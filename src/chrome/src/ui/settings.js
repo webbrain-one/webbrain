@@ -378,6 +378,13 @@ function renderProviders() {
         { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'claude-sonnet-4-6' },
       ],
     },
+    openai_subscription: {
+      customRender: 'openai_oauth',
+      fields: [
+        { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'gpt-5' },
+        { key: 'baseUrl', labelKey: 'st.provider.field.api_base_url', type: 'text', placeholder: 'https://api.openai.com/v1' },
+      ],
+    },
     webbrain: {
       fields: [
         { key: 'baseUrl', labelKey: 'st.provider.field.api_base_url', type: 'text', placeholder: 'https://auth.webbrain.one/v1' },
@@ -395,6 +402,10 @@ function renderProviders() {
     // form fields, and the auth state is fetched async.
     if (providerConfigs[id]?.customRender === 'claude_oauth') {
       providersContainer.appendChild(renderClaudeOAuthCard(id, config, isActive, fieldDefs));
+      continue;
+    }
+    if (providerConfigs[id]?.customRender === 'openai_oauth') {
+      providersContainer.appendChild(renderOpenAIOAuthCard(id, config, isActive, fieldDefs));
       continue;
     }
 
@@ -602,6 +613,55 @@ async function signInWithClaude(id) {
 async function signOutOfClaude(id) {
   await sendToBackground('claude_oauth_signout');
   await refreshClaudeOAuthStatus(id);
+}
+
+function renderOpenAIOAuthCard(id, config, isActive, fieldDefs) {
+  const card = document.createElement('div');
+  card.className = `provider-card ${isActive ? 'active' : ''}`;
+  let fieldsHTML = '';
+  for (const field of fieldDefs) {
+    const label = field.labelKey ? t(field.labelKey) : (field.label || field.key);
+    const placeholder = field.placeholder || '';
+    fieldsHTML += `<div class="field"><label>${escapeHtml(label)}</label>
+      <input type="${field.type}" data-provider="${id}" data-key="${field.key}" value="${escapeHtml(config[field.key] || '')}" placeholder="${escapeHtml(placeholder)}"></div>`;
+  }
+  card.innerHTML = `<div class="provider-header"><div><span class="provider-name">${escapeHtml(config.label || id)}</span><span class="provider-type">oauth</span></div>${isActive ? `<span style="color:var(--accent);font-size:11px;font-weight:600">${escapeHtml(t('st.providers.active'))}</span>` : ''}</div>
+  <div class="openai-oauth-status" id="openai-oauth-status-${id}" style="padding:10px 12px;border-radius:6px;background:var(--surface2,#f5f5f7);margin-bottom:10px;font-size:13px;color:var(--text2);">Loading sign-in status…</div>
+  ${fieldsHTML}
+  <div class="btn-row"><button class="btn-primary btn-openai-signin" data-provider="${id}" style="display:none;">Sign in with OpenAI</button><button class="btn-secondary btn-openai-signout" data-provider="${id}" style="display:none;">Sign out</button>
+  <button class="btn-primary btn-save" data-provider="${id}">${escapeHtml(t('st.providers.save'))}</button><button class="btn-secondary btn-test" data-provider="${id}">${escapeHtml(t('st.providers.test'))}</button>${!isActive ? `<button class="btn-secondary btn-activate" data-provider="${id}">${escapeHtml(t('st.providers.set_active'))}</button>` : ''}</div>
+  <div class="test-result" id="test-${id}"></div>`;
+  refreshOpenAIOAuthStatus(id);
+  card.querySelector('.btn-openai-signin').addEventListener('click', () => signInWithOpenAI(id));
+  card.querySelector('.btn-openai-signout').addEventListener('click', () => signOutOfOpenAI(id));
+  return card;
+}
+
+async function refreshOpenAIOAuthStatus(id) {
+  const statusEl = document.getElementById(`openai-oauth-status-${id}`);
+  const signInBtn = document.querySelector(`.btn-openai-signin[data-provider="${id}"]`);
+  const signOutBtn = document.querySelector(`.btn-openai-signout[data-provider="${id}"]`);
+  if (!statusEl) return;
+  try {
+    const status = await sendToBackground('openai_oauth_status');
+    if (status?.signedIn) {
+      statusEl.innerHTML = `<strong style="color:var(--ok,#1a8a4a);">Signed in.</strong>`;
+      if (signInBtn) signInBtn.style.display = 'none';
+      if (signOutBtn) signOutBtn.style.display = '';
+    } else {
+      statusEl.innerHTML = `Not signed in. Click <strong>Sign in with OpenAI</strong>.`;
+      if (signInBtn) signInBtn.style.display = '';
+      if (signOutBtn) signOutBtn.style.display = 'none';
+    }
+  } catch (e) { statusEl.innerHTML = `Status unavailable: ${escapeHtml(e.message)}`; }
+}
+async function signInWithOpenAI(id) {
+  const res = await sendToBackground('openai_oauth_start');
+  if (res?.ok) await refreshOpenAIOAuthStatus(id);
+}
+async function signOutOfOpenAI(id) {
+  await sendToBackground('openai_oauth_signout');
+  await refreshOpenAIOAuthStatus(id);
 }
 
 async function loadOllamaModels(id) {

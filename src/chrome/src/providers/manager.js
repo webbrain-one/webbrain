@@ -119,6 +119,15 @@ export class ProviderManager {
         model: 'claude-sonnet-4-6',
         enabled: false,
       },
+      openai_subscription: {
+        type: 'openai',
+        label: 'OpenAI (ChatGPT subscription)',
+        providerName: 'openai',
+        baseUrl: 'https://api.openai.com/v1',
+        model: 'gpt-5',
+        apiKey: '',
+        enabled: false,
+      },
       webbrain: {
         type: 'openai',
         label: 'WebBrain Cloud',
