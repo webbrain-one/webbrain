@@ -195,6 +195,7 @@ The default UI-first rule exists because API actions are invisible (you don't se
 - **Cross-origin iframe interaction tools** (`iframe_read`, `iframe_click`, `iframe_type`) for embedded forms and widgets
 - **Network research tools** (`fetch_url`, `research_url`) for fast read-only data retrieval
 - **Download workflow tools** (`download_file`, `download_files`, `list_downloads`, `read_downloaded_file`)
+- **PDF reading tool** (`read_pdf`) for direct PDF extraction when viewer pages block DOM access
 - **Trace viewer and quality-of-life upgrades** including step-limit continuation and stronger context controls
 
 ## Roadmap
