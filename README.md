@@ -116,6 +116,7 @@ Key difference: Chrome uses Manifest V3 (service worker, `chrome.scripting`, `si
 | Tool | Ask Mode | Act Mode | Description |
 |------|----------|----------|-------------|
 | `read_page` | Yes | Yes | Extract page text, links, forms |
+| `read_pdf` | Yes | Yes | Extract text from PDF documents via vendored pdfjs-dist. On Anthropic Claude, also attaches raw PDF bytes as a native document block for full layout/vision. |
 | `screenshot` | Yes | Yes | Capture visible tab |
 | `get_interactive_elements` | Yes | Yes | List all clickable/interactive elements |
 | `scroll` | Yes | Yes | Scroll the page |
