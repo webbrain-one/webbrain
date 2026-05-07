@@ -157,19 +157,6 @@ window.addEventListener('message', (event) => {
 });
 
 async function autoConfigureWebbrainProvider() {
-  const webbrainConfig = {
-    type: 'openai',
-    label: t('st.account.provider_name'),
-    providerName: 'webbrain',
-    baseUrl: 'https://auth.webbrain.one/v1',
-    model: authDefaultModel || 'openai/gpt-4o',
-    apiKey: authToken,
-    enabled: true,
-  };
-
-  await sendToBackground('update_provider', { providerId: 'webbrain', config: webbrainConfig });
-  await sendToBackground('set_active_provider', { providerId: 'webbrain' });
-
   const res = await sendToBackground('get_providers');
   providersData = res.providers;
   activeProviderId = res.active;
@@ -366,12 +353,6 @@ function renderProviders() {
         { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'claude-sonnet-4-20250514' },
       ],
     },
-    webbrain: {
-      fields: [
-        { key: 'baseUrl', labelKey: 'st.provider.field.api_base_url', type: 'text', placeholder: 'https://auth.webbrain.one/v1' },
-        { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'openai/gpt-4o' },
-      ],
-    },
   };
 
   for (const [id, config] of Object.entries(providersData)) {
@@ -525,10 +506,11 @@ function renderClaudeOAuthCard(id, config, isActive, fieldDefs) {
     </div>
   `;
 
-  refreshClaudeOAuthStatus(id);
-
   card.querySelector('.btn-claude-signin').addEventListener('click', () => signInWithClaude(id));
   card.querySelector('.btn-claude-signout').addEventListener('click', () => signOutOfClaude(id));
+  // Run after the caller appends the card; refreshClaudeOAuthStatus()
+  // looks up elements through document.getElementById().
+  queueMicrotask(() => refreshClaudeOAuthStatus(id));
 
   return card;
 }
@@ -540,7 +522,7 @@ async function refreshClaudeOAuthStatus(id) {
   if (!statusEl) return;
 
   try {
-    const status = await sendToBackground('claude_oauth_status');
+    const status = await sendToBackgroundWithTimeout('claude_oauth_status', {}, 5000);
     if (status?.signedIn) {
       const obtained = new Date(status.obtainedAt || Date.now()).toLocaleString();
       const expires = new Date(status.expiresAt || Date.now()).toLocaleTimeString();
@@ -554,6 +536,8 @@ async function refreshClaudeOAuthStatus(id) {
     }
   } catch (e) {
     statusEl.innerHTML = `Status unavailable: ${escapeHtml(e.message)}`;
+    if (signInBtn) signInBtn.style.display = '';
+    if (signOutBtn) signOutBtn.style.display = 'none';
   }
 }
 
@@ -669,6 +653,15 @@ async function sendToBackground(action, data = {}) {
     throw new Error(response.error);
   }
   return response;
+}
+
+function sendToBackgroundWithTimeout(action, data = {}, timeoutMs = 5000) {
+  let timeoutId;
+  const timeout = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error('Timed out waiting for background response. Reload the extension and reopen Settings.')), timeoutMs);
+  });
+  return Promise.race([sendToBackground(action, data), timeout])
+    .finally(() => clearTimeout(timeoutId));
 }
 
 init();

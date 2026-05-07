@@ -20,14 +20,17 @@ export class ProviderManager {
    * new provider entry (e.g. `claude_subscription` in v6.1) would
    * never appear for users with a saved `providers` object — they'd
    * have to clear extension storage to see the new entry. There's no
-   * "delete provider" operation, so spreading defaults can't
-   * resurrect a user-removed entry.
+   * Deprecated provider entries are filtered after the merge so removed
+   * defaults do not stay visible forever for existing users.
    */
   async load() {
     const data = await browser.storage.local.get(['providers', 'activeProvider']);
     const stored = data.providers || {};
     const configs = { ...this._defaultConfigs(), ...stored };
-    this.activeProviderId = data.activeProvider || 'llamacpp';
+    delete configs.webbrain;
+    this.activeProviderId = data.activeProvider === 'webbrain'
+      ? 'llamacpp'
+      : (data.activeProvider || 'llamacpp');
 
     this.providers.clear();
     for (const [id, config] of Object.entries(configs)) {
@@ -113,15 +116,6 @@ export class ProviderManager {
         type: 'anthropic_oauth',
         label: 'Claude (Pro/Max subscription)',
         model: 'claude-sonnet-4-20250514',
-        enabled: false,
-      },
-      webbrain: {
-        type: 'openai',
-        label: 'WebBrain Cloud',
-        providerName: 'webbrain',
-        baseUrl: 'https://auth.webbrain.one/v1',
-        model: 'openai/gpt-4o',
-        apiKey: '',
         enabled: false,
       },
     };

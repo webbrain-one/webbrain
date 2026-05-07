@@ -22,14 +22,18 @@ export class ProviderManager {
    * users who already have a `providers` object in storage. They'd
    * have to manually clear extension storage to see the new entry.
    *
-   * Note we don't have a "delete provider" operation in the manager,
-   * so spreading defaults can't resurrect a user-removed entry.
+   * Deprecated provider entries are filtered after the merge so removed
+   * defaults do not stay visible forever for existing users.
    */
   async load() {
     const data = await chrome.storage.local.get(['providers', 'activeProvider']);
     const stored = data.providers || {};
     const configs = { ...this._defaultConfigs(), ...stored };
-    this.activeProviderId = data.activeProvider || 'llamacpp';
+    delete configs.webbrain;
+    delete configs.openai_subscription;
+    this.activeProviderId = ['webbrain', 'openai_subscription'].includes(data.activeProvider)
+      ? 'llamacpp'
+      : (data.activeProvider || 'llamacpp');
 
     this.providers.clear();
     for (const [id, config] of Object.entries(configs)) {
@@ -117,24 +121,6 @@ export class ProviderManager {
         type: 'anthropic_oauth',
         label: 'Claude (Pro/Max subscription)',
         model: 'claude-sonnet-4-6',
-        enabled: false,
-      },
-      openai_subscription: {
-        type: 'openai',
-        label: 'OpenAI (ChatGPT subscription)',
-        providerName: 'openai',
-        baseUrl: 'https://api.openai.com/v1',
-        model: 'gpt-5',
-        apiKey: '',
-        enabled: false,
-      },
-      webbrain: {
-        type: 'openai',
-        label: 'WebBrain Cloud',
-        providerName: 'webbrain',
-        baseUrl: 'https://auth.webbrain.one/v1',
-        model: 'openai/gpt-4o',
-        apiKey: '',
         enabled: false,
       },
     };

@@ -14,10 +14,10 @@
  */
 
 const CLIENT_ID  = '9d1c250a-e61b-44d9-88ed-5944d1962f5e';
-const AUTH_URL   = 'https://claude.ai/oauth/authorize';
-const TOKEN_URL  = 'https://console.anthropic.com/v1/oauth/token';
-const REDIRECT   = 'https://console.anthropic.com/oauth/code/callback';
-const SCOPES     = 'org:create_api_key user:profile user:inference';
+const AUTH_URL   = 'https://claude.com/cai/oauth/authorize';
+const TOKEN_URL  = 'https://platform.claude.com/v1/oauth/token';
+const REDIRECT   = 'https://platform.claude.com/oauth/code/callback';
+const SCOPES     = 'org:create_api_key user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload';
 
 const STORAGE_KEY = 'anthropicOauthTokens';
 const REFRESH_WINDOW_MS = 60_000;
@@ -49,7 +49,7 @@ function randomBase64Url(byteLength = 32) {
 export async function startClaudeOAuth() {
   const codeVerifier = randomBase64Url(48);
   const codeChallenge = await sha256Base64Url(codeVerifier);
-  const state = randomBase64Url(16);
+  const state = randomBase64Url(32);
 
   const params = new URLSearchParams({
     code: 'true',

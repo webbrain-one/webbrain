@@ -25,7 +25,7 @@
  * 3. **Why not `chrome.identity.launchWebAuthFlow`?** That API requires
  *    the redirect URI to be `https://<extension-id>.chromiumapp.org/`.
  *    Claude Code's `client_id` is registered with redirect_uri
- *    `https://console.anthropic.com/oauth/code/callback`, which is what
+ *    `https://platform.claude.com/oauth/code/callback`, which is what
  *    Anthropic's authorization server will accept. There is no way for
  *    a third-party client to register a different redirect URI without
  *    going through Anthropic. So we open the auth URL in a normal tab
@@ -40,10 +40,10 @@
 // changing them will break the flow, so don't touch unless Anthropic
 // rotates their CLI's client.
 const CLIENT_ID  = '9d1c250a-e61b-44d9-88ed-5944d1962f5e';
-const AUTH_URL   = 'https://claude.ai/oauth/authorize';
-const TOKEN_URL  = 'https://console.anthropic.com/v1/oauth/token';
-const REDIRECT   = 'https://console.anthropic.com/oauth/code/callback';
-const SCOPES     = 'org:create_api_key user:profile user:inference';
+const AUTH_URL   = 'https://claude.com/cai/oauth/authorize';
+const TOKEN_URL  = 'https://platform.claude.com/v1/oauth/token';
+const REDIRECT   = 'https://platform.claude.com/oauth/code/callback';
+const SCOPES     = 'org:create_api_key user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload';
 
 // Storage key. Kept in `chrome.storage.local` separately from provider
 // configs so `manager.getAll()` (which returns provider configs to the
@@ -88,7 +88,7 @@ function randomBase64Url(byteLength = 32) {
 /**
  * Kick off the Claude OAuth flow. Opens a new tab with Anthropic's
  * authorization URL, waits for the redirect to land at
- * `console.anthropic.com/oauth/code/callback?code=…&state=…`, exchanges
+ * `platform.claude.com/oauth/code/callback?code=…&state=…`, exchanges
  * the code for tokens, and persists them in `chrome.storage.local`.
  *
  * Resolves with the persisted token bundle. Rejects if the user closes
@@ -109,7 +109,7 @@ function randomBase64Url(byteLength = 32) {
 export async function startClaudeOAuth() {
   const codeVerifier = randomBase64Url(48);
   const codeChallenge = await sha256Base64Url(codeVerifier);
-  const state = randomBase64Url(16);
+  const state = randomBase64Url(32);
 
   const params = new URLSearchParams({
     code: 'true',

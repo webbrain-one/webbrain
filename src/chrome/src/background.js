@@ -6,12 +6,6 @@ import {
   signOutClaude,
   getClaudeOAuthStatus,
 } from './providers/oauth-claude.js';
-import {
-  startOpenAIOAuth,
-  signOutOpenAI,
-  getOpenAIOAuthStatus,
-  getOpenAIAccessToken,
-} from './providers/oauth-openai.js';
 
 /**
  * WebBrain Service Worker (Background Script)
@@ -593,25 +587,6 @@ async function handleMessage(msg, sender) {
         return { ok: false, error: e.message };
       }
     }
-    case 'openai_oauth_start': {
-      try {
-        await startOpenAIOAuth();
-        const token = await getOpenAIAccessToken();
-        await providerManager.updateProvider('openai_subscription', { apiKey: token || '' });
-        return { ok: true };
-      } catch (e) {
-        return { ok: false, error: e.message };
-      }
-    }
-    case 'openai_oauth_signout': {
-      await signOutOpenAI();
-      await providerManager.updateProvider('openai_subscription', { apiKey: '' });
-      return { ok: true };
-    }
-    case 'openai_oauth_status': {
-      return await getOpenAIOAuthStatus();
-    }
-
     // --- Page Info (quick, no agent loop) ---
     case 'get_page_info': {
       const tabId = msg.tabId || sender.tab?.id;
