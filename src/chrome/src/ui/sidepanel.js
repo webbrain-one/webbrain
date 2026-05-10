@@ -4,6 +4,7 @@
  */
 
 import { t, getLocale, setLocale, LANGUAGES, applyDOMTranslations } from './i18n.js';
+import { sanitizeMarkdownLinks } from './markdown-link.js';
 
 const messagesEl = document.getElementById('messages');
 const inputEl = document.getElementById('user-input');
@@ -889,12 +890,15 @@ function formatMarkdown(text) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 
-  // 4. Inline formatting
+  // 4. Inline formatting (bold + italic), then markdown link sanitization,
+  // then newline → <br>. Links are handled by the dedicated markdown-link
+  // module (unit-tested in test/run.js) — see that file for the rationale
+  // and threat model.
   text = text
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
-    .replace(/\n/g, '<br>');
+    .replace(/\*(.+?)\*/g, '<em>$1</em>');
+  text = sanitizeMarkdownLinks(text);
+  text = text.replace(/\n/g, '<br>');
 
   // 5. Restore inline code
   inlineCodes.forEach((code, i) => {

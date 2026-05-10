@@ -60,16 +60,264 @@ function htmlToText(html) {
 const FETCH_TEXT_LIMIT = 8000;
 const FETCH_JSON_LIMIT = 16000;
 
-export async function fetchUrl(url, opts = {}) {
+/**
+ * Validate a URL before the agent fetches it.
+ *
+ * The LLM-callable fetch tools run in the background service worker with
+ * <all_urls> host permissions. Without this gate, prompt-injected text on a
+ * visited page can steer the agent into:
+ *   - reading cloud instance-metadata endpoints (169.254.169.254, etc.),
+ *   - probing the user's intranet / RFC1918 hosts,
+ *   - fetching local services (Ollama, Grafana, internal admin panels),
+ *   - using non-http schemes (file:, chrome-extension:, javascript:, data:).
+ *
+ * Returns { ok: true } if the URL is safe, or { ok: false, error } otherwise.
+ *
+ * Two tiers of blocks:
+ *   - ALWAYS-BLOCKED: non-http schemes, cloud-metadata IPs/hostnames,
+ *     link-local IPv6, multicast/reserved, *.internal/*.local. These are
+ *     never relaxed.
+ *   - LOCAL-NETWORK: loopback, RFC1918, unique-local IPv6, `localhost`,
+ *     *.localhost. Relaxed when opts.allowLocalNetwork is true (the user
+ *     opted in via the "Allow agent to access local network" setting).
+ */
+export function validateFetchUrl(rawUrl, opts = {}) {
+  const allowLocal = !!opts.allowLocalNetwork;
+
+  let u;
+  try { u = new URL(rawUrl); }
+  catch (_) { return { ok: false, error: `Invalid URL: ${rawUrl}` }; }
+
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') {
+    return { ok: false, error: `Unsupported URL scheme: ${u.protocol} (only http/https allowed)` };
+  }
+
+  // URL.hostname keeps the [..] around IPv6 literals — strip them.
+  let host = (u.hostname || '').toLowerCase();
+  if (host.startsWith('[') && host.endsWith(']')) host = host.slice(1, -1);
+  if (!host) return { ok: false, error: 'URL has no hostname.' };
+
+  // Always-blocked hostnames (cloud metadata aliases + intranet TLDs).
+  const ALWAYS_BLOCKED_HOSTS = new Set([
+    'metadata.google.internal',
+    'metadata.goog',
+    'metadata.aws.internal',
+    'metadata.azure.com',
+  ]);
+  if (ALWAYS_BLOCKED_HOSTS.has(host) ||
+      host.endsWith('.internal') ||
+      host.endsWith('.local')) {
+    return { ok: false, error: `Blocked hostname: ${host}` };
+  }
+  // Local hostnames — relaxable.
+  if (!allowLocal && (host === 'localhost' || host.endsWith('.localhost'))) {
+    return { ok: false, error: `Blocked local hostname: ${host} (enable "Allow agent to access local network" in settings to permit)` };
+  }
+
+  // IPv4 literal.
+  const ipv4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (ipv4) {
+    const o = ipv4.slice(1).map((n) => parseInt(n, 10));
+    if (o.some((n) => Number.isNaN(n) || n > 255)) {
+      return { ok: false, error: `Invalid IPv4: ${host}` };
+    }
+    // Always-blocked IPv4 ranges (cloud metadata, CGNAT, multicast, 0/8).
+    if (o[0] === 0) return { ok: false, error: `Blocked unspecified IPv4: ${host}` };
+    if (o[0] === 169 && o[1] === 254) return { ok: false, error: `Blocked link-local IPv4 (cloud metadata): ${host}` };
+    if (o[0] === 100 && o[1] >= 64 && o[1] <= 127) return { ok: false, error: `Blocked CGNAT IPv4: ${host}` };
+    if (o[0] >= 224) return { ok: false, error: `Blocked multicast/reserved IPv4: ${host}` };
+    // Local-network IPv4 ranges — relaxable.
+    if (!allowLocal) {
+      const localHint = ' (enable "Allow agent to access local network" in settings to permit)';
+      if (o[0] === 10) return { ok: false, error: `Blocked private IPv4: ${host}${localHint}` };
+      if (o[0] === 127) return { ok: false, error: `Blocked loopback IPv4: ${host}${localHint}` };
+      if (o[0] === 172 && o[1] >= 16 && o[1] <= 31) return { ok: false, error: `Blocked private IPv4: ${host}${localHint}` };
+      if (o[0] === 192 && o[1] === 168) return { ok: false, error: `Blocked private IPv4: ${host}${localHint}` };
+    }
+  }
+
+  // IPv6 literal.
+  if (host.includes(':')) {
+    // Always-blocked IPv6 — link-local fe80::/10.
+    if (/^fe[89ab][0-9a-f]?:/i.test(host)) {
+      return { ok: false, error: `Blocked link-local IPv6: ${host}` };
+    }
+    // Always-blocked unspecified ::.
+    if (host === '::') {
+      return { ok: false, error: `Blocked unspecified IPv6: ${host}` };
+    }
+    // Local-network IPv6 — relaxable.
+    if (!allowLocal) {
+      const localHint = ' (enable "Allow agent to access local network" in settings to permit)';
+      if (host === '::1' || /^0:0:0:0:0:0:0:[01]$/.test(host)) {
+        return { ok: false, error: `Blocked loopback IPv6: ${host}${localHint}` };
+      }
+      // Unique-local fc00::/7 → first hextet fc.. or fd..
+      if (/^f[cd][0-9a-f]{0,2}:/i.test(host)) {
+        return { ok: false, error: `Blocked unique-local IPv6: ${host}${localHint}` };
+      }
+    }
+    // IPv4-mapped IPv6. URL parser normalizes `::ffff:127.0.0.1` to
+    // `::ffff:7f00:1`, so match either form, decode the last two hextets,
+    // and re-validate (passing through opts so allowLocal carries over).
+    const mappedDotted = host.match(/::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/i);
+    const mappedHex = host.match(/::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i);
+    let mappedV4 = null;
+    if (mappedDotted) {
+      mappedV4 = mappedDotted[1];
+    } else if (mappedHex) {
+      const hi = parseInt(mappedHex[1], 16);
+      const lo = parseInt(mappedHex[2], 16);
+      mappedV4 = `${(hi >> 8) & 0xff}.${hi & 0xff}.${(lo >> 8) & 0xff}.${lo & 0xff}`;
+    }
+    if (mappedV4) {
+      return validateFetchUrl(`${u.protocol}//${mappedV4}${u.pathname}${u.search}${u.hash}`, opts);
+    }
+  }
+
+  return { ok: true };
+}
+
+// ─── Same-eTLD+1 cookie policy ──────────────────────────────────────────
+
+/**
+ * Best-effort registrable-domain extractor (a.k.a. eTLD+1).
+ *
+ * Used to decide whether an agent-driven fetch should attach the user's
+ * cookies: we attach cookies only when the fetch target shares the
+ * registrable domain of the active tab the agent is operating on. That
+ * way, a prompt-injected page on news.example.com can't steer the agent
+ * into a cookied read of mail.google.com.
+ *
+ * This is NOT the full Public Suffix List — it covers common ccTLD
+ * patterns and well-known multi-tenant hosts. For unknown multi-label
+ * suffixes it falls back to "last 2 labels", which over-matches on rare
+ * ccTLDs. If you need PSL-perfect accuracy, swap in a vetted PSL.
+ */
+const KNOWN_MULTI_LABEL_TLDS = new Set([
+  // ccTLD patterns
+  'co.uk', 'co.jp', 'co.kr', 'co.nz', 'co.za', 'co.in', 'co.il', 'co.th',
+  'com.au', 'com.br', 'com.cn', 'com.mx', 'com.tr', 'com.sg', 'com.hk',
+  'com.tw', 'com.ar', 'com.co', 'com.pe', 'com.ph', 'com.my', 'com.vn',
+  'gov.uk', 'gov.au', 'gov.in', 'gov.cn',
+  'ac.uk', 'ac.jp', 'ac.in', 'ac.kr',
+  'org.uk', 'org.au', 'org.nz',
+  'net.au', 'net.uk',
+  // Known multi-tenant hosting (PSL "private" section)
+  'github.io', 'gitlab.io',
+  'netlify.app', 'netlify.com',
+  'vercel.app',
+  'pages.dev', 'workers.dev',
+  'herokuapp.com', 'firebaseapp.com', 'web.app', 'glitch.me',
+  'cloudfront.net', 'azurewebsites.net',
+  'r2.dev', 'github.dev',
+]);
+
+export function registrableDomain(host) {
+  if (!host) return host;
+  const lower = String(host).toLowerCase();
+  if (lower.includes(':') || /^\d+\.\d+\.\d+\.\d+$/.test(lower)) return lower; // IP literal
+  const parts = lower.split('.');
+  if (parts.length < 2) return lower;
+  const last2 = parts.slice(-2).join('.');
+  if (parts.length >= 3 && KNOWN_MULTI_LABEL_TLDS.has(last2)) {
+    return parts.slice(-3).join('.');
+  }
+  return last2;
+}
+
+// ─── Allow-local-network setting (cached) ───────────────────────────────
+
+let _allowLocalNetwork = false;
+try {
+  chrome.storage.local.get('agentAllowLocalNetwork').then((r) => {
+    _allowLocalNetwork = !!r.agentAllowLocalNetwork;
+  });
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes.agentAllowLocalNetwork) {
+      _allowLocalNetwork = !!changes.agentAllowLocalNetwork.newValue;
+    }
+  });
+} catch (_) { /* storage not available (e.g. unit tests) — default false */ }
+
+export function getAllowLocalNetwork() {
+  return _allowLocalNetwork;
+}
+
+/**
+ * Agent-driven fetch.
+ *
+ *   url   — target URL (validated against validateFetchUrl)
+ *   opts  — { method, headers, body } (LLM-controlled)
+ *   ctx   — { tabId } (extension-supplied; used to decide cookie policy)
+ *
+ * Cookie policy: cookies are attached only when the fetch target shares the
+ * registrable domain (eTLD+1) of the active tab the agent is operating on.
+ * On a github.com tab, fetches to api.github.com get cookies; fetches to
+ * mail.google.com do not. This prevents prompt-injected pages from steering
+ * the agent into authenticated cross-origin reads.
+ *
+ * Redirect policy: redirects ARE followed (so http→https and similar work),
+ * but the final URL is re-validated against validateFetchUrl. If a redirect
+ * lands on a blocked host, or — when cookies were attached — crosses the
+ * eTLD+1 boundary, the body is discarded and an error is returned.
+ */
+export async function fetchUrl(url, opts = {}, ctx = {}) {
   if (!url) return { success: false, error: 'url is required' };
+  const allowLocal = getAllowLocalNetwork();
+  const v = validateFetchUrl(url, { allowLocalNetwork: allowLocal });
+  if (!v.ok) return { success: false, error: v.error };
+
+  // Decide cookie policy based on active tab origin (if any).
+  let attachCookies = false;
+  let tabRegDomain = null;
+  if (ctx && ctx.tabId != null) {
+    try {
+      const tab = await chrome.tabs.get(ctx.tabId);
+      if (tab && tab.url) {
+        try {
+          const tabHost = new URL(tab.url).hostname;
+          const fetchHost = new URL(url).hostname;
+          tabRegDomain = registrableDomain(tabHost);
+          if (tabRegDomain && tabRegDomain === registrableDomain(fetchHost)) {
+            attachCookies = true;
+          }
+        } catch (_) { /* unparseable tab URL */ }
+      }
+    } catch (_) { /* tab gone */ }
+  }
+
   try {
     const res = await fetch(url, {
       method: opts.method || 'GET',
       headers: opts.headers || {},
       body: opts.body || undefined,
-      credentials: 'include',
+      credentials: attachCookies ? 'include' : 'omit',
       redirect: 'follow',
     });
+
+    // Re-validate the final URL after redirects. If a redirect landed on a
+    // blocked host, discard the body. If cookies were attached and the
+    // redirect crossed the registrable-domain boundary, also discard — we
+    // only surface authenticated content for the same eTLD+1 as the tab.
+    if (res.url && res.url !== url) {
+      const v2 = validateFetchUrl(res.url, { allowLocalNetwork: allowLocal });
+      if (!v2.ok) {
+        return { success: false, error: `Redirect to blocked URL: ${v2.error}`, finalUrl: res.url };
+      }
+      if (attachCookies && tabRegDomain) {
+        try {
+          const finalRegDomain = registrableDomain(new URL(res.url).hostname);
+          if (finalRegDomain !== tabRegDomain) {
+            return {
+              success: false,
+              error: `Redirect crossed registrable-domain boundary (${tabRegDomain} → ${finalRegDomain}); body discarded for safety. Re-call with the explicit final URL if needed.`,
+              finalUrl: res.url,
+            };
+          }
+        } catch (_) {}
+      }
+    }
     const contentType = (res.headers.get('content-type') || '').toLowerCase();
     const status = res.status;
     const finalUrl = res.url;
@@ -248,7 +496,7 @@ export async function listDownloads(opts = {}) {
 const READ_FILE_TEXT_LIMIT = 16000;
 const READ_FILE_BASE64_LIMIT = 32000;
 
-export async function readDownloadedFile(downloadId) {
+export async function readDownloadedFile(downloadId, ctx = {}) {
   if (downloadId == null) return { success: false, error: 'downloadId is required' };
   try {
     const items = await chrome.downloads.search({ id: downloadId });
@@ -258,9 +506,44 @@ export async function readDownloadedFile(downloadId) {
       return { success: false, error: `Download is in state: ${item.state}, not complete` };
     }
 
-    // Re-fetch the source URL with cookies. This works because the file
-    // was originally downloadable.
-    const res = await fetch(item.url, { credentials: 'include' });
+    // Re-fetch the source URL. Validate first; apply same cookie policy as
+    // fetchUrl (eTLD+1 of active tab), and re-validate after redirects.
+    const allowLocal = getAllowLocalNetwork();
+    const v = validateFetchUrl(item.url, { allowLocalNetwork: allowLocal });
+    if (!v.ok) return { success: false, error: v.error };
+
+    let attachCookies = false;
+    let tabRegDomain = null;
+    if (ctx && ctx.tabId != null) {
+      try {
+        const tab = await chrome.tabs.get(ctx.tabId);
+        if (tab && tab.url) {
+          try {
+            tabRegDomain = registrableDomain(new URL(tab.url).hostname);
+            if (tabRegDomain && tabRegDomain === registrableDomain(new URL(item.url).hostname)) {
+              attachCookies = true;
+            }
+          } catch (_) {}
+        }
+      } catch (_) {}
+    }
+
+    const res = await fetch(item.url, {
+      credentials: attachCookies ? 'include' : 'omit',
+      redirect: 'follow',
+    });
+    if (res.url && res.url !== item.url) {
+      const v2 = validateFetchUrl(res.url, { allowLocalNetwork: allowLocal });
+      if (!v2.ok) return { success: false, error: `Redirect to blocked URL: ${v2.error}`, finalUrl: res.url };
+      if (attachCookies && tabRegDomain) {
+        try {
+          const finalRegDomain = registrableDomain(new URL(res.url).hostname);
+          if (finalRegDomain !== tabRegDomain) {
+            return { success: false, error: `Redirect crossed registrable-domain boundary; body discarded for safety.`, finalUrl: res.url };
+          }
+        } catch (_) {}
+      }
+    }
     if (!res.ok) {
       return { success: false, error: `Re-fetch failed with HTTP ${res.status}` };
     }

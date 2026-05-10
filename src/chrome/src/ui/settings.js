@@ -17,6 +17,7 @@ const autoScreenshotSelect = document.getElementById('select-auto-screenshot');
 const siteAdaptersToggle = document.getElementById('toggle-site-adapters');
 const notifySoundToggle = document.getElementById('toggle-notify-sound');
 const tracingToggle = document.getElementById('toggle-tracing');
+const allowLocalNetworkToggle = document.getElementById('toggle-allow-local-network');
 const accountSection = document.getElementById('account-section');
 const visionBaseUrlInput = document.getElementById('vision-base-url');
 const visionApiKeyInput = document.getElementById('vision-api-key');
@@ -73,7 +74,7 @@ async function init() {
   renderAuthSection();
 
   // Load display settings
-  const stored = await chrome.storage.local.get(['verboseMode', 'screenshotFallback', 'maxAgentSteps', 'autoScreenshot', 'useSiteAdapters', 'notifySound', 'tracingEnabled']);
+  const stored = await chrome.storage.local.get(['verboseMode', 'screenshotFallback', 'maxAgentSteps', 'autoScreenshot', 'useSiteAdapters', 'notifySound', 'tracingEnabled', 'agentAllowLocalNetwork']);
   verboseToggle.checked = stored.verboseMode || false;
   screenshotToggle.checked = stored.screenshotFallback ?? true; // on by default
   maxStepsRange.value = stored.maxAgentSteps || 60;
@@ -82,6 +83,9 @@ async function init() {
   siteAdaptersToggle.checked = stored.useSiteAdapters ?? true;
   notifySoundToggle.checked = stored.notifySound ?? true; // on by default
   tracingToggle.checked = stored.tracingEnabled === true; // off by default
+  if (allowLocalNetworkToggle) {
+    allowLocalNetworkToggle.checked = stored.agentAllowLocalNetwork === true; // off by default
+  }
 
   // Load vision model config
   const visionStored = await chrome.storage.local.get(['visionModel']);
@@ -199,6 +203,12 @@ notifySoundToggle.addEventListener('change', () => {
 tracingToggle.addEventListener('change', () => {
   chrome.storage.local.set({ tracingEnabled: tracingToggle.checked });
 });
+
+if (allowLocalNetworkToggle) {
+  allowLocalNetworkToggle.addEventListener('change', () => {
+    chrome.storage.local.set({ agentAllowLocalNetwork: allowLocalNetworkToggle.checked });
+  });
+}
 
 // --- Vision Model ---
 

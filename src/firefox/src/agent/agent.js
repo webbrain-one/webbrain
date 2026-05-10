@@ -1565,9 +1565,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       return { done: true, summary: args.summary };
     }
 
-    // Network & download tools (background context, with user cookies).
+    // Network & download tools (background context). fetchUrl/readDownloadedFile
+    // attach the user's cookies only for fetches that share the registrable
+    // domain (eTLD+1) of the active tab — see network-tools.js for cookie &
+    // redirect policy.
     if (name === 'fetch_url') {
-      return await fetchUrl(args.url, args);
+      return await fetchUrl(args.url, args, { tabId });
     }
     if (name === 'research_url') {
       return await researchUrl(args.url, { ...args, sourceTabId: tabId });
@@ -1576,7 +1579,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       return await listDownloads(args);
     }
     if (name === 'read_downloaded_file') {
-      return await readDownloadedFile(args.downloadId);
+      return await readDownloadedFile(args.downloadId, { tabId });
     }
     if (name === 'download_resource_from_page') {
       return await downloadResourceFromPage(tabId, args);

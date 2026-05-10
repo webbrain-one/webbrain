@@ -24,6 +24,24 @@ const { getActiveAdapter, listAdapters } = await import(
   'file://' + path.join(ROOT, 'src/chrome/src/agent/adapters.js').replace(/\\/g, '/')
 );
 
+// network-tools.js references chrome.* inside a try/catch at module load, so
+// it imports cleanly under Node — the storage init silently no-ops and
+// validateFetchUrl / registrableDomain are pure functions.
+const { validateFetchUrl, registrableDomain } = await import(
+  'file://' + path.join(ROOT, 'src/chrome/src/network/network-tools.js').replace(/\\/g, '/')
+);
+const { validateFetchUrl: validateFetchUrlFx, registrableDomain: registrableDomainFx } = await import(
+  'file://' + path.join(ROOT, 'src/firefox/src/network/network-tools.js').replace(/\\/g, '/')
+);
+
+// markdown-link.js is pure JS with no DOM / chrome.* deps.
+const { sanitizeLink, sanitizeMarkdownLinks } = await import(
+  'file://' + path.join(ROOT, 'src/chrome/src/ui/markdown-link.js').replace(/\\/g, '/')
+);
+const { sanitizeMarkdownLinks: sanitizeMarkdownLinksFx } = await import(
+  'file://' + path.join(ROOT, 'src/firefox/src/ui/markdown-link.js').replace(/\\/g, '/')
+);
+
 // agent.js imports tools.js and cdp-client.js (which uses chrome.*). We need
 // only the loop-detection helpers, so we extract them via a tiny standalone
 // shim that mirrors the relevant Agent methods. Keep this in sync with
@@ -539,6 +557,300 @@ test('existing dims under caps stay within the monotonic bound', () => {
     assert.ok(ow <= iw, `w grew: ${iw}→${ow}`);
     assert.ok(oh <= ih, `h grew: ${ih}→${oh}`);
     assert.ok(estimateImageTokens(ow, oh, 28) <= 1568, `tokens over cap for ${iw}×${ih} → ${ow}×${oh}`);
+  }
+});
+
+// ────────────────────────────────────────────────────────────────────────
+// Markdown link sanitizer
+// ────────────────────────────────────────────────────────────────────────
+
+console.log('\nmarkdown link sanitizer');
+
+test('safe https link produces an <a> with rel=noopener', () => {
+  const out = sanitizeMarkdownLinks('see [example](https://example.com/a?b=c)');
+  assert.match(out, /<a href="https:\/\/example\.com\/a\?b=c" target="_blank" rel="noopener noreferrer">example<\/a>/);
+});
+
+test('Wikipedia URL with balanced parens round-trips', () => {
+  // The bug fix for the [^)]+ pre-existing limitation. URLs with one level
+  // of nested parens (Wikipedia disambiguation, MDN, Apple docs, …) must
+  // survive the regex without truncation.
+  const out = sanitizeMarkdownLinks('[JS](https://en.wikipedia.org/wiki/JavaScript_(programming_language))');
+  assert.match(out, /href="https:\/\/en\.wikipedia\.org\/wiki\/JavaScript_\(programming_language\)"/);
+});
+
+test('javascript: URL renders as text only (no <a>)', () => {
+  const out = sanitizeMarkdownLinks('[click](javascript:alert(document.cookie))');
+  assert.ok(!/<a /.test(out), `expected no <a> tag, got: ${out}`);
+  assert.ok(out.startsWith('click'), `expected label "click" at start, got: ${out}`);
+});
+
+test('data: URL renders as text only (no <a>)', () => {
+  const out = sanitizeMarkdownLinks('[x](data:text/html,<script>alert(1)</script>)');
+  assert.ok(!/<a /.test(out), `expected no <a> tag, got: ${out}`);
+});
+
+test('vbscript: URL renders as text only (no <a>)', () => {
+  const out = sanitizeMarkdownLinks('[x](vbscript:msgbox(1))');
+  assert.ok(!/<a /.test(out), `expected no <a> tag, got: ${out}`);
+});
+
+test('file:// URL renders as text only (no <a>)', () => {
+  const out = sanitizeMarkdownLinks('[x](file:///etc/passwd)');
+  assert.ok(!/<a /.test(out));
+});
+
+test('attribute breakout payload — quote escapes, no extra attributes', () => {
+  // The exact payload from the original XSS finding. The trailing `)` ends
+  // the markdown link match; the captured href is `" onmouseover="alert(1`
+  // which is not http/https/mailto, so it renders as plain text.
+  const out = sanitizeMarkdownLinks('[x](" onmouseover="alert(1))');
+  assert.ok(!/<a /.test(out), `expected no <a> tag, got: ${out}`);
+});
+
+test('https URL with embedded quote is escaped, not broken out of', () => {
+  // The href DOES start with https:, so we emit an <a>, but the `"` inside
+  // the URL must be entity-escaped so the attribute closes at the right place.
+  const out = sanitizeMarkdownLinks('[x](https://x" onerror="alert(1)/)');
+  // The whole captured URL stays inside the href attribute as &quot;…
+  // No new attribute (onerror=) should appear outside the href value.
+  const tagMatch = out.match(/<a\s+href="([^"]*)"\s+([^>]*)>/);
+  assert.ok(tagMatch, `expected <a> tag, got: ${out}`);
+  assert.ok(!/onerror=/i.test(tagMatch[2]), `injected attribute leaked: ${tagMatch[2]}`);
+  assert.match(tagMatch[1], /&quot;/);
+});
+
+test('relative URL (anchor) produces an <a>', () => {
+  const out = sanitizeMarkdownLinks('[top](#section)');
+  assert.match(out, /<a href="#section"/);
+});
+
+test('relative URL (path) produces an <a>', () => {
+  const out = sanitizeMarkdownLinks('[home](/path)');
+  assert.match(out, /<a href="\/path"/);
+});
+
+test('mailto: produces an <a>', () => {
+  const out = sanitizeMarkdownLinks('[mail me](mailto:a@b.com)');
+  assert.match(out, /<a href="mailto:a@b\.com"/);
+});
+
+test('schemeless / no-recognized-form renders as text only', () => {
+  const out = sanitizeMarkdownLinks('[x](no-scheme-here)');
+  assert.ok(!/<a /.test(out));
+});
+
+test('sanitizeLink helper handles null/undefined href safely', () => {
+  // Defense-in-depth — should never throw.
+  assert.equal(sanitizeLink('label', null), 'label');
+  assert.equal(sanitizeLink('label', undefined), 'label');
+  assert.equal(sanitizeLink('label', ''), 'label');
+});
+
+test('firefox port has the same sanitizer behavior', () => {
+  // Spot-check the Firefox copy is in sync — it's a literal copy today,
+  // but if it ever diverges we want to know.
+  const inputs = [
+    '[ok](https://example.com)',
+    '[bad](javascript:alert(1))',
+    '[wiki](https://en.wikipedia.org/wiki/Foo_(bar))',
+  ];
+  for (const inp of inputs) {
+    assert.equal(
+      sanitizeMarkdownLinksFx(inp),
+      sanitizeMarkdownLinks(inp),
+      `firefox sanitizer diverged on input: ${inp}`,
+    );
+  }
+});
+
+// ────────────────────────────────────────────────────────────────────────
+// validateFetchUrl — the agent's network gate
+// ────────────────────────────────────────────────────────────────────────
+
+console.log('\nfetch URL validator');
+
+// Helper: shorthand expectation.
+function expectReject(url, opts) {
+  const r = validateFetchUrl(url, opts);
+  assert.equal(r.ok, false, `${url} (allowLocal=${!!opts?.allowLocalNetwork}) should reject — got ${JSON.stringify(r)}`);
+}
+function expectAccept(url, opts) {
+  const r = validateFetchUrl(url, opts);
+  assert.equal(r.ok, true, `${url} (allowLocal=${!!opts?.allowLocalNetwork}) should accept — got ${JSON.stringify(r)}`);
+}
+
+test('rejects non-http schemes (javascript:, data:, file:, ftp:)', () => {
+  expectReject('javascript:alert(1)');
+  expectReject('data:text/plain,foo');
+  expectReject('file:///etc/passwd');
+  expectReject('ftp://example.com/');
+});
+
+test('rejects cloud metadata hostnames regardless of allowLocal', () => {
+  for (const allowLocal of [false, true]) {
+    expectReject('http://metadata.google.internal/', { allowLocalNetwork: allowLocal });
+    expectReject('http://metadata.aws.internal/', { allowLocalNetwork: allowLocal });
+    expectReject('http://metadata.azure.com/', { allowLocalNetwork: allowLocal });
+  }
+});
+
+test('rejects *.internal and *.local regardless of allowLocal', () => {
+  for (const allowLocal of [false, true]) {
+    expectReject('http://corp-jenkins.internal/', { allowLocalNetwork: allowLocal });
+    expectReject('http://router.local/', { allowLocalNetwork: allowLocal });
+  }
+});
+
+test('rejects 169.254.169.254 (cloud metadata IP) regardless of allowLocal', () => {
+  for (const allowLocal of [false, true]) {
+    expectReject('http://169.254.169.254/latest/meta-data/', { allowLocalNetwork: allowLocal });
+  }
+});
+
+test('rejects CGNAT 100.64/10 regardless of allowLocal', () => {
+  expectReject('http://100.64.0.1/');
+  expectReject('http://100.127.255.255/');
+  expectAccept('http://100.128.0.1/'); // outside CGNAT
+});
+
+test('rejects multicast/reserved (≥224) and 0/8', () => {
+  expectReject('http://224.0.0.1/');
+  expectReject('http://255.255.255.255/');
+  expectReject('http://0.0.0.0/');
+});
+
+test('localhost / loopback / RFC1918 — relaxable via allowLocalNetwork', () => {
+  // Default = blocked.
+  expectReject('http://localhost:8080/');
+  expectReject('http://127.0.0.1/');
+  expectReject('http://10.1.2.3/');
+  expectReject('http://172.16.0.1/');
+  expectReject('http://172.31.255.255/');
+  expectReject('http://192.168.1.1/');
+  // 172.32 is outside RFC1918 — accepted.
+  expectAccept('http://172.32.0.1/');
+  // With the toggle on — accepted.
+  expectAccept('http://localhost:8080/', { allowLocalNetwork: true });
+  expectAccept('http://127.0.0.1/', { allowLocalNetwork: true });
+  expectAccept('http://10.1.2.3/', { allowLocalNetwork: true });
+  expectAccept('http://192.168.1.1/', { allowLocalNetwork: true });
+  expectAccept('http://172.20.0.1/', { allowLocalNetwork: true });
+});
+
+test('IPv6 — link-local always blocked, loopback/unique-local relaxable', () => {
+  // Always-blocked: link-local fe80::/10 and unspecified ::
+  expectReject('http://[fe80::1]/');
+  expectReject('http://[fe80::1]/', { allowLocalNetwork: true });
+  expectReject('http://[::]/');
+  expectReject('http://[::]/', { allowLocalNetwork: true });
+  // Relaxable: ::1 and fc00::/7
+  expectReject('http://[::1]/');
+  expectAccept('http://[::1]/', { allowLocalNetwork: true });
+  expectReject('http://[fc00::1]/');
+  expectAccept('http://[fc00::1]/', { allowLocalNetwork: true });
+  expectReject('http://[fd12:3456::1]/');
+  expectAccept('http://[fd12:3456::1]/', { allowLocalNetwork: true });
+  // Public IPv6 always allowed.
+  expectAccept('http://[2001:db8::1]/');
+});
+
+test('IPv4-mapped IPv6 (::ffff:V4) is decoded and re-validated', () => {
+  // The URL parser normalizes ::ffff:127.0.0.1 → ::ffff:7f00:1, so the
+  // validator must handle the hex form too.
+  expectReject('http://[::ffff:127.0.0.1]/');
+  expectAccept('http://[::ffff:127.0.0.1]/', { allowLocalNetwork: true });
+  expectReject('http://[::ffff:10.0.0.1]/');
+  expectAccept('http://[::ffff:10.0.0.1]/', { allowLocalNetwork: true });
+  expectReject('http://[::ffff:169.254.169.254]/'); // metadata even when toggled
+  expectReject('http://[::ffff:169.254.169.254]/', { allowLocalNetwork: true });
+  expectAccept('http://[::ffff:8.8.8.8]/'); // public v4 mapped
+});
+
+test('public hosts always accepted', () => {
+  expectAccept('https://example.com/');
+  expectAccept('https://api.github.com/repos/');
+  expectAccept('http://example.com/');
+});
+
+test('invalid URL strings are rejected', () => {
+  expectReject('not a url');
+  expectReject('://no-scheme');
+  expectReject('http://');
+});
+
+test('firefox port validator agrees with chrome on a sample of cases', () => {
+  // Sanity check that the two ports stay in sync. Pick one case from each
+  // category — full coverage runs against the chrome copy above.
+  const samples = [
+    ['javascript:alert(1)', false, false],
+    ['http://169.254.169.254/', false, false],
+    ['http://localhost/', false, false],
+    ['http://localhost/', true, true],
+    ['http://[fe80::1]/', true, false],
+    ['https://example.com/', false, true],
+  ];
+  for (const [url, allowLocal, expectOk] of samples) {
+    const opts = { allowLocalNetwork: allowLocal };
+    const cr = validateFetchUrl(url, opts);
+    const fr = validateFetchUrlFx(url, opts);
+    assert.equal(cr.ok, fr.ok, `chrome/firefox disagree on ${url} (allowLocal=${allowLocal})`);
+    assert.equal(cr.ok, expectOk, `wrong result for ${url} (allowLocal=${allowLocal})`);
+  }
+});
+
+// ────────────────────────────────────────────────────────────────────────
+// registrableDomain — eTLD+1 extractor for cookie policy
+// ────────────────────────────────────────────────────────────────────────
+
+console.log('\nregistrable domain');
+
+test('subdomains collapse to the registrable domain', () => {
+  assert.equal(registrableDomain('github.com'), 'github.com');
+  assert.equal(registrableDomain('api.github.com'), 'github.com');
+  assert.equal(registrableDomain('www.api.github.com'), 'github.com');
+  assert.equal(registrableDomain('mail.google.com'), 'google.com');
+  assert.equal(registrableDomain('docs.google.com'), 'google.com');
+});
+
+test('known multi-label ccTLDs get +1 label', () => {
+  assert.equal(registrableDomain('example.co.uk'), 'example.co.uk');
+  assert.equal(registrableDomain('foo.example.co.uk'), 'example.co.uk');
+  assert.equal(registrableDomain('foo.bar.example.co.uk'), 'example.co.uk');
+  assert.equal(registrableDomain('shop.example.com.au'), 'example.com.au');
+});
+
+test('known multi-tenant hosting suffixes get +1 label', () => {
+  // GitHub Pages: each user is a separate registrable domain.
+  assert.equal(registrableDomain('alice.github.io'), 'alice.github.io');
+  assert.equal(registrableDomain('bob.github.io'), 'bob.github.io');
+  assert.notEqual(registrableDomain('alice.github.io'), registrableDomain('bob.github.io'));
+  // Netlify, Vercel, Cloudflare Pages similarly.
+  assert.equal(registrableDomain('my-site.netlify.app'), 'my-site.netlify.app');
+  assert.equal(registrableDomain('app.vercel.app'), 'app.vercel.app');
+});
+
+test('IP literals returned as-is', () => {
+  assert.equal(registrableDomain('127.0.0.1'), '127.0.0.1');
+  assert.equal(registrableDomain('192.168.1.1'), '192.168.1.1');
+  assert.equal(registrableDomain('::1'), '::1');
+  assert.equal(registrableDomain('fe80::1'), 'fe80::1');
+});
+
+test('edge cases (empty / single label)', () => {
+  assert.equal(registrableDomain(''), '');
+  assert.equal(registrableDomain('localhost'), 'localhost');
+});
+
+test('case-insensitive — same registrable domain', () => {
+  assert.equal(registrableDomain('GitHub.com'), 'github.com');
+  assert.equal(registrableDomain('API.GitHub.COM'), 'github.com');
+});
+
+test('firefox port registrableDomain matches chrome', () => {
+  const samples = ['github.com', 'api.github.com', 'foo.example.co.uk', 'alice.github.io', '127.0.0.1'];
+  for (const h of samples) {
+    assert.equal(registrableDomainFx(h), registrableDomain(h), `mismatch on ${h}`);
   }
 });
 

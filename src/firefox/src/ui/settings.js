@@ -16,6 +16,7 @@ const stepsValueLabel = document.getElementById('steps-value');
 const autoScreenshotSelect = document.getElementById('select-auto-screenshot');
 const siteAdaptersToggle = document.getElementById('toggle-site-adapters');
 const tracingToggle = document.getElementById('toggle-tracing');
+const allowLocalNetworkToggle = document.getElementById('toggle-allow-local-network');
 const accountSection = document.getElementById('account-section');
 const visionBaseUrlInput = document.getElementById('vision-base-url');
 const visionApiKeyInput = document.getElementById('vision-api-key');
@@ -71,7 +72,7 @@ async function init() {
   renderAuthSection();
 
   // Load display settings
-  const stored = await browser.storage.local.get(['verboseMode', 'screenshotFallback', 'maxAgentSteps', 'autoScreenshot', 'useSiteAdapters', 'tracingEnabled']);
+  const stored = await browser.storage.local.get(['verboseMode', 'screenshotFallback', 'maxAgentSteps', 'autoScreenshot', 'useSiteAdapters', 'tracingEnabled', 'agentAllowLocalNetwork']);
   verboseToggle.checked = stored.verboseMode || false;
   screenshotToggle.checked = stored.screenshotFallback ?? true; // on by default
   maxStepsRange.value = stored.maxAgentSteps || 60;
@@ -79,6 +80,7 @@ async function init() {
   if (autoScreenshotSelect) autoScreenshotSelect.value = stored.autoScreenshot || 'state_change';
   if (siteAdaptersToggle) siteAdaptersToggle.checked = stored.useSiteAdapters ?? true;
   if (tracingToggle) tracingToggle.checked = stored.tracingEnabled === true;
+  if (allowLocalNetworkToggle) allowLocalNetworkToggle.checked = stored.agentAllowLocalNetwork === true;
 
   // Load vision model config
   const visionStored = await browser.storage.local.get(['visionModel']);
@@ -191,6 +193,10 @@ siteAdaptersToggle?.addEventListener('change', () => {
 
 tracingToggle?.addEventListener('change', () => {
   browser.storage.local.set({ tracingEnabled: tracingToggle.checked });
+});
+
+allowLocalNetworkToggle?.addEventListener('change', () => {
+  browser.storage.local.set({ agentAllowLocalNetwork: allowLocalNetworkToggle.checked });
 });
 
 // --- Vision Model ---

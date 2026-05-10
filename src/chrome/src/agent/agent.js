@@ -2574,11 +2574,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     }
 
     // ─── Network & download tools ─────────────────────────────────────
-    // These run in the background script context with the user's cookies.
-    // They don't touch the active tab so they're safe to call any time.
+    // These run in the background script context. fetchUrl/readDownloadedFile
+    // attach the user's cookies only when the target shares the registrable
+    // domain (eTLD+1) of the active tab — see network-tools.js for the
+    // cookie & redirect policy. They don't touch the active tab DOM, so
+    // they're safe to call any time.
 
     if (name === 'fetch_url') {
-      return await fetchUrl(args.url, args);
+      return await fetchUrl(args.url, args, { tabId });
     }
     if (name === 'research_url') {
       return await researchUrl(args.url, { ...args, sourceTabId: tabId });
@@ -2587,7 +2590,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       return await listDownloads(args);
     }
     if (name === 'read_downloaded_file') {
-      return await readDownloadedFile(args.downloadId);
+      return await readDownloadedFile(args.downloadId, { tabId });
     }
     if (name === 'download_resource_from_page') {
       return await downloadResourceFromPage(tabId, args);
