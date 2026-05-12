@@ -416,6 +416,9 @@
     if (depth > opts.maxDepth) return;
     if (!el || !el.tagName) return;
 
+    // Skip nodes already emitted in the priority/action prelude.
+    if (depth > 0 && opts._skipPrioritySet && opts._skipPrioritySet.has(el)) return;
+
     // Skip nodes already emitted in the hoisted-overlay prelude. depth>0
     // guard ensures we still enter the overlay itself when it's the
     // explicit walk root.
@@ -444,7 +447,163 @@
   }
 
   // ── Public: build the tree ──────────────────────────────────────────────
-  function generateAccessibilityTree(filter, maxDepth, maxChars, refId) {
+  function isTextEntrySurface(el) {
+    if (!el || !el.tagName) return false;
+    const tag = el.tagName.toLowerCase();
+    const role = (el.getAttribute('role') || '').toLowerCase();
+    const type = (el.getAttribute('type') || 'text').toLowerCase();
+    if (tag === 'textarea') return true;
+    if (tag === 'input') {
+      return !new Set(['submit', 'button', 'reset', 'file', 'checkbox', 'radio', 'image', 'hidden', 'color', 'range']).has(type);
+    }
+    if (role === 'textbox' || role === 'searchbox') return true;
+    if (el.getAttribute('contenteditable') === 'true') return true;
+    return false;
+  }
+
+  function isLikelySubmitSurface(el) {
+    if (!el || !el.tagName) return false;
+    const tag = el.tagName.toLowerCase();
+    const role = (el.getAttribute('role') || '').toLowerCase();
+    if (tag !== 'button' && tag !== 'input' && role !== 'button') return false;
+    const name = (getAccessibleName(el) || '').toLowerCase();
+    const aria = (el.getAttribute('aria-label') || '').toLowerCase();
+    const type = (el.getAttribute('type') || '').toLowerCase();
+    return type === 'submit' || /\b(send|submit|post|reply)\b/.test(`${name} ${aria}`);
+  }
+
+  function isPriorityActionSurface(el) {
+    if (!el || !el.tagName || !el.isConnected) return false;
+    try {
+      if (!isVisible(el) || !isInViewport(el)) return false;
+    } catch (e) {
+      return false;
+    }
+    return isTextEntrySurface(el) || isLikelySubmitSurface(el);
+  }
+
+  function hasCollectedAncestor(el, collected) {
+    for (let p = el.parentElement; p; p = p.parentElement) {
+      if (collected.has(p)) return true;
+    }
+    return false;
+  }
+
+  function collectPriorityActionSurfaces() {
+    const collected = new WeakSet();
+    const out = [];
+    const add = (el) => {
+      if (!isPriorityActionSurface(el)) return;
+      if (collected.has(el) || hasCollectedAncestor(el, collected)) return;
+      collected.add(el);
+      out.push(el);
+    };
+
+    try {
+      const active = document.activeElement;
+      if (active && active !== document.body && active !== document.documentElement) add(active);
+    } catch (e) {}
+
+    const selectors = [
+      'textarea',
+      'input',
+      '[contenteditable="true"]',
+      '[role="textbox"]',
+      '[role="searchbox"]',
+      'button',
+      '[role="button"]',
+      'input[type="submit"]',
+      'input[type="button"]',
+    ];
+    try {
+      for (const el of document.querySelectorAll(selectors.join(','))) {
+        add(el);
+        if (out.length >= 20) break;
+      }
+    } catch (e) {}
+
+    return { elements: out, set: collected };
+  }
+
+  function sliceTreePage(output, lines, chunkSize, page) {
+    const safePage = Math.max(1, Math.floor(Number(page) || 1));
+    const chunks = [];
+    let current = [];
+    let currentLen = 0;
+    let startNode = 0;
+    let charStart = 0;
+    let cursor = 0;
+
+    for (const line of lines) {
+      const addLen = line.length + (current.length ? 1 : 0);
+      if (current.length && currentLen + addLen > chunkSize) {
+        const text = current.join('\n');
+        chunks.push({
+          text,
+          startNode,
+          endNode: startNode + current.length,
+          charStart,
+          charEnd: charStart + text.length,
+        });
+        cursor = charStart + text.length + 1;
+        startNode += current.length;
+        charStart = cursor;
+        current = [line];
+        currentLen = line.length;
+      } else {
+        current.push(line);
+        currentLen += addLen;
+      }
+    }
+    if (current.length || !chunks.length) {
+      const text = current.join('\n');
+      chunks.push({
+        text,
+        startNode,
+        endNode: startNode + current.length,
+        charStart,
+        charEnd: charStart + text.length,
+      });
+    }
+
+    const chunk = chunks[safePage - 1];
+    if (!chunk) {
+      return {
+        pageContent: `[tree page ${safePage}: no content at this page. The rendered tree is ${output.length} chars; request an earlier page.]`,
+        truncated: false,
+        hasMore: false,
+        page: safePage,
+        totalChars: output.length,
+        chunkStart: output.length,
+        chunkEnd: output.length,
+      };
+    }
+
+    let pageContent = chunk.text;
+    const hasMore = safePage < chunks.length;
+    const omittedBefore = chunk.startNode;
+    const omittedAfter = Math.max(0, lines.length - chunk.endNode);
+
+    if (safePage > 1) {
+      pageContent = `[tree page ${safePage}; ${omittedBefore} earlier nodes omitted]\n${pageContent}`;
+    }
+    if (hasMore) {
+      pageContent += `\n[tree truncated: ${omittedAfter} more nodes omitted to stay under ${chunkSize} chars. Before scrolling to find a visible control, call get_accessibility_tree({filter:"visible", page:${safePage + 1}}) for the next chunk.]`;
+    }
+
+    return {
+      pageContent,
+      truncated: hasMore,
+      hasMore,
+      page: safePage,
+      nextPage: hasMore ? safePage + 1 : undefined,
+      totalChars: output.length,
+      chunkStart: chunk.charStart,
+      chunkEnd: chunk.charEnd,
+    };
+  }
+
+  function generateAccessibilityTree(filter, maxDepth, maxChars, refId, page) {
     try {
       const effFilter = filter || 'all';
       // Tighter defaults for the 'visible' / 'interactive' modes so small
@@ -536,24 +695,32 @@
           lines.push('[/open overlays]');
           opts._skipOverlaySet = seen;
         }
+        if (effFilter === 'visible') {
+          const priority = collectPriorityActionSurfaces();
+          if (priority.elements.length) {
+            lines.push('[priority action surfaces - editable/focused/submit controls rendered first]');
+            for (const n of priority.elements) {
+              lines.push(formatLine(n, 0));
+            }
+            lines.push('[/priority action surfaces]');
+            opts._skipPrioritySet = priority.set;
+          }
+        }
         walk(document.body, 0, opts, lines);
       }
 
       sweepDeadRefs();
 
       const output = lines.join('\n');
+      if (effMaxChars != null && page != null && Math.floor(Number(page) || 1) > 1) {
+        return { ...sliceTreePage(output, lines, effMaxChars, page), viewport };
+      }
       // For 'visible' / 'interactive', truncate gracefully on overflow —
       // small models prefer a partial tree to a hard error. For explicit
       // maxChars (caller opted in), keep the stricter error behaviour.
       if (effMaxChars != null && output.length > effMaxChars) {
         if (filter && filter !== 'all' && maxChars == null) {
-          // Soft truncate at line boundary, append a clear hint.
-          let truncated = output.slice(0, effMaxChars);
-          const lastNl = truncated.lastIndexOf('\n');
-          if (lastNl > 0) truncated = truncated.slice(0, lastNl);
-          const omitted = lines.length - truncated.split('\n').length;
-          truncated += `\n[tree truncated: ${omitted} more nodes omitted to stay under ${effMaxChars} chars. For the whole page pass filter:"all" or increase maxChars. For a specific area pass refId of a container from the tree above.]`;
-          return { pageContent: truncated, viewport, truncated: true };
+          return { ...sliceTreePage(output, lines, effMaxChars, page), viewport };
         }
         let hint = `Output exceeds ${effMaxChars} character limit (${output.length} characters). `;
         if (refId) {

@@ -8,7 +8,7 @@ export const AGENT_TOOLS = [
     type: 'function',
     function: {
       name: 'get_accessibility_tree',
-      description: 'PREFERRED page-reading tool. Returns the page as a flat, indented text representation of its accessibility tree. Each kept node is one line of the form `role "accessible name" [ref_id] href="..." type="..." placeholder="..."`. Indentation shows hierarchy. ref_ids are STABLE across calls — re-use them in click_ax / type_ax. Use this first; read_page is a prose fallback for long-form articles only.',
+      description: 'PREFERRED page-reading tool. Returns the page as a flat, indented text representation of its accessibility tree. Each kept node is one line of the form `role "accessible name" [ref_id] href="..." type="..." placeholder="..."`. Indentation shows hierarchy. ref_ids are STABLE across calls — re-use them in click_ax / type_ax. If the result is truncated, request the next page before scrolling to find a visible control. Use this first; read_page is a prose fallback for long-form articles only.',
       parameters: {
         type: 'object',
         properties: {
@@ -16,6 +16,7 @@ export const AGENT_TOOLS = [
           maxDepth: { type: 'number', description: 'Max tree depth to descend (default 15). Lower values produce smaller output.' },
           maxChars: { type: 'number', description: 'Abort and return an error if the rendered tree exceeds this many characters. Protects against huge pages.' },
           ref_id: { type: 'string', description: 'Optional. Anchor the read at a previously-seen ref_id instead of document.body — returns just that element and its subtree. Useful for zooming into a nav, table, or dialog you already found.' },
+          page: { type: 'number', description: 'Optional 1-based chunk number for visible/interactive trees. If a visible tree returns truncated:true/hasMore:true, call again with page: nextPage to read the next chunk of the same ordered tree before trying to scroll.' },
         },
         required: [],
       },
@@ -622,6 +623,7 @@ ACCESSIBILITY TREE — read this carefully:
     filter: "all" (default) | "visible" (in-viewport only) | "interactive" (clickable/typeable only)
     maxDepth: how deep to go (default 15)
     maxChars: bail with an error if output would exceed this length
+    page: when visible/interactive output is truncated, read the next chunk with page: nextPage before scrolling
     ref_id: anchor the read at a specific element — returns its subtree only
 - \`ref_id\`s are STABLE across calls. A ref_id you saw in a previous turn still points to the same element, unless the element was removed from the DOM or the page navigated.
 - Default read pattern: \`get_accessibility_tree({filter: "visible"})\` → locate what you need → answer.
@@ -637,6 +639,7 @@ READING THE CURRENT TAB vs. FETCHING URLS — read this:
 - If the answer lives on the active tab, READ THE TAB. Use \`get_accessibility_tree\` (default) or \`read_page\` (long-form prose). The page content is already loaded — there is nothing to gain by going over the network.
 - DO NOT call \`fetch_url\` or \`research_url\` against the URL of the active tab, the API equivalent of the active tab, or a "renderable" / "raw" / "amp" / "mobile" variant of the active tab's URL. Re-fetching content the user is already looking at is the most common wasted step. Symptom of this antipattern: you fetch a Wikipedia/MediaWiki API URL for the same page the user is on, get a truncated result, then fetch a slightly different variant hoping for more content. Stop and call \`read_page\` instead.
 - \`fetch_url\` and \`research_url\` are for content on OTHER URLs — a referenced article, an API the page links to, a sibling page, a different site entirely.
+- If \`get_accessibility_tree({filter:"visible"})\` returns \`truncated:true\` / \`hasMore:true\`, call \`get_accessibility_tree({filter:"visible", page: nextPage})\` before scrolling to find a control that may already be visible but omitted from the first chunk.
 - If \`read_page\` truncates or doesn't surface what you need, scroll the tab and re-read; or use \`get_accessibility_tree({ref_id: ...})\` to read a specific subtree. Don't escape to fetch_url to retrieve what's already in the DOM.
 
 Guidelines:
@@ -699,14 +702,16 @@ ACCESSIBILITY TREE — read this carefully:
     filter: "all" (default) | "visible" (in-viewport only — great default for action tasks) | "interactive" (only clickable/typeable nodes)
     maxDepth: how deep to descend (default 15)
     maxChars: bail with an error if output would exceed this length
+    page: when visible/interactive output is truncated, read the next chunk with page: nextPage before scrolling
     ref_id: re-read just the subtree under a previously-seen ref_id (useful for zooming into a form or nav)
 - \`ref_id\`s are STABLE across calls. A ref_id you saw last turn still points to the same element as long as it's still in the DOM. If you get a "not found" error, the element was removed or the page navigated — re-read the tree.
 - DEFAULT ACT LOOP:
     1. \`get_accessibility_tree({filter: "visible"})\` — see what's on screen.
-    2. Identify the ref_ids you need for the next step.
-    3. \`click_ax({ref_id: "ref_N"})\` or \`type_ax({ref_id: "ref_N", text: "..."})\`.
-    4. Re-read the tree (or take a screenshot) to verify the page changed.
-    5. Repeat.
+    2. If the tree is truncated and you cannot find a visible target, call \`get_accessibility_tree({filter: "visible", page: nextPage})\` before scrolling.
+    3. Identify the ref_ids you need for the next step.
+    4. \`click_ax({ref_id: "ref_N"})\` or \`type_ax({ref_id: "ref_N", text: "..."})\`.
+    5. Re-read the tree (or take a screenshot) to verify the page changed.
+    6. Repeat.
 - Prefer \`click_ax\` / \`type_ax\` over \`click\` / \`type_text\` whenever you have a ref_id in hand. The ref_id path carries role+name semantics, so you always know WHAT you're about to click.
 - Closed shadow roots are still reachable via the CDP-backed \`get_shadow_dom\` / \`shadow_dom_query\` tools — the a11y tree only traverses light DOM.
 

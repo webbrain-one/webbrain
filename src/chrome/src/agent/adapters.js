@@ -167,6 +167,8 @@ const ADAPTERS = [
 - LinkedIn aggressively lazy-loads everything; scroll to populate the feed/profile, but most content lives in modal-style detail panes.
 - "Connect" button on profiles often has a "Send without a note" prompt — read it before clicking.
 - Messages are at /messaging — the message composer is a contenteditable with image/file upload icons.
+- In Messaging, after filling the composer, the reliable send path is usually Enter. If the composer footer says "Press Enter to Send" or the send-options popover shows "Press Enter to Send", call press_keys({key:"Enter"}) from the composer. Do NOT keep scrolling to find a Send button that is already visible/implicit.
+- The three-dot / send-options control near the composer opens send preferences ("Press Enter to Send" vs "Click Send"); it is not the Send action. If you opened that popover by mistake, choose/keep "Press Enter to Send", close it if needed, then press Enter to send the focused composer.
 - Search has filters (People, Posts, Jobs, Companies) as tabs at the top.`,
   },
   {

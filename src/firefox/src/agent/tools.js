@@ -8,7 +8,7 @@ export const AGENT_TOOLS = [
     type: 'function',
     function: {
       name: 'get_accessibility_tree',
-      description: 'PREFERRED page-reading tool. Returns the page as a flat, indented text representation of its accessibility tree. Each kept node is one line of the form `role "accessible name" [ref_id] href="..." type="..." placeholder="..."`. Indentation shows hierarchy. ref_ids are STABLE across calls — re-use them in click_ax / type_ax / set_field.',
+      description: 'PREFERRED page-reading tool. Returns the page as a flat, indented text representation of its accessibility tree. Each kept node is one line of the form `role "accessible name" [ref_id] href="..." type="..." placeholder="..."`. Indentation shows hierarchy. ref_ids are STABLE across calls — re-use them in click_ax / type_ax / set_field. If the result is truncated, request the next page before scrolling to find a visible control.',
       parameters: {
         type: 'object',
         properties: {
@@ -16,6 +16,7 @@ export const AGENT_TOOLS = [
           maxDepth: { type: 'number', description: 'Max tree depth to descend (default 15).' },
           maxChars: { type: 'number', description: 'Abort and return an error if the rendered tree exceeds this many characters.' },
           ref_id: { type: 'string', description: 'Optional. Anchor at a previously-seen ref_id instead of document.body.' },
+          page: { type: 'number', description: 'Optional 1-based chunk number for visible/interactive trees. If a visible tree returns truncated:true/hasMore:true, call again with page: nextPage to read the next chunk of the same ordered tree before trying to scroll.' },
         },
         required: [],
       },
@@ -551,6 +552,7 @@ READING THE CURRENT TAB vs. FETCHING URLS — read this:
 - If the answer lives on the active tab, READ THE TAB. Use \`get_accessibility_tree\` (default) or \`read_page\` (long-form prose). The page content is already loaded — there is nothing to gain by going over the network.
 - DO NOT call \`fetch_url\` or \`research_url\` against the URL of the active tab, the API equivalent of the active tab, or a "renderable" / "raw" / "amp" / "mobile" variant of the active tab's URL. Re-fetching content the user is already looking at is the most common wasted step. Symptom of this antipattern: you fetch a Wikipedia/MediaWiki API URL for the same page the user is on, get a truncated result, then fetch a slightly different variant hoping for more content. Stop and call \`read_page\` instead.
 - \`fetch_url\` and \`research_url\` are for content on OTHER URLs — a referenced article, an API the page links to, a sibling page, a different site entirely.
+- If \`get_accessibility_tree({filter:"visible"})\` returns \`truncated:true\` / \`hasMore:true\`, call \`get_accessibility_tree({filter:"visible", page: nextPage})\` before scrolling to find a control that may already be visible but omitted from the first chunk.
 - If \`read_page\` truncates or doesn't surface what you need, scroll the tab and re-read; or use \`get_accessibility_tree({ref_id: ...})\` to read a specific subtree. Don't escape to fetch_url to retrieve what's already in the DOM.
 
 Guidelines:

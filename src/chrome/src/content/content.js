@@ -1176,8 +1176,8 @@
           if (typeof window.__generateAccessibilityTree !== 'function') {
             return { error: 'accessibility-tree.js not injected' };
           }
-          const { filter, maxDepth, maxChars, ref_id } = msg.params || {};
-          return window.__generateAccessibilityTree(filter, maxDepth, maxChars, ref_id);
+          const { filter, maxDepth, maxChars, ref_id, page } = msg.params || {};
+          return window.__generateAccessibilityTree(filter, maxDepth, maxChars, ref_id, page);
         } catch (e) {
           return { error: 'Failed to build accessibility tree: ' + (e && e.message || String(e)) };
         }
