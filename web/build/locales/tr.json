@@ -8,7 +8,6 @@
   "meta.twitter_description": "Claude tarayıcı eklentisine ücretsiz açık kaynaklı alternatif. Chrome ve Firefox için AI ajanı. Yerel veya bulut LLM'lerle çalışır. 5 dilli arayüz. Varsayılan olarak token tasarruflu.",
   "meta.image_alt": "WebBrain simgesi",
   "meta.software_version": "5.1.0",
-
   "nav.features": "Özellikler",
   "nav.demo": "Tanıtım",
   "nav.providers": "Sağlayıcılar",
@@ -19,12 +18,10 @@
   "nav.language_aria": "Dil seç",
   "nav.github": "GitHub",
   "nav.github_stars_aria": "WebBrain'i GitHub'da yıldızla",
-
   "hero.h1_html": "Açık kaynaklı AI <span class=\"gradient\">tarayıcı ajanı</span>",
   "hero.description": "WebBrain, Chrome ve Firefox'a AI ajan yeteneklerini getiren ücretsiz ve açık kaynaklı bir tarayıcı uzantısıdır. Sayfaları oku, veri çıkar, web görevlerini otomatikleştir — seçtiğin LLM ile. Tescilli tarayıcı AI eklentilerine kendine ait sunucularda barındırılabilir bir alternatif.",
   "hero.cta.install": "Uzantıyı yükle",
   "hero.cta.github": "GitHub'da gör",
-
   "hero.mockup.url": "https://example.com/urunler",
   "hero.mockup.page_title": "Ürün Kataloğu",
   "hero.mockup.user_prompt": "Bu sayfadaki tüm ürün adlarını ve fiyatlarını çıkar",
@@ -33,16 +30,13 @@
   "hero.mockup.result_html": "<strong>24 ürün</strong> bulundu. İşte sonuçlar:",
   "hero.mockup.result_more": "...ve 21 tane daha",
   "hero.mockup.input_placeholder": "Bu sayfayla ilgili istediğini sor...",
-
   "demo.label": "Tanıtım",
   "demo.title": "WebBrain iş başında",
   "demo.subtitle": "WebBrain'in sayfaları nasıl okuduğunu, veri çıkardığını ve tarayıcı görevlerini otomatikleştirdiğini izle.",
   "demo.iframe_title": "WebBrain tanıtım videosu",
-
   "features.label": "Özellikler",
   "features.title": "Bir tarayıcı AI'sında ihtiyacın olan her şey",
   "features.subtitle": "Tarayıcının yan panelinde yaşayan ve her web sayfasını anlayan eksiksiz bir AI ajanı.",
-
   "features.page_understanding.title": "Sayfa anlama",
   "features.page_understanding.desc": "Her web sayfasını okur ve anlar — makaleler, belgeler, panolar, formlar. Soru sor, mevcut sayfadan anında yanıt al.",
   "features.agent.title": "Tam tarayıcı ajanı",
@@ -67,11 +61,9 @@
   "features.multilingual.desc": "Eklenti English, Español, Français, Türkçe ve 中文 dillerinde geliyor. İlk kullanımda tarayıcı dilini otomatik algılar; yan paneldeki küre simgesinden istediğin an değiştirebilirsin. Pazarlama sitesi de buna uygun olarak yerelleştirildi.",
   "features.token_conscious.title": "Token bilincine sahip",
   "features.token_conscious.desc": "Ekran görüntüleri, makineden çıkmadan önce yeniden boyutlandırılır ve yinelemeli olarak JPEG sıkıştırılır; böylece görüntü tokenleri küçük kalır. Akıllı bağlam kırpma ve araç çıktısı sınırları, bulut faturalarını öngörülebilir tutar — uzun oturumlarda sürpriz harcama yok.",
-
   "providers.label": "LLM sağlayıcıları",
   "providers.title": "Kendi AI'nı getir",
   "providers.subtitle": "OpenAI uyumlu herhangi bir API'ye bağlan veya yerel bir model çalıştır. Uzantı ayarlarından istediğin an sağlayıcı değiştir.",
-
   "modes.label": "Etkileşim kipleri",
   "modes.title": "Sor ya da Uygula",
   "modes.subtitle": "Farklı ihtiyaçlar için iki kip. Varsayılan salt okunur, gerektiğinde tam ajan gücü.",
@@ -79,7 +71,6 @@
   "modes.ask.desc": "Salt okunur. Geçerli sayfayla ilgili soru sor, bilgi çıkar, içerik özetle. Güvenli ve müdahalesiz — hiçbir şey değiştirilmez.",
   "modes.act.title": "Uygula kipi",
   "modes.act.desc": "Tam ajan. Düğmelere tıkla, formları doldur, sayfalar arasında gezin, betikleri çalıştır. Karmaşık çok adımlı tarayıcı iş akışlarını tek talimatla otomatikleştir.",
-
   "download.label": "Başla",
   "download.title": "WebBrain'i yükle",
   "download.subtitle": "Chrome ve Firefox için mevcut. Ücretsiz, açık kaynaklı, hesap gerekmez.",
@@ -91,7 +82,6 @@
   "download.firefox.desc_html": "Manifest V2 · Firefox 109+",
   "download.firefox.install": "Firefox Add-ons'tan indir",
   "download.firefox.source": "Firefox kaynağını gör",
-
   "compare.label": "Neden WebBrain?",
   "compare.title": "WebBrain nasıl karşılaştırılır?",
   "compare.subtitle": "WebBrain, tarayıcıya özgü AI eklentileri ile tam ajan çatıları arasında yer alır. Konumu şöyle.",
@@ -127,7 +117,6 @@
   "compare.cell.offline_yes": "Evet (yerel LLM ile)",
   "compare.cell.offline_no": "Hayır — bulut gerekir",
   "compare.row.self_host": "Kendin barındırabilirsin",
-
   "compare.row.what_is_it": "Nedir?",
   "compare.cell.extension_end_user": "Tarayıcı uzantısı (son kullanıcı aracı)",
   "compare.cell.framework_sdk": "Ajan çatı / SDK (geliştirici aracı)",
@@ -156,81 +145,58 @@
   "compare.cell.daily_ai": "Günlük gezinmede AI asistanı",
   "compare.cell.scraping_testing": "Otomatik kazıma / test işlem hatları",
   "compare.disclaimer": "WebBrain, gezinirken bir AI asistanı isteyen son kullanıcılar için bir tarayıcı uzantısıdır. OpenClaw gibi ajan çatıları, otomatik tarayıcı işlem hatları inşa eden geliştiricilere yönelik araçlardır. Farklı işler için farklı araçlar — ve her ikisini de kullanabilirsin.",
-
   "faq.label": "SSS",
   "faq.title": "Sık Sorulan Sorular",
-
   "faq.alt_claude.q": "WebBrain, Claude'un tarayıcı eklentisine ücretsiz bir alternatif mi?",
   "faq.alt_claude.a_html": "Evet. WebBrain benzer AI tarayıcı ajan yetenekleri sunar — sayfa okuma, veri çıkarma, düğmelere tıklama, form doldurma ve çok adımlı iş akışlarını otomatikleştirme. Claude Pro aboneliği gerektiren ve yalnızca Anthropic modelleriyle çalışan tescilli Claude eklentisinin aksine WebBrain tamamen ücretsiz, açık kaynaklı (MIT lisansı) ve makinende tamamen çalışan yerel modeller de dahil olmak üzere birden çok LLM sağlayıcısını destekler.",
-
   "faq.vs_frameworks.q": "WebBrain; OpenClaw, Browser-Use ve diğer AI ajan çatılarından nasıl farklı?",
   "faq.vs_frameworks.a_html": "Bunlar farklı kategoride araçlar. WebBrain bir tarayıcı uzantısı — Chrome veya Firefox'a kurar ve yan panelde sohbet edersin, kod gerekmez. OpenClaw ve Browser-Use gibi çatılar ise genellikle başlıksız tarayıcılar ve CDP kullanarak Python'da otomatik tarayıcı işlem hatları kuran geliştiriciler için SDK'dır. Kısaca: WebBrain, günlük gezinme için bir AI asistanı; ajan çatıları ise kazıma botları ve test otomasyonu inşa etmek içindir. İkisini de kullanabilirsin — birbirlerini tamamlarlar.",
-
   "faq.offline.q": "WebBrain'i tamamen çevrimdışı kullanabilir miyim?",
   "faq.offline.a_html": "Evet. WebBrain'in varsayılan sağlayıcısı llama.cpp'dir; bilgisayarında yerel bir AI modeli çalıştırır. API anahtarı gerekmez, AI için internet gerekmez ve hiçbir veri makinenden çıkmaz. Bir GGUF modeli indir, llama-server'ı başlat ve tamamen özel bir AI tarayıcı ajanın olsun. Ollama'yı OpenAI uyumlu uç noktasıyla da kullanabilirsin.",
-
   "faq.models_supported.q": "WebBrain hangi AI modellerini destekliyor?",
   "faq.models_supported.a_html": "WebBrain dört sağlayıcı türünü destekler: llama.cpp (herhangi bir yerel GGUF modeli), OpenAI (GPT-4o, GPT-4 vb.), Claude (yerel API üzerinden Claude Opus, Sonnet, Haiku) ve OpenRouter (çeşitli sağlayıcılardan 100+ modele erişim). OpenAI uyumlu herhangi bir API uç noktası çalışır; Together AI, Groq, Mistral veya OpenAI uyumlu arayüze sahip herhangi bir yerel sunucuyu da kullanabilirsin.",
-
   "faq.recommended_model.date": "21 Nisan 2026",
   "faq.recommended_model.q": "En çok önerilen model nedir?",
   "faq.recommended_model.a_html": "<p><strong>21 Nisan 2026</strong> itibarıyla en çok önerdiğimiz model <a href=\"https://huggingface.co/Qwen/Qwen3.6-35B-A3B\" target=\"_blank\">Qwen 3.6 35B</a>. Nedeni: görme kıyaslamamızda (<a href=\"https://www.webbrain.one/blog/vision-model-shootout\" target=\"_blank\">vision-model-shootout</a>) ekran görüntüsü anlamada Gemma 4'ü geçti ve yerel çıkarım için hâlâ pratik.</p><p>Tüketici GPU'larında RTX 5090 ideal; RTX 4090 ise <a href=\"https://huggingface.co/Intel/Qwen3.6-35B-A3B-int4-AutoRound\" target=\"_blank\">Intel/Qwen3.6-35B-A3B-int4-AutoRound</a> üzerinden INT4 AutoRound niceleme ile sıklıkla çalıştırılabilir.</p><p>Maksimum hız için <strong>vLLM</strong> ile servis etmeni öneririz. Örnek komut:</p><p><code>python -u -m vllm.entrypoints.openai.api_server --model Intel/Qwen3.6-35B-A3B-int4-AutoRound --served-model-name qwen3.6-35b --quantization auto --dtype bfloat16 --max-model-len 65536 --max-num-batched-tokens 32768 --max-num-seqs 4 --host 0.0.0.0 --port 8000 --gpu-memory-utilization 0.92 --enable-prefix-caching --enable-chunked-prefill --limit-mm-per-prompt '{\"image\": 4, \"video\": 1}' --mm-processor-cache-type shm --reasoning-parser qwen3 --enable-auto-tool-choice --tool-call-parser qwen3_coder --trust-remote-code --allowed-origins '[\"*\"]' --speculative-config '{\"method\": \"dflash\", \"model\": \"z-lab/Qwen3.6-35B-A3B-DFlash\", \"num_speculative_tokens\": 15}' --attention-backend flash_attn</code></p><p><em>DFlash spekülatif çözümleme isteğe bağlıdır.</em></p>",
-
   "faq.cors.q": "Ağımdaki yerel bir LLM sunucusuna (vLLM, Ollama, llama.cpp) bağlanırken «Failed to fetch» alıyorum",
   "faq.cors.a_html": "<p>LLM sunucunuz yerel ağınızdaki başka bir makinedeyse (ör. <code>http://192.168.1.x:8000</code>), sunucu <strong>CORS başlıkları</strong> göndermedikçe Chrome isteği engeller. Çözüm sunucuya göre değişir:</p><p><strong>vLLM:</strong> <code>--allowed-origins '[\"*\"]'</code> ile başlatın (değer bir JSON listesi olmalıdır).<br><strong>Ollama:</strong> Başlatmadan önce <code>OLLAMA_ORIGINS=*</code> ortam değişkenini ayarlayın.<br><strong>llama.cpp:</strong> CORS varsayılan olarak açıktır — değişiklik gerekmez.</p><p>Sunucunuz <code>localhost</code>'ta (tarayıcıyla aynı makinede) çalışıyorsa genellikle CORS gerekmez. Sorun yalnızca yerel ağdaki makineler arası bağlantıları etkiler. WebBrain ayarlarındaki taban URL'nin <code>/v1</code> ile bittiğinden emin olun (ör. <code>http://192.168.1.47:8000/v1</code>).</p>",
-
   "faq.firefox.q": "WebBrain Firefox'ta çalışıyor mu?",
   "faq.firefox.a_html": "Evet. WebBrain hem Chrome sürümü (sidePanel API'sini kullanan Manifest V3) hem de Firefox sürümüyle (sidebar_action'ı kullanan Manifest V2) birlikte gelir. Her iki sürümün özellikleri aynıdır. Firefox sürümü geliştirme için geçici eklenti olarak yüklenebilir ya da kalıcı kurulum için addons.mozilla.org'da yayımlanabilir.",
-
   "faq.firefox_sidebar_move.q": "Firefox kenar çubuğunu Chrome'un yan paneli gibi soldan sağa taşıyabilir miyim?",
   "faq.firefox_sidebar_move.a_html": "Evet — Firefox'un kenar çubuğu varsayılan olarak solda görünür, ancak konumunu değiştirebilirsin. Kenar çubuğunun başlık alanına sağ tıkla ve <strong>Kenar Çubuğunu Sağa Taşı</strong>'yı seç (ya da menü çubuğundan <strong>Görünüm → Kenar Çubuğu → Kenar Çubuğunu Sağa Taşı</strong>'yı kullan). Konum yeniden başlatmalar arasında korunur. Chrome'un sidePanel'i varsayılan olarak sağdadır ve panelin kendisinden kullanıcı tarafından taşınamaz.",
-
   "faq.safe.q": "WebBrain güvenli mi? Web sayfalarını değiştirebilir mi?",
   "faq.safe.a_html": "WebBrain'in iki kipi vardır: Sor kipi (varsayılan) salt okunurdur ve sayfada hiçbir şeyi değiştiremez. Uygula kipi tam tarayıcı ajan yeteneklerini (tıklama, yazma, gezinme) açar, ancak etkinleştirilmeden önce kullanıcıdan açık onay ister ve görünür bir uyarı banner'ı ile gelir. İstediğin an Durdur düğmesiyle ajanı durdurabilirsin. Uzantının kaynak kodu denetim için tamamen GitHub'da açıktır.",
-
   "faq.scraping.q": "WebBrain'i web kazıma ve veri çıkarma için nasıl kullanırım?",
   "faq.scraping.a_html": "Herhangi bir web sayfasını aç, WebBrain yan panelini aç ve doğal dille sor: «Bu sayfadaki tüm ürün adlarını ve fiyatlarını çıkar», «Bu sayfadaki tüm e-posta adreslerini getir» veya «Bu makaleyi madde madde özetle». AI ajanı sayfa içeriğini okur, yapısını anlar ve çıkardığı veriyi döner. Daha karmaşık kazımalar için Uygula kipine geç; ajan sayfalar arasında gezinir, sayfalama düğmelerine tıklar ve verileri birden çok sayfada birleştirebilir.",
-
   "faq.api_mutations.q": "WebBrain API'leri doğrudan mı çağırır, yoksa her zaman arayüzden mi gider?",
   "faq.api_mutations.a_html": "<p>Varsayılan olarak WebBrain; oluşturan, değiştiren, silen, gönderen, yayınlayan, paylaşan veya satın alan her eylem için <strong>her zaman görünür arayüzden gider</strong>. Sayfaya gider, formu doldurur ve düğmeye tıklar — tam da senin yapacağın gibi. Mutasyonlar için arka planda <code>fetch()</code> ile REST/GraphQL uç noktalarını doğrudan çağırmayı reddeder. Bu kasıtlıdır: API eylemleri görünmezdir (ne gönderildiğini görmezsin), çoğu zaman yapılandırmadığın ayrı yetki jetonları gerektirir ve görünür bir yanlış tıklamaya göre çok daha geniş bir etki alanına sahiptir. UI-first: her şey ekrandadır, olağan tarayıcı oturumundadır ve durdurulabilir.</p><p><strong>Veri okumak</strong> için — bir README alma, issue arama, fiyat karşılaştırma, durum sayfasını kontrol etme — WebBrain, <code>fetch_url</code> ve <code>research_url</code> araçlarıyla arka plan HTTP isteklerini rahatça kullanır. Okumak eylem değildir; uzak bir serviste hiçbir şey değişmez, bu nedenle güvenlik endişeleri burada geçerli değildir.</p><p>Belirli bir görev için API mutasyonlarına özellikle izin vermek istiyorsan, mesajının başına <code>/allow-api</code> yaz (isteğe bağlı olarak kısa bir görev tanımı ekle). Konuşma başına geçerli bu geçersiz kılma, arayüz gerçekten başarısız ya da kullanılamaz olduğunda WebBrain'in API uç noktalarına geri düşmesine izin verir; arayüz çalıştığında yine arayüzü tercih eder. Geçersiz kılma aktifken giriş alanının üstünde yapışkan bir rozet görünür ve konuşma sıfırlandığında bayrak temizlenir.</p>",
-
   "faq.lm_studio.q": "Bunu LM Studio'da da kullanabilir miyim?",
   "faq.lm_studio.a_html": "Evet. WebBrain'in salt okunur ağ araçları — <code>fetch_url</code> ve <code>research_url</code> — bağımsız bir <a href=\"https://lmstudio.ai\" target=\"_blank\">LM Studio</a> eklentisi olarak <a href=\"https://lmstudio.ai/webbrain/web-tools\" target=\"_blank\">webbrain/web-tools</a> adresinde de yayınlanır. <code>lms clone webbrain/web-tools</code> ile kur ve herhangi bir LM Studio sohbetinde aç — araç destekleyen herhangi bir model, tarayıcı eklentisini kurmadan bu iki aracı çağırabilir. Saf Node, headless tarayıcı yok. Kaynak: <a href=\"https://github.com/esokullu/webbrain/tree/main/lmstudio-plugin\" target=\"_blank\">lmstudio-plugin/</a>.",
-
   "faq.tab_switch.q": "WebBrain bir sayfada çalışırken başka bir sekmeye geçebilir miyim?",
   "faq.tab_switch.a_html": "<p>Evet, Chrome'da — ajan arka plan service worker'ında çalışır ve başladığı sekmeye bağlıdır; yani odağını başka yere taşısan bile o belirli sekmeyi tıklamaya, yazmaya ve okumaya devam eder. Bir sekmeyi hedefleyen araçlar (CDP ile tıklama, yazma, gezinme, ekran görüntüsü) Chrome'da arka plan sekmelerinde çalışır. Bir görev sürerken yan çubuk girişi kilitler; böylece yeni sekmede kazara ikinci bir görev başlatamazsın — mevcut olanı beklemen ya da durdurman gerekir. Tarayıcılar arka plan sekmelerindeki zamanlayıcıları ve animasyonları yavaşlattığı için ağır animasyonlu siteler biraz daha yavaş tepki verebilir.</p><p>Firefox'ta ajan yine orijinal sekmesinde çalışmaya devam eder, ancak otomatik ekran görüntüleri kısıtlıdır: Firefox'un ekran görüntüsü API'si yalnızca aktif sekmeyi yakalayabilir, arka plandaki belirli bir sekmeyi değil. WebBrain bunu algılar ve alakasız bir sayfanın görüntüsünü modele beslemektense o tur için ekran görüntüsünü atlar. Ajan, sen sekmesine geri dönene dek metin tabanlı bağlamla planlamaya devam eder.</p><p><strong>Ajanın çalıştığı sekmede aktif olarak tıklamaktan ya da yazmaktan kaçın</strong> — aynı sayfa üzerinde senin ve ajanın birbirinizle yarıştığı yarış koşulları doğar. Sekme değiştirmek sorun değil; aynı sekmeyi beraber sürmek sorun.</p>",
-
   "faq.profile.q": "Profil otomatik doldurma nasıl çalışır ve güvenli mi?",
   "faq.profile.a_html": "<p>Profil otomatik doldurma, <strong>Ayarlar → Profil</strong> altında isteğe bağlı bir özelliktir. Kısa bir biyografi girersin — ad, iş e-postası, şirket ve düşük riskli kayıtlar için <em>tek kullanımlık</em> bir parola — ve açarsın. Etkinleştirildiğinde WebBrain bu metni ajanın sistem istemine ekler, böylece kayıt formlarını her seferinde sormadan doldurabilir.</p><p>Metin tarayıcının yerel depolamasında <strong>düz metin olarak</strong> saklanır. <strong>WebBrain projesine iletilmez</strong> ama yapılandırdığın LLM sağlayıcısına her turda sistem isteminin bir parçası olarak <strong>gönderilir</strong>. Varsayılan kapalı.</p><p><strong>Önemli hesapların parolalarını</strong> (Google, Apple, iCloud, bankacılık, iş SSO'su, birincil e-posta) buraya koyma. Bu hesaplar 2FA kullanmalı ve zaten bir ajana teslim edilmemeli. Amaçlanan kullanım durumu, bülten kayıtları ve ücretsiz denemeler için tekrar tekrar kullandığın tek kullanımlık bir paroladır.</p>",
-
   "faq.cookies_paywalls.q": "WebBrain, çerez banner'ları ve ödeme duvarlarıyla ne yapar?",
   "faq.cookies_paywalls.a_html": "<p><strong>Çerez banner'ları:</strong> WebBrain yaygın çerçevelerin (OneTrust, Cookiebot, Didomi, Quantcast, Google Funding Choices, TrustArc) onay banner'larını tanır ve sayfa üzerinde akıl yürütmeden önce kapatır. Öncelik açıkça görünürse «Tümünü reddet» / «Gerekli olmayanları reddet» / «Yalnızca gerekliler»; aksi hâlde «Tercihleri yönet» labirentine kaybolmak yerine «Tümünü kabul et»e düşer.</p><p><strong>Ödeme duvarları:</strong> WebBrain ödeme duvarını dürüstçe bildirir ve gerçekten ne gördüğünü (başlık, alt başlık, ilk paragraflar) söyler. Ödeme duvarlarını aşmaya <strong>çalışmaz</strong> — ne archive.today, ne 12ft.io, ne çerez silme, ne JS devre dışı bırakma, ne okuma modu hileleri. Tam makaleyi istiyorsan abonelikle giriş yap ya da WebBrain'den aynı haberin ücretsiz kapsamını aramasını iste.</p>",
-
-  "faq.multilingual.q": "WebBrain arayüzü hangi dilleri destekler?",
-  "faq.multilingual.a_html": "<p>Eklenti; <strong>English, Español, Français, Türkçe ve 中文</strong> dillerinde tamamen çevrilmiş arayüzle gelir. İlk kullanımda tarayıcı dilini otomatik algılar; sonrasında istediğin an yan panel başlığındaki küre simgesinden ya da <strong>Ayarlar → Görüntü</strong> içindeki Dil satırından değiştirebilirsin. Ayar, <code>browser.storage.local</code> üzerinden yan panel, seçenekler sayfası ve izler sayfası arasında eşitlenir. Bu pazarlama sitesi de buna uygun şekilde yerelleştirildi: <code>/es/</code>, <code>/fr/</code>, <code>/tr/</code>, <code>/zh/</code> hepsi İngilizce sayfayı yansıtır.</p>",
-
+  "faq.multilingual.q": "WebBrain dry-run modunu destekliyor mu?",
+  "faq.multilingual.a_html": "<p><strong>7.0.0</strong> sürümü itibarıyla henüz hayır. Dry-run modu planlandı ve yol haritasında yer alıyor.</p>",
   "faq.token_conscious.q": "WebBrain bulut LLM faturalarını nasıl kontrol altında tutar?",
   "faq.token_conscious.a_html": "<p>Üç bağımsız katman:</p><p><strong>Token bilincine sahip ekran görüntüleri.</strong> Herhangi bir görüntü makineden çıkmadan önce WebBrain onu yeniden boyutlandırır (kısa kenar sınırlanır, en-boy oranı korunur) ve tur başına görüntü token bütçesine sığana kadar yinelemeli olarak JPEG sıkıştırır. GPT-4o'da sana yaklaşık 1.500 giriş tokeni mal olacak 2000×1200 bir ekran görüntüsü, sayfa okuma görevlerinde pratik kayıp olmaksızın yaklaşık 300–500 tokene inerek sıkıştırılır. <code>_fitImageDimensions</code> içinde uygulanır, bütçe matematiği için birim testleri vardır.</p><p><strong>Akıllı bağlam kırpma.</strong> Konuşma geçmişi, araç çıktıları ve satır içi DOM dökümleri tur başına sınırlıdır ve aktif modelin bağlam penceresi dolmaya yaklaştığında önce en eskilerden kırpılır. Bir <code>read_page</code> roman uzunluğunda bir makale döndürdü diye bir çalışmanın 10 binden 100 bin token'a sessizce şişmesini görmezsin.</p><p><strong>Özel görme modeli.</strong> Planlama ve araç çağrıları için ucuz bir metin modelini (ör. GPT-4o-mini), yalnızca ekran görüntüleri için ayrı bir görme modeliyle (ör. GPT-4o) eşleştir; böylece her turda çok kipli model fiyatını ödemezsin. <strong>Ayarlar → Görme</strong> altında yapılandırılır.</p><p>Net sonuç: bulut sağlayıcılarıyla uzun oturumlar öngörülebilir kalır. Tam kontrol için yerel llama.cpp'yi kullan — token başına sıfır maliyet.</p>",
-
   "faq.contribute.q": "WebBrain'e katkıda bulunabilir miyim?",
   "faq.contribute.a_html": "Kesinlikle! WebBrain MIT lisanslıdır ve katkılara açıktır. Issue'lar, özellik istekleri ve katkı kılavuzu için <a href=\"https://github.com/esokullu/webbrain\" target=\"_blank\">GitHub deposuna</a> göz at.",
-
   "oss.title": "%100 açık kaynak",
   "oss.desc": "WebBrain MIT lisanslıdır. Kodu incele, özelliklere katkı ver ya da çatallayıp kendine özelleştir.",
   "oss.star_btn": "GitHub'da yıldızla",
-
   "share.title": "Haberi yay, sevgini paylaş",
   "share.desc": "WebBrain MIT lisanslıdır ve tamamen tarayıcında çalışır. İşine yarıyorsa bir yıldız bırak ya da paylaş — bağımsız açık kaynak projeleri ancak böyle duyuluyor.",
   "share.star_btn": "⭐ GitHub'da yıldızla",
   "share.x_btn": "X'te paylaş",
   "share.linkedin_btn": "LinkedIn'de paylaş",
   "share.text": "WebBrain — Chrome ve Firefox için ücretsiz, açık kaynaklı AI tarayıcı ajanı. Çok dilli arayüz, varsayılan token tasarruflu, MIT lisanslı.",
-
   "safety.heading": "Önemli güvenlik uyarısı",
   "safety.item_1": "WebBrain'in Uygula kipi senin adına gerçek eylemler gerçekleştirebilir. Devam etmeden önce istekleri, hedefleri ve sonuçları gözden geçirmek senin sorumluluğundadır.",
   "safety.item_2": "WebBrain planlama için ekran görüntüsü alabilir. Riskini kabul etmediğin sürece hassas sayfalarda (örneğin sağlık, finans, flört veya özel hesap portalları) ajan kipini kullanmaktan kaçın.",
   "safety.item_3": "Web içeriği, AI davranışını manipüle etmek üzere tasarlanmış zararlı prompt enjeksiyonları içerebilir. Önerilen eylemleri her zaman gözden geçir ve beklenmeyen görünen çalışmaları durdur.",
-
   "footer.copyright_html": "© 2026 WebBrain. <a href=\"https://emresokullu.com\" target=\"_blank\">Emre Sokullu</a> tarafından yapıldı.",
   "footer.link_github": "GitHub",
   "footer.link_safety": "Güvenlik uyarısı",

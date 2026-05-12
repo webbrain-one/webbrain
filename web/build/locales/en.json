@@ -8,7 +8,6 @@
   "meta.twitter_description": "Free, open-source alternative to Claude browser plugin. AI agent for Chrome & Firefox. Works with local or cloud LLMs. 5-language UI. Token-conscious by default.",
   "meta.image_alt": "WebBrain icon",
   "meta.software_version": "5.1.0",
-
   "nav.features": "Features",
   "nav.demo": "Demo",
   "nav.providers": "Providers",
@@ -19,12 +18,10 @@
   "nav.language_aria": "Select language",
   "nav.github": "GitHub",
   "nav.github_stars_aria": "Star WebBrain on GitHub",
-
   "hero.h1_html": "The Open-Source AI <span class=\"gradient\">Browser Agent</span>",
   "hero.description": "WebBrain is a free, open-source browser extension that brings AI agent capabilities to Chrome and Firefox. Read pages, extract data, and automate web tasks — powered by your choice of LLM. The self-hostable alternative to proprietary browser AI plugins.",
   "hero.cta.install": "Install Extension",
   "hero.cta.github": "View on GitHub",
-
   "hero.mockup.url": "https://example.com/products",
   "hero.mockup.page_title": "Product Catalog",
   "hero.mockup.user_prompt": "Extract all product names and prices from this page",
@@ -33,16 +30,13 @@
   "hero.mockup.result_html": "Found <strong>24 products</strong>. Here are the results:",
   "hero.mockup.result_more": "...and 21 more",
   "hero.mockup.input_placeholder": "Ask anything about this page...",
-
   "demo.label": "Demo",
   "demo.title": "Watch WebBrain in action",
   "demo.subtitle": "See how WebBrain reads pages, extracts data, and automates browser tasks.",
   "demo.iframe_title": "WebBrain demo video",
-
   "features.label": "Features",
   "features.title": "Everything you need in a browser AI",
   "features.subtitle": "A full-featured AI agent that lives in your browser sidebar and understands any web page.",
-
   "features.page_understanding.title": "Page Understanding",
   "features.page_understanding.desc": "Reads and comprehends any web page — articles, docs, dashboards, forms. Ask questions and get instant answers from the current page content.",
   "features.agent.title": "Full Browser Agent",
@@ -67,11 +61,9 @@
   "features.multilingual.desc": "The plugin ships in English, Español, Français, Türkçe and 中文. Auto-detects your browser language on first use; switch anytime from the globe icon in the side panel. The marketing site is localized to match.",
   "features.token_conscious.title": "Token-Conscious",
   "features.token_conscious.desc": "Screenshots are resized and iteratively JPEG-compressed before they leave your machine, keeping image tokens small. Smart context trimming and tool-output caps keep cloud bills predictable — no surprise spend on long sessions.",
-
   "providers.label": "LLM Providers",
   "providers.title": "Bring your own AI",
   "providers.subtitle": "Connect to any OpenAI-compatible API or run a local model. Switch providers anytime from the extension settings.",
-
   "modes.label": "Interaction Modes",
   "modes.title": "Ask or Act",
   "modes.subtitle": "Two modes for different needs. Read-only by default, full agent power when you need it.",
@@ -79,7 +71,6 @@
   "modes.ask.desc": "Read-only. Ask questions about the current page, extract information, summarize content. Safe and non-intrusive — nothing gets modified.",
   "modes.act.title": "Act Mode",
   "modes.act.desc": "Full agent. Click buttons, fill forms, navigate between pages, run scripts. Automate complex multi-step browser workflows with a single instruction.",
-
   "download.label": "Get Started",
   "download.title": "Install WebBrain",
   "download.subtitle": "Available for Chrome and Firefox. Free, open-source, no account required.",
@@ -91,7 +82,6 @@
   "download.firefox.desc_html": "Manifest V2 · Firefox 109+",
   "download.firefox.install": "Download from Firefox Add-ons",
   "download.firefox.source": "View Firefox source",
-
   "compare.label": "Why WebBrain?",
   "compare.title": "How does WebBrain compare?",
   "compare.subtitle": "WebBrain sits at the intersection of browser-native AI plugins and full agent frameworks. Here's how it stacks up.",
@@ -127,7 +117,6 @@
   "compare.cell.offline_yes": "Yes (with local LLM)",
   "compare.cell.offline_no": "No — cloud required",
   "compare.row.self_host": "Self-hostable",
-
   "compare.row.what_is_it": "What is it?",
   "compare.cell.extension_end_user": "Browser extension (end-user tool)",
   "compare.cell.framework_sdk": "Agent framework / SDK (developer tool)",
@@ -156,81 +145,58 @@
   "compare.cell.daily_ai": "Daily browsing AI assistant",
   "compare.cell.scraping_testing": "Automated scraping / testing pipelines",
   "compare.disclaimer": "WebBrain is a browser extension for end users who want an AI assistant while they browse. Agent frameworks like OpenClaw are developer tools for building automated browser pipelines. Different tools for different jobs — and you can use both.",
-
   "faq.label": "FAQ",
   "faq.title": "Frequently Asked Questions",
-
   "faq.alt_claude.q": "Is WebBrain a free alternative to Claude's browser plugin?",
   "faq.alt_claude.a_html": "Yes. WebBrain provides similar AI browser agent capabilities — reading pages, extracting data, clicking buttons, filling forms, and automating multi-step workflows. Unlike Claude's proprietary browser plugin which requires a Claude Pro subscription and only works with Anthropic's models, WebBrain is completely free, open-source (MIT license), and supports multiple LLM providers including local models that run entirely on your machine.",
-
   "faq.vs_frameworks.q": "How does WebBrain compare to OpenClaw, Browser-Use, and other AI agent frameworks?",
   "faq.vs_frameworks.a_html": "They're different categories of tools. WebBrain is a browser extension — you install it in Chrome or Firefox and chat with it in a side panel, no coding required. Frameworks like OpenClaw and Browser-Use are developer SDKs for building automated browser pipelines in Python, typically using headless browsers and CDP. Think of it this way: WebBrain is for daily browsing with an AI assistant; agent frameworks are for building scraping bots and test automation. You can use both — they complement each other.",
-
   "faq.offline.q": "Can I use WebBrain completely offline?",
   "faq.offline.a_html": "Yes. WebBrain's default provider is llama.cpp, which runs a local AI model on your computer. No API keys needed, no internet required for the AI, and no data ever leaves your machine. Just download a GGUF model, start llama-server, and you have a fully private AI browser agent. You can also use Ollama with its OpenAI-compatible endpoint.",
-
   "faq.models_supported.q": "Which AI models does WebBrain support?",
   "faq.models_supported.a_html": "WebBrain supports four provider types: llama.cpp (any local GGUF model), OpenAI (GPT-4o, GPT-4, etc.), Claude (Claude Opus, Sonnet, Haiku via native API), and OpenRouter (access to 100+ models from various providers). Any OpenAI-compatible API endpoint works, so you can also use services like Together AI, Groq, Mistral, or any local server with an OpenAI-compatible interface.",
-
   "faq.recommended_model.date": "April 21, 2026",
   "faq.recommended_model.q": "What's the most recommended model?",
   "faq.recommended_model.a_html": "<p>As of <strong>April 21, 2026</strong>, the top recommendation is <a href=\"https://huggingface.co/Qwen/Qwen3.6-35B-A3B\" target=\"_blank\">Qwen 3.6 35B</a>. Why: in our vision benchmark (<a href=\"https://www.webbrain.one/blog/vision-model-shootout\" target=\"_blank\">vision-model-shootout</a>), it outperformed Gemma 4 on screenshot understanding while remaining practical for local inference.</p><p>For consumer GPUs, RTX 5090 is ideal, and RTX 4090 is often workable with INT4 AutoRound quantization via <a href=\"https://huggingface.co/Intel/Qwen3.6-35B-A3B-int4-AutoRound\" target=\"_blank\">Intel/Qwen3.6-35B-A3B-int4-AutoRound</a>.</p><p>For max speed, we recommend serving on <strong>vLLM</strong>. Sample command:</p><p><code>python -u -m vllm.entrypoints.openai.api_server --model Intel/Qwen3.6-35B-A3B-int4-AutoRound --served-model-name qwen3.6-35b --quantization auto --dtype bfloat16 --max-model-len 65536 --max-num-batched-tokens 32768 --max-num-seqs 4 --host 0.0.0.0 --port 8000 --gpu-memory-utilization 0.92 --enable-prefix-caching --enable-chunked-prefill --limit-mm-per-prompt '{\"image\": 4, \"video\": 1}' --mm-processor-cache-type shm --reasoning-parser qwen3 --enable-auto-tool-choice --tool-call-parser qwen3_coder --trust-remote-code --allowed-origins '[\"*\"]' --speculative-config '{\"method\": \"dflash\", \"model\": \"z-lab/Qwen3.6-35B-A3B-DFlash\", \"num_speculative_tokens\": 15}' --attention-backend flash_attn</code></p><p><em>DFlash speculative decoding is optional.</em></p>",
-
   "faq.cors.q": "I'm getting \"Failed to fetch\" when connecting to a local LLM server (vLLM, Ollama, llama.cpp) on my network",
   "faq.cors.a_html": "<p>If your LLM server is on a different machine on your local network (e.g. <code>http://192.168.1.x:8000</code>), Chrome blocks the request unless the server sends <strong>CORS headers</strong>. The fix depends on your server:</p><p><strong>vLLM:</strong> Start with <code>--allowed-origins '[\"*\"]'</code> (the value must be a JSON list).<br><strong>Ollama:</strong> Set the environment variable <code>OLLAMA_ORIGINS=*</code> before starting.<br><strong>llama.cpp:</strong> CORS is enabled by default — no changes needed.</p><p>If your server runs on <code>localhost</code> (same machine as the browser), CORS is usually not required. The issue only affects cross-machine connections on the local network. Make sure your base URL in WebBrain settings ends with <code>/v1</code> (e.g. <code>http://192.168.1.47:8000/v1</code>).</p>",
-
   "faq.firefox.q": "Does WebBrain work on Firefox?",
   "faq.firefox.a_html": "Yes. WebBrain ships with both a Chrome version (Manifest V3, using the sidePanel API) and a Firefox version (Manifest V2, using sidebar_action). Both versions have identical features. The Firefox version can be loaded as a temporary add-on for development, or published to addons.mozilla.org for permanent installation.",
-
   "faq.firefox_sidebar_move.q": "Can I move the Firefox sidebar from the left to the right, like Chrome's side panel?",
   "faq.firefox_sidebar_move.a_html": "Yes — Firefox's sidebar defaults to the left, but you can flip it. Right-click anywhere in the sidebar header and choose <strong>Move Sidebar to Right</strong> (or use <strong>View → Sidebar → Move Sidebar to Right</strong> from the menu bar). The position persists across restarts. Chrome's sidePanel defaults to the right and isn't user-movable from the panel itself.",
-
   "faq.safe.q": "Is WebBrain safe to use? Can it modify web pages?",
   "faq.safe.a_html": "WebBrain has two modes: Ask mode (default) is read-only and cannot modify anything on the page. Act mode enables full browser agent capabilities (clicking, typing, navigating) but requires explicit user confirmation before activation, and comes with a visible warning banner. You can stop the agent at any time with the Stop button. The extension's source code is fully open for audit on GitHub.",
-
   "faq.scraping.q": "How do I use WebBrain for web scraping and data extraction?",
   "faq.scraping.a_html": "Simply open any web page, open the WebBrain side panel, and ask in natural language: \"Extract all product names and prices from this page\", \"Get all email addresses on this page\", or \"Summarize this article in bullet points\". The AI agent reads the page content, understands the structure, and returns the extracted data. For more complex scraping, switch to Act mode and the agent can navigate between pages, click pagination buttons, and aggregate data across multiple pages.",
-
   "faq.api_mutations.q": "Does WebBrain call APIs directly, or does it always click through the UI?",
   "faq.api_mutations.a_html": "<p>By default, WebBrain <strong>always goes through the visible UI</strong> for any action that creates, modifies, deletes, sends, submits, posts, or buys anything. It will navigate to the page, fill the form, and click the button — exactly the way you would. It refuses to call REST/GraphQL endpoints directly via background <code>fetch()</code> for mutations. This is deliberate: API actions are invisible (you don't see what's being sent), often require separate auth tokens you may not have configured, and have a much larger blast radius than a visible mis-click. UI-first means everything is on screen, in your normal browser session, and stoppable.</p><p>For <strong>reading</strong> data — fetching a README, looking up an issue, comparing prices across sites, checking a status page — WebBrain freely uses background HTTP requests via the <code>fetch_url</code> and <code>research_url</code> tools. Reading is not the same as acting; it doesn't change anything on a remote service, so the safety concerns don't apply.</p><p>If you specifically want to allow API mutations for a particular task, type <code>/allow-api</code> at the start of your message (optionally followed by a short task description). This per-conversation override lets WebBrain fall back to API endpoints when the UI is genuinely failing or unworkable, while still preferring UI when UI works. A sticky badge stays visible above the input area while the override is active, and it clears when you reset the conversation.</p>",
-
   "faq.lm_studio.q": "Can I use it in LM Studio too?",
   "faq.lm_studio.a_html": "Yes. WebBrain's read-only network tools — <code>fetch_url</code> and <code>research_url</code> — also ship as a standalone <a href=\"https://lmstudio.ai\" target=\"_blank\">LM Studio</a> plugin at <a href=\"https://lmstudio.ai/webbrain/web-tools\" target=\"_blank\">webbrain/web-tools</a>. Install with <code>lms clone webbrain/web-tools</code> and toggle it on in any LM Studio chat — any tool-capable model can then call those two tools without you installing the browser extension. Pure Node, no headless browser. Source: <a href=\"https://github.com/esokullu/webbrain/tree/main/lmstudio-plugin\" target=\"_blank\">lmstudio-plugin/</a>.",
-
   "faq.tab_switch.q": "Can I switch to another tab while WebBrain is working on a page?",
   "faq.tab_switch.a_html": "<p>Yes, on Chrome — the agent runs in the background service worker and is bound to the tab it started on, so it keeps clicking, typing, and reading that specific tab even when you move focus elsewhere. Tools that target a tab (CDP click, type, navigate, screenshot) all work on backgrounded tabs in Chrome. The sidebar locks the input while a task is running so you can't accidentally start a second task on the new tab — you'll need to wait or stop the current one. Note that browsers throttle timers and animations on background tabs, so heavily animated sites may respond slightly slower.</p><p>On Firefox, the agent will keep running on its original tab too, but auto-screenshots are limited: Firefox's screenshot API can only capture the currently active tab, not a specific tab in the background. WebBrain detects this and skips the screenshot for that turn rather than feeding the model an image of an unrelated page. The agent will continue planning from text-based context until you switch back to its tab.</p><p><strong>Avoid actively clicking or typing on the same tab the agent is working on</strong> — that creates race conditions where you and the agent fight over the same page. Switching tabs is fine; co-driving the same tab is not.</p>",
-
   "faq.profile.q": "How does Profile auto-fill work, and is it safe?",
   "faq.profile.a_html": "<p>Profile auto-fill is an optional feature in <strong>Settings → Profile</strong>. You enter a short bio — name, work email, company, and a <em>throwaway</em> password for low-stakes signups — and toggle it on. When enabled, WebBrain appends that text to the agent's system prompt so it can fill signup forms without asking every time.</p><p>The text is stored <strong>in plaintext</strong> in your browser's local storage. It is <strong>not</strong> transmitted to the WebBrain project, but it <strong>is</strong> sent to whichever LLM provider you have configured on every turn, as part of the system prompt. Off by default.</p><p><strong>Do not put passwords for important accounts</strong> (Google, Apple, iCloud, banking, work SSO, primary email) here. Those accounts should use 2FA and shouldn't be handed to an agent anyway. A throwaway password you reuse for newsletter signups and free trials is the intended use case.</p>",
-
   "faq.cookies_paywalls.q": "What does WebBrain do with cookie banners and paywalls?",
   "faq.cookies_paywalls.a_html": "<p><strong>Cookie banners:</strong> WebBrain recognizes consent banners from common frameworks (OneTrust, Cookiebot, Didomi, Quantcast, Google Funding Choices, TrustArc) and dismisses them before reasoning about the page. Priority is \"Reject all\" / \"Reject non-essential\" / \"Only necessary\" when clearly visible; it falls back to \"Accept all\" rather than disappearing into the \"Manage preferences\" maze.</p><p><strong>Paywalls:</strong> WebBrain reports the paywall honestly and tells you what it could actually see (headline, dek, first paragraphs). It does <strong>not</strong> attempt to bypass paywalls — no archive.today, 12ft.io, cookie clearing, JS disabling, or reader-mode tricks. If you want the full article, log in with a subscription or ask WebBrain to look for free coverage of the same story.</p>",
-
-  "faq.multilingual.q": "What languages does the WebBrain UI support?",
-  "faq.multilingual.a_html": "<p>The plugin ships with a fully translated UI in <strong>English, Español, Français, Türkçe and 中文</strong>. On first use it auto-detects your browser language; after that you can switch anytime from the globe icon in the side-panel header or the Language row in <strong>Settings → Display</strong>. The setting is synced across the side panel, options page, and traces page via <code>browser.storage.local</code>. This marketing site is localized to match, so <code>/es/</code>, <code>/fr/</code>, <code>/tr/</code>, <code>/zh/</code> all mirror the English page.</p>",
-
+  "faq.multilingual.q": "Does WebBrain support a dry-run mode?",
+  "faq.multilingual.a_html": "<p>As of <strong>7.0.0</strong>, not yet. Dry-run mode is planned and already on the roadmap.</p>",
   "faq.token_conscious.q": "How does WebBrain keep cloud LLM bills under control?",
   "faq.token_conscious.a_html": "<p>Three independent layers:</p><p><strong>Token-conscious screenshots.</strong> Before any image leaves your machine, WebBrain resizes it (shorter side capped, preserving aspect ratio) and iteratively JPEG-compresses it until it fits a per-turn image-token budget. A 2000×1200 screenshot that would cost you ~1,500 input tokens on GPT-4o gets compressed down to ~300–500 tokens with no practical loss for page-reading tasks. Implemented in <code>_fitImageDimensions</code> with unit tests for the budget math.</p><p><strong>Smart context trimming.</strong> Conversation history, tool outputs, and inline DOM dumps are bounded per turn and trimmed oldest-first when the active model's context window is approaching full. You won't see a run silently balloon from 10k tokens to 100k because a <code>read_page</code> returned a novel-length article.</p><p><strong>Dedicated vision model.</strong> Pair a cheap text model (e.g. GPT-4o-mini) for planning and tool calls with a separate vision-capable model (e.g. GPT-4o) only for screenshots, so you don't pay multimodal-model prices on every single turn. Configure under <strong>Settings → Vision</strong>.</p><p>Net result: long sessions with cloud providers stay predictable. For full control, use llama.cpp locally — zero per-token cost.</p>",
-
   "faq.contribute.q": "Can I contribute to WebBrain?",
   "faq.contribute.a_html": "Absolutely! WebBrain is MIT-licensed and welcomes contributions. Check out the <a href=\"https://github.com/esokullu/webbrain\" target=\"_blank\">GitHub repository</a> for issues, feature requests, and contribution guidelines.",
-
   "oss.title": "100% Open Source",
   "oss.desc": "WebBrain is MIT-licensed. Inspect the code, contribute features, or fork it and make it your own.",
   "oss.star_btn": "Star on GitHub",
-
   "share.title": "Spread the word, share the love",
   "share.desc": "WebBrain is MIT-licensed and runs entirely in your browser. If it's useful, drop us a star or share it — that's how independent open-source projects get found.",
   "share.star_btn": "⭐ Star on GitHub",
   "share.x_btn": "Share on X",
   "share.linkedin_btn": "Share on LinkedIn",
   "share.text": "WebBrain — free, open-source AI browser agent for Chrome & Firefox. Multilingual UI, token-conscious by default, MIT-licensed.",
-
   "safety.heading": "Important Safety Notice",
   "safety.item_1": "WebBrain Act mode can take real actions on your behalf. You are responsible for reviewing prompts, destinations, and outcomes before continuing.",
   "safety.item_2": "WebBrain may capture screenshots for planning. Avoid using agent mode on sensitive pages (for example health, finance, dating, or private account portals) unless you accept that risk.",
   "safety.item_3": "Web content can contain malicious prompt injections designed to manipulate AI behavior. Always review suggested actions and stop runs that look unexpected.",
-
   "footer.copyright_html": "© 2026 WebBrain. Built by <a href=\"https://emresokullu.com\" target=\"_blank\">Emre Sokullu</a>.",
   "footer.link_github": "GitHub",
   "footer.link_safety": "Safety Notice",

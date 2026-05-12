@@ -8,7 +8,6 @@
   "meta.twitter_description": "Claude 浏览器插件的免费开源替代品。面向 Chrome 与 Firefox 的 AI 代理。支持本地或云端 LLM。5 种语言界面。默认节省 token。",
   "meta.image_alt": "WebBrain 图标",
   "meta.software_version": "5.1.0",
-
   "nav.features": "功能",
   "nav.demo": "演示",
   "nav.providers": "提供商",
@@ -19,12 +18,10 @@
   "nav.language_aria": "选择语言",
   "nav.github": "GitHub",
   "nav.github_stars_aria": "在 GitHub 上为 WebBrain 加星",
-
   "hero.h1_html": "开源 <span class=\"gradient\">AI 浏览器代理</span>",
   "hero.description": "WebBrain 是一款免费的开源浏览器扩展,为 Chrome 和 Firefox 带来 AI 代理能力。阅读页面、提取数据、自动化网页任务 —— 使用你选择的 LLM。专有浏览器 AI 插件的可自托管替代品。",
   "hero.cta.install": "安装扩展",
   "hero.cta.github": "在 GitHub 查看",
-
   "hero.mockup.url": "https://example.com/products",
   "hero.mockup.page_title": "产品目录",
   "hero.mockup.user_prompt": "提取本页面所有产品名称和价格",
@@ -33,16 +30,13 @@
   "hero.mockup.result_html": "发现 <strong>24 个产品</strong>。结果如下:",
   "hero.mockup.result_more": "...还有 21 个",
   "hero.mockup.input_placeholder": "针对此页面随便问点什么...",
-
   "demo.label": "演示",
   "demo.title": "观看 WebBrain 实战",
   "demo.subtitle": "看看 WebBrain 如何阅读页面、提取数据并自动化浏览器任务。",
   "demo.iframe_title": "WebBrain 演示视频",
-
   "features.label": "功能",
   "features.title": "浏览器 AI 所需的一切",
   "features.subtitle": "一个功能齐全的 AI 代理,驻扎在浏览器侧边栏,能理解任何网页。",
-
   "features.page_understanding.title": "页面理解",
   "features.page_understanding.desc": "读懂任何网页 —— 文章、文档、仪表板、表单。对当前页面内容提问并立即获得答案。",
   "features.agent.title": "完整浏览器代理",
@@ -67,11 +61,9 @@
   "features.multilingual.desc": "插件提供 English、Español、Français、Türkçe 和 中文 五种语言。首次使用时自动检测浏览器语言;随时可通过侧边栏中的地球图标切换。本站也相应本地化。",
   "features.token_conscious.title": "节省 token",
   "features.token_conscious.desc": "截图在离开你的机器之前会先按比例缩放并迭代 JPEG 压缩,让图像 token 保持很小。智能上下文裁剪和工具输出上限让云端费用可预测 —— 长会话不会出现意外支出。",
-
   "providers.label": "LLM 提供商",
   "providers.title": "自带 AI",
   "providers.subtitle": "连接任何 OpenAI 兼容 API,或运行一个本地模型。随时在扩展设置中切换提供商。",
-
   "modes.label": "交互模式",
   "modes.title": "询问或执行",
   "modes.subtitle": "两种模式应对不同需求。默认只读,需要时则具备完整代理能力。",
@@ -79,7 +71,6 @@
   "modes.ask.desc": "只读。就当前页面提问、提取信息、总结内容。安全且不具侵入性 —— 不会修改任何内容。",
   "modes.act.title": "执行模式",
   "modes.act.desc": "完整代理。点击按钮、填写表单、在页面间导航、运行脚本。用一条指令自动化复杂的多步骤浏览器工作流。",
-
   "download.label": "开始使用",
   "download.title": "安装 WebBrain",
   "download.subtitle": "支持 Chrome 和 Firefox。免费、开源、无需账号。",
@@ -91,7 +82,6 @@
   "download.firefox.desc_html": "Manifest V2 · Firefox 109+",
   "download.firefox.install": "从 Firefox 附加组件下载",
   "download.firefox.source": "查看 Firefox 源代码",
-
   "compare.label": "为什么选择 WebBrain?",
   "compare.title": "WebBrain 与其他工具相比如何?",
   "compare.subtitle": "WebBrain 位于浏览器原生 AI 插件与完整代理框架之间。以下是它的定位。",
@@ -127,7 +117,6 @@
   "compare.cell.offline_yes": "是(使用本地 LLM)",
   "compare.cell.offline_no": "否 —— 需要云端",
   "compare.row.self_host": "可自托管",
-
   "compare.row.what_is_it": "是什么?",
   "compare.cell.extension_end_user": "浏览器扩展(面向终端用户的工具)",
   "compare.cell.framework_sdk": "代理框架 / SDK(面向开发者的工具)",
@@ -156,81 +145,58 @@
   "compare.cell.daily_ai": "日常浏览的 AI 助手",
   "compare.cell.scraping_testing": "自动化抓取 / 测试流水线",
   "compare.disclaimer": "WebBrain 是面向终端用户的浏览器扩展,适合希望在浏览时有 AI 助手陪伴的人。像 OpenClaw 这样的代理框架则是开发者用来构建自动化浏览器流水线的工具。不同工具适合不同工作 —— 两者可以并用。",
-
   "faq.label": "常见问题",
   "faq.title": "常见问题解答",
-
   "faq.alt_claude.q": "WebBrain 是 Claude 浏览器插件的免费替代品吗?",
   "faq.alt_claude.a_html": "是的。WebBrain 提供类似的 AI 浏览器代理能力 —— 阅读页面、提取数据、点击按钮、填写表单并自动化多步骤工作流。与需要 Claude Pro 订阅且仅支持 Anthropic 模型的专有 Claude 插件不同,WebBrain 完全免费、开源(MIT 许可),并支持多个 LLM 提供商,包括完全在你的机器上运行的本地模型。",
-
   "faq.vs_frameworks.q": "WebBrain 与 OpenClaw、Browser-Use 以及其他 AI 代理框架有何不同?",
   "faq.vs_frameworks.a_html": "它们属于不同类别的工具。WebBrain 是浏览器扩展 —— 你在 Chrome 或 Firefox 中安装它,并在侧边栏中与它对话,无需编码。OpenClaw 和 Browser-Use 等框架是面向开发者的 SDK,用 Python 构建自动化浏览器流水线,通常使用无头浏览器和 CDP。换句话说:WebBrain 用于日常浏览时的 AI 助手;代理框架用于构建抓取机器人和测试自动化。你可以同时使用 —— 二者互补。",
-
   "faq.offline.q": "我能完全离线使用 WebBrain 吗?",
   "faq.offline.a_html": "可以。WebBrain 的默认提供商是 llama.cpp,它在你的电脑上运行本地 AI 模型。无需 API 密钥,AI 无需互联网,数据不会离开你的机器。下载一个 GGUF 模型,启动 llama-server,你就拥有了一个完全私有的 AI 浏览器代理。你也可以通过 OpenAI 兼容端点使用 Ollama。",
-
   "faq.models_supported.q": "WebBrain 支持哪些 AI 模型?",
   "faq.models_supported.a_html": "WebBrain 支持四类提供商:llama.cpp(任意本地 GGUF 模型)、OpenAI(GPT-4o、GPT-4 等)、Claude(通过原生 API 使用 Claude Opus、Sonnet、Haiku)以及 OpenRouter(访问多家提供商的 100 多种模型)。任何 OpenAI 兼容的 API 端点都能工作,因此你也可以使用 Together AI、Groq、Mistral 等服务,或任何提供 OpenAI 兼容接口的本地服务器。",
-
   "faq.recommended_model.date": "2026 年 4 月 21 日",
   "faq.recommended_model.q": "最推荐的模型是什么?",
   "faq.recommended_model.a_html": "<p>截至 <strong>2026 年 4 月 21 日</strong>,最推荐的是 <a href=\"https://huggingface.co/Qwen/Qwen3.6-35B-A3B\" target=\"_blank\">Qwen 3.6 35B</a>。原因:在我们的视觉基准测试中(<a href=\"https://www.webbrain.one/blog/vision-model-shootout\" target=\"_blank\">vision-model-shootout</a>),它在截图理解方面超过了 Gemma 4,同时对本地推理仍然可行。</p><p>在消费级 GPU 上,RTX 5090 是理想选择;RTX 4090 通常可借助 <a href=\"https://huggingface.co/Intel/Qwen3.6-35B-A3B-int4-AutoRound\" target=\"_blank\">Intel/Qwen3.6-35B-A3B-int4-AutoRound</a> 的 INT4 AutoRound 量化运行。</p><p>追求最高速度时,推荐使用 <strong>vLLM</strong> 提供服务。示例命令:</p><p><code>python -u -m vllm.entrypoints.openai.api_server --model Intel/Qwen3.6-35B-A3B-int4-AutoRound --served-model-name qwen3.6-35b --quantization auto --dtype bfloat16 --max-model-len 65536 --max-num-batched-tokens 32768 --max-num-seqs 4 --host 0.0.0.0 --port 8000 --gpu-memory-utilization 0.92 --enable-prefix-caching --enable-chunked-prefill --limit-mm-per-prompt '{\"image\": 4, \"video\": 1}' --mm-processor-cache-type shm --reasoning-parser qwen3 --enable-auto-tool-choice --tool-call-parser qwen3_coder --trust-remote-code --allowed-origins '[\"*\"]' --speculative-config '{\"method\": \"dflash\", \"model\": \"z-lab/Qwen3.6-35B-A3B-DFlash\", \"num_speculative_tokens\": 15}' --attention-backend flash_attn</code></p><p><em>DFlash 推测解码是可选项。</em></p>",
-
   "faq.cors.q": "连接到我网络上的本地 LLM 服务器(vLLM、Ollama、llama.cpp)时出现「Failed to fetch」",
   "faq.cors.a_html": "<p>如果你的 LLM 服务器在本地网络中的另一台机器上(例如 <code>http://192.168.1.x:8000</code>),除非服务器发送 <strong>CORS 头</strong>,否则 Chrome 会拦截该请求。解决方案因服务器而异:</p><p><strong>vLLM:</strong>启动时添加 <code>--allowed-origins '[\"*\"]'</code>(值必须是 JSON 列表)。<br><strong>Ollama:</strong>启动前设置环境变量 <code>OLLAMA_ORIGINS=*</code>。<br><strong>llama.cpp:</strong>默认启用 CORS,无需更改。</p><p>如果你的服务器运行在 <code>localhost</code>(与浏览器同一台机器),通常不需要 CORS。该问题仅影响本地网络上跨机器的连接。请确保 WebBrain 设置中的基础 URL 以 <code>/v1</code> 结尾(例如 <code>http://192.168.1.47:8000/v1</code>)。</p>",
-
   "faq.firefox.q": "WebBrain 在 Firefox 上能用吗?",
   "faq.firefox.a_html": "能。WebBrain 同时提供 Chrome 版(使用 sidePanel API 的 Manifest V3)和 Firefox 版(使用 sidebar_action 的 Manifest V2)。两个版本功能一致。Firefox 版本可以作为临时附加组件用于开发,也可以发布到 addons.mozilla.org 进行永久安装。",
-
   "faq.firefox_sidebar_move.q": "我可以像 Chrome 那样把 Firefox 的侧边栏从左边移到右边吗?",
   "faq.firefox_sidebar_move.a_html": "可以 —— Firefox 的侧边栏默认显示在左侧,但你可以把它切换到右侧。在侧边栏标题栏上右键点击,选择<strong>「将侧边栏移到右侧」</strong>(也可以从菜单栏走<strong>「查看 → 侧边栏 → 将侧边栏移到右侧」</strong>)。重启后位置保持不变。Chrome 的 sidePanel 默认在右侧,且无法由用户从面板本身移动。",
-
   "faq.safe.q": "使用 WebBrain 安全吗?它能修改网页吗?",
   "faq.safe.a_html": "WebBrain 有两种模式:询问模式(默认)只读,无法修改页面上的任何内容。执行模式启用完整的浏览器代理能力(点击、输入、导航),但在启用前需要用户显式确认,并会显示明显的警告横幅。你可以随时通过「停止」按钮停止代理。扩展的源代码在 GitHub 上完全开放供审计。",
-
   "faq.scraping.q": "如何用 WebBrain 进行网页抓取和数据提取?",
   "faq.scraping.a_html": "打开任意网页,打开 WebBrain 侧边栏,用自然语言提问:「提取本页面所有产品名称和价格」、「获取本页面所有邮箱地址」或「用要点总结这篇文章」。AI 代理会读取页面内容、理解结构并返回提取的数据。对于更复杂的抓取,切换到执行模式,代理可以在页面间导航、点击分页按钮,并在多个页面上聚合数据。",
-
   "faq.api_mutations.q": "WebBrain 是直接调用 API,还是始终通过界面点击?",
   "faq.api_mutations.a_html": "<p>默认情况下,WebBrain 对任何会创建、修改、删除、发送、提交、发布或购买的操作,<strong>始终通过可见界面进行</strong>。它会导航到页面、填写表单、点击按钮 —— 完全像你一样操作。它拒绝在后台通过 <code>fetch()</code> 直接调用 REST/GraphQL 端点进行变更。这是刻意设计:API 操作是不可见的(你看不到发送了什么),通常需要你可能未配置的单独认证令牌,而且相比于一次可见的误点击,影响范围大得多。UI-first 意味着一切都在屏幕上、在你平时的浏览器会话中、并且可中断。</p><p>对于<strong>读取</strong>数据 —— 获取 README、查找议题、跨站比价、检查状态页 —— WebBrain 会自由地通过 <code>fetch_url</code> 和 <code>research_url</code> 工具发送后台 HTTP 请求。读取不等于操作;它不会改变远程服务上的任何东西,因此不存在同样的安全顾虑。</p><p>如果你希望在某个具体任务上允许 API 变更,请在消息开头输入 <code>/allow-api</code>(可以后跟一段简短的任务描述)。这个按会话生效的覆盖会让 WebBrain 在界面确实失败或不可用时回退到 API 端点,但只要界面可用仍优先使用界面。覆盖启用期间,输入区上方会显示一枚置顶徽章,重置会话后该标志会清除。</p>",
-
   "faq.lm_studio.q": "我能在 LM Studio 里也用吗?",
   "faq.lm_studio.a_html": "可以。WebBrain 的只读网络工具 —— <code>fetch_url</code> 和 <code>research_url</code> —— 也作为独立的 <a href=\"https://lmstudio.ai\" target=\"_blank\">LM Studio</a> 插件发布在 <a href=\"https://lmstudio.ai/webbrain/web-tools\" target=\"_blank\">webbrain/web-tools</a>。用 <code>lms clone webbrain/web-tools</code> 安装,然后在任意 LM Studio 聊天里开启 —— 任何支持工具调用的模型都能调用这两个工具,你不需要安装浏览器扩展。纯 Node,无 headless 浏览器。源码:<a href=\"https://github.com/esokullu/webbrain/tree/main/lmstudio-plugin\" target=\"_blank\">lmstudio-plugin/</a>。",
-
   "faq.tab_switch.q": "WebBrain 在某个页面上工作时,我能切换到别的标签吗?",
   "faq.tab_switch.a_html": "<p>在 Chrome 上可以 —— 代理运行在后台 service worker 中,并绑定在启动它的标签上,因此即使你把焦点切到别处,它也会继续在那个特定标签上点击、输入和读取。针对标签的工具(CDP 的点击、输入、导航、截图)在 Chrome 中对后台标签同样有效。任务进行期间,侧边栏会锁定输入,防止你在新标签上意外启动第二个任务 —— 你需要等当前任务完成或手动停止它。需要注意的是,浏览器会限制后台标签上的计时器和动画,因此动画繁多的站点响应可能略慢。</p><p>在 Firefox 上,代理也会继续在其原始标签上运行,但自动截图会受限:Firefox 的截图 API 只能捕获当前活动标签,无法抓取后台的某个具体标签。WebBrain 会识别这一点,并在该轮跳过截图,而不是把一张无关页面的图像喂给模型。代理会继续基于文本上下文进行规划,直到你切回它的标签。</p><p><strong>请避免在代理正在工作的同一标签上主动点击或输入</strong> —— 这会造成你和代理争抢同一页面的竞态条件。切换标签没问题;共同驾驶同一标签则不行。</p>",
-
   "faq.profile.q": "个人资料自动填写如何工作?它安全吗?",
   "faq.profile.a_html": "<p>个人资料自动填写是 <strong>设置 → 个人资料</strong> 中的可选功能。你输入一段简短的自述 —— 姓名、工作邮箱、公司以及用于低风险注册的<em>一次性</em>密码 —— 然后将其打开。启用后,WebBrain 会将这段文本附加到代理的系统提示中,这样它就能无需每次询问即可填写注册表单。</p><p>该文本以<strong>明文</strong>保存在浏览器的本地存储中。它<strong>不会</strong>被传送到 WebBrain 项目,但<strong>会</strong>在每一轮作为系统提示的一部分发送给你配置的 LLM 提供商。默认关闭。</p><p><strong>不要在此放置重要账户的密码</strong>(Google、Apple、iCloud、银行、公司 SSO、主邮箱)。这些账户应启用 2FA,而且本就不该交给代理。预期用途是你在订阅通讯和免费试用注册时反复使用的一次性密码。</p>",
-
   "faq.cookies_paywalls.q": "WebBrain 如何处理 Cookie 横幅和付费墙?",
   "faq.cookies_paywalls.a_html": "<p><strong>Cookie 横幅:</strong>WebBrain 能识别常见框架(OneTrust、Cookiebot、Didomi、Quantcast、Google Funding Choices、TrustArc)的同意横幅,并在对页面进行推理之前将其关闭。当「全部拒绝」/「拒绝非必要」/「仅必要」清晰可见时优先选择这些选项;否则会退而点击「全部接受」,而不是陷入「管理偏好」的迷宫。</p><p><strong>付费墙:</strong>WebBrain 会如实报告付费墙,并告诉你它实际看到了什么(标题、副标题、开头几段)。它<strong>不会</strong>尝试绕过付费墙 —— 不使用 archive.today、12ft.io、不清除 Cookie、不禁用 JS、不使用阅读模式小技巧。如果你想要完整文章,请使用订阅登录,或请 WebBrain 搜索同一报道的免费报道。</p>",
-
-  "faq.multilingual.q": "WebBrain 界面支持哪些语言?",
-  "faq.multilingual.a_html": "<p>插件带有完整翻译的界面,覆盖 <strong>English、Español、Français、Türkçe 和 中文</strong>。首次使用时会自动检测浏览器语言;之后你可以随时从侧边栏顶部的地球图标或 <strong>设置 → 显示</strong> 中的「语言」行切换。该设置通过 <code>browser.storage.local</code> 在侧边栏、选项页和轨迹页之间同步。本营销站点也相应本地化:<code>/es/</code>、<code>/fr/</code>、<code>/tr/</code>、<code>/zh/</code> 都与英文页面保持一致。</p>",
-
+  "faq.multilingual.q": "WebBrain 支持 dry-run（演练）模式吗？",
+  "faq.multilingual.a_html": "<p>截至 <strong>7.0.0</strong> 版本, 还不支持。dry-run 模式已在路线图中, 后续会提供。</p>",
   "faq.token_conscious.q": "WebBrain 如何控制云端 LLM 的账单?",
   "faq.token_conscious.a_html": "<p>三个独立的层:</p><p><strong>节省 token 的截图。</strong>在任何图像离开你的机器之前,WebBrain 会先缩放它(短边封顶,保持宽高比),然后迭代 JPEG 压缩直到适配每轮的图像 token 预算。一张 2000×1200 的截图,在 GPT-4o 上原本大约要花 1500 个输入 token,可被压缩到约 300–500 个 token,对页面阅读任务来说没有实际损失。实现位于 <code>_fitImageDimensions</code>,并有覆盖预算计算的单元测试。</p><p><strong>智能上下文裁剪。</strong>对话历史、工具输出和内联 DOM 转储都会按每轮加以限制,当活跃模型的上下文窗口接近占满时,会从最早的内容开始裁剪。你不会看到一次运行因为一次 <code>read_page</code> 返回了一篇长篇大论,就从 1 万 token 悄悄膨胀到 10 万。</p><p><strong>专用视觉模型。</strong>将便宜的文本模型(如 GPT-4o-mini)用于规划和工具调用,再配一个专门的视觉模型(如 GPT-4o)只用于截图,这样你不必在每一轮都支付多模态模型的价格。可在 <strong>设置 → 视觉</strong> 中配置。</p><p>结果:与云端提供商的长会话保持可预测。如需完全控制,请使用本地 llama.cpp —— 每 token 成本为零。</p>",
-
   "faq.contribute.q": "我可以为 WebBrain 做贡献吗?",
   "faq.contribute.a_html": "当然可以!WebBrain 采用 MIT 许可,欢迎贡献。请查看 <a href=\"https://github.com/esokullu/webbrain\" target=\"_blank\">GitHub 仓库</a> 了解议题、功能请求和贡献指南。",
-
   "oss.title": "100% 开源",
   "oss.desc": "WebBrain 采用 MIT 许可。检查代码、贡献功能,或 fork 一份,打造你自己的版本。",
   "oss.star_btn": "在 GitHub 上加星",
-
   "share.title": "传播开来,分享这份热爱",
   "share.desc": "WebBrain 采用 MIT 许可,完全在你的浏览器中运行。如果你觉得有用,请给个星或分享出去 —— 独立开源项目就是靠这种方式被人发现的。",
   "share.star_btn": "⭐ 在 GitHub 上加星",
   "share.x_btn": "分享到 X",
   "share.linkedin_btn": "分享到 LinkedIn",
   "share.text": "WebBrain — Chrome 和 Firefox 上免费的开源 AI 浏览器代理。多语言界面,默认节省 token,MIT 许可。",
-
   "safety.heading": "重要安全提示",
   "safety.item_1": "WebBrain 的执行模式可以代表你进行真实操作。在继续之前,由你负责检查提示词、目标页面和结果。",
   "safety.item_2": "WebBrain 可能会为了规划而截图。除非你接受风险,否则请避免在敏感页面上使用代理模式(例如健康、金融、约会或私人账户门户)。",
   "safety.item_3": "网页内容可能包含旨在操纵 AI 行为的恶意提示注入。请始终审查建议的操作,并停止看起来异常的运行。",
-
   "footer.copyright_html": "© 2026 WebBrain。由 <a href=\"https://emresokullu.com\" target=\"_blank\">Emre Sokullu</a> 构建。",
   "footer.link_github": "GitHub",
   "footer.link_safety": "安全提示",
