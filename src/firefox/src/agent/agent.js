@@ -954,12 +954,13 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   }
 
   /**
-   * For the FIRST user message, attach page URL/title (always) and a
-   * viewport screenshot (only when the active provider supports vision).
+   * Attach the current page's URL/title to every user message so deictic
+   * phrases like "this page" resolve to the active tab, not an older page
+   * mentioned earlier in the thread. The heavier screenshot context is still
+   * limited to the first real user turn.
    */
-  async _enrichFirstUserMessage(tabId, messages, userMessage) {
+  async _enrichUserMessageWithCurrentPage(tabId, messages, userMessage) {
     const hasPriorUserTurn = messages.some(m => m.role === 'user');
-    if (hasPriorUserTurn) return { role: 'user', content: userMessage };
 
     let url = '', title = '';
     try {
@@ -969,7 +970,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     } catch (e) { /* ignore */ }
 
     let contextLine = url
-      ? `[Page context — URL: ${url}${title ? ` — Title: ${title}` : ''}]\n\n`
+      ? `[Current page context — applies to this user message and supersedes older page context for phrases like "this page". URL: ${url}${title ? ` — Title: ${title}` : ''}]\n\n`
       : '';
 
     if (this.apiAllowedTabs.has(tabId) && !this.apiAllowedInjected.has(tabId)) {
@@ -979,14 +980,19 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
     if (this.useSiteAdapters && url) {
       const adapter = getActiveAdapter(url);
-      this.lastSeenAdapter.set(tabId, adapter ? adapter.name : null);
-      if (adapter) {
+      const currentName = adapter ? adapter.name : null;
+      const lastName = this.lastSeenAdapter.get(tabId) || null;
+      const shouldInjectAdapter = !hasPriorUserTurn || currentName !== lastName;
+      this.lastSeenAdapter.set(tabId, currentName);
+      if (adapter && shouldInjectAdapter) {
         const heading = adapter.category === 'finance'
           ? `[Site guidance for ${adapter.name} — FINANCE / HIGH-STAKES]`
           : `[Site guidance for ${adapter.name}]`;
         contextLine += `${heading}\n${adapter.notes.trim()}\n\n`;
       }
     }
+
+    if (hasPriorUserTurn) return { role: 'user', content: contextLine + userMessage };
 
     // Determine vision capability: either a dedicated vision model is
     // configured (routes screenshots there, text to main), or the main
@@ -2097,7 +2103,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     // Trim context if it's getting too long
     await this._manageContext(tabId, messages);
 
-    const enriched = await this._enrichFirstUserMessage(tabId, messages, userMessage);
+    const enriched = await this._enrichUserMessageWithCurrentPage(tabId, messages, userMessage);
     messages.push(enriched);
 
     const provider = this.providerManager.getActive();
@@ -2301,7 +2307,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     // Trim context if it's getting too long
     await this._manageContext(tabId, messages);
 
-    const enriched = await this._enrichFirstUserMessage(tabId, messages, userMessage);
+    const enriched = await this._enrichUserMessageWithCurrentPage(tabId, messages, userMessage);
     messages.push(enriched);
 
     const provider = this.providerManager.getActive();

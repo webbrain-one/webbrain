@@ -43,8 +43,8 @@ export class Agent {
     // Whether to inject site adapter notes + universal cookie/paywall
     // guidance into the system prompt. Loaded from chrome.storage.local.
     // Default true. The adapter notes themselves still live in
-    // _enrichFirstUserMessage because they're URL-specific; the universal
-    // preamble rides along with the base system prompt.
+    // _enrichUserMessageWithCurrentPage because they're URL-specific; the
+    // universal preamble rides along with the base system prompt.
     this.useSiteAdapters = true;
 
     // Profile auto-fill: when enabled, the user's profile text (name,
@@ -498,20 +498,13 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
    * if capture fails. JPEG @ q60 keeps tokens reasonable (~1k–2k per image).
    */
   /**
-   * For the FIRST user message in a conversation, attach the current page's
-   * URL/title (always) and a viewport screenshot (if the active provider
-   * supports vision). Subsequent turns return the user message unchanged.
-   *
-   * "First message" = no prior user/assistant turns in the message array
-   * (system prompt may exist; summarized-trim acks may exist but those are
-   * synthetic). We treat any conversation with no real user turn yet as
-   * fresh context and seed it.
+   * Attach the current page's URL/title to every user message so deictic
+   * phrases like "this page" resolve to the active tab, not an older page
+   * mentioned earlier in the thread. The heavier screenshot context is still
+   * limited to the first real user turn.
    */
-  async _enrichFirstUserMessage(tabId, messages, userMessage) {
+  async _enrichUserMessageWithCurrentPage(tabId, messages, userMessage) {
     const hasPriorUserTurn = messages.some(m => m.role === 'user');
-    if (hasPriorUserTurn) {
-      return { role: 'user', content: userMessage };
-    }
 
     // Collect URL + title via chrome.tabs (cheap, no debugger needed).
     let url = '';
@@ -523,7 +516,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     } catch (e) { /* ignore */ }
 
     let contextLine = url
-      ? `[Page context — URL: ${url}${title ? ` — Title: ${title}` : ''}]\n\n`
+      ? `[Current page context — applies to this user message and supersedes older page context for phrases like "this page". URL: ${url}${title ? ` — Title: ${title}` : ''}]\n\n`
       : '';
 
     // API mutation override: prepend a strong note when the user has set
@@ -538,15 +531,22 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     // non-obvious quirks the model would otherwise have to discover by trial.
     if (this.useSiteAdapters && url) {
       const adapter = getActiveAdapter(url);
+      const currentName = adapter ? adapter.name : null;
+      const lastName = this.lastSeenAdapter.get(tabId) || null;
+      const shouldInjectAdapter = !hasPriorUserTurn || currentName !== lastName;
       // Always remember the current adapter (or null) so mid-conversation
       // re-injection can detect a real change.
-      this.lastSeenAdapter.set(tabId, adapter ? adapter.name : null);
-      if (adapter) {
+      this.lastSeenAdapter.set(tabId, currentName);
+      if (adapter && shouldInjectAdapter) {
         const heading = adapter.category === 'finance'
           ? `[Site guidance for ${adapter.name} — FINANCE / HIGH-STAKES]`
           : `[Site guidance for ${adapter.name}]`;
         contextLine += `${heading}\n${adapter.notes.trim()}\n\n`;
       }
+    }
+
+    if (hasPriorUserTurn) {
+      return { role: 'user', content: contextLine + userMessage };
     }
 
     // Determine vision capability: either a dedicated vision model is
@@ -4551,7 +4551,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     // Trim context if it's getting too long
     await this._manageContext(tabId, messages);
 
-    const enriched = await this._enrichFirstUserMessage(tabId, messages, userMessage);
+    const enriched = await this._enrichUserMessageWithCurrentPage(tabId, messages, userMessage);
     messages.push(enriched);
     this._persist(tabId);
 
@@ -4596,7 +4596,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
       // Re-inject adapter notes if the user navigated to a different
       // high-traffic site mid-conversation (no-op on the first iteration
-      // because _enrichFirstUserMessage already seeded lastSeenAdapter).
+      // because _enrichUserMessageWithCurrentPage already seeded lastSeenAdapter).
       if (steps > 0) {
         await this._maybeReinjectAdapter(tabId, messages);
       }
@@ -4769,7 +4769,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     // Trim context if it's getting too long
     await this._manageContext(tabId, messages);
 
-    const enriched = await this._enrichFirstUserMessage(tabId, messages, userMessage);
+    const enriched = await this._enrichUserMessageWithCurrentPage(tabId, messages, userMessage);
     messages.push(enriched);
     this._persist(tabId);
 
