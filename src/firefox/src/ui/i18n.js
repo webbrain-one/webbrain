@@ -7,8 +7,17 @@ import es from './locales/es.js';
 import fr from './locales/fr.js';
 import tr from './locales/tr.js';
 import zh from './locales/zh.js';
+import ru from './locales/ru.js';
+import uk from './locales/uk.js';
+import ar from './locales/ar.js';
+import ja from './locales/ja.js';
+import ko from './locales/ko.js';
+import id from './locales/id.js';
+import th from './locales/th.js';
+import ms from './locales/ms.js';
+import tl from './locales/tl.js';
 
-const DICTS = { en, es, fr, tr, zh };
+const DICTS = { en, es, fr, tr, zh, ru, uk, ar, ja, ko, id, th, ms, tl };
 const LS_KEY = 'wbLocale';
 
 export const LANGUAGES = [
@@ -17,6 +26,15 @@ export const LANGUAGES = [
   { code: 'fr', label: 'Français' },
   { code: 'tr', label: 'Türkçe' },
   { code: 'zh', label: '中文' },
+  { code: 'ru', label: 'Русский' },
+  { code: 'uk', label: 'Українська' },
+  { code: 'ar', label: 'العربية' },
+  { code: 'ja', label: '日本語' },
+  { code: 'ko', label: '한국어' },
+  { code: 'id', label: 'Bahasa Indonesia' },
+  { code: 'th', label: 'ไทย' },
+  { code: 'ms', label: 'Bahasa Melayu' },
+  { code: 'tl', label: 'Filipino' },
 ];
 
 function detect() {

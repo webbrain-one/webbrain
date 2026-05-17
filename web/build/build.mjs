@@ -39,11 +39,20 @@ const SITE_ORIGIN = 'https://webbrain.one';
 // Locale config. The default locale (en) renders to web/index.html;
 // the others render to web/<code>/index.html.
 const LOCALES = [
-  { code: 'en', bcp47: 'en-US', label: 'English',   isDefault: true  },
-  { code: 'es', bcp47: 'es-ES', label: 'Español',   isDefault: false },
-  { code: 'fr', bcp47: 'fr-FR', label: 'Français',  isDefault: false },
-  { code: 'tr', bcp47: 'tr-TR', label: 'Türkçe',    isDefault: false },
-  { code: 'zh', bcp47: 'zh-CN', label: '中文',      isDefault: false },
+  { code: 'en', bcp47: 'en-US', label: 'English',          dir: 'ltr', isDefault: true  },
+  { code: 'es', bcp47: 'es-ES', label: 'Español',          dir: 'ltr', isDefault: false },
+  { code: 'fr', bcp47: 'fr-FR', label: 'Français',         dir: 'ltr', isDefault: false },
+  { code: 'tr', bcp47: 'tr-TR', label: 'Türkçe',           dir: 'ltr', isDefault: false },
+  { code: 'zh', bcp47: 'zh-CN', label: '中文',             dir: 'ltr', isDefault: false },
+  { code: 'ru', bcp47: 'ru-RU', label: 'Русский',          dir: 'ltr', isDefault: false },
+  { code: 'uk', bcp47: 'uk-UA', label: 'Українська',       dir: 'ltr', isDefault: false },
+  { code: 'ar', bcp47: 'ar',    label: 'العربية',          dir: 'rtl', isDefault: false },
+  { code: 'ja', bcp47: 'ja-JP', label: '日本語',           dir: 'ltr', isDefault: false },
+  { code: 'ko', bcp47: 'ko-KR', label: '한국어',           dir: 'ltr', isDefault: false },
+  { code: 'id', bcp47: 'id-ID', label: 'Bahasa Indonesia', dir: 'ltr', isDefault: false },
+  { code: 'th', bcp47: 'th-TH', label: 'ไทย',              dir: 'ltr', isDefault: false },
+  { code: 'ms', bcp47: 'ms-MY', label: 'Bahasa Melayu',    dir: 'ltr', isDefault: false },
+  { code: 'tl', bcp47: 'fil-PH', label: 'Filipino',        dir: 'ltr', isDefault: false },
 ];
 
 const FAQ_KEYS = [
@@ -159,6 +168,7 @@ function applyTemplate(template, dict, locale) {
   let out = template
     .replace(/\{\{locale_code\}\}/g, locale.code)
     .replace(/\{\{locale_bcp47\}\}/g, locale.bcp47)
+    .replace(/\{\{locale_dir\}\}/g, locale.dir || 'ltr')
     .replace(/\{\{locale_home_url\}\}/g, canonical)
     .replace(/\{\{hreflang_links\}\}/g, buildHreflangBlock())
     .replace(/\{\{faq_jsonld\}\}/g, buildFaqJsonLd(dict, locale.bcp47))
