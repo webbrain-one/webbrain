@@ -874,6 +874,11 @@
       }
     }
 
+    // Is the document itself scrollable? Used by Strategy 2 to decide whether
+    // to also accept overflow:hidden panes (see the comment there). Strategy 3
+    // — the unconditional window scroll near the end — runs regardless.
+    const windowScrollable = document.documentElement.scrollHeight > window.innerHeight + 10;
+
     // Strategy 2: find the largest scrollable container on the page.
     if (!target) {
       let best = null;
@@ -883,7 +888,16 @@
         if (el.scrollHeight > el.clientHeight + 10) {
           const style = window.getComputedStyle(el);
           const ov = style.overflowY;
-          if (ov === 'auto' || ov === 'scroll' || ov === 'overlay') {
+          // Normally require explicit scroll. When the document itself can't
+          // scroll, also accept overflow:hidden — LinkedIn messaging and
+          // similar virtualized scrollers wrap their content in
+          // overflow:hidden panes that still update scrollTop and fire
+          // scroll events programmatically, which their lazy-loaders listen
+          // for. (overflow:clip blocks programmatic scrolling per spec, so
+          // we don't accept it.)
+          const isScrollable = ov === 'auto' || ov === 'scroll' || ov === 'overlay'
+            || (!windowScrollable && ov === 'hidden');
+          if (isScrollable) {
             const rect = el.getBoundingClientRect();
             const area = rect.width * rect.height;
             if (area > bestArea) {
@@ -898,10 +912,6 @@
         target = best;
       }
     }
-
-    // Strategy 3: check if window itself is scrollable; if not, fall back to
-    // the documentElement or body.
-    const windowScrollable = document.documentElement.scrollHeight > window.innerHeight + 10;
 
     if (target) {
       if (direction === 'down') target.scrollBy(0, amount);
