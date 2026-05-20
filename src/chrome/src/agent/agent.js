@@ -19,6 +19,7 @@ import {
   PDF_PASSTHROUGH_MAX_BYTES,
 } from './pdf-tools.js';
 import * as trace from '../trace/recorder.js';
+import { solveCaptcha, detectCaptcha, injectToken } from './captcha-solver.js';
 
 /**
  * The WebBrain Agent — orchestrates multi-step LLM + tool-use loops.
@@ -66,6 +67,13 @@ export class Agent {
     // UI. Loaded in background.js alongside other settings.
     this.profileEnabled = false;
     this.profileText = '';
+
+    // CapSolver integration. Off by default. When enabled AND an API key
+    // is set, the system prompt grows a "[CAPTCHA SOLVER]" note that
+    // tells the model to try `solve_captcha` once before falling back to
+    // asking the user. The agent reads the key from chrome.storage.local
+    // at call time so rotating the key doesn't require a restart.
+    this.captchaSolverEnabled = false;
     // Stale click detection: per-tab last clicked element identity.
     this._lastCdpClickIdent = new Map(); // tabId -> string
     // Loop detection: per-tab ring buffer of recent tool calls + nudge count.
@@ -1854,6 +1862,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         this.profileText.trim();
     }
 
+    // CAPTCHA solver. Only injected when the user has explicitly enabled
+    // CapSolver — otherwise the default "stop and ask the user" rule in
+    // SYSTEM_PROMPT_ACT stands. The note unlocks the solve_captcha tool
+    // path described there.
+    if (this.captchaSolverEnabled) {
+      prompt += `\n\n[CAPTCHA SOLVER — the user has configured CapSolver. When a CAPTCHA blocks a step, call \`solve_captcha\` once (with no arguments — it auto-detects reCAPTCHA v2/v3, hCaptcha, and Cloudflare Turnstile). On success, click the form's submit button and continue. On failure, ask the user to solve it manually — do not retry solve_captcha repeatedly.]`;
+    }
+
     return prompt;
   }
 
@@ -2243,6 +2259,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       case 'screenshot':
       case 'full_page_screenshot':
         return parsed.success ? 'screenshot captured' : 'screenshot failed';
+      case 'solve_captcha': {
+        if (parsed.success === false) return `captcha solve failed: ${this._truncate(parsed.error || '', 100)}`;
+        const inj = parsed.injected ? 'injected' : 'token only';
+        return `${parsed.type || 'captcha'} solved (${inj})`;
+      }
       case 'scratchpad_write': {
         return `scratchpad ${parsed.mode || 'write'} (${parsed.bytes ?? '?'} chars)`;
       }
@@ -2790,6 +2811,94 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     }
     if (name === 'download_files') {
       return await downloadFiles(args);
+    }
+
+    // ─── CAPTCHA solver ──────────────────────────────────────────────
+    // Only meaningfully wired when the user has enabled CapSolver in
+    // Settings. We re-check on every call so flipping the toggle or
+    // rotating the key takes effect without a restart.
+    if (name === 'solve_captcha') {
+      try {
+        const stored = await chrome.storage.local.get(['captchaSolverEnabled', 'capsolverApiKey']);
+        if (!stored.captchaSolverEnabled) {
+          return { success: false, error: 'CapSolver is not enabled. Ask the user to enable it in Settings → CAPTCHA, or fall back to asking them to solve the captcha manually.' };
+        }
+        const apiKey = (stored.capsolverApiKey || '').trim();
+        if (!apiKey) {
+          return { success: false, error: 'CapSolver is enabled but no API key is configured. Ask the user to set one in Settings → CAPTCHA, or fall back to asking them to solve the captcha manually.' };
+        }
+
+        // Resolve the website URL — the active tab's URL is what the
+        // captcha vendor needs to match its sitekey allowlist.
+        let websiteURL = '';
+        try {
+          const tab = await chrome.tabs.get(tabId);
+          websiteURL = tab?.url || '';
+        } catch {}
+
+        // Detect when the model didn't pre-specify a captcha type. Image-
+        // to-text is a special case that needs an explicit imageBase64.
+        let { type, websiteKey, isInvisible, pageAction, minScore, imageBase64 } = args || {};
+        if (!type) {
+          const detected = await detectCaptcha(tabId);
+          if (!detected) {
+            return { success: false, error: 'No CAPTCHA detected on the page. If the captcha lives inside a cross-origin iframe or uses a non-standard widget, pass `type` and `websiteKey` explicitly.' };
+          }
+          type = detected.type;
+          if (!websiteKey) websiteKey = detected.websiteKey;
+          if (isInvisible == null && detected.isInvisible != null) isInvisible = detected.isInvisible;
+          if (!pageAction && detected.pageAction) pageAction = detected.pageAction;
+        }
+
+        if (type === 'image_to_text') {
+          if (!imageBase64) {
+            return { success: false, error: 'solve_captcha: image_to_text requires `imageBase64`.' };
+          }
+        } else if (!websiteKey) {
+          return { success: false, error: `solve_captcha: ${type} requires a websiteKey (data-sitekey). Auto-detection didn't find one — pass it explicitly.` };
+        }
+
+        const result = await solveCaptcha(apiKey, {
+          type,
+          websiteURL,
+          websiteKey,
+          ...(isInvisible != null ? { isInvisible } : {}),
+          ...(pageAction ? { pageAction } : {}),
+          ...(minScore ? { minScore } : {}),
+          ...(imageBase64 ? { body: imageBase64 } : {}),
+        });
+
+        // For non-image types, push the token into the page response field
+        // unless the caller explicitly opted out.
+        const wantInject = args?.inject !== false && type !== 'image_to_text';
+        let injection = null;
+        if (wantInject && result.fieldName && result.token) {
+          try {
+            injection = await injectToken(tabId, {
+              fieldName: result.fieldName,
+              alsoSet: result.alsoSet,
+              token: result.token,
+            });
+          } catch (e) {
+            injection = { success: false, error: e.message };
+          }
+        }
+
+        return {
+          success: true,
+          type,
+          taskId: result.taskId,
+          token: result.token,
+          tokenPreview: result.token ? `${String(result.token).slice(0, 24)}…(${String(result.token).length} chars)` : null,
+          injected: injection?.success === true,
+          injection,
+          note: wantInject
+            ? 'Token was injected into the page response field. Click the form\'s submit button next; do NOT call solve_captcha again.'
+            : 'Token returned, not injected. Pass it to the form via type_text on the response field, then submit.',
+        };
+      } catch (e) {
+        return { success: false, error: `solve_captcha failed: ${e.message}` };
+      }
     }
 
     // ─── PDF reader ───────────────────────────────────────────────────

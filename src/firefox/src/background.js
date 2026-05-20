@@ -6,6 +6,7 @@ import {
   signOutClaude,
   getClaudeOAuthStatus,
 } from './providers/oauth-claude.js';
+import { getBalance as capsolverGetBalance } from './agent/captcha-solver.js';
 
 /**
  * WebBrain Background Script (Firefox)
@@ -46,6 +47,16 @@ async function loadProfile() {
 }
 loadProfile();
 
+// CapSolver opt-in. API key itself is read at solve time so rotating
+// keys via Settings doesn't need a restart.
+async function loadCaptchaSolver() {
+  const stored = await browser.storage.local.get('captchaSolverEnabled');
+  if (stored.captchaSolverEnabled != null) {
+    agent.captchaSolverEnabled = !!stored.captchaSolverEnabled;
+  }
+}
+loadCaptchaSolver();
+
 // Initialize on install
 browser.runtime.onInstalled.addListener(async () => {
   await providerManager.load();
@@ -78,6 +89,10 @@ browser.storage.onChanged.addListener((changes) => {
   }
   if (changes.profileText) {
     agent.profileText = changes.profileText.newValue || '';
+    refreshPrompts = true;
+  }
+  if (changes.captchaSolverEnabled) {
+    agent.captchaSolverEnabled = !!changes.captchaSolverEnabled.newValue;
     refreshPrompts = true;
   }
   if (refreshPrompts) agent._refreshSystemPrompts();
@@ -377,6 +392,17 @@ async function handleMessage(msg, sender) {
 
     case 'test_vision_provider': {
       return await providerManager.testVisionProvider();
+    }
+
+    case 'test_capsolver_balance': {
+      try {
+        const key = String(msg.apiKey || '').trim();
+        if (!key) return { ok: false, error: 'No API key provided' };
+        const res = await capsolverGetBalance(key);
+        return { ok: true, balance: res.balance, packages: res.packages };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
     }
 
     case 'list_ollama_models': {

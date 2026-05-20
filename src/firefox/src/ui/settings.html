@@ -322,6 +322,7 @@
     <button class="tab-btn" type="button" role="tab" data-tab="providers" data-i18n="st.tab.providers"></button>
     <button class="tab-btn" type="button" role="tab" data-tab="vision" data-i18n="st.tab.vision"></button>
     <button class="tab-btn" type="button" role="tab" data-tab="profile" data-i18n="st.tab.profile"></button>
+    <button class="tab-btn" type="button" role="tab" data-tab="captcha" data-i18n="st.tab.captcha"></button>
   </nav>
 
   <section class="tab-panel active" data-panel="display" role="tabpanel">
@@ -494,6 +495,37 @@
       <div class="test-result" id="test-profile"></div>
 
       <div class="info-box" style="margin-top:16px;" data-i18n-html="st.profile.security_html"></div>
+    </div>
+  </section>
+
+  <section class="tab-panel" data-panel="captcha" role="tabpanel">
+    <div class="provider-card" id="captcha-card">
+      <div style="font-size:12px;color:var(--text2);margin-bottom:14px;line-height:1.55;" data-i18n-html="st.captcha.desc_html"></div>
+
+      <div class="setting-row" style="margin-bottom:12px;">
+        <div class="setting-info">
+          <div class="setting-label" data-i18n="st.captcha.enabled.label"></div>
+          <div class="setting-desc" data-i18n="st.captcha.enabled.desc"></div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="toggle-captcha-enabled">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <div class="field">
+        <label data-i18n="st.captcha.api_key.label"></label>
+        <input type="password" id="captcha-api-key" placeholder="CAP-XXXXXXXXXXXXXXXXXXXX">
+      </div>
+
+      <div class="btn-row">
+        <button class="btn-primary" id="btn-save-captcha" data-i18n="st.captcha.save"></button>
+        <button class="btn-secondary" id="btn-test-captcha" data-i18n="st.captcha.check_balance"></button>
+        <button class="btn-secondary" id="btn-clear-captcha" data-i18n="st.captcha.clear"></button>
+      </div>
+      <div class="test-result" id="test-captcha"></div>
+
+      <div class="info-box" style="margin-top:16px;" data-i18n-html="st.captcha.security_html"></div>
     </div>
   </section>
 

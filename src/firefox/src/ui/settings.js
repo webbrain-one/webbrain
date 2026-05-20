@@ -31,6 +31,12 @@ const profileTextArea = document.getElementById('profile-text');
 const btnSaveProfile = document.getElementById('btn-save-profile');
 const btnClearProfile = document.getElementById('btn-clear-profile');
 const profileTestResult = document.getElementById('test-profile');
+const captchaEnabledToggle = document.getElementById('toggle-captcha-enabled');
+const captchaApiKeyInput = document.getElementById('captcha-api-key');
+const btnSaveCaptcha = document.getElementById('btn-save-captcha');
+const btnTestCaptcha = document.getElementById('btn-test-captcha');
+const btnClearCaptcha = document.getElementById('btn-clear-captcha');
+const captchaTestResult = document.getElementById('test-captcha');
 const languageSelect = document.getElementById('select-language');
 const subtitleEl = document.getElementById('subtitle');
 
@@ -95,6 +101,11 @@ async function init() {
   const profileStored = await browser.storage.local.get(['profileEnabled', 'profileText']);
   if (profileEnabledToggle) profileEnabledToggle.checked = !!profileStored.profileEnabled;
   if (profileTextArea) profileTextArea.value = profileStored.profileText || '';
+
+  // Load CapSolver config — off by default.
+  const captchaStored = await browser.storage.local.get(['captchaSolverEnabled', 'capsolverApiKey']);
+  if (captchaEnabledToggle) captchaEnabledToggle.checked = !!captchaStored.captchaSolverEnabled;
+  if (captchaApiKeyInput) captchaApiKeyInput.value = captchaStored.capsolverApiKey || '';
 
   // Load providers
   const res = await sendToBackground('get_providers');
@@ -299,6 +310,58 @@ if (btnClearProfile) {
     if (profileTextArea) profileTextArea.value = '';
     await browser.storage.local.set({ profileText: '' });
     flashProfileResult('ok', t('st.profile.cleared'));
+  });
+}
+
+// --- CapSolver (captcha solving) ---
+// Toggle persists immediately. The API key needs an explicit Save.
+
+function flashCaptchaResult(className, text) {
+  if (!captchaTestResult) return;
+  captchaTestResult.className = `test-result show ${className}`;
+  captchaTestResult.textContent = text;
+  setTimeout(() => captchaTestResult.classList.remove('show'), 3000);
+}
+
+if (captchaEnabledToggle) {
+  captchaEnabledToggle.addEventListener('change', () => {
+    browser.storage.local.set({ captchaSolverEnabled: captchaEnabledToggle.checked });
+  });
+}
+
+if (btnSaveCaptcha) {
+  btnSaveCaptcha.addEventListener('click', async () => {
+    const key = (captchaApiKeyInput?.value || '').trim();
+    await browser.storage.local.set({ capsolverApiKey: key });
+    flashCaptchaResult('ok', t('st.captcha.saved'));
+  });
+}
+
+if (btnTestCaptcha) {
+  btnTestCaptcha.addEventListener('click', async () => {
+    const key = (captchaApiKeyInput?.value || '').trim();
+    if (!key) {
+      flashCaptchaResult('fail', t('st.captcha.need_key'));
+      return;
+    }
+    captchaTestResult.className = 'test-result show';
+    captchaTestResult.textContent = t('st.captcha.checking');
+    captchaTestResult.style.color = 'var(--text2)';
+    const res = await sendToBackground('test_capsolver_balance', { apiKey: key });
+    if (res.ok) {
+      flashCaptchaResult('ok', t('st.captcha.balance_ok', { balance: Number(res.balance).toFixed(4) }));
+    } else {
+      flashCaptchaResult('fail', t('st.captcha.balance_fail', { error: res.error }));
+    }
+  });
+}
+
+if (btnClearCaptcha) {
+  btnClearCaptcha.addEventListener('click', async () => {
+    if (captchaApiKeyInput) captchaApiKeyInput.value = '';
+    if (captchaEnabledToggle) captchaEnabledToggle.checked = false;
+    await browser.storage.local.remove(['capsolverApiKey', 'captchaSolverEnabled']);
+    flashCaptchaResult('ok', t('st.captcha.cleared'));
   });
 }
 

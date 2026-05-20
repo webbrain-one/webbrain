@@ -92,6 +92,7 @@ export default {
   'st.tab.vision': 'Vision',
   'st.tab.profile': 'Profile',
   'st.tab.account': 'Account',
+  'st.tab.captcha': 'CAPTCHA',
 
   'st.account.not_signed_in': 'Not signed in',
   'st.account.sign_in': 'Sign In / Register',
@@ -170,6 +171,21 @@ export default {
   'st.profile.saved': 'Saved.',
   'st.profile.cleared': 'Cleared.',
   'st.profile.security_html': '<strong>Security — read this:</strong><br><ul style="margin:6px 0 0 18px;padding:0;line-height:1.55;"><li>The text you enter here is stored <strong>in plaintext</strong> in your browser\'s local storage. It is <strong>not</strong> transmitted to the WebBrain project — but it <strong>is</strong> sent to whichever LLM provider you have configured on every turn, as part of the system prompt.</li><li><strong>Do not put passwords for important accounts</strong> here (Google, Apple, iCloud, banking, work SSO, primary email). Those accounts should use 2FA and you shouldn\'t need to hand them to an agent anyway.</li><li>A <strong>throwaway password</strong> you reuse for low-stakes site signups (newsletters, free trials, forum accounts) is the intended use case.</li><li>If this browser profile is ever compromised, an attacker with disk access can read this text. Keep it minimal.</li></ul>',
+
+  'st.captcha.desc_html': 'Let the agent solve CAPTCHAs automatically via the <a href="https://capsolver.com" target="_blank" style="color:var(--accent);">CapSolver</a> API. Supports reCAPTCHA v2/v3, hCaptcha, and Cloudflare Turnstile. Off by default — when off, the agent stops and asks you to solve the captcha yourself. CapSolver charges per solve (~$0.001–$0.003); you bring your own account and API key.',
+  'st.captcha.enabled.label': 'Enable CapSolver',
+  'st.captcha.enabled.desc': 'When the agent hits a CAPTCHA it will call CapSolver once before falling back to asking you. Requires an API key below.',
+  'st.captcha.api_key.label': 'CapSolver API Key',
+  'st.captcha.save': 'Save Key',
+  'st.captcha.check_balance': 'Check Balance',
+  'st.captcha.clear': 'Clear',
+  'st.captcha.saved': 'Saved.',
+  'st.captcha.cleared': 'Cleared.',
+  'st.captcha.checking': 'Checking balance…',
+  'st.captcha.need_key': 'Enter an API key first.',
+  'st.captcha.balance_ok': 'OK — balance: ${balance}',
+  'st.captcha.balance_fail': 'Failed: {error}',
+  'st.captcha.security_html': '<strong>Heads-up:</strong> the API key is stored <strong>in plaintext</strong> in browser local storage. CapSolver charges your account for every solve; the agent will only call it when a CAPTCHA actually blocks a step (max once per encounter — it won\'t retry on failure). Some sites\' terms of service prohibit automated CAPTCHA solving; use your judgement.',
 
   // --- Traces page -------------------------------------------------------
   'tr.title': 'WebBrain Traces',

@@ -613,6 +613,30 @@ export const AGENT_TOOLS = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'solve_captcha',
+      description: 'Solve a CAPTCHA on the current page using the CapSolver API (only available when the user has enabled CapSolver and provided an API key in Settings → CAPTCHA). If `type` and `websiteKey` are omitted, the tool scans the page for known widgets (reCAPTCHA v2/v3, hCaptcha, Cloudflare Turnstile) and uses what it finds. Returns the solution token and whether it was injected into the page; you usually still need to click the form\'s submit button afterward. On failure (no CapSolver key configured, unknown captcha type, API error, timeout) the tool returns `{ success: false, error: "..." }` — fall back to asking the user to solve it manually.',
+      parameters: {
+        type: 'object',
+        properties: {
+          type: {
+            type: 'string',
+            enum: ['recaptcha_v2', 'recaptcha_v3', 'hcaptcha', 'turnstile', 'image_to_text'],
+            description: 'CAPTCHA type. Omit to auto-detect from the page DOM.',
+          },
+          websiteKey: { type: 'string', description: 'Site key from the captcha widget\'s data-sitekey attribute. Auto-detected when omitted.' },
+          isInvisible: { type: 'boolean', description: 'reCAPTCHA v2 / hCaptcha only — true when the widget uses invisible mode (no visible checkbox). Auto-detected when omitted.' },
+          pageAction: { type: 'string', description: 'reCAPTCHA v3 only — the action name the page uses (e.g. "login", "submit"). Auto-detected from data-action when present.' },
+          minScore: { type: 'number', description: 'reCAPTCHA v3 only — minimum score requested (0.3 is the usual lower bound, 0.7+ is hard).' },
+          imageBase64: { type: 'string', description: 'image_to_text only — base64-encoded image bytes (no data: prefix).' },
+          inject: { type: 'boolean', description: 'After solving, inject the token into the page\'s response field (textarea[name=g-recaptcha-response] etc.) and fire the widget\'s callback. Default true. Set false to get just the token back.' },
+        },
+        required: [],
+      },
+    },
+  },
 ];
 
 /**
@@ -926,7 +950,7 @@ FORMS — read this:
 - You do NOT need verify_form for simple interactions: search boxes, single-field forms, or login forms. Use it for multi-field forms where wrong data has consequences (checkout, profile, issue creation, releases, etc.).
 - AFTER submitting a form, ALWAYS take a screenshot and read the page to confirm success BEFORE doing anything else. Do not resume other actions until you verify the submission result. Look for: a success message/toast, the newly created item appearing in a list, or a detail page for the new item. Check that the details (name, price, dates) match what you intended.
 - NEVER claim you created something unless you see CONFIRMATION on the page. If you see a list of items, check the creation date — if it says "2 months ago" or a past date, that is an EXISTING item, NOT something you just created. Only items with a timestamp from right now are yours.
-- If you encounter any CAPTCHA, anti-bot check, or human verification challenge, STOP immediately and ask the user to solve it. Do not attempt to bypass it and do not continue automation until the user confirms it is solved.
+- If you encounter any CAPTCHA, anti-bot check, or human verification challenge, the default is to STOP and ask the user to solve it — do not invent code or DOM tricks to bypass it. The single exception: when the user has configured CapSolver (you will see a "[CAPTCHA SOLVER]" note in the system prompt), call \`solve_captcha\` ONCE. If that returns success, click the form's submit button and continue. If it errors, fall back to asking the user — do not loop on solve_captcha.
 
 MODALS & DIALOGS — read this:
 - When a modal/dialog is open, treat the rest of the page as unreachable. click({text: ...}) and get_interactive_elements are automatically scoped to the topmost dialog, so queries for buttons behind the overlay will return "no match" — that's intentional.

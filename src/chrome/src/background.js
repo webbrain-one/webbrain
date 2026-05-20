@@ -6,6 +6,7 @@ import {
   signOutClaude,
   getClaudeOAuthStatus,
 } from './providers/oauth-claude.js';
+import { getBalance as capsolverGetBalance } from './agent/captcha-solver.js';
 
 /**
  * WebBrain Service Worker (Background Script)
@@ -51,6 +52,17 @@ async function loadProfile() {
 }
 loadProfile();
 
+// CapSolver opt-in. We only need the toggle here — the API key is read at
+// call time inside the agent's solve_captcha handler so rotating it via
+// the settings page is picked up without a restart.
+async function loadCaptchaSolver() {
+  const stored = await chrome.storage.local.get('captchaSolverEnabled');
+  if (stored.captchaSolverEnabled != null) {
+    agent.captchaSolverEnabled = !!stored.captchaSolverEnabled;
+  }
+}
+loadCaptchaSolver();
+
 // Initialize on install
 chrome.runtime.onInstalled.addListener(async () => {
   await providerManager.load();
@@ -92,6 +104,10 @@ chrome.storage.onChanged.addListener((changes) => {
   }
   if (changes.profileText) {
     agent.profileText = changes.profileText.newValue || '';
+    refreshPrompts = true;
+  }
+  if (changes.captchaSolverEnabled) {
+    agent.captchaSolverEnabled = !!changes.captchaSolverEnabled.newValue;
     refreshPrompts = true;
   }
   if (refreshPrompts) agent._refreshSystemPrompts();
@@ -547,6 +563,20 @@ async function handleMessage(msg, sender) {
 
     case 'test_vision_provider': {
       return await providerManager.testVisionProvider();
+    }
+
+    case 'test_capsolver_balance': {
+      // Settings UI "Check balance" button. Uses the key from the request
+      // rather than re-reading storage so the user gets feedback before
+      // they've clicked Save.
+      try {
+        const key = String(msg.apiKey || '').trim();
+        if (!key) return { ok: false, error: 'No API key provided' };
+        const res = await capsolverGetBalance(key);
+        return { ok: true, balance: res.balance, packages: res.packages };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
     }
 
     case 'list_ollama_models': {
