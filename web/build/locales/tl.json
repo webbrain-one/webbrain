@@ -51,8 +51,6 @@
   "features.smart_context.desc": "Pinipigilan ng awtomatikong pamamahala sa konteksto ang pag-apaw ng tokens. Marunong magbawas ng kasaysayan ng usapan at naglilimita sa output ng mga tool para sa maayos at walang patid na sesyon.",
   "features.vision.title": "Nakalaang Vision Model",
   "features.vision.desc": "Magsama ng isang mabilis at puro-teksto na modelo para sa pagpaplano sa isang hiwalay na vision-capable na modelo para basahin ang mga screenshot. Mas mura at mas mabilis kaysa gumamit ng iisang malaking multimodal model para sa lahat.",
-  "features.tabgroups.title": "Tab Groups",
-  "features.tabgroups.desc": "Anumang tab na binuksan ng ahente ay sasapi sa isang nakalaang \"WebBrain\" group, para ang iyong mga research chain ay magkakasama sa tingin sa halip na magkalat sa buong window. Ang mga click sa target=\"_blank\" na link ay babalik sa kasalukuyang tab upang maiwasan ang tab sprawl.",
   "features.profile.title": "Auto-fill ng Profile",
   "features.profile.desc": "Isang opsyonal na plaintext bio — pangalan, email sa trabaho, kumpanya, isang isahang-gamit na password — ang nagbibigay-daan sa ahente na lumagpas sa mga low-stakes na signup form nang hindi nagtatanong tuwing kailangan. Naka-off bilang default, lahat naka-store nang lokal.",
   "features.cookies.title": "May Kaalaman sa Cookie at Paywall",

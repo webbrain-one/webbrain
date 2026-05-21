@@ -51,8 +51,6 @@
   "features.smart_context.desc": "Pengurusan konteks automatik menghalang limpahan token. Memangkas sejarah perbualan dengan pintar dan menghadkan output alat untuk sesi yang lancar tanpa gangguan.",
   "features.vision.title": "Model Penglihatan Khusus",
   "features.vision.desc": "Pasangkan model teks pantas untuk perancangan dengan model penglihatan berasingan untuk membaca tangkapan skrin. Lebih murah dan lebih pantas daripada menggunakan satu model multimodal besar untuk segalanya.",
-  "features.tabgroups.title": "Kumpulan Tab",
-  "features.tabgroups.desc": "Mana-mana tab yang dibuka oleh ejen akan menyertai kumpulan \"WebBrain\" khusus, supaya rantai penyelidikan anda kekal berdekatan secara visual dan tidak berselerak di tetingkap. Klik pada pautan target=\"_blank\" akan dilipat semula ke tab semasa untuk mengelakkan ledakan tab.",
   "features.profile.title": "Auto-isi Profil",
   "features.profile.desc": "Bio teks biasa pilihan — nama, e-mel kerja, syarikat, kata laluan sekali pakai — membolehkan ejen melepasi borang pendaftaran berisiko rendah tanpa bertanya setiap kali. Dimatikan secara lalai, semuanya disimpan secara tempatan.",
   "features.cookies.title": "Mengenali Cookie & Paywall",

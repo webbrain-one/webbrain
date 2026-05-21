@@ -51,8 +51,6 @@
   "features.smart_context.desc": "Otomatik bağlam yönetimi token taşmalarını önler. Konuşma geçmişini akıllıca kırpar ve araç çıktılarını sınırlar — pürüzsüz, kesintisiz oturumlar.",
   "features.vision.title": "Özel görme modeli",
   "features.vision.desc": "Planlama için hızlı bir metin modeli ile ekran görüntülerini okuyan ayrı bir görme modelini birleştir. Her şey için tek bir büyük çok kipli model kullanmaktan daha ucuz ve hızlı.",
-  "features.tabgroups.title": "Sekme grupları",
-  "features.tabgroups.desc": "Ajanın açtığı her sekme özel bir «WebBrain» grubuna katılır; böylece araştırma zincirlerin pencerene dağılmak yerine görsel olarak bir arada kalır. target=\"_blank\" bağlantılara yapılan tıklamalar, sekme çoğalmasını önlemek için mevcut sekmeye döner.",
   "features.profile.title": "Profil otomatik doldurma",
   "features.profile.desc": "İsteğe bağlı düz metin biyografi — ad, iş e-postası, şirket, tek kullanımlık bir parola — ajanın düşük riskli kayıt formlarını her seferinde sormadan geçmesini sağlar. Varsayılan kapalı, her şey yerelde saklanır.",
   "features.cookies.title": "Çerez ve ödeme duvarı farkındalığı",

@@ -51,8 +51,6 @@
   "features.smart_context.desc": "La gestion automatique du contexte évite le dépassement de tokens. Rognage intelligent de l'historique et limitation de la sortie des outils pour des sessions fluides et continues.",
   "features.vision.title": "Modèle de vision dédié",
   "features.vision.desc": "Associez un modèle texte rapide pour la planification à un modèle de vision dédié pour lire les captures. Plus économique et plus rapide qu'un unique gros modèle multimodal pour tout faire.",
-  "features.tabgroups.title": "Groupes d'onglets",
-  "features.tabgroups.desc": "Tout onglet que l'agent ouvre rejoint un groupe « WebBrain » dédié, pour que vos enchaînements de recherche restent visuellement groupés au lieu d'éparpiller votre fenêtre. Les clics sur les liens target=\"_blank\" se replient dans l'onglet courant pour éviter la prolifération.",
   "features.profile.title": "Auto-remplissage du profil",
   "features.profile.desc": "Une biographie optionnelle en texte brut — nom, e-mail pro, entreprise, un mot de passe jetable — permet à l'agent de passer les formulaires d'inscription à faible enjeu sans poser la question à chaque fois. Désactivé par défaut, stocké uniquement en local.",
   "features.cookies.title": "Cookies et paywalls",

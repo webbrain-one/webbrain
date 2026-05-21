@@ -801,10 +801,6 @@
     .pn-bubble.openrouter { background: rgba(108,99,255,0.12); color: var(--accent2); border-color: rgba(108,99,255,0.3); }
     .pn-bubble.studiolm { background: rgba(245,158,11,0.12); color: #f59e0b; border-color: rgba(245,158,11,0.25); }
     .pn-bubble.vllm { background: rgba(99,102,241,0.12); color: #6366f1; border-color: rgba(99,102,241,0.25); }
-    .pn-bubble.grok { background: rgba(255,255,255,0.06); color: #e5e5e5; border-color: rgba(255,255,255,0.2); }
-    .pn-bubble.gemini { background: rgba(66,133,244,0.12); color: #4285f4; border-color: rgba(66,133,244,0.25); }
-    .pn-bubble.deepseek { background: rgba(72,191,255,0.12); color: #48bfff; border-color: rgba(72,191,255,0.25); }
-    .pn-bubble.mistral { background: rgba(255,127,80,0.12); color: #ff7f50; border-color: rgba(255,127,80,0.25); }
 
     /* Reduced-motion: kill the float + ring pulse so users on
        prefers-reduced-motion see a static layout. */
@@ -1308,11 +1304,7 @@
       <h3>Model Visi Khusus</h3>
       <p>Pasangkan model teks cepat untuk perencanaan dengan model visi terpisah untuk membaca tangkapan layar. Lebih murah dan lebih cepat dibanding menggunakan satu model multimodal besar untuk semuanya.</p>
     </div>
-    <div class="feature-card">
-      <div class="feature-icon">🗂️</div>
-      <h3>Grup Tab</h3>
-      <p>Tab apa pun yang dibuka agen akan bergabung ke grup &quot;WebBrain&quot; khusus, sehingga rantai riset Anda tetap berkumpul secara visual alih-alih tercerai-berai di jendela. Klik pada tautan target=&quot;_blank&quot; terlipat kembali ke tab saat ini untuk mencegah ledakan tab.</p>
-    </div>
+
     <div class="feature-card">
       <div class="feature-icon">👤</div>
       <h3>Isi-Otomatis Profil</h3>
@@ -1322,11 +1314,6 @@
       <div class="feature-icon">🍪</div>
       <h3>Sadar Cookie &amp; Paywall</h3>
       <p>Menutup spanduk persetujuan (OneTrust, Cookiebot, Didomi, Quantcast) sebelum menalar isi halaman. Mendeteksi paywall dan memberi tahu Anda dengan jujur, alih-alih mengarang isi artikel atau mencoba menerobosnya.</p>
-    </div>
-    <div class="feature-card">
-      <div class="feature-icon">🧩</div>
-      <h3>Penyelesai CAPTCHA Opsional</h3>
-      <p>Pasang kunci API <a href="https://capsolver.com" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none;">CapSolver</a> dan agen akan otomatis menyelesaikan reCAPTCHA v2/v3, hCaptcha, dan Cloudflare Turnstile ketika menghalangi suatu langkah — alih-alih berhenti untuk bertanya. Nonaktif secara default, BYO kunci, tidak ada layanan captcha yang dihubungi kecuali kamu mengaktifkannya.</p>
     </div>
     <div class="feature-card">
       <div class="feature-icon">🌐</div>
@@ -1347,29 +1334,21 @@
   <h2 class="section-title">Bawa AI Anda Sendiri</h2>
   <p class="section-subtitle">Hubungkan ke API kompatibel OpenAI apa pun atau jalankan model lokal. Ganti penyedia kapan saja dari pengaturan ekstensi.</p>
 
-  <!-- Constellation: central WebBrain core, 11 provider nodes orbiting on
-       two arcs (5 above, 6 below). Connection lines drawn in SVG (viewBox
-       is in % units via a 0–100 coordinate space so the line endpoints
-       follow the % values used to position each node). The node order
-       matches the line order so JS can map a hovered node → its line for
-       highlight. Local runtimes (llama.cpp, Ollama, LM Studio, vLLM) are
-       on the left edges of each arc; cloud providers fan out toward the
-       right. Grok / Gemini / DeepSeek / Mistral are reached via the
-       OpenAI-compatible config — any OpenAI-style endpoint works. -->
+  <!-- Constellation: central WebBrain core, 7 provider nodes orbiting on
+       two arcs. Connection lines drawn in SVG (viewBox is in % units via
+       a 0–100 coordinate space so the line endpoints follow the % values
+       used to position each node). The node order matches the line order
+       so JS can map a hovered node → its line for highlight. -->
   <div class="provider-constellation" aria-label="Bawa AI Anda Sendiri">
     <svg class="constellation-lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-      <!-- order: llama.cpp, ollama, openai, anthropic, openrouter, lmstudio, vllm, grok, gemini, deepseek, mistral -->
+      <!-- order: llama.cpp, ollama, openai, anthropic, openrouter, studiolm, vllm -->
       <line x1="50" y1="50" x2="10" y2="28"></line>
+      <line x1="50" y1="50" x2="22" y2="78"></line>
       <line x1="50" y1="50" x2="28" y2="12"></line>
-      <line x1="50" y1="50" x2="50" y2="6"></line>
+      <line x1="50" y1="50" x2="50" y2="92"></line>
       <line x1="50" y1="50" x2="72" y2="12"></line>
+      <line x1="50" y1="50" x2="78" y2="78"></line>
       <line x1="50" y1="50" x2="90" y2="28"></line>
-      <line x1="50" y1="50" x2="8" y2="72"></line>
-      <line x1="50" y1="50" x2="24" y2="88"></line>
-      <line x1="50" y1="50" x2="40" y2="95"></line>
-      <line x1="50" y1="50" x2="60" y2="95"></line>
-      <line x1="50" y1="50" x2="76" y2="88"></line>
-      <line x1="50" y1="50" x2="92" y2="72"></line>
     </svg>
 
     <div class="constellation-center" aria-hidden="true">
@@ -1382,45 +1361,29 @@
       <div class="pn-bubble local">🦙</div>
       <div class="pn-label">llama.cpp</div>
     </a>
-    <a class="provider-node" href="https://ollama.com" target="_blank" rel="noopener" style="--x: 28%; --y: 12%; --d: 0.6s;" data-line="1">
+    <a class="provider-node" href="https://ollama.com" target="_blank" rel="noopener" style="--x: 22%; --y: 78%; --d: 0.8s;" data-line="1">
       <div class="pn-bubble ollama">◉</div>
       <div class="pn-label">Ollama</div>
     </a>
-    <a class="provider-node" href="https://platform.openai.com" target="_blank" rel="noopener" style="--x: 50%; --y: 6%; --d: 1.2s;" data-line="2">
+    <a class="provider-node" href="https://platform.openai.com" target="_blank" rel="noopener" style="--x: 28%; --y: 12%; --d: 1.6s;" data-line="2">
       <div class="pn-bubble openai">⬡</div>
       <div class="pn-label">OpenAI</div>
     </a>
-    <a class="provider-node" href="https://www.anthropic.com" target="_blank" rel="noopener" style="--x: 72%; --y: 12%; --d: 1.8s;" data-line="3">
+    <a class="provider-node" href="https://www.anthropic.com" target="_blank" rel="noopener" style="--x: 50%; --y: 92%; --d: 2.4s;" data-line="3">
       <div class="pn-bubble anthropic">◈</div>
       <div class="pn-label">Claude</div>
     </a>
-    <a class="provider-node" href="https://openrouter.ai" target="_blank" rel="noopener" style="--x: 90%; --y: 28%; --d: 2.4s;" data-line="4">
+    <a class="provider-node" href="https://openrouter.ai" target="_blank" rel="noopener" style="--x: 72%; --y: 12%; --d: 3.2s;" data-line="4">
       <div class="pn-bubble openrouter">◆</div>
       <div class="pn-label">OpenRouter</div>
     </a>
-    <a class="provider-node" href="https://lmstudio.ai" target="_blank" rel="noopener" style="--x: 8%; --y: 72%; --d: 3.0s;" data-line="5">
+    <a class="provider-node" href="https://lmstudio.ai" target="_blank" rel="noopener" style="--x: 78%; --y: 78%; --d: 4.0s;" data-line="5">
       <div class="pn-bubble studiolm">✦</div>
-      <div class="pn-label">LM Studio</div>
+      <div class="pn-label">StudioLM</div>
     </a>
-    <a class="provider-node" href="https://docs.vllm.ai" target="_blank" rel="noopener" style="--x: 24%; --y: 88%; --d: 3.6s;" data-line="6">
+    <a class="provider-node" href="https://docs.vllm.ai" target="_blank" rel="noopener" style="--x: 90%; --y: 28%; --d: 4.8s;" data-line="6">
       <div class="pn-bubble vllm">▣</div>
-      <div class="pn-label">vLLM</div>
-    </a>
-    <a class="provider-node" href="https://x.ai/api" target="_blank" rel="noopener" style="--x: 40%; --y: 95%; --d: 4.2s;" data-line="7">
-      <div class="pn-bubble grok">✕</div>
-      <div class="pn-label">Grok</div>
-    </a>
-    <a class="provider-node" href="https://ai.google.dev/gemini-api/docs/openai" target="_blank" rel="noopener" style="--x: 60%; --y: 95%; --d: 4.8s;" data-line="8">
-      <div class="pn-bubble gemini">◊</div>
-      <div class="pn-label">Gemini</div>
-    </a>
-    <a class="provider-node" href="https://api-docs.deepseek.com" target="_blank" rel="noopener" style="--x: 76%; --y: 88%; --d: 5.4s;" data-line="9">
-      <div class="pn-bubble deepseek">⬣</div>
-      <div class="pn-label">DeepSeek</div>
-    </a>
-    <a class="provider-node" href="https://docs.mistral.ai/api/" target="_blank" rel="noopener" style="--x: 92%; --y: 72%; --d: 6.0s;" data-line="10">
-      <div class="pn-bubble mistral">▲</div>
-      <div class="pn-label">Mistral</div>
+      <div class="pn-label">VLLM</div>
     </a>
   </div>
 </section>
@@ -1504,7 +1467,7 @@
         <tr><td>Open Source</td><td class="highlight">Lisensi MIT</td><td>Tertutup</td></tr>
         <tr><td>Harga</td><td class="highlight">Gratis selamanya</td><td>Butuh Claude Pro ($20/bulan)</td></tr>
         <tr><td>Dukungan LLM lokal</td><td class="highlight">llama.cpp, Ollama</td><td>Tidak — Claude saja</td></tr>
-        <tr><td>Multi-penyedia</td><td class="highlight">Semua endpoint kompatibel OpenAI</td><td>Claude saja</td></tr>
+        <tr><td>Multi-penyedia</td><td class="highlight">4 penyedia (lokal + cloud)</td><td>Claude saja</td></tr>
         <tr><td>Chrome</td><td class="highlight">Ya (MV3)</td><td>Ya</td></tr>
         <tr><td>Firefox</td><td class="highlight">Ya (MV2)</td><td>Tidak</td></tr>
         <tr><td>UI panel samping</td><td class="highlight">Ya</td><td>Ya</td></tr>

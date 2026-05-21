@@ -51,8 +51,6 @@
   "features.smart_context.desc": "自动上下文管理防止 token 溢出。智能裁剪对话历史并限制工具输出,让会话顺畅不中断。",
   "features.vision.title": "专用视觉模型",
   "features.vision.desc": "用一个快速的纯文本模型做规划,再配一个专门的视觉模型读取截图。比用一个庞大的多模态模型做所有事情更便宜也更快。",
-  "features.tabgroups.title": "标签组",
-  "features.tabgroups.desc": "代理打开的任何标签都加入专用的「WebBrain」组,这样你的研究链条在视觉上保持在一起,而不会散落在窗口中。对 target=\"_blank\" 链接的点击会回折到当前标签,防止标签爆炸。",
   "features.profile.title": "个人资料自动填写",
   "features.profile.desc": "可选的纯文本自述 —— 姓名、工作邮箱、公司、一个一次性密码 —— 让代理无需每次询问即可轻松完成低风险注册表单。默认关闭,全部在本地存储。",
   "features.cookies.title": "识别 Cookie 与付费墙",

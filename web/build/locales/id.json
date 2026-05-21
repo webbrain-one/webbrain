@@ -51,8 +51,6 @@
   "features.smart_context.desc": "Manajemen konteks otomatis mencegah token meluap. Memangkas riwayat percakapan dengan cerdas dan membatasi keluaran alat agar sesi berjalan mulus tanpa terputus.",
   "features.vision.title": "Model Visi Khusus",
   "features.vision.desc": "Pasangkan model teks cepat untuk perencanaan dengan model visi terpisah untuk membaca tangkapan layar. Lebih murah dan lebih cepat dibanding menggunakan satu model multimodal besar untuk semuanya.",
-  "features.tabgroups.title": "Grup Tab",
-  "features.tabgroups.desc": "Tab apa pun yang dibuka agen akan bergabung ke grup \"WebBrain\" khusus, sehingga rantai riset Anda tetap berkumpul secara visual alih-alih tercerai-berai di jendela. Klik pada tautan target=\"_blank\" terlipat kembali ke tab saat ini untuk mencegah ledakan tab.",
   "features.profile.title": "Isi-Otomatis Profil",
   "features.profile.desc": "Bio plaintext opsional — nama, email kerja, perusahaan, kata sandi sekali pakai — membuat agen melewati formulir pendaftaran berisiko rendah tanpa bertanya setiap kali. Mati secara bawaan, semuanya disimpan secara lokal.",
   "features.cookies.title": "Sadar Cookie & Paywall",

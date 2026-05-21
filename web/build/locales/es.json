@@ -51,8 +51,6 @@
   "features.smart_context.desc": "La gestión automática de contexto evita el desbordamiento de tokens. Recorta el historial de conversación y limita la salida de herramientas para sesiones fluidas e ininterrumpidas.",
   "features.vision.title": "Modelo de visión dedicado",
   "features.vision.desc": "Combina un modelo de texto rápido para planificar con un modelo de visión separado para leer capturas. Más barato y más rápido que usar un único modelo multimodal grande para todo.",
-  "features.tabgroups.title": "Grupos de pestañas",
-  "features.tabgroups.desc": "Las pestañas que abre el agente se unen a un grupo «WebBrain» dedicado, de modo que tus cadenas de investigación quedan juntas visualmente en lugar de dispersarse. Los clics en enlaces target=\"_blank\" se repliegan a la pestaña actual para evitar proliferación de pestañas.",
   "features.profile.title": "Autocompletado de perfil",
   "features.profile.desc": "Una biografía opcional en texto plano —nombre, correo laboral, empresa y una contraseña desechable— permite al agente rellenar formularios de registro de poca importancia sin preguntar cada vez. Desactivado por defecto, todo se almacena localmente.",
   "features.cookies.title": "Cookies y muros de pago",

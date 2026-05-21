@@ -51,8 +51,6 @@
   "features.smart_context.desc": "자동 컨텍스트 관리가 토큰 초과를 막습니다. 대화 기록을 똑똑하게 자르고 도구 출력을 제한해, 끊김 없이 매끄러운 세션을 유지합니다.",
   "features.vision.title": "전용 비전 모델",
   "features.vision.desc": "계획에는 빠른 텍스트 전용 모델을, 스크린샷 읽기에는 별도의 비전 지원 모델을 함께 쓰세요. 모든 일을 거대한 멀티모달 모델 하나로 처리하는 것보다 더 저렴하고 빠릅니다.",
-  "features.tabgroups.title": "탭 그룹",
-  "features.tabgroups.desc": "에이전트가 여는 어떤 탭이든 전용 \"WebBrain\" 그룹에 들어가서, 리서치 흐름이 창에 흩어지지 않고 시각적으로 모여 있습니다. target=\"_blank\" 링크 클릭은 현재 탭으로 접혀 들어가 탭 폭발을 막아 줍니다.",
   "features.profile.title": "프로필 자동 입력",
   "features.profile.desc": "선택적인 일반 텍스트 자기소개 — 이름, 업무 이메일, 회사, 저위험 가입용 일회용 비밀번호 — 만 있으면, 에이전트가 매번 묻지 않고도 저위험 가입 양식을 술술 넘깁니다. 기본적으로 꺼져 있고, 모두 로컬에 저장됩니다.",
   "features.cookies.title": "Cookie와 페이월 인식",

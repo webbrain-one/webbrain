@@ -51,8 +51,6 @@
   "features.smart_context.desc": "Automatic context management prevents token overflow. Intelligently trims conversation history and limits tool output for smooth, uninterrupted sessions.",
   "features.vision.title": "Dedicated Vision Model",
   "features.vision.desc": "Pair a fast text-only model for planning with a separate vision-capable model for reading screenshots. Cheaper and faster than using a single big multimodal model for everything.",
-  "features.tabgroups.title": "Tab Groups",
-  "features.tabgroups.desc": "Any tab the agent opens joins a dedicated \"WebBrain\" group, so your research chains stay visually together instead of scattering across your window. Clicks on target=\"_blank\" links fold back into the current tab to prevent tab sprawl.",
   "features.profile.title": "Profile Auto-fill",
   "features.profile.desc": "Optional plaintext bio — name, work email, company, a throwaway password — lets the agent breeze through low-stakes signup forms without asking every time. Off by default, all stored locally.",
   "features.cookies.title": "Cookie & Paywall Aware",
