@@ -100,7 +100,7 @@
   "compare.cell.local_llm_yes": "llama.cpp, Ollama",
   "compare.cell.local_llm_no": "Ні — лише Claude",
   "compare.row.multi_provider": "Мульти-провайдер",
-  "compare.cell.multi_provider_yes": "4 провайдери (локальні + хмара)",
+  "compare.cell.multi_provider_yes": "All OpenAI-compatible endpoints",
   "compare.cell.multi_provider_no": "Лише Claude",
   "compare.row.chrome": "Chrome",
   "compare.cell.yes_mv3": "Так (MV3)",

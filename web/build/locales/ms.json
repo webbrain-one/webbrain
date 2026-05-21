@@ -100,7 +100,7 @@
   "compare.cell.local_llm_yes": "llama.cpp, Ollama",
   "compare.cell.local_llm_no": "Tidak — Claude sahaja",
   "compare.row.multi_provider": "Berbilang pembekal",
-  "compare.cell.multi_provider_yes": "4 pembekal (tempatan + awan)",
+  "compare.cell.multi_provider_yes": "All OpenAI-compatible endpoints",
   "compare.cell.multi_provider_no": "Claude sahaja",
   "compare.row.chrome": "Chrome",
   "compare.cell.yes_mv3": "Ya (MV3)",

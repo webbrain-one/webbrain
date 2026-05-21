@@ -801,6 +801,10 @@
     .pn-bubble.openrouter { background: rgba(108,99,255,0.12); color: var(--accent2); border-color: rgba(108,99,255,0.3); }
     .pn-bubble.studiolm { background: rgba(245,158,11,0.12); color: #f59e0b; border-color: rgba(245,158,11,0.25); }
     .pn-bubble.vllm { background: rgba(99,102,241,0.12); color: #6366f1; border-color: rgba(99,102,241,0.25); }
+    .pn-bubble.grok { background: rgba(255,255,255,0.06); color: #e5e5e5; border-color: rgba(255,255,255,0.2); }
+    .pn-bubble.gemini { background: rgba(66,133,244,0.12); color: #4285f4; border-color: rgba(66,133,244,0.25); }
+    .pn-bubble.deepseek { background: rgba(72,191,255,0.12); color: #48bfff; border-color: rgba(72,191,255,0.25); }
+    .pn-bubble.mistral { background: rgba(255,127,80,0.12); color: #ff7f50; border-color: rgba(255,127,80,0.25); }
 
     /* Reduced-motion: kill the float + ring pulse so users on
        prefers-reduced-motion see a static layout. */
@@ -1339,21 +1343,29 @@
   <h2 class="section-title">أحضر ذكاءك الخاص</h2>
   <p class="section-subtitle">اتّصل بأي واجهة API متوافقة مع OpenAI أو شغّل موديلًا محليًا. غيّر المزوّد متى شئت من إعدادات الإضافة.</p>
 
-  <!-- Constellation: central WebBrain core, 7 provider nodes orbiting on
-       two arcs. Connection lines drawn in SVG (viewBox is in % units via
-       a 0–100 coordinate space so the line endpoints follow the % values
-       used to position each node). The node order matches the line order
-       so JS can map a hovered node → its line for highlight. -->
+  <!-- Constellation: central WebBrain core, 11 provider nodes orbiting on
+       two arcs (5 above, 6 below). Connection lines drawn in SVG (viewBox
+       is in % units via a 0–100 coordinate space so the line endpoints
+       follow the % values used to position each node). The node order
+       matches the line order so JS can map a hovered node → its line for
+       highlight. Local runtimes (llama.cpp, Ollama, LM Studio, vLLM) are
+       on the left edges of each arc; cloud providers fan out toward the
+       right. Grok / Gemini / DeepSeek / Mistral are reached via the
+       OpenAI-compatible config — any OpenAI-style endpoint works. -->
   <div class="provider-constellation" aria-label="أحضر ذكاءك الخاص">
     <svg class="constellation-lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-      <!-- order: llama.cpp, ollama, openai, anthropic, openrouter, studiolm, vllm -->
+      <!-- order: llama.cpp, ollama, openai, anthropic, openrouter, lmstudio, vllm, grok, gemini, deepseek, mistral -->
       <line x1="50" y1="50" x2="10" y2="28"></line>
-      <line x1="50" y1="50" x2="22" y2="78"></line>
       <line x1="50" y1="50" x2="28" y2="12"></line>
-      <line x1="50" y1="50" x2="50" y2="92"></line>
+      <line x1="50" y1="50" x2="50" y2="6"></line>
       <line x1="50" y1="50" x2="72" y2="12"></line>
-      <line x1="50" y1="50" x2="78" y2="78"></line>
       <line x1="50" y1="50" x2="90" y2="28"></line>
+      <line x1="50" y1="50" x2="8" y2="72"></line>
+      <line x1="50" y1="50" x2="24" y2="88"></line>
+      <line x1="50" y1="50" x2="40" y2="95"></line>
+      <line x1="50" y1="50" x2="60" y2="95"></line>
+      <line x1="50" y1="50" x2="76" y2="88"></line>
+      <line x1="50" y1="50" x2="92" y2="72"></line>
     </svg>
 
     <div class="constellation-center" aria-hidden="true">
@@ -1366,29 +1378,45 @@
       <div class="pn-bubble local">🦙</div>
       <div class="pn-label">llama.cpp</div>
     </a>
-    <a class="provider-node" href="https://ollama.com" target="_blank" rel="noopener" style="--x: 22%; --y: 78%; --d: 0.8s;" data-line="1">
+    <a class="provider-node" href="https://ollama.com" target="_blank" rel="noopener" style="--x: 28%; --y: 12%; --d: 0.6s;" data-line="1">
       <div class="pn-bubble ollama">◉</div>
       <div class="pn-label">Ollama</div>
     </a>
-    <a class="provider-node" href="https://platform.openai.com" target="_blank" rel="noopener" style="--x: 28%; --y: 12%; --d: 1.6s;" data-line="2">
+    <a class="provider-node" href="https://platform.openai.com" target="_blank" rel="noopener" style="--x: 50%; --y: 6%; --d: 1.2s;" data-line="2">
       <div class="pn-bubble openai">⬡</div>
       <div class="pn-label">OpenAI</div>
     </a>
-    <a class="provider-node" href="https://www.anthropic.com" target="_blank" rel="noopener" style="--x: 50%; --y: 92%; --d: 2.4s;" data-line="3">
+    <a class="provider-node" href="https://www.anthropic.com" target="_blank" rel="noopener" style="--x: 72%; --y: 12%; --d: 1.8s;" data-line="3">
       <div class="pn-bubble anthropic">◈</div>
       <div class="pn-label">Claude</div>
     </a>
-    <a class="provider-node" href="https://openrouter.ai" target="_blank" rel="noopener" style="--x: 72%; --y: 12%; --d: 3.2s;" data-line="4">
+    <a class="provider-node" href="https://openrouter.ai" target="_blank" rel="noopener" style="--x: 90%; --y: 28%; --d: 2.4s;" data-line="4">
       <div class="pn-bubble openrouter">◆</div>
       <div class="pn-label">OpenRouter</div>
     </a>
-    <a class="provider-node" href="https://lmstudio.ai" target="_blank" rel="noopener" style="--x: 78%; --y: 78%; --d: 4.0s;" data-line="5">
+    <a class="provider-node" href="https://lmstudio.ai" target="_blank" rel="noopener" style="--x: 8%; --y: 72%; --d: 3.0s;" data-line="5">
       <div class="pn-bubble studiolm">✦</div>
-      <div class="pn-label">StudioLM</div>
+      <div class="pn-label">LM Studio</div>
     </a>
-    <a class="provider-node" href="https://docs.vllm.ai" target="_blank" rel="noopener" style="--x: 90%; --y: 28%; --d: 4.8s;" data-line="6">
+    <a class="provider-node" href="https://docs.vllm.ai" target="_blank" rel="noopener" style="--x: 24%; --y: 88%; --d: 3.6s;" data-line="6">
       <div class="pn-bubble vllm">▣</div>
-      <div class="pn-label">VLLM</div>
+      <div class="pn-label">vLLM</div>
+    </a>
+    <a class="provider-node" href="https://x.ai/api" target="_blank" rel="noopener" style="--x: 40%; --y: 95%; --d: 4.2s;" data-line="7">
+      <div class="pn-bubble grok">✕</div>
+      <div class="pn-label">Grok</div>
+    </a>
+    <a class="provider-node" href="https://ai.google.dev/gemini-api/docs/openai" target="_blank" rel="noopener" style="--x: 60%; --y: 95%; --d: 4.8s;" data-line="8">
+      <div class="pn-bubble gemini">◊</div>
+      <div class="pn-label">Gemini</div>
+    </a>
+    <a class="provider-node" href="https://api-docs.deepseek.com" target="_blank" rel="noopener" style="--x: 76%; --y: 88%; --d: 5.4s;" data-line="9">
+      <div class="pn-bubble deepseek">⬣</div>
+      <div class="pn-label">DeepSeek</div>
+    </a>
+    <a class="provider-node" href="https://docs.mistral.ai/api/" target="_blank" rel="noopener" style="--x: 92%; --y: 72%; --d: 6.0s;" data-line="10">
+      <div class="pn-bubble mistral">▲</div>
+      <div class="pn-label">Mistral</div>
     </a>
   </div>
 </section>
@@ -1472,7 +1500,7 @@
         <tr><td>مفتوح المصدر</td><td class="highlight">رخصة MIT</td><td>مملوك</td></tr>
         <tr><td>السعر</td><td class="highlight">مجاني للأبد</td><td>يتطلّب Claude Pro (20$/شهر)</td></tr>
         <tr><td>دعم LLM محلية</td><td class="highlight">llama.cpp و Ollama</td><td>لا — Claude فقط</td></tr>
-        <tr><td>متعدّد المزوّدين</td><td class="highlight">4 مزوّدين (محلي + سحابي)</td><td>Claude فقط</td></tr>
+        <tr><td>متعدّد المزوّدين</td><td class="highlight">All OpenAI-compatible endpoints</td><td>Claude فقط</td></tr>
         <tr><td>Chrome</td><td class="highlight">نعم (MV3)</td><td>نعم</td></tr>
         <tr><td>Firefox</td><td class="highlight">نعم (MV2)</td><td>لا</td></tr>
         <tr><td>واجهة في لوحة جانبية</td><td class="highlight">نعم</td><td>نعم</td></tr>

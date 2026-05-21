@@ -100,7 +100,7 @@
   "compare.cell.local_llm_yes": "llama.cpp, Ollama",
   "compare.cell.local_llm_no": "No — Claude only",
   "compare.row.multi_provider": "Multi-provider",
-  "compare.cell.multi_provider_yes": "4 providers (local + cloud)",
+  "compare.cell.multi_provider_yes": "All OpenAI-compatible endpoints",
   "compare.cell.multi_provider_no": "Claude only",
   "compare.row.chrome": "Chrome",
   "compare.cell.yes_mv3": "Yes (MV3)",

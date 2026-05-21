@@ -100,7 +100,7 @@
   "compare.cell.local_llm_yes": "llama.cpp、Ollama",
   "compare.cell.local_llm_no": "否 —— 仅限 Claude",
   "compare.row.multi_provider": "多提供商",
-  "compare.cell.multi_provider_yes": "4 家提供商(本地 + 云端)",
+  "compare.cell.multi_provider_yes": "All OpenAI-compatible endpoints",
   "compare.cell.multi_provider_no": "仅限 Claude",
   "compare.row.chrome": "Chrome",
   "compare.cell.yes_mv3": "是(MV3)",

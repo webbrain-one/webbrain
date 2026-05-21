@@ -100,7 +100,7 @@
   "compare.cell.local_llm_yes": "llama.cpp و Ollama",
   "compare.cell.local_llm_no": "لا — Claude فقط",
   "compare.row.multi_provider": "متعدّد المزوّدين",
-  "compare.cell.multi_provider_yes": "4 مزوّدين (محلي + سحابي)",
+  "compare.cell.multi_provider_yes": "All OpenAI-compatible endpoints",
   "compare.cell.multi_provider_no": "Claude فقط",
   "compare.row.chrome": "Chrome",
   "compare.cell.yes_mv3": "نعم (MV3)",

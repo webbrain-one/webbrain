@@ -100,7 +100,7 @@
   "compare.cell.local_llm_yes": "llama.cpp、Ollama",
   "compare.cell.local_llm_no": "なし — Claude のみ",
   "compare.row.multi_provider": "マルチプロバイダー",
-  "compare.cell.multi_provider_yes": "4 プロバイダー (ローカル + クラウド)",
+  "compare.cell.multi_provider_yes": "All OpenAI-compatible endpoints",
   "compare.cell.multi_provider_no": "Claude のみ",
   "compare.row.chrome": "Chrome",
   "compare.cell.yes_mv3": "あり (MV3)",

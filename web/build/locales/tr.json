@@ -100,7 +100,7 @@
   "compare.cell.local_llm_yes": "llama.cpp, Ollama",
   "compare.cell.local_llm_no": "Hayır — yalnızca Claude",
   "compare.row.multi_provider": "Çoklu sağlayıcı",
-  "compare.cell.multi_provider_yes": "4 sağlayıcı (yerel + bulut)",
+  "compare.cell.multi_provider_yes": "All OpenAI-compatible endpoints",
   "compare.cell.multi_provider_no": "Yalnızca Claude",
   "compare.row.chrome": "Chrome",
   "compare.cell.yes_mv3": "Evet (MV3)",

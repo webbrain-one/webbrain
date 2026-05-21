@@ -100,7 +100,7 @@
   "compare.cell.local_llm_yes": "llama.cpp, Ollama",
   "compare.cell.local_llm_no": "ไม่ — เฉพาะ Claude",
   "compare.row.multi_provider": "หลายผู้ให้บริการ",
-  "compare.cell.multi_provider_yes": "4 ผู้ให้บริการ (ภายในเครื่อง + คลาวด์)",
+  "compare.cell.multi_provider_yes": "All OpenAI-compatible endpoints",
   "compare.cell.multi_provider_no": "เฉพาะ Claude",
   "compare.row.chrome": "Chrome",
   "compare.cell.yes_mv3": "ใช่ (MV3)",
