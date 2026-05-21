@@ -26,7 +26,14 @@ export class ProviderManager {
   async load() {
     const data = await browser.storage.local.get(['providers', 'activeProvider']);
     const stored = data.providers || {};
-    const configs = { ...this._defaultConfigs(), ...stored };
+    const defaults = this._defaultConfigs();
+    const configs = {};
+    for (const [id, config] of Object.entries(defaults)) {
+      configs[id] = { ...config, ...(stored[id] || {}) };
+    }
+    for (const id of Object.keys(stored)) {
+      if (!configs[id]) configs[id] = stored[id];
+    }
     delete configs.webbrain;
     this.activeProviderId = data.activeProvider === 'webbrain'
       ? 'llamacpp'

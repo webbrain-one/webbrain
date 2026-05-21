@@ -28,7 +28,18 @@ export class ProviderManager {
   async load() {
     const data = await chrome.storage.local.get(['providers', 'activeProvider']);
     const stored = data.providers || {};
-    const configs = { ...this._defaultConfigs(), ...stored };
+    // Field-level merge: defaults provide the full shape (including new
+    // fields like apiKeyUrl), stored values override individual fields
+    // without dropping keys that don't exist in stored.
+    const defaults = this._defaultConfigs();
+    const configs = {};
+    for (const [id, config] of Object.entries(defaults)) {
+      configs[id] = { ...config, ...(stored[id] || {}) };
+    }
+    // Carry over any stored-only entries (e.g. legacy provider ids).
+    for (const id of Object.keys(stored)) {
+      if (!configs[id]) configs[id] = stored[id];
+    }
     delete configs.webbrain;
     delete configs.openai_subscription;
     this.activeProviderId = ['webbrain', 'openai_subscription'].includes(data.activeProvider)
