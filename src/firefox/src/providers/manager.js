@@ -292,15 +292,24 @@ export class ProviderManager {
   }
 
   /**
-   * Fetch the list of installed models from a running Ollama server.
-   * Uses the native /api/tags endpoint (not the OpenAI-compat /v1).
+   * Fetch selectable models for local providers. Ollama uses its native
+   * /api/tags endpoint; llama.cpp and LM Studio use OpenAI-compatible
+   * /v1/models.
    */
-  async listOllamaModels(id) {
+  async listProviderModels(id) {
     const provider = this.providers.get(id);
     if (!provider) return { ok: false, error: 'Provider not found' };
-    const baseUrl = (provider.config.baseUrl || '').replace(/\/v1\/?$/, '').replace(/\/$/, '');
+    if (!['llamacpp', 'ollama', 'lmstudio'].includes(id)) {
+      return { ok: false, error: 'Model loading is only supported for local providers' };
+    }
+
+    const rawBaseUrl = (provider.config.baseUrl || '').replace(/\/$/, '');
+    if (!rawBaseUrl) return { ok: false, error: 'Base URL is empty' };
+    const baseUrl = id === 'ollama'
+      ? rawBaseUrl.replace(/\/v1\/?$/, '').replace(/\/$/, '')
+      : (/\/v1$/.test(rawBaseUrl) ? rawBaseUrl : `${rawBaseUrl}/v1`);
     if (!baseUrl) return { ok: false, error: 'Base URL is empty' };
-    const url = `${baseUrl}/api/tags`;
+    const url = id === 'ollama' ? `${baseUrl}/api/tags` : `${baseUrl}/models`;
     try {
       const res = await fetch(url, { method: 'GET' });
       if (!res.ok) {
@@ -315,12 +324,26 @@ export class ProviderManager {
         return { ok: false, error: `HTTP ${res.status}: ${errBody}` };
       }
       const data = await res.json();
-      const models = Array.isArray(data?.models)
-        ? data.models.map((m) => m?.name).filter(Boolean)
-        : [];
+      const models = this._extractModelIds(id, data);
       return { ok: true, models };
     } catch (e) {
       return { ok: false, error: e.message };
     }
+  }
+
+  async listOllamaModels(id) {
+    return this.listProviderModels(id);
+  }
+
+  _extractModelIds(id, data) {
+    const source = id === 'ollama' ? data?.models : data?.data;
+    if (!Array.isArray(source)) return [];
+    const ids = source
+      .map((m) => {
+        if (typeof m === 'string') return m;
+        return id === 'ollama' ? m?.name : m?.id;
+      })
+      .filter(Boolean);
+    return [...new Set(ids)].sort((a, b) => a.localeCompare(b));
   }
 }

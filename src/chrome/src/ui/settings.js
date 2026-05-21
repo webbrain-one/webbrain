@@ -6,7 +6,7 @@ import { t, getLocale, setLocale, LANGUAGES } from './i18n.js';
 
 // Version shown in the subtitle. Kept here so it only needs one update per
 // release; the subtitle string itself is translated.
-const EXT_VERSION = '7.3.0';
+const EXT_VERSION = '7.3.1';
 
 const providersContainer = document.getElementById('providers');
 const verboseToggle = document.getElementById('toggle-verbose');
@@ -536,12 +536,13 @@ function renderProviders() {
           </div>
         `;
       } else {
-        // For Ollama's model field, attach a <datalist> + a "Load models"
-        // button so users can pick from `ollama list` without typing.
-        const isOllamaModel = id === 'ollama' && field.key === 'model';
-        const listAttr = isOllamaModel ? `list="models-${id}"` : '';
-        const datalistHTML = isOllamaModel ? `<datalist id="models-${id}"></datalist>` : '';
-        const loadBtnHTML = isOllamaModel
+        // Local providers expose model-list endpoints. Attach a datalist so
+        // users can pick a running/installed model without typing it by hand.
+        const localModelProviders = ['llamacpp', 'ollama', 'lmstudio'];
+        const canLoadModels = localModelProviders.includes(id) && field.key === 'model';
+        const listAttr = canLoadModels ? `list="models-${id}"` : '';
+        const datalistHTML = canLoadModels ? `<datalist id="models-${id}"></datalist>` : '';
+        const loadBtnHTML = canLoadModels
           ? `<button type="button" class="btn-secondary btn-load-models" data-provider="${id}"
                     style="margin-top:6px;">${escapeHtml(t('st.providers.load_models'))}</button>
              <span class="load-models-status" data-provider="${id}"
@@ -592,7 +593,7 @@ function renderProviders() {
     btn.addEventListener('click', () => activateProvider(btn.dataset.provider));
   });
   document.querySelectorAll('.btn-load-models').forEach(btn => {
-    btn.addEventListener('click', () => loadOllamaModels(btn.dataset.provider));
+    btn.addEventListener('click', () => loadProviderModels(btn.dataset.provider));
   });
   // OAuth-Claude-specific bindings. These only fire if the OAuth card is
   // currently rendered (i.e., expanded — collapsed bodies aren't in DOM).
@@ -807,7 +808,7 @@ async function signOutOfClaude(id) {
   await refreshClaudeOAuthStatus(id);
 }
 
-async function loadOllamaModels(id) {
+async function loadProviderModels(id) {
   const statusEl = document.querySelector(`.load-models-status[data-provider="${id}"]`);
   const datalistEl = document.getElementById(`models-${id}`);
   if (!datalistEl) return;
@@ -815,7 +816,7 @@ async function loadOllamaModels(id) {
   // call uses the current values, not stale storage.
   await saveProvider(id, { showFlash: false });
   if (statusEl) statusEl.textContent = t('st.providers.loading');
-  const res = await sendToBackground('list_ollama_models', { providerId: id });
+  const res = await sendToBackground('list_provider_models', { providerId: id });
   if (res.ok) {
     datalistEl.innerHTML = res.models
       .map((m) => `<option value="${escapeHtml(m)}"></option>`)

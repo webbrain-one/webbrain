@@ -1428,6 +1428,34 @@ test('categoryFor: unknown id with no category defaults to cloud', () => {
   }
 });
 
+test('_extractModelIds: Ollama /api/tags format', () => {
+  for (const PM of [ProviderManagerCh, ProviderManagerFx]) {
+    const mgr = new PM();
+    assert.deepEqual(
+      mgr._extractModelIds('ollama', {
+        models: [{ name: 'qwen3:8b' }, { name: 'llama3.1' }, { digest: 'missing-name' }, { name: 'qwen3:8b' }],
+      }),
+      ['llama3.1', 'qwen3:8b']
+    );
+  }
+});
+
+test('_extractModelIds: OpenAI-compatible /v1/models format', () => {
+  for (const PM of [ProviderManagerCh, ProviderManagerFx]) {
+    const mgr = new PM();
+    assert.deepEqual(
+      mgr._extractModelIds('lmstudio', {
+        data: [{ id: 'local/qwen3' }, { id: 'gemma-3n' }, { object: 'model' }, { id: 'local/qwen3' }],
+      }),
+      ['gemma-3n', 'local/qwen3']
+    );
+    assert.deepEqual(
+      mgr._extractModelIds('llamacpp', { data: ['qwen2.5-coder', 'llama.cpp-model'] }),
+      ['llama.cpp-model', 'qwen2.5-coder']
+    );
+  }
+});
+
 test('_defaultConfigs: every entry carries an explicit category', () => {
   // Walk the actual default config table on each platform and assert
   // each entry has a category field. Catches "I added a provider but

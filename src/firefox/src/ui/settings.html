@@ -152,35 +152,30 @@
 
     .provider-filter-bar {
       display: flex;
-      gap: 6px;
+      justify-content: flex-end;
+      gap: 12px;
       flex-wrap: wrap;
-      margin: 0 0 16px 0;
-      padding: 4px;
-      background: var(--bg2);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
+      margin: -2px 0 12px 0;
+      padding: 0;
     }
     .provider-filter-pill {
-      flex: 1;
-      min-width: 60px;
       background: transparent;
       color: var(--text2);
       border: none;
-      border-radius: 6px;
-      padding: 7px 10px;
-      font-size: 12px;
+      border-radius: 0;
+      padding: 2px 0 3px;
+      font-size: 11px;
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.4px;
       cursor: pointer;
-      transition: background 0.12s, color 0.12s;
+      transition: color 0.12s;
     }
     .provider-filter-pill:hover { color: var(--text); }
     .provider-filter-pill.active {
-      background: var(--accent);
-      color: #fff;
+      color: var(--accent);
     }
-    .provider-filter-pill.active:hover { color: #fff; }
+    .provider-filter-pill.active:hover { color: var(--accent); }
     .provider-filter-empty {
       padding: 16px;
       text-align: center;

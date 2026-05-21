@@ -405,8 +405,12 @@ async function handleMessage(msg, sender) {
       }
     }
 
+    case 'list_provider_models': {
+      return await providerManager.listProviderModels(msg.providerId);
+    }
+
     case 'list_ollama_models': {
-      return await providerManager.listOllamaModels(msg.providerId);
+      return await providerManager.listProviderModels(msg.providerId);
     }
 
     // ── Claude Pro/Max OAuth ─────────────────────────────────────────
