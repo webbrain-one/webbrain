@@ -240,13 +240,28 @@
     }
     try { await s.audioContext.close(); } catch {}
 
-    const blob = new Blob(s.chunks, { type: s.mimeType });
+    // IMPORTANT: strip the codecs= parameter from the blob's type before
+    // serializing to a data URL. MediaRecorder gives us something like
+    // "video/webm;codecs=vp9,opus" — that comma inside the parameter
+    // value makes the resulting `data:video/webm;codecs=vp9,opus;base64,XXX`
+    // URL ambiguous, and chrome.downloads.download's URL parser
+    // mis-segments it. The base64 payload ends up partially treated as
+    // mediatype params, so what hits disk is corrupted bytes and the
+    // .webm fails to play ("Invalid data found").
+    //
+    // The bare type ("video/webm") is enough — the codec is also encoded
+    // inside the WebM track header, so players auto-detect it without
+    // the param hint. We still return the FULL mimeType in the metadata
+    // for callers that want it (e.g. transcription).
+    const bareType = (s.mimeType || 'video/webm').split(';')[0];
+    const blob = new Blob(s.chunks, { type: bareType });
     const dataUrl = await blobToDataUrl(blob);
 
     session = null;
     return {
       ok: true,
-      mimeType: s.mimeType,
+      mimeType: s.mimeType,        // original, with codecs param
+      blobType: bareType,          // what the data URL actually carries
       sizeBytes: blob.size,
       durationMs: Date.now() - s.startedAt,
       dataUrl,
