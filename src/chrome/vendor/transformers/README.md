@@ -1,45 +1,44 @@
 # Vendored @huggingface/transformers
 
 The WebGPU provider (`src/providers/webgpu.js`) loads the in-browser ONNX
-runtime via `@huggingface/transformers`. The build is too large
-(~5MB JS + a ~30MB onnxruntime-web WASM blob) to commit to the repo, so
-it's vendored out-of-band.
+runtime via `@huggingface/transformers`. The relevant build files are
+committed in this directory so the extension works straight from a
+fresh `git clone` — no per-developer vendoring step.
 
-## How to drop the build in
+## What's here
+
+| File | Source | Purpose |
+| --- | --- | --- |
+| `transformers.web.min.js` | `node_modules/@huggingface/transformers/dist/` | Browser ESM bundle of the library |
+| `ort-wasm-simd-threaded.jsep.mjs` | `node_modules/@huggingface/transformers/dist/` | JS loader for the WebGPU WASM blob |
+| `ort-wasm-simd-threaded.jsep.wasm` | `node_modules/onnxruntime-web/dist/` | The actual WebGPU-enabled ONNX runtime (~25MB) |
+
+The `.web.min.js` build is the browser ESM variant — not
+`transformers.min.js` (dual ESM/CJS), not `transformers.node.*`. The
+import path in `src/offscreen/offscreen.js` is hard-coded to
+`transformers.web.min.js`; if you change which build is vendored, update
+that import.
+
+## Current vendored version
+
+| webbrain | @huggingface/transformers | onnxruntime-web |
+| --- | --- | --- |
+| 7.4.0+ | 4.2.0 | (matched, transitive dep of transformers) |
+
+## Updating
 
 ```bash
-# From the repo root:
-npm install @huggingface/transformers      # or: pnpm / yarn
-
-# Copy the ESM bundle + the onnxruntime-web WASM files into both
-# chrome and firefox vendor dirs.
-cp node_modules/@huggingface/transformers/dist/transformers.min.js \
+npm install @huggingface/transformers@latest
+cp node_modules/@huggingface/transformers/dist/transformers.web.min.js \
    src/chrome/vendor/transformers/
-cp node_modules/@huggingface/transformers/dist/transformers.min.js \
-   src/firefox/vendor/transformers/
-
-# onnxruntime-web ships its WASM separately. Copy the matching version:
-cp node_modules/@huggingface/transformers/dist/ort-wasm-simd-threaded.* \
+cp node_modules/@huggingface/transformers/dist/ort-wasm-simd-threaded.jsep.mjs \
    src/chrome/vendor/transformers/
-cp node_modules/@huggingface/transformers/dist/ort-wasm-simd-threaded.* \
-   src/firefox/vendor/transformers/
+cp node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.wasm \
+   src/chrome/vendor/transformers/
 ```
 
-The exact filename / path of the build inside `dist/` shifts between
-library versions — check what's there. The provider tries to import
-`transformers.min.js`; if you rename the build, update
-`src/offscreen/offscreen.js`'s `await import('../../vendor/transformers/transformers.min.js')`
-call to match.
-
-## Why not bundle this ourselves?
-
-We could, but:
-
-- The library is already a single-file ESM bundle out of `npm publish` —
-  no further bundling step buys us much.
-- Keeping it out of git keeps the repo small and the diff history
-  readable. Build artifacts don't belong in source.
-- Updating the library means updating ONE file in each vendor dir.
+Then bump the version row in the table above, commit, and re-run the
+extension to verify Qwen 3 still loads.
 
 ## Why vendored and not loaded from a CDN?
 
@@ -51,19 +50,27 @@ only path.
 
 ## Runtime configuration
 
-`offscreen.js` configures the library to fetch model weights from the
-HuggingFace CDN (`allowRemoteModels = true`) and to cache them in
-IndexedDB (the library's default). First-run for Qwen 3 0.6B q4 is
-roughly 500MB; subsequent runs are instant.
+`offscreen.js` configures the library to:
 
-If you need to pin the onnxruntime WASM location (e.g. because the
-library's auto-detection picks the wrong path), set
-`env.backends.onnx.wasm.wasmPaths` in `offscreen.js` to a
-chrome-extension:// URL pointing at the vendor dir. Document any such
-override here when you make it.
+- Fetch model weights from the HuggingFace CDN (`allowRemoteModels = true`).
+- Cache them in IndexedDB (the library's default — first-run downloads
+  big, subsequent runs are instant).
+- Pin `env.backends.onnx.wasm.wasmPaths` to this directory's
+  `chrome-extension://` URL so the runtime finds the `.wasm` file
+  reliably regardless of how the library is bundled.
 
-## Versions tested
+If a future library version changes the `env.backends.onnx.wasm` shape,
+the `wasmPaths` setter is wrapped in a try/catch — failure falls back
+to the library's own resolution heuristics.
 
-| webbrain | @huggingface/transformers | notes |
-| --- | --- | --- |
-| 7.4.0  | (TBD, fill in when first vendored) | First release with WebGPU provider |
+## Files NOT vendored (and why)
+
+- `transformers.js` / `transformers.min.js` (dual builds, ~1.3MB each) —
+  redundant with the `.web.min.js` we use; the dual variants embed Node-
+  only code paths we never reach.
+- `transformers.node.*` — Node runtime, unused.
+- `ort-wasm-simd-threaded.asyncify.wasm` / `.jspi.wasm` / `.wasm` — CPU
+  fallback variants. Adding them would let the provider fall back to
+  WASM-CPU when WebGPU is absent, but for now we surface a clear
+  "WebGPU not available" error instead. Add these later if we want
+  CPU fallback for systems without WebGPU.

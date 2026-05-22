@@ -75,11 +75,12 @@ async function loadLibrary() {
   _libPromise = (async () => {
     let lib;
     try {
-      // Dynamic import so a missing file fails at runtime (with a clear
-      // message) instead of at offscreen-doc parse time.
-      lib = await import('../../vendor/transformers/transformers.min.js');
+      // Dynamic import so a vendor-mishap fails at runtime (with a clear
+      // message) instead of at offscreen-doc parse time. The .web build
+      // is the browser ESM variant; transformers.node.* is for Node.
+      lib = await import('../../vendor/transformers/transformers.web.min.js');
     } catch (e) {
-      _libPromise = null; // allow retry after the user vendors the file
+      _libPromise = null; // allow retry after the user re-vendors
       throw new Error(
         'transformers.js library not vendored. See ' +
         'src/chrome/vendor/transformers/README.md for how to drop the ' +
@@ -93,6 +94,18 @@ async function loadLibrary() {
       // gives us the "big first download, instant subsequent runs" UX.
       lib.env.allowLocalModels = false;
       lib.env.allowRemoteModels = true;
+      // Pin the WASM file URL to OUR vendor dir. Without this, the
+      // onnxruntime-web loader resolves the wasm path relative to
+      // transformers.web.min.js's URL — which DOES work for us today
+      // (both files are siblings in vendor/transformers/) but only by
+      // happy accident. Setting it explicitly makes the wiring obvious
+      // and survives future re-vendoring at different paths.
+      try {
+        if (lib.env.backends?.onnx?.wasm) {
+          const base = chrome.runtime.getURL('vendor/transformers/');
+          lib.env.backends.onnx.wasm.wasmPaths = base;
+        }
+      } catch { /* if the shape moves between library versions, fall back to defaults */ }
     }
     return lib;
   })();

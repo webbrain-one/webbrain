@@ -3,13 +3,11 @@
 node_modules/
 test/anonymous/.test-profile/
 
-# Vendored @huggingface/transformers build artifacts. See
-# src/{chrome,firefox}/vendor/transformers/README.md — the build is
-# dropped in locally and too big to commit. The READMEs themselves
-# stay tracked.
-src/chrome/vendor/transformers/*.js
-src/chrome/vendor/transformers/*.wasm
-src/chrome/vendor/transformers/*.mjs
+# Vendored @huggingface/transformers — Chrome's build is committed
+# (see src/chrome/vendor/transformers/README.md for versioning notes).
+# Firefox's stays gitignored because the Firefox WebGPU provider is
+# still a stub; once it's wired, copy the chrome vendor over and
+# remove the firefox exclusion below.
 src/firefox/vendor/transformers/*.js
 src/firefox/vendor/transformers/*.wasm
 src/firefox/vendor/transformers/*.mjs
