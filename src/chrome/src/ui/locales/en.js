@@ -62,6 +62,11 @@ export default {
   'sp.clarify.input_placeholder_with_options': 'Or type a different answer…',
   'sp.clarify.your_answer': 'Your answer:',
 
+  'sp.model_download.headline': 'Downloading {model} — {mb} / {total_mb} MB',
+  'sp.model_download.queued': 'Queued',
+  'sp.model_download.file_done': 'File complete',
+  'sp.model_download.ready': '{model} ready',
+
   'sp.step.details': 'details',
   'sp.step.input_label': 'Input',
   'sp.step.result_label': 'Result',

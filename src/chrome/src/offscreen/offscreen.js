@@ -111,9 +111,57 @@ async function getPipeline(modelId, dtype, device) {
   _activePipeline = await pipeline('text-generation', modelId, {
     device: device || 'webgpu',
     dtype: dtype || 'q4',
+    // Stream download progress to the side panel. Without this the UI
+    // shows nothing for ~30-60s on first run while ~500MB of weights
+    // pull from the HF Hub, which is indistinguishable from a hang.
+    // The callback fires per file with one of:
+    //   {status:'initiate', file, name}        // queued
+    //   {status:'download', file, name}        // about to start
+    //   {status:'progress', file, loaded, total, progress}  // bytes streaming
+    //   {status:'done', file, name}            // file complete
+    //   {status:'ready', model, task}          // pipeline ready
+    progress_callback: (ev) => broadcastProgress(modelId, ev),
   });
   _activeModelId = modelId;
   return _activePipeline;
+}
+
+/**
+ * Forward a transformers.js progress event to anyone listening (side
+ * panel). The SW relays this to its open extension pages via
+ * chrome.runtime.sendMessage with action='model_download'. We use a
+ * "fire-and-forget, swallow rejections" pattern because no listener is
+ * fine — first-run UI is a bonus, not a contract.
+ *
+ * Throttling: 'progress' events fire many times per second across
+ * multiple files in parallel. We rate-limit to one event per file per
+ * 200ms so the message channel doesn't drown in updates.
+ */
+const _progressLastEmitted = new Map(); // key = `${modelId}|${file}`, value = ts
+function broadcastProgress(modelId, ev) {
+  try {
+    const file = ev?.file || ev?.name || '';
+    const status = ev?.status || '';
+    // Always pass through state transitions (initiate / download / done /
+    // ready); rate-limit only the continuous 'progress' stream.
+    if (status === 'progress') {
+      const key = `${modelId}|${file}`;
+      const now = Date.now();
+      const last = _progressLastEmitted.get(key) || 0;
+      if (now - last < 200) return;
+      _progressLastEmitted.set(key, now);
+    }
+    chrome.runtime.sendMessage({
+      target: 'sidepanel',
+      action: 'model_download',
+      modelId,
+      status,
+      file,
+      loaded: ev?.loaded || 0,
+      total: ev?.total || 0,
+      progress: ev?.progress || 0,
+    }).catch(() => { /* no listener — fine, progress UI is best-effort */ });
+  } catch { /* never let a UI update break the download */ }
 }
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
