@@ -108,11 +108,15 @@ export class WebGPUProvider extends BaseLLMProvider {
     // somebody asks for it, swap this for a streamId-based subscription
     // that forwards transformers.js `streamer` callbacks back to the SW.
     const result = await this.chat(messages, options);
-    yield {
-      type: result.toolCalls ? 'tool_call' : 'text',
-      content: result.content,
-      toolCalls: result.toolCalls,
-    };
+    if (result.toolCalls && result.toolCalls.length > 0) {
+      // Convention shared with openai.js / llamacpp.js: when a chunk has
+      // type:'tool_call', `content` IS the tool_calls array (not text).
+      // processMessageStream() in agent.js reads chunk.content for tool
+      // deltas — yielding text in `content` here would drop the tool call.
+      yield { type: 'tool_call', content: result.toolCalls };
+    } else {
+      yield { type: 'text', content: result.content };
+    }
     yield { type: 'done', usage: result.usage };
   }
 

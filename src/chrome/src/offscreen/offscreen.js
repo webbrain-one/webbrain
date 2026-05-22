@@ -60,7 +60,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
 let _libPromise = null;        // Promise resolving to the transformers module
 let _libraryVersion = null;    // for diagnostics
-let _activeModelId = null;     // which model the cached pipeline is for
+let _activePipelineKey = null; // `${modelId}|${dtype}|${device}` of cached pipeline
 let _activePipeline = null;    // text-generation pipeline instance
 
 /**
@@ -131,7 +131,12 @@ async function loadLibrary() {
 }
 
 async function getPipeline(modelId, dtype, device) {
-  if (_activePipeline && _activeModelId === modelId) return _activePipeline;
+  // Cache key includes dtype + device, not just modelId — otherwise editing
+  // either field in Settings (q4 → q8, webgpu → wasm) silently reuses the
+  // old pipeline until the offscreen doc is recreated, so users see "my
+  // setting change had no effect" until they re-enable the extension.
+  const key = `${modelId}|${dtype || 'default'}|${device || 'webgpu'}`;
+  if (_activePipeline && _activePipelineKey === key) return _activePipeline;
   const lib = await loadLibrary();
   const { pipeline } = lib;
   // Diagnostic: log the actual runtime state so users hitting OOM /
@@ -198,7 +203,7 @@ async function getPipeline(modelId, dtype, device) {
     //   {status:'ready', model, task}          // pipeline ready
     progress_callback: (ev) => broadcastProgress(modelId, ev),
   });
-  _activeModelId = modelId;
+  _activePipelineKey = key;
   return _activePipeline;
 }
 
