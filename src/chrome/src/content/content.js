@@ -1673,17 +1673,20 @@
       // execute_js — model-supplied JS body, evaluated in the content
       // script's isolated world via `new Function()`.
       //
-      // CSP CONSTRAINT (known, not fixable): `new Function()` requires
-      // `'unsafe-eval'` in the executing context's CSP. For content
-      // scripts in MV3 that's the extension's `extension_pages` CSP —
-      // and MV3 forbids `'unsafe-eval'` in extension_pages (Chrome's
-      // minimum-policy enforcement is strict; adding it makes the
-      // extension fail to install). There's no manifest-side workaround.
+      // CSP CONSTRAINT (Chrome MV3, not fixable): `new Function()`
+      // requires `'unsafe-eval'` in the executing context's CSP. For
+      // content scripts in MV3 that's the extension's `extension_pages`
+      // CSP — and MV3 forbids `'unsafe-eval'` in extension_pages
+      // (Chrome's minimum-policy enforcement is strict; adding it
+      // makes the extension fail to install). There's no manifest-side
+      // workaround. Firefox MV2 does allow this and the firefox build
+      // grants `unsafe-eval` — see src/firefox/src/content/content.js
+      // for the parallel handler.
       //
-      // Net effect: execute_js fails on every host with the same CSP
-      // error. Detected below and reported with an actionable hint so
-      // the agent stops thrashing through execute_js variants and uses
-      // the finite-verb tools instead.
+      // Net effect on Chrome: execute_js fails on every host with the
+      // same CSP error. Detected below and reported with an actionable
+      // hint so the agent stops thrashing through execute_js variants
+      // and uses the finite-verb tools instead.
       'execute_js': () => {
         try {
           const fn = new Function(msg.params.code);
