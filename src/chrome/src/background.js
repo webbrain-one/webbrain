@@ -579,6 +579,10 @@ async function handleMessage(msg, sender) {
       return await providerManager.testVisionProvider();
     }
 
+    case 'test_transcription_provider': {
+      return await providerManager.testTranscriptionProvider();
+    }
+
     case 'test_capsolver_balance': {
       // Settings UI "Check balance" button. Uses the key from the request
       // rather than re-reading storage so the user gets feedback before

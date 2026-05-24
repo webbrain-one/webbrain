@@ -135,7 +135,7 @@ export default {
   'st.provider.field.model': '모델',
   'st.provider.field.model_optional': '모델 (선택)',
   'st.provider.field.supports_vision': '모델이 비전(멀티모달)을 지원합니다',
-  'st.provider.field.compact_prompt': '간결한 prompt (작은 모델에 권장, 기본 켜짐)',
+  'st.provider.field.compact_prompt': '간결한 prompt (일부 안전 가이드 제거 — 8B 미만 모델에서만 활성화)',
   'st.provider.field.model_loaded_hint': '비워 두면 이미 로드된 모델을 사용',
 
   'st.vision.desc': '설정하면 페이지 읽기용 스크린샷은 이 모델로 전송되고, 활성 제공자는 계획 수립과 도구 호출을 담당합니다. 비워 두면 비전에도 활성 제공자가 사용됩니다. OpenAI 호환 엔드포인트만 지원합니다.',

@@ -37,8 +37,10 @@
     }
   } catch (_) {}
 
-  // Honour #display / #providers / #vision in the URL so other parts of
-  // the extension can deep-link into a tab later.
+  // Honour #display / #providers / #multimodal in the URL so other parts
+  // of the extension can deep-link into a tab later. The "multimodal" tab
+  // was previously named "vision" — old #vision deep-links no longer match
+  // anything and silently fall back to the default tab, which is fine.
   const hash = (location.hash || '').replace('#', '');
   if (hash && document.querySelector(`.tab-btn[data-tab="${hash}"]`)) {
     initial = hash;

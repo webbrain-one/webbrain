@@ -26,6 +26,16 @@ const visionBaseUrlInput = document.getElementById('vision-base-url');
 const visionApiKeyInput = document.getElementById('vision-api-key');
 const visionModelInput = document.getElementById('vision-model');
 const btnSaveVision = document.getElementById('btn-save-vision');
+
+// Transcription service (Whisper-compatible) — same shape as the vision
+// override but routes to /v1/audio/transcriptions instead of /v1/chat/completions.
+const transcriptionBaseUrlInput = document.getElementById('transcription-base-url');
+const transcriptionApiKeyInput = document.getElementById('transcription-api-key');
+const transcriptionModelInput = document.getElementById('transcription-model');
+const btnSaveTranscription = document.getElementById('btn-save-transcription');
+const btnTestTranscription = document.getElementById('btn-test-transcription');
+const btnClearTranscription = document.getElementById('btn-clear-transcription');
+const transcriptionTestResult = document.getElementById('test-transcription');
 const btnTestVision = document.getElementById('btn-test-vision');
 const btnClearVision = document.getElementById('btn-clear-vision');
 const visionTestResult = document.getElementById('test-vision');
@@ -125,6 +135,14 @@ async function init() {
   visionBaseUrlInput.value = vision.baseUrl || '';
   visionApiKeyInput.value = vision.apiKey || '';
   visionModelInput.value = vision.model || '';
+
+  // Load transcription service config. Same shape as visionModel; used by
+  // recorder/host.js → transcribe.js when transcribing recorded audio.
+  const transcriptionStored = await chrome.storage.local.get(['transcriptionModel']);
+  const transcription = transcriptionStored.transcriptionModel || {};
+  if (transcriptionBaseUrlInput) transcriptionBaseUrlInput.value = transcription.baseUrl || '';
+  if (transcriptionApiKeyInput) transcriptionApiKeyInput.value = transcription.apiKey || '';
+  if (transcriptionModelInput) transcriptionModelInput.value = transcription.model || '';
 
   // Load profile (auto-fill bio + throwaway password)
   const profileStored = await chrome.storage.local.get(['profileEnabled', 'profileText']);
@@ -326,6 +344,83 @@ btnClearVision.addEventListener('click', async () => {
   await chrome.storage.local.remove('visionModel');
   flashVisionResult('ok', t('st.vision.cleared'));
 });
+
+// --- Transcription Service (Whisper-compatible) ---
+//
+// Same UX as the vision override. Stored in chrome.storage.local under
+// `transcriptionModel = { baseUrl, apiKey, model }`. Consumed by
+// transcribe.js, which uses the override when all three fields are
+// filled, and falls back to the auto-pick-from-providers behavior when
+// any field is empty.
+
+function flashTranscriptionResult(className, text) {
+  if (!transcriptionTestResult) return;
+  transcriptionTestResult.className = `test-result show ${className}`;
+  transcriptionTestResult.textContent = text;
+  setTimeout(() => transcriptionTestResult.classList.remove('show'), 2000);
+}
+
+if (btnSaveTranscription) {
+  btnSaveTranscription.addEventListener('click', async () => {
+    const baseUrl = transcriptionBaseUrlInput.value.trim();
+    const apiKey = transcriptionApiKeyInput.value.trim();
+    const model = transcriptionModelInput.value.trim();
+
+    if (!baseUrl && !apiKey && !model) {
+      await chrome.storage.local.remove('transcriptionModel');
+      flashTranscriptionResult('ok', t('st.transcription.cleared'));
+      return;
+    }
+
+    await chrome.storage.local.set({
+      transcriptionModel: { baseUrl, apiKey, model },
+    });
+    flashTranscriptionResult('ok', t('st.transcription.saved'));
+  });
+}
+
+if (btnTestTranscription) {
+  btnTestTranscription.addEventListener('click', async () => {
+    const baseUrl = transcriptionBaseUrlInput.value.trim();
+    const apiKey = transcriptionApiKeyInput.value.trim();
+    const model = transcriptionModelInput.value.trim();
+
+    if (!baseUrl || !model) {
+      transcriptionTestResult.className = 'test-result show fail';
+      transcriptionTestResult.textContent = t('st.transcription.fill_required');
+      setTimeout(() => transcriptionTestResult.classList.remove('show'), 2500);
+      return;
+    }
+
+    // Persist before testing so the background handler sees the values.
+    await chrome.storage.local.set({
+      transcriptionModel: { baseUrl, apiKey, model },
+    });
+
+    transcriptionTestResult.className = 'test-result show';
+    transcriptionTestResult.textContent = t('st.transcription.testing');
+    transcriptionTestResult.style.color = 'var(--text2)';
+
+    const res = await sendToBackground('test_transcription_provider');
+    if (res.ok) {
+      transcriptionTestResult.className = 'test-result show ok';
+      transcriptionTestResult.textContent = t('st.transcription.connected', { model: res.model || model });
+    } else {
+      transcriptionTestResult.className = 'test-result show fail';
+      transcriptionTestResult.textContent = t('st.transcription.failed', { error: res.error });
+    }
+  });
+}
+
+if (btnClearTranscription) {
+  btnClearTranscription.addEventListener('click', async () => {
+    transcriptionBaseUrlInput.value = '';
+    transcriptionApiKeyInput.value = '';
+    transcriptionModelInput.value = '';
+    await chrome.storage.local.remove('transcriptionModel');
+    flashTranscriptionResult('ok', t('st.transcription.cleared'));
+  });
+}
 
 // --- Profile auto-fill ---
 // Persisted to chrome.storage.local in plaintext; the agent picks the
@@ -557,13 +652,14 @@ function renderProviders() {
       const label = field.labelKey ? t(field.labelKey) : (field.label || field.key);
       const placeholder = field.placeholderKey ? t(field.placeholderKey) : (field.placeholder || '');
       if (field.type === 'checkbox') {
-        // For useCompactPrompt on local providers, default to checked when
-        // the config key hasn't been explicitly set yet (matches provider logic).
-        let isChecked = config[field.key];
-        if (field.key === 'useCompactPrompt' && config[field.key] == null) {
-          const localProviders = ['llamacpp', 'ollama', 'lmstudio'];
-          isChecked = localProviders.includes(id);
-        }
+        // useCompactPrompt defaults to UNCHECKED across the board now.
+        // Earlier builds defaulted it ON for local providers — the compact
+        // prompt drops too many guardrails (modal handling, duplicate-
+        // submit guard wording, iframe rules) and small local models that
+        // are vision-capable in 2026 (Qwen-VL, Llama 3.2-V) are big enough
+        // to handle the full prompt comfortably. The checkbox is preserved
+        // so users on truly tiny models (under 8B) can opt back in.
+        const isChecked = !!config[field.key];
         const checked = isChecked ? 'checked' : '';
         fieldsHTML += `
           <div class="field" style="display:flex;align-items:center;gap:8px;flex-direction:row;">

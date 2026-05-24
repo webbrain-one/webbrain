@@ -135,7 +135,7 @@ export default {
   'st.provider.field.model': 'Model',
   'st.provider.field.model_optional': 'Model (opsional)',
   'st.provider.field.supports_vision': 'Model mendukung visi (multimodal)',
-  'st.provider.field.compact_prompt': 'Prompt ringkas (disarankan untuk model kecil, aktif secara bawaan)',
+  'st.provider.field.compact_prompt': 'Prompt ringkas (menghilangkan beberapa pengaman — aktifkan hanya untuk model di bawah 8B)',
   'st.provider.field.model_loaded_hint': 'kosongkan untuk menggunakan model yang sudah dimuat',
 
   'st.vision.desc': 'Jika diatur, tangkapan layar dikirim ke model ini untuk membaca halaman, sementara penyedia aktif menangani perencanaan dan pemanggilan alat. Kosongkan agar penyedia aktif juga menangani visi. Hanya endpoint yang kompatibel dengan OpenAI.',

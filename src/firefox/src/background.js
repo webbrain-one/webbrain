@@ -397,6 +397,10 @@ async function handleMessage(msg, sender) {
       return await providerManager.testVisionProvider();
     }
 
+    case 'test_transcription_provider': {
+      return await providerManager.testTranscriptionProvider();
+    }
+
     case 'test_capsolver_balance': {
       try {
         const key = String(msg.apiKey || '').trim();

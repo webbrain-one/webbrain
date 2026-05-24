@@ -403,7 +403,7 @@
   <nav class="tabs" role="tablist">
     <button class="tab-btn active" type="button" role="tab" data-tab="display" data-i18n="st.tab.display"></button>
     <button class="tab-btn" type="button" role="tab" data-tab="providers" data-i18n="st.tab.providers"></button>
-    <button class="tab-btn" type="button" role="tab" data-tab="vision" data-i18n="st.tab.vision"></button>
+    <button class="tab-btn" type="button" role="tab" data-tab="multimodal" data-i18n="st.tab.multimodal"></button>
     <button class="tab-btn" type="button" role="tab" data-tab="profile" data-i18n="st.tab.profile"></button>
     <button class="tab-btn" type="button" role="tab" data-tab="captcha" data-i18n="st.tab.captcha"></button>
   </nav>
@@ -533,7 +533,8 @@
     <div class="info-box" data-i18n-html="st.providers.info.html"></div>
   </section>
 
-  <section class="tab-panel" data-panel="vision" role="tabpanel">
+  <section class="tab-panel" data-panel="multimodal" role="tabpanel">
+    <h3 data-i18n="st.vision.heading" style="margin:0 0 12px;font-size:14px;font-weight:600;"></h3>
     <div class="provider-card" id="vision-card">
       <div style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.5;" data-i18n="st.vision.desc"></div>
       <div class="field">
@@ -554,6 +555,29 @@
         <button class="btn-secondary" id="btn-clear-vision" data-i18n="st.vision.clear"></button>
       </div>
       <div class="test-result" id="test-vision"></div>
+    </div>
+
+    <h3 data-i18n="st.transcription.heading" style="margin:24px 0 12px;font-size:14px;font-weight:600;"></h3>
+    <div class="provider-card" id="transcription-card">
+      <div style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.5;" data-i18n="st.transcription.desc"></div>
+      <div class="field">
+        <label data-i18n="st.provider.field.api_base_url"></label>
+        <input type="text" id="transcription-base-url" placeholder="https://api.openai.com/v1">
+      </div>
+      <div class="field">
+        <label data-i18n="st.provider.field.api_key"></label>
+        <input type="password" id="transcription-api-key" placeholder="sk-...">
+      </div>
+      <div class="field">
+        <label data-i18n="st.provider.field.model"></label>
+        <input type="text" id="transcription-model" placeholder="whisper-1">
+      </div>
+      <div class="btn-row">
+        <button class="btn-primary" id="btn-save-transcription" data-i18n="st.transcription.save"></button>
+        <button class="btn-secondary" id="btn-test-transcription" data-i18n="st.transcription.test"></button>
+        <button class="btn-secondary" id="btn-clear-transcription" data-i18n="st.transcription.clear"></button>
+      </div>
+      <div class="test-result" id="test-transcription"></div>
     </div>
   </section>
 

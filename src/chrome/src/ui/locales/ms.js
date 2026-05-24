@@ -135,7 +135,7 @@ export default {
   'st.provider.field.model': 'Model',
   'st.provider.field.model_optional': 'Model (pilihan)',
   'st.provider.field.supports_vision': 'Model menyokong penglihatan (multimodal)',
-  'st.provider.field.compact_prompt': 'Prompt ringkas (disyorkan untuk model kecil, aktif secara lalai)',
+  'st.provider.field.compact_prompt': 'Prompt ringkas (mengabaikan beberapa pengawal — aktifkan hanya untuk model di bawah 8B)',
   'st.provider.field.model_loaded_hint': 'biarkan kosong untuk menggunakan model yang telah dimuatkan',
 
   'st.vision.desc': 'Jika ditetapkan, tangkapan skrin dihantar kepada model ini untuk membaca halaman, manakala pembekal aktif mengendalikan perancangan dan panggilan alat. Biarkan kosong agar pembekal aktif juga mengendalikan penglihatan. Hanya hujung yang serasi dengan OpenAI.',

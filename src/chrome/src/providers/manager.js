@@ -74,7 +74,14 @@ export class ProviderManager {
         label: 'llama.cpp (Local)',
         baseUrl: 'http://localhost:8080',
         model: '',
-        supportsVision: false,
+        // Default ON for local providers: in practice users who reach for
+        // llama.cpp / Ollama / LM Studio in 2026 are running multimodal
+        // models (Qwen-VL, Llama 3.2-Vision, etc.). False-positives where a
+        // text-only model is loaded with vision=true still work — the agent
+        // just sends image_url blocks the model ignores. False-negatives
+        // (vision-capable model loaded with vision=false) silently lose the
+        // multimodal channel, which is the worse failure mode.
+        supportsVision: true,
         enabled: true,
       },
       ollama: {
@@ -85,7 +92,7 @@ export class ProviderManager {
         baseUrl: 'http://localhost:11434/v1',
         model: 'llama3.1',
         apiKey: 'ollama',
-        supportsVision: false,
+        supportsVision: true,
         enabled: true,
       },
       lmstudio: {
@@ -96,7 +103,7 @@ export class ProviderManager {
         baseUrl: 'http://localhost:1234/v1',
         model: '',
         apiKey: 'lm-studio',
-        supportsVision: false,
+        supportsVision: true,
         enabled: true,
       },
       openai: {
@@ -339,6 +346,57 @@ export class ProviderManager {
     const provider = await this.getVisionProvider();
     if (!provider) return { ok: false, error: 'Vision model not configured' };
     return provider.testConnection();
+  }
+
+  /**
+   * Test the optional dedicated transcription provider's connection.
+   *
+   * Hits <baseUrl>/models with the configured auth, which is the cheapest
+   * round-trip that validates "the endpoint is reachable AND the key works"
+   * without uploading actual audio. /v1/models is mandatory in the
+   * OpenAI-compatible spec, so every Whisper-hosting provider exposes it.
+   * If /models returns 200, /audio/transcriptions on the same base URL will
+   * accept calls (modulo per-model availability — that's checked when the
+   * actual transcription runs).
+   */
+  async testTranscriptionProvider() {
+    let cfg;
+    try {
+      const stored = await chrome.storage.local.get(['transcriptionModel']);
+      cfg = stored?.transcriptionModel;
+    } catch (e) {
+      return { ok: false, error: 'Failed to read transcription config: ' + e.message };
+    }
+    if (!cfg || !cfg.baseUrl || !cfg.model) {
+      return { ok: false, error: 'Transcription model not configured (Base URL and Model are required).' };
+    }
+    const baseUrl = cfg.baseUrl.replace(/\/$/, '');
+    const url = `${baseUrl}/models`;
+    const headers = { 'Accept': 'application/json' };
+    if (cfg.apiKey) headers['Authorization'] = `Bearer ${cfg.apiKey}`;
+    try {
+      const { fetchWithFallback } = await import('./fetch-with-fallback.js');
+      const res = await fetchWithFallback(url, { method: 'GET', headers });
+      if (!res.ok) {
+        let body = '';
+        try { body = (await res.text()).slice(0, 300); } catch {}
+        return { ok: false, error: `HTTP ${res.status}: ${body || res.statusText}` };
+      }
+      // Best-effort: confirm the user-specified model appears in the list.
+      // Not required for success — local servers (LM Studio, llama.cpp)
+      // sometimes return the loaded model under a different id than what
+      // the user typed, and that still works when actually transcribing.
+      try {
+        const data = await res.json();
+        const ids = this._extractModelIds('openai-compatible', data) || [];
+        const matches = ids.includes(cfg.model);
+        return { ok: true, model: cfg.model, modelListed: matches, modelCount: ids.length };
+      } catch {
+        return { ok: true, model: cfg.model };
+      }
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
   }
 
   /**

@@ -135,7 +135,7 @@ export default {
   'st.provider.field.model': 'النموذج',
   'st.provider.field.model_optional': 'النموذج (اختياري)',
   'st.provider.field.supports_vision': 'النموذج يدعم الرؤية (متعدّد الوسائط)',
-  'st.provider.field.compact_prompt': 'prompt مُختصر (موصى به للنماذج الصغيرة، مُفعَّل افتراضيًا)',
+  'st.provider.field.compact_prompt': 'prompt مُختصر (يُسقط بعض الضوابط — فعِّله فقط للنماذج الأصغر من 8 مليار معامل)',
   'st.provider.field.model_loaded_hint': 'اتركه فارغًا لاستخدام النموذج المُحمَّل',
 
   'st.vision.desc': 'إذا تم تعيينه، تُرسَل لقطات الشاشة إلى هذا النموذج لقراءة الصفحة، بينما يتولّى المزوّد النشط التخطيط واستدعاءات الأدوات. اتركه فارغًا لاستخدام المزوّد النشط للرؤية أيضًا. نقاط نهاية متوافقة مع OpenAI فقط.',
