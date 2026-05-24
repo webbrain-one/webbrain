@@ -1670,6 +1670,18 @@
           return { success: false, error: e && e.message || String(e) };
         }
       },
+      // execute_js — model-supplied JS body, evaluated in the content
+      // script's isolated world. `new Function()` requires `unsafe-eval`
+      // in the extension's `extension_pages` CSP (the MV3 directive that
+      // also governs content-script eval). That's been granted in
+      // manifest.json since v8.0.x — before then this handler silently
+      // failed on every strict-CSP host with "'unsafe-eval' is not an
+      // allowed source of script: script-src 'self' 'wasm-unsafe-eval'",
+      // and the agent burned tool calls thrashing through fallbacks.
+      // Trade-off (and why we accept it): this extension's whole job is
+      // to evaluate model-generated code in the user's browser —
+      // `unsafe-eval` is not an incremental risk on top of the
+      // `<all_urls>` host_permissions + `scripting` we already have.
       'execute_js': () => {
         try {
           const fn = new Function(msg.params.code);

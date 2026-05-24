@@ -3468,8 +3468,27 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
                 }
                 for (const b of (rec.orphanBuffers || [])) mseBytes += (b.bytes || 0);
               } catch (_) { /* recorder optional */ }
+              // If the MSE recorder captured bytes, save them HERE rather
+              // than asking the agent to call execute_js → saveMse() in a
+              // follow-up step. The follow-up pattern was broken by the
+              // extension's own CSP (no `unsafe-eval`), and the user-
+              // observable behaviour ("28 MB captured but won't save") was
+              // a head-scratcher. Now `download_social_media` is a single
+              // call that completes the save end-to-end on supported sites.
+              // Failures fall through to the recommendation path below.
+              let mseSavedFiles = [];
+              let mseSaveError = null;
+              if (mseBytes > 0) {
+                try {
+                  mseSavedFiles = await window.SocialMediaDownloader.saveMse({
+                    prefix: (window.location && window.location.hostname || 'mse').replace(/^www\./, ''),
+                  });
+                } catch (e) {
+                  mseSaveError = (e && e.message) || String(e);
+                }
+              }
               const recommendation = window.SocialMediaDownloader._buildRecommendation({
-                urls, profile, mseBytes, pageUrl: location.href,
+                urls, profile, mseBytes, mseSavedFiles, mseSaveError, pageUrl: location.href,
               });
               // Honest per-status counts so the agent can detect cases
               // where 713 URLs were "found" but only 1 file actually
@@ -3479,18 +3498,25 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
               // handed to <a download>; `openedInTabCount` opened a new
               // tab as a last resort (uncertain — verify with
               // list_downloads); `failedCount` is hard errors.
+              // Roll mse-saved files into the completed count so the agent
+              // sees one consistent "N files downloaded" number rather than
+              // having to add up urls + mseSavedFiles itself.
+              const completedFromStats = stats ? stats.completed : 0;
+              const mseSavedCount = mseSavedFiles.length;
               return {
                 success: true,
                 site: profile,
                 mode: runOpts.mode,
-                count: urls.length,
-                triggeredCount: stats ? stats.triggered : urls.length,
-                completedCount: stats ? stats.completed : null,
+                count: urls.length + mseSavedCount,
+                triggeredCount: (stats ? stats.triggered : urls.length) + mseSavedCount,
+                completedCount: completedFromStats + mseSavedCount,
                 openedInTabCount: stats ? stats.openedInTab : null,
                 failedCount: stats ? stats.failed : null,
                 failures: stats ? stats.failures : [],
                 urls: urls.slice(0, 50),
                 mseBytes,
+                mseSavedFiles,                  // [{filename, bytes, mime}, ...]
+                ...(mseSaveError ? { mseSaveError } : {}),
                 recommendation,
               };
             } catch (e) {

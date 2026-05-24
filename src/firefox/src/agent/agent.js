@@ -1918,23 +1918,44 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
                 }
                 for (const b of (rec.orphanBuffers || [])) mseBytes += (b.bytes || 0);
               } catch (_) {}
+              // If the MSE recorder captured bytes, save them inline rather
+              // than asking the agent to call execute_js → saveMse() in a
+              // follow-up step. The follow-up pattern was broken by the
+              // extension's own CSP (no \`unsafe-eval\`), and "28 MB captured
+              // but won't save" was a head-scratcher. Now download_social_media
+              // is a single call that completes the save end-to-end.
+              let mseSavedFiles = [];
+              let mseSaveError = null;
+              if (mseBytes > 0) {
+                try {
+                  mseSavedFiles = await window.SocialMediaDownloader.saveMse({
+                    prefix: (window.location && window.location.hostname || 'mse').replace(/^www\\./, ''),
+                  });
+                } catch (e) {
+                  mseSaveError = (e && e.message) || String(e);
+                }
+              }
               const recommendation = window.SocialMediaDownloader._buildRecommendation({
-                urls, profile, mseBytes, pageUrl: location.href,
+                urls, profile, mseBytes, mseSavedFiles, mseSaveError, pageUrl: location.href,
               });
-              // Honest per-status counts so the agent doesn't claim
-              // 713 downloads when popup-blocking killed all but one.
+              // Honest per-status counts. Roll mse-saved files into the
+              // completed count so the agent sees one consistent number.
+              const completedFromStats = stats ? stats.completed : 0;
+              const mseSavedCount = mseSavedFiles.length;
               return {
                 success: true,
                 site: profile,
                 mode: ${JSON.stringify(opts.mode)},
-                count: urls.length,
-                triggeredCount: stats ? stats.triggered : urls.length,
-                completedCount: stats ? stats.completed : null,
+                count: urls.length + mseSavedCount,
+                triggeredCount: (stats ? stats.triggered : urls.length) + mseSavedCount,
+                completedCount: completedFromStats + mseSavedCount,
                 openedInTabCount: stats ? stats.openedInTab : null,
                 failedCount: stats ? stats.failed : null,
                 failures: stats ? stats.failures : [],
                 urls: urls.slice(0, 50),
                 mseBytes,
+                mseSavedFiles,
+                ...(mseSaveError ? { mseSaveError } : {}),
                 recommendation,
               };
             } catch (e) {

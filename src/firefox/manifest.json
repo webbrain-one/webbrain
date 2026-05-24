@@ -11,7 +11,7 @@
     "tabGroups",
     "<all_urls>"
   ],
-  "content_security_policy": "script-src 'self'; object-src 'self'; connect-src * data: blob: http://* ws://*;",
+  "content_security_policy": "script-src 'self' 'unsafe-eval'; object-src 'self'; connect-src * data: blob: http://* ws://*;",
   "background": {
     "page": "src/background.html",
     "persistent": false

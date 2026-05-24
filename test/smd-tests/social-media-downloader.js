@@ -829,6 +829,15 @@ window.SocialMediaDownloader = (() => {
     urls = [],
     profile = 'generic',
     mseBytes = 0,
+    // v4.x: download_social_media now calls saveMse() inline when
+    // mseBytes > 0 and passes the results in. If the save succeeded
+    // there's nothing to recommend — the bytes already landed. If it
+    // failed, recommend yt-dlp instead of the old "call execute_js
+    // → saveMse()" dance, which was broken by extension-CSP `unsafe-
+    // eval`. Old callers that don't pass these fields still work: they
+    // get the legacy `mse_capture_available` recommendation.
+    mseSavedFiles = null,
+    mseSaveError = null,
     pageUrl = (typeof location !== 'undefined' ? location.href : ''),
   } = {}) => {
     let parsed = null;
@@ -855,19 +864,52 @@ window.SocialMediaDownloader = (() => {
       }
     }
 
-    // MSE capture available — the player loaded bytes into the recorder
-    // while we were waiting. Surface them to the agent so it can call
-    // saveMse() in a follow-up step.
+    // MSE capture available. The new flow: download_social_media calls
+    // saveMse() inline and passes mseSavedFiles / mseSaveError in.
+    //
+    //   - mseSavedFiles is a non-empty array → the bytes already landed.
+    //     No recommendation needed; let the normal "N files downloaded"
+    //     result speak for itself.
+    //   - mseSavedFiles is an empty array → save attempted but produced
+    //     nothing (rare — buffers below minBytes). Surface a useful
+    //     note pointing at yt-dlp as the bulletproof fallback.
+    //   - mseSaveError is set → save threw. Same fallback as above plus
+    //     the error string so the agent can echo it to the user.
+    //   - Both null (legacy caller that doesn't pass the new fields) →
+    //     return the old `mse_capture_available` recommendation, preserved
+    //     for backwards compat with any external callers of
+    //     _buildRecommendation. NOT consumed by download_social_media
+    //     anymore.
     if (mseBytes > 0) {
+      if (Array.isArray(mseSavedFiles) && mseSavedFiles.length > 0) {
+        return null; // bytes saved — nothing to recommend
+      }
+      if (mseSavedFiles !== null || mseSaveError) {
+        // New caller invoked saveMse, but it returned nothing or threw.
+        const errBit = mseSaveError ? ' (' + mseSaveError + ')' : '';
+        return {
+          kind: 'mse_save_failed',
+          message:
+            'The MSE recorder captured ' + mseBytes + ' bytes from the ' +
+            'player but saveMse() did not produce a downloadable file' +
+            errBit + '. This usually means the captured chunks are below ' +
+            'the minBytes threshold or the page revoked the blob URL ' +
+            'before the <a download> click landed. The most reliable ' +
+            'fallback for this URL is yt-dlp:\n' +
+            '  pip install yt-dlp\n' +
+            '  yt-dlp "' + href + '"',
+        };
+      }
+      // Legacy caller (didn't pass mseSavedFiles / mseSaveError). Keep
+      // the old recommendation. download_social_media no longer hits this.
       return {
         kind: 'mse_capture_available',
         message:
           'The MSE recorder captured ' + mseBytes + ' bytes from the ' +
           'player while the page was open. Run `await ' +
-          'SocialMediaDownloader.saveMse()` (via execute_js) to download ' +
-          'those bytes as separate video / audio files. If the result is ' +
-          'two files, remux with: ffmpeg -i video.mp4 -i audio.mp4 -c ' +
-          'copy out.mp4',
+          'SocialMediaDownloader.saveMse()` to download those bytes as ' +
+          'separate video / audio files. If the result is two files, ' +
+          'remux with: ffmpeg -i video.mp4 -i audio.mp4 -c copy out.mp4',
       };
     }
 
