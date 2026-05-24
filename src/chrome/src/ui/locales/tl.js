@@ -135,7 +135,7 @@ export default {
   'st.provider.field.model': 'Modelo',
   'st.provider.field.model_optional': 'Modelo (opsyonal)',
   'st.provider.field.supports_vision': 'Sumusuporta ang modelo sa bisyon (multimodal)',
-  'st.provider.field.compact_prompt': 'Compact prompt (inirerekomenda para sa maliliit na modelo, naka-on bilang default)',
+  'st.provider.field.compact_prompt': 'Compact prompt (inaalis ang ilang gabay sa kaligtasan — i-on lang para sa mga modelong mas maliit sa 8B)',
   'st.provider.field.model_loaded_hint': 'iwang blangko para gamitin ang na-load na modelo',
 
   'st.vision.desc': 'Kung naitakda, ipinapadala ang mga screenshot sa modelong ito para basahin ang pahina, habang ang aktibong provider ang humahawak sa pagpaplano at mga tool call. Iwang blangko para gamitin din ang aktibong provider para sa bisyon. Para lamang sa mga OpenAI-compatible na endpoint.',

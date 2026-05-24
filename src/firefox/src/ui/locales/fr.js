@@ -135,7 +135,7 @@ export default {
   'st.provider.field.model': 'Modèle',
   'st.provider.field.model_optional': 'Modèle (facultatif)',
   'st.provider.field.supports_vision': 'Le modèle gère la vision (multimodal)',
-  'st.provider.field.compact_prompt': 'Prompt compact (recommandé pour les petits modèles, activé par défaut)',
+  'st.provider.field.compact_prompt': 'Prompt compact (supprime certains garde-fous — à n\'activer que pour les modèles de moins de 8B)',
   'st.provider.field.model_loaded_hint': 'laisser vide pour utiliser le modèle chargé',
 
   'st.vision.desc': 'Si défini, les captures d\'écran sont envoyées à ce modèle pour lire la page, pendant que le fournisseur actif gère la planification et les appels d\'outils. Laissez vide pour utiliser également le fournisseur actif pour la vision. Uniquement pour les endpoints compatibles OpenAI.',
