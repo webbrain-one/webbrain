@@ -1,0 +1,90 @@
+{
+  "id": "056",
+  "category": "stale-refid",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://example.com/list",
+    "title": "List"
+  },
+  "description": "Used index from get_interactive_elements after a navigation. Indices are tied to the call that produced them.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://example.com/list — Title: List]\n\nopen the first link"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_24_4eod5r",
+          "type": "function",
+          "function": {
+            "name": "get_interactive_elements",
+            "arguments": "{}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_24_4eod5r",
+      "name": "get_interactive_elements",
+      "content": "[{\"index\":0,\"tag\":\"a\",\"text\":\"First\",\"href\":\"https://example.com/first\"},{\"index\":1,\"tag\":\"a\",\"text\":\"Second\",\"href\":\"https://example.com/second\"}]"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_25_aij6rx",
+          "type": "function",
+          "function": {
+            "name": "click",
+            "arguments": "{\"index\":0}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_25_aij6rx",
+      "name": "click",
+      "content": "{\"success\":true,\"navigates\":true}"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_26_r8ystm",
+          "type": "function",
+          "function": {
+            "name": "click",
+            "arguments": "{\"index\":1}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_26_r8ystm",
+      "name": "click",
+      "content": "{\"success\":false,\"error\":\"Index 1 not found in current page. Indices from previous turns are not stable — call get_interactive_elements again.\"}"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "get_interactive_elements",
+      "args": {}
+    },
+    "antiPatterns": [
+      {
+        "match": "click({index:1})",
+        "reason": "Reuse of stale index — system prompt explicitly forbids this."
+      }
+    ],
+    "successRubric": "After navigation, indices reset. Call get_interactive_elements again before using an index."
+  }
+}

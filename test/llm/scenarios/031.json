@@ -1,0 +1,56 @@
+{
+  "id": "031",
+  "category": "truncation-cascade",
+  "mode": "ask",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://en.wikipedia.org/wiki/Closure_(computer_programming)",
+    "title": "Closure — Wikipedia"
+  },
+  "description": "read_page truncated, but the answer is visible in the head. Just answer.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://en.wikipedia.org/wiki/Closure_(computer_programming) — Title: Closure — Wikipedia]\n\nin one sentence, what is a closure?"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_y_yp2kmc",
+          "type": "function",
+          "function": {
+            "name": "read_page",
+            "arguments": "{}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_y_yp2kmc",
+      "name": "read_page",
+      "content": "{\"url\":\"https://en.wikipedia.org/wiki/Closure_(computer_programming)\",\"title\":\"Closure (computer programming) — Wikipedia\",\"text\":\"In programming languages, a closure, also lexical closure or function closure, is a technique for implementing lexically scoped name binding in a language with first-class functions. Operationally, a closure is a record storing a function together with an environment. ... [continued text]\",\"_truncated\":true,\"originalLength\":84000}"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "done",
+      "args": {
+        "summary": "A closure is a function bundled with the lexical environment it was defined in — so it can access variables from its enclosing scope even after that scope has returned."
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "fetch_url({url:\"https://en.wikipedia.org/wiki/Closure_(computer_programming)\"})",
+        "reason": "Same URL we just read — won't produce more."
+      },
+      {
+        "match": "read_page({})",
+        "reason": "Refetching same URL."
+      }
+    ],
+    "successRubric": "The visible head answers the question fully. Call done with a one-sentence definition. No need to fetch more."
+  }
+}

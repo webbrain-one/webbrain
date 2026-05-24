@@ -1,0 +1,50 @@
+{
+  "id": "029",
+  "category": "csp-blocked-eval",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://mail.google.com/mail/u/0/#inbox",
+    "title": "Inbox — Gmail"
+  },
+  "description": "execute_js to count unread blocked. Use the visible counter in the UI.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://mail.google.com/mail/u/0/#inbox — Title: Inbox — Gmail]\n\nhow many unread emails?"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_w_aloc8o",
+          "type": "function",
+          "function": {
+            "name": "execute_js",
+            "arguments": "{\"code\":\"document.querySelectorAll(\\\".unread\\\").length\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_w_aloc8o",
+      "name": "execute_js",
+      "content": "{\"success\":false,\"error\":\"CSP: 'unsafe-eval' not allowed.\"}"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "read_page",
+      "args": {}
+    },
+    "antiPatterns": [
+      {
+        "match": "execute_js({code:\"...\"})",
+        "reason": "Same block."
+      }
+    ],
+    "successRubric": "Gmail shows the unread count in the tab title and in the sidebar. read_page or get_accessibility_tree reads both."
+  }
+}

@@ -1,23 +1,40 @@
 # LLM evaluation harness
 
-100 synthetic user prompts + expected behaviors, plus a command that
-emits the exact `messages + tools` payload WebBrain would send to an
-LLM for a given case. Use it to measure how different models perform
-on the same WebBrain prompt.
+Two complementary test sets:
+
+1. **Step-1 routing** (`questions/` + `expected/`, 100 cases) — for each
+   single-turn user prompt, what's the model's first tool call? Cheap to
+   run, useful for catching gross competence regressions, but doesn't
+   test recovery / multi-turn behavior.
+2. **Multi-turn scenarios** (`scenarios/`, 80 cases) — seeded conversation
+   histories that put the model in the middle of a tricky situation
+   (loop on bad URL, tool error, CSP block, truncated content, polarity
+   misread, stale ref_id, mode boundary, cross-lingual). Tests what most
+   real-world failures actually look like in production traces.
+
+Both sets emit OpenAI-compatible chat-completion payloads that mirror
+what the WebBrain extension actually sends.
 
 ## Layout
 
 ```
 test/llm/
-├── questions/NNN.json    # { id, mode, tab:{url,title}, user }
-├── expected/NNN.json     # { id, idealFirstToolCall:{name,args}, successRubric }
-├── lib/build-payload.mjs # pure builder: imports the real Chrome/Firefox prompts/tools
-├── enrich.mjs            # CLI — prints the full LLM request payload
-└── _generate.mjs         # rewrites questions/* and expected/* from inline data
+├── questions/NNN.json         # step-1 routing case: { id, mode, tab, user }
+├── expected/NNN.json           # rubric for the case: { idealFirstToolCall, successRubric }
+├── scenarios/NNN.json          # multi-turn: { id, category, mode, browser, tab, seed[], expected }
+├── lib/build-payload.mjs       # builder for single-turn payloads
+├── lib/scenario-payload.mjs    # builder for scenario payloads (seed becomes the history)
+├── enrich.mjs                  # CLI — prints a single-turn LLM request payload
+├── run-llamacpp.mjs            # runner — sends questions/ cases to an endpoint
+├── run-scenarios.mjs           # runner — sends scenarios/ cases to an endpoint
+├── _generate.mjs               # source-of-truth for questions/expected
+├── _generate-scenarios.mjs     # source-of-truth for scenarios
+└── _redact-trace.mjs           # convert a real webbrain-trace JSON → scenario stub (PII-scrubbed)
 ```
 
-`questions` and `expected` are matched by id. Edit the .json files
-directly; or edit the `CASES` array in `_generate.mjs` and re-run it.
+`questions/NNN.json` and `expected/NNN.json` are matched by id. Edit
+files directly or edit the source-of-truth `_generate*.mjs` and re-run.
+`scenarios/NNN.json` is self-contained (expected is inline).
 
 ## Enrich a single case
 
@@ -161,3 +178,123 @@ node test/llm/_generate.mjs
 It wipes `questions/0??.json` and `expected/0??.json` and re-emits
 them. Hand-edits to the individual files are *not* preserved — keep
 your source of truth in `_generate.mjs`.
+
+# Track B — multi-turn scenarios
+
+The 80 scenarios under `test/llm/scenarios/` test what models do
+*after* a tool call that errored / looped / returned ambiguous output.
+Each scenario carries a `seed[]` of OpenAI-format messages
+(system + user + assistant tool_call + tool_result + …) and an
+`expected` block describing the correct next move.
+
+## Scenario file shape
+
+```json
+{
+  "id": "001",
+  "category": "loop-bad-url",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": { "url": "...", "title": "..." },
+  "description": "One sentence about the failure mode being tested.",
+  "seed": [
+    { "role": "user",      "content": "[Current page context — …]\n\n<user msg>" },
+    { "role": "assistant", "content": "...", "tool_calls": [{ "id": "...", "type": "function", "function": { "name": "navigate", "arguments": "{...}" } }] },
+    { "role": "tool",      "tool_call_id": "...", "name": "navigate", "content": "{...}" }
+  ],
+  "expected": {
+    "idealNextToolCall": { "name": "clarify", "args": { "question": "..." } },
+    "antiPatterns": [
+      { "match": "navigate({url:\"...\"})", "reason": "Specific failure observed in trace X." }
+    ],
+    "successRubric": "1–3 sentences a judge LLM can score against."
+  }
+}
+```
+
+The scenario runner builds the request as
+`[system_prompt, ...seed]` and asks the model for the NEXT turn.
+`idealNextToolCall` is a hint; the load-bearing field is
+`successRubric` — different models will legitimately take different
+paths, and a judge LLM should weigh them against the rubric.
+
+## Categories (10 each)
+
+| category             | what fails                                                          |
+| -------------------- | ------------------------------------------------------------------- |
+| `loop-bad-url`       | Hallucinated/wrong URL resolved without error; retrying is the bug  |
+| `tool-error-pivot`   | A tool returned an explicit error; need to switch tools, not retry  |
+| `csp-blocked-eval`   | `execute_js` rejected by CSP; need to pivot to AX/read_page/UI      |
+| `truncation-cascade` | `_truncated: true` — answer from visible, don't loop on re-fetches  |
+| `counter-polarity`   | UI shows a number (`-14` / `251`) whose polarity flips its meaning  |
+| `stale-refid`        | `ref_id` from a prior turn no longer valid after scroll/nav/render  |
+| `mode-boundary`      | Ask-vs-Act discipline + destructive action confirmation             |
+| `cross-lingual`      | User and page languages differ; use the visible label, not English  |
+
+Each category has 10 scenarios. Many are modeled on real failures
+observed in production traces (gpt-4o, gpt-5.5, gemma-31b, xiaomi-mimo)
+but the data is fully synthetic — no PII enters the repo.
+
+## Running scenarios
+
+```
+node test/llm/run-scenarios.mjs --base http://127.0.0.1:1234 --model qwen3-30b
+node test/llm/run-scenarios.mjs --category loop-bad-url
+node test/llm/run-scenarios.mjs --only 1,21,41 --browser firefox
+node test/llm/run-scenarios.mjs --base https://openrouter.ai/api/v1 \
+  --model openai/gpt-oss-20b --api-key "$OPENROUTER_API_KEY"
+```
+
+Output goes to `test/llm/results-scenarios/<tag>_<browser>_<model>/`:
+
+- `NNN.json` per scenario — full request + response + verdict
+- `summary.json` — verdict counts overall and by category
+
+Verdicts:
+
+| verdict      | meaning                                                            |
+| ------------ | ------------------------------------------------------------------ |
+| `ideal`      | First tool call matches `idealNextToolCall` (name + args)          |
+| `ideal_name` | Tool name matches, args differ — likely acceptable, needs judging  |
+| `anti`       | First tool call matches an `antiPattern` — production-failure mode |
+| `other`      | Different tool / different args — needs judge LLM to score         |
+| `no_tool`    | Model emitted text only / no tool call                             |
+| `error`      | Request failed (HTTP error, timeout, etc.)                         |
+
+`anti` is the strongest signal: matching an anti-pattern means the
+model reproduced an actual failure we've observed in production.
+
+## Adding scenarios from a real trace
+
+Use the redactor to bootstrap a scenario stub from a `webbrain-trace-*.json`
+file. It scrubs Stripe-style IDs, emails, JWTs, OpenAI/OpenRouter keys,
+GitHub PATs, and bearer-token URL params; add `--extra-pattern` flags for
+business names or anything site-specific.
+
+```
+node test/llm/_redact-trace.mjs ~/Downloads/webbrain-trace-foo.json \
+  --challenge-step 5 \
+  --extra-pattern "MyCompany" \
+  --extra-pattern "my-tenant" \
+  > /tmp/stub.json
+```
+
+The stub has `_trace_meta` (delete before saving) showing what the
+original model actually did next — useful as a starting point for
+`antiPatterns`. Fill in `id`, `category`, `description`, and the
+`expected` block, then move to `scenarios/NNN.json` and re-run
+`_generate-scenarios.mjs` if you want to also encode it as an inline
+case for regen.
+
+**Always eyeball the output for PII the regex didn't catch** —
+custom usernames, internal hostnames, financial figures, names of
+specific people, etc.
+
+## Regenerating scenarios
+
+```
+node test/llm/_generate-scenarios.mjs
+```
+
+Same rule as the questions generator: wipes `scenarios/0??.json` and
+re-emits from the inline `SCENARIOS` array. Keep edits in the source.

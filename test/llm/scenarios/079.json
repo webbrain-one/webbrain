@@ -1,0 +1,56 @@
+{
+  "id": "079",
+  "category": "cross-lingual",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://www.example.fr/contact",
+    "title": "Contact"
+  },
+  "description": "French form, English instructions including mixed English+French data.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://www.example.fr/contact — Title: Contact]\n\nfill name = Marie Dupont, message = \"Bonjour, j'ai une question\""
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_2r_f0tbe7",
+          "type": "function",
+          "function": {
+            "name": "get_interactive_elements",
+            "arguments": "{}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_2r_f0tbe7",
+      "name": "get_interactive_elements",
+      "content": "[{\"index\":0,\"tag\":\"input\",\"text\":\"Nom complet\"},{\"index\":1,\"tag\":\"textarea\",\"text\":\"Votre message\"},{\"index\":2,\"tag\":\"button\",\"text\":\"Envoyer\"}]"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "click",
+      "args": {
+        "index": 0
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "type_text({text:\"Marie Dupont\"})",
+        "reason": "No field focused yet; type would land in wrong field."
+      },
+      {
+        "match": "click({text:\"Name\"})",
+        "reason": "Field is labeled \"Nom complet\" not \"Name\"."
+      }
+    ],
+    "successRubric": "Click name field first (by index), then type. Use the French label \"Envoyer\" for final submit."
+  }
+}

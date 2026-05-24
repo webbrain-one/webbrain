@@ -1,0 +1,50 @@
+{
+  "id": "020",
+  "category": "tool-error-pivot",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://mastoturk.org/publish",
+    "title": "MastoTurk"
+  },
+  "description": "CSP blocked execute_js. Pivot to read_page/AX, not retry with different JS.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://mastoturk.org/publish — Title: MastoTurk]\n\nhow many chars in the textarea?"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_n_uuhnm7",
+          "type": "function",
+          "function": {
+            "name": "execute_js",
+            "arguments": "{\"code\":\"document.querySelector(\\\"textarea\\\").value.length\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_n_uuhnm7",
+      "name": "execute_js",
+      "content": "{\"success\":false,\"error\":\"Evaluating a string as JavaScript violates the following Content Security Policy directive because 'unsafe-eval' is not an allowed source of script: script-src 'self' 'wasm-unsafe-eval'.\"}"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "read_page",
+      "args": {}
+    },
+    "antiPatterns": [
+      {
+        "match": "execute_js({code:\"document.querySelector(\\\"textarea[name=\\\\\\\"status\\\\\\\"]\\\").value.length\"})",
+        "reason": "CSP blocks ALL eval, not just this particular string. gpt-4o xpx9t9 made this mistake."
+      }
+    ],
+    "successRubric": "Pivot to read_page or get_accessibility_tree — the page reads back the form value and the counter. CSP will block any execute_js variant."
+  }
+}

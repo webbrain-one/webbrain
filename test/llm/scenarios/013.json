@@ -1,0 +1,56 @@
+{
+  "id": "013",
+  "category": "tool-error-pivot",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://www.amazon.com/dp/B0EXAMPLE",
+    "title": "Acme Widget — Amazon"
+  },
+  "description": "click returned overlay-blocked. Dismiss the overlay, don't force the click.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://www.amazon.com/dp/B0EXAMPLE — Title: Acme Widget — Amazon]\n\nadd to cart"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_g_ov90qu",
+          "type": "function",
+          "function": {
+            "name": "click",
+            "arguments": "{\"text\":\"Add to Cart\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_g_ov90qu",
+      "name": "click",
+      "content": "{\"success\":false,\"error\":\"Click blocked: an overlay is covering the target. Dismiss it (Escape, close button, or complete the modal) before retrying. Force-clicking with x,y hits the overlay, not your target.\"}"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "press_keys",
+      "args": {
+        "key": "Escape"
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "click({text:\"Add to Cart\"})",
+        "reason": "Will hit the overlay again."
+      },
+      {
+        "match": "click({x:_,y:_})",
+        "reason": "Force-clicking with coords hits the overlay per the error message."
+      }
+    ],
+    "successRubric": "Dismiss the overlay first — Escape, click the close button, or complete the modal. THEN retry the cart click."
+  }
+}

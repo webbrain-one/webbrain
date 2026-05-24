@@ -1,0 +1,37 @@
+{
+  "runTag": "2026-05-24T00-15-21-376Z",
+  "model": "local",
+  "base": "http://127.0.0.1:1",
+  "browser": "chrome",
+  "scenarios": 3,
+  "totalLatencyMs": 13,
+  "byVerdict": {
+    "error": 3
+  },
+  "byCategory": {
+    "loop-bad-url": {
+      "ideal": 0,
+      "ideal_name": 0,
+      "anti": 0,
+      "other": 0,
+      "no_tool": 0,
+      "error": 1
+    },
+    "csp-blocked-eval": {
+      "ideal": 0,
+      "ideal_name": 0,
+      "anti": 0,
+      "other": 0,
+      "no_tool": 0,
+      "error": 1
+    },
+    "counter-polarity": {
+      "ideal": 0,
+      "ideal_name": 0,
+      "anti": 0,
+      "other": 0,
+      "no_tool": 0,
+      "error": 1
+    }
+  }
+}

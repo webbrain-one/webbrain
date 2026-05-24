@@ -1,0 +1,54 @@
+{
+  "id": "046",
+  "category": "counter-polarity",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://www.reddit.com/submit?type=LINK",
+    "title": "Submit — Reddit"
+  },
+  "description": "Reddit title field — 320 chars typed, 300 char limit. Shorten.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://www.reddit.com/submit?type=LINK — Title: Submit — Reddit]\n\nsubmit my post"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_1j_ors7v3",
+          "type": "function",
+          "function": {
+            "name": "read_page",
+            "arguments": "{}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_1j_ors7v3",
+      "name": "read_page",
+      "content": "{\"url\":\"https://www.reddit.com/submit?type=LINK\",\"text\":\"...title field shows red underline... 320 / 300 ... Submit\",\"forms\":[{\"inputs\":[{\"type\":\"text\",\"name\":\"title\",\"value\":\"<320 char title>\"}]}]}"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "set_field",
+      "args": {
+        "ref_id": "ref_title",
+        "clear": true,
+        "text": "<300-char-or-less title>"
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "click({text:\"Submit\"})",
+        "reason": "Title is over 300 — will be rejected."
+      }
+    ],
+    "successRubric": "320/300 means over by 20. Shorten title before submitting."
+  }
+}

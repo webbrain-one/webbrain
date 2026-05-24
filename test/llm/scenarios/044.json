@@ -1,0 +1,54 @@
+{
+  "id": "044",
+  "category": "counter-polarity",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://x.com/compose/post",
+    "title": "Compose post / X"
+  },
+  "description": "X counter shows \"-5\" — over by 5. Shorten before posting.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://x.com/compose/post — Title: Compose post / X]\n\npost this draft"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_1h_i96lbl",
+          "type": "function",
+          "function": {
+            "name": "read_page",
+            "arguments": "{}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_1h_i96lbl",
+      "name": "read_page",
+      "content": "{\"url\":\"https://x.com/compose/post\",\"text\":\"What is happening? ... -5 ... Post\",\"forms\":[{\"inputs\":[{\"type\":\"textarea\",\"value\":\"<285-char text>\"}]}]}"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "set_field",
+      "args": {
+        "ref_id": "ref_textarea",
+        "clear": true,
+        "text": "<shortened text>"
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "click({text:\"Post\"})",
+        "reason": "Will be rejected — text is 5 over."
+      }
+    ],
+    "successRubric": "Negative on X's counter = over by N chars. Shorten before submit."
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "id": "057",
+  "category": "stale-refid",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://github.com/acme/widgets",
+    "title": "acme/widgets — GitHub"
+  },
+  "description": "Model guessed ref_id #38 from training-data memory. Both: don't guess; AND per github adapter, ref_38 on the release page goes to \"Pull requests\".",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://github.com/acme/widgets/releases/new — Title: New Release — acme/widgets]\n\npublish"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_27_kt6fij",
+          "type": "function",
+          "function": {
+            "name": "click_ax",
+            "arguments": "{\"ref_id\":\"ref_38\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_27_kt6fij",
+      "name": "click_ax",
+      "content": "{\"success\":true,\"navigates\":true,\"href\":\"https://github.com/acme/widgets/pulls\"}"
+    },
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://github.com/acme/widgets/pulls — Title: Pull requests · acme/widgets]\n\nwhy did you click PRs?"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "clarify",
+      "args": {
+        "question": "I clicked the wrong element — I guessed ref_id 38 and it navigated to Pull requests instead of publishing the release. I'll go back to the release page and click \"Publish release\" by text this time. OK?"
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "click_ax({ref_id:\"ref_38\"})",
+        "reason": "Repeating the exact mistake. The github adapter warns about this."
+      },
+      {
+        "match": "click({text:\"Publish release\"})",
+        "reason": "Acceptable forward move, but only after navigating back. Currently we are on /pulls."
+      }
+    ],
+    "successRubric": "Acknowledge the wrong navigation, navigate back to /releases/new, and click \"Publish release\" by text. The github adapter specifically warns against guessing ref_38."
+  }
+}

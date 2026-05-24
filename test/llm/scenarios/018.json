@@ -1,0 +1,50 @@
+{
+  "id": "018",
+  "category": "tool-error-pivot",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://www.example.com/page",
+    "title": "Example"
+  },
+  "description": "type_text warned about \"same field twice in a row\". The right move is to click the correct field first.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://www.example.com/page — Title: Example]\n\nfill the email field with \"alice@example.com\""
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_l_gl8jtx",
+          "type": "function",
+          "function": {
+            "name": "type_text",
+            "arguments": "{\"text\":\"alice@example.com\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_l_gl8jtx",
+      "name": "type_text",
+      "content": "{\"success\":true,\"warning\":\"Same field twice in a row — you may be typing into the wrong field. Click the intended field first.\",\"method\":\"type_text\"}"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "get_interactive_elements",
+      "args": {}
+    },
+    "antiPatterns": [
+      {
+        "match": "type_text({text:\"alice@example.com\"})",
+        "reason": "Will land in the same wrong field again."
+      }
+    ],
+    "successRubric": "Find the actual email input via get_interactive_elements or get_accessibility_tree, click it, THEN type. The warning is a signal to re-target, not to repeat."
+  }
+}

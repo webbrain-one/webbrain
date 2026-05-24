@@ -1,0 +1,56 @@
+{
+  "id": "005",
+  "category": "loop-bad-url",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://docs.example-tool.io/404",
+    "title": "404 — Not Found"
+  },
+  "description": "Guessed documentation URL based on tool name failed. Should search docs index, not guess again.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: about:home — Title: New Tab]\n\nfind the api reference for example-tool"
+    },
+    {
+      "role": "assistant",
+      "content": "Going to the API reference.",
+      "tool_calls": [
+        {
+          "id": "call_6_tulnf2",
+          "type": "function",
+          "function": {
+            "name": "navigate",
+            "arguments": "{\"url\":\"https://docs.example-tool.io/api\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_6_tulnf2",
+      "name": "navigate",
+      "content": "{\"success\":true,\"url\":\"https://docs.example-tool.io/404\",\"requestedUrl\":\"https://docs.example-tool.io/api\"}"
+    },
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://docs.example-tool.io/404 — Title: 404 — Not Found]\n\ndidn't work"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "navigate",
+      "args": {
+        "url": "https://docs.example-tool.io/"
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "navigate({url:\"https://docs.example-tool.io/api/v1\"})",
+        "reason": "Guess-and-check on docs path is a loop pattern."
+      }
+    ],
+    "successRubric": "Go to the docs root and let the site's nav lead to the API reference. Acceptable: web search for \"example-tool api reference\"."
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "id": "016",
+  "category": "tool-error-pivot",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://example.com/signup",
+    "title": "Sign up"
+  },
+  "description": "click landed on a SELECT element. The error tells us to use type_text. Don't click again.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://example.com/signup — Title: Sign up]\n\npick \"Premium\" as the plan"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_j_k8mi5q",
+          "type": "function",
+          "function": {
+            "name": "click",
+            "arguments": "{\"text\":\"Premium\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_j_k8mi5q",
+      "name": "click",
+      "content": "{\"success\":false,\"tag\":\"SELECT\",\"text\":\"Free\",\"error\":\"CANNOT CLICK a <select> dropdown — clicking opens a native OS popup that cannot be controlled. The dropdown is now focused (current: \\\"Free\\\"). Use type_text({text: \\\"option name\\\"}) to change the value. Available options: Free, Pro, Premium\"}"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "type_text",
+      "args": {
+        "text": "Premium"
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "click({text:\"Premium\"})",
+        "reason": "Will hit the SELECT again — error message explicitly forbids this."
+      },
+      {
+        "match": "click({x:_,y:_})",
+        "reason": "Coord click on a SELECT triggers the native popup we can't control."
+      }
+    ],
+    "successRubric": "Use type_text with the option name — the SELECT is already focused per the error. Do not click again."
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "id": "049",
+  "category": "counter-polarity",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://example.com/upload",
+    "title": "Upload"
+  },
+  "description": "File size: 12.4 MB; limit 10 MB. Recognize the over-limit and report.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://example.com/upload — Title: Upload]\n\nupload report.pdf"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_1n_b4l4ap",
+          "type": "function",
+          "function": {
+            "name": "read_page",
+            "arguments": "{}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_1n_b4l4ap",
+      "name": "read_page",
+      "content": "{\"text\":\"Selected: report.pdf (12.4 MB). Max size: 10 MB.\"}"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "done",
+      "args": {
+        "summary": "report.pdf is 12.4 MB but this form caps uploads at 10 MB. Compress it or split before retrying."
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "click({text:\"Upload\"})",
+        "reason": "Will be rejected — file too big."
+      }
+    ],
+    "successRubric": "Recognize the over-limit number, surface honestly to the user. Do not attempt the upload."
+  }
+}

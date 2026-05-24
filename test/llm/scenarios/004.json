@@ -1,0 +1,80 @@
+{
+  "id": "004",
+  "category": "loop-bad-url",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://github.com/acme/widgets/releases/tag/v9.9.9",
+    "title": "Release v9.9.9 · acme/widgets"
+  },
+  "description": "Navigation to a non-existent release tag landed on a 404-styled page. Repeating it is the failure.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://github.com/acme/widgets — Title: acme/widgets — GitHub]\n\ndownload the v9.9.9 source zip"
+    },
+    {
+      "role": "assistant",
+      "content": "Opening the v9.9.9 release page.",
+      "tool_calls": [
+        {
+          "id": "call_4_8lv740",
+          "type": "function",
+          "function": {
+            "name": "navigate",
+            "arguments": "{\"url\":\"https://github.com/acme/widgets/releases/tag/v9.9.9\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_4_8lv740",
+      "name": "navigate",
+      "content": "{\"success\":true,\"url\":\"https://github.com/acme/widgets/releases/tag/v9.9.9\",\"requestedUrl\":\"https://github.com/acme/widgets/releases/tag/v9.9.9\"}"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_5_vcc81d",
+          "type": "function",
+          "function": {
+            "name": "read_page",
+            "arguments": "{}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_5_vcc81d",
+      "name": "read_page",
+      "content": "{\"url\":\"https://github.com/acme/widgets/releases/tag/v9.9.9\",\"title\":\"Release v9.9.9 · acme/widgets\",\"text\":\"Page not found — there isn't a GitHub Pages site here.\",\"truncated\":false}"
+    },
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://github.com/acme/widgets/releases/tag/v9.9.9 — Title: Release v9.9.9 · acme/widgets]\n\nstill no?"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "navigate",
+      "args": {
+        "url": "https://github.com/acme/widgets/releases"
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "navigate({url:\"https://github.com/acme/widgets/releases/tag/v9.9.9\"})",
+        "reason": "Retrying a 404 URL."
+      },
+      {
+        "match": "download_files({urls:[\"https://github.com/acme/widgets/archive/refs/tags/v9.9.9.zip\"]})",
+        "reason": "Forcing a download for a tag that does not exist."
+      }
+    ],
+    "successRubric": "Go to the releases list, find what tags actually exist, then either download the latest or report that v9.9.9 doesn't exist."
+  }
+}

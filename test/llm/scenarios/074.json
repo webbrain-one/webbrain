@@ -1,0 +1,52 @@
+{
+  "id": "074",
+  "category": "cross-lingual",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://www.amazon.co.jp/",
+    "title": "Amazon.co.jp"
+  },
+  "description": "Japanese site, English user. Use the visible kanji label OR the aria-label equivalent.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://www.amazon.co.jp/ — Title: Amazon.co.jp]\n\nsign in to my account"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_2m_wjns0m",
+          "type": "function",
+          "function": {
+            "name": "read_page",
+            "arguments": "{}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_2m_wjns0m",
+      "name": "read_page",
+      "content": "{\"text\":\"こんにちは、ログイン アカウント＆リスト ... 注文履歴\"}"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "click",
+      "args": {
+        "text": "ログイン"
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "click({text:\"Sign in\"})",
+        "reason": "Japanese site — no English \"Sign in\" label."
+      }
+    ],
+    "successRubric": "Use the Japanese label \"ログイン\" (login). Multilingual interfaces require using the visible label."
+  }
+}

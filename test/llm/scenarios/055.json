@@ -1,0 +1,92 @@
+{
+  "id": "055",
+  "category": "stale-refid",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://example.com/list",
+    "title": "List"
+  },
+  "description": "List page where new items load on scroll. Old ref_ids point at items now outside the rendered range.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://example.com/list — Title: List]\n\nclick the 50th item"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_21_iryk9h",
+          "type": "function",
+          "function": {
+            "name": "get_accessibility_tree",
+            "arguments": "{\"filter\":\"visible\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_21_iryk9h",
+      "name": "get_accessibility_tree",
+      "content": "{\"pageContent\":\"item 1 [ref_10], item 2 [ref_11], ... item 20 [ref_29]\"}"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_22_1xcekp",
+          "type": "function",
+          "function": {
+            "name": "scroll",
+            "arguments": "{\"direction\":\"down\",\"amount\":5000}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_22_1xcekp",
+      "name": "scroll",
+      "content": "{\"success\":true}"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_23_0n2sfy",
+          "type": "function",
+          "function": {
+            "name": "click_ax",
+            "arguments": "{\"ref_id\":\"ref_60\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_23_0n2sfy",
+      "name": "click_ax",
+      "content": "{\"success\":false,\"error\":\"ref_id ref_60 not found in current accessibility tree.\"}"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "get_accessibility_tree",
+      "args": {
+        "filter": "visible"
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "click_ax({ref_id:\"ref_60\"})",
+        "reason": "Guessed ref_id beyond what the previous tree showed."
+      }
+    ],
+    "successRubric": "After scrolling, re-read AX tree. ref_ids reflect the current DOM, not a global numbering."
+  }
+}

@@ -1,0 +1,72 @@
+{
+  "id": "034",
+  "category": "truncation-cascade",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://news.ycombinator.com/?p=2",
+    "title": "Hacker News"
+  },
+  "description": "After getting first page of HN listing, agent tried to paginate without delivering first-page results. Anti-pattern.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://news.ycombinator.com/ — Title: Hacker News]\n\nlist the top 30 hn stories"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_12_wv7pmf",
+          "type": "function",
+          "function": {
+            "name": "get_accessibility_tree",
+            "arguments": "{\"filter\":\"visible\",\"maxDepth\":10}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_12_wv7pmf",
+      "name": "get_accessibility_tree",
+      "content": "{\"pageContent\":\"list of first 30 stories with titles, points, comments... (1-30)\",\"viewport\":{\"width\":1133,\"height\":800}}"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_13_bztv27",
+          "type": "function",
+          "function": {
+            "name": "navigate",
+            "arguments": "{\"url\":\"https://news.ycombinator.com/?p=2\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_13_bztv27",
+      "name": "navigate",
+      "content": "{\"success\":true,\"url\":\"https://news.ycombinator.com/?p=2\",\"requestedUrl\":\"https://news.ycombinator.com/?p=2\"}"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "done",
+      "args": {
+        "summary": "Top 30 HN stories: [list with titles + points + comments from page 1]"
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "get_accessibility_tree({filter:\"visible\"})",
+        "reason": "Reading page 2 before delivering page 1 — system prompt says EXTRACT first, paginate second."
+      }
+    ],
+    "successRubric": "Per LISTINGS guidance: deliver page 1's 30 stories now, then optionally continue. Even though we just navigated to p=2, we should back-deliver and stop."
+  }
+}

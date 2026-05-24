@@ -1,0 +1,53 @@
+{
+  "id": "033",
+  "category": "truncation-cascade",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://news.ycombinator.com/",
+    "title": "Hacker News"
+  },
+  "description": "AX tree overflow on listing page. Switch to read_page or a more constrained AX call. Do not raise maxChars.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://news.ycombinator.com/ — Title: Hacker News]\n\ngive me the top 5 story titles with their points"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_11_imzhhg",
+          "type": "function",
+          "function": {
+            "name": "get_accessibility_tree",
+            "arguments": "{\"filter\":\"all\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_11_imzhhg",
+      "name": "get_accessibility_tree",
+      "content": "{\"success\":false,\"error\":\"Output exceeds 50000 character limit.\"}"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "get_accessibility_tree",
+      "args": {
+        "filter": "visible",
+        "maxDepth": 10
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "get_accessibility_tree({filter:\"all\", maxChars:200000})",
+        "reason": "System prompt explicitly warns against raising maxChars on listings."
+      }
+    ],
+    "successRubric": "Switch to filter:\"visible\" or read_page. Listing pages don't fit in the AX tree under filter:\"all\"."
+  }
+}

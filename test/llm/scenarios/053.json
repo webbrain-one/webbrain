@@ -1,0 +1,92 @@
+{
+  "id": "053",
+  "category": "stale-refid",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://mail.google.com/mail/u/0/#inbox",
+    "title": "Inbox — Gmail"
+  },
+  "description": "A dialog opened after a click; ref_ids from before the dialog are stale within the dialog scope.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://mail.google.com/mail/u/0/#inbox — Title: Inbox — Gmail]\n\nopen a compose window and type \"hi alice\""
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_1v_2y6r50",
+          "type": "function",
+          "function": {
+            "name": "get_accessibility_tree",
+            "arguments": "{\"filter\":\"visible\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_1v_2y6r50",
+      "name": "get_accessibility_tree",
+      "content": "{\"pageContent\":\"button \\\"Compose\\\" [ref_7]\"}"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_1w_w7ac8i",
+          "type": "function",
+          "function": {
+            "name": "click_ax",
+            "arguments": "{\"ref_id\":\"ref_7\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_1w_w7ac8i",
+      "name": "click_ax",
+      "content": "{\"success\":true}"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_1x_h371yg",
+          "type": "function",
+          "function": {
+            "name": "type_ax",
+            "arguments": "{\"ref_id\":\"ref_30\",\"text\":\"hi alice\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_1x_h371yg",
+      "name": "type_ax",
+      "content": "{\"success\":false,\"error\":\"ref_id ref_30 not found in current accessibility tree.\"}"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "get_accessibility_tree",
+      "args": {
+        "filter": "visible"
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "type_ax({ref_id:\"ref_30\", text:\"hi alice\"})",
+        "reason": "Compose dialog opened; previous tree didn't include it. Re-read."
+      }
+    ],
+    "successRubric": "After opening a dialog/modal, re-read AX tree. The compose dialog has its own ref_id space."
+  }
+}

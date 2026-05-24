@@ -1,0 +1,72 @@
+{
+  "id": "059",
+  "category": "stale-refid",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://example.com/dashboard",
+    "title": "Dashboard"
+  },
+  "description": "Click pretended to \"verify\" using a stale ref_id, error spelled out the reason. Re-read.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://example.com/dashboard — Title: Dashboard]\n\nverify the form is filled correctly"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_2b_p6zfym",
+          "type": "function",
+          "function": {
+            "name": "verify_form",
+            "arguments": "{}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_2b_p6zfym",
+      "name": "verify_form",
+      "content": "{\"fields\":[{\"name\":\"email\",\"value\":\"alice@example.com\"},{\"name\":\"phone\",\"value\":\"\"}]}"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_2c_2tbwvm",
+          "type": "function",
+          "function": {
+            "name": "set_field",
+            "arguments": "{\"ref_id\":\"ref_19\",\"text\":\"555-1234\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_2c_2tbwvm",
+      "name": "set_field",
+      "content": "{\"success\":false,\"error\":\"ref_id ref_19 not found in current accessibility tree. verify_form does not produce ref_ids — call get_accessibility_tree to get them.\"}"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "get_accessibility_tree",
+      "args": {
+        "filter": "visible"
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "set_field({ref_id:\"ref_19\", text:\"555-1234\"})",
+        "reason": "Hallucinated ref_id; verify_form doesn't return refs."
+      }
+    ],
+    "successRubric": "Inferred ref_ids don't work. Call get_accessibility_tree to get real refs, then set_field on the empty phone field."
+  }
+}

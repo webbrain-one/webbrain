@@ -1,0 +1,92 @@
+{
+  "id": "052",
+  "category": "stale-refid",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://github.com/login",
+    "title": "Sign in to GitHub"
+  },
+  "description": "Page navigated between AX read and click. Re-read tree.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://github.com/acme/widgets — Title: acme/widgets — GitHub]\n\nsign in"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_1s_x4ewk7",
+          "type": "function",
+          "function": {
+            "name": "get_accessibility_tree",
+            "arguments": "{\"filter\":\"visible\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_1s_x4ewk7",
+      "name": "get_accessibility_tree",
+      "content": "{\"pageContent\":\"link \\\"Sign in\\\" [ref_5]\"}"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_1t_59ipkv",
+          "type": "function",
+          "function": {
+            "name": "click_ax",
+            "arguments": "{\"ref_id\":\"ref_5\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_1t_59ipkv",
+      "name": "click_ax",
+      "content": "{\"success\":true,\"navigates\":true,\"href\":\"https://github.com/login\"}"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_1u_og7mnt",
+          "type": "function",
+          "function": {
+            "name": "click_ax",
+            "arguments": "{\"ref_id\":\"ref_8\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_1u_og7mnt",
+      "name": "click_ax",
+      "content": "{\"success\":false,\"error\":\"ref_id ref_8 not found in current accessibility tree.\"}"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "get_accessibility_tree",
+      "args": {
+        "filter": "visible"
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "click_ax({ref_id:\"ref_8\"})",
+        "reason": "Old tree was for the repo page; we're now on /login. Re-read."
+      }
+    ],
+    "successRubric": "After a click that navigated, the entire ref_id space resets. Re-read."
+  }
+}

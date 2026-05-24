@@ -1,0 +1,72 @@
+{
+  "id": "042",
+  "category": "counter-polarity",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://mastoturk.org/publish",
+    "title": "MastoTurk"
+  },
+  "description": "Mastodon counter shows \"251\" (positive) — 251 chars remaining. Safe to submit.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://mastoturk.org/publish — Title: MastoTurk]\n\npost the shortened version"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_1e_a2jkui",
+          "type": "function",
+          "function": {
+            "name": "set_field",
+            "arguments": "{\"ref_id\":\"ref_8\",\"clear\":true,\"text\":\"<short text>\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_1e_a2jkui",
+      "name": "set_field",
+      "content": "{\"success\":true,\"method\":\"set_field\",\"verified\":true}"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_1f_qzgcbw",
+          "type": "function",
+          "function": {
+            "name": "read_page",
+            "arguments": "{}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_1f_qzgcbw",
+      "name": "read_page",
+      "content": "{\"url\":\"https://mastoturk.org/publish\",\"text\":\"Yeni Gönderi ... 251 ... Gönder\",\"forms\":[{\"inputs\":[{\"type\":\"textarea\",\"value\":\"<short text>\"}]}]}"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "click",
+      "args": {
+        "text": "Gönder"
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "set_field({ref_id:\"ref_8\", clear:true, text:\"...\"})",
+        "reason": "Shortening again — but 251 means 251 remaining, not 251 over. gpt-4o xpx9t9 misread this exact case."
+      }
+    ],
+    "successRubric": "Positive number on the counter = chars REMAINING (Mastodon). 251 means safe. Submit via click on \"Gönder\"."
+  }
+}

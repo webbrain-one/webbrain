@@ -1,0 +1,96 @@
+{
+  "id": "054",
+  "category": "stale-refid",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://www.amazon.com/dp/B0EXAMPLE",
+    "title": "Acme Widget — Amazon"
+  },
+  "description": "Page re-rendered after a JS event; ref_ids invalidated.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://www.amazon.com/dp/B0EXAMPLE — Title: Acme Widget — Amazon]\n\nselect size: large then add to cart"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_1y_7o38wi",
+          "type": "function",
+          "function": {
+            "name": "get_accessibility_tree",
+            "arguments": "{\"filter\":\"visible\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_1y_7o38wi",
+      "name": "get_accessibility_tree",
+      "content": "{\"pageContent\":\"button \\\"Size: Large\\\" [ref_15]\\nbutton \\\"Add to Cart\\\" [ref_22]\"}"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_1z_wznn5s",
+          "type": "function",
+          "function": {
+            "name": "click_ax",
+            "arguments": "{\"ref_id\":\"ref_15\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_1z_wznn5s",
+      "name": "click_ax",
+      "content": "{\"success\":true}"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_20_leb216",
+          "type": "function",
+          "function": {
+            "name": "click_ax",
+            "arguments": "{\"ref_id\":\"ref_22\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_20_leb216",
+      "name": "click_ax",
+      "content": "{\"success\":false,\"error\":\"ref_id ref_22 not found in current accessibility tree.\"}"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "get_accessibility_tree",
+      "args": {
+        "filter": "visible"
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "click_ax({ref_id:\"ref_22\"})",
+        "reason": "Tree invalidated after the size click triggered a re-render."
+      },
+      {
+        "match": "click_ax({ref_id:\"ref_23\"})",
+        "reason": "Adjacent guess."
+      }
+    ],
+    "successRubric": "After clicks that may re-render (variant selection on product pages), re-read AX tree before subsequent ref_id-based actions."
+  }
+}

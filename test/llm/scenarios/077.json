@@ -1,0 +1,52 @@
+{
+  "id": "077",
+  "category": "cross-lingual",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://news.ycombinator.com/item?id=12345",
+    "title": "HN: ... Comments"
+  },
+  "description": "HN comments in English, user asks in Turkish. Read + respond Turkish.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://news.ycombinator.com/item?id=12345 — Title: HN: ... Comments]\n\nen üstteki yorum ne diyor kısaca"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_2p_5m5m3f",
+          "type": "function",
+          "function": {
+            "name": "read_page",
+            "arguments": "{}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_2p_5m5m3f",
+      "name": "read_page",
+      "content": "{\"text\":\"Top comment: \\\"I disagree with the premise. The author conflates X with Y, which leads to...\\\"\"}"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "done",
+      "args": {
+        "summary": "En üstteki yorum yazarın temel önermesine katılmıyor — yazarın X ile Y'yi karıştırdığını ve bu yüzden vardığı sonucun hatalı olduğunu söylüyor."
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "done({summary:\"Top comment disagrees with...\"})",
+        "reason": "User asked in Turkish — answer in Turkish."
+      }
+    ],
+    "successRubric": "Answer in Turkish. Translate gist of English comment."
+  }
+}

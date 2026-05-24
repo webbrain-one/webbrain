@@ -1,0 +1,50 @@
+{
+  "id": "027",
+  "category": "csp-blocked-eval",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://discord.com/channels/123/456",
+    "title": "Discord"
+  },
+  "description": "execute_js to set localStorage blocked. The user-visible task can be done another way.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://discord.com/channels/123/456 — Title: Discord]\n\nset my theme preference to dark"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_u_qa4qzx",
+          "type": "function",
+          "function": {
+            "name": "execute_js",
+            "arguments": "{\"code\":\"localStorage.setItem(\\\"theme\\\", \\\"dark\\\")\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_u_qa4qzx",
+      "name": "execute_js",
+      "content": "{\"success\":false,\"error\":\"CSP: 'unsafe-eval' not allowed.\"}"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "get_interactive_elements",
+      "args": {}
+    },
+    "antiPatterns": [
+      {
+        "match": "execute_js({code:\"localStorage...\"})",
+        "reason": "Same block."
+      }
+    ],
+    "successRubric": "Find Discord's in-app theme setting via the UI (Settings → Appearance) and toggle it there."
+  }
+}

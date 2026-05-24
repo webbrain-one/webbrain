@@ -1,0 +1,152 @@
+{
+  "id": "060",
+  "category": "stale-refid",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://example.com/form",
+    "title": "Form"
+  },
+  "description": "After a long sequence of unrelated tool calls, used a ref_id from way back. Re-read.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://example.com/form — Title: Form]\n\nclick submit"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_2d_fxlfeo",
+          "type": "function",
+          "function": {
+            "name": "get_accessibility_tree",
+            "arguments": "{\"filter\":\"visible\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_2d_fxlfeo",
+      "name": "get_accessibility_tree",
+      "content": "{\"pageContent\":\"button \\\"Submit\\\" [ref_12]\"}"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_2e_fa7b1z",
+          "type": "function",
+          "function": {
+            "name": "screenshot",
+            "arguments": "{}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_2e_fa7b1z",
+      "name": "screenshot",
+      "content": "{\"success\":true}"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_2f_n2ol6e",
+          "type": "function",
+          "function": {
+            "name": "read_page",
+            "arguments": "{}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_2f_n2ol6e",
+      "name": "read_page",
+      "content": "{\"text\":\"...\"}"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_2g_v2bxb8",
+          "type": "function",
+          "function": {
+            "name": "extract_data",
+            "arguments": "{\"type\":\"images\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_2g_v2bxb8",
+      "name": "extract_data",
+      "content": "[{\"src\":\"...\",\"alt\":\"logo\"}]"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_2h_gsgdcz",
+          "type": "function",
+          "function": {
+            "name": "get_selection",
+            "arguments": "{}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_2h_gsgdcz",
+      "name": "get_selection",
+      "content": "{\"text\":\"\"}"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_2i_74y9b9",
+          "type": "function",
+          "function": {
+            "name": "click_ax",
+            "arguments": "{\"ref_id\":\"ref_12\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_2i_74y9b9",
+      "name": "click_ax",
+      "content": "{\"success\":false,\"error\":\"ref_id ref_12 not found in current accessibility tree.\"}"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "get_accessibility_tree",
+      "args": {
+        "filter": "visible"
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "click_ax({ref_id:\"ref_12\"})",
+        "reason": "Several unrelated tool calls in between; ref_id likely stale."
+      }
+    ],
+    "successRubric": "After several turns of unrelated work, refresh the tree before relying on an old ref_id."
+  }
+}

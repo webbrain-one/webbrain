@@ -1,0 +1,50 @@
+{
+  "id": "025",
+  "category": "csp-blocked-eval",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://stripe.com/billing",
+    "title": "Stripe"
+  },
+  "description": "execute_js to flip a class for dark mode blocked. Look for the dark-mode toggle in UI.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://stripe.com/billing — Title: Stripe]\n\nenable dark mode"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_s_s1xa89",
+          "type": "function",
+          "function": {
+            "name": "execute_js",
+            "arguments": "{\"code\":\"document.documentElement.classList.toggle(\\\"dark\\\")\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_s_s1xa89",
+      "name": "execute_js",
+      "content": "{\"success\":false,\"error\":\"CSP: 'unsafe-eval' not allowed.\"}"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "get_interactive_elements",
+      "args": {}
+    },
+    "antiPatterns": [
+      {
+        "match": "execute_js({code:\"...\"})",
+        "reason": "CSP applies to all execute_js calls on this page."
+      }
+    ],
+    "successRubric": "Look for a dark-mode toggle via get_interactive_elements; if none found, call done and explain the page has no toggle."
+  }
+}

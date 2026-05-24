@@ -1,0 +1,52 @@
+{
+  "id": "043",
+  "category": "counter-polarity",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://x.com/compose/post",
+    "title": "Compose post / X"
+  },
+  "description": "X counter shows \"0\" — text is exactly at the 280 limit. Safe (but barely).",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://x.com/compose/post — Title: Compose post / X]\n\npost this draft"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_1g_9410tz",
+          "type": "function",
+          "function": {
+            "name": "read_page",
+            "arguments": "{}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_1g_9410tz",
+      "name": "read_page",
+      "content": "{\"url\":\"https://x.com/compose/post\",\"text\":\"What is happening? ... 0 ... Post\",\"forms\":[{\"inputs\":[{\"type\":\"textarea\",\"value\":\"<280-char text>\"}]}]}"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "click",
+      "args": {
+        "text": "Post"
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "set_field({ref_id:\"...\", clear:true, text:\"...\"})",
+        "reason": "0 means exactly at limit, which is allowed."
+      }
+    ],
+    "successRubric": "X allows posts at exactly the limit (counter shows 0 chars remaining). Submit."
+  }
+}

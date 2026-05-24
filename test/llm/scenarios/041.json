@@ -1,0 +1,78 @@
+{
+  "id": "041",
+  "category": "counter-polarity",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://mastoturk.org/publish",
+    "title": "MastoTurk"
+  },
+  "description": "Mastodon char counter shows \"-14\" — text is 14 over the 500 limit. Must shorten.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://mastoturk.org/publish — Title: MastoTurk]\n\npost my benchmark results"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_1c_kje83d",
+          "type": "function",
+          "function": {
+            "name": "set_field",
+            "arguments": "{\"ref_id\":\"ref_8\",\"clear\":true,\"text\":\"... long text ...\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_1c_kje83d",
+      "name": "set_field",
+      "content": "{\"success\":true,\"method\":\"set_field\",\"verified\":true}"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_1d_d11twl",
+          "type": "function",
+          "function": {
+            "name": "read_page",
+            "arguments": "{}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_1d_d11twl",
+      "name": "read_page",
+      "content": "{\"url\":\"https://mastoturk.org/publish\",\"text\":\"Yeni Gönderi ... -14 ... Gönder\",\"forms\":[{\"inputs\":[{\"type\":\"textarea\",\"value\":\"... long text ...\"}]}]}"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "set_field",
+      "args": {
+        "ref_id": "ref_8",
+        "clear": true,
+        "text": "<shortened text>"
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "click({text:\"Gönder\"})",
+        "reason": "Submitting an over-limit post will be rejected."
+      },
+      {
+        "match": "click({text:\"Send\"})",
+        "reason": "Same."
+      }
+    ],
+    "successRubric": "Recognize \"-14\" means 14 chars over limit (Mastodon convention). Shorten the text and try again. Do not submit."
+  }
+}
