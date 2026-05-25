@@ -794,14 +794,26 @@ window.SocialMediaDownloader = (() => {
     return candidates[0];
   };
 
-  // mode: 'all' saves every captured stream (gallery / multi-video pages
-  // that explicitly asked for everything). Any other value ('main',
-  // 'auto', default) saves only the primary stream so a single-reel
-  // URL doesn't dump every preloaded neighbour. Default 'all' preserves
-  // the pre-v4 contract for any external caller of saveMse() directly.
+  // mode mirrors collect()'s resolution so saveMse() doesn't break the
+  // documented `auto` semantics:
+  //   'main'  → keep only the primary stream
+  //   'all'   → keep every captured stream
+  //   'auto'  → main on a single-content URL (e.g. /reel/<id>),
+  //             all on a feed/timeline page (profile.isSingle()).
+  // Without auto resolving via the active profile, a feed page that
+  // captured several MSE streams would silently drop most of them on
+  // the default call. Default 'all' preserves the pre-v4 contract for
+  // any external caller of saveMse() directly (no profile assumed).
   const saveMse = async ({ prefix = 'mse', minBytes = 1, mode = 'all' } = {}) => {
     const groups = _groupMseBuffers(minBytes);
-    const toSave = (mode !== 'all' && groups.length > 1)
+    let primaryOnly;
+    if (mode === 'main') primaryOnly = true;
+    else if (mode === 'all') primaryOnly = false;
+    else { // 'auto' or anything unrecognised → follow the profile
+      try { primaryOnly = !!activeProfile().isSingle(); }
+      catch (_) { primaryOnly = false; }
+    }
+    const toSave = (primaryOnly && groups.length > 1)
       ? [_pickPrimaryMseGroup(groups)]
       : groups;
     let i = 1;
