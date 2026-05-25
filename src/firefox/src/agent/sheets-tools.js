@@ -80,25 +80,78 @@ export function detectSheetSite(url) {
 
 const A1_PATTERN = /^([A-Z]+)?(\d+)?(?::([A-Z]+)?(\d+)?)?$/;
 
+/**
+ * Split "Sheet!A1:B2" into { sheet, body }, with proper handling of
+ * quoted sheet names that themselves may contain '!' characters.
+ *
+ * Grammar (matches Google Sheets / Excel):
+ *   - Quoted sheet:   'Any!chars'!body    (use '' to escape a literal ')
+ *   - Unquoted sheet: SimpleName!body
+ *   - No sheet:       body
+ *
+ * `originalRange` is included in error messages so the caller can
+ * surface a clear context line ("in 'Sales!Q1A1'") to the user.
+ */
+function _splitSheetRange(trimmed, originalRange) {
+  // No '!' at all → no sheet prefix.
+  if (!trimmed.includes('!')) {
+    return { sheet: null, body: trimmed };
+  }
+
+  // Quoted sheet name. Walk char-by-char to find the matching close
+  // quote, treating '' as an escaped quote (no split). The '!' MUST
+  // immediately follow the close quote — anything else means the
+  // input is malformed.
+  if (trimmed.startsWith("'")) {
+    let i = 1;
+    while (i < trimmed.length) {
+      if (trimmed[i] === "'") {
+        // Escaped quote ('') inside the sheet name — skip both.
+        if (trimmed[i + 1] === "'") { i += 2; continue; }
+        // Close quote. Expect '!' next.
+        if (trimmed[i + 1] !== '!') {
+          throw new Error(`parseA1: closing quote of sheet name must be immediately followed by '!' in ${JSON.stringify(originalRange)}`);
+        }
+        const rawSheet = trimmed.slice(1, i);
+        if (!rawSheet) {
+          throw new Error(`parseA1: empty sheet name before "!" in ${JSON.stringify(originalRange)}`);
+        }
+        const sheet = rawSheet.replace(/''/g, "'");
+        const body = trimmed.slice(i + 2).trim(); // skip "'!"
+        return { sheet, body };
+      }
+      i++;
+    }
+    // Walked off the end without finding the close quote.
+    throw new Error(`parseA1: unterminated quoted sheet name in ${JSON.stringify(originalRange)}`);
+  }
+
+  // Unquoted sheet name. First '!' is the separator.
+  const idx = trimmed.indexOf('!');
+  const sheet = trimmed.slice(0, idx).trim();
+  if (!sheet) {
+    throw new Error(`parseA1: empty sheet name before "!" in ${JSON.stringify(originalRange)}`);
+  }
+  const body = trimmed.slice(idx + 1).trim();
+  return { sheet, body };
+}
+
 export function parseA1(range) {
   if (typeof range !== 'string' || !range.trim()) {
     throw new Error(`parseA1: range must be a non-empty string, got ${JSON.stringify(range)}`);
   }
   const trimmed = range.trim();
 
-  // Optional Sheet!Range prefix.
-  let sheet = null;
-  let body = trimmed;
-  const bangIdx = trimmed.indexOf('!');
-  if (bangIdx !== -1) {
-    sheet = trimmed.slice(0, bangIdx).trim();
-    // Strip surrounding single-quotes if present (e.g. 'My Sheet'!A1).
-    if (sheet.length >= 2 && sheet.startsWith("'") && sheet.endsWith("'")) {
-      sheet = sheet.slice(1, -1).replace(/''/g, "'");
-    }
-    body = trimmed.slice(bangIdx + 1).trim();
-    if (!sheet) throw new Error(`parseA1: empty sheet name before "!" in ${JSON.stringify(range)}`);
-  }
+  // Split the optional sheet prefix from the A1 body. Spreadsheet
+  // grammar allows quoted sheet names that contain '!' — e.g.
+  // 'Sales!Q1'!A1 — and inside the quotes, '' is an escaped quote
+  // (Google Sheets / Excel convention). Using a naive `indexOf('!')`
+  // would split inside the sheet name and corrupt valid input. So we
+  // hand-walk the prefix:
+  //   - If trimmed starts with "'", find the matching close quote
+  //     (handling '' as escaped), then expect '!' immediately after.
+  //   - Otherwise split at the first '!'.
+  const { sheet, body } = _splitSheetRange(trimmed, range);
 
   const m = A1_PATTERN.exec(body.toUpperCase());
   if (!m) throw new Error(`parseA1: not A1 notation: ${JSON.stringify(range)}`);

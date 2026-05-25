@@ -1584,6 +1584,30 @@ test("parseA1: escaped quote in sheet name 'It''s'!A1", () => {
   const r = parseA1("'It''s'!A1");
   assert.equal(r.sheet, "It's");
 });
+test("parseA1: quoted sheet name containing '!' — 'Sales!Q1'!A1", () => {
+  // Spreadsheet grammar allows '!' inside quoted sheet names. The split
+  // must skip the inner '!' and only act on the one after the close quote.
+  const r = parseA1("'Sales!Q1'!A1");
+  assert.equal(r.sheet, 'Sales!Q1');
+  assert.equal(r.row, 0);
+  assert.equal(r.col, 0);
+});
+test("parseA1: quoted sheet name with both '!' AND escaped quote", () => {
+  const r = parseA1("'It''s!Special'!C5");
+  assert.equal(r.sheet, "It's!Special");
+  assert.equal(r.row, 4);
+  assert.equal(r.col, 2);
+});
+test("parseA1: unterminated quoted sheet name throws", () => {
+  assert.throws(() => parseA1("'unterminated!A1"), /unterminated quoted sheet/);
+});
+test("parseA1: quote-then-not-bang throws", () => {
+  // 'foo'X — close quote not followed by '!', malformed.
+  assert.throws(() => parseA1("'foo'X!A1"), /closing quote.*must be immediately followed by/);
+});
+test("parseA1: empty quoted sheet name throws", () => {
+  assert.throws(() => parseA1("''!A1"), /empty sheet name/);
+});
 test('parseA1: empty string throws', () => {
   assert.throws(() => parseA1(''), /non-empty string/);
 });
