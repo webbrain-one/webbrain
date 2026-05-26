@@ -1088,7 +1088,7 @@ export const COMPACT_TOOL_NAMES = new Set([
   'click', 'type_text', 'press_keys',
   'navigate', 'new_tab', 'wait_for_element',
   'fetch_url', 'download_social_media',
-  'scratchpad_write', 'clarify', 'done',
+  'scratchpad_write', 'clarify', 'solve_captcha', 'done',
 ]);
 
 export const SYSTEM_PROMPT_ACT_COMPACT = `You are WebBrain, an AI browser agent. You control web pages through tools.

@@ -28,9 +28,7 @@ export class LlamaCppProvider extends BaseLLMProvider {
   }
 
   get useCompactPrompt() {
-    // Default to compact for llama.cpp since most local models are small.
-    // User can explicitly opt out via settings if they're running a large model.
-    return this.config.useCompactPrompt !== false;
+    return !!this.config.useCompactPrompt;
   }
 
   async chat(messages, options = {}) {

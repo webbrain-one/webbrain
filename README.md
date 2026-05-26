@@ -158,7 +158,7 @@ Key difference: Chrome uses Manifest V3 (service worker, `chrome.scripting`, `si
 | `scratchpad_write` | Yes | Yes | Yes | Pin a note in context that survives summarization |
 | `clarify` | Yes | Yes | Yes | Pause and ask the user a question |
 | `verify_form` | -- | Yes | -- | Verify form fields before submitting |
-| `solve_captcha` | -- | Yes | -- | Solve CAPTCHAs via CapSolver API (optional, requires API key) |
+| `solve_captcha` | -- | Yes | Yes | Solve CAPTCHAs via CapSolver API (optional, requires API key) |
 | `done` | Yes | Yes | Yes | Signal task completion |
 
 **Compact mode** is a reduced tool set + shorter system prompt designed for small local models (2B–8B). It cuts the schema from 40+ tools to 20, reducing decision surface and hallucination. Enable it per-provider in Settings (checkbox on llama.cpp, Ollama, LM Studio — off by default).
