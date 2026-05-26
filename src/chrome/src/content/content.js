@@ -713,25 +713,92 @@
   /**
    * Type text into an input/textarea.
    */
-  let _deasciifierLoaded = false;
+  let _deasciifier = null;
   function _loadDeasciifier() {
-    if (_deasciifierLoaded || window.__turkishDeasciifier) {
-      _deasciifierLoaded = true;
-      return Promise.resolve();
+    if (_deasciifier) return Promise.resolve();
+    return fetch(chrome.runtime.getURL('vendor/turkish-deasciifier-patterns.json'))
+      .then(r => r.json())
+      .then(patterns => { _deasciifier = _buildDeasciifier(patterns); });
+  }
+
+  function _buildDeasciifier(patternList) {
+    const charAlist = { c:'ç',C:'Ç',g:'ğ',G:'Ğ',i:'ı',I:'İ',o:'ö',O:'Ö',s:'ş',S:'Ş',u:'ü',U:'Ü' };
+    const asciifyTbl = {};
+    for (const k in charAlist) asciifyTbl[charAlist[k]] = k;
+    const downTbl = {}, upTbl = {};
+    for (let c = 97; c <= 122; c++) {
+      const ch = String.fromCharCode(c);
+      downTbl[ch] = ch; downTbl[ch.toUpperCase()] = ch;
+      upTbl[ch] = ch; upTbl[ch.toUpperCase()] = ch;
     }
-    return new Promise((resolve, reject) => {
-      const s = document.createElement('script');
-      s.src = chrome.runtime.getURL('vendor/turkish-deasciifier.js');
-      s.onload = () => { _deasciifierLoaded = true; resolve(); };
-      s.onerror = () => reject(new Error('Failed to load Turkish deasciifier'));
-      (document.head || document.documentElement).appendChild(s);
-    });
+    for (const k in charAlist) {
+      downTbl[charAlist[k]] = k.toLowerCase();
+      upTbl[charAlist[k]] = k.toUpperCase();
+    }
+    upTbl['i'] = 'i'; upTbl['I'] = 'I'; upTbl['İ'] = 'i'; upTbl['ı'] = 'I';
+    const toggleTbl = {};
+    for (const k in charAlist) { toggleTbl[k] = charAlist[k]; toggleTbl[charAlist[k]] = k; }
+    const CTX = 10;
+    function setCharAt(s, i, c) { return s.substring(0, i) + c + s.substring(i + 1); }
+    function getContext(text, pos) {
+      let s = ' '.repeat(2 * CTX + 1);
+      s = setCharAt(s, CTX, 'X');
+      let i = CTX + 1, idx = pos + 1, space = false;
+      while (i < s.length && !space && idx < text.length) {
+        const x = downTbl[text.charAt(idx)];
+        if (!x) { if (space) i++; else space = true; }
+        else { s = setCharAt(s, i, x); space = false; }
+        i++; idx++;
+      }
+      s = s.substring(0, i);
+      i = CTX - 1; idx = pos - 1; space = false;
+      while (i >= 0 && idx >= 0) {
+        const x = upTbl[text.charAt(idx)];
+        if (!x) { if (space) i--; else space = true; }
+        else { s = setCharAt(s, i, x); space = false; }
+        i--; idx--;
+      }
+      return s;
+    }
+    function matchPattern(text, pos, dlist) {
+      let rank = dlist.length * 2;
+      const str = getContext(text, pos);
+      let start = 0;
+      while (start <= CTX) {
+        let end = CTX + 1;
+        while (end <= str.length) {
+          const r = dlist[str.substring(start, end)];
+          if (r !== undefined && Math.abs(r) < Math.abs(rank)) rank = r;
+          end++;
+        }
+        start++;
+      }
+      return rank > 0;
+    }
+    function needsCorrection(text, pos) {
+      const ch = text.charAt(pos);
+      const tr = asciifyTbl[ch] || ch;
+      const pl = patternList[tr.toLowerCase()];
+      const m = pl && matchPattern(text, pos, pl);
+      if (tr === 'I') return (ch === tr) ? !m : m;
+      return (ch === tr) ? m : !m;
+    }
+    return {
+      deasciify(text) {
+        if (!text) return text;
+        for (let i = 0; i < text.length; i++) {
+          if (needsCorrection(text, i)) {
+            const alt = toggleTbl[text.charAt(i)];
+            if (alt) text = setCharAt(text, i, alt);
+          }
+        }
+        return text;
+      }
+    };
   }
 
   function _applyLangTransform(text, lang) {
-    if (lang === 'tr-deasciify' && window.__turkishDeasciifier) {
-      return window.__turkishDeasciifier.deasciify(text);
-    }
+    if (lang === 'tr-deasciify' && _deasciifier) return _deasciifier.deasciify(text);
     return text;
   }
 

@@ -72,7 +72,7 @@
     "vendor/pdfjs/pdf.mjs",
     "vendor/pdfjs/pdf.worker.mjs",
     "src/agent/social-media-downloader.js",
-    "vendor/turkish-deasciifier.js"
+    "vendor/turkish-deasciifier-patterns.json"
   ],
   "browser_specific_settings": {
     "gecko": {
