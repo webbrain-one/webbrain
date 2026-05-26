@@ -279,7 +279,21 @@ self.addEventListener('message', async (e) => {
   if (type === 'chat') {
     try {
       const { modelId, dtype, device, messages, options } = payload;
-      let pipe = await getPipeline(modelId, dtype, device);
+      let pipe;
+      try {
+        pipe = await getPipeline(modelId, dtype, device);
+      } catch (initErr) {
+        const initMsg = initErr?.message || String(initErr);
+        const missingKernel = initMsg.includes('Kernel not found') || initMsg.includes('GatherBlockQuantized');
+        const usingWasm = _runtimeDeviceMode === 'wasm';
+        if (!missingKernel || !usingWasm) throw initErr;
+        // If a previous turn switched us to wasm and this quantized model
+        // can't initialize there, immediately reset back to webgpu and retry.
+        _runtimeDeviceMode = 'webgpu';
+        _outputLocationMode = 'auto';
+        await disposeActivePipeline();
+        pipe = await getPipeline(modelId, dtype, device, _outputLocationMode, _runtimeDeviceMode);
+      }
       const opts = options || {};
       const generateArgs = {
         max_new_tokens: opts.maxTokens || 1024,
