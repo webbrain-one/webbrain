@@ -1,0 +1,10 @@
+{
+  "id": "024",
+  "idealFirstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "https://x.com/search?q=react%2019&src=typed_query"
+    }
+  },
+  "successRubric": "Navigate to X/Twitter search for \"react 19\". x.com or twitter.com domain both fine. Acceptable: open x.com home first and click into the search box."
+}

@@ -1,0 +1,10 @@
+{
+  "id": "020",
+  "idealFirstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "https://stackoverflow.com/search?q=javascript+closures"
+    }
+  },
+  "successRubric": "Navigates to a Stack Overflow search for \"javascript closures\". The /search?q= URL or the homepage + search-box flow are both fine."
+}

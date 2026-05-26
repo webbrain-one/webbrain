@@ -1,0 +1,15 @@
+{
+  "id": "001",
+  "user": "go to firefox extensions management pagr",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 12,
+  "error": "fetch failed",
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": null,
+  "content": null,
+  "usage": null
+}

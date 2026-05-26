@@ -1,0 +1,10 @@
+{
+  "id": "037",
+  "idealFirstToolCall": {
+    "name": "click",
+    "args": {
+      "text": "Reject all"
+    }
+  },
+  "successRubric": "Per UNIVERSAL_PREAMBLE: prefer \"Reject all\" / \"Reject non-essential\" / \"Only necessary\" over \"Accept all\". If only Accept is available at the top level, that's also acceptable. Must NOT dig into \"Manage preferences\"."
+}

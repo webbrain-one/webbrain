@@ -1,0 +1,10 @@
+{
+  "id": "087",
+  "idealFirstToolCall": {
+    "name": "clarify",
+    "args": {
+      "question": "Which link on the page should I open in a new tab?"
+    }
+  },
+  "successRubric": "No specific link identified. clarify is correct. Acceptable: get_interactive_elements first to enumerate links, then ask which."
+}

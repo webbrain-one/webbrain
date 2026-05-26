@@ -1,0 +1,11 @@
+{
+  "id": "040",
+  "idealFirstToolCall": {
+    "name": "set_field",
+    "args": {
+      "ref_id": "search",
+      "text": ""
+    }
+  },
+  "successRubric": "Clears the search input. Acceptable: get_accessibility_tree first to find a ref_id, then set_field; OR click({text:\"Search\"}) + type_text({text:\"\", clear:true})."
+}

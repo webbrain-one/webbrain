@@ -1,0 +1,60 @@
+{
+  "id": "002",
+  "category": "loop-bad-url",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://addons.mozilla.org/error",
+    "title": "Page not found"
+  },
+  "description": "Auto-completed AMO URL hit a 404. Should pivot rather than retry.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: about:home — Title: New Tab]\n\nopen the firefox tabby cat extension page"
+    },
+    {
+      "role": "assistant",
+      "content": "Going to the Tabby Cat addon page.",
+      "tool_calls": [
+        {
+          "id": "call_2_kunyk7",
+          "type": "function",
+          "function": {
+            "name": "navigate",
+            "arguments": "{\"url\":\"https://addons.mozilla.org/en-US/firefox/addon/tabby-cat-extension/\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_2_kunyk7",
+      "name": "navigate",
+      "content": "{\"success\":true,\"url\":\"https://addons.mozilla.org/error\",\"requestedUrl\":\"https://addons.mozilla.org/en-US/firefox/addon/tabby-cat-extension/\"}"
+    },
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://addons.mozilla.org/error — Title: Page not found]\n\nit 404ed"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "navigate",
+      "args": {
+        "url": "https://addons.mozilla.org/en-US/firefox/search/?q=tabby+cat"
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "navigate({url:\"https://addons.mozilla.org/en-US/firefox/addon/tabby-cat-extension/\"})",
+        "reason": "Same URL that just 404ed."
+      },
+      {
+        "match": "navigate({url:\"https://addons.mozilla.org/en-US/firefox/addon/tabby-cat/\"})",
+        "reason": "Acceptable single retry with corrected slug, but only once; flagged as anti-pattern only if combined with no fallback plan."
+      }
+    ],
+    "successRubric": "Acceptable: search AMO for \"tabby cat\" to find the real slug, OR clarify with user. Trying ONE slug variant is fine; looping on the same slug is the failure."
+  }
+}

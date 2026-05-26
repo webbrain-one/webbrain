@@ -1,0 +1,58 @@
+{
+  "id": "035",
+  "category": "truncation-cascade",
+  "mode": "ask",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://arxiv.org/pdf/2401.00001.pdf",
+    "title": "2401.00001.pdf"
+  },
+  "description": "read_pdf returned 50 pages truncated; agent should call again with fromPage to continue OR answer if enough.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://arxiv.org/pdf/2401.00001.pdf — Title: 2401.00001.pdf]\n\nwhat does the paper conclude?"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_14_915foh",
+          "type": "function",
+          "function": {
+            "name": "read_pdf",
+            "arguments": "{\"url\":\"https://arxiv.org/pdf/2401.00001.pdf\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_14_915foh",
+      "name": "read_pdf",
+      "content": "{\"text\":\"Abstract: ...\\nIntroduction: ...\\n[pages 1-50]\\nMethods: ...\",\"pages\":\"1-50\",\"totalPages\":87,\"_truncated\":true}"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "read_pdf",
+      "args": {
+        "url": "https://arxiv.org/pdf/2401.00001.pdf",
+        "fromPage": 70,
+        "toPage": 87
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "read_pdf({url:\"...\", fromPage:1, toPage:50})",
+        "reason": "Re-reading the same range."
+      },
+      {
+        "match": "fetch_url({url:\"https://arxiv.org/pdf/2401.00001.pdf\"})",
+        "reason": "Won't parse the PDF."
+      }
+    ],
+    "successRubric": "Conclusion is at the END of a paper. Use fromPage near the total to grab the conclusion. Don't re-read the same range."
+  }
+}

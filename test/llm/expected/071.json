@@ -1,0 +1,10 @@
+{
+  "id": "071",
+  "idealFirstToolCall": {
+    "name": "clarify",
+    "args": {
+      "question": "Send what, and to whom?"
+    }
+  },
+  "successRubric": "No referent. clarify is correct."
+}

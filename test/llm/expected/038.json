@@ -1,0 +1,10 @@
+{
+  "id": "038",
+  "idealFirstToolCall": {
+    "name": "press_keys",
+    "args": {
+      "key": "Escape"
+    }
+  },
+  "successRubric": "Escape key dismisses most modals. Acceptable: click({text:\"Close\"}) or click({text:\"×\"}) if a close button is visible."
+}

@@ -1,0 +1,60 @@
+{
+  "id": "001",
+  "category": "loop-bad-url",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://mastodon.turk/",
+    "title": "Server not found"
+  },
+  "description": "Hallucinated URL (mastodon.turk) resolved to an error page. The agent must re-evaluate, not retry.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://mstdn.social/@example/12345 — Title: Example post — Mastodon]\n\ncan you also post this to MastoTurk in Turkish?"
+    },
+    {
+      "role": "assistant",
+      "content": "Heading to MastoTurk to post.",
+      "tool_calls": [
+        {
+          "id": "call_1_ggvjrd",
+          "type": "function",
+          "function": {
+            "name": "navigate",
+            "arguments": "{\"url\":\"https://mastodon.turk\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_1_ggvjrd",
+      "name": "navigate",
+      "content": "{\"success\":true,\"url\":\"https://mastodon.turk/\",\"requestedUrl\":\"https://mastodon.turk\"}"
+    },
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://mastodon.turk/ — Title: Server not found]\n\nis it loaded?"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "clarify",
+      "args": {
+        "question": "I navigated to mastodon.turk but the page title is \"Server not found\" — that doesn't look like a real Mastodon instance. Is the URL actually mastoturk.org, or something else?"
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "navigate({url:\"https://mastodon.turk\"})",
+        "reason": "Retrying the exact same broken URL — the failure mode observed in gpt-4o trace 9ckqpf."
+      },
+      {
+        "match": "new_tab({url:\"https://mastodon.turk\"})",
+        "reason": "Same URL via a different tool — still a retry."
+      }
+    ],
+    "successRubric": "Must recognize \"Server not found\" title means the URL is dead. Acceptable: clarify with user, search for real URL, OR try ONE plausible variant like mastoturk.org. Anti-pattern: any retry of mastodon.turk through any tool."
+  }
+}

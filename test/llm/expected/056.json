@@ -1,0 +1,8 @@
+{
+  "id": "056",
+  "idealFirstToolCall": {
+    "name": "download_social_media",
+    "args": {}
+  },
+  "successRubric": "Calls download_social_media on the watch page. The tool handles thumbnail extraction. Acceptable: download the thumbnail URL directly if the agent knows it."
+}

@@ -1,0 +1,28 @@
+{
+  "runTag": "2026-05-23T18-21-16-713Z",
+  "model": "google/gemma-4-e2b",
+  "browser": "chrome",
+  "base": "http://127.0.0.1:1234",
+  "saveRequest": true,
+  "cases": 100,
+  "totalLatencyMs": 511453,
+  "errors": 0,
+  "withToolCall": 76,
+  "withToolCallFromContent": 0,
+  "byTool": {
+    "navigate": 21,
+    "list_downloads": 2,
+    "new_tab": 3,
+    "(no_tool_call)": 24,
+    "get_accessibility_tree": 29,
+    "research_url": 3,
+    "read_page": 10,
+    "full_page_screenshot": 1,
+    "download_social_media": 2,
+    "fetch_url": 1,
+    "scroll": 1,
+    "screenshot": 1,
+    "press_keys": 1,
+    "execute_js": 1
+  }
+}

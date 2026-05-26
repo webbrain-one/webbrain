@@ -1,0 +1,10 @@
+{
+  "id": "008",
+  "idealFirstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "https://www.wikipedia.org/"
+    }
+  },
+  "successRubric": "Navigates to wikipedia.org (the multi-language landing page) OR en.wikipedia.org/wiki/Main_Page. Either is acceptable."
+}

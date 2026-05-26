@@ -1,0 +1,56 @@
+{
+  "id": "008",
+  "category": "loop-bad-url",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://www.reddit.com/login/?dest=https%3A%2F%2Fwww.reddit.com%2Fr%2Fprivate-sub",
+    "title": "Reddit"
+  },
+  "description": "Subreddit is private; Reddit redirected to login. Don't retry the sub URL.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: about:home — Title: New Tab]\n\nshow me posts in r/private-sub"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_b_r5v7qt",
+          "type": "function",
+          "function": {
+            "name": "navigate",
+            "arguments": "{\"url\":\"https://www.reddit.com/r/private-sub\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_b_r5v7qt",
+      "name": "navigate",
+      "content": "{\"success\":true,\"url\":\"https://www.reddit.com/login/?dest=https%3A%2F%2Fwww.reddit.com%2Fr%2Fprivate-sub\",\"requestedUrl\":\"https://www.reddit.com/r/private-sub\"}"
+    },
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://www.reddit.com/login/?dest=https%3A%2F%2Fwww.reddit.com%2Fr%2Fprivate-sub — Title: Reddit]\n\ncontinue"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "done",
+      "args": {
+        "summary": "r/private-sub appears to be private or requires login — Reddit redirected me to the sign-in page. Sign in (or check the sub name) and try again."
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "navigate({url:\"https://www.reddit.com/r/private-sub\"})",
+        "reason": "Will redirect to login again."
+      }
+    ],
+    "successRubric": "Recognize the private-sub redirect, report it to the user. Don't fight the auth wall."
+  }
+}

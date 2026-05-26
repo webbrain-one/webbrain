@@ -1,0 +1,10 @@
+{
+  "id": "005",
+  "idealFirstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "about:downloads"
+    }
+  },
+  "successRubric": "Navigates to about:downloads (Firefox's built-in downloads page). list_downloads is also acceptable — both surface recent downloads."
+}

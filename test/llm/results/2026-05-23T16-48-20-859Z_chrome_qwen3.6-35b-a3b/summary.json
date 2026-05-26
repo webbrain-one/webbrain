@@ -1,0 +1,31 @@
+{
+  "runTag": "2026-05-23T16-48-20-859Z",
+  "model": "qwen3.6-35b-a3b",
+  "browser": "chrome",
+  "base": "http://192.168.1.41:8000",
+  "saveRequest": true,
+  "cases": 100,
+  "totalLatencyMs": 543880,
+  "errors": 0,
+  "withToolCall": 90,
+  "byTool": {
+    "navigate": 21,
+    "list_downloads": 2,
+    "new_tab": 3,
+    "get_accessibility_tree": 37,
+    "read_page": 7,
+    "extract_data": 2,
+    "verify_form": 1,
+    "screenshot": 2,
+    "(no_tool_call)": 10,
+    "download_file": 1,
+    "download_social_media": 2,
+    "set_field": 1,
+    "scroll": 1,
+    "get_selection": 1,
+    "get_interactive_elements": 1,
+    "clarify": 3,
+    "execute_js": 4,
+    "press_keys": 1
+  }
+}

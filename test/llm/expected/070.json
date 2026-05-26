@@ -1,0 +1,10 @@
+{
+  "id": "070",
+  "idealFirstToolCall": {
+    "name": "clarify",
+    "args": {
+      "question": "Which site do you want to log into?"
+    }
+  },
+  "successRubric": "No site context. clarify with a short list of likely options is even better. Navigating somewhere specific without asking is wrong."
+}

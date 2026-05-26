@@ -1,0 +1,52 @@
+{
+  "id": "080",
+  "category": "cross-lingual",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://example.com/checkout",
+    "title": "Checkout"
+  },
+  "description": "Mixed: English UI, but user types Arabic content. Should set field with the Arabic text as-is.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://example.com/checkout — Title: Checkout]\n\nadd shipping note: \"يرجى التسليم بعد الساعة 5 مساءً\""
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_2s_niwcpg",
+          "type": "function",
+          "function": {
+            "name": "get_interactive_elements",
+            "arguments": "{}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_2s_niwcpg",
+      "name": "get_interactive_elements",
+      "content": "[{\"index\":0,\"tag\":\"textarea\",\"text\":\"Shipping notes\"}]"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "click",
+      "args": {
+        "index": 0
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "type_text({text:\"Please deliver after 5pm\"})",
+        "reason": "Translating user content to English without permission."
+      }
+    ],
+    "successRubric": "Preserve the Arabic text verbatim — never translate user-provided content to English without instruction."
+  }
+}

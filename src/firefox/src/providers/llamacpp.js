@@ -1,4 +1,5 @@
 import { BaseLLMProvider } from './base.js';
+import { fetchWithTimeout } from './fetch-timeout.js';
 
 /**
  * Provider for local llama.cpp server (OpenAI-compatible API on localhost).
@@ -44,7 +45,7 @@ export class LlamaCppProvider extends BaseLLMProvider {
     const url = `${this.baseUrl}/v1/chat/completions`;
     let res;
     try {
-      res = await fetch(url, {
+      res = await fetchWithTimeout(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -90,7 +91,7 @@ export class LlamaCppProvider extends BaseLLMProvider {
     const streamUrl = `${this.baseUrl}/v1/chat/completions`;
     let res;
     try {
-      res = await fetch(streamUrl, {
+      res = await fetchWithTimeout(streamUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),

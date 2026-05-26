@@ -1,0 +1,10 @@
+{
+  "id": "001",
+  "idealFirstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "about:addons"
+    }
+  },
+  "successRubric": "Navigates the current tab to about:addons (Firefox's built-in extensions manager). The typo \"pagr\" should not derail interpretation. addons.mozilla.org is NOT acceptable — the user clarified in trace 2 they meant the management page."
+}

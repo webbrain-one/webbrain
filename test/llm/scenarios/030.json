@@ -1,0 +1,52 @@
+{
+  "id": "030",
+  "category": "csp-blocked-eval",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://example.com/page",
+    "title": "Example"
+  },
+  "description": "execute_js to read history.length blocked. Just answer without it — not critical.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://example.com/page — Title: Example]\n\ngo back to the previous page"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_x_o1rwo9",
+          "type": "function",
+          "function": {
+            "name": "execute_js",
+            "arguments": "{\"code\":\"history.back()\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_x_o1rwo9",
+      "name": "execute_js",
+      "content": "{\"success\":false,\"error\":\"CSP: 'unsafe-eval' not allowed.\"}"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "done",
+      "args": {
+        "summary": "I can't use execute_js on this site (CSP), and I don't have a back-button tool. Press the browser's Back button (or Cmd/Ctrl+[) to go back."
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "execute_js({code:\"history.back()\"})",
+        "reason": "Same block."
+      }
+    ],
+    "successRubric": "Honestly report the limitation. There is no back tool in the schema; execute_js is blocked. Tell the user to use the browser."
+  }
+}

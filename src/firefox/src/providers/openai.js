@@ -1,30 +1,5 @@
 import { BaseLLMProvider } from './base.js';
-
-const CONNECT_TIMEOUT_MS = 60000;
-
-/**
- * fetch() wrapper that aborts only the connection / time-to-headers phase.
- * Once headers arrive the timer is cleared, so streaming bodies can run as
- * long as needed. Without this, a stalled endpoint hangs the UI forever.
- */
-async function fetchWithTimeout(url, options) {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), CONNECT_TIMEOUT_MS);
-  try {
-    const res = await fetch(url, { ...options, signal: controller.signal });
-    clearTimeout(timeoutId);
-    return res;
-  } catch (e) {
-    clearTimeout(timeoutId);
-    if (e.name === 'AbortError') {
-      throw new Error(
-        `Request to ${url} timed out after ${CONNECT_TIMEOUT_MS}ms. ` +
-        `The endpoint may be unreachable, blocked by CORS, or stalled.`
-      );
-    }
-    throw e;
-  }
-}
+import { fetchWithTimeout } from './fetch-timeout.js';
 
 /**
  * Provider for OpenAI-compatible APIs (ChatGPT, OpenRouter, any OpenAI-compatible endpoint).

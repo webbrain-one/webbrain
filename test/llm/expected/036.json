@@ -1,0 +1,10 @@
+{
+  "id": "036",
+  "idealFirstToolCall": {
+    "name": "click",
+    "args": {
+      "text": "Submit"
+    }
+  },
+  "successRubric": "Clicks the visible Submit button by text. For multi-field forms, verify_form() before submit is even better. NOT acceptable: blindly press Enter."
+}

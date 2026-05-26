@@ -1,0 +1,10 @@
+{
+  "id": "095",
+  "idealFirstToolCall": {
+    "name": "done",
+    "args": {
+      "summary": "I don't have a translation tool. You can right-click → \"Translate this page\" if you have the Firefox Translations add-on, or copy text into translate.google.com."
+    }
+  },
+  "successRubric": "No translation tool. done with honest fallback (Firefox's built-in translator + Google Translate) is correct."
+}

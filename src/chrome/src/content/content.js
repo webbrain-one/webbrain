@@ -284,6 +284,38 @@
     });
   }
 
+  // When click({index}) or type_text({index}) gets an out-of-range index,
+  // return both a SPECIFIC stale-index error AND a fresh enumeration of
+  // what's actually clickable now. Background: with the generic
+  // "Element not found" message, several models (qwen3.6-27b q7kix9 was
+  // the loudest) interpret the failure as a broken page state and try to
+  // "reset" via navigate(same URL) → scroll → click(same stale index),
+  // looping indefinitely. Embedding the current enumeration in the tool
+  // result means even a model that ignores the prose has to see that
+  // index 6 doesn't exist among the 23 elements actually on the page.
+  function _staleIndexError(requestedIndex, interactive) {
+    const total = interactive.length;
+    // Compact snapshot — first ~40 elements, just the fields a model
+    // needs to pick the right one: index, tag, role, text.
+    const available = interactive.slice(0, 40).map((el, i) => {
+      const text = (el.innerText || el.value || el.placeholder || el.title || el.ariaLabel || '').trim().slice(0, 80);
+      return {
+        index: i,
+        tag: el.tagName.toLowerCase(),
+        role: el.getAttribute('role') || '',
+        text,
+      };
+    });
+    return {
+      success: false,
+      error: `Index ${requestedIndex} not found — only ${total} interactive element${total === 1 ? '' : 's'} on the current page (max valid index: ${total - 1}). Indices are NOT stable across scrolls, navigations, or DOM updates — the index you used was from a previous turn's get_interactive_elements call and no longer applies. Pick a new index from \`available\` below, OR use click({text: "..."}) which re-resolves every call. DO NOT reload, re-navigate, or scroll-then-retry with the same index — the page is fine; your index is stale.`,
+      indexRequested: requestedIndex,
+      totalAvailable: total,
+      available,
+      truncated: total > available.length,
+    };
+  }
+
   // -- Click helpers: interactive-element detection & parent traversal --------
   const _INTERACTIVE_TAGS = new Set(['BUTTON', 'A', 'INPUT', 'SELECT', 'TEXTAREA']);
   const _INTERACTIVE_ROLES = new Set(['button', 'link', 'tab', 'menuitem', 'option']);
@@ -535,6 +567,7 @@
       // index the agent saw is the index we resolve.
       const interactive = queryInteractive();
       el = interactive[params.index];
+      if (!el) return _staleIndexError(params.index, interactive);
     } else if (params.x != null && params.y != null) {
       el = document.elementFromPoint(params.x, params.y);
     }
@@ -686,7 +719,9 @@
       el = safeQuerySelector(params.selector);
     } else if (params.index != null) {
       // Same index space as getInteractiveElements / clickElement.
-      el = queryInteractive()[params.index];
+      const interactive = queryInteractive();
+      el = interactive[params.index];
+      if (!el) return _staleIndexError(params.index, interactive);
     } else {
       // Fallback path: type into the currently focused element. Used when
       // CDP isn't available or as the secondary path. Usually unreached on
@@ -1635,13 +1670,309 @@
           return { success: false, error: e && e.message || String(e) };
         }
       },
+      // execute_js — model-supplied JS body, evaluated in the content
+      // script's isolated world via `new Function()`.
+      //
+      // CSP CONSTRAINT (Chrome MV3, not fixable): `new Function()`
+      // requires `'unsafe-eval'` in the executing context's CSP. For
+      // content scripts in MV3 that's the extension's `extension_pages`
+      // CSP — and MV3 forbids `'unsafe-eval'` in extension_pages
+      // (Chrome's minimum-policy enforcement is strict; adding it
+      // makes the extension fail to install). There's no manifest-side
+      // workaround. Firefox MV2 does allow this and the firefox build
+      // grants `unsafe-eval` — see src/firefox/src/content/content.js
+      // for the parallel handler.
+      //
+      // Net effect on Chrome: execute_js fails on every host with the
+      // same CSP error. Detected below and reported with an actionable
+      // hint so the agent stops thrashing through execute_js variants
+      // and uses the finite-verb tools instead.
       'execute_js': () => {
         try {
           const fn = new Function(msg.params.code);
           return { success: true, result: fn() };
         } catch (e) {
-          return { success: false, error: e.message };
+          const errMsg = (e && e.message) || String(e);
+          // Chrome reports CSP eval blocks as EvalError with a message
+          // citing "'unsafe-eval' is not an allowed source of script".
+          // Detect both the name and the message so we catch the case
+          // across Chrome and Firefox.
+          const isCspBlock =
+            (e && e.name === 'EvalError') ||
+            /unsafe-eval|Content Security Policy/i.test(errMsg);
+          if (isCspBlock) {
+            return {
+              success: false,
+              cspBlocked: true,
+              error:
+                'execute_js is blocked by the extension\'s MV3 Content Security Policy — `new Function()` requires `unsafe-eval`, which MV3 forbids in extension_pages. This is a hard browser-level limitation; do NOT retry execute_js with different code, the result is the same. Use the finite tools instead: get_accessibility_tree (read the page), click_ax / type_ax / set_field (interact via ref_id), scroll, navigate, get_selection, iframe_read / iframe_click / iframe_type. If you need a value that has no dedicated tool, read the tree and quote what you see.',
+            };
+          }
+          return { success: false, error: errMsg };
         }
+      },
+      // ── ref_id → on-screen rect resolver ─────────────────────────────────
+      // Helper for the CDP-backed pointer tools (hover, right_click,
+      // drag_drop). The agent calls this from background.js to get viewport
+      // coords for a ref_id, then dispatches trusted Input events via CDP at
+      // those coords. We do scrollIntoView here so the element is reachable
+      // when CDP fires the pointer event ~milliseconds later. Returns the
+      // same rect shape click_ax / type_ax already return; suggestions on
+      // miss are identical so error messages stay consistent.
+      'ax_resolve_rect': () => {
+        try {
+          const { ref_id } = msg.params || {};
+          if (typeof ref_id !== 'string') return { success: false, error: 'ref_id (string, e.g. "ref_42") is required' };
+          if (typeof window.__wb_ax_lookup !== 'function') return { success: false, error: 'accessibility-tree.js not injected' };
+          const el = window.__wb_ax_lookup(ref_id);
+          if (!el) {
+            let suggestions = [];
+            try { if (typeof window.__wb_ax_suggest === 'function') suggestions = window.__wb_ax_suggest(ref_id, 6); } catch {}
+            const refStr = String(ref_id);
+            const looksLikeDomId = !/^ref_\d+$/.test(refStr);
+            const formatNote = looksLikeDomId
+              ? ` "${refStr}" is not a valid ref_id. Valid ref_ids have the form ref_N (e.g. ref_42) and appear in square brackets in get_accessibility_tree output — do not use DOM ids, CSS selectors, or placeholder words from the prompt.`
+              : '';
+            const hint = suggestions.length
+              ? ' Nearest existing refs: ' + suggestions.map(s => `${s.ref} (${s.role}${s.name ? ' "' + s.name + '"' : ''})`).join(', ') + '.'
+              : '';
+            return { success: false, error: `ref_id ${ref_id} not found.${formatNote} The element may have been removed or the page replaced.${hint} Re-read the accessibility tree to get fresh ids.`, suggestions };
+          }
+          try { el.scrollIntoView({ block: 'center', inline: 'center' }); } catch {}
+          const r = el.getBoundingClientRect();
+          const cx = r.left + r.width / 2;
+          const cy = r.top + r.height / 2;
+          const vw = window.innerWidth, vh = window.innerHeight;
+          const inViewport = r.width > 0 && r.height > 0 && cx >= 0 && cy >= 0 && cx <= vw && cy <= vh;
+          let name = '';
+          try {
+            name = (el.getAttribute && (el.getAttribute('aria-label') || el.getAttribute('title')))
+              || (el.innerText && el.innerText.trim().slice(0, 80))
+              || '';
+          } catch {}
+          return {
+            success: true,
+            ref_id,
+            tag: el.tagName ? el.tagName.toLowerCase() : '',
+            name,
+            x: Math.round(cx),
+            y: Math.round(cy),
+            rect: { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) },
+            inViewport,
+          };
+        } catch (e) {
+          return { success: false, error: e && e.message || String(e) };
+        }
+      },
+      // Resolve TWO ref_ids in a single round-trip and measure both
+      // rects in the SAME post-scroll viewport snapshot. drag_drop needs
+      // this because the previous "resolve-source, then resolve-dest,
+      // then re-resolve-source" dance scrolled the viewport back to
+      // source after dest was measured — invalidating the dest coords.
+      // Doing both scrolls then both measurements here means both
+      // x/y pairs are in the same coordinate frame the CDP drag will
+      // dispatch into.
+      'ax_resolve_two_rects': () => {
+        try {
+          const { fromRefId, toRefId } = msg.params || {};
+          if (typeof fromRefId !== 'string' || typeof toRefId !== 'string') {
+            return { success: false, error: 'fromRefId and toRefId (both strings, e.g. "ref_42") are required' };
+          }
+          if (typeof window.__wb_ax_lookup !== 'function') {
+            return { success: false, error: 'accessibility-tree.js not injected' };
+          }
+          const fromEl = window.__wb_ax_lookup(fromRefId);
+          const toEl = window.__wb_ax_lookup(toRefId);
+          if (!fromEl) return { success: false, error: `fromRefId ${fromRefId} not found` };
+          if (!toEl) return { success: false, error: `toRefId ${toRefId} not found` };
+
+          // Scroll source first, then destination. After both scrolls the
+          // viewport is settled at the dest-centered position; measuring
+          // BOTH rects against that frame is what drag_drop wants.
+          // Source may end up partly off-screen if the two are far
+          // apart vertically — flagged via inViewport on the return.
+          try { fromEl.scrollIntoView({ block: 'center', inline: 'center' }); } catch {}
+          try { toEl.scrollIntoView({ block: 'center', inline: 'center' }); } catch {}
+
+          const fr = fromEl.getBoundingClientRect();
+          const tr = toEl.getBoundingClientRect();
+          const vw = window.innerWidth, vh = window.innerHeight;
+
+          const measure = (el, r, refId) => {
+            const cx = r.left + r.width / 2;
+            const cy = r.top + r.height / 2;
+            const inViewport = r.width > 0 && r.height > 0 && cx >= 0 && cy >= 0 && cx <= vw && cy <= vh;
+            let name = '';
+            try {
+              name = (el.getAttribute && (el.getAttribute('aria-label') || el.getAttribute('title')))
+                || (el.innerText && el.innerText.trim().slice(0, 80))
+                || '';
+            } catch {}
+            return {
+              ref_id: refId,
+              tag: el.tagName ? el.tagName.toLowerCase() : '',
+              name,
+              x: Math.round(cx),
+              y: Math.round(cy),
+              rect: { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) },
+              inViewport,
+            };
+          };
+          return {
+            success: true,
+            from: measure(fromEl, fr, fromRefId),
+            to: measure(toEl, tr, toRefId),
+          };
+        } catch (e) {
+          return { success: false, error: e && e.message || String(e) };
+        }
+      },
+      // ── wait_for_stable ──────────────────────────────────────────────────
+      // Resolve when N consecutive milliseconds pass with no DOM mutations
+      // AND no in-flight fetch/XHR. wait_for_element answers "did X appear";
+      // this answers "is the page done shuffling". Common use: right after
+      // navigate / set_field({submit:true}) before reading the tree, so the
+      // model doesn't grab a half-rendered DOM. Network idle is best-effort
+      // — we wrap fetch + XMLHttpRequest in window once per page; we don't
+      // see WebSocket frames or chunked SSE. That's fine: the MutationObserver
+      // is the load-bearing signal, network-idle is a tightener.
+      // CROSS-WORLD NOTE: page JavaScript runs in the MAIN world; this
+      // content script runs in an ISOLATED world that has its own copies
+      // of `window.fetch` and `XMLHttpRequest.prototype.send`. Patching
+      // those copies here (the previous implementation) observed nothing
+      // — the page calls the MAIN-world fetch we can't reach directly.
+      // To get real network visibility we inject a <script> element with
+      // text patches that run in the page's own world. The injected
+      // counter publishes its value to
+      // `document.documentElement.dataset.__wbInflight`, which crosses
+      // the world boundary via the shared DOM. We read it from here.
+      //
+      // STRICT-CSP FALLBACK: pages with `script-src 'self'` (no inline)
+      // refuse the injected <script>. We detect the failure (the dataset
+      // attribute never gets set) and degrade gracefully: the response
+      // includes `networkObserved: false`, the netIdle gate is bypassed,
+      // and stability is decided on MutationObserver alone. Honest
+      // failure beats a fake "idle" signal.
+      'wait_for_stable': () => {
+        return new Promise((resolve) => {
+          const params = msg.params || {};
+          const timeout = Math.max(200, Math.min(20000, Number(params.timeout) || 5000));
+          const quietMs = Math.max(100, Math.min(3000, Number(params.quietMs) || 500));
+          const checkNetwork = params.checkNetwork !== false; // default on
+          let mutationCount = 0;
+          let networkObserved = false;
+
+          // Install the MAIN-world counter once per page (per isolated-
+          // world realm — re-injection is a no-op).
+          if (checkNetwork && !window.__wbNetCounterAttempted) {
+            window.__wbNetCounterAttempted = true;
+            try {
+              const script = document.createElement('script');
+              script.textContent = `(() => {
+                if (window.__wbNetIdleInstalled) return;
+                window.__wbNetIdleInstalled = true;
+                let inFlight = 0;
+                const root = document.documentElement;
+                const publish = () => {
+                  try { root.dataset.__wbInflight = String(inFlight); } catch (_) {}
+                };
+                publish();
+                const origFetch = window.fetch;
+                if (typeof origFetch === 'function') {
+                  window.fetch = function() {
+                    inFlight++; publish();
+                    return origFetch.apply(this, arguments).finally(() => {
+                      inFlight = Math.max(0, inFlight - 1); publish();
+                    });
+                  };
+                }
+                const XHR = window.XMLHttpRequest;
+                if (XHR && XHR.prototype && XHR.prototype.send) {
+                  const origSend = XHR.prototype.send;
+                  XHR.prototype.send = function() {
+                    inFlight++; publish();
+                    const done = () => { inFlight = Math.max(0, inFlight - 1); publish(); };
+                    this.addEventListener('loadend', done, { once: true });
+                    return origSend.apply(this, arguments);
+                  };
+                }
+              })();`;
+              (document.head || document.documentElement).appendChild(script);
+              script.remove();
+            } catch { /* CSP or DOM unavailability — networkObserved stays false */ }
+          }
+
+          // Read the MAIN-world counter via the shared DOM attribute.
+          // Returns null when the inject failed (CSP) or hasn't run yet.
+          const readInflight = () => {
+            try {
+              const v = document.documentElement.dataset.__wbInflight;
+              if (v == null) return null;
+              const n = parseInt(v, 10);
+              return Number.isFinite(n) ? n : null;
+            } catch { return null; }
+          };
+          if (checkNetwork) {
+            networkObserved = readInflight() !== null;
+          }
+
+          const startedAt = Date.now();
+          let quietStart = Date.now();
+          const observer = new MutationObserver((records) => {
+            mutationCount += records.length;
+            quietStart = Date.now();
+          });
+          try {
+            observer.observe(document.documentElement || document.body, {
+              childList: true, subtree: true, attributes: true, characterData: true,
+            });
+          } catch {
+            resolve({ success: true, stable: true, elapsedMs: 0, reason: 'observer-failed' });
+            return;
+          }
+
+          const interval = setInterval(() => {
+            const now = Date.now();
+            const quiet = now - quietStart;
+            const elapsed = now - startedAt;
+            // Re-check observation status each tick — the injected
+            // script may have started reporting after a delay on a
+            // slow-parsing page.
+            if (checkNetwork && !networkObserved) {
+              networkObserved = readInflight() !== null;
+            }
+            const inFlight = networkObserved ? (readInflight() | 0) : 0;
+            const netIdle = !checkNetwork || !networkObserved || inFlight === 0;
+            if (quiet >= quietMs && netIdle) {
+              clearInterval(interval);
+              observer.disconnect();
+              resolve({
+                success: true,
+                stable: true,
+                elapsedMs: elapsed,
+                quietMs: quiet,
+                mutations: mutationCount,
+                inFlightAtExit: networkObserved ? inFlight : null,
+                networkObserved,
+              });
+            } else if (elapsed >= timeout) {
+              clearInterval(interval);
+              observer.disconnect();
+              resolve({
+                success: true,
+                stable: false,
+                timedOut: true,
+                elapsedMs: elapsed,
+                mutations: mutationCount,
+                inFlightAtExit: networkObserved ? inFlight : null,
+                networkObserved,
+                hint: networkObserved
+                  ? 'Page never went quiet within the timeout. The page may be polling, animating, or streaming — proceed and read the tree anyway, or pass a longer timeout.'
+                  : 'Network activity could not be observed on this page (the in-page <script> inject was blocked, likely by a strict Content Security Policy). Stability was judged on DOM mutations alone, and that never settled. Proceed cautiously.',
+              });
+            }
+          }, 100);
+        });
       },
     };
 

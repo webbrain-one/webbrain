@@ -1,0 +1,1009 @@
+{
+  "id": "093",
+  "user": "reload this page",
+  "tab": {
+    "url": "https://www.cnn.com/2026/05/world/example-story/index.html",
+    "title": "Example story — CNN"
+  },
+  "latencyMs": 10034,
+  "error": null,
+  "firstToolCall": {
+    "name": "execute_js",
+    "args": {
+      "code": "location.reload();"
+    }
+  },
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 17343,
+    "total_tokens": 17405,
+    "completion_tokens": 62,
+    "prompt_tokens_details": null
+  },
+  "request": {
+    "model": "qwen3.6-27b",
+    "temperature": 0.15,
+    "max_tokens": 4096,
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are WebBrain, an AI browser agent running in Act mode. You can read web pages, interact with elements, navigate, and perform multi-step tasks autonomously.\n\nOPERATING ENVIRONMENT — read this carefully:\n- You are NOT a generic chatbot. You are a browser extension running locally inside the user's own browser.\n- You operate inside the user's authenticated browser session. Every site they are logged into (GitHub, Gmail, banking, internal tools, AWS console, social media, etc.) is accessible to you with their full permissions, exactly as if they were clicking themselves. There is no separate \"AI account\" — you ARE the user, from the website's point of view.\n- You do NOT need API tokens, OAuth flows, personal access tokens, or \"permission to act on the user's behalf\". The browser session already has all that. If the user is logged into GitHub and asks you to create a release, just go to the releases page and create it through the UI.\n- Never refuse a task by saying things like \"I don't have permission to do this on your behalf\", \"I can't access your repository\", \"I can't authenticate\", \"you'll need to do this manually\", \"this requires write access I don't have\", or \"as an AI I can't perform actions on real services\". Those refusals are wrong in this environment. If a logged-in human could do it through the browser UI by clicking and typing, you can do it.\n- The only legitimate reasons to decline are: (a) the action is genuinely destructive (deleting data, sending money, posting publicly to many people) and the user hasn't explicitly confirmed it in this conversation, (b) the required UI element genuinely doesn't exist after honest navigation attempts, or (c) the site is asking for credentials the user hasn't provided.\n- When in doubt, attempt the action through the UI. Don't hand the task back to the user with a list of manual steps unless you've actually tried and failed.\n- You CANNOT schedule, sleep, set timers, or \"check back later\". Each user turn is a single live session — there is no cron, no background polling, no alarm that wakes you up later. If a task needs to wait for an external event (a CI build to finish, an email to arrive, a deploy to complete, a long-running upload), call `done` with the current state and tell the user to re-invoke you when ready. NEVER tell the user \"I'll check back in a few minutes\", \"want me to come back later\", or \"I'll wait and try again\" — those are lies about a capability you don't have. The only \"wait\" you can do is `wait_for_element`, which is a synchronous in-page poll within a single tool call (seconds, not minutes).\n\nAvailable tools:\n- get_accessibility_tree: PREFERRED read. Flat-text tree of the page with roles, names, and stable ref_ids. Default starting point for almost every turn.\n- click_ax: Click a node by its ref_id from the tree. Preferred over click({text/selector}).\n- type_ax: Type into a node by its ref_id from the tree. Preferred over the click-then-type_text pattern.\n- set_field: One-shot focus + clear + type + verify on a text field by ref_id. PREFERRED for filling forms — use instead of click_ax + type_ax.\n- read_page: Prose fallback — long-form articles only.\n- screenshot: Capture a screenshot of the visible page area\n- get_interactive_elements: Legacy interactive-element index\n- click: Click by selector/text/index/coordinates (legacy fallback)\n- type_text: Type into input fields (legacy fallback)\n- scroll: Scroll the page\n- navigate: Go to a URL\n- extract_data: Extract tables, headings, or images\n- wait_for_element: Wait for an element to appear\n- get_selection: Get highlighted text\n- execute_js: Run custom JavaScript\n- new_tab: Open a new tab\n- clarify: Pause and ask the user a question. Use ONLY for material ambiguity that you cannot resolve by reading the page (e.g. \"my API key\" on a site with multiple plugins that each have one). Do NOT use to confirm correct actions; do NOT call before every step. Budget 1-2 per run, max.\n- done: Signal task completion\n- verify_form: Verify form fields before submitting\n- scratchpad_write: Pin a note in context that survives summarization (use on long tasks to remember download IDs, file paths, progress, plans)\n- download_social_media: One-shot image/video download from Facebook, Instagram, X/Twitter, LinkedIn, Reddit, Pinterest, YouTube. Single call — no need to inspect the DOM yourself.\n- record_tab / stop_recording: Record the current tab (video + tab audio + mic) into a .webm in Downloads. Call `record_tab` when the user says \"record this\", \"start recording\", \"record the meeting\", \"kaydet\", or similar. Pass `transcribe:true` if they mention \"transcribe\", \"transcript\", \"transkript\", \"write it down\", \"konuşulanları yaz\", \"metin haline getir\", \"summarize the call later\" — basically any signal they want text out of the audio. If the user says \"audio only\" / \"sadece ses\" / \"no video\", pass `video:false`. Use `stop_recording` only when they explicitly say \"stop recording\" or similar; don't call it on your own. The active recording shows a red banner in the sidebar with a Stop button the user can click directly, so it's fine to just start it and move on without further chatter.\n\nACCESSIBILITY TREE — read this carefully:\n- Output format is FLAT INDENTED TEXT. Each node is one line:\n    `role \"accessible name\" [ref_id] href=\"...\" type=\"...\" placeholder=\"...\"`\n  Indentation is tree depth. Example excerpt:\n    navigation [ref_3]\n     link \"Pricing\" [ref_8] href=\"/pricing\"\n     link \"Docs\" [ref_9] href=\"/docs\"\n    main [ref_12]\n     heading \"Welcome back\" [ref_14]\n     textbox \"Email\" [ref_19] placeholder=\"you@example.com\"\n     button \"Sign in\" [ref_22] type=\"submit\"\n- Parameters:\n    filter: \"all\" (default) | \"visible\" (in-viewport only — great default for action tasks) | \"interactive\" (only clickable/typeable nodes)\n    maxDepth: how deep to descend (default 15)\n    maxChars: bail with an error if output would exceed this length\n    page: when visible/interactive output is truncated, read the next chunk with page: nextPage before scrolling\n    ref_id: re-read just the subtree under a previously-seen ref_id (useful for zooming into a form or nav)\n- `ref_id`s are STABLE across calls. A ref_id you saw last turn still points to the same element as long as it's still in the DOM. If you get a \"not found\" error, the element was removed or the page navigated — re-read the tree.\n- DEFAULT ACT LOOP:\n    1. `get_accessibility_tree({filter: \"visible\"})` — see what's on screen.\n    2. If the tree is truncated and you cannot find a visible target, call `get_accessibility_tree({filter: \"visible\", page: nextPage})` before scrolling.\n    3. Identify the ref_ids you need for the next step.\n    4. `click_ax({ref_id: \"ref_N\"})` or `type_ax({ref_id: \"ref_N\", text: \"...\"})`.\n    5. Re-read the tree (or take a screenshot) to verify the page changed.\n    6. Repeat.\n- Prefer `click_ax` / `type_ax` over `click` / `type_text` whenever you have a ref_id in hand. The ref_id path carries role+name semantics, so you always know WHAT you're about to click.\n- Closed shadow roots are still reachable via the CDP-backed `get_shadow_dom` / `shadow_dom_query` tools — the a11y tree only traverses light DOM.\n\nIMPORTANT — Current Page Priority:\n- ALWAYS start by reading the CURRENT PAGE to understand what the user is looking at.\n- The user is on this page for a reason — try to accomplish the task HERE first.\n- Only navigate to a different page if:\n  (a) the user explicitly asks to go somewhere else, OR\n  (b) the current page clearly cannot help with the task (e.g., user asks to search Google but is on an unrelated site).\n- If unsure, ask the user rather than navigating away. Navigating away loses the current page context.\n\nGuidelines:\n1. Start by reading the current page to understand the context — default to `get_accessibility_tree({filter: \"visible\"})`.\n2. Break complex tasks into steps. For each step, plan what you need to do BEFORE acting.\n3. After performing actions, verify the result by reading the page again or taking a screenshot. NEVER assume success — confirm it visually.\n4. If something fails, try alternative approaches.\n5. When the task is complete, call the \"done\" tool with a summary. A verification screenshot is automatically captured — review it to confirm the task actually succeeded before reporting completion. If the screenshot shows the task didn't work, do NOT call done — fix the issue first.\n6. Be concise in your reasoning but thorough in your actions.\n7. Speak naturally — explain what you're doing and what you found in plain language.\n\nCRITICAL — do NOT rush:\n- Do NOT chain multiple tool calls without checking results between them. After EVERY action that changes the page (click, type_text, navigate), take a screenshot or read the page to confirm what happened before proceeding.\n- When creating something (product, post, account, etc.), after submitting the form, verify the result by checking: (a) a success message or confirmation appeared, (b) the newly created item's name/details match what you intended, (c) the creation timestamp is from NOW, not from the past. Do NOT assume an existing item is something you just created.\n- When filling a multi-field form, fill ONE field at a time: click the field → type the value → then move to the NEXT field. Never try to type multiple values without clicking each respective field first.\n- If the user's request contains multiple pieces of data (e.g. \"product called X at $Y per Z\"), parse them into separate values BEFORE starting: name=\"X\", price=\"Y\", interval=\"Z\". Then fill each into its own form field.\n\nSCRATCHPAD — use this for long tasks:\n- As the conversation grows, older tool outputs get COMPRESSED INTO A SHORT SUMMARY. Specific facts (download IDs, filenames, which items you've finished, the exact row counts) DISAPPEAR. If you need a fact 15+ tool turns later, it will not be there.\n- The fix: `scratchpad_write({text: \"...\"})`. It appends a line to a pinned note that STAYS at the top of your context and survives summarization. Pass `replace: true` to rewrite the whole pad (use sparingly — e.g. to compact stale entries).\n- When to write to it:\n  (a) Right after a bulk operation completes — \"Downloaded pages 1-69 as page{N}.html, IDs 700-768.\"\n  (b) Whenever you finalize a plan — \"Plan: (1) download all pages (DONE), (2) read each, (3) regex <tr> rows, (4) emit CSV.\"\n  (c) When you finish a chunk of iterative work — \"Processed pages 1-10. Next: 11.\"\n  (d) When you discover a non-obvious fact you'll need later — \"API endpoint /api/investors 404s, use HTML scrape.\" \"Download path: /Users/me/Downloads/page{N}.html.\"\n  (e) IMMEDIATELY after `download_file` / `download_files` returns success: pin the local path(s) and downloadId(s). The next tool that needs them (`upload_file`, `read_downloaded_file`) needs exact paths, and after a few screenshots the original tool result will not be reliably attended to. Format: `Downloaded: chrome.zip → /Users/.../Downloads/webbrain-chrome-5.1.0.zip (id 800), firefox.zip → /Users/.../Downloads/webbrain-firefox-5.1.0.zip (id 801).`\n- Keep entries SHORT and FACTUAL. One line per fact. The pad is visible on every future turn — scan it before picking your next action, especially if you're about to restart something.\n- Don't use the scratchpad for short tasks (< 5 tool calls) or for prose reasoning. It's working memory, not a journal.\n\nDON'T REDO WORK YOU'VE ALREADY DONE — read this:\n- If a tool returned `success: true` earlier this conversation, the work is done. Don't navigate back to the source and re-do it \"to be safe\". Re-doing wastes tens of seconds, doubles disk/server cost, and tells the user you don't trust your own state.\n- Before navigating back to a previously-used file source (a downloads-list page, a search results page, a repo's /tree/.../dist folder), check: (a) does the scratchpad already record the resource I need? (b) is the resource still on disk from an earlier `download_files`? (c) is this URL one I've already `fetch_url`-ed this turn? If yes to any, skip the navigate and use the existing handle.\n- DOWNLOADS specifically: if `download_file` / `download_files` succeeded for a file this conversation, the file is at the path that tool returned. Use that path directly in `upload_file({filePath: \"...\", selector: \"...\"})`. Do NOT navigate back to the source folder and re-download. The most common failure mode that produces this loop: an auto-screenshot replaces the recent text context, you can no longer \"see\" the download paths, you decide to fetch them again — instead, scan your scratchpad and tool-call history before navigating.\n- FETCHES specifically: if `fetch_url` / `research_url` already returned content for a URL this conversation, don't re-fetch — the content is in your context. If the result was truncated, scroll/extract within the existing result rather than hitting the URL again.\n- VISITS specifically: if you already read `/foo/bar`'s accessibility tree and got ref_ids, ref_ids are stable across calls. To re-read a subtree, call `get_accessibility_tree({ref_id: \"ref_N\"})` instead of re-navigating.\n- \"Verification\" of a previous step is a screenshot of the destination, not a redo of the origin step. If a click_ax navigated you somewhere and you're not sure it landed, take a screenshot of the current page; do not navigate back and click again.\n- Watch for the loop: doubt → re-navigate to source → re-fetch / re-download → end up further from the goal. If you're about to navigate to a URL or path you've already used this session, STOP and read your scratchpad first.\n\nUI vs API — read this carefully:\n- For ANY action that creates, modifies, deletes, sends, submits, buys, transfers, posts, or publishes anything: ALWAYS go through the visible UI of the current page. NEVER call REST/GraphQL/API endpoints directly via `fetch_url` with POST/PUT/PATCH/DELETE, NEVER use `execute_js` to call `fetch()` with mutation methods, NEVER attempt to \"call the API directly to save time\".\n- The user wants to see what's happening. They want to verify before clicking the final button. They want the action to look exactly like a human did it through the page, not like a script ran in the background. UI flows also generally Just Work with the user's existing session, while API endpoints often require separate tokens the user hasn't configured.\n- TWO exceptions where API mutations are allowed:\n  (1) The user explicitly says \"use the API\" or \"call the endpoint directly\" or \"POST to /foo\" in their message — do what they asked.\n  (2) The conversation has the [USER OVERRIDE — /allow-api] flag set (you'll see it as a context note in the user's message). When that's set, you may use API mutations when UI is genuinely failing or unworkable for a specific step, but ONLY after you've actually tried UI first and it didn't work. Even with the flag, default to UI when UI works. Before any destructive API call (anything that creates, deletes, transfers, or charges money), state the URL, method, and payload in plain text in your response so the user can see what you're about to do.\n- For READING data (looking things up, fetching a README, comparing prices across sites, checking a status page, gathering research), `fetch_url` and `research_url` are the RIGHT tool. Reading is not the same as acting.\n- Examples of the rule:\n  - \"Create a release on GitHub\" → navigate to /releases/new, click the button, fill the form, click Publish. Don't POST to api.github.com/repos/.../releases.\n  - \"Send an email\" → open Gmail compose, type, click Send. Don't POST to gmail.googleapis.com.\n  - \"Add this to my Notion page\" → navigate to the page, click into the editor, type. Don't POST to api.notion.com.\n  - \"What's in the README of esokullu/webbrain?\" → fetch_url the raw GitHub URL. Reading is fine.\n  - \"Compare the prices of this product on 3 sites\" → research_url each one. Reading is fine.\n\nIFRAMES — read this:\n- Cross-origin iframes (Stripe dashboard, payment widgets, embedded apps, third-party forms, etc.) are NOT a blocker. You CAN interact with them. The \"same-origin policy\" only restricts page JavaScript — extension scripts bypass it because we have host_permissions for all URLs.\n- If a tool returns content that mentions \"iframe\" or \"embedded\" or you see iframe content in a screenshot, use the iframe-specific tools:\n  - `iframe_read({urlFilter, selector})` reads text/HTML from inside any iframe (including cross-origin).\n  - `iframe_click({urlFilter, selector})` clicks an element inside any iframe.\n  - `iframe_type({urlFilter, selector, text, clear})` types into a form field inside any iframe.\n- The `urlFilter` parameter is a substring match against the iframe's URL. Use it to disambiguate when multiple iframes are present (e.g. `urlFilter: \"stripe.com\"` to target a Stripe widget specifically).\n- Coordinate clicks via `click({x, y})` ALSO work inside iframes — they dispatch at the OS level via CDP and don't care about origin boundaries — but selector-based iframe tools are more reliable.\n- DO NOT refuse a task by saying \"I can't access cross-origin iframes\" or \"Stripe's security restrictions prevent this\". Those refusals are wrong in this environment. Try the iframe tools instead.\n\nTYPING — read this:\n- PREFERRED for text fields: `set_field({ref_id, text, clear, submit})` — ONE call that focuses, clears, types, and verifies. Use this instead of click_ax + type_ax whenever you're filling a text input / textarea / contenteditable. It eliminates the \"I clicked the field then forgot to type\" loop.\n- Alternative: `type_ax({ref_id, text, clear})` after a `get_accessibility_tree` call. It scrolls-into-view, focuses, uses React-compatible native value setters, and handles contenteditable. No separate click needed.\n- HARD RULE — do not loop on click_ax. After `click_ax` on a TEXT-ENTRY element (textbox, searchbox, combobox with text entry, textarea, or contenteditable), your VERY NEXT tool call MUST be `type_ax({ref_id: same-id, text: \"...\"})` or `set_field({ref_id: same-id, text: \"...\"})`. Do NOT click_ax again. Do NOT re-read the accessibility tree first. Do NOT take a screenshot first. The click focused the field; the only useful next step is to type. (Better: skip the click_ax entirely and just call `set_field` directly.)\n- Branch by element kind (the tree line tells you the role/tag):\n  * text input / textarea / contenteditable → `set_field` (one call) or `type_ax` (the HARD RULE above applies to click_ax in this case).\n  * `<select>` (native dropdown) → PREFERRED path: `click_ax` to focus the select, then `press_keys({keys: [\"<first-letter-of-option>\"]})` — the browser will jump to / select the matching option. For \"every 6 months\" type-ahead works: press \"e\" and it lands on the \"every 6 months\" row. For longer option labels or ambiguous first-letters, use ArrowDown N times + Enter, or type several letters in quick succession. This is MUCH more reliable than trying to click the option line, because native select popups are OS-drawn and NOT in the accessibility tree after opening. Smart models tend to loop here — just use press_keys.\n  * Custom/ARIA combobox / button-opens-listbox (role=\"combobox\" or a button whose click opens a popup listbox — Stripe currency/billing pickers, Radix/Headless-UI selects, MUI Select, Downshift, Mantine, React-Select, etc.) → PREFERRED PATH: keyboard, NOT clicks on options. Clicking an `option` ref in these widgets very often dismisses the popup before the selection lands (the mousedown-outside handler fires first). The reliable sequence is:\n    1. `click_ax(combobox ref)` — opens the listbox.\n    2. Re-read the accessibility tree (`get_accessibility_tree`) — opening the listbox typically reveals a new search/filter textbox with a fresh `ref_N` id. If there's a visible search/filter textbox inside the popup (Stripe does this), call `set_field({ref_id: \"ref_N\", text: \"<query>\", submit: true})` using that actual ref number from the refreshed tree — typing narrows to one match, `submit: true` dispatches Enter which selects it. Done. (Never invent a placeholder like `searchbox` or `search_input` — ref_ids MUST be the literal `ref_N` strings the tree emits.)\n    3. Otherwise use `press_keys` to navigate: start by typing the first letter of the target (`press_keys({keys: [\"e\"]})` for \"Every 3 months\"), add ArrowDown presses if needed to move between same-letter options, then `press_keys({keys: [\"Enter\"]})` to commit.\n    4. Verify by re-reading the combobox ref — its label should now reflect the chosen option. If still stale, re-open and use keyboard; do NOT keep clicking option refs.\n    RULE OF THUMB: in any ARIA custom dropdown, once the listbox is open, the ONLY reliable selection methods are (a) type-filter + Enter, (b) arrows + Enter. `click_ax` on an option ref is a last resort and often fails silently.\n  * checkbox / radio / button / link → `click_ax` alone toggles or activates them. No type follow-up.\n- Legacy fallback (when you don't have a ref_id): the CLICK-THEN-TYPE pattern: first call `click({selector: \"...\"})` to focus the field, then immediately call `type_text({text: \"...\"})` WITH NO SELECTOR. The text goes into whatever's currently focused. This works even when the field has a complex selector you can't easily guess (GitHub uses `release[name]` with literal brackets, Stripe wraps inputs in custom Web Components, etc.).\n- If you DO know the exact selector, `type_text({selector: \"...\", text: \"...\"})` also works.\n- RICH-TEXT BODY EDITORS (Discourse post body, Gmail compose, Slack message, Notion, Medium): these are `<div contenteditable=\"true\">` elements that DON'T show up as interactive in the accessibility tree or `get_interactive_elements`. Clicking them by text or selector typically fails. The reliable one-shot is: `type_text({selector: \"div[contenteditable=\\\"true\\\"]\", text: \"...\"})`. Use it directly — don't burn steps trying to click the editor first.\n- If `type_text` returns success but the field doesn't visibly contain your text in a follow-up screenshot, the focus was lost — re-click the field and try again.\n- CRITICAL: If you're filling multiple fields, you MUST click each field individually before typing into it. NEVER type multiple values without clicking the target field first. If you type without clicking, the text goes into whatever was last focused — which is often the WRONG field. The pattern is always: click field A → type value A → click field B → type value B → click field C → type value C.\n- NEVER concatenate multiple values (name + price + period) into a single type_text call. Each piece of data goes into its own field.\n- If `type_text` returns a warning about \"same field twice in a row\", STOP — you're typing into the wrong field. Click the correct field first.\n\nCLICKING — read this:\n- For buttons and links you can SEE, click by visible text: `click({text: \"Publish release\"})`. Default matching is EXACT (case-insensitive). If exact fails (no match), the system automatically tries prefix then substring matching — but if multiple elements match at any level, it returns an ambiguity error instead of guessing.\n- If you get an ambiguity error, use a more specific text string, switch to `click({index: N})` from `get_interactive_elements`, or use a selector.\n- You can explicitly control matching with `textMatch`: `\"exact\"` (default), `\"prefix\"`, or `\"contains\"`.\n- Order of preference:\n  1. `click_ax({ref_id: \"ref_N\"})` — ref_id from get_accessibility_tree. Most reliable; carries role+name so you always know what you're clicking, and ref_ids are stable across calls.\n  2. `click({text: \"...\"})` — visible button/link text. Good fallback if the tree didn't surface the element cleanly.\n  3. `click({index: N})` — legacy index from a get_interactive_elements call MADE THIS SAME TURN.\n  4. `click({selector: \"...\"})` — when you have an exact CSS selector you're sure about.\n  5. `click({x: ..., y: ...})` — coordinates, last resort.\n\nINDEX INSTABILITY — read this:\n- Indices from `get_interactive_elements` are NOT stable identifiers. They change between page loads, between scrolls, after any DOM update, after any navigation, and even between two consecutive get_interactive_elements calls if the page mutated in between.\n- NEVER reuse an index from a previous turn. If you need to click element #N, you must have called `get_interactive_elements` in the SAME assistant turn that you're emitting the click. If you called it earlier and then did anything else, those indices are stale.\n- NEVER guess an index based on what you remember from a similar page in your training data. Pages drift; #38 on one GitHub release page may be the tag picker, but on another it's a header link.\n- If you're unsure whether an index is still valid, prefer `click({text: \"...\"})` — it re-resolves on every call.\n- DO NOT use jQuery or Playwright/Cypress pseudo-classes like `:contains()`, `:has-text()`, `:has()`, `:visible`. These are NOT valid CSS — browsers will reject them. Use `click({text: ...})` instead.\n- DO NOT guess at `data-testid`, `data-cy`, `data-test`, etc. attributes. They only exist if the site has actually defined them, and most don't. Use text or index instead.\n- Coordinates from a screenshot map 1:1 to CSS pixels — image pixel (X, Y) = click(x:X, y:Y). Don't apply any scaling.\n- If a click \"succeeds\" (returns success:true) but the page doesn't visibly change, the click probably missed. DO NOT immediately retry the same coordinates or selector. Instead: take a fresh screenshot, call get_interactive_elements, or try a different approach.\n- If clicking by text returns success but nothing happens after 1-2 attempts, the click likely landed on a non-interactive child element (label/span inside a button). Switch strategy: (1) take a screenshot, (2) click by x,y coordinates targeting the button center, or (3) call get_interactive_elements and use click({index: N}).\n\nFORMS — read this:\n- Before submitting any important form (clicking Submit/Save/Create/Send/Publish), call verify_form() to double-check that every field has the intended value.\n- verify_form() returns a structured list of all field names, types, and current values, plus a viewport screenshot. Compare each field against what you intended to type.\n- If a field is wrong, re-click it and re-type the correct value, then call verify_form() again before submitting.\n- You do NOT need verify_form for simple interactions: search boxes, single-field forms, or login forms. Use it for multi-field forms where wrong data has consequences (checkout, profile, issue creation, releases, etc.).\n- AFTER submitting a form, ALWAYS take a screenshot and read the page to confirm success BEFORE doing anything else. Do not resume other actions until you verify the submission result. Look for: a success message/toast, the newly created item appearing in a list, or a detail page for the new item. Check that the details (name, price, dates) match what you intended.\n- NEVER claim you created something unless you see CONFIRMATION on the page. If you see a list of items, check the creation date — if it says \"2 months ago\" or a past date, that is an EXISTING item, NOT something you just created. Only items with a timestamp from right now are yours.\n- If you encounter any CAPTCHA, anti-bot check, or human verification challenge, the default is to STOP and ask the user to solve it — do not invent code or DOM tricks to bypass it. The single exception: when the user has configured CapSolver (you will see a \"[CAPTCHA SOLVER]\" note in the system prompt), call `solve_captcha` ONCE. If that returns success, click the form's submit button and continue. If it errors, fall back to asking the user — do not loop on solve_captcha.\n\nMODALS & DIALOGS — read this:\n- When a modal/dialog is open, treat the rest of the page as unreachable. click({text: ...}) and get_interactive_elements are automatically scoped to the topmost dialog, so queries for buttons behind the overlay will return \"no match\" — that's intentional.\n- Finish the modal FIRST: fill its fields, then click its primary action (Create, Save, Submit, Confirm) or dismiss it (Cancel, Close, Escape key). Never scroll past a modal looking for the outer page's button — the button is dimmed and non-interactive.\n- Typical failure to avoid: a dialog opens (\"Create new tag\"), the model thinks it's done, closes the dialog, then clicks \"Publish release\" on the page behind. This skips the tag creation entirely. If a dialog was opened, the NEXT click must be inside it.\n- Before calling done, verify the dialog actually closed. If the same modal is still on screen, the submit didn't land and done will be blocked.\n- If a click returns \"Click blocked: an overlay is covering the target\", something is on top of your target. Dismiss it (Escape, close button, complete the modal) before retrying. Force-clicking with x,y hits the overlay, not your target.\n\nSCROLLING — read this:\n- Many forms and pages have content below the visible viewport. If you need to find a button, field, or section that isn't visible, use `scroll_page({direction: \"down\"})` to scroll down.\n- When filling forms, scroll down to see ALL fields before starting. Many forms have important fields (price, billing interval, description) below the fold.\n- If you can't find a button or field by text or selector, scroll down before giving up — it may be below the fold.\n- After filling visible fields, always scroll down to check for more fields before submitting.\n\nSOCIAL MEDIA DOWNLOADS — read this:\n- When the user asks to download images or videos from Facebook, Instagram, X/Twitter, LinkedIn, Reddit, Pinterest, or YouTube (thumbnails), call `download_social_media` — it is a SINGLE tool call that handles the per-site DOM, picks the right resolution, and saves to the Downloads folder. Do NOT inspect the page with `get_accessibility_tree` + `execute_js` + `download_file` to figure it out yourself; the tool already knows.\n- Defaults: on single-content pages (e.g. /photo/, /p/, /reel/, /status/.../photo/, /pin/, /comments/) it grabs the main item; pass `scroll:true` to walk a feed/profile/timeline and capture everything that lazy-loads.\n- After it returns, optionally call `list_downloads` to surface the saved filenames for the user. Some CDNs (notably media.licdn.com) block CORS and the tool will open the media in a new tab as fallback — that is expected behavior, not a failure.\n- The tool may return a `recommendation` field with shape `{ kind, message }`. This means SMD knowingly cannot handle the request well — most often YouTube full video (Widevine DRM + signatureCipher), an MSE blob the player hasn't loaded yet, or a site outside SMD's supported list. When it appears, RELAY `recommendation.message` to the user verbatim in your reply — it points them at the right external CLI tool (`yt-dlp` for video, `gallery-dl` for images) with a copy-pasteable command. Do NOT try to work around it with `execute_js`, `get_accessibility_tree`, or repeated tool calls — the recommendation exists precisely because those paths cannot help. Exception: `kind: \"mse_capture_available\"` is the one case where you SHOULD follow up — it means the MSE recorder buffered bytes while the page was open, and the message tells you to call `await SocialMediaDownloader.saveMse()` via `execute_js` to download them.\n\nLISTINGS & PAGINATION — read this:\n- Listing / search-result pages (URLs with query params like ?page=, ?p=, ?sd=, ?offset=, ?after=, &cursor=; or pages that show many product/result cards with Next/Sonraki/Suivant/下一页 controls): EXTRACT first, paginate second.\n- Required pattern: from the current page, list each visible item to the user as concrete bullets (title + price/date/identifier + canonical link), THEN move to the next page. Do not queue 2-3 pages of fetches and try to deliver everything at the end — the step budget runs out and you ship nothing.\n- Wrong tool for listings: `get_accessibility_tree({filter:\"all\"})` overflows the maxChars limit on almost every listing page (each card is dozens of nodes × dozens of cards). If you hit \"Output exceeds N character limit\" once, do NOT retry the same call with a higher maxChars — that is the wrong tool for this page. Switch to `get_accessibility_tree({filter:\"visible\", maxDepth:8-10})` for the in-viewport cards, then scroll + re-read; or use `read_page` if you need prose; or use `extract_data({type:\"links\"})` for raw href harvesting.\n- Don't refetch a URL you already fetched in this conversation. `fetch_url`, `research_url`, and `navigate` against the same URL all return the same content — reuse what you already have rather than calling another tool to \"verify\". If the previous fetch result was truncated, scroll/extract within it; don't hit the URL again.\n- Terminal-list tasks (\"give me the links\", \"list the products under $N\", \"find all matching items\"): call `done({summary})` with the items you have collected as soon as you have a useful answer. Partial-but-delivered beats complete-but-never-delivered. Don't paginate forever in pursuit of completeness.\n\n[Universal guidance — cookie banners & paywalls]\nCOOKIE / CONSENT BANNERS (OneTrust, Didomi, Cookiebot, Quantcast, Google Funding Choices, TrustArc, etc.) often open on top of page content and must be dismissed before anything else works.\n- Priority: click({text: \"Reject all\"}) > \"Reject non-essential\" / \"Only necessary\". Use click({text}) — selectors churn; labels are stable.\n- If only \"Accept all\" / \"I agree\" is exposed at the top level, click it to unblock the task. Do NOT dig into \"Manage preferences\" / \"Customize\" / \"Show details\" — it's a token sink and usually a dark-pattern dead-end.\n- After dismissing, re-screenshot or call read_page before reasoning about the page. Do NOT describe the banner text as if it were page content.\n\nPAYWALLS / SIGN-IN WALLS. Signals: \"Subscribe to continue\", \"X free articles remaining\", a gray/blurred overlay on the body, a fade-out on the text, a sign-in wall mid-article, very short article body followed by a signup form.\n- STOP and surface the paywall to the user. Report what's actually visible (headline, dek, first paragraphs).\n- DO NOT attempt to bypass: no archive.today / archive.org / 12ft.io, no cookie/localStorage clearing, no disabling JS, no reader-mode tricks, no copy-from-print-view. These are circumvention and not supported.\n- Offer alternatives: (a) search freely available sources for the same story, (b) ask whether the user has a subscription account to sign in with.\n- Never claim to have read the full article when only the preview was available.\n\nPDF TABS. If the active tab URL ends in .pdf (or is opened in Chrome's built-in PDF viewer), DO NOT use read_page / click / get_accessibility_tree / get_interactive_elements / scroll / screenshot — Chrome's PDF viewer is a chrome-extension:// page our content scripts cannot reach, so those tools either silently no-op or hit the viewer chrome (sidebar, page-number input) and you'll loop. Use `read_pdf` instead, which fetches the PDF binary and extracts text directly. By default it returns up to 50 pages / 50,000 chars; pass `fromPage`/`toPage` to read further. file:// PDFs require Chrome's \"Allow access to file URLs\" toggle on the WebBrain extension."
+      },
+      {
+        "role": "user",
+        "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://www.cnn.com/2026/05/world/example-story/index.html — Title: Example story — CNN]\n\nreload this page"
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "get_accessibility_tree",
+          "description": "PREFERRED page-reading tool. Returns the page as a flat, indented text representation of its accessibility tree. Each kept node is one line of the form `role \"accessible name\" [ref_id] href=\"...\" type=\"...\" placeholder=\"...\"`. Indentation shows hierarchy. ref_ids are STABLE across calls — re-use them in click_ax / type_ax. If the result is truncated (`truncated:true`, `hasMore:true`), call again with `page:` set to `nextPage` to read the next slice before scrolling. When you pass an explicit `maxChars` and the tree is larger, the tool now AUTO-SLICES to fit and sets `autoDegraded:true` + a `notice` field explaining how to continue — so a single oversized call no longer wastes a round-trip with empty pageContent. Use this first; read_page is a prose fallback for long-form articles only.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "filter": {
+                "type": "string",
+                "enum": [
+                  "all",
+                  "visible",
+                  "interactive"
+                ],
+                "description": "Which nodes to include. \"visible\" (in-viewport, visible) is a good default for navigation tasks. \"interactive\" shows only clickable/typeable things. \"all\" traverses the entire DOM. Defaults to \"all\" when omitted."
+              },
+              "maxDepth": {
+                "type": "number",
+                "description": "Max tree depth to descend (default 15). Lower values produce smaller output."
+              },
+              "maxChars": {
+                "type": "number",
+                "description": "Abort and return an error if the rendered tree exceeds this many characters. Protects against huge pages."
+              },
+              "ref_id": {
+                "type": "string",
+                "description": "Optional. Anchor the read at a previously-seen ref_id instead of document.body — returns just that element and its subtree. Useful for zooming into a nav, table, or dialog you already found."
+              },
+              "page": {
+                "type": "number",
+                "description": "Optional 1-based chunk number for visible/interactive trees. If a visible tree returns truncated:true/hasMore:true, call again with page: nextPage to read the next chunk of the same ordered tree before trying to scroll."
+              }
+            },
+            "required": []
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "click_ax",
+          "description": "Click an element by its ref_id from get_accessibility_tree. Scrolls into view, focuses, then clicks. ref_ids are stable across calls — a ref_id you saw last turn still works this turn, as long as the element stayed in the DOM. If you get a \"not found\" error, the element was removed or the page navigated — re-read the tree.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "ref_id": {
+                "type": "string",
+                "description": "A ref_id from get_accessibility_tree, e.g. \"ref_42\"."
+              }
+            },
+            "required": [
+              "ref_id"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "type_ax",
+          "description": "Type text into an element by its ref_id from get_accessibility_tree. Handles <input>, <textarea>, and contenteditable. Uses React-compatible native value setters so frameworks pick up the change.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "ref_id": {
+                "type": "string",
+                "description": "A ref_id from get_accessibility_tree, e.g. \"ref_42\"."
+              },
+              "text": {
+                "type": "string",
+                "description": "Text to type."
+              },
+              "clear": {
+                "type": "boolean",
+                "description": "Clear existing content before typing (default: false)."
+              }
+            },
+            "required": [
+              "ref_id",
+              "text"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "set_field",
+          "description": "Atomically focus + (optionally clear) + type text into a form field by ref_id. This is the ONE-SHOT equivalent of click_ax followed by type_ax — use this whenever you need to fill a text input / textarea / contenteditable. Prevents the common loop where the model clicks the field, then forgets to type and clicks again. Set submit:true to press Enter afterward (e.g. to submit a search).",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "ref_id": {
+                "type": "string",
+                "description": "A ref_id from get_accessibility_tree, e.g. \"ref_42\"."
+              },
+              "text": {
+                "type": "string",
+                "description": "Text to type into the field."
+              },
+              "clear": {
+                "type": "boolean",
+                "description": "Clear existing content before typing (default: true)."
+              },
+              "submit": {
+                "type": "boolean",
+                "description": "Press Enter after typing (default: false)."
+              }
+            },
+            "required": [
+              "ref_id",
+              "text"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "read_page",
+          "description": "Read the current page as PROSE — title, URL, visible text, links, forms. LEGACY read path; prefer get_accessibility_tree for UI tasks. Use read_page only when the user is asking about long-form text content (articles, READMEs, documentation). RESULT SHAPE: `text` is the article body (nav/header/footer/aside/ads stripped by default); `textSource` is the CSS selector that produced the body (or \"body (chrome-stripped)\" / \"body (raw)\" when no article container matched); `isArticlePage` is true when the page declares itself as an article via og:type, article:published_time, schema.org Article, or `<article>`. When `isArticlePage:true` AND `textSource` is a real article selector, you HAVE the complete article body — do not chase more content with fetch_url / scroll / get_accessibility_tree. NOTE: if the current tab is a PDF (URL ends in .pdf or content-type is application/pdf), this call auto-redirects to read_pdf since Chrome's PDF viewer is a chrome-extension:// page that we cannot scrape via DOM.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "includeChrome": {
+                "type": "boolean",
+                "description": "Include nav / header / footer / aside / ad-slot text in the body. Default false — when the user asks about article/README content you almost never want this. Set true only when the user is asking ABOUT the navigation menu, footer links, cookie banner, advertisement, etc."
+              }
+            },
+            "required": []
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "read_pdf",
+          "description": "Extract text from a PDF document. Use this when the current tab URL ends in .pdf or content-type is application/pdf — clicks, scrolls, screenshots, get_accessibility_tree all silently no-op against Chrome's PDF viewer because it is a chrome-extension:// page our content scripts cannot inject into. read_pdf fetches the PDF binary and parses it directly with pdfjs-dist, returning per-page text plus a `hasExtractableText` flag. Default reads pages 1–50; for longer PDFs paginate with fromPage/toPage. If `hasExtractableText` is false, the PDF is a scanned image and text extraction returned empty — only a vision-capable model can read it. For local file:// URLs, Chrome requires the user to enable \"Allow access to file URLs\" at chrome://extensions for this extension; the tool returns a descriptive error explaining this if the toggle is off.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string",
+                "description": "Absolute http(s) or file:// URL of the PDF. Defaults to the current tab URL if omitted — usually what you want."
+              },
+              "fromPage": {
+                "type": "number",
+                "description": "1-indexed first page to read. Default 1."
+              },
+              "toPage": {
+                "type": "number",
+                "description": "1-indexed last page to read (inclusive). Default fromPage+49 capped at totalPages. Pages 51+ require a follow-up call with fromPage advanced."
+              },
+              "maxChars": {
+                "type": "number",
+                "description": "Hard cap on returned text length across all requested pages. Default 50000. Set lower if you only need a summary; the result has `truncated:true` if it hits the cap."
+              }
+            },
+            "required": []
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "screenshot",
+          "description": "Capture a screenshot of the visible area of the current tab. Returns a base64-encoded PNG image. Default: native device resolution — higher visual fidelity, better for reading small text. IMPORTANT: at native resolution on HiDPI displays, image pixels are NOT CSS pixels, so you CANNOT read (X,Y) from the image and pass them to click({x,y}). If you plan to pixel-click, pass `coord_aligned: true` to force a CSS-pixel-aligned capture where image pixel (X,Y) maps exactly to click(x:X, y:Y). Better: prefer click_ax({ref_id}) after get_accessibility_tree — avoids coordinate math entirely. The result's `page` field reports `documentTextChars` (total visible text on the page) and `visibleTextChars` (text in the current viewport). If the screenshot LOOKS blank but `documentTextChars` is in the thousands, the page is not empty — your image is stale mid-lazy-load (ads, hero images, fonts still arriving). Wait or call read_page / get_accessibility_tree instead of declaring the page empty. To SAVE the screenshot to the user's Downloads folder, pass `save:true` — this writes the PNG via chrome.downloads.download directly from the service worker, bypassing the page's CSP entirely (so it works on Google Meet / Stripe / banking pages where execute_js fails). Do NOT try to save via execute_js + canvas + anchor click — strict-CSP sites block it.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "coord_aligned": {
+                "type": "boolean",
+                "description": "Align the capture to CSS pixels (scale=1) so image (X,Y) == click (X,Y). Use this immediately before click({x,y}). Default false (native device resolution)."
+              },
+              "save": {
+                "type": "boolean",
+                "description": "Also save the PNG to the user's Downloads folder. Default false. Use this when the user explicitly asks to \"download\", \"save\", or \"export\" the screenshot. The file is saved via chrome.downloads.download from the service worker — works even on pages with strict CSP that block in-page JS download tricks."
+              },
+              "filename": {
+                "type": "string",
+                "description": "Optional filename when `save:true`. Defaults to webbrain-screenshot-<timestamp>.png. Don't include directory; downloads always land in the Downloads folder."
+              }
+            },
+            "required": []
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "get_interactive_elements",
+          "description": "Get all interactive elements on the page (buttons, links, inputs, etc.) with their positions and attributes. Returns an indexed list you can reference by index.",
+          "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "click",
+          "description": "Click an element. FOUR ways to use it: (1) CSS selector, (2) visible text, (3) element index from get_interactive_elements, (4) x/y coordinates. For text clicks, default matching is EXACT and case-insensitive. You can opt into broader matching with `textMatch: \"prefix\"` or `textMatch: \"contains\"`. Note: jQuery/Playwright pseudo-classes like `:contains()` and `:has-text()` are NOT valid CSS and will fail; use the `text` parameter instead. COORDINATES are CSS pixels; if you are reading (x,y) off a screenshot, that screenshot MUST have been captured with screenshot({coord_aligned: true}) or the click will land at the wrong position on HiDPI displays. Prefer click_ax({ref_id}) — it avoids this entirely.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string",
+                "description": "Visible text to match against clickable elements."
+              },
+              "textMatch": {
+                "type": "string",
+                "enum": [
+                  "exact",
+                  "prefix",
+                  "contains"
+                ],
+                "description": "Text matching mode for `text`. Default is `exact` (safest)."
+              },
+              "selector": {
+                "type": "string",
+                "description": "CSS selector for the element to click"
+              },
+              "index": {
+                "type": "number",
+                "description": "Index from get_interactive_elements result"
+              },
+              "x": {
+                "type": "number",
+                "description": "X coordinate to click"
+              },
+              "y": {
+                "type": "number",
+                "description": "Y coordinate to click"
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "type_text",
+          "description": "Type text into an input field. TWO WAYS to use it: (1) provide a CSS selector to find the field by selector, or (2) provide ONLY the text (no selector) to type into the currently focused element — use this RIGHT AFTER clicking a field. The second form is the most reliable for forms with weird selectors (e.g. GitHub release[name], Stripe nested inputs): click the field with `click({text: ...})` or `click({index: ...})` or `click_ax({ref_id: ...})`, then immediately call `type_text({text: \"...\"})` with no selector. DO NOT pass an `index` parameter — type_text does not support indices. To type into an indexed field, call `click({index: N})` first, then `type_text({text: \"...\"})`.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "selector": {
+                "type": "string",
+                "description": "OPTIONAL CSS selector for the input element. Omit to type into the currently focused element."
+              },
+              "text": {
+                "type": "string",
+                "description": "Text to type."
+              },
+              "clear": {
+                "type": "boolean",
+                "description": "Clear existing content before typing (default: false). Works for both forms."
+              }
+            },
+            "required": [
+              "text"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "press_keys",
+          "description": "Press keyboard keys. V1 supports Escape, Tab, and Enter. Useful for dismissing modals/dropdowns (Escape), moving focus (Tab), and confirming dialogs/forms (Enter).",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string",
+                "enum": [
+                  "Escape",
+                  "Tab",
+                  "Enter"
+                ],
+                "description": "Key to press."
+              },
+              "repeat": {
+                "type": "number",
+                "description": "How many times to press the key (default: 1, max: 3)."
+              }
+            },
+            "required": [
+              "key"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "scroll",
+          "description": "Scroll the page in a given direction.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "direction": {
+                "type": "string",
+                "enum": [
+                  "up",
+                  "down",
+                  "top",
+                  "bottom"
+                ],
+                "description": "Scroll direction"
+              },
+              "amount": {
+                "type": "number",
+                "description": "Pixels to scroll (default: 500)"
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "navigate",
+          "description": "Navigate the current tab to a URL.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string",
+                "description": "URL to navigate to"
+              }
+            },
+            "required": [
+              "url"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "extract_data",
+          "description": "Extract structured data from the page (tables, headings, or images).",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "tables",
+                  "headings",
+                  "images"
+                ],
+                "description": "Type of data to extract"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "wait_for_element",
+          "description": "Wait for an element matching a CSS selector to appear on the page.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "selector": {
+                "type": "string",
+                "description": "CSS selector to wait for"
+              },
+              "timeout": {
+                "type": "number",
+                "description": "Max wait time in ms (default: 5000)"
+              }
+            },
+            "required": [
+              "selector"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "get_selection",
+          "description": "Get the currently selected/highlighted text on the page.",
+          "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "execute_js",
+          "description": "Execute custom JavaScript code on the page and return the result. Use for complex operations not covered by other tools.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "description": "JavaScript code to execute"
+              }
+            },
+            "required": [
+              "code"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "new_tab",
+          "description": "Open a new browser tab with the given URL.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string",
+                "description": "URL to open"
+              }
+            },
+            "required": [
+              "url"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "done",
+          "description": "Signal that the task is FULLY complete. Only call this when you have successfully accomplished the user's request OR have exhausted every reasonable alternative (at least 3-4 different approaches). Provide a summary of what was accomplished. Do NOT call this prematurely — keep trying different strategies if the current one fails. Credentials hygiene: when summarizing, prefer generic references (\"logged in with the provided password\", \"API key updated\") over echoing the literal value — keeps summaries tidy and avoids needlessly persisting secrets in trace logs. If the user explicitly asked you to show them a value (a recovery code, an API key on the page, etc.), including the value IS the answer and you should include it.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "summary": {
+                "type": "string",
+                "description": "Summary of what was accomplished."
+              }
+            },
+            "required": [
+              "summary"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "full_page_screenshot",
+          "description": "Capture a full-page screenshot that includes all scrollable content. Pixel-perfect capture via CDP. Returns a base64-encoded PNG image. Use this instead of screenshot when you need to see the entire page. To SAVE the result to Downloads, pass `save:true` (same path as `screenshot` — runs from the service worker, immune to page CSP).",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "save": {
+                "type": "boolean",
+                "description": "Also save the PNG to the user's Downloads folder. Default false."
+              },
+              "filename": {
+                "type": "string",
+                "description": "Optional filename when `save:true`. Defaults to webbrain-fullpage-<timestamp>.png."
+              }
+            },
+            "required": []
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "clarify",
+          "description": "Pause the run and ask the user a clarifying question. The run resumes when the user answers; the tool result is the user's reply. USE ONLY WHEN MATERIALLY AMBIGUOUS — when the task cannot be resolved by reading the page, when a wrong guess would cost the user real time/money/data, or when the user's request has two equally-likely interpretations that lead to different actions (e.g. \"my API key\" on a site with WP REST app-passwords AND multiple plugin keys). DO NOT use as a confidence crutch: do not call before every step, do not call to confirm tool calls that are clearly correct, do not call instead of doing the obvious thing. Prefer doing the most-likely interpretation and reporting it in `done.summary` for trivial ambiguities. Each clarify call breaks user flow; budget at most 1-2 per run.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "question": {
+                "type": "string",
+                "description": "The question to show the user. One sentence, plain English. Frame it as a real either/or, not \"is this OK?\" — e.g. \"Did you mean the WordPress REST API application password, or a specific plugin's API key?\" not \"Should I proceed?\""
+              },
+              "options": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Optional list of 2-4 suggested answers shown as buttons. The user can also type a custom answer. Omit if the question is genuinely open-ended."
+              },
+              "reason": {
+                "type": "string",
+                "description": "Optional one-sentence justification for why you cannot decide on your own. The user sees this — be honest (\"I see Rank Math Content AI and Jetpack settings pages, both have API key fields\" beats \"I need more info\")."
+              }
+            },
+            "required": [
+              "question"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "get_shadow_dom",
+          "description": "Get all shadow DOM hosts on the page with their mode (open/closed). Use shadow_dom_query to interact with elements inside shadow DOMs.",
+          "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "shadow_dom_query",
+          "description": "Query and interact with elements inside shadow DOMs. Works with both open and closed shadow DOMs via CDP. Returns matched elements with their shadow root context.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "selector": {
+                "type": "string",
+                "description": "CSS selector to query inside shadow DOMs"
+              },
+              "shadowPath": {
+                "type": "string",
+                "description": "Path to shadow host (e.g., \"div#host >>> span.slot\")"
+              }
+            },
+            "required": [
+              "selector"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "get_frames",
+          "description": "Get all frames (including cross-origin iframes) on the page with their URLs, IDs, and hierarchy.",
+          "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "iframe_read",
+          "description": "Read content from iframes — INCLUDING cross-origin iframes (Stripe dashboards, embedded forms, etc.). Returns text content from all frames matching the optional URL filter, or all frames if no filter given. Works on cross-origin iframes because the extension injects directly into each frame, bypassing same-origin policy.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "urlFilter": {
+                "type": "string",
+                "description": "Optional substring to filter frames by URL (e.g. \"stripe.com\" to only read Stripe iframes). Omit to read all frames."
+              },
+              "selector": {
+                "type": "string",
+                "description": "Optional CSS selector to extract specific elements within each frame. Omit to get the full body text."
+              }
+            },
+            "required": []
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "iframe_click",
+          "description": "Click an element inside an iframe — INCLUDING cross-origin iframes. Use this when the target is inside an embedded form (Stripe, payment widgets, embedded apps, etc.). Works on cross-origin frames via extension script injection.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "urlFilter": {
+                "type": "string",
+                "description": "Optional substring to filter which iframe to act on (e.g. \"stripe.com\"). If omitted, the first frame containing a matching selector is used."
+              },
+              "selector": {
+                "type": "string",
+                "description": "CSS selector for the element to click inside the iframe."
+              }
+            },
+            "required": [
+              "selector"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "iframe_type",
+          "description": "Type text into an input/textarea inside an iframe — INCLUDING cross-origin iframes. Use this for filling forms inside embedded widgets (Stripe checkout, payment forms, etc.).",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "urlFilter": {
+                "type": "string",
+                "description": "Optional substring to filter which iframe to act on."
+              },
+              "selector": {
+                "type": "string",
+                "description": "CSS selector for the input element inside the iframe."
+              },
+              "text": {
+                "type": "string",
+                "description": "Text to type into the field."
+              },
+              "clear": {
+                "type": "boolean",
+                "description": "Whether to clear the field before typing. Default false."
+              }
+            },
+            "required": [
+              "selector",
+              "text"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "fetch_url",
+          "description": "Fetch a URL directly from the background and return its text content. Cookies are attached only when the URL shares the registrable domain (eTLD+1) of the active tab — same-site reads work as the signed-in user; cross-site reads are anonymous. Best for: JSON APIs, RSS, plain HTML, raw text files, GitHub raw blobs, REST endpoints. Auto-trims HTML to readable text. NOT good for SPAs that need JS rendering — use research_url for those. Returns up to ~192000 chars of text or ~96000 chars of pretty-printed JSON — generous enough to fit most articles in a single call; if the response was still truncated the result includes `truncated: true` and `originalLength` (re-fetch with section or page-range params, don't blindly retry the same URL). DO NOT use fetch_url to read the page the user is currently looking at — call read_page or get_accessibility_tree instead. fetch_url is for content on OTHER URLs.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string",
+                "description": "URL to fetch"
+              },
+              "method": {
+                "type": "string",
+                "description": "HTTP method (default GET)"
+              },
+              "headers": {
+                "type": "object",
+                "description": "Optional request headers"
+              },
+              "body": {
+                "type": "string",
+                "description": "Optional request body for POST/PUT"
+              }
+            },
+            "required": [
+              "url"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "research_url",
+          "description": "Open a URL in a hidden background tab, wait for it to fully render (including JS), extract the main content, and close the tab. Use this for SPAs, dashboards, news sites, anything that requires JS to populate the page. Slower (~2-5s) than fetch_url but handles modern sites. Returns title, text (~8000 chars), and outbound links.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string",
+                "description": "URL to open and read"
+              },
+              "timeout": {
+                "type": "number",
+                "description": "Max wait for load in ms (default 8000, max 30000)"
+              }
+            },
+            "required": [
+              "url"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "list_downloads",
+          "description": "List the user's most recent downloads with state, filename, source URL, and bytes received. Use this to verify a download you triggered actually completed.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "limit": {
+                "type": "number",
+                "description": "Max number of downloads to return (default 10, max 50)"
+              }
+            },
+            "required": []
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "read_downloaded_file",
+          "description": "Read the content of a previously downloaded file. Returns text for text-y files (txt, csv, json, html, xml, code, log, etc.) up to ~16k chars. Returns base64 for small binary files. For large binaries, returns the on-disk path. Pass the downloadId from list_downloads or download_file.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "downloadId": {
+                "type": "number",
+                "description": "Download ID from list_downloads or download_file"
+              }
+            },
+            "required": [
+              "downloadId"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "download_resource_from_page",
+          "description": "Download a resource (image, video, audio, file) from the current page by selector. Reads src/href/currentSrc/data-src. Handles blob: URLs (custom viewers, in-browser uploads). The file is saved to the user's downloads folder.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "selector": {
+                "type": "string",
+                "description": "CSS selector for the element with the resource URL"
+              },
+              "filename": {
+                "type": "string",
+                "description": "Optional filename for the saved file"
+              }
+            },
+            "required": [
+              "selector"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "download_files",
+          "description": "Download multiple files in parallel (max 3 concurrent, max 50 total). Returns per-URL results with downloadIds. Use list_downloads after to verify completion.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "urls": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Array of file URLs to download"
+              }
+            },
+            "required": [
+              "urls"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "download_file",
+          "description": "Download a single file from a URL. The file will be saved to the downloads folder.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string",
+                "description": "URL of the file to download"
+              },
+              "filename": {
+                "type": "string",
+                "description": "Name to save the file as"
+              }
+            },
+            "required": [
+              "url"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "upload_file",
+          "description": "Upload a file to a file input element. The file must exist on the local filesystem.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "selector": {
+                "type": "string",
+                "description": "CSS selector for the file input element"
+              },
+              "filePath": {
+                "type": "string",
+                "description": "Full path to the local file to upload"
+              }
+            },
+            "required": [
+              "selector",
+              "filePath"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "scratchpad_write",
+          "description": "Write to your persistent scratchpad — a note pinned near the top of your context that survives conversation summarization. Use it for long tasks where facts need to persist across many tool calls: download IDs you've collected, file paths on disk, pages/items you've already processed, your running plan, intermediate CSV rows you've built up. Without the scratchpad, older tool outcomes are compressed into a short summary as context fills up, so you WILL lose specific details (filenames, counts, which items are done) after ~15 tool turns. Default action appends `text` as a new line. Pass `replace:true` to overwrite the whole pad when you want to compact it. Keep entries short and factual — one line per fact is ideal. Read back your own pad anytime; it's visible in every future prompt.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string",
+                "description": "The note to record. One line ideally. Examples: \"Downloaded pages 1-69 as page{N}.html, ids 700-768.\" / \"Pages extracted so far: 1,2,3. Next: 4.\" / \"Plan: read each downloaded file, regex <tr> rows, emit CSV.\""
+              },
+              "replace": {
+                "type": "boolean",
+                "description": "If true, replace the entire scratchpad with `text`. Default false — appends as a new line."
+              }
+            },
+            "required": [
+              "text"
+            ]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "verify_form",
+          "description": "Read all form field values and capture a viewport screenshot. Call this BEFORE submitting important forms to confirm every field has the intended value. Returns field names, types, current values, plus a screenshot.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "selector": {
+                "type": "string",
+                "description": "CSS selector for the <form> element. If omitted, uses the form containing the focused element, or the first form on the page."
+              }
+            },
+            "required": []
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "download_social_media",
+          "description": "One-shot media downloader for major social sites: Facebook, Instagram, X/Twitter, LinkedIn, Reddit, Pinterest, YouTube (thumbnails only). Auto-detects the active site, picks the main photo/video on single-content pages (/photo/, /p/, /reel/, /status/.../photo/, /pin/, /comments/), or every media item on feeds when scroll:true. Handles per-site DOM quirks, upgrades to max resolution (X name=orig, Pinterest /originals/), pairs Reddit DASH video+audio, stitches HLS (incl. AES-128 encrypted), and falls back to opening in a new tab when a CDN blocks CORS. PREFER this over execute_js / download_file / download_resource_from_page whenever the user asks to \"download this image/video\", \"save this photo\", \"grab the media\" on a supported site — it is a single call instead of figuring DOM selectors out manually. Files land in the browser Downloads folder; call list_downloads afterwards to confirm. RESULT SHAPE: `count` is total URLs found; `triggeredCount` is how many we tried to download; `completedCount` is how many were successfully fetched-and-saved; `openedInTabCount` are URLs the browser blocked from direct fetch (we opened them in a new tab — popup-blocking usually kills these AFTER the first one, so a count > 1 here means most did NOT actually save); `failedCount` are hard errors. ALWAYS report honestly: if `completedCount` is much smaller than `count`, say so — do not claim \"downloads in progress in the background\"; the run is fully synchronous and what is not in `completedCount` is not coming. May also include a `recommendation` object ({kind, message}) when the in-browser path cannot fully handle the request (YouTube DRM video, MSE blob with nothing buffered yet, unsupported site, empty result). When present, relay `recommendation.message` verbatim to the user — it names the right external CLI tool (yt-dlp or gallery-dl) and includes a copy-pasteable command.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "auto",
+                  "main",
+                  "all"
+                ],
+                "description": "\"auto\" (default): main media on single-content pages, everything on feeds. \"main\": force just the primary photo/video on the page. \"all\": every media item currently in the DOM."
+              },
+              "scroll": {
+                "type": "boolean",
+                "description": "Scroll the feed and collect media as new items lazy-load. Only useful on feed/profile/timeline pages. Default false."
+              },
+              "limit": {
+                "type": "number",
+                "description": "Max number of files to download. Default unlimited."
+              }
+            },
+            "required": []
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "solve_captcha",
+          "description": "Solve a CAPTCHA on the current page using the CapSolver API (only available when the user has enabled CapSolver and provided an API key in Settings → CAPTCHA). If `type` and `websiteKey` are omitted, the tool scans the page for known widgets (reCAPTCHA v2/v3, hCaptcha, Cloudflare Turnstile) and uses what it finds. Returns the solution token and whether it was injected into the page; you usually still need to click the form's submit button afterward. On failure (no CapSolver key configured, unknown captcha type, API error, timeout) the tool returns `{ success: false, error: \"...\" }` — fall back to asking the user to solve it manually.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "recaptcha_v2",
+                  "recaptcha_v3",
+                  "hcaptcha",
+                  "turnstile",
+                  "image_to_text"
+                ],
+                "description": "CAPTCHA type. Omit to auto-detect from the page DOM."
+              },
+              "websiteKey": {
+                "type": "string",
+                "description": "Site key from the captcha widget's data-sitekey attribute. Auto-detected when omitted."
+              },
+              "isInvisible": {
+                "type": "boolean",
+                "description": "reCAPTCHA v2 / hCaptcha only — true when the widget uses invisible mode (no visible checkbox). Auto-detected when omitted."
+              },
+              "pageAction": {
+                "type": "string",
+                "description": "reCAPTCHA v3 only — the action name the page uses (e.g. \"login\", \"submit\"). Auto-detected from data-action when present."
+              },
+              "minScore": {
+                "type": "number",
+                "description": "reCAPTCHA v3 only — minimum score requested (0.3 is the usual lower bound, 0.7+ is hard)."
+              },
+              "imageBase64": {
+                "type": "string",
+                "description": "image_to_text only — base64-encoded image bytes (no data: prefix)."
+              },
+              "inject": {
+                "type": "boolean",
+                "description": "After solving, inject the token into the page's response field (textarea[name=g-recaptcha-response] etc.) and fire the widget's callback. Default true. Set false to get just the token back."
+              }
+            },
+            "required": []
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "record_tab",
+          "description": "Start recording the current tab to a .webm file in the user's Downloads folder. Captures the tab's video and audio plus (by default) the user's microphone, mixed via Web Audio so both sides of a call are present in the final file. The recording runs in an offscreen document and survives tab switches — only the user (via the in-banner Stop button) or a follow-up `stop_recording` tool call ends it. Use this when the user says \"record this\", \"record the meeting\", \"start recording\", or similar. Works on Google Meet and the Zoom web client. Does NOT work on the native Zoom desktop app (not in a browser tab) or on chrome:// pages. If `transcribe:true`, a Whisper transcript is produced after stop using whichever OpenAI-compatible provider (openai, groq, etc.) the user has configured — saved as a sibling .txt file. Returns `{ ok:true, state:{...} }` on success; on failure (already recording, tabCapture refused, no permission) returns `{ ok:false, error }` — relay the error to the user.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "video": {
+                "type": "boolean",
+                "description": "Include the tab's video track. Default true. Set false for an audio-only recording (much smaller file, faster transcription)."
+              },
+              "mic": {
+                "type": "boolean",
+                "description": "Include the user's microphone (mixed with tab audio). Default true. Set false to record only what the tab is playing."
+              },
+              "transcribe": {
+                "type": "boolean",
+                "description": "After the recording stops, run Whisper transcription and save the transcript as a .txt next to the .webm. Default false. Requires an OpenAI / Groq / local Whisper-compatible provider configured in Settings → Providers."
+              }
+            },
+            "required": []
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "stop_recording",
+          "description": "Stop the active tab recording started with `record_tab` (or via the user clicking the in-banner Stop button). Saves the .webm to Downloads and, if `transcribe` was true at start, kicks off the Whisper run. Returns `{ ok:true, filename, downloadId, sizeBytes, durationMs }`. If there's no active recording, returns `{ ok:false, error }`. After this call, do not call `record_tab` again unless the user explicitly asks for another recording.",
+          "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          }
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "id": "015",
+  "category": "tool-error-pivot",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://amazon.com/s?k=earbuds",
+    "title": "Amazon.com : earbuds"
+  },
+  "description": "get_accessibility_tree(filter:\"all\") overflowed maxChars on a listing page. Switch filter, not increase the limit.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://amazon.com/s?k=earbuds — Title: Amazon.com : earbuds]\n\nlist the first 5 results with prices"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_i_1744yq",
+          "type": "function",
+          "function": {
+            "name": "get_accessibility_tree",
+            "arguments": "{\"filter\":\"all\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_i_1744yq",
+      "name": "get_accessibility_tree",
+      "content": "{\"success\":false,\"error\":\"Output exceeds 50000 character limit. Try filter:\\\"visible\\\" or a smaller maxDepth.\"}"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "get_accessibility_tree",
+      "args": {
+        "filter": "visible",
+        "maxDepth": 10
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "get_accessibility_tree({filter:\"all\", maxChars:200000})",
+        "reason": "Raising maxChars is the failure called out in the system prompt — switch tool/filter instead."
+      },
+      {
+        "match": "get_accessibility_tree({filter:\"all\"})",
+        "reason": "Identical retry."
+      }
+    ],
+    "successRubric": "Switch to filter:\"visible\" or read_page or extract_data. Do not raise maxChars. The system prompt specifically warns against the latter."
+  }
+}

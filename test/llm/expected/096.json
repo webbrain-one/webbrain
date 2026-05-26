@@ -1,0 +1,10 @@
+{
+  "id": "096",
+  "idealFirstToolCall": {
+    "name": "done",
+    "args": {
+      "summary": "I don't have a text-to-speech tool. Firefox's Reader Mode (the icon in the address bar) has a \"Listen\" button that reads articles aloud."
+    }
+  },
+  "successRubric": "No TTS tool. done with honest fallback (Reader Mode's Listen feature) is correct."
+}

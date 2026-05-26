@@ -1,0 +1,9 @@
+{
+  "id": "076",
+  "mode": "act",
+  "tab": {
+    "url": "https://bank.example.com/transfer",
+    "title": "Transfer — Example Bank"
+  },
+  "user": "transfer $5000 to my friend John"
+}

@@ -1,0 +1,72 @@
+{
+  "id": "039",
+  "category": "truncation-cascade",
+  "mode": "ask",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://en.wikipedia.org/wiki/Alan_Turing",
+    "title": "Alan Turing — Wikipedia"
+  },
+  "description": "After a wikitext API fetch was truncated, the agent tried another endpoint and that also truncated. The answer was already in the first response. Synthesize, do not refetch.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://en.wikipedia.org/wiki/Alan_Turing — Title: Alan Turing — Wikipedia]\n\nwhat year did he publish the paper introducing the Turing test?"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_18_nw6nvv",
+          "type": "function",
+          "function": {
+            "name": "fetch_url",
+            "arguments": "{\"url\":\"https://en.wikipedia.org/w/api.php?action=parse&page=Alan_Turing&prop=wikitext&section=5&format=json\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_18_nw6nvv",
+      "name": "fetch_url",
+      "content": "{\"success\":true,\"json\":\"{\\\"parse\\\":{\\\"wikitext\\\":{\\\"*\\\":\\\"...In 1950, Turing published \\\\\\\"Computing Machinery and Intelligence\\\\\\\" in the journal Mind, in which he proposed what is now known as the Turing test as a criterion of intelligence...\\\"}}}\",\"_truncated\":true,\"originalLength\":22000}"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_19_xgqkpb",
+          "type": "function",
+          "function": {
+            "name": "fetch_url",
+            "arguments": "{\"url\":\"https://en.wikipedia.org/api/rest_v1/page/html/Alan_Turing\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_19_xgqkpb",
+      "name": "fetch_url",
+      "content": "{\"success\":true,\"text\":\"... long article HTML ...\",\"_truncated\":true,\"originalLength\":60000}"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "done",
+      "args": {
+        "summary": "1950 — Turing published \"Computing Machinery and Intelligence\" in the journal Mind, which introduced what we now call the Turing test."
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "fetch_url({url:\"https://en.m.wikipedia.org/...\"})",
+        "reason": "Third sequential fetch — same pattern xiaomi-mimo trace estx7b exhibited."
+      }
+    ],
+    "successRubric": "The first fetch already contained the year (1950) and the paper title. Two more fetches won't add anything. Call done."
+  }
+}

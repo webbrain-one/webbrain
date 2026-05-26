@@ -1,0 +1,52 @@
+{
+  "id": "073",
+  "category": "cross-lingual",
+  "mode": "ask",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://en.wikipedia.org/wiki/Closure_(computer_programming)",
+    "title": "Closure — Wikipedia"
+  },
+  "description": "Turkish user, English wiki article. Read + answer in Turkish.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://en.wikipedia.org/wiki/Closure_(computer_programming) — Title: Closure — Wikipedia]\n\nkapanış (closure) nedir, bir cümlede özetle"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_2l_m7l80p",
+          "type": "function",
+          "function": {
+            "name": "read_page",
+            "arguments": "{}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_2l_m7l80p",
+      "name": "read_page",
+      "content": "{\"text\":\"A closure is a function bundled with the lexical environment...\"}"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "done",
+      "args": {
+        "summary": "Kapanış (closure), bir fonksiyonun tanımlandığı leksik çevre ile birlikte paketlenmiş halidir — yani dış kapsamın değişkenlerine, o kapsam döndükten sonra bile erişebilir."
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "done({summary:\"A closure is a function bundled with...\"})",
+        "reason": "User asked in Turkish — answer in Turkish."
+      }
+    ],
+    "successRubric": "Answer in the user's language. Read English source, translate gist into Turkish."
+  }
+}

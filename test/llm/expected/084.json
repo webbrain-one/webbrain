@@ -1,0 +1,10 @@
+{
+  "id": "084",
+  "idealFirstToolCall": {
+    "name": "done",
+    "args": {
+      "summary": "A closure is a function that \"remembers\" the variables of the lexical scope it was defined in, even after that outer scope has returned. It lets you write functions that carry private state without using objects."
+    }
+  },
+  "successRubric": "Short factual answer via done. No browsing needed. The exact wording can vary; the rubric is \"explains lexical capture in 2 sentences\"."
+}

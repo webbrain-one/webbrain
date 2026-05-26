@@ -1,0 +1,10 @@
+{
+  "id": "022",
+  "idealFirstToolCall": {
+    "name": "click",
+    "args": {
+      "text": "Search"
+    }
+  },
+  "successRubric": "Focuses the Amazon search box and types \"noise cancelling headphones\", optionally followed by use of the price filter. Direct navigation to /s?k=noise+cancelling+headphones is also acceptable. Type-then-click-search or click-then-type are both fine."
+}

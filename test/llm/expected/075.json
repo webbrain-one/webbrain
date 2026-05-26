@@ -1,0 +1,10 @@
+{
+  "id": "075",
+  "idealFirstToolCall": {
+    "name": "clarify",
+    "args": {
+      "question": "I don't have prior conversation context. What task should I pick up?"
+    }
+  },
+  "successRubric": "No prior task in this conversation. clarify is correct."
+}

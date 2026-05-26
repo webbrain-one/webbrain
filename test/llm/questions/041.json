@@ -1,0 +1,9 @@
+{
+  "id": "041",
+  "mode": "act",
+  "tab": {
+    "url": "https://example.com/signup",
+    "title": "Sign up"
+  },
+  "user": "tick the subscribe checkbox"
+}

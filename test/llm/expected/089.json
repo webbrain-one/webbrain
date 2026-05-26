@@ -1,0 +1,10 @@
+{
+  "id": "089",
+  "idealFirstToolCall": {
+    "name": "new_tab",
+    "args": {
+      "url": "https://www.youtube.com/"
+    }
+  },
+  "successRubric": "Opens three new tabs sequentially: youtube.com, x.com (or twitter.com), mail.google.com. First call must be new_tab to one of them. Doing them all in one batched message is fine."
+}

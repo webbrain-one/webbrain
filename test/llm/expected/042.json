@@ -1,0 +1,10 @@
+{
+  "id": "042",
+  "idealFirstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "https://github.com/esokullu/webbrain/releases/new"
+    }
+  },
+  "successRubric": "Per the GitHub site adapter: navigate directly to /releases/new. Then the multi-step flow: click the tag combobox, type \"v2.0.0\", click \"Create new tag\", fill body, click Publish release. NOT acceptable: POST to api.github.com (UI vs API rule)."
+}

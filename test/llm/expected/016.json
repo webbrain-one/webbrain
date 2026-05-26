@@ -1,0 +1,10 @@
+{
+  "id": "016",
+  "idealFirstToolCall": {
+    "name": "click",
+    "args": {
+      "text": "Search"
+    }
+  },
+  "successRubric": "Focuses the YouTube search box (click({text:\"Search\"}) or click on the search input by selector), then types \"lo-fi study music\", then submits (Enter or click search icon). Acceptable alternative: navigate directly to https://www.youtube.com/results?search_query=lo-fi+study+music."
+}

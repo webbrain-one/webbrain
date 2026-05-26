@@ -1,0 +1,60 @@
+{
+  "id": "010",
+  "category": "loop-bad-url",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "description": "Navigation to a malformed URL (missing scheme + typo) silently became a search. Re-interpret what the user meant.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: about:home — Title: New Tab]\n\ngo to githhub.com"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_d_dytgas",
+          "type": "function",
+          "function": {
+            "name": "navigate",
+            "arguments": "{\"url\":\"githhub.com\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_d_dytgas",
+      "name": "navigate",
+      "content": "{\"success\":false,\"error\":\"navigate: invalid URL (githhub.com — missing scheme or malformed). Did you mean https://github.com?\"}"
+    },
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: about:home — Title: New Tab]\n\nyes that"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "navigate",
+      "args": {
+        "url": "https://github.com"
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "navigate({url:\"githhub.com\"})",
+        "reason": "Same malformed URL."
+      },
+      {
+        "match": "clarify({question:\"...\"})",
+        "reason": "User already confirmed — clarify would be unnecessary friction."
+      }
+    ],
+    "successRubric": "Correct the typo (githhub → github) and navigate. No clarify needed — the previous error message already proposed the fix and the user agreed."
+  }
+}

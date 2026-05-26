@@ -1,0 +1,8 @@
+{
+  "id": "100",
+  "idealFirstToolCall": {
+    "name": "read_page",
+    "args": {}
+  },
+  "successRubric": "Reads the search-results page, picks the item with the highest visible rating, and reports it. Acceptable: extract_data({type:\"tables\"}) is not appropriate; read_page or get_accessibility_tree with filter:\"visible\" are correct."
+}

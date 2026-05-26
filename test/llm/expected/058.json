@@ -1,0 +1,8 @@
+{
+  "id": "058",
+  "idealFirstToolCall": {
+    "name": "read_page",
+    "args": {}
+  },
+  "successRubric": "First read the folder listing to enumerate zip filenames (read_page or get_interactive_elements), THEN call download_files with the .raw URLs for each zip. Acceptable: extract_data({type:\"links\"}) is NOT valid (no \"links\" type) — agent should use get_interactive_elements or read_page."
+}

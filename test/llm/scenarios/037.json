@@ -1,0 +1,57 @@
+{
+  "id": "037",
+  "category": "truncation-cascade",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://www.example.com/long-doc",
+    "title": "Long Documentation"
+  },
+  "description": "read_page truncated; agent has the headers but the answer is below the fold. Use targeted extraction, not refetch.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://www.example.com/long-doc — Title: Long Documentation]\n\nwhat does section 5 say?"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_16_sw7nm1",
+          "type": "function",
+          "function": {
+            "name": "read_page",
+            "arguments": "{}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_16_sw7nm1",
+      "name": "read_page",
+      "content": "{\"url\":\"https://www.example.com/long-doc\",\"title\":\"Long Documentation\",\"text\":\"## 1 Introduction\\n...\\n## 2 Setup\\n...\\n## 3 Configuration\\n...\\n## 4 Usage\\n...\",\"_truncated\":true,\"originalLength\":50000}"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "scroll",
+      "args": {
+        "direction": "down",
+        "amount": 3000
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "read_page({})",
+        "reason": "Re-reading without scrolling won't reveal section 5."
+      },
+      {
+        "match": "fetch_url({url:\"https://www.example.com/long-doc\"})",
+        "reason": "Same URL."
+      }
+    ],
+    "successRubric": "Scroll down to bring section 5 into view, then read_page again. read_page is viewport-aware."
+  }
+}

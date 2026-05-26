@@ -1,0 +1,10 @@
+{
+  "id": "046",
+  "idealFirstToolCall": {
+    "name": "click",
+    "args": {
+      "text": "Fork"
+    }
+  },
+  "successRubric": "Clicks the Fork button. Acceptable: click({text:\"Create a new fork\"}) if there's a dropdown."
+}

@@ -1,0 +1,8 @@
+{
+  "id": "030",
+  "idealFirstToolCall": {
+    "name": "get_interactive_elements",
+    "args": {}
+  },
+  "successRubric": "Calls get_interactive_elements (which lists clickable elements including links) OR read_page and parses links out. extract_data does not have a \"links\" type so calling it that way would be wrong."
+}

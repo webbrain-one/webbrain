@@ -1,0 +1,92 @@
+{
+  "id": "058",
+  "category": "stale-refid",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://example.com/page",
+    "title": "Example"
+  },
+  "description": "Used a ref_id from a filtered tree on an unfiltered turn (or vice versa).",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://example.com/page — Title: Example]\n\nclick the second button"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_28_m7jao0",
+          "type": "function",
+          "function": {
+            "name": "get_accessibility_tree",
+            "arguments": "{\"filter\":\"visible\",\"maxDepth\":5}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_28_m7jao0",
+      "name": "get_accessibility_tree",
+      "content": "{\"pageContent\":\"button \\\"First\\\" [ref_2], button \\\"Second\\\" [ref_5]\"}"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_29_4xgnmy",
+          "type": "function",
+          "function": {
+            "name": "get_accessibility_tree",
+            "arguments": "{\"filter\":\"all\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_29_4xgnmy",
+      "name": "get_accessibility_tree",
+      "content": "{\"pageContent\":\"button \\\"First\\\" [ref_3], button \\\"Second\\\" [ref_7]\"}"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_2a_f6g7bt",
+          "type": "function",
+          "function": {
+            "name": "click_ax",
+            "arguments": "{\"ref_id\":\"ref_5\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_2a_f6g7bt",
+      "name": "click_ax",
+      "content": "{\"success\":false,\"error\":\"ref_id ref_5 not found in current accessibility tree.\"}"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "click_ax",
+      "args": {
+        "ref_id": "ref_7"
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "click_ax({ref_id:\"ref_5\"})",
+        "reason": "ref_5 was from the filtered tree; we last requested filter:\"all\"."
+      }
+    ],
+    "successRubric": "Use the ref_id from the MOST RECENT tree call. Different filters produce different ref_id allocations."
+  }
+}

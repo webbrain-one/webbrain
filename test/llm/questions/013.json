@@ -1,0 +1,9 @@
+{
+  "id": "013",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "user": "open the about config page"
+}

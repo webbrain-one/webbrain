@@ -1,0 +1,10 @@
+{
+  "id": "098",
+  "idealFirstToolCall": {
+    "name": "clarify",
+    "args": {
+      "question": "I can only see the product currently open. What's the URL of the second product you want to compare?"
+    }
+  },
+  "successRubric": "Only one product visible. clarify for the second URL is correct. Acceptable: open browser history check (not directly available — would need user input)."
+}

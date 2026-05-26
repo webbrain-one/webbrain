@@ -1,0 +1,10 @@
+{
+  "id": "035",
+  "idealFirstToolCall": {
+    "name": "click",
+    "args": {
+      "text": "Username or email address"
+    }
+  },
+  "successRubric": "Focuses the username/email field, then types \"bob@example.com\" with no selector (click-then-type pattern). Acceptable: type_text with an explicit selector if the agent inspected the page first."
+}

@@ -135,7 +135,7 @@ export default {
   'st.provider.field.model': 'Model',
   'st.provider.field.model_optional': 'Model (isteğe bağlı)',
   'st.provider.field.supports_vision': 'Model görme yeteneğini destekliyor (çok kipli)',
-  'st.provider.field.compact_prompt': 'Kompakt prompt (küçük modeller için önerilir, varsayılan olarak açık)',
+  'st.provider.field.compact_prompt': 'Kompakt prompt (bazı korumaları kaldırır — yalnızca 8B\'den küçük modellerde açın)',
   'st.provider.field.model_loaded_hint': 'yüklenmiş modeli kullanmak için boş bırak',
 
   'st.vision.desc': 'Ayarlandığında, sayfa okuma için ekran görüntüleri bu modele gönderilir; planlama ve araç çağrılarını aktif sağlayıcı yürütür. Görme için de aktif sağlayıcıyı kullanmak istiyorsan boş bırak. Yalnızca OpenAI uyumlu uç noktalar.',

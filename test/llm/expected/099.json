@@ -1,0 +1,8 @@
+{
+  "id": "099",
+  "idealFirstToolCall": {
+    "name": "read_page",
+    "args": {}
+  },
+  "successRubric": "Reads the listing page and emits a bulleted list (title + price + link) via done(). Per LISTINGS guidance: extract first, paginate second. Don't fetch additional pages before delivering this page's items."
+}

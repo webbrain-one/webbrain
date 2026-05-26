@@ -1,0 +1,56 @@
+{
+  "id": "017",
+  "category": "tool-error-pivot",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://www.google.com/recaptcha/api2/demo",
+    "title": "ReCAPTCHA demo"
+  },
+  "description": "solve_captcha returned \"wrong captcha type\". Stop, ask user to solve manually, do not loop.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://www.google.com/recaptcha/api2/demo — Title: ReCAPTCHA demo]\n\nsubmit this form"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_k_tqe639",
+          "type": "function",
+          "function": {
+            "name": "solve_captcha",
+            "arguments": "{}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_k_tqe639",
+      "name": "solve_captcha",
+      "content": "{\"success\":false,\"error\":\"solve_captcha failed: CapSolver getTaskResult: wrong captcha type\"}"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "done",
+      "args": {
+        "summary": "CapSolver can't solve this particular CAPTCHA variant. Please solve the \"I'm not a robot\" check manually — once it's green, tell me and I'll click Submit."
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "solve_captcha({})",
+        "reason": "System prompt: \"do not loop on solve_captcha\". gpt-4o wr0h8w did this correctly — most models do not."
+      },
+      {
+        "match": "click({text:\"I'm not a robot\"})",
+        "reason": "Programmatically clicking the reCAPTCHA box does not solve it and may flag the session."
+      }
+    ],
+    "successRubric": "Surface that the user needs to solve the CAPTCHA themselves. Single call to done() with the explanation. Do not retry solve_captcha."
+  }
+}

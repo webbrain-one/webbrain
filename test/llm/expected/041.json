@@ -1,0 +1,10 @@
+{
+  "id": "041",
+  "idealFirstToolCall": {
+    "name": "click",
+    "args": {
+      "text": "Subscribe to newsletter"
+    }
+  },
+  "successRubric": "Clicks the subscribe checkbox by its label text. Acceptable: get_interactive_elements first, then click by index."
+}

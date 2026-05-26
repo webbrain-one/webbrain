@@ -1,0 +1,52 @@
+{
+  "id": "072",
+  "category": "cross-lingual",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://www.google.de/",
+    "title": "Google"
+  },
+  "description": "German UI, English user request. Use the German button label.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://www.google.de/ — Title: Google]\n\nsearch for berlin weather"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_2k_oeey3r",
+          "type": "function",
+          "function": {
+            "name": "read_page",
+            "arguments": "{}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_2k_oeey3r",
+      "name": "read_page",
+      "content": "{\"text\":\"Google Suche · Auf gut Glück! · Datenschutz · AGB · Einstellungen\"}"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "click",
+      "args": {
+        "text": "Search"
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "click({text:\"Google Suche\"})",
+        "reason": "Acceptable too, but the search-input pattern works with the visible search field, not a button."
+      }
+    ],
+    "successRubric": "Focus the search input (an input has aria-label \"Search\" or similar — click(text) on inputs is supported per click tool docs), type query. The German labels Suche/Suchen also work."
+  }
+}

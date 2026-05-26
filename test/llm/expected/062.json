@@ -1,0 +1,10 @@
+{
+  "id": "062",
+  "idealFirstToolCall": {
+    "name": "click",
+    "args": {
+      "text": "Apply a gift card, promotional code, or voucher"
+    }
+  },
+  "successRubric": "Finds and clicks the promo-code expander/field, types SAVE10, clicks Apply. Acceptable: get_interactive_elements first to locate the field."
+}

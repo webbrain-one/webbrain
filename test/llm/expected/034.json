@@ -1,0 +1,10 @@
+{
+  "id": "034",
+  "idealFirstToolCall": {
+    "name": "click",
+    "args": {
+      "text": "Sign in"
+    }
+  },
+  "successRubric": "Clicks the \"Sign in\" button/link on the current page. Acceptable: navigate to /login directly."
+}

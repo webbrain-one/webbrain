@@ -1,0 +1,10 @@
+{
+  "id": "009",
+  "idealFirstToolCall": {
+    "name": "new_tab",
+    "args": {
+      "url": "https://chatgpt.com/"
+    }
+  },
+  "successRubric": "Opens chatgpt.com in a NEW tab (the phrase \"in a new tab\" is explicit). chat.openai.com is also acceptable."
+}

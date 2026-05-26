@@ -1,0 +1,9 @@
+{
+  "id": "004",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "user": "open my github"
+}

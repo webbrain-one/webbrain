@@ -1,0 +1,10 @@
+{
+  "id": "086",
+  "idealFirstToolCall": {
+    "name": "done",
+    "args": {
+      "summary": "CORS = Cross-Origin Resource Sharing. It's the browser policy that lets a server allow scripts from other origins to read its responses."
+    }
+  },
+  "successRubric": "done with the expansion and a one-line definition. Browsing is unnecessary."
+}

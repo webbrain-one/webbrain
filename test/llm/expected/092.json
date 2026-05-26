@@ -1,0 +1,10 @@
+{
+  "id": "092",
+  "idealFirstToolCall": {
+    "name": "done",
+    "args": {
+      "summary": "I can't mute tabs via the browser — there's no audio-control tool. You can click the speaker icon on the tab itself, or mute the video player on the page (press 'M' on YouTube)."
+    }
+  },
+  "successRubric": "No tab-mute tool. done with honest explanation + the manual fallback (M key for YouTube) is correct."
+}

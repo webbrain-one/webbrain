@@ -1,0 +1,9 @@
+{
+  "id": "020",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "user": "look up \"javascript closures\" on stackoverflow"
+}

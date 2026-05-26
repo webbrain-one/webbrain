@@ -1,4 +1,5 @@
 import { BaseLLMProvider } from './base.js';
+import { fetchWithTimeout } from './fetch-timeout.js';
 import {
   getClaudeAccessToken,
   refreshClaudeAccessToken,
@@ -148,7 +149,7 @@ export class AnthropicProvider extends BaseLLMProvider {
       body.tools = this._convertTools(options.tools);
     }
 
-    const res = await fetch(`${this.baseUrl}/v1/messages`, {
+    const res = await fetchWithTimeout(`${this.baseUrl}/v1/messages`, {
       method: 'POST',
       headers: this._headers(),
       body: JSON.stringify(body),
@@ -209,7 +210,7 @@ export class AnthropicProvider extends BaseLLMProvider {
       body.tools = this._convertTools(options.tools);
     }
 
-    const res = await fetch(`${this.baseUrl}/v1/messages`, {
+    const res = await fetchWithTimeout(`${this.baseUrl}/v1/messages`, {
       method: 'POST',
       headers: this._headers(),
       body: JSON.stringify(body),

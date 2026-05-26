@@ -1,0 +1,10 @@
+{
+  "id": "088",
+  "idealFirstToolCall": {
+    "name": "done",
+    "args": {
+      "summary": "I can't close tabs — there's no tab-close tool in my toolkit. You can press Cmd/Ctrl+W to close the current tab yourself."
+    }
+  },
+  "successRubric": "No tab-close tool. done with honest explanation + keyboard shortcut is correct."
+}

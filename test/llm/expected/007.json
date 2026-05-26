@@ -1,0 +1,10 @@
+{
+  "id": "007",
+  "idealFirstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "https://www.linkedin.com/"
+    }
+  },
+  "successRubric": "Navigates the CURRENT tab (not new_tab — \"in this tab\" is explicit). URL: linkedin.com."
+}

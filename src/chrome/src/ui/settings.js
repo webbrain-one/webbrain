@@ -6,13 +6,15 @@ import { t, getLocale, setLocale, LANGUAGES } from './i18n.js';
 
 // Version shown in the subtitle. Kept here so it only needs one update per
 // release; the subtitle string itself is translated.
-const EXT_VERSION = '7.4.1';
+const EXT_VERSION = '8.0.3';
 
 const providersContainer = document.getElementById('providers');
 const verboseToggle = document.getElementById('toggle-verbose');
 const screenshotToggle = document.getElementById('toggle-screenshot-fallback');
 const maxStepsRange = document.getElementById('range-max-steps');
 const stepsValueLabel = document.getElementById('steps-value');
+const requestTimeoutRange = document.getElementById('range-request-timeout');
+const requestTimeoutValueLabel = document.getElementById('timeout-value');
 const autoScreenshotSelect = document.getElementById('select-auto-screenshot');
 const siteAdaptersToggle = document.getElementById('toggle-site-adapters');
 const notifySoundToggle = document.getElementById('toggle-notify-sound');
@@ -24,6 +26,16 @@ const visionBaseUrlInput = document.getElementById('vision-base-url');
 const visionApiKeyInput = document.getElementById('vision-api-key');
 const visionModelInput = document.getElementById('vision-model');
 const btnSaveVision = document.getElementById('btn-save-vision');
+
+// Transcription service (Whisper-compatible) — same shape as the vision
+// override but routes to /v1/audio/transcriptions instead of /v1/chat/completions.
+const transcriptionBaseUrlInput = document.getElementById('transcription-base-url');
+const transcriptionApiKeyInput = document.getElementById('transcription-api-key');
+const transcriptionModelInput = document.getElementById('transcription-model');
+const btnSaveTranscription = document.getElementById('btn-save-transcription');
+const btnTestTranscription = document.getElementById('btn-test-transcription');
+const btnClearTranscription = document.getElementById('btn-clear-transcription');
+const transcriptionTestResult = document.getElementById('test-transcription');
 const btnTestVision = document.getElementById('btn-test-vision');
 const btnClearVision = document.getElementById('btn-clear-vision');
 const visionTestResult = document.getElementById('test-vision');
@@ -88,14 +100,24 @@ async function init() {
   renderAuthSection();
 
   // Load display settings
-  const stored = await chrome.storage.local.get(['verboseMode', 'screenshotFallback', 'maxAgentSteps', 'autoScreenshot', 'useSiteAdapters', 'notifySound', 'tracingEnabled', 'strictSecretMode', 'agentAllowLocalNetwork', 'providerFilter']);
+  const stored = await chrome.storage.local.get(['verboseMode', 'screenshotFallback', 'maxAgentSteps', 'autoScreenshot', 'useSiteAdapters', 'notifySound', 'tracingEnabled', 'strictSecretMode', 'agentAllowLocalNetwork', 'providerFilter', 'requestTimeoutMs']);
   if (typeof stored.providerFilter === 'string' && ['all','local','cloud','router'].includes(stored.providerFilter)) {
     providerFilter = stored.providerFilter;
   }
   verboseToggle.checked = stored.verboseMode || false;
   screenshotToggle.checked = stored.screenshotFallback ?? true; // on by default
-  maxStepsRange.value = stored.maxAgentSteps || 60;
+  maxStepsRange.value = stored.maxAgentSteps || 130;
   stepsValueLabel.textContent = maxStepsRange.value;
+  // requestTimeoutMs is stored in milliseconds, displayed as seconds.
+  // Default 60s when unset. Floor 10s / ceiling 600s matches the slider.
+  if (requestTimeoutRange && requestTimeoutValueLabel) {
+    const tMs = (typeof stored.requestTimeoutMs === 'number' && stored.requestTimeoutMs > 0)
+      ? stored.requestTimeoutMs
+      : 120000;
+    const tSec = Math.max(10, Math.min(600, Math.round(tMs / 1000)));
+    requestTimeoutRange.value = tSec;
+    requestTimeoutValueLabel.textContent = tSec + 's';
+  }
   autoScreenshotSelect.value = stored.autoScreenshot || 'state_change';
   siteAdaptersToggle.checked = stored.useSiteAdapters ?? true;
   notifySoundToggle.checked = stored.notifySound ?? true; // on by default
@@ -113,6 +135,14 @@ async function init() {
   visionBaseUrlInput.value = vision.baseUrl || '';
   visionApiKeyInput.value = vision.apiKey || '';
   visionModelInput.value = vision.model || '';
+
+  // Load transcription service config. Same shape as visionModel; used by
+  // recorder/host.js → transcribe.js when transcribing recorded audio.
+  const transcriptionStored = await chrome.storage.local.get(['transcriptionModel']);
+  const transcription = transcriptionStored.transcriptionModel || {};
+  if (transcriptionBaseUrlInput) transcriptionBaseUrlInput.value = transcription.baseUrl || '';
+  if (transcriptionApiKeyInput) transcriptionApiKeyInput.value = transcription.apiKey || '';
+  if (transcriptionModelInput) transcriptionModelInput.value = transcription.model || '';
 
   // Load profile (auto-fill bio + throwaway password)
   const profileStored = await chrome.storage.local.get(['profileEnabled', 'profileText']);
@@ -213,6 +243,17 @@ maxStepsRange.addEventListener('change', () => {
   chrome.storage.local.set({ maxAgentSteps: parseInt(maxStepsRange.value) });
 });
 
+if (requestTimeoutRange) {
+  requestTimeoutRange.addEventListener('input', () => {
+    requestTimeoutValueLabel.textContent = requestTimeoutRange.value + 's';
+  });
+  requestTimeoutRange.addEventListener('change', () => {
+    // Stored as ms (the provider code consumes ms). UI shows seconds.
+    const sec = parseInt(requestTimeoutRange.value, 10);
+    chrome.storage.local.set({ requestTimeoutMs: sec * 1000 });
+  });
+}
+
 autoScreenshotSelect.addEventListener('change', () => {
   chrome.storage.local.set({ autoScreenshot: autoScreenshotSelect.value });
 });
@@ -303,6 +344,83 @@ btnClearVision.addEventListener('click', async () => {
   await chrome.storage.local.remove('visionModel');
   flashVisionResult('ok', t('st.vision.cleared'));
 });
+
+// --- Transcription Service (Whisper-compatible) ---
+//
+// Same UX as the vision override. Stored in chrome.storage.local under
+// `transcriptionModel = { baseUrl, apiKey, model }`. Consumed by
+// transcribe.js, which uses the override when all three fields are
+// filled, and falls back to the auto-pick-from-providers behavior when
+// any field is empty.
+
+function flashTranscriptionResult(className, text) {
+  if (!transcriptionTestResult) return;
+  transcriptionTestResult.className = `test-result show ${className}`;
+  transcriptionTestResult.textContent = text;
+  setTimeout(() => transcriptionTestResult.classList.remove('show'), 2000);
+}
+
+if (btnSaveTranscription) {
+  btnSaveTranscription.addEventListener('click', async () => {
+    const baseUrl = transcriptionBaseUrlInput.value.trim();
+    const apiKey = transcriptionApiKeyInput.value.trim();
+    const model = transcriptionModelInput.value.trim();
+
+    if (!baseUrl && !apiKey && !model) {
+      await chrome.storage.local.remove('transcriptionModel');
+      flashTranscriptionResult('ok', t('st.transcription.cleared'));
+      return;
+    }
+
+    await chrome.storage.local.set({
+      transcriptionModel: { baseUrl, apiKey, model },
+    });
+    flashTranscriptionResult('ok', t('st.transcription.saved'));
+  });
+}
+
+if (btnTestTranscription) {
+  btnTestTranscription.addEventListener('click', async () => {
+    const baseUrl = transcriptionBaseUrlInput.value.trim();
+    const apiKey = transcriptionApiKeyInput.value.trim();
+    const model = transcriptionModelInput.value.trim();
+
+    if (!baseUrl || !model) {
+      transcriptionTestResult.className = 'test-result show fail';
+      transcriptionTestResult.textContent = t('st.transcription.fill_required');
+      setTimeout(() => transcriptionTestResult.classList.remove('show'), 2500);
+      return;
+    }
+
+    // Persist before testing so the background handler sees the values.
+    await chrome.storage.local.set({
+      transcriptionModel: { baseUrl, apiKey, model },
+    });
+
+    transcriptionTestResult.className = 'test-result show';
+    transcriptionTestResult.textContent = t('st.transcription.testing');
+    transcriptionTestResult.style.color = 'var(--text2)';
+
+    const res = await sendToBackground('test_transcription_provider');
+    if (res.ok) {
+      transcriptionTestResult.className = 'test-result show ok';
+      transcriptionTestResult.textContent = t('st.transcription.connected', { model: res.model || model });
+    } else {
+      transcriptionTestResult.className = 'test-result show fail';
+      transcriptionTestResult.textContent = t('st.transcription.failed', { error: res.error });
+    }
+  });
+}
+
+if (btnClearTranscription) {
+  btnClearTranscription.addEventListener('click', async () => {
+    transcriptionBaseUrlInput.value = '';
+    transcriptionApiKeyInput.value = '';
+    transcriptionModelInput.value = '';
+    await chrome.storage.local.remove('transcriptionModel');
+    flashTranscriptionResult('ok', t('st.transcription.cleared'));
+  });
+}
 
 // --- Profile auto-fill ---
 // Persisted to chrome.storage.local in plaintext; the agent picks the
@@ -545,13 +663,14 @@ function renderProviders() {
       const label = field.labelKey ? t(field.labelKey) : (field.label || field.key);
       const placeholder = field.placeholderKey ? t(field.placeholderKey) : (field.placeholder || '');
       if (field.type === 'checkbox') {
-        // For useCompactPrompt on local providers, default to checked when
-        // the config key hasn't been explicitly set yet (matches provider logic).
-        let isChecked = config[field.key];
-        if (field.key === 'useCompactPrompt' && config[field.key] == null) {
-          const localProviders = ['llamacpp', 'ollama', 'lmstudio'];
-          isChecked = localProviders.includes(id);
-        }
+        // useCompactPrompt defaults to UNCHECKED across the board now.
+        // Earlier builds defaulted it ON for local providers — the compact
+        // prompt drops too many guardrails (modal handling, duplicate-
+        // submit guard wording, iframe rules) and small local models that
+        // are vision-capable in 2026 (Qwen-VL, Llama 3.2-V) are big enough
+        // to handle the full prompt comfortably. The checkbox is preserved
+        // so users on truly tiny models (under 8B) can opt back in.
+        const isChecked = !!config[field.key];
         const checked = isChecked ? 'checked' : '';
         fieldsHTML += `
           <div class="field" style="display:flex;align-items:center;gap:8px;flex-direction:row;">

@@ -1,0 +1,10 @@
+{
+  "id": "018",
+  "idealFirstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "https://github.com/search?q=language%3Atypescript&type=repositories&s=stars&o=desc"
+    }
+  },
+  "successRubric": "Acceptable: navigate to GitHub search with language:typescript and stars sort, OR use the search box on the current page. The key signal is sorting by stars descending."
+}

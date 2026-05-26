@@ -1,0 +1,10 @@
+{
+  "id": "003",
+  "idealFirstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "https://www.youtube.com/"
+    }
+  },
+  "successRubric": "Navigates to youtube.com. www subdomain optional; new_tab is also acceptable."
+}

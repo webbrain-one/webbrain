@@ -97,6 +97,27 @@ const {
   'file://' + path.join(ROOT, 'src/firefox/src/agent/credential-fields.js').replace(/\\/g, '/')
 );
 
+// sheets-tools.js — A1 range parsing, TSV roundtrip, site detection. The
+// pure helpers exported from sheets-tools.js are testable without any
+// chrome.* / DOM mocks. The backend I/O (readSheet, fillSheet) is not
+// covered here — those need a real Sheets/Excel tab.
+const {
+  parseA1, colLettersToIndex, indexToColLetters, rangeToA1,
+  valuesToTsv, tsvToValues, detectSheetSite,
+} = await import(
+  'file://' + path.join(ROOT, 'src/chrome/src/agent/sheets-tools.js').replace(/\\/g, '/')
+);
+const {
+  parseA1: parseA1Fx,
+  colLettersToIndex: colLettersToIndexFx,
+  indexToColLetters: indexToColLettersFx,
+  valuesToTsv: valuesToTsvFx,
+  tsvToValues: tsvToValuesFx,
+  detectSheetSite: detectSheetSiteFx,
+} = await import(
+  'file://' + path.join(ROOT, 'src/firefox/src/agent/sheets-tools.js').replace(/\\/g, '/')
+);
+
 // agent.js imports tools.js and cdp-client.js (which uses chrome.*). We need
 // only the loop-detection helpers, so we extract them via a tiny standalone
 // shim that mirrors the relevant Agent methods. Keep this in sync with
@@ -1541,6 +1562,310 @@ test('_createProvider: webgpu type wires the WebGPUProvider class', () => {
     assert.equal(provider.supportsTools, true);
     assert.equal(provider.supportsVision, false);
   }
+});
+console.log('\nsheets-tools: A1 parsing');
+
+test('parseA1: single cell A1', () => {
+  const r = parseA1('A1');
+  assert.deepEqual(r, { sheet: null, row: 0, col: 0, rowCount: 1, colCount: 1 });
+});
+test('parseA1: single cell B5', () => {
+  const r = parseA1('B5');
+  assert.deepEqual(r, { sheet: null, row: 4, col: 1, rowCount: 1, colCount: 1 });
+});
+test('parseA1: range A1:C10', () => {
+  const r = parseA1('A1:C10');
+  assert.deepEqual(r, { sheet: null, row: 0, col: 0, rowCount: 10, colCount: 3 });
+});
+test('parseA1: range reversed (C10:A1) is normalized', () => {
+  const r = parseA1('C10:A1');
+  assert.deepEqual(r, { sheet: null, row: 0, col: 0, rowCount: 10, colCount: 3 });
+});
+test('parseA1: absolute single cell $A$1 is accepted', () => {
+  const r = parseA1('$A$1');
+  assert.deepEqual(r, { sheet: null, row: 0, col: 0, rowCount: 1, colCount: 1 });
+});
+test('parseA1: mixed absolute single cell A$1 is accepted', () => {
+  const r = parseA1('A$1');
+  assert.deepEqual(r, { sheet: null, row: 0, col: 0, rowCount: 1, colCount: 1 });
+});
+test('parseA1: mixed absolute range $B2:C$10 is accepted', () => {
+  const r = parseA1('$B2:C$10');
+  assert.deepEqual(r, { sheet: null, row: 1, col: 1, rowCount: 9, colCount: 2 });
+});
+test('parseA1: lowercase input is uppercased', () => {
+  const r = parseA1('a1:c10');
+  assert.deepEqual(r, { sheet: null, row: 0, col: 0, rowCount: 10, colCount: 3 });
+});
+test('parseA1: whole column A:A', () => {
+  const r = parseA1('A:A');
+  assert.equal(r.wholeColumn, true);
+  assert.equal(r.col, 0);
+  assert.equal(r.colCount, 1);
+  assert.equal(r.rowCount, -1);
+});
+test('parseA1: whole-column range A:C', () => {
+  const r = parseA1('A:C');
+  assert.equal(r.wholeColumn, true);
+  assert.equal(r.colCount, 3);
+});
+test('parseA1: whole-column reversed C:A normalizes to A:C', () => {
+  // Same shape as the rectangular-range normalization (C10:A1 → A1:C10).
+  // Without normalization colCount comes out negative and downstream
+  // backends mis-size the selection.
+  const r = parseA1('C:A');
+  assert.equal(r.wholeColumn, true);
+  assert.equal(r.col, 0);
+  assert.equal(r.colCount, 3);
+  assert.equal(r.rowCount, -1);
+});
+test('parseA1: whole row 1:1', () => {
+  const r = parseA1('1:1');
+  assert.equal(r.wholeRow, true);
+  assert.equal(r.row, 0);
+  assert.equal(r.rowCount, 1);
+  assert.equal(r.colCount, -1);
+});
+test('parseA1: whole-row reversed 5:1 normalizes to 1:5', () => {
+  const r = parseA1('5:1');
+  assert.equal(r.wholeRow, true);
+  assert.equal(r.row, 0);
+  assert.equal(r.rowCount, 5);
+  assert.equal(r.colCount, -1);
+});
+test('parseA1: sheet prefix Sheet2!A1:C3', () => {
+  const r = parseA1('Sheet2!A1:C3');
+  assert.equal(r.sheet, 'Sheet2');
+  assert.equal(r.row, 0);
+  assert.equal(r.col, 0);
+  assert.equal(r.rowCount, 3);
+  assert.equal(r.colCount, 3);
+});
+test("parseA1: quoted sheet prefix 'My Sheet'!A1", () => {
+  const r = parseA1("'My Sheet'!A1");
+  assert.equal(r.sheet, 'My Sheet');
+});
+test("parseA1: quoted sheet prefix with absolute cell 'My Sheet'!$A$1", () => {
+  const r = parseA1("'My Sheet'!$A$1");
+  assert.deepEqual(r, { sheet: 'My Sheet', row: 0, col: 0, rowCount: 1, colCount: 1 });
+});
+test("parseA1: escaped quote in sheet name 'It''s'!A1", () => {
+  const r = parseA1("'It''s'!A1");
+  assert.equal(r.sheet, "It's");
+});
+test("parseA1: quoted sheet name containing '!' — 'Sales!Q1'!A1", () => {
+  // Spreadsheet grammar allows '!' inside quoted sheet names. The split
+  // must skip the inner '!' and only act on the one after the close quote.
+  const r = parseA1("'Sales!Q1'!A1");
+  assert.equal(r.sheet, 'Sales!Q1');
+  assert.equal(r.row, 0);
+  assert.equal(r.col, 0);
+});
+test("parseA1: quoted sheet name with both '!' AND escaped quote", () => {
+  const r = parseA1("'It''s!Special'!C5");
+  assert.equal(r.sheet, "It's!Special");
+  assert.equal(r.row, 4);
+  assert.equal(r.col, 2);
+});
+test("parseA1: unterminated quoted sheet name throws", () => {
+  assert.throws(() => parseA1("'unterminated!A1"), /unterminated quoted sheet/);
+});
+test("parseA1: quote-then-not-bang throws", () => {
+  // 'foo'X — close quote not followed by '!', malformed.
+  assert.throws(() => parseA1("'foo'X!A1"), /closing quote.*must be immediately followed by/);
+});
+test("parseA1: empty quoted sheet name throws", () => {
+  assert.throws(() => parseA1("''!A1"), /empty sheet name/);
+});
+test('parseA1: empty string throws', () => {
+  assert.throws(() => parseA1(''), /non-empty string/);
+});
+test('parseA1: garbage throws', () => {
+  assert.throws(() => parseA1('not a range'), /not A1 notation/);
+});
+test('parseA1: empty sheet name throws', () => {
+  assert.throws(() => parseA1('!A1'), /empty sheet/);
+});
+test('parseA1: A (no row, no end) throws — ambiguous', () => {
+  assert.throws(() => parseA1('A'), /incomplete start/);
+});
+test('parseA1: A0 throws (rows are 1-indexed)', () => {
+  assert.throws(() => parseA1('A0'), /1-indexed/);
+});
+test('parseA1: A0:B5 throws (start row 0)', () => {
+  assert.throws(() => parseA1('A0:B5'), /1-indexed/);
+});
+test('parseA1: B5:A0 throws (end row 0)', () => {
+  assert.throws(() => parseA1('B5:A0'), /1-indexed/);
+});
+test('parseA1: 0:1 throws (whole-row form with row 0)', () => {
+  assert.throws(() => parseA1('0:1'), /1-indexed/);
+});
+test('parseA1: 1:0 throws (whole-row form with end row 0)', () => {
+  assert.throws(() => parseA1('1:0'), /1-indexed/);
+});
+
+test('colLettersToIndex: A → 0, Z → 25', () => {
+  assert.equal(colLettersToIndex('A'), 0);
+  assert.equal(colLettersToIndex('B'), 1);
+  assert.equal(colLettersToIndex('Z'), 25);
+});
+test('colLettersToIndex: AA → 26, AZ → 51, BA → 52', () => {
+  assert.equal(colLettersToIndex('AA'), 26);
+  assert.equal(colLettersToIndex('AZ'), 51);
+  assert.equal(colLettersToIndex('BA'), 52);
+});
+test('colLettersToIndex: ZZ → 701, AAA → 702', () => {
+  assert.equal(colLettersToIndex('ZZ'), 701);
+  assert.equal(colLettersToIndex('AAA'), 702);
+});
+test('colLettersToIndex: rejects non-letters', () => {
+  assert.throws(() => colLettersToIndex('1'), /not column letters/);
+  assert.throws(() => colLettersToIndex('a'), /not column letters/);
+  assert.throws(() => colLettersToIndex(''), /not column letters/);
+});
+
+test('indexToColLetters: 0 → A, 25 → Z', () => {
+  assert.equal(indexToColLetters(0), 'A');
+  assert.equal(indexToColLetters(25), 'Z');
+});
+test('indexToColLetters: 26 → AA, 51 → AZ, 52 → BA', () => {
+  assert.equal(indexToColLetters(26), 'AA');
+  assert.equal(indexToColLetters(51), 'AZ');
+  assert.equal(indexToColLetters(52), 'BA');
+});
+test('indexToColLetters: 701 → ZZ, 702 → AAA', () => {
+  assert.equal(indexToColLetters(701), 'ZZ');
+  assert.equal(indexToColLetters(702), 'AAA');
+});
+test('indexToColLetters: roundtrip with colLettersToIndex for 0–1000', () => {
+  for (let i = 0; i <= 1000; i++) {
+    const letters = indexToColLetters(i);
+    const back = colLettersToIndex(letters);
+    assert.equal(back, i, `roundtrip ${i} → ${letters} → ${back}`);
+  }
+});
+test('indexToColLetters: rejects negative / non-integer', () => {
+  assert.throws(() => indexToColLetters(-1), /non-negative integer/);
+  assert.throws(() => indexToColLetters(1.5), /non-negative integer/);
+});
+
+test('rangeToA1: single cell', () => {
+  assert.equal(rangeToA1({ row: 0, col: 0, rowCount: 1, colCount: 1 }), 'A1');
+  assert.equal(rangeToA1({ row: 4, col: 1, rowCount: 1, colCount: 1 }), 'B5');
+});
+test('rangeToA1: range', () => {
+  assert.equal(rangeToA1({ row: 0, col: 0, rowCount: 10, colCount: 3 }), 'A1:C10');
+});
+test('rangeToA1: with sheet name (no quoting needed)', () => {
+  assert.equal(rangeToA1({ row: 0, col: 0, rowCount: 1, colCount: 1, sheet: 'Sheet1' }), 'Sheet1!A1');
+});
+test('rangeToA1: with sheet name needing quotes', () => {
+  assert.equal(rangeToA1({ row: 0, col: 0, rowCount: 1, colCount: 1, sheet: 'My Sheet' }), "'My Sheet'!A1");
+});
+
+console.log('\nsheets-tools: TSV (de)serialization');
+
+test('valuesToTsv: simple grid', () => {
+  assert.equal(valuesToTsv([['a','b'],['c','d']]), 'a\tb\nc\td');
+});
+test('valuesToTsv: cell with tab is quoted', () => {
+  assert.equal(valuesToTsv([['a\tb','c']]), '"a\tb"\tc');
+});
+test('valuesToTsv: cell with newline is quoted', () => {
+  assert.equal(valuesToTsv([['a\nb','c']]), '"a\nb"\tc');
+});
+test('valuesToTsv: cell with quote — quote is doubled and wrapped', () => {
+  assert.equal(valuesToTsv([['say "hi"','c']]), '"say ""hi"""\tc');
+});
+test('valuesToTsv: null/undefined → empty string', () => {
+  assert.equal(valuesToTsv([[null, undefined, 'x']]), '\t\tx');
+});
+test('valuesToTsv: numbers coerced to string', () => {
+  assert.equal(valuesToTsv([[1, 2.5]]), '1\t2.5');
+});
+test('valuesToTsv: rejects non-array', () => {
+  assert.throws(() => valuesToTsv('foo'), /2D array/);
+});
+
+test('tsvToValues: simple grid', () => {
+  assert.deepEqual(tsvToValues('a\tb\nc\td'), [['a','b'],['c','d']]);
+});
+test('tsvToValues: trailing newline does not add empty row', () => {
+  assert.deepEqual(tsvToValues('a\tb\nc\td\n'), [['a','b'],['c','d']]);
+});
+test('tsvToValues: CRLF treated as one newline', () => {
+  assert.deepEqual(tsvToValues('a\tb\r\nc\td'), [['a','b'],['c','d']]);
+});
+test('tsvToValues: quoted cell with tab inside', () => {
+  assert.deepEqual(tsvToValues('"a\tb"\tc'), [['a\tb','c']]);
+});
+test('tsvToValues: quoted cell with embedded quote', () => {
+  assert.deepEqual(tsvToValues('"say ""hi"""\tc'), [['say "hi"','c']]);
+});
+test('tsvToValues: empty input → one empty row', () => {
+  assert.deepEqual(tsvToValues(''), [[]]);
+});
+
+test('TSV roundtrip: 100 random shapes', () => {
+  const shapes = [
+    [['a']],
+    [['a','b','c']],
+    [['a'],['b'],['c']],
+    [['x\ty','z']],
+    [['line1\nline2','plain']],
+    [['has "quotes"','none']],
+    [['',''],['',''],['','']],
+    [['1','2','3'],['4','5','6']],
+  ];
+  for (const grid of shapes) {
+    const tsv = valuesToTsv(grid);
+    const back = tsvToValues(tsv);
+    assert.deepEqual(back, grid, `roundtrip failed for ${JSON.stringify(grid)}`);
+  }
+});
+
+console.log('\nsheets-tools: site detection');
+
+test('detectSheetSite: Google Sheets URL', () => {
+  assert.equal(detectSheetSite('https://docs.google.com/spreadsheets/d/abc123/edit'), 'google-sheets');
+});
+test('detectSheetSite: Google Docs URL is NOT a sheet', () => {
+  assert.equal(detectSheetSite('https://docs.google.com/document/d/abc/edit'), null);
+});
+test('detectSheetSite: Excel Online via office.com', () => {
+  assert.equal(detectSheetSite('https://www.office.com/launch/excel/foo'), 'excel-online');
+});
+test('detectSheetSite: Excel Online via officeapps.live.com', () => {
+  assert.equal(detectSheetSite('https://word-edit.officeapps.live.com/x/something'), 'excel-online');
+});
+test('detectSheetSite: random URL returns null', () => {
+  assert.equal(detectSheetSite('https://example.com/'), null);
+  assert.equal(detectSheetSite(''), null);
+  assert.equal(detectSheetSite(null), null);
+});
+
+console.log('\nsheets-tools: chrome / firefox parity');
+
+test('parity: parseA1 returns identical results', () => {
+  const cases = ['A1', 'B5:C10', 'A:A', 'Sheet2!A1:C3', "'My Sheet'!Z99"];
+  for (const c of cases) {
+    assert.deepEqual(parseA1(c), parseA1Fx(c), `parseA1 drift for ${c}`);
+  }
+});
+test('parity: colLettersToIndex / indexToColLetters identical', () => {
+  for (let i = 0; i < 100; i++) {
+    assert.equal(indexToColLetters(i), indexToColLettersFx(i));
+    assert.equal(colLettersToIndex('A' + (i ? indexToColLetters(i) : '')), colLettersToIndexFx('A' + (i ? indexToColLetters(i) : '')));
+  }
+});
+test('parity: TSV roundtrip identical', () => {
+  const grid = [['a','b\tc'],['d\ne','f"g']];
+  assert.deepEqual(tsvToValues(valuesToTsv(grid)), tsvToValuesFx(valuesToTsvFx(grid)));
+});
+test('parity: detectSheetSite identical', () => {
+  const urls = ['https://docs.google.com/spreadsheets/d/x/edit', 'https://example.com/', 'https://word-edit.officeapps.live.com/x/y'];
+  for (const u of urls) assert.equal(detectSheetSite(u), detectSheetSiteFx(u));
 });
 
 await run();

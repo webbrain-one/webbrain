@@ -1,0 +1,10 @@
+{
+  "id": "029",
+  "idealFirstToolCall": {
+    "name": "extract_data",
+    "args": {
+      "type": "headings"
+    }
+  },
+  "successRubric": "Calls extract_data({type:\"headings\"}) and surfaces the heading list. read_page is also acceptable (since the model can pull headings out of prose) but extract is more efficient."
+}

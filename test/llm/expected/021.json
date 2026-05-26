@@ -1,0 +1,10 @@
+{
+  "id": "021",
+  "idealFirstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "https://en.wikipedia.org/wiki/World_War_II"
+    }
+  },
+  "successRubric": "Recognize \"ww2\" expands to World War II and navigate to the matching Wikipedia article. Direct /wiki/World_War_II URL or a search through wikipedia.org are both acceptable."
+}

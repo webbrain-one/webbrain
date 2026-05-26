@@ -31,7 +31,7 @@ export class Agent {
     this.conversationModes = new Map(); // tabId -> 'ask' | 'act'
     this.abortFlags = new Map(); // tabId -> boolean
     this.currentRunId = new Map(); // tabId -> active trace runId
-    this.maxSteps = 120; // safety limit for autonomous loops (configurable via settings)
+    this.maxSteps = 130; // safety limit for autonomous loops (configurable via settings)
     this.maxContextMessages = 50; // trim beyond this
     this._debugLog = []; // ring buffer for deep verbose (LLM requests/responses)
     this._debugLogMax = 200; // max entries before oldest are dropped
@@ -210,7 +210,7 @@ export class Agent {
   }
 
   static NAV_TOOLS = new Set(['navigate', 'new_tab']);
-  static STATE_CHANGE_TOOLS = new Set(['navigate', 'new_tab', 'click', 'type_text', 'press_keys', 'scroll']);
+  static STATE_CHANGE_TOOLS = new Set(['navigate', 'new_tab', 'click', 'type_text', 'press_keys', 'scroll', 'hover', 'drag_drop']);
 
   // System prompt for the dedicated "vision model" sub-call. Kept terse and
   // format-oriented so the description is actually useful to the planning
@@ -422,13 +422,17 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       let stopMessage = '';
       if (loopCheck.kind === 'stop' || coordCheck.kind === 'stop') {
         effectiveKind = 'stop';
+        // Show the model's actual args, not _checkCoordClickLoop's 5px
+        // bucket — for fractional inputs like (0.911, 0.331) the bucket
+        // rounds to (0, 0) and the message reads as if we'd clicked the
+        // top-left corner, hiding what really happened.
         stopMessage = coordCheck.kind === 'stop'
-          ? `Stopped: I clicked at (or near) coordinates (${coordCheck.x}, ${coordCheck.y}) multiple times and the page never responded. That position is hitting empty space, an overlay, or the wrong element. Please give a different instruction or check the page yourself.`
+          ? `Stopped: I clicked at (or near) coordinates (${fnArgs.x}, ${fnArgs.y}) multiple times and the page never responded. That position is hitting empty space, an overlay, or the wrong element. Please give a different instruction or check the page yourself.`
           : loopCheck.message;
       } else if (loopCheck.kind === 'nudge' || coordCheck.kind === 'nudge') {
         effectiveKind = 'nudge';
         nudgeWarning = coordCheck.kind === 'nudge'
-          ? `[COORDINATE CLICK WARNING: You've clicked at or near (${coordCheck.x}, ${coordCheck.y}) several times with no visible page change. The click may be missing its target. Try: (a) call get_interactive_elements to find a real selector, (b) click({text: "..."}) to target by visible text, or (c) take a fresh screenshot and look more carefully at element positions. Try a different approach before clicking these coordinates again.]`
+          ? `[COORDINATE CLICK WARNING: You've clicked at or near (${fnArgs.x}, ${fnArgs.y}) several times with no visible page change. The click may be missing its target. Try: (a) call get_interactive_elements to find a real selector, (b) click({text: "..."}) to target by visible text, or (c) take a fresh screenshot and look more carefully at element positions. Try a different approach before clicking these coordinates again.]`
           : loopCheck.warning;
       }
 
@@ -1914,23 +1918,45 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
                 }
                 for (const b of (rec.orphanBuffers || [])) mseBytes += (b.bytes || 0);
               } catch (_) {}
+              // If the MSE recorder captured bytes, save them inline rather
+              // than asking the agent to call execute_js → saveMse() in a
+              // follow-up step. The follow-up pattern was broken by the
+              // extension's own CSP (no \`unsafe-eval\`), and "28 MB captured
+              // but won't save" was a head-scratcher. Now download_social_media
+              // is a single call that completes the save end-to-end.
+              let mseSavedFiles = [];
+              let mseSaveError = null;
+              if (mseBytes > 0) {
+                try {
+                  mseSavedFiles = await window.SocialMediaDownloader.saveMse({
+                    prefix: (window.location && window.location.hostname || 'mse').replace(/^www\\./, ''),
+                    mode: ${JSON.stringify(opts.mode)},
+                  });
+                } catch (e) {
+                  mseSaveError = (e && e.message) || String(e);
+                }
+              }
               const recommendation = window.SocialMediaDownloader._buildRecommendation({
-                urls, profile, mseBytes, pageUrl: location.href,
+                urls, profile, mseBytes, mseSavedFiles, mseSaveError, pageUrl: location.href,
               });
-              // Honest per-status counts so the agent doesn't claim
-              // 713 downloads when popup-blocking killed all but one.
+              // Honest per-status counts. Roll mse-saved files into the
+              // completed count so the agent sees one consistent number.
+              const completedFromStats = stats ? stats.completed : 0;
+              const mseSavedCount = mseSavedFiles.length;
               return {
                 success: true,
                 site: profile,
                 mode: ${JSON.stringify(opts.mode)},
-                count: urls.length,
-                triggeredCount: stats ? stats.triggered : urls.length,
-                completedCount: stats ? stats.completed : null,
+                count: urls.length + mseSavedCount,
+                triggeredCount: (stats ? stats.triggered : urls.length) + mseSavedCount,
+                completedCount: completedFromStats + mseSavedCount,
                 openedInTabCount: stats ? stats.openedInTab : null,
                 failedCount: stats ? stats.failed : null,
                 failures: stats ? stats.failures : [],
                 urls: urls.slice(0, 50),
                 mseBytes,
+                mseSavedFiles,
+                ...(mseSaveError ? { mseSaveError } : {}),
                 recommendation,
               };
             } catch (e) {
@@ -2188,17 +2214,40 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       'scroll': 'scroll',
       'extract_data': 'extract_data',
       'wait_for_element': 'wait_for_element',
+      'wait_for_stable': 'wait_for_stable',
       'get_selection': 'get_selection',
       'execute_js': 'execute_js',
       'get_accessibility_tree': 'get_accessibility_tree',
       'click_ax': 'click_ax',
       'type_ax': 'type_ax',
       'set_field': 'set_field',
+      // hover + drag_drop are content-script-only on Firefox (no CDP).
+      // The handlers in content.js do the synthetic-event work.
+      'hover': 'hover',
+      'drag_drop': 'drag_drop',
     };
 
     const action = actionMap[name];
     if (!action) {
       return { error: `Unknown tool: ${name}` };
+    }
+
+    // ── Normalized-coord guard for click({x, y}) ────────────────────────
+    // Some models pass {x: 0.91, y: 0.33} thinking coords are normalized
+    // (0–1 fractions of the viewport). The click handler takes CSS pixels
+    // — so 0.91 hits the very top-left of the page, the click misses, the
+    // model retries the same values, and we burn 8 attempts before the
+    // coord-loop detector trips. Reject up front so the model pivots to
+    // click_ax / click({text}) on the first try.
+    if (name === 'click' && args?.x != null && args?.y != null) {
+      const xn = Number(args.x);
+      const yn = Number(args.y);
+      if (Number.isFinite(xn) && Number.isFinite(yn) && xn >= 0 && xn <= 1 && yn >= 0 && yn <= 1) {
+        return {
+          success: false,
+          error: `Coordinates (${args.x}, ${args.y}) look like normalized values (0–1 fractions of the viewport), not CSS pixels. The click tool expects CSS pixels (e.g. {x: 437, y: 156}). Prefer click_ax({ref_id}) after get_accessibility_tree or click({text: "..."}) over pixel clicks — they don't depend on screenshot resolution. If you must use pixels, take a fresh screenshot and pass integer pixel coordinates from the image.`,
+        };
+      }
     }
 
     // PDF redirect. Firefox's built-in PDF viewer is a privileged page
@@ -2225,8 +2274,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           name === 'click' || name === 'click_ax' ||
           name === 'type_text' || name === 'type_ax' || name === 'set_field' ||
           name === 'press_keys' || name === 'scroll' ||
+          name === 'hover' || name === 'drag_drop' ||
           name === 'get_accessibility_tree' || name === 'get_interactive_elements' ||
-          name === 'extract_data' || name === 'wait_for_element' ||
+          name === 'extract_data' || name === 'wait_for_element' || name === 'wait_for_stable' ||
           name === 'get_selection' || name === 'execute_js'
         ) {
           return {

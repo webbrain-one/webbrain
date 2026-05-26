@@ -1,0 +1,72 @@
+{
+  "id": "040",
+  "category": "truncation-cascade",
+  "mode": "ask",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://www.example.com/long-page",
+    "title": "Long page"
+  },
+  "description": "After repeated truncated reads of the same URL, agent should call done with what it has and tell user the response is partial.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://www.example.com/long-page — Title: Long page]\n\nsummarize this page"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_1a_9ll0cl",
+          "type": "function",
+          "function": {
+            "name": "read_page",
+            "arguments": "{}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_1a_9ll0cl",
+      "name": "read_page",
+      "content": "{\"text\":\"Section A: ... Section B: ...\",\"_truncated\":true,\"originalLength\":80000}"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_1b_no4r6q",
+          "type": "function",
+          "function": {
+            "name": "read_page",
+            "arguments": "{}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_1b_no4r6q",
+      "name": "read_page",
+      "content": "{\"text\":\"Section A: ... Section B: ...\",\"_truncated\":true,\"originalLength\":80000}"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "done",
+      "args": {
+        "summary": "Summary of the visible portion: [synthesis of Section A and B]. The page is large and read_page returned truncated content twice — I've summarized what I can see."
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "read_page({})",
+        "reason": "Third identical read won't yield more."
+      }
+    ],
+    "successRubric": "Deliver a summary of what is visible. Acknowledge the truncation. Don't loop."
+  }
+}

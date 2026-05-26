@@ -72,6 +72,36 @@ export const AGENT_TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'hover',
+      description: 'Hover the mouse over an element by its ref_id. Use this for menus, tooltips, and "More actions" overlays that only reveal on hover (GitHub three-dot menus, Linear card actions, dropdown nav with reveal-on-hover children). Dispatched as a CDP-trusted mouseMoved at the element\'s center, so reveal-on-hover handlers that gate on event.isTrusted will fire. After calling hover, re-read the accessibility tree to see the now-visible menu/tooltip; the new items typically appear via a portal at the end of <body>, NOT inside this element\'s subtree, so do not pass ref_id to the follow-up get_accessibility_tree call.',
+      parameters: {
+        type: 'object',
+        properties: {
+          ref_id: { type: 'string', description: 'A ref_id from get_accessibility_tree, e.g. "ref_42".' },
+        },
+        required: ['ref_id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'drag_drop',
+      description: 'Drag one element onto another via CDP-trusted pointer events. Use this for Trello/Linear-style card reordering, Notion block drags, file-tree node moves, image-crop handles, slider thumbs, kanban columns. Dispatched as a real mousedown → multiple mouseMoved waypoints → mouseup sequence at the resolved coordinates, so HTML5 drag-and-drop handlers AND custom pointer-event drag handlers both fire. If the page uses HTML5 drag-and-drop (dataTransfer), some advanced cases (cross-window, file-payload drags) may still fail — fall back to per-step click/scroll if so. After a drag, re-read the tree to confirm the order/position changed.',
+      parameters: {
+        type: 'object',
+        properties: {
+          fromRefId: { type: 'string', description: 'ref_id of the element to grab (the source of the drag).' },
+          toRefId: { type: 'string', description: 'ref_id of the element to drop onto (the destination).' },
+          steps: { type: 'number', description: 'Number of intermediate mouseMoved waypoints between source and destination. Default 10. Sites with momentum-tracking dnd (Trello) sometimes need 15–20 for the drop indicator to settle.' },
+        },
+        required: ['fromRefId', 'toRefId'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'read_page',
       description: 'Read the current page as PROSE — title, URL, visible text, links, forms. LEGACY read path; prefer get_accessibility_tree for UI tasks. Use read_page only when the user is asking about long-form text content (articles, READMEs, documentation). RESULT SHAPE: `text` is the article body (nav/header/footer/aside/ads stripped by default); `textSource` is the CSS selector that produced the body (or "body (chrome-stripped)" / "body (raw)" when no article container matched); `isArticlePage` is true when the page declares itself as an article via og:type, article:published_time, schema.org Article, or `<article>`. When `isArticlePage:true` AND `textSource` is a real article selector, you HAVE the complete article body — do not chase more content with fetch_url / scroll / get_accessibility_tree. NOTE: if the current tab is a PDF (URL ends in .pdf or content-type is application/pdf), this call auto-redirects to read_pdf since Chrome\'s PDF viewer is a chrome-extension:// page that we cannot scrape via DOM.',
       parameters: {
@@ -263,6 +293,22 @@ export const AGENT_TOOLS = [
           timeout: { type: 'number', description: 'Max wait time in ms (default: 5000)' },
         },
         required: ['selector'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'wait_for_stable',
+      description: 'Wait until the page has been quiet for `quietMs` consecutive milliseconds — no DOM mutations AND no in-flight fetch/XHR. Use this AFTER navigate / set_field({submit:true}) / a click that triggers async work, BEFORE reading the accessibility tree, so you don\'t grab a half-rendered DOM. Different from wait_for_element: wait_for_element answers "did X appear", wait_for_stable answers "is the page done shuffling". Returns `{stable:true, elapsedMs, mutations, inFlightAtExit}` on success, or `{stable:false, timedOut:true, ...}` if the page never settled within `timeout` (proceed anyway in that case — animations / polling never go quiet).',
+      parameters: {
+        type: 'object',
+        properties: {
+          timeout: { type: 'number', description: 'Max total wait in ms. Default 5000, capped at 20000.' },
+          quietMs: { type: 'number', description: 'How many consecutive milliseconds of no mutations + no network activity count as "stable". Default 500, capped at 3000. Use 200–300 for snappy SPAs, 800–1500 for sites with chatty analytics.' },
+          checkNetwork: { type: 'boolean', description: 'Also require fetch/XHR in-flight count == 0. Default true. Set false if the page polls every few seconds (analytics, telemetry) and network never goes idle.' },
+        },
+        required: [],
       },
     },
   },
@@ -687,6 +733,9 @@ export const ASK_ONLY_TOOLS = [
   'get_accessibility_tree', 'read_page', 'read_pdf', 'screenshot',
   'get_interactive_elements', 'scroll',
   'extract_data', 'get_selection', 'clarify', 'done',
+  // wait_for_stable just polls — it does not click, type, or navigate.
+  // Useful in Ask mode when reading a page that is still loading.
+  'wait_for_stable',
   // Read-only network tools — safe in Ask mode because they don't modify
   // the active page or take destructive actions. They DO send the user's
   // cookies though, so they have access to authenticated read endpoints.
@@ -844,6 +893,9 @@ Available tools:
 - scratchpad_write: Pin a note in context that survives summarization (use on long tasks to remember download IDs, file paths, progress, plans)
 - download_social_media: One-shot image/video download from Facebook, Instagram, X/Twitter, LinkedIn, Reddit, Pinterest, YouTube. Single call — no need to inspect the DOM yourself.
 - record_tab / stop_recording: Record the current tab (video + tab audio + mic) into a .webm in Downloads. Call \`record_tab\` when the user says "record this", "start recording", "record the meeting", "kaydet", or similar. Pass \`transcribe:true\` if they mention "transcribe", "transcript", "transkript", "write it down", "konuşulanları yaz", "metin haline getir", "summarize the call later" — basically any signal they want text out of the audio. If the user says "audio only" / "sadece ses" / "no video", pass \`video:false\`. Use \`stop_recording\` only when they explicitly say "stop recording" or similar; don't call it on your own. The active recording shows a red banner in the sidebar with a Stop button the user can click directly, so it's fine to just start it and move on without further chatter.
+- hover: CDP-trusted hover over a ref_id. Use ONLY for menus/tooltips that REVEAL on hover (GitHub three-dot menus, Linear card actions, nav menus with reveal-on-hover children). Re-read the tree after to find the newly-visible items. Do NOT call hover before every click — most things are clickable directly.
+- drag_drop: Drag one ref_id onto another via CDP-trusted pointer events. Use for Trello/Linear/Notion-style card reordering, file-tree node moves, image-crop handles, slider thumbs. Pass \`steps: 15–20\` if the first attempt doesn't trigger the drop indicator on momentum-tracking dnd. Verify by re-reading the tree.
+- wait_for_stable: Wait until the page is quiet (no DOM mutations + no in-flight network) for \`quietMs\` ms. Use AFTER navigate / set_field({submit:true}) / a click that fires async work, BEFORE re-reading the tree, so you don't get a half-rendered DOM. Different from wait_for_element: wait_for_element answers "did X appear", wait_for_stable answers "is the page done shuffling". On chatty sites that never go idle, it times out with \`stable:false\` — proceed anyway.
 
 ACCESSIBILITY TREE — read this carefully:
 - Output format is FLAT INDENTED TEXT. Each node is one line:

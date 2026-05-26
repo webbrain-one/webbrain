@@ -1,0 +1,10 @@
+{
+  "id": "097",
+  "idealFirstToolCall": {
+    "name": "extract_data",
+    "args": {
+      "type": "images"
+    }
+  },
+  "successRubric": "Calls extract_data({type:\"images\"}) which returns image src + alt text. Acceptable: execute_js querying all img elements' alt attributes."
+}

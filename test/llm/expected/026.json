@@ -1,0 +1,8 @@
+{
+  "id": "026",
+  "idealFirstToolCall": {
+    "name": "read_page",
+    "args": {}
+  },
+  "successRubric": "Calls read_page on the current tab. After reading, the agent should call done() with a concise summary of the article body. Navigating away is wrong — the user said \"this page\"."
+}

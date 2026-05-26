@@ -1,0 +1,9 @@
+{
+  "id": "005",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "user": "show me my downloads"
+}

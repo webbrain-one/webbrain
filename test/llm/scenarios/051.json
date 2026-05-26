@@ -1,0 +1,96 @@
+{
+  "id": "051",
+  "category": "stale-refid",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://github.com/acme/widgets/releases/new",
+    "title": "New Release — acme/widgets"
+  },
+  "description": "Used a ref_id from a prior AX tree taken before scrolling. The page has changed; re-read.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://github.com/acme/widgets/releases/new — Title: New Release — acme/widgets]\n\npublish the release"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_1p_99oe0d",
+          "type": "function",
+          "function": {
+            "name": "get_accessibility_tree",
+            "arguments": "{\"filter\":\"visible\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_1p_99oe0d",
+      "name": "get_accessibility_tree",
+      "content": "{\"pageContent\":\"button \\\"Publish release\\\" [ref_42]\",\"viewport\":{\"width\":1133,\"height\":800}}"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_1q_mx5ep1",
+          "type": "function",
+          "function": {
+            "name": "scroll",
+            "arguments": "{\"direction\":\"down\",\"amount\":500}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_1q_mx5ep1",
+      "name": "scroll",
+      "content": "{\"success\":true}"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_1r_noi6sf",
+          "type": "function",
+          "function": {
+            "name": "click_ax",
+            "arguments": "{\"ref_id\":\"ref_42\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_1r_noi6sf",
+      "name": "click_ax",
+      "content": "{\"success\":false,\"error\":\"ref_id ref_42 not found in current accessibility tree. The page may have re-rendered or scrolled. Re-read the tree to get fresh ids.\"}"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "get_accessibility_tree",
+      "args": {
+        "filter": "visible"
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "click_ax({ref_id:\"ref_42\"})",
+        "reason": "Same stale ref_id will fail again — error message explicitly says re-read."
+      },
+      {
+        "match": "click_ax({ref_id:\"ref_43\"})",
+        "reason": "Guessing adjacent ref_ids."
+      }
+    ],
+    "successRubric": "Re-read AX tree before any ref_id-based action. ref_ids are not stable across scroll/navigation."
+  }
+}

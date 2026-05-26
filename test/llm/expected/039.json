@@ -1,0 +1,8 @@
+{
+  "id": "039",
+  "idealFirstToolCall": {
+    "name": "verify_form",
+    "args": {}
+  },
+  "successRubric": "Calls verify_form() to inspect all fields and confirm values. This is the canonical use of verify_form."
+}

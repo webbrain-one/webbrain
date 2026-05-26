@@ -1,0 +1,56 @@
+{
+  "id": "009",
+  "category": "loop-bad-url",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://my-tenant.notion.site/",
+    "title": "You don't have access"
+  },
+  "description": "Tenant URL but no auth/permission — refresh or retry won't help.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: about:home — Title: New Tab]\n\nopen my notion workspace at my-tenant"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_c_7svwtt",
+          "type": "function",
+          "function": {
+            "name": "navigate",
+            "arguments": "{\"url\":\"https://my-tenant.notion.site/\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_c_7svwtt",
+      "name": "navigate",
+      "content": "{\"success\":true,\"url\":\"https://my-tenant.notion.site/\",\"requestedUrl\":\"https://my-tenant.notion.site/\"}"
+    },
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://my-tenant.notion.site/ — Title: You don't have access]\n\nand?"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "done",
+      "args": {
+        "summary": "The Notion workspace at my-tenant.notion.site is saying \"You don't have access\". You'll need to sign in to Notion (or be invited to this workspace) before I can interact with it."
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "navigate({url:\"https://my-tenant.notion.site/\"})",
+        "reason": "Refreshing won't produce a different result."
+      }
+    ],
+    "successRubric": "Report the access wall to the user, do not loop."
+  }
+}

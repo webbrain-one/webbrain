@@ -1,0 +1,10 @@
+{
+  "id": "045",
+  "idealFirstToolCall": {
+    "name": "click",
+    "args": {
+      "text": "Star"
+    }
+  },
+  "successRubric": "Clicks the Star button by text. If already starred (button says \"Starred\"), the agent should detect and report — but the first call is correct."
+}

@@ -1,0 +1,8 @@
+{
+  "id": "091",
+  "idealFirstToolCall": {
+    "name": "get_interactive_elements",
+    "args": {}
+  },
+  "successRubric": "Look for a dark-mode toggle on the current page via get_interactive_elements, then click it. Acceptable: read_page first. Calling execute_js to flip a class is acceptable but UI-first is preferred per the system prompt."
+}

@@ -1,0 +1,9 @@
+{
+  "id": "007",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "user": "open linkedin in this tab"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "066",
+  "idealFirstToolCall": {
+    "name": "get_selection",
+    "args": {}
+  },
+  "successRubric": "Calls get_selection to read the user's highlighted text."
+}

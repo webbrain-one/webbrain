@@ -1,0 +1,10 @@
+{
+  "id": "049",
+  "idealFirstToolCall": {
+    "name": "click",
+    "args": {
+      "text": "Compose"
+    }
+  },
+  "successRubric": "Clicks the Compose button, then fills the To: field with alice@example.com. Body is not specified so the agent should leave it blank or call clarify for body content."
+}

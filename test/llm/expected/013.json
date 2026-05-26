@@ -1,0 +1,10 @@
+{
+  "id": "013",
+  "idealFirstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "about:config"
+    }
+  },
+  "successRubric": "Navigates to about:config (Firefox's advanced preferences)."
+}

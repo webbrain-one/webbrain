@@ -1,0 +1,56 @@
+{
+  "id": "014",
+  "category": "tool-error-pivot",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://arxiv.org/pdf/2401.00001.pdf",
+    "title": "2401.00001.pdf"
+  },
+  "description": "read_page returned PDF-tab notice. Pivot to read_pdf.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://arxiv.org/pdf/2401.00001.pdf — Title: 2401.00001.pdf]\n\nsummarize this paper"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_h_20139z",
+          "type": "function",
+          "function": {
+            "name": "read_page",
+            "arguments": "{}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_h_20139z",
+      "name": "read_page",
+      "content": "{\"success\":false,\"error\":\"This tab is a PDF — Firefox's built-in PDF viewer is a privileged page our content scripts cannot reach. Use read_pdf instead, which fetches the binary and extracts text directly.\"}"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "read_pdf",
+      "args": {
+        "url": "https://arxiv.org/pdf/2401.00001.pdf"
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "read_page({})",
+        "reason": "Same tool that just rejected the PDF tab."
+      },
+      {
+        "match": "screenshot({})",
+        "reason": "PDF viewer screenshot won't produce extractable text."
+      }
+    ],
+    "successRubric": "Use read_pdf with the tab URL. The error message names the right tool — follow it."
+  }
+}

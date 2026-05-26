@@ -1,0 +1,56 @@
+{
+  "id": "012",
+  "category": "tool-error-pivot",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://www.amazon.com/dp/B0EXAMPLE",
+    "title": "Acme Widget — Amazon"
+  },
+  "description": "click by text returned ambiguity error. Pivot to a more specific selector or index.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://www.amazon.com/dp/B0EXAMPLE — Title: Acme Widget — Amazon]\n\nadd this to cart"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_f_b48kc1",
+          "type": "function",
+          "function": {
+            "name": "click",
+            "arguments": "{\"text\":\"Add\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_f_b48kc1",
+      "name": "click",
+      "content": "{\"success\":false,\"error\":\"Ambiguous: 4 elements match \\\"Add\\\" (exact). Use a more specific text, click({index: N}) from get_interactive_elements, or a selector.\"}"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "click",
+      "args": {
+        "text": "Add to Cart"
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "click({text:\"Add\"})",
+        "reason": "Same ambiguous query."
+      },
+      {
+        "match": "click({text:\"Add\", textMatch:\"contains\"})",
+        "reason": "Broader matching makes ambiguity worse, not better."
+      }
+    ],
+    "successRubric": "Use a more specific text (\"Add to Cart\" — the actual Amazon button) OR call get_interactive_elements first and use the index."
+  }
+}

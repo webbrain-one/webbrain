@@ -1,0 +1,10 @@
+{
+  "id": "006",
+  "idealFirstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "https://www.netflix.com/"
+    }
+  },
+  "successRubric": "Navigates to netflix.com. Should treat colloquial \"wanna check\" as \"open the site\"."
+}

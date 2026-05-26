@@ -1,0 +1,9 @@
+{
+  "id": "040",
+  "mode": "act",
+  "tab": {
+    "url": "https://www.google.com/search?q=foo",
+    "title": "foo - Google Search"
+  },
+  "user": "clear the search box"
+}

@@ -1,0 +1,27 @@
+{
+  "runTag": "2026-05-23T17-40-47-950Z",
+  "model": "nemotron-omni-30b",
+  "browser": "chrome",
+  "base": "http://192.168.1.47:8000",
+  "saveRequest": true,
+  "cases": 100,
+  "totalLatencyMs": 176139,
+  "errors": 0,
+  "withToolCall": 93,
+  "byTool": {
+    "navigate": 21,
+    "list_downloads": 2,
+    "new_tab": 3,
+    "(no_tool_call)": 7,
+    "read_page": 8,
+    "get_accessibility_tree": 40,
+    "clarify": 9,
+    "download_file": 3,
+    "download_social_media": 1,
+    "scroll": 1,
+    "screenshot": 1,
+    "get_selection": 1,
+    "fetch_url": 1,
+    "execute_js": 2
+  }
+}

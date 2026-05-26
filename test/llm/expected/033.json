@@ -1,0 +1,8 @@
+{
+  "id": "033",
+  "idealFirstToolCall": {
+    "name": "read_page",
+    "args": {}
+  },
+  "successRubric": "Reads the Amazon product page and reports the visible price. Should not call fetch_url against the same URL (the page is already loaded)."
+}

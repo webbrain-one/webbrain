@@ -1,0 +1,10 @@
+{
+  "id": "068",
+  "idealFirstToolCall": {
+    "name": "clarify",
+    "args": {
+      "question": "Which element should I click?"
+    }
+  },
+  "successRubric": "No antecedent on the current page (about:home is the new-tab page). clarify is correct. Picking some element on the new-tab page is wrong."
+}

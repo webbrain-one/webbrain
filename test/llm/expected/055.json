@@ -1,0 +1,8 @@
+{
+  "id": "055",
+  "idealFirstToolCall": {
+    "name": "download_social_media",
+    "args": {}
+  },
+  "successRubric": "Calls download_social_media (single tool — per the prompt, do NOT try to inspect the DOM manually for IG posts)."
+}

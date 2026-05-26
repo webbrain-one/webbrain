@@ -1,0 +1,10 @@
+{
+  "id": "082",
+  "idealFirstToolCall": {
+    "name": "done",
+    "args": {
+      "summary": "Paris."
+    }
+  },
+  "successRubric": "Trivial factual question. done with the one-word answer is correct. Browsing the web for it is wasteful but not wrong."
+}

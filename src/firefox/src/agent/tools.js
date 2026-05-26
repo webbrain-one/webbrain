@@ -72,6 +72,36 @@ export const AGENT_TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'hover',
+      description: 'Hover the mouse over an element by its ref_id. Use this for menus, tooltips, and "More actions" overlays that only reveal on hover. On Firefox this is synthetic (mouseenter/mouseover/pointerover events) — works on most sites but sites that gate hover-reveal on event.isTrusted will not respond. Re-read the accessibility tree after to find the now-visible items.',
+      parameters: {
+        type: 'object',
+        properties: {
+          ref_id: { type: 'string', description: 'A ref_id from get_accessibility_tree, e.g. "ref_42".' },
+        },
+        required: ['ref_id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'drag_drop',
+      description: 'Drag one element onto another. Use for Trello/Linear-style card reordering, Notion block drags, file-tree node moves, image-crop handles. On Firefox the implementation is synthetic (pointerdown/pointermove/pointerup + HTML5 dragstart/dragover/drop) — less reliable than Chrome\'s CDP path. Sites that verify event.isTrusted, or that use complex DataTransfer payloads (e.g. file drops, cross-window drags), may not respond. After a drag, re-read the tree to confirm the order/position changed.',
+      parameters: {
+        type: 'object',
+        properties: {
+          fromRefId: { type: 'string', description: 'ref_id of the element to grab.' },
+          toRefId: { type: 'string', description: 'ref_id of the element to drop onto.' },
+          steps: { type: 'number', description: 'Intermediate move waypoints. Default 10; bump to 15–20 if a momentum-tracking library doesn\'t pick up the drop.' },
+        },
+        required: ['fromRefId', 'toRefId'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'read_page',
       description: 'Read the current page content including title, URL, text content, links, and forms. RESULT SHAPE: `text` is the article body (nav/header/footer/aside/ads stripped by default); `textSource` is the CSS selector that produced the body (or "body (chrome-stripped)" / "body (raw)" when no article container matched); `isArticlePage` is true when the page self-declares as an article via og:type, article:published_time, schema.org Article, or `<article>`. When `isArticlePage:true` AND `textSource` is a real article selector, you HAVE the complete article body — do not chase more content with fetch_url / scroll / get_accessibility_tree. NOTE: if the current tab is a PDF (URL ends in .pdf or content-type is application/pdf), this call auto-redirects to read_pdf since Firefox\'s built-in PDF viewer is a privileged page that we cannot scrape via DOM.',
       parameters: {
@@ -250,6 +280,22 @@ export const AGENT_TOOLS = [
           timeout: { type: 'number', description: 'Max wait time in ms (default: 5000)' },
         },
         required: ['selector'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'wait_for_stable',
+      description: 'Wait until the page has been quiet for `quietMs` consecutive milliseconds — no DOM mutations AND no in-flight fetch/XHR. Use this AFTER navigate / set_field({submit:true}) / a click that triggers async work, BEFORE reading the accessibility tree, so you don\'t grab a half-rendered DOM. Different from wait_for_element: wait_for_element answers "did X appear", wait_for_stable answers "is the page done shuffling". Returns `{stable:true, elapsedMs, mutations, inFlightAtExit}` on success, or `{stable:false, timedOut:true, ...}` if the page never settled within `timeout`.',
+      parameters: {
+        type: 'object',
+        properties: {
+          timeout: { type: 'number', description: 'Max total wait in ms. Default 5000, capped at 20000.' },
+          quietMs: { type: 'number', description: 'How many consecutive milliseconds of no mutations + no network activity count as "stable". Default 500, capped at 3000.' },
+          checkNetwork: { type: 'boolean', description: 'Also require fetch/XHR in-flight count == 0. Default true.' },
+        },
+        required: [],
       },
     },
   },
@@ -583,6 +629,8 @@ export const AGENT_TOOLS = [
 export const ASK_ONLY_TOOLS = [
   'read_page', 'read_pdf', 'screenshot', 'get_interactive_elements', 'scroll',
   'extract_data', 'get_selection', 'clarify', 'done',
+  // wait_for_stable just polls — safe in Ask mode.
+  'wait_for_stable',
   'fetch_url', 'research_url', 'list_downloads',
 ];
 
@@ -703,6 +751,9 @@ Available tools:
 - verify_form: Verify form fields before submitting
 - scratchpad_write: Pin a note in context that survives summarization (use on long tasks to remember download IDs, file paths, progress, plans)
 - download_social_media: One-shot image/video download from Facebook, Instagram, X/Twitter, LinkedIn, Reddit, Pinterest, YouTube. Single call — no need to inspect the DOM yourself.
+- hover: Synthetic hover over a ref_id (Firefox MV2 — no CDP). Use ONLY for menus/tooltips that REVEAL on hover (GitHub three-dot menus, Linear card actions). Re-read the tree after to find the newly-visible items. isTrusted=false, so sites with strict event-trust gating won't respond — fall back to clicking the explicit "..." button if hover doesn't reveal a menu.
+- drag_drop: Synthetic drag from one ref_id to another (pointerdown/move/up + HTML5 dragstart/drop). Use for Trello/Linear/Notion-style card reordering, image-crop handles. Less reliable than Chrome's CDP path — verify by re-reading the tree.
+- wait_for_stable: Wait until the page is quiet (no DOM mutations + no in-flight network) for \`quietMs\` ms. Use AFTER navigate / set_field({submit:true}) / a click that fires async work, BEFORE re-reading the tree. Different from wait_for_element: wait_for_element answers "did X appear", wait_for_stable answers "is the page done shuffling".
 
 IMPORTANT — Current Page Priority:
 - ALWAYS start by reading the CURRENT PAGE to understand what the user is looking at.

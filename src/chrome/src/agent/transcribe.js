@@ -75,6 +75,37 @@ function pickProvider(providers) {
 }
 
 /**
+ * Read the user's explicit transcription override from storage if set.
+ *
+ * Lives in chrome.storage.local under `transcriptionModel = {baseUrl, apiKey,
+ * model}` — written by Settings → Multimodal → Transcription. All three
+ * fields must be present (baseUrl, model required; apiKey optional for
+ * local servers like LM Studio / llama.cpp) for the override to win over
+ * the auto-pick path. Returns null when not set so callers can fall
+ * through to pickProvider().
+ */
+async function readTranscriptionOverride() {
+  try {
+    const api = (typeof chrome !== 'undefined' ? chrome : (typeof browser !== 'undefined' ? browser : null));
+    if (!api?.storage?.local?.get) return null;
+    const stored = await api.storage.local.get(['transcriptionModel']);
+    const cfg = stored?.transcriptionModel;
+    if (!cfg || typeof cfg !== 'object') return null;
+    const baseUrl = (cfg.baseUrl || '').trim();
+    const model = (cfg.model || '').trim();
+    if (!baseUrl || !model) return null; // partial → not an override
+    return {
+      id: 'transcription-override',
+      baseUrl,
+      apiKey: (cfg.apiKey || '').trim(),
+      explicitModel: model,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Transcribe a webm/wav/mp3 blob.
  *
  * @param {Map|Object} providers — providerManager.providers (Map) or a plain object.
@@ -88,15 +119,20 @@ export async function transcribeAudio(providers, audioBlob, opts = {}) {
   if (!audioBlob || audioBlob.size === 0) {
     return { ok: false, error: 'Transcription: empty audio blob.' };
   }
-  const picked = pickProvider(providers);
+  // Explicit Settings → Multimodal → Transcription override wins over the
+  // auto-pick path. When the user has bothered to fill in a base URL +
+  // model, that's a strong signal that they want THOSE rather than the
+  // first OpenAI-compatible provider in their list.
+  const override = await readTranscriptionOverride();
+  const picked = override || pickProvider(providers);
   if (!picked) {
     return {
       ok: false,
-      error: 'No Whisper-compatible provider configured. Add an API key to OpenAI (whisper-1) or Groq (whisper-large-v3) in Settings → Providers, then re-record.',
+      error: 'No Whisper-compatible provider configured. Add an API key to OpenAI (whisper-1) or Groq (whisper-large-v3) in Settings → Providers, OR set an explicit Transcription endpoint in Settings → Multimodal → Transcription, then re-record.',
     };
   }
 
-  const model = opts.modelOverride || WHISPER_MODEL_BY_PROVIDER[picked.id] || 'whisper-1';
+  const model = opts.modelOverride || picked.explicitModel || WHISPER_MODEL_BY_PROVIDER[picked.id] || 'whisper-1';
   const filename = opts.filename || 'recording.webm';
 
   // Whisper endpoint convention: /v1/audio/transcriptions. baseUrl already

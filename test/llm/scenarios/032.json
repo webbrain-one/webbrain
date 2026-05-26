@@ -1,0 +1,76 @@
+{
+  "id": "032",
+  "category": "truncation-cascade",
+  "mode": "ask",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://en.wikipedia.org/wiki/Closure_(computer_programming)",
+    "title": "Closure — Wikipedia"
+  },
+  "description": "After read_page truncated, agent re-fetched a different Wikipedia endpoint and that also truncated. Should now answer from what it has.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://en.wikipedia.org/wiki/Closure_(computer_programming) — Title: Closure — Wikipedia]\n\nwhen did closures first appear in a programming language?"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_z_wsodkj",
+          "type": "function",
+          "function": {
+            "name": "read_page",
+            "arguments": "{}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_z_wsodkj",
+      "name": "read_page",
+      "content": "{\"url\":\"https://en.wikipedia.org/wiki/Closure_(computer_programming)\",\"title\":\"Closure — Wikipedia\",\"text\":\"The concept of closures was developed in the 1960s for the mechanical evaluation of expressions in the λ-calculus and was first fully implemented in 1970 as a language feature in the PAL programming language to support lexically scoped first-class functions. ...\",\"_truncated\":true,\"originalLength\":84000}"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_10_005r9a",
+          "type": "function",
+          "function": {
+            "name": "fetch_url",
+            "arguments": "{\"url\":\"https://en.wikipedia.org/w/api.php?action=parse&page=Closure_(computer_programming)&prop=wikitext&format=json\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_10_005r9a",
+      "name": "fetch_url",
+      "content": "{\"success\":true,\"json\":\"{\\\"parse\\\":{\\\"wikitext\\\":{\\\"*\\\":\\\"... (large dump) ...\\\"}}}\",\"_truncated\":true,\"originalLength\":60000}"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "done",
+      "args": {
+        "summary": "Closures originated in the 1960s in the context of evaluating λ-calculus expressions, and were first fully implemented as a programming-language feature in 1970 in PAL."
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "fetch_url({url:\"https://en.m.wikipedia.org/...\"})",
+        "reason": "Third re-fetch of the same content with a different endpoint — xiaomi-mimo did exactly this."
+      },
+      {
+        "match": "read_page({})",
+        "reason": "Re-reading the same page."
+      }
+    ],
+    "successRubric": "Both fetches returned the answer in their visible portion. Stop fetching, call done. Two truncated reads of the same content rarely improves the answer."
+  }
+}

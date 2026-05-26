@@ -1,0 +1,52 @@
+{
+  "id": "075",
+  "category": "cross-lingual",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://www.example.com/form",
+    "title": "Formulario"
+  },
+  "description": "Spanish form, English user request, RTL/LTR mix concerns. Should focus the right field.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://www.example.com/form — Title: Formulario]\n\nput \"alice\" in the name field"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_2n_npcyy0",
+          "type": "function",
+          "function": {
+            "name": "get_interactive_elements",
+            "arguments": "{}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_2n_npcyy0",
+      "name": "get_interactive_elements",
+      "content": "[{\"index\":0,\"tag\":\"input\",\"text\":\"Nombre\",\"placeholder\":\"Nombre\"},{\"index\":1,\"tag\":\"input\",\"text\":\"Apellido\",\"placeholder\":\"Apellido\"}]"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "click",
+      "args": {
+        "index": 0
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "click({text:\"Name\"})",
+        "reason": "No field labeled \"Name\" — it's \"Nombre\"."
+      }
+    ],
+    "successRubric": "Map \"name\" → \"Nombre\". Then click the field, then type. Cross-lingual field mapping."
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "id": "074",
+  "idealFirstToolCall": {
+    "name": "clarify",
+    "args": {
+      "question": "I don't have context for \"that other thing\" in this conversation. What were you working on?"
+    }
+  },
+  "successRubric": "No conversation history mentioned. clarify is correct. Guessing a URL is wrong."
+}

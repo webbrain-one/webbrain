@@ -1,0 +1,30 @@
+{
+  "id": "064",
+  "category": "mode-boundary",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://www.cnn.com/2026/01/world/example-story/index.html",
+    "title": "Example story — CNN"
+  },
+  "description": "Act + simple question. Act allows read; no need to be ceremonious.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://www.cnn.com/2026/01/world/example-story/index.html — Title: Example story — CNN]\n\ntldr"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "read_page",
+      "args": {}
+    },
+    "antiPatterns": [
+      {
+        "match": "clarify({question:\"...\"})",
+        "reason": "Clear request, no ambiguity."
+      }
+    ],
+    "successRubric": "Read the page and call done with a summary. Don't over-think."
+  }
+}

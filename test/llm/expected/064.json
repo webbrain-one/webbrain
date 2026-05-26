@@ -1,0 +1,10 @@
+{
+  "id": "064",
+  "idealFirstToolCall": {
+    "name": "scroll",
+    "args": {
+      "direction": "bottom"
+    }
+  },
+  "successRubric": "Calls scroll({direction:\"bottom\"}). Acceptable: scroll({direction:\"down\", amount: ...}) repeatedly."
+}

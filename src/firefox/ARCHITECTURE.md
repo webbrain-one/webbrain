@@ -1,6 +1,6 @@
 # WebBrain Firefox Extension — Architecture
 
-> Version 7.4.1 · Manifest V2 · Background Page
+> Version 8.0.3 · Manifest V2 · Background Page
 
 ## How Firefox Differs from Chrome
 
@@ -205,7 +205,7 @@ this.conversations = new Map();  // memory only, no persistence
 
 ## Tools
 
-### Complete tool list (31 tools)
+### Complete tool list
 
 AX tier (preferred in 3.6.x):
 
@@ -215,6 +215,8 @@ AX tier (preferred in 3.6.x):
 | `click_ax` | Click by ref_id |
 | `type_ax` | Type into field by ref_id |
 | `set_field` | Type + combobox-aware commit (ArrowDown+Enter) or form submit |
+| `hover` | Synthetic hover (mouseenter/mouseover/pointerover events). `isTrusted: false` — sites that gate hover-reveal on event trust will not respond. Works on most React/Vue handlers that listen to the standard events. |
+| `drag_drop` | Synthetic drag: pointerdown/move/up + HTML5 dragstart/dragover/drop with constructed DataTransfer. Less reliable than Chrome's CDP-trusted path; verify by re-reading the tree. |
 
 Legacy tier (kept for compatibility with older prompts and for non-AX flows):
 
@@ -222,7 +224,7 @@ Legacy tier (kept for compatibility with older prompts and for non-AX flows):
 |---|---|
 | `read_page`, `screenshot`, `get_interactive_elements` | Page content / image / indexed elements |
 | `click`, `type_text`, `press_keys` | Text/selector/index-based interaction |
-| `scroll`, `navigate`, `new_tab`, `wait_for_element` | Page control |
+| `scroll`, `navigate`, `new_tab`, `wait_for_element`, `wait_for_stable` | Page control. `wait_for_stable` polls MutationObserver + in-flight fetch/XHR — works identically to Chrome. |
 | `extract_data`, `get_selection`, `execute_js` | Data extraction / arbitrary JS |
 | `get_shadow_dom`, `get_frames`, `iframe_read`, `iframe_click`, `iframe_type` | Frame / shadow DOM |
 | `fetch_url`, `research_url` | HTTP / open-and-read |
@@ -347,7 +349,7 @@ All identical to Chrome:
 - **Loop detection** — three detectors (general repeat, coordinate click, navigation) with the same thresholds and nudge/stop behavior
 - **Context management** — auto-trim at >50 messages or >80,000 chars, LLM-powered summarization, emergency trim on context overflow, image pruning (last 4 only), tool-result cap at 8,000 chars
 - **Verbose mode** — three levels: Normal / Verbose ON / Deep verbose (Shift+click dumps the LLM-payload ring buffer to DevTools console). Deep verbose works identically; there's just no persisted trace UI to browse it from
-- **Site adapters** — same adapter set, same `getActiveAdapter(url)` matching, same mid-conversation re-injection on navigation
+- **Site adapters** — same adapter set as Chrome (57 sites across code/dev, productivity, social, messaging, e-commerce, travel, finance, news paywalls, job portals, etc.); same `getActiveAdapter(url)` matching, same mid-conversation re-injection on navigation. Only ONE adapter fires at a time so prompt cost is fixed regardless of total count.
 
 ---
 

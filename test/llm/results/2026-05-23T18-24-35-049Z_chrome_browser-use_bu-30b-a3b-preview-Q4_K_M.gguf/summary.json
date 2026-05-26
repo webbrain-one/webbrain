@@ -1,0 +1,33 @@
+{
+  "runTag": "2026-05-23T18-24-35-049Z",
+  "model": "browser-use_bu-30b-a3b-preview-Q4_K_M.gguf",
+  "browser": "chrome",
+  "base": "http://192.168.1.47:8080",
+  "saveRequest": true,
+  "cases": 100,
+  "totalLatencyMs": 42587,
+  "errors": 0,
+  "withToolCall": 93,
+  "withToolCallFromContent": 89,
+  "byTool": {
+    "navigate": 31,
+    "list_downloads": 2,
+    "(no_tool_call)": 7,
+    "done": 15,
+    "read_page": 3,
+    "extract_data": 5,
+    "get_accessibility_tree": 10,
+    "set_field": 1,
+    "click_ax": 10,
+    "click": 4,
+    "download_file": 2,
+    "download_social_media": 2,
+    "scroll": 1,
+    "screenshot": 1,
+    "get_selection": 1,
+    "go_back": 1,
+    "close": 2,
+    "search": 1,
+    "switch": 1
+  }
+}

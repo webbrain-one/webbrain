@@ -1,0 +1,8 @@
+{
+  "id": "032",
+  "idealFirstToolCall": {
+    "name": "read_page",
+    "args": {}
+  },
+  "successRubric": "Reads the Reddit thread page and reports the comment count from the page header. extract_data is also acceptable but read_page works."
+}

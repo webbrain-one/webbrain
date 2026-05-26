@@ -1,0 +1,10 @@
+{
+  "id": "019",
+  "idealFirstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "https://www.reddit.com/search/?q=mechanical+keyboards"
+    }
+  },
+  "successRubric": "Either: navigate to reddit.com/search?q=mechanical+keyboards, OR navigate to r/MechanicalKeyboards (the dedicated subreddit). Both are reasonable interpretations."
+}

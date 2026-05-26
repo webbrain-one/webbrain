@@ -1,0 +1,52 @@
+{
+  "id": "036",
+  "category": "truncation-cascade",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://www.amazon.com/s?k=earbuds",
+    "title": "Amazon: earbuds"
+  },
+  "description": "Listing page items captured; deliver via done rather than paginate.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://www.amazon.com/s?k=earbuds — Title: Amazon: earbuds]\n\nfind me 3 wireless earbuds under $100"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_15_1chahj",
+          "type": "function",
+          "function": {
+            "name": "get_accessibility_tree",
+            "arguments": "{\"filter\":\"visible\",\"maxDepth\":10}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_15_1chahj",
+      "name": "get_accessibility_tree",
+      "content": "{\"pageContent\":\"list of 24 product cards on page, including: Acme Buds $49, Acme Pro $89, Acme Mini $34, Acme Lite $59... (and 20 more)\",\"viewport\":{\"width\":1133,\"height\":800}}"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "done",
+      "args": {
+        "summary": "3 wireless earbuds under $100: Acme Mini ($34) — link, Acme Buds ($49) — link, Acme Lite ($59) — link."
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "navigate({url:\"https://www.amazon.com/s?k=earbuds&p=2\"})",
+        "reason": "Paginating before delivering the 3 already-visible matches."
+      }
+    ],
+    "successRubric": "We already have at least 3 sub-$100 results on this page. Deliver them via done(). The user asked for 3, not 30."
+  }
+}

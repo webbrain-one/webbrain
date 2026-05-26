@@ -1,0 +1,10 @@
+{
+  "id": "014",
+  "idealFirstToolCall": {
+    "name": "clarify",
+    "args": {
+      "question": "How would you like to see your bookmarks? I can navigate to the Library, or you can open the Bookmarks sidebar with Ctrl/Cmd+B."
+    }
+  },
+  "successRubric": "Acceptable: clarify, OR navigate to about:bookmarks (which on Firefox redirects to the Library). Calling done with an explanation that the agent can't open the bookmark sidebar via tools is also acceptable."
+}

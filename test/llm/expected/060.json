@@ -1,0 +1,10 @@
+{
+  "id": "060",
+  "idealFirstToolCall": {
+    "name": "click",
+    "args": {
+      "text": "Search"
+    }
+  },
+  "successRubric": "Focuses the search box and types \"wireless earbuds\". Then filters by price ≤ $100 (sidebar filter or query param). Per LISTINGS guidance: extract and list 3 visible results to the user BEFORE paginating further."
+}

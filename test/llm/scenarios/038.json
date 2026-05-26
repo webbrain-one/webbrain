@@ -1,0 +1,52 @@
+{
+  "id": "038",
+  "category": "truncation-cascade",
+  "mode": "ask",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://example-docs.io/api/methods",
+    "title": "API Methods"
+  },
+  "description": "fetch_url returned a long doc truncated mid-method. Extract names from the visible part and report.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://example-docs.io/api/methods — Title: API Methods]\n\nlist all the API methods"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_17_r3kofe",
+          "type": "function",
+          "function": {
+            "name": "fetch_url",
+            "arguments": "{\"url\":\"https://example-docs.io/api/methods\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_17_r3kofe",
+      "name": "fetch_url",
+      "content": "{\"success\":true,\"text\":\"Methods:\\n- getUser\\n- updateUser\\n- deleteUser\\n- listUsers\\n- createUser\\n- createProject\\n- updateProject\\n- listProjects... [continued]\",\"_truncated\":true,\"originalLength\":40000}"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "done",
+      "args": {
+        "summary": "Methods listed in the visible head: getUser, updateUser, deleteUser, listUsers, createUser, createProject, updateProject, listProjects. The response was truncated — there may be more below."
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "fetch_url({url:\"https://example-docs.io/api/methods?page=2\"})",
+        "reason": "Made-up pagination URL."
+      }
+    ],
+    "successRubric": "Surface the partial list with an honest \"truncated\" disclaimer. Don't invent pagination URLs."
+  }
+}

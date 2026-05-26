@@ -1,0 +1,10 @@
+{
+  "id": "053",
+  "idealFirstToolCall": {
+    "name": "click",
+    "args": {
+      "text": "Search mail"
+    }
+  },
+  "successRubric": "Focuses Gmail's search box and types \"invoice\", then submits. Acceptable: navigate directly to /mail/u/0/#search/invoice."
+}

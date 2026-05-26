@@ -1,0 +1,52 @@
+{
+  "id": "078",
+  "category": "cross-lingual",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://www.example.kr/",
+    "title": "예시 페이지"
+  },
+  "description": "Korean UI, English request. Korean label needed.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://www.example.kr/ — Title: 예시 페이지]\n\nclick the login button"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_2q_343q48",
+          "type": "function",
+          "function": {
+            "name": "get_interactive_elements",
+            "arguments": "{}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_2q_343q48",
+      "name": "get_interactive_elements",
+      "content": "[{\"index\":0,\"tag\":\"button\",\"text\":\"로그인\"},{\"index\":1,\"tag\":\"button\",\"text\":\"회원가입\"}]"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "click",
+      "args": {
+        "index": 0
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "click({text:\"Login\"})",
+        "reason": "No English \"Login\" on this page."
+      }
+    ],
+    "successRubric": "Map login → 로그인. Then click by index since the label is in Korean script."
+  }
+}

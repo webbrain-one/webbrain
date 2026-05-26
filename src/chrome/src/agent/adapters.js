@@ -358,10 +358,56 @@ const ADAPTERS = [
 - Subscription edits often have proration prompts ("Charge prorated amount immediately" vs "On next invoice") — read which is selected.
 - PRODUCT CATALOG — CRITICAL: The product catalog page has CONFUSABLE buttons near each other. "Export prices" and "Export products" are NOT for creating products — NEVER click them when the task is to create a product. To create a product: (1) click the green "+ Create product" button, (2) the "Add a product" overlay form appears, (3) use get_interactive_elements to find the Name input field INSIDE THE FORM — it will be an input element near the top, (4) click that input, then type_text with no selector to enter the name, (5) scroll down to the "Pricing" section for price/interval, (6) click "Add product" to submit. IMPORTANT: after the form overlay opens, ONLY interact with elements inside the form. Do NOT click anything on the page behind the form.`,
   },
+  // Site-specific finance adapters come BEFORE finance-generic.
+  // getActiveAdapter returns the first match; finance-generic's regex
+  // includes "coinbase" and "robinhood" as substrings, so if it sat
+  // earlier it would shadow these site-specific adapters and the
+  // high-stakes per-site guidance would never reach the model.
+  {
+    name: 'coinbase',
+    category: 'finance',
+    match: (url) => /^https?:\/\/(www\.|pro\.|exchange\.|accounts\.)?coinbase\.com\//.test(url),
+    notes: `
+- ⚠️ HIGH-STAKES — real crypto, real money. Trades and withdrawals are typically irreversible.
+- Buy / Sell flows are 2-step: an entry screen (amount + asset + funding source) → a Review/Preview screen → an explicit Confirm. Never click Confirm without reading back the exact amount, asset, fees, and total to the user.
+- The funding-source picker (USD wallet vs USDC vs linked bank vs card) changes fees materially — confirm which is selected before previewing.
+- Recurring buy schedules can be toggled inside the buy flow; don't enable one unless the user explicitly asked for recurring.
+- Sends to external wallets show the address and asked network — both must match what the user told you. If the network is wrong, the funds are lost. Read both fields back verbatim.
+- Vault withdrawals carry a 48h delay window; signal this if relevant to the user's task.
+- 2FA prompts (SMS, authenticator, hardware key) should be surfaced — never auto-approve.`,
+  },
+  {
+    name: 'robinhood',
+    category: 'finance',
+    match: (url) => /^https?:\/\/(www\.)?robinhood\.com\//.test(url),
+    notes: `
+- ⚠️ HIGH-STAKES — real brokerage. Orders fill at market and are typically irreversible.
+- Place Order is 2-step: Review → Submit. The Review screen is the last gate — read it back to the user (symbol, action, quantity, dollar amount, order type, time-in-force) before pressing Submit.
+- Account switcher (top-left header) toggles between Brokerage / Cash / Margin / Crypto / Retirement — available symbols and orders differ per account. Confirm which is active before placing.
+- Order entry has a $ vs # shares toggle. Fractional dollar amounts only work on supported symbols; the form silently rounds otherwise.
+- Options trading is gated by approval level (Level 1–3). If the action is unavailable for the user's level, surface that, don't try to bypass.
+- "Robinhood Gold" upsell modals interpose mid-flow on margin / advanced features — dismiss with the close X, don't sign up.
+- Crypto orders on Robinhood Crypto are separate from stock orders; symbols are not transferable to external wallets without a withdrawal flow.`,
+  },
+  {
+    name: 'tradingview',
+    category: 'finance',
+    match: (url) => /^https?:\/\/(www\.)?tradingview\.com\//.test(url),
+    notes: `
+- Charts render to <canvas>. get_accessibility_tree returns almost nothing useful for the chart surface itself — don't try to read prices off the chart by querying the tree.
+- The Symbol info / "Details" panel on the right sidebar (and the watchlist in the top bar) DO surface readable data in the tree. Use those for price, ratio, fundamentals reads.
+- "/" opens symbol search from anywhere. Type ticker, pick from the dropdown.
+- Buy / Sell buttons trigger broker integration (Interactive Brokers, OANDA, etc.) via a side panel — they do NOT execute orders on TradingView itself. If the user said "buy", confirm which broker is connected and treat it as a high-stakes finance action (read order back).
+- Alerts and indicators added to a chart persist per-layout; saving requires sign-in.
+- Heavy keyboard culture: Alt+S save layout, Ctrl+, settings. If the model can't find a button, hint at the shortcut rather than searching forever.`,
+  },
   {
     name: 'finance-generic',
     category: 'finance',
-    // Match common bank, crypto exchange, and payment patterns by domain.
+    // Catch-all for finance/banking/crypto domains we don't have a
+    // site-specific adapter for. MUST be ordered AFTER the specific
+    // finance adapters (stripe, coinbase, robinhood, tradingview) so
+    // those win when both this regex and a specific match() return true.
     match: (url) => /^https?:\/\/[^\/]*(bank|banking|chase|wellsfargo|bankofamerica|citibank|hsbc|barclays|santander|bnp|deutsche|ubs|coinbase|binance|kraken|gemini\.com|bitstamp|bitfinex|crypto\.com|metamask|paypal|venmo|wise\.com|revolut|n26|monzo|robinhood|fidelity|schwab|vanguard|etrade|interactivebrokers|nordnet|degiro)\b/i.test(url),
     notes: `
 - ⚠️ HIGH-STAKES SITE (financial / banking / crypto). Real money is at stake and many actions are irreversible.
@@ -369,6 +415,322 @@ const ADAPTERS = [
 - Always read confirmation modals carefully and read them back to the user before clicking the final confirm.
 - If the user asks you to "check balance" or "show transactions", do that and stop. Don't proactively click action buttons.
 - Wallet connect prompts, signature requests, and 2FA codes should be surfaced to the user — never auto-approve.`,
+  },
+
+  // ─── Travel ───────────────────────────────────────────────────────────
+  {
+    name: 'airbnb',
+    category: 'general',
+    match: (url) => /^https?:\/\/(www\.)?airbnb\.[a-z.]+\//.test(url),
+    notes: `
+- Search "Where" field is a combobox — typing alone won't commit. Type a destination, then PICK the suggestion from the dropdown (set_field with submit:true + a re-read of the tree to confirm the chip appeared).
+- Date pickers are custom calendar listboxes. Keyboard nav (arrow keys + Enter) is more reliable than clicking date cells.
+- "Instant Book" auto-confirms; "Request to Book" needs host approval. Different finality — read the badge on the listing before clicking the primary CTA.
+- Login wall appears the moment the user tries to view wishlists, hosting, or messages. Booking flow itself requires sign-in at the final step.
+- The initially-shown nightly price excludes cleaning fee / Airbnb service fee / taxes — the breakdown only appears in the reservation review. Always confirm the TOTAL with the user before the final Confirm.
+- "Specific dates" vs "Flexible" tabs — flexible search returns a different result shape; flag if the user said specific dates.`,
+  },
+  {
+    name: 'booking',
+    category: 'general',
+    match: (url) => /^https?:\/\/(www\.)?booking\.com\//.test(url),
+    notes: `
+- Urgency overlays ("X people are looking", "Only N rooms left at this price", "Booked 3 times in the last hour") are marketing, not constraints. Ignore them when summarizing for the user.
+- Currency / language widget in the header changes displayed prices. Clicking it mid-flow can shuffle a comparison; check before changing.
+- "Genius" loyalty discount applies only when signed in; the non-logged-in price shown is the ceiling. Mention if relevant.
+- "Free cancellation" vs "Non-refundable" badges on each room option are critical. Read the badge before clicking Reserve — non-refundable saves money but locks the booking.
+- Multi-room reservations require a separate guest-details form per room. Don't assume one form covers all.
+- Search results have a sort dropdown ("Our top picks" by default — sponsored-influenced). For price-sensitive searches, switch to "Price (lowest first)".`,
+  },
+  {
+    name: 'expedia',
+    category: 'general',
+    match: (url) => /^https?:\/\/(www\.)?expedia\.[a-z.]+\//.test(url),
+    notes: `
+- Bundle flow (Flight + Hotel, Flight + Car, etc.) — the primary CTA label changes per step ("Continue" → "Choose flights" → "Select hotel" → "Reserve"). Read the current button text; don't memorize a single label.
+- Filters live in a left rail that may be collapsed on narrow viewports — expand before reading.
+- Loyalty program (One Key) discounts auto-apply at checkout if signed in. Verify the pre/post-loyalty total against what the user expected.
+- Date picker is a custom calendar; type-then-tab usually doesn't commit. Click into the field, pick from the calendar grid (arrow keys + Enter work).
+- "Book a trip" vs "Save for later" — the latter is a wishlist action, not a hold.
+- Trip dashboard at /trips after a booking shows itinerary, change/cancel options. Cancellation rules vary per supplier.`,
+  },
+  {
+    name: 'google-maps',
+    category: 'general',
+    match: (url) => /^https?:\/\/(www\.)?google\.[a-z.]+\/maps/.test(url) || /^https?:\/\/maps\.google\.[a-z.]+\//.test(url),
+    notes: `
+- Search bar at top-left. Results panel slides out from the left when a search returns multiple places.
+- Clicking a marker (or a result in the list) opens a place card. The "Directions" button is at the top of that card.
+- Layer / traffic / satellite toggles live in a bottom-left rail and do not always surface in the AX tree — describe what should be on screen rather than insisting on tree-driven clicks. Coord clicks via screenshot may be necessary.
+- Place details panel has multiple tabs (Overview, Reviews, Photos, About) — switch by clicking the tab label. Reviews lazy-load.
+- "Send directions to your phone" requires Google sign-in.
+- Sharing a place produces a /maps/place/... URL with a CID — that's the stable link. The current viewport URL with @lat,lng,zoom is not a place link.`,
+  },
+  {
+    name: 'google-flights',
+    category: 'general',
+    match: (url) => /^https?:\/\/(www\.)?google\.[a-z.]+\/(travel\/)?flights/.test(url),
+    notes: `
+- Date matrix and price calendar are partially canvas-rendered; the AX tree may show very little for that section. Use the visible row/column labels you CAN read, and quote dollar amounts only when they appear as DOM text.
+- Origin / Destination / Dates are all comboboxes — type, then pick the matching dropdown entry. Without picking, the search doesn't commit.
+- Filter chips (stops, airlines, times, bags) toggle inline; the URL may not reflect changes. To share a filtered search, copy the URL AFTER changing filters.
+- "Track prices" toggle requires Google sign-in; surface this if the user asks to track.
+- "Book on Expedia / Kayak / airline" buttons redirect to an OTA or airline site — that's a different adapter's territory. Flag the handoff to the user before clicking.`,
+  },
+  {
+    name: 'kayak',
+    category: 'general',
+    match: (url) => /^https?:\/\/(www\.)?kayak\.[a-z.]+\//.test(url),
+    notes: `
+- Aggregator, not a direct booker. The "View Deal" / "Book Now" button redirects to an OTA (Expedia, Priceline, etc.) or the airline directly. The actual booking happens off-Kayak.
+- "Hacker Fares" combine two one-way tickets, often on different carriers. Confirm before the user purchases — the two legs are SEPARATE bookings with separate cancellation rules.
+- Search Engine Results Page (SERP) clusters multiple booking options per itinerary — expand the cluster card to see all providers and prices.
+- Anti-bot challenges fire on rapid filter changes or fast pagination — slow the pace (wait_for_stable between filter toggles) rather than power through.
+- Price alerts require sign-in; "Hopper" predictions on price trends are advisory, not guarantees.`,
+  },
+  {
+    name: 'opentable',
+    category: 'general',
+    match: (url) => /^https?:\/\/(www\.)?opentable\.[a-z.]+\//.test(url),
+    notes: `
+- Search flow: party size + date + time → results show time-slot chips per restaurant. Click a time chip to enter the reservation flow.
+- A reservation HOLD is created when the user clicks the time chip; final confirmation happens on the next screen. The hold expires (usually 5 min) — don't dawdle on the review page.
+- Phone number is required for booking; some restaurants ask for credit-card hold (no-show charge).
+- Cancellation policy varies per restaurant and per time — read the small print before confirming.
+- "DiningPoints" earnings show in the confirmation screen; not all reservations earn points.
+- Map view and List view toggle in the toolbar — list is easier for read-back.`,
+  },
+
+  // ─── E-commerce (beyond Amazon) ───────────────────────────────────────
+  {
+    name: 'ebay',
+    category: 'general',
+    match: (url) => /^https?:\/\/(www\.)?ebay\.[a-z.]+\//.test(url),
+    notes: `
+- Listing format matters: Auction vs Buy-It-Now vs Best Offer — the primary buy button changes. "Place bid" is NOT the same as "Buy It Now".
+- Bidding: enter your maximum bid (eBay auto-bids up to it). The confirm modal shows the actual current bid that will be placed, which may be lower than the max. Read both back to the user.
+- "Watchlist" requires sign-in; "Add to cart" works without.
+- Seller page URL pattern is /usr/<seller>; listing URL is /itm/<id>. Don't confuse them when navigating.
+- Shipping cost may show as "Calculated" until a ZIP code is entered — set the ZIP before promising a total.
+- Returns policies vary per seller (30 day, 60 day, no returns) — read the listing's Returns section before suggesting purchase.`,
+  },
+  {
+    name: 'walmart',
+    category: 'general',
+    match: (url) => /^https?:\/\/(www\.)?walmart\.com\//.test(url),
+    notes: `
+- Fulfillment selector (Pickup / Delivery / Shipping) sits at the top of search and product pages — switching it filters items and changes prices/availability. Confirm the user's intent before assuming.
+- "Add to cart" appears in TWO mounts: search results card AND product detail page. They behave identically; either is fine.
+- "Walmart+" subscription upsell interposes mid-checkout with a "Free shipping with Walmart+" modal. Decline unless asked.
+- Pickup / delivery slots require a ZIP code or saved address; "Find in store" inventory requires it too.
+- Reviews and Q&A tabs lazy-load. Scroll into the section before reading.`,
+  },
+  {
+    name: 'target',
+    category: 'general',
+    match: (url) => /^https?:\/\/(www\.)?target\.com\//.test(url),
+    notes: `
+- Fulfillment toggle (Drive Up / Order Pickup / Shipping) — Drive Up is store curbside, Order Pickup is in-store, Shipping is delivery. The cart fields change per choice.
+- "RedCard" prompts (5% discount on the Target credit/debit card) interpose mid-checkout. Decline unless explicitly asked.
+- "Find in store" requires ZIP; results show per-store inventory and stock levels.
+- "Target Circle" rewards offers may auto-apply at checkout if signed in. Verify the cart total reflects the rewards the user expected.
+- Cart drawer slides in from the right after Add; main cart is at /cart.`,
+  },
+  {
+    name: 'etsy',
+    category: 'general',
+    match: (url) => /^https?:\/\/(www\.)?etsy\.[a-z.]+\//.test(url),
+    notes: `
+- Variations (size, color, style) live in a separate selector ABOVE Add to cart. If the listing has variations and they aren't picked, Add to cart is disabled. Click each variation dropdown, pick a value, before adding.
+- Personalization text field appears for some listings (engraving, monogram, custom note). When marked required, you can't add to cart without filling it.
+- "Add to cart" can appear on the listing page AND inside the cart drawer (when the drawer re-renders) — both work; treat them as the same action.
+- Save for later (heart icon) requires sign-in.
+- Sellers are independent shops; shipping/return policies vary per shop and are listed on the listing under "Shipping and return policies".
+- Pre-orders / "Made to order" listings have a longer ship date — surface that to the user before buying.`,
+  },
+
+  // ─── Productivity (gaps) ──────────────────────────────────────────────
+  {
+    name: 'outlook',
+    category: 'general',
+    match: (url) => /^https?:\/\/outlook\.(live|office)\.com\//.test(url) || /^https?:\/\/outlook\.office365\.com\//.test(url),
+    notes: `
+- Compose opens in either a side pane (default layout) or a popped-out window (if the user clicked "Pop out"). UI differs slightly — Send button location is top-right in the side pane, bottom in popped-out.
+- To / Cc / Bcc are contact-picker fields. Type a name, pick from the dropdown — typing a raw email and pressing Enter usually works, but the picker is more reliable for contacts.
+- "Focused" vs "Other" inbox tabs split incoming mail. The user's expected message may be in "Other" if it's from a new sender.
+- Folder tree on the left collapses; expand the relevant folder before clicking conversations inside.
+- Calendar integration: New > Calendar event (not Email) opens the event composer.
+- Reply / Reply all / Forward buttons live at the top of the reading pane AND inline at the bottom of the most recent message; either works.`,
+  },
+  {
+    name: 'google-sheets',
+    category: 'general',
+    match: (url) => /^https?:\/\/docs\.google\.com\/spreadsheets\//.test(url),
+    notes: `
+- The cell grid is canvas-rendered. get_accessibility_tree returns essentially nothing for cell content — the tree shows menus, toolbar, and the formula bar, but not the cells themselves. Do NOT try to "read the data" by querying the tree; that returns empty.
+- The formula bar (visible in the tree, labeled by current cell) DOES expose the active cell's value. To READ a cell: click the cell first (keyboard arrows or a coordinate click on the visible grid), then read the formula bar.
+- To WRITE a cell: click into the cell, type — input goes into the cell. Or click into the formula bar (in the tree) directly. Enter commits and moves down; Tab commits and moves right.
+- For bulk reads / writes / formulas across many cells, the AX-tree path is too slow and brittle. Surface this to the user honestly: "Sheets cells are canvas-rendered; for bulk operations I can navigate cell-by-cell but you may want to do it yourself or paste a CSV." Don't pretend you can read a 100-row range fast.
+- Menus (File, Edit, View, Insert, Format, Data, Tools, Extensions, Help) ARE in the tree — they're standard HTML menus. The toolbar (bold, color, sum, etc.) also surfaces.
+- Ranges and named ranges: Data > Named ranges. The name box (left of the formula bar) jumps to a range.`,
+  },
+  {
+    name: 'trello',
+    category: 'general',
+    match: (url) => /^https?:\/\/trello\.com\//.test(url),
+    notes: `
+- Board structure: lists (vertical columns) contain cards. drag_drop is the right tool to reorder cards inside a list OR move them between lists — there's no "Move to" button on the card by default (it's hidden in the card-detail menu).
+- "Add a card" is an inline input at the bottom of each list. Click the "+ Add a card" placeholder, type the title, press Enter. Enter again to immediately start adding another card.
+- Card detail opens in a modal overlay over the board. Edit description, add checklists/labels/dates from there. Close with Escape or the X — navigating away (e.g. clicking the board background) does NOT save unsaved description edits.
+- Quick-edit (small pencil that appears on hover) lets you rename + label without opening the modal.
+- Power-Ups (Butler, Calendar, custom-fields) are gated by workspace settings; if a feature is missing, it's not enabled.
+- Search (top bar) returns boards, cards, and members across visible workspaces.`,
+  },
+
+  // ─── Social (gaps) ────────────────────────────────────────────────────
+  {
+    name: 'instagram',
+    category: 'general',
+    match: (url) => /^https?:\/\/(www\.)?instagram\.com\//.test(url),
+    notes: `
+- Login wall pops mid-scroll on the home feed (/), Explore (/explore), and Reels (/reels). Without sign-in, beyond a handful of posts the user can't view anything — surface that, don't loop trying to scroll past.
+- Story bar at top of profile / feed is keyboard-driven: left/right arrows advance, Esc closes. Clicking is unreliable.
+- Profile grid (/<user>) lazy-loads via IntersectionObserver — scroll the page (not a sub-container) to load more posts.
+- DMs at /direct/inbox — sign-in required.
+- Hashtag pages: /explore/tags/<tag>. Location pages: /explore/locations/<id>.
+- "Add to story / Add to post" actions require the mobile app for most content types — surface the limitation.
+- Saving images / videos directly is blocked by the UI. If the user asks to download, recommend the \`download_social_media\` tool — it handles Instagram CDN quirks.`,
+  },
+  {
+    name: 'tiktok',
+    category: 'general',
+    match: (url) => /^https?:\/\/(www\.)?tiktok\.com\//.test(url),
+    notes: `
+- "For You" feed swallows clicks that aren't on explicit buttons (Like, Comment, Share). Avoid coord-clicking inside the video area.
+- Login required for comments, likes, follows, saves. Without sign-in, the user can watch but not interact.
+- Video URL pattern: /@<user>/video/<id>. Profile pattern: /@<user>.
+- Sidebar nav (For You / Following / Explore / Live) only visible at desktop widths; on narrow viewports it collapses behind a menu icon.
+- "Watch History" requires sign-in and lives at /following.
+- Downloading videos: use \`download_social_media\` — it handles TikTok's CDN signing.`,
+  },
+  {
+    name: 'facebook',
+    category: 'general',
+    match: (url) => /^https?:\/\/(www\.|m\.)?facebook\.com\//.test(url),
+    notes: `
+- PRIMARY use cases on Facebook web are Marketplace (/marketplace/) and Groups (/groups/<id>). The main news feed is heavily algorithmically personalized noise — don't try to "summarize the feed" usefully.
+- Marketplace listings (/marketplace/item/<id>): contact seller is via Messenger ("Message" button); price + location + condition + description fields. Some sellers gate inquiries behind "Send" templates.
+- Group pages: many groups are member-only — content is gated behind a "Join Group" request that requires admin approval (could take hours/days). If the user asks to read a group they aren't in, surface this rather than looping.
+- Login wall fires aggressively across most non-public surfaces. Persistent cross-page nav loss — refresh resets the URL to the wall.
+- "Sign in to continue" interstitials show even on PUBLIC pages once a few are viewed; rate-limit-ish.
+- Messenger lives at messenger.com (separate domain) — different adapter territory.
+- Notification bell and message inbox in the top bar; both require sign-in.`,
+  },
+
+  // ─── Coding Practice ──────────────────────────────────────────────────
+  {
+    name: 'leetcode',
+    category: 'general',
+    match: (url) => /^https?:\/\/(www\.)?leetcode\.com\//.test(url),
+    notes: `
+- Problem layout: statement (markdown panel) on the LEFT, code editor (Monaco) on the RIGHT. The split is draggable but defaults to ~50/50.
+- The code editor IS a Monaco instance, NOT a textarea. Click into the editor area, then type — input goes to the focused editor. set_field is overkill; click_ax to focus, then type_text with NO selector.
+- Language selector dropdown at the top-left of the editor. Switching language WIPES the current code (no warning). Confirm with the user before switching if they wrote anything.
+- "Run" button tests against the sample input shown below the editor; "Submit" runs against hidden test cases and counts toward stats.
+- Premium problems show a lock icon. Without a Premium subscription, they cannot be opened — surface that, don't loop trying.
+- "Solutions" tab below the editor reveals community solutions AFTER you submit (or for unsolved problems via a Premium tier).
+- Daily Challenge at /problems/<slug> with the calendar widget at the top.`,
+  },
+  {
+    name: 'hackerrank',
+    category: 'general',
+    match: (url) => /^https?:\/\/(www\.)?hackerrank\.com\//.test(url),
+    notes: `
+- Practice/test environment layout: problem statement above (or left), Monaco code editor below (or right). Some tests have a timer at the top — DON'T navigate away mid-test (work is lost on some test configs).
+- Language selector is on the right side of the editor toolbar. Switching language may or may not preserve code — confirm with the user.
+- "Compile & Test" runs against custom input (a separate textarea below the editor); "Submit Code" finalizes against hidden cases.
+- Multi-part problems (common in tests) have tabs at the top of the problem panel for each subproblem. Submissions are per-part.
+- Test invitations land at /test/<id>. The Take Test button starts a timer that can't be paused.
+- Login required for submissions and progress tracking. Anonymous users can read problems but not submit.`,
+  },
+
+  // ─── Job Portals ──────────────────────────────────────────────────────
+  {
+    name: 'greenhouse',
+    category: 'general',
+    // Greenhouse hosts ATS for many employers under boards.greenhouse.io
+    // (or job-boards.greenhouse.io for the newer build).
+    match: (url) => /^https?:\/\/(boards|job-boards)\.greenhouse\.io\//.test(url),
+    notes: `
+- Application URLs look like /<employer>/jobs/<id> with the apply form at /<employer>/jobs/<id>/applications/new.
+- Form fields vary per employer but typically include: First name, Last name, Email, Phone, Resume (file upload), Cover letter (textarea), and a set of demographic / EEO questions (usually optional).
+- Resume upload: input[type=file] — use upload_file with the local path. PDF is universally accepted; some employers also accept .docx.
+- Cover letter is a plain textarea (not a rich editor). Click into it, type with no selector.
+- "Apply" / "Submit Application" button at the bottom. Some employers add custom questions below the standard set — scroll the entire form before submitting.
+- Each employer's customization can add required custom questions; an unanswered required field will block submit with an inline error.
+- Application status / withdrawals are NOT visible on greenhouse — the candidate dashboard is hosted per-employer (often a separate URL provided in the confirmation email).`,
+  },
+  {
+    name: 'workday',
+    category: 'general',
+    // Workday's tenant URLs are like myworkdayjobs.com or <company>.wd1.myworkdayjobs.com.
+    match: (url) => /^https?:\/\/[^\/]*\.myworkdayjobs\.com\//.test(url) || /^https?:\/\/[^\/]*\.wd[0-9]+\.myworkdayjobs\.com\//.test(url),
+    notes: `
+- Workday is the most hostile of common ATS systems. Expect: heavy use of accordion panels, shadow DOM for some form fields, autosave between steps, and lots of "Continue" buttons that look the same.
+- Multi-step application: each step is a separate route. Workday AUTOSAVES between steps, so "Save and Continue Later" works — but mid-step changes can be lost if you navigate via browser back. Always click the page's Continue / Save button explicitly.
+- Many fields are nested in collapsed accordions (Education, Experience, References). EXPAND each accordion before reading or filling — collapsed required fields will fail validation but you can't see what's missing.
+- Date pickers are custom widgets. Click the field, type MM/DD/YYYY (or DD/MM/YYYY depending on tenant locale), then Tab. Don't try to click calendar cells — the popup is portal-rendered outside the field's subtree.
+- "Add Another" buttons for experiences / education clone the entire panel — fill the FIRST one fully before clicking Add Another, or the new clone may copy partial state.
+- Some employers wrap Workday in an iframe — if get_accessibility_tree shows almost no form fields, check for an iframe and switch to iframe_read / iframe_type.
+- File upload (resume, CV) lives in the "My Information" or "Resume/CV" step. The drop zone has a "Select Files" button — use upload_file against the underlying input.
+- "Review" step at the end shows everything filled — read it back to the user before clicking Submit; mistakes at this stage usually require restarting the whole application.`,
+  },
+
+  // ─── Messaging ────────────────────────────────────────────────────────
+  {
+    name: 'discord',
+    category: 'general',
+    match: (url) => /^https?:\/\/(www\.)?discord\.com\/(channels|app)/.test(url) || /^https?:\/\/(www\.)?discord\.com\/$/.test(url),
+    notes: `
+- Three-pane layout: Server list (icons, left-most rail) → Channel list (per-server, second rail) → Channel chat (main pane). Selecting a server reveals its channels; selecting a channel loads its message history.
+- Channel URL pattern: /channels/<server_id>/<channel_id>. Direct messages live under /channels/@me/<dm_id>.
+- Text channels are #-prefixed; voice channels have a speaker icon and join on click (don't click them unless the user asked to join voice).
+- @mentions trigger an autocomplete dropdown — type @ + a few letters, pick from the list. Pinging the wrong person is a real social cost; verify the suggestion before submit.
+- Slash commands (/, then command name); per-server bots add their own. The command list popup appears as you type /.
+- Message input is a contenteditable div (rich text). Use set_field or click + type_text. Enter sends by default; Shift+Enter inserts a newline.
+- Threads (replies branching from a message) live inside channels; opening one reveals a side pane.
+- Reactions appear on hover for each message; the smiley + button on hover opens the emoji picker. Reveal-on-hover affordances — use \`hover\` if the model can't see the buttons.
+- 2FA, security tokens, payment / Nitro flows should be surfaced to the user — high-stakes.`,
+  },
+  {
+    name: 'whatsapp-web',
+    category: 'general',
+    match: (url) => /^https?:\/\/web\.whatsapp\.com\//.test(url),
+    notes: `
+- First-time setup REQUIRES the user to scan a QR code with their phone's WhatsApp app. The agent CANNOT scan a QR code — if the QR is on screen, surface it to the user and stop. Don't loop waiting for it to disappear.
+- Once linked, layout is: conversation list on the LEFT (chats sorted by recency), active conversation on the RIGHT.
+- Message input is a contenteditable div at the bottom of the conversation. set_field works; Enter sends by default.
+- Emoji picker, attachment button (paperclip), voice-note (mic) sit to the left/right of the input.
+- Search at the top of the conversation list searches across all chats (people, group names, message content).
+- "Status" tab (eye icon) is a separate stream of ephemeral updates; "Calls" tab shows call history and starts voice/video calls.
+- DO NOT send a message unless the user has named the recipient AND given an explicit message body in this conversation. Auto-confirming a draft is irreversible.
+- New chat (pencil icon) opens the contact picker.`,
+  },
+  {
+    name: 'telegram',
+    category: 'general',
+    // Both web.telegram.org and the k/a/z variants for different builds.
+    match: (url) => /^https?:\/\/((web|webk|weba|webz|k)\.)?telegram\.org\//.test(url) && !/^https?:\/\/(www\.)?telegram\.org\/\?/.test(url),
+    notes: `
+- Login: phone number → SMS code → optionally 2FA password. If the phone has no SMS access, an in-app Telegram code is sent instead — surface either flow to the user.
+- Layout: chat list on the LEFT (Saved Messages, channels, groups, individual chats), active chat on the RIGHT.
+- "Saved Messages" is a self-DM — common pattern for personal notes / file storage.
+- Channels (broadcast, read-only for most members) have a megaphone icon; groups (interactive) have a people icon.
+- Public channels / groups can be joined via /joinchat/<token> or @<username> links.
+- @mentions trigger autocomplete for users; #hashtags work in channels with the hashtag feature enabled.
+- Stickers, GIFs, and bot commands (/) all live in popups above the message input.
+- DO NOT send a message unless the user named the recipient AND the exact message body in this conversation.
+- "Edit message" works for a window after sending (~48h); "Delete for everyone" within a shorter window — both have explicit confirms.`,
   },
 ];
 

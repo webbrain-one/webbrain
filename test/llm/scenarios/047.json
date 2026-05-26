@@ -1,0 +1,56 @@
+{
+  "id": "047",
+  "category": "counter-polarity",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://stackoverflow.com/questions/ask",
+    "title": "Ask a Question — Stack Overflow"
+  },
+  "description": "SO requires MINIMUM 20 chars in body. Currently 15 — too short. Add more.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://stackoverflow.com/questions/ask — Title: Ask a Question — Stack Overflow]\n\npost this question"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_1k_fi05ce",
+          "type": "function",
+          "function": {
+            "name": "read_page",
+            "arguments": "{}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_1k_fi05ce",
+      "name": "read_page",
+      "content": "{\"text\":\"... body must be at least 30 characters; you entered 15. ... Post Your Question\"}"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "clarify",
+      "args": {
+        "question": "Your body is only 15 characters but Stack Overflow requires at least 30. Want me to wait while you expand it, or should I add a generic explanation?"
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "click({text:\"Post Your Question\"})",
+        "reason": "Will be rejected — body too short."
+      },
+      {
+        "match": "set_field({ref_id:\"...\", text:\"thanks for any help\"})",
+        "reason": "Inventing body content for the user."
+      }
+    ],
+    "successRubric": "Length is below the MIN, not max. Don't submit. Either clarify or report. Definitely don't invent body text."
+  }
+}

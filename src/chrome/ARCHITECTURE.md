@@ -1,6 +1,6 @@
 # WebBrain Chrome Extension — Architecture
 
-> Version 7.4.1 · Manifest V3 · Service Worker background
+> Version 8.0.3 · Manifest V3 · Service Worker background
 
 ## High-Level Overview
 
@@ -320,7 +320,7 @@ When `click({text})` or `click({selector})` finds multiple matches, the error pa
 `get_accessibility_tree`, `read_page` (legacy prose), `screenshot`, `get_interactive_elements` (legacy indexed list), `get_selection`, `extract_data`, `get_shadow_dom`, `get_frames`
 
 ### Interaction
-`click_ax`, `type_ax`, `set_field`, `click` (by text/selector/index/coords — legacy), `type_text`, `press_keys`, `scroll`, `navigate`, `new_tab`, `wait_for_element`, `execute_js`, `iframe_read`, `iframe_click`, `iframe_type`, `upload_file`
+`click_ax`, `type_ax`, `set_field`, `hover` (CDP-trusted, for reveal-on-hover menus), `drag_drop` (CDP-trusted pointer sequence, for Trello/Linear-style reordering), `click` (by text/selector/index/coords — legacy), `type_text`, `press_keys`, `scroll`, `navigate`, `new_tab`, `wait_for_element`, `wait_for_stable` (DOM mutations + network idle), `execute_js`, `iframe_read`, `iframe_click`, `iframe_type`, `upload_file`
 
 ### Network / files
 `fetch_url`, `research_url`, `list_downloads`, `read_downloaded_file`, `download_resource_from_page`, `download_files`
@@ -450,19 +450,24 @@ The Traces page (`ui/traces.html`) lists runs and renders their event timelines.
 
 ## Site Adapters
 
-17 adapters inject site-specific guidance into the first user message. Re-injected mid-conversation if the user navigates to a different matched site.
+57 adapters inject site-specific guidance into the first user message. Re-injected mid-conversation if the user navigates to a different matched site. Only ONE adapter fires at a time (the first matching `match(url)` wins), so the prompt cost is fixed regardless of total adapter count — what grows is the maintenance surface.
 
 | Category | Sites |
 |---|---|
 | Code & Dev | GitHub, GitLab, Stack Overflow, Hacker News |
-| Productivity | Gmail, Google Docs, Slack, Notion, Jira |
-| Social | Twitter/X, LinkedIn, Reddit, YouTube |
-| Publishing | Medium, Substack |
-| Commerce | Amazon |
-| Cloud | AWS, GCP |
-| Finance | Stripe, Coinbase, Chase, Robinhood |
+| Coding practice | LeetCode, HackerRank |
+| Productivity | Gmail, Outlook, Google Docs, Google Sheets, Google Calendar, Slack, Notion, Jira, Trello |
+| Social | Twitter/X, LinkedIn, Reddit, YouTube, Instagram, TikTok, Facebook |
+| Messaging | Discord, WhatsApp Web, Telegram |
+| Publishing | Medium, Substack, WordPress |
+| Commerce | Amazon, eBay, Walmart, Target, Etsy |
+| Travel | Airbnb, Booking.com, Expedia, Google Maps, Google Flights, Kayak, OpenTable |
+| Cloud / Infra | AWS, GCP, Cloudflare, Vercel |
+| News (paywalls) | NYT, WSJ, FT, Bloomberg, Economist, Washington Post |
+| Job portals | Greenhouse, Workday |
+| Finance | Stripe, Coinbase, Robinhood, TradingView, `finance-generic` (banks/exchanges/payments) |
 
-Finance adapters carry a `[FINANCE / HIGH-STAKES]` banner and extra confirmation guidance.
+Finance adapters carry a `[FINANCE / HIGH-STAKES]` banner and extra confirmation guidance. The `finance-generic` adapter matches a curated regex of bank, brokerage, crypto exchange, and payment domains as a catch-all when no site-specific adapter exists.
 
 ---
 

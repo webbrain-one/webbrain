@@ -1,0 +1,20 @@
+{
+  "runTag": "2026-05-23T17-53-23-294Z",
+  "model": "qwen3.5-2b",
+  "browser": "chrome",
+  "base": "http://127.0.0.1:1234",
+  "saveRequest": true,
+  "cases": 100,
+  "totalLatencyMs": 92143,
+  "errors": 0,
+  "withToolCall": 89,
+  "byTool": {
+    "get_accessibility_tree": 63,
+    "navigate": 5,
+    "new_tab": 7,
+    "read_page": 12,
+    "click": 1,
+    "(no_tool_call)": 11,
+    "screenshot": 1
+  }
+}

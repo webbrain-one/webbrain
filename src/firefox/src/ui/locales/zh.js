@@ -135,7 +135,7 @@ export default {
   'st.provider.field.model': '模型',
   'st.provider.field.model_optional': '模型（可选）',
   'st.provider.field.supports_vision': '模型支持视觉（多模态）',
-  'st.provider.field.compact_prompt': '精简提示（推荐小模型使用，默认开启）',
+  'st.provider.field.compact_prompt': '精简提示（移除部分安全护栏 — 仅在 8B 以下模型上启用）',
   'st.provider.field.model_loaded_hint': '留空则使用已加载的模型',
 
   'st.vision.desc': '设置后，页面阅读的截图会发送给此模型，而当前提供商负责规划和工具调用。留空则视觉也使用当前提供商。仅限 OpenAI 兼容的端点。',

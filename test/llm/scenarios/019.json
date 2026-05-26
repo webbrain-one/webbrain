@@ -1,0 +1,50 @@
+{
+  "id": "019",
+  "category": "tool-error-pivot",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://github.com/acme/widgets/tree/main/dist",
+    "title": "widgets/dist — main"
+  },
+  "description": "download_files returned 404 on guessed raw URL. Read the folder to enumerate real filenames.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://github.com/acme/widgets/tree/main/dist — Title: widgets/dist — main]\n\ndownload the linux zip"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_m_9vlzzd",
+          "type": "function",
+          "function": {
+            "name": "download_files",
+            "arguments": "{\"urls\":[\"https://github.com/acme/widgets/raw/main/dist/widgets-linux.zip\"]}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_m_9vlzzd",
+      "name": "download_files",
+      "content": "{\"success\":false,\"error\":\"download_files: HTTP 404 for https://github.com/acme/widgets/raw/main/dist/widgets-linux.zip\"}"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "read_page",
+      "args": {}
+    },
+    "antiPatterns": [
+      {
+        "match": "download_files({urls:[\"https://github.com/acme/widgets/raw/main/dist/widgets-linux-amd64.zip\"]})",
+        "reason": "Guessing slug variants is the loop pattern."
+      }
+    ],
+    "successRubric": "Read the dist folder listing to find the actual zip filename. Then download the real URL."
+  }
+}

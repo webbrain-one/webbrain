@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "WebBrain",
-  "version": "7.4.1",
+  "version": "8.0.3",
   "description": "Open-source AI browser agent — chat with pages, automate tasks, multi-provider LLM support.",
   "permissions": [
     "activeTab",
@@ -9,9 +9,11 @@
     "unlimitedStorage",
     "tabs",
     "tabGroups",
+    "clipboardWrite",
+    "clipboardRead",
     "<all_urls>"
   ],
-  "content_security_policy": "script-src 'self'; object-src 'self'; connect-src * data: blob: http://* ws://*;",
+  "content_security_policy": "script-src 'self' 'unsafe-eval'; object-src 'self'; connect-src * data: blob: http://* ws://*;",
   "background": {
     "page": "src/background.html",
     "persistent": false

@@ -1,0 +1,10 @@
+{
+  "id": "048",
+  "idealFirstToolCall": {
+    "name": "done",
+    "args": {
+      "summary": "You're already in your Gmail inbox. Is there a specific message you want me to open?"
+    }
+  },
+  "successRubric": "Recognize the user is already on the inbox page (URL contains /#inbox). Acceptable: done with that observation, OR clarify what they meant. Clicking around aimlessly is wrong."
+}

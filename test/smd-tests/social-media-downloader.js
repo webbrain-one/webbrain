@@ -731,24 +731,142 @@ window.SocialMediaDownloader = (() => {
     return '.bin';
   };
 
-  const saveMse = async ({ prefix = 'mse', minBytes = 1 } = {}) => {
+  // Group captured SourceBuffers by their parent MediaSource. Each
+  // MediaSource ≈ one stream on the page — typically one reel on
+  // infinite-feed viewers like Instagram /reels/, where the player
+  // preloads neighbours as the user scrolls. Without grouping,
+  // "download this reel" once produced 29 files (15 video + 14 audio,
+  // one per preloaded neighbour). Orphan buffers (appendBuffer fired
+  // before our addSourceBuffer hook) become their own group since we
+  // can't attribute them to a specific stream.
+  const _groupMseBuffers = (minBytes) => {
     const state = _mseStateRef();
+    const groups = []; // { url, entries: [bufferEntry], totalBytes }
+    const seen = new Set();
+    for (const [, msEntry] of state.mediaSources) {
+      const entries = [];
+      let totalBytes = 0;
+      for (const sb of msEntry.buffers) {
+        const e = state.buffers.get(sb);
+        if (!e || e.bytes < minBytes) continue;
+        entries.push(e);
+        totalBytes += e.bytes;
+        seen.add(e);
+      }
+      if (entries.length > 0) groups.push({ url: msEntry.url, entries, totalBytes });
+    }
+    const orphanEntries = [];
+    let orphanBytes = 0;
+    for (const [, entry] of state.buffers) {
+      if (seen.has(entry)) continue;
+      if (entry.bytes < minBytes) continue;
+      orphanEntries.push(entry);
+      orphanBytes += entry.bytes;
+    }
+    if (orphanEntries.length > 0) {
+      groups.push({ url: null, entries: orphanEntries, totalBytes: orphanBytes });
+    }
+    return groups;
+  };
+
+  // Pick the "primary" stream when the page captured multiple. Instagram
+  // (and similar infinite-feed viewers) keeps adjacent preloaded reels
+  // mounted as their own <video> elements with their own MediaSources,
+  // so "is the MediaSource attached to any <video>" doesn't narrow at
+  // all — every captured group is. We need a tighter signal for "the
+  // one the user is watching". Probe in priority order:
+  //   1. video is actively playing AND its bounding rect intersects
+  //      the viewport (Instagram autoplays the focused reel; preloaded
+  //      neighbours are paused);
+  //   2. video bounding rect intersects the viewport (user paused, but
+  //      it's still the one on screen);
+  //   3. any <video> in the DOM (last resort).
+  // Within the narrowest non-empty tier we tie-break by total bytes —
+  // longer playback ≈ the one the user actually watched. Bytes alone
+  // are NOT used as the primary signal: an off-screen neighbour that
+  // happened to preload more frames than the focused reel would
+  // otherwise win.
+  const _pickPrimaryMseGroup = (groups) => {
+    if (groups.length <= 1) return groups[0];
+    const byUrl = new Map();
+    for (const g of groups) {
+      if (g.url) byUrl.set(g.url, g);
+    }
+    const playing = new Set();
+    const visible = new Set();
+    const anyDom = new Set();
+    try {
+      if (typeof document !== 'undefined') {
+        const vw = (typeof window !== 'undefined' && window.innerWidth) || 0;
+        const vh = (typeof window !== 'undefined' && window.innerHeight) || 0;
+        for (const v of document.querySelectorAll('video')) {
+          const g = byUrl.get(v.currentSrc) || byUrl.get(v.src);
+          if (!g) continue;
+          anyDom.add(g);
+          let inView = false;
+          try {
+            const r = v.getBoundingClientRect();
+            inView = r.width > 0 && r.height > 0 &&
+                     r.bottom > 0 && r.top < vh &&
+                     r.right > 0 && r.left < vw;
+          } catch (_) { /* detached <video> — leave inView=false */ }
+          if (inView) {
+            visible.add(g);
+            if (v.paused === false) playing.add(g);
+          }
+        }
+      }
+    } catch (_) { /* detached doc — fall through to size heuristic */ }
+    const candidates =
+      playing.size > 0 ? [...playing] :
+      visible.size > 0 ? [...visible] :
+      anyDom.size > 0 ? [...anyDom] :
+      groups;
+    candidates.sort((a, b) => b.totalBytes - a.totalBytes);
+    return candidates[0];
+  };
+
+  // mode resolution intentionally diverges from collect()'s here. For
+  // URL extraction, `auto` on a feed page means "every item the page
+  // shows" — that's correct, because the captured URLs ARE distinct
+  // gallery items. For MSE captures, the captured groups are temporal
+  // player state (preload side-effects), not page content: an Instagram
+  // /home feed will MSE-capture ≈5 reels because the player preloads
+  // vertically-adjacent reels in the background, but the user only
+  // ever sees one. Resolving `auto` via profile.isSingle() here would
+  // dump every preloaded neighbour on every feed page, which is the
+  // bug this PR fixes in the first place. So saveMse() treats auto
+  // and main identically — primary group only — and reserves explicit
+  // `mode: 'all'` for callers who genuinely want every captured stream
+  // (e.g. they scrolled through 10 reels and want them all).
+  //   'main'  → primary group only
+  //   'auto'  → primary group only (same as main; see above)
+  //   'all'   → every captured group
+  // Default 'all' preserves the pre-v4 contract for direct console
+  // callers of saveMse() — only download_social_media plumbs the mode.
+  const saveMse = async ({ prefix = 'mse', minBytes = 1, mode = 'all' } = {}) => {
+    const groups = _groupMseBuffers(minBytes);
+    const primaryOnly = mode === 'main' || mode === 'auto';
+    const toSave = (primaryOnly && groups.length > 1)
+      ? [_pickPrimaryMseGroup(groups)]
+      : groups;
     let i = 1;
     const saved = [];
-    for (const [, entry] of state.buffers) {
-      if (entry.bytes < minBytes) continue;
-      const merged = new Uint8Array(entry.bytes);
-      let off = 0;
-      for (const c of entry.chunks) { merged.set(c, off); off += c.length; }
-      const kind = /audio/i.test(entry.mime) ? 'audio' : 'video';
-      const ext = _mseExtForMime(entry.mime);
-      const fname = `${filenameSafe(prefix)}_${kind}_${String(i).padStart(2, '0')}${ext}`;
-      triggerBlobDownload(
-        new Blob([merged], { type: entry.mime || 'application/octet-stream' }),
-        fname
-      );
-      saved.push({ filename: fname, bytes: entry.bytes, mime: entry.mime });
-      i++;
+    for (const group of toSave) {
+      for (const entry of group.entries) {
+        const merged = new Uint8Array(entry.bytes);
+        let off = 0;
+        for (const c of entry.chunks) { merged.set(c, off); off += c.length; }
+        const kind = /audio/i.test(entry.mime) ? 'audio' : 'video';
+        const ext = _mseExtForMime(entry.mime);
+        const fname = `${filenameSafe(prefix)}_${kind}_${String(i).padStart(2, '0')}${ext}`;
+        triggerBlobDownload(
+          new Blob([merged], { type: entry.mime || 'application/octet-stream' }),
+          fname
+        );
+        saved.push({ filename: fname, bytes: entry.bytes, mime: entry.mime });
+        i++;
+      }
     }
     if (saved.length >= 2) {
       console.log(
@@ -829,6 +947,15 @@ window.SocialMediaDownloader = (() => {
     urls = [],
     profile = 'generic',
     mseBytes = 0,
+    // v4.x: download_social_media now calls saveMse() inline when
+    // mseBytes > 0 and passes the results in. If the save succeeded
+    // there's nothing to recommend — the bytes already landed. If it
+    // failed, recommend yt-dlp instead of the old "call execute_js
+    // → saveMse()" dance, which was broken by extension-CSP `unsafe-
+    // eval`. Old callers that don't pass these fields still work: they
+    // get the legacy `mse_capture_available` recommendation.
+    mseSavedFiles = null,
+    mseSaveError = null,
     pageUrl = (typeof location !== 'undefined' ? location.href : ''),
   } = {}) => {
     let parsed = null;
@@ -855,19 +982,52 @@ window.SocialMediaDownloader = (() => {
       }
     }
 
-    // MSE capture available — the player loaded bytes into the recorder
-    // while we were waiting. Surface them to the agent so it can call
-    // saveMse() in a follow-up step.
+    // MSE capture available. The new flow: download_social_media calls
+    // saveMse() inline and passes mseSavedFiles / mseSaveError in.
+    //
+    //   - mseSavedFiles is a non-empty array → the bytes already landed.
+    //     No recommendation needed; let the normal "N files downloaded"
+    //     result speak for itself.
+    //   - mseSavedFiles is an empty array → save attempted but produced
+    //     nothing (rare — buffers below minBytes). Surface a useful
+    //     note pointing at yt-dlp as the bulletproof fallback.
+    //   - mseSaveError is set → save threw. Same fallback as above plus
+    //     the error string so the agent can echo it to the user.
+    //   - Both null (legacy caller that doesn't pass the new fields) →
+    //     return the old `mse_capture_available` recommendation, preserved
+    //     for backwards compat with any external callers of
+    //     _buildRecommendation. NOT consumed by download_social_media
+    //     anymore.
     if (mseBytes > 0) {
+      if (Array.isArray(mseSavedFiles) && mseSavedFiles.length > 0) {
+        return null; // bytes saved — nothing to recommend
+      }
+      if (mseSavedFiles !== null || mseSaveError) {
+        // New caller invoked saveMse, but it returned nothing or threw.
+        const errBit = mseSaveError ? ' (' + mseSaveError + ')' : '';
+        return {
+          kind: 'mse_save_failed',
+          message:
+            'The MSE recorder captured ' + mseBytes + ' bytes from the ' +
+            'player but saveMse() did not produce a downloadable file' +
+            errBit + '. This usually means the captured chunks are below ' +
+            'the minBytes threshold or the page revoked the blob URL ' +
+            'before the <a download> click landed. The most reliable ' +
+            'fallback for this URL is yt-dlp:\n' +
+            '  pip install yt-dlp\n' +
+            '  yt-dlp "' + href + '"',
+        };
+      }
+      // Legacy caller (didn't pass mseSavedFiles / mseSaveError). Keep
+      // the old recommendation. download_social_media no longer hits this.
       return {
         kind: 'mse_capture_available',
         message:
           'The MSE recorder captured ' + mseBytes + ' bytes from the ' +
           'player while the page was open. Run `await ' +
-          'SocialMediaDownloader.saveMse()` (via execute_js) to download ' +
-          'those bytes as separate video / audio files. If the result is ' +
-          'two files, remux with: ffmpeg -i video.mp4 -i audio.mp4 -c ' +
-          'copy out.mp4',
+          'SocialMediaDownloader.saveMse()` to download those bytes as ' +
+          'separate video / audio files. If the result is two files, ' +
+          'remux with: ffmpeg -i video.mp4 -i audio.mp4 -c copy out.mp4',
       };
     }
 

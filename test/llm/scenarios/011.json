@@ -1,0 +1,52 @@
+{
+  "id": "011",
+  "category": "tool-error-pivot",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://mastoturk.org/publish",
+    "title": "MastoTurk"
+  },
+  "description": "screenshot tool returned \"no vision capability\". Must pivot to AX tree, not retry screenshot.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://mastoturk.org/publish — Title: MastoTurk]\n\nhow many characters does the post have so far?"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_e_c33fe4",
+          "type": "function",
+          "function": {
+            "name": "screenshot",
+            "arguments": "{}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_e_c33fe4",
+      "name": "screenshot",
+      "content": "{\"success\":false,\"error\":\"This model cannot see images: it has no vision capability and no dedicated vision model is configured. In provider settings, enable \\\"Model supports vision\\\" for the active provider or set a vision model. For now, use get_accessibility_tree, get_interactive_elements, or read_page to inspect the page.\"}"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "get_accessibility_tree",
+      "args": {
+        "filter": "visible"
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "screenshot({})",
+        "reason": "Retrying a tool that just declared it cannot work — gpt-4o trace xpx9t9 made this mistake."
+      }
+    ],
+    "successRubric": "Pivot to a text-based inspection tool (get_accessibility_tree, read_page, or get_interactive_elements). The error message even names the alternatives — use one of them."
+  }
+}

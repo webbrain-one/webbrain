@@ -1,0 +1,10 @@
+{
+  "id": "015",
+  "idealFirstToolCall": {
+    "name": "done",
+    "args": {
+      "summary": "Your current tab is at about:home — the New Tab page. That's what Firefox shows when you open a new tab unless you've overridden the homepage."
+    }
+  },
+  "successRubric": "Recognize this is an informational question about the current tab's identity. done() with a plain-text answer about about:home is correct. Navigating somewhere else is wrong."
+}

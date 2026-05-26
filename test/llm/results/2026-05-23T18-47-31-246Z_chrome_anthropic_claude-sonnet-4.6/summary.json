@@ -1,0 +1,29 @@
+{
+  "runTag": "2026-05-23T18-47-31-246Z",
+  "model": "anthropic/claude-sonnet-4.6",
+  "browser": "chrome",
+  "base": "http://localhost:8080",
+  "saveRequest": true,
+  "cases": 100,
+  "totalLatencyMs": 160318,
+  "errors": 0,
+  "withToolCall": 92,
+  "withToolCallFromContent": 0,
+  "byTool": {
+    "navigate": 23,
+    "list_downloads": 2,
+    "new_tab": 3,
+    "screenshot": 4,
+    "execute_js": 7,
+    "get_accessibility_tree": 32,
+    "read_page": 5,
+    "extract_data": 2,
+    "fetch_url": 3,
+    "download_file": 1,
+    "download_social_media": 2,
+    "scroll": 1,
+    "get_selection": 1,
+    "(no_tool_call)": 8,
+    "clarify": 6
+  }
+}

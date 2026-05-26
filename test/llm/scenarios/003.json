@@ -1,0 +1,56 @@
+{
+  "id": "003",
+  "category": "loop-bad-url",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://twitter.com/home",
+    "title": "Home / X"
+  },
+  "description": "twitter.com redirected to x.com but the agent did not notice the brand change.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: about:home — Title: New Tab]\n\nopen twitter.com"
+    },
+    {
+      "role": "assistant",
+      "content": "Opening Twitter.",
+      "tool_calls": [
+        {
+          "id": "call_3_gb708e",
+          "type": "function",
+          "function": {
+            "name": "navigate",
+            "arguments": "{\"url\":\"https://twitter.com\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_3_gb708e",
+      "name": "navigate",
+      "content": "{\"success\":true,\"url\":\"https://twitter.com/home\",\"requestedUrl\":\"https://twitter.com\"}"
+    },
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://twitter.com/home — Title: Home / X]\n\nnow search for \"react 19\""
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "click",
+      "args": {
+        "text": "Search"
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "navigate({url:\"https://twitter.com/search?q=react+19\"})",
+        "reason": "Acceptable but slightly worse; we are already on the SPA."
+      }
+    ],
+    "successRubric": "Use the on-page search box. The page title saying \"Home / X\" rather than \"Twitter\" is a tell that the brand is X — don't comment on it. Just search."
+  }
+}

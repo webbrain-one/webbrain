@@ -1,0 +1,12 @@
+{
+  "id": "057",
+  "idealFirstToolCall": {
+    "name": "download_files",
+    "args": {
+      "urls": [
+        "https://raw.githubusercontent.com/esokullu/webbrain/main/README.md"
+      ]
+    }
+  },
+  "successRubric": "Downloads the raw README.md. Acceptable URL variants: github.com/.../raw/main/README.md or raw.githubusercontent.com path. fetch_url + write is also acceptable."
+}

@@ -446,6 +446,36 @@
     });
   }
 
+  // When click({index}) or type_text({index}) gets an out-of-range index,
+  // return both a SPECIFIC stale-index error AND a fresh enumeration of
+  // what's actually clickable now. Background: with the generic
+  // "Element not found" message, several models (qwen3.6-27b q7kix9 was
+  // the loudest) interpret the failure as a broken page state and try to
+  // "reset" via navigate(same URL) → scroll → click(same stale index),
+  // looping indefinitely. Embedding the current enumeration in the tool
+  // result means even a model that ignores the prose has to see that
+  // index 6 doesn't exist among the 23 elements actually on the page.
+  function _staleIndexError(requestedIndex, interactive) {
+    const total = interactive.length;
+    const available = interactive.slice(0, 40).map((el, i) => {
+      const text = (el.innerText || el.value || el.placeholder || el.title || el.ariaLabel || '').trim().slice(0, 80);
+      return {
+        index: i,
+        tag: el.tagName.toLowerCase(),
+        role: el.getAttribute('role') || '',
+        text,
+      };
+    });
+    return {
+      success: false,
+      error: `Index ${requestedIndex} not found — only ${total} interactive element${total === 1 ? '' : 's'} on the current page (max valid index: ${total - 1}). Indices are NOT stable across scrolls, navigations, or DOM updates — the index you used was from a previous turn's get_interactive_elements call and no longer applies. Pick a new index from \`available\` below, OR use click({text: "..."}) which re-resolves every call. DO NOT reload, re-navigate, or scroll-then-retry with the same index — the page is fine; your index is stale.`,
+      indexRequested: requestedIndex,
+      totalAvailable: total,
+      available,
+      truncated: total > available.length,
+    };
+  }
+
   // -- Click helpers: interactive-element detection & parent traversal --------
   const _INTERACTIVE_TAGS = new Set(['BUTTON', 'A', 'INPUT', 'SELECT', 'TEXTAREA']);
   const _INTERACTIVE_ROLES = new Set(['button', 'link', 'tab', 'menuitem', 'option']);
@@ -705,7 +735,9 @@
       el = document.querySelector(params.selector);
     } else if (params.index != null) {
       // Same traversal as getInteractiveElements — index stability.
-      el = queryInteractive()[params.index];
+      const interactive = queryInteractive();
+      el = interactive[params.index];
+      if (!el) return _staleIndexError(params.index, interactive);
     } else if (params.x != null && params.y != null) {
       el = document.elementFromPoint(params.x, params.y);
     }
@@ -851,7 +883,9 @@
     if (params.selector) {
       el = document.querySelector(params.selector);
     } else if (params.index != null) {
-      el = queryInteractive()[params.index];
+      const interactive = queryInteractive();
+      el = interactive[params.index];
+      if (!el) return _staleIndexError(params.index, interactive);
     } else {
       // No selector and no index → type into the currently focused element.
       // Most reliable for click-then-type flows on forms with weird selectors.
@@ -1213,12 +1247,42 @@
       'extract_data': () => extractData(msg.params || {}),
       'wait_for_element': () => waitForElement(msg.params || {}),
       'get_selection': () => ({ text: window.getSelection()?.toString() || '' }),
+      // execute_js — model-supplied JS body, evaluated in the content
+      // script's isolated world via `new Function()`.
+      //
+      // CSP NOTE (Firefox-specific): `new Function()` requires
+      // `'unsafe-eval'` in the extension's CSP. Firefox MV2 permits us
+      // to opt in to that, and the firefox manifest does — so this
+      // handler works on every host regardless of the host page's CSP.
+      // (Page CSP doesn't reach the isolated content-script world for
+      // eval purposes; the extension's own CSP governs.)
+      //
+      // The same code path on Chrome MV3 can NOT grant unsafe-eval —
+      // MV3's minimum-policy enforcement is strict, the extension fails
+      // to install if you try. So Chrome's identical handler returns a
+      // `cspBlocked: true` error and points the agent at finite-verb
+      // tools instead. We keep the same shape here: if the eval throws
+      // a CSP-flavoured error (which shouldn't happen on Firefox today
+      // but is possible if the policy ever tightens), report it
+      // identically so the cross-browser surface stays consistent.
       'execute_js': () => {
         try {
           const fn = new Function(msg.params.code);
           return { success: true, result: fn() };
         } catch (e) {
-          return { success: false, error: e.message };
+          const errMsg = (e && e.message) || String(e);
+          const isCspBlock =
+            (e && e.name === 'EvalError') ||
+            /unsafe-eval|Content Security Policy/i.test(errMsg);
+          if (isCspBlock) {
+            return {
+              success: false,
+              cspBlocked: true,
+              error:
+                'execute_js is blocked by the extension\'s Content Security Policy — `new Function()` requires `unsafe-eval`. This is unexpected on Firefox (the manifest grants `unsafe-eval`) — the policy may have been changed. Use the finite tools instead: get_accessibility_tree (read the page), click_ax / type_ax / set_field (interact via ref_id), scroll, navigate, get_selection, iframe_read / iframe_click / iframe_type.',
+            };
+          }
+          return { success: false, error: errMsg };
         }
       },
       'get_shadow_dom': () => getShadowDOM(),
@@ -1520,6 +1584,261 @@
         } catch (e) {
           return { success: false, error: e && e.message || String(e) };
         }
+      },
+      // ── hover ──────────────────────────────────────────────────────────────
+      // Firefox MV2 has no CDP. We dispatch synthetic mouseenter/mouseover/
+      // pointerenter/pointerover events with bubbles=true so frameworks see
+      // the right sequence. These are isTrusted=false, so sites that gate
+      // their reveal-on-hover handler on event.isTrusted (rare but real) will
+      // not respond — there's no way around that without browser-level
+      // automation APIs. For the common case (CSS :hover doesn't apply since
+      // we can't synthesize the OS cursor, but mouseenter/mouseover handlers
+      // fire and trigger React/Vue state changes) this is enough.
+      'hover': () => {
+        try {
+          const { ref_id } = msg.params || {};
+          if (typeof ref_id !== 'string') return { success: false, error: 'ref_id (string, e.g. "ref_42") is required' };
+          if (typeof window.__wb_ax_lookup !== 'function') return { success: false, error: 'accessibility-tree.js not injected' };
+          const el = window.__wb_ax_lookup(ref_id);
+          if (!el) {
+            let suggestions = [];
+            try { if (typeof window.__wb_ax_suggest === 'function') suggestions = window.__wb_ax_suggest(ref_id, 6); } catch {}
+            return { success: false, error: `ref_id ${ref_id} not found.`, suggestions };
+          }
+          try { el.scrollIntoView({ block: 'center', inline: 'center' }); } catch {}
+          const r = el.getBoundingClientRect();
+          const cx = r.left + r.width / 2;
+          const cy = r.top + r.height / 2;
+          const eventInit = { bubbles: true, cancelable: true, view: window, clientX: cx, clientY: cy };
+          try {
+            // Order matches the browser's real sequence so listeners that
+            // chain (pointer → mouse) see what they expect.
+            el.dispatchEvent(new PointerEvent('pointerover', eventInit));
+            el.dispatchEvent(new PointerEvent('pointerenter', eventInit));
+            el.dispatchEvent(new MouseEvent('mouseover', eventInit));
+            el.dispatchEvent(new MouseEvent('mouseenter', eventInit));
+            el.dispatchEvent(new MouseEvent('mousemove', eventInit));
+          } catch {
+            // PointerEvent unavailable on very old Firefox — MouseEvent alone.
+            try {
+              el.dispatchEvent(new MouseEvent('mouseover', eventInit));
+              el.dispatchEvent(new MouseEvent('mouseenter', eventInit));
+              el.dispatchEvent(new MouseEvent('mousemove', eventInit));
+            } catch {}
+          }
+          return {
+            success: true,
+            method: 'synthetic-hover',
+            ref_id,
+            tag: el.tagName ? el.tagName.toLowerCase() : '',
+            rect: { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) },
+            note: 'Synthetic hover (Firefox has no CDP). isTrusted=false — sites that gate hover-reveal on event.isTrusted will not respond. Re-read the tree to confirm a menu/tooltip appeared.',
+          };
+        } catch (e) {
+          return { success: false, error: e && e.message || String(e) };
+        }
+      },
+      // ── drag_drop ──────────────────────────────────────────────────────────
+      // Firefox synthetic implementation. We dispatch the full pointer +
+      // HTML5 drag-and-drop event chain with a constructed DataTransfer so
+      // BOTH custom pointer-event drag handlers (Trello-style) AND HTML5
+      // dnd handlers (file-drop, ordering libs that use dragstart/dragover/
+      // drop) see something. isTrusted=false applies — same caveat as hover.
+      // For sites that work, this is enough. For sites that don't, the user
+      // should switch to Chrome (where CDP delivers trusted events).
+      'drag_drop': () => {
+        try {
+          const { fromRefId, toRefId, steps: stepsRaw } = msg.params || {};
+          if (typeof fromRefId !== 'string' || typeof toRefId !== 'string') {
+            return { success: false, error: 'drag_drop: fromRefId and toRefId (both strings, e.g. "ref_42") are required' };
+          }
+          if (typeof window.__wb_ax_lookup !== 'function') return { success: false, error: 'accessibility-tree.js not injected' };
+          const from = window.__wb_ax_lookup(fromRefId);
+          const to = window.__wb_ax_lookup(toRefId);
+          if (!from) return { success: false, error: `drag_drop: fromRefId ${fromRefId} not found.` };
+          if (!to) return { success: false, error: `drag_drop: toRefId ${toRefId} not found.` };
+          try { from.scrollIntoView({ block: 'center', inline: 'center' }); } catch {}
+          const fr = from.getBoundingClientRect();
+          const x1 = fr.left + fr.width / 2;
+          const y1 = fr.top + fr.height / 2;
+          try { to.scrollIntoView({ block: 'center', inline: 'center' }); } catch {}
+          // Re-measure source AFTER destination scroll — viewport may have
+          // shifted. Same precaution Chrome takes.
+          const fr2 = from.getBoundingClientRect();
+          const sx1 = fr2.left + fr2.width / 2;
+          const sy1 = fr2.top + fr2.height / 2;
+          const tr = to.getBoundingClientRect();
+          const x2 = tr.left + tr.width / 2;
+          const y2 = tr.top + tr.height / 2;
+          const stepsN = Math.max(2, Math.min(40, Math.floor(Number(stepsRaw) || 10)));
+          // Construct a DataTransfer so HTML5 dnd handlers see one.
+          // Firefox supports `new DataTransfer()`.
+          let dt;
+          try { dt = new DataTransfer(); } catch { dt = null; }
+          const mk = (type, x, y, target) => {
+            const init = { bubbles: true, cancelable: true, view: window, clientX: x, clientY: y };
+            if (dt && /^drag/.test(type)) init.dataTransfer = dt;
+            try {
+              if (/^pointer/.test(type)) return new PointerEvent(type, init);
+              if (/^drag/.test(type)) return new DragEvent(type, init);
+              return new MouseEvent(type, init);
+            } catch { return null; }
+          };
+          const dispatch = (type, x, y, target) => {
+            const ev = mk(type, x, y, target);
+            if (ev) try { target.dispatchEvent(ev); } catch {}
+          };
+          // Pointer + mouse + drag sequence on source.
+          dispatch('pointerdown', sx1, sy1, from);
+          dispatch('mousedown', sx1, sy1, from);
+          dispatch('dragstart', sx1, sy1, from);
+          // Intermediate waypoints — fire pointermove/mousemove/dragover at
+          // both source and destination so library code that listens at
+          // either end sees movement.
+          for (let i = 1; i <= stepsN; i++) {
+            const t = i / stepsN;
+            const ix = Math.round(sx1 + (x2 - sx1) * t);
+            const iy = Math.round(sy1 + (y2 - sy1) * t);
+            const overTarget = document.elementFromPoint(ix, iy) || to;
+            dispatch('drag', ix, iy, from);
+            dispatch('pointermove', ix, iy, overTarget);
+            dispatch('mousemove', ix, iy, overTarget);
+            dispatch('dragenter', ix, iy, overTarget);
+            dispatch('dragover', ix, iy, overTarget);
+          }
+          // Drop sequence on destination.
+          dispatch('drop', x2, y2, to);
+          dispatch('dragend', x2, y2, from);
+          dispatch('pointerup', x2, y2, to);
+          dispatch('mouseup', x2, y2, to);
+          return {
+            success: true,
+            method: 'synthetic-drag',
+            from: { ref_id: fromRefId, x: sx1, y: sy1 },
+            to: { ref_id: toRefId, x: x2, y: y2 },
+            steps: stepsN,
+            note: 'Synthetic drag (Firefox has no CDP). isTrusted=false — some sites with strict event verification will not respond. Re-read the tree to confirm the order/position changed. If nothing moved, the site needs Chrome (CDP-trusted) drag.',
+          };
+        } catch (e) {
+          return { success: false, error: e && e.message || String(e) };
+        }
+      },
+      // ── wait_for_stable ────────────────────────────────────────────────────
+      // CROSS-WORLD NOTE: Firefox content scripts (like Chrome) run in a
+      // separate JS compartment from the page. Patching `window.fetch` /
+      // `XMLHttpRequest.prototype.send` here observes nothing because the
+      // page's calls happen in the page's own world. Same fix as Chrome:
+      // inject a <script> with text patches, publish the in-flight count
+      // via `document.documentElement.dataset.__wbInflight` (shared DOM
+      // crosses the world boundary), read from here. Page CSP can refuse
+      // the inline-script inject — when that happens we fall back to
+      // MutationObserver-only stability and flag `networkObserved: false`.
+      'wait_for_stable': () => {
+        return new Promise((resolve) => {
+          const params = msg.params || {};
+          const timeout = Math.max(200, Math.min(20000, Number(params.timeout) || 5000));
+          const quietMs = Math.max(100, Math.min(3000, Number(params.quietMs) || 500));
+          const checkNetwork = params.checkNetwork !== false;
+          let mutationCount = 0;
+          let networkObserved = false;
+
+          if (checkNetwork && !window.__wbNetCounterAttempted) {
+            window.__wbNetCounterAttempted = true;
+            try {
+              const script = document.createElement('script');
+              script.textContent = `(() => {
+                if (window.__wbNetIdleInstalled) return;
+                window.__wbNetIdleInstalled = true;
+                let inFlight = 0;
+                const root = document.documentElement;
+                const publish = () => {
+                  try { root.dataset.__wbInflight = String(inFlight); } catch (_) {}
+                };
+                publish();
+                const origFetch = window.fetch;
+                if (typeof origFetch === 'function') {
+                  window.fetch = function() {
+                    inFlight++; publish();
+                    return origFetch.apply(this, arguments).finally(() => {
+                      inFlight = Math.max(0, inFlight - 1); publish();
+                    });
+                  };
+                }
+                const XHR = window.XMLHttpRequest;
+                if (XHR && XHR.prototype && XHR.prototype.send) {
+                  const origSend = XHR.prototype.send;
+                  XHR.prototype.send = function() {
+                    inFlight++; publish();
+                    const done = () => { inFlight = Math.max(0, inFlight - 1); publish(); };
+                    this.addEventListener('loadend', done, { once: true });
+                    return origSend.apply(this, arguments);
+                  };
+                }
+              })();`;
+              (document.head || document.documentElement).appendChild(script);
+              script.remove();
+            } catch {}
+          }
+
+          const readInflight = () => {
+            try {
+              const v = document.documentElement.dataset.__wbInflight;
+              if (v == null) return null;
+              const n = parseInt(v, 10);
+              return Number.isFinite(n) ? n : null;
+            } catch { return null; }
+          };
+          if (checkNetwork) {
+            networkObserved = readInflight() !== null;
+          }
+
+          const startedAt = Date.now();
+          let quietStart = Date.now();
+          const observer = new MutationObserver((records) => {
+            mutationCount += records.length;
+            quietStart = Date.now();
+          });
+          try {
+            observer.observe(document.documentElement || document.body, {
+              childList: true, subtree: true, attributes: true, characterData: true,
+            });
+          } catch {
+            resolve({ success: true, stable: true, elapsedMs: 0, reason: 'observer-failed' });
+            return;
+          }
+          const interval = setInterval(() => {
+            const now = Date.now();
+            const quiet = now - quietStart;
+            const elapsed = now - startedAt;
+            if (checkNetwork && !networkObserved) {
+              networkObserved = readInflight() !== null;
+            }
+            const inFlight = networkObserved ? (readInflight() | 0) : 0;
+            const netIdle = !checkNetwork || !networkObserved || inFlight === 0;
+            if (quiet >= quietMs && netIdle) {
+              clearInterval(interval);
+              observer.disconnect();
+              resolve({
+                success: true, stable: true,
+                elapsedMs: elapsed, quietMs: quiet, mutations: mutationCount,
+                inFlightAtExit: networkObserved ? inFlight : null,
+                networkObserved,
+              });
+            } else if (elapsed >= timeout) {
+              clearInterval(interval);
+              observer.disconnect();
+              resolve({
+                success: true, stable: false, timedOut: true,
+                elapsedMs: elapsed, mutations: mutationCount,
+                inFlightAtExit: networkObserved ? inFlight : null,
+                networkObserved,
+                hint: networkObserved
+                  ? 'Page never went quiet within the timeout. Proceed and read the tree anyway, or pass a longer timeout.'
+                  : 'Network activity could not be observed on this page (the in-page <script> inject was blocked, likely by a strict Content Security Policy). Stability was judged on DOM mutations alone, and that never settled. Proceed cautiously.',
+              });
+            }
+          }, 100);
+        });
       },
     };
 

@@ -1,0 +1,10 @@
+{
+  "id": "050",
+  "idealFirstToolCall": {
+    "name": "click",
+    "args": {
+      "text": "Reply"
+    }
+  },
+  "successRubric": "Clicks Reply on the open thread. Acceptable: scroll to the bottom first if the reply button is below the fold."
+}

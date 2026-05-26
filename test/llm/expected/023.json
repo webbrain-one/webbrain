@@ -1,0 +1,10 @@
+{
+  "id": "023",
+  "idealFirstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "https://www.google.com/search?q=vegan+lasagna+recipes"
+    }
+  },
+  "successRubric": "Either: Google/Bing/DuckDuckGo search for \"vegan lasagna recipes\", OR navigate to a recipe site's own search. Direct Google search is the most-likely first action."
+}

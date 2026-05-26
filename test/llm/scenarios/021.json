@@ -1,0 +1,50 @@
+{
+  "id": "021",
+  "category": "csp-blocked-eval",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://github.com/acme/widgets",
+    "title": "acme/widgets — GitHub"
+  },
+  "description": "execute_js to enumerate links blocked by GitHub CSP. Use extract_data instead.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://github.com/acme/widgets — Title: acme/widgets — GitHub]\n\nlist all the external links on this page"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_o_1v92m7",
+          "type": "function",
+          "function": {
+            "name": "execute_js",
+            "arguments": "{\"code\":\"Array.from(document.querySelectorAll(\\\"a[href]\\\")).map(a => a.href)\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_o_1v92m7",
+      "name": "execute_js",
+      "content": "{\"success\":false,\"error\":\"CSP: 'unsafe-eval' not allowed.\"}"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "get_interactive_elements",
+      "args": {}
+    },
+    "antiPatterns": [
+      {
+        "match": "execute_js({code:\"[...document.links].map(l=>l.href)\"})",
+        "reason": "Different code, same CSP block."
+      }
+    ],
+    "successRubric": "Use get_interactive_elements (lists all clickable elements including links) or read_page. CSP-blocked execute_js cannot be circumvented client-side."
+  }
+}

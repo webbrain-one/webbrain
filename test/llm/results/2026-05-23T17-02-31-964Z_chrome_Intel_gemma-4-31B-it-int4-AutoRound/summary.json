@@ -1,0 +1,28 @@
+{
+  "runTag": "2026-05-23T17-02-31-964Z",
+  "model": "Intel/gemma-4-31B-it-int4-AutoRound",
+  "browser": "chrome",
+  "base": "http://192.168.1.47:8000",
+  "saveRequest": true,
+  "cases": 100,
+  "totalLatencyMs": 45244,
+  "errors": 0,
+  "withToolCall": 88,
+  "byTool": {
+    "navigate": 22,
+    "list_downloads": 2,
+    "new_tab": 3,
+    "get_accessibility_tree": 45,
+    "read_page": 4,
+    "extract_data": 1,
+    "download_resource_from_page": 1,
+    "download_social_media": 2,
+    "scroll": 1,
+    "screenshot": 1,
+    "get_selection": 1,
+    "clarify": 2,
+    "(no_tool_call)": 12,
+    "get_frames": 1,
+    "execute_js": 2
+  }
+}

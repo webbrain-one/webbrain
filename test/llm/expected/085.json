@@ -1,0 +1,10 @@
+{
+  "id": "085",
+  "idealFirstToolCall": {
+    "name": "done",
+    "args": {
+      "summary": "Why don't scientists trust atoms? Because they make up everything."
+    }
+  },
+  "successRubric": "done with a joke. Any clean joke is fine. Navigating somewhere is wrong."
+}

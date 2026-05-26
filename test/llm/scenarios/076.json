@@ -1,0 +1,52 @@
+{
+  "id": "076",
+  "category": "cross-lingual",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://www.bilibili.com/",
+    "title": "bilibili"
+  },
+  "description": "Chinese site. The agent must use 搜索 (search) not English.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://www.bilibili.com/ — Title: bilibili]\n\nsearch for \"lo-fi study\""
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_2o_g22k14",
+          "type": "function",
+          "function": {
+            "name": "get_accessibility_tree",
+            "arguments": "{\"filter\":\"visible\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_2o_g22k14",
+      "name": "get_accessibility_tree",
+      "content": "{\"pageContent\":\"searchbox \\\"搜索\\\" [ref_5]\"}"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "click_ax",
+      "args": {
+        "ref_id": "ref_5"
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "click({text:\"Search\"})",
+        "reason": "Chinese UI — search input has placeholder 搜索, not \"Search\"."
+      }
+    ],
+    "successRubric": "Click the Chinese searchbox via ref_id. Then type the query."
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "id": "071",
+  "category": "cross-lingual",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://mastoturk.org/publish",
+    "title": "MastoTurk"
+  },
+  "description": "Turkish user asks in Turkish on a Turkish UI. Recognize the Turkish \"Gönder\" = \"Send\".",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://mastoturk.org/publish — Title: MastoTurk]\n\ngönder bunu"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_2j_4hc8pe",
+          "type": "function",
+          "function": {
+            "name": "read_page",
+            "arguments": "{}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_2j_4hc8pe",
+      "name": "read_page",
+      "content": "{\"url\":\"https://mastoturk.org/publish\",\"text\":\"Yeni Gönderi ... 251 ... Gönder\"}"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "click",
+      "args": {
+        "text": "Gönder"
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "click({text:\"Send\"})",
+        "reason": "Turkish UI — button label is \"Gönder\" not \"Send\"."
+      },
+      {
+        "match": "click({text:\"Post\"})",
+        "reason": "Same."
+      }
+    ],
+    "successRubric": "Use the visible Turkish button label \"Gönder\". Don't translate UI labels to English."
+  }
+}

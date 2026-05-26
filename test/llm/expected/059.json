@@ -1,0 +1,8 @@
+{
+  "id": "059",
+  "idealFirstToolCall": {
+    "name": "list_downloads",
+    "args": {}
+  },
+  "successRubric": "Calls list_downloads. Direct, single-tool answer."
+}

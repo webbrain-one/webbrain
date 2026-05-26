@@ -1,0 +1,10 @@
+{
+  "id": "025",
+  "idealFirstToolCall": {
+    "name": "click",
+    "args": {
+      "text": "Search"
+    }
+  },
+  "successRubric": "Focus YouTube's search box and type the query, OR navigate directly to youtube.com/results?search_query=never+gonna+give+you+up. Both pass."
+}

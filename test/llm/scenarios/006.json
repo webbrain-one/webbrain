@@ -1,0 +1,100 @@
+{
+  "id": "006",
+  "category": "loop-bad-url",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://mastodon.turk/",
+    "title": "Server not found"
+  },
+  "description": "After three sequential failures on the same hallucinated URL, the agent must finally give up that URL.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://mstdn.social/@example/12345 — Title: Example post — Mastodon]\n\ncross-post this to mastoturk"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_7_koeofw",
+          "type": "function",
+          "function": {
+            "name": "navigate",
+            "arguments": "{\"url\":\"https://mastodon.turk\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_7_koeofw",
+      "name": "navigate",
+      "content": "{\"success\":true,\"url\":\"https://mastodon.turk/\",\"requestedUrl\":\"https://mastodon.turk\"}"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_8_wjkwgh",
+          "type": "function",
+          "function": {
+            "name": "navigate",
+            "arguments": "{\"url\":\"https://mastodon.turk\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_8_wjkwgh",
+      "name": "navigate",
+      "content": "{\"success\":true,\"url\":\"https://mastodon.turk/\",\"requestedUrl\":\"https://mastodon.turk\"}"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_9_tns9qp",
+          "type": "function",
+          "function": {
+            "name": "new_tab",
+            "arguments": "{\"url\":\"https://mastodon.turk\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_9_tns9qp",
+      "name": "new_tab",
+      "content": "{\"success\":true,\"tabId\":999,\"url\":\"https://mastodon.turk\",\"groupId\":null}"
+    },
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://mastodon.turk/ — Title: Server not found]\n\nnow what?"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "clarify",
+      "args": {
+        "question": "mastodon.turk isn't resolving — I've tried three times. Could you share the actual MastoTurk URL? It's likely mastoturk.org or similar."
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "navigate({url:\"https://mastodon.turk\"})",
+        "reason": "4th retry — exact gpt-4o failure pattern."
+      },
+      {
+        "match": "new_tab({url:\"https://mastodon.turk\"})",
+        "reason": "Same URL in another tab — still a retry."
+      }
+    ],
+    "successRubric": "After 3 failed attempts on the same URL, abandon it. Clarify with user OR search for the real URL."
+  }
+}

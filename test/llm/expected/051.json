@@ -1,0 +1,10 @@
+{
+  "id": "051",
+  "idealFirstToolCall": {
+    "name": "click",
+    "args": {
+      "text": "Report spam"
+    }
+  },
+  "successRubric": "Clicks \"Report spam\" on the current Gmail thread. Acceptable: click by toolbar icon via get_interactive_elements."
+}

@@ -1,0 +1,12 @@
+{
+  "id": "054",
+  "idealFirstToolCall": {
+    "name": "download_files",
+    "args": {
+      "urls": [
+        "https://example.com/photo.jpg"
+      ]
+    }
+  },
+  "successRubric": "Calls download_files with the current image URL. Acceptable: download_resource_from_page if the agent prefers that path."
+}

@@ -578,13 +578,16 @@ function submitClarify(card, tabId, clarifyId, answer, source) {
   card.appendChild(answered);
   scrollToBottom();
 
-  browser.runtime.sendMessage({
-    action: 'clarify_response',
-    tabId,
-    clarifyId,
-    answer,
-    source,
-  }).catch(() => { /* background may be torn down — clarify state already lives there */ });
+  // IMPORTANT: include `target: 'background'`. Without it, background's
+  // message router (browser.runtime.onMessage in background.js) silently
+  // drops the message — the very first line is
+  //   if (msg.target !== 'background') return;
+  // …and the agent's pending clarify Promise hangs forever, leaving the
+  // run stuck after the user answers. Use sendToBackground() rather than
+  // browser.runtime.sendMessage directly so the target field is always
+  // injected.
+  sendToBackground('clarify_response', { tabId, clarifyId, answer, source })
+    .catch(() => { /* background may be torn down — clarify state already lives there */ });
 }
 
 
@@ -783,7 +786,7 @@ function showContinueButton() {
   const bar = document.createElement('div');
   bar.className = 'continue-bar';
   bar.innerHTML = `
-    <span class="continue-text">${escapeHtml(t('sp.continue_bar', { steps: agent_maxSteps || 60 }))}</span>
+    <span class="continue-text">${escapeHtml(t('sp.continue_bar', { steps: agent_maxSteps || 130 }))}</span>
     <button class="continue-btn" id="btn-continue">${escapeHtml(t('sp.continue_btn'))}</button>
   `;
   messagesEl.appendChild(bar);
@@ -830,8 +833,8 @@ async function continueAgent() {
   }
 }
 
-let agent_maxSteps = 60;
-browser.storage.local.get('maxAgentSteps').then(s => { agent_maxSteps = s.maxAgentSteps || 60; });
+let agent_maxSteps = 130;
+browser.storage.local.get('maxAgentSteps').then(s => { agent_maxSteps = s.maxAgentSteps || 130; });
 browser.storage.onChanged.addListener((changes) => {
   if (changes.maxAgentSteps) agent_maxSteps = changes.maxAgentSteps.newValue;
 });

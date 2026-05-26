@@ -1,0 +1,8 @@
+{
+  "id": "065",
+  "idealFirstToolCall": {
+    "name": "screenshot",
+    "args": {}
+  },
+  "successRubric": "Single screenshot call. The agent may then call done with a brief description."
+}

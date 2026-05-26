@@ -1,0 +1,10 @@
+{
+  "id": "017",
+  "idealFirstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "https://www.google.com/search?q=best+coffee+shop+in+seattle"
+    }
+  },
+  "successRubric": "Either: navigate directly to a Google search URL with the query, OR navigate to google.com and submit the search. Both are correct."
+}

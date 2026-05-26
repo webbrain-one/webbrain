@@ -1,0 +1,10 @@
+{
+  "id": "083",
+  "idealFirstToolCall": {
+    "name": "fetch_url",
+    "args": {
+      "url": "https://www.timeanddate.com/worldclock/japan/tokyo"
+    }
+  },
+  "successRubric": "Either: fetch a worldclock URL (the model can't know \"now\" without external info), OR call done with an explanation that the agent can't time-zone-compute reliably and suggest a quick site. done with a guessed time is wrong."
+}

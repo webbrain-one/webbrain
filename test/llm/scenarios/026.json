@@ -1,0 +1,50 @@
+{
+  "id": "026",
+  "category": "csp-blocked-eval",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://example.com/page",
+    "title": "Example"
+  },
+  "description": "execute_js to read computed style blocked. Use accessibility tree, which carries visible state.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://example.com/page — Title: Example]\n\nis the submit button disabled?"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_t_fw4ahn",
+          "type": "function",
+          "function": {
+            "name": "execute_js",
+            "arguments": "{\"code\":\"document.querySelector(\\\"button[type=\\\\\\\"submit\\\\\\\"]\\\").disabled\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_t_fw4ahn",
+      "name": "execute_js",
+      "content": "{\"success\":false,\"error\":\"CSP: 'unsafe-eval' not allowed.\"}"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "get_interactive_elements",
+      "args": {}
+    },
+    "antiPatterns": [
+      {
+        "match": "execute_js({code:\"...\"})",
+        "reason": "CSP-blocked."
+      }
+    ],
+    "successRubric": "get_interactive_elements or get_accessibility_tree both report disabled state. Use one."
+  }
+}

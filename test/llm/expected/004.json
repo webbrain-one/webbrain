@@ -1,0 +1,10 @@
+{
+  "id": "004",
+  "idealFirstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "https://github.com/"
+    }
+  },
+  "successRubric": "Navigates to github.com. The agent should NOT try to guess the username slug — github.com's logged-in landing handles that."
+}

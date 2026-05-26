@@ -1,0 +1,10 @@
+{
+  "id": "061",
+  "idealFirstToolCall": {
+    "name": "click",
+    "args": {
+      "text": "Add to Cart"
+    }
+  },
+  "successRubric": "Clicks \"Add to Cart\" on the product page. Acceptable: \"Add to cart\" (different capitalization is fine; click is case-insensitive)."
+}

@@ -1,0 +1,9 @@
+{
+  "id": "009",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "user": "open chatgpt in a new tab"
+}

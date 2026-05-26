@@ -1,0 +1,15 @@
+{
+  "runTag": "smoke-url",
+  "model": "mock",
+  "browser": "chrome",
+  "base": "http://127.0.0.1:9/v1",
+  "saveRequest": false,
+  "cases": 1,
+  "totalLatencyMs": 13,
+  "errors": 1,
+  "withToolCall": 0,
+  "withToolCallFromContent": 0,
+  "byTool": {
+    "(error)": 1
+  }
+}

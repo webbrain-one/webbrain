@@ -1,0 +1,8 @@
+{
+  "id": "028",
+  "idealFirstToolCall": {
+    "name": "read_page",
+    "args": {}
+  },
+  "successRubric": "Reads the current page and answers in one sentence. Navigating, screenshotting, or extracting headings (instead of body text) is wrong."
+}

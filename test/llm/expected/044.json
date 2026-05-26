@@ -1,0 +1,10 @@
+{
+  "id": "044",
+  "idealFirstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "https://github.com/esokullu/webbrain/issues/new"
+    }
+  },
+  "successRubric": "Navigates to /issues/new, then types the title and (optionally) body, then submits. Title is provided so no clarify needed."
+}
