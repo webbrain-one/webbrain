@@ -1,21 +1,16 @@
 <!DOCTYPE html>
-<html>
-<head>
-  <!--
-    Single offscreen document hosting both:
-      • offscreen.js — fetch proxy for localhost LLM servers (existing)
-      • recorder.js  — tab capture + mic mix + MediaRecorder (new in v7.4)
+<!--
+  Offscreen document for WebBrain.
+  - Local-network fetch proxy (PNA workaround).
+  - WebGPU + ONNX LLM runtime via vendored @huggingface/transformers.
+  - Tab recorder (recorder.js).
 
-    Chrome MV3 only allows ONE offscreen document per extension at a time,
-    so the two responsibilities share this host. Each script binds its own
-    runtime.onMessage filter (`offscreen-fetch` vs `recorder-*`) so they
-    don't step on each other's messages.
-
-    Reasons declared at createDocument time cover both code paths up front:
-    LOCAL_STORAGE (fetch proxy), USER_MEDIA (mic), DISPLAY_MEDIA (tabCapture).
-  -->
-  <script src="offscreen.js"></script>
-  <script src="recorder.js"></script>
-</head>
-<body></body>
-</html>
+  type="module" is required so offscreen.js can dynamically import the
+  vendored library. NOTE: the vendored transformers.web.min.js has its
+  internal `import("onnxruntime-web/webgpu")` bare specifier rewritten
+  to a relative path during vendoring — see
+  src/chrome/vendor/transformers/README.md. We deliberately do NOT use a
+  <script type="importmap"> here because the MV3 CSP (`script-src 'self'`)
+  may block inline import maps on some Chrome versions.
+-->
+<html><head><script type="module" src="offscreen.js"></script><script src="recorder.js"></script></head></html>

@@ -3,6 +3,15 @@
 node_modules/
 test/anonymous/.test-profile/
 
+# Vendored @huggingface/transformers — Chrome's build is committed
+# (see src/chrome/vendor/transformers/README.md for versioning notes).
+# Firefox's stays gitignored because the Firefox WebGPU provider is
+# still a stub; once it's wired, copy the chrome vendor over and
+# remove the firefox exclusion below.
+src/firefox/vendor/transformers/*.js
+src/firefox/vendor/transformers/*.wasm
+src/firefox/vendor/transformers/*.mjs
+
 # ---- SocialMediaDownloader test suite ----
 # Cookies / session state if someone ever points the profile here
 smd-test-profile/

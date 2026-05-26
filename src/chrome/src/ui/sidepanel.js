@@ -605,6 +605,18 @@ function summarizeLastTranscript() {
   if (sendBtn) sendBtn.click();
 }
 
+// Model-download progress (WebGPU provider's first-run weights download
+// from HF Hub). Broadcast by the offscreen document via chrome.runtime
+// .sendMessage with action='model_download'. Listener is separate from
+// the agent_update one below because download events fire outside of any
+// chat turn (the user clicks Test Connection or sends their first message;
+// the model loads in the background; we want to surface progress without
+// hijacking the agent's normal status pipeline).
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg.target !== 'sidepanel' || msg.action !== 'model_download') return;
+  renderModelDownloadProgress(msg);
+});
+
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.target !== 'sidepanel' || msg.action !== 'agent_update') return;
 
@@ -718,6 +730,100 @@ chrome.runtime.onMessage.addListener((msg) => {
       break;
   }
 });
+
+/**
+ * Render / update the WebGPU model-download progress card. Lives at the
+ * top of the messages container while a download is active; auto-dismisses
+ * a couple of seconds after the 'ready' event so the user sees confirmation
+ * before it disappears.
+ *
+ * Aggregates across multiple in-flight files: the model has ~8 files (the
+ * .onnx tensor blob, tokenizer, config, generation_config, etc.) and they
+ * arrive in parallel. We sum loaded/total across files for the headline
+ * progress, and show the currently-downloading filename below it.
+ */
+const _modelDownloadState = {
+  cardEl: null,
+  files: new Map(), // file → {loaded, total, status}
+  dismissTimer: null,
+};
+
+function renderModelDownloadProgress(msg) {
+  const { status, file, loaded, total, modelId } = msg;
+
+  // Track per-file progress so totals are accurate even with parallel
+  // downloads. 'done' / 'ready' don't have byte counts; preserve the
+  // last-known totals.
+  if (file) {
+    const prev = _modelDownloadState.files.get(file) || { loaded: 0, total: 0 };
+    _modelDownloadState.files.set(file, {
+      loaded: status === 'done' ? (prev.total || prev.loaded) : (loaded || prev.loaded),
+      total: total || prev.total,
+      status,
+    });
+  }
+
+  // Build or find the card.
+  if (!_modelDownloadState.cardEl) {
+    const card = document.createElement('div');
+    card.className = 'model-download-card';
+    card.innerHTML = `
+      <div class="model-download-headline"></div>
+      <div class="model-download-bar"><div class="model-download-bar-fill"></div></div>
+      <div class="model-download-detail"></div>
+    `;
+    if (messagesEl) messagesEl.prepend(card);
+    _modelDownloadState.cardEl = card;
+  }
+  const card = _modelDownloadState.cardEl;
+  const headline = card.querySelector('.model-download-headline');
+  const fill = card.querySelector('.model-download-bar-fill');
+  const detail = card.querySelector('.model-download-detail');
+
+  if (status === 'ready') {
+    headline.textContent = (typeof t === 'function' ? t('sp.model_download.ready', { model: modelId }) : `${modelId} ready`) || `${modelId} ready`;
+    fill.style.width = '100%';
+    fill.classList.add('done');
+    detail.textContent = '';
+    // Linger briefly so the user sees "ready", then fade out.
+    if (_modelDownloadState.dismissTimer) clearTimeout(_modelDownloadState.dismissTimer);
+    _modelDownloadState.dismissTimer = setTimeout(() => {
+      if (_modelDownloadState.cardEl) {
+        _modelDownloadState.cardEl.remove();
+        _modelDownloadState.cardEl = null;
+        _modelDownloadState.files.clear();
+      }
+    }, 1800);
+    scrollToBottom();
+    return;
+  }
+
+  // Aggregate across files for the headline bar.
+  let totalLoaded = 0;
+  let totalSize = 0;
+  for (const f of _modelDownloadState.files.values()) {
+    totalLoaded += f.loaded || 0;
+    totalSize += f.total || 0;
+  }
+  const pct = totalSize > 0 ? Math.min(100, Math.round((totalLoaded / totalSize) * 100)) : 0;
+  fill.style.width = `${pct}%`;
+  fill.classList.remove('done');
+
+  const headlineText = (typeof t === 'function'
+    ? t('sp.model_download.headline', { model: modelId, mb: Math.round(totalLoaded / 1048576), total_mb: Math.round(totalSize / 1048576) || '?' })
+    : null) || `Downloading ${modelId} — ${Math.round(totalLoaded / 1048576)} / ${Math.round(totalSize / 1048576) || '?'} MB`;
+  headline.textContent = headlineText;
+
+  if (status === 'progress' || status === 'download') {
+    detail.textContent = file || '';
+  } else if (status === 'initiate') {
+    detail.textContent = (typeof t === 'function' ? t('sp.model_download.queued') : 'Queued') + (file ? ` · ${file}` : '');
+  } else if (status === 'done') {
+    detail.textContent = (typeof t === 'function' ? t('sp.model_download.file_done') : 'File complete') + (file ? ` · ${file}` : '');
+  }
+
+  scrollToBottom();
+}
 
 /**
  * Render a clarify() prompt inside the current assistant message. Shows the

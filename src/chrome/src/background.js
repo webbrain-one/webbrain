@@ -597,6 +597,14 @@ async function handleMessage(msg, sender) {
       }
     }
 
+    case 'clear_webgpu_cache': {
+      const provider = providerManager.providers.get('webgpu_qwen3');
+      if (!provider || typeof provider.clearCache !== 'function') {
+        return { ok: false, error: 'WebGPU provider not available' };
+      }
+      return await provider.clearCache();
+    }
+
     case 'list_provider_models': {
       return await providerManager.listProviderModels(msg.providerId);
     }

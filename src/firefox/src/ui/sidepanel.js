@@ -287,6 +287,14 @@ async function sendMessage() {
 
 // --- Listen for Agent Updates ---
 
+// Model-download progress (WebGPU provider — currently stubbed on
+// Firefox, but the listener stays so the parity with chrome is real
+// once the Firefox WebGPU path lands).
+browser.runtime.onMessage.addListener((msg) => {
+  if (msg.target !== 'sidepanel' || msg.action !== 'model_download') return;
+  renderModelDownloadProgress(msg);
+});
+
 browser.runtime.onMessage.addListener((msg) => {
   if (msg.target !== 'sidepanel' || msg.action !== 'agent_update') return;
 
@@ -394,6 +402,89 @@ browser.runtime.onMessage.addListener((msg) => {
       break;
   }
 });
+
+/**
+ * Render / update the WebGPU model-download progress card. See
+ * chrome/sidepanel.js for the design notes. Currently inert on Firefox
+ * (the WebGPU provider is a stub) but the listener + rendering stay so
+ * the cut-over is one-line when the Firefox WebGPU path lands.
+ */
+const _modelDownloadState = {
+  cardEl: null,
+  files: new Map(),
+  dismissTimer: null,
+};
+
+function renderModelDownloadProgress(msg) {
+  const { status, file, loaded, total, modelId } = msg;
+
+  if (file) {
+    const prev = _modelDownloadState.files.get(file) || { loaded: 0, total: 0 };
+    _modelDownloadState.files.set(file, {
+      loaded: status === 'done' ? (prev.total || prev.loaded) : (loaded || prev.loaded),
+      total: total || prev.total,
+      status,
+    });
+  }
+
+  if (!_modelDownloadState.cardEl) {
+    const card = document.createElement('div');
+    card.className = 'model-download-card';
+    card.innerHTML = `
+      <div class="model-download-headline"></div>
+      <div class="model-download-bar"><div class="model-download-bar-fill"></div></div>
+      <div class="model-download-detail"></div>
+    `;
+    if (messagesEl) messagesEl.prepend(card);
+    _modelDownloadState.cardEl = card;
+  }
+  const card = _modelDownloadState.cardEl;
+  const headline = card.querySelector('.model-download-headline');
+  const fill = card.querySelector('.model-download-bar-fill');
+  const detail = card.querySelector('.model-download-detail');
+
+  if (status === 'ready') {
+    headline.textContent = (typeof t === 'function' ? t('sp.model_download.ready', { model: modelId }) : `${modelId} ready`) || `${modelId} ready`;
+    fill.style.width = '100%';
+    fill.classList.add('done');
+    detail.textContent = '';
+    if (_modelDownloadState.dismissTimer) clearTimeout(_modelDownloadState.dismissTimer);
+    _modelDownloadState.dismissTimer = setTimeout(() => {
+      if (_modelDownloadState.cardEl) {
+        _modelDownloadState.cardEl.remove();
+        _modelDownloadState.cardEl = null;
+        _modelDownloadState.files.clear();
+      }
+    }, 1800);
+    scrollToBottom();
+    return;
+  }
+
+  let totalLoaded = 0;
+  let totalSize = 0;
+  for (const f of _modelDownloadState.files.values()) {
+    totalLoaded += f.loaded || 0;
+    totalSize += f.total || 0;
+  }
+  const pct = totalSize > 0 ? Math.min(100, Math.round((totalLoaded / totalSize) * 100)) : 0;
+  fill.style.width = `${pct}%`;
+  fill.classList.remove('done');
+
+  const headlineText = (typeof t === 'function'
+    ? t('sp.model_download.headline', { model: modelId, mb: Math.round(totalLoaded / 1048576), total_mb: Math.round(totalSize / 1048576) || '?' })
+    : null) || `Downloading ${modelId} — ${Math.round(totalLoaded / 1048576)} / ${Math.round(totalSize / 1048576) || '?'} MB`;
+  headline.textContent = headlineText;
+
+  if (status === 'progress' || status === 'download') {
+    detail.textContent = file || '';
+  } else if (status === 'initiate') {
+    detail.textContent = (typeof t === 'function' ? t('sp.model_download.queued') : 'Queued') + (file ? ` · ${file}` : '');
+  } else if (status === 'done') {
+    detail.textContent = (typeof t === 'function' ? t('sp.model_download.file_done') : 'File complete') + (file ? ` · ${file}` : '');
+  }
+
+  scrollToBottom();
+}
 
 /**
  * Render a clarify() prompt inside the current assistant message. Shows

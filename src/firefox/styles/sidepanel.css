@@ -925,3 +925,46 @@ body {
   border-top: 1px dashed var(--border);
 }
 
+
+/* WebGPU model-download progress — currently inert on Firefox (provider
+   is stubbed), kept for parity with chrome so the layout doesn't drift. */
+.model-download-card {
+  margin: 8px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius, 6px);
+  background: var(--accent-dim, rgba(33, 150, 243, 0.08));
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.model-download-headline {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.model-download-bar {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.model-download-bar-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  transition: width 0.2s ease-out;
+  border-radius: 3px;
+}
+.model-download-bar-fill.done {
+  background: var(--success, #4caf50);
+}
+.model-download-detail {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

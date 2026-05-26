@@ -1,6 +1,7 @@
 import { LlamaCppProvider } from './llamacpp.js';
 import { OpenAICompatibleProvider } from './openai.js';
 import { AnthropicProvider, AnthropicOAuthProvider } from './anthropic.js';
+import { WebGPUProvider } from './webgpu.js';
 
 /**
  * Manages LLM provider instances and persists configuration.
@@ -76,6 +77,20 @@ export class ProviderManager {
         // multimodal channel, which is the worse failure mode.
         supportsVision: true,
         enabled: true,
+      },
+      // Browser-native local: WebGPU + ONNX. Firefox stub — see
+      // src/firefox/src/providers/webgpu.js. Config kept for parity with
+      // chrome's default set; the provider class fails fast.
+      webgpu_qwen3: {
+        type: 'webgpu',
+        category: 'local',
+        label: 'WebGPU',
+        model: 'onnx-community/gemma-4-E2B-it-ONNX',
+        dtype: 'q4f16',
+        device: 'webgpu',
+        supportsVision: false,
+        useCompactPrompt: true,
+        enabled: false,
       },
       ollama: {
         type: 'openai',
@@ -233,6 +248,10 @@ export class ProviderManager {
         return new AnthropicProvider(config);
       case 'anthropic_oauth':
         return new AnthropicOAuthProvider(config);
+      case 'webgpu':
+        // Firefox: stub that fails fast — see providers/webgpu.js. Config
+        // stays for parity with chrome so the categorization test passes.
+        return new WebGPUProvider(config);
       default:
         throw new Error(`Unknown provider type: ${config.type}`);
     }

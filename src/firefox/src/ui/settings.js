@@ -6,7 +6,7 @@ import { t, getLocale, setLocale, LANGUAGES } from './i18n.js';
 
 // Version shown in the subtitle. Kept here so it only needs one update per
 // release; the subtitle string itself is translated.
-const EXT_VERSION = '8.0.3';
+const EXT_VERSION = '9.0.10';
 
 const providersContainer = document.getElementById('providers');
 const verboseToggle = document.getElementById('toggle-verbose');
@@ -506,6 +506,15 @@ function renderProviders() {
         { key: 'useCompactPrompt', labelKey: 'st.provider.field.compact_prompt', type: 'checkbox' },
       ],
     },
+    // WebGPU stub on Firefox — fields still render so the card looks the
+    // same as on chrome, but Test Connection will report "not yet supported".
+    webgpu_qwen3: {
+      fields: [
+        { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'onnx-community/gemma-4-E2B-it-ONNX' },
+        { key: 'dtype', labelKey: 'st.provider.field.dtype', type: 'text', placeholder: 'q4f16' },
+        { key: 'useCompactPrompt', labelKey: 'st.provider.field.compact_prompt', type: 'checkbox' },
+      ],
+    },
     ollama: {
       fields: [
         { key: 'baseUrl', labelKey: 'st.provider.field.server_url', type: 'text', placeholder: 'http://localhost:11434/v1' },
@@ -668,6 +677,7 @@ function renderProviders() {
         <button class="btn-primary btn-save" data-provider="${id}">${escapeHtml(t('st.providers.save'))}</button>
         <button class="btn-secondary btn-test" data-provider="${id}">${escapeHtml(t('st.providers.test'))}</button>
         ${!isActive ? `<button class="btn-secondary btn-activate" data-provider="${id}">${escapeHtml(t('st.providers.set_active'))}</button>` : ''}
+        ${config.type === 'webgpu' ? `<button class="btn-secondary btn-clear-cache" data-provider="${id}">${escapeHtml(t('st.providers.clear_cache'))}</button>` : ''}
       </div>
       <div class="test-result" id="test-${id}"></div>
     `;
@@ -693,6 +703,9 @@ function renderProviders() {
   });
   document.querySelectorAll('.btn-load-models').forEach(btn => {
     btn.addEventListener('click', () => loadProviderModels(btn.dataset.provider));
+  });
+  document.querySelectorAll('.btn-clear-cache').forEach(btn => {
+    btn.addEventListener('click', () => clearWebGPUCache(btn.dataset.provider));
   });
   document.querySelectorAll('.btn-claude-signin').forEach(btn => {
     btn.addEventListener('click', () => signInWithClaude(btn.dataset.provider));
@@ -759,10 +772,11 @@ function wrapCollapsibleCard(id, config, isActive, bodyHtml) {
   // LM Studio defaults to whatever's loaded) just renders nothing rather
   // than a placeholder.
   const modelStr = (config.model && String(config.model).trim()) || '';
+  const providerTitle = id === 'webgpu_qwen3' ? 'WebGPU' : (config.label || id);
   header.innerHTML = `
     <div class="provider-header-left">
       <span class="provider-chevron" aria-hidden="true">${expanded ? '▾' : '▸'}</span>
-      <span class="provider-name">${escapeHtml(config.label || id)}</span>
+      <span class="provider-name">${escapeHtml(providerTitle)}</span>
       <span class="provider-type">${escapeHtml(config.type)}</span>
       ${config.category ? `<span class="provider-category-badge provider-category-${escapeHtml(config.category)}">${escapeHtml(config.category)}</span>` : ''}
       ${modelStr ? `<span class="provider-model" title="${escapeHtml(modelStr)}">${escapeHtml(modelStr)}</span>` : ''}
@@ -946,6 +960,21 @@ async function testProvider(id) {
   } else {
     testEl.className = 'test-result show fail';
     testEl.textContent = t('st.providers.failed', { error: res.error });
+  }
+}
+
+async function clearWebGPUCache(id) {
+  const testEl = document.getElementById(`test-${id}`);
+  testEl.className = 'test-result show';
+  testEl.textContent = t('st.providers.clearing_cache');
+  testEl.style.color = 'var(--text2)';
+  try {
+    const res = await sendToBackground('clear_webgpu_cache');
+    testEl.className = 'test-result show ok';
+    testEl.textContent = t('st.providers.cache_cleared');
+  } catch (e) {
+    testEl.className = 'test-result show fail';
+    testEl.textContent = t('st.providers.cache_clear_failed', { error: e.message });
   }
 }
 

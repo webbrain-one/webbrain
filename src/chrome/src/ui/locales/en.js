@@ -62,6 +62,11 @@ export default {
   'sp.clarify.input_placeholder_with_options': 'Or type a different answer…',
   'sp.clarify.your_answer': 'Your answer:',
 
+  'sp.model_download.headline': 'Downloading {model} — {mb} / {total_mb} MB',
+  'sp.model_download.queued': 'Queued',
+  'sp.model_download.file_done': 'File complete',
+  'sp.model_download.ready': '{model} ready',
+
   'sp.step.details': 'details',
   'sp.step.input_label': 'Input',
   'sp.step.result_label': 'Result',
@@ -166,6 +171,11 @@ export default {
   'st.provider.field.supports_vision': 'Model supports vision (multimodal)',
   'st.provider.field.compact_prompt': 'Compact prompt (drops some guardrails — opt in only for models under 8B)',
   'st.provider.field.model_loaded_hint': 'leave blank to use loaded model',
+  'st.provider.field.dtype': 'Quantization (e.g. q4, q8, fp16)',
+  'st.providers.clear_cache': 'Clear Model Cache',
+  'st.providers.clearing_cache': 'Clearing cached model files…',
+  'st.providers.cache_cleared': 'Model cache cleared. The model will re-download on next use.',
+  'st.providers.cache_clear_failed': 'Failed to clear cache: {error}',
 
   'st.vision.heading': 'Vision',
   'st.vision.desc': 'If set, screenshots are sent to this model for reading the page, while the active provider handles planning and tool calls. Leave blank to use the active provider for vision too. OpenAI-compatible endpoints only.',

@@ -412,6 +412,10 @@ async function handleMessage(msg, sender) {
       }
     }
 
+    case 'clear_webgpu_cache': {
+      return { ok: false, error: 'WebGPU provider is not yet supported on Firefox.' };
+    }
+
     case 'list_provider_models': {
       return await providerManager.listProviderModels(msg.providerId);
     }
