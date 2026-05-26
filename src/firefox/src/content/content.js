@@ -875,10 +875,106 @@
 
   let _lastTypeFieldIdent = null;
 
-  /**
-   * Type text into an input/textarea.
-   */
+  let _deasciifier = null;
+  function _loadDeasciifier() {
+    if (_deasciifier) return Promise.resolve();
+    return fetch(browser.runtime.getURL('vendor/turkish-deasciifier-patterns.json'))
+      .then(r => r.json())
+      .then(patterns => { _deasciifier = _buildDeasciifier(patterns); });
+  }
+
+  function _buildDeasciifier(patternList) {
+    const charAlist = { c:'ç',C:'Ç',g:'ğ',G:'Ğ',i:'ı',I:'İ',o:'ö',O:'Ö',s:'ş',S:'Ş',u:'ü',U:'Ü' };
+    const asciifyTbl = {};
+    for (const k in charAlist) asciifyTbl[charAlist[k]] = k;
+    const downTbl = {}, upTbl = {};
+    for (let c = 97; c <= 122; c++) {
+      const ch = String.fromCharCode(c);
+      downTbl[ch] = ch; downTbl[ch.toUpperCase()] = ch;
+      upTbl[ch] = ch; upTbl[ch.toUpperCase()] = ch;
+    }
+    for (const k in charAlist) {
+      downTbl[charAlist[k]] = k.toLowerCase();
+      upTbl[charAlist[k]] = k.toUpperCase();
+    }
+    upTbl['i'] = 'i'; upTbl['I'] = 'I'; upTbl['İ'] = 'i'; upTbl['ı'] = 'I';
+    const toggleTbl = {};
+    for (const k in charAlist) { toggleTbl[k] = charAlist[k]; toggleTbl[charAlist[k]] = k; }
+    const CTX = 10;
+    function setCharAt(s, i, c) { return s.substring(0, i) + c + s.substring(i + 1); }
+    function getContext(text, pos) {
+      let s = ' '.repeat(2 * CTX + 1);
+      s = setCharAt(s, CTX, 'X');
+      let i = CTX + 1, idx = pos + 1, space = false;
+      while (i < s.length && !space && idx < text.length) {
+        const x = downTbl[text.charAt(idx)];
+        if (!x) { if (space) i++; else space = true; }
+        else { s = setCharAt(s, i, x); space = false; }
+        i++; idx++;
+      }
+      s = s.substring(0, i);
+      i = CTX - 1; idx = pos - 1; space = false;
+      while (i >= 0 && idx >= 0) {
+        const x = upTbl[text.charAt(idx)];
+        if (!x) { if (space) i--; else space = true; }
+        else { s = setCharAt(s, i, x); space = false; }
+        i--; idx--;
+      }
+      return s;
+    }
+    function matchPattern(text, pos, dlist) {
+      let rank = dlist.length * 2;
+      const str = getContext(text, pos);
+      let start = 0;
+      while (start <= CTX) {
+        let end = CTX + 1;
+        while (end <= str.length) {
+          const r = dlist[str.substring(start, end)];
+          if (r !== undefined && Math.abs(r) < Math.abs(rank)) rank = r;
+          end++;
+        }
+        start++;
+      }
+      return rank > 0;
+    }
+    function needsCorrection(text, pos) {
+      const ch = text.charAt(pos);
+      const tr = asciifyTbl[ch] || ch;
+      const pl = patternList[tr.toLowerCase()];
+      const m = pl && matchPattern(text, pos, pl);
+      if (tr === 'I') return (ch === tr) ? !m : m;
+      return (ch === tr) ? m : !m;
+    }
+    return {
+      deasciify(text) {
+        if (!text) return text;
+        for (let i = 0; i < text.length; i++) {
+          if (needsCorrection(text, i)) {
+            const alt = toggleTbl[text.charAt(i)];
+            if (alt) text = setCharAt(text, i, alt);
+          }
+        }
+        return text;
+      }
+    };
+  }
+
+  function _applyLangTransform(text, lang) {
+    if (lang === 'tr-deasciify' && _deasciifier) return _deasciifier.deasciify(text);
+    return text;
+  }
+
   function typeText(params) {
+    if (params.lang === 'tr-deasciify') {
+      return _loadDeasciifier().then(() => {
+        params.text = _applyLangTransform(params.text, params.lang);
+        return _typeTextInner(params);
+      }).catch(e => ({ success: false, error: e.message }));
+    }
+    return _typeTextInner(params);
+  }
+
+  function _typeTextInner(params) {
     let el;
     if (params.selector) {
       el = document.querySelector(params.selector);
@@ -1384,6 +1480,13 @@
         }
       },
       'type_ax': () => {
+        if (msg.params?.lang === 'tr-deasciify') {
+          return _loadDeasciifier().then(() => {
+            msg.params.text = _applyLangTransform(msg.params.text, msg.params.lang);
+            delete msg.params.lang;
+            return handlers['type_ax']();
+          }).catch(e => ({ success: false, error: e.message }));
+        }
         try {
           const { ref_id, text, clear } = msg.params || {};
           if (typeof ref_id !== 'string') return { success: false, error: 'ref_id (string, e.g. "ref_42") is required' };
@@ -1447,6 +1550,11 @@
       },
       'set_field': async () => {
         try {
+          if (msg.params?.lang === 'tr-deasciify') {
+            await _loadDeasciifier();
+            msg.params.text = _applyLangTransform(msg.params.text, msg.params.lang);
+            delete msg.params.lang;
+          }
           const { ref_id, text, clear = true, submit = false } = msg.params || {};
           if (typeof ref_id !== 'string') return { success: false, error: 'ref_id (string, e.g. "ref_42") is required' };
           if (typeof text !== 'string') return { success: false, error: 'text (string) is required' };
