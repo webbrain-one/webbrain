@@ -186,6 +186,7 @@ export default {
   'st.provider.field.supports_vision': 'Model supports vision (multimodal)',
   'st.provider.field.compact_prompt': 'Compact prompt (drops some guardrails — opt in only for models under 8B)',
   'st.provider.field.model_loaded_hint': 'leave blank to use loaded model',
+  'st.provider.field.model_custom': 'Custom...',
 
   'st.vision.heading': 'Vision',
   'st.vision.desc': 'If set, screenshots are sent to this model for reading the page, while the active provider handles planning and tool calls. Leave blank to use the active provider for vision too. OpenAI-compatible endpoints only.',

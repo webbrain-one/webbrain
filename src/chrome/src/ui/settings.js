@@ -6,7 +6,7 @@ import { t, getLocale, setLocale, LANGUAGES } from './i18n.js';
 
 // Version shown in the subtitle. Kept here so it only needs one update per
 // release; the subtitle string itself is translated.
-const EXT_VERSION = '8.1.1';
+const EXT_VERSION = '8.1.3';
 
 const providersContainer = document.getElementById('providers');
 const verboseToggle = document.getElementById('toggle-verbose');
@@ -549,63 +549,88 @@ function renderProviders() {
     openai: {
       fields: [
         { key: 'apiKey', labelKey: 'st.provider.field.api_key', type: 'password', placeholder: 'sk-...' },
-        { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'gpt-5.5' },
+        { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'gpt-5.5',
+          suggestions: ['gpt-5.5', 'gpt-5.4', 'gpt-5.2', 'gpt-5.3-codex'] },
         { key: 'baseUrl', labelKey: 'st.provider.field.api_base_url', type: 'text', placeholder: 'https://api.openai.com/v1' },
       ],
     },
     openrouter: {
       fields: [
         { key: 'apiKey', labelKey: 'st.provider.field.api_key', type: 'password', placeholder: 'sk-or-...' },
-        { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'anthropic/claude-sonnet-4-6' },
+        { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'minimax/minimax-m2.7',
+          suggestions: ['minimax/minimax-m2.7', 'qwen/qwen3.7-max', 'xiaomi/mimo-v2.5-pro'] },
         { key: 'baseUrl', labelKey: 'st.provider.field.api_base_url', type: 'text', placeholder: 'https://openrouter.ai/api/v1' },
       ],
     },
     anthropic: {
       fields: [
         { key: 'apiKey', labelKey: 'st.provider.field.api_key', type: 'password', placeholder: 'sk-ant-...' },
-        { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'claude-sonnet-4-6' },
+        { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'claude-opus-4-7',
+          suggestions: ['claude-opus-4-7', 'claude-opus-4-6', 'claude-sonnet-4-6', 'claude-haiku-4-5'] },
         { key: 'baseUrl', labelKey: 'st.provider.field.api_base_url', type: 'text', placeholder: 'https://api.anthropic.com' },
       ],
     },
     gemini: {
       fields: [
         { key: 'apiKey', labelKey: 'st.provider.field.api_key', type: 'password', placeholder: 'AIza...' },
-        { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'gemini-3.1-flash' },
+        { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'gemini-3.1-pro',
+          suggestions: ['gemini-3.1-pro', 'gemini-3-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite'] },
         { key: 'baseUrl', labelKey: 'st.provider.field.api_base_url', type: 'text', placeholder: 'https://generativelanguage.googleapis.com/v1beta/openai' },
       ],
     },
     mistral: {
       fields: [
         { key: 'apiKey', labelKey: 'st.provider.field.api_key', type: 'password', placeholder: 'API key' },
-        { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'mistral-large-latest' },
+        { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'mistral-medium-3.5',
+          suggestions: ['mistral-medium-3.5', 'mistral-small-4', 'codestral-25.08', 'devstral-medium'] },
         { key: 'baseUrl', labelKey: 'st.provider.field.api_base_url', type: 'text', placeholder: 'https://api.mistral.ai/v1' },
       ],
     },
     deepseek: {
       fields: [
         { key: 'apiKey', labelKey: 'st.provider.field.api_key', type: 'password', placeholder: 'sk-...' },
-        { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'deepseek-chat' },
+        { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'deepseek-chat',
+          suggestions: ['deepseek-chat', 'deepseek-reasoner'] },
         { key: 'baseUrl', labelKey: 'st.provider.field.api_base_url', type: 'text', placeholder: 'https://api.deepseek.com/v1' },
       ],
     },
     xai: {
       fields: [
         { key: 'apiKey', labelKey: 'st.provider.field.api_key', type: 'password', placeholder: 'xai-...' },
-        { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'grok-4.3' },
+        { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'grok-4.3',
+          suggestions: ['grok-4.3', 'grok-4.1-fast', 'grok-build-0.1'] },
         { key: 'baseUrl', labelKey: 'st.provider.field.api_base_url', type: 'text', placeholder: 'https://api.x.ai/v1' },
       ],
     },
     nvidia: {
       fields: [
         { key: 'apiKey', labelKey: 'st.provider.field.api_key', type: 'password', placeholder: 'nvapi-...' },
-        { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'meta/llama-3.1-8b-instruct' },
+        { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'nvidia/llama-3.3-nemotron-super-49b',
+          suggestions: ['nvidia/llama-3.3-nemotron-super-49b', 'nvidia/llama-3.1-nemotron-70b-instruct', 'nvidia/nemotron-nano-9b-v2', 'meta/llama-3.3-70b-instruct', 'deepseek-ai/deepseek-r1'] },
         { key: 'baseUrl', labelKey: 'st.provider.field.api_base_url', type: 'text', placeholder: 'https://integrate.api.nvidia.com/v1' },
+      ],
+    },
+    minimax: {
+      fields: [
+        { key: 'apiKey', labelKey: 'st.provider.field.api_key', type: 'password', placeholder: 'API key' },
+        { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'minimax-m2.7',
+          suggestions: ['minimax-m2.7', 'minimax-m2', 'minimax-text-01'] },
+        { key: 'baseUrl', labelKey: 'st.provider.field.api_base_url', type: 'text', placeholder: 'https://api.minimax.chat/v1' },
+      ],
+    },
+    alibaba: {
+      fields: [
+        { key: 'apiKey', labelKey: 'st.provider.field.api_key', type: 'password', placeholder: 'sk-...' },
+        { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'qwen-max',
+          suggestions: ['qwen-max', 'qwen-plus', 'qwen-turbo', 'qwen3-235b-a22b'] },
+        { key: 'baseUrl', labelKey: 'st.provider.field.api_base_url', type: 'text', placeholder: 'https://dashscope.aliyuncs.com/compatible-mode/v1' },
       ],
     },
     groq: {
       fields: [
         { key: 'apiKey', labelKey: 'st.provider.field.api_key', type: 'password', placeholder: 'gsk_...' },
-        { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'llama-3.3-70b-versatile' },
+        { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'openai/gpt-oss-120b',
+          suggestions: ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'meta-llama/llama-4-scout-17b-16e-instruct', 'llama-3.3-70b-versatile', 'qwen/qwen3-32b'] },
         { key: 'baseUrl', labelKey: 'st.provider.field.api_base_url', type: 'text', placeholder: 'https://api.groq.com/openai/v1' },
       ],
     },
@@ -671,9 +696,25 @@ function renderProviders() {
             <label style="margin:0;cursor:pointer;">${escapeHtml(label)}</label>
           </div>
         `;
-        } else {
-        // Local providers expose model-list endpoints. Attach a datalist so
-        // users can pick a running/installed model without typing it by hand.
+        } else if (field.suggestions && field.key === 'model') {
+        const rawVal = config[field.key] || '';
+        const isCustom = rawVal && !field.suggestions.includes(rawVal);
+        const effectiveVal = rawVal || field.suggestions[0];
+        const selectVal = isCustom ? '__custom__' : effectiveVal;
+        const optionsHTML = field.suggestions
+          .map(s => `<option value="${escapeHtml(s)}"${s === selectVal ? ' selected' : ''}>${escapeHtml(s)}</option>`)
+          .join('') +
+          `<option value="__custom__"${isCustom ? ' selected' : ''}>${escapeHtml(t('st.provider.field.model_custom'))}</option>`;
+        fieldsHTML += `
+          <div class="field">
+            <label>${escapeHtml(label)}</label>
+            <select class="model-select" data-model-for="${id}">${optionsHTML}</select>
+            <input type="text" data-provider="${id}" data-key="model"
+                   value="${escapeHtml(effectiveVal)}" placeholder="${escapeHtml(placeholder)}"
+                   style="${isCustom ? '' : 'display:none;'}margin-top:6px;">
+          </div>
+        `;
+      } else {
         const localModelProviders = ['llamacpp', 'ollama', 'lmstudio'];
         const canLoadModels = localModelProviders.includes(id) && field.key === 'model';
         const listAttr = canLoadModels ? `list="models-${id}"` : '';
@@ -733,6 +774,21 @@ function renderProviders() {
   });
   document.querySelectorAll('.btn-load-models').forEach(btn => {
     btn.addEventListener('click', () => loadProviderModels(btn.dataset.provider));
+  });
+  document.querySelectorAll('.model-select').forEach(sel => {
+    sel.addEventListener('change', () => {
+      const providerId = sel.dataset.modelFor;
+      const input = document.querySelector(`input[data-provider="${providerId}"][data-key="model"]`);
+      if (!input) return;
+      if (sel.value === '__custom__') {
+        input.style.display = '';
+        input.value = '';
+        input.focus();
+      } else {
+        input.style.display = 'none';
+        input.value = sel.value;
+      }
+    });
   });
   // OAuth-Claude-specific bindings. These only fire if the OAuth card is
   // currently rendered (i.e., expanded — collapsed bodies aren't in DOM).
