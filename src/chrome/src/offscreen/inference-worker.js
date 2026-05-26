@@ -33,6 +33,7 @@ let _libraryVersion = null;    // for diagnostics
 let _activePipelineKey = null; // `${modelId}|${dtype}|${device}`
 let _activePipeline = null;    // text-generation pipeline instance
 let _config = null;            // { transformersUrl, wasmMjsUrl, wasmUrl } from init
+let _outputLocationMode = 'auto'; // 'auto' | 'gpu-buffer'
 
 /**
  * Dynamic import transformers.js using the URL passed from offscreen.js.
@@ -79,10 +80,10 @@ async function loadLibrary() {
   return _libPromise;
 }
 
-async function getPipeline(modelId, dtype, device) {
+async function getPipeline(modelId, dtype, device, outputLocationMode = _outputLocationMode) {
   // Cache key includes dtype + device so editing those in Settings
   // rebuilds the pipeline instead of silently reusing the old one.
-  const key = `${modelId}|${dtype || 'default'}|${device || 'webgpu'}`;
+  const key = `${modelId}|${dtype || 'default'}|${device || 'webgpu'}|${outputLocationMode}`;
   if (_activePipeline && _activePipelineKey === key) return _activePipeline;
   const lib = await loadLibrary();
   const { pipeline } = lib;
@@ -119,17 +120,25 @@ async function getPipeline(modelId, dtype, device) {
   if (_activePipeline && _activePipeline.dispose) {
     try { await _activePipeline.dispose(); } catch {}
   }
-  _activePipeline = await pipeline('text-generation', modelId, {
+  const pipelineOptions = {
     device: device || 'webgpu',
     dtype: dtype || 'q4f16',
-    // Do not force preferredOutputLocation='gpu-buffer' globally.
-    // For chat generation, transformers.js needs CPU-readable values in
-    // parts of its post-processing path; forcing all outputs to GPU can
-    // raise "The data is not on CPU. Use getData() ..." at runtime.
     progress_callback: (ev) => postProgress(modelId, ev),
-  });
+  };
+  if (outputLocationMode === 'gpu-buffer') {
+    pipelineOptions.session_options = { preferredOutputLocation: 'gpu-buffer' };
+  }
+  _activePipeline = await pipeline('text-generation', modelId, pipelineOptions);
   _activePipelineKey = key;
   return _activePipeline;
+}
+
+async function disposeActivePipeline() {
+  if (_activePipeline && _activePipeline.dispose) {
+    try { await _activePipeline.dispose(); } catch {}
+  }
+  _activePipeline = null;
+  _activePipelineKey = null;
 }
 
 /**
@@ -252,11 +261,7 @@ self.addEventListener('message', async (e) => {
 
   if (type === 'clear-cache') {
     try {
-      if (_activePipeline && _activePipeline.dispose) {
-        try { await _activePipeline.dispose(); } catch {}
-      }
-      _activePipeline = null;
-      _activePipelineKey = null;
+      await disposeActivePipeline();
       _libPromise = null;
       const deleted = [];
       for (const name of ['transformers-cache', 'experimental_transformers-hash-cache']) {
@@ -272,7 +277,7 @@ self.addEventListener('message', async (e) => {
   if (type === 'chat') {
     try {
       const { modelId, dtype, device, messages, options } = payload;
-      const pipe = await getPipeline(modelId, dtype, device);
+      let pipe = await getPipeline(modelId, dtype, device);
       const opts = options || {};
       const generateArgs = {
         max_new_tokens: opts.maxTokens || 1024,
@@ -285,7 +290,19 @@ self.addEventListener('message', async (e) => {
         // template wants just the inner function object.
         generateArgs.tools = opts.tools.map(t => t.function || t);
       }
-      const output = await pipe(messages || [], generateArgs);
+      let output;
+      try {
+        output = await pipe(messages || [], generateArgs);
+      } catch (err) {
+        const msg = err?.message || String(err);
+        const cpuError = msg.includes('The data is not on CPU');
+        const mapError = msg.includes('Failed to download data from buffer') || msg.includes("Failed to execute 'mapAsync'");
+        if (!cpuError && !mapError) throw err;
+        _outputLocationMode = mapError ? 'gpu-buffer' : 'auto';
+        await disposeActivePipeline();
+        pipe = await getPipeline(modelId, dtype, device, _outputLocationMode);
+        output = await pipe(messages || [], generateArgs);
+      }
       const text = extractGeneratedText(output);
       const toolCalls = extractToolCalls(text);
       self.postMessage({
