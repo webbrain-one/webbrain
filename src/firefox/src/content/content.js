@@ -965,7 +965,7 @@
   }
 
   function typeText(params) {
-    if (params.lang) {
+    if (params.lang === 'tr-deasciify') {
       return _loadDeasciifier().then(() => {
         params.text = _applyLangTransform(params.text, params.lang);
         return _typeTextInner(params);
@@ -1480,7 +1480,7 @@
         }
       },
       'type_ax': () => {
-        if (msg.params?.lang) {
+        if (msg.params?.lang === 'tr-deasciify') {
           return _loadDeasciifier().then(() => {
             msg.params.text = _applyLangTransform(msg.params.text, msg.params.lang);
             delete msg.params.lang;
@@ -1550,7 +1550,7 @@
       },
       'set_field': async () => {
         try {
-          if (msg.params?.lang) {
+          if (msg.params?.lang === 'tr-deasciify') {
             await _loadDeasciifier();
             msg.params.text = _applyLangTransform(msg.params.text, msg.params.lang);
             delete msg.params.lang;
