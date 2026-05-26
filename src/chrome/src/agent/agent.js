@@ -5337,7 +5337,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       // Fallback: if the LLM emitted tool calls as raw text instead of
       // using the structured tool_calls field, try to parse them out.
       if ((!result.toolCalls || result.toolCalls.length === 0) && result.content) {
-        const fallback = this._tryParseToolCallsFromText(result.content, provider.useCompactPrompt ? COMPACT_TOOL_NAMES : undefined);
+        const fallback = this._tryParseToolCallsFromText(result.content, (mode === 'act' && provider.useCompactPrompt) ? COMPACT_TOOL_NAMES : undefined);
         if (fallback.length > 0) {
           this._logDebug({ type: 'llm_text_fallback_parse', step: steps, parsed: fallback.map(tc => tc.function.name) });
           result.toolCalls = fallback;
@@ -5503,7 +5503,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
         // Fallback: parse tool calls from streamed text if structured calls are missing.
         if (!hasToolCalls && fullText) {
-          const fallback = this._tryParseToolCallsFromText(fullText, provider.useCompactPrompt ? COMPACT_TOOL_NAMES : undefined);
+          const fallback = this._tryParseToolCallsFromText(fullText, (mode === 'act' && provider.useCompactPrompt) ? COMPACT_TOOL_NAMES : undefined);
           if (fallback.length > 0) {
             this._logDebug({ type: 'llm_text_fallback_parse', step: steps, parsed: fallback.map(tc => tc.function.name) });
             hasToolCalls = true;

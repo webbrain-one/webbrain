@@ -686,6 +686,8 @@ export async function downloadFiles(args = {}) {
     return { success: false, error: `Too many URLs (max ${DOWNLOAD_BATCH_MAX})` };
   }
 
+  const singleFilename = (urls.length === 1 && args.filename) ? args.filename : null;
+
   const results = new Array(urls.length);
   let idx = 0;
 
@@ -695,10 +697,10 @@ export async function downloadFiles(args = {}) {
       if (i >= urls.length) return;
       const url = urls[i];
       try {
+        const opts = { url, conflictAction: 'uniquify' };
+        if (i === 0 && singleFilename) opts.filename = singleFilename;
         const downloadId = await new Promise((resolve, reject) => {
-          chrome.downloads.download({
-            url, conflictAction: 'uniquify',
-          }, (id) => {
+          chrome.downloads.download(opts, (id) => {
             if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
             else resolve(id);
           });
