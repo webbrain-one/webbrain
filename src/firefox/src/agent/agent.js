@@ -61,6 +61,9 @@ export class Agent {
     // Cache for `_isPdfTab` HEAD probes — see Chrome agent.js for
     // design notes. Same (tabId,url) → isPdf shape.
     this._isPdfTabCache = new Map();
+    this._doneBlockCount = new Map();
+    this._recentSubmitClicks = new Map();
+    this._runningTabs = new Set(); // tabIds with an active processMessage/Stream in flight
     // Pending clarify() tool calls awaiting user input — see Chrome
     // agent.js. Keyed by tabId → (clarifyId → {resolve, ts}).
     this._pendingClarifications = new Map();
@@ -1161,8 +1164,17 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   clearConversation(tabId) {
     this._cancelClarifications(tabId, 'conversation cleared');
     this.conversations.delete(tabId);
-    this.conversationIds.delete(tabId); // next getConversation() mints a fresh id
-    if (this._doneBlockCount) this._doneBlockCount.delete(tabId);
+    this.conversationIds.delete(tabId);
+    this._cleanupTab(tabId, { preserveRunGuard: true });
+  }
+
+  _cleanupTab(tabId, { preserveRunGuard = false } = {}) {
+    this._isPdfTabCache.delete(tabId);
+    this._doneBlockCount.delete(tabId);
+    this._recentSubmitClicks.delete(tabId);
+    if (!preserveRunGuard) {
+      this._runningTabs.delete(tabId);
+    }
     this._clearLoopState(tabId);
   }
 
@@ -1733,7 +1745,6 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             // can escape if the heuristic is wrong (e.g. the "form" is a
             // search/filter bar, not a submit form).
             if (completionWarning) {
-              if (!this._doneBlockCount) this._doneBlockCount = new Map();
               const blocks = (this._doneBlockCount.get(tabId) || 0) + 1;
               this._doneBlockCount.set(tabId, blocks);
               if (blocks <= 2) {
@@ -1748,7 +1759,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
               // After 2 blocks, let done through with a loud note in verification.
             }
             // Reset block count on successful done.
-            if (this._doneBlockCount) this._doneBlockCount.delete(tabId);
+            this._doneBlockCount.delete(tabId);
 
             return {
               done: true,
@@ -2476,6 +2487,18 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
    * @returns {Promise<string>} final text response
    */
   async processMessage(tabId, userMessage, onUpdate = () => {}, mode = 'ask') {
+    if (this._runningTabs.has(tabId)) {
+      throw new Error('An agent run is already in progress for this tab.');
+    }
+    this._runningTabs.add(tabId);
+    try {
+      return await this._processMessageInner(tabId, userMessage, onUpdate, mode);
+    } finally {
+      this._runningTabs.delete(tabId);
+    }
+  }
+
+  async _processMessageInner(tabId, userMessage, onUpdate, mode) {
     const messages = this.getConversation(tabId, mode);
 
     // Trim context if it's getting too long
@@ -2680,6 +2703,18 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
    * Process a message with streaming output.
    */
   async processMessageStream(tabId, userMessage, onUpdate = () => {}, mode = 'ask') {
+    if (this._runningTabs.has(tabId)) {
+      throw new Error('An agent run is already in progress for this tab.');
+    }
+    this._runningTabs.add(tabId);
+    try {
+      return await this._processMessageStreamInner(tabId, userMessage, onUpdate, mode);
+    } finally {
+      this._runningTabs.delete(tabId);
+    }
+  }
+
+  async _processMessageStreamInner(tabId, userMessage, onUpdate, mode) {
     const messages = this.getConversation(tabId, mode);
 
     // Trim context if it's getting too long
@@ -2725,8 +2760,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             onUpdate('text_delta', { content: chunk.content });
           } else if (chunk.type === 'tool_call') {
             hasToolCalls = true;
-            // Accumulate streaming tool call deltas (OpenAI format)
-            for (const tc of chunk.content) {
+            const calls = Array.isArray(chunk.content) ? chunk.content : [];
+            for (const tc of calls) {
               const idx = tc.index ?? 0;
               if (!toolCallsAccumulator[idx]) {
                 toolCallsAccumulator[idx] = { id: '', function: { name: '', arguments: '' } };
@@ -2739,13 +2774,13 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             hasToolCalls = true;
             const idx = Object.keys(toolCallsAccumulator).length;
             toolCallsAccumulator[idx] = {
-              id: chunk.content.id,
-              function: { name: chunk.content.name, arguments: '' },
+              id: chunk.content?.id || '',
+              function: { name: chunk.content?.name || '', arguments: '' },
             };
           } else if (chunk.type === 'tool_call_delta') {
             const idx = Object.keys(toolCallsAccumulator).length - 1;
-            if (toolCallsAccumulator[idx]) {
-              toolCallsAccumulator[idx].function.arguments += chunk.content;
+            if (idx >= 0 && toolCallsAccumulator[idx]) {
+              toolCallsAccumulator[idx].function.arguments += String(chunk.content ?? '');
             }
           } else if (chunk.type === 'done') {
             break;

@@ -382,11 +382,8 @@ chrome.windows?.onRemoved?.addListener?.((windowId) => {
 chrome.tabs.onRemoved.addListener((tabId) => {
   panelTabs.delete(tabId);
   savePanelTabs();
-  // Also clear any persisted chat state for that tab.
   chrome.storage.session?.remove(`tabChat:${tabId}`).catch(() => {});
-  // Drop per-tab agent state (last interaction rect, etc.) so stale data
-  // can't resurface if Chrome recycles the tab id for a new tab.
-  try { agent._lastInteractionRect?.delete(tabId); } catch { /* ignore */ }
+  try { agent._cleanupTab(tabId); } catch { /* ignore */ }
 });
 
 // SPA navigation tracking. Many sites change route via History API without

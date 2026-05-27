@@ -25,7 +25,9 @@ async function postJson(path, body) {
     const text = await res.text().catch(() => '');
     throw new Error(`CapSolver ${path} HTTP ${res.status}: ${text.slice(0, 200)}`);
   }
-  return await res.json();
+  try { return await res.json(); } catch {
+    throw new Error(`CapSolver ${path} returned invalid JSON.`);
+  }
 }
 
 // Wrap a CapSolver error response in a friendlier message. See the chrome
@@ -52,8 +54,9 @@ function capsolverError(prefix, body) {
 export async function getBalance(apiKey) {
   if (!apiKey) throw new Error('No CapSolver API key configured.');
   const res = await postJson('/getBalance', { clientKey: apiKey });
+  if (!res || typeof res !== 'object') throw new Error('CapSolver getBalance returned unexpected response.');
   if (res.errorId) throw capsolverError('CapSolver', res);
-  return { balance: res.balance, packages: res.packages || [] };
+  return { balance: res.balance ?? 0, packages: res.packages || [] };
 }
 
 async function createTask(apiKey, task) {
@@ -62,15 +65,18 @@ async function createTask(apiKey, task) {
     appId: DEFAULT_APP_ID,
     task,
   });
+  if (!res || typeof res !== 'object') throw new Error('CapSolver createTask returned unexpected response.');
   if (res.errorId) throw capsolverError('CapSolver createTask', res);
   if (!res.taskId) throw new Error('CapSolver createTask returned no taskId.');
   return res.taskId;
 }
 
 async function pollTaskResult(apiKey, taskId, { timeoutMs = POLL_TIMEOUT_MS } = {}) {
+  const effectiveTimeout = (typeof timeoutMs === 'number' && timeoutMs > 0) ? timeoutMs : POLL_TIMEOUT_MS;
   const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
+  while (Date.now() - start < effectiveTimeout) {
     const res = await postJson('/getTaskResult', { clientKey: apiKey, taskId });
+    if (!res || typeof res !== 'object') throw new Error('CapSolver getTaskResult returned unexpected response.');
     if (res.errorId) throw capsolverError('CapSolver getTaskResult', res);
     if (res.status === 'ready') return res.solution || {};
     await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));

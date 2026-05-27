@@ -19,23 +19,13 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         body: msg.body || undefined,
       });
 
-      if (msg.stream) {
-        // For streaming, read the full body and return it
-        // (offscreen can't stream back via sendResponse)
-        const text = await res.text();
-        sendResponse({
-          ok: res.ok,
-          status: res.status,
-          body: text,
-        });
-      } else {
-        const text = await res.text();
-        sendResponse({
-          ok: res.ok,
-          status: res.status,
-          body: text,
-        });
-      }
+      const text = await res.text();
+      sendResponse({
+        ok: res.ok,
+        status: res.status,
+        contentType: res.headers.get('content-type') || '',
+        body: text,
+      });
     } catch (e) {
       sendResponse({
         ok: false,

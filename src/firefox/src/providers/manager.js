@@ -35,7 +35,8 @@ export class ProviderManager {
       if (!configs[id]) configs[id] = stored[id];
     }
     delete configs.webbrain;
-    this.activeProviderId = data.activeProvider === 'webbrain'
+    delete configs.openai_subscription;
+    this.activeProviderId = ['webbrain', 'openai_subscription'].includes(data.activeProvider)
       ? 'llamacpp'
       : (data.activeProvider || 'llamacpp');
 
@@ -115,7 +116,7 @@ export class ProviderManager {
         category: 'cloud',
         label: 'Anthropic Claude',
         baseUrl: 'https://api.anthropic.com',
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-6',
         apiKey: '',
         apiKeyUrl: 'https://console.anthropic.com/settings/keys',
         enabled: false,
@@ -226,7 +227,7 @@ export class ProviderManager {
         type: 'anthropic_oauth',
         category: 'cloud',
         label: 'Claude (Pro/Max subscription)',
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-6',
         enabled: false,
       },
     };

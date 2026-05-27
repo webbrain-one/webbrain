@@ -66,19 +66,20 @@ export const CREDENTIAL_NOTE = CREDENTIAL_NOTE_LOOSE;
  * @returns {{sensitive: boolean, reason: string|null}}
  */
 export function isCredentialField(meta) {
-  if (!meta || typeof meta !== 'object') return { sensitive: false, reason: null };
+  if (!meta || typeof meta !== 'object' || Array.isArray(meta)) return { sensitive: false, reason: null };
 
-  const type = String(meta.type || '').toLowerCase();
+  const type = String(meta.type ?? '').toLowerCase();
   if (type === 'password') return { sensitive: true, reason: 'input type=password' };
 
-  const ac = String(meta.autocomplete || '').trim();
+  const ac = String(meta.autocomplete ?? '').trim();
   if (ac && SENSITIVE_AUTOCOMPLETE_RE.test(ac)) {
     return { sensitive: true, reason: `autocomplete=${ac}` };
   }
 
   for (const key of ['name', 'id', 'ariaLabel', 'placeholder', 'labelText']) {
     const v = meta[key];
-    if (v && SENSITIVE_NAME_RE.test(String(v))) {
+    if (v != null && typeof v !== 'string' && typeof v !== 'number') continue;
+    if (v && SENSITIVE_NAME_RE.test(String(v).slice(0, 200))) {
       return { sensitive: true, reason: `${key} matches credential pattern: ${JSON.stringify(String(v).slice(0, 60))}` };
     }
   }

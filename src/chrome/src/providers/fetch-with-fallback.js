@@ -31,6 +31,7 @@ import { ensureOffscreen } from '../offscreen/ensure.js';
 // reconstruction.
 let _cachedTimeoutMs = 120000;
 let _timeoutInitialized = false;
+let _storageListener = null;
 const TIMEOUT_FLOOR_MS = 5000;        // 5s — anything lower than this is a typo
 const TIMEOUT_CEILING_MS = 600000;    // 10 min — well past any reasonable first-byte wait
 
@@ -47,17 +48,17 @@ async function _ensureTimeoutInitialized() {
     if (typeof v === 'number' && v >= TIMEOUT_FLOOR_MS && v <= TIMEOUT_CEILING_MS) {
       _cachedTimeoutMs = v;
     }
-    // Live refresh when the user edits the setting.
-    if (api.storage.onChanged?.addListener) {
-      api.storage.onChanged.addListener((changes, area) => {
+    if (api.storage.onChanged?.addListener && !_storageListener) {
+      _storageListener = (changes, area) => {
         if (area !== 'local' || !changes.requestTimeoutMs) return;
         const next = changes.requestTimeoutMs.newValue;
         if (typeof next === 'number' && next >= TIMEOUT_FLOOR_MS && next <= TIMEOUT_CEILING_MS) {
           _cachedTimeoutMs = next;
         } else if (next == null) {
-          _cachedTimeoutMs = 120000; // setting was cleared — back to default
+          _cachedTimeoutMs = 120000;
         }
-      });
+      };
+      api.storage.onChanged.addListener(_storageListener);
     }
   } catch { /* keep the hardcoded default */ }
 }
@@ -135,11 +136,10 @@ export async function fetchWithFallback(url, options = {}) {
         );
       }
 
-      // Wrap the proxy response to look like a fetch Response
       return new Response(proxyResult.body, {
         status: proxyResult.status,
         statusText: proxyResult.ok ? 'OK' : 'Error',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': proxyResult.contentType || 'application/json' },
       });
     } catch (proxyError) {
       // Offscreen proxy also failed — throw the most useful error

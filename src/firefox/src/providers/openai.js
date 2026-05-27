@@ -111,11 +111,15 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
     }
 
     if (!res.ok) {
-      const err = await res.text();
+      let err = '';
+      try { err = (await res.text()).slice(0, 500); } catch {}
       throw new Error(`${this.name} error ${res.status}: ${this._formatHttpError(res.status, err)}`);
     }
 
-    const data = await res.json();
+    let data;
+    try { data = await res.json(); } catch {
+      throw new Error(`${this.name} returned invalid JSON in chat response.`);
+    }
     const choice = data.choices?.[0];
     const message = choice?.message;
 
@@ -187,8 +191,8 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
           if (delta?.tool_calls) {
             yield { type: 'tool_call', content: delta.tool_calls };
           }
-        } catch {
-          // skip
+        } catch (e) {
+          console.warn(`[${this.name}] malformed SSE chunk skipped:`, payload?.slice(0, 120), e?.message);
         }
       }
     }

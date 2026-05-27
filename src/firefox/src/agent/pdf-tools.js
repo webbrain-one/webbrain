@@ -44,7 +44,12 @@ async function getPdfjs() {
  * stack on multi-MB PDFs. fromCharCode.apply has a per-call argument
  * limit (~64k in V8), so we chunk.
  */
+const BASE64_MAX_INPUT_BYTES = 32 * 1024 * 1024; // 32 MB safety cap
+
 function bytesToBase64(bytes) {
+  if (bytes.length > BASE64_MAX_INPUT_BYTES) {
+    throw new Error(`PDF too large for base64 conversion (${bytes.length} bytes, cap ${BASE64_MAX_INPUT_BYTES}).`);
+  }
   let bin = '';
   const chunk = 0x8000;
   for (let i = 0; i < bytes.length; i += chunk) {
@@ -82,31 +87,31 @@ export function isPdfUrl(url) {
  * error instead of leaving the agent guessing.
  */
 export async function fetchPdfBytes(url) {
-  let res;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 60000);
   try {
-    // `credentials: 'include'` forwards the user's cookies for this
-    // origin so PDFs gated behind a session are reachable by the
-    // same identity that can view the file in-tab. Without it, the
-    // extension's fetch is anonymous and a signed-in PDF returns a
-    // login page or 403. Same posture as the Chrome build.
-    // No-op for file:// URLs.
-    res = await fetch(url, { credentials: 'include' });
-  } catch (e) {
-    if (typeof url === 'string' && url.startsWith('file://')) {
-      throw new Error(
-        'Cannot fetch local PDF from a file:// URL. Firefox blocks ' +
-        'extension fetches against file:// for privacy. Workaround: ' +
-        'open the PDF over http(s) (e.g. drag it into a local web ' +
-        'server, or upload it to a file host) and try read_pdf again.'
-      );
+    let res;
+    try {
+      res = await fetch(url, { credentials: 'include', signal: controller.signal });
+    } catch (e) {
+      if (typeof url === 'string' && url.startsWith('file://')) {
+        throw new Error(
+          'Cannot fetch local PDF from a file:// URL. Firefox blocks ' +
+          'extension fetches against file:// for privacy. Workaround: ' +
+          'open the PDF over http(s) (e.g. drag it into a local web ' +
+          'server, or upload it to a file host) and try read_pdf again.'
+        );
+      }
+      throw new Error(`PDF fetch failed: ${e.message}`);
     }
-    throw new Error(`PDF fetch failed: ${e.message}`);
+    if (!res.ok) {
+      throw new Error(`PDF fetch returned HTTP ${res.status} ${res.statusText}`);
+    }
+    const buf = await res.arrayBuffer();
+    return new Uint8Array(buf);
+  } finally {
+    clearTimeout(timeout);
   }
-  if (!res.ok) {
-    throw new Error(`PDF fetch returned HTTP ${res.status} ${res.statusText}`);
-  }
-  const buf = await res.arrayBuffer();
-  return new Uint8Array(buf);
 }
 
 /**

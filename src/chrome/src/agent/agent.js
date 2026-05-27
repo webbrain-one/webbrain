@@ -123,6 +123,9 @@ export class Agent {
     // resolved is-PDF flag per (tabId,url) so the agent doesn't probe
     // on every executeTool call within a turn.
     this._isPdfTabCache = new Map(); // tabId -> { url, isPdf }
+    this._doneBlockCount = new Map(); // tabId -> consecutive done-blocks
+    this._recentSubmitClicks = new Map(); // tabId -> recent submit click timestamps
+    this._runningTabs = new Set(); // tabIds with an active processMessage/Stream in flight
   }
 
   /**
@@ -1924,18 +1927,30 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   /**
    * Clear conversation for a tab.
    */
+  _cleanupTab(tabId, { preserveRunGuard = false } = {}) {
+    this._isPdfTabCache.delete(tabId);
+    this._lastCdpClickIdent?.delete(tabId);
+    this.lastAutoScreenshotTs.delete(tabId);
+    this.lastSeenAdapter.delete(tabId);
+    this._lastInteractionRect.delete(tabId);
+    this._doneBlockCount.delete(tabId);
+    this._recentSubmitClicks.delete(tabId);
+    if (!preserveRunGuard) {
+      this._runningTabs.delete(tabId);
+      this.currentRunId.delete(tabId);
+    }
+    this._clearLoopState(tabId);
+  }
+
   clearConversation(tabId) {
     this._cancelClarifications(tabId, 'conversation cleared');
     this.conversations.delete(tabId);
     this.conversationModes.delete(tabId);
-    this.conversationIds.delete(tabId); // next getConversation() mints a fresh id
+    this.conversationIds.delete(tabId);
     this.hydratedTabs.delete(tabId);
     this.apiAllowedTabs.delete(tabId);
     this.apiAllowedInjected.delete(tabId);
-    this._lastInteractionRect.delete(tabId);
-    if (this._doneBlockCount) this._doneBlockCount.delete(tabId);
-    if (this._recentSubmitClicks) this._recentSubmitClicks.delete(tabId);
-    this._clearLoopState(tabId);
+    this._cleanupTab(tabId, { preserveRunGuard: true });
     const t = this.persistTimers.get(tabId);
     if (t) { clearTimeout(t); this.persistTimers.delete(tabId); }
     try {
@@ -2803,7 +2818,6 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           // can escape if the heuristic is wrong (e.g. the "form" is a
           // search/filter bar, not a submit form).
           if (completionWarning) {
-            if (!this._doneBlockCount) this._doneBlockCount = new Map();
             const blocks = (this._doneBlockCount.get(tabId) || 0) + 1;
             this._doneBlockCount.set(tabId, blocks);
             if (blocks <= 2) {
@@ -2818,7 +2832,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             // After 2 blocks, let done through with a loud note in verification.
           }
           // Reset block count on successful done.
-          if (this._doneBlockCount) this._doneBlockCount.delete(tabId);
+          this._doneBlockCount.delete(tabId);
 
           return {
             done: true,
@@ -3586,7 +3600,6 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           if (submitLikeRE.test(rawText)) {
             let curUrl = '';
             try { const t = await chrome.tabs.get(tabId); curUrl = t?.url || ''; } catch (e) {}
-            if (!this._recentSubmitClicks) this._recentSubmitClicks = new Map();
             const buf = this._recentSubmitClicks.get(tabId) || [];
             const key = `${rawText.toLowerCase()}|${curUrl}`;
             const now = Date.now();
@@ -5221,6 +5234,18 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   // ─────────────────────────────────────────────────────────────────────
 
   async processMessage(tabId, userMessage, onUpdate = () => {}, mode = 'ask') {
+    if (this._runningTabs.has(tabId)) {
+      throw new Error('An agent run is already in progress for this tab.');
+    }
+    this._runningTabs.add(tabId);
+    try {
+      return await this._processMessageInner(tabId, userMessage, onUpdate, mode);
+    } finally {
+      this._runningTabs.delete(tabId);
+    }
+  }
+
+  async _processMessageInner(tabId, userMessage, onUpdate, mode) {
     await this._hydrate(tabId);
     const messages = this.getConversation(tabId, mode);
 
@@ -5439,6 +5464,18 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
    * Process a message with streaming output.
    */
   async processMessageStream(tabId, userMessage, onUpdate = () => {}, mode = 'ask') {
+    if (this._runningTabs.has(tabId)) {
+      throw new Error('An agent run is already in progress for this tab.');
+    }
+    this._runningTabs.add(tabId);
+    try {
+      return await this._processMessageStreamInner(tabId, userMessage, onUpdate, mode);
+    } finally {
+      this._runningTabs.delete(tabId);
+    }
+  }
+
+  async _processMessageStreamInner(tabId, userMessage, onUpdate, mode) {
     await this._hydrate(tabId);
     const messages = this.getConversation(tabId, mode);
 
@@ -5486,8 +5523,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             onUpdate('text_delta', { content: chunk.content });
           } else if (chunk.type === 'tool_call') {
             hasToolCalls = true;
-            // Accumulate streaming tool call deltas (OpenAI format)
-            for (const tc of chunk.content) {
+            const calls = Array.isArray(chunk.content) ? chunk.content : [];
+            for (const tc of calls) {
               const idx = tc.index ?? 0;
               if (!toolCallsAccumulator[idx]) {
                 toolCallsAccumulator[idx] = { id: '', function: { name: '', arguments: '' } };
@@ -5500,13 +5537,13 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             hasToolCalls = true;
             const idx = Object.keys(toolCallsAccumulator).length;
             toolCallsAccumulator[idx] = {
-              id: chunk.content.id,
-              function: { name: chunk.content.name, arguments: '' },
+              id: chunk.content?.id || '',
+              function: { name: chunk.content?.name || '', arguments: '' },
             };
           } else if (chunk.type === 'tool_call_delta') {
             const idx = Object.keys(toolCallsAccumulator).length - 1;
-            if (toolCallsAccumulator[idx]) {
-              toolCallsAccumulator[idx].function.arguments += chunk.content;
+            if (idx >= 0 && toolCallsAccumulator[idx]) {
+              toolCallsAccumulator[idx].function.arguments += String(chunk.content ?? '');
             }
           } else if (chunk.type === 'done') {
             break;

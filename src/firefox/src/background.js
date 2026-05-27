@@ -206,6 +206,11 @@ browser.windows?.onRemoved?.addListener?.((windowId) => {
   }
 });
 
+// Clean up per-tab agent state when a tab is closed.
+browser.tabs.onRemoved.addListener((tabId) => {
+  try { agent._cleanupTab(tabId); } catch { /* ignore */ }
+});
+
 // Action click: toggle sidebar (existing UX) AND ensure source tab is
 // in the WebBrain group so the colored label appears immediately.
 browser.browserAction.onClicked.addListener((tab) => {
@@ -451,6 +456,12 @@ async function handleMessage(msg, sender) {
       }
     }
 
+    case 'start_tab_recording':
+    case 'stop_tab_recording':
+      return { ok: false, error: 'Tab recording is not supported in Firefox. This feature requires Chrome\'s tabCapture and OffscreenDocument APIs.' };
+    case 'get_recording_state':
+      return { ok: true, state: { recording: false, supported: false } };
+
     case 'get_page_info': {
       const tabId = msg.tabId || sender.tab?.id;
       try {
@@ -459,6 +470,9 @@ async function handleMessage(msg, sender) {
           action: 'get_page_info',
         });
       } catch {
+        await browser.tabs.executeScript(tabId, {
+          file: 'src/content/accessibility-tree.js',
+        });
         await browser.tabs.executeScript(tabId, {
           file: 'src/content/content.js',
         });

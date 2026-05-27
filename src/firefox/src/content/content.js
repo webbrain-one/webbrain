@@ -499,6 +499,31 @@
     return el; // no interactive ancestor found — use original
   }
 
+  /**
+   * querySelector with resilience against selectors that contain unescaped
+   * React-Aria-style IDs like `#react-aria-:r1a:` — the literal colons
+   * blow up CSS parsing. If the selector is a bare id-hash and throws,
+   * retry with the `[id="..."]` attribute-selector form. Also handles
+   * escaping colons as a last resort.
+   */
+  function safeQuerySelector(selector) {
+    if (typeof selector !== 'string' || !selector) return null;
+    try { return document.querySelector(selector); } catch {}
+    if (selector.startsWith('#') && !/[\s>+~,\[\]\.:]/.test(selector.slice(1).replace(/\\:/g, ''))) {
+      const rawId = selector.slice(1).replace(/\\:/g, ':');
+      try {
+        const byId = document.getElementById(rawId);
+        if (byId) return byId;
+      } catch {}
+      try { return document.querySelector(`[id="${rawId.replace(/"/g, '\\"')}"]`); } catch {}
+    }
+    try {
+      const escaped = selector.replace(/(^|[^\\]):/g, '$1\\:');
+      return document.querySelector(escaped);
+    } catch {}
+    return null;
+  }
+
   let _lastClickIdent = null;
 
   /**
@@ -732,7 +757,7 @@
         el = _resolveInteractiveAncestor(resolved);
       }
     } else if (params.selector) {
-      el = document.querySelector(params.selector);
+      el = safeQuerySelector(params.selector);
     } else if (params.index != null) {
       // Same traversal as getInteractiveElements — index stability.
       const interactive = queryInteractive();
@@ -981,7 +1006,7 @@
   function _typeTextInner(params) {
     let el;
     if (params.selector) {
-      el = document.querySelector(params.selector);
+      el = safeQuerySelector(params.selector);
     } else if (params.index != null) {
       const interactive = queryInteractive();
       el = interactive[params.index];

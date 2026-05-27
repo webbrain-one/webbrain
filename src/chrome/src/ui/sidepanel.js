@@ -219,6 +219,7 @@ async function init() {
     const html = await loadTabChat(currentTabId);
     if (html) {
       messagesEl.innerHTML = html;
+      messagesEl.querySelectorAll('[data-bound]').forEach(el => delete el.dataset.bound);
       rebindCopyButtons();
       scrollToBottom();
     }
@@ -317,6 +318,7 @@ async function switchToTab(newTabId) {
   const html = await loadTabChat(newTabId);
   if (html) {
     messagesEl.innerHTML = html;
+    messagesEl.querySelectorAll('[data-bound]').forEach(el => delete el.dataset.bound);
     rebindCopyButtons();
   } else {
     messagesEl.innerHTML = '';

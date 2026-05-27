@@ -138,10 +138,15 @@ async function exchangeCodeForTokens(code, codeVerifier) {
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Token exchange failed (HTTP ${res.status}): ${text.slice(0, 400)}`);
+    let errMsg = '';
+    try { errMsg = (await res.text()).slice(0, 200); } catch {}
+    errMsg = errMsg.replace(/[A-Za-z0-9_-]{40,}/g, '[REDACTED]');
+    throw new Error(`Token exchange failed (HTTP ${res.status}): ${errMsg}`);
   }
-  const data = await res.json();
+  let data;
+  try { data = await res.json(); } catch {
+    throw new Error('Token exchange returned invalid JSON.');
+  }
   return await persistTokens(data);
 }
 
@@ -181,9 +186,18 @@ export async function refreshClaudeAccessToken() {
       await browser.storage.local.remove([STORAGE_KEY]);
       throw new Error('Claude refresh token rejected — please sign in again.');
     }
-    throw new Error(`Token refresh failed (HTTP ${res.status}): ${text.slice(0, 400)}`);
+    if (res.status === 429) {
+      const retryAfter = res.headers.get('retry-after');
+      const waitHint = retryAfter ? ` (retry-after: ${retryAfter}s)` : '';
+      throw new Error(`Token refresh rate-limited (HTTP 429)${waitHint}. Try again in a moment.`);
+    }
+    const safeText = text.slice(0, 200).replace(/[A-Za-z0-9_-]{40,}/g, '[REDACTED]');
+    throw new Error(`Token refresh failed (HTTP ${res.status}): ${safeText}`);
   }
-  const data = await res.json();
+  let data;
+  try { data = await res.json(); } catch {
+    throw new Error('Token refresh returned invalid JSON.');
+  }
   return await persistTokens(data, tokens.refreshToken);
 }
 

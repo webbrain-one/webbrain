@@ -158,11 +158,15 @@ export class AnthropicProvider extends BaseLLMProvider {
     });
 
     if (!res.ok) {
-      const err = await res.text();
+      let err = '';
+      try { err = (await res.text()).slice(0, 500); } catch {}
       throw new Error(`Anthropic error ${res.status}: ${err}`);
     }
 
-    const data = await res.json();
+    let data;
+    try { data = await res.json(); } catch {
+      throw new Error('Anthropic returned invalid JSON in chat response.');
+    }
 
     // Extract text content and tool use blocks
     let content = '';
@@ -170,15 +174,15 @@ export class AnthropicProvider extends BaseLLMProvider {
 
     for (const block of data.content || []) {
       if (block.type === 'text') {
-        content += block.text;
+        content += block.text || '';
       } else if (block.type === 'tool_use') {
         if (!toolCalls) toolCalls = [];
         toolCalls.push({
-          id: block.id,
+          id: block.id || '',
           type: 'function',
           function: {
-            name: block.name,
-            arguments: JSON.stringify(block.input),
+            name: block.name || '',
+            arguments: JSON.stringify(block.input ?? {}),
           },
         });
       }
@@ -219,7 +223,8 @@ export class AnthropicProvider extends BaseLLMProvider {
     });
 
     if (!res.ok) {
-      const err = await res.text();
+      let err = '';
+      try { err = (await res.text()).slice(0, 500); } catch {}
       throw new Error(`Anthropic stream error ${res.status}: ${err}`);
     }
 
@@ -252,8 +257,8 @@ export class AnthropicProvider extends BaseLLMProvider {
               yield {
                 type: 'tool_call_start',
                 content: {
-                  id: event.content_block.id,
-                  name: event.content_block.name,
+                  id: event.content_block.id || '',
+                  name: event.content_block.name || '',
                 },
               };
             }
@@ -261,8 +266,8 @@ export class AnthropicProvider extends BaseLLMProvider {
             yield { type: 'done', content: '' };
             return;
           }
-        } catch {
-          // skip
+        } catch (e) {
+          console.warn('[anthropic] malformed SSE chunk skipped:', payload?.slice(0, 120), e?.message);
         }
       }
     }
@@ -295,6 +300,7 @@ export class AnthropicOAuthProvider extends AnthropicProvider {
   constructor(config) {
     super(config);
     this._accessToken = null;
+    this._refreshPromise = null;
   }
 
   get name() {
@@ -345,6 +351,15 @@ export class AnthropicOAuthProvider extends AnthropicProvider {
     this._accessToken = await getClaudeAccessToken();
   }
 
+  async _refreshOnce() {
+    if (!this._refreshPromise) {
+      this._refreshPromise = refreshClaudeAccessToken().finally(() => {
+        this._refreshPromise = null;
+      });
+    }
+    return this._refreshPromise;
+  }
+
   async chat(messages, options = {}) {
     await this._ensureFreshToken();
     try {
@@ -354,7 +369,7 @@ export class AnthropicOAuthProvider extends AnthropicProvider {
       // check and the request landing. One retry-after-refresh is
       // safe; further failures bubble out as auth errors.
       if (/Anthropic error 401/.test(e.message)) {
-        await refreshClaudeAccessToken();
+        await this._refreshOnce();
         await this._ensureFreshToken();
         return await super.chat(messages, options);
       }
@@ -369,7 +384,7 @@ export class AnthropicOAuthProvider extends AnthropicProvider {
       return;
     } catch (e) {
       if (/Anthropic stream error 401/.test(e.message)) {
-        await refreshClaudeAccessToken();
+        await this._refreshOnce();
         await this._ensureFreshToken();
         yield* super.chatStream(messages, options);
         return;
