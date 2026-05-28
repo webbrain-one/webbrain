@@ -43,8 +43,11 @@ const { sanitizeMarkdownLinks: sanitizeMarkdownLinksFx } = await import(
 );
 
 // action-gate.js is pure JS (security-critical Layer-3 confirmation logic).
-const { classifyConsequentialAction, isUserAuthorized, actionKey } = await import(
+const { classifyConsequentialAction, isUserAuthorized, actionKey, shouldConfirmAction } = await import(
   'file://' + path.join(ROOT, 'src/firefox/src/agent/action-gate.js').replace(/\\/g, '/')
+);
+const { isTopSite } = await import(
+  'file://' + path.join(ROOT, 'src/firefox/src/agent/top-sites.js').replace(/\\/g, '/')
 );
 
 // loop-bucket.js is pure JS — the URL-family loop-detector bucketing logic
@@ -1916,6 +1919,41 @@ test('actionKey is stable per kind+target', () => {
   const b = classifyConsequentialAction('navigate', { url: 'https://github.com/b' });
   assert.equal(actionKey(a), actionKey(b));
   assert.notEqual(actionKey(a), actionKey(classifyConsequentialAction('navigate', { url: 'https://x.com' })));
+});
+
+test('isTopSite matches registrable domain and subdomains, not lookalikes', () => {
+  assert.equal(isTopSite('google.com'), true);
+  assert.equal(isTopSite('docs.google.com'), true);
+  assert.equal(isTopSite('www.github.com'), true);
+  assert.equal(isTopSite('notgoogle.com'), false);
+  assert.equal(isTopSite('evil-google.com'), false);
+  // attacker domain embedding a top name must NOT match
+  assert.equal(isTopSite('google.com.attacker-exfil.io'), false);
+  assert.equal(isTopSite('attacker-exfil.io'), false);
+});
+
+test('navigation to a top site skips confirmation; unknown origin still prompts', () => {
+  const top = classifyConsequentialAction('navigate', { url: 'https://www.youtube.com/watch?v=x' });
+  assert.equal(shouldConfirmAction(top, { userText: 'summarize this page' }), false);
+  const evil = classifyConsequentialAction('navigate', { url: 'https://attacker-exfil.io/?leak=secrets' });
+  assert.equal(shouldConfirmAction(evil, { userText: 'summarize this page' }), true);
+});
+
+test('top-site allowlist does NOT waive submit/mutation gates', () => {
+  // "Send" on a top site (e.g. gmail) is the high-value injection target.
+  const send = classifyConsequentialAction('click', { text: 'Send' });
+  assert.equal(shouldConfirmAction(send, { userText: 'what does this page say' }), true);
+  const mut = classifyConsequentialAction('fetch_url', { url: 'https://api.github.com/x', method: 'POST' });
+  assert.equal(shouldConfirmAction(mut, { userText: 'read my notifications' }), true);
+  // /allow-api waives the mutation gate
+  assert.equal(shouldConfirmAction(mut, { userText: 'read my notifications', apiAllowed: true }), false);
+});
+
+test('shouldConfirmAction: benign calls never confirm; user-named actions skip', () => {
+  assert.equal(shouldConfirmAction(null, {}), false);
+  const del = classifyConsequentialAction('click', { text: 'Delete' });
+  assert.equal(shouldConfirmAction(del, { userText: 'remove my old posts' }), false);
+  assert.equal(shouldConfirmAction(del, { userText: 'what is on this page' }), true);
 });
 
 await run();

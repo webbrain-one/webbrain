@@ -22,6 +22,8 @@
  * the actual confirmation pause around these answers.
  */
 
+import { isTopSite } from './top-sites.js';
+
 const MUTATION_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 // Visible button/link labels that denote a hard-to-reverse action. Generic
@@ -166,4 +168,26 @@ function escapeRe(s) {
 export function actionKey(classification) {
   if (!classification) return '';
   return `${classification.kind}:${(classification.target || '').toLowerCase()}`;
+}
+
+/**
+ * The single decision the agent asks: must we pause for user confirmation
+ * before running this tool call? Returns false (run it) when:
+ *   - the call is benign (not classified consequential),
+ *   - it's a navigation to a mainstream top-site domain (not a plausible
+ *     exfil endpoint) — the NARROW, navigation-only allowlist relaxation,
+ *   - it's an API mutation and the user set the /allow-api override,
+ *   - the user's own instruction named the action.
+ * Otherwise returns true → the agent pauses for an explicit Yes/No.
+ *
+ * The top-site skip applies to NAVIGATION ONLY by design. Submit/delete/pay
+ * and API mutations are never waived by domain reputation — those are exactly
+ * the high-value injection targets on trusted sites.
+ */
+export function shouldConfirmAction(classification, { userText = '', apiAllowed = false } = {}) {
+  if (!classification) return false;
+  if (classification.kind === 'navigate' && isTopSite(classification.target)) return false;
+  if (classification.kind === 'mutation' && apiAllowed) return false;
+  if (isUserAuthorized(userText, classification)) return false;
+  return true;
 }

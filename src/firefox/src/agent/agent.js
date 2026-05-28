@@ -19,7 +19,7 @@ import {
 } from './pdf-tools.js';
 import * as trace from '../trace/recorder.js';
 import { solveCaptcha, detectCaptcha, injectToken } from './captcha-solver.js';
-import { classifyConsequentialAction, isUserAuthorized, actionKey } from './action-gate.js';
+import { classifyConsequentialAction, shouldConfirmAction, actionKey } from './action-gate.js';
 
 /**
  * Tools whose results carry content lifted from the web page / fetched docs —
@@ -415,10 +415,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       // straight through; API writes are allowed only via /allow-api.
       const gate = classifyConsequentialAction(fnName, fnArgs);
       if (gate) {
-        const apiOk = gate.kind === 'mutation' && this.apiAllowedTabs.has(tabId);
-        const named = isUserAuthorized(this._runUserText.get(tabId) || '', gate);
         const already = this._approvedActions.get(tabId)?.has(actionKey(gate));
-        if (!apiOk && !named && !already) {
+        const needConfirm = !already && shouldConfirmAction(gate, {
+          userText: this._runUserText.get(tabId) || '',
+          apiAllowed: this.apiAllowedTabs.has(tabId),
+        });
+        if (needConfirm) {
           const approved = await this._confirmConsequentialAction(tabId, gate, onUpdate);
           if (approved === null) {
             onUpdate('warning', { message: 'Stopped by user.' });
