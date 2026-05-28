@@ -424,12 +424,21 @@
        ================================================================ */
     .mockup-stack {
       display: grid;
+      /* Single column that fills the container — without this, grid auto-
+         sizes the track to max-content of the items, which collapses the
+         mockup to ~470px instead of the 820px it had before. */
+      grid-template-columns: minmax(0, 1fr);
       max-width: 820px;
       margin: 0 auto;
     }
     .mockup-stack > .browser-mockup {
       grid-column: 1;
       grid-row: 1;
+      /* Reset the base .browser-mockup's `margin: 0 auto` — on a grid item,
+         auto margins absorb the leftover track space instead of letting
+         the item stretch, which left the mockup ~470px wide. */
+      margin: 0;
+      width: 100%;
       opacity: 0;
       transform: scale(0.985);
       transition: opacity 0.55s ease, transform 0.55s ease;
