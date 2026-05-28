@@ -69,6 +69,17 @@ export default {
   'sp.api.enabled_html': '🔓 <strong>API mutations enabled</strong> for this conversation. The agent may now use POST/PUT/PATCH/DELETE via fetch_url and execute_js when it judges API to be more reliable than UI for a step. UI-first remains the default. This flag clears when you reset the conversation.',
   'sp.api.badge_html': '<span>🔓 API mutations allowed</span>',
 
+  'sp.help_html': '<strong>Slash Commands</strong><br><code>/help</code> — Show this list<br><code>/allow-api</code> — Allow API mutations for this conversation<br><code>/compact</code> — Toggle verbose/compact tool display<br><code>/reset</code> — Clear conversation<br><code>/screenshot</code> — Capture current tab<br><code>/export</code> — Download conversation as Markdown<br><code>/profile</code> — Toggle profile auto-fill<br><code>/vision</code> — Toggle vision mode on active provider',
+  'sp.compact.verbose_on': 'Verbose mode <strong>on</strong> — full tool call JSON visible.',
+  'sp.compact.verbose_off': 'Verbose mode <strong>off</strong> — compact tool display.',
+  'sp.screenshot.error': 'Screenshot failed: {msg}',
+  'sp.export.done': 'Conversation exported.',
+  'sp.profile.on': 'Profile auto-fill <strong>enabled</strong>.',
+  'sp.profile.off': 'Profile auto-fill <strong>disabled</strong>.',
+  'sp.vision.on': 'Vision mode <strong>enabled</strong> for active provider.',
+  'sp.vision.off': 'Vision mode <strong>disabled</strong> for active provider.',
+  'sp.vision.error': 'Vision toggle failed: {msg}',
+
   // --- Tool labels -------------------------------------------------------
   'tool.read_page': 'Reading page',
   'tool.get_interactive_elements': 'Scanning interactive elements',

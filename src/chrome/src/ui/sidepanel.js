@@ -403,21 +403,130 @@ async function testConnection() {
 let apiMutationsAllowed = false;
 
 /**
- * Parse leading slash commands out of the user's message. Currently:
- *   /allow-api  → enable API mutation override for this conversation.
- * Returns the cleaned text. May trigger UI side effects (toast, badge).
+ * Parse leading slash commands out of the user's message.
+ * Returns the cleaned text (empty string if fully consumed).
+ * May trigger async UI side effects (screenshot, export, etc.).
  */
-function parseSlashCommands(text) {
-  const m = text.match(/^\/allow-api\b\s*/i);
-  if (m) {
+async function parseSlashCommands(text) {
+  // /help — list all available slash commands
+  if (/^\/help\b\s*/i.test(text)) {
+    addMessage('system', t('sp.help_html'));
+    return '';
+  }
+
+  // /allow-api — enable API mutation override
+  const mApi = text.match(/^\/allow-api\b\s*/i);
+  if (mApi) {
     const wasAlreadyAllowed = apiMutationsAllowed;
     apiMutationsAllowed = true;
     updateApiBadge();
     if (!wasAlreadyAllowed) {
       addMessage('system', t('sp.api.enabled_html'));
     }
-    return text.slice(m[0].length).trim();
+    return text.slice(mApi[0].length).trim();
   }
+
+  // /compact — toggle verbose/compact mode
+  if (/^\/compact\b\s*/i.test(text)) {
+    verboseMode = !verboseMode;
+    if (verboseBtn) verboseBtn.classList.toggle('active', verboseMode);
+    chrome.storage.local.set({ verboseMode }).catch(() => {});
+    addMessage('system', verboseMode
+      ? t('sp.compact.verbose_on')
+      : t('sp.compact.verbose_off'));
+    return '';
+  }
+
+  // /reset — clear conversation (same as clear button)
+  if (/^\/reset\b\s*/i.test(text)) {
+    await sendToBackground('clear_conversation', { tabId: currentTabId });
+    messagesEl.innerHTML = '';
+    addMessage('system', t('sp.cleared_message'));
+    if (currentTabId != null) {
+      tabChats.delete(currentTabId);
+      chrome.storage.session?.remove(TAB_CHAT_PREFIX + currentTabId).catch(() => {});
+    }
+    apiMutationsAllowed = false;
+    updateApiBadge();
+    return '';
+  }
+
+  // /screenshot — capture visible tab and display in chat
+  if (/^\/screenshot\b\s*/i.test(text)) {
+    try {
+      const tab = await chrome.tabs.query({ active: true, currentWindow: true });
+      const windowId = tab[0]?.windowId;
+      if (windowId) {
+        const dataUrl = await chrome.tabs.captureVisibleTab(windowId, { format: 'png' });
+        const imgHtml = `<img src="${dataUrl}" style="max-width:100%;border-radius:6px;margin:4px 0;" alt="Screenshot"/>`;
+        addMessage('system', imgHtml);
+      }
+    } catch (e) {
+      addMessage('system', t('sp.screenshot.error', { msg: e.message }));
+    }
+    return '';
+  }
+
+  // /export — export conversation as markdown
+  if (/^\/export\b\s*/i.test(text)) {
+    const messages = messagesEl.querySelectorAll('.message');
+    let md = '# WebBrain Conversation\n\n';
+    for (const msg of messages) {
+      const textEl = msg.querySelector('.message-text');
+      if (!textEl) continue;
+      const content = textEl.textContent.trim();
+      if (!content) continue;
+      if (msg.classList.contains('user')) {
+        md += `**You:** ${content}\n\n`;
+      } else if (msg.classList.contains('assistant')) {
+        md += `**WebBrain:** ${content}\n\n`;
+      } else if (msg.classList.contains('system')) {
+        md += `*${content}*\n\n`;
+      }
+    }
+    const blob = new Blob([md], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `webbrain-chat-${Date.now()}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+    addMessage('system', t('sp.export.done'));
+    return '';
+  }
+
+  // /profile — toggle profile auto-fill on/off
+  if (/^\/profile\b\s*/i.test(text)) {
+    const stored = await chrome.storage.local.get(['profileEnabled', 'profileText']);
+    const newState = !stored.profileEnabled;
+    await chrome.storage.local.set({ profileEnabled: newState });
+    addMessage('system', newState
+      ? t('sp.profile.on')
+      : t('sp.profile.off'));
+    return '';
+  }
+
+  // /vision — toggle vision support on active provider
+  if (/^\/vision\b\s*/i.test(text)) {
+    try {
+      const { providers, active } = await sendToBackground('get_providers');
+      const config = providers[active];
+      if (config) {
+        const newVision = !config.supportsVision;
+        await sendToBackground('update_provider', {
+          providerId: active,
+          config: { ...config, supportsVision: newVision },
+        });
+        addMessage('system', newVision
+          ? t('sp.vision.on')
+          : t('sp.vision.off'));
+      }
+    } catch (e) {
+      addMessage('system', t('sp.vision.error', { msg: e.message }));
+    }
+    return '';
+  }
+
   return text;
 }
 
@@ -441,9 +550,15 @@ async function sendMessage() {
   let text = inputEl.value.trim();
   if (!text || isProcessing) return;
 
+  // Clear input early so slash commands don't linger visually.
+  if (text.startsWith('/')) {
+    inputEl.value = '';
+    autoResizeInput();
+  }
+
   // Parse any leading slash command. parseSlashCommands may strip the
   // command from `text` and toggle apiMutationsAllowed as a side effect.
-  text = parseSlashCommands(text);
+  text = await parseSlashCommands(text);
   // If the entire message was just the slash command, there's nothing
   // left to send to the agent — bail out after the side effect.
   if (!text) {
