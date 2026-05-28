@@ -557,7 +557,7 @@
       font-size: 12px;
       line-height: 1.5;
       max-width: 90%;
-      animation: fadeUp 0.4s ease both;
+      opacity: 0;
     }
     @keyframes fadeUp {
       from { opacity: 0; transform: translateY(8px); }
@@ -567,14 +567,20 @@
       background: var(--accent);
       color: #fff;
       align-self: flex-end;
-      animation-delay: 0.2s;
     }
     .sp-msg.assistant {
       background: #16213e;
       border: 1px solid rgba(255,255,255,0.06);
       align-self: flex-start;
-      animation-delay: 0.5s;
     }
+    /* Messages animate only inside the active scene. Toggling .is-active on the
+       scene removes/reapplies the animation rule, restarting it each cycle. */
+    .browser-mockup.is-active .sp-msg          { animation: fadeUp 0.45s ease both; }
+    .browser-mockup.is-active .sp-msg.user     { animation-delay: 0.15s; }
+    .browser-mockup.is-active .sp-msg.assistant{ animation-delay: 0.45s; }
+    /* Variant 4 — second turn lands after the first answer has settled. */
+    .browser-mockup.is-active .sp-msg.user-2       { animation-delay: 0.95s; }
+    .browser-mockup.is-active .sp-msg.assistant-2  { animation-delay: 1.30s; }
     .sp-msg .step {
       display: flex;
       align-items: center;
@@ -597,6 +603,228 @@
       padding: 8px 12px;
       font-size: 11px;
       color: var(--text-dim);
+    }
+
+    /* ================================================================
+       MOCKUP STACK — 4 demo scenes share the same grid cell and
+       cross-fade between them. The container takes the height of the
+       tallest scene so the surrounding layout doesn't jump.
+       ================================================================ */
+    .mockup-stack {
+      display: grid;
+      max-width: 820px;
+      margin: 0 auto;
+    }
+    .mockup-stack > .browser-mockup {
+      grid-column: 1;
+      grid-row: 1;
+      opacity: 0;
+      transform: scale(0.985);
+      transition: opacity 0.55s ease, transform 0.55s ease;
+      pointer-events: none;
+    }
+    .mockup-stack > .browser-mockup.is-active {
+      opacity: 1;
+      transform: scale(1);
+      pointer-events: auto;
+    }
+
+    .scene-nav {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 22px;
+    }
+    .scene-dot {
+      appearance: none;
+      -webkit-appearance: none;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      width: 9px;
+      height: 9px;
+      padding: 0;
+      cursor: pointer;
+      transition: background 0.2s, width 0.3s, box-shadow 0.2s;
+    }
+    .scene-dot:hover { background: rgba(255,255,255,0.22); }
+    .scene-dot.is-active {
+      background: var(--accent);
+      width: 26px;
+      box-shadow: 0 0 0 3px rgba(108,99,255,0.18);
+    }
+    .scene-dot:focus-visible { outline: 2px solid var(--accent2); outline-offset: 2px; }
+
+    /* ----- v2 — "clone this site" landing-page mockup ----- */
+    .page-landing {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .pl-logo {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: 0.4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .pl-logo .pl-mark {
+      color: var(--accent2);
+      font-size: 16px;
+    }
+    .pl-hero {
+      background: linear-gradient(135deg, rgba(108,99,255,0.18), rgba(167,139,250,0.10));
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      align-items: flex-start;
+    }
+    .pl-headline {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.2;
+    }
+    .pl-headline em {
+      font-style: normal;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .pl-buttons { display: flex; gap: 8px; }
+    .pl-btn {
+      height: 22px;
+      width: 70px;
+      border-radius: 6px;
+      background: rgba(255,255,255,0.08);
+    }
+    .pl-btn.primary { background: var(--accent); width: 86px; }
+    .pl-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+    .pl-tile {
+      height: 54px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+    .pl-tile:nth-child(1) { background: linear-gradient(135deg, rgba(108,99,255,0.22), rgba(108,99,255,0.04)); }
+    .pl-tile:nth-child(2) { background: linear-gradient(135deg, rgba(167,139,250,0.22), rgba(167,139,250,0.04)); }
+    .pl-tile:nth-child(3) { background: linear-gradient(135deg, rgba(52,211,153,0.22), rgba(52,211,153,0.04)); }
+    .palette-dot {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      display: inline-block;
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.1);
+    }
+
+    /* ----- v3 — short-form video player ----- */
+    .page-video {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 14px 24px;
+      background: radial-gradient(circle at 50% 30%, rgba(167,139,250,0.10), transparent 70%);
+    }
+    .pv-frame {
+      position: relative;
+      width: 200px;
+      aspect-ratio: 9 / 16;
+      max-height: 100%;
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.08);
+      box-shadow: 0 12px 36px rgba(0,0,0,0.45);
+      background:
+        linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.55) 75%, rgba(0,0,0,0.85) 100%),
+        linear-gradient(45deg, #2d1b69, #6c63ff 70%, #ec4899);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 10px 12px 14px;
+      color: #fff;
+    }
+    .pv-frame::before {
+      content: '▶';
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 30px;
+      color: rgba(255,255,255,0.85);
+      text-shadow: 0 4px 14px rgba(0,0,0,0.5);
+      pointer-events: none;
+    }
+    .pv-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 10px;
+      color: rgba(255,255,255,0.85);
+      position: relative;
+      z-index: 1;
+    }
+    .pv-time {
+      background: rgba(0,0,0,0.4);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .pv-bottom {
+      position: relative;
+      z-index: 1;
+      font-size: 11px;
+      line-height: 1.4;
+      padding-inline-end: 30px;
+    }
+    .pv-username {
+      font-weight: 700;
+      margin-bottom: 3px;
+    }
+    .pv-caption {
+      color: rgba(255,255,255,0.85);
+    }
+    .pv-actions {
+      position: absolute;
+      inset-inline-end: 6px;
+      bottom: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 1;
+    }
+    .pv-actions span {
+      background: rgba(0,0,0,0.4);
+      border-radius: 50%;
+      width: 26px;
+      height: 26px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+    }
+
+    /* ----- v4 — long-form article ----- */
+    .page-article h3 { margin-bottom: 4px; }
+    .pa-meta {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-bottom: 14px;
+      letter-spacing: 0.2px;
+    }
+
+    /* Reduced motion — keep messages visible and disable cross-fade. */
+    @media (prefers-reduced-motion: reduce) {
+      .sp-msg { opacity: 1; }
+      .browser-mockup.is-active .sp-msg { animation: none; }
+      .mockup-stack > .browser-mockup { transition: none; transform: none; }
     }
 
     /* ================================================================
@@ -1203,53 +1431,202 @@
     </a>
   </div>
 
-  <!-- Browser mockup -->
+  <!-- Browser mockup — 4 demo scenarios that cross-fade. The first scene
+       carries .is-active on load so its messages animate in immediately;
+       the rotation script swaps the class on a timer / on click. -->
   <div class="hero-visual">
-    <div class="browser-mockup">
-      <div class="browser-bar">
-        <div class="browser-dots">
-          <span></span><span></span><span></span>
+    <div class="mockup-stack" id="mockup-stack">
+
+      <!-- Scene 1: Product extraction -->
+      <div class="browser-mockup is-active" data-scene="0">
+        <div class="browser-bar">
+          <div class="browser-dots"><span></span><span></span><span></span></div>
+          <div class="browser-url">https://example.com/urunler</div>
         </div>
-        <div class="browser-url">https://example.com/urunler</div>
-      </div>
-      <div class="browser-body">
-        <div class="browser-page">
-          <h3>Ürün Kataloğu</h3>
-          <div class="placeholder-line"></div>
-          <div class="placeholder-line"></div>
-          <div class="placeholder-line"></div>
-          <div class="placeholder-line"></div>
-          <div class="placeholder-line"></div>
-          <div class="placeholder-line"></div>
-          <div class="placeholder-line"></div>
-          <div class="placeholder-line"></div>
-          <div class="placeholder-line"></div>
-          <div class="placeholder-line"></div>
-        </div>
-        <div class="side-panel">
-          <div class="sp-header">
-            <span class="sp-brand">🧠 WebBrain<span class="sp-domain">.one</span></span>
-            <span class="sp-status"></span>
+        <div class="browser-body">
+          <div class="browser-page">
+            <h3>Ürün Kataloğu</h3>
+            <div class="placeholder-line"></div>
+            <div class="placeholder-line"></div>
+            <div class="placeholder-line"></div>
+            <div class="placeholder-line"></div>
+            <div class="placeholder-line"></div>
+            <div class="placeholder-line"></div>
+            <div class="placeholder-line"></div>
+            <div class="placeholder-line"></div>
+            <div class="placeholder-line"></div>
+            <div class="placeholder-line"></div>
           </div>
-          <div class="sp-messages">
-            <div class="sp-msg user">Bu sayfadaki tüm ürün adlarını ve fiyatlarını çıkar</div>
-            <div class="sp-msg assistant">
-              <div class="step"><span class="check">&#10003;</span> Sayfa okunuyor</div>
-              <div class="step"><span class="check">&#10003;</span> Veri çıkarılıyor</div>
-              <div style="margin-top:6px;"><strong>24 ürün</strong> bulundu. İşte sonuçlar:</div>
-              <div style="margin-top:4px; font-size:11px; color: var(--text-dim);">
-                1. Widget Pro — $29.99<br>
-                2. Super Gadget — $49.99<br>
-                3. MegaTool X — $19.99<br>
-                <span style="color:var(--accent2);">...ve 21 tane daha</span>
+          <div class="side-panel">
+            <div class="sp-header">
+              <span class="sp-brand">🧠 WebBrain<span class="sp-domain">.one</span></span>
+              <span class="sp-status"></span>
+            </div>
+            <div class="sp-messages">
+              <div class="sp-msg user">Bu sayfadaki tüm ürün adlarını ve fiyatlarını çıkar</div>
+              <div class="sp-msg assistant">
+                <div class="step"><span class="check">&#10003;</span> Sayfa okunuyor</div>
+                <div class="step"><span class="check">&#10003;</span> Veri çıkarılıyor</div>
+                <div style="margin-top:6px;"><strong>24 ürün</strong> bulundu. İşte sonuçlar:</div>
+                <div style="margin-top:4px; font-size:11px; color: var(--text-dim);">
+                  1. Widget Pro — $29.99<br>
+                  2. Super Gadget — $49.99<br>
+                  3. MegaTool X — $19.99<br>
+                  <span style="color:var(--accent2);">...ve 21 tane daha</span>
+                </div>
+              </div>
+            </div>
+            <div class="sp-input">
+              <div class="sp-input-box">Bu sayfayla ilgili istediğini sor...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scene 2: Clone-this-site / website builder -->
+      <div class="browser-mockup" data-scene="1">
+        <div class="browser-bar">
+          <div class="browser-dots"><span></span><span></span><span></span></div>
+          <div class="browser-url">https://acmestudio.io</div>
+        </div>
+        <div class="browser-body">
+          <div class="browser-page page-landing">
+            <div class="pl-logo"><span class="pl-mark">⬢</span>Acme Studio</div>
+            <div class="pl-hero">
+              <div class="pl-headline">Build <em>beautiful</em> things</div>
+              <div class="pl-buttons">
+                <span class="pl-btn primary"></span>
+                <span class="pl-btn"></span>
+              </div>
+            </div>
+            <div class="pl-grid">
+              <div class="pl-tile"></div>
+              <div class="pl-tile"></div>
+              <div class="pl-tile"></div>
+            </div>
+          </div>
+          <div class="side-panel">
+            <div class="sp-header">
+              <span class="sp-brand">🧠 WebBrain<span class="sp-domain">.one</span></span>
+              <span class="sp-status"></span>
+            </div>
+            <div class="sp-messages">
+              <div class="sp-msg user">Make a site like this for my brand &quot;Lumen Coffee&quot;</div>
+              <div class="sp-msg assistant">
+                <div class="step"><span class="check">&#10003;</span> Analyzing layout &amp; sections</div>
+                <div class="step"><span class="check">&#10003;</span> Extracting fonts &amp; colors</div>
+                <div style="margin-top:6px;">Generated <strong>Lumen Coffee</strong> with matching layout:</div>
+                <div style="margin-top:6px; display:flex; gap:5px; align-items:center; flex-wrap:wrap;">
+                  <span class="palette-dot" style="background:#6c63ff;"></span>
+                  <span class="palette-dot" style="background:#a78bfa;"></span>
+                  <span class="palette-dot" style="background:#f5d76e;"></span>
+                  <span class="palette-dot" style="background:#34d399;"></span>
+                  <span style="font-size:11px; color: var(--text-dim); margin-inline-start:4px;">Hero · Features · Pricing</span>
+                </div>
+                <div style="margin-top:4px;">
+                  <span style="color:var(--accent2);">Open in editor →</span>
+                </div>
+              </div>
+            </div>
+            <div class="sp-input">
+              <div class="sp-input-box">Bu sayfayla ilgili istediğini sor...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scene 3: Social video download -->
+      <div class="browser-mockup" data-scene="2">
+        <div class="browser-bar">
+          <div class="browser-dots"><span></span><span></span><span></span></div>
+          <div class="browser-url">https://socialvid.app/@nomad/clip-8472</div>
+        </div>
+        <div class="browser-body">
+          <div class="browser-page page-video">
+            <div class="pv-frame">
+              <div class="pv-top">
+                <span></span>
+                <span class="pv-time">0:24</span>
+              </div>
+              <div class="pv-bottom">
+                <div class="pv-username">@nomad</div>
+                <div class="pv-caption">Sunset timelapse over Bodrum</div>
+              </div>
+              <div class="pv-actions">
+                <span>♥</span>
+                <span>💬</span>
+                <span>↗</span>
               </div>
             </div>
           </div>
-          <div class="sp-input">
-            <div class="sp-input-box">Bu sayfayla ilgili istediğini sor...</div>
+          <div class="side-panel">
+            <div class="sp-header">
+              <span class="sp-brand">🧠 WebBrain<span class="sp-domain">.one</span></span>
+              <span class="sp-status"></span>
+            </div>
+            <div class="sp-messages">
+              <div class="sp-msg user">Download this video</div>
+              <div class="sp-msg assistant">
+                <div class="step"><span class="check">&#10003;</span> Locating video stream</div>
+                <div class="step"><span class="check">&#10003;</span> Fetching MP4</div>
+                <div style="margin-top:6px;">Saved to <strong>Downloads/nomad-bodrum.mp4</strong></div>
+                <div style="margin-top:4px; font-size:11px; color: var(--text-dim);">1080p · 24s · 4.2 MB</div>
+              </div>
+            </div>
+            <div class="sp-input">
+              <div class="sp-input-box">Bu sayfayla ilgili istediğini sor...</div>
+            </div>
           </div>
         </div>
       </div>
+
+      <!-- Scene 4: Follow-up question (two-turn conversation) -->
+      <div class="browser-mockup" data-scene="3">
+        <div class="browser-bar">
+          <div class="browser-dots"><span></span><span></span><span></span></div>
+          <div class="browser-url">https://magazine.dev/local-ai-2026</div>
+        </div>
+        <div class="browser-body">
+          <div class="browser-page page-article">
+            <h3>The Future of Local AI</h3>
+            <div class="pa-meta">By Jane Smith · 8 min read</div>
+            <div class="placeholder-line"></div>
+            <div class="placeholder-line"></div>
+            <div class="placeholder-line"></div>
+            <div class="placeholder-line"></div>
+            <div class="placeholder-line"></div>
+            <div class="placeholder-line"></div>
+            <div class="placeholder-line"></div>
+            <div class="placeholder-line"></div>
+          </div>
+          <div class="side-panel">
+            <div class="sp-header">
+              <span class="sp-brand">🧠 WebBrain<span class="sp-domain">.one</span></span>
+              <span class="sp-status"></span>
+            </div>
+            <div class="sp-messages">
+              <div class="sp-msg user">Summarize this article</div>
+              <div class="sp-msg assistant">Local LLMs now match cloud quality on many tasks — driven by better quantization, faster consumer GPUs, and a privacy-first shift.</div>
+              <div class="sp-msg user user-2">What does the author predict for 2026?</div>
+              <div class="sp-msg assistant assistant-2">
+                <div class="step"><span class="check">&#10003;</span> Recalling article context</div>
+                <div style="margin-top:6px;">By <strong>2026</strong>, the author expects 70%+ of consumer AI workloads to run on-device.</div>
+              </div>
+            </div>
+            <div class="sp-input">
+              <div class="sp-input-box">Bu sayfayla ilgili istediğini sor...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="scene-nav" role="tablist" aria-label="Switch demo scenario">
+      <button class="scene-dot is-active" type="button" data-scene="0" role="tab" aria-selected="true" aria-label="Product extraction demo"></button>
+      <button class="scene-dot" type="button" data-scene="1" role="tab" aria-selected="false" aria-label="Clone-this-site demo"></button>
+      <button class="scene-dot" type="button" data-scene="2" role="tab" aria-selected="false" aria-label="Video download demo"></button>
+      <button class="scene-dot" type="button" data-scene="3" role="tab" aria-selected="false" aria-label="Follow-up question demo"></button>
     </div>
   </div>
 </section>
@@ -1712,6 +2089,69 @@
     } else if (typeof mobileQuery.addListener === 'function') {
       mobileQuery.addListener(syncDemoVideoSource);
     }
+  })();
+</script>
+
+<!-- Hero mockup rotation: cross-fade through 4 demo scenes. Click a dot to
+     jump (and freeze the auto-rotate so a hand-picked scene stays put).
+     Auto-rotate pauses on hover and when the tab is hidden. Skipped
+     entirely under prefers-reduced-motion — the first scene just stays. -->
+<script>
+  (function () {
+    const stack = document.getElementById('mockup-stack');
+    if (!stack) return;
+    const scenes = stack.querySelectorAll(':scope > .browser-mockup');
+    const dots = document.querySelectorAll('.scene-nav .scene-dot');
+    if (scenes.length < 2) return;
+
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const INTERVAL_MS = 6000;
+    let current = 0;
+    let timer = null;
+    let userLocked = false; // set true once the visitor clicks a dot
+
+    function activate(idx) {
+      idx = ((idx % scenes.length) + scenes.length) % scenes.length;
+      scenes.forEach((s) => s.classList.remove('is-active'));
+      dots.forEach((d, i) => {
+        const on = i === idx;
+        d.classList.toggle('is-active', on);
+        d.setAttribute('aria-selected', on ? 'true' : 'false');
+      });
+      // Force a reflow so re-applying the .is-active rule restarts the
+      // message fade-up animation cleanly.
+      void scenes[idx].offsetWidth;
+      scenes[idx].classList.add('is-active');
+      current = idx;
+    }
+
+    function tick() { activate(current + 1); }
+
+    function start() {
+      if (reduceMotion || userLocked || timer) return;
+      timer = setInterval(tick, INTERVAL_MS);
+    }
+    function stop() {
+      if (timer) { clearInterval(timer); timer = null; }
+    }
+
+    dots.forEach((dot) => {
+      dot.addEventListener('click', function () {
+        const idx = parseInt(dot.dataset.scene, 10);
+        if (Number.isNaN(idx)) return;
+        userLocked = true;
+        stop();
+        activate(idx);
+      });
+    });
+
+    stack.addEventListener('mouseenter', stop);
+    stack.addEventListener('mouseleave', start);
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) stop(); else start();
+    });
+
+    start();
   })();
 </script>
 
