@@ -353,6 +353,7 @@
       backdrop-filter: blur(20px);
       background: var(--nav-bg);
       border-bottom: 1px solid var(--border);
+      overflow-x: clip;
     }
     .nav-inner {
       max-width: var(--max-w);
@@ -373,7 +374,7 @@
       -webkit-text-fill-color: transparent;
     }
     .nav-brand span.emoji { -webkit-text-fill-color: initial; font-size: 22px; }
-    .nav-links { display: flex; gap: 28px; align-items: center; }
+    .nav-links { display: flex; gap: 28px; align-items: center; margin-inline-start: auto; min-width: 0; }
     .nav-links a {
       color: var(--text-dim);
       font-size: 14px;
@@ -548,6 +549,7 @@
     .hero-visual {
       margin-top: 60px;
       position: relative;
+      overflow: hidden;
     }
     .browser-mockup {
       max-width: 820px;
@@ -576,12 +578,16 @@
     .browser-dots span:nth-child(3) { background: #34d399; }
     .browser-url {
       flex: 1;
+      min-width: 0;
       margin-inline-start: 12px;
       background: var(--url-bg);
       border-radius: 6px;
       padding: 5px 12px;
       font-size: 12px;
       color: var(--text-dim);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .browser-body {
       display: flex;
@@ -652,6 +658,7 @@
       font-size: 12px;
       line-height: 1.5;
       max-width: 90%;
+      overflow-wrap: anywhere;
       opacity: 0;
     }
     @keyframes fadeUp {
@@ -713,6 +720,7 @@
       grid-template-columns: minmax(0, 1fr);
       max-width: 820px;
       margin: 0 auto;
+      overflow: hidden;
     }
     .mockup-stack > .browser-mockup {
       grid-column: 1;
@@ -1450,10 +1458,16 @@
        RESPONSIVE
        ================================================================ */
     @media (max-width: 768px) {
+      body { overflow-x: hidden; }
       .browser-body { flex-direction: column; }
       .side-panel { width: 100%; border-inline-start: none; border-top: 1px solid var(--border); min-height: 260px; }
       .modes-grid { grid-template-columns: 1fr; }
+      .nav-inner { width: 100%; padding: 12px 10px; gap: 8px; }
+      .nav-brand { min-width: 0; font-size: 17px; gap: 6px; }
+      .nav-links { gap: 8px; flex-shrink: 0; }
       .nav-links a:not(.nav-cta) { display: none; }
+      .nav-cta { padding: 8px 14px; font-size: 12px; }
+      .lang-dropdown { max-width: 42vw; }
       .gh-stars { display: none; }
       /* The theme toggle would overflow the 24px-padded header at phone
          widths. prefers-color-scheme still auto-picks the right theme
