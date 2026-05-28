@@ -1484,7 +1484,7 @@
       </div>
 
       <!-- Scene 2: Clone-this-site / website builder -->
-      <div class="browser-mockup" data-scene="1">
+      <div class="browser-mockup" data-scene="1" aria-hidden="true" inert>
         <div class="browser-bar">
           <div class="browser-dots"><span></span><span></span><span></span></div>
           <div class="browser-url">https://acmestudio.io</div>
@@ -1536,7 +1536,7 @@
       </div>
 
       <!-- Scene 3: Social video download -->
-      <div class="browser-mockup" data-scene="2">
+      <div class="browser-mockup" data-scene="2" aria-hidden="true" inert>
         <div class="browser-bar">
           <div class="browser-dots"><span></span><span></span><span></span></div>
           <div class="browser-url">https://socialvid.app/@nomad/clip-8472</div>
@@ -1581,7 +1581,7 @@
       </div>
 
       <!-- Scene 4: Follow-up question (two-turn conversation) -->
-      <div class="browser-mockup" data-scene="3">
+      <div class="browser-mockup" data-scene="3" aria-hidden="true" inert>
         <div class="browser-bar">
           <div class="browser-dots"><span></span><span></span><span></span></div>
           <div class="browser-url">https://magazine.dev/local-ai-2026</div>
@@ -2112,7 +2112,16 @@
 
     function activate(idx) {
       idx = ((idx % scenes.length) + scenes.length) % scenes.length;
-      scenes.forEach((s) => s.classList.remove('is-active'));
+      scenes.forEach((s, i) => {
+        const on = i === idx;
+        if (!on) {
+          // Hide inactive scenes from screen readers + keyboard tab order.
+          // (opacity:0 alone leaves their links/buttons in the a11y tree.)
+          s.classList.remove('is-active');
+          s.setAttribute('aria-hidden', 'true');
+          s.setAttribute('inert', '');
+        }
+      });
       dots.forEach((d, i) => {
         const on = i === idx;
         d.classList.toggle('is-active', on);
@@ -2122,6 +2131,8 @@
       // message fade-up animation cleanly.
       void scenes[idx].offsetWidth;
       scenes[idx].classList.add('is-active');
+      scenes[idx].removeAttribute('aria-hidden');
+      scenes[idx].removeAttribute('inert');
       current = idx;
     }
 
