@@ -157,16 +157,21 @@ export function normalizeHost(input) {
  */
 export function hostForCapability(capability, args, currentUrlOrHost, toolName) {
   args = args || {};
-  // iframe_click / iframe_type run in ALL frames and select a (possibly
-  // cross-origin) frame via `urlFilter` — e.g. a Stripe/PayPal iframe embedded
-  // on merchant.com. Charge the permission to the FRAME host, not the top page,
-  // so a grant for the embedding site does not silently authorize actions
-  // inside the payment/login provider. No urlFilter → can't identify the frame,
-  // fall back to the current host.
+  // iframe_click / iframe_type run in ALL frames and act on the first matching
+  // selector in a (possibly cross-origin) frame named by `urlFilter` — e.g. a
+  // Stripe/PayPal iframe embedded on merchant.com. Charge the permission to the
+  // FRAME host. If urlFilter is missing/garbage we CANNOT identify the frame —
+  // return '' so the caller FAILS CLOSED rather than charging the action to the
+  // current page's grant (which would let merchant.com authorize a click inside
+  // the payment provider).
   if (toolName === 'iframe_click' || toolName === 'iframe_type') {
-    return normalizeHost(args.urlFilter) || normalizeHost(currentUrlOrHost);
+    return normalizeHost(args.urlFilter);
   }
-  if (capability === Capability.NAVIGATE || capability === Capability.NETWORK) {
+  // Navigate / network / download all target a URL → charge the DESTINATION
+  // host (resolved against the current page), falling back to the current host
+  // only when the tool carries no url (e.g. download_resource_from_page, which
+  // downloads from the page itself).
+  if (capability === Capability.NAVIGATE || capability === Capability.NETWORK || capability === Capability.DOWNLOAD) {
     const raw = args && args.url;
     if (typeof raw === 'string' && raw) {
       try {
@@ -214,6 +219,21 @@ export class PermissionManager {
         }
       }
     } catch { /* storage unavailable → start empty */ }
+  }
+
+  /**
+   * Replace the persisted (always) grants from a fresh storage snapshot,
+   * preserving in-memory once-grants. Lets a storage change — e.g. a user
+   * revoking a grant in Settings — take effect immediately, without waiting
+   * for the agent/service-worker to be recreated.
+   */
+  hydrateFrom(grants) {
+    const once = this.permissions.filter(p => p.duration !== 'always');
+    const always = Array.isArray(grants)
+      ? grants.filter(g => g && g.capability && g.host).map(g => ({ ...g, duration: 'always' }))
+      : [];
+    this.permissions = [...once, ...always];
+    this._hydrated = true;
   }
 
   /** Drop transient (once) grants/denies at the start of a new user turn. */

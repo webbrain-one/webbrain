@@ -1936,10 +1936,31 @@ test('iframe actions are gated on the frame host (urlFilter), not the top page',
     hostForCapability(Capability.TYPE, { urlFilter: 'https://checkout.paypal.com/x' }, top, 'iframe_type'),
     'checkout.paypal.com'
   );
-  // No urlFilter → can't identify the frame, fall back to the current host
-  assert.equal(hostForCapability(Capability.CLICK, {}, top, 'iframe_click'), 'merchant.com');
+  // No urlFilter → host can't be identified → return '' so the agent fails closed
+  assert.equal(hostForCapability(Capability.CLICK, {}, top, 'iframe_click'), '');
   // A normal (non-iframe) click still uses the current page host
   assert.equal(hostForCapability(Capability.CLICK, { ref_id: 'ref_1' }, top, 'click'), 'merchant.com');
+});
+
+test('downloads are charged to the target URL host, not the current page', () => {
+  const top = 'https://trusted.com/page';
+  // download_files from an attacker URL → charge attacker.example, NOT trusted.com
+  assert.equal(
+    hostForCapability(Capability.DOWNLOAD, { url: 'https://attacker.example/payload.bin' }, top),
+    'attacker.example'
+  );
+  // a download with no url (e.g. download_resource_from_page) → current page
+  assert.equal(hostForCapability(Capability.DOWNLOAD, {}, top), 'trusted.com');
+});
+
+test('hydrateFrom replaces always-grants but keeps once-grants (live revoke)', async () => {
+  const pm = new PermissionManager();
+  await pm.record('a.com', Capability.CLICK, 'allow', 'always');
+  await pm.record('b.com', Capability.TYPE, 'allow', 'once');
+  // Simulate a Settings revoke of a.com's grant arriving via storage.onChanged
+  pm.hydrateFrom([]); // new persisted snapshot is empty
+  assert.equal(pm.check('a.com', Capability.CLICK).needsPrompt, true);  // revoked → re-prompts
+  assert.equal(pm.check('b.com', Capability.TYPE).allowed, true);       // once-grant survives the turn
 });
 
 test('check: unknown (capability, host) needs a prompt', () => {

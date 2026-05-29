@@ -79,6 +79,16 @@ export class Agent {
         try { await browser.storage.local.set({ wb_permissions: grants }); } catch { /* best-effort */ }
       },
     });
+    // Keep the in-memory grants in sync when storage changes out-of-band —
+    // e.g. the user revokes an "Always allow" entry in Settings. Without this
+    // the agent would keep serving the stale grant until it's recreated.
+    try {
+      browser.storage.onChanged.addListener((changes, area) => {
+        if (area === 'local' && changes.wb_permissions) {
+          this.permissions.hydrateFrom(changes.wb_permissions.newValue || []);
+        }
+      });
+    } catch { /* storage API unavailable in this context */ }
   }
 
   setApiMutationsAllowed(tabId, allowed) {
@@ -397,6 +407,21 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         const apiPreGranted = capability === Capability.NETWORK && this.apiAllowedTabs.has(tabId);
         if (!apiPreGranted) {
           const actHost = hostForCapability(capability, fnArgs, await this._currentUrl(tabId), fnName);
+          if (!actHost) {
+            // Target host couldn't be identified (e.g. an iframe action with no
+            // urlFilter). Fail closed — never charge it to the current page's
+            // grant — and tell the model how to make it checkable.
+            messages.push({
+              role: 'tool',
+              tool_call_id: tc.id,
+              content: JSON.stringify({
+                success: false,
+                denied: true,
+                error: `Cannot run ${fnName}: the target frame/host couldn't be identified, so it can't be permission-checked. Pass a urlFilter naming the iframe's domain (read it first with iframe_read / get_accessibility_tree) and retry.`,
+              }),
+            });
+            continue;
+          }
           const verdict = this.permissions.check(actHost, capability);
           if (!verdict.allowed) {
             const choice = verdict.needsPrompt
