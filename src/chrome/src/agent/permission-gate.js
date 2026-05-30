@@ -38,7 +38,7 @@ export const CAPABILITY_LABEL = {
   [Capability.CLICK]: 'click / submit on',
   [Capability.TYPE]: 'type into',
   [Capability.EXECUTE_JS]: 'run JavaScript on',
-  [Capability.NETWORK]: 'send a write request to',
+  [Capability.NETWORK]: 'make a network request to',
   [Capability.DOWNLOAD]: 'download files from',
   [Capability.UPLOAD]: 'upload a file to',
   [Capability.RECORD]: 'record the tab (and microphone) on',
@@ -83,8 +83,6 @@ export const UNTRUSTED_CONTENT_TOOLS = new Set([
   'done',
 ]);
 
-const MUTATION_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
-
 // Tool name -> capability. EVERY side-effecting tool must be here (or handled
 // in capabilityFor below). Tools absent from this map are read-only and never
 // gated — adding a new state-changing tool without listing it would silently
@@ -111,7 +109,11 @@ const TOOL_CAPABILITY = {
 /**
  * Map a tool call to its gated capability, or null if the tool is read-only /
  * not gated. Some tools are gated conditionally on their arguments:
- *   - fetch_url/research_url: only when carrying a write method.
+ *   - fetch_url/research_url: ALL methods — a GET can exfiltrate data in its
+ *     query string to an attacker host, and research_url opens a background
+ *     tab. Gated per destination host (egress is consequential).
+ *   - screenshot/full_page_screenshot: read-only, EXCEPT save:true writes a
+ *     file via chrome.downloads → DOWNLOAD.
  *   - set_field: TYPE normally, but CLICK when submit:true (pressing Enter
  *     submits the form — a TYPE grant must not authorize a submit).
  *   - press_keys: Enter can submit/activate → CLICK; Tab/Escape are benign.
@@ -119,8 +121,10 @@ const TOOL_CAPABILITY = {
 export function capabilityFor(name, args) {
   args = args || {};
   if (name === 'fetch_url' || name === 'research_url') {
-    const method = String(args.method || 'GET').toUpperCase();
-    return MUTATION_METHODS.has(method) ? Capability.NETWORK : null;
+    return Capability.NETWORK;
+  }
+  if (name === 'screenshot' || name === 'full_page_screenshot') {
+    return args.save ? Capability.DOWNLOAD : null;
   }
   if (name === 'set_field') {
     return args.submit ? Capability.CLICK : Capability.TYPE;
