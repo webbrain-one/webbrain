@@ -129,15 +129,13 @@ if (globalThis.browser?.storage?.onChanged) {
 
       const detected = await Promise.all(localProviderIds.map(async (providerId) => {
         try {
-          // 8s, not 2.5s: on a cold first-run the local-server model list can
-          // take longer than 2.5s to come back (the server may still be
-          // loading/warming), which made onboarding report "no models" for a
-          // server that the (un-timed) Settings model-load reaches fine. Give
-          // it room to match the Settings path. (Kept equal to the Chrome
-          // build, where a cold offscreen-proxy round-trip adds even more.)
+          // Upper bound only — this does NOT freeze the UI. Probes run in
+          // parallel: a reachable server answers in well under a second, and a
+          // closed port fails fast. 5s just caps a slow/stalled server. (Kept
+          // equal to the Chrome build for parity.)
           const res = await withTimeout(
             sendToBackground('list_provider_models', { providerId }),
-            8000
+            5000
           );
           if (res?.ok && Array.isArray(res.models)) {
             const choices = res.models
