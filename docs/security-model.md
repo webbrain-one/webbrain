@@ -13,20 +13,24 @@ For vulnerability disclosure, see [SECURITY.md](../SECURITY.md).
 ```json
 {
   "permissions": [
-    "sidePanel", "activeTab", "scripting", "storage",
-    "webNavigation", "debugger", "downloads",
-    "unlimitedStorage", "offscreen", "privateNetworkAccess",
-    "tabCapture"
+    "sidePanel", "activeTab", "tabs", "tabGroups", "scripting", "storage",
+    "webNavigation", "debugger", "downloads", "unlimitedStorage",
+    "offscreen", "privateNetworkAccess", "tabCapture",
+    "clipboardWrite", "clipboardRead"
   ],
-  "host_permissions": ["<all_urls>", "http://localhost/*", "http://127.0.0.1/*"]
+  "host_permissions": ["<all_urls>", "http://localhost/*", "http://127.0.0.1/*", "http://*/*"]
 }
 ```
+
+(This is the Chrome MV3 manifest. Firefox MV2 grants a narrower set —
+`activeTab`, `tabs`, `tabGroups`, `storage`, `unlimitedStorage`, `clipboard*`,
+`<all_urls>` — and has no `debugger`/`offscreen`, see Firefox Differences below.)
 
 | Permission | Risk | Mitigation |
 |---|---|---|
 | `<all_urls>` | Content script injection anywhere — the agent can read and interact with any page the user visits | The user must explicitly switch to Act mode; Ask mode is read-only. The agent never auto-activates on new tabs. |
 | `debugger` | CDP access provides trusted events and full DOM/network control on any tab | The debugger is only attached during active agent runs and detached on completion/abort. |
-| `downloads` | Can save files to the user's Downloads folder without prompting | Only the agent's explicit tool calls (`download_files`, `screenshot({save:true})`, `record_tab`) use this. |
+| `downloads` | Can save files to the user's Downloads folder without prompting | Only the agent's explicit tool calls (`download_files`, `download_file`, `download_resource_from_page`, `download_social_media`, `screenshot({save:true})`) use this, and each is gated by the capability × origin permission prompt. |
 | `offscreen` | An offscreen document can make HTTP requests immune to user CSP | Only used for localhost LLM provider proxy and tab recording. Never forwards arbitrary URLs. |
 
 ### Authentication
@@ -84,11 +88,13 @@ The primary threat: a malicious page crafts content that, when read by the agent
 
 | Layer | Mechanism |
 |---|---|
+| **Untrusted-content wrapping** | Page-derived tool results are wrapped in `<untrusted_page_content>` markers (`_wrapUntrusted` + `UNTRUSTED_CONTENT_TOOLS`) so the model treats them as data, not instructions. See [prompt-injection-defense.md](prompt-injection-defense.md). |
+| **Capability × origin gate** | Before a consequential tool runs (click/type/navigate/execute_js/network/download/…), the agent requires a `(capability, host)` grant — Allow once / Always / Deny. Language-agnostic, deterministic, human-in-the-loop (`permission-gate.js`). |
 | **Tool result cap** | Individual tool results truncated at 8,000 chars (`_limitToolResult`). Injected text beyond that is silently dropped. |
 | **Ask/Act mode** | In Ask mode, only read-only tools are available. The user must explicitly switch to Act for the agent to click/type/navigate. |
-| **`/allow-api` gate** | Destructive HTTP methods (POST/PUT/PATCH/DELETE) via `fetch_url` require the user to explicitly set a per-conversation `/allow-api` flag. The flag clears on conversation reset. |
+| **`/allow-api`** | A per-conversation `/allow-api` flag that *waives* the permission prompt for write-method network egress (`fetch_url`/`research_url` with POST/PUT/PATCH/DELETE). It does NOT waive GET egress or any other capability. Clears on conversation reset. |
 | **`done()` blocking** | Before accepting completion, the agent probes for open dialogs/forms. If the summary claims "created"/"saved" but a modal is still open, the agent is forced to continue. |
-| **Duplicate-submit guard** | Clicks on submit-like text (create/save/submit/add/post/publish/send/confirm) are blocked within a 45-second window per tab+URL. |
+| **Duplicate-submit guard** | Clicks on submit-like text (create/save/submit/add/post/publish/send/confirm/sign up/log in/pay/checkout/order, etc.) are blocked within a 45-second window per tab+URL (Chrome). |
 | **CLICK occlusion test** | Before clicking, the resolver calls `elementFromPoint()`. If another element is visually on top, the click is refused. |
 | **Modal-scoped click** | When a dialog is open, text clicks are scoped to that subtree so the agent doesn't click a dimmed background element. |
 | **Universal preamble** | Every system prompt includes guidance on cookie banners and paywalls — two common injection vectors that look like benign page content. |
@@ -107,10 +113,14 @@ The primary threat: a malicious page crafts content that, when read by the agent
 
 ## `/allow-api` Flag
 
-Set per-conversation via the `/allow-api` slash command in the side panel. When active, the agent may use:
+Set per-conversation via the `/allow-api` slash command in the side panel. When active, it waives the permission prompt for **write-method network egress only**:
 
-- `fetch_url` with `method: POST/PUT/PATCH/DELETE`
-- `execute_js` with mutation code (Firefox only)
+- `fetch_url` / `research_url` with `method: POST/PUT/PATCH/DELETE`
+
+It does NOT waive GET egress, `execute_js`, or any other capability — those still
+go through the capability × origin gate. (`isNetworkMutation` in
+`permission-gate.js` is what `/allow-api` keys off; `execute_js` is its own
+`Capability.EXECUTE_JS` and is always gated.)
 
 The system prompt adds a preamble telling the model to:
 - State the URL, method, and payload in plain text before any destructive API call
@@ -140,10 +150,12 @@ Firefox has no CDP (`debugger` permission), so:
 - No full-page screenshots
 - No shadow DOM piercing for closed roots
 - No offscreen document (CORS must be handled by LLM servers)
-- No trace recorder
-- No duplicate-submit guard
+- No tab recording (`record_tab` — Chrome's `recorder/` is absent)
+- No duplicate-submit guard (the timestamp Map is declared but unwired)
 
-Everything else (permissions model, credential detection, loop detection, adapter system) is identical.
+Everything else — the permission gate, untrusted-content wrapping, credential
+detection, loop detection, adapter system, and the **trace recorder** (it ships
+identically in `src/firefox/src/trace/recorder.js`) — is the same.
 
 ---
 

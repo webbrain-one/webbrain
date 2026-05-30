@@ -2,13 +2,14 @@
 
 ## Reporting a Vulnerability
 
-WebBrain operates with extensive browser permissions (`<all_urls>`, `debugger`, `downloads`, `nativeMessaging`) and drives authenticated sessions. If you discover a security vulnerability, please handle it responsibly.
+WebBrain operates with extensive browser permissions (`<all_urls>`, `debugger`, `downloads`, `tabCapture`) and drives authenticated sessions. If you discover a security vulnerability, please handle it responsibly.
 
-**Do NOT file a public GitHub issue.** Instead, email the maintainer directly:
+**Do NOT file a public GitHub issue.** Instead, use GitHub's private vulnerability reporting:
 
-**security@webbrain.app**
+**[Report a vulnerability →](https://github.com/esokullu/webbrain/security/advisories/new)**
 
-You can also reach out via the project's [GitHub Security Advisories page](https://github.com/anomalyco/webbrain/security/advisories/new).
+(If private advisories are disabled on the repo, contact the maintainer
+[Emre Sokullu](https://emresokullu.com) and ask for a private channel.)
 
 ### What to include
 
@@ -31,7 +32,7 @@ We are interested in vulnerabilities affecting:
 
 - **Privilege escalation**: the extension performing actions the user did not authorize
 - **Credential leakage**: agent output or trace data exposing user credentials
-- **Prompt injection**: crafted page content causing the agent to perform unintended actions (see `docs/security-model.md` for the existing defenses)
+- **Prompt injection**: crafted page content causing the agent to perform unintended actions (see `docs/prompt-injection-defense.md` for the existing defenses)
 - **Provider key exposure**: LLM API keys or OAuth tokens readable by third parties
 - **Cross-origin data access**: the extension reading data from sites the user is not actively on
 

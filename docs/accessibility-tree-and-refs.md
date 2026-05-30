@@ -17,9 +17,11 @@ Both are injected into `<all_urls>` pages at `document_idle`.
 
 ## The Tree (`accessibility-tree.js`)
 
-Exposes three globals on `window`:
+Builds the tree with an internal `generateAccessibilityTree(...)` (invoked by
+the agent via `executeScript`) and installs a ref-resolution API on `window`
+(`__wbElementMap`, `__wb_ax_lookup`, `__wb_ax_release`):
 
-### `__generateAccessibilityTree(filter, maxDepth, maxChars, ref_id)`
+### `generateAccessibilityTree(filter, maxDepth, maxChars, ref_id, page)`
 
 Walks the DOM and emits a flat, indented text tree:
 

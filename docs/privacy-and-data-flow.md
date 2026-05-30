@@ -156,8 +156,10 @@ CDP capture → JPEG/PNG data URL
 
 ## Firefox Differences
 
-Firefox has no trace recorder, no offscreen document, and no `unlimitedStorage` for IndexedDB. All data-flow patterns are otherwise identical to Chrome, except:
+Firefox has no offscreen document. The trace recorder and `unlimitedStorage`
+are present and identical to Chrome (`src/firefox/src/trace/recorder.js`). All
+data-flow patterns are otherwise the same, except:
 
 - No dedicated vision sub-call (screenshots go directly to the main provider if vision is supported)
-- No tab recording
+- No tab recording (`record_tab`)
 - Conversation history is not persisted (lost when the sidebar closes)

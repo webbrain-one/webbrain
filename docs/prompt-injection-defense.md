@@ -119,7 +119,7 @@ protect the user on the trusted sites where injected content actually lives
 - `node test/run.js` — pure-logic unit tests, including:
   - the **exhaustiveness guard**: every `getToolsForMode('act')` tool must be
     gated (`capabilityFor`), untrusted-read (`UNTRUSTED_CONTENT_TOOLS`), or on the
-    documented `KNOWN_SAFE_TOOLS` allowlist — else CI fails.
+    `KNOWN_SAFE_TOOLS` allowlist (defined in `test/run.js`) — else CI fails.
   - capability mapping, host resolution, `requiredHosts`, `frameHostMatches`,
     grant storage / `hydrateFrom`, content-wrap breakout-stripping.
 - `test/manual-permissions.md` — the in-browser checklist (the 3-option

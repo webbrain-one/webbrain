@@ -249,7 +249,7 @@ MV3 service workers can die between turns. Conversations are persisted to `chrom
 | Full-page screenshot | CDP scroll+stitch | Not available |
 | Conversation persistence | `chrome.storage.session` | In-memory only |
 | Offscreen document | Yes (fetch proxy + recorder) | Not available |
-| Trace recorder | IndexedDB (opt-in) | Not available |
+| Trace recorder | IndexedDB (opt-in) | IndexedDB (opt-in) — same `trace/recorder.js` |
 | Duplicate-submit guard | Yes | Not available |
 | `execute_js` | Blocked by CSP | Available |
 | Shadow DOM piercing | CDP for closed roots | Open roots only |
@@ -280,7 +280,7 @@ src/
 │       └── ui/       # sidepanel, settings, traces, i18n
 ├── firefox/          # Firefox build (MV2)
 │   ├── manifest.json
-│   └── src/          # Same structure, minus cdp/, offscreen/, trace/
+│   └── src/          # Same structure, minus cdp/, offscreen/, recorder/
 └── vendor/           # Third-party libs (pdfjs, katex)
 ```
 
