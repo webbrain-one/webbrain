@@ -188,6 +188,22 @@ lms clone webbrain/web-tools
 
 Source: [`lmstudio-plugin/`](./lmstudio-plugin/).
 
+## MCP browser bridge
+
+WebBrain can also expose the already-open browser/profile to MCP clients such
+as OpenClaw, Hermes, Claude Desktop, or other local agent hosts. This bridge
+does not launch a fresh Chromium; it talks to the installed WebBrain extension
+over localhost so agents use the user's real tabs, cookies, sessions, downloads,
+and profile state.
+
+```bash
+npm run mcp
+```
+
+Then open/click WebBrain in the browser profile you want the MCP client to use.
+See [`docs/mcp-browser-bridge.md`](./docs/mcp-browser-bridge.md) for MCP client
+configuration and exposed tools.
+
 ## Slash Commands
 
 WebBrain accepts slash commands as the first thing on a line in the input box. Type `/help` to see the list inside the panel.

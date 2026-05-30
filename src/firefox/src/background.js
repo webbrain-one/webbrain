@@ -7,6 +7,7 @@ import {
   getClaudeOAuthStatus,
 } from './providers/oauth-claude.js';
 import { getBalance as capsolverGetBalance } from './agent/captcha-solver.js';
+import { startMcpBridge } from './mcp/bridge.js';
 
 /**
  * WebBrain Background Script (Firefox)
@@ -242,6 +243,14 @@ function sendIndicatorMessage(tabId, type) {
     browser.tabs.sendMessage(tabId, { type }).catch(() => { /* expected */ });
   } catch { /* ignore */ }
 }
+
+startMcpBridge({
+  browserApi: browser,
+  browserName: 'firefox',
+  agent,
+  providerManager,
+  sendIndicatorMessage,
+});
 
 // Stop button on the page → abort the agent run for that tab. Mirrors
 // the sidepanel's Stop button.

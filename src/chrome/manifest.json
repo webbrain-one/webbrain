@@ -27,7 +27,7 @@
     "http://*/*"
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; connect-src * data: blob:;"
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'; connect-src * data: blob: ws://127.0.0.1:* ws://localhost:*;"
   },
   "background": {
     "service_worker": "src/background.js",

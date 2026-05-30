@@ -15,6 +15,7 @@ import {
   getRecordingState,
   setProviderManager as setRecorderProviderManager,
 } from './recorder/host.js';
+import { startMcpBridge } from './mcp/bridge.js';
 
 /**
  * WebBrain Service Worker (Background Script)
@@ -312,6 +313,14 @@ function sendIndicatorMessage(tabId, type) {
     chrome.tabs.sendMessage(tabId, { type }).catch(() => { /* expected */ });
   } catch { /* ignore */ }
 }
+
+startMcpBridge({
+  browserApi: chrome,
+  browserName: 'chrome',
+  agent,
+  providerManager,
+  sendIndicatorMessage,
+});
 
 // Stop button on the page → abort the agent run for that tab. Mirrors
 // the sidepanel's Stop button.

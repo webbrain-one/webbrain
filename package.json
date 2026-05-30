@@ -8,6 +8,7 @@
     "test": "node test/run.js",
     "test:fixtures": "node test/fixtures/run.mjs",
     "test:anonymous": "node test/anonymous/run.mjs",
+    "mcp": "node scripts/mcp-server.mjs",
     "build:web": "node web/build/build.mjs",
     "build:zip": "node scripts/build-zip.mjs",
     "bump": "node scripts/bump-version.mjs",
