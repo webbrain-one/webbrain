@@ -1162,7 +1162,9 @@
     }
 
     function findScrollableAncestor(origin, dir, allowHidden = false) {
-      let el = origin;
+      const tag = origin?.tagName || '';
+      const skipOrigin = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || origin?.isContentEditable;
+      let el = skipOrigin ? origin.parentElement : origin;
       while (el && el !== document.body && el !== document.documentElement) {
         if (isScrollableElement(el, allowHidden) && canScrollElement(el, dir)) return el;
         el = el.parentElement;
