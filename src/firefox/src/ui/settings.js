@@ -622,6 +622,30 @@ if (btnClearCaptcha) {
 
 // --- Provider Rendering ---
 
+// Prompt-tier selector, shown only for local + OpenRouter providers (cloud is
+// always 'full'). Mirrors the resolution in providers/base.js get promptTier().
+const PROMPT_TIER_FIELD = {
+  key: 'promptTier',
+  labelKey: 'st.provider.field.prompt_tier',
+  type: 'select',
+  options: [
+    { value: 'compact', labelKey: 'st.provider.field.prompt_tier.compact' },
+    { value: 'mid', labelKey: 'st.provider.field.prompt_tier.mid' },
+    { value: 'full', labelKey: 'st.provider.field.prompt_tier.full' },
+  ],
+};
+
+// Effective tier for the dropdown's initial value — same precedence as the
+// provider getter: cloud is forced full; an explicit promptTier wins; the
+// legacy useCompactPrompt boolean maps to compact; otherwise local → mid.
+function effectivePromptTier(config) {
+  if ((config.category || 'cloud') === 'cloud') return 'full';
+  const tier = config.promptTier;
+  if (tier === 'compact' || tier === 'mid' || tier === 'full') return tier;
+  if (config.useCompactPrompt) return 'compact';
+  return config.category === 'local' ? 'mid' : 'full';
+}
+
 function renderProviders() {
   providersContainer.innerHTML = '';
 
@@ -635,7 +659,7 @@ function renderProviders() {
         { key: 'baseUrl', labelKey: 'st.provider.field.server_url', type: 'text', placeholder: 'http://localhost:8080' },
         { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'qwen/qwen3.5-9b' },
         { key: 'supportsVision', labelKey: 'st.provider.field.supports_vision', type: 'checkbox' },
-        { key: 'useCompactPrompt', labelKey: 'st.provider.field.compact_prompt', type: 'checkbox' },
+        PROMPT_TIER_FIELD,
       ],
     },
     ollama: {
@@ -643,7 +667,7 @@ function renderProviders() {
         { key: 'baseUrl', labelKey: 'st.provider.field.server_url', type: 'text', placeholder: 'http://localhost:11434/v1' },
         { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'llama3.1' },
         { key: 'supportsVision', labelKey: 'st.provider.field.supports_vision', type: 'checkbox' },
-        { key: 'useCompactPrompt', labelKey: 'st.provider.field.compact_prompt', type: 'checkbox' },
+        PROMPT_TIER_FIELD,
       ],
     },
     lmstudio: {
@@ -651,7 +675,7 @@ function renderProviders() {
         { key: 'baseUrl', labelKey: 'st.provider.field.server_url', type: 'text', placeholder: 'http://localhost:1234/v1' },
         { key: 'model', labelKey: 'st.provider.field.model_optional', type: 'text', placeholderKey: 'st.provider.field.model_loaded_hint' },
         { key: 'supportsVision', labelKey: 'st.provider.field.supports_vision', type: 'checkbox' },
-        { key: 'useCompactPrompt', labelKey: 'st.provider.field.compact_prompt', type: 'checkbox' },
+        PROMPT_TIER_FIELD,
       ],
     },
     openai: {
@@ -668,6 +692,7 @@ function renderProviders() {
         { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'minimax/minimax-m2.7',
           suggestions: ['minimax/minimax-m2.7', 'qwen/qwen3.7-max', 'xiaomi/mimo-v2.5-pro'] },
         { key: 'baseUrl', labelKey: 'st.provider.field.api_base_url', type: 'text', placeholder: 'https://openrouter.ai/api/v1' },
+        PROMPT_TIER_FIELD,
       ],
     },
     anthropic: {
@@ -779,14 +804,20 @@ function renderProviders() {
     for (const field of fieldDefs) {
       const label = field.labelKey ? t(field.labelKey) : (field.label || field.key);
       const placeholder = field.placeholderKey ? t(field.placeholderKey) : (field.placeholder || '');
-      if (field.type === 'checkbox') {
-        // useCompactPrompt defaults to UNCHECKED across the board now.
-        // Earlier builds defaulted it ON for local providers — the compact
-        // prompt drops too many guardrails (modal handling, duplicate-
-        // submit guard wording, iframe rules) and small local models that
-        // are vision-capable in 2026 (Qwen-VL, Llama 3.2-V) are big enough
-        // to handle the full prompt comfortably. The checkbox is preserved
-        // so users on truly tiny models (under 8B) can opt back in.
+      if (field.type === 'select') {
+        const current = field.key === 'promptTier'
+          ? effectivePromptTier(config)
+          : (config[field.key] ?? field.options[0]?.value);
+        const optionsHTML = field.options
+          .map(o => `<option value="${escapeHtml(o.value)}"${o.value === current ? ' selected' : ''}>${escapeHtml(o.labelKey ? t(o.labelKey) : o.label)}</option>`)
+          .join('');
+        fieldsHTML += `
+          <div class="field">
+            <label>${escapeHtml(label)}</label>
+            <select data-provider="${id}" data-key="${field.key}" data-type="select">${optionsHTML}</select>
+          </div>
+        `;
+      } else if (field.type === 'checkbox') {
         const isChecked = !!config[field.key];
         const checked = isChecked ? 'checked' : '';
         fieldsHTML += `
@@ -1102,7 +1133,7 @@ async function loadProviderModels(id) {
 }
 
 async function saveProvider(id, { showFlash = true } = {}) {
-  const inputs = document.querySelectorAll(`input[data-provider="${id}"]`);
+  const inputs = document.querySelectorAll(`input[data-provider="${id}"], select[data-provider="${id}"]`);
   const config = {};
   inputs.forEach(input => {
     if (input.dataset.type === 'checkbox' || input.type === 'checkbox') {
@@ -1143,7 +1174,7 @@ async function testProvider(id) {
 }
 
 function syncInputsIntoProvidersData() {
-  document.querySelectorAll('input[data-provider]').forEach((input) => {
+  document.querySelectorAll('input[data-provider], select[data-provider]').forEach((input) => {
     const id = input.dataset.provider;
     const key = input.dataset.key;
     if (!id || !key || !providersData[id]) return;

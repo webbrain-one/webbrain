@@ -54,6 +54,24 @@ export class BaseLLMProvider {
   }
 
   /**
+   * Prompt tier for this provider: 'compact' | 'mid' | 'full'. Drives both
+   * which ACT system prompt and which tool set the agent uses.
+   *
+   * Cloud providers are always 'full' — the tier knob is a small-model
+   * concern, exposed only for local and OpenRouter providers. Otherwise an
+   * explicit config.promptTier wins; failing that the legacy boolean
+   * useCompactPrompt maps to 'compact'; failing that local providers default
+   * to 'mid' and everything else (e.g. OpenRouter) to 'full'.
+   */
+  get promptTier() {
+    if (this.config.category === 'cloud') return 'full';
+    const t = this.config.promptTier;
+    if (t === 'compact' || t === 'mid' || t === 'full') return t;
+    if (this.config.useCompactPrompt) return 'compact';
+    return this.config.category === 'local' ? 'mid' : 'full';
+  }
+
+  /**
    * Test the connection to this provider.
    * @returns {Promise<{ok: boolean, error?: string, model?: string}>}
    */

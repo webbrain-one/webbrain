@@ -233,6 +233,10 @@ export default {
   'st.provider.field.model_optional': 'Model (optional)',
   'st.provider.field.supports_vision': 'Model supports vision (multimodal)',
   'st.provider.field.compact_prompt': 'Compact prompt (drops some guardrails — opt in only for models under 8B)',
+  'st.provider.field.prompt_tier': 'Prompt tier',
+  'st.provider.field.prompt_tier.compact': 'Compact — tiny models (under 8B): fewest tools, terse rules',
+  'st.provider.field.prompt_tier.mid': 'Mid — small/local models (~9B–32B): leaner prompt, reduced tools (default for local)',
+  'st.provider.field.prompt_tier.full': 'Full — frontier models: every tool and guardrail',
   'st.provider.field.model_loaded_hint': 'leave blank to use loaded model',
   'st.provider.field.model_custom': 'Custom...',
 

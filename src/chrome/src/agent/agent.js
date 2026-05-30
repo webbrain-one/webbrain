@@ -1,4 +1,4 @@
-import { AGENT_TOOLS, AGENT_TOOL_NAMES, COMPACT_TOOL_NAMES, getToolsForMode, SYSTEM_PROMPT_ASK, SYSTEM_PROMPT_ACT, SYSTEM_PROMPT_ACT_COMPACT } from './tools.js';
+import { AGENT_TOOLS, AGENT_TOOL_NAMES, COMPACT_TOOL_NAMES, MID_TOOL_NAMES, getToolsForMode, SYSTEM_PROMPT_ASK, SYSTEM_PROMPT_ACT, SYSTEM_PROMPT_ACT_COMPACT, SYSTEM_PROMPT_ACT_MID } from './tools.js';
 import { URL_FAMILY_TOOLS, resourceBucket, bucketArgsKey } from './loop-bucket.js';
 import { isCredentialField, CREDENTIAL_NOTE_STRICT } from './credential-fields.js';
 import { cdpClient } from '../cdp/cdp-client.js';
@@ -2020,11 +2020,22 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
    * Small/local models get a compact prompt to save context budget.
    */
   _getActPrompt() {
-    try {
-      const provider = this.providerManager.getActive();
-      if (provider.useCompactPrompt) return SYSTEM_PROMPT_ACT_COMPACT;
-    } catch { /* provider not ready yet — use full prompt */ }
+    const tier = this._resolvePromptTier();
+    if (tier === 'compact') return SYSTEM_PROMPT_ACT_COMPACT;
+    if (tier === 'mid') return SYSTEM_PROMPT_ACT_MID;
     return SYSTEM_PROMPT_ACT;
+  }
+
+  /**
+   * Resolve the active provider's prompt tier ('compact' | 'mid' | 'full').
+   * The provider getter already forces 'full' for cloud providers and applies
+   * the per-category defaults (local → 'mid'); we just guard the case where
+   * no provider is ready yet (fall back to the full prompt).
+   */
+  _resolvePromptTier() {
+    try {
+      return this.providerManager.getActive().promptTier || 'full';
+    } catch { return 'full'; }
   }
 
   /**
@@ -5674,7 +5685,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
     const provider = this.providerManager.getActive();
     const visionAvailable = !!(provider?.supportsVision) || !!(await this.providerManager.getVisionProvider());
-    const tools = getToolsForMode(mode, { strictSecretMode: this.strictSecretMode, compact: provider.useCompactPrompt, visionAvailable });
+    const tools = getToolsForMode(mode, { strictSecretMode: this.strictSecretMode, tier: provider.promptTier, visionAvailable });
     const plannerTemperature = mode === 'act' ? 0.15 : 0.3;
     let steps = 0;
     let finalResponse = '';
@@ -5791,7 +5802,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       // Fallback: if the LLM emitted tool calls as raw text instead of
       // using the structured tool_calls field, try to parse them out.
       if ((!result.toolCalls || result.toolCalls.length === 0) && result.content) {
-        const fallback = this._tryParseToolCallsFromText(result.content, (mode === 'act' && provider.useCompactPrompt) ? COMPACT_TOOL_NAMES : undefined);
+        const fallback = this._tryParseToolCallsFromText(result.content, mode === 'act' ? (provider.promptTier === 'compact' ? COMPACT_TOOL_NAMES : provider.promptTier === 'mid' ? MID_TOOL_NAMES : undefined) : undefined);
         if (fallback.length > 0) {
           this._logDebug({ type: 'llm_text_fallback_parse', step: steps, parsed: fallback.map(tc => tc.function.name) });
           result.toolCalls = fallback;
@@ -5907,7 +5918,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
     const provider = this.providerManager.getActive();
     const visionAvailable = !!(provider?.supportsVision) || !!(await this.providerManager.getVisionProvider());
-    const tools = getToolsForMode(mode, { strictSecretMode: this.strictSecretMode, compact: provider.useCompactPrompt, visionAvailable });
+    const tools = getToolsForMode(mode, { strictSecretMode: this.strictSecretMode, tier: provider.promptTier, visionAvailable });
     const plannerTemperature = mode === 'act' ? 0.15 : 0.3;
     let steps = 0;
     // See processMessage — used to break the empty-response→nudge cycle.
@@ -5972,7 +5983,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
         // Fallback: parse tool calls from streamed text if structured calls are missing.
         if (!hasToolCalls && fullText) {
-          const fallback = this._tryParseToolCallsFromText(fullText, (mode === 'act' && provider.useCompactPrompt) ? COMPACT_TOOL_NAMES : undefined);
+          const fallback = this._tryParseToolCallsFromText(fullText, mode === 'act' ? (provider.promptTier === 'compact' ? COMPACT_TOOL_NAMES : provider.promptTier === 'mid' ? MID_TOOL_NAMES : undefined) : undefined);
           if (fallback.length > 0) {
             this._logDebug({ type: 'llm_text_fallback_parse', step: steps, parsed: fallback.map(tc => tc.function.name) });
             hasToolCalls = true;
