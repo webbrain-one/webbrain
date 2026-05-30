@@ -2971,30 +2971,43 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       const mode = this.conversationModes.get(tabId) || 'ask';
       if (mode === 'act') {
         try {
+          // Only capture a verification screenshot when the model (or a vision
+          // sidecar) can actually see it. For a blind model the capture is a
+          // wasted CDP round-trip and the giant base64 data URL just gets
+          // truncated to garbage in the tool-result history. The text-based
+          // verification below (URL/title/pageState/completionWarning) is
+          // vision-independent and runs regardless.
+          const provider = this.providerManager.getActive();
+          const visionProvider = await this.providerManager.getVisionProvider();
+          const visionAvailable = !!(provider?.supportsVision) || !!visionProvider;
+
           await cdpClient.attach(tabId);
           await cdpClient.sendCommand(tabId, 'Page.enable');
           // Probe page health so the model can catch "I verified a stale
           // loading frame" cases, and bring the tab forward so the capture
           // reflects what the user would actually see.
           const probe = await this._captureViewportProbe(tabId);
-          await this._bringToFrontForCapture(tabId);
-          const shot = await this._withIndicatorsHidden(tabId, () =>
-            cdpClient.sendCommand(tabId, 'Page.captureScreenshot', {
-              format: 'png', quality: 80, fromSurface: true,
-            })
-          );
-          let imageDataUrl = `data:image/png;base64,${shot.data}`;
-          // If we remember the rect of the last ax interaction on this tab,
-          // outline it on the screenshot so the model can anchor its review
-          // to the element it actually touched.
+          let imageDataUrl = null;
           let annotatedRect = null;
-          const last = this._lastInteractionRect.get(tabId);
-          if (last) {
-            const cssViewport = probe
-              ? { width: probe.innerWidth, height: probe.innerHeight }
-              : null;
-            imageDataUrl = await this._annotateScreenshot(imageDataUrl, last, cssViewport);
-            annotatedRect = { x: last.x, y: last.y, w: last.w, h: last.h };
+          if (visionAvailable) {
+            await this._bringToFrontForCapture(tabId);
+            const shot = await this._withIndicatorsHidden(tabId, () =>
+              cdpClient.sendCommand(tabId, 'Page.captureScreenshot', {
+                format: 'png', quality: 80, fromSurface: true,
+              })
+            );
+            imageDataUrl = `data:image/png;base64,${shot.data}`;
+            // If we remember the rect of the last ax interaction on this tab,
+            // outline it on the screenshot so the model can anchor its review
+            // to the element it actually touched.
+            const last = this._lastInteractionRect.get(tabId);
+            if (last) {
+              const cssViewport = probe
+                ? { width: probe.innerWidth, height: probe.innerHeight }
+                : null;
+              imageDataUrl = await this._annotateScreenshot(imageDataUrl, last, cssViewport);
+              annotatedRect = { x: last.x, y: last.y, w: last.w, h: last.h };
+            }
           }
 
           // Probe for "work in progress" signals: an open dialog/modal or a
@@ -3084,7 +3097,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
               annotatedRect,
               pageState,
               completionWarning,
-              note: 'Review this screenshot carefully. Does it confirm the task was completed successfully? If the page shows an existing item from the past (check dates), you may NOT have actually created anything new.' + (annotatedRect ? ' The red-outlined region is the element you last interacted with.' : '') + (completionWarning ? ' ' + completionWarning : ''),
+              note: (imageDataUrl
+                ? 'Review this screenshot carefully. Does it confirm the task was completed successfully? If the page shows an existing item from the past (check dates), you may NOT have actually created anything new.' + (annotatedRect ? ' The red-outlined region is the element you last interacted with.' : '')
+                : 'No screenshot was captured (the active model has no vision). Verify completion from the text signals: pageUrl/pageTitle and pageState (open dialogs/forms, live-region messages). If a form or dialog is still visible, the submit likely did not happen and the task is NOT complete.') + (completionWarning ? ' ' + completionWarning : ''),
             },
           };
         } catch (_) {

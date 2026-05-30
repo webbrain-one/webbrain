@@ -1955,9 +1955,21 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             `;
             const results = await browser.tabs.executeScript(tabId, { code: probeCode });
             const pageState = (results && results[0]) || {};
-            const dataUrl = await this._withIndicatorsHidden(tabId, () =>
-              browser.tabs.captureVisibleTab(tab.windowId, { format: 'png', quality: 80 })
-            );
+
+            // Only capture a verification screenshot when the model (or a
+            // vision sidecar) can actually see it. For a blind model the
+            // capture is wasted work and the giant base64 data URL just gets
+            // truncated to garbage in the tool-result history. The text-based
+            // verification below (URL/title/pageState/completionWarning) is
+            // vision-independent and runs regardless.
+            const provider = this.providerManager.getActive();
+            const visionProvider = await this.providerManager.getVisionProvider();
+            const visionAvailable = !!(provider?.supportsVision) || !!visionProvider;
+            const dataUrl = visionAvailable
+              ? await this._withIndicatorsHidden(tabId, () =>
+                  browser.tabs.captureVisibleTab(tab.windowId, { format: 'png', quality: 80 })
+                )
+              : null;
 
             // Synthesize a warning when summary claims completion but page
             // state contradicts it.
@@ -2007,7 +2019,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
                 screenshot: dataUrl,
                 pageState,
                 completionWarning,
-                note: 'Review this screenshot carefully. Does it confirm the task was completed successfully? If the page shows an existing item from the past (check dates), you may NOT have actually created anything new.' + (completionWarning ? ' ' + completionWarning : ''),
+                note: (dataUrl
+                  ? 'Review this screenshot carefully. Does it confirm the task was completed successfully? If the page shows an existing item from the past (check dates), you may NOT have actually created anything new.'
+                  : 'No screenshot was captured (the active model has no vision). Verify completion from the text signals: pageUrl/pageTitle and pageState (open dialogs/forms, live-region messages). If a form or dialog is still visible, the submit likely did not happen and the task is NOT complete.') + (completionWarning ? ' ' + completionWarning : ''),
               },
             };
           }
