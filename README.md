@@ -126,6 +126,8 @@ web/
 
 Key difference: Chrome uses Manifest V3 (service worker, `chrome.scripting`, `sidePanel` API), Firefox uses Manifest V2 (background page, `browser.tabs.executeScript`, `sidebar_action`).
 
+Deeper docs live in [`docs/`](docs/): [architecture](docs/architecture.md), [site adapters](docs/site-adapters.md), [providers and models](docs/providers-and-models.md), [security model](docs/security-model.md), [prompt-injection defense](docs/prompt-injection-defense.md), [privacy and data flow](docs/privacy-and-data-flow.md), [accessibility tree and refs](docs/accessibility-tree-and-refs.md), [localization](docs/localization.md), [adding a tool](docs/adding-a-tool.md), and [test scenarios](docs/test-scenarios.md).
+
 ## Agent Tools
 
 | Tool | Ask | Act | Compact | Description |
