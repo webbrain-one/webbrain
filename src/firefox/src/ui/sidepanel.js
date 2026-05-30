@@ -247,6 +247,28 @@ let verboseMode = false;
 let agentMode = 'ask'; // 'ask' or 'act'
 let abortRequested = false;
 
+// Act-mode risk banner is only meaningful when the permission gate is OFF.
+// With "Ask before consequential actions" ON (the default) the user is
+// prompted per consequential action, so the standing banner is redundant —
+// only surface it in Act mode when the gate is disabled.
+let askBeforeConsequential = true; // gate ON by default
+browser.storage.local.get('askBeforeConsequentialActions').then((stored) => {
+  if (stored && stored.askBeforeConsequentialActions === false) askBeforeConsequential = false;
+  updateActWarning();
+}).catch(() => {});
+browser.storage.onChanged.addListener((changes) => {
+  if (changes.askBeforeConsequentialActions) {
+    askBeforeConsequential = changes.askBeforeConsequentialActions.newValue !== false;
+    updateActWarning();
+  }
+});
+
+function updateActWarning() {
+  if (!actWarning) return;
+  const show = agentMode === 'act' && !askBeforeConsequential;
+  actWarning.classList.toggle('hidden', !show);
+}
+
 // Per-tab chat history (stores innerHTML of messages container)
 const tabChats = new Map();
 
@@ -1329,14 +1351,14 @@ function setMode(mode) {
     modeAskBtn.classList.add('active');
     modeAskBtn.classList.remove('act');
     modeActBtn.classList.remove('active', 'act');
-    actWarning.classList.add('hidden');
+    updateActWarning();
     inputArea.classList.remove('act-mode');
     inputEl.placeholder = t('sp.input.ask_placeholder');
     inputEl.dataset.i18nPlaceholder = 'sp.input.ask_placeholder';
   } else {
     modeActBtn.classList.add('active', 'act');
     modeAskBtn.classList.remove('active');
-    actWarning.classList.remove('hidden');
+    updateActWarning();
     inputArea.classList.add('act-mode');
     inputEl.placeholder = t('sp.input.act_placeholder');
     inputEl.dataset.i18nPlaceholder = 'sp.input.act_placeholder';
