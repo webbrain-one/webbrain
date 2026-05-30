@@ -45,6 +45,15 @@ export class BaseLLMProvider {
   }
 
   /**
+   * Whether this provider is running a small/local model that benefits from
+   * a compact system prompt. When true, the agent uses SYSTEM_PROMPT_ACT_COMPACT
+   * instead of the full SYSTEM_PROMPT_ACT to save context budget.
+   */
+  get useCompactPrompt() {
+    return !!this.config.useCompactPrompt;
+  }
+
+  /**
    * Test the connection to this provider.
    * @returns {Promise<{ok: boolean, error?: string, model?: string}>}
    */

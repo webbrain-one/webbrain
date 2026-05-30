@@ -1,4 +1,4 @@
-import { AGENT_TOOLS, AGENT_TOOL_NAMES, getToolsForMode, SYSTEM_PROMPT_ASK, SYSTEM_PROMPT_ACT } from './tools.js';
+import { AGENT_TOOLS, AGENT_TOOL_NAMES, getToolsForMode, SYSTEM_PROMPT_ASK, SYSTEM_PROMPT_ACT, SYSTEM_PROMPT_ACT_COMPACT } from './tools.js';
 import { URL_FAMILY_TOOLS, resourceBucket, bucketArgsKey } from './loop-bucket.js';
 import { isCredentialField, CREDENTIAL_NOTE_STRICT } from './credential-fields.js';
 import { getActiveAdapter, UNIVERSAL_PREAMBLE } from './adapters.js';
@@ -395,7 +395,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
    * Shared tool-batch executor used by both processMessage and
    * processMessageStream so they can't drift.
    */
-  async _executeToolBatch(tabId, toolCalls, messages, onUpdate, provider, partialAssistantText = null) {
+  async _executeToolBatch(tabId, toolCalls, messages, onUpdate, provider, partialAssistantText = null, allowedToolNames = AGENT_TOOL_NAMES) {
     let didStateChange = false;
     const NAV_PRONE_TOOLS = new Set(['click', 'navigate', 'execute_js', 'iframe_click']);
     const navNotices = [];
@@ -406,7 +406,19 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         onUpdate('warning', { message: 'Stopped by user.' });
         return { action: 'return', value };
       }
-      const fnName = tc.function.name;
+      const fnName = tc.function?.name || '';
+      if (!allowedToolNames.has(fnName)) {
+        const error = fnName
+          ? `Tool ${fnName} is not available in the current mode/provider tool set. Use one of the advertised tools instead.`
+          : 'Tool call is missing a function name.';
+        onUpdate('warning', { message: error });
+        messages.push({
+          role: 'tool',
+          tool_call_id: tc.id,
+          content: JSON.stringify({ success: false, denied: true, error }),
+        });
+        continue;
+      }
       let fnArgs;
       try {
         fnArgs = typeof tc.function.arguments === 'string'
@@ -1287,15 +1299,24 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   }
 
   /**
-   * Get or create a conversation for a tab.
+   * Select the appropriate ACT system prompt based on the active provider.
+   * Small/local models get a compact prompt to save context budget.
    */
+  _getActPrompt() {
+    try {
+      const provider = this.providerManager.getActive();
+      if (provider.useCompactPrompt) return SYSTEM_PROMPT_ACT_COMPACT;
+    } catch { /* provider not ready yet; use full prompt */ }
+    return SYSTEM_PROMPT_ACT;
+  }
+
   /**
    * Compose the full system prompt: base (ASK or ACT) + optional universal
    * cookie/paywall guidance + optional user profile block. Base goes
    * first so prompt-cache prefixes stay stable when user toggles settings.
    */
   _buildSystemPrompt(mode) {
-    let prompt = mode === 'act' ? SYSTEM_PROMPT_ACT : SYSTEM_PROMPT_ASK;
+    let prompt = mode === 'act' ? this._getActPrompt() : SYSTEM_PROMPT_ASK;
     if (this.useSiteAdapters) {
       prompt += `\n\n${UNIVERSAL_PREAMBLE.trim()}`;
     }
@@ -1313,7 +1334,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   _refreshSystemPrompts() {
     for (const [tabId, messages] of this.conversations) {
       if (!messages || messages[0]?.role !== 'system') continue;
-      const mode = this._conversationMode || 'ask';
+      const mode = this.conversationModes.get(tabId) || this._conversationMode || 'ask';
       messages[0].content = this._buildSystemPrompt(mode);
     }
   }
@@ -1323,6 +1344,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       this.conversations.set(tabId, [
         { role: 'system', content: this._buildSystemPrompt(mode) },
       ]);
+      this.conversationModes.set(tabId, mode);
       this._conversationMode = mode;
       // New conversation → mint a new conversationId. Stable for the
       // lifetime of this conversation (until clearConversation), so every
@@ -1333,14 +1355,19 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       }
     }
     // If mode changed, update the system prompt
-    if (this._conversationMode !== mode) {
-      const messages = this.conversations.get(tabId);
-      if (messages[0]?.role === 'system') {
-        messages[0].content = this._buildSystemPrompt(mode);
-      }
+    const messages = this.conversations.get(tabId);
+    const lastMode = this.conversationModes.get(tabId) || this._conversationMode;
+    if (lastMode !== mode) {
+      this.conversationModes.set(tabId, mode);
       this._conversationMode = mode;
     }
-    return this.conversations.get(tabId);
+    if (messages[0]?.role === 'system') {
+      // Provider settings can change while a tab conversation stays alive.
+      // Rebuild on reuse so the prompt matches the current provider's tools.
+      const nextPrompt = this._buildSystemPrompt(mode);
+      if (messages[0].content !== nextPrompt) messages[0].content = nextPrompt;
+    }
+    return messages;
   }
 
   /**
@@ -1349,6 +1376,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   clearConversation(tabId) {
     this._cancelClarifications(tabId, 'conversation cleared');
     this.conversations.delete(tabId);
+    this.conversationModes.delete(tabId);
     this.conversationIds.delete(tabId);
     this._cleanupTab(tabId, { preserveRunGuard: true });
   }
@@ -2616,9 +2644,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
    *   - call:toolName{key:<|"|>value<|"|>}  (custom quote-token format)
    *   - Bare JSON objects with a known tool name
    * Returns an array of tool call objects in OpenAI format, or [] if nothing
-   * was found. Only tool names present in AGENT_TOOL_NAMES are accepted.
+   * was found. Only tool names present in the allowed-name set are accepted.
    */
-  _tryParseToolCallsFromText(text) {
+  _tryParseToolCallsFromText(text, allowedNames = AGENT_TOOL_NAMES) {
     if (!text || text.length > 10000) return [];
 
     const results = [];
@@ -2635,7 +2663,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         // Try JSON first (most common).
         try {
           const obj = JSON.parse(inner);
-          if (obj && obj.name && AGENT_TOOL_NAMES.has(obj.name)) {
+          if (obj && obj.name && allowedNames.has(obj.name)) {
             results.push(obj);
             continue;
           }
@@ -2643,7 +2671,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
         // call:toolName{key:<|"|>value<|"|>, ...} format.
         const callMatch = /^call:(\w+)\s*\{([\s\S]*)\}$/.exec(inner);
-        if (callMatch && AGENT_TOOL_NAMES.has(callMatch[1])) {
+        if (callMatch && allowedNames.has(callMatch[1])) {
           const toolName = callMatch[1];
           let argsBody = callMatch[2]
             .replace(/<\|"\|>/g, '"')
@@ -2665,10 +2693,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       const bareRe = /\{[^{}]*"name"\s*:\s*"(\w+)"[^{}]*\}/g;
       let m;
       while ((m = bareRe.exec(text)) !== null) {
-        if (!AGENT_TOOL_NAMES.has(m[1])) continue;
+        if (!allowedNames.has(m[1])) continue;
         try {
           const obj = JSON.parse(m[0]);
-          if (obj && obj.name && AGENT_TOOL_NAMES.has(obj.name)) {
+          if (obj && obj.name && allowedNames.has(obj.name)) {
             results.push(obj);
           }
         } catch { /* skip */ }
@@ -2680,7 +2708,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       const callRe = /call:(\w+)\s*\{([\s\S]*?)\}/g;
       let m;
       while ((m = callRe.exec(text)) !== null) {
-        if (!AGENT_TOOL_NAMES.has(m[1])) continue;
+        if (!allowedNames.has(m[1])) continue;
         const toolName = m[1];
         let argsBody = m[2]
           .replace(/<\|"\|>/g, '"')
@@ -2739,7 +2767,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     messages.push(enriched);
 
     const provider = this.providerManager.getActive();
-    const tools = getToolsForMode(mode, { strictSecretMode: this.strictSecretMode });
+    const tools = getToolsForMode(mode, { strictSecretMode: this.strictSecretMode, compact: provider.useCompactPrompt });
+    const allowedToolNames = new Set(tools.map(t => t.function.name));
     const plannerTemperature = mode === 'act' ? 0.15 : 0.3;
     let steps = 0;
     let finalResponse = '';
@@ -2853,7 +2882,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       // Fallback: if the LLM emitted tool calls as raw text instead of
       // using the structured tool_calls field, try to parse them out.
       if ((!result.toolCalls || result.toolCalls.length === 0) && result.content) {
-        const fallback = this._tryParseToolCallsFromText(result.content);
+        const fallback = this._tryParseToolCallsFromText(result.content, allowedToolNames);
         if (fallback.length > 0) {
           this._logDebug({ type: 'llm_text_fallback_parse', step: steps, parsed: fallback.map(tc => tc.function.name) });
           result.toolCalls = fallback;
@@ -2873,7 +2902,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         }
 
         const batchResult = await this._executeToolBatch(
-          tabId, result.toolCalls, messages, onUpdate, provider, result.content
+          tabId, result.toolCalls, messages, onUpdate, provider, result.content, allowedToolNames
         );
         if (batchResult.action === 'return') {
           finalResponse = batchResult.value;
@@ -2957,7 +2986,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     messages.push(enriched);
 
     const provider = this.providerManager.getActive();
-    const tools = getToolsForMode(mode, { strictSecretMode: this.strictSecretMode });
+    const tools = getToolsForMode(mode, { strictSecretMode: this.strictSecretMode, compact: provider.useCompactPrompt });
+    const allowedToolNames = new Set(tools.map(t => t.function.name));
     const plannerTemperature = mode === 'act' ? 0.15 : 0.3;
     let steps = 0;
     // See processMessage — used to break the empty-response→nudge cycle.
@@ -3022,7 +3052,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
         // Fallback: parse tool calls from streamed text if structured calls are missing.
         if (!hasToolCalls && fullText) {
-          const fallback = this._tryParseToolCallsFromText(fullText);
+          const fallback = this._tryParseToolCallsFromText(fullText, allowedToolNames);
           if (fallback.length > 0) {
             this._logDebug({ type: 'llm_text_fallback_parse', step: steps, parsed: fallback.map(tc => tc.function.name) });
             hasToolCalls = true;
@@ -3040,7 +3070,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             tool_calls: toolCalls,
           });
           const batchResult = await this._executeToolBatch(
-            tabId, toolCalls, messages, onUpdate, provider, fullText
+            tabId, toolCalls, messages, onUpdate, provider, fullText, allowedToolNames
           );
           if (batchResult.action === 'return') {
             return batchResult.value;

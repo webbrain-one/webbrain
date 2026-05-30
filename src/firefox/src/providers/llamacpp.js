@@ -25,6 +25,10 @@ export class LlamaCppProvider extends BaseLLMProvider {
     return !!this.config.supportsVision;
   }
 
+  get useCompactPrompt() {
+    return !!this.config.useCompactPrompt;
+  }
+
   async chat(messages, options = {}) {
     const body = {
       messages,

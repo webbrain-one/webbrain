@@ -27,8 +27,9 @@ them in sync — the test suite asserts the pure modules are byte-identical.
 2. **System-prompt contract (Layer 2).** The prompts tell the model that
    anything in those markers is data, never instructions, and that only the
    system prompt and the user's own chat/`clarify` messages are authoritative.
-   - Code: `tools.js` → `SYSTEM_PROMPT_ASK` (5-bullet block), `SYSTEM_PROMPT_ACT`
-     (7-bullet block), `SYSTEM_PROMPT_ACT_COMPACT` (1 condensed line, Chrome only).
+   - Code: `tools.js` -> `SYSTEM_PROMPT_ASK` (5-bullet block), `SYSTEM_PROMPT_ACT`
+     (7-bullet block), `SYSTEM_PROMPT_ACT_COMPACT` (condensed opt-in compact
+     prompt in both browser builds).
 3. **Capability × origin permission gate (Layer 3).** Before a consequential
    tool runs, the agent checks a `(capability, host)` grant and prompts the user
    (Allow once / Always / Deny) if there isn't one. No text inspection, no LLM —

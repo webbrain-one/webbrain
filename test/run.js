@@ -79,12 +79,20 @@ const { ProviderManager: ProviderManagerFx } = await import(
   'file://' + path.join(ROOT, 'src/firefox/src/providers/manager.js').replace(/\\/g, '/')
 );
 
-// tools.js — pure ESM. We import getToolsForMode from each side so we can
-// verify the strict/loose `done` description swap.
-const { getToolsForMode: getToolsForModeCh } = await import(
+// tools.js — pure ESM. We import both browser builds so prompt/tool routing
+// stays in parity.
+const {
+  COMPACT_TOOL_NAMES: COMPACT_TOOL_NAMES_CH,
+  SYSTEM_PROMPT_ACT_COMPACT: SYSTEM_PROMPT_ACT_COMPACT_CH,
+  getToolsForMode: getToolsForModeCh,
+} = await import(
   'file://' + path.join(ROOT, 'src/chrome/src/agent/tools.js').replace(/\\/g, '/')
 );
-const { getToolsForMode: getToolsForModeFx } = await import(
+const {
+  COMPACT_TOOL_NAMES: COMPACT_TOOL_NAMES_FX,
+  SYSTEM_PROMPT_ACT_COMPACT: SYSTEM_PROMPT_ACT_COMPACT_FX,
+  getToolsForMode: getToolsForModeFx,
+} = await import(
   'file://' + path.join(ROOT, 'src/firefox/src/agent/tools.js').replace(/\\/g, '/')
 );
 
@@ -1349,6 +1357,41 @@ test('getToolsForMode: strictSecretMode works in ask mode too', () => {
     assert.ok(done, '`done` must be available in ask mode');
     assert.match(done.function.description, /strict mode/i);
   }
+});
+
+test('getToolsForMode: compact mode restricts act tools in both browsers', () => {
+  for (const [label, getTools, compactNames] of [
+    ['chrome', getToolsForModeCh, COMPACT_TOOL_NAMES_CH],
+    ['firefox', getToolsForModeFx, COMPACT_TOOL_NAMES_FX],
+  ]) {
+    const fullNames = getTools('act').map(t => t.function.name);
+    const compactNamesActual = getTools('act', { compact: true }).map(t => t.function.name);
+    const unknownCompactNames = [...compactNames].filter(name => !fullNames.includes(name));
+    assert.deepEqual(unknownCompactNames, [], `[${label}] compact set must only name real tools`);
+    assert.ok(compactNamesActual.length < fullNames.length, `[${label}] compact should be smaller than full act tools`);
+    assert.deepEqual(
+      compactNamesActual.slice().sort(),
+      [...compactNames].sort(),
+    );
+    assert.ok(compactNamesActual.includes('done'), `[${label}] compact mode must keep done`);
+    assert.ok(compactNamesActual.includes('solve_captcha'), `[${label}] compact mode must keep solve_captcha`);
+    assert.equal(compactNamesActual.includes('execute_js'), false, `[${label}] compact mode must omit execute_js`);
+  }
+});
+
+test('getToolsForMode: compact flag does not shrink ask mode', () => {
+  for (const getTools of [getToolsForModeCh, getToolsForModeFx]) {
+    assert.deepEqual(
+      getTools('ask', { compact: true }).map(t => t.function.name).sort(),
+      getTools('ask').map(t => t.function.name).sort(),
+    );
+  }
+});
+
+test('compact act prompt exists in both browser builds', () => {
+  assert.match(SYSTEM_PROMPT_ACT_COMPACT_CH, /untrusted/i);
+  assert.match(SYSTEM_PROMPT_ACT_COMPACT_FX, /untrusted/i);
+  assert.match(SYSTEM_PROMPT_ACT_COMPACT_FX, /get_accessibility_tree/);
 });
 
 test('detects <input type="password">', () => {

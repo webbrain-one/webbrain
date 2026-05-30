@@ -7,15 +7,15 @@ without re-deriving the analysis.
 
 ## 1. Resolve the compact-vs-full system prompt contradiction
 
-**Status:** Open. Compact prompt is currently disabled in code; every provider
-gets the full ACT prompt. UI checkbox and provider config still exist; routing
-is commented out.
+**Status:** Partially resolved. Compact prompt routing is implemented in both
+Chrome and Firefox as an explicit per-provider opt-in. The remaining question is
+prompt quality and model-tier selection, not browser parity or dead code.
 
 **Where the code lives:**
-- Compact prompt body — [`src/chrome/src/agent/tools.js`](src/chrome/src/agent/tools.js) `SYSTEM_PROMPT_ACT_COMPACT` (~38 lines, ~5 KB, ~1.3K tokens)
-- Full ACT prompt body — same file, `SYSTEM_PROMPT_ACT` (~205 lines, ~30 KB, ~7.4K tokens)
-- Dispatch — [`src/chrome/src/agent/agent.js:1528`](src/chrome/src/agent/agent.js#L1528) `_getActPrompt()` — currently hard-returns the full prompt. The original branch is preserved as a code comment.
-- Provider opt-in — `BaseLLMProvider.useCompactPrompt` getter + per-provider override (`openai.js`, `llamacpp.js`).
+- Compact prompt bodies — [`src/chrome/src/agent/tools.js`](src/chrome/src/agent/tools.js) and [`src/firefox/src/agent/tools.js`](src/firefox/src/agent/tools.js) `SYSTEM_PROMPT_ACT_COMPACT`
+- Full ACT prompt bodies — same files, `SYSTEM_PROMPT_ACT`
+- Dispatch — [`src/chrome/src/agent/agent.js`](src/chrome/src/agent/agent.js) and [`src/firefox/src/agent/agent.js`](src/firefox/src/agent/agent.js) `_getActPrompt()` route Act mode to compact prompts when the active provider has `useCompactPrompt`.
+- Provider opt-in — `BaseLLMProvider.useCompactPrompt` getter + per-provider config (`openai.js`, `llamacpp.js`, inherited by compatible OpenAI-style local providers).
 
 **The actual contradiction:**
 
@@ -41,7 +41,7 @@ The "drop examples to save tokens" choice is exactly backwards: examples are how
 
 `webbrain-trace-qwen3.6-27b-run_1777441198379_v1rqkk.json` — qwen3.6-27b on llama.cpp. Asked to upload `dist/*.zip` to a v5.1.0 GitHub release. Re-downloaded the same files **three times** because each auto-screenshot pushed the original `download_files` result out of recent attention, and the model re-derived "I need to fetch the files" from current visual state. Pattern-matched on intent, not on prior tool history. This is the failure mode small-model compactness was meant to address — and yet the compact prompt would have made it worse by stripping the SCRATCHPAD section that says explicitly to pin download paths.
 
-Per-step input tokens for that run: 21K → 21K → 28K → 30K → 40K (auto-screenshot growth, not summarization growth). The model paid the tax of the full prompt (~7.4K) AND lost track of state. The current "everyone gets full prompt" decision was the right local fix.
+Per-step input tokens for that run: 21K -> 21K -> 28K -> 30K -> 40K (auto-screenshot growth, not summarization growth). The model paid the tax of the full prompt (~7.4K) AND lost track of state. The previous "everyone gets full prompt" decision was the right local fix.
 
 **What an actual resolution would look like:**
 
@@ -53,17 +53,17 @@ Three tiers, not a binary:
 | Mid | Llama 70B, Qwen 35B, GPT-4o-mini | Full rules + 1-2 examples per rule. | ~5K tokens |
 | Small | 7B–30B local (qwen3.6-27b, etc.) | Full rules + many examples + simpler imperative vocabulary, + extra failure-mode reminders. **Larger, not smaller, than current full prompt.** | ~6K-7K tokens |
 
-Per-model-class prompt selection wired through `_getActPrompt()`. Tier inferred from provider config (`useCompactPrompt` is the wrong axis — it should be `tier: 'frontier' | 'mid' | 'small'`).
+Per-model-class prompt selection wired through `_getActPrompt()`. Tier inferred from provider config (`useCompactPrompt` is the wrong axis; it should be `tier: 'frontier' | 'mid' | 'small'`).
 
 **Why this is on the TODO list and not in flight:**
 - Requires picking the tier per model rather than per-provider, which means a model→tier mapping (or a heuristic).
 - Examples need to be written deliberately, not extracted from the existing full prompt.
-- The current "everyone gets the full prompt" works for frontier-skewed users (the dominant cohort), so the urgency is on the small-model end which is also where local-host iteration is hardest to test.
+- Full-prompt defaults work for frontier-skewed users (the dominant cohort), so the urgency is on the small-model end which is also where local-host iteration is hardest to test.
 
 **Concrete next steps when picking this up:**
 1. Define the tier enum and a `getTier()` method on each provider class. Default frontend models to `frontier`, OpenAI/Anthropic configs with non-flagship model names to `mid`, llama.cpp / lmstudio / ollama to `small`.
 2. Author `SYSTEM_PROMPT_ACT_FRONTIER` (trimmed) and `SYSTEM_PROMPT_ACT_SMALL` (expanded). Keep `SYSTEM_PROMPT_ACT` as the mid-tier default.
-3. Re-enable the dispatch in `_getActPrompt()` to route by tier.
+3. Replace the current compact/full dispatch in `_getActPrompt()` with tier-based routing.
 4. Re-run the qwen3.6-27b trace scenario and verify the small-tier prompt prevents the re-download loop.
 5. Token-budget the prompt against each model's context window so prompt + first turn fits.
 

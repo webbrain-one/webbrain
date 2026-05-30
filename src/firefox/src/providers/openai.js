@@ -27,6 +27,10 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
     return /gpt-4o|gpt-4\.1|gpt-4-turbo|gpt-5|claude|gemini|llava|qwen.*vl|qwen2.*vl|qwen3.*vl|pixtral|llama.*vision|gemma.*vision|gemma-?[34]/.test(m);
   }
 
+  get useCompactPrompt() {
+    return !!this.config.useCompactPrompt;
+  }
+
   _headers() {
     const headers = { 'Content-Type': 'application/json' };
     if (this.config.apiKey) {

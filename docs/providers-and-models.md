@@ -61,6 +61,10 @@ Three local providers are enabled by default with no API key needed:
 
 All three default `supportsVision: true` since most models loaded locally in 2026 are multimodal.
 
+Compact prompts are opt-in per provider in both Chrome and Firefox. When
+`useCompactPrompt` is enabled, Act mode uses `SYSTEM_PROMPT_ACT_COMPACT` and
+filters the exposed tools through `COMPACT_TOOL_NAMES`; Ask mode is unchanged.
+
 ### Vision Detection
 
 | Provider | Mechanism |
