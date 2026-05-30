@@ -83,6 +83,21 @@ export const UNTRUSTED_CONTENT_TOOLS = new Set([
   'done',
 ]);
 
+const MUTATION_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+/**
+ * True only for a fetch_url/research_url call carrying a write HTTP method —
+ * the egress the `/allow-api` override was meant to pre-authorize. A GET is NOT
+ * a mutation here (it can still exfiltrate via the query string), so the
+ * /allow-api bypass must not cover it; cross-site GET egress still needs a host
+ * grant.
+ */
+export function isNetworkMutation(name, args) {
+  if (name !== 'fetch_url' && name !== 'research_url') return false;
+  const method = String((args && args.method) || 'GET').toUpperCase();
+  return MUTATION_METHODS.has(method);
+}
+
 // Tool name -> capability. EVERY side-effecting tool must be here (or handled
 // in capabilityFor below). Tools absent from this map are read-only and never
 // gated — adding a new state-changing tool without listing it would silently

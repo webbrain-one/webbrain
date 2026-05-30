@@ -19,7 +19,7 @@ import {
 } from './pdf-tools.js';
 import * as trace from '../trace/recorder.js';
 import { solveCaptcha, detectCaptcha, injectToken } from './captcha-solver.js';
-import { Capability, CAPABILITY_LABEL, capabilityFor, requiredHosts, frameHostMatches, PermissionManager, UNTRUSTED_CONTENT_TOOLS } from './permission-gate.js';
+import { Capability, CAPABILITY_LABEL, capabilityFor, requiredHosts, frameHostMatches, isNetworkMutation, PermissionManager, UNTRUSTED_CONTENT_TOOLS } from './permission-gate.js';
 
 /**
  * The WebBrain Agent — orchestrates multi-step LLM + tool-use loops.
@@ -425,7 +425,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       await this._ensureGateSetting();
       if (capability && !this._skipPermissionGate) {
         await this.permissions.hydrate();
-        const apiPreGranted = capability === Capability.NETWORK && this.apiAllowedTabs.has(tabId);
+        const apiPreGranted = isNetworkMutation(fnName, fnArgs) && this.apiAllowedTabs.has(tabId);
         if (!apiPreGranted) {
           // Every distinct host the call touches must be granted. Usually one,
           // but download_files takes a urls[] array that can span many hosts —

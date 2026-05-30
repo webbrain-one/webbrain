@@ -43,7 +43,7 @@ const { sanitizeMarkdownLinks: sanitizeMarkdownLinksFx } = await import(
 );
 
 // permission-gate.js is pure JS (deterministic capability × origin gate).
-const { Capability, capabilityFor, normalizeHost, hostForCapability, requiredHosts, frameHostMatches, PermissionManager, UNTRUSTED_CONTENT_TOOLS } = await import(
+const { Capability, capabilityFor, normalizeHost, hostForCapability, requiredHosts, frameHostMatches, isNetworkMutation, PermissionManager, UNTRUSTED_CONTENT_TOOLS } = await import(
   'file://' + path.join(ROOT, 'src/firefox/src/agent/permission-gate.js').replace(/\\/g, '/')
 );
 const {
@@ -1862,6 +1862,15 @@ test('capabilityFor: outbound network egress is gated for ALL methods (exfil)', 
   assert.equal(capabilityFor('fetch_url', { url: 'https://x.com' }), Capability.NETWORK); // default GET
   assert.equal(capabilityFor('research_url', { url: 'https://x.com' }), Capability.NETWORK);
   assert.equal(capabilityFor('fetch_url', { url: 'https://api.x.com', method: 'POST' }), Capability.NETWORK);
+});
+
+test('isNetworkMutation: only write-method fetches (so /allow-api cannot waive GET exfil)', () => {
+  assert.equal(isNetworkMutation('fetch_url', { url: 'https://x.com', method: 'POST' }), true);
+  assert.equal(isNetworkMutation('research_url', { url: 'https://x.com', method: 'delete' }), true);
+  // GET (incl. default) is NOT a mutation — must still get a host prompt even under /allow-api
+  assert.equal(isNetworkMutation('fetch_url', { url: 'https://evil.example/?leak=x' }), false);
+  assert.equal(isNetworkMutation('fetch_url', { url: 'https://x.com', method: 'GET' }), false);
+  assert.equal(isNetworkMutation('navigate', { url: 'https://x.com' }), false);
 });
 
 test('capabilityFor: screenshot is read-only, but save:true is a download', () => {
