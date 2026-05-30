@@ -254,6 +254,12 @@ test('matches twitter.com and x.com', () => {
   assert.equal(getActiveAdapter('https://x.com/elonmusk')?.name, 'twitter');
 });
 
+test('matches apple store pages', () => {
+  assert.equal(getActiveAdapter('https://www.apple.com/shop/buy-mac/macbook-air')?.name, 'apple');
+  assert.equal(getActiveAdapter('https://www.apple.com/uk/shop/refurbished')?.name, 'apple');
+  assert.equal(getActiveAdapter('https://secure.store.apple.com/shop/checkout')?.name, 'apple');
+});
+
 test('matches stripe dashboard', () => {
   const a = getActiveAdapter('https://dashboard.stripe.com/payments');
   assert.equal(a?.name, 'stripe');

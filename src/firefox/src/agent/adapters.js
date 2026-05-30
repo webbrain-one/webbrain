@@ -549,6 +549,18 @@ const ADAPTERS = [
 - Pre-orders / "Made to order" listings have a longer ship date — surface that to the user before buying.`,
   },
 
+  {
+    name: 'apple',
+    category: 'general',
+    match: (url) => /^https?:\/\/((www\.)?apple\.com|secure\.store\.apple\.com)(\/|$)/.test(url),
+    notes: `
+- Product buying flow splits across marketing pages (/iphone, /mac, etc.) and store pages (/shop/buy-*). Use the visible "Buy" CTA to get to the configurable purchase page, then re-read the selected size/chip/storage/color before quoting a price.
+- If the user is price-sensitive, check whether the current country/storefront offers Certified Refurbished (usually a footer/nav link or /shop/refurbished, localized under the country path). If available, compare the same product family and configuration for a lower price before recommending new; if the country does not expose refurbished inventory, say so and continue.
+- Refurbished inventory is limited and not always the exact current model/configuration. Do not treat older generations, different chip tiers, storage, cellular, display size, or keyboard layout as equivalent without telling the user.
+- Trade-in, carrier deals, financing, AppleCare+, and accessories can change the final total. Treat them as optional choices and confirm before adding them.
+- Pickup/delivery availability depends on ZIP/postcode and selected configuration. Set location only when needed, and verify the bag total before checkout.`,
+  },
+
   // ─── Productivity (gaps) ──────────────────────────────────────────────
   {
     name: 'outlook',

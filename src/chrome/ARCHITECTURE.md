@@ -452,7 +452,7 @@ The Traces page (`ui/traces.html`) lists runs and renders their event timelines.
 
 ## Site Adapters
 
-57 adapters inject site-specific guidance into the first user message. Re-injected mid-conversation if the user navigates to a different matched site. Only ONE adapter fires at a time (the first matching `match(url)` wins), so the prompt cost is fixed regardless of total adapter count — what grows is the maintenance surface.
+58 adapters inject site-specific guidance into the first user message. Re-injected mid-conversation if the user navigates to a different matched site. Only ONE adapter fires at a time (the first matching `match(url)` wins), so the prompt cost is fixed regardless of total adapter count — what grows is the maintenance surface.
 
 | Category | Sites |
 |---|---|
