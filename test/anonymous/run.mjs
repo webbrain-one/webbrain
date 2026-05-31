@@ -26,6 +26,7 @@ const scenariosPath = path.join(__dirname, 'scenarios.json');
 const args = process.argv.slice(2);
 const only = args.find(a => a.startsWith('--scenario='))?.split('=')[1];
 const setupOnly = args.includes('--setup');
+const interactiveSetup = setupOnly || (process.stdin.isTTY && process.stdout.isTTY && !process.env.CI);
 
 async function main() {
   const scenarios = JSON.parse(await readFile(scenariosPath, 'utf-8'));
@@ -36,13 +37,21 @@ async function main() {
   }
 
   console.log(`launching chromium with extension at ${extensionPath}`);
-  const context = await chromium.launchPersistentContext(profileDir, {
-    headless: false,
-    args: [
-      `--disable-extensions-except=${extensionPath}`,
-      `--load-extension=${extensionPath}`,
-    ],
-  });
+  let context;
+  try {
+    context = await chromium.launchPersistentContext(profileDir, {
+      headless: false,
+      args: [
+        `--disable-extensions-except=${extensionPath}`,
+        `--load-extension=${extensionPath}`,
+      ],
+    });
+  } catch (e) {
+    console.error('\n  Failed to launch Chromium for anonymous scenarios.');
+    console.error(`  Profile: ${profileDir}`);
+    console.error('  If a previous run was interrupted, close any Chromium window using this profile and retry.');
+    throw e;
+  }
 
   // Grab the extension's service worker — spin-wait up to 10s for MV3 to boot.
   let sw = context.serviceWorkers()[0];
@@ -65,9 +74,14 @@ async function main() {
     console.log(`\n  No active provider configured (${providerCheck.reason}).`);
     console.log(`  Opening Settings — enable a provider, set it active, then close the browser and re-run.`);
     await context.newPage().then(p => p.goto(`chrome-extension://${extensionId}/src/ui/settings.html`));
-    if (!setupOnly) {
-      // Keep the window open so you can configure.
-      await new Promise(() => {});
+    if (interactiveSetup) {
+      console.log('  Waiting for the browser to close...');
+      await context.waitForEvent('close', { timeout: 0 });
+    } else {
+      console.log('  Non-interactive run detected; exiting instead of waiting forever.');
+      console.log('  Run `npm run test:anonymous -- --setup` from a desktop terminal to configure the test profile.');
+      await context.close();
+      process.exit(2);
     }
     return;
   }

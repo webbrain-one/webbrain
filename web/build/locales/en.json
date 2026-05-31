@@ -91,7 +91,7 @@
   "features.token_conscious.desc": "Screenshots are resized and iteratively JPEG-compressed before they leave your machine, keeping image tokens small. Smart context trimming and tool-output caps keep cloud bills predictable — no surprise spend on long sessions.",
   "providers.label": "LLM Providers",
   "providers.title": "Bring your own AI",
-  "providers.subtitle": "Connect to any OpenAI-compatible API or run a local model. Switch providers anytime from the extension settings.",
+  "providers.subtitle": "Connect to any OpenAI-compatible API or run a local model. Switch providers anytime from the extension settings. For local models, give them at least a 16k-token context window (8k works with Compact mode) — WebBrain auto-compacts the conversation as it nears the limit.",
   "modes.label": "Interaction Modes",
   "modes.title": "Ask or Act",
   "modes.subtitle": "Two modes for different needs. Read-only by default, full agent power when you need it.",
