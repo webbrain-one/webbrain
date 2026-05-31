@@ -689,8 +689,8 @@ function renderProviders() {
     openrouter: {
       fields: [
         { key: 'apiKey', labelKey: 'st.provider.field.api_key', type: 'password', placeholder: 'sk-or-...' },
-        { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'minimax/minimax-m2.7',
-          suggestions: ['minimax/minimax-m2.7', 'qwen/qwen3.7-max', 'xiaomi/mimo-v2.5-pro'] },
+        { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'stepfun/step-3.7-flash',
+          suggestions: ['stepfun/step-3.7-flash', 'minimax/minimax-m2.7', 'qwen/qwen3.7-max', 'xiaomi/mimo-v2.5-pro'] },
         { key: 'baseUrl', labelKey: 'st.provider.field.api_base_url', type: 'text', placeholder: 'https://openrouter.ai/api/v1' },
         PROMPT_TIER_FIELD,
       ],

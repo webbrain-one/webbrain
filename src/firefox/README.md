@@ -12,7 +12,7 @@ Open-source AI browser agent for Chrome and Firefox. Chat with any web page, aut
 - **Multi-Provider LLM** — Supports local and cloud models:
   - **llama.cpp** (local, default) — No API key needed
   - **OpenAI** (GPT-4o, etc.)
-  - **OpenRouter** (access 100+ models)
+  - **OpenRouter** (default model: `stepfun/step-3.7-flash`; access 100+ models)
   - **Anthropic Claude** (native API)
 - **Side Panel UI** — Clean chat interface that lives alongside your browsing
 - **Per-Tab Conversations** — Each tab has its own chat history

@@ -231,7 +231,7 @@ export class ProviderManager {
         label: 'OpenRouter',
         providerName: 'openrouter',
         baseUrl: 'https://openrouter.ai/api/v1',
-        model: 'minimax/minimax-m2.7',
+        model: 'stepfun/step-3.7-flash',
         apiKey: '',
         apiKeyUrl: 'https://openrouter.ai/keys',
         enabled: false,
