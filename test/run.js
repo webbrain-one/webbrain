@@ -1693,6 +1693,24 @@ test('Agent cost metering treats only real IPv4 literals as local', () => {
   }
 });
 
+test('Agent cost metering does not charge local URLs saved on cloud cards', () => {
+  for (const AgentClass of [AgentCh, AgentFx]) {
+    const agent = new AgentClass({});
+    for (const config of [
+      { type: 'openai', category: 'cloud', providerName: 'nvidia', baseUrl: 'http://localhost:8000/v1', apiKey: 'self-hosted' },
+      { type: 'openai', category: 'cloud', providerName: 'openai', baseUrl: 'http://127.0.0.1:8080/v1', apiKey: 'proxy-key' },
+      { type: 'openai', category: 'router', providerName: 'openrouter', baseUrl: 'http://192.168.1.8:3000/v1', apiKey: 'router-key' },
+      { type: 'openai', category: 'cloud', providerName: 'mistral', baseUrl: 'http://[::1]:1234/v1', apiKey: 'local-key' },
+    ]) {
+      assert.equal(
+        agent._isCostMeteredProvider({ config }),
+        false,
+        `${AgentClass.name} should not meter local override ${config.baseUrl}`
+      );
+    }
+  }
+});
+
 test('Agent cost metering still treats public IPv6 URLs as remote', () => {
   for (const AgentClass of [AgentCh, AgentFx]) {
     const agent = new AgentClass({});

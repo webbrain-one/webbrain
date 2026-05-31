@@ -274,10 +274,10 @@ export class Agent {
   _isCostMeteredProvider(provider) {
     const config = provider?.config || {};
     if (config.category === 'local') return false;
+    if (this._isLocalBaseUrl(config.baseUrl)) return false;
     if (config.type === 'anthropic_oauth') return false;
     if (config.category === 'cloud' || config.category === 'router') return true;
     if (config.providerName === 'openrouter') return true;
-    if (this._isLocalBaseUrl(config.baseUrl)) return false;
     return !!(config.apiKey && /^https?:\/\//i.test(config.baseUrl || ''));
   }
 
