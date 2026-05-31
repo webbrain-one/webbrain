@@ -1772,6 +1772,13 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       return this._truncate(String(raw).replace(/\s+/g, ' '), 140);
     }
     if (parsed.error) {
+      // For page-derived tools the error string can embed attacker-controlled
+      // text (a fetched URL, a filename, a page-error snippet). Echoing it
+      // into the trusted trim summary / summarizer prompt would smuggle that
+      // text out of the untrusted wrapper, so emit a content-free note instead.
+      if (UNTRUSTED_CONTENT_TOOLS.has(name)) {
+        return `${name}: error (untrusted page content)`;
+      }
       return `error: ${this._truncate(String(parsed.error), 120)}`;
     }
 
@@ -1780,9 +1787,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         if (Array.isArray(parsed.downloads)) {
           const n = parsed.downloads.length;
           const complete = parsed.downloads.filter(d => d.state === 'complete').length;
-          const latest = parsed.downloads[0];
-          const label = latest ? (latest.filename || latest.url || '') : '';
-          return `${n} downloads listed (${complete} complete)${label ? `; latest: ${this._truncate(label, 70)}` : ''}`;
+          // Don't echo the latest filename/url — both are attacker-controllable
+          // (Content-Disposition header / page href) and would smuggle page text
+          // into the trusted trim summary.
+          return `${n} downloads listed (${complete} complete)`;
         }
         break;
       }
@@ -1798,7 +1806,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       case 'read_downloaded_file': {
         if (parsed.filename) {
           const len = parsed.originalLength ?? (typeof parsed.text === 'string' ? parsed.text.length : '?');
-          return `read ${this._truncate(parsed.filename, 80)} (${parsed.contentType || '?'}, ${len} chars)`;
+          // Don't echo the filename — it's attacker-settable via the
+          // Content-Disposition header. Keep only the safe type + size facts.
+          return `read downloaded file (${parsed.contentType || '?'}, ${len} chars)`;
         }
         break;
       }
