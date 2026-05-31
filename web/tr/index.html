@@ -147,6 +147,14 @@
     },
     {
       "@type": "Question",
+      "name": "Bana çok fazla soru soruyor. Bunu devre dışı bırakabilir miyim?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Bu onay istemleri güvenliğiniz içindir. Güvendiğiniz sitelerde bile kötü niyetli kişiler LLM talimatlarını taklit edebilir veya ajanın sizin adınıza onaylamayacağınız şeyler yapmasını sağlamaya çalışan içerikler enjekte edebilir. Bu yüzden WebBrain sonuç doğuran eylemlerden önce onayınızı ister. Yine de bu istemlerden geçmek istemiyorsanız devre dışı bırakabilirsiniz: yan eklentiyi açın, başlıktaki tekerlek simgesine tıklayın, settings.html içindeki Permissions sekmesine gidin ve Ask before consequential actions seçeneğini kapatın."
+      }
+    },
+    {
+      "@type": "Question",
       "name": "WebBrain'i web kazıma ve veri çıkarma için nasıl kullanırım?",
       "acceptedAnswer": {
         "@type": "Answer",
@@ -2132,6 +2140,11 @@
     <details class="faq-item">
       <summary>WebBrain güvenli mi? Web sayfalarını değiştirebilir mi?</summary>
       <p>WebBrain'in iki kipi vardır: Sor kipi (varsayılan) salt okunurdur ve sayfada hiçbir şeyi değiştiremez. Uygula kipi tam tarayıcı ajan yeteneklerini (tıklama, yazma, gezinme) açar, ancak etkinleştirilmeden önce kullanıcıdan açık onay ister ve görünür bir uyarı banner'ı ile gelir. İstediğin an Durdur düğmesiyle ajanı durdurabilirsin. Uzantının kaynak kodu denetim için tamamen GitHub'da açıktır.</p>
+    </details>
+
+    <details class="faq-item">
+      <summary>Bana çok fazla soru soruyor. Bunu devre dışı bırakabilir miyim?</summary>
+      <p>Bu onay istemleri güvenliğiniz içindir. Güvendiğiniz sitelerde bile kötü niyetli kişiler LLM talimatlarını taklit edebilir veya ajanın sizin adınıza onaylamayacağınız şeyler yapmasını sağlamaya çalışan içerikler enjekte edebilir. Bu yüzden WebBrain sonuç doğuran eylemlerden önce onayınızı ister. Yine de bu istemlerden geçmek istemiyorsanız devre dışı bırakabilirsiniz: yan eklentiyi açın, başlıktaki tekerlek simgesine tıklayın, <code>settings.html</code> içindeki <strong>Permissions</strong> sekmesine gidin ve <strong>Ask before consequential actions</strong> seçeneğini kapatın.</p>
     </details>
 
     <details class="faq-item">

@@ -147,6 +147,14 @@
     },
     {
       "@type": "Question",
+      "name": "질문을 너무 많이 합니다. 비활성화할 수 있나요?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "이 승인 프롬프트는 사용자의 안전을 위한 것입니다. 신뢰하는 사이트에서도 악의적인 행위자가 LLM 지시를 흉내 내거나 콘텐츠를 삽입해, 사용자가 승인하지 않을 일을 에이전트가 대신 하도록 유도할 수 있습니다. 그래서 WebBrain은 중대한 결과가 따르는 작업 전에 항상 승인을 요청합니다. 그래도 이러한 프롬프트를 거치고 싶지 않다면 비활성화할 수 있습니다. 사이드 플러그인을 열고 헤더의 톱니바퀴 아이콘을 클릭한 다음 settings.html의 Permissions 탭으로 이동하여 Ask before consequential actions 옵션을 끄세요."
+      }
+    },
+    {
+      "@type": "Question",
       "name": "웹 스크래핑과 데이터 추출에 WebBrain을 어떻게 사용하나요?",
       "acceptedAnswer": {
         "@type": "Answer",
@@ -2132,6 +2140,11 @@
     <details class="faq-item">
       <summary>WebBrain은 안전한가요? 웹 페이지를 수정할 수 있나요?</summary>
       <p>WebBrain에는 두 가지 모드가 있습니다: 묻기 모드(기본)는 읽기 전용이며 페이지의 어떤 것도 수정하지 못합니다. 실행 모드는 완전한 브라우저 에이전트 기능(클릭, 입력, 탐색)을 활성화하지만, 활성화 전 명시적인 사용자 확인이 필요하고 눈에 띄는 경고 배너가 함께 표시됩니다. 정지 버튼으로 언제든지 에이전트를 멈출 수 있습니다. 확장의 소스 코드는 GitHub에 완전히 공개되어 감사가 가능합니다.</p>
+    </details>
+
+    <details class="faq-item">
+      <summary>질문을 너무 많이 합니다. 비활성화할 수 있나요?</summary>
+      <p>이 승인 프롬프트는 사용자의 안전을 위한 것입니다. 신뢰하는 사이트에서도 악의적인 행위자가 LLM 지시를 흉내 내거나 콘텐츠를 삽입해, 사용자가 승인하지 않을 일을 에이전트가 대신 하도록 유도할 수 있습니다. 그래서 WebBrain은 중대한 결과가 따르는 작업 전에 항상 승인을 요청합니다. 그래도 이러한 프롬프트를 거치고 싶지 않다면 비활성화할 수 있습니다. 사이드 플러그인을 열고 헤더의 톱니바퀴 아이콘을 클릭한 다음 <code>settings.html</code>의 <strong>Permissions</strong> 탭으로 이동하여 <strong>Ask before consequential actions</strong> 옵션을 끄세요.</p>
     </details>
 
     <details class="faq-item">

@@ -147,6 +147,14 @@
     },
     {
       "@type": "Question",
+      "name": "Il me pose trop de questions. Puis-je désactiver cela ?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Ces demandes d’approbation servent à votre sécurité. Même sur des sites auxquels vous faites confiance, des acteurs malveillants peuvent imiter des instructions de LLM ou injecter du contenu qui tente de faire agir l’agent en votre nom d’une manière que vous n’approuveriez pas. C’est pourquoi WebBrain demande votre accord avant les actions importantes. Si vous ne voulez quand même pas passer par ces demandes, vous pouvez les désactiver : ouvrez le plugin latéral, cliquez sur l’icône de roue dans l’en-tête, allez dans l’onglet Permissions de settings.html, puis désactivez Ask before consequential actions."
+      }
+    },
+    {
+      "@type": "Question",
       "name": "Comment utiliser WebBrain pour le scraping et l'extraction de données ?",
       "acceptedAnswer": {
         "@type": "Answer",
@@ -2132,6 +2140,11 @@
     <details class="faq-item">
       <summary>WebBrain est-il sûr ? Peut-il modifier les pages web ?</summary>
       <p>WebBrain a deux modes : le mode Demander (par défaut) est en lecture seule et ne peut rien modifier sur la page. Le mode Agir active les capacités complètes de l'agent (clic, saisie, navigation) mais demande une confirmation explicite de l'utilisateur avant activation et affiche un avertissement visible. Vous pouvez arrêter l'agent à tout moment avec le bouton Arrêter. Le code source de l'extension est entièrement ouvert à l'audit sur GitHub.</p>
+    </details>
+
+    <details class="faq-item">
+      <summary>Il me pose trop de questions. Puis-je désactiver cela ?</summary>
+      <p>Ces demandes d’approbation servent à votre sécurité. Même sur des sites auxquels vous faites confiance, des acteurs malveillants peuvent imiter des instructions de LLM ou injecter du contenu qui tente de faire agir l’agent en votre nom d’une manière que vous n’approuveriez pas. C’est pourquoi WebBrain demande votre accord avant les actions importantes. Si vous ne voulez quand même pas passer par ces demandes, vous pouvez les désactiver : ouvrez le plugin latéral, cliquez sur l’icône de roue dans l’en-tête, allez dans l’onglet <strong>Permissions</strong> de <code>settings.html</code>, puis désactivez <strong>Ask before consequential actions</strong>.</p>
     </details>
 
     <details class="faq-item">

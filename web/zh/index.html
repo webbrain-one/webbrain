@@ -147,6 +147,14 @@
     },
     {
       "@type": "Question",
+      "name": "它问我的问题太多了。可以关闭吗？",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "这些批准提示是为了保护你的安全。即使在你信任的网站上，恶意行为者也可能伪造 LLM 指令或注入内容，试图让代理代表你执行你不会同意的操作。因此，WebBrain 在执行有后果的操作之前始终需要你的批准。如果你仍然不想经过这些提示，也可以关闭它们：打开侧边插件，点击标题栏中的齿轮图标，进入 settings.html 的 Permissions 标签页，然后关闭 Ask before consequential actions 选项。"
+      }
+    },
+    {
+      "@type": "Question",
       "name": "如何用 WebBrain 进行网页抓取和数据提取?",
       "acceptedAnswer": {
         "@type": "Answer",
@@ -2132,6 +2140,11 @@
     <details class="faq-item">
       <summary>使用 WebBrain 安全吗?它能修改网页吗?</summary>
       <p>WebBrain 有两种模式:询问模式(默认)只读,无法修改页面上的任何内容。执行模式启用完整的浏览器代理能力(点击、输入、导航),但在启用前需要用户显式确认,并会显示明显的警告横幅。你可以随时通过「停止」按钮停止代理。扩展的源代码在 GitHub 上完全开放供审计。</p>
+    </details>
+
+    <details class="faq-item">
+      <summary>它问我的问题太多了。可以关闭吗？</summary>
+      <p>这些批准提示是为了保护你的安全。即使在你信任的网站上，恶意行为者也可能伪造 LLM 指令或注入内容，试图让代理代表你执行你不会同意的操作。因此，WebBrain 在执行有后果的操作之前始终需要你的批准。如果你仍然不想经过这些提示，也可以关闭它们：打开侧边插件，点击标题栏中的齿轮图标，进入 <code>settings.html</code> 的 <strong>Permissions</strong> 标签页，然后关闭 <strong>Ask before consequential actions</strong> 选项。</p>
     </details>
 
     <details class="faq-item">

@@ -66,6 +66,7 @@ const FAQ_KEYS = [
   'faq.firefox',
   'faq.firefox_sidebar_move',
   'faq.safe',
+  'faq.disable_approval_questions',
   'faq.scraping',
   'faq.api_mutations',
   'faq.lm_studio',

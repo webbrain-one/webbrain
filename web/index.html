@@ -147,6 +147,14 @@
     },
     {
       "@type": "Question",
+      "name": "It's asking me too many questions. Can I disable that?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Those approval prompts are for your safety. Even on sites you trust, malicious actors can mimic LLM instructions or inject content that tries to make the agent do things on your behalf that you would not approve. That is why WebBrain asks before consequential actions. If you still do not want to go through those prompts, you can disable them: open the side plugin, click the wheel icon in the header, go to the Permissions tab in settings.html, and switch off Ask before consequential actions."
+      }
+    },
+    {
+      "@type": "Question",
       "name": "How do I use WebBrain for web scraping and data extraction?",
       "acceptedAnswer": {
         "@type": "Answer",
@@ -592,7 +600,6 @@
     .browser-body {
       display: flex;
       min-height: 380px;
-      flex: 1;
     }
     .browser-page {
       flex: 1;
@@ -726,8 +733,6 @@
     .mockup-stack > .browser-mockup {
       grid-column: 1;
       grid-row: 1;
-      display: flex;
-      flex-direction: column;
       /* Reset the base .browser-mockup's `margin: 0 auto` — on a grid item,
          auto margins absorb the leftover track space instead of letting
          the item stretch, which left the mockup ~470px wide. */
@@ -1312,7 +1317,7 @@
       flex-wrap: wrap;
       gap: 12px;
     }
-    .footer-links { display: flex; flex-wrap: wrap; gap: 12px 20px; }
+    .footer-links { display: flex; gap: 20px; }
 
     .safety-note {
       max-width: var(--max-w);
@@ -2135,6 +2140,11 @@
     <details class="faq-item">
       <summary>Is WebBrain safe to use? Can it modify web pages?</summary>
       <p>WebBrain has two modes: Ask mode (default) is read-only and cannot modify anything on the page. Act mode enables full browser agent capabilities (clicking, typing, navigating) but requires explicit user confirmation before activation, and comes with a visible warning banner. You can stop the agent at any time with the Stop button. The extension's source code is fully open for audit on GitHub.</p>
+    </details>
+
+    <details class="faq-item">
+      <summary>It&#39;s asking me too many questions. Can I disable that?</summary>
+      <p>Those approval prompts are for your safety. Even on sites you trust, malicious actors can mimic LLM instructions or inject content that tries to make the agent do things on your behalf that you would not approve. That is why WebBrain asks before consequential actions. If you still do not want to go through those prompts, you can disable them: open the side plugin, click the wheel icon in the header, go to the <strong>Permissions</strong> tab in <code>settings.html</code>, and switch off <strong>Ask before consequential actions</strong>.</p>
     </details>
 
     <details class="faq-item">

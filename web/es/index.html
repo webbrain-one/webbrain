@@ -147,6 +147,14 @@
     },
     {
       "@type": "Question",
+      "name": "Me está haciendo demasiadas preguntas. ¿Puedo desactivarlo?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Esas solicitudes de aprobación existen por tu seguridad. Incluso en sitios en los que confías, actores maliciosos pueden imitar instrucciones de LLM o inyectar contenido que intenta hacer que el agente haga en tu nombre cosas que no aprobarías. Por eso WebBrain pide tu aprobación antes de acciones importantes. Si aun así no quieres pasar por esas solicitudes, puedes desactivarlas: abre el plugin lateral, haz clic en el icono de rueda del encabezado, ve a la pestaña Permissions en settings.html y desactiva Ask before consequential actions."
+      }
+    },
+    {
+      "@type": "Question",
       "name": "¿Cómo uso WebBrain para scraping y extracción de datos?",
       "acceptedAnswer": {
         "@type": "Answer",
@@ -2132,6 +2140,11 @@
     <details class="faq-item">
       <summary>¿Es seguro usar WebBrain? ¿Puede modificar páginas web?</summary>
       <p>WebBrain tiene dos modos: el modo Preguntar (por defecto) es de solo lectura y no puede modificar nada en la página. El modo Actuar habilita las capacidades completas del agente (clics, escritura, navegación) pero requiere confirmación explícita del usuario antes de activarse y muestra un aviso visible. Puedes detener el agente en cualquier momento con el botón Detener. El código fuente de la extensión está totalmente abierto en GitHub para auditoría.</p>
+    </details>
+
+    <details class="faq-item">
+      <summary>Me está haciendo demasiadas preguntas. ¿Puedo desactivarlo?</summary>
+      <p>Esas solicitudes de aprobación existen por tu seguridad. Incluso en sitios en los que confías, actores maliciosos pueden imitar instrucciones de LLM o inyectar contenido que intenta hacer que el agente haga en tu nombre cosas que no aprobarías. Por eso WebBrain pide tu aprobación antes de acciones importantes. Si aun así no quieres pasar por esas solicitudes, puedes desactivarlas: abre el plugin lateral, haz clic en el icono de rueda del encabezado, ve a la pestaña <strong>Permissions</strong> en <code>settings.html</code> y desactiva <strong>Ask before consequential actions</strong>.</p>
     </details>
 
     <details class="faq-item">

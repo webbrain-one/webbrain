@@ -147,6 +147,14 @@
     },
     {
       "@type": "Question",
+      "name": "質問が多すぎます。無効にできますか？",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "これらの承認プロンプトは安全のためにあります。信頼しているサイトであっても、悪意ある第三者が LLM の指示をまねたり、コンテンツを注入したりして、あなたが承認しない操作をエージェントに代行させようとする可能性があります。そのため WebBrain は、重大な結果につながる操作の前に承認を求めます。それでもこれらのプロンプトを省略したい場合は無効にできます。サイドプラグインを開き、ヘッダーの歯車アイコンをクリックし、settings.html の Permissions タブに移動して、Ask before consequential actions をオフにしてください。"
+      }
+    },
+    {
+      "@type": "Question",
       "name": "Web スクレイピングやデータ抽出に WebBrain をどう使えばよいですか?",
       "acceptedAnswer": {
         "@type": "Answer",
@@ -2132,6 +2140,11 @@
     <details class="faq-item">
       <summary>WebBrain は安全ですか? Web ページを変更しますか?</summary>
       <p>WebBrain には 2 つのモードがあります。質問モード (デフォルト) は読み取り専用で、ページ上の何も変更できません。実行モードはフルブラウザエージェント機能 (クリック、入力、ナビゲーション) を有効にしますが、起動前に明示的なユーザー確認が必要で、目に見える警告バナーが表示されます。エージェントは「停止」ボタンでいつでも止められます。拡張のソースコードは GitHub で完全公開されており、監査可能です。</p>
+    </details>
+
+    <details class="faq-item">
+      <summary>質問が多すぎます。無効にできますか？</summary>
+      <p>これらの承認プロンプトは安全のためにあります。信頼しているサイトであっても、悪意ある第三者が LLM の指示をまねたり、コンテンツを注入したりして、あなたが承認しない操作をエージェントに代行させようとする可能性があります。そのため WebBrain は、重大な結果につながる操作の前に承認を求めます。それでもこれらのプロンプトを省略したい場合は無効にできます。サイドプラグインを開き、ヘッダーの歯車アイコンをクリックし、<code>settings.html</code> の <strong>Permissions</strong> タブに移動して、<strong>Ask before consequential actions</strong> をオフにしてください。</p>
     </details>
 
     <details class="faq-item">
