@@ -18,6 +18,8 @@ import { readFileSync, existsSync } from 'node:fs';
 
 import {
   SYSTEM_PROMPT_ACT as CHROME_SYSTEM_PROMPT_ACT,
+  SYSTEM_PROMPT_ACT_MID as CHROME_SYSTEM_PROMPT_ACT_MID,
+  SYSTEM_PROMPT_ACT_COMPACT as CHROME_SYSTEM_PROMPT_ACT_COMPACT,
   SYSTEM_PROMPT_ASK as CHROME_SYSTEM_PROMPT_ASK,
   getToolsForMode as chromeGetToolsForMode,
 } from '../../../src/chrome/src/agent/tools.js';
@@ -27,6 +29,8 @@ import {
 } from '../../../src/chrome/src/agent/adapters.js';
 import {
   SYSTEM_PROMPT_ACT as FIREFOX_SYSTEM_PROMPT_ACT,
+  SYSTEM_PROMPT_ACT_MID as FIREFOX_SYSTEM_PROMPT_ACT_MID,
+  SYSTEM_PROMPT_ACT_COMPACT as FIREFOX_SYSTEM_PROMPT_ACT_COMPACT,
   SYSTEM_PROMPT_ASK as FIREFOX_SYSTEM_PROMPT_ASK,
   getToolsForMode as firefoxGetToolsForMode,
 } from '../../../src/firefox/src/agent/tools.js';
@@ -35,10 +39,23 @@ import {
   getActiveAdapter as firefoxGetActiveAdapter,
 } from '../../../src/firefox/src/agent/adapters.js';
 
+export const TIERS = ['full', 'mid', 'compact'];
+export const DEFAULT_TIER = 'full';
+
+export function normalizeTier(tier) {
+  const key = (tier || DEFAULT_TIER).toLowerCase();
+  if (!TIERS.includes(key)) {
+    throw new Error(`Bad tier: ${tier}. Expected one of ${TIERS.join(', ')}.`);
+  }
+  return key;
+}
+
 export const DEFAULT_BROWSER = 'chrome';
 export const BROWSERS = {
   chrome: {
     SYSTEM_PROMPT_ACT: CHROME_SYSTEM_PROMPT_ACT,
+    SYSTEM_PROMPT_ACT_MID: CHROME_SYSTEM_PROMPT_ACT_MID,
+    SYSTEM_PROMPT_ACT_COMPACT: CHROME_SYSTEM_PROMPT_ACT_COMPACT,
     SYSTEM_PROMPT_ASK: CHROME_SYSTEM_PROMPT_ASK,
     UNIVERSAL_PREAMBLE: CHROME_UNIVERSAL_PREAMBLE,
     getActiveAdapter: chromeGetActiveAdapter,
@@ -46,12 +63,22 @@ export const BROWSERS = {
   },
   firefox: {
     SYSTEM_PROMPT_ACT: FIREFOX_SYSTEM_PROMPT_ACT,
+    SYSTEM_PROMPT_ACT_MID: FIREFOX_SYSTEM_PROMPT_ACT_MID,
+    SYSTEM_PROMPT_ACT_COMPACT: FIREFOX_SYSTEM_PROMPT_ACT_COMPACT,
     SYSTEM_PROMPT_ASK: FIREFOX_SYSTEM_PROMPT_ASK,
     UNIVERSAL_PREAMBLE: FIREFOX_UNIVERSAL_PREAMBLE,
     getActiveAdapter: firefoxGetActiveAdapter,
     getToolsForMode: firefoxGetToolsForMode,
   },
 };
+
+// Pick the right ACT system prompt for a tier. Ask mode has no tier
+// variants (only one ASK prompt exists), so tier is ignored there.
+function getActPromptForTier(browser, tier) {
+  if (tier === 'compact') return browser.SYSTEM_PROMPT_ACT_COMPACT;
+  if (tier === 'mid')     return browser.SYSTEM_PROMPT_ACT_MID;
+  return browser.SYSTEM_PROMPT_ACT;
+}
 
 export function normalizeBrowser(browser) {
   const key = browser || DEFAULT_BROWSER;
@@ -62,37 +89,54 @@ export function normalizeBrowser(browser) {
 }
 
 // ── frozen-baseline loader ───────────────────────────────────────────
-// One-time load on module init so we can log it once and reuse cheaply.
-const FREEZE_PATH = process.env.WB_FREEZE_BASELINE || '';
+// Loaded either at module init (via env var) OR lazily before buildPayload
+// is called (via loadFrozenBaseline). The lazy path matters because runners
+// parse CLI args AFTER they import this module, and ES module imports are
+// hoisted — so a --freeze flag set on argv would otherwise be too late.
 let FROZEN_BASELINE = null;
-if (FREEZE_PATH) {
-  if (!existsSync(FREEZE_PATH)) {
-    throw new Error(`WB_FREEZE_BASELINE points at missing file: ${FREEZE_PATH}`);
+
+export function loadFrozenBaseline(path) {
+  if (!path) { FROZEN_BASELINE = null; return null; }
+  if (!existsSync(path)) {
+    throw new Error(`Frozen baseline path missing: ${path}`);
   }
-  const parsed = JSON.parse(readFileSync(FREEZE_PATH, 'utf8'));
+  const parsed = JSON.parse(readFileSync(path, 'utf8'));
   if (!parsed?.systemContent || !Array.isArray(parsed?.tools)) {
-    throw new Error(`WB_FREEZE_BASELINE file lacks systemContent or tools[]: ${FREEZE_PATH}`);
+    throw new Error(`Frozen baseline lacks systemContent or tools[]: ${path}`);
   }
   FROZEN_BASELINE = parsed;
   console.error(
-    `▸ FROZEN baseline loaded: ${FREEZE_PATH}\n` +
+    `▸ FROZEN baseline loaded: ${path}\n` +
     `  source: ${parsed.meta?.sourceRun || '(unknown)'} @ ${parsed.meta?.runTag || '(no tag)'}\n` +
     `  tools=${parsed.tools.length}, systemBytes=${parsed.systemContent.length}, systemHash=${(parsed.meta?.systemHash || '').slice(0,16)}…`
   );
+  return parsed;
 }
+
+// Env-var path: works for plain `WB_FREEZE_BASELINE=... node ...` invocations
+// without any CLI flag.
+const FREEZE_PATH_FROM_ENV = process.env.WB_FREEZE_BASELINE || '';
+if (FREEZE_PATH_FROM_ENV) loadFrozenBaseline(FREEZE_PATH_FROM_ENV);
+
 export function isFrozen() { return !!FROZEN_BASELINE; }
 export function getFrozenMeta() { return FROZEN_BASELINE?.meta || null; }
+// Full snapshot accessor — used by scenario-payload.mjs so both runners
+// share the same singleton baseline, loaded once per process.
+export function getFrozenSnapshot() { return FROZEN_BASELINE; }
 
 /**
  * @param {object} caseRec - { id?, mode: 'act'|'ask', tab: {url, title}, user }
  * @param {object} opts    - { useSiteAdapters?: boolean, strictSecretMode?: boolean,
  *                             profile?: {enabled, text}, captchaSolver?: boolean,
- *                             browser?: 'chrome'|'firefox' }
+ *                             browser?: 'chrome'|'firefox',
+ *                             tier?: 'full'|'mid'|'compact'   // ACT-mode prompt+tools tier
+ *                           }
  * @returns {{ messages: Array, tools: Array }}
  */
 export function buildPayload(caseRec, opts = {}) {
   const browser = BROWSERS[normalizeBrowser(opts.browser)];
   const mode = caseRec.mode === 'ask' ? 'ask' : 'act';
+  const tier = normalizeTier(opts.tier);
   const url = caseRec.tab?.url || '';
   const title = caseRec.tab?.title || '';
   const useSiteAdapters = opts.useSiteAdapters !== false;
@@ -102,11 +146,14 @@ export function buildPayload(caseRec, opts = {}) {
   // FREEZE MODE: skip ALL system-prompt assembly (incl. adapters, profile,
   // captcha) and use the snapshot verbatim. Whatever site-adapter/profile
   // text was baked into the baseline at capture time is what runs.
+  // NOTE: freeze takes precedence over tier — the snapshot's tier is whatever
+  // tier was active when the baseline was captured.
   let systemContent;
   if (FROZEN_BASELINE) {
     systemContent = FROZEN_BASELINE.systemContent;
   } else {
-    systemContent = mode === 'act' ? browser.SYSTEM_PROMPT_ACT : browser.SYSTEM_PROMPT_ASK;
+    // ACT mode honors tier (full / mid / compact). ASK mode has only one prompt.
+    systemContent = mode === 'act' ? getActPromptForTier(browser, tier) : browser.SYSTEM_PROMPT_ASK;
     if (useSiteAdapters) {
       systemContent += `\n\n${browser.UNIVERSAL_PREAMBLE.trim()}`;
     }
@@ -138,11 +185,11 @@ export function buildPayload(caseRec, opts = {}) {
   const userContent = contextLine + caseRec.user;
 
   // ── tools ────────────────────────────────────────────────────────────
-  // FREEZE MODE: use the snapshot's tools verbatim. The strictSecretMode
-  // / mode options have no effect on a frozen baseline by design.
+  // FREEZE MODE: use the snapshot's tools verbatim. The strictSecretMode,
+  // tier, and mode options have no effect on a frozen baseline by design.
   const tools = FROZEN_BASELINE
     ? FROZEN_BASELINE.tools
-    : browser.getToolsForMode(mode, { strictSecretMode });
+    : browser.getToolsForMode(mode, { strictSecretMode, tier });
 
   return {
     messages: [

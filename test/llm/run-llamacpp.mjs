@@ -14,6 +14,21 @@
 //   node test/llm/run-llamacpp.mjs --url https://openrouter.ai/api/v1/chat/completions --model openai/gpt-oss-20b --api-key $OPENROUTER_API_KEY
 //   node test/llm/run-llamacpp.mjs --no-save-request                 # omit request from result files
 //
+// Prompt + tool tier (ACT mode only — ASK ignores this):
+//   --tier full           # SYSTEM_PROMPT_ACT  + full tool set (default)
+//   --tier mid            # SYSTEM_PROMPT_ACT_MID  + MID_TOOL_NAMES subset
+//   --tier compact        # SYSTEM_PROMPT_ACT_COMPACT + COMPACT_TOOL_NAMES subset
+//
+// Freeze (pin everything to a previous snapshot, ignores --tier):
+//   --freeze freeze/baseline-2026-05-23.json
+//   # or set env: WB_FREEZE_BASELINE=freeze/baseline-2026-05-23.json
+//
+// Run dirs get suffixed with the mode so the four can coexist:
+//   results/<tag>_chrome_<model>             # tier=full (default, no suffix)
+//   results/<tag>_chrome_<model>_mid         # tier=mid
+//   results/<tag>_chrome_<model>_compact     # tier=compact
+//   results/<tag>_chrome_<model>_frozen      # any --freeze run
+//
 // Output:
 //   test/llm/results/<run-tag>/NNN.json   — { id, request?, response, latencyMs, error?, firstToolCall }
 //   test/llm/results/<run-tag>/summary.json
@@ -26,7 +41,7 @@
 import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buildPayload, normalizeBrowser } from './lib/build-payload.mjs';
+import { buildPayload, normalizeBrowser, normalizeTier, isFrozen, getFrozenMeta, loadFrozenBaseline } from './lib/build-payload.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const Q_DIR = join(HERE, 'questions');
@@ -55,12 +70,28 @@ const SAVE_REQUEST = !args['no-save-request'];
 const CONCURRENCY = Math.max(1, parseInt(args.concurrency || '2', 10));
 const TIMEOUT_MS = parseInt(args.timeout || '60000', 10);
 
+// --tier full|mid|compact — picks SYSTEM_PROMPT_ACT[_MID|_COMPACT] and the
+// corresponding tool subset. Default: full. ASK-mode cases ignore tier.
+// --freeze <path> — alternative to WB_FREEZE_BASELINE env var. If set,
+// system prompt + tools come from the snapshot and --tier is ignored.
+// Imports are hoisted, so the env-var path of build-payload's loader has
+// already run by here — for the CLI flag we call the loader explicitly.
+if (args.freeze && args.freeze !== true) {
+  loadFrozenBaseline(args.freeze);
+}
+const TIER = normalizeTier(args.tier);
+
 const onlySet = args.only && args.only !== true
   ? new Set(String(args.only).split(',').map(s => String(parseInt(s, 10)).padStart(3, '0')))
   : null;
 
 const runTag = args.tag || new Date().toISOString().replace(/[:.]/g, '-');
-const runDir = join(RESULTS_DIR, `${runTag}_${BROWSER}_${MODEL.replace(/[^\w.-]+/g, '_')}`);
+// Encode tier (and freeze) in the run-dir name so concurrent / sequential
+// runs of the same model at different tiers don't clobber each other.
+const tagSuffix = isFrozen()
+  ? '_frozen'
+  : (TIER === 'full' ? '' : `_${TIER}`);
+const runDir = join(RESULTS_DIR, `${runTag}_${BROWSER}_${MODEL.replace(/[^\w.-]+/g, '_')}${tagSuffix}`);
 mkdirSync(runDir, { recursive: true });
 
 const ids = readdirSync(Q_DIR)
@@ -69,8 +100,12 @@ const ids = readdirSync(Q_DIR)
   .filter(id => !onlySet || onlySet.has(id))
   .sort();
 
+const promptMode = isFrozen()
+  ? `frozen (${getFrozenMeta()?.sourceRun || 'unknown source'} @ ${getFrozenMeta()?.runTag || ''})`
+  : `tier=${TIER}`;
 console.error(`▸ ${ids.length} case(s), base=${BASE}, model=${MODEL}, browser=${BROWSER}, concurrency=${CONCURRENCY}`);
 console.error(`▸ endpoint=${CHAT_URL}`);
+console.error(`▸ prompt: ${promptMode}`);
 console.error(`▸ writing to ${runDir}`);
 
 function chatCompletionsUrl(base) {
@@ -139,7 +174,7 @@ function safeParse(s) { try { return JSON.parse(s); } catch { return {}; } }
 
 async function runOne(id) {
   const caseRec = JSON.parse(readFileSync(join(Q_DIR, `${id}.json`), 'utf8'));
-  const payload = buildPayload(caseRec, { browser: BROWSER });
+  const payload = buildPayload(caseRec, { browser: BROWSER, tier: TIER });
   const body = {
     model: MODEL,
     temperature: caseRec.mode === 'act' ? 0.15 : 0.3,
@@ -249,6 +284,14 @@ const summary = {
   browser: BROWSER,
   base: BASE,
   saveRequest: SAVE_REQUEST,
+  tier: isFrozen() ? null : TIER,
+  freeze: isFrozen() ? {
+    path: args.freeze && args.freeze !== true ? args.freeze : (process.env.WB_FREEZE_BASELINE || null),
+    sourceRun: getFrozenMeta()?.sourceRun || null,
+    sourceRunTag: getFrozenMeta()?.runTag || null,
+    systemHash: getFrozenMeta()?.systemHash || null,
+    toolCount: getFrozenMeta()?.toolCount || null,
+  } : null,
   cases: results.length,
   totalLatencyMs: elapsed,
   errors: results.filter(r => r.error).length,

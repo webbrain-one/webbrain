@@ -13,9 +13,18 @@
 //   node test/llm/run-scenarios.mjs --base https://openrouter.ai/api/v1 --model openai/gpt-oss-20b --api-key $OPENROUTER_API_KEY
 //   node test/llm/run-scenarios.mjs --browser firefox
 //
+// Prompt + tool tier (ACT mode only; ASK ignores):
+//   --tier full           # SYSTEM_PROMPT_ACT + full tool set (default)
+//   --tier mid            # SYSTEM_PROMPT_ACT_MID + MID_TOOL_NAMES subset
+//   --tier compact        # SYSTEM_PROMPT_ACT_COMPACT + COMPACT_TOOL_NAMES subset
+//
+// Freeze (pin everything to a previous snapshot, ignores --tier):
+//   --freeze freeze/baseline-2026-05-23.json
+//   # or set env: WB_FREEZE_BASELINE=freeze/baseline-2026-05-23.json
+//
 // Output:
-//   test/llm/results-scenarios/<tag>_<browser>_<model>/NNN.json
-//   test/llm/results-scenarios/<tag>_<browser>_<model>/summary.json
+//   test/llm/results-scenarios/<tag>_<browser>_<model>[_mid|_compact|_frozen]/NNN.json
+//   test/llm/results-scenarios/<tag>_<browser>_<model>[_mid|_compact|_frozen]/summary.json
 //
 // Heuristic scoring (the judge LLM is OUT of scope for this runner — the
 // rubric strings are written for a separate judge pass). Each scenario
@@ -31,6 +40,7 @@ import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildScenarioPayload } from './lib/scenario-payload.mjs';
+import { normalizeTier, isFrozen, getFrozenMeta, loadFrozenBaseline } from './lib/build-payload.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const S_DIR = join(HERE, 'scenarios');
@@ -59,13 +69,25 @@ const CONCURRENCY = Math.max(1, parseInt(args.concurrency || '2', 10));
 const TIMEOUT_MS = parseInt(args.timeout || '90000', 10);
 const SAVE_REQUEST = !args['no-save-request'];
 
+// --tier full|mid|compact — picks SYSTEM_PROMPT_ACT[_MID|_COMPACT] and the
+// corresponding tool subset. Default: full. ASK-mode scenarios ignore tier.
+// --freeze <path> — alternative to WB_FREEZE_BASELINE env var. If set,
+// system prompt + tools come from the snapshot and --tier is ignored.
+if (args.freeze && args.freeze !== true) {
+  loadFrozenBaseline(args.freeze);
+}
+const TIER = normalizeTier(args.tier);
+
 const onlySet = args.only && args.only !== true
   ? new Set(String(args.only).split(',').map(s => String(parseInt(s, 10)).padStart(3, '0')))
   : null;
 const categoryFilter = args.category && args.category !== true ? String(args.category) : null;
 
 const runTag = args.tag || new Date().toISOString().replace(/[:.]/g, '-');
-const runDir = join(RESULTS_DIR, `${runTag}_${BROWSER}_${MODEL.replace(/[^\w.-]+/g, '_')}`);
+const tagSuffix = isFrozen()
+  ? '_frozen'
+  : (TIER === 'full' ? '' : `_${TIER}`);
+const runDir = join(RESULTS_DIR, `${runTag}_${BROWSER}_${MODEL.replace(/[^\w.-]+/g, '_')}${tagSuffix}`);
 mkdirSync(runDir, { recursive: true });
 
 function chatCompletionsUrl(base) {
@@ -92,9 +114,13 @@ function loadAll() {
 
 const scenarios = loadAll();
 
+const promptMode = isFrozen()
+  ? `frozen (${getFrozenMeta()?.sourceRun || 'unknown source'} @ ${getFrozenMeta()?.runTag || ''})`
+  : `tier=${TIER}`;
 console.error(`▸ ${scenarios.length} scenario(s), base=${BASE}, model=${MODEL}, browser=${BROWSER}, concurrency=${CONCURRENCY}`);
 if (categoryFilter) console.error(`▸ category=${categoryFilter}`);
 console.error(`▸ endpoint=${CHAT_URL}`);
+console.error(`▸ prompt: ${promptMode}`);
 console.error(`▸ writing to ${runDir}`);
 
 // Render a tool call as a stable signature string for antiPattern matching.
@@ -171,7 +197,7 @@ function normalizeToolCall(obj) {
 function safeParse(s) { try { return JSON.parse(s); } catch { return {}; } }
 
 async function runOne(scenario) {
-  const payload = buildScenarioPayload({ ...scenario, browser: scenario.browser || BROWSER });
+  const payload = buildScenarioPayload({ ...scenario, browser: scenario.browser || BROWSER }, { tier: TIER });
   const body = {
     model: MODEL,
     temperature: scenario.mode === 'act' ? 0.15 : 0.3,
@@ -296,6 +322,14 @@ for (const r of results) {
 
 const summary = {
   runTag, model: MODEL, base: BASE, browser: BROWSER,
+  tier: isFrozen() ? null : TIER,
+  freeze: isFrozen() ? {
+    path: args.freeze && args.freeze !== true ? args.freeze : (process.env.WB_FREEZE_BASELINE || null),
+    sourceRun: getFrozenMeta()?.sourceRun || null,
+    sourceRunTag: getFrozenMeta()?.runTag || null,
+    systemHash: getFrozenMeta()?.systemHash || null,
+    toolCount: getFrozenMeta()?.toolCount || null,
+  } : null,
   scenarios: results.length,
   totalLatencyMs: elapsed,
   byVerdict,
