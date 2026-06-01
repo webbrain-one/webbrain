@@ -205,6 +205,37 @@ test('SMD: Instagram focused video keeps blob URL ahead of poster image', async 
   }
 });
 
+test('SMD: YouTube focused video prefers signed HTTP video over blob and poster', async (page) => {
+  await setupSmd(page, 'https://www.youtube.com/watch?v=abc123', `<!doctype html>
+    <script>
+      window.ytInitialPlayerResponse = {
+        streamingData: {
+          formats: [
+            { url: 'https://rr1---sn.googlevideo.com/videoplayback?expire=999&mime=video%2Fmp4&itag=18' }
+          ]
+        }
+      };
+    </script>
+    <style>
+      body { margin: 0; }
+      #movie_player { width: 960px; height: 540px; }
+      #movie_player video { width: 960px; height: 540px; background: #000; }
+    </style>
+    <div id="movie_player">
+      <video width="960" height="540"
+        src="blob:https://www.youtube.com/focused-player-video"
+        poster="https://i.ytimg.com/vi/abc123/hqdefault.jpg"></video>
+    </div>`);
+
+  const auto = await collectSmd(page, 'auto');
+  if (auto.profile !== 'youtube') throw new Error(`expected youtube profile, got ${auto.profile}`);
+  if (auto.mode !== 'focused') throw new Error(`expected focused mode, got ${auto.mode}`);
+  if (auto.urls.length !== 1) throw new Error(`expected one focused URL, got ${auto.urls.length}: ${auto.urls.join(', ')}`);
+  if (!/googlevideo\.com\/videoplayback/.test(auto.urls[0])) {
+    throw new Error(`expected signed HTTP video before blob/poster, got ${auto.urls[0]}`);
+  }
+});
+
 test('SMD: X photo modal wins over background timeline media', async (page) => {
   await setupSmd(page, 'https://x.com/NASA/status/123/photo/1', `<!doctype html>
     <style>

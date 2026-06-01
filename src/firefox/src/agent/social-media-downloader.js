@@ -1284,9 +1284,15 @@ window.SocialMediaDownloader = (() => {
   };
 
   // ---------- Scoring & ranking ----------
+  const isHttpVideoUrl = url =>
+    /^https?:\/\//i.test(url || '') &&
+    (/\.(mp4|mov|m4v|webm|m3u8|mpd|ts)(\?|#|$)/i.test(url) ||
+     /googlevideo\.com\/videoplayback\b/i.test(url) ||
+     /[?&](?:mime|type)=video(?:%2f|\/)/i.test(url));
+
   const scoreUrl = url => {
     let s = 0;
-    if (/\.(mp4|mov|m4v|webm)(\?|#|$)/i.test(url)) s += 100;
+    if (isHttpVideoUrl(url)) s += 100;
     if (/\.(jpg|jpeg|png|webp)(\?|#|$)/i.test(url)) s += 50;
     if (url.includes("name=orig")) s += 20;
     if (url.includes("originals/")) s += 25;
@@ -1297,6 +1303,8 @@ window.SocialMediaDownloader = (() => {
   };
 
   const focusedDownloadUrls = urls => {
+    const httpVideoUrl = urls.find(isHttpVideoUrl);
+    if (httpVideoUrl) return [httpVideoUrl];
     const blobUrl = urls.find(u => u.startsWith("blob:"));
     return blobUrl ? [blobUrl] : urls.slice(0, 1);
   };
