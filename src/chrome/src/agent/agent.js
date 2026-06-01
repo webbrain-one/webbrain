@@ -4748,13 +4748,23 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         // the target input on `change`, so reading the target back can't tell
         // "consumed a valid file" from "got a bad path". A detached isolated
         // probe input answers that authoritatively without hitting delegated
-        // upload handlers on the page. Only block on a definitive
-        // "present but unreadable" verdict. A null/unknown probe falls
-        // through so we never turn a possibly-good upload into a hard failure.
+        // upload handlers on the page. The probe returns one of:
+        //   {exists:true,  readable:true}  → path is a real, readable file
+        //   {exists:true,  readable:false} → phantom entry: path missing/unreadable
+        //   {exists:false, readable:null}  → nothing attached: probe inconclusive
+        //   null                           → probe couldn't run: inconclusive
         const probe = await cdpClient.probeLocalFile(tabId, args.filePath);
         if (probe && probe.exists && probe.readable === false) {
           return { success: false, error: `"${args.filePath}" could not be read — it almost certainly does not exist at that path. Confirm the absolute path (use list_downloads to see where files were actually saved) and retry.` };
         }
+        // Did the probe AFFIRMATIVELY confirm a readable file? Only then may we
+        // later treat an emptied/unreadable target input as a real
+        // async-uploader success. An inconclusive probe (exists:false or null)
+        // must NOT green-light that branch — otherwise a bad/stale path whose
+        // input the page clears on `change` would report success and a release
+        // could publish without its asset (the very false positive this
+        // pre-validation exists to prevent).
+        const pathConfirmed = !!(probe && probe.exists && probe.readable === true);
 
         await cdpClient.setFileInputFiles(tabId, nodeIds[0], [args.filePath]);
 
@@ -4774,18 +4784,26 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
         if (readOk) {
           if (files.length === 0) {
-            // An empty FileList after a setFileInputFiles command that did
-            // NOT throw means the page CONSUMED the file: async uploaders —
+            // An empty FileList after a setFileInputFiles command that did NOT
+            // throw usually means the page CONSUMED the file: async uploaders —
             // GitHub's include-fragment release-asset attacher, and many
             // drag-drop widgets — listen for the input's 'change' event, read
             // the file out, fire an XHR, then clear or swap the <input>, so by
-            // the time we read it back the list is empty. We already
-            // pre-validated that args.filePath is readable above, so an empty
-            // list here is NOT a stale/bad-path false success — it's a real
-            // upload the page has taken over. Report it as an unverified
+            // the time we read it back the list is empty.
+            //
+            // BUT an empty list is also what a bad/stale path produces once the
+            // page clears the input, so we may only call it a success when the
+            // probe affirmatively confirmed the path is a real, readable file.
+            // If the probe was inconclusive, surface it rather than fabricating
+            // a success the agent would treat as completed work.
+            if (!pathConfirmed) {
+              return { success: false, error: `Could not confirm "${basename}" uploaded: the target input is empty and the local path "${args.filePath}" was not validated. Check whether "${basename}" appears attached via get_accessibility_tree — if it does, the upload succeeded and you should NOT re-upload; if it does not, re-check the path with list_downloads and retry.` };
+            }
+            // Path was validated as readable above, so an empty list here is a
+            // real upload the page has taken over — report it as an unverified
             // success for the model to confirm against the page, NOT a hard
-            // failure: the old hard failure made the model loop, re-uploading
-            // a file that was already attached and clobbering the page.
+            // failure: the old hard failure made the model loop, re-uploading a
+            // file that was already attached and clobbering the page.
             return { success: true, file: args.filePath, verified: false, note: `The file input is empty after upload — this usually means an async uploader (e.g. a GitHub release attachment) already consumed the file. Confirm "${basename}" now appears attached via get_accessibility_tree before re-uploading; only retry if it is genuinely missing (and if so, re-check the path with list_downloads).` };
           }
           const attached = files.find(f => f.name === basename) || files[files.length - 1] || null;
@@ -4800,10 +4818,15 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           return { success: true, file: args.filePath, attached: { name: attached.name, size: attached.size } };
         }
 
-        // Could not read the FileList back. Don't fabricate a success, but
-        // don't turn a possibly-good upload into a hard failure either —
-        // report it as unverified so the model knows to double-check.
-        return { success: true, file: args.filePath, verified: false, note: 'Attachment could not be verified (the input.files list was unreadable). If the file does not appear attached, re-check the file path and selector.' };
+        // Could not read the FileList back. If the probe confirmed the path is
+        // a real readable file, lean to an unverified success (don't turn a
+        // possibly-good upload into a hard failure). If the probe was
+        // inconclusive too, we have no evidence at all — surface it instead of
+        // fabricating a success the agent would treat as completed work.
+        if (!pathConfirmed) {
+          return { success: false, error: `Could not confirm "${basename}" uploaded: the input.files list was unreadable and the local path "${args.filePath}" was not validated. Check whether "${basename}" appears attached via get_accessibility_tree — if it does, you're done; if not, re-check the path with list_downloads and the selector, then retry.` };
+        }
+        return { success: true, file: args.filePath, verified: false, note: 'Attachment could not be verified (the input.files list was unreadable), but the local path validated as readable. If the file does not appear attached on the page, re-check the selector.' };
       } catch (e) {
         return { success: false, error: `Upload failed: ${e.message}` };
       }
