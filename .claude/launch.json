@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "web",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["-y", "serve", "web", "-l", "5187"],
+      "port": 5187
+    }
+  ]
+}
