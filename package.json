@@ -5,7 +5,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node test/run.js",
+    "test": "node test/run.js && node test/security/injection-corpus.mjs",
+    "test:security": "node test/security/injection-corpus.mjs",
+    "test:injection-bench": "node test/llm/run-scenarios.mjs --category prompt-injection",
+    "test:safety-report": "node test/llm/safety-report.mjs",
     "test:fixtures": "node test/fixtures/run.mjs",
     "test:anonymous": "node test/anonymous/run.mjs",
     "build:blog": "node scripts/build-blog.mjs",
