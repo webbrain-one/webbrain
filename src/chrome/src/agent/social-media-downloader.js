@@ -1302,7 +1302,15 @@ window.SocialMediaDownloader = (() => {
     return s;
   };
 
+  const videoFirstUrls = urls => {
+    const httpVideos = urls.filter(isHttpVideoUrl);
+    const blobUrls = urls.filter(u => u.startsWith("blob:"));
+    const rest = urls.filter(u => !isHttpVideoUrl(u) && !u.startsWith("blob:"));
+    return [...httpVideos, ...blobUrls, ...rest];
+  };
+
   const focusedDownloadUrls = urls => {
+    urls = videoFirstUrls(urls);
     const httpVideoUrl = urls.find(isHttpVideoUrl);
     if (httpVideoUrl) return [httpVideoUrl];
     const blobUrl = urls.find(u => u.startsWith("blob:"));
@@ -1533,6 +1541,7 @@ window.SocialMediaDownloader = (() => {
       });
     }
     if (sourceMode === 'focused') finalUrls = focusedDownloadUrls(finalUrls);
+    else if (sourceMode === 'main') finalUrls = videoFirstUrls(finalUrls);
     return { urls: finalUrls, profile,
              mode: sourceMode,
              dashGroups: groups };

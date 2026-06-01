@@ -205,6 +205,29 @@ test('SMD: Instagram focused video keeps blob URL ahead of poster image', async 
   }
 });
 
+test('SMD: main mode orders focused video before poster when caller limits to one', async (page) => {
+  await setupSmd(page, 'https://www.instagram.com/p/video123/', `<!doctype html>
+    <style>
+      body { margin: 0; }
+      main article video { width: 640px; height: 640px; background: #000; }
+    </style>
+    <main>
+      <article>
+        <video width="640" height="640"
+          src="blob:https://www.instagram.com/main-post-video"
+          poster="https://cdninstagram.com/main-post-poster.jpg"></video>
+      </article>
+    </main>`);
+
+  const main = await collectSmd(page, 'main');
+  if (main.profile !== 'instagram') throw new Error(`expected instagram profile, got ${main.profile}`);
+  if (main.mode !== 'main') throw new Error(`expected main mode, got ${main.mode}`);
+  if (!main.urls.length) throw new Error('expected main-mode URLs');
+  if (!main.urls[0].startsWith('blob:https://www.instagram.com/main-post-video')) {
+    throw new Error(`expected main-mode video before poster, got ${main.urls[0]}`);
+  }
+});
+
 test('SMD: YouTube focused video prefers signed HTTP video over blob and poster', async (page) => {
   await setupSmd(page, 'https://www.youtube.com/watch?v=abc123', `<!doctype html>
     <script>
