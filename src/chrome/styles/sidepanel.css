@@ -883,6 +883,58 @@ body {
 }
 
 
+
+/* Context-aware recommendations */
+.recommended-actions {
+  margin-bottom: 8px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--tint-soft-2);
+}
+
+.recommended-actions.hidden {
+  display: none;
+}
+
+.recommended-actions-title {
+  margin-bottom: 6px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.recommended-actions-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.recommended-action-chip {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.2;
+  padding: 6px 9px;
+  transition: border-color 0.15s, color 0.15s, background 0.15s, transform 0.1s;
+}
+
+.recommended-action-chip:hover {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+  color: var(--text-primary);
+}
+
+.recommended-action-chip:active {
+  transform: scale(0.98);
+}
+
 /* ==========================================================================
    ASK / ACT MODE TOGGLE
    ========================================================================== */

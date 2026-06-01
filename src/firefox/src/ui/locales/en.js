@@ -32,6 +32,7 @@ export default {
 
   'sp.input.ask_placeholder': 'Ask anything about this page...',
   'sp.input.act_placeholder': 'Tell me what to do on this page...',
+  'sp.recommended.title': 'Suggested actions',
 
   'sp.activity.thinking': 'Thinking...',
   'sp.activity.thinking_step': 'Thinking (step {step})...',

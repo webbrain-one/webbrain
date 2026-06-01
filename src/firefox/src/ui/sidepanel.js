@@ -6,6 +6,7 @@
 import { t, getLocale, setLocale, LANGUAGES, applyDOMTranslations } from './i18n.js';
 import { sanitizeMarkdownLinks } from './markdown-link.js';
 import { applyMode, loadMode, watch } from './theme.js';
+import { buildRecommendedActions } from './recommended-actions.js';
 
 // Hydrate the theme from browser.storage.local (the inline <head> bootstrap
 // only sees localStorage; if the user changes the theme on another device
@@ -256,6 +257,8 @@ const modeAskBtn = document.getElementById('btn-mode-ask');
 const modeActBtn = document.getElementById('btn-mode-act');
 const actWarning = document.getElementById('act-warning');
 const inputArea = document.getElementById('input-area');
+const recommendedActionsEl = document.getElementById('recommended-actions');
+const recommendedActionsListEl = document.getElementById('recommended-actions-list');
 const stopBtn = document.getElementById('btn-stop');
 
 let currentTabId = null;
@@ -264,6 +267,7 @@ let currentAssistantEl = null;
 let verboseMode = false;
 let agentMode = 'ask'; // 'ask' or 'act'
 let abortRequested = false;
+let recommendationsRequestId = 0;
 
 // Act-mode risk banner is only meaningful when the permission gate is OFF.
 // With "Ask before consequential actions" ON (the default) the user is
@@ -335,9 +339,17 @@ async function init() {
 
   await loadProviders();
   await testConnection();
+  refreshRecommendedActions();
 
   browser.tabs.onActivated.addListener(async (info) => {
     switchToTab(info.tabId);
+  });
+
+  browser.tabs.onUpdated?.addListener?.((tabId, changeInfo) => {
+    if (tabId !== currentTabId || isProcessing) return;
+    if (changeInfo.status === 'complete' || changeInfo.url || changeInfo.title) {
+      refreshRecommendedActions();
+    }
   });
 
   // Listen for setting changes (from options page)
@@ -415,6 +427,52 @@ function switchToTab(newTabId) {
     addMessage('system', t('sp.help_message'));
   }
   scrollToBottom();
+  refreshRecommendedActions();
+}
+
+function hideRecommendedActions() {
+  if (!recommendedActionsEl || !recommendedActionsListEl) return;
+  recommendedActionsListEl.replaceChildren();
+  recommendedActionsEl.classList.add('hidden');
+}
+
+async function refreshRecommendedActions() {
+  const requestId = ++recommendationsRequestId;
+  if (!recommendedActionsEl || !recommendedActionsListEl || currentTabId == null || isProcessing) {
+    hideRecommendedActions();
+    return;
+  }
+
+  try {
+    const pageInfo = await sendToBackground('get_page_info', { tabId: currentTabId });
+    if (requestId !== recommendationsRequestId) return;
+    const actions = buildRecommendedActions(pageInfo, { max: 4 });
+    recommendedActionsListEl.replaceChildren();
+    actions.forEach((action) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'recommended-action-chip';
+      btn.textContent = action.label;
+      btn.dataset.prompt = action.prompt;
+      btn.addEventListener('click', () => runRecommendedAction(action));
+      recommendedActionsListEl.appendChild(btn);
+    });
+    recommendedActionsEl.classList.toggle('hidden', actions.length === 0);
+  } catch {
+    if (requestId === recommendationsRequestId) hideRecommendedActions();
+  }
+}
+
+async function runRecommendedAction(action) {
+  const prompt = typeof action === 'string' ? action : action?.prompt;
+  if (!prompt || isProcessing) return;
+  if (action?.mode === 'act') {
+    const ok = await ensureActMode();
+    if (!ok) return;
+  }
+  inputEl.value = prompt;
+  autoResizeInput();
+  sendMessage();
 }
 
 async function loadProviders() {
@@ -605,6 +663,7 @@ async function sendMessage() {
   }
 
   isProcessing = true;
+  hideRecommendedActions();
   abortRequested = false;
   sendBtn.disabled = true;
   inputEl.value = '';
@@ -649,6 +708,7 @@ async function sendMessage() {
     hideActivity();
     currentAssistantEl = null;
     scrollToBottom();
+    refreshRecommendedActions();
   }
 }
 
@@ -1420,19 +1480,26 @@ function setMode(mode) {
   }
 }
 
-modeAskBtn.addEventListener('click', () => setMode('ask'));
-
-modeActBtn.addEventListener('click', async () => {
-  if (agentMode === 'act') return; // already active
+async function ensureActMode() {
+  if (agentMode === 'act') return true;
+  // Recommended action chips share the same first-run warning as the Act
+  // toggle so they cannot silently bypass the Act-mode confirmation.
   try {
     const stored = await browser.storage.local.get('actConfirmed');
     if (!stored.actConfirmed) {
       const ok = confirm(t('sp.mode.act.confirm'));
-      if (!ok) return;
+      if (!ok) return false;
       browser.storage.local.set({ actConfirmed: true }).catch(() => {});
     }
   } catch (e) { /* ignore */ }
   setMode('act');
+  return true;
+}
+
+modeAskBtn.addEventListener('click', () => setMode('ask'));
+
+modeActBtn.addEventListener('click', () => {
+  ensureActMode();
 });
 
 
@@ -1488,6 +1555,7 @@ clearBtn.addEventListener('click', async () => {
   addMessage('system', t('sp.cleared_message'));
   apiMutationsAllowed = false;
   updateApiBadge();
+  refreshRecommendedActions();
 });
 
 providerSelect.addEventListener('change', async () => {

@@ -23,6 +23,31 @@
     return document.body.innerText.trim();
   }
 
+
+  function getPageMediaSummary() {
+    const videos = Array.from(document.querySelectorAll('video, source[type^="video/"], a[href]')).filter((el) => {
+      const src = el.currentSrc || el.src || el.href || '';
+      return /\.(mp4|webm|mov|m4v)(?:[?#]|$)/i.test(src) || el.tagName === 'VIDEO';
+    });
+    const images = Array.from(document.querySelectorAll('img, picture source, meta[property="og:image"], meta[name="twitter:image"]')).filter((el) => {
+      const src = el.currentSrc || el.src || el.srcset || el.content || '';
+      return !!src;
+    });
+    return {
+      videoCount: videos.length,
+      imageCount: images.length,
+      videos: videos.slice(0, 5).map((el) => ({
+        tag: el.tagName.toLowerCase(),
+        src: (el.currentSrc || el.src || el.href || '').slice(0, 500),
+      })),
+      images: images.slice(0, 8).map((el) => ({
+        tag: el.tagName.toLowerCase(),
+        alt: (el.alt || '').slice(0, 120),
+        src: (el.currentSrc || el.src || el.srcset || el.content || '').slice(0, 500),
+      })),
+    };
+  }
+
   /**
    * Get page metadata.
    */
@@ -32,6 +57,7 @@
       title: document.title,
       description: document.querySelector('meta[name="description"]')?.content || '',
       text: getPageText(),
+      media: getPageMediaSummary(),
       links: Array.from(document.querySelectorAll('a[href]')).slice(0, 100).map(a => ({
         text: a.innerText.trim().slice(0, 100),
         href: a.href,
@@ -1522,6 +1548,7 @@
       textSource,
       isArticlePage,
       includeChrome,
+      media: getPageMediaSummary(),
       links: Array.from(document.querySelectorAll('a[href]')).slice(0, 100).map(a => ({
         text: a.innerText.trim().slice(0, 100),
         href: a.href,

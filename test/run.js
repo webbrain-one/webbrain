@@ -87,6 +87,12 @@ const { OpenAICompatibleProvider: OpenAIProviderCh } = await import(
 const { OpenAICompatibleProvider: OpenAIProviderFx } = await import(
   'file://' + path.join(ROOT, 'src/firefox/src/providers/openai.js').replace(/\\/g, '/')
 );
+const { buildRecommendedActions: buildRecommendedActionsCh } = await import(
+  'file://' + path.join(ROOT, 'src/chrome/src/ui/recommended-actions.js').replace(/\\/g, '/')
+);
+const { buildRecommendedActions: buildRecommendedActionsFx } = await import(
+  'file://' + path.join(ROOT, 'src/firefox/src/ui/recommended-actions.js').replace(/\\/g, '/')
+);
 const { Agent: AgentCh } = await import(
   'file://' + path.join(ROOT, 'src/chrome/src/agent/agent.js').replace(/\\/g, '/')
 );
@@ -1335,6 +1341,84 @@ test('isReleaseBoundary: composes with bumpSemver to classify the next version',
   // Explicit override path also routes through correctly.
   assert.equal(isReleaseBoundary(bumpSemver('7.0.5', '8.2.0')), true);
   assert.equal(isReleaseBoundary(bumpSemver('7.0.5', '8.2.3')), false);
+});
+
+// ────────────────────────────────────────────────────────────────────────
+// Context-aware recommended actions
+// ────────────────────────────────────────────────────────────────────────
+
+console.log('\ncontext-aware recommended actions');
+
+test('recommended actions match issue scenarios', () => {
+  const cases = [
+    [
+      { url: 'https://www.instagram.com/p/abc/', title: 'Post', media: { imageCount: 1, videoCount: 0 } },
+      'Download this video/photo',
+    ],
+    [
+      { url: 'https://checkout.example.com/', title: 'Checkout', forms: [{ inputs: [{ type: 'email', name: 'email' }, { type: 'text', name: 'name' }] }] },
+      'Fill this form with my saved profile info',
+    ],
+    [
+      { url: 'https://meet.google.com/abc-defg-hij', title: 'Team meeting' },
+      'Record this meeting',
+    ],
+    [
+      { url: 'https://tinder.com/app/recs', title: 'Profile' },
+      'Like this person',
+    ],
+    [
+      { url: 'https://news.example.com/article/story', title: 'Long article', text: 'word '.repeat(500) },
+      'Summarize this page',
+    ],
+    [
+      { url: 'https://github.com/esokullu/webbrain/releases', title: 'Releases · esokullu/webbrain' },
+      'Create a new release',
+    ],
+    [
+      { url: 'https://www.amazon.com/dp/B000000', title: 'Product', description: 'Price $19.99 Add to Cart' },
+      'Compare this price with other stores',
+    ],
+  ];
+
+  for (const [pageInfo, label] of cases) {
+    const labels = buildRecommendedActionsCh(pageInfo).map((a) => a.label);
+    assert.ok(labels.includes(label), `expected ${label} for ${pageInfo.url}; got ${labels.join(', ')}`);
+  }
+});
+
+test('actionable recommendations opt into Act mode', () => {
+  const actionablePages = [
+    { url: 'https://meet.google.com/abc-defg-hij', title: 'Team meeting' },
+    { url: 'https://github.com/esokullu/webbrain/releases', title: 'Releases · esokullu/webbrain' },
+    { url: 'https://tinder.com/app/recs', title: 'Profile' },
+    { url: 'https://www.instagram.com/p/abc/', title: 'Post', media: { imageCount: 1, videoCount: 0 } },
+    { url: 'https://checkout.example.com/', title: 'Checkout', forms: [{ inputs: [{ type: 'email', name: 'email' }, { type: 'text', name: 'name' }] }] },
+  ];
+  const readOnlyPage = { url: 'https://news.example.com/article/story', title: 'Long article', text: 'word '.repeat(500) };
+
+  for (const pageInfo of actionablePages) {
+    const actions = buildRecommendedActionsCh(pageInfo);
+    assert.ok(actions.some((action) => action.mode === 'act'), `expected an Act-mode action for ${pageInfo.url}`);
+  }
+  assert.equal(buildRecommendedActionsCh(readOnlyPage).find((a) => a.id === 'summarize-page')?.mode, undefined);
+});
+
+test('firefox recommended actions match chrome', () => {
+  const page = {
+    url: 'https://github.com/esokullu/webbrain/releases',
+    title: 'Releases · esokullu/webbrain',
+    text: 'Release notes',
+    forms: [{ inputs: [{ type: 'email', name: 'email' }, { type: 'text', name: 'full_name' }] }],
+    media: { imageCount: 2, videoCount: 0 },
+  };
+  assert.deepEqual(buildRecommendedActionsFx(page), buildRecommendedActionsCh(page));
+});
+
+test('firefox recommended actions omit Chrome-only recording', () => {
+  const meetingPage = { url: 'https://meet.google.com/abc-defg-hij', title: 'Team meeting' };
+  assert.equal(buildRecommendedActionsCh(meetingPage).some((a) => a.id === 'record-meeting'), true);
+  assert.equal(buildRecommendedActionsFx(meetingPage).some((a) => a.id === 'record-meeting'), false);
 });
 
 // ────────────────────────────────────────────────────────────────────────
