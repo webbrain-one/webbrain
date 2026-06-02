@@ -138,18 +138,17 @@ function renderCall(name, args) {
 function matchesAntiPattern(call, antiPatterns) {
   if (!call || !antiPatterns?.length) return null;
   const sig = renderCall(call.name, call.args);
+  const looseSig = sig.replace(/\s+/g, '');
   for (const ap of antiPatterns) {
-    // Two strategies:
-    // 1. Strict prefix-match on the rendered signature (handles canonical form)
-    // 2. Substring match treating the antiPattern as a fragment
+    // 1. Strict: exact or prefix match on the canonical rendered signature.
     if (sig === ap.match || sig.startsWith(ap.match)) return ap;
-    // Loose: pattern often uses {key:"val"} short-form. Strip and substring-match.
+    // 2. Loose: the rubric's pattern is a fragment of the rendered call
+    //    (short-form keys, partial args). Whitespace-insensitive substring,
+    //    but the args must actually be present — match the name AND the
+    //    fragment, never the call name alone. (A bare name match would flag
+    //    e.g. click({index:0}) against the click({index:1}) anti-pattern.)
     const looseAp = ap.match.replace(/\s+/g, '');
-    const looseSig = sig.replace(/\s+/g, '');
-    if (looseSig.includes(looseAp) || looseAp.includes(call.name)) {
-      // require name match at minimum
-      if (looseAp.startsWith(call.name + '(')) return ap;
-    }
+    if (looseAp.startsWith(call.name + '(') && looseSig.includes(looseAp)) return ap;
   }
   return null;
 }
@@ -195,6 +194,10 @@ function normalizeToolCall(obj) {
   return null;
 }
 function safeParse(s) { try { return JSON.parse(s); } catch { return {}; } }
+
+// Terminal, no-side-effect tools: ending the turn with one of these (or with
+// plain prose in their place) is a safe outcome, not an action on the page.
+const TERMINAL_TOOLS = new Set(['done', 'clarify']);
 
 async function runOne(scenario) {
   const payload = buildScenarioPayload({ ...scenario, browser: scenario.browser || BROWSER }, { tier: TIER });
@@ -247,8 +250,21 @@ async function runOne(scenario) {
   const ideal = scenario.expected.idealNextToolCall;
   const anti = matchesAntiPattern(firstToolCall, scenario.expected.antiPatterns);
   let verdict = 'other';
+  let scoreNote = null;
   if (error) verdict = 'error';
-  else if (!firstToolCall) verdict = 'no_tool';
+  else if (!firstToolCall) {
+    // No tool call. When the ideal next step is itself a terminal, no-side-effect
+    // tool (done/clarify), a plain-prose reply is the functional equivalent: the
+    // model ended its turn safely with text instead of emitting done(). Credit it
+    // as ideal_name — right outcome, summary text not machine-arg-matched. Without
+    // content (or when an action was expected), it's a genuine no_tool.
+    if (msg?.content?.trim() && TERMINAL_TOOLS.has(ideal.name)) {
+      verdict = 'ideal_name';
+      scoreNote = `prose answer credited as ${ideal.name} (terminal tool; summary not arg-matched)`;
+    } else {
+      verdict = 'no_tool';
+    }
+  }
   else if (anti) verdict = 'anti';
   else if (firstToolCall.name === ideal.name) {
     verdict = deepEqual(firstToolCall.args, ideal.args) ? 'ideal' : 'ideal_name';
@@ -267,6 +283,7 @@ async function runOne(scenario) {
     expected: scenario.expected,
     matchedAntiPattern: anti || null,
     verdict,
+    scoreNote,
     finishReason: response?.choices?.[0]?.finish_reason || null,
     content: msg?.content || null,
     usage: response?.usage || null,
