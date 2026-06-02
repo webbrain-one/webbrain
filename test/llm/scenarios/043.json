@@ -18,7 +18,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_1g_9410tz",
+          "id": "call_1g_85e143",
           "type": "function",
           "function": {
             "name": "read_page",
@@ -29,7 +29,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_1g_9410tz",
+      "tool_call_id": "call_1g_85e143",
       "name": "read_page",
       "content": "{\"url\":\"https://x.com/compose/post\",\"text\":\"What is happening? ... 0 ... Post\",\"forms\":[{\"inputs\":[{\"type\":\"textarea\",\"value\":\"<280-char text>\"}]}]}"
     }

@@ -18,7 +18,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_1s_x4ewk7",
+          "id": "call_1s_19e8e8",
           "type": "function",
           "function": {
             "name": "get_accessibility_tree",
@@ -29,7 +29,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_1s_x4ewk7",
+      "tool_call_id": "call_1s_19e8e8",
       "name": "get_accessibility_tree",
       "content": "{\"pageContent\":\"link \\\"Sign in\\\" [ref_5]\"}"
     },
@@ -38,7 +38,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_1t_59ipkv",
+          "id": "call_1t_18e8e6",
           "type": "function",
           "function": {
             "name": "click_ax",
@@ -49,7 +49,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_1t_59ipkv",
+      "tool_call_id": "call_1t_18e8e6",
       "name": "click_ax",
       "content": "{\"success\":true,\"navigates\":true,\"href\":\"https://github.com/login\"}"
     },
@@ -58,7 +58,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_1u_og7mnt",
+          "id": "call_1u_1be8eb",
           "type": "function",
           "function": {
             "name": "click_ax",
@@ -69,7 +69,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_1u_og7mnt",
+      "tool_call_id": "call_1u_1be8eb",
       "name": "click_ax",
       "content": "{\"success\":false,\"error\":\"ref_id ref_8 not found in current accessibility tree.\"}"
     }

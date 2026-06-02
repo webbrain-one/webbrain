@@ -18,7 +18,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_2s_niwcpg",
+          "id": "call_2s_6733d4",
           "type": "function",
           "function": {
             "name": "get_interactive_elements",
@@ -29,7 +29,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_2s_niwcpg",
+      "tool_call_id": "call_2s_6733d4",
       "name": "get_interactive_elements",
       "content": "[{\"index\":0,\"tag\":\"textarea\",\"text\":\"Shipping notes\"}]"
     }

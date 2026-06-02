@@ -18,7 +18,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_n_uuhnm7",
+          "id": "call_n_8ef29b",
           "type": "function",
           "function": {
             "name": "execute_js",
@@ -29,7 +29,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_n_uuhnm7",
+      "tool_call_id": "call_n_8ef29b",
       "name": "execute_js",
       "content": "{\"success\":false,\"error\":\"Evaluating a string as JavaScript violates the following Content Security Policy directive because 'unsafe-eval' is not an allowed source of script: script-src 'self' 'wasm-unsafe-eval'.\"}"
     }

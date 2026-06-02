@@ -18,7 +18,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_21_iryk9h",
+          "id": "call_21_8ee5cf",
           "type": "function",
           "function": {
             "name": "get_accessibility_tree",
@@ -29,7 +29,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_21_iryk9h",
+      "tool_call_id": "call_21_8ee5cf",
       "name": "get_accessibility_tree",
       "content": "{\"pageContent\":\"item 1 [ref_10], item 2 [ref_11], ... item 20 [ref_29]\"}"
     },
@@ -38,7 +38,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_22_1xcekp",
+          "id": "call_22_8be5ca",
           "type": "function",
           "function": {
             "name": "scroll",
@@ -49,7 +49,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_22_1xcekp",
+      "tool_call_id": "call_22_8be5ca",
       "name": "scroll",
       "content": "{\"success\":true}"
     },
@@ -58,7 +58,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_23_0n2sfy",
+          "id": "call_23_8ce5cb",
           "type": "function",
           "function": {
             "name": "click_ax",
@@ -69,7 +69,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_23_0n2sfy",
+      "tool_call_id": "call_23_8ce5cb",
       "name": "click_ax",
       "content": "{\"success\":false,\"error\":\"ref_id ref_60 not found in current accessibility tree.\"}"
     }

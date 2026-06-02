@@ -18,7 +18,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_7_koeofw",
+          "id": "call_7_320ca3",
           "type": "function",
           "function": {
             "name": "navigate",
@@ -29,7 +29,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_7_koeofw",
+      "tool_call_id": "call_7_320ca3",
       "name": "navigate",
       "content": "{\"success\":true,\"url\":\"https://mastodon.turk/\",\"requestedUrl\":\"https://mastodon.turk\"}"
     },
@@ -38,7 +38,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_8_wjkwgh",
+          "id": "call_8_3d0cb5",
           "type": "function",
           "function": {
             "name": "navigate",
@@ -49,7 +49,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_8_wjkwgh",
+      "tool_call_id": "call_8_3d0cb5",
       "name": "navigate",
       "content": "{\"success\":true,\"url\":\"https://mastodon.turk/\",\"requestedUrl\":\"https://mastodon.turk\"}"
     },
@@ -58,7 +58,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_9_tns9qp",
+          "id": "call_9_3c0cb3",
           "type": "function",
           "function": {
             "name": "new_tab",
@@ -69,7 +69,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_9_tns9qp",
+      "tool_call_id": "call_9_3c0cb3",
       "name": "new_tab",
       "content": "{\"success\":true,\"tabId\":999,\"url\":\"https://mastodon.turk\",\"groupId\":null}"
     },

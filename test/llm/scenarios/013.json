@@ -18,7 +18,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_g_ov90qu",
+          "id": "call_g_19eb27",
           "type": "function",
           "function": {
             "name": "click",
@@ -29,7 +29,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_g_ov90qu",
+      "tool_call_id": "call_g_19eb27",
       "name": "click",
       "content": "{\"success\":false,\"error\":\"Click blocked: an overlay is covering the target. Dismiss it (Escape, close button, or complete the modal) before retrying. Force-clicking with x,y hits the overlay, not your target.\"}"
     }

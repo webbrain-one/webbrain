@@ -18,7 +18,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_2k_oeey3r",
+          "id": "call_2k_0dfe9b",
           "type": "function",
           "function": {
             "name": "read_page",
@@ -29,7 +29,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_2k_oeey3r",
+      "tool_call_id": "call_2k_0dfe9b",
       "name": "read_page",
       "content": "{\"text\":\"Google Suche · Auf gut Glück! · Datenschutz · AGB · Einstellungen\"}"
     }

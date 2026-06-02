@@ -18,7 +18,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_18_nw6nvv",
+          "id": "call_18_8de38e",
           "type": "function",
           "function": {
             "name": "fetch_url",
@@ -29,7 +29,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_18_nw6nvv",
+      "tool_call_id": "call_18_8de38e",
       "name": "fetch_url",
       "content": "{\"success\":true,\"json\":\"{\\\"parse\\\":{\\\"wikitext\\\":{\\\"*\\\":\\\"...In 1950, Turing published \\\\\\\"Computing Machinery and Intelligence\\\\\\\" in the journal Mind, in which he proposed what is now known as the Turing test as a criterion of intelligence...\\\"}}}\",\"_truncated\":true,\"originalLength\":22000}"
     },
@@ -38,7 +38,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_19_xgqkpb",
+          "id": "call_19_8ce38d",
           "type": "function",
           "function": {
             "name": "fetch_url",
@@ -49,7 +49,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_19_xgqkpb",
+      "tool_call_id": "call_19_8ce38d",
       "name": "fetch_url",
       "content": "{\"success\":true,\"text\":\"... long article HTML ...\",\"_truncated\":true,\"originalLength\":60000}"
     }

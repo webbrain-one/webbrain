@@ -18,7 +18,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_17_r3kofe",
+          "id": "call_17_86e383",
           "type": "function",
           "function": {
             "name": "fetch_url",
@@ -29,7 +29,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_17_r3kofe",
+      "tool_call_id": "call_17_86e383",
       "name": "fetch_url",
       "content": "{\"success\":true,\"text\":\"Methods:\\n- getUser\\n- updateUser\\n- deleteUser\\n- listUsers\\n- createUser\\n- createProject\\n- updateProject\\n- listProjects... [continued]\",\"_truncated\":true,\"originalLength\":40000}"
     }

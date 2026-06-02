@@ -18,7 +18,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_2o_g22k14",
+          "id": "call_2o_09fe95",
           "type": "function",
           "function": {
             "name": "get_accessibility_tree",
@@ -29,7 +29,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_2o_g22k14",
+      "tool_call_id": "call_2o_09fe95",
       "name": "get_accessibility_tree",
       "content": "{\"pageContent\":\"searchbox \\\"搜索\\\" [ref_5]\"}"
     }

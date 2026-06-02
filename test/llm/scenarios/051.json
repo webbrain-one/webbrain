@@ -18,7 +18,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_1p_99oe0d",
+          "id": "call_1p_14e8e0",
           "type": "function",
           "function": {
             "name": "get_accessibility_tree",
@@ -29,7 +29,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_1p_99oe0d",
+      "tool_call_id": "call_1p_14e8e0",
       "name": "get_accessibility_tree",
       "content": "{\"pageContent\":\"button \\\"Publish release\\\" [ref_42]\",\"viewport\":{\"width\":1133,\"height\":800}}"
     },
@@ -38,7 +38,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_1q_mx5ep1",
+          "id": "call_1q_17e8e5",
           "type": "function",
           "function": {
             "name": "scroll",
@@ -49,7 +49,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_1q_mx5ep1",
+      "tool_call_id": "call_1q_17e8e5",
       "name": "scroll",
       "content": "{\"success\":true}"
     },
@@ -58,7 +58,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_1r_noi6sf",
+          "id": "call_1r_16e8e3",
           "type": "function",
           "function": {
             "name": "click_ax",
@@ -69,7 +69,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_1r_noi6sf",
+      "tool_call_id": "call_1r_16e8e3",
       "name": "click_ax",
       "content": "{\"success\":false,\"error\":\"ref_id ref_42 not found in current accessibility tree. The page may have re-rendered or scrolled. Re-read the tree to get fresh ids.\"}"
     }

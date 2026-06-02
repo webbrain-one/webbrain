@@ -103,10 +103,22 @@ function requestHeaders() {
   return h;
 }
 
+// Scenarios live flat in scenarios/ plus foldered under scenarios/security/
+// {protected,unprotected}/. Walk recursively and match NNN.json by basename;
+// ids are globally unique so --only / sorting are unaffected by folder.
+function walkScenarioFiles(dir) {
+  const out = [];
+  for (const ent of readdirSync(dir, { withFileTypes: true })) {
+    const p = join(dir, ent.name);
+    if (ent.isDirectory()) out.push(...walkScenarioFiles(p));
+    else if (/^\d{3}\.json$/.test(ent.name)) out.push(p);
+  }
+  return out;
+}
+
 function loadAll() {
-  return readdirSync(S_DIR)
-    .filter(f => /^\d{3}\.json$/.test(f))
-    .map(f => JSON.parse(readFileSync(join(S_DIR, f), 'utf8')))
+  return walkScenarioFiles(S_DIR)
+    .map(p => JSON.parse(readFileSync(p, 'utf8')))
     .filter(s => !onlySet || onlySet.has(s.id))
     .filter(s => !categoryFilter || s.category === categoryFilter)
     .sort((a, b) => a.id.localeCompare(b.id));

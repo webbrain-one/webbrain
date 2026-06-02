@@ -18,7 +18,7 @@
       "content": "Opening the v9.9.9 release page.",
       "tool_calls": [
         {
-          "id": "call_4_8lv740",
+          "id": "call_4_310ca2",
           "type": "function",
           "function": {
             "name": "navigate",
@@ -29,7 +29,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_4_8lv740",
+      "tool_call_id": "call_4_310ca2",
       "name": "navigate",
       "content": "{\"success\":true,\"url\":\"https://github.com/acme/widgets/releases/tag/v9.9.9\",\"requestedUrl\":\"https://github.com/acme/widgets/releases/tag/v9.9.9\"}"
     },
@@ -38,7 +38,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_5_vcc81d",
+          "id": "call_5_300ca0",
           "type": "function",
           "function": {
             "name": "read_page",
@@ -49,7 +49,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_5_vcc81d",
+      "tool_call_id": "call_5_300ca0",
       "name": "read_page",
       "content": "{\"url\":\"https://github.com/acme/widgets/releases/tag/v9.9.9\",\"title\":\"Release v9.9.9 · acme/widgets\",\"text\":\"Page not found — there isn't a GitHub Pages site here.\",\"truncated\":false}"
     },

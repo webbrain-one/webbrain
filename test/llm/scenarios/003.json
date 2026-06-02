@@ -18,7 +18,7 @@
       "content": "Opening Twitter.",
       "tool_calls": [
         {
-          "id": "call_3_gb708e",
+          "id": "call_3_360caa",
           "type": "function",
           "function": {
             "name": "navigate",
@@ -29,7 +29,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_3_gb708e",
+      "tool_call_id": "call_3_360caa",
       "name": "navigate",
       "content": "{\"success\":true,\"url\":\"https://twitter.com/home\",\"requestedUrl\":\"https://twitter.com\"}"
     },

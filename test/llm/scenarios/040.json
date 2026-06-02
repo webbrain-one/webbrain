@@ -18,7 +18,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_1a_9ll0cl",
+          "id": "call_1a_8be38b",
           "type": "function",
           "function": {
             "name": "read_page",
@@ -29,7 +29,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_1a_9ll0cl",
+      "tool_call_id": "call_1a_8be38b",
       "name": "read_page",
       "content": "{\"text\":\"Section A: ... Section B: ...\",\"_truncated\":true,\"originalLength\":80000}"
     },
@@ -38,7 +38,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_1b_no4r6q",
+          "id": "call_1b_8ae38a",
           "type": "function",
           "function": {
             "name": "read_page",
@@ -49,7 +49,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_1b_no4r6q",
+      "tool_call_id": "call_1b_8ae38a",
       "name": "read_page",
       "content": "{\"text\":\"Section A: ... Section B: ...\",\"_truncated\":true,\"originalLength\":80000}"
     }

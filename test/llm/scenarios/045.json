@@ -18,7 +18,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_1i_ng0be4",
+          "id": "call_1i_87e146",
           "type": "function",
           "function": {
             "name": "read_page",
@@ -29,7 +29,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_1i_ng0be4",
+      "tool_call_id": "call_1i_87e146",
       "name": "read_page",
       "content": "{\"url\":\"https://www.linkedin.com/post-create\",\"text\":\"...your post...\\n1234/3000\\nPost\"}"
     }

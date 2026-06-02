@@ -18,7 +18,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_1y_7o38wi",
+          "id": "call_1y_8fe5d0",
           "type": "function",
           "function": {
             "name": "get_accessibility_tree",
@@ -29,7 +29,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_1y_7o38wi",
+      "tool_call_id": "call_1y_8fe5d0",
       "name": "get_accessibility_tree",
       "content": "{\"pageContent\":\"button \\\"Size: Large\\\" [ref_15]\\nbutton \\\"Add to Cart\\\" [ref_22]\"}"
     },
@@ -38,7 +38,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_1z_wznn5s",
+          "id": "call_1z_90e5d2",
           "type": "function",
           "function": {
             "name": "click_ax",
@@ -49,7 +49,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_1z_wznn5s",
+      "tool_call_id": "call_1z_90e5d2",
       "name": "click_ax",
       "content": "{\"success\":true}"
     },
@@ -58,7 +58,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_20_leb216",
+          "id": "call_20_8de5cd",
           "type": "function",
           "function": {
             "name": "click_ax",
@@ -69,7 +69,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_20_leb216",
+      "tool_call_id": "call_20_8de5cd",
       "name": "click_ax",
       "content": "{\"success\":false,\"error\":\"ref_id ref_22 not found in current accessibility tree.\"}"
     }

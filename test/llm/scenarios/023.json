@@ -18,7 +18,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_q_i1kr6o",
+          "id": "call_q_8bf296",
           "type": "function",
           "function": {
             "name": "execute_js",
@@ -29,7 +29,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_q_i1kr6o",
+      "tool_call_id": "call_q_8bf296",
       "name": "execute_js",
       "content": "{\"success\":false,\"error\":\"CSP: 'unsafe-eval' not allowed.\"}"
     }

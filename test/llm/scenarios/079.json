@@ -18,7 +18,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_2r_f0tbe7",
+          "id": "call_2r_14fea6",
           "type": "function",
           "function": {
             "name": "get_interactive_elements",
@@ -29,7 +29,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_2r_f0tbe7",
+      "tool_call_id": "call_2r_14fea6",
       "name": "get_interactive_elements",
       "content": "[{\"index\":0,\"tag\":\"input\",\"text\":\"Nom complet\"},{\"index\":1,\"tag\":\"textarea\",\"text\":\"Votre message\"},{\"index\":2,\"tag\":\"button\",\"text\":\"Envoyer\"}]"
     }

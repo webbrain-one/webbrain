@@ -18,7 +18,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_27_kt6fij",
+          "id": "call_27_98e5de",
           "type": "function",
           "function": {
             "name": "click_ax",
@@ -29,7 +29,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_27_kt6fij",
+      "tool_call_id": "call_27_98e5de",
       "name": "click_ax",
       "content": "{\"success\":true,\"navigates\":true,\"href\":\"https://github.com/acme/widgets/pulls\"}"
     },

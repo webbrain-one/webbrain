@@ -18,7 +18,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_1n_b4l4ap",
+          "id": "call_1n_8ce14e",
           "type": "function",
           "function": {
             "name": "read_page",
@@ -29,7 +29,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_1n_b4l4ap",
+      "tool_call_id": "call_1n_8ce14e",
       "name": "read_page",
       "content": "{\"text\":\"Selected: report.pdf (12.4 MB). Max size: 10 MB.\"}"
     }

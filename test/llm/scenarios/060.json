@@ -18,7 +18,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_2d_fxlfeo",
+          "id": "call_2d_8d01a2",
           "type": "function",
           "function": {
             "name": "get_accessibility_tree",
@@ -29,7 +29,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_2d_fxlfeo",
+      "tool_call_id": "call_2d_8d01a2",
       "name": "get_accessibility_tree",
       "content": "{\"pageContent\":\"button \\\"Submit\\\" [ref_12]\"}"
     },
@@ -38,7 +38,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_2e_fa7b1z",
+          "id": "call_2e_8c01a0",
           "type": "function",
           "function": {
             "name": "screenshot",
@@ -49,7 +49,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_2e_fa7b1z",
+      "tool_call_id": "call_2e_8c01a0",
       "name": "screenshot",
       "content": "{\"success\":true}"
     },
@@ -58,7 +58,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_2f_n2ol6e",
+          "id": "call_2f_8b019f",
           "type": "function",
           "function": {
             "name": "read_page",
@@ -69,7 +69,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_2f_n2ol6e",
+      "tool_call_id": "call_2f_8b019f",
       "name": "read_page",
       "content": "{\"text\":\"...\"}"
     },
@@ -78,7 +78,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_2g_v2bxb8",
+          "id": "call_2g_9a01b6",
           "type": "function",
           "function": {
             "name": "extract_data",
@@ -89,7 +89,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_2g_v2bxb8",
+      "tool_call_id": "call_2g_9a01b6",
       "name": "extract_data",
       "content": "[{\"src\":\"...\",\"alt\":\"logo\"}]"
     },
@@ -98,7 +98,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_2h_gsgdcz",
+          "id": "call_2h_9901b5",
           "type": "function",
           "function": {
             "name": "get_selection",
@@ -109,7 +109,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_2h_gsgdcz",
+      "tool_call_id": "call_2h_9901b5",
       "name": "get_selection",
       "content": "{\"text\":\"\"}"
     },
@@ -118,7 +118,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_2i_74y9b9",
+          "id": "call_2i_0bfe98",
           "type": "function",
           "function": {
             "name": "click_ax",
@@ -129,7 +129,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_2i_74y9b9",
+      "tool_call_id": "call_2i_0bfe98",
       "name": "click_ax",
       "content": "{\"success\":false,\"error\":\"ref_id ref_12 not found in current accessibility tree.\"}"
     }

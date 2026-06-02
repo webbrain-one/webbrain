@@ -18,7 +18,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_28_m7jao0",
+          "id": "call_28_9201aa",
           "type": "function",
           "function": {
             "name": "get_accessibility_tree",
@@ -29,7 +29,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_28_m7jao0",
+      "tool_call_id": "call_28_9201aa",
       "name": "get_accessibility_tree",
       "content": "{\"pageContent\":\"button \\\"First\\\" [ref_2], button \\\"Second\\\" [ref_5]\"}"
     },
@@ -38,7 +38,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_29_4xgnmy",
+          "id": "call_29_9101a8",
           "type": "function",
           "function": {
             "name": "get_accessibility_tree",
@@ -49,7 +49,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_29_4xgnmy",
+      "tool_call_id": "call_29_9101a8",
       "name": "get_accessibility_tree",
       "content": "{\"pageContent\":\"button \\\"First\\\" [ref_3], button \\\"Second\\\" [ref_7]\"}"
     },
@@ -58,7 +58,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_2a_f6g7bt",
+          "id": "call_2a_9001a7",
           "type": "function",
           "function": {
             "name": "click_ax",
@@ -69,7 +69,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_2a_f6g7bt",
+      "tool_call_id": "call_2a_9001a7",
       "name": "click_ax",
       "content": "{\"success\":false,\"error\":\"ref_id ref_5 not found in current accessibility tree.\"}"
     }

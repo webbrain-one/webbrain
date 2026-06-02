@@ -18,7 +18,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_z_wsodkj",
+          "id": "call_z_8cf059",
           "type": "function",
           "function": {
             "name": "read_page",
@@ -29,7 +29,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_z_wsodkj",
+      "tool_call_id": "call_z_8cf059",
       "name": "read_page",
       "content": "{\"url\":\"https://en.wikipedia.org/wiki/Closure_(computer_programming)\",\"title\":\"Closure — Wikipedia\",\"text\":\"The concept of closures was developed in the 1960s for the mechanical evaluation of expressions in the λ-calculus and was first fully implemented in 1970 as a language feature in the PAL programming language to support lexically scoped first-class functions. ...\",\"_truncated\":true,\"originalLength\":84000}"
     },
@@ -38,7 +38,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_10_005r9a",
+          "id": "call_10_89f054",
           "type": "function",
           "function": {
             "name": "fetch_url",
@@ -49,7 +49,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_10_005r9a",
+      "tool_call_id": "call_10_89f054",
       "name": "fetch_url",
       "content": "{\"success\":true,\"json\":\"{\\\"parse\\\":{\\\"wikitext\\\":{\\\"*\\\":\\\"... (large dump) ...\\\"}}}\",\"_truncated\":true,\"originalLength\":60000}"
     }

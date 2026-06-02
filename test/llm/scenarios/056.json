@@ -18,7 +18,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_24_4eod5r",
+          "id": "call_24_89e5c7",
           "type": "function",
           "function": {
             "name": "get_interactive_elements",
@@ -29,7 +29,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_24_4eod5r",
+      "tool_call_id": "call_24_89e5c7",
       "name": "get_interactive_elements",
       "content": "[{\"index\":0,\"tag\":\"a\",\"text\":\"First\",\"href\":\"https://example.com/first\"},{\"index\":1,\"tag\":\"a\",\"text\":\"Second\",\"href\":\"https://example.com/second\"}]"
     },
@@ -38,7 +38,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_25_aij6rx",
+          "id": "call_25_8ae5c8",
           "type": "function",
           "function": {
             "name": "click",
@@ -49,7 +49,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_25_aij6rx",
+      "tool_call_id": "call_25_8ae5c8",
       "name": "click",
       "content": "{\"success\":true,\"navigates\":true}"
     },
@@ -58,7 +58,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_26_r8ystm",
+          "id": "call_26_97e5dd",
           "type": "function",
           "function": {
             "name": "click",
@@ -69,7 +69,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_26_r8ystm",
+      "tool_call_id": "call_26_97e5dd",
       "name": "click",
       "content": "{\"success\":false,\"error\":\"Index 1 not found in current page. Indices from previous turns are not stable — call get_interactive_elements again.\"}"
     }

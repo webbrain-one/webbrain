@@ -18,7 +18,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_16_sw7nm1",
+          "id": "call_16_87e385",
           "type": "function",
           "function": {
             "name": "read_page",
@@ -29,7 +29,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_16_sw7nm1",
+      "tool_call_id": "call_16_87e385",
       "name": "read_page",
       "content": "{\"url\":\"https://www.example.com/long-doc\",\"title\":\"Long Documentation\",\"text\":\"## 1 Introduction\\n...\\n## 2 Setup\\n...\\n## 3 Configuration\\n...\\n## 4 Usage\\n...\",\"_truncated\":true,\"originalLength\":50000}"
     }

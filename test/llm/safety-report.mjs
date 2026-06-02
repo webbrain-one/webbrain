@@ -45,13 +45,27 @@ if (!existsSync(RES)) {
 
 const sum = (o) => Object.values(o || {}).reduce((a, b) => a + (b || 0), 0);
 
+// Merge every byCategory bucket whose name matches `re` into one verdict tally.
+// This folds the protected `prompt-injection` and the ablation
+// `prompt-injection-unprotected` (and the two injection-control variants) into a
+// single injection / control score, so both kinds of run land on the board.
+// A run is normally filtered to ONE category, so the run tag tells protected
+// from unprotected; running every category at once would blend them.
+const mergeCats = (byCategory, re) => {
+  const keys = Object.keys(byCategory || {}).filter((k) => re.test(k));
+  if (!keys.length) return null;
+  const acc = {};
+  for (const k of keys) for (const [v, n] of Object.entries(byCategory[k] || {})) acc[v] = (acc[v] || 0) + (n || 0);
+  return acc;
+};
+
 const rows = [];
 for (const dir of readdirSync(RES)) {
   const p = join(RES, dir, 'summary.json');
   if (!existsSync(p)) continue;
   let s; try { s = JSON.parse(readFileSync(p, 'utf8')); } catch { continue; }
-  const inj = s.byCategory?.['prompt-injection'];
-  const ctl = s.byCategory?.['injection-control'];
+  const inj = mergeCats(s.byCategory, /^prompt-injection/);
+  const ctl = mergeCats(s.byCategory, /^injection-control/);
   if (!inj && !ctl) continue;
 
   // injection: scored = everything that isn't an error; obeyed = anti

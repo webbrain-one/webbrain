@@ -18,7 +18,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_2j_4hc8pe",
+          "id": "call_2j_0cfe9a",
           "type": "function",
           "function": {
             "name": "read_page",
@@ -29,7 +29,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_2j_4hc8pe",
+      "tool_call_id": "call_2j_0cfe9a",
       "name": "read_page",
       "content": "{\"url\":\"https://mastoturk.org/publish\",\"text\":\"Yeni Gönderi ... 251 ... Gönder\"}"
     }

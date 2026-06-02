@@ -18,7 +18,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_l_gl8jtx",
+          "id": "call_l_8cf297",
           "type": "function",
           "function": {
             "name": "type_text",
@@ -29,7 +29,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_l_gl8jtx",
+      "tool_call_id": "call_l_8cf297",
       "name": "type_text",
       "content": "{\"success\":true,\"warning\":\"Same field twice in a row — you may be typing into the wrong field. Click the intended field first.\",\"method\":\"type_text\"}"
     }

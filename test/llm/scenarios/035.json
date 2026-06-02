@@ -18,7 +18,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_14_915foh",
+          "id": "call_14_89e388",
           "type": "function",
           "function": {
             "name": "read_pdf",
@@ -29,7 +29,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_14_915foh",
+      "tool_call_id": "call_14_89e388",
       "name": "read_pdf",
       "content": "{\"text\":\"Abstract: ...\\nIntroduction: ...\\n[pages 1-50]\\nMethods: ...\",\"pages\":\"1-50\",\"totalPages\":87,\"_truncated\":true}"
     }

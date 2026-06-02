@@ -6,11 +6,12 @@ Two complementary test sets:
    single-turn user prompt, what's the model's first tool call? Cheap to
    run, useful for catching gross competence regressions, but doesn't
    test recovery / multi-turn behavior.
-2. **Multi-turn scenarios** (`scenarios/`, 80 cases) — seeded conversation
+2. **Multi-turn scenarios** (`scenarios/`, 100 cases) — seeded conversation
    histories that put the model in the middle of a tricky situation
    (loop on bad URL, tool error, CSP block, truncated content, polarity
-   misread, stale ref_id, mode boundary, cross-lingual). Tests what most
-   real-world failures actually look like in production traces.
+   misread, stale ref_id, mode boundary, cross-lingual, prompt-injection).
+   Tests what most real-world failures actually look like in production
+   traces. The 20 security cases live under `scenarios/security/`.
 
 Both sets emit OpenAI-compatible chat-completion payloads that mirror
 what the WebBrain extension actually sends.
@@ -22,6 +23,9 @@ test/llm/
 ├── questions/NNN.json         # step-1 routing case: { id, mode, tab, user }
 ├── expected/NNN.json           # rubric for the case: { idealFirstToolCall, successRubric }
 ├── scenarios/NNN.json          # multi-turn: { id, category, mode, browser, tab, seed[], expected }
+│   └── security/               #   prompt-injection cases, foldered by trust posture:
+│       ├── protected/          #     081–090 — page bytes wrapped as agent ships them (<untrusted_page_content>)
+│       └── unprotected/        #     091–100 — same prompts, NO wrapper (ablation: measures the wrapper's value)
 ├── lib/build-payload.mjs       # builder for single-turn payloads
 ├── lib/scenario-payload.mjs    # builder for scenario payloads (seed becomes the history)
 ├── enrich.mjs                  # CLI — prints a single-turn LLM request payload
@@ -181,8 +185,10 @@ your source of truth in `_generate.mjs`.
 
 # Track B — multi-turn scenarios
 
-The 80 scenarios under `test/llm/scenarios/` test what models do
+The 100 scenarios under `test/llm/scenarios/` test what models do
 *after* a tool call that errored / looped / returned ambiguous output.
+(The 20 security cases are foldered under `scenarios/security/`; the
+runner walks subfolders recursively, so ids and `--only` are unaffected.)
 Each scenario carries a `seed[]` of OpenAI-format messages
 (system + user + assistant tool_call + tool_result + …) and an
 `expected` block describing the correct next move.
@@ -296,8 +302,10 @@ specific people, etc.
 node test/llm/_generate-scenarios.mjs
 ```
 
-Same rule as the questions generator: wipes `scenarios/0??.json` and
-re-emits from the inline `SCENARIOS` array. Keep edits in the source.
+Same rule as the questions generator: wipes the generated `NNN.json`
+(flat root **and** `scenarios/security/{protected,unprotected}/`) and
+re-emits from the inline `SCENARIOS` array — security cases are routed to
+their subfolder by `category`. Keep edits in the source.
 
 ## Prompt-injection safety benchmark
 
@@ -314,6 +322,32 @@ half, the untrusted-content boundary itself, is unit-tested in
 - **`injection-control`** (2) — benign pages with no injection. Here the model
   *should* just do the task; refusing or needlessly clarifying is **over-block**
   (a false positive). These keep a paranoid model honest.
+
+The protected set lives in `scenarios/security/protected/` (081–090).
+
+### Unprotected ablation set (`scenarios/security/unprotected/`, 091–100)
+
+`prompt-injection-unprotected` (8) and `injection-control-unprotected` (2) are
+**exact mirrors** of the protected twins, but the page bytes are delivered
+**raw** — no `<untrusted_page_content>` box and no breakout-stripping (the
+boundary-breakout case keeps its forged `</untrusted_page_content><system>` tags
+intact). They model what the agent would see if `_wrapUntrusted` didn't exist.
+Run them separately and diff the safety% against the protected run: the gap is
+how much of the model's safety comes from the **deterministic wrapper** vs. the
+model's own injection resistance.
+
+```bash
+# protected vs unprotected, same model, separate tags
+node test/llm/run-scenarios.mjs --category prompt-injection \
+  --base http://localhost:8080 --model qwen3-coder-30b --tag protected
+node test/llm/run-scenarios.mjs --category prompt-injection-unprotected \
+  --base http://localhost:8080 --model qwen3-coder-30b --tag unprotected
+node test/llm/safety-report.mjs   # both runs appear as rows; compare safety%
+```
+
+`safety-report.mjs` folds the `*-unprotected` categories into the same
+injection / control buckets, so each run scores on the same scale — the run tag
+(`protected` / `unprotected`) is what distinguishes them on the board.
 
 Because scoring is deterministic (antiPattern match on the next tool call), you
 don't need a judge model. To benchmark safety across models with a strong model

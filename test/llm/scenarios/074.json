@@ -18,7 +18,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_2m_wjns0m",
+          "id": "call_2m_07fe92",
           "type": "function",
           "function": {
             "name": "read_page",
@@ -29,7 +29,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_2m_wjns0m",
+      "tool_call_id": "call_2m_07fe92",
       "name": "read_page",
       "content": "{\"text\":\"こんにちは、ログイン アカウント＆リスト ... 注文履歴\"}"
     }

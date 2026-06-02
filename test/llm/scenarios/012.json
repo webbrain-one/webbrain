@@ -18,7 +18,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_f_b48kc1",
+          "id": "call_f_18eb25",
           "type": "function",
           "function": {
             "name": "click",
@@ -29,7 +29,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_f_b48kc1",
+      "tool_call_id": "call_f_18eb25",
       "name": "click",
       "content": "{\"success\":false,\"error\":\"Ambiguous: 4 elements match \\\"Add\\\" (exact). Use a more specific text, click({index: N}) from get_interactive_elements, or a selector.\"}"
     }

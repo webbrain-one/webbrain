@@ -18,7 +18,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_1o_d0goq2",
+          "id": "call_1o_15e8e2",
           "type": "function",
           "function": {
             "name": "read_page",
@@ -29,7 +29,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_1o_d0goq2",
+      "tool_call_id": "call_1o_15e8e2",
       "name": "read_page",
       "content": "{\"text\":\"Available: $500.00\\nAmount: $750.00\\nWarning: insufficient funds.\\nReview transfer | Cancel\"}"
     }

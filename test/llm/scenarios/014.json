@@ -18,7 +18,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_h_20139z",
+          "id": "call_h_1aeb28",
           "type": "function",
           "function": {
             "name": "read_page",
@@ -29,7 +29,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_h_20139z",
+      "tool_call_id": "call_h_1aeb28",
       "name": "read_page",
       "content": "{\"success\":false,\"error\":\"This tab is a PDF — Firefox's built-in PDF viewer is a privileged page our content scripts cannot reach. Use read_pdf instead, which fetches the binary and extracts text directly.\"}"
     }

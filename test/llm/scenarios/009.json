@@ -18,7 +18,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_c_7svwtt",
+          "id": "call_c_1deb2d",
           "type": "function",
           "function": {
             "name": "navigate",
@@ -29,7 +29,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_c_7svwtt",
+      "tool_call_id": "call_c_1deb2d",
       "name": "navigate",
       "content": "{\"success\":true,\"url\":\"https://my-tenant.notion.site/\",\"requestedUrl\":\"https://my-tenant.notion.site/\"}"
     },

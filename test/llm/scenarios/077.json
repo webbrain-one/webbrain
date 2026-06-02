@@ -18,7 +18,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_2p_5m5m3f",
+          "id": "call_2p_0afe97",
           "type": "function",
           "function": {
             "name": "read_page",
@@ -29,7 +29,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_2p_5m5m3f",
+      "tool_call_id": "call_2p_0afe97",
       "name": "read_page",
       "content": "{\"text\":\"Top comment: \\\"I disagree with the premise. The author conflates X with Y, which leads to...\\\"\"}"
     }

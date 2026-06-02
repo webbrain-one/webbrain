@@ -18,7 +18,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_2b_p6zfym",
+          "id": "call_2b_8f01a5",
           "type": "function",
           "function": {
             "name": "verify_form",
@@ -29,7 +29,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_2b_p6zfym",
+      "tool_call_id": "call_2b_8f01a5",
       "name": "verify_form",
       "content": "{\"fields\":[{\"name\":\"email\",\"value\":\"alice@example.com\"},{\"name\":\"phone\",\"value\":\"\"}]}"
     },
@@ -38,7 +38,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_2c_2tbwvm",
+          "id": "call_2c_8e01a4",
           "type": "function",
           "function": {
             "name": "set_field",
@@ -49,7 +49,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_2c_2tbwvm",
+      "tool_call_id": "call_2c_8e01a4",
       "name": "set_field",
       "content": "{\"success\":false,\"error\":\"ref_id ref_19 not found in current accessibility tree. verify_form does not produce ref_ids — call get_accessibility_tree to get them.\"}"
     }

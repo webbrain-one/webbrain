@@ -18,7 +18,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_m_9vlzzd",
+          "id": "call_m_8ff29c",
           "type": "function",
           "function": {
             "name": "download_files",
@@ -29,7 +29,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_m_9vlzzd",
+      "tool_call_id": "call_m_8ff29c",
       "name": "download_files",
       "content": "{\"success\":false,\"error\":\"download_files: HTTP 404 for https://github.com/acme/widgets/raw/main/dist/widgets-linux.zip\"}"
     }

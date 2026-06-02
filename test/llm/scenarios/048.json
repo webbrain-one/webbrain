@@ -18,7 +18,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_1l_62xbln",
+          "id": "call_1l_8ae14b",
           "type": "function",
           "function": {
             "name": "click",
@@ -29,7 +29,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_1l_62xbln",
+      "tool_call_id": "call_1l_8ae14b",
       "name": "click",
       "content": "{\"success\":true,\"method\":\"click\"}"
     },
@@ -38,7 +38,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_1m_un5cmj",
+          "id": "call_1m_8be14d",
           "type": "function",
           "function": {
             "name": "read_page",
@@ -49,7 +49,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_1m_un5cmj",
+      "tool_call_id": "call_1m_8be14d",
       "name": "read_page",
       "content": "{\"text\":\"Send without subject? — Send anyway / Cancel\"}"
     }

@@ -18,7 +18,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_1c_kje83d",
+          "id": "call_1c_91e395",
           "type": "function",
           "function": {
             "name": "set_field",
@@ -29,7 +29,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_1c_kje83d",
+      "tool_call_id": "call_1c_91e395",
       "name": "set_field",
       "content": "{\"success\":true,\"method\":\"set_field\",\"verified\":true}"
     },
@@ -38,7 +38,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_1d_d11twl",
+          "id": "call_1d_90e393",
           "type": "function",
           "function": {
             "name": "read_page",
@@ -49,7 +49,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_1d_d11twl",
+      "tool_call_id": "call_1d_90e393",
       "name": "read_page",
       "content": "{\"url\":\"https://mastoturk.org/publish\",\"text\":\"Yeni Gönderi ... -14 ... Gönder\",\"forms\":[{\"inputs\":[{\"type\":\"textarea\",\"value\":\"... long text ...\"}]}]}"
     }

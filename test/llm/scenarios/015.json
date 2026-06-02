@@ -18,7 +18,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_i_1744yq",
+          "id": "call_i_13eb1d",
           "type": "function",
           "function": {
             "name": "get_accessibility_tree",
@@ -29,7 +29,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_i_1744yq",
+      "tool_call_id": "call_i_13eb1d",
       "name": "get_accessibility_tree",
       "content": "{\"success\":false,\"error\":\"Output exceeds 50000 character limit. Try filter:\\\"visible\\\" or a smaller maxDepth.\"}"
     }

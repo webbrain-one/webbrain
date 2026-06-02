@@ -18,7 +18,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_e_c33fe4",
+          "id": "call_e_17eb23",
           "type": "function",
           "function": {
             "name": "screenshot",
@@ -29,7 +29,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_e_c33fe4",
+      "tool_call_id": "call_e_17eb23",
       "name": "screenshot",
       "content": "{\"success\":false,\"error\":\"This model cannot see images: it has no vision capability and no dedicated vision model is configured. In provider settings, enable \\\"Model supports vision\\\" for the active provider or set a vision model. For now, use get_accessibility_tree, get_interactive_elements, or read_page to inspect the page.\"}"
     }

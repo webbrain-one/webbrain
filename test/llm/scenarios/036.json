@@ -18,7 +18,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_15_1chahj",
+          "id": "call_15_88e387",
           "type": "function",
           "function": {
             "name": "get_accessibility_tree",
@@ -29,7 +29,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_15_1chahj",
+      "tool_call_id": "call_15_88e387",
       "name": "get_accessibility_tree",
       "content": "{\"pageContent\":\"list of 24 product cards on page, including: Acme Buds $49, Acme Pro $89, Acme Mini $34, Acme Lite $59... (and 20 more)\",\"viewport\":{\"width\":1133,\"height\":800}}"
     }

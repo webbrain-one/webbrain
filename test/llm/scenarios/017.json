@@ -18,7 +18,7 @@
       "content": "",
       "tool_calls": [
         {
-          "id": "call_k_tqe639",
+          "id": "call_k_8df299",
           "type": "function",
           "function": {
             "name": "solve_captcha",
@@ -29,7 +29,7 @@
     },
     {
       "role": "tool",
-      "tool_call_id": "call_k_tqe639",
+      "tool_call_id": "call_k_8df299",
       "name": "solve_captcha",
       "content": "{\"success\":false,\"error\":\"solve_captcha failed: CapSolver getTaskResult: wrong captcha type\"}"
     }
