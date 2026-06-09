@@ -605,7 +605,7 @@ export const AGENT_TOOLS = [
     type: 'function',
     function: {
       name: 'download_files',
-      description: 'Download one or more files. Pass a single url string or an array of urls (max 3 concurrent, max 50 total). Returns per-URL results with the downloadId AND the resolved local filename (the path on disk), plus completion state. The downloadId + path are also auto-recorded to your scratchpad. To attach a downloaded file to a form later, pass its downloadId to upload_file — you do NOT need to remember the path. Use list_downloads to re-check completion.',
+      description: 'Download one or more files. Pass a single url string or an array of urls (max 3 concurrent, max 50 total). Returns per-URL results with the downloadId AND the resolved local filename (the path on disk), plus completion state. The downloadId (not the path) is also auto-recorded to your scratchpad. To attach a downloaded file to a form later, pass its downloadId to upload_file — you do NOT need to remember the path. Use list_downloads to re-check completion.',
       parameters: {
         type: 'object',
         properties: {

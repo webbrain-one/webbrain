@@ -566,7 +566,7 @@ export const AGENT_TOOLS = [
     type: 'function',
     function: {
       name: 'download_files',
-      description: 'Download multiple files in parallel (max 3 concurrent, max 50 total). Returns per-URL results with the downloadId AND the resolved local filename (path on disk), plus completion state. The downloadId + path are also auto-recorded to your scratchpad. Use list_downloads to re-check completion.',
+      description: 'Download multiple files in parallel (max 3 concurrent, max 50 total). Returns per-URL results with the downloadId AND the resolved local filename (path on disk), plus completion state. The downloadId (not the path) is also auto-recorded to your scratchpad. Use list_downloads to re-check completion.',
       parameters: {
         type: 'object',
         properties: {
