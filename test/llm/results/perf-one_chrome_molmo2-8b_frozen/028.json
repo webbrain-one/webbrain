@@ -1,0 +1,22 @@
+{
+  "id": "028",
+  "user": "what is this article about",
+  "tab": {
+    "url": "https://www.cnn.com/2026/05/world/example-story/index.html",
+    "title": "Example story — CNN"
+  },
+  "latencyMs": 1421,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I don't have access to the current page content or the ability to read the article directly. Please provide the text of the article or a summary, and I'll be happy to help you understand what it's about.",
+  "usage": {
+    "prompt_tokens": 8612,
+    "completion_tokens": 45,
+    "total_tokens": 8657,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    }
+  }
+}

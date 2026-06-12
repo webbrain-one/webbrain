@@ -456,6 +456,18 @@
   "blogPost": [
     {
       "@type": "BlogPosting",
+      "headline": "Molmo2-8B is truly open. On browser tool calling, it is not ready yet.",
+      "url": "https://webbrain.one/blog/molmo2-8b-tool-calling",
+      "datePublished": "2026-06-12",
+      "description": "We ran Molmo2-8B through WebBrain's frozen 100-case browser-agent tool-calling benchmark and prompt-injection scenarios. The open-source story is excellent: open weights, data, and recipe. The comparable first-tool-call result is not: 2 parsed tool calls out of 100, with 0 exact matches.",
+      "author": {
+        "@type": "Person",
+        "name": "Emre Sokullu",
+        "url": "https://emresokullu.com"
+      }
+    },
+    {
+      "@type": "BlogPosting",
       "headline": "How WebBrain keeps a local AI agent from getting hijacked by the page it's reading",
       "url": "https://webbrain.one/blog/agent-security-model",
       "datePublished": "2026-06-02",
@@ -595,7 +607,12 @@
     <p class="page-sub">Short write-ups on design decisions, failure modes, and benchmarks from building an open-source AI browser agent.</p>
 
     <div class="post-list">
-      <a href="/blog/agent-security-model" class="post-card">
+      <a href="/blog/molmo2-8b-tool-calling" class="post-card">
+        <div class="post-meta">June 12, 2026 &middot; 8 min read</div>
+        <div class="post-title">Molmo2-8B is truly open. On browser tool calling, it is not ready yet.</div>
+        <div class="post-excerpt">Molmo2-8B deserves praise for being open source in the meaningful sense: weights, data, recipe, and no closed-VLM distillation dependency. But on WebBrain&#39;s frozen Sonnet-baseline 100-case browser-agent routing run it produced only 2 parsed tool calls, with 0 exact first-action matches. In prompt-injection scenarios it avoided malicious tool calls, but mostly by refusing or falling back to prose.</div>
+      </a>
+<a href="/blog/agent-security-model" class="post-card">
         <div class="post-meta">June 2, 2026 &middot; 9 min read</div>
         <div class="post-title">How WebBrain keeps a local AI agent from getting hijacked by the page it&#39;s reading</div>
         <div class="post-excerpt">When an AI agent can act on a page as the logged-in user, the page itself becomes an attacker. We walk through WebBrain&#39;s layered defense — untrusted-content quarantine, a language-agnostic permission gate, UI-first actions — and share what our adversarial tests revealed: big models resist injection on their own, small local models need the guardrails, and the guardrails are what flip a confused model from relaying an attacker&#39;s instruction to flagging it.</div>

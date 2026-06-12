@@ -1,0 +1,22 @@
+{
+  "id": "009",
+  "user": "open chatgpt in a new tab",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 656,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I don't have permission to do this on your behalf",
+  "usage": {
+    "prompt_tokens": 8597,
+    "completion_tokens": 12,
+    "total_tokens": 8609,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    }
+  }
+}

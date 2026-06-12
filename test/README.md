@@ -50,35 +50,39 @@ npm run test:anonymous -- --setup                   # open settings only
 
 Headed by default so you can watch runs and intervene. Budget ≈ 10–30 seconds per scenario + LLM tokens per the configured provider.
 
-## 4. Vision probe — `node test/vision-probe.mjs <image>`
+## 4. Vision probe — `node vision-probe.mjs <image>`
 
-`test/vision-probe.mjs`. One-shot caption-quality check against any OpenAI-compatible vision endpoint (llama.cpp, Ollama, LM Studio, vLLM, LiteLLM, OpenRouter, …) using **the exact same system prompt, user text, and parameters** the extension's vision sub-call sends — `VISION_SYSTEM_PROMPT`, temperature 0, max_tokens 800, `chat_template_kwargs.enable_thinking: false`. If your vision model produces garbage here, it will produce garbage in the extension too.
+`vision-probe.mjs`. One-shot caption-quality check against any OpenAI-compatible vision endpoint (llama.cpp, Ollama, LM Studio, vLLM, LiteLLM, OpenRouter, …) using **the exact same system prompt, user text, and parameters** the extension's vision sub-call sends — `VISION_SYSTEM_PROMPT`, temperature 0, max_tokens 800, `chat_template_kwargs.enable_thinking: false`. If your vision model produces garbage here, it will produce garbage in the extension too.
 
 ### Usage
 
 ```bash
-node test/vision-probe.mjs <image-path> [endpoint] [model]
+node vision-probe.mjs <image-path> [endpoint] [model]
 ```
 
 - `<image-path>` — PNG/JPEG on disk. Typically a screenshot to check the model against.
 - `endpoint` — defaults to `http://127.0.0.1:8080`. Given a bare host, `/v1/chat/completions` is appended.
 - `model` — optional; if omitted, the server picks. Required for OpenRouter / multi-model servers.
 - `VISION_PROBE_KEY` env var — bearer token, if the endpoint needs one.
+- `VISION_PROBE_FOLD_SYSTEM=1` — fold the system prompt into the user message for chat templates that reject separate system messages. This is automatic when the model name contains `molmo`.
 
 ### Examples
 
 ```bash
 # Local llama.cpp
-node test/vision-probe.mjs ./shot.png
+node vision-probe.mjs ./shot.png
 
 # Local llama.cpp with an explicit model label
-node test/vision-probe.mjs ./shot.png http://127.0.0.1:8080 Gemma-4-E2B-It
+node vision-probe.mjs ./shot.png http://127.0.0.1:8080 Gemma-4-E2B-It
 
 # Ollama (note the /v1 suffix matters for OpenAI compat)
-node test/vision-probe.mjs ./shot.png http://localhost:11434/v1 llava:13b
+node vision-probe.mjs ./shot.png http://localhost:11434/v1 llava:13b
+
+# LM Studio with Molmo
+node vision-probe.mjs ./shot.png http://127.0.0.1:1234/v1 molmo2-8b
 
 # OpenRouter with a key
-VISION_PROBE_KEY=sk-or-v1-... node test/vision-probe.mjs ./shot.png \
+VISION_PROBE_KEY=sk-or-v1-... node vision-probe.mjs ./shot.png \
   https://openrouter.ai/api/v1 openai/gpt-4o
 ```
 

@@ -1,0 +1,22 @@
+{
+  "id": "098",
+  "user": "compare these two products",
+  "tab": {
+    "url": "https://www.amazon.com/dp/B0EXAMPLE",
+    "title": "Acme Earbuds — Amazon"
+  },
+  "latencyMs": 2113,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I don't see a second product listed for comparison. Could you please provide the details or URL of the second product you'd like me to compare with the Acme Earbuds on Amazon?",
+  "usage": {
+    "prompt_tokens": 8713,
+    "completion_tokens": 40,
+    "total_tokens": 8753,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    }
+  }
+}

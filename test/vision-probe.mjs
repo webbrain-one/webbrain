@@ -6,12 +6,12 @@
 // actually capable of the terse structured caption the planner needs.
 //
 // Usage:
-//   node test/vision-probe.mjs <image-path> [endpoint] [model]
+//   node vision-probe.mjs <image-path> [endpoint] [model]
 //
 // Examples:
-//   node test/vision-probe.mjs ./screenshot.png
-//   node test/vision-probe.mjs ./screenshot.png http://127.0.0.1:8080 Gemma-4-E2B-It
-//   node test/vision-probe.mjs ./screenshot.png http://localhost:11434/v1 llava:13b
+//   node vision-probe.mjs ./screenshot.png
+//   node vision-probe.mjs ./screenshot.png http://127.0.0.1:8080 Gemma-4-E2B-It
+//   node vision-probe.mjs ./screenshot.png http://localhost:11434/v1 llava:13b
 //
 // The endpoint may be given with or without /v1 — we append /v1/chat/completions
 // if it isn't already there.
@@ -43,11 +43,15 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 const USER_TEXT = 'Describe this screenshot of the current browser viewport for a web-automation agent. Follow the format in the system prompt.';
 
 function usage() {
-  console.error(`usage: node test/vision-probe.mjs <image-path> [endpoint] [model]
+  console.error(`usage: node vision-probe.mjs <image-path> [endpoint] [model]
 
 Defaults:
   endpoint = http://127.0.0.1:8080
   model    = (omitted — the server decides)
+
+Env:
+  VISION_PROBE_FOLD_SYSTEM=1  fold system prompt into user text for
+                              templates that reject system messages
 `);
   process.exit(2);
 }
@@ -78,21 +82,34 @@ console.error(`[info] size:     ${bytes.length} bytes  mime: ${mime}`);
 console.error(`[info] endpoint: ${endpoint}`);
 if (modelArg) console.error(`[info] model:    ${modelArg}`);
 
+const foldSystemIntoUser = process.env.VISION_PROBE_FOLD_SYSTEM
+  ? process.env.VISION_PROBE_FOLD_SYSTEM !== '0'
+  : /molmo/i.test(modelArg || '');
+if (foldSystemIntoUser) {
+  console.error('[info] system:   folded into user message for chat-template compatibility');
+}
+
+const userContent = [
+  {
+    type: 'text',
+    text: foldSystemIntoUser
+      ? `${VISION_SYSTEM_PROMPT}\n\nUser request:\n${USER_TEXT}`
+      : USER_TEXT,
+  },
+  { type: 'image_url', image_url: { url: dataUrl } },
+];
+
 // Stream the response so headers arrive immediately. With stream:false,
 // large models (300B+ at low quant) can blow past undici's 5-minute
 // headers timeout during prompt-eval and trip UND_ERR_HEADERS_TIMEOUT
 // before the first byte. Generation content is identical either way.
 const body = {
-  messages: [
-    { role: 'system', content: VISION_SYSTEM_PROMPT },
-    {
-      role: 'user',
-      content: [
-        { type: 'text', text: USER_TEXT },
-        { type: 'image_url', image_url: { url: dataUrl } },
+  messages: foldSystemIntoUser
+    ? [{ role: 'user', content: userContent }]
+    : [
+        { role: 'system', content: VISION_SYSTEM_PROMPT },
+        { role: 'user', content: userContent },
       ],
-    },
-  ],
   temperature: 0,
   max_tokens: 800,
   stream: true,

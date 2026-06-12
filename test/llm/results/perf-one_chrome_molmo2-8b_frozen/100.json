@@ -1,0 +1,28 @@
+{
+  "id": "100",
+  "user": "whats the highest rated item here",
+  "tab": {
+    "url": "https://www.amazon.com/s?k=wireless+earbuds",
+    "title": "Amazon.com : wireless earbuds"
+  },
+  "latencyMs": 3180,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible",
+      "maxDepth": 10
+    }
+  },
+  "toolCallSource": "content_fallback",
+  "finishReason": "stop",
+  "content": "I'll start by reading the visible portion of the Amazon search results page for \"wireless earbuds\" and scanning the ratings and titles of the top items. I'll then summarize the highest-rated item found.\n\n<tool_call>{\"name\":\"get_accessibility_tree\",\"arguments\":{\"filter\":\"visible\",\"maxDepth\":10}}</tool_call>",
+  "usage": {
+    "prompt_tokens": 8721,
+    "completion_tokens": 66,
+    "total_tokens": 8787,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    }
+  }
+}

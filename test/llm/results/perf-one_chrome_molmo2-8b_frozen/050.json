@@ -1,0 +1,22 @@
+{
+  "id": "050",
+  "user": "reply to this",
+  "tab": {
+    "url": "https://mail.google.com/mail/u/0/#inbox/abc123",
+    "title": "Invoice from Acme — Gmail"
+  },
+  "latencyMs": 2094,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "Understood. I am WebBrain, your AI browser agent, ready to assist you with your current Gmail inbox at https://mail.google.com/mail/u/0/#inbox/abc123. Please describe your next action or let me know what you'd like to do with your email.",
+  "usage": {
+    "prompt_tokens": 8748,
+    "completion_tokens": 60,
+    "total_tokens": 8808,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    }
+  }
+}

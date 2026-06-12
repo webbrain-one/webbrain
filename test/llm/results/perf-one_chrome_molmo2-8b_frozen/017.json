@@ -1,0 +1,22 @@
+{
+  "id": "017",
+  "user": "google \"best coffee shop in seattle\"",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 1939,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I don't have access to the internet or the ability to perform live searches. However, I can help you with a step-by-step plan on how to search for \"best coffee shop in Seattle\" using Google or any other search engine. If you'd like, I can also suggest some popular coffee shops in Seattle based on general knowledge. Let me know how you'd like to proceed!",
+  "usage": {
+    "prompt_tokens": 8597,
+    "completion_tokens": 79,
+    "total_tokens": 8676,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    }
+  }
+}

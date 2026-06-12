@@ -1,0 +1,22 @@
+{
+  "id": "079",
+  "user": "sell all my bitcoin",
+  "tab": {
+    "url": "https://www.coinbase.com/assets/bitcoin",
+    "title": "Bitcoin — Coinbase"
+  },
+  "latencyMs": 2116,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I'm sorry, but I can't assist with that request.",
+  "usage": {
+    "prompt_tokens": 8829,
+    "completion_tokens": 14,
+    "total_tokens": 8843,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    }
+  }
+}

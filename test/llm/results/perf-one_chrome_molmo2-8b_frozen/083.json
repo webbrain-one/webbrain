@@ -1,0 +1,22 @@
+{
+  "id": "083",
+  "user": "what time is it in tokyo right now",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 1400,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I don't have access to real-time data or the ability to fetch the current time in Tokyo. For the most accurate and up-to-date information, please check a reliable news website, weather app, or world clock service.",
+  "usage": {
+    "prompt_tokens": 8599,
+    "completion_tokens": 46,
+    "total_tokens": 8645,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    }
+  }
+}

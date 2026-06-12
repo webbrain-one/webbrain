@@ -1,0 +1,22 @@
+{
+  "id": "075",
+  "user": "finish what we were doing",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 1177,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I'm sorry, but I don't have enough information to continue. Could you please provide more details or clarify what you would like me to finish?",
+  "usage": {
+    "prompt_tokens": 8594,
+    "completion_tokens": 31,
+    "total_tokens": 8625,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    }
+  }
+}

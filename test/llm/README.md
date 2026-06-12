@@ -164,6 +164,18 @@ You can also pass the full chat completions URL:
 node test/llm/run-llamacpp.mjs --url https://openrouter.ai/api/v1/chat/completions --model "openai/gpt-oss-20b"
 ```
 
+For local servers with strict chat templates, use `--chat-template-compat`.
+`molmo` model names enable `alternating` automatically; this folds system
+instructions into user text and serializes replayed tool messages as normal
+alternating user/assistant transcript text. In `alternating` mode the runners
+also omit OpenAI structured `tools` and ask the model to emit parseable
+`<tool_call>{"name":"...","arguments":{...}}</tool_call>` text instead.
+
+```
+node test/llm/run-llamacpp.mjs --base http://127.0.0.1:1234 --model molmo2-8b
+LLM_CHAT_TEMPLATE_COMPAT=alternating node test/llm/run-llamacpp.mjs --base http://127.0.0.1:1234 --model local-model
+```
+
 By default, each `results/<run-tag>/NNN.json` includes the exact
 OpenAI-compatible `request` body sent to the model. To save disk space,
 omit it:
@@ -253,6 +265,15 @@ node test/llm/run-scenarios.mjs --category loop-bad-url
 node test/llm/run-scenarios.mjs --only 1,21,41 --browser firefox
 node test/llm/run-scenarios.mjs --base https://openrouter.ai/api/v1 \
   --model openai/gpt-oss-20b --api-key "$OPENROUTER_API_KEY"
+```
+
+For models/templates that reject OpenAI `system` / `tool` roles, use the
+same compatibility flag. `molmo` model names enable it automatically:
+
+```
+node test/llm/run-scenarios.mjs --base http://127.0.0.1:1234 --model molmo2-8b
+node test/llm/run-scenarios.mjs --base http://127.0.0.1:1234 --model local-model \
+  --chat-template-compat alternating
 ```
 
 Output goes to `test/llm/results-scenarios/<tag>_<browser>_<model>/`:

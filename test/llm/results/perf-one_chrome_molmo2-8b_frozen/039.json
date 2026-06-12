@@ -1,0 +1,22 @@
+{
+  "id": "039",
+  "user": "verify the form is ready before submitting",
+  "tab": {
+    "url": "https://github.com/esokullu/webbrain/releases/new",
+    "title": "New Release"
+  },
+  "latencyMs": 2684,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I'm ready to help with your GitHub release. What would you like to name the release, and do you have a tag you'd like to use? If you want to create a new tag, I can help you with that as well.",
+  "usage": {
+    "prompt_tokens": 9144,
+    "completion_tokens": 50,
+    "total_tokens": 9194,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    }
+  }
+}

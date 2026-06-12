@@ -1,0 +1,22 @@
+{
+  "id": "059",
+  "user": "list my downloads",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 1186,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I don't see any downloads listed on this New Tab page. Would you like me to search your Downloads folder or a specific site for download items?",
+  "usage": {
+    "prompt_tokens": 8592,
+    "completion_tokens": 31,
+    "total_tokens": 8623,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    }
+  }
+}

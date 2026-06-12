@@ -1,0 +1,22 @@
+{
+  "id": "024",
+  "user": "find tweets about react 19",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 1947,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I don't have access to the current page content or the ability to search Twitter directly. However, I can guide you on how to search for tweets about React 19 using the Twitter website or app. If you'd like, I can also help you with a script or API call if you have access to Twitter's API. Let me know how you'd like to proceed!",
+  "usage": {
+    "prompt_tokens": 8596,
+    "completion_tokens": 78,
+    "total_tokens": 8674,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    }
+  }
+}

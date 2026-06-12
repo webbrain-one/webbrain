@@ -1,0 +1,22 @@
+{
+  "id": "067",
+  "user": "show me what i can click on this page",
+  "tab": {
+    "url": "https://www.cnn.com/2026/05/world/example-story/index.html",
+    "title": "Example story — CNN"
+  },
+  "latencyMs": 938,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "<tool_call>{\"name\":\"get_accessibility_tree\",\"arguments\":{\"filter\":\"visible\"}}",
+  "usage": {
+    "prompt_tokens": 8616,
+    "completion_tokens": 16,
+    "total_tokens": 8632,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    }
+  }
+}

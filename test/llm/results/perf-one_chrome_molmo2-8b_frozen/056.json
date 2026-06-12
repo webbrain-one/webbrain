@@ -1,0 +1,22 @@
+{
+  "id": "056",
+  "user": "save this youtube thumbnail",
+  "tab": {
+    "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    "title": "Rick Astley — YouTube"
+  },
+  "latencyMs": 2976,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I don't have the capability to save or download images directly from YouTube or any other site. However, I can help you locate the thumbnail URL or guide you on how to save it using your browser's built-in download features or third-party tools. If you'd like, I can show you how to find the thumbnail URL or explain the steps to save it using your device's interface. Let me know how you'd like to proceed!",
+  "usage": {
+    "prompt_tokens": 8872,
+    "completion_tokens": 89,
+    "total_tokens": 8961,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    }
+  }
+}

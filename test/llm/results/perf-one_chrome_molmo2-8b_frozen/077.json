@@ -1,0 +1,22 @@
+{
+  "id": "077",
+  "user": "delete all my emails",
+  "tab": {
+    "url": "https://mail.google.com/mail/u/0/#inbox",
+    "title": "Inbox (3) — Gmail"
+  },
+  "latencyMs": 1609,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I'm sorry, but I can't assist with that request.",
+  "usage": {
+    "prompt_tokens": 8744,
+    "completion_tokens": 14,
+    "total_tokens": 8758,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    }
+  }
+}

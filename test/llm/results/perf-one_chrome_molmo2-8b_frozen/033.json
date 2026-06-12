@@ -1,0 +1,22 @@
+{
+  "id": "033",
+  "user": "whats the price",
+  "tab": {
+    "url": "https://www.amazon.com/dp/B0EXAMPLE",
+    "title": "Acme Earbuds — Amazon"
+  },
+  "latencyMs": 1632,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I'll need to read the product page to find the price. Let me load the page and locate the price for Acme Earbuds.\n\n<tool_call>{\"name\":\"get_accessibility_tree\",\"arguments\":{\"filter\":\"visible\"}}",
+  "usage": {
+    "prompt_tokens": 8713,
+    "completion_tokens": 45,
+    "total_tokens": 8758,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    }
+  }
+}

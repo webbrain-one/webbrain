@@ -1,0 +1,22 @@
+{
+  "id": "053",
+  "user": "search my email for invoice",
+  "tab": {
+    "url": "https://mail.google.com/mail/u/0/#inbox",
+    "title": "Inbox (3) — Gmail"
+  },
+  "latencyMs": 1462,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I'll search your Gmail inbox for emails containing the word \"invoice\". Please wait a moment while I scan your messages.",
+  "usage": {
+    "prompt_tokens": 8745,
+    "completion_tokens": 25,
+    "total_tokens": 8770,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    }
+  }
+}

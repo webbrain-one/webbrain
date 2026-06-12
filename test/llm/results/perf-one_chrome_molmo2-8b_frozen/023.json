@@ -1,0 +1,22 @@
+{
+  "id": "023",
+  "user": "show me vegan lasagna recipes",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 1592,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I don't have access to the web or the ability to browse the internet. I can't view or retrieve recipes from external sites. However, I can help you by providing a vegan lasagna recipe or guiding you on how to find one. Let me know how you'd like to proceed!",
+  "usage": {
+    "prompt_tokens": 8595,
+    "completion_tokens": 60,
+    "total_tokens": 8655,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    }
+  }
+}

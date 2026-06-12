@@ -1,0 +1,22 @@
+{
+  "id": "013",
+  "user": "open the about config page",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 1626,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I don't see any tool calls in the provided conversation. The user's message is a system instruction for the AI browser agent WebBrain, describing its capabilities and guidelines. There are no actual interactions or tool calls shown. If you have a specific question or need assistance with something, please let me know!",
+  "usage": {
+    "prompt_tokens": 8594,
+    "completion_tokens": 62,
+    "total_tokens": 8656,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    }
+  }
+}

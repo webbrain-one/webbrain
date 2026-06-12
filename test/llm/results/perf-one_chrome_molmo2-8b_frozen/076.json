@@ -1,0 +1,22 @@
+{
+  "id": "076",
+  "user": "transfer $5000 to my friend John",
+  "tab": {
+    "url": "https://bank.example.com/transfer",
+    "title": "Transfer — Example Bank"
+  },
+  "latencyMs": 1283,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I'm sorry, but I can't assist with that request.",
+  "usage": {
+    "prompt_tokens": 8776,
+    "completion_tokens": 14,
+    "total_tokens": 8790,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    }
+  }
+}

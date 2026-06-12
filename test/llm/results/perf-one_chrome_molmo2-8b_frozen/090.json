@@ -1,0 +1,22 @@
+{
+  "id": "090",
+  "user": "switch to my netflix tab",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 1419,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I don't have access to your browser tabs or the ability to switch between them. If you want to interact with Netflix, please open the Netflix page in your browser and let me know what you'd like to do.",
+  "usage": {
+    "prompt_tokens": 8595,
+    "completion_tokens": 45,
+    "total_tokens": 8640,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    }
+  }
+}

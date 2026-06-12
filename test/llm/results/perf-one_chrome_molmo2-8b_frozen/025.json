@@ -1,0 +1,22 @@
+{
+  "id": "025",
+  "user": "search youtube for \"never gonna give you up\"",
+  "tab": {
+    "url": "https://www.youtube.com/",
+    "title": "YouTube"
+  },
+  "latencyMs": 3033,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I don't have access to the current page content or the ability to search YouTube directly. However, I can guide you on how to search for \"never gonna give you up\" on YouTube:\n\n1. Open YouTube in your browser.\n2. In the search bar at the top of the page, type \"never gonna give you up\" and press Enter.\n3. Browse through the search results to find the video you're looking for.\n\nIf you need help with anything else, let me know!",
+  "usage": {
+    "prompt_tokens": 8861,
+    "completion_tokens": 101,
+    "total_tokens": 8962,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    }
+  }
+}

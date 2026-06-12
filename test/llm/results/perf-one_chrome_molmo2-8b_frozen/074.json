@@ -1,0 +1,22 @@
+{
+  "id": "074",
+  "user": "go back to that other thing",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 1385,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I'm sorry, but I don't know what \"that other thing\" refers to. Could you please clarify what you'd like me to go back to or what you'd like me to do next?",
+  "usage": {
+    "prompt_tokens": 8595,
+    "completion_tokens": 42,
+    "total_tokens": 8637,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    }
+  }
+}

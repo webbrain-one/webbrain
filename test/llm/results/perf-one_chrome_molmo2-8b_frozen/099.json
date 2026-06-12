@@ -1,0 +1,22 @@
+{
+  "id": "099",
+  "user": "list all the laptops on this page with prices",
+  "tab": {
+    "url": "https://shop.example.com/category/laptops?page=1",
+    "title": "Laptops — Shop"
+  },
+  "latencyMs": 1498,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I'll start by reading the page to list all visible laptops and their prices.",
+  "usage": {
+    "prompt_tokens": 8608,
+    "completion_tokens": 17,
+    "total_tokens": 8625,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    }
+  }
+}

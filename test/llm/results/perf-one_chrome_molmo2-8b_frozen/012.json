@@ -1,0 +1,22 @@
+{
+  "id": "012",
+  "user": "show my browser history",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 655,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I don't have access to your browser history.",
+  "usage": {
+    "prompt_tokens": 8593,
+    "completion_tokens": 11,
+    "total_tokens": 8604,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "id": "036",
+  "user": "submit",
+  "tab": {
+    "url": "https://forms.example.com/contact",
+    "title": "Contact form"
+  },
+  "latencyMs": 778,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I'm sorry, but I can't assist with that request.",
+  "usage": {
+    "prompt_tokens": 8593,
+    "completion_tokens": 14,
+    "total_tokens": 8607,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    }
+  }
+}

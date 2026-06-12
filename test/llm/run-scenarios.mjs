@@ -18,6 +18,10 @@
 //   --tier mid            # SYSTEM_PROMPT_ACT_MID + MID_TOOL_NAMES subset
 //   --tier compact        # SYSTEM_PROMPT_ACT_COMPACT + COMPACT_TOOL_NAMES subset
 //
+// Local chat-template compatibility:
+//   --chat-template-compat off|fold-system|alternating
+//   # or set env: LLM_CHAT_TEMPLATE_COMPAT=alternating
+//
 // Freeze (pin everything to a previous snapshot, ignores --tier):
 //   --freeze freeze/baseline-2026-05-23.json
 //   # or set env: WB_FREEZE_BASELINE=freeze/baseline-2026-05-23.json
@@ -42,6 +46,12 @@ import { fileURLToPath } from 'node:url';
 import { buildScenarioPayload } from './lib/scenario-payload.mjs';
 import { normalizeTier, isFrozen, getFrozenMeta, loadFrozenBaseline } from './lib/build-payload.mjs';
 import { scoreVerdict } from './lib/score.mjs';
+import {
+  chatTemplateCompatLabel,
+  getChatTemplateCompat,
+  prepareMessagesForChatTemplate,
+  prepareToolsForChatTemplate,
+} from './lib/chat-template-compat.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const S_DIR = join(HERE, 'scenarios');
@@ -69,6 +79,10 @@ const BROWSER = args.browser || 'chrome';
 const CONCURRENCY = Math.max(1, parseInt(args.concurrency || '2', 10));
 const TIMEOUT_MS = parseInt(args.timeout || '90000', 10);
 const SAVE_REQUEST = !args['no-save-request'];
+const CHAT_TEMPLATE_COMPAT = getChatTemplateCompat({
+  model: MODEL,
+  value: args['chat-template-compat'],
+});
 
 // --tier full|mid|compact — picks SYSTEM_PROMPT_ACT[_MID|_COMPACT] and the
 // corresponding tool subset. Default: full. ASK-mode scenarios ignore tier.
@@ -137,6 +151,9 @@ console.error(`▸ ${scenarios.length} scenario(s), base=${BASE}, model=${MODEL}
 if (categoryFilter) console.error(`▸ category=${categoryFilter}`);
 console.error(`▸ endpoint=${CHAT_URL}`);
 console.error(`▸ prompt: ${promptMode}${UNPROTECTED ? ' — ⚠ UNPROTECTED (wrapper + untrusted-content instructions stripped)' : ''}`);
+if (CHAT_TEMPLATE_COMPAT.mode !== 'off') {
+  console.error(`▸ chat template compat: ${chatTemplateCompatLabel(CHAT_TEMPLATE_COMPAT)}`);
+}
 console.error(`▸ writing to ${runDir}`);
 
 // Scoring (renderCall / matchesAntiPattern / deepEqual / scoreVerdict) lives in
@@ -155,6 +172,10 @@ function extractToolCallFromContent(text) {
   if (trimmed.startsWith('{') && trimmed.endsWith('}')) candidates.push(trimmed);
   for (const raw of candidates) {
     try { return normalizeToolCall(JSON.parse(raw)); } catch {}
+  }
+  const callMatch = trimmed.match(/^([A-Za-z_][\w.-]*)\s*\(([\s\S]*)\)\s*;?$/);
+  if (callMatch) {
+    return { name: callMatch[1], args: callMatch[2].trim() ? safeParse(callMatch[2]) : {} };
   }
   return null;
 }
@@ -175,13 +196,15 @@ function safeParse(s) { try { return JSON.parse(s); } catch { return {}; } }
 
 async function runOne(scenario) {
   const payload = buildScenarioPayload({ ...scenario, browser: scenario.browser || BROWSER }, { tier: TIER, unprotected: UNPROTECTED });
+  const messages = prepareMessagesForChatTemplate(payload.messages, CHAT_TEMPLATE_COMPAT, { tools: payload.tools });
+  const tools = prepareToolsForChatTemplate(payload.tools, CHAT_TEMPLATE_COMPAT);
   const body = {
     model: MODEL,
     temperature: scenario.mode === 'act' ? 0.15 : 0.3,
     max_tokens: 4096,
-    messages: payload.messages,
-    tools: payload.tools,
+    messages,
   };
+  if (tools) body.tools = tools;
 
   const t0 = Date.now();
   const ctrl = new AbortController();
@@ -249,7 +272,10 @@ async function runOne(scenario) {
     finishReason: response?.choices?.[0]?.finish_reason || null,
     content: msg?.content || null,
     usage: response?.usage || null,
-    request: SAVE_REQUEST ? { messages: payload.messages, tools_summary: { count: payload.tools.length } } : undefined,
+    request: SAVE_REQUEST ? {
+      messages: body.messages,
+      tools_summary: { count: payload.tools.length, sent: !!tools },
+    } : undefined,
   };
 }
 
@@ -303,6 +329,8 @@ const summary = {
   runTag, model: MODEL, base: BASE, browser: BROWSER,
   tier: isFrozen() ? null : TIER,
   unprotected: UNPROTECTED,
+  chatTemplateCompat: CHAT_TEMPLATE_COMPAT.mode,
+  structuredToolsSent: !CHAT_TEMPLATE_COMPAT.omitStructuredTools,
   freeze: isFrozen() ? {
     path: args.freeze && args.freeze !== true ? args.freeze : (process.env.WB_FREEZE_BASELINE || null),
     sourceRun: getFrozenMeta()?.sourceRun || null,
