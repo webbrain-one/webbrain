@@ -189,6 +189,12 @@
 
   let _lastInteractionPoint = null;
 
+  function showAgentWorkingTarget(el, source = 'interaction') {
+    try {
+      window.__webbrainAgentIndicator?.showTarget?.(el, source);
+    } catch {}
+  }
+
   function rememberInteractionPoint(el, source = 'interaction') {
     try {
       if (!el || typeof el.getBoundingClientRect !== 'function') return null;
@@ -206,6 +212,7 @@
         source,
         ts: Date.now(),
       };
+      showAgentWorkingTarget(el, source);
       return rect;
     } catch {
       return null;
@@ -955,6 +962,7 @@
     }
 
     el.focus();
+    showAgentWorkingTarget(el, 'type_text');
 
     if (el.isContentEditable) {
       if (params.clear) el.textContent = '';
@@ -1873,6 +1881,7 @@
           }
           try { el.scrollIntoView({ block: 'center', inline: 'center' }); } catch {}
           try { el.focus({ preventScroll: true }); } catch {}
+          showAgentWorkingTarget(el, 'type_ax');
           // Capture the element's on-screen rect so the background can
           // remember where the last interaction happened (for annotated
           // verification screenshots on done).
@@ -1963,6 +1972,7 @@
           }
           try { el.scrollIntoView({ block: 'center', inline: 'center' }); } catch {}
           try { el.focus({ preventScroll: true }); } catch {}
+          showAgentWorkingTarget(el, 'set_field');
           const rect = (() => {
             try {
               const r = el.getBoundingClientRect();
@@ -2176,6 +2186,7 @@
             return { success: false, error: `ref_id ${ref_id} not found.${formatNote} The element may have been removed or the page replaced.${hint} Re-read the accessibility tree to get fresh ids.`, suggestions };
           }
           try { el.scrollIntoView({ block: 'center', inline: 'center' }); } catch {}
+          showAgentWorkingTarget(el, 'ax_resolve_rect');
           const r = el.getBoundingClientRect();
           const cx = r.left + r.width / 2;
           const cy = r.top + r.height / 2;
@@ -2230,6 +2241,7 @@
           // apart vertically — flagged via inViewport on the return.
           try { fromEl.scrollIntoView({ block: 'center', inline: 'center' }); } catch {}
           try { toEl.scrollIntoView({ block: 'center', inline: 'center' }); } catch {}
+          showAgentWorkingTarget(toEl, 'ax_resolve_two_rects');
 
           const fr = fromEl.getBoundingClientRect();
           const tr = toEl.getBoundingClientRect();

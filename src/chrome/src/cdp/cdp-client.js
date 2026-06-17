@@ -1083,6 +1083,12 @@ export class CDPClient {
     // Step 1: real mouse events at center coordinates.
     if (info.inViewport && info.hitOk) {
       try {
+        const rect = {
+          x: Math.round(info.x - (info.width || 1) / 2),
+          y: Math.round(info.y - (info.height || 1) / 2),
+          w: Math.round(info.width || 1),
+          h: Math.round(info.height || 1),
+        };
         await this.sendCommand(tabId, 'Input.dispatchMouseEvent', {
           type: 'mouseMoved', x: info.x, y: info.y, button: 'none', buttons: 0,
         });
@@ -1099,6 +1105,7 @@ export class CDPClient {
           text: info.text,
           x: info.x,
           y: info.y,
+          rect,
         };
       } catch (e) {
         // fall through to fallback
@@ -1117,7 +1124,18 @@ export class CDPClient {
             functionDeclaration: 'function() { this.click(); }',
             awaitPromise: false,
           });
-          return { success: true, method: 'cdp-node-click', x: info.x, y: info.y };
+          return {
+            success: true,
+            method: 'cdp-node-click',
+            x: info.x,
+            y: info.y,
+            rect: {
+              x: Math.round(info.x - (info.width || 1) / 2),
+              y: Math.round(info.y - (info.height || 1) / 2),
+              w: Math.round(info.width || 1),
+              h: Math.round(info.height || 1),
+            },
+          };
         }
       } catch (e) { /* fall through */ }
     }
@@ -1138,7 +1156,14 @@ export class CDPClient {
         if (!el) return { success: false, error: 'Element not found (fallback)' };
         try { el.focus(); } catch (e) {}
         el.click();
-        return { success: true, method: 'js-click', tag: el.tagName, text: (el.innerText || '').slice(0, 80) };
+        const r = el.getBoundingClientRect();
+        return {
+          success: true,
+          method: 'js-click',
+          tag: el.tagName,
+          text: (el.innerText || '').slice(0, 80),
+          rect: { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) },
+        };
       })()
     `);
     return fb?.result?.value || { success: false, error: 'Click failed' };
@@ -1335,7 +1360,13 @@ export class CDPClient {
             if (${clear}) el.textContent = '';
             el.textContent += txt;
             el.dispatchEvent(new InputEvent('input', { bubbles: true, data: txt }));
-            return { success: true, method: 'js-contenteditable', value: el.textContent.slice(0, 100) };
+            const r = el.getBoundingClientRect();
+            return {
+              success: true,
+              method: 'js-contenteditable',
+              value: el.textContent.slice(0, 100),
+              rect: { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) },
+            };
           }
 
           const proto = el instanceof HTMLTextAreaElement
@@ -1347,13 +1378,29 @@ export class CDPClient {
 
           el.dispatchEvent(new Event('input', { bubbles: true }));
           el.dispatchEvent(new Event('change', { bubbles: true }));
-          return { success: true, method: 'js-setter', value: (el.value || '').slice(0, 100) };
+          const r = el.getBoundingClientRect();
+          return {
+            success: true,
+            method: 'js-setter',
+            value: (el.value || '').slice(0, 100),
+            rect: { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) },
+          };
         })()
       `);
       return result?.result?.value || { success: false, error: 'Type failed' };
     }
 
-    return { success: true, method: 'cdp-insert-text', tag: info.tag };
+    return {
+      success: true,
+      method: 'cdp-insert-text',
+      tag: info.tag,
+      rect: {
+        x: Math.round(info.x - (info.width || 1) / 2),
+        y: Math.round(info.y - (info.height || 1) / 2),
+        w: Math.round(info.width || 1),
+        h: Math.round(info.height || 1),
+      },
+    };
   }
 
   /**

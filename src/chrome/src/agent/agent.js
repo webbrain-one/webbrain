@@ -1689,6 +1689,17 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     }
   }
 
+  _showAgentTarget(tabId, rect, source = 'interaction') {
+    if (!rect) return;
+    try {
+      chrome.tabs.sendMessage(tabId, {
+        type: 'WB_SHOW_AGENT_TARGET',
+        rect,
+        source,
+      }).catch(() => {});
+    } catch { /* decorative only */ }
+  }
+
   static BLANK_SCREENSHOT_RETRY_DELAYS_MS = [500, 1000, 1500];
 
   static _summarizeBlankness(info) {
@@ -5386,6 +5397,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
                     return {
                       found: true, mode: 'label', x: r.left + r.width / 2,
                       y: r.top + r.height / 2, tag: inp.tagName,
+                      width: r.width, height: r.height,
                       text: ltxt.slice(0, 80), focusedInput: true,
                     };
                   }
@@ -5509,6 +5521,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
                 mode: usedMode,
                 x: r.left + r.width / 2,
                 y: r.top + r.height / 2,
+                width: r.width,
+                height: r.height,
                 tag: el.tagName,
                 text: (el.innerText || el.value || '').slice(0, 80),
               };
@@ -5566,7 +5580,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
                             if (pr.width > 0 && pr.height > 0) { r = pr; break; }
                           }
                         }
-                        return { found: true, mode: 'label', x: r.left + r.width / 2, y: r.top + r.height / 2, tag: inp.tagName, text: ltxt.slice(0, 80), focusedInput: true };
+                        return { found: true, mode: 'label', x: r.left + r.width / 2, y: r.top + r.height / 2, width: r.width, height: r.height, tag: inp.tagName, text: ltxt.slice(0, 80), focusedInput: true };
                       }
                     }
                     return { found: false };
@@ -5631,7 +5645,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
                       if (pr.width > 0 && pr.height > 0) { r = pr; break; }
                     }
                   }
-                  return { found: true, mode: usedMode, x: r.left+r.width/2, y: r.top+r.height/2, tag: el.tagName, text: (el.innerText||el.value||'').slice(0,80) };
+                  return { found: true, mode: usedMode, x: r.left+r.width/2, y: r.top+r.height/2, width: r.width, height: r.height, tag: el.tagName, text: (el.innerText||el.value||'').slice(0,80) };
                 })()
               `);
               const retryInfo = retry?.result?.value;
@@ -5804,6 +5818,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
                         mode: m,
                         x: r.left + r.width/2,
                         y: r.top + r.height/2,
+                        width: r.width,
+                        height: r.height,
                         tag: el.tagName,
                         role: el.getAttribute('role') || (el.getAttribute('contenteditable') != null ? 'contenteditable' : ''),
                         text: matches[0].txt.slice(0, 80),
@@ -5914,6 +5930,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           const progressBeforeText = await this._clickProgressSnapshot(tabId);
           const beforeTabIdsText = new Set((await chrome.tabs.query({})).map(t => t.id));
           await new Promise(r => setTimeout(r, 100));
+          this._showAgentTarget(tabId, {
+            x: Math.round(info.x - (Number(info.width) || 1) / 2),
+            y: Math.round(info.y - (Number(info.height) || 1) / 2),
+            w: Math.round(Number(info.width) || 1),
+            h: Math.round(Number(info.height) || 1),
+          }, 'click_text');
           await cdpClient.dispatchMouseEvent(tabId, 'mouseMoved', info.x, info.y);
           await cdpClient.dispatchMouseEvent(tabId, 'mousePressed', info.x, info.y);
           await cdpClient.dispatchMouseEvent(tabId, 'mouseReleased', info.x, info.y);
@@ -5987,7 +6009,13 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           }
           const clickX = Math.round(info.x);
           const clickY = Math.round(info.y);
-          this._lastInteractionRect.set(tabId, { x: clickX, y: clickY, w: 1, h: 1, ts: Date.now(), url: clickUrl });
+          const clickRect = {
+            x: Math.round(info.x - (Number(info.width) || 1) / 2),
+            y: Math.round(info.y - (Number(info.height) || 1) / 2),
+            w: Math.round(Number(info.width) || 1),
+            h: Math.round(Number(info.height) || 1),
+          };
+          this._lastInteractionRect.set(tabId, { ...clickRect, ts: Date.now(), url: clickUrl });
           const clickResponse = {
             success: true,
             method: 'cdp-by-text',
@@ -5997,7 +6025,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             matched: args.text,
             x: clickX,
             y: clickY,
-            rect: { x: clickX, y: clickY, w: 1, h: 1 },
+            rect: clickRect,
           };
           return await this._annotateClickProgress(tabId, 'click', args, clickResponse, progressBeforeText, { editable: isEditableTarget });
         }
@@ -6028,6 +6056,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           const progressBeforeSel = await this._clickProgressSnapshot(tabId);
           const beforeTabIdsSel = new Set((await chrome.tabs.query({})).map(t => t.id));
           const selResult = await cdpClient.clickElement(tabId, args.selector);
+          if (selResult?.success) this._showAgentTarget(tabId, selResult.rect || selResult, 'click_selector');
           const redirectedSel = await this._redirectTargetBlankClick(tabId, beforeTabIdsSel);
           if (redirectedSel?.redirected) {
             return {
@@ -6173,6 +6202,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           const clickUrl = await this._currentUrl(tabId);
           const progressBeforeCoord = await this._clickProgressSnapshot(tabId);
           const beforeTabIdsCoord = new Set((await chrome.tabs.query({})).map(t => t.id));
+          this._showAgentTarget(tabId, { x: Math.round(clickX), y: Math.round(clickY), w: 1, h: 1 }, 'click_coordinates');
           await cdpClient.dispatchMouseEvent(tabId, 'mouseMoved', clickX, clickY);
           await cdpClient.dispatchMouseEvent(tabId, 'mousePressed', clickX, clickY);
           await cdpClient.dispatchMouseEvent(tabId, 'mouseReleased', clickX, clickY);
@@ -6240,6 +6270,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         }
         if (args.selector) {
           const result = await cdpClient.typeText(tabId, args.selector, args.text || '', !!args.clear);
+          if (result.success) this._showAgentTarget(tabId, result.rect || result, 'type_text_selector');
           // Track field for duplicate-typing detection
           if (result.success) {
             const fieldIdent = `sel:${args.selector}`;
@@ -6267,6 +6298,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
               }
               const tag = el.tagName;
               const editable = el.isContentEditable || ['INPUT','TEXTAREA','SELECT'].includes(tag);
+              const r = el.getBoundingClientRect();
               return {
                 focused: true,
                 editable,
@@ -6274,6 +6306,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
                 type: el.type || '',
                 name: el.name || el.id || el.getAttribute('aria-label') || '',
                 value: (el.value || '').slice(0, 50),
+                rect: { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) },
               };
             })()
           `);
@@ -6286,6 +6319,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
               focusedElement: focus || null,
             };
           }
+          this._showAgentTarget(tabId, focus.rect, 'type_text_focused');
 
           // <select> fast-path: use CDP keyboard ArrowDown/ArrowUp events
           // to change the selected option. This fires native browser events
@@ -6680,7 +6714,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       try {
         await chrome.scripting.executeScript({
           target: { tabId },
-          files: ['src/content/accessibility-tree.js', 'src/content/content.js'],
+          files: [
+            'src/content/accessibility-tree.js',
+            'src/content/content.js',
+            'src/content/agent-visual-indicator.js',
+          ],
         });
         const response = await chrome.tabs.sendMessage(tabId, {
           target: 'content',

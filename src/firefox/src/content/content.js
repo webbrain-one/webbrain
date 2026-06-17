@@ -311,6 +311,12 @@
 
   let _lastInteractionPoint = null;
 
+  function showAgentWorkingTarget(el, source = 'interaction') {
+    try {
+      window.__webbrainAgentIndicator?.showTarget?.(el, source);
+    } catch {}
+  }
+
   function rememberInteractionPoint(el, source = 'interaction') {
     try {
       if (!el || typeof el.getBoundingClientRect !== 'function') return null;
@@ -328,6 +334,7 @@
         source,
         ts: Date.now(),
       };
+      showAgentWorkingTarget(el, source);
       return rect;
     } catch {
       return null;
@@ -1142,6 +1149,7 @@
     }
 
     el.focus();
+    showAgentWorkingTarget(el, 'type_text');
 
     // contenteditable path (Notion, Google Docs comments, Lexical,
     // ProseMirror, Slate, Draft — all need the beforeinput → input →
@@ -1851,6 +1859,7 @@
           }
           try { el.scrollIntoView({ block: 'center', inline: 'center' }); } catch {}
           try { el.focus({ preventScroll: true }); } catch {}
+          showAgentWorkingTarget(el, 'type_ax');
           const typeRect = (() => {
             try {
               const r = el.getBoundingClientRect();
@@ -1914,6 +1923,7 @@
           if (!el) return { success: false, error: `ref_id ${ref_id} not found. Re-read the accessibility tree.` };
           try { el.scrollIntoView({ block: 'center', inline: 'center' }); } catch {}
           try { el.focus({ preventScroll: true }); } catch {}
+          showAgentWorkingTarget(el, 'set_field');
           const rect = (() => {
             try {
               const r = el.getBoundingClientRect();

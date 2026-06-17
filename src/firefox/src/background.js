@@ -476,6 +476,9 @@ async function handleMessage(msg, sender) {
         await browser.tabs.executeScript(tabId, {
           file: 'src/content/content.js',
         });
+        await browser.tabs.executeScript(tabId, {
+          file: 'src/content/agent-visual-indicator.js',
+        });
         return await browser.tabs.sendMessage(tabId, {
           target: 'content',
           action: 'get_page_info',
