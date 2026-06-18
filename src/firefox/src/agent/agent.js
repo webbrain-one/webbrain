@@ -4060,6 +4060,21 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   _tryParseToolCallsFromText(text, allowedNames = AGENT_TOOL_NAMES) {
     if (!text || text.length > 10000) return [];
 
+    const parseXmlParameterValue = (raw) => {
+      const value = raw.trim();
+      if (!value) return value;
+      const looksJsonLiteral =
+        /^(?:true|false|null)$/.test(value) ||
+        /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(value) ||
+        /^[\[{"]/.test(value);
+      if (!looksJsonLiteral) return value;
+      try {
+        return JSON.parse(value);
+      } catch {
+        return value;
+      }
+    };
+
     const results = [];
     const patterns = [
       /<tool_call>\s*([\s\S]*?)\s*<\/tool_call>/gi,
@@ -4112,7 +4127,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         const paramRe = /<parameter=([A-Za-z_]\w*)>\s*([\s\S]*?)\s*<\/parameter>/gi;
         let p;
         while ((p = paramRe.exec(m[2])) !== null) {
-          args[p[1]] = p[2].trim();
+          args[p[1]] = parseXmlParameterValue(p[2]);
         }
         results.push({ name: toolName, arguments: args });
       }
