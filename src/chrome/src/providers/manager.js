@@ -89,7 +89,6 @@ export class ProviderManager {
         providerName: 'webbrain-cloud',
         baseUrl: 'https://api.webbrain.one/v1',
         model: 'webbrain-cloud 1.0',
-        promptTier: 'mid',
         contextWindow: 256000,
         inputCostPerMillionUsd: 0.20,
         outputCostPerMillionUsd: 1.15,

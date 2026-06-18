@@ -4049,6 +4049,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
    * Some local models emit tool calls as text markup instead of using the
    * structured tool_calls field. This catches the most common formats:
    *   - <tool_call>{"name":"...","arguments":{...}}</tool_call>
+   *   - <tool_call><function=name><parameter=key>value</parameter>...</function></tool_call>
    *   - <|tool_call|>...<|/tool_call|>  or  <|tool_call>...<tool_call|>
    *   - <functioncall>{"name":"...","arguments":{...}}</functioncall>
    *   - call:toolName{key:<|"|>value<|"|>}  (custom quote-token format)
@@ -4095,6 +4096,25 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           }
           continue;
         }
+      }
+    }
+
+    // StepFun/OpenRouter can emit function calls as XML-ish text even when
+    // OpenAI-style tools were requested:
+    // <tool_call><function=click_ax><parameter=ref_id>ref_123</parameter>...
+    if (results.length === 0) {
+      const xmlToolRe = /<tool_call>\s*<function=([A-Za-z_]\w*)>\s*([\s\S]*?)<\/function>\s*<\/tool_call>/gi;
+      let m;
+      while ((m = xmlToolRe.exec(text)) !== null) {
+        const toolName = m[1];
+        if (!allowedNames.has(toolName)) continue;
+        const args = {};
+        const paramRe = /<parameter=([A-Za-z_]\w*)>\s*([\s\S]*?)\s*<\/parameter>/gi;
+        let p;
+        while ((p = paramRe.exec(m[2])) !== null) {
+          args[p[1]] = p[2].trim();
+        }
+        results.push({ name: toolName, arguments: args });
       }
     }
 

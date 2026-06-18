@@ -82,16 +82,16 @@ export class BaseLLMProvider {
    * Prompt tier for this provider: 'compact' | 'mid' | 'full'. Drives both
    * which ACT system prompt and which tool set the agent uses.
    *
-   * Explicit config.promptTier wins; this lets hosted-but-weaker defaults
-   * such as WebBrain Cloud use the mid tool set without pretending to be a
-   * local provider. Failing that, cloud providers default to 'full', legacy
-   * useCompactPrompt maps to 'compact', local providers default to 'mid', and
-   * everything else (e.g. OpenRouter) defaults to 'full'.
+   * Cloud providers are always 'full' — the tier knob is a small-model
+   * concern, exposed only for local and OpenRouter providers. Otherwise an
+   * explicit config.promptTier wins; failing that the legacy boolean
+   * useCompactPrompt maps to 'compact'; failing that local providers default
+   * to 'mid' and everything else (e.g. OpenRouter) to 'full'.
    */
   get promptTier() {
+    if (this.config.category === 'cloud') return 'full';
     const t = this.config.promptTier;
     if (t === 'compact' || t === 'mid' || t === 'full') return t;
-    if (this.config.category === 'cloud') return 'full';
     if (this.config.useCompactPrompt) return 'compact';
     return this.config.category === 'local' ? 'mid' : 'full';
   }
