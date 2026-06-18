@@ -180,6 +180,7 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
       content: message?.content || '',
       toolCalls: message?.tool_calls || null,
       usage: data.usage || null,
+      finishReason: choice?.finish_reason || null,
       raw: data,
     };
   }

@@ -4249,8 +4249,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           // _manageContext can add only the growth since (see its delta logic).
           this._lastEstCharsAtReport.set(tabId, this._estimateContextChars(messages));
         }
-        if (runId) { try { await trace.recordLLMResponse(runId, steps, { content: result.content, toolCalls: result.toolCalls, usage: result.usage, latencyMs: Date.now() - _llmStart, model: provider.model }); } catch {} }
-        this._logDebug({ type: 'llm_response', step: steps, content: result.content, toolCalls: result.toolCalls });
+        if (runId) { try { await trace.recordLLMResponse(runId, steps, { content: result.content, toolCalls: result.toolCalls, usage: result.usage, latencyMs: Date.now() - _llmStart, model: provider.model, finishReason: result.finishReason }); } catch {} }
+        this._logDebug({ type: 'llm_response', step: steps, content: result.content, toolCalls: result.toolCalls, finishReason: result.finishReason });
       } catch (e) {
         this._logDebug({ type: 'llm_error', step: steps, error: e.message });
         if (this._isCostAllowanceError(e)) {

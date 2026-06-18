@@ -7274,8 +7274,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           this._lastEstCharsAtReport.set(tabId, this._estimateContextChars(messages));
         }
         const _llmLatency = Date.now() - _llmStart;
-        this._logDebug({ type: 'llm_response', step: steps, content: result.content, toolCalls: result.toolCalls });
-        if (runId) trace.recordLLMResponse(runId, steps, { content: result.content, toolCalls: result.toolCalls, usage: result.usage, latencyMs: _llmLatency, model: provider.model });
+        this._logDebug({ type: 'llm_response', step: steps, content: result.content, toolCalls: result.toolCalls, finishReason: result.finishReason });
+        if (runId) trace.recordLLMResponse(runId, steps, { content: result.content, toolCalls: result.toolCalls, usage: result.usage, latencyMs: _llmLatency, model: provider.model, finishReason: result.finishReason });
       } catch (e) {
         this._logDebug({ type: 'llm_error', step: steps, error: e.message });
         if (this._isCostAllowanceError(e)) {

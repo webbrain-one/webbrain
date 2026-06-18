@@ -154,7 +154,7 @@ export function recordLLMRequest(runId, step, payload) {
   return _appendEvent(runId, 'llm_request', { step, ...payload });
 }
 
-export function recordLLMResponse(runId, step, { content, toolCalls, usage, latencyMs, model }) {
+export function recordLLMResponse(runId, step, { content, toolCalls, usage, latencyMs, model, finishReason }) {
   return _appendEvent(runId, 'llm_response', {
     step,
     content: content || null,
@@ -166,6 +166,7 @@ export function recordLLMResponse(runId, step, { content, toolCalls, usage, late
     usage: usage || null,
     latencyMs: latencyMs || null,
     model: model || null,
+    finishReason: finishReason || null,
   });
 }
 
