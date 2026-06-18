@@ -1,4 +1,4 @@
-.claude/settings.local.json
+.claude/
 .DS_Store
 node_modules/
 test/anonymous/.test-profile/
