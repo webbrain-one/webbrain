@@ -43,6 +43,8 @@ export default {
   'sp.input.placeholder_tip.record': 'Say "record this page" to save this tab/window interaction',
   'sp.input.act_placeholder': 'Tell me what to do on this page...',
   'sp.recommended.title': 'Suggested actions',
+  'sp.recommended.collapse': 'Minimize suggested actions',
+  'sp.recommended.expand': 'Show suggested actions',
 
   'sp.activity.thinking': 'Thinking...',
   'sp.activity.thinking_step': 'Thinking (step {step})...',

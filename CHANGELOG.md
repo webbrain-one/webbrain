@@ -6,6 +6,15 @@ This changelog was generated from the repository Git history and release tags. V
 
 ## [Unreleased]
 
+## [14.0.4] - 2026-06-19
+
+### Added
+- Suggested actions in the side panel can now be minimized and restored in both Chrome and Firefox. The collapsed preference is saved, so users can reclaim chat space once and keep it that way across panel reloads.
+
+### Changed
+- Tightened the Suggested actions panel spacing, chevron control, and action chips to reduce vertical space used above the chat input.
+- Updated release metadata, Settings subtitle versions, architecture docs, and Chrome / Firefox manifests for 14.0.4.
+
 ## [14.0.0] - 2026-06-18
 
 ### Changed

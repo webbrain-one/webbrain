@@ -886,30 +886,87 @@ body {
 
 /* Context-aware recommendations */
 .recommended-actions {
-  margin-bottom: 8px;
-  padding: 8px;
+  margin-bottom: 6px;
+  padding: 5px 6px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--tint-soft-2);
+}
+
+.recommended-actions.collapsed {
+  padding: 4px 6px;
 }
 
 .recommended-actions.hidden {
   display: none;
 }
 
+.recommended-actions-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.recommended-actions.collapsed .recommended-actions-header {
+  margin-bottom: 0;
+}
+
 .recommended-actions-title {
-  margin-bottom: 6px;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.02em;
+  line-height: 1;
   text-transform: uppercase;
+}
+
+.recommended-actions-toggle {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  flex-shrink: 0;
+  height: 18px;
+  justify-content: center;
+  padding: 0;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+  width: 18px;
+}
+
+.recommended-actions-toggle:hover {
+  background: var(--accent-dim);
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+
+.recommended-actions-toggle svg {
+  fill: none;
+  height: 12px;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+  transition: transform 0.15s;
+  width: 12px;
+}
+
+.recommended-actions.collapsed .recommended-actions-toggle svg {
+  transform: rotate(-90deg);
 }
 
 .recommended-actions-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
+}
+
+.recommended-actions.collapsed .recommended-actions-list {
+  display: none;
 }
 
 .recommended-action-chip {
@@ -919,9 +976,9 @@ body {
   color: var(--text-secondary);
   cursor: pointer;
   font: inherit;
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1.2;
-  padding: 6px 9px;
+  padding: 4px 7px;
   transition: border-color 0.15s, color 0.15s, background 0.15s, transform 0.1s;
 }
 

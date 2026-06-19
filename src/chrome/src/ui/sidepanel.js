@@ -290,8 +290,10 @@ const modeActBtn = document.getElementById('btn-mode-act');
 const actWarning = document.getElementById('act-warning');
 const inputArea = document.getElementById('input-area');
 const recommendedActionsEl = document.getElementById('recommended-actions');
+const recommendedActionsToggleEl = document.getElementById('recommended-actions-toggle');
 const recommendedActionsListEl = document.getElementById('recommended-actions-list');
 const stopBtn = document.getElementById('btn-stop');
+const RECOMMENDED_ACTIONS_COLLAPSED_KEY = 'recommendedActionsCollapsed';
 const PLACEHOLDER_ROTATION_INTERVAL_MS = 10_000;
 const ASK_PLACEHOLDER_KEYS = [
   'sp.input.ask_placeholder',
@@ -315,6 +317,7 @@ let verboseMode = false;
 let agentMode = 'ask'; // 'ask' or 'act'
 let abortRequested = false;
 let recommendationsRequestId = 0;
+let recommendedActionsCollapsed = false;
 // Notification sound on task completion. Default on; togglable via Settings.
 let notifySoundEnabled = true;
 let notifyAudio = null;
@@ -581,6 +584,47 @@ function hideRecommendedActions() {
   recommendedActionsListEl.replaceChildren();
   recommendedActionsEl.classList.add('hidden');
 }
+
+function updateRecommendedActionsCollapsedState() {
+  if (!recommendedActionsEl) return;
+  recommendedActionsEl.classList.toggle('collapsed', recommendedActionsCollapsed);
+  if (!recommendedActionsToggleEl) return;
+
+  const labelKey = recommendedActionsCollapsed ? 'sp.recommended.expand' : 'sp.recommended.collapse';
+  const label = t(labelKey);
+  recommendedActionsToggleEl.dataset.i18nTitle = labelKey;
+  recommendedActionsToggleEl.dataset.i18nAriaLabel = labelKey;
+  recommendedActionsToggleEl.title = label;
+  recommendedActionsToggleEl.setAttribute('aria-label', label);
+  recommendedActionsToggleEl.setAttribute('aria-expanded', String(!recommendedActionsCollapsed));
+}
+
+function setRecommendedActionsCollapsed(collapsed, { persist = true } = {}) {
+  recommendedActionsCollapsed = Boolean(collapsed);
+  updateRecommendedActionsCollapsedState();
+  if (persist) {
+    chrome.storage.local.set({ [RECOMMENDED_ACTIONS_COLLAPSED_KEY]: recommendedActionsCollapsed }).catch(() => {});
+  }
+}
+
+if (recommendedActionsToggleEl) {
+  recommendedActionsToggleEl.addEventListener('click', () => {
+    setRecommendedActionsCollapsed(!recommendedActionsCollapsed);
+  });
+}
+
+chrome.storage.local.get(RECOMMENDED_ACTIONS_COLLAPSED_KEY).then((stored) => {
+  setRecommendedActionsCollapsed(stored?.[RECOMMENDED_ACTIONS_COLLAPSED_KEY] === true, { persist: false });
+}).catch(() => updateRecommendedActionsCollapsedState());
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area && area !== 'local') return;
+  if (changes[RECOMMENDED_ACTIONS_COLLAPSED_KEY]) {
+    setRecommendedActionsCollapsed(changes[RECOMMENDED_ACTIONS_COLLAPSED_KEY].newValue === true, { persist: false });
+  }
+});
+
+document.addEventListener('wb-locale-changed', updateRecommendedActionsCollapsedState);
 
 async function refreshRecommendedActions() {
   const requestId = ++recommendationsRequestId;
