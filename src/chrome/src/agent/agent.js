@@ -3398,7 +3398,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const rows = this._activeProgressLedgerRows(tabId);
     const hasFollowRows = rows.some(row => String(row?.action || '').toLowerCase() === 'follow');
     const text = this._latestTaskText(tabId).toLowerCase();
-    const hasFollowIntent = /\b(?:follow|unfollow)\b/.test(text);
+    const hasFollowIntent = /\bfollow\b/.test(text);
     if (hasFollowIntent && this._hasProgressLedgerContext(tabId)) return true;
     return hasFollowRows
       && this._currentTaskIsProgressContinuation(tabId)
@@ -3968,6 +3968,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         return `progress ledger updated (${c.total ?? '?'} rows, ${c.unresolved ?? 0} unresolved)`;
       }
       case 'progress_read': {
+        if (UNTRUSTED_CONTENT_TOOLS.has(name)) return `${name} ok (untrusted page content)`;
         const c = parsed.counts || {};
         return `progress ledger read (${c.total ?? '?'} rows, ${c.unresolved ?? 0} unresolved)`;
       }
