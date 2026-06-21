@@ -1801,12 +1801,57 @@
               : '';
             return { success: false, error: `ref_id ${ref_id} not found.${formatNote} The element may have been removed or the page replaced.${hint} Re-read the accessibility tree to get fresh ids — do NOT guess ref numbers or invent placeholders.`, suggestions };
           }
+          const tag = el.tagName ? el.tagName.toLowerCase() : '';
           try { el.scrollIntoView({ block: 'center', inline: 'center' }); } catch {}
           try { el.focus({ preventScroll: true }); } catch {}
           const rect = el.getBoundingClientRect();
+          let popupRole = '';
+          let popupHasPopup = null;
+          let isPopupOpener = false;
+          try {
+            popupRole = (el.getAttribute('role') || '').toLowerCase();
+            popupHasPopup = el.getAttribute('aria-haspopup');
+            isPopupOpener = popupRole === 'combobox' || !!popupHasPopup;
+          } catch {}
+          let anchorMeta = null;
+          if (tag === 'a') {
+            try {
+              const href = el.getAttribute('href') || '';
+              if (href) {
+                const resolvedHref = el.href || new URL(href, document.baseURI || location.href).href;
+                anchorMeta = {
+                  href,
+                  resolvedHref,
+                  beforeUrl: location.href,
+                  beforeScrollY: Math.round(window.scrollY || 0),
+                };
+                const trimmedHref = href.trim();
+                const lowerHref = trimmedHref.toLowerCase();
+                if (!lowerHref.startsWith('javascript:')) {
+                  try {
+                    const before = new URL(anchorMeta.beforeUrl);
+                    const target = new URL(resolvedHref);
+                    const sameDocumentBase = target.origin === before.origin &&
+                      target.pathname === before.pathname &&
+                      target.search === before.search;
+                    const anchorTarget = target.hash || (trimmedHref.startsWith('#') && trimmedHref.length > 1 ? trimmedHref : '');
+                    anchorMeta.targetUrl = target.href;
+                    if (sameDocumentBase && anchorTarget && !isPopupOpener) {
+                      anchorMeta.sameDocumentAnchor = true;
+                      anchorMeta.anchorTarget = anchorTarget;
+                    } else if (!sameDocumentBase) {
+                      anchorMeta.navigates = true;
+                    }
+                  } catch {
+                    const currentPath = (location.pathname + location.search) || '/';
+                    anchorMeta.navigates = href && !href.startsWith('#') && href !== currentPath;
+                  }
+                }
+              }
+            } catch {}
+          }
           rememberInteractionPoint(el, 'click_ax');
           el.click();
-          const tag = el.tagName ? el.tagName.toLowerCase() : '';
           let isTextEntry = false;
           if (tag === 'textarea') isTextEntry = true;
           else if (tag === 'input') {
@@ -1814,51 +1859,83 @@
             const nonText = new Set(['checkbox', 'radio', 'file', 'submit', 'button', 'reset', 'image', 'color', 'range', 'hidden']);
             isTextEntry = !nonText.has(inputType);
           } else if (el.isContentEditable) isTextEntry = true;
-          const resp = {
-            success: true,
-            method: 'click_ax',
-            ref_id,
-            tag,
-            rect: { x: Math.round(rect.x), y: Math.round(rect.y), w: Math.round(rect.width), h: Math.round(rect.height) },
-          };
-          try {
-            const accName = (el.getAttribute && (el.getAttribute('aria-label') || el.getAttribute('title')))
-              || (el.innerText && el.innerText.trim().slice(0, 80))
-              || '';
-            if (accName) resp.name = accName;
-          } catch {}
-          if (tag === 'a') {
+          const buildResponse = () => {
+            const resp = {
+              success: true,
+              method: 'click_ax',
+              ref_id,
+              tag,
+              rect: { x: Math.round(rect.x), y: Math.round(rect.y), w: Math.round(rect.width), h: Math.round(rect.height) },
+            };
             try {
-              const href = el.getAttribute('href') || '';
-              if (href) {
+              const accName = (el.getAttribute && (el.getAttribute('aria-label') || el.getAttribute('title')))
+                || (el.innerText && el.innerText.trim().slice(0, 80))
+                || '';
+              if (accName) resp.name = accName;
+            } catch {}
+            if (tag === 'a') {
+              try {
+                const href = anchorMeta?.href || el.getAttribute('href') || '';
                 resp.href = href;
-                const currentPath = (location.pathname + location.search) || '/';
-                const navigates = href && !href.startsWith('#') && !href.toLowerCase().startsWith('javascript:') && href !== currentPath;
-                if (navigates) {
+                if (anchorMeta?.resolvedHref) resp.resolvedHref = anchorMeta.resolvedHref;
+                if (anchorMeta?.sameDocumentAnchor) {
+                  const afterScrollY = Math.round(window.scrollY || 0);
+                  const afterUrl = location.href;
+                  resp.sameDocumentAnchor = true;
+                  resp.anchorTarget = anchorMeta.anchorTarget;
+                  resp.targetUrl = anchorMeta.targetUrl;
+                  resp.beforeUrl = anchorMeta.beforeUrl;
+                  resp.afterUrl = afterUrl;
+                  resp.beforeScrollY = anchorMeta.beforeScrollY;
+                  resp.afterScrollY = afterScrollY;
+                  resp.scrollChanged = Math.abs(afterScrollY - anchorMeta.beforeScrollY) > 1;
+                  let afterHash = '';
+                  try {
+                    afterHash = new URL(afterUrl).hash;
+                    resp.hashChanged = afterHash !== new URL(anchorMeta.beforeUrl).hash;
+                  } catch {
+                    resp.hashChanged = afterUrl !== anchorMeta.beforeUrl;
+                  }
+                  resp.atAnchor = afterHash === anchorMeta.anchorTarget || (anchorMeta.anchorTarget === '#' && !afterHash);
+                  resp.anchorActivated = resp.hashChanged || resp.scrollChanged || resp.atAnchor;
+                  resp.hint = resp.anchorActivated
+                    ? `Same-page anchor click completed: URL is now ${afterUrl}, and scrollY moved from ${anchorMeta.beforeScrollY} to ${afterScrollY}. The page is already at ${anchorMeta.anchorTarget}; do not click this anchor again unless the user asks to return here.`
+                    : `Same-page anchor click returned for ${anchorMeta.anchorTarget}, but URL and scroll position did not change. Re-observe the page before retrying this same anchor.`;
+                } else if (anchorMeta?.navigates) {
                   resp.navigates = true;
-                  resp.hint = `This <a> click is navigating to ${href}. If that's not what you intended, the ref_id was stale — re-read the accessibility tree to get fresh ids. Any unsaved form input on the previous page has been lost.`;
+                  resp.targetUrl = anchorMeta.targetUrl || href;
+                  resp.hint = `This <a> click is navigating to ${anchorMeta.targetUrl || href}. If that's not what you intended, the ref_id was stale — re-read the accessibility tree to get fresh ids. Any unsaved form input on the previous page has been lost.`;
                 }
-              }
-            } catch {}
+              } catch {}
+            }
+            if (isTextEntry) {
+              resp.focused = true;
+              resp.next_required = 'type_ax';
+              resp.hint = `This element is now focused. Your very next tool call MUST be type_ax({ref_id: "${ref_id}", text: "..."}). Do not call any other tool in between.`;
+            } else if (tag === 'select') {
+              resp.hint = `This is a <select>. Prefer press_keys on the focused element to choose an option (e.g. type the first letters of the desired option, or ArrowDown + Enter). type_ax on a select also works via value/text match.`;
+            } else if (!anchorMeta?.sameDocumentAnchor) {
+              try {
+                if (isPopupOpener) {
+                  resp.opened_popup_likely = true;
+                  resp.hint = `This element is a combobox / popup-opener (role="${popupRole}"${popupHasPopup ? `, aria-haspopup="${popupHasPopup}"` : ''}). The popup is almost always rendered in a portal at the end of <body>, OUTSIDE this button's subtree. Next step: call get_accessibility_tree({filter: "visible"}) — do NOT pass a ref_id (subtree filter will miss the portal). Look for a newly-appeared listbox / searchbox / menu. Then either (a) set_field({ref_id: <new search textbox ref>, text: "<query>", submit: true}), or (b) press_keys(["<first letter>"]) then press_keys(["Enter"]). Do NOT click this same ref_id again — it will just toggle the popup closed.`;
+                }
+              } catch {}
+            }
+            return resp;
+          };
+          if (anchorMeta?.sameDocumentAnchor) {
+            return new Promise((resolve) => {
+              setTimeout(() => {
+                try {
+                  resolve(buildResponse());
+                } catch (e) {
+                  resolve({ success: false, error: e && e.message || String(e) });
+                }
+              }, 120);
+            });
           }
-          if (isTextEntry) {
-            resp.focused = true;
-            resp.next_required = 'type_ax';
-            resp.hint = `This element is now focused. Your very next tool call MUST be type_ax({ref_id: "${ref_id}", text: "..."}). Do not call any other tool in between.`;
-          } else if (tag === 'select') {
-            resp.hint = `This is a <select>. Prefer press_keys on the focused element to choose an option (e.g. type the first letters of the desired option, or ArrowDown + Enter). type_ax on a select also works via value/text match.`;
-          } else {
-            try {
-              const role = (el.getAttribute('role') || '').toLowerCase();
-              const hasPopup = el.getAttribute('aria-haspopup');
-              const isCombobox = role === 'combobox' || !!hasPopup;
-              if (isCombobox) {
-                resp.opened_popup_likely = true;
-                resp.hint = `This element is a combobox / popup-opener (role="${role}"${hasPopup ? `, aria-haspopup="${hasPopup}"` : ''}). The popup is almost always rendered in a portal at the end of <body>, OUTSIDE this button's subtree. Next step: call get_accessibility_tree({filter: "visible"}) — do NOT pass a ref_id (subtree filter will miss the portal). Look for a newly-appeared listbox / searchbox / menu. Then either (a) set_field({ref_id: <new search textbox ref>, text: "<query>", submit: true}), or (b) press_keys(["<first letter>"]) then press_keys(["Enter"]). Do NOT click this same ref_id again — it will just toggle the popup closed.`;
-              }
-            } catch {}
-          }
-          return resp;
+          return buildResponse();
         } catch (e) {
           return { success: false, error: e && e.message || String(e) };
         }

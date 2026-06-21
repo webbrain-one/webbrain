@@ -19,6 +19,7 @@ import path from 'node:path';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..', '..');
+const accessibilityTreeJsPath = path.join(root, 'src', 'chrome', 'src', 'content', 'accessibility-tree.js');
 const contentJsPath = path.join(root, 'src', 'chrome', 'src', 'content', 'content.js');
 const smdJsPath = path.join(root, 'src', 'chrome', 'src', 'agent', 'social-media-downloader.js');
 
@@ -39,6 +40,8 @@ const stubChrome = `
 async function setup(page, fixture) {
   await page.addInitScript(stubChrome);
   await page.goto(fixtureUrl(fixture));
+  const axSrc = await readFile(accessibilityTreeJsPath, 'utf-8');
+  await page.addScriptTag({ content: axSrc });
   const src = await readFile(contentJsPath, 'utf-8');
   await page.addScriptTag({ content: src });
   // Ensure handler is registered.
@@ -143,6 +146,82 @@ test('ambiguity: two Cancels return rich candidates with ancestor', async (page)
       throw new Error(`candidate missing cx/cy: ${JSON.stringify(c)}`);
     }
   }
+});
+
+// ─── click_ax same-page anchors ─────────────────────────────────────────────
+test('click_ax: same-page anchor reports hash and scroll completion', async (page) => {
+  await setup(page, 'anchor-click.html');
+  const before = await page.evaluate(() => ({ hash: location.hash, scrollY: window.scrollY }));
+  if (before.hash !== '') throw new Error(`expected no initial hash, got ${before.hash}`);
+
+  const tree = await call(page, 'get_accessibility_tree', { filter: 'visible', maxDepth: 8 });
+  const match = String(tree?.pageContent || '').match(/link "References" \[(ref_\d+)\] href="#References"/);
+  if (!match) throw new Error(`could not find References link in tree: ${tree?.pageContent}`);
+
+  const resp = await call(page, 'click_ax', { ref_id: match[1] });
+  if (!resp?.success) throw new Error(`expected click_ax success, got: ${JSON.stringify(resp)}`);
+  if (resp.href !== '#References') throw new Error(`expected href #References, got ${resp.href}`);
+  if (resp.sameDocumentAnchor !== true) throw new Error(`expected sameDocumentAnchor:true, got ${JSON.stringify(resp)}`);
+  if (resp.anchorTarget !== '#References') throw new Error(`expected anchorTarget #References, got ${resp.anchorTarget}`);
+  if (!resp.afterUrl || !resp.afterUrl.endsWith('#References')) throw new Error(`expected afterUrl to end with #References, got ${resp.afterUrl}`);
+  if (resp.scrollChanged !== true) throw new Error(`expected scrollChanged:true, got ${JSON.stringify(resp)}`);
+  if (!(resp.afterScrollY > resp.beforeScrollY)) throw new Error(`expected afterScrollY > beforeScrollY, got ${JSON.stringify(resp)}`);
+  if (!/Same-page anchor click completed/i.test(resp.hint || '')) throw new Error(`missing completion hint: ${resp.hint}`);
+
+  const after = await page.evaluate(() => ({ hash: location.hash, scrollY: window.scrollY }));
+  if (after.hash !== '#References') throw new Error(`expected page hash #References, got ${after.hash}`);
+  if (!(after.scrollY > before.scrollY)) throw new Error(`expected page to scroll, before=${before.scrollY} after=${after.scrollY}`);
+});
+
+test('click_ax: base href fragment uses resolved anchor destination', async (page) => {
+  await setup(page, 'anchor-base-click.html');
+  const tree = await call(page, 'get_accessibility_tree', { filter: 'visible', maxDepth: 8 });
+  const match = String(tree?.pageContent || '').match(/link "References" \[(ref_\d+)\] href="#References"/);
+  if (!match) throw new Error(`could not find References link in tree: ${tree?.pageContent}`);
+
+  const resp = await call(page, 'click_ax', { ref_id: match[1] });
+  if (!resp?.success) throw new Error(`expected click_ax success, got: ${JSON.stringify(resp)}`);
+  if (resp.href !== '#References') throw new Error(`expected raw href #References, got ${resp.href}`);
+  if (resp.resolvedHref !== 'https://example.com/docs/#References') throw new Error(`expected resolvedHref to honor <base>, got ${resp.resolvedHref}`);
+  if (resp.targetUrl !== 'https://example.com/docs/#References') throw new Error(`expected targetUrl to honor <base>, got ${resp.targetUrl}`);
+  if (resp.sameDocumentAnchor === true) throw new Error(`base-resolved off-document href must not be sameDocumentAnchor: ${JSON.stringify(resp)}`);
+  if (resp.navigates !== true) throw new Error(`expected navigates:true, got ${JSON.stringify(resp)}`);
+});
+
+test('click_ax: placeholder popup anchor keeps popup guidance', async (page) => {
+  await setup(page, 'anchor-popup-click.html');
+  const tree = await call(page, 'get_accessibility_tree', { filter: 'visible', maxDepth: 8 });
+  const match = String(tree?.pageContent || '').match(/link "Options" \[(ref_\d+)\] href="#"/);
+  if (!match) throw new Error(`could not find Options link in tree: ${tree?.pageContent}`);
+
+  const resp = await call(page, 'click_ax', { ref_id: match[1] });
+  if (!resp?.success) throw new Error(`expected click_ax success, got: ${JSON.stringify(resp)}`);
+  if (resp.href !== '#') throw new Error(`expected href #, got ${resp.href}`);
+  if (resp.sameDocumentAnchor === true) throw new Error(`placeholder href must not be sameDocumentAnchor: ${JSON.stringify(resp)}`);
+  if (resp.opened_popup_likely !== true) throw new Error(`expected opened_popup_likely:true, got ${JSON.stringify(resp)}`);
+  if (!/popup-opener/i.test(resp.hint || '')) throw new Error(`expected popup guidance, got: ${resp.hint}`);
+  if (/Same-page anchor click completed/i.test(resp.hint || '')) throw new Error(`placeholder popup used same-page anchor hint: ${resp.hint}`);
+
+  const opened = await page.evaluate(() => window.__menuOpened);
+  if (opened !== true) throw new Error('expected click handler to run');
+});
+
+test('click_ax: hash popup anchor keeps popup guidance', async (page) => {
+  await setup(page, 'anchor-popup-click.html');
+  const tree = await call(page, 'get_accessibility_tree', { filter: 'visible', maxDepth: 8 });
+  const match = String(tree?.pageContent || '').match(/link "More" \[(ref_\d+)\] href="#menu"/);
+  if (!match) throw new Error(`could not find More link in tree: ${tree?.pageContent}`);
+
+  const resp = await call(page, 'click_ax', { ref_id: match[1] });
+  if (!resp?.success) throw new Error(`expected click_ax success, got: ${JSON.stringify(resp)}`);
+  if (resp.href !== '#menu') throw new Error(`expected href #menu, got ${resp.href}`);
+  if (resp.sameDocumentAnchor === true) throw new Error(`popup href must not be sameDocumentAnchor: ${JSON.stringify(resp)}`);
+  if (resp.opened_popup_likely !== true) throw new Error(`expected opened_popup_likely:true, got ${JSON.stringify(resp)}`);
+  if (!/popup-opener/i.test(resp.hint || '')) throw new Error(`expected popup guidance, got: ${resp.hint}`);
+  if (/Same-page anchor/i.test(resp.hint || '')) throw new Error(`hash popup used same-page anchor hint: ${resp.hint}`);
+
+  const opened = await page.evaluate(() => window.__hashMenuOpened);
+  if (opened !== true) throw new Error('expected hash popup click handler to run');
 });
 
 // ─── main ─────────────────────────────────────────────────────────────────
