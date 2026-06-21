@@ -2778,6 +2778,15 @@ test('agent only auto-records progress clicks inside repeated-item work', () => 
     agent._progressUpdate(775, { items: [{ id: 'rafi', label: 'rafi', action: 'follow', status: 'pending' }] });
     const existing = agent._autoRecordProgressAction(775, 'click', { text: 'Follow rafi' }, { success: true, text: 'Follow rafi', href: '/rafi' });
     assert.equal(existing?.item.id, 'rafi', `${AgentClass.name}: existing ledger click was not recorded`);
+
+    agent.conversations.set(779, [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: 'Summarize this repository.' },
+      { role: 'assistant', content: 'Summary complete.' },
+      { role: 'user', content: 'Follow every stargazer on this page.' },
+    ]);
+    const laterTask = agent._autoRecordProgressAction(779, 'click', { text: 'Follow monalisa' }, { success: true, text: 'Follow monalisa', href: '/monalisa' });
+    assert.equal(laterTask?.item.id, 'monalisa', `${AgentClass.name}: latest repeated-item task was ignored`);
   }
 });
 
@@ -2939,6 +2948,32 @@ test('agent does not seed GitHub stargazer follow rows for read-only page reads'
   }
 });
 
+test('agent seeds GitHub stargazer follow rows from the latest user request', async () => {
+  const page = `
+    button "Follow ChJus" [ref_13]
+    button "Follow rafi" [ref_31]
+  `;
+  for (const AgentClass of [AgentCh, AgentFx]) {
+    const agent = new AgentClass({ getActive: () => ({ contextWindow: 128000, supportsVision: false }) });
+    const tabId = 781;
+    agent.conversations.set(tabId, [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: 'Summarize this repository.' },
+      { role: 'assistant', content: 'Summary complete.' },
+      { role: 'user', content: 'Follow every stargazer on this page.' },
+    ]);
+    agent._currentUrl = async () => 'https://github.com/foo/bar/stargazers';
+
+    const result = { success: true, pageContent: page };
+    const note = await agent._recordProgressObservation(tabId, 'get_accessibility_tree', result);
+    assert.equal(note.addedPending, 2, `${AgentClass.name}: latest follow request did not seed rows`);
+    assert.deepEqual(agent.progressLedgers.get(tabId).map(row => [row.id, row.action, row.status]), [
+      ['ChJus', 'follow', 'pending'],
+      ['rafi', 'follow', 'pending'],
+    ]);
+  }
+});
+
 test('agent does not seed GitHub follow rows for non-follow stargazer list work', async () => {
   const page = `
     button "Follow ChJus" [ref_13]
@@ -2963,6 +2998,23 @@ test('agent does not seed GitHub follow rows for non-follow stargazer list work'
     assert.deepEqual(rows.map(row => [row.id, row.action, row.status]), [
       ['ChJus', 'collect_email', 'pending'],
     ]);
+  }
+});
+
+test('progress ledger done-blocking only applies in Act mode', () => {
+  for (const AgentClass of [AgentCh, AgentFx]) {
+    const agent = new AgentClass({ getActive: () => ({ contextWindow: 128000, supportsVision: false }) });
+    const tabId = 780;
+    agent._progressUpdate(tabId, {
+      items: [{ id: 'octocat', label: 'octocat', action: 'follow', status: 'pending' }],
+    });
+
+    agent.conversationModes.set(tabId, 'ask');
+    assert.equal(agent._shouldBlockDoneForProgress(tabId), false, `${AgentClass.name}: Ask mode should not block done`);
+    assert.ok(agent._progressDoneBlock(tabId)?.blocked, `${AgentClass.name}: setup should have unresolved rows`);
+
+    agent.conversationModes.set(tabId, 'act');
+    assert.equal(agent._shouldBlockDoneForProgress(tabId), true, `${AgentClass.name}: Act mode should block done`);
   }
 });
 

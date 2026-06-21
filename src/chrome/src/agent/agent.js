@@ -1199,7 +1199,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
       // done() short-circuit — push result, persist, and bail out.
       if (toolResult && toolResult.done) {
-        const progressBlock = this._progressDoneBlock(tabId);
+        const progressBlock = this._shouldBlockDoneForProgress(tabId)
+          ? this._progressDoneBlock(tabId)
+          : null;
         if (progressBlock) {
           messages.push({
             role: 'tool',
@@ -3258,11 +3260,31 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     return idx >= 0 ? this._messageText(messages[idx]?.content) : '';
   }
 
+  _isAgentInjectedUserContent(content) {
+    const c = typeof content === 'string' ? content : '';
+    return c.startsWith('[Site guidance')
+      || c.startsWith('[Site context changed')
+      || c.startsWith('[Context window was trimmed')
+      || c.startsWith('[Agent scratchpad')
+      || c.startsWith('[Agent progress ledger');
+  }
+
+  _latestTaskText(tabId) {
+    const messages = this.conversations.get(tabId) || [];
+    for (let i = messages.length - 1; i >= 1; i--) {
+      const m = messages[i];
+      if (m.role !== 'user') continue;
+      if (this._isAgentInjectedUserContent(m.content)) continue;
+      return this._messageText(m.content);
+    }
+    return '';
+  }
+
   _hasProgressLedgerContext(tabId) {
     const rows = this.progressLedgers.get(tabId) || [];
     if (rows.length > 0) return true;
 
-    const text = this._originalTaskText(tabId).toLowerCase();
+    const text = this._latestTaskText(tabId).toLowerCase();
     if (!text) return false;
     if (/\bprogress(?:\s+ledger)?\b|\btrack\s+(?:progress|each|which)\b|\bkeep\s+(?:track|a\s+list|a\s+ledger)\b|\bone[-\s]+by[-\s]+one\b|\bper[-\s]+(?:item|user|profile|row|result)\b/.test(text)) {
       return true;
@@ -3280,12 +3302,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   _hasGithubStargazerFollowContext(tabId) {
     const rows = this.progressLedgers.get(tabId) || [];
     if (rows.some(row => String(row?.action || '').toLowerCase() === 'follow')) return true;
-    const text = this._originalTaskText(tabId).toLowerCase();
+    const text = this._latestTaskText(tabId).toLowerCase();
     return /\bfollow\b/.test(text) && this._hasProgressLedgerContext(tabId);
   }
 
   _excludedGithubUsernames(tabId) {
-    const text = this._originalTaskText(tabId);
+    const text = this._latestTaskText(tabId);
     const match = text.match(/\bexcept\b([\s\S]*?)(?:\band\s+while\b|\bwhile\b|[.;\n]|$)/i);
     if (!match) return [];
     const stop = new Set([
@@ -3365,6 +3387,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
   _progressDoneBlock(tabId) {
     return ledgerDoneBlock(this.progressLedgers.get(tabId) || [], { limit: 12 });
+  }
+
+  _shouldBlockDoneForProgress(tabId) {
+    return (this.conversationModes.get(tabId) || 'ask') === 'act';
   }
 
   _appendProgressLedgerToFinal(tabId, summary) {
@@ -3455,7 +3481,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       const m = messages[i];
       if (m.role !== 'user') continue;
       const c = typeof m.content === 'string' ? m.content : '';
-      if (c.startsWith('[Site guidance') || c.startsWith('[Site context changed') || c.startsWith('[Context window was trimmed') || c.startsWith('[Agent scratchpad') || c.startsWith('[Agent progress ledger')) continue;
+      if (this._isAgentInjectedUserContent(c)) continue;
       return i;
     }
     return -1;
