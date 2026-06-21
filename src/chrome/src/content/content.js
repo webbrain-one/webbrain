@@ -1781,8 +1781,10 @@
             try {
               const href = el.getAttribute('href') || '';
               if (href) {
+                const resolvedHref = el.href || new URL(href, document.baseURI || location.href).href;
                 anchorMeta = {
                   href,
+                  resolvedHref,
                   beforeUrl: location.href,
                   beforeScrollY: Math.round(window.scrollY || 0),
                 };
@@ -1790,7 +1792,7 @@
                 if (!lowerHref.startsWith('javascript:')) {
                   try {
                     const before = new URL(anchorMeta.beforeUrl);
-                    const target = new URL(href, anchorMeta.beforeUrl);
+                    const target = new URL(resolvedHref);
                     const sameDocumentBase = target.origin === before.origin &&
                       target.pathname === before.pathname &&
                       target.search === before.search;
@@ -1845,6 +1847,7 @@
               try {
                 const href = anchorMeta?.href || el.getAttribute('href') || '';
                 resp.href = href;
+                if (anchorMeta?.resolvedHref) resp.resolvedHref = anchorMeta.resolvedHref;
                 if (anchorMeta?.sameDocumentAnchor) {
                   const afterScrollY = Math.round(window.scrollY || 0);
                   const afterUrl = location.href;

@@ -173,6 +173,21 @@ test('click_ax: same-page anchor reports hash and scroll completion', async (pag
   if (!(after.scrollY > before.scrollY)) throw new Error(`expected page to scroll, before=${before.scrollY} after=${after.scrollY}`);
 });
 
+test('click_ax: base href fragment uses resolved anchor destination', async (page) => {
+  await setup(page, 'anchor-base-click.html');
+  const tree = await call(page, 'get_accessibility_tree', { filter: 'visible', maxDepth: 8 });
+  const match = String(tree?.pageContent || '').match(/link "References" \[(ref_\d+)\] href="#References"/);
+  if (!match) throw new Error(`could not find References link in tree: ${tree?.pageContent}`);
+
+  const resp = await call(page, 'click_ax', { ref_id: match[1] });
+  if (!resp?.success) throw new Error(`expected click_ax success, got: ${JSON.stringify(resp)}`);
+  if (resp.href !== '#References') throw new Error(`expected raw href #References, got ${resp.href}`);
+  if (resp.resolvedHref !== 'https://example.com/docs/#References') throw new Error(`expected resolvedHref to honor <base>, got ${resp.resolvedHref}`);
+  if (resp.targetUrl !== 'https://example.com/docs/#References') throw new Error(`expected targetUrl to honor <base>, got ${resp.targetUrl}`);
+  if (resp.sameDocumentAnchor === true) throw new Error(`base-resolved off-document href must not be sameDocumentAnchor: ${JSON.stringify(resp)}`);
+  if (resp.navigates !== true) throw new Error(`expected navigates:true, got ${JSON.stringify(resp)}`);
+});
+
 // ─── main ─────────────────────────────────────────────────────────────────
 // Social media downloader focus safety
 test('SMD: Instagram auto mode downloads the open dialog image, not the feed', async (page) => {
