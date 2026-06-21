@@ -55,6 +55,8 @@ export default {
   'sp.slash.export': 'Download this conversation as Markdown',
   'sp.slash.profile': 'Toggle profile auto-fill',
   'sp.slash.vision': 'Toggle vision mode on the active provider',
+  'sp.slash.ask': 'Switch to Ask mode before sending',
+  'sp.slash.plan': 'Switch to Ask mode with planning intent',
   'sp.recommended.title': 'Suggested actions',
   'sp.recommended.collapse': 'Minimize suggested actions',
   'sp.recommended.expand': 'Show suggested actions',
