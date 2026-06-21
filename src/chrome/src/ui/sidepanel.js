@@ -516,6 +516,10 @@ function scheduledJobTabId(job) {
   return Number.isFinite(numeric) ? numeric : tabId;
 }
 
+function isUrlTargetScheduledJob(job) {
+  return job?.kind === 'task' && job?.target?.type === 'url';
+}
+
 function findScheduledClarifyCard(jobId, clarifyId) {
   for (const card of messagesEl?.querySelectorAll?.('.clarify-card[data-scheduled-job-id]') || []) {
     if (card.dataset.scheduledJobId === String(jobId) && card.dataset.clarifyId === String(clarifyId)) {
@@ -531,9 +535,14 @@ function ensureScheduledClarifyCards(jobs = []) {
     const pending = job?.pendingClarify;
     if (job?.status !== 'needs_user_input' || !pending?.clarifyId) continue;
     const jobTabId = scheduledJobTabId(job);
-    if (jobTabId != null && currentTabId != null && String(jobTabId) !== String(currentTabId)) continue;
+    if (!isUrlTargetScheduledJob(job) && jobTabId != null && currentTabId != null && String(jobTabId) !== String(currentTabId)) continue;
     if (findScheduledClarifyCard(job.id, pending.clarifyId)) continue;
-    renderClarifyCard({ ...pending, scheduledJobId: job.id });
+    renderClarifyCard({
+      ...pending,
+      scheduledJobId: job.id,
+      scheduledTabId: jobTabId,
+      forceNewScheduledCard: true,
+    });
   }
 }
 
@@ -632,7 +641,8 @@ function handleScheduledJobEvent(data, tabId) {
   if (!event || !job) return;
 
   const sameTab = tabId == null || tabId === currentTabId;
-  if (!sameTab) return;
+  const crossPanelScheduledClarify = event === 'needs_user_input' && isUrlTargetScheduledJob(job);
+  if (!sameTab && !crossPanelScheduledClarify) return;
 
   const title = scheduledJobTitle(job);
   const safeTitle = escapeHtml(title);
@@ -1751,14 +1761,16 @@ chrome.runtime.onMessage.addListener((msg) => {
  */
 function renderClarifyCard(data) {
   hideActivity();
-  const tabId = currentTabId;
-  if (!tabId) return;
-  if (!currentAssistantEl) {
-    if (data?.scheduledJobId) {
-      currentAssistantEl = addMessage('assistant', '');
-    } else {
-      return;
-    }
+  const tabId = data?.scheduledTabId ?? data?.tabId ?? currentTabId;
+  if (tabId == null) return;
+  const scheduledJobId = data?.scheduledJobId ? String(data.scheduledJobId) : '';
+  if (scheduledJobId && (!currentAssistantEl || data.forceNewScheduledCard)) {
+    currentAssistantEl = addMessage('assistant', '');
+  } else if (!currentAssistantEl) {
+    return;
+  }
+  if (scheduledJobId) {
+    currentAssistantEl.dataset.scheduledJobId = scheduledJobId;
   }
   const clarifyId = String(data.clarifyId || '');
   if (!clarifyId) return;
@@ -1769,8 +1781,11 @@ function renderClarifyCard(data) {
   const card = document.createElement('div');
   card.className = 'clarify-card';
   card.dataset.clarifyId = clarifyId;
-  if (data.scheduledJobId) {
-    card.dataset.scheduledJobId = String(data.scheduledJobId);
+  if (scheduledJobId) {
+    card.dataset.scheduledJobId = scheduledJobId;
+  }
+  if (data.scheduledTabId != null) {
+    card.dataset.scheduledTabId = String(data.scheduledTabId);
   }
 
   const qEl = document.createElement('div');
