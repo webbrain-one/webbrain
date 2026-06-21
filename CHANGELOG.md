@@ -6,6 +6,11 @@ This changelog was generated from the repository Git history and release tags. V
 
 ## [Unreleased]
 
+## [14.1.2] - 2026-06-21
+
+### Changed
+- Completed missing translations for all 13 supported languages (Arabic, Spanish, French, Indonesian, Japanese, Korean, Malay, Russian, Thai, Tagalog, Turkish, Ukrainian, Chinese Simplified) across Chrome and Firefox locale files, covering scheduled-task UI strings, scratchpad panel, schedule form, permission verb, tool labels, and settings toggles added in 14.1.0.
+
 ## [14.1.0] - 2026-06-21
 
 ### Added
