@@ -19,6 +19,7 @@ import path from 'node:path';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..', '..');
+const accessibilityTreeJsPath = path.join(root, 'src', 'chrome', 'src', 'content', 'accessibility-tree.js');
 const contentJsPath = path.join(root, 'src', 'chrome', 'src', 'content', 'content.js');
 const smdJsPath = path.join(root, 'src', 'chrome', 'src', 'agent', 'social-media-downloader.js');
 
@@ -39,6 +40,8 @@ const stubChrome = `
 async function setup(page, fixture) {
   await page.addInitScript(stubChrome);
   await page.goto(fixtureUrl(fixture));
+  const axSrc = await readFile(accessibilityTreeJsPath, 'utf-8');
+  await page.addScriptTag({ content: axSrc });
   const src = await readFile(contentJsPath, 'utf-8');
   await page.addScriptTag({ content: src });
   // Ensure handler is registered.
@@ -143,6 +146,31 @@ test('ambiguity: two Cancels return rich candidates with ancestor', async (page)
       throw new Error(`candidate missing cx/cy: ${JSON.stringify(c)}`);
     }
   }
+});
+
+// ─── click_ax same-page anchors ─────────────────────────────────────────────
+test('click_ax: same-page anchor reports hash and scroll completion', async (page) => {
+  await setup(page, 'anchor-click.html');
+  const before = await page.evaluate(() => ({ hash: location.hash, scrollY: window.scrollY }));
+  if (before.hash !== '') throw new Error(`expected no initial hash, got ${before.hash}`);
+
+  const tree = await call(page, 'get_accessibility_tree', { filter: 'visible', maxDepth: 8 });
+  const match = String(tree?.pageContent || '').match(/link "References" \[(ref_\d+)\] href="#References"/);
+  if (!match) throw new Error(`could not find References link in tree: ${tree?.pageContent}`);
+
+  const resp = await call(page, 'click_ax', { ref_id: match[1] });
+  if (!resp?.success) throw new Error(`expected click_ax success, got: ${JSON.stringify(resp)}`);
+  if (resp.href !== '#References') throw new Error(`expected href #References, got ${resp.href}`);
+  if (resp.sameDocumentAnchor !== true) throw new Error(`expected sameDocumentAnchor:true, got ${JSON.stringify(resp)}`);
+  if (resp.anchorTarget !== '#References') throw new Error(`expected anchorTarget #References, got ${resp.anchorTarget}`);
+  if (!resp.afterUrl || !resp.afterUrl.endsWith('#References')) throw new Error(`expected afterUrl to end with #References, got ${resp.afterUrl}`);
+  if (resp.scrollChanged !== true) throw new Error(`expected scrollChanged:true, got ${JSON.stringify(resp)}`);
+  if (!(resp.afterScrollY > resp.beforeScrollY)) throw new Error(`expected afterScrollY > beforeScrollY, got ${JSON.stringify(resp)}`);
+  if (!/Same-page anchor click completed/i.test(resp.hint || '')) throw new Error(`missing completion hint: ${resp.hint}`);
+
+  const after = await page.evaluate(() => ({ hash: location.hash, scrollY: window.scrollY }));
+  if (after.hash !== '#References') throw new Error(`expected page hash #References, got ${after.hash}`);
+  if (!(after.scrollY > before.scrollY)) throw new Error(`expected page to scroll, before=${before.scrollY} after=${after.scrollY}`);
 });
 
 // ─── main ─────────────────────────────────────────────────────────────────

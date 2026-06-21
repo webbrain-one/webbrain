@@ -281,6 +281,27 @@ async function run() {
 }
 
 // ────────────────────────────────────────────────────────────────────────
+// Agent tool classifications
+// ────────────────────────────────────────────────────────────────────────
+
+console.log('\nagent tool classifications');
+
+test('ref-id action tools are state changes in both browser agents', () => {
+  for (const [label, AgentClass] of [['chrome', AgentCh], ['firefox', AgentFx]]) {
+    for (const name of ['click_ax', 'type_ax', 'set_field']) {
+      assert.equal(AgentClass.STATE_CHANGE_TOOLS.has(name), true, `${label} missing ${name} from STATE_CHANGE_TOOLS`);
+    }
+  }
+});
+
+test('click_ax is nav-prone but non-submitting set_field is not', () => {
+  for (const [label, AgentClass] of [['chrome', AgentCh], ['firefox', AgentFx]]) {
+    assert.equal(AgentClass.NAV_PRONE_TOOLS.has('click_ax'), true, `${label} missing click_ax from NAV_PRONE_TOOLS`);
+    assert.equal(AgentClass.NAV_PRONE_TOOLS.has('set_field'), false, `${label} should not treat set_field as nav-prone`);
+  }
+});
+
+// ────────────────────────────────────────────────────────────────────────
 // Adapter matching tests
 // ────────────────────────────────────────────────────────────────────────
 

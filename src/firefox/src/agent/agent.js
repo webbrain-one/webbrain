@@ -499,7 +499,8 @@ export class Agent {
   }
 
   static NAV_TOOLS = new Set(['navigate', 'new_tab']);
-  static STATE_CHANGE_TOOLS = new Set(['navigate', 'new_tab', 'click', 'type_text', 'press_keys', 'scroll', 'hover', 'drag_drop']);
+  static STATE_CHANGE_TOOLS = new Set(['navigate', 'new_tab', 'click', 'click_ax', 'type_text', 'type_ax', 'set_field', 'press_keys', 'scroll', 'hover', 'drag_drop']);
+  static NAV_PRONE_TOOLS = new Set(['click', 'click_ax', 'navigate', 'execute_js', 'iframe_click']);
 
   // System prompt for the dedicated "vision model" sub-call. Kept terse and
   // format-oriented so the description is actually useful to the planning
@@ -655,7 +656,6 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
    */
   async _executeToolBatch(tabId, toolCalls, messages, onUpdate, provider, partialAssistantText = null, allowedToolNames = AGENT_TOOL_NAMES, step = null) {
     let didStateChange = false;
-    const NAV_PRONE_TOOLS = new Set(['click', 'navigate', 'execute_js', 'iframe_click']);
     const navNotices = [];
 
     for (const tc of toolCalls) {
@@ -757,7 +757,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       }
 
       let beforeUrl = '';
-      if (NAV_PRONE_TOOLS.has(fnName)) {
+      if (Agent.NAV_PRONE_TOOLS.has(fnName)) {
         beforeUrl = await this._currentUrl(tabId);
       }
 
@@ -780,7 +780,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       // scratchpad_write itself — the failure that made it invent file paths.
       this._pinDownloadHandles(tabId, fnName, toolResult);
 
-      if (NAV_PRONE_TOOLS.has(fnName) && beforeUrl && !toolResult?.error) {
+      if (Agent.NAV_PRONE_TOOLS.has(fnName) && beforeUrl && !toolResult?.error) {
         await new Promise(r => setTimeout(r, 200));
         const afterUrl = await this._currentUrl(tabId);
         const beforeNorm = this._normalizeUrl(beforeUrl);

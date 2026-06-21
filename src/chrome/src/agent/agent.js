@@ -757,7 +757,8 @@ export class Agent {
   // Tools whose successful completion should trigger an auto-screenshot when
   // the corresponding mode is active.
   static NAV_TOOLS = new Set(['navigate', 'new_tab']);
-  static STATE_CHANGE_TOOLS = new Set(['navigate', 'new_tab', 'click', 'type_text', 'press_keys', 'scroll', 'hover', 'drag_drop']);
+  static STATE_CHANGE_TOOLS = new Set(['navigate', 'new_tab', 'click', 'click_ax', 'type_text', 'type_ax', 'set_field', 'press_keys', 'scroll', 'hover', 'drag_drop']);
+  static NAV_PRONE_TOOLS = new Set(['click', 'click_ax', 'navigate', 'iframe_click']);
 
   // System prompt for the dedicated "vision model" sub-call. Kept terse and
   // format-oriented so the description is actually useful to the planning
@@ -1047,7 +1048,6 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     // URL before these and re-check after, so we can warn the model when an
     // unintended navigation happens (the most common cause of "model keeps
     // executing the original plan on a totally different page").
-    const NAV_PRONE_TOOLS = new Set(['click', 'navigate', 'iframe_click']);
     const navNotices = []; // accumulated for injection after the loop
 
     for (const tc of toolCalls) {
@@ -1140,7 +1140,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
       // Snapshot URL before nav-prone tools.
       let beforeUrl = '';
-      if (NAV_PRONE_TOOLS.has(fnName)) {
+      if (Agent.NAV_PRONE_TOOLS.has(fnName)) {
         beforeUrl = await this._currentUrl(tabId);
       }
 
@@ -1163,7 +1163,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
       // Detect unintended navigation. Give the page a beat to fire SPA
       // history events / commit a real nav before re-reading the URL.
-      if (NAV_PRONE_TOOLS.has(fnName) && beforeUrl && !toolResult?.error) {
+      if (Agent.NAV_PRONE_TOOLS.has(fnName) && beforeUrl && !toolResult?.error) {
         await new Promise(r => setTimeout(r, 200));
         const afterUrl = await this._currentUrl(tabId);
         const beforeNorm = this._normalizeUrl(beforeUrl);
