@@ -41,6 +41,7 @@ export class Agent {
     this.providerManager = providerManager;
     this.conversations = new Map(); // tabId -> messages[]
     this.progressLedgers = new Map(); // tabId -> structured progress rows, projected into a pinned note
+    this.progressPageScopes = new Map(); // tabId -> normalized page identity for scoped progress task keys
     this.conversationIds = new Map(); // tabId -> stable conversationId (regenerated on clearConversation)
     this.conversationModes = new Map(); // tabId -> 'ask' | 'act'
     this.abortFlags = new Map(); // tabId -> boolean
@@ -615,7 +616,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   async _currentUrl(tabId) {
     try {
       const tab = await browser.tabs.get(tabId);
-      return tab?.url || '';
+      const url = tab?.url || '';
+      this._rememberProgressPageScope(tabId, url);
+      return url;
     } catch (e) { return ''; }
   }
 
@@ -2220,6 +2223,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     this._cancelClarifications(tabId, 'conversation cleared');
     this.conversations.delete(tabId);
     this.progressLedgers.delete(tabId);
+    this.progressPageScopes.delete(tabId);
     this.conversationModes.delete(tabId);
     this.conversationIds.delete(tabId);
     this._lastInputTokens.delete(tabId);
@@ -2230,6 +2234,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
   _cleanupTab(tabId, { preserveRunGuard = false } = {}) {
     this._isPdfTabCache.delete(tabId);
+    this.progressPageScopes.delete(tabId);
     this._doneBlockCount.delete(tabId);
     this._recentSubmitClicks.delete(tabId);
     if (!preserveRunGuard) {
@@ -2494,8 +2499,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         error: `progress_update: invalid status value(s): ${invalid.slice(0, 6).join(', ')}. Use exactly one of pending, acted, processed, skipped, or failed.`,
       };
     }
+    const taskKey = opts.taskKey || this._currentProgressTaskKey(tabId, { pageScope: opts.pageScope });
+    const scopedItems = taskKey
+      ? items.map(item => (item && typeof item === 'object' && !Array.isArray(item)
+        ? { ...item, taskKey }
+        : item))
+      : items;
     const current = this.progressLedgers.get(tabId) || [];
-    const result = upsertLedgerItems(current, items, { source: opts.source || args.source || 'model' });
+    const result = upsertLedgerItems(current, scopedItems, { source: opts.source || args.source || 'model', taskKey });
     if (!result.changed) {
       return { success: false, error: 'progress_update: no valid items were provided. Each item needs a stable id.' };
     }
@@ -2547,6 +2558,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       || c.startsWith('[Context was too large')
       || c.startsWith('[Agent scratchpad')
       || c.startsWith('[Agent progress ledger')
+      || c.startsWith('[PROGRESS LEDGER BLOCK')
       || c.startsWith('[NAVIGATION OCCURRED')
       || c.startsWith('[Auto-screenshot')
       || c.startsWith('[UNTRUSTED CAPTURE')
@@ -2625,36 +2637,128 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     return `[PROGRESS AUTO-RECORDED: clicked ${safeAction} item is now status=${status}. Its id is recorded only inside the untrusted tool result as data. After collecting the needed result for the clicked item, call progress_update to mark it processed, skipped, or failed.]`;
   }
 
+  _progressItemFromClickedLedgerRow(tabId, args = {}, result = {}) {
+    if (!result || result.success === false || result.error || result.noProgress) return null;
+    const refId = String(args?.ref_id || args?.refId || result?.ref_id || result?.refId || '').trim();
+    if (!refId) return null;
+    const row = this._activeProgressLedgerRows(tabId).find(candidate => {
+      const fields = candidate?.fields && typeof candidate.fields === 'object' ? candidate.fields : {};
+      return String(fields.refId || fields.ref_id || '').trim() === refId
+        && String(candidate?.action || '').trim();
+    });
+    if (!row?.id) return null;
+    const fields = row.fields && typeof row.fields === 'object' ? row.fields : null;
+    return {
+      id: row.id,
+      label: row.label || row.target || row.id,
+      target: row.target || row.label || row.id,
+      action: row.action,
+      status: 'acted',
+      ...(row.url ? { url: row.url } : {}),
+      ...(fields ? { fields } : {}),
+    };
+  }
+
   _hasProgressLedgerContext(tabId) {
     if (this._currentTaskHasProgressIntent(tabId)) return true;
     return this._activeProgressLedgerRows(tabId).length > 0
       && this._currentTaskIsProgressContinuation(tabId);
   }
 
-  _progressRowMatchesTaskText(row, text) {
+  _progressTaskKeyForText(text, pageScope = '') {
+    const base = String(text || '')
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 180);
+    const scope = String(pageScope || '').trim();
+    return scope ? `${base} ::page:${scope}`.slice(0, 240) : base;
+  }
+
+  _progressPageScopeForUrl(url) {
+    const raw = String(url || '').trim();
+    if (!raw) return '';
+    try {
+      const parsed = new URL(raw);
+      if (!/^https?:$/i.test(parsed.protocol)) return '';
+      const path = parsed.pathname.replace(/\/+$/, '') || '/';
+      return `${parsed.protocol}//${parsed.hostname.toLowerCase()}${path}${parsed.search}`.slice(0, 180);
+    } catch {
+      return '';
+    }
+  }
+
+  _rememberProgressPageScope(tabId, url) {
+    const pageScope = this._progressPageScopeForUrl(url);
+    if (pageScope) this.progressPageScopes.set(tabId, pageScope);
+    return pageScope;
+  }
+
+  _progressPageScopeFromConversation(tabId) {
+    const messages = this.conversations.get(tabId) || [];
+    for (let i = messages.length - 1; i >= 1; i--) {
+      const c = this._messageText(messages[i]?.content);
+      const match = c.match(/^\s*\[Current page context[^\]]*\bURL:\s*(https?:\/\/[^\s\]]+)/i);
+      const pageScope = match ? this._progressPageScopeForUrl(match[1]) : '';
+      if (pageScope) return pageScope;
+    }
+    return '';
+  }
+
+  _currentProgressPageScope(tabId) {
+    const cached = this.progressPageScopes.get(tabId);
+    if (cached) return cached;
+    const pageScope = this._progressPageScopeFromConversation(tabId);
+    if (pageScope) this.progressPageScopes.set(tabId, pageScope);
+    return pageScope;
+  }
+
+  _currentProgressTaskKey(tabId, opts = {}) {
+    if (this._currentTaskIsProgressContinuation(tabId)) {
+      const keys = Array.from(new Set(
+        this._activeProgressLedgerRows(tabId)
+          .map(row => String(row?.taskKey || '').trim())
+          .filter(Boolean)
+      ));
+      if (keys.length === 1) return keys[0];
+    }
+    const pageScope = String(opts.pageScope || this._currentProgressPageScope(tabId) || '').trim();
+    return this._progressTaskKeyForText(this._latestTaskText(tabId), pageScope);
+  }
+
+  _progressRowMatchesTaskText(row, text, currentTaskKey = '') {
+    const rowTaskKey = String(row?.taskKey || '').trim();
+    if (rowTaskKey) {
+      if (rowTaskKey === currentTaskKey) return true;
+      return !rowTaskKey.includes('::page:')
+        && rowTaskKey === this._progressTaskKeyForText(text);
+    }
     const taskWords = new Set(String(text || '').toLowerCase().match(/[a-z0-9]+/g) || []);
     if (!taskWords.size) return false;
+    const rowWords = String(`${row?.id || ''} ${row?.label || ''} ${row?.target || ''} ${row?.url || ''}`)
+      .toLowerCase()
+      .split(/[^a-z0-9]+/g)
+      .filter(Boolean);
+    const rowMatchesTask = rowWords.some(word => taskWords.has(word));
     const action = String(row?.action || '').toLowerCase();
     if (!action) {
-      return String(`${row?.id || ''} ${row?.label || ''}`)
-        .toLowerCase()
-        .split(/[^a-z0-9]+/g)
-        .filter(Boolean)
-        .some(word => taskWords.has(word));
+      return rowMatchesTask;
     }
     return action
       .split(/[^a-z0-9]+/g)
       .filter(Boolean)
-      .some(word => taskWords.has(word));
+      .some(word => taskWords.has(word))
+      && rowMatchesTask;
   }
 
-  _currentTaskLedgerRows(tabId) {
+  _currentTaskLedgerRows(tabId, opts = {}) {
     const rows = this.progressLedgers.get(tabId) || [];
     if (!rows.length) return [];
     if (this._currentTaskIsProgressContinuation(tabId)) return rows;
     if (!this._currentTaskHasProgressIntent(tabId)) return [];
     const text = this._latestTaskText(tabId);
-    return rows.filter(row => this._progressRowMatchesTaskText(row, text));
+    const taskKey = this._currentProgressTaskKey(tabId, opts);
+    return rows.filter(row => this._progressRowMatchesTaskText(row, text, taskKey));
   }
 
   _currentTaskProgressRows(tabId) {
@@ -2664,7 +2768,13 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   _currentTaskIsProgressContinuation(tabId) {
     const text = this._latestTaskText(tabId).toLowerCase();
     if (!text) return false;
-    return /^(?:please\s+)?(?:continue|keep\s+going|go\s+on|proceed|resume|carry\s+on|next|do\s+the\s+rest|finish\s+(?:the\s+)?(?:rest|remaining)|keep\s+working)(?:\s+(?:please|with\s+(?:it|this|that|them|those|the\s+(?:task|list|queue|rest|remaining))))?[.!?]*$/.test(text);
+    if (/^(?:please\s+)?(?:continue|keep\s+going|go\s+on|proceed|resume|carry\s+on|next|do\s+the\s+rest|finish\s+(?:the\s+)?(?:rest|remaining)|keep\s+working)(?:\s+(?:please|with\s+(?:it|this|that|them|those|the\s+(?:task|list|queue|rest|remaining))))?[.!?]*$/.test(text)) {
+      return true;
+    }
+    if (/^(?:please\s+)?(?:continue|go\s+on|proceed|resume|carry\s+on|keep\s+(?:going|working))\s+(?:with\s+)?(?:the\s+)?(?:(?:existing|current|active|open|pending|progress)\s+)?(?:ledger|progress\s+ledger|task|work|list|queue|rows?|items?)[.!?]*$/.test(text)) {
+      return true;
+    }
+    return /^(?:please\s+)?(?:continue|go\s+on|proceed|resume|carry\s+on|keep\s+(?:going|working))\s+(?:with\s+)?(?:(?:the\s+)?(?:rest|remaining)\s+)?(?:following|unfollowing|starring|unstarring|watching|unwatching|connecting|subscribing|unsubscribing|saving|unsaving|liking|unliking|blocking|unblocking|reporting|sending|submitting|adding|removing|processing|collecting|scraping|visiting|opening)\b[\s\S]{0,120}\b(?:remaining|rest|rows|items|profiles|users|people|members|followers|following|stargazers|results|links|pages|contacts|accounts|repos|repositories|entries|records|comments|messages|emails|names|handles)\b[.!?]*$/.test(text);
   }
 
   _currentTaskHasProgressIntent(tabId) {
@@ -2675,28 +2785,37 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     }
 
     const actionVerb = '(?:follow|unfollow|star|unstar|watch|unwatch|connect|subscribe|unsubscribe|save|unsave|like|unlike|block|unblock|report|send|submit|add|remove|process|collect|scrape|visit|open)';
-    const readOnlyQuestion = /^(?:which|who|what|where|when|why|how|list|show|tell\s+me|summarize|identify)\b/.test(text) || /\?\s*$/.test(text);
-    const directActionRequest = new RegExp(`(?:^|\\b)(?:please\\s+|can\\s+you\\s+|could\\s+you\\s+|would\\s+you\\s+)?${actionVerb}\\b`).test(text)
-      && (
-        new RegExp(`${actionVerb}\\s+(?:all|every|each|remaining|the\\s+rest|not-followed)\\b`).test(text)
-        || /\b(?:all|every|each|remaining|the\s+rest|not-followed)\b[\s\S]{0,80}\b(?:rows|items|profiles|users|people|members|followers|following|stargazers|results|links|pages|contacts|accounts|repos|repositories|entries|records|comments|messages|emails|names|handles)\b/.test(text)
-      );
-    if (readOnlyQuestion && !directActionRequest) return false;
-
-    const itemAction = /\b(follow|unfollow|star|unstar|watch|unwatch|connect|subscribe|unsubscribe|save|unsave|like|unlike|block|unblock|report|send|submit|add|remove|process|collect|scrape|visit|open)\b/.test(text);
+    const itemAction = new RegExp(`\\b${actionVerb}\\b`).test(text);
     const repeatedAction = /\b(follow|unfollow|star|unstar|watch|unwatch|connect|subscribe|unsubscribe|process|collect|scrape|visit|open)\b/.test(text);
     const repeatedTarget = /\b(rows|items|profiles|users|people|members|followers|following|stargazers|results|links|pages|contacts|accounts|repos|repositories|entries|records|comments|messages|emails|names|handles)\b/.test(text)
       || /\b(?:list|queue)\s+of\b/.test(text)
       || /\b(?:each|every)\s+(?:row|item|profile|user|person|member|follower|stargazer|result|link|page|contact|account|repo|repository|entry|record|comment|message|email|name|handle)\b/.test(text)
       || (/\b(?:all|remaining|not-followed)\b/.test(text) && repeatedAction);
+    const readOnlyQuestion = /^(?:which|who|what|where|when|why|how|list|show|tell\s+me|summarize|identify)\b/.test(text) || /\?\s*$/.test(text);
+    const directActionRequest = new RegExp(`^(?:please\\s+)?${actionVerb}\\b|^(?:can|could|would)\\s+you\\s+(?:please\\s+)?${actionVerb}\\b`).test(text)
+      && itemAction
+      && repeatedTarget;
+    if (readOnlyQuestion && !directActionRequest) return false;
     return itemAction && repeatedTarget;
+  }
+
+  _textHasAffirmativeFollowIntent(text) {
+    let normalized = String(text || '').toLowerCase().replace(/[’]/g, "'");
+    if (!/\bfollow(?:ing)?\b/.test(normalized)) return false;
+    normalized = normalized
+      .replace(/\b(?:do\s+not|don't|dont|never)\s+(?:try\s+to\s+|start\s+|keep\s+)?follow(?:ing)?\b(?:\s+(?:anyone|anybody|people|users?|stargazers?|them|him|her|it))?/g, ' ')
+      .replace(/\b(?:avoid|skip)\s+follow(?:ing)?\b(?:\s+(?:anyone|anybody|people|users?|stargazers?|them|him|her|it))?/g, ' ')
+      .replace(/\bwithout\s+follow(?:ing)?\b(?:\s+(?:anyone|anybody|people|users?|stargazers?|them|him|her|it))?/g, ' ')
+      .replace(/\bnot\s+(?:to\s+)?follow(?:ing)?\b(?:\s+(?:anyone|anybody|people|users?|stargazers?|them|him|her|it))?/g, ' ')
+      .replace(/\bno\s+follow(?:ing)?\b/g, ' ');
+    return /\bfollow(?:ing)?\b/.test(normalized);
   }
 
   _hasGithubStargazerFollowContext(tabId) {
     const rows = this._activeProgressLedgerRows(tabId);
     const hasFollowRows = rows.some(row => String(row?.action || '').toLowerCase() === 'follow');
     const text = this._latestTaskText(tabId).toLowerCase();
-    const hasFollowIntent = /\bfollow\b/.test(text);
+    const hasFollowIntent = this._textHasAffirmativeFollowIntent(text);
     if (hasFollowIntent && this._hasProgressLedgerContext(tabId)) return true;
     return hasFollowRows
       && this._currentTaskIsProgressContinuation(tabId)
@@ -2745,14 +2864,15 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (!pageContent || (!pageContent.includes('button "Follow ') && !pageContent.includes('button "Unfollow '))) return null;
     const url = result.url || result.pageUrl || await this._currentUrl(tabId);
     if (!this._isGithubStargazersUrl(url)) return null;
+    const pageScope = this._rememberProgressPageScope(tabId, url);
 
     const observed = buildGithubStargazerProgressItems(
-      this.progressLedgers.get(tabId) || [],
+      this._currentTaskLedgerRows(tabId, { pageScope }),
       pageContent,
       { excludedUsernames: this._excludedGithubUsernames(tabId) }
     );
     if (!observed.items.length) return null;
-    const update = this._progressUpdate(tabId, { items: observed.items }, { source: 'observe' });
+    const update = this._progressUpdate(tabId, { items: observed.items }, { source: 'observe', pageScope });
     if (!update?.success) return null;
     const note = {
       ...observed.stats,
@@ -2765,7 +2885,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
   _autoRecordProgressAction(tabId, name, args, result) {
     if (!this._hasProgressLedgerContext(tabId)) return null;
-    const item = detectProgressAction(name, args, result);
+    const item = this._progressItemFromClickedLedgerRow(tabId, args, result)
+      || detectProgressAction(name, args, result);
     if (!item) return null;
     const reconciled = this._reconcileAutoProgressItem(tabId, item);
     const update = this._progressUpdate(tabId, { items: [reconciled] }, { source: 'auto' });
@@ -2792,6 +2913,24 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   _shouldBlockDoneForProgress(tabId) {
     if ((this.conversationModes.get(tabId) || 'ask') !== 'act') return false;
     return this._currentTaskProgressRows(tabId).length > 0;
+  }
+
+  _plainFinalProgressBlock(tabId) {
+    const progressBlock = this._shouldBlockDoneForProgress(tabId)
+      ? this._progressDoneBlock(tabId)
+      : null;
+    if (!progressBlock) return null;
+    const blockedResult = {
+      success: false,
+      blockedFinal: true,
+      error: progressBlock.error,
+      counts: progressBlock.counts,
+      unresolved: progressBlock.unresolved,
+    };
+    return [
+      '[PROGRESS LEDGER BLOCK: Your previous response was a plain final answer, but this Act-mode repeated-item task still has unresolved progress rows. Continue the task. Use progress_update to mark rows processed, skipped, or failed before finishing.]',
+      this._wrapUntrusted('progress_read', this._limitToolResult(blockedResult)),
+    ].join('\n');
   }
 
   _appendProgressLedgerToFinal(tabId, summary) {
@@ -4995,6 +5134,13 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         onUpdate('warning', { message: finalResponse });
         break;
       }
+      const progressFinalBlock = this._plainFinalProgressBlock(tabId);
+      if (progressFinalBlock) {
+        messages.push({ role: 'assistant', content: result.content });
+        messages.push({ role: 'user', content: progressFinalBlock });
+        onUpdate('warning', { message: 'Progress ledger has unresolved rows; continuing.' });
+        continue;
+      }
       finalResponse = result.costAllowanceMessage
         ? `${result.content}\n\n${result.costAllowanceMessage}`
         : result.content;
@@ -5194,6 +5340,13 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           return failMsg;
         }
         emptyOutputRecoveryAttempted = false;
+        const progressFinalBlock = this._plainFinalProgressBlock(tabId);
+        if (progressFinalBlock) {
+          messages.push({ role: 'assistant', content: fullText });
+          messages.push({ role: 'user', content: progressFinalBlock });
+          onUpdate('warning', { message: 'Progress ledger has unresolved rows; continuing.' });
+          continue;
+        }
         if (costStopMessage) {
           onUpdate('text_delta', { content: `\n\n${costStopMessage}` });
           fullText = `${fullText}\n\n${costStopMessage}`;

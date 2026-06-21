@@ -102,6 +102,7 @@ export function normalizeLedgerItem(item, opts = {}) {
   const status = normalizeStatus(item.status, fallbackStatus);
   const label = sanitizeText(item.label || target || id, 220);
   const reason = sanitizeText(item.reason || item.note || '', 300);
+  const taskKey = sanitizeText(item.taskKey || opts.taskKey || '', 240);
   const fields = sanitizeFields(item.fields);
   const attempts = Number.isFinite(Number(item.attempts))
     ? Math.max(0, Math.floor(Number(item.attempts)))
@@ -115,6 +116,7 @@ export function normalizeLedgerItem(item, opts = {}) {
     ...(action ? { action } : {}),
     ...(fields ? { fields } : {}),
     ...(reason ? { reason } : {}),
+    ...(taskKey ? { taskKey } : {}),
     source,
     attempts,
     firstSeenAt: Number.isFinite(Number(item.firstSeenAt)) ? Number(item.firstSeenAt) : now,
@@ -187,6 +189,7 @@ export function upsertLedgerItems(rows = [], items = [], opts = {}) {
       ...(incoming.action ? { action: incoming.action } : {}),
       fields: { ...(existing.fields || {}), ...(incoming.fields || {}) },
       ...(incoming.reason ? { reason: incoming.reason } : {}),
+      taskKey: incoming.taskKey || existing.taskKey,
       source: incoming.source || existing.source,
       attempts: source === 'auto'
         ? Math.max(1, Number(existing.attempts || 0) + 1)
@@ -195,6 +198,7 @@ export function upsertLedgerItems(rows = [], items = [], opts = {}) {
       updatedAt: now,
     };
     if (!Object.keys(merged.fields || {}).length) delete merged.fields;
+    if (!merged.taskKey) delete merged.taskKey;
     next[existingIdx] = merged;
     updated.push(merged);
   }
@@ -254,9 +258,14 @@ export function detectProgressAction(toolName, args = {}, result = {}) {
   if (!result || result.success === false || result.error || result.noProgress) return null;
 
   const labels = [
+    args.text,
+    args.name,
+    args.label,
+    result.requestedText,
+    result.beforeText,
+    result.beforeName,
     result.name,
     result.text,
-    args.text,
   ].map(v => sanitizeText(v, 220)).filter(Boolean);
   const href = sanitizeText(result.href || result.url || '', 500);
 
