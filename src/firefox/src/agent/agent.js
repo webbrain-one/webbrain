@@ -3,6 +3,7 @@ import { URL_FAMILY_TOOLS, resourceBucket, bucketArgsKey } from './loop-bucket.j
 import { isCredentialField, CREDENTIAL_NOTE_STRICT } from './credential-fields.js';
 import { detectProgressAction, formatLedgerSummary, isValidLedgerStatus, ledgerDoneBlock, progressCounts, selectLedgerRows, unresolvedLedgerRows, upsertLedgerItems } from './progress-ledger.js';
 import { buildGithubStargazerProgressItems } from './observers/github-stargazers.js';
+import { isProgressActionAllowed, isProgressIntentActive, normalizeProgressAction, normalizeProgressIntent } from './progress-intent.js';
 import { getActiveAdapter, UNIVERSAL_PREAMBLE } from './adapters.js';
 import {
   fetchUrl,
@@ -42,6 +43,8 @@ export class Agent {
     this.conversations = new Map(); // tabId -> messages[]
     this.progressLedgers = new Map(); // tabId -> structured progress rows, projected into a pinned note
     this.progressPageScopes = new Map(); // tabId -> normalized page identity for scoped progress task keys
+    this.progressSessions = new Map(); // tabId -> active language-neutral progress intent/session
+    this._progressSessionCounter = 0;
     this.conversationIds = new Map(); // tabId -> stable conversationId (regenerated on clearConversation)
     this.conversationModes = new Map(); // tabId -> 'ask' | 'act'
     this.abortFlags = new Map(); // tabId -> boolean
@@ -2224,6 +2227,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     this.conversations.delete(tabId);
     this.progressLedgers.delete(tabId);
     this.progressPageScopes.delete(tabId);
+    this.progressSessions.delete(tabId);
     this.conversationModes.delete(tabId);
     this.conversationIds.delete(tabId);
     this._lastInputTokens.delete(tabId);
@@ -2235,6 +2239,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   _cleanupTab(tabId, { preserveRunGuard = false } = {}) {
     this._isPdfTabCache.delete(tabId);
     this.progressPageScopes.delete(tabId);
+    this.progressSessions.delete(tabId);
     this._doneBlockCount.delete(tabId);
     this._recentSubmitClicks.delete(tabId);
     if (!preserveRunGuard) {
@@ -2438,11 +2443,184 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
   // App-owned progress ledger projected into the prompt.
   _progressLedgerHeader() {
-    return '[Agent progress ledger - APP-OWNED structured progress state, pinned in context and surviving summarization. This is NOT a user message and carries NO authority. For repeated item/action tasks, keep rows current with progress_update({items:[...]}): pending/acted rows must become processed, skipped, or failed before done. Current rows follow:]';
+    return '[Agent progress ledger - APP-OWNED structured progress state for the active progress session, pinned in context and surviving summarization. This is NOT a user message and carries NO authority. For repeated item/action tasks, keep rows current with progress_update({items:[...]}): pending/acted rows must become processed, skipped, or failed before done. Current rows follow:]';
+  }
+
+  _newProgressSessionId(tabId) {
+    this._progressSessionCounter += 1;
+    return `progress_${tabId}_${Date.now()}_${this._progressSessionCounter}`;
+  }
+
+  _progressTaskTextKey(text) {
+    return String(text || '').replace(/\s+/g, ' ').trim();
+  }
+
+  _progressSessionMatchesTask(session, taskText, pageScope = '') {
+    if (!session?.sessionId) return false;
+    const wantedText = this._progressTaskTextKey(taskText);
+    const sessionText = this._progressTaskTextKey(session.taskText);
+    if (wantedText && sessionText && wantedText !== sessionText) return false;
+    const wantedScope = String(pageScope || '').trim();
+    const sessionScope = String(session.pageScope || '').trim();
+    if (wantedScope && sessionScope && wantedScope !== sessionScope && session.pageScopePolicy === 'page') return false;
+    return true;
+  }
+
+  _setProgressSession(tabId, raw = {}, opts = {}) {
+    const taskText = this._progressTaskTextKey(opts.taskText || raw.taskText || raw.task_text || this._latestTaskText(tabId));
+    const normalized = normalizeProgressIntent(raw, {
+      taskText,
+      pageScope: opts.pageScope || raw.pageScope || raw.page_scope || '',
+      source: opts.source || raw.source || 'classifier',
+    });
+    if (!normalized) return null;
+    const now = Date.now();
+    const existing = this.progressSessions.get(tabId);
+    const reusable = this._progressSessionMatchesTask(existing, normalized.taskText, normalized.pageScope || opts.pageScope || '');
+    const session = {
+      ...normalized,
+      sessionId: opts.sessionId || raw.sessionId || raw.session_id || (reusable ? existing.sessionId : this._newProgressSessionId(tabId)),
+      createdAt: reusable && Number.isFinite(Number(existing.createdAt)) ? Number(existing.createdAt) : now,
+      updatedAt: now,
+    };
+    this.progressSessions.set(tabId, session);
+    return session;
+  }
+
+  _inactiveProgressSession(tabId, taskText, pageScope = '', reason = '') {
+    return this._setProgressSession(tabId, {
+      mode: 'inactive',
+      allowedActions: [],
+      forbiddenActions: [],
+      confidence: 0,
+      reason,
+    }, { taskText, pageScope, source: 'classifier' });
+  }
+
+  _rowsForProgressSession(tabId, sessionId, rows = this.progressLedgers.get(tabId) || []) {
+    const id = String(sessionId || '').trim();
+    if (!id) return [];
+    return (Array.isArray(rows) ? rows : []).filter(row => String(row?.sessionId || '').trim() === id);
+  }
+
+  _deriveProgressSessionFromRows(tabId) {
+    const rows = unresolvedLedgerRows(this.progressLedgers.get(tabId) || []);
+    const sessionIds = Array.from(new Set(rows.map(row => String(row?.sessionId || '').trim()).filter(Boolean)));
+    if (sessionIds.length !== 1) return null;
+    const sessionId = sessionIds[0];
+    const actions = Array.from(new Set(rows.map(row => normalizeProgressAction(row?.action)).filter(Boolean)));
+    if (!actions.length) return null;
+    return this._setProgressSession(tabId, {
+      mode: 'active',
+      allowedActions: actions,
+      forbiddenActions: [],
+      confidence: 1,
+    }, {
+      sessionId,
+      taskText: this._latestTaskText(tabId),
+      source: 'ledger',
+    });
+  }
+
+  _currentProgressSession(tabId, opts = {}) {
+    const session = this.progressSessions.get(tabId);
+    const taskText = this._latestTaskText(tabId);
+    const pageScope = String(opts.pageScope || '').trim();
+    if (this._currentTaskIsProgressContinuation(tabId)) {
+      return session || this._deriveProgressSessionFromRows(tabId);
+    }
+    if (!this._progressSessionMatchesTask(session, taskText, pageScope)) return null;
+    if (pageScope && !session.pageScope) {
+      session.pageScope = pageScope;
+      session.pageScopePolicy = 'page';
+      session.updatedAt = Date.now();
+    }
+    return session;
+  }
+
+  _progressSessionForObservation(tabId, opts = {}) {
+    const current = this._currentProgressSession(tabId, opts);
+    if (current) return current;
+    const previous = this.progressSessions.get(tabId);
+    const pageScope = String(opts.pageScope || '').trim();
+    if (
+      pageScope
+      && previous
+      && isProgressIntentActive(previous)
+      && previous.pageScopePolicy === 'page'
+      && this._progressTaskTextKey(previous.taskText) === this._progressTaskTextKey(this._latestTaskText(tabId))
+    ) {
+      return this._setProgressSession(tabId, {
+        mode: 'active',
+        allowedActions: previous.allowedActions || [],
+        forbiddenActions: previous.forbiddenActions || [],
+        targets: previous.targets || [],
+        confidence: previous.confidence || 1,
+        pageScopePolicy: 'page',
+        reason: previous.reason || 'same task on a new page scope',
+      }, {
+        taskText: previous.taskText,
+        pageScope,
+        source: previous.source || 'classifier',
+      });
+    }
+    return null;
+  }
+
+  _actionsFromProgressItems(items = []) {
+    return Array.from(new Set((Array.isArray(items) ? items : [])
+      .map(item => normalizeProgressAction(item?.action))
+      .filter(Boolean)));
+  }
+
+  _sessionForProgressUpdate(tabId, items = [], opts = {}) {
+    if (opts.sessionId) {
+      const existing = this.progressSessions.get(tabId);
+      if (existing?.sessionId === opts.sessionId) return existing;
+      const actions = this._actionsFromProgressItems(items);
+      return this._setProgressSession(tabId, {
+        mode: actions.length ? 'active' : 'inactive',
+        allowedActions: actions,
+        forbiddenActions: [],
+        confidence: actions.length ? 1 : 0,
+      }, {
+        sessionId: opts.sessionId,
+        taskText: this._latestTaskText(tabId),
+        pageScope: opts.pageScope,
+        source: opts.source || 'model',
+      });
+    }
+
+    const current = this._currentProgressSession(tabId, opts);
+    if (current && isProgressIntentActive(current)) return current;
+    const actions = this._actionsFromProgressItems(items);
+    const hasUnresolvedItem = (Array.isArray(items) ? items : []).some(item => {
+      const status = String(item?.status || '').toLowerCase();
+      return status === 'pending' || status === 'acted';
+    });
+    if (current && (!actions.length || !hasUnresolvedItem)) return current;
+    if (!actions.length || !hasUnresolvedItem) return null;
+    return this._setProgressSession(tabId, {
+      mode: 'active',
+      allowedActions: actions,
+      forbiddenActions: [],
+      confidence: 1,
+    }, {
+      sessionId: current?.sessionId,
+      taskText: this._latestTaskText(tabId),
+      pageScope: opts.pageScope,
+      source: opts.source || 'model',
+    });
+  }
+
+  _progressRowsForPrompt(tabId) {
+    const session = this._currentProgressSession(tabId);
+    if (!session || !isProgressIntentActive(session)) return [];
+    return this._rowsForProgressSession(tabId, session.sessionId);
   }
 
   _buildProgressLedgerMessage(tabId) {
-    const rows = this.progressLedgers.get(tabId) || [];
+    const rows = this._progressRowsForPrompt(tabId);
     const summary = formatLedgerSummary(rows, { maxRows: 18 });
     return {
       role: 'user',
@@ -2453,7 +2631,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   _syncProgressLedgerMessage(tabId) {
     const messages = this.conversations.get(tabId);
     if (!messages) return;
-    const rows = this.progressLedgers.get(tabId) || [];
+    const rows = this._progressRowsForPrompt(tabId);
     const idx = this._findProgressLedgerIndex(messages);
     if (!rows.length) {
       if (idx >= 0) messages.splice(idx, 1);
@@ -2499,39 +2677,51 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         error: `progress_update: invalid status value(s): ${invalid.slice(0, 6).join(', ')}. Use exactly one of pending, acted, processed, skipped, or failed.`,
       };
     }
-    const taskKey = opts.taskKey || this._currentProgressTaskKey(tabId, { pageScope: opts.pageScope });
-    const scopedItems = taskKey
+    const sessionOpts = { ...opts, sessionId: opts.sessionId || args.sessionId || args.session_id, source: opts.source || args.source || 'model' };
+    const session = this._sessionForProgressUpdate(tabId, items, sessionOpts);
+    const sessionId = sessionOpts.sessionId || session?.sessionId || '';
+    const pageScope = opts.pageScope || session?.pageScope || '';
+    const scopedItems = sessionId
       ? items.map(item => (item && typeof item === 'object' && !Array.isArray(item)
-        ? { ...item, taskKey }
+        ? { ...item, sessionId, ...(pageScope ? { pageScope } : {}) }
         : item))
       : items;
     const current = this.progressLedgers.get(tabId) || [];
-    const result = upsertLedgerItems(current, scopedItems, { source: opts.source || args.source || 'model', taskKey });
+    const result = upsertLedgerItems(current, scopedItems, { source: opts.source || args.source || 'model', sessionId, pageScope });
     if (!result.changed) {
       return { success: false, error: 'progress_update: no valid items were provided. Each item needs a stable id.' };
     }
     this.progressLedgers.set(tabId, result.rows);
     this._syncProgressLedgerMessage(tabId);
     if (typeof this._persist === 'function') this._persist(tabId);
+    const visibleRows = sessionId ? this._rowsForProgressSession(tabId, sessionId, result.rows) : result.rows;
     return {
       success: true,
       updated: result.updated,
-      counts: result.counts,
-      unresolved: unresolvedLedgerRows(result.rows, { limit: 20 }),
+      counts: progressCounts(visibleRows),
+      unresolved: unresolvedLedgerRows(visibleRows, { limit: 20 }),
+      ...(sessionId ? { sessionId } : {}),
       note: 'progress ledger updated',
     };
   }
 
   _progressRead(tabId, args = {}) {
-    const rows = this.progressLedgers.get(tabId) || [];
+    const explicitSessionId = String(args.sessionId || args.session_id || '').trim();
+    const session = args.allSessions || explicitSessionId ? null : this._currentProgressSession(tabId);
+    const rows = args.allSessions
+      ? (this.progressLedgers.get(tabId) || [])
+      : explicitSessionId
+        ? this._rowsForProgressSession(tabId, explicitSessionId)
+      : (session ? this._rowsForProgressSession(tabId, session.sessionId) : []);
     const limit = Number.isFinite(Number(args.limit)) ? Math.max(1, Math.min(200, Math.floor(Number(args.limit)))) : 50;
     const offset = Number.isFinite(Number(args.offset)) ? Math.max(0, Math.floor(Number(args.offset))) : 0;
     return {
       success: true,
       counts: progressCounts(rows),
-      rows: selectLedgerRows(rows, { status: args.status, limit, offset }),
+      rows: selectLedgerRows(rows, { status: args.status, limit, offset, sessionId: explicitSessionId || session?.sessionId }),
       offset,
       limit,
+      ...(explicitSessionId || session?.sessionId ? { sessionId: explicitSessionId || session.sessionId } : {}),
       note: rows.length ? 'Use progress_update to close pending/acted rows.' : 'No progress rows recorded yet.',
     };
   }
@@ -2594,8 +2784,81 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     return '';
   }
 
+  _progressIntentClassifierMessages(taskText, siteContext = {}) {
+    return [
+      {
+        role: 'system',
+        content: [
+          'Classify the user task for a browser automation progress ledger.',
+          'Use semantic understanding across languages. Do not infer intent from page UI labels.',
+          'Return exactly one JSON object, no prose.',
+          'Schema: {"mode":"active|read_only|inactive","allowedActions":["follow"],"forbiddenActions":[],"targets":[],"confidence":0.0,"pageScopePolicy":"none|page|site","reason":"short"}.',
+          'Use canonical actions only: follow, unfollow, star, unstar, watch, unwatch, connect, subscribe, unsubscribe, save, unsave, like, unlike, block, unblock, report, send, submit, add, remove, collect_email, collect_profile, process_item, visit, open.',
+          'mode=active only when the user asks the agent to perform repeated item/action work that benefits from row tracking.',
+          'mode=read_only for questions, summaries, inspections, or reference-only uses of UI labels.',
+          'If an action is negated or forbidden, put it in forbiddenActions even if its label appears in the task text.',
+        ].join('\n'),
+      },
+      {
+        role: 'user',
+        content: JSON.stringify({
+          taskText,
+          siteContext,
+        }),
+      },
+    ];
+  }
+
+  async _classifyProgressIntentWithProvider(tabId, opts = {}) {
+    const taskText = this._progressTaskTextKey(opts.taskText || this._latestTaskText(tabId));
+    if (!taskText) return null;
+    const provider = opts.provider || this.providerManager?.getActive?.();
+    if (!provider?.chat) return null;
+    const pageScope = String(opts.pageScope || this._currentProgressPageScope(tabId) || '').trim();
+    const siteContext = {
+      pageScope,
+      site: this._isGithubStargazersUrl(pageScope) ? 'github_stargazers' : 'unknown',
+    };
+    try {
+      const response = await this._chatWithCostAllowance(provider, this._progressIntentClassifierMessages(taskText, siteContext), {
+        temperature: 0,
+        maxTokens: 320,
+        extraBody: { chat_template_kwargs: { enable_thinking: false } },
+      }, opts.costState || this.currentCostState.get(tabId) || null);
+      const obj = Agent._extractFirstJsonObject(response?.content || '');
+      return normalizeProgressIntent(obj, { taskText, pageScope, source: 'classifier' });
+    } catch {
+      return null;
+    }
+  }
+
+  async _ensureProgressSessionForCurrentTask(tabId, opts = {}) {
+    const taskText = this._progressTaskTextKey(opts.taskText || this._latestTaskText(tabId));
+    if (!taskText) return null;
+    const pageScope = String(opts.pageScope || this._currentProgressPageScope(tabId) || '').trim();
+    const existing = this._currentProgressSession(tabId, { pageScope });
+    if (existing) return existing;
+    if (this._currentTaskIsProgressContinuation(tabId)) {
+      return this._deriveProgressSessionFromRows(tabId);
+    }
+    const classified = await this._classifyProgressIntentWithProvider(tabId, {
+      provider: opts.provider,
+      costState: opts.costState,
+      taskText,
+      pageScope,
+    });
+    if (!classified || (classified.mode === 'active' && !isProgressIntentActive(classified))) {
+      return this._inactiveProgressSession(tabId, taskText, pageScope, classified?.reason || 'progress intent unavailable');
+    }
+    return this._setProgressSession(tabId, classified, { taskText, pageScope, source: 'classifier' });
+  }
+
   _activeProgressLedgerRows(tabId) {
-    return unresolvedLedgerRows(this.progressLedgers.get(tabId) || []);
+    const session = this._currentProgressSession(tabId);
+    const rows = session
+      ? this._rowsForProgressSession(tabId, session.sessionId)
+      : [];
+    return unresolvedLedgerRows(rows);
   }
 
   _progressLedgerLookupKey(value) {
@@ -2613,7 +2876,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       .map(value => this._progressLedgerLookupKey(value))
       .filter(Boolean));
     if (!itemKeys.size) return item;
+    const session = this._currentProgressSession(tabId);
     const match = this._activeProgressLedgerRows(tabId).find(row => {
+      if (session?.sessionId && String(row?.sessionId || '') !== session.sessionId) return false;
       if (String(row?.action || '').toLowerCase() !== 'follow') return false;
       return [row.id, row.label, row.target]
         .map(value => this._progressLedgerLookupKey(value))
@@ -2641,7 +2906,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (!result || result.success === false || result.error || result.noProgress) return null;
     const refId = String(args?.ref_id || args?.refId || result?.ref_id || result?.refId || '').trim();
     if (!refId) return null;
+    const session = this._currentProgressSession(tabId);
     const row = this._activeProgressLedgerRows(tabId).find(candidate => {
+      if (session?.sessionId && String(candidate?.sessionId || '') !== session.sessionId) return false;
       const fields = candidate?.fields && typeof candidate.fields === 'object' ? candidate.fields : {};
       return String(fields.refId || fields.ref_id || '').trim() === refId
         && String(candidate?.action || '').trim();
@@ -2660,27 +2927,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   }
 
   _hasProgressLedgerContext(tabId) {
-    if (this._currentTaskHasProgressIntent(tabId)) return true;
-    return this._activeProgressLedgerRows(tabId).length > 0
-      && this._currentTaskIsProgressContinuation(tabId);
-  }
-
-  _progressTaskKeyForText(text, pageScope = '') {
-    const base = String(text || '')
-      .toLowerCase()
-      .replace(/\s+/g, ' ')
-      .trim()
-      .slice(0, 180);
-    const scope = String(pageScope || '').trim();
-    return scope ? `${base} ::page:${scope}`.slice(0, 240) : base;
-  }
-
-  _progressTaskKeyBase(taskKey) {
-    return String(taskKey || '').split(/\s+::page:/)[0].trim();
-  }
-
-  _isProgressCollectionPageScope(pageScope) {
-    return this._isGithubStargazersUrl(pageScope);
+    const session = this._currentProgressSession(tabId);
+    if (isProgressIntentActive(session)) return true;
+    return this._activeProgressLedgerRows(tabId).length > 0;
   }
 
   _progressPageScopeForUrl(url) {
@@ -2714,70 +2963,18 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   }
 
   _currentProgressPageScope(tabId) {
-    const cached = this.progressPageScopes.get(tabId);
-    if (cached) return cached;
     const pageScope = this._progressPageScopeFromConversation(tabId);
-    if (pageScope) this.progressPageScopes.set(tabId, pageScope);
-    return pageScope;
-  }
-
-  _currentProgressTaskKey(tabId, opts = {}) {
-    if (this._currentTaskIsProgressContinuation(tabId)) {
-      const keys = Array.from(new Set(
-        this._activeProgressLedgerRows(tabId)
-          .map(row => String(row?.taskKey || '').trim())
-          .filter(Boolean)
-      ));
-      if (keys.length === 1) return keys[0];
+    if (pageScope) {
+      this.progressPageScopes.set(tabId, pageScope);
+      return pageScope;
     }
-    const hasExplicitPageScope = Object.prototype.hasOwnProperty.call(opts, 'pageScope');
-    const pageScope = String(opts.pageScope || this._currentProgressPageScope(tabId) || '').trim();
-    const text = this._latestTaskText(tabId);
-    const baseTaskKey = this._progressTaskKeyForText(text);
-    if (!hasExplicitPageScope && (!pageScope || !this._isProgressCollectionPageScope(pageScope))) {
-      const matchingKeys = Array.from(new Set(
-        this._activeProgressLedgerRows(tabId)
-          .map(row => String(row?.taskKey || '').trim())
-          .filter(key => key && this._progressTaskKeyBase(key) === baseTaskKey)
-      ));
-      if (matchingKeys.length === 1) return matchingKeys[0];
-    }
-    return this._progressTaskKeyForText(text, pageScope);
-  }
-
-  _progressRowMatchesTaskText(row, text, currentTaskKey = '') {
-    const rowTaskKey = String(row?.taskKey || '').trim();
-    if (rowTaskKey) {
-      if (rowTaskKey === currentTaskKey) return true;
-      return !rowTaskKey.includes('::page:')
-        && rowTaskKey === this._progressTaskKeyForText(text);
-    }
-    const taskWords = new Set(String(text || '').toLowerCase().match(/[a-z0-9]+/g) || []);
-    if (!taskWords.size) return false;
-    const rowWords = String(`${row?.id || ''} ${row?.label || ''} ${row?.target || ''} ${row?.url || ''}`)
-      .toLowerCase()
-      .split(/[^a-z0-9]+/g)
-      .filter(Boolean);
-    const rowMatchesTask = rowWords.some(word => taskWords.has(word));
-    const action = String(row?.action || '').toLowerCase();
-    if (!action) {
-      return rowMatchesTask;
-    }
-    return action
-      .split(/[^a-z0-9]+/g)
-      .filter(Boolean)
-      .some(word => taskWords.has(word))
-      && rowMatchesTask;
+    return this.progressPageScopes.get(tabId) || '';
   }
 
   _currentTaskLedgerRows(tabId, opts = {}) {
-    const rows = this.progressLedgers.get(tabId) || [];
-    if (!rows.length) return [];
-    if (this._currentTaskIsProgressContinuation(tabId)) return rows;
-    if (!this._currentTaskHasProgressIntent(tabId)) return [];
-    const text = this._latestTaskText(tabId);
-    const taskKey = this._currentProgressTaskKey(tabId, opts);
-    return rows.filter(row => this._progressRowMatchesTaskText(row, text, taskKey));
+    const session = this._currentProgressSession(tabId, opts);
+    if (!session?.sessionId) return [];
+    return this._rowsForProgressSession(tabId, session.sessionId);
   }
 
   _currentTaskProgressRows(tabId) {
@@ -2797,48 +2994,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   }
 
   _currentTaskHasProgressIntent(tabId) {
-    const text = this._latestTaskText(tabId).toLowerCase();
-    if (!text) return false;
-    if (/\bprogress(?:\s+ledger)?\b|\bledger\b|\btrack\s+(?:progress|each|which)\b|\bkeep\s+(?:track|a\s+list|a\s+ledger)\b|\bone[-\s]+by[-\s]+one\b|\bper[-\s]+(?:item|user|profile|row|result)\b/.test(text)) {
-      return true;
-    }
-
-    const actionVerb = '(?:follow|unfollow|star|unstar|watch|unwatch|connect|subscribe|unsubscribe|save|unsave|like|unlike|block|unblock|report|send|submit|add|remove|process|collect|scrape|visit|open)';
-    const itemAction = new RegExp(`\\b${actionVerb}\\b`).test(text);
-    const repeatedAction = /\b(follow|unfollow|star|unstar|watch|unwatch|connect|subscribe|unsubscribe|process|collect|scrape|visit|open)\b/.test(text);
-    const repeatedTarget = /\b(rows|items|profiles|users|people|members|followers|following|stargazers|results|links|pages|contacts|accounts|repos|repositories|entries|records|comments|messages|emails|names|handles)\b/.test(text)
-      || /\b(?:list|queue)\s+of\b/.test(text)
-      || /\b(?:each|every)\s+(?:row|item|profile|user|person|member|follower|stargazer|result|link|page|contact|account|repo|repository|entry|record|comment|message|email|name|handle)\b/.test(text)
-      || (/\b(?:all|remaining|not-followed)\b/.test(text) && repeatedAction);
-    const readOnlyQuestion = /^(?:which|who|what|where|when|why|how|list|show|tell\s+me|summarize|identify)\b/.test(text) || /\?\s*$/.test(text);
-    const directActionRequest = new RegExp(`^(?:please\\s+)?${actionVerb}\\b|^(?:can|could|would)\\s+you\\s+(?:please\\s+)?${actionVerb}\\b`).test(text)
-      && itemAction
-      && repeatedTarget;
-    if (readOnlyQuestion && !directActionRequest) return false;
-    return itemAction && repeatedTarget;
-  }
-
-  _textHasAffirmativeFollowIntent(text) {
-    let normalized = String(text || '').toLowerCase().replace(/[’]/g, "'");
-    if (!/\bfollow(?:ing)?\b/.test(normalized)) return false;
-    normalized = normalized
-      .replace(/\b(?:do\s+not|don't|dont|never)\s+(?:try\s+to\s+|start\s+|keep\s+)?follow(?:ing)?\b(?:\s+(?:anyone|anybody|people|users?|stargazers?|them|him|her|it))?/g, ' ')
-      .replace(/\b(?:avoid|skip)\s+follow(?:ing)?\b(?:\s+(?:anyone|anybody|people|users?|stargazers?|them|him|her|it))?/g, ' ')
-      .replace(/\bwithout\s+follow(?:ing)?\b(?:\s+(?:anyone|anybody|people|users?|stargazers?|them|him|her|it))?/g, ' ')
-      .replace(/\bnot\s+(?:to\s+)?follow(?:ing)?\b(?:\s+(?:anyone|anybody|people|users?|stargazers?|them|him|her|it))?/g, ' ')
-      .replace(/\bno\s+follow(?:ing)?\b/g, ' ');
-    return /\bfollow(?:ing)?\b/.test(normalized);
+    return isProgressIntentActive(this._currentProgressSession(tabId));
   }
 
   _hasGithubStargazerFollowContext(tabId) {
-    const rows = this._activeProgressLedgerRows(tabId);
-    const hasFollowRows = rows.some(row => String(row?.action || '').toLowerCase() === 'follow');
-    const text = this._latestTaskText(tabId).toLowerCase();
-    const hasFollowIntent = this._textHasAffirmativeFollowIntent(text);
-    if (hasFollowIntent && this._hasProgressLedgerContext(tabId)) return true;
-    return hasFollowRows
-      && this._currentTaskIsProgressContinuation(tabId)
-      && this._hasProgressLedgerContext(tabId);
+    return isProgressActionAllowed(this._currentProgressSession(tabId), 'follow');
   }
 
   _excludedGithubUsernames(tabId) {
@@ -2878,20 +3038,21 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   async _recordProgressObservation(tabId, name, result) {
     if (name !== 'get_accessibility_tree') return null;
     if (!result || result.error || result.success === false) return null;
-    if (!this._hasGithubStargazerFollowContext(tabId)) return null;
     const pageContent = result.pageContent || result.text || '';
     if (!pageContent || (!pageContent.includes('button "Follow ') && !pageContent.includes('button "Unfollow '))) return null;
     const url = result.url || result.pageUrl || await this._currentUrl(tabId);
     if (!this._isGithubStargazersUrl(url)) return null;
     const pageScope = this._rememberProgressPageScope(tabId, url);
+    const session = this._progressSessionForObservation(tabId, { pageScope });
+    if (!isProgressActionAllowed(session, 'follow')) return null;
 
     const observed = buildGithubStargazerProgressItems(
       this._currentTaskLedgerRows(tabId, { pageScope }),
       pageContent,
-      { excludedUsernames: this._excludedGithubUsernames(tabId) }
+      { excludedUsernames: this._excludedGithubUsernames(tabId), session }
     );
     if (!observed.items.length) return null;
-    const update = this._progressUpdate(tabId, { items: observed.items }, { source: 'observe', pageScope });
+    const update = this._progressUpdate(tabId, { items: observed.items }, { source: 'observe', pageScope, sessionId: session.sessionId });
     if (!update?.success) return null;
     const note = {
       ...observed.stats,
@@ -2903,22 +3064,24 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   }
 
   _autoRecordProgressAction(tabId, name, args, result) {
-    if (!this._hasProgressLedgerContext(tabId)) return null;
+    const session = this._currentProgressSession(tabId);
+    if (!isProgressIntentActive(session)) return null;
     const item = this._progressItemFromClickedLedgerRow(tabId, args, result)
-      || detectProgressAction(name, args, result);
+      || detectProgressAction(name, args, result, { allowedActions: session.allowedActions });
     if (!item) return null;
+    if (!isProgressActionAllowed(session, item.action)) return null;
     const reconciled = this._reconcileAutoProgressItem(tabId, item);
-    const update = this._progressUpdate(tabId, { items: [reconciled] }, { source: 'auto' });
+    const update = this._progressUpdate(tabId, { items: [reconciled] }, { source: 'auto', sessionId: session.sessionId, pageScope: session.pageScope });
     if (!update?.success) return null;
     return {
       item: update.updated?.[0] || reconciled,
-      counts: update.counts || progressCounts(this.progressLedgers.get(tabId) || []),
-      unresolved: unresolvedLedgerRows(this.progressLedgers.get(tabId) || [], { limit: 8 }),
+      counts: update.counts || progressCounts(this._currentTaskLedgerRows(tabId)),
+      unresolved: unresolvedLedgerRows(this._currentTaskLedgerRows(tabId), { limit: 8 }),
     };
   }
 
   _progressWarningForAction(tabId) {
-    const acted = unresolvedLedgerRows(this.progressLedgers.get(tabId) || [], { limit: 50 })
+    const acted = unresolvedLedgerRows(this._currentTaskLedgerRows(tabId), { limit: 50 })
       .filter(row => String(row?.status || '').toLowerCase() === 'acted')
       .slice(0, 8);
     if (!acted.length) return '';
@@ -4942,6 +5105,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     messages.push(enriched);
 
     const provider = this.providerManager.getActive();
+    if (mode === 'act') {
+      await this._ensureProgressSessionForCurrentTask(tabId, { provider, costState });
+    }
     const visionAvailable = !!(provider?.supportsVision) || !!(await this.providerManager.getVisionProvider());
     const tools = getToolsForMode(mode, { strictSecretMode: this.strictSecretMode, tier: provider.promptTier, visionAvailable });
     const allowedToolNames = new Set(tools.map(t => t.function.name));
@@ -5221,6 +5387,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     messages.push(enriched);
 
     const provider = this.providerManager.getActive();
+    if (mode === 'act') {
+      await this._ensureProgressSessionForCurrentTask(tabId, { provider, costState });
+    }
     const visionAvailable = !!(provider?.supportsVision) || !!(await this.providerManager.getVisionProvider());
     const tools = getToolsForMode(mode, { strictSecretMode: this.strictSecretMode, tier: provider.promptTier, visionAvailable });
     const allowedToolNames = new Set(tools.map(t => t.function.name));

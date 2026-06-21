@@ -99,6 +99,22 @@ const { CDPClient, cdpClient: cdpClientCh } = await import(
   'file://' + path.join(ROOT, 'src/chrome/src/cdp/cdp-client.js').replace(/\\/g, '/')
 );
 
+function allowProgress(agent, tabId, allowedActions = ['follow'], opts = {}) {
+  return agent._setProgressSession(tabId, {
+    mode: 'active',
+    allowedActions,
+    forbiddenActions: opts.forbiddenActions || [],
+    targets: opts.targets || [],
+    confidence: opts.confidence ?? 1,
+    pageScopePolicy: opts.pageScope ? 'page' : (opts.pageScopePolicy || 'none'),
+    reason: 'test session',
+  }, {
+    taskText: opts.taskText || agent._latestTaskText(tabId),
+    pageScope: opts.pageScope || '',
+    source: 'test',
+  });
+}
+
 // bump-version.mjs is the version-bump CLI but exports its pure helpers
 // for testing. The CLI body is guarded so importing it is side-effect-free.
 const { bumpSemver, rewriteVersionInJsonText, rewriteVersionByAnchor, isReleaseBoundary } = await import(
@@ -3609,6 +3625,63 @@ test('Agent enrich: no recording status note when the conversation never recorde
 
 console.log('\nprogress ledger');
 
+test('progress intent classifier accepts multilingual structured intent and fails closed', async () => {
+  for (const AgentClass of [AgentCh, AgentFx]) {
+    const agent = new AgentClass({ getActive: () => ({ contextWindow: 128000, supportsVision: false, chat: async () => ({ content: '{}' }) }) });
+    const tabId = 760;
+    agent.conversations.set(tabId, [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: 'Her stargazer\\u2019i takip et.' },
+    ]);
+    agent._currentUrl = async () => 'https://github.com/foo/bar/stargazers';
+    agent._chatWithCostAllowance = async () => ({
+      content: JSON.stringify({
+        mode: 'active',
+        allowedActions: ['follow'],
+        forbiddenActions: [],
+        targets: ['stargazers'],
+        confidence: 0.92,
+        pageScopePolicy: 'page',
+      }),
+    });
+    const TurkishFollow = await agent._classifyProgressIntentWithProvider(tabId, {
+      provider: { chat: async () => ({ content: '{}' }) },
+      pageScope: 'https://github.com/foo/bar/stargazers',
+    });
+    assert.equal(TurkishFollow.mode, 'active', `${AgentClass.name}: Turkish follow intent was not active`);
+    assert.deepEqual(TurkishFollow.allowedActions, ['follow'], `${AgentClass.name}: Turkish takip et did not normalize to follow`);
+
+    agent.conversations.set(tabId, [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: 'E-postaları topla, kimseyi takip etme; Follow butonlarını sadece durum için kullan.' },
+    ]);
+    agent._chatWithCostAllowance = async () => ({
+      content: JSON.stringify({
+        mode: 'active',
+        allowedActions: ['collect_email'],
+        forbiddenActions: ['follow'],
+        targets: ['stargazers'],
+        confidence: 0.9,
+        pageScopePolicy: 'page',
+      }),
+    });
+    const TurkishNoFollow = await agent._classifyProgressIntentWithProvider(tabId, {
+      provider: { chat: async () => ({ content: '{}' }) },
+      pageScope: 'https://github.com/foo/bar/stargazers',
+    });
+    assert.deepEqual(TurkishNoFollow.allowedActions, ['collect_email'], `${AgentClass.name}: collect_email intent was not preserved`);
+    assert.deepEqual(TurkishNoFollow.forbiddenActions, ['follow'], `${AgentClass.name}: negated takip et did not forbid follow`);
+
+    agent._chatWithCostAllowance = async () => ({ content: 'not json' });
+    const failed = await agent._ensureProgressSessionForCurrentTask(tabId, {
+      provider: { chat: async () => ({ content: '{}' }) },
+      pageScope: 'https://github.com/foo/bar/stargazers',
+    });
+    assert.equal(failed.mode, 'inactive', `${AgentClass.name}: classifier failure did not fail closed`);
+    assert.equal(agent._hasGithubStargazerFollowContext(tabId), false, `${AgentClass.name}: failed classifier allowed GitHub follow context`);
+  }
+});
+
 test('progress ledger auto-detects item action clicks (chrome & firefox)', () => {
   const result = {
     success: true,
@@ -3647,6 +3720,7 @@ test('agent only auto-records progress clicks inside repeated-item work', () => 
       { role: 'system', content: 'sys' },
       { role: 'user', content: 'Follow every stargazer on this page.' },
     ]);
+    allowProgress(agent, 774, ['follow']);
     const repeated = agent._autoRecordProgressAction(774, 'click', { text: 'Follow octocat' }, { success: true, text: 'Follow octocat', href: '/octocat' });
     assert.equal(repeated?.item.id, 'octocat', `${AgentClass.name}: repeated-item click was not recorded`);
 
@@ -3664,6 +3738,7 @@ test('agent only auto-records progress clicks inside repeated-item work', () => 
       { role: 'assistant', content: 'Summary complete.' },
       { role: 'user', content: 'Follow every stargazer on this page.' },
     ]);
+    allowProgress(agent, 779, ['follow']);
     const laterTask = agent._autoRecordProgressAction(779, 'click', { text: 'Follow monalisa' }, { success: true, text: 'Follow monalisa', href: '/monalisa' });
     assert.equal(laterTask?.item.id, 'monalisa', `${AgentClass.name}: latest repeated-item task was ignored`);
 
@@ -3864,6 +3939,7 @@ test('progress ledger reconciles GitHub stargazer Follow and Unfollow buttons', 
     [parseGithubStargazerFollowButtons, buildGithubStargazerProgressItems],
     [parseGithubStargazerFollowButtonsFx, buildGithubStargazerProgressItemsFx],
   ]) {
+    const followSession = { sessionId: 'test-follow-session', mode: 'active', allowedActions: ['follow'], forbiddenActions: [], confidence: 1 };
     const buttons = parseButtons(page);
     assert.deepEqual(buttons.map(b => [b.username, b.state]), [
       ['ChJus', 'not_followed'],
@@ -3871,11 +3947,13 @@ test('progress ledger reconciles GitHub stargazer Follow and Unfollow buttons', 
       ['rafi', 'not_followed'],
       ['ryan-the-crayon', 'not_followed'],
     ]);
+    assert.deepEqual(buttons.map(b => b.action), ['follow', 'follow', 'follow', 'follow']);
+    assert.equal(buildItems([], page).items.length, 0, 'observer produced progress rows without an allowed follow session');
 
     const observed = buildItems([
       { id: 'myxvisual', label: 'myxvisual', action: 'follow', status: 'pending' },
       { id: 'rafi', label: 'rafi', action: 'follow', status: 'acted' },
-    ], page, { excludedUsernames: ['ChJus', 'ryan-the-crayon'] });
+    ], page, { excludedUsernames: ['ChJus', 'ryan-the-crayon'], session: followSession });
     assert.equal(observed.stats.addedPending, 0);
     assert.equal(observed.stats.alreadyFollowedSkipped, 1);
     assert.equal(observed.stats.excludedSkipped, 2);
@@ -3888,7 +3966,7 @@ test('progress ledger reconciles GitHub stargazer Follow and Unfollow buttons', 
 
     const laterFollow = buildItems([
       { id: 'ChJus', label: 'ChJus', action: 'collect_email', status: 'processed' },
-    ], page);
+    ], page, { session: followSession });
     assert.deepEqual(
       laterFollow.items.filter(item => item.label === 'ChJus').map(item => [item.id, item.action, item.status]),
       [['follow:chjus', 'follow', 'pending']],
@@ -3902,7 +3980,7 @@ test('progress ledger reconciles GitHub stargazer Follow and Unfollow buttons', 
         status: 'pending',
         fields: { followState: 'not_followed', refId: 'ref_1' },
       },
-    ], 'button "Unfollow octocat" [ref_2]');
+    ], 'button "Unfollow octocat" [ref_2]', { session: followSession });
     assert.equal(completedAfterObservation.stats.alreadyFollowedSkipped, 0);
     assert.deepEqual(completedAfterObservation.items, []);
   }
@@ -3952,10 +4030,10 @@ test('agent ignores stale terminal follow rows when observing a new stargazer ta
       { role: 'user', content: 'Follow every stargazer except alice.' },
     ]);
     agent._currentUrl = async () => 'https://github.com/foo/bar/stargazers';
+    const oldSession = allowProgress(agent, tabId, ['follow']);
     agent._progressUpdate(tabId, {
       items: [{ id: 'alice', label: 'alice', action: 'follow', status: 'skipped', reason: 'excluded by user request' }],
     });
-    const oldTaskKey = agent.progressLedgers.get(tabId)[0].taskKey;
 
     agent.conversations.set(tabId, [
       { role: 'system', content: 'sys' },
@@ -3963,13 +4041,14 @@ test('agent ignores stale terminal follow rows when observing a new stargazer ta
       { role: 'assistant', content: 'Skipped alice.' },
       { role: 'user', content: 'Follow every stargazer on this page.' },
     ]);
+    const newSession = allowProgress(agent, tabId, ['follow']);
     const result = { success: true, pageContent: page };
     const note = await agent._recordProgressObservation(tabId, 'get_accessibility_tree', result);
 
     assert.equal(note.addedPending, 1, `${AgentClass.name}: stale terminal row suppressed new pending follow row`);
-    const row = agent.progressLedgers.get(tabId).find(item => item.id === 'alice');
+    const row = agent.progressLedgers.get(tabId).find(item => item.id === 'alice' && item.sessionId === newSession.sessionId);
     assert.equal(row.status, 'pending', `${AgentClass.name}: stale skipped row was not reopened for the new task`);
-    assert.notEqual(row.taskKey, oldTaskKey, `${AgentClass.name}: reopened row kept the stale task key`);
+    assert.notEqual(row.sessionId, oldSession.sessionId, `${AgentClass.name}: reopened row kept the stale progress session`);
   }
 });
 
@@ -4020,12 +4099,14 @@ test('agent does not treat follow-status questions as stargazer follow work', as
       { role: 'system', content: 'sys' },
       { role: 'user', content: 'Can you follow every stargazer on this page?' },
     ]);
+    allowProgress(agent, tabId, ['follow']);
     assert.equal(agent._currentTaskHasProgressIntent(tabId), true, `${AgentClass.name}: direct action question lost progress intent`);
 
     agent.conversations.set(tabId, [
       { role: 'system', content: 'sys' },
       { role: 'user', content: 'Can you collect email addresses for every stargazer on this page?' },
     ]);
+    allowProgress(agent, tabId, ['collect_email']);
     assert.equal(agent._currentTaskHasProgressIntent(tabId), true, `${AgentClass.name}: question-form collect task lost progress intent`);
 
     agent.conversations.set(tabId, [
@@ -4107,6 +4188,7 @@ test('agent skips synthetic screenshot and document turns before inferring progr
     ]);
 
     assert.equal(agent._latestTaskText(tabId), 'Follow every stargazer on this page.');
+    allowProgress(agent, tabId, ['follow']);
     const recorded = agent._autoRecordProgressAction(
       tabId,
       'click',
@@ -4131,6 +4213,7 @@ test('agent skips emergency trim notices before inferring progress intent', () =
     ]);
 
     assert.equal(agent._latestTaskText(tabId), 'Follow every stargazer on this page.', `${AgentClass.name}: emergency trim notice hid latest task`);
+    allowProgress(agent, tabId, ['follow']);
     assert.equal(agent._currentTaskHasProgressIntent(tabId), true, `${AgentClass.name}: emergency trim notice disabled progress intent`);
   }
 });
@@ -4176,6 +4259,7 @@ test('agent seeds GitHub stargazer follow rows from the latest user request', as
       { role: 'user', content: 'Follow every stargazer on this page.' },
     ]);
     agent._currentUrl = async () => 'https://github.com/foo/bar/stargazers';
+    allowProgress(agent, tabId, ['follow'], { pageScope: 'https://github.com/foo/bar/stargazers' });
 
     const result = { success: true, pageContent: page };
     const note = await agent._recordProgressObservation(tabId, 'get_accessibility_tree', result);
@@ -4233,7 +4317,6 @@ test('agent does not seed GitHub follow rows when follow intent is negated', asy
 
     assert.equal(agent._currentTaskHasProgressIntent(tabId), true, `${AgentClass.name}: collect task lost progress intent`);
     assert.equal(agent._hasGithubStargazerFollowContext(tabId), false, `${AgentClass.name}: negated follow wording enabled follow observation`);
-    assert.equal(agent._textHasAffirmativeFollowIntent('Do not follow alice, but follow everyone else.'), true, `${AgentClass.name}: affirmative follow clause was stripped with the negated clause`);
 
     const result = { success: true, pageContent: page };
     const note = await agent._recordProgressObservation(tabId, 'get_accessibility_tree', result);
@@ -4277,13 +4360,15 @@ test('agent scopes page-relative progress task keys to the current page', async 
 
     let currentUrl = 'https://github.com/foo/bar/stargazers?page=1';
     agent._currentUrl = async () => currentUrl;
+    const firstSession = allowProgress(agent, tabId, ['follow'], { pageScope: currentUrl });
     const first = await agent._recordProgressObservation(tabId, 'get_accessibility_tree', {
       success: true,
       pageContent: 'button "Follow alice" [ref_41]',
     });
     assert.equal(first.addedPending, 1, `${AgentClass.name}: first page did not seed a pending row`);
     const alice = agent.progressLedgers.get(tabId).find(row => row.id === 'alice');
-    assert.match(alice.taskKey, /github\.com\/foo\/bar\/stargazers\?page=1/, `${AgentClass.name}: first task key did not include page scope`);
+    assert.equal(alice.sessionId, firstSession.sessionId, `${AgentClass.name}: first row did not use the first progress session`);
+    assert.match(alice.pageScope, /github\.com\/foo\/bar\/stargazers\?page=1/, `${AgentClass.name}: first row did not include page scope`);
 
     currentUrl = 'https://github.com/acme/widgets/stargazers?page=1';
     const second = await agent._recordProgressObservation(tabId, 'get_accessibility_tree', {
@@ -4292,8 +4377,8 @@ test('agent scopes page-relative progress task keys to the current page', async 
     });
     assert.equal(second.addedPending, 1, `${AgentClass.name}: second page did not seed a pending row`);
     const bob = agent.progressLedgers.get(tabId).find(row => row.id === 'bob');
-    assert.match(bob.taskKey, /github\.com\/acme\/widgets\/stargazers\?page=1/, `${AgentClass.name}: second task key did not include page scope`);
-    assert.notEqual(bob.taskKey, alice.taskKey, `${AgentClass.name}: page-relative tasks reused the same task key`);
+    assert.match(bob.pageScope, /github\.com\/acme\/widgets\/stargazers\?page=1/, `${AgentClass.name}: second row did not include page scope`);
+    assert.notEqual(bob.sessionId, alice.sessionId, `${AgentClass.name}: page-relative tasks reused the same progress session`);
 
     const currentRows = agent._currentTaskLedgerRows(tabId);
     assert.deepEqual(currentRows.map(row => row.id), ['bob'], `${AgentClass.name}: stale page row matched the current page task`);
@@ -4312,12 +4397,18 @@ test('agent requires current follow intent before reusing stale follow rows for 
     agent.conversations.set(tabId, [
       { role: 'system', content: 'sys' },
       { role: 'user', content: 'Follow every stargazer on this page.' },
-      { role: 'assistant', content: 'Paused with follow work left.' },
-      { role: 'user', content: 'Collect email addresses for every stargazer on this page.' },
     ]);
+    allowProgress(agent, tabId, ['follow']);
     agent._progressUpdate(tabId, {
       items: [{ id: 'octocat', label: 'octocat', action: 'follow', status: 'pending' }],
     });
+    agent.conversations.set(tabId, [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: 'Follow every stargazer on this page.' },
+      { role: 'assistant', content: 'Paused with follow work left.' },
+      { role: 'user', content: 'Collect email addresses for every stargazer on this page.' },
+    ]);
+    allowProgress(agent, tabId, ['collect_email']);
     agent._currentUrl = async () => 'https://github.com/foo/bar/stargazers';
 
     const result = { success: true, pageContent: page };
@@ -4465,13 +4556,18 @@ test('progress ledger preserves page-scoped rows after task navigation', () => {
       { role: 'assistant', content: 'Opening octocat to process the pending follow row.' },
       { role: 'user', content: '[Current page context - URL: https://github.com/octocat - Title: octocat]' },
     ]);
+    const session = allowProgress(agent, tabId, ['follow'], {
+      taskText: 'Follow every stargazer on this page.',
+      pageScope: 'https://github.com/foo/bar/stargazers',
+    });
     agent.progressLedgers.set(tabId, [
       {
         id: 'octocat',
         label: 'octocat',
         action: 'follow',
         status: 'pending',
-        taskKey: 'follow every stargazer on this page. ::page:https://github.com/foo/bar/stargazers',
+        sessionId: session.sessionId,
+        pageScope: session.pageScope,
       },
     ]);
 
@@ -4494,6 +4590,7 @@ test('progress ledger done-blocking only applies to current task rows', () => {
       { role: 'system', content: 'sys' },
       { role: 'user', content: 'Follow every stargazer on this page.' },
     ]);
+    allowProgress(agent, tabId, ['follow']);
     agent._progressUpdate(tabId, {
       items: [
         { id: 'octocat', label: 'octocat', action: 'follow', status: 'pending' },
@@ -4506,6 +4603,7 @@ test('progress ledger done-blocking only applies to current task rows', () => {
       { role: 'assistant', content: 'Paused with one row unresolved.' },
       { role: 'user', content: 'Collect email addresses for every stargazer on this page.' },
     ]);
+    allowProgress(agent, tabId, ['collect_email']);
 
     assert.equal(agent._hasProgressLedgerContext(tabId), true, `${AgentClass.name}: setup should still have generic progress context`);
     assert.equal(agent._shouldBlockDoneForProgress(tabId), false, `${AgentClass.name}: stale row blocked a collect-email task`);
@@ -4533,6 +4631,7 @@ test('progress ledger done-blocking only applies to current task rows', () => {
       { role: 'system', content: 'sys' },
       { role: 'user', content: 'Process Acme records one by one.' },
     ]);
+    allowProgress(agent, matchingTabId, ['process_item']);
     agent._progressUpdate(matchingTabId, {
       items: [{ id: 'acme', label: 'Acme Corp', status: 'pending' }],
     });

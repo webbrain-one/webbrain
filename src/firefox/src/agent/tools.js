@@ -684,7 +684,7 @@ export const AGENT_TOOLS = [
     type: 'function',
     function: {
       name: 'progress_update',
-      description: 'Update the app-owned structured progress ledger for repeated item/action tasks. Use this instead of free-form scratchpad notes when processing a list of users/items/links. Each row needs a stable id (username, URL, SKU, row key). Status values: pending (known but not acted), acted (clicked/applied/followed but not yet processed), processed (finished and facts collected), skipped (intentionally not done), failed (attempted but blocked). Before calling done, all pending/acted rows must be closed as processed/skipped/failed.',
+      description: 'Update the app-owned structured progress ledger for the active repeated item/action task. Use this instead of free-form scratchpad notes when processing a list of users/items/links. Each row needs a stable id (username, URL, SKU, row key). Status values: pending (known but not acted), acted (clicked/applied/followed but not yet processed), processed (finished and facts collected), skipped (intentionally not done), failed (attempted but blocked). Before calling done, all pending/acted rows in the active session must be closed as processed/skipped/failed.',
       parameters: {
         type: 'object',
         properties: {
@@ -705,6 +705,7 @@ export const AGENT_TOOLS = [
               required: ['id', 'status'],
             },
           },
+          sessionId: { type: 'string', description: 'Optional advanced override. Usually omit this; the app assigns rows to the active progress session.' },
         },
         required: ['items'],
       },
@@ -714,13 +715,15 @@ export const AGENT_TOOLS = [
     type: 'function',
     function: {
       name: 'progress_read',
-      description: 'Read the structured progress ledger. Use when you need to resume a repeated item/action task, see what remains unresolved, or build the final summary. The ledger survives summarization and is separate from scratchpad prose.',
+      description: 'Read the structured progress ledger for the active session. Use when you need to resume a repeated item/action task, see what remains unresolved, or build the final summary. The ledger survives summarization and is separate from scratchpad prose.',
       parameters: {
         type: 'object',
         properties: {
           status: { type: 'string', enum: ['pending', 'acted', 'processed', 'skipped', 'failed'], description: 'Optional status filter.' },
           limit: { type: 'number', description: 'Maximum rows to return, default 50.' },
           offset: { type: 'number', description: 'Pagination offset, default 0.' },
+          sessionId: { type: 'string', description: 'Optional advanced override to read a specific session.' },
+          allSessions: { type: 'boolean', description: 'If true, read every stored session. Usually omit this.' },
         },
         required: [],
       },
@@ -935,7 +938,7 @@ TOOLS - use only these:
 - fetch_url({url}): Fetch other URLs for reading only; do not use it to re-read the active tab.
 - download_social_media: Download images/videos from supported social sites. Use strategy:"vision" only when the user wants the single visible item cropped; without vision it falls back to DOM.
 - scratchpad_write({text}): Save notes that persist across steps.
-- progress_update({items}) / progress_read({status}): Structured progress ledger for repeated item/action tasks. On GitHub stargazers, only "Follow USER" buttons are follow targets; "Unfollow USER" means skip/already followed unless the ledger shows acted.
+- progress_update({items}) / progress_read({status}): Structured progress ledger for the active repeated item/action task. On GitHub stargazers, only "Follow USER" buttons are follow targets when following is allowed by the task; "Unfollow USER" means skip/already followed unless the ledger shows acted.
 - clarify({question}): Ask the user only when materially blocked or ambiguous.
 - solve_captcha: Try once only when CapSolver is configured.
 - done({summary}): Signal completion.
@@ -1045,7 +1048,7 @@ Available tools:
 - done: Signal task completion
 - verify_form: Verify form fields before submitting
 - scratchpad_write: Pin a note in context that survives summarization (use on long tasks to remember download IDs, file paths, plans)
-- progress_update / progress_read: Structured app-owned ledger for repeated item/action tasks. Use it for per-user/per-item status and collected fields; close pending/acted rows before done.
+- progress_update / progress_read: Structured app-owned ledger for the active repeated item/action task. Use it for per-user/per-item status and collected fields; close pending/acted rows before done.
 - download_social_media: One-shot image/video download from Facebook, Instagram, X/Twitter, LinkedIn, Reddit, Pinterest, YouTube. Single call — no need to inspect the DOM yourself.
 - hover: Synthetic hover over a ref_id (Firefox MV2 — no CDP). Use ONLY for menus/tooltips that REVEAL on hover (GitHub three-dot menus, Linear card actions). Re-read the tree after to find the newly-visible items. isTrusted=false, so sites with strict event-trust gating won't respond — fall back to clicking the explicit "..." button if hover doesn't reveal a menu.
 - drag_drop: Synthetic drag from one ref_id to another (pointerdown/move/up + HTML5 dragstart/drop). Use for Trello/Linear/Notion-style card reordering, image-crop handles. Less reliable than Chrome's CDP path — verify by re-reading the tree.
@@ -1089,7 +1092,7 @@ SCRATCHPAD — use this for long tasks:
 - Don't use the scratchpad for short tasks (< 5 tool calls) or for prose reasoning. It's working memory, not a journal.
 
 PROGRESS LEDGER - use this for repeated item/action tasks:
-- For tasks like "follow these users", "collect emails for these profiles", or "process every result", use progress_update/progress_read as the source of truth. One row per item; stable id; status pending/acted/processed/skipped/failed; collected facts in fields.
+- For tasks like "follow these users", "collect emails for these profiles", or "process every result", use progress_update/progress_read as the active-session source of truth. One row per item; stable id; status pending/acted/processed/skipped/failed; collected facts in fields.
 - App auto-records some item-action clicks (for example "Follow alice") as acted. After you collect/verify that item's result, call progress_update to mark it processed, skipped, or failed. Before done, no pending/acted rows may remain.
 - On GitHub stargazer pages, only visible buttons named "Follow USER" are follow targets. Buttons named "Unfollow USER" mean that user was already followed and should be skipped unless the ledger already has that user as acted from your own click.
 
@@ -1279,7 +1282,7 @@ IFRAMES & UI-vs-API:
 
 SCRATCHPAD & DON'T REDO WORK:
 - On long tasks, scratchpad_write({text}) pins miscellaneous facts (IDs, plans) that survive context summarization; downloads are auto-pinned for you (scan the \`[auto]\` lines for downloadIds). Keep entries short and factual.
-- For repeated item/action tasks (follow these users, collect emails for profiles, process search results), use progress_update/progress_read as the source of truth: one row per item, stable id, status pending/acted/processed/skipped/failed, collected fields in fields. Before done, close every pending/acted row. On GitHub stargazers, only "Follow USER" buttons are follow targets; "Unfollow USER" means skip/already followed unless the ledger shows acted.
+- For repeated item/action tasks (follow these users, collect emails for profiles, process search results), use progress_update/progress_read as the active-session source of truth: one row per item, stable id, status pending/acted/processed/skipped/failed, collected fields in fields. Before done, close every pending/acted row. On GitHub stargazers, only "Follow USER" buttons are follow targets when following is allowed by the task; "Unfollow USER" means skip/already followed unless the ledger shows acted.
 - If a tool already returned success this conversation, the work is done — don't re-navigate and redo it. Reuse download IDs, fetched content, and stable ref_ids instead of fetching again.
 
 LISTINGS:

@@ -78,7 +78,10 @@ function sanitizeFields(fields) {
 }
 
 function rowKey(row) {
-  return sanitizeText(row?.id, 180).toLowerCase();
+  const id = sanitizeText(row?.id, 180).toLowerCase();
+  if (!id) return '';
+  const sessionId = sanitizeText(row?.sessionId || row?.session_id || '', 120).toLowerCase();
+  return sessionId ? `${sessionId}::${id}` : id;
 }
 
 export function isTerminalLedgerStatus(status) {
@@ -102,6 +105,8 @@ export function normalizeLedgerItem(item, opts = {}) {
   const status = normalizeStatus(item.status, fallbackStatus);
   const label = sanitizeText(item.label || target || id, 220);
   const reason = sanitizeText(item.reason || item.note || '', 300);
+  const sessionId = sanitizeText(item.sessionId || item.session_id || opts.sessionId || '', 120);
+  const pageScope = sanitizeText(item.pageScope || item.page_scope || opts.pageScope || '', 240);
   const taskKey = sanitizeText(item.taskKey || opts.taskKey || '', 240);
   const fields = sanitizeFields(item.fields);
   const attempts = Number.isFinite(Number(item.attempts))
@@ -116,6 +121,8 @@ export function normalizeLedgerItem(item, opts = {}) {
     ...(action ? { action } : {}),
     ...(fields ? { fields } : {}),
     ...(reason ? { reason } : {}),
+    ...(sessionId ? { sessionId } : {}),
+    ...(pageScope ? { pageScope } : {}),
     ...(taskKey ? { taskKey } : {}),
     source,
     attempts,
@@ -148,10 +155,12 @@ export function unresolvedLedgerRows(rows = [], opts = {}) {
 
 export function selectLedgerRows(rows = [], opts = {}) {
   const status = opts.status ? normalizeStatus(opts.status, '') : '';
+  const sessionId = sanitizeText(opts.sessionId || opts.session_id || '', 120);
   const offset = Number.isFinite(Number(opts.offset)) ? Math.max(0, Math.floor(Number(opts.offset))) : 0;
   const limit = Number.isFinite(Number(opts.limit)) ? Math.max(0, Math.floor(Number(opts.limit))) : 50;
   const filtered = (Array.isArray(rows) ? rows : [])
-    .filter(row => !status || normalizeStatus(row?.status, 'pending') === status);
+    .filter(row => (!status || normalizeStatus(row?.status, 'pending') === status)
+      && (!sessionId || sanitizeText(row?.sessionId || row?.session_id || '', 120) === sessionId));
   return filtered.slice(offset, offset + limit);
 }
 
@@ -167,7 +176,7 @@ export function upsertLedgerItems(rows = [], items = [], opts = {}) {
 
   const updated = [];
   for (const rawItem of Array.isArray(items) ? items : []) {
-    const incoming = normalizeLedgerItem(rawItem, { source, now });
+    const incoming = normalizeLedgerItem(rawItem, { source, now, sessionId: opts.sessionId, pageScope: opts.pageScope, taskKey: opts.taskKey });
     if (!incoming) continue;
     const key = rowKey(incoming);
     const existingIdx = indexByKey.get(key);
@@ -189,6 +198,8 @@ export function upsertLedgerItems(rows = [], items = [], opts = {}) {
       ...(incoming.action ? { action: incoming.action } : {}),
       fields: { ...(existing.fields || {}), ...(incoming.fields || {}) },
       ...(incoming.reason ? { reason: incoming.reason } : {}),
+      sessionId: incoming.sessionId || existing.sessionId,
+      pageScope: incoming.pageScope || existing.pageScope,
       taskKey: incoming.taskKey || existing.taskKey,
       source: incoming.source || existing.source,
       attempts: source === 'auto'
@@ -198,6 +209,8 @@ export function upsertLedgerItems(rows = [], items = [], opts = {}) {
       updatedAt: now,
     };
     if (!Object.keys(merged.fields || {}).length) delete merged.fields;
+    if (!merged.sessionId) delete merged.sessionId;
+    if (!merged.pageScope) delete merged.pageScope;
     if (!merged.taskKey) delete merged.taskKey;
     next[existingIdx] = merged;
     updated.push(merged);
@@ -253,9 +266,12 @@ export function ledgerDoneBlock(rows = [], opts = {}) {
   };
 }
 
-export function detectProgressAction(toolName, args = {}, result = {}) {
+export function detectProgressAction(toolName, args = {}, result = {}, opts = {}) {
   if (!CLICK_ACTION_TOOLS.has(toolName)) return null;
   if (!result || result.success === false || result.error || result.noProgress) return null;
+  const allowedActions = new Set((Array.isArray(opts.allowedActions) ? opts.allowedActions : [])
+    .map(value => sanitizeText(value, 80).toLowerCase())
+    .filter(Boolean));
 
   const labels = [
     args.text,
@@ -273,6 +289,7 @@ export function detectProgressAction(toolName, args = {}, result = {}) {
     const match = label.match(ACTION_RE);
     if (!match) continue;
     const action = match[1].toLowerCase();
+    if (allowedActions.size && !allowedActions.has(action)) continue;
     const target = cleanTarget(match[2] || '') || targetFromHref(href);
     const id = stableIdFor(action, target, href);
     if (!id) continue;
