@@ -4209,6 +4209,39 @@ test('agent preserves active progress ledger for bare continuation turns', async
   }
 });
 
+test('agent preserves active progress ledger for ongoing-action continuation wording', async () => {
+  const page = `
+    button "Follow rafi" [ref_31]
+  `;
+  for (const AgentClass of [AgentCh, AgentFx]) {
+    const agent = new AgentClass({ getActive: () => ({ contextWindow: 128000, supportsVision: false }) });
+    const tabId = 803;
+    agent.conversationModes.set(tabId, 'act');
+    agent.conversations.set(tabId, [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: 'Follow every stargazer on this page.' },
+    ]);
+    agent._progressUpdate(tabId, {
+      items: [{ id: 'octocat', label: 'octocat', action: 'follow', status: 'pending' }],
+    });
+    agent.conversations.set(tabId, [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: 'Follow every stargazer on this page.' },
+      { role: 'assistant', content: 'Paused with one row unresolved.' },
+      { role: 'user', content: 'Continue following the remaining stargazers.' },
+    ]);
+
+    assert.equal(agent._hasProgressLedgerContext(tabId), true, `${AgentClass.name}: ongoing-action continuation did not keep ledger context`);
+    assert.equal(agent._shouldBlockDoneForProgress(tabId), true, `${AgentClass.name}: ongoing-action continuation did not block unresolved done`);
+
+    agent._currentUrl = async () => 'https://github.com/foo/bar/stargazers';
+    const result = { success: true, pageContent: page };
+    const note = await agent._recordProgressObservation(tabId, 'get_accessibility_tree', result);
+    assert.equal(note.addedPending, 1, `${AgentClass.name}: ongoing-action continuation stargazer observation did not seed rows`);
+    assert.ok(agent.progressLedgers.get(tabId).some(row => row.id === 'rafi' && row.status === 'pending'));
+  }
+});
+
 test('progress ledger done-blocking only applies in Act mode', () => {
   for (const AgentClass of [AgentCh, AgentFx]) {
     const agent = new AgentClass({ getActive: () => ({ contextWindow: 128000, supportsVision: false }) });
