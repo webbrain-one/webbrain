@@ -866,6 +866,9 @@ function renderScheduleComposer(prefillPrompt = '') {
         tabId: currentTabId,
         job: { title, prompt, schedule, target, mode: modeInput.value },
       });
+      if (res?.success === false || res?.ok === false || !res?.scheduledAt) {
+        throw new Error(res?.error || 'Could not create scheduled job.');
+      }
       form.remove();
       const textEl = msgEl.querySelector('.message-text');
       if (textEl) {
