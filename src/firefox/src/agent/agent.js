@@ -2392,9 +2392,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
   _buildProgressLedgerMessage(tabId) {
     const rows = this.progressLedgers.get(tabId) || [];
+    const summary = formatLedgerSummary(rows, { maxRows: 18 });
     return {
       role: 'user',
-      content: `${this._progressLedgerHeader()}\n\n${formatLedgerSummary(rows, { maxRows: 18 })}`,
+      content: `${this._progressLedgerHeader()}\n\n${this._wrapUntrusted('progress_read', summary)}`,
     };
   }
 
@@ -2585,10 +2586,16 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   }
 
   _progressRowMatchesTaskText(row, text) {
-    const action = String(row?.action || '').toLowerCase();
-    if (!action) return true;
     const taskWords = new Set(String(text || '').toLowerCase().match(/[a-z0-9]+/g) || []);
     if (!taskWords.size) return false;
+    const action = String(row?.action || '').toLowerCase();
+    if (!action) {
+      return String(`${row?.id || ''} ${row?.label || ''}`)
+        .toLowerCase()
+        .split(/[^a-z0-9]+/g)
+        .filter(Boolean)
+        .some(word => taskWords.has(word));
+    }
     return action
       .split(/[^a-z0-9]+/g)
       .filter(Boolean)
