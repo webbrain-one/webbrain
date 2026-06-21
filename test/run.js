@@ -3779,6 +3779,29 @@ test('agent reuses namespaced follow rows for auto-recorded clicks', () => {
     assert.equal(refRecorded?.item.id, 'follow:monalisa', `${AgentClass.name}: ref-id click did not reuse the follow row id`);
     assert.equal(refRows.get('follow:monalisa')?.status, 'acted', `${AgentClass.name}: ref-id follow row was not marked acted`);
     assert.equal(refRows.get('follow:monalisa')?.action, 'follow', `${AgentClass.name}: ref-id follow row action used post-click label`);
+
+    const failedTabId = 806;
+    agent.conversations.set(failedTabId, [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: 'Follow every stargazer on this page.' },
+    ]);
+    agent._progressUpdate(failedTabId, {
+      items: [{
+        id: 'follow:failed',
+        label: 'failed',
+        action: 'follow',
+        status: 'pending',
+        fields: { followState: 'not_followed', refId: 'ref_stale' },
+      }],
+    });
+    const failedRecorded = agent._autoRecordProgressAction(
+      failedTabId,
+      'click_ax',
+      { ref_id: 'ref_stale' },
+      { success: false, error: 'stale ref_id', name: 'Unfollow failed', noProgress: true },
+    );
+    assert.equal(failedRecorded, null, `${AgentClass.name}: failed ref-id click was auto-recorded`);
+    assert.equal(agent.progressLedgers.get(failedTabId)[0]?.status, 'pending', `${AgentClass.name}: failed ref-id click changed pending row`);
   }
 });
 

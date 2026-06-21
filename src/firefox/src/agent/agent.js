@@ -2631,6 +2631,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   }
 
   _progressItemFromClickedLedgerRow(tabId, args = {}, result = {}) {
+    if (!result || result.success === false || result.error || result.noProgress) return null;
     const refId = String(args?.ref_id || args?.refId || result?.ref_id || result?.refId || '').trim();
     if (!refId) return null;
     const row = this._activeProgressLedgerRows(tabId).find(candidate => {
