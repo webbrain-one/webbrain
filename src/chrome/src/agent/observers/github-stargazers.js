@@ -112,7 +112,12 @@ export function buildGithubStargazerProgressItems(rows = [], pageContent = '', o
       continue;
     }
 
-    if (existing?.action === 'follow' && normalizeStatus(existing.status, 'pending') === 'pending') {
+    const existingFollowState = sanitizeText(existing?.fields?.followState, 80).toLowerCase();
+    if (
+      existing?.action === 'follow'
+      && normalizeStatus(existing.status, 'pending') === 'pending'
+      && existingFollowState !== 'not_followed'
+    ) {
       items.push({
         id: existing.id || button.username,
         label: existing.label || button.username,

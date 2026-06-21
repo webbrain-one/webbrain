@@ -2901,6 +2901,18 @@ test('progress ledger reconciles GitHub stargazer Follow and Unfollow buttons', 
       ['rafi', 'acted', ''],
       ['ryan-the-crayon', 'skipped', 'excluded by user request'],
     ]);
+
+    const completedAfterObservation = buildItems([
+      {
+        id: 'octocat',
+        label: 'octocat',
+        action: 'follow',
+        status: 'pending',
+        fields: { followState: 'not_followed', refId: 'ref_1' },
+      },
+    ], 'button "Unfollow octocat" [ref_2]');
+    assert.equal(completedAfterObservation.stats.alreadyFollowedSkipped, 0);
+    assert.deepEqual(completedAfterObservation.items, []);
   }
 });
 
@@ -3124,6 +3136,10 @@ test('progress ledger done-blocking only applies in Act mode', () => {
   for (const AgentClass of [AgentCh, AgentFx]) {
     const agent = new AgentClass({ getActive: () => ({ contextWindow: 128000, supportsVision: false }) });
     const tabId = 780;
+    agent.conversations.set(tabId, [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: 'Follow every stargazer on this page.' },
+    ]);
     agent._progressUpdate(tabId, {
       items: [{ id: 'octocat', label: 'octocat', action: 'follow', status: 'pending' }],
     });
@@ -3134,6 +3150,14 @@ test('progress ledger done-blocking only applies in Act mode', () => {
 
     agent.conversationModes.set(tabId, 'act');
     assert.equal(agent._shouldBlockDoneForProgress(tabId), true, `${AgentClass.name}: Act mode should block done`);
+
+    agent.conversations.set(tabId, [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: 'Follow every stargazer on this page.' },
+      { role: 'assistant', content: 'Paused with one row unresolved.' },
+      { role: 'user', content: 'Now summarize this repository instead.' },
+    ]);
+    assert.equal(agent._shouldBlockDoneForProgress(tabId), false, `${AgentClass.name}: stale unresolved rows should not block unrelated done`);
   }
 });
 
