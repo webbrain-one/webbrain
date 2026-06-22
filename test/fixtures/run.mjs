@@ -332,6 +332,88 @@ test('Firefox: type_text returns an error after focus moves to a noneditable ele
   if (value !== 'Ada') throw new Error(`expected stale fallback not to mutate input, got: ${value}`);
 });
 
+test('Firefox: full indexed elements exclude inert background controls', async (page) => {
+  await setupFirefoxHtml(page, `<!doctype html>
+    <style>
+      body { margin: 0; font: 16px sans-serif; }
+      #background { position: absolute; left: 20px; top: 20px; }
+      #dialog { position: absolute; left: 20px; top: 90px; width: 220px; padding: 16px; border: 1px solid #888; background: white; }
+      button { width: 160px; height: 40px; }
+    </style>
+    <main id="background" aria-hidden="true">
+      <button id="background-action" onclick="window.__backgroundClicked = true">Publish</button>
+    </main>
+    <section id="disabled-zone" inert>
+      <button id="inert-action" onclick="window.__inertClicked = true">Archive</button>
+    </section>
+    <div id="dialog" role="dialog" aria-modal="true">
+      <button id="dialog-action" onclick="window.__dialogClicked = true">Create</button>
+    </div>`);
+
+  const elements = await call(page, 'get_interactive_elements_cdp', {});
+  if (elements.some(e => e.id === 'background-action' || e.id === 'inert-action')) {
+    throw new Error(`expected hidden/inert background controls to be filtered, got: ${JSON.stringify(elements)}`);
+  }
+  if (elements?.[0]?.id !== 'dialog-action') {
+    throw new Error(`expected dialog action to be first actionable index, got: ${JSON.stringify(elements?.[0])}`);
+  }
+
+  const click = await call(page, 'click', { index: 0 });
+  if (!click?.success) throw new Error(`expected dialog click success, got: ${JSON.stringify(click)}`);
+
+  const state = await page.evaluate(() => ({
+    dialog: window.__dialogClicked === true,
+    background: window.__backgroundClicked === true,
+    inert: window.__inertClicked === true,
+  }));
+  if (!state.dialog || state.background || state.inert) {
+    throw new Error(`expected only dialog action to run, got: ${JSON.stringify(state)}`);
+  }
+});
+
+test('Firefox: type_text rejects non-text input after it receives focus', async (page) => {
+  await setupFirefoxHtml(page, `<!doctype html>
+    <style>
+      body { margin: 0; font: 16px sans-serif; }
+      #field { position: absolute; left: 20px; top: 20px; width: 220px; height: 40px; }
+      #button-input { position: absolute; left: 20px; top: 90px; width: 140px; height: 40px; }
+    </style>
+    <input id="field" placeholder="Name">
+    <input id="button-input" type="button" value="Open" onclick="window.__buttonInputClicked = true">`);
+
+  const elements = await call(page, 'get_interactive_elements_cdp', {});
+  const fieldIndex = elements.findIndex(e => e.id === 'field');
+  const buttonIndex = elements.findIndex(e => e.id === 'button-input');
+  if (fieldIndex < 0 || buttonIndex < 0) throw new Error(`expected both controls in elements, got: ${JSON.stringify(elements)}`);
+
+  const fieldClick = await call(page, 'click', { index: fieldIndex });
+  if (!fieldClick?.success) throw new Error(`expected field click success, got: ${JSON.stringify(fieldClick)}`);
+
+  const typed = await call(page, 'type', { text: 'Ada' });
+  if (!typed?.success) throw new Error(`expected field type success, got: ${JSON.stringify(typed)}`);
+
+  const buttonClick = await call(page, 'click', { index: buttonIndex });
+  if (!buttonClick?.success) throw new Error(`expected button input click success, got: ${JSON.stringify(buttonClick)}`);
+
+  const activeId = await page.evaluate(() => document.activeElement?.id || '');
+  if (activeId !== 'button-input') throw new Error(`expected button input focus, got: ${activeId}`);
+
+  const rejected = await call(page, 'type', { text: ' Lovelace' });
+  if (rejected?.success) throw new Error(`expected non-text input type failure, got: ${JSON.stringify(rejected)}`);
+  if (!/Focused element <input> is not an editable field/.test(rejected?.error || '')) {
+    throw new Error(`expected focused input error, got: ${JSON.stringify(rejected)}`);
+  }
+
+  const values = await page.evaluate(() => ({
+    field: document.getElementById('field').value,
+    button: document.getElementById('button-input').value,
+    clicked: window.__buttonInputClicked === true,
+  }));
+  if (values.field !== 'Ada' || values.button !== 'Open' || !values.clicked) {
+    throw new Error(`expected no stale/non-text value mutation, got: ${JSON.stringify(values)}`);
+  }
+});
+
 // ─── main ─────────────────────────────────────────────────────────────────
 // Social media downloader focus safety
 test('SMD: Instagram auto mode downloads the open dialog image, not the feed', async (page) => {

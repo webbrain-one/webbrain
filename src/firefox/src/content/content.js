@@ -279,9 +279,43 @@
     'label',
   ];
 
+  function _composedParent(node) {
+    if (!node) return null;
+    const parent = node.parentNode;
+    if (parent) {
+      return (typeof ShadowRoot !== 'undefined' && parent instanceof ShadowRoot)
+        ? parent.host
+        : parent;
+    }
+    const root = node.getRootNode?.();
+    return (typeof ShadowRoot !== 'undefined' && root instanceof ShadowRoot)
+      ? root.host
+      : null;
+  }
+
+  function _isComposedAncestor(ancestor, node) {
+    let cur = node;
+    while (cur) {
+      if (cur === ancestor) return true;
+      cur = _composedParent(cur);
+    }
+    return false;
+  }
+
+  function _hasComposedClosest(el, selector) {
+    let cur = el;
+    while (cur) {
+      try {
+        if (cur.nodeType === Node.ELEMENT_NODE && cur.matches(selector)) return true;
+      } catch {}
+      cur = _composedParent(cur);
+    }
+    return false;
+  }
+
   function isVisiblyInteractive(el) {
     if (!el || el.tagName === 'BODY' || el.tagName === 'HTML') return false;
-    if (el.closest('[aria-hidden="true"], [inert]')) return false;
+    if (_hasComposedClosest(el, '[aria-hidden="true"], [inert]')) return false;
     const style = el.ownerDocument.defaultView.getComputedStyle(el);
     if (style.display === 'none' || style.visibility === 'hidden') return false;
     if (style.opacity === '0' && el.tagName !== 'SELECT') return false;
@@ -381,7 +415,7 @@
     const out = [];
     for (const el of all) {
       if (!isVisiblyInteractive(el)) continue;
-      if (modal && !modal.contains(el)) continue;
+      if (modal && !_isComposedAncestor(modal, el)) continue;
       out.push(el);
     }
     return out;
@@ -472,8 +506,11 @@
   function queryInteractiveFull() {
     const collected = [];
     const seen = new Set();
+    const modal = _findTopmostModal();
 
     const isUsable = (el, rect) => {
+      if (_hasComposedClosest(el, '[aria-hidden="true"], [inert]')) return false;
+      if (modal && !_isComposedAncestor(modal, el)) return false;
       if (rect.width < 2 || rect.height < 2) return false;
       if (rect.bottom < 0 || rect.top > window.innerHeight) return false;
       if (rect.right < 0 || rect.left > window.innerWidth) return false;
@@ -635,13 +672,40 @@
   let _lastClickIdent = null;
   let _lastEditableTarget = null;
 
+  const _NON_TEXT_INPUT_TYPES = new Set(['checkbox', 'radio', 'file', 'submit', 'button', 'reset', 'image', 'color', 'range', 'hidden']);
+
+  function _isTextTypeableInput(el) {
+    if (!(el instanceof HTMLInputElement)) return false;
+    const inputType = (el.type || el.getAttribute('type') || 'text').toLowerCase();
+    return !_NON_TEXT_INPUT_TYPES.has(inputType);
+  }
+
   function _isTypeableElement(el) {
     return !!(el && (
       el.isContentEditable ||
-      el instanceof HTMLInputElement ||
+      _isTextTypeableInput(el) ||
       el instanceof HTMLTextAreaElement ||
       el instanceof HTMLSelectElement
     ));
+  }
+
+  function _isMeaningfulFocus(el) {
+    return !!(el && el !== document.body && el !== document.documentElement);
+  }
+
+  function _isFocusableElement(el) {
+    if (!el || typeof el.focus !== 'function') return false;
+    if (el.disabled || el.getAttribute?.('aria-disabled') === 'true') return false;
+    if (el.isContentEditable) return true;
+    if (/^(A|BUTTON|INPUT|SELECT|TEXTAREA)$/i.test(el.tagName || '')) return true;
+    const tabIndexAttr = el.getAttribute?.('tabindex');
+    if (tabIndexAttr == null) return false;
+    const tabIndex = Number(tabIndexAttr);
+    return Number.isFinite(tabIndex) && tabIndex >= 0;
+  }
+
+  function _focusElement(el) {
+    try { el.focus({ preventScroll: true }); } catch { try { el.focus(); } catch {} }
   }
 
   function _rememberEditableTarget(el) {
@@ -673,25 +737,6 @@
       topmost = inner;
     }
     return topmost;
-  }
-
-  function _isComposedAncestor(ancestor, node) {
-    let cur = node;
-    while (cur) {
-      if (cur === ancestor) return true;
-      const parent = cur.parentNode;
-      if (parent) {
-        cur = (typeof ShadowRoot !== 'undefined' && parent instanceof ShadowRoot)
-          ? parent.host
-          : parent;
-      } else {
-        const root = cur.getRootNode?.();
-        cur = (typeof ShadowRoot !== 'undefined' && root instanceof ShadowRoot)
-          ? root.host
-          : null;
-      }
-    }
-    return false;
   }
 
   function _hitTestMatchesTarget(target, topmost) {
@@ -1073,10 +1118,11 @@
     }
 
     if (_isTypeableElement(el)) {
-      try { el.focus({ preventScroll: true }); } catch { try { el.focus(); } catch {} }
+      _focusElement(el);
       _rememberEditableTarget(el);
     } else {
       _lastEditableTarget = null;
+      if (_isFocusableElement(el)) _focusElement(el);
     }
 
     const clickedRect = rememberInteractionPoint(el, 'click');
@@ -1087,9 +1133,11 @@
     const postActive = document.activeElement;
     if (_isTypeableElement(postActive)) {
       _rememberEditableTarget(postActive);
-    } else if (_isTypeableElement(el)) {
-      try { el.focus({ preventScroll: true }); } catch { try { el.focus(); } catch {} }
+    } else if (!_isMeaningfulFocus(postActive) && _isTypeableElement(el)) {
+      _focusElement(el);
       _rememberEditableTarget(el);
+    } else if (_isMeaningfulFocus(postActive)) {
+      _lastEditableTarget = null;
     }
 
     if (postActive && postActive !== el && postActive instanceof HTMLSelectElement) {
@@ -1244,7 +1292,7 @@
         return { success: false, error: 'No editable element is currently focused. Click the target input/textarea first, then call type_text again with no selector.' };
       }
       // Verify it's actually editable
-      const editable = el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName);
+      const editable = _isTypeableElement(el);
       if (!editable) {
         _lastEditableTarget = null;
         return {
