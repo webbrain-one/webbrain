@@ -1776,7 +1776,7 @@ async function sendMessage() {
         textEl.innerHTML = formatMarkdown(res?.content || t('sp.stopped_by_user'));
         addMessageCopyButton(currentAssistantEl);
       }
-    } else if (res.content && currentAssistantEl) {
+    } else if (res?.content && currentAssistantEl) {
       const textEl = currentAssistantEl.querySelector('.message-text');
       if (textEl && !textEl.textContent.trim()) {
         textEl.innerHTML = formatMarkdown(res.content);
@@ -2561,7 +2561,7 @@ async function continueAgent() {
       mode: agentMode,
     });
 
-    if (res.content && currentAssistantEl) {
+    if (res?.content && currentAssistantEl) {
       const textEl = currentAssistantEl.querySelector('.message-text');
       if (textEl && !textEl.textContent.trim()) {
         textEl.innerHTML = formatMarkdown(res.content);
@@ -2827,6 +2827,8 @@ function sendToBackground(action, data = {}) {
       (response) => {
         if (chrome.runtime.lastError) {
           reject(new Error(chrome.runtime.lastError.message));
+        } else if (response == null) {
+          reject(new Error(`No response from WebBrain background for "${action}". The background script may have restarted or crashed; reload the sidebar/extension and check the extension console for the original error.`));
         } else if (response?.error) {
           reject(new Error(response.error));
         } else {

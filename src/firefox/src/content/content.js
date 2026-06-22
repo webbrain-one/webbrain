@@ -279,9 +279,43 @@
     'label',
   ];
 
+  function _composedParent(node) {
+    if (!node) return null;
+    const parent = node.parentNode;
+    if (parent) {
+      return (typeof ShadowRoot !== 'undefined' && parent instanceof ShadowRoot)
+        ? parent.host
+        : parent;
+    }
+    const root = node.getRootNode?.();
+    return (typeof ShadowRoot !== 'undefined' && root instanceof ShadowRoot)
+      ? root.host
+      : null;
+  }
+
+  function _isComposedAncestor(ancestor, node) {
+    let cur = node;
+    while (cur) {
+      if (cur === ancestor) return true;
+      cur = _composedParent(cur);
+    }
+    return false;
+  }
+
+  function _hasComposedClosest(el, selector) {
+    let cur = el;
+    while (cur) {
+      try {
+        if (cur.nodeType === Node.ELEMENT_NODE && cur.matches(selector)) return true;
+      } catch {}
+      cur = _composedParent(cur);
+    }
+    return false;
+  }
+
   function isVisiblyInteractive(el) {
     if (!el || el.tagName === 'BODY' || el.tagName === 'HTML') return false;
-    if (el.closest('[aria-hidden="true"], [inert]')) return false;
+    if (_hasComposedClosest(el, '[aria-hidden="true"], [inert]')) return false;
     const style = el.ownerDocument.defaultView.getComputedStyle(el);
     if (style.display === 'none' || style.visibility === 'hidden') return false;
     if (style.opacity === '0' && el.tagName !== 'SELECT') return false;
@@ -341,13 +375,65 @@
     }
   }
 
+  function _isNativeBlockingDialog(dialog) {
+    if (!dialog) return false;
+    try {
+      if (dialog.matches(':modal')) return true;
+    } catch {}
+    return dialog.getAttribute('aria-modal') === 'true';
+  }
+
+  function _hasVisibleBox(el, minWidth = 1, minHeight = 1) {
+    if (!el || typeof el.getBoundingClientRect !== 'function') return false;
+    try {
+      const r = el.getBoundingClientRect();
+      if (r.width < minWidth || r.height < minHeight) return false;
+      const s = getComputedStyle(el);
+      if (s.visibility === 'hidden' || s.display === 'none' || parseFloat(s.opacity) === 0) return false;
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function _findDialogContentForOverlay(overlay) {
+    const selector = '[role="dialog"],[role="alertdialog"],[aria-modal="true"],dialog[open],[data-state="open"][role="dialog"],[class*="DialogContent"],[class*="ModalContent"],.modal.show';
+    const pick = (node) => {
+      if (!node || node === overlay) return null;
+      try {
+        if (node.matches?.(selector) && _hasVisibleBox(node, 20, 20)) return node;
+        const match = node.querySelector?.(selector);
+        if (match && _hasVisibleBox(match, 20, 20)) return match;
+      } catch {}
+      return null;
+    };
+
+    const siblings = overlay?.parentElement ? Array.from(overlay.parentElement.children) : [];
+    const idx = siblings.indexOf(overlay);
+    if (idx >= 0) {
+      for (let i = idx + 1; i < siblings.length; i++) {
+        const found = pick(siblings[i]);
+        if (found) return found;
+      }
+      for (let i = idx - 1; i >= 0; i--) {
+        const found = pick(siblings[i]);
+        if (found) return found;
+      }
+    }
+
+    return pick(overlay);
+  }
+
   /**
    * Detect the topmost modal/overlay/dialog on the page. Returns the modal
    * container element, or null if no overlay is detected.
    */
-  function _findTopmostModal() {
+  function _findTopmostModal(opts = {}) {
+    const includeNonModalDialogs = opts.includeNonModalDialogs !== false;
     const dialogs = document.querySelectorAll('dialog[open]');
-    if (dialogs.length > 0) return dialogs[dialogs.length - 1];
+    for (let i = dialogs.length - 1; i >= 0; i--) {
+      if (includeNonModalDialogs || _isNativeBlockingDialog(dialogs[i])) return dialogs[i];
+    }
 
     const ariaModals = document.querySelectorAll('[role="dialog"][aria-modal="true"]');
     for (let i = ariaModals.length - 1; i >= 0; i--) {
@@ -355,33 +441,46 @@
       if (r.width > 0 && r.height > 0) return ariaModals[i];
     }
 
-    const roleDialogs = document.querySelectorAll('[role="dialog"]');
-    for (let i = roleDialogs.length - 1; i >= 0; i--) {
-      const r = roleDialogs[i].getBoundingClientRect();
-      if (r.width > 0 && r.height > 0) return roleDialogs[i];
+    if (includeNonModalDialogs) {
+      const roleDialogs = document.querySelectorAll('[role="dialog"]');
+      for (let i = roleDialogs.length - 1; i >= 0; i--) {
+        const r = roleDialogs[i].getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) return roleDialogs[i];
+      }
     }
 
     const candidates = document.querySelectorAll(
-      '[data-overlay], [data-state="open"][role="dialog"], ' +
+      '[data-overlay], ' +
+      (includeNonModalDialogs ? '[data-state="open"][role="dialog"], ' : '') +
       '.modal.show, .modal-overlay, .overlay, [class*="modal"][class*="open"], ' +
       '[class*="overlay"][class*="active"], [class*="DialogOverlay"], ' +
       '[class*="ModalOverlay"]'
     );
     for (let i = candidates.length - 1; i >= 0; i--) {
       const r = candidates[i].getBoundingClientRect();
-      if (r.width > 100 && r.height > 100) return candidates[i];
+      if (r.width > 100 && r.height > 100) {
+        if (!includeNonModalDialogs) {
+          const dialogContent = _findDialogContentForOverlay(candidates[i]);
+          if (dialogContent) return dialogContent;
+        }
+        return candidates[i];
+      }
     }
 
     return null;
   }
 
+  function _findTopmostBlockingModal() {
+    return _findTopmostModal({ includeNonModalDialogs: false });
+  }
+
   function queryInteractive() {
     const all = document.querySelectorAll(INTERACTIVE_SELECTORS.join(', '));
-    const modal = _findTopmostModal();
+    const modal = _findTopmostBlockingModal();
     const out = [];
     for (const el of all) {
       if (!isVisiblyInteractive(el)) continue;
-      if (modal && !modal.contains(el)) continue;
+      if (modal && !_isComposedAncestor(modal, el)) continue;
       out.push(el);
     }
     return out;
@@ -469,11 +568,14 @@
     });
   }
 
-  function getInteractiveElementsFull() {
+  function queryInteractiveFull() {
     const collected = [];
     const seen = new Set();
+    const modal = _findTopmostBlockingModal();
 
     const isUsable = (el, rect) => {
+      if (_hasComposedClosest(el, '[aria-hidden="true"], [inert]')) return false;
+      if (modal && !_isComposedAncestor(modal, el)) return false;
       if (rect.width < 2 || rect.height < 2) return false;
       if (rect.bottom < 0 || rect.top > window.innerHeight) return false;
       if (rect.right < 0 || rect.left > window.innerWidth) return false;
@@ -525,7 +627,19 @@
       return a.rect.left - b.rect.left;
     });
 
-    return collected.map((c, i) => {
+    return collected;
+  }
+
+  function queryInteractiveForToolIndex() {
+    // Firefox's agent maps get_interactive_elements to the full/CDP-like
+    // collector below, so index-based follow-up actions must resolve against
+    // that same ordering. The legacy queryInteractive() order is still used
+    // by the plain content handler but it is not the list the agent sees.
+    return queryInteractiveFull().map(c => c.el);
+  }
+
+  function getInteractiveElementsFull() {
+    return queryInteractiveFull().map((c, i) => {
       const el = c.el;
       return {
         index: i,
@@ -621,6 +735,102 @@
   }
 
   let _lastClickIdent = null;
+  let _lastEditableTarget = null;
+
+  const _NON_TEXT_INPUT_TYPES = new Set(['checkbox', 'radio', 'file', 'submit', 'button', 'reset', 'image', 'color', 'range', 'hidden']);
+
+  function _isTextTypeableInput(el) {
+    if (!(el instanceof HTMLInputElement)) return false;
+    const inputType = (el.type || el.getAttribute('type') || 'text').toLowerCase();
+    return !_NON_TEXT_INPUT_TYPES.has(inputType);
+  }
+
+  function _isDisabledEditable(el) {
+    return !!(el && (
+      el.disabled ||
+      el.getAttribute?.('aria-disabled') === 'true' ||
+      el.matches?.(':disabled')
+    ));
+  }
+
+  function _isTypeableElement(el) {
+    if (!el || _isDisabledEditable(el)) return false;
+    return !!(el && (
+      el.isContentEditable ||
+      _isTextTypeableInput(el) ||
+      el instanceof HTMLTextAreaElement ||
+      el instanceof HTMLSelectElement
+    ));
+  }
+
+  function _isMeaningfulFocus(el) {
+    return !!(el && el !== document.body && el !== document.documentElement);
+  }
+
+  function _isShadowHostForTarget(host, target) {
+    if (!_isMeaningfulFocus(host) || !target || typeof ShadowRoot === 'undefined') return false;
+    let root = target.getRootNode?.();
+    while (root instanceof ShadowRoot) {
+      if (root.host === host) return true;
+      root = root.host?.getRootNode?.();
+    }
+    return false;
+  }
+
+  function _isFocusableElement(el) {
+    if (!el || typeof el.focus !== 'function') return false;
+    if (el.disabled || el.getAttribute?.('aria-disabled') === 'true') return false;
+    if (el.isContentEditable) return true;
+    if (/^(A|BUTTON|INPUT|SELECT|TEXTAREA)$/i.test(el.tagName || '')) return true;
+    const tabIndexAttr = el.getAttribute?.('tabindex');
+    if (tabIndexAttr == null) return false;
+    const tabIndex = Number(tabIndexAttr);
+    return Number.isFinite(tabIndex) && tabIndex >= 0;
+  }
+
+  function _focusElement(el) {
+    try { el.focus({ preventScroll: true }); } catch { try { el.focus(); } catch {} }
+  }
+
+  function _rememberEditableTarget(el) {
+    if (!_isTypeableElement(el)) return;
+    _lastEditableTarget = {
+      el,
+      href: location.href,
+      ts: Date.now(),
+    };
+  }
+
+  function _recentEditableTarget() {
+    if (!_lastEditableTarget) return null;
+    const { el, href, ts } = _lastEditableTarget;
+    if (!el || !el.isConnected || href !== location.href) return null;
+    if (Date.now() - ts > 30000) return null;
+    if (!_isTypeableElement(el) || !isVisiblyInteractive(el)) return null;
+    return el;
+  }
+
+  function _shadowAwareElementFromPoint(x, y) {
+    let topmost = document.elementFromPoint(x, y);
+    const seen = new Set();
+    while (topmost && topmost.shadowRoot && !seen.has(topmost)) {
+      seen.add(topmost);
+      let inner = null;
+      try { inner = topmost.shadowRoot.elementFromPoint(x, y); } catch {}
+      if (!inner || inner === topmost) break;
+      topmost = inner;
+    }
+    return topmost;
+  }
+
+  function _hitTestMatchesTarget(target, topmost) {
+    if (!target || !topmost) return false;
+    if (target === topmost) return true;
+    try {
+      if (target.contains(topmost) || topmost.contains(target)) return true;
+    } catch {}
+    return _isComposedAncestor(target, topmost) || _isComposedAncestor(topmost, target);
+  }
 
   /**
    * Click an element by selector or coordinates.
@@ -880,8 +1090,7 @@
     } else if (params.selector) {
       el = safeQuerySelector(params.selector);
     } else if (params.index != null) {
-      // Same traversal as getInteractiveElements — index stability.
-      const interactive = queryInteractive();
+      const interactive = queryInteractiveForToolIndex();
       el = interactive[params.index];
       if (!el) return _staleIndexError(params.index, interactive);
     } else if (params.x != null && params.y != null) {
@@ -965,8 +1174,8 @@
         if (r.width >= 1 && r.height >= 1 && r.top >= 0 && r.left >= 0 && r.bottom <= window.innerHeight && r.right <= window.innerWidth) {
           const cx = Math.round(r.left + r.width / 2);
           const cy = Math.round(r.top + r.height / 2);
-          const topmost = document.elementFromPoint(cx, cy);
-          if (topmost && topmost !== el && !el.contains(topmost) && !topmost.contains(el)) {
+          const topmost = _shadowAwareElementFromPoint(cx, cy);
+          if (topmost && !_hitTestMatchesTarget(el, topmost)) {
             let blockerInfo = topmost.tagName.toLowerCase();
             const role = topmost.getAttribute && topmost.getAttribute('role');
             if (role) blockerInfo += `[role=${role}]`;
@@ -992,12 +1201,31 @@
       } catch {}
     }
 
+    if (_isTypeableElement(el)) {
+      _focusElement(el);
+      _rememberEditableTarget(el);
+    } else {
+      _lastEditableTarget = null;
+      if (_isFocusableElement(el)) _focusElement(el);
+    }
+
     const clickedRect = rememberInteractionPoint(el, 'click');
     el.click();
 
     // Post-click SELECT detection: the click may have activated a <select>
     // via a label, wrapper, or overlapping element. Return error, not success.
     const postActive = document.activeElement;
+    if (_isTypeableElement(postActive)) {
+      _rememberEditableTarget(postActive);
+    } else if (_isTypeableElement(el) && _isShadowHostForTarget(postActive, el)) {
+      _rememberEditableTarget(el);
+    } else if (!_isMeaningfulFocus(postActive) && _isTypeableElement(el)) {
+      _focusElement(el);
+      _rememberEditableTarget(el);
+    } else if (_isMeaningfulFocus(postActive)) {
+      _lastEditableTarget = null;
+    }
+
     if (postActive && postActive !== el && postActive instanceof HTMLSelectElement) {
       postActive.blur();
       postActive.focus(); // close native popup, keep focus
@@ -1014,7 +1242,7 @@
     // Skip for editable targets — re-clicking a text field / contenteditable
     // is legitimate (positions cursor / re-focuses) and "no page change" is
     // the expected outcome there, not a failure signal.
-    const isEditableTarget = el.isContentEditable || el.tagName === 'INPUT' || el.tagName === 'TEXTAREA';
+    const isEditableTarget = _isTypeableElement(el);
     const ident = `${el.tagName}|${(el.innerText || '').slice(0, 50)}|${location.href}`;
     let warning;
     if (_lastClickIdent === ident && !isEditableTarget) {
@@ -1136,7 +1364,7 @@
     if (params.selector) {
       el = safeQuerySelector(params.selector);
     } else if (params.index != null) {
-      const interactive = queryInteractive();
+      const interactive = queryInteractiveForToolIndex();
       el = interactive[params.index];
       if (!el) return _staleIndexError(params.index, interactive);
     } else {
@@ -1144,28 +1372,30 @@
       // Most reliable for click-then-type flows on forms with weird selectors.
       el = document.activeElement;
       if (!el || el === document.body || el === document.documentElement) {
+        el = _recentEditableTarget();
+      }
+      if (!el || el === document.body || el === document.documentElement) {
         return { success: false, error: 'No editable element is currently focused. Click the target input/textarea first, then call type_text again with no selector.' };
       }
       // Verify it's actually editable
-      const editable = el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName);
+      const editable = _isTypeableElement(el);
       if (!editable) {
-        return {
-          success: false,
-          error: `Focused element <${el.tagName.toLowerCase()}> is not an editable field. Click the target input/textarea first, then call type_text again.`,
-        };
+        const recentEditable = _recentEditableTarget();
+        if (recentEditable && _isShadowHostForTarget(el, recentEditable)) {
+          el = recentEditable;
+        } else {
+          _lastEditableTarget = null;
+          return {
+            success: false,
+            error: `Focused element <${el.tagName.toLowerCase()}> is not an editable field. Click the target input/textarea first, then call type_text again.`,
+          };
+        }
       }
     }
 
     if (!el) return { success: false, error: 'Element not found' };
 
-    // Guard: only INPUT, TEXTAREA, SELECT, and contenteditable are typeable.
-    // Calling HTMLInputElement's native value setter on anything else throws
-    // "Illegal invocation" because the setter requires `this` to be an input.
-    const isTypeable = el.isContentEditable
-      || el instanceof HTMLInputElement
-      || el instanceof HTMLTextAreaElement
-      || el instanceof HTMLSelectElement;
-    if (!isTypeable) {
+    if (!_isTypeableElement(el)) {
       const tag = (el.tagName || '').toLowerCase();
       return {
         success: false,

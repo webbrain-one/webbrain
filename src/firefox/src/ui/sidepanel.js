@@ -1591,7 +1591,7 @@ async function sendMessage() {
         textEl.innerHTML = formatMarkdown(res?.content || t('sp.stopped_by_user'));
         addMessageCopyButton(currentAssistantEl);
       }
-    } else if (res.content && currentAssistantEl) {
+    } else if (res?.content && currentAssistantEl) {
       const textEl = currentAssistantEl.querySelector('.message-text');
       if (textEl && !textEl.textContent.trim()) {
         textEl.innerHTML = formatMarkdown(res.content);
@@ -2172,7 +2172,7 @@ async function continueAgent() {
       mode: agentMode,
     });
 
-    if (res.content && currentAssistantEl) {
+    if (res?.content && currentAssistantEl) {
       const textEl = currentAssistantEl.querySelector('.message-text');
       if (textEl && !textEl.textContent.trim()) {
         textEl.innerHTML = formatMarkdown(res.content);
@@ -2395,6 +2395,9 @@ async function sendToBackground(action, data = {}) {
   const response = await browser.runtime.sendMessage(
     { target: 'background', action, ...data }
   );
+  if (response == null) {
+    throw new Error(`No response from WebBrain background for "${action}". The background script may have restarted or crashed; reload the sidebar/extension and check the Firefox extension console for the original error.`);
+  }
   if (response?.error) {
     throw new Error(response.error);
   }

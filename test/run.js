@@ -1908,6 +1908,19 @@ test('sidepanel exposes show-scratchpad slash command in both builds', () => {
   }
 });
 
+test('sidepanel reports missing background responses without res.content crash', () => {
+  for (const [label, panelRel] of [
+    ['chrome', 'src/chrome/src/ui/sidepanel.js'],
+    ['firefox', 'src/firefox/src/ui/sidepanel.js'],
+  ]) {
+    const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
+    assert.match(panel, /No response from WebBrain background/, `${label}: missing background response should become a clear error`);
+    assert.match(panel, /response == null/, `${label}: sendToBackground should reject nullish responses`);
+    assert.equal((panel.match(/res\?\.content && currentAssistantEl/g) || []).length >= 2, true, `${label}: chat and continue should not dereference missing responses`);
+    assert.doesNotMatch(panel, /(?:else\s+)?if \(res\.content && currentAssistantEl\)/, `${label}: unsafe res.content render guard returned`);
+  }
+});
+
 test('download_social_media exposes merged DOM/vision strategy in act tiers only', () => {
   for (const [label, getTools] of [
     ['chrome', getToolsForModeCh],
