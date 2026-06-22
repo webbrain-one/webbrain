@@ -3,8 +3,9 @@ export const SCHEDULED_TASKS_ENABLED_KEY = 'scheduledTasksEnabled';
 export const SCHEDULED_REQUIRE_CONFIRMATION_KEY = 'scheduledRequireConsequentialConfirmation';
 export const SCHEDULED_ALARM_PREFIX = 'wb_scheduled_job:';
 
+export const MIN_RESUME_DELAY_MS = 30 * 1000;
 export const MIN_DELAY_MS = 60 * 1000;
-export const MAX_DELAY_MS = 24 * 60 * 60 * 1000;
+export const MAX_DELAY_MS = 7 * 24 * 60 * 60 * 1000;
 export const QUEUE_RETRY_MS = 30 * 1000;
 export const MAX_QUEUE_DEFERRALS = 120;
 export const MIN_INTERVAL_MINUTES = 1;
@@ -117,7 +118,7 @@ export function normalizeScheduledTime(input, {
 
 export function validateResumeArgs(args, now = Date.now()) {
   const obj = asObject(args);
-  const time = normalizeScheduledTime(obj, { now });
+  const time = normalizeScheduledTime(obj, { now, minDelayMs: MIN_RESUME_DELAY_MS });
   if (!time.ok) return time;
   const reason = String(obj.reason || '').trim();
   const resumeInstruction = String(obj.resume_instruction || '').trim();
@@ -207,6 +208,7 @@ export function summarizeScheduledJob(job) {
     lastError: job.lastError || null,
     needsUserInput: job.status === 'needs_user_input',
     pendingClarify: job.pendingClarify || null,
+    completedAt: job.completedAt || null,
     createdAt: job.createdAt,
     updatedAt: job.updatedAt,
   };

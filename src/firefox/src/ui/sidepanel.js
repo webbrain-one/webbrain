@@ -441,10 +441,44 @@ function scheduledJobActions(job) {
 }
 
 const SCHEDULED_VISIBLE_STATUSES = new Set(['pending', 'queued', 'paused', 'running', 'needs_user_input', 'failed', 'completed']);
+const COMPLETED_SCHEDULED_JOB_AUTO_HIDE_MS = 15 * 1000;
 const crossPanelScheduledJobIds = new Set();
+const pinnedCompletedScheduledJobIds = new Set();
+let scheduledJobAutoHideTimer = null;
 
 function visibleScheduledJobs(jobs = []) {
-  return jobs.filter((job) => SCHEDULED_VISIBLE_STATUSES.has(job.status));
+  const now = Date.now();
+  return jobs.filter((job) => {
+    if (!SCHEDULED_VISIBLE_STATUSES.has(job.status)) return false;
+    if (job.status !== 'completed') return true;
+    if (pinnedCompletedScheduledJobIds.has(String(job.id || ''))) return true;
+    const completedAt = Date.parse(job?.completedAt || job?.updatedAt || job?.lastRunAt || '');
+    if (!Number.isFinite(completedAt)) return true;
+    return now - completedAt < COMPLETED_SCHEDULED_JOB_AUTO_HIDE_MS;
+  });
+}
+
+function scheduleCompletedJobAutoHide(jobs = []) {
+  if (scheduledJobAutoHideTimer) {
+    clearTimeout(scheduledJobAutoHideTimer);
+    scheduledJobAutoHideTimer = null;
+  }
+  const now = Date.now();
+  let nextDelay = Infinity;
+  for (const job of jobs) {
+    if (job?.status !== 'completed') continue;
+    if (pinnedCompletedScheduledJobIds.has(String(job.id || ''))) continue;
+    const completedAt = Date.parse(job?.completedAt || job?.updatedAt || job?.lastRunAt || '');
+    if (!Number.isFinite(completedAt)) continue;
+    const remaining = COMPLETED_SCHEDULED_JOB_AUTO_HIDE_MS - (now - completedAt);
+    if (remaining > 0) nextDelay = Math.min(nextDelay, remaining);
+  }
+  if (Number.isFinite(nextDelay)) {
+    scheduledJobAutoHideTimer = setTimeout(() => {
+      scheduledJobAutoHideTimer = null;
+      refreshScheduledJobs();
+    }, Math.max(0, Math.ceil(nextDelay)));
+  }
 }
 
 function scheduledJobTabId(job) {
@@ -519,12 +553,14 @@ function ensureScheduledClarifyCards(jobs = []) {
 function renderScheduledJobs(jobs = []) {
   if (!scheduledJobsEl) return;
   const visible = visibleScheduledJobs(jobs);
+  scheduleCompletedJobAutoHide(jobs);
   scheduledJobsEl.replaceChildren();
   scheduledJobsEl.classList.toggle('hidden', visible.length === 0);
   for (const job of visible) {
     const card = document.createElement('div');
     card.className = 'scheduled-job-card';
     card.dataset.jobId = job.id;
+    card.dataset.status = job.status;
 
     const title = document.createElement('div');
     title.className = 'scheduled-job-title';
@@ -657,6 +693,10 @@ function handleScheduledJobEvent(data, tabId) {
 
 if (scheduledJobsEl) {
   scheduledJobsEl.addEventListener('click', (e) => {
+    const card = e.target.closest('.scheduled-job-card[data-job-id]');
+    if (card?.dataset.status === 'completed') {
+      pinnedCompletedScheduledJobIds.add(String(card.dataset.jobId || ''));
+    }
     const btn = e.target.closest('button[data-action][data-job-id]');
     if (!btn) return;
     scheduledJobAction(btn.dataset.action, btn.dataset.jobId);
@@ -715,7 +755,7 @@ function renderScheduleComposer(prefillPrompt = '') {
   const afterInput = document.createElement('input');
   afterInput.type = 'number';
   afterInput.min = '1';
-  afterInput.max = '1440';
+  afterInput.max = '10080';
   afterInput.step = '1';
   afterInput.value = '10';
   const afterField = addScheduleField(form, t('sp.schedule_form.after_minutes'), afterInput);

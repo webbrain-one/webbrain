@@ -1869,10 +1869,14 @@ test('sidepanel exposes schedule slash commands in both builds', () => {
     assert.match(panel, /\/schedule\b/, `${label}: /schedule parser missing`);
     assert.match(panel, /\/list-schedules\b/, `${label}: /list-schedules parser missing`);
     assert.match(panel, /create_scheduled_job/, `${label}: composer should create scheduled jobs through background`);
+    assert.match(panel, /afterInput\.max = '10080'/, `${label}: schedule composer should allow seven-day relative delays`);
     assert.match(panel, /scheduledJobId/, `${label}: scheduled clarify prompts should retain their job id`);
     assert.match(panel, /scheduledTabId/, `${label}: scheduled clarify answers should route to the run tab`);
     assert.match(panel, /isUrlTargetScheduledJob/, `${label}: URL-target scheduled prompts should be visible across panels`);
-    assert.match(panel, /'completed'\]\)/, `${label}: completed one-shot jobs should stay visible until deleted`);
+    assert.match(panel, /COMPLETED_SCHEDULED_JOB_AUTO_HIDE_MS = 15 \* 1000/, `${label}: completed job cards should auto-hide after 15 seconds`);
+    assert.match(panel, /pinnedCompletedScheduledJobIds/, `${label}: clicking completed job cards should keep them visible`);
+    assert.match(panel, /Date\.parse\(job\?\.completedAt/, `${label}: completed job auto-hide should use completion time`);
+    assert.match(panel, /scheduleCompletedJobAutoHide\(jobs\)/, `${label}: completed job auto-hide should reschedule the scheduled-job strip`);
     assert.match(panel, /job\.status === 'completed' && job\.lastResult/, `${label}: completed job cards should expose saved results after refresh`);
     assert.match(panel, /crossPanelScheduledJobIds/, `${label}: cross-panel scheduled jobs should stay tracked until terminal events`);
     assert.match(panel, /terminalScheduledEvent/, `${label}: cross-panel scheduled terminal events should settle the panel`);
@@ -2016,23 +2020,42 @@ test('scheduler validation rejects ambiguous, too-soon, and malformed schedules'
   const now = Date.UTC(2026, 0, 1, 12, 0, 0);
   for (const [label, SchedulerMod] of [['chrome', SchedulerCh], ['firefox', SchedulerFx]]) {
     assert.equal(SchedulerMod.validateResumeArgs({
-      after_seconds: 60,
+      after_seconds: 30,
       reason: 'wait for it',
       resume_instruction: 'try again',
     }, now).ok, true, `${label}: valid resume should pass`);
 
     assert.match(SchedulerMod.validateResumeArgs({
-      after_seconds: 60,
-      run_at: new Date(now + 60000).toISOString(),
+      after_seconds: 30,
+      run_at: new Date(now + 30000).toISOString(),
       reason: 'both',
       resume_instruction: 'bad',
     }, now).error, /exactly one/, `${label}: ambiguous time should fail`);
 
     assert.match(SchedulerMod.validateResumeArgs({
-      after_seconds: 30,
+      after_seconds: 29,
       reason: 'too soon',
       resume_instruction: 'bad',
-    }, now).error, /at least 60 seconds/, `${label}: too-soon time should fail`);
+    }, now).error, /at least 30 seconds/, `${label}: too-soon resume time should fail`);
+
+    assert.equal(SchedulerMod.validateResumeArgs({
+      after_seconds: 604800,
+      reason: 'wait up to a week',
+      resume_instruction: 'try again',
+    }, now).ok, true, `${label}: seven-day resume should pass`);
+
+    assert.match(SchedulerMod.validateResumeArgs({
+      after_seconds: 604801,
+      reason: 'too late',
+      resume_instruction: 'bad',
+    }, now).error, /no more than 168 hours/, `${label}: over-seven-day resume should fail`);
+
+    assert.equal(SchedulerMod.validateTaskArgs({
+      title: 'Valid week task',
+      prompt: 'check',
+      schedule: { type: 'once', after_seconds: 604800 },
+      target: { type: 'current_tab' },
+    }, now).ok, true, `${label}: seven-day task should pass`);
 
     assert.match(SchedulerMod.validateTaskArgs({
       title: 'Bad',
