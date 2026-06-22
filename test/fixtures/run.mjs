@@ -302,6 +302,38 @@ test('Firefox: indexed shadow-DOM click passes occlusion hit test', async (page)
   if (!clicked) throw new Error('expected shadow button click handler to run');
 });
 
+test('Firefox: click-then-type preserves shadow-root input focus', async (page) => {
+  await setupFirefoxHtml(page, `<!doctype html>
+    <style>
+      body { margin: 0; font: 16px sans-serif; }
+      #host { position: absolute; left: 20px; top: 20px; width: 220px; height: 44px; }
+    </style>
+    <div id="host"></div>
+    <script>
+      const root = document.getElementById('host').attachShadow({ mode: 'open' });
+      root.innerHTML = '<style>input { width: 220px; height: 44px; box-sizing: border-box; }</style><input id="shadow-input" placeholder="Shadow Name">';
+    </script>`);
+
+  const elements = await call(page, 'get_interactive_elements_cdp', {});
+  const shadowIndex = elements.findIndex(e => e.id === 'shadow-input');
+  if (shadowIndex < 0) throw new Error(`expected shadow input in elements, got: ${JSON.stringify(elements)}`);
+  if (elements[shadowIndex].inShadowDOM !== true) {
+    throw new Error(`expected inShadowDOM:true, got: ${JSON.stringify(elements[shadowIndex])}`);
+  }
+
+  const click = await call(page, 'click', { index: shadowIndex });
+  if (!click?.success) throw new Error(`expected shadow input click success, got: ${JSON.stringify(click)}`);
+
+  const activeId = await page.evaluate(() => document.activeElement?.id || '');
+  if (activeId !== 'host') throw new Error(`expected document focus on shadow host, got: ${activeId}`);
+
+  const typed = await call(page, 'type', { text: 'Ada' });
+  if (!typed?.success) throw new Error(`expected shadow input type success, got: ${JSON.stringify(typed)}`);
+
+  const value = await page.evaluate(() => document.getElementById('host').shadowRoot.getElementById('shadow-input').value);
+  if (value !== 'Ada') throw new Error(`expected typed shadow value, got: ${value}`);
+});
+
 test('Firefox: type_text returns an error after focus moves to a noneditable element', async (page) => {
   await setupFirefoxHtml(page, `<!doctype html>
     <style>
@@ -367,6 +399,40 @@ test('Firefox: full indexed elements exclude inert background controls', async (
     inert: window.__inertClicked === true,
   }));
   if (!state.dialog || state.background || state.inert) {
+    throw new Error(`expected only dialog action to run, got: ${JSON.stringify(state)}`);
+  }
+});
+
+test('Firefox: blocking overlay resolves sibling dialog content for indexed controls', async (page) => {
+  await setupFirefoxHtml(page, `<!doctype html>
+    <style>
+      body { margin: 0; font: 16px sans-serif; }
+      #page-action { position: absolute; left: 20px; top: 20px; width: 160px; height: 40px; }
+      #backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, .35); }
+      #dialog-panel { position: fixed; left: 20px; top: 90px; width: 220px; padding: 16px; border: 1px solid #888; background: white; }
+      #dialog-action { width: 160px; height: 40px; }
+    </style>
+    <button id="page-action" onclick="window.__pageClicked = true">Save page</button>
+    <div id="backdrop" data-overlay></div>
+    <section id="dialog-panel" role="dialog">
+      <button id="dialog-action" onclick="window.__dialogClicked = true">Confirm</button>
+    </section>`);
+
+  const elements = await call(page, 'get_interactive_elements_cdp', {});
+  if (elements.some(e => e.id === 'page-action')) {
+    throw new Error(`expected page action to be filtered behind overlay, got: ${JSON.stringify(elements)}`);
+  }
+  const dialogIndex = elements.findIndex(e => e.id === 'dialog-action');
+  if (dialogIndex < 0) throw new Error(`expected sibling dialog action in elements, got: ${JSON.stringify(elements)}`);
+
+  const click = await call(page, 'click', { index: dialogIndex });
+  if (!click?.success) throw new Error(`expected dialog action click success, got: ${JSON.stringify(click)}`);
+
+  const state = await page.evaluate(() => ({
+    page: window.__pageClicked === true,
+    dialog: window.__dialogClicked === true,
+  }));
+  if (state.page || !state.dialog) {
     throw new Error(`expected only dialog action to run, got: ${JSON.stringify(state)}`);
   }
 });

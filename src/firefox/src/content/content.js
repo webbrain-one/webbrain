@@ -383,6 +383,47 @@
     return dialog.getAttribute('aria-modal') === 'true';
   }
 
+  function _hasVisibleBox(el, minWidth = 1, minHeight = 1) {
+    if (!el || typeof el.getBoundingClientRect !== 'function') return false;
+    try {
+      const r = el.getBoundingClientRect();
+      if (r.width < minWidth || r.height < minHeight) return false;
+      const s = getComputedStyle(el);
+      if (s.visibility === 'hidden' || s.display === 'none' || parseFloat(s.opacity) === 0) return false;
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function _findDialogContentForOverlay(overlay) {
+    const selector = '[role="dialog"],[role="alertdialog"],[aria-modal="true"],dialog[open],[data-state="open"][role="dialog"],[class*="DialogContent"],[class*="ModalContent"],.modal.show';
+    const pick = (node) => {
+      if (!node || node === overlay) return null;
+      try {
+        if (node.matches?.(selector) && _hasVisibleBox(node, 20, 20)) return node;
+        const match = node.querySelector?.(selector);
+        if (match && _hasVisibleBox(match, 20, 20)) return match;
+      } catch {}
+      return null;
+    };
+
+    const siblings = overlay?.parentElement ? Array.from(overlay.parentElement.children) : [];
+    const idx = siblings.indexOf(overlay);
+    if (idx >= 0) {
+      for (let i = idx + 1; i < siblings.length; i++) {
+        const found = pick(siblings[i]);
+        if (found) return found;
+      }
+      for (let i = idx - 1; i >= 0; i--) {
+        const found = pick(siblings[i]);
+        if (found) return found;
+      }
+    }
+
+    return pick(overlay);
+  }
+
   /**
    * Detect the topmost modal/overlay/dialog on the page. Returns the modal
    * container element, or null if no overlay is detected.
@@ -417,7 +458,13 @@
     );
     for (let i = candidates.length - 1; i >= 0; i--) {
       const r = candidates[i].getBoundingClientRect();
-      if (r.width > 100 && r.height > 100) return candidates[i];
+      if (r.width > 100 && r.height > 100) {
+        if (!includeNonModalDialogs) {
+          const dialogContent = _findDialogContentForOverlay(candidates[i]);
+          if (dialogContent) return dialogContent;
+        }
+        return candidates[i];
+      }
     }
 
     return null;
@@ -709,6 +756,16 @@
 
   function _isMeaningfulFocus(el) {
     return !!(el && el !== document.body && el !== document.documentElement);
+  }
+
+  function _isShadowHostForTarget(host, target) {
+    if (!_isMeaningfulFocus(host) || !target || typeof ShadowRoot === 'undefined') return false;
+    let root = target.getRootNode?.();
+    while (root instanceof ShadowRoot) {
+      if (root.host === host) return true;
+      root = root.host?.getRootNode?.();
+    }
+    return false;
   }
 
   function _isFocusableElement(el) {
@@ -1151,6 +1208,8 @@
     const postActive = document.activeElement;
     if (_isTypeableElement(postActive)) {
       _rememberEditableTarget(postActive);
+    } else if (_isTypeableElement(el) && _isShadowHostForTarget(postActive, el)) {
+      _rememberEditableTarget(el);
     } else if (!_isMeaningfulFocus(postActive) && _isTypeableElement(el)) {
       _focusElement(el);
       _rememberEditableTarget(el);
@@ -1312,11 +1371,16 @@
       // Verify it's actually editable
       const editable = _isTypeableElement(el);
       if (!editable) {
-        _lastEditableTarget = null;
-        return {
-          success: false,
-          error: `Focused element <${el.tagName.toLowerCase()}> is not an editable field. Click the target input/textarea first, then call type_text again.`,
-        };
+        const recentEditable = _recentEditableTarget();
+        if (recentEditable && _isShadowHostForTarget(el, recentEditable)) {
+          el = recentEditable;
+        } else {
+          _lastEditableTarget = null;
+          return {
+            success: false,
+            error: `Focused element <${el.tagName.toLowerCase()}> is not an editable field. Click the target input/textarea first, then call type_text again.`,
+          };
+        }
       }
     }
 
