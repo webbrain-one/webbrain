@@ -598,7 +598,7 @@ async function handleMessage(msg, sender) {
       // the prompt recoverable) but before the agent run starts (so a
       // mid-run panel close does not replay the prompt on reopen).
       if (msg.contextMenuClear?.tabId != null) {
-        contextMenuStorage.clear(msg.contextMenuClear.tabId, msg.contextMenuClear.promptId).catch(() => {});
+        await contextMenuStorage.clear(msg.contextMenuClear.tabId, msg.contextMenuClear.promptId);
       }
 
       const updates = [];

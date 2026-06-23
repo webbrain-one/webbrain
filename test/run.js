@@ -1986,10 +1986,36 @@ test('sidepanel drains queued context-menu prompts after Continue finishes', () 
     assert.ok(match, `${label}: continueAgent finally block missing`);
     const finallyBody = match[1];
     const idleIdx = finallyBody.indexOf('isProcessing = false;');
+    const pendingIdx = finallyBody.indexOf('if (pendingTabSwitch != null)');
+    const switchIdx = finallyBody.indexOf('switchToTab(pending);');
     const drainIdx = finallyBody.indexOf('drainQueuedContextMenuPrompts();');
     assert.notEqual(idleIdx, -1, `${label}: continueAgent should clear processing state`);
+    assert.notEqual(pendingIdx, -1, `${label}: Continue completion should apply pending tab switches`);
+    assert.notEqual(switchIdx, -1, `${label}: Continue completion should switch to the pending tab`);
     assert.notEqual(drainIdx, -1, `${label}: Continue completion should drain queued context-menu prompts`);
     assert.equal(idleIdx < drainIdx, true, `${label}: context-menu queue must drain after processing is cleared`);
+    assert.equal(idleIdx < pendingIdx, true, `${label}: pending tab switch must wait until processing is cleared`);
+    assert.equal(pendingIdx < switchIdx, true, `${label}: pending tab switch should capture the target before switching`);
+    assert.equal(switchIdx < drainIdx, true, `${label}: context-menu queue must drain after pending tab switch is applied`);
+  }
+});
+
+test('background awaits context-menu prompt clear before agent chat starts', () => {
+  for (const [label, bgRel] of [
+    ['chrome', 'src/chrome/src/background.js'],
+    ['firefox', 'src/firefox/src/background.js'],
+  ]) {
+    const bg = fs.readFileSync(path.join(ROOT, bgRel), 'utf8');
+    const match = bg.match(/case 'chat': \{([\s\S]*?)\n\s+case 'chat_stream':/);
+    assert.ok(match, `${label}: chat handler missing`);
+    const chatBody = match[1];
+    const clear = 'await contextMenuStorage.clear(msg.contextMenuClear.tabId, msg.contextMenuClear.promptId);';
+    const clearIdx = chatBody.indexOf(clear);
+    const processIdx = chatBody.indexOf('agent.processMessage(');
+    assert.notEqual(clearIdx, -1, `${label}: context-menu prompt clear should be awaited`);
+    assert.notEqual(processIdx, -1, `${label}: chat handler should start an agent run`);
+    assert.equal(clearIdx < processIdx, true, `${label}: context-menu prompt clear must finish before the agent run starts`);
+    assert.doesNotMatch(chatBody, /contextMenuStorage\.clear\(msg\.contextMenuClear\.tabId,\s*msg\.contextMenuClear\.promptId\)\.catch\(\(\) => \{\}\)/, `${label}: context-menu clear should not be fire-and-forget`);
   }
 });
 
