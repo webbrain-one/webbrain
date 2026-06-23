@@ -2571,20 +2571,25 @@ test('sidepanel rebinds interactive controls after restoring serialized tab chat
 
 test('chrome sidepanel drops stale async tab-chat restores', () => {
   const panel = fs.readFileSync(path.join(ROOT, 'src/chrome/src/ui/sidepanel.js'), 'utf8');
+  assert.match(panel, /let renderedTabId = null;/, 'chrome: sidepanel should track which tab is actually rendered in the DOM');
   const match = panel.match(/async function switchToTab\(newTabId\) \{([\s\S]*?)\n\}/);
   assert.ok(match, 'chrome: switchToTab body missing');
   const body = match[1];
   const setIdx = body.indexOf('currentTabId = newTabId;');
   const loadIdx = body.indexOf('const html = await loadTabChat(newTabId);');
   const guardIdx = body.indexOf('if (currentTabId !== newTabId) return;');
+  const renderedSetIdx = body.indexOf('renderedTabId = newTabId;');
   const restoreIdx = body.indexOf('messagesEl.innerHTML =');
   const consumeIdx = body.indexOf('consumePendingContextMenuPrompt()');
   assert.notEqual(setIdx, -1, 'chrome: switchToTab should set the visible tab before restoring chat');
   assert.notEqual(loadIdx, -1, 'chrome: switchToTab should load persisted tab chat asynchronously');
   assert.notEqual(guardIdx, -1, 'chrome: stale async tab-chat restores should be dropped');
+  assert.notEqual(renderedSetIdx, -1, 'chrome: switchToTab should mark the rendered tab only after stale async restores are dropped');
   assert.notEqual(restoreIdx, -1, 'chrome: switchToTab restore point missing');
   assert.notEqual(consumeIdx, -1, 'chrome: switchToTab context-menu consume point missing');
-  assert.equal(setIdx < loadIdx && loadIdx < guardIdx && guardIdx < restoreIdx && guardIdx < consumeIdx, true, 'chrome: stale guard must run after async chat load and before DOM/context-menu work');
+  assert.equal(setIdx < loadIdx && loadIdx < guardIdx && guardIdx < renderedSetIdx && renderedSetIdx < restoreIdx && guardIdx < consumeIdx, true, 'chrome: stale guard must run after async chat load and before rendered-tab/DOM/context-menu work');
+  assert.match(body, /if \(renderedTabId != null\) \{[\s\S]*?persistTabChat\(renderedTabId, messagesEl\.innerHTML\);[\s\S]*?captureInputDraftForTab\(renderedTabId\);[\s\S]*?\}/, 'chrome: overlapping tab switches should save drafts for the tab represented by the DOM');
+  assert.doesNotMatch(body, /persistTabChat\(currentTabId,\s*messagesEl\.innerHTML\)|captureInputDraftForTab\(currentTabId\)/, 'chrome: overlapping tab switches must not save DOM or drafts under a pending target tab');
 });
 
 test('chrome sidepanel persists tab chat to the tab captured before debounce', () => {
@@ -2592,11 +2597,11 @@ test('chrome sidepanel persists tab chat to the tab captured before debounce', (
   const start = panel.indexOf('function schedulePersist() {');
   assert.notEqual(start, -1, 'chrome: schedulePersist missing');
   const body = panel.slice(start, panel.indexOf('\n}\n\n// Observe', start) + 2);
-  const captureTabIdx = body.indexOf('const tabId = currentTabId;');
+  const captureTabIdx = body.indexOf('const tabId = renderedTabId;');
   const captureHtmlIdx = body.indexOf('const html = messagesEl.innerHTML;');
   const timerIdx = body.indexOf('persistTimer = setTimeout(() => {');
   const persistIdx = body.indexOf('persistTabChat(tabId, html);');
-  assert.notEqual(captureTabIdx, -1, 'chrome: persistence should capture the tab id before the debounce delay');
+  assert.notEqual(captureTabIdx, -1, 'chrome: persistence should capture the rendered tab id before the debounce delay');
   assert.notEqual(captureHtmlIdx, -1, 'chrome: persistence should capture the chat HTML before the debounce delay');
   assert.notEqual(timerIdx, -1, 'chrome: persistence debounce missing');
   assert.notEqual(persistIdx, -1, 'chrome: persistence should write the captured tab/html');
@@ -2632,7 +2637,7 @@ test('chrome sidepanel cancels stale tab-chat persistence when clearing a tab', 
   const scheduleBody = panel.slice(scheduleStart, panel.indexOf('\n}\n\n// Observe', scheduleStart) + 2);
   assert.match(
     scheduleBody,
-    /const tabId = currentTabId;[\s\S]*?const html = messagesEl\.innerHTML;[\s\S]*?persistTimerTabId = tabId;[\s\S]*?persistTimer = setTimeout\(\(\) => \{[\s\S]*?persistTimer = null;[\s\S]*?persistTimerTabId = null;[\s\S]*?persistTabChat\(tabId, html\);/,
+    /const tabId = renderedTabId;[\s\S]*?const html = messagesEl\.innerHTML;[\s\S]*?persistTimerTabId = tabId;[\s\S]*?persistTimer = setTimeout\(\(\) => \{[\s\S]*?persistTimer = null;[\s\S]*?persistTimerTabId = null;[\s\S]*?persistTabChat\(tabId, html\);/,
     'chrome: debounced persistence should associate and clear the pending tab id',
   );
 
@@ -3231,7 +3236,10 @@ test('sidepanel preserves stale residual slash-command prompts without hidden ru
     const switchStart = panel.indexOf('function switchToTab(newTabId)');
     assert.notEqual(switchStart, -1, `${label}: switchToTab missing`);
     const switchBody = panel.slice(switchStart, panel.indexOf('refreshScheduledJobs({', switchStart));
-    assert.match(switchBody, /captureInputDraftForTab\(currentTabId\);[\s\S]*?restoreInputDraftForTab\(newTabId\);/, `${label}: tab switches should capture and restore per-tab composer drafts`);
+    const captureDraftPattern = label === 'chrome'
+      ? /captureInputDraftForTab\(renderedTabId\);[\s\S]*?restoreInputDraftForTab\(newTabId\);/
+      : /captureInputDraftForTab\(currentTabId\);[\s\S]*?restoreInputDraftForTab\(newTabId\);/;
+    assert.match(switchBody, captureDraftPattern, `${label}: tab switches should capture and restore per-tab composer drafts`);
 
     const sendMatch = panel.match(/async function sendMessage\(extraChatParams\) \{[\s\S]*?\n  return accepted;\n\}/);
     assert.ok(sendMatch, `${label}: sendMessage missing`);

@@ -358,6 +358,7 @@ const recordingTimerEl = document.getElementById('recording-timer');
 const recordingStopBtn = document.getElementById('btn-recording-stop');
 
 let currentTabId = null;
+let renderedTabId = null;
 let pendingTabSwitch = null; // tab the user switched to while isProcessing was true
 let isProcessing = false;
 let currentAssistantEl = null;
@@ -538,6 +539,7 @@ function renderClearedConversationForTab(tabId) {
   saveInputDraftForTab(tabId, '');
   setApiMutationsAllowedForTab(tabId, false);
   if (currentTabId !== tabId) return;
+  renderedTabId = tabId;
   messagesEl.innerHTML = '';
   inputEl.value = '';
   autoResizeInput();
@@ -552,7 +554,7 @@ let persistTimer = null;
 let persistTimerTabId = null;
 function schedulePersist() {
   if (persistTimer) clearTimeout(persistTimer);
-  const tabId = currentTabId;
+  const tabId = renderedTabId;
   const html = messagesEl.innerHTML;
   persistTimerTabId = tabId;
   persistTimer = setTimeout(() => {
@@ -1285,6 +1287,7 @@ async function showScratchpad(tabId = currentTabId) {
 async function init() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   currentTabId = tab?.id;
+  renderedTabId = currentTabId;
 
   chrome.tabs.onActivated.addListener(async (info) => {
     switchToTab(info.tabId);
@@ -1396,17 +1399,18 @@ if (verboseBtn) {
 }
 
 async function switchToTab(newTabId) {
-  if (newTabId === currentTabId) { pendingTabSwitch = null; return; }
+  if (newTabId === currentTabId && renderedTabId === newTabId) { pendingTabSwitch = null; return; }
   if (isProcessing) {
     pendingTabSwitch = newTabId; // apply after the run ends
     return;
   }
   pendingTabSwitch = null;
 
-  // Save current tab's chat (in-memory + storage).
-  if (currentTabId != null) {
-    persistTabChat(currentTabId, messagesEl.innerHTML);
-    captureInputDraftForTab(currentTabId);
+  // Save the tab currently represented by the DOM. During an async restore,
+  // currentTabId may already point at the target while the DOM is still older.
+  if (renderedTabId != null) {
+    persistTabChat(renderedTabId, messagesEl.innerHTML);
+    captureInputDraftForTab(renderedTabId);
   }
 
   currentTabId = newTabId;
@@ -1415,6 +1419,7 @@ async function switchToTab(newTabId) {
   // Restore new tab's chat from memory or storage.
   const html = await loadTabChat(newTabId);
   if (currentTabId !== newTabId) return;
+  renderedTabId = newTabId;
   if (html) {
     messagesEl.innerHTML = html;
     messagesEl.querySelectorAll('[data-bound]').forEach(el => delete el.dataset.bound);
