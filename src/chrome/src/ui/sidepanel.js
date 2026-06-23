@@ -1840,7 +1840,7 @@ function syncApiMutationsAllowedForCurrentTab() {
  * Returns the cleaned text (empty string if fully consumed).
  * May trigger async UI side effects (screenshot, export, etc.).
  */
-async function parseSlashCommands(text) {
+async function parseSlashCommands(text, tabId = currentTabId) {
   // /help — list all available slash commands
   if (/^\/help\b\s*/i.test(text)) {
     addMessage('system', t('sp.help_html'));
@@ -1849,7 +1849,6 @@ async function parseSlashCommands(text) {
 
   // /list-schedules — refresh the scheduled job strip
   if (/^\/list-schedules\b\s*/i.test(text)) {
-    const tabId = currentTabId;
     const jobs = await refreshScheduledJobs();
     if (currentTabId !== tabId) return '';
     addMessage('system', visibleScheduledJobs(jobs).length
@@ -1860,21 +1859,20 @@ async function parseSlashCommands(text) {
 
   // /show-scratchpad — dump the current tab's agent scratchpad
   if (/^\/show-scratchpad\b\s*/i.test(text)) {
-    await showScratchpad(currentTabId);
+    await showScratchpad(tabId);
     return '';
   }
 
   // /schedule — open a deterministic scheduled-task composer
   const mSchedule = text.match(/^\/schedule\b\s*/i);
   if (mSchedule) {
-    renderScheduleComposer(text.slice(mSchedule[0].length).trim(), currentTabId);
+    renderScheduleComposer(text.slice(mSchedule[0].length).trim(), tabId);
     return '';
   }
 
   // /allow-api — enable API mutation override
   const mApi = text.match(/^\/allow-api\b\s*/i);
   if (mApi) {
-    const tabId = currentTabId;
     const wasAlreadyAllowed = isApiMutationsAllowedForTab(tabId);
     setApiMutationsAllowedForTab(tabId, true);
     if (!wasAlreadyAllowed) {
@@ -1886,7 +1884,6 @@ async function parseSlashCommands(text) {
   // /compact — force context compaction for this conversation
   const mCompact = text.match(/^\/compact\b\s*/i);
   if (mCompact) {
-    const tabId = currentTabId;
     const res = await sendToBackground('compact_conversation', { tabId });
     if (currentTabId !== tabId) return '';
     if (res?.ok && res.compacted) {
@@ -1914,7 +1911,6 @@ async function parseSlashCommands(text) {
 
   // /reset — clear conversation (same as clear button)
   if (/^\/reset\b\s*/i.test(text)) {
-    const tabId = currentTabId;
     await sendToBackground('clear_conversation', { tabId });
     renderClearedConversationForTab(tabId);
     return '';
@@ -1922,7 +1918,6 @@ async function parseSlashCommands(text) {
 
   // /screenshot — capture visible tab and display in chat
   if (/^\/screenshot\b\s*/i.test(text)) {
-    const tabId = currentTabId;
     try {
       const tab = tabId == null ? null : await chrome.tabs.get(tabId);
       if (currentTabId !== tabId || !tab?.active) return '';
@@ -1942,7 +1937,6 @@ async function parseSlashCommands(text) {
 
   // /record — start recording the current tab without LLM involvement
   if (/^\/record(?:\s|$)/i.test(text)) {
-    const tabId = currentTabId;
     try {
       const res = await sendToBackground('start_tab_recording', {
         tabId,
@@ -1996,7 +1990,6 @@ async function parseSlashCommands(text) {
 
   // /profile — toggle profile auto-fill on/off
   if (/^\/profile\b\s*/i.test(text)) {
-    const tabId = currentTabId;
     const stored = await chrome.storage.local.get(['profileEnabled', 'profileText']);
     const newState = !stored.profileEnabled;
     await chrome.storage.local.set({ profileEnabled: newState });
@@ -2024,7 +2017,6 @@ async function parseSlashCommands(text) {
 
   // /vision — toggle vision support on active provider
   if (/^\/vision\b\s*/i.test(text)) {
-    const tabId = currentTabId;
     try {
       const { providers, active } = await sendToBackground('get_providers');
       const config = providers[active];
@@ -2068,6 +2060,7 @@ function updateApiBadge() {
 async function sendMessage(extraChatParams) {
   let text = inputEl.value.trim();
   if (!text || isProcessing) return;
+  const tabId = currentTabId;
   hideSlashCommandAutocomplete();
 
   // Clear input early so slash commands don't linger visually.
@@ -2078,7 +2071,8 @@ async function sendMessage(extraChatParams) {
 
   // Parse any leading slash command. parseSlashCommands may strip the
   // command from `text` and toggle apiMutationsAllowed as a side effect.
-  text = await parseSlashCommands(text);
+  text = await parseSlashCommands(text, tabId);
+  if (currentTabId !== tabId) return false;
   // If the entire message was just the slash command, there's nothing
   // left to send to the agent — bail out after the side effect.
   if (!text) {
@@ -2102,7 +2096,7 @@ async function sendMessage(extraChatParams) {
   let accepted = false;
   try {
     const res = await sendToBackground('chat', {
-      tabId: currentTabId,
+      tabId,
       text,
       mode: agentMode,
       apiMutationsAllowed,

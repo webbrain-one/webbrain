@@ -1954,7 +1954,7 @@ test('sidepanel exposes schedule slash commands in both builds', () => {
     assert.match(panel, /create_scheduled_job'[\s\S]*?\{\s*tabId,[\s\S]*?job:/, `${label}: schedule form should create jobs for the captured tab`);
     assert.match(panel, /const createdHtml = tSystemHtml\('sp\.schedule_form\.created'[\s\S]*?if \(currentTabId !== tabId\) \{[\s\S]*?replaceCachedScheduleComposer\(tabId, form\.dataset\.composerId, createdHtml\);[\s\S]*?return;[\s\S]*?\}[\s\S]*?form\.remove\(\);/, `${label}: schedule form should update hidden cached composers instead of leaving stale disabled forms`);
     assert.match(panel, /catch \(err\) \{[\s\S]*?if \(currentTabId !== tabId\) \{[\s\S]*?updateCachedScheduleComposerError\(tabId, form\.dataset\.composerId, err\.message\);[\s\S]*?return;[\s\S]*?\}[\s\S]*?submit\.disabled = false;[\s\S]*?errorEl\.textContent = err\.message;/, `${label}: schedule form failures should update hidden cached composers instead of leaving disabled forms`);
-    assert.match(panel, /renderScheduleComposer\(text\.slice\(mSchedule\[0\]\.length\)\.trim\(\), currentTabId\)/, `${label}: /schedule should pass the initiating tab into the async composer`);
+    assert.match(panel, /renderScheduleComposer\(text\.slice\(mSchedule\[0\]\.length\)\.trim\(\), tabId\)/, `${label}: /schedule should pass the initiating tab into the async composer`);
     assert.match(panel, /urlInput\.value = initialScheduleUrl/, `${label}: schedule form should prefill URL targets from the active tab`);
     assert.match(panel, /targetType\.value = 'url'/, `${label}: schedule form should default http(s) pages to URL targets`);
     assert.match(panel, /content\.appendChild\(form\)/, `${label}: schedule form should append after initial target defaults are applied`);
@@ -2895,7 +2895,7 @@ test('sidepanel scopes allow-api override to the tab conversation', () => {
     const allowIdx = panel.indexOf('// /allow-api');
     assert.notEqual(allowIdx, -1, `${label}: /allow-api parser missing`);
     const allowBody = panel.slice(allowIdx, panel.indexOf('// /compact', allowIdx));
-    assert.match(allowBody, /const tabId = currentTabId;[\s\S]*?const wasAlreadyAllowed = isApiMutationsAllowedForTab\(tabId\);[\s\S]*?setApiMutationsAllowedForTab\(tabId, true\);/, `${label}: /allow-api should enable only the current tab conversation`);
+    assert.match(allowBody, /const wasAlreadyAllowed = isApiMutationsAllowedForTab\(tabId\);[\s\S]*?setApiMutationsAllowedForTab\(tabId, true\);/, `${label}: /allow-api should enable only the initiating tab conversation`);
     assert.doesNotMatch(allowBody, /apiMutationsAllowed = true;/, `${label}: /allow-api should not enable a global mutation override`);
   }
 });
@@ -2906,6 +2906,7 @@ test('sidepanel scopes async tab commands to the original tab', () => {
     ['firefox', 'src/firefox/src/ui/sidepanel.js'],
   ]) {
     const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
+    assert.match(panel, /async function parseSlashCommands\(text, tabId = currentTabId\) \{/, `${label}: slash-command parsing should accept the initiating tab id`);
 
     const helperStart = panel.indexOf('function renderClearedConversationForTab(tabId)');
     assert.notEqual(helperStart, -1, `${label}: clear helper missing`);
@@ -2914,7 +2915,7 @@ test('sidepanel scopes async tab commands to the original tab', () => {
 
     const resetIdx = panel.indexOf("// /reset");
     const resetBody = panel.slice(resetIdx, panel.indexOf("// /screenshot", resetIdx));
-    assert.match(resetBody, /const tabId = currentTabId;[\s\S]*?await sendToBackground\('clear_conversation', \{ tabId \}\);[\s\S]*?renderClearedConversationForTab\(tabId\);/, `${label}: /reset should clear the originally requested tab only`);
+    assert.match(resetBody, /await sendToBackground\('clear_conversation', \{ tabId \}\);[\s\S]*?renderClearedConversationForTab\(tabId\);/, `${label}: /reset should clear the originally requested tab only`);
     assert.doesNotMatch(resetBody, /sendToBackground\('clear_conversation', \{ tabId: currentTabId \}\)/, `${label}: /reset should not use currentTabId after async delay`);
 
     const clearStart = panel.indexOf("clearBtn.addEventListener('click', async () => {");
@@ -2923,32 +2924,55 @@ test('sidepanel scopes async tab commands to the original tab', () => {
 
     const compactIdx = panel.indexOf('// /compact');
     const compactBody = panel.slice(compactIdx, panel.indexOf('// /verbose', compactIdx));
-    assert.match(compactBody, /const tabId = currentTabId;[\s\S]*?sendToBackground\('compact_conversation', \{ tabId \}\);[\s\S]*?if \(currentTabId !== tabId\) return '';/, `${label}: /compact should not render a result into a different tab`);
+    assert.match(compactBody, /sendToBackground\('compact_conversation', \{ tabId \}\);[\s\S]*?if \(currentTabId !== tabId\) return '';/, `${label}: /compact should not render a result into a different tab`);
 
     const listIdx = panel.indexOf('// /list-schedules');
     const listBody = panel.slice(listIdx, panel.indexOf('// /show-scratchpad', listIdx));
-    assert.match(listBody, /const tabId = currentTabId;[\s\S]*?const jobs = await refreshScheduledJobs\(\);[\s\S]*?if \(currentTabId !== tabId\) return '';/, `${label}: /list-schedules should not render a result into a different tab`);
+    assert.match(listBody, /const jobs = await refreshScheduledJobs\(\);[\s\S]*?if \(currentTabId !== tabId\) return '';/, `${label}: /list-schedules should not render a result into a different tab`);
 
     assert.match(panel, /async function showScratchpad\(tabId = currentTabId\) \{[\s\S]*?sendToBackground\('get_scratchpad', \{ tabId \}\);[\s\S]*?if \(currentTabId !== tabId\) return;[\s\S]*?catch \(e\) \{[\s\S]*?if \(currentTabId !== tabId\) return;[\s\S]*?sp\.scratchpad\.error/, `${label}: /show-scratchpad should not render success or error results into a different tab`);
+    assert.match(panel, /\/\/ \/show-scratchpad[\s\S]*?await showScratchpad\(tabId\);/, `${label}: /show-scratchpad should use the initiating tab id from the parser`);
 
     const screenshotIdx = panel.indexOf('// /screenshot');
     const screenshotEnd = panel.indexOf('// /record', screenshotIdx);
     const screenshotBody = panel.slice(screenshotIdx, screenshotEnd);
-    assert.match(screenshotBody, /const tabId = currentTabId;[\s\S]*?if \(currentTabId !== tabId \|\| !tab\?\.active\) return '';[\s\S]*?captureVisibleTab[\s\S]*?if \(currentTabId !== tabId\) return '';[\s\S]*?addMessage\('system', imgHtml\);/, `${label}: /screenshot should not render a captured image into a different tab`);
+    assert.match(screenshotBody, /if \(currentTabId !== tabId \|\| !tab\?\.active\) return '';[\s\S]*?captureVisibleTab[\s\S]*?if \(currentTabId !== tabId\) return '';[\s\S]*?addMessage\('system', imgHtml\);/, `${label}: /screenshot should not render a captured image into a different tab`);
 
     if (label === 'chrome') {
       const recordIdx = panel.indexOf('// /record');
       const recordBody = panel.slice(recordIdx, panel.indexOf('// /export', recordIdx));
-      assert.match(recordBody, /const tabId = currentTabId;[\s\S]*?sendToBackground\('start_tab_recording', \{[\s\S]*?tabId,[\s\S]*?\}\);[\s\S]*?if \(currentTabId !== tabId\) return '';/, `${label}: /record should not render recording status into a different tab`);
+      assert.match(recordBody, /sendToBackground\('start_tab_recording', \{[\s\S]*?tabId,[\s\S]*?\}\);[\s\S]*?if \(currentTabId !== tabId\) return '';/, `${label}: /record should not render recording status into a different tab`);
     }
 
     const profileIdx = panel.indexOf('// /profile');
     const profileBody = panel.slice(profileIdx, panel.indexOf('// /ask', profileIdx));
-    assert.match(profileBody, /const tabId = currentTabId;[\s\S]*?storage\.local\.get\(\['profileEnabled', 'profileText'\]\);[\s\S]*?storage\.local\.set\(\{ profileEnabled: newState \}\);[\s\S]*?if \(currentTabId !== tabId\) return '';[\s\S]*?addMessage\('system'/, `${label}: /profile should not render a result into a different tab`);
+    assert.match(profileBody, /storage\.local\.get\(\['profileEnabled', 'profileText'\]\);[\s\S]*?storage\.local\.set\(\{ profileEnabled: newState \}\);[\s\S]*?if \(currentTabId !== tabId\) return '';[\s\S]*?addMessage\('system'/, `${label}: /profile should not render a result into a different tab`);
 
     const visionIdx = panel.indexOf('// /vision');
     const visionBody = panel.slice(visionIdx, panel.indexOf('return text;', visionIdx));
-    assert.match(visionBody, /const tabId = currentTabId;[\s\S]*?sendToBackground\('get_providers'\);[\s\S]*?sendToBackground\('update_provider'[\s\S]*?if \(currentTabId !== tabId\) return '';[\s\S]*?addMessage\('system'/, `${label}: /vision should not render a result into a different tab`);
+    assert.match(visionBody, /sendToBackground\('get_providers'\);[\s\S]*?sendToBackground\('update_provider'[\s\S]*?if \(currentTabId !== tabId\) return '';[\s\S]*?addMessage\('system'/, `${label}: /vision should not render a result into a different tab`);
+  }
+});
+
+test('sidepanel sends residual slash-command prompts to the initiating tab', () => {
+  for (const [label, panelRel] of [
+    ['chrome', 'src/chrome/src/ui/sidepanel.js'],
+    ['firefox', 'src/firefox/src/ui/sidepanel.js'],
+  ]) {
+    const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
+    const sendMatch = panel.match(/async function sendMessage\(extraChatParams\) \{[\s\S]*?\n  return accepted;\n\}/);
+    assert.ok(sendMatch, `${label}: sendMessage missing`);
+    const sendBody = sendMatch[0];
+    assert.match(
+      sendBody,
+      /const tabId = currentTabId;[\s\S]*?text = await parseSlashCommands\(text, tabId\);[\s\S]*?if \(currentTabId !== tabId\) return false;[\s\S]*?sendToBackground\('chat', \{[\s\S]*?tabId,[\s\S]*?text,/,
+      `${label}: residual slash-command prompts should use the tab captured before async parsing`,
+    );
+    assert.doesNotMatch(
+      sendBody,
+      /sendToBackground\('chat', \{[\s\S]*?tabId: currentTabId/,
+      `${label}: chat dispatch should not read currentTabId after slash parsing`,
+    );
   }
 });
 
