@@ -4,6 +4,11 @@ All notable changes to WebBrain are documented in this file.
 
 This changelog was generated from the repository Git history and release tags. Versions without a Git tag are inferred from version-bump commits and the current `package.json` / `manifest.json` version.
 
+## [15.2.2] - 2026-06-23
+
+### Fixed
+- Scheduled recurring tasks can now start immediately when their first run is due now.
+
 ## [15.2.1] - 2026-06-23
 
 ### Changed
