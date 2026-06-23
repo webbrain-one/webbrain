@@ -1992,6 +1992,35 @@ test('sidepanel exposes show-scratchpad slash command in both builds', () => {
   }
 });
 
+test('sidepanel awaits onboarding completion persistence before hiding', () => {
+  for (const [label, panelRel] of [
+    ['chrome', 'src/chrome/src/ui/sidepanel.js'],
+    ['firefox', 'src/firefox/src/ui/sidepanel.js'],
+  ]) {
+    const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
+    assert.match(
+      panel,
+      /async function dismissOnboarding\(\) \{[\s\S]*?await (chrome|browser)\.storage\.local\.set\(\{ onboardingComplete: true \}\)\.catch\(\(\) => \{\}\);[\s\S]*?overlay\.classList\.add\('hidden'\);[\s\S]*?\}/,
+      `${label}: onboarding completion should persist before the overlay is hidden`,
+    );
+    assert.match(
+      panel,
+      /changeLink\.addEventListener\('click', async \(event\) => \{[\s\S]*?await dismissOnboarding\(\);[\s\S]*?\}\);/,
+      `${label}: onboarding change link should await completion persistence`,
+    );
+    assert.match(
+      panel,
+      /settingsBtn\.addEventListener\('click', async \(\) => \{[\s\S]*?if \(cloudReady\) \{[\s\S]*?await dismissOnboarding\(\);[\s\S]*?return;[\s\S]*?\}[\s\S]*?await dismissOnboarding\(\);[\s\S]*?\}\);/,
+      `${label}: onboarding settings flow should await completion persistence before closing`,
+    );
+    assert.match(
+      panel,
+      /skipBtn\.addEventListener\('click', async \(\) => \{[\s\S]*?await dismissOnboarding\(\);[\s\S]*?\}\);/,
+      `${label}: onboarding skip button should await completion persistence`,
+    );
+  }
+});
+
 test('chrome /record reports mic denial as a warning, not recording failure', () => {
   const panel = fs.readFileSync(path.join(ROOT, 'src/chrome/src/ui/sidepanel.js'), 'utf8');
   const locale = fs.readFileSync(path.join(ROOT, 'src/chrome/src/ui/locales/en.js'), 'utf8');

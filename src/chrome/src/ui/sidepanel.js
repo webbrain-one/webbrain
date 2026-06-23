@@ -57,8 +57,8 @@ if (globalThis.chrome?.storage?.onChanged) {
   let localModelChoices = [];
   let cloudReady = false;
 
-  function dismissOnboarding() {
-    chrome.storage.local.set({ onboardingComplete: true }).catch(() => {});
+  async function dismissOnboarding() {
+    await chrome.storage.local.set({ onboardingComplete: true }).catch(() => {});
     overlay.classList.add('hidden');
   }
 
@@ -139,10 +139,10 @@ if (globalThis.chrome?.storage?.onChanged) {
       changeLink.target = '_blank';
       changeLink.rel = 'noopener noreferrer';
       changeLink.textContent = 'Change';
-      changeLink.addEventListener('click', (event) => {
+      changeLink.addEventListener('click', async (event) => {
         event.preventDefault();
         openProviderSettings();
-        dismissOnboarding();
+        await dismissOnboarding();
       });
       providerStatus.append(
         document.createTextNode('Using WebBrain Cloud. '),
@@ -262,7 +262,7 @@ if (globalThis.chrome?.storage?.onChanged) {
 
   settingsBtn.addEventListener('click', async () => {
     if (cloudReady) {
-      dismissOnboarding();
+      await dismissOnboarding();
       inputEl?.focus();
       return;
     }
@@ -293,10 +293,12 @@ if (globalThis.chrome?.storage?.onChanged) {
     }
 
     openProviderSettings();
-    dismissOnboarding();
+    await dismissOnboarding();
   });
 
-  skipBtn.addEventListener('click', dismissOnboarding);
+  skipBtn.addEventListener('click', async () => {
+    await dismissOnboarding();
+  });
 })();
 
 const messagesEl = document.getElementById('messages');
