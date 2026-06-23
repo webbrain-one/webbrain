@@ -41,13 +41,13 @@ export function resolveTheme(mode) {
 }
 
 /** Apply a mode to <html data-theme="..."> and remember it. */
-export function applyMode(mode, opts = {}) {
+export async function applyMode(mode, opts = {}) {
   if (!THEME_MODES.includes(mode)) mode = DEFAULT_MODE;
   document.documentElement.setAttribute('data-theme', resolveTheme(mode));
   if (opts.persist !== false) {
     writeLocal(mode);
     if (opts.syncStorage !== false && globalThis.chrome?.storage?.local) {
-      chrome.storage.local.set({ themeMode: mode });
+      await chrome.storage.local.set({ themeMode: mode }).catch(() => {});
     }
   }
 }

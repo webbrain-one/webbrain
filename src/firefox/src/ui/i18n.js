@@ -52,14 +52,14 @@ export function getLocale() {
   return currentLocale;
 }
 
-export function setLocale(code) {
+export async function setLocale(code) {
   if (!DICTS[code] || code === currentLocale) return;
   currentLocale = code;
   try { localStorage.setItem(LS_KEY, code); } catch { /* ignore */ }
   // Mirror to browser storage so other extension pages pick it up.
   try {
     const api = (typeof browser !== 'undefined' && browser?.storage) ? browser : (typeof chrome !== 'undefined' ? chrome : null);
-    api?.storage?.local?.set?.({ wbLocale: code });
+    await api?.storage?.local?.set?.({ wbLocale: code });
   } catch { /* ignore */ }
   applyDOMTranslations(document);
   document.dispatchEvent(new CustomEvent('wb-locale-changed', { detail: { code } }));

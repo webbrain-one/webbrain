@@ -56,8 +56,8 @@ if (globalThis.browser?.storage?.onChanged) {
   let localModelChoices = [];
   let cloudReady = false;
 
-  function dismissOnboarding() {
-    browser.storage.local.set({ onboardingComplete: true }).catch(() => {});
+  async function dismissOnboarding() {
+    await browser.storage.local.set({ onboardingComplete: true }).catch(() => {});
     overlay.classList.add('hidden');
   }
 
@@ -138,10 +138,10 @@ if (globalThis.browser?.storage?.onChanged) {
       changeLink.target = '_blank';
       changeLink.rel = 'noopener noreferrer';
       changeLink.textContent = 'Change';
-      changeLink.addEventListener('click', (event) => {
+      changeLink.addEventListener('click', async (event) => {
         event.preventDefault();
         openProviderSettings();
-        dismissOnboarding();
+        await dismissOnboarding();
       });
       providerStatus.append(
         document.createTextNode('Using WebBrain Cloud. '),
@@ -258,7 +258,7 @@ if (globalThis.browser?.storage?.onChanged) {
 
   settingsBtn.addEventListener('click', async () => {
     if (cloudReady) {
-      dismissOnboarding();
+      await dismissOnboarding();
       inputEl?.focus();
       return;
     }
@@ -289,10 +289,12 @@ if (globalThis.browser?.storage?.onChanged) {
     }
 
     openProviderSettings();
-    dismissOnboarding();
+    await dismissOnboarding();
   });
 
-  skipBtn.addEventListener('click', dismissOnboarding);
+  skipBtn.addEventListener('click', async () => {
+    await dismissOnboarding();
+  });
 })();
 
 const messagesEl = document.getElementById('messages');
@@ -388,19 +390,48 @@ function updateActWarning() {
 
 // Per-tab chat history (stores innerHTML of messages container)
 const tabChats = new Map();
+const tabInputDrafts = new Map();
 
 function clearCachedTabChat(tabId) {
   if (tabId == null) return;
   tabChats.delete(tabId);
 }
 
+function saveInputDraftForTab(tabId, text) {
+  const numericTabId = Number(tabId);
+  if (!Number.isFinite(numericTabId)) return;
+  const draft = String(text || '');
+  if (draft.trim()) {
+    tabInputDrafts.set(numericTabId, draft);
+  } else {
+    tabInputDrafts.delete(numericTabId);
+  }
+}
+
+function captureInputDraftForTab(tabId) {
+  if (!inputEl) return;
+  saveInputDraftForTab(tabId, inputEl.value || '');
+}
+
+function restoreInputDraftForTab(tabId) {
+  if (!inputEl) return;
+  const numericTabId = Number(tabId);
+  const draft = Number.isFinite(numericTabId) ? tabInputDrafts.get(numericTabId) || '' : '';
+  inputEl.value = draft;
+  autoResizeInput();
+  updateSlashCommandAutocomplete();
+}
+
 function renderClearedConversationForTab(tabId) {
   clearCachedTabChat(tabId);
+  saveInputDraftForTab(tabId, '');
   setApiMutationsAllowedForTab(tabId, false);
   if (currentTabId !== tabId) return;
   messagesEl.innerHTML = '';
+  inputEl.value = '';
+  autoResizeInput();
   addMessage('system', t('sp.cleared_message'));
-  refreshScheduledJobs();
+  refreshScheduledJobs({ tabId });
   refreshRecommendedActions();
 }
 
@@ -646,11 +677,12 @@ function renderScheduledJobs(jobs = []) {
   ensureScheduledClarifyCards(visible);
 }
 
-async function refreshScheduledJobs() {
+async function refreshScheduledJobs({ tabId = null } = {}) {
   if (!scheduledJobsEl) return;
   try {
     const response = await sendToBackground('list_scheduled_jobs', { all: true });
     const jobs = response?.jobs || [];
+    if (tabId != null && currentTabId !== tabId) return jobs;
     renderScheduledJobs(jobs);
     return jobs;
   } catch (e) {
@@ -677,7 +709,7 @@ async function scheduledJobAction(action, jobId) {
         addMessage('error', t('sp.error_prefix', { msg: response.error || 'Scheduled job action failed.' }));
       }
     }
-    await refreshScheduledJobs();
+    await refreshScheduledJobs({ tabId });
   } catch (e) {
     if (currentTabId === tabId) {
       addMessage('error', t('sp.error_prefix', { msg: e.message }));
@@ -724,7 +756,7 @@ function settleScheduledRun(event, job) {
 }
 
 function handleScheduledJobEvent(data, tabId) {
-  refreshScheduledJobs();
+  refreshScheduledJobs({ tabId: currentTabId });
   const event = data?.event;
   const job = data?.job;
   if (!event || !job) return;
@@ -940,7 +972,7 @@ async function submitScheduleComposer(e, form) {
     if (textEl) {
       textEl.innerHTML = createdHtml;
     }
-    await refreshScheduledJobs();
+    await refreshScheduledJobs({ tabId });
   } catch (err) {
     if (currentTabId !== tabId) {
       updateCachedScheduleComposerError(tabId, form.dataset.composerId, err.message);
@@ -1144,7 +1176,7 @@ async function init() {
   if (activeTab?.id && activeTab.id !== currentTabId) {
     await switchToTab(activeTab.id);
   }
-  refreshScheduledJobs();
+  refreshScheduledJobs({ tabId: currentTabId });
   refreshRecommendedActions();
   await consumePendingContextMenuPrompt();
   drainQueuedContextMenuPrompts();
@@ -1201,7 +1233,7 @@ if (verboseBtn) {
     // Normal click → toggle verbose mode
     verboseMode = !verboseMode;
     verboseBtn.classList.toggle('active', verboseMode);
-    browser.storage.local.set({ verboseMode }).catch(() => {});
+    await browser.storage.local.set({ verboseMode }).catch(() => {});
   });
 }
 
@@ -1216,6 +1248,7 @@ function switchToTab(newTabId) {
   // Save current tab's chat
   if (currentTabId != null) {
     tabChats.set(currentTabId, messagesEl.innerHTML);
+    captureInputDraftForTab(currentTabId);
   }
 
   currentTabId = newTabId;
@@ -1230,8 +1263,9 @@ function switchToTab(newTabId) {
     messagesEl.innerHTML = '';
     addMessage('system', t('sp.help_message'));
   }
+  restoreInputDraftForTab(newTabId);
   scrollToBottom();
-  refreshScheduledJobs();
+  refreshScheduledJobs({ tabId: newTabId });
   refreshRecommendedActions();
   consumePendingContextMenuPrompt().then(() => drainQueuedContextMenuPrompts()).catch(() => {});
 }
@@ -1260,13 +1294,15 @@ function setRecommendedActionsCollapsed(collapsed, { persist = true } = {}) {
   recommendedActionsCollapsed = Boolean(collapsed);
   updateRecommendedActionsCollapsedState();
   if (persist) {
-    browser.storage.local.set({ [RECOMMENDED_ACTIONS_COLLAPSED_KEY]: recommendedActionsCollapsed }).catch(() => {});
+    void browser.storage.local.set({ [RECOMMENDED_ACTIONS_COLLAPSED_KEY]: recommendedActionsCollapsed }).catch(() => {});
   }
 }
 
 if (recommendedActionsToggleEl) {
-  recommendedActionsToggleEl.addEventListener('click', () => {
-    setRecommendedActionsCollapsed(!recommendedActionsCollapsed);
+  recommendedActionsToggleEl.addEventListener('click', async () => {
+    const next = !recommendedActionsCollapsed;
+    setRecommendedActionsCollapsed(next, { persist: false });
+    await browser.storage.local.set({ [RECOMMENDED_ACTIONS_COLLAPSED_KEY]: next }).catch(() => {});
   });
 }
 
@@ -1444,6 +1480,12 @@ function isWebBrainCloudProviderSelected() {
 function markSelectedProviderUntested() {
   statusDot.className = 'status-dot';
   statusDot.title = providerSelect?.selectedOptions?.[0]?.textContent || providerSelect?.value || '';
+}
+
+function markSelectedProviderFailed(error) {
+  const msg = error?.message || t('sp.status.failed');
+  statusDot.className = 'status-dot offline';
+  statusDot.title = t('sp.status.error', { msg });
 }
 
 async function testConnection(options = {}) {
@@ -1700,7 +1742,7 @@ function syncApiMutationsAllowedForCurrentTab() {
   updateApiBadge();
 }
 
-async function parseSlashCommands(text) {
+async function parseSlashCommands(text, tabId = currentTabId) {
   // /help — list all available slash commands
   if (/^\/help\b\s*/i.test(text)) {
     addMessage('system', t('sp.help_html'));
@@ -1709,8 +1751,7 @@ async function parseSlashCommands(text) {
 
   // /list-schedules — refresh the scheduled job strip
   if (/^\/list-schedules\b\s*/i.test(text)) {
-    const tabId = currentTabId;
-    const jobs = await refreshScheduledJobs();
+    const jobs = await refreshScheduledJobs({ tabId });
     if (currentTabId !== tabId) return '';
     addMessage('system', visibleScheduledJobs(jobs).length
       ? t('sp.schedule_form.list_refreshed')
@@ -1720,21 +1761,20 @@ async function parseSlashCommands(text) {
 
   // /show-scratchpad — dump the current tab's agent scratchpad
   if (/^\/show-scratchpad\b\s*/i.test(text)) {
-    await showScratchpad(currentTabId);
+    await showScratchpad(tabId);
     return '';
   }
 
   // /schedule — open a deterministic scheduled-task composer
   const mSchedule = text.match(/^\/schedule\b\s*/i);
   if (mSchedule) {
-    renderScheduleComposer(text.slice(mSchedule[0].length).trim(), currentTabId);
+    renderScheduleComposer(text.slice(mSchedule[0].length).trim(), tabId);
     return '';
   }
 
   // /allow-api — enable API mutation override
   const mApi = text.match(/^\/allow-api\b\s*/i);
   if (mApi) {
-    const tabId = currentTabId;
     const wasAlreadyAllowed = isApiMutationsAllowedForTab(tabId);
     setApiMutationsAllowedForTab(tabId, true);
     if (!wasAlreadyAllowed) {
@@ -1746,9 +1786,9 @@ async function parseSlashCommands(text) {
   // /compact — force context compaction for this conversation
   const mCompact = text.match(/^\/compact\b\s*/i);
   if (mCompact) {
-    const tabId = currentTabId;
+    const remainder = text.slice(mCompact[0].length).trim();
     const res = await sendToBackground('compact_conversation', { tabId });
-    if (currentTabId !== tabId) return '';
+    if (currentTabId !== tabId) return remainder;
     if (res?.ok && res.compacted) {
       addContextCompactedNote({ ...res, manual: true });
     } else if (res?.ok && res.reason === 'busy') {
@@ -1758,14 +1798,15 @@ async function parseSlashCommands(text) {
     } else {
       addMessage('system', tSystemHtml('sp.compact.failed', { error: res?.error || 'unknown error' }));
     }
-    return text.slice(mCompact[0].length).trim();
+    return remainder;
   }
 
   // /verbose — toggle verbose/compact tool display
   if (/^\/verbose\b\s*/i.test(text)) {
     verboseMode = !verboseMode;
     if (verboseBtn) verboseBtn.classList.toggle('active', verboseMode);
-    browser.storage.local.set({ verboseMode }).catch(() => {});
+    await browser.storage.local.set({ verboseMode }).catch(() => {});
+    if (currentTabId !== tabId) return '';
     addMessage('system', verboseMode
       ? t('sp.compact.verbose_on')
       : t('sp.compact.verbose_off'));
@@ -1774,7 +1815,6 @@ async function parseSlashCommands(text) {
 
   // /reset — clear conversation (same as clear button)
   if (/^\/reset\b\s*/i.test(text)) {
-    const tabId = currentTabId;
     await sendToBackground('clear_conversation', { tabId });
     renderClearedConversationForTab(tabId);
     return '';
@@ -1782,7 +1822,6 @@ async function parseSlashCommands(text) {
 
   // /screenshot — capture visible tab and display in chat
   if (/^\/screenshot\b\s*/i.test(text)) {
-    const tabId = currentTabId;
     try {
       const tab = tabId == null ? null : await browser.tabs.get(tabId);
       if (currentTabId !== tabId || !tab?.active) return '';
@@ -1838,7 +1877,6 @@ async function parseSlashCommands(text) {
 
   // /profile — toggle profile auto-fill on/off
   if (/^\/profile\b\s*/i.test(text)) {
-    const tabId = currentTabId;
     const stored = await browser.storage.local.get(['profileEnabled', 'profileText']);
     const newState = !stored.profileEnabled;
     await browser.storage.local.set({ profileEnabled: newState });
@@ -1866,7 +1904,6 @@ async function parseSlashCommands(text) {
 
   // /vision — toggle vision support on active provider
   if (/^\/vision\b\s*/i.test(text)) {
-    const tabId = currentTabId;
     try {
       const { providers, active } = await sendToBackground('get_providers');
       const config = providers[active];
@@ -1910,6 +1947,10 @@ function updateApiBadge() {
 async function sendMessage(extraChatParams) {
   let text = inputEl.value.trim();
   if (!text || isProcessing) return;
+  const tabId = currentTabId;
+  const modeForSend = /^\/(?:ask|plan)\b/i.test(text) ? 'ask' : agentMode;
+  const apiMutationsAllowedForSend = isApiMutationsAllowedForTab(tabId) || /^\/allow-api\b/i.test(text);
+  saveInputDraftForTab(tabId, '');
   hideSlashCommandAutocomplete();
 
   if (text.startsWith('/')) {
@@ -1917,63 +1958,74 @@ async function sendMessage(extraChatParams) {
     autoResizeInput();
   }
 
-  text = await parseSlashCommands(text);
+  text = await parseSlashCommands(text, tabId);
+  const renderToCurrentTab = currentTabId === tabId;
+  if (!renderToCurrentTab) {
+    if (text) saveInputDraftForTab(tabId, text);
+    return false;
+  }
   if (!text) {
     inputEl.value = '';
     autoResizeInput();
     return;
   }
 
-  isProcessing = true;
-  hideRecommendedActions();
-  abortRequested = false;
-  sendBtn.disabled = true;
-  inputEl.value = '';
-  autoResizeInput();
-
-  addMessage('user', text);
-  showActivity(t('sp.activity.thinking'));
-
-  currentAssistantEl = addMessage('assistant', '');
+  let assistantEl = null;
+  if (renderToCurrentTab) {
+    isProcessing = true;
+    abortRequested = false;
+    sendBtn.disabled = true;
+    inputEl.value = '';
+    autoResizeInput();
+    hideRecommendedActions();
+    addMessage('user', text);
+    showActivity(t('sp.activity.thinking'));
+    assistantEl = addMessage('assistant', '');
+    currentAssistantEl = assistantEl;
+  }
 
   let accepted = false;
   try {
     const res = await sendToBackground('chat', {
-      tabId: currentTabId,
+      tabId,
       text,
-      mode: agentMode,
-      apiMutationsAllowed,
+      mode: modeForSend,
+      apiMutationsAllowed: apiMutationsAllowedForSend,
       ...extraChatParams,
     });
     accepted = true;
 
-    if (abortRequested) {
+    if (renderToCurrentTab && currentTabId === tabId && abortRequested) {
       // Agent was stopped — show what we got so far
-      const textEl = currentAssistantEl?.querySelector('.message-text');
+      const textEl = assistantEl?.querySelector('.message-text');
       if (textEl && !textEl.textContent.trim()) {
         textEl.innerHTML = formatMarkdown(res?.content || t('sp.stopped_by_user'));
-        addMessageCopyButton(currentAssistantEl);
+        addMessageCopyButton(assistantEl);
       }
-    } else if (res?.content && currentAssistantEl) {
-      const textEl = currentAssistantEl.querySelector('.message-text');
+    } else if (renderToCurrentTab && currentTabId === tabId && res?.content && assistantEl) {
+      const textEl = assistantEl.querySelector('.message-text');
       if (textEl && !textEl.textContent.trim()) {
         textEl.innerHTML = formatMarkdown(res.content);
-        addMessageCopyButton(currentAssistantEl);
+        addMessageCopyButton(assistantEl);
       }
     }
   } catch (e) {
-    if (!abortRequested) {
+    if (renderToCurrentTab && currentTabId === tabId && !abortRequested) {
       addMessage('error', t('sp.error_prefix', { msg: e.message }));
     }
   } finally {
-    finalizeSteps();
-    isProcessing = false;
-    abortRequested = false;
-    sendBtn.disabled = false;
-    hideActivity();
-    currentAssistantEl = null;
-    scrollToBottom();
-    refreshRecommendedActions();
+    if (renderToCurrentTab && currentTabId === tabId) finalizeSteps(assistantEl);
+    if (renderToCurrentTab) {
+      isProcessing = false;
+      abortRequested = false;
+      sendBtn.disabled = false;
+      hideActivity();
+    }
+    if (currentAssistantEl === assistantEl) currentAssistantEl = null;
+    if (renderToCurrentTab && currentTabId === tabId) {
+      scrollToBottom();
+      refreshRecommendedActions();
+    }
     await drainQueuedContextMenuPromptsAfterPendingTabSwitch();
   }
   return accepted;
@@ -2546,40 +2598,43 @@ function showContinueButton() {
 }
 
 async function continueAgent() {
+  const tabId = currentTabId;
+  const modeForSend = agentMode;
   document.querySelectorAll('.continue-bar').forEach(el => el.remove());
 
   isProcessing = true;
   abortRequested = false;
   sendBtn.disabled = true;
 
-  currentAssistantEl = addMessage('assistant', '');
+  const assistantEl = addMessage('assistant', '');
+  currentAssistantEl = assistantEl;
   showActivity(t('sp.activity.continuing'));
 
   try {
     const res = await sendToBackground('continue', {
-      tabId: currentTabId,
-      mode: agentMode,
+      tabId,
+      mode: modeForSend,
     });
 
-    if (res?.content && currentAssistantEl) {
-      const textEl = currentAssistantEl.querySelector('.message-text');
+    if (currentTabId === tabId && res?.content && assistantEl) {
+      const textEl = assistantEl.querySelector('.message-text');
       if (textEl && !textEl.textContent.trim()) {
         textEl.innerHTML = formatMarkdown(res.content);
-        addMessageCopyButton(currentAssistantEl);
+        addMessageCopyButton(assistantEl);
       }
     }
   } catch (e) {
-    if (!abortRequested) {
+    if (currentTabId === tabId && !abortRequested) {
       addMessage('error', t('sp.error_prefix', { msg: e.message }));
     }
   } finally {
-    finalizeSteps();
+    if (currentTabId === tabId) finalizeSteps(assistantEl);
     isProcessing = false;
     abortRequested = false;
     sendBtn.disabled = false;
     hideActivity();
-    currentAssistantEl = null;
-    scrollToBottom();
+    if (currentAssistantEl === assistantEl) currentAssistantEl = null;
+    if (currentTabId === tabId) scrollToBottom();
     await drainQueuedContextMenuPromptsAfterPendingTabSwitch();
   }
 }
@@ -2840,7 +2895,7 @@ async function ensureActMode() {
     if (!stored.actConfirmed) {
       const ok = confirm(t('sp.mode.act.confirm'));
       if (!ok) return false;
-      browser.storage.local.set({ actConfirmed: true }).catch(() => {});
+      await browser.storage.local.set({ actConfirmed: true }).catch(() => {});
     }
   } catch (e) { /* ignore */ }
   setMode('act');
@@ -2849,8 +2904,8 @@ async function ensureActMode() {
 
 modeAskBtn.addEventListener('click', () => setMode('ask'));
 
-modeActBtn.addEventListener('click', () => {
-  ensureActMode();
+modeActBtn.addEventListener('click', async () => {
+  await ensureActMode();
 });
 
 
@@ -2917,7 +2972,15 @@ clearBtn.addEventListener('click', async () => {
 providerSelect.addEventListener('change', async () => {
   const providerId = providerSelect.value;
   const requestId = ++providerSelectionRequestId;
-  await sendToBackground('set_active_provider', { providerId });
+  providerTestRequestId += 1;
+  try {
+    await sendToBackground('set_active_provider', { providerId });
+  } catch (e) {
+    if (requestId === providerSelectionRequestId && providerSelect.value === providerId) {
+      markSelectedProviderFailed(e);
+    }
+    return;
+  }
   if (requestId !== providerSelectionRequestId || providerSelect.value !== providerId) {
     const latestProviderId = providerSelect.value;
     if (latestProviderId && latestProviderId !== providerId) {
@@ -2939,8 +3002,8 @@ if (languageSelect) {
     .map((l) => `<option value="${l.code}">${l.label}</option>`)
     .join('');
   languageSelect.value = getLocale();
-  languageSelect.addEventListener('change', () => {
-    setLocale(languageSelect.value);
+  languageSelect.addEventListener('change', async () => {
+    await setLocale(languageSelect.value);
     applyDOMTranslations(document);
   });
   document.addEventListener('wb-locale-changed', () => {

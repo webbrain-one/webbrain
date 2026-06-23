@@ -1954,7 +1954,7 @@ test('sidepanel exposes schedule slash commands in both builds', () => {
     assert.match(panel, /create_scheduled_job'[\s\S]*?\{\s*tabId,[\s\S]*?job:/, `${label}: schedule form should create jobs for the captured tab`);
     assert.match(panel, /const createdHtml = tSystemHtml\('sp\.schedule_form\.created'[\s\S]*?if \(currentTabId !== tabId\) \{[\s\S]*?replaceCachedScheduleComposer\(tabId, form\.dataset\.composerId, createdHtml\);[\s\S]*?return;[\s\S]*?\}[\s\S]*?form\.remove\(\);/, `${label}: schedule form should update hidden cached composers instead of leaving stale disabled forms`);
     assert.match(panel, /catch \(err\) \{[\s\S]*?if \(currentTabId !== tabId\) \{[\s\S]*?updateCachedScheduleComposerError\(tabId, form\.dataset\.composerId, err\.message\);[\s\S]*?return;[\s\S]*?\}[\s\S]*?submit\.disabled = false;[\s\S]*?errorEl\.textContent = err\.message;/, `${label}: schedule form failures should update hidden cached composers instead of leaving disabled forms`);
-    assert.match(panel, /renderScheduleComposer\(text\.slice\(mSchedule\[0\]\.length\)\.trim\(\), currentTabId\)/, `${label}: /schedule should pass the initiating tab into the async composer`);
+    assert.match(panel, /renderScheduleComposer\(text\.slice\(mSchedule\[0\]\.length\)\.trim\(\), tabId\)/, `${label}: /schedule should pass the initiating tab into the async composer`);
     assert.match(panel, /urlInput\.value = initialScheduleUrl/, `${label}: schedule form should prefill URL targets from the active tab`);
     assert.match(panel, /targetType\.value = 'url'/, `${label}: schedule form should default http(s) pages to URL targets`);
     assert.match(panel, /content\.appendChild\(form\)/, `${label}: schedule form should append after initial target defaults are applied`);
@@ -1989,6 +1989,35 @@ test('sidepanel exposes show-scratchpad slash command in both builds', () => {
     assert.match(panel, /get_scratchpad/, `${label}: sidepanel should call background scratchpad reader`);
     assert.match(bg, /get_scratchpad/, `${label}: background scratchpad action missing`);
     assert.match(locale, /\/show-scratchpad/, `${label}: help should mention /show-scratchpad`);
+  }
+});
+
+test('sidepanel awaits onboarding completion persistence before hiding', () => {
+  for (const [label, panelRel] of [
+    ['chrome', 'src/chrome/src/ui/sidepanel.js'],
+    ['firefox', 'src/firefox/src/ui/sidepanel.js'],
+  ]) {
+    const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
+    assert.match(
+      panel,
+      /async function dismissOnboarding\(\) \{[\s\S]*?await (chrome|browser)\.storage\.local\.set\(\{ onboardingComplete: true \}\)\.catch\(\(\) => \{\}\);[\s\S]*?overlay\.classList\.add\('hidden'\);[\s\S]*?\}/,
+      `${label}: onboarding completion should persist before the overlay is hidden`,
+    );
+    assert.match(
+      panel,
+      /changeLink\.addEventListener\('click', async \(event\) => \{[\s\S]*?await dismissOnboarding\(\);[\s\S]*?\}\);/,
+      `${label}: onboarding change link should await completion persistence`,
+    );
+    assert.match(
+      panel,
+      /settingsBtn\.addEventListener\('click', async \(\) => \{[\s\S]*?if \(cloudReady\) \{[\s\S]*?await dismissOnboarding\(\);[\s\S]*?return;[\s\S]*?\}[\s\S]*?await dismissOnboarding\(\);[\s\S]*?\}\);/,
+      `${label}: onboarding settings flow should await completion persistence before closing`,
+    );
+    assert.match(
+      panel,
+      /skipBtn\.addEventListener\('click', async \(\) => \{[\s\S]*?await dismissOnboarding\(\);[\s\S]*?\}\);/,
+      `${label}: onboarding skip button should await completion persistence`,
+    );
   }
 });
 
@@ -2506,8 +2535,8 @@ test('sidepanel reports missing background responses without res.content crash',
     const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
     assert.match(panel, /No response from WebBrain background/, `${label}: missing background response should become a clear error`);
     assert.match(panel, /response == null/, `${label}: sendToBackground should reject nullish responses`);
-    assert.equal((panel.match(/res\?\.content && currentAssistantEl/g) || []).length >= 2, true, `${label}: chat and continue should not dereference missing responses`);
-    assert.doesNotMatch(panel, /(?:else\s+)?if \(res\.content && currentAssistantEl\)/, `${label}: unsafe res.content render guard returned`);
+    assert.equal((panel.match(/res\?\.content && (?:currentAssistantEl|assistantEl)/g) || []).length >= 2, true, `${label}: chat and continue should not dereference missing responses`);
+    assert.doesNotMatch(panel, /res\.content && (?:currentAssistantEl|assistantEl)/, `${label}: unsafe res.content render guard returned`);
   }
 });
 
@@ -2575,6 +2604,25 @@ test('chrome sidepanel persists tab chat to the tab captured before debounce', (
   assert.doesNotMatch(body, /persistTabChat\(currentTabId,\s*messagesEl\.innerHTML\)/, 'chrome: debounced persistence should not save live DOM under the later currentTabId');
 });
 
+test('chrome sidepanel serializes tab-chat storage writes with clears and reads', () => {
+  const panel = fs.readFileSync(path.join(ROOT, 'src/chrome/src/ui/sidepanel.js'), 'utf8');
+  assert.match(panel, /const tabChatOperations = new Map\(\);/, 'chrome: tab-chat operations should be queued per tab');
+  assert.match(panel, /function enqueueTabChatOperation\(tabId, fn\) \{[\s\S]*?const previous = tabChatOperations\.get\(numericTabId\) \|\| Promise\.resolve\(\);[\s\S]*?tabChatOperations\.set\(numericTabId, operation\);[\s\S]*?\}/, 'chrome: tab-chat writes should be serialized behind prior operations');
+  const loadStart = panel.indexOf('async function loadTabChat(tabId) {');
+  assert.notEqual(loadStart, -1, 'chrome: loadTabChat missing');
+  const loadBody = panel.slice(loadStart, panel.indexOf('\n}\n\nfunction persistTabChat', loadStart) + 2);
+  assert.match(loadBody, /const numericTabId = Number\(tabId\);[\s\S]*?if \(!Number\.isFinite\(numericTabId\)\) return null;/, 'chrome: tab-chat restore should normalize tab ids before checking the cache');
+  assert.match(loadBody, /if \(!tabChatOperations\.has\(numericTabId\) && tabChats\.has\(numericTabId\)\) return tabChats\.get\(numericTabId\);/, 'chrome: tab-chat restore should only trust cached HTML when no queued operation can update it');
+  assert.match(loadBody, /return await enqueueTabChatOperation\(numericTabId, async \(queuedTabId\) => \{[\s\S]*?if \(tabChats\.has\(queuedTabId\)\) return tabChats\.get\(queuedTabId\);[\s\S]*?const stored = await chrome\.storage\.session\.get\(key\);/, 'chrome: tab-chat restore should wait behind pending per-tab operations before reading cache or storage');
+  assert.match(panel, /return enqueueTabChatOperation\(tabId, async \(numericTabId\) => \{[\s\S]*?await chrome\.storage\.session\.set\(\{ \[key\]: html \}\)\.catch\(\(\) => \{\}\);/, 'chrome: tab-chat persistence should be serialized through the queue');
+  const clearStart = panel.indexOf('function clearCachedTabChat(tabId) {');
+  assert.notEqual(clearStart, -1, 'chrome: clearCachedTabChat missing');
+  const clearBody = panel.slice(clearStart, panel.indexOf('\n}\n\nfunction renderClearedConversationForTab', clearStart) + 2);
+  assert.match(clearBody, /tabChats\.delete\(tabId\);/, 'chrome: clearing tab chat should delete the cached HTML before queuing storage removal');
+  assert.match(clearBody, /return enqueueTabChatOperation\(tabId, async \(numericTabId\) => \{/, 'chrome: clearing tab chat should be serialized through the queue');
+  assert.match(clearBody, /return enqueueTabChatOperation\(tabId, async \(numericTabId\) => \{[\s\S]*?tabChats\.delete\(numericTabId\);[\s\S]*?chrome\.storage\.session\?\.remove\(TAB_CHAT_PREFIX \+ numericTabId\)/, 'chrome: queued clears should delete stale HTML re-cached by older queued writes before removing storage');
+});
+
 test('chrome sidepanel cancels stale tab-chat persistence when clearing a tab', () => {
   const panel = fs.readFileSync(path.join(ROOT, 'src/chrome/src/ui/sidepanel.js'), 'utf8');
   assert.match(panel, /let persistTimer = null;\s*let persistTimerTabId = null;/, 'chrome: pending persistence should remember its target tab');
@@ -2593,7 +2641,7 @@ test('chrome sidepanel cancels stale tab-chat persistence when clearing a tab', 
   const clearBody = panel.slice(clearStart, panel.indexOf('\n}\n\nfunction renderClearedConversationForTab', clearStart) + 2);
   assert.match(
     clearBody,
-    /if \(persistTimer && persistTimerTabId === tabId\) \{[\s\S]*?clearTimeout\(persistTimer\);[\s\S]*?persistTimer = null;[\s\S]*?persistTimerTabId = null;[\s\S]*?\}[\s\S]*?tabChats\.delete\(tabId\);[\s\S]*?chrome\.storage\.session\?\.remove\(TAB_CHAT_PREFIX \+ tabId\)/,
+    /if \(persistTimer && persistTimerTabId === tabId\) \{[\s\S]*?clearTimeout\(persistTimer\);[\s\S]*?persistTimer = null;[\s\S]*?persistTimerTabId = null;[\s\S]*?\}[\s\S]*?tabChats\.delete\(tabId\);[\s\S]*?return enqueueTabChatOperation\(tabId, async \(numericTabId\) => \{[\s\S]*?tabChats\.delete\(numericTabId\);[\s\S]*?chrome\.storage\.session\?\.remove\(TAB_CHAT_PREFIX \+ numericTabId\)/,
     'chrome: clearing a tab should cancel any pending stale write before removing cached chat',
   );
 });
@@ -2614,7 +2662,7 @@ test('sidepanel does not miss startup tab switches before consuming tab-scoped s
     const testConnectionIdx = body.indexOf("await testConnection({ skipWebBrainCloud: true });");
     const resyncQueryIdx = body.lastIndexOf('tabs.query({ active: true, currentWindow: true })');
     const resyncSwitchIdx = body.indexOf('await switchToTab(activeTab.id);');
-    const refreshJobsIdx = body.indexOf('refreshScheduledJobs();', resyncSwitchIdx);
+    const refreshJobsIdx = body.indexOf('refreshScheduledJobs({ tabId: currentTabId });', resyncSwitchIdx);
     const refreshActionsIdx = body.indexOf('refreshRecommendedActions();', resyncSwitchIdx);
     const consumeIdx = body.indexOf('await consumePendingContextMenuPrompt();', resyncSwitchIdx);
     assert.notEqual(listenerIdx, -1, `${label}: startup should register tab activation listener`);
@@ -2688,6 +2736,35 @@ test('sidepanel drops stale recommended-action clicks after async act confirmati
   }
 });
 
+test('sidepanel awaits act confirmation persistence before switching modes', () => {
+  for (const [label, panelRel] of [
+    ['chrome', 'src/chrome/src/ui/sidepanel.js'],
+    ['firefox', 'src/firefox/src/ui/sidepanel.js'],
+  ]) {
+    const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
+    const ensureStart = panel.indexOf('async function ensureActMode() {');
+    assert.notEqual(ensureStart, -1, `${label}: ensureActMode missing`);
+    const ensureBody = panel.slice(ensureStart, panel.indexOf('\n}\n\nmodeAskBtn.addEventListener', ensureStart) + 2);
+    assert.match(
+      ensureBody,
+      /const stored = await (chrome|browser)\.storage\.local\.get\('actConfirmed'\);[\s\S]*?if \(!stored\.actConfirmed\) \{[\s\S]*?const ok = confirm\(t\('sp\.mode\.act\.confirm'\)\);[\s\S]*?if \(!ok\) return false;[\s\S]*?await (chrome|browser)\.storage\.local\.set\(\{ actConfirmed: true \}\)\.catch\(\(\) => \{\}\);[\s\S]*?\}[\s\S]*?setMode\('act'\);/,
+      `${label}: act confirmation should persist before mode switches to Act`,
+    );
+    assert.match(
+      panel,
+      /modeActBtn\.addEventListener\('click', async \(\) => \{[\s\S]*?await ensureActMode\(\);[\s\S]*?\}\);/,
+      `${label}: Act button should await confirmation persistence`,
+    );
+    if (label === 'chrome') {
+      assert.match(
+        panel,
+        /async function handleGlobalKeydown\(e\) \{[\s\S]*?await ensureActMode\(\);[\s\S]*?\}/,
+        `${label}: Ctrl+Shift+X should await act confirmation persistence`,
+      );
+    }
+  }
+});
+
 test('sidepanel drops stale provider selection and connection checks', () => {
   for (const [label, panelRel] of [
     ['chrome', 'src/chrome/src/ui/sidepanel.js'],
@@ -2712,11 +2789,44 @@ test('sidepanel drops stale provider selection and connection checks', () => {
     assert.notEqual(statusIdx, -1, `${label}: provider status update missing`);
     assert.equal(captureIdx < requestIdx && requestIdx < sendIdx && sendIdx < staleGuardIdx && staleGuardIdx < statusIdx, true, `${label}: provider test stale guard must run after the async request and before status updates`);
     assert.doesNotMatch(testBody, /providerId: providerSelect\.value/, `${label}: provider test should not read the mutable selection after async delay`);
+    assert.match(panel, /function markSelectedProviderFailed\(error\) \{[\s\S]*?const msg = error\?\.message \|\| t\('sp\.status\.failed'\);[\s\S]*?statusDot\.className = 'status-dot offline';[\s\S]*?statusDot\.title = t\('sp\.status\.error', \{ msg \}\);[\s\S]*?\}/, `${label}: provider activation failures should surface on the selected provider`);
 
     const changeStart = panel.indexOf("providerSelect.addEventListener('change', async () => {");
     assert.notEqual(changeStart, -1, `${label}: provider change handler missing`);
     const changeBody = panel.slice(changeStart, panel.indexOf('\n});', changeStart) + 4);
-    assert.match(changeBody, /const providerId = providerSelect\.value;[\s\S]*?const requestId = \+\+providerSelectionRequestId;[\s\S]*?sendToBackground\('set_active_provider', \{ providerId \}\);[\s\S]*?if \(requestId !== providerSelectionRequestId \|\| providerSelect\.value !== providerId\) \{[\s\S]*?const latestProviderId = providerSelect\.value;[\s\S]*?sendToBackground\('set_active_provider', \{ providerId: latestProviderId \}\)\.catch\(\(\) => \{\}\);[\s\S]*?return;[\s\S]*?\}[\s\S]*?await testConnection\(\{ providerId \}\);/, `${label}: provider changes should drop stale completions and test only the captured provider`);
+    const changeCaptureIdx = changeBody.indexOf('const providerId = providerSelect.value;');
+    const changeRequestIdx = changeBody.indexOf('const requestId = ++providerSelectionRequestId;');
+    const invalidateIdx = changeBody.indexOf('providerTestRequestId += 1;');
+    const activateIdx = changeBody.indexOf("await sendToBackground('set_active_provider', { providerId });");
+    const catchIdx = changeBody.indexOf('} catch (e) {');
+    const failureGuardIdx = changeBody.indexOf('if (requestId === providerSelectionRequestId && providerSelect.value === providerId) {');
+    const failureStatusIdx = changeBody.indexOf('markSelectedProviderFailed(e);');
+    const changeStaleGuardIdx = changeBody.indexOf('if (requestId !== providerSelectionRequestId || providerSelect.value !== providerId) {');
+    const repairIdx = changeBody.indexOf("sendToBackground('set_active_provider', { providerId: latestProviderId }).catch(() => {});");
+    const changeTestIdx = changeBody.indexOf('await testConnection({ providerId });');
+    assert.notEqual(changeCaptureIdx, -1, `${label}: provider change should capture the intended provider`);
+    assert.notEqual(changeRequestIdx, -1, `${label}: provider change should increment a request sequence`);
+    assert.notEqual(invalidateIdx, -1, `${label}: provider change should invalidate pending provider tests`);
+    assert.notEqual(activateIdx, -1, `${label}: provider activation request missing`);
+    assert.notEqual(catchIdx, -1, `${label}: provider activation failures should be caught`);
+    assert.notEqual(failureGuardIdx, -1, `${label}: stale provider activation failures should be dropped`);
+    assert.notEqual(failureStatusIdx, -1, `${label}: current provider activation failures should update status`);
+    assert.notEqual(changeStaleGuardIdx, -1, `${label}: stale provider activation completions should be dropped`);
+    assert.notEqual(repairIdx, -1, `${label}: stale provider activation completions should repair the latest selected provider`);
+    assert.notEqual(changeTestIdx, -1, `${label}: provider change should test the captured provider`);
+    assert.equal(
+      changeCaptureIdx < changeRequestIdx
+        && changeRequestIdx < invalidateIdx
+        && invalidateIdx < activateIdx
+        && activateIdx < catchIdx
+        && catchIdx < failureGuardIdx
+        && failureGuardIdx < failureStatusIdx
+        && failureStatusIdx < changeStaleGuardIdx
+        && changeStaleGuardIdx < repairIdx
+        && repairIdx < changeTestIdx,
+      true,
+      `${label}: provider activation failure/stale guards should run before testing the captured provider`,
+    );
     assert.match(panel, /await testConnection\(\{ providerId: choice\.providerId \}\);/, `${label}: onboarding provider enablement should test the selected provider explicitly`);
   }
 });
@@ -2733,10 +2843,38 @@ test('settings page drops stale provider activation completions', () => {
     const activateStart = settings.indexOf('async function activateProvider(id) {');
     assert.notEqual(activateStart, -1, `${label}: activateProvider missing`);
     const activateBody = settings.slice(activateStart, settings.indexOf('\n}\n\n', activateStart) + 2);
-    assert.match(
-      activateBody,
-      /requestedActiveProviderId = id;[\s\S]*?const requestId = \+\+providerActivationRequestId;[\s\S]*?sendToBackground\('set_active_provider', \{ providerId: id \}\);[\s\S]*?if \(requestId !== providerActivationRequestId \|\| requestedActiveProviderId !== id\) \{[\s\S]*?const latestProviderId = requestedActiveProviderId;[\s\S]*?sendToBackground\('set_active_provider', \{ providerId: latestProviderId \}\)\.catch\(\(\) => \{\}\);[\s\S]*?return;[\s\S]*?\}[\s\S]*?activeProviderId = id;[\s\S]*?renderProviders\(\);/,
-      `${label}: stale settings provider activations should repair the latest provider and skip stale rendering`,
+    const requestedIdx = activateBody.indexOf('requestedActiveProviderId = id;');
+    const requestIdx = activateBody.indexOf('const requestId = ++providerActivationRequestId;');
+    const activateIdx = activateBody.indexOf("await sendToBackground('set_active_provider', { providerId: id });");
+    const catchIdx = activateBody.indexOf('} catch (e) {');
+    const failureGuardIdx = activateBody.indexOf('if (requestId === providerActivationRequestId && requestedActiveProviderId === id) {');
+    const failureStatusIdx = activateBody.indexOf("setProviderTestResult(id, 'fail', t('st.providers.failed', { error: e.message }));");
+    const staleGuardIdx = activateBody.indexOf('if (requestId !== providerActivationRequestId || requestedActiveProviderId !== id) {');
+    const repairIdx = activateBody.indexOf("sendToBackground('set_active_provider', { providerId: latestProviderId }).catch(() => {});");
+    const activeIdx = activateBody.indexOf('activeProviderId = id;');
+    const renderIdx = activateBody.indexOf('renderProviders();');
+    assert.notEqual(requestedIdx, -1, `${label}: settings activation should track the latest requested provider`);
+    assert.notEqual(requestIdx, -1, `${label}: settings activation should increment a request sequence`);
+    assert.notEqual(activateIdx, -1, `${label}: settings activation request missing`);
+    assert.notEqual(catchIdx, -1, `${label}: settings activation failures should be caught`);
+    assert.notEqual(failureGuardIdx, -1, `${label}: stale settings activation failures should be dropped`);
+    assert.notEqual(failureStatusIdx, -1, `${label}: current settings activation failures should update the provider status`);
+    assert.notEqual(staleGuardIdx, -1, `${label}: stale settings activation completions should be dropped`);
+    assert.notEqual(repairIdx, -1, `${label}: stale settings activation completions should repair the latest provider`);
+    assert.notEqual(activeIdx, -1, `${label}: successful settings activation should update active provider`);
+    assert.notEqual(renderIdx, -1, `${label}: successful settings activation should rerender providers`);
+    assert.equal(
+      requestedIdx < requestIdx
+        && requestIdx < activateIdx
+        && activateIdx < catchIdx
+        && catchIdx < failureGuardIdx
+        && failureGuardIdx < failureStatusIdx
+        && failureStatusIdx < staleGuardIdx
+        && staleGuardIdx < repairIdx
+        && repairIdx < activeIdx
+        && activeIdx < renderIdx,
+      true,
+      `${label}: settings activation should handle failures and stale completions before rendering success`,
     );
   }
 });
@@ -2749,9 +2887,12 @@ test('settings provider save and test status updates are DOM-safe', () => {
     const settings = fs.readFileSync(path.join(ROOT, settingsRel), 'utf8');
     assert.match(
       settings,
-      /function setProviderTestResult\(id, className, message, color\) \{[\s\S]*?const testEl = document\.getElementById\(`test-\$\{id\}`\);[\s\S]*?if \(!testEl\) return null;[\s\S]*?testEl\.className = `test-result show\$\{className \? ` \$\{className\}` : ''\}`;[\s\S]*?return testEl;[\s\S]*?\}/,
+      /function setProviderTestResult\(id, className, message, color\) \{[\s\S]*?const testEl = document\.getElementById\(`test-\$\{id\}`\);[\s\S]*?if \(!testEl\) return null;[\s\S]*?testEl\.className = `test-result show\$\{className \? ` \$\{className\}` : ''\}`;[\s\S]*?testEl\.style\.color = color \|\| '';[\s\S]*?return testEl;[\s\S]*?\}/,
       `${label}: provider status writes should tolerate re-rendered or filtered-away cards`,
     );
+    assert.match(settings, /visionTestResult\.style\.color = color \|\| '';/, `${label}: vision results should clear stale inline colors`);
+    assert.match(settings, /transcriptionTestResult\.style\.color = color \|\| '';/, `${label}: transcription results should clear stale inline colors`);
+    assert.match(settings, /captchaTestResult\.style\.color = color \|\| '';/, `${label}: captcha results should clear stale inline colors`);
 
     const saveStart = settings.indexOf('async function saveProvider(id, { showFlash = true } = {}) {');
     assert.notEqual(saveStart, -1, `${label}: saveProvider missing`);
@@ -2795,8 +2936,151 @@ test('settings provider save and test status updates are DOM-safe', () => {
     const loadBody = settings.slice(loadStart, settings.indexOf('\n}\n\nfunction setProviderTestResult', loadStart) + 2);
     assert.match(
       loadBody,
-      /try \{[\s\S]*?await saveProvider\(id, \{ showFlash: false \}\);[\s\S]*?\} catch \(e\) \{[\s\S]*?statusEl\.textContent = e\.message;[\s\S]*?return;[\s\S]*?\}/,
+      /try \{[\s\S]*?await saveProvider\(id, \{ showFlash: false \}\);[\s\S]*?\} catch \(e\) \{[\s\S]*?setProviderLoadModelsStatus\(id, e\.message, 'var\(--danger, #c33\)'\);[\s\S]*?return;[\s\S]*?\}/,
       `${label}: model loading should stop and report if the pre-save fails`,
+    );
+  }
+});
+
+test('settings async test controls surface rejected background results', () => {
+  for (const [label, settingsRel] of [
+    ['chrome', 'src/chrome/src/ui/settings.js'],
+    ['firefox', 'src/firefox/src/ui/settings.js'],
+  ]) {
+    const settings = fs.readFileSync(path.join(ROOT, settingsRel), 'utf8');
+
+    assert.match(
+      settings,
+      /function showVisionResult\(className, text, color = ''\) \{[\s\S]*?visionTestResult\.style\.color = color \|\| '';[\s\S]*?return visionTestResult;[\s\S]*?\}/,
+      `${label}: vision status helper should clear stale inline colors and return the current node`,
+    );
+    assert.match(
+      settings,
+      /function showTranscriptionResult\(className, text, color = ''\) \{[\s\S]*?if \(!transcriptionTestResult\) return;[\s\S]*?transcriptionTestResult\.style\.color = color \|\| '';[\s\S]*?return transcriptionTestResult;[\s\S]*?\}/,
+      `${label}: transcription status helper should clear stale inline colors and tolerate absent controls`,
+    );
+    assert.match(
+      settings,
+      /function showCaptchaResult\(className, text, color = ''\) \{[\s\S]*?if \(!captchaTestResult\) return;[\s\S]*?captchaTestResult\.style\.color = color \|\| '';[\s\S]*?return captchaTestResult;[\s\S]*?\}/,
+      `${label}: captcha status helper should clear stale inline colors and tolerate absent controls`,
+    );
+
+    const visionStart = settings.indexOf("btnTestVision.addEventListener('click', async () => {");
+    assert.notEqual(visionStart, -1, `${label}: vision test handler missing`);
+    const visionBody = settings.slice(visionStart, settings.indexOf('\n});\n\nbtnClearVision', visionStart) + 4);
+    assert.match(
+      visionBody,
+      /showVisionResult\('', t\('st\.vision\.testing'\), 'var\(--text2\)'\);[\s\S]*?try \{[\s\S]*?const res = await sendToBackground\('test_vision_provider'\);[\s\S]*?showVisionResult\('ok'[\s\S]*?showVisionResult\('fail'[\s\S]*?\} catch \(e\) \{[\s\S]*?showVisionResult\('fail', t\('st\.vision\.failed', \{ error: e\.message \}\)\);[\s\S]*?\}/,
+      `${label}: rejected vision provider checks should replace the testing state with a failure`,
+    );
+
+    const transcriptionStart = settings.indexOf("btnTestTranscription.addEventListener('click', async () => {");
+    assert.notEqual(transcriptionStart, -1, `${label}: transcription test handler missing`);
+    const transcriptionEnd = settings.indexOf('\n  });\n}\n\nif (btnClearTranscription', transcriptionStart);
+    assert.notEqual(transcriptionEnd, -1, `${label}: transcription test handler boundary missing`);
+    const transcriptionBody = settings.slice(transcriptionStart, transcriptionEnd + 7);
+    assert.match(
+      transcriptionBody,
+      /showTranscriptionResult\('', t\('st\.transcription\.testing'\), 'var\(--text2\)'\);[\s\S]*?try \{[\s\S]*?const res = await sendToBackground\('test_transcription_provider'\);[\s\S]*?showTranscriptionResult\('ok'[\s\S]*?showTranscriptionResult\('fail'[\s\S]*?\} catch \(e\) \{[\s\S]*?showTranscriptionResult\('fail', t\('st\.transcription\.failed', \{ error: e\.message \}\)\);[\s\S]*?\}/,
+      `${label}: rejected transcription provider checks should replace the testing state with a failure`,
+    );
+
+    const captchaStart = settings.indexOf("btnTestCaptcha.addEventListener('click', async () => {");
+    assert.notEqual(captchaStart, -1, `${label}: captcha test handler missing`);
+    const captchaEnd = settings.indexOf('\n  });\n}\n\nif (btnClearCaptcha', captchaStart);
+    assert.notEqual(captchaEnd, -1, `${label}: captcha test handler boundary missing`);
+    const captchaBody = settings.slice(captchaStart, captchaEnd + 7);
+    assert.match(
+      captchaBody,
+      /showCaptchaResult\('', t\('st\.captcha\.checking'\), 'var\(--text2\)'\);[\s\S]*?try \{[\s\S]*?const res = await sendToBackground\('test_capsolver_balance', \{ apiKey: key \}\);[\s\S]*?flashCaptchaResult\('ok'[\s\S]*?flashCaptchaResult\('fail'[\s\S]*?\} catch \(e\) \{[\s\S]*?flashCaptchaResult\('fail', t\('st\.captcha\.balance_fail', \{ error: e\.message \}\)\);[\s\S]*?\}/,
+      `${label}: rejected captcha balance checks should replace the checking state with a failure`,
+    );
+
+    assert.match(
+      settings,
+      /function setProviderLoadModelsStatus\(id, message, color = 'var\(--text2\)'\) \{[\s\S]*?document\.querySelector\(`\.load-models-status\[data-provider="\$\{id\}"\]`\);[\s\S]*?statusEl\.textContent = message;[\s\S]*?statusEl\.style\.color = color;[\s\S]*?return statusEl;[\s\S]*?\}/,
+      `${label}: model-load status writes should re-query the current provider card`,
+    );
+
+    const loadStart = settings.indexOf('async function loadProviderModels(id) {');
+    assert.notEqual(loadStart, -1, `${label}: loadProviderModels missing`);
+    const loadBody = settings.slice(loadStart, settings.indexOf('\n}\n\nfunction setProviderTestResult', loadStart) + 2);
+    assert.match(
+      loadBody,
+      /let datalistEl = document\.getElementById\(`models-\$\{id\}`\);[\s\S]*?setProviderLoadModelsStatus\(id, t\('st\.providers\.loading'\)\);[\s\S]*?try \{[\s\S]*?res = await sendToBackground\('list_provider_models', \{ providerId: id \}\);[\s\S]*?\} catch \(e\) \{[\s\S]*?setProviderLoadModelsStatus\(id, e\.message, 'var\(--danger, #c33\)'\);[\s\S]*?return;[\s\S]*?\}[\s\S]*?datalistEl = document\.getElementById\(`models-\$\{id\}`\);[\s\S]*?if \(!datalistEl\) return;[\s\S]*?setProviderLoadModelsStatus\(id, res\?\.error \|\| 'Failed to load models', 'var\(--danger, #c33\)'\);/,
+      `${label}: model loading should report rejected background results and avoid stale datalist writes`,
+    );
+  }
+});
+
+test('settings waits for immediate preference writes and theme persistence', () => {
+  for (const [label, settingsRel] of [
+    ['chrome', 'src/chrome/src/ui/settings.js'],
+    ['firefox', 'src/firefox/src/ui/settings.js'],
+  ]) {
+    const settings = fs.readFileSync(path.join(ROOT, settingsRel), 'utf8');
+    assert.match(
+      settings,
+      /themeSelect\.addEventListener\('change', async \(\) => \{[\s\S]*?await applyMode\(mode\);[\s\S]*?\}\);/,
+      `${label}: theme selection should await persistence`,
+    );
+    assert.match(
+      settings,
+      /profileEnabledToggle\.addEventListener\('change', async \(\) => \{[\s\S]*?await (chrome|browser)\.storage\.local\.set\(\{ profileEnabled: profileEnabledToggle\.checked \}\)\.catch\(\(\) => \{\}\);[\s\S]*?\}\);/,
+      `${label}: profile toggle should await persistence`,
+    );
+    assert.match(
+      settings,
+      /captchaEnabledToggle\.addEventListener\('change', async \(\) => \{[\s\S]*?await (chrome|browser)\.storage\.local\.set\(\{ captchaSolverEnabled: captchaEnabledToggle\.checked \}\)\.catch\(\(\) => \{\}\);[\s\S]*?\}\);/,
+      `${label}: captcha toggle should await persistence`,
+    );
+    assert.match(
+      settings,
+      /btn\.addEventListener\('click', async \(\) => \{[\s\S]*?await (chrome|browser)\.storage\.local\.set\(\{ providerFilter: f\.key \}\)\.catch\(\(\) => \{\}\);[\s\S]*?renderProviders\(\);[\s\S]*?\}\);/,
+      `${label}: provider filter clicks should await persistence before rerendering`,
+    );
+
+    const theme = fs.readFileSync(path.join(ROOT, label === 'chrome' ? 'src/chrome/src/ui/theme.js' : 'src/firefox/src/ui/theme.js'), 'utf8');
+    assert.match(
+      theme,
+      /export async function applyMode\(mode, opts = \{\}\) \{[\s\S]*?await (chrome|browser)\.storage\.local\.set\(\{ themeMode: mode \}\)\.catch\(\(\) => \{\}\);[\s\S]*?\}/,
+      `${label}: shared theme helper should await storage persistence`,
+    );
+
+    const i18n = fs.readFileSync(path.join(ROOT, label === 'chrome' ? 'src/chrome/src/ui/i18n.js' : 'src/firefox/src/ui/i18n.js'), 'utf8');
+    assert.match(
+      i18n,
+      /export async function setLocale\(code\) \{[\s\S]*?await api\?\.storage\?\.local\?\.set\?\.?\(\{ wbLocale: code \}\);[\s\S]*?applyDOMTranslations\(document\);/,
+      `${label}: locale helper should await storage persistence before broadcasting`,
+    );
+    assert.match(
+      settings,
+      /languageSelect\.addEventListener\('change', async \(\) => \{[\s\S]*?await setLocale\(languageSelect\.value\);[\s\S]*?renderSubtitle\(\);/,
+      `${label}: settings language change should await locale persistence`,
+    );
+  }
+});
+
+test('settings page awaits immediate preference writes before moving on', () => {
+  for (const [label, settingsRel] of [
+    ['chrome', 'src/chrome/src/ui/settings.js'],
+    ['firefox', 'src/firefox/src/ui/settings.js'],
+  ]) {
+    const settings = fs.readFileSync(path.join(ROOT, settingsRel), 'utf8');
+    assert.match(
+      settings,
+      /window\.addEventListener\('message', async \(event\) => \{[\s\S]*?await (chrome|browser)\.storage\.local\.set\(\{ authToken, authEmail, authDefaultModel \}\)\.catch\(\(\) => \{\}\);[\s\S]*?renderAuthSection\(\);/,
+      `${label}: auth token hydration should persist before the settings UI proceeds`,
+    );
+    assert.match(
+      settings,
+      /verboseToggle\.addEventListener\('change', async \(\) => \{[\s\S]*?await (chrome|browser)\.storage\.local\.set\(\{ verboseMode: verboseToggle\.checked \}\)\.catch\(\(\) => \{\}\);[\s\S]*?\}\);/,
+      `${label}: verbose toggle should await its storage write`,
+    );
+    assert.match(
+      settings,
+      /requestTimeoutRange\.addEventListener\('change', async \(\) => \{[\s\S]*?await (chrome|browser)\.storage\.local\.set\(\{ requestTimeoutMs: sec \* 1000 \}\)\.catch\(\(\) => \{\}\);[\s\S]*?\}\);/,
+      `${label}: request timeout changes should await persistence`,
     );
   }
 });
@@ -2813,18 +3097,18 @@ test('sidepanel scopes allow-api override to the tab conversation', () => {
 
     const switchStart = panel.indexOf('function switchToTab(newTabId)');
     assert.notEqual(switchStart, -1, `${label}: switchToTab missing`);
-    const switchBody = panel.slice(switchStart, panel.indexOf('refreshScheduledJobs();', switchStart));
+    const switchBody = panel.slice(switchStart, panel.indexOf('refreshScheduledJobs({', switchStart));
     assert.match(switchBody, /currentTabId = newTabId;[\s\S]*?syncApiMutationsAllowedForCurrentTab\(\);/, `${label}: switching tabs should load the selected tab's /allow-api state`);
 
     const resetStart = panel.indexOf('function renderClearedConversationForTab(tabId)');
     assert.notEqual(resetStart, -1, `${label}: renderClearedConversationForTab missing`);
-    const resetBody = panel.slice(resetStart, panel.indexOf('refreshScheduledJobs();', resetStart));
+    const resetBody = panel.slice(resetStart, panel.indexOf('refreshScheduledJobs({', resetStart));
     assert.match(resetBody, /clearCachedTabChat\(tabId\);[\s\S]*?setApiMutationsAllowedForTab\(tabId, false\);[\s\S]*?if \(currentTabId !== tabId\) return;/, `${label}: reset should clear the target tab's /allow-api state before visible-tab guards`);
 
     const allowIdx = panel.indexOf('// /allow-api');
     assert.notEqual(allowIdx, -1, `${label}: /allow-api parser missing`);
     const allowBody = panel.slice(allowIdx, panel.indexOf('// /compact', allowIdx));
-    assert.match(allowBody, /const tabId = currentTabId;[\s\S]*?const wasAlreadyAllowed = isApiMutationsAllowedForTab\(tabId\);[\s\S]*?setApiMutationsAllowedForTab\(tabId, true\);/, `${label}: /allow-api should enable only the current tab conversation`);
+    assert.match(allowBody, /const wasAlreadyAllowed = isApiMutationsAllowedForTab\(tabId\);[\s\S]*?setApiMutationsAllowedForTab\(tabId, true\);/, `${label}: /allow-api should enable only the initiating tab conversation`);
     assert.doesNotMatch(allowBody, /apiMutationsAllowed = true;/, `${label}: /allow-api should not enable a global mutation override`);
   }
 });
@@ -2835,15 +3119,17 @@ test('sidepanel scopes async tab commands to the original tab', () => {
     ['firefox', 'src/firefox/src/ui/sidepanel.js'],
   ]) {
     const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
+    assert.match(panel, /async function parseSlashCommands\(text, tabId = currentTabId\) \{/, `${label}: slash-command parsing should accept the initiating tab id`);
 
     const helperStart = panel.indexOf('function renderClearedConversationForTab(tabId)');
     assert.notEqual(helperStart, -1, `${label}: clear helper missing`);
     const helperBody = panel.slice(helperStart, panel.indexOf('\n}', helperStart) + 2);
     assert.match(helperBody, /clearCachedTabChat\(tabId\);[\s\S]*?if \(currentTabId !== tabId\) return;[\s\S]*?messagesEl\.innerHTML = '';/, `${label}: clear helper should clear cached target tab and only mutate visible UI for the same tab`);
+    assert.match(helperBody, /refreshScheduledJobs\(\{ tabId \}\);/, `${label}: clear helper should scope async scheduled-job refresh to the cleared tab`);
 
     const resetIdx = panel.indexOf("// /reset");
     const resetBody = panel.slice(resetIdx, panel.indexOf("// /screenshot", resetIdx));
-    assert.match(resetBody, /const tabId = currentTabId;[\s\S]*?await sendToBackground\('clear_conversation', \{ tabId \}\);[\s\S]*?renderClearedConversationForTab\(tabId\);/, `${label}: /reset should clear the originally requested tab only`);
+    assert.match(resetBody, /await sendToBackground\('clear_conversation', \{ tabId \}\);[\s\S]*?renderClearedConversationForTab\(tabId\);/, `${label}: /reset should clear the originally requested tab only`);
     assert.doesNotMatch(resetBody, /sendToBackground\('clear_conversation', \{ tabId: currentTabId \}\)/, `${label}: /reset should not use currentTabId after async delay`);
 
     const clearStart = panel.indexOf("clearBtn.addEventListener('click', async () => {");
@@ -2852,32 +3138,149 @@ test('sidepanel scopes async tab commands to the original tab', () => {
 
     const compactIdx = panel.indexOf('// /compact');
     const compactBody = panel.slice(compactIdx, panel.indexOf('// /verbose', compactIdx));
-    assert.match(compactBody, /const tabId = currentTabId;[\s\S]*?sendToBackground\('compact_conversation', \{ tabId \}\);[\s\S]*?if \(currentTabId !== tabId\) return '';/, `${label}: /compact should not render a result into a different tab`);
+    assert.match(compactBody, /const remainder = text\.slice\(mCompact\[0\]\.length\)\.trim\(\);[\s\S]*?sendToBackground\('compact_conversation', \{ tabId \}\);[\s\S]*?if \(currentTabId !== tabId\) return remainder;/, `${label}: /compact should preserve residual prompt text after tab switches without rendering into a different tab`);
 
     const listIdx = panel.indexOf('// /list-schedules');
     const listBody = panel.slice(listIdx, panel.indexOf('// /show-scratchpad', listIdx));
-    assert.match(listBody, /const tabId = currentTabId;[\s\S]*?const jobs = await refreshScheduledJobs\(\);[\s\S]*?if \(currentTabId !== tabId\) return '';/, `${label}: /list-schedules should not render a result into a different tab`);
+    assert.match(listBody, /const jobs = await refreshScheduledJobs\(\{ tabId \}\);[\s\S]*?if \(currentTabId !== tabId\) return '';/, `${label}: /list-schedules should not render or refresh results into a different tab`);
+
+    assert.match(panel, /async function refreshScheduledJobs\(\{ tabId = null \} = \{\}\) \{[\s\S]*?const jobs = response\?\.jobs \|\| \[\];[\s\S]*?if \(tabId != null && currentTabId !== tabId\) return jobs;[\s\S]*?renderScheduledJobs\(jobs\);/, `${label}: scheduled-job refreshes should be able to drop stale tab completions before rendering`);
+    assert.match(panel, /await refreshScheduledJobs\(\{ tabId \}\);/, `${label}: tab-scoped scheduled-job actions should not repaint a later visible tab`);
 
     assert.match(panel, /async function showScratchpad\(tabId = currentTabId\) \{[\s\S]*?sendToBackground\('get_scratchpad', \{ tabId \}\);[\s\S]*?if \(currentTabId !== tabId\) return;[\s\S]*?catch \(e\) \{[\s\S]*?if \(currentTabId !== tabId\) return;[\s\S]*?sp\.scratchpad\.error/, `${label}: /show-scratchpad should not render success or error results into a different tab`);
+    assert.match(panel, /\/\/ \/show-scratchpad[\s\S]*?await showScratchpad\(tabId\);/, `${label}: /show-scratchpad should use the initiating tab id from the parser`);
 
     const screenshotIdx = panel.indexOf('// /screenshot');
     const screenshotEnd = panel.indexOf('// /record', screenshotIdx);
     const screenshotBody = panel.slice(screenshotIdx, screenshotEnd);
-    assert.match(screenshotBody, /const tabId = currentTabId;[\s\S]*?if \(currentTabId !== tabId \|\| !tab\?\.active\) return '';[\s\S]*?captureVisibleTab[\s\S]*?if \(currentTabId !== tabId\) return '';[\s\S]*?addMessage\('system', imgHtml\);/, `${label}: /screenshot should not render a captured image into a different tab`);
+    assert.match(screenshotBody, /if \(currentTabId !== tabId \|\| !tab\?\.active\) return '';[\s\S]*?captureVisibleTab[\s\S]*?if \(currentTabId !== tabId\) return '';[\s\S]*?addMessage\('system', imgHtml\);/, `${label}: /screenshot should not render a captured image into a different tab`);
 
     if (label === 'chrome') {
       const recordIdx = panel.indexOf('// /record');
       const recordBody = panel.slice(recordIdx, panel.indexOf('// /export', recordIdx));
-      assert.match(recordBody, /const tabId = currentTabId;[\s\S]*?sendToBackground\('start_tab_recording', \{[\s\S]*?tabId,[\s\S]*?\}\);[\s\S]*?if \(currentTabId !== tabId\) return '';/, `${label}: /record should not render recording status into a different tab`);
+      assert.match(recordBody, /sendToBackground\('start_tab_recording', \{[\s\S]*?tabId,[\s\S]*?\}\);[\s\S]*?if \(currentTabId !== tabId\) return '';/, `${label}: /record should not render recording status into a different tab`);
     }
 
     const profileIdx = panel.indexOf('// /profile');
     const profileBody = panel.slice(profileIdx, panel.indexOf('// /ask', profileIdx));
-    assert.match(profileBody, /const tabId = currentTabId;[\s\S]*?storage\.local\.get\(\['profileEnabled', 'profileText'\]\);[\s\S]*?storage\.local\.set\(\{ profileEnabled: newState \}\);[\s\S]*?if \(currentTabId !== tabId\) return '';[\s\S]*?addMessage\('system'/, `${label}: /profile should not render a result into a different tab`);
+    assert.match(profileBody, /storage\.local\.get\(\['profileEnabled', 'profileText'\]\);[\s\S]*?storage\.local\.set\(\{ profileEnabled: newState \}\);[\s\S]*?if \(currentTabId !== tabId\) return '';[\s\S]*?addMessage\('system'/, `${label}: /profile should not render a result into a different tab`);
 
     const visionIdx = panel.indexOf('// /vision');
     const visionBody = panel.slice(visionIdx, panel.indexOf('return text;', visionIdx));
-    assert.match(visionBody, /const tabId = currentTabId;[\s\S]*?sendToBackground\('get_providers'\);[\s\S]*?sendToBackground\('update_provider'[\s\S]*?if \(currentTabId !== tabId\) return '';[\s\S]*?addMessage\('system'/, `${label}: /vision should not render a result into a different tab`);
+    assert.match(visionBody, /sendToBackground\('get_providers'\);[\s\S]*?sendToBackground\('update_provider'[\s\S]*?if \(currentTabId !== tabId\) return '';[\s\S]*?addMessage\('system'/, `${label}: /vision should not render a result into a different tab`);
+  }
+});
+
+test('sidepanel awaits immediate verbose preference writes', () => {
+  for (const [label, panelRel] of [
+    ['chrome', 'src/chrome/src/ui/sidepanel.js'],
+    ['firefox', 'src/firefox/src/ui/sidepanel.js'],
+  ]) {
+    const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
+    assert.match(
+      panel,
+      /verboseMode = !verboseMode;[\s\S]*?await (chrome|browser)\.storage\.local\.set\(\{ verboseMode \}\)\.catch\(\(\) => \{\}\);/,
+      `${label}: verbose toggles should await persistence before continuing`,
+    );
+    assert.match(
+      panel,
+      /if \(\s*\/\^\\\/verbose\\b\\s\*\/i\.test\(text\)\s*\) \{[\s\S]*?await (chrome|browser)\.storage\.local\.set\(\{ verboseMode \}\)\.catch\(\(\) => \{\}\);[\s\S]*?if \(currentTabId !== tabId\) return '';[\s\S]*?addMessage\('system', verboseMode/,
+      `${label}: /verbose should guard against stale tabs after persisting the mode change`,
+    );
+  }
+});
+
+test('sidepanel awaits recommended-actions collapse persistence', () => {
+  for (const [label, panelRel] of [
+    ['chrome', 'src/chrome/src/ui/sidepanel.js'],
+    ['firefox', 'src/firefox/src/ui/sidepanel.js'],
+  ]) {
+    const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
+    assert.match(
+      panel,
+      /recommendedActionsToggleEl\.addEventListener\('click', async \(\) => \{[\s\S]*?const next = !recommendedActionsCollapsed;[\s\S]*?setRecommendedActionsCollapsed\(next, \{ persist: false \}\);[\s\S]*?await (chrome|browser)\.storage\.local\.set\(\{ \[RECOMMENDED_ACTIONS_COLLAPSED_KEY\]: next \}\)\.catch\(\(\) => \{\}\);[\s\S]*?\}\);/,
+      `${label}: recommended-actions collapse should update local state before awaiting persistence`,
+    );
+  }
+});
+
+test('sidepanel language changes await locale persistence', () => {
+  for (const [label, panelRel] of [
+    ['chrome', 'src/chrome/src/ui/sidepanel.js'],
+    ['firefox', 'src/firefox/src/ui/sidepanel.js'],
+  ]) {
+    const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
+    assert.match(
+      panel,
+      /languageSelect\.addEventListener\('change', async \(\) => \{[\s\S]*?await setLocale\(languageSelect\.value\);[\s\S]*?applyDOMTranslations\(document\);/,
+      `${label}: sidepanel language change should await locale persistence`,
+    );
+  }
+});
+
+test('sidepanel preserves stale residual slash-command prompts without hidden runs', () => {
+  for (const [label, panelRel] of [
+    ['chrome', 'src/chrome/src/ui/sidepanel.js'],
+    ['firefox', 'src/firefox/src/ui/sidepanel.js'],
+  ]) {
+    const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
+    assert.match(panel, /const tabInputDrafts = new Map\(\);/, `${label}: sidepanel should track per-tab composer drafts`);
+    assert.match(panel, /function saveInputDraftForTab\(tabId, text\) \{[\s\S]*?tabInputDrafts\.set\(numericTabId, draft\);[\s\S]*?tabInputDrafts\.delete\(numericTabId\);[\s\S]*?\}/, `${label}: tab drafts should save non-empty text and clear empty text`);
+    assert.match(panel, /function restoreInputDraftForTab\(tabId\) \{[\s\S]*?inputEl\.value = draft;[\s\S]*?autoResizeInput\(\);[\s\S]*?updateSlashCommandAutocomplete\(\);[\s\S]*?\}/, `${label}: tab drafts should restore into the composer when returning to a tab`);
+
+    const switchStart = panel.indexOf('function switchToTab(newTabId)');
+    assert.notEqual(switchStart, -1, `${label}: switchToTab missing`);
+    const switchBody = panel.slice(switchStart, panel.indexOf('refreshScheduledJobs({', switchStart));
+    assert.match(switchBody, /captureInputDraftForTab\(currentTabId\);[\s\S]*?restoreInputDraftForTab\(newTabId\);/, `${label}: tab switches should capture and restore per-tab composer drafts`);
+
+    const sendMatch = panel.match(/async function sendMessage\(extraChatParams\) \{[\s\S]*?\n  return accepted;\n\}/);
+    assert.ok(sendMatch, `${label}: sendMessage missing`);
+    const sendBody = sendMatch[0];
+    const modeCapture = "const modeForSend = /^\\/(?:ask|plan)\\b/i.test(text) ? 'ask' : agentMode;";
+    const apiCapture = "const apiMutationsAllowedForSend = isApiMutationsAllowedForTab(tabId) || /^\\/allow-api\\b/i.test(text);";
+    const modeCaptureIdx = sendBody.indexOf(modeCapture);
+    const apiCaptureIdx = sendBody.indexOf(apiCapture);
+    const parseIdx = sendBody.indexOf('text = await parseSlashCommands(text, tabId);');
+    assert.notEqual(modeCaptureIdx, -1, `${label}: send mode should be captured from the initiating command before async slash parsing`);
+    assert.notEqual(apiCaptureIdx, -1, `${label}: API override should be captured from the initiating tab before async slash parsing`);
+    assert.equal(modeCaptureIdx < parseIdx && apiCaptureIdx < parseIdx, true, `${label}: stale-tab residual sends should not read visible-tab options after slash parsing`);
+    assert.match(
+      sendBody,
+      /const tabId = currentTabId;[\s\S]*?text = await parseSlashCommands\(text, tabId\);[\s\S]*?const renderToCurrentTab = currentTabId === tabId;[\s\S]*?if \(!renderToCurrentTab\) \{[\s\S]*?if \(text\) saveInputDraftForTab\(tabId, text\);[\s\S]*?return false;[\s\S]*?\}/,
+      `${label}: stale residual slash-command prompts should be preserved as drafts instead of hidden runs`,
+    );
+    const staleReturnIdx = sendBody.indexOf('if (!renderToCurrentTab) {');
+    const sendIdx = sendBody.indexOf("sendToBackground('chat'");
+    assert.notEqual(staleReturnIdx, -1, `${label}: stale-tab residual guard missing`);
+    assert.notEqual(sendIdx, -1, `${label}: chat send missing`);
+    assert.equal(staleReturnIdx < sendIdx, true, `${label}: stale-tab residual guard must run before chat dispatch`);
+    assert.match(
+      sendBody,
+      /if \(renderToCurrentTab\) \{\s*isProcessing = true;\s*abortRequested = false;\s*sendBtn\.disabled = true;\s*inputEl\.value = '';\s*autoResizeInput\(\);[\s\S]*?addMessage\('user', text\);[\s\S]*?currentAssistantEl = assistantEl;[\s\S]*?\}/,
+      `${label}: stale-tab residual sends should not mutate or render chat UI in the currently visible tab`,
+    );
+    assert.doesNotMatch(
+      sendBody,
+      /sendToBackground\('chat', \{[\s\S]*?tabId: currentTabId/,
+      `${label}: chat dispatch should not read currentTabId after slash parsing`,
+    );
+  }
+});
+
+test('sidepanel continue runs use the initiating tab state', () => {
+  for (const [label, panelRel] of [
+    ['chrome', 'src/chrome/src/ui/sidepanel.js'],
+    ['firefox', 'src/firefox/src/ui/sidepanel.js'],
+  ]) {
+    const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
+    const match = panel.match(/async function continueAgent\(\) \{[\s\S]*?\n\}/);
+    assert.ok(match, `${label}: continueAgent missing`);
+    const body = match[0];
+    assert.match(body, /const tabId = currentTabId;[\s\S]*?const modeForSend = agentMode;[\s\S]*?sendToBackground\('continue', \{[\s\S]*?tabId,[\s\S]*?mode: modeForSend,/, `${label}: Continue should send with the tab and mode captured before awaiting`);
+    assert.doesNotMatch(body, /sendToBackground\('continue', \{[\s\S]*?tabId: currentTabId/, `${label}: Continue should not read currentTabId inside the async send payload`);
+    assert.doesNotMatch(body, /sendToBackground\('continue', \{[\s\S]*?mode: agentMode/, `${label}: Continue should not read agentMode inside the async send payload`);
+    assert.match(body, /const assistantEl = addMessage\('assistant', ''\);[\s\S]*?currentAssistantEl = assistantEl;[\s\S]*?if \(currentTabId === tabId && res\?\.content && assistantEl\) \{[\s\S]*?addMessageCopyButton\(assistantEl\);/, `${label}: Continue should render only into its captured assistant bubble for the initiating tab`);
+    assert.match(body, /if \(currentTabId === tabId\) finalizeSteps\(assistantEl\);[\s\S]*?if \(currentAssistantEl === assistantEl\) currentAssistantEl = null;/, `${label}: Continue should finalize and clear only its captured assistant bubble`);
   }
 });
 
