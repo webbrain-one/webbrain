@@ -592,6 +592,7 @@ export class ScheduledJobManager {
     const target = {
       ...parsed.target,
       ...(parsed.target.type === 'current_tab' ? { tabId, conversationId, originalUrl: currentUrl, originalTitle: currentTitle } : {}),
+      ...(parsed.target.type === 'url' ? { tabId } : {}),
     };
     const job = {
       id: makeScheduledJobId('task', this.now()),
