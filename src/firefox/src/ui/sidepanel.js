@@ -1155,9 +1155,10 @@ async function refreshRecommendedActions() {
     return;
   }
 
+  const tabId = currentTabId;
   try {
-    const pageInfo = await sendToBackground('get_page_info', { tabId: currentTabId });
-    if (requestId !== recommendationsRequestId) return;
+    const pageInfo = await sendToBackground('get_page_info', { tabId });
+    if (requestId !== recommendationsRequestId || currentTabId !== tabId || isProcessing) return;
     const actions = buildRecommendedActions(pageInfo, { max: 4 });
     recommendedActionsListEl.replaceChildren();
     actions.forEach((action) => {

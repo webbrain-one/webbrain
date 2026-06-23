@@ -2005,6 +2005,28 @@ test('sidepanel rebinds copy buttons after restoring serialized tab chat', () =>
   }
 });
 
+test('sidepanel drops stale recommended-action refreshes after tab changes or run start', () => {
+  for (const [label, panelRel] of [
+    ['chrome', 'src/chrome/src/ui/sidepanel.js'],
+    ['firefox', 'src/firefox/src/ui/sidepanel.js'],
+  ]) {
+    const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
+    const match = panel.match(/async function refreshRecommendedActions\(\) \{([\s\S]*?)\n\}/);
+    assert.ok(match, `${label}: refreshRecommendedActions missing`);
+    const body = match[1];
+    const captureIdx = body.indexOf('const tabId = currentTabId;');
+    const sendIdx = body.indexOf("sendToBackground('get_page_info', { tabId })");
+    const guard = 'requestId !== recommendationsRequestId || currentTabId !== tabId || isProcessing';
+    const guardIdx = body.indexOf(guard);
+    const renderIdx = body.indexOf('recommendedActionsListEl.replaceChildren();');
+    assert.notEqual(captureIdx, -1, `${label}: recommended-action refresh should capture the requested tab`);
+    assert.notEqual(sendIdx, -1, `${label}: recommended-action refresh should request page info for the captured tab`);
+    assert.notEqual(guardIdx, -1, `${label}: stale recommended-action refreshes should be dropped after tab switches or run start`);
+    assert.notEqual(renderIdx, -1, `${label}: recommended-action refresh render point missing`);
+    assert.equal(captureIdx < sendIdx && sendIdx < guardIdx && guardIdx < renderIdx, true, `${label}: stale guard must run after the async page-info read and before rendering chips`);
+  }
+});
+
 test('sidepanel drains queued context-menu prompts after Continue finishes', () => {
   for (const [label, panelRel] of [
     ['chrome', 'src/chrome/src/ui/sidepanel.js'],
