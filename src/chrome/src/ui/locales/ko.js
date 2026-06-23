@@ -171,7 +171,7 @@ export default {
   'st.display.notify_sound.label': '완료 알림음',
   'st.display.notify_sound.desc': '에이전트가 작업을 마치면 사이드 패널에서 짧은 알림음을 재생합니다. 실행을 취소한 경우에는 재생되지 않습니다.',
   'st.display.max_steps.label': '에이전트 최대 단계 수',
-  'st.display.max_steps.desc': '한 메시지당 에이전트가 사용할 수 있는 도구 호출 단계의 최대 수입니다. 값이 클수록 더 복잡한 다단계 작업이 가능하지만 토큰을 더 소비할 수 있습니다.',
+  'st.display.max_steps.desc': '한 메시지당 에이전트가 사용할 수 있는 도구 호출 단계의 최대 수입니다. 값이 클수록 더 복잡한 다단계 작업이 가능하지만 토큰을 더 소비할 수 있습니다. 슬라이더를 ∞로 설정하면 단계 수가 무제한입니다.',
   'st.display.traces_link.label': '트레이스',
   'st.display.traces_link.desc': '기록된 실행을 나란히 검사할 수 있습니다. 트레이스가 켜져 있을 때만 사용할 수 있습니다.',
   'st.display.traces_link.open': '트레이스 열기 →',

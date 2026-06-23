@@ -37,11 +37,23 @@ const scheduler = new ScheduledJobManager({
 agent.setScheduler(scheduler);
 scheduler.start();
 
+const MAX_AGENT_STEPS_DEFAULT = 130;
+const MAX_AGENT_STEPS_UNLIMITED_SENTINEL = 200;
+
+function normalizeMaxAgentSteps(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return MAX_AGENT_STEPS_DEFAULT;
+  if (n === 0 || n >= MAX_AGENT_STEPS_UNLIMITED_SENTINEL) return Infinity;
+  return n >= 5 ? Math.floor(n) : MAX_AGENT_STEPS_DEFAULT;
+}
+
 // Load maxSteps setting
 async function loadMaxSteps() {
   const stored = await browser.storage.local.get('maxAgentSteps');
-  if (stored.maxAgentSteps === 0) agent.maxSteps = Infinity;
-  else if (stored.maxAgentSteps) agent.maxSteps = stored.maxAgentSteps;
+  agent.maxSteps = normalizeMaxAgentSteps(stored.maxAgentSteps);
+  if (Number(stored.maxAgentSteps) >= MAX_AGENT_STEPS_UNLIMITED_SENTINEL) {
+    await browser.storage.local.set({ maxAgentSteps: 0 });
+  }
 }
 loadMaxSteps();
 
@@ -91,7 +103,7 @@ browser.runtime.onInstalled.addListener(async () => {
 // Listen for setting changes
 browser.storage.onChanged.addListener((changes) => {
   if (changes.maxAgentSteps) {
-    agent.maxSteps = changes.maxAgentSteps.newValue === 0 ? Infinity : changes.maxAgentSteps.newValue;
+    agent.maxSteps = normalizeMaxAgentSteps(changes.maxAgentSteps.newValue);
   }
   if (changes.autoScreenshot) {
     agent.autoScreenshot = changes.autoScreenshot.newValue;

@@ -171,7 +171,7 @@ export default {
   'st.display.notify_sound.label': '完了サウンド',
   'st.display.notify_sound.desc': 'エージェントがタスクを完了したときにサイドパネルで短いチャイムを鳴らします。実行をキャンセルした場合は鳴りません。',
   'st.display.max_steps.label': 'エージェントの最大ステップ数',
-  'st.display.max_steps.desc': '1 メッセージあたりに使えるツール呼び出しステップの上限です。値を大きくすると複雑な多段タスクが可能になりますが、トークン消費が増えることがあります。',
+  'st.display.max_steps.desc': '1 メッセージあたりに使えるツール呼び出しステップの上限です。値を大きくすると複雑な多段タスクが可能になりますが、トークン消費が増えることがあります。スライダーを ∞ にするとステップ数は無制限になります。',
   'st.display.traces_link.label': 'トレース',
   'st.display.traces_link.desc': '記録された実行を並べて確認できます。トレースをオンにしているときだけ利用できます。',
   'st.display.traces_link.open': 'トレースを開く →',

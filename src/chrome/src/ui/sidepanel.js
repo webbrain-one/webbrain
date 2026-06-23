@@ -2532,6 +2532,14 @@ function addContextCompactedNote(data) {
   scrollToBottom();
 }
 
+const MAX_AGENT_STEPS_UNLIMITED_SENTINEL = 200;
+
+function displayMaxAgentSteps(value) {
+  const n = Number(value);
+  if (Number.isFinite(n) && (n === 0 || n >= MAX_AGENT_STEPS_UNLIMITED_SENTINEL)) return '∞';
+  return Number.isFinite(n) && n > 0 ? String(Math.floor(n)) : '130';
+}
+
 function showContinueButton() {
   // Remove any existing continue button
   document.querySelectorAll('.continue-bar').forEach(el => el.remove());
@@ -2539,7 +2547,7 @@ function showContinueButton() {
   const bar = document.createElement('div');
   bar.className = 'continue-bar';
   bar.innerHTML = `
-    <span class="continue-text">${escapeHtml(t('sp.continue_bar', { steps: agent_maxSteps || 130 }))}</span>
+    <span class="continue-text">${escapeHtml(t('sp.continue_bar', { steps: displayMaxAgentSteps(agent_maxSteps) }))}</span>
     <button class="continue-btn" id="btn-continue">${escapeHtml(t('sp.continue_btn'))}</button>
   `;
   messagesEl.appendChild(bar);
@@ -2589,7 +2597,7 @@ async function continueAgent() {
 
 // Track max steps for display in continue bar
 let agent_maxSteps = 130;
-chrome.storage.local.get('maxAgentSteps').then(s => { agent_maxSteps = s.maxAgentSteps || 130; });
+chrome.storage.local.get('maxAgentSteps').then(s => { agent_maxSteps = s.maxAgentSteps ?? 130; });
 chrome.storage.onChanged.addListener((changes) => {
   if (changes.maxAgentSteps) agent_maxSteps = changes.maxAgentSteps.newValue;
 });
