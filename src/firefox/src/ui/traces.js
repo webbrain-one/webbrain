@@ -434,8 +434,13 @@ document.getElementById('btn-export').addEventListener('click', async () => {
   const a = document.createElement('a');
   a.href = url;
   a.download = `webbrain-trace-${run.model || 'unknown'}-${run.runId}.json`;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  document.body.appendChild(a);
+  try {
+    a.click();
+  } finally {
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 7000);
+  }
 });
 
 document.getElementById('btn-delete').addEventListener('click', async () => {

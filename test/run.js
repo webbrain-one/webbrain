@@ -2132,6 +2132,28 @@ test('trace viewer revokes screenshot object URLs when replacing rendered timeli
   }
 });
 
+test('trace viewer export keeps blob URLs alive until the download is committed', () => {
+  for (const [label, tracesRel] of [
+    ['chrome', 'src/chrome/src/ui/traces.js'],
+    ['firefox', 'src/firefox/src/ui/traces.js'],
+  ]) {
+    const traces = fs.readFileSync(path.join(ROOT, tracesRel), 'utf8');
+    const exportStart = traces.indexOf("document.getElementById('btn-export').addEventListener('click', async () => {");
+    assert.notEqual(exportStart, -1, `${label}: trace export handler missing`);
+    const exportBody = traces.slice(exportStart, traces.indexOf("document.getElementById('btn-delete')", exportStart));
+    assert.match(
+      exportBody,
+      /const url = URL\.createObjectURL\(blob\);[\s\S]*?const a = document\.createElement\('a'\);[\s\S]*?document\.body\.appendChild\(a\);[\s\S]*?try \{[\s\S]*?a\.click\(\);[\s\S]*?\} finally \{[\s\S]*?a\.remove\(\);[\s\S]*?setTimeout\(\(\) => URL\.revokeObjectURL\(url\), 7000\);[\s\S]*?\}/,
+      `${label}: trace export should click a connected anchor and revoke the blob URL asynchronously`,
+    );
+    assert.doesNotMatch(
+      exportBody,
+      /a\.click\(\);\s*setTimeout\(\(\) => URL\.revokeObjectURL\(url\), 1000\);/,
+      `${label}: trace export should not use a detached anchor with short-lived blob URL cleanup`,
+    );
+  }
+});
+
 test('sidepanel export keeps blob URLs alive until the download is committed', () => {
   for (const [label, panelRel] of [
     ['chrome', 'src/chrome/src/ui/sidepanel.js'],
