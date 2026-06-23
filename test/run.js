@@ -2035,6 +2035,49 @@ test('chrome sidepanel drops stale async tab-chat restores', () => {
   assert.equal(setIdx < loadIdx && loadIdx < guardIdx && guardIdx < restoreIdx && guardIdx < consumeIdx, true, 'chrome: stale guard must run after async chat load and before DOM/context-menu work');
 });
 
+test('sidepanel does not miss startup tab switches before consuming tab-scoped state', () => {
+  for (const [label, panelRel] of [
+    ['chrome', 'src/chrome/src/ui/sidepanel.js'],
+    ['firefox', 'src/firefox/src/ui/sidepanel.js'],
+  ]) {
+    const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
+    const start = panel.indexOf('async function init() {');
+    const end = panel.indexOf('\nif (verboseBtn)', start);
+    assert.notEqual(start, -1, `${label}: init missing`);
+    assert.notEqual(end, -1, `${label}: init boundary missing`);
+    const body = panel.slice(start, end);
+    const listenerIdx = body.indexOf('tabs.onActivated.addListener');
+    const loadProvidersIdx = body.indexOf('await loadProviders();');
+    const testConnectionIdx = body.indexOf("await testConnection({ skipWebBrainCloud: true });");
+    const resyncQueryIdx = body.lastIndexOf('tabs.query({ active: true, currentWindow: true })');
+    const resyncSwitchIdx = body.indexOf('await switchToTab(activeTab.id);');
+    const refreshJobsIdx = body.indexOf('refreshScheduledJobs();', resyncSwitchIdx);
+    const refreshActionsIdx = body.indexOf('refreshRecommendedActions();', resyncSwitchIdx);
+    const consumeIdx = body.indexOf('await consumePendingContextMenuPrompt();', resyncSwitchIdx);
+    assert.notEqual(listenerIdx, -1, `${label}: startup should register tab activation listener`);
+    assert.notEqual(loadProvidersIdx, -1, `${label}: startup provider load missing`);
+    assert.notEqual(testConnectionIdx, -1, `${label}: startup connection test missing`);
+    assert.notEqual(resyncQueryIdx, -1, `${label}: startup should re-query the active tab after async setup`);
+    assert.notEqual(resyncSwitchIdx, -1, `${label}: startup should switch to the active tab after async setup`);
+    assert.notEqual(refreshJobsIdx, -1, `${label}: startup scheduled-job refresh missing`);
+    assert.notEqual(refreshActionsIdx, -1, `${label}: startup recommended-action refresh missing`);
+    assert.notEqual(consumeIdx, -1, `${label}: startup context-menu consume missing`);
+    assert.equal(listenerIdx < loadProvidersIdx, true, `${label}: tab activation listener must be registered before startup awaits`);
+    assert.equal(testConnectionIdx < resyncQueryIdx && resyncQueryIdx < resyncSwitchIdx, true, `${label}: startup should resync the active tab after async setup`);
+    assert.equal(resyncSwitchIdx < refreshJobsIdx && resyncSwitchIdx < refreshActionsIdx && resyncSwitchIdx < consumeIdx, true, `${label}: startup must resync before tab-scoped refreshes and context-menu consume`);
+
+    if (label === 'chrome') {
+      const restoreCaptureIdx = body.indexOf('const restoreTabId = currentTabId;');
+      const restoreLoadIdx = body.indexOf('const html = await loadTabChat(restoreTabId);');
+      const restoreGuardIdx = body.indexOf('if (currentTabId === restoreTabId && html)');
+      assert.notEqual(restoreCaptureIdx, -1, 'chrome: initial tab-chat restore should capture the target tab');
+      assert.notEqual(restoreLoadIdx, -1, 'chrome: initial tab-chat restore should load the captured tab');
+      assert.notEqual(restoreGuardIdx, -1, 'chrome: initial tab-chat restore should drop stale async results');
+      assert.equal(listenerIdx < restoreCaptureIdx && restoreCaptureIdx < restoreLoadIdx && restoreLoadIdx < restoreGuardIdx, true, 'chrome: initial restore must be guarded after listener-driven tab changes');
+    }
+  }
+});
+
 test('sidepanel drops stale recommended-action refreshes after tab changes or run start', () => {
   for (const [label, panelRel] of [
     ['chrome', 'src/chrome/src/ui/sidepanel.js'],

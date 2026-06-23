@@ -1038,17 +1038,6 @@ async function init() {
   const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
   currentTabId = tab?.id;
 
-  // Load verbose setting
-  const stored = await browser.storage.local.get('verboseMode');
-  verboseMode = stored.verboseMode || false;
-
-  await loadProviders();
-  await testConnection({ skipWebBrainCloud: true });
-  refreshScheduledJobs();
-  refreshRecommendedActions();
-  await consumePendingContextMenuPrompt();
-  drainQueuedContextMenuPrompts();
-
   browser.tabs.onActivated.addListener(async (info) => {
     switchToTab(info.tabId);
   });
@@ -1059,6 +1048,21 @@ async function init() {
       refreshRecommendedActions();
     }
   });
+
+  // Load verbose setting
+  const stored = await browser.storage.local.get('verboseMode');
+  verboseMode = stored.verboseMode || false;
+
+  await loadProviders();
+  await testConnection({ skipWebBrainCloud: true });
+  const [activeTab] = await browser.tabs.query({ active: true, currentWindow: true });
+  if (activeTab?.id && activeTab.id !== currentTabId) {
+    await switchToTab(activeTab.id);
+  }
+  refreshScheduledJobs();
+  refreshRecommendedActions();
+  await consumePendingContextMenuPrompt();
+  drainQueuedContextMenuPrompts();
 
   // Listen for setting changes (from options page)
   if (verboseBtn) verboseBtn.classList.toggle('active', verboseMode);

@@ -1132,31 +1132,6 @@ async function init() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   currentTabId = tab?.id;
 
-  // Load verbose setting
-  const stored = await chrome.storage.local.get('verboseMode');
-  verboseMode = stored.verboseMode || false;
-
-  // Restore prior conversation for this tab (if any) — survives close/reopen.
-  if (currentTabId != null) {
-    const html = await loadTabChat(currentTabId);
-    if (html) {
-      messagesEl.innerHTML = html;
-      messagesEl.querySelectorAll('[data-bound]').forEach(el => delete el.dataset.bound);
-      rebindRestoredMessageControls();
-      scrollToBottom();
-    }
-  }
-
-  // Start observing the messages container for changes to persist.
-  persistObserver.observe(messagesEl, { childList: true, subtree: true, characterData: true });
-
-  await loadProviders();
-  await testConnection({ skipWebBrainCloud: true });
-  refreshScheduledJobs();
-  refreshRecommendedActions();
-  await consumePendingContextMenuPrompt();
-  drainQueuedContextMenuPrompts();
-
   chrome.tabs.onActivated.addListener(async (info) => {
     switchToTab(info.tabId);
   });
@@ -1176,6 +1151,36 @@ async function init() {
       refreshRecommendedActions();
     }
   });
+
+  // Load verbose setting
+  const stored = await chrome.storage.local.get('verboseMode');
+  verboseMode = stored.verboseMode || false;
+
+  // Restore prior conversation for this tab (if any) — survives close/reopen.
+  const restoreTabId = currentTabId;
+  if (restoreTabId != null) {
+    const html = await loadTabChat(restoreTabId);
+    if (currentTabId === restoreTabId && html) {
+      messagesEl.innerHTML = html;
+      messagesEl.querySelectorAll('[data-bound]').forEach(el => delete el.dataset.bound);
+      rebindRestoredMessageControls();
+      scrollToBottom();
+    }
+  }
+
+  // Start observing the messages container for changes to persist.
+  persistObserver.observe(messagesEl, { childList: true, subtree: true, characterData: true });
+
+  await loadProviders();
+  await testConnection({ skipWebBrainCloud: true });
+  const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (activeTab?.id && activeTab.id !== currentTabId) {
+    await switchToTab(activeTab.id);
+  }
+  refreshScheduledJobs();
+  refreshRecommendedActions();
+  await consumePendingContextMenuPrompt();
+  drainQueuedContextMenuPrompts();
 
   // Reflect initial verbose state in the button.
   if (verboseBtn) verboseBtn.classList.toggle('active', verboseMode);
