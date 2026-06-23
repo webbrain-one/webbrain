@@ -41,11 +41,12 @@ export function createContextMenuPromptHandler({
       deferredContextMenuPrompts.push(payload);
       return;
     }
-    if (!contextMenuPromptMatchesCurrentTab(payload)) return;
     if (handledContextMenuPromptIds.has(payload.id)) return;
-
     handledContextMenuPromptIds.add(payload.id);
-    if (getIsProcessing()) {
+
+    // Queue prompts that belong to a different tab or arrive while busy.
+    // drainQueuedContextMenuPrompts picks them up on tab switch or run completion.
+    if (!contextMenuPromptMatchesCurrentTab(payload) || getIsProcessing()) {
       queuedContextMenuPrompts.push(payload);
       return;
     }
@@ -87,12 +88,11 @@ export function createContextMenuPromptHandler({
     getInputEl().dispatchEvent(new Event('input', { bubbles: true }));
     autoResizeInput();
 
-    // Clear storage before awaiting the run so that if the panel is closed or
-    // reloaded mid-run the stored copy is already gone and won't be resubmitted
-    // on reopen. If the backend rejects the request (accepted === false) we
-    // re-queue in-memory only; drainQueuedContextMenuPrompts will retry it.
-    sendToBackground('clear_context_menu_prompt', clearPayload).catch(() => {});
-    const accepted = await sendMessage();
+    // Pass clearPayload to sendMessage() so the background can clear storage
+    // immediately when it starts the run — after receiving the request (so a
+    // pre-acceptance crash preserves the prompt) but before the agent loop
+    // (so a mid-run panel close does not replay it on reopen).
+    const accepted = await sendMessage({ contextMenuClear: clearPayload });
     if (!accepted) {
       queuedContextMenuPrompts.push(payload);
     }

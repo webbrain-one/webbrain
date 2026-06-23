@@ -441,6 +441,14 @@ async function handleMessage(msg, sender) {
 
       sendIndicatorMessage(tabId, 'WB_SHOW_AGENT_INDICATORS');
 
+      // Clear any linked context-menu prompt from storage here — after the
+      // background has received the message (so a pre-acceptance crash leaves
+      // the prompt recoverable) but before the agent run starts (so a
+      // mid-run panel close does not replay the prompt on reopen).
+      if (msg.contextMenuClear?.tabId != null) {
+        contextMenuStorage.clear(msg.contextMenuClear.tabId, msg.contextMenuClear.promptId).catch(() => {});
+      }
+
       const updates = [];
       try {
         const result = await agent.processMessage(tabId, msg.text, (type, data) => {

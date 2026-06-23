@@ -1615,7 +1615,7 @@ function updateApiBadge() {
   }
 }
 
-async function sendMessage() {
+async function sendMessage(extraChatParams) {
   let text = inputEl.value.trim();
   if (!text || isProcessing) return;
   hideSlashCommandAutocomplete();
@@ -1651,6 +1651,7 @@ async function sendMessage() {
       text,
       mode: agentMode,
       apiMutationsAllowed,
+      ...extraChatParams,
     });
     accepted = true;
 
