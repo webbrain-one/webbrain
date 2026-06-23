@@ -1253,6 +1253,7 @@ async function switchToTab(newTabId) {
 
   // Restore new tab's chat from memory or storage.
   const html = await loadTabChat(newTabId);
+  if (currentTabId !== newTabId) return;
   if (html) {
     messagesEl.innerHTML = html;
     messagesEl.querySelectorAll('[data-bound]').forEach(el => delete el.dataset.bound);

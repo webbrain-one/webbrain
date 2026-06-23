@@ -2017,6 +2017,24 @@ test('sidepanel rebinds interactive controls after restoring serialized tab chat
   }
 });
 
+test('chrome sidepanel drops stale async tab-chat restores', () => {
+  const panel = fs.readFileSync(path.join(ROOT, 'src/chrome/src/ui/sidepanel.js'), 'utf8');
+  const match = panel.match(/async function switchToTab\(newTabId\) \{([\s\S]*?)\n\}/);
+  assert.ok(match, 'chrome: switchToTab body missing');
+  const body = match[1];
+  const setIdx = body.indexOf('currentTabId = newTabId;');
+  const loadIdx = body.indexOf('const html = await loadTabChat(newTabId);');
+  const guardIdx = body.indexOf('if (currentTabId !== newTabId) return;');
+  const restoreIdx = body.indexOf('messagesEl.innerHTML =');
+  const consumeIdx = body.indexOf('consumePendingContextMenuPrompt()');
+  assert.notEqual(setIdx, -1, 'chrome: switchToTab should set the visible tab before restoring chat');
+  assert.notEqual(loadIdx, -1, 'chrome: switchToTab should load persisted tab chat asynchronously');
+  assert.notEqual(guardIdx, -1, 'chrome: stale async tab-chat restores should be dropped');
+  assert.notEqual(restoreIdx, -1, 'chrome: switchToTab restore point missing');
+  assert.notEqual(consumeIdx, -1, 'chrome: switchToTab context-menu consume point missing');
+  assert.equal(setIdx < loadIdx && loadIdx < guardIdx && guardIdx < restoreIdx && guardIdx < consumeIdx, true, 'chrome: stale guard must run after async chat load and before DOM/context-menu work');
+});
+
 test('sidepanel drops stale recommended-action refreshes after tab changes or run start', () => {
   for (const [label, panelRel] of [
     ['chrome', 'src/chrome/src/ui/sidepanel.js'],
