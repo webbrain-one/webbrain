@@ -906,7 +906,7 @@ export class ScheduledJobManager {
     const tab = await this.api.tabs.get(tabId);
     const currentUrl = tab?.url || '';
     if (currentUrl && !sameDocumentUrl(originalUrl, currentUrl)) {
-      throw new Error('Target tab changed before the scheduled task ran.');
+      throw new Error('Target tab changed before the scheduled task ran. Recreate this schedule with Target = URL if it should reopen the original page automatically.');
     }
   }
 

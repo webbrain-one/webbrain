@@ -823,6 +823,25 @@ function datetimeLocalValue(ms) {
   return local.toISOString().slice(0, 16);
 }
 
+function isHttpScheduleUrl(value) {
+  try {
+    const url = new URL(String(value || ''));
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+async function getCurrentScheduleUrl() {
+  if (currentTabId == null) return '';
+  try {
+    const tab = await chrome.tabs.get(currentTabId);
+    return tab?.url || '';
+  } catch {
+    return '';
+  }
+}
+
 function addScheduleField(form, labelText, control) {
   const label = document.createElement('label');
   label.className = 'schedule-field';
@@ -834,11 +853,12 @@ function addScheduleField(form, labelText, control) {
   return label;
 }
 
-function renderScheduleComposer(prefillPrompt = '') {
+async function renderScheduleComposer(prefillPrompt = '') {
   const msgEl = addMessage('system', t('sp.schedule_form.opened'));
   const content = msgEl.querySelector('.message-content');
   const form = document.createElement('form');
   form.className = 'schedule-composer';
+  const initialScheduleUrl = await getCurrentScheduleUrl();
 
   const titleInput = document.createElement('input');
   titleInput.type = 'text';
@@ -894,6 +914,10 @@ function renderScheduleComposer(prefillPrompt = '') {
   urlInput.type = 'url';
   urlInput.placeholder = 'https://example.com/';
   const urlField = addScheduleField(form, t('sp.schedule_form.target_url'), urlInput);
+  if (isHttpScheduleUrl(initialScheduleUrl)) {
+    urlInput.value = initialScheduleUrl;
+    targetType.value = 'url';
+  }
 
   const modeInput = document.createElement('select');
   modeInput.innerHTML = `<option value="act">${escapeHtml(t('sp.mode.act'))}</option><option value="ask">${escapeHtml(t('sp.mode.ask'))}</option>`;

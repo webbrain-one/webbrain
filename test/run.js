@@ -1889,6 +1889,11 @@ test('sidepanel exposes schedule slash commands in both builds', () => {
     assert.match(panel, /let assistantEl = currentAssistantEl/, `${label}: forced scheduled clarify cards should not overwrite the active assistant bubble`);
     assert.match(panel, /currentAssistantEl\.dataset\?\.scheduledJobId === scheduledJobId/, `${label}: scheduled clarify submission should not steal an unrelated active reply`);
     assert.match(panel, /res\?\.success === false \|\| res\?\.ok === false \|\| !res\?\.scheduledAt/, `${label}: schedule form should reject failed create responses before showing success`);
+    assert.match(panel, /async function renderScheduleComposer/, `${label}: schedule form should resolve initial defaults before display`);
+    assert.match(panel, /const initialScheduleUrl = await getCurrentScheduleUrl\(\)/, `${label}: schedule form should inspect the active tab URL before rendering`);
+    assert.match(panel, /urlInput\.value = initialScheduleUrl/, `${label}: schedule form should prefill URL targets from the active tab`);
+    assert.match(panel, /targetType\.value = 'url'/, `${label}: schedule form should default http(s) pages to URL targets`);
+    assert.match(panel, /content\.appendChild\(form\)/, `${label}: schedule form should append after initial target defaults are applied`);
     assert.match(locale, /\/schedule/, `${label}: help should mention /schedule`);
     assert.match(locale, /\/list-schedules/, `${label}: help should mention /list-schedules`);
   }

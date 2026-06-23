@@ -393,7 +393,7 @@ export const AGENT_TOOLS = [
     type: 'function',
     function: {
       name: 'schedule_task',
-      description: 'Create a one-shot or recurring scheduled task. Use only when the user explicitly asks to schedule future work, create a reminder, monitor/check something later, or run a recurring task. Do NOT use this as a generic wait/retry tool for the current run — use schedule_resume for deferring the current task, or wait_for_element/wait_for_stable for seconds-level page waits.',
+      description: 'Create a one-shot or recurring scheduled task. Use only when the user explicitly asks to schedule future work, create a reminder, monitor/check something later, or run a recurring task. Prefer target.type="url" for automations, monitors, and repeatable tasks that can reopen a page; use target.type="current_tab" only when the task depends on the exact live tab state and should fail if that tab navigates. Do NOT use this as a generic wait/retry tool for the current run — use schedule_resume for deferring the current task, or wait_for_element/wait_for_stable for seconds-level page waits.',
       parameters: {
         type: 'object',
         properties: {
@@ -414,7 +414,7 @@ export const AGENT_TOOLS = [
             type: 'object',
             description: 'Where to run the task.',
             properties: {
-              type: { type: 'string', enum: ['current_tab', 'url'], description: 'Use current_tab for this tab or url to open/reuse a tab for a URL.' },
+              type: { type: 'string', enum: ['current_tab', 'url'], description: 'Use url to open/reuse a tab at a URL, best for repeatable automations. Use current_tab only for exact live-tab state that should fail after navigation.' },
               url: { type: 'string', description: 'Required when target.type is url. Must be http(s).' },
             },
             required: ['type'],
@@ -1040,7 +1040,7 @@ Available tools:
 - read_page_source: Read raw View Source-style HTML and linked CSS/JS URLs
 - wait_for_element: Wait for an element to appear
 - schedule_resume: Durably pause this current task and resume it later in the same tab/conversation. Terminal tool; use only for external waits.
-- schedule_task: Create a one-shot or recurring scheduled task only when the user explicitly asks for future scheduled work.
+- schedule_task: Create a one-shot or recurring scheduled task only when the user explicitly asks for future scheduled work. Prefer URL targets for repeatable automations; current_tab is strict and fails if the tab changes.
 - get_selection: Get highlighted text
 - execute_js: Run custom JavaScript
 - new_tab: Open a new tab
@@ -1246,7 +1246,7 @@ TOOLS — use only these:
 - extract_data: tables/headings/images/links. inspect_element_styles: live computed CSS/box model. get_selection: highlighted text. read_pdf: read a PDF.
 - wait_for_element({selector}) / wait_for_stable({quietMs}): wait for an element / for the page to go quiet after an action.
 - schedule_resume({after_seconds|run_at, reason, resume_instruction}): terminal durable pause for this current task.
-- schedule_task({title, prompt, schedule, target, mode}): create one-shot or recurring future work only when explicitly requested by the user.
+- schedule_task({title, prompt, schedule, target, mode}): create one-shot or recurring future work only when explicitly requested by the user. Prefer target.type:"url" for monitors/repeatable automations; use current_tab only for exact current-tab state.
 - iframe_read / iframe_click / iframe_type ({urlFilter, selector, text}): interact inside cross-origin iframes (Stripe, payment widgets, embeds).
 - fetch_url({url}) / research_url({url}): read OTHER URLs (not the active tab). list_downloads, download_files, read_downloaded_file: file workflows. download_files auto-pins each file's downloadId to the scratchpad as an \`[auto]\` line — re-read with read_downloaded_file({downloadId}); no need to recall the path.
 - download_social_media: one-shot image/video download from supported social sites; strategy:"auto" uses DOM first, then vision crop only when needed and available.
