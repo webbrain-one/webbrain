@@ -390,17 +390,46 @@ function updateActWarning() {
 
 // Per-tab chat history (stores innerHTML of messages container)
 const tabChats = new Map();
+const tabInputDrafts = new Map();
 
 function clearCachedTabChat(tabId) {
   if (tabId == null) return;
   tabChats.delete(tabId);
 }
 
+function saveInputDraftForTab(tabId, text) {
+  const numericTabId = Number(tabId);
+  if (!Number.isFinite(numericTabId)) return;
+  const draft = String(text || '');
+  if (draft.trim()) {
+    tabInputDrafts.set(numericTabId, draft);
+  } else {
+    tabInputDrafts.delete(numericTabId);
+  }
+}
+
+function captureInputDraftForTab(tabId) {
+  if (!inputEl) return;
+  saveInputDraftForTab(tabId, inputEl.value || '');
+}
+
+function restoreInputDraftForTab(tabId) {
+  if (!inputEl) return;
+  const numericTabId = Number(tabId);
+  const draft = Number.isFinite(numericTabId) ? tabInputDrafts.get(numericTabId) || '' : '';
+  inputEl.value = draft;
+  autoResizeInput();
+  updateSlashCommandAutocomplete();
+}
+
 function renderClearedConversationForTab(tabId) {
   clearCachedTabChat(tabId);
+  saveInputDraftForTab(tabId, '');
   setApiMutationsAllowedForTab(tabId, false);
   if (currentTabId !== tabId) return;
   messagesEl.innerHTML = '';
+  inputEl.value = '';
+  autoResizeInput();
   addMessage('system', t('sp.cleared_message'));
   refreshScheduledJobs({ tabId });
   refreshRecommendedActions();
@@ -1219,6 +1248,7 @@ function switchToTab(newTabId) {
   // Save current tab's chat
   if (currentTabId != null) {
     tabChats.set(currentTabId, messagesEl.innerHTML);
+    captureInputDraftForTab(currentTabId);
   }
 
   currentTabId = newTabId;
@@ -1233,6 +1263,7 @@ function switchToTab(newTabId) {
     messagesEl.innerHTML = '';
     addMessage('system', t('sp.help_message'));
   }
+  restoreInputDraftForTab(newTabId);
   scrollToBottom();
   refreshScheduledJobs({ tabId: newTabId });
   refreshRecommendedActions();
@@ -1919,6 +1950,7 @@ async function sendMessage(extraChatParams) {
   const tabId = currentTabId;
   const modeForSend = /^\/(?:ask|plan)\b/i.test(text) ? 'ask' : agentMode;
   const apiMutationsAllowedForSend = isApiMutationsAllowedForTab(tabId) || /^\/allow-api\b/i.test(text);
+  saveInputDraftForTab(tabId, '');
   hideSlashCommandAutocomplete();
 
   if (text.startsWith('/')) {
@@ -1928,7 +1960,10 @@ async function sendMessage(extraChatParams) {
 
   text = await parseSlashCommands(text, tabId);
   const renderToCurrentTab = currentTabId === tabId;
-  if (!renderToCurrentTab && !text) return false;
+  if (!renderToCurrentTab) {
+    if (text) saveInputDraftForTab(tabId, text);
+    return false;
+  }
   if (!text) {
     inputEl.value = '';
     autoResizeInput();

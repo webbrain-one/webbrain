@@ -3213,12 +3213,21 @@ test('sidepanel language changes await locale persistence', () => {
   }
 });
 
-test('sidepanel sends residual slash-command prompts to the initiating tab', () => {
+test('sidepanel preserves stale residual slash-command prompts without hidden runs', () => {
   for (const [label, panelRel] of [
     ['chrome', 'src/chrome/src/ui/sidepanel.js'],
     ['firefox', 'src/firefox/src/ui/sidepanel.js'],
   ]) {
     const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
+    assert.match(panel, /const tabInputDrafts = new Map\(\);/, `${label}: sidepanel should track per-tab composer drafts`);
+    assert.match(panel, /function saveInputDraftForTab\(tabId, text\) \{[\s\S]*?tabInputDrafts\.set\(numericTabId, draft\);[\s\S]*?tabInputDrafts\.delete\(numericTabId\);[\s\S]*?\}/, `${label}: tab drafts should save non-empty text and clear empty text`);
+    assert.match(panel, /function restoreInputDraftForTab\(tabId\) \{[\s\S]*?inputEl\.value = draft;[\s\S]*?autoResizeInput\(\);[\s\S]*?updateSlashCommandAutocomplete\(\);[\s\S]*?\}/, `${label}: tab drafts should restore into the composer when returning to a tab`);
+
+    const switchStart = panel.indexOf('function switchToTab(newTabId)');
+    assert.notEqual(switchStart, -1, `${label}: switchToTab missing`);
+    const switchBody = panel.slice(switchStart, panel.indexOf('refreshScheduledJobs({', switchStart));
+    assert.match(switchBody, /captureInputDraftForTab\(currentTabId\);[\s\S]*?restoreInputDraftForTab\(newTabId\);/, `${label}: tab switches should capture and restore per-tab composer drafts`);
+
     const sendMatch = panel.match(/async function sendMessage\(extraChatParams\) \{[\s\S]*?\n  return accepted;\n\}/);
     assert.ok(sendMatch, `${label}: sendMessage missing`);
     const sendBody = sendMatch[0];
@@ -3232,9 +3241,14 @@ test('sidepanel sends residual slash-command prompts to the initiating tab', () 
     assert.equal(modeCaptureIdx < parseIdx && apiCaptureIdx < parseIdx, true, `${label}: stale-tab residual sends should not read visible-tab options after slash parsing`);
     assert.match(
       sendBody,
-      /const tabId = currentTabId;[\s\S]*?text = await parseSlashCommands\(text, tabId\);[\s\S]*?const renderToCurrentTab = currentTabId === tabId;[\s\S]*?if \(!renderToCurrentTab && !text\) return false;[\s\S]*?sendToBackground\('chat', \{[\s\S]*?tabId,[\s\S]*?text,[\s\S]*?mode: modeForSend,[\s\S]*?apiMutationsAllowed: apiMutationsAllowedForSend,/,
-      `${label}: residual slash-command prompts should still dispatch to the tab captured before async parsing`,
+      /const tabId = currentTabId;[\s\S]*?text = await parseSlashCommands\(text, tabId\);[\s\S]*?const renderToCurrentTab = currentTabId === tabId;[\s\S]*?if \(!renderToCurrentTab\) \{[\s\S]*?if \(text\) saveInputDraftForTab\(tabId, text\);[\s\S]*?return false;[\s\S]*?\}/,
+      `${label}: stale residual slash-command prompts should be preserved as drafts instead of hidden runs`,
     );
+    const staleReturnIdx = sendBody.indexOf('if (!renderToCurrentTab) {');
+    const sendIdx = sendBody.indexOf("sendToBackground('chat'");
+    assert.notEqual(staleReturnIdx, -1, `${label}: stale-tab residual guard missing`);
+    assert.notEqual(sendIdx, -1, `${label}: chat send missing`);
+    assert.equal(staleReturnIdx < sendIdx, true, `${label}: stale-tab residual guard must run before chat dispatch`);
     assert.match(
       sendBody,
       /if \(renderToCurrentTab\) \{\s*isProcessing = true;\s*abortRequested = false;\s*sendBtn\.disabled = true;\s*inputEl\.value = '';\s*autoResizeInput\(\);[\s\S]*?addMessage\('user', text\);[\s\S]*?currentAssistantEl = assistantEl;[\s\S]*?\}/,
