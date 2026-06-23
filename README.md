@@ -246,8 +246,8 @@ See [CHANGELOG.md](./CHANGELOG.md) for the full version history. Recent highligh
 
 - [ ] **Conversation export/import** — Save and load chat histories
 - [ ] **Custom tool definitions** — User-defined tools via settings
-- [ ] **Keyboard shortcuts** — Hotkeys for opening panel, sending messages, switching modes
-- [ ] **Context menu integration** — Right-click → "Ask WebBrain about this"
+- [X] **Keyboard shortcuts** — Hotkeys for opening panel, sending messages, switching modes
+- [X] **Context menu integration** — Right-click → "Ask WebBrain about this"
 - [X] **Screenshot/vision tool** — Send screenshots to multimodal models for visual understanding
 - [X] **Chrome Web Store / Firefox AMO** — Official store listings
 
