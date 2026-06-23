@@ -1916,6 +1916,8 @@ async function sendMessage(extraChatParams) {
   let text = inputEl.value.trim();
   if (!text || isProcessing) return;
   const tabId = currentTabId;
+  const modeForSend = /^\/(?:ask|plan)\b/i.test(text) ? 'ask' : agentMode;
+  const apiMutationsAllowedForSend = isApiMutationsAllowedForTab(tabId) || /^\/allow-api\b/i.test(text);
   hideSlashCommandAutocomplete();
 
   if (text.startsWith('/')) {
@@ -1932,14 +1934,13 @@ async function sendMessage(extraChatParams) {
     return;
   }
 
-  isProcessing = true;
-  abortRequested = false;
-  sendBtn.disabled = true;
-  inputEl.value = '';
-  autoResizeInput();
-
   let assistantEl = null;
   if (renderToCurrentTab) {
+    isProcessing = true;
+    abortRequested = false;
+    sendBtn.disabled = true;
+    inputEl.value = '';
+    autoResizeInput();
     hideRecommendedActions();
     addMessage('user', text);
     showActivity(t('sp.activity.thinking'));
@@ -1952,8 +1953,8 @@ async function sendMessage(extraChatParams) {
     const res = await sendToBackground('chat', {
       tabId,
       text,
-      mode: agentMode,
-      apiMutationsAllowed,
+      mode: modeForSend,
+      apiMutationsAllowed: apiMutationsAllowedForSend,
       ...extraChatParams,
     });
     accepted = true;
@@ -1978,10 +1979,12 @@ async function sendMessage(extraChatParams) {
     }
   } finally {
     if (renderToCurrentTab && currentTabId === tabId) finalizeSteps(assistantEl);
-    isProcessing = false;
-    abortRequested = false;
-    sendBtn.disabled = false;
-    hideActivity();
+    if (renderToCurrentTab) {
+      isProcessing = false;
+      abortRequested = false;
+      sendBtn.disabled = false;
+      hideActivity();
+    }
     if (currentAssistantEl === assistantEl) currentAssistantEl = null;
     if (renderToCurrentTab && currentTabId === tabId) {
       scrollToBottom();

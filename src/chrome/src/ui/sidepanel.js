@@ -497,6 +497,7 @@ function clearCachedTabChat(tabId) {
   }
   tabChats.delete(tabId);
   return enqueueTabChatOperation(tabId, async (numericTabId) => {
+    tabChats.delete(numericTabId);
     try {
       await chrome.storage.session?.remove(TAB_CHAT_PREFIX + numericTabId).catch(() => {});
     } catch (e) { /* ignore */ }
@@ -2097,6 +2098,8 @@ async function sendMessage(extraChatParams) {
   let text = inputEl.value.trim();
   if (!text || isProcessing) return;
   const tabId = currentTabId;
+  const modeForSend = /^\/(?:ask|plan)\b/i.test(text) ? 'ask' : agentMode;
+  const apiMutationsAllowedForSend = isApiMutationsAllowedForTab(tabId) || /^\/allow-api\b/i.test(text);
   hideSlashCommandAutocomplete();
 
   // Clear input early so slash commands don't linger visually.
@@ -2118,14 +2121,13 @@ async function sendMessage(extraChatParams) {
     return;
   }
 
-  isProcessing = true;
-  abortRequested = false;
-  sendBtn.disabled = true;
-  inputEl.value = '';
-  autoResizeInput();
-
   let assistantEl = null;
   if (renderToCurrentTab) {
+    isProcessing = true;
+    abortRequested = false;
+    sendBtn.disabled = true;
+    inputEl.value = '';
+    autoResizeInput();
     hideRecommendedActions();
     addMessage('user', text);
     showActivity(t('sp.activity.thinking'));
@@ -2138,8 +2140,8 @@ async function sendMessage(extraChatParams) {
     const res = await sendToBackground('chat', {
       tabId,
       text,
-      mode: agentMode,
-      apiMutationsAllowed,
+      mode: modeForSend,
+      apiMutationsAllowed: apiMutationsAllowedForSend,
       ...extraChatParams,
     });
     accepted = true;
@@ -2169,13 +2171,15 @@ async function sendMessage(extraChatParams) {
     // sound is what takes them from "glance back at the tab" to "know it's
     // done" without having to sit and watch the sidebar.
     const wasAborted = abortRequested;
-    isProcessing = false;
-    abortRequested = false;
-    sendBtn.disabled = false;
-    hideActivity();
+    if (renderToCurrentTab) {
+      isProcessing = false;
+      abortRequested = false;
+      sendBtn.disabled = false;
+      hideActivity();
+    }
     if (currentAssistantEl === assistantEl) currentAssistantEl = null;
     if (renderToCurrentTab && currentTabId === tabId) scrollToBottom();
-    if (!wasAborted) playCompletionSound();
+    if (renderToCurrentTab && !wasAborted) playCompletionSound();
     if (renderToCurrentTab && currentTabId === tabId) refreshRecommendedActions();
     await drainQueuedContextMenuPromptsAfterPendingTabSwitch();
   }

@@ -2615,7 +2615,7 @@ test('chrome sidepanel serializes tab-chat storage writes with clears and reads'
   const clearBody = panel.slice(clearStart, panel.indexOf('\n}\n\nfunction renderClearedConversationForTab', clearStart) + 2);
   assert.match(clearBody, /tabChats\.delete\(tabId\);/, 'chrome: clearing tab chat should delete the cached HTML before queuing storage removal');
   assert.match(clearBody, /return enqueueTabChatOperation\(tabId, async \(numericTabId\) => \{/, 'chrome: clearing tab chat should be serialized through the queue');
-  assert.match(clearBody, /chrome\.storage\.session\?\.remove\(TAB_CHAT_PREFIX \+ numericTabId\)/, 'chrome: clearing tab chat should remove the stored HTML after queued writes settle');
+  assert.match(clearBody, /return enqueueTabChatOperation\(tabId, async \(numericTabId\) => \{[\s\S]*?tabChats\.delete\(numericTabId\);[\s\S]*?chrome\.storage\.session\?\.remove\(TAB_CHAT_PREFIX \+ numericTabId\)/, 'chrome: queued clears should delete stale HTML re-cached by older queued writes before removing storage');
 });
 
 test('chrome sidepanel cancels stale tab-chat persistence when clearing a tab', () => {
@@ -2636,7 +2636,7 @@ test('chrome sidepanel cancels stale tab-chat persistence when clearing a tab', 
   const clearBody = panel.slice(clearStart, panel.indexOf('\n}\n\nfunction renderClearedConversationForTab', clearStart) + 2);
   assert.match(
     clearBody,
-    /if \(persistTimer && persistTimerTabId === tabId\) \{[\s\S]*?clearTimeout\(persistTimer\);[\s\S]*?persistTimer = null;[\s\S]*?persistTimerTabId = null;[\s\S]*?\}[\s\S]*?tabChats\.delete\(tabId\);[\s\S]*?return enqueueTabChatOperation\(tabId, async \(numericTabId\) => \{[\s\S]*?chrome\.storage\.session\?\.remove\(TAB_CHAT_PREFIX \+ numericTabId\)/,
+    /if \(persistTimer && persistTimerTabId === tabId\) \{[\s\S]*?clearTimeout\(persistTimer\);[\s\S]*?persistTimer = null;[\s\S]*?persistTimerTabId = null;[\s\S]*?\}[\s\S]*?tabChats\.delete\(tabId\);[\s\S]*?return enqueueTabChatOperation\(tabId, async \(numericTabId\) => \{[\s\S]*?tabChats\.delete\(numericTabId\);[\s\S]*?chrome\.storage\.session\?\.remove\(TAB_CHAT_PREFIX \+ numericTabId\)/,
     'chrome: clearing a tab should cancel any pending stale write before removing cached chat',
   );
 });
@@ -3218,15 +3218,23 @@ test('sidepanel sends residual slash-command prompts to the initiating tab', () 
     const sendMatch = panel.match(/async function sendMessage\(extraChatParams\) \{[\s\S]*?\n  return accepted;\n\}/);
     assert.ok(sendMatch, `${label}: sendMessage missing`);
     const sendBody = sendMatch[0];
+    const modeCapture = "const modeForSend = /^\\/(?:ask|plan)\\b/i.test(text) ? 'ask' : agentMode;";
+    const apiCapture = "const apiMutationsAllowedForSend = isApiMutationsAllowedForTab(tabId) || /^\\/allow-api\\b/i.test(text);";
+    const modeCaptureIdx = sendBody.indexOf(modeCapture);
+    const apiCaptureIdx = sendBody.indexOf(apiCapture);
+    const parseIdx = sendBody.indexOf('text = await parseSlashCommands(text, tabId);');
+    assert.notEqual(modeCaptureIdx, -1, `${label}: send mode should be captured from the initiating command before async slash parsing`);
+    assert.notEqual(apiCaptureIdx, -1, `${label}: API override should be captured from the initiating tab before async slash parsing`);
+    assert.equal(modeCaptureIdx < parseIdx && apiCaptureIdx < parseIdx, true, `${label}: stale-tab residual sends should not read visible-tab options after slash parsing`);
     assert.match(
       sendBody,
-      /const tabId = currentTabId;[\s\S]*?text = await parseSlashCommands\(text, tabId\);[\s\S]*?const renderToCurrentTab = currentTabId === tabId;[\s\S]*?if \(!renderToCurrentTab && !text\) return false;[\s\S]*?sendToBackground\('chat', \{[\s\S]*?tabId,[\s\S]*?text,/,
+      /const tabId = currentTabId;[\s\S]*?text = await parseSlashCommands\(text, tabId\);[\s\S]*?const renderToCurrentTab = currentTabId === tabId;[\s\S]*?if \(!renderToCurrentTab && !text\) return false;[\s\S]*?sendToBackground\('chat', \{[\s\S]*?tabId,[\s\S]*?text,[\s\S]*?mode: modeForSend,[\s\S]*?apiMutationsAllowed: apiMutationsAllowedForSend,/,
       `${label}: residual slash-command prompts should still dispatch to the tab captured before async parsing`,
     );
     assert.match(
       sendBody,
-      /if \(renderToCurrentTab\) \{[\s\S]*?addMessage\('user', text\);[\s\S]*?currentAssistantEl = assistantEl;[\s\S]*?\}/,
-      `${label}: stale-tab residual sends should not render chat UI into the currently visible tab`,
+      /if \(renderToCurrentTab\) \{\s*isProcessing = true;\s*abortRequested = false;\s*sendBtn\.disabled = true;\s*inputEl\.value = '';\s*autoResizeInput\(\);[\s\S]*?addMessage\('user', text\);[\s\S]*?currentAssistantEl = assistantEl;[\s\S]*?\}/,
+      `${label}: stale-tab residual sends should not mutate or render chat UI in the currently visible tab`,
     );
     assert.doesNotMatch(
       sendBody,
