@@ -2682,6 +2682,11 @@ async function continueAgent() {
     hideActivity();
     currentAssistantEl = null;
     scrollToBottom();
+    if (pendingTabSwitch != null) {
+      const pending = pendingTabSwitch;
+      pendingTabSwitch = null;
+      await switchToTab(pending);
+    }
     drainQueuedContextMenuPrompts();
   }
 }
