@@ -169,7 +169,7 @@ export default {
   'st.display.notify_sound.label': 'Sonido al terminar',
   'st.display.notify_sound.desc': 'Reproduce un tono corto en el panel lateral cuando el agente termina una tarea. No suena si cancelas la ejecución.',
   'st.display.max_steps.label': 'Pasos máximos del agente',
-  'st.display.max_steps.desc': 'Número máximo de pasos con herramientas que el agente puede dar por mensaje. Valores más altos permiten tareas más complejas pero pueden consumir más tokens.',
+  'st.display.max_steps.desc': 'Número máximo de pasos con herramientas que el agente puede dar por mensaje. Valores más altos permiten tareas más complejas pero pueden consumir más tokens. Pon el control en ∞ para pasos ilimitados.',
   'st.display.traces_link.label': 'Trazas',
   'st.display.traces_link.desc': 'Inspecciona las ejecuciones grabadas lado a lado. Solo está disponible cuando el registro de trazas está activo.',
   'st.display.traces_link.open': 'Abrir Trazas →',

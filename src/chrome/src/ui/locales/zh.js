@@ -171,7 +171,7 @@ export default {
   'st.display.notify_sound.label': '完成提示音',
   'st.display.notify_sound.desc': '代理完成任务时在侧边栏播放短促的提示音。取消运行则不播放。',
   'st.display.max_steps.label': '代理最大步骤数',
-  'st.display.max_steps.desc': '代理每条消息可执行的最大工具调用步数。更高的值允许更复杂的多步任务，但可能消耗更多 token。',
+  'st.display.max_steps.desc': '代理每条消息可执行的最大工具调用步数。更高的值允许更复杂的多步任务，但可能消耗更多 token。将滑块设为 ∞ 可不限步骤数。',
   'st.display.traces_link.label': '轨迹',
   'st.display.traces_link.desc': '并排查看已记录的运行。仅在轨迹记录开启时可用。',
   'st.display.traces_link.open': '打开轨迹 →',

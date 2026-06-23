@@ -1930,6 +1930,48 @@ test('sidepanel reports missing background responses without res.content crash',
   }
 });
 
+test('max agent steps treats the slider maximum as unlimited', () => {
+  for (const [label, bgRel, settingsRel, panelRel] of [
+    ['chrome', 'src/chrome/src/background.js', 'src/chrome/src/ui/settings.js', 'src/chrome/src/ui/sidepanel.js'],
+    ['firefox', 'src/firefox/src/background.js', 'src/firefox/src/ui/settings.js', 'src/firefox/src/ui/sidepanel.js'],
+  ]) {
+    const bg = fs.readFileSync(path.join(ROOT, bgRel), 'utf8');
+    const settings = fs.readFileSync(path.join(ROOT, settingsRel), 'utf8');
+    const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
+    const fnMatch = bg.match(/function normalizeMaxAgentSteps\(value\) \{[\s\S]*?\n\}/);
+    assert.ok(fnMatch, `${label}: normalizeMaxAgentSteps missing`);
+    const normalize = new Function(
+      'value',
+      `const MAX_AGENT_STEPS_DEFAULT = 130;\nconst MAX_AGENT_STEPS_UNLIMITED_SENTINEL = 200;\n${fnMatch[0]}\nreturn normalizeMaxAgentSteps(value);`,
+    );
+
+    assert.equal(normalize(0), Infinity, `${label}: stored 0 should mean unlimited`);
+    assert.equal(normalize(200), Infinity, `${label}: stored 200 should mean unlimited`);
+    assert.equal(normalize('200'), Infinity, `${label}: stored "200" should mean unlimited`);
+    assert.equal(normalize(250), Infinity, `${label}: stored values above the sentinel should mean unlimited`);
+    assert.equal(normalize(130), 130, `${label}: finite settings below 200 should remain finite`);
+    assert.equal(normalize(undefined), 130, `${label}: missing setting should use the default`);
+
+    assert.match(bg, /Number\(stored\.maxAgentSteps\) >= MAX_AGENT_STEPS_UNLIMITED_SENTINEL/, `${label}: startup should migrate stale 200 values to 0`);
+    assert.match(settings, /isUnlimitedMaxAgentSteps\(stored\.maxAgentSteps\)/, `${label}: settings UI should display stored 200 as unlimited`);
+    assert.match(settings, /maxAgentSteps:\s*Number\(maxStepsRange\.value\) === MAX_AGENT_STEPS_UNLIMITED_SENTINEL\s*\?\s*0/, `${label}: settings UI should persist slider max as 0`);
+    assert.match(panel, /displayMaxAgentSteps\(agent_maxSteps\)/, `${label}: continue bar should format 0\/200 as unlimited`);
+    assert.doesNotMatch(panel, /agent_maxSteps \|\| 130/, `${label}: continue bar should not treat 0 as default 130`);
+  }
+});
+
+test('max agent steps locale copy mentions unlimited in every locale', () => {
+  for (const dirRel of ['src/chrome/src/ui/locales', 'src/firefox/src/ui/locales']) {
+    const dir = path.join(ROOT, dirRel);
+    for (const file of fs.readdirSync(dir).filter(name => name.endsWith('.js'))) {
+      const locale = fs.readFileSync(path.join(dir, file), 'utf8');
+      const match = locale.match(/'st\.display\.max_steps\.desc':\s*'((?:\\'|[^'])*)'/);
+      assert.ok(match, `${dirRel}/${file}: max steps description missing`);
+      assert.match(match[1], /∞/, `${dirRel}/${file}: max steps description should mention the unlimited slider setting`);
+    }
+  }
+});
+
 test('download_social_media exposes merged DOM/vision strategy in act tiers only', () => {
   for (const [label, getTools] of [
     ['chrome', getToolsForModeCh],

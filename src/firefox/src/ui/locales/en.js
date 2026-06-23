@@ -294,7 +294,7 @@ export default {
   'st.display.notify_sound.label': 'Completion sound',
   'st.display.notify_sound.desc': 'Play a short chime in the side panel when the agent finishes a task. Won\'t play if you cancel the run.',
   'st.display.max_steps.label': 'Max Agent Steps',
-  'st.display.max_steps.desc': 'Maximum number of tool-use steps the agent can take per message. Higher values allow more complex multi-step tasks but may use more tokens.',
+  'st.display.max_steps.desc': 'Maximum number of tool-use steps the agent can take per message. Higher values allow more complex multi-step tasks but may use more tokens. Set the slider to ∞ for unlimited steps.',
   'st.display.request_timeout.label': 'LLM request timeout',
   'st.display.request_timeout.desc': 'How long to wait for the LLM to start responding before giving up. Aborts only the connection / time-to-headers phase — streaming bodies are not affected. Default 120s. Cloud providers (OpenAI / Anthropic / Gemini) respond within seconds; local models (Jan / LM Studio / Ollama / llama.cpp / vLLM / SGLang) on CPU or with large contexts can take 60–180s before the first byte.',
   'st.display.traces_link.label': 'Traces',

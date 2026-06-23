@@ -169,7 +169,7 @@ export default {
   'st.display.notify_sound.label': 'Tunog kapag tapos na',
   'st.display.notify_sound.desc': 'Magpatugtog ng maikling chime sa side panel kapag natapos ang gawain ng ahente. Hindi tutugtog kung kinansela mo ang run.',
   'st.display.max_steps.label': 'Maximum na hakbang ng ahente',
-  'st.display.max_steps.desc': 'Pinakamalaking bilang ng tool-use na hakbang na maaaring gawin ng ahente bawat mensahe. Ang mas mataas na halaga ay nagpapahintulot ng mas komplikadong multi-step na gawain ngunit maaaring mas marami ang gagamiting token.',
+  'st.display.max_steps.desc': 'Pinakamalaking bilang ng tool-use na hakbang na maaaring gawin ng ahente bawat mensahe. Ang mas mataas na halaga ay nagpapahintulot ng mas komplikadong multi-step na gawain ngunit maaaring mas marami ang gagamiting token. Itakda ang slider sa ∞ para sa walang limitasyong mga hakbang.',
   'st.display.traces_link.label': 'Traces',
   'st.display.traces_link.desc': 'Suriin ang mga naitalang run nang magkatabi. Available lamang kapag naka-on ang tracing.',
   'st.display.traces_link.open': 'Buksan ang Traces →',

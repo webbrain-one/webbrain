@@ -6,6 +6,15 @@ This changelog was generated from the repository Git history and release tags. V
 
 ## [Unreleased]
 
+### Changed
+- Max Agent Steps settings copy now explains that the `∞` slider position means unlimited steps in every supported Chrome and Firefox locale.
+
+### Fixed
+- Max Agent Steps now treats the Settings slider maximum (`200`) as the unlimited sentinel instead of a finite cap, migrates stale stored `200+` values to `maxAgentSteps: 0`, and keeps the continue bar from displaying unlimited (`0`) as the default step count.
+
+### Tests
+- Added regression coverage to ensure `0`, `200`, and values above `200` remain unlimited in both browser builds, and that all max-step locale descriptions mention the `∞` setting.
+
 ## [15.2.0] - 2026-06-22
 
 ### Added

@@ -8,7 +8,7 @@ import { CAPABILITY_LABEL } from '../agent/permission-gate.js';
 
 // Version shown in the subtitle. Kept here so it only needs one update per
 // release; the subtitle string itself is translated.
-const EXT_VERSION = '15.2.0';
+const EXT_VERSION = '15.2.1';
 
 const providersContainer = document.getElementById('providers');
 const verboseToggle = document.getElementById('toggle-verbose');
@@ -124,6 +124,8 @@ let authEmail = '';
 let authDefaultModel = '';
 
 const DEFAULT_COST_ALLOWANCE_USD = 10;
+const MAX_AGENT_STEPS_DEFAULT = 130;
+const MAX_AGENT_STEPS_UNLIMITED_SENTINEL = 200;
 
 function normalizeCostAmount(value, fallback = DEFAULT_COST_ALLOWANCE_USD) {
   const n = Number(value);
@@ -137,6 +139,18 @@ function formatUsd(value) {
 function renderCostAllowanceSpent(spent, limit) {
   if (!costSpentValueLabel) return;
   costSpentValueLabel.textContent = `${formatUsd(spent)} / ${formatUsd(limit)}`;
+}
+
+function isUnlimitedMaxAgentSteps(value) {
+  const n = Number(value);
+  return Number.isFinite(n) && (n === 0 || n >= MAX_AGENT_STEPS_UNLIMITED_SENTINEL);
+}
+
+function boundedMaxAgentSteps(value) {
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 5 && n < MAX_AGENT_STEPS_UNLIMITED_SENTINEL
+    ? Math.floor(n)
+    : MAX_AGENT_STEPS_DEFAULT;
 }
 
 // Filter + collapse state for the providers panel. See chrome/settings.js
@@ -161,11 +175,11 @@ async function init() {
   }
   verboseToggle.checked = stored.verboseMode || false;
   screenshotToggle.checked = stored.screenshotFallback ?? true; // on by default
-  if (stored.maxAgentSteps === 0) {
-    maxStepsRange.value = 200;
+  if (isUnlimitedMaxAgentSteps(stored.maxAgentSteps)) {
+    maxStepsRange.value = MAX_AGENT_STEPS_UNLIMITED_SENTINEL;
     stepsValueLabel.textContent = '∞';
   } else {
-    maxStepsRange.value = stored.maxAgentSteps || 130;
+    maxStepsRange.value = boundedMaxAgentSteps(stored.maxAgentSteps);
     stepsValueLabel.textContent = maxStepsRange.value;
   }
   // requestTimeoutMs is stored in milliseconds, displayed as seconds.
@@ -393,11 +407,15 @@ screenshotToggle.addEventListener('change', () => {
 });
 
 maxStepsRange.addEventListener('input', () => {
-  stepsValueLabel.textContent = maxStepsRange.value == 200 ? '∞' : maxStepsRange.value;
+  stepsValueLabel.textContent = Number(maxStepsRange.value) === MAX_AGENT_STEPS_UNLIMITED_SENTINEL ? '∞' : maxStepsRange.value;
 });
 
 maxStepsRange.addEventListener('change', () => {
-  browser.storage.local.set({ maxAgentSteps: maxStepsRange.value == 200 ? 0 : parseInt(maxStepsRange.value) });
+  browser.storage.local.set({
+    maxAgentSteps: Number(maxStepsRange.value) === MAX_AGENT_STEPS_UNLIMITED_SENTINEL
+      ? 0
+      : parseInt(maxStepsRange.value, 10),
+  });
 });
 
 if (requestTimeoutRange) {

@@ -171,7 +171,7 @@ export default {
   'st.display.notify_sound.label': 'Son de fin',
   'st.display.notify_sound.desc': 'Joue un court carillon dans le panneau latéral quand l\'agent termine une tâche. Ne joue pas si vous annulez l\'exécution.',
   'st.display.max_steps.label': 'Étapes maximum de l\'agent',
-  'st.display.max_steps.desc': 'Nombre maximum d\'étapes d\'outil que l\'agent peut effectuer par message. Des valeurs plus élevées permettent des tâches plus complexes mais peuvent consommer plus de tokens.',
+  'st.display.max_steps.desc': 'Nombre maximum d\'étapes d\'outil que l\'agent peut effectuer par message. Des valeurs plus élevées permettent des tâches plus complexes mais peuvent consommer plus de tokens. Réglez le curseur sur ∞ pour des étapes illimitées.',
   'st.display.traces_link.label': 'Traces',
   'st.display.traces_link.desc': 'Inspectez les exécutions enregistrées côte à côte. Disponible uniquement quand l\'enregistrement des traces est activé.',
   'st.display.traces_link.open': 'Ouvrir les traces →',

@@ -171,7 +171,7 @@ export default {
   'st.display.notify_sound.label': 'Tamamlama sesi',
   'st.display.notify_sound.desc': 'Aracı bir görevi bitirdiğinde yan panelde kısa bir ses çalar. Çalışmayı iptal edersen çalınmaz.',
   'st.display.max_steps.label': 'Azami aracı adımı',
-  'st.display.max_steps.desc': 'Aracının mesaj başına atabileceği en fazla araç adımı sayısı. Daha yüksek değerler daha karmaşık çok adımlı görevlere izin verir ama daha fazla token kullanabilir.',
+  'st.display.max_steps.desc': 'Aracının mesaj başına atabileceği en fazla araç adımı sayısı. Daha yüksek değerler daha karmaşık çok adımlı görevlere izin verir ama daha fazla token kullanabilir. Sınırsız adım için kaydırıcıyı ∞ konumuna getirin.',
   'st.display.traces_link.label': 'İzler',
   'st.display.traces_link.desc': 'Kaydedilmiş çalışmaları yan yana incele. Yalnızca iz kaydı açıkken kullanılabilir.',
   'st.display.traces_link.open': 'İzleri aç →',

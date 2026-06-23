@@ -171,7 +171,7 @@ export default {
   'st.display.notify_sound.label': 'Suara penyelesaian',
   'st.display.notify_sound.desc': 'Mainkan dering singkat di panel samping saat agen menyelesaikan tugas. Tidak akan dimainkan jika Anda membatalkan proses.',
   'st.display.max_steps.label': 'Langkah maksimum agen',
-  'st.display.max_steps.desc': 'Jumlah maksimum langkah pemanggilan alat yang dapat dilakukan agen per pesan. Nilai lebih tinggi memungkinkan tugas multi-langkah lebih kompleks tetapi mungkin memakai lebih banyak token.',
+  'st.display.max_steps.desc': 'Jumlah maksimum langkah pemanggilan alat yang dapat dilakukan agen per pesan. Nilai lebih tinggi memungkinkan tugas multi-langkah lebih kompleks tetapi mungkin memakai lebih banyak token. Geser ke ∞ untuk langkah tanpa batas.',
   'st.display.traces_link.label': 'Jejak',
   'st.display.traces_link.desc': 'Periksa proses yang direkam berdampingan. Hanya tersedia saat perekaman jejak aktif.',
   'st.display.traces_link.open': 'Buka Jejak →',
