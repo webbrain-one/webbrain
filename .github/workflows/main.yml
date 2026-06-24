@@ -22,6 +22,6 @@ jobs:
         continue-on-error: true
       - run: git add -A
       - run: git commit -m "chore: bump version and rebuild dist zips" 
-      - run: git pushname: Build and Package
+      - run: git push
 
 
