@@ -4,6 +4,14 @@ All notable changes to WebBrain are documented in this file.
 
 This changelog was generated from the repository Git history and release tags. Versions without a Git tag are inferred from version-bump commits and the current `package.json` / `manifest.json` version.
 
+## [17.1.0] - 2026-06-24
+
+### Added
+- Introduced a better payment UI for WebBrain Cloud: the quota-exceeded error now surfaces a Subscribe button that links users directly to upgrade their plan, with the button persisting and rebinding across chat restores.
+
+### Changed
+- Translated the Subscribe button strings into all supported locales.
+
 ## [17.0.0] - 2026-06-23
 
 ### Changed
