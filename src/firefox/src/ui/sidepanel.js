@@ -2623,8 +2623,9 @@ function addMessage(role, content) {
   msgEl.appendChild(contentEl);
   messagesEl.appendChild(msgEl);
 
-  // Add copy button to assistant messages
-  if (role === 'assistant' && content) {
+  // Add copy button to assistant messages, and to user messages too (Firefox
+  // only — manual select-and-copy is unreliable in the Firefox sidebar panel).
+  if ((role === 'assistant' || role === 'user') && content) {
     addMessageCopyButton(msgEl);
   }
 
