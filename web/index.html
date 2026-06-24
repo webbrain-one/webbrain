@@ -1498,6 +1498,9 @@
       display: block;
       background: #000;
     }
+    /* The security explainer is landscape 16:9 — keep that ratio at every
+       width so it never inherits the portrait mobile override below. */
+    .video-frame--wide { padding-bottom: 56.25%; }
 
     /* ================================================================
        RESPONSIVE
@@ -1524,6 +1527,9 @@
       .cc-core { width: 64px; height: 64px; font-size: 28px; }
       .video-showcase { max-width: 380px; }
       .video-frame { padding-bottom: 177.78%; }
+      /* Wide (16:9) showcase stays full-width and keeps its ratio on phones. */
+      .video-showcase--wide { max-width: 100%; }
+      .video-frame--wide { padding-bottom: 56.25%; }
     }
     @media (max-width: 560px) {
       /* Stack the install cards on small phones — squeezing two side-by-side
@@ -1577,6 +1583,7 @@
     </a>
     <div class="nav-links">
       <a href="#features">Features</a>
+      <a href="#security">Security</a>
       <a href="#compare">Compare</a>
       <a href="#download">Download</a>
       <a href="#faq">FAQ</a>
@@ -1838,6 +1845,18 @@
   <div class="video-showcase">
     <div class="video-frame">
       <video id="demo-video" data-desktop-src="/assets/demo-desktop.mp4" data-mobile-src="/assets/demo-mobile.mp4" controls preload="metadata" playsinline></video>
+    </div>
+  </div>
+</section>
+
+<!-- SECURITY VIDEO -->
+<section class="section" id="security" style="padding-top: 30px;">
+  <div class="section-label">Security</div>
+  <h2 class="section-title">How WebBrain keeps you in control</h2>
+  <p class="section-subtitle">The browser is where real work happens — and an adversarial surface. WebBrain starts in read-only Ask Mode, asks before it acts, defends against hidden prompt injections, and handles sensitive fields with stricter rules.</p>
+  <div class="video-showcase video-showcase--wide">
+    <div class="video-frame video-frame--wide">
+      <video id="security-video" data-desktop-src="/assets/security-desktop.mp4" data-mobile-src="/assets/security-mobile.mp4" poster="/assets/security-poster.jpg" controls preload="none" playsinline></video>
     </div>
   </div>
 </section>
@@ -2288,25 +2307,32 @@
 
 <script>
   (function () {
-    const demoVideo = document.getElementById('demo-video');
-    if (!demoVideo) return;
+    // Pick the right source (desktop vs mobile) for every responsive video
+    // on the page — the product demo and the security explainer.
+    const videos = Array.prototype.slice.call(
+      document.querySelectorAll('video[data-desktop-src]')
+    );
+    if (!videos.length) return;
 
     const mobileQuery = window.matchMedia('(max-width: 768px)');
 
-    function syncDemoVideoSource(event) {
-      const isMobile = event.matches ?? mobileQuery.matches;
-      const nextSrc = isMobile ? demoVideo.dataset.mobileSrc : demoVideo.dataset.desktopSrc;
-      if (nextSrc && demoVideo.src !== nextSrc) {
-        demoVideo.src = nextSrc;
-      }
+    function syncVideoSources(event) {
+      const isMobile = event && typeof event.matches === 'boolean'
+        ? event.matches : mobileQuery.matches;
+      videos.forEach(function (video) {
+        const nextSrc = isMobile ? video.dataset.mobileSrc : video.dataset.desktopSrc;
+        if (nextSrc && video.src !== nextSrc) {
+          video.src = nextSrc;
+        }
+      });
     }
 
-    syncDemoVideoSource(mobileQuery);
+    syncVideoSources(mobileQuery);
 
     if (typeof mobileQuery.addEventListener === 'function') {
-      mobileQuery.addEventListener('change', syncDemoVideoSource);
+      mobileQuery.addEventListener('change', syncVideoSources);
     } else if (typeof mobileQuery.addListener === 'function') {
-      mobileQuery.addListener(syncDemoVideoSource);
+      mobileQuery.addListener(syncVideoSources);
     }
   })();
 </script>
