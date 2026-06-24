@@ -142,6 +142,12 @@ export default {
   'sp.clarify.input_placeholder': 'Type your answer…',
   'sp.clarify.input_placeholder_with_options': 'Or type a different answer…',
   'sp.clarify.your_answer': 'Your answer:',
+  'sp.plan.title': 'Review plan',
+  'sp.plan.approve': 'Approve & run',
+  'sp.plan.cancel': 'Cancel',
+  'sp.plan.edit_hint': 'Optional: edit the plan before approving',
+  'sp.plan.approved': 'Plan approved — running…',
+  'sp.plan.cancelled': 'Plan cancelled.',
 
   // Permission prompt (structured; returns once/always/deny — no free text)
   'sp.perm.question': 'WebBrain wants to {verb} {host}. Allow it?',
@@ -282,6 +288,8 @@ export default {
   'st.display.screenshot.desc': 'Capture a screenshot of the page when DOM reading fails or returns insufficient content. Requires a vision-capable model.',
   'st.display.site_adapters.label': 'Site adapters',
   'st.display.site_adapters.desc': 'Inject short, hand-curated guidance for known high-traffic sites (GitHub, Gmail, Stripe, AWS, etc.) into the agent\'s first message. Helps the agent avoid common dead-ends. Adds a small token cost on the first turn of conversations on matched sites.',
+  'st.display.plan_before_act.label': 'Plan before Act',
+  'st.display.plan_before_act.desc': 'In Act mode, generate a structured plan first, show it for your approval, then pin it to the scratchpad before the agent runs. Adds one LLM call per Act turn.',
   'st.display.auto_screenshot.label': 'Auto-screenshot',
   'st.display.auto_screenshot.desc': 'Automatically capture a viewport screenshot after the agent acts on the page, so vision-capable models can see what changed. Costs more tokens. Disabled silently if the active model doesn\'t support images.',
   'st.display.auto_screenshot.off': 'Off',

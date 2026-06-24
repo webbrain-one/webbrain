@@ -2180,6 +2180,10 @@ browser.runtime.onMessage.addListener((msg) => {
       // the bg.
       renderClarifyCard(data);
       break;
+
+    case 'plan_review':
+      renderPlanReviewCard(data);
+      break;
   }
 });
 
@@ -2317,6 +2321,93 @@ function renderClarifyCard(data) {
   content.appendChild(card);
   scrollToBottom();
   try { input.focus(); } catch {}
+}
+
+function renderPlanReviewCard(data) {
+  hideActivity();
+  const tabId = data?.tabId ?? currentTabId;
+  if (tabId == null) return;
+  let assistantEl = currentAssistantEl;
+  if (!assistantEl) {
+    assistantEl = addMessage('assistant', '');
+    currentAssistantEl = assistantEl;
+  }
+
+  const planId = String(data.planId || '');
+  if (!planId) return;
+
+  const content = assistantEl.querySelector('.message-content');
+  if (!content) return;
+
+  const card = document.createElement('div');
+  card.className = 'plan-review-card';
+  card.dataset.planId = planId;
+  card.dataset.tabId = String(tabId);
+
+  const titleEl = document.createElement('div');
+  titleEl.className = 'plan-review-title';
+  titleEl.textContent = typeof t === 'function' ? t('sp.plan.title') : 'Review plan';
+  card.appendChild(titleEl);
+
+  const bodyEl = document.createElement('pre');
+  bodyEl.className = 'plan-review-body';
+  bodyEl.textContent = String(data.markdown || data.plan?.summary || '').slice(0, 6000);
+  card.appendChild(bodyEl);
+
+  const editHint = document.createElement('div');
+  editHint.className = 'plan-review-hint';
+  editHint.textContent = typeof t === 'function' ? t('sp.plan.edit_hint') : 'Optional: edit the plan before approving';
+  card.appendChild(editHint);
+
+  const textarea = document.createElement('textarea');
+  textarea.className = 'plan-review-edit';
+  textarea.rows = 4;
+  textarea.value = String(data.markdown || '').slice(0, 6000);
+  card.appendChild(textarea);
+
+  const actions = document.createElement('div');
+  actions.className = 'plan-review-actions';
+
+  const approveBtn = document.createElement('button');
+  approveBtn.type = 'button';
+  approveBtn.className = 'plan-review-approve';
+  approveBtn.textContent = typeof t === 'function' ? t('sp.plan.approve') : 'Approve & run';
+  approveBtn.addEventListener('click', () => {
+    submitPlanReview(card, tabId, planId, 'approve', textarea.value.trim());
+  });
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.type = 'button';
+  cancelBtn.className = 'plan-review-cancel';
+  cancelBtn.textContent = typeof t === 'function' ? t('sp.plan.cancel') : 'Cancel';
+  cancelBtn.addEventListener('click', () => {
+    submitPlanReview(card, tabId, planId, 'reject', '');
+  });
+
+  actions.appendChild(approveBtn);
+  actions.appendChild(cancelBtn);
+  card.appendChild(actions);
+
+  content.appendChild(card);
+  scrollToBottom();
+}
+
+function submitPlanReview(card, tabId, planId, action, editedText) {
+  if (card.classList.contains('plan-reviewed')) return;
+  card.classList.add('plan-reviewed');
+  for (const el of card.querySelectorAll('button, textarea')) {
+    el.disabled = true;
+  }
+  const note = document.createElement('div');
+  note.className = 'plan-review-note';
+  note.textContent = action === 'approve'
+    ? (typeof t === 'function' ? t('sp.plan.approved') : 'Plan approved — running…')
+    : (typeof t === 'function' ? t('sp.plan.cancelled') : 'Plan cancelled.');
+  card.appendChild(note);
+  scrollToBottom();
+
+  sendToBackground('plan_response', { tabId, planId, action, editedText })
+    .catch(() => {});
 }
 
 function submitClarify(card, tabId, clarifyId, answer, source) {

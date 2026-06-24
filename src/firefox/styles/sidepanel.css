@@ -1650,3 +1650,100 @@ body {
   padding-top: 4px;
   border-top: 1px dashed var(--border);
 }
+
+/* ─── Planner gate (issue #165) ───────────────────────────────────── */
+
+.plan-review-card {
+  margin: 8px 0;
+  padding: 12px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius, 6px);
+  background: var(--accent-dim, rgba(33, 150, 243, 0.08));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.plan-review-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.plan-review-body {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  margin: 0;
+  max-height: 200px;
+  overflow: auto;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px;
+}
+
+.plan-review-hint {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.plan-review-edit {
+  width: 100%;
+  min-height: 72px;
+  padding: 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.plan-review-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.plan-review-approve {
+  padding: 6px 12px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.plan-review-cancel {
+  padding: 6px 12px;
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.plan-review-approve:disabled,
+.plan-review-cancel:disabled,
+.plan-review-edit:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.plan-reviewed {
+  border-color: var(--success, #4caf50);
+  background: rgba(76, 175, 80, 0.06);
+}
+
+.plan-review-note {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-style: italic;
+}

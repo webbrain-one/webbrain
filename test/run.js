@@ -40,6 +40,15 @@ const { validateFetchUrl: validateFetchUrlFx, registrableDomain: registrableDoma
 const { sanitizeLink, sanitizeMarkdownLinks } = await import(
   'file://' + path.join(ROOT, 'src/chrome/src/ui/markdown-link.js').replace(/\\/g, '/')
 );
+
+const {
+  parsePlanFromContent,
+  formatPlanMarkdown,
+  formatPlanScratchpad,
+  normalizePlan,
+} = await import(
+  'file://' + path.join(ROOT, 'src/chrome/src/agent/planner.js').replace(/\\/g, '/')
+);
 const { sanitizeMarkdownLinks: sanitizeMarkdownLinksFx } = await import(
   'file://' + path.join(ROOT, 'src/firefox/src/ui/markdown-link.js').replace(/\\/g, '/')
 );
@@ -8725,6 +8734,39 @@ test('exhaustiveness: every model-exposed tool is classified', () => {
       );
     }
   }
+});
+
+test('planner: parse and format structured plan', () => {
+  const raw = JSON.stringify({
+    summary: 'Follow GitHub stargazers',
+    steps: [{ id: '1', action: 'Open stargazers', tools: ['navigate', 'wait_for_stable'] }],
+    memory: {
+      use_scratchpad: true,
+      scratchpad_notes: ['download IDs'],
+      use_progress_ledger: true,
+      progress_action: 'follow',
+    },
+    scheduling: { tool: 'schedule_task', hint: 'user asked for daily check' },
+    risks: ['bulk follow'],
+    mode: 'act',
+  });
+  const plan = parsePlanFromContent(raw);
+  assert.ok(plan, 'should parse JSON plan');
+  assert.equal(plan.summary, 'Follow GitHub stargazers');
+  assert.equal(plan.memory.use_progress_ledger, true);
+  assert.equal(plan.scheduling.tool, 'schedule_task');
+  const md = formatPlanMarkdown(plan);
+  assert.match(md, /Follow GitHub stargazers/);
+  assert.match(md, /Progress ledger: yes/);
+  const scratch = formatPlanScratchpad(plan);
+  assert.match(scratch, /\[Approved plan/);
+});
+
+test('planner: parse JSON inside markdown fence', () => {
+  const fenced = 'Here is the plan:\n```json\n{"summary":"Go back","steps":[],"memory":{"use_scratchpad":false,"scratchpad_notes":[],"use_progress_ledger":false,"progress_action":null},"scheduling":null,"risks":[],"mode":"act"}\n```';
+  const plan = parsePlanFromContent(fenced);
+  assert.ok(plan);
+  assert.equal(plan.summary, 'Go back');
 });
 
 await run();

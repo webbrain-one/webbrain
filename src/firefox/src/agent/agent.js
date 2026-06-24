@@ -24,6 +24,12 @@ import {
 import * as trace from '../trace/recorder.js';
 import { solveCaptcha, detectCaptcha, injectToken } from './captcha-solver.js';
 import { Capability, CAPABILITY_LABEL, capabilitiesFor, requiredHosts, frameHostMatches, isNetworkMutation, PermissionManager, UNTRUSTED_CONTENT_TOOLS } from './permission-gate.js';
+import {
+  buildPlannerMessages,
+  parsePlanFromContent,
+  formatPlanMarkdown,
+  formatPlanScratchpad,
+} from './planner.js';
 
 const DEFAULT_CLOUD_COST_ALLOWANCE_USD = 10;
 const COST_ALLOWANCE_SESSION_KEY = 'costAllowanceSessionUsd';
@@ -92,6 +98,8 @@ export class Agent {
     // model to try `solve_captcha` once before falling back to asking
     // the user. The API key is read at call time from browser.storage.
     this.captchaSolverEnabled = false;
+    this.planBeforeAct = false;
+    this._pendingPlans = new Map();
     // Strict secret-handling mode — see chrome/agent.js for rationale.
     // Default off; user opts in via Settings → "Strict secret handling".
     this.strictSecretMode = false;
@@ -2053,6 +2061,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   abort(tabId) {
     this.abortFlags.set(tabId, true);
     this._cancelClarifications(tabId, 'aborted by user');
+    this._cancelPendingPlans(tabId, 'aborted by user');
   }
 
   /**
@@ -2081,6 +2090,103 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       try { entry.resolve({ cancelled: true, reason }); } catch {}
     }
     this._pendingClarifications.delete(tabId);
+  }
+
+  submitPlanResponse(tabId, planId, action, editedText = '') {
+    const tabPending = this._pendingPlans.get(tabId);
+    if (!tabPending) return false;
+    const entry = tabPending.get(planId);
+    if (!entry) return false;
+    try {
+      entry.resolve({
+        action: String(action || 'reject'),
+        editedText: String(editedText || '').trim(),
+      });
+    } catch {}
+    return true;
+  }
+
+  _cancelPendingPlans(tabId, reason) {
+    const tabPending = this._pendingPlans.get(tabId);
+    if (!tabPending) return;
+    for (const [, entry] of tabPending) {
+      try { entry.resolve({ action: 'reject', cancelled: true, reason }); } catch {}
+    }
+    this._pendingPlans.delete(tabId);
+  }
+
+  async _waitForPlanReview(tabId, planId, plan, markdown, onUpdate) {
+    const tabPending = this._pendingPlans.get(tabId) || new Map();
+    this._pendingPlans.set(tabId, tabPending);
+    const responsePromise = new Promise((resolve) => {
+      tabPending.set(planId, { resolve, ts: Date.now() });
+    });
+    if (typeof onUpdate === 'function') {
+      try {
+        onUpdate('plan_review', { planId, plan, markdown });
+      } catch {}
+    }
+    const response = await responsePromise;
+    tabPending.delete(planId);
+    if (!tabPending.size) this._pendingPlans.delete(tabId);
+    return response;
+  }
+
+  async _runPlannerGate(tabId, enriched, onUpdate, costState) {
+    let tabUrl = '';
+    let tabTitle = '';
+    try {
+      const tab = await browser.tabs.get(tabId);
+      tabUrl = tab?.url || '';
+      tabTitle = tab?.title || '';
+    } catch {}
+
+    onUpdate('thinking', { step: 0, note: 'Planning…' });
+
+    const provider = this.providerManager.getActive();
+    const plannerMessages = buildPlannerMessages(enriched, tabUrl, tabTitle);
+
+    try {
+      const result = await this._chatWithCostAllowance(
+        provider,
+        plannerMessages,
+        { temperature: 0.3, maxTokens: 2048 },
+        costState,
+      );
+      const plan = parsePlanFromContent(result.content);
+      if (!plan) {
+        onUpdate('warning', { message: 'Planner could not parse a structured plan — continuing without plan review.' });
+        return { proceed: true };
+      }
+
+      const planId = `plan_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+      const markdown = formatPlanMarkdown(plan);
+      const choice = await this._waitForPlanReview(tabId, planId, plan, markdown, onUpdate);
+
+      if (this._checkAbort(tabId)) {
+        return { proceed: false, message: '[Stopped by user]' };
+      }
+      if (choice?.cancelled || choice?.action === 'reject') {
+        return { proceed: false, message: 'Task cancelled — plan was not approved.' };
+      }
+
+      const scratchpadText = formatPlanScratchpad(plan, choice?.editedText);
+      const scratchResult = this._scratchpadWrite(tabId, { text: scratchpadText, replace: true });
+      if (!scratchResult?.success) {
+        onUpdate('warning', { message: scratchResult?.error || 'Could not pin plan to scratchpad.' });
+      } else {
+        onUpdate('plan_approved', { planId, bytes: scratchResult.bytes });
+      }
+      return { proceed: true };
+    } catch (e) {
+      if (this._isCostAllowanceError(e)) {
+        return { proceed: false, message: e.message };
+      }
+      onUpdate('warning', {
+        message: `Planner failed: ${e.message || 'unknown error'}. Continuing without plan review.`,
+      });
+      return { proceed: true };
+    }
   }
 
   /**
@@ -2224,6 +2330,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
    */
   clearConversation(tabId) {
     this._cancelClarifications(tabId, 'conversation cleared');
+    this._cancelPendingPlans(tabId, 'conversation cleared');
     this.conversations.delete(tabId);
     this.progressLedgers.delete(tabId);
     this.progressPageScopes.delete(tabId);
@@ -5161,6 +5268,16 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     await this._manageContext(tabId, messages, onUpdate, costState);
 
     const enriched = await this._enrichUserMessageWithCurrentPage(tabId, messages, userMessage, costState);
+
+    if (mode === 'act' && this.planBeforeAct) {
+      const gate = await this._runPlannerGate(tabId, enriched, onUpdate, costState);
+      if (!gate.proceed) {
+        messages.push(enriched);
+        messages.push({ role: 'assistant', content: gate.message || 'Task cancelled.' });
+        return gate.message || 'Task cancelled.';
+      }
+    }
+
     messages.push(enriched);
 
     const provider = this.providerManager.getActive();
@@ -5443,6 +5560,16 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     await this._manageContext(tabId, messages, onUpdate, costState);
 
     const enriched = await this._enrichUserMessageWithCurrentPage(tabId, messages, userMessage, costState);
+
+    if (mode === 'act' && this.planBeforeAct) {
+      const gate = await this._runPlannerGate(tabId, enriched, onUpdate, costState);
+      if (!gate.proceed) {
+        messages.push(enriched);
+        messages.push({ role: 'assistant', content: gate.message || 'Task cancelled.' });
+        return gate.message || 'Task cancelled.';
+      }
+    }
+
     messages.push(enriched);
 
     const provider = this.providerManager.getActive();

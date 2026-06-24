@@ -136,6 +136,12 @@ async function loadCaptchaSolver() {
 }
 loadCaptchaSolver();
 
+async function loadPlanBeforeAct() {
+  const stored = await browser.storage.local.get('planBeforeAct');
+  if (stored.planBeforeAct != null) agent.planBeforeAct = !!stored.planBeforeAct;
+}
+loadPlanBeforeAct();
+
 // Initialize on install
 browser.runtime.onInstalled.addListener(async () => {
   createContextMenus();
@@ -178,6 +184,9 @@ browser.storage.onChanged.addListener((changes) => {
   if (changes.captchaSolverEnabled) {
     agent.captchaSolverEnabled = !!changes.captchaSolverEnabled.newValue;
     refreshPrompts = true;
+  }
+  if (changes.planBeforeAct) {
+    agent.planBeforeAct = !!changes.planBeforeAct.newValue;
   }
   if (refreshPrompts) agent._refreshSystemPrompts();
 });
@@ -605,6 +614,17 @@ async function handleMessage(msg, sender) {
       if (!clarifyId) return { ok: false, error: 'clarifyId required' };
       if (!answer) return { ok: false, error: 'answer required' };
       const matched = agent.submitClarifyResponse(tabId, clarifyId, answer, msg.source || 'user');
+      return { ok: matched, matched };
+    }
+
+    case 'plan_response': {
+      const tabId = msg.tabId || sender.tab?.id;
+      if (!tabId) return { ok: false, error: 'No tab ID' };
+      const planId = String(msg.planId || '');
+      const action = String(msg.action || 'reject');
+      const editedText = String(msg.editedText || '');
+      if (!planId) return { ok: false, error: 'planId required' };
+      const matched = agent.submitPlanResponse(tabId, planId, action, editedText);
       return { ok: matched, matched };
     }
 

@@ -23,6 +23,7 @@ const costSpentValueLabel = document.getElementById('cost-spent-value');
 const btnResetCostSpend = document.getElementById('btn-reset-cost-spend');
 const autoScreenshotSelect = document.getElementById('select-auto-screenshot');
 const siteAdaptersToggle = document.getElementById('toggle-site-adapters');
+const planBeforeActToggle = document.getElementById('toggle-plan-before-act');
 const tracingToggle = document.getElementById('toggle-tracing');
 const strictSecretToggle = document.getElementById('toggle-strict-secret');
 const allowLocalNetworkToggle = document.getElementById('toggle-allow-local-network');
@@ -179,7 +180,7 @@ async function init() {
   renderAuthSection();
 
   // Load display settings
-  const stored = await browser.storage.local.get(['verboseMode', 'screenshotFallback', 'maxAgentSteps', 'autoScreenshot', 'useSiteAdapters', 'tracingEnabled', 'strictSecretMode', 'agentAllowLocalNetwork', 'scheduledTasksEnabled', 'scheduledRequireConsequentialConfirmation', 'providerFilter', 'requestTimeoutMs', 'costAllowanceSessionUsd', 'costAllowanceTotalUsd', 'cloudCostSpentUsd']);
+  const stored = await browser.storage.local.get(['verboseMode', 'screenshotFallback', 'maxAgentSteps', 'autoScreenshot', 'useSiteAdapters', 'planBeforeAct', 'tracingEnabled', 'strictSecretMode', 'agentAllowLocalNetwork', 'scheduledTasksEnabled', 'scheduledRequireConsequentialConfirmation', 'providerFilter', 'requestTimeoutMs', 'costAllowanceSessionUsd', 'costAllowanceTotalUsd', 'cloudCostSpentUsd']);
   if (typeof stored.providerFilter === 'string' && ['all','local','cloud','router'].includes(stored.providerFilter)) {
     providerFilter = stored.providerFilter;
   }
@@ -203,6 +204,7 @@ async function init() {
   }
   if (autoScreenshotSelect) autoScreenshotSelect.value = stored.autoScreenshot || 'state_change';
   if (siteAdaptersToggle) siteAdaptersToggle.checked = stored.useSiteAdapters ?? true;
+  if (planBeforeActToggle) planBeforeActToggle.checked = !!stored.planBeforeAct;
   if (tracingToggle) tracingToggle.checked = stored.tracingEnabled === true;
   const sessionLimit = normalizeCostAmount(stored.costAllowanceSessionUsd);
   const totalLimit = normalizeCostAmount(stored.costAllowanceTotalUsd);
@@ -445,6 +447,12 @@ autoScreenshotSelect?.addEventListener('change', async () => {
 siteAdaptersToggle?.addEventListener('change', async () => {
   await browser.storage.local.set({ useSiteAdapters: siteAdaptersToggle.checked }).catch(() => {});
 });
+
+if (planBeforeActToggle) {
+  planBeforeActToggle.addEventListener('change', async () => {
+    await browser.storage.local.set({ planBeforeAct: planBeforeActToggle.checked }).catch(() => {});
+  });
+}
 
 tracingToggle?.addEventListener('change', async () => {
   await browser.storage.local.set({ tracingEnabled: tracingToggle.checked }).catch(() => {});
