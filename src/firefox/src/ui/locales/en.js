@@ -119,6 +119,8 @@ export default {
   'sp.copy.code.title': 'Copy code',
 
   'sp.error_prefix': 'Error: {msg}',
+  'sp.subscribe.allowance_used': 'Daily free WebBrain Cloud allowance used.',
+  'sp.subscribe.btn': 'Subscribe',
   'sp.stopped_by_user': '[Stopped by user]',
   'sp.stopped_by_user_html': '<em>Stopped by user.</em>',
 

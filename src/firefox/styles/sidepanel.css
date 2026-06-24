@@ -1520,6 +1520,35 @@ body {
   color: var(--error-soft);
 }
 
+/* WebBrain Cloud quota / subscribe prompt — bare URL upgraded to a button */
+.message-text.subscribe-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.subscribe-error-text {
+  line-height: 1.45;
+}
+
+.subscribe-btn {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  padding: 8px 22px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.subscribe-btn:hover {
+  background: var(--accent-hover);
+}
+
 /* Clarify card — agent paused to ask user a question */
 .clarify-card {
   margin: 8px 0;
