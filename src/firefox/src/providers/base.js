@@ -16,7 +16,7 @@ export class BaseLLMProvider {
    * Send a chat completion request.
    * @param {Array<{role: string, content: string}>} messages
    * @param {Object} options - { tools, temperature, maxTokens, stream }
-   * @returns {Promise<{content: string, toolCalls: Array|null, usage: Object|null}>}
+   * @returns {Promise<{content: string, reasoningContent?: string, toolCalls: Array|null, usage: Object|null}>}
    */
   async chat(messages, options = {}) {
     throw new Error('chat() not implemented');

@@ -196,6 +196,7 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
 
     return {
       content: message?.content || '',
+      reasoningContent: message?.reasoning_content || message?.reasoning || '',
       toolCalls: message?.tool_calls || null,
       usage: data.usage || null,
       raw: data,

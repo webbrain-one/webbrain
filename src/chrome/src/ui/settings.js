@@ -210,7 +210,7 @@ async function init() {
   autoScreenshotSelect.value = stored.autoScreenshot || 'state_change';
   siteAdaptersToggle.checked = stored.useSiteAdapters ?? true;
   if (planBeforeActToggle) {
-    planBeforeActToggle.checked = !!stored.planBeforeAct;
+    planBeforeActToggle.checked = stored.planBeforeAct !== false;
   }
   notifySoundToggle.checked = stored.notifySound ?? true; // on by default
   tracingToggle.checked = stored.tracingEnabled === true; // off by default

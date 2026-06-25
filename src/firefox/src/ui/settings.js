@@ -204,7 +204,7 @@ async function init() {
   }
   if (autoScreenshotSelect) autoScreenshotSelect.value = stored.autoScreenshot || 'state_change';
   if (siteAdaptersToggle) siteAdaptersToggle.checked = stored.useSiteAdapters ?? true;
-  if (planBeforeActToggle) planBeforeActToggle.checked = !!stored.planBeforeAct;
+  if (planBeforeActToggle) planBeforeActToggle.checked = stored.planBeforeAct !== false;
   if (tracingToggle) tracingToggle.checked = stored.tracingEnabled === true;
   const sessionLimit = normalizeCostAmount(stored.costAllowanceSessionUsd);
   const totalLimit = normalizeCostAmount(stored.costAllowanceTotalUsd);

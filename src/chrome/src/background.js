@@ -139,7 +139,7 @@ loadCaptchaSolver();
 
 async function loadPlanBeforeAct() {
   const stored = await chrome.storage.local.get('planBeforeAct');
-  if (stored.planBeforeAct != null) agent.planBeforeAct = !!stored.planBeforeAct;
+  agent.planBeforeAct = stored.planBeforeAct !== false;
 }
 // Hydrate once at SW boot. handleMessage awaits this promise so the first chat
 // can't race ahead of hydration, but it does NOT re-read storage per message —
@@ -196,7 +196,7 @@ chrome.storage.onChanged.addListener((changes) => {
     refreshPrompts = true;
   }
   if (changes.planBeforeAct) {
-    agent.planBeforeAct = !!changes.planBeforeAct.newValue;
+    agent.planBeforeAct = changes.planBeforeAct.newValue !== false;
   }
   if (refreshPrompts) agent._refreshSystemPrompts();
 });
@@ -448,6 +448,17 @@ function sendIndicatorMessage(tabId, type) {
   } catch { /* ignore */ }
 }
 
+function sendAgentRunComplete(tabId) {
+  if (tabId == null) return;
+  chrome.runtime.sendMessage({
+    target: 'sidepanel',
+    action: 'agent_update',
+    tabId,
+    type: 'run_complete',
+    data: {},
+  }).catch(() => {});
+}
+
 // Stop button on the page → abort the agent run for that tab. Mirrors
 // the sidepanel's Stop button.
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
@@ -637,6 +648,7 @@ async function handleMessage(msg, sender) {
 
         return { content: result, updates };
       } finally {
+        sendAgentRunComplete(tabId);
         sendIndicatorMessage(tabId, 'WB_HIDE_AGENT_INDICATORS');
       }
     }
@@ -662,6 +674,7 @@ async function handleMessage(msg, sender) {
 
         return { content: result };
       } finally {
+        sendAgentRunComplete(tabId);
         sendIndicatorMessage(tabId, 'WB_HIDE_AGENT_INDICATORS');
       }
     }
@@ -685,6 +698,7 @@ async function handleMessage(msg, sender) {
 
         return { content: result };
       } finally {
+        sendAgentRunComplete(tabId);
         sendIndicatorMessage(tabId, 'WB_HIDE_AGENT_INDICATORS');
       }
     }

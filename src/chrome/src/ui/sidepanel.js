@@ -1639,6 +1639,27 @@ function bindPlanReviewCard(card) {
   }
 }
 
+function reattachPlanReviewActiveRun(card) {
+  const assistantEl = card?.closest?.('.message.assistant');
+  if (!assistantEl) return null;
+  currentAssistantEl = assistantEl;
+  isProcessing = true;
+  abortRequested = false;
+  sendBtn.disabled = true;
+  hideRecommendedActions();
+  showActivity(t('sp.activity.thinking'));
+  return assistantEl;
+}
+
+function clearPlanReviewActiveRun(assistantEl) {
+  if (currentAssistantEl === assistantEl) currentAssistantEl = null;
+  isProcessing = false;
+  sendBtn.disabled = false;
+  hideActivity();
+  drainQueuedContextMenuPromptsAfterPendingTabSwitch();
+  refreshRecommendedActions();
+}
+
 function rebindPlanReviewCards() {
   document.querySelectorAll('.plan-review-card').forEach(card => {
     bindPlanReviewCard(card);
@@ -2607,6 +2628,12 @@ chrome.runtime.onMessage.addListener((msg) => {
       hideActivity();
       break;
 
+    case 'run_complete':
+      if (currentAssistantEl) finalizeSteps(currentAssistantEl);
+      clearPlanReviewActiveRun(currentAssistantEl);
+      scrollToBottom();
+      break;
+
     case 'context_compacted':
       // The agent auto-summarized older turns to stay within the model's
       // context window. Show a subtle inline separator so the user knows
@@ -2830,6 +2857,7 @@ function renderPlanReviewCard(data) {
 
 function submitPlanReview(card, tabId, planId, action, editedText) {
   if (card.classList.contains('plan-reviewed')) return;
+  const activeAssistantEl = action === 'approve' ? reattachPlanReviewActiveRun(card) : null;
   card.classList.add('plan-reviewed');
   for (const el of card.querySelectorAll('button, textarea')) {
     el.disabled = true;
@@ -2853,11 +2881,13 @@ function submitPlanReview(card, tabId, planId, action, editedText) {
     .then((res) => {
       if (action !== 'approve') return;
       note.textContent = res && res.matched ? approvedText() : expiredText();
+      if (!res?.matched && activeAssistantEl) clearPlanReviewActiveRun(activeAssistantEl);
       scrollToBottom();
     })
     .catch(() => {
       if (action === 'approve') {
         note.textContent = expiredText();
+        if (activeAssistantEl) clearPlanReviewActiveRun(activeAssistantEl);
         scrollToBottom();
       }
     });

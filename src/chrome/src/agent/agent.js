@@ -137,7 +137,7 @@ export class Agent {
     // Pre-execution planner (Settings → Plan before Act). When enabled, Act-mode
     // runs a read-only planning LLM call, shows the plan in the side panel, and
     // pins it to the scratchpad on user approval before the tool loop starts.
-    this.planBeforeAct = false;
+    this.planBeforeAct = true;
     this._pendingPlans = new Map(); // tabId → (planId → { resolve, ts })
     // Stale click detection: per-tab last clicked element identity.
     this._lastCdpClickIdent = new Map(); // tabId -> string
@@ -2973,6 +2973,49 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     return { proceed: true };
   }
 
+  _plannerChatOptions(provider, retry = false) {
+    const opts = {
+      temperature: retry ? 0.1 : 0.3,
+      maxTokens: 4096,
+    };
+    const providerName = String(provider?.config?.providerName || provider?.name || '').toLowerCase();
+    // vLLM/SGLang expose Qwen-style chat_template_kwargs; disabling thinking
+    // keeps planner calls from spending the whole output budget on hidden
+    // reasoning and returning empty final content.
+    if (providerName === 'vllm' || providerName === 'sglang') {
+      opts.extraBody = { chat_template_kwargs: { enable_thinking: false } };
+    }
+    return opts;
+  }
+
+  _plannerPrefersNoThinkPrompt(provider) {
+    const model = String(provider?.model || provider?.config?.model || '').toLowerCase();
+    return /\b(qwen[-_ ]?3|qwq)\b/.test(model) || /deepseek[-_ ]?r1/.test(model);
+  }
+
+  _plannerReasoningContent(result) {
+    return String(
+      result?.reasoningContent
+      || result?.raw?.choices?.[0]?.message?.reasoning_content
+      || result?.raw?.choices?.[0]?.message?.reasoning
+      || ''
+    ).trim();
+  }
+
+  _plannerRepairMessages(plannerMessages) {
+    return [
+      ...plannerMessages,
+      {
+        role: 'user',
+        content:
+          '/no_think\n' +
+          'The previous planner attempt did not return a parseable final JSON object. ' +
+          'Re-read the task above and output exactly one JSON object matching the schema. ' +
+          'No prose, no markdown, no tool calls, and no reasoning text.',
+      },
+    ];
+  }
+
   /**
    * Run the optional pre-execution planner gate for Act mode.
    * Returns { proceed, message?, approvedScratchpadText?, planId? }.
@@ -2983,7 +3026,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     onUpdate('thinking', { step: 0, note: 'Planning…' });
 
     const provider = this.providerManager.getActive();
-    const plannerMessages = buildPlannerMessages(enriched, tabUrl, tabTitle, historyDigest);
+    const plannerMessages = buildPlannerMessages(enriched, tabUrl, tabTitle, historyDigest, {
+      noThink: this._plannerPrefersNoThinkPrompt(provider),
+    });
     const plannerStep = 0;
 
     try {
@@ -2999,10 +3044,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         } catch {}
       }
       const _llmStart = Date.now();
-      const result = await this._chatWithCostAllowance(
+      let result = await this._chatWithCostAllowance(
         provider,
         plannerMessages,
-        { temperature: 0.3, maxTokens: 2048 },
+        this._plannerChatOptions(provider),
         costState,
       );
       if (runId) {
@@ -3020,7 +3065,17 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       if (this._checkAbort(tabId)) {
         return { proceed: false, message: '[Stopped by user]' };
       }
-      const plan = parsePlanFromContent(result.content);
+      let plan = parsePlanFromContent(result.content);
+      if (!plan && (!String(result.content || '').trim() || this._plannerReasoningContent(result))) {
+        onUpdate('thinking', { step: 0, note: 'Planning… retrying JSON output' });
+        result = await this._chatWithCostAllowance(
+          provider,
+          this._plannerRepairMessages(plannerMessages),
+          this._plannerChatOptions(provider, true),
+          costState,
+        );
+        plan = parsePlanFromContent(result.content);
+      }
       if (!plan) {
         const msg = 'Plan before Act is enabled but the planner could not produce a valid structured plan. Task cancelled — no actions were taken.';
         onUpdate('warning', { message: msg });
