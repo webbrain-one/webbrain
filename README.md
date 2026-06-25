@@ -218,6 +218,7 @@ WebBrain accepts slash commands as the first thing on a line in the input box. T
 | `/schedule` | Create a scheduled task |
 | `/list-schedules` | Show scheduled tasks |
 | `/show-scratchpad` | Show the current scratchpad |
+| `/edit-scratchpad <text>` | Append text to the current scratchpad |
 | `/allow-api` | **Per-conversation API mutation override.** Lifts the UI-first restriction so the agent may use POST/PUT/PATCH/DELETE via `fetch_url` when UI is failing. Badge appears while active; clears on `/reset`. |
 | `/compact` | Force context compaction for the current conversation |
 | `/verbose` | Toggle verbose/compact tool display (same as the toolbar button) |

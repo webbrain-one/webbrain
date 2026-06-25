@@ -208,6 +208,7 @@ WebBrain accepte les commandes slash en tant que premier élément d'une ligne d
 | `/schedule` | Créer une tâche planifiée |
 | `/list-schedules` | Afficher les tâches planifiées |
 | `/show-scratchpad` | Afficher le bloc-notes actuel |
+| `/edit-scratchpad <texte>` | Ajouter du texte au bloc-notes actuel |
 | `/allow-api` | **Dérogation de mutation API par conversation.** Lève la restriction UI-d'abord afin que l'agent puisse utiliser POST/PUT/PATCH/DELETE via `fetch_url` lorsque l'UI échoue. Un badge apparaît pendant l'activation ; il s'efface au `/reset`. |
 | `/compact` | Force le compactage du contexte pour la conversation actuelle |
 | `/verbose` | Bascule l'affichage des outils verbeux/compact (identique au bouton de la barre d'outils) |

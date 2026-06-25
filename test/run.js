@@ -1977,18 +1977,24 @@ test('schedule form time errors mention immediate start in every locale', () => 
   }
 });
 
-test('sidepanel exposes show-scratchpad slash command in both builds', () => {
-  for (const [label, panelRel, bgRel, localeRel] of [
-    ['chrome', 'src/chrome/src/ui/sidepanel.js', 'src/chrome/src/background.js', 'src/chrome/src/ui/locales/en.js'],
-    ['firefox', 'src/firefox/src/ui/sidepanel.js', 'src/firefox/src/background.js', 'src/firefox/src/ui/locales/en.js'],
+test('sidepanel exposes scratchpad slash commands in both builds', () => {
+  for (const [label, panelRel, bgRel, agentRel, localeRel] of [
+    ['chrome', 'src/chrome/src/ui/sidepanel.js', 'src/chrome/src/background.js', 'src/chrome/src/agent/agent.js', 'src/chrome/src/ui/locales/en.js'],
+    ['firefox', 'src/firefox/src/ui/sidepanel.js', 'src/firefox/src/background.js', 'src/firefox/src/agent/agent.js', 'src/firefox/src/ui/locales/en.js'],
   ]) {
     const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
     const bg = fs.readFileSync(path.join(ROOT, bgRel), 'utf8');
+    const agent = fs.readFileSync(path.join(ROOT, agentRel), 'utf8');
     const locale = fs.readFileSync(path.join(ROOT, localeRel), 'utf8');
     assert.match(panel, /\/show-scratchpad\b/, `${label}: /show-scratchpad parser missing`);
+    assert.match(panel, /\/edit-scratchpad\b/, `${label}: /edit-scratchpad parser missing`);
     assert.match(panel, /get_scratchpad/, `${label}: sidepanel should call background scratchpad reader`);
+    assert.match(panel, /write_scratchpad/, `${label}: sidepanel should call background scratchpad writer`);
     assert.match(bg, /get_scratchpad/, `${label}: background scratchpad action missing`);
+    assert.match(bg, /write_scratchpad/, `${label}: background scratchpad write action missing`);
+    assert.match(agent, /async writeScratchpad\(tabId, text, options = \{\}\) \{[\s\S]*?this\.getConversation\(tabId, mode\);[\s\S]*?this\._scratchpadWrite\(tabId, \{ text, replace: !!options\?\.replace \}\);[\s\S]*?\}/, `${label}: agent should expose scratchpad append wrapper`);
     assert.match(locale, /\/show-scratchpad/, `${label}: help should mention /show-scratchpad`);
+    assert.match(locale, /\/edit-scratchpad/, `${label}: help should mention /edit-scratchpad`);
   }
 });
 
@@ -3166,6 +3172,8 @@ test('sidepanel scopes async tab commands to the original tab', () => {
 
     assert.match(panel, /async function showScratchpad\(tabId = currentTabId\) \{[\s\S]*?sendToBackground\('get_scratchpad', \{ tabId \}\);[\s\S]*?if \(currentTabId !== tabId\) return;[\s\S]*?catch \(e\) \{[\s\S]*?if \(currentTabId !== tabId\) return;[\s\S]*?sp\.scratchpad\.error/, `${label}: /show-scratchpad should not render success or error results into a different tab`);
     assert.match(panel, /\/\/ \/show-scratchpad[\s\S]*?await showScratchpad\(tabId\);/, `${label}: /show-scratchpad should use the initiating tab id from the parser`);
+    assert.match(panel, /async function editScratchpad\(note, tabId = currentTabId\) \{[\s\S]*?sendToBackground\('write_scratchpad', \{ tabId, text \}\);[\s\S]*?if \(currentTabId !== tabId\) return;[\s\S]*?catch \(e\) \{[\s\S]*?if \(currentTabId !== tabId\) return;[\s\S]*?sp\.scratchpad\.error/, `${label}: /edit-scratchpad should not render success or error results into a different tab`);
+    assert.match(panel, /\/\/ \/edit-scratchpad[\s\S]*?await editScratchpad\(text\.slice\(mEditScratchpad\[0\]\.length\), tabId\);/, `${label}: /edit-scratchpad should use the initiating tab id from the parser`);
 
     const screenshotIdx = panel.indexOf('// /screenshot');
     const screenshotEnd = panel.indexOf('// /record', screenshotIdx);

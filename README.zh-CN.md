@@ -208,6 +208,7 @@ WebBrain 接受作为输入框某行开头的斜杠命令。在面板内输入 `
 | `/schedule` | 创建计划任务 |
 | `/list-schedules` | 显示计划任务 |
 | `/show-scratchpad` | 显示当前草稿板 |
+| `/edit-scratchpad <文本>` | 将文本追加到当前草稿板 |
 | `/allow-api` | **按对话的 API 变更覆盖。** 解除 UI 优先限制，使智能体在 UI 失败时可通过 `fetch_url` 使用 POST/PUT/PATCH/DELETE。激活时显示徽章；在 `/reset` 时清除。 |
 | `/compact` | 强制压缩当前对话上下文 |
 | `/verbose` | 切换详细/压缩工具显示（与工具栏按钮相同） |

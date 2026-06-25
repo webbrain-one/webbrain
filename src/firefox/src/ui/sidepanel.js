@@ -324,6 +324,7 @@ const SLASH_COMMANDS = [
   { value: '/schedule', descriptionKey: 'sp.slash.schedule' },
   { value: '/list-schedules', descriptionKey: 'sp.slash.list_schedules' },
   { value: '/show-scratchpad', descriptionKey: 'sp.slash.show_scratchpad' },
+  { value: '/edit-scratchpad', descriptionKey: 'sp.slash.edit_scratchpad' },
   { value: '/allow-api', descriptionKey: 'sp.slash.allow_api' },
   { value: '/compact', descriptionKey: 'sp.slash.compact' },
   { value: '/verbose', descriptionKey: 'sp.slash.verbose' },
@@ -1148,6 +1149,27 @@ async function showScratchpad(tabId = currentTabId) {
   }
 }
 
+async function editScratchpad(note, tabId = currentTabId) {
+  const text = String(note || '').trim();
+  if (!text) {
+    if (currentTabId !== tabId) return;
+    addMessage('system', t('sp.scratchpad.edit_empty'));
+    return;
+  }
+  try {
+    const res = await sendToBackground('write_scratchpad', { tabId, text });
+    if (currentTabId !== tabId) return;
+    if (!res?.ok && !res?.success) {
+      addMessage('system', tSystemHtml('sp.scratchpad.error', { msg: res?.error || 'unknown error' }));
+      return;
+    }
+    addMessage('system', t('sp.scratchpad.updated'));
+  } catch (e) {
+    if (currentTabId !== tabId) return;
+    addMessage('system', tSystemHtml('sp.scratchpad.error', { msg: e.message }));
+  }
+}
+
 
 // --- Initialization ---
 
@@ -1771,6 +1793,13 @@ async function parseSlashCommands(text, tabId = currentTabId) {
   // /show-scratchpad — dump the current tab's agent scratchpad
   if (/^\/show-scratchpad\b\s*/i.test(text)) {
     await showScratchpad(tabId);
+    return '';
+  }
+
+  // /edit-scratchpad — append text after the command to the scratchpad
+  const mEditScratchpad = text.match(/^\/edit-scratchpad\b\s*/i);
+  if (mEditScratchpad) {
+    await editScratchpad(text.slice(mEditScratchpad[0].length), tabId);
     return '';
   }
 

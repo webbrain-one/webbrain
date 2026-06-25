@@ -241,6 +241,13 @@ export class Agent {
     };
   }
 
+  async writeScratchpad(tabId, text, options = {}) {
+    await this._hydrate(tabId);
+    const mode = options?.mode || this.conversationModes.get(tabId) || 'ask';
+    this.getConversation(tabId, mode);
+    return this._scratchpadWrite(tabId, { text, replace: !!options?.replace });
+  }
+
   setScheduledRunPolicy(tabId, policy) {
     this.scheduledRunPolicies.set(tabId, {
       requireConsequentialConfirmation: policy?.requireConsequentialConfirmation !== false,
