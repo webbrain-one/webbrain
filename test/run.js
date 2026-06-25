@@ -8912,6 +8912,58 @@ test('planner gate: approving plan appends without deleting scratchpad facts', a
   });
 });
 
+test('planner gate: scheduled runs auto-approve plan review', async () => {
+  await withPlannerBrowserGlobals(async () => {
+    for (const [label, AgentClass] of [['chrome', AgentCh], ['firefox', AgentFx]]) {
+      const tabId = label === 'chrome' ? 9221 : 9222;
+      const agent = new AgentClass({ getActive: () => ({}) });
+      agent.planBeforeAct = true;
+      agent.conversations.set(tabId, [{ role: 'system', content: 'system' }]);
+      agent.setScheduledRunPolicy(tabId, {
+        requireConsequentialConfirmation: false,
+        autoApprovePlanReview: true,
+      });
+      agent._chatWithCostAllowance = async () => ({ content: plannerFixtureJson() });
+      agent._waitForPlanReview = async () => {
+        throw new Error('scheduled run should not wait for side panel plan approval');
+      };
+
+      const messages = agent.conversations.get(tabId);
+      const outcome = await agent._maybeRunPlannerGate(
+        tabId,
+        messages,
+        { role: 'user', content: 'scheduled task' },
+        (type) => {
+          assert.notEqual(type, 'plan_review', `${label} should not emit a plan review prompt`);
+        },
+        'act',
+        null,
+        null,
+      );
+
+      assert.equal(outcome.proceed, true, `${label} scheduled run should proceed`);
+      const idx = agent._findScratchpadIndex(agent.conversations.get(tabId));
+      assert.ok(idx >= 0, `${label} scheduled run should pin the approved plan`);
+      const body = agent._extractScratchpadBody(agent.conversations.get(tabId)[idx].content);
+      assert.match(body, /\[Approved plan — pinned by planner\]/, `${label} should append approved plan marker`);
+    }
+  });
+});
+
+test('sidepanel: restored plan review cards rebind approve and cancel actions', () => {
+  for (const file of [
+    'src/chrome/src/ui/sidepanel.js',
+    'src/firefox/src/ui/sidepanel.js',
+  ]) {
+    const source = fs.readFileSync(path.join(ROOT, file), 'utf8');
+    assert.match(source, /function bindPlanReviewCard\(/, `${file} should expose a card binder`);
+    assert.match(source, /function rebindPlanReviewCards\(/, `${file} should expose a restored-card rebinder`);
+    assert.match(source, /rebindPlanReviewCards\(\);/, `${file} should call the rebinder after chat restore`);
+    assert.match(source, /plan-review-approve[\s\S]*submitPlanReview\(card, tabId, planId, 'approve'/, `${file} should rebind approve`);
+    assert.match(source, /plan-review-cancel[\s\S]*submitPlanReview\(card, tabId, planId, 'reject'/, `${file} should rebind cancel`);
+  }
+});
+
 test('planner gate: streaming path clears active trace run after completion', async () => {
   await withPlannerBrowserGlobals(async () => {
     for (const [label, AgentClass] of [['chrome', AgentCh], ['firefox', AgentFx]]) {

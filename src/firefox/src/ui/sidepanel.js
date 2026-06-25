@@ -1444,6 +1444,42 @@ function rebindClarifyCards() {
   });
 }
 
+function bindPlanReviewCard(card) {
+  if (!card || card.classList.contains('plan-reviewed')) return;
+  const planId = String(card.dataset.planId || '');
+  if (!planId) return;
+  const rawTabId = card.dataset.tabId;
+  const tabId = rawTabId != null && rawTabId !== '' ? Number(rawTabId) : currentTabId;
+  if (tabId == null || Number.isNaN(tabId)) return;
+
+  const textarea = card.querySelector('.plan-review-edit');
+  const originalMarkdown = String(textarea?.defaultValue || textarea?.value || '').trim();
+
+  const approveBtn = card.querySelector('.plan-review-approve');
+  if (approveBtn && !approveBtn.dataset.bound) {
+    approveBtn.dataset.bound = 'true';
+    approveBtn.addEventListener('click', () => {
+      const current = String(textarea?.value || '').trim();
+      const editedText = current && current !== originalMarkdown ? current : '';
+      submitPlanReview(card, tabId, planId, 'approve', editedText);
+    });
+  }
+
+  const cancelBtn = card.querySelector('.plan-review-cancel');
+  if (cancelBtn && !cancelBtn.dataset.bound) {
+    cancelBtn.dataset.bound = 'true';
+    cancelBtn.addEventListener('click', () => {
+      submitPlanReview(card, tabId, planId, 'reject', '');
+    });
+  }
+}
+
+function rebindPlanReviewCards() {
+  document.querySelectorAll('.plan-review-card').forEach(card => {
+    bindPlanReviewCard(card);
+  });
+}
+
 function rebindScheduleComposers() {
   document.querySelectorAll('form.schedule-composer').forEach(form => {
     bindScheduleComposer(form);
@@ -1462,6 +1498,7 @@ function rebindRestoredMessageControls() {
   rebindCopyButtons();
   rebindContinueButtons();
   rebindClarifyCards();
+  rebindPlanReviewCards();
   rebindScheduleComposers();
   rebindSubscribeButtons();
 }
@@ -2372,6 +2409,7 @@ function renderPlanReviewCard(data) {
   textarea.className = 'plan-review-edit';
   textarea.rows = 8;
   textarea.value = originalMarkdown;
+  textarea.defaultValue = originalMarkdown;
   card.appendChild(textarea);
 
   const actions = document.createElement('div');
@@ -2381,23 +2419,16 @@ function renderPlanReviewCard(data) {
   approveBtn.type = 'button';
   approveBtn.className = 'plan-review-approve';
   approveBtn.textContent = typeof t === 'function' ? t('sp.plan.approve') : 'Approve & run';
-  approveBtn.addEventListener('click', () => {
-    const current = textarea.value.trim();
-    const editedText = current && current !== originalMarkdown.trim() ? current : '';
-    submitPlanReview(card, tabId, planId, 'approve', editedText);
-  });
 
   const cancelBtn = document.createElement('button');
   cancelBtn.type = 'button';
   cancelBtn.className = 'plan-review-cancel';
   cancelBtn.textContent = typeof t === 'function' ? t('sp.plan.cancel') : 'Cancel';
-  cancelBtn.addEventListener('click', () => {
-    submitPlanReview(card, tabId, planId, 'reject', '');
-  });
 
   actions.appendChild(approveBtn);
   actions.appendChild(cancelBtn);
   card.appendChild(actions);
+  bindPlanReviewCard(card);
 
   content.appendChild(card);
   scrollToBottom();

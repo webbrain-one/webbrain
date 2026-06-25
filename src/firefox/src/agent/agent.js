@@ -121,7 +121,7 @@ export class Agent {
     this._recentSubmitClicks = new Map();
     this._runningTabs = new Set(); // tabIds with an active processMessage/Stream in flight
     this.scheduler = null;
-    this.scheduledRunPolicies = new Map(); // tabId -> { requireConsequentialConfirmation }
+    this.scheduledRunPolicies = new Map(); // tabId -> { requireConsequentialConfirmation, autoApprovePlanReview }
     // Pending clarify() tool calls awaiting user input — see Chrome
     // agent.js. Keyed by tabId → (clarifyId → {resolve, ts}).
     this._pendingClarifications = new Map();
@@ -201,6 +201,7 @@ export class Agent {
   setScheduledRunPolicy(tabId, policy) {
     this.scheduledRunPolicies.set(tabId, {
       requireConsequentialConfirmation: policy?.requireConsequentialConfirmation !== false,
+      autoApprovePlanReview: policy?.autoApprovePlanReview === true,
     });
   }
 
@@ -2257,6 +2258,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
       const planId = `plan_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
       const markdown = formatPlanMarkdown(plan);
+      const scheduledPolicy = this.scheduledRunPolicies.get(tabId);
+      if (scheduledPolicy?.autoApprovePlanReview === true) {
+        const approvedScratchpadText = formatPlanScratchpad(plan, '');
+        return { proceed: true, approvedScratchpadText, planId };
+      }
       const choice = await this._waitForPlanReview(tabId, planId, plan, markdown, onUpdate);
 
       if (this._checkAbort(tabId)) {
