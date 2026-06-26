@@ -1,0 +1,25 @@
+{
+  "id": "071",
+  "user": "send it",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 557,
+  "error": null,
+  "firstToolCall": {
+    "name": "read_page",
+    "args": {
+      "url": "about:home"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 18246,
+    "total_tokens": 18259,
+    "completion_tokens": 13,
+    "prompt_tokens_details": null
+  }
+}

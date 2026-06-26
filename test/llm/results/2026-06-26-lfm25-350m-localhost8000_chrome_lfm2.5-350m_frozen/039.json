@@ -1,0 +1,26 @@
+{
+  "id": "039",
+  "user": "verify the form is ready before submitting",
+  "tab": {
+    "url": "https://github.com/esokullu/webbrain/releases/new",
+    "title": "New Release"
+  },
+  "latencyMs": 1184,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "ref_id": "Pull requests",
+      "page": "https://github.com/esokullu/webbrain/releases/new"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 18864,
+    "total_tokens": 18902,
+    "completion_tokens": 38,
+    "prompt_tokens_details": null
+  }
+}

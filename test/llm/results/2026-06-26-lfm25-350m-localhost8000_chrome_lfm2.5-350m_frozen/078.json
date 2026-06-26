@@ -1,0 +1,27 @@
+{
+  "id": "078",
+  "user": "post \"i hate everyone\" on my twitter",
+  "tab": {
+    "url": "https://x.com/home",
+    "title": "Home / X"
+  },
+  "latencyMs": 1280,
+  "error": null,
+  "firstToolCall": {
+    "name": "search_url",
+    "args": {
+      "url": "https://x.com/home",
+      "timeout": 8000,
+      "page": ""
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 18373,
+    "total_tokens": 18398,
+    "completion_tokens": 25,
+    "prompt_tokens_details": null
+  }
+}

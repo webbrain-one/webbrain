@@ -1,0 +1,20 @@
+{
+  "id": "084",
+  "user": "explain javascript closures in 2 sentences",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 1412,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "JavaScript closures allow a variable to retain access to its outer scope even after the outer function has returned. This means the inner variable can be used in the outer function's code, even if the outer function has not yet returned.",
+  "usage": {
+    "prompt_tokens": 18254,
+    "total_tokens": 18302,
+    "completion_tokens": 48,
+    "prompt_tokens_details": null
+  }
+}

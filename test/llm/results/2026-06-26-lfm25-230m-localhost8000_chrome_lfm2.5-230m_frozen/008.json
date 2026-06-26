@@ -1,0 +1,25 @@
+{
+  "id": "008",
+  "user": "wikipedia please",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 65521,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 18247,
+    "total_tokens": 18262,
+    "completion_tokens": 15,
+    "prompt_tokens_details": null
+  }
+}

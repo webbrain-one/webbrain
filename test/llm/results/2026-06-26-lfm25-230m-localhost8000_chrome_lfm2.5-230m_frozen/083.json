@@ -1,0 +1,25 @@
+{
+  "id": "083",
+  "user": "what time is it in tokyo right now",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 764,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 18254,
+    "total_tokens": 18269,
+    "completion_tokens": 15,
+    "prompt_tokens_details": null
+  }
+}

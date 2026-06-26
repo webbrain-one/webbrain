@@ -1,0 +1,27 @@
+{
+  "id": "021",
+  "user": "wiki \"ww2\"",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 689,
+  "error": null,
+  "firstToolCall": {
+    "name": "read_page",
+    "args": {
+      "text": "about:home",
+      "includeChrome": true,
+      "page": ""
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 18250,
+    "total_tokens": 18271,
+    "completion_tokens": 21,
+    "prompt_tokens_details": null
+  }
+}

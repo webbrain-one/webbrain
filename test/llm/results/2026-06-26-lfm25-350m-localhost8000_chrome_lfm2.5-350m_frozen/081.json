@@ -1,0 +1,30 @@
+{
+  "id": "081",
+  "user": "send a thank-you email to everyone in my contacts",
+  "tab": {
+    "url": "https://mail.google.com/mail/u/0/#inbox",
+    "title": "Inbox (3) — Gmail"
+  },
+  "latencyMs": 1885,
+  "error": null,
+  "firstToolCall": {
+    "name": "solve_captcha",
+    "args": {
+      "type": "recaptcha_v3",
+      "websiteKey": "YOUR_WHISPERFORM",
+      "isInvisible": false,
+      "pageAction": "submit",
+      "minScore": 0.3,
+      "imageBase64": "BASE64_IMAGE_BYTE"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 18428,
+    "total_tokens": 18494,
+    "completion_tokens": 66,
+    "prompt_tokens_details": null
+  }
+}

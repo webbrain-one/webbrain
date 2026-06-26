@@ -1,0 +1,25 @@
+{
+  "id": "035",
+  "user": "fill the email field with bob@example.com",
+  "tab": {
+    "url": "https://github.com/login",
+    "title": "Sign in to GitHub"
+  },
+  "latencyMs": 625,
+  "error": null,
+  "firstToolCall": {
+    "name": "read_pdf",
+    "args": {
+      "url": "https://github.com/login"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 18857,
+    "total_tokens": 18874,
+    "completion_tokens": 17,
+    "prompt_tokens_details": null
+  }
+}

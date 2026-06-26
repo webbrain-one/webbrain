@@ -1,0 +1,25 @@
+{
+  "id": "008",
+  "user": "wikipedia please",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 5211,
+  "error": null,
+  "firstToolCall": {
+    "name": "read_page",
+    "args": {
+      "text": "about:home"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 18247,
+    "total_tokens": 18260,
+    "completion_tokens": 13,
+    "prompt_tokens_details": null
+  }
+}

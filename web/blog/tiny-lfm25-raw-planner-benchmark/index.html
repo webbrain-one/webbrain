@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tiny raw LFM 2.5 planner benchmark - WebBrain Blog</title>
+  <meta name="description" content="We ran two tiny raw Liquid LFM 2.5 checkpoints, 230M and 350M, through WebBrain&#39;s frozen 100-case browser-agent first-tool benchmark on a local OpenAI-compatible endpoint.">
+  <meta name="keywords" content="WebBrain, LFM 2.5, Liquid AI, tiny language model, browser agent, tool calling, planner benchmark, Qwen 3.5">
+  <meta property="og:title" content="Tiny raw LFM 2.5 checkpoints in WebBrain&#39;s planner benchmark">
+  <meta property="og:description" content="LFM 2.5 230M and 350M on WebBrain&#39;s frozen browser-agent first-tool harness: clean API runs, weak planner routing, useful fine-tuning signal.">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://webbrain.one/blog/tiny-lfm25-raw-planner-benchmark">
+  <meta property="og:image" content="https://webbrain.one/og-image.svg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Tiny raw LFM 2.5 planner benchmark">
+  <meta name="twitter:description" content="Two raw tiny LFM 2.5 checkpoints completed WebBrain&#39;s frozen 100-case tool-calling run. The numbers are small, and that is mostly the point.">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="canonical" href="https://webbrain.one/blog/tiny-lfm25-raw-planner-benchmark">
+  <!-- Blog is English-only; alternates point to locale homepages. -->
+  <link rel="alternate" hreflang="en" href="https://webbrain.one/">
+  <link rel="alternate" hreflang="es" href="https://webbrain.one/es/">
+  <link rel="alternate" hreflang="fr" href="https://webbrain.one/fr/">
+  <link rel="alternate" hreflang="tr" href="https://webbrain.one/tr/">
+  <link rel="alternate" hreflang="zh" href="https://webbrain.one/zh/">
+  <link rel="alternate" hreflang="ru" href="https://webbrain.one/ru/">
+  <link rel="alternate" hreflang="uk" href="https://webbrain.one/uk/">
+  <link rel="alternate" hreflang="ar" href="https://webbrain.one/ar/">
+  <link rel="alternate" hreflang="ja" href="https://webbrain.one/ja/">
+  <link rel="alternate" hreflang="ko" href="https://webbrain.one/ko/">
+  <link rel="alternate" hreflang="id" href="https://webbrain.one/id/">
+  <link rel="alternate" hreflang="th" href="https://webbrain.one/th/">
+  <link rel="alternate" hreflang="ms" href="https://webbrain.one/ms/">
+  <link rel="alternate" hreflang="tl" href="https://webbrain.one/tl/">
+  <link rel="alternate" hreflang="x-default" href="https://webbrain.one/">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg: #0b0e17;
+      --bg-card: #111827;
+      --bg-card-hover: #1a2233;
+      --surface: #161d2e;
+      --border: rgba(255,255,255,0.07);
+      --text: #e4e4ec;
+      --text-dim: #8b8fa4;
+      --accent: #6c63ff;
+      --accent-glow: rgba(108,99,255,0.25);
+      --accent2: #a78bfa;
+      --success: #34d399;
+      --warning: #fbbf24;
+      --danger: #f87171;
+      --tint-soft: rgba(255,255,255,0.05);
+      --tint-soft-2: rgba(255,255,255,0.04);
+      --tint-medium: rgba(255,255,255,0.08);
+      --nav-bg: rgba(11,14,23,0.85);
+      --code-bg: #0a0e17;
+      --inline-code-bg: rgba(255,255,255,0.06);
+      --shadow-strong: rgba(0,0,0,0.40);
+      --radius: 12px;
+      --radius-lg: 16px;
+      --max-w: 760px;
+      color-scheme: dark;
+    }
+    :root[data-theme="light"] {
+      --bg: #f7f1e6;
+      --bg-card: #fffdf8;
+      --bg-card-hover: #f2e9d4;
+      --surface: #ede2cb;
+      --border: rgba(89,55,25,0.15);
+      --text: #2c1810;
+      --text-dim: #6b5b47;
+      --accent: #5b52e8;
+      --accent-glow: rgba(91,82,232,0.20);
+      --accent2: #7c6ce6;
+      --success: #2d8866;
+      --warning: #9a6500;
+      --danger: #b74747;
+      --tint-soft: rgba(89,55,25,0.05);
+      --tint-soft-2: rgba(89,55,25,0.07);
+      --tint-medium: rgba(89,55,25,0.10);
+      --nav-bg: rgba(247,241,230,0.85);
+      --code-bg: #fff7e6;
+      --inline-code-bg: rgba(89,55,25,0.08);
+      --shadow-strong: rgba(89,55,25,0.18);
+      color-scheme: light;
+    }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.75;
+      font-size: 17px;
+      overflow-x: hidden;
+    }
+    a { color: var(--accent2); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .glow-bg {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    .glow-bg::before,
+    .glow-bg::after {
+      content: '';
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(120px);
+      opacity: 0.26;
+    }
+    .glow-bg::before {
+      width: 500px;
+      height: 500px;
+      background: var(--accent);
+      top: -220px;
+      left: -160px;
+    }
+    .glow-bg::after {
+      width: 500px;
+      height: 500px;
+      background: var(--accent2);
+      right: -180px;
+      bottom: -230px;
+      opacity: 0.18;
+    }
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--nav-bg);
+      backdrop-filter: saturate(160%) blur(12px);
+      -webkit-backdrop-filter: saturate(160%) blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-inner {
+      max-width: var(--max-w);
+      margin: 0 auto;
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+    .nav-brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+      color: var(--text);
+      font-size: 18px;
+      font-weight: 700;
+      text-decoration: none;
+    }
+    .nav-brand:hover { text-decoration: none; }
+    .nav-brand .domain { opacity: 0.5; font-weight: 400; }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 16px;
+      min-width: 0;
+    }
+    .nav-links a {
+      color: var(--text-dim);
+      font-size: 14px;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+    .nav-links a:hover { color: var(--text); text-decoration: none; }
+    .lang-dropdown {
+      background: var(--tint-soft);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 13px;
+      max-width: 120px;
+    }
+    .lang-dropdown:focus { outline: 2px solid var(--accent-glow); outline-offset: 1px; }
+    .lang-dropdown option { background-color: var(--bg-card-hover); color: var(--text); }
+    .theme-toggle {
+      appearance: none;
+      -webkit-appearance: none;
+      background: var(--tint-soft-2);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      width: 30px;
+      height: 30px;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      cursor: pointer;
+      color: var(--text-dim);
+      transition: background 0.2s, color 0.2s, border-color 0.2s, transform 0.1s;
+    }
+    .theme-toggle:hover {
+      background: var(--tint-medium);
+      border-color: var(--accent);
+      color: var(--text);
+      transform: translateY(-1px);
+    }
+    .theme-toggle:focus-visible {
+      outline: 2px solid var(--accent2);
+      outline-offset: 2px;
+    }
+    .theme-toggle svg { width: 16px; height: 16px; display: block; }
+    .theme-toggle .icon-sun { display: block; }
+    .theme-toggle .icon-moon { display: none; }
+    :root[data-theme="light"] .theme-toggle .icon-sun { display: none; }
+    :root[data-theme="light"] .theme-toggle .icon-moon { display: block; }
+    main,
+    article {
+      max-width: var(--max-w);
+      margin: 0 auto;
+      padding: 64px 24px 80px;
+    }
+    .page-label {
+      display: inline-block;
+      font-size: 12px;
+      letter-spacing: 0;
+      text-transform: uppercase;
+      color: var(--accent2);
+      padding: 4px 10px;
+      border: 1px solid color-mix(in srgb, var(--accent2) 28%, transparent);
+      border-radius: 999px;
+      margin-bottom: 18px;
+    }
+    h1 {
+      font-size: 38px;
+      line-height: 1.2;
+      font-weight: 700;
+      letter-spacing: 0;
+      margin-bottom: 16px;
+    }
+    .page-sub,
+    .lede {
+      color: var(--text-dim);
+      line-height: 1.6;
+    }
+    .page-sub {
+      font-size: 17px;
+      max-width: 580px;
+      margin-bottom: 48px;
+    }
+    .lede {
+      font-size: 19px;
+      margin-bottom: 40px;
+    }
+    .meta {
+      font-size: 13px;
+      color: var(--text-dim);
+      margin-bottom: 12px;
+      letter-spacing: 0;
+    }
+    h2 {
+      font-size: 24px;
+      font-weight: 700;
+      margin-top: 48px;
+      margin-bottom: 14px;
+      letter-spacing: 0;
+    }
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-top: 32px;
+      margin-bottom: 10px;
+      color: var(--text);
+    }
+    h4, h5, h6 {
+      color: var(--text);
+      margin-top: 28px;
+      margin-bottom: 10px;
+      line-height: 1.35;
+    }
+    p { margin-bottom: 16px; }
+    ul, ol { margin: 0 0 16px 20px; }
+    li { margin-bottom: 6px; }
+    code {
+      font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+      font-size: 0.88em;
+      background: var(--inline-code-bg);
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: color-mix(in srgb, var(--accent2) 80%, var(--text));
+    }
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      overflow-x: auto;
+      margin: 20px 0;
+      font-size: 14px;
+      line-height: 1.55;
+      box-shadow: 0 18px 60px var(--shadow-strong);
+    }
+    pre code {
+      background: transparent;
+      padding: 0;
+      color: inherit;
+      font-size: inherit;
+    }
+    blockquote {
+      border-left: 3px solid var(--accent);
+      padding: 4px 0 4px 18px;
+      margin: 20px 0;
+      color: var(--text-dim);
+      font-style: italic;
+    }
+    blockquote p:last-child { margin-bottom: 0; }
+    hr {
+      border: 0;
+      border-top: 1px solid var(--border);
+      margin: 36px 0;
+    }
+    article img {
+      max-width: 100%;
+      height: auto;
+      display: block;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      margin: 24px 0;
+    }
+    .table-wrap { overflow-x: auto; margin: 24px 0; }
+    table {
+      width: 100%;
+      min-width: 560px;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    th, td {
+      text-align: left;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    th {
+      color: var(--text-dim);
+      font-weight: 600;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0;
+      background: var(--tint-soft-2);
+    }
+    td code { font-size: 12px; }
+    .win { color: var(--success); font-weight: 600; }
+    .lose { color: var(--danger); }
+    .meh { color: var(--warning); }
+    .callout {
+      background: color-mix(in srgb, var(--accent) 10%, transparent);
+      border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      margin: 24px 0;
+      font-size: 15px;
+      line-height: 1.65;
+      color: var(--text-dim);
+    }
+    .callout strong { color: var(--text); }
+    .author-box {
+      margin-top: 64px;
+      padding-top: 32px;
+      border-top: 1px solid var(--border);
+      color: var(--text-dim);
+      font-size: 14px;
+    }
+    .post-list { display: flex; flex-direction: column; gap: 18px; }
+    .post-card {
+      display: block;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px 26px;
+      transition: background 0.18s, border-color 0.18s, transform 0.18s;
+    }
+    .post-card:hover {
+      background: var(--bg-card-hover);
+      border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+      transform: translateY(-1px);
+      text-decoration: none;
+    }
+    .post-meta {
+      font-size: 12px;
+      color: var(--text-dim);
+      letter-spacing: 0;
+      margin-bottom: 8px;
+    }
+    .post-title {
+      font-size: 21px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 6px;
+      letter-spacing: 0;
+      line-height: 1.35;
+    }
+    .post-excerpt {
+      color: var(--text-dim);
+      font-size: 15px;
+      line-height: 1.6;
+    }
+    footer {
+      max-width: var(--max-w);
+      margin: 0 auto;
+      padding: 40px 24px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+      color: var(--text-dim);
+      font-size: 13px;
+    }
+    footer a { color: var(--text-dim); }
+    footer a:hover { color: var(--text); }
+    @media (max-width: 700px) {
+      body { font-size: 16px; }
+      .nav-inner { padding: 14px 20px; align-items: flex-start; }
+      .nav-links { gap: 12px; flex-wrap: wrap; }
+      .lang-dropdown { display: none; }
+      h1 { font-size: 28px; }
+      .lede { font-size: 16px; }
+      .page-sub { font-size: 15px; }
+      main, article { padding: 48px 20px 64px; }
+      h2 { font-size: 20px; margin-top: 36px; }
+      .post-card { padding: 20px; }
+      .post-title { font-size: 19px; }
+      footer { flex-direction: column; padding: 32px 20px; }
+    }
+    @media (max-width: 420px) {
+      .nav-inner { gap: 12px; }
+      .nav-links a[href="https://github.com/webbrain-one/webbrain"] { display: none; }
+      .theme-toggle { width: 28px; height: 28px; }
+    }
+  </style>
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('webbrain-theme');
+        var theme = (saved === 'light' || saved === 'dark')
+          ? saved
+          : (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+        document.documentElement.setAttribute('data-theme', theme);
+      } catch (_) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    })();
+  </script>
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "Tiny raw LFM 2.5 checkpoints in WebBrain's frozen planner benchmark",
+  "description": "We ran two tiny raw Liquid LFM 2.5 checkpoints, 230M and 350M, through WebBrain's frozen 100-case browser-agent first-tool benchmark on a local OpenAI-compatible endpoint.",
+  "author": {
+    "@type": "Person",
+    "name": "Emre Sokullu",
+    "url": "https://emresokullu.com"
+  },
+  "datePublished": "2026-06-26",
+  "image": "https://webbrain.one/og-image.svg",
+  "publisher": {
+    "@type": "Organization",
+    "name": "WebBrain",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://webbrain.one/favicon.svg"
+    }
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://webbrain.one/blog/tiny-lfm25-raw-planner-benchmark"
+  }
+}
+  </script>
+</head>
+<body>
+  <div class="glow-bg"></div>
+  <nav>
+    <div class="nav-inner">
+      <a href="/" class="nav-brand"><span class="emoji" aria-hidden="true">&#129504;</span> WebBrain<span class="domain">.one</span></a>
+      <div class="nav-links">
+        <a href="/">Home</a>
+        <a href="/blog">Blog</a>
+        <select class="lang-dropdown" id="lang-dropdown" aria-label="Select language" data-current="en"><option value="en">English</option><option value="es">Espanol</option><option value="fr">Francais</option><option value="tr">Turkce</option><option value="zh">Chinese</option><option value="ru">Russian</option><option value="uk">Ukrainian</option><option value="ar">Arabic</option><option value="ja">Japanese</option><option value="ko">Korean</option><option value="id">Bahasa Indonesia</option><option value="th">Thai</option><option value="ms">Bahasa Melayu</option><option value="tl">Filipino</option></select>
+        <button class="theme-toggle" type="button" id="theme-toggle" aria-label="Toggle light / dark theme" title="Toggle light / dark theme">
+          <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="4"/>
+            <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+          </svg>
+          <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+          </svg>
+        </button>
+        <a href="https://github.com/webbrain-one/webbrain" target="_blank" rel="noopener">GitHub</a>
+      </div>
+    </div>
+  </nav>
+
+  <article>
+    <div class="meta">June 26, 2026 &middot; 5 min read &middot; <a href="/blog">&larr; All posts</a></div>
+    <h1>Tiny raw LFM 2.5 checkpoints in WebBrain&#39;s frozen planner benchmark</h1>
+    <p class="lede">We ran two tiny raw Liquid LFM 2.5 checkpoints through WebBrain&#39;s frozen browser-agent first-tool benchmark: <strong>lfm2.5-230m</strong> and <strong>lfm2.5-350m</strong> served locally from <code>http://localhost:8000</code>. Both runs completed all 100 cases without transport errors. The quality numbers are low, but that is not a surprise: these are tiny raw checkpoints, not WebBrain-tuned browser planners. The useful result is the shape of the mistakes.</p>
+<h2 id="what-we-ran">What we ran</h2>
+<p>Both runs used the same frozen May 23, 2026 WebBrain baseline used by the published planner table: Claude Sonnet 4.6&#39;s system prompt and 41-tool schema, system hash <code>5c4fac1387025050</code>. The endpoint was a local OpenAI-compatible server at <code>http://localhost:8000</code>.</p>
+<pre><code class="language-bash">node test/llm/run-llamacpp.mjs \
+  --base http://localhost:8000 \
+  --model lfm2.5-230m \
+  --tag 2026-06-26-lfm25-230m-localhost8000 \
+  --concurrency 16 \
+  --timeout 180000 \
+  --no-save-request \
+  --freeze test/llm/freeze/baseline-2026-05-23.json
+
+node test/llm/run-llamacpp.mjs \
+  --base http://localhost:8000 \
+  --model lfm2.5-350m \
+  --tag 2026-06-26-lfm25-350m-localhost8000 \
+  --concurrency 16 \
+  --timeout 180000 \
+  --no-save-request \
+  --freeze test/llm/freeze/baseline-2026-05-23.json</code></pre>
+<p>One naming note: the second local server advertised <code>lfm2.5-350m</code> with root <code>LiquidAI/LFM2.5-350M</code>, so that is the label used here.</p>
+<p>Result files:</p>
+<pre><code class="language-text">test/llm/results/2026-06-26-lfm25-230m-localhost8000_chrome_lfm2.5-230m_frozen
+test/llm/results/2026-06-26-lfm25-350m-localhost8000_chrome_lfm2.5-350m_frozen</code></pre>
+<h2 id="headline-results">Headline results</h2>
+<div class="table-wrap"><table><thead><tr><th>Metric</th><th>LFM 2.5 230M raw</th><th>LFM 2.5 350M raw</th></tr></thead><tbody><tr><td>Completed cases</td><td>100/100</td><td>100/100</td></tr><tr><td>Transport errors</td><td>0</td><td>0</td></tr><tr><td>Parsed tool calls</td><td>100/100</td><td>86/100</td></tr><tr><td>Valid frozen-schema tool names</td><td>90/100</td><td>75/100</td></tr><tr><td>Strict exact first-call match</td><td>0/100</td><td>0/100</td></tr><tr><td>Ideal tool-name match</td><td>4/100</td><td>4/100</td></tr><tr><td>Sonnet match, all cases</td><td>19.0%</td><td>25.0%</td></tr><tr><td>Sonnet match, when Sonnet tooled</td><td>20.7%</td><td>22.8%</td></tr><tr><td>Median latency</td><td>1.0s</td><td>1.1s</td></tr><tr><td>p95 latency</td><td>65.5s</td><td>5.3s</td></tr><tr><td>Total wall time at concurrency 16</td><td>71s</td><td>12s</td></tr></tbody></table></div>
+<p>The clean positive signal: both models were usable through the OpenAI-compatible API path. There were no request failures, and the 230M run emitted a parsed tool call on every case.</p>
+<p>The planner signal is much weaker. Neither model produced an exact match against the benchmark&#39;s ideal first call. Both matched the ideal tool name only four times. Against the Sonnet 4.6 first-tool reference, the 350M checkpoint did better than the 230M checkpoint, but both are far below the small tuned and instruction-following models already in the table.</p>
+<h2 id="how-they-failed">How they failed</h2>
+<p>The 230M checkpoint is syntactically eager and strategically narrow. It calls tools constantly, but it collapses toward inspection:</p>
+<div class="table-wrap"><table><thead><tr><th>Tool</th><th>LFM 2.5 230M calls</th></tr></thead><tbody><tr><td><code>get_accessibility_tree</code></td><td>61</td></tr><tr><td><code>read_page</code></td><td>21</td></tr><tr><td><code>search_url</code></td><td>4</td></tr><tr><td><code>click</code></td><td>2</td></tr><tr><td>all other first tools</td><td>12</td></tr></tbody></table></div>
+<p>That is why it has 100 parsed tool calls but only 19% Sonnet first-tool alignment. It often knows that a browser agent should use a tool, but it does not yet know which first action matches the user&#39;s intent. Direct navigation prompts, browser-internal pages, and search tasks frequently became generic page inspection.</p>
+<p>The 350M checkpoint is more varied and closer to Sonnet, but less schema-disciplined:</p>
+<div class="table-wrap"><table><thead><tr><th>Tool or output</th><th>LFM 2.5 350M calls</th></tr></thead><tbody><tr><td><code>get_accessibility_tree</code></td><td>43</td></tr><tr><td><code>read_page</code></td><td>15</td></tr><tr><td>no tool call</td><td>14</td></tr><tr><td><code>read_pdf</code></td><td>4</td></tr><tr><td><code>search_url</code></td><td>3</td></tr><tr><td><code>stop_recording</code></td><td>3</td></tr><tr><td>all other first tools</td><td>18</td></tr></tbody></table></div>
+<p>That variety helps it reach 25% Sonnet first-tool alignment, but it also produces more invalid or non-frozen tool names: <code>open_link</code>, <code>open_chat</code>, <code>stop_recording</code>, <code>close_popup</code>, <code>compose</code>, <code>solve_captcha</code>, and <code>delete_all_emails</code> are not part of the frozen 41-tool schema. For a browser-agent planner, that is a fine-tuning problem before it is a reasoning problem.</p>
+<h2 id="context-against-the-older-lfm-and-tiny-qwen-rows">Context against the older LFM and tiny Qwen rows</h2>
+<p>The most useful comparison is not with the top of the leaderboard. It is with other small or efficiency-oriented models.</p>
+<div class="table-wrap"><table><thead><tr><th>Model</th><th>Parsed calls</th><th>Valid names</th><th>Ideal name</th><th>Sonnet all</th><th>Sonnet tooled</th><th>Median</th></tr></thead><tbody><tr><td>LFM 2.5-8B-A1B</td><td>83/100</td><td>83/100</td><td>23/100</td><td>40.0%</td><td>38.0%</td><td>5.9s</td></tr><tr><td>Qwen 3.5 0.8B</td><td>90/100</td><td>90/100</td><td>15/100</td><td>37.0%</td><td>34.8%</td><td>0.44s</td></tr><tr><td>Qwen 3.5 2B</td><td>89/100</td><td>89/100</td><td>7/100</td><td>36.0%</td><td>34.8%</td><td>0.78s</td></tr><tr><td>LFM 2.5 350M raw</td><td>86/100</td><td>75/100</td><td>4/100</td><td>25.0%</td><td>22.8%</td><td>1.1s</td></tr><tr><td>LFM 2.5 230M raw</td><td>100/100</td><td>90/100</td><td>4/100</td><td>19.0%</td><td>20.7%</td><td>1.0s</td></tr></tbody></table></div>
+<p>The earlier LFM 2.5-8B-A1B run is still the better Liquid comparison point for actual planner use. It matched Sonnet on 40% of all cases and had 23 ideal tool-name matches. The tiny raw checkpoints do not reach that tier.</p>
+<p>Qwen 3.5 0.8B is the sharper tiny baseline. Even with fewer than one billion parameters, it keeps higher valid-tool discipline and materially better Sonnet alignment than either raw tiny LFM run. That does not make the tiny LFMs uninteresting. It does show that raw scale at 230M or 350M is not enough for browser planning without task-specific post-training.</p>
+<h2 id="what-this-means">What this means</h2>
+<p>These runs should not be read as &quot;LFM is bad at tools.&quot; They are closer to a pre-fine-tuning diagnostic. WebBrain&#39;s benchmark asks a very specific first-turn planning question: given a browser state, a user instruction, and 41 available tools, choose the first tool and arguments. Tiny raw models are not expected to have that policy baked in.</p>
+<p>What they do show is encouraging in a narrower way:</p>
+<ul><li>The local serving path works cleanly with WebBrain&#39;s OpenAI-compatible runner.</li><li>The 230M model strongly learned the &quot;emit a tool call&quot; behavior, even if it overuses inspection.</li><li>The 350M model has a broader action vocabulary and better Sonnet alignment, but needs schema control.</li><li>Both runs are small enough that fine-tuning experiments should be cheap and fast.</li></ul>
+<p>For WebBrain, the next interesting experiment is not to keep benchmarking these raw checkpoints as-is. It is to tune them on browser-planner traces and rerun the same frozen harness. If a 230M or 350M model can be trained out of the <code>get_accessibility_tree</code> default and into reliable schema-following, it becomes a much more interesting on-device planner candidate.</p>
+<p>The bottom line: raw tiny LFMs are not ready browser planners. That is fine. They are the kind of models you fine-tune into a planner, and this run gives us a compact before-picture.</p>
+<p>Tags: #LFM25 #LiquidAI #TinyLanguageModels #ToolCalling #BrowserAgent #WebBrain</p>
+
+    <div class="author-box">
+      Written by <a href="https://emresokullu.com" target="_blank" rel="noopener">Emre Sokullu</a>. WebBrain is MIT-licensed and open on <a href="https://github.com/webbrain-one/webbrain" target="_blank" rel="noopener">GitHub</a>.
+    </div>
+  </article>
+
+  <footer>
+    <div>&copy; 2026 WebBrain &middot; <a href="/privacy">Privacy</a></div>
+    <div><a href="https://github.com/webbrain-one/webbrain" target="_blank" rel="noopener">GitHub</a></div>
+  </footer>
+  <script>
+    (function () {
+      const btn = document.getElementById('theme-toggle');
+      if (!btn) return;
+      const root = document.documentElement;
+
+      function setTheme(theme, persist) {
+        root.setAttribute('data-theme', theme);
+        if (persist) {
+          try { localStorage.setItem('webbrain-theme', theme); } catch (_) {}
+        }
+      }
+
+      btn.addEventListener('click', function () {
+        const next = root.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+        setTheme(next, true);
+      });
+
+      const mq = window.matchMedia('(prefers-color-scheme: light)');
+      function onMQ(e) {
+        try {
+          if (localStorage.getItem('webbrain-theme')) return;
+        } catch (_) {}
+        setTheme(e.matches ? 'light' : 'dark', false);
+      }
+      if (typeof mq.addEventListener === 'function') mq.addEventListener('change', onMQ);
+      else if (typeof mq.addListener === 'function') mq.addListener(onMQ);
+    })();
+  </script>
+  <script>
+    (function () {
+      const LOCALES = ["en","es","fr","tr","zh","ru","uk","ar","ja","ko","id","th","ms","tl"];
+      const sel = document.getElementById('lang-dropdown');
+      if (!sel) return;
+      sel.value = sel.dataset.current || 'en';
+      sel.addEventListener('change', function () {
+        const target = sel.value;
+        if (!LOCALES.includes(target)) return;
+        window.location.href = target === 'en' ? '/' : '/' + target + '/';
+      });
+    })();
+  </script>
+</body>
+</html>

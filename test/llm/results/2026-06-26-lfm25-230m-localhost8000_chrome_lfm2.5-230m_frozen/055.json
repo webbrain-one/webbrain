@@ -1,0 +1,26 @@
+{
+  "id": "055",
+  "user": "download this instagram post",
+  "tab": {
+    "url": "https://www.instagram.com/p/CxAbcExample/",
+    "title": "Photo — Instagram"
+  },
+  "latencyMs": 1284,
+  "error": null,
+  "firstToolCall": {
+    "name": "read_page",
+    "args": {
+      "url": "https://www.instagram.com/p/CxAbcExample/",
+      "includeChrome": "true"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 18489,
+    "total_tokens": 18519,
+    "completion_tokens": 30,
+    "prompt_tokens_details": null
+  }
+}

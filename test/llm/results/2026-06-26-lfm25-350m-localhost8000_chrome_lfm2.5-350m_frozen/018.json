@@ -1,0 +1,26 @@
+{
+  "id": "018",
+  "user": "find typescript repos with most stars",
+  "tab": {
+    "url": "https://github.com/",
+    "title": "GitHub"
+  },
+  "latencyMs": 972,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "ref_id": "PUB",
+      "page": "main"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 18853,
+    "total_tokens": 18874,
+    "completion_tokens": 21,
+    "prompt_tokens_details": null
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "id": "090",
+  "user": "switch to my netflix tab",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 817,
+  "error": null,
+  "firstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "about:home"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 18251,
+    "total_tokens": 18264,
+    "completion_tokens": 13,
+    "prompt_tokens_details": null
+  }
+}

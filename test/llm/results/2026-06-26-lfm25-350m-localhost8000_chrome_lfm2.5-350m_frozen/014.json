@@ -1,0 +1,20 @@
+{
+  "id": "014",
+  "user": "show me my bookmarks",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 6601,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I don't have access to bookmarks or the ability to retrieve them from the current page context. The available tools only allow me to interact with the current page (get_accessibility_tree, read_page, scroll, etc.), but not with bookmarks or external resources. Would you like me to help with something else that can be addressed using the available tools?",
+  "usage": {
+    "prompt_tokens": 18249,
+    "total_tokens": 18323,
+    "completion_tokens": 74,
+    "prompt_tokens_details": null
+  }
+}

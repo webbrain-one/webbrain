@@ -1,0 +1,27 @@
+{
+  "id": "053",
+  "user": "search my email for invoice",
+  "tab": {
+    "url": "https://mail.google.com/mail/u/0/#inbox",
+    "title": "Inbox (3) — Gmail"
+  },
+  "latencyMs": 1344,
+  "error": null,
+  "firstToolCall": {
+    "name": "search_url",
+    "args": {
+      "url": "https://mail.google.com/mail/u/0/#inbox",
+      "method": "get_accessibility_tree",
+      "page": "inbox"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 18423,
+    "total_tokens": 18460,
+    "completion_tokens": 37,
+    "prompt_tokens_details": null
+  }
+}

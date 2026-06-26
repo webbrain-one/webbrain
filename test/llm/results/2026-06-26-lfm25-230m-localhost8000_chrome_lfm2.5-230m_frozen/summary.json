@@ -1,0 +1,40 @@
+{
+  "runTag": "2026-06-26-lfm25-230m-localhost8000",
+  "model": "lfm2.5-230m",
+  "browser": "chrome",
+  "base": "http://localhost:8000",
+  "saveRequest": false,
+  "tier": null,
+  "chatTemplateCompat": "off",
+  "structuredToolsSent": true,
+  "freeze": {
+    "path": "test/llm/freeze/baseline-2026-05-23.json",
+    "sourceRun": "anthropic/claude-sonnet-4.6",
+    "sourceRunTag": "2026-05-23T18-47-31-246Z",
+    "systemHash": "5c4fac1387025050d002fb87fb6ae02af2fba0e232cd40737f844a3a5c4e7abf",
+    "toolCount": 41
+  },
+  "cases": 100,
+  "totalLatencyMs": 71043,
+  "errors": 0,
+  "withToolCall": 100,
+  "withToolCallFromContent": 0,
+  "byTool": {
+    "get_accessibility_tree": 61,
+    "find_pages": 1,
+    "search_url": 4,
+    "summarize": 1,
+    "read_page": 21,
+    "sign_in": 1,
+    "fill_text": 1,
+    "clear": 1,
+    "verify_form": 1,
+    "type_text": 1,
+    "list_downloads": 1,
+    "click": 2,
+    "fetch_url": 1,
+    "apply_cap_solver": 1,
+    "navigate": 1,
+    "get_interactive_elements": 1
+  }
+}

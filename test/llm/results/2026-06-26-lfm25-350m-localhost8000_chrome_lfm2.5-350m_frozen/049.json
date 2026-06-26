@@ -1,0 +1,27 @@
+{
+  "id": "049",
+  "user": "compose an email to alice@example.com",
+  "tab": {
+    "url": "https://mail.google.com/mail/u/0/#inbox",
+    "title": "Inbox (3) — Gmail"
+  },
+  "latencyMs": 1166,
+  "error": null,
+  "firstToolCall": {
+    "name": "compose",
+    "args": {
+      "ref_id": "to",
+      "text": "Alice@example.com",
+      "clear": true
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 18426,
+    "total_tokens": 18448,
+    "completion_tokens": 22,
+    "prompt_tokens_details": null
+  }
+}

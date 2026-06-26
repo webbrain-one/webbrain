@@ -1,0 +1,26 @@
+{
+  "id": "009",
+  "user": "open chatgpt in a new tab",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 5301,
+  "error": null,
+  "firstToolCall": {
+    "name": "open_chat",
+    "args": {
+      "gpt_internal": "chatgpt",
+      "url": "about:home"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 18252,
+    "total_tokens": 18275,
+    "completion_tokens": 23,
+    "prompt_tokens_details": null
+  }
+}

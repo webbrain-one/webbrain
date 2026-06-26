@@ -1,0 +1,27 @@
+{
+  "id": "071",
+  "user": "send it",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 1379,
+  "error": null,
+  "firstToolCall": {
+    "name": "read_page",
+    "args": {
+      "text": "about:home",
+      "includeChrome": true,
+      "filename": "new_tab.txt"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 18246,
+    "total_tokens": 18271,
+    "completion_tokens": 25,
+    "prompt_tokens_details": null
+  }
+}

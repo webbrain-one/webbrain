@@ -1,0 +1,25 @@
+{
+  "id": "057",
+  "user": "download the readme",
+  "tab": {
+    "url": "https://github.com/esokullu/webbrain",
+    "title": "esokullu/webbrain — GitHub"
+  },
+  "latencyMs": 865,
+  "error": null,
+  "firstToolCall": {
+    "name": "read_page",
+    "args": {
+      "text": "Title: esokullu/webbrain\nGitHub"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 18866,
+    "total_tokens": 18890,
+    "completion_tokens": 24,
+    "prompt_tokens_details": null
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "id": "072",
+  "user": "delete this",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 1659,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I'm sorry, but I can't delete content from your page. The available tools only allow me to read, record, or manage tabs, not modify or delete pages. Let me know if you'd like help with something else!",
+  "usage": {
+    "prompt_tokens": 18246,
+    "total_tokens": 18294,
+    "completion_tokens": 48,
+    "prompt_tokens_details": null
+  }
+}

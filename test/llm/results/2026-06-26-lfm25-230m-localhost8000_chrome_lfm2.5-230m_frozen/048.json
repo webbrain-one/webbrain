@@ -1,0 +1,25 @@
+{
+  "id": "048",
+  "user": "open my inbox",
+  "tab": {
+    "url": "https://mail.google.com/mail/u/0/#inbox",
+    "title": "Inbox (3) — Gmail"
+  },
+  "latencyMs": 1038,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 18421,
+    "total_tokens": 18436,
+    "completion_tokens": 15,
+    "prompt_tokens_details": null
+  }
+}

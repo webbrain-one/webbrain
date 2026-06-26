@@ -1,0 +1,27 @@
+{
+  "id": "074",
+  "user": "go back to that other thing",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 1283,
+  "error": null,
+  "firstToolCall": {
+    "name": "read_page",
+    "args": {
+      "text": "about:home",
+      "includeChrome": true,
+      "filename": "new_tab.txt"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 18250,
+    "total_tokens": 18275,
+    "completion_tokens": 25,
+    "prompt_tokens_details": null
+  }
+}

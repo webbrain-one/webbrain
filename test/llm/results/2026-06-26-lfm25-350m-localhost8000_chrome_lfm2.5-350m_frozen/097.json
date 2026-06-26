@@ -1,0 +1,20 @@
+{
+  "id": "097",
+  "user": "show me alt text for all images",
+  "tab": {
+    "url": "https://www.cnn.com/2026/05/world/example-story/index.html",
+    "title": "Example story — CNN"
+  },
+  "latencyMs": 1190,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I don't have access to a tool that can generate alt text for images. The available tools focus on page content extraction, downloads, form validation, and other specific tasks, but none provide image alt text generation capabilities. You might want to use a dedicated image alt text generator or check the page source for appropriate alt attributes.",
+  "usage": {
+    "prompt_tokens": 18268,
+    "total_tokens": 18335,
+    "completion_tokens": 67,
+    "prompt_tokens_details": null
+  }
+}

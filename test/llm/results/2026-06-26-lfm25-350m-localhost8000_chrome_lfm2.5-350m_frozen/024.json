@@ -1,0 +1,20 @@
+{
+  "id": "024",
+  "user": "find tweets about react 19",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 1876,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I don't have access to a tweet search API or web search functionality in the current toolset. The available tools only support DOM manipulation, file downloads, and other browser-based operations. Would you like me to help with something that can be addressed using the available tools?",
+  "usage": {
+    "prompt_tokens": 18251,
+    "total_tokens": 18308,
+    "completion_tokens": 57,
+    "prompt_tokens_details": null
+  }
+}

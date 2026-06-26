@@ -1,0 +1,28 @@
+{
+  "id": "063",
+  "user": "whats my shipping address",
+  "tab": {
+    "url": "https://www.amazon.com/gp/buy/spc/handlers/display.html",
+    "title": "Amazon Checkout"
+  },
+  "latencyMs": 1439,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible",
+      "maxDepth": 8,
+      "maxChars": 5000,
+      "page": "https://www.amazon.com/gp/buy/spc/handlers/display.html"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 18378,
+    "total_tokens": 18426,
+    "completion_tokens": 48,
+    "prompt_tokens_details": null
+  }
+}

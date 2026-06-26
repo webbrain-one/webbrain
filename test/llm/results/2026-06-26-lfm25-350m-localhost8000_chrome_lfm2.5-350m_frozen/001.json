@@ -1,0 +1,23 @@
+{
+  "id": "001",
+  "user": "go to firefox extensions management pagr",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 5237,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {}
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 18252,
+    "total_tokens": 18263,
+    "completion_tokens": 11,
+    "prompt_tokens_details": null
+  }
+}

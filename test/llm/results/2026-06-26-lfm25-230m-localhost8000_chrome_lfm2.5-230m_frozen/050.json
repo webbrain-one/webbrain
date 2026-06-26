@@ -1,0 +1,26 @@
+{
+  "id": "050",
+  "user": "reply to this",
+  "tab": {
+    "url": "https://mail.google.com/mail/u/0/#inbox/abc123",
+    "title": "Invoice from Acme — Gmail"
+  },
+  "latencyMs": 1465,
+  "error": null,
+  "firstToolCall": {
+    "name": "read_page",
+    "args": {
+      "url": "https://mail.google.com/mail/u/0/#inbox/abc123",
+      "includeChrome": true
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 18424,
+    "total_tokens": 18455,
+    "completion_tokens": 31,
+    "prompt_tokens_details": null
+  }
+}

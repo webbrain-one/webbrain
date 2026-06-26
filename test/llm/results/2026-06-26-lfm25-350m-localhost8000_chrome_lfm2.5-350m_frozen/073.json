@@ -1,0 +1,27 @@
+{
+  "id": "073",
+  "user": "buy it",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 1395,
+  "error": null,
+  "firstToolCall": {
+    "name": "read_page",
+    "args": {
+      "text": "about:home",
+      "includeChrome": true,
+      "filename": "buy_news.txt"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 18247,
+    "total_tokens": 18273,
+    "completion_tokens": 26,
+    "prompt_tokens_details": null
+  }
+}

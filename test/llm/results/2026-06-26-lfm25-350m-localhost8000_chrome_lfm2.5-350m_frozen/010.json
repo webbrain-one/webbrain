@@ -1,0 +1,26 @@
+{
+  "id": "010",
+  "user": "go to amazon",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 5331,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "preferepand": "new tab",
+      "page": "about:home"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 18248,
+    "total_tokens": 18273,
+    "completion_tokens": 25,
+    "prompt_tokens_details": null
+  }
+}

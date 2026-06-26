@@ -1,0 +1,26 @@
+{
+  "id": "088",
+  "user": "close this tab",
+  "tab": {
+    "url": "https://www.cnn.com/2026/05/world/example-story/index.html",
+    "title": "Example story — CNN"
+  },
+  "latencyMs": 886,
+  "error": null,
+  "firstToolCall": {
+    "name": "click",
+    "args": {
+      "ref_id": "ref_example_story",
+      "text": "close this tab"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 18264,
+    "total_tokens": 18286,
+    "completion_tokens": 22,
+    "prompt_tokens_details": null
+  }
+}

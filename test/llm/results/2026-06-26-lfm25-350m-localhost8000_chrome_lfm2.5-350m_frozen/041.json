@@ -1,0 +1,20 @@
+{
+  "id": "041",
+  "user": "tick the subscribe checkbox",
+  "tab": {
+    "url": "https://example.com/signup",
+    "title": "Sign up"
+  },
+  "latencyMs": 507,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "<|tool_call_start|>[click({text=\"signup\"})]<|tool_call_end|>",
+  "usage": {
+    "prompt_tokens": 18254,
+    "total_tokens": 18267,
+    "completion_tokens": 13,
+    "prompt_tokens_details": null
+  }
+}

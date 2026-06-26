@@ -1,0 +1,25 @@
+{
+  "id": "034",
+  "user": "sign in",
+  "tab": {
+    "url": "https://github.com/",
+    "title": "GitHub"
+  },
+  "latencyMs": 722,
+  "error": null,
+  "firstToolCall": {
+    "name": "read_pdf",
+    "args": {
+      "url": "https://github.com/"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 18847,
+    "total_tokens": 18863,
+    "completion_tokens": 16,
+    "prompt_tokens_details": null
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "id": "069",
+  "user": "open it",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 938,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "ref_id": "ref_1",
+      "page": "about"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 18246,
+    "total_tokens": 18268,
+    "completion_tokens": 22,
+    "prompt_tokens_details": null
+  }
+}

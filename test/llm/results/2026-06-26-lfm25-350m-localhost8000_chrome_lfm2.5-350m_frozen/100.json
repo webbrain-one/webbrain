@@ -1,0 +1,26 @@
+{
+  "id": "100",
+  "user": "whats the highest rated item here",
+  "tab": {
+    "url": "https://www.amazon.com/s?k=wireless+earbuds",
+    "title": "Amazon.com : wireless earbuds"
+  },
+  "latencyMs": 528,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "all",
+      "page": "1"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 18381,
+    "total_tokens": 18400,
+    "completion_tokens": 19,
+    "prompt_tokens_details": null
+  }
+}

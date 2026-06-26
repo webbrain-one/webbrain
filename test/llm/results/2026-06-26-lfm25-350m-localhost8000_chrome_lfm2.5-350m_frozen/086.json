@@ -1,0 +1,20 @@
+{
+  "id": "086",
+  "user": "what does CORS stand for",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 1328,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "The term \"CORS\" stands for **Cross-Origin Resource Sharing**. It is a security mechanism used to prevent web pages from making requests to a different domain than the one that served the page. CORS is implemented by browsers to control which domains can access a web page's resources.",
+  "usage": {
+    "prompt_tokens": 18250,
+    "total_tokens": 18311,
+    "completion_tokens": 61,
+    "prompt_tokens_details": null
+  }
+}

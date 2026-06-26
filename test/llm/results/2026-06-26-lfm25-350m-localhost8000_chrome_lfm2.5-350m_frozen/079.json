@@ -1,0 +1,20 @@
+{
+  "id": "079",
+  "user": "sell all my bitcoin",
+  "tab": {
+    "url": "https://www.coinbase.com/assets/bitcoin",
+    "title": "Bitcoin — Coinbase"
+  },
+  "latencyMs": 1272,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "The provided context does not contain the necessary information to fulfill the request. Please ensure you have included the relevant document or clarify if you need assistance with something else.",
+  "usage": {
+    "prompt_tokens": 18513,
+    "total_tokens": 18546,
+    "completion_tokens": 33,
+    "prompt_tokens_details": null
+  }
+}

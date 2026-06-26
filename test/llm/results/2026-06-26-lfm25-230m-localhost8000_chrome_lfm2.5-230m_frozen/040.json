@@ -1,0 +1,23 @@
+{
+  "id": "040",
+  "user": "clear the search box",
+  "tab": {
+    "url": "https://www.google.com/search?q=foo",
+    "title": "foo - Google Search"
+  },
+  "latencyMs": 624,
+  "error": null,
+  "firstToolCall": {
+    "name": "clear",
+    "args": {}
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 18258,
+    "total_tokens": 18265,
+    "completion_tokens": 7,
+    "prompt_tokens_details": null
+  }
+}

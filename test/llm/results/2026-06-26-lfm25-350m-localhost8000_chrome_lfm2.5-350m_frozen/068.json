@@ -1,0 +1,20 @@
+{
+  "id": "068",
+  "user": "click that",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 794,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "<|tool_call_start|>[click({text=\"New Tab\"})]<|tool_call_end|>",
+  "usage": {
+    "prompt_tokens": 18246,
+    "total_tokens": 18259,
+    "completion_tokens": 13,
+    "prompt_tokens_details": null
+  }
+}

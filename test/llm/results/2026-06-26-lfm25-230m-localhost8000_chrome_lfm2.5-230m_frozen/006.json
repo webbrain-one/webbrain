@@ -1,0 +1,28 @@
+{
+  "id": "006",
+  "user": "i wanna check netflix",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 65752,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible",
+      "maxDepth": 15,
+      "maxChars": 8,
+      "page": "about:home"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 18250,
+    "total_tokens": 18282,
+    "completion_tokens": 32,
+    "prompt_tokens_details": null
+  }
+}

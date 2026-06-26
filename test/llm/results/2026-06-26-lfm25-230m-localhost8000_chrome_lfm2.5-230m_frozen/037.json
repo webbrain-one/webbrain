@@ -1,0 +1,26 @@
+{
+  "id": "037",
+  "user": "close the cookie banner",
+  "tab": {
+    "url": "https://www.theguardian.com/uk",
+    "title": "The Guardian"
+  },
+  "latencyMs": 1072,
+  "error": null,
+  "firstToolCall": {
+    "name": "read_page",
+    "args": {
+      "url": "https://www.theguardian.com/uk",
+      "includeChrome": true
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 18255,
+    "total_tokens": 18279,
+    "completion_tokens": 24,
+    "prompt_tokens_details": null
+  }
+}

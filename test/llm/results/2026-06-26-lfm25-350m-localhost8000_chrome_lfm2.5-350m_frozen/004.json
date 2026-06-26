@@ -1,0 +1,26 @@
+{
+  "id": "004",
+  "user": "open my github",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 5287,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "all",
+      "page": "about:home"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 18248,
+    "total_tokens": 18269,
+    "completion_tokens": 21,
+    "prompt_tokens_details": null
+  }
+}

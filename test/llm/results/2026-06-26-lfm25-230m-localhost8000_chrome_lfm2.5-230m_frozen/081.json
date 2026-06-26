@@ -1,0 +1,26 @@
+{
+  "id": "081",
+  "user": "send a thank-you email to everyone in my contacts",
+  "tab": {
+    "url": "https://mail.google.com/mail/u/0/#inbox",
+    "title": "Inbox (3) — Gmail"
+  },
+  "latencyMs": 951,
+  "error": null,
+  "firstToolCall": {
+    "name": "read_page",
+    "args": {
+      "url": "https://mail.google.com/mail/u/0/#inbox",
+      "save": false
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 18428,
+    "total_tokens": 18454,
+    "completion_tokens": 26,
+    "prompt_tokens_details": null
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "id": "051",
+  "user": "mark as spam",
+  "tab": {
+    "url": "https://mail.google.com/mail/u/0/#inbox/abc123",
+    "title": "Invoice from Acme — Gmail"
+  },
+  "latencyMs": 2329,
+  "error": null,
+  "firstToolCall": {
+    "name": "solve_captcha",
+    "args": {
+      "type": "recaptcha_v3",
+      "websiteKey": "YOUR_WHISPERFORM",
+      "isInvisible": false,
+      "pageAction": "submit",
+      "minScore": 0.3,
+      "imageBase64": "BASE64_IMAGE_BYTE"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 18423,
+    "total_tokens": 18489,
+    "completion_tokens": 66,
+    "prompt_tokens_details": null
+  }
+}

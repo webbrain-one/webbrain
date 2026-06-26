@@ -1,0 +1,25 @@
+{
+  "id": "075",
+  "user": "finish what we were doing",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 851,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 18250,
+    "total_tokens": 18265,
+    "completion_tokens": 15,
+    "prompt_tokens_details": null
+  }
+}

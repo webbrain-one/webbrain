@@ -1,0 +1,25 @@
+{
+  "id": "022",
+  "user": "find noise cancelling headphones under 200 dollars",
+  "tab": {
+    "url": "https://www.amazon.com/",
+    "title": "Amazon.com"
+  },
+  "latencyMs": 1141,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 18370,
+    "total_tokens": 18385,
+    "completion_tokens": 15,
+    "prompt_tokens_details": null
+  }
+}

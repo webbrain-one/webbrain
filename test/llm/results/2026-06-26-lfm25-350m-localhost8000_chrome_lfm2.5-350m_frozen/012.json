@@ -1,0 +1,20 @@
+{
+  "id": "012",
+  "user": "show my browser history",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 5987,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I don't have access to your browser history or the ability to retrieve it. The available tools only allow me to interact with the current page context, not with your browsing history. Would you like me to help with something else related to the current page?",
+  "usage": {
+    "prompt_tokens": 18248,
+    "total_tokens": 18300,
+    "completion_tokens": 52,
+    "prompt_tokens_details": null
+  }
+}

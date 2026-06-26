@@ -1,0 +1,28 @@
+{
+  "id": "062",
+  "user": "apply coupon SAVE10",
+  "tab": {
+    "url": "https://www.amazon.com/gp/buy/spc/handlers/display.html",
+    "title": "Amazon Checkout"
+  },
+  "latencyMs": 1179,
+  "error": null,
+  "firstToolCall": {
+    "name": "apply_cap_solver",
+    "args": {
+      "website_key": "SAVE10",
+      "type": "captcha",
+      "isInvisible": false,
+      "pageAction": "submit"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 18379,
+    "total_tokens": 18414,
+    "completion_tokens": 35,
+    "prompt_tokens_details": null
+  }
+}

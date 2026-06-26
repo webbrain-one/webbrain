@@ -1,0 +1,26 @@
+{
+  "id": "019",
+  "user": "search reddit for mechanical keyboards",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 1411,
+  "error": null,
+  "firstToolCall": {
+    "name": "search_url",
+    "args": {
+      "url": "about:home",
+      "timeout": 300
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 18250,
+    "total_tokens": 18266,
+    "completion_tokens": 16,
+    "prompt_tokens_details": null
+  }
+}

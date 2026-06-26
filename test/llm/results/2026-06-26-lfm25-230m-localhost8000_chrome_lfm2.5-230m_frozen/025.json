@@ -1,0 +1,27 @@
+{
+  "id": "025",
+  "user": "search youtube for \"never gonna give you up\"",
+  "tab": {
+    "url": "https://www.youtube.com/",
+    "title": "YouTube"
+  },
+  "latencyMs": 975,
+  "error": null,
+  "firstToolCall": {
+    "name": "search_url",
+    "args": {
+      "url": "https://www.youtube.com/",
+      "method": "get_accessibility_tree",
+      "headers": {}
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 18542,
+    "total_tokens": 18569,
+    "completion_tokens": 27,
+    "prompt_tokens_details": null
+  }
+}
