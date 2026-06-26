@@ -142,6 +142,6 @@ What they do show is encouraging in a narrower way:
 
 For WebBrain, the next interesting experiment is not to keep benchmarking these raw checkpoints as-is. It is to tune them on browser-planner traces and rerun the same frozen harness. If a 230M or 350M model can be trained out of the `get_accessibility_tree` default and into reliable schema-following, it becomes a much more interesting on-device planner candidate.
 
-The bottom line: raw tiny LFMs are not ready browser planners. That is fine. They are the kind of models you fine-tune into a planner, and this run gives us a compact before-picture.
+The bottom line: raw tiny LFMs are not ready browser planners. That is fine. They are the kind of models you fine-tune into a planner, and this run gives us a compact before-picture. Liquid's new [LFM2.5-230M](https://www.liquid.ai/blog/lfm2-5-230m) strengthens that case: if a 230M model can perform as well as the 350M checkpoint while being roughly 33% smaller, it should become the default tiny LFM target for fine-tuning experiments. For no-fine-tuning, raw tiny-model use, though, Qwen 3.5 0.8B remains the de facto standard to beat.
 
 Tags: #LFM25 #LiquidAI #TinyLanguageModels #ToolCalling #BrowserAgent #WebBrain
