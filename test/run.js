@@ -8420,6 +8420,38 @@ test('upload_file schema accepts downloadId and no longer hard-requires filePath
   assert.deepEqual(up.function.parameters.required, ['selector'], 'filePath should no longer be required');
 });
 
+test('go_back treats query/hash-only URL changes as successful history navigation (chrome)', async () => {
+  const originalChrome = globalThis.chrome;
+  const beforeUrl = 'https://example.com/search?q=shirts&page=2#/inbox';
+  const afterUrl = 'https://example.com/search?q=shirts&page=1#/sent';
+  let getCalls = 0;
+  try {
+    globalThis.chrome = {
+      tabs: {
+        async get() {
+          getCalls += 1;
+          return { url: getCalls === 1 ? beforeUrl : afterUrl };
+        },
+      },
+      scripting: {
+        async executeScript() {
+          return [{ result: { before: beforeUrl } }];
+        },
+      },
+    };
+    const agent = new AgentCh({});
+    agent._probeUnsavedChanges = async () => null;
+
+    const result = await agent.executeTool(42, 'go_back', {});
+    assert.equal(result.success, true);
+    assert.equal(result.url, afterUrl);
+    assert.equal(result.previousUrl, beforeUrl);
+  } finally {
+    if (originalChrome === undefined) delete globalThis.chrome;
+    else globalThis.chrome = originalChrome;
+  }
+});
+
 test('upload_file prefers downloadId over a supplied stale filePath (chrome)', async () => {
   const originalChrome = globalThis.chrome;
   const originalCdp = {

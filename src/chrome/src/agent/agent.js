@@ -4988,7 +4988,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         if (tab?.url) afterUrl = tab.url;
       } catch {}
 
-      if (this._normalizeUrl(afterUrl) === this._normalizeUrl(probe.before)) {
+      if (afterUrl === probe.before) {
         const dirWord = direction === 'back' ? 'earlier' : 'later';
         return {
           success: false,
