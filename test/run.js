@@ -2706,13 +2706,15 @@ test('sidepanel flushes completed run chat before deferred tab switches', () => 
     assert.notEqual(continueDrainIdx, -1, `${label}: Continue completion should drain pending tab switches`);
     assert.equal(continueFlushIdx < continueDrainIdx, true, `${label}: Continue completion must flush before deferred tab switching`);
 
-    const scheduledStart = panel.indexOf('function settleScheduledRun(event, job)');
-    const scheduledEnd = panel.indexOf('function handleScheduledJobEvent', scheduledStart);
+    const scheduledStart = panel.search(/(?:async\s+)?function settleScheduledRun\(event, job\)/);
+    const scheduledEnd = panel.search(/(?:async\s+)?function handleScheduledJobEvent\(data, tabId\)/);
     assert.notEqual(scheduledStart, -1, `${label}: scheduled settlement helper missing`);
     assert.notEqual(scheduledEnd, -1, `${label}: scheduled event handler boundary missing`);
     const scheduledBody = panel.slice(scheduledStart, scheduledEnd);
-    const scheduledFlushIdx = scheduledBody.indexOf('flushRenderedTabChat()');
-    const scheduledDrainIdx = scheduledBody.indexOf('drainQueuedContextMenuPromptsAfterPendingTabSwitch();');
+    const scheduledFlushNeedle = label === 'chrome' ? 'await flushRenderedTabChat()' : 'flushRenderedTabChat()';
+    const scheduledDrainNeedle = label === 'chrome' ? 'await drainQueuedContextMenuPromptsAfterPendingTabSwitch();' : 'drainQueuedContextMenuPromptsAfterPendingTabSwitch();';
+    const scheduledFlushIdx = scheduledBody.indexOf(scheduledFlushNeedle);
+    const scheduledDrainIdx = scheduledBody.indexOf(scheduledDrainNeedle);
     assert.notEqual(scheduledFlushIdx, -1, `${label}: scheduled completion should flush the final transcript`);
     assert.notEqual(scheduledDrainIdx, -1, `${label}: scheduled completion should drain pending tab switches`);
     assert.equal(scheduledFlushIdx < scheduledDrainIdx, true, `${label}: scheduled completion must flush before deferred tab switching`);
@@ -3522,7 +3524,7 @@ test('sidepanel drains scheduled-run context-menu prompts after pending tab swit
     const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
     assert.match(panel, /async function drainQueuedContextMenuPromptsAfterPendingTabSwitch\(\) \{[\s\S]*?if \(pendingTabSwitch == null\) \{[\s\S]*?drainQueuedContextMenuPrompts\(\);[\s\S]*?const pending = pendingTabSwitch;[\s\S]*?pendingTabSwitch = null;[\s\S]*?try \{[\s\S]*?await switchToTab\(pending\);[\s\S]*?\} catch \{[\s\S]*?\}[\s\S]*?drainQueuedContextMenuPrompts\(\);/, `${label}: scheduled completions need a non-throwing pending-tab switch before draining context-menu prompts`);
 
-    const scheduledStart = panel.indexOf('function settleScheduledRun(event, job)');
+    const scheduledStart = panel.search(/(?:async\s+)?function settleScheduledRun\(event, job\)/);
     const scheduledEnd = panel.indexOf('if (scheduledJobsEl)', scheduledStart);
     assert.notEqual(scheduledStart, -1, `${label}: scheduled run settlement helper missing`);
     assert.notEqual(scheduledEnd, -1, `${label}: scheduled job event block missing`);

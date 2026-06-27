@@ -890,7 +890,7 @@ async function drainQueuedContextMenuPromptsAfterPendingTabSwitch() {
   drainQueuedContextMenuPrompts();
 }
 
-function settleScheduledRun(event, job) {
+async function settleScheduledRun(event, job) {
   if (job?.id) crossPanelScheduledJobIds.delete(String(job.id));
   const assistantEl = job?.id ? findScheduledAssistantMessageForJob(job.id) : currentAssistantEl;
   if (assistantEl) {
@@ -908,13 +908,13 @@ function settleScheduledRun(event, job) {
     hideActivity();
     if (currentAssistantEl === assistantEl) currentAssistantEl = null;
     abortRequested = false;
-    if (renderedTabId != null) flushRenderedTabChat();
-    drainQueuedContextMenuPromptsAfterPendingTabSwitch();
+    if (renderedTabId != null) await flushRenderedTabChat();
+    await drainQueuedContextMenuPromptsAfterPendingTabSwitch();
   }
   if (event === 'completed') playCompletionSound();
 }
 
-function handleScheduledJobEvent(data, tabId) {
+async function handleScheduledJobEvent(data, tabId) {
   refreshScheduledJobs({ tabId: currentTabId });
   const event = data?.event;
   const job = data?.job;
@@ -941,10 +941,10 @@ function handleScheduledJobEvent(data, tabId) {
     showActivity(t('sp.scheduled.running', { title }));
   } else if (event === 'completed') {
     ensureScheduledTerminalMessage(job);
-    settleScheduledRun(event, job);
+    await settleScheduledRun(event, job);
   } else if (event === 'failed') {
-    settleScheduledRun(event, job);
     addMessage('error', t('sp.scheduled.failed', { title, msg: job.lastError || t('sp.scheduled.unknown_error') }));
+    await settleScheduledRun(event, job);
   } else if (event === 'needs_user_input') {
     ensureScheduledClarifyCards([job]);
     hideActivity();
@@ -2569,7 +2569,9 @@ chrome.runtime.onMessage.addListener((msg) => {
   if (msg.target !== 'sidepanel' || msg.action !== 'agent_update') return;
 
   if (msg.type === 'scheduled_job') {
-    handleScheduledJobEvent(msg.data, msg.tabId);
+    handleScheduledJobEvent(msg.data, msg.tabId).catch((err) => {
+      console.warn('[WebBrain] failed to handle scheduled job event:', err);
+    });
     return;
   }
 
