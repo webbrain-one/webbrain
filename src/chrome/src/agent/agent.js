@@ -180,6 +180,7 @@ export class Agent {
     // per item.
     this.bulkApiMutationClicks = new Map(); // tabId -> recent correlated click entries
     this.bulkApiMutationHints = new Map(); // tabId -> hintKey -> last count warned
+    this.failedBulkApiReplayShapes = new Map(); // "tabId|runId" -> Set("METHOD|requestShape")
     // Last interacted region per tab (CSS-pixel rect from click_ax / type_ax).
     // Used to draw an outline onto verification screenshots in `done` so the
     // model can see which element it last touched. Lives for the tab's
@@ -584,6 +585,46 @@ export class Agent {
     return isNetworkMutation(name, args) && this._isToolResultErroredForLoop(name, args, result);
   }
 
+  _bulkApiReplayShapeKey(method, requestShape) {
+    const m = String(method || '').toUpperCase();
+    const shape = String(requestShape || '').trim();
+    return m && shape ? `${m}|${shape}` : '';
+  }
+
+  _bulkApiReplayFailureScope(tabId) {
+    return `${tabId}|${this.currentRunId.get(tabId) || 'runless'}`;
+  }
+
+  _hasFailedBulkApiReplayShape(tabId, method, requestShape) {
+    const key = this._bulkApiReplayShapeKey(method, requestShape);
+    return !!key && !!this.failedBulkApiReplayShapes.get(this._bulkApiReplayFailureScope(tabId))?.has(key);
+  }
+
+  _setFailedBulkApiReplayShape(tabId, method, requestShape, failed) {
+    const key = this._bulkApiReplayShapeKey(method, requestShape);
+    if (!key) return;
+    const scope = this._bulkApiReplayFailureScope(tabId);
+    const failures = this.failedBulkApiReplayShapes.get(scope) || new Set();
+    if (failed) {
+      failures.add(key);
+      this.failedBulkApiReplayShapes.set(scope, failures);
+    } else {
+      failures.delete(key);
+      if (failures.size) this.failedBulkApiReplayShapes.set(scope, failures);
+      else this.failedBulkApiReplayShapes.delete(scope);
+    }
+  }
+
+  _trackBulkApiReplayResult(tabId, name, args, result) {
+    if (name !== 'fetch_url' || !args?.replayRequestId || !isNetworkMutation(name, args)) return null;
+    const method = String(args.method || 'GET').toUpperCase();
+    const requestShape = this._bulkApiRequestShape(args.url);
+    if (!requestShape) return null;
+    const failed = this._isToolResultErroredForLoop(name, args, result);
+    this._setFailedBulkApiReplayShape(tabId, method, requestShape, failed);
+    return { method, requestShape, failed };
+  }
+
   _clearLoopState(tabId) {
     this.recentCalls.delete(tabId);
     this.loopNudges.delete(tabId);
@@ -591,6 +632,12 @@ export class Agent {
     this.recentCoordClicks.delete(tabId);
     this.bulkApiMutationClicks.delete(tabId);
     this.bulkApiMutationHints.delete(tabId);
+    const replayFailurePrefix = `${tabId}|`;
+    for (const key of this.failedBulkApiReplayShapes.keys()) {
+      if (key === tabId || String(key).startsWith(replayFailurePrefix)) {
+        this.failedBulkApiReplayShapes.delete(key);
+      }
+    }
   }
 
   /**
@@ -775,6 +822,7 @@ export class Agent {
       item.requestShape === entry.requestShape
     );
     if (group.length < 2) return null;
+    if (this._hasFailedBulkApiReplayShape(tabId, entry.method, entry.requestShape)) return null;
 
     const hintKey = `${entry.actionKey}|${entry.method}|${entry.requestShape}`;
     const hinted = this.bulkApiMutationHints.get(tabId) || new Map();
@@ -804,12 +852,53 @@ export class Agent {
       .map(url => `${shortcut.method} ${url}`)
       .join('; ');
     const permission = shortcut.apiAllowed
-      ? 'API mutations are enabled for this conversation, so switch to fetch_url for the remaining matching items when the sampled endpoint works.'
+      ? 'API mutations are enabled for this conversation. Stop further same-shape UI clicks and sample one direct fetch_url replay for the next matching item.'
       : 'API mutations are NOT enabled for this conversation; ask the user to type /allow-api before using mutating fetch_url, or continue through the visible UI.';
     const replay = shortcut.replayRequestId
-      ? ` Captured replay material is available as replayRequestId "${shortcut.replayRequestId}"${shortcut.replayHasBody ? ' with a request body' : ''}${shortcut.replayHeaderNames?.length ? ` and headers (${shortcut.replayHeaderNames.join(', ')})` : ''}; use fetch_url({url, method: "${shortcut.method}", replayRequestId: "${shortcut.replayRequestId}"}) for one sampled remaining item so WebBrain reuses same-origin body/headers without exposing hidden tokens.`
+      ? ` Captured replay material is available as replayRequestId "${shortcut.replayRequestId}"${shortcut.replayHasBody ? ' with a request body' : ''}${shortcut.replayHeaderNames?.length ? ` and headers (${shortcut.replayHeaderNames.join(', ')})` : ''}; use fetch_url({url: "<next matching concrete URL>", method: "${shortcut.method}", replayRequestId: "${shortcut.replayRequestId}"}) for exactly one sampled remaining item so WebBrain reuses same-origin body/headers without exposing hidden tokens.`
       : '';
-    return `[BULK API MUTATION PATTERN: You have successfully clicked ${shortcut.count} similar "${shortcut.action}" controls, and each click triggered ${shortcut.method} requests with the same URL shape: ${shortcut.requestShape}. Recent examples: ${examples}. This is repeated bulk mutation work, not a stuck loop. ${permission}${replay} Do not spend one LLM turn per remaining button. If one direct API call fails, fall back to the UI and do not loop on fetch_url. Verify the page after any API batch.]`;
+    return `[BULK API MUTATION PATTERN: You have successfully clicked ${shortcut.count} similar "${shortcut.action}" controls, and each click triggered ${shortcut.method} requests with the same URL shape: ${shortcut.requestShape}. Recent concrete examples: ${examples}. This is repeated bulk mutation work, not a stuck loop. ${permission}${replay} If the sampled direct API call returns success:false or HTTP 4xx/5xx, fall back to the visible UI for this shape and do not loop on fetch_url. Verify the page after any API batch.]`;
+  }
+
+  _toolCallArgs(tc) {
+    try {
+      return typeof tc?.function?.arguments === 'string'
+        ? JSON.parse(tc.function.arguments)
+        : (tc?.function?.arguments || {});
+    } catch {
+      return {};
+    }
+  }
+
+  _bulkApiReplayInstruction(shortcut) {
+    return `Stop executing same-shape UI clicks. API mutations are enabled and WebBrain captured replayRequestId "${shortcut.replayRequestId}" for ${shortcut.method} ${shortcut.requestShape}. On the next turn, sample one remaining matching item with fetch_url({url: "<next matching concrete URL>", method: "${shortcut.method}", replayRequestId: "${shortcut.replayRequestId}"}). If that sample fails, fall back to the visible UI for this request shape.`;
+  }
+
+  _appendSyntheticToolResults(tabId, toolCalls, startIndex, messages, onUpdate, step, makeResult) {
+    let count = 0;
+    for (let i = startIndex; i < toolCalls.length; i++) {
+      const tc = toolCalls[i];
+      const fnName = tc?.function?.name || 'unknown_tool';
+      const fnArgs = this._toolCallArgs(tc);
+      const result = makeResult(fnName, fnArgs, i);
+      messages.push({
+        role: 'tool',
+        tool_call_id: tc.id,
+        content: JSON.stringify(result),
+      });
+      onUpdate('tool_result', { name: fnName, result });
+      const runId = this.currentRunId.get(tabId);
+      if (runId) {
+        trace.recordToolCall(runId, step, {
+          name: fnName,
+          args: fnArgs,
+          result,
+          latencyMs: 0,
+        });
+      }
+      count++;
+    }
+    return count;
   }
 
   /**
@@ -1429,7 +1518,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
    * Returns one of:
    *   { action: 'continue' }                  → caller should `continue` the LLM loop
    *   { action: 'return',   value: string }   → caller should return immediately
-   *   { action: 'abort' }                     → user requested abort mid-batch
+   *   { action: 'abort',   value: string }    → user requested abort mid-batch
    */
   async _executeToolBatch(tabId, toolCalls, messages, onUpdate, provider, partialAssistantText = null, allowedToolNames = AGENT_TOOL_NAMES, step = null) {
     let didStateChange = false;
@@ -1440,12 +1529,18 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const navNotices = []; // accumulated for injection after the loop
     const failedApiMutationLoopKeysThisBatch = new Set();
 
-    for (const tc of toolCalls) {
+    for (let toolIndex = 0; toolIndex < toolCalls.length; toolIndex++) {
+      const tc = toolCalls[toolIndex];
       // Abort check before each tool call.
       if (this._checkAbort(tabId)) {
-        const value = partialAssistantText || '[Stopped by user]';
+        const value = '[Stopped by user before executing requested tool calls.]';
+        this._appendSyntheticToolResults(tabId, toolCalls, toolIndex, messages, onUpdate, step, () => ({
+          success: false,
+          cancelled: true,
+          error: value,
+        }));
         onUpdate('warning', { message: 'Stopped by user.' });
-        return { action: 'return', value };
+        return { action: 'abort', value };
       }
 
       const fnName = tc.function?.name || '';
@@ -1461,14 +1556,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         });
         continue;
       }
-      let fnArgs;
-      try {
-        fnArgs = typeof tc.function.arguments === 'string'
-          ? JSON.parse(tc.function.arguments)
-          : tc.function.arguments;
-      } catch {
-        fnArgs = {};
-      }
+      const fnArgs = this._toolCallArgs(tc);
 
       // Deterministic capability × origin permission gate (permission-gate.js).
       // Maps the tool to a capability and requires a (capability, host) grant —
@@ -1525,8 +1613,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           if (aborted || blocked) break;
         }
         if (aborted) {
+          const value = '[Stopped by user before executing requested tool calls.]';
+          this._appendSyntheticToolResults(tabId, toolCalls, toolIndex, messages, onUpdate, step, () => ({
+            success: false,
+            cancelled: true,
+            error: value,
+          }));
           onUpdate('warning', { message: 'Stopped by user.' });
-          return { action: 'return', value: partialAssistantText || '[Stopped by user]' };
+          return { action: 'abort', value };
         }
         if (failClosed) {
           // Target host couldn't be identified (e.g. an iframe action with no
@@ -1571,6 +1665,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       // upload/read survives context compaction even if the model never calls
       // scratchpad_write itself — the failure that made it invent file paths.
       this._pinDownloadHandles(tabId, fnName, toolResult);
+      const replayTracking = this._trackBulkApiReplayResult(tabId, fnName, fnArgs, toolResult);
 
       let progressObserved = null;
       let progressAuto = null;
@@ -1748,6 +1843,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         resultContent += '\n' + this._formatBulkApiMutationWarning(bulkApiShortcut);
         onUpdate('warning', { message: 'Bulk API mutation pattern detected.' });
       }
+      if (replayTracking?.failed) {
+        resultContent += `\n[BULK API REPLAY FAILED: Direct API replay for ${replayTracking.method} ${replayTracking.requestShape} returned failure. Fall back to the visible UI for this request shape and do not keep retrying fetch_url.]`;
+        onUpdate('warning', { message: 'Bulk API replay failed; falling back to UI for this shape.' });
+      }
       if (toolResult?.noProgress) {
         resultContent = resultContent +
           '\n[NO PROGRESS DETECTED: The last click returned from the page, but the visible page snapshot did not change. Do not repeat the same click. Re-observe the page with get_accessibility_tree({filter:"visible"}) or screenshot({coord_aligned:true}), then choose a different target or explain the blocker.]';
@@ -1814,6 +1913,45 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         this._clearLoopState(tabId);
         this._persist(tabId);
         return { action: 'return', value: stopMessage };
+      }
+
+      if (bulkApiShortcut?.apiAllowed && bulkApiShortcut.replayRequestId && toolIndex < toolCalls.length - 1) {
+        const instruction = this._bulkApiReplayInstruction(bulkApiShortcut);
+        const skippedCount = this._appendSyntheticToolResults(
+          tabId,
+          toolCalls,
+          toolIndex + 1,
+          messages,
+          onUpdate,
+          step,
+          (skippedName) => ({
+            success: false,
+            skipped: true,
+            skippedBecause: 'bulk_api_replay_available',
+            error: `Skipped ${skippedName} because ${instruction}`,
+            bulkApiReplay: {
+              action: bulkApiShortcut.action,
+              method: bulkApiShortcut.method,
+              requestShape: bulkApiShortcut.requestShape,
+              replayRequestId: bulkApiShortcut.replayRequestId,
+              replayHasBody: bulkApiShortcut.replayHasBody,
+              replayHeaderNames: bulkApiShortcut.replayHeaderNames,
+              apiAllowed: bulkApiShortcut.apiAllowed,
+            },
+          }),
+        );
+        onUpdate('warning', { message: `Bulk API replay available; paused ${skippedCount} remaining tool call(s).` });
+        const runId = this.currentRunId.get(tabId);
+        if (runId) {
+          trace.recordNote(runId, step, 'bulk_api_replay_batch_interrupted', {
+            skippedCount,
+            method: bulkApiShortcut.method,
+            requestShape: bulkApiShortcut.requestShape,
+            replayRequestId: bulkApiShortcut.replayRequestId,
+          });
+        }
+        this._persist(tabId);
+        return { action: 'continue' };
       }
 
       if (this._shouldAutoScreenshot(fnName) && !toolResult?.error) {
@@ -8996,6 +9134,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       // Check for abort before each step
       if (this._checkAbort(tabId)) {
         finalResponse = finalResponse || '[Stopped by user]';
+        _traceStatus = 'cancelled';
         onUpdate('warning', { message: 'Stopped by user.' });
         messages.push({ role: 'assistant', content: finalResponse });
         break;
@@ -9096,7 +9235,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
       // Check for abort after LLM response
       if (this._checkAbort(tabId)) {
-        finalResponse = result?.content || '[Stopped by user]';
+        const hadToolCalls = !!(result?.toolCalls && result.toolCalls.length > 0);
+        finalResponse = hadToolCalls
+          ? '[Stopped by user before executing requested tool calls.]'
+          : '[Stopped by user]';
+        _traceStatus = 'cancelled';
         onUpdate('warning', { message: 'Stopped by user.' });
         messages.push({ role: 'assistant', content: finalResponse });
         break;
@@ -9144,6 +9287,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         );
         if (batchResult.action === 'return') {
           finalResponse = batchResult.value;
+          return finalResponse;
+        }
+        if (batchResult.action === 'abort') {
+          finalResponse = batchResult.value;
+          _traceStatus = 'cancelled';
           return finalResponse;
         }
         // 'continue' → fall through to next loop iteration
@@ -9399,6 +9547,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           );
           if (batchResult.action === 'return') {
             return finish(batchResult.value);
+          }
+          if (batchResult.action === 'abort') {
+            return finish(batchResult.value, 'cancelled');
           }
           continue;
         }

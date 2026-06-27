@@ -1027,6 +1027,130 @@ test('_detectBulkApiMutationShortcut: /allow-api is reflected in the bulk hint',
     }
   }
 });
+
+test('_executeToolBatch pauses remaining clicks when API replay is available', async () => {
+  for (const AgentClass of [AgentCh, AgentFx]) {
+    const agent = new AgentClass({ getVisionProvider: async () => null });
+    const tabId = 2062;
+    const apiMap = new Map([[tabId, []]]);
+    const executed = [];
+    const updates = [];
+    const messages = [];
+    const originalApiRequests = globalThis.__webbrainApiRequests;
+    globalThis.__webbrainApiRequests = apiMap;
+
+    try {
+      agent._ensureGateSetting = async () => {};
+      agent._skipPermissionGate = true;
+      agent._currentUrl = async () => 'https://github.com/acme/repo/stargazers';
+      agent._recordProgressObservation = async () => null;
+      agent._autoRecordProgressAction = () => null;
+      agent._progressWarningForAction = () => '';
+      agent._persist = () => {};
+      agent.setApiMutationsAllowed(tabId, true);
+      agent.executeTool = async (_tabId, name, args) => {
+        assert.equal(name, 'click_ax', `${AgentClass.name}: unexpected tool`);
+        const target = `user${executed.length}`;
+        executed.push(args.ref_id);
+        apiMap.get(tabId).push({
+          url: `https://github.com/users/follow?target=${target}`,
+          method: 'POST',
+          ts: Date.now(),
+          replayRequestId: `api_${target}`,
+          hasBody: true,
+          headerNames: ['content-type', 'accept'],
+        });
+        return { success: true, method: 'click_ax', ref_id: args.ref_id, name: `Follow ${target}` };
+      };
+      const toolCalls = Array.from({ length: 10 }, (_, i) => ({
+        id: `click_${i}`,
+        function: {
+          name: 'click_ax',
+          arguments: JSON.stringify({ ref_id: `ref_${i}` }),
+        },
+      }));
+
+      const result = await agent._executeToolBatch(
+        tabId,
+        toolCalls,
+        messages,
+        (type, data) => updates.push({ type, data }),
+        { supportsVision: false },
+        '',
+        new Set(['click_ax']),
+        3,
+      );
+
+      assert.equal(result.action, 'continue', `${AgentClass.name}: interrupted batch should continue to next model turn`);
+      assert.deepEqual(executed, ['ref_0', 'ref_1'], `${AgentClass.name}: should execute only until replay shortcut is detected`);
+      assert.equal(messages.length, 10, `${AgentClass.name}: every tool call needs a tool result`);
+      assert.match(messages[1].content, /BULK API MUTATION PATTERN/, `${AgentClass.name}: triggering click result missed replay warning`);
+      assert.match(messages[1].content, /Stop further same-shape UI clicks/, `${AgentClass.name}: warning should instruct a replay pivot`);
+      const skipped = messages.slice(2).map(msg => JSON.parse(msg.content));
+      assert.equal(skipped.length, 8, `${AgentClass.name}: expected eight skipped calls`);
+      assert.ok(skipped.every(item => item.skipped === true && item.skippedBecause === 'bulk_api_replay_available'), `${AgentClass.name}: skipped calls missing replay marker`);
+      assert.ok(updates.some(update => update.type === 'warning' && /paused 8 remaining/.test(update.data?.message || '')), `${AgentClass.name}: missing batch pause warning`);
+    } finally {
+      if (originalApiRequests === undefined) delete globalThis.__webbrainApiRequests;
+      else globalThis.__webbrainApiRequests = originalApiRequests;
+    }
+  }
+});
+
+test('failed API replay suppresses future bulk replay hints until a success clears it', () => {
+  for (const AgentClass of [AgentCh, AgentFx]) {
+    const agent = new AgentClass({});
+    const tabId = 2063;
+    const base = Date.now();
+    const requests = [];
+    const apiMap = new Map([[tabId, requests]]);
+    const originalApiRequests = globalThis.__webbrainApiRequests;
+    globalThis.__webbrainApiRequests = apiMap;
+    agent.setApiMutationsAllowed(tabId, true);
+
+    const click = (i, target) => {
+      requests.push({
+        url: `https://github.com/users/follow?target=${target}`,
+        method: 'POST',
+        ts: base + (i * 1000) + 20,
+        replayRequestId: `api_${target}`,
+      });
+      return agent._detectBulkApiMutationShortcut(
+        tabId,
+        'click_ax',
+        { ref_id: `ref_${i}` },
+        { success: true, name: `Follow ${target}` },
+        { startedAt: base + (i * 1000), endedAt: base + (i * 1000) + 100, pageUrl: 'https://github.com/acme/repo/stargazers' },
+      );
+    };
+
+    try {
+      assert.equal(click(0, 'alice'), null, `${AgentClass.name}: first click should not hint`);
+      assert.ok(click(1, 'bob'), `${AgentClass.name}: second click should hint`);
+
+      const failed = agent._trackBulkApiReplayResult(
+        tabId,
+        'fetch_url',
+        { url: 'https://github.com/users/follow?target=carol', method: 'POST', replayRequestId: 'api_carol' },
+        { success: false, status: 422, error: 'Fetch returned HTTP 422' },
+      );
+      assert.equal(failed.failed, true, `${AgentClass.name}: failed replay was not tracked`);
+      assert.equal(click(2, 'carol'), null, `${AgentClass.name}: failed shape should suppress future replay hints`);
+
+      const cleared = agent._trackBulkApiReplayResult(
+        tabId,
+        'fetch_url',
+        { url: 'https://github.com/users/follow?target=dave', method: 'POST', replayRequestId: 'api_dave' },
+        { success: true, status: 200, text: 'ok' },
+      );
+      assert.equal(cleared.failed, false, `${AgentClass.name}: successful replay should clear failed shape`);
+      assert.ok(click(3, 'dave'), `${AgentClass.name}: cleared shape should become eligible again`);
+    } finally {
+      if (originalApiRequests === undefined) delete globalThis.__webbrainApiRequests;
+      else globalThis.__webbrainApiRequests = originalApiRequests;
+    }
+  }
+});
 //
 // These mirror the static helpers on Agent exactly — keep them in sync
 // with src/chrome/src/agent/agent.js `_estimateImageTokens` and
@@ -8712,6 +8836,68 @@ test('accepted done emits successful result update after progress gate', async (
       1,
       `${AgentClass.name}: accepted done should emit one successful done update`,
     );
+  }
+});
+
+test('aborted content-plus-tool responses do not become successful finals', async () => {
+  for (const AgentClass of [AgentCh, AgentFx]) {
+    const tabId = 797;
+    let agent;
+    let executed = false;
+    let ended = null;
+    const provider = {
+      supportsTools: true,
+      supportsVision: false,
+      promptTier: 'full',
+      contextWindow: 128000,
+      model: 'test-model',
+      name: 'test-provider',
+      chat: async () => {
+        agent.abort(tabId);
+        return {
+          content: 'Updating ledger and navigating to the next page.',
+          toolCalls: [{
+            id: 'next_call',
+            function: {
+              name: 'click_ax',
+              arguments: JSON.stringify({ ref_id: 'ref_260' }),
+            },
+          }],
+        };
+      },
+    };
+    agent = new AgentClass({
+      getActive: () => provider,
+      getVisionProvider: async () => null,
+    });
+    agent.planBeforeAct = false;
+    agent.maxSteps = 2;
+    agent._skipPermissionGate = true;
+    agent._manageContext = async () => {};
+    agent._enrichUserMessageWithCurrentPage = async (_tabId, _messages, content) => ({ role: 'user', content });
+    agent._maybeReinjectAdapter = async () => {};
+    agent._ensureProgressSessionForCurrentTask = async () => ({ mode: 'inactive' });
+    agent._persist = () => {};
+    agent._startTraceRun = async () => {
+      agent.currentRunId.set(tabId, 'run_abort_test');
+      return 'run_abort_test';
+    };
+    agent._endTraceRun = (_tabId, runId, status, finalContent) => {
+      ended = { runId, status, finalContent };
+      agent.currentRunId.delete(tabId);
+    };
+    agent.executeTool = async () => {
+      executed = true;
+      return { success: true };
+    };
+
+    const final = await agent.processMessage(tabId, 'continue', () => {}, 'act');
+
+    assert.equal(final, '[Stopped by user before executing requested tool calls.]', `${AgentClass.name}: partial tool-call text became final`);
+    assert.equal(executed, false, `${AgentClass.name}: tool executed after abort`);
+    assert.equal(ended?.status, 'cancelled', `${AgentClass.name}: trace was not marked cancelled`);
+    assert.equal(ended?.finalContent, final, `${AgentClass.name}: trace final did not use interrupted message`);
+    assert.doesNotMatch(final, /Updating ledger/, `${AgentClass.name}: model partial text leaked as final`);
   }
 });
 

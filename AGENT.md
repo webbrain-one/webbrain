@@ -77,6 +77,10 @@ vanilla JS/CSS unless there is a very strong reason to add a framework.
   should stay current with behavior.
 - `test/`: browser-neutral regression tests and parity checks.
 - `web/`: marketing site and blog content; run the web build after editing it.
+  Most homepage files under `web/` are generated: change
+  `web/build/template.html` and `web/build/locales/*.json`, then run
+  `npm run build:web`. Do not hand-edit only `web/index.html` or localized
+  `web/*/index.html`, because the next build will erase those changes.
 
 ## Testing
 

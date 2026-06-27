@@ -1500,7 +1500,7 @@
       display: block;
       background: #000;
     }
-    /* The security explainer is landscape 16:9 — keep that ratio at every
+    /* The security explainer is landscape 16:9 - keep that ratio at every
        width so it never inherits the portrait mobile override below. */
     .video-frame--wide { padding-bottom: 56.25%; }
 
@@ -1581,7 +1581,7 @@
 <nav>
   <div class="nav-inner">
     <a href="https://webbrain.one/" class="nav-brand" style="text-decoration:none;">
-      <span class="emoji">🧠</span> WebBrain<span style="opacity:0.5; font-weight:400;">.one</span>
+      <span class="emoji">🧠</span> WebBrain<span style="opacity:0.5; font-weight:400; -webkit-text-fill-color:currentColor;">.one</span>
     </a>
     <div class="nav-links">
       <a href="#features">Features</a>
@@ -2310,7 +2310,7 @@
 <script>
   (function () {
     // Pick the right source (desktop vs mobile) for every responsive video
-    // on the page — the product demo and the security explainer.
+    // on the page - the product demo and the security explainer.
     const videos = Array.prototype.slice.call(
       document.querySelectorAll('video[data-desktop-src]')
     );
