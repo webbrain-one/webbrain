@@ -504,6 +504,17 @@ function persistTabChat(tabId, html) {
   });
 }
 
+async function flushRenderedTabChat() {
+  const tabId = renderedTabId;
+  if (tabId == null) return;
+  if (persistTimer && persistTimerTabId === tabId) {
+    clearTimeout(persistTimer);
+    persistTimer = null;
+    persistTimerTabId = null;
+  }
+  await persistTabChat(tabId, messagesEl.innerHTML);
+}
+
 function clearCachedTabChat(tabId) {
   if (tabId == null) return;
   if (persistTimer && persistTimerTabId === tabId) {
@@ -897,6 +908,7 @@ function settleScheduledRun(event, job) {
     hideActivity();
     if (currentAssistantEl === assistantEl) currentAssistantEl = null;
     abortRequested = false;
+    if (renderedTabId != null) flushRenderedTabChat();
     drainQueuedContextMenuPromptsAfterPendingTabSwitch();
   }
   if (event === 'completed') playCompletionSound();
@@ -1461,7 +1473,7 @@ async function switchToTab(newTabId) {
   // Save the tab currently represented by the DOM. During an async restore,
   // currentTabId may already point at the target while the DOM is still older.
   if (renderedTabId != null) {
-    persistTabChat(renderedTabId, messagesEl.innerHTML);
+    await flushRenderedTabChat();
     captureInputDraftForTab(renderedTabId);
   }
 
@@ -2342,6 +2354,7 @@ async function sendMessage(extraChatParams) {
     }
     if (currentAssistantEl === assistantEl) currentAssistantEl = null;
     if (renderToCurrentTab && currentTabId === tabId) scrollToBottom();
+    if (renderToCurrentTab && renderedTabId === tabId) await flushRenderedTabChat();
     if (renderToCurrentTab && !wasAborted) playCompletionSound();
     if (renderToCurrentTab && currentTabId === tabId) refreshRecommendedActions();
     await drainQueuedContextMenuPromptsAfterPendingTabSwitch();
@@ -3229,6 +3242,7 @@ async function continueAgent() {
     hideActivity();
     if (currentAssistantEl === assistantEl) currentAssistantEl = null;
     if (currentTabId === tabId) scrollToBottom();
+    if (currentTabId === tabId && renderedTabId === tabId) await flushRenderedTabChat();
     await drainQueuedContextMenuPromptsAfterPendingTabSwitch();
   }
 }
@@ -3642,6 +3656,7 @@ async function abortRun() {
       hideActivity();
       currentAssistantEl = null;
       abortRequested = false;
+      await flushRenderedTabChat();
       await drainQueuedContextMenuPromptsAfterPendingTabSwitch();
     }
   }, 3000); // safety timeout if background takes too long
