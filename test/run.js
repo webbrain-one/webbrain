@@ -329,14 +329,12 @@ class LoopDetectorShim {
     if (clickTimes.length < 2) return null;
 
     const WINDOW_MS = 3000;
-    const SAFE_SHORTCUT_METHODS = new Set(['GET']);
     let candidate = null;
     let matches = 0;
     const usedRequestIndexes = new Set();
     for (const clickTs of clickTimes) {
       const hitIndex = apiRequests.findIndex((r, idx) =>
         !usedRequestIndexes.has(idx) &&
-        SAFE_SHORTCUT_METHODS.has(String(r.method || '').toUpperCase()) &&
         r.ts >= clickTs && r.ts <= clickTs + WINDOW_MS &&
         (!candidate || (r.url === candidate.url && String(r.method || '').toUpperCase() === candidate.method))
       );
@@ -847,7 +845,7 @@ test('_detectApiShortcut: request outside 3 s window returns null', () => {
   }
 });
 
-test('_detectApiShortcut: write-method requests are not suggested', () => {
+test('_detectApiShortcut: write-method requests remain eligible for explicit API mode', () => {
   const d = new LoopDetectorShim();
   const tabId = 204;
   d._recordCall(tabId, 'click', { selector: '#delete' }, { success: true });
@@ -866,11 +864,10 @@ test('_detectApiShortcut: write-method requests are not suggested', () => {
   globalThis.__webbrainApiRequests = apiMap;
 
   try {
-    assert.equal(
-      d._detectApiShortcut(tabId, loop, buf),
-      null,
-      'write-method requests should not be turned into fetch_url shortcut suggestions'
-    );
+    const shortcut = d._detectApiShortcut(tabId, loop, buf);
+    assert.ok(shortcut, 'write-method requests should still be surfaced for /allow-api flows');
+    assert.equal(shortcut.url, 'https://api.example.com/items/delete');
+    assert.equal(shortcut.method, 'POST');
   } finally {
     delete globalThis.__webbrainApiRequests;
   }

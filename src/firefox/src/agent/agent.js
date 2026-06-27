@@ -491,9 +491,9 @@ export class Agent {
    * listener in background.js). If so, surface the URL/method so the model
    * can call fetch_url directly instead of clicking again.
    *
-   * Strict matching only: same tab, exact url+method repeated, request must
-   * land within WINDOW_MS after the click that triggered it, and only GET
-   * requests are suggested. No fuzzy param-pattern matching.
+   * Strict matching only: same tab, exact url+method repeated, and request
+   * must land within WINDOW_MS after the click that triggered it. No fuzzy
+   * param-pattern matching.
    */
   _detectApiShortcut(tabId, loop, buf) {
     if (loop.type !== 'repeat') return null;
@@ -505,14 +505,12 @@ export class Agent {
     if (clickTimes.length < 2) return null;
 
     const WINDOW_MS = 3000;
-    const SAFE_SHORTCUT_METHODS = new Set(['GET']);
     let candidate = null;
     let matches = 0;
     const usedRequestIndexes = new Set();
     for (const clickTs of clickTimes) {
       const hitIndex = apiRequests.findIndex((r, idx) =>
         !usedRequestIndexes.has(idx) &&
-        SAFE_SHORTCUT_METHODS.has(String(r.method || '').toUpperCase()) &&
         r.ts >= clickTs && r.ts <= clickTs + WINDOW_MS &&
         (!candidate || (r.url === candidate.url && String(r.method || '').toUpperCase() === candidate.method))
       );
@@ -617,7 +615,7 @@ export class Agent {
     if (loop.type === 'repeat') {
       const shortcut = this._detectApiShortcut(tabId, loop, buf);
       warning = shortcut
-        ? `[LOOP DETECTED + API SHORTCUT FOUND: You've called ${loop.name} ${loop.count} times. Each click triggered the same background request: ${shortcut.method} ${shortcut.url}. Instead of clicking again, call fetch_url({url: "${shortcut.url}", method: "${shortcut.method}"}) directly to get the next page's data.]`
+        ? `[LOOP DETECTED + API SHORTCUT FOUND: You've called ${loop.name} ${loop.count} times. Each click triggered the same background request pattern: ${shortcut.method} ${shortcut.url}. Instead of clicking again, consider fetch_url({url: "${shortcut.url}", method: "${shortcut.method}"}) with the same method; follow the UI/API mutation policy for mutating methods.]`
         : `[LOOP DETECTED: You've just called ${loop.name} ${loop.count} times with the same arguments and the same outcome. The current approach is NOT working. Try something fundamentally different: a different selector, a different tool, scroll to find a different element, or take a screenshot to see what's actually on screen. DO NOT repeat this exact call again — try a creative alternative.]`;
     } else {
       warning = `[LOOP DETECTED: You're oscillating between ${loop.a} and ${loop.b} without making progress. Stop. Take a screenshot to see what's actually happening, then try a completely different approach.]`;
