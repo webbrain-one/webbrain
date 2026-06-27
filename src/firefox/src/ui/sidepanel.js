@@ -442,7 +442,7 @@ function triggerCompletionConfetti() {
       piece.style.setProperty('--x', `${Math.random() * 100}%`);
       piece.style.setProperty('--drift', `${Math.round((Math.random() - 0.5) * 160)}px`);
       piece.style.setProperty('--delay', `${Math.random() * 0.28}s`);
-      piece.style.setProperty('--duration', `${1.15 + Math.random() * 0.75}s`);
+      piece.style.setProperty('--duration', `${1.55 + Math.random() * 0.95}s`);
       piece.style.setProperty('--rotation', `${Math.round(240 + Math.random() * 600)}deg`);
       const size = 5 + Math.random() * 5;
       piece.style.setProperty('--size', `${size}px`);
@@ -454,7 +454,7 @@ function triggerCompletionConfetti() {
     completionConfettiTimer = setTimeout(() => {
       layer.remove();
       completionConfettiTimer = null;
-    }, 2300);
+    }, 3000);
   } catch { /* ignore */ }
 }
 
