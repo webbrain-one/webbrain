@@ -43,7 +43,7 @@ Open-source AI browser agent for Chrome and Firefox. Chat with any web page, aut
 ### Chrome
 
 ```bash
-git clone https://github.com/esokullu/webbrain.git
+git clone https://github.com/webbrain-one/webbrain.git
 ```
 
 1. Open Chrome → `chrome://extensions/`
@@ -53,7 +53,7 @@ git clone https://github.com/esokullu/webbrain.git
 ### Firefox
 
 ```bash
-git clone https://github.com/esokullu/webbrain.git
+git clone https://github.com/webbrain-one/webbrain.git
 ```
 
 1. Open Firefox → `about:debugging#/runtime/this-firefox`

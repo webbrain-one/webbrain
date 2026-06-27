@@ -40,7 +40,7 @@
 ### Chrome
 
 ```bash
-git clone https://github.com/esokullu/webbrain.git
+git clone https://github.com/webbrain-one/webbrain.git
 ```
 
 1. 打开 Chrome → `chrome://extensions/`
@@ -50,7 +50,7 @@ git clone https://github.com/esokullu/webbrain.git
 ### Firefox
 
 ```bash
-git clone https://github.com/esokullu/webbrain.git
+git clone https://github.com/webbrain-one/webbrain.git
 ```
 
 1. 打开 Firefox → `about:debugging#/runtime/this-firefox`
