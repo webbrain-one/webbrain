@@ -554,7 +554,13 @@ export class Agent {
       if (hitIndex < 0) continue;
       const hit = apiRequests[hitIndex];
       if (!hit) continue;
-      if (!candidate) candidate = { url: hit.url, method: String(hit.method || '').toUpperCase() };
+      if (!candidate) {
+        candidate = {
+          url: hit.url,
+          method: String(hit.method || '').toUpperCase(),
+          replayRequestId: hit.replayRequestId,
+        };
+      }
       usedRequestIndexes.add(hitIndex);
       matches++;
     }
@@ -681,6 +687,9 @@ export class Agent {
       url: request.url,
       requestShape: this._bulkApiRequestShape(request.url),
       requestTs: request.ts,
+      replayRequestId: request.replayRequestId,
+      hasBody: !!request.hasBody,
+      headerNames: Array.isArray(request.headerNames) ? request.headerNames : [],
     };
     const recent = (this.bulkApiMutationClicks.get(tabId) || [])
       .filter(item => now - item.ts <= 60000);
@@ -703,6 +712,7 @@ export class Agent {
     this.bulkApiMutationHints.set(tabId, hinted);
 
     const examples = [...new Set(group.slice(-4).map(item => item.url))];
+    const replaySource = [...group].reverse().find(item => item.replayRequestId);
     return {
       action: entry.actionKey,
       label,
@@ -710,6 +720,9 @@ export class Agent {
       requestShape: entry.requestShape,
       count: group.length,
       examples,
+      replayRequestId: replaySource?.replayRequestId || null,
+      replayHasBody: !!replaySource?.hasBody,
+      replayHeaderNames: replaySource?.headerNames || [],
       apiAllowed: this.apiAllowedTabs.has(tabId),
     };
   }
@@ -721,7 +734,10 @@ export class Agent {
     const permission = shortcut.apiAllowed
       ? 'API mutations are enabled for this conversation, so switch to fetch_url for the remaining matching items when the sampled endpoint works.'
       : 'API mutations are NOT enabled for this conversation; ask the user to type /allow-api before using mutating fetch_url, or continue through the visible UI.';
-    return `[BULK API MUTATION PATTERN: You have successfully clicked ${shortcut.count} similar "${shortcut.action}" controls, and each click triggered ${shortcut.method} requests with the same URL shape: ${shortcut.requestShape}. Recent examples: ${examples}. This is repeated bulk mutation work, not a stuck loop. ${permission} Do not spend one LLM turn per remaining button. If one direct API call fails because the endpoint needs hidden form body/headers, fall back to the UI and do not loop on fetch_url. Verify the page after any API batch.]`;
+    const replay = shortcut.replayRequestId
+      ? ` Captured replay material is available as replayRequestId "${shortcut.replayRequestId}"${shortcut.replayHasBody ? ' with a request body' : ''}${shortcut.replayHeaderNames?.length ? ` and headers (${shortcut.replayHeaderNames.join(', ')})` : ''}; use fetch_url({url, method: "${shortcut.method}", replayRequestId: "${shortcut.replayRequestId}"}) for one sampled remaining item so WebBrain reuses same-origin body/headers without exposing hidden tokens.`
+      : '';
+    return `[BULK API MUTATION PATTERN: You have successfully clicked ${shortcut.count} similar "${shortcut.action}" controls, and each click triggered ${shortcut.method} requests with the same URL shape: ${shortcut.requestShape}. Recent examples: ${examples}. This is repeated bulk mutation work, not a stuck loop. ${permission}${replay} Do not spend one LLM turn per remaining button. If one direct API call fails, fall back to the UI and do not loop on fetch_url. Verify the page after any API batch.]`;
   }
 
   /**
@@ -814,7 +830,7 @@ export class Agent {
     if (loop.type === 'repeat') {
       const shortcut = this._detectApiShortcut(tabId, loop, buf);
       warning = shortcut
-        ? `[LOOP DETECTED + API SHORTCUT FOUND: You've called ${loop.name} ${loop.count} times. Each click triggered the same background request pattern: ${shortcut.method} ${shortcut.url}. Instead of clicking again, consider fetch_url({url: "${shortcut.url}", method: "${shortcut.method}"}) with the same method; follow the UI/API mutation policy for mutating methods.]`
+        ? `[LOOP DETECTED + API SHORTCUT FOUND: You've called ${loop.name} ${loop.count} times. Each click triggered the same background request pattern: ${shortcut.method} ${shortcut.url}. Instead of clicking again, consider fetch_url({url: "${shortcut.url}", method: "${shortcut.method}"${shortcut.replayRequestId ? `, replayRequestId: "${shortcut.replayRequestId}"` : ''}}) with the same method; follow the UI/API mutation policy for mutating methods.]`
         : `[LOOP DETECTED: You've just called ${loop.name} ${loop.count} times with the same arguments and the same outcome. The current approach is NOT working. Try something fundamentally different: a different selector, a different tool, scroll to find a different element, or take a screenshot to see what's actually on screen. DO NOT repeat this exact call again — try a creative alternative.]`;
     } else {
       warning = `[LOOP DETECTED: You're oscillating between ${loop.a} and ${loop.b} without making progress. Stop. Take a screenshot to see what's actually happening, then try a completely different approach.]`;
@@ -1194,6 +1210,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             method: bulkApiShortcut.method,
             requestShape: bulkApiShortcut.requestShape,
             count: bulkApiShortcut.count,
+            replayRequestId: bulkApiShortcut.replayRequestId,
+            replayHasBody: bulkApiShortcut.replayHasBody,
+            replayHeaderNames: bulkApiShortcut.replayHeaderNames,
             apiAllowed: bulkApiShortcut.apiAllowed,
           };
         }

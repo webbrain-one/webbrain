@@ -221,6 +221,40 @@ export function getAllowLocalNetwork() {
   return _allowLocalNetwork;
 }
 
+function apiReplayOptionsForFetch(rawUrl, opts = {}, ctx = {}) {
+  const replayRequestId = opts.replayRequestId || opts.apiReplayRequestId;
+  if (!replayRequestId) return { ok: true, opts };
+  const replay = globalThis.__webbrainApiRequestReplay?.get(String(replayRequestId));
+  if (!replay) {
+    return { ok: false, error: `No captured API request replay data found for replayRequestId: ${replayRequestId}` };
+  }
+  if (ctx?.tabId != null && replay.tabId != null && Number(replay.tabId) !== Number(ctx.tabId)) {
+    return { ok: false, error: 'Captured API request replay data belongs to a different tab.' };
+  }
+  try {
+    const target = new URL(rawUrl);
+    const captured = new URL(replay.url);
+    if (target.origin !== captured.origin) {
+      return { ok: false, error: `Captured API request replay data is scoped to ${captured.origin}, not ${target.origin}.` };
+    }
+  } catch (e) {
+    return { ok: false, error: `Invalid captured API request replay URL: ${e.message}` };
+  }
+  const mergedHeaders = {
+    ...(replay.headers || {}),
+    ...(opts.headers || {}),
+  };
+  return {
+    ok: true,
+    opts: {
+      ...opts,
+      method: opts.method || replay.method || 'GET',
+      headers: mergedHeaders,
+      body: opts.body !== undefined ? opts.body : (replay.body ?? undefined),
+    },
+  };
+}
+
 export function extractPageSourceAssets(html, baseUrl) {
   const out = { stylesheets: [], scripts: [] };
   const seen = { stylesheets: new Set(), scripts: new Set() };
@@ -557,6 +591,9 @@ export async function readPageSource(url, opts = {}, ctx = {}) {
  */
 export async function fetchUrl(url, opts = {}, ctx = {}) {
   if (!url) return { success: false, error: 'url is required' };
+  const replay = apiReplayOptionsForFetch(url, opts, ctx);
+  if (!replay.ok) return { success: false, error: replay.error };
+  opts = replay.opts;
   const allowLocal = getAllowLocalNetwork();
   const v = validateFetchUrl(url, { allowLocalNetwork: allowLocal });
   if (!v.ok) return { success: false, error: v.error };

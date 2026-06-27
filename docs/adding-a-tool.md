@@ -206,7 +206,7 @@ Every new tool should be classified for security:
 2. **Can it perform destructive mutations?** → Consider whether it should be gated behind `/allow-api`.
 3. **Can it be prompt-injected?** → If the tool accepts user-provided strings that end up in tool-call arguments, document the injection surface in the tool description.
 4. **Should it work in Ask mode?** → If yes, add to `ASK_ONLY_TOOLS`.
-5. **Can it shortcut repeated UI actions to network calls?** → Keep the UI-first policy intact. The background API observer may surface exact XHR/fetch URL+method hints during click loops, but mutating `fetch_url` calls still need the conversation's `/allow-api` state. GET requests and non-network capabilities still use the normal permission gate.
+5. **Can it shortcut repeated UI actions to network calls?** → Keep the UI-first policy intact. The background API observer may surface exact XHR/fetch URL+method hints during click loops, plus an opaque `replayRequestId` when same-origin body/header replay material is available. Mutating `fetch_url` calls still need the conversation's `/allow-api` state, and hidden form tokens must stay behind the replay id rather than being exposed to the model. GET requests and non-network capabilities still use the normal permission gate.
 
 See `docs/security-model.md` for the full threat model.
 

@@ -418,35 +418,147 @@ browser.webNavigation?.onReferenceFragmentUpdated?.addListener?.((details) => {
 // page itself fires — e.g. clicking "Next Page" — so the agent can later spot
 // a repeated UI action and shortcut to calling the underlying API directly.
 // Strict matching only: same tab, exact method/url captured as-is — no
-// param-pattern fuzzing yet.
+// param-pattern fuzzing yet. Replay material is kept behind opaque ids so CSRF
+// tokens and form bodies do not get printed into model context.
 const API_REQUESTS_PER_TAB_LIMIT = 40;
 const API_MUTATION_OBSERVER_KEY = 'apiMutationObserverEnabled';
-const apiRequestsByTab = new Map(); // tabId -> [{ url, method, ts }]
+const API_REPLAY_BODY_LIMIT = 16000;
+const apiRequestsByTab = new Map(); // tabId -> [{ url, method, ts, replayRequestId, ... }]
+const apiRequestReplayById = new Map(); // replayRequestId -> captured same-origin replay options
 globalThis.__webbrainApiRequests = apiRequestsByTab;
+globalThis.__webbrainApiRequestReplay = apiRequestReplayById;
 let apiMutationObserverRegistered = false;
 
+function apiReplayId(tabId, requestId) {
+  return `api_${tabId}_${String(requestId || Date.now()).replace(/[^\w.-]/g, '_')}`;
+}
+
+function extractApiReplayBody(requestBody) {
+  if (!requestBody) return null;
+  try {
+    if (Array.isArray(requestBody.raw) && requestBody.raw.length) {
+      const chunks = [];
+      for (const part of requestBody.raw) {
+        if (part?.bytes) chunks.push(new Uint8Array(part.bytes));
+      }
+      const total = chunks.reduce((n, chunk) => n + chunk.byteLength, 0);
+      if (!total || total > API_REPLAY_BODY_LIMIT) return null;
+      const merged = new Uint8Array(total);
+      let offset = 0;
+      for (const chunk of chunks) {
+        merged.set(chunk, offset);
+        offset += chunk.byteLength;
+      }
+      return new TextDecoder().decode(merged);
+    }
+    if (requestBody.formData && typeof requestBody.formData === 'object') {
+      const params = new URLSearchParams();
+      for (const [key, values] of Object.entries(requestBody.formData)) {
+        const list = Array.isArray(values) ? values : [values];
+        for (const value of list) params.append(key, String(value));
+      }
+      const text = params.toString();
+      return text.length <= API_REPLAY_BODY_LIMIT ? text : null;
+    }
+  } catch (_) {}
+  return null;
+}
+
+function filterApiReplayHeaders(requestHeaders = []) {
+  const allowed = new Set([
+    'accept',
+    'content-type',
+    'x-requested-with',
+    'x-csrf-token',
+    'x-xsrf-token',
+    'x-github-requested-with',
+    'x-turbo-request-id',
+  ]);
+  const headers = {};
+  for (const header of requestHeaders || []) {
+    const name = String(header?.name || '').toLowerCase();
+    if (!allowed.has(name)) continue;
+    const value = header?.value;
+    if (value != null) headers[name] = String(value);
+  }
+  return headers;
+}
+
+function pruneApiReplayStore() {
+  const liveIds = new Set();
+  for (const list of apiRequestsByTab.values()) {
+    for (const item of list) {
+      if (item?.replayRequestId) liveIds.add(item.replayRequestId);
+    }
+  }
+  for (const id of apiRequestReplayById.keys()) {
+    if (!liveIds.has(id)) apiRequestReplayById.delete(id);
+  }
+}
+
 function recordApiRequest(details) {
-  const { tabId, url, method } = details;
+  const { tabId, url, method, requestId } = details;
   if (tabId == null || tabId < 0) return;
+  const replayRequestId = apiReplayId(tabId, requestId);
+  const body = extractApiReplayBody(details.requestBody);
+  const entry = {
+    requestId,
+    replayRequestId,
+    url,
+    method,
+    ts: Date.now(),
+    hasBody: body != null,
+    headerNames: [],
+  };
   const list = apiRequestsByTab.get(tabId) || [];
-  list.push({ url, method, ts: Date.now() });
+  list.push(entry);
   if (list.length > API_REQUESTS_PER_TAB_LIMIT) list.shift();
   apiRequestsByTab.set(tabId, list);
+  apiRequestReplayById.set(replayRequestId, {
+    tabId,
+    requestId,
+    url,
+    method,
+    body,
+    headers: {},
+  });
+  pruneApiReplayStore();
+}
+
+function recordApiRequestHeaders(details) {
+  const { tabId, requestId } = details;
+  if (tabId == null || tabId < 0 || !requestId) return;
+  const list = apiRequestsByTab.get(tabId) || [];
+  const entry = [...list].reverse().find(item => item?.requestId === requestId);
+  if (!entry) return;
+  const headers = filterApiReplayHeaders(details.requestHeaders);
+  entry.headerNames = Object.keys(headers);
+  const replay = apiRequestReplayById.get(entry.replayRequestId);
+  if (replay) replay.headers = headers;
 }
 
 function setApiMutationObserverEnabled(enabled) {
   const shouldEnable = enabled === true;
   const onBeforeRequest = browser.webRequest?.onBeforeRequest;
+  const onBeforeSendHeaders = browser.webRequest?.onBeforeSendHeaders;
   if (!onBeforeRequest) return;
   if (shouldEnable && !apiMutationObserverRegistered) {
-    onBeforeRequest.addListener(recordApiRequest, { urls: ['<all_urls>'], types: ['xmlhttprequest'] });
+    onBeforeRequest.addListener(recordApiRequest, { urls: ['<all_urls>'], types: ['xmlhttprequest'] }, ['requestBody']);
+    onBeforeSendHeaders?.addListener(
+      recordApiRequestHeaders,
+      { urls: ['<all_urls>'], types: ['xmlhttprequest'] },
+      ['requestHeaders']
+    );
     apiMutationObserverRegistered = true;
   } else if (!shouldEnable && apiMutationObserverRegistered) {
     onBeforeRequest.removeListener(recordApiRequest);
+    onBeforeSendHeaders?.removeListener(recordApiRequestHeaders);
     apiMutationObserverRegistered = false;
     apiRequestsByTab.clear();
+    apiRequestReplayById.clear();
   } else if (!shouldEnable) {
     apiRequestsByTab.clear();
+    apiRequestReplayById.clear();
   }
 }
 
@@ -461,7 +573,12 @@ async function loadApiMutationObserverSetting() {
 
 loadApiMutationObserverSetting();
 
-browser.tabs.onRemoved.addListener((tabId) => apiRequestsByTab.delete(tabId));
+browser.tabs.onRemoved.addListener((tabId) => {
+  apiRequestsByTab.delete(tabId);
+  for (const [id, replay] of apiRequestReplayById.entries()) {
+    if (replay?.tabId === tabId) apiRequestReplayById.delete(id);
+  }
+});
 
 // Action click: toggle sidebar (existing UX) AND ensure source tab is
 // in the WebBrain group so the colored label appears immediately.

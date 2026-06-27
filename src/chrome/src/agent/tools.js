@@ -664,6 +664,7 @@ export const AGENT_TOOLS = [
           method: { type: 'string', description: 'HTTP method (default GET)' },
           headers: { type: 'object', description: 'Optional request headers' },
           body: { type: 'string', description: 'Optional request body for POST/PUT' },
+          replayRequestId: { type: 'string', description: 'Optional opaque id from a bulk API mutation hint. Reuses captured same-origin XHR/fetch body and safe headers without exposing hidden form tokens.' },
         },
         required: ['url'],
       },

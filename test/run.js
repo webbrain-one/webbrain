@@ -941,7 +941,14 @@ test('_detectBulkApiMutationShortcut: detects repeated same-action clicks with d
     const apiMap = new Map();
     apiMap.set(tabId, [
       { url: 'https://github.com/users/follow?target=alice', method: 'POST', ts: base + 20 },
-      { url: 'https://github.com/users/follow?target=bob', method: 'POST', ts: base + 1020 },
+      {
+        url: 'https://github.com/users/follow?target=bob',
+        method: 'POST',
+        ts: base + 1020,
+        replayRequestId: 'api_2060_req_bob',
+        hasBody: true,
+        headerNames: ['content-type', 'x-csrf-token'],
+      },
     ]);
     globalThis.__webbrainApiRequests = apiMap;
 
@@ -968,8 +975,14 @@ test('_detectBulkApiMutationShortcut: detects repeated same-action clicks with d
       assert.equal(shortcut.action, 'follow');
       assert.equal(shortcut.method, 'POST');
       assert.equal(shortcut.requestShape, 'https://github.com/users/follow?target=*');
+      assert.equal(shortcut.replayRequestId, 'api_2060_req_bob');
+      assert.equal(shortcut.replayHasBody, true);
+      assert.deepEqual(shortcut.replayHeaderNames, ['content-type', 'x-csrf-token']);
       assert.equal(shortcut.apiAllowed, false);
-      assert.match(agent._formatBulkApiMutationWarning(shortcut), /API mutations are NOT enabled/, `${AgentClass.name}: warning must preserve /allow-api gate`);
+      const warning = agent._formatBulkApiMutationWarning(shortcut);
+      assert.match(warning, /API mutations are NOT enabled/, `${AgentClass.name}: warning must preserve /allow-api gate`);
+      assert.match(warning, /replayRequestId "api_2060_req_bob"/, `${AgentClass.name}: warning should surface opaque replay id`);
+      assert.doesNotMatch(warning, /x-csrf-token=.*opaque-token|authenticity_token=/, `${AgentClass.name}: warning must not leak hidden token values`);
     } finally {
       delete globalThis.__webbrainApiRequests;
     }
@@ -985,7 +998,7 @@ test('_detectBulkApiMutationShortcut: /allow-api is reflected in the bulk hint',
     const apiMap = new Map();
     apiMap.set(tabId, [
       { url: 'https://github.com/users/follow?target=carol', method: 'POST', ts: base + 20 },
-      { url: 'https://github.com/users/follow?target=dave', method: 'POST', ts: base + 1020 },
+      { url: 'https://github.com/users/follow?target=dave', method: 'POST', ts: base + 1020, replayRequestId: 'api_2061_req_dave' },
     ]);
     globalThis.__webbrainApiRequests = apiMap;
 
@@ -1006,6 +1019,8 @@ test('_detectBulkApiMutationShortcut: /allow-api is reflected in the bulk hint',
       );
       assert.ok(shortcut, `${AgentClass.name}: expected repeated follow API pattern`);
       assert.equal(shortcut.apiAllowed, true);
+      assert.equal(shortcut.replayRequestId, 'api_2061_req_dave');
+      assert.match(agent._formatBulkApiMutationWarning(shortcut), /replayRequestId "api_2061_req_dave"/, `${AgentClass.name}: warning should include replay id after /allow-api`);
       assert.match(agent._formatBulkApiMutationWarning(shortcut), /API mutations are enabled/, `${AgentClass.name}: warning should permit API path after /allow-api`);
     } finally {
       delete globalThis.__webbrainApiRequests;
@@ -1529,6 +1544,65 @@ test('fetchUrl reports HTTP 4xx/5xx as unsuccessful while preserving response te
       delete globalThis.fetch;
     } else {
       globalThis.fetch = previousFetch;
+    }
+  }
+});
+
+test('fetchUrl reuses captured same-origin API replay body and safe headers', async () => {
+  const previousFetch = globalThis.fetch;
+  const previousReplay = globalThis.__webbrainApiRequestReplay;
+  try {
+    for (const [label, fetchUrl] of [['chrome', fetchUrlCh], ['firefox', fetchUrlFx]]) {
+      let seen = null;
+      globalThis.__webbrainApiRequestReplay = new Map([[
+        'api_42_req_1',
+        {
+          tabId: 42,
+          url: 'https://github.com/users/follow?target=alice',
+          method: 'POST',
+          headers: {
+            accept: 'text/html',
+            'content-type': 'application/x-www-form-urlencoded',
+            'x-csrf-token': 'opaque-token',
+          },
+          body: 'authenticity_token=opaque-token',
+        },
+      ]]);
+      globalThis.fetch = async (rawUrl, init = {}) => {
+        seen = { url: String(rawUrl), init };
+        return new Response('ok', { status: 200, headers: { 'content-type': 'text/plain' } });
+      };
+
+      const result = await fetchUrl(
+        'https://github.com/users/follow?target=bob',
+        { replayRequestId: 'api_42_req_1' },
+        { tabId: 42 },
+      );
+
+      assert.equal(result.success, true, `${label}: replayed fetch should succeed`);
+      assert.equal(seen.init.method, 'POST', `${label}: replay should reuse captured method`);
+      assert.equal(seen.init.body, 'authenticity_token=opaque-token', `${label}: replay should reuse captured body`);
+      assert.equal(seen.init.headers['content-type'], 'application/x-www-form-urlencoded', `${label}: replay should reuse content-type`);
+      assert.equal(seen.init.headers['x-csrf-token'], 'opaque-token', `${label}: replay should reuse safe CSRF header internally`);
+
+      const blocked = await fetchUrl(
+        'https://evil.example/users/follow?target=bob',
+        { replayRequestId: 'api_42_req_1' },
+        { tabId: 42 },
+      );
+      assert.equal(blocked.success, false, `${label}: replay must not cross origins`);
+      assert.match(blocked.error, /scoped to https:\/\/github\.com/, `${label}: expected same-origin replay error`);
+    }
+  } finally {
+    if (previousFetch === undefined) {
+      delete globalThis.fetch;
+    } else {
+      globalThis.fetch = previousFetch;
+    }
+    if (previousReplay === undefined) {
+      delete globalThis.__webbrainApiRequestReplay;
+    } else {
+      globalThis.__webbrainApiRequestReplay = previousReplay;
     }
   }
 });
@@ -3562,7 +3636,11 @@ test('API mutation observer setting is opt-in and controls the request observer'
     assert.match(bg, /function setApiMutationObserverEnabled\(enabled\)/, `${label}: observer gate missing`);
     assert.doesNotMatch(bg, /(?:chrome|browser)\.webRequest\.onBeforeRequest\.addListener\(/, `${label}: observer should not register unconditionally`);
     assert.match(bg, /onBeforeRequest\.addListener\(recordApiRequest/, `${label}: observer should register only through the gate`);
+    assert.match(bg, /onBeforeRequest\.addListener\(recordApiRequest[\s\S]*\['requestBody'\]/, `${label}: observer should capture request bodies for opaque replay`);
+    assert.match(bg, /onBeforeSendHeaders\?\.addListener\(\s*recordApiRequestHeaders/, `${label}: observer should capture replay-safe request headers`);
+    assert.match(bg, /globalThis\.__webbrainApiRequestReplay = apiRequestReplayById/, `${label}: replay store should be available to fetch_url`);
     assert.match(bg, /onBeforeRequest\.removeListener\(recordApiRequest\)/, `${label}: observer should unregister when disabled`);
+    assert.match(bg, /onBeforeSendHeaders\?\.removeListener\(recordApiRequestHeaders\)/, `${label}: header observer should unregister when disabled`);
     assert.match(bg, /setApiMutationObserverEnabled\(stored\[API_MUTATION_OBSERVER_KEY\] === true\)/, `${label}: unset storage should load as off`);
     assert.match(
       bg,
