@@ -10394,7 +10394,13 @@ test('planner: parse and format structured plan', () => {
   assert.equal(plan.scheduling.tool, 'schedule_task');
   const md = formatPlanMarkdown(plan);
   assert.match(md, /Follow GitHub stargazers/);
-  assert.match(md, /Progress ledger: yes/);
+  assert.match(md, /1\. Open stargazers/);
+  assert.doesNotMatch(md, /navigate|wait_for_stable/, 'compact plan should hide tool names');
+  assert.doesNotMatch(md, /Progress ledger|Scratchpad|schedule_task|bulk follow/, 'compact plan should hide planner internals');
+  const verboseMd = formatPlanMarkdown(plan, { verbose: true });
+  assert.match(verboseMd, /navigate, wait_for_stable/);
+  assert.match(verboseMd, /Progress ledger: yes/);
+  assert.match(verboseMd, /schedule_task/);
   const scratch = formatPlanScratchpad(plan);
   assert.match(scratch, /\[Approved plan/);
 });
@@ -10700,11 +10706,47 @@ test('planner gate: approving plan appends without deleting scratchpad facts', a
       const body = agent._extractScratchpadBody(agent.conversations.get(tabId)[idx].content);
       assert.match(body, /Existing downloadId=42/, `${label} should preserve existing scratchpad fact`);
       assert.match(body, /\[Approved plan — pinned by planner\]/, `${label} should append approved plan marker`);
+      assert.match(body, /read_page/, `${label} unedited approval should pin verbose tool detail for execution`);
+      assert.match(body, /Scratchpad: yes/, `${label} unedited approval should pin verbose memory strategy for execution`);
 
       const userIdx = agent.conversations.get(tabId).findIndex((m) => m.role === 'user' && m.content === 'collect account links');
       assert.ok(userIdx >= 0, `${label} user message present`);
       assert.ok(idx > userIdx, `${label} scratchpad should follow user task`);
       assert.equal(idx, agent.conversations.get(tabId).length - 1, `${label} scratchpad should be last`);
+    }
+  });
+});
+
+test('planner gate: review exposes compact markdown plus verbose markdown', async () => {
+  await withPlannerBrowserGlobals(async () => {
+    for (const [label, AgentClass] of [['chrome', AgentCh], ['firefox', AgentFx]]) {
+      const tabId = label === 'chrome' ? 9211 : 9212;
+      const agent = new AgentClass({ getActive: () => ({}) });
+      agent.conversations.set(tabId, [{ role: 'system', content: 'system' }]);
+      agent._chatWithCostAllowance = async () => ({ content: plannerFixtureJson() });
+      agent._waitForPlanReview = async (_tabId, _planId, _plan, markdown, _onUpdate, verboseMarkdown) => {
+        assert.match(markdown, /Open the page and collect visible account links/, `${label} compact plan should include summary`);
+        assert.doesNotMatch(markdown, /read_page|Scratchpad|Progress ledger/, `${label} compact plan should hide tools and memory internals`);
+        assert.match(verboseMarkdown, /read_page/, `${label} verbose plan should include tool names`);
+        assert.match(verboseMarkdown, /Scratchpad: yes/, `${label} verbose plan should include memory strategy`);
+        return {
+          action: 'approve',
+          editedText: '**Edited compact plan**\n\n### Steps\n1. Read the page and collect account links carefully',
+          markdownMode: 'compact',
+        };
+      };
+
+      const gate = await agent._runPlannerGate(
+        tabId,
+        { role: 'user', content: 'collect account links' },
+        () => {},
+        null,
+      );
+      assert.equal(gate.proceed, true, `${label} should proceed after approval`);
+      assert.doesNotMatch(gate.approvedScratchpadText, /read_page/, `${label} compact edits should not re-pin stale hidden tool detail`);
+      assert.match(gate.approvedScratchpadText, /Scratchpad: yes/, `${label} scratchpad handoff should keep verbose memory strategy`);
+      assert.match(gate.approvedScratchpadText, /Edited compact plan/, `${label} scratchpad handoff should preserve compact edits`);
+      assert.match(gate.approvedScratchpadText, /Planner execution metadata/, `${label} compact edits should keep non-step execution metadata`);
     }
   });
 });
@@ -10743,6 +10785,8 @@ test('planner gate: scheduled runs auto-approve plan review', async () => {
       assert.ok(idx >= 0, `${label} scheduled run should pin the approved plan`);
       const body = agent._extractScratchpadBody(agent.conversations.get(tabId)[idx].content);
       assert.match(body, /\[Approved plan — pinned by planner\]/, `${label} should append approved plan marker`);
+      assert.match(body, /read_page/, `${label} scheduled auto-approval should pin verbose tool detail`);
+      assert.match(body, /Scratchpad: yes/, `${label} scheduled auto-approval should pin verbose memory strategy`);
     }
   });
 });
@@ -10759,6 +10803,11 @@ test('sidepanel: restored plan review cards rebind approve and cancel actions', 
     assert.match(source, /rebindPlanReviewCards\(\);/, `${file} should call the rebinder after chat restore`);
     assert.match(source, /plan-review-approve[\s\S]*submitPlanReview\(card, tabId, planId, 'approve'/, `${file} should rebind approve`);
     assert.match(source, /plan-review-cancel[\s\S]*submitPlanReview\(card, tabId, planId, 'reject'/, `${file} should rebind cancel`);
+    assert.match(source, /const useVerbosePlan = verboseMode && !!data\.verboseMarkdown;/, `${file} should use the verbose plan only in verbose mode`);
+    assert.match(source, /card\.dataset\.planMarkdownMode = useVerbosePlan \? 'verbose' : 'compact';/, `${file} should remember which plan text was displayed`);
+    assert.match(source, /markdownMode === 'verbose'/, `${file} should pin the displayed verbose plan when approved`);
+    assert.match(source, /markdownMode = String\(card\.dataset\.planMarkdownMode \|\| 'compact'\)/, `${file} should send the displayed markdown mode with plan approval`);
+    assert.match(source, /decision: action, editedText, markdownMode/, `${file} should include markdown mode in plan responses`);
     assert.match(source, /const activeAssistantEl = action === 'approve' \? reattachPlanReviewActiveRun\(card\) : null;/, `${file} should mark approvals active before posting`);
     assert.match(source, /if \(action !== 'approve'\) \{[\s\S]*?card\.remove\(\);[\s\S]*?sendToBackground\('plan_response'/, `${file} should remove cancelled plan review cards`);
     assert.match(source, /if \(res\?\.matched\) \{[\s\S]*?card\.remove\(\);[\s\S]*?\} else \{[\s\S]*?note\.textContent = expiredText\(\);/, `${file} should remove successfully approved plan review cards`);

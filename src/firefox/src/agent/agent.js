@@ -28,6 +28,7 @@ import {
   buildPlannerMessages,
   parsePlanFromContent,
   formatPlanMarkdown,
+  formatPlanExecutionMetadataMarkdown,
   formatPlanScratchpad,
   userMessageToText,
   messageContentToText,
@@ -2626,7 +2627,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     this._pendingClarifications.delete(tabId);
   }
 
-  submitPlanResponse(tabId, planId, action, editedText = '') {
+  submitPlanResponse(tabId, planId, action, editedText = '', markdownMode = 'compact') {
     const tabPending = this._pendingPlans.get(tabId);
     if (!tabPending) return false;
     const entry = tabPending.get(planId);
@@ -2635,6 +2636,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       entry.resolve({
         action: String(action || 'reject'),
         editedText: String(editedText || '').trim(),
+        markdownMode: markdownMode === 'verbose' ? 'verbose' : 'compact',
       });
     } catch {}
     return true;
@@ -2649,7 +2651,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     this._pendingPlans.delete(tabId);
   }
 
-  async _waitForPlanReview(tabId, planId, plan, markdown, onUpdate) {
+  async _waitForPlanReview(tabId, planId, plan, markdown, onUpdate, verboseMarkdown = '') {
     const PLAN_REVIEW_TIMEOUT_MS = 10 * 60 * 1000;
     const tabPending = this._pendingPlans.get(tabId) || new Map();
     this._pendingPlans.set(tabId, tabPending);
@@ -2666,7 +2668,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     });
     if (typeof onUpdate === 'function') {
       try {
-        onUpdate('plan_review', { planId, plan, markdown });
+        onUpdate('plan_review', { planId, plan, markdown, verboseMarkdown });
       } catch {}
     }
     try {
@@ -2925,12 +2927,13 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
       const planId = `plan_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
       const markdown = formatPlanMarkdown(plan);
+      const verboseMarkdown = formatPlanMarkdown(plan, { verbose: true });
       const scheduledPolicy = this.scheduledRunPolicies.get(tabId);
       if (scheduledPolicy?.autoApprovePlanReview === true) {
-        const approvedScratchpadText = formatPlanScratchpad(plan, '', markdown);
+        const approvedScratchpadText = formatPlanScratchpad(plan, '', verboseMarkdown);
         return { proceed: true, approvedScratchpadText, planId };
       }
-      const choice = await this._waitForPlanReview(tabId, planId, plan, markdown, onUpdate);
+      const choice = await this._waitForPlanReview(tabId, planId, plan, markdown, onUpdate, verboseMarkdown);
 
       if (this._checkAbort(tabId)) {
         return { proceed: false, message: '[Stopped by user]' };
@@ -2939,7 +2942,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         return { proceed: false, message: 'Task cancelled — plan was not approved.' };
       }
 
-      const approvedScratchpadText = formatPlanScratchpad(plan, choice?.editedText, markdown);
+      const editedText = String(choice?.editedText || '').trim();
+      const approvedText = editedText && choice?.markdownMode === 'compact'
+        ? `${editedText}\n\n${formatPlanExecutionMetadataMarkdown(plan)}`
+        : editedText;
+      const approvedScratchpadText = formatPlanScratchpad(plan, approvedText, verboseMarkdown);
       return { proceed: true, approvedScratchpadText, planId };
     } catch (e) {
       if (this._isCostAllowanceError(e)) {

@@ -1766,6 +1766,7 @@ function bindPlanReviewCard(card) {
 
   const textarea = card.querySelector('.plan-review-edit');
   const originalMarkdown = String(textarea?.defaultValue || textarea?.value || '').trim();
+  const markdownMode = String(card.dataset.planMarkdownMode || 'compact');
 
   // A <textarea>'s live `.value` is NOT captured when the conversation is
   // persisted via innerHTML (only its defaultValue / child text is), so edits
@@ -1793,7 +1794,7 @@ function bindPlanReviewCard(card) {
     approveBtn.dataset.bound = 'true';
     approveBtn.addEventListener('click', () => {
       const current = String(textarea?.value || '').trim();
-      const editedText = current && current !== originalMarkdown ? current : '';
+      const editedText = current && (current !== originalMarkdown || markdownMode === 'verbose') ? current : '';
       submitPlanReview(card, tabId, planId, 'approve', editedText);
     });
   }
@@ -3075,7 +3076,11 @@ function renderPlanReviewCard(data) {
   // chars). A lower display cap would silently drop the plan's tail the moment
   // the user edits a long plan, since the edited textarea becomes the pinned
   // text. (#5)
-  const originalMarkdown = String(data.markdown || data.plan?.summary || '').slice(0, 8000);
+  const compactMarkdown = String(data.markdown || data.plan?.summary || '').slice(0, 8000);
+  const verboseMarkdown = String(data.verboseMarkdown || compactMarkdown).slice(0, 8000);
+  const useVerbosePlan = verboseMode && !!data.verboseMarkdown;
+  const originalMarkdown = useVerbosePlan ? verboseMarkdown : compactMarkdown;
+  card.dataset.planMarkdownMode = useVerbosePlan ? 'verbose' : 'compact';
 
   const editHint = document.createElement('div');
   editHint.className = 'plan-review-hint';
@@ -3084,7 +3089,7 @@ function renderPlanReviewCard(data) {
 
   const textarea = document.createElement('textarea');
   textarea.className = 'plan-review-edit';
-  textarea.rows = 8;
+  textarea.rows = useVerbosePlan ? 8 : 5;
   textarea.value = originalMarkdown;
   textarea.defaultValue = originalMarkdown;
   card.appendChild(textarea);
@@ -3114,11 +3119,12 @@ function renderPlanReviewCard(data) {
 function submitPlanReview(card, tabId, planId, action, editedText) {
   if (card.classList.contains('plan-reviewed')) return;
   const activeAssistantEl = action === 'approve' ? reattachPlanReviewActiveRun(card) : null;
+  const markdownMode = String(card.dataset.planMarkdownMode || 'compact') === 'verbose' ? 'verbose' : 'compact';
   card.classList.add('plan-reviewed');
   if (action !== 'approve') {
     card.remove();
     scrollToBottom();
-    sendToBackground('plan_response', { tabId, planId, decision: action, editedText }).catch(() => {});
+    sendToBackground('plan_response', { tabId, planId, decision: action, editedText, markdownMode }).catch(() => {});
     return;
   }
   for (const el of card.querySelectorAll('button, textarea')) {
@@ -3128,7 +3134,7 @@ function submitPlanReview(card, tabId, planId, action, editedText) {
   note.className = 'plan-review-note';
   const expiredText = () => (typeof t === 'function' ? t('sp.plan.expired') : 'This plan is no longer awaiting review — the run was cancelled.');
 
-  sendToBackground('plan_response', { tabId, planId, decision: action, editedText })
+  sendToBackground('plan_response', { tabId, planId, decision: action, editedText, markdownMode })
     .then((res) => {
       if (action !== 'approve') return;
       if (res?.matched) {

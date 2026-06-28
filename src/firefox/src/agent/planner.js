@@ -159,19 +159,21 @@ export function normalizePlan(obj) {
   };
 }
 
-export function formatPlanMarkdown(plan) {
+export function formatPlanCompactMarkdown(plan) {
   if (!plan) return '';
   const lines = [`**${plan.summary}**`, ''];
 
   if (plan.steps?.length) {
     lines.push('### Steps');
     for (const step of plan.steps) {
-      const tools = step.tools?.length ? ` (${step.tools.join(', ')})` : '';
-      lines.push(`${step.id}. ${step.action}${tools}`);
+      lines.push(`${step.id}. ${step.action}`);
     }
-    lines.push('');
   }
 
+  return lines.join('\n').trim();
+}
+
+function appendPlanExecutionMetadata(lines, plan) {
   const mem = plan.memory || {};
   lines.push('### Memory strategy');
   if (mem.use_scratchpad) {
@@ -197,8 +199,35 @@ export function formatPlanMarkdown(plan) {
     lines.push('### Risks / notes');
     for (const risk of plan.risks) lines.push(`- ${risk}`);
   }
+}
+
+export function formatPlanVerboseMarkdown(plan) {
+  if (!plan) return '';
+  const lines = [`**${plan.summary}**`, ''];
+
+  if (plan.steps?.length) {
+    lines.push('### Steps');
+    for (const step of plan.steps) {
+      const tools = step.tools?.length ? ` (${step.tools.join(', ')})` : '';
+      lines.push(`${step.id}. ${step.action}${tools}`);
+    }
+    lines.push('');
+  }
+
+  appendPlanExecutionMetadata(lines, plan);
 
   return lines.join('\n').trim();
+}
+
+export function formatPlanExecutionMetadataMarkdown(plan) {
+  if (!plan) return '';
+  const lines = ['### Planner execution metadata'];
+  appendPlanExecutionMetadata(lines, plan);
+  return lines.join('\n').trim();
+}
+
+export function formatPlanMarkdown(plan, opts = {}) {
+  return opts.verbose ? formatPlanVerboseMarkdown(plan) : formatPlanCompactMarkdown(plan);
 }
 
 export function formatPlanScratchpad(plan, editedText, markdown) {

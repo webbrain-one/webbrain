@@ -876,8 +876,9 @@ async function handleMessage(msg, sender) {
       const planId = String(msg.planId || '');
       const decision = String(msg.decision || 'reject');
       const editedText = String(msg.editedText || '');
+      const markdownMode = msg.markdownMode === 'verbose' ? 'verbose' : 'compact';
       if (!planId) return { ok: false, error: 'planId required' };
-      const matched = agent.submitPlanResponse(tabId, planId, decision, editedText);
+      const matched = agent.submitPlanResponse(tabId, planId, decision, editedText, markdownMode);
       return { ok: matched, matched };
     }
 
