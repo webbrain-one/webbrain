@@ -1271,7 +1271,7 @@ UI vs API — read this carefully:
   - "Create a release on GitHub" → navigate to /releases/new, click the button, fill the form, click Publish. Don't POST to api.github.com/repos/.../releases.
   - "Send an email" → open Gmail compose, type, click Send. Don't POST to gmail.googleapis.com.
   - "Add this to my Notion page" → navigate to the page, click into the editor, type. Don't POST to api.notion.com.
-  - "What's in the README of esokullu/webbrain?" → fetch_url the raw GitHub URL. Reading is fine.
+  - "What's in the README of webbrain-one/webbrain?" → fetch_url the raw GitHub URL. Reading is fine.
   - "Compare the prices of this product on 3 sites" → research_url each one. Reading is fine.
 
 IFRAMES — read this:

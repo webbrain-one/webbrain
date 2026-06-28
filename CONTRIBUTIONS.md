@@ -220,6 +220,6 @@ the commit history, forever.
 
 ## Questions
 
-Open a [GitHub Discussion](https://github.com/esokullu/webbrain/discussions)
+Open a [GitHub Discussion](https://github.com/webbrain-one/webbrain/discussions)
 or file an issue. Don't email Emre directly with code questions; the
 conversation is more useful in public.

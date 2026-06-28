@@ -57,7 +57,7 @@ PRIVACY & SECURITY:
 WebBrain runs entirely in your browser. Your API keys are stored locally and never sent to any third-party server. All communication goes directly between your Firefox browser and your chosen AI provider. The full source code is available on GitHub for audit.
 
 Website: https://webbrain.one
-GitHub: https://github.com/esokullu/webbrain
+GitHub: https://github.com/webbrain-one/webbrain
 License: MIT
 Author: Emre Sokullu
 

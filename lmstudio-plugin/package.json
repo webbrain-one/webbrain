@@ -9,7 +9,7 @@
   "homepage": "https://webbrain.one",
   "repository": {
     "type": "git",
-    "url": "https://github.com/esokullu/webbrain.git",
+    "url": "https://github.com/webbrain-one/webbrain.git",
     "directory": "lmstudio-plugin"
   },
   "scripts": {
