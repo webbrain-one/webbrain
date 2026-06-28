@@ -4,6 +4,11 @@ All notable changes to WebBrain are documented in this file.
 
 This changelog was generated from the repository Git history and release tags. Versions without a Git tag are inferred from version-bump commits and the current `package.json` / `manifest.json` version.
 
+## [18.2.0] - 2026-06-28
+
+### Changed
+- edge store preparations
+
 ## [18.1.0] - 2026-06-28
 
 ### Changed
