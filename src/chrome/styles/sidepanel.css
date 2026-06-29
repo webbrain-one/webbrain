@@ -1446,6 +1446,19 @@ body {
   animation: btn-mic-pulse 1.4s ease-in-out infinite;
 }
 
+/* Visually disabled but NOT the disabled attribute — clicks must still
+   register so the user gets a "why" message in chat (unsupported browser /
+   disabled in settings) instead of a button that mysteriously does nothing. */
+#btn-mic.mic-disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+#btn-mic.mic-disabled:hover {
+  background: transparent;
+  color: var(--text-secondary);
+}
+
 @keyframes btn-mic-pulse {
   0%, 100% { background: transparent; }
   50% { background: rgba(244, 67, 54, 0.16); }

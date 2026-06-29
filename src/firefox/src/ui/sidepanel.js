@@ -3506,18 +3506,34 @@ stopBtn.addEventListener('click', async () => {
 
 // --- Voice input (mic dictation, issue #210) ---
 // Web Speech API: well-supported in Chrome, absent in stock Firefox (which
-// lacks window.SpeechRecognition entirely). Feature-detect and hide the
-// button rather than show a control that silently does nothing.
+// lacks window.SpeechRecognition entirely). The mic button stays visible
+// either way — a hidden button gives the user no signal as to WHY voice
+// input doesn't work. Instead it's shown grayed out with a tooltip and an
+// in-chat message on click explaining the reason: unsupported browser, or
+// disabled via the "Voice input" toggle in Settings.
 const SpeechRecognitionImpl = window.SpeechRecognition || window.webkitSpeechRecognition;
 let speechRecognition = null;
 let isListening = false;
 let micBaseText = '';
+let voiceInputSettingEnabled = true; // mirrors storage 'voiceInputEnabled', on by default
+let micDisabledReason = null; // null | 'unsupported' | 'settings'
+
+function updateMicButtonState() {
+  if (!micBtn) return;
+  micDisabledReason = !SpeechRecognitionImpl ? 'unsupported'
+    : !voiceInputSettingEnabled ? 'settings'
+    : null;
+  micBtn.classList.toggle('mic-disabled', !!micDisabledReason);
+  micBtn.title = micDisabledReason === 'unsupported' ? t('sp.mic.unsupported')
+    : micDisabledReason === 'settings' ? t('sp.mic.disabled_settings')
+    : (isListening ? t('sp.btn.mic_stop') : t('sp.btn.mic'));
+}
 
 function stopListening() {
   if (!isListening) return;
   isListening = false;
   micBtn?.classList.remove('listening');
-  if (micBtn) micBtn.title = t('sp.btn.mic');
+  updateMicButtonState();
   try { speechRecognition?.stop(); } catch { /* ignore */ }
 }
 
@@ -3547,24 +3563,40 @@ function startListening() {
   speechRecognition.onend = () => {
     isListening = false;
     micBtn?.classList.remove('listening');
-    if (micBtn) micBtn.title = t('sp.btn.mic');
+    updateMicButtonState();
   };
 
   isListening = true;
   micBtn?.classList.add('listening');
-  if (micBtn) micBtn.title = t('sp.btn.mic_stop');
+  updateMicButtonState();
   speechRecognition.start();
 }
 
 if (micBtn) {
-  if (!SpeechRecognitionImpl) {
-    micBtn.style.display = 'none';
-  } else {
-    micBtn.addEventListener('click', () => {
-      if (isListening) stopListening();
-      else startListening();
-    });
-  }
+  browser.storage.local.get('voiceInputEnabled').then((stored) => {
+    voiceInputSettingEnabled = stored?.voiceInputEnabled ?? true;
+    updateMicButtonState();
+  }).catch(() => {});
+  browser.storage.onChanged.addListener((changes) => {
+    if (changes.voiceInputEnabled) {
+      voiceInputSettingEnabled = changes.voiceInputEnabled.newValue ?? true;
+      if (!voiceInputSettingEnabled) stopListening();
+      updateMicButtonState();
+    }
+  });
+  micBtn.addEventListener('click', () => {
+    if (micDisabledReason === 'unsupported') {
+      addMessage('system', t('sp.mic.unsupported'));
+      return;
+    }
+    if (micDisabledReason === 'settings') {
+      addMessage('system', t('sp.mic.disabled_settings'));
+      return;
+    }
+    if (isListening) stopListening();
+    else startListening();
+  });
+  updateMicButtonState();
 }
 
 // --- File attachments (+ button, issue #220) ---
