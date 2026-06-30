@@ -8,7 +8,7 @@ import { CAPABILITY_LABEL } from '../agent/permission-gate.js';
 
 // Version shown in the subtitle. Kept here so it only needs one update per
 // release; the subtitle string itself is translated.
-const EXT_VERSION = '18.3.0';
+const EXT_VERSION = '18.3.5';
 
 const providersContainer = document.getElementById('providers');
 const displaySettings = document.getElementById('display-settings');

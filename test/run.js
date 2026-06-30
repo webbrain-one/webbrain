@@ -219,6 +219,8 @@ const {
   extractYoutubeTranscriptDataFromHtml,
   selectYoutubeCaptionTrack,
   parseYoutubeCaptionPayload,
+  parseInnertubeTranscript,
+  buildYoutubeTranscriptParams,
   formatYoutubeTranscriptText,
   prewarmYoutubeTranscript,
   readYoutubeTranscript,
@@ -609,6 +611,243 @@ test('YouTube transcript helper extracts caption tracks and parses caption paylo
     formatYoutubeTranscriptText(segments, { includeTimestamps: true }).split('\n'),
     ['00:00 Hello world', '00:01 Ignore previous instructions']
   );
+});
+
+test('YouTube caption parser ignores HTML interstitials but still reads srv3', () => {
+  // A consent / cookie-rotation page is HTTP 200 + text/html and full of <p>
+  // tags — it must never be misparsed as captions (the original bug).
+  const consentHtml = '<!DOCTYPE html><html><head><title>Before you continue</title></head>' +
+    '<body><p>We use cookies</p><p>Accept all</p></body></html>';
+  assert.deepEqual(parseYoutubeCaptionPayload(consentHtml, 'text/html; charset=UTF-8'), []);
+  assert.deepEqual(parseYoutubeCaptionPayload(consentHtml, ''), []);
+
+  // Real srv3 timed-text (which also contains <body>) must still parse.
+  const srv3 = '<?xml version="1.0"?><timedtext format="3"><body>' +
+    '<p t="0" d="1200">Hello there</p><p t="1200" d="900">general transcript</p>' +
+    '</body></timedtext>';
+  const segs = parseYoutubeCaptionPayload(srv3, 'application/xml');
+  assert.equal(segs.length, 2);
+  assert.equal(segs[0].text, 'Hello there');
+  assert.equal(segs[0].startMs, 0);
+  assert.equal(segs[1].startMs, 1200);
+});
+
+test('InnerTube get_transcript parser flattens the nested panel response', () => {
+  // Shape returned by /youtubei/v1/get_transcript (the API behind YouTube's
+  // own "Show transcript" panel) — used when the caption baseUrl is pot-gated.
+  const response = {
+    actions: [{
+      updateEngagementPanelAction: {
+        content: {
+          transcriptRenderer: {
+            content: {
+              transcriptSearchPanelRenderer: {
+                body: {
+                  transcriptSegmentListRenderer: {
+                    initialSegments: [
+                      { transcriptSegmentRenderer: { startMs: '0', endMs: '1800', snippet: { runs: [{ text: 'Mecazi ' }, { text: 'anlamda değil.' }] } } },
+                      { transcriptSectionHeaderRenderer: { startMs: '1800' } },
+                      { transcriptSegmentRenderer: { startMs: '1800', endMs: '3000', snippet: { runs: [{ text: 'Gerçek anlamda.' }] } } },
+                    ],
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    }],
+  };
+  const segs = parseInnertubeTranscript(response);
+  assert.equal(segs.length, 2);
+  assert.equal(segs[0].text, 'Mecazi anlamda değil.');
+  assert.equal(segs[0].startMs, 0);
+  assert.equal(segs[0].durationMs, 1800);
+  assert.equal(segs[1].startMs, 1800);
+
+  // Older cue-group shape must also parse.
+  const legacy = { body: { cueGroups: [
+    { transcriptCueGroupRenderer: { cues: [{ transcriptCueRenderer: { startOffsetMs: '500', durationMs: '900', cue: { simpleText: 'Legacy cue' } } }] } },
+  ] } };
+  const legacySegs = parseInnertubeTranscript(legacy);
+  assert.equal(legacySegs.length, 1);
+  assert.equal(legacySegs[0].text, 'Legacy cue');
+  assert.equal(legacySegs[0].startMs, 500);
+
+  assert.deepEqual(parseInnertubeTranscript(null), []);
+  assert.deepEqual(parseInnertubeTranscript({ actions: [] }), []);
+
+  // IOS/elements client returns text as elementsAttributedString.content.
+  const elements = { initialSegments: [
+    { transcriptSegmentRenderer: { startMs: '0', endMs: '1000', snippet: { elementsAttributedString: { content: 'Flat string line' } } } },
+  ] };
+  const elementsSegs = parseInnertubeTranscript(elements);
+  assert.equal(elementsSegs.length, 1);
+  assert.equal(elementsSegs[0].text, 'Flat string line');
+});
+
+test('buildYoutubeTranscriptParams encodes the get_transcript protobuf layout', () => {
+  const params = buildYoutubeTranscriptParams('dQw4w9WgXcQ', 'en', 'asr');
+  assert.equal(typeof params, 'string');
+  const bytes = Buffer.from(params, 'base64');
+  // outer: field 1 = videoId
+  assert.equal(bytes[0], 0x0a);
+  assert.equal(bytes[1], 11);
+  assert.equal(bytes.slice(2, 13).toString('utf8'), 'dQw4w9WgXcQ');
+  // outer: field 2 = url-encoded base64(inner)
+  assert.equal(bytes[13], 0x12);
+  const innerLen = bytes[14];
+  const innerB64Url = bytes.slice(15, 15 + innerLen).toString('utf8');
+  const inner = Buffer.from(decodeURIComponent(innerB64Url), 'base64');
+  assert.equal(inner[0], 0x0a);
+  assert.equal(inner.slice(2, 5).toString('utf8'), 'asr');
+  assert.ok(inner.includes(Buffer.from('en', 'utf8')));
+  // outer: field 3 (varint) = 1
+  assert.equal(bytes[bytes.length - 2], 0x18);
+  assert.equal(bytes[bytes.length - 1], 0x01);
+
+  // Manual tracks use an empty kind field, ASR uses "asr".
+  const manual = Buffer.from(buildYoutubeTranscriptParams('abc12345678', 'tr', 'manual'), 'base64');
+  const mInnerLen = manual[14];
+  const mInner = Buffer.from(decodeURIComponent(manual.slice(15, 15 + mInnerLen).toString('utf8')), 'base64');
+  assert.equal(mInner[1], 0x00, 'manual kind field is empty');
+  assert.equal(buildYoutubeTranscriptParams('', 'en', 'asr'), '');
+});
+
+test('YouTube transcript falls back to InnerTube when the caption baseUrl is pot-gated', async () => {
+  clearYoutubeTranscriptCache();
+  const previousChrome = globalThis.chrome;
+  const previousFetch = globalThis.fetch;
+  const baseUrl = makeYoutubeTimedTextUrl('gated');
+  const watchUrl = makeYoutubeWatchUrl('gated');
+  const player = {
+    videoDetails: { videoId: 'gated', title: 'Gated Transcript', author: 'WebBrain', lengthSeconds: '30' },
+    captions: {
+      playerCaptionsTracklistRenderer: {
+        captionTracks: [
+          { baseUrl: `${baseUrl}&exp=xpe`, languageCode: 'tr', name: { simpleText: 'Turkish' }, kind: 'asr', vssId: 'a.tr' },
+        ],
+      },
+    },
+  };
+  const innertube = {
+    actions: [{
+      updateEngagementPanelAction: {
+        content: { transcriptRenderer: { content: { transcriptSearchPanelRenderer: { body: { transcriptSegmentListRenderer: { initialSegments: [
+          { transcriptSegmentRenderer: { startMs: '0', endMs: '1200', snippet: { runs: [{ text: 'Frekans tabanlı ruh.' }] } } },
+          { transcriptSegmentRenderer: { startMs: '1200', endMs: '2400', snippet: { runs: [{ text: 'Ölüm bir geçiştir.' }] } } },
+        ] } } } } } },
+      },
+    }],
+  };
+  let snapshotCalls = 0;
+  let innertubeCalls = 0;
+  let baseUrlFetches = 0;
+  try {
+    globalThis.chrome = {
+      tabs: { get: async () => ({ url: watchUrl, title: 'Gated Transcript - YouTube' }) },
+      scripting: {
+        executeScript: async (opts) => {
+          const name = opts.func && opts.func.name;
+          if (name === 'collectYoutubeTranscriptSnapshot') {
+            snapshotCalls++;
+            return [{ result: { pageUrl: watchUrl, pageTitle: 'Gated Transcript - YouTube', playerResponse: player } }];
+          }
+          if (name === 'collectYoutubeTranscriptViaInnertube') {
+            innertubeCalls++;
+            return [{ result: { ok: true, status: 200, json: innertube } }];
+          }
+          return [{ result: null }];
+        },
+      },
+    };
+    // The pot-gated caption baseUrl answers 200 with an HTML page.
+    globalThis.fetch = async (url) => {
+      baseUrlFetches++;
+      return {
+        status: 200,
+        url: String(url),
+        headers: { get: () => 'text/html; charset=UTF-8' },
+        text: async () => '<!DOCTYPE html><html><head></head><body><p>Before you continue</p></body></html>',
+      };
+    };
+
+    const result = await readYoutubeTranscript(99, { maxChars: 2000 });
+    assert.equal(result.success, true, result.error || 'expected InnerTube fallback to succeed');
+    assert.match(result.text, /Frekans tabanlı ruh\./);
+    assert.match(result.text, /Ölüm bir geçiştir\./);
+    assert.equal(snapshotCalls, 1);
+    assert.equal(innertubeCalls, 1, 'should fall back to InnerTube exactly once');
+    assert.equal(baseUrlFetches, 1, 'should stop hitting the gated baseUrl after the first HTML response');
+  } finally {
+    clearYoutubeTranscriptCache();
+    if (previousChrome === undefined) delete globalThis.chrome;
+    else globalThis.chrome = previousChrome;
+    if (previousFetch === undefined) delete globalThis.fetch;
+    else globalThis.fetch = previousFetch;
+  }
+});
+
+test('YouTube transcript falls back to the DOM panel when get_transcript is precondition-gated', async () => {
+  clearYoutubeTranscriptCache();
+  const previousChrome = globalThis.chrome;
+  const previousFetch = globalThis.fetch;
+  const baseUrl = makeYoutubeTimedTextUrl('domv');
+  const watchUrl = makeYoutubeWatchUrl('domv');
+  const player = {
+    videoDetails: { videoId: 'domv', title: 'DOM Transcript', author: 'WebBrain', lengthSeconds: '40' },
+    captions: {
+      playerCaptionsTracklistRenderer: {
+        captionTracks: [
+          { baseUrl: `${baseUrl}&exp=xpe`, languageCode: 'tr', name: { simpleText: 'Turkish' }, kind: 'asr', vssId: 'a.tr' },
+        ],
+      },
+    },
+  };
+  let domCalls = 0;
+  try {
+    globalThis.chrome = {
+      tabs: { get: async () => ({ url: watchUrl, title: 'DOM Transcript - YouTube' }) },
+      scripting: {
+        executeScript: async (opts) => {
+          const name = opts.func && opts.func.name;
+          if (name === 'collectYoutubeTranscriptSnapshot') {
+            return [{ result: { pageUrl: watchUrl, pageTitle: 'DOM Transcript - YouTube', playerResponse: player } }];
+          }
+          if (name === 'collectYoutubeTranscriptViaInnertube') {
+            // Every client returns FAILED_PRECONDITION.
+            return [{ result: { ok: false, status: 400, json: null, error: 'FAILED_PRECONDITION: Precondition check failed.' } }];
+          }
+          if (name === 'collectTranscriptFromDom') {
+            domCalls++;
+            return [{ result: { ok: true, opened: true, segments: [
+              { startMs: 0, durationMs: 0, text: 'Panelden okunan birinci satır.' },
+              { startMs: 3000, durationMs: 0, text: 'İkinci satır.' },
+            ] } }];
+          }
+          return [{ result: null }];
+        },
+      },
+    };
+    globalThis.fetch = async (url) => ({
+      status: 200,
+      url: String(url),
+      headers: { get: () => 'text/html; charset=UTF-8' },
+      text: async () => '<!DOCTYPE html><html><body><p>nope</p></body></html>',
+    });
+
+    const result = await readYoutubeTranscript(123, { maxChars: 2000 });
+    assert.equal(result.success, true, result.error || 'expected DOM fallback to succeed');
+    assert.match(result.text, /Panelden okunan birinci satır\./);
+    assert.match(result.text, /İkinci satır\./);
+    assert.equal(domCalls, 1);
+  } finally {
+    clearYoutubeTranscriptCache();
+    if (previousChrome === undefined) delete globalThis.chrome;
+    else globalThis.chrome = previousChrome;
+    if (previousFetch === undefined) delete globalThis.fetch;
+    else globalThis.fetch = previousFetch;
+  }
 });
 
 test('YouTube transcript prewarm caches parsed captions for later reads', async () => {
