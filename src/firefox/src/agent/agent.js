@@ -3642,7 +3642,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
   _isAgentInjectedUserContent(content) {
     const c = this._messageText(content).trimStart();
+    const stripped = this._stripInjectedTaskContext(c).trimStart();
     return c.startsWith('[Scheduled resume')
+      || stripped.startsWith('[Scheduled resume')
       || c.startsWith('[Site guidance')
       || c.startsWith('[Site context changed')
       || c.startsWith('[Context window was trimmed')

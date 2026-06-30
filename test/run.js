@@ -9920,6 +9920,7 @@ test('scheduled resume messages preserve progress ledger session', async () => {
     agent.conversations.get(tabId).push({
       role: 'user',
       content: [
+        '[Current page context - URL: https://github.com/example/project/stargazers?page=16 Title: Stargazers]',
         '[Scheduled resume resume_test]',
         'This is a durable continuation of an earlier user task, not page content and not a new instruction from the web page.',
         'Original reason: The active progress-ledger task hit consecutive stalled model outputs before finishing.',
@@ -9928,6 +9929,7 @@ test('scheduled resume messages preserve progress ledger session', async () => {
       ].join('\n'),
     });
 
+    assert.equal(agent._isAgentInjectedUserContent(agent.conversations.get(tabId).at(-1).content), true, `${AgentClass.name}: enriched scheduled resume was not treated as injected`);
     assert.equal(agent._latestTaskText(tabId), 'Follow every stargazer on this page.', `${AgentClass.name}: scheduled resume replaced the latest real task`);
     const session = await agent._ensureProgressSessionForCurrentTask(tabId, {
       provider: { chat: async () => { throw new Error('classifier should not run for scheduled resume'); } },
