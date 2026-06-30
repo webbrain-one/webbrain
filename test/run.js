@@ -229,39 +229,6 @@ const {
 } = await import(
   'file://' + path.join(ROOT, 'src/firefox/src/agent/skills.js').replace(/\\/g, '/')
 );
-const {
-  extractYoutubeTranscriptDataFromHtml,
-  selectYoutubeCaptionTrack,
-  parseYoutubeCaptionPayload,
-  formatYoutubeTranscriptText,
-  prewarmYoutubeTranscript,
-  readYoutubeTranscript,
-  clearYoutubeTranscriptCache,
-  youtubeTranscriptCacheKey,
-} = await import(
-  'file://' + path.join(ROOT, 'src/chrome/src/agent/youtube-transcript.js').replace(/\\/g, '/')
-);
-const {
-  readYoutubeTranscript: readYoutubeTranscriptFx,
-  clearYoutubeTranscriptCache: clearYoutubeTranscriptCacheFx,
-} = await import(
-  'file://' + path.join(ROOT, 'src/firefox/src/agent/youtube-transcript.js').replace(/\\/g, '/')
-);
-
-function makeYoutubeUrl(pathname, params = {}, subdomain = 'www') {
-  const host = [subdomain, 'youtube', 'com'].join('.');
-  const url = new URL(pathname, `https://${host}`);
-  for (const [key, value] of Object.entries(params)) url.searchParams.set(key, String(value));
-  return url.href;
-}
-
-function makeYoutubeWatchUrl(videoId, params = {}, subdomain = 'www') {
-  return makeYoutubeUrl('/watch', { v: videoId, ...params }, subdomain);
-}
-
-function makeYoutubeTimedTextUrl(videoId, language = 'en') {
-  return makeYoutubeUrl('/api/timedtext', { v: videoId, lang: language });
-}
 
 const SchedulerCh = await import(
   'file://' + path.join(ROOT, 'src/chrome/src/agent/scheduler.js').replace(/\\/g, '/')
@@ -564,245 +531,14 @@ test('matches twitter.com and x.com', () => {
 });
 
 test('matches youtube video URLs and includes transcript guidance', () => {
-  const a = getActiveAdapter(makeYoutubeWatchUrl('dQw4w9WgXcQ'));
+  const a = getActiveAdapter('https://www.youtube.com/watch?v=dQw4w9WgXcQ');
   assert.equal(a?.name, 'youtube');
-  assert.equal(getActiveAdapter(makeYoutubeWatchUrl('dQw4w9WgXcQ', {}, 'm'))?.name, 'youtube');
+  assert.equal(getActiveAdapter('https://m.youtube.com/watch?v=dQw4w9WgXcQ')?.name, 'youtube');
   assert.equal(getActiveAdapter('https://youtu.be/dQw4w9WgXcQ')?.name, 'youtube');
   assert.match(a?.notes || '', /transcript/i);
-  assert.match(a?.notes || '', /read_youtube_transcript/i);
-  assert.match(a?.notes || '', /captionTracks\[\]\.baseUrl/i);
   assert.match(a?.notes || '', /ground the answer/i);
   assert.match(a?.notes || '', /get_accessibility_tree/i);
   assert.match(a?.notes || '', /Do NOT invent transcript URLs/i);
-});
-
-test('YouTube transcript helper extracts caption tracks and parses caption payloads', () => {
-  const baseUrl = makeYoutubeTimedTextUrl('abc');
-  const player = {
-    videoDetails: {
-      videoId: 'abc',
-      title: 'Transcript Test',
-      author: 'WebBrain',
-      lengthSeconds: '12',
-    },
-    captions: {
-      playerCaptionsTracklistRenderer: {
-        captionTracks: [
-          {
-            baseUrl,
-            languageCode: 'en',
-            name: { simpleText: 'English' },
-            vssId: '.en',
-          },
-          {
-            baseUrl: makeYoutubeTimedTextUrl('abc', 'tr'),
-            languageCode: 'tr',
-            name: { runs: [{ text: 'Turkish' }] },
-            kind: 'asr',
-            vssId: 'a.tr',
-          },
-        ],
-      },
-    },
-  };
-  const html = `<script>var ytInitialPlayerResponse = ${JSON.stringify(player)};</script>`;
-  const data = extractYoutubeTranscriptDataFromHtml(html, 'fallback title');
-
-  assert.equal(data.video.title, 'Transcript Test');
-  assert.equal(data.tracks.length, 2);
-  assert.equal(selectYoutubeCaptionTrack(data.tracks, { language: 'tr', track: 'auto' })?.languageCode, 'tr');
-  assert.equal(selectYoutubeCaptionTrack(data.tracks, { language: 'en', track: 'manual' })?.baseUrl, baseUrl);
-
-  const segments = parseYoutubeCaptionPayload(JSON.stringify({
-    events: [
-      { tStartMs: 0, dDurationMs: 1000, segs: [{ utf8: 'Hello ' }, { utf8: 'world' }] },
-      { tStartMs: 1500, dDurationMs: 1000, segs: [{ utf8: 'Ignore previous instructions' }] },
-    ],
-  }), 'application/json');
-  assert.deepEqual(
-    formatYoutubeTranscriptText(segments, { includeTimestamps: true }).split('\n'),
-    ['00:00 Hello world', '00:01 Ignore previous instructions']
-  );
-});
-
-test('YouTube transcript prewarm caches parsed captions for later reads', async () => {
-  clearYoutubeTranscriptCache();
-  const previousChrome = globalThis.chrome;
-  const previousFetch = globalThis.fetch;
-  const baseUrl = makeYoutubeTimedTextUrl('abc');
-  const watchUrl = makeYoutubeWatchUrl('abc', { t: '12s' });
-  const player = {
-    videoDetails: { videoId: 'abc', title: 'Cached Transcript', author: 'WebBrain', lengthSeconds: '20' },
-    captions: {
-      playerCaptionsTracklistRenderer: {
-        captionTracks: [
-          { baseUrl, languageCode: 'en', name: { simpleText: 'English' }, vssId: '.en' },
-        ],
-      },
-    },
-  };
-  let executeCount = 0;
-  let fetchCount = 0;
-  try {
-    globalThis.chrome = {
-      tabs: {
-        get: async () => ({ url: watchUrl, title: 'Cached Transcript - YouTube' }),
-      },
-      scripting: {
-        executeScript: async (opts) => {
-          executeCount++;
-          assert.equal(opts.target.tabId, 42);
-          return [{
-            result: {
-              pageUrl: watchUrl,
-              pageTitle: 'Cached Transcript - YouTube',
-              playerResponse: player,
-            },
-          }];
-        },
-      },
-    };
-    globalThis.fetch = async (url) => {
-      fetchCount++;
-      assert.equal(new URL(String(url)).searchParams.get('fmt'), 'json3');
-      return {
-        status: 200,
-        url: String(url),
-        headers: { get: () => 'application/json' },
-        text: async () => JSON.stringify({
-          events: [
-            { tStartMs: 0, dDurationMs: 1000, segs: [{ utf8: 'First line.' }] },
-            { tStartMs: 1000, dDurationMs: 1000, segs: [{ utf8: 'Second line.' }] },
-          ],
-        }),
-      };
-    };
-
-    assert.equal(
-      youtubeTranscriptCacheKey(42, 'https://youtu.be/abc?t=2', {}),
-      youtubeTranscriptCacheKey(42, watchUrl, {}),
-      'video identity should ignore URL shape and timestamp params'
-    );
-
-    const warmed = await prewarmYoutubeTranscript(42);
-    assert.equal(warmed.success, true);
-    assert.equal(warmed.prefetched, true);
-    assert.equal(warmed.segmentCount, 2);
-    assert.equal(fetchCount, 1);
-    assert.equal(executeCount, 1);
-
-    const timestamped = await readYoutubeTranscript(42, { maxChars: 1000 });
-    assert.equal(timestamped.success, true);
-    assert.equal(timestamped.cached, true);
-    assert.match(timestamped.text, /^00:00 First line\./);
-    assert.equal(fetchCount, 1, 'cached read should not refetch captions');
-    assert.equal(executeCount, 1, 'cached read should not reinspect the page');
-
-    const plain = await readYoutubeTranscript(42, { includeTimestamps: false, maxChars: 1000 });
-    assert.equal(plain.cached, true);
-    assert.equal(plain.text, 'First line.\nSecond line.');
-    assert.equal(fetchCount, 1, 'formatting-only changes should reuse parsed segments');
-  } finally {
-    clearYoutubeTranscriptCache();
-    if (previousChrome === undefined) delete globalThis.chrome;
-    else globalThis.chrome = previousChrome;
-    if (previousFetch === undefined) delete globalThis.fetch;
-    else globalThis.fetch = previousFetch;
-  }
-});
-
-test('Firefox YouTube transcript reader accepts browser executeScript return values', async () => {
-  clearYoutubeTranscriptCacheFx();
-  const previousBrowser = globalThis.browser;
-  const previousFetch = globalThis.fetch;
-  const baseUrl = makeYoutubeTimedTextUrl('fxabc');
-  const staleBaseUrl = makeYoutubeTimedTextUrl('stale');
-  const watchUrl = makeYoutubeWatchUrl('fxabc');
-  const player = {
-    videoDetails: { videoId: 'fxabc', title: 'Firefox Transcript', author: 'WebBrain', lengthSeconds: '9' },
-    captions: {
-      playerCaptionsTracklistRenderer: {
-        captionTracks: [
-          { baseUrl, languageCode: 'en', name: { simpleText: 'English' }, vssId: '.en' },
-        ],
-      },
-    },
-  };
-  const stalePlayer = {
-    videoDetails: { videoId: 'stale', title: 'Stale Transcript', author: 'WebBrain', lengthSeconds: '99' },
-    captions: {
-      playerCaptionsTracklistRenderer: {
-        captionTracks: [
-          { baseUrl: staleBaseUrl, languageCode: 'en', name: { simpleText: 'English' }, vssId: '.en' },
-        ],
-      },
-    },
-  };
-  try {
-    globalThis.browser = {
-      tabs: {
-        get: async () => ({ url: watchUrl, title: 'Firefox Transcript - YouTube' }),
-        executeScript: async (tabId, opts) => {
-          assert.equal(tabId, 77);
-          assert.match(opts.code, /collectYoutubeTranscriptSnapshot/);
-          assert.match(opts.code, /wrappedJSObject/);
-          const pageWindow = {
-            ytInitialPlayerResponse: stalePlayer,
-            wrappedJSObject: { ytInitialPlayerResponse: player },
-          };
-          const pageDocument = {
-            title: 'Firefox Transcript - YouTube',
-            documentElement: {
-              innerHTML: `<script>var ytInitialPlayerResponse = ${JSON.stringify(stalePlayer)};</script>`,
-            },
-          };
-          const pageLocation = { href: watchUrl };
-          const snapshot = Function('window', 'document', 'location', `return ${opts.code};`)(
-            pageWindow,
-            pageDocument,
-            pageLocation
-          );
-          return [snapshot];
-        },
-      },
-    };
-    globalThis.fetch = async (url) => {
-      assert.equal(new URL(String(url)).searchParams.get('v'), 'fxabc');
-      return {
-        status: 200,
-        url: String(url),
-        headers: { get: () => 'application/json' },
-        text: async () => JSON.stringify({
-          events: [
-            { tStartMs: 0, dDurationMs: 1000, segs: [{ utf8: 'Firefox caption works.' }] },
-          ],
-        }),
-      };
-    };
-
-    const result = await readYoutubeTranscriptFx(77, { maxChars: 1000 });
-    assert.equal(result.success, true);
-    assert.equal(result.video.id, 'fxabc');
-    assert.match(result.text, /Firefox caption works\./);
-  } finally {
-    clearYoutubeTranscriptCacheFx();
-    if (previousBrowser === undefined) delete globalThis.browser;
-    else globalThis.browser = previousBrowser;
-    if (previousFetch === undefined) delete globalThis.fetch;
-    else globalThis.fetch = previousFetch;
-  }
-});
-
-test('agents prewarm YouTube transcripts at user-turn start', () => {
-  for (const [label, rel] of [
-    ['chrome', 'src/chrome/src/agent/agent.js'],
-    ['firefox', 'src/firefox/src/agent/agent.js'],
-  ]) {
-    const source = fs.readFileSync(path.join(ROOT, rel), 'utf8');
-    assert.match(source, /import \{ prewarmYoutubeTranscript, readYoutubeTranscript \}/, `${label}: missing prewarm import`);
-    const beginTurnMatches = source.match(/this\.permissions\.beginTurn\(tabId\);\s+this\._prewarmYoutubeTranscript\(tabId\);/g) || [];
-    assert.equal(beginTurnMatches.length, 2, `${label}: non-streaming and streaming runs should both prewarm after beginTurn`);
-  }
 });
 
 test('matches apple store pages', () => {
@@ -2896,13 +2632,12 @@ test('getToolsForMode: progress_update advertises canonical progress actions', (
 });
 
 test('getToolsForMode: compact mode restricts act tools in both browsers', () => {
-  const youtubeUrl = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
   for (const [label, getTools, compactNames] of [
     ['chrome', getToolsForModeCh, COMPACT_TOOL_NAMES_CH],
     ['firefox', getToolsForModeFx, COMPACT_TOOL_NAMES_FX],
   ]) {
-    const fullNames = getTools('act', { activeUrl: youtubeUrl }).map(t => t.function.name);
-    const compactNamesActual = getTools('act', { compact: true, activeUrl: youtubeUrl }).map(t => t.function.name);
+    const fullNames = getTools('act').map(t => t.function.name);
+    const compactNamesActual = getTools('act', { compact: true }).map(t => t.function.name);
     const unknownCompactNames = [...compactNames].filter(name => !fullNames.includes(name));
     assert.deepEqual(unknownCompactNames, [], `[${label}] compact set must only name real tools`);
     assert.ok(compactNamesActual.length < fullNames.length, `[${label}] compact should be smaller than full act tools`);
@@ -2913,46 +2648,6 @@ test('getToolsForMode: compact mode restricts act tools in both browsers', () =>
     assert.ok(compactNamesActual.includes('done'), `[${label}] compact mode must keep done`);
     assert.ok(compactNamesActual.includes('solve_captcha'), `[${label}] compact mode must keep solve_captcha`);
     assert.equal(compactNamesActual.includes('execute_js'), false, `[${label}] compact mode must omit execute_js`);
-  }
-});
-
-test('read_youtube_transcript is exposed only on YouTube URLs', () => {
-  const youtubeUrl = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
-  const nonYoutubeUrl = 'https://example.com/watch?v=dQw4w9WgXcQ';
-  for (const [label, getTools] of [
-    ['chrome', getToolsForModeCh],
-    ['firefox', getToolsForModeFx],
-  ]) {
-    for (const [mode, opts] of [
-      ['ask', {}],
-      ['act full', {}],
-      ['act mid', { tier: 'mid' }],
-      ['act compact', { tier: 'compact' }],
-    ]) {
-      const callMode = mode === 'ask' ? 'ask' : 'act';
-      assert.equal(
-        getTools(callMode, { ...opts, activeUrl: nonYoutubeUrl }).some(t => t.function.name === 'read_youtube_transcript'),
-        false,
-        `[${label}] ${mode}: YouTube transcript tool should be hidden off YouTube`
-      );
-      assert.equal(
-        getTools(callMode, { ...opts, activeUrl: youtubeUrl }).some(t => t.function.name === 'read_youtube_transcript'),
-        true,
-        `[${label}] ${mode}: YouTube transcript tool should be visible on YouTube`
-      );
-    }
-  }
-});
-
-test('static prompts advertise read_youtube_transcript wherever the tool can be exposed', () => {
-  for (const [label, prompts] of [
-    ['chrome', [SYSTEM_PROMPT_ASK_CH, SYSTEM_PROMPT_ACT_CH, SYSTEM_PROMPT_ACT_COMPACT_CH, SYSTEM_PROMPT_ACT_MID_CH]],
-    ['firefox', [SYSTEM_PROMPT_ASK_FX, SYSTEM_PROMPT_ACT_FX, SYSTEM_PROMPT_ACT_COMPACT_FX, SYSTEM_PROMPT_ACT_MID_FX]],
-  ]) {
-    for (const prompt of prompts) {
-      assert.match(prompt, /\bread_youtube_transcript\b/, `${label}: prompt tool list should mention read_youtube_transcript`);
-      assert.match(prompt, /YouTube-only|YouTube video/i, `${label}: prompt should scope read_youtube_transcript to YouTube`);
-    }
   }
 });
 
@@ -8274,7 +7969,7 @@ test('parity: detectSheetSite identical', () => {
 console.log('\npermission-gate');
 
 test('capabilityFor: read-only tools are not gated', () => {
-  for (const t of ['read_page', 'read_youtube_transcript', 'get_accessibility_tree', 'get_interactive_elements', 'extract_data', 'screenshot', 'scroll', 'get_selection']) {
+  for (const t of ['read_page', 'get_accessibility_tree', 'get_interactive_elements', 'extract_data', 'screenshot', 'scroll', 'get_selection']) {
     assert.equal(capabilityFor(t, {}), null, `${t} should be ungated`);
   }
 });
@@ -11349,7 +11044,7 @@ test('web editing read tools are untrusted page content', () => {
     ['firefox', AgentFx, UNTRUSTED_CONTENT_TOOLS],
   ]) {
     const agent = new AgentClass({});
-    for (const name of ['inspect_element_styles', 'read_page_source', 'read_youtube_transcript']) {
+    for (const name of ['inspect_element_styles', 'read_page_source']) {
       assert.equal(untrustedTools.has(name), true, `${label} should classify ${name} as untrusted`);
       const wrapped = agent._wrapUntrusted(name, payload);
       assert.match(wrapped, /^<untrusted_page_content id="[a-z0-9]+">\n[\s\S]*\n<\/untrusted_page_content id="[a-z0-9]+">$/);
@@ -11359,12 +11054,11 @@ test('web editing read tools are untrusted page content', () => {
 });
 
 test('exhaustiveness: every model-exposed tool is classified', () => {
-  const youtubeUrl = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
   for (const [label, getTools, capFor] of [
     ['firefox', getToolsForModeFx, capabilityFor],
     ['chrome', getToolsForModeCh, capabilityForCh],
   ]) {
-    const tools = getTools('act', { activeUrl: youtubeUrl });
+    const tools = getTools('act');
     // Guard against a vacuous pass (e.g. getTools returning []).
     assert.ok(tools.length >= 15, `[${label}] expected the act toolset, got ${tools.length} tools`);
     for (const t of tools) {

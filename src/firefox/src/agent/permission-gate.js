@@ -67,7 +67,6 @@ export const UNTRUSTED_CONTENT_TOOLS = new Set([
   'fetch_url',
   'research_url',
   'read_pdf',
-  'read_youtube_transcript',
   'read_page_source',
   'read_downloaded_file',
   'inspect_element_styles',

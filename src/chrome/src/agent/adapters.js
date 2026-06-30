@@ -188,10 +188,10 @@ const ADAPTERS = [
     match: (url) => /^https?:\/\/((www|m)\.)?youtube\.com\//.test(url) || /^https?:\/\/youtu\.be\//.test(url),
     notes: `
 - The video player is a custom element. Keyboard shortcuts: space=play/pause, k=play/pause, j/l=±10s, ←/→=±5s, m=mute.
-- For questions about the current video's content, call read_youtube_transcript first and ground the answer in that transcript; if no transcript is exposed, say so and fall back to visible title/description/comments.
-- read_youtube_transcript mechanically extracts YouTube captionTracks[].baseUrl from the active page and parses the caption payload. Do NOT invent transcript URLs or use fetch_url for captions yourself.
-- If read_youtube_transcript returns hasMore:true, continue with offset: nextOffset before summarizing the whole video. Transcript text is timestamped/segmented and may be auto-generated or auto-translated; do not infer from the title alone when transcript is reachable.
-- If the mechanical transcript tool fails but the page visibly offers "Show transcript", fallback path: get_accessibility_tree({filter:"visible"}) → expand description ("..." / "more") with click_ax/click → click "Show transcript" → read the transcript panel with get_accessibility_tree or read_page; scroll the panel/page for more segments.
+- For questions about the current video's content, read the transcript first when available and ground the answer in it; if no transcript is exposed, say so and fall back to visible title/description/comments.
+- Tool path for transcript: get_accessibility_tree({filter:"visible"}) → expand description ("..." / "more") with click_ax/click → click "Show transcript" → read the transcript panel with get_accessibility_tree or read_page; scroll the panel/page for more segments.
+- Do NOT invent transcript URLs. Only use fetch_url for captions if the page exposes a real YouTube captionTracks/baseUrl; otherwise use the visible transcript UI.
+- Transcript text is timestamped/segmented and may be auto-generated or auto-translated; collect enough segments before summarizing or answering, and do not infer from the title alone when transcript is reachable.
 - Comments load lazily AFTER you scroll past the video — they're not in the initial DOM.
 - The subscribe button has a bell icon next to it for notification preferences; they're separate clicks.`,
   },

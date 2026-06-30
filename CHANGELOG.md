@@ -6,19 +6,8 @@ This changelog was generated from the repository Git history and release tags. V
 
 ## [18.3.0] - 2026-06-29
 
-### Added
-- Added a YouTube-only `read_youtube_transcript` tool for Chrome and Firefox that mechanically extracts `captionTracks[].baseUrl`, fetches and parses YouTube caption payloads, paginates transcript text, and keeps transcript data wrapped as untrusted page content.
-- Added eager YouTube transcript prewarming when a WebBrain turn starts on a YouTube video, including in-flight de-duplication and a short parsed-segment cache so the first transcript read can return quickly without injecting transcript text into prompt context unless the tool is called.
-
 ### Changed
-- Exposed `read_youtube_transcript` only while the active tab is on YouTube, refreshed the model-visible tool set after navigation, and updated the YouTube site adapter plus static prompt tool lists to prefer transcript-grounded answers for video-content questions.
 - Deleted the stale root `manifest.json` and updated Chrome setup docs, version bumping, and release workflows to use `src/chrome/manifest.json` and `src/firefox/manifest.json` as the only extension manifests.
-
-### Fixed
-- Fixed Firefox transcript snapshot extraction to handle `browser.tabs.executeScript` returning the injected function result directly instead of Chrome's `{ result }` wrapper.
-
-### Tests
-- Added Chrome and Firefox regression coverage for YouTube transcript parsing, prewarm caching, contextual tool exposure, static prompt consistency, Firefox executeScript return shape, and read-only/untrusted tool classification.
 
 ## [18.2.0] - 2026-06-28
 
