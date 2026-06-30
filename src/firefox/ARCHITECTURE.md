@@ -202,13 +202,17 @@ refreshes the stored copy without re-adding deleted skills.
 
 The manifest fence is stripped before prompt injection. Declared skill tools are
 appended to `getToolsForMode(...)` at LLM-call time and executed through
-`executeHttpSkillTool()` in `network-tools.js`. Current skill tools are read-only
-HTTP integrations: HTTPS only, GET/POST only, `credentials: "omit"`, optional
-URL input allowlists, and optional response limits.
+`executeHttpSkillTool()` in `network-tools.js`. Current skill tools support
+read-only HTTPS GET/POST integrations and HTTPS download-job integrations that
+poll a same-origin status URL, save through browser Downloads, and clean up the
+provider job. Requests use `credentials: "omit"`, optional URL input allowlists,
+and optional response limits.
 
 Importing/enabling a skill is the trust boundary. After import, the declared
-tool can run without a per-call permission prompt. Third-party results should
-use `resultPolicy: "untrusted"` so the agent wraps and digests them like page
+tool can contact its declared endpoint without a per-call permission prompt.
+Download-job tools still run in Act mode and use the normal Downloads permission
+gate before saving files. Third-party results should use
+`resultPolicy: "untrusted"` so the agent wraps and digests them like page
 content instead of trusted instructions.
 
 ---

@@ -11,7 +11,7 @@ There are two ways to add a model-callable tool:
 - **Core tool**: product-owned browser, DOM, network, download, scheduler, or
   privileged behavior implemented in WebBrain source. Use the full checklist
   below.
-- **Skill HTTP tool**: user-importable, removable, read-only HTTP integration
+- **Skill tool**: user-importable, removable HTTP or download-job integration
   declared in a skill's `webbrain-tools` manifest. Use this when the tool is
   best treated as a trusted third-party extension rather than a WebBrain core
   primitive.
@@ -26,11 +26,13 @@ Most tools also need to be mirrored to both the Chrome and Firefox builds.
 
 ---
 
-## Option 0: Expose a Read-Only HTTP Tool from a Skill
+## Option 0: Expose a Tool from a Skill
 
 If the integration is a trusted third-party HTTP service, prefer a skill tool
 before hard-coding a core tool. Skill tools are removable from Settings -> Skills
-and can be renamed or replaced by editing the manifest.
+and can be renamed or replaced by editing the manifest. Use `kind: "http"` for
+read-only lookups and `kind: "httpDownloadJob"` for services that create a
+temporary job, expose a file URL, and need browser Downloads.
 
 Add a fenced `webbrain-tools` JSON block to the skill markdown:
 
@@ -73,6 +75,49 @@ Use this skill when...
 ```
 ````
 
+A download-job skill uses the same manifest fence, but declares the job
+endpoints. The endpoint origin must stay the same across create, status, file,
+and cleanup URLs:
+
+````markdown
+```webbrain-tools
+{
+  "tools": [
+    {
+      "id": "example_download_media",
+      "name": "example_download_media",
+      "description": "Download a public media file from Example into the browser Downloads folder.",
+      "kind": "httpDownloadJob",
+      "readOnly": false,
+      "requiresDownloadPermission": true,
+      "method": "POST",
+      "endpoint": "https://api.example.com/v1/media/jobs",
+      "job": {
+        "idField": "job_id",
+        "statusEndpoint": "https://api.example.com/v1/media/jobs/{job_id}",
+        "fileEndpoint": "https://api.example.com/v1/media/jobs/{job_id}/file",
+        "cleanupEndpoint": "https://api.example.com/v1/media/jobs/{job_id}",
+        "pollIntervalMs": 1000,
+        "timeoutMs": 90000
+      },
+      "activeTabUrlArg": "url",
+      "inputUrlArg": "url",
+      "resultPolicy": "untrusted",
+      "modes": ["act"],
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "url": { "type": "string" },
+          "filename": { "type": "string" }
+        },
+        "required": []
+      }
+    }
+  ]
+}
+```
+````
+
 How it is wired:
 
 - `agent/skills.js` parses manifests from enabled skills and builds tool schemas
@@ -81,22 +126,27 @@ How it is wired:
   is not copied into the main system prompt.
 - `agent.js` routes declared skill tool calls through
   `executeHttpSkillTool()` in `network-tools.js`.
-- Skill HTTP tools currently require HTTPS, GET or POST, `readOnly: true`, and
-  `credentials: "omit"`.
+- Skill tools currently require HTTPS and `credentials: "omit"`. `kind: "http"`
+  tools must be GET or POST and `readOnly: true`. `kind: "httpDownloadJob"`
+  tools must be POST, `readOnly: false`, `requiresDownloadPermission: true`,
+  and declare same-origin status/file/cleanup endpoint templates with
+  `{job_id}`.
 
 Security model:
 
-- Importing/enabling the skill is the trust boundary. After import, declared
-  skill tools can send their declared inputs to their declared HTTPS endpoints
-  without per-call confirmation.
+- Importing/enabling the skill is the trust boundary for the declared HTTPS
+  endpoint. After import, declared skill tools can send their declared inputs to
+  that endpoint without per-call confirmation.
+- Download-job skill tools are still Act-only and run through the normal
+  Downloads permission gate before a file is saved.
 - Mark any third-party/page/document response as `resultPolicy: "untrusted"` so
   the result is wrapped in `<untrusted_page_content>` and cannot become trusted
   instructions during summarization.
 - Use `inputUrlAllowlist` when the service should only receive specific public
   URL families.
 
-Use a core tool instead when the tool needs browser privileges, cookies,
-downloads, content-script DOM access, mutation permissions, a custom permission
+Use a core tool instead when the tool needs browser privileges beyond Downloads,
+cookies, content-script DOM access, mutation permissions, a custom permission
 gate, or non-HTTP execution.
 
 ---

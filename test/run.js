@@ -2681,14 +2681,31 @@ test('getToolsForMode: skill tools are exposed only when enabled skills declare 
     ['chrome', 'src/chrome', getToolsForModeCh, normalizeCustomSkillsCh, buildSkillToolDefinitionsCh, buildSkillToolRegistryCh],
     ['firefox', 'src/firefox', getToolsForModeFx, normalizeCustomSkillsFx, buildSkillToolDefinitionsFx, buildSkillToolRegistryFx],
   ]) {
-    assert.equal(getTools('ask').some(t => t.function?.name === 'read_youtube_transcript'), false, `${label}: transcript tool should not be static`);
-    assert.equal(getTools('act').some(t => t.function?.name === 'read_youtube_transcript'), false, `${label}: transcript tool should not be static in act`);
+    for (const name of ['read_youtube_transcript', 'resolve_public_media', 'download_public_media']) {
+      assert.equal(getTools('ask').some(t => t.function?.name === name), false, `${label}: ${name} should not be static`);
+      assert.equal(getTools('act').some(t => t.function?.name === name), false, `${label}: ${name} should not be static in act`);
+    }
 
     const skills = normalizeSkills([packagedFreeSkillzRecord(prefix)]);
-    const registryTool = buildRegistry(skills).get('read_youtube_transcript');
-    assert.ok(registryTool, `${label}: FreeSkillz manifest tool missing`);
-    assert.equal(registryTool.endpoint, 'https://freeskillz.xyz/v1/youtube/transcript', `${label}: wrong manifest endpoint`);
-    assert.equal(registryTool.resultPolicy, 'untrusted', `${label}: transcript output should be untrusted`);
+    const registry = buildRegistry(skills);
+    const transcriptTool = registry.get('read_youtube_transcript');
+    const resolveTool = registry.get('resolve_public_media');
+    const downloadTool = registry.get('download_public_media');
+    assert.ok(transcriptTool, `${label}: FreeSkillz transcript tool missing`);
+    assert.ok(resolveTool, `${label}: FreeSkillz media resolver tool missing`);
+    assert.ok(downloadTool, `${label}: FreeSkillz media download tool missing`);
+    assert.equal(transcriptTool.endpoint, 'https://freeskillz.xyz/v1/youtube/transcript', `${label}: wrong transcript endpoint`);
+    assert.equal(transcriptTool.resultPolicy, 'untrusted', `${label}: transcript output should be untrusted`);
+    assert.equal(resolveTool.kind, 'http', `${label}: resolver should be read-only HTTP`);
+    assert.equal(resolveTool.readOnly, true, `${label}: resolver should be read-only`);
+    assert.equal(resolveTool.endpoint, 'https://freeskillz.xyz/v1/media/resolve', `${label}: wrong resolver endpoint`);
+    assert.equal(downloadTool.kind, 'httpDownloadJob', `${label}: downloader should use job execution`);
+    assert.equal(downloadTool.readOnly, false, `${label}: downloader should not be read-only`);
+    assert.equal(downloadTool.requiresDownloadPermission, true, `${label}: downloader should require download permission`);
+    assert.equal(downloadTool.endpoint, 'https://freeskillz.xyz/v1/media/jobs', `${label}: wrong download job endpoint`);
+    assert.equal(downloadTool.job.statusEndpoint, 'https://freeskillz.xyz/v1/media/jobs/{job_id}', `${label}: wrong status endpoint template`);
+    assert.equal(downloadTool.job.fileEndpoint, 'https://freeskillz.xyz/v1/media/jobs/{job_id}/file', `${label}: wrong file endpoint template`);
+    assert.equal(downloadTool.job.cleanupEndpoint, 'https://freeskillz.xyz/v1/media/jobs/{job_id}', `${label}: wrong cleanup endpoint template`);
 
     const toolSets = [
       ['ask', 'ask', 'full', getTools('ask', { skillTools: buildDefs(skills, { mode: 'ask' }) })],
@@ -2699,14 +2716,29 @@ test('getToolsForMode: skill tools are exposed only when enabled skills declare 
     for (const [mode, _runMode, _tier, tools] of toolSets) {
       const names = tools.map(t => t.function?.name).filter(Boolean);
       assert.ok(names.includes('read_youtube_transcript'), `${label} ${mode}: transcript tool missing`);
-      const tool = tools.find(t => t.function?.name === 'read_youtube_transcript');
-      assert.equal(tool.function.parameters.required.length, 0, `${label} ${mode}: url should be optional`);
-      assert.ok(tool.function.parameters.properties.url, `${label} ${mode}: url param missing`);
-      assert.ok(tool.function.parameters.properties.lang, `${label} ${mode}: lang param missing`);
-      assert.ok(tool.function.parameters.properties.timestamps, `${label} ${mode}: timestamps param missing`);
-      assert.match(tool.function.description, /Use this first/i, `${label} ${mode}: description should steer first use`);
-      assert.match(tool.function.description, /does not require \/allow-api/i, `${label} ${mode}: read-only skill tool should not ask for /allow-api`);
-      assert.match(tool.function.description, /FreeSkillz\.xyz/, `${label} ${mode}: provider missing`);
+      assert.ok(names.includes('resolve_public_media'), `${label} ${mode}: resolver tool missing`);
+      assert.equal(names.includes('download_public_media'), mode === 'ask' ? false : true, `${label} ${mode}: download tool mode mismatch`);
+
+      const transcript = tools.find(t => t.function?.name === 'read_youtube_transcript');
+      assert.equal(transcript.function.parameters.required.length, 0, `${label} ${mode}: url should be optional`);
+      assert.ok(transcript.function.parameters.properties.url, `${label} ${mode}: url param missing`);
+      assert.ok(transcript.function.parameters.properties.lang, `${label} ${mode}: lang param missing`);
+      assert.ok(transcript.function.parameters.properties.timestamps, `${label} ${mode}: timestamps param missing`);
+      assert.match(transcript.function.description, /Use this first/i, `${label} ${mode}: description should steer first use`);
+      assert.match(transcript.function.description, /does not require \/allow-api/i, `${label} ${mode}: read-only skill tool should not ask for /allow-api`);
+      assert.match(transcript.function.description, /FreeSkillz\.xyz/, `${label} ${mode}: provider missing`);
+
+      const resolver = tools.find(t => t.function?.name === 'resolve_public_media');
+      assert.ok(resolver.function.parameters.properties.url, `${label} ${mode}: resolver url param missing`);
+      assert.match(resolver.function.description, /before downloading/i, `${label} ${mode}: resolver should steer metadata-first workflow`);
+      if (mode !== 'ask') {
+        const downloader = tools.find(t => t.function?.name === 'download_public_media');
+        assert.ok(downloader.function.parameters.properties.kind, `${label} ${mode}: downloader kind param missing`);
+        assert.ok(downloader.function.parameters.properties.max_height, `${label} ${mode}: downloader max_height param missing`);
+        assert.ok(downloader.function.parameters.properties.filename, `${label} ${mode}: downloader filename param missing`);
+        assert.match(downloader.function.description, /Downloads folder/i, `${label} ${mode}: downloader should explain side effect`);
+        assert.match(downloader.function.description, /does not require \/allow-api/i, `${label} ${mode}: downloader should not ask for /allow-api`);
+      }
     }
   }
 });
@@ -2755,6 +2787,135 @@ test('executeHttpSkillTool uses skill manifest endpoint for supported YouTube UR
   }
 });
 
+test('executeHttpSkillTool runs FreeSkillz media download jobs and cleans up', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalChrome = globalThis.chrome;
+  const originalBrowser = globalThis.browser;
+  try {
+    for (const [label, prefix, executeTool, normalizeSkills, buildRegistry] of [
+      ['chrome', 'src/chrome', executeHttpSkillToolCh, normalizeCustomSkillsCh, buildSkillToolRegistryCh],
+      ['firefox', 'src/firefox', executeHttpSkillToolFx, normalizeCustomSkillsFx, buildSkillToolRegistryFx],
+    ]) {
+      const skills = normalizeSkills([packagedFreeSkillzRecord(prefix)]);
+      const tool = buildRegistry(skills).get('download_public_media');
+      assert.ok(tool, `${label}: download_public_media manifest tool missing`);
+
+      const providerCalls = [];
+      const downloadCalls = [];
+      const jsonResponse = (status, body) => ({
+        ok: status >= 200 && status < 300,
+        status,
+        text: async () => JSON.stringify(body),
+      });
+      globalThis.fetch = async (url, opts = {}) => {
+        providerCalls.push({ url, opts });
+        if (url === 'https://freeskillz.xyz/v1/media/jobs' && opts.method === 'POST') {
+          return jsonResponse(200, { job_id: 'job_123' });
+        }
+        if (url === 'https://freeskillz.xyz/v1/media/jobs/job_123' && opts.method === 'GET') {
+          return jsonResponse(200, { status: 'complete' });
+        }
+        if (url === 'https://freeskillz.xyz/v1/media/jobs/job_123' && opts.method === 'DELETE') {
+          return jsonResponse(204, {});
+        }
+        throw new Error(`unexpected provider call: ${opts.method || 'GET'} ${url}`);
+      };
+
+      if (label === 'chrome') {
+        delete globalThis.browser;
+        globalThis.chrome = {
+          runtime: { lastError: null },
+          downloads: {
+            download(opts, cb) {
+              downloadCalls.push(opts);
+              cb(7101);
+            },
+            search(_query, cb) {
+              cb([{
+                id: 7101,
+                filename: '/Users/x/Downloads/media.mp4',
+                state: 'complete',
+                bytesReceived: 11,
+                totalBytes: 11,
+              }]);
+            },
+          },
+        };
+      } else {
+        delete globalThis.chrome;
+        globalThis.browser = {
+          downloads: {
+            async download(opts) {
+              downloadCalls.push(opts);
+              return 8101;
+            },
+            async search() {
+              return [{
+                id: 8101,
+                filename: '/Users/x/Downloads/media.mp4',
+                state: 'complete',
+                bytesReceived: 11,
+                totalBytes: 11,
+              }];
+            },
+          },
+        };
+      }
+
+      const rejected = await executeTool(tool, { url: 'https://example.com/video/1' });
+      assert.equal(rejected.success, false, `${label}: non-allowlisted media URL should be rejected`);
+      assert.equal(providerCalls.length, 0, `${label}: rejected URL should not contact provider`);
+
+      const result = await executeTool(tool, {
+        url: 'https://www.instagram.com/reel/abc/',
+        kind: 'video',
+        max_height: 360,
+        filename: '../evil.mp4',
+      });
+
+      assert.equal(result.success, true, `${label}: media download job should succeed`);
+      assert.equal(result.provider, 'freeskillz.xyz', `${label}: provider missing`);
+      assert.equal(result.skillTool, 'download_public_media', `${label}: skill tool name missing`);
+      assert.equal(result.jobId, 'job_123', `${label}: job id missing`);
+      assert.equal(result.jobStatus, 'complete', `${label}: final job status missing`);
+      assert.equal(result.fileUrl, 'https://freeskillz.xyz/v1/media/jobs/job_123/file', `${label}: wrong file URL`);
+      assert.equal(result.downloadId, label === 'chrome' ? 7101 : 8101, `${label}: wrong download id`);
+      assert.equal(result.cleanup?.success, true, `${label}: cleanup should succeed`);
+      assert.equal(downloadCalls.length, 1, `${label}: browser download should run once`);
+      assert.equal(downloadCalls[0].url, 'https://freeskillz.xyz/v1/media/jobs/job_123/file', `${label}: wrong browser download URL`);
+      assert.equal(downloadCalls[0].filename, 'evil.mp4', `${label}: filename should be sanitized to basename`);
+
+      assert.deepEqual(
+        providerCalls.map(call => `${call.opts.method || 'GET'} ${call.url}`),
+        [
+          'POST https://freeskillz.xyz/v1/media/jobs',
+          'GET https://freeskillz.xyz/v1/media/jobs/job_123',
+          'DELETE https://freeskillz.xyz/v1/media/jobs/job_123',
+        ],
+        `${label}: wrong provider lifecycle`,
+      );
+      assert.equal(providerCalls[0].opts.credentials, 'omit', `${label}: create job should omit cookies`);
+      assert.deepEqual(
+        JSON.parse(providerCalls[0].opts.body),
+        {
+          kind: 'video',
+          max_height: 360,
+          url: 'https://www.instagram.com/reel/abc/',
+          filename: '../evil.mp4',
+        },
+        `${label}: wrong create job payload`,
+      );
+    }
+  } finally {
+    if (originalFetch === undefined) delete globalThis.fetch;
+    else globalThis.fetch = originalFetch;
+    if (originalChrome === undefined) delete globalThis.chrome;
+    else globalThis.chrome = originalChrome;
+    if (originalBrowser === undefined) delete globalThis.browser;
+    else globalThis.browser = originalBrowser;
+  }
+});
+
 test('custom skills prompt is empty before storage seed and injects enabled skills', () => {
   for (const [label, normalizeSkills, buildPrompt] of [
     ['chrome', normalizeCustomSkillsCh, buildCustomSkillsPromptCh],
@@ -2785,17 +2946,25 @@ test('custom skills parse tool manifests without injecting manifest JSON into pr
   ]) {
     const skills = normalizeSkills([packagedFreeSkillzRecord(prefix)]);
     assert.equal(skills.length, 1, `${label}: packaged skill should normalize`);
-    assert.equal(skills[0].tools.length, 1, `${label}: manifest tool should parse`);
-    assert.equal(skills[0].tools[0].name, 'read_youtube_transcript', `${label}: wrong manifest tool name`);
+    assert.deepEqual(
+      skills[0].tools.map((tool) => tool.name),
+      ['read_youtube_transcript', 'resolve_public_media', 'download_public_media'],
+      `${label}: manifest tools should parse`,
+    );
 
     const prompt = buildPrompt(skills);
     assert.match(prompt, /FreeSkillz\.xyz/, `${label}: skill instructions missing from prompt`);
     assert.doesNotMatch(prompt, /```webbrain-tools/, `${label}: tool manifest fence should not be injected`);
     assert.doesNotMatch(prompt, /"endpoint": "https:\/\/freeskillz\.xyz\/v1\/youtube\/transcript"/, `${label}: endpoint JSON should stay out of prompt`);
+    assert.doesNotMatch(prompt, /"endpoint": "https:\/\/freeskillz\.xyz\/v1\/media\/jobs"/, `${label}: download endpoint JSON should stay out of prompt`);
 
     const defs = buildDefs(skills, { mode: 'ask' });
-    assert.equal(defs.length, 1, `${label}: skill tool definition missing`);
+    assert.equal(defs.length, 2, `${label}: ask skill tool definitions missing`);
     assert.equal(defs[0].function.name, 'read_youtube_transcript', `${label}: wrong tool definition name`);
+    assert.equal(defs[1].function.name, 'resolve_public_media', `${label}: wrong ask media tool definition name`);
+    const actDefs = buildDefs(skills, { mode: 'act' });
+    assert.equal(actDefs.length, 3, `${label}: act should include download skill definition`);
+    assert.equal(actDefs[2].function.name, 'download_public_media', `${label}: wrong act download tool definition name`);
   }
 });
 
@@ -8277,7 +8446,7 @@ test('agent redirects fetch_url calls for enabled skill endpoints to the skill t
       (type, data) => updates.push({ type, data }),
       { supportsVision: false },
       '',
-      new Set(['fetch_url', 'read_youtube_transcript']),
+      new Set(['fetch_url', 'read_youtube_transcript', 'download_public_media']),
       1,
     );
 
@@ -8287,9 +8456,80 @@ test('agent redirects fetch_url calls for enabled skill endpoints to the skill t
     assert.equal(redirected.wrongTool, true, `${label}: result should identify the wrong tool`);
     assert.equal(redirected.useTool, 'read_youtube_transcript', `${label}: result should point to transcript skill tool`);
     assert.equal(redirected.requiresApiAllow, false, `${label}: skill endpoint redirect should not request /allow-api`);
-    assert.match(redirected.error, /does not require \/allow-api/i, `${label}: redirect should explain skill tools do not need /allow-api`);
+    assert.match(redirected.error, /do not require \/allow-api/i, `${label}: redirect should explain skill tools do not need /allow-api`);
     assert.ok(updates.some(update => /read_youtube_transcript/.test(update.data?.message || '')), `${label}: missing skill redirect warning`);
     assert.equal(updates.some(update => /blocked until \/allow-api/.test(update.data?.message || '')), false, `${label}: emitted stale /allow-api warning`);
+
+    const mediaUpdates = [];
+    const mediaMessages = [];
+    await agent._executeToolBatch(
+      label === 'chrome' ? 4899 : 4900,
+      [{
+        id: 'tool_2',
+        function: { name: 'fetch_url', arguments: '{"url":"https://freeskillz.xyz/v1/media/jobs","method":"POST","body":"{\\"url\\":\\"https://www.instagram.com/reel/abc/\\",\\"kind\\":\\"video\\"}"}' },
+      }],
+      mediaMessages,
+      (type, data) => mediaUpdates.push({ type, data }),
+      { supportsVision: false },
+      '',
+      new Set(['fetch_url', 'download_public_media']),
+      1,
+    );
+
+    assert.equal(executed, false, `${label}: fetch_url executed against the download skill endpoint`);
+    assert.equal(mediaMessages.length, 1, `${label}: expected media endpoint redirect result`);
+    const redirectedMedia = JSON.parse(mediaMessages[0].content);
+    assert.equal(redirectedMedia.wrongTool, true, `${label}: media result should identify the wrong tool`);
+    assert.equal(redirectedMedia.useTool, 'download_public_media', `${label}: result should point to media download skill tool`);
+    assert.equal(redirectedMedia.requiresApiAllow, false, `${label}: media skill endpoint redirect should not request /allow-api`);
+    assert.match(redirectedMedia.error, /download-job skill tools require Act mode plus download permission/i, `${label}: redirect should mention download permission`);
+    assert.ok(mediaUpdates.some(update => /download_public_media/.test(update.data?.message || '')), `${label}: missing media skill redirect warning`);
+    assert.equal(mediaUpdates.some(update => /blocked until \/allow-api/.test(update.data?.message || '')), false, `${label}: emitted stale /allow-api warning for media skill endpoint`);
+  }
+});
+
+test('agent gates download-job skill tools with download permission', async () => {
+  for (const [label, prefix, AgentClass] of [
+    ['chrome', 'src/chrome', AgentCh],
+    ['firefox', 'src/firefox', AgentFx],
+  ]) {
+    const agent = new AgentClass({ getVisionProvider: async () => null });
+    agent.setCustomSkills([packagedFreeSkillzRecord(prefix)]);
+    let executed = false;
+    agent.executeTool = async () => {
+      executed = true;
+      return { success: true, downloadId: 7101 };
+    };
+    agent._ensureGateSetting = async () => {};
+    agent._currentUrl = async () => 'https://www.instagram.com/reel/abc/';
+    const prompts = [];
+    agent._promptPermission = async (_tabId, capability, host) => {
+      prompts.push({ capability, host });
+      return 'deny';
+    };
+    const updates = [];
+    const messages = [];
+
+    await agent._executeToolBatch(
+      label === 'chrome' ? 4901 : 4902,
+      [{
+        id: 'tool_1',
+        function: { name: 'download_public_media', arguments: '{"url":"https://www.instagram.com/reel/abc/","kind":"video"}' },
+      }],
+      messages,
+      (type, data) => updates.push({ type, data }),
+      { supportsVision: false },
+      '',
+      new Set(['download_public_media']),
+      1,
+    );
+
+    assert.equal(executed, false, `${label}: download skill ran after permission denial`);
+    assert.deepEqual(prompts, [{ capability: Capability.DOWNLOAD, host: 'instagram.com' }], `${label}: download skill should prompt for source host`);
+    assert.equal(messages.length, 1, `${label}: expected denied tool result`);
+    const denied = JSON.parse(messages[0].content);
+    assert.equal(denied.denied, true, `${label}: denied result missing`);
+    assert.match(denied.error, /download files from instagram\.com/i, `${label}: denial should mention download capability and host`);
   }
 });
 
@@ -10822,18 +11062,21 @@ test('_pinDownloadHandles pins downloadIds id-only across download tools (chrome
   }
 });
 
-test('_pinDownloadHandles points social-media saves at list_downloads, never an invented id (chrome & firefox)', () => {
-  for (const AgentClass of [AgentCh, AgentFx]) {
+test('_pinDownloadHandles pins social-media and skill download handles (chrome & firefox)', () => {
+  for (const [prefix, AgentClass] of [['src/chrome', AgentCh], ['src/firefox', AgentFx]]) {
     const agent = new AgentClass({});
+    agent.setCustomSkills([packagedFreeSkillzRecord(prefix)]);
     const tabId = 89;
     agent.conversations.set(tabId, [{ role: 'system', content: 's' }, { role: 'user', content: 't' }]);
     agent._pinDownloadHandles(tabId, 'download_social_media', { success: true, completedCount: 3 });
+    agent._pinDownloadHandles(tabId, 'download_public_media', { success: true, downloadId: 47 });
     const messages = agent.conversations.get(tabId);
     const idx = agent._findScratchpadIndex(messages);
     assert.ok(idx >= 0, `${AgentClass.name}: social save not pinned`);
     const body = messages[idx].content;
     assert.match(body, /saved 3 file/, `${AgentClass.name}: completed count missing`);
     assert.match(body, /list_downloads/, `${AgentClass.name}: list_downloads pointer missing`);
+    assert.match(body, /downloadId 47/, `${AgentClass.name}: skill download id missing`);
   }
 });
 
@@ -11506,6 +11749,12 @@ test('settings exposes custom skills tab and packaged skills resource directory'
     assert.match(freeSkillz, /```webbrain-tools/, `${label}: FreeSkillz skill tool manifest missing`);
     assert.match(freeSkillz, /"name": "read_youtube_transcript"/, `${label}: FreeSkillz transcript tool missing`);
     assert.match(freeSkillz, /"endpoint": "https:\/\/freeskillz\.xyz\/v1\/youtube\/transcript"/, `${label}: FreeSkillz transcript endpoint missing`);
+    assert.match(freeSkillz, /"name": "resolve_public_media"/, `${label}: FreeSkillz media resolver tool missing`);
+    assert.match(freeSkillz, /"endpoint": "https:\/\/freeskillz\.xyz\/v1\/media\/resolve"/, `${label}: FreeSkillz media resolver endpoint missing`);
+    assert.match(freeSkillz, /"name": "download_public_media"/, `${label}: FreeSkillz media download tool missing`);
+    assert.match(freeSkillz, /"kind": "httpDownloadJob"/, `${label}: FreeSkillz media download kind missing`);
+    assert.match(freeSkillz, /"requiresDownloadPermission": true/, `${label}: FreeSkillz media download permission marker missing`);
+    assert.match(freeSkillz, /"endpoint": "https:\/\/freeskillz\.xyz\/v1\/media\/jobs"/, `${label}: FreeSkillz media download endpoint missing`);
     assert.doesNotMatch(freeSkillz, /127\.0\.0\.1|localhost|Local development/i, `${label}: FreeSkillz skill should not include local development URLs`);
   }
 });

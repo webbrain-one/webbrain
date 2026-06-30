@@ -172,7 +172,7 @@ while (steps < maxSteps) {
 | `click`, `type_text`, `press_keys`, `scroll`, `read_page`, `screenshot`, etc. | content script message | Injected page context |
 | `navigate`, `new_tab`, `go_back`, `go_forward` | `chrome.tabs` / `browser.tabs` API | Background script |
 | `fetch_url`, `research_url`, `list_downloads`, etc. | `network-tools.js` | Service worker |
-| Enabled skill HTTP tools | `skills.js` registry + `executeHttpSkillTool()` | Service worker |
+| Enabled skill tools | `skills.js` registry + `executeHttpSkillTool()` | Service worker |
 | `done` | agent.js — captures verification screenshot + page state probe | Service worker + CDP |
 | `clarify` | agent.js — pauses for user input | Service worker |
 | `solve_captcha` | captcha-solver.js | Service worker + CapSolver API |
@@ -224,13 +224,16 @@ The manifest format is a fenced JSON block inside the skill markdown:
 ```
 ````
 
-Current skill tools are read-only HTTP tools. They must use HTTPS, GET or POST,
-and `credentials: "omit"`; optional manifest allowlists can restrict URL-like
-inputs. This is intentionally a trust-at-import model: once a user imports or
-keeps a skill enabled, its declared tool can run without a per-call permission
-prompt. Results that carry third-party content should set
-`resultPolicy: "untrusted"` so `_wrapUntrusted()` and `_digestToolResult()` treat
-them as data rather than instructions.
+Current skill tools support `kind: "http"` for read-only HTTPS GET/POST
+integrations and `kind: "httpDownloadJob"` for short-lived HTTPS POST jobs that
+poll a same-origin status URL, save the produced file through browser Downloads,
+and call cleanup afterward. Requests use `credentials: "omit"` and optional
+manifest allowlists can restrict URL-like inputs. This is intentionally a
+trust-at-import model for the declared endpoint; download-job tools still run in
+Act mode and use the normal Downloads permission gate before saving files.
+Results that carry third-party content should set `resultPolicy: "untrusted"` so
+`_wrapUntrusted()` and `_digestToolResult()` treat them as data rather than
+instructions.
 
 ### Step 7: Results Back to UI
 

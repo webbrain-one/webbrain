@@ -6,7 +6,7 @@ Base URL: `https://freeskillz.xyz`
 
 No API key is required.
 
-This skill exposes the `read_youtube_transcript` tool when enabled. Use raw FreeSkillz endpoints only when that tool is unavailable or for media resolve/download jobs.
+This skill exposes `read_youtube_transcript`, `resolve_public_media`, and `download_public_media` when enabled. Use these tools before raw FreeSkillz endpoints.
 
 ```webbrain-tools
 {
@@ -59,6 +59,113 @@ This skill exposes the `read_youtube_transcript` tool when enabled. Use raw Free
         },
         "required": []
       }
+    },
+    {
+      "id": "public_media_resolve",
+      "name": "resolve_public_media",
+      "description": "Resolve a public social/media URL via FreeSkillz.xyz before downloading. Returns title, extractor, media type, thumbnail, duration, and available formats when the provider can inspect the URL. Omit url to use the active tab. This is read-only and does not require /allow-api.",
+      "kind": "http",
+      "readOnly": true,
+      "method": "POST",
+      "endpoint": "https://freeskillz.xyz/v1/media/resolve",
+      "activeTabUrlArg": "url",
+      "inputUrlArg": "url",
+      "inputUrlAllowlist": [
+        { "host": "youtube.com", "paths": ["/"] },
+        { "host": "youtu.be", "paths": ["/"] },
+        { "host": "tiktok.com", "paths": ["/"] },
+        { "host": "instagram.com", "paths": ["/"] },
+        { "host": "x.com", "paths": ["/"] },
+        { "host": "twitter.com", "paths": ["/"] },
+        { "host": "reddit.com", "paths": ["/"] },
+        { "host": "redd.it", "paths": ["/"] },
+        { "host": "facebook.com", "paths": ["/"] },
+        { "host": "fb.watch", "paths": ["/"] },
+        { "host": "pinterest.com", "paths": ["/"] },
+        { "host": "pin.it", "paths": ["/"] },
+        { "host": "linkedin.com", "paths": ["/"] },
+        { "host": "threads.net", "paths": ["/"] }
+      ],
+      "resultPolicy": "untrusted",
+      "responseLimits": {
+        "maxTextChars": 40000,
+        "maxArrayItems": {
+          "formats": 80
+        }
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "Optional public media URL. Omit to use the active tab URL."
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "id": "public_media_download",
+      "name": "download_public_media",
+      "description": "Download a public social media photo, video, image, or audio file through FreeSkillz.xyz. Use this when the user asks to save/download/grab public media from YouTube, TikTok, Instagram public posts/reels, X/Twitter public videos, Reddit media, Facebook public media, Pinterest, LinkedIn public posts, or Threads. Omit url to use the active tab. This creates a short-lived provider job, saves the completed file to the browser Downloads folder, deletes the provider job, and returns a downloadId. Available in Act mode; it does not require /allow-api.",
+      "kind": "httpDownloadJob",
+      "readOnly": false,
+      "requiresDownloadPermission": true,
+      "method": "POST",
+      "endpoint": "https://freeskillz.xyz/v1/media/jobs",
+      "statusEndpoint": "https://freeskillz.xyz/v1/media/jobs/{job_id}",
+      "fileEndpoint": "https://freeskillz.xyz/v1/media/jobs/{job_id}/file",
+      "cleanupEndpoint": "https://freeskillz.xyz/v1/media/jobs/{job_id}",
+      "jobIdField": "job_id",
+      "pollIntervalMs": 1000,
+      "timeoutMs": 90000,
+      "defaultArgs": {
+        "kind": "auto",
+        "max_height": 720
+      },
+      "activeTabUrlArg": "url",
+      "inputUrlArg": "url",
+      "inputUrlAllowlist": [
+        { "host": "youtube.com", "paths": ["/"] },
+        { "host": "youtu.be", "paths": ["/"] },
+        { "host": "tiktok.com", "paths": ["/"] },
+        { "host": "instagram.com", "paths": ["/"] },
+        { "host": "x.com", "paths": ["/"] },
+        { "host": "twitter.com", "paths": ["/"] },
+        { "host": "reddit.com", "paths": ["/"] },
+        { "host": "redd.it", "paths": ["/"] },
+        { "host": "facebook.com", "paths": ["/"] },
+        { "host": "fb.watch", "paths": ["/"] },
+        { "host": "pinterest.com", "paths": ["/"] },
+        { "host": "pin.it", "paths": ["/"] },
+        { "host": "linkedin.com", "paths": ["/"] },
+        { "host": "threads.net", "paths": ["/"] }
+      ],
+      "resultPolicy": "untrusted",
+      "modes": ["act"],
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "Optional public media URL. Omit to use the active tab URL."
+          },
+          "kind": {
+            "type": "string",
+            "enum": ["auto", "video", "audio", "image"],
+            "description": "Media kind to download. Default auto."
+          },
+          "max_height": {
+            "type": "number",
+            "description": "Maximum video height. Keep modest, usually 360 or 720. Default 720."
+          },
+          "filename": {
+            "type": "string",
+            "description": "Optional filename hint for the saved download. Directory components are ignored."
+          }
+        },
+        "required": []
+      }
     }
   ]
 }
@@ -68,12 +175,8 @@ This skill exposes the `read_youtube_transcript` tool when enabled. Use raw Free
 
 1. If availability matters, call `GET /healthz`.
 2. For YouTube text, prefer `POST /v1/youtube/transcript` before any media download.
-3. For unknown public media URLs, call `POST /v1/media/resolve` before downloading.
-4. For media files, create a job, poll it, fetch the file, then delete the job:
-   - `POST /v1/media/jobs`
-   - `GET /v1/media/jobs/{job_id}`
-   - `GET /v1/media/jobs/{job_id}/file`
-   - `DELETE /v1/media/jobs/{job_id}`
+3. For unknown public media URLs, call `resolve_public_media` before downloading.
+4. For public media files, call `download_public_media`. It creates a job, polls it, downloads the file to the browser Downloads folder, and deletes the job.
 
 ## Endpoints
 

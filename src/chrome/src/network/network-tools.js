@@ -315,6 +315,181 @@ function applySkillResponseLimits(value, limits = {}) {
   return out;
 }
 
+function fillSkillJobEndpoint(template, jobId, baseEndpoint, label) {
+  if (!template) return { ok: false, error: `Skill download job is missing ${label}.` };
+  let url;
+  try {
+    url = new URL(template.replace(/\{job_id\}/g, encodeURIComponent(jobId)));
+  } catch {
+    return { ok: false, error: `Skill download job has an invalid ${label}.` };
+  }
+  if (url.protocol !== 'https:') return { ok: false, error: `Skill download job ${label} must use https.` };
+  if (baseEndpoint && url.origin !== baseEndpoint.origin) {
+    return { ok: false, error: `Skill download job ${label} must stay on ${baseEndpoint.origin}.` };
+  }
+  return { ok: true, url: url.href };
+}
+
+function safeDownloadFilename(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return undefined;
+  const base = raw.split(/[\\/]/).filter(Boolean).pop() || '';
+  const safe = base.replace(/[\u0000-\u001f\u007f]/g, '').trim();
+  return safe || undefined;
+}
+
+async function fetchSkillJson(url, init, endpoint, tool) {
+  const res = await fetch(url, {
+    credentials: 'omit',
+    redirect: 'follow',
+    ...init,
+  });
+  const rawText = await res.text();
+  let data = null;
+  try { data = rawText ? JSON.parse(rawText) : null; } catch (_) {}
+  if (!res.ok) {
+    return {
+      success: false,
+      status: res.status,
+      provider: endpoint.hostname,
+      skillTool: tool.name || '',
+      skillName: tool.skillName || '',
+      error: providerError(res.status, data, rawText),
+    };
+  }
+  return { success: true, status: res.status, data: data && typeof data === 'object' ? data : { text: rawText } };
+}
+
+async function cleanupSkillDownloadJob(url, endpoint, tool) {
+  try {
+    const res = await fetch(url, { method: 'DELETE', credentials: 'omit', redirect: 'follow' });
+    if (res.ok) return { success: true, status: res.status };
+    const rawText = await res.text();
+    let data = null;
+    try { data = rawText ? JSON.parse(rawText) : null; } catch (_) {}
+    return { success: false, status: res.status, error: providerError(res.status, data, rawText) };
+  } catch (e) {
+    return { success: false, error: `Cleanup failed for ${tool.name || 'skill tool'} on ${endpoint.hostname}: ${e.message}` };
+  }
+}
+
+async function downloadSkillFile(url, filename, waitMs = 60000) {
+  const opts = { url, conflictAction: 'uniquify' };
+  const safeName = safeDownloadFilename(filename);
+  if (safeName) opts.filename = safeName;
+  const downloadId = await new Promise((resolve, reject) => {
+    chrome.downloads.download(opts, (id) => {
+      if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+      else resolve(id);
+    });
+  });
+  const info = await resolveDownloadInfo(downloadId, waitMs);
+  const result = { downloadId, success: true };
+  if (info) {
+    if (info.filename) result.filename = info.filename;
+    if (info.state) result.state = info.state;
+    if (info.error) result.error = info.error;
+    if (info.bytesReceived != null) result.bytesReceived = info.bytesReceived;
+    if (info.totalBytes != null) result.totalBytes = info.totalBytes;
+    if (info.state === 'interrupted') {
+      result.success = false;
+      result.error = info.error ? `Download interrupted: ${info.error}` : 'Download interrupted before completion.';
+    }
+  }
+  return result;
+}
+
+async function executeHttpDownloadJobSkillTool(tool, payload, endpoint) {
+  const create = await fetchSkillJson(endpoint.href, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  }, endpoint, tool);
+  if (!create.success) return create;
+
+  const idField = tool.job?.idField || 'job_id';
+  const jobId = String(create.data?.[idField] || create.data?.job_id || '').trim();
+  if (!jobId) {
+    return { success: false, provider: endpoint.hostname, skillTool: tool.name || '', skillName: tool.skillName || '', error: `Skill download job response did not include ${idField}.` };
+  }
+
+  const statusEndpoint = fillSkillJobEndpoint(tool.job?.statusEndpoint, jobId, endpoint, 'statusEndpoint');
+  const fileEndpoint = fillSkillJobEndpoint(tool.job?.fileEndpoint, jobId, endpoint, 'fileEndpoint');
+  const cleanupEndpoint = fillSkillJobEndpoint(tool.job?.cleanupEndpoint || tool.job?.statusEndpoint, jobId, endpoint, 'cleanupEndpoint');
+  if (!statusEndpoint.ok) return { success: false, provider: endpoint.hostname, skillTool: tool.name || '', skillName: tool.skillName || '', jobId, error: statusEndpoint.error };
+  if (!fileEndpoint.ok) return { success: false, provider: endpoint.hostname, skillTool: tool.name || '', skillName: tool.skillName || '', jobId, error: fileEndpoint.error };
+
+  const deadline = Date.now() + (tool.job?.timeoutMs || 90000);
+  const pollIntervalMs = tool.job?.pollIntervalMs || 1000;
+  let lastStatus = create.data;
+  while (Date.now() < deadline) {
+    const poll = await fetchSkillJson(statusEndpoint.url, { method: 'GET' }, endpoint, tool);
+    if (!poll.success) return { ...poll, jobId };
+    lastStatus = poll.data;
+    const status = String(poll.data?.status || '').toLowerCase();
+    if (status === 'complete' || status === 'completed' || status === 'done' || status === 'success') break;
+    if (status === 'failed' || status === 'error' || status === 'cancelled' || status === 'canceled') {
+      return {
+        success: false,
+        provider: endpoint.hostname,
+        skillTool: tool.name || '',
+        skillName: tool.skillName || '',
+        jobId,
+        jobStatus: status,
+        error: providerError(502, poll.data, '') || `Skill download job ${jobId} failed.`,
+      };
+    }
+    await new Promise(r => setTimeout(r, pollIntervalMs));
+  }
+
+  const finalStatus = String(lastStatus?.status || '').toLowerCase();
+  if (!(finalStatus === 'complete' || finalStatus === 'completed' || finalStatus === 'done' || finalStatus === 'success')) {
+    return {
+      success: false,
+      provider: endpoint.hostname,
+      skillTool: tool.name || '',
+      skillName: tool.skillName || '',
+      jobId,
+      jobStatus: finalStatus || 'unknown',
+      error: `Skill download job timed out before completion.`,
+    };
+  }
+
+  let cleanup = null;
+  try {
+    const download = await downloadSkillFile(fileEndpoint.url, payload.filename, Math.min(tool.job?.timeoutMs || 90000, 120000));
+    if (cleanupEndpoint.ok) cleanup = await cleanupSkillDownloadJob(cleanupEndpoint.url, endpoint, tool);
+    if (!download.success) {
+      return {
+        success: false,
+        provider: endpoint.hostname,
+        skillTool: tool.name || '',
+        skillName: tool.skillName || '',
+        jobId,
+        jobStatus: finalStatus,
+        fileUrl: fileEndpoint.url,
+        cleanup,
+        ...download,
+      };
+    }
+    return {
+      success: true,
+      status: 200,
+      provider: endpoint.hostname,
+      skillTool: tool.name || '',
+      skillName: tool.skillName || '',
+      jobId,
+      jobStatus: finalStatus,
+      fileUrl: fileEndpoint.url,
+      cleanup,
+      ...download,
+    };
+  } catch (e) {
+    if (cleanupEndpoint.ok) cleanup = await cleanupSkillDownloadJob(cleanupEndpoint.url, endpoint, tool);
+    return { success: false, provider: endpoint.hostname, skillTool: tool.name || '', skillName: tool.skillName || '', jobId, fileUrl: fileEndpoint.url, cleanup, error: `Skill download failed: ${e.message}` };
+  }
+}
+
 export async function executeHttpSkillTool(tool, args = {}, ctx = {}) {
   let endpoint;
   try {
@@ -333,6 +508,10 @@ export async function executeHttpSkillTool(tool, args = {}, ctx = {}) {
   }
   if (tool.inputUrlArg && payload[tool.inputUrlArg] && !inputUrlAllowed(payload[tool.inputUrlArg], tool.allowedInputUrls || [])) {
     return { success: false, error: `Skill tool input URL is outside its declared allowlist: ${tool.inputUrlArg}`, provider: endpoint.hostname };
+  }
+
+  if (tool.kind === 'httpDownloadJob') {
+    return await executeHttpDownloadJobSkillTool(tool, payload, endpoint);
   }
 
   const init = {

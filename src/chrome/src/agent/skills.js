@@ -147,6 +147,23 @@ function normalizeTiers(value) {
   return set.size ? [...set] : ['full', 'mid', 'compact'];
 }
 
+function normalizeToolKind(value) {
+  const raw = cleanSingleLine(value || 'http').replace(/[-_\s]+/g, '').toLowerCase();
+  if (raw === 'httpdownloadjob') return 'httpDownloadJob';
+  return 'http';
+}
+
+function normalizeEndpointTemplate(value) {
+  const template = cleanSingleLine(value).slice(0, 2048);
+  if (!template || !template.includes('{job_id}')) return '';
+  try {
+    const sample = new URL(template.replace(/\{job_id\}/g, 'sample-job'));
+    return sample.protocol === 'https:' ? template : '';
+  } catch {
+    return '';
+  }
+}
+
 function normalizeSkillTools(value, skillId) {
   const raw = Array.isArray(value) ? value : [];
   const tools = [];
@@ -155,9 +172,10 @@ function normalizeSkillTools(value, skillId) {
     if (!isPlainObject(item) || tools.length >= MAX_CUSTOM_SKILL_TOOLS) continue;
     const name = cleanToolName(item.name || item.expose_as || item.exposeAs || item.id);
     if (!name || seen.has(name)) continue;
-    const kind = cleanSingleLine(item.kind || item.type || 'http').toLowerCase();
-    const readOnly = item.readOnly ?? item.read_only ?? true;
-    if (kind !== 'http' || readOnly !== true) continue;
+    const kind = normalizeToolKind(item.kind || item.type || 'http');
+    const readOnly = item.readOnly ?? item.read_only ?? kind === 'http';
+    if (kind === 'http' && readOnly !== true) continue;
+    if (kind === 'httpDownloadJob' && (readOnly === true || item.requiresDownloadPermission === false)) continue;
     let endpoint = cleanSingleLine(item.endpoint || item.url).slice(0, 2048);
     try {
       const parsed = new URL(endpoint);
@@ -168,6 +186,17 @@ function normalizeSkillTools(value, skillId) {
     }
     const method = cleanSingleLine(item.method || 'GET').toUpperCase();
     if (method !== 'GET' && method !== 'POST') continue;
+    if (kind === 'httpDownloadJob' && method !== 'POST') continue;
+    const jobSource = isPlainObject(item.job) ? item.job : {};
+    const job = {
+      idField: cleanSingleLine(item.jobIdField || item.job_id_field || jobSource.idField || jobSource.id_field || 'job_id').slice(0, 80) || 'job_id',
+      statusEndpoint: normalizeEndpointTemplate(item.statusEndpoint || item.status_endpoint || item.statusUrlTemplate || item.status_url_template || jobSource.statusEndpoint || jobSource.status_endpoint || jobSource.statusUrlTemplate || jobSource.status_url_template),
+      fileEndpoint: normalizeEndpointTemplate(item.fileEndpoint || item.file_endpoint || item.fileUrlTemplate || item.file_url_template || jobSource.fileEndpoint || jobSource.file_endpoint || jobSource.fileUrlTemplate || jobSource.file_url_template),
+      cleanupEndpoint: normalizeEndpointTemplate(item.cleanupEndpoint || item.cleanup_endpoint || item.deleteEndpoint || item.delete_endpoint || jobSource.cleanupEndpoint || jobSource.cleanup_endpoint || jobSource.deleteEndpoint || jobSource.delete_endpoint),
+      pollIntervalMs: Math.max(250, Math.min(5000, Number(item.pollIntervalMs || item.poll_interval_ms || jobSource.pollIntervalMs || jobSource.poll_interval_ms || 1000) || 1000)),
+      timeoutMs: Math.max(5000, Math.min(180000, Number(item.timeoutMs || item.timeout_ms || jobSource.timeoutMs || jobSource.timeout_ms || 90000) || 90000)),
+    };
+    if (kind === 'httpDownloadJob' && (!job.statusEndpoint || !job.fileEndpoint)) continue;
     seen.add(name);
     tools.push({
       id: cleanSingleLine(item.id || name).slice(0, 80) || name,
@@ -177,7 +206,8 @@ function normalizeSkillTools(value, skillId) {
       method,
       endpoint,
       credentials: 'omit',
-      readOnly: true,
+      readOnly: kind === 'http',
+      requiresDownloadPermission: kind === 'httpDownloadJob',
       parameters: normalizeToolParameters(item),
       defaultArgs: cloneJsonObject(item.defaultArgs || item.default_args, {}),
       activeTabUrlArg: cleanSingleLine(item.activeTabUrlArg || item.active_tab_url_arg || '').slice(0, 80),
@@ -185,6 +215,7 @@ function normalizeSkillTools(value, skillId) {
       allowedInputUrls: normalizeAllowedInputUrls(item.allowedInputUrls || item.allowed_input_urls || item.inputUrlAllowlist || item.input_url_allowlist),
       resultPolicy: cleanSingleLine(item.resultPolicy || item.result_policy).toLowerCase() === 'trusted' ? 'trusted' : 'untrusted',
       responseLimits: cloneJsonObject(item.responseLimits || item.response_limits, {}),
+      job,
       modes: normalizeModes(item.modes),
       tiers: normalizeTiers(item.tiers),
     });

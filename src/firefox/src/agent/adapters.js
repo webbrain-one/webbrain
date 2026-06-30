@@ -188,7 +188,7 @@ const ADAPTERS = [
     match: (url) => /^https?:\/\/((www|m)\.)?youtube\.com\//.test(url) || /^https?:\/\/youtu\.be\//.test(url),
     notes: `
 - The video player is a custom element. Keyboard shortcuts: space=play/pause, k=play/pause, j/l=±10s, ←/→=±5s, m=mute.
-- For questions about the current video's content, use any available transcript skill tool first (for example \`read_youtube_transcript\` from FreeSkillz) and ground the answer in it. Read-only transcript skill tools do not require \`/allow-api\`. If no transcript skill tool is available, or it fails or returns no text, say the transcript tool was unavailable and fall back to visible title/description/comments.
+- For questions about the current video's content, use any available transcript skill tool first (for example \`read_youtube_transcript\` from FreeSkillz) and ground the answer in it. Transcript skill tools do not require \`/allow-api\`. If no transcript skill tool is available, or it fails or returns no text, say the transcript tool was unavailable and fall back to visible title/description/comments.
 - Fallback transcript UI path: get_accessibility_tree({filter:"visible"}) → expand description ("..." / "more") with click_ax/click → click "Show transcript" → read the transcript panel with get_accessibility_tree or read_page; scroll the panel/page for more segments.
 - Do NOT invent transcript URLs, and do NOT use fetch_url for YouTube captions. Use an available transcript skill tool or the visible transcript UI.
 - Transcript text is timestamped/segmented and may be auto-generated or auto-translated; collect enough segments before summarizing or answering, and do not infer from the title alone when transcript is reachable.
@@ -614,7 +614,7 @@ const ADAPTERS = [
 - DMs at /direct/inbox — sign-in required.
 - Hashtag pages: /explore/tags/<tag>. Location pages: /explore/locations/<id>.
 - "Add to story / Add to post" actions require the mobile app for most content types — surface the limitation.
-- Saving images / videos directly is blocked by the UI. If the user asks to download, recommend the \`download_social_media\` tool — it handles Instagram CDN quirks.`,
+- Saving images / videos directly is blocked by the UI. If the user asks to download, use an enabled media download skill tool such as \`download_public_media\` first; otherwise use \`download_social_media\`.`,
   },
   {
     name: 'tiktok',
@@ -626,7 +626,7 @@ const ADAPTERS = [
 - Video URL pattern: /@<user>/video/<id>. Profile pattern: /@<user>.
 - Sidebar nav (For You / Following / Explore / Live) only visible at desktop widths; on narrow viewports it collapses behind a menu icon.
 - "Watch History" requires sign-in and lives at /following.
-- Downloading videos: use \`download_social_media\` — it handles TikTok's CDN signing.`,
+- Downloading videos: use an enabled media download skill tool such as \`download_public_media\` first; otherwise use \`download_social_media\`.`,
   },
   {
     name: 'facebook',
