@@ -72,9 +72,6 @@ export default {
   'sp.btn.send': 'Ipadala',
   'sp.btn.stop.title': 'Itigil ang ahente',
   'sp.btn.stop.label': 'Itigil',
-
-  'sp.inspection': 'Sinimulan ng WebBrain na suriin ang pahinang ito',
-
   'sp.greeting.html': 'Kumusta! Ako si <strong>WebBrain</strong>. Kaya kong basahin ang pahinang ito, sumagot ng mga tanong, mag-click ng mga button, magpuno ng mga form, at mag-automate ng mga multi-step na gawain.',
   'sp.greeting.hint': 'Subukan: "I-summarize ang pahinang ito" o "Hanapin lahat ng link tungkol sa presyo"',
   'sp.help_message': 'Paano kita matutulungan sa pahinang ito?',

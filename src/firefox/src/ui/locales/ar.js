@@ -72,9 +72,6 @@ export default {
   'sp.btn.send': 'إرسال',
   'sp.btn.stop.title': 'إيقاف الوكيل',
   'sp.btn.stop.label': 'إيقاف',
-
-  'sp.inspection': 'بدأ WebBrain فحص هذه الصفحة',
-
   'sp.greeting.html': 'مرحبًا! أنا <strong>WebBrain</strong>. أستطيع قراءة هذه الصفحة، والإجابة على الأسئلة، والنقر على الأزرار، وملء النماذج، وأتمتة المهام متعددة الخطوات.',
   'sp.greeting.hint': 'جرّب: «لخّص هذه الصفحة» أو «ابحث عن كل الروابط المتعلقة بالأسعار»',
   'sp.help_message': 'كيف أساعدك في هذه الصفحة؟',

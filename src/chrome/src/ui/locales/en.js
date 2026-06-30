@@ -24,9 +24,6 @@ export default {
   'sp.btn.send': 'Send',
   'sp.btn.stop.title': 'Stop agent',
   'sp.btn.stop.label': 'Stop',
-
-  'sp.inspection': 'WebBrain started inspecting this page',
-
   'sp.greeting.html': 'Hi! I\'m <strong>WebBrain</strong>. I can read this page, answer questions, click buttons, fill forms, and automate multi-step tasks.',
   'sp.greeting.hint': 'Try: "Summarize this page" or "Find all links about pricing"',
   'sp.help_message': 'How can I help with this page?',

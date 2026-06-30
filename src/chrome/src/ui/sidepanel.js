@@ -2826,7 +2826,6 @@ function handleAgentUpdateMessage(msg) {
 
     case 'tool_call':
       showActivity(friendlyToolLabel(data.name, data.args));
-      showInspectionBanner(data.name);
       if (currentAssistantEl) {
         clearTransientAssistantTextForToolCall();
         if (verboseMode) {
@@ -3578,33 +3577,6 @@ chrome.storage.onChanged.addListener((changes) => {
   if (changes.maxAgentSteps) agent_maxSteps = changes.maxAgentSteps.newValue;
 });
 
-// Page inspection banner — shown when agent starts interacting with the page
-const PAGE_TOOLS = new Set(['read_page', 'read_page_source', 'get_interactive_elements', 'click', 'type_text', 'scroll', 'extract_data', 'inspect_element_styles', 'wait_for_element', 'get_selection', 'screenshot']);
-let inspectionBannerShown = false;
-
-function showInspectionBanner(toolName) {
-  if (inspectionBannerShown || !PAGE_TOOLS.has(toolName)) return;
-  inspectionBannerShown = true;
-
-  const banner = document.getElementById('inspection-banner');
-  if (banner) {
-    banner.classList.remove('hidden');
-  }
-
-  // Set extension badge
-  chrome.action?.setBadgeText?.({ text: '🔍' }).catch(() => {});
-  chrome.action?.setBadgeBackgroundColor?.({ color: '#6c63ff' }).catch(() => {});
-}
-
-function hideInspectionBanner() {
-  inspectionBannerShown = false;
-  const banner = document.getElementById('inspection-banner');
-  if (banner) {
-    banner.classList.add('hidden');
-  }
-  chrome.action?.setBadgeText?.({ text: '' }).catch(() => {});
-}
-
 function showActivity(text) {
   agentActivity.classList.remove('hidden');
   activityText.textContent = text;
@@ -3612,7 +3584,6 @@ function showActivity(text) {
 
 function hideActivity() {
   agentActivity.classList.add('hidden');
-  hideInspectionBanner();
 }
 
 function scrollToBottom() {

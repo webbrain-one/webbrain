@@ -72,9 +72,6 @@ export default {
   'sp.btn.send': '发送',
   'sp.btn.stop.title': '停止代理',
   'sp.btn.stop.label': '停止',
-
-  'sp.inspection': 'WebBrain 已开始检查此页面',
-
   'sp.greeting.html': '你好！我是 <strong>WebBrain</strong>。我可以阅读此页面、回答问题、点击按钮、填写表单以及执行多步骤自动化任务。',
   'sp.greeting.hint': '试试：「总结此页面」或「查找所有关于定价的链接」',
   'sp.help_message': '需要我在此页面做什么？',

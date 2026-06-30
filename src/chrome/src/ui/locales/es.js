@@ -72,9 +72,6 @@ export default {
   'sp.btn.send': 'Enviar',
   'sp.btn.stop.title': 'Detener agente',
   'sp.btn.stop.label': 'Detener',
-
-  'sp.inspection': 'WebBrain empezó a inspeccionar esta página',
-
   'sp.greeting.html': '¡Hola! Soy <strong>WebBrain</strong>. Puedo leer esta página, responder preguntas, hacer clic en botones, rellenar formularios y automatizar tareas de varios pasos.',
   'sp.greeting.hint': 'Prueba: «Resume esta página» o «Busca todos los enlaces sobre precios»',
   'sp.help_message': '¿Cómo puedo ayudarte con esta página?',

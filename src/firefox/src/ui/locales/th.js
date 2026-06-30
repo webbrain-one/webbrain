@@ -72,9 +72,6 @@ export default {
   'sp.btn.send': 'ส่ง',
   'sp.btn.stop.title': 'หยุดเอเจนต์',
   'sp.btn.stop.label': 'หยุด',
-
-  'sp.inspection': 'WebBrain เริ่มตรวจสอบหน้านี้แล้ว',
-
   'sp.greeting.html': 'สวัสดี! ฉันคือ <strong>WebBrain</strong> ฉันสามารถอ่านหน้านี้ ตอบคำถาม คลิกปุ่ม กรอกแบบฟอร์ม และทำงานหลายขั้นตอนอัตโนมัติได้',
   'sp.greeting.hint': 'ลอง: “สรุปหน้านี้” หรือ “หาลิงก์ทั้งหมดเกี่ยวกับราคา”',
   'sp.help_message': 'ให้ช่วยอะไรในหน้านี้ดีคะ/ครับ?',

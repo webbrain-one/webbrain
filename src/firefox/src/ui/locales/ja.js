@@ -72,9 +72,6 @@ export default {
   'sp.btn.send': '送信',
   'sp.btn.stop.title': 'エージェントを停止',
   'sp.btn.stop.label': '停止',
-
-  'sp.inspection': 'WebBrain がこのページの解析を開始しました',
-
   'sp.greeting.html': 'こんにちは！<strong>WebBrain</strong> です。このページを読み、質問に答え、ボタンを押し、フォームに入力し、複数ステップのタスクを自動化できます。',
   'sp.greeting.hint': 'お試し:「このページを要約して」または「料金に関するリンクを全部探して」',
   'sp.help_message': 'このページで何をお手伝いしましょうか？',

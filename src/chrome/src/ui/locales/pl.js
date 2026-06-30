@@ -21,7 +21,6 @@ export default {
   'sp.btn.send': 'Wyślij',
   'sp.btn.stop.title': 'Zatrzymaj agenta',
   'sp.btn.stop.label': 'Zatrzymaj',
-  'sp.inspection': 'WebBrain rozpoczął analizę tej strony',
   'sp.greeting.html': 'Cześć! Jestem <strong>WebBrain</strong>. Mogę czytać tę stronę, odpowiadać na pytania, klikać przyciski, wypełniać formularze i automatyzować wieloetapowe zadania.',
   'sp.greeting.hint': 'Spróbuj: „Podsumuj tę stronę” lub „Znajdź wszystkie linki o cenach”',
   'sp.help_message': 'W czym mogę pomóc na tej stronie?',

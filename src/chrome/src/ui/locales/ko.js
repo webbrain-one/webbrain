@@ -72,9 +72,6 @@ export default {
   'sp.btn.send': '보내기',
   'sp.btn.stop.title': '에이전트 중지',
   'sp.btn.stop.label': '중지',
-
-  'sp.inspection': 'WebBrain이 이 페이지 분석을 시작했습니다',
-
   'sp.greeting.html': '안녕하세요! 저는 <strong>WebBrain</strong>입니다. 이 페이지를 읽고, 질문에 답하고, 버튼을 누르고, 양식을 채우며, 여러 단계의 작업을 자동화할 수 있습니다.',
   'sp.greeting.hint': '예: "이 페이지를 요약해 줘" 또는 "가격과 관련된 모든 링크를 찾아 줘"',
   'sp.help_message': '이 페이지에서 무엇을 도와드릴까요?',

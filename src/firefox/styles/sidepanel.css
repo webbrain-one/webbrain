@@ -479,34 +479,6 @@ body {
 }
 .api-badge span { font-weight: 600; }
 
-/* Page Inspection Banner */
-#inspection-banner {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 14px;
-  background: rgba(108, 99, 255, 0.08);
-  border-bottom: 1px solid rgba(108, 99, 255, 0.15);
-  font-size: 11px;
-  color: var(--accent);
-  font-weight: 500;
-  flex-shrink: 0;
-  animation: fadeIn 0.2s ease;
-}
-
-#inspection-banner.hidden {
-  display: none;
-}
-
-.inspection-dot {
-  width: 7px;
-  height: 7px;
-  background: var(--accent);
-  border-radius: 50%;
-  animation: pulse 1.5s infinite;
-  flex-shrink: 0;
-}
-
 /* Chat Container */
 #chat-container {
   flex: 1;

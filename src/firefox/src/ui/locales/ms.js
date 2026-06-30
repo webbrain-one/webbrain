@@ -72,9 +72,6 @@ export default {
   'sp.btn.send': 'Hantar',
   'sp.btn.stop.title': 'Hentikan ejen',
   'sp.btn.stop.label': 'Henti',
-
-  'sp.inspection': 'WebBrain mula meneliti halaman ini',
-
   'sp.greeting.html': 'Hai! Saya <strong>WebBrain</strong>. Saya boleh membaca halaman ini, menjawab soalan, mengklik butang, mengisi borang, dan mengautomatikkan tugas berbilang langkah.',
   'sp.greeting.hint': 'Cuba: "Rumuskan halaman ini" atau "Cari semua pautan tentang harga"',
   'sp.help_message': 'Bagaimana saya boleh membantu pada halaman ini?',

@@ -72,9 +72,6 @@ export default {
   'sp.btn.send': 'Gönder',
   'sp.btn.stop.title': 'Aracıyı durdur',
   'sp.btn.stop.label': 'Durdur',
-
-  'sp.inspection': 'WebBrain bu sayfayı incelemeye başladı',
-
   'sp.greeting.html': 'Merhaba! Ben <strong>WebBrain</strong>. Bu sayfayı okuyabilir, sorularını yanıtlayabilir, düğmelere tıklayabilir, formları doldurabilir ve çok adımlı görevleri otomatikleştirebilirim.',
   'sp.greeting.hint': 'Dene: «Bu sayfayı özetle» veya «Fiyatlandırmayla ilgili tüm bağlantıları bul»',
   'sp.help_message': 'Bu sayfayla ilgili nasıl yardımcı olabilirim?',

@@ -2437,7 +2437,6 @@ browser.runtime.onMessage.addListener((msg) => {
 
     case 'tool_call':
       showActivity(friendlyToolLabel(data.name, data.args));
-      showInspectionBanner(data.name);
       if (currentAssistantEl) {
         clearTransientAssistantTextForToolCall();
         if (verboseMode) {
@@ -3173,28 +3172,6 @@ browser.storage.onChanged.addListener((changes) => {
   if (changes.maxAgentSteps) agent_maxSteps = changes.maxAgentSteps.newValue;
 });
 
-// Page inspection banner
-const PAGE_TOOLS = new Set(['read_page', 'read_page_source', 'get_interactive_elements', 'click', 'type_text', 'scroll', 'extract_data', 'inspect_element_styles', 'wait_for_element', 'get_selection', 'execute_js', 'screenshot']);
-let inspectionBannerShown = false;
-
-function showInspectionBanner(toolName) {
-  if (inspectionBannerShown || !PAGE_TOOLS.has(toolName)) return;
-  inspectionBannerShown = true;
-
-  const banner = document.getElementById('inspection-banner');
-  if (banner) banner.classList.remove('hidden');
-
-  browser.browserAction?.setBadgeText?.({ text: '🔍' }).catch(() => {});
-  browser.browserAction?.setBadgeBackgroundColor?.({ color: '#6c63ff' }).catch(() => {});
-}
-
-function hideInspectionBanner() {
-  inspectionBannerShown = false;
-  const banner = document.getElementById('inspection-banner');
-  if (banner) banner.classList.add('hidden');
-  browser.browserAction?.setBadgeText?.({ text: '' }).catch(() => {});
-}
-
 function showActivity(text) {
   agentActivity.classList.remove('hidden');
   activityText.textContent = text;
@@ -3202,7 +3179,6 @@ function showActivity(text) {
 
 function hideActivity() {
   agentActivity.classList.add('hidden');
-  hideInspectionBanner();
 }
 
 function scrollToBottom() {
