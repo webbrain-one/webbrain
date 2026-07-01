@@ -945,6 +945,105 @@ export class Agent {
     return count;
   }
 
+  _normalizePublicMediaAttemptUrl(url) {
+    if (!url) return '';
+    try {
+      const u = new URL(url);
+      return `${u.origin}${u.pathname.replace(/\/+$/, '')}${u.search}`;
+    } catch {
+      return String(url || '').trim();
+    }
+  }
+
+  _downloadPublicMediaAttemptTargetChanged(toolName, toolResultMessage = null) {
+    if (this.constructor.NAV_TOOLS?.has?.(toolName) === true) return true;
+    if (this.constructor.NAV_PRONE_TOOLS?.has?.(toolName) !== true) return false;
+    try {
+      const parsed = JSON.parse(this._unwrapUntrusted(toolResultMessage?.content || ''));
+      return !!(parsed && typeof parsed === 'object' && parsed.pageUrlChanged === true);
+    } catch {
+      return false;
+    }
+  }
+
+  _downloadPublicMediaAttempt(messages, currentUrl = '') {
+    const list = Array.isArray(messages) ? messages : [];
+    const currentMediaUrl = this._normalizePublicMediaAttemptUrl(currentUrl);
+    let scanStart = 0;
+    for (let i = list.length - 1; i >= 0; i--) {
+      if (list[i]?.role === 'user' && !this._isAgentInjectedUserContent(list[i].content)) {
+        scanStart = i + 1;
+        break;
+      }
+    }
+    const toolCallById = new Map();
+    let attempted = false;
+    let succeeded = false;
+    let explicitAttempted = false;
+    for (const msg of list.slice(scanStart)) {
+      if (msg?.role === 'assistant' && Array.isArray(msg.tool_calls)) {
+        for (const tc of msg.tool_calls) {
+          if (!tc?.id) continue;
+          let args = null;
+          try { args = JSON.parse(tc.function?.arguments || tc.arguments || '{}'); } catch { args = null; }
+          toolCallById.set(tc.id, { name: tc.function?.name || tc.name || '', args });
+        }
+        continue;
+      }
+      if (msg?.role !== 'tool') continue;
+      const toolCall = toolCallById.get(msg.tool_call_id);
+      if (toolCall && toolCall.name !== 'download_public_media' && this._downloadPublicMediaAttemptTargetChanged(toolCall.name, msg)) {
+        attempted = false;
+        succeeded = false;
+        explicitAttempted = false;
+        continue;
+      }
+      if (toolCall?.name !== 'download_public_media') continue;
+      const explicitUrl = typeof toolCall.args?.url === 'string' ? toolCall.args.url.trim() : '';
+      const explicitMatchesCurrent = !!explicitUrl && !!currentMediaUrl && this._normalizePublicMediaAttemptUrl(explicitUrl) === currentMediaUrl;
+      explicitAttempted = !!explicitUrl && !explicitMatchesCurrent;
+      attempted = !explicitUrl || explicitMatchesCurrent;
+      let parsed = null;
+      try { parsed = JSON.parse(this._unwrapUntrusted(msg.content)); } catch { /* malformed result still counts as an attempt */ }
+      succeeded = attempted && !!(parsed && typeof parsed === 'object' && parsed.success === true);
+    }
+    return { attempted, succeeded, explicitAttempted };
+  }
+
+  _downloadPublicMediaArgsFromSocialArgs(args) {
+    const out = {};
+    if (args?.target === 'image' || args?.target === 'video') out.kind = args.target;
+    if (typeof args?.filename === 'string' && args.filename.trim()) out.filename = args.filename.trim();
+    return out;
+  }
+
+  async _downloadPublicMediaRedirectForSocial(tabId, fnName, fnArgs, allowedToolNames, messages) {
+    if (fnName !== 'download_social_media') return null;
+    if (!allowedToolNames?.has?.('download_public_media')) return null;
+    if (!this._skillToolForName('download_public_media')) return null;
+    if (fnArgs?.scroll === true || fnArgs?.mode === 'all' || Number(fnArgs?.limit || 0) > 1) return null;
+
+    const publicAttempt = this._downloadPublicMediaAttempt(messages, await this._currentUrl(tabId));
+    if (publicAttempt.succeeded) {
+      return {
+        success: true,
+        skipped: true,
+        skippedBecause: 'download_public_media_already_succeeded',
+        error: 'Skipped download_social_media because download_public_media already succeeded. Do not run the browser-side fallback unless the user asks for an additional download.',
+      };
+    }
+    if (publicAttempt.attempted || publicAttempt.explicitAttempted) return null;
+
+    return {
+      success: false,
+      wrongTool: true,
+      useTool: 'download_public_media',
+      fallbackTool: 'download_social_media',
+      suggestedArgs: this._downloadPublicMediaArgsFromSocialArgs(fnArgs),
+      error: 'download_social_media is the browser-side fallback. Because download_public_media is available, call download_public_media first for this public media download. If download_public_media fails, then call download_social_media.',
+    };
+  }
+
   /**
    * Synthesize a transparent summary when the agent hits the step limit
    * without producing a final answer. Walks the conversation to count
@@ -1666,6 +1765,19 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         onUpdate('warning', { message: `Use ${skillEndpointRedirect.useTool} instead of ${fnName} for this skill endpoint.` });
         continue;
       }
+      const mediaDownloadRedirect = await this._downloadPublicMediaRedirectForSocial(tabId, fnName, fnArgs, allowedToolNames, messages);
+      if (mediaDownloadRedirect) {
+        messages.push({
+          role: 'tool',
+          tool_call_id: tc.id,
+          content: JSON.stringify(mediaDownloadRedirect),
+        });
+        const message = mediaDownloadRedirect.skipped
+          ? 'Skipped download_social_media because download_public_media already succeeded.'
+          : 'Use download_public_media before download_social_media for this media download.';
+        onUpdate('warning', { message });
+        continue;
+      }
       if (isNetworkMutation(fnName, fnArgs) && !this.apiAllowedTabs.has(tabId)) {
         messages.push({
           role: 'tool',
@@ -1792,6 +1904,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         const beforeNorm = this._normalizeUrlPath(beforeUrl);
         const afterNorm = this._normalizeUrlPath(afterUrl);
         if (beforeNorm && afterNorm && beforeNorm !== afterNorm) {
+          if (toolResult && typeof toolResult === 'object') {
+            toolResult.pageUrlChanged = true;
+            toolResult.previousUrl = beforeUrl;
+            toolResult.currentUrl = afterUrl;
+          }
           // Explicit navigation tools (navigate / go_back / go_forward)
           // intentionally go somewhere — don't warn. For everything else
           // (click, execute_js, iframe_click) the nav is a side effect the
