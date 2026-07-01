@@ -868,10 +868,18 @@ export class Agent {
   }
 
   _downloadPublicMediaAttempt(messages) {
+    const list = Array.isArray(messages) ? messages : [];
+    let scanStart = 0;
+    for (let i = list.length - 1; i >= 0; i--) {
+      if (list[i]?.role === 'user' && !this._isAgentInjectedUserContent(list[i].content)) {
+        scanStart = i + 1;
+        break;
+      }
+    }
     const toolNameById = new Map();
     let attempted = false;
     let succeeded = false;
-    for (const msg of messages || []) {
+    for (const msg of list.slice(scanStart)) {
       if (msg?.role === 'assistant' && Array.isArray(msg.tool_calls)) {
         for (const tc of msg.tool_calls) {
           if (tc?.id) toolNameById.set(tc.id, tc.function?.name || tc.name || '');
@@ -882,9 +890,7 @@ export class Agent {
       attempted = true;
       let parsed = null;
       try { parsed = JSON.parse(this._unwrapUntrusted(msg.content)); } catch { /* malformed result still counts as an attempt */ }
-      if (parsed && typeof parsed === 'object' && (parsed.success === true || parsed.downloadId != null)) {
-        succeeded = true;
-      }
+      succeeded = !!(parsed && typeof parsed === 'object' && (parsed.success === true || parsed.downloadId != null));
     }
     return { attempted, succeeded };
   }

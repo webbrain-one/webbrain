@@ -9934,6 +9934,111 @@ test('agent prefers download_public_media before download_social_media when avai
     assert.equal(skipped.skipped, true, `${label}: duplicate fallback should be marked skipped`);
     assert.equal(skipped.skippedBecause, 'download_public_media_already_succeeded', `${label}: duplicate skip reason mismatch`);
 
+    const nextTurnAgent = new AgentClass({ getVisionProvider: async () => null });
+    nextTurnAgent.setCustomSkills([packagedFreeSkillzRecord(prefix)]);
+    nextTurnAgent._ensureGateSetting = async () => {};
+    nextTurnAgent._skipPermissionGate = true;
+    let nextTurnExecuted = false;
+    nextTurnAgent.executeTool = async () => {
+      nextTurnExecuted = true;
+      return { success: true };
+    };
+    const oldSuccessMessages = [
+      { role: 'user', content: 'Download the first public video.' },
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [{
+          id: 'old_public_success',
+          function: { name: 'download_public_media', arguments: '{"kind":"video"}' },
+        }],
+      },
+      {
+        role: 'tool',
+        tool_call_id: 'old_public_success',
+        content: nextTurnAgent._wrapUntrusted('download_public_media', JSON.stringify({ success: true, downloadId: 43 })),
+      },
+      { role: 'assistant', content: 'Downloaded.' },
+      { role: 'user', content: 'Download this different public video.' },
+    ];
+
+    await nextTurnAgent._executeToolBatch(
+      label === 'chrome' ? 4909 : 4910,
+      [{
+        id: 'social_new_turn',
+        function: { name: 'download_social_media', arguments: '{"target":"video"}' },
+      }],
+      oldSuccessMessages,
+      () => {},
+      { supportsVision: false },
+      '',
+      allowedTools,
+      5,
+    );
+
+    assert.equal(nextTurnExecuted, false, `${label}: old public success should not skip a later media request`);
+    const nextTurnRedirect = JSON.parse(oldSuccessMessages.at(-1).content);
+    assert.equal(nextTurnRedirect.wrongTool, true, `${label}: later media request should be redirected to public downloader first`);
+
+    const laterFailedAgent = new AgentClass({ getVisionProvider: async () => null });
+    laterFailedAgent.setCustomSkills([packagedFreeSkillzRecord(prefix)]);
+    laterFailedAgent._ensureGateSetting = async () => {};
+    laterFailedAgent._skipPermissionGate = true;
+    let laterFailedExecutedName = '';
+    laterFailedAgent.executeTool = async (_tabId, name) => {
+      laterFailedExecutedName = name;
+      return { success: true, completedCount: 1 };
+    };
+    const priorSuccessThenFailureMessages = [
+      { role: 'user', content: 'Download the first public video.' },
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [{
+          id: 'previous_public_success',
+          function: { name: 'download_public_media', arguments: '{"kind":"video"}' },
+        }],
+      },
+      {
+        role: 'tool',
+        tool_call_id: 'previous_public_success',
+        content: laterFailedAgent._wrapUntrusted('download_public_media', JSON.stringify({ success: true, downloadId: 44 })),
+      },
+      { role: 'assistant', content: 'Downloaded.' },
+      { role: 'user', content: 'Download this different public video.' },
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [{
+          id: 'current_public_failed',
+          function: { name: 'download_public_media', arguments: '{"kind":"video"}' },
+        }],
+      },
+      {
+        role: 'tool',
+        tool_call_id: 'current_public_failed',
+        content: laterFailedAgent._wrapUntrusted('download_public_media', JSON.stringify({ success: false, error: 'provider failed' })),
+      },
+    ];
+
+    await laterFailedAgent._executeToolBatch(
+      label === 'chrome' ? 4911 : 4912,
+      [{
+        id: 'social_after_later_fail',
+        function: { name: 'download_social_media', arguments: '{"target":"video"}' },
+      }],
+      priorSuccessThenFailureMessages,
+      () => {},
+      { supportsVision: false },
+      '',
+      allowedTools,
+      6,
+    );
+
+    assert.equal(laterFailedExecutedName, 'download_social_media', `${label}: later failed public attempt should allow browser fallback`);
+    const laterFallbackResult = JSON.parse(laterFailedAgent._unwrapUntrusted(priorSuccessThenFailureMessages.at(-1).content));
+    assert.equal(laterFallbackResult.completedCount, 1, `${label}: later fallback result missing`);
+
     const noSkillAgent = new AgentClass({ getVisionProvider: async () => null });
     noSkillAgent._ensureGateSetting = async () => {};
     noSkillAgent._skipPermissionGate = true;
