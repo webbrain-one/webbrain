@@ -1980,6 +1980,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           // are page-derived and get persisted as history for the next turn.
           content: this._wrapUntrusted(fnName, this._limitToolResult(toolResult)),
         });
+        // If `done` wasn't the last call in the batch, the remaining tool_calls
+        // in this assistant message still need matching tool results — otherwise
+        // the persisted conversation has orphaned tool_calls and the provider
+        // rejects the next turn with a 400. Mirror the abort / bulk-replay paths.
+        this._appendSyntheticToolResults(
+          tabId, toolCalls, toolIndex + 1, messages, onUpdate, step,
+          () => ({ success: false, skipped: true, error: 'skipped: run ended via done' })
+        );
         this._persist(tabId);
         return { action: 'return', value: finalResponse };
       }
@@ -7062,7 +7070,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
               format: 'png', quality: 100, fromSurface: true,
             })
           );
-          result.image = `data:image/png;base64,${shot.data}`;
+          // Route the screenshot through `_attachImage` (like the `screenshot`
+          // tool) so the batch loop strips it and re-attaches it as an
+          // image_url block. Left inline as `result.image`, the base64 blob
+          // blows past the tool-result char cap and gets truncated to garbage
+          // that the vision model can never read.
+          result._attachImage = `data:image/png;base64,${shot.data}`;
         } catch {
           result.screenshotFailed = true;
         }

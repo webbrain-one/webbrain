@@ -2213,6 +2213,26 @@
                 };
               }
             }
+            if (el.tagName === 'SELECT') {
+              // Native <select>: match the requested text against options by
+              // value, then by visible text (exact, then substring). A select's
+              // value can't be set through the INPUT prototype setter used below
+              // (Web IDL brand-check throws "Illegal invocation"), so handle it
+              // here with the HTMLSelectElement setter — mirrors _typeTextInner.
+              const needle = (text || '').trim();
+              const byValue = Array.from(el.options).find((o) => o.value === needle);
+              const byText = Array.from(el.options).find((o) => o.text.trim() === needle)
+                || Array.from(el.options).find((o) => o.text.trim().toLowerCase().includes(needle.toLowerCase()));
+              const match = byValue || byText;
+              if (!match) {
+                return { success: false, error: `No <option> matching "${text}" in select ref_id ${ref_id}.` };
+              }
+              const selSetter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value')?.set;
+              if (selSetter) selSetter.call(el, match.value); else el.value = match.value;
+              el.dispatchEvent(new Event('input', { bubbles: true }));
+              el.dispatchEvent(new Event('change', { bubbles: true }));
+              return { success: true, method: 'type_ax_select', ref_id, value: el.value, rect: typeRect };
+            }
             if (clear) el.value = '';
             // Use the native setter so React's synthetic event system picks it up.
             const proto = el.tagName === 'TEXTAREA'

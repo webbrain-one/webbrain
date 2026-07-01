@@ -89,6 +89,15 @@ const { sanitizeLink, sanitizeMarkdownLinks } = await import(
   'file://' + path.join(ROOT, 'src/chrome/src/ui/markdown-link.js').replace(/\\/g, '/')
 );
 
+// anthropic.js imports cleanly under Node (its chrome.* touches are lazy); we
+// only exercise the pure _convertMessages transform here.
+const { AnthropicProvider: AnthropicProviderCh } = await import(
+  'file://' + path.join(ROOT, 'src/chrome/src/providers/anthropic.js').replace(/\\/g, '/')
+);
+const { AnthropicProvider: AnthropicProviderFx } = await import(
+  'file://' + path.join(ROOT, 'src/firefox/src/providers/anthropic.js').replace(/\\/g, '/')
+);
+
 const {
   PLANNER_SYSTEM_PROMPT,
   PLANNER_API_REPLAY_RULE,
@@ -14951,5 +14960,54 @@ test('planner input: recent conversation digest is included for follow-up acts',
   const plainUser = noHistory.find((m) => m.role === 'user');
   assert.ok(!/Recent conversation/.test(plainUser.content), 'no history section when there is no prior context');
 });
+
+// ── Anthropic parallel tool_result merge (regression) ──────────────────────
+// One assistant turn emitting parallel tool_use calls must have ALL its
+// tool_result blocks combined into a SINGLE user message — otherwise the
+// Messages API rejects the consecutive user roles with a 400.
+for (const [label, Provider] of [['chrome', AnthropicProviderCh], ['firefox', AnthropicProviderFx]]) {
+  test(`anthropic (${label}): parallel tool results merge into one user message`, () => {
+    const provider = new Provider({});
+    const { messages } = provider._convertMessages([
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: 'hi' },
+      { role: 'assistant', content: '', tool_calls: [
+        { id: 't1', function: { name: 'a', arguments: '{}' } },
+        { id: 't2', function: { name: 'b', arguments: '{}' } },
+      ] },
+      { role: 'tool', tool_call_id: 't1', content: 'r1' },
+      { role: 'tool', tool_call_id: 't2', content: 'r2' },
+    ]);
+    // No two adjacent messages share the same role.
+    for (let i = 1; i < messages.length; i++) {
+      assert.notEqual(messages[i].role, messages[i - 1].role, `messages ${i - 1}/${i} must alternate roles`);
+    }
+    const toolMsg = messages.find(
+      (m) => m.role === 'user' && Array.isArray(m.content) && m.content[0]?.type === 'tool_result',
+    );
+    assert.ok(toolMsg, 'a merged tool_result user message exists');
+    assert.equal(toolMsg.content.length, 2, 'both tool_result blocks live in one user message');
+    assert.deepEqual(toolMsg.content.map((b) => b.tool_use_id), ['t1', 't2'], 'both tool_use_ids preserved in order');
+  });
+}
+
+// ── Recommended actions: symbol-only price triggers compare-price (regression) ─
+// A product page whose only price cue is a currency symbol must still surface
+// the compare-price action — the old `\b…\b` around the symbols could never match.
+for (const [label, build] of [['chrome', buildRecommendedActionsCh], ['firefox', buildRecommendedActionsFx]]) {
+  test(`recommended-actions (${label}): symbol-only price surfaces compare-price`, () => {
+    const pageInfo = {
+      url: 'https://www.amazon.com/dp/B0EXAMPLE',
+      title: 'Wireless Headphones',
+      description: 'Great sound. Total $50 today only.',
+    };
+    const actions = build(pageInfo);
+    assert.ok(actions.some((a) => a.id === 'compare-price'), 'compare-price offered for a $-only price');
+
+    // Non-shopping page with no price cue must NOT get the action.
+    const noPrice = build({ url: 'https://example.com/about', title: 'About us' });
+    assert.ok(!noPrice.some((a) => a.id === 'compare-price'), 'no compare-price without a shopping/price signal');
+  });
+}
 
 await run();

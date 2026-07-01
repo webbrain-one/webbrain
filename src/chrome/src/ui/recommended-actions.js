@@ -66,7 +66,11 @@ function hasCartOrPriceSignal(pageInfo = {}) {
     ...(pageInfo.links || []).slice(0, 40).flatMap((link) => [link?.text, link?.href]),
     ...(pageInfo.forms || []).flatMap((form) => (form?.inputs || []).flatMap((input) => [input?.name, input?.id, input?.placeholder])),
   ].filter(Boolean).join(' ');
-  return /\b(add to cart|buy now|checkout|basket|cart|price|discount|sale|shipping|₺|\$|€|£)\b/i.test(haystack);
+  // Currency symbols are non-word characters, so `\b…\b` around them can never
+  // match — keep the word-boundary anchors for the keywords and test the
+  // symbols separately so a symbol-only price (e.g. "Total $50") still registers.
+  return /\b(add to cart|buy now|checkout|basket|cart|price|discount|sale|shipping)\b/i.test(haystack)
+    || /[₺$€£]/.test(haystack);
 }
 
 function communicationSignal(pageInfo = {}, { includeUrl = true } = {}) {
