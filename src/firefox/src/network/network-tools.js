@@ -436,6 +436,44 @@ function markUnsafeSkillDownload(info, expectedUrl) {
   };
 }
 
+async function validateSkillDownloadStartUrl(url, expectedUrl) {
+  const initialUrlCheck = validateSkillDownloadFinalUrl(url, expectedUrl);
+  if (!initialUrlCheck.ok) {
+    return { success: false, blocked: true, finalUrl: url, error: initialUrlCheck.error };
+  }
+  try {
+    const res = await fetch(url, {
+      method: 'HEAD',
+      credentials: 'omit',
+      redirect: 'manual',
+      cache: 'no-store',
+    });
+    if (res?.type === 'opaqueredirect' || isHttpRedirectStatus(res?.status)) {
+      return {
+        success: false,
+        blocked: true,
+        status: res.status,
+        finalUrl: url,
+        error: 'Skill download redirects are not allowed because the final URL cannot be validated before saving.',
+      };
+    }
+    const responseUrl = res.url || url;
+    const responseUrlCheck = validateSkillDownloadFinalUrl(responseUrl, expectedUrl);
+    if (!responseUrlCheck.ok) {
+      return {
+        success: false,
+        blocked: true,
+        status: res.status,
+        finalUrl: responseUrl,
+        error: responseUrlCheck.error,
+      };
+    }
+    return { success: true, status: res.status, finalUrl: responseUrl };
+  } catch (e) {
+    return { success: false, finalUrl: url, error: `Skill download preflight failed: ${e.message}` };
+  }
+}
+
 async function callBrowserDownloadAction(name, ...args) {
   const fn = browser.downloads?.[name];
   if (typeof fn !== 'function') return false;
@@ -504,6 +542,16 @@ function scheduleSkillDownloadCleanup(downloadId, cleanupUrl, endpoint, tool, ex
 }
 
 async function downloadSkillFile(url, filename, waitMs = 60000) {
+  const startUrlCheck = await validateSkillDownloadStartUrl(url, url);
+  if (!startUrlCheck.success) {
+    return {
+      success: false,
+      ...(startUrlCheck.blocked ? { blocked: true } : {}),
+      ...(startUrlCheck.status != null ? { status: startUrlCheck.status } : {}),
+      finalUrl: startUrlCheck.finalUrl || url,
+      error: startUrlCheck.error,
+    };
+  }
   const opts = { url, conflictAction: 'uniquify' };
   const safeName = safeDownloadFilename(filename);
   if (safeName) opts.filename = safeName;

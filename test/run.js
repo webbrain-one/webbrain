@@ -2905,6 +2905,9 @@ test('executeHttpSkillTool runs FreeSkillz media download jobs and cleans up', a
         if (url === 'https://freeskillz.xyz/v1/media/jobs/job_123' && opts.method === 'GET') {
           return jsonResponse(200, { status: 'complete' });
         }
+        if (url === 'https://freeskillz.xyz/v1/media/jobs/job_123/file' && opts.method === 'HEAD') {
+          return jsonResponse(200, {});
+        }
         if (url === 'https://freeskillz.xyz/v1/media/jobs/job_123' && opts.method === 'DELETE') {
           return jsonResponse(204, {});
         }
@@ -2980,6 +2983,7 @@ test('executeHttpSkillTool runs FreeSkillz media download jobs and cleans up', a
         [
           'POST https://freeskillz.xyz/v1/media/jobs',
           'GET https://freeskillz.xyz/v1/media/jobs/job_123',
+          'HEAD https://freeskillz.xyz/v1/media/jobs/job_123/file',
           'DELETE https://freeskillz.xyz/v1/media/jobs/job_123',
         ],
         `${label}: wrong provider lifecycle`,
@@ -3036,6 +3040,9 @@ test('executeHttpSkillTool defers cleanup while skill downloads are still runnin
         }
         if (url === 'https://freeskillz.xyz/v1/media/jobs/job_pending' && opts.method === 'GET') {
           return jsonResponse(200, { status: 'complete' });
+        }
+        if (url === 'https://freeskillz.xyz/v1/media/jobs/job_pending/file' && opts.method === 'HEAD') {
+          return jsonResponse(200, {});
         }
         if (url === 'https://freeskillz.xyz/v1/media/jobs/job_pending' && opts.method === 'DELETE') {
           return jsonResponse(204, {});
@@ -3114,6 +3121,7 @@ test('executeHttpSkillTool defers cleanup while skill downloads are still runnin
         [
           'POST https://freeskillz.xyz/v1/media/jobs',
           'GET https://freeskillz.xyz/v1/media/jobs/job_pending',
+          'HEAD https://freeskillz.xyz/v1/media/jobs/job_pending/file',
         ],
         `${label}: pending local download should not delete provider job`,
       );
@@ -3129,6 +3137,7 @@ test('executeHttpSkillTool defers cleanup while skill downloads are still runnin
         [
           'POST https://freeskillz.xyz/v1/media/jobs',
           'GET https://freeskillz.xyz/v1/media/jobs/job_pending',
+          'HEAD https://freeskillz.xyz/v1/media/jobs/job_pending/file',
           'DELETE https://freeskillz.xyz/v1/media/jobs/job_pending',
         ],
         `${label}: completed local download should clean up provider job`,
@@ -3172,6 +3181,9 @@ test('executeHttpSkillTool rejects unsafe final URLs for skill downloads and cle
         }
         if (url === 'https://freeskillz.xyz/v1/media/jobs/job_unsafe' && opts.method === 'GET') {
           return jsonResponse(200, { status: 'complete' });
+        }
+        if (url === 'https://freeskillz.xyz/v1/media/jobs/job_unsafe/file' && opts.method === 'HEAD') {
+          return jsonResponse(200, {});
         }
         if (url === 'https://freeskillz.xyz/v1/media/jobs/job_unsafe' && opts.method === 'DELETE') {
           return jsonResponse(204, {});
@@ -3260,9 +3272,98 @@ test('executeHttpSkillTool rejects unsafe final URLs for skill downloads and cle
         [
           'POST https://freeskillz.xyz/v1/media/jobs',
           'GET https://freeskillz.xyz/v1/media/jobs/job_unsafe',
+          'HEAD https://freeskillz.xyz/v1/media/jobs/job_unsafe/file',
           'DELETE https://freeskillz.xyz/v1/media/jobs/job_unsafe',
         ],
         `${label}: unsafe local download should still clean up provider job`,
+      );
+    }
+  } finally {
+    if (originalFetch === undefined) delete globalThis.fetch;
+    else globalThis.fetch = originalFetch;
+    if (originalChrome === undefined) delete globalThis.chrome;
+    else globalThis.chrome = originalChrome;
+    if (originalBrowser === undefined) delete globalThis.browser;
+    else globalThis.browser = originalBrowser;
+  }
+});
+
+test('executeHttpSkillTool blocks skill download redirects before starting browser downloads', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalChrome = globalThis.chrome;
+  const originalBrowser = globalThis.browser;
+  try {
+    for (const [label, prefix, executeTool, normalizeSkills, buildRegistry] of [
+      ['chrome', 'src/chrome', executeHttpSkillToolCh, normalizeCustomSkillsCh, buildSkillToolRegistryCh],
+      ['firefox', 'src/firefox', executeHttpSkillToolFx, normalizeCustomSkillsFx, buildSkillToolRegistryFx],
+    ]) {
+      const skills = normalizeSkills([packagedFreeSkillzRecord(prefix)]);
+      const tool = buildRegistry(skills).get('download_public_media');
+      assert.ok(tool, `${label}: download_public_media manifest tool missing`);
+
+      const providerCalls = [];
+      const downloadCalls = [];
+      const jsonResponse = (status, body) => ({
+        ok: status >= 200 && status < 300,
+        status,
+        text: async () => JSON.stringify(body),
+      });
+      globalThis.fetch = async (url, opts = {}) => {
+        providerCalls.push({ url, opts });
+        if (url === 'https://freeskillz.xyz/v1/media/jobs' && opts.method === 'POST') {
+          return jsonResponse(200, { job_id: 'job_redirect' });
+        }
+        if (url === 'https://freeskillz.xyz/v1/media/jobs/job_redirect' && opts.method === 'GET') {
+          return jsonResponse(200, { status: 'complete' });
+        }
+        if (url === 'https://freeskillz.xyz/v1/media/jobs/job_redirect/file' && opts.method === 'HEAD') {
+          return jsonResponse(302, {});
+        }
+        if (url === 'https://freeskillz.xyz/v1/media/jobs/job_redirect' && opts.method === 'DELETE') {
+          return jsonResponse(204, {});
+        }
+        throw new Error(`unexpected provider call: ${opts.method || 'GET'} ${url}`);
+      };
+
+      if (label === 'chrome') {
+        delete globalThis.browser;
+        globalThis.chrome = {
+          runtime: { lastError: null },
+          downloads: {
+            download(opts, cb) {
+              downloadCalls.push(opts);
+              cb(7401);
+            },
+          },
+        };
+      } else {
+        delete globalThis.chrome;
+        globalThis.browser = {
+          downloads: {
+            async download(opts) {
+              downloadCalls.push(opts);
+              return 8401;
+            },
+          },
+        };
+      }
+
+      const result = await executeTool(tool, { url: 'https://www.instagram.com/reel/abc/' });
+      assert.equal(result.success, false, `${label}: redirecting file endpoint should fail`);
+      assert.equal(result.blocked, true, `${label}: redirecting file endpoint should be blocked`);
+      assert.match(result.error, /redirects are not allowed/i, `${label}: redirect error should be explicit`);
+      assert.equal(result.finalUrl, 'https://freeskillz.xyz/v1/media/jobs/job_redirect/file', `${label}: redirect preflight should report original URL`);
+      assert.equal(result.cleanup?.success, true, `${label}: provider job should be cleaned up after blocked preflight`);
+      assert.equal(downloadCalls.length, 0, `${label}: browser download must not start after redirect preflight`);
+      assert.deepEqual(
+        providerCalls.map(call => `${call.opts.method || 'GET'} ${call.url}`),
+        [
+          'POST https://freeskillz.xyz/v1/media/jobs',
+          'GET https://freeskillz.xyz/v1/media/jobs/job_redirect',
+          'HEAD https://freeskillz.xyz/v1/media/jobs/job_redirect/file',
+          'DELETE https://freeskillz.xyz/v1/media/jobs/job_redirect',
+        ],
+        `${label}: redirect preflight lifecycle mismatch`,
       );
     }
   } finally {
