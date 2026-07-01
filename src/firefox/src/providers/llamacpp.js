@@ -17,6 +17,13 @@ export class LlamaCppProvider extends BaseLLMProvider {
     return this.config.model || null;
   }
 
+  get promptTier() {
+    const tier = this.config.promptTier;
+    if (tier === 'compact' || tier === 'mid' || tier === 'full') return tier;
+    if (this.config.useCompactPrompt) return 'compact';
+    return 'mid';
+  }
+
   get supportsTools() {
     return true; // llama.cpp server supports function calling
   }

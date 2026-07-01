@@ -175,7 +175,7 @@
 
 <div class="container">
   <h1>Privacy Policy</h1>
-  <p class="updated">Last updated: June 18, 2026</p>
+  <p class="updated">Last updated: June 30, 2026</p>
 
   <div class="highlight-box">
     <p><strong>TL;DR:</strong> WebBrain can run with local or bring-your-own API providers, where your keys stay on your device and requests go directly to the provider you select. If you use WebBrain Cloud, the request is sent through our API so we can provide the hosted model, enforce quotas, process subscriptions, and keep privacy-preserving debug logs. WebBrain Cloud does not store prompt text, page content, screenshots, uploaded image data, or model responses by default.</p>
@@ -233,6 +233,9 @@
 
   <h2>Act Mode</h2>
   <p>When you enable Act mode, WebBrain can interact with web pages on your behalf (clicking, typing, scrolling, navigating). This is done via content scripts running in your browser — no data about these actions is sent to us. All actions are performed locally and are visible to you in real time. Act mode requires explicit activation and displays a visible warning banner.</p>
+
+  <h2>Bundled Skills</h2>
+  <p>WebBrain ships with one skill enabled by default: <strong>FreeSkillz.xyz</strong>, a first-party service we operate. It can read YouTube video transcripts and resolve or download public media from the hosts declared in the bundled skill manifest. When you use these tools, WebBrain sends only the current or specified URL plus declared options such as transcript language, media kind, maximum height, or filename hint to <code>freeskillz.xyz</code>. It does not receive your page content, chat history, or browsing history. Public media downloads create a short-lived provider job, save the completed file through the browser Downloads API, and then ask the provider to delete the job. You can remove this skill at any time in Settings → Skills, and any additional skills you import yourself are off by default and run only against the HTTPS endpoint they declare.</p>
 
   <h2>Cookies &amp; Analytics</h2>
   <p>The WebBrain browser extension does not use cookies. The webbrain.one website uses Plausible Analytics for aggregate, privacy-friendly page-view metrics. There are no ads or tracking pixels. WebBrain Cloud API request logs are separate from website analytics.</p>

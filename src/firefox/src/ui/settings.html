@@ -67,6 +67,7 @@
     /* Tab bar — sticky so it survives long provider lists. */
     .tabs {
       display: flex;
+      flex-wrap: wrap;
       gap: 2px;
       margin: 4px 0 20px 0;
       padding: 4px;
@@ -78,7 +79,7 @@
       z-index: 10;
     }
     .tab-btn {
-      flex: 1;
+      flex: 1 1 104px;
       background: transparent;
       color: var(--text2);
       border: none;
@@ -101,6 +102,58 @@
     /* Kill the top margin on section headers inside panels so they don't
        double up with the tab-bar spacing. */
     .tab-panel h2:first-of-type { margin-top: 0; }
+
+    .settings-search {
+      margin: 0 0 14px;
+    }
+    .settings-search input {
+      width: 100%;
+      background: var(--bg2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font: inherit;
+      font-size: 13px;
+      outline: none;
+    }
+    .settings-search input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(108,99,255,0.22);
+    }
+    .general-search-empty {
+      color: var(--text2);
+      font-size: 12px;
+      padding: 8px 2px 14px;
+    }
+    .general-search-hidden { display: none !important; }
+
+    .advanced-settings {
+      margin: 22px 0 32px;
+      padding: 16px 0 22px;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+    .advanced-settings summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: var(--text);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 700;
+      list-style: none;
+      user-select: none;
+    }
+    .advanced-settings summary::-webkit-details-marker { display: none; }
+    .advanced-settings summary::after {
+      content: '+';
+      color: var(--text2);
+      font-size: 18px;
+      line-height: 1;
+    }
+    .advanced-settings[open] summary::after { content: '-'; }
+    .advanced-settings-body { margin-top: 12px; }
 
     .provider-card {
       background: var(--bg2);
@@ -213,7 +266,7 @@
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
-    .field input, .field select {
+    .field input, .field select, .field textarea {
       width: 100%;
       background: var(--bg3);
       border: 1px solid var(--border);
@@ -225,7 +278,12 @@
       outline: none;
       transition: border-color 0.2s;
     }
-    .field input:focus, .field select:focus {
+    .field textarea {
+      min-height: 170px;
+      line-height: 1.5;
+      resize: vertical;
+    }
+    .field input:focus, .field select:focus, .field textarea:focus {
       border-color: var(--accent);
     }
     .field input[type="password"] {
@@ -286,6 +344,7 @@
     }
     .setting-info {
       flex: 1;
+      min-width: 0;
     }
     .setting-label {
       font-size: 13px;
@@ -296,6 +355,12 @@
       font-size: 11px;
       color: var(--text2);
       line-height: 1.4;
+    }
+    .skill-source {
+      max-width: 340px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .toggle {
@@ -427,13 +492,16 @@
     <button class="tab-btn" type="button" role="tab" data-tab="display" data-i18n="st.tab.display"></button>
     <button class="tab-btn active" type="button" role="tab" data-tab="providers" data-i18n="st.tab.providers"></button>
     <button class="tab-btn" type="button" role="tab" data-tab="multimodal" data-i18n="st.tab.multimodal"></button>
-    <button class="tab-btn" type="button" role="tab" data-tab="profile" data-i18n="st.tab.profile"></button>
-    <button class="tab-btn" type="button" role="tab" data-tab="captcha" data-i18n="st.tab.captcha"></button>
+    <button class="tab-btn" type="button" role="tab" data-tab="skills" data-i18n="st.tab.skills"></button>
     <button class="tab-btn" type="button" role="tab" data-tab="permissions" data-i18n="st.tab.permissions"></button>
   </nav>
 
   <section class="tab-panel" data-panel="display" role="tabpanel">
     <div id="display-settings">
+      <div class="settings-search">
+        <input type="search" id="input-general-search" autocomplete="off" spellcheck="false" data-i18n-placeholder="st.display.search.placeholder">
+      </div>
+      <div class="general-search-empty" id="general-search-empty" hidden data-i18n="st.display.search.empty"></div>
       <div class="setting-row">
         <div class="setting-info">
           <div class="setting-label" data-i18n="st.display.language.label"></div>
@@ -459,105 +527,6 @@
         </div>
         <label class="toggle">
           <input type="checkbox" id="toggle-verbose">
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-      <div class="setting-row">
-        <div class="setting-info">
-          <div class="setting-label" data-i18n="st.display.screenshot.label"></div>
-          <div class="setting-desc" data-i18n="st.display.screenshot.desc"></div>
-        </div>
-        <label class="toggle">
-          <input type="checkbox" id="toggle-screenshot-fallback">
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-      <div class="setting-row">
-        <div class="setting-info">
-          <div class="setting-label" data-i18n="st.display.site_adapters.label"></div>
-          <div class="setting-desc" data-i18n="st.display.site_adapters.desc"></div>
-        </div>
-        <label class="toggle">
-          <input type="checkbox" id="toggle-site-adapters" checked>
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-      <div class="setting-row">
-        <div class="setting-info">
-          <div class="setting-label" data-i18n="st.display.api_mutation_observer.label"></div>
-          <div class="setting-desc" data-i18n="st.display.api_mutation_observer.desc"></div>
-        </div>
-        <label class="toggle">
-          <input type="checkbox" id="toggle-api-mutation-observer">
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-      <div class="setting-row">
-        <div class="setting-info">
-          <div class="setting-label" data-i18n="st.display.auto_screenshot.label"></div>
-          <div class="setting-desc" data-i18n="st.display.auto_screenshot.desc"></div>
-        </div>
-        <select id="select-auto-screenshot" style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-family:inherit;cursor:pointer;">
-          <option value="off" data-i18n="st.display.auto_screenshot.off"></option>
-          <option value="navigation" data-i18n="st.display.auto_screenshot.navigation"></option>
-          <option value="state_change" data-i18n="st.display.auto_screenshot.state_change"></option>
-          <option value="every_step" data-i18n="st.display.auto_screenshot.every_step"></option>
-        </select>
-      </div>
-      <div class="setting-row">
-        <div class="setting-info">
-          <div class="setting-label" data-i18n="st.display.tracing.label"></div>
-          <div class="setting-desc" data-i18n-html="st.display.tracing.desc_html"></div>
-        </div>
-        <label class="toggle">
-          <input type="checkbox" id="toggle-tracing">
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-      <div class="setting-row">
-        <div class="setting-info">
-          <div class="setting-label" data-i18n="st.display.cost_session_limit.label"></div>
-          <div class="setting-desc" data-i18n="st.display.cost_session_limit.desc"></div>
-        </div>
-        <label style="display:flex;align-items:center;gap:4px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--text2);font-size:12px;">
-          <span>$</span>
-          <input type="number" id="input-cost-session-limit" min="0" step="0.01" value="10"
-                 style="width:76px;background:transparent;border:0;color:var(--text);font:inherit;outline:none;">
-        </label>
-      </div>
-      <div class="setting-row">
-        <div class="setting-info">
-          <div class="setting-label"><span data-i18n="st.display.cost_total_limit.label"></span> <span id="cost-spent-value" style="color:var(--accent);font-weight:700;margin-left:4px;">$0.00 / $10.00</span></div>
-          <div class="setting-desc" data-i18n="st.display.cost_total_limit.desc"></div>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
-          <label style="display:flex;align-items:center;gap:4px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--text2);font-size:12px;">
-            <span>$</span>
-            <input type="number" id="input-cost-total-limit" min="0" step="0.01" value="10"
-                   style="width:76px;background:transparent;border:0;color:var(--text);font:inherit;outline:none;">
-          </label>
-          <button type="button" id="btn-reset-cost-spend"
-                  style="background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;"
-                  data-i18n="st.display.cost_reset"></button>
-        </div>
-      </div>
-      <div class="setting-row">
-        <div class="setting-info">
-          <div class="setting-label" data-i18n="st.display.strict_secret.label"></div>
-          <div class="setting-desc" data-i18n="st.display.strict_secret.desc"></div>
-        </div>
-        <label class="toggle">
-          <input type="checkbox" id="toggle-strict-secret">
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-      <div class="setting-row">
-        <div class="setting-info">
-          <div class="setting-label" data-i18n="st.display.allow_local_network.label"></div>
-          <div class="setting-desc" data-i18n="st.display.allow_local_network.desc"></div>
-        </div>
-        <label class="toggle">
-          <input type="checkbox" id="toggle-allow-local-network">
           <span class="toggle-slider"></span>
         </label>
       </div>
@@ -637,6 +606,170 @@
            style="background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;text-decoration:none;white-space:nowrap;"
            data-i18n="st.display.traces_link.open"></a>
       </div>
+
+      <details class="advanced-settings">
+        <summary data-i18n="st.display.advanced"></summary>
+        <div class="advanced-settings-body">
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-label" data-i18n="st.display.screenshot.label"></div>
+              <div class="setting-desc" data-i18n="st.display.screenshot.desc"></div>
+            </div>
+            <label class="toggle">
+              <input type="checkbox" id="toggle-screenshot-fallback">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-label" data-i18n="st.display.site_adapters.label"></div>
+              <div class="setting-desc" data-i18n="st.display.site_adapters.desc"></div>
+            </div>
+            <label class="toggle">
+              <input type="checkbox" id="toggle-site-adapters" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-label" data-i18n="st.display.api_mutation_observer.label"></div>
+              <div class="setting-desc" data-i18n="st.display.api_mutation_observer.desc"></div>
+            </div>
+            <label class="toggle">
+              <input type="checkbox" id="toggle-api-mutation-observer">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-label" data-i18n="st.display.auto_screenshot.label"></div>
+              <div class="setting-desc" data-i18n="st.display.auto_screenshot.desc"></div>
+            </div>
+            <select id="select-auto-screenshot" style="background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-family:inherit;cursor:pointer;">
+              <option value="off" data-i18n="st.display.auto_screenshot.off"></option>
+              <option value="navigation" data-i18n="st.display.auto_screenshot.navigation"></option>
+              <option value="state_change" data-i18n="st.display.auto_screenshot.state_change"></option>
+              <option value="every_step" data-i18n="st.display.auto_screenshot.every_step"></option>
+            </select>
+          </div>
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-label" data-i18n="st.display.tracing.label"></div>
+              <div class="setting-desc" data-i18n-html="st.display.tracing.desc_html"></div>
+            </div>
+            <label class="toggle">
+              <input type="checkbox" id="toggle-tracing">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-label" data-i18n="st.display.cost_session_limit.label"></div>
+              <div class="setting-desc" data-i18n="st.display.cost_session_limit.desc"></div>
+            </div>
+            <label style="display:flex;align-items:center;gap:4px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--text2);font-size:12px;">
+              <span>$</span>
+              <input type="number" id="input-cost-session-limit" min="0" step="0.01" value="10"
+                     style="width:76px;background:transparent;border:0;color:var(--text);font:inherit;outline:none;">
+            </label>
+          </div>
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-label"><span data-i18n="st.display.cost_total_limit.label"></span> <span id="cost-spent-value" style="color:var(--accent);font-weight:700;margin-left:4px;">$0.00 / $10.00</span></div>
+              <div class="setting-desc" data-i18n="st.display.cost_total_limit.desc"></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
+              <label style="display:flex;align-items:center;gap:4px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--text2);font-size:12px;">
+                <span>$</span>
+                <input type="number" id="input-cost-total-limit" min="0" step="0.01" value="10"
+                       style="width:76px;background:transparent;border:0;color:var(--text);font:inherit;outline:none;">
+              </label>
+              <button type="button" id="btn-reset-cost-spend"
+                      style="background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;"
+                      data-i18n="st.display.cost_reset"></button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-label" data-i18n="st.display.strict_secret.label"></div>
+              <div class="setting-desc" data-i18n="st.display.strict_secret.desc"></div>
+            </div>
+            <label class="toggle">
+              <input type="checkbox" id="toggle-strict-secret">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-label" data-i18n="st.display.allow_local_network.label"></div>
+              <div class="setting-desc" data-i18n="st.display.allow_local_network.desc"></div>
+            </div>
+            <label class="toggle">
+              <input type="checkbox" id="toggle-allow-local-network">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="provider-card" id="profile-card">
+            <div style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.55;" data-i18n-html="st.profile.desc_html"></div>
+
+            <div class="setting-row" style="margin-bottom:12px;">
+              <div class="setting-info">
+                <div class="setting-label" data-i18n="st.profile.enabled.label"></div>
+                <div class="setting-desc" data-i18n="st.profile.enabled.desc"></div>
+              </div>
+              <label class="toggle">
+                <input type="checkbox" id="toggle-profile-enabled">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+
+            <div class="field">
+              <label data-i18n="st.profile.text.label"></label>
+              <textarea id="profile-text"
+                        rows="8"
+                        data-i18n-placeholder="st.profile.text.placeholder"
+                        style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:10px 12px;font-size:13px;font-family:inherit;line-height:1.5;outline:none;resize:vertical;"></textarea>
+            </div>
+            <div class="btn-row">
+              <button class="btn-primary" id="btn-save-profile" data-i18n="st.profile.save"></button>
+              <button class="btn-secondary" id="btn-clear-profile" data-i18n="st.profile.clear"></button>
+            </div>
+            <div class="test-result" id="test-profile"></div>
+
+            <div class="info-box" style="margin-top:16px;" data-i18n-html="st.profile.security_html"></div>
+          </div>
+
+          <div class="provider-card" id="captcha-card">
+            <div style="font-size:12px;color:var(--text2);margin-bottom:14px;line-height:1.55;" data-i18n-html="st.captcha.desc_html"></div>
+
+            <div class="setting-row" style="margin-bottom:12px;">
+              <div class="setting-info">
+                <div class="setting-label" data-i18n="st.captcha.enabled.label"></div>
+                <div class="setting-desc" data-i18n="st.captcha.enabled.desc"></div>
+              </div>
+              <label class="toggle">
+                <input type="checkbox" id="toggle-captcha-enabled">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+
+            <div class="field">
+              <label data-i18n="st.captcha.api_key.label"></label>
+              <input type="password" id="captcha-api-key" placeholder="CAP-XXXXXXXXXXXXXXXXXXXX">
+            </div>
+
+            <div class="btn-row">
+              <button class="btn-primary" id="btn-save-captcha" data-i18n="st.captcha.save"></button>
+              <button class="btn-secondary" id="btn-test-captcha" data-i18n="st.captcha.check_balance"></button>
+              <button class="btn-secondary" id="btn-clear-captcha" data-i18n="st.captcha.clear"></button>
+            </div>
+            <div class="test-result" id="test-captcha"></div>
+
+            <div class="info-box" style="margin-top:16px;" data-i18n-html="st.captcha.security_html"></div>
+          </div>
+        </div>
+      </details>
     </div>
   </section>
 
@@ -694,67 +827,37 @@
     </div>
   </section>
 
-  <section class="tab-panel" data-panel="profile" role="tabpanel">
-    <div class="provider-card" id="profile-card">
-      <div style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.55;" data-i18n-html="st.profile.desc_html"></div>
-
-      <div class="setting-row" style="margin-bottom:12px;">
-        <div class="setting-info">
-          <div class="setting-label" data-i18n="st.profile.enabled.label"></div>
-          <div class="setting-desc" data-i18n="st.profile.enabled.desc"></div>
-        </div>
-        <label class="toggle">
-          <input type="checkbox" id="toggle-profile-enabled">
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-
+  <section class="tab-panel" data-panel="skills" role="tabpanel">
+    <div class="provider-card" id="skills-card">
+      <div style="font-size:12px;color:var(--text2);margin-bottom:14px;line-height:1.55;" data-i18n-html="st.skills.desc_html"></div>
       <div class="field">
-        <label data-i18n="st.profile.text.label"></label>
-        <textarea id="profile-text"
-                  rows="8"
-                  data-i18n-placeholder="st.profile.text.placeholder"
-                  style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:10px 12px;font-size:13px;font-family:inherit;line-height:1.5;outline:none;resize:vertical;"></textarea>
+        <label data-i18n="st.skills.name.label"></label>
+        <input type="text" id="skill-name" data-i18n-placeholder="st.skills.name.placeholder">
+      </div>
+      <div class="field">
+        <label data-i18n="st.skills.url.label"></label>
+        <input type="url" id="skill-url" placeholder="https://example.com/skill.md">
       </div>
       <div class="btn-row">
-        <button class="btn-primary" id="btn-save-profile" data-i18n="st.profile.save"></button>
-        <button class="btn-secondary" id="btn-clear-profile" data-i18n="st.profile.clear"></button>
+        <button class="btn-primary" id="btn-add-skill-url" data-i18n="st.skills.add_url"></button>
       </div>
-      <div class="test-result" id="test-profile"></div>
-
-      <div class="info-box" style="margin-top:16px;" data-i18n-html="st.profile.security_html"></div>
-    </div>
-  </section>
-
-  <section class="tab-panel" data-panel="captcha" role="tabpanel">
-    <div class="provider-card" id="captcha-card">
-      <div style="font-size:12px;color:var(--text2);margin-bottom:14px;line-height:1.55;" data-i18n-html="st.captcha.desc_html"></div>
-
-      <div class="setting-row" style="margin-bottom:12px;">
-        <div class="setting-info">
-          <div class="setting-label" data-i18n="st.captcha.enabled.label"></div>
-          <div class="setting-desc" data-i18n="st.captcha.enabled.desc"></div>
-        </div>
-        <label class="toggle">
-          <input type="checkbox" id="toggle-captcha-enabled">
-          <span class="toggle-slider"></span>
-        </label>
+      <div class="field" style="margin-top:16px;">
+        <label data-i18n="st.skills.text.label"></label>
+        <textarea id="skill-text" rows="10" data-i18n-placeholder="st.skills.text.placeholder"></textarea>
       </div>
-
-      <div class="field">
-        <label data-i18n="st.captcha.api_key.label"></label>
-        <input type="password" id="captcha-api-key" placeholder="CAP-XXXXXXXXXXXXXXXXXXXX">
-      </div>
-
       <div class="btn-row">
-        <button class="btn-primary" id="btn-save-captcha" data-i18n="st.captcha.save"></button>
-        <button class="btn-secondary" id="btn-test-captcha" data-i18n="st.captcha.check_balance"></button>
-        <button class="btn-secondary" id="btn-clear-captcha" data-i18n="st.captcha.clear"></button>
+        <button class="btn-primary" id="btn-add-skill-text" data-i18n="st.skills.add_text"></button>
+        <button class="btn-secondary" id="btn-clear-skill-form" data-i18n="st.skills.clear_form"></button>
       </div>
-      <div class="test-result" id="test-captcha"></div>
-
-      <div class="info-box" style="margin-top:16px;" data-i18n-html="st.captcha.security_html"></div>
+      <div class="test-result" id="skills-result"></div>
     </div>
+
+    <div class="provider-card" id="skills-list-card">
+      <div class="setting-label" style="margin-bottom:10px;" data-i18n="st.skills.list.heading"></div>
+      <div id="skills-list"></div>
+    </div>
+
+    <div class="info-box" data-i18n-html="st.skills.security_html"></div>
   </section>
 
   <section class="tab-panel" data-panel="permissions" role="tabpanel">

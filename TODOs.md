@@ -74,7 +74,6 @@ Per-model-class prompt selection wired through `_getActPrompt()`. Tier inferred 
 The Firefox build is meaningfully weaker than Chrome (already noted in the README's "Known Issues"). Some gaps are platform-real (no CDP, no Manifest V3 service worker), but several are just unported features. Worth ticking off one at a time:
 
 - **`upload_file`** — not yet in Firefox. The dispatcher path exists for downloads but not for uploads. Likely a few hours of work; webextensions has the same `<input type="file">` mechanics.
-- **Conversation persistence across background restarts** — Chrome persists per-tab chats to `chrome.storage.session`; Firefox keeps them in-memory only. This is why the scratchpad port deliberately skips the `_persist` call. Real fix would persist via `browser.storage.session` + restore on background page reload.
 - **`full_page_screenshot`** — Chrome uses CDP `captureBeyondViewport`; Firefox would need `tabs.captureFullPage` or a scroll-and-stitch fallback. Lower priority.
 - **`shadow_dom_query`** — CDP-dependent. Hardest port; may not be worth it until a concrete user case emerges.
 

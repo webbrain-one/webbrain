@@ -1,6 +1,6 @@
 # WebBrain
 
-Open-source AI browser agent for Chrome and Firefox. Chat with any web page, automate browser tasks, and run multi-step agent workflows — powered by your choice of LLM.
+Open-source AI browser agent for Chrome, Microsoft Edge, and Firefox. Chat with any web page, automate browser tasks, and run multi-step agent workflows — powered by your choice of LLM.
 
 ## Features
 
@@ -28,22 +28,36 @@ Open-source AI browser agent for Chrome and Firefox. Chat with any web page, aut
 ### Chrome
 
 ```bash
-git clone https://github.com/esokullu/webbrain.git
+git clone https://github.com/webbrain-one/webbrain.git
 ```
 
 1. Open Chrome → `chrome://extensions/`
 2. Enable **Developer mode** (top right)
-3. Click **Load unpacked** → select the `webbrain` folder
+3. Click **Load unpacked** → select the `webbrain/src/chrome` folder
+
+### Microsoft Edge
+
+```bash
+git clone https://github.com/webbrain-one/webbrain.git
+```
+
+1. Open Edge → `edge://extensions/`
+2. Enable **Developer mode** (left sidebar)
+3. Click **Load unpacked** → select the `webbrain/src/chrome` folder
+
+The Edge package uses the same Manifest V3 build as Chrome. The extension APIs
+still use the Chromium `chrome.*` namespace in code, which is supported by
+Microsoft Edge.
 
 ### Firefox
 
 ```bash
-git clone https://github.com/esokullu/webbrain.git
+git clone https://github.com/webbrain-one/webbrain.git
 ```
 
 1. Open Firefox → `about:debugging#/runtime/this-firefox`
 2. Click **Load Temporary Add-on**
-3. Navigate to the `webbrain-firefox` folder and select `manifest.json`
+3. Navigate to `webbrain/src/firefox/` and select `manifest.json`
 
 > **Note:** Temporary add-ons are removed when Firefox restarts. For permanent installation, the extension needs to be signed via [addons.mozilla.org](https://addons.mozilla.org).
 
@@ -98,8 +112,8 @@ Click the gear icon or go to the extension's Options page to configure:
 ## Architecture
 
 ```
-webbrain/                          webbrain-firefox/
-├── manifest.json (MV3)            ├── manifest.json (MV2)
+src/chrome/ (Chrome/Edge MV3)      src/firefox/ (Firefox MV2)
+├── manifest.json                  ├── manifest.json
 ├── src/                           ├── src/
 │   ├── background.js              │   ├── background.js (+ background.html)
 │   ├── agent/                     │   ├── agent/
@@ -126,7 +140,7 @@ webbrain/                          webbrain-firefox/
 └── icons/
 ```
 
-Key difference: Chrome uses Manifest V3 (service worker, `chrome.scripting`, `sidePanel` API), Firefox uses Manifest V2 (background page, `browser.tabs.executeScript`, `sidebar_action`).
+Key difference: Chrome and Edge use Manifest V3 (service worker, `chrome.scripting`, `sidePanel` API), Firefox uses Manifest V2 (background page, `browser.tabs.executeScript`, `sidebar_action`).
 
 ## Agent Tools
 
@@ -148,8 +162,8 @@ Key difference: Chrome uses Manifest V3 (service worker, `chrome.scripting`, `si
 
 ## Known Issues
 
-- **No file download/upload support** — The agent cannot download files from pages or upload files to file inputs. This is a limitation of the content script architecture. Planned for a future release via `chrome.downloads` API and CDP integration.
-- **No Chrome DevTools Protocol (CDP) support** — Currently uses content script injection instead of CDP. This means no access to network requests, shadow DOM, cross-origin iframes, or pixel-perfect screenshots. CDP support is planned as an opt-in advanced mode.
+- **No file download/upload support** — The agent cannot download files from pages or upload files to file inputs. This is a limitation of the content script architecture. Planned for a future release via the Chromium `chrome.downloads` API and CDP integration.
+- **No DevTools Protocol (CDP) support** — Currently uses content script injection instead of CDP. This means no access to network requests, shadow DOM, cross-origin iframes, or pixel-perfect screenshots. CDP support is planned as an opt-in advanced mode.
 - **Shadow DOM limitations** — Web components using closed shadow DOM cannot be read or interacted with by the content script.
 - **SPA navigation detection** — Some single-page applications may not trigger content script re-injection after client-side navigation.
 - **Firefox temporary add-on** — Firefox requires the extension to be loaded as a temporary add-on during development, which is removed on restart.
@@ -164,7 +178,7 @@ Key difference: Chrome uses Manifest V3 (service worker, `chrome.scripting`, `si
 - [ ] **Keyboard shortcuts** — Hotkeys for opening panel, sending messages, switching modes
 - [ ] **Context menu integration** — Right-click → "Ask WebBrain about this"
 - [ ] **Screenshot/vision tool** — Send screenshots to multimodal models for visual understanding
-- [ ] **Chrome Web Store / Firefox AMO** — Official store listings
+- [ ] **Chrome Web Store / Microsoft Edge Add-ons / Firefox AMO** — Official store listings
 
 ## Adding a New Provider
 

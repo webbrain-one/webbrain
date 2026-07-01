@@ -33,6 +33,7 @@ Open-source AI browser agent for Chrome and Firefox. Chat with any web page, aut
 - **Smart Context** — Token-aware auto-compaction (summarizes older turns once the conversation nears the model's context window, with a visible "Context automatically compacted" notice), tool result limits, and emergency overflow recovery
 - **Browser History Control** — Act mode can use native `go_back` / `go_forward` history tools instead of CSP-sensitive page JavaScript
 - **API Shortcut Hints** — Repeated clicks that fire the same XHR/fetch request can surface a matching `fetch_url` suggestion while preserving the UI-first and `/allow-api` mutation policy
+- **Custom Skills and Skill Tools** — Settings → Skills can import trusted skill text or URLs; skills may also expose HTTP or download-job tools through a `webbrain-tools` manifest. FreeSkillz.xyz is enabled by default for YouTube transcripts and public media downloads, and can be removed.
 - **Copy Support** — Copy buttons on code blocks and full messages
 - **Page Inspection Banner** — Visual indicator when the agent is interacting with the page
 - **Stop Button** — Abort the agent mid-execution at any time
@@ -48,7 +49,7 @@ git clone https://github.com/webbrain-one/webbrain.git
 
 1. Open Chrome → `chrome://extensions/`
 2. Enable **Developer mode** (top right)
-3. Click **Load unpacked** → select the `webbrain` folder
+3. Click **Load unpacked** → select the `webbrain/src/chrome` folder
 
 ### Firefox
 
@@ -100,6 +101,12 @@ Click the gear icon or go to the extension's Options page to configure:
 - Auto-screenshot — Provide visual context when DOM/page reads are insufficient
 - Max Agent Steps — Configurable step limit (5-200, default 60)
 - Plan before Act — Optionally generate and review a structured Act-mode plan before browser tools run (off by default)
+
+**Skills:**
+- FreeSkillz.xyz ships enabled by default and exposes `read_youtube_transcript`, `resolve_public_media`, and `download_public_media` through its skill manifest; remove it from Settings → Skills if you do not want those tools available.
+- Imported skills are copied into browser local storage and appended to the agent's system prompt when enabled.
+- A skill can expose read-only HTTP tools or short-lived download-job tools with a fenced `webbrain-tools` JSON manifest. Importing a skill is the trust boundary for its declared HTTPS endpoint; download-job skill tools still run in Act mode and use the normal Downloads permission gate before saving files.
+- Tool results from third-party content should be marked `resultPolicy: "untrusted"` so they are wrapped as data, not instructions.
 
 **Providers:**
 
@@ -195,6 +202,13 @@ Deeper docs live in [`docs/`](docs/): [architecture](docs/architecture.md), [sit
 | `solve_captcha` | -- | Yes | Yes | Solve CAPTCHAs via CapSolver API (optional, requires API key) |
 | `done` | Yes | Yes | Yes | Signal task completion |
 
+Enabled skills can append additional tool schemas at runtime. For example,
+the bundled FreeSkillz.xyz skill exposes `read_youtube_transcript` for YouTube
+transcripts plus `resolve_public_media` / `download_public_media` for public
+media URLs. These skill tools are not hard-coded in the static table above:
+if the skill is removed or renamed, the tool disappears or appears under the
+manifest's declared name.
+
 **Compact mode** is a reduced tool set + shorter system prompt designed for small local models (2B-8B). In both Chrome and Firefox builds, it cuts the Act-mode schema from 40+ tools to about 20, reducing decision surface and hallucination. Enable it per-provider in Settings (checkbox on local providers; off by default).
 
 > **Shadow DOM note:** The accessibility tree only traverses light DOM. On Web Component-heavy pages (Stripe, Salesforce, Shopify), use `get_interactive_elements` (pierces open shadow roots) or `get_shadow_dom` / `shadow_dom_query` for targeted reads.
@@ -269,7 +283,7 @@ See [CHANGELOG.md](./CHANGELOG.md) for the full version history. Recent highligh
 ## Roadmap
 
 - [X] **Conversation export/~~import~~** — Save ~~and load~~ chat histories (only export added, import not planned)
-- [ ] **Custom tool definitions** — User-defined tools via settings
+- [X] **Custom skill tools** — User-imported skills can expose read-only HTTP and download-job tools via `webbrain-tools` manifests
 - [X] **Keyboard shortcuts** — Hotkeys for opening panel, sending messages, switching modes
 - [X] **Context menu integration** — Right-click → "Ask WebBrain about this"
 - [X] **Auto-screenshot vision context** — Send captured viewport context to multimodal models for visual understanding

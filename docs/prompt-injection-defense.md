@@ -73,6 +73,11 @@ Model-authored text (a tool's own status string, the agent's `summary`) and the
 Add its name to `UNTRUSTED_CONTENT_TOOLS` in `permission-gate.js` (both builds).
 The exhaustiveness test will fail until every act-mode tool is classified.
 
+For a dynamic skill tool, do not add the name to the static set. Declare
+`"resultPolicy": "untrusted"` in the skill's `webbrain-tools` manifest instead;
+`agent.js` consults the enabled-skill registry at runtime and applies the same
+wrapper/digest behavior.
+
 ### Adding a tool that has a SIDE EFFECT (click/type/navigate/download/etc.)
 Map it in `permission-gate.js`:
 - add it to `TOOL_CAPABILITY` (or handle it in `capabilityFor` if the capability

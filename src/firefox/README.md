@@ -28,22 +28,22 @@ Open-source AI browser agent for Chrome and Firefox. Chat with any web page, aut
 ### Chrome
 
 ```bash
-git clone https://github.com/esokullu/webbrain.git
+git clone https://github.com/webbrain-one/webbrain.git
 ```
 
 1. Open Chrome → `chrome://extensions/`
 2. Enable **Developer mode** (top right)
-3. Click **Load unpacked** → select the `webbrain` folder
+3. Click **Load unpacked** → select the `webbrain/src/chrome` folder
 
 ### Firefox
 
 ```bash
-git clone https://github.com/esokullu/webbrain.git
+git clone https://github.com/webbrain-one/webbrain.git
 ```
 
 1. Open Firefox → `about:debugging#/runtime/this-firefox`
 2. Click **Load Temporary Add-on**
-3. Navigate to the `webbrain-firefox` folder and select `manifest.json`
+3. Navigate to `webbrain/src/firefox/` and select `manifest.json`
 
 > **Note:** Temporary add-ons are removed when Firefox restarts. For permanent installation, the extension needs to be signed via [addons.mozilla.org](https://addons.mozilla.org).
 
@@ -98,7 +98,7 @@ Click the gear icon or go to the extension's Options page to configure:
 ## Architecture
 
 ```
-webbrain/                          webbrain-firefox/
+src/chrome/                        src/firefox/
 ├── manifest.json (MV3)            ├── manifest.json (MV2)
 ├── src/                           ├── src/
 │   ├── background.js              │   ├── background.js (+ background.html)

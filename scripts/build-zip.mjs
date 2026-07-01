@@ -17,6 +17,7 @@
  *
  * Output:
  *   dist/webbrain-chrome-<version>.zip
+ *   dist/webbrain-edge-<version>.zip
  *   dist/webbrain-firefox-<version>.zip
  *
  * <version> is read from package.json so a single npm-version bump
@@ -38,14 +39,21 @@ mkdirSync(distDir, { recursive: true });
 
 console.log(`Building extension zips for v${version} …`);
 
-for (const browser of ['chrome', 'firefox']) {
-  const out = path.join(distDir, `webbrain-${browser}-${version}.zip`);
+const targets = [
+  { packageName: 'chrome', sourceDir: 'chrome' },
+  // Microsoft Edge uses the same Chromium-compatible MV3 source tree.
+  { packageName: 'edge', sourceDir: 'chrome' },
+  { packageName: 'firefox', sourceDir: 'firefox' },
+];
+
+for (const { packageName, sourceDir } of targets) {
+  const out = path.join(distDir, `webbrain-${packageName}-${version}.zip`);
   // -o writes directly to the file; avoids needing shell redirection,
   // so this runs identically on bash, zsh, cmd, and PowerShell.
   execFileSync(
     'git',
-    ['archive', '--format=zip', '-o', out, `HEAD:src/${browser}`],
+    ['archive', '--format=zip', '-o', out, `HEAD:src/${sourceDir}`],
     { stdio: 'inherit', cwd: root }
   );
-  console.log(`  ✓ dist/webbrain-${browser}-${version}.zip`);
+  console.log(`  ✓ dist/webbrain-${packageName}-${version}.zip`);
 }

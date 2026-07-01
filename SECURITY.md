@@ -9,7 +9,7 @@ WebBrain operates with extensive browser permissions (`<all_urls>`, `debugger`, 
 **emre@webbrain.one**
 
 You can also use GitHub's private vulnerability reporting:
-**[Report a vulnerability →](https://github.com/esokullu/webbrain/security/advisories/new)**
+**[Report a vulnerability →](https://github.com/webbrain-one/webbrain/security/advisories/new)**
 
 ### What to include
 

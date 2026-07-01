@@ -412,23 +412,28 @@ export class ProviderManager {
    */
   static categoryFor(id, config) {
     if (config && config.category) return config.category;
+    if (config?.type === 'llamacpp') return 'local';
     if (['llamacpp', 'ollama', 'lmstudio', 'jan', 'vllm', 'sglang'].includes(id)) return 'local';
     if (ROUTER_PROVIDER_IDS.includes(id)) return 'router';
     return 'cloud';
   }
 
   _createProvider(id, config) {
-    switch (config.type) {
+    const normalizedConfig = {
+      ...config,
+      category: ProviderManager.categoryFor(id, config),
+    };
+    switch (normalizedConfig.type) {
       case 'llamacpp':
-        return new LlamaCppProvider(config);
+        return new LlamaCppProvider(normalizedConfig);
       case 'openai':
-        return new OpenAICompatibleProvider(config);
+        return new OpenAICompatibleProvider(normalizedConfig);
       case 'anthropic':
-        return new AnthropicProvider(config);
+        return new AnthropicProvider(normalizedConfig);
       case 'anthropic_oauth':
-        return new AnthropicOAuthProvider(config);
+        return new AnthropicOAuthProvider(normalizedConfig);
       default:
-        throw new Error(`Unknown provider type: ${config.type}`);
+        throw new Error(`Unknown provider type: ${normalizedConfig.type}`);
     }
   }
 
@@ -519,7 +524,26 @@ export class ProviderManager {
   async testProvider(id) {
     const provider = this.providers.get(id);
     if (!provider) return { ok: false, error: 'Provider not found' };
-    return provider.testConnection();
+    const observedBaseUrl = provider.config.baseUrl;
+    const candidates = this._baseUrlCandidates(provider.config);
+    if (!candidates.length) return provider.testConnection();
+
+    let firstFailure = null;
+    for (const baseUrl of candidates) {
+      const candidateProvider = baseUrl === observedBaseUrl
+        ? provider
+        : this._createProvider(id, { ...provider.config, baseUrl });
+      const result = await candidateProvider.testConnection();
+      if (result.ok) {
+        if (baseUrl !== observedBaseUrl) {
+          const updated = await this._updateProviderBaseUrl(id, baseUrl, observedBaseUrl);
+          return updated ? { ...result, baseUrl } : result;
+        }
+        return result;
+      }
+      if (!firstFailure) firstFailure = result;
+    }
+    return firstFailure || { ok: false, error: 'Provider connection failed' };
   }
 
   /**
@@ -593,7 +617,8 @@ export class ProviderManager {
       return { ok: false, error: 'Model loading is only supported for local providers' };
     }
 
-    const rawBaseUrl = (provider.config.baseUrl || '').replace(/\/$/, '');
+    const observedBaseUrl = provider.config.baseUrl;
+    const rawBaseUrl = (observedBaseUrl || '').trim().replace(/\/+$/, '');
     if (!rawBaseUrl) return { ok: false, error: 'Base URL is empty' };
 
     // LM Studio: prefer its native /api/v0/models, which (unlike the
@@ -612,35 +637,52 @@ export class ProviderManager {
         const res = await fetchWithFallback(`${host}/api/v0/models`, { method: 'GET', headers });
         if (res.ok) {
           const models = this._extractLmStudioModels(await res.json());
-          if (models.length) return { ok: true, models };
+          if (models.length) {
+            const configBaseUrl = `${host}/v1`;
+            const result = { ok: true, models };
+            if (configBaseUrl !== observedBaseUrl) {
+              if (await this._updateProviderBaseUrl(id, configBaseUrl, observedBaseUrl)) {
+                result.baseUrl = configBaseUrl;
+              }
+            }
+            return result;
+          }
         }
       } catch { /* fall through to /v1/models */ }
     }
 
-    const baseUrl = id === 'ollama'
-      ? rawBaseUrl.replace(/\/v1\/?$/, '').replace(/\/$/, '')
-      : (/\/v1$/.test(rawBaseUrl) ? rawBaseUrl : `${rawBaseUrl}/v1`);
-    if (!baseUrl) return { ok: false, error: 'Base URL is empty' };
-    const url = id === 'ollama' ? `${baseUrl}/api/tags` : `${baseUrl}/models`;
-    try {
-      const res = await fetchWithFallback(url, { method: 'GET', headers });
-      if (!res.ok) {
-        const errBody = await res.text();
-        if (res.status === 403) {
-          return {
-            ok: false,
-            error:
-              'Ollama returned 403 — set OLLAMA_ORIGINS="*" (or moz-extension://*,chrome-extension://*) and restart `ollama serve`.',
-          };
+    let firstFailure = null;
+    for (const candidate of this._modelListCandidates(id, rawBaseUrl)) {
+      const url = id === 'ollama' ? `${candidate.requestBaseUrl}/api/tags` : `${candidate.requestBaseUrl}/models`;
+      try {
+        const res = await fetchWithFallback(url, { method: 'GET', headers });
+        if (!res.ok) {
+          const errBody = await res.text();
+          if (res.status === 403) {
+            if (!firstFailure) firstFailure = {
+              ok: false,
+              error:
+                'Ollama returned 403 - set OLLAMA_ORIGINS="*" (or moz-extension://*,chrome-extension://*) and restart `ollama serve`.',
+            };
+            continue;
+          }
+          if (!firstFailure) firstFailure = { ok: false, error: `HTTP ${res.status}: ${errBody}` };
+          continue;
         }
-        return { ok: false, error: `HTTP ${res.status}: ${errBody}` };
+        const data = await res.json();
+        const models = this._extractModelIds(id, data);
+        const result = { ok: true, models };
+        if (candidate.configBaseUrl !== observedBaseUrl) {
+          if (await this._updateProviderBaseUrl(id, candidate.configBaseUrl, observedBaseUrl)) {
+            result.baseUrl = candidate.configBaseUrl;
+          }
+        }
+        return result;
+      } catch (e) {
+        if (!firstFailure) firstFailure = { ok: false, error: e.message };
       }
-      const data = await res.json();
-      const models = this._extractModelIds(id, data);
-      return { ok: true, models };
-    } catch (e) {
-      return { ok: false, error: e.message };
     }
+    return firstFailure || { ok: false, error: 'Failed to load models' };
   }
 
   async listOllamaModels(id) {
@@ -652,6 +694,70 @@ export class ProviderManager {
     const apiKey = provider?.config?.apiKey;
     if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
     return headers;
+  }
+
+  _baseUrlCandidates(config) {
+    const raw = typeof config?.baseUrl === 'string' ? config.baseUrl : '';
+    const trimmed = raw.trim();
+    if (!trimmed) return [];
+
+    const noTrailingSlash = trimmed.replace(/\/+$/, '');
+    const withoutTerminalV1 = noTrailingSlash.replace(/\/v1$/i, '');
+    const withTerminalV1 = /\/v1$/i.test(noTrailingSlash)
+      ? noTrailingSlash
+      : `${noTrailingSlash}/v1`;
+    const rootBaseProviders = new Set(['llamacpp', 'anthropic']);
+    const primary = rootBaseProviders.has(config?.type)
+      ? [withoutTerminalV1, noTrailingSlash, trimmed, withTerminalV1]
+      : [noTrailingSlash, trimmed, withTerminalV1, withoutTerminalV1];
+
+    const candidates = [];
+    const add = (value) => {
+      if (value && !candidates.includes(value)) candidates.push(value);
+    };
+    for (const value of primary) add(value);
+    for (const value of primary) {
+      if (value && !value.endsWith('/')) add(`${value}/`);
+    }
+    return candidates;
+  }
+
+  _modelListCandidates(id, rawBaseUrl) {
+    const root = rawBaseUrl.replace(/\/v1$/i, '');
+    const openAiBase = /\/v1$/i.test(rawBaseUrl) ? rawBaseUrl : `${rawBaseUrl}/v1`;
+    const candidates = [];
+    const add = (requestBaseUrl, configBaseUrl) => {
+      if (!requestBaseUrl || !configBaseUrl) return;
+      if (candidates.some((candidate) =>
+        candidate.requestBaseUrl === requestBaseUrl && candidate.configBaseUrl === configBaseUrl
+      )) return;
+      candidates.push({ requestBaseUrl, configBaseUrl });
+    };
+
+    if (id === 'ollama') {
+      add(root, `${root}/v1`);
+      add(rawBaseUrl, openAiBase);
+      return candidates;
+    }
+    if (id === 'llamacpp') {
+      add(`${root}/v1`, root);
+      return candidates;
+    }
+
+    add(openAiBase, openAiBase);
+    add(rawBaseUrl, rawBaseUrl);
+    add(root, root);
+    return candidates;
+  }
+
+  async _updateProviderBaseUrl(id, baseUrl, observedBaseUrl) {
+    const current = this.providers.get(id);
+    if (!current) return false;
+    if (current.config.baseUrl === baseUrl) return true;
+    if (observedBaseUrl !== undefined && current.config.baseUrl !== observedBaseUrl) return false;
+    this.providers.set(id, this._createProvider(id, { ...current.config, baseUrl }));
+    await this.save();
+    return true;
   }
 
   _extractModelIds(id, data) {

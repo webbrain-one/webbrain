@@ -50,7 +50,7 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
     }
     // OpenRouter-specific headers
     if (providerName === 'openrouter') {
-      headers['HTTP-Referer'] = this.config.siteUrl || 'https://github.com/esokullu/webbrain';
+      headers['HTTP-Referer'] = this.config.siteUrl || 'https://github.com/webbrain-one/webbrain';
       headers['X-Title'] = 'WebBrain';
     }
     return headers;

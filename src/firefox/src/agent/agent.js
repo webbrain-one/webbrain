@@ -7,6 +7,7 @@ import { isProgressActionAllowed, isProgressIntentActive, normalizeProgressActio
 import { getActiveAdapter, UNIVERSAL_PREAMBLE } from './adapters.js';
 import {
   fetchUrl,
+  executeHttpSkillTool,
   readPageSource,
   researchUrl,
   listDownloads,
@@ -28,12 +29,14 @@ import {
   buildPlannerMessages,
   parsePlanFromContent,
   formatPlanMarkdown,
+  formatPlanExecutionMetadataMarkdown,
   formatPlanScratchpad,
   userMessageToText,
   messageContentToText,
 } from './planner.js';
 import { extractFirstJsonObject } from './json-extract.js';
 import { sanitizeText as sanitizePlannerText } from './text-sanitize.js';
+import { buildCustomSkillsPrompt, buildSkillToolDefinitions, buildSkillToolRegistry, normalizeCustomSkills } from './skills.js';
 
 const DEFAULT_CLOUD_COST_ALLOWANCE_USD = 10;
 const COST_ALLOWANCE_SESSION_KEY = 'costAllowanceSessionUsd';
@@ -63,6 +66,8 @@ export class Agent {
     this._progressSessionCounter = 0;
     this.conversationIds = new Map(); // tabId -> stable conversationId (regenerated on clearConversation)
     this.conversationModes = new Map(); // tabId -> 'ask' | 'act'
+    this.hydratedTabs = new Set(); // tabIds we've already pulled from storage
+    this.persistTimers = new Map(); // tabId -> debounce handle
     this.abortFlags = new Map(); // tabId -> boolean
     this.currentRunId = new Map(); // tabId -> active trace runId
     this.currentCostState = new Map(); // tabId -> active cloud/router cost state
@@ -71,10 +76,9 @@ export class Agent {
     this._debugLog = []; // ring buffer for deep verbose (LLM requests/responses)
     this._debugLogMax = 200; // max entries before oldest are dropped
     this.maxContextChars = 80000; // rough char budget (~20k tokens)
-    // Fraction of the model's context window at which we auto-compact. Once
-    // the running input-token count crosses this share of provider.contextWindow,
-    // _manageContext summarizes older turns ("Context automatically compacted")
-    // — leaving headroom for the next request plus the output budget.
+    // Default fraction of the model's context window at which we auto-compact.
+    // _contextCompactRatioForWindow tightens this for small context windows and
+    // relaxes it for very large ones.
     this.contextCompactRatio = 0.75;
     // tabId -> most recent provider-reported input (prompt) token count. Drives
     // the token-aware auto-compaction trigger; updated after each LLM response,
@@ -103,6 +107,7 @@ export class Agent {
     // signup forms). Loaded in background.js and refreshed live on change.
     this.profileEnabled = false;
     this.profileText = '';
+    this.customSkills = [];
     // CapSolver opt-in. Off by default. When enabled AND an API key is
     // set, the system prompt gets a "[CAPTCHA SOLVER]" note telling the
     // model to try `solve_captcha` once before falling back to asking
@@ -189,10 +194,62 @@ export class Agent {
     return this._runningTabs.has(tabId);
   }
 
-  async _hydrate(_tabId) {
-    // Firefox conversations are memory-only in this port; Chrome hydrates from
-    // storage.session. Keep the method so shared scheduler/scratchpad code can
-    // call it without browser-specific branching.
+  _convKey(tabId) { return `agentConv:${tabId}`; }
+
+  /**
+   * Pull a tab's conversation from storage.session into memory if we haven't
+   * already this background lifetime. Safe to call repeatedly.
+   */
+  async _hydrate(tabId) {
+    if (this.hydratedTabs.has(tabId)) return;
+    this.hydratedTabs.add(tabId);
+    if (this.conversations.has(tabId)) return;
+    try {
+      const key = this._convKey(tabId);
+      const stored = await browser.storage.session.get(key);
+      const entry = stored?.[key];
+      if (entry && Array.isArray(entry.messages) && entry.messages.length > 0) {
+        this.conversations.set(tabId, entry.messages);
+        if (entry.mode) {
+          this.conversationModes.set(tabId, entry.mode);
+          this._conversationMode = entry.mode;
+        }
+        if (entry.conversationId) {
+          this.conversationIds.set(tabId, entry.conversationId);
+        }
+        if (Array.isArray(entry.progressLedger)) {
+          this.progressLedgers.set(tabId, entry.progressLedger);
+        }
+        if (entry.progressSession && typeof entry.progressSession === 'object') {
+          this.progressSessions.set(tabId, entry.progressSession);
+        }
+      }
+    } catch (e) { /* session storage may be unavailable */ }
+  }
+
+  /**
+   * Debounced write of a tab's conversation to storage.session. Multiple
+   * rapid mutations within 300ms collapse into one write.
+   */
+  _persist(tabId) {
+    if (tabId == null) return;
+    const existing = this.persistTimers.get(tabId);
+    if (existing) clearTimeout(existing);
+    const handle = setTimeout(() => {
+      this.persistTimers.delete(tabId);
+      const messages = this.conversations.get(tabId);
+      if (!messages) return;
+      const mode = this.conversationModes.get(tabId) || 'ask';
+      const conversationId = this.conversationIds.get(tabId) || null;
+      const progressLedger = this.progressLedgers.get(tabId) || [];
+      const progressSession = this.progressSessions.get(tabId) || null;
+      try {
+        browser.storage.session.set({
+          [this._convKey(tabId)]: { mode, messages, conversationId, progressLedger, progressSession },
+        }).catch(() => {});
+      } catch (e) { /* ignore */ }
+    }, 300);
+    this.persistTimers.set(tabId, handle);
   }
 
   async getConversationId(tabId) {
@@ -864,6 +921,105 @@ export class Agent {
     return count;
   }
 
+  _normalizePublicMediaAttemptUrl(url) {
+    if (!url) return '';
+    try {
+      const u = new URL(url);
+      return `${u.origin}${u.pathname.replace(/\/+$/, '')}${u.search}`;
+    } catch {
+      return String(url || '').trim();
+    }
+  }
+
+  _downloadPublicMediaAttemptTargetChanged(toolName, toolResultMessage = null) {
+    if (this.constructor.NAV_TOOLS?.has?.(toolName) === true) return true;
+    if (this.constructor.NAV_PRONE_TOOLS?.has?.(toolName) !== true) return false;
+    try {
+      const parsed = JSON.parse(this._unwrapUntrusted(toolResultMessage?.content || ''));
+      return !!(parsed && typeof parsed === 'object' && parsed.pageUrlChanged === true);
+    } catch {
+      return false;
+    }
+  }
+
+  _downloadPublicMediaAttempt(messages, currentUrl = '') {
+    const list = Array.isArray(messages) ? messages : [];
+    const currentMediaUrl = this._normalizePublicMediaAttemptUrl(currentUrl);
+    let scanStart = 0;
+    for (let i = list.length - 1; i >= 0; i--) {
+      if (list[i]?.role === 'user' && !this._isAgentInjectedUserContent(list[i].content)) {
+        scanStart = i + 1;
+        break;
+      }
+    }
+    const toolCallById = new Map();
+    let attempted = false;
+    let succeeded = false;
+    let explicitAttempted = false;
+    for (const msg of list.slice(scanStart)) {
+      if (msg?.role === 'assistant' && Array.isArray(msg.tool_calls)) {
+        for (const tc of msg.tool_calls) {
+          if (!tc?.id) continue;
+          let args = null;
+          try { args = JSON.parse(tc.function?.arguments || tc.arguments || '{}'); } catch { args = null; }
+          toolCallById.set(tc.id, { name: tc.function?.name || tc.name || '', args });
+        }
+        continue;
+      }
+      if (msg?.role !== 'tool') continue;
+      const toolCall = toolCallById.get(msg.tool_call_id);
+      if (toolCall && toolCall.name !== 'download_public_media' && this._downloadPublicMediaAttemptTargetChanged(toolCall.name, msg)) {
+        attempted = false;
+        succeeded = false;
+        explicitAttempted = false;
+        continue;
+      }
+      if (toolCall?.name !== 'download_public_media') continue;
+      const explicitUrl = typeof toolCall.args?.url === 'string' ? toolCall.args.url.trim() : '';
+      const explicitMatchesCurrent = !!explicitUrl && !!currentMediaUrl && this._normalizePublicMediaAttemptUrl(explicitUrl) === currentMediaUrl;
+      explicitAttempted = !!explicitUrl && !explicitMatchesCurrent;
+      attempted = !explicitUrl || explicitMatchesCurrent;
+      let parsed = null;
+      try { parsed = JSON.parse(this._unwrapUntrusted(msg.content)); } catch { /* malformed result still counts as an attempt */ }
+      succeeded = attempted && !!(parsed && typeof parsed === 'object' && parsed.success === true);
+    }
+    return { attempted, succeeded, explicitAttempted };
+  }
+
+  _downloadPublicMediaArgsFromSocialArgs(args) {
+    const out = {};
+    if (args?.target === 'image' || args?.target === 'video') out.kind = args.target;
+    if (typeof args?.filename === 'string' && args.filename.trim()) out.filename = args.filename.trim();
+    return out;
+  }
+
+  async _downloadPublicMediaRedirectForSocial(tabId, fnName, fnArgs, allowedToolNames, messages) {
+    if (fnName !== 'download_social_media') return null;
+    if (!allowedToolNames?.has?.('download_public_media')) return null;
+    if (!this._skillToolForName('download_public_media')) return null;
+    if (fnArgs?.scroll === true || fnArgs?.mode === 'all' || Number(fnArgs?.limit || 0) > 1) return null;
+
+    const publicAttempt = this._downloadPublicMediaAttempt(messages, await this._currentUrl(tabId));
+    if (publicAttempt.succeeded) {
+      return {
+        success: true,
+        skipped: true,
+        skippedBecause: 'download_public_media_already_succeeded',
+        error: 'Skipped download_social_media because download_public_media already succeeded. Do not run the browser-side fallback unless the user asks for an additional download.',
+      };
+    }
+    if (publicAttempt.attempted || publicAttempt.explicitAttempted) return null;
+
+    return {
+      success: false,
+      wrongTool: true,
+      useTool: 'download_public_media',
+      fallbackTool: 'download_social_media',
+      suggestedArgs: this._downloadPublicMediaArgsFromSocialArgs(fnArgs),
+      error: 'download_social_media is the browser-side fallback. Because download_public_media is available, call download_public_media first for this public media download. If download_public_media fails, then call download_social_media.',
+    };
+  }
+
   /**
    * Synthesize a transparent summary when the agent hits the step limit
    * without producing a final answer. See chrome's copy for the rationale.
@@ -1241,8 +1397,35 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       // anchor). Read-only tools map to null and pass straight through.
       // A call may require MORE THAN ONE capability — e.g. set_field({submit})
       // both types AND submits, so it needs a TYPE grant and a CLICK grant.
+      const skillCallTool = this._skillToolForName(fnName);
       const capabilities = capabilitiesFor(fnName, fnArgs);
+      if (skillCallTool?.requiresDownloadPermission && !capabilities.includes(Capability.DOWNLOAD)) {
+        capabilities.push(Capability.DOWNLOAD);
+      }
       await this._ensureGateSetting();
+      const skillEndpointRedirect = this._skillEndpointToolRedirect(fnName, fnArgs);
+      if (skillEndpointRedirect) {
+        messages.push({
+          role: 'tool',
+          tool_call_id: tc.id,
+          content: JSON.stringify(skillEndpointRedirect),
+        });
+        onUpdate('warning', { message: `Use ${skillEndpointRedirect.useTool} instead of ${fnName} for this skill endpoint.` });
+        continue;
+      }
+      const mediaDownloadRedirect = await this._downloadPublicMediaRedirectForSocial(tabId, fnName, fnArgs, allowedToolNames, messages);
+      if (mediaDownloadRedirect) {
+        messages.push({
+          role: 'tool',
+          tool_call_id: tc.id,
+          content: JSON.stringify(mediaDownloadRedirect),
+        });
+        const message = mediaDownloadRedirect.skipped
+          ? 'Skipped download_social_media because download_public_media already succeeded.'
+          : 'Use download_public_media before download_social_media for this media download.';
+        onUpdate('warning', { message });
+        continue;
+      }
       if (isNetworkMutation(fnName, fnArgs) && !this.apiAllowedTabs.has(tabId)) {
         messages.push({
           role: 'tool',
@@ -1270,7 +1453,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           if (capability === Capability.NETWORK && isNetworkMutation(fnName, fnArgs) && this.apiAllowedTabs.has(tabId)) continue;
           // Every distinct host the call touches must be granted. Usually one,
           // but download_files takes a urls[] array that can span many hosts.
-          const hosts = requiredHosts(capability, fnArgs, curUrl, fnName);
+          const gateArgs = this._skillPermissionArgsForCapability(skillCallTool, capability, fnArgs);
+          const hosts = requiredHosts(capability, gateArgs, curUrl, fnName);
           if (hosts.length === 0) { failClosed = true; break; }
           for (const host of hosts) {
             const verdict = this.permissions.check(host, capability, tabId);
@@ -1364,8 +1548,15 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         const afterUrl = await this._currentUrl(tabId);
         const beforeNorm = this._normalizeUrlPath(beforeUrl);
         const afterNorm = this._normalizeUrlPath(afterUrl);
-        if (beforeNorm && afterNorm && beforeNorm !== afterNorm && !Agent.NAV_TOOLS.has(fnName)) {
-          navNotices.push({ before: beforeUrl, after: afterUrl, viaTool: fnName });
+        if (beforeNorm && afterNorm && beforeNorm !== afterNorm) {
+          if (toolResult && typeof toolResult === 'object') {
+            toolResult.pageUrlChanged = true;
+            toolResult.previousUrl = beforeUrl;
+            toolResult.currentUrl = afterUrl;
+          }
+          if (!Agent.NAV_TOOLS.has(fnName)) {
+            navNotices.push({ before: beforeUrl, after: afterUrl, viaTool: fnName });
+          }
         }
       }
       if (toolResult && typeof toolResult === 'object' && !toolResult.done) {
@@ -1420,6 +1611,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             content: this._wrapUntrusted(fnName, this._limitToolResult(blockedResult)),
           });
           onUpdate('warning', { message: 'Progress ledger has unresolved rows; continuing.' });
+          this._persist(tabId);
           continue;
         }
         onUpdate('tool_result', { name: fnName, result: toolResult });
@@ -1431,6 +1623,15 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           // are page-derived and get persisted as history for the next turn.
           content: this._wrapUntrusted(fnName, this._limitToolResult(toolResult)),
         });
+        // If `done` wasn't the last call in the batch, the remaining tool_calls
+        // in this assistant message still need matching tool results — otherwise
+        // the persisted conversation has orphaned tool_calls and the provider
+        // rejects the next turn with a 400. Mirror the abort / bulk-replay paths.
+        this._appendSyntheticToolResults(
+          tabId, toolCalls, toolIndex + 1, messages, onUpdate, step,
+          () => ({ success: false, skipped: true, error: 'skipped: run ended via done' })
+        );
+        this._persist(tabId);
         return { action: 'return', value: finalResponse };
       }
 
@@ -1548,6 +1749,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         onUpdate('text', { content: stopMessage });
         onUpdate('error', { message: 'Stuck in a loop. Stopped.' });
         this._clearLoopState(tabId);
+        this._persist(tabId);
         return { action: 'return', value: stopMessage };
       }
       if (bulkApiShortcut?.apiAllowed && bulkApiShortcut.replayRequestId && toolIndex < toolCalls.length - 1) {
@@ -1589,6 +1791,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         // early return skips the post-loop flush, so emit any nav notices here
         // or the model would replay against stale URLs from the prior page.
         this._injectNavNotices(messages, navNotices, onUpdate);
+        this._persist(tabId);
         return { action: 'continue' };
       }
       if (this._shouldAutoScreenshot(fnName) && !toolResult?.error) {
@@ -1674,6 +1877,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       }
     }
 
+    this._persist(tabId);
     return { action: 'continue' };
   }
 
@@ -2626,7 +2830,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     this._pendingClarifications.delete(tabId);
   }
 
-  submitPlanResponse(tabId, planId, action, editedText = '') {
+  submitPlanResponse(tabId, planId, action, editedText = '', markdownMode = 'compact') {
     const tabPending = this._pendingPlans.get(tabId);
     if (!tabPending) return false;
     const entry = tabPending.get(planId);
@@ -2635,6 +2839,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       entry.resolve({
         action: String(action || 'reject'),
         editedText: String(editedText || '').trim(),
+        markdownMode: markdownMode === 'verbose' ? 'verbose' : 'compact',
       });
     } catch {}
     return true;
@@ -2649,7 +2854,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     this._pendingPlans.delete(tabId);
   }
 
-  async _waitForPlanReview(tabId, planId, plan, markdown, onUpdate) {
+  async _waitForPlanReview(tabId, planId, plan, markdown, onUpdate, verboseMarkdown = '') {
     const PLAN_REVIEW_TIMEOUT_MS = 10 * 60 * 1000;
     const tabPending = this._pendingPlans.get(tabId) || new Map();
     this._pendingPlans.set(tabId, tabPending);
@@ -2666,7 +2871,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     });
     if (typeof onUpdate === 'function') {
       try {
-        onUpdate('plan_review', { planId, plan, markdown });
+        onUpdate('plan_review', { planId, plan, markdown, verboseMarkdown });
       } catch {}
     }
     try {
@@ -2783,12 +2988,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     // transcript.
     const priorMessages = runPlanner ? messages.slice() : null;
     messages.push(enriched);
+    this._persist(tabId);
     if (!runPlanner) return { proceed: true };
 
     const historyDigest = this._buildPlannerHistoryDigest(priorMessages);
     const gate = await this._runPlannerGate(tabId, enriched, onUpdate, costState, runId, historyDigest, tabInfo, plannerMode);
     if (!gate.proceed) {
       messages.push({ role: 'assistant', content: gate.message || 'Task cancelled.' });
+      this._persist(tabId);
       return { proceed: false, message: gate.message || 'Task cancelled.', reason: gate.reason };
     }
 
@@ -2807,6 +3014,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         // by submitPlanReview in the sidepanel, so there's no plan_approved
         // agent_update to emit here (no handler consumed it).
       }
+      this._persist(tabId);
     }
     return { proceed: true };
   }
@@ -2925,12 +3133,13 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
       const planId = `plan_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
       const markdown = formatPlanMarkdown(plan);
+      const verboseMarkdown = formatPlanMarkdown(plan, { verbose: true });
       const scheduledPolicy = this.scheduledRunPolicies.get(tabId);
       if (scheduledPolicy?.autoApprovePlanReview === true) {
-        const approvedScratchpadText = formatPlanScratchpad(plan, '', markdown);
+        const approvedScratchpadText = formatPlanScratchpad(plan, '', verboseMarkdown);
         return { proceed: true, approvedScratchpadText, planId };
       }
-      const choice = await this._waitForPlanReview(tabId, planId, plan, markdown, onUpdate);
+      const choice = await this._waitForPlanReview(tabId, planId, plan, markdown, onUpdate, verboseMarkdown);
 
       if (this._checkAbort(tabId)) {
         return { proceed: false, message: '[Stopped by user]' };
@@ -2939,7 +3148,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         return { proceed: false, message: 'Task cancelled — plan was not approved.' };
       }
 
-      const approvedScratchpadText = formatPlanScratchpad(plan, choice?.editedText, markdown);
+      const editedText = String(choice?.editedText || '').trim();
+      const approvedText = editedText && choice?.markdownMode === 'compact'
+        ? `${editedText}\n\n${formatPlanExecutionMetadataMarkdown(plan)}`
+        : editedText;
+      const approvedScratchpadText = formatPlanScratchpad(plan, approvedText, verboseMarkdown);
       return { proceed: true, approvedScratchpadText, planId };
     } catch (e) {
       if (this._isCostAllowanceError(e)) {
@@ -3033,13 +3246,18 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
   /**
    * Compose the full system prompt: base (ASK or ACT) + optional universal
-   * cookie/paywall guidance + optional user profile block. Base goes
-   * first so prompt-cache prefixes stay stable when user toggles settings.
+   * cookie/paywall guidance + optional enabled skills + optional user
+   * profile block. Base goes first so prompt-cache prefixes stay stable when
+   * user toggles settings.
    */
   _buildSystemPrompt(mode) {
     let prompt = mode === 'act' ? this._getActPrompt() : SYSTEM_PROMPT_ASK;
     if (this.useSiteAdapters) {
       prompt += `\n\n${UNIVERSAL_PREAMBLE.trim()}`;
+    }
+    const skillsPrompt = buildCustomSkillsPrompt(this.customSkills);
+    if (skillsPrompt) {
+      prompt += `\n\n${skillsPrompt}`;
     }
     if (this.profileEnabled && this.profileText && this.profileText.trim()) {
       prompt +=
@@ -3050,6 +3268,88 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       prompt += `\n\n[CAPTCHA SOLVER — the user has configured CapSolver. When a CAPTCHA blocks a step, call \`solve_captcha\` once (with no arguments — it auto-detects reCAPTCHA v2/v3, hCaptcha, and Cloudflare Turnstile). On success, click the form's submit button and continue. On failure, ask the user to solve it manually — do not retry solve_captcha repeatedly.]`;
     }
     return prompt;
+  }
+
+  setCustomSkills(skills) {
+    this.customSkills = normalizeCustomSkills(skills);
+    this._refreshSystemPrompts();
+  }
+
+  _skillToolDefinitions(mode, tier) {
+    return buildSkillToolDefinitions(this.customSkills, {
+      mode,
+      tier: tier || 'full',
+      excludeNames: AGENT_TOOL_NAMES,
+    });
+  }
+
+  _skillToolRegistry() {
+    return buildSkillToolRegistry(this.customSkills, {
+      excludeNames: AGENT_TOOL_NAMES,
+    });
+  }
+
+  _skillToolForName(name) {
+    if (!name) return null;
+    return this._skillToolRegistry().get(name) || null;
+  }
+
+  _skillPermissionArgsForCapability(skillTool, capability, args) {
+    if (capability !== Capability.DOWNLOAD || !skillTool?.requiresDownloadPermission) return args;
+    const inputUrlArg = skillTool.inputUrlArg || 'url';
+    if (!inputUrlArg || inputUrlArg === 'url') return args;
+    const inputUrl = args?.[inputUrlArg];
+    if (typeof inputUrl !== 'string' || !inputUrl.trim()) return args;
+    return { ...args, url: inputUrl };
+  }
+
+  _skillToolForEndpoint(url) {
+    if (!url) return null;
+    let target;
+    try {
+      target = new URL(String(url));
+      target.hash = '';
+    } catch (_) {
+      return null;
+    }
+    const normalizePath = (value) => String(value || '/').replace(/\/+$/, '') || '/';
+    for (const tool of this._skillToolRegistry().values()) {
+      if (!tool || !tool.endpoint) continue;
+      try {
+        const endpoint = new URL(tool.endpoint);
+        endpoint.hash = '';
+        if (
+          endpoint.protocol === target.protocol &&
+          endpoint.hostname === target.hostname &&
+          endpoint.port === target.port &&
+          normalizePath(endpoint.pathname) === normalizePath(target.pathname) &&
+          endpoint.search === target.search
+        ) {
+          return tool;
+        }
+      } catch (_) {
+        // Ignore malformed skill endpoint records.
+      }
+    }
+    return null;
+  }
+
+  _skillEndpointToolRedirect(name, args) {
+    if (name !== 'fetch_url' && name !== 'research_url') return null;
+    const skillTool = this._skillToolForEndpoint(args?.url);
+    if (!skillTool) return null;
+    return {
+      success: false,
+      denied: true,
+      wrongTool: true,
+      useTool: skillTool.name,
+      requiresApiAllow: false,
+      error: `This URL is the HTTPS endpoint for the enabled ${skillTool.name} skill tool. Do not call ${name} against enabled skill endpoints; call ${skillTool.name} directly with the user-visible arguments instead. Skill tools do not require /allow-api; read-only skill tools can run in Ask mode, and download-job skill tools require Act mode plus download permission. /allow-api only applies to mutating fetch_url/research_url API calls.`,
+    };
+  }
+
+  _isUntrustedTool(name) {
+    return UNTRUSTED_CONTENT_TOOLS.has(name) || this._skillToolForName(name)?.resultPolicy === 'untrusted';
   }
 
   _refreshSystemPrompts() {
@@ -3106,9 +3406,15 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     this._lastInputTokens.delete(tabId);
     this._lastEstCharsAtReport.delete(tabId);
     this._compactCooldown.delete(tabId);
+    this.hydratedTabs.delete(tabId);
     this.apiAllowedTabs.delete(tabId);
     this.apiAllowedInjected.delete(tabId);
     this._cleanupTab(tabId, { preserveRunGuard: true });
+    const t = this.persistTimers.get(tabId);
+    if (t) { clearTimeout(t); this.persistTimers.delete(tabId); }
+    try {
+      browser.storage.session.remove(this._convKey(tabId)).catch(() => {});
+    } catch (e) { /* ignore */ }
   }
 
   _cleanupTab(tabId, { preserveRunGuard = false } = {}) {
@@ -3137,10 +3443,6 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   // record facts (download IDs, file paths, progress counters) that it
   // would otherwise lose when older tool results get compressed away.
   //
-  // Firefox port note: ported from chrome/agent.js. Firefox conversations
-  // are in-memory only (no chrome.storage.session persistence), so this
-  // implementation skips the post-write _persist call.
-
   _scratchpadHeader() {
     // Reframed to break "trust laundering": the scratchpad is a role:'user'
     // message (so it survives summarization and stays pinned), but it must NOT
@@ -3239,6 +3541,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       messages.splice(insertAt, 0, msg);
     }
 
+    this._persist(tabId);
     return {
       success: true,
       mode: replace ? 'replace' : 'append',
@@ -3298,9 +3601,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   /**
    * After any download-producing tool returns, pin the durable handle(s) it
    * yielded so a later read survives context compaction. Centralized here so
-   * download_files, download_resource_from_page, and download_social_media are
-   * covered uniformly, and so social media — which exposes no per-file id —
-   * degrades to a list_downloads pointer instead of an invented id.
+   * core download tools and download skill tools are covered uniformly, and so
+   * social media — which exposes no per-file id — degrades to a list_downloads
+   * pointer instead of an invented id.
    * Best-effort. (Tab recording is Chrome-only, so no stop_recording branch.)
    */
   _pinDownloadHandles(tabId, name, result) {
@@ -3315,9 +3618,16 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       } else if (name === 'download_social_media') {
         const n = Number(result.completedCount || 0);
         if (n > 0) this._autoScratchpadNote(tabId, `[auto] download_social_media saved ${n} file(s) — find their ids/paths via list_downloads.`);
+      } else if (this._skillToolForName(name)?.requiresDownloadPermission) {
+        this._pinDownloadId(tabId, result.downloadId);
       }
     } catch { /* best-effort */ }
   }
+  _isCompressionPlaceholderResponse(text) {
+    const normalized = String(text || '').trim().toLowerCase();
+    return normalized === '[compressed]' || normalized === '[context compressed]';
+  }
+
   // ─────────────────────────────────────────────────────────────────────
 
   // App-owned progress ledger projected into the prompt.
@@ -3645,6 +3955,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       || c.startsWith('[UNTRUSTED DOCUMENT');
   }
 
+  _isScheduledResumeTurn(content) {
+    const c = this._messageText(content).trimStart();
+    const stripped = this._stripInjectedTaskContext(c).trimStart();
+    return c.startsWith('[Scheduled resume') || stripped.startsWith('[Scheduled resume');
+  }
+
   _stripInjectedTaskContext(text) {
     let out = String(text || '');
     let prev = null;
@@ -3666,6 +3982,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     for (let i = messages.length - 1; i >= 1; i--) {
       const m = messages[i];
       if (m.role !== 'user') continue;
+      if (this._isScheduledResumeTurn(m.content)) continue;
       if (this._isAgentInjectedUserContent(m.content)) continue;
       const text = this._stripInjectedTaskContext(this._messageText(m.content));
       if (!text) continue;
@@ -3993,6 +4310,70 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     return this._currentTaskProgressRows(tabId).length > 0;
   }
 
+  _emptyOutputRecoveryNudge(mode) {
+    if (mode === 'act') {
+      return '[System nudge: your previous response had neither text nor a tool call. Continue the active browser task with tool calls. If the task is truly complete, call the done tool with a real summary. Do not output a plain summary and do not stop without a tool call.]';
+    }
+    return '[System nudge: your previous response had neither text nor a tool call. You may have run out of output budget on internal reasoning. In ONE short message, summarize what you accomplished, what you tried, and what blocked you - then stop. Do not start any new tool calls.]';
+  }
+
+  _buildAutoProgressResumeInstruction(tabId) {
+    const session = this._currentProgressSession(tabId);
+    const sessionId = String(session?.sessionId || '').trim();
+    const safeSessionId = /^[A-Za-z0-9_.:-]{1,128}$/.test(sessionId) ? sessionId : '';
+    const rows = safeSessionId ? this._rowsForProgressSession(tabId, safeSessionId) : this._currentTaskLedgerRows(tabId);
+    const unresolved = unresolvedLedgerRows(rows);
+    const counts = progressCounts(rows);
+    return [
+      'Continue the active Act-mode progress-ledger task after the previous run hit consecutive stalled model outputs.',
+      'Reread the current page/state before acting.',
+      'Use the pinned progress ledger or progress_read to decide what remains.',
+      ...(safeSessionId ? [`App-owned progress session id: ${safeSessionId}. If the pinned ledger is missing, call progress_read({sessionId: "${safeSessionId}"}) before acting.`] : []),
+      'Do not redo processed, skipped, or failed rows.',
+      'Continue only unresolved pending/acted rows for the current task.',
+      'Prefer a small batch of tool calls, then update progress.',
+      'When all rows are processed, skipped, or failed, call done with a real summary.',
+      `Current progress snapshot: ${counts.total} row(s), ${unresolved.length} unresolved.`,
+    ].join(' ');
+  }
+
+  async _scheduleAutoProgressResume(tabId, onUpdate = () => {}) {
+    if (!this.scheduler) return null;
+    if ((this.conversationModes.get(tabId) || 'ask') !== 'act') return null;
+    if (!this._shouldBlockDoneForProgress(tabId)) return null;
+
+    const { tabUrl, tabTitle } = await this._getTabUrlTitle(tabId);
+    let result;
+    try {
+      result = await this.scheduler.createResumeJob({
+        tabId,
+        conversationId: this.conversationIds.get(tabId) || null,
+        mode: 'act',
+        args: {
+          after_seconds: 90,
+          reason: 'The active progress-ledger task hit consecutive stalled model outputs before finishing.',
+          resume_instruction: this._buildAutoProgressResumeInstruction(tabId),
+        },
+        currentUrl: tabUrl,
+        currentTitle: tabTitle,
+      });
+    } catch (e) {
+      onUpdate('warning', { message: `Could not schedule automatic resume: ${e?.message || e}` });
+      return null;
+    }
+    if (!result?.success) {
+      const error = result?.error || 'unknown error';
+      onUpdate('warning', { message: `Could not schedule automatic resume: ${error}` });
+      return null;
+    }
+
+    const message = result.deduped
+      ? `Agent hit consecutive stalled outputs; an existing resume is already scheduled for ${result.scheduledAt}.`
+      : `Agent hit consecutive stalled outputs; scheduled a resume for ${result.scheduledAt}.`;
+    onUpdate('warning', { message });
+    return { ...result, message };
+  }
+
   _plainFinalProgressBlock(tabId) {
     const progressBlock = this._shouldBlockDoneForProgress(tabId)
       ? this._progressDoneBlock(tabId)
@@ -4028,15 +4409,22 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
   /**
    * Token budget at which we proactively auto-compact for the active provider:
-   * a fraction (contextCompactRatio) of the model's context window. Compacting
+   * an adaptive fraction of the model's context window. Compacting
    * here — before the provider hard-errors on overflow — keeps the run smooth
    * and lets us surface a clean "Context automatically compacted" notice rather
    * than the jarring _emergencyTrim fallback.
    */
+  _contextCompactRatioForWindow(contextWindow) {
+    if (contextWindow <= 32768) return 0.65;
+    if (contextWindow <= 65536) return 0.70;
+    if (contextWindow <= 131072) return this.contextCompactRatio;
+    return 0.80;
+  }
+
   _contextTokenBudget() {
     const provider = this.providerManager.getActive();
     const window = (provider && Number(provider.contextWindow)) || 128000;
-    return Math.floor(window * this.contextCompactRatio);
+    return Math.floor(window * this._contextCompactRatioForWindow(window));
   }
 
   // Char-equivalent billed for the single screenshot that survives image
@@ -4105,6 +4493,17 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     return -1;
   }
 
+  _findLatestScheduledResumeIndex(messages) {
+    for (let i = messages.length - 1; i >= 1; i--) {
+      const m = messages[i];
+      if (m.role !== 'user') continue;
+      if (this._isScheduledResumeTurn(m.content)) return i;
+      if (this._isAgentInjectedUserContent(m.content)) continue;
+      if (this._stripInjectedTaskContext(this._messageText(m.content))) return -1;
+    }
+    return -1;
+  }
+
   /**
    * Shrink oversized tool results / message bodies in place, capping the bloat
    * without dropping any turns. Used as the fallback when we're over the token
@@ -4116,19 +4515,45 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
    * would silently drop it. Clears the cached input-token count so the next
    * call re-measures the smaller size.
    */
+  /**
+   * Truncate `content` to `limit` chars, but if it's wrapped in an
+   * <untrusted_page_content> box, keep the closing tag intact instead of
+   * slicing it off. A naive slice can drop the close tag (and its nonce id),
+   * which makes _hasUntrustedWrapper() return false on a later pass — e.g.
+   * when the digest/summarizer runs after the skill that produced it was
+   * removed or renamed, so _isUntrustedTool() no longer recognizes it either.
+   * That combination would launder attacker-controlled page text into the
+   * trusted trim summary. Re-appending the matching close tag keeps the
+   * wrapper detectable regardless of skill registry state.
+   */
+  _truncatePreservingUntrustedWrapper(content, limit) {
+    const openMatch = content.match(/^<untrusted_page_content\b([^>]*)>\n?/);
+    if (!openMatch) {
+      return content.slice(0, limit) + '\n[...truncated to fit context]';
+    }
+    const closeMatch = content.match(/\n?<\/untrusted_page_content\b[^>]*>\s*$/);
+    const closeTag = closeMatch ? closeMatch[0] : `\n</untrusted_page_content${openMatch[1]}>`;
+    const openTag = openMatch[0];
+    const innerLimit = Math.max(0, limit - openTag.length - closeTag.length);
+    const inner = content.slice(openTag.length, openTag.length + innerLimit);
+    return `${openTag}${inner}\n[...truncated to fit context]${closeTag}`;
+  }
+
   _truncateOversizedMessages(tabId, messages) {
     const taskIdx = this._findOriginalTaskIndex(messages);
+    const scheduledResumeIdx = this._findLatestScheduledResumeIndex(messages);
     let trimmed = false;
     for (let i = 1; i < messages.length; i++) {
       if (i === taskIdx) continue; // never truncate the pinned original task
+      if (i === scheduledResumeIdx) continue; // preserve scheduled resume instructions
       const m = messages[i];
       if (this._isPinnedAgentStateMessage(m)) continue;
       if (typeof m.content !== 'string') continue; // image/array content handled by _pruneOldImages
       if (m.role === 'tool' && m.content.length > 2000) {
-        m.content = m.content.slice(0, 2000) + '\n[...truncated to fit context]';
+        m.content = this._truncatePreservingUntrustedWrapper(m.content, 2000);
         trimmed = true;
       } else if (m.content.length > 5000) {
-        m.content = m.content.slice(0, 5000) + '\n[...truncated to fit context]';
+        m.content = this._truncatePreservingUntrustedWrapper(m.content, 5000);
         trimmed = true;
       }
     }
@@ -4159,6 +4584,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     } else {
       usedTokens = Math.max(lastReported, estTokens);
     }
+    const fixedPromptOverheadTokens = lastReported > 0 && lastEstChars != null
+      ? Math.max(0, lastReported - Math.ceil(lastEstChars / 4))
+      : 0;
 
     const tooManyMessages = messages.length > this.maxContextMessages;
     const tooManyChars = totalChars > this.maxContextChars;
@@ -4191,6 +4619,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     // Shared with _truncateOversizedMessages.
     const originalTaskIdx = this._findOriginalTaskIndex(messages);
     const originalTask = originalTaskIdx >= 0 ? messages[originalTaskIdx] : null;
+    const scheduledResumeIdx = this._findLatestScheduledResumeIndex(messages);
+    const scheduledResumeMsg = scheduledResumeIdx >= 0 && scheduledResumeIdx !== originalTaskIdx
+      ? messages[scheduledResumeIdx]
+      : null;
     // Pin the scratchpad alongside system so the model's self-written notes
     // survive summarization. Stripped from old/recent slices below to avoid
     // duplicating it during rebuild.
@@ -4198,13 +4630,19 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const scratchpadMsg = scratchpadIdx >= 0 ? messages[scratchpadIdx] : null;
     const progressIdx = this._findProgressLedgerIndex(messages);
     const progressMsg = progressIdx >= 0 ? messages[progressIdx] : null;
-    const keepRecent = 16; // keep last N messages verbatim
+    // Keep last N messages verbatim. Agents doing heavy tool work (scraping,
+    // batch downloads) burn messages fast — each tool call is 2 messages
+    // (assistant + tool result), so 30 ≈ last 15 tool turns. 16 was too tight
+    // for long-horizon tasks and caused the model to "forget" outcomes from
+    // ~8 steps back (e.g. the file list from list_downloads).
+    const keepRecent = 30;
     // Exclude the pinned original task from both summary and recent slices.
     const afterPin = originalTaskIdx >= 0 ? originalTaskIdx + 1 : 1;
-    const oldMessagesRaw = messages.slice(afterPin, -keepRecent);
-    const recentMessagesRaw = messages.slice(-keepRecent);
-    const oldMessages = oldMessagesRaw.filter(m => !this._isPinnedAgentStateMessage(m));
-    const recentMessages = recentMessagesRaw.filter(m => !this._isPinnedAgentStateMessage(m));
+    const recentStart = Math.max(afterPin, messages.length - keepRecent);
+    const oldMessagesRaw = messages.slice(afterPin, recentStart);
+    const recentMessagesRaw = messages.slice(recentStart);
+    const oldMessages = oldMessagesRaw.filter(m => m !== scheduledResumeMsg && !this._isScheduledResumeTurn(m.content) && !this._isPinnedAgentStateMessage(m));
+    const recentMessages = recentMessagesRaw.filter(m => m !== scheduledResumeMsg && !this._isScheduledResumeTurn(m.content) && !this._isPinnedAgentStateMessage(m));
 
     // Boundary fix: the recent slice must not begin in the middle of a
     // tool-call group. If the cutoff lands right after an assistant
@@ -4217,8 +4655,48 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     while (recentMessages.length && recentMessages[0].role === 'tool') {
       oldMessages.push(recentMessages.shift());
     }
+    let retainedRecentOverBudget = false;
+    if (tooManyTokens) {
+      // Small-window runs can exceed the token budget before they have more
+      // than 30 post-task messages. In that case, keeping all 30 recent turns
+      // would leave too little `oldMessages` history to summarize and we'd send
+      // the same over-budget prompt again. Move just enough of the earliest
+      // recent turns back into the summary set to make compaction possible.
+      const latestUserRecentIndex = () => {
+        for (let i = recentMessages.length - 1; i >= 0; i--) {
+          const msg = recentMessages[i];
+          if (msg?.role === 'user' && !this._isAgentInjectedUserContent(msg.content)) return i;
+        }
+        return -1;
+      };
+      const canMoveOldestRecentToSummary = () => {
+        if (!recentMessages.length) return false;
+        const latestUserIdx = latestUserRecentIndex();
+        if (latestUserIdx === 0) return false;
+        if (latestUserIdx < 0 && recentMessages[0]?.role === 'tool') return true;
+        return latestUserIdx > 0 || recentMessages.length > 1;
+      };
+      const moveOldestRecentToSummary = () => {
+        if (!canMoveOldestRecentToSummary()) return false;
+        oldMessages.push(recentMessages.shift());
+        while (recentMessages.length && recentMessages[0].role === 'tool' && canMoveOldestRecentToSummary()) {
+          oldMessages.push(recentMessages.shift());
+        }
+        return true;
+      };
+      while (oldMessages.length < 4 && moveOldestRecentToSummary()) {}
+      const pinnedChars = this._estimateContextChars([systemMsg, originalTask, scheduledResumeMsg, scratchpadMsg, progressMsg].filter(Boolean));
+      const compactOverheadChars = 3000; // summary wrapper + ack + manual summary fallback
+      const fixedPromptOverheadChars = fixedPromptOverheadTokens * 4;
+      const maxRecentChars = Math.max(0, (tokenBudget * 4) - fixedPromptOverheadChars - pinnedChars - compactOverheadChars);
+      while (oldMessages.length >= 4 && canMoveOldestRecentToSummary() && this._estimateContextChars(recentMessages) > maxRecentChars) {
+        moveOldestRecentToSummary();
+      }
+      retainedRecentOverBudget = this._estimateContextChars(recentMessages) > maxRecentChars;
+    }
 
-    if (oldMessages.length < 4) {
+    const minSummarizableMessages = tooManyTokens && oldMessages.some(m => m?.role === 'user') ? 1 : 4;
+    if (oldMessages.length < minSummarizableMessages || retainedRecentOverBudget) {
       // Not enough history to summarize. But if the TOKEN budget is what
       // tripped us (e.g. a single huge page/tool result early in a run on a
       // small local model), returning unchanged would re-send the same
@@ -4307,13 +4785,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       }
     }
 
-    // Rebuild: system + pinned original task + scratchpad (if any) + summary + recent
+    // Rebuild: system + pinned original task + scheduled resume + scratchpad (if any) + summary + recent
     const summaryMsg = { role: 'user', content: `[Context window was trimmed to stay within budget. Your ORIGINAL TASK is the user message above — keep working on it. ${summaryText}]` };
     const summaryAck = { role: 'assistant', content: 'Understood, I have the conversation context. Continuing.' };
 
     messages.length = 0;
     messages.push(systemMsg);
     if (originalTask) messages.push(originalTask);
+    if (scheduledResumeMsg) messages.push(scheduledResumeMsg);
     if (scratchpadMsg) messages.push(scratchpadMsg);
     if (progressMsg) messages.push(progressMsg);
     messages.push(summaryMsg, summaryAck, ...recentMessages);
@@ -4353,6 +4832,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (this._runningTabs.has(tabId)) {
       return { compacted: false, reason: 'busy', remaining: 0 };
     }
+    await this._hydrate(tabId);
     const messages = this.conversations.get(tabId);
     if (!messages || messages.length <= 1) {
       return { compacted: false, reason: 'empty', remaining: messages?.length || 0 };
@@ -4365,6 +4845,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       this.currentCostState.get(tabId) || null,
       { force: true }
     );
+    if (result?.compacted) this._persist(tabId);
     return result || { compacted: false, reason: 'not_needed', remaining: messages.length };
   }
 
@@ -4389,6 +4870,50 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       if (json.length <= maxResultChars) return json;
     }
 
+    if (result && result.data && typeof result.data === 'object' && !Array.isArray(result.data)) {
+      const originalData = result.data;
+      const originalText = typeof originalData.text === 'string' ? originalData.text : null;
+      const originalSegments = Array.isArray(originalData.segments) ? originalData.segments : null;
+      if (originalText || originalSegments) {
+        const textLimits = originalText ? [4000, 3000, 2000, 1000] : [null];
+        const segmentLimits = originalSegments ? [80, 40, 20, 10, 5, 0] : [null];
+        for (const textLimit of textLimits) {
+          for (const segmentLimit of segmentLimits) {
+            const data = { ...originalData };
+            if (originalText && originalText.length > textLimit) {
+              data.text = `${originalText.slice(0, textLimit)}\n[...tool data text truncated]`;
+              data.truncated = true;
+              data.originalLength = data.originalLength ?? originalText.length;
+              // `null` means "offset absent" (e.g. the provider's final
+              // transcript window), not offset 0 — Number(null) would be 0.
+              const rawTextOffset = originalData.text_offset == null ? NaN : Number(originalData.text_offset);
+              const rawNextTextOffset = originalData.next_text_offset == null ? NaN : Number(originalData.next_text_offset);
+              const hasTextOffset = Number.isFinite(rawTextOffset) && rawTextOffset >= 0;
+              const hasNextTextOffset = Number.isFinite(rawNextTextOffset) && rawNextTextOffset >= 0;
+              const inferredTextOffset = hasTextOffset
+                ? rawTextOffset
+                : (hasNextTextOffset ? Math.max(0, rawNextTextOffset - originalText.length) : null);
+              if (inferredTextOffset != null) {
+                const deliveredNextTextOffset = inferredTextOffset + textLimit;
+                if (!hasNextTextOffset || deliveredNextTextOffset < rawNextTextOffset) {
+                  data.next_text_offset = deliveredNextTextOffset;
+                  data.has_more_text = true;
+                }
+              }
+            }
+            if (originalSegments && originalSegments.length > segmentLimit) {
+              data.segments = originalSegments.slice(0, segmentLimit);
+              data.segmentsTruncated = true;
+              data.originalSegmentCount = data.originalSegmentCount ?? originalSegments.length;
+            }
+            const trimmed = { ...result, data };
+            json = JSON.stringify(trimmed);
+            if (json.length <= maxResultChars) return json;
+          }
+        }
+      }
+    }
+
     // If still too big, just chop the JSON
     return json.slice(0, maxResultChars) + '\n[...result truncated]';
   }
@@ -4406,7 +4931,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
    * page, so it cannot be guessed and spoofed.
    */
   _wrapUntrusted(name, content) {
-    if (!UNTRUSTED_CONTENT_TOOLS.has(name)) return content;
+    if (!this._isUntrustedTool(name)) return content;
     const nonce = Math.random().toString(36).slice(2, 10);
     const safe = String(content).replace(/<\/?untrusted_page_content\b[^>]*>/gi, '[markup stripped]');
     return `<untrusted_page_content id="${nonce}">\n${safe}\n</untrusted_page_content id="${nonce}">`;
@@ -4424,6 +4949,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     return m ? m[1] : content;
   }
 
+  _hasUntrustedWrapper(content) {
+    return typeof content === 'string'
+      && /<untrusted_page_content\b[^>]*>[\s\S]*?<\/untrusted_page_content\b[^>]*>/.test(content);
+  }
+
   /**
    * One-line digest of a tool result, used when summarizing older turns so
    * the model retains the key outcome (file count, download IDs, final URL)
@@ -4435,6 +4965,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
    */
   _digestToolResult(name, content) {
     if (!content) return '(empty)';
+    const isUntrusted = this._isUntrustedTool(name) || this._hasUntrustedWrapper(content);
     // Unwrap the untrusted-content markers first so the inner JSON parses —
     // otherwise the parse fails and the fallback would dump raw (attacker-
     // controlled) page text into the trusted trim summary / summarizer input.
@@ -4443,7 +4974,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     try { parsed = JSON.parse(raw); } catch { /* not JSON / truncated */ }
     if (!parsed || typeof parsed !== 'object') {
       // Never echo raw bytes from a page-derived tool into the trusted summary.
-      if (UNTRUSTED_CONTENT_TOOLS.has(name)) {
+      if (isUntrusted) {
         return `${name}: untrusted page content (${String(raw).length} chars)`;
       }
       return this._truncate(String(raw).replace(/\s+/g, ' '), 140);
@@ -4453,10 +4984,16 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       // text (a fetched URL, a filename, a page-error snippet). Echoing it
       // into the trusted trim summary / summarizer prompt would smuggle that
       // text out of the untrusted wrapper, so emit a content-free note instead.
-      if (UNTRUSTED_CONTENT_TOOLS.has(name)) {
+      if (isUntrusted) {
         return `${name}: error (untrusted page content)`;
       }
       return `error: ${this._truncate(String(parsed.error), 120)}`;
+    }
+
+    const skillTool = this._skillToolForName(name);
+    if (skillTool) {
+      const len = parsed.originalLength ?? (typeof parsed.text === 'string' ? parsed.text.length : JSON.stringify(parsed).length);
+      return `${name}: ${parsed.status ?? 200} (${len} chars)`;
     }
 
     switch (name) {
@@ -4557,12 +5094,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         return `scratchpad ${parsed.mode || 'write'} (${parsed.bytes ?? '?'} chars)`;
       }
       case 'progress_update': {
-        if (UNTRUSTED_CONTENT_TOOLS.has(name)) return `${name} ok (untrusted page content)`;
+        if (isUntrusted) return `${name} ok (untrusted page content)`;
         const c = parsed.counts || {};
         return `progress ledger updated (${c.total ?? '?'} rows, ${c.unresolved ?? 0} unresolved)`;
       }
       case 'progress_read': {
-        if (UNTRUSTED_CONTENT_TOOLS.has(name)) return `${name} ok (untrusted page content)`;
+        if (isUntrusted) return `${name} ok (untrusted page content)`;
         const c = parsed.counts || {};
         return `progress ledger read (${c.total ?? '?'} rows, ${c.unresolved ?? 0} unresolved)`;
       }
@@ -4572,7 +5109,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     // object — it holds page content (element labels, selection, frame text,
     // PDF text, execute_js output, …) that would land in the trusted trim
     // summary. Emit a content-free digest instead.
-    if (UNTRUSTED_CONTENT_TOOLS.has(name)) {
+    if (isUntrusted) {
       return `${name} ok (untrusted page content)`;
     }
     try {
@@ -4657,6 +5194,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       originalTask = m;
       break;
     }
+    const scheduledResumeIdx = this._findLatestScheduledResumeIndex(messages);
+    const scheduledResumeMsg = scheduledResumeIdx >= 0 && messages[scheduledResumeIdx] !== originalTask
+      ? messages[scheduledResumeIdx]
+      : null;
     // Pin the scratchpad too — even under emergency trim, the model's own
     // notes should survive.
     const scratchpadIdx = this._findScratchpadIndex(messages);
@@ -4664,7 +5205,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const progressIdx = this._findProgressLedgerIndex(messages);
     const progressMsg = progressIdx >= 0 ? messages[progressIdx] : null;
     const keepLast = 6; // keep only 6 most recent messages
-    const recent = messages.slice(-keepLast).filter(m => !this._isPinnedAgentStateMessage(m));
+    const recent = messages.slice(-keepLast).filter(m => m !== scheduledResumeMsg && !this._isScheduledResumeTurn(m.content) && !this._isPinnedAgentStateMessage(m));
 
     // Drop any leading `tool` messages whose requesting assistant turn fell
     // outside the kept window. Both OpenAI-compatible and Anthropic APIs reject
@@ -4696,6 +5237,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     messages.length = 0;
     messages.push(systemMsg);
     if (originalTask) messages.push(originalTask);
+    if (scheduledResumeMsg) messages.push(scheduledResumeMsg);
     if (scratchpadMsg) messages.push(scratchpadMsg);
     if (progressMsg) messages.push(progressMsg);
     messages.push(notice, ack, ...recent);
@@ -5200,6 +5742,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     // attach the user's cookies only for fetches that share the registrable
     // domain (eTLD+1) of the active tab — see network-tools.js for cookie &
     // redirect policy.
+    const skillTool = this._skillToolForName(name);
+    if (skillTool) {
+      return await executeHttpSkillTool(skillTool, args, { tabId });
+    }
+    const skillEndpointRedirect = this._skillEndpointToolRedirect(name, args);
+    if (skillEndpointRedirect) {
+      return skillEndpointRedirect;
+    }
     if (name === 'fetch_url') {
       return await fetchUrl(args.url, args, { tabId });
     }
@@ -5231,11 +5781,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       try {
         const stored = await browser.storage.local.get(['captchaSolverEnabled', 'capsolverApiKey']);
         if (!stored.captchaSolverEnabled) {
-          return { success: false, error: 'CapSolver is not enabled. Ask the user to enable it in Settings → CAPTCHA, or fall back to asking them to solve the captcha manually.' };
+          return { success: false, error: 'CapSolver is not enabled. Ask the user to enable it in Settings → General → Advanced, or fall back to asking them to solve the captcha manually.' };
         }
         const apiKey = (stored.capsolverApiKey || '').trim();
         if (!apiKey) {
-          return { success: false, error: 'CapSolver is enabled but no API key is configured. Ask the user to set one in Settings → CAPTCHA, or fall back to asking them to solve the captcha manually.' };
+          return { success: false, error: 'CapSolver is enabled but no API key is configured. Ask the user to set one in Settings → General → Advanced, or fall back to asking them to solve the captcha manually.' };
         }
 
         let websiteURL = '';
@@ -5607,7 +6157,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         try {
           const tab = await browser.tabs.get(tabId);
           if (tab?.active) {
-            result.image = await this._withIndicatorsHidden(tabId, () =>
+            // Route through `_attachImage` (like the `screenshot` tool) so the
+            // batch loop strips it and re-attaches it as an image_url block.
+            // Left inline as `result.image`, the base64 data URL blows past the
+            // tool-result char cap and gets truncated to unreadable garbage.
+            result._attachImage = await this._withIndicatorsHidden(tabId, () =>
               browser.tabs.captureVisibleTab(tab.windowId, { format: 'png', quality: 80 })
             );
           } else {
@@ -6071,6 +6625,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   }
 
   async _processMessageInner(tabId, userMessage, onUpdate, mode) {
+    await this._hydrate(tabId);
     const messages = this.getConversation(tabId, mode);
     const costState = this._newCostRunState();
     this.currentCostState.set(tabId, costState);
@@ -6121,7 +6676,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       await this._ensureProgressSessionForCurrentTask(tabId, { provider, costState });
     }
     const visionAvailable = !!(provider?.supportsVision) || !!(await this.providerManager.getVisionProvider());
-    const tools = getToolsForMode(mode, { strictSecretMode: this.strictSecretMode, tier: provider.promptTier, visionAvailable });
+    const tier = provider.promptTier;
+    const skillTools = this._skillToolDefinitions(mode, tier);
+    const tools = getToolsForMode(mode, { strictSecretMode: this.strictSecretMode, tier, visionAvailable, skillTools });
     const allowedToolNames = new Set(tools.map(t => t.function.name));
     const plannerTemperature = mode === 'act' ? 0.15 : 0.3;
     let steps = 0;
@@ -6129,6 +6686,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     // (no-content + no-tool-call) response. Prevents an infinite
     // empty→nudge→empty→nudge cycle.
     let emptyOutputRecoveryAttempted = false;
+    let compressionPlaceholderRecoveryAttempted = false;
 
     if (!runId) {
       runId = await this._startTraceRun(tabId, userMessage, mode, provider);
@@ -6244,12 +6802,6 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         break;
       }
 
-      // Reset the empty-output recovery flag whenever the model produces
-      // any signal of life (text or a tool call).
-      if ((result.content && result.content.trim()) || (result.toolCalls && result.toolCalls.length > 0)) {
-        emptyOutputRecoveryAttempted = false;
-      }
-
       // Fallback: if the LLM emitted tool calls as raw text instead of
       // using the structured tool_calls field, try to parse them out.
       if ((!result.toolCalls || result.toolCalls.length === 0) && result.content) {
@@ -6258,6 +6810,19 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           this._logDebug({ type: 'llm_text_fallback_parse', step: steps, parsed: fallback.map(tc => tc.function.name) });
           result.toolCalls = fallback;
           result.content = null;
+        }
+      }
+
+      // Reset recovery flags whenever the model produces real progress. A
+      // placeholder is not progress, but a later tool call or genuine response
+      // should make the next placeholder eligible for its own recovery nudge.
+      const hasToolCallsAfterFallback = !!(result.toolCalls && result.toolCalls.length > 0);
+      const hasContentAfterFallback = !!(result.content && result.content.trim());
+      const isCompressionPlaceholderAfterFallback = mode === 'act' && this._isCompressionPlaceholderResponse(result.content);
+      if (hasToolCallsAfterFallback || hasContentAfterFallback) {
+        emptyOutputRecoveryAttempted = false;
+        if (hasToolCallsAfterFallback || !isCompressionPlaceholderAfterFallback) {
+          compressionPlaceholderRecoveryAttempted = false;
         }
       }
 
@@ -6297,11 +6862,37 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
       // No tool calls. Detect the "empty output" failure mode (no text +
       // no tool call after non-trivial reasoning) and recover ONCE via a
-      // summary-nudge before giving up.
+      // mode-aware nudge before giving up.
       const isEmpty = !result.content || !result.content.trim();
       if (isEmpty && result.costAllowanceMessage) {
         finalResponse = result.costAllowanceMessage;
         _traceStatus = 'cost_limit';
+        messages.push({ role: 'assistant', content: finalResponse });
+        onUpdate('warning', { message: finalResponse });
+        break;
+      }
+      if (mode === 'act' && this._isCompressionPlaceholderResponse(result.content)) {
+        if (!compressionPlaceholderRecoveryAttempted) {
+          compressionPlaceholderRecoveryAttempted = true;
+          messages.push({ role: 'assistant', content: result.content });
+          messages.push({
+            role: 'user',
+            content: '[System nudge: your previous response was a context-compression placeholder, not a real final answer or tool call. Continue the active browser task with tool calls. Do not output "[compressed]".]',
+          });
+          onUpdate('warning', { message: 'Model returned a compression placeholder; continuing.' });
+          this._persist(tabId);
+          continue;
+        }
+        const scheduledResume = await this._scheduleAutoProgressResume(tabId, onUpdate);
+        if (scheduledResume) {
+          finalResponse = scheduledResume.message;
+          _traceStatus = 'scheduled_resume';
+          messages.push({ role: 'assistant', content: finalResponse });
+          this._persist(tabId);
+          break;
+        }
+        finalResponse = '[Agent stopped because the model returned a context-compression placeholder instead of a tool call or real final answer, even after a recovery nudge.]';
+        _traceStatus = 'placeholder_output';
         messages.push({ role: 'assistant', content: finalResponse });
         onUpdate('warning', { message: finalResponse });
         break;
@@ -6311,9 +6902,18 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           emptyOutputRecoveryAttempted = true;
           messages.push({
             role: 'user',
-            content: '[System nudge: your previous response had neither text nor a tool call. You may have run out of output budget on internal reasoning. In ONE short message, summarize what you accomplished, what you tried, and what blocked you — then stop. Do not start any new tool calls.]',
+            content: this._emptyOutputRecoveryNudge(mode),
           });
+          this._persist(tabId);
           continue;
+        }
+        const scheduledResume = await this._scheduleAutoProgressResume(tabId, onUpdate);
+        if (scheduledResume) {
+          finalResponse = scheduledResume.message;
+          _traceStatus = 'scheduled_resume';
+          messages.push({ role: 'assistant', content: finalResponse });
+          this._persist(tabId);
+          break;
         }
         finalResponse = '[Agent emitted no output and no tool call, even after a recovery nudge. This usually means the task exceeded the current model\'s capability or context budget. Try a stronger model, raise the step limit in settings, or break the task into smaller parts.]';
         _traceStatus = 'empty_output';
@@ -6326,6 +6926,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         messages.push({ role: 'assistant', content: result.content });
         messages.push({ role: 'user', content: progressFinalBlock });
         onUpdate('warning', { message: 'Progress ledger has unresolved rows; continuing.' });
+        this._persist(tabId);
         continue;
       }
       finalResponse = result.costAllowanceMessage
@@ -6348,6 +6949,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       }
     }
 
+    this._persist(tabId);
     return finalResponse;
     } finally {
       this._endTraceRun(tabId, runId, _traceStatus, finalResponse);
@@ -6371,6 +6973,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   }
 
   async _processMessageStreamInner(tabId, userMessage, onUpdate, mode) {
+    await this._hydrate(tabId);
     const messages = this.getConversation(tabId, mode);
     const costState = this._newCostRunState();
     this.currentCostState.set(tabId, costState);
@@ -6421,12 +7024,15 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       await this._ensureProgressSessionForCurrentTask(tabId, { provider, costState });
     }
     const visionAvailable = !!(provider?.supportsVision) || !!(await this.providerManager.getVisionProvider());
-    const tools = getToolsForMode(mode, { strictSecretMode: this.strictSecretMode, tier: provider.promptTier, visionAvailable });
+    const tier = provider.promptTier;
+    const skillTools = this._skillToolDefinitions(mode, tier);
+    const tools = getToolsForMode(mode, { strictSecretMode: this.strictSecretMode, tier, visionAvailable, skillTools });
     const allowedToolNames = new Set(tools.map(t => t.function.name));
     const plannerTemperature = mode === 'act' ? 0.15 : 0.3;
     let steps = 0;
     // See processMessage — used to break the empty-response→nudge cycle.
     let emptyOutputRecoveryAttempted = false;
+    let compressionPlaceholderRecoveryAttempted = false;
 
     while (steps < this.maxSteps) {
       if (this._checkAbort(tabId)) {
@@ -6458,6 +7064,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         if (beforeCost) {
           messages.push({ role: 'assistant', content: beforeCost });
           onUpdate('warning', { message: beforeCost });
+          this._persist(tabId);
           return finish(beforeCost, 'cost_limit');
         }
         let costStopMessage = '';
@@ -6511,9 +7118,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         }
 
         if (hasToolCalls) {
+          emptyOutputRecoveryAttempted = false;
+          compressionPlaceholderRecoveryAttempted = false;
           if (costStopMessage) {
             messages.push({ role: 'assistant', content: costStopMessage });
             onUpdate('warning', { message: costStopMessage });
+            this._persist(tabId);
             return finish(costStopMessage, 'cost_limit');
           }
           const toolCalls = Object.values(toolCallsAccumulator);
@@ -6536,12 +7146,13 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         }
 
         // No tool calls. Detect the "empty output" failure and recover
-        // once via a summary-nudge; on second empty in a row, give up
+        // once via a mode-aware nudge; on second empty in a row, give up
         // with a transparent message instead of returning empty content.
         this._logDebug({ type: 'llm_stream_response', step: steps, content: fullText, toolCalls: null });
         if ((!fullText || !fullText.trim()) && costStopMessage) {
           messages.push({ role: 'assistant', content: costStopMessage });
           onUpdate('warning', { message: costStopMessage });
+          this._persist(tabId);
           return finish(costStopMessage, 'cost_limit');
         }
         if (!fullText || !fullText.trim()) {
@@ -6549,21 +7160,54 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             emptyOutputRecoveryAttempted = true;
             messages.push({
               role: 'user',
-              content: '[System nudge: your previous response had neither text nor a tool call. You may have run out of output budget on internal reasoning. In ONE short message, summarize what you accomplished, what you tried, and what blocked you — then stop. Do not start any new tool calls.]',
+              content: this._emptyOutputRecoveryNudge(mode),
             });
+            this._persist(tabId);
             continue;
+          }
+          const scheduledResume = await this._scheduleAutoProgressResume(tabId, onUpdate);
+          if (scheduledResume) {
+            messages.push({ role: 'assistant', content: scheduledResume.message });
+            this._persist(tabId);
+            return finish(scheduledResume.message, 'scheduled_resume');
           }
           const failMsg = '[Agent emitted no output and no tool call, even after a recovery nudge. This usually means the task exceeded the current model\'s capability or context budget. Try a stronger model, raise the step limit in settings, or break the task into smaller parts.]';
           messages.push({ role: 'assistant', content: failMsg });
           onUpdate('warning', { message: failMsg });
+          this._persist(tabId);
           return finish(failMsg, 'empty_output');
         }
+        if (mode === 'act' && this._isCompressionPlaceholderResponse(fullText)) {
+          if (!compressionPlaceholderRecoveryAttempted) {
+            compressionPlaceholderRecoveryAttempted = true;
+            messages.push({ role: 'assistant', content: fullText });
+            messages.push({
+              role: 'user',
+              content: '[System nudge: your previous response was a context-compression placeholder, not a real final answer or tool call. Continue the active browser task with tool calls. Do not output "[compressed]".]',
+            });
+            onUpdate('warning', { message: 'Model returned a compression placeholder; continuing.' });
+            this._persist(tabId);
+            continue;
+          }
+          const scheduledResume = await this._scheduleAutoProgressResume(tabId, onUpdate);
+          if (scheduledResume) {
+            messages.push({ role: 'assistant', content: scheduledResume.message });
+            this._persist(tabId);
+            return finish(scheduledResume.message, 'scheduled_resume');
+          }
+          const failMsg = '[Agent stopped because the model returned a context-compression placeholder instead of a tool call or real final answer, even after a recovery nudge.]';
+          messages.push({ role: 'assistant', content: failMsg });
+          onUpdate('warning', { message: failMsg });
+          return finish(failMsg, 'placeholder_output');
+        }
         emptyOutputRecoveryAttempted = false;
+        compressionPlaceholderRecoveryAttempted = false;
         const progressFinalBlock = this._plainFinalProgressBlock(tabId);
         if (progressFinalBlock) {
           messages.push({ role: 'assistant', content: fullText });
           messages.push({ role: 'user', content: progressFinalBlock });
           onUpdate('warning', { message: 'Progress ledger has unresolved rows; continuing.' });
+          this._persist(tabId);
           continue;
         }
         if (costStopMessage) {
@@ -6571,6 +7215,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           fullText = `${fullText}\n\n${costStopMessage}`;
         }
         messages.push({ role: 'assistant', content: fullText });
+        this._persist(tabId);
         return finish(fullText);
 
       } catch (e) {
@@ -6579,11 +7224,13 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         if (this._isContextOverflow(e.message)) {
           onUpdate('thinking', { step: steps, note: 'Context too large, trimming...' });
           this._emergencyTrim(messages);
+          this._persist(tabId);
           continue; // retry the loop with trimmed context
         }
         onUpdate('error', { message: e.message });
         const errMsg = `Error: ${e.message}`;
         messages.push({ role: 'assistant', content: errMsg });
+        this._persist(tabId);
         return finish(errMsg, 'error');
       }
     }
@@ -6594,6 +7241,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const summary = this._buildStepLimitSummary(messages, steps);
     messages.push({ role: 'assistant', content: summary });
     onUpdate('text', { content: summary });
+    this._persist(tabId);
     return finish(summary, 'max_steps');
     } finally {
       this._endTraceRun(tabId, runId, _traceStatus, finalResponse);

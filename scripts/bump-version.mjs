@@ -17,8 +17,7 @@
  * Updates (in lockstep):
  *   package.json                       "version"
  *   package-lock.json                  top-level "version" + packages[""].version
- *   manifest.json                      "version"     (Chrome MV3, repo root)
- *   src/chrome/manifest.json           "version"     (Chrome MV3, in-source)
+ *   src/chrome/manifest.json           "version"     (Chrome MV3)
  *   src/firefox/manifest.json          "version"     (Firefox MV2)
  *   src/chrome/src/ui/settings.js      const EXT_VERSION = '...'   (settings UI)
  *   src/firefox/src/ui/settings.js     const EXT_VERSION = '...'   (settings UI)
@@ -35,9 +34,10 @@
  * automatic — the operator runs `git push --follow-tags origin <branch>`.
  *
  * The pure helpers `bumpSemver`, `rewriteVersionInJsonText`,
- * `rewriteVersionByAnchor`, and `isReleaseBoundary` are exported for unit
- * tests — the CLI side is guarded by an `import.meta.url` check so
- * importing this file doesn't trigger filesystem writes or git calls.
+ * `rewriteVersionByAnchor`, `isReleaseBoundary`, `submissionZipPaths`, and
+ * `submissionZipRemoveCommand` are exported for unit tests — the CLI side is
+ * guarded by an `import.meta.url` check so importing this file doesn't
+ * trigger filesystem writes or git calls.
  */
 
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -120,6 +120,16 @@ export function isReleaseBoundary(version) {
   return parseInt(match[3], 10) === 0;
 }
 
+export const SUBMISSION_ZIP_PACKAGES = Object.freeze(['chrome', 'edge', 'firefox']);
+
+export function submissionZipPaths(version) {
+  return SUBMISSION_ZIP_PACKAGES.map((browser) => `dist/webbrain-${browser}-${version}.zip`);
+}
+
+export function submissionZipRemoveCommand(version) {
+  return `git rm --ignore-unmatch ${submissionZipPaths(version).join(' ')}`;
+}
+
 /**
  * Generic version replacement for non-JSON files where the version lives
  * between two known surrounding strings (a JS literal, a Markdown badge,
@@ -150,7 +160,6 @@ const FILES_TO_UPDATE = [
   // twice (top-level + packages[""]).
   { path: 'package.json', kind: 'json' },
   { path: 'package-lock.json', kind: 'json', replaceAll: true },
-  { path: 'manifest.json', kind: 'json' },
   { path: 'src/chrome/manifest.json', kind: 'json' },
   { path: 'src/firefox/manifest.json', kind: 'json' },
   // Settings UI subtitle constant. The settings panel shows the version
@@ -299,9 +308,9 @@ function runCli() {
   if (isReleaseBoundary(newVersion)) {
     console.log(`  git tag -a v${newVersion} -m "Release v${newVersion}"   # ${newVersion} is a release boundary`);
   }
-  console.log('  npm run build:zip       # rebuild dist/webbrain-{chrome,firefox}-' + newVersion + '.zip');
-  console.log('  git rm dist/webbrain-{chrome,firefox}-' + oldVersion + '.zip');
-  console.log('  git add dist/webbrain-{chrome,firefox}-' + newVersion + '.zip');
+  console.log('  npm run build:zip       # rebuild ' + submissionZipPaths(newVersion).join(', '));
+  console.log('  ' + submissionZipRemoveCommand(oldVersion));
+  console.log('  git add ' + submissionZipPaths(newVersion).join(' '));
   console.log('  git commit -m "dist: rebuild submission zips for v' + newVersion + '"');
 }
 

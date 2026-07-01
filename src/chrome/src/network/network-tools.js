@@ -78,6 +78,7 @@ const PAGE_SOURCE_RESULT_MAX_CHARS = 8000;
 const PAGE_SOURCE_RESULT_SAFETY_CHARS = 200;
 const PAGE_SOURCE_ASSET_KINDS = ['stylesheets', 'scripts'];
 const PAGE_SOURCE_BODY_MAX_BYTES = 1000000;
+const SKILL_DOWNLOAD_DATA_URL_MAX_BYTES = 25 * 1024 * 1024;
 
 /**
  * Validate a URL before the agent fetches it.
@@ -261,6 +262,725 @@ try {
 
 export function getAllowLocalNetwork() {
   return _allowLocalNetwork;
+}
+
+async function currentTabUrl(tabId) {
+  if (tabId == null) return '';
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    return tab?.url || '';
+  } catch (_) {
+    return '';
+  }
+}
+
+function providerError(status, data, rawText) {
+  const detail = data?.detail || data?.error || data?.message || rawText || `HTTP ${status}`;
+  return typeof detail === 'string' ? detail.slice(0, 1000) : JSON.stringify(detail).slice(0, 1000);
+}
+
+function inputUrlAllowed(rawUrl, rules = []) {
+  if (!rules.length) return true;
+  let u;
+  try { u = new URL(rawUrl); } catch (_) { return false; }
+  const host = u.hostname.toLowerCase();
+  const path = u.pathname || '/';
+  return rules.some((rule) => {
+    const ruleHost = String(rule.host || '').toLowerCase();
+    if (!ruleHost) return false;
+    const hostMatches = host === ruleHost || host.endsWith(`.${ruleHost}`);
+    if (!hostMatches) return false;
+    const paths = Array.isArray(rule.paths) && rule.paths.length ? rule.paths : ['/'];
+    return paths.some((prefix) => path.startsWith(String(prefix || '/')));
+  });
+}
+
+function applySkillResponseLimits(value, limits = {}) {
+  if (!value || typeof value !== 'object') return value;
+  const rawMaxTextChars = limits.maxTextChars;
+  const unlimitedText = rawMaxTextChars === 'unlimited';
+  const maxTextChars = unlimitedText
+    ? Number.POSITIVE_INFINITY
+    : Number.isFinite(Number(rawMaxTextChars)) ? Math.max(1000, Number(rawMaxTextChars)) : 160000;
+  const arrayLimits = limits.maxArrayItems && typeof limits.maxArrayItems === 'object' ? limits.maxArrayItems : {};
+  const out = Array.isArray(value) ? [...value] : { ...value };
+  for (const [key, item] of Object.entries(out)) {
+    if (typeof item === 'string' && item.length > maxTextChars) {
+      out[key] = item.slice(0, maxTextChars);
+      out.truncated = true;
+      out.originalLength = out.originalLength ?? item.length;
+    } else if (Array.isArray(item)) {
+      const limit = Number(arrayLimits[key]);
+      if (Number.isFinite(limit) && limit >= 0 && item.length > limit) {
+        out[key] = item.slice(0, limit);
+        out.truncated = true;
+      }
+    }
+  }
+  return out;
+}
+
+function isHttpRedirectStatus(status) {
+  return status === 301 || status === 302 || status === 303 || status === 307 || status === 308;
+}
+
+function filterArgsToDeclaredParameters(args, tool) {
+  const properties = tool?.parameters?.properties;
+  if (!properties || typeof properties !== 'object') return {};
+  const allowed = new Set(Object.keys(properties));
+  const out = {};
+  for (const [key, value] of Object.entries(args || {})) {
+    if (!allowed.has(key)) continue;
+    const schema = properties[key] || {};
+    const type = schema.type;
+    const isNumeric = type === 'number' || type === 'integer';
+    if (isNumeric && value != null && value !== '') {
+      const numeric = Number(value);
+      if (Number.isFinite(numeric)) {
+        let next = type === 'integer' ? Math.trunc(numeric) : numeric;
+        const min = Number(schema.minimum);
+        const max = Number(schema.maximum);
+        if (Number.isFinite(min)) next = Math.max(min, next);
+        if (Number.isFinite(max)) next = Math.min(max, next);
+        out[key] = next;
+        continue;
+      }
+    }
+    out[key] = value;
+  }
+  return out;
+}
+
+function fillSkillJobEndpoint(template, jobId, baseEndpoint, label) {
+  if (!template) return { ok: false, error: `Skill download job is missing ${label}.` };
+  let url;
+  try {
+    url = new URL(template.replace(/\{job_id\}/g, encodeURIComponent(jobId)));
+  } catch {
+    return { ok: false, error: `Skill download job has an invalid ${label}.` };
+  }
+  if (url.protocol !== 'https:') return { ok: false, error: `Skill download job ${label} must use https.` };
+  if (baseEndpoint && url.origin !== baseEndpoint.origin) {
+    return { ok: false, error: `Skill download job ${label} must stay on ${baseEndpoint.origin}.` };
+  }
+  return { ok: true, url: url.href };
+}
+
+function safeDownloadFilename(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return undefined;
+  const base = raw.split(/[\\/]/).filter(Boolean).pop() || '';
+  const safe = base.replace(/[\u0000-\u001f\u007f]/g, '').trim();
+  return safe || undefined;
+}
+
+async function fetchSkillJson(url, init, endpoint, tool) {
+  const urlCheck = validateFetchUrl(url, { allowLocalNetwork: getAllowLocalNetwork() });
+  if (!urlCheck.ok) {
+    return {
+      success: false,
+      provider: endpoint.hostname,
+      skillTool: tool.name || '',
+      skillName: tool.skillName || '',
+      finalUrl: url,
+      error: `Skill tool endpoint is blocked: ${urlCheck.error}`,
+    };
+  }
+  try {
+    const res = await fetch(url, {
+      credentials: 'omit',
+      redirect: 'manual',
+      ...init,
+    });
+    if (res?.type === 'opaqueredirect' || isHttpRedirectStatus(res?.status)) {
+      return {
+        success: false,
+        status: res.status,
+        provider: endpoint.hostname,
+        skillTool: tool.name || '',
+        skillName: tool.skillName || '',
+        finalUrl: url,
+        error: 'Skill tool redirects are not allowed because browser manual redirects cannot be validated before following.',
+      };
+    }
+    const responseUrl = res.url || url;
+    const responseUrlCheck = validateFetchUrl(responseUrl, { allowLocalNetwork: getAllowLocalNetwork() });
+    if (!responseUrlCheck.ok) {
+      return {
+        success: false,
+        status: res.status,
+        provider: endpoint.hostname,
+        skillTool: tool.name || '',
+        skillName: tool.skillName || '',
+        finalUrl: responseUrl,
+        error: `Skill tool redirected to blocked URL: ${responseUrlCheck.error}`,
+      };
+    }
+    const rawText = await res.text();
+    let data = null;
+    try { data = rawText ? JSON.parse(rawText) : null; } catch (_) {}
+    if (!res.ok) {
+      return {
+        success: false,
+        status: res.status,
+        provider: endpoint.hostname,
+        skillTool: tool.name || '',
+        skillName: tool.skillName || '',
+        error: providerError(res.status, data, rawText),
+      };
+    }
+    return { success: true, status: res.status, data: data && typeof data === 'object' ? data : { text: rawText } };
+  } catch (e) {
+    return { success: false, provider: endpoint.hostname, skillTool: tool.name || '', skillName: tool.skillName || '', error: `Skill tool request failed: ${e.message}` };
+  }
+}
+
+async function cleanupSkillDownloadJob(url, endpoint, tool) {
+  const result = await fetchSkillJson(url, { method: 'DELETE' }, endpoint, tool);
+  if (result.success) return { success: true, status: result.status };
+  return { success: false, status: result.status, error: result.error };
+}
+
+async function withSkillDownloadJobCleanup(result, cleanupEndpoint, endpoint, tool) {
+  if (!cleanupEndpoint?.ok) return result;
+  const cleanup = await cleanupSkillDownloadJob(cleanupEndpoint.url, endpoint, tool);
+  return { ...result, cleanup };
+}
+
+const pendingSkillDownloadCleanups = new Map();
+
+function summarizeDownloadItem(item) {
+  if (!item) return null;
+  return {
+    filename: item.filename || null,
+    state: item.state,
+    error: item.error || null,
+    bytesReceived: item.bytesReceived ?? null,
+    totalBytes: item.totalBytes ?? null,
+    url: item.url || null,
+    finalUrl: item.finalUrl || item.url || null,
+  };
+}
+
+async function findDownloadItem(downloadId) {
+  try {
+    const items = await new Promise((resolve, reject) => {
+      chrome.downloads.search({ id: downloadId }, (res) => {
+        if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+        else resolve(res);
+      });
+    });
+    return items && items[0] ? items[0] : null;
+  } catch {
+    return null;
+  }
+}
+
+function validateSkillDownloadFinalUrl(finalUrl, expectedUrl) {
+  if (!finalUrl) return { ok: true };
+  let final;
+  let expected;
+  try {
+    final = new URL(finalUrl);
+    expected = new URL(expectedUrl);
+  } catch {
+    return { ok: false, error: 'Skill download redirected to an invalid URL.' };
+  }
+  if (final.protocol !== 'https:') {
+    return { ok: false, error: 'Skill download redirected away from HTTPS.' };
+  }
+  const urlCheck = validateFetchUrl(final.href, { allowLocalNetwork: getAllowLocalNetwork() });
+  if (!urlCheck.ok) {
+    return { ok: false, error: `Skill download redirected to blocked URL: ${urlCheck.error}` };
+  }
+  if (final.origin !== expected.origin) {
+    return { ok: false, error: `Skill download redirected outside ${expected.origin}.` };
+  }
+  return { ok: true, finalUrl: final.href };
+}
+
+function markUnsafeSkillDownload(info, expectedUrl) {
+  if (!info?.finalUrl || !expectedUrl) return info;
+  const finalUrlCheck = validateSkillDownloadFinalUrl(info.finalUrl, expectedUrl);
+  if (finalUrlCheck.ok) return info;
+  return {
+    ...info,
+    finalUrlBlocked: true,
+    finalUrlError: finalUrlCheck.error,
+  };
+}
+
+function safeDataUrlMimeType(value) {
+  const type = String(value || '').split(';')[0].trim().toLowerCase();
+  return /^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/.test(type)
+    ? type
+    : 'application/octet-stream';
+}
+
+function arrayBufferToDataUrl(buffer, mimeType) {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return `data:${safeDataUrlMimeType(mimeType)};base64,${btoa(binary)}`;
+}
+
+function skillDownloadTooLargeError(size) {
+  return `Skill download is too large for cookie-free saving (${size} bytes > ${SKILL_DOWNLOAD_DATA_URL_MAX_BYTES} bytes).`;
+}
+
+async function readSkillDownloadBuffer(res) {
+  const expectedSize = parseContentLength(res.headers?.get?.('content-length'));
+  if (expectedSize != null && expectedSize > SKILL_DOWNLOAD_DATA_URL_MAX_BYTES) {
+    return {
+      success: false,
+      bytesExpected: expectedSize,
+      error: skillDownloadTooLargeError(expectedSize),
+    };
+  }
+
+  const reader = res.body?.getReader?.();
+  if (reader) {
+    const chunks = [];
+    let bytesReceived = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = value instanceof Uint8Array ? value : new Uint8Array(value);
+      bytesReceived += chunk.byteLength;
+      if (bytesReceived > SKILL_DOWNLOAD_DATA_URL_MAX_BYTES) {
+        try { await reader.cancel(); } catch (_) {}
+        return {
+          success: false,
+          bytesReceived,
+          error: skillDownloadTooLargeError(bytesReceived),
+        };
+      }
+      chunks.push(chunk);
+    }
+    const buffer = new ArrayBuffer(bytesReceived);
+    const out = new Uint8Array(buffer);
+    let offset = 0;
+    for (const chunk of chunks) {
+      out.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return { success: true, buffer, bytesReceived };
+  }
+
+  const buffer = await res.arrayBuffer();
+  if (buffer.byteLength > SKILL_DOWNLOAD_DATA_URL_MAX_BYTES) {
+    return {
+      success: false,
+      bytesReceived: buffer.byteLength,
+      error: skillDownloadTooLargeError(buffer.byteLength),
+    };
+  }
+  return { success: true, buffer, bytesReceived: buffer.byteLength };
+}
+
+async function fetchSkillDownloadData(url, expectedUrl) {
+  const initialUrlCheck = validateSkillDownloadFinalUrl(url, expectedUrl);
+  if (!initialUrlCheck.ok) {
+    return { success: false, blocked: true, finalUrl: url, error: initialUrlCheck.error };
+  }
+  try {
+    const res = await fetch(url, {
+      method: 'GET',
+      credentials: 'omit',
+      redirect: 'manual',
+      cache: 'no-store',
+    });
+    if (res?.type === 'opaqueredirect' || isHttpRedirectStatus(res?.status)) {
+      return {
+        success: false,
+        blocked: true,
+        status: res.status,
+        finalUrl: url,
+        error: 'Skill download redirects are not allowed because the final URL cannot be validated before saving.',
+      };
+    }
+    const responseUrl = res.url || url;
+    const responseUrlCheck = validateSkillDownloadFinalUrl(responseUrl, expectedUrl);
+    if (!responseUrlCheck.ok) {
+      return {
+        success: false,
+        blocked: true,
+        status: res.status,
+        finalUrl: responseUrl,
+        error: responseUrlCheck.error,
+      };
+    }
+    if (!res.ok) {
+      return {
+        success: false,
+        status: res.status,
+        finalUrl: responseUrl,
+        error: `Skill download file request failed with HTTP ${res.status}.`,
+      };
+    }
+    const file = await readSkillDownloadBuffer(res);
+    if (!file.success) {
+      return {
+        success: false,
+        status: res.status,
+        finalUrl: responseUrl,
+        ...(file.bytesExpected != null ? { bytesExpected: file.bytesExpected } : {}),
+        ...(file.bytesReceived != null ? { bytesReceived: file.bytesReceived } : {}),
+        error: file.error,
+      };
+    }
+    const dataUrl = arrayBufferToDataUrl(file.buffer, res.headers?.get?.('content-type'));
+    return {
+      success: true,
+      status: res.status,
+      finalUrl: responseUrl,
+      dataUrl,
+      bytesReceived: file.bytesReceived,
+    };
+  } catch (e) {
+    return { success: false, finalUrl: url, error: `Skill download file request failed: ${e.message}` };
+  }
+}
+
+async function callChromeDownloadAction(name, ...args) {
+  const fn = chrome.downloads?.[name];
+  if (typeof fn !== 'function') return false;
+  try {
+    return await new Promise((resolve) => {
+      fn.call(chrome.downloads, ...args, () => {
+        resolve(!chrome.runtime?.lastError);
+      });
+    });
+  } catch {
+    return false;
+  }
+}
+
+async function removeUnsafeSkillDownload(downloadId, state) {
+  if (state !== 'complete') await callChromeDownloadAction('cancel', downloadId);
+  if (state === 'complete') await callChromeDownloadAction('removeFile', downloadId);
+  await callChromeDownloadAction('erase', { id: downloadId });
+}
+
+function scheduleSkillDownloadCleanup(downloadId, cleanupUrl, endpoint, tool, expectedUrl) {
+  const downloads = chrome.downloads;
+  if (!downloads?.onChanged?.addListener) return false;
+  const key = String(downloadId);
+  if (pendingSkillDownloadCleanups.has(key)) return true;
+
+  const finish = async (state, finalUrl) => {
+    downloads.onChanged?.removeListener?.(listener);
+    pendingSkillDownloadCleanups.delete(key);
+    try {
+      let unsafe = null;
+      if (expectedUrl && finalUrl) {
+        const finalUrlCheck = validateSkillDownloadFinalUrl(finalUrl, expectedUrl);
+        if (!finalUrlCheck.ok) unsafe = finalUrlCheck.error;
+      }
+      if (expectedUrl && !unsafe) {
+        const item = await findDownloadItem(downloadId);
+        const info = markUnsafeSkillDownload(summarizeDownloadItem(item), expectedUrl);
+        if (info?.finalUrlBlocked) unsafe = info.finalUrlError;
+      }
+      if (unsafe) await removeUnsafeSkillDownload(downloadId, state);
+    } catch (_) {
+      // Cleanup is still attempted even if validating/removing the local file fails.
+    }
+    try {
+      await cleanupSkillDownloadJob(cleanupUrl, endpoint, tool);
+    } catch (_) {}
+  };
+
+  const listener = (delta) => {
+    if (!delta || delta.id !== downloadId) return;
+    const state = delta.state?.current;
+    const finalUrl = delta.finalUrl?.current || delta.url?.current || '';
+    if (expectedUrl && finalUrl) {
+      const finalUrlCheck = validateSkillDownloadFinalUrl(finalUrl, expectedUrl);
+      if (!finalUrlCheck.ok) {
+        return finish(state || 'interrupted', finalUrl);
+      }
+    }
+    if (state === 'complete' || state === 'interrupted') {
+      return finish(state, finalUrl);
+    }
+    return undefined;
+  };
+
+  pendingSkillDownloadCleanups.set(key, listener);
+  downloads.onChanged.addListener(listener);
+  return true;
+}
+
+async function downloadSkillFile(url, filename, waitMs = 60000) {
+  const file = await fetchSkillDownloadData(url, url);
+  if (!file.success) {
+    return {
+      success: false,
+      ...(file.blocked ? { blocked: true } : {}),
+      ...(file.status != null ? { status: file.status } : {}),
+      ...(file.bytesExpected != null ? { bytesExpected: file.bytesExpected } : {}),
+      ...(file.bytesReceived != null ? { bytesReceived: file.bytesReceived } : {}),
+      finalUrl: file.finalUrl || url,
+      error: file.error,
+    };
+  }
+  const opts = { url: file.dataUrl, conflictAction: 'uniquify' };
+  const safeName = safeDownloadFilename(filename);
+  if (safeName) opts.filename = safeName;
+  const downloadId = await new Promise((resolve, reject) => {
+    chrome.downloads.download(opts, (id) => {
+      if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+      else resolve(id);
+    });
+  });
+  const info = await resolveDownloadInfo(downloadId, waitMs);
+  const result = {
+    downloadId,
+    success: false,
+    url,
+    finalUrl: file.finalUrl || url,
+    ...(file.status != null ? { status: file.status } : {}),
+    ...(file.bytesReceived != null ? { bytesReceived: file.bytesReceived, totalBytes: file.bytesReceived } : {}),
+  };
+  if (info) {
+    if (info.filename) result.filename = info.filename;
+    if (info.state) result.state = info.state;
+    if (info.error) result.error = info.error;
+    if (info.bytesReceived != null) result.bytesReceived = info.bytesReceived;
+    if (info.totalBytes != null) result.totalBytes = info.totalBytes;
+    if (info.url && !String(info.url).startsWith('data:')) result.url = info.url;
+    if (info.finalUrl && !String(info.finalUrl).startsWith('data:')) result.finalUrl = info.finalUrl;
+    if (info.finalUrlBlocked) {
+      await removeUnsafeSkillDownload(downloadId, info.state);
+      result.blocked = true;
+      result.error = info.finalUrlError || 'Skill download redirected to a blocked URL.';
+    } else if (info.state === 'complete') {
+      result.success = true;
+    } else if (info.state === 'interrupted') {
+      result.error = info.error ? `Download interrupted: ${info.error}` : 'Download interrupted before completion.';
+    } else {
+      result.pending = true;
+      result.error = `Download did not complete before timeout${info.state ? ` (state: ${info.state})` : ''}.`;
+    }
+  } else {
+    result.pending = true;
+    result.error = 'Download did not report completion before timeout.';
+  }
+  return result;
+}
+
+async function executeHttpDownloadJobSkillTool(tool, payload, endpoint) {
+  const create = await fetchSkillJson(endpoint.href, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  }, endpoint, tool);
+  if (!create.success) return create;
+
+  const idField = tool.job?.idField || 'job_id';
+  const jobId = String(create.data?.[idField] || create.data?.job_id || '').trim();
+  if (!jobId) {
+    return { success: false, provider: endpoint.hostname, skillTool: tool.name || '', skillName: tool.skillName || '', error: `Skill download job response did not include ${idField}.` };
+  }
+
+  const statusEndpoint = fillSkillJobEndpoint(tool.job?.statusEndpoint, jobId, endpoint, 'statusEndpoint');
+  const fileEndpoint = fillSkillJobEndpoint(tool.job?.fileEndpoint, jobId, endpoint, 'fileEndpoint');
+  const cleanupEndpoint = fillSkillJobEndpoint(tool.job?.cleanupEndpoint || tool.job?.statusEndpoint, jobId, endpoint, 'cleanupEndpoint');
+  if (!statusEndpoint.ok) {
+    return await withSkillDownloadJobCleanup({ success: false, provider: endpoint.hostname, skillTool: tool.name || '', skillName: tool.skillName || '', jobId, error: statusEndpoint.error }, cleanupEndpoint, endpoint, tool);
+  }
+  if (!fileEndpoint.ok) {
+    return await withSkillDownloadJobCleanup({ success: false, provider: endpoint.hostname, skillTool: tool.name || '', skillName: tool.skillName || '', jobId, error: fileEndpoint.error }, cleanupEndpoint, endpoint, tool);
+  }
+
+  const deadline = Date.now() + (tool.job?.timeoutMs || 90000);
+  const pollIntervalMs = tool.job?.pollIntervalMs || 1000;
+  let lastStatus = create.data;
+  while (Date.now() < deadline) {
+    const poll = await fetchSkillJson(statusEndpoint.url, { method: 'GET' }, endpoint, tool);
+    if (!poll.success) return await withSkillDownloadJobCleanup({ ...poll, jobId }, cleanupEndpoint, endpoint, tool);
+    lastStatus = poll.data;
+    const status = String(poll.data?.status || '').toLowerCase();
+    if (status === 'complete' || status === 'completed' || status === 'done' || status === 'success') break;
+    if (status === 'failed' || status === 'error' || status === 'cancelled' || status === 'canceled') {
+      return await withSkillDownloadJobCleanup({
+        success: false,
+        provider: endpoint.hostname,
+        skillTool: tool.name || '',
+        skillName: tool.skillName || '',
+        jobId,
+        jobStatus: status,
+        error: providerError(502, poll.data, '') || `Skill download job ${jobId} failed.`,
+      }, cleanupEndpoint, endpoint, tool);
+    }
+    await new Promise(r => setTimeout(r, pollIntervalMs));
+  }
+
+  const finalStatus = String(lastStatus?.status || '').toLowerCase();
+  if (!(finalStatus === 'complete' || finalStatus === 'completed' || finalStatus === 'done' || finalStatus === 'success')) {
+    return await withSkillDownloadJobCleanup({
+      success: false,
+      provider: endpoint.hostname,
+      skillTool: tool.name || '',
+      skillName: tool.skillName || '',
+      jobId,
+      jobStatus: finalStatus || 'unknown',
+      error: `Skill download job timed out before completion.`,
+    }, cleanupEndpoint, endpoint, tool);
+  }
+
+  let cleanup = null;
+  try {
+    const download = await downloadSkillFile(fileEndpoint.url, payload.filename, Math.min(tool.job?.timeoutMs || 90000, 120000));
+    const cleanupDeferred = cleanupEndpoint.ok && download.pending === true;
+    const cleanupScheduled = cleanupDeferred
+      ? scheduleSkillDownloadCleanup(download.downloadId, cleanupEndpoint.url, endpoint, tool)
+      : false;
+    if (cleanupEndpoint.ok && !cleanupDeferred) cleanup = await cleanupSkillDownloadJob(cleanupEndpoint.url, endpoint, tool);
+    if (!download.success) {
+      return {
+        success: false,
+        provider: endpoint.hostname,
+        skillTool: tool.name || '',
+        skillName: tool.skillName || '',
+        jobId,
+        jobStatus: finalStatus,
+        fileUrl: fileEndpoint.url,
+        cleanup,
+        ...(cleanupDeferred ? { cleanupDeferred: true } : {}),
+        ...(cleanupDeferred ? { cleanupScheduled } : {}),
+        ...download,
+      };
+    }
+    return {
+      success: true,
+      status: 200,
+      provider: endpoint.hostname,
+      skillTool: tool.name || '',
+      skillName: tool.skillName || '',
+      jobId,
+      jobStatus: finalStatus,
+      fileUrl: fileEndpoint.url,
+      cleanup,
+      ...download,
+    };
+  } catch (e) {
+    if (cleanupEndpoint.ok) cleanup = await cleanupSkillDownloadJob(cleanupEndpoint.url, endpoint, tool);
+    return { success: false, provider: endpoint.hostname, skillTool: tool.name || '', skillName: tool.skillName || '', jobId, fileUrl: fileEndpoint.url, cleanup, error: `Skill download failed: ${e.message}` };
+  }
+}
+
+export async function executeHttpSkillTool(tool, args = {}, ctx = {}) {
+  let endpoint;
+  try {
+    endpoint = new URL(tool?.endpoint || '');
+  } catch {
+    return { success: false, error: 'Skill tool has an invalid endpoint.' };
+  }
+  if (endpoint.protocol !== 'https:') {
+    return { success: false, error: 'Skill tools currently require an https endpoint.' };
+  }
+
+  const method = String(tool.method || 'GET').toUpperCase() === 'POST' ? 'POST' : 'GET';
+  const payload = { ...(tool.defaultArgs || {}), ...filterArgsToDeclaredParameters(args, tool) };
+  if (tool.activeTabUrlArg && !payload[tool.activeTabUrlArg]) {
+    payload[tool.activeTabUrlArg] = await currentTabUrl(ctx.tabId);
+  }
+  if (tool.inputUrlArg && payload[tool.inputUrlArg] && !inputUrlAllowed(payload[tool.inputUrlArg], tool.allowedInputUrls || [])) {
+    return { success: false, error: `Skill tool input URL is outside its declared allowlist: ${tool.inputUrlArg}`, provider: endpoint.hostname };
+  }
+
+  if (tool.kind === 'httpDownloadJob') {
+    return await executeHttpDownloadJobSkillTool(tool, payload, endpoint);
+  }
+
+  const init = {
+    method,
+    headers: {},
+    credentials: 'omit',
+    redirect: 'manual',
+  };
+  const finalUrl = new URL(endpoint.href);
+  if (method === 'POST') {
+    init.headers['Content-Type'] = 'application/json';
+    init.body = JSON.stringify(payload);
+  } else {
+    for (const [key, value] of Object.entries(payload)) {
+      if (value == null) continue;
+      finalUrl.searchParams.set(key, typeof value === 'string' ? value : JSON.stringify(value));
+    }
+  }
+  const endpointUrlCheck = validateFetchUrl(finalUrl.href, { allowLocalNetwork: getAllowLocalNetwork() });
+  if (!endpointUrlCheck.ok) {
+    return {
+      success: false,
+      provider: endpoint.hostname,
+      skillTool: tool.name || '',
+      skillName: tool.skillName || '',
+      finalUrl: finalUrl.href,
+      error: `Skill tool endpoint is blocked: ${endpointUrlCheck.error}`,
+    };
+  }
+
+  try {
+    let requestUrl = finalUrl.href;
+    const res = await fetch(requestUrl, init);
+    // Browser manual redirects are opaqueredirect responses without an
+    // inspectable Location header. Reject instead of replaying skill inputs.
+    if (res?.type === 'opaqueredirect' || isHttpRedirectStatus(res?.status)) {
+      return {
+        success: false,
+        status: res.status,
+        provider: endpoint.hostname,
+        skillTool: tool.name || '',
+        skillName: tool.skillName || '',
+        finalUrl: requestUrl,
+        error: 'Skill tool redirects are not allowed because browser manual redirects cannot be validated before following.',
+      };
+    }
+
+    const responseUrl = res.url || requestUrl;
+    const responseUrlCheck = validateFetchUrl(responseUrl, { allowLocalNetwork: getAllowLocalNetwork() });
+    if (!responseUrlCheck.ok) {
+      return {
+        success: false,
+        status: res.status,
+        provider: endpoint.hostname,
+        skillTool: tool.name || '',
+        skillName: tool.skillName || '',
+        finalUrl: responseUrl,
+        error: `Skill tool redirected to blocked URL: ${responseUrlCheck.error}`,
+      };
+    }
+    const rawText = await res.text();
+    let data = null;
+    try { data = rawText ? JSON.parse(rawText) : null; } catch (_) {}
+    if (!res.ok) {
+      return {
+        success: false,
+        status: res.status,
+        provider: endpoint.hostname,
+        skillTool: tool.name || '',
+        skillName: tool.skillName || '',
+        error: providerError(res.status, data, rawText),
+      };
+    }
+    const body = data && typeof data === 'object' ? data : { text: rawText };
+    return {
+      success: true,
+      status: res.status,
+      provider: endpoint.hostname,
+      skillTool: tool.name || '',
+      skillName: tool.skillName || '',
+      data: applySkillResponseLimits(body, tool.responseLimits || {}),
+    };
+  } catch (e) {
+    return { success: false, provider: endpoint.hostname, skillTool: tool.name || '', skillName: tool.skillName || '', error: `Skill tool request failed: ${e.message}` };
+  }
 }
 
 function apiReplayOptionsForFetch(rawUrl, opts = {}, ctx = {}) {
@@ -1266,7 +1986,7 @@ const DOWNLOAD_BATCH_MAX = 50;
 // Poll for it. Returns the resolved on-disk path + state once the download
 // reaches a terminal state, or the best-known info if it's still in progress
 // when we time out. Best-effort: never throws.
-async function resolveDownloadInfo(downloadId, timeoutMs = 15000) {
+async function resolveDownloadInfo(downloadId, timeoutMs = 15000, opts = {}) {
   const deadline = Date.now() + timeoutMs;
   let last = null;
   while (Date.now() < deadline) {
@@ -1283,13 +2003,9 @@ async function resolveDownloadInfo(downloadId, timeoutMs = 15000) {
     }
     const it = items && items[0];
     if (it) {
-      last = {
-        filename: it.filename || null,
-        state: it.state,
-        error: it.error || null,
-        bytesReceived: it.bytesReceived ?? null,
-        totalBytes: it.totalBytes ?? null,
-      };
+      last = summarizeDownloadItem(it);
+      if (opts.expectedUrl) last = markUnsafeSkillDownload(last, opts.expectedUrl);
+      if (last.finalUrlBlocked) return last;
       if (it.state === 'complete' || it.state === 'interrupted') return last;
     }
     await new Promise(r => setTimeout(r, 200));

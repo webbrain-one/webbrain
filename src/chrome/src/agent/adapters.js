@@ -188,9 +188,10 @@ const ADAPTERS = [
     match: (url) => /^https?:\/\/((www|m)\.)?youtube\.com\//.test(url) || /^https?:\/\/youtu\.be\//.test(url),
     notes: `
 - The video player is a custom element. Keyboard shortcuts: space=play/pause, k=play/pause, j/l=±10s, ←/→=±5s, m=mute.
-- For questions about the current video's content, read the transcript first when available and ground the answer in it; if no transcript is exposed, say so and fall back to visible title/description/comments.
-- Tool path for transcript: get_accessibility_tree({filter:"visible"}) → expand description ("..." / "more") with click_ax/click → click "Show transcript" → read the transcript panel with get_accessibility_tree or read_page; scroll the panel/page for more segments.
-- Do NOT invent transcript URLs. Only use fetch_url for captions if the page exposes a real YouTube captionTracks/baseUrl; otherwise use the visible transcript UI.
+- For questions about the current video's content, use any available transcript skill tool first (for example \`read_youtube_transcript\` from FreeSkillz) and ground the answer in it. Transcript skill tools do not require \`/allow-api\`. If no transcript skill tool is available, or it fails or returns no text, say the transcript tool was unavailable and fall back to visible title/description/comments.
+- Fallback transcript UI path: get_accessibility_tree({filter:"visible"}) → expand description ("..." / "more") with click_ax/click → click "Show transcript" → read the transcript panel with get_accessibility_tree or read_page; scroll the panel/page for more segments.
+- Do NOT invent transcript URLs, and do NOT use fetch_url for YouTube captions. Use an available transcript skill tool or the visible transcript UI.
+- If a transcript skill response has has_more_text=true, continue with text_offset=next_text_offset until you have enough transcript evidence for the task.
 - Transcript text is timestamped/segmented and may be auto-generated or auto-translated; collect enough segments before summarizing or answering, and do not infer from the title alone when transcript is reachable.
 - Comments load lazily AFTER you scroll past the video — they're not in the initial DOM.
 - The subscribe button has a bell icon next to it for notification preferences; they're separate clicks.`,
@@ -553,6 +554,23 @@ const ADAPTERS = [
 - Pre-orders / "Made to order" listings have a longer ship date — surface that to the user before buying.`,
   },
 
+  // ─── Regional — Türkiye (TR) ──────────────────────────────────────────
+  // Regional adapters are the project's #1 wanted contribution (CONTRIBUTIONS.md);
+  // Türkiye is top of the priority list. Add more TR sites (trendyol,
+  // hepsiburada, n11, getir, yemeksepeti) below as separate, focused entries.
+  {
+    name: 'sahibinden',
+    category: 'general',
+    match: (url) => /^https?:\/\/(www\.)?sahibinden\.com\//.test(url),
+    notes: `
+- sahibinden is Türkiye's largest CLASSIFIEDS site (vehicles/"Vasıta", real estate/"Emlak", and general goods), NOT a checkout store. Most listings are "contact the seller", so do NOT hunt for a "Sepete Ekle"/Add-to-cart button on a typical car or property listing — the task is to read the listing and surface the seller's contact. "Mesaj Gönder" sends a message; the phone/"Cep" number is often revealed only after login.
+- ANTI-BOT TRAP: sahibinden runs aggressive bot protection (DataDome). You may hit a security/verification wall — a page saying "Güvenlik kontrolü", "İşleminize devam edebilmek için...", a slider/CAPTCHA, or "Erişiminiz engellendi". If you see one, STOP and tell the user a security check is blocking automated access. Do NOT loop retrying navigations/fetches — repeated automated requests escalate the block.
+- Do NOT re-fetch the same search/results URL repeatedly. The results list is already on the page; extract items from it (extract_data / get_accessibility_tree) before paginating. Re-running research_url/fetch_url on the same sorted URL (e.g. a "?...&sorting=..." or "?sd=..." variant) returns the same page and wastes steps.
+- Filtering: filters live in the LEFT rail (price range, "İl"/"İlçe" = province/district location, date, and category-specific facets). Set the location filter for local results. Sort via the "Sıralama" dropdown (e.g. price ascending) rather than guessing URL params.
+- Labels are Turkish: "Giriş Yap" = log in, "Üye Ol" = sign up, "İlan Ver"/"Ücretsiz İlan Ver" = post a listing, "Filtrele" = apply filters, "Sıralama" = sort.
+- Posting an "İlan" requires login and a multi-step form; after submitting it appears under "İlanlarım" with a status such as "Onay Bekliyor" (pending approval) — it is NOT live immediately. Do not report it as published until the status shows it is active ("Yayında").`,
+  },
+
   {
     name: 'apple',
     category: 'general',
@@ -615,7 +633,7 @@ const ADAPTERS = [
 - DMs at /direct/inbox — sign-in required.
 - Hashtag pages: /explore/tags/<tag>. Location pages: /explore/locations/<id>.
 - "Add to story / Add to post" actions require the mobile app for most content types — surface the limitation.
-- Saving images / videos directly is blocked by the UI. If the user asks to download, recommend the \`download_social_media\` tool — it handles Instagram CDN quirks.`,
+- Saving images / videos directly is blocked by the UI. If the user asks to download, use an enabled media download skill tool such as \`download_public_media\` first; otherwise use \`download_social_media\`.`,
   },
   {
     name: 'tiktok',
@@ -627,7 +645,7 @@ const ADAPTERS = [
 - Video URL pattern: /@<user>/video/<id>. Profile pattern: /@<user>.
 - Sidebar nav (For You / Following / Explore / Live) only visible at desktop widths; on narrow viewports it collapses behind a menu icon.
 - "Watch History" requires sign-in and lives at /following.
-- Downloading videos: use \`download_social_media\` — it handles TikTok's CDN signing.`,
+- Downloading videos: use an enabled media download skill tool such as \`download_public_media\` first; otherwise use \`download_social_media\`.`,
   },
   {
     name: 'facebook',

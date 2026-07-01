@@ -89,15 +89,25 @@ export class AnthropicProvider extends BaseLLMProvider {
       }
 
       if (msg.role === 'tool') {
-        // Convert tool result messages
-        converted.push({
-          role: 'user',
-          content: [{
-            type: 'tool_result',
-            tool_use_id: msg.tool_call_id,
-            content: msg.content,
-          }],
-        });
+        // Convert tool result messages. Anthropic requires ALL tool_result
+        // blocks answering one assistant turn's parallel tool_use calls to live
+        // in a SINGLE user message — emitting one user message per tool result
+        // produces consecutive same-role messages that the API rejects with 400.
+        const block = {
+          type: 'tool_result',
+          tool_use_id: msg.tool_call_id,
+          content: msg.content,
+        };
+        const prev = converted[converted.length - 1];
+        if (
+          prev && prev.role === 'user' && Array.isArray(prev.content) &&
+          prev.content.length > 0 &&
+          prev.content.every((b) => b && b.type === 'tool_result')
+        ) {
+          prev.content.push(block);
+        } else {
+          converted.push({ role: 'user', content: [block] });
+        }
         continue;
       }
 

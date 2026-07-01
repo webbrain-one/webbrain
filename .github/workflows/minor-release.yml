@@ -1,0 +1,172 @@
+name: Minor Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      use_ai:
+        description: Generate the changelog with GitHub Models when manual notes are empty.
+        required: true
+        type: boolean
+        default: true
+      manual_changelog:
+        description: Optional changelog Markdown body. Leave empty to use AI.
+        required: false
+        type: string
+        default: ''
+      model:
+        description: GitHub Models model for AI changelog generation.
+        required: false
+        type: string
+        default: openai/gpt-4o
+
+permissions:
+  contents: write
+  models: read
+
+concurrency:
+  group: minor-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Configure git author
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Identify release baseline
+        id: baseline
+        run: |
+          old_version=$(node -p "require('./package.json').version")
+          latest_bump=$(git log --format=%H -n 1 --grep='^chore: bump version' || true)
+          latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || true)
+          if [ -n "$latest_bump" ]; then
+            base_ref="$latest_bump"
+            base_label="latest version-bump commit"
+          elif [ -n "$latest_tag" ]; then
+            base_ref="$latest_tag"
+            base_label="latest git tag"
+          else
+            base_ref="$(git rev-list --max-parents=0 HEAD)"
+            base_label="initial commit"
+          fi
+          echo "old_version=$old_version" >> "$GITHUB_OUTPUT"
+          echo "base_ref=$base_ref" >> "$GITHUB_OUTPUT"
+          echo "base_label=$base_label" >> "$GITHUB_OUTPUT"
+
+      - name: Bump minor version
+        run: node scripts/bump-version.mjs minor
+
+      - name: Build release context
+        id: release_meta
+        run: |
+          mkdir -p .release
+          new_version=$(node -p "require('./package.json').version")
+          release_date=$(date -u +%F)
+          {
+            echo "# Release context"
+            echo
+            echo "Previous version: ${{ steps.baseline.outputs.old_version }}"
+            echo "New version: $new_version"
+            echo "Baseline: ${{ steps.baseline.outputs.base_label }} ${{ steps.baseline.outputs.base_ref }}"
+            echo
+            echo "## Commit summary"
+            git log --no-merges --date=short --pretty=format:'- %h %ad %s' "${{ steps.baseline.outputs.base_ref }}..HEAD" || true
+            echo
+            echo
+            echo "## Merge summary"
+            git log --merges --date=short --pretty=format:'- %h %ad %s' "${{ steps.baseline.outputs.base_ref }}..HEAD" || true
+            echo
+            echo
+            echo "## Changed files"
+            git diff --name-status "${{ steps.baseline.outputs.base_ref }}..HEAD" || true
+            echo
+            echo
+            echo "## Current top changelog entries"
+            sed -n '1,140p' CHANGELOG.md
+          } > .release/release-context.md
+          echo "new_version=$new_version" >> "$GITHUB_OUTPUT"
+          echo "release_date=$release_date" >> "$GITHUB_OUTPUT"
+
+      - name: Use manual changelog notes
+        if: ${{ inputs.manual_changelog != '' }}
+        env:
+          MANUAL_CHANGELOG: ${{ inputs.manual_changelog }}
+        run: |
+          printf '%s\n' "$MANUAL_CHANGELOG" > .release/changelog-body.md
+
+      - name: Generate changelog notes with AI
+        if: ${{ inputs.manual_changelog == '' && inputs.use_ai }}
+        id: ai_changelog
+        uses: actions/ai-inference@v1
+        with:
+          model: ${{ inputs.model }}
+          prompt-file: .github/prompts/minor-release-changelog.prompt.yml
+          input: |
+            version: ${{ steps.release_meta.outputs.new_version }}
+            date: ${{ steps.release_meta.outputs.release_date }}
+          file_input: |
+            release_context: .release/release-context.md
+
+      - name: Save AI changelog notes
+        if: ${{ inputs.manual_changelog == '' && inputs.use_ai }}
+        run: |
+          cp "${{ steps.ai_changelog.outputs.response-file }}" .release/changelog-body.md
+
+      - name: Require changelog notes
+        run: |
+          if [ ! -s .release/changelog-body.md ]; then
+            echo "No changelog notes were provided. Enter manual_changelog or run with use_ai=true." >&2
+            exit 1
+          fi
+
+      - name: Update changelog
+        run: |
+          node scripts/update-changelog.mjs \
+            --version "${{ steps.release_meta.outputs.new_version }}" \
+            --date "${{ steps.release_meta.outputs.release_date }}" \
+            --notes-file .release/changelog-body.md
+
+      - name: Test
+        run: npm test
+
+      - name: Commit release metadata
+        run: |
+          git add package.json package-lock.json src/chrome/manifest.json src/firefox/manifest.json src/chrome/src/ui/settings.js src/firefox/src/ui/settings.js src/chrome/ARCHITECTURE.md src/firefox/ARCHITECTURE.md CHANGELOG.md
+          git commit -m "chore: release v${{ steps.release_meta.outputs.new_version }}"
+
+      - name: Rebuild distribution zips
+        run: |
+          rm -rf dist/*
+          node scripts/build-zip.mjs
+          git add -A dist
+          git commit -m "dist: rebuild submission zips for v${{ steps.release_meta.outputs.new_version }}"
+
+      - name: Push release commits
+        run: git push origin HEAD:${{ github.ref_name }}
+
+      - name: Get final release commit
+        id: final_release
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: v${{ steps.release_meta.outputs.new_version }}
+          target_commitish: ${{ steps.final_release.outputs.sha }}
+          name: Release v${{ steps.release_meta.outputs.new_version }}
+          body_path: .release/changelog-body.md
+          fail_on_unmatched_files: true
+          files: |
+            dist/*.zip

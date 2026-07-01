@@ -2,7 +2,45 @@
 
 All notable changes to WebBrain are documented in this file.
 
-This changelog was generated from the repository Git history and release tags. Versions without a Git tag are inferred from version-bump commits and the current `package.json` / `manifest.json` version.
+This changelog was generated from the repository Git history and release tags. Versions without a Git tag are inferred from version-bump commits and the current `package.json` / browser manifest versions.
+
+## [19.0.0] - 2026-07-01
+
+### Added
+- Added the new Skills infrastructure for Chrome and Firefox: Settings -> Skills can import trusted skill text or HTTPS skill URLs, store enabled skills in browser local storage, append enabled skill instructions to the agent system prompt, and show/remove declared skill tools.
+- Added `webbrain-tools` manifest support so enabled skills can declare runtime tools without hard-coding them into the static tool table. Skills can expose read-only HTTPS GET/POST tools and Act-only `httpDownloadJob` tools with create, poll, file, and cleanup endpoints.
+- Added a bundled FreeSkillz.xyz skill, enabled by default and removable from Settings -> Skills, with `read_youtube_transcript`, `resolve_public_media`, and `download_public_media` for public YouTube transcripts and public social/media URLs.
+- Added skill-aware tool hydration before provider setup and scheduled runs so imported and packaged skill tools are available consistently in normal and resumed agent sessions.
+
+### Changed
+- Updated README, adding-a-tool, architecture, privacy/data-flow, prompt-injection, security-model, and browser architecture docs for custom skills, skill tool trust boundaries, bundled FreeSkillz behavior, and the removal of the stale root extension manifest.
+- Updated release metadata, Settings subtitle versions, Chrome / Firefox manifests, package versions, and browser architecture docs for 19.0.0.
+- Kept skill HTTP requests cookie-free with `credentials: "omit"`, nested provider payloads under untrusted result data, and documented that importing or keeping a skill enabled is the trust decision for its declared HTTPS endpoint.
+
+### Fixed
+- Hardened skill imports and skill tool calls against unsafe endpoints, oversized imports, opaque or cross-origin redirects, blocked local/internal destinations, and provider fields such as `done`, `_attachImage`, or `_attachDocument` escaping into internal tool-result control fields.
+- Hardened download-job skill tools so they are Act-only by default, stay behind the normal Downloads permission gate, handle pending browser downloads without prematurely deleting provider jobs, clean up provider jobs on early failures, validate file/final URLs, reject file redirects and non-2xx file responses, and support GET-only file endpoints without requiring HEAD.
+- Reworked skill media saving to avoid cookie-bearing browser downloads against provider domains by fetching files with omitted credentials, validating the response URL before saving, and capping cookie-free data-URL saves at 25 MiB so large media fails cleanly instead of buffering unbounded data in the service worker.
+- Required explicit URLs for read-only public media resolution so broad social-media allowlists do not silently send the active tab URL to FreeSkillz from Ask mode.
+
+### Tests
+- Added Chrome and Firefox regression coverage for skill import/storage limits, packaged-skill seeding and refresh, Settings -> Skills UI behavior, scheduled-run skill hydration, runtime skill tool schemas, Ask/Act/Compact mode filtering, untrusted skill result wrapping, endpoint and redirect validation, and skill response trimming.
+- Added FreeSkillz transcript/media coverage for supported URL allowlists, public media resolve requirements, download-job lifecycle, pending cleanup, unsafe final URLs, blocked redirects, failed file requests, GET-only file endpoints, cookie-free file fetches, and oversized media rejection.
+
+## [18.3.0] - 2026-06-29
+
+### Changed
+- Deleted the stale root `manifest.json` and updated Chrome setup docs, version bumping, and release workflows to use `src/chrome/manifest.json` and `src/firefox/manifest.json` as the only extension manifests.
+
+## [18.2.0] - 2026-06-28
+
+### Changed
+- edge store preparations
+
+## [18.1.0] - 2026-06-28
+
+### Changed
+- Added: Tune context compaction thresholds
 
 ## [18.0.4] - 2026-06-27
 

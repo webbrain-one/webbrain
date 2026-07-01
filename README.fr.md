@@ -14,22 +14,25 @@ Agent de navigation IA open source pour Chrome et Firefox. Discutez avec n'impor
 - **Lecture de page** — Extrait le texte, les liens, les formulaires, les tableaux et les éléments interactifs de n'importe quelle page
 - **Actions du navigateur** — Cliquer, saisir, faire défiler, naviguer et interagir avec les éléments de la page
 - **Modes Ask / Act** — Mode lecture seule par défaut, mode agent complet avec confirmation
+- **Plan avant Act** — Le mode Act peut générer un plan structuré, l'afficher pour approbation, puis épingler le plan approuvé dans le scratchpad avant l'exécution des outils
 - **Agent multi-étapes** — Exécution autonome de tâches via des boucles d'utilisation d'outils (configurable, 130 étapes par défaut)
 - **Continuer depuis la limite** — Lorsque l'agent atteint la limite d'étapes, cliquez sur Continuer pour poursuivre
 - **LLM multi-fournisseurs** — Prend en charge les modèles locaux et cloud :
   - **WebBrain Cloud 1.0** (cloud, par défaut) — Option cloud gérée intégrée, aucune configuration locale requise
-  - **llama.cpp** (local) — Aucune clé API requise. Également **Ollama** et **LM Studio**
+  - **llama.cpp** (local) — Aucune clé API requise. Également **Ollama**, **LM Studio**, **Jan**, **vLLM** et **SGLang**
   - **OpenAI** (GPT-5.5, etc.)
   - **Anthropic Claude** (API native)
   - **Google Gemini**, **Mistral AI**, **DeepSeek**, **xAI Grok**, **Groq**
   - **MiniMax**, **Alibaba Cloud (Qwen)**
-  - **Nvidia NIM**
+  - **Cloudflare Workers AI**, **Nvidia NIM**
   - **OpenRouter** (modèle par défaut : `stepfun/step-3.7-flash` ; accès à plus de 100 modèles)
 - **Assistant d'intégration** — Visite guidée au premier lancement couvrant la sécurité du mode Act et la configuration des fournisseurs
 - **Interface en panneau latéral** — Interface de chat épurée qui accompagne votre navigation
 - **Conversations par onglet** — Chaque onglet possède son propre historique de chat
 - **Streaming** — Diffusion de jetons en temps réel depuis tous les fournisseurs
 - **Contexte intelligent** — Auto-compactage tenant compte des jetons (résume les tours plus anciens lorsque la conversation approche de la fenêtre de contexte du modèle, avec un avis visible « Contexte automatiquement compacté »), limites de résultats d'outils et récupération d'urgence en cas de débordement
+- **Contrôle de l'historique du navigateur** — Le mode Act peut utiliser les outils natifs d'historique `go_back` / `go_forward` au lieu du JavaScript de page sensible à la CSP
+- **Indices de raccourcis API** — Les clics répétés qui déclenchent la même requête XHR/fetch peuvent afficher une suggestion `fetch_url` correspondante tout en préservant la règle UI-d'abord et la politique de mutation `/allow-api`
 - **Prise en charge de la copie** — Boutons de copie sur les blocs de code et les messages complets
 - **Bannière d'inspection de page** — Indicateur visuel lorsque l'agent interagit avec la page
 - **Bouton d'arrêt** — Interrompez l'agent en cours d'exécution à tout moment
@@ -40,17 +43,17 @@ Agent de navigation IA open source pour Chrome et Firefox. Discutez avec n'impor
 ### Chrome
 
 ```bash
-git clone https://github.com/esokullu/webbrain.git
+git clone https://github.com/webbrain-one/webbrain.git
 ```
 
 1. Ouvrez Chrome → `chrome://extensions/`
 2. Activez le **mode développeur** (en haut à droite)
-3. Cliquez sur **Charger l'extension non empaquetée** → sélectionnez le dossier `webbrain`
+3. Cliquez sur **Charger l'extension non empaquetée** → sélectionnez le dossier `webbrain/src/chrome`
 
 ### Firefox
 
 ```bash
-git clone https://github.com/esokullu/webbrain.git
+git clone https://github.com/webbrain-one/webbrain.git
 ```
 
 1. Ouvrez Firefox → `about:debugging#/runtime/this-firefox`
@@ -68,6 +71,13 @@ llama-server -m your-model.gguf --port 8080
 # Ou avec Ollama (compatible OpenAI)
 ollama serve
 # Puis définissez l'URL de base sur http://localhost:11434/v1 dans les paramètres
+
+# Ou avec Jan (compatible OpenAI)
+# Lancez le serveur d'API local de Jan et utilisez http://localhost:1337/v1
+
+# Ou avec vLLM / SGLang (compatible OpenAI)
+vllm serve your-model --port 8000
+python -m sglang.launch_server --model-path your-model --port 30000
 ```
 
 > **Fenêtre de contexte :** Pour des exécutions d'agent fiables, chargez un modèle local avec **au moins une fenêtre de contexte de 16k jetons** (le minimum utilisable). 8k peut fonctionner avec le **mode Compact** activé (Paramètres → case à cocher par fournisseur) ; 4k est trop petit pour contenir le prompt système + les schémas d'outils. WebBrain compacte automatiquement la conversation à l'approche de la fenêtre — il suppose 16k pour les modèles locaux sauf si vous définissez une taille de contexte explicite, alors donnez au serveur du modèle (par ex. `llama-server -c 16384`) suffisamment d'espace.
@@ -89,6 +99,7 @@ Cliquez sur l'icône d'engrenage ou accédez à la page Options de l'extension p
 - Mode verbeux — Affiche le JSON complet des appels d'outils (désactivé par défaut)
 - Repli sur capture d'écran — Utilise des captures d'écran lorsque la lecture du DOM échoue
 - Étapes max de l'agent — Limite d'étapes configurable (5-200, 60 par défaut)
+- Plan avant Act — Génère et permet de revoir facultativement un plan structuré en mode Act avant l'exécution des outils du navigateur (désactivé par défaut)
 
 **Fournisseurs :**
 
@@ -97,9 +108,13 @@ Cliquez sur l'icône d'engrenage ou accédez à la page Options de l'extension p
 | llama.cpp | `http://localhost:8080` | Non requise | (votre modèle chargé) |
 | Ollama | `http://localhost:11434/v1` | Non requise | (votre modèle chargé) |
 | LM Studio | `http://localhost:1234/v1` | Non requise | (votre modèle chargé) |
+| Jan | `http://localhost:1337/v1` | Non requise | (votre modèle chargé) |
+| vLLM | `http://localhost:8000/v1` | Optionnelle | (votre modèle servi) |
+| SGLang | `http://localhost:30000/v1` | Optionnelle | (votre modèle servi) |
 | OpenAI | `https://api.openai.com/v1` | Requise | gpt-5.5 |
 | Anthropic Claude | `https://api.anthropic.com` | Requise | claude-sonnet-4-6 |
 | Google Gemini | `https://generativelanguage.googleapis.com/v1beta/openai` | Requise | gemini-3.1-flash |
+| Cloudflare Workers AI | `https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1` | Requise (plus Account ID) | @cf/zai-org/glm-5.2 |
 | Mistral AI | `https://api.mistral.ai/v1` | Requise | mistral-large-latest |
 | DeepSeek | `https://api.deepseek.com/v1` | Requise | deepseek-v4-flash |
 | xAI Grok | `https://api.x.ai/v1` | Requise | grok-4.3 |
@@ -160,6 +175,8 @@ Une documentation plus approfondie se trouve dans [`docs/`](docs/) : [architectu
 | `hover` | -- | Oui | -- | Survol approuvé par CDP pour les menus révélés au survol (Chrome uniquement) |
 | `drag_drop` | -- | Oui | -- | Glisser-déposer via les événements de pointeur CDP (Chrome uniquement) |
 | `navigate` | -- | Oui | Oui | Aller à une URL |
+| `go_back` | -- | Oui | -- | Revenir en arrière dans l'historique de l'onglet actuel |
+| `go_forward` | -- | Oui | -- | Avancer dans l'historique de l'onglet actuel |
 | `new_tab` | -- | Oui | Oui | Ouvrir un nouvel onglet |
 | `wait_for_element` | -- | Oui | Oui | Attendre qu'un sélecteur apparaisse |
 | `wait_for_stable` | -- | Oui | -- | Attendre que la page soit inactive (aucune mutation du DOM + aucun réseau) |
@@ -180,7 +197,7 @@ Une documentation plus approfondie se trouve dans [`docs/`](docs/) : [architectu
 | `solve_captcha` | -- | Oui | Oui | Résoudre les CAPTCHAs via l'API CapSolver (optionnel, nécessite une clé API) |
 | `done` | Oui | Oui | Oui | Signaler l'achèvement de la tâche |
 
-**Le mode Compact** est un ensemble d'outils réduit + un prompt système plus court conçu pour les petits modèles locaux (2B-8B). Dans les builds Chrome et Firefox, il réduit le schéma du mode Act de plus de 40 outils à environ 20, diminuant la surface de décision et les hallucinations. Activez-le par fournisseur dans les Paramètres (case à cocher sur llama.cpp, Ollama, LM Studio ; désactivé par défaut).
+**Le mode Compact** est un ensemble d'outils réduit + un prompt système plus court conçu pour les petits modèles locaux (2B-8B). Dans les builds Chrome et Firefox, il réduit le schéma du mode Act de plus de 40 outils à environ 20, diminuant la surface de décision et les hallucinations. Activez-le par fournisseur dans les Paramètres (case à cocher sur les fournisseurs locaux ; désactivé par défaut).
 
 > **Note sur le Shadow DOM :** L'arbre d'accessibilité ne traverse que le light DOM. Sur les pages riches en Web Components (Stripe, Salesforce, Shopify), utilisez `get_interactive_elements` (traverse les shadow roots ouverts) ou `get_shadow_dom` / `shadow_dom_query` pour des lectures ciblées.
 
@@ -224,6 +241,17 @@ WebBrain accepte les commandes slash en tant que premier élément d'une ligne d
 
 La règle UI-d'abord par défaut existe parce que les actions API sont invisibles (vous ne voyez pas ce qui est envoyé), nécessitent souvent des jetons d'authentification distincts que vous n'avez peut-être pas configurés, et peuvent avoir un rayon d'impact bien plus grand qu'un mauvais clic visible. N'utilisez `/allow-api` que lorsque vous avez décidé d'accepter ce compromis pour une tâche spécifique.
 
+## Raccourcis clavier
+
+Les raccourcis du panneau latéral Chrome fonctionnent lorsque le panneau latéral WebBrain a le focus.
+
+| Raccourci | Ce qu'il fait |
+|----------|--------------|
+| `Ctrl+/` ou `Cmd+/` | Mettre le focus dans le champ de saisie |
+| `Ctrl+Shift+A` ou `Cmd+Shift+A` | Passer en mode Ask |
+| `Ctrl+Shift+X` ou `Cmd+Shift+X` | Passer en mode Act |
+| `Escape` | Arrêter l'exécution active, sauf s'il ne fait que fermer l'autocomplétion des commandes slash |
+
 ## Problèmes connus
 
 - **Firefox est nettement plus faible que Chrome.** Firefox n'a pas d'équivalent au Chrome DevTools Protocol via `chrome.debugger`, donc plusieurs fonctionnalités propres à Chrome manquent dans le build Firefox :
@@ -238,14 +266,14 @@ La règle UI-d'abord par défaut existe parce que les actions API sont invisible
 
 ## Nouveautés
 
-Consultez [CHANGELOG.md](./CHANGELOG.md) pour l'historique complet des versions. Points forts récents : lecture PDF native avec passthrough Claude (8.x), plus de 65 corrections de bugs dans 8.5.0, le mode compact devenu entièrement opt-in (8.3.0), désasciification du turc (8.2.x), indicateur d'agent sur la page et panneau latéral limité au groupe d'onglets (6.0.x).
+Consultez [CHANGELOG.md](./CHANGELOG.md) pour l'historique complet des versions. Les points forts récents incluent Plan avant Act, les outils natifs d'historique du navigateur, les indices de raccourcis API pour les clics répétés, WebBrain Cloud 1.0, les tâches planifiées, les améliorations du mode Compact et la lecture PDF native.
 
 ## Feuille de route
 
-- [ ] **Export/import de conversation** — Sauvegarder et charger les historiques de chat
+- [X] **Export/~~import~~ de conversation** — Sauvegarder ~~et charger~~ les historiques de chat (seul l'export a été ajouté, l'import n'est pas prévu)
 - [ ] **Définitions d'outils personnalisés** — Outils définis par l'utilisateur via les paramètres
-- [ ] **Raccourcis clavier** — Touches de raccourci pour ouvrir le panneau, envoyer des messages, changer de mode
-- [ ] **Intégration au menu contextuel** — Clic droit → « Demander à WebBrain à propos de ceci »
+- [X] **Raccourcis clavier** — Touches de raccourci pour ouvrir le panneau, envoyer des messages, changer de mode
+- [X] **Intégration au menu contextuel** — Clic droit → « Demander à WebBrain à propos de ceci »
 - [X] **Outil de capture d'écran/vision** — Envoyer des captures d'écran à des modèles multimodaux pour la compréhension visuelle
 - [X] **Chrome Web Store / Firefox AMO** — Référencements officiels dans les boutiques
 
@@ -259,6 +287,16 @@ Tous les fournisseurs se normalisent vers un format de réponse commun :
 ```js
 { content: string, toolCalls: Array|null, usage: Object|null }
 ```
+
+## Historique des étoiles
+
+<a href="https://www.star-history.com/?repos=webbrain-one%2Fwebbrain&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=webbrain-one/webbrain&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=webbrain-one/webbrain&type=date&legend=top-left" />
+   <img alt="Graphique d'historique des étoiles" src="https://api.star-history.com/chart?repos=webbrain-one/webbrain&type=date&legend=top-left" />
+ </picture>
+</a>
 
 
 ## Licence

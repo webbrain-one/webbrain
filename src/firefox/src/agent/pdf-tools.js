@@ -159,6 +159,11 @@ export async function extractPdfText(url, opts = {}) {
   const pages = [];
   let charCount = 0;
   let truncated = false;
+  // Last page actually read, so the truncation notice's "read more with
+  // fromPage" advice resolves to a page that was really covered. Reporting
+  // `endPage` after an early `break` would make a caller resume past the
+  // unread pages and silently lose them.
+  let lastRead = startPage - 1;
 
   for (let i = startPage; i <= endPage; i++) {
     const page = await pdf.getPage(i);
@@ -176,12 +181,14 @@ export async function extractPdfText(url, opts = {}) {
     if (charCount + pageText.length > maxChars) {
       const remaining = Math.max(0, maxChars - charCount);
       pages.push(pageText.slice(0, remaining) + '… [page truncated, use read_pdf with fromPage to read more]');
+      lastRead = i;
       truncated = true;
       break;
     }
 
     pages.push(pageText);
     charCount += pageText.length;
+    lastRead = i;
 
     // Free per-page resources — pdfjs caches aggressively otherwise.
     page.cleanup?.();
@@ -196,7 +203,7 @@ export async function extractPdfText(url, opts = {}) {
     title,
     totalPages,
     fromPage: startPage,
-    toPage: endPage,
+    toPage: lastRead,
     pageCount: pages.length,
     pages,
     hasExtractableText,

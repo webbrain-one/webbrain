@@ -1,5 +1,15 @@
 import { ProviderManager } from './providers/manager.js';
 import { Agent } from './agent/agent.js';
+import {
+  CUSTOM_SKILLS_STORAGE_KEY,
+  DEFAULT_SKILL_SOURCES,
+  DEFAULT_SKILLS_REMOVED_STORAGE_KEY,
+  DEFAULT_SKILLS_SEEDED_STORAGE_KEY,
+  MAX_CUSTOM_SKILLS,
+  normalizeCustomSkills,
+  normalizeDefaultSkillRemovalIds,
+  refreshBuiltInSkillRecord,
+} from './agent/skills.js';
 import { ScheduledJobManager } from './agent/scheduler.js';
 import {
   startClaudeOAuth,
@@ -29,6 +39,7 @@ const scheduler = new ScheduledJobManager({
   api: chrome,
   agent,
   loadProviders: async () => {
+    await customSkillsReady;
     if (providerManager.providers.size === 0) await providerManager.load();
   },
   sendUpdate: (tabId, type, data) => {
@@ -126,6 +137,83 @@ async function loadProfile() {
 }
 loadProfile();
 
+async function loadDefaultSkillRecords() {
+  const records = [];
+  for (const source of DEFAULT_SKILL_SOURCES) {
+    const response = await fetch(chrome.runtime.getURL(source.path));
+    if (!response.ok) {
+      throw new Error(`Default skill ${source.id} failed to load: HTTP ${response.status}`);
+    }
+    records.push({
+      id: source.id,
+      name: source.name,
+      sourceType: 'built-in',
+      sourceUrl: source.path,
+      content: await response.text(),
+      createdAt: 0,
+    });
+  }
+  return records;
+}
+
+async function refreshDefaultSkillRecords(skills) {
+  const existingBuiltIns = skills.filter((skill) => skill.sourceType === 'built-in');
+  if (existingBuiltIns.length === 0) return { skills, changed: false };
+
+  const defaults = new Map((await loadDefaultSkillRecords()).map((skill) => [skill.id, skill]));
+  let changed = false;
+  const refreshed = skills.map((skill) => {
+    const current = defaults.get(skill.id);
+    if (!current || skill.sourceType !== 'built-in') return skill;
+    const result = refreshBuiltInSkillRecord(skill, current);
+    if (result.changed) changed = true;
+    return result.skill;
+  });
+  return { skills: changed ? normalizeCustomSkills(refreshed) : skills, changed };
+}
+
+async function loadCustomSkills() {
+  const stored = await chrome.storage.local.get([
+    CUSTOM_SKILLS_STORAGE_KEY,
+    DEFAULT_SKILLS_REMOVED_STORAGE_KEY,
+    DEFAULT_SKILLS_SEEDED_STORAGE_KEY,
+  ]);
+  let skills = normalizeCustomSkills(stored[CUSTOM_SKILLS_STORAGE_KEY]);
+  const removedDefaultIds = new Set(normalizeDefaultSkillRemovalIds(stored[DEFAULT_SKILLS_REMOVED_STORAGE_KEY]));
+  try {
+    const existingIds = new Set(skills.map((skill) => skill.id));
+    const room = Math.max(0, MAX_CUSTOM_SKILLS - skills.length);
+    const defaultSkills = (await loadDefaultSkillRecords())
+      .filter((skill) => !existingIds.has(skill.id) && !removedDefaultIds.has(skill.id))
+      .slice(0, room);
+    if (defaultSkills.length || !stored[DEFAULT_SKILLS_SEEDED_STORAGE_KEY]) {
+      skills = normalizeCustomSkills([...defaultSkills, ...skills]);
+      const update = {
+        [CUSTOM_SKILLS_STORAGE_KEY]: skills,
+        [DEFAULT_SKILLS_SEEDED_STORAGE_KEY]: true,
+      };
+      const normalizedRemoved = normalizeDefaultSkillRemovalIds(stored[DEFAULT_SKILLS_REMOVED_STORAGE_KEY]);
+      if (JSON.stringify(normalizedRemoved) !== JSON.stringify(stored[DEFAULT_SKILLS_REMOVED_STORAGE_KEY] || [])) {
+        update[DEFAULT_SKILLS_REMOVED_STORAGE_KEY] = normalizedRemoved;
+      }
+      await chrome.storage.local.set(update);
+    }
+  } catch (e) {
+    console.warn('[WebBrain] Default skills could not be loaded', e);
+  }
+  try {
+    const refreshed = await refreshDefaultSkillRecords(skills);
+    if (refreshed.changed) {
+      skills = refreshed.skills;
+      await chrome.storage.local.set({ [CUSTOM_SKILLS_STORAGE_KEY]: skills });
+    }
+  } catch (e) {
+    console.warn('[WebBrain] Default skills could not be refreshed', e);
+  }
+  agent.setCustomSkills(skills);
+}
+const customSkillsReady = loadCustomSkills();
+
 // CapSolver opt-in. We only need the toggle here — the API key is read at
 // call time inside the agent's solve_captcha handler so rotating it via
 // the settings page is picked up without a restart.
@@ -210,6 +298,10 @@ chrome.storage.onChanged.addListener((changes) => {
   }
   if (changes.profileText) {
     agent.profileText = changes.profileText.newValue || '';
+    refreshPrompts = true;
+  }
+  if (changes[CUSTOM_SKILLS_STORAGE_KEY]) {
+    agent.customSkills = normalizeCustomSkills(changes[CUSTOM_SKILLS_STORAGE_KEY].newValue);
     refreshPrompts = true;
   }
   if (changes.captchaSolverEnabled) {
@@ -821,10 +913,10 @@ async function handleMessage(msg, sender) {
   if (providerManager.providers.size === 0) {
     await providerManager.load();
   }
-  // Agent toggles (planBeforeAct, etc.) hydrate once at SW boot — await that
-  // single promise so the first chat can't race ahead of hydration, without a
+  // Agent toggles and prompt add-ons hydrate once at SW boot — await those
+  // promises so the first chat can't race ahead of hydration, without a
   // storage round-trip on every message.
-  await planBeforeActReady;
+  await Promise.all([planBeforeActReady, customSkillsReady]);
 
   switch (msg.action) {
     // --- Chat / Agent ---
@@ -1030,8 +1122,9 @@ async function handleMessage(msg, sender) {
       const planId = String(msg.planId || '');
       const decision = String(msg.decision || 'reject');
       const editedText = String(msg.editedText || '');
+      const markdownMode = msg.markdownMode === 'verbose' ? 'verbose' : 'compact';
       if (!planId) return { ok: false, error: 'planId required' };
-      const matched = agent.submitPlanResponse(tabId, planId, decision, editedText);
+      const matched = agent.submitPlanResponse(tabId, planId, decision, editedText, markdownMode);
       return { ok: matched, matched };
     }
 

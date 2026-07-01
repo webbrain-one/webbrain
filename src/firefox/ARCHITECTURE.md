@@ -1,6 +1,6 @@
 # WebBrain Firefox Extension — Architecture
 
-> Version 18.0.12 · Manifest V2 · Background Page
+> Version 19.0.2 · Manifest V2 · Background Page
 
 ## How Firefox Differs from Chrome
 
@@ -8,7 +8,6 @@ Firefox uses Manifest V2 (background page, not service worker) and has **no acce
 
 - **No trusted events** — clicks and key presses are synthetic (`el.click()`, `new KeyboardEvent()`), and some sites reject `event.isTrusted === false`. All AX-tool click/type paths use synthetic dispatch in Firefox; the CDP-backed trusted-event path in Chrome has no Firefox equivalent.
 - **No pixel-perfect / full-page screenshots** — uses `browser.tabs.captureVisibleTab()` instead of CDP `Page.captureScreenshot`.
-- **No conversation persistence** — conversations are lost when the sidebar closes (no session-storage equivalent for MV2 background pages).
 - **No shadow DOM piercing** — content script can read open shadow roots via `element.shadowRoot`, but cannot pierce closed roots.
 - **No offscreen document** — no HTTP fetch proxy for localhost LLM servers with Private Network Access / CORS issues. User must ensure their local LLM server sends permissive CORS headers.
 - **No duplicate-submit guard** — the per-tab submit-throttle (Chrome v3.6.5+) is still Chrome-only. Firefox's agent loop does not block rapid duplicate Create/Submit clicks. `blockedDone` and the ambiguous-click candidate payload were ported to Firefox in v4.0.1 (see "Overlay defenses" below).
@@ -55,6 +54,7 @@ src/firefox/
 │   ├── agent/
 │   │   ├── agent.js                # Core agent loop
 │   │   ├── tools.js                # Tool schemas + system prompts (incl. 4 AX tools)
+│   │   ├── skills.js               # Settings skills + dynamic skill tool manifests
 │   │   ├── planner.js              # Plan-before-Act structured planner
 │   │   ├── permission-gate.js      # Capability x origin permission gate
 │   │   ├── adapters.js             # Per-site guidance (identical to Chrome)
@@ -63,7 +63,7 @@ src/firefox/
 │   │   ├── accessibility-tree.js   # AX tree builder + ref_id registry (NEW in 3.6.8)
 │   │   └── content.js              # DOM reader / typer / clicker + AX handlers
 │   ├── network/
-│   │   └── network-tools.js        # fetch_url, research_url
+│   │   └── network-tools.js        # fetch_url, research_url, skill HTTP tools
 │   ├── providers/
 │   │   ├── base.js                 # Provider interface
 │   │   ├── manager.js              # Provider lifecycle
@@ -79,6 +79,7 @@ src/firefox/
 │       ├── settings.js
 │       ├── traces.html
 │       └── traces.js
+├── skills/                         # Packaged default skills (removable after seeding)
 └── icons/
 ```
 
@@ -185,6 +186,36 @@ System prompt has a new "MODALS & DIALOGS" section describing the intended flow 
 
 ---
 
+## Skills and Dynamic Skill Tools
+
+Settings -> Skills stores enabled skills under `customSkills`. On first run,
+`background.js` seeds packaged skills from `skills/*`; FreeSkillz.xyz is enabled
+by default but is just a stored built-in skill, so the user can remove it. If a
+packaged built-in skill changes and the user still has it enabled, startup
+refreshes the stored copy without re-adding deleted skills.
+
+`agent/skills.js` splits each skill into two surfaces:
+
+- prompt instructions appended by `buildCustomSkillsPrompt()`;
+- optional tool schemas declared in fenced `webbrain-tools` JSON blocks.
+
+The manifest fence is stripped before prompt injection. Declared skill tools are
+appended to `getToolsForMode(...)` at LLM-call time and executed through
+`executeHttpSkillTool()` in `network-tools.js`. Current skill tools support
+read-only HTTPS GET/POST integrations and HTTPS download-job integrations that
+poll a same-origin status URL, save through browser Downloads, and clean up the
+provider job. Requests use `credentials: "omit"`, optional URL input allowlists,
+and optional response limits.
+
+Importing/enabling a skill is the trust boundary. After import, the declared
+tool can contact its declared endpoint without a per-call permission prompt.
+Download-job tools still run in Act mode and use the normal Downloads permission
+gate before saving files. Third-party results should use
+`resultPolicy: "untrusted"` so the agent wraps and digests them like page
+content instead of trusted instructions.
+
+---
+
 ## Agent Loop
 
 The agent loop is structurally identical to Chrome. The same `processMessage()` / `processMessageStream()` flow runs:
@@ -204,16 +235,13 @@ Main Loop (max 120 steps)
     └─ If done() → return summary
 ```
 
-### No conversation persistence
+### Conversation persistence (parity with Chrome)
 
-Chrome persists conversations to `chrome.storage.session` and hydrates on service-worker restart. Firefox does **not** — conversations live only in memory on the background page and are lost when the sidebar closes or the background page unloads.
+Per-tab agent conversations and sidebar chat HTML are mirrored to `browser.storage.session` (`agentConv:<tabId>`, `tabChat:<tabId>`), same key shape as Chrome. The background page hydrates from session on the next message and the sidebar restores chat HTML on open/reopen. Session keys are cleared on `/reset` and when a tab closes (`tabChat` only for the UI layer; agent conv policy matches Chrome).
 
 ```javascript
-// Chrome has:
-this.conversations = new Map();  // + _persist() + _hydrate()
-
-// Firefox has:
-this.conversations = new Map();  // memory only, no persistence
+// Both browsers:
+this.conversations = new Map();  // + _persist() + _hydrate() → storage.session
 ```
 
 ---
@@ -384,8 +412,8 @@ All identical to Chrome:
 | Feature | Chrome | Firefox |
 |---|---|---|
 | Panel type | Side panel (MV3 API) | Sidebar action (MV2) |
-| Chat persistence | Survives panel close | Lost on close |
-| Tab tracking | `chrome.tabs.onActivated` + session storage | `browser.tabs.onActivated` + in-memory Map |
+| Chat persistence | Survives panel close | Survives sidebar close (`browser.storage.session`) |
+| Tab tracking | `chrome.tabs.onActivated` + session storage | `browser.tabs.onActivated` + session storage |
 | Background comms | `chrome.runtime.sendMessage` | `browser.runtime.sendMessage` (Promise-based) |
 | Trace viewer | Yes (`ui/traces.html`) | No |
 
@@ -446,7 +474,6 @@ when the tab conversation already has `/allow-api`.
 |---|---|---|
 | No CDP (no `debugger` permission) | Clicks are synthetic (`isTrusted: false`) | Most sites work; some banking/captcha sites may reject |
 | No offscreen document | Localhost LLM fetches fail on CORS | Configure server CORS headers |
-| No conversation persistence | Chat lost when sidebar closes | None — MV2 limitation |
 | No trusted keyboard events | `press_keys` may not land on all sites | Dispatched to both activeElement and document |
 | No full-page screenshot | Only visible viewport | Scroll + multiple captures |
 | No shadow-root piercing (closed) | Can't read closed shadow roots | `execute_js` with manual traversal |

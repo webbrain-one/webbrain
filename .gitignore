@@ -3,6 +3,10 @@
 node_modules/
 test/anonymous/.test-profile/
 
+# ---- Expo / React Native local state ----
+.expo/
+expo-env.d.ts
+
 # ---- SocialMediaDownloader test suite ----
 # Cookies / session state if someone ever points the profile here
 smd-test-profile/
