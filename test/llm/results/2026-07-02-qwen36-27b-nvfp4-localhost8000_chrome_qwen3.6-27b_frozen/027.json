@@ -1,0 +1,23 @@
+{
+  "id": "027",
+  "user": "tldr",
+  "tab": {
+    "url": "https://en.wikipedia.org/wiki/Closure_(computer_programming)",
+    "title": "Closure (computer programming) — Wikipedia"
+  },
+  "latencyMs": 1337,
+  "error": null,
+  "firstToolCall": {
+    "name": "read_page",
+    "args": {}
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 17339,
+    "total_tokens": 17390,
+    "completion_tokens": 51,
+    "prompt_tokens_details": null
+  }
+}

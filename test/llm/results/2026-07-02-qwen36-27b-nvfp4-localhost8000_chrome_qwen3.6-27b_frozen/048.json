@@ -1,0 +1,25 @@
+{
+  "id": "048",
+  "user": "open my inbox",
+  "tab": {
+    "url": "https://mail.google.com/mail/u/0/#inbox",
+    "title": "Inbox (3) — Gmail"
+  },
+  "latencyMs": 2485,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "You're already on your Gmail inbox page! I can see you have **3 unread messages** in your inbox. Let me take a quick look at what's there.",
+  "usage": {
+    "prompt_tokens": 17482,
+    "total_tokens": 17583,
+    "completion_tokens": 101,
+    "prompt_tokens_details": null
+  }
+}

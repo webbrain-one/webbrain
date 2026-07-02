@@ -1,0 +1,25 @@
+{
+  "id": "029",
+  "user": "give me the headings on this page",
+  "tab": {
+    "url": "https://en.wikipedia.org/wiki/Closure_(computer_programming)",
+    "title": "Closure (computer programming) — Wikipedia"
+  },
+  "latencyMs": 1561,
+  "error": null,
+  "firstToolCall": {
+    "name": "extract_data",
+    "args": {
+      "type": "headings"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 17344,
+    "total_tokens": 17405,
+    "completion_tokens": 61,
+    "prompt_tokens_details": null
+  }
+}

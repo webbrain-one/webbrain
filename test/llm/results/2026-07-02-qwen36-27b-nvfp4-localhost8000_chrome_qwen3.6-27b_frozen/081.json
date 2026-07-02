@@ -1,0 +1,29 @@
+{
+  "id": "081",
+  "user": "send a thank-you email to everyone in my contacts",
+  "tab": {
+    "url": "https://mail.google.com/mail/u/0/#inbox",
+    "title": "Inbox (3) — Gmail"
+  },
+  "latencyMs": 8662,
+  "error": null,
+  "firstToolCall": {
+    "name": "clarify",
+    "args": {
+      "question": "Do you want one email sent to all contacts (BCC'd) or separate individual emails to each contact?",
+      "options": [
+        "One email with all contacts BCC'd",
+        "Separate individual emails to each contact"
+      ]
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "Before I proceed — I want to make sure I get this right. When you say \"send a thank-you email to everyone in my contacts,\" do you mean:\n\n1. **One email** with all contacts BCC'd so they each receive it individually, or\n2. **Separate individual emails** sent to each contact one by one?\n\nAlso, do you have a specific message you'd like me to include, or should I draft something?",
+  "usage": {
+    "prompt_tokens": 17489,
+    "total_tokens": 17896,
+    "completion_tokens": 407,
+    "prompt_tokens_details": null
+  }
+}

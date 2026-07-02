@@ -1,0 +1,25 @@
+{
+  "id": "075",
+  "user": "finish what we were doing",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 6612,
+  "error": null,
+  "firstToolCall": {
+    "name": "scratchpad_write",
+    "args": {
+      "text": "User wants to finish previous task - need to identify what was in progress"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I need to check what we were working on. Let me look at the scratchpad and navigate back to where we left off.",
+  "usage": {
+    "prompt_tokens": 17327,
+    "total_tokens": 17632,
+    "completion_tokens": 305,
+    "prompt_tokens_details": null
+  }
+}

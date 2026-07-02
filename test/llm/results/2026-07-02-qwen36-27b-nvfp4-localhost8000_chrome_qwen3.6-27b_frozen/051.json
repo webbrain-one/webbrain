@@ -1,0 +1,25 @@
+{
+  "id": "051",
+  "user": "mark as spam",
+  "tab": {
+    "url": "https://mail.google.com/mail/u/0/#inbox/abc123",
+    "title": "Invoice from Acme — Gmail"
+  },
+  "latencyMs": 1504,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "interactive"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 17487,
+    "total_tokens": 17550,
+    "completion_tokens": 63,
+    "prompt_tokens_details": null
+  }
+}

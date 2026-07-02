@@ -1,0 +1,25 @@
+{
+  "id": "018",
+  "user": "find typescript repos with most stars",
+  "tab": {
+    "url": "https://github.com/",
+    "title": "GitHub"
+  },
+  "latencyMs": 2049,
+  "error": null,
+  "firstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "https://github.com/search?q=typescript&o=desc&s=stars&type=repositories"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll search GitHub for TypeScript repositories sorted by most stars.",
+  "usage": {
+    "prompt_tokens": 17879,
+    "total_tokens": 17961,
+    "completion_tokens": 82,
+    "prompt_tokens_details": null
+  }
+}

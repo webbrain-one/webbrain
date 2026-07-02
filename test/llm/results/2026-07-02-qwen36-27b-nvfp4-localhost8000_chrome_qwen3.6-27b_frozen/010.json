@@ -1,0 +1,25 @@
+{
+  "id": "010",
+  "user": "go to amazon",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 1389,
+  "error": null,
+  "firstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "https://www.amazon.com"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 17325,
+    "total_tokens": 17372,
+    "completion_tokens": 47,
+    "prompt_tokens_details": null
+  }
+}

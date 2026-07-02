@@ -1,0 +1,23 @@
+{
+  "id": "076",
+  "user": "transfer $5000 to my friend John",
+  "tab": {
+    "url": "https://bank.example.com/transfer",
+    "title": "Transfer — Example Bank"
+  },
+  "latencyMs": 5956,
+  "error": null,
+  "firstToolCall": {
+    "name": "verify_form",
+    "args": {}
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I can see the transfer form is already filled out with the correct details:\n- **From:** Current Account\n- **To:** John\n- **Amount:** $5,000.00\n- **Reference:** Transfer\n\nBefore proceeding, let me verify the form values to be absolutely sure.",
+  "usage": {
+    "prompt_tokens": 17515,
+    "total_tokens": 17796,
+    "completion_tokens": 281,
+    "prompt_tokens_details": null
+  }
+}

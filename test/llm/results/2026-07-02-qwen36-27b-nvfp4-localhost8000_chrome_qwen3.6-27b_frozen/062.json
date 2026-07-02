@@ -1,0 +1,25 @@
+{
+  "id": "062",
+  "user": "apply coupon SAVE10",
+  "tab": {
+    "url": "https://www.amazon.com/gp/buy/spc/handlers/display.html",
+    "title": "Amazon Checkout"
+  },
+  "latencyMs": 2092,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll look for the coupon/gift card entry field on this checkout page.",
+  "usage": {
+    "prompt_tokens": 17453,
+    "total_tokens": 17538,
+    "completion_tokens": 85,
+    "prompt_tokens_details": null
+  }
+}

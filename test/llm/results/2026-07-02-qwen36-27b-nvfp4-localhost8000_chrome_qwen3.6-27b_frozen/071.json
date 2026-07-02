@@ -1,0 +1,32 @@
+{
+  "id": "071",
+  "user": "send it",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 3825,
+  "error": null,
+  "firstToolCall": {
+    "name": "clarify",
+    "args": {
+      "question": "What would you like me to send?",
+      "reason": "I'm on a blank new tab page with no email, message, or form visible — I need to know what \"it\" refers to.",
+      "options": [
+        "Send an email",
+        "Send a message on a website",
+        "Submit a form on this page",
+        "Something else"
+      ]
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 17324,
+    "total_tokens": 17489,
+    "completion_tokens": 165,
+    "prompt_tokens_details": null
+  }
+}

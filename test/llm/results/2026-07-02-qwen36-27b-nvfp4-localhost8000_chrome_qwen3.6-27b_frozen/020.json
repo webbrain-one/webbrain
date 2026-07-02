@@ -1,0 +1,25 @@
+{
+  "id": "020",
+  "user": "look up \"javascript closures\" on stackoverflow",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 1853,
+  "error": null,
+  "firstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "https://stackoverflow.com/search?q=javascript+closures"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll search for \"javascript closures\" on Stack Overflow for you.",
+  "usage": {
+    "prompt_tokens": 17331,
+    "total_tokens": 17410,
+    "completion_tokens": 79,
+    "prompt_tokens_details": null
+  }
+}

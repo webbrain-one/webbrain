@@ -1,0 +1,23 @@
+{
+  "id": "068",
+  "user": "click that",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 2167,
+  "error": null,
+  "firstToolCall": {
+    "name": "screenshot",
+    "args": {}
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'm on a new tab page — could you clarify what you'd like me to click? Let me take a screenshot to see what's on screen.",
+  "usage": {
+    "prompt_tokens": 17324,
+    "total_tokens": 17416,
+    "completion_tokens": 92,
+    "prompt_tokens_details": null
+  }
+}

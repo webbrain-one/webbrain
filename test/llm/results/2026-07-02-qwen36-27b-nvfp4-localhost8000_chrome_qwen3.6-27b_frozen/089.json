@@ -1,0 +1,25 @@
+{
+  "id": "089",
+  "user": "open youtube, twitter, and gmail in new tabs",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 3035,
+  "error": null,
+  "firstToolCall": {
+    "name": "new_tab",
+    "args": {
+      "url": "https://www.youtube.com"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "Opening all three tabs for you now.",
+  "usage": {
+    "prompt_tokens": 17332,
+    "total_tokens": 17458,
+    "completion_tokens": 126,
+    "prompt_tokens_details": null
+  }
+}

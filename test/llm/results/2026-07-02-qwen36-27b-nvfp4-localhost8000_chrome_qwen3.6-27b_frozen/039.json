@@ -1,0 +1,23 @@
+{
+  "id": "039",
+  "user": "verify the form is ready before submitting",
+  "tab": {
+    "url": "https://github.com/esokullu/webbrain/releases/new",
+    "title": "New Release"
+  },
+  "latencyMs": 1444,
+  "error": null,
+  "firstToolCall": {
+    "name": "verify_form",
+    "args": {}
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 17887,
+    "total_tokens": 17944,
+    "completion_tokens": 57,
+    "prompt_tokens_details": null
+  }
+}

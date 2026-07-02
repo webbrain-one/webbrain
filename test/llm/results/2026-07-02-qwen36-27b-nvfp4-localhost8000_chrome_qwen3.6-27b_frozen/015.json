@@ -1,0 +1,23 @@
+{
+  "id": "015",
+  "user": "whats my new tab page",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 2046,
+  "error": null,
+  "firstToolCall": {
+    "name": "screenshot",
+    "args": {}
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "You're currently on Firefox's default new tab page (`about:home`). Let me take a screenshot so you can see exactly what's showing up.",
+  "usage": {
+    "prompt_tokens": 17328,
+    "total_tokens": 17414,
+    "completion_tokens": 86,
+    "prompt_tokens_details": null
+  }
+}

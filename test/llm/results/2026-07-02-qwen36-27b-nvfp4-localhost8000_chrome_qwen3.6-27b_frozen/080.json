@@ -1,0 +1,25 @@
+{
+  "id": "080",
+  "user": "close all my tabs except this one",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 3745,
+  "error": null,
+  "firstToolCall": {
+    "name": "execute_js",
+    "args": {
+      "code": "// Get info about all windows and their tabs\nconst { windows } = chrome;\n// We can't directly list tabs from here, but we can use the extension API\n// Let's just return the current tab info\nconst tabs = await new Promise((resolve) => {\n  chrome.tabs.query({}, (tabs) => resolve(tabs));\n});\nreturn tabs.map(t => ({ id: t.id, url: t.url, title: t.title }));"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll check what tabs are currently open and close all of them except this one.",
+  "usage": {
+    "prompt_tokens": 17329,
+    "total_tokens": 17502,
+    "completion_tokens": 173,
+    "prompt_tokens_details": null
+  }
+}

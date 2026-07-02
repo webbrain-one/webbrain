@@ -1,0 +1,25 @@
+{
+  "id": "074",
+  "user": "go back to that other thing",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 1630,
+  "error": null,
+  "firstToolCall": {
+    "name": "execute_js",
+    "args": {
+      "code": "window.history.back();"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 17328,
+    "total_tokens": 17393,
+    "completion_tokens": 65,
+    "prompt_tokens_details": null
+  }
+}

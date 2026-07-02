@@ -1,0 +1,25 @@
+{
+  "id": "012",
+  "user": "show my browser history",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 1800,
+  "error": null,
+  "firstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "chrome://history/"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll navigate to your browser history page for you.",
+  "usage": {
+    "prompt_tokens": 17326,
+    "total_tokens": 17399,
+    "completion_tokens": 73,
+    "prompt_tokens_details": null
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "id": "082",
+  "user": "whats the capital of france",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 1956,
+  "error": null,
+  "firstToolCall": {
+    "name": "done",
+    "args": {
+      "summary": "Answered the user's question: the capital of France is Paris."
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "The capital of France is **Paris**.",
+  "usage": {
+    "prompt_tokens": 17328,
+    "total_tokens": 17416,
+    "completion_tokens": 88,
+    "prompt_tokens_details": null
+  }
+}

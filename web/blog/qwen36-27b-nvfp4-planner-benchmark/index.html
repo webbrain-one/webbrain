@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Qwen 3.6 27B NVFP4 WebBrain planner benchmark - WebBrain Blog</title>
+  <meta name="description" content="We tested nvidia/Qwen3.6-27B-NVFP4 against WebBrain&#39;s frozen browser-agent first-tool benchmark. It is far faster than the older Qwen 3.6 27B row and enters the top 10, but loses three all-case Sonnet-alignment points on boundary cases.">
+  <meta name="keywords" content="WebBrain, Qwen 3.6, Qwen 3.6 27B, NVFP4, NVIDIA, vLLM, browser agent, planner benchmark, tool calling">
+  <meta property="og:title" content="Qwen 3.6 27B NVFP4 enters WebBrain&#39;s planner top 10">
+  <meta property="og:description" content="The NVFP4 Qwen 3.6 27B variant is much faster than the older saved Qwen row, but the all-case Sonnet benchmark exposes a boundary-case tradeoff.">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://webbrain.one/blog/qwen36-27b-nvfp4-planner-benchmark">
+  <meta property="og:image" content="https://webbrain.one/og-image.png">
+  <meta property="og:image:secure_url" content="https://webbrain.one/og-image.png">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="WebBrain brain emoji icon">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Qwen 3.6 27B NVFP4 WebBrain benchmark">
+  <meta name="twitter:description" content="Faster, more parseable, top-10 - but not a clean all-case quality upgrade over the older Qwen 3.6 27B row.">
+  <meta name="twitter:image" content="https://webbrain.one/twitter-image.png">
+  <meta name="twitter:image:alt" content="WebBrain brain emoji icon">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="canonical" href="https://webbrain.one/blog/qwen36-27b-nvfp4-planner-benchmark">
+  <!-- Blog is English-only; alternates point to locale homepages. -->
+  <link rel="alternate" hreflang="en" href="https://webbrain.one/">
+  <link rel="alternate" hreflang="es" href="https://webbrain.one/es/">
+  <link rel="alternate" hreflang="fr" href="https://webbrain.one/fr/">
+  <link rel="alternate" hreflang="tr" href="https://webbrain.one/tr/">
+  <link rel="alternate" hreflang="zh" href="https://webbrain.one/zh/">
+  <link rel="alternate" hreflang="ru" href="https://webbrain.one/ru/">
+  <link rel="alternate" hreflang="uk" href="https://webbrain.one/uk/">
+  <link rel="alternate" hreflang="ar" href="https://webbrain.one/ar/">
+  <link rel="alternate" hreflang="ja" href="https://webbrain.one/ja/">
+  <link rel="alternate" hreflang="ko" href="https://webbrain.one/ko/">
+  <link rel="alternate" hreflang="id" href="https://webbrain.one/id/">
+  <link rel="alternate" hreflang="th" href="https://webbrain.one/th/">
+  <link rel="alternate" hreflang="ms" href="https://webbrain.one/ms/">
+  <link rel="alternate" hreflang="tl" href="https://webbrain.one/tl/">
+  <link rel="alternate" hreflang="x-default" href="https://webbrain.one/">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg: #0b0e17;
+      --bg-card: #111827;
+      --bg-card-hover: #1a2233;
+      --surface: #161d2e;
+      --border: rgba(255,255,255,0.07);
+      --text: #e4e4ec;
+      --text-dim: #8b8fa4;
+      --accent: #6c63ff;
+      --accent-glow: rgba(108,99,255,0.25);
+      --accent2: #a78bfa;
+      --success: #34d399;
+      --warning: #fbbf24;
+      --danger: #f87171;
+      --tint-soft: rgba(255,255,255,0.05);
+      --tint-soft-2: rgba(255,255,255,0.04);
+      --tint-medium: rgba(255,255,255,0.08);
+      --nav-bg: rgba(11,14,23,0.85);
+      --code-bg: #0a0e17;
+      --inline-code-bg: rgba(255,255,255,0.06);
+      --shadow-strong: rgba(0,0,0,0.40);
+      --radius: 12px;
+      --radius-lg: 16px;
+      --max-w: 760px;
+      color-scheme: dark;
+    }
+    :root[data-theme="light"] {
+      --bg: #f7f1e6;
+      --bg-card: #fffdf8;
+      --bg-card-hover: #f2e9d4;
+      --surface: #ede2cb;
+      --border: rgba(89,55,25,0.15);
+      --text: #2c1810;
+      --text-dim: #6b5b47;
+      --accent: #5b52e8;
+      --accent-glow: rgba(91,82,232,0.20);
+      --accent2: #7c6ce6;
+      --success: #2d8866;
+      --warning: #9a6500;
+      --danger: #b74747;
+      --tint-soft: rgba(89,55,25,0.05);
+      --tint-soft-2: rgba(89,55,25,0.07);
+      --tint-medium: rgba(89,55,25,0.10);
+      --nav-bg: rgba(247,241,230,0.85);
+      --code-bg: #fff7e6;
+      --inline-code-bg: rgba(89,55,25,0.08);
+      --shadow-strong: rgba(89,55,25,0.18);
+      color-scheme: light;
+    }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.75;
+      font-size: 17px;
+      overflow-x: hidden;
+    }
+    a { color: var(--accent2); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .glow-bg {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    .glow-bg::before,
+    .glow-bg::after {
+      content: '';
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(120px);
+      opacity: 0.26;
+    }
+    .glow-bg::before {
+      width: 500px;
+      height: 500px;
+      background: var(--accent);
+      top: -220px;
+      left: -160px;
+    }
+    .glow-bg::after {
+      width: 500px;
+      height: 500px;
+      background: var(--accent2);
+      right: -180px;
+      bottom: -230px;
+      opacity: 0.18;
+    }
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--nav-bg);
+      backdrop-filter: saturate(160%) blur(12px);
+      -webkit-backdrop-filter: saturate(160%) blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-inner {
+      max-width: var(--max-w);
+      margin: 0 auto;
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+    .nav-brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+      color: var(--text);
+      font-size: 18px;
+      font-weight: 700;
+      text-decoration: none;
+    }
+    .nav-brand:hover { text-decoration: none; }
+    .nav-brand .domain { opacity: 0.5; font-weight: 400; }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 16px;
+      min-width: 0;
+    }
+    .nav-links a {
+      color: var(--text-dim);
+      font-size: 14px;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+    .nav-links a:hover { color: var(--text); text-decoration: none; }
+    .lang-dropdown {
+      background: var(--tint-soft);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 13px;
+      max-width: 120px;
+    }
+    .lang-dropdown:focus { outline: 2px solid var(--accent-glow); outline-offset: 1px; }
+    .lang-dropdown option { background-color: var(--bg-card-hover); color: var(--text); }
+    .theme-toggle {
+      appearance: none;
+      -webkit-appearance: none;
+      background: var(--tint-soft-2);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      width: 30px;
+      height: 30px;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      cursor: pointer;
+      color: var(--text-dim);
+      transition: background 0.2s, color 0.2s, border-color 0.2s, transform 0.1s;
+    }
+    .theme-toggle:hover {
+      background: var(--tint-medium);
+      border-color: var(--accent);
+      color: var(--text);
+      transform: translateY(-1px);
+    }
+    .theme-toggle:focus-visible {
+      outline: 2px solid var(--accent2);
+      outline-offset: 2px;
+    }
+    .theme-toggle svg { width: 16px; height: 16px; display: block; }
+    .theme-toggle .icon-sun { display: block; }
+    .theme-toggle .icon-moon { display: none; }
+    :root[data-theme="light"] .theme-toggle .icon-sun { display: none; }
+    :root[data-theme="light"] .theme-toggle .icon-moon { display: block; }
+    main,
+    article {
+      max-width: var(--max-w);
+      margin: 0 auto;
+      padding: 64px 24px 80px;
+    }
+    .page-label {
+      display: inline-block;
+      font-size: 12px;
+      letter-spacing: 0;
+      text-transform: uppercase;
+      color: var(--accent2);
+      padding: 4px 10px;
+      border: 1px solid color-mix(in srgb, var(--accent2) 28%, transparent);
+      border-radius: 999px;
+      margin-bottom: 18px;
+    }
+    h1 {
+      font-size: 38px;
+      line-height: 1.2;
+      font-weight: 700;
+      letter-spacing: 0;
+      margin-bottom: 16px;
+    }
+    .page-sub,
+    .lede {
+      color: var(--text-dim);
+      line-height: 1.6;
+    }
+    .page-sub {
+      font-size: 17px;
+      max-width: 580px;
+      margin-bottom: 48px;
+    }
+    .lede {
+      font-size: 19px;
+      margin-bottom: 40px;
+    }
+    .meta {
+      font-size: 13px;
+      color: var(--text-dim);
+      margin-bottom: 12px;
+      letter-spacing: 0;
+    }
+    h2 {
+      font-size: 24px;
+      font-weight: 700;
+      margin-top: 48px;
+      margin-bottom: 14px;
+      letter-spacing: 0;
+    }
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-top: 32px;
+      margin-bottom: 10px;
+      color: var(--text);
+    }
+    h4, h5, h6 {
+      color: var(--text);
+      margin-top: 28px;
+      margin-bottom: 10px;
+      line-height: 1.35;
+    }
+    p { margin-bottom: 16px; }
+    ul, ol { margin: 0 0 16px 20px; }
+    li { margin-bottom: 6px; }
+    code {
+      font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+      font-size: 0.88em;
+      background: var(--inline-code-bg);
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: color-mix(in srgb, var(--accent2) 80%, var(--text));
+    }
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      overflow-x: auto;
+      margin: 20px 0;
+      font-size: 14px;
+      line-height: 1.55;
+      box-shadow: 0 18px 60px var(--shadow-strong);
+    }
+    pre code {
+      background: transparent;
+      padding: 0;
+      color: inherit;
+      font-size: inherit;
+    }
+    blockquote {
+      border-left: 3px solid var(--accent);
+      padding: 4px 0 4px 18px;
+      margin: 20px 0;
+      color: var(--text-dim);
+      font-style: italic;
+    }
+    blockquote p:last-child { margin-bottom: 0; }
+    hr {
+      border: 0;
+      border-top: 1px solid var(--border);
+      margin: 36px 0;
+    }
+    article img {
+      max-width: 100%;
+      height: auto;
+      display: block;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      margin: 24px 0;
+    }
+    .table-wrap { overflow-x: auto; margin: 24px 0; }
+    table {
+      width: 100%;
+      min-width: 560px;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    th, td {
+      text-align: left;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    th {
+      color: var(--text-dim);
+      font-weight: 600;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0;
+      background: var(--tint-soft-2);
+    }
+    td code { font-size: 12px; }
+    .win { color: var(--success); font-weight: 600; }
+    .lose { color: var(--danger); }
+    .meh { color: var(--warning); }
+    .callout {
+      background: color-mix(in srgb, var(--accent) 10%, transparent);
+      border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      margin: 24px 0;
+      font-size: 15px;
+      line-height: 1.65;
+      color: var(--text-dim);
+    }
+    .callout strong { color: var(--text); }
+    .author-box {
+      margin-top: 64px;
+      padding-top: 32px;
+      border-top: 1px solid var(--border);
+      color: var(--text-dim);
+      font-size: 14px;
+    }
+    .post-list { display: flex; flex-direction: column; gap: 18px; }
+    .post-card {
+      display: block;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px 26px;
+      transition: background 0.18s, border-color 0.18s, transform 0.18s;
+    }
+    .post-card:hover {
+      background: var(--bg-card-hover);
+      border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+      transform: translateY(-1px);
+      text-decoration: none;
+    }
+    .post-meta {
+      font-size: 12px;
+      color: var(--text-dim);
+      letter-spacing: 0;
+      margin-bottom: 8px;
+    }
+    .post-title {
+      font-size: 21px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 6px;
+      letter-spacing: 0;
+      line-height: 1.35;
+    }
+    .post-excerpt {
+      color: var(--text-dim);
+      font-size: 15px;
+      line-height: 1.6;
+    }
+    footer {
+      max-width: var(--max-w);
+      margin: 0 auto;
+      padding: 40px 24px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+      color: var(--text-dim);
+      font-size: 13px;
+    }
+    footer a { color: var(--text-dim); }
+    footer a:hover { color: var(--text); }
+    @media (max-width: 700px) {
+      body { font-size: 16px; }
+      .nav-inner { padding: 14px 20px; align-items: flex-start; }
+      .nav-links { gap: 12px; flex-wrap: wrap; }
+      .lang-dropdown { display: none; }
+      h1 { font-size: 28px; }
+      .lede { font-size: 16px; }
+      .page-sub { font-size: 15px; }
+      main, article { padding: 48px 20px 64px; }
+      h2 { font-size: 20px; margin-top: 36px; }
+      .post-card { padding: 20px; }
+      .post-title { font-size: 19px; }
+      footer { flex-direction: column; padding: 32px 20px; }
+    }
+    @media (max-width: 420px) {
+      .nav-inner { gap: 12px; }
+      .nav-links a[href="https://github.com/webbrain-one/webbrain"] { display: none; }
+      .theme-toggle { width: 28px; height: 28px; }
+    }
+  </style>
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('webbrain-theme');
+        var theme = (saved === 'light' || saved === 'dark')
+          ? saved
+          : (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+        document.documentElement.setAttribute('data-theme', theme);
+      } catch (_) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    })();
+  </script>
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "Qwen 3.6 27B NVFP4 is much faster, but not a clean planner upgrade",
+  "description": "We tested nvidia/Qwen3.6-27B-NVFP4 against WebBrain's frozen browser-agent first-tool benchmark. It is far faster than the older Qwen 3.6 27B row and enters the top 10, but loses three all-case Sonnet-alignment points on boundary cases.",
+  "author": {
+    "@type": "Person",
+    "name": "Emre Sokullu",
+    "url": "https://emresokullu.com"
+  },
+  "datePublished": "2026-07-02",
+  "image": "https://webbrain.one/og-image.png",
+  "publisher": {
+    "@type": "Organization",
+    "name": "WebBrain",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://webbrain.one/favicon.svg"
+    }
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://webbrain.one/blog/qwen36-27b-nvfp4-planner-benchmark"
+  }
+}
+  </script>
+</head>
+<body>
+  <div class="glow-bg"></div>
+  <nav>
+    <div class="nav-inner">
+      <a href="/" class="nav-brand"><span class="emoji" aria-hidden="true">&#129504;</span> WebBrain<span class="domain">.one</span></a>
+      <div class="nav-links">
+        <a href="/">Home</a>
+        <a href="/blog">Blog</a>
+        <select class="lang-dropdown" id="lang-dropdown" aria-label="Select language" data-current="en"><option value="en">English</option><option value="es">Espanol</option><option value="fr">Francais</option><option value="tr">Turkce</option><option value="zh">Chinese</option><option value="ru">Russian</option><option value="uk">Ukrainian</option><option value="ar">Arabic</option><option value="ja">Japanese</option><option value="ko">Korean</option><option value="id">Bahasa Indonesia</option><option value="th">Thai</option><option value="ms">Bahasa Melayu</option><option value="tl">Filipino</option></select>
+        <button class="theme-toggle" type="button" id="theme-toggle" aria-label="Toggle light / dark theme" title="Toggle light / dark theme">
+          <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="4"/>
+            <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+          </svg>
+          <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+          </svg>
+        </button>
+        <a href="https://github.com/webbrain-one/webbrain" target="_blank" rel="noopener">GitHub</a>
+      </div>
+    </div>
+  </nav>
+
+  <article>
+    <div class="meta">July 2, 2026 &middot; 6 min read &middot; <a href="/blog">&larr; All posts</a></div>
+    <h1>Qwen 3.6 27B NVFP4 is much faster, but not a clean planner upgrade</h1>
+    <p class="lede">We ran <strong>nvidia/Qwen3.6-27B-NVFP4</strong> through WebBrain&#39;s frozen 100-case browser-agent planner benchmark because the NVFP4 build is supposed to be the more performant Qwen 3.6 27B serving path. The performance claim holds: this run is dramatically faster than the older saved Qwen 3.6 27B row. The planner-quality claim is more nuanced: it enters the current Sonnet-reference top 10, but it does not beat old Qwen on all-case Sonnet alignment.</p>
+<h2 id="what-we-ran">What we ran</h2>
+<p>The local vLLM server at <code>http://localhost:8000</code> advertised:</p>
+<pre><code class="language-json">{
+  &quot;id&quot;: &quot;qwen3.6-27b&quot;,
+  &quot;root&quot;: &quot;nvidia/Qwen3.6-27B-NVFP4&quot;,
+  &quot;max_model_len&quot;: 65536
+}</code></pre>
+<p>We used the same frozen May 23, 2026 WebBrain baseline used by the recent planner posts: Claude Sonnet 4.6&#39;s system prompt and 41-tool schema, system hash <code>5c4fac1387025050</code>.</p>
+<pre><code class="language-bash">node test/llm/run-llamacpp.mjs \
+  --base http://localhost:8000 \
+  --model qwen3.6-27b \
+  --tag 2026-07-02-qwen36-27b-nvfp4-localhost8000 \
+  --concurrency 3 \
+  --timeout 180000 \
+  --no-save-request \
+  --freeze test/llm/freeze/baseline-2026-05-23.json</code></pre>
+<p>This run used native OpenAI-style structured tools (<code>--chat-template-compat off</code>). Concurrency was capped at 3 because the vLLM server was running with <code>num-seqs=3</code>.</p>
+<p>Result files:</p>
+<pre><code class="language-text">test/llm/results/2026-07-02-qwen36-27b-nvfp4-localhost8000_chrome_qwen3.6-27b_frozen</code></pre>
+<h2 id="headline-result">Headline result</h2>
+<div class="table-wrap"><table><thead><tr><th>Metric</th><th>Qwen 3.6 27B NVFP4</th></tr></thead><tbody><tr><td>Completed cases</td><td>100/100</td></tr><tr><td>Transport errors</td><td>0</td></tr><tr><td>Parsed tool calls</td><td>96/100</td></tr><tr><td>Valid frozen-schema tool names</td><td>96/100</td></tr><tr><td>Strict exact first-call match</td><td>18/100</td></tr><tr><td>Ideal tool-name match</td><td>38/100</td></tr><tr><td>Sonnet match, all cases</td><td>74.0%</td></tr><tr><td>Sonnet match, when Sonnet tooled</td><td>77.2%</td></tr><tr><td>Average latency</td><td>2.19s</td></tr><tr><td>Median latency</td><td>1.76s</td></tr><tr><td>p95 latency</td><td>6.49s</td></tr><tr><td>Slowest case</td><td>8.66s</td></tr><tr><td>Total wall time</td><td>74s at concurrency 3</td></tr></tbody></table></div>
+<p>That is a useful row. It emits native tool calls cleanly, every emitted tool name is in the frozen schema, and median latency is low enough for an interactive browser loop.</p>
+<p>But it is not a clean quality upgrade over the older Qwen 3.6 27B result.</p>
+<h2 id="against-old-qwen-3-6-27b">Against old Qwen 3.6 27B</h2>
+<p>The old row is still the main comparison point because it is the same model family and size in the saved WebBrain benchmark table.</p>
+<div class="table-wrap"><table><thead><tr><th>Model</th><th>Parsed calls</th><th>Exact</th><th>Ideal name</th><th>Sonnet all</th><th>Sonnet tooled</th><th>Median</th><th>p95</th></tr></thead><tbody><tr><td>Qwen 3.6 27B</td><td>92/100</td><td>18/100</td><td>37/100</td><td>77.0%</td><td>77.2%</td><td>10.2s</td><td>15.0s</td></tr><tr><td>Qwen 3.6 27B NVFP4</td><td>96/100</td><td>18/100</td><td>38/100</td><td>74.0%</td><td>77.2%</td><td>1.76s</td><td>6.49s</td></tr></tbody></table></div>
+<p>The speedup is the obvious win: 1.76s median versus 10.2s is about a 5.8x improvement in the saved rows. The p95 also drops from 15.0s to 6.49s.</p>
+<p>The quality picture splits:</p>
+<ul><li>NVFP4 parses more calls: 96 instead of 92.</li><li>NVFP4 has one more ideal tool-name match: 38 instead of 37.</li><li>Strict exact matches are tied at 18.</li><li>Sonnet-tooled matches are tied at 71/92.</li><li>All-case Sonnet alignment drops from 77/100 to 74/100.</li></ul>
+<p>That last line is the trick. The new run did not get worse at matching Sonnet on prompts where Sonnet actually used a tool. It tied the old Qwen row there. The three-point loss comes from prompts where Sonnet intentionally returned no tool.</p>
+<p>Sonnet returned no tool on eight frozen cases. The old Qwen row matched six of those no-tool decisions. NVFP4 matched three. In the other five, it emitted tools like <code>screenshot</code>, <code>scratchpad_write</code>, <code>done</code>, or <code>clarify</code>. That is not a schema failure. It is a boundary-discipline issue: the model is more eager to do something.</p>
+<h2 id="current-sonnetreference-top-10">Current Sonnet-reference top 10</h2>
+<p>Rows are ranked by all-case Sonnet match, then by Sonnet-tooled match as the first tiebreaker. Claude Sonnet 4.6 is the reference, not included as a ranked row.</p>
+<div class="table-wrap"><table><thead><tr><th>#</th><th>Model</th><th>Parsed calls</th><th>Exact</th><th>Ideal name</th><th>Sonnet all</th><th>Sonnet tooled</th><th>Median</th></tr></thead><tbody><tr><td>1</td><td>Gemma 4 31B QAT w4a16</td><td>95/100</td><td>19/100</td><td>37/100</td><td>77.0%</td><td>78.3%</td><td>0.55s</td></tr><tr><td>2</td><td>Qwen 3.6 27B</td><td>92/100</td><td>18/100</td><td>37/100</td><td>77.0%</td><td>77.2%</td><td>10.2s</td></tr><tr><td>3</td><td>MiniMax M2.7</td><td>88/100</td><td>23/100</td><td>36/100</td><td>77.0%</td><td>76.1%</td><td>3.1s</td></tr><tr><td>4</td><td>MiniMax M3</td><td>85/100</td><td>17/100</td><td>32/100</td><td>75.0%</td><td>73.9%</td><td>3.1s</td></tr><tr><td>5</td><td><strong>Qwen 3.6 27B NVFP4</strong></td><td><strong>96/100</strong></td><td><strong>18/100</strong></td><td><strong>38/100</strong></td><td><strong>74.0%</strong></td><td><strong>77.2%</strong></td><td><strong>1.76s</strong></td></tr><tr><td>6</td><td>Intel Gemma 4 31B int4 AutoRound</td><td>88/100</td><td>14/100</td><td>34/100</td><td>74.0%</td><td>72.8%</td><td>0.63s</td></tr><tr><td>7</td><td>WebBrain Cloud 1.0</td><td>90/100</td><td>16/100</td><td>35/100</td><td>73.0%</td><td>72.8%</td><td>8.8s</td></tr><tr><td>8</td><td>Qwen 3.5 4B</td><td>82/100</td><td>12/100</td><td>33/100</td><td>73.0%</td><td>71.7%</td><td>5.5s</td></tr><tr><td>9</td><td>Ornith-1.0-35B NVFP4</td><td>88/100</td><td>21/100</td><td>36/100</td><td>71.0%</td><td>70.7%</td><td>2.4s</td></tr><tr><td>10</td><td>Gemma 4 26B-A4B</td><td>87/100</td><td>13/100</td><td>30/100</td><td>71.0%</td><td>70.7%</td><td>1.4s</td></tr></tbody></table></div>
+<p>This is the fair positive interpretation: NVFP4 enters the top 10 and has the highest parsed-call count in that table. It also has the best ideal-name score in the top 10, tied with Qwen 3.6 35B just below the cut. If you only look at cases where Sonnet picked a tool, it is tied with old Qwen 3.6 27B.</p>
+<p>The fair negative interpretation is also real: the old Qwen 3.6 27B row is still better on the all-case metric because it declines or answers directly more often in the same places Sonnet does.</p>
+<h2 id="where-it-is-strong">Where it is strong</h2>
+<p>The tool distribution looks healthy:</p>
+<div class="table-wrap"><table><thead><tr><th>Tool or output</th><th>First calls</th></tr></thead><tbody><tr><td><code>get_accessibility_tree</code></td><td>39</td></tr><tr><td><code>navigate</code></td><td>21</td></tr><tr><td><code>execute_js</code></td><td>8</td></tr><tr><td><code>read_page</code></td><td>6</td></tr><tr><td>no tool call</td><td>4</td></tr><tr><td><code>screenshot</code></td><td>4</td></tr><tr><td><code>clarify</code></td><td>3</td></tr><tr><td><code>new_tab</code></td><td>3</td></tr><tr><td><code>extract_data</code></td><td>2</td></tr><tr><td><code>list_downloads</code></td><td>2</td></tr><tr><td><code>verify_form</code></td><td>2</td></tr></tbody></table></div>
+<p>The cleanest category wins are the normal browser-agent routing cases:</p>
+<div class="table-wrap"><table><thead><tr><th>Category</th><th>Sonnet matches</th></tr></thead><tbody><tr><td>Direct navigation</td><td>10/10</td></tr><tr><td>Search</td><td>10/10</td></tr><tr><td>Page reading</td><td>7/8</td></tr><tr><td>Forms / interactive</td><td>7/8</td></tr><tr><td>Tab management</td><td>4/4</td></tr><tr><td>UI mutations</td><td>4/4</td></tr><tr><td>Translation / accessibility</td><td>3/3</td></tr><tr><td>Multi-page / listing</td><td>3/3</td></tr></tbody></table></div>
+<p>For ordinary &quot;go here&quot;, &quot;search this&quot;, &quot;read this&quot;, &quot;change this UI setting&quot; first moves, the model is right in the top local tier. That is the part of the result that feels like a real deployable planner.</p>
+<h2 id="where-it-loses-points">Where it loses points</h2>
+<p>The weaker bands are the boundaries and special-purpose shortcuts:</p>
+<div class="table-wrap"><table><thead><tr><th>Category</th><th>Sonnet matches</th><th>What happened</th></tr></thead><tbody><tr><td>Ambiguous / clarify</td><td>0/8</td><td>Over-tooled or picked the wrong terminal shape on no-tool and clarify-style cases.</td></tr><tr><td>Destructive / refusal-worthy</td><td>2/6</td><td>Often inspected or verified instead of matching Sonnet&#39;s confirmation boundary.</td></tr><tr><td>Downloads</td><td>3/6</td><td>Missed some <code>download_file</code>, <code>download_social_media</code>, and <code>fetch_url</code> shortcut choices.</td></tr><tr><td>GitHub flows</td><td>3/6</td><td>Preferred page inspection for some flows where Sonnet navigated or fetched directly.</td></tr><tr><td>Knowledge questions</td><td>3/5</td><td>Correctly no-tooled three short-answer cases, but used tools on two others.</td></tr></tbody></table></div>
+<p>The ambiguous band is the entire reason the all-case score falls below old Qwen. Case 075 is a good example: &quot;finish what we were doing&quot; is intentionally under-specified. Sonnet returned no tool. Old Qwen returned no tool. NVFP4 wrote to the scratchpad. That is a valid WebBrain tool name, but it is the wrong kind of eagerness for this benchmark.</p>
+<h2 id="bottom-line">Bottom line</h2>
+<p>Qwen 3.6 27B NVFP4 is a strong local serving result. It is far faster than the older saved Qwen 3.6 27B row, produces more parsed native tool calls, stays inside the frozen schema, and enters the current Sonnet-reference top 10.</p>
+<p>It is not a clean planner-quality upgrade. On tool-required tasks, it is essentially tied with old Qwen 3.6 27B. On all cases, old Qwen still wins by three points because it better matches Sonnet&#39;s &quot;do not call a tool yet&quot; decisions.</p>
+<p>For WebBrain, I would treat this as a serious practical candidate with one caveat: pair it with stronger boundary handling. If the outer agent can guard ambiguous, destructive, and no-browser-needed turns, the NVFP4 serving profile is very attractive. Without that guard, the old Qwen row remains the cleaner planner by the benchmark&#39;s all-case metric.</p>
+<p>Tags: #Qwen36 #NVFP4 #NVIDIA #vLLM #ToolCalling #BrowserAgent #WebBrain</p>
+
+    <div class="author-box">
+      Written by <a href="https://emresokullu.com" target="_blank" rel="noopener">Emre Sokullu</a>. WebBrain is MIT-licensed and open on <a href="https://github.com/webbrain-one/webbrain" target="_blank" rel="noopener">GitHub</a>.
+    </div>
+  </article>
+
+  <footer>
+    <div>&copy; 2026 WebBrain &middot; <a href="/privacy">Privacy</a></div>
+    <div><a href="https://github.com/webbrain-one/webbrain" target="_blank" rel="noopener">GitHub</a></div>
+  </footer>
+  <script>
+    (function () {
+      const btn = document.getElementById('theme-toggle');
+      if (!btn) return;
+      const root = document.documentElement;
+
+      function setTheme(theme, persist) {
+        root.setAttribute('data-theme', theme);
+        if (persist) {
+          try { localStorage.setItem('webbrain-theme', theme); } catch (_) {}
+        }
+      }
+
+      btn.addEventListener('click', function () {
+        const next = root.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+        setTheme(next, true);
+      });
+
+      const mq = window.matchMedia('(prefers-color-scheme: light)');
+      function onMQ(e) {
+        try {
+          if (localStorage.getItem('webbrain-theme')) return;
+        } catch (_) {}
+        setTheme(e.matches ? 'light' : 'dark', false);
+      }
+      if (typeof mq.addEventListener === 'function') mq.addEventListener('change', onMQ);
+      else if (typeof mq.addListener === 'function') mq.addListener(onMQ);
+    })();
+  </script>
+  <script>
+    (function () {
+      const LOCALES = ["en","es","fr","tr","zh","ru","uk","ar","ja","ko","id","th","ms","tl"];
+      const sel = document.getElementById('lang-dropdown');
+      if (!sel) return;
+      sel.value = sel.dataset.current || 'en';
+      sel.addEventListener('change', function () {
+        const target = sel.value;
+        if (!LOCALES.includes(target)) return;
+        window.location.href = target === 'en' ? '/' : '/' + target + '/';
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -464,6 +464,18 @@
   "blogPost": [
     {
       "@type": "BlogPosting",
+      "headline": "Qwen 3.6 27B NVFP4 is much faster, but not a clean planner upgrade",
+      "url": "https://webbrain.one/blog/qwen36-27b-nvfp4-planner-benchmark",
+      "datePublished": "2026-07-02",
+      "description": "We tested nvidia/Qwen3.6-27B-NVFP4 against WebBrain's frozen browser-agent first-tool benchmark. It is far faster than the older Qwen 3.6 27B row and enters the top 10, but loses three all-case Sonnet-alignment points on boundary cases.",
+      "author": {
+        "@type": "Person",
+        "name": "Emre Sokullu",
+        "url": "https://emresokullu.com"
+      }
+    },
+    {
+      "@type": "BlogPosting",
       "headline": "Ornith-1.0-35B in WebBrain's frozen planner benchmark",
       "url": "https://webbrain.one/blog/ornith-35b-webbrain-planner-benchmark",
       "datePublished": "2026-06-26",
@@ -699,7 +711,12 @@
     <p class="page-sub">Short write-ups on design decisions, failure modes, and benchmarks from building an open-source AI browser agent.</p>
 
     <div class="post-list">
-      <a href="/blog/ornith-35b-webbrain-planner-benchmark" class="post-card">
+      <a href="/blog/qwen36-27b-nvfp4-planner-benchmark" class="post-card">
+        <div class="post-meta">July 2, 2026 &middot; 6 min read</div>
+        <div class="post-title">Qwen 3.6 27B NVFP4 is much faster, but not a clean planner upgrade</div>
+        <div class="post-excerpt">Qwen 3.6 27B NVFP4 gives WebBrain a big local latency win: 96/100 parsed calls, 1.8s median latency, and a top-10 Sonnet-reference result. The planner quality story is more mixed.</div>
+      </a>
+<a href="/blog/ornith-35b-webbrain-planner-benchmark" class="post-card">
         <div class="post-meta">June 26, 2026 &middot; 6 min read</div>
         <div class="post-title">Ornith-1.0-35B in WebBrain&#39;s frozen planner benchmark</div>
         <div class="post-excerpt">Ornith-1.0-35B is a strong local planner and narrowly beats Qwen 3.6 35B on WebBrain&#39;s all-case Sonnet alignment. It does not beat Gemma 4 31B QAT in this browser-agent harness.</div>

@@ -1,0 +1,25 @@
+{
+  "id": "094",
+  "user": "make text bigger",
+  "tab": {
+    "url": "https://www.cnn.com/2026/05/world/example-story/index.html",
+    "title": "Example story — CNN"
+  },
+  "latencyMs": 4780,
+  "error": null,
+  "firstToolCall": {
+    "name": "execute_js",
+    "args": {
+      "code": "document.documentElement.style.fontSize = '20px';\ndocument.body.style.fontSize = '20px';\ndocument.querySelectorAll('p, span, div, li, td, th').forEach(el => {\n  if (!el.style.fontSize || parseFloat(el.style.fontSize) < 20) {\n    el.style.fontSize = '1.25em';\n  }\n});\n// Also zoom the page\ndocument.body.style.zoom = '1.25';"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll increase the text size on the page for you.",
+  "usage": {
+    "prompt_tokens": 17343,
+    "total_tokens": 17563,
+    "completion_tokens": 220,
+    "prompt_tokens_details": null
+  }
+}

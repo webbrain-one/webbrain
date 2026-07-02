@@ -1,0 +1,20 @@
+{
+  "id": "085",
+  "user": "tell me a joke",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 1762,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "\n\nHere you go:\n\n> Why do programmers prefer dark mode?\n> \n> Because **light attracts bugs**. 🐛\n\nWant another one?",
+  "usage": {
+    "prompt_tokens": 17326,
+    "total_tokens": 17400,
+    "completion_tokens": 74,
+    "prompt_tokens_details": null
+  }
+}

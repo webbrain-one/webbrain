@@ -1,0 +1,41 @@
+{
+  "runTag": "2026-07-02-qwen36-27b-nvfp4-localhost8000",
+  "model": "qwen3.6-27b",
+  "browser": "chrome",
+  "base": "http://localhost:8000",
+  "saveRequest": false,
+  "tier": null,
+  "chatTemplateCompat": "off",
+  "structuredToolsSent": true,
+  "freeze": {
+    "path": "test/llm/freeze/baseline-2026-05-23.json",
+    "sourceRun": "anthropic/claude-sonnet-4.6",
+    "sourceRunTag": "2026-05-23T18-47-31-246Z",
+    "systemHash": "5c4fac1387025050d002fb87fb6ae02af2fba0e232cd40737f844a3a5c4e7abf",
+    "toolCount": 41
+  },
+  "cases": 100,
+  "totalLatencyMs": 73874,
+  "errors": 0,
+  "withToolCall": 96,
+  "withToolCallFromContent": 0,
+  "byTool": {
+    "navigate": 21,
+    "list_downloads": 2,
+    "new_tab": 3,
+    "screenshot": 4,
+    "get_accessibility_tree": 39,
+    "read_page": 6,
+    "extract_data": 2,
+    "verify_form": 2,
+    "download_social_media": 1,
+    "scroll": 1,
+    "get_selection": 1,
+    "get_interactive_elements": 1,
+    "(no_tool_call)": 4,
+    "clarify": 3,
+    "execute_js": 8,
+    "scratchpad_write": 1,
+    "done": 1
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "id": "064",
+  "user": "scroll to the bottom",
+  "tab": {
+    "url": "https://news.ycombinator.com/",
+    "title": "Hacker News"
+  },
+  "latencyMs": 1125,
+  "error": null,
+  "firstToolCall": {
+    "name": "scroll",
+    "args": {
+      "direction": "bottom"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 17409,
+    "total_tokens": 17453,
+    "completion_tokens": 44,
+    "prompt_tokens_details": null
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "id": "030",
+  "user": "list all the visible links here",
+  "tab": {
+    "url": "https://news.ycombinator.com/",
+    "title": "Hacker News"
+  },
+  "latencyMs": 1808,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible",
+      "maxDepth": 10
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 17411,
+    "total_tokens": 17482,
+    "completion_tokens": 71,
+    "prompt_tokens_details": null
+  }
+}

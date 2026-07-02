@@ -1,0 +1,25 @@
+{
+  "id": "002",
+  "user": "open gmail",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 6492,
+  "error": null,
+  "firstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "https://mail.google.com"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 17324,
+    "total_tokens": 17370,
+    "completion_tokens": 46,
+    "prompt_tokens_details": null
+  }
+}

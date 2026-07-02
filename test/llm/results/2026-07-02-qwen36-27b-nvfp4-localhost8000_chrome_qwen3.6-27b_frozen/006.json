@@ -1,0 +1,25 @@
+{
+  "id": "006",
+  "user": "i wanna check netflix",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 1234,
+  "error": null,
+  "firstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "https://www.netflix.com"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 17327,
+    "total_tokens": 17374,
+    "completion_tokens": 47,
+    "prompt_tokens_details": null
+  }
+}

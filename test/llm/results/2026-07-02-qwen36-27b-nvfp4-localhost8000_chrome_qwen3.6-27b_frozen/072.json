@@ -1,0 +1,23 @@
+{
+  "id": "072",
+  "user": "delete this",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 3078,
+  "error": null,
+  "firstToolCall": {
+    "name": "screenshot",
+    "args": {}
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'm on a new tab page - could you clarify what you'd like me to delete? Let me take a screenshot to see what's on the page.",
+  "usage": {
+    "prompt_tokens": 17324,
+    "total_tokens": 17463,
+    "completion_tokens": 139,
+    "prompt_tokens_details": null
+  }
+}

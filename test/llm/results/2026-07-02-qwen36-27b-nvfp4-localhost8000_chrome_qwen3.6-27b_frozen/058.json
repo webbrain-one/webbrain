@@ -1,0 +1,26 @@
+{
+  "id": "058",
+  "user": "download all the zips in this folder",
+  "tab": {
+    "url": "https://github.com/esokullu/webbrain/tree/main/dist",
+    "title": "webbrain/dist — main"
+  },
+  "latencyMs": 2015,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible",
+      "maxDepth": 10
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 17892,
+    "total_tokens": 17978,
+    "completion_tokens": 86,
+    "prompt_tokens_details": null
+  }
+}

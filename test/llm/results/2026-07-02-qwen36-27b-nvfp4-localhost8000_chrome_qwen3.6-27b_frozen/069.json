@@ -1,0 +1,20 @@
+{
+  "id": "069",
+  "user": "open it",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 2010,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "\n\nI'm currently on a blank new tab page. What would you like me to open? Could you share a URL or tell me which website you'd like me to navigate to?",
+  "usage": {
+    "prompt_tokens": 17324,
+    "total_tokens": 17410,
+    "completion_tokens": 86,
+    "prompt_tokens_details": null
+  }
+}

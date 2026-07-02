@@ -1,0 +1,25 @@
+{
+  "id": "073",
+  "user": "buy it",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 1698,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "\"visible\""
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 17324,
+    "total_tokens": 17402,
+    "completion_tokens": 78,
+    "prompt_tokens_details": null
+  }
+}

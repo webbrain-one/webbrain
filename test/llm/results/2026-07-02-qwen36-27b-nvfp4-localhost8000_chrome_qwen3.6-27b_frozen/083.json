@@ -1,0 +1,25 @@
+{
+  "id": "083",
+  "user": "what time is it in tokyo right now",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 3579,
+  "error": null,
+  "firstToolCall": {
+    "name": "execute_js",
+    "args": {
+      "code": "const now = new Date();\nconst tokyoTime = new Intl.DateTimeFormat('en-US', {\n  timeZone: 'Asia/Tokyo',\n  hour: '2-digit',\n  minute: '2-digit',\n  second: '2-digit',\n  hour12: true,\n  weekday: 'long',\n  year: 'numeric',\n  month: 'long',\n  day: 'numeric'\n}).format(now);\nreturn tokyoTime;"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I can get that for you right away using JavaScript.",
+  "usage": {
+    "prompt_tokens": 17332,
+    "total_tokens": 17506,
+    "completion_tokens": 174,
+    "prompt_tokens_details": null
+  }
+}

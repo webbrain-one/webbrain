@@ -1,0 +1,25 @@
+{
+  "id": "043",
+  "user": "open a pull request",
+  "tab": {
+    "url": "https://github.com/esokullu/webbrain",
+    "title": "esokullu/webbrain — GitHub"
+  },
+  "latencyMs": 1832,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 17888,
+    "total_tokens": 17959,
+    "completion_tokens": 71,
+    "prompt_tokens_details": null
+  }
+}

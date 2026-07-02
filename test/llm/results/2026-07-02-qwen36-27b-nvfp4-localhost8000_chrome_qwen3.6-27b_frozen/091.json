@@ -1,0 +1,26 @@
+{
+  "id": "091",
+  "user": "toggle dark mode on this site",
+  "tab": {
+    "url": "https://stackoverflow.com/questions/111/javascript-closures",
+    "title": "JavaScript closures — Stack Overflow"
+  },
+  "latencyMs": 1690,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "interactive",
+      "maxDepth": 10
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 17420,
+    "total_tokens": 17492,
+    "completion_tokens": 72,
+    "prompt_tokens_details": null
+  }
+}
