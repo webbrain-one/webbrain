@@ -680,6 +680,9 @@ test('matches wordpress wp-admin on any host', () => {
   assert.equal(getActiveAdapter('https://teknofili.com/wp-admin/profile.php')?.name, 'wordpress');
   assert.equal(getActiveAdapter('https://my-blog.io/wp-admin/admin.php?page=rank-math')?.name, 'wordpress');
   assert.equal(getActiveAdapter('https://example.com/wp-login.php')?.name, 'wordpress');
+  const postEditor = getActiveAdapter('https://example.com/wp-admin/post-new.php');
+  assert.match(postEditor?.notes || '', /post-new\.php\?classic-editor/);
+  assert.match(postEditor?.notes || '', /GET URLs.*create\/publish/);
   // Front-end of a WP site is NOT a match — adapter is admin-only.
   assert.equal(getActiveAdapter('https://example.com/'), null);
   assert.equal(getActiveAdapter('https://example.com/some-post/'), null);
