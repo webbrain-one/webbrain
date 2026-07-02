@@ -3947,6 +3947,15 @@ function readFileAsDataUrl(file) {
   });
 }
 
+function readFileAsText(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsText(file);
+  });
+}
+
 async function handleAttachedFiles(fileList, tabId = currentTabId) {
   const numericTabId = normalizeAttachmentTabId(tabId);
   if (numericTabId == null) return;
@@ -3972,9 +3981,15 @@ async function handleAttachedFiles(fileList, tabId = currentTabId) {
         continue;
       }
       try {
-        const dataUrl = await readFileAsDataUrl(file);
-        if (generation !== getAttachmentGeneration(numericTabId)) continue;
-        getPendingAttachmentsForTab(numericTabId).push({ kind: isImage ? 'image' : 'document', name: file.name, dataUrl });
+        if (isJson) {
+          const textContent = await readFileAsText(file);
+          if (generation !== getAttachmentGeneration(numericTabId)) continue;
+          getPendingAttachmentsForTab(numericTabId).push({ kind: 'text', name: file.name, textContent });
+        } else {
+          const dataUrl = await readFileAsDataUrl(file);
+          if (generation !== getAttachmentGeneration(numericTabId)) continue;
+          getPendingAttachmentsForTab(numericTabId).push({ kind: isImage ? 'image' : 'document', name: file.name, dataUrl });
+        }
       } catch {
         if (generation === getAttachmentGeneration(numericTabId) && normalizeAttachmentTabId() === numericTabId) {
           addMessage('system', systemHtml(tSystemHtml('sp.attach.read_failed', { name: file.name })));

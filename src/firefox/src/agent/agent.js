@@ -6700,6 +6700,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           source: { type: 'base64', media_type: 'application/pdf', data: String(att.dataUrl || '').split(',')[1] || '' },
           ...(att.name ? { title: att.name } : {}),
         });
+      } else if (att.kind === 'text') {
+        blocks.push({ type: 'text', text: `[Attached file: ${att.name || 'file.json'}]\n${att.textContent || ''}` });
       }
     }
     if (blocks.length) {
