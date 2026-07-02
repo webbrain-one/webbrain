@@ -300,6 +300,21 @@ export class Agent {
     return { success: true, existed: true, note: 'scratchpad cleared' };
   }
 
+  async captureFullPageScreenshotForUser(tabId) {
+    if (!tabId) return { ok: false, error: 'No tab ID' };
+    try {
+      await cdpClient.attach(tabId);
+      await this._bringToFrontForCapture(tabId);
+      const imageData = await this._withIndicatorsHidden(tabId, () =>
+        cdpClient.captureFullPageScreenshot(tabId)
+      );
+      if (!imageData) return { ok: false, error: 'Full-page screenshot returned no image data' };
+      return { ok: true, dataUrl: `data:image/png;base64,${imageData}` };
+    } catch (e) {
+      return { ok: false, error: e?.message || String(e) };
+    }
+  }
+
   setScheduledRunPolicy(tabId, policy) {
     this.scheduledRunPolicies.set(tabId, {
       requireConsequentialConfirmation: policy?.requireConsequentialConfirmation !== false,

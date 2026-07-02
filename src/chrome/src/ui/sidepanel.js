@@ -341,6 +341,7 @@ const SLASH_COMMANDS = [
   { value: '/verbose', descriptionKey: 'sp.slash.verbose' },
   { value: '/reset', descriptionKey: 'sp.slash.reset' },
   { value: '/screenshot', descriptionKey: 'sp.slash.screenshot' },
+  { value: '/full-page-screenshot', descriptionKey: 'sp.slash.full_page_screenshot' },
   { value: '/record', descriptionKey: 'sp.slash.record' },
   { value: '/export', descriptionKey: 'sp.slash.export' },
   { value: '/profile', descriptionKey: 'sp.slash.profile' },
@@ -353,6 +354,7 @@ const OUT_OF_BAND_SLASH_COMMANDS = new Set([
   '/show-scratchpad',
   '/list-schedules',
   '/screenshot',
+  '/full-page-screenshot',
   '/export',
   '/verbose',
 ]);
@@ -375,6 +377,21 @@ function isPlainScreenshotRequest(text) {
     || /^(?:please |pls |can you |could you |would you )?(?:take|capture|grab|show|get) (?:a |the |this |current )?(?:screen ?shot|screenshot)(?: (?:of|for) (?:the |this |current )?(?:page|tab|screen|window))?$/.test(s)
     || /^(?:lutfen )?(?:screenshot|screen ?shot|ekran goruntusu)(?: (?:al|cek|goster|at))?$/.test(s)
     || /^(?:lutfen )?(?:bu |mevcut |aktif )?(?:sekmenin|sayfanin|ekranin) ekran goruntusunu (?:al|cek|goster|at)$/.test(s);
+}
+
+function isPlainFullPageScreenshotRequest(text) {
+  const s = normalizeScreenshotRequestText(text);
+  if (!s || s.startsWith('/')) return false;
+  return /^(?:please |pls )?(?:(?:full|whole|entire|complete) page|fullpage|long) (?:screenshot|screen ?shot)(?: (?:please|pls))?$/.test(s)
+    || /^(?:please |pls |can you |could you |would you )?(?:take|capture|grab|show|get) (?:a |the |this )?(?:(?:full|whole|entire|complete) page|fullpage|long) (?:screenshot|screen ?shot)(?: (?:of|for) (?:the |this |current )?(?:page|tab|screen|window))?$/.test(s)
+    || /^(?:lutfen )?(?:tam sayfa|butun sayfa|tum sayfa|uzun) ekran goruntusu(?: (?:al|cek|goster|at))?$/.test(s)
+    || /^(?:lutfen )?(?:bu |mevcut |aktif )?(?:sayfanin|sekmenin) (?:tam|butun|tum) ekran goruntusunu (?:al|cek|goster|at)$/.test(s);
+}
+
+function normalizeScreenshotCommandText(text) {
+  if (isPlainFullPageScreenshotRequest(text)) return '/full-page-screenshot';
+  if (isPlainScreenshotRequest(text)) return '/screenshot';
+  return text;
 }
 
 const SLASH_COMMAND_OPTION_ID_PREFIX = 'slash-command-option-';
@@ -2189,7 +2206,8 @@ function syncSendButtonState() {
     sendBtn.disabled = false;
     return;
   }
-  sendBtn.disabled = !isOutOfBandSlashDraft(inputEl?.value || '');
+  const draft = normalizeScreenshotCommandText(inputEl?.value || '');
+  sendBtn.disabled = !isOutOfBandSlashDraft(draft);
 }
 
 function showBusySlashCommandNotice() {
@@ -2307,6 +2325,24 @@ async function parseSlashCommands(text, tabId = currentTabId) {
         const imgHtml = `<img src="${dataUrl}" style="max-width:100%;border-radius:6px;margin:4px 0;" alt="Screenshot"/>`;
         addMessage('system', imgHtml);
       }
+    } catch (e) {
+      if (currentTabId !== tabId) return '';
+      addMessage('system', tSystemHtml('sp.screenshot.error', { msg: e.message }));
+    }
+    return '';
+  }
+
+  // /full-page-screenshot — capture the full scrollable page and display in chat
+  if (/^\/full-page-screenshot\b\s*/i.test(text)) {
+    try {
+      const res = await sendToBackground('capture_full_page_screenshot', { tabId });
+      if (currentTabId !== tabId) return '';
+      if (!res?.ok || !res.dataUrl) {
+        addMessage('system', tSystemHtml('sp.screenshot.error', { msg: res?.error || 'unknown error' }));
+        return '';
+      }
+      const imgHtml = `<img src="${res.dataUrl}" style="max-width:100%;max-height:70vh;object-fit:contain;object-position:top;border-radius:6px;margin:4px 0;" alt="Full-page screenshot"/>`;
+      addMessage('system', imgHtml);
     } catch (e) {
       if (currentTabId !== tabId) return '';
       addMessage('system', tSystemHtml('sp.screenshot.error', { msg: e.message }));
@@ -2440,7 +2476,7 @@ async function sendMessage(extraChatParams) {
   let text = inputEl.value.trim();
   if (!text) return;
   const tabId = currentTabId;
-  if (isPlainScreenshotRequest(text)) text = '/screenshot';
+  text = normalizeScreenshotCommandText(text);
   if (isProcessing) {
     if (!isOutOfBandSlashDraft(text)) {
       showBusySlashCommandNotice();

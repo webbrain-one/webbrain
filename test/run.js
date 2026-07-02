@@ -2784,6 +2784,12 @@ test('getToolsForMode: screenshot tools are not model-callable', () => {
       assert.doesNotMatch(prompt, /\bscreenshot\s*\(\s*\{/i, `[${label}] ${promptLabel} prompt must not recommend screenshot(...)`);
       assert.doesNotMatch(prompt, /\bfull_page_screenshot\b/i, `[${label}] ${promptLabel} prompt must not mention full_page_screenshot`);
       assert.doesNotMatch(prompt, /\b(?:take|taking) (?:a |fresh )?screenshot\b/i, `[${label}] ${promptLabel} prompt must not tell the model to take a screenshot`);
+      assert.match(prompt, /\/screenshot\b/, `[${label}] ${promptLabel} prompt should direct chat-image requests to the /screenshot slash command`);
+      if (label === 'chrome') {
+        assert.match(prompt, /\/full-page-screenshot\b/, `[${label}] ${promptLabel} prompt should direct full-page chat-image requests to the /full-page-screenshot slash command`);
+      } else {
+        assert.doesNotMatch(prompt, /\/full-page-screenshot\b/, `[${label}] ${promptLabel} prompt must not mention the Chrome-only full-page screenshot slash command`);
+      }
     }
   }
 });
@@ -6138,6 +6144,25 @@ test('sidepanel scopes async tab commands to the original tab', () => {
     const screenshotEnd = panel.indexOf('// /record', screenshotIdx);
     const screenshotBody = panel.slice(screenshotIdx, screenshotEnd);
     assert.match(screenshotBody, /if \(currentTabId !== tabId \|\| !tab\?\.active\) return '';[\s\S]*?captureVisibleTab[\s\S]*?if \(currentTabId !== tabId\) return '';[\s\S]*?addMessage\('system', imgHtml\);/, `${label}: /screenshot should not render a captured image into a different tab`);
+    const fullPageIdx = panel.indexOf('// /full-page-screenshot');
+    assert.match(panel, /function normalizeScreenshotRequestText\(text\) \{[\s\S]*?\.normalize\('NFKD'\)[\s\S]*?\.replace\(\/\[\\u0300-\\u036f\]\/g, ''\)[\s\S]*?\.replace\(\/\\u0131\/g, 'i'\)/, `${label}: plain screenshot request normalization should handle accented Turkish text`);
+    assert.match(panel, /function isPlainScreenshotRequest\(text\) \{[\s\S]*?const s = normalizeScreenshotRequestText\(text\);[\s\S]*?s\.startsWith\('\/'\)[\s\S]*?ekran goruntusu[\s\S]*?ekran goruntusunu/, `${label}: plain screenshot request routing should cover English and Turkish screenshot-only requests`);
+    if (label === 'chrome') {
+      assert.notEqual(fullPageIdx, -1, `${label}: /full-page-screenshot parser missing`);
+      const fullPageBody = panel.slice(fullPageIdx, panel.indexOf('// /record', fullPageIdx));
+      assert.match(fullPageBody, /sendToBackground\('capture_full_page_screenshot', \{ tabId \}\);[\s\S]*?if \(currentTabId !== tabId\) return '';[\s\S]*?addMessage\('system', imgHtml\);/, `${label}: /full-page-screenshot should render only into the initiating tab`);
+      assert.match(panel, /function isPlainFullPageScreenshotRequest\(text\) \{[\s\S]*?full\|whole\|entire\|complete[\s\S]*?tam sayfa[\s\S]*?ekran goruntusu/, `${label}: plain full-page screenshot request routing should cover English and Turkish requests`);
+      assert.match(panel, /function normalizeScreenshotCommandText\(text\) \{[\s\S]*?isPlainFullPageScreenshotRequest\(text\)[\s\S]*?return '\/full-page-screenshot';[\s\S]*?isPlainScreenshotRequest\(text\)[\s\S]*?return '\/screenshot';/, `${label}: screenshot normalization should route full-page requests before viewport screenshots`);
+    } else {
+      assert.equal(fullPageIdx, -1, `${label}: /full-page-screenshot parser should stay Chrome-only`);
+      assert.doesNotMatch(panel, /capture_full_page_screenshot/, `${label}: should not call the Chrome-only full-page screenshot route`);
+      assert.doesNotMatch(panel, /isPlainFullPageScreenshotRequest/, `${label}: should not normalize full-page screenshot text into an unsupported slash command`);
+      assert.match(panel, /function normalizeScreenshotCommandText\(text\) \{[\s\S]*?if \(isPlainScreenshotRequest\(text\)\) return '\/screenshot';[\s\S]*?return text;[\s\S]*?\}/, `${label}: screenshot normalization should only route viewport screenshots`);
+    }
+    const sendIdx = panel.indexOf('async function sendMessage(extraChatParams)');
+    assert.notEqual(sendIdx, -1, `${label}: sendMessage missing`);
+    const sendBody = panel.slice(sendIdx, panel.indexOf('let assistantEl = null;', sendIdx));
+    assert.match(sendBody, /const tabId = currentTabId;[\s\S]*?text = normalizeScreenshotCommandText\(text\);[\s\S]*?if \(isProcessing\)/, `${label}: plain screenshot requests should route to slash commands before busy gating`);
 
     if (label === 'chrome') {
       const recordIdx = panel.indexOf('// /record');
@@ -6252,13 +6277,15 @@ test('sidepanel preserves stale residual slash-command prompts without hidden ru
 });
 
 test('sidepanel allows only safe slash commands while busy', () => {
-  const allowed = ['/help', '/show-scratchpad', '/list-schedules', '/screenshot', '/export', '/verbose'];
   for (const [label, panelRel, localeRel] of [
     ['chrome', 'src/chrome/src/ui/sidepanel.js', 'src/chrome/src/ui/locales/en.js'],
     ['firefox', 'src/firefox/src/ui/sidepanel.js', 'src/firefox/src/ui/locales/en.js'],
   ]) {
     const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
     const locale = fs.readFileSync(path.join(ROOT, localeRel), 'utf8');
+    const allowed = label === 'chrome'
+      ? ['/help', '/show-scratchpad', '/list-schedules', '/screenshot', '/full-page-screenshot', '/export', '/verbose']
+      : ['/help', '/show-scratchpad', '/list-schedules', '/screenshot', '/export', '/verbose'];
     for (const command of allowed) {
       assert.match(
         panel,
@@ -6266,10 +6293,13 @@ test('sidepanel allows only safe slash commands while busy', () => {
         `${label}: ${command} should be allowed while busy`,
       );
     }
+    if (label === 'firefox') {
+      assert.doesNotMatch(panel, /const OUT_OF_BAND_SLASH_COMMANDS = new Set\(\[[\s\S]*?'\/full-page-screenshot'/, `${label}: /full-page-screenshot should not be allowed while busy`);
+    }
     assert.match(
       panel,
-      /function syncSendButtonState\(\) \{[\s\S]*?if \(!isProcessing\) \{[\s\S]*?sendBtn\.disabled = false;[\s\S]*?\}[\s\S]*?sendBtn\.disabled = !isOutOfBandSlashDraft\(inputEl\?\.value \|\| ''\);[\s\S]*?\}/,
-      `${label}: send button state should permit only out-of-band slash drafts while busy`,
+      /function syncSendButtonState\(\) \{[\s\S]*?if \(!isProcessing\) \{[\s\S]*?sendBtn\.disabled = false;[\s\S]*?\}[\s\S]*?const draft = normalizeScreenshotCommandText\(inputEl\?\.value \|\| ''\);[\s\S]*?sendBtn\.disabled = !isOutOfBandSlashDraft\(draft\);[\s\S]*?\}/,
+      `${label}: send button state should normalize screenshot requests and permit only out-of-band slash drafts while busy`,
     );
     assert.match(
       panel,
@@ -6278,7 +6308,7 @@ test('sidepanel allows only safe slash commands while busy', () => {
     );
     assert.match(
       panel,
-      /if \(isProcessing\) \{[\s\S]*?if \(!isOutOfBandSlashDraft\(text\)\) \{[\s\S]*?showBusySlashCommandNotice\(\);[\s\S]*?return false;[\s\S]*?\}[\s\S]*?await parseSlashCommands\(text, tabId\);[\s\S]*?return true;[\s\S]*?\}/,
+      /text = normalizeScreenshotCommandText\(text\);[\s\S]*?if \(isProcessing\) \{[\s\S]*?if \(!isOutOfBandSlashDraft\(text\)\) \{[\s\S]*?showBusySlashCommandNotice\(\);[\s\S]*?return false;[\s\S]*?\}[\s\S]*?await parseSlashCommands\(text, tabId\);[\s\S]*?return true;[\s\S]*?\}/,
       `${label}: busy send preflight should run safe slash commands without starting chat`,
     );
     assert.match(
@@ -6288,7 +6318,9 @@ test('sidepanel allows only safe slash commands while busy', () => {
     );
     assert.match(
       locale,
-      /'sp\.slash\.busy_only_oob': 'Only \/help, \/show-scratchpad, \/list-schedules, \/screenshot, \/export, and \/verbose can run while WebBrain is busy\./,
+      label === 'chrome'
+        ? /'sp\.slash\.busy_only_oob': 'Only \/help, \/show-scratchpad, \/list-schedules, \/screenshot, \/full-page-screenshot, \/export, and \/verbose can run while WebBrain is busy\./
+        : /'sp\.slash\.busy_only_oob': 'Only \/help, \/show-scratchpad, \/list-schedules, \/screenshot, \/export, and \/verbose can run while WebBrain is busy\./,
       `${label}: busy slash notice should be localized`,
     );
   }

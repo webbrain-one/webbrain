@@ -244,6 +244,7 @@ WebBrain accepts slash commands as the first thing on a line in the input box. T
 | `/verbose` | Toggle verbose/compact tool display (same as the toolbar button) |
 | `/reset` | Clear the conversation and all per-conversation flags |
 | `/screenshot` | Capture the visible tab and display the image inline in chat |
+| `/full-page-screenshot` | Capture the full scrollable page and display it inline in chat (Chrome only) |
 | `/record` | Start recording the current tab |
 | `/export` | Download the current conversation as a Markdown file |
 | `/profile` | Toggle profile auto-fill on/off without opening Settings |

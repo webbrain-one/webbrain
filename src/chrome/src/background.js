@@ -1237,6 +1237,11 @@ async function handleMessage(msg, sender) {
       return { ok: true, state: await getRecordingStateFresh() };
     }
 
+    case 'capture_full_page_screenshot': {
+      const tabId = msg.tabId || sender.tab?.id;
+      return await agent.captureFullPageScreenshotForUser(tabId);
+    }
+
     // --- Page Info (quick, no agent loop) ---
     case 'get_page_info': {
       const tabId = msg.tabId || sender.tab?.id;

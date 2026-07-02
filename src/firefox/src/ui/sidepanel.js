@@ -366,6 +366,11 @@ function isPlainScreenshotRequest(text) {
     || /^(?:lutfen )?(?:bu |mevcut |aktif )?(?:sekmenin|sayfanin|ekranin) ekran goruntusunu (?:al|cek|goster|at)$/.test(s);
 }
 
+function normalizeScreenshotCommandText(text) {
+  if (isPlainScreenshotRequest(text)) return '/screenshot';
+  return text;
+}
+
 const SLASH_COMMAND_OPTION_ID_PREFIX = 'slash-command-option-';
 const BUSY_SLASH_NOTICE_COOLDOWN_MS = 3000;
 
@@ -2163,7 +2168,8 @@ function syncSendButtonState() {
     sendBtn.disabled = false;
     return;
   }
-  sendBtn.disabled = !isOutOfBandSlashDraft(inputEl?.value || '');
+  const draft = normalizeScreenshotCommandText(inputEl?.value || '');
+  sendBtn.disabled = !isOutOfBandSlashDraft(draft);
 }
 
 function showBusySlashCommandNotice() {
@@ -2392,7 +2398,7 @@ async function sendMessage(extraChatParams) {
   let text = inputEl.value.trim();
   if (!text) return;
   const tabId = currentTabId;
-  if (isPlainScreenshotRequest(text)) text = '/screenshot';
+  text = normalizeScreenshotCommandText(text);
   if (isProcessing) {
     if (!isOutOfBandSlashDraft(text)) {
       showBusySlashCommandNotice();
