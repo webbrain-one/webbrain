@@ -4148,7 +4148,7 @@ function startListening() {
   if (!SpeechRecognitionImpl || !inputEl) return;
   const recognition = new SpeechRecognitionImpl();
   speechRecognition = recognition;
-  recognition.lang = navigator.language || 'en-US';
+  recognition.lang = getLocale() || navigator.language || 'en-US';
   recognition.continuous = true;
   recognition.interimResults = true;
   micInterimText = '';
@@ -4441,7 +4441,8 @@ async function handleAttachedFiles(fileList, tabId = renderedTabId ?? currentTab
       }
       const isImage = file.type.startsWith('image/');
       const isPdf = file.type === 'application/pdf';
-      if (!isImage && !isPdf) {
+      const isJson = file.type === 'application/json';
+      if (!isImage && !isPdf && !isJson) {
         if (normalizeAttachmentTabId() === numericTabId) {
           addMessage('system', systemHtml(tSystemHtml('sp.attach.unsupported_type', { name: file.name })));
         }
