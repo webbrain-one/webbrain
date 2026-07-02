@@ -6109,6 +6109,11 @@ test('settings async test controls surface rejected background results', () => {
       `${label}: choosing a loaded model should write it back to the provider model input`,
     );
     assert.match(
+      settings,
+      /function openLoadedModelDialog\(dialog\) \{[\s\S]*?if \(!dialog\) return;[\s\S]*?if \(dialog\.open\) return;[\s\S]*?dialog\.showModal/,
+      `${label}: loaded-model dialog opening should tolerate repeated model-load responses`,
+    );
+    assert.match(
       html,
       /\.loaded-model-dialog \{[\s\S]*?position: fixed;[\s\S]*?inset: 0;[\s\S]*?margin: auto;[\s\S]*?width: min\(520px, calc\(100vw - 32px\)\);/,
       `${label}: loaded-model dialog should stay centered despite the global margin reset`,
