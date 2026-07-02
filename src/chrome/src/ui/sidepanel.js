@@ -305,6 +305,7 @@ const messagesEl = document.getElementById('messages');
 const inputEl = document.getElementById('user-input');
 const inputHighlightEl = document.getElementById('input-highlight');
 const sendBtn = document.getElementById('btn-send');
+const micBtn = document.getElementById('btn-mic');
 const clearBtn = document.getElementById('btn-clear');
 const settingsBtn = document.getElementById('btn-settings');
 const verboseBtn = document.getElementById('btn-verbose');
@@ -410,6 +411,9 @@ let renderedTabId = null;
 let pendingTabSwitch = null; // tab the user switched to while isProcessing was true
 let tabSwitchTransitionId = null;
 let queuedTabSwitchMessages = [];
+const pendingAttachmentsByTab = new Map(); // tabId -> [{ kind: 'image'|'document', name, dataUrl }]
+const attachmentReadCountsByTab = new Map();
+const attachmentGenerationByTab = new Map();
 let isProcessing = false;
 let currentAssistantEl = null;
 let verboseMode = false;
@@ -662,6 +666,7 @@ function restoreInputDraftForTab(tabId) {
 function renderClearedConversationForTab(tabId) {
   clearCachedTabChat(tabId);
   saveInputDraftForTab(tabId, '');
+  clearPendingAttachmentsForTab(tabId);
   setApiMutationsAllowedForTab(tabId, false);
   if (currentTabId !== tabId) return;
   renderedTabId = tabId;
@@ -1052,7 +1057,7 @@ async function handleScheduledJobEvent(data, tabId) {
 
   const title = scheduledJobTitle(job);
   if (event === 'created') {
-    addMessage('system', tSystemHtml('sp.scheduled.created', { title, time: formatScheduledTime(job.nextRunAt || job.scheduledAt) }));
+    addMessage('system', systemHtml(tSystemHtml('sp.scheduled.created', { title, time: formatScheduledTime(job.nextRunAt || job.scheduledAt) })));
   } else if (event === 'running') {
     isProcessing = true;
     abortRequested = false;
@@ -1076,7 +1081,7 @@ async function handleScheduledJobEvent(data, tabId) {
     } else {
       isProcessing = false;
       syncSendButtonState();
-      addMessage('system', tSystemHtml('sp.scheduled.needs_user_input', { title }));
+      addMessage('system', systemHtml(tSystemHtml('sp.scheduled.needs_user_input', { title })));
       drainQueuedContextMenuPromptsAfterPendingTabSwitch();
     }
   }
@@ -1421,11 +1426,11 @@ async function showScratchpad(tabId = currentTabId) {
       addMessage('system', t('sp.scratchpad.empty'));
       return;
     }
-    const msgEl = addMessage('system', `${t('sp.scratchpad.title_html')}<pre class="scratchpad-dump">${escapeHtml(body)}</pre>`);
+    const msgEl = addMessage('system', systemHtml(`${t('sp.scratchpad.title_html')}<pre class="scratchpad-dump">${escapeHtml(body)}</pre>`));
     addScratchpadCopyButton(msgEl);
   } catch (e) {
     if (currentTabId !== tabId) return;
-    addMessage('system', tSystemHtml('sp.scratchpad.error', { msg: e.message }));
+    addMessage('system', systemHtml(tSystemHtml('sp.scratchpad.error', { msg: e.message })));
   }
 }
 
@@ -1440,13 +1445,13 @@ async function editScratchpad(note, tabId = currentTabId) {
     const res = await sendToBackground('write_scratchpad', { tabId, text });
     if (currentTabId !== tabId) return;
     if (!res?.ok && !res?.success) {
-      addMessage('system', tSystemHtml('sp.scratchpad.error', { msg: res?.error || 'unknown error' }));
+      addMessage('system', systemHtml(tSystemHtml('sp.scratchpad.error', { msg: res?.error || 'unknown error' })));
       return;
     }
     addMessage('system', t('sp.scratchpad.updated'));
   } catch (e) {
     if (currentTabId !== tabId) return;
-    addMessage('system', tSystemHtml('sp.scratchpad.error', { msg: e.message }));
+    addMessage('system', systemHtml(tSystemHtml('sp.scratchpad.error', { msg: e.message })));
   }
 }
 
@@ -1455,14 +1460,14 @@ function clearScratchpad(tabId = currentTabId) {
     .then((res) => {
       if (currentTabId !== tabId) return;
       if (!res?.ok && !res?.success) {
-        addMessage('system', tSystemHtml('sp.scratchpad.error', { msg: res?.error || 'unknown error' }));
+        addMessage('system', systemHtml(tSystemHtml('sp.scratchpad.error', { msg: res?.error || 'unknown error' })));
         return;
       }
       addMessage('system', t('sp.scratchpad.cleared'));
     })
     .catch((e) => {
       if (currentTabId !== tabId) return;
-      addMessage('system', tSystemHtml('sp.scratchpad.error', { msg: e.message }));
+      addMessage('system', systemHtml(tSystemHtml('sp.scratchpad.error', { msg: e.message })));
     });
 }
 
@@ -1620,6 +1625,7 @@ async function switchToTab(newTabId) {
       addMessage('system', t('sp.help_message'));
     }
     restoreInputDraftForTab(newTabId);
+    renderAttachmentPreviews();
     scrollToBottom();
     refreshScheduledJobs({ tabId: newTabId });
     refreshRecommendedActions();
@@ -2201,12 +2207,12 @@ function isOutOfBandSlashDraft(value) {
 
 function syncSendButtonState() {
   if (!sendBtn) return;
-  if (!isProcessing) {
-    sendBtn.disabled = false;
+  const draft = normalizeScreenshotCommandText(inputEl?.value || '');
+  if (isProcessing) {
+    sendBtn.disabled = !isOutOfBandSlashDraft(draft);
     return;
   }
-  const draft = normalizeScreenshotCommandText(inputEl?.value || '');
-  sendBtn.disabled = !isOutOfBandSlashDraft(draft);
+  sendBtn.disabled = isAttachmentReadPendingForTab();
 }
 
 function showBusySlashCommandNotice() {
@@ -2224,7 +2230,7 @@ function showBusySlashCommandNotice() {
 async function parseSlashCommands(text, tabId = currentTabId) {
   // /help — list all available slash commands
   if (/^\/help\b\s*/i.test(text)) {
-    addMessage('system', t('sp.help_html'));
+    addMessage('system', systemHtml(t('sp.help_html')));
     return '';
   }
 
@@ -2270,7 +2276,7 @@ async function parseSlashCommands(text, tabId = currentTabId) {
     const wasAlreadyAllowed = isApiMutationsAllowedForTab(tabId);
     setApiMutationsAllowedForTab(tabId, true);
     if (!wasAlreadyAllowed) {
-      addMessage('system', t('sp.api.enabled_html'));
+      addMessage('system', systemHtml(t('sp.api.enabled_html')));
     }
     return text.slice(mApi[0].length).trim();
   }
@@ -2288,7 +2294,7 @@ async function parseSlashCommands(text, tabId = currentTabId) {
     } else if (res?.ok) {
       addMessage('system', t('sp.compact.nothing_to_compact'));
     } else {
-      addMessage('system', tSystemHtml('sp.compact.failed', { error: res?.error || 'unknown error' }));
+      addMessage('system', systemHtml(tSystemHtml('sp.compact.failed', { error: res?.error || 'unknown error' })));
     }
     return remainder;
   }
@@ -2322,11 +2328,11 @@ async function parseSlashCommands(text, tabId = currentTabId) {
         const dataUrl = await chrome.tabs.captureVisibleTab(windowId, { format: 'png' });
         if (currentTabId !== tabId) return '';
         const imgHtml = `<img src="${dataUrl}" style="max-width:100%;border-radius:6px;margin:4px 0;" alt="Screenshot"/>`;
-        addMessage('system', imgHtml);
+        addMessage('system', systemHtml(imgHtml));
       }
     } catch (e) {
       if (currentTabId !== tabId) return '';
-      addMessage('system', tSystemHtml('sp.screenshot.error', { msg: e.message }));
+      addMessage('system', systemHtml(tSystemHtml('sp.screenshot.error', { msg: e.message })));
     }
     return '';
   }
@@ -2337,14 +2343,14 @@ async function parseSlashCommands(text, tabId = currentTabId) {
       const res = await sendToBackground('capture_full_page_screenshot', { tabId });
       if (currentTabId !== tabId) return '';
       if (!res?.ok || !res.dataUrl) {
-        addMessage('system', tSystemHtml('sp.screenshot.error', { msg: res?.error || 'unknown error' }));
+        addMessage('system', systemHtml(tSystemHtml('sp.screenshot.error', { msg: res?.error || 'unknown error' })));
         return '';
       }
       const imgHtml = `<img src="${res.dataUrl}" style="max-width:100%;max-height:70vh;object-fit:contain;object-position:top;border-radius:6px;margin:4px 0;" alt="Full-page screenshot"/>`;
-      addMessage('system', imgHtml);
+      addMessage('system', systemHtml(imgHtml));
     } catch (e) {
       if (currentTabId !== tabId) return '';
-      addMessage('system', tSystemHtml('sp.screenshot.error', { msg: e.message }));
+      addMessage('system', systemHtml(tSystemHtml('sp.screenshot.error', { msg: e.message })));
     }
     return '';
   }
@@ -2358,13 +2364,13 @@ async function parseSlashCommands(text, tabId = currentTabId) {
       });
       if (currentTabId !== tabId) return '';
       if (!res?.ok) {
-        addMessage('system', tSystemHtml('sp.record.error', { error: res?.error || 'unknown' }));
+        addMessage('system', systemHtml(tSystemHtml('sp.record.error', { error: res?.error || 'unknown' })));
       } else if (res.state && res.state.hasMic === false && res.state.micError) {
-        addMessage('system', tSystemHtml('sp.record.mic_unavailable', { error: res.state.micError }));
+        addMessage('system', systemHtml(tSystemHtml('sp.record.mic_unavailable', { error: res.state.micError })));
       }
     } catch (e) {
       if (currentTabId !== tabId) return '';
-      addMessage('system', tSystemHtml('sp.record.error', { error: e.message }));
+      addMessage('system', systemHtml(tSystemHtml('sp.record.error', { error: e.message })));
     }
     return '';
   }
@@ -2447,7 +2453,7 @@ async function parseSlashCommands(text, tabId = currentTabId) {
       }
     } catch (e) {
       if (currentTabId !== tabId) return '';
-      addMessage('system', tSystemHtml('sp.vision.error', { msg: e.message }));
+      addMessage('system', systemHtml(tSystemHtml('sp.vision.error', { msg: e.message })));
     }
     return '';
   }
@@ -2472,10 +2478,15 @@ function updateApiBadge() {
 }
 
 async function sendMessage(extraChatParams) {
+  stopListening();
   let text = inputEl.value.trim();
   if (!text) return;
   const tabId = currentTabId;
   text = normalizeScreenshotCommandText(text);
+  if (!isProcessing && isAttachmentReadPendingForTab(tabId)) {
+    syncSendButtonState();
+    return false;
+  }
   if (isProcessing) {
     if (!isOutOfBandSlashDraft(text)) {
       showBusySlashCommandNotice();
@@ -2526,6 +2537,7 @@ async function sendMessage(extraChatParams) {
   }
 
   let assistantEl = null;
+  const attachmentsForSend = getPendingAttachmentsForTab(tabId, { create: false }).slice();
   if (renderToCurrentTab) {
     isProcessing = true;
     abortRequested = false;
@@ -2533,6 +2545,8 @@ async function sendMessage(extraChatParams) {
     autoResizeInput();
     syncSendButtonState();
     hideRecommendedActions();
+    clearPendingAttachmentsForTab(tabId);
+    renderAttachmentPreviews();
     addMessage('user', text);
     showActivity(t('sp.activity.thinking'));
     assistantEl = addMessage('assistant', '');
@@ -2547,10 +2561,28 @@ async function sendMessage(extraChatParams) {
       text,
       mode: modeForSend,
       apiMutationsAllowed: apiMutationsAllowedForSend,
+      ...(attachmentsForSend.length ? { attachments: attachmentsForSend } : {}),
       ...extraChatParams,
     });
     accepted = true;
     completedSuccessfully = updatesContainSuccessfulDone(res?.updates);
+
+    // An unsupported-attachment rejection comes back as a plain error string
+    // and the turn is never recorded in history. We optimistically cleared the
+    // chips on send, so re-add them here — otherwise "switch providers and try
+    // again" is impossible without re-picking every file.
+    if (attachmentsForSend.length && currentTabId === tabId
+        && typeof res?.content === 'string'
+        && /does not support (?:image|document) attachments/.test(res.content)) {
+      const pending = getPendingAttachmentsForTab(tabId);
+      pending.unshift(...attachmentsForSend.filter(att => !pending.includes(att)));
+      inputEl.value = text;
+      saveInputDraftForTab(tabId, text);
+      autoResizeInput();
+      updateSlashCommandAutocomplete();
+      renderAttachmentPreviews();
+      syncSendButtonState();
+    }
 
     if (renderToCurrentTab && currentTabId === tabId && abortRequested) {
       // Agent was stopped — show what we got so far
@@ -3480,7 +3512,7 @@ function renderSubscribeError(textEl, content) {
   const parsed = parseSubscribeError(content);
   if (!parsed) return false;
 
-  textEl.innerHTML = '';
+  textEl.replaceChildren();
   textEl.classList.add('subscribe-error');
 
   const msg = document.createElement('div');
@@ -3510,7 +3542,8 @@ function addMessage(role, content) {
   if (role === 'user') {
     textEl.textContent = content;
   } else if (role === 'system') {
-    textEl.innerHTML = content || '';
+    if (isSystemHtml(content)) textEl.innerHTML = content.__systemHtml;
+    else textEl.textContent = content || '';
   } else if (!renderSubscribeError(textEl, content)) {
     textEl.innerHTML = content ? formatMarkdown(content) : '';
   }
@@ -3860,6 +3893,14 @@ function escapeHtml(str) {
   }[c]));
 }
 
+function systemHtml(html) {
+  return { __systemHtml: String(html == null ? '' : html) };
+}
+
+function isSystemHtml(content) {
+  return !!content && typeof content === 'object' && Object.prototype.hasOwnProperty.call(content, '__systemHtml');
+}
+
 function tSystemHtml(key, params) {
   const safeParams = {};
   for (const [name, value] of Object.entries(params || {})) {
@@ -4046,6 +4087,391 @@ async function abortRun() {
 
 stopBtn.addEventListener('click', abortRun);
 
+// --- Voice input (mic dictation, issue #210) ---
+// Web Speech API: well-supported in Chrome, absent in stock Firefox (which
+// lacks window.SpeechRecognition entirely). The mic button stays visible
+// either way — a hidden button gives the user no signal as to WHY voice
+// input doesn't work. Instead it's shown grayed out with a tooltip and an
+// in-chat message on click explaining the reason: unsupported browser, or
+// disabled via the "Voice input" toggle in Settings.
+const SpeechRecognitionImpl = window.SpeechRecognition || window.webkitSpeechRecognition;
+let speechRecognition = null;
+let isListening = false;
+let micInterimText = ''; // the interim transcript tail we last appended to the input
+let voiceInputSettingEnabled = true; // mirrors storage 'voiceInputEnabled', on by default
+let micDisabledReason = null; // null | 'unsupported' | 'settings' | 'permission_denied'
+let micPermissionDenied = false; // latched when Chrome denies mic; cleared by permissionchange
+let micRequestInFlight = false; // prevents concurrent requestMicAndStart() calls
+
+function setMicIdleIcon() {
+  if (!micBtn) return;
+  micBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3z"/><path d="M19 11a7 7 0 0 1-14 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 18v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
+}
+
+function updateMicButtonState() {
+  if (!micBtn) return;
+  micDisabledReason = !SpeechRecognitionImpl ? 'unsupported'
+    : !voiceInputSettingEnabled ? 'settings'
+    : micPermissionDenied ? 'permission_denied'
+    : null;
+  micBtn.classList.toggle('mic-disabled', !!micDisabledReason);
+  micBtn.title = micDisabledReason === 'unsupported' ? t('sp.mic.unsupported')
+    : micDisabledReason === 'settings' ? t('sp.mic.disabled_settings')
+    : micDisabledReason === 'permission_denied' ? t('sp.mic.permission_denied')
+    : (isListening ? t('sp.btn.mic_stop') : t('sp.btn.mic'));
+}
+
+function stopListening() {
+  if (!isListening) return;
+  isListening = false;
+  if (micBtn) {
+    micBtn.classList.remove('listening');
+    setMicIdleIcon();
+  }
+  updateMicButtonState();
+  // Detach handlers before stop(): the engine can fire a trailing
+  // onresult/onend *after* stop() for buffered audio. Left attached, that
+  // late onresult would repaint the input (resurrecting just-sent text), and
+  // a stale onend would clobber the state of a freshly-started session.
+  const recognition = speechRecognition;
+  speechRecognition = null;
+  micInterimText = '';
+  if (recognition) {
+    recognition.onresult = null;
+    recognition.onerror = null;
+    recognition.onend = null;
+    try { recognition.stop(); } catch { /* ignore */ }
+  }
+}
+
+function startListening() {
+  if (!SpeechRecognitionImpl || !inputEl) return;
+  const recognition = new SpeechRecognitionImpl();
+  speechRecognition = recognition;
+  recognition.lang = navigator.language || 'en-US';
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  micInterimText = '';
+
+  // Append transcripts to whatever is currently in the box, replacing only
+  // the interim tail we ourselves appended. This preserves text the user
+  // types by hand during dictation instead of overwriting it.
+  recognition.onresult = (e) => {
+    if (!isListening || speechRecognition !== recognition) return;
+    // Strip our previous interim tail only if it's still the suffix — a
+    // manual edit after it means the user took over, so leave it alone.
+    if (micInterimText && inputEl.value.endsWith(micInterimText)) {
+      inputEl.value = inputEl.value.slice(0, inputEl.value.length - micInterimText.length);
+    }
+    let interimTranscript = '';
+    let finalTranscript = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const transcript = e.results[i][0].transcript;
+      if (e.results[i].isFinal) finalTranscript += transcript;
+      else interimTranscript += transcript;
+    }
+    if (finalTranscript) {
+      const sep = inputEl.value && !/\s$/.test(inputEl.value) ? ' ' : '';
+      inputEl.value += sep + finalTranscript;
+    }
+    if (interimTranscript) {
+      const sep = inputEl.value && !/\s$/.test(inputEl.value) ? ' ' : '';
+      micInterimText = sep + interimTranscript;
+      inputEl.value += micInterimText;
+    } else {
+      micInterimText = '';
+    }
+    handleInput();
+  };
+
+  recognition.onerror = (e) => {
+    stopListening();
+    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+      if (!micPermissionDenied) {
+        micPermissionDenied = true;
+        updateMicButtonState();
+        addMessage('system', t('sp.mic.permission_denied'));
+      }
+    }
+  };
+  recognition.onend = () => {
+    if (speechRecognition !== recognition) return; // superseded by a newer session
+    isListening = false;
+    speechRecognition = null;
+    micInterimText = '';
+    if (micBtn) {
+      micBtn.classList.remove('listening');
+      setMicIdleIcon();
+    }
+    updateMicButtonState();
+  };
+
+  isListening = true;
+  if (micBtn) {
+    micBtn.classList.add('listening');
+    micBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="3"/></svg>`;
+  }
+  updateMicButtonState();
+  recognition.start();
+}
+
+// Chrome's side panel context never surfaces the getUserMedia permission
+// dialog — it silently rejects. A real popup window does trigger it.
+// On first failure we open a small popup, wait for the user to click Allow,
+// then start listening once the permission is cached on the extension origin.
+function openMicPermissionPopup() {
+  return new Promise((resolve) => {
+    let popupId = null;
+    let settled = false;
+    const settle = (granted) => {
+      if (settled) return;
+      settled = true;
+      chrome.runtime.onMessage.removeListener(onMsg);
+      chrome.windows.onRemoved.removeListener(onRemoved);
+      resolve(granted);
+    };
+    const onMsg = (msg) => {
+      if (msg.type === 'mic-permission-granted') settle(true);
+      else if (msg.type === 'mic-permission-denied') settle(false);
+    };
+    const onRemoved = (id) => { if (id === popupId) settle(false); };
+    chrome.runtime.onMessage.addListener(onMsg);
+    chrome.windows.onRemoved.addListener(onRemoved);
+    chrome.windows.create({
+      url: chrome.runtime.getURL('src/ui/mic-permission.html'),
+      type: 'popup',
+      width: 380,
+      height: 240,
+    }, (win) => { popupId = win?.id ?? null; });
+  });
+}
+
+async function requestMicAndStart() {
+  if (micRequestInFlight) return;
+  micRequestInFlight = true;
+  try {
+    let granted = false;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach(t => t.stop());
+      granted = true;
+    } catch {
+      // Side panel can't show the permission dialog — delegate to a popup window.
+      granted = await openMicPermissionPopup();
+    }
+    if (!granted) {
+      micPermissionDenied = true;
+      updateMicButtonState();
+      addMessage('system', t('sp.mic.permission_denied'));
+      return;
+    }
+    // "Allow this time" only grants access to the popup window, not the side
+    // panel. Verify the permission carried over before starting.
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({ audio: true });
+      s.getTracks().forEach(t => t.stop());
+    } catch {
+      addMessage('system', t('sp.mic.use_allow_site'));
+      return;
+    }
+    startListening();
+  } finally {
+    micRequestInFlight = false;
+  }
+}
+
+if (micBtn) {
+  chrome.storage.local.get('voiceInputEnabled').then((stored) => {
+    voiceInputSettingEnabled = stored?.voiceInputEnabled ?? true;
+    updateMicButtonState();
+  }).catch(() => {});
+  chrome.storage.onChanged.addListener((changes) => {
+    if (changes.voiceInputEnabled) {
+      voiceInputSettingEnabled = changes.voiceInputEnabled.newValue ?? true;
+      if (!voiceInputSettingEnabled) stopListening();
+      updateMicButtonState();
+    }
+  });
+  micBtn.addEventListener('click', async () => {
+    if (micDisabledReason === 'unsupported') {
+      addMessage('system', t('sp.mic.unsupported'));
+      return;
+    }
+    if (micDisabledReason === 'settings') {
+      addMessage('system', t('sp.mic.disabled_settings'));
+      return;
+    }
+    if (micDisabledReason === 'permission_denied') return; // tooltip already explains; no spam
+    if (isListening) stopListening();
+    else await requestMicAndStart();
+  });
+  // Re-enable button automatically if the user grants mic from browser settings.
+  try {
+    const micPermissionQuery = navigator.permissions?.query?.({ name: 'microphone' });
+    if (micPermissionQuery) {
+      micPermissionQuery.then((micPerm) => {
+        micPerm.addEventListener('change', () => {
+          micPermissionDenied = micPerm.state === 'denied';
+          updateMicButtonState();
+        });
+      }).catch(() => { /* permissions API unavailable */ });
+    }
+  } catch { /* permissions API unavailable */ }
+  updateMicButtonState();
+}
+
+// --- File attachments (+ button, issue #220) ---
+// Images go through the OpenAI-style image_url content block (works with any
+// vision-capable provider, validated in agent.js against provider.supportsVision).
+// PDFs go through Anthropic's {type:'document'} block (Anthropic-only —
+// agent.js returns a clear chat error for other providers via
+// provider.supportsDocuments). Both are read client-side as data URLs and
+// sent as-is; agent.js strips the data: prefix when building the PDF block.
+const attachBtn = document.getElementById('btn-attach');
+const fileAttachInput = document.getElementById('file-attach-input');
+const attachmentPreviewList = document.getElementById('attachment-preview-list');
+const MAX_ATTACHMENT_BYTES = 16 * 1024 * 1024; // matches PDF_PASSTHROUGH_MAX_BYTES (pdf-tools.js)
+
+function normalizeAttachmentTabId(tabId = renderedTabId ?? currentTabId) {
+  if (tabId == null || tabId === '') return null;
+  const numericTabId = Number(tabId);
+  return Number.isFinite(numericTabId) ? numericTabId : null;
+}
+
+function getPendingAttachmentsForTab(tabId = renderedTabId ?? currentTabId, { create = true } = {}) {
+  const numericTabId = normalizeAttachmentTabId(tabId);
+  if (numericTabId == null) return [];
+  let attachments = pendingAttachmentsByTab.get(numericTabId);
+  if (!attachments && create) {
+    attachments = [];
+    pendingAttachmentsByTab.set(numericTabId, attachments);
+  }
+  return attachments || [];
+}
+
+function getAttachmentGeneration(tabId) {
+  const numericTabId = normalizeAttachmentTabId(tabId);
+  if (numericTabId == null) return 0;
+  return attachmentGenerationByTab.get(numericTabId) || 0;
+}
+
+function bumpAttachmentGeneration(tabId) {
+  const numericTabId = normalizeAttachmentTabId(tabId);
+  if (numericTabId == null) return;
+  attachmentGenerationByTab.set(numericTabId, getAttachmentGeneration(numericTabId) + 1);
+}
+
+function isAttachmentReadPendingForTab(tabId = renderedTabId ?? currentTabId) {
+  const numericTabId = normalizeAttachmentTabId(tabId);
+  return numericTabId != null && (attachmentReadCountsByTab.get(numericTabId) || 0) > 0;
+}
+
+function updateAttachmentReadCount(tabId, delta) {
+  const numericTabId = normalizeAttachmentTabId(tabId);
+  if (numericTabId == null) return;
+  const next = Math.max(0, (attachmentReadCountsByTab.get(numericTabId) || 0) + delta);
+  if (next) attachmentReadCountsByTab.set(numericTabId, next);
+  else attachmentReadCountsByTab.delete(numericTabId);
+  if (normalizeAttachmentTabId() === numericTabId) syncSendButtonState();
+}
+
+function clearPendingAttachmentsForTab(tabId) {
+  const numericTabId = normalizeAttachmentTabId(tabId);
+  if (numericTabId == null) return;
+  pendingAttachmentsByTab.delete(numericTabId);
+  bumpAttachmentGeneration(numericTabId);
+  if (normalizeAttachmentTabId() === numericTabId) {
+    renderAttachmentPreviews();
+    syncSendButtonState();
+  }
+}
+
+function renderAttachmentPreviews() {
+  if (!attachmentPreviewList) return;
+  const previewTabId = normalizeAttachmentTabId();
+  const pendingAttachments = getPendingAttachmentsForTab(previewTabId, { create: false });
+  attachmentPreviewList.innerHTML = '';
+  attachmentPreviewList.classList.toggle('hidden', pendingAttachments.length === 0);
+  pendingAttachments.forEach((att, i) => {
+    const chip = document.createElement('div');
+    chip.className = 'attachment-chip';
+    const label = document.createElement('span');
+    label.className = 'attachment-chip-name';
+    label.textContent = att.name;
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'attachment-chip-remove';
+    removeBtn.setAttribute('aria-label', t('sp.attach.remove'));
+    removeBtn.textContent = '×';
+    removeBtn.addEventListener('click', () => {
+      const attachments = getPendingAttachmentsForTab(previewTabId, { create: false });
+      attachments.splice(i, 1);
+      if (attachments.length === 0 && previewTabId != null) pendingAttachmentsByTab.delete(previewTabId);
+      renderAttachmentPreviews();
+      syncSendButtonState();
+    });
+    chip.append(label, removeBtn);
+    attachmentPreviewList.appendChild(chip);
+  });
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+async function handleAttachedFiles(fileList, tabId = renderedTabId ?? currentTabId) {
+  const numericTabId = normalizeAttachmentTabId(tabId);
+  if (numericTabId == null) return;
+  const files = Array.from(fileList || []);
+  if (!files.length) return;
+  const generation = getAttachmentGeneration(numericTabId);
+  updateAttachmentReadCount(numericTabId, 1);
+  try {
+    for (const file of files) {
+      if (file.size > MAX_ATTACHMENT_BYTES) {
+        if (normalizeAttachmentTabId() === numericTabId) {
+          addMessage('system', systemHtml(tSystemHtml('sp.attach.too_large', { name: file.name })));
+        }
+        continue;
+      }
+      const isImage = file.type.startsWith('image/');
+      const isPdf = file.type === 'application/pdf';
+      if (!isImage && !isPdf) {
+        if (normalizeAttachmentTabId() === numericTabId) {
+          addMessage('system', systemHtml(tSystemHtml('sp.attach.unsupported_type', { name: file.name })));
+        }
+        continue;
+      }
+      try {
+        const dataUrl = await readFileAsDataUrl(file);
+        if (generation !== getAttachmentGeneration(numericTabId)) continue;
+        getPendingAttachmentsForTab(numericTabId).push({ kind: isImage ? 'image' : 'document', name: file.name, dataUrl });
+      } catch {
+        if (generation === getAttachmentGeneration(numericTabId) && normalizeAttachmentTabId() === numericTabId) {
+          addMessage('system', systemHtml(tSystemHtml('sp.attach.read_failed', { name: file.name })));
+        }
+      }
+    }
+  } finally {
+    updateAttachmentReadCount(numericTabId, -1);
+    if (generation === getAttachmentGeneration(numericTabId) && normalizeAttachmentTabId() === numericTabId) {
+      renderAttachmentPreviews();
+    }
+  }
+}
+
+if (attachBtn && fileAttachInput) {
+  attachBtn.addEventListener('click', () => fileAttachInput.click());
+  fileAttachInput.addEventListener('change', () => {
+    handleAttachedFiles(fileAttachInput.files, renderedTabId ?? currentTabId);
+    fileAttachInput.value = ''; // allow re-selecting the same file
+  });
+}
 
 // --- Event Listeners ---
 

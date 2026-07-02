@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>WebBrain – Microphone Access</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #1a1a2e;
+      color: #e0e0e0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 24px;
+    }
+    .card {
+      text-align: center;
+      max-width: 300px;
+    }
+    .icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+    h1 {
+      font-size: 17px;
+      font-weight: 600;
+      margin-bottom: 10px;
+      color: #fff;
+    }
+    p {
+      font-size: 13px;
+      line-height: 1.6;
+      color: #aaa;
+    }
+    #status {
+      margin-top: 16px;
+      font-size: 13px;
+      color: #aaa;
+      min-height: 20px;
+    }
+    #status.success { color: #4caf50; }
+    #status.error   { color: #f44336; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">🎤</div>
+    <h1>Microphone Access</h1>
+    <p>Click <strong>Allow</strong> when Chrome asks to grant WebBrain microphone access for voice input.</p>
+    <div id="status">Waiting for permission…</div>
+  </div>
+  <script src="mic-permission.js"></script>
+</body>
+</html>

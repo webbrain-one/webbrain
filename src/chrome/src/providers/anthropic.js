@@ -31,6 +31,11 @@ export class AnthropicProvider extends BaseLLMProvider {
     return /claude-(3|sonnet-4|opus-4|haiku-4|4)/.test(this.config.model || '');
   }
 
+  get supportsDocuments() {
+    // PDF passthrough as a {type:'document'} content block — Anthropic-only.
+    return true;
+  }
+
   _headers() {
     return {
       'Content-Type': 'application/json',

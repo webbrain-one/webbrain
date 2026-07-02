@@ -1199,7 +1199,7 @@ body {
 
 #input-wrapper {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 8px;
   background: var(--bg-input);
   border: 1px solid var(--border);
@@ -1273,6 +1273,57 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 12px;
+}
+
+.attachment-preview-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 8px;
+}
+
+.attachment-preview-list.hidden {
+  display: none;
+}
+
+.attachment-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 200px;
+  padding: 4px 6px 4px 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.attachment-chip-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachment-chip-remove {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.attachment-chip-remove:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
 }
 
 #input-text-layer {
@@ -1353,6 +1404,63 @@ body {
 #btn-send:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+#btn-attach,
+#btn-mic {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, color 0.2s, transform 0.1s;
+  flex-shrink: 0;
+}
+
+#btn-attach:hover,
+#btn-mic:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+#btn-attach:active,
+#btn-mic:active {
+  transform: scale(0.95);
+}
+
+#btn-attach:disabled,
+#btn-mic:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Active dictation — pulsing red to signal the mic is live. */
+#btn-mic.listening {
+  color: var(--error);
+  animation: btn-mic-pulse 1.4s ease-in-out infinite;
+}
+
+/* Visually disabled but NOT the disabled attribute — clicks must still
+   register so the user gets a "why" message in chat (unsupported browser /
+   disabled in settings) instead of a button that mysteriously does nothing. */
+#btn-mic.mic-disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+#btn-mic.mic-disabled:hover {
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+@keyframes btn-mic-pulse {
+  0%, 100% { background: transparent; }
+  50% { background: rgba(244, 67, 54, 0.16); }
 }
 
 /* Scrollbar */

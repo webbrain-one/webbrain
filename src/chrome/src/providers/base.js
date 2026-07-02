@@ -47,6 +47,14 @@ export class BaseLLMProvider {
   }
 
   /**
+   * Check if this provider supports document inputs (e.g. PDF passthrough
+   * as a {type:'document'} content block). See pdf-tools.js.
+   */
+  get supportsDocuments() {
+    return false;
+  }
+
+  /**
    * Approximate context window (in tokens) for the active model. The agent
    * uses this to decide when to auto-compact the conversation ("Context
    * automatically compacted"): once the running input-token count crosses a
