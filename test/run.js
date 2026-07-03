@@ -720,6 +720,8 @@ test('matches mastodon profile and interaction URLs on any host', () => {
   // Earlier site-specific adapters should keep precedence for @-style URLs.
   assert.equal(getActiveAdapter('https://www.youtube.com/@OpenAI')?.name, 'youtube');
   assert.equal(getActiveAdapter('https://medium.com/@example')?.name, 'medium');
+  assert.equal(getActiveAdapter('https://substack.com/@alice')?.name, 'substack');
+  assert.equal(getActiveAdapterFx('https://substack.com/@alice')?.name, 'substack');
   assert.equal(getActiveAdapter('https://www.tiktok.com/@openai')?.name, 'tiktok');
   assert.equal(getActiveAdapter('https://www.tiktok.com/@openai/video/1234567890123456789')?.name, 'tiktok');
   assert.equal(getActiveAdapterFx('https://www.tiktok.com/@openai')?.name, 'tiktok');

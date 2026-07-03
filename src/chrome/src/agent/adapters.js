@@ -240,7 +240,7 @@ const ADAPTERS = [
   {
     name: 'substack',
     category: 'general',
-    match: (url) => /\.substack\.com\//.test(url),
+    match: (url) => /^https?:\/\/([^/]+\.)?substack\.com\//.test(url),
     notes: `
 - Most posts are public; some are paywalled mid-article. If the content suddenly stops with a "Subscribe" CTA, that's a paywall, not the end.
 - Comments live below the article in a separate thread component.
