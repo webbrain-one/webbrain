@@ -4745,24 +4745,27 @@ async function handleAttachedFiles(fileList, tabId = renderedTabId ?? currentTab
     for (const file of files) {
       const isImage = file.type.startsWith('image/');
       const isPdf = file.type === 'application/pdf';
-      // The reported MIME type for .json files is OS-registry dependent and
+      // The reported MIME type for text files is OS-registry dependent and
       // often empty — fall back to the extension.
-      const isJson = file.type === 'application/json' || (!isImage && !isPdf && /\.json$/i.test(file.name || ''));
-      if (!isImage && !isPdf && !isJson) {
+      const isTextFile = file.type === 'application/json'
+        || file.type === 'text/plain'
+        || file.type === 'text/csv'
+        || (!isImage && !isPdf && /\.(json|txt|csv)$/i.test(file.name || ''));
+      if (!isImage && !isPdf && !isTextFile) {
         if (normalizeAttachmentTabId() === numericTabId) {
           addMessage('system', systemHtml(tSystemHtml('sp.attach.unsupported_type', { name: file.name })));
         }
         continue;
       }
-      const maxBytes = isJson ? MAX_TEXT_ATTACHMENT_BYTES : MAX_ATTACHMENT_BYTES;
+      const maxBytes = isTextFile ? MAX_TEXT_ATTACHMENT_BYTES : MAX_ATTACHMENT_BYTES;
       if (file.size > maxBytes) {
         if (normalizeAttachmentTabId() === numericTabId) {
-          addMessage('system', systemHtml(tSystemHtml('sp.attach.too_large', { name: file.name, max: isJson ? '512KB' : '16MB' })));
+          addMessage('system', systemHtml(tSystemHtml('sp.attach.too_large', { name: file.name, max: isTextFile ? '512KB' : '16MB' })));
         }
         continue;
       }
       try {
-        if (isJson) {
+        if (isTextFile) {
           const textContent = await readFileAsText(file);
           if (generation !== getAttachmentGeneration(numericTabId)) continue;
           getPendingAttachmentsForTab(numericTabId).push({ kind: 'text', name: file.name, textContent });

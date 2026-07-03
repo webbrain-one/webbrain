@@ -23,7 +23,7 @@ export default {
   'sp.mic.permission_denied': 'Microphone blocked — allow microphone access for this extension in your browser\'s site permissions',
   'sp.attach.remove': 'Remove attachment',
   'sp.attach.too_large': '{name} is too large to attach (max {max}).',
-  'sp.attach.unsupported_type': '{name} is not a supported attachment type — only images, PDFs, and JSON files are supported.',
+  'sp.attach.unsupported_type': '{name} is not a supported attachment type — only images, PDFs, JSON, TXT, and CSV files are supported.',
   'sp.attach.read_failed': 'Could not read {name}.',
   'sp.queue.label': 'Queued',
   'sp.queue.label_numbered': 'Queued {index}',

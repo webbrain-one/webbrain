@@ -34,7 +34,7 @@ export default {
   'sp.mic.use_allow_site': 'Please choose "Allow while visiting the site" (not "Allow this time") so the permission sticks across windows',
   'sp.attach.remove': 'Remove attachment',
   'sp.attach.too_large': '{name} is too large to attach (max {max}).',
-  'sp.attach.unsupported_type': '{name} is not a supported attachment type — only images, PDFs, and JSON files are supported.',
+  'sp.attach.unsupported_type': '{name} is not a supported attachment type — only images, PDFs, JSON, TXT, and CSV files are supported.',
   'sp.attach.read_failed': 'Could not read {name}.',
   'sp.queue.label': 'Queued',
   'sp.queue.label_numbered': 'Queued {index}',
