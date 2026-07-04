@@ -4742,9 +4742,19 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     let rows = readSessionId
       ? this._rowsForProgressSession(tabId, readSessionId, allRows)
       : [];
+    // Mixed migration state: legacy unscoped rows for the same task must stay
+    // visible even when the session already has scoped rows, so merge instead
+    // of only falling back when the scoped read is empty. A merged set can't
+    // be read via a sessionId filter, so it switches to the currentTaskOnly
+    // read (which returns exactly this set).
+    const legacyRows = this._legacyUnscopedProgressRowsForResumeGuard(tabId, allRows);
     if (!rows.length) {
-      rows = this._legacyUnscopedProgressRowsForResumeGuard(tabId, allRows);
+      rows = legacyRows;
       if (rows.length) readSessionId = '';
+    } else if (legacyRows.length) {
+      const keep = new Set([...rows, ...legacyRows]);
+      rows = allRows.filter(row => keep.has(row));
+      readSessionId = '';
     }
     return { rows, sessionId: readSessionId };
   }

@@ -14191,6 +14191,57 @@ test('schedule_resume mixed migration state: foreign stamped row does not starve
   }
 });
 
+test('schedule_resume merges legacy rows with scoped session rows instead of falling back only when empty', async () => {
+  for (const AgentClass of [AgentCh, AgentFx]) {
+    const agent = new AgentClass({ getActive: () => ({ contextWindow: 128000, supportsVision: false }) });
+    const tabId = AgentClass === AgentCh ? 831 : 832;
+    agent.conversationModes.set(tabId, 'act');
+    agent.conversationIds.set(tabId, 'conv_merged_scoped_legacy_resume_guard');
+    agent._persist = () => {};
+    agent.conversations.set(tabId, [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: "follow 100 accounts i don't follow yet here" },
+    ]);
+    allowProgress(agent, tabId, ['follow']);
+    agent._progressUpdate(tabId, {
+      items: [{ id: 'already_done', label: 'already_done', action: 'follow', status: 'processed' }],
+    });
+    agent.progressLedgers.get(tabId).push(
+      { id: 'legacy_pending', label: 'legacy_pending', action: 'follow', status: 'pending' },
+    );
+
+    const read = agent._progressRead(tabId, { currentTaskOnly: true });
+    assert.deepEqual(read.rows.map(r => r.id).sort(), ['already_done', 'legacy_pending'], `${AgentClass.name}: currentTaskOnly read must merge scoped and matching legacy rows`);
+
+    let scheduledPayload = null;
+    agent.setScheduler({
+      createResumeJob: async payload => {
+        scheduledPayload = payload;
+        return {
+          success: true,
+          scheduled: true,
+          jobId: 'resume_merged_guard_test',
+          scheduledAt: '2026-06-30T09:01:30.000Z',
+          summary: 'Resume scheduled.',
+          done: true,
+        };
+      },
+    });
+
+    const result = await agent.executeTool(tabId, 'schedule_resume', {
+      after_seconds: 60,
+      reason: '60-second pause between follows',
+      resume_instruction: 'Next account to follow is @eXeDK.',
+    });
+
+    assert.equal(result.success, true, `${AgentClass.name}: merged-state schedule_resume should succeed`);
+    const instruction = scheduledPayload?.args?.resume_instruction || '';
+    assert.match(instruction, /^Continue the active Act-mode progress-ledger task/, `${AgentClass.name}: unresolved legacy rows must attach the guard even when all scoped rows are terminal`);
+    assert.ok(instruction.includes('progress_read({currentTaskOnly: true, limit: 50})'), `${AgentClass.name}: merged scoped+legacy sets must use the currentTaskOnly read`);
+    assert.match(instruction, /2 row\(s\), 1 unresolved/, `${AgentClass.name}: guard counts must cover the merged scoped+legacy set`);
+  }
+});
+
 test('schedule_resume does not revive a stale scoped session for an unrelated new task', async () => {
   for (const AgentClass of [AgentCh, AgentFx]) {
     const agent = new AgentClass({ getActive: () => ({ contextWindow: 128000, supportsVision: false }) });
