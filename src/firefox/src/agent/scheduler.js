@@ -316,7 +316,7 @@ export function validateTaskArgs(args, now = Date.now()) {
   const schedule = asObject(obj.schedule);
   const target = asObject(obj.target);
   const type = schedule.type || 'once';
-  const mode = obj.mode === 'ask' ? 'ask' : 'act';
+  const mode = obj.mode === 'ask' ? 'ask' : (obj.mode === 'dev' ? 'dev' : 'act');
 
   if (!title) return { ok: false, error: '`title` is required.' };
   if (!prompt) return { ok: false, error: '`prompt` is required.' };

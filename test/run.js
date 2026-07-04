@@ -291,6 +291,7 @@ const {
   SYSTEM_PROMPT_ASK: SYSTEM_PROMPT_ASK_CH,
   SYSTEM_PROMPT_ACT_COMPACT: SYSTEM_PROMPT_ACT_COMPACT_CH,
   SYSTEM_PROMPT_ACT_MID: SYSTEM_PROMPT_ACT_MID_CH,
+  SYSTEM_PROMPT_DEV_APPENDIX: SYSTEM_PROMPT_DEV_APPENDIX_CH,
   getToolsForMode: getToolsForModeCh,
 } = await import(
   'file://' + path.join(ROOT, 'src/chrome/src/agent/tools.js').replace(/\\/g, '/')
@@ -304,10 +305,24 @@ const {
   SYSTEM_PROMPT_ASK: SYSTEM_PROMPT_ASK_FX,
   SYSTEM_PROMPT_ACT_COMPACT: SYSTEM_PROMPT_ACT_COMPACT_FX,
   SYSTEM_PROMPT_ACT_MID: SYSTEM_PROMPT_ACT_MID_FX,
+  SYSTEM_PROMPT_DEV_APPENDIX: SYSTEM_PROMPT_DEV_APPENDIX_FX,
   getToolsForMode: getToolsForModeFx,
 } = await import(
   'file://' + path.join(ROOT, 'src/firefox/src/agent/tools.js').replace(/\\/g, '/')
 );
+const {
+  buildPayload: buildLlmPayload,
+  loadFrozenBaseline: loadLlmFrozenBaseline,
+  normalizeMode: normalizeLlmMode,
+} = await import(
+  'file://' + path.join(ROOT, 'test/llm/lib/build-payload.mjs').replace(/\\/g, '/')
+);
+const {
+  buildScenarioPayload: buildLlmScenarioPayload,
+} = await import(
+  'file://' + path.join(ROOT, 'test/llm/lib/scenario-payload.mjs').replace(/\\/g, '/')
+);
+loadLlmFrozenBaseline('');
 const {
   CUSTOM_SKILLS_STORAGE_KEY: CUSTOM_SKILLS_STORAGE_KEY_CH,
   DEFAULT_SKILL_SOURCES: DEFAULT_SKILL_SOURCES_CH,
@@ -2841,7 +2856,7 @@ test('getToolsForMode: default `done` description is the loose hygiene hint', ()
   }
 });
 
-test('getToolsForMode: `done` outcome is exposed only in full and mid act modes', () => {
+test('getToolsForMode: `done` outcome is exposed only in full and mid action modes', () => {
   for (const [label, getTools] of [
     ['chrome', getToolsForModeCh],
     ['firefox', getToolsForModeFx],
@@ -2852,9 +2867,13 @@ test('getToolsForMode: `done` outcome is exposed only in full and mid act modes'
       ['act full', getTools('act'), true],
       ['act mid', getTools('act', { tier: 'mid' }), true],
       ['act compact', getTools('act', { tier: 'compact' }), false],
+      ['dev full', getTools('dev'), true],
+      ['dev mid', getTools('dev', { tier: 'mid' }), true],
       ['act strict full', getTools('act', { strictSecretMode: true }), true],
       ['act strict mid', getTools('act', { tier: 'mid', strictSecretMode: true }), true],
       ['act strict compact', getTools('act', { tier: 'compact', strictSecretMode: true }), false],
+      ['dev strict full', getTools('dev', { strictSecretMode: true }), true],
+      ['dev strict mid', getTools('dev', { tier: 'mid', strictSecretMode: true }), true],
     ]) {
       const done = tools.find(t => t.function.name === 'done');
       assert.ok(done, `[${label}] ${modeLabel}: done tool missing`);
@@ -2933,9 +2952,190 @@ test('getToolsForMode: compact mode restricts act tools in both browsers', () =>
       [...compactNames].sort(),
     );
     assert.ok(compactNamesActual.includes('done'), `[${label}] compact mode must keep done`);
-    assert.ok(compactNamesActual.includes('solve_captcha'), `[${label}] compact mode must keep solve_captcha`);
+    for (const excluded of ['resize_window', 'download_social_media', 'solve_captcha']) {
+      assert.equal(compactNamesActual.includes(excluded), false, `[${label}] compact mode must omit ${excluded}`);
+    }
     assert.equal(compactNamesActual.includes('execute_js'), false, `[${label}] compact mode must omit execute_js`);
   }
+});
+
+test('getToolsForMode: mode/tier redesign exposes the intended normal and Dev tools', () => {
+  for (const [label, getTools] of [
+    ['chrome', getToolsForModeCh],
+    ['firefox', getToolsForModeFx],
+  ]) {
+    const ask = getTools('ask').map(t => t.function.name);
+    const compact = getTools('act', { tier: 'compact' }).map(t => t.function.name);
+    const mid = getTools('act', { tier: 'mid' }).map(t => t.function.name);
+    const full = getTools('act').map(t => t.function.name);
+    const devCompact = getTools('dev', { tier: 'compact' }).map(t => t.function.name);
+    const devMid = getTools('dev', { tier: 'mid' }).map(t => t.function.name);
+    const devFull = getTools('dev').map(t => t.function.name);
+
+    assert.deepEqual(devCompact, [], `[${label}] Dev Compact should be blocked at tool-schema level`);
+    for (const name of ['get_accessibility_tree', 'read_page', 'scroll', 'extract_data', 'get_selection', 'done', 'fetch_url']) {
+      assert.equal(ask.includes(name), true, `[${label}] ask should expose ${name}`);
+      assert.equal(compact.includes(name), true, `[${label}] compact act should expose ${name}`);
+      assert.equal(mid.includes(name), true, `[${label}] mid act should expose ${name}`);
+      assert.equal(full.includes(name), true, `[${label}] full act should expose ${name}`);
+    }
+    assert.equal(ask.includes('clarify'), false, `[${label}] ask should not expose clarify`);
+    assert.equal(compact.includes('clarify'), true, `[${label}] compact act should expose clarify`);
+    assert.equal(mid.includes('clarify'), true, `[${label}] mid act should expose clarify`);
+    assert.equal(full.includes('clarify'), true, `[${label}] full act should expose clarify`);
+
+    for (const name of ['click_ax', 'type_ax', 'set_field', 'click', 'type_text', 'press_keys', 'navigate', 'wait_for_element', 'new_tab', 'scratchpad_write', 'progress_update', 'progress_read']) {
+      assert.equal(ask.includes(name), false, `[${label}] ask should not expose action tool ${name}`);
+      assert.equal(compact.includes(name), true, `[${label}] compact act should expose ${name}`);
+      assert.equal(mid.includes(name), true, `[${label}] mid act should expose ${name}`);
+      assert.equal(full.includes(name), true, `[${label}] full act should expose ${name}`);
+    }
+
+    assert.equal(ask.includes('download_resource_from_page'), false, `[${label}] ask must not expose download_resource_from_page`);
+    assert.equal(compact.includes('download_resource_from_page'), false, `[${label}] compact act must not expose download_resource_from_page`);
+    assert.equal(mid.includes('download_resource_from_page'), true, `[${label}] mid act should expose download_resource_from_page`);
+    assert.equal(full.includes('download_resource_from_page'), true, `[${label}] full act should expose download_resource_from_page`);
+
+    for (const name of ['hover', 'drag_drop']) {
+      assert.equal(ask.includes(name), false, `[${label}] ask should not expose ${name}`);
+      assert.equal(compact.includes(name), false, `[${label}] compact act should not expose ${name}`);
+      assert.equal(mid.includes(name), false, `[${label}] mid act should not expose ${name}`);
+      assert.equal(full.includes(name), true, `[${label}] full act should expose ${name}`);
+      assert.equal(devMid.includes(name), false, `[${label}] dev mid should not add ${name}`);
+      assert.equal(devFull.includes(name), true, `[${label}] dev full should keep full-act ${name}`);
+    }
+    for (const name of ['get_shadow_dom', 'get_frames']) {
+      assert.equal(ask.includes(name), false, `[${label}] ask should not expose ${name}`);
+      assert.equal(compact.includes(name), false, `[${label}] compact act should not expose ${name}`);
+      assert.equal(mid.includes(name), false, `[${label}] mid act should not expose ${name}`);
+      assert.equal(full.includes(name), true, `[${label}] full act should expose ${name}`);
+      assert.equal(devMid.includes(name), true, `[${label}] dev mid should add ${name}`);
+      assert.equal(devFull.includes(name), true, `[${label}] dev full should keep full-act ${name}`);
+    }
+
+    assert.equal(ask.includes('read_page_source'), false, `[${label}] ask must not expose read_page_source`);
+    assert.equal(ask.includes('inspect_element_styles'), false, `[${label}] ask must not expose inspect_element_styles`);
+    assert.equal(full.includes('read_page_source'), false, `[${label}] full act must not expose read_page_source`);
+    assert.equal(full.includes('inspect_element_styles'), false, `[${label}] full act must not expose inspect_element_styles`);
+    assert.equal(mid.includes('read_page_source'), false, `[${label}] mid act must not expose read_page_source`);
+    assert.equal(mid.includes('inspect_element_styles'), false, `[${label}] mid act must not expose inspect_element_styles`);
+    assert.equal(devMid.includes('read_page_source'), true, `[${label}] dev mid should expose read_page_source`);
+    assert.equal(devMid.includes('inspect_element_styles'), true, `[${label}] dev mid should expose inspect_element_styles`);
+    assert.equal(devFull.includes('read_page_source'), true, `[${label}] dev full should expose read_page_source`);
+    assert.equal(devFull.includes('inspect_element_styles'), true, `[${label}] dev full should expose inspect_element_styles`);
+
+    if (label === 'chrome') {
+      assert.equal(full.includes('shadow_dom_query'), true, '[chrome] full act should expose shadow_dom_query');
+      assert.equal(mid.includes('shadow_dom_query'), false, '[chrome] mid act should not expose shadow_dom_query');
+      assert.equal(devMid.includes('shadow_dom_query'), true, '[chrome] dev mid should add shadow_dom_query');
+      assert.equal(devFull.includes('shadow_dom_query'), true, '[chrome] dev full should keep shadow_dom_query');
+      assert.equal(mid.includes('upload_file'), true, '[chrome] mid act should expose upload_file');
+      assert.equal(full.includes('upload_file'), true, '[chrome] full act should expose upload_file');
+      assert.equal(devFull.includes('execute_js'), false, '[chrome] Dev must not expose execute_js');
+    } else {
+      assert.equal(full.includes('shadow_dom_query'), false, '[firefox] shadow_dom_query is Chrome-only');
+      assert.equal(mid.includes('shadow_dom_query'), false, '[firefox] shadow_dom_query is Chrome-only');
+      assert.equal(devMid.includes('shadow_dom_query'), false, '[firefox] Dev must not invent Chrome-only shadow_dom_query');
+      assert.equal(devFull.includes('shadow_dom_query'), false, '[firefox] Dev must not invent Chrome-only shadow_dom_query');
+      assert.equal(mid.includes('upload_file'), false, '[firefox] upload_file is Chrome-only');
+      assert.equal(full.includes('upload_file'), false, '[firefox] upload_file is Chrome-only');
+      assert.equal(full.includes('execute_js'), false, '[firefox] full act must not expose execute_js');
+      assert.equal(devMid.includes('execute_js'), true, '[firefox] dev mid should expose execute_js');
+      assert.equal(devFull.includes('execute_js'), true, '[firefox] dev full should expose execute_js');
+    }
+  }
+});
+
+test('Ask prompts do not advertise removed Ask tools', () => {
+  for (const [label, prompt] of [
+    ['chrome', SYSTEM_PROMPT_ASK_CH],
+    ['firefox', SYSTEM_PROMPT_ASK_FX],
+  ]) {
+    assert.doesNotMatch(prompt, /\bread_page_source\b/, `[${label}] Ask prompt must not mention read_page_source`);
+    assert.doesNotMatch(prompt, /\binspect_element_styles\b/, `[${label}] Ask prompt must not mention inspect_element_styles`);
+    assert.doesNotMatch(prompt, /\bclarify\b/, `[${label}] Ask prompt must not mention clarify`);
+    assert.doesNotMatch(prompt, /\bget_shadow_dom\b/, `[${label}] Ask prompt must not mention get_shadow_dom`);
+    assert.doesNotMatch(prompt, /\bshadow_dom_query\b/, `[${label}] Ask prompt must not mention shadow_dom_query`);
+    assert.doesNotMatch(prompt, /\bget_frames\b/, `[${label}] Ask prompt must not mention get_frames`);
+  }
+});
+
+test('test/llm payload builders support Dev mode and preserve Ask cleanup', () => {
+  assert.equal(normalizeLlmMode(undefined), 'act');
+  assert.equal(normalizeLlmMode('ask'), 'ask');
+  assert.equal(normalizeLlmMode('act'), 'act');
+  assert.equal(normalizeLlmMode('dev'), 'dev');
+  assert.throws(() => normalizeLlmMode('debug'), /Bad mode: debug/);
+
+  const baseCase = {
+    tab: { url: 'https://example.com', title: 'Example' },
+    user: 'inspect this layout',
+  };
+  const chromeDevMid = buildLlmPayload({ ...baseCase, mode: 'dev' }, {
+    browser: 'chrome',
+    tier: 'mid',
+    useSiteAdapters: false,
+  });
+  const chromeDevMidNames = new Set(chromeDevMid.tools.map(t => t.function.name));
+  assert.match(chromeDevMid.messages[0].content, /DEV MODE APPENDIX/);
+  assert.match(chromeDevMid.messages[0].content, /\bread_page_source\b/);
+  for (const name of ['read_page_source', 'inspect_element_styles', 'get_shadow_dom', 'get_frames', 'shadow_dom_query']) {
+    assert.equal(chromeDevMidNames.has(name), true, `chrome dev mid should include ${name}`);
+  }
+  assert.equal(chromeDevMidNames.has('hover'), false, 'chrome dev mid should not inherit full-only hover');
+
+  const chromeDevFull = buildLlmPayload({ ...baseCase, mode: 'dev' }, {
+    browser: 'chrome',
+    tier: 'full',
+    useSiteAdapters: false,
+  });
+  const chromeDevFullNames = new Set(chromeDevFull.tools.map(t => t.function.name));
+  for (const name of ['read_page_source', 'inspect_element_styles', 'get_shadow_dom', 'get_frames', 'shadow_dom_query', 'hover', 'drag_drop']) {
+    assert.equal(chromeDevFullNames.has(name), true, `chrome dev full should include ${name}`);
+  }
+
+  const firefoxDevMid = buildLlmPayload({ ...baseCase, mode: 'dev' }, {
+    browser: 'firefox',
+    tier: 'mid',
+    useSiteAdapters: false,
+  });
+  const firefoxDevMidNames = new Set(firefoxDevMid.tools.map(t => t.function.name));
+  for (const name of ['read_page_source', 'inspect_element_styles', 'get_shadow_dom', 'get_frames', 'execute_js']) {
+    assert.equal(firefoxDevMidNames.has(name), true, `firefox dev mid should include ${name}`);
+  }
+  assert.equal(firefoxDevMidNames.has('shadow_dom_query'), false, 'firefox dev mid must not invent Chrome-only shadow_dom_query');
+
+  assert.throws(
+    () => buildLlmPayload({ ...baseCase, mode: 'dev' }, { browser: 'chrome', tier: 'compact', useSiteAdapters: false }),
+    /Dev mode requires a Mid or Full prompt tier/
+  );
+
+  const chromeAsk = buildLlmPayload({ ...baseCase, mode: 'ask' }, {
+    browser: 'chrome',
+    tier: 'full',
+    useSiteAdapters: false,
+  });
+  const chromeAskNames = new Set(chromeAsk.tools.map(t => t.function.name));
+  for (const name of ['read_page_source', 'inspect_element_styles', 'clarify', 'get_shadow_dom', 'shadow_dom_query', 'get_frames']) {
+    assert.equal(chromeAskNames.has(name), false, `test/llm ask payload should exclude ${name}`);
+    assert.doesNotMatch(chromeAsk.messages[0].content, new RegExp(`\\b${name}\\b`), `test/llm ask prompt should not mention ${name}`);
+  }
+
+  const scenarioPayload = buildLlmScenarioPayload({
+    id: '999',
+    mode: 'dev',
+    browser: 'chrome',
+    seed: [{ role: 'user', content: 'Inspect the current component styles.' }],
+    expected: {},
+  }, {
+    tier: 'mid',
+    useSiteAdapters: false,
+  });
+  const scenarioNames = new Set(scenarioPayload.tools.map(t => t.function.name));
+  assert.match(scenarioPayload.messages[0].content, /DEV MODE APPENDIX/);
+  assert.equal(scenarioNames.has('read_page_source'), true, 'scenario dev payload should include read_page_source');
+  assert.equal(scenarioNames.has('get_shadow_dom'), true, 'scenario dev payload should include get_shadow_dom');
+  assert.equal(scenarioNames.has('shadow_dom_query'), true, 'scenario dev payload should include Chrome shadow_dom_query');
 });
 
 test('getToolsForMode: retired tools are not model-callable', () => {
@@ -3123,9 +3323,16 @@ test('getToolsForMode: skill tools are exposed only when enabled skills declare 
       ['act:full', 'act', 'full', getTools('act', { skillTools: buildDefs(skills, { mode: 'act', tier: 'full' }) })],
       ['act:mid', 'act', 'mid', getTools('act', { tier: 'mid', skillTools: buildDefs(skills, { mode: 'act', tier: 'mid' }) })],
       ['act:compact', 'act', 'compact', getTools('act', { tier: 'compact', skillTools: buildDefs(skills, { mode: 'act', tier: 'compact' }) })],
+      ['dev:full', 'dev', 'full', getTools('dev', { skillTools: buildDefs(skills, { mode: 'dev', tier: 'full' }) })],
+      ['dev:mid', 'dev', 'mid', getTools('dev', { tier: 'mid', skillTools: buildDefs(skills, { mode: 'dev', tier: 'mid' }) })],
+      ['dev:compact', 'dev', 'compact', getTools('dev', { tier: 'compact', skillTools: buildDefs(skills, { mode: 'dev', tier: 'compact' }) })],
     ];
     for (const [mode, _runMode, _tier, tools] of toolSets) {
       const names = tools.map(t => t.function?.name).filter(Boolean);
+      if (mode === 'dev:compact') {
+        assert.deepEqual(names, [], `${label} ${mode}: Dev Compact should not expose skill tools`);
+        continue;
+      }
       assert.ok(names.includes('read_youtube_transcript'), `${label} ${mode}: transcript tool missing`);
       assert.ok(names.includes('resolve_public_media'), `${label} ${mode}: resolver tool missing`);
       assert.equal(names.includes('download_public_media'), mode === 'ask' ? false : true, `${label} ${mode}: download tool mode mismatch`);
@@ -3160,7 +3367,7 @@ test('getToolsForMode: skill tools are exposed only when enabled skills declare 
   }
 });
 
-test('getToolsForMode: custom download-job skill tools are Act-only by policy', () => {
+test('getToolsForMode: custom download-job skill tools are action-compatible but hidden from Ask', () => {
   for (const [label, normalizeSkills, buildDefs, buildRegistry] of [
     ['chrome', normalizeCustomSkillsCh, buildSkillToolDefinitionsCh, buildSkillToolRegistryCh],
     ['firefox', normalizeCustomSkillsFx, buildSkillToolDefinitionsFx, buildSkillToolRegistryFx],
@@ -3201,8 +3408,10 @@ Downloads test media.
 
       const askNames = buildDefs(skills, { mode: 'ask' }).map(t => t.function?.name).filter(Boolean);
       const actNames = buildDefs(skills, { mode: 'act', tier: 'full' }).map(t => t.function?.name).filter(Boolean);
+      const devNames = buildDefs(skills, { mode: 'dev', tier: 'full' }).map(t => t.function?.name).filter(Boolean);
       assert.equal(askNames.includes('download_custom_media'), false, `${label} ${caseName}: download-job tool must not be exposed in Ask`);
       assert.equal(actNames.includes('download_custom_media'), true, `${label} ${caseName}: download-job tool should be exposed in Act`);
+      assert.equal(devNames.includes('download_custom_media'), true, `${label} ${caseName}: download-job tool should be exposed in Dev via Act compatibility`);
     }
   }
 });
@@ -4766,6 +4975,8 @@ test('Chrome model-facing tools and prompts do not advertise execute_js', () => 
     ['act:full', getToolsForModeCh('act')],
     ['act:mid', getToolsForModeCh('act', { tier: 'mid' })],
     ['act:compact', getToolsForModeCh('act', { tier: 'compact' })],
+    ['dev:full', getToolsForModeCh('dev')],
+    ['dev:mid', getToolsForModeCh('dev', { tier: 'mid' })],
   ];
   for (const [label, tools] of chromeToolSets) {
     const names = tools.map(t => t.function?.name).filter(Boolean);
@@ -4780,10 +4991,15 @@ test('Chrome model-facing tools and prompts do not advertise execute_js', () => 
   }
 });
 
-test('Firefox full act mode still exposes execute_js', () => {
+test('Firefox execute_js is exposed only as a Dev add-on', () => {
   const firefoxFullNames = getToolsForModeFx('act').map(t => t.function.name);
-  assert.equal(firefoxFullNames.includes('execute_js'), true);
-  assert.match(SYSTEM_PROMPT_ASK_FX + SYSTEM_PROMPT_ACT_FX, /\bexecute_js\b/);
+  const firefoxDevFullNames = getToolsForModeFx('dev').map(t => t.function.name);
+  const firefoxDevMidNames = getToolsForModeFx('dev', { tier: 'mid' }).map(t => t.function.name);
+  assert.equal(firefoxFullNames.includes('execute_js'), false);
+  assert.equal(firefoxDevFullNames.includes('execute_js'), true);
+  assert.equal(firefoxDevMidNames.includes('execute_js'), true);
+  assert.doesNotMatch(SYSTEM_PROMPT_ASK_FX + SYSTEM_PROMPT_ACT_FX + SYSTEM_PROMPT_ACT_MID_FX + SYSTEM_PROMPT_ACT_COMPACT_FX, /\bexecute_js\b/);
+  assert.match(SYSTEM_PROMPT_DEV_APPENDIX_FX, /\bexecute_js\b/);
 });
 
 test('getToolsForMode: compact flag does not shrink ask mode', () => {
@@ -6734,7 +6950,18 @@ test('sidepanel preserves stale residual slash-command prompts without hidden ru
     const sendMatch = panel.match(/async function sendMessage\(extraChatParams\) \{[\s\S]*?\n  return accepted;\n\}/);
     assert.ok(sendMatch, `${label}: sendMessage missing`);
     const sendBody = sendMatch[0];
-    const modeCapture = "const modeForSend = /^\\/(?:ask|plan)\\b/i.test(text) ? 'ask' : agentMode;";
+    const modeHelperStart = panel.indexOf('function modeForMessageText(text) {');
+    assert.notEqual(modeHelperStart, -1, `${label}: modeForMessageText missing`);
+    const modeHelper = panel.slice(modeHelperStart, panel.indexOf('\n}', modeHelperStart) + 2);
+    for (const [snippet, commandLabel] of [
+      ["if (/^\\/(?:ask|plan)\\b/i.test(text)) return 'ask';", '/ask and /plan'],
+      ["if (/^\\/act\\b/i.test(text)) return 'act';", '/act'],
+      ["if (/^\\/dev\\b/i.test(text)) return 'dev';", '/dev'],
+      ['return agentMode;', 'current mode fallback'],
+    ]) {
+      assert.ok(modeHelper.includes(snippet), `${label}: modeForMessageText should handle ${commandLabel}`);
+    }
+    const modeCapture = "const modeForSend = modeForMessageText(text);";
     const apiCapture = "const apiMutationsAllowedForSend = isApiMutationsAllowedForTab(tabId) || /^\\/allow-api\\b/i.test(text);";
     const modeCaptureIdx = sendBody.indexOf(modeCapture);
     const apiCaptureIdx = sendBody.indexOf(apiCapture);
@@ -7379,7 +7606,8 @@ test('download_social_media exposes merged DOM/vision strategy in act tiers only
     ['firefox', getToolsForModeFx],
   ]) {
     assert.equal(getTools('ask').some(t => t.function.name === 'download_social_media'), false, `[${label}] ask mode should not expose downloads`);
-    for (const opts of [{}, { tier: 'mid' }, { tier: 'compact' }]) {
+    assert.equal(getTools('act', { tier: 'compact' }).some(t => t.function.name === 'download_social_media'), false, `[${label}] compact act should not expose download_social_media`);
+    for (const opts of [{}, { tier: 'mid' }]) {
       const tool = getTools('act', opts).find(t => t.function.name === 'download_social_media');
       assert.ok(tool, `[${label}] download_social_media missing for ${JSON.stringify(opts)}`);
       const props = tool.function.parameters.properties;
@@ -16225,8 +16453,8 @@ test('attachments: text attachment scratchpad path never writes raw textContent'
     );
     assert.match(
       source,
-      /const canUseScratchpadTool = mode !== 'ask';[\s\S]*?_applyAttachments\(enriched, attachments, provider, \{[\s\S]*?canUseScratchpadTool,[\s\S]*?tabId,[\s\S]*?messages,[\s\S]*?\}\);[\s\S]*?_pinTextAttachmentMetadata\(tabId, attachments, \{ canUseScratchpadTool \}\);/,
-      `${label} should gate attachment scratchpad guidance on ask vs act mode`,
+      /const canUseScratchpadTool = this\._isActionMode\(mode\);[\s\S]*?_applyAttachments\(enriched, attachments, provider, \{[\s\S]*?canUseScratchpadTool,[\s\S]*?tabId,[\s\S]*?messages,[\s\S]*?\}\);[\s\S]*?_pinTextAttachmentMetadata\(tabId, attachments, \{ canUseScratchpadTool \}\);/,
+      `${label} should gate attachment scratchpad guidance on ask vs action modes`,
     );
   }
 });

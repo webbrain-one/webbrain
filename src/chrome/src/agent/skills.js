@@ -138,7 +138,7 @@ function normalizeAllowedInputUrls(value) {
 
 function normalizeModes(value) {
   const raw = Array.isArray(value) ? value : ['ask', 'act'];
-  const set = new Set(raw.map((v) => cleanSingleLine(v).toLowerCase()).filter((v) => v === 'ask' || v === 'act'));
+  const set = new Set(raw.map((v) => cleanSingleLine(v).toLowerCase()).filter((v) => v === 'ask' || v === 'act' || v === 'dev'));
   return set.size ? [...set] : ['ask', 'act'];
 }
 
@@ -428,8 +428,12 @@ export function buildCustomSkillsPrompt(skillsValue) {
 }
 
 function skillToolAllowedInMode(tool, mode, tier) {
-  if (mode && !tool.modes.includes(mode)) return false;
-  if (mode === 'act' && tier && !tool.tiers.includes(tier)) return false;
+  if (mode === 'dev') {
+    if (!tool.modes.includes('dev') && !tool.modes.includes('act')) return false;
+  } else if (mode && !tool.modes.includes(mode)) {
+    return false;
+  }
+  if ((mode === 'act' || mode === 'dev') && tier && !tool.tiers.includes(tier)) return false;
   return true;
 }
 

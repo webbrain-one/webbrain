@@ -1,4 +1,4 @@
-import { AGENT_TOOLS, AGENT_TOOL_NAMES, RESERVED_AGENT_TOOL_NAMES, getToolsForMode, SYSTEM_PROMPT_ASK, SYSTEM_PROMPT_ACT, SYSTEM_PROMPT_ACT_COMPACT, SYSTEM_PROMPT_ACT_MID } from './tools.js';
+import { AGENT_TOOLS, AGENT_TOOL_NAMES, RESERVED_AGENT_TOOL_NAMES, getToolsForMode, SYSTEM_PROMPT_ASK, SYSTEM_PROMPT_ACT, SYSTEM_PROMPT_ACT_COMPACT, SYSTEM_PROMPT_ACT_MID, SYSTEM_PROMPT_DEV_APPENDIX } from './tools.js';
 import { URL_FAMILY_TOOLS, resourceBucket, bucketArgsKey } from './loop-bucket.js';
 import { isCredentialField, CREDENTIAL_NOTE_STRICT } from './credential-fields.js';
 import { detectProgressAction, formatLedgerRow, formatLedgerSummary, isValidLedgerStatus, ledgerDoneBlock, normalizeLedgerStatus, progressCounts, selectLedgerRows, unresolvedLedgerRows, upsertLedgerItems } from './progress-ledger.js';
@@ -66,7 +66,7 @@ export class Agent {
     this.progressSessions = new Map(); // tabId -> active language-neutral progress intent/session
     this._progressSessionCounter = 0;
     this.conversationIds = new Map(); // tabId -> stable conversationId (regenerated on clearConversation)
-    this.conversationModes = new Map(); // tabId -> 'ask' | 'act'
+    this.conversationModes = new Map(); // tabId -> 'ask' | 'act' | 'dev'
     this.hydratedTabs = new Set(); // tabIds we've already pulled from storage
     this.persistTimers = new Map(); // tabId -> debounce handle
     this.abortFlags = new Map(); // tabId -> boolean
@@ -3073,7 +3073,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   }
 
   async _maybeRunPlannerGate(tabId, messages, enriched, onUpdate, mode, costState, runId, tabInfo = null) {
-    const plannerMode = mode === 'act' ? this._plannerMode() : 'off';
+    const plannerMode = this._isActionMode(mode) ? this._plannerMode() : 'off';
     const runPlanner = plannerMode !== 'off';
 
     // Snapshot prior turns for the planner digest BEFORE appending, then always
@@ -3338,6 +3338,15 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     } catch { return 'full'; }
   }
 
+  _isActionMode(mode) {
+    return mode === 'act' || mode === 'dev';
+  }
+
+  _devModeBlockedMessage(provider = null) {
+    const providerName = provider?.name || provider?.config?.model || 'the active provider';
+    return `Dev mode requires a Mid or Full prompt tier. ${providerName} is currently configured as Compact, so Dev mode is blocked for this provider. Switch to a Mid/Full-tier provider or change this provider's prompt tier, then try Dev again.`;
+  }
+
   /**
    * Compose the full system prompt: base (ASK or ACT) + optional universal
    * cookie/paywall guidance + optional enabled skills + optional user
@@ -3345,7 +3354,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
    * user toggles settings.
    */
   _buildSystemPrompt(mode) {
-    let prompt = mode === 'act' ? this._getActPrompt() : SYSTEM_PROMPT_ASK;
+    let prompt = this._isActionMode(mode) ? this._getActPrompt() : SYSTEM_PROMPT_ASK;
+    if (mode === 'dev') {
+      prompt += `\n\n${SYSTEM_PROMPT_DEV_APPENDIX.trim()}`;
+    }
     if (this.useSiteAdapters) {
       prompt += `\n\n${UNIVERSAL_PREAMBLE.trim()}`;
     }
@@ -4556,12 +4568,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   }
 
   _shouldBlockDoneForProgress(tabId) {
-    if ((this.conversationModes.get(tabId) || 'ask') !== 'act') return false;
+    if (!this._isActionMode(this.conversationModes.get(tabId) || 'ask')) return false;
     return !!this._progressDoneBlock(tabId, 'success');
   }
 
   _emptyOutputRecoveryNudge(mode) {
-    if (mode === 'act') {
+    if (this._isActionMode(mode)) {
       return '[System nudge: your previous response had neither text nor a tool call. Continue the active browser task with tool calls. If the task is truly complete, call the done tool with a real summary. Do not output a plain summary and do not stop without a tool call.]';
     }
     return '[System nudge: your previous response had neither text nor a tool call. You may have run out of output budget on internal reasoning. In ONE short message, summarize what you accomplished, what you tried, and what blocked you - then stop. Do not start any new tool calls.]';
@@ -4575,7 +4587,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const unresolved = unresolvedLedgerRows(rows);
     const counts = progressCounts(rows);
     return [
-      'Continue the active Act-mode progress-ledger task after the previous run hit consecutive stalled model outputs.',
+      'Continue the active action-mode progress-ledger task after the previous run hit consecutive stalled model outputs.',
       'Reread the current page/state before acting.',
       'Use the pinned progress ledger or progress_read to decide what remains.',
       ...(safeSessionId ? [`App-owned progress session id: ${safeSessionId}. If the pinned ledger is missing, call progress_read({sessionId: "${safeSessionId}"}) before acting.`] : []),
@@ -4589,7 +4601,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
   async _scheduleAutoProgressResume(tabId, onUpdate = () => {}) {
     if (!this.scheduler) return null;
-    if ((this.conversationModes.get(tabId) || 'ask') !== 'act') return null;
+    const mode = this.conversationModes.get(tabId) || 'ask';
+    if (!this._isActionMode(mode)) return null;
     if (!this._shouldBlockDoneForProgress(tabId)) return null;
 
     const { tabUrl, tabTitle } = await this._getTabUrlTitle(tabId);
@@ -4598,7 +4611,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       result = await this.scheduler.createResumeJob({
         tabId,
         conversationId: this.conversationIds.get(tabId) || null,
-        mode: 'act',
+        mode,
         args: {
           after_seconds: 90,
           reason: 'The active progress-ledger task hit consecutive stalled model outputs before finishing.',
@@ -4637,7 +4650,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       unresolved: progressBlock.unresolved,
     };
     return [
-      '[PROGRESS LEDGER BLOCK: Your previous response was a plain final answer, but this Act-mode repeated-item task still has unresolved progress rows. Continue the task. Use progress_update to mark rows processed, skipped, or failed before finishing.]',
+      '[PROGRESS LEDGER BLOCK: Your previous response was a plain final answer, but this action-mode repeated-item task still has unresolved progress rows. Continue the task. Use progress_update to mark rows processed, skipped, or failed before finishing.]',
       this._wrapUntrusted('progress_read', this._limitToolResult(blockedResult)),
     ].join('\n');
   }
@@ -5995,9 +6008,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
     if (name === 'done') {
       const outcome = normalizeDoneOutcome(args?.outcome);
-      // In act mode, require a verification screenshot + page info before completing.
+      // In action modes, require a verification screenshot + page info before completing.
       const mode = this.conversationModes.get(tabId) || 'ask';
-      if (mode === 'act') {
+      if (this._isActionMode(mode)) {
         try {
           const tab = await browser.tabs.get(tabId);
           if (tab?.active) {
@@ -7082,11 +7095,20 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     let finalResponse = '';
     let _traceStatus = 'done';
 
+    if (mode === 'dev' && provider.promptTier === 'compact') {
+      const msg = this._devModeBlockedMessage(provider);
+      messages.push(enriched);
+      messages.push({ role: 'assistant', content: msg });
+      this._persist(tabId);
+      onUpdate('warning', { message: msg });
+      return (finalResponse = msg);
+    }
+
     // Validate attachments BEFORE the planner gate / trace start: an
     // unsupported attachment is a plain "tell the user" response, not an
     // agent run, and the message must never be pushed to history this way.
     if (attachments && attachments.length) {
-      const canUseScratchpadTool = mode !== 'ask';
+      const canUseScratchpadTool = this._isActionMode(mode);
       const attachResult = this._applyAttachments(enriched, attachments, provider, {
         canUseScratchpadTool,
         tabId,
@@ -7111,7 +7133,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     // loop. _startTraceRun is the single source of truth (no duplicate tab
     // fetch / startRun payload). (#6)
     let plannerTabInfo = null;
-    if (mode === 'act' && this._plannerIsEnabled()) {
+    if (this._isActionMode(mode) && this._plannerIsEnabled()) {
       // Fetch the tab url/title once and reuse it for both the trace start and
       // the planner gate, instead of fetching the same tab twice.
       plannerTabInfo = await this._getTabUrlTitle(tabId);
@@ -7126,14 +7148,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       return (finalResponse = gateOutcome.message || 'Task cancelled.');
     }
 
-    if (mode === 'act') {
+    if (this._isActionMode(mode)) {
       await this._ensureProgressSessionForCurrentTask(tabId, { provider, costState });
     }
     const tier = provider.promptTier;
     const skillTools = this._skillToolDefinitions(mode, tier);
     const tools = getToolsForMode(mode, { strictSecretMode: this.strictSecretMode, tier, skillTools });
     const allowedToolNames = new Set(tools.map(t => t.function.name));
-    const plannerTemperature = mode === 'act' ? 0.15 : 0.3;
+    const plannerTemperature = this._isActionMode(mode) ? 0.15 : 0.3;
     let steps = 0;
     // Tracks whether we've already nudged the model after an empty
     // (no-content + no-tool-call) response. Prevents an infinite
@@ -7271,7 +7293,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       // should make the next placeholder eligible for its own recovery nudge.
       const hasToolCallsAfterFallback = !!(result.toolCalls && result.toolCalls.length > 0);
       const hasContentAfterFallback = !!(result.content && result.content.trim());
-      const isCompressionPlaceholderAfterFallback = mode === 'act' && this._isCompressionPlaceholderResponse(result.content);
+      const isCompressionPlaceholderAfterFallback = this._isActionMode(mode) && this._isCompressionPlaceholderResponse(result.content);
       if (hasToolCallsAfterFallback || hasContentAfterFallback) {
         emptyOutputRecoveryAttempted = false;
         if (hasToolCallsAfterFallback || !isCompressionPlaceholderAfterFallback) {
@@ -7324,7 +7346,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         onUpdate('warning', { message: finalResponse });
         break;
       }
-      if (mode === 'act' && this._isCompressionPlaceholderResponse(result.content)) {
+      if (this._isActionMode(mode) && this._isCompressionPlaceholderResponse(result.content)) {
         if (!compressionPlaceholderRecoveryAttempted) {
           compressionPlaceholderRecoveryAttempted = true;
           messages.push({ role: 'assistant', content: result.content });
@@ -7454,12 +7476,21 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       return response;
     };
 
+    if (mode === 'dev' && provider.promptTier === 'compact') {
+      const msg = this._devModeBlockedMessage(provider);
+      messages.push(enriched);
+      messages.push({ role: 'assistant', content: msg });
+      this._persist(tabId);
+      onUpdate('warning', { message: msg });
+      return finish(msg);
+    }
+
     // All throwing work — trace start, planner gate, run setup, and the agent
     // loop — runs inside this try so the finally always ends the trace run and
     // clears currentRunId, even on an early throw during setup. (#2)
     try {
     let plannerTabInfo = null;
-    if (mode === 'act' && this._plannerIsEnabled()) {
+    if (this._isActionMode(mode) && this._plannerIsEnabled()) {
       // Fetch the tab url/title once and reuse it for both the trace start and
       // the planner gate, instead of fetching the same tab twice.
       plannerTabInfo = await this._getTabUrlTitle(tabId);
@@ -7473,14 +7504,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       return finish(gateOutcome.message || 'Task cancelled.', gateOutcome.reason === 'cost_limit' ? 'cost_limit' : 'cancelled');
     }
 
-    if (mode === 'act') {
+    if (this._isActionMode(mode)) {
       await this._ensureProgressSessionForCurrentTask(tabId, { provider, costState });
     }
     const tier = provider.promptTier;
     const skillTools = this._skillToolDefinitions(mode, tier);
     const tools = getToolsForMode(mode, { strictSecretMode: this.strictSecretMode, tier, skillTools });
     const allowedToolNames = new Set(tools.map(t => t.function.name));
-    const plannerTemperature = mode === 'act' ? 0.15 : 0.3;
+    const plannerTemperature = this._isActionMode(mode) ? 0.15 : 0.3;
     let steps = 0;
     // See processMessage — used to break the empty-response→nudge cycle.
     let emptyOutputRecoveryAttempted = false;
@@ -7629,7 +7660,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           this._persist(tabId);
           return finish(failMsg, 'empty_output');
         }
-        if (mode === 'act' && this._isCompressionPlaceholderResponse(fullText)) {
+        if (this._isActionMode(mode) && this._isCompressionPlaceholderResponse(fullText)) {
           if (!compressionPlaceholderRecoveryAttempted) {
             compressionPlaceholderRecoveryAttempted = true;
             messages.push({ role: 'assistant', content: fullText });

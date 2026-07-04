@@ -3,7 +3,7 @@
 // WebBrain would send. Two modes:
 //
 //   node test/llm/enrich.mjs --id 042
-//   node test/llm/enrich.mjs --user "go to gmail" --url "about:home" --title "New Tab" [--mode act|ask]
+//   node test/llm/enrich.mjs --user "go to gmail" --url "about:home" --title "New Tab" [--mode act|ask|dev]
 //
 // Output: JSON to stdout with `messages` and `tools`. Pipe into any
 // OpenAI-compatible /chat/completions endpoint, or save and diff against
@@ -54,11 +54,13 @@ function usage() {
   process.stderr.write(`Usage:
   node test/llm/enrich.mjs --id <NNN>
   node test/llm/enrich.mjs --all
-  node test/llm/enrich.mjs --user "<text>" --url "<url>" [--title "<title>"] [--mode act|ask] [--browser chrome|firefox]
+  node test/llm/enrich.mjs --user "<text>" --url "<url>" [--title "<title>"] [--mode act|ask|dev] [--tier full|mid|compact] [--browser chrome|firefox]
 
 Options:
   --all               Enrich all question cases as a JSON array
   --browser           Browser source to mirror: chrome (default) or firefox
+  --mode              Override mode: act (default), ask, or dev
+  --tier              Tool/prompt tier: full (default), mid, or compact. Compact Dev is blocked.
   --pretty            Pretty-print JSON output
   --no-tools          Omit the tools array (smaller diff)
   --no-adapters       Disable site-adapter injection (UNIVERSAL_PREAMBLE + per-site)
@@ -72,10 +74,12 @@ Examples:
 }
 
 function enrich(caseRec, args) {
-  const payload = buildPayload(caseRec, {
+  const rec = args.mode == null ? caseRec : { ...caseRec, mode: args.mode };
+  const payload = buildPayload(rec, {
     useSiteAdapters: !args['no-adapters'],
     strictSecretMode: !!args['strict-secrets'],
     browser: args.browser,
+    tier: args.tier,
   });
 
   if (args['no-tools']) {
@@ -100,7 +104,7 @@ function main() {
     output = enrich(loadCase(n), args);
   } else if (typeof args.user === 'string') {
     output = enrich({
-      mode: args.mode === 'ask' ? 'ask' : 'act',
+      mode: args.mode || 'act',
       tab: { url: args.url || '', title: args.title || '' },
       user: args.user,
     }, args);

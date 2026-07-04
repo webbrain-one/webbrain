@@ -13,7 +13,8 @@
 //   node test/llm/run-scenarios.mjs --base https://openrouter.ai/api/v1 --model openai/gpt-oss-20b --api-key $OPENROUTER_API_KEY
 //   node test/llm/run-scenarios.mjs --browser firefox
 //
-// Prompt + tool tier (ACT mode only; ASK ignores):
+// Prompt + tool tier:
+//   --mode act|ask|dev   # override scenario mode; Dev requires --tier mid|full
 //   --tier full           # SYSTEM_PROMPT_ACT + full tool set (default)
 //   --tier mid            # SYSTEM_PROMPT_ACT_MID + MID_TOOL_NAMES subset
 //   --tier compact        # SYSTEM_PROMPT_ACT_COMPACT + COMPACT_TOOL_NAMES subset
@@ -27,8 +28,8 @@
 //   # or set env: WB_FREEZE_BASELINE=freeze/baseline-2026-05-23.json
 //
 // Output:
-//   test/llm/results-scenarios/<tag>_<browser>_<model>[_mid|_compact|_frozen]/NNN.json
-//   test/llm/results-scenarios/<tag>_<browser>_<model>[_mid|_compact|_frozen]/summary.json
+//   test/llm/results-scenarios/<tag>_<browser>_<model>[_dev][_mid|_compact|_frozen]/NNN.json
+//   test/llm/results-scenarios/<tag>_<browser>_<model>[_dev][_mid|_compact|_frozen]/summary.json
 //
 // Heuristic scoring (the judge LLM is OUT of scope for this runner — the
 // rubric strings are written for a separate judge pass). Each scenario
@@ -44,7 +45,14 @@ import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildScenarioPayload } from './lib/scenario-payload.mjs';
-import { normalizeTier, isFrozen, getFrozenMeta, loadFrozenBaseline } from './lib/build-payload.mjs';
+import {
+  isActionMode,
+  isFrozen,
+  getFrozenMeta,
+  loadFrozenBaseline,
+  normalizeMode,
+  normalizeTier,
+} from './lib/build-payload.mjs';
 import { scoreVerdict } from './lib/score.mjs';
 import {
   chatTemplateCompatLabel,
@@ -85,6 +93,7 @@ Selection:
   --only IDS                         Comma-separated scenario ids, e.g. 81,82,90
   --category NAME                    Run only one scenario category
   --browser chrome|firefox           Browser prompt/tool source (default: chrome)
+  --mode ask|act|dev                 Override scenario mode; Dev requires Mid/Full tier
   --tier full|mid|compact            Prompt/tool tier; ignored with --freeze
   --freeze PATH                      Pin system prompt + tools to a snapshot
   --unprotected                      Strip wrapper + untrusted-content instructions
@@ -135,6 +144,7 @@ const CHAT_TEMPLATE_COMPAT = getChatTemplateCompat({
   value: args['chat-template-compat'],
 });
 
+// --mode ask|act|dev — optional override of the mode stored in each scenario.
 // --tier full|mid|compact — picks SYSTEM_PROMPT_ACT[_MID|_COMPACT] and the
 // corresponding tool subset. Default: full. ASK-mode scenarios ignore tier.
 // --freeze <path> — alternative to WB_FREEZE_BASELINE env var. If set,
@@ -143,6 +153,7 @@ if (args.freeze && args.freeze !== true) {
   loadFrozenBaseline(args.freeze);
 }
 const TIER = normalizeTier(args.tier);
+const MODE_OVERRIDE = args.mode == null ? null : normalizeMode(args.mode);
 // --unprotected: ABLATION. Strip BOTH the untrusted-content wrapper from the
 // seed AND the untrusted-content instructions from the system prompt.
 const UNPROTECTED = !!args.unprotected;
@@ -155,7 +166,7 @@ const categoryFilter = args.category && args.category !== true ? String(args.cat
 const runTag = args.tag || new Date().toISOString().replace(/[:.]/g, '-');
 const tagSuffix = (isFrozen()
   ? '_frozen'
-  : (TIER === 'full' ? '' : `_${TIER}`)) + (UNPROTECTED ? '_unprotected' : '');
+  : `${MODE_OVERRIDE === 'dev' ? '_dev' : ''}${TIER === 'full' ? '' : `_${TIER}`}`) + (UNPROTECTED ? '_unprotected' : '');
 const runDir = join(RESULTS_DIR, `${runTag}_${BROWSER}_${MODEL.replace(/[^\w.-]+/g, '_')}${tagSuffix}`);
 mkdirSync(runDir, { recursive: true });
 
@@ -197,7 +208,7 @@ const scenarios = loadAll();
 
 const promptMode = isFrozen()
   ? `frozen (${getFrozenMeta()?.sourceRun || 'unknown source'} @ ${getFrozenMeta()?.runTag || ''})`
-  : `tier=${TIER}`;
+  : `mode=${MODE_OVERRIDE || 'scenario'}, tier=${TIER}`;
 console.error(`▸ ${scenarios.length} scenario(s), base=${BASE}, model=${MODEL}, browser=${BROWSER}, concurrency=${CONCURRENCY}`);
 if (categoryFilter) console.error(`▸ category=${categoryFilter}`);
 console.error(`▸ endpoint=${CHAT_URL}`);
@@ -246,12 +257,13 @@ function normalizeToolCall(obj) {
 function safeParse(s) { try { return JSON.parse(s); } catch { return {}; } }
 
 async function runOne(scenario) {
-  const payload = buildScenarioPayload({ ...scenario, browser: scenario.browser || BROWSER }, { tier: TIER, unprotected: UNPROTECTED });
+  const mode = MODE_OVERRIDE || normalizeMode(scenario.mode);
+  const payload = buildScenarioPayload({ ...scenario, browser: scenario.browser || BROWSER, mode }, { tier: TIER, unprotected: UNPROTECTED });
   const messages = prepareMessagesForChatTemplate(payload.messages, CHAT_TEMPLATE_COMPAT, { tools: payload.tools });
   const tools = prepareToolsForChatTemplate(payload.tools, CHAT_TEMPLATE_COMPAT);
   const body = {
     model: MODEL,
-    temperature: scenario.mode === 'act' ? 0.15 : 0.3,
+    temperature: isActionMode(mode) ? 0.15 : 0.3,
     max_tokens: 4096,
     messages,
   };
@@ -310,7 +322,7 @@ async function runOne(scenario) {
     id: scenario.id,
     category: scenario.category,
     description: scenario.description,
-    mode: scenario.mode,
+    mode,
     browser: scenario.browser || BROWSER,
     latencyMs,
     error,
@@ -379,6 +391,7 @@ for (const r of results) {
 const summary = {
   runTag, model: MODEL, base: BASE, browser: BROWSER,
   tier: isFrozen() ? null : TIER,
+  modeOverride: isFrozen() ? null : MODE_OVERRIDE,
   unprotected: UNPROTECTED,
   chatTemplateCompat: CHAT_TEMPLATE_COMPAT.mode,
   structuredToolsSent: !CHAT_TEMPLATE_COMPAT.omitStructuredTools,

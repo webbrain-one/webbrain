@@ -87,6 +87,7 @@ Ad-hoc (not from a case file):
 
 ```
 node test/llm/enrich.mjs --user "go to gmail" --url "about:home" --title "New Tab"
+node test/llm/enrich.mjs --user "inspect this layout" --url "https://example.com" --mode dev --tier mid --pretty
 ```
 
 Flags:
@@ -99,7 +100,8 @@ Flags:
 | `--user "..."`         | Ad-hoc message (must pass `--url` too)                |
 | `--url "..."`          | Synthetic tab URL                                     |
 | `--title "..."`        | Synthetic tab title                                   |
-| `--mode act\|ask`      | Mode (default: `act`)                                 |
+| `--mode act\|ask\|dev` | Mode (default: `act`; Dev requires Mid/Full tier)     |
+| `--tier full\|mid\|compact` | Prompt/tool tier (default: `full`)              |
 | `--pretty`             | Indented JSON                                         |
 | `--no-tools`           | Omit the `tools` array                                |
 | `--no-adapters`        | Skip UNIVERSAL_PREAMBLE + per-site adapter injection  |
@@ -148,6 +150,7 @@ Run the included OpenAI-compatible runner against a local endpoint:
 
 ```
 node test/llm/run-llamacpp.mjs --base http://127.0.0.1:1234 --model "qwen/qwen3.6-35b-a3b"
+node test/llm/run-llamacpp.mjs --base http://127.0.0.1:1234 --model "qwen/qwen3.6-35b-a3b" --mode dev --tier mid
 ```
 
 Print the current runner options without starting a run:
@@ -269,6 +272,7 @@ but the data is fully synthetic — no PII enters the repo.
 ```
 node test/llm/run-scenarios.mjs --base http://127.0.0.1:1234 --model qwen3-30b
 node test/llm/run-scenarios.mjs --category loop-bad-url
+node test/llm/run-scenarios.mjs --category stale-refid --mode dev --tier mid
 node test/llm/run-scenarios.mjs --only 1,21,41 --browser firefox
 node test/llm/run-scenarios.mjs --base https://openrouter.ai/api/v1 \
   --model openai/gpt-oss-20b --api-key "$OPENROUTER_API_KEY"
@@ -427,7 +431,9 @@ node test/llm/safety-report.mjs --truth claude
 `safety-report.mjs` prints, per model: injection scenarios obeyed (lower is
 better), a safety %, the gap to the ground-truth model, and control over-blocks.
 Run the same suite at each `--tier` (full / mid / compact) to see how prompt
-size trades off against safety on smaller models.
+size trades off against safety on smaller models. Add `--mode dev --tier mid`
+or `--mode dev --tier full` to measure Dev add-ons; Compact Dev is intentionally
+blocked to match production.
 
 ### Re-grading saved runs: `regrade.mjs`
 

@@ -13,8 +13,8 @@ Open-source AI browser agent for Chrome and Firefox. Chat with any web page, aut
 
 - **Page Reading** — Extracts text, links, forms, tables, and interactive elements from any page
 - **Browser Actions** — Click, type, scroll, navigate, and interact with page elements
-- **Ask / Act Modes** — Read-only mode by default, full agent mode with confirmation
-- **Plan before Act** — Act mode can generate a structured plan, show it for approval, then pin the approved plan to the scratchpad before tools run
+- **Ask / Act / Dev Modes** — Read-only by default, normal browser actions on request, and Dev add-ons for source/style/page-debugging work
+- **Plan before Act** — Act and Dev modes can generate a structured plan, show it for approval, then pin the approved plan to the scratchpad before tools run
 - **Multi-Step Agent** — Autonomous task execution with tool-use loops (configurable, default 130 steps)
 - **Continue from Limit** — When the agent hits the step limit, click Continue to keep going
 - **Multi-Provider LLM** — Supports local and cloud models:
@@ -37,7 +37,7 @@ Open-source AI browser agent for Chrome and Firefox. Chat with any web page, aut
 - **Copy Support** — Copy buttons on code blocks and full messages
 - **Page Inspection Banner** — Visual indicator when the agent is interacting with the page
 - **Stop Button** — Abort the agent mid-execution at any time
-- **Deterministic Act Mode** — Act mode uses temperature `0.15` for browser-control decisions; Ask mode uses `0.3`, and dedicated vision screenshot descriptions use `0`
+- **Deterministic Action Modes** — Act and Dev modes use temperature `0.15` for browser-control decisions; Ask mode uses `0.3`, and dedicated vision screenshot descriptions use `0`
 
 ## Quick Start
 
@@ -180,46 +180,62 @@ Deeper docs live in [`docs/`](docs/): [architecture](docs/architecture.md), [sit
 
 ## Agent Tools
 
-| Tool | Ask | Act | Compact | Description |
-|------|-----|-----|---------|-------------|
-| `get_accessibility_tree` | Yes | Yes | Yes | Flat indented text of the page's accessibility tree with persistent ref_ids |
-| `read_page` | Yes | Yes | Yes | Extract page text, links, forms (legacy prose fallback) |
-| `read_pdf` | Yes | Yes | -- | Extract text from PDF documents via vendored pdfjs-dist |
-| `get_interactive_elements` | Yes | Yes | -- | List all clickable/interactive elements (legacy, pierces shadow DOM) |
-| `get_frames` | Yes | Yes | -- | List all iframes on the page |
-| `get_shadow_dom` | Yes | Yes | -- | Read shadow DOM trees |
-| `scroll` | Yes | Yes | Yes | Scroll the page |
-| `extract_data` | Yes | Yes | Yes | Extract tables, headings, images |
-| `get_selection` | Yes | Yes | Yes | Get highlighted text |
-| `click_ax` | -- | Yes | Yes | Click an element by accessibility tree ref_id (preferred) |
-| `type_ax` | -- | Yes | Yes | Type into a field by ref_id. Supports `lang: "tr-deasciify"` |
-| `set_field` | -- | Yes | Yes | One-shot focus + clear + type + verify by ref_id. Supports `lang: "tr-deasciify"` |
-| `click` | -- | Yes | Yes | Click elements by selector, index, or coordinates (legacy fallback) |
-| `type_text` | -- | Yes | Yes | Type into input fields. Supports `lang: "tr-deasciify"` |
-| `press_keys` | -- | Yes | Yes | Press Escape, Tab, or Enter |
-| `hover` | -- | Yes | -- | CDP-trusted hover for reveal-on-hover menus (Chrome only) |
-| `drag_drop` | -- | Yes | -- | Drag-and-drop via CDP pointer events (Chrome only) |
-| `navigate` | -- | Yes | Yes | Go to a URL |
-| `go_back` | -- | Yes | -- | Go back in the current tab's browser history |
-| `go_forward` | -- | Yes | -- | Go forward in the current tab's browser history |
-| `new_tab` | -- | Yes | Yes | Open a new tab |
-| `wait_for_element` | -- | Yes | Yes | Wait for a selector to appear |
-| `wait_for_stable` | -- | Yes | -- | Wait until page is idle (no DOM mutations + no network) |
-| `upload_file` | -- | Yes | -- | Upload a file to a file input (Chrome only) |
-| `execute_js` | -- | Yes | -- | Run custom JavaScript (**Firefox only** — blocked by MV3 CSP on Chrome) |
-| `fetch_url` | Yes | Yes | Yes | Fetch a URL from the background with the user's cookies |
-| `research_url` | Yes | Yes | -- | Open a URL in a hidden tab, wait for JS rendering, return content |
-| `download_files` | -- | Yes | -- | Download one or more files (single url or array, max 3 concurrent) |
-| `download_resource_from_page` | -- | Yes | -- | Download an `<img>`/`<video>`/blob URL from the current page |
-| `download_social_media` | -- | Yes | Yes | One-shot social media download; DOM/CDN first, optional visible-media vision crop fallback |
-| `list_downloads` | Yes | Yes | -- | List recent downloads with status and source URLs |
-| `read_downloaded_file` | -- | Yes | -- | Re-fetch a downloaded file's content (text or base64) |
-| `iframe_read` / `iframe_click` / `iframe_type` | -- | Yes | -- | Read/click/type inside cross-origin iframes |
-| `scratchpad_write` | Yes | Yes | Yes | Pin a note in context that survives summarization |
-| `clarify` | Yes | Yes | Yes | Pause and ask the user a question |
-| `verify_form` | -- | Yes | -- | Verify form fields before submitting |
-| `solve_captcha` | -- | Yes | Yes | Solve CAPTCHAs via CapSolver API (optional, requires API key) |
-| `done` | Yes | Yes | Yes | Signal task completion |
+WebBrain separates model tier from conversation mode:
+
+- **Tier** (`compact`, `mid`, `full`) controls how many normal browser-agent tools a model sees.
+- **Mode** (`ask`, `act`, `dev`) controls what kind of task the user is allowing. Ask is read-only. Act exposes the selected tier's normal tools. Dev requires a Mid or Full provider and adds a small source/style/debug tool appendix, including deeper DOM/frame inspection for Mid-tier Dev runs.
+
+| Tool | Ask | Compact Act | Mid Act | Full Act | Dev Add-on |
+|---|---:|---:|---:|---:|---:|
+| `get_accessibility_tree` | Yes | Yes | Yes | Yes | No |
+| `read_page` | Yes | Yes | Yes | Yes | No |
+| `read_pdf` | Yes | No | Yes | Yes | No |
+| `read_page_source` | No | No | No | No | Yes |
+| `get_window_info` | Yes | Yes | Yes | Yes | No |
+| `get_interactive_elements` | Yes | No | Yes | Yes | No |
+| `scroll` | Yes | Yes | Yes | Yes | No |
+| `extract_data` | Yes | Yes | Yes | Yes | No |
+| `inspect_element_styles` | No | No | No | No | Yes |
+| `wait_for_stable` | Yes | No | Yes | Yes | No |
+| `get_selection` | Yes | Yes | Yes | Yes | No |
+| `done` | Yes | Yes | Yes | Yes | No |
+| `clarify` | No | Yes | Yes | Yes | No |
+| `fetch_url` | Yes | Yes | Yes | Yes | No |
+| `research_url` | Yes | No | Yes | Yes | No |
+| `list_downloads` | Yes | No | Yes | Yes | No |
+| `click_ax` | No | Yes | Yes | Yes | No |
+| `type_ax` | No | Yes | Yes | Yes | No |
+| `set_field` | No | Yes | Yes | Yes | No |
+| `resize_window` | No | No | No | Yes | No |
+| `click` | No | Yes | Yes | Yes | No |
+| `type_text` | No | Yes | Yes | Yes | No |
+| `press_keys` | No | Yes | Yes | Yes | No |
+| `navigate` | No | Yes | Yes | Yes | No |
+| `wait_for_element` | No | Yes | Yes | Yes | No |
+| `new_tab` | No | Yes | Yes | Yes | No |
+| `scratchpad_write` | No | Yes | Yes | Yes | No |
+| `progress_update` | No | Yes | Yes | Yes | No |
+| `progress_read` | No | Yes | Yes | Yes | No |
+| `download_social_media` | No | No | Yes | Yes | No |
+| `solve_captcha` | No | No | Yes | Yes | No |
+| `go_back` | No | No | Yes | Yes | No |
+| `go_forward` | No | No | Yes | Yes | No |
+| `schedule_resume` | No | No | Yes | Yes | No |
+| `schedule_task` | No | No | Yes | Yes | No |
+| `iframe_read` | No | No | Yes | Yes | No |
+| `iframe_click` | No | No | Yes | Yes | No |
+| `iframe_type` | No | No | Yes | Yes | No |
+| `read_downloaded_file` | No | No | Yes | Yes | No |
+| `download_files` | No | No | Yes | Yes | No |
+| `download_resource_from_page` | No | No | Yes | Yes | No |
+| `upload_file` | No | No | Chrome | Chrome | No |
+| `verify_form` | No | No | Yes | Yes | No |
+| `hover` | No | No | No | Yes | No |
+| `drag_drop` | No | No | No | Yes | No |
+| `get_shadow_dom` | No | No | No | Yes | Yes |
+| `shadow_dom_query` | No | No | No | Chrome | Chrome |
+| `get_frames` | No | No | No | Yes | Yes |
+| `execute_js` | No | No | No | No | Firefox |
 
 Enabled skills can append additional tool schemas at runtime. For example,
 the bundled FreeSkillz.xyz skill exposes `read_youtube_transcript` for YouTube
@@ -228,9 +244,11 @@ media URLs. These skill tools are not hard-coded in the static table above:
 if the skill is removed or renamed, the tool disappears or appears under the
 manifest's declared name.
 
-**Compact mode** is a reduced tool set + shorter system prompt designed for small local models (2B-8B). In both Chrome and Firefox builds, it cuts the Act-mode schema from 40+ tools to about 20, reducing decision surface and hallucination. Enable it per-provider in Settings (checkbox on local providers; off by default).
+Dev Add-on tools are only exposed in Dev mode, and Dev mode is blocked for Compact-tier providers.
 
-> **Shadow DOM note:** The accessibility tree only traverses light DOM. On Web Component-heavy pages (Stripe, Salesforce, Shopify), use `get_interactive_elements` (pierces open shadow roots) or `get_shadow_dom` / `shadow_dom_query` for targeted reads.
+**Compact tier** is a reduced normal-tool set + shorter system prompt designed for smaller local models. **Mid tier** keeps common task tools, iframe support, downloads, scheduling, and form verification while avoiding advanced DOM/UI fallbacks. **Full tier** adds advanced browser-operation tools such as hover, drag-drop, frames, and shadow DOM. Enable the tier per provider in Settings.
+
+> **Shadow DOM note:** The accessibility tree only traverses light DOM. On Web Component-heavy pages (Stripe, Salesforce, Shopify), use `get_interactive_elements` first; in Full Act or Dev mode, use `get_shadow_dom` / `shadow_dom_query` for targeted reads.
 
 ## LM Studio plugin
 
@@ -271,6 +289,8 @@ WebBrain accepts slash commands as the first thing on a line in the input box. T
 | `/profile` | Toggle profile auto-fill on/off without opening Settings |
 | `/vision` | Toggle vision mode (screenshot understanding) on the active provider |
 | `/ask` | Switch to Ask mode before sending |
+| `/act` | Switch to Act mode before sending |
+| `/dev` | Switch to Dev mode before sending |
 | `/plan` | Switch to Ask mode with planning intent |
 
 The default UI-first rule exists because API actions are invisible (you don't see what's being sent), often require separate auth tokens you may not have configured, and can have a much larger blast radius than a visible mis-click. Only use `/allow-api` when you've decided you want that tradeoff for a specific job.
@@ -284,6 +304,7 @@ Chrome side panel shortcuts work when the WebBrain side panel has focus.
 | `Ctrl+/` or `Cmd+/` | Focus the input |
 | `Ctrl+Shift+A` or `Cmd+Shift+A` | Switch to Ask mode |
 | `Ctrl+Shift+X` or `Cmd+Shift+X` | Switch to Act mode |
+| `Ctrl+Shift+D` or `Cmd+Shift+D` | Switch to Dev mode |
 | `Escape` | Stop the active run, unless it is only dismissing slash-command autocomplete |
 | `Escape` twice | Stop an active recording from WebBrain or browser pages |
 

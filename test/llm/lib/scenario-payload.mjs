@@ -16,6 +16,7 @@ import {
   SYSTEM_PROMPT_ACT as CHROME_SYSTEM_PROMPT_ACT,
   SYSTEM_PROMPT_ACT_MID as CHROME_SYSTEM_PROMPT_ACT_MID,
   SYSTEM_PROMPT_ACT_COMPACT as CHROME_SYSTEM_PROMPT_ACT_COMPACT,
+  SYSTEM_PROMPT_DEV_APPENDIX as CHROME_SYSTEM_PROMPT_DEV_APPENDIX,
   SYSTEM_PROMPT_ASK as CHROME_SYSTEM_PROMPT_ASK,
   getToolsForMode as chromeGetToolsForMode,
 } from '../../../src/chrome/src/agent/tools.js';
@@ -26,21 +27,29 @@ import {
   SYSTEM_PROMPT_ACT as FIREFOX_SYSTEM_PROMPT_ACT,
   SYSTEM_PROMPT_ACT_MID as FIREFOX_SYSTEM_PROMPT_ACT_MID,
   SYSTEM_PROMPT_ACT_COMPACT as FIREFOX_SYSTEM_PROMPT_ACT_COMPACT,
+  SYSTEM_PROMPT_DEV_APPENDIX as FIREFOX_SYSTEM_PROMPT_DEV_APPENDIX,
   SYSTEM_PROMPT_ASK as FIREFOX_SYSTEM_PROMPT_ASK,
   getToolsForMode as firefoxGetToolsForMode,
 } from '../../../src/firefox/src/agent/tools.js';
 import {
   UNIVERSAL_PREAMBLE as FIREFOX_UNIVERSAL_PREAMBLE,
 } from '../../../src/firefox/src/agent/adapters.js';
-// Freeze + tier helpers live in build-payload.mjs so both runners share
+// Freeze + mode/tier helpers live in build-payload.mjs so both runners share
 // one baseline loaded once per process.
-import { normalizeTier, getFrozenSnapshot } from './build-payload.mjs';
+import {
+  assertRunnableModeTier,
+  getFrozenSnapshot,
+  getSystemPromptForMode,
+  normalizeMode,
+  normalizeTier,
+} from './build-payload.mjs';
 
 const BROWSERS = {
   chrome: {
     SYSTEM_PROMPT_ACT: CHROME_SYSTEM_PROMPT_ACT,
     SYSTEM_PROMPT_ACT_MID: CHROME_SYSTEM_PROMPT_ACT_MID,
     SYSTEM_PROMPT_ACT_COMPACT: CHROME_SYSTEM_PROMPT_ACT_COMPACT,
+    SYSTEM_PROMPT_DEV_APPENDIX: CHROME_SYSTEM_PROMPT_DEV_APPENDIX,
     SYSTEM_PROMPT_ASK: CHROME_SYSTEM_PROMPT_ASK,
     UNIVERSAL_PREAMBLE: CHROME_UNIVERSAL_PREAMBLE,
     getToolsForMode: chromeGetToolsForMode,
@@ -49,17 +58,12 @@ const BROWSERS = {
     SYSTEM_PROMPT_ACT: FIREFOX_SYSTEM_PROMPT_ACT,
     SYSTEM_PROMPT_ACT_MID: FIREFOX_SYSTEM_PROMPT_ACT_MID,
     SYSTEM_PROMPT_ACT_COMPACT: FIREFOX_SYSTEM_PROMPT_ACT_COMPACT,
+    SYSTEM_PROMPT_DEV_APPENDIX: FIREFOX_SYSTEM_PROMPT_DEV_APPENDIX,
     SYSTEM_PROMPT_ASK: FIREFOX_SYSTEM_PROMPT_ASK,
     UNIVERSAL_PREAMBLE: FIREFOX_UNIVERSAL_PREAMBLE,
     getToolsForMode: firefoxGetToolsForMode,
   },
 };
-
-function getActPromptForTier(browser, tier) {
-  if (tier === 'compact') return browser.SYSTEM_PROMPT_ACT_COMPACT;
-  if (tier === 'mid')     return browser.SYSTEM_PROMPT_ACT_MID;
-  return browser.SYSTEM_PROMPT_ACT;
-}
 
 function pick(browser) {
   const key = browser || 'chrome';
@@ -99,7 +103,7 @@ function stripUntrustedInstructions(prompt) {
  */
 export function buildScenarioPayload(scenario, opts = {}) {
   const browser = pick(scenario.browser);
-  const mode = scenario.mode === 'ask' ? 'ask' : 'act';
+  const mode = normalizeMode(scenario.mode);
   const tier = normalizeTier(opts.tier);
   const useSiteAdapters = opts.useSiteAdapters !== false;
   const strictSecretMode = !!opts.strictSecretMode;
@@ -113,7 +117,8 @@ export function buildScenarioPayload(scenario, opts = {}) {
   if (FROZEN) {
     systemContent = FROZEN.systemContent;
   } else {
-    systemContent = mode === 'act' ? getActPromptForTier(browser, tier) : browser.SYSTEM_PROMPT_ASK;
+    assertRunnableModeTier(mode, tier);
+    systemContent = getSystemPromptForMode(browser, mode, tier);
     if (useSiteAdapters) {
       systemContent += `\n\n${browser.UNIVERSAL_PREAMBLE.trim()}`;
     }

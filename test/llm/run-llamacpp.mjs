@@ -14,7 +14,8 @@
 //   node test/llm/run-llamacpp.mjs --url https://openrouter.ai/api/v1/chat/completions --model openai/gpt-oss-20b --api-key $OPENROUTER_API_KEY
 //   node test/llm/run-llamacpp.mjs --no-save-request                 # omit request from result files
 //
-// Prompt + tool tier (ACT mode only — ASK ignores this):
+// Prompt + tool tier:
+//   --mode act|ask|dev   # override case mode; Dev requires --tier mid|full
 //   --tier full           # SYSTEM_PROMPT_ACT  + full tool set (default)
 //   --tier mid            # SYSTEM_PROMPT_ACT_MID  + MID_TOOL_NAMES subset
 //   --tier compact        # SYSTEM_PROMPT_ACT_COMPACT + COMPACT_TOOL_NAMES subset
@@ -30,6 +31,7 @@
 // Run dirs get suffixed with the mode so the four can coexist:
 //   results/<tag>_chrome_<model>             # tier=full (default, no suffix)
 //   results/<tag>_chrome_<model>_mid         # tier=mid
+//   results/<tag>_chrome_<model>_dev_mid     # mode=dev, tier=mid
 //   results/<tag>_chrome_<model>_compact     # tier=compact
 //   results/<tag>_chrome_<model>_frozen      # any --freeze run
 //
@@ -45,7 +47,16 @@
 import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buildPayload, normalizeBrowser, normalizeTier, isFrozen, getFrozenMeta, loadFrozenBaseline } from './lib/build-payload.mjs';
+import {
+  buildPayload,
+  isActionMode,
+  isFrozen,
+  getFrozenMeta,
+  loadFrozenBaseline,
+  normalizeBrowser,
+  normalizeMode,
+  normalizeTier,
+} from './lib/build-payload.mjs';
 import {
   chatTemplateCompatLabel,
   getChatTemplateCompat,
@@ -84,6 +95,7 @@ Endpoint:
 Selection:
   --only IDS                         Comma-separated case ids, e.g. 1,5,42
   --browser chrome|firefox           Browser prompt/tool source (default: chrome)
+  --mode ask|act|dev                 Override case mode; Dev requires Mid/Full tier
   --tier full|mid|compact            Prompt/tool tier; ignored with --freeze
   --freeze PATH                      Pin system prompt + tools to a snapshot
 
@@ -133,6 +145,7 @@ const CHAT_TEMPLATE_COMPAT = getChatTemplateCompat({
   value: args['chat-template-compat'],
 });
 
+// --mode ask|act|dev — optional override of the mode stored in each case.
 // --tier full|mid|compact — picks SYSTEM_PROMPT_ACT[_MID|_COMPACT] and the
 // corresponding tool subset. Default: full. ASK-mode cases ignore tier.
 // --freeze <path> — alternative to WB_FREEZE_BASELINE env var. If set,
@@ -143,6 +156,7 @@ if (args.freeze && args.freeze !== true) {
   loadFrozenBaseline(args.freeze);
 }
 const TIER = normalizeTier(args.tier);
+const MODE_OVERRIDE = args.mode == null ? null : normalizeMode(args.mode);
 
 const onlySet = args.only && args.only !== true
   ? new Set(String(args.only).split(',').map(s => String(parseInt(s, 10)).padStart(3, '0')))
@@ -153,7 +167,7 @@ const runTag = args.tag || new Date().toISOString().replace(/[:.]/g, '-');
 // runs of the same model at different tiers don't clobber each other.
 const tagSuffix = isFrozen()
   ? '_frozen'
-  : (TIER === 'full' ? '' : `_${TIER}`);
+  : `${MODE_OVERRIDE === 'dev' ? '_dev' : ''}${TIER === 'full' ? '' : `_${TIER}`}`;
 const runDir = join(RESULTS_DIR, `${runTag}_${BROWSER}_${MODEL.replace(/[^\w.-]+/g, '_')}${tagSuffix}`);
 mkdirSync(runDir, { recursive: true });
 
@@ -165,7 +179,7 @@ const ids = readdirSync(Q_DIR)
 
 const promptMode = isFrozen()
   ? `frozen (${getFrozenMeta()?.sourceRun || 'unknown source'} @ ${getFrozenMeta()?.runTag || ''})`
-  : `tier=${TIER}`;
+  : `mode=${MODE_OVERRIDE || 'case'}, tier=${TIER}`;
 console.error(`▸ ${ids.length} case(s), base=${BASE}, model=${MODEL}, browser=${BROWSER}, concurrency=${CONCURRENCY}`);
 console.error(`▸ endpoint=${CHAT_URL}`);
 console.error(`▸ prompt: ${promptMode}`);
@@ -261,12 +275,13 @@ function safeParse(s) { try { return JSON.parse(s); } catch { return {}; } }
 
 async function runOne(id) {
   const caseRec = JSON.parse(readFileSync(join(Q_DIR, `${id}.json`), 'utf8'));
-  const payload = buildPayload(caseRec, { browser: BROWSER, tier: TIER });
+  const mode = MODE_OVERRIDE || normalizeMode(caseRec.mode);
+  const payload = buildPayload({ ...caseRec, mode }, { browser: BROWSER, tier: TIER });
   const messages = prepareMessagesForChatTemplate(payload.messages, CHAT_TEMPLATE_COMPAT, { tools: payload.tools });
   const tools = prepareToolsForChatTemplate(payload.tools, CHAT_TEMPLATE_COMPAT);
   const body = {
     model: MODEL,
-    temperature: caseRec.mode === 'act' ? 0.15 : 0.3,
+    temperature: isActionMode(mode) ? 0.15 : 0.3,
     max_tokens: 4096,
     messages,
   };
@@ -315,6 +330,7 @@ async function runOne(id) {
   const out = {
     id,
     user: caseRec.user,
+    mode,
     tab: caseRec.tab,
     latencyMs,
     error,
@@ -374,6 +390,7 @@ const summary = {
   base: BASE,
   saveRequest: SAVE_REQUEST,
   tier: isFrozen() ? null : TIER,
+  modeOverride: isFrozen() ? null : MODE_OVERRIDE,
   chatTemplateCompat: CHAT_TEMPLATE_COMPAT.mode,
   structuredToolsSent: !CHAT_TEMPLATE_COMPAT.omitStructuredTools,
   freeze: isFrozen() ? {

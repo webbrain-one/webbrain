@@ -20,6 +20,7 @@ import {
   SYSTEM_PROMPT_ACT as CHROME_SYSTEM_PROMPT_ACT,
   SYSTEM_PROMPT_ACT_MID as CHROME_SYSTEM_PROMPT_ACT_MID,
   SYSTEM_PROMPT_ACT_COMPACT as CHROME_SYSTEM_PROMPT_ACT_COMPACT,
+  SYSTEM_PROMPT_DEV_APPENDIX as CHROME_SYSTEM_PROMPT_DEV_APPENDIX,
   SYSTEM_PROMPT_ASK as CHROME_SYSTEM_PROMPT_ASK,
   getToolsForMode as chromeGetToolsForMode,
 } from '../../../src/chrome/src/agent/tools.js';
@@ -31,6 +32,7 @@ import {
   SYSTEM_PROMPT_ACT as FIREFOX_SYSTEM_PROMPT_ACT,
   SYSTEM_PROMPT_ACT_MID as FIREFOX_SYSTEM_PROMPT_ACT_MID,
   SYSTEM_PROMPT_ACT_COMPACT as FIREFOX_SYSTEM_PROMPT_ACT_COMPACT,
+  SYSTEM_PROMPT_DEV_APPENDIX as FIREFOX_SYSTEM_PROMPT_DEV_APPENDIX,
   SYSTEM_PROMPT_ASK as FIREFOX_SYSTEM_PROMPT_ASK,
   getToolsForMode as firefoxGetToolsForMode,
 } from '../../../src/firefox/src/agent/tools.js';
@@ -41,6 +43,8 @@ import {
 
 export const TIERS = ['full', 'mid', 'compact'];
 export const DEFAULT_TIER = 'full';
+export const MODES = ['ask', 'act', 'dev'];
+export const DEFAULT_MODE = 'act';
 
 export function normalizeTier(tier) {
   const key = (tier || DEFAULT_TIER).toLowerCase();
@@ -50,12 +54,32 @@ export function normalizeTier(tier) {
   return key;
 }
 
+export function normalizeMode(mode) {
+  const key = (mode || DEFAULT_MODE).toLowerCase();
+  if (!MODES.includes(key)) {
+    throw new Error(`Bad mode: ${mode}. Expected one of ${MODES.join(', ')}.`);
+  }
+  return key;
+}
+
+export function isActionMode(mode) {
+  const key = normalizeMode(mode);
+  return key === 'act' || key === 'dev';
+}
+
+export function assertRunnableModeTier(mode, tier) {
+  if (mode === 'dev' && tier === 'compact') {
+    throw new Error('Dev mode requires a Mid or Full prompt tier; Compact-tier Dev is blocked.');
+  }
+}
+
 export const DEFAULT_BROWSER = 'chrome';
 export const BROWSERS = {
   chrome: {
     SYSTEM_PROMPT_ACT: CHROME_SYSTEM_PROMPT_ACT,
     SYSTEM_PROMPT_ACT_MID: CHROME_SYSTEM_PROMPT_ACT_MID,
     SYSTEM_PROMPT_ACT_COMPACT: CHROME_SYSTEM_PROMPT_ACT_COMPACT,
+    SYSTEM_PROMPT_DEV_APPENDIX: CHROME_SYSTEM_PROMPT_DEV_APPENDIX,
     SYSTEM_PROMPT_ASK: CHROME_SYSTEM_PROMPT_ASK,
     UNIVERSAL_PREAMBLE: CHROME_UNIVERSAL_PREAMBLE,
     getActiveAdapter: chromeGetActiveAdapter,
@@ -65,6 +89,7 @@ export const BROWSERS = {
     SYSTEM_PROMPT_ACT: FIREFOX_SYSTEM_PROMPT_ACT,
     SYSTEM_PROMPT_ACT_MID: FIREFOX_SYSTEM_PROMPT_ACT_MID,
     SYSTEM_PROMPT_ACT_COMPACT: FIREFOX_SYSTEM_PROMPT_ACT_COMPACT,
+    SYSTEM_PROMPT_DEV_APPENDIX: FIREFOX_SYSTEM_PROMPT_DEV_APPENDIX,
     SYSTEM_PROMPT_ASK: FIREFOX_SYSTEM_PROMPT_ASK,
     UNIVERSAL_PREAMBLE: FIREFOX_UNIVERSAL_PREAMBLE,
     getActiveAdapter: firefoxGetActiveAdapter,
@@ -78,6 +103,15 @@ function getActPromptForTier(browser, tier) {
   if (tier === 'compact') return browser.SYSTEM_PROMPT_ACT_COMPACT;
   if (tier === 'mid')     return browser.SYSTEM_PROMPT_ACT_MID;
   return browser.SYSTEM_PROMPT_ACT;
+}
+
+export function getSystemPromptForMode(browser, mode, tier) {
+  if (mode === 'ask') return browser.SYSTEM_PROMPT_ASK;
+  let prompt = getActPromptForTier(browser, tier);
+  if (mode === 'dev') {
+    prompt += `\n\n${browser.SYSTEM_PROMPT_DEV_APPENDIX.trim()}`;
+  }
+  return prompt;
 }
 
 export function normalizeBrowser(browser) {
@@ -125,7 +159,7 @@ export function getFrozenMeta() { return FROZEN_BASELINE?.meta || null; }
 export function getFrozenSnapshot() { return FROZEN_BASELINE; }
 
 /**
- * @param {object} caseRec - { id?, mode: 'act'|'ask', tab: {url, title}, user }
+ * @param {object} caseRec - { id?, mode: 'act'|'ask'|'dev', tab: {url, title}, user }
  * @param {object} opts    - { useSiteAdapters?: boolean, strictSecretMode?: boolean,
  *                             profile?: {enabled, text}, captchaSolver?: boolean,
  *                             browser?: 'chrome'|'firefox',
@@ -135,7 +169,7 @@ export function getFrozenSnapshot() { return FROZEN_BASELINE; }
  */
 export function buildPayload(caseRec, opts = {}) {
   const browser = BROWSERS[normalizeBrowser(opts.browser)];
-  const mode = caseRec.mode === 'ask' ? 'ask' : 'act';
+  const mode = normalizeMode(caseRec.mode);
   const tier = normalizeTier(opts.tier);
   const url = caseRec.tab?.url || '';
   const title = caseRec.tab?.title || '';
@@ -152,8 +186,9 @@ export function buildPayload(caseRec, opts = {}) {
   if (FROZEN_BASELINE) {
     systemContent = FROZEN_BASELINE.systemContent;
   } else {
-    // ACT mode honors tier (full / mid / compact). ASK mode has only one prompt.
-    systemContent = mode === 'act' ? getActPromptForTier(browser, tier) : browser.SYSTEM_PROMPT_ASK;
+    assertRunnableModeTier(mode, tier);
+    // ACT and DEV modes honor tier (full / mid / compact). ASK mode has one prompt.
+    systemContent = getSystemPromptForMode(browser, mode, tier);
     if (useSiteAdapters) {
       systemContent += `\n\n${browser.UNIVERSAL_PREAMBLE.trim()}`;
     }

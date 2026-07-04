@@ -1178,6 +1178,16 @@ async function handleMessage(msg, sender) {
       return { providers: providerManager.getAll(), active: providerManager.activeProviderId };
     }
 
+    case 'get_active_prompt_tier': {
+      const provider = providerManager.getActive();
+      return {
+        ok: true,
+        providerId: providerManager.activeProviderId,
+        tier: provider?.promptTier || 'full',
+        name: provider?.name || provider?.config?.model || providerManager.activeProviderId,
+      };
+    }
+
     case 'set_active_provider': {
       await providerManager.setActive(msg.providerId);
       return { ok: true };

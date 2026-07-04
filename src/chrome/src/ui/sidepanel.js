@@ -315,6 +315,7 @@ const agentActivity = document.getElementById('agent-activity');
 const activityText = document.getElementById('activity-text');
 const modeAskBtn = document.getElementById('btn-mode-ask');
 const modeActBtn = document.getElementById('btn-mode-act');
+const modeDevBtn = document.getElementById('btn-mode-dev');
 const actWarning = document.getElementById('act-warning');
 const inputArea = document.getElementById('input-area');
 const slashCommandMenuEl = document.getElementById('slash-command-menu');
@@ -352,6 +353,8 @@ const SLASH_COMMANDS = [
   { value: '/profile', descriptionKey: 'sp.slash.profile' },
   { value: '/vision', descriptionKey: 'sp.slash.vision' },
   { value: '/ask', descriptionKey: 'sp.slash.ask' },
+  { value: '/act', descriptionKey: 'sp.slash.act' },
+  { value: '/dev', descriptionKey: 'sp.slash.dev' },
   { value: '/plan', descriptionKey: 'sp.slash.plan' },
 ];
 const OUT_OF_BAND_SLASH_COMMANDS = new Set([
@@ -423,7 +426,7 @@ const attachmentGenerationByTab = new Map();
 let isProcessing = false;
 let currentAssistantEl = null;
 let verboseMode = false;
-let agentMode = 'ask'; // 'ask' or 'act'
+let agentMode = 'ask'; // 'ask' | 'act' | 'dev'
 let abortRequested = false;
 let recommendationsRequestId = 0;
 let providerSelectionRequestId = 0;
@@ -484,7 +487,7 @@ chrome.storage.onChanged.addListener((changes) => {
 
 function updateActWarning() {
   if (!actWarning) return;
-  const show = agentMode === 'act' && !askBeforeConsequential;
+  const show = agentMode !== 'ask' && !askBeforeConsequential;
   actWarning.classList.toggle('hidden', !show);
 }
 
@@ -1566,8 +1569,8 @@ async function renderScheduleComposer(prefillPrompt = '', tabId = currentTabId) 
 
   const modeInput = document.createElement('select');
   modeInput.className = 'schedule-mode';
-  modeInput.innerHTML = `<option value="act">${escapeHtml(t('sp.mode.act'))}</option><option value="ask">${escapeHtml(t('sp.mode.ask'))}</option>`;
-  modeInput.value = agentMode === 'ask' ? 'ask' : 'act';
+  modeInput.innerHTML = `<option value="act">${escapeHtml(t('sp.mode.act'))}</option><option value="ask">${escapeHtml(t('sp.mode.ask'))}</option><option value="dev">${escapeHtml(t('sp.mode.dev'))}</option>`;
+  modeInput.value = agentMode === 'dev' ? 'dev' : (agentMode === 'ask' ? 'ask' : 'act');
   addScheduleField(form, t('sp.schedule_form.mode'), modeInput);
 
   const errorEl = document.createElement('div');
@@ -2695,6 +2698,20 @@ async function parseSlashCommands(text, tabId = currentTabId) {
     return text.slice(mAsk[0].length).trim();
   }
 
+  // /act — switch to Act mode, then send remaining text
+  const mAct = text.match(/^\/act\b\s*/i);
+  if (mAct) {
+    const ok = await ensureActMode();
+    return ok ? text.slice(mAct[0].length).trim() : '';
+  }
+
+  // /dev — switch to Dev mode, then send remaining text
+  const mDev = text.match(/^\/dev\b\s*/i);
+  if (mDev) {
+    const ok = await ensureDevMode();
+    return ok ? text.slice(mDev[0].length).trim() : '';
+  }
+
   // /plan — switch to Ask mode with explicit planning intent
   const mPlan = text.match(/^\/plan\b\s*/i);
   if (mPlan) {
@@ -2727,6 +2744,13 @@ async function parseSlashCommands(text, tabId = currentTabId) {
   }
 
   return text;
+}
+
+function modeForMessageText(text) {
+  if (/^\/(?:ask|plan)\b/i.test(text)) return 'ask';
+  if (/^\/act\b/i.test(text)) return 'act';
+  if (/^\/dev\b/i.test(text)) return 'dev';
+  return agentMode;
 }
 
 function parseRecordingSlashOptions(text, commandMatch) {
@@ -2819,7 +2843,7 @@ async function sendMessage(extraChatParams) {
     }
     return enqueueQueuedComposerMessage(tabId, text);
   }
-  const modeForSend = /^\/(?:ask|plan)\b/i.test(text) ? 'ask' : agentMode;
+  const modeForSend = modeForMessageText(text);
   const apiMutationsAllowedForSend = isApiMutationsAllowedForTab(tabId) || /^\/allow-api\b/i.test(text);
   saveInputDraftForTab(tabId, '');
   hideSlashCommandAutocomplete();
@@ -4243,7 +4267,9 @@ function autoResizeInput() {
 }
 
 function getInputPlaceholderKeys() {
-  return agentMode === 'ask' ? ASK_PLACEHOLDER_KEYS : ['sp.input.act_placeholder'];
+  if (agentMode === 'ask') return ASK_PLACEHOLDER_KEYS;
+  if (agentMode === 'dev') return ['sp.input.dev_placeholder'];
+  return ['sp.input.act_placeholder'];
 }
 
 function updateInputPlaceholder() {
@@ -4348,27 +4374,29 @@ async function handleGlobalKeydown(e) {
     await ensureActMode();
     return;
   }
+  // Ctrl+Shift+D: switch to Dev mode (blocked while agent is running)
+  if (mod && e.shiftKey && e.key === 'D' && !isProcessing) {
+    e.preventDefault();
+    await ensureDevMode();
+    return;
+  }
 }
 
 // --- Mode Toggle ---
 
 function setMode(mode) {
+  if (mode !== 'ask' && mode !== 'act' && mode !== 'dev') mode = 'ask';
   agentMode = mode;
 
-  if (mode === 'ask') {
-    modeAskBtn.classList.add('active');
-    modeAskBtn.classList.remove('act');
-    modeActBtn.classList.remove('active', 'act');
-    updateActWarning();
-    inputArea.classList.remove('act-mode');
-    resetInputPlaceholderRotation();
-  } else {
-    modeActBtn.classList.add('active', 'act');
-    modeAskBtn.classList.remove('active');
-    updateActWarning();
-    inputArea.classList.add('act-mode');
-    resetInputPlaceholderRotation();
-  }
+  modeAskBtn.classList.toggle('active', mode === 'ask');
+  modeAskBtn.classList.remove('act');
+  modeActBtn.classList.toggle('active', mode === 'act');
+  modeActBtn.classList.toggle('act', mode === 'act');
+  modeDevBtn?.classList.toggle('active', mode === 'dev');
+  modeDevBtn?.classList.toggle('act', mode === 'dev');
+  inputArea.classList.toggle('act-mode', mode !== 'ask');
+  updateActWarning();
+  resetInputPlaceholderRotation();
 }
 
 async function ensureActMode() {
@@ -4389,10 +4417,42 @@ async function ensureActMode() {
   return true;
 }
 
+async function ensureDevMode() {
+  if (agentMode === 'dev') return true;
+  try {
+    const tierInfo = await sendToBackground('get_active_prompt_tier');
+    if (tierInfo?.tier === 'compact') {
+      addMessage('system', systemHtml(tSystemHtml('sp.mode.dev.compact_blocked', {
+        provider: tierInfo.name || tierInfo.providerId || 'active provider',
+      })));
+      return false;
+    }
+  } catch (e) {
+    // The agent also enforces this server-side; don't block Dev on a stale
+    // sidepanel/background lookup failure.
+  }
+  const actOk = await ensureActMode();
+  if (!actOk) return false;
+  try {
+    const stored = await chrome.storage.local.get('devConfirmed');
+    if (!stored.devConfirmed) {
+      const ok = confirm(t('sp.mode.dev.confirm'));
+      if (!ok) return false;
+      await chrome.storage.local.set({ devConfirmed: true }).catch(() => {});
+    }
+  } catch (e) { /* storage unavailable, fall through */ }
+  setMode('dev');
+  return true;
+}
+
 modeAskBtn.addEventListener('click', () => setMode('ask'));
 
 modeActBtn.addEventListener('click', async () => {
   await ensureActMode();
+});
+
+modeDevBtn?.addEventListener('click', async () => {
+  await ensureDevMode();
 });
 
 
