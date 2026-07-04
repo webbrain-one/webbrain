@@ -1,6 +1,6 @@
 # WebBrain Chrome/Edge Extension — Architecture
 
-> Version 20.5.3 · Manifest V3 · Service Worker background
+> Version 20.5.4 · Manifest V3 · Service Worker background
 
 ## High-Level Overview
 
