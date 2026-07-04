@@ -1,7 +1,7 @@
 import { AGENT_TOOLS, AGENT_TOOL_NAMES, RESERVED_AGENT_TOOL_NAMES, getToolsForMode, SYSTEM_PROMPT_ASK, SYSTEM_PROMPT_ACT, SYSTEM_PROMPT_ACT_COMPACT, SYSTEM_PROMPT_ACT_MID } from './tools.js';
 import { URL_FAMILY_TOOLS, resourceBucket, bucketArgsKey } from './loop-bucket.js';
 import { isCredentialField, CREDENTIAL_NOTE_STRICT } from './credential-fields.js';
-import { detectProgressAction, formatLedgerRow, formatLedgerSummary, isValidLedgerStatus, ledgerDoneBlock, normalizeLedgerStatus, progressCounts, selectLedgerRows, unresolvedLedgerRows, upsertLedgerItems } from './progress-ledger.js';
+import { detectProgressAction, formatLedgerRow, formatLedgerSummary, isTerminalLedgerStatus, isValidLedgerStatus, ledgerDoneBlock, normalizeLedgerStatus, progressCounts, selectLedgerRows, unresolvedLedgerRows, upsertLedgerItems } from './progress-ledger.js';
 import { buildGithubStargazerProgressItems } from './observers/github-stargazers.js';
 import { analyzeMastodonPage, mastodonHandoffInstruction, mastodonProgressGuard } from './observers/mastodon.js';
 import { isProgressActionAllowed, isProgressIntentActive, normalizeProgressAction, normalizeProgressIntent } from './progress-intent.js';
@@ -4562,16 +4562,21 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     return `tk_${hash.toString(16).padStart(8, '0')}`;
   }
 
-  _adoptUnscopedProgressRows(tabId, sessionId) {
+  _adoptUnscopedProgressRows(tabId, sessionId, opts = {}) {
     const safeSessionId = String(sessionId || '').trim();
-    if (!safeSessionId) return false;
+    if (!safeSessionId) return { changed: false, blockedDowngrades: [] };
     const taskKey = this._progressTaskKeyHash(tabId);
-    if (!taskKey) return false;
+    if (!taskKey) return { changed: false, blockedDowngrades: [] };
     const rows = this.progressLedgers.get(tabId) || [];
-    const scopedIds = new Set(rows
-      .filter(row => row && typeof row === 'object' && String(row.sessionId || row.session_id || '').trim() === safeSessionId)
-      .map(row => String(row.id || '').trim().toLowerCase()));
+    const scopedRowsById = new Map();
+    for (const row of rows) {
+      if (!row || typeof row !== 'object') continue;
+      if (String(row.sessionId || row.session_id || '').trim() !== safeSessionId) continue;
+      scopedRowsById.set(String(row.id || '').trim().toLowerCase(), row);
+    }
     const legacyFieldsById = new Map();
+    const legacyTerminalById = new Map();
+    const blockedDowngrades = [];
     let changed = false;
     const next = [];
     for (const row of rows) {
@@ -4583,29 +4588,44 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         continue;
       }
       const idKey = String(row.id || '').trim().toLowerCase();
-      if (scopedIds.has(idKey)) {
+      const scoped = scopedRowsById.get(idKey);
+      if (scoped) {
         // The session already tracks this item under sessionId::id; stamping
         // would create a duplicate key. Drop the legacy copy and fold its
-        // collected fields into the scoped row (scoped values win).
+        // collected fields into the scoped row (scoped values win) — except a
+        // terminal legacy status, which must not be silently reopened by a
+        // non-terminal scoped row: that would bypass the reopen:true gate the
+        // same-key upsert path enforces.
         if (row.fields && typeof row.fields === 'object') legacyFieldsById.set(idKey, row.fields);
+        if (isTerminalLedgerStatus(row.status) && !isTerminalLedgerStatus(scoped.status) && opts.allowReopen !== true) {
+          const keptStatus = normalizeLedgerStatus(row.status, 'processed');
+          legacyTerminalById.set(idKey, keptStatus);
+          blockedDowngrades.push({ id: scoped.id, keptStatus, requestedStatus: normalizeLedgerStatus(scoped.status, 'pending') });
+        }
         changed = true;
         continue;
       }
       changed = true;
       next.push({ ...row, sessionId: safeSessionId });
     }
-    if (!changed) return false;
-    const merged = legacyFieldsById.size
+    if (!changed) return { changed: false, blockedDowngrades: [] };
+    const merged = (legacyFieldsById.size || legacyTerminalById.size)
       ? next.map(row => {
         if (!row || typeof row !== 'object') return row;
         if (String(row.sessionId || row.session_id || '').trim() !== safeSessionId) return row;
-        const legacyFields = legacyFieldsById.get(String(row.id || '').trim().toLowerCase());
-        if (!legacyFields) return row;
-        return { ...row, fields: { ...legacyFields, ...(row.fields || {}) } };
+        const idKey = String(row.id || '').trim().toLowerCase();
+        const legacyFields = legacyFieldsById.get(idKey);
+        const terminalStatus = legacyTerminalById.get(idKey);
+        if (!legacyFields && !terminalStatus) return row;
+        return {
+          ...row,
+          ...(legacyFields ? { fields: { ...legacyFields, ...(row.fields || {}) } } : {}),
+          ...(terminalStatus ? { status: terminalStatus } : {}),
+        };
       })
       : next;
     this.progressLedgers.set(tabId, merged);
-    return true;
+    return { changed: true, blockedDowngrades };
   }
 
   _progressSessionMatchesTask(session, taskText, pageScope = '') {
@@ -4882,12 +4902,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       return { success: false, error: 'progress_update: no valid items were provided. Each item needs a stable id.' };
     }
     this.progressLedgers.set(tabId, result.rows);
-    if (sessionId) this._adoptUnscopedProgressRows(tabId, sessionId);
+    const adoption = sessionId
+      ? this._adoptUnscopedProgressRows(tabId, sessionId, { allowReopen: args.reopen === true })
+      : { blockedDowngrades: [] };
     this._syncProgressLedgerMessage(tabId);
     if (typeof this._persist === 'function') this._persist(tabId);
     const ledgerRows = this.progressLedgers.get(tabId) || [];
     const visibleRows = sessionId ? this._rowsForProgressSession(tabId, sessionId, ledgerRows) : ledgerRows;
-    const blockedDowngrades = result.blockedDowngrades || [];
+    const blockedDowngrades = [...(result.blockedDowngrades || []), ...adoption.blockedDowngrades];
     return {
       success: true,
       updated: result.updated,

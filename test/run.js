@@ -14367,6 +14367,44 @@ test('progress_update adoption merges same-id legacy rows instead of duplicating
   }
 });
 
+test('progress_update adoption preserves terminal legacy status against non-terminal scoped writes', async () => {
+  for (const AgentClass of [AgentCh, AgentFx]) {
+    const agent = new AgentClass({ getActive: () => ({ contextWindow: 128000, supportsVision: false }) });
+    const tabId = AgentClass === AgentCh ? 833 : 834;
+    agent.conversationModes.set(tabId, 'act');
+    agent._persist = () => {};
+    agent.conversations.set(tabId, [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: "follow 100 accounts i don't follow yet here" },
+    ]);
+    const taskKey = agent._progressTaskKeyHash(tabId);
+    agent.progressLedgers.set(tabId, [
+      { id: 'octocat', label: 'octocat', action: 'follow', status: 'processed', taskKey },
+    ]);
+    allowProgress(agent, tabId, ['follow']);
+    const sessionId = agent.progressSessions.get(tabId)?.sessionId;
+    assert.ok(sessionId, `${AgentClass.name}: setup did not create a progress session`);
+
+    const blocked = agent._progressUpdate(tabId, {
+      items: [{ id: 'octocat', label: 'octocat', action: 'follow', status: 'pending' }],
+    });
+    assert.ok(Array.isArray(blocked.warnings) && blocked.warnings.length === 1, `${AgentClass.name}: adoption downgrade should return a warning`);
+    assert.match(blocked.warnings[0], /already processed/, `${AgentClass.name}: warning should say the row is already processed`);
+    let octoRows = (agent.progressLedgers.get(tabId) || []).filter(r => String(r.id).toLowerCase() === 'octocat');
+    assert.equal(octoRows.length, 1, `${AgentClass.name}: adoption must not duplicate the row`);
+    assert.equal(octoRows[0].status, 'processed', `${AgentClass.name}: a terminal legacy row must not be reopened by a same-id scoped write without reopen:true`);
+    assert.equal(octoRows[0].sessionId, sessionId, `${AgentClass.name}: surviving row should be scoped`);
+
+    const reopened = agent._progressUpdate(tabId, {
+      reopen: true,
+      items: [{ id: 'octocat', label: 'octocat', action: 'follow', status: 'pending' }],
+    });
+    assert.equal(reopened.success, true, `${AgentClass.name}: reopen:true update should succeed`);
+    octoRows = (agent.progressLedgers.get(tabId) || []).filter(r => String(r.id).toLowerCase() === 'octocat');
+    assert.equal(octoRows[0].status, 'pending', `${AgentClass.name}: reopen:true should allow reopening the migrated terminal row`);
+  }
+});
+
 test('progress_update refuses to reopen terminal rows unless reopen:true', async () => {
   for (const AgentClass of [AgentCh, AgentFx]) {
     const agent = new AgentClass({ getActive: () => ({ contextWindow: 128000, supportsVision: false }) });
