@@ -1220,7 +1220,7 @@ body {
   background: var(--bg-input);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 6px 8px 6px 14px;
+  padding: 6px 8px;
   transition: border-color 0.2s;
 }
 
