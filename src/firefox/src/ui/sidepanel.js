@@ -6,7 +6,7 @@
 import { t, getLocale, setLocale, LANGUAGES, applyDOMTranslations } from './i18n.js';
 import { sanitizeMarkdownLinks } from './markdown-link.js';
 import { applyMode, loadMode, watch } from './theme.js';
-import { buildRecommendedActions } from './recommended-actions.js';
+import { buildRecommendedActions, shouldShowRecommendedActions } from './recommended-actions.js';
 import { createContextMenuPromptHandler } from './context-menu-prompts.js';
 
 // Hydrate the theme from browser.storage.local (the inline <head> bootstrap
@@ -1776,6 +1776,10 @@ async function switchToTab(newTabId) {
   consumePendingContextMenuPrompt().then(() => drainQueuedContextMenuPrompts()).catch(() => {});
 }
 
+function conversationHasUserMessages() {
+  return messagesEl.querySelector('.message.user') != null;
+}
+
 function hideRecommendedActions() {
   if (!recommendedActionsEl || !recommendedActionsListEl) return;
   recommendedActionsListEl.replaceChildren();
@@ -1827,7 +1831,11 @@ document.addEventListener('wb-locale-changed', updateRecommendedActionsCollapsed
 
 async function refreshRecommendedActions() {
   const requestId = ++recommendationsRequestId;
-  if (!recommendedActionsEl || !recommendedActionsListEl || currentTabId == null || isProcessing) {
+  if (!recommendedActionsEl || !recommendedActionsListEl || !shouldShowRecommendedActions({
+    tabId: currentTabId,
+    isProcessing,
+    hasUserMessages: conversationHasUserMessages(),
+  })) {
     hideRecommendedActions();
     return;
   }

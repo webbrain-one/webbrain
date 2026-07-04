@@ -514,6 +514,7 @@ body {
   overflow-y: auto;
   padding: 12px;
   scroll-behavior: smooth;
+  position: relative;
 }
 
 #messages {
@@ -1039,17 +1040,26 @@ body {
 
 
 
-/* Context-aware recommendations */
+/* Context-aware recommendations — centered pill row in the chat body */
 .recommended-actions {
-  margin-bottom: 6px;
-  padding: 5px 6px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--tint-soft-2);
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 0;
+  padding: 16px 12px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  pointer-events: none;
 }
 
 .recommended-actions.collapsed {
-  padding: 4px 6px;
+  padding: 16px 12px;
 }
 
 .recommended-actions.hidden {
@@ -1059,9 +1069,10 @@ body {
 .recommended-actions-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   gap: 6px;
-  margin-bottom: 4px;
+  margin-bottom: 0;
+  pointer-events: auto;
 }
 
 .recommended-actions.collapsed .recommended-actions-header {
@@ -1072,7 +1083,7 @@ body {
   color: var(--text-muted);
   font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.04em;
   line-height: 1;
   text-transform: uppercase;
 }
@@ -1117,7 +1128,10 @@ body {
 .recommended-actions-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 6px;
+  justify-content: center;
+  max-width: min(100%, 340px);
+  pointer-events: auto;
 }
 
 .recommended-actions.collapsed .recommended-actions-list {
@@ -1127,14 +1141,16 @@ body {
 .recommended-action-chip {
   border: 1px solid var(--border);
   border-radius: 999px;
-  background: var(--bg-input);
+  background: color-mix(in srgb, var(--bg-secondary) 82%, transparent);
+  backdrop-filter: blur(6px);
   color: var(--text-secondary);
   cursor: pointer;
   font: inherit;
   font-size: 11px;
   line-height: 1.2;
-  padding: 4px 7px;
+  padding: 6px 10px;
   transition: border-color 0.15s, color 0.15s, background 0.15s, transform 0.1s;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--border) 40%, transparent);
 }
 
 .recommended-action-chip:hover {

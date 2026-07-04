@@ -267,10 +267,10 @@ const { LlamaCppProvider: LlamaCppProviderCh } = await import(
 const { LlamaCppProvider: LlamaCppProviderFx } = await import(
   'file://' + path.join(ROOT, 'src/firefox/src/providers/llamacpp.js').replace(/\\/g, '/')
 );
-const { buildRecommendedActions: buildRecommendedActionsCh } = await import(
+const { buildRecommendedActions: buildRecommendedActionsCh, shouldShowRecommendedActions: shouldShowRecommendedActionsCh } = await import(
   'file://' + path.join(ROOT, 'src/chrome/src/ui/recommended-actions.js').replace(/\\/g, '/')
 );
-const { buildRecommendedActions: buildRecommendedActionsFx } = await import(
+const { buildRecommendedActions: buildRecommendedActionsFx, shouldShowRecommendedActions: shouldShowRecommendedActionsFx } = await import(
   'file://' + path.join(ROOT, 'src/firefox/src/ui/recommended-actions.js').replace(/\\/g, '/')
 );
 const { Agent: AgentCh } = await import(
@@ -2769,6 +2769,31 @@ test('firefox recommended actions omit Chrome-only recording', () => {
   const meetingPage = { url: 'https://meet.google.com/abc-defg-hij', title: 'Team meeting' };
   assert.equal(buildRecommendedActionsCh(meetingPage).some((a) => a.id === 'record-meeting'), true);
   assert.equal(buildRecommendedActionsFx(meetingPage).some((a) => a.id === 'record-meeting'), false);
+});
+
+test('suggested pills hide when conversation has user messages', () => {
+  for (const shouldShow of [shouldShowRecommendedActionsCh, shouldShowRecommendedActionsFx]) {
+    assert.equal(shouldShow({ tabId: 1, isProcessing: false, hasUserMessages: false }), true);
+    assert.equal(shouldShow({ tabId: 1, isProcessing: false, hasUserMessages: true }), false);
+    assert.equal(shouldShow({ tabId: null, isProcessing: false, hasUserMessages: false }), false);
+    assert.equal(shouldShow({ tabId: 1, isProcessing: true, hasUserMessages: false }), false);
+  }
+});
+
+test('suggested actions live in chat body not input area', () => {
+  for (const [label, htmlRel] of [
+    ['chrome', 'src/chrome/src/ui/sidepanel.html'],
+    ['firefox', 'src/firefox/src/ui/sidepanel.html'],
+  ]) {
+    const html = fs.readFileSync(path.join(ROOT, htmlRel), 'utf8');
+    const chatStart = html.indexOf('id="chat-container"');
+    const inputStart = html.indexOf('id="input-area"');
+    const actionsIdx = html.indexOf('id="recommended-actions"');
+    assert.notEqual(chatStart, -1, `${label}: chat container missing`);
+    assert.notEqual(inputStart, -1, `${label}: input area missing`);
+    assert.notEqual(actionsIdx, -1, `${label}: recommended actions missing`);
+    assert.equal(actionsIdx > chatStart && actionsIdx < inputStart, true, `${label}: suggested actions should live inside the chat container, not the input area`);
+  }
 });
 
 // ────────────────────────────────────────────────────────────────────────
@@ -5989,6 +6014,7 @@ test('sidepanel drops stale recommended-action refreshes after tab changes or ru
     const match = panel.match(/async function refreshRecommendedActions\(\) \{([\s\S]*?)\n\}/);
     assert.ok(match, `${label}: refreshRecommendedActions missing`);
     const body = match[1];
+    assert.match(body, /shouldShowRecommendedActions\(\{[\s\S]*?hasUserMessages: conversationHasUserMessages\(\)/, `${label}: recommended-action refresh should hide pills when the conversation has user messages`);
     const captureIdx = body.indexOf('const tabId = currentTabId;');
     const sendIdx = body.indexOf("sendToBackground('get_page_info', { tabId })");
     const guard = 'requestId !== recommendationsRequestId || currentTabId !== tabId || isProcessing';

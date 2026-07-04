@@ -271,3 +271,13 @@ export function buildRecommendedActions(pageInfo = {}, options = {}) {
 
   return actions.slice(0, Math.max(0, max));
 }
+
+/**
+ * Whether the suggested-action pill row should be visible. Pills live in the
+ * chat body and disappear once the user has sent a message or a run is active.
+ */
+export function shouldShowRecommendedActions({ tabId, isProcessing, hasUserMessages }) {
+  if (tabId == null || isProcessing) return false;
+  if (hasUserMessages) return false;
+  return true;
+}

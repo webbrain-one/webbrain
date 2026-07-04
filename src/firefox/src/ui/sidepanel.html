@@ -147,6 +147,25 @@
           </div>
         </div>
       </div>
+      <div id="recommended-actions" class="recommended-actions hidden" aria-live="polite">
+        <div class="recommended-actions-header">
+          <div class="recommended-actions-title" data-i18n="sp.recommended.title">Suggested actions</div>
+          <button
+            id="recommended-actions-toggle"
+            class="recommended-actions-toggle"
+            type="button"
+            aria-controls="recommended-actions-list"
+            aria-expanded="true"
+            data-i18n-title="sp.recommended.collapse"
+            data-i18n-aria-label="sp.recommended.collapse"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 9l6 6 6-6"/>
+            </svg>
+          </button>
+        </div>
+        <div id="recommended-actions-list" class="recommended-actions-list"></div>
+      </div>
     </div>
 
     <!-- Agent Activity Indicator -->
@@ -171,25 +190,6 @@
 
     <!-- Input Area -->
     <div id="input-area">
-      <div id="recommended-actions" class="recommended-actions hidden" aria-live="polite">
-        <div class="recommended-actions-header">
-          <div class="recommended-actions-title" data-i18n="sp.recommended.title">Suggested actions</div>
-          <button
-            id="recommended-actions-toggle"
-            class="recommended-actions-toggle"
-            type="button"
-            aria-controls="recommended-actions-list"
-            aria-expanded="true"
-            data-i18n-title="sp.recommended.collapse"
-            data-i18n-aria-label="sp.recommended.collapse"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M6 9l6 6 6-6"/>
-            </svg>
-          </button>
-        </div>
-        <div id="recommended-actions-list" class="recommended-actions-list"></div>
-      </div>
       <div id="mode-toggle">
         <button id="btn-mode-ask" class="mode-btn active" data-i18n="sp.mode.ask" data-i18n-title="sp.mode.ask.title"></button>
         <button id="btn-mode-act" class="mode-btn" data-i18n="sp.mode.act" data-i18n-title="sp.mode.act.title"></button>
