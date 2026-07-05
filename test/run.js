@@ -2895,6 +2895,39 @@ test('suggested actions live in chat body not input area', () => {
   }
 });
 
+test('suggested actions do not overlay chat messages', () => {
+  for (const [label, cssRel] of [
+    ['chrome', 'src/chrome/styles/sidepanel.css'],
+    ['firefox', 'src/firefox/styles/sidepanel.css'],
+  ]) {
+    const css = fs.readFileSync(path.join(ROOT, cssRel), 'utf8');
+    const match = css.match(/\.recommended-actions\s*\{([\s\S]*?)\n\}/);
+    assert.ok(match, `${label}: recommended actions CSS missing`);
+    const body = match[1];
+    assert.equal(/position\s*:\s*absolute\b/.test(body), false, `${label}: suggested actions must stay in normal chat flow`);
+    assert.equal(/inset\s*:\s*0\b/.test(body), false, `${label}: suggested actions must not cover the chat container`);
+    assert.equal(/z-index\s*:/.test(body), false, `${label}: suggested actions must not layer above messages`);
+  }
+});
+
+test('scheduled runs hide suggested actions immediately', () => {
+  for (const [label, panelRel] of [
+    ['chrome', 'src/chrome/src/ui/sidepanel.js'],
+    ['firefox', 'src/firefox/src/ui/sidepanel.js'],
+  ]) {
+    const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
+    const runningIdx = panel.indexOf("} else if (event === 'running') {");
+    const isProcessingIdx = panel.indexOf('isProcessing = true;', runningIdx);
+    const hideIdx = panel.indexOf('hideRecommendedActions();', runningIdx);
+    const addAssistantIdx = panel.indexOf("currentAssistantEl = addMessage('assistant', '');", runningIdx);
+    assert.notEqual(runningIdx, -1, `${label}: scheduled running branch missing`);
+    assert.notEqual(isProcessingIdx, -1, `${label}: scheduled running branch should mark processing`);
+    assert.notEqual(hideIdx, -1, `${label}: scheduled running branch should hide suggested actions`);
+    assert.notEqual(addAssistantIdx, -1, `${label}: scheduled running branch should render assistant message`);
+    assert.equal(isProcessingIdx < hideIdx && hideIdx < addAssistantIdx, true, `${label}: suggestions should hide before scheduled output renders`);
+  }
+});
+
 // ────────────────────────────────────────────────────────────────────────
 // Credential-field detection
 // ────────────────────────────────────────────────────────────────────────

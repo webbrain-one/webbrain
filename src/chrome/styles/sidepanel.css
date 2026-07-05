@@ -1061,26 +1061,23 @@ body {
 
 
 
-/* Context-aware recommendations — centered pill row in the chat body */
+/* Context-aware recommendations — inline centered pill row in the chat body */
 .recommended-actions {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
   gap: 8px;
-  margin: 0;
-  padding: 16px 12px;
+  margin: 12px 0 4px;
+  padding: 0 4px;
   border: none;
   border-radius: 0;
   background: transparent;
-  pointer-events: none;
+  box-sizing: border-box;
+  width: 100%;
 }
 
 .recommended-actions.collapsed {
-  padding: 16px 12px;
+  margin-bottom: 0;
 }
 
 .recommended-actions.hidden {
@@ -1093,7 +1090,6 @@ body {
   justify-content: center;
   gap: 6px;
   margin-bottom: 0;
-  pointer-events: auto;
 }
 
 .recommended-actions.collapsed .recommended-actions-header {
@@ -1152,7 +1148,6 @@ body {
   gap: 6px;
   justify-content: center;
   max-width: min(100%, 340px);
-  pointer-events: auto;
 }
 
 .recommended-actions.collapsed .recommended-actions-list {

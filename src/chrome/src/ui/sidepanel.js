@@ -1464,6 +1464,7 @@ async function handleScheduledJobEvent(data, tabId) {
     isProcessing = true;
     abortRequested = false;
     syncSendButtonState();
+    hideRecommendedActions();
     currentAssistantEl = addMessage('assistant', '');
     if (jobId) currentAssistantEl.dataset.scheduledJobId = jobId;
     showActivity(t('sp.scheduled.running', { title }));
@@ -1481,6 +1482,7 @@ async function handleScheduledJobEvent(data, tabId) {
       clearActiveChatPayloadForTab(tabId ?? currentTabId);
       isProcessing = true;
       syncSendButtonState();
+      hideRecommendedActions();
     } else {
       isProcessing = false;
       syncSendButtonState();
