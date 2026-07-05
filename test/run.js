@@ -717,6 +717,16 @@ test('matches n11.com and includes marketplace guidance', () => {
   assert.match(a?.notes || '', /mağaza/i);
 });
 
+test('matches getir.com and includes quick-commerce guidance', () => {
+  assert.equal(getActiveAdapter('https://www.getir.com/')?.name, 'getir');
+  assert.equal(getActiveAdapter('https://getir.com/kategori/icecek')?.name, 'getir');
+  // lookalike / suffix domains must NOT match
+  assert.notEqual(getActiveAdapter('https://getir.com.phishing.example/')?.name, 'getir');
+  const a = getActiveAdapter('https://getir.com/');
+  assert.match(a?.notes || '', /quick-commerce/i);
+  assert.match(a?.notes || '', /Adres/);
+});
+
 test('matches stripe dashboard', () => {
   const a = getActiveAdapter('https://dashboard.stripe.com/payments');
   assert.equal(a?.name, 'stripe');

@@ -16146,6 +16146,17 @@ const ADAPTERS = [
 - Price trap: coupons and "n11 Cüzdan" (wallet) balance can change the final total at checkout, so the listed price isn't always what the user pays — confirm the cart total.
 - Sort with the "Sıralama" dropdown ("En düşük fiyat" = price low→high, "En yüksek fiyat", "En yeniler"); set filters in the left rail ("Marka" brand, "Fiyat" price, store) rather than guessing URL params.`,
   },
+  {
+    name: 'getir',
+    category: 'general',
+    match: (url) => /^https?:\/\/(www\.)?getir\.com\//.test(url),
+    notes: `
+- Getir is Turkish QUICK-COMMERCE (fast grocery delivery), app-first — the website may push you to the app and full ordering usually needs login (phone number). Turkish labels: "Sepete Ekle"/"+" = add, "Sepetim" = cart, "Adres" = delivery address, "Giriş Yap" = log in.
+- LOCATION-FIRST trap: set a delivery "Adres" (address/neighborhood) BEFORE the catalog is meaningful — products, prices, and availability come from the local warehouse, so without an address you'll see an empty or generic page. Set the address first, then browse.
+- Multiple verticals with different catalogs/carts: Getir (grocery), "GetirYemek" (restaurant food), "GetirBüyük" (bulk/weekly grocery), "GetirSu" (water), "GetirÇarşı" (local shops). Pick the one that matches the task — the grocery catalog does not cover restaurant food.
+- Checkout gates: there is a "minimum sepet tutarı" (minimum basket total) before you can order, and a "teslimat ücreti" (delivery fee) may apply — surface both before promising a total.
+- Stock is real-time and thin (fast delivery from a small local stock), so an item can go out of stock between adding and checkout — re-check the cart before finalizing.`,
+  },
 
   {
     name: 'apple',
