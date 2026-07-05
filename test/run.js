@@ -14448,6 +14448,33 @@ test('continuation session derive after restart ignores a foreign task\'s scoped
   }
 });
 
+test('continuation ensure path after restart ignores a foreign task\'s scoped rows', async () => {
+  for (const AgentClass of [AgentCh, AgentFx]) {
+    const agent = new AgentClass({ getActive: () => ({ contextWindow: 128000, supportsVision: false }) });
+    const tabId = AgentClass === AgentCh ? 857 : 858;
+    agent.conversationModes.set(tabId, 'act');
+    agent._persist = () => {};
+    agent.conversations.set(tabId, [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: "follow 100 accounts i don't follow yet here" },
+      { role: 'assistant', content: 'Paused.' },
+      { role: 'user', content: 'Check the deployment again in one minute.' },
+      { role: 'assistant', content: 'Checked.' },
+      { role: 'user', content: 'continue' },
+    ]);
+    // No cached session after restart, only rows from the older follow task.
+    agent.progressLedgers.set(tabId, [
+      { id: 'old_task_row', label: 'old_task_row', action: 'follow', status: 'pending', taskKey: 'tk_00000000', sessionId: 'progress_old_session' },
+    ]);
+
+    const session = await agent._ensureProgressSessionForCurrentTask(tabId, {
+      provider: { chat: async () => { throw new Error('classifier should not run for continuation turns'); } },
+    });
+    assert.equal(session, null, `${AgentClass.name}: ensure path must not revive a foreign task's session`);
+    assert.equal(agent.progressSessions.get(tabId), undefined, `${AgentClass.name}: ensure path must not persist the stale foreign session`);
+  }
+});
+
 test('continue after an unrelated task does not revive the cached older session', async () => {
   for (const AgentClass of [AgentCh, AgentFx]) {
     const agent = new AgentClass({ getActive: () => ({ contextWindow: 128000, supportsVision: false }) });

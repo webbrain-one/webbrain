@@ -5170,7 +5170,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const existing = this._currentProgressSession(tabId, { pageScope });
     if (existing) return existing;
     if (this._currentTaskIsProgressContinuation(tabId)) {
-      const session = this._deriveProgressSessionFromRows(tabId);
+      const session = this._deriveProgressSessionForCurrentTask(tabId);
       this._syncProgressSessionPrompt(tabId);
       return session;
     }
