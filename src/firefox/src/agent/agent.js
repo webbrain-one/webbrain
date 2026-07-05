@@ -3419,7 +3419,15 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         rawResults = Array.isArray(rawResults) ? rawResults.map(item => item?.result) : [];
       } else if (globalThis.browser?.tabs?.executeScript) {
         const probeSource = Agent._submitActionProbe.toString();
-        const code = `(() => { const __wbSubmitProbe = { ${probeSource} }; return __wbSubmitProbe._submitActionProbe(${JSON.stringify(name)}, ${JSON.stringify(args || {})}); })()`;
+        const safeName = ['click', 'click_ax', 'iframe_click', 'set_field', 'press_keys', 'execute_js'].includes(name) ? name : '';
+        const serializedArgs = JSON.stringify(args || {}).replace(/[<>\u2028\u2029/]/g, ch => (
+          ch === '<' ? '\\u003C'
+            : ch === '>' ? '\\u003E'
+            : ch === '/' ? '\\u002F'
+            : ch === '\u2028' ? '\\u2028'
+            : '\\u2029'
+        ));
+        const code = `(() => { const __wbSubmitProbe = (${probeSource}); return __wbSubmitProbe(${JSON.stringify(safeName)}, ${serializedArgs}); })()`;
         rawResults = await browser.tabs.executeScript(tabId, { code, allFrames });
       }
       const detected = (Array.isArray(rawResults) ? rawResults : [])
