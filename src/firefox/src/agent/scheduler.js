@@ -83,6 +83,28 @@ function normalizePendingClarify(data, now = Date.now()) {
       host: String(permission.host || '').slice(0, 300),
     };
   }
+  const submitConfirmation = asObject(obj.submitConfirmation);
+  if (submitConfirmation.host || submitConfirmation.summary || submitConfirmation.reason) {
+    const normalizeFields = (fields, limit) => Array.isArray(fields)
+      ? fields.slice(0, limit).map((field) => {
+        const item = asObject(field);
+        return {
+          label: String(item.label || '').slice(0, 120),
+          type: String(item.type || '').slice(0, 80),
+          value: String(item.value || '').slice(0, 200),
+          changed: item.changed === true,
+        };
+      })
+      : [];
+    pending.submitConfirmation = {
+      host: String(submitConfirmation.host || '').slice(0, 300),
+      tool: String(submitConfirmation.tool || '').slice(0, 80),
+      reason: String(submitConfirmation.reason || '').slice(0, 200),
+      summary: String(submitConfirmation.summary || '').slice(0, 1200),
+      fields: normalizeFields(submitConfirmation.fields, 12),
+      changedFields: normalizeFields(submitConfirmation.changedFields, 8),
+    };
+  }
   return pending;
 }
 
