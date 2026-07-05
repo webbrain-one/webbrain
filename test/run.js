@@ -12433,6 +12433,8 @@ test('submit detector source covers submit controls, Enter, set_field, iframes, 
     assert.match(agent, /name === 'iframe_click' \|\| name === 'press_keys'/, `${label}: iframe/all-frame probing missing`);
     assert.match(agent, /allFrames/, `${label}: iframe equivalent submit checks should use allFrames`);
     assert.match(agent, /requestSubmit\|submit/, `${label}: execute_js submit/requestSubmit detection missing`);
+    assert.match(agent, /\\\.click\\s\*\\\(/, `${label}: execute_js programmatic clicks should fail closed as submit candidates`);
+    assert.match(agent, /execute_js calls form submit\/requestSubmit or programmatic click/, `${label}: execute_js submit-click reason missing`);
     assert.match(agent, /__wb_resolve_click_target_for_submit_probe/, `${label}: submit probe should reuse content click-index resolver when available`);
     assert.match(agent, /const deepQuerySelector = \(root, selector\)/, `${label}: selector submit probing should pierce open shadow roots`);
     assert.match(agent, /return deepQuerySelector\(doc, args\.selector\)/, `${label}: selector submit probing should use the deep selector resolver`);
