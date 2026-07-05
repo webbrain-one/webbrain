@@ -12433,9 +12433,9 @@ test('submit detector source covers submit controls, Enter, set_field, iframes, 
     assert.match(agent, /name === 'iframe_click' \|\| name === 'press_keys'/, `${label}: iframe/all-frame probing missing`);
     assert.match(agent, /allFrames/, `${label}: iframe equivalent submit checks should use allFrames`);
     assert.match(agent, /requestSubmit\|submit/, `${label}: execute_js submit/requestSubmit detection missing`);
-    assert.match(agent, /\\\.click\\s\*/, `${label}: execute_js programmatic clicks should fail closed as submit candidates`);
+    assert.match(agent, /\(\?:\\\.\|\\b\)click\\s\*/, `${label}: execute_js programmatic clicks should fail closed as submit candidates`);
     assert.match(agent, /requestSubmit\|submit\)\\s\*\(\?:\\\?\\\.\)\?\\s\*\\\(/, `${label}: execute_js submit detection should cover optional-chained submit calls`);
-    assert.match(agent, /\\\.click\\s\*\(\?:\\\?\\\.\)\?\\s\*\\\(/, `${label}: execute_js click detection should cover optional-chained click calls`);
+    assert.match(agent, /\(\?:\\\.\|\\b\)click\\s\*\(\?:\\\?\\\.\)\?\\s\*\\\(/, `${label}: execute_js click detection should cover optional-chained and bare click calls`);
     assert.match(agent, /execute_js calls form submit\/requestSubmit or programmatic click/, `${label}: execute_js submit-click reason missing`);
     assert.match(agent, /__wb_resolve_click_target_for_submit_probe/, `${label}: submit probe should reuse content click-index resolver when available`);
     assert.match(agent, /const deepQuerySelector = \(root, selector\)/, `${label}: selector submit probing should pierce open shadow roots`);

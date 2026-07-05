@@ -4099,7 +4099,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   _executeJsLooksLikeFormSubmit(code) {
     const text = String(code || '');
     return /\b(?:requestSubmit|submit)\s*(?:\?\.)?\s*\(/i.test(text)
-      || /\.click\s*(?:\?\.)?\s*\(/i.test(text);
+      || /(?:\.|\b)click\s*(?:\?\.)?\s*\(/i.test(text);
   }
 
   _fallbackSubmitConfirmationInfo(host, tool, reason, summary = '') {
