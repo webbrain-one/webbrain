@@ -333,6 +333,13 @@
     return out;
   }
 
+  window.__wb_resolve_click_target_for_submit_probe = function resolveClickTargetForSubmitProbe(params = {}) {
+    if (params?.index == null) return null;
+    const index = Number(params.index);
+    if (!Number.isInteger(index) || index < 0) return null;
+    return queryInteractive()[index] || null;
+  };
+
   /**
    * Get a simplified DOM snapshot for the agent.
    */

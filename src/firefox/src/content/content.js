@@ -638,6 +638,13 @@
     return queryInteractiveFull().map(c => c.el);
   }
 
+  window.__wb_resolve_click_target_for_submit_probe = function resolveClickTargetForSubmitProbe(params = {}) {
+    if (params?.index == null) return null;
+    const index = Number(params.index);
+    if (!Number.isInteger(index) || index < 0) return null;
+    return queryInteractiveForToolIndex()[index] || null;
+  };
+
   function getInteractiveElementsFull() {
     return queryInteractiveFull().map((c, i) => {
       const el = c.el;

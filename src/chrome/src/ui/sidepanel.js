@@ -3743,6 +3743,49 @@ function renderClarifyCard(data) {
   qEl.textContent = String(data.question || '').slice(0, 600);
   card.appendChild(qEl);
 
+  if (data.submitConfirmation) {
+    card.dataset.submitConfirmation = '1';
+    const submit = data.submitConfirmation || {};
+    const host = String(submit.host || '').slice(0, 300) || 'this site';
+    qEl.textContent = String(data.question || `WebBrain wants to submit this form on ${host}.`).slice(0, 600);
+
+    const summary = String(submit.summary || '').trim();
+    if (summary) {
+      const summaryEl = document.createElement('div');
+      summaryEl.className = 'clarify-reason';
+      summaryEl.textContent = summary.slice(0, 1200);
+      card.appendChild(summaryEl);
+    } else if (Array.isArray(submit.changedFields) && submit.changedFields.length) {
+      const fieldsEl = document.createElement('div');
+      fieldsEl.className = 'clarify-reason';
+      fieldsEl.textContent = submit.changedFields
+        .slice(0, 6)
+        .map(field => `${String(field.label || 'Field').slice(0, 80)}: ${String(field.value || '').slice(0, 120) || '(blank)'}`)
+        .join('; ');
+      card.appendChild(fieldsEl);
+    }
+
+    const optionsEl = document.createElement('div');
+    optionsEl.className = 'clarify-options';
+    const choices = [
+      ['once', 'Submit once'],
+      ['deny', 'Do not submit'],
+    ];
+    for (const [value, label] of choices) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'clarify-option';
+      b.textContent = label;
+      b.dataset.value = value;
+      b.addEventListener('click', () => submitClarify(card, tabId, clarifyId, value, 'option'));
+      optionsEl.appendChild(b);
+    }
+    card.appendChild(optionsEl);
+    content.appendChild(card);
+    scrollToBottom();
+    return;
+  }
+
   // Permission-prompt mode: localized question + three fixed choices that
   // return a stable VALUE ('once'/'always'/'deny'), and NO free-text input —
   // so there's nothing to parse and no English/locale dependency.

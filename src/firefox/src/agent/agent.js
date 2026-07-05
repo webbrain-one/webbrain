@@ -25,7 +25,7 @@ import {
 } from './pdf-tools.js';
 import * as trace from '../trace/recorder.js';
 import { solveCaptcha, detectCaptcha, injectToken } from './captcha-solver.js';
-import { Capability, CAPABILITY_LABEL, capabilitiesFor, requiredHosts, frameHostMatches, isNetworkMutation, PermissionManager, UNTRUSTED_CONTENT_TOOLS } from './permission-gate.js';
+import { Capability, CAPABILITY_LABEL, capabilitiesFor, requiredHosts, frameHostMatches, isNetworkMutation, normalizeHost, PermissionManager, UNTRUSTED_CONTENT_TOOLS } from './permission-gate.js';
 import {
   buildPlannerMessages,
   parsePlanFromContent,
@@ -1498,7 +1498,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       // A call may require MORE THAN ONE capability — e.g. set_field({submit})
       // both types AND submits, so it needs a TYPE grant and a CLICK grant.
       const skillCallTool = this._skillToolForName(fnName);
-      const capabilities = capabilitiesFor(fnName, fnArgs);
+      let capabilities = capabilitiesFor(fnName, fnArgs);
       if (skillCallTool?.requiresDownloadPermission && !capabilities.includes(Capability.DOWNLOAD)) {
         capabilities.push(Capability.DOWNLOAD);
       }
@@ -1542,6 +1542,45 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       }
       const scheduledPolicy = this.scheduledRunPolicies.get(tabId);
       const scheduledBypassesGate = scheduledPolicy?.requireConsequentialConfirmation === false;
+      if (!this._skipPermissionGate && !scheduledBypassesGate) {
+        const submitConfirmation = await this._detectLikelySubmitAction(tabId, fnName, fnArgs);
+        if (submitConfirmation?.isSubmit) {
+          const choice = await this._promptSubmitConfirmation(tabId, submitConfirmation, onUpdate);
+          if (choice === null) {
+            const value = '[Stopped by user before executing requested tool calls.]';
+            this._appendSyntheticToolResults(tabId, toolCalls, toolIndex, messages, onUpdate, step, () => ({
+              success: false,
+              cancelled: true,
+              error: value,
+            }));
+            onUpdate('warning', { message: 'Stopped by user.' });
+            return { action: 'abort', value };
+          }
+          if (choice !== 'once') {
+            messages.push({
+              role: 'tool',
+              tool_call_id: tc.id,
+              content: JSON.stringify({
+                success: false,
+                denied: true,
+                submitConfirmationRequired: true,
+                error: `The user did not confirm submitting the form on ${submitConfirmation.host || 'this site'}. Do NOT retry this submit action unless the user explicitly confirms it.`,
+              }),
+            });
+            onUpdate('warning', { message: 'Form submission blocked until the user confirms.' });
+            continue;
+          }
+          // The submit-specific card is fresher and more precise than the
+          // generic click/submit capability prompt. Keep any other required
+          // capabilities (e.g. TYPE for set_field), but avoid a duplicate click
+          // card for same-frame submissions. iframe_click is different: the
+          // generic gate is what identifies and fail-closes the target frame host
+          // when urlFilter is missing, so keep CLICK for that tool.
+          if (fnName !== 'iframe_click') {
+            capabilities = capabilities.filter(capability => capability !== Capability.CLICK);
+          }
+        }
+      }
       if (capabilities.length && !this._skipPermissionGate && !scheduledBypassesGate) {
         await this.permissions.hydrate();
         const curUrl = await this._currentUrl(tabId);
@@ -3325,6 +3364,465 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (v === 'always') return 'always';
     if (v === 'once') return 'once';
     return 'deny'; // 'deny', or anything unexpected → fail safe
+  }
+
+  _fallbackSubmitConfirmationInfo(host, tool, reason, summary = '') {
+    const normalizedHost = normalizeHost(host || '') || String(host || '').trim() || 'this site';
+    return {
+      isSubmit: true,
+      host: normalizedHost,
+      tool: String(tool || '').slice(0, 80),
+      reason: String(reason || 'likely form submission').slice(0, 200),
+      summary: String(summary || '').slice(0, 1200),
+      fields: [],
+      changedFields: [],
+    };
+  }
+
+  async _detectLikelySubmitAction(tabId, toolName, args = {}) {
+    const name = String(toolName || '');
+    const submitCapableTools = new Set(['click', 'click_ax', 'iframe_click', 'set_field', 'press_keys', 'execute_js']);
+    if (!submitCapableTools.has(name)) return null;
+
+    if (name === 'set_field' && !args?.submit) return null;
+    if (name === 'press_keys') {
+      const keys = JSON.stringify(args?.key ?? args?.keys ?? '').toLowerCase();
+      if (!/\b(enter|return)\b/.test(keys)) return null;
+    }
+    let currentUrl = '';
+    const fallbackHostForPrompt = async () => {
+      if (!currentUrl) {
+        try { currentUrl = await this._currentUrl(tabId); } catch {}
+      }
+      return normalizeHost(args?.urlFilter || currentUrl) || 'this site';
+    };
+    if (name === 'execute_js') {
+      return this._fallbackSubmitConfirmationInfo(
+        await fallbackHostForPrompt(),
+        name,
+        'execute_js can run page JavaScript',
+        'JavaScript execution can trigger form submission through dynamic code, so it requires fresh submit confirmation.'
+      );
+    }
+
+    try {
+      const allFrames = name === 'iframe_click' || name === 'press_keys';
+      let rawResults = [];
+      if (globalThis.chrome?.scripting?.executeScript) {
+        rawResults = await chrome.scripting.executeScript({
+          target: { tabId, ...(allFrames ? { allFrames: true } : {}) },
+          func: Agent._submitActionProbe,
+          args: [name, args || {}],
+        });
+        rawResults = Array.isArray(rawResults) ? rawResults.map(item => item?.result) : [];
+      } else if (globalThis.browser?.tabs?.executeScript) {
+        let probeSource = Agent._submitActionProbe.toString();
+        if (!/^\s*(?:async\s+)?function\b/.test(probeSource)) {
+          probeSource = `function ${probeSource}`;
+        }
+        const safeName = ['click', 'click_ax', 'iframe_click', 'set_field', 'press_keys', 'execute_js'].includes(name) ? name : '';
+        const serializedSafeName = JSON.stringify(safeName).replace(/[<>\u2028\u2029/]/g, ch => (
+          ch === '<' ? '\\u003C'
+            : ch === '>' ? '\\u003E'
+            : ch === '/' ? '\\u002F'
+            : ch === '\u2028' ? '\\u2028'
+            : '\\u2029'
+        ));
+        const serializedArgs = JSON.stringify(args || {}).replace(/[<>\u2028\u2029/]/g, ch => (
+          ch === '<' ? '\\u003C'
+            : ch === '>' ? '\\u003E'
+            : ch === '/' ? '\\u002F'
+            : ch === '\u2028' ? '\\u2028'
+            : '\\u2029'
+        ));
+        const code = `(() => { const __wbSubmitProbe = (${probeSource}); return __wbSubmitProbe(${serializedSafeName}, ${serializedArgs}); })()`;
+        rawResults = await browser.tabs.executeScript(tabId, { code, allFrames });
+      }
+      const detected = (Array.isArray(rawResults) ? rawResults : [])
+        .find(item => item && item.isSubmit === true);
+      if (detected) {
+        const host = normalizeHost(detected.host || detected.url || args?.urlFilter || currentUrl) || 'this site';
+        return {
+          isSubmit: true,
+          host,
+          tool: name,
+          reason: String(detected.reason || 'likely form submission').slice(0, 200),
+          summary: String(detected.summary || '').slice(0, 1200),
+          fields: Array.isArray(detected.fields) ? detected.fields.slice(0, 12) : [],
+          changedFields: Array.isArray(detected.changedFields) ? detected.changedFields.slice(0, 8) : [],
+        };
+      }
+    } catch {
+      // Fall through to explicit-argument fallbacks below.
+    }
+
+    if (name === 'set_field' && args?.submit) {
+      return this._fallbackSubmitConfirmationInfo(
+        await fallbackHostForPrompt(),
+        name,
+        'set_field({submit:true})',
+        'set_field was called with submit:true.'
+      );
+    }
+    return null;
+  }
+
+  /**
+   * Page/iframe-side probe for likely form submits. Keep this function fully
+   * self-contained: it is serialized into tabs and cannot close over Agent.
+   */
+  static _submitActionProbe = function _submitActionProbe(toolName, args = {}) {
+    const compact = (value, max = 160) => String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
+    const doc = document;
+    const host = (() => {
+      try { return location.hostname || location.host || ''; } catch { return ''; }
+    })();
+    const url = (() => {
+      try { return location.href || ''; } catch { return ''; }
+    })();
+    const isVisible = (el) => {
+      if (!el || el.nodeType !== 1) return false;
+      try {
+        const style = getComputedStyle(el);
+        if (style.display === 'none' || style.visibility === 'hidden' || style.pointerEvents === 'none') return false;
+        const rect = el.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      } catch { return true; }
+    };
+    const safeQuerySelector = (root, selector) => {
+      if (!root || typeof selector !== 'string' || !selector) return null;
+      try { return root.querySelector(selector); } catch {}
+      if (selector.startsWith('#') && !/[\s>+~,\[\]\.:]/.test(selector.slice(1).replace(/\\:/g, ''))) {
+        const rawId = selector.slice(1).replace(/\\:/g, ':');
+        try {
+          const byId = typeof root.getElementById === 'function' ? root.getElementById(rawId) : null;
+          if (byId) return byId;
+        } catch {}
+        try {
+          if (typeof CSS !== 'undefined' && CSS && typeof CSS.escape === 'function') {
+            return root.querySelector(`#${CSS.escape(rawId)}`);
+          }
+          const escapedRawId = rawId.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+          return root.querySelector(`[id="${escapedRawId}"]`);
+        } catch {}
+      }
+      try {
+        const escaped = selector.replace(/(^|[^\\]):/g, '$1\\:');
+        return root.querySelector(escaped);
+      } catch {}
+      return null;
+    };
+    const deepQuerySelector = (root, selector) => {
+      const hit = safeQuerySelector(root, selector);
+      if (hit) return hit;
+      let walker = null;
+      try { walker = doc.createTreeWalker(root, NodeFilter.SHOW_ELEMENT); } catch { return null; }
+      let node = walker.currentNode;
+      while (node) {
+        try {
+          if (node.shadowRoot) {
+            const inner = deepQuerySelector(node.shadowRoot, selector);
+            if (inner) return inner;
+          }
+        } catch {}
+        node = walker.nextNode();
+      }
+      return null;
+    };
+    const cssEscape = (value) => {
+      if (globalThis.CSS?.escape) return CSS.escape(String(value));
+      return String(value).replace(/["\\]/g, '\\$&');
+    };
+    const labelFor = (el) => {
+      if (!el) return '';
+      const parts = [];
+      try {
+        if (el.id) {
+          const lbl = doc.querySelector(`label[for="${cssEscape(el.id)}"]`);
+          if (lbl) parts.push(lbl.innerText || lbl.textContent || '');
+        }
+      } catch {}
+      try {
+        const wrap = el.closest('label');
+        if (wrap) parts.push(wrap.innerText || wrap.textContent || '');
+      } catch {}
+      parts.push(
+        el.getAttribute?.('aria-label') || '',
+        el.getAttribute?.('placeholder') || '',
+        el.getAttribute?.('name') || '',
+        el.getAttribute?.('id') || '',
+        el.getAttribute?.('role') || '',
+        el.tagName || ''
+      );
+      return compact(parts.find(Boolean) || 'field', 80);
+    };
+    const fieldValue = (el, pendingEl = null, pendingValue = null) => {
+      const tag = String(el?.tagName || '').toLowerCase();
+      const type = String(el?.type || '').toLowerCase();
+      if (type === 'password') return '[password redacted]';
+      if (pendingEl && el === pendingEl) return compact(pendingValue, 120);
+      if (type === 'file') return el.files?.length ? `${el.files.length} file(s)` : '';
+      if (type === 'checkbox' || type === 'radio') return el.checked ? 'checked' : 'unchecked';
+      if (tag === 'select') {
+        const selected = Array.from(el.selectedOptions || []).map(option => compact(option.text || option.value, 60));
+        return selected.join(', ');
+      }
+      if (el.isContentEditable) return compact(el.textContent || '', 120);
+      return compact(el.value || '', 120);
+    };
+    const defaultValue = (el) => {
+      const tag = String(el?.tagName || '').toLowerCase();
+      const type = String(el?.type || '').toLowerCase();
+      if (type === 'checkbox' || type === 'radio') return el.defaultChecked ? 'checked' : 'unchecked';
+      if (tag === 'select') {
+        const selected = Array.from(el.options || []).filter(option => option.defaultSelected).map(option => compact(option.text || option.value, 60));
+        return selected.join(', ');
+      }
+      return compact(el.defaultValue ?? el.getAttribute?.('value') ?? '', 120);
+    };
+    const summarizeForm = (form, pendingEl = null, pendingValue = null) => {
+      if (!form) return { summary: '', fields: [], changedFields: [] };
+      const method = compact(form.getAttribute('method') || form.method || 'GET', 20).toUpperCase();
+      const action = (() => {
+        try {
+          const actionUrl = new URL(form.getAttribute('action') || location.href, location.href);
+          actionUrl.search = '';
+          actionUrl.hash = '';
+          return compact(actionUrl.href, 160);
+        } catch {
+          return compact(form.getAttribute('action') || location.href, 160);
+        }
+      })();
+      const controls = Array.from(form.querySelectorAll('input, textarea, select, [contenteditable="true"]'))
+        .filter((el) => {
+          const type = String(el.type || '').toLowerCase();
+          return !['hidden', 'submit', 'button', 'reset', 'image'].includes(type);
+        })
+        .slice(0, 20);
+      const fields = controls.map((el) => {
+        const value = fieldValue(el, pendingEl, pendingValue);
+        const before = defaultValue(el);
+        const changed = el === pendingEl || (!!value && value !== before);
+        return {
+          label: labelFor(el),
+          type: compact(el.type || el.tagName || '', 40),
+          value,
+          changed,
+        };
+      });
+      const changedFields = fields.filter(field => field.changed || field.value).slice(0, 8);
+      const changedText = changedFields.length
+        ? `Changed/filled fields: ${changedFields.map(field => `${field.label}: ${field.value || '(blank)'}`).join('; ')}.`
+        : 'No changed or filled fields were detected.';
+      return {
+        summary: `Form action: ${method} ${action}. ${changedText}`,
+        fields: fields.slice(0, 12),
+        changedFields,
+      };
+    };
+    const submitInfo = (form, reason, pendingEl = null, pendingValue = null) => ({
+      isSubmit: true,
+      host,
+      url,
+      reason,
+      ...summarizeForm(form, pendingEl, pendingValue),
+    });
+    const labelControlFor = (el) => {
+      if (!el || el.nodeType !== 1 || String(el.tagName || '').toUpperCase() !== 'LABEL') return null;
+      let target = null;
+      try {
+        if (el.htmlFor) target = doc.getElementById(el.htmlFor);
+      } catch {}
+      try {
+        if (!target) target = el.querySelector('button,input,textarea,select');
+      } catch {}
+      try {
+        if (!target && el.nextElementSibling) {
+          const next = el.nextElementSibling;
+          if (/^(BUTTON|INPUT|TEXTAREA|SELECT)$/i.test(next.tagName || '')) target = next;
+          else target = next.querySelector?.('button,input,textarea,select') || null;
+        }
+      } catch {}
+      return target && target.nodeType === 1 ? target : null;
+    };
+    const isSubmitControl = (el) => {
+      const target = labelControlFor(el) || el;
+      if (!target || target.nodeType !== 1) return false;
+      const candidate = target.closest?.('button,input,[role="button"],[onclick],[data-action]') || target;
+      const tag = String(candidate.tagName || '').toLowerCase();
+      const type = String(candidate.getAttribute?.('type') || candidate.type || '').toLowerCase();
+      const role = String(candidate.getAttribute?.('role') || '').toLowerCase();
+      const hasActivationHandler = candidate.hasAttribute?.('onclick') || candidate.hasAttribute?.('data-action');
+      const form = candidate.form || candidate.closest?.('form');
+      if (!form) return false;
+      if (tag === 'input') return type === 'submit' || type === 'image' || type === 'button';
+      if (tag === 'button') return !type || type === 'submit' || type === 'button';
+      if (role === 'button' || hasActivationHandler) return true;
+      return false;
+    };
+    const formForSubmitControl = (el) => {
+      const target = labelControlFor(el) || el;
+      const candidate = target?.closest?.('button,input') || target;
+      return candidate?.form || candidate?.closest?.('form') || null;
+    };
+    const isFormField = (el) => {
+      if (!el || el.nodeType !== 1) return false;
+      if (el.isContentEditable) return true;
+      return /^(INPUT|TEXTAREA|SELECT)$/i.test(el.tagName || '');
+    };
+    const hasVisibleBox = (el, minWidth = 1, minHeight = 1) => {
+      if (!el || typeof el.getBoundingClientRect !== 'function') return false;
+      try {
+        const rect = el.getBoundingClientRect();
+        if (rect.width < minWidth || rect.height < minHeight) return false;
+        const style = window.getComputedStyle(el);
+        if (style.display === 'none' || style.visibility === 'hidden' || parseFloat(style.opacity || '1') === 0) return false;
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    const findTopmostModal = () => {
+      const dialogs = doc.querySelectorAll('dialog[open]');
+      for (let i = dialogs.length - 1; i >= 0; i--) {
+        if (hasVisibleBox(dialogs[i])) return dialogs[i];
+      }
+      const modalDialogs = doc.querySelectorAll('[role="dialog"][aria-modal="true"], [role="alertdialog"][aria-modal="true"]');
+      for (let i = modalDialogs.length - 1; i >= 0; i--) {
+        if (hasVisibleBox(modalDialogs[i])) return modalDialogs[i];
+      }
+      const roleDialogs = doc.querySelectorAll('[role="dialog"], [role="alertdialog"]');
+      for (let i = roleDialogs.length - 1; i >= 0; i--) {
+        if (hasVisibleBox(roleDialogs[i])) return roleDialogs[i];
+      }
+      const overlays = doc.querySelectorAll(
+        '[data-overlay], [data-state="open"][role="dialog"], ' +
+        '.modal.show, .modal-overlay, .overlay, [class*="modal"][class*="open"], ' +
+        '[class*="overlay"][class*="active"], [class*="DialogOverlay"], [class*="ModalOverlay"]'
+      );
+      for (let i = overlays.length - 1; i >= 0; i--) {
+        if (hasVisibleBox(overlays[i], 100, 100)) return overlays[i];
+      }
+      return null;
+    };
+    const interactiveElements = () => Array.from((findTopmostModal() || doc).querySelectorAll(
+      'a, button, [role="button"], [role="link"], [role="tab"], [role="menuitem"], input:not([type="hidden"]), textarea, select, input[type="button"], input[type="submit"], summary, label, [onclick], [data-action]'
+    )).filter(isVisible);
+    const resolveClickTarget = () => {
+      if (toolName === 'click_ax' || toolName === 'set_field') {
+        try {
+          if (typeof window.__wb_ax_lookup === 'function' && typeof args.ref_id === 'string') {
+            return window.__wb_ax_lookup(args.ref_id);
+          }
+        } catch {}
+        return null;
+      }
+      if (toolName === 'press_keys') return doc.activeElement;
+      if (toolName === 'iframe_click') {
+        const filter = compact(args.urlFilter || '', 300).toLowerCase();
+        const frameUrl = url.toLowerCase();
+        const frameHost = host.toLowerCase();
+        if (filter && !frameUrl.includes(filter) && !frameHost.includes(filter.replace(/^https?:\/\//, ''))) return null;
+        if (args.selector) {
+          return deepQuerySelector(doc, args.selector);
+        }
+        if (args.text) {
+          const needle = compact(args.text).toLowerCase();
+          return interactiveElements().find((el) => compact(el.innerText || el.value || el.placeholder || el.ariaLabel).toLowerCase().includes(needle)) || null;
+        }
+        if (args.x != null && args.y != null) {
+          try { return doc.elementFromPoint(Number(args.x), Number(args.y)); } catch { return null; }
+        }
+        return null;
+      }
+      if (toolName !== 'click') return null;
+      if (args.selector) {
+        return deepQuerySelector(doc, args.selector);
+      }
+      if (args.index != null) {
+        try {
+          if (typeof window.__wb_resolve_click_target_for_submit_probe === 'function') {
+            return window.__wb_resolve_click_target_for_submit_probe(args);
+          }
+        } catch {}
+        const index = Number(args.index);
+        const all = interactiveElements();
+        return Number.isFinite(index) ? all[index] || null : null;
+      }
+      if (args.x != null && args.y != null) {
+        try { return doc.elementFromPoint(Number(args.x), Number(args.y)); } catch { return null; }
+      }
+      if (args.text) {
+        const needle = compact(args.text).toLowerCase();
+        const all = interactiveElements().map(el => ({
+          el,
+          text: compact(el.innerText || el.value || el.placeholder || el.ariaLabel).toLowerCase(),
+        })).filter(item => item.text);
+        const exact = all.find(item => item.text === needle);
+        const prefix = all.find(item => item.text.startsWith(needle));
+        const contains = all.find(item => item.text.includes(needle));
+        return (exact || prefix || contains)?.el || null;
+      }
+      return null;
+    };
+
+    try {
+      const target = resolveClickTarget();
+      if (toolName === 'set_field' && args.submit) {
+        const form = target?.form || target?.closest?.('form') || null;
+        return submitInfo(form, 'set_field({submit:true})', target, args.text || '');
+      }
+      if (toolName === 'press_keys') {
+        if (target && isSubmitControl(target)) {
+          return submitInfo(formForSubmitControl(target), 'Enter key on a submit button/control');
+        }
+        const field = isFormField(target) ? target : null;
+        const form = field?.form || field?.closest?.('form') || null;
+        return form ? submitInfo(form, 'Enter key in a form field') : null;
+      }
+      if (target && isSubmitControl(target)) {
+        return submitInfo(formForSubmitControl(target), 'submit button/control activation');
+      }
+    } catch {}
+    return null;
+  };
+
+  async _promptSubmitConfirmation(tabId, submitInfo, onUpdate) {
+    const clarifyId = `submit_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    const host = normalizeHost(submitInfo?.host || '') || String(submitInfo?.host || '').trim() || 'this site';
+
+    const tabPending = this._pendingClarifications.get(tabId) || new Map();
+    this._pendingClarifications.set(tabId, tabPending);
+    const responsePromise = new Promise((resolve) => {
+      tabPending.set(clarifyId, { resolve, ts: Date.now() });
+    });
+
+    if (typeof onUpdate === 'function') {
+      try {
+        onUpdate('clarify', {
+          clarifyId,
+          submitConfirmation: {
+            host,
+            tool: String(submitInfo?.tool || '').slice(0, 80),
+            reason: String(submitInfo?.reason || '').slice(0, 200),
+            summary: String(submitInfo?.summary || '').slice(0, 1200),
+            fields: Array.isArray(submitInfo?.fields) ? submitInfo.fields.slice(0, 12) : [],
+            changedFields: Array.isArray(submitInfo?.changedFields) ? submitInfo.changedFields.slice(0, 8) : [],
+          },
+          question: `WebBrain wants to submit this form on ${host}.`,
+          options: ['once', 'deny'],
+        });
+      } catch {}
+    }
+
+    const response = await responsePromise;
+    tabPending.delete(clarifyId);
+    if (tabPending.size === 0) this._pendingClarifications.delete(tabId);
+
+    if (response && response.cancelled) return null;
+    const v = String(response?.answer || '').trim().toLowerCase();
+    if (v === 'once' || v === 'submit' || v === 'confirm' || v === 'allow' || v === 'yes') return 'once';
+    return 'deny';
   }
 
   /**
