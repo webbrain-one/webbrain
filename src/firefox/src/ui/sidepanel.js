@@ -419,6 +419,10 @@ let recommendedActionsCollapsed = false;
 let slashCommandMatches = [];
 let slashCommandSelectedIndex = 0;
 let busySlashNoticeLastShownAt = 0;
+let composerToastTimer = null;
+let retryPayloadSeq = 0;
+const activeChatPayloadsByTab = new Map();
+const retryAttachmentPayloads = new Map();
 const {
   acceptContextMenuPrompt,
   drainQueuedContextMenuPrompts,
@@ -1748,14 +1752,14 @@ async function showScratchpad(tabId = currentTabId) {
     if (currentTabId !== tabId) return;
     const body = String(res?.body || '').trim();
     if (!res?.exists || !body || body === '(empty)') {
-      addMessage('system', t('sp.scratchpad.empty'));
+      addPersistentSlashMessage(t('sp.scratchpad.empty'));
       return;
     }
-    const msgEl = addMessage('system', systemHtml(`${t('sp.scratchpad.title_html')}<pre class="scratchpad-dump">${escapeHtml(body)}</pre>`));
+    const msgEl = addPersistentSlashMessage(systemHtml(`${t('sp.scratchpad.title_html')}<pre class="scratchpad-dump">${escapeHtml(body)}</pre>`));
     addScratchpadCopyButton(msgEl);
   } catch (e) {
     if (currentTabId !== tabId) return;
-    addMessage('system', systemHtml(tSystemHtml('sp.scratchpad.error', { msg: e.message })));
+    addPersistentSlashMessage(systemHtml(tSystemHtml('sp.scratchpad.error', { msg: e.message })));
   }
 }
 
@@ -1764,13 +1768,13 @@ async function showProgress(tabId = currentTabId) {
     const res = await sendToBackground('get_progress', { tabId });
     if (currentTabId !== tabId) return;
     if (!res?.ok && !res?.success) {
-      addMessage('system', systemHtml(tSystemHtml('sp.progress.error', { msg: res?.error || 'unknown error' })));
+      addPersistentSlashMessage(systemHtml(tSystemHtml('sp.progress.error', { msg: res?.error || 'unknown error' })));
       return;
     }
     const rows = Array.isArray(res.rows) ? res.rows : [];
     const counts = res.counts || {};
     if (!rows.length) {
-      addMessage('system', t('sp.progress.empty'));
+      addPersistentSlashMessage(t('sp.progress.empty'));
       return;
     }
     const summary = [
@@ -1784,10 +1788,10 @@ async function showProgress(tabId = currentTabId) {
       `unresolved: ${counts.unresolved ?? 0}`,
     ].join('\n');
     const body = JSON.stringify(rows, null, 2);
-    addMessage('system', systemHtml(`${t('sp.progress.title_html')}<pre class="scratchpad-dump">${escapeHtml(summary)}\n\n${escapeHtml(body)}</pre>`));
+    addPersistentSlashMessage(systemHtml(`${t('sp.progress.title_html')}<pre class="scratchpad-dump">${escapeHtml(summary)}\n\n${escapeHtml(body)}</pre>`));
   } catch (e) {
     if (currentTabId !== tabId) return;
-    addMessage('system', systemHtml(tSystemHtml('sp.progress.error', { msg: e.message })));
+    addPersistentSlashMessage(systemHtml(tSystemHtml('sp.progress.error', { msg: e.message })));
   }
 }
 
@@ -1795,20 +1799,20 @@ async function editScratchpad(note, tabId = currentTabId) {
   const text = String(note || '').trim();
   if (!text) {
     if (currentTabId !== tabId) return;
-    addMessage('system', t('sp.scratchpad.edit_empty'));
+    showComposerToast(t('sp.scratchpad.edit_empty'), { duration: 5000 });
     return;
   }
   try {
     const res = await sendToBackground('write_scratchpad', { tabId, text });
     if (currentTabId !== tabId) return;
     if (!res?.ok && !res?.success) {
-      addMessage('system', systemHtml(tSystemHtml('sp.scratchpad.error', { msg: res?.error || 'unknown error' })));
+      showComposerToast(t('sp.scratchpad.error', { msg: res?.error || 'unknown error' }), { duration: 5000 });
       return;
     }
-    addMessage('system', t('sp.scratchpad.updated'));
+    showComposerToast(t('sp.scratchpad.updated'));
   } catch (e) {
     if (currentTabId !== tabId) return;
-    addMessage('system', systemHtml(tSystemHtml('sp.scratchpad.error', { msg: e.message })));
+    showComposerToast(t('sp.scratchpad.error', { msg: e.message }), { duration: 5000 });
   }
 }
 
@@ -1817,14 +1821,14 @@ function clearScratchpad(tabId = currentTabId) {
     .then((res) => {
       if (currentTabId !== tabId) return;
       if (!res?.ok && !res?.success) {
-        addMessage('system', systemHtml(tSystemHtml('sp.scratchpad.error', { msg: res?.error || 'unknown error' })));
+        showComposerToast(t('sp.scratchpad.error', { msg: res?.error || 'unknown error' }), { duration: 5000 });
         return;
       }
-      addMessage('system', t('sp.scratchpad.cleared'));
+      showComposerToast(t('sp.scratchpad.cleared'));
     })
     .catch((e) => {
       if (currentTabId !== tabId) return;
-      addMessage('system', systemHtml(tSystemHtml('sp.scratchpad.error', { msg: e.message })));
+      showComposerToast(t('sp.scratchpad.error', { msg: e.message }), { duration: 5000 });
     });
 }
 
@@ -2245,8 +2249,60 @@ function rebindSubscribeButtons() {
   });
 }
 
+function retryPayloadFromButton(btn) {
+  const text = String(btn?.dataset?.retryText || '').trim();
+  if (!text) return null;
+  const mode = ['ask', 'act', 'dev'].includes(btn.dataset.retryMode)
+    ? btn.dataset.retryMode
+    : agentMode;
+  const retryId = btn.dataset.retryId || '';
+  const attachments = retryAttachmentPayloads.get(retryId) || [];
+  const attachmentCount = Number(btn.dataset.retryAttachmentCount || 0) || 0;
+  return {
+    text,
+    mode,
+    apiMutationsAllowed: btn.dataset.retryApiMutationsAllowed === 'true',
+    attachments,
+    missingAttachments: attachmentCount > 0 && attachments.length === 0,
+  };
+}
+
+function bindErrorRetryButton(btn) {
+  if (!btn || btn.dataset.bound) return;
+  btn.dataset.bound = 'true';
+  btn.addEventListener('click', async (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (isProcessing) {
+      showComposerToast(t('sp.retry.busy'), { duration: 4000 });
+      return;
+    }
+    const payload = retryPayloadFromButton(btn);
+    if (!payload) return;
+    if (payload.missingAttachments) {
+      showComposerToast(t('sp.retry.attachments_unavailable'), { duration: 5000 });
+    }
+    setMode(payload.mode);
+    inputEl.value = payload.text;
+    autoResizeInput();
+    hideSlashCommandAutocomplete();
+    await sendMessage({
+      __retry: {
+        mode: payload.mode,
+        apiMutationsAllowed: payload.apiMutationsAllowed,
+        attachments: payload.attachments,
+      },
+    });
+  });
+}
+
+function rebindRetryButtons() {
+  document.querySelectorAll('.error-retry-btn').forEach(bindErrorRetryButton);
+}
+
 function rebindRestoredMessageControls() {
   rebindCopyButtons();
+  rebindRetryButtons();
   rebindContinueButtons();
   rebindClarifyCards();
   rebindPlanReviewCards();
@@ -2575,7 +2631,30 @@ function showBusySlashCommandNotice() {
   const now = Date.now();
   if (now - busySlashNoticeLastShownAt < BUSY_SLASH_NOTICE_COOLDOWN_MS) return;
   busySlashNoticeLastShownAt = now;
-  addMessage('system', t('sp.slash.busy_only_oob'));
+  showComposerToast(t('sp.slash.busy_only_oob'), { duration: 5000 });
+}
+
+function showComposerToast(message, { duration = 2600 } = {}) {
+  if (!message) return;
+  let toast = document.getElementById('composer-toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'composer-toast';
+    toast.className = 'composer-toast';
+    toast.setAttribute('role', 'status');
+    toast.setAttribute('aria-live', 'polite');
+    inputArea?.parentNode?.insertBefore(toast, inputArea);
+  }
+  toast.textContent = message;
+  toast.classList.remove('hidden');
+  clearTimeout(composerToastTimer);
+  composerToastTimer = setTimeout(() => {
+    toast.classList.add('hidden');
+  }, duration);
+}
+
+function addPersistentSlashMessage(content) {
+  return addMessage('system', content, { beforeCurrentAssistant: true });
 }
 
 function resolvePendingPermissionPromptsForTab(tabId) {
@@ -2596,7 +2675,7 @@ function resolvePendingPermissionPromptsForTab(tabId) {
 async function parseSlashCommands(text, tabId = currentTabId) {
   // /help — list all available slash commands
   if (/^\/help\b\s*/i.test(text)) {
-    addMessage('system', systemHtml(t('sp.help_html')));
+    addPersistentSlashMessage(systemHtml(t('sp.help_html')));
     return '';
   }
 
@@ -2604,7 +2683,7 @@ async function parseSlashCommands(text, tabId = currentTabId) {
   if (/^\/list-schedules\b\s*/i.test(text)) {
     const jobs = await refreshScheduledJobs({ tabId });
     if (currentTabId !== tabId) return '';
-    addMessage('system', visibleScheduledJobs(jobs).length
+    addPersistentSlashMessage(visibleScheduledJobs(jobs).length
       ? t('sp.schedule_form.list_refreshed')
       : t('sp.schedule_form.none'));
     return '';
@@ -2648,7 +2727,7 @@ async function parseSlashCommands(text, tabId = currentTabId) {
     const wasAlreadyAllowed = isApiMutationsAllowedForTab(tabId);
     setApiMutationsAllowedForTab(tabId, true);
     if (!wasAlreadyAllowed) {
-      addMessage('system', systemHtml(t('sp.api.enabled_html')));
+      addPersistentSlashMessage(systemHtml(t('sp.api.enabled_html')));
     }
     return text.slice(mApi[0].length).trim();
   }
@@ -2660,7 +2739,7 @@ async function parseSlashCommands(text, tabId = currentTabId) {
     askBeforeConsequential = false;
     updateActWarning();
     resolvePendingPermissionPromptsForTab(tabId);
-    addMessage('system', systemHtml(t('sp.permissions.disabled_html')));
+    addPersistentSlashMessage(systemHtml(t('sp.permissions.disabled_html')));
     return text.slice(mSkipPermissions[0].length).trim();
   }
 
@@ -2673,11 +2752,11 @@ async function parseSlashCommands(text, tabId = currentTabId) {
     if (res?.ok && res.compacted) {
       addContextCompactedNote({ ...res, manual: true });
     } else if (res?.ok && res.reason === 'busy') {
-      addMessage('system', t('sp.compact.busy'));
+      showComposerToast(t('sp.compact.busy'), { duration: 5000 });
     } else if (res?.ok) {
-      addMessage('system', t('sp.compact.nothing_to_compact'));
+      showComposerToast(t('sp.compact.nothing_to_compact'), { duration: 5000 });
     } else {
-      addMessage('system', systemHtml(tSystemHtml('sp.compact.failed', { error: res?.error || 'unknown error' })));
+      showComposerToast(tSystemHtml('sp.compact.failed', { error: res?.error || 'unknown error' }), { duration: 5000 });
     }
     return remainder;
   }
@@ -2688,7 +2767,7 @@ async function parseSlashCommands(text, tabId = currentTabId) {
     if (verboseBtn) verboseBtn.classList.toggle('active', verboseMode);
     await browser.storage.local.set({ verboseMode }).catch(() => {});
     if (currentTabId !== tabId) return '';
-    addMessage('system', verboseMode
+    showComposerToast(verboseMode
       ? t('sp.compact.verbose_on')
       : t('sp.compact.verbose_off'));
     return '';
@@ -2709,23 +2788,23 @@ async function parseSlashCommands(text, tabId = currentTabId) {
       const dataUrl = await browser.tabs.captureVisibleTab(tab.windowId, { format: 'png' });
       if (currentTabId !== tabId) return '';
       const imgHtml = `<img src="${dataUrl}" style="max-width:100%;border-radius:6px;margin:4px 0;" alt="Screenshot"/>`;
-      addMessage('system', systemHtml(imgHtml));
+      addPersistentSlashMessage(systemHtml(imgHtml));
     } catch (e) {
       if (currentTabId !== tabId) return '';
-      addMessage('system', systemHtml(tSystemHtml('sp.screenshot.error', { msg: e.message })));
+      addPersistentSlashMessage(systemHtml(tSystemHtml('sp.screenshot.error', { msg: e.message })));
     }
     return '';
   }
 
   // /record-full-screen — not supported in Firefox
   if (/^\/record-full-screen(?:\s|$)/i.test(text)) {
-    addMessage('system', systemHtml(tSystemHtml('sp.record.error', { error: 'Full-screen recording is not supported in Firefox.' })));
+    addPersistentSlashMessage(systemHtml(tSystemHtml('sp.record.error', { error: 'Full-screen recording is not supported in Firefox.' })));
     return '';
   }
 
   // /record — not supported in Firefox
   if (/^\/record(?:\s|$)/i.test(text)) {
-    addMessage('system', systemHtml(tSystemHtml('sp.record.error', { error: 'Tab recording is not supported in Firefox.' })));
+    addPersistentSlashMessage(systemHtml(tSystemHtml('sp.record.error', { error: 'Tab recording is not supported in Firefox.' })));
     return '';
   }
 
@@ -2758,7 +2837,7 @@ async function parseSlashCommands(text, tabId = currentTabId) {
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 7000);
     }
-    addMessage('system', t('sp.export.done'));
+    addPersistentSlashMessage(t('sp.export.done'));
     return '';
   }
 
@@ -2768,7 +2847,7 @@ async function parseSlashCommands(text, tabId = currentTabId) {
     const newState = !stored.profileEnabled;
     await browser.storage.local.set({ profileEnabled: newState });
     if (currentTabId !== tabId) return '';
-    addMessage('system', newState
+    showComposerToast(newState
       ? t('sp.profile.on')
       : t('sp.profile.off'));
     return '';
@@ -2815,13 +2894,13 @@ async function parseSlashCommands(text, tabId = currentTabId) {
           config: { ...config, supportsVision: newVision },
         });
         if (currentTabId !== tabId) return '';
-        addMessage('system', newVision
+        showComposerToast(newVision
           ? t('sp.vision.on')
           : t('sp.vision.off'));
       }
     } catch (e) {
       if (currentTabId !== tabId) return '';
-      addMessage('system', systemHtml(tSystemHtml('sp.vision.error', { msg: e.message })));
+      showComposerToast(tSystemHtml('sp.vision.error', { msg: e.message }), { duration: 5000 });
     }
     return '';
   }
@@ -2852,13 +2931,16 @@ function updateApiBadge() {
   }
 }
 
-async function sendMessage(extraChatParams) {
+async function sendMessage(extraChatParams = {}) {
+  const retryOptions = extraChatParams?.__retry || null;
+  const chatExtraParams = { ...(extraChatParams || {}) };
+  delete chatExtraParams.__retry;
   stopListening();
   let text = inputEl.value.trim();
   if (!text) return;
   const tabId = currentTabId;
   text = normalizeScreenshotCommandText(text);
-  if (!isProcessing && isAttachmentReadPendingForTab(tabId)) {
+  if (!retryOptions && !isProcessing && isAttachmentReadPendingForTab(tabId)) {
     syncSendButtonState();
     return false;
   }
@@ -2885,18 +2967,20 @@ async function sendMessage(extraChatParams) {
     }
     return enqueueQueuedComposerMessage(tabId, text);
   }
-  const modeForSend = modeForMessageText(text);
-  const apiMutationsAllowedForSend = isApiMutationsAllowedForTab(tabId) || /^\/allow-api\b/i.test(text);
+  const modeForSend = retryOptions?.mode || modeForMessageText(text);
+  const apiMutationsAllowedForSend = retryOptions
+    ? !!retryOptions.apiMutationsAllowed
+    : isApiMutationsAllowedForTab(tabId) || /^\/allow-api\b/i.test(text);
   saveInputDraftForTab(tabId, '');
   hideSlashCommandAutocomplete();
 
-  if (text.startsWith('/')) {
+  if (!retryOptions && text.startsWith('/')) {
     inputEl.value = '';
     autoResizeInput();
     syncSendButtonState();
   }
 
-  text = await parseSlashCommands(text, tabId);
+  if (!retryOptions) text = await parseSlashCommands(text, tabId);
   const renderToCurrentTab = currentTabId === tabId;
   if (!renderToCurrentTab) {
     if (text) saveInputDraftForTab(tabId, text);
@@ -2910,7 +2994,15 @@ async function sendMessage(extraChatParams) {
   }
 
   let assistantEl = null;
-  const attachmentsForSend = getPendingAttachmentsForTab(tabId, { create: false }).slice();
+  const attachmentsForSend = retryOptions
+    ? (Array.isArray(retryOptions.attachments) ? retryOptions.attachments.slice() : [])
+    : getPendingAttachmentsForTab(tabId, { create: false }).slice();
+  const retryPayload = {
+    text,
+    mode: modeForSend,
+    apiMutationsAllowed: apiMutationsAllowedForSend,
+    attachments: attachmentsForSend,
+  };
   if (renderToCurrentTab) {
     isProcessing = true;
     abortRequested = false;
@@ -2918,13 +3010,16 @@ async function sendMessage(extraChatParams) {
     autoResizeInput();
     syncSendButtonState();
     hideRecommendedActions();
-    clearPendingAttachmentsForTab(tabId);
-    renderAttachmentPreviews();
+    if (!retryOptions) {
+      clearPendingAttachmentsForTab(tabId);
+      renderAttachmentPreviews();
+    }
     addMessage('user', text);
     showActivity(t('sp.activity.thinking'));
     assistantEl = addMessage('assistant', '');
     currentAssistantEl = assistantEl;
   }
+  activeChatPayloadsByTab.set(tabId, retryPayload);
 
   let accepted = false;
   let completedSuccessfully = false;
@@ -2936,7 +3031,7 @@ async function sendMessage(extraChatParams) {
       mode: modeForSend,
       apiMutationsAllowed: apiMutationsAllowedForSend,
       ...(attachmentsForSend.length ? { attachments: attachmentsForSend } : {}),
-      ...extraChatParams,
+      ...chatExtraParams,
     });
     accepted = true;
     completedSuccessfully = updatesContainSuccessfulDone(res?.updates);
@@ -2984,9 +3079,12 @@ async function sendMessage(extraChatParams) {
     }
   } catch (e) {
     if (renderToCurrentTab && currentTabId === tabId && !abortRequested) {
-      addMessage('error', t('sp.error_prefix', { msg: e.message }));
+      addMessage('error', t('sp.error_prefix', { msg: e.message }), { retryPayload });
     }
   } finally {
+    if (activeChatPayloadsByTab.get(tabId) === retryPayload) {
+      activeChatPayloadsByTab.delete(tabId);
+    }
     if (renderToCurrentTab && currentTabId === tabId) finalizeSteps(assistantEl);
     clearAssistantTextStreamState(assistantEl);
     const wasAborted = abortRequested;
@@ -3114,7 +3212,9 @@ function handleAgentUpdateMessage(msg) {
     case 'error':
       hideActivity();
       if (currentAssistantEl) markLastStepFailed();
-      addMessage('error', t('sp.error_prefix', { msg: data.message }));
+      addMessage('error', t('sp.error_prefix', { msg: data.message }), {
+        retryPayload: abortRequested ? null : activeChatPayloadsByTab.get(currentTabId),
+      });
       break;
 
     case 'max_steps_reached':
@@ -3746,7 +3846,32 @@ function renderSubscribeError(textEl, content) {
   return true;
 }
 
-function addMessage(role, content) {
+function addErrorRetryButton(msgEl, retryPayload) {
+  if (!msgEl || !retryPayload?.text || msgEl.querySelector('.error-retry-btn')) return;
+  const retryId = `retry-${Date.now()}-${++retryPayloadSeq}`;
+  const attachments = Array.isArray(retryPayload.attachments) ? retryPayload.attachments.slice() : [];
+  if (attachments.length) retryAttachmentPayloads.set(retryId, attachments);
+  msgEl.classList.add('retryable');
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'error-retry-btn';
+  btn.title = t('sp.retry');
+  btn.setAttribute('aria-label', t('sp.retry'));
+  btn.dataset.retryId = retryId;
+  btn.dataset.retryText = String(retryPayload.text || '');
+  btn.dataset.retryMode = retryPayload.mode || 'ask';
+  btn.dataset.retryApiMutationsAllowed = retryPayload.apiMutationsAllowed ? 'true' : 'false';
+  btn.dataset.retryAttachmentCount = String(attachments.length);
+  btn.innerHTML = `
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <polyline points="23 4 23 10 17 10"></polyline>
+      <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+    </svg>`;
+  bindErrorRetryButton(btn);
+  msgEl.querySelector('.message-content')?.appendChild(btn);
+}
+
+function addMessage(role, content, options = {}) {
   const msgEl = document.createElement('div');
   msgEl.className = `message ${role}`;
 
@@ -3766,7 +3891,15 @@ function addMessage(role, content) {
 
   contentEl.appendChild(textEl);
   msgEl.appendChild(contentEl);
-  messagesEl.appendChild(msgEl);
+  if (options.beforeCurrentAssistant && currentAssistantEl?.parentNode === messagesEl) {
+    messagesEl.insertBefore(msgEl, currentAssistantEl);
+  } else {
+    messagesEl.appendChild(msgEl);
+  }
+
+  if (role === 'error' && options.retryPayload) {
+    addErrorRetryButton(msgEl, options.retryPayload);
+  }
 
   // Add copy button to assistant messages, and to user messages too (Firefox
   // only — manual select-and-copy is unreliable in the Firefox sidebar panel).

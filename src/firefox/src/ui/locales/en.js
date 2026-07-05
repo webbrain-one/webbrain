@@ -169,6 +169,9 @@ export default {
   'sp.copy': 'Copy',
   'sp.copied': 'Copied!',
   'sp.copy.code.title': 'Copy code',
+  'sp.retry': 'Retry',
+  'sp.retry.busy': 'Wait for the current run to finish before retrying.',
+  'sp.retry.attachments_unavailable': 'Attachments from the failed attempt are no longer available; retrying the text only.',
 
   'sp.error_prefix': 'Error: {msg}',
   'sp.subscribe.allowance_used': 'Daily free WebBrain Cloud allowance used.',
