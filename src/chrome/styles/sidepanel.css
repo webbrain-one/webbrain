@@ -485,6 +485,22 @@ body {
 }
 .api-badge span { font-weight: 600; }
 
+.composer-toast {
+  margin: 0 12px 6px 12px;
+  padding: 7px 11px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.4;
+  box-shadow: var(--shadow);
+}
+
+.composer-toast.hidden {
+  display: none;
+}
+
 /* Page Inspection Banner */
 #inspection-banner {
   display: flex;
@@ -1876,6 +1892,46 @@ body {
   background: rgba(244, 67, 54, 0.1);
   border: 1px solid rgba(244, 67, 54, 0.3);
   color: var(--error-soft);
+}
+
+.message.error.retryable .message-content {
+  position: relative;
+  padding-right: 42px;
+  min-height: 42px;
+}
+
+.error-retry-btn {
+  position: absolute;
+  right: 8px;
+  bottom: 7px;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(244, 67, 54, 0.35);
+  border-radius: 6px;
+  background: rgba(244, 67, 54, 0.08);
+  color: var(--error-soft);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.error-retry-btn svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.error-retry-btn:hover,
+.error-retry-btn:focus-visible {
+  background: rgba(244, 67, 54, 0.18);
+  border-color: rgba(244, 67, 54, 0.55);
+  color: var(--text-primary);
 }
 
 /* WebBrain Cloud quota / subscribe prompt — bare URL upgraded to a button */

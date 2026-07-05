@@ -6989,14 +6989,14 @@ test('sidepanel scopes async tab commands to the original tab', () => {
     const screenshotIdx = panel.indexOf('// /screenshot');
     const screenshotEnd = panel.indexOf('// /record', screenshotIdx);
     const screenshotBody = panel.slice(screenshotIdx, screenshotEnd);
-    assert.match(screenshotBody, /if \(currentTabId !== tabId \|\| !tab\?\.active\) return '';[\s\S]*?captureVisibleTab[\s\S]*?if \(currentTabId !== tabId\) return '';[\s\S]*?addMessage\('system', systemHtml\(imgHtml\)\);/, `${label}: /screenshot should not render a captured image into a different tab`);
+    assert.match(screenshotBody, /if \(currentTabId !== tabId \|\| !tab\?\.active\) return '';[\s\S]*?captureVisibleTab[\s\S]*?if \(currentTabId !== tabId\) return '';[\s\S]*?(?:addMessage\('system', systemHtml\(imgHtml\)\)|addPersistentSlashMessage\(systemHtml\(imgHtml\)\));/, `${label}: /screenshot should not render a captured image into a different tab`);
     const fullPageIdx = panel.indexOf('// /full-page-screenshot');
     assert.match(panel, /function normalizeScreenshotRequestText\(text\) \{[\s\S]*?\.normalize\('NFKD'\)[\s\S]*?\.replace\(\/\[\\u0300-\\u036f\]\/g, ''\)[\s\S]*?\.replace\(\/\\u0131\/g, 'i'\)/, `${label}: plain screenshot request normalization should handle accented Turkish text`);
     assert.match(panel, /function isPlainScreenshotRequest\(text\) \{[\s\S]*?const s = normalizeScreenshotRequestText\(text\);[\s\S]*?s\.startsWith\('\/'\)[\s\S]*?ekran goruntusu[\s\S]*?ekran goruntusunu/, `${label}: plain screenshot request routing should cover English and Turkish screenshot-only requests`);
     if (label === 'chrome') {
       assert.notEqual(fullPageIdx, -1, `${label}: /full-page-screenshot parser missing`);
       const fullPageBody = panel.slice(fullPageIdx, panel.indexOf('// /record', fullPageIdx));
-      assert.match(fullPageBody, /sendToBackground\('capture_full_page_screenshot', \{ tabId \}\);[\s\S]*?if \(currentTabId !== tabId\) return '';[\s\S]*?addMessage\('system', systemHtml\(imgHtml\)\);/, `${label}: /full-page-screenshot should render only into the initiating tab`);
+      assert.match(fullPageBody, /sendToBackground\('capture_full_page_screenshot', \{ tabId \}\);[\s\S]*?if \(currentTabId !== tabId\) return '';[\s\S]*?(?:addMessage\('system', systemHtml\(imgHtml\)\)|addPersistentSlashMessage\(systemHtml\(imgHtml\)\));/, `${label}: /full-page-screenshot should render only into the initiating tab`);
       assert.match(panel, /function isPlainFullPageScreenshotRequest\(text\) \{[\s\S]*?full\|whole\|entire\|complete[\s\S]*?tam sayfa[\s\S]*?ekran goruntusu/, `${label}: plain full-page screenshot request routing should cover English and Turkish requests`);
       assert.match(panel, /function normalizeScreenshotCommandText\(text\) \{[\s\S]*?isPlainFullPageScreenshotRequest\(text\)[\s\S]*?return '\/full-page-screenshot';[\s\S]*?isPlainScreenshotRequest\(text\)[\s\S]*?return '\/screenshot';/, `${label}: screenshot normalization should route full-page requests before viewport screenshots`);
     } else {
@@ -7005,7 +7005,7 @@ test('sidepanel scopes async tab commands to the original tab', () => {
       assert.doesNotMatch(panel, /isPlainFullPageScreenshotRequest/, `${label}: should not normalize full-page screenshot text into an unsupported slash command`);
       assert.match(panel, /function normalizeScreenshotCommandText\(text\) \{[\s\S]*?if \(isPlainScreenshotRequest\(text\)\) return '\/screenshot';[\s\S]*?return text;[\s\S]*?\}/, `${label}: screenshot normalization should only route viewport screenshots`);
     }
-    const sendIdx = panel.indexOf('async function sendMessage(extraChatParams)');
+    const sendIdx = panel.search(/async function sendMessage\(extraChatParams(?: = \{\})?\)/);
     assert.notEqual(sendIdx, -1, `${label}: sendMessage missing`);
     const sendBody = panel.slice(sendIdx, panel.indexOf('let assistantEl = null;', sendIdx));
     assert.match(sendBody, /const tabId = currentTabId;[\s\S]*?text = normalizeScreenshotCommandText\(text\);[\s\S]*?if \(isProcessing\)/, `${label}: plain screenshot requests should route to slash commands before busy gating`);
@@ -7025,11 +7025,11 @@ test('sidepanel scopes async tab commands to the original tab', () => {
 
     const profileIdx = panel.indexOf('// /profile');
     const profileBody = panel.slice(profileIdx, panel.indexOf('// /ask', profileIdx));
-    assert.match(profileBody, /storage\.local\.get\(\['profileEnabled', 'profileText'\]\);[\s\S]*?storage\.local\.set\(\{ profileEnabled: newState \}\);[\s\S]*?if \(currentTabId !== tabId\) return '';[\s\S]*?addMessage\('system'/, `${label}: /profile should not render a result into a different tab`);
+    assert.match(profileBody, /storage\.local\.get\(\['profileEnabled', 'profileText'\]\);[\s\S]*?storage\.local\.set\(\{ profileEnabled: newState \}\);[\s\S]*?if \(currentTabId !== tabId\) return '';[\s\S]*?(?:addMessage\('system'|showComposerToast\()/, `${label}: /profile should not render a result into a different tab`);
 
     const visionIdx = panel.indexOf('// /vision');
     const visionBody = panel.slice(visionIdx, panel.indexOf('return text;', visionIdx));
-    assert.match(visionBody, /sendToBackground\('get_providers'\);[\s\S]*?sendToBackground\('update_provider'[\s\S]*?if \(currentTabId !== tabId\) return '';[\s\S]*?addMessage\('system'/, `${label}: /vision should not render a result into a different tab`);
+    assert.match(visionBody, /sendToBackground\('get_providers'\);[\s\S]*?sendToBackground\('update_provider'[\s\S]*?if \(currentTabId !== tabId\) return '';[\s\S]*?(?:addMessage\('system'|showComposerToast\()/, `${label}: /vision should not render a result into a different tab`);
   }
 });
 
@@ -7046,7 +7046,7 @@ test('sidepanel awaits immediate verbose preference writes', () => {
     );
     assert.match(
       panel,
-      /if \(\s*\/\^\\\/verbose\\b\\s\*\/i\.test\(text\)\s*\) \{[\s\S]*?await (chrome|browser)\.storage\.local\.set\(\{ verboseMode \}\)\.catch\(\(\) => \{\}\);[\s\S]*?if \(currentTabId !== tabId\) return '';[\s\S]*?addMessage\('system', verboseMode/,
+      /if \(\s*\/\^\\\/verbose\\b\\s\*\/i\.test\(text\)\s*\) \{[\s\S]*?await (chrome|browser)\.storage\.local\.set\(\{ verboseMode \}\)\.catch\(\(\) => \{\}\);[\s\S]*?if \(currentTabId !== tabId\) return '';[\s\S]*?showComposerToast\(verboseMode/,
       `${label}: /verbose should guard against stale tabs after persisting the mode change`,
     );
   }
@@ -7095,7 +7095,7 @@ test('sidepanel preserves stale residual slash-command prompts without hidden ru
     const switchBody = panel.slice(switchStart, panel.indexOf('refreshScheduledJobs({', switchStart));
     assert.match(switchBody, /captureInputDraftForTab\(renderedTabId\);[\s\S]*?restoreInputDraftForTab\(newTabId\);/, `${label}: tab switches should capture and restore per-tab composer drafts`);
 
-    const sendMatch = panel.match(/async function sendMessage\(extraChatParams\) \{[\s\S]*?\n  return accepted;\n\}/);
+    const sendMatch = panel.match(/async function sendMessage\(extraChatParams(?: = \{\})?\) \{[\s\S]*?\n  return accepted;\n\}/);
     assert.ok(sendMatch, `${label}: sendMessage missing`);
     const sendBody = sendMatch[0];
     const modeHelperStart = panel.indexOf('function modeForMessageText(text) {');
@@ -7109,8 +7109,8 @@ test('sidepanel preserves stale residual slash-command prompts without hidden ru
     ]) {
       assert.ok(modeHelper.includes(snippet), `${label}: modeForMessageText should handle ${commandLabel}`);
     }
-    const modeCapture = "const modeForSend = modeForMessageText(text);";
-    const apiCapture = "const apiMutationsAllowedForSend = isApiMutationsAllowedForTab(tabId) || /^\\/allow-api\\b/i.test(text);";
+    const modeCapture = "const modeForSend = retryOptions?.mode || modeForMessageText(text);";
+    const apiCapture = 'const apiMutationsAllowedForSend = retryOptions';
     const modeCaptureIdx = sendBody.indexOf(modeCapture);
     const apiCaptureIdx = sendBody.indexOf(apiCapture);
     const parseIdx = sendBody.indexOf('text = await parseSlashCommands(text, tabId);');
@@ -7136,6 +7136,90 @@ test('sidepanel preserves stale residual slash-command prompts without hidden ru
       sendBody,
       /sendToBackground\('chat', \{[\s\S]*?tabId: currentTabId/,
       `${label}: chat dispatch should not read currentTabId after slash parsing`,
+    );
+  }
+});
+
+test('sidepanel keeps retry metadata long enough for returned error updates', () => {
+  for (const [label, panelRel] of [
+    ['chrome', 'src/chrome/src/ui/sidepanel.js'],
+    ['firefox', 'src/firefox/src/ui/sidepanel.js'],
+  ]) {
+    const source = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
+    assert.match(
+      source,
+      /function createActiveChatPayloadState\(retryPayload\) \{[\s\S]*?renderedErrorMessages: new Set\(\)[\s\S]*?\}/,
+      `${label}: active retry metadata should track rendered error messages`,
+    );
+    assert.match(
+      source,
+      /const retryAttachmentIdsByTab = new Map\(\);/,
+      `${label}: retry attachment payloads should be indexed by tab for cleanup`,
+    );
+    assert.match(
+      source,
+      /function clearRetryAttachmentsForTab\(tabId\) \{[\s\S]*?retryAttachmentPayloads\.delete\(retryId\)[\s\S]*?retryAttachmentIdsByTab\.delete\(numericTabId\);[\s\S]*?\}/,
+      `${label}: clearing a conversation should release retry attachment payloads for that tab`,
+    );
+    assert.match(
+      source,
+      /function renderClearedConversationForTab\(tabId\) \{[\s\S]*?releaseRetryAttachmentsInTree\(messagesEl\);[\s\S]*?clearRetryAttachmentsForTab\(tabId\);[\s\S]*?messagesEl\.innerHTML = '';/,
+      `${label}: reset should release retry attachment payloads before removing retry buttons from the DOM`,
+    );
+    assert.match(
+      source,
+      /retryAttachmentPayloads\.set\(retryId, attachments\);[\s\S]*?trackRetryAttachmentId\(renderedTabId \?\? currentTabId, retryId\);/,
+      `${label}: retry attachment payload IDs should be associated with the rendered tab`,
+    );
+    assert.match(
+      source,
+      /if \(payload\.apiMutationsAllowed\) \{[\s\S]*?setApiMutationsAllowedForTab\(currentTabId, true\);[\s\S]*?\}[\s\S]*?await sendMessage\(\{/,
+      `${label}: restored retries that replay API mutation permission should resync the visible per-tab API state`,
+    );
+    assert.match(
+      source,
+      /const activePayloadState = createActiveChatPayloadState\(retryPayload\);[\s\S]*?activeChatPayloadsByTab\.set\(tabId, activePayloadState\);/,
+      `${label}: sendMessage should store retry metadata as an active run state`,
+    );
+    assert.match(
+      source,
+      /const returnedErrorUpdate = Array\.isArray\(res\?\.updates\)[\s\S]*?res\.updates\.find\(u => u\?\.type === 'error'\)[\s\S]*?renderAgentErrorUpdate\(returnedErrorUpdate\.data, tabId\);/,
+      `${label}: returned agent error updates should render with retry metadata even if the broadcast is late`,
+    );
+    assert.match(
+      source,
+      /case 'error':[\s\S]*?renderAgentErrorUpdate\(data, currentTabId\);[\s\S]*?break;/,
+      `${label}: broadcast agent errors should share the retry-aware renderer`,
+    );
+    assert.match(
+      source,
+      /function scheduleActiveChatPayloadCleanup\(tabId, state\) \{[\s\S]*?setTimeout\(\(\) => \{[\s\S]*?activeChatPayloadsByTab\.delete\(tabId\);[\s\S]*?\}, 30000\);/,
+      `${label}: active retry metadata should be cleaned up after late broadcasts have had a chance to drain`,
+    );
+    assert.match(
+      source,
+      /function clearActiveChatPayloadForTab\(tabId\) \{[\s\S]*?activeChatPayloadsByTab\.delete\(tabId\);[\s\S]*?\}/,
+      `${label}: non-chat runs should be able to clear stale chat retry metadata`,
+    );
+    assert.match(
+      source,
+      /else if \(event === 'running'\) \{[\s\S]*?clearActiveChatPayloadForTab\(tabId \?\? currentTabId\);[\s\S]*?isProcessing = true;/,
+      `${label}: scheduled runs should clear stale chat retry metadata before starting`,
+    );
+    assert.match(
+      source,
+      /function reattachPlanReviewActiveRun\(card\) \{[\s\S]*?clearActiveChatPayloadForTab\(currentTabId\);[\s\S]*?isProcessing = true;/,
+      `${label}: plan review resumes should clear stale chat retry metadata before starting`,
+    );
+    assert.match(
+      source,
+      /const isScheduledClarify = !!card\.dataset\.scheduledJobId;[\s\S]*?if \(isScheduledClarify\) \{[\s\S]*?clearActiveChatPayloadForTab\(tabId\);[\s\S]*?isProcessing = true;/,
+      `${label}: scheduled clarify resumes should clear stale chat retry metadata before starting`,
+    );
+    assert.match(
+      source,
+      /async function continueAgent\(\) \{[\s\S]*?const tabId = currentTabId;[\s\S]*?clearActiveChatPayloadForTab\(tabId\);[\s\S]*?isProcessing = true;/,
+      `${label}: Continue runs should clear stale chat retry metadata before starting`,
     );
   }
 });
@@ -15296,6 +15380,10 @@ test('scheduled resume turns get a fresh untrusted ledger snapshot appended', as
     assert.ok(hostileIdx > untrustedIdx, `${AgentClass.name}: hostile row labels must only appear inside the untrusted wrapper`);
     assert.doesNotMatch(augmented.slice(0, untrustedIdx), /steal secrets|Ignore previous instructions/, `${AgentClass.name}: hostile row labels must not leak into the trusted preamble`);
 
+    agent.conversationModes.set(tabId, 'dev');
+    const devAugmented = agent._augmentScheduledResumeMessage(tabId, resumeMessage);
+    assert.match(devAugmented, /Fresh progress ledger snapshot at resume time: 2 row\(s\), 1 unresolved/, `${AgentClass.name}: Dev scheduled resumes should get the action-mode snapshot`);
+
     assert.equal(agent._augmentScheduledResumeMessage(tabId, 'hello there'), 'hello there', `${AgentClass.name}: non-resume turns must pass through unchanged`);
 
     agent._progressUpdate(tabId, {
@@ -17838,7 +17926,7 @@ test('sidepanel: pending attachments are tab-scoped and send-gated while loading
     assert.ok(source.includes('const pendingAttachmentsByTab = new Map()'), `${label} should store pending attachments by tab`);
     assert.ok(source.includes('const attachmentReadCountsByTab = new Map()'), `${label} should track in-flight attachment reads by tab`);
     assert.ok(source.includes('function isAttachmentReadPendingForTab'), `${label} should expose a read-pending helper`);
-    assert.ok(source.includes('if (!isProcessing && isAttachmentReadPendingForTab(tabId))'), `${label} should block keyboard sends while files load`);
+    assert.ok(source.includes('if (!retryOptions && !isProcessing && isAttachmentReadPendingForTab(tabId))'), `${label} should block normal sends while files load without blocking retries`);
     assert.ok(source.includes('clearPendingAttachmentsForTab(tabId);'), `${label} should clear pending files with the conversation`);
     assert.match(
       source,

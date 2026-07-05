@@ -5691,7 +5691,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
   _augmentScheduledResumeMessage(tabId, userMessage) {
     if (typeof userMessage !== 'string') return userMessage;
-    if ((this.conversationModes.get(tabId) || 'ask') !== 'act') return userMessage;
+    if (!this._isActionMode(this.conversationModes.get(tabId) || 'ask')) return userMessage;
     if (!this._isScheduledResumeTurn(userMessage)) return userMessage;
     const { rows } = this._progressRowsForResumeGuard(tabId);
     if (!rows.length) return userMessage;
