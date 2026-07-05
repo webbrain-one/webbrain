@@ -1577,10 +1577,6 @@
       display: block;
       background: #000;
     }
-    /* The security explainer is landscape 16:9 - keep that ratio at every
-       width so it never inherits the portrait mobile override below. */
-    .video-frame--wide { padding-bottom: 56.25%; }
-
     /* ================================================================
        RESPONSIVE
        ================================================================ */
@@ -1620,9 +1616,6 @@
       }
       .video-showcase { max-width: 380px; }
       .video-frame { padding-bottom: 177.78%; }
-      /* Wide (16:9) showcase stays full-width and keeps its ratio on phones. */
-      .video-showcase--wide { max-width: 100%; }
-      .video-frame--wide { padding-bottom: 56.25%; }
     }
     @media (max-width: 560px) {
       /* Stack the install cards on small phones — squeezing two side-by-side
@@ -1947,8 +1940,8 @@
   <div class="section-label">보안</div>
   <h2 class="section-title">WebBrain이 제어권을 지켜 주는 방식</h2>
   <p class="section-subtitle">브라우저는 실제 작업이 이루어지는 곳이자 공격적인 입력이 들어올 수 있는 표면입니다. WebBrain은 읽기 전용 Ask Mode에서 시작하고, 행동하기 전에 허락을 구하며, 숨겨진 프롬프트 주입을 방어하고, 민감한 입력란에는 더 엄격한 규칙을 적용합니다.</p>
-  <div class="video-showcase video-showcase--wide">
-    <div class="video-frame video-frame--wide">
+  <div class="video-showcase">
+    <div class="video-frame">
       <video id="security-video" data-desktop-src="/assets/security-desktop.mp4" data-mobile-src="/assets/security-mobile.mp4" poster="/assets/security-poster.jpg" controls preload="none" playsinline></video>
     </div>
   </div>

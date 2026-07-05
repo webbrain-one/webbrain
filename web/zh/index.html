@@ -1577,10 +1577,6 @@
       display: block;
       background: #000;
     }
-    /* The security explainer is landscape 16:9 - keep that ratio at every
-       width so it never inherits the portrait mobile override below. */
-    .video-frame--wide { padding-bottom: 56.25%; }
-
     /* ================================================================
        RESPONSIVE
        ================================================================ */
@@ -1620,9 +1616,6 @@
       }
       .video-showcase { max-width: 380px; }
       .video-frame { padding-bottom: 177.78%; }
-      /* Wide (16:9) showcase stays full-width and keeps its ratio on phones. */
-      .video-showcase--wide { max-width: 100%; }
-      .video-frame--wide { padding-bottom: 56.25%; }
     }
     @media (max-width: 560px) {
       /* Stack the install cards on small phones — squeezing two side-by-side
@@ -1947,8 +1940,8 @@
   <div class="section-label">安全</div>
   <h2 class="section-title">WebBrain 如何让你保持掌控</h2>
   <p class="section-subtitle">浏览器是真正工作发生的地方，也是一块对抗性表面。WebBrain 从只读的询问模式开始，行动前先请求确认，防御隐藏的提示注入，并用更严格的规则处理敏感字段。</p>
-  <div class="video-showcase video-showcase--wide">
-    <div class="video-frame video-frame--wide">
+  <div class="video-showcase">
+    <div class="video-frame">
       <video id="security-video" data-desktop-src="/assets/security-desktop.mp4" data-mobile-src="/assets/security-mobile.mp4" poster="/assets/security-poster.jpg" controls preload="none" playsinline></video>
     </div>
   </div>

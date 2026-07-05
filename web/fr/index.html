@@ -1577,10 +1577,6 @@
       display: block;
       background: #000;
     }
-    /* The security explainer is landscape 16:9 - keep that ratio at every
-       width so it never inherits the portrait mobile override below. */
-    .video-frame--wide { padding-bottom: 56.25%; }
-
     /* ================================================================
        RESPONSIVE
        ================================================================ */
@@ -1620,9 +1616,6 @@
       }
       .video-showcase { max-width: 380px; }
       .video-frame { padding-bottom: 177.78%; }
-      /* Wide (16:9) showcase stays full-width and keeps its ratio on phones. */
-      .video-showcase--wide { max-width: 100%; }
-      .video-frame--wide { padding-bottom: 56.25%; }
     }
     @media (max-width: 560px) {
       /* Stack the install cards on small phones — squeezing two side-by-side
@@ -1947,8 +1940,8 @@
   <div class="section-label">Sécurité</div>
   <h2 class="section-title">Comment WebBrain vous garde aux commandes</h2>
   <p class="section-subtitle">Le navigateur est l&#39;endroit où le vrai travail se fait — et aussi une surface d&#39;attaque. WebBrain démarre en mode Demander, en lecture seule, demande avant d&#39;agir, se défend contre les injections de prompt cachées et applique des règles plus strictes aux champs sensibles.</p>
-  <div class="video-showcase video-showcase--wide">
-    <div class="video-frame video-frame--wide">
+  <div class="video-showcase">
+    <div class="video-frame">
       <video id="security-video" data-desktop-src="/assets/security-desktop.mp4" data-mobile-src="/assets/security-mobile.mp4" poster="/assets/security-poster.jpg" controls preload="none" playsinline></video>
     </div>
   </div>
