@@ -1,7 +1,7 @@
 import { AGENT_TOOLS, AGENT_TOOL_NAMES, RESERVED_AGENT_TOOL_NAMES, getToolsForMode, SYSTEM_PROMPT_ASK, SYSTEM_PROMPT_ACT, SYSTEM_PROMPT_ACT_COMPACT, SYSTEM_PROMPT_ACT_MID } from './tools.js';
 import { URL_FAMILY_TOOLS, resourceBucket, bucketArgsKey } from './loop-bucket.js';
 import { isCredentialField, CREDENTIAL_NOTE_STRICT } from './credential-fields.js';
-import { detectProgressAction, formatLedgerRow, formatLedgerSummary, isValidLedgerStatus, ledgerDoneBlock, normalizeLedgerStatus, progressCounts, selectLedgerRows, unresolvedLedgerRows, upsertLedgerItems } from './progress-ledger.js';
+import { detectProgressAction, formatLedgerRow, formatLedgerSummary, isBlockedLedgerDowngrade, isTerminalLedgerStatus, isValidLedgerStatus, ledgerDoneBlock, normalizeLedgerStatus, progressCounts, selectLedgerRows, unresolvedLedgerRows, upsertLedgerItems } from './progress-ledger.js';
 import { buildGithubStargazerProgressItems } from './observers/github-stargazers.js';
 import { analyzeMastodonPage, mastodonHandoffInstruction, mastodonProgressGuard } from './observers/mastodon.js';
 import { isProgressActionAllowed, isProgressIntentActive, normalizeProgressAction, normalizeProgressIntent } from './progress-intent.js';
@@ -3800,6 +3800,131 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     return String(text || '').replace(/\s+/g, ' ').trim();
   }
 
+  // Bare acknowledgments carry no task identity; the anchor walk must not
+  // treat "ok" between steps as a task switch.
+  _isProgressAckText(text) {
+    return /^(?:ok(?:ay)?|yes|yep|yeah|sure|thanks|thank\s+you|great|good|nice|cool|perfect|got\s+it|sounds\s+good|alright|fine)[\s\d.,!?;:~*+-]*$/i.test(text);
+  }
+
+  // Latest user task message that is NOT a continuation phrase ("continue",
+  // "keep going", ...) or a bare acknowledgment, so one logical task keeps
+  // one anchor across pauses and confirmations.
+  _progressTaskAnchorText(tabId) {
+    const messages = this.conversations.get(tabId) || [];
+    for (let i = messages.length - 1; i >= 1; i--) {
+      const m = messages[i];
+      if (m.role !== 'user') continue;
+      if (this._isScheduledResumeTurn(m.content)) continue;
+      if (this._isAgentInjectedUserContent(m.content)) continue;
+      const text = this._stripInjectedTaskContext(this._messageText(m.content));
+      if (!text) continue;
+      const lower = text.toLowerCase();
+      if (this._isProgressContinuationText(lower)) continue;
+      if (this._isProgressAckText(lower)) continue;
+      return text;
+    }
+    return '';
+  }
+
+  _progressTaskKeyHash(tabId) {
+    const text = this._progressTaskTextKey(this._progressTaskAnchorText(tabId) || this._originalTaskText(tabId)).toLowerCase();
+    if (!text) return '';
+    let hash = 0x811c9dc5;
+    for (let i = 0; i < text.length; i++) {
+      hash ^= text.charCodeAt(i);
+      hash = Math.imul(hash, 0x01000193) >>> 0;
+    }
+    return `tk_${hash.toString(16).padStart(8, '0')}`;
+  }
+
+  _adoptUnscopedProgressRows(tabId, sessionId, opts = {}) {
+    const safeSessionId = String(sessionId || '').trim();
+    if (!safeSessionId) return { changed: false, blockedDowngrades: [] };
+    const rows = this.progressLedgers.get(tabId) || [];
+    if (!rows.some(row => row && typeof row === 'object' && !String(row.sessionId || row.session_id || '').trim())) {
+      return { changed: false, blockedDowngrades: [] };
+    }
+    const taskKey = opts.taskKey !== undefined ? opts.taskKey : this._progressTaskKeyHash(tabId);
+    if (!taskKey) return { changed: false, blockedDowngrades: [] };
+    const scopedRowsById = new Map();
+    for (const row of rows) {
+      if (!row || typeof row !== 'object') continue;
+      if (String(row.sessionId || row.session_id || '').trim() !== safeSessionId) continue;
+      scopedRowsById.set(String(row.id || '').trim().toLowerCase(), row);
+    }
+    // Adopt exactly what the resume guard attributes to the current task:
+    // stamped rows by exact key, pre-stamp rows via the legacy heuristic.
+    // Otherwise a scoped update for a guard-visible unstamped row would leave
+    // the unscoped pending copy behind and the merged currentTaskOnly view
+    // would report it forever. Foreign-stamped rows stay excluded even when
+    // the guard's continuation shortcut would include them.
+    const guardAttributed = new Set(this._legacyUnscopedProgressRowsForResumeGuard(tabId, rows, { taskKey }));
+    const legacyFieldsById = new Map();
+    const legacyTerminalById = new Map();
+    const blockedDowngrades = [];
+    let changed = false;
+    const next = [];
+    for (const row of rows) {
+      const rowTaskKey = row && typeof row === 'object' ? String(row.taskKey || '').trim() : '';
+      const adoptable = row && typeof row === 'object'
+        && !String(row.sessionId || row.session_id || '').trim()
+        && (rowTaskKey ? rowTaskKey === taskKey : guardAttributed.has(row));
+      if (!adoptable) {
+        next.push(row);
+        continue;
+      }
+      const idKey = String(row.id || '').trim().toLowerCase();
+      const scoped = scopedRowsById.get(idKey);
+      if (scoped) {
+        // The session already tracks this item under sessionId::id; stamping
+        // would create a duplicate key. Drop the legacy copy and fold its
+        // collected fields into the scoped row (scoped values win) — except a
+        // terminal legacy status, which must not be silently reopened by a
+        // non-terminal scoped row: that would bypass the reopen:true gate the
+        // same-key upsert path enforces.
+        if (row.fields && typeof row.fields === 'object') legacyFieldsById.set(idKey, row.fields);
+        if (isBlockedLedgerDowngrade(row.status, scoped.status, { allowReopen: opts.allowReopen })) {
+          const keptStatus = normalizeLedgerStatus(row.status, 'processed');
+          legacyTerminalById.set(idKey, keptStatus);
+          blockedDowngrades.push({ id: scoped.id, keptStatus, requestedStatus: normalizeLedgerStatus(scoped.status, 'pending') });
+        }
+        changed = true;
+        continue;
+      }
+      changed = true;
+      next.push({ ...row, sessionId: safeSessionId });
+    }
+    if (!changed) return { changed: false, blockedDowngrades: [] };
+    const merged = (legacyFieldsById.size || legacyTerminalById.size)
+      ? next.map(row => {
+        if (!row || typeof row !== 'object') return row;
+        if (String(row.sessionId || row.session_id || '').trim() !== safeSessionId) return row;
+        const idKey = String(row.id || '').trim().toLowerCase();
+        const legacyFields = legacyFieldsById.get(idKey);
+        const terminalStatus = legacyTerminalById.get(idKey);
+        if (!legacyFields && !terminalStatus) return row;
+        return {
+          ...row,
+          ...(legacyFields ? { fields: { ...legacyFields, ...(row.fields || {}) } } : {}),
+          ...(terminalStatus ? { status: terminalStatus } : {}),
+        };
+      })
+      : next;
+    this.progressLedgers.set(tabId, merged);
+    return { changed: true, blockedDowngrades };
+  }
+
+  _progressSessionMatchesAnchoredTask(tabId, session) {
+    const sessionText = this._progressTaskTextKey(session?.taskText);
+    if (!sessionText) return true;
+    // Degenerate stored text (session persisted during a continuation turn)
+    // carries no task identity to compare against; keep the old behavior.
+    if (this._isProgressContinuationText(sessionText.toLowerCase())) return true;
+    const anchor = this._progressTaskTextKey(this._progressTaskAnchorText(tabId) || this._originalTaskText(tabId));
+    if (!anchor) return true;
+    return sessionText === anchor;
+  }
+
   _progressSessionMatchesTask(session, taskText, pageScope = '') {
     if (!session?.sessionId) return false;
     const wantedText = this._progressTaskTextKey(taskText);
@@ -3848,13 +3973,21 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     return (Array.isArray(rows) ? rows : []).filter(row => String(row?.sessionId || '').trim() === id);
   }
 
-  _deriveProgressSessionFromRows(tabId) {
-    const rows = unresolvedLedgerRows(this.progressLedgers.get(tabId) || []);
+  _deriveProgressSessionFromRows(tabId, opts = {}) {
+    const wantedTaskKey = String(opts.taskKey || '').trim();
+    let rows = unresolvedLedgerRows(this.progressLedgers.get(tabId) || []);
+    if (wantedTaskKey) rows = rows.filter(row => String(row?.taskKey || '').trim() === wantedTaskKey);
+    if (opts.unstampedOnly) rows = rows.filter(row => !String(row?.taskKey || '').trim());
     const sessionIds = Array.from(new Set(rows.map(row => String(row?.sessionId || '').trim()).filter(Boolean)));
     if (sessionIds.length !== 1) return null;
     const sessionId = sessionIds[0];
     const actions = Array.from(new Set(rows.map(row => normalizeProgressAction(row?.action)).filter(Boolean)));
     if (!actions.length) return null;
+    if (opts.persist === false) {
+      // Read-only derive for guard/snapshot paths: no _setProgressSession, so
+      // a progress_read must never mutate action-gating state.
+      return { sessionId, mode: 'active', allowedActions: actions };
+    }
     return this._setProgressSession(tabId, {
       mode: 'active',
       allowedActions: actions,
@@ -3862,9 +3995,28 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       confidence: 1,
     }, {
       sessionId,
-      taskText: this._latestTaskText(tabId),
+      // Anchor, not latest: a session persisted during a "continue" turn must
+      // carry the real task identity, not the continuation phrase.
+      taskText: this._progressTaskAnchorText(tabId) || this._latestTaskText(tabId),
       source: 'ledger',
     });
+  }
+
+  // Derive a session only from rows attributable to the current task:
+  // stamped rows by exact key first, then (only while the conversation is
+  // still on its original task) rows persisted before taskKey stamping
+  // existed. Rows from other tasks neither revive nor block the rebuild.
+  _deriveProgressSessionForCurrentTask(tabId, opts = {}) {
+    const taskKey = opts.taskKey !== undefined ? opts.taskKey : this._progressTaskKeyHash(tabId);
+    let session = taskKey ? this._deriveProgressSessionFromRows(tabId, { ...opts, taskKey }) : null;
+    if (!session) {
+      const anchor = this._progressTaskTextKey(this._progressTaskAnchorText(tabId));
+      const original = this._progressTaskTextKey(this._originalTaskText(tabId));
+      if (anchor && anchor === original) {
+        session = this._deriveProgressSessionFromRows(tabId, { ...opts, taskKey: '', unstampedOnly: true });
+      }
+    }
+    return session;
   }
 
   _currentProgressSession(tabId, opts = {}) {
@@ -3872,7 +4024,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const taskText = this._latestTaskText(tabId);
     const pageScope = String(opts.pageScope || '').trim();
     if (this._currentTaskIsProgressContinuation(tabId)) {
-      return session || this._deriveProgressSessionFromRows(tabId);
+      // "continue" refers to the latest non-continuation task, so a cached
+      // session from an older, different task must not be revived by it.
+      const anchored = session && this._progressSessionMatchesAnchoredTask(tabId, session) ? session : null;
+      return anchored || this._deriveProgressSessionForCurrentTask(tabId, opts.readOnly ? { persist: false } : {});
     }
     if (!this._progressSessionMatchesTask(session, taskText, pageScope)) return null;
     if (pageScope && !session.pageScope) {
@@ -4063,25 +4218,66 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         : item))
       : canonicalItems;
     const current = this.progressLedgers.get(tabId) || [];
-    const result = upsertLedgerItems(current, scopedItems, { source: opts.source || args.source || 'model', sessionId, pageScope });
+    const taskKey = this._progressTaskKeyHash(tabId);
+    const result = upsertLedgerItems(current, scopedItems, {
+      source: opts.source || args.source || 'model',
+      sessionId,
+      pageScope,
+      taskKey,
+      allowReopen: args.reopen === true,
+    });
     if (!result.changed) {
       return { success: false, error: 'progress_update: no valid items were provided. Each item needs a stable id.' };
     }
     this.progressLedgers.set(tabId, result.rows);
+    const adoption = sessionId
+      ? this._adoptUnscopedProgressRows(tabId, sessionId, { allowReopen: args.reopen === true, taskKey })
+      : { blockedDowngrades: [] };
     this._syncProgressLedgerMessage(tabId);
     if (typeof this._persist === 'function') this._persist(tabId);
-    const visibleRows = sessionId ? this._rowsForProgressSession(tabId, sessionId, result.rows) : result.rows;
+    const ledgerRows = this.progressLedgers.get(tabId) || [];
+    const visibleRows = sessionId ? this._rowsForProgressSession(tabId, sessionId, ledgerRows) : ledgerRows;
+    const blockedDowngrades = [...(result.blockedDowngrades || []), ...adoption.blockedDowngrades];
+    // Adoption may have reverted a status after the upsert; report each
+    // updated row as it actually ended up in the ledger, not as requested.
+    const updatedRows = adoption.changed
+      ? result.updated.map(row => {
+        if (!row || typeof row !== 'object') return row;
+        const final = ledgerRows.find(r => r && r.id === row.id
+          && String(r.sessionId || '') === String(row.sessionId || ''));
+        return final || row;
+      })
+      : result.updated;
     return {
       success: true,
-      updated: result.updated,
+      updated: updatedRows,
       counts: progressCounts(visibleRows),
       unresolved: unresolvedLedgerRows(visibleRows, { limit: 20 }),
       ...(sessionId ? { sessionId } : {}),
+      ...(blockedDowngrades.length ? {
+        warnings: blockedDowngrades.map(b => `row ${b.id} is already ${b.keptStatus}; status change to ${b.requestedStatus} ignored. Pass reopen:true only if the user explicitly asked to redo it.`),
+      } : {}),
       note: 'progress ledger updated',
     };
   }
 
   _progressRead(tabId, args = {}) {
+    const limit = Number.isFinite(Number(args.limit)) ? Math.max(1, Math.min(200, Math.floor(Number(args.limit)))) : 50;
+    const offset = Number.isFinite(Number(args.offset)) ? Math.max(0, Math.floor(Number(args.offset))) : 0;
+    if (args.currentTaskOnly || args.current_task_only) {
+      const guard = this._progressRowsForResumeGuard(tabId);
+      return {
+        success: true,
+        counts: progressCounts(guard.rows),
+        rows: selectLedgerRows(guard.rows, { status: args.status, limit, offset }),
+        offset,
+        limit,
+        ...(guard.sessionId ? { sessionId: guard.sessionId } : {}),
+        note: guard.rows.length
+          ? 'Rows the app attributes to the current task. Use progress_update to close pending/acted rows.'
+          : 'No progress rows recorded for the current task.',
+      };
+    }
     const explicitSessionId = String(args.sessionId || args.session_id || '').trim();
     const session = args.allSessions || explicitSessionId ? null : this._currentProgressSession(tabId);
     const rows = args.allSessions
@@ -4089,8 +4285,6 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       : explicitSessionId
         ? this._rowsForProgressSession(tabId, explicitSessionId)
       : (session ? this._rowsForProgressSession(tabId, session.sessionId) : []);
-    const limit = Number.isFinite(Number(args.limit)) ? Math.max(1, Math.min(200, Math.floor(Number(args.limit)))) : 50;
-    const offset = Number.isFinite(Number(args.offset)) ? Math.max(0, Math.floor(Number(args.offset))) : 0;
     return {
       success: true,
       counts: progressCounts(rows),
@@ -4225,7 +4419,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const existing = this._currentProgressSession(tabId, { pageScope });
     if (existing) return existing;
     if (this._currentTaskIsProgressContinuation(tabId)) {
-      const session = this._deriveProgressSessionFromRows(tabId);
+      const session = this._deriveProgressSessionForCurrentTask(tabId);
       this._syncProgressSessionPrompt(tabId);
       return session;
     }
@@ -4374,7 +4568,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   }
 
   _currentTaskIsProgressContinuation(tabId) {
-    const text = this._latestTaskText(tabId).toLowerCase();
+    return this._isProgressContinuationText(this._latestTaskText(tabId).toLowerCase());
+  }
+
+  _isProgressContinuationText(text) {
     if (!text) return false;
     if (/^(?:please\s+)?(?:continue|keep\s+going|go\s+on|proceed|resume|carry\s+on|next|do\s+the\s+rest|finish\s+(?:the\s+)?(?:rest|remaining)|keep\s+working)(?:\s+(?:please|with\s+(?:it|this|that|them|those|the\s+(?:task|list|queue|rest|remaining))))?[.!?]*$/.test(text)) {
       return true;
@@ -4585,6 +4782,165 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       'When all rows are processed, skipped, or failed, call done with a real summary.',
       `Current progress snapshot: ${counts.total} row(s), ${unresolved.length} unresolved.`,
     ].join(' ');
+  }
+
+  _progressActionMentionedInTaskText(taskText, action) {
+    const canonical = normalizeProgressAction(action);
+    if (!canonical) return false;
+    const words = new Set([canonical.replace(/_/g, ' ')]);
+    const firstWord = canonical.split('_')[0];
+    if (firstWord) words.add(firstWord);
+    return Array.from(words).some(word => {
+      const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return new RegExp(`\\b${escaped}(?:s|ed|ing)?\\b`, 'i').test(taskText);
+    });
+  }
+
+  _taskTextLooksLikeLegacyProgressWork(taskText, rows = []) {
+    const text = String(taskText || '').toLowerCase();
+    if (!/\b(?:\d+|all|each|every|remaining|rest|list|accounts?|users?|profiles?|items?|rows?|people|members|followers|following|stargazers|results|links|pages|contacts|records)\b/i.test(text)) {
+      return false;
+    }
+    const actions = Array.from(new Set((Array.isArray(rows) ? rows : [])
+      .map(row => normalizeProgressAction(row?.action))
+      .filter(Boolean)));
+    return actions.some(action => this._progressActionMentionedInTaskText(text, action));
+  }
+
+  _legacyUnscopedProgressRowsForResumeGuard(tabId, allRows = [], opts = {}) {
+    const rows = (Array.isArray(allRows) ? allRows : [])
+      .filter(row => row && !String(row.sessionId || row.session_id || '').trim());
+    if (!rows.length) return [];
+
+    // Mixed migration state: stamped rows are matched by exact taskKey — even
+    // on continuation turns, so a foreign task's stamped rows never ride along
+    // — while pre-stamp rows are kept on an explicit continuation or via the
+    // lexical heuristic while the conversation is still on its original task.
+    const taskKey = opts.taskKey !== undefined ? opts.taskKey : this._progressTaskKeyHash(tabId);
+    const unstamped = rows.filter(row => !String(row.taskKey || '').trim());
+    let keepUnstamped = false;
+    if (unstamped.length) {
+      if (this._currentTaskIsProgressContinuation(tabId)) {
+        // "continue" resumes unstamped legacy rows only while the anchored
+        // task is still the original one; continuing after an unrelated task
+        // must not resurrect them.
+        const anchor = this._progressTaskTextKey(this._progressTaskAnchorText(tabId));
+        const original = this._progressTaskTextKey(this._originalTaskText(tabId));
+        keepUnstamped = !anchor || anchor === original;
+      } else {
+        const latestTask = this._progressTaskTextKey(this._latestTaskText(tabId));
+        const originalTask = this._progressTaskTextKey(this._originalTaskText(tabId));
+        keepUnstamped = !!latestTask
+          && latestTask === originalTask
+          && this._taskTextLooksLikeLegacyProgressWork(latestTask, unstamped);
+      }
+    }
+    return rows.filter(row => {
+      const rowKey = String(row.taskKey || '').trim();
+      if (rowKey) return !!taskKey && rowKey === taskKey;
+      return keepUnstamped;
+    });
+  }
+
+  _dedupeProgressRowsForResumeGuard(rows = []) {
+    const byId = new Map();
+    for (const row of Array.isArray(rows) ? rows : []) {
+      if (!row || typeof row !== 'object') continue;
+      const key = String(row.id || '').trim().toLowerCase();
+      if (!key) continue;
+      const previous = byId.get(key);
+      if (!previous) {
+        byId.set(key, row);
+        continue;
+      }
+      const rowTerminal = isTerminalLedgerStatus(row.status);
+      const previousTerminal = isTerminalLedgerStatus(previous.status);
+      if (rowTerminal && !previousTerminal) {
+        byId.set(key, row);
+      } else if (rowTerminal === previousTerminal && !String(row.sessionId || row.session_id || '').trim()) {
+        byId.set(key, row);
+      }
+    }
+    return Array.from(byId.values());
+  }
+
+  _progressRowsForResumeGuard(tabId) {
+    const taskKey = this._progressTaskKeyHash(tabId);
+    let session = this._currentProgressSession(tabId, { readOnly: true });
+    if (!session) {
+      // Rebuild after a restart, read-only: guard/snapshot paths must not
+      // write session state (progress_read is a read tool).
+      session = this._deriveProgressSessionForCurrentTask(tabId, { persist: false, taskKey });
+    }
+    const sessionId = String(session?.sessionId || '').trim();
+    const safeSessionId = /^[A-Za-z0-9_.:-]{1,128}$/.test(sessionId) ? sessionId : '';
+    const allRows = this.progressLedgers.get(tabId) || [];
+    let readSessionId = safeSessionId;
+    let rows = readSessionId
+      ? this._rowsForProgressSession(tabId, readSessionId, allRows)
+      : [];
+    // Mixed migration state: legacy unscoped rows for the same task must stay
+    // visible even when the session already has scoped rows, so merge instead
+    // of only falling back when the scoped read is empty. A merged set can't
+    // be read via a sessionId filter, so it switches to the currentTaskOnly
+    // read (which returns exactly this set).
+    const legacyRows = this._legacyUnscopedProgressRowsForResumeGuard(tabId, allRows, { taskKey });
+    if (!rows.length) {
+      rows = legacyRows;
+      if (rows.length) readSessionId = '';
+    } else if (legacyRows.length) {
+      const keep = new Set([...rows, ...legacyRows]);
+      rows = allRows.filter(row => keep.has(row));
+      rows = this._dedupeProgressRowsForResumeGuard(rows);
+      readSessionId = '';
+    }
+    return { rows, sessionId: readSessionId };
+  }
+
+  _augmentScheduledResumeMessage(tabId, userMessage) {
+    if (typeof userMessage !== 'string') return userMessage;
+    if ((this.conversationModes.get(tabId) || 'ask') !== 'act') return userMessage;
+    if (!this._isScheduledResumeTurn(userMessage)) return userMessage;
+    const { rows } = this._progressRowsForResumeGuard(tabId);
+    if (!rows.length) return userMessage;
+    const counts = progressCounts(rows);
+    if (!counts.unresolved) return userMessage;
+
+    const firstUnresolved = unresolvedLedgerRows(rows, { limit: 1 })[0];
+    const summary = `${formatLedgerSummary(rows, { maxRows: 18 })}${firstUnresolved ? `\nFirst unresolved row id: ${firstUnresolved.id}` : ''}`;
+    const preamble = `[Fresh progress ledger snapshot at resume time: ${counts.total} row(s), ${counts.unresolved} unresolved. The app-recorded rows below are the source of truth; they override any next-account/item hint in the resume instruction above.]`;
+    return `${userMessage}\n\n${preamble}\n${this._wrapUntrusted('progress_read', summary)}`;
+  }
+
+  _buildProgressGuardedResumeInstruction(tabId, modelInstruction = '') {
+    const rawInstruction = String(modelInstruction || '').trim();
+    const { rows, sessionId: readSessionId } = this._progressRowsForResumeGuard(tabId);
+    if (!rows.length) return rawInstruction;
+
+    const counts = progressCounts(rows);
+    if (!counts.unresolved) return rawInstruction;
+
+    const readCall = readSessionId
+      ? `progress_read({sessionId: "${readSessionId}", limit: 50})`
+      : 'progress_read({currentTaskOnly: true, limit: 50})';
+    const guard = [
+      'Continue the active Act-mode progress-ledger task after this scheduled pause.',
+      ...(readSessionId ? [`App-owned progress session id: ${readSessionId}.`] : []),
+      `Before navigating to any account/item named below, call ${readCall} and use the returned pending/acted rows as the source of truth.`,
+      'Do not redo processed, skipped, or failed rows.',
+      'If a concrete next account/item in the model-supplied hint conflicts with the ledger, ignore the hint and follow the ledger.',
+      `Current progress snapshot: ${counts.total} row(s), ${counts.unresolved} unresolved.`,
+    ].join(' ');
+    const hint = rawInstruction
+      ? `\n\nModel-supplied resume hint (secondary; ignore any item order that conflicts with the ledger): ${rawInstruction}`
+      : '';
+    return `${guard}${hint}`.slice(0, 4000);
+  }
+
+  _resumeArgsWithProgressGuard(tabId, args = {}) {
+    const nextArgs = { ...(args || {}) };
+    nextArgs.resume_instruction = this._buildProgressGuardedResumeInstruction(tabId, nextArgs.resume_instruction || '');
+    return nextArgs;
   }
 
   async _scheduleAutoProgressResume(tabId, onUpdate = () => {}) {
@@ -5730,7 +6086,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         tabId,
         conversationId: this.conversationIds.get(tabId) || null,
         mode: this.conversationModes.get(tabId) || 'act',
-        args: args || {},
+        args: this._resumeArgsWithProgressGuard(tabId, args || {}),
         currentUrl: tab?.url || '',
         currentTitle: tab?.title || '',
       });
@@ -7061,6 +7417,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   async _processMessageInner(tabId, userMessage, onUpdate, mode, attachments = []) {
     await this._hydrate(tabId);
     const messages = this.getConversation(tabId, mode);
+    // Scheduled resumes get the live ledger appended at fire time, so the
+    // model's first turn sees current row state even if it never calls
+    // progress_read; must run before the message is enriched/pushed.
+    userMessage = this._augmentScheduledResumeMessage(tabId, userMessage);
     const costState = this._newCostRunState();
     this.currentCostState.set(tabId, costState);
     // New user turn: drop transient "allow once" / "deny once" permission grants.

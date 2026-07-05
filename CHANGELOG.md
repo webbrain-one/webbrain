@@ -4,6 +4,11 @@ All notable changes to WebBrain are documented in this file.
 
 This changelog was generated from the repository Git history and release tags. Versions without a Git tag are inferred from version-bump commits and the current `package.json` / browser manifest versions.
 
+## [20.6.0] - 2026-07-05
+
+### Changed
+- Guarded scheduled resumes with the progress ledger so resumed runs can preserve and surface task progress before continuing.
+
 ## [20.5.5] - 2026-07-04
 
 ### Changed

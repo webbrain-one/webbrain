@@ -96,6 +96,13 @@ export function isTerminalLedgerStatus(status) {
   return TERMINAL_STATUSES.has(String(status || '').toLowerCase());
 }
 
+// Single source of truth for the reopen gate: a terminal row may only move
+// back to a non-terminal status via an explicit allowReopen (never for auto).
+export function isBlockedLedgerDowngrade(existingStatus, incomingStatus, opts = {}) {
+  if (!isTerminalLedgerStatus(existingStatus) || isTerminalLedgerStatus(incomingStatus)) return false;
+  return opts.source === 'auto' || opts.allowReopen !== true;
+}
+
 export function isValidLedgerStatus(status) {
   return VALID_STATUSES.has(normalizeLedgerStatus(status, ''));
 }
@@ -183,6 +190,7 @@ export function upsertLedgerItems(rows = [], items = [], opts = {}) {
   });
 
   const updated = [];
+  const blockedDowngrades = [];
   for (const rawItem of Array.isArray(items) ? items : []) {
     const incoming = normalizeLedgerItem(rawItem, { source, now, sessionId: opts.sessionId, pageScope: opts.pageScope, taskKey: opts.taskKey });
     if (!incoming) continue;
@@ -197,7 +205,10 @@ export function upsertLedgerItems(rows = [], items = [], opts = {}) {
 
     const existing = next[existingIdx] || {};
     const autoActed = source === 'auto' && incoming.status === 'acted';
-    const keepTerminal = autoActed && isTerminalLedgerStatus(existing.status);
+    const keepTerminal = isBlockedLedgerDowngrade(existing.status, incoming.status, { source, allowReopen: opts.allowReopen });
+    if (keepTerminal && !autoActed) {
+      blockedDowngrades.push({ id: incoming.id, keptStatus: existing.status, requestedStatus: incoming.status });
+    }
     const merged = {
       ...existing,
       label: incoming.label || existing.label,
@@ -224,7 +235,7 @@ export function upsertLedgerItems(rows = [], items = [], opts = {}) {
     updated.push(merged);
   }
 
-  return { rows: next, updated, counts: progressCounts(next), changed: updated.length > 0 };
+  return { rows: next, updated, counts: progressCounts(next), changed: updated.length > 0, blockedDowngrades };
 }
 
 export function formatLedgerRow(row) {
