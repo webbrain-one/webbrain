@@ -2968,6 +2968,23 @@ test('scheduled clarify cards hide suggested actions before rendering prompts', 
   }
 });
 
+test('hiding suggested actions cancels pending refreshes', () => {
+  for (const [label, panelRel] of [
+    ['chrome', 'src/chrome/src/ui/sidepanel.js'],
+    ['firefox', 'src/firefox/src/ui/sidepanel.js'],
+  ]) {
+    const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
+    const match = panel.match(/function hideRecommendedActions\(\) \{([\s\S]*?)\n\}/);
+    assert.ok(match, `${label}: hideRecommendedActions missing`);
+    const body = match[1];
+    const invalidateIdx = body.indexOf('recommendationsRequestId += 1;');
+    const clearIdx = body.indexOf('recommendedActionsListEl.replaceChildren();');
+    assert.notEqual(invalidateIdx, -1, `${label}: hideRecommendedActions should invalidate pending refreshes`);
+    assert.notEqual(clearIdx, -1, `${label}: hideRecommendedActions should clear rendered suggestions`);
+    assert.equal(invalidateIdx < clearIdx, true, `${label}: pending refreshes should be invalidated before clearing suggestions`);
+  }
+});
+
 // ────────────────────────────────────────────────────────────────────────
 // Credential-field detection
 // ────────────────────────────────────────────────────────────────────────

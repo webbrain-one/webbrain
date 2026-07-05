@@ -2043,6 +2043,7 @@ function conversationHasUserMessages() {
 }
 
 function hideRecommendedActions() {
+  recommendationsRequestId += 1;
   if (!recommendedActionsEl || !recommendedActionsListEl) return;
   recommendedActionsListEl.replaceChildren();
   recommendedActionsEl.classList.add('hidden');
