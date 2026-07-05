@@ -87,7 +87,6 @@ const FAQ_KEYS = [
 ];
 
 const STRIPE_SUBSCRIBE_URL = 'https://buy.stripe.com/bJebJ13at2kc5XP7eY8g00a';
-const X_PROFILE_URL = 'https://x.com/webbrain_one';
 const MASTODON_PROFILE_URL = 'https://mastoturk.org/@webbrain';
 const BLUESKY_PROFILE_URL = 'https://bsky.app/profile/webbrain-one.bsky.social';
 
@@ -331,7 +330,6 @@ async function main() {
       'share.linkedin_intent_url': `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(homeUrl)}`,
       'share.mastodon_intent_url': `https://mastoturk.org/share?text=${encodeURIComponent(shareTextWithUrl)}`,
       'share.bluesky_intent_url': `https://bsky.app/intent/compose?text=${encodeURIComponent(shareTextWithUrl)}`,
-      'social.x_url': X_PROFILE_URL,
       'social.mastodon_url': MASTODON_PROFILE_URL,
       'social.bluesky_url': BLUESKY_PROFILE_URL,
     };
