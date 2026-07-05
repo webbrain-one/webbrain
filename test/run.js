@@ -12422,6 +12422,9 @@ test('submit detector source covers submit controls, Enter, set_field, iframes, 
     assert.match(agent, /tag === 'button'[\s\S]*!type \|\| type === 'submit'/, `${label}: submit detector should catch default form buttons`);
     assert.match(agent, /tag === 'input'[\s\S]*type === 'button'/, `${label}: JS-driven input buttons inside forms should fail closed as submit candidates`);
     assert.match(agent, /tag === 'button'[\s\S]*type === 'button'/, `${label}: JS-driven form buttons should fail closed as submit candidates`);
+    assert.match(agent, /\[role="button"\],\[onclick\],\[data-action\]/, `${label}: non-native form controls should be considered submit candidates`);
+    assert.match(agent, /const hasActivationHandler = candidate\.hasAttribute\?\.\('onclick'\) \|\| candidate\.hasAttribute\?\.\('data-action'\)/, `${label}: handler-backed form controls should fail closed`);
+    assert.match(agent, /role === 'button' \|\| hasActivationHandler/, `${label}: role button and handler-backed form controls should fail closed`);
     assert.match(agent, /name === 'set_field' && !args\?\.submit/, `${label}: set_field({submit:true}) precheck missing`);
     assert.match(agent, /set_field\(\{submit:true\}\)/, `${label}: set_field submit reason missing`);
     assert.match(agent, /Enter key in a form field/, `${label}: Enter-in-form-field detection missing`);
@@ -12460,6 +12463,7 @@ test('chrome submit detector fail-closes CDP-only submit selector targets', () =
   assert.match(agent, /cdpClient\.resolveSelector\(tabId, String\(selector\)/, 'chrome: CDP selector fallback should use the same deep resolver as click({selector})');
   assert.match(agent, /selector resolves to a submit control in shadow DOM/, 'chrome: CDP selector fallback should force submit confirmation for CDP-only submit controls');
   assert.match(agent, /_detectCdpSubmitSelector[\s\S]*type === 'image' \|\| type === 'button'[\s\S]*!type \|\| type === 'submit' \|\| type === 'button'/, 'chrome: CDP selector fallback should fail closed for JS-driven type=button form controls');
+  assert.match(agent, /_detectCdpSubmitSelector[\s\S]*const role = String\(attrs\.role \|\| ''\)\.toLowerCase\(\);[\s\S]*Object\.prototype\.hasOwnProperty\.call\(attrs, 'onclick'\)[\s\S]*role === 'button'[\s\S]*hasActivationHandler/, 'chrome: CDP selector fallback should fail closed for non-native JS-driven controls');
 });
 
 test('firefox submit detector serializes static probe as a function expression', () => {

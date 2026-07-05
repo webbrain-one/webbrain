@@ -4270,8 +4270,13 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         attrs[String(rawAttrs[i] || '').toLowerCase()] = String(rawAttrs[i + 1] || '');
       }
       const type = String(attrs.type || '').toLowerCase();
+      const role = String(attrs.role || '').toLowerCase();
+      const hasActivationHandler = Object.prototype.hasOwnProperty.call(attrs, 'onclick')
+        || Object.prototype.hasOwnProperty.call(attrs, 'data-action');
       const isSubmit = (tag === 'input' && (type === 'submit' || type === 'image' || type === 'button'))
-        || (tag === 'button' && (!type || type === 'submit' || type === 'button'));
+        || (tag === 'button' && (!type || type === 'submit' || type === 'button'))
+        || role === 'button'
+        || hasActivationHandler;
       if (!isSubmit) return null;
       return this._fallbackSubmitConfirmationInfo(
         host,
@@ -4427,13 +4432,16 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     });
     const isSubmitControl = (el) => {
       if (!el || el.nodeType !== 1) return false;
-      const candidate = el.closest?.('button,input') || el;
+      const candidate = el.closest?.('button,input,[role="button"],[onclick],[data-action]') || el;
       const tag = String(candidate.tagName || '').toLowerCase();
       const type = String(candidate.getAttribute?.('type') || candidate.type || '').toLowerCase();
+      const role = String(candidate.getAttribute?.('role') || '').toLowerCase();
+      const hasActivationHandler = candidate.hasAttribute?.('onclick') || candidate.hasAttribute?.('data-action');
       const form = candidate.form || candidate.closest?.('form');
       if (!form) return false;
       if (tag === 'input') return type === 'submit' || type === 'image' || type === 'button';
       if (tag === 'button') return !type || type === 'submit' || type === 'button';
+      if (role === 'button' || hasActivationHandler) return true;
       return false;
     };
     const formForSubmitControl = (el) => {

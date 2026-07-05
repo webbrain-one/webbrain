@@ -3618,13 +3618,16 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     });
     const isSubmitControl = (el) => {
       if (!el || el.nodeType !== 1) return false;
-      const candidate = el.closest?.('button,input') || el;
+      const candidate = el.closest?.('button,input,[role="button"],[onclick],[data-action]') || el;
       const tag = String(candidate.tagName || '').toLowerCase();
       const type = String(candidate.getAttribute?.('type') || candidate.type || '').toLowerCase();
+      const role = String(candidate.getAttribute?.('role') || '').toLowerCase();
+      const hasActivationHandler = candidate.hasAttribute?.('onclick') || candidate.hasAttribute?.('data-action');
       const form = candidate.form || candidate.closest?.('form');
       if (!form) return false;
       if (tag === 'input') return type === 'submit' || type === 'image' || type === 'button';
       if (tag === 'button') return !type || type === 'submit' || type === 'button';
+      if (role === 'button' || hasActivationHandler) return true;
       return false;
     };
     const formForSubmitControl = (el) => {
