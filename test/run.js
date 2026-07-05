@@ -18007,6 +18007,55 @@ test('planner gate: short-follow-up skip keeps planner for stale, first, long, U
   });
 });
 
+test('planner gate: intervening ask turn clears short-follow-up allowance', async () => {
+  await withPlannerBrowserGlobals(async () => {
+    for (const [label, AgentClass] of [['chrome', AgentCh], ['firefox', AgentFx]]) {
+      const tabId = label === 'chrome' ? 9260 : 9261;
+      const agent = new AgentClass({ getActive: () => ({}) });
+      agent.setPlanBeforeActMode('try');
+      agent.conversations.set(tabId, [
+        { role: 'system', content: 'system' },
+        { role: 'user', content: 'original task' },
+        agent._buildScratchpadMessage('[Approved plan — pinned by planner]\n\n### Summary\nOriginal plan.'),
+      ]);
+      agent.plannerFollowUpSkipTabs.add(tabId);
+
+      let plannerCalls = 0;
+      agent._runPlannerGate = async () => {
+        plannerCalls += 1;
+        return { proceed: true };
+      };
+
+      const askOutcome = await agent._maybeRunPlannerGate(
+        tabId,
+        agent.conversations.get(tabId),
+        { role: 'user', content: 'what was the tone again?' },
+        () => {},
+        'ask',
+        null,
+        null,
+      );
+
+      assert.equal(askOutcome.proceed, true, `${label} ask turn should proceed`);
+      assert.equal(plannerCalls, 0, `${label} ask turn should not run the planner`);
+      assert.equal(agent.plannerFollowUpSkipTabs.has(tabId), false, `${label} ask turn should clear the short-follow-up allowance`);
+
+      const actOutcome = await agent._maybeRunPlannerGate(
+        tabId,
+        agent.conversations.get(tabId),
+        { role: 'user', content: 'do it' },
+        () => {},
+        'act',
+        null,
+        null,
+      );
+
+      assert.equal(actOutcome.proceed, true, `${label} later act turn should proceed`);
+      assert.equal(plannerCalls, 1, `${label} later short act turn should run the planner after intervening ask`);
+    }
+  });
+});
+
 test('planner gate: clearing scratchpad or conversation clears short-follow-up allowance', async () => {
   await withPlannerBrowserGlobals(async () => {
     for (const [label, AgentClass] of [['chrome', AgentCh], ['firefox', AgentFx]]) {

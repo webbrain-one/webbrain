@@ -3950,7 +3950,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     messages.push(enriched);
     this._persist(tabId);
     if (!runPlanner) {
-      if (this._isActionMode(mode)) this.plannerFollowUpSkipTabs.delete(tabId);
+      this.plannerFollowUpSkipTabs.delete(tabId);
       return { proceed: true };
     }
     if (this._shouldSkipPlannerForShortFollowUp(tabId, priorMessages, enriched, plannerMode)) {
