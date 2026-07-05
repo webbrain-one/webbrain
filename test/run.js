@@ -273,6 +273,28 @@ const { buildRecommendedActions: buildRecommendedActionsCh, shouldShowRecommende
 const { buildRecommendedActions: buildRecommendedActionsFx, shouldShowRecommendedActions: shouldShowRecommendedActionsFx } = await import(
   'file://' + path.join(ROOT, 'src/firefox/src/ui/recommended-actions.js').replace(/\\/g, '/')
 );
+const {
+  recordSuccessfulTask: recordStoreReviewSuccessCh,
+  shouldShowPrompt: shouldShowStoreReviewCh,
+  markDismissed: markStoreReviewDismissedCh,
+  markPromptShown: markStoreReviewShownCh,
+  getStoreUrl: getStoreUrlCh,
+  buildFeedbackUrl: buildFeedbackUrlCh,
+  positiveRating: positiveStoreReviewCh,
+  MIN_SUCCESSFUL_TASKS: STORE_REVIEW_MIN_TASKS,
+  MIN_DAYS_BEFORE_PROMPT: STORE_REVIEW_MIN_DAYS,
+  DISMISS_COOLDOWN_DAYS: STORE_REVIEW_DISMISS_DAYS,
+} = await import(
+  'file://' + path.join(ROOT, 'src/chrome/src/ui/store-review-prompt.js').replace(/\\/g, '/')
+);
+const {
+  recordSuccessfulTask: recordStoreReviewSuccessFx,
+  shouldShowPrompt: shouldShowStoreReviewFx,
+  getStoreUrl: getStoreUrlFx,
+  buildFeedbackUrl: buildFeedbackUrlFx,
+} = await import(
+  'file://' + path.join(ROOT, 'src/firefox/src/ui/store-review-prompt.js').replace(/\\/g, '/')
+);
 const { Agent: AgentCh } = await import(
   'file://' + path.join(ROOT, 'src/chrome/src/agent/agent.js').replace(/\\/g, '/')
 );
@@ -7705,10 +7727,12 @@ test('completion confetti is default-on and success-only in sidepanel completion
     assert.match(panel, /completionConfettiEnabled = changes\.completionConfetti\.newValue !== false/, `${label}: sidepanel should live-sync completion confetti setting`);
     assert.match(panel, /function triggerCompletionConfetti\(\)/, `${label}: sidepanel should define the confetti animation trigger`);
     assert.match(panel, /function updatesContainSuccessfulDone\(updates\)/, `${label}: live completion success should be derived from done tool updates`);
+    assert.match(panel, /function updatesContainStoreReviewFailure\(updates\)/, `${label}: review prompt should ignore failed Ask completions`);
+    assert.match(panel, /function isSuccessfulAskCompletion\(mode, response\)/, `${label}: sidepanel should classify successful Ask replies separately`);
     assert.match(panel, /if \(success\) triggerCompletionConfetti\(\);/, `${label}: confetti should only fire for successful completions`);
     assert.match(panel, /result\?\.outcome === 'success'/, `${label}: live done success should require explicit success outcome`);
     assert.match(panel, /notifyCompletion\(\{\s*success:\s*job\?\.lastOutcome === 'success'\s*\}\)/, `${label}: scheduled completed jobs should celebrate only explicit success outcomes`);
-    assert.match(panel, /notifyCompletion\(\{\s*success:\s*currentTabId === tabId && completedSuccessfully\s*\}\)/, `${label}: live confetti should be gated to the tab that completed`);
+    assert.match(panel, /success:\s*currentTabId === tabId && completedSuccessfully/, `${label}: live confetti should be gated to the tab that completed`);
     assert.doesNotMatch(panel, /completedSuccessfully = !\(res\?\./, `${label}: live confetti should not treat every normal chat response as successful completion`);
 
     assert.match(css, /\.completion-confetti/, `${label}: sidepanel CSS should include the confetti overlay`);
@@ -17997,5 +18021,120 @@ for (const [label, build] of [['chrome', buildRecommendedActionsCh], ['firefox',
     assert.ok(!noPrice.some((a) => a.id === 'compare-price'), 'no compare-price without a shopping/price signal');
   });
 }
+
+// ── Store review prompt (#208) ───────────────────────────────────────────────
+const MS_DAY = 24 * 60 * 60 * 1000;
+
+test('store-review-prompt: eligibility requires successful tasks and cooling period', () => {
+  const now = Date.now();
+  assert.equal(STORE_REVIEW_MIN_DAYS, 0);
+  assert.equal(STORE_REVIEW_DISMISS_DAYS, 7);
+  const eligibleBase = {
+    successfulTasks: STORE_REVIEW_MIN_TASKS,
+    firstSuccessAt: now - (STORE_REVIEW_MIN_DAYS + 1) * MS_DAY,
+  };
+  assert.equal(shouldShowStoreReviewCh(eligibleBase, { now, onboardingComplete: true }), true);
+  assert.equal(shouldShowStoreReviewCh(eligibleBase, { now, onboardingComplete: false }), false);
+  assert.equal(shouldShowStoreReviewCh({ ...eligibleBase, successfulTasks: STORE_REVIEW_MIN_TASKS - 1 }, { now, onboardingComplete: true }), false);
+  assert.equal(shouldShowStoreReviewCh({ ...eligibleBase, firstSuccessAt: now }, { now, onboardingComplete: true }), true);
+
+  let state = recordStoreReviewSuccessCh(null, { now });
+  for (let i = 1; i < STORE_REVIEW_MIN_TASKS; i += 1) {
+    state = recordStoreReviewSuccessCh(state, { now });
+  }
+  assert.equal(state.successfulTasks, STORE_REVIEW_MIN_TASKS);
+  assert.equal(shouldShowStoreReviewCh(state, { now: now + STORE_REVIEW_MIN_DAYS * MS_DAY, onboardingComplete: true }), true);
+
+  const dismissed = markStoreReviewDismissedCh(eligibleBase, { now });
+  assert.equal(
+    shouldShowStoreReviewCh(dismissed, { now: now + (STORE_REVIEW_DISMISS_DAYS - 1) * MS_DAY, onboardingComplete: true }),
+    false,
+  );
+  assert.equal(
+    shouldShowStoreReviewCh(dismissed, { now: now + (STORE_REVIEW_DISMISS_DAYS + 1) * MS_DAY, onboardingComplete: true }),
+    true,
+  );
+  const shown = markStoreReviewShownCh(eligibleBase, { now });
+  assert.equal(shouldShowStoreReviewCh(shown, { now, onboardingComplete: true }), false);
+  assert.equal(shouldShowStoreReviewCh({ ...shown, ratedAt: now, rating: 5 }, { now: now + MS_DAY, onboardingComplete: true }), false);
+  assert.equal(
+    shouldShowStoreReviewCh(shown, { now: now + (STORE_REVIEW_DISMISS_DAYS + 1) * MS_DAY, onboardingComplete: true }),
+    true,
+  );
+});
+
+test('store-review-prompt: positive ratings route to store URLs; feedback URL encodes rating', () => {
+  assert.equal(positiveStoreReviewCh(4), true);
+  assert.equal(positiveStoreReviewCh(3), false);
+  assert.match(getStoreUrlCh('chrome'), /chromewebstore\.google\.com/);
+  assert.match(getStoreUrlFx('firefox'), /addons\.mozilla\.org/);
+  const url = buildFeedbackUrlCh({ rating: 2, comment: 'Needs work on forms' });
+  assert.match(url, /github\.com\/webbrain-one\/webbrain\/issues\/new/);
+  assert.match(decodeURIComponent(url), /Rating:\*\* 2\/5/);
+  assert.match(decodeURIComponent(url), /Needs work on forms/);
+  assert.equal(buildFeedbackUrlCh({ rating: 2 }), buildFeedbackUrlFx({ rating: 2 }));
+});
+
+const STORE_REVIEW_LOCALE_KEYS = [
+  'sp.review.rating_title',
+  'sp.review.rating_body',
+  'sp.review.stars_label',
+  'sp.review.star_1',
+  'sp.review.star_2',
+  'sp.review.star_3',
+  'sp.review.star_4',
+  'sp.review.star_5',
+  'sp.review.positive_title',
+  'sp.review.positive_body',
+  'sp.review.open_store',
+  'sp.review.negative_title',
+  'sp.review.negative_body',
+  'sp.review.feedback_placeholder',
+  'sp.review.send_feedback',
+  'sp.review.thanks_title',
+  'sp.review.thanks_body',
+  'sp.review.not_now',
+  'sp.review.never',
+  'sp.review.close',
+];
+
+test('store-review-prompt: all locales include review prompt strings', () => {
+  for (const [label, dirRel] of [
+    ['chrome', 'src/chrome/src/ui/locales'],
+    ['firefox', 'src/firefox/src/ui/locales'],
+  ]) {
+    for (const file of fs.readdirSync(path.join(ROOT, dirRel)).filter(f => f.endsWith('.js'))) {
+      const locale = fs.readFileSync(path.join(ROOT, dirRel, file), 'utf8');
+      for (const key of STORE_REVIEW_LOCALE_KEYS) {
+        const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        assert.match(locale, new RegExp(`['"]${escapedKey}['"]:\\s*['"][^'"]+['"]`), `${label}/${file}: missing ${key}`);
+      }
+    }
+  }
+});
+
+test('sidepanel wires store review prompt after successful agent completion', () => {
+  for (const [label, panelRel, htmlRel, localeRel] of [
+    ['chrome', 'src/chrome/src/ui/sidepanel.js', 'src/chrome/src/ui/sidepanel.html', 'src/chrome/src/ui/locales/en.js'],
+    ['firefox', 'src/firefox/src/ui/sidepanel.js', 'src/firefox/src/ui/sidepanel.html', 'src/firefox/src/ui/locales/en.js'],
+  ]) {
+    const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
+    const html = fs.readFileSync(path.join(ROOT, htmlRel), 'utf8');
+    const locale = fs.readFileSync(path.join(ROOT, localeRel), 'utf8');
+    assert.match(html, /id="store-review-prompt"/, `${label}: store review card should live in chat container`);
+    assert.match(html, /id="store-review-step-rating"/, `${label}: rating step should exist`);
+    assert.match(html, /id="store-review-step-positive"/, `${label}: positive step should exist`);
+    assert.match(html, /id="store-review-step-negative"/, `${label}: negative step should exist`);
+    assert.match(panel, /from '\.\/store-review-prompt\.js'/, `${label}: sidepanel should import store-review-prompt`);
+    assert.match(panel, /void maybePromptStoreReviewAfterSuccess\(\)/, `${label}: successful completion should trigger review prompt check`);
+    assert.match(panel, /storeReviewSuccess:\s*currentTabId === tabId && promptEligibleCompletion/, `${label}: review prompt should count Ask completions separately from confetti success`);
+    assert.match(panel, /mode !== 'ask'[\s\S]*?updatesContainStoreReviewFailure\(response\.updates\)[\s\S]*?parseSubscribeError/, `${label}: Ask completions should require a clean content response`);
+    assert.match(panel, /function setStoreReviewStarPreview\(rating\)/, `${label}: star preview helper should exist`);
+    assert.match(panel, /mouseenter', previewRating[\s\S]*?focus', previewRating[\s\S]*?mouseleave'[\s\S]*?setStoreReviewStarPreview\(storeReviewSelectedRating\)/, `${label}: star hover and focus should preview cumulative rating`);
+    assert.match(html, /data-i18n-aria-label="sp\.review\.star_5"/, `${label}: star aria labels should be localized`);
+    assert.match(panel, /getStoreUrl\(getExtensionStoreKey\(\)\)/, `${label}: store link should pick chrome vs firefox URL`);
+    assert.match(locale, /'sp\.review\.rating_title'/, `${label}: review strings should be localized`);
+  }
+});
 
 await run();

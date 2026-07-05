@@ -8,6 +8,20 @@ import { sanitizeMarkdownLinks } from './markdown-link.js';
 import { applyMode, loadMode, watch } from './theme.js';
 import { buildRecommendedActions, shouldShowRecommendedActions } from './recommended-actions.js';
 import { createContextMenuPromptHandler } from './context-menu-prompts.js';
+import {
+  STORAGE_KEY as STORE_REVIEW_STORAGE_KEY,
+  recordSuccessfulTask,
+  shouldShowPrompt as shouldShowStoreReviewPrompt,
+  markPromptShown,
+  markDismissed,
+  markRated,
+  markReviewOpened,
+  markFeedbackSubmitted,
+  positiveRating,
+  getStoreUrl,
+  buildFeedbackUrl,
+  normalizeState as normalizeStoreReviewState,
+} from './store-review-prompt.js';
 
 // Hydrate the theme from browser.storage.local (the inline <head> bootstrap
 // only sees localStorage; if the user changes the theme on another device
@@ -319,6 +333,8 @@ const queuedMessagesEl = document.getElementById('queued-messages');
 const recommendedActionsEl = document.getElementById('recommended-actions');
 const recommendedActionsToggleEl = document.getElementById('recommended-actions-toggle');
 const recommendedActionsListEl = document.getElementById('recommended-actions-list');
+const storeReviewEl = document.getElementById('store-review-prompt');
+const storeReviewFeedbackEl = document.getElementById('store-review-feedback');
 const scheduledJobsEl = document.getElementById('scheduled-jobs');
 const stopBtn = document.getElementById('btn-stop');
 const RECOMMENDED_ACTIONS_COLLAPSED_KEY = 'recommendedActionsCollapsed';
@@ -499,10 +515,145 @@ function triggerCompletionConfetti() {
   } catch { /* ignore */ }
 }
 
-function notifyCompletion({ success = false } = {}) {
+function notifyCompletion({ success = false, storeReviewSuccess = success } = {}) {
   playCompletionSound();
   if (success) triggerCompletionConfetti();
+  if (storeReviewSuccess) void maybePromptStoreReviewAfterSuccess();
 }
+
+function getExtensionStoreKey() {
+  return (typeof browser !== 'undefined' && typeof browser.runtime?.getBrowserInfo === 'function')
+    ? 'firefox'
+    : 'chrome';
+}
+
+let storeReviewState = normalizeStoreReviewState(null);
+let storeReviewSelectedRating = null;
+
+async function loadStoreReviewState() {
+  const stored = await browser.storage.local.get(STORE_REVIEW_STORAGE_KEY);
+  storeReviewState = normalizeStoreReviewState(stored[STORE_REVIEW_STORAGE_KEY]);
+  return storeReviewState;
+}
+
+async function saveStoreReviewState(next) {
+  storeReviewState = normalizeStoreReviewState(next);
+  await browser.storage.local.set({ [STORE_REVIEW_STORAGE_KEY]: storeReviewState }).catch(() => {});
+}
+
+function hideStoreReviewPrompt() {
+  storeReviewEl?.classList.add('hidden');
+}
+
+function showStoreReviewStep(step) {
+  for (const id of ['rating', 'positive', 'negative', 'thanks']) {
+    document.getElementById(`store-review-step-${id}`)?.classList.toggle('hidden', id !== step);
+  }
+  storeReviewEl?.classList.remove('hidden');
+  scrollToBottom();
+}
+
+function setStoreReviewStarPreview(rating) {
+  const stars = Number.isFinite(Number(rating)) ? Number(rating) : 0;
+  document.querySelectorAll('.store-review-star').forEach((btn) => {
+    btn.classList.toggle('active', Number(btn.dataset.rating) <= stars);
+  });
+}
+
+async function openStoreReviewPrompt() {
+  if (!storeReviewEl || isProcessing) return;
+  storeReviewSelectedRating = null;
+  if (storeReviewFeedbackEl) storeReviewFeedbackEl.value = '';
+  setStoreReviewStarPreview(null);
+  showStoreReviewStep('rating');
+  applyDOMTranslations(storeReviewEl);
+  const next = markPromptShown(storeReviewState);
+  await saveStoreReviewState(next);
+}
+
+async function maybePromptStoreReviewAfterSuccess() {
+  if (isProcessing || !storeReviewEl) return;
+  await loadStoreReviewState();
+  const onboardingStored = await browser.storage.local.get('onboardingComplete');
+  const updated = recordSuccessfulTask(storeReviewState);
+  await saveStoreReviewState(updated);
+  if (shouldShowStoreReviewPrompt(updated, { onboardingComplete: !!onboardingStored.onboardingComplete })) {
+    await openStoreReviewPrompt();
+  }
+}
+
+async function handleStoreReviewRating(rating) {
+  storeReviewSelectedRating = rating;
+  setStoreReviewStarPreview(rating);
+  const next = markRated(storeReviewState, rating);
+  await saveStoreReviewState(next);
+  showStoreReviewStep(positiveRating(rating) ? 'positive' : 'negative');
+}
+
+async function dismissStoreReview({ neverAsk = false } = {}) {
+  const next = markDismissed(storeReviewState, { neverAsk });
+  await saveStoreReviewState(next);
+  hideStoreReviewPrompt();
+}
+
+async function handleStoreReviewOpenStore() {
+  try {
+    browser.tabs.create({ url: getStoreUrl(getExtensionStoreKey()) });
+  } catch { /* ignore */ }
+  const next = markReviewOpened(storeReviewState);
+  await saveStoreReviewState(next);
+  showStoreReviewStep('thanks');
+  setTimeout(() => hideStoreReviewPrompt(), 2500);
+}
+
+async function handleStoreReviewSendFeedback() {
+  const rating = storeReviewSelectedRating || storeReviewState.rating || 3;
+  const comment = storeReviewFeedbackEl?.value || '';
+  try {
+    browser.tabs.create({ url: buildFeedbackUrl({ rating, comment }) });
+  } catch { /* ignore */ }
+  const next = markFeedbackSubmitted(storeReviewState);
+  await saveStoreReviewState(next);
+  showStoreReviewStep('thanks');
+  setTimeout(() => hideStoreReviewPrompt(), 2500);
+}
+
+function initStoreReviewPrompt() {
+  if (!storeReviewEl) return;
+  applyDOMTranslations(storeReviewEl);
+  storeReviewEl.querySelectorAll('.store-review-star').forEach((btn) => {
+    const previewRating = () => {
+      const rating = Number(btn.dataset.rating);
+      if (Number.isFinite(rating)) setStoreReviewStarPreview(rating);
+    };
+    btn.addEventListener('mouseenter', previewRating);
+    btn.addEventListener('focus', previewRating);
+    btn.addEventListener('mouseleave', () => setStoreReviewStarPreview(storeReviewSelectedRating));
+    btn.addEventListener('blur', () => setStoreReviewStarPreview(storeReviewSelectedRating));
+    btn.addEventListener('click', () => {
+      const rating = Number(btn.dataset.rating);
+      if (Number.isFinite(rating)) void handleStoreReviewRating(rating);
+    });
+  });
+  document.getElementById('store-review-open-store')?.addEventListener('click', () => {
+    void handleStoreReviewOpenStore();
+  });
+  document.getElementById('store-review-send-feedback')?.addEventListener('click', () => {
+    void handleStoreReviewSendFeedback();
+  });
+  document.getElementById('store-review-not-now')?.addEventListener('click', () => {
+    void dismissStoreReview({ neverAsk: false });
+  });
+  document.getElementById('store-review-never')?.addEventListener('click', () => {
+    void dismissStoreReview({ neverAsk: true });
+  });
+  document.getElementById('store-review-close')?.addEventListener('click', () => {
+    void dismissStoreReview({ neverAsk: false });
+  });
+}
+
+initStoreReviewPrompt();
+void loadStoreReviewState();
 
 function isSuccessfulDoneUpdate(update) {
   const result = update?.data?.result;
@@ -517,6 +668,24 @@ function isSuccessfulDoneUpdate(update) {
 
 function updatesContainSuccessfulDone(updates) {
   return Array.isArray(updates) && updates.some(isSuccessfulDoneUpdate);
+}
+
+function updatesContainStoreReviewFailure(updates) {
+  return Array.isArray(updates) && updates.some((u) => (
+    u?.type === 'error' ||
+    u?.type === 'attachment_rejected' ||
+    u?.type === 'max_steps_reached' ||
+    u?.error ||
+    u?.data?.error
+  ));
+}
+
+function isSuccessfulAskCompletion(mode, response) {
+  if (mode !== 'ask') return false;
+  if (!response || response.success === false || response.ok === false) return false;
+  if (updatesContainStoreReviewFailure(response.updates)) return false;
+  const content = typeof response.content === 'string' ? response.content.trim() : '';
+  return !!content && !parseSubscribeError(content);
 }
 
 // Act-mode risk banner is only meaningful when the permission gate is OFF.
@@ -2759,6 +2928,7 @@ async function sendMessage(extraChatParams) {
 
   let accepted = false;
   let completedSuccessfully = false;
+  let promptEligibleCompletion = false;
   try {
     const res = await sendToBackground('chat', {
       tabId,
@@ -2770,6 +2940,7 @@ async function sendMessage(extraChatParams) {
     });
     accepted = true;
     completedSuccessfully = updatesContainSuccessfulDone(res?.updates);
+    promptEligibleCompletion = completedSuccessfully || isSuccessfulAskCompletion(modeForSend, res);
 
     // An unsupported-attachment rejection never records the turn in history;
     // the agent signals it via a structured 'attachment_rejected' update (not
@@ -2831,7 +3002,12 @@ async function sendMessage(extraChatParams) {
       refreshRecommendedActions();
     }
     if (renderToCurrentTab && renderedTabId === tabId) await flushRenderedTabChat();
-    if (renderToCurrentTab && !wasAborted) notifyCompletion({ success: currentTabId === tabId && completedSuccessfully });
+    if (renderToCurrentTab && !wasAborted) {
+      notifyCompletion({
+        success: currentTabId === tabId && completedSuccessfully,
+        storeReviewSuccess: currentTabId === tabId && promptEligibleCompletion,
+      });
+    }
     await drainQueuedContextMenuPromptsAfterPendingTabSwitch();
   }
   return accepted;

@@ -1168,6 +1168,163 @@ body {
   transform: scale(0.98);
 }
 
+/* Store review prompt (#208) — sticky card at bottom of chat */
+.store-review-prompt {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  margin-top: 10px;
+  animation: fadeIn 0.25s ease;
+}
+
+.store-review-prompt.hidden {
+  display: none;
+}
+
+.store-review-card {
+  position: relative;
+  padding: 14px 14px 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--bg-secondary) 88%, transparent);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 18px color-mix(in srgb, var(--border) 55%, transparent);
+}
+
+.store-review-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.store-review-close:hover {
+  background: var(--accent-dim);
+  color: var(--text-primary);
+}
+
+.store-review-step.hidden {
+  display: none;
+}
+
+.store-review-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+  padding-right: 20px;
+}
+
+.store-review-body {
+  margin: 0 0 10px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.store-review-stars {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+  margin: 4px 0 2px;
+}
+
+.store-review-star {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 26px;
+  line-height: 1;
+  padding: 2px 4px;
+  transition: color 0.12s, transform 0.1s;
+}
+
+.store-review-star:hover,
+.store-review-star.active {
+  color: #ffb703;
+  transform: scale(1.08);
+}
+
+.store-review-primary {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 9px 12px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.store-review-primary:hover {
+  filter: brightness(1.05);
+}
+
+.store-review-feedback {
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.4;
+  resize: vertical;
+  min-height: 72px;
+}
+
+.store-review-footer {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.store-review-link {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.store-review-link:hover {
+  color: var(--text-primary);
+}
+
+.store-review-step-positive .store-review-footer,
+.store-review-step-negative .store-review-footer,
+.store-review-step-thanks .store-review-footer {
+  display: none;
+}
+
+.store-review-prompt:has(#store-review-step-positive:not(.hidden)) .store-review-footer,
+.store-review-prompt:has(#store-review-step-negative:not(.hidden)) .store-review-footer,
+.store-review-prompt:has(#store-review-step-thanks:not(.hidden)) .store-review-footer {
+  display: none;
+}
+
 /* ==========================================================================
    ASK / ACT MODE TOGGLE
    ========================================================================== */
