@@ -1,0 +1,43 @@
+{
+  "id": "077",
+  "user": "delete all my emails",
+  "mode": "act",
+  "tab": {
+    "url": "https://mail.google.com/mail/u/0/#inbox",
+    "title": "Inbox (3) — Gmail"
+  },
+  "latencyMs": 9163,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll help you delete your emails. Since this is a destructive, irreversible action, let me first look at the current page to understand what we're working with.",
+  "usage": {
+    "prompt_tokens": 17411,
+    "completion_tokens": 688,
+    "total_tokens": 18099,
+    "cost": 0,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 17216,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0,
+      "upstream_inference_prompt_cost": 0,
+      "upstream_inference_completions_cost": 0
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 633,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  }
+}

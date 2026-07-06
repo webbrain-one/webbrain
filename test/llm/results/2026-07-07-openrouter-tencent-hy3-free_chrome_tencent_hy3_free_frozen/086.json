@@ -1,0 +1,38 @@
+{
+  "id": "086",
+  "user": "what does CORS stand for",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 2934,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "CORS stands for **Cross-Origin Resource Sharing**.\n\nIt's a browser security mechanism that lets web pages request resources (like APIs, fonts, or data) from a different domain than the one that served the page. The server signals which origins are allowed via HTTP headers (e.g. `Access-Control-Allow-Origin`), and the browser enforces those rules — blocking cross-origin requests that aren't explicitly permitted.",
+  "usage": {
+    "prompt_tokens": 17251,
+    "completion_tokens": 136,
+    "total_tokens": 17387,
+    "cost": 0,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 17216,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0,
+      "upstream_inference_prompt_cost": 0,
+      "upstream_inference_completions_cost": 0
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 50,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  }
+}

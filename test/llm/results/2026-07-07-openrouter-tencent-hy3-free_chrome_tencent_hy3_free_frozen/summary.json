@@ -1,0 +1,48 @@
+{
+  "runTag": "2026-07-07-openrouter-tencent-hy3-free",
+  "model": "tencent/hy3:free",
+  "browser": "chrome",
+  "base": "https://openrouter.ai/api/v1",
+  "saveRequest": false,
+  "tier": null,
+  "modeOverride": null,
+  "chatTemplateCompat": "off",
+  "structuredToolsSent": true,
+  "freeze": {
+    "path": "test/llm/freeze/baseline-2026-05-23.json",
+    "sourceRun": "anthropic/claude-sonnet-4.6",
+    "sourceRunTag": "2026-05-23T18-47-31-246Z",
+    "systemHash": "5c4fac1387025050d002fb87fb6ae02af2fba0e232cd40737f844a3a5c4e7abf",
+    "toolCount": 41
+  },
+  "cases": 100,
+  "totalLatencyMs": 433874,
+  "timingNote": "Rebuilt after OpenRouter free-tier 16 rpm rate-limit recovery; totalLatencyMs is summed per-case latency, not one clean wall-clock run.",
+  "errors": 0,
+  "withToolCall": 95,
+  "withToolCallFromContent": 0,
+  "rateLimitRecovery": {
+    "initialPassConcurrency": 3,
+    "initialRateLimitErrors": 72,
+    "rerunConcurrency": 1,
+    "rerunBatchSize": 12,
+    "finalErrors": 0
+  },
+  "byTool": {
+    "navigate": 22,
+    "list_downloads": 2,
+    "new_tab": 3,
+    "execute_js": 6,
+    "get_accessibility_tree": 43,
+    "read_page": 4,
+    "extract_data": 2,
+    "download_file": 3,
+    "download_social_media": 1,
+    "scroll": 1,
+    "screenshot": 1,
+    "get_selection": 1,
+    "get_interactive_elements": 1,
+    "(no_tool_call)": 5,
+    "clarify": 5
+  }
+}

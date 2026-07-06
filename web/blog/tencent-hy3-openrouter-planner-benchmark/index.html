@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tencent Hy3 OpenRouter WebBrain planner benchmark - WebBrain Blog</title>
+  <meta name="description" content="We ran Tencent Hy3 through WebBrain&#39;s frozen 100-case browser-agent planner benchmark on OpenRouter. Hy3 lands in the serious hosted planner tier with 95 parsed tool calls, 20 exact first-action matches, and 73% Sonnet alignment, but the current model is still text-only.">
+  <meta name="keywords" content="WebBrain, Tencent Hy3, OpenRouter, MiniMax M3, MiniMax M2.7, Qwen 3.7 Plus, browser agent, planner benchmark, tool calling">
+  <meta property="og:title" content="Tencent Hy3 is a strong OpenRouter planner in WebBrain&#39;s benchmark">
+  <meta property="og:description" content="Hy3 via OpenRouter: 95 parsed calls, 20 exact first actions, 73% Sonnet alignment, and a clear text-only caveat for browser agents.">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://webbrain.one/blog/tencent-hy3-openrouter-planner-benchmark">
+  <meta property="og:image" content="https://webbrain.one/og-image.png">
+  <meta property="og:image:secure_url" content="https://webbrain.one/og-image.png">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="WebBrain brain emoji icon">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Tencent Hy3 WebBrain planner benchmark">
+  <meta name="twitter:description" content="Tencent Hy3 via OpenRouter is a strong text planner: 95 parsed calls, 20 exact matches, and 73% Sonnet alignment.">
+  <meta name="twitter:image" content="https://webbrain.one/twitter-image.png">
+  <meta name="twitter:image:alt" content="WebBrain brain emoji icon">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="canonical" href="https://webbrain.one/blog/tencent-hy3-openrouter-planner-benchmark">
+  <!-- Blog is English-only; alternates point to locale homepages. -->
+  <link rel="alternate" hreflang="en" href="https://webbrain.one/">
+  <link rel="alternate" hreflang="es" href="https://webbrain.one/es/">
+  <link rel="alternate" hreflang="fr" href="https://webbrain.one/fr/">
+  <link rel="alternate" hreflang="tr" href="https://webbrain.one/tr/">
+  <link rel="alternate" hreflang="zh" href="https://webbrain.one/zh/">
+  <link rel="alternate" hreflang="ru" href="https://webbrain.one/ru/">
+  <link rel="alternate" hreflang="uk" href="https://webbrain.one/uk/">
+  <link rel="alternate" hreflang="ar" href="https://webbrain.one/ar/">
+  <link rel="alternate" hreflang="ja" href="https://webbrain.one/ja/">
+  <link rel="alternate" hreflang="ko" href="https://webbrain.one/ko/">
+  <link rel="alternate" hreflang="id" href="https://webbrain.one/id/">
+  <link rel="alternate" hreflang="th" href="https://webbrain.one/th/">
+  <link rel="alternate" hreflang="ms" href="https://webbrain.one/ms/">
+  <link rel="alternate" hreflang="tl" href="https://webbrain.one/tl/">
+  <link rel="alternate" hreflang="x-default" href="https://webbrain.one/">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg: #0b0e17;
+      --bg-card: #111827;
+      --bg-card-hover: #1a2233;
+      --surface: #161d2e;
+      --border: rgba(255,255,255,0.07);
+      --text: #e4e4ec;
+      --text-dim: #8b8fa4;
+      --accent: #6c63ff;
+      --accent-glow: rgba(108,99,255,0.25);
+      --accent2: #a78bfa;
+      --success: #34d399;
+      --warning: #fbbf24;
+      --danger: #f87171;
+      --tint-soft: rgba(255,255,255,0.05);
+      --tint-soft-2: rgba(255,255,255,0.04);
+      --tint-medium: rgba(255,255,255,0.08);
+      --nav-bg: rgba(11,14,23,0.85);
+      --code-bg: #0a0e17;
+      --inline-code-bg: rgba(255,255,255,0.06);
+      --shadow-strong: rgba(0,0,0,0.40);
+      --radius: 12px;
+      --radius-lg: 16px;
+      --max-w: 760px;
+      color-scheme: dark;
+    }
+    :root[data-theme="light"] {
+      --bg: #f7f1e6;
+      --bg-card: #fffdf8;
+      --bg-card-hover: #f2e9d4;
+      --surface: #ede2cb;
+      --border: rgba(89,55,25,0.15);
+      --text: #2c1810;
+      --text-dim: #6b5b47;
+      --accent: #5b52e8;
+      --accent-glow: rgba(91,82,232,0.20);
+      --accent2: #7c6ce6;
+      --success: #2d8866;
+      --warning: #9a6500;
+      --danger: #b74747;
+      --tint-soft: rgba(89,55,25,0.05);
+      --tint-soft-2: rgba(89,55,25,0.07);
+      --tint-medium: rgba(89,55,25,0.10);
+      --nav-bg: rgba(247,241,230,0.85);
+      --code-bg: #fff7e6;
+      --inline-code-bg: rgba(89,55,25,0.08);
+      --shadow-strong: rgba(89,55,25,0.18);
+      color-scheme: light;
+    }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.75;
+      font-size: 17px;
+      overflow-x: hidden;
+    }
+    a { color: var(--accent2); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .glow-bg {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    .glow-bg::before,
+    .glow-bg::after {
+      content: '';
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(120px);
+      opacity: 0.26;
+    }
+    .glow-bg::before {
+      width: 500px;
+      height: 500px;
+      background: var(--accent);
+      top: -220px;
+      left: -160px;
+    }
+    .glow-bg::after {
+      width: 500px;
+      height: 500px;
+      background: var(--accent2);
+      right: -180px;
+      bottom: -230px;
+      opacity: 0.18;
+    }
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--nav-bg);
+      backdrop-filter: saturate(160%) blur(12px);
+      -webkit-backdrop-filter: saturate(160%) blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-inner {
+      max-width: var(--max-w);
+      margin: 0 auto;
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+    .nav-brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+      color: var(--text);
+      font-size: 18px;
+      font-weight: 700;
+      text-decoration: none;
+    }
+    .nav-brand:hover { text-decoration: none; }
+    .nav-brand .domain { opacity: 0.5; font-weight: 400; }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 16px;
+      min-width: 0;
+    }
+    .nav-links a {
+      color: var(--text-dim);
+      font-size: 14px;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+    .nav-links a:hover { color: var(--text); text-decoration: none; }
+    .lang-dropdown {
+      background: var(--tint-soft);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 13px;
+      max-width: 120px;
+    }
+    .lang-dropdown:focus { outline: 2px solid var(--accent-glow); outline-offset: 1px; }
+    .lang-dropdown option { background-color: var(--bg-card-hover); color: var(--text); }
+    .theme-toggle {
+      appearance: none;
+      -webkit-appearance: none;
+      background: var(--tint-soft-2);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      width: 30px;
+      height: 30px;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      cursor: pointer;
+      color: var(--text-dim);
+      transition: background 0.2s, color 0.2s, border-color 0.2s, transform 0.1s;
+    }
+    .theme-toggle:hover {
+      background: var(--tint-medium);
+      border-color: var(--accent);
+      color: var(--text);
+      transform: translateY(-1px);
+    }
+    .theme-toggle:focus-visible {
+      outline: 2px solid var(--accent2);
+      outline-offset: 2px;
+    }
+    .theme-toggle svg { width: 16px; height: 16px; display: block; }
+    .theme-toggle .icon-sun { display: block; }
+    .theme-toggle .icon-moon { display: none; }
+    :root[data-theme="light"] .theme-toggle .icon-sun { display: none; }
+    :root[data-theme="light"] .theme-toggle .icon-moon { display: block; }
+    main,
+    article {
+      max-width: var(--max-w);
+      margin: 0 auto;
+      padding: 64px 24px 80px;
+    }
+    .page-label {
+      display: inline-block;
+      font-size: 12px;
+      letter-spacing: 0;
+      text-transform: uppercase;
+      color: var(--accent2);
+      padding: 4px 10px;
+      border: 1px solid color-mix(in srgb, var(--accent2) 28%, transparent);
+      border-radius: 999px;
+      margin-bottom: 18px;
+    }
+    h1 {
+      font-size: 38px;
+      line-height: 1.2;
+      font-weight: 700;
+      letter-spacing: 0;
+      margin-bottom: 16px;
+    }
+    .page-sub,
+    .lede {
+      color: var(--text-dim);
+      line-height: 1.6;
+    }
+    .page-sub {
+      font-size: 17px;
+      max-width: 580px;
+      margin-bottom: 48px;
+    }
+    .lede {
+      font-size: 19px;
+      margin-bottom: 40px;
+    }
+    .meta {
+      font-size: 13px;
+      color: var(--text-dim);
+      margin-bottom: 12px;
+      letter-spacing: 0;
+    }
+    h2 {
+      font-size: 24px;
+      font-weight: 700;
+      margin-top: 48px;
+      margin-bottom: 14px;
+      letter-spacing: 0;
+    }
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-top: 32px;
+      margin-bottom: 10px;
+      color: var(--text);
+    }
+    h4, h5, h6 {
+      color: var(--text);
+      margin-top: 28px;
+      margin-bottom: 10px;
+      line-height: 1.35;
+    }
+    p { margin-bottom: 16px; }
+    ul, ol { margin: 0 0 16px 20px; }
+    li { margin-bottom: 6px; }
+    code {
+      font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+      font-size: 0.88em;
+      background: var(--inline-code-bg);
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: color-mix(in srgb, var(--accent2) 80%, var(--text));
+    }
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      overflow-x: auto;
+      margin: 20px 0;
+      font-size: 14px;
+      line-height: 1.55;
+      box-shadow: 0 18px 60px var(--shadow-strong);
+    }
+    pre code {
+      background: transparent;
+      padding: 0;
+      color: inherit;
+      font-size: inherit;
+    }
+    blockquote {
+      border-left: 3px solid var(--accent);
+      padding: 4px 0 4px 18px;
+      margin: 20px 0;
+      color: var(--text-dim);
+      font-style: italic;
+    }
+    blockquote p:last-child { margin-bottom: 0; }
+    hr {
+      border: 0;
+      border-top: 1px solid var(--border);
+      margin: 36px 0;
+    }
+    article img {
+      max-width: 100%;
+      height: auto;
+      display: block;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      margin: 24px 0;
+    }
+    .table-wrap { overflow-x: auto; margin: 24px 0; }
+    table {
+      width: 100%;
+      min-width: 560px;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    th, td {
+      text-align: left;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    th {
+      color: var(--text-dim);
+      font-weight: 600;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0;
+      background: var(--tint-soft-2);
+    }
+    td code { font-size: 12px; }
+    .win { color: var(--success); font-weight: 600; }
+    .lose { color: var(--danger); }
+    .meh { color: var(--warning); }
+    .callout {
+      background: color-mix(in srgb, var(--accent) 10%, transparent);
+      border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      margin: 24px 0;
+      font-size: 15px;
+      line-height: 1.65;
+      color: var(--text-dim);
+    }
+    .callout strong { color: var(--text); }
+    .author-box {
+      margin-top: 64px;
+      padding-top: 32px;
+      border-top: 1px solid var(--border);
+      color: var(--text-dim);
+      font-size: 14px;
+    }
+    .post-list { display: flex; flex-direction: column; gap: 18px; }
+    .post-card {
+      display: block;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px 26px;
+      transition: background 0.18s, border-color 0.18s, transform 0.18s;
+    }
+    .post-card:hover {
+      background: var(--bg-card-hover);
+      border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+      transform: translateY(-1px);
+      text-decoration: none;
+    }
+    .post-meta {
+      font-size: 12px;
+      color: var(--text-dim);
+      letter-spacing: 0;
+      margin-bottom: 8px;
+    }
+    .post-title {
+      font-size: 21px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 6px;
+      letter-spacing: 0;
+      line-height: 1.35;
+    }
+    .post-excerpt {
+      color: var(--text-dim);
+      font-size: 15px;
+      line-height: 1.6;
+    }
+    footer {
+      max-width: var(--max-w);
+      margin: 0 auto;
+      padding: 40px 24px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+      color: var(--text-dim);
+      font-size: 13px;
+    }
+    footer a { color: var(--text-dim); }
+    footer a:hover { color: var(--text); }
+    @media (max-width: 700px) {
+      body { font-size: 16px; }
+      .nav-inner { padding: 14px 20px; align-items: flex-start; }
+      .nav-links { gap: 12px; flex-wrap: wrap; }
+      .lang-dropdown { display: none; }
+      h1 { font-size: 28px; }
+      .lede { font-size: 16px; }
+      .page-sub { font-size: 15px; }
+      main, article { padding: 48px 20px 64px; }
+      h2 { font-size: 20px; margin-top: 36px; }
+      .post-card { padding: 20px; }
+      .post-title { font-size: 19px; }
+      footer { flex-direction: column; padding: 32px 20px; }
+    }
+    @media (max-width: 420px) {
+      .nav-inner { gap: 12px; }
+      .nav-links a[href="https://github.com/webbrain-one/webbrain"] { display: none; }
+      .theme-toggle { width: 28px; height: 28px; }
+    }
+  </style>
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('webbrain-theme');
+        var theme = (saved === 'light' || saved === 'dark')
+          ? saved
+          : (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+        document.documentElement.setAttribute('data-theme', theme);
+      } catch (_) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    })();
+  </script>
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "Tencent Hy3 is a great OpenRouter planner, but text-only for now",
+  "description": "We ran Tencent Hy3 through WebBrain's frozen 100-case browser-agent planner benchmark on OpenRouter. Hy3 lands in the serious hosted planner tier with 95 parsed tool calls, 20 exact first-action matches, and 73% Sonnet alignment, but the current model is still text-only.",
+  "author": {
+    "@type": "Person",
+    "name": "Emre Sokullu",
+    "url": "https://emresokullu.com"
+  },
+  "datePublished": "2026-07-07",
+  "image": "https://webbrain.one/og-image.png",
+  "publisher": {
+    "@type": "Organization",
+    "name": "WebBrain",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://webbrain.one/favicon.svg"
+    }
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://webbrain.one/blog/tencent-hy3-openrouter-planner-benchmark"
+  }
+}
+  </script>
+</head>
+<body>
+  <div class="glow-bg"></div>
+  <nav>
+    <div class="nav-inner">
+      <a href="/" class="nav-brand"><span class="emoji" aria-hidden="true">&#129504;</span> WebBrain<span class="domain">.one</span></a>
+      <div class="nav-links">
+        <a href="/">Home</a>
+        <a href="/blog">Blog</a>
+        <select class="lang-dropdown" id="lang-dropdown" aria-label="Select language" data-current="en"><option value="en">English</option><option value="es">Espanol</option><option value="fr">Francais</option><option value="tr">Turkce</option><option value="zh">Chinese</option><option value="ru">Russian</option><option value="uk">Ukrainian</option><option value="ar">Arabic</option><option value="ja">Japanese</option><option value="ko">Korean</option><option value="id">Bahasa Indonesia</option><option value="th">Thai</option><option value="ms">Bahasa Melayu</option><option value="tl">Filipino</option></select>
+        <button class="theme-toggle" type="button" id="theme-toggle" aria-label="Toggle light / dark theme" title="Toggle light / dark theme">
+          <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="4"/>
+            <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+          </svg>
+          <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+          </svg>
+        </button>
+        <a href="https://github.com/webbrain-one/webbrain" target="_blank" rel="noopener">GitHub</a>
+      </div>
+    </div>
+  </nav>
+
+  <article>
+    <div class="meta">July 7, 2026 &middot; 6 min read &middot; <a href="/blog">&larr; All posts</a></div>
+    <h1>Tencent Hy3 is a great OpenRouter planner, but text-only for now</h1>
+    <p class="lede">We ran <strong>tencent/hy3:free</strong> through WebBrain&#39;s frozen 100-case browser-agent first-tool benchmark on OpenRouter. The short version: Hy3 is a very good hosted text planner. It does not beat the top MiniMax M2.7 / MiniMax M3 neighborhood on every headline number, but it absolutely belongs in that conversation. The practical caveat is just as important: Hy3 is text-only today, so it is not a full browser-agent model until Tencent adds image input.</p>
+<h2 id="what-we-ran">What we ran</h2>
+<p>The run used the same frozen May 23, 2026 WebBrain baseline used by the recent planner posts: Claude Sonnet 4.6&#39;s system prompt and 41-tool schema, system hash <code>5c4fac1387025050</code>.</p>
+<pre><code class="language-bash">node test/llm/run-llamacpp.mjs \
+  --base https://openrouter.ai/api/v1 \
+  --model tencent/hy3:free \
+  --tag 2026-07-07-openrouter-tencent-hy3-free \
+  --concurrency 3 \
+  --timeout 180000 \
+  --no-save-request \
+  --freeze test/llm/freeze/baseline-2026-05-23.json</code></pre>
+<p>This was a native OpenAI structured-tools run. No chat-template fallback was used, and request payloads were not saved.</p>
+<p>One operational wrinkle: OpenRouter&#39;s free-model bucket rate-limited the first pass after 28 good responses. The 72 rate-limited IDs were rerun in 12-case chunks at concurrency 1. The final saved row has 100 completed cases and zero transport errors, but wall-clock time is not comparable with the clean paid/local runs. The latency numbers below are per-case model latencies.</p>
+<p>Result files:</p>
+<pre><code class="language-text">test/llm/results/2026-07-07-openrouter-tencent-hy3-free_chrome_tencent_hy3_free_frozen</code></pre>
+<h2 id="headline-result">Headline result</h2>
+<div class="table-wrap"><table><thead><tr><th>Metric</th><th>Tencent Hy3 via OpenRouter</th></tr></thead><tbody><tr><td>Completed cases</td><td>100/100</td></tr><tr><td>Transport errors</td><td>0</td></tr><tr><td>Parsed tool calls</td><td>95/100</td></tr><tr><td>Valid frozen-schema tool names</td><td>95/95</td></tr><tr><td>Strict exact first-call match</td><td>20/100</td></tr><tr><td>Ideal tool-name match</td><td>38/100</td></tr><tr><td>Sonnet match, all cases</td><td>73.0%</td></tr><tr><td>Sonnet match, when Sonnet tooled</td><td>75.0%</td></tr><tr><td>Average latency</td><td>4.34s</td></tr><tr><td>Median latency</td><td>3.68s</td></tr><tr><td>p95 latency</td><td>9.16s</td></tr><tr><td>Slowest case</td><td>14.11s</td></tr><tr><td>OpenRouter reported cost</td><td>$0.00</td></tr></tbody></table></div>
+<p>The clean read: this is a strong hosted tool-calling row. Hy3 completed the full suite after rate-limit recovery, produced parsed native tool calls on 95 of 100 cases, stayed entirely inside the frozen 41-tool schema, and scored a better strict exact-match count than every saved top-10 row except MiniMax M2.7.</p>
+<p>The all-case Sonnet score is lower than the MiniMax rows, but the tool discipline is real. Hy3 is not just &quot;free and decent&quot;; it is good enough that the right comparison is MiniMax, not the middle of the table.</p>
+<h2 id="against-minimax">Against MiniMax</h2>
+<p>This is the comparison that matters. Hy3 sits in the same hosted-agent lane as MiniMax M2.7 and MiniMax M3.</p>
+<div class="table-wrap"><table><thead><tr><th>Model</th><th>Parsed calls</th><th>Exact</th><th>Ideal name</th><th>Sonnet all</th><th>Sonnet tooled</th><th>Median</th><th>p95</th><th>Cost</th></tr></thead><tbody><tr><td>MiniMax M2.7</td><td>88/100</td><td>23/100</td><td>36/100</td><td>77.0%</td><td>76.1%</td><td>3.05s</td><td>6.81s</td><td>$0.16</td></tr><tr><td>MiniMax M3</td><td>85/100</td><td>17/100</td><td>32/100</td><td>75.0%</td><td>73.9%</td><td>3.07s</td><td>8.20s</td><td>$1.06</td></tr><tr><td>Tencent Hy3</td><td>95/100</td><td>20/100</td><td>38/100</td><td>73.0%</td><td>75.0%</td><td>3.68s</td><td>9.16s</td><td>$0.00</td></tr></tbody></table></div>
+<p>Against <strong>MiniMax M3</strong>, Hy3 is the more disciplined structured-tools model in this run: +10 parsed calls, +3 exact matches, +6 ideal-name matches, and a better Sonnet-tooled score. M3 still wins the all-case Sonnet metric by two cases, mostly because Hy3 diverges on boundary prompts where Sonnet returns no tool or asks for confirmation.</p>
+<p>Against <strong>MiniMax M2.7</strong>, the result is more mixed. M2.7 still has the better all-case Sonnet score and exact-action score. Hy3 beats it on parsed calls and ideal tool-name count, and it is very close on the Sonnet-tooled subset. If I were picking purely from this frozen first-turn harness, M2.7 still stays ahead. If I were choosing a cheap hosted text planner to watch, Hy3 is the new obvious candidate.</p>
+<p>One cost caveat: this run used <a href="https://openrouter.ai/tencent/hy3%3Afree" target="_blank" rel="noopener">OpenRouter&#39;s free Hy3 variant</a>, and OpenRouter marks that free variant as temporary. Treat the $0.00 row as a free-tier result, not a permanent pricing promise.</p>
+<h2 id="current-top-10">Current top 10</h2>
+<p>Rows are ranked by all-case Sonnet match, then Sonnet-tooled match.</p>
+<div class="table-wrap"><table><thead><tr><th>#</th><th>Model</th><th>Parsed calls</th><th>Exact</th><th>Ideal name</th><th>Sonnet all</th><th>Sonnet tooled</th><th>Median</th></tr></thead><tbody><tr><td>1</td><td>Gemma 4 31B QAT w4a16</td><td>95/100</td><td>19/100</td><td>37/100</td><td>77.0%</td><td>78.3%</td><td>0.55s</td></tr><tr><td>2</td><td>Qwen 3.6 27B</td><td>92/100</td><td>18/100</td><td>37/100</td><td>77.0%</td><td>77.2%</td><td>10.18s</td></tr><tr><td>3</td><td>MiniMax M2.7</td><td>88/100</td><td>23/100</td><td>36/100</td><td>77.0%</td><td>76.1%</td><td>3.05s</td></tr><tr><td>4</td><td>Qwen 3.7 Plus</td><td>95/100</td><td>19/100</td><td>41/100</td><td>75.0%</td><td>77.2%</td><td>3.74s</td></tr><tr><td>5</td><td>MiniMax M3</td><td>85/100</td><td>17/100</td><td>32/100</td><td>75.0%</td><td>73.9%</td><td>3.07s</td></tr><tr><td>6</td><td>Qwen 3.6 27B NVFP4</td><td>96/100</td><td>18/100</td><td>38/100</td><td>74.0%</td><td>77.2%</td><td>1.76s</td></tr><tr><td>7</td><td>Intel Gemma 4 31B int4 AutoRound</td><td>88/100</td><td>14/100</td><td>34/100</td><td>74.0%</td><td>72.8%</td><td>0.63s</td></tr><tr><td>8</td><td><strong>Tencent Hy3</strong></td><td><strong>95/100</strong></td><td><strong>20/100</strong></td><td><strong>38/100</strong></td><td><strong>73.0%</strong></td><td><strong>75.0%</strong></td><td><strong>3.68s</strong></td></tr><tr><td>9</td><td>WebBrain Cloud 1.0</td><td>90/100</td><td>16/100</td><td>35/100</td><td>73.0%</td><td>72.8%</td><td>8.77s</td></tr><tr><td>10</td><td>Qwen 3.5 4B</td><td>82/100</td><td>12/100</td><td>33/100</td><td>73.0%</td><td>71.7%</td><td>5.44s</td></tr></tbody></table></div>
+<p>This is a good debut. Hy3 does not enter above the top hosted rows, but it does enter the top 10 and wins the 73% tie-breaker against WebBrain Cloud 1.0 and Qwen 3.5 4B. It also has the second-best exact-match count in the table.</p>
+<h2 id="where-it-is-strong">Where it is strong</h2>
+<p>The tool distribution is healthy:</p>
+<div class="table-wrap"><table><thead><tr><th>Tool or output</th><th>First calls</th></tr></thead><tbody><tr><td><code>get_accessibility_tree</code></td><td>43</td></tr><tr><td><code>navigate</code></td><td>22</td></tr><tr><td><code>execute_js</code></td><td>6</td></tr><tr><td><code>clarify</code></td><td>5</td></tr><tr><td>no tool call</td><td>5</td></tr><tr><td><code>read_page</code></td><td>4</td></tr><tr><td><code>download_file</code></td><td>3</td></tr><tr><td><code>new_tab</code></td><td>3</td></tr><tr><td><code>extract_data</code></td><td>2</td></tr><tr><td><code>list_downloads</code></td><td>2</td></tr><tr><td><code>download_social_media</code></td><td>1</td></tr><tr><td><code>get_interactive_elements</code></td><td>1</td></tr><tr><td><code>get_selection</code></td><td>1</td></tr><tr><td><code>screenshot</code></td><td>1</td></tr><tr><td><code>scroll</code></td><td>1</td></tr></tbody></table></div>
+<p>The strongest category bands were the practical browser-agent ones:</p>
+<div class="table-wrap"><table><thead><tr><th>Category</th><th>Sonnet matches</th></tr></thead><tbody><tr><td>Direct navigation</td><td>10/10</td></tr><tr><td>Search</td><td>10/10</td></tr><tr><td>Forms / interactive</td><td>8/8</td></tr><tr><td>Page reading / summarize</td><td>6/8</td></tr><tr><td>Email</td><td>5/6</td></tr><tr><td>GitHub flows</td><td>4/6</td></tr><tr><td>Knowledge questions</td><td>4/5</td></tr><tr><td>Multi-page / listing</td><td>3/3</td></tr></tbody></table></div>
+<p>That is why I like this row. Hy3 can route ordinary browser work. It navigates cleanly, starts forms with the accessibility tree, and does not fall out of the structured <code>tools</code> interface.</p>
+<h2 id="where-it-loses-points">Where it loses points</h2>
+<p>The weak spots are mostly boundary decisions:</p>
+<div class="table-wrap"><table><thead><tr><th>Category</th><th>Sonnet matches</th><th>Pattern</th></tr></thead><tbody><tr><td>Ambiguous / clarify</td><td>1/8</td><td>Split across page inspection, no-tool answers, <code>clarify</code>, and one <code>execute_js</code> call.</td></tr><tr><td>Destructive / refusal-worthy</td><td>3/6</td><td>Often inspected the page instead of asking for explicit confirmation first.</td></tr><tr><td>Browser internals</td><td>2/5</td><td>Mixed <code>navigate</code>, <code>execute_js</code>, <code>screenshot</code>, and page inspection choices.</td></tr><tr><td>Downloads</td><td>4/6</td><td>Picked plausible download tools, but differed from Sonnet on YouTube thumbnail and README cases.</td></tr><tr><td>UI mutations</td><td>2/4</td><td>Mixed navigation, page inspection, and <code>execute_js</code> on browser-control tasks.</td></tr></tbody></table></div>
+<p>This explains the gap between Hy3&#39;s strong exact/ideal scores and its lower all-case Sonnet score. It is good when a browser tool should be used. It is less Sonnet-like when the correct first move is to pause, refuse, answer directly, or handle a browser-internal edge.</p>
+<h2 id="the-multimodal-gap">The multimodal gap</h2>
+<p>For WebBrain, the obvious missing piece is vision. <a href="https://openrouter.ai/tencent/hy3%3Afree" target="_blank" rel="noopener">OpenRouter&#39;s Hy3 model page</a> and public model metadata currently expose Hy3 as <code>text-&gt;text</code>: text input, text output, no image input. That makes this benchmark a planner result, not a full browser-agent result.</p>
+<p>That distinction matters because WebBrain often needs screenshots: visual confirmation, OCR-ish page states, canvas-heavy apps, broken accessibility trees, and UI affordances that text extraction misses. A text-only planner can choose tools well, but it cannot replace a multimodal browser model.</p>
+<p>I still expect this gap to close. Tencent is clearly positioning Hy3 for agentic workflows, long-horizon tasks, tool-calling, coding, document processing, financial analysis, game development, and frontend design. In the broader Chinese frontier-model lane, text-first releases have been moving toward visual capabilities quickly; <a href="https://api-docs.deepseek.com/news/news260424" target="_blank" rel="noopener">DeepSeek&#39;s V4 release</a> is text/agent/1M-context focused in the public docs, while the surrounding DeepSeek ecosystem has been pushing vision-token and OCR-style work. Hy3 feels like the same kind of model family: strong text first, multimodal pressure next.</p>
+<p>So the fair wording is: Hy3 is not multimodal yet, but I would be surprised if Tencent leaves it text-only for long. If image input arrives in the coming months and the tool-calling behavior holds, this becomes much more interesting for WebBrain than the current row already is.</p>
+<h2 id="bottom-line">Bottom line</h2>
+<p>Tencent Hy3 is a great hosted text planner in this frozen WebBrain benchmark. It is not the new overall winner, and MiniMax M2.7 still has the stronger all-case Sonnet row. But Hy3 is cleaner than MiniMax M3 on parsed tool calls, exact matches, ideal-name matches, and Sonnet-tooled alignment, while matching the practical latency band and costing nothing in this temporary free run.</p>
+<p>The caveat is simple: it is text-only today. For WebBrain, that keeps it in the planner bucket rather than the full agent bucket. Add vision, keep this tool discipline, and Hy3 becomes a serious default-candidate conversation instead of just a very good OpenRouter benchmark row.</p>
+<p>Tags: #TencentHy3 #OpenRouter #MiniMaxM3 #MiniMaxM27 #ToolCalling #BrowserAgent #WebBrain</p>
+
+    <div class="author-box">
+      Written by <a href="https://emresokullu.com" target="_blank" rel="noopener">Emre Sokullu</a>. WebBrain is MIT-licensed and open on <a href="https://github.com/webbrain-one/webbrain" target="_blank" rel="noopener">GitHub</a>.
+    </div>
+  </article>
+
+  <footer>
+    <div>&copy; 2026 WebBrain &middot; <a href="/privacy">Privacy</a></div>
+    <div><a href="https://github.com/webbrain-one/webbrain" target="_blank" rel="noopener">GitHub</a></div>
+  </footer>
+  <script>
+    (function () {
+      const btn = document.getElementById('theme-toggle');
+      if (!btn) return;
+      const root = document.documentElement;
+
+      function setTheme(theme, persist) {
+        root.setAttribute('data-theme', theme);
+        if (persist) {
+          try { localStorage.setItem('webbrain-theme', theme); } catch (_) {}
+        }
+      }
+
+      btn.addEventListener('click', function () {
+        const next = root.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+        setTheme(next, true);
+      });
+
+      const mq = window.matchMedia('(prefers-color-scheme: light)');
+      function onMQ(e) {
+        try {
+          if (localStorage.getItem('webbrain-theme')) return;
+        } catch (_) {}
+        setTheme(e.matches ? 'light' : 'dark', false);
+      }
+      if (typeof mq.addEventListener === 'function') mq.addEventListener('change', onMQ);
+      else if (typeof mq.addListener === 'function') mq.addListener(onMQ);
+    })();
+  </script>
+  <script>
+    (function () {
+      const LOCALES = ["en","es","fr","tr","zh","ru","uk","ar","ja","ko","id","th","ms","tl"];
+      const sel = document.getElementById('lang-dropdown');
+      if (!sel) return;
+      sel.value = sel.dataset.current || 'en';
+      sel.addEventListener('change', function () {
+        const target = sel.value;
+        if (!LOCALES.includes(target)) return;
+        window.location.href = target === 'en' ? '/' : '/' + target + '/';
+      });
+    })();
+  </script>
+</body>
+</html>

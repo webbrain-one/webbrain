@@ -1,0 +1,49 @@
+{
+  "id": "070",
+  "user": "log in",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 3873,
+  "error": null,
+  "firstToolCall": {
+    "name": "clarify",
+    "args": {
+      "question": "Which site do you want to log into? (I'm currently on a blank New Tab with no site open.)",
+      "reason": "You said \"log in\" but didn't specify a site, and the current tab is a blank New Tab page. I need to know the destination before I can navigate there and fill in credentials.",
+      "options": [
+        "Open a specific URL/site I'll name",
+        "A site I already have open in another tab",
+        "My most-used site (e.g. Gmail, GitHub)"
+      ]
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'm on a blank New Tab page, so I don't know which site you'd like to log into. Let me ask.",
+  "usage": {
+    "prompt_tokens": 17247,
+    "completion_tokens": 286,
+    "total_tokens": 17533,
+    "cost": 0,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 17216,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0,
+      "upstream_inference_prompt_cost": 0,
+      "upstream_inference_completions_cost": 0
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 128,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  }
+}

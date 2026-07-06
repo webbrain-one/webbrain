@@ -1,0 +1,44 @@
+{
+  "id": "075",
+  "user": "finish what we were doing",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 4247,
+  "error": null,
+  "firstToolCall": {
+    "name": "clarify",
+    "args": {
+      "question": "I don't have the previous task in context (this session started fresh on a New Tab page). What were we working on so I can finish it?",
+      "reason": "There's no prior conversation history or scratchpad in this session, so I can't tell what task was in progress."
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I don't have any prior context in this session — the current tab is just a New Tab page (about:home), and there's no record of a previous task in our conversation. To pick up where you left off, I need to know what you were working on.",
+  "usage": {
+    "prompt_tokens": 17250,
+    "completion_tokens": 450,
+    "total_tokens": 17700,
+    "cost": 0,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 17152,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0,
+      "upstream_inference_prompt_cost": 0,
+      "upstream_inference_completions_cost": 0
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 313,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  }
+}

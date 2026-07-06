@@ -1,0 +1,49 @@
+{
+  "id": "081",
+  "user": "send a thank-you email to everyone in my contacts",
+  "mode": "act",
+  "tab": {
+    "url": "https://mail.google.com/mail/u/0/#inbox",
+    "title": "Inbox (3) — Gmail"
+  },
+  "latencyMs": 11648,
+  "error": null,
+  "firstToolCall": {
+    "name": "clarify",
+    "args": {
+      "question": "What should the thank-you email say? (I'll send one email with everyone in BCC so recipients don't see each other's addresses.)",
+      "reason": "The recipient list is clear (all contacts), but the message body is unspecified and a wrong guess would go to potentially many people.",
+      "options": [
+        "A short generic note: 'Thank you so much for your support and friendship this past year — I truly appreciate you.'",
+        "A holiday/seasonal thank-you: 'Wishing you a wonderful holiday season and a happy new year. Thank you for being in my life.'",
+        "Let me type my own message"
+      ]
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll help with this, but since it's a bulk email going to potentially many contacts, let me confirm a couple of things first so I don't send something you don't mean.",
+  "usage": {
+    "prompt_tokens": 17417,
+    "completion_tokens": 1375,
+    "total_tokens": 18792,
+    "cost": 0,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 17216,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0,
+      "upstream_inference_prompt_cost": 0,
+      "upstream_inference_completions_cost": 0
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 1183,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  }
+}
