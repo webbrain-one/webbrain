@@ -19,7 +19,7 @@ Open-source AI browser agent for Chrome and Firefox. Chat with any web page, aut
 - **Continue from Limit** — When the agent hits the step limit, click Continue to keep going
 - **Multi-Provider LLM** — Supports local and cloud models:
   - **WebBrain Cloud 1.0** (cloud, default) — Built-in managed cloud option; no local setup required
-  - **llama.cpp** (local) — No API key needed. Also **Ollama**, **LM Studio**, **Jan**, **vLLM**, and **SGLang**
+  - **llama.cpp** (local) — No API key needed. Also **Ollama**, **LM Studio**, **Jan**, **vLLM**, **SGLang**, and **LocalAI**
   - **OpenAI** (GPT-5.5, etc.)
   - **Anthropic Claude** (native API)
   - **Google Gemini**, **Mistral AI**, **DeepSeek**, **xAI Grok**, **Groq**
@@ -138,6 +138,7 @@ Click the gear icon or go to the extension's Options page to configure:
 | Jan | `http://localhost:1337/v1` | Not needed | (your loaded model) |
 | vLLM | `http://localhost:8000/v1` | Optional | (your served model) |
 | SGLang | `http://localhost:30000/v1` | Optional | (your served model) |
+| LocalAI | `http://localhost:8080/v1` | Optional | (your loaded model) |
 | OpenAI | `https://api.openai.com/v1` | Required | gpt-5.5 |
 | Anthropic Claude | `https://api.anthropic.com` | Required | claude-sonnet-4-6 |
 | Google Gemini | `https://generativelanguage.googleapis.com/v1beta/openai` | Required | gemini-3.1-flash |

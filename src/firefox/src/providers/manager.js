@@ -174,6 +174,18 @@ export class ProviderManager {
         supportsVision: true,
         enabled: true,
       },
+      localai: {
+        type: 'openai',
+        category: 'local',
+        label: 'LocalAI (Local)',
+        providerName: 'localai',
+        baseUrl: 'http://localhost:8080/v1',
+        model: '',
+        contextWindow: 16384,
+        apiKey: '',
+        supportsVision: true,
+        enabled: true,
+      },
       openai: {
         type: 'openai',
         category: 'cloud',
@@ -400,7 +412,7 @@ export class ProviderManager {
   static categoryFor(id, config) {
     if (config && config.category) return config.category;
     if (config?.type === 'llamacpp') return 'local';
-    if (['llamacpp', 'ollama', 'lmstudio', 'jan', 'vllm', 'sglang'].includes(id)) return 'local';
+    if (['llamacpp', 'ollama', 'lmstudio', 'jan', 'vllm', 'sglang', 'localai'].includes(id)) return 'local';
     if (ROUTER_PROVIDER_IDS.includes(id)) return 'router';
     return 'cloud';
   }
@@ -602,7 +614,7 @@ export class ProviderManager {
   async listProviderModels(id) {
     const provider = this.providers.get(id);
     if (!provider) return { ok: false, error: 'Provider not found' };
-    if (!['llamacpp', 'ollama', 'lmstudio', 'jan', 'vllm', 'sglang'].includes(id)) {
+    if (!['llamacpp', 'ollama', 'lmstudio', 'jan', 'vllm', 'sglang', 'localai'].includes(id)) {
       return { ok: false, error: 'Model loading is only supported for local providers' };
     }
 

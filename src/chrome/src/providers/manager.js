@@ -187,6 +187,18 @@ export class ProviderManager {
         supportsVision: true,
         enabled: true,
       },
+      localai: {
+        type: 'openai',
+        category: 'local',
+        label: 'LocalAI (Local)',
+        providerName: 'localai',
+        baseUrl: 'http://localhost:8080/v1',
+        model: '',
+        contextWindow: 16384,
+        apiKey: '',
+        supportsVision: true,
+        enabled: true,
+      },
       openai: {
         type: 'openai',
         category: 'cloud',
@@ -412,7 +424,7 @@ export class ProviderManager {
 
   /**
    * Provider category for filter UI. Returns one of:
-   *   'local'  — runs on the user's machine (llama.cpp, ollama, lmstudio, jan, vllm, sglang)
+   *   'local'  — runs on the user's machine (llama.cpp, ollama, lmstudio, jan, vllm, sglang, localai)
    *   'cloud'  — first-party API endpoint (openai, anthropic, gemini, etc.)
    *   'router' — multi-model gateways that fan out to many backends (openrouter, cloudflare, nvidia, groq)
    * Reads `config.category` first; falls back to a per-id table so configs
@@ -421,7 +433,7 @@ export class ProviderManager {
   static categoryFor(id, config) {
     if (config && config.category) return config.category;
     if (config?.type === 'llamacpp') return 'local';
-    if (['llamacpp', 'ollama', 'lmstudio', 'jan', 'vllm', 'sglang'].includes(id)) return 'local';
+    if (['llamacpp', 'ollama', 'lmstudio', 'jan', 'vllm', 'sglang', 'localai'].includes(id)) return 'local';
     if (ROUTER_PROVIDER_IDS.includes(id)) return 'router';
     return 'cloud';
   }
@@ -615,13 +627,13 @@ export class ProviderManager {
 
   /**
    * Fetch selectable models for local providers. Ollama uses its native
-   * /api/tags endpoint; llama.cpp, LM Studio, Jan, vLLM, and SGLang use
+   * /api/tags endpoint; llama.cpp, LM Studio, Jan, vLLM, SGLang, and LocalAI use
    * OpenAI-compatible /v1/models.
    */
   async listProviderModels(id) {
     const provider = this.providers.get(id);
     if (!provider) return { ok: false, error: 'Provider not found' };
-    if (!['llamacpp', 'ollama', 'lmstudio', 'jan', 'vllm', 'sglang'].includes(id)) {
+    if (!['llamacpp', 'ollama', 'lmstudio', 'jan', 'vllm', 'sglang', 'localai'].includes(id)) {
       return { ok: false, error: 'Model loading is only supported for local providers' };
     }
 
