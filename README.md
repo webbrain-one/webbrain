@@ -335,7 +335,6 @@ All providers normalize to a common response format:
 { content: string, toolCalls: Array|null, usage: Object|null }
 ```
 
-## Star History
 
 ## Star History
 
