@@ -72,10 +72,11 @@ ollama serve
 # Then set base URL to http://localhost:11434/v1 in settings
 # Or run: ollama launch webbrain --model <model>
 
-# Or using Jan, vLLM, or SGLang (OpenAI-compatible)
+# Or using Jan, vLLM, SGLang, or LocalAI (OpenAI-compatible)
 # Jan: http://localhost:1337/v1
 # vLLM: http://localhost:8000/v1
 # SGLang: http://localhost:30000/v1
+# LocalAI: http://localhost:8080/v1
 ```
 
 ### Use it
@@ -106,6 +107,7 @@ Click the gear icon or go to the extension's Options page to configure:
 | Jan | `http://localhost:1337/v1` | Not needed |
 | vLLM | `http://localhost:8000/v1` | Optional |
 | SGLang | `http://localhost:30000/v1` | Optional |
+| LocalAI | `http://localhost:8080/v1` | Optional |
 | OpenAI | `https://api.openai.com/v1` | Required |
 | OpenRouter | `https://openrouter.ai/api/v1` | Required |
 | Anthropic | `https://api.anthropic.com` | Required |

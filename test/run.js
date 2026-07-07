@@ -9680,7 +9680,7 @@ console.log('\nprovider categorization');
 
 test('categoryFor: local family', () => {
   for (const PM of [ProviderManagerCh, ProviderManagerFx]) {
-    for (const id of ['llamacpp', 'ollama', 'lmstudio', 'jan', 'vllm', 'sglang']) {
+    for (const id of ['llamacpp', 'ollama', 'lmstudio', 'jan', 'vllm', 'sglang', 'localai']) {
       assert.equal(PM.categoryFor(id, { type: id === 'llamacpp' ? 'llamacpp' : 'openai' }), 'local');
     }
     assert.equal(PM.categoryFor('custom_llama_cpp', { type: 'llamacpp' }), 'local');
@@ -9739,7 +9739,7 @@ test('llama.cpp provider defaults to mid prompt tier for saved configs without c
 
 test('inferContextWindow: model-aware cloud/router defaults and local 16k fallback', () => {
   for (const infer of [inferContextWindowCh, inferContextWindowFx]) {
-    for (const providerName of ['lmstudio', 'jan', 'vllm', 'sglang']) {
+    for (const providerName of ['lmstudio', 'jan', 'vllm', 'sglang', 'localai']) {
       assert.equal(infer({ category: 'local', providerName, model: 'qwen3.7-plus' }), 16384);
     }
     assert.equal(infer({ category: 'cloud', providerName: 'openai', model: 'gpt-5.5-pro' }), 1050000);
@@ -9873,7 +9873,7 @@ test('listProviderModels sends saved API keys for auth-enabled OpenAI-compatible
 
   try {
     for (const PM of [ProviderManagerCh, ProviderManagerFx]) {
-      for (const id of ['jan', 'vllm', 'sglang']) {
+      for (const id of ['jan', 'vllm', 'sglang', 'localai']) {
         const mgr = new PM();
         const config = {
           ...mgr._defaultConfigs()[id],
@@ -10483,7 +10483,7 @@ test('_defaultConfigs: new offline providers present and enabled by default', ()
   for (const PM of [ProviderManagerCh, ProviderManagerFx]) {
     const mgr = new PM();
     const defaults = mgr._defaultConfigs();
-    for (const id of ['jan', 'vllm', 'sglang']) {
+    for (const id of ['jan', 'vllm', 'sglang', 'localai']) {
       assert.ok(defaults[id], `${PM.name}: missing default config for ${id}`);
       assert.equal(defaults[id].type, 'openai', `${PM.name}: ${id} should use OpenAI-compatible provider`);
       assert.equal(defaults[id].category, 'local', `${PM.name}: ${id} should be local`);
@@ -10493,11 +10493,11 @@ test('_defaultConfigs: new offline providers present and enabled by default', ()
   }
 });
 
-test('_defaultConfigs: OpenRouter defaults to MiniMax M3 and migrates old default', () => {
+test('_defaultConfigs: OpenRouter defaults to openrouter/free and migrates legacy default', () => {
   for (const PM of [ProviderManagerCh, ProviderManagerFx]) {
     const mgr = new PM();
     const defaults = mgr._defaultConfigs();
-    assert.equal(defaults.openrouter.model, 'minimax/minimax-m3');
+    assert.equal(defaults.openrouter.model, 'openrouter/free');
 
     const migrated = mgr._migrateStoredProviderConfigs({
       openrouter: {
@@ -10505,7 +10505,7 @@ test('_defaultConfigs: OpenRouter defaults to MiniMax M3 and migrates old defaul
         apiKey: 'kept',
       },
     });
-    assert.equal(migrated.openrouter.model, 'minimax/minimax-m3');
+    assert.equal(migrated.openrouter.model, 'openrouter/free');
     assert.equal(migrated.openrouter.apiKey, 'kept');
 
     const custom = mgr._migrateStoredProviderConfigs({
@@ -10614,6 +10614,7 @@ test('OpenAI-compatible local streams do not request usage metadata', () => {
       { category: 'local', providerName: 'jan' },
       { category: 'local', providerName: 'vllm' },
       { category: 'local', providerName: 'sglang' },
+      { category: 'local', providerName: 'localai' },
       { category: 'local', providerName: 'openai' },
     ]) {
       const provider = new Provider(config);
@@ -10626,7 +10627,7 @@ test('OpenAI-compatible local streams do not request usage metadata', () => {
 
 test('OpenAI-compatible local providers always use legacy request token fields', () => {
   for (const Provider of [OpenAIProviderCh, OpenAIProviderFx]) {
-    for (const providerName of ['ollama', 'lmstudio', 'jan', 'vllm', 'sglang']) {
+    for (const providerName of ['ollama', 'lmstudio', 'jan', 'vllm', 'sglang', 'localai']) {
       const provider = new Provider({
         category: 'local',
         providerName,
