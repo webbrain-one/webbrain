@@ -64,7 +64,7 @@ if (globalThis.browser?.storage?.onChanged) {
   const localModels = document.getElementById('ob-local-models');
   const localModelSelect = document.getElementById('ob-local-model-select');
   const totalSteps = steps.length;
-  const LOCAL_PROVIDER_ORDER = ['jan', 'lmstudio', 'ollama', 'llamacpp', 'vllm', 'sglang'];
+  const LOCAL_PROVIDER_ORDER = ['jan', 'lmstudio', 'ollama', 'llamacpp', 'vllm', 'sglang', 'localai'];
   let current = 0;
   let localScanStarted = false;
   let localModelChoices = [];

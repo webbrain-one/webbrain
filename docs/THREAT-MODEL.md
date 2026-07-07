@@ -13,7 +13,7 @@ So the question this document answers is: **what is the agent equivalent of the 
 ## 2. System overview & trust boundaries
 
 - **Extension (Manifest V3).** The agent loop, prompt assembly, and tool dispatch run in the extension's standard MV3 sandbox.
-- **Local model process.** llama.cpp, Ollama, LM Studio, Jan, vLLM, or SGLang runs as a *separate* process and is reached over `localhost` HTTP. No custom binaries, no elevated privileges; the model itself has only the extension's permissions, indirectly.
+- **Local model process.** llama.cpp, Ollama, LM Studio, Jan, vLLM, SGLang, or LocalAI runs as a *separate* process and is reached over `localhost` HTTP. No custom binaries, no elevated privileges; the model itself has only the extension's permissions, indirectly.
 - **Automation surface.** Page reads and actions are performed through the extension APIs and, for richer control, CDP/debugger automation.
 - **Cloud option.** The same agent can target a cloud model instead of the local one.
 
