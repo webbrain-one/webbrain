@@ -46,12 +46,14 @@ async function refresh() {
   allRecords = records;
   allRuns = runs;
   countPill.textContent = t(records.length === 1 ? 'hist.record' : 'hist.records', { n: records.length });
-  if (selectedRecordId && !allRecords.some((record) => record.id === selectedRecordId)) {
+  const selectedRecordStillExists = selectedRecordId && allRecords.some((record) => record.id === selectedRecordId);
+  if (selectedRecordId && !selectedRecordStillExists) {
     selectedRecordId = null;
     renderEmpty();
   }
   renderList();
   refreshButtons();
+  if (selectedRecordStillExists) await renderRecord(selectedRecordId);
 }
 
 function renderList() {

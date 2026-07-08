@@ -5820,6 +5820,34 @@ test('trace viewer locale changes rerender the active pane', () => {
   }
 });
 
+test('history page refresh rerenders the selected conversation pane', () => {
+  for (const [label, historyRel] of [
+    ['chrome', 'src/chrome/src/ui/history.js'],
+    ['firefox', 'src/firefox/src/ui/history.js'],
+  ]) {
+    const source = fs.readFileSync(path.join(ROOT, historyRel), 'utf8');
+    const match = source.match(/async function refresh\(\) \{([\s\S]*?)\n\}/);
+    assert.ok(match, `${label}: history refresh function missing`);
+    const body = match[1];
+    const recordsIdx = body.indexOf('allRecords = records;');
+    const runsIdx = body.indexOf('allRuns = runs;');
+    const selectedExistsIdx = body.indexOf('const selectedRecordStillExists = selectedRecordId && allRecords.some((record) => record.id === selectedRecordId);');
+    const missingIdx = body.indexOf('if (selectedRecordId && !selectedRecordStillExists)');
+    const renderListIdx = body.indexOf('renderList();');
+    const refreshButtonsIdx = body.indexOf('refreshButtons();');
+    const renderSelectedIdx = body.indexOf('if (selectedRecordStillExists) await renderRecord(selectedRecordId);');
+    assert.notEqual(recordsIdx, -1, `${label}: refresh should update records before rendering`);
+    assert.notEqual(runsIdx, -1, `${label}: refresh should update trace runs before rendering`);
+    assert.notEqual(selectedExistsIdx, -1, `${label}: refresh should check whether the selected record still exists`);
+    assert.notEqual(missingIdx, -1, `${label}: refresh should preserve the deleted-selection empty state`);
+    assert.notEqual(renderListIdx, -1, `${label}: refresh should rerender the history list`);
+    assert.notEqual(refreshButtonsIdx, -1, `${label}: refresh should update selection buttons`);
+    assert.notEqual(renderSelectedIdx, -1, `${label}: refresh should rerender the selected record pane`);
+    assert.equal(recordsIdx < selectedExistsIdx && runsIdx < selectedExistsIdx, true, `${label}: selected-record refresh should use the latest data`);
+    assert.equal(missingIdx < renderListIdx && renderListIdx < refreshButtonsIdx && refreshButtonsIdx < renderSelectedIdx, true, `${label}: selected pane should refresh after the sidebar and buttons update`);
+  }
+});
+
 test('sidepanel export keeps blob URLs alive until the download is committed', () => {
   for (const [label, panelRel] of [
     ['chrome', 'src/chrome/src/ui/sidepanel.js'],
