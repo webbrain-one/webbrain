@@ -226,6 +226,15 @@ async function updateUserMemoryExtractionQueue(updater) {
   });
 }
 
+async function clearUserMemoryExtractionQueue() {
+  await updateUserMemoryExtractionQueue(() => []);
+}
+
+function shouldClearUserMemoryExtractionQueueForChanges(changes) {
+  return changes[USER_MEMORY_ENABLED_KEY]?.newValue === false
+    || (changes[USER_MEMORY_AUTO_CAPTURE_KEY] && changes[USER_MEMORY_AUTO_CAPTURE_KEY].newValue !== true);
+}
+
 async function claimUserMemoryExtractionJob(jobId) {
   if (!jobId) return false;
   let claimed = false;
@@ -276,6 +285,10 @@ async function withUserMemoryStoreLock(task) {
 
 async function applyUserMemoryExtractionOperationsToCurrentStore(jobId, operations) {
   return withUserMemoryStoreLock(async () => {
+    if (!await isUserMemoryExtractionEnabled()) {
+      await clearUserMemoryExtractionQueue();
+      return { changed: false, claimed: false, disabled: true };
+    }
     if (!await claimUserMemoryExtractionJob(jobId)) return { changed: false, claimed: false };
     const latestStore = await userMemoryStore.load();
     const applied = applyUserMemoryExtractionOperations(latestStore, operations);
@@ -576,6 +589,11 @@ chrome.storage.onChanged.addListener((changes) => {
       memoryUpdate.records = normalizeUserMemoryStore(changes[USER_MEMORY_STORAGE_KEY].newValue).records;
     }
     agent.setUserMemory(memoryUpdate);
+  }
+  if (shouldClearUserMemoryExtractionQueueForChanges(changes)) {
+    clearUserMemoryExtractionQueue().catch((error) => {
+      console.warn('[WebBrain] failed to clear user-memory extraction queue:', error);
+    });
   }
   if (changes[CUSTOM_SKILLS_STORAGE_KEY]) {
     agent.customSkills = normalizeCustomSkills(changes[CUSTOM_SKILLS_STORAGE_KEY].newValue);
@@ -1280,7 +1298,7 @@ async function handleMessage(msg, sender) {
 
     case 'clear_user_memory': {
       const store = await withUserMemoryStoreLock(async () => {
-        await updateUserMemoryExtractionQueue(() => []);
+        await clearUserMemoryExtractionQueue();
         return userMemoryStore.clear();
       });
       await syncAgentUserMemoryFromStorage();
