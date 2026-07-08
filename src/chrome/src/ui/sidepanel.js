@@ -3449,10 +3449,19 @@ async function sendMessage(extraChatParams = {}) {
     syncSendButtonState();
     return;
   }
+  isProcessing = true;
+  abortRequested = false;
+  inputEl.value = '';
+  autoResizeInput();
+  syncSendButtonState();
+
   await prepareChatHistoryForTurn(tabId, modeForSend);
   renderToCurrentTab = sameTabId(currentTabId, tabId) && sameTabId(renderedTabId, tabId);
   if (!renderToCurrentTab) {
     if (text) saveInputDraftForTab(tabId, text);
+    isProcessing = false;
+    abortRequested = false;
+    syncSendButtonState();
     return false;
   }
 
@@ -3469,8 +3478,6 @@ async function sendMessage(extraChatParams = {}) {
   if (renderToCurrentTab) {
     isProcessing = true;
     abortRequested = false;
-    inputEl.value = '';
-    autoResizeInput();
     syncSendButtonState();
     hideRecommendedActions();
     if (!retryOptions) {

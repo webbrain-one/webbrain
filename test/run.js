@@ -7229,6 +7229,11 @@ test('sidepanel preserves stale residual slash-command prompts without hidden ru
       /const tabId = currentTabId;[\s\S]*?text = await parseSlashCommands\(text, tabId\);[\s\S]*?renderToCurrentTab = sameTabId\(currentTabId, tabId\) && sameTabId\(renderedTabId, tabId\);[\s\S]*?if \(!renderToCurrentTab\) \{[\s\S]*?if \(text\) saveInputDraftForTab\(tabId, text\);[\s\S]*?return false;[\s\S]*?\}/,
       `${label}: stale residual slash-command prompts should be preserved as drafts instead of hidden runs`,
     );
+    assert.match(
+      sendBody,
+      /if \(!text\) \{[\s\S]*?return;[\s\S]*?\}\s*isProcessing = true;\s*abortRequested = false;\s*inputEl\.value = '';\s*autoResizeInput\(\);\s*syncSendButtonState\(\);\s*await prepareChatHistoryForTurn\(tabId, modeForSend\);/,
+      `${label}: send should enter a busy state and clear the composer before async history hydration`,
+    );
     const staleReturnIdx = sendBody.indexOf('if (!renderToCurrentTab) {');
     const sendIdx = sendBody.indexOf("sendToBackground('chat'");
     assert.notEqual(staleReturnIdx, -1, `${label}: stale-tab residual guard missing`);
@@ -7236,7 +7241,7 @@ test('sidepanel preserves stale residual slash-command prompts without hidden ru
     assert.equal(staleReturnIdx < sendIdx, true, `${label}: stale-tab residual guard must run before chat dispatch`);
     assert.match(
       sendBody,
-      /if \(renderToCurrentTab\) \{\s*isProcessing = true;\s*abortRequested = false;\s*inputEl\.value = '';\s*autoResizeInput\(\);\s*syncSendButtonState\(\);[\s\S]*?addMessage\('user', text\);[\s\S]*?currentAssistantEl = assistantEl;[\s\S]*?\}/,
+      /if \(renderToCurrentTab\) \{\s*isProcessing = true;\s*abortRequested = false;\s*syncSendButtonState\(\);[\s\S]*?addMessage\('user', text\);[\s\S]*?currentAssistantEl = assistantEl;[\s\S]*?\}/,
       `${label}: stale-tab residual sends should not mutate or render chat UI in the currently visible tab`,
     );
     assert.doesNotMatch(
