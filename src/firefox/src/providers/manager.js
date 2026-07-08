@@ -10,7 +10,7 @@ const OPENROUTER_DEFAULT_MODEL = 'openrouter/free';
 const OPENROUTER_LEGACY_DEFAULT_MODEL = 'stepfun/step-3.7-flash';
 const SUPPORTED_PROVIDER_TYPES = new Set(['llamacpp', 'openai', 'anthropic', 'anthropic_oauth']);
 const SAFE_PROVIDER_ID_RE = /^[A-Za-z0-9_-]+$/;
-const ROUTER_PROVIDER_IDS = ['openrouter', 'cloudflare', 'nvidia', 'groq'];
+const ROUTER_PROVIDER_IDS = ['openrouter', 'cloudflare', 'nvidia', 'groq', 'huggingface'];
 
 /**
  * Manages LLM provider instances and persists configuration.
@@ -46,6 +46,7 @@ export class ProviderManager {
     }
     delete configs.webbrain;
     delete configs.openai_subscription;
+    delete configs.claude_subscription;
     if (configs[WEBBRAIN_CLOUD_PROVIDER_ID]) {
       configs[WEBBRAIN_CLOUD_PROVIDER_ID].deviceGuid = await this._getDeviceGuid(data[WEBBRAIN_DEVICE_GUID_KEY]);
     }
@@ -339,15 +340,16 @@ export class ProviderManager {
         apiKeyUrl: 'https://openrouter.ai/keys',
         enabled: false,
       },
-      // Subscription auth (OAuth) entry, kept distinct from the API-key
-      // entry above so a user can have both configured. Tokens live in
-      // `browser.storage.local` under `anthropicOauthTokens` (see
-      // oauth-claude.js), not in this config.
-      claude_subscription: {
-        type: 'anthropic_oauth',
-        category: 'cloud',
-        label: 'Claude (Pro/Max subscription)',
-        model: 'claude-sonnet-4-6',
+      huggingface: {
+        type: 'openai',
+        category: 'router',
+        label: 'Hugging Face Inference',
+        providerName: 'huggingface',
+        baseUrl: 'https://router.huggingface.co/v1',
+        model: 'deepseek-ai/DeepSeek-V4',
+        supportsStreamUsageOptions: true,
+        apiKey: '',
+        apiKeyUrl: 'https://huggingface.co/settings/tokens',
         enabled: false,
       },
     };
