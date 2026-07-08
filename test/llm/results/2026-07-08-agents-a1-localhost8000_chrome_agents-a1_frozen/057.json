@@ -1,0 +1,26 @@
+{
+  "id": "057",
+  "user": "download the readme",
+  "mode": "act",
+  "tab": {
+    "url": "https://github.com/esokullu/webbrain",
+    "title": "esokullu/webbrain — GitHub"
+  },
+  "latencyMs": 1141,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 17887,
+    "total_tokens": 17967,
+    "completion_tokens": 80,
+    "prompt_tokens_details": null
+  }
+}

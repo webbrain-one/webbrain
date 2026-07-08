@@ -1,0 +1,26 @@
+{
+  "id": "090",
+  "user": "switch to my netflix tab",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 2218,
+  "error": null,
+  "firstToolCall": {
+    "name": "execute_js",
+    "args": {
+      "code": "chrome.tabs.query({}).then(tabs => tabs.map(t => ({id: t.id, url: t.url, title: t.title})))"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 17328,
+    "total_tokens": 17537,
+    "completion_tokens": 209,
+    "prompt_tokens_details": null
+  }
+}

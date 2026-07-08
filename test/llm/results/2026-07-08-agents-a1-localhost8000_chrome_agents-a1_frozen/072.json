@@ -1,0 +1,21 @@
+{
+  "id": "072",
+  "user": "delete this",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 1768,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "\n\nI'm on a new tab (about:home) and don't see anything specific to delete. Could you clarify what you'd like to delete? For example:\n\n- Browser history?\n- A specific file or download?\n- Something else?",
+  "usage": {
+    "prompt_tokens": 17324,
+    "total_tokens": 17466,
+    "completion_tokens": 142,
+    "prompt_tokens_details": null
+  }
+}

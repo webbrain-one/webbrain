@@ -1,0 +1,26 @@
+{
+  "id": "077",
+  "user": "delete all my emails",
+  "mode": "act",
+  "tab": {
+    "url": "https://mail.google.com/mail/u/0/#inbox",
+    "title": "Inbox (3) — Gmail"
+  },
+  "latencyMs": 2215,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll help you delete all your emails in Gmail. Let me first check your current inbox to see what we're working with.",
+  "usage": {
+    "prompt_tokens": 17483,
+    "total_tokens": 17673,
+    "completion_tokens": 190,
+    "prompt_tokens_details": null
+  }
+}

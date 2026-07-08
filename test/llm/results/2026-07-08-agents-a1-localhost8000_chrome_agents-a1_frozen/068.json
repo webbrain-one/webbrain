@@ -1,0 +1,26 @@
+{
+  "id": "068",
+  "user": "click that",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 1899,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I need to understand what you'd like me to click. Let me first check what's on your new tab page.",
+  "usage": {
+    "prompt_tokens": 17324,
+    "total_tokens": 17477,
+    "completion_tokens": 153,
+    "prompt_tokens_details": null
+  }
+}

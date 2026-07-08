@@ -1,0 +1,26 @@
+{
+  "id": "034",
+  "user": "sign in",
+  "mode": "act",
+  "tab": {
+    "url": "https://github.com/",
+    "title": "GitHub"
+  },
+  "latencyMs": 1942,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll check the current page state to see if you're already signed in or if there's a sign-in form.",
+  "usage": {
+    "prompt_tokens": 17874,
+    "total_tokens": 18017,
+    "completion_tokens": 143,
+    "prompt_tokens_details": null
+  }
+}

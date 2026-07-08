@@ -1,0 +1,21 @@
+{
+  "id": "073",
+  "user": "buy it",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 1893,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "\n\nI'd be happy to help you buy something, but I need more information. What would you like to purchase? For example:\n\n- A product from an online store?\n- A subscription or service?\n- Something from a specific website?\n\nPlease let me know what you're looking to buy, and I'll help you through the process.",
+  "usage": {
+    "prompt_tokens": 17324,
+    "total_tokens": 17476,
+    "completion_tokens": 152,
+    "prompt_tokens_details": null
+  }
+}

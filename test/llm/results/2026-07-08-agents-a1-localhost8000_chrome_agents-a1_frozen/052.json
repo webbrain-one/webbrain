@@ -1,0 +1,26 @@
+{
+  "id": "052",
+  "user": "archive this",
+  "mode": "act",
+  "tab": {
+    "url": "https://mail.google.com/mail/u/0/#inbox/abc123",
+    "title": "Invoice from Acme — Gmail"
+  },
+  "latencyMs": 2122,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll help you archive this message in Gmail. Let me first check the current page to find the archive button.",
+  "usage": {
+    "prompt_tokens": 17486,
+    "total_tokens": 17660,
+    "completion_tokens": 174,
+    "prompt_tokens_details": null
+  }
+}

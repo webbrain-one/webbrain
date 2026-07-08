@@ -1,0 +1,27 @@
+{
+  "id": "099",
+  "user": "list all the laptops on this page with prices",
+  "mode": "act",
+  "tab": {
+    "url": "https://shop.example.com/category/laptops?page=1",
+    "title": "Laptops — Shop"
+  },
+  "latencyMs": 2063,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible",
+      "maxDepth": 10
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll read the current page to extract all laptop items and their prices.",
+  "usage": {
+    "prompt_tokens": 17341,
+    "total_tokens": 17520,
+    "completion_tokens": 179,
+    "prompt_tokens_details": null
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "id": "097",
+  "user": "show me alt text for all images",
+  "mode": "act",
+  "tab": {
+    "url": "https://www.cnn.com/2026/05/world/example-story/index.html",
+    "title": "Example story — CNN"
+  },
+  "latencyMs": 2165,
+  "error": null,
+  "firstToolCall": {
+    "name": "extract_data",
+    "args": {
+      "type": "images"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll extract all images and their alt text from the current page.",
+  "usage": {
+    "prompt_tokens": 17347,
+    "total_tokens": 17532,
+    "completion_tokens": 185,
+    "prompt_tokens_details": null
+  }
+}

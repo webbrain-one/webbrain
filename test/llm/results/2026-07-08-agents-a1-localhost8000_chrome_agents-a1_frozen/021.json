@@ -1,0 +1,26 @@
+{
+  "id": "021",
+  "user": "wiki \"ww2\"",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 2242,
+  "error": null,
+  "firstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "https://en.wikipedia.org/wiki/Special:Search?search=ww2"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll help you search for \"ww2\" on Wikipedia. Let me navigate to Wikipedia and perform the search.",
+  "usage": {
+    "prompt_tokens": 17327,
+    "total_tokens": 17506,
+    "completion_tokens": 179,
+    "prompt_tokens_details": null
+  }
+}

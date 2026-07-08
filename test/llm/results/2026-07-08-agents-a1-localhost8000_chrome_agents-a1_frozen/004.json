@@ -1,0 +1,26 @@
+{
+  "id": "004",
+  "user": "open my github",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 1191,
+  "error": null,
+  "firstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "https://github.com"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 17325,
+    "total_tokens": 17394,
+    "completion_tokens": 69,
+    "prompt_tokens_details": null
+  }
+}

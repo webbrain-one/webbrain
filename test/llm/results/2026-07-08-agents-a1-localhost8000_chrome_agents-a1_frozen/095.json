@@ -1,0 +1,24 @@
+{
+  "id": "095",
+  "user": "translate this page to spanish",
+  "mode": "act",
+  "tab": {
+    "url": "https://www.cnn.com/2026/05/world/example-story/index.html",
+    "title": "Example story — CNN"
+  },
+  "latencyMs": 2783,
+  "error": null,
+  "firstToolCall": {
+    "name": "read_page",
+    "args": {}
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll help you with this. Let me first read the page content to understand what needs to be translated.",
+  "usage": {
+    "prompt_tokens": 17345,
+    "total_tokens": 17615,
+    "completion_tokens": 270,
+    "prompt_tokens_details": null
+  }
+}

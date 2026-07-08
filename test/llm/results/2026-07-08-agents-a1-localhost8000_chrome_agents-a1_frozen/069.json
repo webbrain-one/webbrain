@@ -1,0 +1,21 @@
+{
+  "id": "069",
+  "user": "open it",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 1600,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "\n\nI see you're on a new tab (about:home). Could you please clarify what you'd like me to open? For example:\n\n- A specific website URL?\n- A file from your downloads?\n- Something else?\n\nPlease provide more details so I can help you.",
+  "usage": {
+    "prompt_tokens": 17324,
+    "total_tokens": 17432,
+    "completion_tokens": 108,
+    "prompt_tokens_details": null
+  }
+}

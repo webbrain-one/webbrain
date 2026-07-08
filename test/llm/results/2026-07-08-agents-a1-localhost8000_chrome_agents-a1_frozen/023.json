@@ -1,0 +1,26 @@
+{
+  "id": "023",
+  "user": "show me vegan lasagna recipes",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 1677,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 17328,
+    "total_tokens": 17454,
+    "completion_tokens": 126,
+    "prompt_tokens_details": null
+  }
+}

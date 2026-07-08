@@ -1,0 +1,21 @@
+{
+  "id": "071",
+  "user": "send it",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 1892,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "\n\nI need more information to help you. What would you like to send? For example:\n\n- An email (through Gmail or another email service)\n- A message (through a messaging app)\n- A file (through a file-sharing service)\n- Something else?\n\nPlease let me know what you'd like to send and to whom.",
+  "usage": {
+    "prompt_tokens": 17324,
+    "total_tokens": 17469,
+    "completion_tokens": 145,
+    "prompt_tokens_details": null
+  }
+}

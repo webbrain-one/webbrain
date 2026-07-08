@@ -1,0 +1,27 @@
+{
+  "id": "075",
+  "user": "finish what we were doing",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 2553,
+  "error": null,
+  "firstToolCall": {
+    "name": "scratchpad_write",
+    "args": {
+      "replace": true,
+      "text": "Checking for previous task context..."
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I see we're on a new tab, but I don't have context about what we were working on before. Let me check if there's any recent activity saved in my scratchpad.",
+  "usage": {
+    "prompt_tokens": 17327,
+    "total_tokens": 17550,
+    "completion_tokens": 223,
+    "prompt_tokens_details": null
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "id": "063",
+  "user": "whats my shipping address",
+  "mode": "act",
+  "tab": {
+    "url": "https://www.amazon.com/gp/buy/spc/handlers/display.html",
+    "title": "Amazon Checkout"
+  },
+  "latencyMs": 1381,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 17453,
+    "total_tokens": 17538,
+    "completion_tokens": 85,
+    "prompt_tokens_details": null
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "id": "015",
+  "user": "whats my new tab page",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 2838,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "\n\nYour new tab page is showing `about:home` with the title \"New Tab\". This is the default page that appears when you open a new browser tab. It typically includes:\n\n- A search bar (usually Google or your default search engine)\n- Quick links to frequently visited websites\n- A clock or date display\n- Sometimes news headlines or other personalized content\n\nThe exact appearance and features depend on your browser settings and any extensions you have installed. Is there anything specific you'd like to know or do on your new tab page?",
+  "usage": {
+    "prompt_tokens": 17328,
+    "total_tokens": 17531,
+    "completion_tokens": 203,
+    "prompt_tokens_details": null
+  }
+}

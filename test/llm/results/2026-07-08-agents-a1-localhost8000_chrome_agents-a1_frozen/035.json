@@ -1,0 +1,26 @@
+{
+  "id": "035",
+  "user": "fill the email field with bob@example.com",
+  "mode": "act",
+  "tab": {
+    "url": "https://github.com/login",
+    "title": "Sign in to GitHub"
+  },
+  "latencyMs": 1404,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 17883,
+    "total_tokens": 17971,
+    "completion_tokens": 88,
+    "prompt_tokens_details": null
+  }
+}

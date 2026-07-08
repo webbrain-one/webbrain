@@ -1,0 +1,26 @@
+{
+  "id": "017",
+  "user": "google \"best coffee shop in seattle\"",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 1820,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 17331,
+    "total_tokens": 17446,
+    "completion_tokens": 115,
+    "prompt_tokens_details": null
+  }
+}

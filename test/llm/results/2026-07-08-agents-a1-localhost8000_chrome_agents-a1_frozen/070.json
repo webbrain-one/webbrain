@@ -1,0 +1,21 @@
+{
+  "id": "070",
+  "user": "log in",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 1524,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "\n\nI see you're on a new tab. Which website would you like to log into? Please provide the URL or the name of the site (e.g., GitHub, Gmail, your bank, etc.).",
+  "usage": {
+    "prompt_tokens": 17324,
+    "total_tokens": 17413,
+    "completion_tokens": 89,
+    "prompt_tokens_details": null
+  }
+}

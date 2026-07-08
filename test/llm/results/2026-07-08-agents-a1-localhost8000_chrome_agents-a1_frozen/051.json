@@ -1,0 +1,26 @@
+{
+  "id": "051",
+  "user": "mark as spam",
+  "mode": "act",
+  "tab": {
+    "url": "https://mail.google.com/mail/u/0/#inbox/abc123",
+    "title": "Invoice from Acme — Gmail"
+  },
+  "latencyMs": 2788,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll help you mark the current message as spam in Gmail. Let me first check what's on the page to find the spam button.",
+  "usage": {
+    "prompt_tokens": 17487,
+    "total_tokens": 17737,
+    "completion_tokens": 250,
+    "prompt_tokens_details": null
+  }
+}

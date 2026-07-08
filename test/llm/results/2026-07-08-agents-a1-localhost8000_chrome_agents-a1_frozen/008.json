@@ -1,0 +1,26 @@
+{
+  "id": "008",
+  "user": "wikipedia please",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 990,
+  "error": null,
+  "firstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "https://www.wikipedia.org"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 17324,
+    "total_tokens": 17372,
+    "completion_tokens": 48,
+    "prompt_tokens_details": null
+  }
+}

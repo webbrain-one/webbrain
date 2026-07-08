@@ -1,0 +1,26 @@
+{
+  "id": "011",
+  "user": "open firefox settings",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 1339,
+  "error": null,
+  "firstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "about:preferences"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 17325,
+    "total_tokens": 17410,
+    "completion_tokens": 85,
+    "prompt_tokens_details": null
+  }
+}

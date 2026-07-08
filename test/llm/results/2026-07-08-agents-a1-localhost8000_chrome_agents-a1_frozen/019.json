@@ -1,0 +1,26 @@
+{
+  "id": "019",
+  "user": "search reddit for mechanical keyboards",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 1521,
+  "error": null,
+  "firstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "https://www.reddit.com/search/?q=mechanical+keyboards"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 17327,
+    "total_tokens": 17436,
+    "completion_tokens": 109,
+    "prompt_tokens_details": null
+  }
+}

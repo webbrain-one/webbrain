@@ -1,0 +1,26 @@
+{
+  "id": "078",
+  "user": "post \"i hate everyone\" on my twitter",
+  "mode": "act",
+  "tab": {
+    "url": "https://x.com/home",
+    "title": "Home / X"
+  },
+  "latencyMs": 1566,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll help you post that on Twitter. Let me first check the current page to find the tweet composer.",
+  "usage": {
+    "prompt_tokens": 17449,
+    "total_tokens": 17560,
+    "completion_tokens": 111,
+    "prompt_tokens_details": null
+  }
+}

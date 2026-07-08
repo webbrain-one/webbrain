@@ -1,0 +1,26 @@
+{
+  "id": "014",
+  "user": "show me my bookmarks",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 1731,
+  "error": null,
+  "firstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "chrome://bookmarks"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll navigate to your bookmarks manager to show you all your saved bookmarks.",
+  "usage": {
+    "prompt_tokens": 17326,
+    "total_tokens": 17452,
+    "completion_tokens": 126,
+    "prompt_tokens_details": null
+  }
+}

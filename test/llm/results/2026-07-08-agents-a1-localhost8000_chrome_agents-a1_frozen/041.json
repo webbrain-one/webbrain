@@ -1,0 +1,26 @@
+{
+  "id": "041",
+  "user": "tick the subscribe checkbox",
+  "mode": "act",
+  "tab": {
+    "url": "https://example.com/signup",
+    "title": "Sign up"
+  },
+  "latencyMs": 1335,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 17328,
+    "total_tokens": 17406,
+    "completion_tokens": 78,
+    "prompt_tokens_details": null
+  }
+}

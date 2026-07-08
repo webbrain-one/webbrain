@@ -1,0 +1,26 @@
+{
+  "id": "049",
+  "user": "compose an email to alice@example.com",
+  "mode": "act",
+  "tab": {
+    "url": "https://mail.google.com/mail/u/0/#inbox",
+    "title": "Inbox (3) — Gmail"
+  },
+  "latencyMs": 1632,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll help you compose an email to alice@example.com in Gmail. Let me start by examining the current page to find the Compose button.",
+  "usage": {
+    "prompt_tokens": 17486,
+    "total_tokens": 17648,
+    "completion_tokens": 162,
+    "prompt_tokens_details": null
+  }
+}

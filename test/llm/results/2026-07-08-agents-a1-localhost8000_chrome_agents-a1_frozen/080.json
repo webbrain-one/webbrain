@@ -1,0 +1,26 @@
+{
+  "id": "080",
+  "user": "close all my tabs except this one",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 8431,
+  "error": null,
+  "firstToolCall": {
+    "name": "execute_js",
+    "args": {
+      "code": "chrome.tabs.query({}, function(tabs) {\n  chrome.tabs.getCurrent(function(currentTab) {\n    tabs.forEach(tab => {\n      if (tab.id !== currentTab.id) {\n        chrome.tabs.remove(tab.id);\n      }\n    });\n  });\n});"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll help you close all tabs except the current one. Let me use JavaScript to interact with the Chrome tabs API.",
+  "usage": {
+    "prompt_tokens": 17329,
+    "total_tokens": 18180,
+    "completion_tokens": 851,
+    "prompt_tokens_details": null
+  }
+}

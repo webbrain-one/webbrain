@@ -1,0 +1,26 @@
+{
+  "id": "040",
+  "user": "clear the search box",
+  "mode": "act",
+  "tab": {
+    "url": "https://www.google.com/search?q=foo",
+    "title": "foo - Google Search"
+  },
+  "latencyMs": 1269,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 17634,
+    "total_tokens": 17712,
+    "completion_tokens": 78,
+    "prompt_tokens_details": null
+  }
+}
