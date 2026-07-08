@@ -10455,6 +10455,9 @@ test('ProviderManager load ignores unsupported stored provider configs', async (
       async set(patch) {
         Object.assign(storageData, patch);
       },
+      async remove(keys) {
+        for (const key of Array.isArray(keys) ? keys : [keys]) delete storageData[key];
+      },
     };
     return {
       storage: { local },

@@ -1257,6 +1257,20 @@ function renderProviders() {
         PROMPT_TIER_FIELD,
       ],
     },
+    huggingface: {
+      fields: [
+        { key: 'apiKey', labelKey: 'st.provider.field.api_key', type: 'password', placeholder: 'hf_...' },
+        { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'zai-org/GLM-5.2',
+          suggestions: ['zai-org/GLM-5.2', 'Qwen/Qwen3.6-27B'] },
+        { key: 'baseUrl', labelKey: 'st.provider.field.api_base_url', type: 'text', placeholder: 'https://router.huggingface.co/v1' },
+        // Hugging Face's catalog is huge and open-ended — unlike curated
+        // routers, model-name sniffing (openai.js supportsVision) can't
+        // reliably tell VLMs from text-only models, so expose an explicit
+        // toggle like the local providers do.
+        { key: 'supportsVision', labelKey: 'st.provider.field.supports_vision', type: 'checkbox' },
+        PROMPT_TIER_FIELD,
+      ],
+    },
     anthropic: {
       fields: [
         { key: 'apiKey', labelKey: 'st.provider.field.api_key', type: 'password', placeholder: 'sk-ant-...' },
@@ -1348,16 +1362,6 @@ function renderProviders() {
         ...COST_ESTIMATE_FIELDS,
       ],
     },
-    // OAuth-based Claude subscription provider. The card body is rendered
-    // by renderClaudeOAuthCard() — it shows a sign-in/out button, the
-    // current account state, and a disclaimer about Anthropic's terms.
-    // The model field is the only normal config field.
-    claude_subscription: {
-      customRender: 'claude_oauth',
-      fields: [
-        { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'claude-sonnet-4-6' },
-      ],
-    },
   };
 
   // Filter bar — sits above the list. Pill row, click-to-switch.
@@ -1376,15 +1380,6 @@ function renderProviders() {
     const category = config.category || 'cloud';
     if (providerFilter !== 'all' && category !== providerFilter && !isActive) continue;
     visibleCount++;
-
-    // Custom render for the OAuth Claude provider — same collapsible
-    // wrapper, but the body comes from renderClaudeOAuthCard().
-    if (providerConfigs[id]?.customRender === 'claude_oauth') {
-      providersContainer.appendChild(
-        wrapCollapsibleCard(id, config, isActive, renderClaudeOAuthCardBody(id, config, fieldDefs))
-      );
-      continue;
-    }
 
     let fieldsHTML = '';
     for (const field of fieldDefs) {
@@ -1570,18 +1565,6 @@ function renderProviders() {
       closeLoadedModelDialog(dialog);
     });
   });
-  // OAuth-Claude-specific bindings. These only fire if the OAuth card is
-  // currently rendered (i.e., expanded — collapsed bodies aren't in DOM).
-  document.querySelectorAll('.btn-claude-signin').forEach(btn => {
-    btn.addEventListener('click', () => signInWithClaude(btn.dataset.provider));
-  });
-  document.querySelectorAll('.btn-claude-signout').forEach(btn => {
-    btn.addEventListener('click', () => signOutOfClaude(btn.dataset.provider));
-  });
-  document.querySelectorAll('.claude-oauth-status').forEach(el => {
-    const id = el.id.replace(/^claude-oauth-status-/, '');
-    if (id) queueMicrotask(() => refreshClaudeOAuthStatus(id));
-  });
 }
 
 /**
@@ -1671,116 +1654,6 @@ function wrapCollapsibleCard(id, config, isActive, bodyHtml) {
   card.appendChild(header);
   if (expanded) card.appendChild(body);
   return card;
-}
-
-/**
- * Render the BODY of the Claude (Pro/Max subscription) provider card.
- *
- * Returns the inner HTML — header + outer wrapper come from
- * wrapCollapsibleCard() in renderProviders(). Differs from a normal
- * provider card in three ways:
- *   - No API-key field. Auth is via OAuth — handled by the background
- *     script. We just dispatch claude_oauth_start/signout/status.
- *   - Loaded auth state shows the obtained-at timestamp and a "Sign
- *     out" button; unauthed state shows "Sign in with Claude".
- *   - A persistent disclaimer warns the user that Anthropic's terms
- *     restrict third-party clients from using Pro/Max subs and that
- *     this integration may stop working at any time.
- *
- * Event bindings (sign-in/out) + the async status refresh fire from
- * the per-card pass at the end of renderProviders() — see
- * bindClaudeOAuthCards().
- */
-function renderClaudeOAuthCardBody(id, config, fieldDefs) {
-  const isActive = id === activeProviderId;
-  let fieldsHTML = '';
-  for (const field of fieldDefs) {
-    const label = field.labelKey ? t(field.labelKey) : (field.label || field.key);
-    const placeholder = field.placeholder || '';
-    fieldsHTML += `
-      <div class="field">
-        <label>${escapeHtml(label)}</label>
-        <input type="${field.type}" data-provider="${id}" data-key="${field.key}"
-               value="${escapeHtml(config[field.key] || '')}" placeholder="${escapeHtml(placeholder)}">
-      </div>
-    `;
-  }
-
-  return `
-    <div class="claude-oauth-status" id="claude-oauth-status-${id}"
-         style="padding:10px 12px;border-radius:6px;background:var(--surface2,#f5f5f7);
-                margin-bottom:10px;font-size:13px;color:var(--text2);">
-      Loading sign-in status…
-    </div>
-
-    ${fieldsHTML}
-
-    <div class="btn-row">
-      <button class="btn-primary btn-claude-signin" data-provider="${id}" style="display:none;">
-        Sign in with Claude
-      </button>
-      <button class="btn-secondary btn-claude-signout" data-provider="${id}" style="display:none;">
-        Sign out
-      </button>
-      <button class="btn-primary btn-save" data-provider="${id}">${escapeHtml(t('st.providers.save'))}</button>
-      <button class="btn-secondary btn-test" data-provider="${id}">${escapeHtml(t('st.providers.test'))}</button>
-      ${!isActive ? `<button class="btn-secondary btn-activate" data-provider="${id}">${escapeHtml(t('st.providers.set_active'))}</button>` : ''}
-    </div>
-
-    <div class="test-result" id="test-${id}"></div>
-
-    <div style="margin-top:14px;padding:10px 12px;border-radius:6px;
-                background:rgba(204,153,0,0.08);border:1px solid rgba(204,153,0,0.25);
-                font-size:12px;color:var(--text2);line-height:1.5;">
-      <strong>Heads up:</strong> Uses your Claude.ai Pro/Max subscription's quota via the OAuth flow Anthropic ships for Claude Code. This is a third-party use of that flow — Anthropic's terms restrict using Pro/Max subscriptions with non-Anthropic tools, and the integration could stop working at any time if Anthropic rotates their CLI's OAuth client. Your access + refresh tokens are stored in <code>chrome.storage.local</code> in plaintext (same as API keys). Use at your own risk; for production / reliability, prefer the API-key Anthropic provider above.
-    </div>
-  `;
-}
-
-async function refreshClaudeOAuthStatus(id) {
-  const statusEl = document.getElementById(`claude-oauth-status-${id}`);
-  const signInBtn = document.querySelector(`.btn-claude-signin[data-provider="${id}"]`);
-  const signOutBtn = document.querySelector(`.btn-claude-signout[data-provider="${id}"]`);
-  if (!statusEl) return;
-
-  try {
-    const status = await sendToBackgroundWithTimeout('claude_oauth_status', {}, 5000);
-    if (status?.signedIn) {
-      const obtained = new Date(status.obtainedAt || Date.now()).toLocaleString();
-      const expires = new Date(status.expiresAt || Date.now()).toLocaleTimeString();
-      statusEl.innerHTML = `<strong style="color:var(--ok,#1a8a4a);">Signed in.</strong> Token issued ${escapeHtml(obtained)}, refreshes around ${escapeHtml(expires)}.`;
-      if (signInBtn) signInBtn.style.display = 'none';
-      if (signOutBtn) signOutBtn.style.display = '';
-    } else {
-      statusEl.innerHTML = `Not signed in. Click <strong>Sign in with Claude</strong> to authorize this extension against your Claude.ai account.`;
-      if (signInBtn) signInBtn.style.display = '';
-      if (signOutBtn) signOutBtn.style.display = 'none';
-    }
-  } catch (e) {
-    statusEl.innerHTML = `Status unavailable: ${escapeHtml(e.message)}`;
-    if (signInBtn) signInBtn.style.display = '';
-    if (signOutBtn) signOutBtn.style.display = 'none';
-  }
-}
-
-async function signInWithClaude(id) {
-  const statusEl = document.getElementById(`claude-oauth-status-${id}`);
-  if (statusEl) statusEl.innerHTML = `Opening Claude.ai sign-in tab… complete authorization in the new tab. The sign-in tab closes automatically once you approve.`;
-  try {
-    const res = await sendToBackground('claude_oauth_start');
-    if (res?.ok) {
-      await refreshClaudeOAuthStatus(id);
-    } else {
-      if (statusEl) statusEl.innerHTML = `Sign-in failed: ${escapeHtml(res?.error || 'Unknown error')}`;
-    }
-  } catch (e) {
-    if (statusEl) statusEl.innerHTML = `Sign-in failed: ${escapeHtml(e.message)}`;
-  }
-}
-
-async function signOutOfClaude(id) {
-  await sendToBackground('claude_oauth_signout');
-  await refreshClaudeOAuthStatus(id);
 }
 
 function setProviderLoadModelsStatus(id, message, color = 'var(--text2)') {
@@ -1984,15 +1857,6 @@ function sendToBackground(action, data = {}) {
       }
     );
   });
-}
-
-function sendToBackgroundWithTimeout(action, data = {}, timeoutMs = 5000) {
-  let timeoutId;
-  const timeout = new Promise((_, reject) => {
-    timeoutId = setTimeout(() => reject(new Error('Timed out waiting for background response. Reload the extension and reopen Settings.')), timeoutMs);
-  });
-  return Promise.race([sendToBackground(action, data), timeout])
-    .finally(() => clearTimeout(timeoutId));
 }
 
 init();

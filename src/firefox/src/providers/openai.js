@@ -30,8 +30,11 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
 
   get supportsVision() {
     if (this.config.supportsVision != null) return !!this.config.supportsVision;
+    // Qwen went natively multimodal starting at 3.5 (no separate -VL
+    // checkpoint needed), so qwen3\.[5-9] catches those alongside the
+    // older qwen*vl-suffixed lines.
     const m = (this.config.model || '').toLowerCase();
-    return /gpt-4o|gpt-4\.1|gpt-4-turbo|gpt-5|claude|gemini|llava|qwen.*vl|qwen2.*vl|qwen3.*vl|pixtral|llama.*vision|gemma.*vision|gemma-?[34]/.test(m);
+    return /gpt-4o|gpt-4\.1|gpt-4-turbo|gpt-5|claude|gemini|llava|qwen.*vl|qwen2.*vl|qwen3.*vl|qwen3\.[5-9]|pixtral|llama.*vision|gemma.*vision|gemma-?[34]/.test(m);
   }
 
   get useCompactPrompt() {
