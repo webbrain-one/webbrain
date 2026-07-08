@@ -1263,6 +1263,11 @@ function renderProviders() {
         { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'zai-org/GLM-5.2',
           suggestions: ['zai-org/GLM-5.2', 'Qwen/Qwen3.6-27B'] },
         { key: 'baseUrl', labelKey: 'st.provider.field.api_base_url', type: 'text', placeholder: 'https://router.huggingface.co/v1' },
+        // Hugging Face's catalog is huge and open-ended — unlike curated
+        // routers, model-name sniffing (openai.js supportsVision) can't
+        // reliably tell VLMs from text-only models, so expose an explicit
+        // toggle like the local providers do.
+        { key: 'supportsVision', labelKey: 'st.provider.field.supports_vision', type: 'checkbox' },
         PROMPT_TIER_FIELD,
       ],
     },
