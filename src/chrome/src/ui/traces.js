@@ -17,6 +17,7 @@ const filterText = document.getElementById('filter-text');
 const filterModel = document.getElementById('filter-model');
 const imgModal = document.getElementById('img-modal');
 const imgModalImg = document.getElementById('img-modal-img');
+const initialRunId = new URLSearchParams(location.search).get('runId');
 
 let allRuns = [];
 let selectedRunId = null;
@@ -72,6 +73,17 @@ async function refresh() {
     models.map(m => `<option value="${escapeAttr(m)}">${escapeHtml(m)}</option>`).join('');
   filterModel.value = models.includes(prev) ? prev : '';
   renderList();
+}
+
+async function ensureRunLoaded(runId) {
+  if (!runId || allRuns.some((run) => run.runId === runId)) return true;
+  const run = await getRun(runId).catch(() => null);
+  if (!run) return false;
+  allRuns.push(run);
+  allRuns.sort((a, b) => (b.startedAt || 0) - (a.startedAt || 0));
+  rebuildConversationMap();
+  countPill.textContent = t(allRuns.length === 1 ? 'tr.run' : 'tr.runs', { n: allRuns.length });
+  return true;
 }
 
 function renderList() {
@@ -580,5 +592,10 @@ document.addEventListener('visibilitychange', () => {
 // polling if the freshly-loaded data shows a live run.
 (async () => {
   await refresh();
+  if (initialRunId && await ensureRunLoaded(initialRunId)) {
+    selectedRunId = initialRunId;
+    renderList();
+    await renderRun(initialRunId);
+  }
   if (hasRunningJob()) scheduleAutoRefresh();
 })();

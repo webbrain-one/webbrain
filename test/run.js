@@ -5820,6 +5820,50 @@ test('trace viewer locale changes rerender the active pane', () => {
   }
 });
 
+test('history page refresh rerenders the selected conversation pane', () => {
+  for (const [label, historyRel] of [
+    ['chrome', 'src/chrome/src/ui/history.js'],
+    ['firefox', 'src/firefox/src/ui/history.js'],
+  ]) {
+    const source = fs.readFileSync(path.join(ROOT, historyRel), 'utf8');
+    assert.match(source, /let historyRecordRenderRequestId = 0;/, `${label}: history page should track async record render requests`);
+    const match = source.match(/async function refresh\(\) \{([\s\S]*?)\n\}/);
+    assert.ok(match, `${label}: history refresh function missing`);
+    const body = match[1];
+    const recordsIdx = body.indexOf('allRecords = records;');
+    const runsIdx = body.indexOf('allRuns = runs;');
+    const selectedExistsIdx = body.indexOf('const selectedRecordStillExists = selectedRecordId && allRecords.some((record) => record.id === selectedRecordId);');
+    const missingIdx = body.indexOf('if (selectedRecordId && !selectedRecordStillExists)');
+    const renderListIdx = body.indexOf('renderList();');
+    const refreshButtonsIdx = body.indexOf('refreshButtons();');
+    const renderSelectedIdx = body.indexOf('if (selectedRecordStillExists) await renderRecord(selectedRecordId);');
+    assert.notEqual(recordsIdx, -1, `${label}: refresh should update records before rendering`);
+    assert.notEqual(runsIdx, -1, `${label}: refresh should update trace runs before rendering`);
+    assert.notEqual(selectedExistsIdx, -1, `${label}: refresh should check whether the selected record still exists`);
+    assert.notEqual(missingIdx, -1, `${label}: refresh should preserve the deleted-selection empty state`);
+    assert.notEqual(renderListIdx, -1, `${label}: refresh should rerender the history list`);
+    assert.notEqual(refreshButtonsIdx, -1, `${label}: refresh should update selection buttons`);
+    assert.notEqual(renderSelectedIdx, -1, `${label}: refresh should rerender the selected record pane`);
+    assert.equal(recordsIdx < selectedExistsIdx && runsIdx < selectedExistsIdx, true, `${label}: selected-record refresh should use the latest data`);
+    assert.equal(missingIdx < renderListIdx && renderListIdx < refreshButtonsIdx && refreshButtonsIdx < renderSelectedIdx, true, `${label}: selected pane should refresh after the sidebar and buttons update`);
+
+    const recordMatch = source.match(/async function renderRecord\(recordId\) \{([\s\S]*?)\n\}/);
+    assert.ok(recordMatch, `${label}: renderRecord function missing`);
+    const recordBody = recordMatch[1];
+    const requestIdx = recordBody.indexOf('const requestId = ++historyRecordRenderRequestId;');
+    const selectIdx = recordBody.indexOf('selectedRecordId = recordId;');
+    const loadIdx = recordBody.indexOf('const record = await getChatHistoryRecord(recordId);');
+    const staleGuardIdx = recordBody.indexOf('if (requestId !== historyRecordRenderRequestId || selectedRecordId !== recordId) return;');
+    const applyIdx = recordBody.indexOf('selectedRecordId = record.id;');
+    assert.notEqual(requestIdx, -1, `${label}: renderRecord should stamp each async request`);
+    assert.notEqual(selectIdx, -1, `${label}: renderRecord should mark the latest requested selection before loading`);
+    assert.notEqual(loadIdx, -1, `${label}: renderRecord should load the selected record asynchronously`);
+    assert.notEqual(staleGuardIdx, -1, `${label}: renderRecord should ignore stale async record loads`);
+    assert.notEqual(applyIdx, -1, `${label}: renderRecord should apply only the loaded current record`);
+    assert.equal(requestIdx < loadIdx && selectIdx < loadIdx && loadIdx < staleGuardIdx && staleGuardIdx < applyIdx, true, `${label}: stale record loads must be guarded before updating the details pane`);
+  }
+});
+
 test('sidepanel export keeps blob URLs alive until the download is committed', () => {
   for (const [label, panelRel] of [
     ['chrome', 'src/chrome/src/ui/sidepanel.js'],
@@ -6234,6 +6278,7 @@ test('chrome sidepanel drops stale async tab-chat restores', () => {
   const restoreIdx = body.indexOf('messagesEl.innerHTML =');
   const consumeIdx = body.indexOf('consumePendingContextMenuPrompt()');
   const flushIdx = body.indexOf('await flushRenderedTabChat();');
+  const historyFlushIdx = body.indexOf('await flushChatHistorySnapshot(outgoingTabId);');
   const postFlushProcessingIdx = body.indexOf('if (isProcessing) {', flushIdx);
   const postFlushPendingIdx = body.indexOf('pendingTabSwitch = newTabId;', postFlushProcessingIdx);
   const postFlushReturnIdx = body.indexOf('return;', postFlushPendingIdx);
@@ -6244,12 +6289,14 @@ test('chrome sidepanel drops stale async tab-chat restores', () => {
   assert.notEqual(restoreIdx, -1, 'chrome: switchToTab restore point missing');
   assert.notEqual(consumeIdx, -1, 'chrome: switchToTab context-menu consume point missing');
   assert.notEqual(flushIdx, -1, 'chrome: switchToTab should flush rendered chat before changing tabs');
+  assert.notEqual(historyFlushIdx, -1, 'chrome: switchToTab should flush rendered history before changing tabs');
   assert.notEqual(postFlushProcessingIdx, -1, 'chrome: switchToTab should recheck processing after the async flush yields');
   assert.notEqual(postFlushPendingIdx, -1, 'chrome: switchToTab should defer the requested tab switch if a run starts during the flush');
   assert.notEqual(postFlushReturnIdx, -1, 'chrome: switchToTab should stop before changing currentTabId when a run starts during the flush');
   assert.equal(flushIdx < postFlushProcessingIdx && postFlushProcessingIdx < postFlushPendingIdx && postFlushPendingIdx < postFlushReturnIdx && postFlushReturnIdx < setIdx, true, 'chrome: post-flush processing recheck must happen before currentTabId changes');
+  assert.equal(flushIdx < historyFlushIdx && historyFlushIdx < setIdx, true, 'chrome: pending history snapshots should flush before currentTabId changes');
   assert.equal(setIdx < loadIdx && loadIdx < guardIdx && guardIdx < renderedSetIdx && renderedSetIdx < restoreIdx && guardIdx < consumeIdx, true, 'chrome: stale guard must run after async chat load and before rendered-tab/DOM/context-menu work');
-  assert.match(body, /if \(renderedTabId != null\) \{[\s\S]*?await flushRenderedTabChat\(\);[\s\S]*?captureInputDraftForTab\(renderedTabId\);[\s\S]*?\}/, 'chrome: overlapping tab switches should flush chat and save drafts for the tab represented by the DOM');
+  assert.match(body, /if \(renderedTabId != null\) \{[\s\S]*?const outgoingTabId = renderedTabId;[\s\S]*?await flushRenderedTabChat\(\);[\s\S]*?await flushChatHistorySnapshot\(outgoingTabId\);[\s\S]*?captureInputDraftForTab\(outgoingTabId\);[\s\S]*?\}/, 'chrome: overlapping tab switches should flush chat/history and save drafts for the tab represented by the DOM');
   assert.doesNotMatch(body, /persistTabChat\(currentTabId,\s*messagesEl\.innerHTML\)|captureInputDraftForTab\(currentTabId\)/, 'chrome: overlapping tab switches must not save DOM or drafts under a pending target tab');
 });
 
@@ -6269,17 +6316,19 @@ test('sidepanel queues target-tab updates during async tab switches', () => {
     const body = switchMatch[1];
     const markIdx = body.indexOf('tabSwitchTransitionId = newTabId;');
     const flushIdx = body.indexOf('await flushRenderedTabChat();');
+    const historyFlushIdx = body.indexOf('await flushChatHistorySnapshot(outgoingTabId);');
     const loadIdx = body.indexOf('const html = await loadTabChat(newTabId);');
     const clearTransitionIdx = body.indexOf('if (tabSwitchTransitionId === newTabId) tabSwitchTransitionId = null;');
     const replayIdx = body.indexOf('drainQueuedAgentUpdatesForTab(newTabId);');
     const consumeIdx = body.indexOf('consumePendingContextMenuPrompt()');
     assert.notEqual(markIdx, -1, `${label}: switchToTab should mark the target tab before any async flush can yield`);
     assert.notEqual(flushIdx, -1, `${label}: switchToTab flush point missing`);
+    assert.notEqual(historyFlushIdx, -1, `${label}: switchToTab history flush point missing`);
     assert.notEqual(loadIdx, -1, `${label}: switchToTab restore load point missing`);
     assert.notEqual(clearTransitionIdx, -1, `${label}: switchToTab should clear the transition marker after restore settles`);
     assert.notEqual(replayIdx, -1, `${label}: switchToTab should replay queued target-tab messages after restore`);
     assert.notEqual(consumeIdx, -1, `${label}: switchToTab context-menu consume point missing`);
-    assert.equal(markIdx < flushIdx && flushIdx < loadIdx && loadIdx < clearTransitionIdx && clearTransitionIdx < replayIdx && replayIdx < consumeIdx, true, `${label}: queued target-tab updates must wait until the async restore has settled`);
+    assert.equal(markIdx < flushIdx && flushIdx < historyFlushIdx && historyFlushIdx < loadIdx && loadIdx < clearTransitionIdx && clearTransitionIdx < replayIdx && replayIdx < consumeIdx, true, `${label}: queued target-tab updates must wait until the async restore has settled`);
 
     const listenerStart = panel.indexOf("if (msg.target !== 'sidepanel' || msg.action !== 'agent_update') return;");
     assert.notEqual(listenerStart, -1, `${label}: runtime message listener missing`);
@@ -6289,6 +6338,143 @@ test('sidepanel queues target-tab updates during async tab switches', () => {
     assert.notEqual(queueIdx, -1, `${label}: runtime listener should queue target-tab updates during async tab switching`);
     assert.notEqual(handleIdx, -1, `${label}: runtime listener should still pass normal updates to the shared handler`);
     assert.equal(queueIdx < handleIdx, true, `${label}: target-tab updates should be queued before scheduled-job or tab filters can drop them`);
+  }
+});
+
+test('sidepanel hydrates restored history ids before fallback records', () => {
+  for (const [label, panelRel] of [
+    ['chrome', 'src/chrome/src/ui/sidepanel.js'],
+    ['firefox', 'src/firefox/src/ui/sidepanel.js'],
+  ]) {
+    const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
+    const htmlHelperMatch = panel.match(/function chatHistoryHtmlHasUserMessage\(html\) \{([\s\S]*?)\n\}/);
+    assert.ok(htmlHelperMatch, `${label}: restored history user-message helper missing`);
+    const htmlHelper = htmlHelperMatch[1];
+    assert.ok(htmlHelper.includes("document.createElement('div')"), `${label}: restored history helper should parse restored HTML off-DOM`);
+    assert.ok(htmlHelper.includes("wrapper.innerHTML = String(html || '');"), `${label}: restored history helper should inspect the restored HTML`);
+    assert.ok(htmlHelper.includes("classList?.contains('message')"), `${label}: restored history helper should look for message elements`);
+    assert.ok(htmlHelper.includes("classList.contains('user')"), `${label}: restored history hydration should only run for chats with user messages`);
+    assert.match(panel, /async function hydrateRestoredChatHistory\(tabId, html\) \{[\s\S]*?if \(!html \|\| !chatHistoryHtmlHasUserMessage\(html\)\) return;[\s\S]*?await hydrateChatHistoryIdentity\(tabId, agentMode\);[\s\S]*?\}/, `${label}: restored chat helper should hydrate history ids before DOM restore`);
+    assert.match(panel, /async function hydrateChatHistoryIdentity\(tabId, mode = agentMode, \{ allowFallback = false, refreshTabInfo = false \} = \{\}\) \{[\s\S]*?sendToBackground\('ensure_conversation_id'[\s\S]*?chatHistoryConversationIdsByTab\.set\(numericTabId, identity\.conversationId\);[\s\S]*?chatHistoryRecordIdsByTab\.set\(numericTabId, identity\.conversationId\);[\s\S]*?else if \(allowFallback && !chatHistoryRecordIdsByTab\.has\(numericTabId\)\) \{[\s\S]*?fallbackHistoryRecordId\(numericTabId\);/, `${label}: history identity helper should hydrate conversation ids before allowing fallback records`);
+    assert.match(panel, /async function prepareChatHistoryForTurn\(tabId, mode\) \{\s*await hydrateChatHistoryIdentity\(tabId, mode, \{ allowFallback: true, refreshTabInfo: true \}\);\s*\}/, `${label}: send and continue preflight should use the shared history identity helper`);
+
+    const switchMatch = panel.match(/async function switchToTab\(newTabId\) \{([\s\S]*?)\n\}/);
+    assert.ok(switchMatch, `${label}: switchToTab body missing`);
+    const switchBody = switchMatch[1];
+    const loadIdx = switchBody.indexOf('const html = await loadTabChat(newTabId);');
+    const restoredHasUserIdx = switchBody.indexOf('if (html) {');
+    const hydrateRestoredIdx = switchBody.indexOf('await hydrateRestoredChatHistory(newTabId, html);');
+    const postHydrateGuardIdx = switchBody.indexOf('if (currentTabId !== newTabId) return;', hydrateRestoredIdx);
+    const restoreDomIdx = switchBody.indexOf('messagesEl.innerHTML = html;');
+    assert.notEqual(loadIdx, -1, `${label}: switchToTab should load persisted tab chat`);
+    assert.notEqual(restoredHasUserIdx, -1, `${label}: switchToTab should detect restored user chats before DOM insertion`);
+    assert.notEqual(hydrateRestoredIdx, -1, `${label}: switchToTab should hydrate restored chat history ids`);
+    assert.notEqual(postHydrateGuardIdx, -1, `${label}: switchToTab should drop stale restores after async history hydration`);
+    assert.notEqual(restoreDomIdx, -1, `${label}: switchToTab should restore chat HTML`);
+    assert.equal(loadIdx < restoredHasUserIdx && restoredHasUserIdx < hydrateRestoredIdx && hydrateRestoredIdx < postHydrateGuardIdx && postHydrateGuardIdx < restoreDomIdx, true, `${label}: restored chat ids must hydrate before the MutationObserver sees restored HTML`);
+
+    const initMatch = panel.match(/async function init\(\) \{([\s\S]*?)\n  \/\/ Start observing the messages container/);
+    assert.ok(initMatch, `${label}: init restore block missing`);
+    const initBody = initMatch[1];
+    const initLoadIdx = initBody.indexOf('const html = await loadTabChat(restoreTabId);');
+    const initHydrateIdx = initBody.indexOf('await hydrateRestoredChatHistory(restoreTabId, html);');
+    const initGuardIdx = initBody.indexOf('if (currentTabId === restoreTabId) {', initHydrateIdx);
+    const initDomIdx = initBody.indexOf('messagesEl.innerHTML = html;', initGuardIdx);
+    assert.notEqual(initLoadIdx, -1, `${label}: init should load restored tab chat`);
+    assert.notEqual(initHydrateIdx, -1, `${label}: init should hydrate restored chat history ids`);
+    assert.notEqual(initGuardIdx, -1, `${label}: init should recheck the active tab after hydration`);
+    assert.notEqual(initDomIdx, -1, `${label}: init should restore chat HTML after hydration`);
+    assert.equal(initLoadIdx < initHydrateIdx && initHydrateIdx < initGuardIdx && initGuardIdx < initDomIdx, true, `${label}: startup restore must hydrate ids before restoring HTML`);
+
+    const persistMatch = panel.match(/async function persistChatHistorySnapshot\(tabId, \{ refreshTabInfo = false \} = \{\}\) \{([\s\S]*?)\n\}/);
+    assert.ok(persistMatch, `${label}: persistChatHistorySnapshot missing`);
+    const persistBody = persistMatch[1];
+    const hydrateIdx = persistBody.indexOf('await hydrateChatHistoryIdentity(numericTabId, agentMode, { refreshTabInfo });');
+    const recordIdx = persistBody.indexOf('const recordId = chatHistoryRecordIdsByTab.get(numericTabId) || fallbackHistoryRecordId(numericTabId);');
+    const saveIdx = persistBody.indexOf('await saveChatHistoryRecord({');
+    assert.notEqual(hydrateIdx, -1, `${label}: history snapshots should try to hydrate conversation identity`);
+    assert.notEqual(recordIdx, -1, `${label}: history snapshots should still have a local fallback`);
+    assert.notEqual(saveIdx, -1, `${label}: history snapshots should save a record`);
+    assert.equal(hydrateIdx < recordIdx && recordIdx < saveIdx, true, `${label}: snapshots must hydrate ids before minting a fallback record`);
+  }
+});
+
+test('sidepanel deletes durable history when clearing conversations', () => {
+  for (const [label, panelRel] of [
+    ['chrome', 'src/chrome/src/ui/sidepanel.js'],
+    ['firefox', 'src/firefox/src/ui/sidepanel.js'],
+  ]) {
+    const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
+    assert.match(panel, /import \{ deleteChatHistoryRecord, saveChatHistoryRecord \} from '\.\/chat-history-store\.js';/, `${label}: sidepanel should import durable history deletion`);
+
+    const resetMatch = panel.match(/async function resetChatHistoryStateForTab\(tabId\) \{([\s\S]*?)\n\}/);
+    assert.ok(resetMatch, `${label}: resetChatHistoryStateForTab should be async`);
+    const resetBody = resetMatch[1];
+    const recordSetIdx = resetBody.indexOf('const recordIdsToDelete = new Set([');
+    const activeRecordIdx = resetBody.indexOf('chatHistoryRecordIdsByTab.get(numericTabId)');
+    const conversationRecordIdx = resetBody.indexOf('chatHistoryConversationIdsByTab.get(numericTabId)');
+    const deleteIdx = resetBody.indexOf('deleteChatHistoryRecord(recordId)');
+    const mapDeleteIdx = resetBody.indexOf('chatHistoryRecordIdsByTab.delete(numericTabId)');
+    const hydrateMissingIdx = resetBody.indexOf('await hydrateChatHistoryIdentity(numericTabId, agentMode);');
+    assert.notEqual(recordSetIdx, -1, `${label}: reset should collect durable record ids before clearing maps`);
+    assert.notEqual(activeRecordIdx, -1, `${label}: reset should delete the active history record id`);
+    assert.notEqual(conversationRecordIdx, -1, `${label}: reset should also delete the conversation id record`);
+    assert.notEqual(hydrateMissingIdx, -1, `${label}: reset should hydrate restored ids before collecting records to delete`);
+    assert.notEqual(deleteIdx, -1, `${label}: reset should delete IndexedDB history records`);
+    assert.notEqual(mapDeleteIdx, -1, `${label}: reset should clear in-memory history ids`);
+    assert.equal(hydrateMissingIdx < recordSetIdx && recordSetIdx < deleteIdx && activeRecordIdx < deleteIdx && conversationRecordIdx < deleteIdx && deleteIdx < mapDeleteIdx, true, `${label}: durable history must be hydrated and deleted before in-memory ids are dropped`);
+
+    const helperStart = panel.indexOf('async function renderClearedConversationForTab(tabId)');
+    assert.notEqual(helperStart, -1, `${label}: clear helper should be async`);
+    const helperBody = panel.slice(helperStart, panel.indexOf('refreshScheduledJobs({', helperStart));
+    assert.match(helperBody, /await resetChatHistoryStateForTab\(tabId\);[\s\S]*?if \(currentTabId !== tabId\) return;/, `${label}: clear helper should delete durable history before visible-tab guards`);
+
+    const resetIdx = panel.indexOf('// /reset');
+    const resetSlashBody = panel.slice(resetIdx, panel.indexOf('// /screenshot', resetIdx));
+    assert.match(resetSlashBody, /await sendToBackground\('clear_conversation', \{ tabId \}\);[\s\S]*?await renderClearedConversationForTab\(tabId\);/, `${label}: /reset should await durable history deletion`);
+
+    const clearStart = panel.indexOf("clearBtn.addEventListener('click', async () => {");
+    const clearBody = panel.slice(clearStart, panel.indexOf('\n});', clearStart) + 4);
+    assert.match(clearBody, /await sendToBackground\('clear_conversation', \{ tabId \}\);[\s\S]*?await renderClearedConversationForTab\(tabId\);/, `${label}: clear button should await durable history deletion`);
+  }
+});
+
+test('sidepanel ignores stale async history snapshot saves', () => {
+  for (const [label, panelRel] of [
+    ['chrome', 'src/chrome/src/ui/sidepanel.js'],
+    ['firefox', 'src/firefox/src/ui/sidepanel.js'],
+  ]) {
+    const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
+    assert.match(panel, /const chatHistorySaveSeqByTab = new Map\(\);[\s\S]*?let chatHistorySaveSeq = 0;/, `${label}: history snapshots should track per-tab save sequence`);
+    assert.match(panel, /function nextChatHistorySaveSeqForTab\(tabId\) \{[\s\S]*?chatHistorySaveSeq \+= 1;[\s\S]*?chatHistorySaveSeqByTab\.set\(numericTabId, chatHistorySaveSeq\);[\s\S]*?return chatHistorySaveSeq;[\s\S]*?\}/, `${label}: history snapshot sequence helper missing`);
+
+    const persistStart = panel.indexOf('async function persistChatHistorySnapshot(tabId, { refreshTabInfo = false } = {}) {');
+    assert.notEqual(persistStart, -1, `${label}: persistChatHistorySnapshot missing`);
+    const persistBody = panel.slice(persistStart, panel.indexOf('\n}\n\nfunction scheduleHistoryPersist', persistStart) + 2);
+    const userCheckIdx = persistBody.indexOf("if (!messages.some((message) => message.role === 'user')) return;");
+    const stampIdx = persistBody.indexOf('const saveSeq = nextChatHistorySaveSeqForTab(numericTabId);');
+    const hydrateIdx = persistBody.indexOf('await hydrateChatHistoryIdentity(numericTabId, agentMode, { refreshTabInfo });');
+    const staleGuardIdx = persistBody.indexOf('if (chatHistorySaveSeqByTab.get(numericTabId) !== saveSeq) return;');
+    const saveIdx = persistBody.indexOf('await saveChatHistoryRecord({');
+    assert.notEqual(userCheckIdx, -1, `${label}: snapshots should skip conversations without user messages`);
+    assert.notEqual(stampIdx, -1, `${label}: snapshots should stamp async saves`);
+    assert.notEqual(hydrateIdx, -1, `${label}: snapshots should hydrate identity before saving`);
+    assert.notEqual(staleGuardIdx, -1, `${label}: snapshots should skip stale async saves`);
+    assert.notEqual(saveIdx, -1, `${label}: snapshots should save only after stale guard`);
+    assert.equal(userCheckIdx < stampIdx && stampIdx < hydrateIdx && hydrateIdx < staleGuardIdx && staleGuardIdx < saveIdx, true, `${label}: stale snapshot guard must run before writing history`);
+
+    const resetMatch = panel.match(/async function resetChatHistoryStateForTab\(tabId\) \{([\s\S]*?)\n\}/);
+    assert.ok(resetMatch, `${label}: resetChatHistoryStateForTab missing`);
+    const resetBody = resetMatch[1];
+    const invalidateIdx = resetBody.indexOf('nextChatHistorySaveSeqForTab(numericTabId);');
+    const hydrateMissingIdx = resetBody.indexOf('await hydrateChatHistoryIdentity(numericTabId, agentMode);');
+    const recordSetIdx = resetBody.indexOf('const recordIdsToDelete = new Set([');
+    const mapDeleteIdx = resetBody.indexOf('chatHistorySaveSeqByTab.delete(numericTabId);');
+    assert.notEqual(invalidateIdx, -1, `${label}: reset should invalidate in-flight history saves`);
+    assert.notEqual(hydrateMissingIdx, -1, `${label}: reset should hydrate restored ids after invalidating saves`);
+    assert.notEqual(recordSetIdx, -1, `${label}: reset should collect record ids after invalidating saves`);
+    assert.notEqual(mapDeleteIdx, -1, `${label}: reset should clear save sequence state after deleting history`);
+    assert.equal(invalidateIdx < hydrateMissingIdx && hydrateMissingIdx < recordSetIdx && recordSetIdx < mapDeleteIdx, true, `${label}: clear/reset must invalidate stale saves before async deletion work`);
   }
 });
 
@@ -6379,7 +6565,7 @@ test('chrome sidepanel serializes tab-chat storage writes with clears and reads'
   assert.match(panel, /return enqueueTabChatOperation\(tabId, async \(numericTabId\) => \{[\s\S]*?await chrome\.storage\.session\.set\(\{ \[key\]: html \}\)\.catch\(\(\) => \{\}\);/, 'chrome: tab-chat persistence should be serialized through the queue');
   const clearStart = panel.indexOf('function clearCachedTabChat(tabId) {');
   assert.notEqual(clearStart, -1, 'chrome: clearCachedTabChat missing');
-  const clearBody = panel.slice(clearStart, panel.indexOf('\n}\n\nfunction renderClearedConversationForTab', clearStart) + 2);
+  const clearBody = panel.slice(clearStart, panel.indexOf('\n}\n\nasync function renderClearedConversationForTab', clearStart) + 2);
   assert.match(clearBody, /tabChats\.delete\(tabId\);/, 'chrome: clearing tab chat should delete the cached HTML before queuing storage removal');
   assert.match(clearBody, /return enqueueTabChatOperation\(tabId, async \(numericTabId\) => \{/, 'chrome: clearing tab chat should be serialized through the queue');
   assert.match(clearBody, /return enqueueTabChatOperation\(tabId, async \(numericTabId\) => \{[\s\S]*?tabChats\.delete\(numericTabId\);[\s\S]*?chrome\.storage\.session\?\.remove\(TAB_CHAT_PREFIX \+ numericTabId\)/, 'chrome: queued clears should delete stale HTML re-cached by older queued writes before removing storage');
@@ -6419,7 +6605,7 @@ test('chrome sidepanel cancels stale tab-chat persistence when clearing a tab', 
 
   const clearStart = panel.indexOf('function clearCachedTabChat(tabId) {');
   assert.notEqual(clearStart, -1, 'chrome: clearCachedTabChat missing');
-  const clearBody = panel.slice(clearStart, panel.indexOf('\n}\n\nfunction renderClearedConversationForTab', clearStart) + 2);
+  const clearBody = panel.slice(clearStart, panel.indexOf('\n}\n\nasync function renderClearedConversationForTab', clearStart) + 2);
   assert.match(
     clearBody,
     /if \(persistTimer && persistTimerTabId === tabId\) \{[\s\S]*?clearTimeout\(persistTimer\);[\s\S]*?persistTimer = null;[\s\S]*?persistTimerTabId = null;[\s\S]*?\}[\s\S]*?tabChats\.delete\(tabId\);[\s\S]*?return enqueueTabChatOperation\(tabId, async \(numericTabId\) => \{[\s\S]*?tabChats\.delete\(numericTabId\);[\s\S]*?chrome\.storage\.session\?\.remove\(TAB_CHAT_PREFIX \+ numericTabId\)/,
@@ -7200,7 +7386,7 @@ test('sidepanel preserves stale residual slash-command prompts without hidden ru
     const switchStart = panel.indexOf('function switchToTab(newTabId)');
     assert.notEqual(switchStart, -1, `${label}: switchToTab missing`);
     const switchBody = panel.slice(switchStart, panel.indexOf('refreshScheduledJobs({', switchStart));
-    assert.match(switchBody, /captureInputDraftForTab\(renderedTabId\);[\s\S]*?restoreInputDraftForTab\(newTabId\);/, `${label}: tab switches should capture and restore per-tab composer drafts`);
+    assert.match(switchBody, /const outgoingTabId = renderedTabId;[\s\S]*?captureInputDraftForTab\(outgoingTabId\);[\s\S]*?restoreInputDraftForTab\(newTabId\);/, `${label}: tab switches should capture and restore per-tab composer drafts`);
 
     const sendMatch = panel.match(/async function sendMessage\(extraChatParams(?: = \{\})?\) \{[\s\S]*?\n  return accepted;\n\}/);
     assert.ok(sendMatch, `${label}: sendMessage missing`);
@@ -7226,8 +7412,18 @@ test('sidepanel preserves stale residual slash-command prompts without hidden ru
     assert.equal(modeCaptureIdx < parseIdx && apiCaptureIdx < parseIdx, true, `${label}: stale-tab residual sends should not read visible-tab options after slash parsing`);
     assert.match(
       sendBody,
-      /const tabId = currentTabId;[\s\S]*?text = await parseSlashCommands\(text, tabId\);[\s\S]*?const renderToCurrentTab = currentTabId === tabId;[\s\S]*?if \(!renderToCurrentTab\) \{[\s\S]*?if \(text\) saveInputDraftForTab\(tabId, text\);[\s\S]*?return false;[\s\S]*?\}/,
+      /const tabId = currentTabId;[\s\S]*?text = await parseSlashCommands\(text, tabId\);[\s\S]*?renderToCurrentTab = sameTabId\(currentTabId, tabId\) && sameTabId\(renderedTabId, tabId\);[\s\S]*?if \(!renderToCurrentTab\) \{[\s\S]*?if \(text\) saveInputDraftForTab\(tabId, text\);[\s\S]*?return false;[\s\S]*?\}/,
       `${label}: stale residual slash-command prompts should be preserved as drafts instead of hidden runs`,
+    );
+    assert.match(
+      sendBody,
+      /if \(!text\) \{[\s\S]*?return;[\s\S]*?\}\s*isProcessing = true;\s*abortRequested = false;\s*inputEl\.value = '';\s*autoResizeInput\(\);\s*syncSendButtonState\(\);\s*await prepareChatHistoryForTurn\(tabId, modeForSend\);/,
+      `${label}: send should enter a busy state and clear the composer before async history hydration`,
+    );
+    assert.match(
+      sendBody,
+      /await prepareChatHistoryForTurn\(tabId, modeForSend\);\s*if \(abortRequested\) \{[\s\S]*?isProcessing = false;[\s\S]*?abortRequested = false;[\s\S]*?syncSendButtonState\(\);[\s\S]*?return false;[\s\S]*?\}[\s\S]*?renderToCurrentTab = sameTabId\(currentTabId, tabId\) && sameTabId\(renderedTabId, tabId\);/,
+      `${label}: aborted sends during history hydration should stop before chat dispatch`,
     );
     const staleReturnIdx = sendBody.indexOf('if (!renderToCurrentTab) {');
     const sendIdx = sendBody.indexOf("sendToBackground('chat'");
@@ -7236,7 +7432,7 @@ test('sidepanel preserves stale residual slash-command prompts without hidden ru
     assert.equal(staleReturnIdx < sendIdx, true, `${label}: stale-tab residual guard must run before chat dispatch`);
     assert.match(
       sendBody,
-      /if \(renderToCurrentTab\) \{\s*isProcessing = true;\s*abortRequested = false;\s*inputEl\.value = '';\s*autoResizeInput\(\);\s*syncSendButtonState\(\);[\s\S]*?addMessage\('user', text\);[\s\S]*?currentAssistantEl = assistantEl;[\s\S]*?\}/,
+      /if \(renderToCurrentTab\) \{\s*isProcessing = true;\s*abortRequested = false;\s*syncSendButtonState\(\);[\s\S]*?addMessage\('user', text\);[\s\S]*?currentAssistantEl = assistantEl;[\s\S]*?\}/,
       `${label}: stale-tab residual sends should not mutate or render chat UI in the currently visible tab`,
     );
     assert.doesNotMatch(
@@ -7474,8 +7670,9 @@ test('sidepanel continue runs use the initiating tab state', () => {
     assert.match(body, /const tabId = currentTabId;[\s\S]*?const modeForSend = agentMode;[\s\S]*?sendToBackground\('continue', \{[\s\S]*?tabId,[\s\S]*?mode: modeForSend,/, `${label}: Continue should send with the tab and mode captured before awaiting`);
     assert.doesNotMatch(body, /sendToBackground\('continue', \{[\s\S]*?tabId: currentTabId/, `${label}: Continue should not read currentTabId inside the async send payload`);
     assert.doesNotMatch(body, /sendToBackground\('continue', \{[\s\S]*?mode: agentMode/, `${label}: Continue should not read agentMode inside the async send payload`);
-    assert.match(body, /const assistantEl = addMessage\('assistant', ''\);[\s\S]*?currentAssistantEl = assistantEl;[\s\S]*?if \(currentTabId === tabId && res\?\.content && assistantEl\) \{[\s\S]*?addMessageCopyButton\(assistantEl\);/, `${label}: Continue should render only into its captured assistant bubble for the initiating tab`);
-    assert.match(body, /if \(currentTabId === tabId\) finalizeSteps\(assistantEl\);[\s\S]*?if \(currentAssistantEl === assistantEl\) currentAssistantEl = null;/, `${label}: Continue should finalize and clear only its captured assistant bubble`);
+    assert.match(body, /await prepareChatHistoryForTurn\(tabId, modeForSend\);[\s\S]*?if \(abortRequested\) return false;[\s\S]*?if \(!sameTabId\(currentTabId, tabId\) \|\| !sameTabId\(renderedTabId, tabId\)\) return false;[\s\S]*?assistantEl = addMessage\('assistant', ''\);/, `${label}: Continue should hydrate history, honor aborts, and re-check the initiating tab before rendering`);
+    assert.match(body, /let assistantEl = null;[\s\S]*?assistantEl = addMessage\('assistant', ''\);[\s\S]*?currentAssistantEl = assistantEl;[\s\S]*?if \(currentTabId === tabId && res\?\.content && assistantEl\) \{[\s\S]*?addMessageCopyButton\(assistantEl\);/, `${label}: Continue should render only into its captured assistant bubble for the initiating tab`);
+    assert.match(body, /if \(currentTabId === tabId && assistantEl\) finalizeSteps\(assistantEl\);[\s\S]*?if \(currentAssistantEl === assistantEl\) currentAssistantEl = null;/, `${label}: Continue should finalize and clear only its captured assistant bubble`);
   }
 });
 

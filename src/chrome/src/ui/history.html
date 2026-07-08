@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebBrain Chat History</title>
+  <script src="theme-bootstrap.js"></script>
+  <style>
+    :root {
+      --bg: #1a1a2e;
+      --bg2: #16213e;
+      --bg3: #1e2746;
+      --bg4: #2a3558;
+      --text: #e8e8e8;
+      --text2: #a0a0b8;
+      --text3: #6d6d87;
+      --accent: #6c63ff;
+      --accent2: #5a52d5;
+      --border: rgba(255,255,255,0.08);
+      --error: #f44336;
+      --radius: 10px;
+      color-scheme: dark;
+    }
+    :root[data-theme="light"] {
+      --bg: #f7f1e6;
+      --bg2: #fffdf8;
+      --bg3: #fdf6e0;
+      --bg4: #f2e6cf;
+      --text: #2c1810;
+      --text2: #6b5b47;
+      --text3: #9a876c;
+      --accent: #5b52e8;
+      --accent2: #4a42c4;
+      --border: rgba(89,55,25,0.15);
+      --error: #c5363c;
+      color-scheme: light;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 13px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    header {
+      padding: 12px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-shrink: 0;
+    }
+    h1 {
+      font-size: 18px;
+      background: linear-gradient(135deg, var(--accent), #a78bfa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .spacer { flex: 1; }
+    .pill {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      color: var(--text2);
+      white-space: nowrap;
+    }
+    button, input[type=text] {
+      background: var(--bg3);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 12px;
+      font-family: inherit;
+      cursor: pointer;
+    }
+    button:hover { background: var(--bg4); }
+    button:disabled { opacity: 0.48; cursor: default; }
+    button.danger { color: var(--error); }
+    input[type=text] {
+      cursor: text;
+      width: 100%;
+      outline: none;
+    }
+    input[type=text]:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(108,99,255,0.22);
+    }
+    main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      min-height: 0;
+    }
+    #sidebar {
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    #filters {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    #history-list {
+      overflow-y: auto;
+      flex: 1;
+      padding: 4px;
+    }
+    .history-item {
+      padding: 10px 12px;
+      border-radius: 8px;
+      margin-bottom: 2px;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: background 0.1s, border-color 0.1s;
+    }
+    .history-item:hover { background: var(--bg2); }
+    .history-item.selected { background: var(--bg3); border-color: var(--accent); }
+    .history-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-bottom: 4px;
+    }
+    .history-meta {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      color: var(--text2);
+      font-size: 10px;
+    }
+    .trace-chip {
+      color: var(--accent);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    #main-pane {
+      overflow-y: auto;
+      min-width: 0;
+      padding: 18px;
+    }
+    #empty-state {
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      color: var(--text3);
+    }
+    #empty-state div { max-width: 380px; }
+    .record-header {
+      margin-bottom: 14px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .record-header h2 {
+      font-size: 17px;
+      line-height: 1.35;
+      margin-bottom: 8px;
+    }
+    .record-meta {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      color: var(--text2);
+      font-size: 11px;
+    }
+    .record-url {
+      display: block;
+      margin-top: 10px;
+      color: var(--accent);
+      overflow-wrap: anywhere;
+      text-decoration: none;
+      font-size: 12px;
+    }
+    .record-url:hover { text-decoration: underline; }
+    .trace-panel {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin: 0 0 14px;
+    }
+    .trace-panel-title {
+      font-size: 11px;
+      color: var(--text2);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 8px;
+      font-weight: 700;
+    }
+    .trace-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .trace-link {
+      display: inline-flex;
+      gap: 6px;
+      align-items: center;
+      padding: 5px 8px;
+      border-radius: 5px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      color: var(--text);
+      text-decoration: none;
+      font-size: 11px;
+    }
+    .trace-link:hover { border-color: var(--accent); }
+    .messages {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .message {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg2);
+      padding: 10px 12px;
+    }
+    .message.user {
+      background: rgba(108,99,255,0.14);
+      border-color: rgba(108,99,255,0.32);
+    }
+    .message.error {
+      border-color: rgba(244,67,54,0.35);
+      color: var(--error);
+    }
+    .message-role {
+      color: var(--text2);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .message-text {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      line-height: 1.5;
+      font-size: 12px;
+    }
+    .empty-inline {
+      padding: 20px;
+      text-align: center;
+      color: var(--text3);
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1 data-i18n="hist.title"></h1>
+    <span id="count-pill" class="pill"></span>
+    <div class="spacer"></div>
+    <button id="btn-refresh" data-i18n="hist.btn.refresh" data-i18n-title="hist.btn.refresh.title"></button>
+    <button id="btn-export" data-i18n="hist.btn.export" data-i18n-title="hist.btn.export.title"></button>
+    <button id="btn-delete" class="danger" data-i18n="hist.btn.delete" data-i18n-title="hist.btn.delete.title"></button>
+    <button id="btn-clear-all" class="danger" data-i18n="hist.btn.clear_all" data-i18n-title="hist.btn.clear_all.title"></button>
+  </header>
+  <main>
+    <aside id="sidebar">
+      <div id="filters">
+        <input type="text" id="filter-text" data-i18n-placeholder="hist.filter.placeholder">
+      </div>
+      <div id="history-list"></div>
+    </aside>
+    <section id="main-pane">
+      <div id="empty-state">
+        <div>
+          <p style="font-size:14px;margin-bottom:10px;" data-i18n="hist.empty.title"></p>
+          <p style="color:var(--text3);" data-i18n="hist.empty.hint"></p>
+        </div>
+      </div>
+    </section>
+  </main>
+  <script src="history.js" type="module"></script>
+</body>
+</html>

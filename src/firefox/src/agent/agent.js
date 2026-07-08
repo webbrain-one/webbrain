@@ -262,6 +262,13 @@ export class Agent {
     return this.conversationIds.get(tabId) || null;
   }
 
+  async ensureConversationId(tabId, mode = 'ask') {
+    await this._hydrate(tabId);
+    this.getConversation(tabId, mode);
+    this._persist(tabId);
+    return this.conversationIds.get(tabId) || null;
+  }
+
   async getScratchpad(tabId) {
     await this._hydrate(tabId);
     const messages = this.conversations.get(tabId);

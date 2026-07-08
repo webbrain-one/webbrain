@@ -814,6 +814,15 @@ async function handleMessage(msg, sender) {
   await Promise.all([planBeforeActReady, planReviewReady, customSkillsReady]);
 
   switch (msg.action) {
+    case 'ensure_conversation_id': {
+      const tabId = msg.tabId || sender.tab?.id;
+      if (!tabId) throw new Error('No tab ID');
+      return {
+        ok: true,
+        conversationId: await agent.ensureConversationId(tabId, msg.mode || 'ask'),
+      };
+    }
+
     case 'chat': {
       const tabId = msg.tabId || sender.tab?.id;
       if (!tabId) throw new Error('No tab ID');
@@ -844,7 +853,7 @@ async function handleMessage(msg, sender) {
           }).catch(() => {});
         }, mode, msg.attachments);
 
-        return { content: result, updates };
+        return { content: result, updates, conversationId: await agent.getConversationId(tabId) };
       } finally {
         sendAgentRunComplete(tabId);
         sendIndicatorMessage(tabId, 'WB_HIDE_AGENT_INDICATORS');
@@ -870,7 +879,7 @@ async function handleMessage(msg, sender) {
           }).catch(() => {});
         }, mode);
 
-        return { content: result };
+        return { content: result, conversationId: await agent.getConversationId(tabId) };
       } finally {
         sendAgentRunComplete(tabId);
         sendIndicatorMessage(tabId, 'WB_HIDE_AGENT_INDICATORS');
@@ -894,7 +903,7 @@ async function handleMessage(msg, sender) {
           }).catch(() => {});
         }, mode);
 
-        return { content: result };
+        return { content: result, conversationId: await agent.getConversationId(tabId) };
       } finally {
         sendAgentRunComplete(tabId);
         sendIndicatorMessage(tabId, 'WB_HIDE_AGENT_INDICATORS');
