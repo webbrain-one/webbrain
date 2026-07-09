@@ -96,3 +96,16 @@ The prompt asks the model for a 6-section structured caption (page purpose, exac
 - Does it correctly flag "unknown" when it can't read a number, not guess?
 
 Keep the two constants at the top of `vision-probe.mjs` in sync with `src/chrome/src/agent/agent.js` (`VISION_SYSTEM_PROMPT` and the user-message text). If the real prompt changes, update the probe so results stay comparable.
+
+## 5. Manual memory tutorial — `test/memory/`
+
+Static HTML tutorial for the user-memory feature. Serve it locally and drive it
+with the extension side panel:
+
+```bash
+python3 -m http.server 8765 -d test/memory
+```
+
+Then open `http://127.0.0.1:8765/`. The page walks through `/remember`,
+form-derived learning, normal auto-learning, replaying saved memories into a
+later form, and Profile auto-fill.

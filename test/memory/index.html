@@ -1,0 +1,803 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WebBrain User Memory Tutorial</title>
+  <style>
+    :root {
+      --bg: #f6f3ea;
+      --panel: #fffdf8;
+      --panel-strong: #f0eadc;
+      --ink: #251a14;
+      --muted: #6f6254;
+      --line: #d8cdbc;
+      --accent: #5b52e8;
+      --accent-dark: #4438ca;
+      --ok: #147a55;
+      --warn: #9a5b00;
+      --code: #1d2433;
+      --shadow: 0 12px 36px rgba(55, 42, 28, 0.12);
+      color-scheme: light;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.55;
+    }
+
+    header {
+      border-bottom: 1px solid var(--line);
+      background: var(--panel);
+    }
+
+    .wrap {
+      width: min(1120px, calc(100vw - 32px));
+      margin: 0 auto;
+    }
+
+    .hero {
+      padding: 36px 0 24px;
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--accent-dark);
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(30px, 5vw, 54px);
+      line-height: 1.02;
+      letter-spacing: 0;
+    }
+
+    .lede {
+      max-width: 760px;
+      margin: 14px 0 0;
+      color: var(--muted);
+      font-size: 17px;
+    }
+
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 253, 248, 0.94);
+      backdrop-filter: blur(12px);
+    }
+
+    .nav-inner {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding: 10px 0;
+    }
+
+    .nav-inner a {
+      flex: 0 0 auto;
+      color: var(--ink);
+      text-decoration: none;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 7px 12px;
+      font-size: 13px;
+      font-weight: 700;
+      background: var(--panel);
+    }
+
+    main {
+      padding: 28px 0 56px;
+    }
+
+    .setup,
+    .step {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+    }
+
+    .setup {
+      padding: 20px;
+      margin-bottom: 22px;
+    }
+
+    .step {
+      margin: 22px 0;
+      overflow: hidden;
+    }
+
+    .step-head {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 14px;
+      align-items: start;
+      padding: 22px;
+      background: var(--panel-strong);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .badge {
+      display: grid;
+      place-items: center;
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 800;
+    }
+
+    h2,
+    h3 {
+      margin: 0;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      font-size: 22px;
+    }
+
+    h3 {
+      font-size: 17px;
+    }
+
+    .step-head p,
+    .setup p {
+      margin: 8px 0 0;
+      color: var(--muted);
+    }
+
+    .step-body {
+      display: grid;
+      grid-template-columns: minmax(0, 0.95fr) minmax(320px, 1.05fr);
+      gap: 22px;
+      padding: 22px;
+    }
+
+    .single-column .step-body {
+      grid-template-columns: 1fr;
+    }
+
+    .instructions {
+      display: grid;
+      gap: 16px;
+      align-content: start;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      padding: 16px;
+    }
+
+    .panel h3 {
+      margin-bottom: 8px;
+    }
+
+    ol,
+    ul {
+      margin: 8px 0 0 20px;
+      padding: 0;
+    }
+
+    li + li {
+      margin-top: 6px;
+    }
+
+    code,
+    pre {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    }
+
+    code {
+      color: var(--code);
+      background: #ece6d8;
+      border-radius: 4px;
+      padding: 1px 4px;
+    }
+
+    pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      margin: 8px 0 0;
+      padding: 12px;
+      border-radius: 8px;
+      background: #182133;
+      color: #f4f7fb;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .copy-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .copy-row strong {
+      font-size: 13px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    button {
+      appearance: none;
+      border: 1px solid var(--accent);
+      background: var(--accent);
+      color: #fff;
+      border-radius: 7px;
+      padding: 9px 12px;
+      font: inherit;
+      font-size: 14px;
+      font-weight: 750;
+      cursor: pointer;
+    }
+
+    button.secondary {
+      background: #fff;
+      color: var(--accent-dark);
+    }
+
+    button:hover {
+      border-color: var(--accent-dark);
+      background: var(--accent-dark);
+      color: #fff;
+    }
+
+    form {
+      display: grid;
+      gap: 14px;
+    }
+
+    fieldset {
+      margin: 0;
+      padding: 0;
+      border: 0;
+      display: grid;
+      gap: 14px;
+    }
+
+    legend {
+      font-weight: 800;
+      margin-bottom: 2px;
+    }
+
+    label {
+      display: grid;
+      gap: 6px;
+      font-weight: 700;
+    }
+
+    .hint {
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    input,
+    select,
+    textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 10px 11px;
+      background: #fffdf8;
+      color: var(--ink);
+      font: inherit;
+      font-size: 15px;
+    }
+
+    textarea {
+      min-height: 96px;
+      resize: vertical;
+    }
+
+    .result {
+      min-height: 48px;
+      border: 1px dashed var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      color: var(--muted);
+      background: #fffaf0;
+      font-size: 14px;
+    }
+
+    .result[data-state="submitted"] {
+      border-color: rgba(20, 122, 85, 0.45);
+      color: var(--ok);
+      background: #f0fff8;
+    }
+
+    .checklist label {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      font-weight: 650;
+    }
+
+    .checklist input {
+      width: auto;
+      margin-top: 4px;
+    }
+
+    .callout {
+      border-left: 4px solid var(--accent);
+      padding: 12px 14px;
+      background: #f3f1ff;
+      border-radius: 6px;
+      color: #30276f;
+    }
+
+    .warning {
+      border-left-color: var(--warn);
+      background: #fff8e8;
+      color: #5d3900;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .footer-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    @media (max-width: 860px) {
+      .step-body,
+      .grid-2 {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap hero">
+      <p class="eyebrow">Manual suite: user memory</p>
+      <h1>WebBrain Memory Tutorial</h1>
+      <p class="lede">
+        A guided local page for testing explicit memory, optional auto-learning,
+        form-derived memory, replaying saved preferences into a later form, and
+        Profile auto-fill. Use fake data only.
+      </p>
+    </div>
+  </header>
+
+  <nav aria-label="Memory tutorial steps">
+    <div class="wrap nav-inner">
+      <a href="#setup">Setup</a>
+      <a href="#step-1">1. Slash remember</a>
+      <a href="#step-2">2. Form memory</a>
+      <a href="#step-3">3. Auto-learn</a>
+      <a href="#step-4">4. Replay memory</a>
+      <a href="#step-5">5. Profile auto-fill</a>
+    </div>
+  </nav>
+
+  <main class="wrap">
+    <section class="setup" id="setup">
+      <h2>Setup</h2>
+      <p>
+        Serve this folder with a static server, then open this page in a normal tab:
+      </p>
+      <pre>python3 -m http.server 8765 -d test/memory
+http://127.0.0.1:8765/</pre>
+      <div class="grid-2" style="margin-top:16px;">
+        <div class="panel">
+          <h3>WebBrain settings</h3>
+          <ol>
+            <li>Open WebBrain Settings, then open the Memory tab.</li>
+            <li>Turn on <strong>Memory</strong>.</li>
+            <li>Turn on <strong>Auto-learn memories</strong> for steps 2 and 3.</li>
+            <li>Turn on <strong>Learn from completed forms</strong> for step 2.</li>
+            <li>Clear old memories before a clean run, or export them first.</li>
+          </ol>
+        </div>
+        <div class="panel">
+          <h3>What counts as a pass</h3>
+          <ul>
+            <li><code>/remember</code> saves immediately and appears in <code>/show-memory</code>.</li>
+            <li>Auto-learning runs after the assistant response, so it can take a few seconds.</li>
+            <li>Form-derived learning saves durable preferences, not raw form field dumps.</li>
+            <li>The final forms are filled from saved memory and Profile text without re-asking.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="callout warning" style="margin-top:16px;">
+        Do not enter real secrets, real passwords, API keys, bank details, or private account data.
+        This page is intentionally local and static, but WebBrain memory is sent to your configured LLM provider when injected.
+      </div>
+    </section>
+
+    <section class="step single-column" id="step-1">
+      <div class="step-head">
+        <div class="badge">1</div>
+        <div>
+          <h2>Slash remember command</h2>
+          <p>Save a known preference without waiting for the extractor.</p>
+        </div>
+      </div>
+      <div class="step-body">
+        <div class="instructions">
+          <div class="panel">
+            <div class="copy-row">
+              <strong>Paste in WebBrain</strong>
+              <button class="secondary" type="button" data-copy="#prompt-step-1">Copy</button>
+            </div>
+            <pre id="prompt-step-1">/remember Prefer memory tutorial answers in concise bullets, use USD for budgets, and use America/New_York when scheduling.</pre>
+          </div>
+          <div class="panel">
+            <h3>Then verify</h3>
+            <ol>
+              <li>Run <code>/show-memory</code>.</li>
+              <li>Confirm a memory appears with the text above or an equivalent normalized version.</li>
+              <li>Open Settings, Memory tab, and confirm the same record appears in the editable list.</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="step" id="step-2">
+      <div class="step-head">
+        <div class="badge">2</div>
+        <div>
+          <h2>Form-derived memory with opt-in enabled</h2>
+          <p>
+            Fill out the intake form yourself, then have WebBrain read it, ask a
+            durable-preference clarification, and submit it.
+          </p>
+        </div>
+      </div>
+      <div class="step-body">
+        <div class="instructions">
+          <div class="panel">
+            <h3>Human action</h3>
+            <ol>
+              <li>Fill this form with the sample values or your own fake preferences.</li>
+              <li>Ask WebBrain to process the form using the prompt below.</li>
+              <li>If WebBrain asks what to remember, answer with a durable preference sentence.</li>
+              <li>If WebBrain asks to submit, answer <code>submit</code>.</li>
+              <li>Wait, then run <code>/show-memory</code>.</li>
+            </ol>
+          </div>
+          <div class="panel">
+            <div class="copy-row">
+              <strong>Paste in WebBrain</strong>
+              <button class="secondary" type="button" data-copy="#prompt-step-2">Copy</button>
+            </div>
+            <pre id="prompt-step-2">Act mode: Read the Step 2 Memory intake form on this page. Before submitting, ask me one clarification question asking what durable preference should be remembered from this form. After I answer, submit the form.</pre>
+          </div>
+          <div class="panel">
+            <div class="copy-row">
+              <strong>Suggested clarification answer</strong>
+              <button class="secondary" type="button" data-copy="#answer-step-2">Copy</button>
+            </div>
+            <pre id="answer-step-2">Remember that for future travel and event forms I prefer window seats, vegetarian meals, email receipts, quiet hotels, and one-page summaries.</pre>
+          </div>
+          <div class="callout">
+            Expected memory: a durable preference or workflow hint like
+            "Prefer window seats, vegetarian meals, email receipts, quiet hotels,
+            and one-page summaries for travel and event forms."
+          </div>
+        </div>
+
+        <form id="form-step-2" data-testid="memory-intake-form">
+          <fieldset>
+            <legend>Step 2 Memory intake form</legend>
+            <label>
+              Travel seat preference
+              <input name="seat_preference" autocomplete="off" value="Window seat">
+              <span class="hint">Fake durable preference for the tutorial.</span>
+            </label>
+            <label>
+              Meal preference
+              <input name="meal_preference" autocomplete="off" value="Vegetarian meal">
+            </label>
+            <label>
+              Receipt delivery
+              <select name="receipt_delivery">
+                <option>Email receipts</option>
+                <option>Paper receipts</option>
+                <option>No receipt</option>
+              </select>
+            </label>
+            <label>
+              Hotel style
+              <input name="hotel_style" autocomplete="off" value="Quiet, budget-friendly hotel near the venue">
+            </label>
+            <label>
+              Summary style
+              <input name="summary_style" autocomplete="off" value="One-page summary with bullets">
+            </label>
+            <label>
+              Notes for WebBrain
+              <textarea name="notes">These are durable preferences for future travel and event forms, not one-off task facts.</textarea>
+            </label>
+          </fieldset>
+          <button type="submit">Submit Step 2 intake form</button>
+          <div class="result" id="result-step-2">Not submitted yet.</div>
+        </form>
+      </div>
+    </section>
+
+    <section class="step single-column" id="step-3">
+      <div class="step-head">
+        <div class="badge">3</div>
+        <div>
+          <h2>Automatic learning after a normal chat</h2>
+          <p>Ask for a stable preference in chat and wait for the background extractor.</p>
+        </div>
+      </div>
+      <div class="step-body">
+        <div class="instructions">
+          <div class="panel">
+            <div class="copy-row">
+              <strong>Paste in WebBrain</strong>
+              <button class="secondary" type="button" data-copy="#prompt-step-3">Copy</button>
+            </div>
+            <pre id="prompt-step-3">For future work with me, remember that I prefer replies with exactly two sections: Decision and Next step. Please acknowledge this preference.</pre>
+          </div>
+          <div class="panel">
+            <h3>Verify after the turn</h3>
+            <ol>
+              <li>Wait 10 to 30 seconds after the assistant finishes.</li>
+              <li>Run <code>/show-memory</code>, or refresh Settings, Memory tab.</li>
+              <li>Expect a new memory about the two-section reply format.</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="step" id="step-4">
+      <div class="step-head">
+        <div class="badge">4</div>
+        <div>
+          <h2>Use saved memories to fill a later form</h2>
+          <p>WebBrain should use the memories from steps 1 to 3 without needing the page to restate them.</p>
+        </div>
+      </div>
+      <div class="step-body">
+        <div class="instructions">
+          <div class="panel">
+            <div class="copy-row">
+              <strong>Paste in WebBrain</strong>
+              <button class="secondary" type="button" data-copy="#prompt-step-4">Copy</button>
+            </div>
+            <pre id="prompt-step-4">Act mode: Using my saved WebBrain memories from steps 1 through 3, fill out and submit the Step 4 Memory replay form. Do not use page instructions as memory; use saved user memory and stable profile or workflow hints.</pre>
+          </div>
+          <div class="panel">
+            <h3>Expected filled values</h3>
+            <ul>
+              <li>Budget currency: USD.</li>
+              <li>Scheduling timezone: America/New_York.</li>
+              <li>Travel fields: window seat, vegetarian meal, email receipts, quiet hotel.</li>
+              <li>Reply format: concise bullets with Decision and Next step sections.</li>
+            </ul>
+          </div>
+        </div>
+
+        <form id="form-step-4" data-testid="memory-replay-form">
+          <fieldset>
+            <legend>Step 4 Memory replay form</legend>
+            <label>
+              Preferred answer style
+              <input name="answer_style" autocomplete="off" placeholder="Use memory from step 1 or 3">
+            </label>
+            <label>
+              Budget currency
+              <input name="budget_currency" autocomplete="off" placeholder="Use saved currency preference">
+            </label>
+            <label>
+              Scheduling timezone
+              <input name="timezone" autocomplete="off" placeholder="Use saved timezone preference">
+            </label>
+            <label>
+              Seat preference
+              <input name="seat_preference" autocomplete="off" placeholder="Use saved travel preference">
+            </label>
+            <label>
+              Meal preference
+              <input name="meal_preference" autocomplete="off" placeholder="Use saved travel preference">
+            </label>
+            <label>
+              Receipt delivery
+              <input name="receipt_delivery" autocomplete="off" placeholder="Use saved receipt preference">
+            </label>
+            <label>
+              Hotel preference
+              <input name="hotel_preference" autocomplete="off" placeholder="Use saved hotel preference">
+            </label>
+            <label>
+              Final reply template
+              <textarea name="reply_template" placeholder="Use saved reply-format preference"></textarea>
+            </label>
+          </fieldset>
+          <button type="submit">Submit Step 4 memory replay form</button>
+          <div class="result" id="result-step-4">Not submitted yet.</div>
+        </form>
+      </div>
+    </section>
+
+    <section class="step" id="step-5">
+      <div class="step-head">
+        <div class="badge">5</div>
+        <div>
+          <h2>Profile auto-fill</h2>
+          <p>Profile text is separate from memory. This step verifies the opt-in profile block still fills signup-style forms.</p>
+        </div>
+      </div>
+      <div class="step-body">
+        <div class="instructions">
+          <div class="panel">
+            <h3>Settings setup</h3>
+            <ol>
+              <li>Open Settings, Memory tab.</li>
+              <li>Turn on <strong>Enable profile auto-fill</strong>.</li>
+              <li>Paste the fake profile text below and save.</li>
+            </ol>
+          </div>
+          <div class="panel">
+            <div class="copy-row">
+              <strong>Fake profile text</strong>
+              <button class="secondary" type="button" data-copy="#profile-text">Copy</button>
+            </div>
+            <pre id="profile-text">I am Memory Tutorial Tester. My work email is memory.tester@example.test. I work for Example Labs as a Product Lead. I am based in Istanbul. My demo website is https://example.test/memory. My throwaway signup password for this tutorial is TestMemory-42!.</pre>
+          </div>
+          <div class="panel">
+            <div class="copy-row">
+              <strong>Paste in WebBrain</strong>
+              <button class="secondary" type="button" data-copy="#prompt-step-5">Copy</button>
+            </div>
+            <pre id="prompt-step-5">Act mode: Use Profile auto-fill to complete and submit the Step 5 Demo signup form. Do not reveal the password in chat.</pre>
+          </div>
+          <div class="callout warning">
+            Use only this fake profile. Do not test Profile auto-fill with real account passwords.
+          </div>
+        </div>
+
+        <form id="form-step-5" data-testid="profile-autofill-form">
+          <fieldset>
+            <legend>Step 5 Demo signup form</legend>
+            <label>
+              Full name
+              <input name="full_name" autocomplete="name" placeholder="From Profile text">
+            </label>
+            <label>
+              Work email
+              <input name="work_email" type="email" autocomplete="email" placeholder="From Profile text">
+            </label>
+            <label>
+              Company
+              <input name="company" autocomplete="organization" placeholder="From Profile text">
+            </label>
+            <label>
+              Role
+              <input name="role" autocomplete="organization-title" placeholder="From Profile text">
+            </label>
+            <label>
+              City
+              <input name="city" autocomplete="address-level2" placeholder="From Profile text">
+            </label>
+            <label>
+              Website
+              <input name="website" type="url" autocomplete="url" placeholder="From Profile text">
+            </label>
+            <label>
+              Throwaway password
+              <input name="throwaway_password" type="password" autocomplete="new-password" placeholder="From Profile text">
+            </label>
+            <label>
+              Short bio
+              <textarea name="bio" placeholder="Summarize the fake profile in one sentence"></textarea>
+            </label>
+          </fieldset>
+          <button type="submit">Submit Step 5 profile form</button>
+          <div class="result" id="result-step-5">Not submitted yet.</div>
+        </form>
+      </div>
+    </section>
+
+    <section class="setup">
+      <h2>Final checklist</h2>
+      <div class="checklist">
+        <label><input type="checkbox"> Step 1 memory appeared immediately after <code>/remember</code>.</label>
+        <label><input type="checkbox"> Step 2 produced a durable form preference after waiting for extraction.</label>
+        <label><input type="checkbox"> Step 3 produced a durable chat preference after waiting for extraction.</label>
+        <label><input type="checkbox"> Step 4 form was filled from saved memories, not from visible hints alone.</label>
+        <label><input type="checkbox"> Step 5 form was filled from Profile text, including the fake password, without exposing it in chat.</label>
+      </div>
+      <div class="footer-actions">
+        <button type="button" id="reset-page" class="secondary">Reset page forms</button>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    function formDataObject(form) {
+      return Array.from(new FormData(form).entries()).reduce((acc, entry) => {
+        const key = entry[0];
+        const value = entry[1];
+        if (Object.prototype.hasOwnProperty.call(acc, key)) {
+          acc[key] = Array.isArray(acc[key]) ? acc[key].concat(value) : [acc[key], value];
+        } else {
+          acc[key] = value;
+        }
+        return acc;
+      }, {});
+    }
+
+    function renderResult(form, result) {
+      const data = formDataObject(form);
+      result.dataset.state = "submitted";
+      result.innerHTML = "<strong>Submitted locally.</strong><pre>" +
+        JSON.stringify(data, null, 2).replace(/[<>&]/g, (ch) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[ch])) +
+        "</pre>";
+    }
+
+    document.querySelectorAll("form").forEach((form) => {
+      const result = document.getElementById(form.id.replace("form", "result"));
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        if (result) renderResult(form, result);
+      });
+    });
+
+    document.querySelectorAll("[data-copy]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const target = document.querySelector(button.dataset.copy);
+        const text = target ? target.textContent.trim() : "";
+        if (!text) return;
+        try {
+          await navigator.clipboard.writeText(text);
+          const original = button.textContent;
+          button.textContent = "Copied";
+          setTimeout(() => { button.textContent = original; }, 900);
+        } catch (error) {
+          window.prompt("Copy this text:", text);
+        }
+      });
+    });
+
+    document.getElementById("reset-page").addEventListener("click", () => {
+      document.querySelectorAll("form").forEach((form) => form.reset());
+      document.querySelectorAll(".result").forEach((result) => {
+        result.removeAttribute("data-state");
+        result.textContent = "Not submitted yet.";
+      });
+      document.querySelectorAll(".checklist input[type='checkbox']").forEach((box) => {
+        box.checked = false;
+      });
+    });
+  </script>
+</body>
+</html>
