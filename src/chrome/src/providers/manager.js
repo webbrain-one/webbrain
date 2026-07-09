@@ -1,7 +1,9 @@
 import { LlamaCppProvider } from './llamacpp.js';
 import { OpenAICompatibleProvider } from './openai.js';
+import { AzureOpenAIProvider } from './azure-openai.js';
 import { AnthropicProvider, AnthropicOAuthProvider } from './anthropic.js';
 import { signOutClaude } from './oauth-claude.js';
+import { AwsBedrockProvider } from './aws-bedrock.js';
 // Static, NOT dynamic: this module runs in the MV3 service worker, where
 // `await import()` throws "import() is disallowed on ServiceWorkerGlobalScope".
 // The provider modules above already import this statically, so it's in the SW
@@ -16,7 +18,7 @@ const WEBBRAIN_CLOUD_LEGACY_CONTEXT_WINDOW = 256000;
 const WEBBRAIN_DEVICE_GUID_KEY = 'webbrainDeviceGuid';
 const OPENROUTER_DEFAULT_MODEL = 'openrouter/free';
 const OPENROUTER_LEGACY_DEFAULT_MODEL = 'stepfun/step-3.7-flash';
-const SUPPORTED_PROVIDER_TYPES = new Set(['llamacpp', 'openai', 'anthropic', 'anthropic_oauth']);
+const SUPPORTED_PROVIDER_TYPES = new Set(['llamacpp', 'openai', 'azure_openai', 'aws_bedrock', 'anthropic', 'anthropic_oauth']);
 const SAFE_PROVIDER_ID_RE = /^[A-Za-z0-9_-]+$/;
 const ROUTER_PROVIDER_IDS = ['openrouter', 'cloudflare', 'nvidia', 'groq', 'huggingface'];
 
@@ -205,6 +207,36 @@ export class ProviderManager {
         apiKey: '',
         supportsVision: true,
         enabled: true,
+      },
+      azure_openai: {
+        type: 'azure_openai',
+        category: 'cloud',
+        label: 'Azure OpenAI',
+        providerName: 'azure-openai',
+        // Azure endpoint root (no /openai/ path). Example:
+        // https://my-resource.openai.azure.com
+        baseUrl: 'https://{resource}.openai.azure.com',
+        // "model" is the Azure *deployment name*.
+        model: '',
+        apiVersion: '2024-10-21',
+        apiKey: '',
+        enabled: false,
+      },
+      aws_bedrock: {
+        type: 'aws_bedrock',
+        category: 'cloud',
+        label: 'AWS Bedrock (Converse)',
+        providerName: 'aws-bedrock',
+        // Bedrock endpoint is derived from region; baseUrl is unused but kept for UI consistency.
+        baseUrl: 'https://bedrock-runtime.{region}.amazonaws.com',
+        // "model" is the Bedrock model id, e.g. "anthropic.claude-3-sonnet-20240229-v1:0"
+        model: '',
+        region: 'us-east-1',
+        accessKeyId: '',
+        secretAccessKey: '',
+        sessionToken: '',
+        supportsVision: false,
+        enabled: false,
       },
       openai: {
         type: 'openai',
@@ -454,6 +486,10 @@ export class ProviderManager {
         return new LlamaCppProvider(normalizedConfig);
       case 'openai':
         return new OpenAICompatibleProvider(normalizedConfig);
+      case 'azure_openai':
+        return new AzureOpenAIProvider(normalizedConfig);
+      case 'aws_bedrock':
+        return new AwsBedrockProvider(normalizedConfig);
       case 'anthropic':
         return new AnthropicProvider(normalizedConfig);
       case 'anthropic_oauth':

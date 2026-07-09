@@ -368,6 +368,7 @@ const SLASH_COMMANDS = [
 const OUT_OF_BAND_SLASH_COMMANDS = new Set([
   '/help',
   '/show-scratchpad',
+  '/show-memory',
   '/check-progress',
   '/list-schedules',
   '/dangerously-skip-permissions',
@@ -2026,6 +2027,17 @@ async function showScratchpad(tabId = currentTabId) {
   }
 }
 
+const USER_MEMORY_FAILURE_REASON_KEYS = {
+  invalid_or_sensitive: 'sp.memory.reason.invalid_or_sensitive',
+  not_found: 'sp.memory.reason.not_found',
+};
+
+function userMemoryFailureMessage(res) {
+  const reasonKey = USER_MEMORY_FAILURE_REASON_KEYS[res?.reason];
+  if (reasonKey) return t(reasonKey);
+  return t('sp.memory.error', { msg: res?.reason || res?.error || 'unknown error' });
+}
+
 async function showUserMemory(tabId = currentTabId) {
   try {
     const res = await sendToBackground('get_user_memory');
@@ -2063,7 +2075,7 @@ async function rememberUserMemory(note, tabId = currentTabId) {
     const res = await sendToBackground('add_user_memory', { text });
     if (currentTabId !== tabId) return;
     if (!res?.ok) {
-      showComposerToast(t('sp.memory.error', { msg: res?.reason || res?.error || 'unknown error' }), { duration: 5000 });
+      showComposerToast(userMemoryFailureMessage(res), { duration: 5000 });
       return;
     }
     showComposerToast(t('sp.memory.remembered'));
@@ -2084,7 +2096,7 @@ async function forgetUserMemory(id, tabId = currentTabId) {
     const res = await sendToBackground('delete_user_memory', { id: memoryId });
     if (currentTabId !== tabId) return;
     if (!res?.ok) {
-      showComposerToast(t('sp.memory.error', { msg: res?.reason || res?.error || 'unknown error' }), { duration: 5000 });
+      showComposerToast(userMemoryFailureMessage(res), { duration: 5000 });
       return;
     }
     showComposerToast(t('sp.memory.forgotten'));

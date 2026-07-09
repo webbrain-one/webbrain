@@ -37,6 +37,13 @@ export function normalizeUserMemoryExtractionSourceContext(value) {
   return ALLOWED_EXTRACTION_SOURCE_CONTEXTS.has(sourceContext) ? sourceContext : 'chat';
 }
 
+export function normalizeUserMemoryMaxPromptChars(value) {
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0
+    ? Math.min(10000, Math.floor(n))
+    : USER_MEMORY_DEFAULT_MAX_PROMPT_CHARS;
+}
+
 export function normalizeUserMemoryText(value, max = MAX_RECORD_TEXT) {
   const text = String(value || '')
     .replace(/\u00a0/g, ' ')

@@ -22,7 +22,6 @@ import { buildContextMenuPrompt, createContextMenuStorage } from './context-menu
 import { normalizeOllamaLaunchHandoff } from './ollama-handoff.js';
 import {
   USER_MEMORY_AUTO_CAPTURE_KEY,
-  USER_MEMORY_DEFAULT_MAX_PROMPT_CHARS,
   USER_MEMORY_ENABLED_KEY,
   USER_MEMORY_EXTRACTION_QUEUE_KEY,
   USER_MEMORY_FORM_CAPTURE_KEY,
@@ -33,6 +32,7 @@ import {
   createUserMemoryStore,
   looksLikeSensitiveMemoryText,
   normalizeUserMemoryExtractionSourceContext,
+  normalizeUserMemoryMaxPromptChars,
   normalizeUserMemoryStore,
   normalizeUserMemoryText,
   parseUserMemoryExtractionResult,
@@ -156,13 +156,6 @@ async function loadProfile() {
 }
 loadProfile();
 
-function normalizeUserMemoryMaxPromptChars(value) {
-  const n = Number(value);
-  return Number.isFinite(n) && n >= 0
-    ? Math.min(10000, Math.floor(n))
-    : USER_MEMORY_DEFAULT_MAX_PROMPT_CHARS;
-}
-
 async function syncAgentUserMemoryFromStorage() {
   const [store, settings] = await Promise.all([
     userMemoryStore.load(),
@@ -182,6 +175,9 @@ const userMemoryReady = syncAgentUserMemoryFromStorage().catch(() => {});
 
 const USER_MEMORY_EXTRACTION_MAX_QUEUE = 10;
 const USER_MEMORY_EXTRACTION_DELAY_MS = 1200;
+// Long enough for a transient network/provider blip to clear, short enough
+// that the timer fires before Chrome's ~30s idle service-worker teardown.
+const USER_MEMORY_EXTRACTION_RETRY_DELAY_MS = 3000;
 const USER_MEMORY_CLARIFICATION_BUFFER_LIMIT = 6;
 let userMemoryExtractionDrainPromise = null;
 let userMemoryExtractionTimer = null;
@@ -392,8 +388,12 @@ function scheduleUserMemoryExtractionDrain(delayMs = USER_MEMORY_EXTRACTION_DELA
 async function enqueueUserMemoryExtraction(payload = {}) {
   if (!await isUserMemoryExtractionEnabled()) return { queued: false, reason: 'disabled' };
   const clarificationText = normalizeUserMemoryText(payload.clarificationText, 1000);
-  let sourceContext = normalizeUserMemoryExtractionSourceContext(payload.sourceContext);
+  const sourceContext = normalizeUserMemoryExtractionSourceContext(payload.sourceContext);
   const formCompletionTurn = sourceContext === 'form_completion';
+  // Deliberate privacy stance: form-completion turns never forward raw turn
+  // text — the typed message and assistant reply may embed form values — so a
+  // form turn without sanitized clarification answers is skipped entirely,
+  // even if the user also typed a durable preference. /remember still works.
   if (formCompletionTurn) {
     if (!await isUserMemoryFormCaptureEnabled()) {
       return { queued: false, reason: 'form_capture_disabled' };
@@ -470,7 +470,7 @@ async function drainUserMemoryExtractionQueue() {
           return;
         }
         await markUserMemoryExtractionJobFailed(job.id);
-        scheduleUserMemoryExtractionDrain();
+        scheduleUserMemoryExtractionDrain(USER_MEMORY_EXTRACTION_RETRY_DELAY_MS);
         return;
       }
     }
@@ -1325,8 +1325,10 @@ async function handleMessage(msg, sender) {
 
       sendIndicatorMessage(tabId, 'WB_SHOW_AGENT_INDICATORS');
       let userMemoryTurnContextTaken = false;
+      let userMemoryTurnHadError = false;
       try {
         const result = await agent.processMessageStream(tabId, msg.text, (type, data) => {
+          if (type === 'error') userMemoryTurnHadError = true;
           browser.runtime.sendMessage({
             target: 'sidepanel',
             action: 'agent_update',
@@ -1340,7 +1342,7 @@ async function handleMessage(msg, sender) {
           userText: msg.text,
           assistantText: result,
           mode,
-          succeeded: true,
+          succeeded: !userMemoryTurnHadError,
         });
         userMemoryTurnContextTaken = true;
         enqueueUserMemoryExtractionAfterTurn(userMemoryPayload);
@@ -1359,8 +1361,10 @@ async function handleMessage(msg, sender) {
 
       sendIndicatorMessage(tabId, 'WB_SHOW_AGENT_INDICATORS');
       let userMemoryTurnContextTaken = false;
+      let userMemoryTurnHadError = false;
       try {
         const result = await agent.continueProcessing(tabId, (type, data) => {
+          if (type === 'error') userMemoryTurnHadError = true;
           browser.runtime.sendMessage({
             target: 'sidepanel',
             action: 'agent_update',
@@ -1374,7 +1378,7 @@ async function handleMessage(msg, sender) {
           userText: 'Please continue from where you left off.',
           assistantText: result,
           mode,
-          succeeded: true,
+          succeeded: !userMemoryTurnHadError,
         });
         userMemoryTurnContextTaken = true;
         enqueueUserMemoryExtractionAfterTurn(userMemoryPayload);

@@ -38,7 +38,7 @@ import {
 import { extractFirstJsonObject } from './json-extract.js';
 import { sanitizeText as sanitizePlannerText } from './text-sanitize.js';
 import { buildCustomSkillsPrompt, buildSkillToolDefinitions, buildSkillToolRegistry, normalizeCustomSkills } from './skills.js';
-import { USER_MEMORY_DEFAULT_MAX_PROMPT_CHARS, formatUserMemoryPrompt, normalizeUserMemoryStore } from './user-memory.js';
+import { USER_MEMORY_DEFAULT_MAX_PROMPT_CHARS, formatUserMemoryPrompt, normalizeUserMemoryMaxPromptChars, normalizeUserMemoryStore } from './user-memory.js';
 
 const DEFAULT_CLOUD_COST_ALLOWANCE_USD = 10;
 const COST_ALLOWANCE_SESSION_KEY = 'costAllowanceSessionUsd';
@@ -4018,10 +4018,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       this.userMemoryRecords = normalizeUserMemoryStore({ records: options.records }).records;
     }
     if (options.maxPromptChars != null) {
-      const n = Number(options.maxPromptChars);
-      this.userMemoryMaxPromptChars = Number.isFinite(n) && n >= 0
-        ? Math.min(10000, Math.floor(n))
-        : USER_MEMORY_DEFAULT_MAX_PROMPT_CHARS;
+      this.userMemoryMaxPromptChars = normalizeUserMemoryMaxPromptChars(options.maxPromptChars);
     }
     this._refreshSystemPrompts();
   }

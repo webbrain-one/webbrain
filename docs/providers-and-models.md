@@ -42,6 +42,8 @@ class BaseLLMProvider {
 | `vllm` | `openai` | local | (loaded model) | Yes (default on) |
 | `sglang` | `openai` | local | (loaded model) | Yes (default on) |
 | `localai` | `openai` | local | (loaded model) | Yes (default on) |
+| `azure_openai` | `azure_openai` | cloud | (deployment) | Manual toggle |
+| `aws_bedrock` | `aws_bedrock` | cloud | (model id) | No |
 | `openai` | `openai` | cloud | `gpt-5.5` | Model-name regex |
 | `anthropic` | `anthropic` | cloud | `claude-sonnet-4-6` | Model-name regex |
 | `claude_subscription` | `anthropic_oauth` | cloud | `claude-sonnet-4-6` | Yes |

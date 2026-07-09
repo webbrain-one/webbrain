@@ -22,6 +22,7 @@ import {
   USER_MEMORY_ENABLED_KEY,
   USER_MEMORY_FORM_CAPTURE_KEY,
   USER_MEMORY_MAX_PROMPT_CHARS_KEY,
+  normalizeUserMemoryMaxPromptChars,
 } from '../agent/user-memory.js';
 
 // Version shown in the subtitle. Kept here so it only needs one update per
@@ -1035,6 +1036,17 @@ function flashUserMemoryResult(className, text) {
   setTimeout(() => userMemoryTestResult.classList.remove('show'), 2500);
 }
 
+const USER_MEMORY_FAILURE_REASON_KEYS = {
+  invalid_or_sensitive: 'st.memory.reason.invalid_or_sensitive',
+  not_found: 'st.memory.reason.not_found',
+};
+
+function userMemoryFailureText(res) {
+  const reasonKey = USER_MEMORY_FAILURE_REASON_KEYS[res?.reason];
+  if (reasonKey) return t(reasonKey);
+  return t('st.memory.failed', { error: res?.reason || res?.error || 'unknown error' });
+}
+
 function renderUserMemoryRecords(records = []) {
   if (!userMemoryList) return;
   const active = records.filter((record) => record && !record.archivedAt && record.text);
@@ -1065,7 +1077,7 @@ function renderUserMemoryRecords(records = []) {
       const kind = card?.querySelector('.user-memory-kind')?.value || 'preference';
       const res = await sendToBackground('update_user_memory', { id, text, kind });
       if (!res?.ok) {
-        flashUserMemoryResult('error', t('st.memory.failed', { error: res?.reason || res?.error || 'unknown error' }));
+        flashUserMemoryResult('error', userMemoryFailureText(res));
         return;
       }
       flashUserMemoryResult('ok', t('st.memory.saved'));
@@ -1076,7 +1088,7 @@ function renderUserMemoryRecords(records = []) {
     btn.addEventListener('click', async () => {
       const res = await sendToBackground('delete_user_memory', { id: btn.dataset.memoryId });
       if (!res?.ok) {
-        flashUserMemoryResult('error', t('st.memory.failed', { error: res?.reason || res?.error || 'unknown error' }));
+        flashUserMemoryResult('error', userMemoryFailureText(res));
         return;
       }
       flashUserMemoryResult('ok', t('st.memory.deleted'));
@@ -1120,10 +1132,9 @@ if (userMemoryFormToggle) {
 if (userMemoryMaxCharsInput) {
   userMemoryMaxCharsInput.addEventListener('change', async () => {
     const rawMaxPromptChars = String(userMemoryMaxCharsInput.value || '').trim();
-    const parsedMaxPromptChars = rawMaxPromptChars === '' ? NaN : Number(rawMaxPromptChars);
-    const value = Number.isFinite(parsedMaxPromptChars)
-      ? Math.max(0, Math.min(10000, Math.floor(parsedMaxPromptChars)))
-      : USER_MEMORY_DEFAULT_MAX_PROMPT_CHARS;
+    const value = rawMaxPromptChars === ''
+      ? USER_MEMORY_DEFAULT_MAX_PROMPT_CHARS
+      : normalizeUserMemoryMaxPromptChars(rawMaxPromptChars);
     userMemoryMaxCharsInput.value = String(value);
     await browser.storage.local.set({ [USER_MEMORY_MAX_PROMPT_CHARS_KEY]: value }).catch(() => {});
   });
@@ -1410,6 +1421,26 @@ function renderProviders() {
         CONTEXT_WINDOW_FIELD,
         { key: 'supportsVision', labelKey: 'st.provider.field.supports_vision', type: 'checkbox' },
         PROMPT_TIER_FIELD,
+      ],
+    },
+    azure_openai: {
+      fields: [
+        { key: 'baseUrl', labelKey: 'st.provider.field.api_base_url', type: 'text', placeholder: 'https://{resource}.openai.azure.com' },
+        { key: 'apiKey', labelKey: 'st.provider.field.api_key', type: 'password', placeholder: 'Azure API key' },
+        { key: 'model', labelKey: 'st.provider.field.deployment_name', type: 'text', placeholder: 'my-deployment' },
+        { key: 'apiVersion', labelKey: 'st.provider.field.api_version', type: 'text', placeholder: '2024-10-21' },
+        { key: 'supportsVision', labelKey: 'st.provider.field.supports_vision', type: 'checkbox' },
+        ...COST_ESTIMATE_FIELDS,
+        ],
+    },
+    aws_bedrock: {
+      fields: [
+        { key: 'region', labelKey: 'st.provider.field.aws_region', type: 'text', placeholder: 'us-east-1' },
+        { key: 'accessKeyId', labelKey: 'st.provider.field.aws_access_key_id', type: 'text', placeholder: 'AKIA...' },
+        { key: 'secretAccessKey', labelKey: 'st.provider.field.aws_secret_access_key', type: 'password', placeholder: '********' },
+        { key: 'sessionToken', labelKey: 'st.provider.field.aws_session_token', type: 'password', placeholder: 'optional (STS)' },
+        { key: 'model', labelKey: 'st.provider.field.bedrock_model_id', type: 'text', placeholder: 'anthropic.claude-3-sonnet-20240229-v1:0' },
+        ...COST_ESTIMATE_FIELDS,
       ],
     },
     openai: {
