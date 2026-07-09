@@ -353,6 +353,8 @@ export default {
   "st.providers.filter.cloud": "Cloud",
   "st.providers.filter.router": "Router",
   "st.providers.filter.empty": "Walang provider sa kategoryang ito. Lipat sa filter na \"Lahat\" para makita ang lahat.",
+  "st.providers.search.placeholder": "Maghanap ng provider",
+  "st.providers.search.empty": "Walang provider na tumutugma sa paghahanap at filter na ito.",
   "st.providers.get_api_key": "Kumuha ng API key",
   "st.provider.field.model_custom": "Custom...",
   "st.vision.heading": "Bisyon",

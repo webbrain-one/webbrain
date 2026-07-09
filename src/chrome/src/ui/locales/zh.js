@@ -353,6 +353,8 @@ export default {
   "st.providers.filter.cloud": "云端",
   "st.providers.filter.router": "路由",
   "st.providers.filter.empty": "此类别下没有提供商。将筛选器切换到“全部”以查看所有内容。",
+  "st.providers.search.placeholder": "搜索提供商",
+  "st.providers.search.empty": "没有提供商匹配此搜索和筛选器。",
   "st.providers.get_api_key": "获取 API 密钥",
   "st.provider.field.model_custom": "自定义...",
   "st.vision.heading": "视觉",

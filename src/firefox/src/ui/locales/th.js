@@ -342,6 +342,8 @@ export default {
   "st.providers.filter.cloud": "คลาวด์",
   "st.providers.filter.router": "เราเตอร์",
   "st.providers.filter.empty": "ไม่มีผู้ให้บริการในหมวดนี้ เปลี่ยนตัวกรองเป็น \"ทั้งหมด\" เพื่อดูทั้งหมด",
+  "st.providers.search.placeholder": "ค้นหาผู้ให้บริการ",
+  "st.providers.search.empty": "ไม่มีผู้ให้บริการที่ตรงกับการค้นหาและตัวกรองนี้",
   "st.providers.get_api_key": "รับคีย์ API",
   "st.provider.field.model_custom": "กำหนดเอง...",
   "st.vision.heading": "การมองเห็น",

@@ -353,6 +353,8 @@ export default {
   "st.providers.filter.cloud": "Облачные",
   "st.providers.filter.router": "Роутер",
   "st.providers.filter.empty": "В этой категории нет провайдеров. Переключите фильтр на «Все», чтобы увидеть всё.",
+  "st.providers.search.placeholder": "Искать провайдеров",
+  "st.providers.search.empty": "Нет провайдеров, соответствующих этому поиску и фильтру.",
   "st.providers.get_api_key": "Получить API-ключ",
   "st.provider.field.model_custom": "Свой...",
   "st.vision.heading": "Зрение",

@@ -342,6 +342,8 @@ export default {
   "st.providers.filter.cloud": "سحابي",
   "st.providers.filter.router": "موجّه",
   "st.providers.filter.empty": "لا توجد مزوّدات في هذه الفئة. بدّل المُرشّح إلى «الكل» لرؤية كل شيء.",
+  "st.providers.search.placeholder": "البحث في المزوّدات",
+  "st.providers.search.empty": "لا توجد مزوّدات تطابق هذا البحث والمرشّح.",
   "st.providers.get_api_key": "احصل على مفتاح API",
   "st.provider.field.model_custom": "مخصّص...",
   "st.vision.heading": "الرؤية",

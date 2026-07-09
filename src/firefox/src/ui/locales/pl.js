@@ -314,6 +314,8 @@ export default {
   'st.providers.filter.cloud': 'Chmura',
   'st.providers.filter.router': 'Router',
   'st.providers.filter.empty': 'Brak dostawców w tej kategorii. Przełącz filtr na „Wszystkie”, aby zobaczyć wszystko.',
+  'st.providers.search.placeholder': 'Szukaj dostawców',
+  'st.providers.search.empty': 'Żaden dostawca nie pasuje do tego wyszukiwania i filtra.',
   'st.providers.save': 'Zapisz',
   'st.providers.test': 'Testuj połączenie',
   'st.providers.set_active': 'Ustaw jako aktywny',

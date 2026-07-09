@@ -238,11 +238,18 @@
     /* Filter bar — compact text links above the provider list. */
     .provider-filter-bar {
       display: flex;
-      justify-content: flex-end;
+      align-items: center;
+      justify-content: space-between;
       gap: 12px;
       flex-wrap: wrap;
       margin: -2px 0 12px 0;
       padding: 0;
+    }
+    .provider-filter-pills {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
     }
     .provider-filter-pill {
       background: transparent;
@@ -262,6 +269,21 @@
       color: var(--accent);
     }
     .provider-filter-pill.active:hover { color: var(--accent); }
+    .provider-search {
+      flex: 0 1 240px;
+      min-width: 180px;
+      margin: 0 0 0 auto;
+    }
+    .provider-search input {
+      padding: 8px 10px;
+      font-size: 12px;
+    }
+    @media (max-width: 600px) {
+      .provider-search {
+        flex-basis: 100%;
+        margin-left: 0;
+      }
+    }
     .provider-filter-empty {
       padding: 16px;
       text-align: center;

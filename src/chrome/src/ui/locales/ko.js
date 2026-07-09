@@ -353,6 +353,8 @@ export default {
   "st.providers.filter.cloud": "클라우드",
   "st.providers.filter.router": "라우터",
   "st.providers.filter.empty": "이 카테고리에 제공자가 없습니다. 필터를 \"전체\"로 바꾸면 모두 볼 수 있습니다.",
+  "st.providers.search.placeholder": "제공자 검색",
+  "st.providers.search.empty": "이 검색 및 필터와 일치하는 제공자가 없습니다.",
   "st.providers.get_api_key": "API 키 받기",
   "st.provider.field.model_custom": "사용자 지정...",
   "st.vision.heading": "비전",

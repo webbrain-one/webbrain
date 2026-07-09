@@ -353,6 +353,8 @@ export default {
   "st.providers.filter.cloud": "クラウド",
   "st.providers.filter.router": "ルーター",
   "st.providers.filter.empty": "このカテゴリにはプロバイダーがありません。フィルターを「すべて」に切り替えると全部表示されます。",
+  "st.providers.search.placeholder": "プロバイダーを検索",
+  "st.providers.search.empty": "この検索とフィルターに一致するプロバイダーはありません。",
   "st.providers.get_api_key": "API キーを取得",
   "st.provider.field.model_custom": "カスタム...",
   "st.vision.heading": "画像認識",

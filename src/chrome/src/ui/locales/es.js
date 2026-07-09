@@ -353,6 +353,8 @@ export default {
   "st.providers.filter.cloud": "Nube",
   "st.providers.filter.router": "Enrutador",
   "st.providers.filter.empty": "No hay proveedores en esta categoría. Cambia el filtro a «Todos» para verlos todos.",
+  "st.providers.search.placeholder": "Buscar proveedores",
+  "st.providers.search.empty": "Ningún proveedor coincide con esta búsqueda y filtro.",
   "st.providers.get_api_key": "Obtener clave de API",
   "st.provider.field.model_custom": "Personalizado...",
   "st.vision.heading": "Visión",

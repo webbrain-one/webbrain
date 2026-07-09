@@ -342,6 +342,8 @@ export default {
   "st.providers.filter.cloud": "Awan",
   "st.providers.filter.router": "Penghala",
   "st.providers.filter.empty": "Tiada pembekal dalam kategori ini. Tukar penapis kepada \"Semua\" untuk melihat semuanya.",
+  "st.providers.search.placeholder": "Cari penyedia",
+  "st.providers.search.empty": "Tiada penyedia sepadan dengan carian dan penapis ini.",
   "st.providers.get_api_key": "Dapatkan kunci API",
   "st.provider.field.model_custom": "Tersuai...",
   "st.vision.heading": "Penglihatan",

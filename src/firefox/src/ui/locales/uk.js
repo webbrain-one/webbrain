@@ -342,6 +342,8 @@ export default {
   "st.providers.filter.cloud": "Хмарні",
   "st.providers.filter.router": "Роутер",
   "st.providers.filter.empty": "У цій категорії немає провайдерів. Перемкніть фільтр на «Усі», щоб побачити все.",
+  "st.providers.search.placeholder": "Шукати провайдерів",
+  "st.providers.search.empty": "Немає провайдерів, що відповідають цьому пошуку та фільтру.",
   "st.providers.get_api_key": "Отримати API-ключ",
   "st.provider.field.model_custom": "Власна...",
   "st.vision.heading": "Зір",

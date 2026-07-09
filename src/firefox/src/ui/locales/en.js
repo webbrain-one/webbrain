@@ -420,6 +420,8 @@ export default {
   'st.providers.filter.cloud': 'Cloud',
   'st.providers.filter.router': 'Router',
   'st.providers.filter.empty': 'No providers in this category. Switch the filter to "All" to see everything.',
+  'st.providers.search.placeholder': 'Search providers',
+  'st.providers.search.empty': 'No providers match this search and filter.',
   'st.providers.save': 'Save',
   'st.providers.test': 'Test Connection',
   'st.providers.set_active': 'Set Active',

@@ -376,6 +376,8 @@ export default {
   "st.providers.filter.cloud": "Bulut",
   "st.providers.filter.router": "Yönlendirici",
   "st.providers.filter.empty": "Bu kategoride sağlayıcı yok. Her şeyi görmek için filtreyi \"Tümü\"ne çevir.",
+  "st.providers.search.placeholder": "Sağlayıcıları ara",
+  "st.providers.search.empty": "Bu arama ve filtreyle eşleşen sağlayıcı yok.",
   "st.providers.get_api_key": "API anahtarı al",
   "st.provider.field.model_custom": "Özel...",
   "st.vision.heading": "Görme",

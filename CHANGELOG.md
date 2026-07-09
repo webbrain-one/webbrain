@@ -7,6 +7,7 @@ This changelog was generated from the repository Git history and release tags. V
 ## [Unreleased]
 
 ### Added
+- Added search to the providers list.
 - Added local user memory for Chrome and Firefox, including `/remember`, `/show-memory`, `/forget-memory`, Settings/Profile management, bounded prompt injection, JSON export/import, and opt-in post-turn auto-learning.
 
 ## [21.7.0] - 2026-07-08

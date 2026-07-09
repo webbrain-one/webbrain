@@ -342,6 +342,8 @@ export default {
   "st.providers.filter.cloud": "Cloud",
   "st.providers.filter.router": "Router",
   "st.providers.filter.empty": "Tidak ada penyedia dalam kategori ini. Ubah filter ke \"Semua\" untuk melihat semuanya.",
+  "st.providers.search.placeholder": "Cari penyedia",
+  "st.providers.search.empty": "Tidak ada penyedia yang cocok dengan pencarian dan filter ini.",
   "st.providers.get_api_key": "Dapatkan kunci API",
   "st.provider.field.model_custom": "Kustom...",
   "st.vision.heading": "Visi",

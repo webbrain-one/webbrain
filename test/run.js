@@ -6474,6 +6474,44 @@ test('settings General search filters visible and Advanced controls', () => {
   }
 });
 
+test('settings Providers tab has a search box beside provider filters', () => {
+  for (const [label, htmlRel, settingsRel, localeRel] of [
+    ['chrome', 'src/chrome/src/ui/settings.html', 'src/chrome/src/ui/settings.js', 'src/chrome/src/ui/locales/en.js'],
+    ['firefox', 'src/firefox/src/ui/settings.html', 'src/firefox/src/ui/settings.js', 'src/firefox/src/ui/locales/en.js'],
+  ]) {
+    const html = fs.readFileSync(path.join(ROOT, htmlRel), 'utf8');
+    const settings = fs.readFileSync(path.join(ROOT, settingsRel), 'utf8');
+    const locale = fs.readFileSync(path.join(ROOT, localeRel), 'utf8');
+
+    assert.match(html, /\.provider-filter-pills \{[\s\S]*?display: flex;[\s\S]*?gap: 12px;/, `${label}: provider filters should sit in their own row group`);
+    assert.match(html, /\.provider-search \{[\s\S]*?flex: 0 1 240px;[\s\S]*?margin: 0 0 0 auto;/, `${label}: provider search should sit to the right of filters`);
+    assert.match(locale, /'st\.providers\.search\.placeholder': 'Search providers'/, `${label}: provider search placeholder should be localized`);
+    assert.match(locale, /'st\.providers\.search\.empty': 'No providers match this search and filter\.'/, `${label}: provider search empty state should be localized`);
+    assert.match(settings, /let providerSearchQuery = '';/, `${label}: provider search query should be session state`);
+    assert.match(settings, /function providerSearchTextForEntry\(id, config, fieldDefs\) \{[\s\S]*?field\.labelKey \? t\(field\.labelKey\) : field\.label,[\s\S]*?config\.model,[\s\S]*?config\.baseUrl,[\s\S]*?\}/, `${label}: provider search should index labels, models, and URLs`);
+    assert.match(settings, /const providerQuery = normalizeGeneralSearchText\(providerSearchQuery\);[\s\S]*?if \(providerQuery && !providerSearchTextForEntry\(id, config, fieldDefs\)\.includes\(providerQuery\)\) continue;/, `${label}: provider rendering should combine search with the active category filter`);
+    assert.match(settings, /input\.id = 'input-provider-search';[\s\S]*?input\.placeholder = t\('st\.providers\.search\.placeholder'\);[\s\S]*?input\.value = providerSearchQuery;/, `${label}: provider filter bar should render the search input`);
+    assert.match(settings, /let providerSearchComposing = false;/, `${label}: provider search should track IME composition state`);
+    assert.match(settings, /const applyProviderSearchInput = \(\) => \{[\s\S]*?syncInputsIntoProvidersData\(\);[\s\S]*?providerSearchQuery = input\.value;[\s\S]*?renderProviders\(\);[\s\S]*?next\.setSelectionRange\(selectionStart, selectionEnd\);[\s\S]*?\};/, `${label}: provider search should preserve unsaved fields and focus while filtering`);
+    assert.match(settings, /input\.addEventListener\('compositionstart', \(\) => \{[\s\S]*?providerSearchComposing = true;[\s\S]*?\}\);[\s\S]*?input\.addEventListener\('compositionend', \(\) => \{[\s\S]*?providerSearchComposing = false;[\s\S]*?applyProviderSearchInput\(\);[\s\S]*?\}\);/, `${label}: provider search should rerender after IME composition ends`);
+    assert.match(settings, /input\.addEventListener\('input', \(event\) => \{[\s\S]*?providerSearchQuery = input\.value;[\s\S]*?if \(event\.isComposing \|\| providerSearchComposing\) return;[\s\S]*?applyProviderSearchInput\(\);[\s\S]*?\}\);/, `${label}: provider search should not rerender during IME composition`);
+    assert.match(settings, /empty\.textContent = providerQuery[\s\S]*?t\('st\.providers\.search\.empty'\)[\s\S]*?t\('st\.providers\.filter\.empty'\);/, `${label}: provider empty state should distinguish search from category-only filtering`);
+  }
+});
+
+test('all locales translate provider search settings strings', () => {
+  for (const [label, localeDir] of [
+    ['chrome', 'src/chrome/src/ui/locales'],
+    ['firefox', 'src/firefox/src/ui/locales'],
+  ]) {
+    for (const filename of fs.readdirSync(path.join(ROOT, localeDir)).filter((name) => name.endsWith('.js'))) {
+      const locale = fs.readFileSync(path.join(ROOT, localeDir, filename), 'utf8');
+      assert.match(locale, /['"]st\.providers\.search\.placeholder['"]:\s*['"][^'"]+['"]/, `${label}/${filename}: missing provider search placeholder locale key`);
+      assert.match(locale, /['"]st\.providers\.search\.empty['"]:\s*['"][^'"]+['"]/, `${label}/${filename}: missing provider search empty locale key`);
+    }
+  }
+});
+
 test('CAPTCHA guidance points to General Advanced settings', () => {
   for (const [label, agentRel, toolsRel] of [
     ['chrome', 'src/chrome/src/agent/agent.js', 'src/chrome/src/agent/tools.js'],
