@@ -1820,7 +1820,8 @@ function renderProviderFilterBar() {
   input.spellcheck = false;
   input.placeholder = t('st.providers.search.placeholder');
   input.value = providerSearchQuery;
-  input.addEventListener('input', () => {
+  let providerSearchComposing = false;
+  const applyProviderSearchInput = () => {
     const selectionStart = input.selectionStart ?? input.value.length;
     const selectionEnd = input.selectionEnd ?? input.value.length;
     syncInputsIntoProvidersData();
@@ -1830,6 +1831,18 @@ function renderProviderFilterBar() {
     if (!next) return;
     next.focus();
     try { next.setSelectionRange(selectionStart, selectionEnd); } catch { /* ignore */ }
+  };
+  input.addEventListener('compositionstart', () => {
+    providerSearchComposing = true;
+  });
+  input.addEventListener('compositionend', () => {
+    providerSearchComposing = false;
+    applyProviderSearchInput();
+  });
+  input.addEventListener('input', (event) => {
+    providerSearchQuery = input.value;
+    if (event.isComposing || providerSearchComposing) return;
+    applyProviderSearchInput();
   });
   search.appendChild(input);
   bar.appendChild(pills);
