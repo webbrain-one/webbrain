@@ -3,6 +3,7 @@ import { OpenAICompatibleProvider } from './openai.js';
 import { AzureOpenAIProvider } from './azure-openai.js';
 import { AnthropicProvider, AnthropicOAuthProvider } from './anthropic.js';
 import { signOutClaude } from './oauth-claude.js';
+import { AwsBedrockProvider } from './aws-bedrock.js';
 
 const WEBBRAIN_CLOUD_PROVIDER_ID = 'webbrain_cloud';
 const WEBBRAIN_CLOUD_CONTEXT_WINDOW = 1000000;
@@ -10,7 +11,7 @@ const WEBBRAIN_CLOUD_LEGACY_CONTEXT_WINDOW = 256000;
 const WEBBRAIN_DEVICE_GUID_KEY = 'webbrainDeviceGuid';
 const OPENROUTER_DEFAULT_MODEL = 'openrouter/free';
 const OPENROUTER_LEGACY_DEFAULT_MODEL = 'stepfun/step-3.7-flash';
-const SUPPORTED_PROVIDER_TYPES = new Set(['llamacpp', 'openai', 'azure_openai', 'anthropic', 'anthropic_oauth']);
+const SUPPORTED_PROVIDER_TYPES = new Set(['llamacpp', 'openai', 'azure_openai', 'aws_bedrock', 'anthropic', 'anthropic_oauth']);
 const SAFE_PROVIDER_ID_RE = /^[A-Za-z0-9_-]+$/;
 const ROUTER_PROVIDER_IDS = ['openrouter', 'cloudflare', 'nvidia', 'groq', 'huggingface'];
 
@@ -203,6 +204,17 @@ export class ProviderManager {
         model: '',
         apiVersion: '2024-10-21',
         apiKey: '',
+      aws_bedrock: {
+        type: 'aws_bedrock',
+        category: 'cloud',
+        label: 'AWS Bedrock (Converse)',
+        providerName: 'aws-bedrock',
+        baseUrl: 'https://bedrock-runtime.{region}.amazonaws.com',
+        model: '',
+        region: 'us-east-1',
+        accessKeyId: '',
+        secretAccessKey: '',
+        sessionToken: '',
         supportsVision: false,
         enabled: false,
       },
@@ -450,6 +462,8 @@ export class ProviderManager {
         return new OpenAICompatibleProvider(normalizedConfig);
       case 'azure_openai':
         return new AzureOpenAIProvider(normalizedConfig);
+      case 'aws_bedrock':
+        return new AwsBedrockProvider(normalizedConfig);
       case 'anthropic':
         return new AnthropicProvider(normalizedConfig);
       case 'anthropic_oauth':

@@ -471,6 +471,11 @@ export default {
   'st.provider.field.model_custom': 'Custom...',
   'st.provider.field.deployment_name': 'Deployment name',
   'st.provider.field.api_version': 'API version',
+  'st.provider.field.aws_region': 'AWS region',
+  'st.provider.field.aws_access_key_id': 'AWS Access Key ID',
+  'st.provider.field.aws_secret_access_key': 'AWS Secret Access Key',
+  'st.provider.field.aws_session_token': 'AWS Session Token',
+  'st.provider.field.bedrock_model_id': 'Bedrock model id',
 
   'st.vision.heading': 'Vision',
   'st.vision.desc': 'If set, screenshots are sent to this model for reading the page, while the active provider handles planning and tool calls. Leave blank to use the active provider for vision too. OpenAI-compatible endpoints only.',
