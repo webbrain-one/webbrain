@@ -822,9 +822,12 @@ test('user memory browser wiring is mirrored and non-blocking', () => {
     assert.match(background, new RegExp(`${runtime}\\.storage\\.local\\.get\\(\\[\\s*USER_MEMORY_ENABLED_KEY,[\\s\\S]*USER_MEMORY_AUTO_CAPTURE_KEY`), `${label}: extraction should read both memory and auto-capture toggles`);
     assert.match(background, /async function isUserMemoryExtractionEnabled\(\)[\s\S]*stored\[USER_MEMORY_ENABLED_KEY\] !== false[\s\S]*stored\[USER_MEMORY_AUTO_CAPTURE_KEY\] === true/, `${label}: extraction should be gated by the main memory toggle`);
     assert.match(background, /if \(!await isUserMemoryExtractionEnabled\(\)\) return \{ queued: false, reason: 'disabled' \};/, `${label}: enqueue should not run when memory is disabled`);
-    assert.match(background, /sourceContext === 'form_completion' && !await isUserMemoryFormCaptureEnabled\(\)/, `${label}: form-derived memory should be gated by its opt-in setting`);
+    assert.match(background, /const formCompletionTurn = sourceContext === 'form_completion';/, `${label}: form-derived memory should be classified before extraction text is built`);
+    assert.match(background, /if \(!await isUserMemoryFormCaptureEnabled\(\)\) \{[\s\S]*return \{ queued: false, reason: 'form_capture_disabled' \};/, `${label}: form-derived memory should be gated by its opt-in setting`);
     assert.match(background, /return \{ queued: false, reason: 'form_capture_disabled' \};/, `${label}: disabled form capture should skip form-derived jobs`);
-    assert.match(background, /formCaptureBlocked \? '' : payload\.userText/, `${label}: disabled form capture should not reclassify form turn text as chat memory`);
+    assert.match(background, /return \{ queued: false, reason: 'form_capture_empty' \};/, `${label}: enabled form capture should skip empty sanitized form jobs`);
+    assert.match(background, /formCompletionTurn \? '' : payload\.userText/, `${label}: form-derived memory should not send raw form turn text`);
+    assert.match(background, /formCompletionTurn \? 'Completed form task; explicit clarification answers recorded\.' : payload\.assistantText/, `${label}: form-derived memory should not send raw form assistant text`);
     assert.match(background, /recordClarificationMemoryCandidate\(tabId, msg\.question, answer\)/, `${label}: clarify answers should be captured for post-turn extraction`);
     assert.match(background, /looksLikeSensitiveMemoryText\(normalizedAnswer\)/, `${label}: clarify answers should be filtered for sensitive text before extraction`);
     assert.match(background, /while \(true\) \{\s*if \(!await isUserMemoryExtractionEnabled\(\)\) return;/, `${label}: drain should not send memory when memory is disabled`);

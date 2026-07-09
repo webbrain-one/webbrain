@@ -395,18 +395,21 @@ async function enqueueUserMemoryExtraction(payload = {}) {
   if (!await isUserMemoryExtractionEnabled()) return { queued: false, reason: 'disabled' };
   const clarificationText = normalizeUserMemoryText(payload.clarificationText, 1000);
   let sourceContext = normalizeUserMemoryExtractionSourceContext(payload.sourceContext);
-  let formCaptureBlocked = false;
-  if (sourceContext === 'form_completion' && !await isUserMemoryFormCaptureEnabled()) {
-    if (!clarificationText) return { queued: false, reason: 'form_capture_disabled' };
-    formCaptureBlocked = true;
-    sourceContext = 'clarification_response';
+  const formCompletionTurn = sourceContext === 'form_completion';
+  if (formCompletionTurn) {
+    if (!await isUserMemoryFormCaptureEnabled()) {
+      if (!clarificationText) return { queued: false, reason: 'form_capture_disabled' };
+      sourceContext = 'clarification_response';
+    } else if (!clarificationText) {
+      return { queued: false, reason: 'form_capture_empty' };
+    }
   }
   const userText = normalizeUserMemoryText([
-    formCaptureBlocked ? '' : payload.userText,
+    formCompletionTurn ? '' : payload.userText,
     clarificationText,
   ].filter(Boolean).join('\n'), 2000);
   const assistantText = normalizeUserMemoryText(
-    formCaptureBlocked ? 'Clarification response recorded.' : payload.assistantText,
+    formCompletionTurn ? 'Completed form task; explicit clarification answers recorded.' : payload.assistantText,
     2000,
   );
   if (!userText || !assistantText) return { queued: false, reason: 'empty' };
