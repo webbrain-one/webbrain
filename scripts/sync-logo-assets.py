@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Regenerate every WebBrain logo derivative from assets/logo-github.png.
+"""Regenerate every WebBrain logo derivative from the canonical brand assets.
 
-The canonical artwork has generous padding that works well for social cards.
-Toolbar and favicon sizes use a tighter square crop so the brain remains
-recognizable at 16–128 px. Requires Pillow.
+The full-background artwork works well for social cards. Toolbar, favicon,
+and store-icon sizes use the matching transparent brain mark so browser chrome
+does not show it as a tiny boxed thumbnail. Requires Pillow.
 """
 
 from __future__ import annotations
@@ -16,6 +16,7 @@ from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parent.parent
 CANONICAL = ROOT / "assets" / "logo-github.png"
+MARK = ROOT / "assets" / "logo-mark.png"
 ASSETS = ROOT / "assets"
 WEB = ROOT / "web"
 
@@ -24,15 +25,20 @@ def full_logo(source: Image.Image, size: int) -> Image.Image:
     return source.resize((size, size), Image.Resampling.LANCZOS)
 
 
-def tight_logo(source: Image.Image, size: int) -> Image.Image:
-    # Proportional form of the reviewed 900×900 crop at (177, 177) in the
-    # 1254×1254 canonical file. Keep this centralized so every small icon uses
-    # precisely the same framing.
-    width, height = source.size
-    side = round(min(width, height) * (900 / 1254))
-    left = round((width - side) * (177 / (1254 - 900)))
-    top = round((height - side) * (177 / (1254 - 900)))
-    cropped = source.crop((left, top, left + side, top + side))
+def icon_logo(mark: Image.Image, size: int) -> Image.Image:
+    """Crop the transparent mark around its alpha bounds with even padding."""
+    bounds = mark.getchannel("A").getbbox()
+    if not bounds:
+        raise SystemExit("Transparent logo mark has no visible pixels")
+
+    left, top, right, bottom = bounds
+    subject_side = max(right - left, bottom - top)
+    side = round(subject_side * 1.14)
+    center_x = (left + right) / 2
+    center_y = (top + bottom) / 2
+    crop_left = round(center_x - side / 2)
+    crop_top = round(center_y - side / 2)
+    cropped = mark.crop((crop_left, crop_top, crop_left + side, crop_top + side))
     return cropped.resize((size, size), Image.Resampling.LANCZOS)
 
 
@@ -59,6 +65,9 @@ def main() -> None:
     source = Image.open(CANONICAL).convert("RGB")
     if source.size != (1254, 1254):
         raise SystemExit(f"Unexpected canonical logo size: {source.size}; expected 1254×1254")
+    mark = Image.open(MARK).convert("RGBA")
+    if mark.size != source.size:
+        raise SystemExit(f"Unexpected transparent logo mark size: {mark.size}; expected {source.size}")
 
     save_png(full_logo(source, 512), ASSETS / "logo-github-512.png")
     full_logo(source, 512).save(
@@ -70,15 +79,15 @@ def main() -> None:
     )
 
     for size in (64, 128):
-        save_png(tight_logo(source, size), ASSETS / f"store-icon-{size}.png")
+        save_png(icon_logo(mark, size), ASSETS / f"store-icon-{size}.png")
 
     for browser in ("chrome", "firefox"):
         icon_dir = ROOT / "src" / browser / "icons"
         for size in (16, 48, 128):
-            save_png(tight_logo(source, size), icon_dir / f"icon{size}.png")
+            save_png(icon_logo(mark, size), icon_dir / f"icon{size}.png")
 
     shutil.copyfile(CANONICAL, WEB / "logo-github.png")
-    save_png(tight_logo(source, 64), WEB / "favicon.png")
+    save_png(icon_logo(mark, 64), WEB / "favicon.png")
     save_png(full_logo(source, 512), WEB / "twitter-image.png")
     save_png(wide_social_logo(source, 1200, 630), WEB / "og-image.png")
 
