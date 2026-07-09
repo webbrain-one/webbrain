@@ -498,7 +498,7 @@ export default {
   'sp.plan.approved': 'Plan zatwierdzony — uruchamianie…',
   'sp.plan.cancelled': 'Plan anulowany.',
   'sp.plan.expired': 'Ten plan nie oczekuje już na przegląd — uruchomienie zostało anulowane.',
-  'sp.slash.busy_only_oob': 'Wiadomości są kolejkowane, gdy WebBrain jest zajęty. Tylko /help, /check-progress, /show-scratchpad, /list-schedules, /dangerously-skip-permissions, /screenshot, /export i /verbose mogą uruchamiać się od razu jako polecenia slash.',
+  'sp.slash.busy_only_oob': 'Wiadomości są kolejkowane, gdy WebBrain jest zajęty. Tylko /help, /check-progress, /show-scratchpad, /show-memory, /list-schedules, /dangerously-skip-permissions, /screenshot, /export i /verbose mogą uruchamiać się od razu jako polecenia slash.',
   'tool.go_back': 'Cofanie',
   'tool.go_forward': 'Przechodzenie do przodu',
   'st.display.search.placeholder': 'Szukaj w ustawieniach ogólnych',

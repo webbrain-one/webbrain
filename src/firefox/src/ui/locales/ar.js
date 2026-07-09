@@ -538,7 +538,7 @@ export default {
   'sp.plan.approved': 'تمت الموافقة على الخطة — جارٍ التشغيل…',
   'sp.plan.cancelled': 'تم إلغاء الخطة.',
   'sp.plan.expired': 'لم تعد هذه الخطة قيد المراجعة — تم إلغاء التشغيل.',
-  'sp.slash.busy_only_oob': 'تُضاف الرسائل إلى قائمة الانتظار بينما يكون WebBrain مشغولًا. يمكن فقط لـ /help و /check-progress و /show-scratchpad و /list-schedules و /dangerously-skip-permissions و /screenshot و /export و /verbose العمل فورًا كأوامر slash.',
+  'sp.slash.busy_only_oob': 'تُضاف الرسائل إلى قائمة الانتظار بينما يكون WebBrain مشغولًا. يمكن فقط لـ /help و /check-progress و /show-scratchpad و /show-memory و /list-schedules و /dangerously-skip-permissions و /screenshot و /export و /verbose العمل فورًا كأوامر slash.',
   'tool.go_back': 'العودة للخلف',
   'tool.go_forward': 'التقدم للأمام',
   'st.display.search.placeholder': 'البحث في الإعدادات العامة',

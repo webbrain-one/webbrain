@@ -538,7 +538,7 @@ export default {
   'sp.plan.approved': 'แผนได้รับการอนุมัติ — กำลังดำเนินการ…',
   'sp.plan.cancelled': 'แผนถูกยกเลิก',
   'sp.plan.expired': 'แผนนี้ไม่ได้รอการตรวจสอบอีกต่อไป — การดำเนินการถูกยกเลิก',
-  'sp.slash.busy_only_oob': 'ข้อความจะถูกเข้าคิวขณะที่ WebBrain ไม่ว่าง เฉพาะ /help, /check-progress, /show-scratchpad, /list-schedules, /dangerously-skip-permissions, /screenshot, /export และ /verbose เท่านั้นที่เรียกใช้ได้ทันทีในฐานะคำสั่ง slash',
+  'sp.slash.busy_only_oob': 'ข้อความจะถูกเข้าคิวขณะที่ WebBrain ไม่ว่าง เฉพาะ /help, /check-progress, /show-scratchpad, /show-memory, /list-schedules, /dangerously-skip-permissions, /screenshot, /export และ /verbose เท่านั้นที่เรียกใช้ได้ทันทีในฐานะคำสั่ง slash',
   'tool.go_back': 'กำลังย้อนกลับ',
   'tool.go_forward': 'กำลังไปข้างหน้า',
   'st.display.search.placeholder': 'ค้นหาการตั้งค่าทั่วไป',

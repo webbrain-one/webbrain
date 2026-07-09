@@ -240,7 +240,7 @@ export default {
   'sp.permissions.disabled_html': '⚠️ <strong>Permission prompts are OFF.</strong> WebBrain will click, type, navigate, run JavaScript, upload, download, record, and schedule future work without asking first. Re-enable this from Settings → Permissions → Ask before consequential actions.',
 
   'sp.help_html': '<strong>Slash Commands</strong><br><code>/help</code> — Show this list<br><code>/schedule</code> — Create a scheduled task<br><code>/list-schedules</code> — Show scheduled tasks<br><code>/check-progress</code> — Show current progress ledger<br><code>/show-scratchpad</code> — Show current scratchpad<br><code>/edit-scratchpad &lt;text&gt;</code> — Append text to the current scratchpad<br><code>/clear-scratchpad</code> — Clear the current scratchpad<br><code>/remember &lt;text&gt;</code> — Save a user preference to memory<br><code>/show-memory</code> — Show saved user memory<br><code>/forget-memory &lt;id&gt;</code> — Forget a saved memory<br><code>/allow-api</code> — Allow API mutations for this conversation<br><code>/dangerously-skip-permissions</code> — Disable permission prompts globally<br><code>/compact</code> — Compact this conversation context<br><code>/verbose</code> — Toggle verbose/compact tool display<br><code>/reset</code> — Clear conversation<br><code>/screenshot</code> — Capture current tab<br><code>/full-page-screenshot</code> — Capture the full page (Chrome only)<br><code>/record</code> — Start recording the current tab<br><code>/record --transcribe</code> — Record and save a Whisper transcript after stop<br><code>/record-full-screen</code> — Record a screen or window (Chrome only)<br><code>/record-full-screen --transcribe</code> — Record screen/window and save a transcript<br><code>/export</code> — Download conversation as Markdown<br><code>/profile</code> — Toggle profile auto-fill<br><code>/vision</code> — Toggle vision mode on active provider<br><code>/ask</code> — Switch to Ask mode<br><code>/act</code> — Switch to Act mode<br><code>/dev</code> — Switch to Dev mode<br><br><strong>Keyboard Shortcuts</strong><br><code>Ctrl/Cmd+/</code> — Focus the input<br><code>Ctrl/Cmd+Shift+A</code> — Switch to Ask mode<br><code>Ctrl/Cmd+Shift+X</code> — Switch to Act mode<br><code>Ctrl/Cmd+Shift+D</code> — Switch to Dev mode<br><code>Escape</code> — Stop the active run<br><code>Escape</code> twice — Stop an active recording',
-  'sp.slash.busy_only_oob': 'Messages are queued while WebBrain is busy. Only /help, /check-progress, /show-scratchpad, /list-schedules, /dangerously-skip-permissions, /screenshot, /export, and /verbose can run immediately as slash commands.',
+  'sp.slash.busy_only_oob': 'Messages are queued while WebBrain is busy. Only /help, /check-progress, /show-scratchpad, /show-memory, /list-schedules, /dangerously-skip-permissions, /screenshot, /export, and /verbose can run immediately as slash commands.',
   'sp.compact.nothing_to_compact': 'Nothing to compact yet — there is not enough older context.',
   'sp.compact.busy': 'Cannot compact while a run is in progress — wait for it to finish.',
   'sp.compact.failed': 'Context compaction failed: {error}',
@@ -260,6 +260,8 @@ export default {
   'sp.memory.forget_empty': 'Paste a memory ID after /forget-memory.',
   'sp.memory.forgotten': 'Memory forgotten.',
   'sp.memory.error': 'Memory error: {msg}',
+  'sp.memory.reason.invalid_or_sensitive': 'Not saved: the text is empty after cleanup or looks like it contains a secret (password, API key, token).',
+  'sp.memory.reason.not_found': 'No saved memory has that ID.',
 
   // --- Tool labels -------------------------------------------------------
   'tool.read_page': 'Reading page',
@@ -557,6 +559,8 @@ export default {
   'st.memory.imported': 'Imported.',
   'st.memory.import_empty': 'Paste memory JSON first.',
   'st.memory.failed': 'Failed: {error}',
+  'st.memory.reason.invalid_or_sensitive': 'Not saved: the text is empty after cleanup or looks like it contains a secret (password, API key, token).',
+  'st.memory.reason.not_found': 'No saved memory has that ID.',
   'st.memory.security_html': '<strong>Privacy:</strong> user memory is stored in plaintext in this browser profile. When enabled, active memory records are sent to whichever LLM provider you configure as part of the system prompt. Do not store passwords, API keys, tokens, recovery codes, or sensitive secrets here.',
 
   'st.captcha.desc_html': 'Let the agent solve CAPTCHAs automatically via the <a href="https://capsolver.com" target="_blank" style="color:var(--accent);">CapSolver</a> API. Supports reCAPTCHA v2/v3, hCaptcha, and Cloudflare Turnstile. Off by default — when off, the agent stops and asks you to solve the captcha yourself. CapSolver charges per solve (~$0.001–$0.003); you bring your own account and API key.',

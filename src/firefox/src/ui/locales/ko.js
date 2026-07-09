@@ -538,7 +538,7 @@ export default {
   'sp.plan.approved': '계획 승인됨 — 실행 중…',
   'sp.plan.cancelled': '계획이 취소되었습니다.',
   'sp.plan.expired': '이 계획은 더 이상 검토 대기 중이 아닙니다 — 실행이 취소되었습니다.',
-  'sp.slash.busy_only_oob': 'WebBrain이 사용 중일 때 메시지는 대기열에 추가됩니다. /help, /check-progress, /show-scratchpad, /list-schedules, /dangerously-skip-permissions, /screenshot, /export, /verbose만 슬래시 명령으로 즉시 실행할 수 있습니다.',
+  'sp.slash.busy_only_oob': 'WebBrain이 사용 중일 때 메시지는 대기열에 추가됩니다. /help, /check-progress, /show-scratchpad, /show-memory, /list-schedules, /dangerously-skip-permissions, /screenshot, /export, /verbose만 슬래시 명령으로 즉시 실행할 수 있습니다.',
   'tool.go_back': '뒤로 가기',
   'tool.go_forward': '앞으로 가기',
   'st.display.search.placeholder': '일반 설정 검색',

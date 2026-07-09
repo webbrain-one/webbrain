@@ -538,7 +538,7 @@ export default {
   'sp.plan.approved': '计划已批准 — 正在运行…',
   'sp.plan.cancelled': '计划已取消。',
   'sp.plan.expired': '该计划不再等待审查 — 运行已取消。',
-  'sp.slash.busy_only_oob': 'WebBrain 忙碌时，消息会排队。只有 /help、/check-progress、/show-scratchpad、/list-schedules、/dangerously-skip-permissions、/screenshot、/export 和 /verbose 可以作为斜杠命令立即运行。',
+  'sp.slash.busy_only_oob': 'WebBrain 忙碌时，消息会排队。只有 /help、/check-progress、/show-scratchpad、/show-memory、/list-schedules、/dangerously-skip-permissions、/screenshot、/export 和 /verbose 可以作为斜杠命令立即运行。',
   'tool.go_back': '返回',
   'tool.go_forward': '前进',
   'st.display.search.placeholder': '搜索通用设置',

@@ -858,7 +858,7 @@ test('user memory browser wiring is mirrored and non-blocking', () => {
     assert.doesNotMatch(background, /await enqueueUserMemoryExtractionAfterTurn/, `${label}: chat path must not await extraction enqueue`);
     assert.match(background, /agent\._isCostAllowanceError\?\.\(error\)/, `${label}: extraction cost limit should be silent`);
     assert.match(background, /async function markUserMemoryExtractionJobFailed\(jobId\)[\s\S]*attempts: attempts \+ 1/, `${label}: extraction jobs should retry once`);
-    assert.match(background, /await markUserMemoryExtractionJobFailed\(job\.id\);\s*scheduleUserMemoryExtractionDrain\(\);\s*return;/, `${label}: retryable extraction failures should reschedule the drain`);
+    assert.match(background, /await markUserMemoryExtractionJobFailed\(job\.id\);\s*scheduleUserMemoryExtractionDrain\(USER_MEMORY_EXTRACTION_RETRY_DELAY_MS\);\s*return;/, `${label}: retryable extraction failures should reschedule the drain with a backoff delay`);
 
     for (const command of ['/remember', '/show-memory', '/forget-memory']) {
       assert.match(sidepanel, new RegExp(command.replace('/', '\\/')), `${label}: sidepanel missing ${command}`);
@@ -881,7 +881,7 @@ test('user memory browser wiring is mirrored and non-blocking', () => {
     assert.match(settingsJs, /USER_MEMORY_FORM_CAPTURE_KEY/, `${label}: settings JS should use form-capture key`);
     assert.match(settingsJs, /sendToBackground\('get_user_memory'\)/, `${label}: settings should read memory through background`);
     assert.match(settingsJs, /sendToBackground\('import_user_memory', \{ json \}\)/, `${label}: settings should import JSON through background`);
-    assert.match(settingsJs, /const rawMaxPromptChars = String\(userMemoryMaxCharsInput\.value \|\| ''\)\.trim\(\);[\s\S]*Number\.isFinite\(parsedMaxPromptChars\)[\s\S]*Math\.floor\(parsedMaxPromptChars\)/, `${label}: settings should preserve a zero memory prompt cap`);
+    assert.match(settingsJs, /const rawMaxPromptChars = String\(userMemoryMaxCharsInput\.value \|\| ''\)\.trim\(\);[\s\S]*rawMaxPromptChars === ''[\s\S]*: normalizeUserMemoryMaxPromptChars\(rawMaxPromptChars\)/, `${label}: settings should preserve a zero memory prompt cap`);
     assert.doesNotMatch(settingsJs, /Number\(userMemoryMaxCharsInput\.value\) \|\| USER_MEMORY_DEFAULT_MAX_PROMPT_CHARS/, `${label}: settings should not coerce zero prompt cap to default`);
     assert.match(locale, /user memory is stored in plaintext/, `${label}: privacy copy missing`);
   }
@@ -7842,7 +7842,7 @@ test('sidepanel allows safe slash commands and queues normal messages while busy
     assert.notEqual(oobStart, -1, `${label}: out-of-band slash command set missing`);
     assert.notEqual(oobEnd, -1, `${label}: out-of-band slash command set should close`);
     const oobBlock = panel.slice(oobStart, oobEnd);
-    const allowed = ['/help', '/check-progress', '/show-scratchpad', '/list-schedules', '/screenshot', '/export', '/verbose'];
+    const allowed = ['/help', '/check-progress', '/show-scratchpad', '/show-memory', '/list-schedules', '/screenshot', '/export', '/verbose'];
     for (const command of allowed) {
       assert.match(
         oobBlock,
@@ -7873,7 +7873,7 @@ test('sidepanel allows safe slash commands and queues normal messages while busy
     );
     assert.match(
       locale,
-      /'sp\.slash\.busy_only_oob': 'Messages are queued while WebBrain is busy\. Only \/help, \/check-progress, \/show-scratchpad, \/list-schedules, \/dangerously-skip-permissions, \/screenshot, \/export, and \/verbose can run immediately as slash commands\./,
+      /'sp\.slash\.busy_only_oob': 'Messages are queued while WebBrain is busy\. Only \/help, \/check-progress, \/show-scratchpad, \/show-memory, \/list-schedules, \/dangerously-skip-permissions, \/screenshot, \/export, and \/verbose can run immediately as slash commands\./,
       `${label}: busy slash notice should explain queued messages and safe slash commands`,
     );
   }
@@ -7930,21 +7930,21 @@ test('sidepanel queued composer messages expose edit and delete controls', () =>
 
 test('sidepanel busy slash notice is updated in every locale', () => {
   const expected = {
-    en: 'Messages are queued while WebBrain is busy. Only /help, /check-progress, /show-scratchpad, /list-schedules, /dangerously-skip-permissions, /screenshot, /export, and /verbose can run immediately as slash commands.',
-    es: 'Los mensajes se ponen en cola mientras WebBrain está ocupado. Solo /help, /check-progress, /show-scratchpad, /list-schedules, /dangerously-skip-permissions, /screenshot, /export y /verbose pueden ejecutarse de inmediato como comandos slash.',
-    fr: "Les messages sont mis en file d'attente pendant que WebBrain est occupé. Seuls /help, /check-progress, /show-scratchpad, /list-schedules, /dangerously-skip-permissions, /screenshot, /export et /verbose peuvent s'exécuter immédiatement comme commandes slash.",
-    tr: 'WebBrain meşgulken mesajlar kuyruğa alınır. Yalnızca /help, /check-progress, /show-scratchpad, /list-schedules, /dangerously-skip-permissions, /screenshot, /export ve /verbose slash komutları olarak hemen çalışabilir.',
-    zh: 'WebBrain 忙碌时，消息会排队。只有 /help、/check-progress、/show-scratchpad、/list-schedules、/dangerously-skip-permissions、/screenshot、/export 和 /verbose 可以作为斜杠命令立即运行。',
-    ru: 'Пока WebBrain занят, сообщения ставятся в очередь. Только /help, /check-progress, /show-scratchpad, /list-schedules, /dangerously-skip-permissions, /screenshot, /export и /verbose могут запускаться сразу как slash-команды.',
-    uk: 'Поки WebBrain зайнятий, повідомлення ставляться в чергу. Лише /help, /check-progress, /show-scratchpad, /list-schedules, /dangerously-skip-permissions, /screenshot, /export та /verbose можуть запускатися одразу як slash-команди.',
-    ar: 'تُضاف الرسائل إلى قائمة الانتظار بينما يكون WebBrain مشغولًا. يمكن فقط لـ /help و /check-progress و /show-scratchpad و /list-schedules و /dangerously-skip-permissions و /screenshot و /export و /verbose العمل فورًا كأوامر slash.',
-    ja: 'WebBrain がビジーの間、メッセージはキューに入ります。/help、/check-progress、/show-scratchpad、/list-schedules、/dangerously-skip-permissions、/screenshot、/export、/verbose だけがスラッシュコマンドとしてすぐに実行できます。',
-    ko: 'WebBrain이 사용 중일 때 메시지는 대기열에 추가됩니다. /help, /check-progress, /show-scratchpad, /list-schedules, /dangerously-skip-permissions, /screenshot, /export, /verbose만 슬래시 명령으로 즉시 실행할 수 있습니다.',
-    id: 'Pesan dimasukkan ke antrean saat WebBrain sibuk. Hanya /help, /check-progress, /show-scratchpad, /list-schedules, /dangerously-skip-permissions, /screenshot, /export, dan /verbose yang dapat langsung berjalan sebagai perintah slash.',
-    th: 'ข้อความจะถูกเข้าคิวขณะที่ WebBrain ไม่ว่าง เฉพาะ /help, /check-progress, /show-scratchpad, /list-schedules, /dangerously-skip-permissions, /screenshot, /export และ /verbose เท่านั้นที่เรียกใช้ได้ทันทีในฐานะคำสั่ง slash',
-    ms: 'Mesej dimasukkan ke giliran semasa WebBrain sibuk. Hanya /help, /check-progress, /show-scratchpad, /list-schedules, /dangerously-skip-permissions, /screenshot, /export, dan /verbose boleh berjalan serta-merta sebagai arahan slash.',
-    tl: 'Nakapila ang mga mensahe habang abala ang WebBrain. Tanging /help, /check-progress, /show-scratchpad, /list-schedules, /dangerously-skip-permissions, /screenshot, /export, at /verbose ang maaaring tumakbo agad bilang mga slash command.',
-    pl: 'Wiadomości są kolejkowane, gdy WebBrain jest zajęty. Tylko /help, /check-progress, /show-scratchpad, /list-schedules, /dangerously-skip-permissions, /screenshot, /export i /verbose mogą uruchamiać się od razu jako polecenia slash.',
+    en: 'Messages are queued while WebBrain is busy. Only /help, /check-progress, /show-scratchpad, /show-memory, /list-schedules, /dangerously-skip-permissions, /screenshot, /export, and /verbose can run immediately as slash commands.',
+    es: 'Los mensajes se ponen en cola mientras WebBrain está ocupado. Solo /help, /check-progress, /show-scratchpad, /show-memory, /list-schedules, /dangerously-skip-permissions, /screenshot, /export y /verbose pueden ejecutarse de inmediato como comandos slash.',
+    fr: "Les messages sont mis en file d'attente pendant que WebBrain est occupé. Seuls /help, /check-progress, /show-scratchpad, /show-memory, /list-schedules, /dangerously-skip-permissions, /screenshot, /export et /verbose peuvent s'exécuter immédiatement comme commandes slash.",
+    tr: 'WebBrain meşgulken mesajlar kuyruğa alınır. Yalnızca /help, /check-progress, /show-scratchpad, /show-memory, /list-schedules, /dangerously-skip-permissions, /screenshot, /export ve /verbose slash komutları olarak hemen çalışabilir.',
+    zh: 'WebBrain 忙碌时，消息会排队。只有 /help、/check-progress、/show-scratchpad、/show-memory、/list-schedules、/dangerously-skip-permissions、/screenshot、/export 和 /verbose 可以作为斜杠命令立即运行。',
+    ru: 'Пока WebBrain занят, сообщения ставятся в очередь. Только /help, /check-progress, /show-scratchpad, /show-memory, /list-schedules, /dangerously-skip-permissions, /screenshot, /export и /verbose могут запускаться сразу как slash-команды.',
+    uk: 'Поки WebBrain зайнятий, повідомлення ставляться в чергу. Лише /help, /check-progress, /show-scratchpad, /show-memory, /list-schedules, /dangerously-skip-permissions, /screenshot, /export та /verbose можуть запускатися одразу як slash-команди.',
+    ar: 'تُضاف الرسائل إلى قائمة الانتظار بينما يكون WebBrain مشغولًا. يمكن فقط لـ /help و /check-progress و /show-scratchpad و /show-memory و /list-schedules و /dangerously-skip-permissions و /screenshot و /export و /verbose العمل فورًا كأوامر slash.',
+    ja: 'WebBrain がビジーの間、メッセージはキューに入ります。/help、/check-progress、/show-scratchpad、/show-memory、/list-schedules、/dangerously-skip-permissions、/screenshot、/export、/verbose だけがスラッシュコマンドとしてすぐに実行できます。',
+    ko: 'WebBrain이 사용 중일 때 메시지는 대기열에 추가됩니다. /help, /check-progress, /show-scratchpad, /show-memory, /list-schedules, /dangerously-skip-permissions, /screenshot, /export, /verbose만 슬래시 명령으로 즉시 실행할 수 있습니다.',
+    id: 'Pesan dimasukkan ke antrean saat WebBrain sibuk. Hanya /help, /check-progress, /show-scratchpad, /show-memory, /list-schedules, /dangerously-skip-permissions, /screenshot, /export, dan /verbose yang dapat langsung berjalan sebagai perintah slash.',
+    th: 'ข้อความจะถูกเข้าคิวขณะที่ WebBrain ไม่ว่าง เฉพาะ /help, /check-progress, /show-scratchpad, /show-memory, /list-schedules, /dangerously-skip-permissions, /screenshot, /export และ /verbose เท่านั้นที่เรียกใช้ได้ทันทีในฐานะคำสั่ง slash',
+    ms: 'Mesej dimasukkan ke giliran semasa WebBrain sibuk. Hanya /help, /check-progress, /show-scratchpad, /show-memory, /list-schedules, /dangerously-skip-permissions, /screenshot, /export, dan /verbose boleh berjalan serta-merta sebagai arahan slash.',
+    tl: 'Nakapila ang mga mensahe habang abala ang WebBrain. Tanging /help, /check-progress, /show-scratchpad, /show-memory, /list-schedules, /dangerously-skip-permissions, /screenshot, /export, at /verbose ang maaaring tumakbo agad bilang mga slash command.',
+    pl: 'Wiadomości są kolejkowane, gdy WebBrain jest zajęty. Tylko /help, /check-progress, /show-scratchpad, /show-memory, /list-schedules, /dangerously-skip-permissions, /screenshot, /export i /verbose mogą uruchamiać się od razu jako polecenia slash.',
   };
 
   for (const [label, localeDir] of [
@@ -13144,7 +13144,7 @@ test('press_keys: Enter is a submit (CLICK); Tab/Escape are benign (null)', () =
 
 test('submit controls bypass native select guards in click paths', () => {
   const chromeAgent = fs.readFileSync(path.join(ROOT, 'src/chrome/src/agent/agent.js'), 'utf8');
-  assert.match(chromeAgent, /function findSubmitControl\(el\)[\s\S]*tag === 'INPUT' && type === 'submit'[\s\S]*tag === 'BUTTON' && \(type === 'submit' \|\| \(!type && !!\(control\.form \|\| control\.closest\?\.\('form'\)\)\)\)/, 'chrome agent: submit-control helper missing');
+  assert.match(chromeAgent, /function findSubmitControl\(el\)[\s\S]*tag === 'INPUT' && \(type === 'submit' \|\| type === 'image'\)[\s\S]*tag === 'BUTTON' && \(type === 'submit' \|\| \(!type && !!\(control\.form \|\| control\.closest\?\.\('form'\)\)\)\)/, 'chrome agent: submit-control helper missing');
   const globalGuardStart = chromeAgent.indexOf("function findSubmitControl(el)");
   const submitBypass = chromeAgent.indexOf("if (findSubmitControl(e.target)) return;", globalGuardStart);
   const nearbySelectCall = chromeAgent.indexOf("const sel = findNearbySelect(e.target);", globalGuardStart);

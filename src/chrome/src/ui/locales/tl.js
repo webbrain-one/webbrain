@@ -538,7 +538,7 @@ export default {
   'sp.plan.approved': 'Naaprubahan ang plano — tumatakbo…',
   'sp.plan.cancelled': 'Kinansela ang plano.',
   'sp.plan.expired': 'Ang planong ito ay hindi na naghihintay ng pagsusuri — ang pagtakbo ay kinansela.',
-  'sp.slash.busy_only_oob': 'Nakapila ang mga mensahe habang abala ang WebBrain. Tanging /help, /check-progress, /show-scratchpad, /list-schedules, /dangerously-skip-permissions, /screenshot, /export, at /verbose ang maaaring tumakbo agad bilang mga slash command.',
+  'sp.slash.busy_only_oob': 'Nakapila ang mga mensahe habang abala ang WebBrain. Tanging /help, /check-progress, /show-scratchpad, /show-memory, /list-schedules, /dangerously-skip-permissions, /screenshot, /export, at /verbose ang maaaring tumakbo agad bilang mga slash command.',
   'tool.go_back': 'Bumabalik',
   'tool.go_forward': 'Sumusulong',
   'st.display.search.placeholder': 'Maghanap sa General na mga setting',

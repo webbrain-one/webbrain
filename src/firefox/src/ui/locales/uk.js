@@ -539,7 +539,7 @@ export default {
   'sp.plan.approved': 'План схвалено — виконується…',
   'sp.plan.cancelled': 'План скасовано.',
   'sp.plan.expired': 'Цей план більше не очікує розгляду — запуск скасовано.',
-  'sp.slash.busy_only_oob': 'Поки WebBrain зайнятий, повідомлення ставляться в чергу. Лише /help, /check-progress, /show-scratchpad, /list-schedules, /dangerously-skip-permissions, /screenshot, /export та /verbose можуть запускатися одразу як slash-команди.',
+  'sp.slash.busy_only_oob': 'Поки WebBrain зайнятий, повідомлення ставляться в чергу. Лише /help, /check-progress, /show-scratchpad, /show-memory, /list-schedules, /dangerously-skip-permissions, /screenshot, /export та /verbose можуть запускатися одразу як slash-команди.',
   'tool.go_back': 'Назад',
   'tool.go_forward': 'Вперед',
   'st.display.search.placeholder': 'Пошук у загальних налаштуваннях',

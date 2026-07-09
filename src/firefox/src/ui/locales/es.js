@@ -540,7 +540,7 @@ export default {
   'sp.plan.approved': 'Plan aprobado — ejecutando…',
   'sp.plan.cancelled': 'Plan cancelado.',
   'sp.plan.expired': 'Este plan ya no está en espera de revisión — la ejecución fue cancelada.',
-  'sp.slash.busy_only_oob': 'Los mensajes se ponen en cola mientras WebBrain está ocupado. Solo /help, /check-progress, /show-scratchpad, /list-schedules, /dangerously-skip-permissions, /screenshot, /export y /verbose pueden ejecutarse de inmediato como comandos slash.',
+  'sp.slash.busy_only_oob': 'Los mensajes se ponen en cola mientras WebBrain está ocupado. Solo /help, /check-progress, /show-scratchpad, /show-memory, /list-schedules, /dangerously-skip-permissions, /screenshot, /export y /verbose pueden ejecutarse de inmediato como comandos slash.',
   'tool.go_back': 'Volviendo atrás',
   'tool.go_forward': 'Avanzando',
   'st.display.search.placeholder': 'Buscar en ajustes generales',

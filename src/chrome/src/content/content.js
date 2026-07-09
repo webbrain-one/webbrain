@@ -483,7 +483,7 @@
     if (!control || !control.tagName) return false;
     const tag = control.tagName.toUpperCase();
     const type = (control.getAttribute?.('type') || '').trim().toLowerCase();
-    if (tag === 'INPUT') return type === 'submit';
+    if (tag === 'INPUT') return type === 'submit' || type === 'image';
     if (tag === 'BUTTON') return type === 'submit' || (!type && !!(control.form || control.closest?.('form')));
     return false;
   }

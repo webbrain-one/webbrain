@@ -538,7 +538,7 @@ export default {
   'sp.plan.approved': 'Rancangan diluluskan — berjalan…',
   'sp.plan.cancelled': 'Rancangan dibatalkan.',
   'sp.plan.expired': 'Rancangan ini tidak lagi menunggu semakan — pelaksanaan dibatalkan.',
-  'sp.slash.busy_only_oob': 'Mesej dimasukkan ke giliran semasa WebBrain sibuk. Hanya /help, /check-progress, /show-scratchpad, /list-schedules, /dangerously-skip-permissions, /screenshot, /export, dan /verbose boleh berjalan serta-merta sebagai arahan slash.',
+  'sp.slash.busy_only_oob': 'Mesej dimasukkan ke giliran semasa WebBrain sibuk. Hanya /help, /check-progress, /show-scratchpad, /show-memory, /list-schedules, /dangerously-skip-permissions, /screenshot, /export, dan /verbose boleh berjalan serta-merta sebagai arahan slash.',
   'tool.go_back': 'Kembali',
   'tool.go_forward': 'Maju',
   'st.display.search.placeholder': 'Cari tetapan Umum',

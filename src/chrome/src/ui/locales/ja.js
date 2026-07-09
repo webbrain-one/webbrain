@@ -538,7 +538,7 @@ export default {
   'sp.plan.approved': '計画承認済み — 実行中…',
   'sp.plan.cancelled': '計画がキャンセルされました。',
   'sp.plan.expired': 'この計画はレビュー待ちではなくなりました — 実行はキャンセルされました。',
-  'sp.slash.busy_only_oob': 'WebBrain がビジーの間、メッセージはキューに入ります。/help、/check-progress、/show-scratchpad、/list-schedules、/dangerously-skip-permissions、/screenshot、/export、/verbose だけがスラッシュコマンドとしてすぐに実行できます。',
+  'sp.slash.busy_only_oob': 'WebBrain がビジーの間、メッセージはキューに入ります。/help、/check-progress、/show-scratchpad、/show-memory、/list-schedules、/dangerously-skip-permissions、/screenshot、/export、/verbose だけがスラッシュコマンドとしてすぐに実行できます。',
   'tool.go_back': '戻る',
   'tool.go_forward': '進む',
   'st.display.search.placeholder': '一般設定を検索',

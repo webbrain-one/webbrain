@@ -22,6 +22,7 @@ import {
   USER_MEMORY_ENABLED_KEY,
   USER_MEMORY_FORM_CAPTURE_KEY,
   USER_MEMORY_MAX_PROMPT_CHARS_KEY,
+  normalizeUserMemoryMaxPromptChars,
 } from '../agent/user-memory.js';
 
 // Version shown in the subtitle. Kept here so it only needs one update per
@@ -1065,6 +1066,17 @@ function flashUserMemoryResult(className, text) {
   setTimeout(() => userMemoryTestResult.classList.remove('show'), 2500);
 }
 
+const USER_MEMORY_FAILURE_REASON_KEYS = {
+  invalid_or_sensitive: 'st.memory.reason.invalid_or_sensitive',
+  not_found: 'st.memory.reason.not_found',
+};
+
+function userMemoryFailureText(res) {
+  const reasonKey = USER_MEMORY_FAILURE_REASON_KEYS[res?.reason];
+  if (reasonKey) return t(reasonKey);
+  return t('st.memory.failed', { error: res?.reason || res?.error || 'unknown error' });
+}
+
 function renderUserMemoryRecords(records = []) {
   if (!userMemoryList) return;
   const active = records.filter((record) => record && !record.archivedAt && record.text);
@@ -1095,7 +1107,7 @@ function renderUserMemoryRecords(records = []) {
       const kind = card?.querySelector('.user-memory-kind')?.value || 'preference';
       const res = await sendToBackground('update_user_memory', { id, text, kind });
       if (!res?.ok) {
-        flashUserMemoryResult('error', t('st.memory.failed', { error: res?.reason || res?.error || 'unknown error' }));
+        flashUserMemoryResult('error', userMemoryFailureText(res));
         return;
       }
       flashUserMemoryResult('ok', t('st.memory.saved'));
@@ -1106,7 +1118,7 @@ function renderUserMemoryRecords(records = []) {
     btn.addEventListener('click', async () => {
       const res = await sendToBackground('delete_user_memory', { id: btn.dataset.memoryId });
       if (!res?.ok) {
-        flashUserMemoryResult('error', t('st.memory.failed', { error: res?.reason || res?.error || 'unknown error' }));
+        flashUserMemoryResult('error', userMemoryFailureText(res));
         return;
       }
       flashUserMemoryResult('ok', t('st.memory.deleted'));
@@ -1150,10 +1162,9 @@ if (userMemoryFormToggle) {
 if (userMemoryMaxCharsInput) {
   userMemoryMaxCharsInput.addEventListener('change', async () => {
     const rawMaxPromptChars = String(userMemoryMaxCharsInput.value || '').trim();
-    const parsedMaxPromptChars = rawMaxPromptChars === '' ? NaN : Number(rawMaxPromptChars);
-    const value = Number.isFinite(parsedMaxPromptChars)
-      ? Math.max(0, Math.min(10000, Math.floor(parsedMaxPromptChars)))
-      : USER_MEMORY_DEFAULT_MAX_PROMPT_CHARS;
+    const value = rawMaxPromptChars === ''
+      ? USER_MEMORY_DEFAULT_MAX_PROMPT_CHARS
+      : normalizeUserMemoryMaxPromptChars(rawMaxPromptChars);
     userMemoryMaxCharsInput.value = String(value);
     await chrome.storage.local.set({ [USER_MEMORY_MAX_PROMPT_CHARS_KEY]: value }).catch(() => {});
   });
