@@ -4,6 +4,25 @@ All notable changes to WebBrain are documented in this file.
 
 This changelog was generated from the repository Git history and release tags. Versions without a Git tag are inferred from version-bump commits and the current `package.json` / browser manifest versions.
 
+## [22.2.3] - 2026-07-10
+
+### Added
+- Added Azure OpenAI and AWS Bedrock (Converse) providers in Chrome and Firefox, including Settings fields, provider manager wiring, docs, and regression coverage.
+- Added encrypted profile sync for providers, profile settings, memory, and auxiliary providers, with email auth, local password unlock, merge recovery, reset, and change-password controls.
+- Added Hebrew app localization and refreshed localized app and website copy.
+- Added GitHub funding metadata and refreshed the WebBrain logo, store listing, banner, favicon, social-card, and website image assets.
+
+### Changed
+- Updated local model setup guidance and provider context-window detection for llama.cpp, Ollama, and LM Studio so live runtime windows can replace defaults while respecting manual overrides.
+- Updated release metadata, Settings subtitle versions, Chrome / Firefox manifests, architecture docs, and rebuilt Chrome, Edge, and Firefox release archives for 22.2.3.
+
+### Fixed
+- Fixed local model context-window detection, including stale detection writes and over-reported windows from loaded local backends.
+- Hardened encrypted profile sync around disabled edits, vault KDF reuse, lock and logout flows, legacy sync migration, and remote apply conflicts.
+
+### Tests
+- Expanded regression coverage for Azure OpenAI, AWS Bedrock, encrypted profile sync, sync recovery and consent flows, local context-window detection, Hebrew localization, and refreshed logo assets.
+
 ## [22.1.2] - 2026-07-10
 
 ### Added
