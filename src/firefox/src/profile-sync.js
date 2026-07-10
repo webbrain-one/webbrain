@@ -170,5 +170,13 @@ export class ProfileSyncManager {
     }
   }
   async disable() { try { await this.request('/auth/revoke', { method: 'POST' }); } catch {} this.lock(); await this.storage.remove([PROFILE_SYNC_KEYS.token]); await this.storage.set({ [PROFILE_SYNC_KEYS.enabled]: false }); this.status = 'disabled'; }
-  async reset(password) { await this.request('/vault', { method: 'DELETE' }); this.password = password; this.key = null; this.envelope = null; this.revision = null; return this.sync({ create: true }); }
+  async reset(password) {
+    if (this.revision == null) {
+      try { const current = await this.request('/vault'); this.revision = current.body.revision; }
+      catch (error) { if (error.status !== 404) throw error; }
+    }
+    await this.request('/vault', { method: 'DELETE', headers: this.revision != null ? { 'If-Match': String(this.revision) } : {} });
+    this.password = password; this.key = null; this.envelope = null; this.revision = null;
+    return this.sync({ create: true });
+  }
 }
