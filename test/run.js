@@ -19939,4 +19939,42 @@ test('profile sync merge keeps newer provider/profile data and memory tombstones
   assert.equal(conflicts.some(conflict => conflict.dataset === 'memory' && conflict.remote.text === 'remote tie'), true);
 });
 
+test('profile sync prefers an established remote vault when legacy metadata ties at zero', async () => {
+  const { mergeProfileVaults } = await import(
+    'file://' + path.join(ROOT, 'src/chrome/src/profile-sync.js').replace(/\\/g, '/')
+  );
+  const local = { providers: {}, activeProvider: '', profile: { enabled: false, text: '' }, memory: { records: [] }, tombstones: {}, meta: {} };
+  const remote = { providers: { openai: { apiKey: 'remote-secret' } }, activeProvider: 'openai', profile: { enabled: true, text: 'remote profile' }, memory: { records: [] }, tombstones: {}, meta: {} };
+  const { vault } = mergeProfileVaults(local, remote);
+  assert.deepEqual(vault.providers, remote.providers);
+  assert.equal(vault.activeProvider, 'openai');
+  assert.deepEqual(vault.profile, remote.profile);
+});
+
+test('profile sync password change uploads a vault encrypted with the new password', async () => {
+  const { ProfileSyncManager, decryptProfileVault } = await import(
+    'file://' + path.join(ROOT, 'src/chrome/src/profile-sync.js').replace(/\\/g, '/')
+  );
+  const payload = { providers: { openai: { apiKey: 'secret' } }, profile: { text: 'private' }, memory: { records: [] } };
+  let uploaded = null;
+  const manager = new ProfileSyncManager({
+    get: async () => ({ profileSyncEnabled: true, profileSyncToken: 'token' }),
+  });
+  manager.unlock = async password => {
+    assert.equal(password, 'old password');
+    manager.password = password;
+    manager.envelope = { vaultId: 'vault-1' };
+    manager.revision = 7;
+  };
+  manager.localVault = async () => payload;
+  manager.request = async (_path, options) => {
+    uploaded = JSON.parse(options.body).envelope;
+    assert.equal(options.headers['If-Match'], '7');
+    return { body: { revision: 8 } };
+  };
+  await manager.changePassword('old password', 'new password long enough');
+  assert.deepEqual((await decryptProfileVault(uploaded, 'new password long enough')).payload, payload);
+  await assert.rejects(() => decryptProfileVault(uploaded, 'old password'), /Incorrect sync password/);
+});
+
 await run();

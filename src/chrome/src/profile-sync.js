@@ -54,6 +54,10 @@ export async function decryptProfileVault(envelope, password, key = null) {
 
 function newer(local, remote, localAt, remoteAt, conflicts, name) {
   if (remoteAt > localAt) return remote;
+  // A remote vault with no metadata predates sync timestamps. On another
+  // device's first unlock, prefer that established cloud value instead of
+  // letting empty/default local state overwrite it on a 0/0 tie.
+  if (localAt === 0 && remoteAt === 0) return remote;
   if (remoteAt === localAt && stable(local) !== stable(remote)) conflicts.push({ dataset: name, local, remote, at: Date.now() });
   return local;
 }
@@ -131,7 +135,33 @@ export class ProfileSyncManager {
     catch (e) { if (e.status === 409) { this.revision = null; return this.sync(); } throw e; }
     this.status = 'current'; return this.state();
   }
-  async changePassword(oldPassword, nextPassword) { await this.unlock(oldPassword); this.password = nextPassword; this.key = null; this.envelope = null; return this.sync(); }
+  async changePassword(oldPassword, nextPassword) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await this.unlock(oldPassword);
+      const local = await this.localVault();
+      const vaultId = this.envelope?.vaultId;
+      const encrypted = await encryptProfileVault(local, nextPassword, { vaultId });
+      try {
+        const put = await this.request('/vault', {
+          method: 'PUT',
+          headers: { 'If-Match': String(this.revision) },
+          body: JSON.stringify({ envelope: encrypted.envelope }),
+        });
+        this.password = nextPassword;
+        this.key = encrypted.key;
+        this.envelope = encrypted.envelope;
+        this.revision = put.body.revision;
+        this.status = 'current';
+        return this.state();
+      } catch (error) {
+        if (error.status !== 409 || attempt === 1) throw error;
+        this.password = oldPassword;
+        this.key = null;
+        this.envelope = null;
+        this.revision = null;
+      }
+    }
+  }
   async disable() { try { await this.request('/auth/revoke', { method: 'POST' }); } catch {} this.lock(); await this.storage.remove([PROFILE_SYNC_KEYS.token]); await this.storage.set({ [PROFILE_SYNC_KEYS.enabled]: false }); this.status = 'disabled'; }
   async reset(password) { await this.request('/vault', { method: 'DELETE' }); this.password = password; this.key = null; this.envelope = null; this.revision = null; return this.sync({ create: true }); }
 }
