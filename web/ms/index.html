@@ -48,7 +48,7 @@
   "@type": "SoftwareApplication",
   "name": "WebBrain",
   "applicationCategory": "BrowserApplication",
-  "operatingSystem": "Chrome, Firefox",
+  "operatingSystem": "Chrome, Edge, Firefox",
   "offers": {
     "@type": "Offer",
     "price": "0",
@@ -1307,14 +1307,24 @@
     }
     .download-cards {
       display: flex;
-      justify-content: center;
+      flex-direction: column;
       align-items: stretch;
       gap: 20px;
-      flex-wrap: nowrap;
       margin-top: 40px;
-      max-width: 820px;
+      max-width: 860px;
       margin-left: auto;
       margin-right: auto;
+    }
+    .download-row {
+      display: grid;
+      gap: 20px;
+      align-items: stretch;
+    }
+    .download-row-current {
+      grid-template-columns: 1fr;
+    }
+    .download-row-secondary {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
     }
     .download-card {
       background: var(--bg-card);
@@ -1334,7 +1344,20 @@
       transform: translateY(-4px);
       box-shadow: 0 12px 40px var(--shadow-card);
     }
-    .download-card .browser-icon { font-size: 38px; margin-bottom: 14px; }
+    .download-card .browser-icon {
+      width: 48px;
+      height: 48px;
+      margin-bottom: 14px;
+      display: grid;
+      place-items: center;
+    }
+    .download-card .browser-icon img {
+      width: 100%;
+      height: 100%;
+      display: block;
+      object-fit: contain;
+      filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.22));
+    }
     .download-card h3 { font-size: 18px; margin-bottom: 6px; }
     .download-card p { color: var(--text-dim); font-size: 13px; margin-bottom: 20px; }
     .download-card-actions {
@@ -1355,17 +1378,37 @@
       word-break: normal;
       hyphens: none;
     }
-    /* Chrome still gets a little extra emphasis, but keep the Firefox card
-       wide enough that its install CTA does not wrap awkwardly. Both cards stay
-       on a single row at all desktop/tablet widths; the mobile breakpoint
-       below stacks them. */
-    .download-card-chrome {
-      flex-grow: 1.12;
+    .download-card-edge .btn-primary {
+      background: linear-gradient(135deg, #0078d4, #13a10e);
+    }
+    .download-card.is-disabled {
+      filter: grayscale(1);
+      opacity: 0.72;
+    }
+    .download-card.is-disabled:hover {
+      border-color: var(--border);
+      box-shadow: none;
+      transform: none;
+    }
+    .download-card.is-disabled .btn {
+      cursor: not-allowed;
+      color: #f1f1f1;
+      background: #2a2a2a;
+      border-color: #6f6f6f;
+      box-shadow: none;
+    }
+    .download-row-current .download-card {
       padding: 38px 32px;
       border-color: rgba(0, 212, 255, 0.45);
     }
-    .download-card-chrome .browser-icon { font-size: 46px; }
-    .download-card-chrome h3 { font-size: 20px; }
+    .download-row-current .browser-icon {
+      width: 58px;
+      height: 58px;
+    }
+    .download-row-current h3 { font-size: 20px; }
+    .download-row-current .download-card-actions {
+      max-width: 380px;
+    }
 
     /* ================================================================
        OPEN SOURCE
@@ -1639,9 +1682,8 @@
     @media (max-width: 560px) {
       /* Stack the install cards on small phones — squeezing two side-by-side
          below this width makes the buttons too cramped to tap reliably. */
-      .download-cards { flex-wrap: wrap; max-width: 360px; }
-      .download-card,
-      .download-card-chrome { flex: 1 1 100%; }
+      .download-cards { max-width: 360px; }
+      .download-row-secondary { grid-template-columns: 1fr; }
     }
     @media (max-width: 480px) {
       .hero { padding: 60px 16px 50px; }
@@ -2157,35 +2199,53 @@
 <section class="section download-section" id="download">
   <div class="section-label">Mulakan</div>
   <h2 class="section-title">Pasang WebBrain</h2>
-  <p class="section-subtitle">Tersedia untuk Chrome dan Firefox. Percuma, sumber terbuka, tiada akaun diperlukan.</p>
+  <p class="section-subtitle">Tersedia untuk Chrome, Edge dan Firefox. Percuma, sumber terbuka, tiada akaun diperlukan.</p>
 
-  <div class="download-cards">
-    <div class="download-card download-card-chrome">
-      <div class="browser-icon">🌐</div>
-      <h3>Chrome &amp; Chromium</h3>
-      <p>Manifest V3 · Chrome 116+ · Juga berfungsi dengan Brave, Edge, Opera, Vivaldi dan pelayar serasi Chromium yang lain.</p>
-      <div class="download-card-actions">
-        <a href="https://chromewebstore.google.com/detail/webbrain/ljhijonmfahplgbbacgcfnaihbjljhhb" target="_blank" rel="noopener noreferrer" class="btn btn-primary">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          Muat turun dari Chrome Web Store
-        </a>
-        <a href="https://github.com/webbrain-one/webbrain/tree/main/src/chrome" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">
-          Lihat sumber Chrome
-        </a>
+  <div class="download-cards" data-download-cards>
+    <div class="download-row download-row-current" data-download-current>
+      <div class="download-card download-card-chrome" data-browser-card="chrome">
+        <div class="browser-icon"><img src="/assets/browser-chrome.svg" alt="" aria-hidden="true"></div>
+        <h3>Chrome &amp; Chromium</h3>
+        <p>Manifest V3 · Chrome 116+ · Juga berfungsi dengan Brave, Opera, Vivaldi dan pelayar serasi Chromium yang lain.</p>
+        <div class="download-card-actions">
+          <a href="https://chromewebstore.google.com/detail/webbrain/ljhijonmfahplgbbacgcfnaihbjljhhb" target="_blank" rel="noopener noreferrer" class="btn btn-primary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Muat turun dari Chrome Web Store
+          </a>
+          <a href="https://github.com/webbrain-one/webbrain/tree/main/src/chrome" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">
+            Lihat sumber Chrome
+          </a>
+        </div>
       </div>
     </div>
-    <div class="download-card download-card-firefox">
-      <div class="browser-icon">🦊</div>
-      <h3>Firefox</h3>
-      <p>Manifest V2 · Firefox 109+</p>
-      <div class="download-card-actions">
-        <a href="https://addons.mozilla.org/en-US/firefox/addon/webbrain/" target="_blank" rel="noopener noreferrer" class="btn btn-primary" style="background: #ff9800;">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          Muat turun dari Firefox Add‑ons
-        </a>
-        <a href="https://github.com/webbrain-one/webbrain/tree/main/src/firefox" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">
-          Lihat sumber Firefox
-        </a>
+    <div class="download-row download-row-secondary" data-download-secondary>
+      <div class="download-card download-card-firefox" data-browser-card="firefox">
+        <div class="browser-icon"><img src="/assets/browser-firefox.svg" alt="" aria-hidden="true"></div>
+        <h3>Firefox</h3>
+        <p>Manifest V2 · Firefox 109+</p>
+        <div class="download-card-actions">
+          <a href="https://addons.mozilla.org/en-US/firefox/addon/webbrain/" target="_blank" rel="noopener noreferrer" class="btn btn-primary" style="background: #ff9800;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Muat turun dari Firefox Add‑ons
+          </a>
+          <a href="https://github.com/webbrain-one/webbrain/tree/main/src/firefox" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">
+            Lihat sumber Firefox
+          </a>
+        </div>
+      </div>
+      <div class="download-card download-card-edge is-disabled" data-browser-card="edge" aria-disabled="true">
+        <div class="browser-icon"><img src="/assets/browser-edge.svg" alt="" aria-hidden="true"></div>
+        <h3>Microsoft Edge</h3>
+        <p>Manifest V3 · Windows 10/11 · Memerlukan Microsoft Edge pada Windows.</p>
+        <div class="download-card-actions">
+          <button type="button" class="btn btn-primary" disabled data-edge-windows-link data-href="https://microsoftedge.microsoft.com/addons/detail/dfbioajafcijomhljabppcelecgdgfeo">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Muat turun dari Edge Add-ons
+          </button>
+          <button type="button" class="btn btn-secondary" disabled data-edge-windows-link data-href="https://github.com/webbrain-one/webbrain/tree/main/src/chrome">
+            Lihat sumber Chromium
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -2431,6 +2491,56 @@
     </div>
   </div>
 </footer>
+
+<script>
+  (function () {
+    const container = document.querySelector('[data-download-cards]');
+    if (!container) return;
+
+    const currentRow = container.querySelector('[data-download-current]');
+    const secondaryRow = container.querySelector('[data-download-secondary]');
+    const cards = Array.prototype.slice.call(container.querySelectorAll('[data-browser-card]'));
+    if (!currentRow || !secondaryRow || !cards.length) return;
+
+    const ua = navigator.userAgent || '';
+    const platform = (
+      navigator.userAgentData && navigator.userAgentData.platform
+        ? navigator.userAgentData.platform
+        : navigator.platform || ''
+    ).toLowerCase();
+    const isWindows = platform.indexOf('win') !== -1;
+
+    const edgeCard = cards.find((card) => card.dataset.browserCard === 'edge');
+    if (edgeCard && isWindows) {
+      edgeCard.classList.remove('is-disabled');
+      edgeCard.removeAttribute('aria-disabled');
+      edgeCard.querySelectorAll('[data-edge-windows-link]').forEach(function (button) {
+        const href = button.dataset.href;
+        if (!href) return;
+        const link = document.createElement('a');
+        link.href = href;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.className = button.className;
+        link.innerHTML = button.innerHTML;
+        button.replaceWith(link);
+      });
+    }
+
+    let currentBrowser = 'chrome';
+    if (/Edg\//.test(ua)) {
+      currentBrowser = 'edge';
+    } else if (/Firefox\//.test(ua)) {
+      currentBrowser = 'firefox';
+    }
+
+    const currentCard = cards.find((card) => card.dataset.browserCard === currentBrowser) || cards[0];
+    currentRow.appendChild(currentCard);
+    cards.forEach(function (card) {
+      if (card !== currentCard) secondaryRow.appendChild(card);
+    });
+  })();
+</script>
 
 <script>
   (function () {

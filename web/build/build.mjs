@@ -161,7 +161,7 @@ function buildSoftwareJsonLd(dict, locale) {
     '@type': 'SoftwareApplication',
     name: 'WebBrain',
     applicationCategory: 'BrowserApplication',
-    operatingSystem: 'Chrome, Firefox',
+    operatingSystem: 'Chrome, Edge, Firefox',
     offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
     description: dict['meta.description'],
     url: homeUrlFor(locale),
