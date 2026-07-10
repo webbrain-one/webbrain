@@ -4,7 +4,7 @@ export const PROFILE_SYNC_KEYS = {
   enabled: 'profileSyncEnabled', token: 'profileSyncToken', deviceGuid: 'webbrainDeviceGuid',
   metadata: 'profileSyncMetadataV1', recovery: 'profileSyncRecoveryV1',
 };
-export const PROFILE_SYNC_DATA_KEYS = [USER_MEMORY_STORAGE_KEY, 'providers', 'activeProvider', 'profileEnabled', 'profileText'];
+export const PROFILE_SYNC_DATA_KEYS = [USER_MEMORY_STORAGE_KEY, 'providers', 'activeProvider', 'visionModel', 'transcriptionModel', 'profileEnabled', 'profileText'];
 const API = 'https://api.webbrain.one/v1/sync';
 const ITERATIONS = 600000;
 const enc = new TextEncoder();
@@ -74,6 +74,7 @@ export function mergeProfileVaults(local, remote) {
   const lm = local.meta || {}, rm = remote.meta || {};
   out.providers = newer(local.providers || {}, remote.providers || {}, lm.providersAt || 0, rm.providersAt || 0, conflicts, 'providers');
   out.activeProvider = newer(local.activeProvider || '', remote.activeProvider || '', lm.providersAt || 0, rm.providersAt || 0, conflicts, 'providers');
+  out.auxiliaryProviders = newer(local.auxiliaryProviders || {}, remote.auxiliaryProviders || {}, lm.providersAt || 0, rm.providersAt || 0, conflicts, 'providers');
   out.profile = newer(local.profile || {}, remote.profile || {}, lm.profileAt || 0, rm.profileAt || 0, conflicts, 'profile');
   const byId = new Map();
   for (const record of [...(remote.memory?.records || []), ...(local.memory?.records || [])]) {
@@ -100,7 +101,7 @@ export class ProfileSyncManager {
   async state() { const s = await this.storage.get([PROFILE_SYNC_KEYS.enabled, PROFILE_SYNC_KEYS.token]); const enabled = s[PROFILE_SYNC_KEYS.enabled] === true; return { enabled, authenticated: !!s[PROFILE_SYNC_KEYS.token], unlocked: !!this.password, status: enabled && !this.password && this.status === 'disabled' ? 'locked' : this.status, revision: this.revision }; }
   async localVault() {
     const s = await this.storage.get([...PROFILE_SYNC_DATA_KEYS, PROFILE_SYNC_KEYS.metadata]); const meta = s[PROFILE_SYNC_KEYS.metadata] || {};
-    return { version: 1, memory: normalizeUserMemoryStore(s[USER_MEMORY_STORAGE_KEY]), tombstones: meta.tombstones || {}, providers: s.providers || {}, activeProvider: s.activeProvider || '', profile: { enabled: !!s.profileEnabled, text: s.profileText || '' }, meta: { providersAt: meta.providersAt || 0, profileAt: meta.profileAt || 0, memoryAt: meta.memoryAt || 0 } };
+    return { version: 1, memory: normalizeUserMemoryStore(s[USER_MEMORY_STORAGE_KEY]), tombstones: meta.tombstones || {}, providers: s.providers || {}, activeProvider: s.activeProvider || '', auxiliaryProviders: { visionModel: s.visionModel || null, transcriptionModel: s.transcriptionModel || null }, profile: { enabled: !!s.profileEnabled, text: s.profileText || '' }, meta: { providersAt: meta.providersAt || 0, profileAt: meta.profileAt || 0, memoryAt: meta.memoryAt || 0 } };
   }
   async request(path, options = {}) {
     const s = await this.storage.get(PROFILE_SYNC_KEYS.token); const token = s[PROFILE_SYNC_KEYS.token];
@@ -117,7 +118,7 @@ export class ProfileSyncManager {
     const stored = await this.storage.get(PROFILE_SYNC_KEYS.metadata);
     const meta = stored[PROFILE_SYNC_KEYS.metadata] || {};
     const now = Date.now();
-    if (changes.providers || changes.activeProvider) meta.providersAt = now;
+    if (changes.providers || changes.activeProvider || changes.visionModel || changes.transcriptionModel) meta.providersAt = now;
     if (changes.profileEnabled || changes.profileText) meta.profileAt = now;
     if (changes[USER_MEMORY_STORAGE_KEY]) {
       meta.memoryAt = now; meta.tombstones = meta.tombstones || {};
@@ -131,7 +132,7 @@ export class ProfileSyncManager {
     this.schedule();
   }
   schedule() { if (this.applying || !this.password) return; clearTimeout(this.timer); this.timer = setTimeout(() => this.sync().catch((e) => { this.status = [402, 403].includes(e.status) ? 'subscription' : e instanceof TypeError ? 'offline' : 'error'; }), 1500); }
-  async apply(vault, conflicts) { this.applying = true; try { await this.storage.set({ [USER_MEMORY_STORAGE_KEY]: vault.memory, providers: vault.providers, activeProvider: vault.activeProvider, profileEnabled: vault.profile.enabled, profileText: vault.profile.text, [PROFILE_SYNC_KEYS.metadata]: { ...vault.meta, tombstones: vault.tombstones }, [PROFILE_SYNC_KEYS.recovery]: conflicts }); } finally { this.applying = false; } }
+  async apply(vault, conflicts) { this.applying = true; try { await this.storage.set({ [USER_MEMORY_STORAGE_KEY]: vault.memory, providers: vault.providers, activeProvider: vault.activeProvider, visionModel: vault.auxiliaryProviders?.visionModel || null, transcriptionModel: vault.auxiliaryProviders?.transcriptionModel || null, profileEnabled: vault.profile.enabled, profileText: vault.profile.text, [PROFILE_SYNC_KEYS.metadata]: { ...vault.meta, tombstones: vault.tombstones }, [PROFILE_SYNC_KEYS.recovery]: conflicts }); } finally { this.applying = false; } }
   async sync({ create = false } = {}) {
     if (!this.password) throw new Error('Cloud Sync is locked'); this.status = 'syncing'; let local = await this.localVault();
     let remote = null; try { const got = await this.request('/vault'); remote = got.body; this.revision = remote.revision; } catch (e) { if (e.status !== 404 || !create) throw e; }
