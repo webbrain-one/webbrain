@@ -1,0 +1,43 @@
+{
+  "id": "080",
+  "user": "close all my tabs except this one",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 2579,
+  "error": null,
+  "firstToolCall": {
+    "name": "execute_js",
+    "args": {
+      "code": "// Get all tabs and close all except the current one\nchrome.tabs.query({}, function(tabs) {\n  tabs.forEach(function(tab) {\n    if (tab.id !== chrome.tabs.TAB_ID_INVALID) {\n      chrome.tabs.remove(tab.id);\n    }\n  });\n});"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll close all your other tabs using the browser's tab management API.",
+  "usage": {
+    "prompt_tokens": 16946,
+    "completion_tokens": 228,
+    "total_tokens": 17174,
+    "cost": 0,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0,
+      "upstream_inference_prompt_cost": 0,
+      "upstream_inference_completions_cost": 0
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 133,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  }
+}

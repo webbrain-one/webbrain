@@ -1,0 +1,58 @@
+{
+  "cases": 100,
+  "errors": 0,
+  "parsed": 92,
+  "valid": 89,
+  "invalid": 3,
+  "exact": 6,
+  "ideal": 27,
+  "sonnetAll": 65,
+  "sonnetAllPct": 65,
+  "sonnetTooled": 60,
+  "sonnetTooledDen": 92,
+  "sonnetTooledPct": 65.21739130434783,
+  "noToolMatches": 5,
+  "noToolDen": 8,
+  "avgMs": 1618.05,
+  "medianMs": 1295,
+  "p95Ms": 3084,
+  "maxMs": 16321,
+  "promptTokens": 1706344,
+  "completionTokens": 11221,
+  "reasoningTokens": 6694,
+  "cachedPromptTokens": 1390176,
+  "totalTokens": 1717565,
+  "invalidNames": [
+    {
+      "id": "018",
+      "name": "click({text: \"Search\"})<tool_call>click({text: \"Repositories\"})<tool_call>wait_for_element"
+    },
+    {
+      "id": "060",
+      "name": "click({text: \"All\"}, index: 0})<tool_call>click({text: \"Search\", index: 0})<tool_call>type_text({text: \"wireless earbuds\"})<tool_call>press_keys({key: \"Enter\"})"
+    },
+    {
+      "id": "071",
+      "name": "get_accessibility_tree<filter: \"visible\""
+    }
+  ],
+  "byTool": {
+    "navigate": 19,
+    "list_downloads": 2,
+    "new_tab": 3,
+    "read_page": 9,
+    "get_accessibility_tree": 45,
+    "click({text: \"Search\"})<tool_call>click({text: \"Repositories\"})<tool_call>wait_for_element": 1,
+    "fetch_url": 1,
+    "execute_js": 3,
+    "research_url": 1,
+    "screenshot": 2,
+    "download_file": 1,
+    "download_social_media": 1,
+    "click({text: \"All\"}, index: 0})<tool_call>click({text: \"Search\", index: 0})<tool_call>type_text({text: \"wireless earbuds\"})<tool_call>press_keys({key: \"Enter\"})": 1,
+    "get_selection": 1,
+    "(no_tool_call)": 8,
+    "clarify": 1,
+    "get_accessibility_tree<filter: \"visible\"": 1
+  }
+}

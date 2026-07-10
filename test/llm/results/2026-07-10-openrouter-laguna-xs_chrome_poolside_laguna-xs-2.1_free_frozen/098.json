@@ -1,0 +1,38 @@
+{
+  "id": "098",
+  "user": "compare these two products",
+  "mode": "act",
+  "tab": {
+    "url": "https://www.amazon.com/dp/B0EXAMPLE",
+    "title": "Acme Earbuds — Amazon"
+  },
+  "latencyMs": 2215,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I'm currently on the Acme Earbuds product page. To compare two products, I need to know which second product you'd like me to compare it with. \n\nCould you provide:\n1. The URL of the second product, OR\n2. The name/ASIN of the second product you want to compare with the Acme Earbuds?\n\nAlternatively, if you'd like me to search for a specific type of product to compare, let me know what criteria to use (e.g., \"compare with another earbuds product under $50\").",
+  "usage": {
+    "prompt_tokens": 17064,
+    "completion_tokens": 279,
+    "total_tokens": 17343,
+    "cost": 0,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 16912,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0,
+      "upstream_inference_prompt_cost": 0,
+      "upstream_inference_completions_cost": 0
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 164,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  }
+}

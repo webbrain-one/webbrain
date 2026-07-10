@@ -1,0 +1,38 @@
+{
+  "id": "083",
+  "user": "what time is it in tokyo right now",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 1721,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I can see you're on a New Tab page. I don't have access to real-time clock information from the browser, but I can tell you that Tokyo is in the Japan Standard Time (JST) timezone, which is UTC+9.\n\nTo get the current time in Tokyo, you can:\n1. Check your device's world clock (most phones/computers have this feature)\n2. Search \"current time in Tokyo\" in a search engine\n3. Use a time zone converter website\n\nWould you like me to help you with anything else related to time zones or would you prefer to check a specific time-related task?",
+  "usage": {
+    "prompt_tokens": 16948,
+    "completion_tokens": 131,
+    "total_tokens": 17079,
+    "cost": 0,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 16912,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0,
+      "upstream_inference_prompt_cost": 0,
+      "upstream_inference_completions_cost": 0
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  }
+}

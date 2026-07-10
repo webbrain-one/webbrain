@@ -465,6 +465,18 @@
   "blogPost": [
     {
       "@type": "BlogPosting",
+      "headline": "Poolside Laguna XS is fast and free, but not a WebBrain planner win",
+      "url": "https://webbrain.one/blog/poolside-laguna-xs-openrouter-planner-benchmark",
+      "datePublished": "2026-07-10",
+      "description": "We ran poolside/laguna-xs-2.1:free through WebBrain's frozen 100-case browser-agent first-tool benchmark on OpenRouter. It is very fast and free to call, but 65% Sonnet alignment, only 6 exact first actions, and malformed tool names keep it out of the planner shortlist.",
+      "author": {
+        "@type": "Person",
+        "name": "Emre Sokullu",
+        "url": "https://emresokullu.com"
+      }
+    },
+    {
+      "@type": "BlogPosting",
       "headline": "ThinkingCap Qwen 3.6 27B is a serious WebBrain planner candidate",
       "url": "https://webbrain.one/blog/thinkingcap-qwen36-27b-planner-benchmark",
       "datePublished": "2026-07-09",
@@ -808,7 +820,12 @@
     <p class="page-sub">Short write-ups on design decisions, failure modes, and benchmarks from building an open-source AI browser agent.</p>
 
     <div class="post-list">
-      <a href="/blog/thinkingcap-qwen36-27b-planner-benchmark" class="post-card">
+      <a href="/blog/poolside-laguna-xs-openrouter-planner-benchmark" class="post-card">
+        <div class="post-meta">July 10, 2026 &middot; 6 min read</div>
+        <div class="post-title">Poolside Laguna XS is fast and free, but not a WebBrain planner win</div>
+        <div class="post-excerpt">Laguna XS completed WebBrain&#39;s frozen planner suite with 92 parsed calls, 89 valid tool names, 65% Sonnet alignment, and a 1.30s median latency. The endpoint is quick; the planner quality is not competitive.</div>
+      </a>
+<a href="/blog/thinkingcap-qwen36-27b-planner-benchmark" class="post-card">
         <div class="post-meta">July 9, 2026 &middot; 8 min read</div>
         <div class="post-title">ThinkingCap Qwen 3.6 27B is a serious WebBrain planner candidate</div>
         <div class="post-excerpt">ThinkingCap lands at 77% Sonnet alignment, 91 parsed tool calls, 19 exact first actions, and 2.25s median latency. It looks like a real local planner candidate, but not a clean replacement for the Qwen baselines.</div>

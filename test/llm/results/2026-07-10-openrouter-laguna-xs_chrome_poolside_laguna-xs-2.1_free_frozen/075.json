@@ -1,0 +1,38 @@
+{
+  "id": "075",
+  "user": "finish what we were doing",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 2079,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I'm currently on a blank new tab page and don't have context about what we were working on previously. Could you let me know what task you'd like me to finish?",
+  "usage": {
+    "prompt_tokens": 16944,
+    "completion_tokens": 181,
+    "total_tokens": 17125,
+    "cost": 0,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0,
+      "upstream_inference_prompt_cost": 0,
+      "upstream_inference_completions_cost": 0
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 144,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  }
+}
