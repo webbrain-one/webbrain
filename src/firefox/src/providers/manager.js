@@ -758,6 +758,10 @@ export class ProviderManager {
     if (savedModel !== selectedModel) {
       return { ok: false, error: 'Selected model changed before context detection completed' };
     }
+    const observed = {
+      model: provider.config?.model,
+      baseUrl: provider.config?.baseUrl,
+    };
     const detected = await this._detectLocalContextWindow(id, provider, { model: selectedModel });
     if (detected?.contextWindow == null) return { ok: false, error: 'No context window detected' };
     const current = this.providers.get(id) || provider;
@@ -766,7 +770,9 @@ export class ProviderManager {
     })) {
       return { ok: true };
     }
-    await this._updateProviderContextWindow(id, detected.contextWindow);
+    if (!await this._updateProviderContextWindow(id, detected.contextWindow, observed)) {
+      return { ok: false, error: 'Provider changed before context detection completed' };
+    }
     return { ok: true, contextWindow: detected.contextWindow };
   }
 
@@ -854,9 +860,11 @@ export class ProviderManager {
     return true;
   }
 
-  async _updateProviderContextWindow(id, contextWindow) {
+  async _updateProviderContextWindow(id, contextWindow, observed = {}) {
     const current = this.providers.get(id);
     if (!current || !Number.isFinite(contextWindow) || contextWindow <= 0) return false;
+    if (observed.model !== undefined && current.config.model !== observed.model) return false;
+    if (observed.baseUrl !== undefined && current.config.baseUrl !== observed.baseUrl) return false;
     if (Number(current.config.contextWindow) === contextWindow) return true;
     this.providers.set(id, this._createProvider(id, { ...current.config, contextWindow }));
     await this.save();
@@ -865,6 +873,10 @@ export class ProviderManager {
 
   async _attachDetectedContextWindow(id, provider, result, options = {}) {
     if (!result?.ok || !LOCAL_MODEL_LIST_PROVIDER_IDS.includes(id)) return result;
+    const observed = {
+      model: provider?.config?.model,
+      baseUrl: provider?.config?.baseUrl,
+    };
     const detected = await this._detectLocalContextWindow(id, provider, options);
     if (detected?.contextWindow == null) return result;
     const current = this.providers.get(id) || provider;
@@ -873,7 +885,9 @@ export class ProviderManager {
     })) {
       return result;
     }
-    await this._updateProviderContextWindow(id, detected.contextWindow);
+    if (!await this._updateProviderContextWindow(id, detected.contextWindow, observed)) {
+      return result;
+    }
     return { ...result, contextWindow: detected.contextWindow };
   }
 

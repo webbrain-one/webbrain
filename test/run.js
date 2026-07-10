@@ -10808,6 +10808,44 @@ test('ProviderManager persists detected local context windows with safe apply po
         assert.equal(mgrDefault.providers.get('ollama').config.contextWindow, 8192);
       }
 
+      // In-flight detection must not write stale context to a changed provider config.
+      {
+        const writes = [];
+        globalThis[runtimeKey] = makeRuntime(writes);
+        const mgr = new PM();
+        const config = {
+          ...mgr._defaultConfigs().ollama,
+          baseUrl: 'http://localhost:11434/v1',
+          model: 'qwen3:8b',
+          contextWindow: 65536,
+        };
+        mgr.providers.set('ollama', mgr._createProvider('ollama', config));
+
+        let releaseDetection;
+        mgr._detectLocalContextWindow = async () => {
+          await new Promise((resolve) => { releaseDetection = resolve; });
+          return { contextWindow: 8192, shrinkOverride: true };
+        };
+
+        const pending = mgr._attachDetectedContextWindow('ollama', mgr.providers.get('ollama'), { ok: true });
+        await Promise.resolve();
+        await mgr.updateProvider('ollama', { model: 'llama3:8b' });
+        releaseDetection();
+
+        const result = await pending;
+        assert.equal(result.contextWindow, undefined, `${label}: stale attach detection is not returned`);
+        assert.equal(mgr.providers.get('ollama').config.model, 'llama3:8b');
+        assert.equal(mgr.providers.get('ollama').config.contextWindow, 65536);
+        assert.equal(
+          writes.some((patch) =>
+            patch.providers?.ollama?.model === 'llama3:8b' &&
+            patch.providers?.ollama?.contextWindow === 8192
+          ),
+          false,
+          `${label}: stale attach detection is not written after model changes`
+        );
+      }
+
       // Preferred model missing from /api/ps must not borrow another running model
       {
         globalThis[runtimeKey] = makeRuntime([]);
@@ -10886,6 +10924,45 @@ test('ProviderManager persists detected local context windows with safe apply po
             patch.providers?.lmstudio?.contextWindow === 8192
           ),
           `${label}: lmstudio selected-model persistence writes context window to storage`
+        );
+      }
+
+      // Model-pick detection must also fail closed if the base URL changes mid-flight.
+      {
+        const writes = [];
+        globalThis[runtimeKey] = makeRuntime(writes);
+        const mgr = new PM();
+        const config = {
+          ...mgr._defaultConfigs().lmstudio,
+          baseUrl: 'http://localhost:1234/v1',
+          model: 'chat-b',
+          contextWindow: 16384,
+        };
+        mgr.providers.set('lmstudio', mgr._createProvider('lmstudio', config));
+
+        let releaseDetection;
+        mgr._detectLocalContextWindow = async () => {
+          await new Promise((resolve) => { releaseDetection = resolve; });
+          return { contextWindow: 8192, shrinkOverride: true };
+        };
+
+        const pending = mgr.detectProviderContextWindow('lmstudio', 'chat-b');
+        await Promise.resolve();
+        await mgr.updateProvider('lmstudio', { baseUrl: 'http://localhost:5678/v1' });
+        releaseDetection();
+
+        const result = await pending;
+        assert.equal(result.ok, false, `${label}: stale selected-model detection fails closed`);
+        assert.equal(result.contextWindow, undefined, `${label}: stale selected-model detection is not returned`);
+        assert.equal(mgr.providers.get('lmstudio').config.baseUrl, 'http://localhost:5678/v1');
+        assert.equal(mgr.providers.get('lmstudio').config.contextWindow, 16384);
+        assert.equal(
+          writes.some((patch) =>
+            patch.providers?.lmstudio?.baseUrl === 'http://localhost:5678/v1' &&
+            patch.providers?.lmstudio?.contextWindow === 8192
+          ),
+          false,
+          `${label}: stale selected-model detection is not written after base URL changes`
         );
       }
     }
