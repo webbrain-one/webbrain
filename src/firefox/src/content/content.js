@@ -126,6 +126,85 @@
     };
   }
 
+  /**
+   * Collect DOM-aware redaction regions for the screenshot redaction feature
+   * (issue #312). Returns descriptors the background/agent turns into
+   * image-pixel blur boxes. Everything is local — no data leaves the page.
+   *
+   * @param {{coordinateSpace?: 'viewport'|'page'}} params
+   *   'viewport' (default): rects are relative to the current viewport
+   *     (uses getBoundingClientRect), for viewport captures.
+   *   'page': rects are relative to the full document (adds scrollX/scrollY),
+   *     for full-page captures.
+   * @returns {{elements: Array<{kind,type,rect:{x,y,w,h},text,value}>}}
+   */
+  function collectRedactionRegions(params) {
+    const space = params && params.coordinateSpace === 'page' ? 'page' : 'viewport';
+    const sx = space === 'page' ? (window.scrollX || window.pageXOffset || 0) : 0;
+    const sy = space === 'page' ? (window.scrollY || window.pageYOffset || 0) : 0;
+    const toRect = (r) => ({
+      x: Math.round(r.left + sx),
+      y: Math.round(r.top + sy),
+      w: Math.round(r.width),
+      h: Math.round(r.height),
+    });
+    const visible = (r) => r.width > 0 && r.height > 0;
+
+    // Report the captured viewport/page size (CSS px) so the agent can derive
+    // the CSS→image-pixel scale itself from the actual screenshot dimensions
+    // (which may be scaled down to fit a vision-token budget, captured at a
+    // different DPR, or snapped to a window by the tabs API). For 'page'
+    // captures, we report the full scrollable document size.
+    let viewport = { width: Math.max(1, Math.round(window.innerWidth || 1)), height: Math.max(1, Math.round(window.innerHeight || 1)) };
+    if (space === 'page') {
+      const docW = Math.max(document.documentElement.scrollWidth || viewport.width, viewport.width);
+      const docH = Math.max(document.documentElement.scrollHeight || viewport.height, viewport.height);
+      viewport = { width: Math.round(docW), height: Math.round(docH) };
+    }
+
+    const elements = [];
+    try {
+      // 1) Form fields — always sensitive. Includes password/email/tel/text
+      //    inputs, textareas, and contenteditable regions.
+      const fields = document.querySelectorAll(
+        'input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="range"]):not([type="color"]), textarea, [contenteditable=""], [contenteditable="true"], [contenteditable="plaintext-only"]'
+      );
+      for (const el of fields) {
+        const r = el.getBoundingClientRect();
+        if (!visible(r)) continue;
+        const tag = (el.tagName || '').toLowerCase();
+        const type = tag === 'input' ? String(el.type || 'text').toLowerCase() : tag;
+        const kind = tag === 'textarea' || el.isContentEditable ? 'textarea' : 'input';
+        elements.push({
+          kind,
+          type,
+          rect: toRect(r),
+          value: typeof el.value === 'string' ? el.value : (el.textContent || ''),
+        });
+        if (elements.length > 400) break;
+      }
+
+      // 2) Text elements whose visible text looks like an email or phone.
+      //    Scan leaf-ish text containers only to bound cost; cap the scan.
+      const textTags = 'p, span, div, a, td, th, li, h1, h2, h3, h4, h5, h6, label, small, b, strong, i';
+      const nodes = document.querySelectorAll(textTags);
+      let scanned = 0;
+      for (const el of nodes) {
+        if (scanned++ > 6000) break;
+        if (elements.length > 400) break;
+        // Only consider elements whose text is a short, self-contained token
+        // (an email or a phone), not a long paragraph that merely contains one.
+        if (el.children.length > 0) continue; // leaf text only
+        const text = (el.textContent || '').trim();
+        if (text.length < 5 || text.length > 60) continue;
+        const r = el.getBoundingClientRect();
+        if (!visible(r)) continue;
+        elements.push({ kind: 'text', type: '', rect: toRect(r), text });
+      }
+    } catch { /* never break the capture over redaction */ }
+    return { elements, viewport };
+  }
+
   function getActiveEditableSummary() {
     let el = document.activeElement;
     if (!el || el === document.body || el === document.documentElement) return null;
@@ -2187,6 +2266,11 @@
       'inspect_element_styles': () => inspectElementStyles(msg.params || {}),
       'wait_for_element': () => waitForElement(msg.params || {}),
       'get_selection': () => ({ text: window.getSelection()?.toString() || '' }),
+      // DOM-aware screenshot redaction (issue #312): returns rects of form
+      // fields + text elements that look like emails/phones. The agent maps
+      // these to image pixels and pixelates them before the shot goes to a
+      // Vision endpoint. Fully local — no data leaves the page.
+      'get_redaction_regions': () => collectRedactionRegions(msg.params || {}),
       // execute_js — model-supplied JS body, evaluated in the content
       // script's isolated world via `new Function()`.
       //

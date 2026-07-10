@@ -209,6 +209,11 @@ const { CDPClient, cdpClient: cdpClientCh } = await import(
   'file://' + path.join(ROOT, 'src/chrome/src/cdp/cdp-client.js').replace(/\\/g, '/')
 );
 
+// Screenshot redaction (issue #312) — pure Node-testable helpers.
+const { selectRedactionRegions, mapRegionsToImage, rectIntersects, REGION_KIND } = await import(
+  'file://' + path.join(ROOT, 'src/chrome/src/agent/screenshot-redaction.js').replace(/\\/g, '/')
+);
+
 function allowProgress(agent, tabId, allowedActions = ['follow'], opts = {}) {
   return agent._setProgressSession(tabId, {
     mode: 'active',
@@ -572,11 +577,77 @@ class LoopDetectorShim {
 }
 
 // ────────────────────────────────────────────────────────────────────────
+// Screenshot redaction (issue #312)
+// ────────────────────────────────────────────────────────────────────────
+
+console.log('\nscreenshot redaction');
+
+// ────────────────────────────────────────────────────────────────────────
 // Test framework (one function, no deps)
 // ────────────────────────────────────────────────────────────────────────
 
 const tests = [];
 function test(name, fn) { tests.push({ name, fn }); }
+
+console.log('\nscreenshot redaction');
+
+test('selectRedactionRegions blurs password fields always', () => {
+  const regions = selectRedactionRegions([
+    { kind: 'input', type: 'password', rect: { x: 10, y: 20, w: 100, h: 30 } },
+    { kind: 'input', type: 'text', rect: { x: 10, y: 60, w: 100, h: 30 } },
+  ], { redactTextInputs: false });
+  assert.equal(regions.length, 1, 'only the password should be blurred');
+  assert.equal(regions[0].kind, REGION_KIND.PASSWORD);
+});
+
+test('selectRedactionRegions blurs text inputs only when opted in', () => {
+  const el = { kind: 'input', type: 'text', rect: { x: 0, y: 0, w: 80, h: 20 } };
+  assert.equal(selectRedactionRegions([el], { redactTextInputs: true }).length, 1, 'text input blurred when enabled');
+  assert.equal(selectRedactionRegions([el], { redactTextInputs: false }).length, 0, 'text input skipped when disabled');
+});
+
+test('selectRedactionRegions detects email and phone text, ignores noise', () => {
+  const regions = selectRedactionRegions([
+    { kind: 'text', text: 'jane.doe@example.com', rect: { x: 0, y: 0, w: 120, h: 18 } },
+    { kind: 'text', text: '+1 (415) 555-2671', rect: { x: 0, y: 20, w: 120, h: 18 } },
+    { kind: 'text', text: 'The year was 1999 and nothing personal', rect: { x: 0, y: 40, w: 200, h: 18 } },
+    { kind: 'text', text: '1999', rect: { x: 0, y: 60, w: 40, h: 18 } },
+  ], { redactDetectedPii: true });
+  const kinds = regions.map((r) => r.kind).sort();
+  assert.deepEqual(kinds, [REGION_KIND.EMAIL, REGION_KIND.PHONE], 'email + phone detected, year/noise skipped');
+});
+
+test('selectRedactionRegions culls regions outside the captured viewport', () => {
+  const regions = selectRedactionRegions([
+    { kind: 'input', type: 'password', rect: { x: 5, y: 5, w: 100, h: 30 } },
+    { kind: 'input', type: 'password', rect: { x: 5, y: 5000, w: 100, h: 30 } },
+  ], { viewport: { x: 0, y: 0, w: 800, h: 600 } });
+  assert.equal(regions.length, 1, 'off-screen password below the fold is dropped');
+  assert.equal(regions[0].rect.y, 5);
+});
+
+test('mapRegionsToImage applies per-axis scale and clamps to image bounds', () => {
+  const out = mapRegionsToImage(
+    [{ kind: REGION_KIND.INPUT, rect: { x: 10, y: 10, w: 100, h: 50 } }],
+    { scaleX: 2, scaleY: 2, imageWidth: 120, imageHeight: 120 }
+  );
+  assert.equal(out.length, 1);
+  assert.deepEqual(out[0].rect, { x: 20, y: 20, w: 100, h: 100 }, 'scaled then clamped to image width/height');
+});
+
+test('mapRegionsToImage drops regions entirely outside the image', () => {
+  const out = mapRegionsToImage(
+    [{ kind: REGION_KIND.INPUT, rect: { x: 200, y: 200, w: 100, h: 50 } }],
+    { scaleX: 1, scaleY: 1, imageWidth: 120, imageHeight: 120 }
+  );
+  assert.equal(out.length, 0, 'region fully outside image is removed');
+});
+
+test('rectIntersects handles edges correctly', () => {
+  const r = { x: 0, y: 0, w: 100, h: 100 };
+  assert.equal(rectIntersects(r, 50, 50, 100, 100), true, 'overlapping box intersects');
+  assert.equal(rectIntersects(r, 200, 200, 10, 10), false, 'disjoint box does not intersect');
+});
 
 async function run() {
   let passed = 0;

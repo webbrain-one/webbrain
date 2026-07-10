@@ -514,6 +514,13 @@ export default {
   'st.transcription.failed': 'Failed: {error}',
   'st.transcription.fill_required': 'Fill in Base URL and Model first.',
 
+  // Screenshot redaction (issue #312): local, best-effort PII blurring that
+  // runs in-browser before any screenshot reaches a vision model.
+  'st.redaction.heading': 'Screenshot redaction',
+  'st.redaction.toggle.label': 'Redact sensitive content from screenshots',
+  'st.redaction.toggle.desc': 'Before a screenshot is sent to a vision model, blur form fields and text that looks like an email or phone number. Runs entirely on your device — nothing is transmitted.',
+  'st.redaction.warning': '⚠️ Local, best-effort redaction only. It blurs password/text inputs and text matching email/phone patterns using DOM heuristics. It is NOT a security guarantee: content drawn on a canvas, PII inside images, or anything not recognized as a form field or email/phone text may still appear in the screenshot that the model sees.',
+
   'st.profile.desc_html': 'Store a short bio the agent can use to fill signup forms without asking every time — your name, work email, company, and a <em>throwaway</em> password for low-stakes signups. When enabled, the text below is appended to the agent\'s system prompt on every conversation.',
   'st.profile.enabled.label': 'Enable profile auto-fill',
   'st.profile.enabled.desc': 'Inject the profile text into the agent\'s system prompt. Disabled = the agent never sees this text.',

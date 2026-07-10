@@ -40,6 +40,7 @@ import {
 import { extractFirstJsonObject } from './json-extract.js';
 import { sanitizeText as sanitizePlannerText } from './text-sanitize.js';
 import { buildCustomSkillsPrompt, buildSkillToolDefinitions, buildSkillToolRegistry, normalizeCustomSkills } from './skills.js';
+import { selectRedactionRegions, mapRegionsToImage, pixelateDataUrl } from './screenshot-redaction.js';
 
 const DEFAULT_CLOUD_COST_ALLOWANCE_USD = 10;
 const COST_ALLOWANCE_SESSION_KEY = 'costAllowanceSessionUsd';
@@ -116,6 +117,11 @@ export class Agent {
     // _enrichUserMessageWithCurrentPage because they're URL-specific; the
     // universal preamble rides along with the base system prompt.
     this.useSiteAdapters = true;
+    // Local screenshot redaction (issue #312). When true, screenshots sent
+    // to a Vision endpoint are pixelated over DOM-detected PII regions
+    // (form fields + email/phone text) BEFORE leaving the extension. Off by
+    // default — loaded from chrome.storage.local in background.js.
+    this.screenshotRedaction = false;
     this.costAllowanceSessionUsd = DEFAULT_CLOUD_COST_ALLOWANCE_USD;
     this.costAllowanceTotalUsd = DEFAULT_CLOUD_COST_ALLOWANCE_USD;
     this.cloudCostSpentUsd = 0;
@@ -2953,7 +2959,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           if (!shot?.data) return null;
           const rawDataUrl = `data:image/jpeg;base64,${shot.data}`;
           const shrunk = await this._compressJpegToByteCeiling(rawDataUrl);
-          return { dataUrl: shrunk, width: cssW, height: cssH, coordAligned: true };
+          const redacted = await this._redactScreenshotDataUrl(tabId, shrunk, { coordinateSpace: 'viewport' });
+          return { dataUrl: redacted, width: cssW, height: cssH, coordAligned: true };
         };
         const first = await captureOnce();
         return await this._retryBlankScreenshotCapture(first, captureOnce, { probe });
@@ -2981,8 +2988,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         // downgrade is the safety net for high-DPR screens where the
         // captured image can still exceed the base64 ceiling.
         const shrunk = await this._compressJpegToByteCeiling(rawDataUrl);
+        const redacted = await this._redactScreenshotDataUrl(tabId, shrunk, { coordinateSpace: 'viewport' });
         return {
-          dataUrl: shrunk,
+          dataUrl: redacted,
           width: targetW,
           height: targetH,
           coordAligned: false,
@@ -2994,6 +3002,94 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       return null;
     }
   }
+
+  /**
+   * Optionally redact PII from a captured screenshot BEFORE it is ever sent
+   * to a Vision endpoint (issue #312). Returns the (possibly redacted) data
+   * URL unchanged when redaction is disabled or cannot be performed.
+   *
+   * All work is local: the content script supplies DOM-aware rects of form
+   * fields and email/phone text, we map them into image-pixel space, and the
+   * service worker pixelates those boxes with OffscreenCanvas. No redaction
+   * data is transmitted.
+   *
+   * @param {number} tabId
+   * @param {string} dataUrl            `data:image/...;base64,...`
+   * @param {object} [opts]
+   * @param {number} [opts.scale=1]     Capture scale (image_px = css_px * scale).
+   * @param {number} [opts.offsetX=0]   Captured-area left in the page (CSS px).
+   * @param {number} [opts.offsetY=0]   Captured-area top in the page (CSS px).
+   * @param {'viewport'|'page'} [opts.coordinateSpace='viewport']  Coordinate space the
+   *   content-script rects are reported in.
+   * @param {number} [opts.imageWidth]  Image width (px) for clamping.
+   * @param {number} [opts.imageHeight] Image height (px) for clamping.
+   * @returns {Promise<string>}
+   */
+  async _redactScreenshotDataUrl(tabId, dataUrl, opts = {}) {
+    if (!this.screenshotRedaction || !dataUrl) return dataUrl;
+
+    // Resolve the captured image's pixel dimensions. Callers that already
+    // know them pass imageWidth/Height to skip this decode; otherwise we
+    // measure once here. We need the real image size to derive the
+    // CSS→image-pixel scale (the screenshot can be budget-scaled, captured
+    // at a non-1 DPR, or snapped to a window).
+    let imageWidth = opts.imageWidth;
+    let imageHeight = opts.imageHeight;
+    if (!(Number.isFinite(imageWidth) && Number.isFinite(imageHeight))) {
+      try {
+        const m = await fetch(dataUrl);
+        const bmp = await createImageBitmap(await m.blob());
+        imageWidth = bmp.width;
+        imageHeight = bmp.height;
+      } catch {
+        return dataUrl;
+      }
+    }
+
+    // Ask the content script for DOM-aware rects of form fields + email/phone
+    // text, plus the captured viewport/page box (CSS px). The rects are in the
+    // same CSS-pixel space as that box, so scale = imagePx / cssPx maps them
+    // into image space regardless of how the capture was scaled.
+    let resp;
+    try {
+      resp = await chrome.tabs.sendMessage(tabId, {
+        target: 'content',
+        action: 'get_redaction_regions',
+        params: { coordinateSpace: opts.coordinateSpace === 'page' ? 'page' : 'viewport' },
+      });
+    } catch {
+      // Content script unreachable (e.g. chrome:// page, PDF viewer). Skip
+      // redaction rather than failing the whole capture.
+      return dataUrl;
+    }
+    const elements = resp?.elements || [];
+    if (!elements.length) return dataUrl;
+
+    // The captured CSS box (CSS px) in the SAME space as the element rects.
+    // Default to the image's own pixel size so scale==1 when the content
+    // script doesn't report a viewport (defensive — it always does).
+    const cssBox = resp?.viewport || { width: imageWidth, height: imageHeight };
+    const cssW = Number.isFinite(cssBox.width) && cssBox.width > 0 ? cssBox.width : imageWidth;
+    const cssH = Number.isFinite(cssBox.height) && cssBox.height > 0 ? cssBox.height : imageHeight;
+    const scaleX = imageWidth / cssW;
+    const scaleY = imageHeight / cssH;
+
+    const regions = selectRedactionRegions(elements, { viewport: cssBox });
+    if (!regions.length) return dataUrl;
+
+    const imageRegions = mapRegionsToImage(regions, {
+      scaleX,
+      scaleY,
+      offsetX: 0,
+      offsetY: 0,
+      imageWidth,
+      imageHeight,
+    });
+    if (!imageRegions.length) return dataUrl;
+
+    return pixelateDataUrl(dataUrl, imageRegions);
+  }
+
 
   /**
    * If the user configured a dedicated vision model in settings, route a
@@ -7903,6 +7999,13 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           const captured = await this._retryBlankScreenshotCapture(await captureOnce(), captureOnce, { probe });
           if (!captured?.dataUrl) throw new Error('CDP returned an empty screenshot');
           dataUrl = captured.dataUrl;
+          // Local screenshot redaction (issue #312): pixelate form fields +
+          // email/phone text BEFORE the image is shown to any vision model
+          // (or saved). Runs once here so both the CDP and tabs-API capture
+          // fallbacks are covered. No-op when the setting is off.
+          if (this.screenshotRedaction) {
+            dataUrl = await this._redactScreenshotDataUrl(tabId, dataUrl, { coordinateSpace: 'viewport' });
+          }
           description = captured.description || '';
           blankFrameRetry = captured.blankFrameRetry || null;
         } catch {
@@ -8081,6 +8184,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
               })
             );
             imageDataUrl = `data:image/png;base64,${shot.data}`;
+            // Local screenshot redaction (issue #312): pixelate form fields +
+            // email/phone text BEFORE this verification screenshot reaches the
+            // planner model. Runs before the optional interaction-rect outline.
+            if (this.screenshotRedaction) {
+              imageDataUrl = await this._redactScreenshotDataUrl(tabId, imageDataUrl, { coordinateSpace: 'viewport' });
+            }
             // If we remember the rect of the last ax interaction on this tab,
             // outline it on the screenshot so the model can anchor its review
             // to the element it actually touched.
@@ -8425,13 +8534,23 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         // front the way we do for viewport captures).
         const shrunk = await this._shrinkImageForBudget(rawUrl, 0, 0);
 
+        // Local screenshot redaction (issue #312): pixelate form fields +
+        // email/phone text on the image BEFORE it is sent to any vision
+        // model. The raw PNG is saved above (unchanged) — redaction only
+        // touches the budget-shrunk copy the model sees. Full-page captures
+        // use page-coordinate rects from the content script.
+        let modelDataUrl = shrunk.dataUrl;
+        if (this.screenshotRedaction) {
+          modelDataUrl = await this._redactScreenshotDataUrl(tabId, shrunk.dataUrl, { coordinateSpace: 'page' });
+        }
+
         // Check the planner/vision setup. A text-only model with no
         // vision sub-call can't consume this at all — refuse rather
         // than hand over a huge useless payload.
         const provider = this.providerManager.getActive();
         const visionProvider = await this.providerManager.getVisionProvider();
         if (visionProvider) {
-          const desc = await this._describeScreenshot(tabId, shrunk.dataUrl, 'full_page_screenshot');
+          const desc = await this._describeScreenshot(tabId, modelDataUrl, 'full_page_screenshot');
           if (desc) {
             return {
               success: true,
@@ -8445,9 +8564,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           return {
             success: true,
             method: 'image_attach',
-            description: `Full page screenshot captured and fit to vision budget (${shrunk.width}×${shrunk.height}, ${shrunk.dataUrl.length} base64 chars)`,
+            description: `Full page screenshot captured and fit to vision budget (${shrunk.width}×${shrunk.height}, ${modelDataUrl.length} base64 chars)`,
             savedFile: savedFile || undefined,
-            _attachImage: shrunk.dataUrl,
+            _attachImage: modelDataUrl,
           };
         }
         if (savedFile && !savedFile.error) {
@@ -8520,7 +8639,13 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           // image_url block. Left inline as `result.image`, the base64 blob
           // blows past the tool-result char cap and gets truncated to garbage
           // that the vision model can never read.
-          result._attachImage = `data:image/png;base64,${shot.data}`;
+          let verifyShotUrl = `data:image/png;base64,${shot.data}`;
+          // Local screenshot redaction (issue #312): pixelate form fields +
+          // email/phone text BEFORE the image reaches the model.
+          if (this.screenshotRedaction) {
+            verifyShotUrl = await this._redactScreenshotDataUrl(tabId, verifyShotUrl, { coordinateSpace: 'viewport' });
+          }
+          result._attachImage = verifyShotUrl;
         } catch {
           result.screenshotFailed = true;
         }

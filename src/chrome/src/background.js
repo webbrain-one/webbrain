@@ -122,6 +122,15 @@ async function loadSiteAdapters() {
 }
 loadSiteAdapters();
 
+// Local screenshot redaction (issue #312): when on, screenshots are pixelated
+// over DOM-detected PII (form fields + email/phone text) BEFORE leaving the
+// extension for a Vision endpoint. OFF by default.
+async function loadScreenshotRedaction() {
+  const stored = await chrome.storage.local.get('screenshotRedaction');
+  if (stored.screenshotRedaction != null) agent.screenshotRedaction = !!stored.screenshotRedaction;
+}
+loadScreenshotRedaction();
+
 async function loadStrictSecretMode() {
   const stored = await chrome.storage.local.get('strictSecretMode');
   if (stored.strictSecretMode != null) agent.strictSecretMode = !!stored.strictSecretMode;
@@ -319,6 +328,9 @@ chrome.storage.onChanged.addListener((changes) => {
   if (changes.useSiteAdapters) {
     agent.useSiteAdapters = changes.useSiteAdapters.newValue;
     refreshPrompts = true;
+  }
+  if (changes.screenshotRedaction) {
+    agent.screenshotRedaction = !!changes.screenshotRedaction.newValue;
   }
   if (changes[API_MUTATION_OBSERVER_KEY]) {
     setApiMutationObserverEnabled(changes[API_MUTATION_OBSERVER_KEY].newValue === true);
