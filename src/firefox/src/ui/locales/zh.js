@@ -689,4 +689,8 @@ export default {
   "st.memory.reason.not_found": "没有使用该 ID 的已保存记忆。",
   "st.memory.security_html": "<strong>隐私：</strong>用户记忆以明文形式存储在此浏览器配置文件中。启用后，活动记忆记录会作为系统提示词的一部分发送给您配置的 LLM 提供商。请勿在此存储密码、API 密钥、令牌、恢复代码或敏感机密信息。",
   "hist.filter.clear": "清除筛选并显示所有对话",
+  "st.redaction.heading": "Screenshot redaction",
+  "st.redaction.toggle.label": "Redact sensitive content from screenshots",
+  "st.redaction.toggle.desc": "Before a screenshot is sent to a vision model, blur form fields and text that looks like an email or phone number. Runs entirely on your device \u2014 nothing is transmitted.",
+  "st.redaction.warning": "\u26a0\ufe0f Local, best-effort redaction only. It blurs password/text inputs and text matching email/phone patterns using DOM heuristics. It is NOT a security guarantee: content drawn on a canvas, PII inside images, or anything not recognized as a form field or email/phone text may still appear in the screenshot that the model sees.",
 };

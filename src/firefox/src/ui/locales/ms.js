@@ -687,4 +687,8 @@ export default {
   "st.memory.reason.not_found": "Tiada memori yang disimpan dengan ID tersebut.",
   "st.memory.security_html": "<strong>Privasi:</strong> memori pengguna disimpan sebagai teks biasa dalam profil pelayar ini. Apabila diaktifkan, rekod memori aktif dihantar kepada pembekal LLM yang anda konfigurasikan sebagai sebahagian daripada system prompt. Jangan simpan kata laluan, kunci API, token, kod pemulihan atau rahsia sensitif di sini.",
   "hist.filter.clear": "Kosongkan penapis dan tunjukkan semua perbualan",
+  "st.redaction.heading": "Screenshot redaction",
+  "st.redaction.toggle.label": "Redact sensitive content from screenshots",
+  "st.redaction.toggle.desc": "Before a screenshot is sent to a vision model, blur form fields and text that looks like an email or phone number. Runs entirely on your device \u2014 nothing is transmitted.",
+  "st.redaction.warning": "\u26a0\ufe0f Local, best-effort redaction only. It blurs password/text inputs and text matching email/phone patterns using DOM heuristics. It is NOT a security guarantee: content drawn on a canvas, PII inside images, or anything not recognized as a form field or email/phone text may still appear in the screenshot that the model sees.",
 };

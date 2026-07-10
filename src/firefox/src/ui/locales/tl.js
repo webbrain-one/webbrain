@@ -687,4 +687,8 @@ export default {
   "st.memory.reason.not_found": "Walang naka-save na memory na may ganoong ID.",
   "st.memory.security_html": "<strong>Privacy:</strong> naka-store bilang plain text ang memory ng user sa browser profile na ito. Kapag naka-enable, ipinapadala ang mga aktibong memory record sa naka-configure mong LLM provider bilang bahagi ng system prompt. Huwag mag-store dito ng mga password, API key, token, recovery code, o sensitibong lihim.",
   "hist.filter.clear": "I-clear ang filter at ipakita ang lahat ng pag-uusap",
+  "st.redaction.heading": "Screenshot redaction",
+  "st.redaction.toggle.label": "Redact sensitive content from screenshots",
+  "st.redaction.toggle.desc": "Before a screenshot is sent to a vision model, blur form fields and text that looks like an email or phone number. Runs entirely on your device \u2014 nothing is transmitted.",
+  "st.redaction.warning": "\u26a0\ufe0f Local, best-effort redaction only. It blurs password/text inputs and text matching email/phone patterns using DOM heuristics. It is NOT a security guarantee: content drawn on a canvas, PII inside images, or anything not recognized as a form field or email/phone text may still appear in the screenshot that the model sees.",
 };

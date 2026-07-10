@@ -687,4 +687,8 @@ export default {
   "st.memory.reason.not_found": "해당 ID의 저장된 메모리가 없습니다.",
   "st.memory.security_html": "<strong>개인정보 보호:</strong> 사용자 메모리는 이 브라우저 프로필에 일반 텍스트로 저장됩니다. 사용하면 활성 메모리 기록이 시스템 프롬프트의 일부로 설정한 LLM 공급자에게 전송됩니다. 비밀번호, API 키, 토큰, 복구 코드 또는 민감한 비밀 정보는 저장하지 마세요.",
   "hist.filter.clear": "필터를 지우고 모든 대화 표시",
+  "st.redaction.heading": "Screenshot redaction",
+  "st.redaction.toggle.label": "Redact sensitive content from screenshots",
+  "st.redaction.toggle.desc": "Before a screenshot is sent to a vision model, blur form fields and text that looks like an email or phone number. Runs entirely on your device \u2014 nothing is transmitted.",
+  "st.redaction.warning": "\u26a0\ufe0f Local, best-effort redaction only. It blurs password/text inputs and text matching email/phone patterns using DOM heuristics. It is NOT a security guarantee: content drawn on a canvas, PII inside images, or anything not recognized as a form field or email/phone text may still appear in the screenshot that the model sees.",
 };

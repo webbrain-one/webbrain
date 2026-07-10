@@ -688,4 +688,8 @@ export default {
   "st.memory.reason.not_found": "Збереженого запису з таким ID немає.",
   "st.memory.security_html": "<strong>Конфіденційність:</strong> пам’ять користувача зберігається відкритим текстом у цьому профілі браузера. Коли її ввімкнено, активні записи пам’яті надсилаються вибраному провайдеру LLM як частина системного промпту. Не зберігайте тут паролі, ключі API, токени, коди відновлення чи інші конфіденційні секрети.",
   "hist.filter.clear": "Очистити фільтр і показати всі розмови",
+  "st.redaction.heading": "Screenshot redaction",
+  "st.redaction.toggle.label": "Redact sensitive content from screenshots",
+  "st.redaction.toggle.desc": "Before a screenshot is sent to a vision model, blur form fields and text that looks like an email or phone number. Runs entirely on your device \u2014 nothing is transmitted.",
+  "st.redaction.warning": "\u26a0\ufe0f Local, best-effort redaction only. It blurs password/text inputs and text matching email/phone patterns using DOM heuristics. It is NOT a security guarantee: content drawn on a canvas, PII inside images, or anything not recognized as a form field or email/phone text may still appear in the screenshot that the model sees.",
 };

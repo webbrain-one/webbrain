@@ -132,7 +132,12 @@
       viewport = { width: Math.round(docW), height: Math.round(docH) };
     }
 
-    const elements = [];
+    // We cap the *selected* (already-PII-classified) elements, not the raw
+    // leaf scan — otherwise a page with many non-PII labels early in the DOM
+    // would evict a genuine email/phone node that appears later. Form fields
+    // are always sensitive, so they are collected first up to the cap.
+    const selected = [];
+    const MAX_REGIONS = 400;
     try {
       // 1) Form fields — always sensitive. Includes password/email/tel/text
       //    inputs, textareas, and contenteditable regions.
@@ -140,18 +145,17 @@
         'input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="range"]):not([type="color"]), textarea, [contenteditable=""], [contenteditable="true"], [contenteditable="plaintext-only"]'
       );
       for (const el of fields) {
+        if (selected.length >= MAX_REGIONS) break;
         const r = el.getBoundingClientRect();
         if (!visible(r)) continue;
         const tag = (el.tagName || '').toLowerCase();
         const type = tag === 'input' ? String(el.type || 'text').toLowerCase() : tag;
         const kind = tag === 'textarea' || el.isContentEditable ? 'textarea' : 'input';
-        elements.push({
-          kind,
-          type,
-          rect: toRect(r),
-          value: typeof el.value === 'string' ? el.value : (el.textContent || ''),
-        });
-        if (elements.length > 400) break;
+        // NOTE: we deliberately do NOT copy the field value (including
+        // passwords) across the content-script message. Region selection only
+        // needs `kind`, `type`, and `rect`, so credentials never leave the
+        // page's own JS context.
+        selected.push({ kind, type, rect: toRect(r) });
       }
 
       // 2) Text elements whose visible text looks like an email or phone.
@@ -161,18 +165,20 @@
       let scanned = 0;
       for (const el of nodes) {
         if (scanned++ > 6000) break;
-        if (elements.length > 400) break;
+        if (selected.length >= MAX_REGIONS) break;
         // Only consider elements whose text is a short, self-contained token
         // (an email or a phone), not a long paragraph that merely contains one.
         if (el.children.length > 0) continue; // leaf text only
         const text = (el.textContent || '').trim();
         if (text.length < 5 || text.length > 60) continue;
+        // Cheap email/phone pre-filter so we only keep genuine PII leaves.
+        if (!/[@\d]/.test(text)) continue;
         const r = el.getBoundingClientRect();
         if (!visible(r)) continue;
-        elements.push({ kind: 'text', type: '', rect: toRect(r), text });
+        selected.push({ kind: 'text', type: '', rect: toRect(r), text });
       }
     } catch { /* never break the capture over redaction */ }
-    return { elements, viewport };
+    return { elements: selected, viewport };
   }
 
   function getActiveEditableSummary() {

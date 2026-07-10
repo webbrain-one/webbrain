@@ -60,6 +60,7 @@ const strictSecretToggle = document.getElementById('toggle-strict-secret');
 const allowLocalNetworkToggle = document.getElementById('toggle-allow-local-network');
 const scheduledTasksToggle = document.getElementById('toggle-scheduled-tasks');
 const scheduledConfirmToggle = document.getElementById('toggle-scheduled-confirm');
+const redactionToggle = document.getElementById('toggle-screenshot-redaction');
 const visionBaseUrlInput = document.getElementById('vision-base-url');
 const visionApiKeyInput = document.getElementById('vision-api-key');
 const visionModelInput = document.getElementById('vision-model');
@@ -348,7 +349,7 @@ async function init() {
   browser.storage.local.remove(['authToken', 'authEmail', 'authDefaultModel']).catch(() => {});
 
   // Load display settings
-  const stored = await browser.storage.local.get(['verboseMode', 'screenshotFallback', 'maxAgentSteps', 'autoScreenshot', 'useSiteAdapters', 'voiceInputEnabled', 'apiMutationObserverEnabled', 'planBeforeActMode', 'planBeforeAct', 'planReviewMode', 'planReviewConfidenceThreshold', 'notifySound', 'completionConfetti', 'tracingEnabled', 'strictSecretMode', 'agentAllowLocalNetwork', 'scheduledTasksEnabled', 'scheduledRequireConsequentialConfirmation', 'providerFilter', 'requestTimeoutMs', 'costAllowanceSessionUsd', 'costAllowanceTotalUsd', 'cloudCostSpentUsd']);
+  const stored = await browser.storage.local.get(['verboseMode', 'screenshotFallback', 'maxAgentSteps', 'autoScreenshot', 'useSiteAdapters', 'voiceInputEnabled', 'apiMutationObserverEnabled', 'planBeforeActMode', 'planBeforeAct', 'planReviewMode', 'planReviewConfidenceThreshold', 'notifySound', 'completionConfetti', 'tracingEnabled', 'strictSecretMode', 'agentAllowLocalNetwork', 'scheduledTasksEnabled', 'scheduledRequireConsequentialConfirmation', 'providerFilter', 'requestTimeoutMs', 'costAllowanceSessionUsd', 'costAllowanceTotalUsd', 'cloudCostSpentUsd', 'screenshotRedaction']);
   if (typeof stored.providerFilter === 'string' && ['all','local','cloud','router'].includes(stored.providerFilter)) {
     providerFilter = stored.providerFilter;
   }
@@ -393,6 +394,14 @@ async function init() {
   if (allowLocalNetworkToggle) allowLocalNetworkToggle.checked = stored.agentAllowLocalNetwork === true;
   if (scheduledTasksToggle) scheduledTasksToggle.checked = stored.scheduledTasksEnabled !== false;
   if (scheduledConfirmToggle) scheduledConfirmToggle.checked = stored.scheduledRequireConsequentialConfirmation !== false;
+
+  // Load screenshot redaction toggle (issue #312) — off by default.
+  if (redactionToggle) redactionToggle.checked = stored.screenshotRedaction === true;
+  if (redactionToggle) {
+    redactionToggle.addEventListener('change', async () => {
+      await browser.storage.local.set({ screenshotRedaction: redactionToggle.checked });
+    });
+  }
 
   // Load vision model config
   const visionStored = await browser.storage.local.get(['visionModel']);

@@ -689,4 +689,8 @@ export default {
   "st.memory.reason.not_found": "Aucune mémoire enregistrée ne possède cet identifiant.",
   "st.memory.security_html": "<strong>Confidentialité :</strong> la mémoire utilisateur est stockée en texte brut dans ce profil de navigateur. Lorsqu’elle est activée, les enregistrements de mémoire actifs sont envoyés au fournisseur LLM configuré dans l’invite système. N’y enregistrez pas de mots de passe, clés API, jetons, codes de récupération ou secrets sensibles.",
   "hist.filter.clear": "Effacer le filtre et afficher toutes les conversations",
+  "st.redaction.heading": "Screenshot redaction",
+  "st.redaction.toggle.label": "Redact sensitive content from screenshots",
+  "st.redaction.toggle.desc": "Before a screenshot is sent to a vision model, blur form fields and text that looks like an email or phone number. Runs entirely on your device \u2014 nothing is transmitted.",
+  "st.redaction.warning": "\u26a0\ufe0f Local, best-effort redaction only. It blurs password/text inputs and text matching email/phone patterns using DOM heuristics. It is NOT a security guarantee: content drawn on a canvas, PII inside images, or anything not recognized as a form field or email/phone text may still appear in the screenshot that the model sees.",
 };

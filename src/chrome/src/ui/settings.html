@@ -982,11 +982,11 @@
     <div class="provider-card" id="redaction-card">
       <div class="setting-row" style="margin-bottom:14px;">
         <div class="setting-info">
-          <div class="setting-label" data-i18n="st.redaction.toggle.label"></div>
-          <div class="setting-desc" data-i18n="st.redaction.toggle.desc"></div>
+          <div class="setting-label" id="screenshot-redaction-label" data-i18n="st.redaction.toggle.label"></div>
+          <div class="setting-desc" id="screenshot-redaction-desc" data-i18n="st.redaction.toggle.desc"></div>
         </div>
         <label class="toggle">
-          <input type="checkbox" id="toggle-screenshot-redaction">
+          <input type="checkbox" id="toggle-screenshot-redaction" aria-labelledby="screenshot-redaction-label" aria-describedby="screenshot-redaction-desc">
           <span class="toggle-slider"></span>
         </label>
       </div>

@@ -158,6 +158,15 @@ async function loadProfile() {
 }
 loadProfile();
 
+// Local screenshot redaction (issue #312): when on, screenshots are pixelated
+// over DOM-detected PII (form fields + email/phone text) BEFORE leaving the
+// extension for a Vision endpoint. OFF by default.
+async function loadScreenshotRedaction() {
+  const stored = await browser.storage.local.get('screenshotRedaction');
+  if (stored.screenshotRedaction != null) agent.screenshotRedaction = !!stored.screenshotRedaction;
+}
+loadScreenshotRedaction();
+
 async function syncAgentUserMemoryFromStorage() {
   const [store, settings] = await Promise.all([
     userMemoryStore.load(),
@@ -673,6 +682,9 @@ browser.storage.onChanged.addListener((changes) => {
   if (changes.profileEnabled) {
     agent.profileEnabled = !!changes.profileEnabled.newValue;
     refreshPrompts = true;
+  }
+  if (changes.screenshotRedaction) {
+    agent.screenshotRedaction = !!changes.screenshotRedaction.newValue;
   }
   if (changes.profileText) {
     agent.profileText = changes.profileText.newValue || '';

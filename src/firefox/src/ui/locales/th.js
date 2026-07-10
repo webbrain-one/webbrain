@@ -687,4 +687,8 @@ export default {
   "st.memory.reason.not_found": "ไม่มีหน่วยความจำที่บันทึกไว้ด้วย ID นี้",
   "st.memory.security_html": "<strong>ความเป็นส่วนตัว:</strong> หน่วยความจำผู้ใช้ถูกเก็บเป็นข้อความธรรมดาในโปรไฟล์เบราว์เซอร์นี้ เมื่อเปิดใช้งาน บันทึกหน่วยความจำที่ใช้งานอยู่จะถูกส่งไปยังผู้ให้บริการ LLM ที่คุณตั้งค่าไว้โดยเป็นส่วนหนึ่งของ system prompt อย่าเก็บรหัสผ่าน คีย์ API โทเค็น รหัสกู้คืน หรือข้อมูลลับที่ละเอียดอ่อนไว้ที่นี่",
   "hist.filter.clear": "ล้างตัวกรองและแสดงการสนทนาทั้งหมด",
+  "st.redaction.heading": "Screenshot redaction",
+  "st.redaction.toggle.label": "Redact sensitive content from screenshots",
+  "st.redaction.toggle.desc": "Before a screenshot is sent to a vision model, blur form fields and text that looks like an email or phone number. Runs entirely on your device \u2014 nothing is transmitted.",
+  "st.redaction.warning": "\u26a0\ufe0f Local, best-effort redaction only. It blurs password/text inputs and text matching email/phone patterns using DOM heuristics. It is NOT a security guarantee: content drawn on a canvas, PII inside images, or anything not recognized as a form field or email/phone text may still appear in the screenshot that the model sees.",
 };

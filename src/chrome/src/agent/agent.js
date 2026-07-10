@@ -3124,7 +3124,18 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     });
     if (!imageRegions.length) return dataUrl;
 
-    return pixelateDataUrl(dataUrl, imageRegions);
+    const redacted = await pixelateDataUrl(dataUrl, imageRegions);
+    if (redacted === dataUrl) return dataUrl; // pixelation was a no-op/failed
+
+    // `pixelateDataUrl` re-encodes at a fixed quality, which can push the
+    // result back over the provider's base64 ceiling (callers have already
+    // run `_compressJpegToByteCeiling` on the original). Re-apply the
+    // byte-ceiling pass so the redacted image still fits the payload cap.
+    try {
+      return await this._compressJpegToByteCeiling(redacted);
+    } catch {
+      return redacted;
+    }
   }
 
 
@@ -3261,7 +3272,13 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       );
       if (!shot?.data) return null;
       const cropDataUrl = `data:image/png;base64,${shot.data}`;
-      const dataUrl = await this._compressJpegToByteCeiling(cropDataUrl);
+      let dataUrl = await this._compressJpegToByteCeiling(cropDataUrl);
+      // Local screenshot redaction (issue #312): the model-facing `dataUrl`
+      // is sent to vision for media localization, so pixelate PII on it.
+      // The raw `cropDataUrl` is kept untouched for the local download.
+      if (this.screenshotRedaction) {
+        dataUrl = await this._redactScreenshotDataUrl(tabId, dataUrl, { coordinateSpace: 'viewport' });
+      }
       return { dataUrl, cropDataUrl, width: cssW, height: cssH, coordAligned: true };
     } catch (_) {
       const fallback = await this._captureAutoScreenshot(tabId, { coordAligned: true });

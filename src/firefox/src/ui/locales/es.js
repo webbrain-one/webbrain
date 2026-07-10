@@ -689,4 +689,8 @@ export default {
   "st.memory.reason.not_found": "Ninguna memoria guardada tiene ese ID.",
   "st.memory.security_html": "<strong>Privacidad:</strong> la memoria del usuario se almacena como texto sin formato en este perfil del navegador. Cuando está activada, los registros de memoria activos se envían al proveedor de LLM que configures como parte de las instrucciones del sistema. No guardes aquí contraseñas, claves de API, tokens, códigos de recuperación ni secretos sensibles.",
   "hist.filter.clear": "Borrar el filtro y mostrar todas las conversaciones",
+  "st.redaction.heading": "Screenshot redaction",
+  "st.redaction.toggle.label": "Redact sensitive content from screenshots",
+  "st.redaction.toggle.desc": "Before a screenshot is sent to a vision model, blur form fields and text that looks like an email or phone number. Runs entirely on your device \u2014 nothing is transmitted.",
+  "st.redaction.warning": "\u26a0\ufe0f Local, best-effort redaction only. It blurs password/text inputs and text matching email/phone patterns using DOM heuristics. It is NOT a security guarantee: content drawn on a canvas, PII inside images, or anything not recognized as a form field or email/phone text may still appear in the screenshot that the model sees.",
 };

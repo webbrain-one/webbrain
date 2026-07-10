@@ -687,4 +687,8 @@ export default {
   "st.memory.reason.not_found": "لا توجد ذاكرة محفوظة بهذا المعرّف.",
   "st.memory.security_html": "<strong>الخصوصية:</strong> تُخزَّن ذاكرة المستخدم كنص عادي في ملف تعريف المتصفح هذا. عند تمكينها، تُرسل سجلات الذاكرة النشطة إلى موفّر LLM الذي تضبطه كجزء من مطالبة النظام. لا تخزّن هنا كلمات المرور أو مفاتيح API أو الرموز المميزة أو رموز الاسترداد أو الأسرار الحساسة.",
   "hist.filter.clear": "مسح عامل التصفية وعرض كل المحادثات",
+  "st.redaction.heading": "Screenshot redaction",
+  "st.redaction.toggle.label": "Redact sensitive content from screenshots",
+  "st.redaction.toggle.desc": "Before a screenshot is sent to a vision model, blur form fields and text that looks like an email or phone number. Runs entirely on your device \u2014 nothing is transmitted.",
+  "st.redaction.warning": "\u26a0\ufe0f Local, best-effort redaction only. It blurs password/text inputs and text matching email/phone patterns using DOM heuristics. It is NOT a security guarantee: content drawn on a canvas, PII inside images, or anything not recognized as a form field or email/phone text may still appear in the screenshot that the model sees.",
 };
