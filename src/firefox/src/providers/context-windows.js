@@ -12,10 +12,23 @@ function clean(value) {
 }
 
 function modelIdsMatch(left, right) {
-  const a = String(left || '').trim().toLowerCase();
-  const b = String(right || '').trim().toLowerCase();
+  const a = clean(left);
+  const b = clean(right);
   if (!a || !b) return false;
-  return a === b || a.startsWith(`${b}:`) || b.startsWith(`${a}:`);
+  return a === b;
+}
+
+function normalizeOllamaModelId(value) {
+  const id = clean(value);
+  if (!id) return '';
+  return id.includes(':') ? id : `${id}:latest`;
+}
+
+function ollamaModelIdsMatch(left, right) {
+  const a = normalizeOllamaModelId(left);
+  const b = normalizeOllamaModelId(right);
+  if (!a || !b) return false;
+  return a === b;
 }
 
 /**
@@ -85,7 +98,7 @@ export function parseOllamaPsContextWindow(data, preferredModel = '') {
 
   const want = String(preferredModel || '').trim();
   const candidates = want
-    ? models.filter((m) => modelIdsMatch(m?.name || m?.model, want))
+    ? models.filter((m) => ollamaModelIdsMatch(m?.name || m?.model, want))
     : models;
   if (!candidates.length) return null;
 

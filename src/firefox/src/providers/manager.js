@@ -700,10 +700,7 @@ export class ProviderManager {
                 result.baseUrl = configBaseUrl;
               }
             }
-            return this._attachDetectedContextWindow(id, this.providers.get(id) || provider, result, {
-              lmStudioData: payload,
-              model: provider.config.model || models[0],
-            });
+            return result;
           }
         }
       } catch { /* fall through to /v1/models */ }
@@ -736,9 +733,9 @@ export class ProviderManager {
             result.baseUrl = candidate.configBaseUrl;
           }
         }
+        if (id !== 'llamacpp') return result;
         const active = this.providers.get(id) || provider;
         return this._attachDetectedContextWindow(id, active, result, {
-          model: active.config.model || models[0],
           requestBaseUrl: candidate.requestBaseUrl,
         });
       } catch (e) {
@@ -750,6 +747,27 @@ export class ProviderManager {
 
   async listOllamaModels(id) {
     return this.listProviderModels(id);
+  }
+
+  async detectProviderContextWindow(id, model) {
+    const provider = this.providers.get(id);
+    if (!provider) return { ok: false, error: 'Provider not found' };
+    const selectedModel = String(model || '').trim();
+    if (!selectedModel) return { ok: false, error: 'No model selected' };
+    const savedModel = String(provider.config?.model || '').trim();
+    if (savedModel !== selectedModel) {
+      return { ok: false, error: 'Selected model changed before context detection completed' };
+    }
+    const detected = await this._detectLocalContextWindow(id, provider, { model: selectedModel });
+    if (detected?.contextWindow == null) return { ok: false, error: 'No context window detected' };
+    const current = this.providers.get(id) || provider;
+    if (!shouldApplyDetectedContextWindow(current?.config?.contextWindow, detected.contextWindow, {
+      shrinkOverride: detected.shrinkOverride === true,
+    })) {
+      return { ok: true };
+    }
+    await this._updateProviderContextWindow(id, detected.contextWindow);
+    return { ok: true, contextWindow: detected.contextWindow };
   }
 
   _modelListHeaders(provider) {

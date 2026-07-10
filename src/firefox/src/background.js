@@ -1593,6 +1593,10 @@ async function handleMessage(msg, sender) {
       return await providerManager.listProviderModels(msg.providerId);
     }
 
+    case 'detect_provider_context_window': {
+      return await providerManager.detectProviderContextWindow(msg.providerId, msg.model);
+    }
+
     // ── Claude Pro/Max OAuth ─────────────────────────────────────────
     // OAuth flow runs in the background script so the
     // browser.tabs.onUpdated listener stays alive even if the user

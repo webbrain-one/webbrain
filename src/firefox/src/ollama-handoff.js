@@ -45,8 +45,8 @@ function normalizeBaseUrl(value) {
 
 function normalizeContextWindow(value) {
   if (value == null || value === '') return DEFAULT_CONTEXT_WINDOW;
-  // Same semantics as detection: keep positive values (including below the
-  // Settings "usable" 4k hint), clamp only the upper bound; invalid → default.
+  // Same semantics as detection: clamp valid values into the Settings range;
+  // invalid values fall back to the launch default.
   const normalized = normalizeDetectedContextWindow(value);
   return normalized == null ? DEFAULT_CONTEXT_WINDOW : normalized;
 }

@@ -1762,7 +1762,11 @@ function renderProviders() {
       const providerId = dialog.dataset.loadedModelsFor;
       const input = document.querySelector(`input[data-provider="${providerId}"][data-key="model"]`);
       if (!input) return;
-      input.value = option.dataset.model || '';
+      const selectedModel = option.dataset.model || '';
+      input.value = selectedModel;
+      void saveProvider(providerId, { showFlash: false })
+        .then(() => detectProviderContextWindowForModel(providerId, selectedModel))
+        .catch(() => {});
       closeLoadedModelDialog(dialog);
     });
   });
@@ -1918,6 +1922,17 @@ function applyProviderContextWindow(id, contextWindow) {
   if (providersData[id]) providersData[id].contextWindow = n;
   const input = document.querySelector(`input[data-provider="${id}"][data-key="contextWindow"]`);
   if (input && input.value !== String(n)) input.value = String(n);
+}
+
+async function detectProviderContextWindowForModel(id, model) {
+  const value = String(model || '').trim();
+  if (!value) return;
+  try {
+    const res = await sendToBackground('detect_provider_context_window', { providerId: id, model: value });
+    if (res?.ok) applyProviderContextWindow(id, res.contextWindow);
+  } catch {
+    // Model picking should still succeed if the backend cannot report a window.
+  }
 }
 
 function closeLoadedModelDialog(dialog) {

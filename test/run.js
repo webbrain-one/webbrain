@@ -7605,8 +7605,13 @@ test('settings async test controls surface rejected background results', () => {
     );
     assert.match(
       settings,
-      /document\.querySelectorAll\('\.loaded-model-dialog'\)\.forEach\(dialog => \{[\s\S]*?dialog\.addEventListener\('click', \(event\) => \{[\s\S]*?event\.target === dialog[\s\S]*?closeLoadedModelDialog\(dialog\);[\s\S]*?event\.target\.closest\('\.loaded-model-option'\);[\s\S]*?const providerId = dialog\.dataset\.loadedModelsFor;[\s\S]*?input\.value = option\.dataset\.model \|\| '';[\s\S]*?closeLoadedModelDialog\(dialog\);[\s\S]*?\}\);[\s\S]*?\}\);/,
-      `${label}: choosing a loaded model should write it back to the provider model input`,
+      /document\.querySelectorAll\('\.loaded-model-dialog'\)\.forEach\(dialog => \{[\s\S]*?dialog\.addEventListener\('click', \(event\) => \{[\s\S]*?event\.target === dialog[\s\S]*?closeLoadedModelDialog\(dialog\);[\s\S]*?event\.target\.closest\('\.loaded-model-option'\);[\s\S]*?const providerId = dialog\.dataset\.loadedModelsFor;[\s\S]*?const selectedModel = option\.dataset\.model \|\| '';[\s\S]*?input\.value = selectedModel;[\s\S]*?saveProvider\(providerId, \{ showFlash: false \}\)[\s\S]*?detectProviderContextWindowForModel\(providerId, selectedModel\)[\s\S]*?closeLoadedModelDialog\(dialog\);[\s\S]*?\}\);[\s\S]*?\}\);/,
+      `${label}: choosing a loaded model should save it before detecting context for that model`,
+    );
+    assert.match(
+      settings,
+      /async function detectProviderContextWindowForModel\(id, model\) \{[\s\S]*?sendToBackground\('detect_provider_context_window', \{ providerId: id, model: value \}\);[\s\S]*?applyProviderContextWindow\(id, res\.contextWindow\);[\s\S]*?\}/,
+      `${label}: selected-model context detection should update the provider context field`,
     );
     assert.match(
       settings,
@@ -10561,6 +10566,16 @@ test('local context-window detection parsers: llama.cpp / Ollama / LM Studio', (
         { name: 'qwen3:8b', context_length: 8192 },
       ],
     }, 'qwen3:8b'), 8192);
+    assert.equal(p.ollamaPs({
+      models: [
+        { name: 'qwen3:8b', context_length: 8192 },
+      ],
+    }, 'qwen3'), null);
+    assert.equal(p.ollamaPs({
+      models: [
+        { name: 'qwen3:latest', context_length: 16384 },
+      ],
+    }, 'qwen3'), 16384);
     // Preferred model not running: do not borrow another model's window.
     assert.equal(p.ollamaPs({
       models: [
@@ -10593,6 +10608,11 @@ test('local context-window detection parsers: llama.cpp / Ollama / LM Studio', (
       data: [
         { id: 'chat-b', type: 'llm', state: 'loaded', loaded_context_length: 8192, max_context_length: 32768 },
       ],
+    }, 'chat'), null);
+    assert.equal(p.lmstudio({
+      data: [
+        { id: 'chat-b', type: 'llm', state: 'loaded', loaded_context_length: 8192, max_context_length: 32768 },
+      ],
     }, 'missing-model'), null);
     assert.equal(p.lmstudio({ data: [] }), null);
 
@@ -10602,6 +10622,7 @@ test('local context-window detection parsers: llama.cpp / Ollama / LM Studio', (
       ],
     };
     assert.equal(p.lmLive(livePayload, 'chat-b'), true);
+    assert.equal(p.lmLive(livePayload, 'chat'), false);
     assert.equal(p.lmLive({
       data: [{ id: 'chat-a', type: 'llm', state: 'not-loaded', max_context_length: 32768 }],
     }, 'chat-a'), false);
@@ -10716,6 +10737,10 @@ test('ProviderManager persists detected local context windows with safe apply po
         assert.equal(result.ok, true, `${label}: llama test ok`);
         assert.equal(result.contextWindow, 8192, `${label}: llama returns detected window`);
         assert.equal(mgr.providers.get('llamacpp').config.contextWindow, 8192, `${label}: llama persists`);
+        assert.ok(
+          writes.some((patch) => patch.providers?.llamacpp?.contextWindow === 8192),
+          `${label}: llama persistence writes detected window to storage`
+        );
       }
 
       // Ollama /api/ps live: may shrink a manual override
@@ -10741,6 +10766,10 @@ test('ProviderManager persists detected local context windows with safe apply po
         assert.equal(result.ok, true, `${label}: ollama ps test ok`);
         assert.equal(result.contextWindow, 8192, `${label}: ollama ps shrinks override`);
         assert.equal(mgr.providers.get('ollama').config.contextWindow, 8192);
+        assert.ok(
+          writes.some((patch) => patch.providers?.ollama?.contextWindow === 8192),
+          `${label}: ollama persistence writes detected window to storage`
+        );
       }
 
       // Ollama /api/show only: refresh default, but do not shrink manual override
@@ -10807,12 +10836,20 @@ test('ProviderManager persists detected local context windows with safe apply po
 
       // LM Studio load models path
       {
-        globalThis[runtimeKey] = makeRuntime([]);
+        const writes = [];
+        globalThis[runtimeKey] = makeRuntime(writes);
         globalThis.fetch = async (url) => {
           const u = String(url);
           if (u.includes('/api/v0/models')) {
             return jsonOk({
               data: [
+                {
+                  id: 'chat-a',
+                  type: 'llm',
+                  state: 'loaded',
+                  loaded_context_length: 4096,
+                  max_context_length: 32768,
+                },
                 {
                   id: 'chat-b',
                   type: 'llm',
@@ -10828,14 +10865,28 @@ test('ProviderManager persists detected local context windows with safe apply po
         const mgr = new PM();
         const config = {
           ...mgr._defaultConfigs().lmstudio,
-          model: 'chat-b',
+          model: 'chat-a',
           contextWindow: 16384,
         };
         mgr.providers.set('lmstudio', mgr._createProvider('lmstudio', config));
         const result = await mgr.listProviderModels('lmstudio');
         assert.equal(result.ok, true, `${label}: lmstudio list ok`);
-        assert.equal(result.contextWindow, 8192, `${label}: lmstudio detects loaded context`);
+        assert.equal(result.contextWindow, undefined, `${label}: lmstudio list does not persist previous-model context`);
+        assert.equal(mgr.providers.get('lmstudio').config.contextWindow, 16384);
+        const staleDetection = await mgr.detectProviderContextWindow('lmstudio', 'chat-b');
+        assert.equal(staleDetection.ok, false, `${label}: lmstudio detection requires the selected model to be saved`);
+        await mgr.updateProvider('lmstudio', { model: 'chat-b' });
+        const detected = await mgr.detectProviderContextWindow('lmstudio', 'chat-b');
+        assert.equal(detected.ok, true, `${label}: lmstudio selected-model detection ok`);
+        assert.equal(detected.contextWindow, 8192, `${label}: lmstudio detects selected loaded context`);
         assert.equal(mgr.providers.get('lmstudio').config.contextWindow, 8192);
+        assert.ok(
+          writes.some((patch) =>
+            patch.providers?.lmstudio?.model === 'chat-b' &&
+            patch.providers?.lmstudio?.contextWindow === 8192
+          ),
+          `${label}: lmstudio selected-model persistence writes context window to storage`
+        );
       }
     }
   } finally {

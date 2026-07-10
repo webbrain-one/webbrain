@@ -1780,6 +1780,10 @@ async function handleMessage(msg, sender) {
       return await providerManager.listProviderModels(msg.providerId);
     }
 
+    case 'detect_provider_context_window': {
+      return await providerManager.detectProviderContextWindow(msg.providerId, msg.model);
+    }
+
     // ── Claude Pro/Max OAuth ─────────────────────────────────────────
     // The actual flow runs in the background script (not the settings
     // page) so the chrome.tabs.onUpdated listener doesn't disappear if
