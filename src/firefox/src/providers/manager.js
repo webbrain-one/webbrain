@@ -739,6 +739,12 @@ export class ProviderManager {
           }
         }
         const active = this.providers.get(id) || provider;
+        if (
+          active.config.baseUrl !== candidate.configBaseUrl ||
+          active.config.model !== provider.config.model
+        ) {
+          return result;
+        }
         return this._attachDetectedContextWindow(id, active, result, {
           requestBaseUrl: candidate.requestBaseUrl,
           modelListData: data,
