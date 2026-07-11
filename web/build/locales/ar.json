@@ -251,6 +251,7 @@
   "hero.mockup.v3.step_fetch": "جلب MP4",
   "hero.mockup.v3.result_html": "تم الحفظ في <strong>Downloads/nomad-bodrum.mp4</strong>",
   "hero.mockup.v3.result_meta": "1080p · 24s · 4.2 MB",
+  "hero.mockup.v3.download_complete": "اكتمل التنزيل",
   "hero.mockup.v4.url": "https://magazine.dev/local-ai-2026",
   "hero.mockup.v4.page_title": "مستقبل الذكاء الاصطناعي المحلي",
   "hero.mockup.v4.byline": "بقلم Jane Smith · قراءة 8 دقائق",

@@ -251,6 +251,7 @@
   "hero.mockup.v3.step_fetch": "กำลังดึง MP4",
   "hero.mockup.v3.result_html": "บันทึกไปยัง <strong>Downloads/nomad-bodrum.mp4</strong> แล้ว",
   "hero.mockup.v3.result_meta": "1080p · 24s · 4.2 MB",
+  "hero.mockup.v3.download_complete": "ดาวน์โหลดเสร็จแล้ว",
   "hero.mockup.v4.url": "https://magazine.dev/local-ai-2026",
   "hero.mockup.v4.page_title": "อนาคตของ AI ในเครื่อง",
   "hero.mockup.v4.byline": "โดย Jane Smith · อ่าน 8 นาที",

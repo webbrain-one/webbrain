@@ -251,6 +251,7 @@
   "hero.mockup.v3.step_fetch": "MP4 가져오는 중",
   "hero.mockup.v3.result_html": "<strong>Downloads/nomad-bodrum.mp4</strong>에 저장했습니다",
   "hero.mockup.v3.result_meta": "1080p · 24s · 4.2 MB",
+  "hero.mockup.v3.download_complete": "다운로드 완료",
   "hero.mockup.v4.url": "https://magazine.dev/local-ai-2026",
   "hero.mockup.v4.page_title": "로컬 AI의 미래",
   "hero.mockup.v4.byline": "Jane Smith · 8분 읽기",

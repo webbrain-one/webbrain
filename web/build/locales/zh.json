@@ -251,6 +251,7 @@
   "hero.mockup.v3.step_fetch": "正在获取 MP4",
   "hero.mockup.v3.result_html": "已保存到 <strong>Downloads/nomad-bodrum.mp4</strong>",
   "hero.mockup.v3.result_meta": "1080p · 24s · 4.2 MB",
+  "hero.mockup.v3.download_complete": "下载完成",
   "hero.mockup.v4.url": "https://magazine.dev/local-ai-2026",
   "hero.mockup.v4.page_title": "本地 AI 的未来",
   "hero.mockup.v4.byline": "作者 Jane Smith · 8 分钟阅读",

@@ -251,6 +251,7 @@
   "hero.mockup.v3.step_fetch": "MP4 を取得中",
   "hero.mockup.v3.result_html": "<strong>Downloads/nomad-bodrum.mp4</strong> に保存しました",
   "hero.mockup.v3.result_meta": "1080p · 24s · 4.2 MB",
+  "hero.mockup.v3.download_complete": "ダウンロード完了",
   "hero.mockup.v4.url": "https://magazine.dev/local-ai-2026",
   "hero.mockup.v4.page_title": "ローカル AI の未来",
   "hero.mockup.v4.byline": "By Jane Smith · 8 分で読了",

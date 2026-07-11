@@ -251,6 +251,7 @@
   "hero.mockup.v3.step_fetch": "Obteniendo el MP4",
   "hero.mockup.v3.result_html": "Se guardó en <strong>Descargas/nomad-bodrum.mp4</strong>",
   "hero.mockup.v3.result_meta": "1080p · 24s · 4.2 MB",
+  "hero.mockup.v3.download_complete": "Descarga completada",
   "hero.mockup.v4.url": "https://magazine.dev/local-ai-2026",
   "hero.mockup.v4.page_title": "El futuro de la IA local",
   "hero.mockup.v4.byline": "Por Jane Smith · 8 min de lectura",

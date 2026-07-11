@@ -668,6 +668,9 @@
       flex-direction: column;
       flex-shrink: 0;
     }
+    /* Scene 5 has list-like extraction output, so keep the response aligned
+       like real chat content instead of inheriting the centered hero text. */
+    .scene-response-left .sp-msg.assistant { text-align: start; }
     .sp-header {
       padding: 10px 14px;
       border-bottom: 1px solid var(--border);
@@ -1085,6 +1088,103 @@
       font-size: 13px;
     }
 
+    /* Scene 4 — a compact browser-style completion bubble lands with the
+       assistant's response. The ring draw and check pop make the
+       successful file handoff readable without turning it into confetti. */
+    .download-complete-toast {
+      position: absolute;
+      inset-inline-end: 14px;
+      bottom: 58px;
+      z-index: 3;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      width: min(218px, calc(100% - 28px));
+      padding: 9px 11px;
+      border: 1px solid rgba(255,255,255,0.13);
+      border-radius: 11px;
+      background: rgba(15,18,31,0.94);
+      color: #f2f4ff;
+      box-shadow: 0 14px 32px rgba(0,0,0,0.38);
+      backdrop-filter: blur(10px);
+      opacity: 0;
+      transform: translateY(14px) scale(0.96);
+    }
+    .scene-download-panel { position: relative; }
+    .download-complete-icon {
+      position: relative;
+      width: 32px;
+      height: 32px;
+      flex: 0 0 32px;
+    }
+    .download-complete-icon svg {
+      position: absolute;
+      inset: 0;
+      width: 32px;
+      height: 32px;
+      overflow: visible;
+    }
+    .download-complete-track,
+    .download-complete-ring {
+      fill: none;
+      stroke-width: 2.5;
+    }
+    .download-complete-track { stroke: rgba(52,211,153,0.20); }
+    .download-complete-ring {
+      stroke: var(--success);
+      stroke-linecap: round;
+      stroke-dasharray: 69.2;
+      stroke-dashoffset: 69.2;
+      transform: rotate(-90deg);
+      transform-origin: 16px 16px;
+    }
+    .download-complete-check {
+      fill: none;
+      stroke: var(--success);
+      stroke-width: 2.5;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      opacity: 0;
+      transform: scale(0.55);
+      transform-origin: 16px 16px;
+    }
+    .download-complete-copy { min-width: 0; line-height: 1.3; text-align: start; }
+    .download-complete-copy strong {
+      display: block;
+      font-size: 11px;
+      letter-spacing: 0.1px;
+    }
+    .download-complete-copy span {
+      display: block;
+      margin-top: 2px;
+      color: rgba(226,231,247,0.70);
+      font-size: 9px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    @keyframes downloadToastIn {
+      from { opacity: 0; transform: translateY(14px) scale(0.96); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    @keyframes downloadRingComplete {
+      from { stroke-dashoffset: 69.2; }
+      to { stroke-dashoffset: 0; }
+    }
+    @keyframes downloadCheckPop {
+      from { opacity: 0; transform: scale(0.55); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .browser-mockup.is-active .download-complete-toast {
+      animation: downloadToastIn 0.42s cubic-bezier(0.2, 0.85, 0.25, 1.15) 0.45s both;
+    }
+    .browser-mockup.is-active .download-complete-ring {
+      animation: downloadRingComplete 0.62s ease-out 0.55s both;
+    }
+    .browser-mockup.is-active .download-complete-check {
+      animation: downloadCheckPop 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.4) 1.08s both;
+    }
+
     /* ----- v5 (scene 5) — product catalog grid ----- */
     .pp-sub {
       font-size: 10px;
@@ -1262,6 +1362,12 @@
       .tf-check, .browser-mockup.is-active .tf-check { animation: none; opacity: 1; }
       .tf-mem, .browser-mockup.is-active .tf-mem { animation: none; opacity: 1; }
       .browser-mockup.is-active .pl-grid { animation: none; gap: 26px; margin-top: 14px; }
+      .download-complete-toast,
+      .browser-mockup.is-active .download-complete-toast { animation: none; opacity: 1; transform: none; }
+      .download-complete-ring,
+      .browser-mockup.is-active .download-complete-ring { animation: none; stroke-dashoffset: 0; }
+      .download-complete-check,
+      .browser-mockup.is-active .download-complete-check { animation: none; opacity: 1; transform: none; }
     }
 
     /* ================================================================
@@ -2246,7 +2352,7 @@
               </div>
             </div>
           </div>
-          <div class="side-panel">
+          <div class="side-panel scene-download-panel">
             <div class="sp-header">
               <span class="sp-brand"><img class="sp-brand-logo" src="/logo-github.png" alt="" aria-hidden="true"> WebBrain<span class="sp-domain">.one</span></span>
               <span class="sp-modes" aria-hidden="true"><span class="sp-mode">Ask</span><span class="sp-mode is-on">Act</span><span class="sp-mode">Dev</span></span>
@@ -2261,6 +2367,19 @@
                 <div style="margin-top:4px; font-size:11px; color: var(--text-dim);">1080p · 24s · 4.2 MB</div>
               </div>
             </div>
+            <div class="download-complete-toast" aria-hidden="true">
+              <span class="download-complete-icon">
+                <svg viewBox="0 0 32 32" aria-hidden="true">
+                  <circle class="download-complete-track" cx="16" cy="16" r="11"></circle>
+                  <circle class="download-complete-ring" cx="16" cy="16" r="11"></circle>
+                  <path class="download-complete-check" d="M10.5 16.3l3.6 3.5 7.5-8"></path>
+                </svg>
+              </span>
+              <span class="download-complete-copy">
+                <strong>下载完成</strong>
+                <span>nomad-bodrum.mp4 · 4.2 MB</span>
+              </span>
+            </div>
             <div class="sp-input">
               <div class="sp-input-box">针对此页面随便问点什么...</div>
             </div>
@@ -2269,7 +2388,7 @@
       </div>
 
       <!-- Scene 5: Product extraction (Act mode) -->
-      <div class="browser-mockup" data-scene="4" aria-hidden="true" inert>
+      <div class="browser-mockup scene-response-left" data-scene="4" aria-hidden="true" inert>
         <div class="browser-bar">
           <div class="browser-dots"><span></span><span></span><span></span></div>
           <div class="browser-url">https://example.com/products</div>

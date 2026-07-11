@@ -251,6 +251,7 @@
   "hero.mockup.v3.step_fetch": "Загрузка MP4",
   "hero.mockup.v3.result_html": "Сохранено в <strong>Downloads/nomad-bodrum.mp4</strong>",
   "hero.mockup.v3.result_meta": "1080p · 24s · 4.2 MB",
+  "hero.mockup.v3.download_complete": "Загрузка завершена",
   "hero.mockup.v4.url": "https://magazine.dev/local-ai-2026",
   "hero.mockup.v4.page_title": "Будущее локального AI",
   "hero.mockup.v4.byline": "Автор Jane Smith · 8 мин чтения",
