@@ -1,6 +1,6 @@
 {
-  "meta.title": "WebBrain — бесплатный open-source AI-агент для Chrome и Firefox",
-  "meta.description": "WebBrain — бесплатная open-source альтернатива браузерному плагину Claude. AI-агент в браузере для Chrome и Firefox: читает страницы, извлекает данные, автоматизирует задачи. Работает с llama.cpp, OpenAI, Claude, OpenRouter. Многоязычный интерфейс, бережное обращение с токенами на скриншотах. Лицензия MIT.",
+  "meta.title": "WebBrain — бесплатный open-source AI-агент для Chrome, Firefox и Edge",
+  "meta.description": "WebBrain — бесплатная open-source альтернатива браузерному плагину Claude. AI-агент в браузере для Chrome, Firefox и Edge: читает страницы, извлекает данные, автоматизирует задачи. Работает с llama.cpp, OpenAI, Claude, OpenRouter. Многоязычный интерфейс, бережное обращение с токенами на скриншотах. Лицензия MIT.",
   "meta.keywords": "AI-агент в браузере, автоматизация браузера, open-source плагин для браузера, альтернатива плагину Claude, альтернатива OpenClaw, веб-автоматизация, LLM-расширение для браузера, AI-расширение Chrome, AI-дополнение Firefox, llama.cpp в браузере, GPT-агент в браузере, AI-ассистент в браузере, AI для веб-скрейпинга, open-source AI-инструмент, self-hosted AI в браузере, многоязычный AI в браузере, экономящее токены расширение",
   "meta.og_title": "WebBrain — бесплатный open-source AI-агент в браузере",
   "meta.og_description": "Open-source альтернатива браузерному плагину Claude. AI-расширение для Chrome и Firefox. Читайте, понимайте и автоматизируйте любую веб-страницу. Поддержка нескольких LLM-провайдеров. Многоязычный интерфейс. Навсегда бесплатно.",

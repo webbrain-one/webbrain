@@ -1,6 +1,6 @@
 {
-  "meta.title": "WebBrain — Chrome と Firefox 向けの無料・オープンソースの AI ブラウザエージェント",
-  "meta.description": "WebBrain は Claude のブラウザプラグインに代わる無料・オープンソースの選択肢です。Chrome と Firefox 用の AI ブラウザエージェント — ページを読み、データを抽出し、タスクを自動化。llama.cpp、OpenAI、Claude、OpenRouter に対応。多言語 UI、トークンに配慮したスクリーンショット。MIT ライセンス。",
+  "meta.title": "WebBrain — Chrome、Firefox、Edge 向けの無料・オープンソースの AI ブラウザエージェント",
+  "meta.description": "WebBrain は Claude のブラウザプラグインに代わる無料・オープンソースの選択肢です。Chrome、Firefox、Edge 用の AI ブラウザエージェント — ページを読み、データを抽出し、タスクを自動化。llama.cpp、OpenAI、Claude、OpenRouter に対応。多言語 UI、トークンに配慮したスクリーンショット。MIT ライセンス。",
   "meta.keywords": "AI ブラウザエージェント, ブラウザ自動化, オープンソースのブラウザ拡張, Claude ブラウザプラグインの代替, OpenClaw の代替, Web 自動化, LLM ブラウザ拡張, Chrome AI 拡張, Firefox AI アドオン, llama.cpp ブラウザ, GPT ブラウザエージェント, ブラウザ AI アシスタント, AI Web スクレイピング, オープンソース AI ツール, セルフホスト AI ブラウザ, 多言語ブラウザ AI, トークン効率のよい AI 拡張",
   "meta.og_title": "WebBrain — 無料・オープンソースの AI ブラウザエージェント",
   "meta.og_description": "Claude のブラウザプラグインに代わるオープンソースの選択肢。Chrome と Firefox 向けの AI ブラウザ拡張。あらゆる Web ページを読み、理解し、自動化。マルチプロバイダー LLM 対応。多言語 UI。永久無料。",

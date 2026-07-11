@@ -1,6 +1,6 @@
 {
-  "meta.title": "WebBrain — Chrome과 Firefox용 무료 오픈소스 AI 브라우저 에이전트",
-  "meta.description": "WebBrain은 Claude 브라우저 플러그인의 무료 오픈소스 대안입니다. Chrome과 Firefox용 AI 브라우저 에이전트 — 페이지를 읽고, 데이터를 추출하고, 작업을 자동화합니다. llama.cpp, OpenAI, Claude, OpenRouter와 함께 작동합니다. 다국어 UI, 토큰을 아끼는 스크린샷. MIT 라이선스.",
+  "meta.title": "WebBrain — Chrome, Firefox, Edge용 무료 오픈소스 AI 브라우저 에이전트",
+  "meta.description": "WebBrain은 Claude 브라우저 플러그인의 무료 오픈소스 대안입니다. Chrome, Firefox, Edge용 AI 브라우저 에이전트 — 페이지를 읽고, 데이터를 추출하고, 작업을 자동화합니다. llama.cpp, OpenAI, Claude, OpenRouter와 함께 작동합니다. 다국어 UI, 토큰을 아끼는 스크린샷. MIT 라이선스.",
   "meta.keywords": "AI 브라우저 에이전트, 브라우저 자동화, 오픈소스 브라우저 플러그인, Claude 브라우저 플러그인 대안, OpenClaw 대안, 웹 자동화, LLM 브라우저 확장, Chrome AI 확장, Firefox AI 애드온, llama.cpp 브라우저, GPT 브라우저 에이전트, 브라우저 AI 어시스턴트, 웹 스크래핑 AI, 오픈소스 AI 도구, 셀프 호스팅 AI 브라우저, 다국어 브라우저 AI, 토큰 효율적인 AI 확장",
   "meta.og_title": "WebBrain — 무료 오픈소스 AI 브라우저 에이전트",
   "meta.og_description": "Claude 브라우저 플러그인의 오픈소스 대안. Chrome과 Firefox용 AI 브라우저 확장. 어떤 웹 페이지든 읽고, 이해하고, 자동화하세요. 멀티 프로바이더 LLM 지원. 다국어 UI. 영구 무료.",

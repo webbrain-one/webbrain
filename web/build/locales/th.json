@@ -1,6 +1,6 @@
 {
-  "meta.title": "WebBrain — AI Browser Agent ฟรี โอเพนซอร์สสำหรับ Chrome และ Firefox",
-  "meta.description": "WebBrain เป็นทางเลือกฟรีและโอเพนซอร์สแทนปลั๊กอินเบราว์เซอร์ของ Claude เป็น AI browser agent สำหรับ Chrome และ Firefox — อ่านหน้า สกัดข้อมูล และทำงานแบบอัตโนมัติ ใช้งานร่วมกับ llama.cpp, OpenAI, Claude, OpenRouter ได้ UI หลายภาษา ภาพหน้าจอประหยัดโทเค็น สัญญาอนุญาต MIT",
+  "meta.title": "WebBrain — AI Browser Agent ฟรี โอเพนซอร์สสำหรับ Chrome, Firefox และ Edge",
+  "meta.description": "WebBrain เป็นทางเลือกฟรีและโอเพนซอร์สแทนปลั๊กอินเบราว์เซอร์ของ Claude เป็น AI browser agent สำหรับ Chrome, Firefox และ Edge — อ่านหน้า สกัดข้อมูล และทำงานแบบอัตโนมัติ ใช้งานร่วมกับ llama.cpp, OpenAI, Claude, OpenRouter ได้ UI หลายภาษา ภาพหน้าจอประหยัดโทเค็น สัญญาอนุญาต MIT",
   "meta.keywords": "AI browser agent, การทำงานอัตโนมัติในเบราว์เซอร์, ปลั๊กอินเบราว์เซอร์โอเพนซอร์ส, ทางเลือกแทนปลั๊กอินเบราว์เซอร์ของ Claude, ทางเลือกแทน OpenClaw, การทำงานอัตโนมัติบนเว็บ, ส่วนขยาย LLM สำหรับเบราว์เซอร์, ส่วนขยาย AI ของ Chrome, แอดออน AI ของ Firefox, llama.cpp ในเบราว์เซอร์, GPT browser agent, ผู้ช่วย AI ในเบราว์เซอร์, AI สำหรับ web scraping, เครื่องมือ AI โอเพนซอร์ส, AI browser โฮสต์เอง, AI ในเบราว์เซอร์หลายภาษา, ส่วนขยาย AI ที่ประหยัดโทเค็น",
   "meta.og_title": "WebBrain — AI Browser Agent ฟรี โอเพนซอร์ส",
   "meta.og_description": "ทางเลือกโอเพนซอร์สแทนปลั๊กอินเบราว์เซอร์ของ Claude ส่วนขยายเบราว์เซอร์ที่ขับเคลื่อนด้วย AI สำหรับ Chrome และ Firefox อ่าน เข้าใจ และทำให้หน้าเว็บใด ๆ ทำงานอัตโนมัติ รองรับ LLM หลายผู้ให้บริการ UI หลายภาษา ฟรีตลอดไป",

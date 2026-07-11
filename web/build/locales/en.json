@@ -1,6 +1,6 @@
 {
-  "meta.title": "WebBrain — Free Open-Source AI Browser Agent for Chrome & Firefox",
-  "meta.description": "WebBrain is a free, open-source alternative to Claude's browser plugin. AI browser agent for Chrome and Firefox — read pages, extract data, automate tasks. Works with llama.cpp, OpenAI, Claude, OpenRouter. Multilingual UI, token-conscious screenshots. MIT licensed.",
+  "meta.title": "WebBrain — Free Open-Source AI Browser Agent for Chrome, Firefox & Edge",
+  "meta.description": "WebBrain is a free, open-source alternative to Claude's browser plugin. AI browser agent for Chrome, Firefox, and Edge — read pages, extract data, automate tasks. Works with llama.cpp, OpenAI, Claude, OpenRouter. Multilingual UI, token-conscious screenshots. MIT licensed.",
   "meta.keywords": "AI browser agent, browser automation, open source browser plugin, Claude browser plugin alternative, OpenClaw alternative, web automation, LLM browser extension, chrome extension AI, firefox AI addon, llama.cpp browser, GPT browser agent, browser AI assistant, web scraping AI, open source AI tool, self-hosted AI browser, multilingual browser AI, token-efficient AI extension",
   "meta.og_title": "WebBrain — Free Open-Source AI Browser Agent",
   "meta.og_description": "The open-source alternative to Claude's browser plugin. AI-powered browser extension for Chrome & Firefox. Read, understand, and automate any web page. Multi-provider LLM support. Multilingual UI. Free forever.",

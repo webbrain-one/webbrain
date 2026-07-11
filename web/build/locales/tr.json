@@ -1,6 +1,6 @@
 {
-  "meta.title": "WebBrain — Chrome ve Firefox için ücretsiz, açık kaynaklı AI tarayıcı ajanı",
-  "meta.description": "WebBrain, Claude'un tarayıcı eklentisine ücretsiz ve açık kaynaklı bir alternatiftir. Chrome ve Firefox için AI tarayıcı ajanı — sayfaları okur, veri çıkarır, görevleri otomatikleştirir. llama.cpp, OpenAI, Claude, OpenRouter ile uyumlu. Çok dilli arayüz, token tasarruflu ekran görüntüleri. MIT lisanslı.",
+  "meta.title": "WebBrain — Chrome, Firefox ve Edge için ücretsiz, açık kaynaklı AI tarayıcı ajanı",
+  "meta.description": "WebBrain, Claude'un tarayıcı eklentisine ücretsiz ve açık kaynaklı bir alternatiftir. Chrome, Firefox ve Edge için AI tarayıcı ajanı — sayfaları okur, veri çıkarır, görevleri otomatikleştirir. llama.cpp, OpenAI, Claude, OpenRouter ile uyumlu. Çok dilli arayüz, token tasarruflu ekran görüntüleri. MIT lisanslı.",
   "meta.keywords": "AI tarayıcı ajanı, tarayıcı otomasyonu, açık kaynaklı tarayıcı eklentisi, Claude tarayıcı eklentisi alternatifi, OpenClaw alternatifi, web otomasyonu, LLM tarayıcı eklentisi, Chrome AI eklentisi, Firefox AI eklentisi, llama.cpp tarayıcı, GPT tarayıcı ajanı, tarayıcı AI asistanı, web kazıma AI, çok dilli tarayıcı AI, token tasarruflu AI eklentisi",
   "meta.og_title": "WebBrain — Ücretsiz, açık kaynaklı AI tarayıcı ajanı",
   "meta.og_description": "Claude'un tarayıcı eklentisine açık kaynaklı alternatif. Chrome ve Firefox için AI tarayıcı uzantısı. Herhangi bir web sayfasını oku, anla ve otomatikleştir. Çoklu LLM sağlayıcı desteği. Çok dilli arayüz. Sonsuza kadar ücretsiz.",

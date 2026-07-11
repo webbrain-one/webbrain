@@ -1,6 +1,6 @@
 {
-  "meta.title": "WebBrain — Chrome 和 Firefox 的免费开源 AI 浏览器代理",
-  "meta.description": "WebBrain 是 Claude 浏览器插件的免费开源替代品。面向 Chrome 与 Firefox 的 AI 浏览器代理 —— 阅读页面、提取数据、自动化任务。兼容 llama.cpp、OpenAI、Claude、OpenRouter。多语言界面、截图节省 token。MIT 许可。",
+  "meta.title": "WebBrain — Chrome、Firefox 和 Edge 的免费开源 AI 浏览器代理",
+  "meta.description": "WebBrain 是 Claude 浏览器插件的免费开源替代品。面向 Chrome、Firefox 与 Edge 的 AI 浏览器代理 —— 阅读页面、提取数据、自动化任务。兼容 llama.cpp、OpenAI、Claude、OpenRouter。多语言界面、截图节省 token。MIT 许可。",
   "meta.keywords": "AI 浏览器代理, 浏览器自动化, 开源浏览器插件, Claude 浏览器插件替代品, OpenClaw 替代品, 网页自动化, LLM 浏览器扩展, Chrome AI 扩展, Firefox AI 附加组件, llama.cpp 浏览器, GPT 浏览器代理, 浏览器 AI 助手, 网页抓取 AI, 多语言浏览器 AI, 节省 token 的 AI 扩展",
   "meta.og_title": "WebBrain — 免费开源的 AI 浏览器代理",
   "meta.og_description": "Claude 浏览器插件的开源替代品。面向 Chrome 与 Firefox 的 AI 扩展。阅读、理解并自动化任何网页。支持多提供商 LLM。多语言界面。永久免费。",

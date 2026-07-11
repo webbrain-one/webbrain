@@ -229,6 +229,27 @@ h1 { margin: 12px 0 16px; font-size: clamp(38px, 6vw, 64px); line-height: 1.02; 
 .doc-page h1 { font-size: clamp(36px, 5vw, 54px); }
 .lede { max-width: 680px; margin: 0; color: var(--muted); font-size: 18px; line-height: 1.65; }
 .meta { margin-top: 18px; color: var(--faint); font-size: 12px; }
+.walkthrough-card {
+  margin-top: 30px;
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: calc(var(--radius) + 4px);
+  background: linear-gradient(145deg, var(--panel), var(--panel-2));
+  box-shadow: var(--shadow);
+}
+.walkthrough-copy { padding: 24px 26px 22px; }
+.walkthrough-copy h2 { max-width: 660px; margin: 8px 0 10px; font-size: 28px; line-height: 1.16; }
+.walkthrough-copy p { max-width: 680px; margin: 0; color: var(--muted); font-size: 15px; }
+.walkthrough-player { border-block: 1px solid var(--line); background: #070912; }
+.walkthrough-player video { display: block; width: 100%; aspect-ratio: 16 / 9; background: #070912; }
+.walkthrough-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 18px;
+  padding: 15px 18px;
+}
+.walkthrough-meta { color: var(--faint); font-family: "SFMono-Regular", Consolas, monospace; font-size: 10px; font-weight: 500; }
 .doc-section { padding: 38px 0 8px; }
 .doc-section h2 { margin: 0 0 14px; font-size: 29px; line-height: 1.2; }
 .doc-section h3 { margin: 30px 0 8px; font-size: 20px; }
@@ -380,6 +401,8 @@ tr:last-child td { border-bottom: 0; }
   .footer-inner { flex-direction: column; }
   h1 { font-size: 39px; }
   .lede { font-size: 16px; }
+  .walkthrough-copy { padding: 20px; }
+  .walkthrough-copy h2 { font-size: 24px; }
 }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
