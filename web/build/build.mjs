@@ -60,6 +60,7 @@ const LOCALES = [
   { code: 'th', bcp47: 'th-TH', label: 'ไทย',              dir: 'ltr', isDefault: false },
   { code: 'ms', bcp47: 'ms-MY', label: 'Bahasa Melayu',    dir: 'ltr', isDefault: false },
   { code: 'tl', bcp47: 'fil-PH', label: 'Filipino',        dir: 'ltr', isDefault: false },
+  { code: 'he', bcp47: 'he-IL', label: 'עברית',           dir: 'rtl', isDefault: false },
 ];
 
 const FAQ_KEYS = [
