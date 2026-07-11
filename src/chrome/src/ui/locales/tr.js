@@ -696,4 +696,8 @@ export default {
   "st.memory.reason.not_found": "Bu kimliğe sahip kaydedilmiş bellek yok.",
   "st.memory.security_html": "<strong>Gizlilik:</strong> kullanıcı belleği bu tarayıcı profilinde düz metin olarak saklanır. Etkinleştirildiğinde aktif bellek kayıtları, sistem isteminin bir parçası olarak yapılandırdığınız LLM sağlayıcısına gönderilir. Burada parola, API anahtarı, token, kurtarma kodu veya hassas gizli bilgi saklamayın.",
   "hist.filter.clear": "Filtreyi temizle ve tüm konuşmaları göster",
+  "st.redaction.heading": "Ekran görüntüsü sansürleme",
+  "st.redaction.toggle.label": "Ekran görüntülerindeki hassas içeriği sansürle",
+  "st.redaction.toggle.desc": "Bir ekran görüntüsü bir görüntü modeline gönderilmeden önce, form alanlarını ve e-posta ya da telefon numarasına benzeyen metni bulanıklaştırır. Algılama tamamen cihazınızda çalışır — fazladan hiçbir şey iletilmez.",
+  "st.redaction.warning": "⚠️ En iyi çaba ilkesiyle çalışır ve fail-open'dır: sansürleme bir sayfada çalışamazsa (örneğin bir gezinmeden hemen sonra, PDF görüntüleyicilerde veya kısıtlı tarayıcı sayfalarında), ekran görüntüsü yine de sansürlenmeden gönderilir. Algılama yalnızca DOM sezgisel yöntemlerini kullanır — bir canvas üzerine çizilmiş metin, görsellerin içindeki kişisel veriler veya form alanı ya da e-posta/telefon metni olarak tanınmayan herhangi bir şey gözden kaçabilir; modele gönderilen sayfa metni de bu ayarla sansürlenmez. Bu bir güvenlik garantisi DEĞİLDİR. Tam gizlilik için yerel/çevrimdışı bir model kullanın (llama.cpp, Ollama): bu durumda ekran görüntüleri makinenizden hiç çıkmaz ve sansürleme gereksiz hale gelir.",
 };

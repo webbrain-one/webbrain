@@ -43,6 +43,13 @@
       "run_at": "document_idle"
     },
     {
+      "matches": ["<all_urls>"],
+      "js": ["src/content/redaction-regions.js"],
+      "run_at": "document_idle",
+      "all_frames": true,
+      "match_about_blank": true
+    },
+    {
       "matches": [
         "*://*.facebook.com/*",
         "*://*.instagram.com/*",

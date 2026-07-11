@@ -697,4 +697,8 @@ export default {
   "st.memory.reason.not_found": "Tiada memori yang disimpan dengan ID tersebut.",
   "st.memory.security_html": "<strong>Privasi:</strong> memori pengguna disimpan sebagai teks biasa dalam profil pelayar ini. Apabila diaktifkan, rekod memori aktif dihantar kepada pembekal LLM yang anda konfigurasikan sebagai sebahagian daripada system prompt. Jangan simpan kata laluan, kunci API, token, kod pemulihan atau rahsia sensitif di sini.",
   "hist.filter.clear": "Kosongkan penapis dan tunjukkan semua perbualan",
+  "st.redaction.heading": "Penyamaran tangkapan skrin",
+  "st.redaction.toggle.label": "Samarkan kandungan sensitif dalam tangkapan skrin",
+  "st.redaction.toggle.desc": "Sebelum tangkapan skrin dihantar ke model visi, medan borang dan teks yang kelihatan seperti e-mel atau nombor telefon akan dikaburkan. Pengesanan berjalan sepenuhnya pada peranti anda — tiada apa-apa tambahan dihantar.",
+  "st.redaction.warning": "⚠️ Ini bersifat usaha terbaik (best-effort) dan fail-open: jika penyamaran tidak dapat berjalan pada sesuatu halaman (contohnya sejurus selepas navigasi, dalam pemapar PDF, atau pada halaman pelayar yang dihadkan), tangkapan skrin tetap dihantar tanpa disamarkan. Pengesanan hanya menggunakan heuristik DOM — teks yang dilukis pada canvas, maklumat peribadi dalam imej, atau apa-apa yang tidak dikenali sebagai medan borang atau teks e-mel/telefon mungkin terlepas, dan teks halaman yang dihantar kepada model tidak disamarkan oleh tetapan ini. Ini BUKAN jaminan keselamatan. Untuk privasi sepenuhnya, gunakan model tempatan/luar talian (llama.cpp, Ollama): tangkapan skrin tidak akan meninggalkan peranti anda dan penyamaran menjadi tidak diperlukan.",
 };

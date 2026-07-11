@@ -697,4 +697,8 @@ export default {
   "st.memory.reason.not_found": "Walang naka-save na memory na may ganoong ID.",
   "st.memory.security_html": "<strong>Privacy:</strong> naka-store bilang plain text ang memory ng user sa browser profile na ito. Kapag naka-enable, ipinapadala ang mga aktibong memory record sa naka-configure mong LLM provider bilang bahagi ng system prompt. Huwag mag-store dito ng mga password, API key, token, recovery code, o sensitibong lihim.",
   "hist.filter.clear": "I-clear ang filter at ipakita ang lahat ng pag-uusap",
+  "st.redaction.heading": "Pagbura sa mga screenshot",
+  "st.redaction.toggle.label": "Burahin ang sensitibong nilalaman sa mga screenshot",
+  "st.redaction.toggle.desc": "Bago ipadala ang isang screenshot sa isang vision model, binuburahin nito ang mga form field at tekstong mukhang email o numero ng telepono. Tumatakbo ang detection nang buo sa iyong device — walang karagdagang ipinapadala.",
+  "st.redaction.warning": "⚠️ Best-effort at fail-open ito: kung hindi matakbo ang pagbura sa isang page (halimbawa, agad pagkatapos mag-navigate, sa mga PDF viewer, o sa mga restricted browser page), ipapadala pa rin ang screenshot nang hindi nabura. Gumagamit lang ang detection ng DOM heuristics — puwedeng makalusot ang tekstong iginuhit sa canvas, personal na impormasyon sa loob ng mga larawan, o anumang hindi nakikilalang form field o email/phone text, at hindi binubura ng setting na ito ang text ng page na ipinapadala sa model. Hindi ito garantiya ng seguridad. Para sa ganap na privacy, gumamit ng local/offline model (llama.cpp, Ollama): hindi na aalis sa iyong device ang mga screenshot at hindi na kailangan ang pagbura.",
 };

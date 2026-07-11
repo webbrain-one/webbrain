@@ -696,4 +696,8 @@ export default {
   "st.memory.reason.not_found": "没有使用该 ID 的已保存记忆。",
   "st.memory.security_html": "<strong>隐私：</strong>用户记忆以明文形式存储在此浏览器配置文件中。启用后，活动记忆记录会作为系统提示词的一部分发送给您配置的 LLM 提供商。请勿在此存储密码、API 密钥、令牌、恢复代码或敏感机密信息。",
   "hist.filter.clear": "清除筛选并显示所有对话",
+  "st.redaction.heading": "截图打码",
+  "st.redaction.toggle.label": "对截图中的敏感内容进行打码",
+  "st.redaction.toggle.desc": "Before a screenshot is sent to a vision model, blur form fields and text that looks like an email or phone number. Detection runs entirely on your device \u2014 nothing extra is transmitted.",
+  "st.redaction.warning": "\u26a0\ufe0f Best-effort and fail-open: if redaction cannot run on a page (for example right after a navigation, on PDF viewers, or on restricted browser pages), the screenshot is still sent unredacted. Detection uses DOM heuristics only \u2014 canvas-drawn text, PII inside images, or anything not recognized as a form field or email/phone text may slip through, and page text sent to the model is not redacted by this setting. It is NOT a security guarantee. For full privacy, use a local/offline model (llama.cpp, Ollama): screenshots then never leave your machine and redaction is unnecessary.",
 };

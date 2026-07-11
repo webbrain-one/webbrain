@@ -39,6 +39,7 @@ import { extractFirstJsonObject } from './json-extract.js';
 import { sanitizeText as sanitizePlannerText } from './text-sanitize.js';
 import { buildCustomSkillsPrompt, buildSkillToolDefinitions, buildSkillToolRegistry, normalizeCustomSkills } from './skills.js';
 import { USER_MEMORY_DEFAULT_MAX_PROMPT_CHARS, formatUserMemoryPrompt, normalizeUserMemoryMaxPromptChars, normalizeUserMemoryStore } from './user-memory.js';
+import { mergeRedactionFrameRegions, mapRegionsToImage, pixelateDataUrl } from './screenshot-redaction.js';
 
 const DEFAULT_CLOUD_COST_ALLOWANCE_USD = 10;
 // Product default: auto-approve plans at 75% confidence to reduce review stops.
@@ -137,6 +138,11 @@ export class Agent {
     this.recentCalls = new Map();
     this.loopNudges = new Map();
     this.healthyCallsSinceLoop = new Map();
+    // Local screenshot redaction (issue #312). When true, screenshots sent
+    // to a Vision endpoint are pixelated over DOM-detected PII regions
+    // (form fields + email/phone text) BEFORE leaving the extension. Off by
+    // default — loaded from browser.storage.local in background.js.
+    this.screenshotRedaction = false;
     this.lastAutoScreenshotTs = new Map();
     this.lastSeenAdapter = new Map();
     this.recentCoordClicks = new Map();
@@ -2266,6 +2272,91 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   }
 
   /**
+   * Optionally redact PII from a captured screenshot BEFORE it is ever sent
+   * to a Vision endpoint (issue #312). Returns the (possibly redacted) data
+   * URL unchanged when redaction is disabled or cannot be performed.
+   *
+   * All work is local: the content script supplies DOM-aware rects of form
+   * fields and email/phone text, we map them into image-pixel space, and the
+   * service worker pixelates those boxes. No redaction data is transmitted.
+   * Ported from src/chrome/src/agent/agent.js.
+   *
+   * @param {number} tabId
+   * @param {string} dataUrl            `data:image/...;base64,...`
+   * @param {object} [opts]
+   * @param {'viewport'|'page'} [opts.coordinateSpace='viewport']
+   * @returns {Promise<string>}
+   */
+  async _redactScreenshotDataUrl(tabId, dataUrl, opts = {}) {
+    if (!this.screenshotRedaction || !dataUrl) return dataUrl;
+
+    let imageWidth = opts.imageWidth;
+    let imageHeight = opts.imageHeight;
+    if (!(Number.isFinite(imageWidth) && Number.isFinite(imageHeight))) {
+      try {
+        const m = await fetch(dataUrl);
+        const bmp = await createImageBitmap(await m.blob());
+        imageWidth = bmp.width;
+        imageHeight = bmp.height;
+      } catch {
+        return dataUrl;
+      }
+    }
+
+    const coordinateSpace = opts.coordinateSpace === 'page' ? 'page' : 'viewport';
+    let navigationFrames;
+    try {
+      navigationFrames = await browser.webNavigation.getAllFrames({ tabId });
+    } catch {
+      navigationFrames = [{ frameId: 0, parentFrameId: -1, url: '' }];
+    }
+    if (!Array.isArray(navigationFrames) || navigationFrames.length === 0) {
+      navigationFrames = [{ frameId: 0, parentFrameId: -1, url: '' }];
+    }
+    const frameSnapshots = (await Promise.all(navigationFrames.map(async (frame) => {
+      try {
+        const resp = await browser.tabs.sendMessage(tabId, {
+          target: 'redaction-content',
+          action: 'get_redaction_regions',
+          params: { coordinateSpace: frame.frameId === 0 ? coordinateSpace : 'viewport' },
+        }, { frameId: frame.frameId });
+        return { ...resp, frameId: frame.frameId, parentFrameId: frame.parentFrameId, url: frame.url || '' };
+      } catch {
+        return null;
+      }
+    }))).filter(Boolean);
+    const resp = frameSnapshots.find((frame) => frame.frameId === 0);
+    if (!resp) return dataUrl;
+
+    const cssBox = resp?.viewport || { width: imageWidth, height: imageHeight };
+    const cssW = Number.isFinite(cssBox.width) && cssBox.width > 0 ? cssBox.width : imageWidth;
+    const cssH = Number.isFinite(cssBox.height) && cssBox.height > 0 ? cssBox.height : imageHeight;
+    const scaleX = imageWidth / cssW;
+    const scaleY = imageHeight / cssH;
+
+    const regions = mergeRedactionFrameRegions(frameSnapshots);
+    if (!regions.length) return dataUrl;
+
+    const imageRegions = mapRegionsToImage(regions, {
+      scaleX,
+      scaleY,
+      offsetX: 0,
+      offsetY: 0,
+      imageWidth,
+      imageHeight,
+    });
+    if (!imageRegions.length) return dataUrl;
+
+    const redacted = await pixelateDataUrl(dataUrl, imageRegions);
+    if (redacted === dataUrl) return dataUrl;
+    try {
+      return await this._compressJpegToByteCeiling(redacted);
+    } catch {
+      return redacted;
+    }
+  }
+
+  /**
    * Add the new tab to the per-window "WebBrain" tab group so the agent's
    * spawned tabs share visual scope with the user's session. Mirrors
    * src/chrome/src/agent/agent.js — same Option-2 semantics: query for
@@ -2616,7 +2707,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         // factor). So we capture at CSS size and shrink via DOM canvas to
         // the token budget. On small viewports this is a no-op fast-exit.
         const shrunk = await this._shrinkImageForBudget(rawDataUrl, w, h);
-        return { dataUrl: shrunk.dataUrl, width: shrunk.width, height: shrunk.height };
+        let dataUrl = shrunk.dataUrl;
+        if (this.screenshotRedaction) {
+          dataUrl = await this._redactScreenshotDataUrl(tabId, dataUrl, { coordinateSpace: 'viewport' });
+        }
+        return { dataUrl, width: shrunk.width, height: shrunk.height };
       };
       const first = await captureOnce();
       return await this._retryBlankScreenshotCapture(first, captureOnce, { probe });
@@ -2762,7 +2857,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         })
       );
       if (!cropDataUrl) return null;
-      const dataUrl = await this._compressJpegToByteCeiling(cropDataUrl);
+      let dataUrl = await this._compressJpegToByteCeiling(cropDataUrl);
+      if (this.screenshotRedaction) {
+        dataUrl = await this._redactScreenshotDataUrl(tabId, dataUrl, { coordinateSpace: 'viewport' });
+      }
       return { dataUrl, cropDataUrl, width, height, coordAligned: true };
     } catch (_) {
       const fallback = await this._captureAutoScreenshot(tabId);
@@ -7112,9 +7210,16 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             error: 'Screenshot failed: no image data was captured.',
           };
         }
-        const dataUrl = captured.dataUrl;
+        let dataUrl = captured.dataUrl;
         const description = captured.description || '';
         const blankFrameRetry = captured.blankFrameRetry || null;
+
+        // Local screenshot redaction (issue #312): pixelate form fields +
+        // email/phone text BEFORE the image is shown to any vision model.
+        // No-op when the setting is off.
+        if (this.screenshotRedaction) {
+          dataUrl = await this._redactScreenshotDataUrl(tabId, dataUrl, { coordinateSpace: 'viewport' });
+        }
 
         // Route the image through whichever vision path is actually wired up.
         // Returning a bare `{image: dataUrl}` blob looks like success but
@@ -7214,11 +7319,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             // runs regardless.
             const provider = this.providerManager.getActive();
             const plannerCanSeeImages = !!provider?.supportsVision;
-            const dataUrl = plannerCanSeeImages
+            let dataUrl = plannerCanSeeImages
               ? await this._withIndicatorsHidden(tabId, () =>
                   browser.tabs.captureVisibleTab(tab.windowId, { format: 'png', quality: 80 })
                 )
               : null;
+            if (dataUrl && this.screenshotRedaction) {
+              dataUrl = await this._redactScreenshotDataUrl(tabId, dataUrl, { coordinateSpace: 'viewport' });
+            }
 
             // Synthesize a warning when summary claims completion but page
             // state contradicts it.
@@ -7705,9 +7813,15 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             // batch loop strips it and re-attaches it as an image_url block.
             // Left inline as `result.image`, the base64 data URL blows past the
             // tool-result char cap and gets truncated to unreadable garbage.
-            result._attachImage = await this._withIndicatorsHidden(tabId, () =>
+            let verifyShotUrl = await this._withIndicatorsHidden(tabId, () =>
               browser.tabs.captureVisibleTab(tab.windowId, { format: 'png', quality: 80 })
             );
+            // Local screenshot redaction (issue #312): pixelate form fields +
+            // email/phone text BEFORE the image reaches the model.
+            if (this.screenshotRedaction) {
+              verifyShotUrl = await this._redactScreenshotDataUrl(tabId, verifyShotUrl, { coordinateSpace: 'viewport' });
+            }
+            result._attachImage = verifyShotUrl;
           } else {
             result.screenshotFailed = true;
           }

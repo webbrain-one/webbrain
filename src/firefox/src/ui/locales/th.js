@@ -694,4 +694,8 @@ export default {
   "st.memory.reason.not_found": "ไม่มีหน่วยความจำที่บันทึกไว้ด้วย ID นี้",
   "st.memory.security_html": "<strong>ความเป็นส่วนตัว:</strong> หน่วยความจำผู้ใช้ถูกเก็บเป็นข้อความธรรมดาในโปรไฟล์เบราว์เซอร์นี้ เมื่อเปิดใช้งาน บันทึกหน่วยความจำที่ใช้งานอยู่จะถูกส่งไปยังผู้ให้บริการ LLM ที่คุณตั้งค่าไว้โดยเป็นส่วนหนึ่งของ system prompt อย่าเก็บรหัสผ่าน คีย์ API โทเค็น รหัสกู้คืน หรือข้อมูลลับที่ละเอียดอ่อนไว้ที่นี่",
   "hist.filter.clear": "ล้างตัวกรองและแสดงการสนทนาทั้งหมด",
+  "st.redaction.heading": "การเบลอภาพหน้าจอ",
+  "st.redaction.toggle.label": "เบลอเนื้อหาที่ละเอียดอ่อนในภาพหน้าจอ",
+  "st.redaction.toggle.desc": "Before a screenshot is sent to a vision model, blur form fields and text that looks like an email or phone number. Detection runs entirely on your device \u2014 nothing extra is transmitted.",
+  "st.redaction.warning": "\u26a0\ufe0f Best-effort and fail-open: if redaction cannot run on a page (for example right after a navigation, on PDF viewers, or on restricted browser pages), the screenshot is still sent unredacted. Detection uses DOM heuristics only \u2014 canvas-drawn text, PII inside images, or anything not recognized as a form field or email/phone text may slip through, and page text sent to the model is not redacted by this setting. It is NOT a security guarantee. For full privacy, use a local/offline model (llama.cpp, Ollama): screenshots then never leave your machine and redaction is unnecessary.",
 };

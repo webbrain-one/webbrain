@@ -209,6 +209,14 @@ const { CDPClient, cdpClient: cdpClientCh } = await import(
   'file://' + path.join(ROOT, 'src/chrome/src/cdp/cdp-client.js').replace(/\\/g, '/')
 );
 
+// Screenshot redaction (issue #312) — pure Node-testable helpers.
+const { selectRedactionRegions, mapRegionsToImage, mergeRedactionFrameRegions, rectIntersects, REGION_KIND } = await import(
+  'file://' + path.join(ROOT, 'src/chrome/src/agent/screenshot-redaction.js').replace(/\\/g, '/')
+);
+const { mergeRedactionFrameRegions: mergeRedactionFrameRegionsFx } = await import(
+  'file://' + path.join(ROOT, 'src/firefox/src/agent/screenshot-redaction.js').replace(/\\/g, '/')
+);
+
 function allowProgress(agent, tabId, allowedActions = ['follow'], opts = {}) {
   return agent._setProgressSession(tabId, {
     mode: 'active',
@@ -607,6 +615,188 @@ class LoopDetectorShim {
 
 const tests = [];
 function test(name, fn) { tests.push({ name, fn }); }
+
+console.log('\nscreenshot redaction');
+
+test('selectRedactionRegions blurs password fields always', () => {
+  const regions = selectRedactionRegions([
+    { kind: 'input', type: 'password', rect: { x: 10, y: 20, w: 100, h: 30 } },
+    { kind: 'input', type: 'text', rect: { x: 10, y: 60, w: 100, h: 30 } },
+  ], { redactTextInputs: false });
+  assert.equal(regions.length, 1, 'only the password should be blurred');
+  assert.equal(regions[0].kind, REGION_KIND.PASSWORD);
+});
+
+test('selectRedactionRegions blurs text inputs only when opted in', () => {
+  const el = { kind: 'input', type: 'text', rect: { x: 0, y: 0, w: 80, h: 20 } };
+  assert.equal(selectRedactionRegions([el], { redactTextInputs: true }).length, 1, 'text input blurred when enabled');
+  assert.equal(selectRedactionRegions([el], { redactTextInputs: false }).length, 0, 'text input skipped when disabled');
+});
+
+test('selectRedactionRegions treats textarea descriptors as sensitive fields', () => {
+  const regions = selectRedactionRegions([
+    { kind: 'textarea', type: 'textarea', rect: { x: 4, y: 8, w: 160, h: 64 } },
+    { kind: 'textarea', type: 'div', rect: { x: 4, y: 80, w: 160, h: 64 } },
+  ], { redactTextInputs: true });
+  assert.equal(regions.length, 2, 'textarea/contenteditable descriptors should be redacted');
+  assert.deepEqual(regions.map((r) => r.kind), [REGION_KIND.INPUT, REGION_KIND.INPUT]);
+});
+
+test('selectRedactionRegions detects email and phone text, ignores noise', () => {
+  const regions = selectRedactionRegions([
+    { kind: 'text', text: 'jane.doe@example.com', rect: { x: 0, y: 0, w: 120, h: 18 } },
+    { kind: 'text', text: '+1 (415) 555-2671', rect: { x: 0, y: 20, w: 120, h: 18 } },
+    { kind: 'text', text: 'The year was 1999 and nothing personal', rect: { x: 0, y: 40, w: 200, h: 18 } },
+    { kind: 'text', text: '1999', rect: { x: 0, y: 60, w: 40, h: 18 } },
+  ], { redactDetectedPii: true });
+  const kinds = regions.map((r) => r.kind).sort();
+  assert.deepEqual(kinds, [REGION_KIND.EMAIL, REGION_KIND.PHONE], 'email + phone detected, year/noise skipped');
+});
+
+test('selectRedactionRegions culls regions outside the captured viewport', () => {
+  const regions = selectRedactionRegions([
+    { kind: 'input', type: 'password', rect: { x: 5, y: 5, w: 100, h: 30 } },
+    { kind: 'input', type: 'password', rect: { x: 5, y: 5000, w: 100, h: 30 } },
+  ], { viewport: { x: 0, y: 0, w: 800, h: 600 } });
+  assert.equal(regions.length, 1, 'off-screen password below the fold is dropped');
+  assert.equal(regions[0].rect.y, 5);
+});
+
+test('mapRegionsToImage applies per-axis scale and clamps to image bounds', () => {
+  const out = mapRegionsToImage(
+    [{ kind: REGION_KIND.INPUT, rect: { x: 10, y: 10, w: 100, h: 50 } }],
+    { scaleX: 2, scaleY: 2, imageWidth: 120, imageHeight: 120 }
+  );
+  assert.equal(out.length, 1);
+  assert.deepEqual(out[0].rect, { x: 20, y: 20, w: 100, h: 100 }, 'scaled then clamped to image width/height');
+});
+
+test('mapRegionsToImage drops regions entirely outside the image', () => {
+  const out = mapRegionsToImage(
+    [{ kind: REGION_KIND.INPUT, rect: { x: 200, y: 200, w: 100, h: 50 } }],
+    { scaleX: 1, scaleY: 1, imageWidth: 120, imageHeight: 120 }
+  );
+  assert.equal(out.length, 0, 'region fully outside image is removed');
+});
+
+test('mapRegionsToImage clips partially off-image regions before rounding', () => {
+  const out = mapRegionsToImage(
+    [{ kind: REGION_KIND.INPUT, rect: { x: -50, y: 10, w: 100, h: 30 } }],
+    { scaleX: 1, scaleY: 1, imageWidth: 120, imageHeight: 120 }
+  );
+  assert.equal(out.length, 1);
+  assert.deepEqual(out[0].rect, { x: 0, y: 10, w: 50, h: 30 }, 'left clipping should reduce width');
+});
+
+test('rectIntersects handles edges correctly', () => {
+  const r = { x: 0, y: 0, w: 100, h: 100 };
+  assert.equal(rectIntersects(r, 50, 50, 100, 100), true, 'overlapping box intersects');
+  assert.equal(rectIntersects(r, 200, 200, 10, 10), false, 'disjoint box does not intersect');
+});
+
+test('mergeRedactionFrameRegions maps nested iframe regions into top capture coordinates', () => {
+  const frames = [
+    {
+      frameId: 0,
+      parentFrameId: -1,
+      url: 'https://shop.example/',
+      viewport: { width: 1000, height: 800 },
+      elements: [{ kind: 'input', type: 'password', rect: { x: 10, y: 20, w: 80, h: 20 } }],
+      childFrames: [{ url: 'https://pay.example/form', rect: { x: 100, y: 50, w: 400, h: 300 } }],
+    },
+    {
+      frameId: 2,
+      parentFrameId: 0,
+      url: 'https://pay.example/form#step',
+      viewport: { width: 800, height: 600 },
+      elements: [{ kind: 'input', type: 'email', rect: { x: 20, y: 40, w: 100, h: 20 } }],
+      childFrames: [{ url: 'https://auth.example/', rect: { x: 200, y: 100, w: 200, h: 100 } }],
+    },
+    {
+      frameId: 5,
+      parentFrameId: 2,
+      url: 'https://auth.example/',
+      viewport: { width: 400, height: 200 },
+      elements: [{ kind: 'input', type: 'password', rect: { x: 40, y: 20, w: 120, h: 30 } }],
+      childFrames: [],
+    },
+  ];
+  const expected = [
+    { kind: REGION_KIND.PASSWORD, rect: { x: 10, y: 20, w: 80, h: 20 } },
+    { kind: REGION_KIND.INPUT, rect: { x: 110, y: 70, w: 50, h: 10 } },
+    { kind: REGION_KIND.PASSWORD, rect: { x: 210, y: 105, w: 30, h: 7.5 } },
+  ];
+  assert.deepEqual(mergeRedactionFrameRegions(frames), expected);
+  assert.deepEqual(mergeRedactionFrameRegionsFx(frames), expected, 'Firefox frame mapping should match Chrome');
+});
+
+test('redaction content scripts run in all frames and startup waits for the stored toggle', () => {
+  for (const browserName of ['chrome', 'firefox']) {
+    const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, `src/${browserName}/manifest.json`), 'utf8'));
+    const entry = manifest.content_scripts.find((item) => item.js.includes('src/content/redaction-regions.js'));
+    assert.equal(entry?.all_frames, true, `${browserName}: redaction collector should run in child frames`);
+    assert.equal(entry?.match_about_blank, true, `${browserName}: inherited-origin blank frames should be covered`);
+
+    const background = fs.readFileSync(path.join(ROOT, `src/${browserName}/src/background.js`), 'utf8');
+    assert.match(background, /const screenshotRedactionReady = loadScreenshotRedaction\(\)\.catch\(\(\) => \{\}\);/,
+      `${browserName}: should retain the redaction hydration promise`);
+    assert.match(background, /await screenshotRedactionReady;/,
+      `${browserName}: first messages should await redaction hydration`);
+  }
+});
+
+test('redaction collectors filter offscreen fields and classify PII before the region cap', () => {
+  for (const browserName of ['chrome', 'firefox']) {
+    const source = fs.readFileSync(path.join(ROOT, `src/${browserName}/src/content/redaction-regions.js`), 'utf8');
+    const start = source.indexOf('function collectRedactionRegions(params)');
+    const end = source.indexOf('runtime.onMessage', start);
+    const body = source.slice(start, end);
+    assert.match(body, /space === 'page' \|\| \([\s\S]*?r\.right > 0[\s\S]*?r\.top < window\.innerHeight/,
+      `${browserName}: viewport collection should reject offscreen rectangles`);
+    assert.match(body, /looksLikePiiText\(text\)\) continue;[\s\S]*?selected\.push\(\{ kind: 'text'/,
+      `${browserName}: only classified PII should count against MAX_REGIONS`);
+  }
+});
+
+test('remaining model-facing screenshot fallbacks apply redaction', () => {
+  const chromeSource = fs.readFileSync(path.join(ROOT, 'src/chrome/src/agent/agent.js'), 'utf8');
+  const chromeStart = chromeSource.indexOf("if (name === 'screenshot')");
+  const chromeEnd = chromeSource.indexOf("if (name === 'done')", chromeStart);
+  const chromeBody = chromeSource.slice(chromeStart, chromeEnd);
+  const fallbackIndex = chromeBody.indexOf('chrome.tabs.captureVisibleTab');
+  const convergedRedactionIndex = chromeBody.indexOf('// Apply redaction after both capture branches converge');
+  assert.ok(fallbackIndex >= 0 && convergedRedactionIndex > fallbackIndex,
+    'Chrome tabs-API fallback should converge into redaction before presentation');
+
+  const firefoxSource = fs.readFileSync(path.join(ROOT, 'src/firefox/src/agent/agent.js'), 'utf8');
+  const firefoxStart = firefoxSource.indexOf("if (name === 'done')");
+  const firefoxEnd = firefoxSource.indexOf("if (name === 'get_shadow_dom')", firefoxStart);
+  const firefoxBody = firefoxSource.slice(firefoxStart, firefoxEnd);
+  assert.match(firefoxBody,
+    /let dataUrl = plannerCanSeeImages[\s\S]*?if \(dataUrl && this\.screenshotRedaction\) \{[\s\S]*?_redactScreenshotDataUrl\(tabId, dataUrl, \{ coordinateSpace: 'viewport' \}\);[\s\S]*?screenshot: dataUrl/,
+    'Firefox done verification should redact before storing the screenshot');
+});
+
+test('firefox auto and media screenshot helpers redact model-facing data URLs', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'src/firefox/src/agent/agent.js'), 'utf8');
+  const autoStart = source.indexOf('async _captureAutoScreenshot(tabId)');
+  const autoEnd = source.indexOf('async _describeScreenshot', autoStart);
+  const autoBody = source.slice(autoStart, autoEnd);
+  assert.match(
+    autoBody,
+    /let dataUrl = shrunk\.dataUrl;[\s\S]*?if \(this\.screenshotRedaction\) \{[\s\S]*?dataUrl = await this\._redactScreenshotDataUrl\(tabId, dataUrl, \{ coordinateSpace: 'viewport' \}\);[\s\S]*?return \{ dataUrl, width: shrunk\.width, height: shrunk\.height \};/,
+    'firefox auto screenshots should redact before any model-facing use'
+  );
+
+  const mediaStart = source.indexOf('async _captureVisibleMediaScreenshot(tabId)');
+  const mediaEnd = source.indexOf('async _locateVisibleMediaWithVision', mediaStart);
+  const mediaBody = source.slice(mediaStart, mediaEnd);
+  assert.match(
+    mediaBody,
+    /let dataUrl = await this\._compressJpegToByteCeiling\(cropDataUrl\);[\s\S]*?if \(this\.screenshotRedaction\) \{[\s\S]*?dataUrl = await this\._redactScreenshotDataUrl\(tabId, dataUrl, \{ coordinateSpace: 'viewport' \}\);[\s\S]*?return \{ dataUrl, cropDataUrl, width, height, coordAligned: true \};/,
+    'firefox visible-media localization should redact the model-facing screenshot while keeping the raw crop source local'
+  );
+});
 
 async function run() {
   let passed = 0;

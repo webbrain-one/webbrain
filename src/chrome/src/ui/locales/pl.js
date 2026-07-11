@@ -657,4 +657,8 @@ export default {
   "st.memory.reason.not_found": "Nie ma zapisanego wpisu o tym ID.",
   "st.memory.security_html": "<strong>Prywatność:</strong> pamięć użytkownika jest przechowywana jako zwykły tekst w tym profilu przeglądarki. Po włączeniu aktywne wpisy pamięci są wysyłane do skonfigurowanego dostawcy LLM jako część promptu systemowego. Nie zapisuj tutaj haseł, kluczy API, tokenów, kodów odzyskiwania ani poufnych sekretów.",
   "hist.filter.clear": "Wyczyść filtr i pokaż wszystkie rozmowy",
+  "st.redaction.heading": "Redakcja zrzutów ekranu",
+  "st.redaction.toggle.label": "Redaguj poufną treść na zrzutach ekranu",
+  "st.redaction.toggle.desc": "Zanim zrzut ekranu zostanie wysłany do modelu wizyjnego, rozmywa pola formularzy oraz tekst wyglądający jak e-mail lub numer telefonu. Wykrywanie działa całkowicie na Twoim urządzeniu — nic dodatkowego nie jest przesyłane.",
+  "st.redaction.warning": "⚠️ To redakcja typu best-effort i fail-open: jeśli redakcja nie może zadziałać na danej stronie (np. tuż po nawigacji, w przeglądarkach PDF lub na ograniczonych stronach przeglądarki), zrzut ekranu i tak zostanie wysłany bez redakcji. Wykrywanie opiera się wyłącznie na heurystykach DOM — tekst narysowany na canvasie, dane osobowe wewnątrz obrazów lub cokolwiek nierozpoznanego jako pole formularza czy tekst e-mail/telefon może zostać pominięte, a tekst strony wysyłany do modelu nie jest redagowany przez to ustawienie. To NIE jest gwarancja bezpieczeństwa. Dla pełnej prywatności użyj lokalnego/offline'owego modelu (llama.cpp, Ollama): wtedy zrzuty ekranu nigdy nie opuszczają Twojego urządzenia, a redakcja przestaje być potrzebna.",
 };

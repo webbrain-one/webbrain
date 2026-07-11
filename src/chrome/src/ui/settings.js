@@ -354,7 +354,7 @@ async function init() {
   chrome.storage.local.remove(['authToken', 'authEmail', 'authDefaultModel']).catch(() => {});
 
   // Load display settings
-  const stored = await chrome.storage.local.get(['verboseMode', 'screenshotFallback', 'maxAgentSteps', 'autoScreenshot', 'useSiteAdapters', 'voiceInputEnabled', 'apiMutationObserverEnabled', 'planBeforeActMode', 'planBeforeAct', 'planReviewMode', 'planReviewConfidenceThreshold', 'notifySound', 'completionConfetti', 'tracingEnabled', 'strictSecretMode', 'agentAllowLocalNetwork', 'scheduledTasksEnabled', 'scheduledRequireConsequentialConfirmation', 'providerFilter', 'requestTimeoutMs', 'costAllowanceSessionUsd', 'costAllowanceTotalUsd', 'cloudCostSpentUsd']);
+  const stored = await chrome.storage.local.get(['verboseMode', 'screenshotFallback', 'maxAgentSteps', 'autoScreenshot', 'useSiteAdapters', 'voiceInputEnabled', 'apiMutationObserverEnabled', 'planBeforeActMode', 'planBeforeAct', 'planReviewMode', 'planReviewConfidenceThreshold', 'notifySound', 'completionConfetti', 'tracingEnabled', 'strictSecretMode', 'agentAllowLocalNetwork', 'scheduledTasksEnabled', 'scheduledRequireConsequentialConfirmation', 'providerFilter', 'requestTimeoutMs', 'costAllowanceSessionUsd', 'costAllowanceTotalUsd', 'cloudCostSpentUsd', 'screenshotRedaction']);
   if (typeof stored.providerFilter === 'string' && ['all','local','cloud','router'].includes(stored.providerFilter)) {
     providerFilter = stored.providerFilter;
   }
@@ -444,6 +444,7 @@ async function init() {
   // Load site permissions (capability × origin grants) + the master switch
   await initPermissionGateToggle();
   await renderPermissions();
+  await initScreenshotRedactionToggle();
 
   // Load providers
   const res = await sendToBackground('get_providers');
@@ -468,6 +469,19 @@ async function initPermissionGateToggle() {
   toggle.addEventListener('change', async () => {
     await chrome.storage.local.set({ [GATE_KEY]: toggle.checked });
     if (warning) warning.style.display = toggle.checked ? 'none' : '';
+  });
+}
+
+// Screenshot redaction (issue #312): local, best-effort PII blurring on
+// screenshots BEFORE they are sent to a vision model. OFF by default.
+const REDACTION_KEY = 'screenshotRedaction';
+async function initScreenshotRedactionToggle() {
+  const toggle = document.getElementById('toggle-screenshot-redaction');
+  if (!toggle) return;
+  const stored = await chrome.storage.local.get(REDACTION_KEY);
+  toggle.checked = stored[REDACTION_KEY] === true; // OFF by default
+  toggle.addEventListener('change', async () => {
+    await chrome.storage.local.set({ [REDACTION_KEY]: toggle.checked });
   });
 }
 

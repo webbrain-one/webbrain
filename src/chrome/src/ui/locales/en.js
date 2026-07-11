@@ -537,6 +537,13 @@ export default {
   'st.transcription.failed': 'Failed: {error}',
   'st.transcription.fill_required': 'Fill in Base URL and Model first.',
 
+  // Screenshot redaction (issue #312): local, best-effort PII blurring that
+  // runs in-browser before any screenshot reaches a vision model.
+  'st.redaction.heading': 'Screenshot redaction',
+  'st.redaction.toggle.label': 'Redact sensitive content from screenshots',
+  'st.redaction.toggle.desc': 'Before a screenshot is sent to a vision model, blur form fields and text that looks like an email or phone number. Detection runs entirely on your device — nothing extra is transmitted.',
+  'st.redaction.warning': '⚠️ Best-effort and fail-open: if redaction cannot run on a page (for example right after a navigation, on PDF viewers, or on restricted browser pages), the screenshot is still sent unredacted. Detection uses DOM heuristics only — canvas-drawn text, PII inside images, or anything not recognized as a form field or email/phone text may slip through, and page text sent to the model is not redacted by this setting. It is NOT a security guarantee. For full privacy, use a local/offline model (llama.cpp, Ollama): screenshots then never leave your machine and redaction is unnecessary.',
+
   'st.profile.desc_html': 'Store a short bio the agent can use to fill signup forms without asking every time — your name, work email, company, and a <em>throwaway</em> password for low-stakes signups. When enabled, the text below is appended to the agent\'s system prompt on every conversation.',
   'st.profile.enabled.label': 'Enable profile auto-fill',
   'st.profile.enabled.desc': 'Inject the profile text into the agent\'s system prompt. Disabled = the agent never sees this text.',

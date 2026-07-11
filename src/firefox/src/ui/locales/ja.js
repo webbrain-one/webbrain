@@ -694,4 +694,8 @@ export default {
   "st.memory.reason.not_found": "その ID の保存済みメモリはありません。",
   "st.memory.security_html": "<strong>プライバシー:</strong> ユーザーメモリは、このブラウザープロフィールにプレーンテキストで保存されます。有効にすると、有効なメモリ記録がシステムプロンプトの一部として、設定した LLM プロバイダーに送信されます。パスワード、API キー、トークン、復旧コード、機密情報は保存しないでください。",
   "hist.filter.clear": "フィルターを消去してすべての会話を表示",
+  "st.redaction.heading": "スクリーンショットの黒塗り",
+  "st.redaction.toggle.label": "スクリーンショット内の機密情報を黒塗りする",
+  "st.redaction.toggle.desc": "Before a screenshot is sent to a vision model, blur form fields and text that looks like an email or phone number. Detection runs entirely on your device \u2014 nothing extra is transmitted.",
+  "st.redaction.warning": "\u26a0\ufe0f Best-effort and fail-open: if redaction cannot run on a page (for example right after a navigation, on PDF viewers, or on restricted browser pages), the screenshot is still sent unredacted. Detection uses DOM heuristics only \u2014 canvas-drawn text, PII inside images, or anything not recognized as a form field or email/phone text may slip through, and page text sent to the model is not redacted by this setting. It is NOT a security guarantee. For full privacy, use a local/offline model (llama.cpp, Ollama): screenshots then never leave your machine and redaction is unnecessary.",
 };

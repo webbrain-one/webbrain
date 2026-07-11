@@ -83,6 +83,7 @@ const FAQ_KEYS = [
   'faq.lm_studio',
   'faq.tab_switch',
   'faq.profile',
+  'faq.screenshot_redaction',
   'faq.cookies_paywalls',
   'faq.multilingual',
   'faq.token_conscious',

@@ -693,4 +693,8 @@ export default {
   "st.memory.reason.not_found": "Bu kimliğe sahip kaydedilmiş bellek yok.",
   "st.memory.security_html": "<strong>Gizlilik:</strong> kullanıcı belleği bu tarayıcı profilinde düz metin olarak saklanır. Etkinleştirildiğinde aktif bellek kayıtları, sistem isteminin bir parçası olarak yapılandırdığınız LLM sağlayıcısına gönderilir. Burada parola, API anahtarı, token, kurtarma kodu veya hassas gizli bilgi saklamayın.",
   "hist.filter.clear": "Filtreyi temizle ve tüm konuşmaları göster",
+  "st.redaction.heading": "Ekran görüntüsü sansürleme",
+  "st.redaction.toggle.label": "Ekran görüntülerindeki hassas içeriği sansürle",
+  "st.redaction.toggle.desc": "Before a screenshot is sent to a vision model, blur form fields and text that looks like an email or phone number. Detection runs entirely on your device \u2014 nothing extra is transmitted.",
+  "st.redaction.warning": "\u26a0\ufe0f Best-effort and fail-open: if redaction cannot run on a page (for example right after a navigation, on PDF viewers, or on restricted browser pages), the screenshot is still sent unredacted. Detection uses DOM heuristics only \u2014 canvas-drawn text, PII inside images, or anything not recognized as a form field or email/phone text may slip through, and page text sent to the model is not redacted by this setting. It is NOT a security guarantee. For full privacy, use a local/offline model (llama.cpp, Ollama): screenshots then never leave your machine and redaction is unnecessary.",
 };

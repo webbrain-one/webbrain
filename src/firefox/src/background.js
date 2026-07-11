@@ -158,6 +158,15 @@ async function loadProfile() {
 }
 loadProfile();
 
+// Local screenshot redaction (issue #312): when on, screenshots are pixelated
+// over DOM-detected PII (form fields + email/phone text) BEFORE leaving the
+// extension for a Vision endpoint. OFF by default.
+async function loadScreenshotRedaction() {
+  const stored = await browser.storage.local.get('screenshotRedaction');
+  if (stored.screenshotRedaction != null) agent.screenshotRedaction = !!stored.screenshotRedaction;
+}
+const screenshotRedactionReady = loadScreenshotRedaction().catch(() => {});
+
 async function syncAgentUserMemoryFromStorage() {
   const [store, settings] = await Promise.all([
     userMemoryStore.load(),
@@ -674,6 +683,9 @@ browser.storage.onChanged.addListener((changes) => {
     agent.profileEnabled = !!changes.profileEnabled.newValue;
     refreshPrompts = true;
   }
+  if (changes.screenshotRedaction) {
+    agent.screenshotRedaction = !!changes.screenshotRedaction.newValue;
+  }
   if (changes.profileText) {
     agent.profileText = changes.profileText.newValue || '';
     refreshPrompts = true;
@@ -1181,6 +1193,7 @@ async function handleMessage(msg, sender) {
   // Hydrate agent toggles and prompt add-ons once at boot (not per message);
   // onChanged keeps them in sync afterward.
   await Promise.all([planBeforeActReady, planReviewReady, customSkillsReady, userMemoryReady]);
+  await screenshotRedactionReady;
 
   switch (msg.action) {
     case 'profile_sync_state': return { ok: true, ...(await profileSync.state()) };

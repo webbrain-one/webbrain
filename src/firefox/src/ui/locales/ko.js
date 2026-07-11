@@ -694,4 +694,8 @@ export default {
   "st.memory.reason.not_found": "해당 ID의 저장된 메모리가 없습니다.",
   "st.memory.security_html": "<strong>개인정보 보호:</strong> 사용자 메모리는 이 브라우저 프로필에 일반 텍스트로 저장됩니다. 사용하면 활성 메모리 기록이 시스템 프롬프트의 일부로 설정한 LLM 공급자에게 전송됩니다. 비밀번호, API 키, 토큰, 복구 코드 또는 민감한 비밀 정보는 저장하지 마세요.",
   "hist.filter.clear": "필터를 지우고 모든 대화 표시",
+  "st.redaction.heading": "스크린샷 마스킹",
+  "st.redaction.toggle.label": "스크린샷의 민감한 콘텐츠 마스킹",
+  "st.redaction.toggle.desc": "Before a screenshot is sent to a vision model, blur form fields and text that looks like an email or phone number. Detection runs entirely on your device \u2014 nothing extra is transmitted.",
+  "st.redaction.warning": "\u26a0\ufe0f Best-effort and fail-open: if redaction cannot run on a page (for example right after a navigation, on PDF viewers, or on restricted browser pages), the screenshot is still sent unredacted. Detection uses DOM heuristics only \u2014 canvas-drawn text, PII inside images, or anything not recognized as a form field or email/phone text may slip through, and page text sent to the model is not redacted by this setting. It is NOT a security guarantee. For full privacy, use a local/offline model (llama.cpp, Ollama): screenshots then never leave your machine and redaction is unnecessary.",
 };

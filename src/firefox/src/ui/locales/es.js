@@ -696,4 +696,8 @@ export default {
   "st.memory.reason.not_found": "Ninguna memoria guardada tiene ese ID.",
   "st.memory.security_html": "<strong>Privacidad:</strong> la memoria del usuario se almacena como texto sin formato en este perfil del navegador. Cuando está activada, los registros de memoria activos se envían al proveedor de LLM que configures como parte de las instrucciones del sistema. No guardes aquí contraseñas, claves de API, tokens, códigos de recuperación ni secretos sensibles.",
   "hist.filter.clear": "Borrar el filtro y mostrar todas las conversaciones",
+  "st.redaction.heading": "Redacción de capturas de pantalla",
+  "st.redaction.toggle.label": "Redactar contenido sensible en las capturas de pantalla",
+  "st.redaction.toggle.desc": "Before a screenshot is sent to a vision model, blur form fields and text that looks like an email or phone number. Detection runs entirely on your device \u2014 nothing extra is transmitted.",
+  "st.redaction.warning": "\u26a0\ufe0f Best-effort and fail-open: if redaction cannot run on a page (for example right after a navigation, on PDF viewers, or on restricted browser pages), the screenshot is still sent unredacted. Detection uses DOM heuristics only \u2014 canvas-drawn text, PII inside images, or anything not recognized as a form field or email/phone text may slip through, and page text sent to the model is not redacted by this setting. It is NOT a security guarantee. For full privacy, use a local/offline model (llama.cpp, Ollama): screenshots then never leave your machine and redaction is unnecessary.",
 };

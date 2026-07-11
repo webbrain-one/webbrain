@@ -694,4 +694,8 @@ export default {
   "st.memory.reason.not_found": "Walang naka-save na memory na may ganoong ID.",
   "st.memory.security_html": "<strong>Privacy:</strong> naka-store bilang plain text ang memory ng user sa browser profile na ito. Kapag naka-enable, ipinapadala ang mga aktibong memory record sa naka-configure mong LLM provider bilang bahagi ng system prompt. Huwag mag-store dito ng mga password, API key, token, recovery code, o sensitibong lihim.",
   "hist.filter.clear": "I-clear ang filter at ipakita ang lahat ng pag-uusap",
+  "st.redaction.heading": "Pagbura sa mga screenshot",
+  "st.redaction.toggle.label": "Burahin ang sensitibong nilalaman sa mga screenshot",
+  "st.redaction.toggle.desc": "Before a screenshot is sent to a vision model, blur form fields and text that looks like an email or phone number. Detection runs entirely on your device \u2014 nothing extra is transmitted.",
+  "st.redaction.warning": "\u26a0\ufe0f Best-effort and fail-open: if redaction cannot run on a page (for example right after a navigation, on PDF viewers, or on restricted browser pages), the screenshot is still sent unredacted. Detection uses DOM heuristics only \u2014 canvas-drawn text, PII inside images, or anything not recognized as a form field or email/phone text may slip through, and page text sent to the model is not redacted by this setting. It is NOT a security guarantee. For full privacy, use a local/offline model (llama.cpp, Ollama): screenshots then never leave your machine and redaction is unnecessary.",
 };

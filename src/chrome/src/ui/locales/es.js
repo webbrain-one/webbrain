@@ -697,4 +697,8 @@ export default {
   "st.memory.reason.not_found": "Ninguna memoria guardada tiene ese ID.",
   "st.memory.security_html": "<strong>Privacidad:</strong> la memoria del usuario se almacena como texto sin formato en este perfil del navegador. Cuando está activada, los registros de memoria activos se envían al proveedor de LLM que configures como parte de las instrucciones del sistema. No guardes aquí contraseñas, claves de API, tokens, códigos de recuperación ni secretos sensibles.",
   "hist.filter.clear": "Borrar el filtro y mostrar todas las conversaciones",
+  "st.redaction.heading": "Redacción de capturas de pantalla",
+  "st.redaction.toggle.label": "Redactar contenido sensible en las capturas de pantalla",
+  "st.redaction.toggle.desc": "Antes de enviar una captura de pantalla a un modelo de visión, difumina los campos de formulario y el texto que parezca un correo electrónico o un número de teléfono. La detección se ejecuta enteramente en tu dispositivo — no se transmite nada adicional.",
+  "st.redaction.warning": "⚠️ Es una redacción best-effort y fail-open: si no se puede aplicar en una página (por ejemplo justo después de una navegación, en visores de PDF o en páginas restringidas del navegador), la captura se envía igualmente sin redactar. La detección usa solo heurísticas del DOM — texto dibujado en un canvas, datos personales dentro de imágenes, o cualquier cosa no reconocida como campo de formulario o texto de correo/teléfono puede pasar desapercibida, y el texto de la página enviado al modelo no se redacta con este ajuste. No es una garantía de seguridad. Para privacidad total, usa un modelo local/sin conexión (llama.cpp, Ollama): las capturas nunca saldrán de tu equipo y la redacción deja de ser necesaria.",
 };
