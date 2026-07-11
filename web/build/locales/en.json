@@ -34,6 +34,8 @@
   "hero.mockup.result_more": "...and 21 more",
   "hero.mockup.input_placeholder": "Ask anything about this page...",
   "hero.mockup.scene_nav_aria": "Switch demo scenario",
+  "hero.mockup.scene_prev_aria": "Previous demo scenario",
+  "hero.mockup.scene_next_aria": "Next demo scenario",
   "hero.mockup.scene_label.products": "Product extraction demo",
   "hero.mockup.scene_label.website": "Clone-this-site demo",
   "hero.mockup.scene_label.video": "Video download demo",

@@ -228,6 +228,8 @@
   "features.captcha.desc": "Plug in a <a href=\"https://capsolver.com\" target=\"_blank\" rel=\"noopener\" style=\"color:var(--accent);text-decoration:none;\">CapSolver</a> API key and the agent will auto-solve reCAPTCHA v2/v3, hCaptcha, and Cloudflare Turnstile when they block a step — instead of stopping to ask. Off by default, BYO key, no captcha service is shipped or contacted unless you turn it on.",
   "nav.theme_toggle_aria": "สลับธีมสว่าง / มืด",
   "hero.mockup.scene_nav_aria": "สลับสถานการณ์เดโม",
+  "hero.mockup.scene_prev_aria": "สถานการณ์เดโมก่อนหน้า",
+  "hero.mockup.scene_next_aria": "สถานการณ์เดโมถัดไป",
   "hero.mockup.scene_label.products": "เดโมการสกัดข้อมูลสินค้า",
   "hero.mockup.scene_label.website": "เดโมโคลนเว็บไซต์นี้",
   "hero.mockup.scene_label.video": "เดโมดาวน์โหลดวิดีโอ",

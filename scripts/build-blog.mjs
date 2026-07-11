@@ -1106,6 +1106,7 @@ function navHtml() {
       <a href="/" class="nav-brand"><img class="brand-logo" src="/logo-github.png" alt="" aria-hidden="true"> WebBrain<span class="domain">.one</span></a>
       <div class="nav-links">
         <a href="/">Home</a>
+        <a href="/docs/">Docs</a>
         <a href="/blog">Blog</a>
         <select class="lang-dropdown" id="lang-dropdown" aria-label="Select language" data-current="en">${options}</select>
         <button class="theme-toggle" type="button" id="theme-toggle" aria-label="Toggle light / dark theme" title="Toggle light / dark theme">

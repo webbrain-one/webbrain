@@ -798,6 +798,12 @@
       margin: 0 auto;
       overflow: hidden;
     }
+    .mockup-stage {
+      position: relative;
+      max-width: 940px;
+      margin: 0 auto;
+      padding-inline: 58px;
+    }
     .mockup-stack > .browser-mockup {
       grid-column: 1;
       grid-row: 1;
@@ -818,6 +824,42 @@
       transform: scale(1);
       pointer-events: auto;
     }
+    .scene-arrow {
+      appearance: none;
+      -webkit-appearance: none;
+      position: absolute;
+      top: 50%;
+      z-index: 3;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 42px;
+      height: 42px;
+      padding: 0;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--surface);
+      color: var(--text);
+      box-shadow: 0 12px 30px var(--shadow);
+      cursor: pointer;
+      transform: translateY(-50%);
+      transition: background 0.2s, border-color 0.2s, color 0.2s, transform 0.2s, box-shadow 0.2s;
+    }
+    .scene-arrow:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--accent);
+      color: var(--text);
+      transform: translateY(-50%) scale(1.04);
+      box-shadow: 0 16px 36px var(--shadow-strong);
+    }
+    .scene-arrow:focus-visible { outline: 2px solid var(--accent2); outline-offset: 3px; }
+    .scene-arrow svg {
+      width: 20px;
+      height: 20px;
+      display: block;
+    }
+    .scene-arrow-prev { inset-inline-start: 0; }
+    .scene-arrow-next { inset-inline-end: 0; }
 
     .scene-nav {
       display: flex;
@@ -1872,6 +1914,8 @@
        ================================================================ */
     @media (max-width: 768px) {
       body { overflow-x: hidden; }
+      .mockup-stage { padding-inline: 0; }
+      .scene-arrow { display: none; }
       .browser-body { flex-direction: column; }
       .side-panel { width: 100%; border-inline-start: none; border-top: 1px solid var(--border); min-height: 260px; }
       .modes-grid { grid-template-columns: 1fr; }
@@ -2013,7 +2057,11 @@
        carries .is-active on load so its messages animate in immediately;
        the rotation script swaps the class on a timer / on click. -->
   <div class="hero-visual">
-    <div class="mockup-stack" id="mockup-stack">
+    <div class="mockup-stage">
+      <button class="scene-arrow scene-arrow-prev" type="button" data-scene-step="-1" aria-label="Попередній демо-сценарій" aria-controls="mockup-stack">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <div class="mockup-stack" id="mockup-stack">
 
       <!-- Scene 1: Follow-up question (two-turn conversation) — Ask mode -->
       <div class="browser-mockup is-active" data-scene="0">
@@ -2266,6 +2314,10 @@
         </div>
       </div>
 
+      </div>
+      <button class="scene-arrow scene-arrow-next" type="button" data-scene-step="1" aria-label="Наступний демо-сценарій" aria-controls="mockup-stack">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>
+      </button>
     </div>
 
     <div class="scene-nav" role="tablist" aria-label="Перемкнути демо-сценарій">
@@ -2778,11 +2830,6 @@
       </a>
       <a href="/blog">Блог</a>
       <a href="/docs/">Docs</a>
-      <a href="#features">Можливості</a>
-      <a href="#security">Безпека</a>
-      <a href="#compare">Порівняння</a>
-      <a href="#faq">FAQ</a>
-      <a href="#safety">Безпека</a>
       <a href="/privacy">Політика конфіденційності</a>
       <a href="https://github.com/webbrain-one/webbrain/issues" target="_blank" rel="noopener">Повідомити про помилку</a>
       <a href="https://github.com/webbrain-one/webbrain/blob/main/LICENSE" target="_blank" rel="noopener">Ліцензія MIT</a>
@@ -2873,23 +2920,25 @@
   })();
 </script>
 
-<!-- Hero mockup rotation: cross-fade through 4 demo scenes. Click a dot to
-     jump (and freeze the auto-rotate so a hand-picked scene stays put).
+<!-- Hero mockup rotation: cross-fade through 5 demo scenes. Click a dot or
+     arrow to jump (and freeze the auto-rotate so a hand-picked scene stays put).
      Auto-rotate pauses on hover and when the tab is hidden. Skipped
      entirely under prefers-reduced-motion — the first scene just stays. -->
 <script>
   (function () {
     const stack = document.getElementById('mockup-stack');
     if (!stack) return;
+    const stage = stack.closest('.mockup-stage') || stack;
     const scenes = stack.querySelectorAll(':scope > .browser-mockup');
     const dots = document.querySelectorAll('.scene-nav .scene-dot');
+    const arrows = document.querySelectorAll('.scene-arrow');
     if (scenes.length < 2) return;
 
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const INTERVAL_MS = 6000;
     let current = 0;
     let timer = null;
-    let userLocked = false; // set true once the visitor clicks a dot
+    let userLocked = false; // set true once the visitor uses a manual control
 
     function activate(idx) {
       idx = ((idx % scenes.length) + scenes.length) % scenes.length;
@@ -2937,8 +2986,18 @@
       });
     });
 
-    stack.addEventListener('mouseenter', stop);
-    stack.addEventListener('mouseleave', start);
+    arrows.forEach((arrow) => {
+      arrow.addEventListener('click', function () {
+        const step = parseInt(arrow.dataset.sceneStep, 10);
+        if (Number.isNaN(step)) return;
+        userLocked = true;
+        stop();
+        activate(current + step);
+      });
+    });
+
+    stage.addEventListener('mouseenter', stop);
+    stage.addEventListener('mouseleave', start);
     document.addEventListener('visibilitychange', function () {
       if (document.hidden) stop(); else start();
     });

@@ -228,6 +228,8 @@
   "features.captcha.desc": "Plug in a <a href=\"https://capsolver.com\" target=\"_blank\" rel=\"noopener\" style=\"color:var(--accent);text-decoration:none;\">CapSolver</a> API key and the agent will auto-solve reCAPTCHA v2/v3, hCaptcha, and Cloudflare Turnstile when they block a step — instead of stopping to ask. Off by default, BYO key, no captcha service is shipped or contacted unless you turn it on.",
   "nav.theme_toggle_aria": "Basculer le thème clair / sombre",
   "hero.mockup.scene_nav_aria": "Changer de scénario de démo",
+  "hero.mockup.scene_prev_aria": "Scénario de démo précédent",
+  "hero.mockup.scene_next_aria": "Scénario de démo suivant",
   "hero.mockup.scene_label.products": "Démo d'extraction de produits",
   "hero.mockup.scene_label.website": "Démo « cloner ce site »",
   "hero.mockup.scene_label.video": "Démo de téléchargement de vidéo",
