@@ -262,4 +262,28 @@
   <url>
     <loc>https://webbrain.one/blog/</loc>
   </url>
+  <url>
+    <loc>https://webbrain.one/docs/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/settings/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/providers/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/safety/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/zh/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/zh/settings/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/zh/providers/</loc>
+  </url>
+  <url>
+    <loc>https://webbrain.one/docs/zh/safety/</loc>
+  </url>
 </urlset>

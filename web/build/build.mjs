@@ -13,6 +13,7 @@
  *   {{locale_code}}      e.g. "en", "es"
  *   {{locale_bcp47}}     e.g. "en-US", "es-ES" (used in og:locale)
  *   {{locale_home_url}}  e.g. "https://webbrain.one/" or ".../es/"
+ *   {{docs_url}}         English docs, or the secondary Chinese docs for zh
  *   {{hreflang_links}}   <link rel="alternate" ...> block for this page
  *   {{faq_jsonld}}       FAQPage schema block generated from faq.* keys
  *
@@ -264,6 +265,7 @@ function buildSubscribeHtml() {
 
 function applyTemplate(template, dict, locale) {
   const canonical = homeUrlFor(locale);
+  const docsUrl = locale.code === 'zh' ? '/docs/zh/' : '/docs/';
 
   // Build-time placeholders first (they're fixed per locale, not per key).
   let out = template
@@ -271,6 +273,7 @@ function applyTemplate(template, dict, locale) {
     .replace(/\{\{locale_bcp47\}\}/g, locale.bcp47)
     .replace(/\{\{locale_dir\}\}/g, locale.dir || 'ltr')
     .replace(/\{\{locale_home_url\}\}/g, canonical)
+    .replace(/\{\{docs_url\}\}/g, docsUrl)
     .replace(/\{\{hreflang_links\}\}/g, buildHreflangBlock())
     .replace(/\{\{faq_jsonld\}\}/g, buildFaqJsonLd(dict, locale.bcp47))
     .replace(/\{\{software_jsonld\}\}/g, buildSoftwareJsonLd(dict, locale));
@@ -353,12 +356,20 @@ async function main() {
     console.log(`✓ wrote ${path.relative(process.cwd(), outPath)} (${html.length.toLocaleString()} bytes)`);
   }
 
-  // sitemap.xml — one URL per localized home, plus privacy + blog index.
+  // sitemap.xml — localized homes plus public utility, blog, and user-doc pages.
   const sitemapUrls = [
     ...LOCALES.map((l) => ({ loc: homeUrlFor(l), hreflang: l.code })),
     { loc: `${SITE_ORIGIN}/privacy` },
     { loc: `${SITE_ORIGIN}/subscribe/` },
     { loc: `${SITE_ORIGIN}/blog/` },
+    { loc: `${SITE_ORIGIN}/docs/` },
+    { loc: `${SITE_ORIGIN}/docs/settings/` },
+    { loc: `${SITE_ORIGIN}/docs/providers/` },
+    { loc: `${SITE_ORIGIN}/docs/safety/` },
+    { loc: `${SITE_ORIGIN}/docs/zh/` },
+    { loc: `${SITE_ORIGIN}/docs/zh/settings/` },
+    { loc: `${SITE_ORIGIN}/docs/zh/providers/` },
+    { loc: `${SITE_ORIGIN}/docs/zh/safety/` },
   ];
   const sitemap = [
     '<?xml version="1.0" encoding="UTF-8"?>',

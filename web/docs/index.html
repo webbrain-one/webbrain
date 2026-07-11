@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WebBrain User Guide</title>
+  <meta name="description" content="Learn WebBrain from your first question through provider setup, safe automation, memory, skills, and advanced settings.">
+  <link rel="canonical" href="https://webbrain.one/docs/">
+  <link rel="alternate" hreflang="zh" href="https://webbrain.one/docs/zh/">
+  <link rel="alternate" hreflang="x-default" href="https://webbrain.one/docs/">
+  <link rel="icon" href="/favicon.png">
+  <script>try{document.documentElement.dataset.theme=localStorage.getItem('webbrain-theme')||'dark'}catch(_){}</script>
+  <link rel="stylesheet" href="/docs/assets/docs.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="/"><img src="/logo-github.png" alt=""><span>WebBrain</span><span class="brand-docs">User guide</span></a>
+      <nav class="top-nav" aria-label="Primary"><a href="/docs/" aria-current="page">Docs</a><a href="/blog/">Blog</a><a href="https://github.com/webbrain-one/webbrain">GitHub</a></nav>
+      <div class="header-tools">
+        <a class="lang-switch" href="/docs/zh/" aria-label="Read in Chinese"><span class="active">EN</span><span>中文</span></a>
+        <button class="icon-button" type="button" data-theme-toggle aria-label="Use light theme">☀</button>
+        <button class="sidebar-toggle" type="button" data-sidebar-toggle aria-expanded="false" aria-label="Open documentation menu">☰</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="docs-shell">
+    <aside class="docs-sidebar" aria-label="Documentation">
+      <div class="sidebar-group">
+        <div class="sidebar-label">Start here</div>
+        <nav><a href="/docs/" aria-current="page">Overview</a><a href="#first-run">Your first 10 minutes</a></nav>
+      </div>
+      <div class="sidebar-group">
+        <div class="sidebar-label">Use WebBrain</div>
+        <nav><a href="/docs/settings/">Settings, explained</a><a href="/docs/providers/">Providers & models</a><a href="/docs/safety/">Modes, safety & privacy</a></nav>
+      </div>
+      <div class="sidebar-group">
+        <div class="sidebar-label">For builders</div>
+        <nav><a href="https://github.com/webbrain-one/webbrain/tree/main/docs">Technical docs ↗</a></nav>
+      </div>
+    </aside>
+
+    <main class="doc-main" id="main">
+      <section class="doc-hero">
+        <div class="eyebrow">WebBrain field guide</div>
+        <h1>Your browser agent has a lot of controls. You don’t need all of them.</h1>
+        <p class="lede">Start with a page and a question. This guide shows the shortest path to useful results, then explains the deeper controls only when they become relevant.</p>
+
+        <div class="path-grid">
+          <a class="path-card" href="#first-run"><span class="tab-key">New here</span><h2>Get a useful result</h2><p>Open the panel, pick the right mode, and complete a first task without changing settings.</p><span class="arrow">First 10 minutes →</span></a>
+          <a class="path-card" href="/docs/settings/"><span class="tab-key">Control the agent</span><h2>Understand Settings</h2><p>What each tab changes, which defaults are sensible, and what new users can safely ignore.</p><span class="arrow">Open the settings guide →</span></a>
+          <a class="path-card" href="/docs/providers/"><span class="tab-key">Bring a model</span><h2>Choose a provider</h2><p>Use WebBrain Cloud, a cloud API, a router, or a local model—and know what the fields mean.</p><span class="arrow">Choose a model →</span></a>
+          <a class="path-card" href="/docs/safety/"><span class="tab-key">Stay in control</span><h2>Use Act mode safely</h2><p>Learn Ask, Act, Dev, site permissions, memory boundaries, and the two dangerous overrides.</p><span class="arrow">Review safety →</span></a>
+        </div>
+      </section>
+
+      <section class="doc-section" id="first-run">
+        <div class="eyebrow">First run</div>
+        <h2>Your first 10 minutes</h2>
+        <ol class="step-list">
+          <li><strong>Open a page you want help with.</strong> Click the WebBrain icon so its side panel opens next to that page.</li>
+          <li><strong>Stay in Ask mode first.</strong> Try “Summarize this page,” “What are the important dates?” or “Compare the plans in this table.” Ask can read, but it does not click or type.</li>
+          <li><strong>Switch to Act for a visible task.</strong> Try “Fill the search box with wireless headphones and run the search.” WebBrain will ask before consequential actions on a new site.</li>
+          <li><strong>Watch the run.</strong> You can stop at any time with the Stop button or <kbd>Escape</kbd>. Treat unexpected navigation, typing, or repeated actions as a reason to stop.</li>
+          <li><strong>Only visit Settings when you have a reason.</strong> The built-in WebBrain Cloud provider and recommended safety defaults are enough for a first run.</li>
+        </ol>
+        <div class="callout tip"><strong class="callout-title">A useful prompt has an outcome</strong><p>“Find the refund policy and tell me whether sale items qualify” is easier to verify than “look around this site.” Name the result you want and any boundary WebBrain must respect.</p></div>
+      </section>
+
+      <section class="doc-section" id="modes">
+        <h2>Pick the mode before the prompt</h2>
+        <div class="mode-strip">
+          <div class="mode ask"><strong>Ask</strong><span>Read, explain, compare, extract. No page changes.</span></div>
+          <div class="mode act"><strong>Act</strong><span>Click, type, navigate, download, schedule, and complete normal browser tasks.</span></div>
+          <div class="mode dev"><strong>Dev</strong><span>Add source, style, DOM, frame, and page-debugging tools. For technical work.</span></div>
+        </div>
+        <p>Ask is the calm default. Act is for work you could perform with the mouse and keyboard. Dev is not a “more powerful answer” mode; it is a specialized toolbox for inspecting and editing web pages.</p>
+      </section>
+
+      <section class="doc-section" id="settings-map">
+        <div class="eyebrow">A map, not a checklist</div>
+        <h2>The six Settings tabs</h2>
+        <p>You do not need to configure every tab. The color at the bottom of each block shows how often a typical person needs it.</p>
+        <div class="settings-map" aria-label="Settings depth map">
+          <div class="setting-node everyday"><strong>General</strong><span>behavior & comfort</span></div>
+          <div class="setting-node everyday"><strong>Providers</strong><span>the active model</span></div>
+          <div class="setting-node sometimes"><strong>Multimodal</strong><span>vision & speech</span></div>
+          <div class="setting-node sometimes"><strong>Memory</strong><span>what persists</span></div>
+          <div class="setting-node expert"><strong>Skills</strong><span>trusted add-ons</span></div>
+          <div class="setting-node everyday"><strong>Permissions</strong><span>where it may act</span></div>
+        </div>
+        <div class="depth-legend"><span>Everyday control</span><span class="sometimes">When you need it</span><span class="expert">Advanced trust decision</span></div>
+        <div class="callout"><strong class="callout-title">The safe baseline</strong><p>Keep <strong>Plan before Act</strong> on Try, <strong>plan review</strong> on the confidence threshold, <strong>scheduled confirmations</strong> on, and <strong>Ask before consequential actions</strong> on. You can get very far without changing anything else.</p></div>
+      </section>
+
+      <section class="doc-section" id="technical-docs">
+        <h2>Looking for internals?</h2>
+        <p>The repository’s <code>docs/</code> folder remains the source for architecture, providers, site adapters, prompt-injection defenses, localization, tool development, and test scenarios. The handbook you are reading focuses on what a person sees and controls.</p>
+        <div class="card-grid">
+          <div class="card"><span class="tab-key">Contributor docs</span><h3>Architecture & tools</h3><p><a href="https://github.com/webbrain-one/webbrain/blob/main/docs/architecture.md">Architecture</a>, <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/adding-a-tool.md">adding a tool</a>, and <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/site-adapters.md">site adapters</a>.</p></div>
+          <div class="card"><span class="tab-key">Security docs</span><h3>Threats & data flow</h3><p><a href="https://github.com/webbrain-one/webbrain/blob/main/docs/security-model.md">Security model</a>, <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/privacy-and-data-flow.md">privacy and data flow</a>, and <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/prompt-injection-defense.md">prompt-injection defense</a>.</p></div>
+        </div>
+      </section>
+
+      <nav class="next-links" aria-label="Next guides"><a href="/docs/settings/"><span>Next</span>Settings, explained →</a><a href="/docs/safety/"><span>Recommended</span>Modes, safety & privacy →</a></nav>
+    </main>
+
+    <aside class="on-this-page" aria-label="On this page"><h2>On this page</h2><a href="#first-run">First 10 minutes</a><a href="#modes">Pick a mode</a><a href="#settings-map">Settings map</a><a href="#technical-docs">Technical docs</a></aside>
+  </div>
+
+  <footer class="site-footer"><div class="footer-inner"><span>WebBrain user guide · English primary, 中文 secondary</span><div class="footer-links"><a href="/privacy">Privacy</a><a href="https://github.com/webbrain-one/webbrain/issues">Report an issue</a></div></div></footer>
+  <script src="/docs/assets/docs.js"></script>
+</body>
+</html>

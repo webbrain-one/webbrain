@@ -7,6 +7,12 @@
     { "source": "/blog/", "destination": "/blog/index.html" },
     { "source": "/blog/:slug", "destination": "/blog/:slug/index.html" },
     { "source": "/blog/:slug/", "destination": "/blog/:slug/index.html" },
+    { "source": "/docs", "destination": "/docs/index.html" },
+    { "source": "/docs/", "destination": "/docs/index.html" },
+    { "source": "/docs/zh/:page", "destination": "/docs/zh/:page/index.html" },
+    { "source": "/docs/zh/:page/", "destination": "/docs/zh/:page/index.html" },
+    { "source": "/docs/:page", "destination": "/docs/:page/index.html" },
+    { "source": "/docs/:page/", "destination": "/docs/:page/index.html" },
     { "source": "/:path*\\.(png|jpg|jpeg|gif|webp|svg|ico|css|js|map|txt|xml|json|woff|woff2|ttf|otf|mp4|webm)", "destination": "/:path*" },
     { "source": "/(.*)", "destination": "/index.html" }
   ],
