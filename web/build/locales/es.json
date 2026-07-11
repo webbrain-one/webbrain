@@ -20,7 +20,7 @@
   "nav.github": "GitHub",
   "nav.github_stars_aria": "Da estrella a WebBrain en GitHub",
   "hero.h1_html": "El agente de navegador con <span class=\"gradient\">IA de código abierto</span>",
-  "hero.description": "WebBrain es una extensión de navegador gratuita y de código abierto que trae capacidades de agente de IA a Chrome y Firefox. Lee páginas, extrae datos y automatiza tareas web — con el LLM que tú elijas. La alternativa autohospedable a los plugins de IA propietarios.",
+  "hero.description": "WebBrain es una extensión de navegador gratuita y de código abierto que trae capacidades de agente de IA a tu navegador. Lee páginas, extrae datos y automatiza tareas web — con el LLM que tú elijas. La alternativa autohospedable a los plugins de IA propietarios.",
   "hero.cta.install": "Instalar extensión",
   "hero.cta.github": "Ver en GitHub",
   "hero.mockup.url": "https://example.com/productos",

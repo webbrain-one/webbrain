@@ -1,5 +1,12 @@
 // Arabic (ar).
 export default {
+  'sp.providers.no_setup_group': 'لا يتطلب إعدادًا',
+  'sp.providers.no_setup': 'بلا إعداد',
+  'sp.providers.active_group': 'المزوّدون النشطون',
+  'sp.providers.active': 'نشط',
+  'sp.providers.more': 'المزيد…',
+  'st.providers.selected': 'محدد',
+  'st.providers.select_for_chat': 'تحديد للدردشة',
   // Context compaction + cloud cost + prompt-tier strings
   'sp.context_compacted': "تم ضغط السياق تلقائيًا",
   'sp.context_compacted_detail': "تم تلخيص {summarized} من الرسائل السابقة · تم الاحتفاظ بـ {remaining}",

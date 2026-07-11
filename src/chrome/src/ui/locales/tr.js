@@ -1,5 +1,12 @@
 // Turkish (tr).
 export default {
+  'sp.providers.no_setup_group': 'Kurulum gerektirmez',
+  'sp.providers.no_setup': 'Kurulum yok',
+  'sp.providers.active_group': 'Etkin sağlayıcılar',
+  'sp.providers.active': 'Etkin',
+  'sp.providers.more': 'Daha fazla…',
+  'st.providers.selected': 'SEÇİLİ',
+  'st.providers.select_for_chat': 'Sohbet için seç',
   // Context compaction + cloud cost + prompt-tier strings
   'sp.context_compacted': "Bağlam otomatik olarak sıkıştırıldı",
   'sp.context_compacted_detail': "{summarized} önceki mesaj özetlendi · {remaining} korundu",

@@ -129,6 +129,13 @@ pm.getAll();                        // All provider configs (for Settings UI)
 await pm.testProvider('openai');    // Test connection
 ```
 
+Each non-WebBrain provider config includes a persisted `configured` flag. An
+explicit configuration update sets it to `true`; this is the UI's **Active**
+state and is separate from `activeProvider`, which is the provider currently
+**Selected** for chat. WebBrain Cloud is always selectable without being marked
+configured. Connection tests report reachability but do not control the Active
+flag.
+
 ### Config Persistence
 
 Configs are stored in `chrome.storage.local` under the `providers` key, merged against defaults. Defaults provide the SHAPE (which provider keys exist); stored configs override per-key values. This allows upgrades that introduce new provider entries to work without users clearing storage.

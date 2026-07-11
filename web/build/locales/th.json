@@ -20,7 +20,7 @@
   "nav.github": "GitHub",
   "nav.github_stars_aria": "ติดดาว WebBrain บน GitHub",
   "hero.h1_html": "AI <span class=\"gradient\">Browser Agent</span> โอเพนซอร์ส",
-  "hero.description": "WebBrain เป็นส่วนขยายเบราว์เซอร์ฟรีและโอเพนซอร์สที่นำความสามารถของ AI agent มาสู่ Chrome และ Firefox อ่านหน้า สกัดข้อมูล และทำให้งานบนเว็บเป็นอัตโนมัติ — ขับเคลื่อนด้วย LLM ที่คุณเลือก เป็นทางเลือกที่โฮสต์เองได้ของปลั๊กอิน AI เบราว์เซอร์ที่เป็นกรรมสิทธิ์",
+  "hero.description": "WebBrain เป็นส่วนขยายเบราว์เซอร์ฟรีและโอเพนซอร์สที่นำความสามารถของ AI agent มาสู่เบราว์เซอร์ของคุณ อ่านหน้า สกัดข้อมูล และทำให้งานบนเว็บเป็นอัตโนมัติ — ขับเคลื่อนด้วย LLM ที่คุณเลือก เป็นทางเลือกที่โฮสต์เองได้ของปลั๊กอิน AI เบราว์เซอร์ที่เป็นกรรมสิทธิ์",
   "hero.cta.install": "ติดตั้งส่วนขยาย",
   "hero.cta.github": "ดูบน GitHub",
   "hero.mockup.url": "https://example.com/products",

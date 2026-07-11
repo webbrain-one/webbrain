@@ -326,6 +326,7 @@ const historyBtn = document.getElementById('btn-history');
 const settingsBtn = document.getElementById('btn-settings');
 const verboseBtn = document.getElementById('btn-verbose');
 const providerSelect = document.getElementById('provider-select');
+const MORE_PROVIDERS_OPTION_VALUE = '__more_providers__';
 const statusDot = document.getElementById('status-dot');
 const agentActivity = document.getElementById('agent-activity');
 const activityText = document.getElementById('activity-text');
@@ -455,6 +456,7 @@ const awaitingPlanReviewTabs = new Set();
 let recommendationsRequestId = 0;
 let providerSelectionRequestId = 0;
 let providerTestRequestId = 0;
+let selectedProviderId = 'webbrain_cloud';
 let recommendedActionsCollapsed = false;
 let slashCommandMatches = [];
 let slashCommandSelectedIndex = 0;
@@ -2298,6 +2300,9 @@ async function init() {
       verboseMode = changes.verboseMode.newValue;
       if (verboseBtn) verboseBtn.classList.toggle('active', verboseMode);
     }
+    if (changes.providers || changes.activeProvider) {
+      void loadProviders();
+    }
   });
 }
 
@@ -2911,16 +2916,50 @@ function rebindRestoredMessageControls() {
 async function loadProviders() {
   try {
     const res = await sendToBackground('get_providers');
-    providerSelect.innerHTML = '';
-    for (const [id, config] of Object.entries(res.providers)) {
-      const opt = document.createElement('option');
-      opt.value = id;
-      opt.textContent = config.label || id;
-      if (id === res.active) opt.selected = true;
-      providerSelect.appendChild(opt);
+    providerSelect.replaceChildren();
+
+    const cloudConfig = res.providers.webbrain_cloud || { label: 'WebBrain Cloud' };
+    const cloudGroup = document.createElement('optgroup');
+    cloudGroup.label = t('sp.providers.no_setup_group');
+    const cloudOption = document.createElement('option');
+    cloudOption.value = 'webbrain_cloud';
+    cloudOption.textContent = `${cloudConfig.label || 'WebBrain Cloud'} — ${t('sp.providers.no_setup')}`;
+    cloudGroup.appendChild(cloudOption);
+    providerSelect.appendChild(cloudGroup);
+
+    const configuredEntries = Object.entries(res.providers)
+      .filter(([id, config]) => id !== 'webbrain_cloud' && config?.configured === true);
+    if (configuredEntries.length) {
+      const activeGroup = document.createElement('optgroup');
+      activeGroup.label = t('sp.providers.active_group');
+      for (const [id, config] of configuredEntries) {
+        const opt = document.createElement('option');
+        opt.value = id;
+        opt.textContent = `${config.label || id} — ${t('sp.providers.active')}`;
+        activeGroup.appendChild(opt);
+      }
+      providerSelect.appendChild(activeGroup);
     }
+
+    const moreOption = document.createElement('option');
+    moreOption.value = MORE_PROVIDERS_OPTION_VALUE;
+    moreOption.textContent = t('sp.providers.more');
+    providerSelect.appendChild(moreOption);
+
+    const selectableProviderIds = new Set(['webbrain_cloud', ...configuredEntries.map(([id]) => id)]);
+    selectedProviderId = selectableProviderIds.has(res.active) ? res.active : 'webbrain_cloud';
+    providerSelect.value = selectedProviderId;
   } catch (e) {
     console.error('Failed to load providers:', e);
+  }
+}
+
+async function openProvidersSettingsPage() {
+  const url = chrome.runtime.getURL('src/ui/settings.html#providers');
+  try {
+    await chrome.tabs.create({ url });
+  } catch {
+    chrome.runtime.openOptionsPage();
   }
 }
 
@@ -6080,6 +6119,7 @@ inputEl.addEventListener('blur', () => setTimeout(hideSlashCommandAutocomplete, 
 document.addEventListener('wb-locale-changed', () => {
   if (slashCommandMatches.length) renderSlashCommandAutocomplete();
   renderQueuedComposerMessages();
+  void loadProviders();
 });
 
 clearBtn.addEventListener('click', async () => {
@@ -6091,6 +6131,11 @@ clearBtn.addEventListener('click', async () => {
 
 providerSelect.addEventListener('change', async () => {
   const providerId = providerSelect.value;
+  if (providerId === MORE_PROVIDERS_OPTION_VALUE) {
+    providerSelect.value = selectedProviderId;
+    await openProvidersSettingsPage();
+    return;
+  }
   const requestId = ++providerSelectionRequestId;
   providerTestRequestId += 1;
   try {
@@ -6108,6 +6153,7 @@ providerSelect.addEventListener('change', async () => {
     }
     return;
   }
+  selectedProviderId = providerId;
   await testConnection({ providerId });
 });
 

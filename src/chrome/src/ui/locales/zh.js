@@ -1,5 +1,12 @@
 // Simplified Chinese (zh).
 export default {
+  'sp.providers.no_setup_group': '无需配置',
+  'sp.providers.no_setup': '无需设置',
+  'sp.providers.active_group': '已启用的提供商',
+  'sp.providers.active': '已启用',
+  'sp.providers.more': '更多…',
+  'st.providers.selected': '已选择',
+  'st.providers.select_for_chat': '选择用于聊天',
   // Context compaction + cloud cost + prompt-tier strings
   'sp.context_compacted': "上下文已自动压缩",
   'sp.context_compacted_detail': "已总结 {summarized} 条较早的消息 · 保留 {remaining} 条",

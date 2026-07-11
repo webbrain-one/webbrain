@@ -1,5 +1,12 @@
 // Polski — translated from en.js. Keys mirror the English canonical file.
 export default {
+  'sp.providers.no_setup_group': 'Bez konfiguracji',
+  'sp.providers.no_setup': 'Konfiguracja nie jest wymagana',
+  'sp.providers.active_group': 'Aktywni dostawcy',
+  'sp.providers.active': 'Aktywny',
+  'sp.providers.more': 'Więcej…',
+  'st.providers.selected': 'WYBRANO',
+  'st.providers.select_for_chat': 'Wybierz do czatu',
   'brand': 'WebBrain',
   'sp.status.disconnected': 'Rozłączono',
   'sp.status.connected': 'Połączono ({model})',

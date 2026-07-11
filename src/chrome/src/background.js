@@ -1770,7 +1770,9 @@ async function handleMessage(msg, sender) {
     }
 
     case 'update_provider': {
-      await providerManager.updateProvider(msg.providerId, msg.config);
+      await providerManager.updateProvider(msg.providerId, msg.config, {
+        markConfigured: msg.markConfigured !== false,
+      });
       return { ok: true };
     }
 

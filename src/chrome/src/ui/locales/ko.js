@@ -1,5 +1,12 @@
 // Korean (ko).
 export default {
+  'sp.providers.no_setup_group': '설정 필요 없음',
+  'sp.providers.no_setup': '설정 없음',
+  'sp.providers.active_group': '활성 공급자',
+  'sp.providers.active': '활성',
+  'sp.providers.more': '더 보기…',
+  'st.providers.selected': '선택됨',
+  'st.providers.select_for_chat': '채팅용으로 선택',
   // Context compaction + cloud cost + prompt-tier strings
   'sp.context_compacted': "컨텍스트가 자동으로 압축되었습니다",
   'sp.context_compacted_detail': "이전 메시지 {summarized}개 요약됨 · {remaining}개 유지됨",

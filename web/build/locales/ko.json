@@ -20,7 +20,7 @@
   "nav.github": "GitHub",
   "nav.github_stars_aria": "GitHub에서 WebBrain에 별표 주기",
   "hero.h1_html": "오픈소스 AI <span class=\"gradient\">브라우저 에이전트</span>",
-  "hero.description": "WebBrain은 Chrome과 Firefox에 AI 에이전트 기능을 가져오는 무료 오픈소스 브라우저 확장입니다. 페이지를 읽고, 데이터를 추출하고, 웹 작업을 자동화합니다 — 원하는 LLM으로. 독점 브라우저 AI 플러그인의 셀프 호스팅 가능한 대안입니다.",
+  "hero.description": "WebBrain은 브라우저에 AI 에이전트 기능을 가져오는 무료 오픈소스 브라우저 확장입니다. 페이지를 읽고, 데이터를 추출하고, 웹 작업을 자동화합니다 — 원하는 LLM으로. 독점 브라우저 AI 플러그인의 셀프 호스팅 가능한 대안입니다.",
   "hero.cta.install": "확장 설치",
   "hero.cta.github": "GitHub에서 보기",
   "hero.mockup.url": "https://example.com/products",

@@ -20,7 +20,7 @@
   "nav.github": "GitHub",
   "nav.github_stars_aria": "WebBrain'i GitHub'da yıldızla",
   "hero.h1_html": "Açık kaynaklı AI <span class=\"gradient\">tarayıcı ajanı</span>",
-  "hero.description": "WebBrain, Chrome ve Firefox'a AI ajan yeteneklerini getiren ücretsiz ve açık kaynaklı bir tarayıcı uzantısıdır. Sayfaları oku, veri çıkar, web görevlerini otomatikleştir — seçtiğin LLM ile. Tescilli tarayıcı AI eklentilerine kendine ait sunucularda barındırılabilir bir alternatif.",
+  "hero.description": "WebBrain, tarayıcınıza AI ajan yeteneklerini getiren ücretsiz ve açık kaynaklı bir tarayıcı uzantısıdır. Sayfaları oku, veri çıkar, web görevlerini otomatikleştir — seçtiğin LLM ile. Tescilli tarayıcı AI eklentilerine kendine ait sunucularda barındırılabilir bir alternatif.",
   "hero.cta.install": "Uzantıyı yükle",
   "hero.cta.github": "GitHub'da gör",
   "hero.mockup.url": "https://example.com/urunler",

@@ -20,7 +20,7 @@
   "nav.github": "GitHub",
   "nav.github_stars_aria": "GitHub で WebBrain にスターを付ける",
   "hero.h1_html": "オープンソースの AI <span class=\"gradient\">ブラウザエージェント</span>",
-  "hero.description": "WebBrain は無料・オープンソースのブラウザ拡張で、Chrome と Firefox に AI エージェント機能を持ち込みます。ページの読み取り、データの抽出、Web タスクの自動化を、あなたが選んだ LLM で。プロプライエタリなブラウザ AI プラグインに代わる、セルフホスト可能な選択肢です。",
+  "hero.description": "WebBrain は無料・オープンソースのブラウザ拡張で、お使いのブラウザに AI エージェント機能を持ち込みます。ページの読み取り、データの抽出、Web タスクの自動化を、あなたが選んだ LLM で。プロプライエタリなブラウザ AI プラグインに代わる、セルフホスト可能な選択肢です。",
   "hero.cta.install": "拡張をインストール",
   "hero.cta.github": "GitHub で見る",
   "hero.mockup.url": "https://example.com/products",

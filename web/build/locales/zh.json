@@ -20,7 +20,7 @@
   "nav.github": "GitHub",
   "nav.github_stars_aria": "在 GitHub 上为 WebBrain 加星",
   "hero.h1_html": "开源 <span class=\"gradient\">AI 浏览器代理</span>",
-  "hero.description": "WebBrain 是一款免费的开源浏览器扩展,为 Chrome 和 Firefox 带来 AI 代理能力。阅读页面、提取数据、自动化网页任务 —— 使用你选择的 LLM。专有浏览器 AI 插件的可自托管替代品。",
+  "hero.description": "WebBrain 是一款免费的开源浏览器扩展,为你的浏览器带来 AI 代理能力。阅读页面、提取数据、自动化网页任务 —— 使用你选择的 LLM。专有浏览器 AI 插件的可自托管替代品。",
   "hero.cta.install": "安装扩展",
   "hero.cta.github": "在 GitHub 查看",
   "hero.mockup.url": "https://example.com/products",

@@ -213,7 +213,7 @@
       margin-bottom: 14px;
       transition: border-color 0.2s;
     }
-    .provider-card.active { border-color: var(--accent); }
+    .provider-card.selected { border-color: var(--accent); }
     /* Collapsed cards are just the header — keeps the providers list scannable
        at a glance when many are configured. */
     .provider-card.collapsed { padding: 12px 16px; }
@@ -243,6 +243,16 @@
     .provider-card.expanded .provider-chevron { color: var(--accent); }
     .provider-name { font-weight: 600; font-size: 14px; }
     .provider-type { color: var(--text2); font-size: 11px; }
+    .provider-status-badges { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+    .provider-status-badge {
+      padding: 2px 6px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.4px;
+    }
+    .provider-status-badge.active { color: #8fd896; background: rgba(76, 175, 80, 0.15); }
+    .provider-status-badge.selected { color: var(--accent); background: rgba(108, 99, 255, 0.15); }
 
     /* Category badge — small uppercase pill next to the provider name so
        the user can see at a glance which category each provider belongs to. */
@@ -265,7 +275,7 @@
        signals "this is an identifier", and dimming + tabular-feel keeps it
        from competing with the provider's own name. max-width + ellipsis so
        long OpenRouter-style names ("anthropic/claude-sonnet-4-thinking-...")
-       don't push the active-indicator off the row. */
+       don't push the status badges off the row. */
     .provider-model {
       color: var(--text2);
       font-size: 11px;

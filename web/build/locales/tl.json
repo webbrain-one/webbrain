@@ -20,7 +20,7 @@
   "nav.github": "GitHub",
   "nav.github_stars_aria": "Bigyan ng star ang WebBrain sa GitHub",
   "hero.h1_html": "Ang Open-Source na AI <span class=\"gradient\">Browser Agent</span>",
-  "hero.description": "Ang WebBrain ay isang libre at open-source na extension ng browser na nagdadala ng AI agent capabilities sa Chrome at Firefox. Basahin ang mga pahina, kumuha ng datos, at i-automate ang mga gawain sa web — pinapagana ng LLM na napili mo. Ang self-hostable na alternatibo sa mga proprietary na browser AI plugin.",
+  "hero.description": "Ang WebBrain ay isang libre at open-source na extension ng browser na nagdadala ng AI agent capabilities sa iyong browser. Basahin ang mga pahina, kumuha ng datos, at i-automate ang mga gawain sa web — pinapagana ng LLM na napili mo. Ang self-hostable na alternatibo sa mga proprietary na browser AI plugin.",
   "hero.cta.install": "I-install ang Extension",
   "hero.cta.github": "Tingnan sa GitHub",
   "hero.mockup.url": "https://example.com/products",

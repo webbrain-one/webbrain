@@ -1,5 +1,12 @@
 // Hebrew (he).
 export default {
+  'sp.providers.no_setup_group': 'ללא הגדרה',
+  'sp.providers.no_setup': 'אין צורך בהגדרה',
+  'sp.providers.active_group': 'ספקים פעילים',
+  'sp.providers.active': 'פעיל',
+  'sp.providers.more': 'עוד…',
+  'st.providers.selected': 'נבחר',
+  'st.providers.select_for_chat': 'בחירה לצ׳אט',
   "brand": "WebBrain",
   "sp.status.disconnected": "לא מחובר",
   "sp.status.connected": "מחובר ({model})",

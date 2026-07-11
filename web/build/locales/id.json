@@ -20,7 +20,7 @@
   "nav.github": "GitHub",
   "nav.github_stars_aria": "Beri bintang WebBrain di GitHub",
   "hero.h1_html": "Agen Peramban <span class=\"gradient\">AI Open-Source</span>",
-  "hero.description": "WebBrain adalah ekstensi peramban gratis dan open-source yang membawa kapabilitas agen AI ke Chrome dan Firefox. Baca halaman, ekstrak data, dan otomatiskan tugas web — ditenagai LLM pilihan Anda. Alternatif yang bisa di-host sendiri untuk plugin AI peramban berpemilik.",
+  "hero.description": "WebBrain adalah ekstensi peramban gratis dan open-source yang membawa kapabilitas agen AI ke browser Anda. Baca halaman, ekstrak data, dan otomatiskan tugas web — ditenagai LLM pilihan Anda. Alternatif yang bisa di-host sendiri untuk plugin AI peramban berpemilik.",
   "hero.cta.install": "Pasang Ekstensi",
   "hero.cta.github": "Lihat di GitHub",
   "hero.mockup.url": "https://example.com/products",

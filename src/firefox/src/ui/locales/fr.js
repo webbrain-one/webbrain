@@ -1,5 +1,12 @@
 // French (fr).
 export default {
+  'sp.providers.no_setup_group': 'Sans configuration',
+  'sp.providers.no_setup': 'Aucune configuration requise',
+  'sp.providers.active_group': 'Fournisseurs actifs',
+  'sp.providers.active': 'Actif',
+  'sp.providers.more': 'Plus…',
+  'st.providers.selected': 'SÉLECTIONNÉ',
+  'st.providers.select_for_chat': 'Sélectionner pour le chat',
   // Context compaction + cloud cost + prompt-tier strings
   'sp.context_compacted': "Contexte compacté automatiquement",
   'sp.context_compacted_detail': "{summarized} messages précédents résumés · {remaining} conservés",

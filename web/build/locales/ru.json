@@ -20,7 +20,7 @@
   "nav.github": "GitHub",
   "nav.github_stars_aria": "Поставить звезду WebBrain на GitHub",
   "hero.h1_html": "Open-source AI-<span class=\"gradient\">агент для браузера</span>",
-  "hero.description": "WebBrain — бесплатное open-source расширение, которое добавляет возможности AI-агента в Chrome и Firefox. Читает страницы, извлекает данные и автоматизирует веб-задачи — на любом LLM по вашему выбору. Self-hosted альтернатива проприетарным браузерным AI-плагинам.",
+  "hero.description": "WebBrain — бесплатное open-source расширение, которое добавляет возможности AI-агента в ваш браузер. Читает страницы, извлекает данные и автоматизирует веб-задачи — на любом LLM по вашему выбору. Self-hosted альтернатива проприетарным браузерным AI-плагинам.",
   "hero.cta.install": "Установить расширение",
   "hero.cta.github": "Открыть на GitHub",
   "hero.mockup.url": "https://example.com/products",

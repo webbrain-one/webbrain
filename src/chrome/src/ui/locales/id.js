@@ -1,5 +1,12 @@
 // Indonesian (id).
 export default {
+  'sp.providers.no_setup_group': 'Tanpa penyiapan',
+  'sp.providers.no_setup': 'Tidak perlu penyiapan',
+  'sp.providers.active_group': 'Penyedia aktif',
+  'sp.providers.active': 'Aktif',
+  'sp.providers.more': 'Lainnya…',
+  'st.providers.selected': 'DIPILIH',
+  'st.providers.select_for_chat': 'Pilih untuk chat',
   // Context compaction + cloud cost + prompt-tier strings
   'sp.context_compacted': "Konteks dipadatkan secara otomatis",
   'sp.context_compacted_detail': "{summarized} pesan sebelumnya diringkas · {remaining} dipertahankan",

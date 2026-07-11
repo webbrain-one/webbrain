@@ -1,5 +1,12 @@
 // Russian (ru).
 export default {
+  'sp.providers.no_setup_group': 'Без настройки',
+  'sp.providers.no_setup': 'Настройка не требуется',
+  'sp.providers.active_group': 'Активные провайдеры',
+  'sp.providers.active': 'Активен',
+  'sp.providers.more': 'Ещё…',
+  'st.providers.selected': 'ВЫБРАН',
+  'st.providers.select_for_chat': 'Выбрать для чата',
   // Context compaction + cloud cost + prompt-tier strings
   'sp.context_compacted': "Контекст автоматически уплотнён",
   'sp.context_compacted_detail': "{summarized} предыдущих сообщений сжато · {remaining} сохранено",
