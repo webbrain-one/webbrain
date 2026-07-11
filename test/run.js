@@ -19226,7 +19226,9 @@ test('plan before act: try is default while explicit off is preserved', () => {
     assert.equal(agent.planBeforeAct, true, `${label} legacy mirror default`);
     assert.equal(agent._plannerMode(), 'try', `${label} effective default mode`);
     assert.equal(agent.planReviewMode, 'confidence', `${label} default plan review mode`);
-    assert.equal(agent.planReviewConfidenceThreshold, 0.9, `${label} default plan review threshold`);
+    assert.equal(agent.planReviewConfidenceThreshold, 0.75, `${label} default plan review threshold`);
+    assert.equal(agent._shouldReviewPlan({ confidence: 0.74 }), true, `${label} default below-threshold plans should review`);
+    assert.equal(agent._shouldReviewPlan({ confidence: 0.75 }), false, `${label} default at-threshold plans should auto-approve`);
     agent.setPlanReviewSettings({ mode: 'always', confidenceThreshold: 95 });
     assert.equal(agent.planReviewMode, 'always', `${label} review mode setter`);
     assert.equal(agent.planReviewConfidenceThreshold, 0.95, `${label} review threshold percent setter`);
@@ -19281,6 +19283,7 @@ test('plan before act: try is default while explicit off is preserved', () => {
     assert.match(html, /<select id="select-plan-before-act-mode">\s*<option value="try"/, `${file} should render try as the first/default option`);
     assert.match(html, /<select id="select-plan-review-mode">\s*<option value="confidence"/, `${file} should render confidence review as the first/default option`);
     assert.match(html, /id="range-plan-review-confidence"/, `${file} should expose the confidence threshold slider`);
+    assert.match(html, /id="range-plan-review-confidence"[^>]*value="75"/, `${file} should render the 75% default threshold`);
   }
   for (const file of [
     'src/chrome/src/ui/locales/en.js',
@@ -19510,6 +19513,7 @@ test('planner gate: approving plan appends without deleting scratchpad facts', a
       const tabId = label === 'chrome' ? 9201 : 9202;
       const agent = new AgentClass({ getActive: () => ({}) });
       agent.setPlanBeforeActMode('try');
+      agent.setPlanReviewSettings({ confidenceThreshold: 0.9 });
       agent.conversations.set(tabId, [
         { role: 'system', content: 'system' },
         { role: 'user', content: 'original task' },
@@ -20037,6 +20041,7 @@ test('planner gate: review exposes compact markdown plus verbose markdown', asyn
     for (const [label, AgentClass] of [['chrome', AgentCh], ['firefox', AgentFx]]) {
       const tabId = label === 'chrome' ? 9211 : 9212;
       const agent = new AgentClass({ getActive: () => ({}) });
+      agent.setPlanReviewSettings({ confidenceThreshold: 0.9 });
       agent.conversations.set(tabId, [{ role: 'system', content: 'system' }]);
       agent._chatWithCostAllowance = async () => ({ content: plannerFixtureJson() });
       agent._waitForPlanReview = async (_tabId, _planId, _plan, markdown, _onUpdate, verboseMarkdown) => {
@@ -20068,15 +20073,15 @@ test('planner gate: review exposes compact markdown plus verbose markdown', asyn
   });
 });
 
-test('planner gate: high-confidence plans auto-approve by default', async () => {
+test('planner gate: 75% confidence plans auto-approve by default', async () => {
   await withPlannerBrowserGlobals(async () => {
     for (const [label, AgentClass] of [['chrome', AgentCh], ['firefox', AgentFx]]) {
       const tabId = label === 'chrome' ? 9215 : 9216;
       const agent = new AgentClass({ getActive: () => ({}) });
       agent.conversations.set(tabId, [{ role: 'system', content: 'system' }]);
-      agent._chatWithCostAllowance = async () => ({ content: plannerFixtureJson({ confidence: 0.95 }) });
+      agent._chatWithCostAllowance = async () => ({ content: plannerFixtureJson({ confidence: 0.75 }) });
       agent._waitForPlanReview = async () => {
-        throw new Error('high-confidence default should not wait for side panel plan approval');
+        throw new Error('75% default should not wait for side panel plan approval');
       };
 
       const autoApprovedEvents = [];
@@ -20092,9 +20097,9 @@ test('planner gate: high-confidence plans auto-approve by default', async () => 
 
       assert.equal(gate.proceed, true, `${label} should proceed`);
       assert.equal(autoApprovedEvents.length, 1, `${label} should emit a visible auto-approve trace`);
-      assert.equal(autoApprovedEvents[0].confidence, 0.95, `${label} auto-approve trace should carry the plan confidence`);
+      assert.equal(autoApprovedEvents[0].confidence, 0.75, `${label} auto-approve trace should carry the plan confidence`);
       assert.match(gate.approvedScratchpadText, /\[Approved plan — pinned by planner\]/, `${label} should pin the auto-approved plan`);
-      assert.match(gate.approvedScratchpadText, /Confidence: 95%/, `${label} auto-approved handoff should keep confidence`);
+      assert.match(gate.approvedScratchpadText, /Confidence: 75%/, `${label} auto-approved handoff should keep confidence`);
       assert.match(gate.approvedScratchpadText, /read_page/, `${label} auto-approved handoff should keep verbose tool detail`);
     }
   });
@@ -20133,6 +20138,7 @@ test('planner gate: scheduled runs auto-approve plan review', async () => {
       const tabId = label === 'chrome' ? 9221 : 9222;
       const agent = new AgentClass({ getActive: () => ({}) });
       agent.setPlanBeforeActMode('try');
+      agent.setPlanReviewSettings({ confidenceThreshold: 0.9 });
       agent.conversations.set(tabId, [{ role: 'system', content: 'system' }]);
       agent.setScheduledRunPolicy(tabId, {
         requireConsequentialConfirmation: false,

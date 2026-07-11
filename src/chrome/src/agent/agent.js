@@ -43,6 +43,10 @@ import { buildCustomSkillsPrompt, buildSkillToolDefinitions, buildSkillToolRegis
 import { USER_MEMORY_DEFAULT_MAX_PROMPT_CHARS, formatUserMemoryPrompt, normalizeUserMemoryMaxPromptChars, normalizeUserMemoryStore } from './user-memory.js';
 
 const DEFAULT_CLOUD_COST_ALLOWANCE_USD = 10;
+// Product default: auto-approve plans at 75% confidence to reduce review stops.
+// Planner prompt still tells the LLM to reserve 0.90+ for straightforward plans;
+// that intentional gap keeps model scoring conservative without over-pausing.
+const PLAN_REVIEW_CONFIDENCE_DEFAULT = 0.75;
 const COST_ALLOWANCE_SESSION_KEY = 'costAllowanceSessionUsd';
 const COST_ALLOWANCE_TOTAL_KEY = 'costAllowanceTotalUsd';
 const CLOUD_COST_SPENT_KEY = 'cloudCostSpentUsd';
@@ -157,7 +161,7 @@ export class Agent {
     this.planBeforeActMode = 'try';
     this.planBeforeAct = true; // legacy boolean mirror for older call sites/tests
     this.planReviewMode = 'confidence'; // confidence | always | never
-    this.planReviewConfidenceThreshold = 0.9;
+    this.planReviewConfidenceThreshold = PLAN_REVIEW_CONFIDENCE_DEFAULT;
     this._pendingPlans = new Map(); // tabId → (planId → { resolve, ts })
     // Stale click detection: per-tab last clicked element identity.
     this._lastCdpClickIdent = new Map(); // tabId -> string
@@ -3902,7 +3906,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
   _normalizePlanReviewConfidenceThreshold(value) {
     let threshold = Number(value);
-    if (!Number.isFinite(threshold)) threshold = 0.9;
+    if (!Number.isFinite(threshold)) threshold = PLAN_REVIEW_CONFIDENCE_DEFAULT;
     if (threshold > 1 && threshold <= 100) threshold /= 100;
     // Clamp to the same [50%, 99%] range the settings slider enforces, so an
     // out-of-band stored value (e.g. 0) can't silently disable the review gate
