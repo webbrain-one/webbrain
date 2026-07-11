@@ -1,5 +1,12 @@
 // Filipino / Tagalog (tl).
 export default {
+  'sp.providers.no_setup_group': 'Walang setup',
+  'sp.providers.no_setup': 'Hindi kailangan ng setup',
+  'sp.providers.active_group': 'Mga aktibong provider',
+  'sp.providers.active': 'Aktibo',
+  'sp.providers.more': 'Higit pa…',
+  'st.providers.selected': 'NAPILI',
+  'st.providers.select_for_chat': 'Piliin para sa chat',
   // Context compaction + cloud cost + prompt-tier strings
   'sp.context_compacted': "Awtomatikong na-compact ang konteksto",
   'sp.context_compacted_detail': "{summarized} naunang mensahe ang binuod · {remaining} ang itinago",

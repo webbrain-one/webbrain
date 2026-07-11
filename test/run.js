@@ -7541,6 +7541,32 @@ test('settings page drops stale provider activation completions', () => {
   }
 });
 
+test('provider picker exposes only WebBrain Cloud, configured providers, and More', () => {
+  for (const [label, panelRel, settingsRel, settingsHtmlRel] of [
+    ['chrome', 'src/chrome/src/ui/sidepanel.js', 'src/chrome/src/ui/settings.js', 'src/chrome/src/ui/settings.html'],
+    ['firefox', 'src/firefox/src/ui/sidepanel.js', 'src/firefox/src/ui/settings.js', 'src/firefox/src/ui/settings.html'],
+  ]) {
+    const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
+    const settings = fs.readFileSync(path.join(ROOT, settingsRel), 'utf8');
+    const settingsHtml = fs.readFileSync(path.join(ROOT, settingsHtmlRel), 'utf8');
+
+    assert.match(panel, /id !== 'webbrain_cloud' && config\?\.configured === true/, `${label}: picker should filter to configured non-cloud providers`);
+    assert.match(panel, /cloudOption\.value = 'webbrain_cloud'/, `${label}: WebBrain Cloud should always be offered`);
+    assert.match(panel, /MORE_PROVIDERS_OPTION_VALUE = '__more_providers__'/, `${label}: More sentinel missing`);
+    assert.match(panel, /providerSelect\.value = selectedProviderId;[\s\S]*?await openProvidersSettingsPage\(\);[\s\S]*?return;/, `${label}: More should restore the selection and stop before activation`);
+    assert.match(panel, /settings\.html#providers/, `${label}: More should deep-link to Providers settings`);
+    assert.match(panel, /if \(changes\.providers \|\| changes\.activeProvider\) \{[\s\S]*?loadProviders\(\)/, `${label}: picker should refresh when provider storage changes`);
+
+    assert.match(settings, /const isConfigured = id !== 'webbrain_cloud' && config\.configured === true/, `${label}: Settings should derive Active from configured state`);
+    assert.match(settings, /const isSelected = id === activeProviderId/, `${label}: Settings should derive Selected independently`);
+    assert.match(settings, /st\.providers\.select_for_chat/, `${label}: Settings should use Select for chat terminology`);
+    assert.match(settings, /await saveProvider\(id, \{ showFlash: false \}\);[\s\S]*?set_active_provider/, `${label}: selecting for chat should persist configuration first`);
+    assert.match(settingsHtml, /\.provider-card\.selected \{ border-color: var\(--accent\); \}/, `${label}: selected card should retain the visual highlight`);
+    assert.match(settingsHtml, /\.provider-status-badge\.active/, `${label}: active badge styling missing`);
+    assert.match(settingsHtml, /\.provider-status-badge\.selected/, `${label}: selected badge styling missing`);
+  }
+});
+
 test('settings provider save and test status updates are DOM-safe', () => {
   for (const [label, settingsRel] of [
     ['chrome', 'src/chrome/src/ui/settings.js'],
@@ -7561,7 +7587,7 @@ test('settings provider save and test status updates are DOM-safe', () => {
     const saveBody = settings.slice(saveStart, settings.indexOf('\n}\n\nasync function testProvider', saveStart) + 2);
     assert.match(
       saveBody,
-      /try \{[\s\S]*?await sendToBackground\('update_provider', \{ providerId: id, config \}\);[\s\S]*?\} catch \(e\) \{[\s\S]*?setProviderTestResult\(id, 'fail', t\('st\.providers\.failed', \{ error: e\.message \}\)\);[\s\S]*?throw e;[\s\S]*?\}[\s\S]*?if \(providersData\[id\]\) Object\.assign\(providersData\[id\], config\);/,
+      /try \{[\s\S]*?await sendToBackground\('update_provider', \{ providerId: id, config \}\);[\s\S]*?\} catch \(e\) \{[\s\S]*?setProviderTestResult\(id, 'fail', t\('st\.providers\.failed', \{ error: e\.message \}\)\);[\s\S]*?throw e;[\s\S]*?\}[\s\S]*?if \(providersData\[id\]\) \{[\s\S]*?Object\.assign\(providersData\[id\], config\);[\s\S]*?providersData\[id\]\.configured = id !== 'webbrain_cloud';[\s\S]*?\}/,
       `${label}: successful saves should update in-memory provider data and failed saves should report safely`,
     );
     assert.match(
@@ -11829,6 +11855,8 @@ test('ProviderManager load ignores unsupported stored provider configs', async (
       assert.equal(mgr.providers.get('openai')?.config.type, 'openai', `${label}: built-in type should stay pinned`);
       assert.equal(mgr.providers.get('openai')?.config.apiKey, `${label}-kept-key`, `${label}: built-in overrides should survive`);
       assert.equal(mgr.providers.get('openai')?.config.model, `${label}-kept-model`, `${label}: built-in model should survive`);
+      assert.equal(mgr.providers.get('openai')?.config.configured, true, `${label}: customized legacy provider should migrate to configured`);
+      assert.equal(mgr.providers.get('anthropic')?.config.configured, false, `${label}: untouched provider should remain unconfigured`);
       for (const id of ['openrouter', 'cloudflare', 'nvidia', 'groq']) {
         assert.equal(mgr.providers.get(id)?.config.category, 'router', `${label}: stored ${id} category should migrate to router`);
       }
@@ -11837,8 +11865,28 @@ test('ProviderManager load ignores unsupported stored provider configs', async (
       assert.equal(mgr.providers.get('groq')?.config.apiKey, `${label}-groq-key`, `${label}: Groq API key should survive migration`);
       assert.equal(mgr.providers.get('webbrain_cloud')?.config.contextWindow, 1000000, `${label}: legacy WebBrain Cloud context window should migrate`);
       assert.equal(mgr.providers.get('webbrain_cloud')?.config.apiKey, `${label}-cloud-key`, `${label}: WebBrain Cloud API key should survive migration`);
+      assert.equal(mgr.providers.get('webbrain_cloud')?.config.configured, false, `${label}: WebBrain Cloud should stay available without being configured`);
       assert.equal(mgr.providers.get('custom_proxy')?.config.type, 'openai', `${label}: supported custom provider should load`);
       assert.equal(mgr.providers.get('custom_proxy')?.config.model, 'custom-model', `${label}: custom provider config should survive`);
+      assert.equal(mgr.providers.get('custom_proxy')?.config.configured, true, `${label}: legacy stored-only provider should migrate to configured`);
+      assert.equal(storageData.providers.openai.configured, true, `${label}: inferred configured state should be persisted`);
+
+      const defaults = mgr._defaultConfigs();
+      assert.equal(mgr._hasStoredProviderCustomization(defaults.ollama, { ...defaults.ollama }), false, `${label}: untouched default snapshot is not customized`);
+      assert.equal(mgr._hasStoredProviderCustomization(defaults.ollama, { ...defaults.ollama, model: 'custom-model' }), true, `${label}: changed model is customized`);
+      assert.equal(mgr._hasStoredProviderCustomization(defaults.ollama, { ...defaults.ollama, enabled: false }), false, `${label}: enabled metadata alone is not customization`);
+
+      const fallbackStorage = {
+        webbrainDeviceGuid: validGuid,
+        activeProvider: 'ollama',
+        providers: {
+          ollama: { ...defaults.ollama, configured: false },
+        },
+      };
+      globalThis[runtimeKey] = makeRuntime(fallbackStorage);
+      const fallbackManager = new PM();
+      await fallbackManager.load();
+      assert.equal(fallbackManager.activeProviderId, 'webbrain_cloud', `${label}: legacy unconfigured selection should fall back to WebBrain Cloud`);
     }
   } finally {
     globalThis.chrome = originalChrome;
@@ -11889,6 +11937,7 @@ test('ProviderManager update rejects unknown providers and pins existing provide
       await mgr.updateProvider('openai', { type: 'llamacpp', model: 'updated-model' });
       assert.equal(mgr.providers.get('openai')?.config.type, 'openai', `${label}: provider type should remain pinned`);
       assert.equal(mgr.providers.get('openai')?.config.model, 'updated-model', `${label}: normal provider fields should update`);
+      assert.equal(mgr.providers.get('openai')?.config.configured, true, `${label}: explicit provider update should mark it configured`);
       assert.equal(writes.length, 1, `${label}: accepted update should persist provider state`);
     }
   } finally {

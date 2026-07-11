@@ -1,5 +1,12 @@
 // Spanish (es).
 export default {
+  'sp.providers.no_setup_group': 'Sin configuración',
+  'sp.providers.no_setup': 'No requiere configuración',
+  'sp.providers.active_group': 'Proveedores activos',
+  'sp.providers.active': 'Activo',
+  'sp.providers.more': 'Más…',
+  'st.providers.selected': 'SELECCIONADO',
+  'st.providers.select_for_chat': 'Seleccionar para el chat',
   // Context compaction + cloud cost + prompt-tier strings
   'sp.context_compacted': "Contexto compactado automáticamente",
   'sp.context_compacted_detail': "{summarized} mensajes anteriores resumidos · {remaining} conservados",

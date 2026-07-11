@@ -1700,7 +1700,7 @@ function renderProviders() {
 
   // Filter bar — sits above the list. Pill row, click-to-switch.
   // "All" includes everything; the per-category pills hide cards whose
-  // `category` doesn't match. The active provider is ALWAYS visible
+  // `category` doesn't match. The selected provider is ALWAYS visible
   // regardless of filter (so the user never loses track of it).
   providersContainer.appendChild(renderProviderFilterBar());
 
@@ -1708,12 +1708,13 @@ function renderProviders() {
   const providerQuery = normalizeGeneralSearchText(providerSearchQuery);
   let visibleCount = 0;
   for (const [id, config] of entries) {
-    const isActive = id === activeProviderId;
+    const isSelected = id === activeProviderId;
+    const isConfigured = id !== 'webbrain_cloud' && config.configured === true;
     const fieldDefs = providerConfigs[id]?.fields || [];
 
-    // Filter: hide cards whose category doesn't match (active always shown).
+    // Filter: hide cards whose category doesn't match (selected always shown).
     const category = config.category || 'cloud';
-    if (providerFilter !== 'all' && category !== providerFilter && !isActive) continue;
+    if (providerFilter !== 'all' && category !== providerFilter && !isSelected) continue;
     if (providerQuery && !providerSearchTextForEntry(id, config, fieldDefs).includes(providerQuery)) continue;
     visibleCount++;
 
@@ -1834,15 +1835,15 @@ function renderProviders() {
         <button class="btn-primary btn-save" data-provider="${id}">${escapeHtml(t('st.providers.save'))}</button>
         <button class="btn-secondary btn-test" data-provider="${id}">${escapeHtml(t('st.providers.test'))}</button>
         ${billingButton}
-        ${!isActive ? `<button class="btn-secondary btn-activate" data-provider="${id}">${escapeHtml(t('st.providers.set_active'))}</button>` : ''}
+        ${!isSelected ? `<button class="btn-secondary btn-activate" data-provider="${id}">${escapeHtml(t('st.providers.select_for_chat'))}</button>` : ''}
       </div>
       <div class="test-result" id="test-${id}"></div>
     `;
 
-    providersContainer.appendChild(wrapCollapsibleCard(id, config, isActive, body));
+    providersContainer.appendChild(wrapCollapsibleCard(id, config, isSelected, isConfigured, body));
   }
 
-  // If the filter would leave the list empty (no cards match and no active
+  // If the filter would leave the list empty (no cards match and no selected
   // provider in this category either), tell the user. Don't make them
   // guess why nothing is showing.
   if (visibleCount === 0) {
@@ -1984,16 +1985,16 @@ function renderProviderFilterBar() {
 }
 
 /**
- * Wrap a provider card's body in a collapsible shell. Active provider
+ * Wrap a provider card's body in a collapsible shell. Selected provider
  * starts expanded; everything else starts collapsed but the user can
  * toggle individual cards open by clicking the header. Expansion state
  * is session-only (resets on settings reload) — keeps the default
  * predictable rather than reflecting whatever the user last poked at.
  */
-function wrapCollapsibleCard(id, config, isActive, bodyHtml) {
-  const expanded = isActive || expandedProviders.has(id);
+function wrapCollapsibleCard(id, config, isSelected, isConfigured, bodyHtml) {
+  const expanded = isSelected || expandedProviders.has(id);
   const card = document.createElement('div');
-  card.className = `provider-card ${isActive ? 'active' : ''} ${expanded ? 'expanded' : 'collapsed'}`;
+  card.className = `provider-card ${isSelected ? 'selected' : ''} ${isConfigured ? 'configured' : ''} ${expanded ? 'expanded' : 'collapsed'}`;
   card.dataset.providerId = id;
   card.dataset.providerCategory = config.category || 'cloud';
 
@@ -2013,7 +2014,10 @@ function wrapCollapsibleCard(id, config, isActive, bodyHtml) {
       ${config.category ? `<span class="provider-category-badge provider-category-${escapeHtml(config.category)}">${escapeHtml(config.category)}</span>` : ''}
       ${modelStr ? `<span class="provider-model" title="${escapeHtml(modelStr)}">${escapeHtml(modelStr)}</span>` : ''}
     </div>
-    ${isActive ? `<span style="color:var(--accent);font-size:11px;font-weight:600">${escapeHtml(t('st.providers.active'))}</span>` : ''}
+    <span class="provider-status-badges">
+      ${isConfigured ? `<span class="provider-status-badge active">${escapeHtml(t('st.providers.active'))}</span>` : ''}
+      ${isSelected ? `<span class="provider-status-badge selected">${escapeHtml(t('st.providers.selected'))}</span>` : ''}
+    </span>
   `;
   header.addEventListener('click', (e) => {
     // Ignore clicks that originated on inputs/buttons inside the header
@@ -2171,12 +2175,31 @@ async function saveProvider(id, { showFlash = true } = {}) {
     if (showFlash) setProviderTestResult(id, 'fail', t('st.providers.failed', { error: e.message }));
     throw e;
   }
-  if (providersData[id]) Object.assign(providersData[id], config);
+  if (providersData[id]) {
+    Object.assign(providersData[id], config);
+    providersData[id].configured = id !== 'webbrain_cloud';
+  }
+  refreshProviderCardStatus(id);
 
   if (showFlash) {
     const testEl = setProviderTestResult(id, 'ok', t('st.providers.saved'));
     if (testEl) setTimeout(() => testEl.classList.remove('show'), 2000);
   }
+}
+
+function refreshProviderCardStatus(id) {
+  const card = document.querySelector(`.provider-card[data-provider-id="${id}"]`);
+  if (!card) return;
+  const isConfigured = id !== 'webbrain_cloud' && providersData[id]?.configured === true;
+  const isSelected = id === activeProviderId;
+  card.classList.toggle('configured', isConfigured);
+  card.classList.toggle('selected', isSelected);
+  const badges = card.querySelector('.provider-status-badges');
+  if (!badges) return;
+  badges.innerHTML = `
+    ${isConfigured ? `<span class="provider-status-badge active">${escapeHtml(t('st.providers.active'))}</span>` : ''}
+    ${isSelected ? `<span class="provider-status-badge selected">${escapeHtml(t('st.providers.selected'))}</span>` : ''}
+  `;
 }
 
 async function testProvider(id) {
@@ -2208,7 +2231,7 @@ async function testProvider(id) {
 /**
  * Snapshot any unsaved field values from the current DOM back into
  * providersData so a subsequent renderProviders() preserves them.
- * Without this, clicking "Set Active" or any other action that re-renders
+ * Without this, clicking "Select for chat" or any other action that re-renders
  * silently throws away whatever the user has typed but not yet saved.
  */
 function syncInputsIntoProvidersData() {
@@ -2225,6 +2248,8 @@ async function activateProvider(id) {
   requestedActiveProviderId = id;
   const requestId = ++providerActivationRequestId;
   try {
+    await saveProvider(id, { showFlash: false });
+    if (requestId !== providerActivationRequestId || requestedActiveProviderId !== id) return;
     await sendToBackground('set_active_provider', { providerId: id });
   } catch (e) {
     if (requestId === providerActivationRequestId && requestedActiveProviderId === id) {

@@ -1,5 +1,12 @@
 // Thai (th).
 export default {
+  'sp.providers.no_setup_group': 'ไม่ต้องตั้งค่า',
+  'sp.providers.no_setup': 'ไม่ต้องตั้งค่า',
+  'sp.providers.active_group': 'ผู้ให้บริการที่ใช้งานอยู่',
+  'sp.providers.active': 'ใช้งานอยู่',
+  'sp.providers.more': 'เพิ่มเติม…',
+  'st.providers.selected': 'เลือกแล้ว',
+  'st.providers.select_for_chat': 'เลือกสำหรับแชต',
   // Context compaction + cloud cost + prompt-tier strings
   'sp.context_compacted': "บีบอัดบริบทโดยอัตโนมัติแล้ว",
   'sp.context_compacted_detail': "สรุปข้อความก่อนหน้า {summarized} ข้อความ · เก็บไว้ {remaining} ข้อความ",

@@ -1,5 +1,12 @@
 // English — canonical locale. Other locales inherit key names from this file.
 export default {
+  'sp.providers.no_setup_group': 'No setup required',
+  'sp.providers.no_setup': 'No setup',
+  'sp.providers.active_group': 'Active providers',
+  'sp.providers.active': 'Active',
+  'sp.providers.more': 'More…',
+  'st.providers.selected': 'SELECTED',
+  'st.providers.select_for_chat': 'Select for chat',
   // Brand name: kept in English across locales.
   'brand': 'WebBrain',
 

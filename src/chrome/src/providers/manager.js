@@ -32,6 +32,18 @@ const OPENROUTER_LEGACY_DEFAULT_MODEL = 'stepfun/step-3.7-flash';
 const SUPPORTED_PROVIDER_TYPES = new Set(['llamacpp', 'openai', 'azure_openai', 'aws_bedrock', 'anthropic', 'anthropic_oauth']);
 const SAFE_PROVIDER_ID_RE = /^[A-Za-z0-9_-]+$/;
 const ROUTER_PROVIDER_IDS = ['openrouter', 'cloudflare', 'nvidia', 'groq', 'huggingface'];
+const PROVIDER_CONFIGURATION_METADATA_KEYS = new Set([
+  'configured',
+  'enabled',
+  'type',
+  'category',
+  'label',
+  'providerName',
+  'apiKeyUrl',
+  'deviceGuid',
+  'supportsStreamUsageOptions',
+  'omitToolsWhenImagesPresent',
+]);
 
 /**
  * Manages LLM provider instances and persists configuration.
@@ -65,12 +77,31 @@ export class ProviderManager {
     // without dropping keys that don't exist in stored.
     const defaults = this._defaultConfigs();
     const configs = {};
+    let providerStateMigrated = false;
     for (const [id, config] of Object.entries(defaults)) {
-      configs[id] = { ...config, ...this._storedDefaultOverride(config, stored[id]) };
+      const storedConfig = stored[id];
+      const hasConfiguredMarker = !!storedConfig && Object.hasOwn(storedConfig, 'configured');
+      const configured = id !== WEBBRAIN_CLOUD_PROVIDER_ID && (
+        storedConfig?.configured === true ||
+        (!hasConfiguredMarker && this._hasStoredProviderCustomization(config, storedConfig))
+      );
+      configs[id] = {
+        ...config,
+        ...this._storedDefaultOverride(config, storedConfig),
+        configured,
+      };
+      if (storedConfig && !hasConfiguredMarker) providerStateMigrated = true;
     }
     // Carry over any stored-only entries (e.g. legacy provider ids).
     for (const [id, config] of Object.entries(stored)) {
-      if (!configs[id] && this._isSupportedProviderConfig(id, config)) configs[id] = config;
+      if (!configs[id] && this._isSupportedProviderConfig(id, config)) {
+        const hasConfiguredMarker = Object.hasOwn(config, 'configured');
+        configs[id] = {
+          ...config,
+          configured: id !== WEBBRAIN_CLOUD_PROVIDER_ID && (config.configured === true || !hasConfiguredMarker),
+        };
+        if (!hasConfiguredMarker) providerStateMigrated = true;
+      }
     }
     delete configs.webbrain;
     delete configs.openai_subscription;
@@ -87,11 +118,16 @@ export class ProviderManager {
       ? WEBBRAIN_CLOUD_PROVIDER_ID
       : (data.activeProvider || WEBBRAIN_CLOUD_PROVIDER_ID);
     if (!configs[this.activeProviderId]) this.activeProviderId = WEBBRAIN_CLOUD_PROVIDER_ID;
+    if (this.activeProviderId !== WEBBRAIN_CLOUD_PROVIDER_ID && configs[this.activeProviderId]?.configured !== true) {
+      this.activeProviderId = WEBBRAIN_CLOUD_PROVIDER_ID;
+      providerStateMigrated = true;
+    }
 
     this.providers.clear();
     for (const [id, config] of Object.entries(configs)) {
       this.providers.set(id, this._createProvider(id, config));
     }
+    if (providerStateMigrated) await this.save();
   }
 
   /**
@@ -465,6 +501,14 @@ export class ProviderManager {
     return override;
   }
 
+  _hasStoredProviderCustomization(defaultConfig, storedConfig) {
+    if (!storedConfig || typeof storedConfig !== 'object') return false;
+    return Object.entries(storedConfig).some(([key, value]) => {
+      if (PROVIDER_CONFIGURATION_METADATA_KEYS.has(key)) return false;
+      return !Object.is(value, defaultConfig[key]);
+    });
+  }
+
   _isSupportedProviderConfig(id, config) {
     return SAFE_PROVIDER_ID_RE.test(String(id || '')) &&
       !!config &&
@@ -569,7 +613,11 @@ export class ProviderManager {
       throw new Error(`Provider not found: ${id}`);
     }
     const current = this.providers.get(id).config;
-    const merged = { ...current, ...this._storedDefaultOverride(current, config) };
+    const merged = {
+      ...current,
+      ...this._storedDefaultOverride(current, config),
+      configured: id !== WEBBRAIN_CLOUD_PROVIDER_ID,
+    };
     this.providers.set(id, this._createProvider(id, merged));
     await this.save();
   }

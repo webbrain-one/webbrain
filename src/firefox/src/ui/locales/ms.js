@@ -1,5 +1,12 @@
 // Malay (ms).
 export default {
+  'sp.providers.no_setup_group': 'Tanpa persediaan',
+  'sp.providers.no_setup': 'Tiada persediaan diperlukan',
+  'sp.providers.active_group': 'Penyedia aktif',
+  'sp.providers.active': 'Aktif',
+  'sp.providers.more': 'Lagi…',
+  'st.providers.selected': 'DIPILIH',
+  'st.providers.select_for_chat': 'Pilih untuk sembang',
   // Context compaction + cloud cost + prompt-tier strings
   'sp.context_compacted': "Konteks dipadatkan secara automatik",
   'sp.context_compacted_detail': "{summarized} mesej terdahulu diringkaskan · {remaining} dikekalkan",

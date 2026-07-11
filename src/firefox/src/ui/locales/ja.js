@@ -1,5 +1,12 @@
 // Japanese (ja).
 export default {
+  'sp.providers.no_setup_group': '設定不要',
+  'sp.providers.no_setup': '設定なし',
+  'sp.providers.active_group': '有効なプロバイダー',
+  'sp.providers.active': '有効',
+  'sp.providers.more': 'その他…',
+  'st.providers.selected': '選択中',
+  'st.providers.select_for_chat': 'チャット用に選択',
   // Context compaction + cloud cost + prompt-tier strings
   'sp.context_compacted': "コンテキストを自動的に圧縮しました",
   'sp.context_compacted_detail': "以前のメッセージ {summarized} 件を要約 · {remaining} 件を保持",

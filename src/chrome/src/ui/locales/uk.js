@@ -1,5 +1,12 @@
 // Ukrainian (uk).
 export default {
+  'sp.providers.no_setup_group': 'Без налаштування',
+  'sp.providers.no_setup': 'Налаштування не потрібне',
+  'sp.providers.active_group': 'Активні провайдери',
+  'sp.providers.active': 'Активний',
+  'sp.providers.more': 'Більше…',
+  'st.providers.selected': 'ВИБРАНО',
+  'st.providers.select_for_chat': 'Вибрати для чату',
   // Context compaction + cloud cost + prompt-tier strings
   'sp.context_compacted': "Контекст автоматично ущільнено",
   'sp.context_compacted_detail': "{summarized} попередніх повідомлень підсумовано · {remaining} збережено",

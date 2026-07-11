@@ -213,7 +213,7 @@
       margin-bottom: 14px;
       transition: border-color 0.2s;
     }
-    .provider-card.active { border-color: var(--accent); }
+    .provider-card.selected { border-color: var(--accent); }
     .provider-card.collapsed { padding: 12px 16px; }
     .provider-card.collapsed .provider-header { margin-bottom: 0; }
 
@@ -241,6 +241,16 @@
     .provider-card.expanded .provider-chevron { color: var(--accent); }
     .provider-name { font-weight: 600; font-size: 14px; }
     .provider-type { color: var(--text2); font-size: 11px; }
+    .provider-status-badges { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+    .provider-status-badge {
+      padding: 2px 6px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.4px;
+    }
+    .provider-status-badge.active { color: #8fd896; background: rgba(76, 175, 80, 0.15); }
+    .provider-status-badge.selected { color: var(--accent); background: rgba(108, 99, 255, 0.15); }
 
     .provider-category-badge {
       font-size: 10px;
@@ -260,7 +270,7 @@
        see at a glance which model is set for each provider. Mono font
        signals "this is an identifier", and dimming keeps it from competing
        with the provider's own name. max-width + ellipsis so long
-       OpenRouter-style names don't push the active-indicator off the row. */
+       OpenRouter-style names don't push the status badges off the row. */
     .provider-model {
       color: var(--text2);
       font-size: 11px;
