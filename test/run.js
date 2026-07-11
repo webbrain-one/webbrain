@@ -1074,6 +1074,24 @@ test('matches yemeksepeti.com and includes food-delivery guidance', () => {
   assert.match(a?.notes || '', /Restoran/);
 });
 
+test('matches galaxus + digitec and includes anti-bot fetch guidance', () => {
+  assert.equal(getActiveAdapter('https://www.galaxus.ch/de/s1/product/x-123')?.name, 'galaxus');
+  assert.equal(getActiveAdapter('https://www.digitec.ch/de/s1/product/x-123')?.name, 'galaxus');
+  for (const tld of ['de', 'at', 'fr', 'it', 'be', 'nl']) {                   // EU storefronts, same platform
+    assert.equal(getActiveAdapter(`https://www.galaxus.${tld}/`)?.name, 'galaxus');
+  }
+  assert.equal(getActiveAdapter('https://www.digitec.de/'), null);            // digitec is CH-only
+  // lookalike / suffix domains must NOT match
+  assert.notEqual(getActiveAdapter('https://galaxus.ch.phishing.example/')?.name, 'galaxus');
+  assert.notEqual(getActiveAdapter('https://digitec.ch.evil.example/')?.name, 'galaxus');
+  const a = getActiveAdapter('https://www.galaxus.ch/de/s1/product/sony-20761668');
+  assert.match(a?.notes || '', /Akamai/i);
+  assert.match(a?.notes || '', /fetch_url/);
+  assert.match(a?.notes || '', /research_url/);
+  assert.match(a?.notes || '', /accessibility tree/i);
+  assert.equal(getActiveAdapterFx('https://www.galaxus.ch/de/')?.name, 'galaxus');   // firefox parity
+});
+
 test('matches stripe dashboard', () => {
   const a = getActiveAdapter('https://dashboard.stripe.com/payments');
   assert.equal(a?.name, 'stripe');

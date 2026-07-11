@@ -16180,6 +16180,18 @@ const ADAPTERS = [
 - "Yemeksepeti Mahalle" (grocery/market quick delivery) is a separate flow from restaurant food ordering — don't expect restaurant menus there.`,
   },
 
+  // ─── Regional — Digitec Galaxus (CH + EU: one in-house platform) ──────
+  // galaxus.* (CH/DE/AT/FR/IT/BE/NL) and digitec.ch share product IDs, slugs, and
+  // UI, so one adapter covers both. digitec.ch = the CH tech-only storefront.
+  {
+    name: 'galaxus',
+    category: 'general',
+    match: (url) => /^https?:\/\/(www\.)?(galaxus\.(ch|de|at|fr|it|be|nl)|digitec\.ch)\//.test(url),
+    notes: `
+- Background HTTP fetches are blocked here (Akamai bot protection). fetch_url and research_url will fail or return a challenge page on galaxus and digitec — do not call them on this site.
+- Read the page with the accessibility tree and DOM tools instead; they work reliably here. If a fetch does fail anyway, switch to the DOM immediately — do not retry it, and do not restart the task to recover.`,
+  },
+
   {
     name: 'apple',
     category: 'general',
