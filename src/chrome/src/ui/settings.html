@@ -54,6 +54,30 @@
     }
     .subtitle { color: var(--text2); font-size: 13px; margin-bottom: 24px; }
 
+    .header-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .support-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+      color: var(--text2);
+      font-size: 12px;
+      font-weight: 600;
+      text-decoration: none;
+      white-space: nowrap;
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .support-link:hover { color: var(--accent); border-color: var(--accent); }
+    .support-link svg { width: 14px; height: 14px; flex-shrink: 0; }
+
     h2 {
       font-size: 14px;
       margin: 28px 0 12px 0;
@@ -638,8 +662,16 @@
   </style>
 </head>
 <body>
-  <h1 data-i18n="st.title"></h1>
-  <p class="subtitle" id="subtitle"></p>
+  <div class="header-row">
+    <div>
+      <h1 data-i18n="st.title"></h1>
+      <p class="subtitle" id="subtitle"></p>
+    </div>
+    <a class="support-link" href="https://webbrain.one/docs" target="_blank" rel="noopener noreferrer">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 2-3 4"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+      Support
+    </a>
+  </div>
 
   <nav class="tabs" role="tablist">
     <button class="tab-btn" type="button" role="tab" data-tab="display" data-i18n="st.tab.display"></button>
