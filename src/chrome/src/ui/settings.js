@@ -2114,7 +2114,7 @@ async function loadProviderModels(id) {
   // Persist whatever the user has typed in baseUrl/model so the background
   // call uses the current values, not stale storage.
   try {
-    await saveProvider(id, { showFlash: false });
+    await saveProvider(id, { showFlash: false, markConfigured: false });
   } catch (e) {
     setProviderLoadModelsStatus(id, providerModelLoadErrorMessage(e.message), 'var(--danger, #c33)');
     return;
@@ -2162,7 +2162,7 @@ function setProviderTestResult(id, className, message, color) {
   return testEl;
 }
 
-async function saveProvider(id, { showFlash = true } = {}) {
+async function saveProvider(id, { showFlash = true, markConfigured = true } = {}) {
   const inputs = document.querySelectorAll(`input[data-provider="${id}"], select[data-provider="${id}"]`);
   const config = {};
   inputs.forEach(input => {
@@ -2170,14 +2170,14 @@ async function saveProvider(id, { showFlash = true } = {}) {
   });
 
   try {
-    await sendToBackground('update_provider', { providerId: id, config });
+    await sendToBackground('update_provider', { providerId: id, config, markConfigured });
   } catch (e) {
     if (showFlash) setProviderTestResult(id, 'fail', t('st.providers.failed', { error: e.message }));
     throw e;
   }
   if (providersData[id]) {
     Object.assign(providersData[id], config);
-    providersData[id].configured = id !== 'webbrain_cloud';
+    if (markConfigured) providersData[id].configured = id !== 'webbrain_cloud';
   }
   refreshProviderCardStatus(id);
 
@@ -2206,7 +2206,7 @@ async function testProvider(id) {
   // Skip the save-flash so its 2s auto-hide doesn't blank out the test result
   // mid-flight on slow endpoints.
   try {
-    await saveProvider(id, { showFlash: false });
+    await saveProvider(id, { showFlash: false, markConfigured: false });
   } catch (e) {
     setProviderTestResult(id, 'fail', t('st.providers.failed', { error: e.message }));
     return;

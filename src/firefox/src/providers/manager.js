@@ -25,18 +25,7 @@ const OPENROUTER_LEGACY_DEFAULT_MODEL = 'stepfun/step-3.7-flash';
 const SUPPORTED_PROVIDER_TYPES = new Set(['llamacpp', 'openai', 'azure_openai', 'aws_bedrock', 'anthropic', 'anthropic_oauth']);
 const SAFE_PROVIDER_ID_RE = /^[A-Za-z0-9_-]+$/;
 const ROUTER_PROVIDER_IDS = ['openrouter', 'cloudflare', 'nvidia', 'groq', 'huggingface'];
-const PROVIDER_CONFIGURATION_METADATA_KEYS = new Set([
-  'configured',
-  'enabled',
-  'type',
-  'category',
-  'label',
-  'providerName',
-  'apiKeyUrl',
-  'deviceGuid',
-  'supportsStreamUsageOptions',
-  'omitToolsWhenImagesPresent',
-]);
+const PROVIDER_CREDENTIAL_KEYS = ['apiKey', 'accessKeyId', 'secretAccessKey', 'sessionToken'];
 
 /**
  * Manages LLM provider instances and persists configuration.
@@ -63,6 +52,9 @@ export class ProviderManager {
     const data = await browser.storage.local.get(['providers', 'activeProvider', WEBBRAIN_DEVICE_GUID_KEY]);
     const hadLegacyClaudeSubscription = Object.hasOwn(data.providers || {}, 'claude_subscription');
     const stored = this._migrateStoredProviderConfigs(data.providers || {});
+    const legacyActiveProviderId = ['webbrain', 'openai_subscription'].includes(data.activeProvider)
+      ? WEBBRAIN_CLOUD_PROVIDER_ID
+      : data.activeProvider;
     const defaults = this._defaultConfigs();
     const configs = {};
     let providerStateMigrated = false;
@@ -71,7 +63,10 @@ export class ProviderManager {
       const hasConfiguredMarker = !!storedConfig && Object.hasOwn(storedConfig, 'configured');
       const configured = id !== WEBBRAIN_CLOUD_PROVIDER_ID && (
         storedConfig?.configured === true ||
-        (!hasConfiguredMarker && this._hasStoredProviderCustomization(config, storedConfig))
+        (!hasConfiguredMarker && !!storedConfig && (
+          id === legacyActiveProviderId ||
+          this._hasStoredProviderCredentials(config, storedConfig)
+        ))
       );
       configs[id] = {
         ...config,
@@ -101,9 +96,7 @@ export class ProviderManager {
     if (configs[WEBBRAIN_CLOUD_PROVIDER_ID]) {
       configs[WEBBRAIN_CLOUD_PROVIDER_ID].deviceGuid = await this._getDeviceGuid(data[WEBBRAIN_DEVICE_GUID_KEY]);
     }
-    this.activeProviderId = ['webbrain', 'openai_subscription'].includes(data.activeProvider)
-      ? WEBBRAIN_CLOUD_PROVIDER_ID
-      : (data.activeProvider || WEBBRAIN_CLOUD_PROVIDER_ID);
+    this.activeProviderId = legacyActiveProviderId || WEBBRAIN_CLOUD_PROVIDER_ID;
     if (!configs[this.activeProviderId]) this.activeProviderId = WEBBRAIN_CLOUD_PROVIDER_ID;
     if (this.activeProviderId !== WEBBRAIN_CLOUD_PROVIDER_ID && configs[this.activeProviderId]?.configured !== true) {
       this.activeProviderId = WEBBRAIN_CLOUD_PROVIDER_ID;
@@ -479,11 +472,19 @@ export class ProviderManager {
     return override;
   }
 
-  _hasStoredProviderCustomization(defaultConfig, storedConfig) {
+  _hasStoredProviderCredentials(defaultConfig, storedConfig) {
     if (!storedConfig || typeof storedConfig !== 'object') return false;
-    return Object.entries(storedConfig).some(([key, value]) => {
-      if (PROVIDER_CONFIGURATION_METADATA_KEYS.has(key)) return false;
-      return !Object.is(value, defaultConfig[key]);
+    // Older releases persisted a full snapshot of every built-in provider.
+    // Model, endpoint, vision, cost, and similar values may therefore differ
+    // only because a shipped default changed. A non-empty credential in a field
+    // whose shipped value is empty is the only strong per-provider signal
+    // available. This deliberately ignores changed local-server dummy keys;
+    // the legacy active provider is handled separately in load().
+    return PROVIDER_CREDENTIAL_KEYS.some((key) => {
+      const value = storedConfig[key];
+      const defaultValue = defaultConfig[key];
+      return typeof value === 'string' && value.trim() !== '' &&
+        (typeof defaultValue !== 'string' || defaultValue.trim() === '');
     });
   }
 
@@ -584,7 +585,7 @@ export class ProviderManager {
   /**
    * Update a provider's configuration.
    */
-  async updateProvider(id, config) {
+  async updateProvider(id, config, { markConfigured = true } = {}) {
     if (!this.providers.has(id)) {
       throw new Error(`Provider not found: ${id}`);
     }
@@ -592,7 +593,7 @@ export class ProviderManager {
     const merged = {
       ...current,
       ...this._storedDefaultOverride(current, config),
-      configured: id !== WEBBRAIN_CLOUD_PROVIDER_ID,
+      configured: id !== WEBBRAIN_CLOUD_PROVIDER_ID && (markConfigured || current.configured === true),
     };
     this.providers.set(id, this._createProvider(id, merged));
     await this.save();
