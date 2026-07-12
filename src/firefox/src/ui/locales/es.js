@@ -109,6 +109,7 @@ export default {
   'sp.error_prefix': 'Error: {msg}',
   'sp.subscribe.allowance_used': 'Se agotó la asignación diaria gratuita de WebBrain Cloud.',
   'sp.subscribe.btn': 'Suscribirse',
+  'sp.subscribe.resume': 'Ya me suscribí — reintentar',
   'sp.stopped_by_user': '[Detenido por el usuario]',
   'sp.stopped_by_user_html': '<em>Detenido por el usuario.</em>',
 

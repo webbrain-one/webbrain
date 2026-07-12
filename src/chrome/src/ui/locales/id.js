@@ -111,6 +111,7 @@ export default {
   'sp.error_prefix': 'Galat: {msg}',
   'sp.subscribe.allowance_used': 'Kuota harian gratis WebBrain Cloud telah habis.',
   'sp.subscribe.btn': 'Berlangganan',
+  'sp.subscribe.resume': 'Sudah berlangganan — coba lagi',
   'sp.stopped_by_user': '[Dihentikan oleh pengguna]',
   'sp.stopped_by_user_html': '<em>Dihentikan oleh pengguna.</em>',
 

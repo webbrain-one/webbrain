@@ -2867,6 +2867,17 @@ function rebindSubscribeButtons() {
     btn.dataset.bound = 'true';
     btn.addEventListener('click', () => openSubscribeUrl(btn.dataset.subscribeUrl));
   });
+  document.querySelectorAll('.subscribe-resume-btn').forEach(btn => {
+    if (btn.dataset.bound) return;
+    btn.dataset.bound = 'true';
+    btn.addEventListener('click', () => {
+      if (isProcessing) {
+        showComposerToast(t('sp.retry.busy'), { duration: 4000 });
+        return;
+      }
+      void continueAgent({ mode: btn.dataset.resumeMode });
+    });
+  });
 }
 
 function retryPayloadFromButton(btn) {
@@ -3776,6 +3787,7 @@ async function sendMessage(extraChatParams = {}) {
     showActivity(t('sp.activity.thinking'));
     assistantEl = addMessage('assistant', '');
     assistantEl.dataset.runRequestId = requestId;
+    assistantEl.dataset.runMode = modeForSend;
     assistantEl.dataset.lastRenderedSeq = '0';
     currentAssistantEl = assistantEl;
   }
@@ -4659,6 +4671,13 @@ function renderAssistantTextUpdate(assistantEl, content) {
     return;
   }
 
+  if (renderSubscribeError(textEl, content)) {
+    clearStreamedAssistantText(textEl);
+    delete textEl.dataset.suppressToolCallStream;
+    if (!assistantEl.querySelector('.msg-copy-btn')) addMessageCopyButton(assistantEl);
+    return;
+  }
+
   const streamedText = getStreamedAssistantText(textEl);
   const isDuplicateStreamFinal = streamedText && streamedText === String(content);
 
@@ -4776,7 +4795,7 @@ function openSubscribeUrl(url) {
   catch { window.open(url, '_blank', 'noopener'); }
 }
 
-// Render the quota error as a card with a one-click Subscribe button. Returns
+// Render the quota error as a card with Subscribe and explicit resume actions. Returns
 // true when `content` matched and the card was rendered into `textEl`, so the
 // caller can skip its normal markdown rendering. The URL is stashed on the
 // button's dataset so it survives chat-history restore (messagesEl.innerHTML),
@@ -4793,13 +4812,34 @@ function renderSubscribeError(textEl, content) {
   msg.textContent = parsed.message || t('sp.subscribe.allowance_used');
   textEl.appendChild(msg);
 
+  const actions = document.createElement('div');
+  actions.className = 'subscribe-actions';
+
   const btn = document.createElement('button');
+  btn.type = 'button';
   btn.className = 'subscribe-btn';
   btn.textContent = t('sp.subscribe.btn');
   btn.dataset.subscribeUrl = parsed.url;
   btn.dataset.bound = 'true';
   btn.addEventListener('click', () => openSubscribeUrl(btn.dataset.subscribeUrl));
-  textEl.appendChild(btn);
+  actions.appendChild(btn);
+
+  const resumeBtn = document.createElement('button');
+  resumeBtn.type = 'button';
+  resumeBtn.className = 'subscribe-resume-btn';
+  resumeBtn.textContent = t('sp.subscribe.resume');
+  resumeBtn.dataset.resumeMode = textEl.closest('.message.assistant')?.dataset.runMode || agentMode;
+  resumeBtn.dataset.bound = 'true';
+  resumeBtn.addEventListener('click', () => {
+    if (isProcessing) {
+      showComposerToast(t('sp.retry.busy'), { duration: 4000 });
+      return;
+    }
+    void continueAgent({ mode: resumeBtn.dataset.resumeMode });
+  });
+  actions.appendChild(resumeBtn);
+
+  textEl.appendChild(actions);
   return true;
 }
 
@@ -4939,10 +4979,10 @@ function showContinueButton() {
   document.getElementById('btn-continue').addEventListener('click', continueAgent);
 }
 
-async function continueAgent() {
+async function continueAgent(options = {}) {
   const tabId = currentTabId;
   const requestId = createRunRequestId(tabId);
-  const modeForSend = agentMode;
+  const modeForSend = ['ask', 'act', 'dev'].includes(options?.mode) ? options.mode : agentMode;
   clearActiveChatPayloadForTab(tabId);
 
   setTabProcessing(tabId, true);
@@ -4960,6 +5000,7 @@ async function continueAgent() {
 
     assistantEl = addMessage('assistant', '');
     assistantEl.dataset.runRequestId = requestId;
+    assistantEl.dataset.runMode = modeForSend;
     assistantEl.dataset.lastRenderedSeq = '0';
     currentAssistantEl = assistantEl;
     showActivity(t('sp.activity.continuing'));

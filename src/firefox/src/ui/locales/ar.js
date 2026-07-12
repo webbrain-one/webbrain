@@ -109,6 +109,7 @@ export default {
   'sp.error_prefix': 'خطأ: {msg}',
   'sp.subscribe.allowance_used': 'تم استخدام الحصة اليومية المجانية من WebBrain Cloud.',
   'sp.subscribe.btn': 'اشترك',
+  'sp.subscribe.resume': 'اشتركت — أعد المحاولة',
   'sp.stopped_by_user': '[أوقفه المستخدم]',
   'sp.stopped_by_user_html': '<em>أوقفه المستخدم.</em>',
 

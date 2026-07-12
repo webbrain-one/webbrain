@@ -142,6 +142,7 @@ export default {
   'sp.error_prefix': 'Hata: {msg}',
   'sp.subscribe.allowance_used': 'Ücretsiz günlük WebBrain Cloud kullanım hakkınız doldu.',
   'sp.subscribe.btn': 'Abone ol',
+  'sp.subscribe.resume': 'Abone oldum — yeniden dene',
   'sp.stopped_by_user': '[Kullanıcı durdurdu]',
   'sp.stopped_by_user_html': '<em>Kullanıcı durdurdu.</em>',
 

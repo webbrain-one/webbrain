@@ -111,6 +111,7 @@ export default {
   'sp.error_prefix': '오류: {msg}',
   'sp.subscribe.allowance_used': 'WebBrain Cloud의 무료 일일 사용량을 모두 사용했습니다.',
   'sp.subscribe.btn': '구독하기',
+  'sp.subscribe.resume': '구독했습니다 — 다시 시도',
   'sp.stopped_by_user': '[사용자가 중지함]',
   'sp.stopped_by_user_html': '<em>사용자가 중지했습니다.</em>',
 

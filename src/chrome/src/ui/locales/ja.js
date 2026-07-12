@@ -111,6 +111,7 @@ export default {
   'sp.error_prefix': 'エラー: {msg}',
   'sp.subscribe.allowance_used': 'WebBrain Cloud の無料の1日あたりの利用枠を使い切りました。',
   'sp.subscribe.btn': '購読する',
+  'sp.subscribe.resume': '購読しました — 再試行',
   'sp.stopped_by_user': '[ユーザーが停止]',
   'sp.stopped_by_user_html': '<em>ユーザーが停止しました。</em>',
 

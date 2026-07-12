@@ -191,6 +191,7 @@ export default {
   "sp.error_prefix": "שגיאה: {msg}",
   "sp.subscribe.allowance_used": "חינם מדי יום WebBrain נעשה שימוש בקצבת ענן.",
   "sp.subscribe.btn": "הירשם",
+  "sp.subscribe.resume": "נרשמתי — נסה שוב",
   "sp.stopped_by_user": "[נעצר על ידי משתמש]",
   "sp.stopped_by_user_html": "<em>נעצר על ידי משתמש.</em>",
   "sp.continue_bar": "הגיע למגבלת הצעדים ({steps} צעדים). רוצה שאמשיך?",

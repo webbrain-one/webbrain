@@ -1942,21 +1942,52 @@ body {
   line-height: 1.45;
 }
 
-.subscribe-btn {
-  background: var(--accent);
-  color: #fff;
-  border: none;
+.subscribe-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.subscribe-btn,
+.subscribe-resume-btn {
   padding: 8px 22px;
   border-radius: 6px;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
-  transition: background 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.subscribe-btn {
+  background: var(--accent);
+  color: #fff;
+  border: 1px solid var(--accent);
 }
 
 .subscribe-btn:hover {
   background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.subscribe-resume-btn {
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  max-width: 100%;
+  white-space: normal;
+}
+
+.subscribe-resume-btn:hover,
+.subscribe-resume-btn:focus-visible {
+  background: var(--accent-dim);
+  color: var(--text-primary);
+}
+
+.subscribe-btn:focus-visible,
+.subscribe-resume-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 /* Clarify card — agent paused to ask user a question */
