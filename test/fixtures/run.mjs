@@ -112,7 +112,7 @@ async function collectSmd(page, mode = 'auto') {
   }, mode);
 }
 
-async function setupSelectionShortcut(page, sourcePath, { enabled = true, requiresManualOpen = false } = {}) {
+async function setupSelectionShortcut(page, sourcePath, { enabled = true, requiresManualOpen = false, locale = 'en' } = {}) {
   await page.setViewportSize({ width: 360, height: 280 });
   await page.setContent(`<!doctype html>
     <style>body{margin:0;font:18px/1.5 sans-serif} #copy{position:absolute;right:2px;bottom:2px;width:210px}</style>
@@ -120,7 +120,7 @@ async function setupSelectionShortcut(page, sourcePath, { enabled = true, requir
     <div id="editor" contenteditable="true">Editable selection text.</div>`);
   await page.addScriptTag({ content: `
     window.__selectionMessages = [];
-    window.__selectionStorage = { selectionShortcutEnabled: ${enabled ? 'true' : 'false'} };
+    window.__selectionStorage = { selectionShortcutEnabled: ${enabled ? 'true' : 'false'}, wbLocale: '${locale}' };
     window.__selectionRuntimeListeners = [];
     window.__selectionStorageListeners = [];
     window.chrome = {
@@ -148,6 +148,9 @@ async function setupSelectionShortcut(page, sourcePath, { enabled = true, requir
     };
     window.__setSelectionShortcutEnabled = async (value) => {
       await window.chrome.storage.local.set({ selectionShortcutEnabled: value });
+    };
+    window.__setSelectionShortcutLocale = async (value) => {
+      await window.chrome.storage.local.set({ wbLocale: value });
     };
     window.__sendSelectionRuntimeMessage = (message) => {
       window.__selectionRuntimeListeners.forEach((listener) => listener(message, {}, () => {}));
@@ -231,46 +234,45 @@ for (const [label, sourcePath, manualOpen] of [
       throw new Error(`custom question was not submitted correctly: ${JSON.stringify(messages)}`);
     }
 
+    await page.evaluate(() => window.__setSelectionShortcutLocale('tr'));
     const translationSelection = await selectFixtureText(page);
     const translationShortcutRect = translationSelection.shortcutRect;
     await page.mouse.click(
       translationShortcutRect.left + translationShortcutRect.width / 2,
       translationShortcutRect.top + translationShortcutRect.height / 2,
     );
-    let translateState = await page.evaluate(() => window.__webbrainSelectionShortcut.getState());
+    const translateState = await page.evaluate(() => window.__webbrainSelectionShortcut.getState());
     const translateRect = translateState.translateRect;
     if (!translateRect) throw new Error('Translate action was not visible in the popup');
     await page.mouse.click(translateRect.left + translateRect.width / 2, translateRect.top + translateRect.height / 2);
-    translateState = await page.evaluate(() => window.__webbrainSelectionShortcut.getState());
-    if (!translateState.translateViewVisible) throw new Error('Translate action did not open the language chooser');
-    await page.evaluate(() => window.__webbrainSelectionShortcut.setTranslationLanguage('tr'));
-    translateState = await page.evaluate(() => window.__webbrainSelectionShortcut.getState());
-    const translateSubmitRect = translateState.translateSubmitRect;
-    if (!translateSubmitRect) throw new Error('choosing a language did not enable Translate');
-    await page.mouse.click(
-      translateSubmitRect.left + translateSubmitRect.width / 2,
-      translateSubmitRect.top + translateSubmitRect.height / 2,
-    );
     await page.waitForFunction(() => window.__selectionMessages.length === 3);
     const translated = await page.evaluate(() => ({
       message: window.__selectionMessages[2],
-      storedLanguage: window.__selectionStorage.selectionTranslateLanguage,
+      state: window.__webbrainSelectionShortcut.getState(),
     }));
     if (translated.message.action !== 'translate' || translated.message.language !== 'tr') {
       throw new Error(`translation request was not submitted correctly: ${JSON.stringify(translated.message)}`);
     }
-    if (translated.storedLanguage !== 'tr') throw new Error('translation language choice was not remembered');
+    if (translated.state.popupVisible || translated.state.shortcutVisible) {
+      throw new Error(`Translate should submit directly and dismiss the surface: ${JSON.stringify(translated.state)}`);
+    }
 
-    const rememberedSelection = await selectFixtureText(page);
-    const rememberedShortcutRect = rememberedSelection.shortcutRect;
+    await page.evaluate(() => window.__setSelectionShortcutLocale('fr'));
+    const updatedLocaleSelection = await selectFixtureText(page);
+    const updatedLocaleShortcutRect = updatedLocaleSelection.shortcutRect;
     await page.mouse.click(
-      rememberedShortcutRect.left + rememberedShortcutRect.width / 2,
-      rememberedShortcutRect.top + rememberedShortcutRect.height / 2,
+      updatedLocaleShortcutRect.left + updatedLocaleShortcutRect.width / 2,
+      updatedLocaleShortcutRect.top + updatedLocaleShortcutRect.height / 2,
     );
-    await page.evaluate(() => window.__webbrainSelectionShortcut.openTranslateView());
-    const rememberedState = await page.evaluate(() => window.__webbrainSelectionShortcut.getState());
-    if (rememberedState.translationLanguage !== 'tr' || rememberedState.translationSelectValue !== 'tr') {
-      throw new Error(`translation chooser did not restore the remembered language: ${JSON.stringify(rememberedState)}`);
+    const updatedLocaleState = await page.evaluate(() => window.__webbrainSelectionShortcut.getState());
+    await page.mouse.click(
+      updatedLocaleState.translateRect.left + updatedLocaleState.translateRect.width / 2,
+      updatedLocaleState.translateRect.top + updatedLocaleState.translateRect.height / 2,
+    );
+    await page.waitForFunction(() => window.__selectionMessages.length === 4);
+    const updatedLocaleMessage = await page.evaluate(() => window.__selectionMessages[3]);
+    if (updatedLocaleMessage.action !== 'translate' || updatedLocaleMessage.language !== 'fr') {
+      throw new Error(`Translate did not follow the updated plugin locale: ${JSON.stringify(updatedLocaleMessage)}`);
     }
   });
 

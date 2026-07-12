@@ -9274,9 +9274,10 @@ test('selection shortcut is shipped, enabled by default, and keeps browser-speci
     const content = fs.readFileSync(path.join(ROOT, prefix, 'src/content/selection-shortcut.js'), 'utf8');
     assert.match(content, /attachShadow\(\{ mode: 'closed' \}\)/, `${label}: selection UI should use a closed Shadow DOM`);
     assert.match(content, /const STORAGE_KEY = 'selectionShortcutEnabled';/, `${label}: content script should use the persistent setting`);
-    assert.match(content, /const TRANSLATION_STORAGE_KEY = 'selectionTranslateLanguage';/, `${label}: content script should remember the last translation language`);
-    assert.match(content, /data-action="translate">Translate…<\/button>/, `${label}: floating popup should expose Translate`);
-    assert.match(content, /class="language-select" aria-label="Translation language"/, `${label}: Translate should provide a language chooser`);
+    assert.match(content, /const LOCALE_STORAGE_KEY = 'wbLocale';/, `${label}: content script should use the plugin interface language`);
+    assert.match(content, /data-action="translate">Translate<\/button>/, `${label}: floating popup should expose one-click Translate`);
+    assert.doesNotMatch(content, /class="language-select"|class="translate-view"/, `${label}: floating Translate should not open a second screen`);
+    assert.match(content, /button\.dataset\.action === 'translate'\) submitSelection\('translate', '', interfaceLanguage\)/, `${label}: floating Translate should submit directly in the plugin language`);
     assert.match(content, /class="shortcut-icon" aria-hidden="true">\?<\/span>/, `${label}: shortcut should use the compact question-mark icon`);
     assert.match(content, /border:1px solid rgba\(108,99,255,\.34\);[\s\S]*?color:var\(--accent\);/, `${label}: shortcut should use the WebBrain purple treatment`);
     assert.doesNotMatch(content, /M6\.8 8\.5 9\.2 14l2\.8-3\.4 2\.8 3\.4 2\.4-5\.5/, `${label}: discarded WebBrain W outline should be removed`);

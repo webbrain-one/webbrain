@@ -12,16 +12,14 @@
   if (!api?.runtime || !api?.storage?.local) return;
 
   const STORAGE_KEY = 'selectionShortcutEnabled';
-  const TRANSLATION_STORAGE_KEY = 'selectionTranslateLanguage';
+  const LOCALE_STORAGE_KEY = 'wbLocale';
   const SUBMIT_MESSAGE = 'WB_SELECTION_SHORTCUT_SUBMIT';
   const GAP = 8;
   const BUTTON_SIZE = 44;
   const POPUP_WIDTH = 316;
   const TRANSLATION_LANGUAGES = Object.freeze([
-    ['en', 'English'], ['es', 'Spanish'], ['fr', 'French'], ['tr', 'Turkish'],
-    ['zh', 'Chinese'], ['ru', 'Russian'], ['uk', 'Ukrainian'], ['ar', 'Arabic'],
-    ['ja', 'Japanese'], ['ko', 'Korean'], ['id', 'Indonesian'], ['th', 'Thai'],
-    ['ms', 'Malay'], ['tl', 'Filipino'], ['pl', 'Polish'], ['he', 'Hebrew'],
+    'en', 'es', 'fr', 'tr', 'zh', 'ru', 'uk', 'ar',
+    'ja', 'ko', 'id', 'th', 'ms', 'tl', 'pl', 'he',
   ]);
 
   let enabled = true;
@@ -33,13 +31,9 @@
   let shadow = null;
   let shortcut = null;
   let popup = null;
-  let mainView = null;
-  let translateView = null;
   let question = null;
   let sendButton = null;
-  let translationSelect = null;
-  let translationSubmit = null;
-  let translationLanguage = '';
+  let interfaceLanguage = resolveInterfaceLanguage('');
   let toast = null;
   let toastTimer = null;
   let selectionTimer = null;
@@ -53,7 +47,14 @@
   }
 
   function isSupportedTranslationLanguage(value) {
-    return TRANSLATION_LANGUAGES.some(([code]) => code === value);
+    return TRANSLATION_LANGUAGES.includes(value);
+  }
+
+  function resolveInterfaceLanguage(value) {
+    const preferred = String(value || '').trim().toLowerCase();
+    if (isSupportedTranslationLanguage(preferred)) return preferred;
+    const browserLanguage = String(navigator.language || 'en').slice(0, 2).toLowerCase();
+    return isSupportedTranslationLanguage(browserLanguage) ? browserLanguage : 'en';
   }
 
   function readSelection() {
@@ -91,9 +92,6 @@
     host.id = 'webbrain-selection-shortcut-host';
     host.style.cssText = 'position:fixed;inset:0;width:100vw;height:100vh;display:block;pointer-events:none;z-index:2147483647';
     shadow = host.attachShadow({ mode: 'closed' });
-    const translationOptions = TRANSLATION_LANGUAGES
-      .map(([code, label]) => `<option value="${code}">${label}</option>`)
-      .join('');
     shadow.innerHTML = `
       <style>
         :host {
@@ -103,7 +101,7 @@
           color-scheme:light dark;
         }
         * { box-sizing:border-box; }
-        button,textarea,select { font:inherit; }
+        button,textarea { font:inherit; }
         [hidden] { display:none !important; }
         .shortcut {
           position:fixed; width:${BUTTON_SIZE}px; height:${BUTTON_SIZE}px; display:grid;
@@ -148,26 +146,7 @@
         .send svg { width:15px; height:15px; }
         .divider { height:1px; margin:10px 0 4px; background:var(--border); }
         .hide { padding:9px 12px; color:var(--muted); font-size:13px; }
-        .translate-view { padding:2px; }
-        .translate-header { display:flex; align-items:center; gap:8px; margin-bottom:12px; }
-        .back {
-          width:32px; height:32px; display:grid; place-items:center; padding:0; border:0;
-          border-radius:9px; background:transparent; color:var(--muted); font-size:20px; cursor:pointer;
-        }
-        .back:hover { background:var(--hover); color:var(--text); }
-        .translate-title { font-size:15px; font-weight:650; }
-        .language-select {
-          width:100%; padding:10px 11px; border:1px solid var(--border); border-radius:11px;
-          background:var(--bg); color:var(--text); font-size:14px;
-        }
-        .translate-submit {
-          width:100%; margin-top:10px; padding:10px 12px; border:0; border-radius:11px;
-          background:var(--accent); color:#fff; font-size:14px; font-weight:650; cursor:pointer;
-        }
-        .translate-submit:hover:not(:disabled) { background:var(--accent-strong); }
-        .translate-submit:disabled { opacity:.42; cursor:default; }
-        .shortcut:focus-visible,.action:focus-visible,.hide:focus-visible,.send:focus-visible,
-        .back:focus-visible,.language-select:focus-visible,.translate-submit:focus-visible,textarea:focus-visible {
+        .shortcut:focus-visible,.action:focus-visible,.hide:focus-visible,.send:focus-visible,textarea:focus-visible {
           outline:3px solid rgba(108,99,255,.34); outline-offset:2px;
         }
         .toast {
@@ -195,7 +174,7 @@
             <button class="action" type="button" data-action="explain">Explain</button>
             <button class="action" type="button" data-action="quiz">Quiz me</button>
             <button class="action" type="button" data-action="proofread">Proofread</button>
-            <button class="action" type="button" data-action="translate">Translate…</button>
+            <button class="action" type="button" data-action="translate">Translate</button>
           </div>
           <div class="question-wrap">
             <textarea maxlength="2000" rows="3" aria-label="Ask WebBrain a question" placeholder="Ask WebBrain…"></textarea>
@@ -206,32 +185,15 @@
           <div class="divider"></div>
           <button class="hide" type="button">Hide selection shortcut</button>
         </div>
-        <div class="translate-view" hidden>
-          <div class="translate-header">
-            <button class="back" type="button" aria-label="Back to selection actions">←</button>
-            <div class="translate-title">Translate to</div>
-          </div>
-          <select class="language-select" aria-label="Translation language">
-            <option value="">Choose language…</option>
-            ${translationOptions}
-          </select>
-          <button class="translate-submit" type="button" disabled>Translate</button>
-        </div>
       </div>
       <div class="toast" role="status" aria-live="polite" hidden></div>
     `;
 
     shortcut = shadow.querySelector('.shortcut');
     popup = shadow.querySelector('.popup');
-    mainView = shadow.querySelector('.main-view');
-    translateView = shadow.querySelector('.translate-view');
     question = shadow.querySelector('textarea');
     sendButton = shadow.querySelector('.send');
-    translationSelect = shadow.querySelector('.language-select');
-    translationSubmit = shadow.querySelector('.translate-submit');
     toast = shadow.querySelector('.toast');
-    translationSelect.value = isSupportedTranslationLanguage(translationLanguage) ? translationLanguage : '';
-    translationSubmit.disabled = !translationSelect.value;
 
     shortcut.addEventListener('click', (event) => {
       if (event.isTrusted && snapshot && !submitting) openPopup();
@@ -239,7 +201,7 @@
     shadow.querySelectorAll('[data-action]').forEach((button) => {
       button.addEventListener('click', (event) => {
         if (!event.isTrusted) return;
-        if (button.dataset.action === 'translate') openTranslateView();
+        if (button.dataset.action === 'translate') submitSelection('translate', '', interfaceLanguage);
         else submitSelection(button.dataset.action);
       });
     });
@@ -255,24 +217,13 @@
     sendButton.addEventListener('click', (event) => {
       if (event.isTrusted) submitSelection('custom', question.value);
     });
-    shadow.querySelector('.back').addEventListener('click', (event) => {
-      if (event.isTrusted) showMainView(true);
-    });
-    translationSelect.addEventListener('change', () => {
-      translationSubmit.disabled = !translationSelect.value;
-    });
-    translationSubmit.addEventListener('click', (event) => {
-      if (!event.isTrusted || !translationSelect.value) return;
-      submitSelection('translate', '', translationSelect.value);
-    });
     shadow.querySelector('.hide').addEventListener('click', (event) => {
       if (event.isTrusted) disableShortcut();
     });
     shadow.addEventListener('keydown', (event) => {
       if (event.key !== 'Escape') return;
       event.preventDefault();
-      if (!translateView.hidden) showMainView(true);
-      else if (!popup.hidden) closePopup(true);
+      if (!popup.hidden) closePopup(true);
       else dismissSurface();
     });
     host.addEventListener('pointerdown', () => { interacting = true; }, true);
@@ -311,7 +262,6 @@
     ensureSurface();
     snapshot = nextSnapshot;
     popup.hidden = true;
-    showMainView(false);
     question.value = '';
     sendButton.disabled = true;
     shortcut.hidden = false;
@@ -321,7 +271,6 @@
   function openPopup() {
     if (!snapshot || submitting) return;
     ensureSurface();
-    showMainView(false);
     popup.hidden = false;
     popup.style.visibility = 'hidden';
     positionPopup();
@@ -329,28 +278,9 @@
     shadow.querySelector('[data-action="summarize"]')?.focus();
   }
 
-  function openTranslateView() {
-    if (!snapshot || !mainView || !translateView) return;
-    mainView.hidden = true;
-    translateView.hidden = false;
-    translationSelect.value = isSupportedTranslationLanguage(translationLanguage) ? translationLanguage : '';
-    translationSubmit.disabled = !translationSelect.value;
-    positionPopup();
-    translationSelect.focus();
-  }
-
-  function showMainView(restoreFocus) {
-    if (!mainView || !translateView) return;
-    mainView.hidden = false;
-    translateView.hidden = true;
-    if (popup && !popup.hidden) positionPopup();
-    if (restoreFocus) shadow.querySelector('[data-action="translate"]')?.focus();
-  }
-
   function closePopup(restoreFocus) {
     if (!popup) return;
     popup.hidden = true;
-    showMainView(false);
     question.value = '';
     sendButton.disabled = true;
     if (restoreFocus && shortcut && !shortcut.hidden) shortcut.focus();
@@ -360,7 +290,6 @@
     snapshot = null;
     if (shortcut) shortcut.hidden = true;
     if (popup) popup.hidden = true;
-    showMainView(false);
     if (question) question.value = '';
     if (sendButton) sendButton.disabled = true;
   }
@@ -368,8 +297,7 @@
   function destroySurface() {
     hideToast();
     host?.remove();
-    host = shadow = shortcut = popup = mainView = translateView = question = sendButton = null;
-    translationSelect = translationSubmit = toast = null;
+    host = shadow = shortcut = popup = question = sendButton = toast = null;
     snapshot = null;
   }
 
@@ -402,10 +330,6 @@
       question: action === 'custom' ? String(customQuestion).trim() : undefined,
       language: action === 'translate' ? language : undefined,
     };
-    if (action === 'translate') {
-      translationLanguage = language;
-      Promise.resolve(api.storage.local.set({ [TRANSLATION_STORAGE_KEY]: language })).catch(() => {});
-    }
     submitting = true;
     dismissSurface();
     try {
@@ -466,17 +390,12 @@
       enabled = changes[STORAGE_KEY].newValue !== false;
       if (!enabled) destroySurface();
     }
-    if (changes[TRANSLATION_STORAGE_KEY]) {
-      const nextLanguage = String(changes[TRANSLATION_STORAGE_KEY].newValue || '');
-      translationLanguage = isSupportedTranslationLanguage(nextLanguage) ? nextLanguage : '';
-      if (translationSelect) translationSelect.value = translationLanguage;
-    }
+    if (changes[LOCALE_STORAGE_KEY]) interfaceLanguage = resolveInterfaceLanguage(changes[LOCALE_STORAGE_KEY].newValue);
   });
-  Promise.resolve(api.storage.local.get({ [STORAGE_KEY]: true, [TRANSLATION_STORAGE_KEY]: '' }))
+  Promise.resolve(api.storage.local.get({ [STORAGE_KEY]: true, [LOCALE_STORAGE_KEY]: '' }))
     .then((stored) => {
       enabled = stored?.[STORAGE_KEY] !== false;
-      const storedLanguage = String(stored?.[TRANSLATION_STORAGE_KEY] || '');
-      translationLanguage = isSupportedTranslationLanguage(storedLanguage) ? storedLanguage : '';
+      interfaceLanguage = resolveInterfaceLanguage(stored?.[LOCALE_STORAGE_KEY]);
       if (!enabled) destroySurface();
     })
     .catch(() => { enabled = true; });
@@ -485,36 +404,26 @@
   window.__webbrainSelectionShortcut = {
     refreshFromSelection,
     openPopup,
-    openTranslateView,
-    submitPreset: (action) => submitSelection(action),
+    submitPreset: (action) => action === 'translate'
+      ? submitSelection('translate', '', interfaceLanguage)
+      : submitSelection(action),
     submitCustom: (value) => submitSelection('custom', value),
-    submitTranslate: (language) => submitSelection('translate', '', language),
-    setTranslationLanguage: (language) => {
-      if (!translationSelect) return;
-      translationSelect.value = isSupportedTranslationLanguage(language) ? language : '';
-      translationSubmit.disabled = !translationSelect.value;
-    },
     hideShortcut: disableShortcut,
     getState: () => ({
       enabled,
       suppressed,
       submitting,
-      translationLanguage,
+      interfaceLanguage,
       hasSelection: !!snapshot?.text,
       shortcutVisible: !!shortcut && !shortcut.hidden,
       popupVisible: !!popup && !popup.hidden,
       toastVisible: !!toast && !toast.hidden,
-      translateViewVisible: !!translateView && !translateView.hidden,
-      translationSelectValue: translationSelect?.value || '',
       shortcutRect: shortcut && !shortcut.hidden ? shortcut.getBoundingClientRect().toJSON() : null,
       summarizeRect: popup && !popup.hidden
         ? shadow.querySelector('[data-action="summarize"]')?.getBoundingClientRect().toJSON() || null
         : null,
-      translateRect: popup && !popup.hidden && !mainView.hidden
+      translateRect: popup && !popup.hidden
         ? shadow.querySelector('[data-action="translate"]')?.getBoundingClientRect().toJSON() || null
-        : null,
-      translateSubmitRect: popup && !popup.hidden && !translateView.hidden && !translationSubmit.disabled
-        ? translationSubmit.getBoundingClientRect().toJSON()
         : null,
     }),
   };
