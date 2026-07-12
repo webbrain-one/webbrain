@@ -137,15 +137,31 @@
     .tab-panel h2:first-of-type { margin-top: 0; }
 
     .settings-search {
+      position: relative;
       margin: 0 0 14px;
     }
+    .settings-search::before {
+      content: "";
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      width: 15px;
+      height: 15px;
+      background: var(--text2);
+      pointer-events: none;
+      transform: translateY(-50%);
+      -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.25' d='m21 21-4.35-4.35m2.35-5.65a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z'/%3E%3C/svg%3E") center / contain no-repeat;
+      mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='black' stroke-linecap='round' stroke-linejoin='round' stroke-width='2.25' d='m21 21-4.35-4.35m2.35-5.65a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z'/%3E%3C/svg%3E") center / contain no-repeat;
+      transition: background-color 0.15s;
+    }
+    .settings-search:focus-within::before { background: var(--accent); }
     .settings-search input {
       width: 100%;
       background: var(--bg2);
       color: var(--text);
       border: 1px solid var(--border);
       border-radius: 8px;
-      padding: 10px 12px;
+      padding: 10px 12px 10px 36px;
       font: inherit;
       font-size: 13px;
       outline: none;
@@ -350,7 +366,7 @@
       margin: 0 0 0 auto;
     }
     .provider-search input {
-      padding: 8px 10px;
+      padding: 8px 10px 8px 34px;
       font-size: 12px;
     }
     @media (max-width: 600px) {

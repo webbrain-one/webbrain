@@ -6937,6 +6937,9 @@ test('settings moves profile and memory controls into Memory while CAPTCHA stays
     const searchStart = displayPanel.indexOf('id="input-general-search"');
     assert.notEqual(searchStart, -1, `${label}: General panel should include a search input`);
     assert.ok(searchStart < advancedStart, `${label}: General search should stay above settings and Advanced`);
+    assert.match(html, /\.settings-search::before \{[\s\S]*?-webkit-mask: url\("data:image\/svg\+xml,[\s\S]*?\}/, `${label}: settings search fields should show a magnifier icon`);
+    assert.match(html, /\.settings-search input \{[\s\S]*?padding: 10px 12px 10px 36px;/, `${label}: General search text should clear the magnifier icon`);
+    assert.match(html, /\.provider-search input \{[\s\S]*?padding: 8px 10px 8px 34px;/, `${label}: provider search text should clear the magnifier icon`);
     assert.match(displayPanel, /id="general-search-empty" hidden/, `${label}: General search should include an empty-result state`);
     assert.match(html, /\.general-search-hidden \{ display: none !important; \}/, `${label}: General search should force-hide filtered rows/cards`);
 
