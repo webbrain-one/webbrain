@@ -4,8 +4,9 @@
  * Chrome MV3 allows only ONE offscreen document per extension at a time,
  * and the set of `reasons` declared at createDocument time is fixed — you
  * cannot add reasons later. So both consumers of the offscreen document
- * (the localhost-fetch proxy in offscreen.js, and the tab-recorder in
- * recorder.js) must agree on a single createDocument call that lists
+ * (the localhost-fetch proxy in offscreen.js, the tab-recorder in
+ * recorder.js, and the cloud bridge in cloud-bridge.js) must agree on a single
+ * createDocument call that lists
  * every reason either of them might ever need.
  *
  * Callers:
@@ -13,6 +14,8 @@
  *     to a localhost LLM server fails (Private Network Access workaround).
  *   • background.js (record routes) — needs the doc to host the
  *     MediaRecorder and Web Audio mixer when recording starts.
+ *   • background.js (cloud bridge routes) — needs the doc to keep an outbound
+ *     WebSocket open to the local sidecar.
  *
  * Both call `ensureOffscreen()` lazily; whichever fires first creates the
  * doc with the unified reason set, and the second one no-ops via the
@@ -30,7 +33,7 @@ const OFFSCREEN_REASONS = [
   'USER_MEDIA',
 ];
 const OFFSCREEN_JUSTIFICATION =
-  'Proxy fetch to localhost LLM servers; capture active tab + mic for the optional Record feature.';
+  'Proxy fetch to localhost LLM servers; capture active tab + mic for the optional Record feature; maintain a localhost cloud bridge WebSocket.';
 
 let ready = false;
 let inflight = null;

@@ -5,6 +5,7 @@
     Single offscreen document hosting both:
       • offscreen.js — fetch proxy for localhost LLM servers (existing)
       • recorder.js  — tab/display capture + mic mix + MediaRecorder
+      • cloud-bridge.js — outbound localhost WebSocket for managed cloud runs
 
     Chrome MV3 only allows ONE offscreen document per extension at a time,
     so the two responsibilities share this host. Each script binds its own
@@ -16,6 +17,7 @@
   -->
   <script src="offscreen.js"></script>
   <script src="recorder.js"></script>
+  <script src="cloud-bridge.js"></script>
 </head>
 <body></body>
 </html>

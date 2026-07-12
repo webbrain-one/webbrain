@@ -858,7 +858,7 @@ export const ASK_ONLY_TOOLS = [
  */
 export const AGENT_TOOL_NAMES = new Set(AGENT_TOOLS.map(t => t.function.name));
 export const RETIRED_AGENT_TOOL_NAMES = new Set(['screenshot', 'full_page_screenshot', 'record_tab', 'stop_recording']);
-export const RESERVED_AGENT_TOOL_NAMES = new Set([...AGENT_TOOL_NAMES, ...RETIRED_AGENT_TOOL_NAMES]);
+export const RESERVED_AGENT_TOOL_NAMES = new Set([...AGENT_TOOL_NAMES, ...RETIRED_AGENT_TOOL_NAMES, 'done_json']);
 export const DEV_ONLY_TOOL_NAMES = new Set(['read_page_source', 'inspect_element_styles', 'execute_js']);
 export const DEV_EXTENDED_TOOL_NAMES = new Set([
   ...DEV_ONLY_TOOL_NAMES,
@@ -940,6 +940,22 @@ const DONE_TOOL_STRICT_WITH_OUTCOME = {
   },
 };
 
+const DONE_JSON_TOOL = {
+  type: 'function',
+  function: {
+    name: 'done_json',
+    description: 'Complete a structured cloud run. Call this only when the task is finished and result exactly matches the requested output schema. If validation fails, repair the result and call done_json once more.',
+    parameters: {
+      type: 'object',
+      properties: {
+        result: { type: 'object', description: 'Machine-readable result matching the requested output schema.' },
+        summary: { type: 'string', description: 'Short human-readable completion summary.' },
+      },
+      required: ['result', 'summary'],
+    },
+  },
+};
+
 /**
  * Get tools filtered by mode.
  *
@@ -979,6 +995,8 @@ export function getToolsForMode(mode, opts = {}) {
     });
     base = [...base, ...extras];
   }
+  const useDoneJson = normalizedMode === 'act' && tier === 'full' && opts.cloudRun === true && !!opts.outputSchema;
+  if (useDoneJson) return base.map(tool => (tool.function.name === 'done' ? DONE_JSON_TOOL : tool));
   const useOutcomeDone = normalizedMode !== 'ask' && tier !== 'compact';
   if (!opts.strictSecretMode && !useOutcomeDone) return base;
   const replacement = opts.strictSecretMode

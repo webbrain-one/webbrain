@@ -1,4 +1,5 @@
 import { AGENT_TOOLS, AGENT_TOOL_NAMES, RESERVED_AGENT_TOOL_NAMES, getToolsForMode, SYSTEM_PROMPT_ASK, SYSTEM_PROMPT_ACT, SYSTEM_PROMPT_ACT_COMPACT, SYSTEM_PROMPT_ACT_MID, SYSTEM_PROMPT_DEV_APPENDIX } from './tools.js';
+import { handleDoneJson } from './cloud-output.js';
 import { URL_FAMILY_TOOLS, resourceBucket, bucketArgsKey } from './loop-bucket.js';
 import { isCredentialField, CREDENTIAL_NOTE_STRICT } from './credential-fields.js';
 import { detectProgressAction, formatLedgerRow, formatLedgerSummary, isBlockedLedgerDowngrade, isTerminalLedgerStatus, isValidLedgerStatus, ledgerDoneBlock, normalizeLedgerStatus, progressCounts, selectLedgerRows, unresolvedLedgerRows, upsertLedgerItems } from './progress-ledger.js';
@@ -224,6 +225,7 @@ export class Agent {
     // abort() and clearConversation() cancel all pending clarifications so
     // the agent loop doesn't deadlock.
     this._pendingClarifications = new Map();
+    this.cloudRunContexts = new Map(); // tabId -> { outputSchema, schemaRepairUsed }
     // Deterministic capability × origin permission gate. "Always" grants are
     // persisted in extension storage; "once" grants live for the current turn.
     this.permissions = new PermissionManager({
@@ -8071,6 +8073,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   }
 
   async executeTool(tabId, name, args, onUpdate = null) {
+    if (name === 'done_json') {
+      return handleDoneJson(this.cloudRunContexts.get(tabId), args);
+    }
     if (name === 'get_window_info') {
       return await this._getWindowInfo(tabId);
     }
@@ -11595,10 +11600,18 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     }
     this._clearLoopState(tabId);
     this._runningTabs.add(tabId);
+    const previousCloudContext = this.cloudRunContexts.get(tabId);
+    if (runOptions.cloudRun) {
+      this.cloudRunContexts.set(tabId, { outputSchema: runOptions.outputSchema || null, schemaRepairUsed: false });
+    }
     try {
       return await this._processMessageInner(tabId, userMessage, onUpdate, mode, attachments, runOptions);
     } finally {
       this.currentCostState.delete(tabId);
+      if (runOptions.cloudRun) {
+        if (previousCloudContext) this.cloudRunContexts.set(tabId, previousCloudContext);
+        else this.cloudRunContexts.delete(tabId);
+      }
       this._runningTabs.delete(tabId);
       this._clearLoopState(tabId);
     }
@@ -11746,7 +11759,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     }
     const tier = provider.promptTier;
     const skillTools = this._skillToolDefinitions(mode, tier);
-    const tools = getToolsForMode(mode, { strictSecretMode: this.strictSecretMode, tier, skillTools });
+    const cloudRunContext = this.cloudRunContexts.get(tabId) || null;
+    const tools = getToolsForMode(mode, {
+      strictSecretMode: this.strictSecretMode,
+      tier,
+      skillTools,
+      cloudRun: !!cloudRunContext,
+      outputSchema: cloudRunContext?.outputSchema || null,
+    });
     const allowedToolNames = new Set(tools.map(t => t.function.name));
     const plannerTemperature = this._isActionMode(mode) ? 0.15 : 0.3;
     let steps = 0;
@@ -12058,10 +12078,18 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     }
     this._clearLoopState(tabId);
     this._runningTabs.add(tabId);
+    const previousCloudContext = this.cloudRunContexts.get(tabId);
+    if (runOptions.cloudRun) {
+      this.cloudRunContexts.set(tabId, { outputSchema: runOptions.outputSchema || null, schemaRepairUsed: false });
+    }
     try {
       return await this._processMessageStreamInner(tabId, userMessage, onUpdate, mode, runOptions);
     } finally {
       this.currentCostState.delete(tabId);
+      if (runOptions.cloudRun) {
+        if (previousCloudContext) this.cloudRunContexts.set(tabId, previousCloudContext);
+        else this.cloudRunContexts.delete(tabId);
+      }
       this._runningTabs.delete(tabId);
       this._clearLoopState(tabId);
     }
@@ -12129,7 +12157,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     }
     const tier = provider.promptTier;
     const skillTools = this._skillToolDefinitions(mode, tier);
-    const tools = getToolsForMode(mode, { strictSecretMode: this.strictSecretMode, tier, skillTools });
+    const cloudRunContext = this.cloudRunContexts.get(tabId) || null;
+    const tools = getToolsForMode(mode, {
+      strictSecretMode: this.strictSecretMode,
+      tier,
+      skillTools,
+      cloudRun: !!cloudRunContext,
+      outputSchema: cloudRunContext?.outputSchema || null,
+    });
     const allowedToolNames = new Set(tools.map(t => t.function.name));
     const plannerTemperature = this._isActionMode(mode) ? 0.15 : 0.3;
     let steps = 0;

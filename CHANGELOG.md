@@ -10,6 +10,7 @@ This changelog was generated from the repository Git history and release tags. V
 - Added a selection shortcut for Chrome and Firefox with Summarize, Explain, Quiz me, Proofread, Translate, and custom WebBrain prompts.
 - Expanded the native selection context menu with matching preset actions, translation languages, and direct side-panel access.
 - Added a persistent setting to hide or restore the floating selection shortcut.
+- Added the managed cloud-browser bridge for API-driven run, status, abort, active-tab control, and validated structured results.
 
 ### Changed
 - Simplified the selection shortcut to a compact purple question-mark icon.

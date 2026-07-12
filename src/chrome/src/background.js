@@ -18,14 +18,14 @@ import {
   getClaudeOAuthStatus,
 } from './providers/oauth-claude.js';
 import { getBalance as capsolverGetBalance } from './agent/captcha-solver.js';
+import { createCloudRunController } from './cloud-runs.js';
+import { ensureOffscreen } from './offscreen/ensure.js';
 import {
   SELECTION_TRANSLATION_LANGUAGES,
   buildContextMenuPrompt,
   buildSelectionPrompt,
   createContextMenuStorage,
 } from './context-menu-storage.js';
-// (ensureOffscreen + transcribeAudio used to be imported here; both are
-// now consumed inside src/recorder/host.js, which background.js calls into.)
 import {
   prepareRecordingHost,
   startTabRecording,
@@ -90,6 +90,14 @@ scheduler.start();
 // can look up the user's configured Whisper-compatible provider. Must
 // happen AFTER providerManager is constructed.
 setRecorderProviderManager(providerManager);
+
+const cloudRunController = createCloudRunController({
+  chromeApi: chrome,
+  agent,
+  ensureOffscreen,
+  sendIndicator: (tabId, type) => sendIndicatorMessage(tabId, type),
+});
+cloudRunController.syncBridge().catch(() => {});
 
 const MAX_AGENT_STEPS_DEFAULT = 130;
 const MAX_AGENT_STEPS_UNLIMITED_SENTINEL = 200;
@@ -679,6 +687,7 @@ chrome.runtime.onInstalled.addListener(async () => {
   await providerManager.load();
   await loadMaxSteps();
   await syncAgentUserMemoryFromStorage().catch(() => {});
+  await cloudRunController.syncBridge().catch(() => {});
   scheduleUserMemoryExtractionDrain(5000);
   console.log('[WebBrain] Extension installed, providers loaded.');
 });
@@ -689,6 +698,7 @@ chrome.runtime.onStartup?.addListener(async () => {
   await providerManager.load();
   await loadMaxSteps();
   await syncAgentUserMemoryFromStorage().catch(() => {});
+  await cloudRunController.syncBridge().catch(() => {});
   scheduleUserMemoryExtractionDrain(5000);
 });
 
@@ -696,6 +706,9 @@ chrome.runtime.onStartup?.addListener(async () => {
 chrome.storage.onChanged.addListener((changes) => {
   if (PROFILE_SYNC_DATA_KEYS.some((key) => changes[key])) profileSync.noteChanges(changes).catch(() => {});
   if (changes.providers || changes.activeProvider) providerManager.load().catch(() => {});
+  if (changes.webbrainCloudBridgeEnabled || changes.webbrainCloudBridgeUrl) {
+    cloudRunController.syncBridge().catch(() => {});
+  }
   if (changes.maxAgentSteps) {
     agent.maxSteps = normalizeMaxAgentSteps(changes.maxAgentSteps.newValue);
   }
@@ -1501,6 +1514,18 @@ async function handleMessage(msg, sender) {
   }
 
   switch (msg.action) {
+    case 'cloud_run':
+      return await cloudRunController.startRun(msg);
+    case 'cloud_status':
+      return await cloudRunController.status(msg);
+    case 'cloud_abort':
+      return await cloudRunController.abort(msg);
+    case 'cloud_bridge_start':
+      return await cloudRunController.startBridge(msg.url);
+    case 'cloud_bridge_stop':
+      return await cloudRunController.stopBridge();
+    case 'cloud_bridge_status':
+      return await cloudRunController.bridgeStatus();
     case 'prepare_recording_host':
       return await prepareRecordingHost();
     case 'start_tab_recording': {

@@ -98,6 +98,15 @@ const { RunUiJournal: RunUiJournalCh } = await import(
 const { RunUiJournal: RunUiJournalFx } = await import(
   'file://' + path.join(ROOT, 'src/firefox/src/run-ui-journal.js').replace(/\\/g, '/')
 );
+const { createCloudRunController, normalizeCloudBridgeUrl } = await import(
+  'file://' + path.join(ROOT, 'src/chrome/src/cloud-runs.js').replace(/\\/g, '/')
+);
+const { handleDoneJson: handleDoneJsonCh } = await import(
+  'file://' + path.join(ROOT, 'src/chrome/src/agent/cloud-output.js').replace(/\\/g, '/')
+);
+const { handleDoneJson: handleDoneJsonFx } = await import(
+  'file://' + path.join(ROOT, 'src/firefox/src/agent/cloud-output.js').replace(/\\/g, '/')
+);
 const { claimRunError: claimRunErrorCh } = await import(
   'file://' + path.join(ROOT, 'src/chrome/src/ui/run-error-dedupe.js').replace(/\\/g, '/')
 );
@@ -4060,6 +4069,167 @@ test('getToolsForMode: default `done` description is the loose hygiene hint', ()
     // Summary param description stays minimal in loose mode.
     assert.equal(done.function.parameters.properties.summary.description, 'Summary of what was accomplished.');
   }
+});
+
+test('getToolsForMode: done_json is available only for structured full-tier cloud runs', () => {
+  const schema = { title: 'string' };
+  for (const [label, getTools] of [['chrome', getToolsForModeCh], ['firefox', getToolsForModeFx]]) {
+    const cloud = getTools('act', { tier: 'full', cloudRun: true, outputSchema: schema }).map(tool => tool.function.name);
+    assert.equal(cloud.includes('done_json'), true, `[${label}] structured cloud run should expose done_json`);
+    assert.equal(cloud.includes('done'), false, `[${label}] structured cloud run should replace done`);
+    for (const tools of [
+      getTools('act', { tier: 'full', cloudRun: true }),
+      getTools('act', { tier: 'mid', cloudRun: true, outputSchema: schema }),
+      getTools('ask', { tier: 'full', cloudRun: true, outputSchema: schema }),
+    ]) {
+      const names = tools.map(tool => tool.function.name);
+      assert.equal(names.includes('done_json'), false, `[${label}] done_json leaked outside its cloud scope`);
+      assert.equal(names.includes('done'), true, `[${label}] normal done tool should remain available`);
+    }
+  }
+});
+
+test('done_json validates Chrome and Firefox cloud results with one repair attempt', () => {
+  for (const [label, handle] of [['chrome', handleDoneJsonCh], ['firefox', handleDoneJsonFx]]) {
+    const context = { outputSchema: { title: 'string', points: 'string[]' }, schemaRepairUsed: false };
+    const first = handle(context, { result: { title: 'Page', points: 'wrong' }, summary: 'First try' });
+    assert.equal(first.schemaValidationError, true, `[${label}] invalid result should fail validation`);
+    assert.equal(first.done, undefined, `[${label}] first invalid result should permit repair`);
+    const valid = handle(context, { result: { title: 'Page', points: ['A'] }, summary: 'Complete' });
+    assert.equal(valid.done, true, `[${label}] repaired result should complete`);
+    assert.deepEqual(valid.cloudResult, { title: 'Page', points: ['A'] });
+
+    const exhausted = { outputSchema: { title: 'string' }, schemaRepairUsed: true };
+    const failed = handle(exhausted, { result: { title: 42 }, summary: 'Bad' });
+    assert.equal(failed.done, true, `[${label}] second invalid result should terminate`);
+    assert.equal(failed.cloudFailed, true, `[${label}] second invalid result should fail the cloud run`);
+  }
+});
+
+test('cloud run controller uses the visible tab and persists terminal status', async () => {
+  const session = {};
+  const tab = { id: 17, url: 'https://webbrain.one/', active: true, windowId: 3 };
+  let finishRun;
+  let processArgs = null;
+  const agent = {
+    isRunning: () => false,
+    abort: () => {},
+    processMessage: (...args) => {
+      processArgs = args;
+      return new Promise(resolve => { finishRun = resolve; });
+    },
+  };
+  const chromeApi = {
+    tabs: {
+      query: async query => query.active ? [tab] : [tab],
+      get: async () => tab,
+      update: async () => tab,
+      create: async () => ({ id: 18, url: 'about:blank', active: true }),
+    },
+    windows: { update: async () => ({}) },
+    storage: {
+      local: { get: async () => ({ webbrainCloudBridgeEnabled: false }) },
+      session: {
+        get: async key => ({ [key]: session[key] || [] }),
+        set: async value => Object.assign(session, value),
+      },
+    },
+    runtime: { sendMessage: async () => ({ connected: false }) },
+  };
+  const controller = createCloudRunController({
+    chromeApi,
+    agent,
+    ensureOffscreen: async () => {},
+    makeRunId: () => 'run_test',
+    now: (() => { let tick = 0; return () => new Date(1700000000000 + tick++ * 1000); })(),
+  });
+  const started = await controller.startRun({ task: 'Open Google' });
+  assert.equal(started.status, 'running');
+  assert.equal(started.tabId, 17);
+  assert.equal(processArgs[3], 'act');
+  assert.deepEqual(processArgs[4], []);
+  assert.equal(processArgs[5].cloudRun, true);
+  finishRun('Google');
+  await new Promise(resolve => setTimeout(resolve, 0));
+  const completed = await controller.status({ run_id: 'run_test' });
+  assert.equal(completed.status, 'completed');
+  assert.equal(completed.result, 'Google');
+  assert.equal(session.webbrainCloudRunSnapshots[0].status, 'completed');
+});
+
+test('cloud run controller fails interrupted runs after service-worker restart', async () => {
+  const row = { runId: 'run_old', status: 'running', tabId: 2, task: 'Old task', updates: [], createdAt: '2020-01-01T00:00:00.000Z' };
+  const session = { webbrainCloudRunSnapshots: [row] };
+  const controller = createCloudRunController({
+    chromeApi: {
+      tabs: {},
+      storage: {
+        local: { get: async () => ({}) },
+        session: { get: async key => ({ [key]: session[key] }), set: async value => Object.assign(session, value) },
+      },
+      runtime: { sendMessage: async () => ({}) },
+    },
+    agent: {},
+    ensureOffscreen: async () => {},
+    now: () => new Date('2020-01-02T00:00:00.000Z'),
+  });
+  const restored = await controller.status({ runId: 'run_old' });
+  assert.equal(restored.status, 'failed');
+  assert.match(restored.error, /service worker restarted/i);
+});
+
+test('cloud bridge accepts only loopback WebSocket URLs', () => {
+  assert.equal(normalizeCloudBridgeUrl('ws://127.0.0.1:17373/extension'), 'ws://127.0.0.1:17373/extension');
+  assert.equal(normalizeCloudBridgeUrl('ws://localhost:17373/extension'), 'ws://localhost:17373/extension');
+  assert.throws(() => normalizeCloudBridgeUrl('wss://example.com/extension'), /localhost/);
+  assert.throws(() => normalizeCloudBridgeUrl('ws://192.168.1.10/extension'), /localhost/);
+});
+
+test('offscreen cloud bridge reconnects with backoff and rejects remote control URLs', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'src/chrome/src/offscreen/cloud-bridge.js'), 'utf8');
+  const sockets = [];
+  const timers = [];
+  let listener = null;
+  class FakeWebSocket {
+    static CONNECTING = 0;
+    static OPEN = 1;
+    static CLOSED = 3;
+    constructor(url) {
+      this.url = url;
+      this.readyState = FakeWebSocket.CONNECTING;
+      this.listeners = new Map();
+      this.sent = [];
+      sockets.push(this);
+    }
+    addEventListener(type, callback) { this.listeners.set(type, callback); }
+    send(value) { this.sent.push(JSON.parse(value)); }
+    close() { this.readyState = FakeWebSocket.CLOSED; this.listeners.get('close')?.(); }
+    emit(type, value = {}) { this.listeners.get(type)?.(value); }
+  }
+  vm.runInNewContext(source, {
+    URL,
+    WebSocket: FakeWebSocket,
+    chrome: { runtime: { onMessage: { addListener: callback => { listener = callback; } }, sendMessage: async () => ({}) } },
+    setTimeout: (callback, delay) => { timers.push({ callback, delay }); return timers.length; },
+    clearTimeout: () => {},
+  });
+
+  let started;
+  listener({ type: 'cloud-bridge-start', url: 'ws://127.0.0.1:17373/extension' }, null, value => { started = value; });
+  assert.equal(started.enabled, true);
+  assert.equal(sockets.length, 1);
+  sockets[0].readyState = FakeWebSocket.OPEN;
+  sockets[0].emit('open');
+  assert.equal(sockets[0].sent[0].type, 'hello');
+  sockets[0].close();
+  assert.equal(timers[0].delay, 500);
+  timers[0].callback();
+  assert.equal(sockets.length, 2);
+
+  let rejected;
+  listener({ type: 'cloud-bridge-start', url: 'wss://attacker.example/extension' }, null, value => { rejected = value; });
+  assert.match(rejected.error, /localhost/);
+  assert.equal(sockets.length, 2);
 });
 
 test('getToolsForMode: `done` outcome is exposed only in full and mid action modes', () => {
@@ -19740,6 +19910,7 @@ test('parity: chrome & firefox permission-gate behave identically', async () => 
 // this list is a security decision, so keep the justification next to it.
 const KNOWN_SAFE_TOOLS = new Set([
   'clarify',              // relays a question to the user (trusted user input)
+  'done_json',            // model-authored structured completion for managed cloud runs
   'scratchpad_write',     // writes an internal agent note, not the page
   'get_window_info',      // reads browser/window metadata, not page content
   // NOTE: hover and list_downloads were moved to UNTRUSTED_CONTENT_TOOLS — both
