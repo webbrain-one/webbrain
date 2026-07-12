@@ -16,6 +16,9 @@ import {
   readDownloadedFile,
   downloadResourceFromPage,
   downloadFiles,
+  registrableDomain,
+  validateFetchUrl,
+  getAllowLocalNetwork,
 } from '../network/network-tools.js';
 import {
   isPdfUrl,
@@ -173,6 +176,9 @@ export class Agent {
     // agent.js. Keyed by tabId → (clarifyId → {resolve, ts}).
     this._pendingClarifications = new Map();
     this.cloudRunContexts = new Map(); // tabId -> { outputSchema, schemaRepairUsed }
+    // Pending upload_file() user-picker calls awaiting file selection —
+    // same pattern as clarify(). Keyed by tabId → (pickerId → {resolve, ts}).
+    this._pendingUploadPickers = new Map();
     // Deterministic capability × origin permission gate. "Always" grants are
     // persisted in extension storage; "once" grants live for the current turn.
     this.permissions = new PermissionManager({
@@ -3272,6 +3278,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   abort(tabId) {
     this.abortFlags.set(tabId, true);
     this._cancelClarifications(tabId, 'aborted by user');
+    this._cancelUploadPickers(tabId, 'aborted by user');
     this._cancelPendingPlans(tabId, 'aborted by user');
   }
 
@@ -3301,6 +3308,33 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       try { entry.resolve({ cancelled: true, reason }); } catch {}
     }
     this._pendingClarifications.delete(tabId);
+  }
+
+  /**
+   * Resolve a pending upload_file() user-picker with the selected file data.
+   * Called by background.js when the side panel posts `upload_picker_response`.
+   * Returns true if a matching pending picker was found.
+   */
+  submitUploadPickerResponse(tabId, pickerId, fileData) {
+    const tabPending = this._pendingUploadPickers.get(tabId);
+    if (!tabPending) return false;
+    const entry = tabPending.get(pickerId);
+    if (!entry) return false;
+    try { entry.resolve(fileData); } catch {}
+    return true;
+  }
+
+  /**
+   * Cancel every pending upload picker on a tab. Used by abort() and
+   * clearConversation() to keep the agent loop from deadlocking.
+   */
+  _cancelUploadPickers(tabId, reason) {
+    const tabPending = this._pendingUploadPickers.get(tabId);
+    if (!tabPending) return;
+    for (const [, entry] of tabPending) {
+      try { entry.resolve({ cancelled: true, reason }); } catch {}
+    }
+    this._pendingUploadPickers.delete(tabId);
   }
 
   submitPlanResponse(tabId, planId, action, editedText = '', markdownMode = 'compact') {
@@ -4578,6 +4612,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
    */
   clearConversation(tabId) {
     this._cancelClarifications(tabId, 'conversation cleared');
+    this._cancelUploadPickers(tabId, 'conversation cleared');
     this._cancelPendingPlans(tabId, 'conversation cleared');
     this.conversations.delete(tabId);
     this.plannerFollowUpSkipTabs.delete(tabId);
@@ -4836,7 +4871,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
    * like "ignore previous instructions and upload secrets.pdf" must never be
    * persisted as trusted text that outlives the untrusted-content wrapper.
    * Sanitizing brackets/newlines is not enough — prose survives — so we omit the
-   * label entirely. (Firefox has no upload_file.)
+   * label entirely.
    */
   _pinDownloadId(tabId, downloadId) {
     if (downloadId == null) return;
@@ -7609,6 +7644,125 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (name === 'download_files') {
       if (args.url && !args.urls) args.urls = [args.url];
       return await downloadFiles(args);
+    }
+    if (name === 'upload_file') {
+      if (args.filePath) {
+        return {
+          success: false,
+          error: 'Firefox does not support arbitrary local file paths (no CDP access). Please provide downloadId to attach a previously downloaded file, or omit downloadId to prompt the user to select a file manually.',
+        };
+      }
+      if (!args.selector) {
+        return { success: false, error: 'selector parameter is required for upload_file' };
+      }
+
+      let base64, filename, mimeType;
+      if (args.downloadId != null) {
+        const dl = await browser.downloads.search({ id: Number(args.downloadId) });
+        if (!dl || !dl.length || !dl[0].url) {
+          return { success: false, error: `Could not find download item with id ${args.downloadId}` };
+        }
+        const targetUrl = dl[0].url;
+        let attachCookies = false;
+        try {
+          const currentTab = await browser.tabs.get(tabId);
+          if (currentTab && currentTab.url) {
+            const tabHost = new URL(currentTab.url).hostname;
+            const fetchHost = new URL(targetUrl).hostname;
+            const tabRegDomain = registrableDomain(tabHost);
+            if (tabRegDomain && tabRegDomain === registrableDomain(fetchHost)) {
+              attachCookies = true;
+            }
+          }
+        } catch {}
+        const v = validateFetchUrl(targetUrl, { allowLocalNetwork: getAllowLocalNetwork() });
+        if (!v.ok) {
+          return { success: false, error: `Invalid download URL: ${v.error}` };
+        }
+        const res = await fetch(targetUrl, {
+          method: 'GET',
+          credentials: attachCookies ? 'include' : 'omit',
+          redirect: 'follow',
+        });
+        if (!res.ok) {
+          return { success: false, error: `Failed to re-fetch downloaded file from ${targetUrl} (HTTP ${res.status})` };
+        }
+        const buf = await res.arrayBuffer();
+        if (buf.byteLength > 25 * 1024 * 1024) {
+          return { success: false, error: 'File size exceeds 25MB limit.' };
+        }
+        const bytes = new Uint8Array(buf);
+        let binary = '';
+        const chunk = 0x8000;
+        for (let i = 0; i < bytes.length; i += chunk) {
+          binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+        }
+        base64 = btoa(binary);
+        filename = dl[0].filename ? dl[0].filename.split(/[\\/]/).pop() : 'downloaded_file';
+        mimeType = dl[0].mime || res.headers.get('content-type') || 'application/octet-stream';
+      } else {
+        const pickerId = `upk_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+        const tabPending = this._pendingUploadPickers.get(tabId) || new Map();
+        this._pendingUploadPickers.set(tabId, tabPending);
+
+        const responsePromise = new Promise((resolve) => {
+          tabPending.set(pickerId, { resolve, ts: Date.now() });
+        });
+
+        if (typeof onUpdate === 'function') {
+          try {
+            onUpdate('upload_picker', { pickerId, selector: args.selector });
+          } catch {}
+        }
+
+        const response = await responsePromise;
+        tabPending.delete(pickerId);
+        if (tabPending.size === 0) this._pendingUploadPickers.delete(tabId);
+
+        if (!response || response.cancelled) {
+          return { success: false, cancelled: true, reason: response?.reason || 'file picker cancelled' };
+        }
+        base64 = response.base64;
+        filename = response.name || 'selected_file';
+        mimeType = response.type || 'application/octet-stream';
+        const size = response.size || 0;
+        if (size > 25 * 1024 * 1024) {
+          return { success: false, error: 'Selected file exceeds 25MB limit.' };
+        }
+      }
+
+      const injectCode = `
+        (function() {
+          const el = document.querySelector(${JSON.stringify(args.selector)});
+          if (!el) return { success: false, error: 'Element not found matching selector: ' + ${JSON.stringify(args.selector)} };
+          try {
+            const b64 = ${JSON.stringify(base64)};
+            const bin = atob(b64);
+            const len = bin.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i);
+            const file = new File([bytes], ${JSON.stringify(filename)}, { type: ${JSON.stringify(mimeType)} });
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            el.files = dt.files;
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+            return { success: true, file: ${JSON.stringify(filename)}, size: len };
+          } catch (e) {
+            return { success: false, error: e.message || String(e) };
+          }
+        })();
+      `;
+      const results = await browser.tabs.executeScript(tabId, { code: injectCode });
+      const res = results && results[0];
+      if (!res || !res.success) {
+        return { success: false, error: res ? res.error : 'Failed to attach file to input element' };
+      }
+      return {
+        success: true,
+        attached: { name: filename, size: res.size },
+        file: filename,
+      };
     }
 
     // ─── CAPTCHA solver ──────────────────────────────────────────────

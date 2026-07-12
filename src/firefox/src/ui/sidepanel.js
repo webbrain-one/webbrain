@@ -4098,6 +4098,10 @@ function handleAgentUpdateMessage(msg) {
       renderClarifyCard(data);
       break;
 
+    case 'upload_picker':
+      renderUploadPickerCard(data, msg.tabId ?? currentTabId);
+      break;
+
     case 'plan_review':
       renderPlanReviewCard({ ...data, tabId: msg.tabId ?? currentTabId, requestId: msg.requestId, runId: msg.runId });
       break;
@@ -4310,6 +4314,74 @@ function renderClarifyCard(data) {
   content.appendChild(card);
   scrollToBottom();
   try { input.focus(); } catch {}
+}
+
+function renderUploadPickerCard(data, tabId) {
+  if (tabId == null) return;
+  const pickerId = String(data.pickerId || '');
+  if (!pickerId || !currentAssistantEl) return;
+
+  const content = currentAssistantEl.querySelector('.message-content');
+  if (!content) return;
+
+  const card = document.createElement('div');
+  card.className = 'clarify-card';
+  card.dataset.pickerId = pickerId;
+  card.dataset.tabId = String(tabId);
+
+  const qEl = document.createElement('div');
+  qEl.className = 'clarify-question';
+  qEl.textContent = `Please select a file to upload to ${data.selector || 'the page'}`;
+  card.appendChild(qEl);
+
+  const btnsEl = document.createElement('div');
+  btnsEl.className = 'clarify-options';
+
+  const chooseBtn = document.createElement('button');
+  chooseBtn.className = 'clarify-option-btn';
+  chooseBtn.textContent = 'Choose File…';
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'clarify-option-btn';
+  cancelBtn.textContent = 'Cancel';
+
+  chooseBtn.addEventListener('click', () => {
+    const input = document.getElementById('upload-picker-input');
+    if (!input) return;
+    input.value = '';
+    input.onchange = () => {
+      const file = input.files && input.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64Str = String(reader.result || '');
+        const commaIdx = base64Str.indexOf(',');
+        const base64 = commaIdx >= 0 ? base64Str.slice(commaIdx + 1) : base64Str;
+        card.innerHTML = `<div class="clarify-question">Selected file: ${file.name} (${file.size} bytes)</div>`;
+        sendToBackground('upload_picker_response', {
+          tabId,
+          pickerId,
+          base64,
+          name: file.name,
+          type: file.type,
+          size: file.size,
+        });
+      };
+      reader.readAsDataURL(file);
+    };
+    input.click();
+  });
+
+  cancelBtn.addEventListener('click', () => {
+    card.innerHTML = '<div class="clarify-question">Upload cancelled</div>';
+    sendToBackground('upload_picker_response', { tabId, pickerId, cancelled: true, reason: 'User cancelled file selection' });
+  });
+
+  btnsEl.appendChild(chooseBtn);
+  btnsEl.appendChild(cancelBtn);
+  card.appendChild(btnsEl);
+  content.appendChild(card);
+  scrollToBottom();
 }
 
 function renderPlanReviewCard(data) {

@@ -28,11 +28,9 @@ export const Capability = {
   EXECUTE_JS: 'execute_js',      // execute_js
   NETWORK: 'network_write',      // fetch_url / research_url with a write method
   DOWNLOAD: 'download',          // download_* tools
+  UPLOAD: 'upload',              // upload_file (attach a file to a page input)
   WINDOW: 'window',              // resize_window (changes browser window bounds)
   SCHEDULE: 'schedule',          // schedule_resume / schedule_task persistent future work
-  // NOTE: no UPLOAD here — upload_file is Chrome-only
-  // (CDP file injection). Firefox's AGENT_TOOLS
-  // does not implement them, so there is nothing to gate.
 };
 
 // Human-readable verb for the permission prompt: "WebBrain wants to <label> <host>".
@@ -43,6 +41,7 @@ export const CAPABILITY_LABEL = {
   [Capability.EXECUTE_JS]: 'run JavaScript on',
   [Capability.NETWORK]: 'make a network request to',
   [Capability.DOWNLOAD]: 'download files from',
+  [Capability.UPLOAD]: 'upload a file on',
   [Capability.WINDOW]: 'resize the browser window for',
   [Capability.SCHEDULE]: 'schedule future work for',
 };
@@ -87,6 +86,7 @@ export const UNTRUSTED_CONTENT_TOOLS = new Set([
   'download_resource_from_page',
   'download_files',
   'download_file',
+  'upload_file',
   // hover returns the element's accessible name (aria-label/title/innerText).
   'hover',
   // list_downloads returns each download's url + filename; the filename can
@@ -142,6 +142,7 @@ const TOOL_CAPABILITY = {
   download_files: Capability.DOWNLOAD,
   download_resource_from_page: Capability.DOWNLOAD,
   download_social_media: Capability.DOWNLOAD,
+  upload_file: Capability.UPLOAD,
   schedule_resume: Capability.SCHEDULE,
   schedule_task: Capability.SCHEDULE,
 };

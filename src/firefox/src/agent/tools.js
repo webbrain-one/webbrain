@@ -694,6 +694,27 @@ export const AGENT_TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'upload_file',
+      description: 'Attach a file to a <input type="file"> element on the page. Provide EITHER downloadId (preferred — re-fetches the file from its original URL) OR omit it to let the user pick a file manually via a file-picker dialog. NOTE: Firefox cannot set arbitrary local file paths (no CDP); only downloadId and user-picker flows are supported.',
+      parameters: {
+        type: 'object',
+        properties: {
+          selector: {
+            type: 'string',
+            description: 'CSS selector for the <input type="file"> element.',
+          },
+          downloadId: {
+            type: 'number',
+            description: 'Download ID from a previous download_files / download_resource_from_page / list_downloads call. The file will be re-fetched from its original URL and attached.',
+          },
+        },
+        required: ['selector'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'scratchpad_write',
       description: 'Write to your persistent scratchpad — a note pinned near the top of your context that survives conversation summarization. Use it for long tasks where facts need to persist across many tool calls: download IDs you\'ve collected, file paths on disk, pages/items you\'ve already processed, your running plan, intermediate CSV rows you\'ve built up. Without the scratchpad, older tool outcomes are compressed into a short summary as context fills up, so you WILL lose specific details (filenames, counts, which items are done) after ~15 tool turns. Default action appends `text` as a new line. Pass `replace:true` to overwrite the whole pad when you want to compact it. Keep entries short and factual — one line per fact is ideal. Read back your own pad anytime; it\'s visible in every future prompt.',
       parameters: {
@@ -1318,11 +1339,10 @@ DEV MODE APPENDIX:
  * source/style/debug tools. It keeps common download workflows, including
  * resource downloads from visible page elements.
  *
- * NOTE: this is the Firefox build, whose AGENT_TOOLS does NOT implement
- * upload_file or other Chrome-only recording/CDP affordances. They are
- * deliberately absent here so mid neither advertises nor steers toward tools
- * Firefox can't execute. Keep this list in sync with AGENT_TOOLS, not with the
- * Chrome mid set.
+ * NOTE: this is the Firefox build, whose AGENT_TOOLS implements upload_file
+ * via DataTransfer injection (no CDP). filePath is not supported — only
+ * downloadId (re-fetch) and user-picker flows work. Keep this list in sync
+ * with AGENT_TOOLS, not with the Chrome mid set.
  */
 export const MID_TOOL_NAMES = new Set([
   'get_accessibility_tree', 'click_ax', 'type_ax', 'set_field',
@@ -1333,6 +1353,7 @@ export const MID_TOOL_NAMES = new Set([
   'iframe_read', 'iframe_click', 'iframe_type',
   'fetch_url', 'research_url', 'list_downloads', 'read_downloaded_file',
   'download_files', 'download_resource_from_page', 'download_social_media',
+  'upload_file',
   'scratchpad_write', 'progress_update', 'progress_read', 'verify_form', 'solve_captcha',
 ]);
 

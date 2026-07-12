@@ -1698,6 +1698,15 @@ async function handleMessage(msg, sender) {
       return { ok: matched, matched };
     }
 
+    case 'upload_picker_response': {
+      const tabId = msg.tabId || sender.tab?.id;
+      if (!tabId) return { ok: false, error: 'No tab ID' };
+      const pickerId = String(msg.pickerId || '');
+      if (!pickerId) return { ok: false, error: 'pickerId required' };
+      const matched = agent.submitUploadPickerResponse(tabId, pickerId, msg);
+      return { ok: matched, matched };
+    }
+
     case 'plan_response': {
       const tabId = msg.tabId || sender.tab?.id;
       if (!tabId) return { ok: false, error: 'No tab ID' };

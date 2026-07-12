@@ -4455,21 +4455,19 @@ test('getToolsForMode: mode/tier redesign exposes the intended normal and Dev to
     assert.equal(devFull.includes('read_page_source'), true, `[${label}] dev full should expose read_page_source`);
     assert.equal(devFull.includes('inspect_element_styles'), true, `[${label}] dev full should expose inspect_element_styles`);
 
+    assert.equal(mid.includes('upload_file'), true, `[${label}] mid act should expose upload_file`);
+    assert.equal(full.includes('upload_file'), true, `[${label}] full act should expose upload_file`);
     if (label === 'chrome') {
       assert.equal(full.includes('shadow_dom_query'), true, '[chrome] full act should expose shadow_dom_query');
       assert.equal(mid.includes('shadow_dom_query'), false, '[chrome] mid act should not expose shadow_dom_query');
       assert.equal(devMid.includes('shadow_dom_query'), true, '[chrome] dev mid should add shadow_dom_query');
       assert.equal(devFull.includes('shadow_dom_query'), true, '[chrome] dev full should keep shadow_dom_query');
-      assert.equal(mid.includes('upload_file'), true, '[chrome] mid act should expose upload_file');
-      assert.equal(full.includes('upload_file'), true, '[chrome] full act should expose upload_file');
       assert.equal(devFull.includes('execute_js'), false, '[chrome] Dev must not expose execute_js');
     } else {
       assert.equal(full.includes('shadow_dom_query'), false, '[firefox] shadow_dom_query is Chrome-only');
       assert.equal(mid.includes('shadow_dom_query'), false, '[firefox] shadow_dom_query is Chrome-only');
       assert.equal(devMid.includes('shadow_dom_query'), false, '[firefox] Dev must not invent Chrome-only shadow_dom_query');
       assert.equal(devFull.includes('shadow_dom_query'), false, '[firefox] Dev must not invent Chrome-only shadow_dom_query');
-      assert.equal(mid.includes('upload_file'), false, '[firefox] upload_file is Chrome-only');
-      assert.equal(full.includes('upload_file'), false, '[firefox] upload_file is Chrome-only');
       assert.equal(full.includes('execute_js'), false, '[firefox] full act must not expose execute_js');
       assert.equal(devMid.includes('execute_js'), true, '[firefox] dev mid should expose execute_js');
       assert.equal(devFull.includes('execute_js'), true, '[firefox] dev full should expose execute_js');
@@ -15227,9 +15225,8 @@ test('capabilityFor: no side-effecting tool slips through ungated', () => {
   assert.equal(capabilityFor('iframe_type', {}), Capability.TYPE);
   assert.equal(capabilityFor('drag_drop', {}), Capability.CLICK);
   assert.equal(capabilityFor('download_file', {}), Capability.DOWNLOAD);
-  // upload_file is Chrome-only.
   assert.equal(capabilityForCh('upload_file', {}), CapabilityCh.UPLOAD);
-  assert.equal(capabilityFor('upload_file', {}), null);
+  assert.equal(capabilityFor('upload_file', {}), Capability.UPLOAD);
 });
 
 test('set_field with submit:true requires CLICK, not the weaker TYPE', () => {
