@@ -442,6 +442,7 @@ let currentTabId = null;
 let renderedTabId = null;
 let pendingTabSwitch = null; // tab the user switched to while isProcessing was true
 let tabSwitchTransitionId = null;
+let tabSwitchGeneration = 0;
 let queuedTabSwitchMessages = [];
 const pendingAttachmentsByTab = new Map(); // tabId -> [{ kind: 'image'|'document'|'text', name, dataUrl?, textContent? }]
 const attachmentReadCountsByTab = new Map();
@@ -451,8 +452,10 @@ let currentAssistantEl = null;
 let verboseMode = false;
 let agentMode = 'ask'; // 'ask' | 'act' | 'dev'
 let abortRequested = false;
-let activeRunRestoredFromBackground = false;
 const awaitingPlanReviewTabs = new Set();
+const processingTabs = new Set();
+const abortRequestedTabs = new Set();
+const localRunRequestIds = new Map();
 let recommendationsRequestId = 0;
 let providerSelectionRequestId = 0;
 let providerTestRequestId = 0;
@@ -466,6 +469,42 @@ let retryPayloadSeq = 0;
 const activeChatPayloadsByTab = new Map();
 const retryAttachmentPayloads = new Map();
 const retryAttachmentIdsByTab = new Map();
+
+function setTabProcessing(tabId, processing) {
+  const numericTabId = Number(tabId);
+  if (!Number.isFinite(numericTabId)) return;
+  if (processing) processingTabs.add(numericTabId);
+  else processingTabs.delete(numericTabId);
+  if (sameTabId(currentTabId, numericTabId)) isProcessing = !!processing;
+}
+
+function isTabProcessing(tabId) {
+  const numericTabId = Number(tabId);
+  return Number.isFinite(numericTabId) && processingTabs.has(numericTabId);
+}
+
+function setTabAbortRequested(tabId, requested) {
+  const numericTabId = Number(tabId);
+  if (!Number.isFinite(numericTabId)) return;
+  if (requested) abortRequestedTabs.add(numericTabId);
+  else abortRequestedTabs.delete(numericTabId);
+  if (sameTabId(currentTabId, numericTabId)) abortRequested = !!requested;
+}
+
+function isTabAbortRequested(tabId) {
+  const numericTabId = Number(tabId);
+  return Number.isFinite(numericTabId) && abortRequestedTabs.has(numericTabId);
+}
+
+function syncCurrentTabRunFlags() {
+  const numericTabId = Number(currentTabId);
+  isProcessing = Number.isFinite(numericTabId) && processingTabs.has(numericTabId);
+  abortRequested = Number.isFinite(numericTabId) && abortRequestedTabs.has(numericTabId);
+}
+
+function createRunRequestId(tabId) {
+  return `req_${tabId}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
 const {
   acceptContextMenuPrompt,
   drainQueuedContextMenuPrompts,
@@ -881,8 +920,8 @@ function setPlanReviewAwaiting(tabId, awaiting, assistantEl = null) {
   if (sameTabId(currentTabId, numericTabId)) {
     if (awaiting) {
       if (assistantEl) currentAssistantEl = assistantEl;
-      isProcessing = true;
-      abortRequested = false;
+      setTabProcessing(numericTabId, true);
+      setTabAbortRequested(numericTabId, false);
       hideRecommendedActions();
     }
     syncSendButtonState();
@@ -1642,8 +1681,11 @@ async function drainQueuedContextMenuPromptsAfterPendingTabSwitch() {
 
 function queueAgentUpdateDuringTabSwitch(msg) {
   const tabId = msg?.tabId;
-  if (tabSwitchTransitionId == null || tabId == null || tabId !== tabSwitchTransitionId) return false;
-  queuedTabSwitchMessages.push(msg);
+  if (tabSwitchTransitionId == null || tabId == null) return false;
+  // Never render into a DOM whose tab is changing. Target-tab events are
+  // queued so updates newer than the fetched journal snapshot are not lost;
+  // sequence de-duplication drops events the snapshot already replayed.
+  if (tabId === tabSwitchTransitionId) queuedTabSwitchMessages.push(msg);
   return true;
 }
 
@@ -1659,7 +1701,8 @@ function drainQueuedAgentUpdatesForTab(tabId) {
   replay.forEach((msg) => handleAgentUpdateMessage(msg));
 }
 
-async function settleScheduledRun(event, job) {
+async function settleScheduledRun(event, job, tabId = currentTabId) {
+  const runTabId = normalizePlanReviewTabId(tabId);
   if (job?.id) crossPanelScheduledJobIds.delete(String(job.id));
   const assistantEl = job?.id ? findScheduledAssistantMessageForJob(job.id) : currentAssistantEl;
   if (assistantEl) {
@@ -1671,12 +1714,14 @@ async function settleScheduledRun(event, job) {
     }
   }
   const ownsActiveRun = !currentAssistantEl || currentAssistantEl === assistantEl;
-  if (ownsActiveRun) {
-    isProcessing = false;
+  if (runTabId != null) {
+    setTabProcessing(runTabId, false);
+    setTabAbortRequested(runTabId, false);
+  }
+  if (ownsActiveRun && sameTabId(currentTabId, runTabId)) {
     syncSendButtonState();
     hideActivity();
     if (currentAssistantEl === assistantEl) currentAssistantEl = null;
-    abortRequested = false;
     if (renderedTabId != null) await flushRenderedTabChat();
     await drainQueuedContextMenuPromptsAfterPendingTabSwitch();
   }
@@ -1690,6 +1735,7 @@ async function handleScheduledJobEvent(data, tabId) {
   if (!event || !job) return;
 
   const sameTab = tabId == null || tabId === currentTabId;
+  const runTabId = normalizePlanReviewTabId(tabId ?? currentTabId);
   const jobId = job?.id ? String(job.id) : '';
   const terminalScheduledEvent = ['completed', 'failed'].includes(event);
   const crossPanelScheduledEvent = isUrlTargetScheduledJob(job) && (
@@ -1702,9 +1748,9 @@ async function handleScheduledJobEvent(data, tabId) {
   if (event === 'created') {
     addMessage('system', systemHtml(tSystemHtml('sp.scheduled.created', { title, time: formatScheduledTime(job.nextRunAt || job.scheduledAt) })));
   } else if (event === 'running') {
-    clearActiveChatPayloadForTab(tabId ?? currentTabId);
-    isProcessing = true;
-    abortRequested = false;
+    clearActiveChatPayloadForTab(runTabId);
+    setTabProcessing(runTabId, true);
+    setTabAbortRequested(runTabId, false);
     syncSendButtonState();
     hideRecommendedActions();
     currentAssistantEl = addMessage('assistant', '');
@@ -1712,21 +1758,21 @@ async function handleScheduledJobEvent(data, tabId) {
     showActivity(t('sp.scheduled.running', { title }));
   } else if (event === 'completed') {
     ensureScheduledTerminalMessage(job);
-    await settleScheduledRun(event, job);
+    await settleScheduledRun(event, job, runTabId);
   } else if (event === 'failed') {
     addMessage('error', t('sp.scheduled.failed', { title, msg: job.lastError || t('sp.scheduled.unknown_error') }));
-    await settleScheduledRun(event, job);
+    await settleScheduledRun(event, job, runTabId);
   } else if (event === 'needs_user_input') {
     ensureScheduledClarifyCards([job]);
     hideActivity();
-    abortRequested = false;
+    setTabAbortRequested(runTabId, false);
     if (currentAssistantEl) {
-      clearActiveChatPayloadForTab(tabId ?? currentTabId);
-      isProcessing = true;
+      clearActiveChatPayloadForTab(runTabId);
+      setTabProcessing(runTabId, true);
       syncSendButtonState();
       hideRecommendedActions();
     } else {
-      isProcessing = false;
+      setTabProcessing(runTabId, false);
       syncSendButtonState();
       addMessage('system', systemHtml(tSystemHtml('sp.scheduled.needs_user_input', { title })));
       drainQueuedContextMenuPromptsAfterPendingTabSwitch();
@@ -2355,12 +2401,10 @@ if (verboseBtn) {
 
 async function switchToTab(newTabId) {
   if (newTabId === currentTabId && renderedTabId === newTabId) { pendingTabSwitch = null; return; }
-  if (isProcessing) {
-    pendingTabSwitch = newTabId; // apply after the run ends
-    return;
-  }
+  const switchGeneration = ++tabSwitchGeneration;
   pendingTabSwitch = null;
   tabSwitchTransitionId = newTabId;
+  queuedTabSwitchMessages = [];
 
   try {
     // Save the tab currently represented by the DOM. During an async restore,
@@ -2368,27 +2412,23 @@ async function switchToTab(newTabId) {
     if (renderedTabId != null) {
       const outgoingTabId = renderedTabId;
       await flushRenderedTabChat();
-      if (isProcessing) {
-        pendingTabSwitch = newTabId;
-        return;
-      }
+      if (switchGeneration !== tabSwitchGeneration) return;
       await flushChatHistorySnapshot(outgoingTabId);
-      if (isProcessing) {
-        pendingTabSwitch = newTabId;
-        return;
-      }
+      if (switchGeneration !== tabSwitchGeneration) return;
       captureInputDraftForTab(outgoingTabId);
     }
 
     currentTabId = newTabId;
+    currentAssistantEl = null;
+    syncCurrentTabRunFlags();
     syncApiMutationsAllowedForCurrentTab();
 
     // Restore new tab's chat from memory or storage.
     const html = await loadTabChat(newTabId);
-    if (currentTabId !== newTabId) return;
+    if (switchGeneration !== tabSwitchGeneration || currentTabId !== newTabId) return;
     if (html) {
       await hydrateRestoredChatHistory(newTabId, html);
-      if (currentTabId !== newTabId) return;
+      if (switchGeneration !== tabSwitchGeneration || currentTabId !== newTabId) return;
     }
     renderedTabId = newTabId;
     if (html) {
@@ -2404,10 +2444,11 @@ async function switchToTab(newTabId) {
     renderQueuedComposerMessages(newTabId);
     scrollToBottom();
     await restoreActiveRunState(newTabId);
+    if (switchGeneration !== tabSwitchGeneration || currentTabId !== newTabId) return;
     refreshScheduledJobs({ tabId: newTabId });
     refreshRecommendedActions();
   } finally {
-    if (tabSwitchTransitionId === newTabId) tabSwitchTransitionId = null;
+    if (switchGeneration === tabSwitchGeneration && tabSwitchTransitionId === newTabId) tabSwitchTransitionId = null;
   }
   drainQueuedAgentUpdatesForTab(newTabId);
   consumePendingContextMenuPrompt().then(() => drainQueuedContextMenuPrompts()).catch(() => {});
@@ -2423,20 +2464,81 @@ async function restoreActiveRunState(tabId = currentTabId) {
     return;
   }
   if (!sameTabId(currentTabId, numericTabId) || !sameTabId(renderedTabId, numericTabId)) return;
-  if (state?.pendingPlan?.planId) {
-    activeRunRestoredFromBackground = true;
-    renderPlanReviewCard({ ...state.pendingPlan, tabId: numericTabId });
+  const runUi = state?.runUi && typeof state.runUi === 'object' ? state.runUi : null;
+  if (runUi?.requestId) {
+    const runAssistantEl = messagesEl.querySelector(`.message.assistant[data-run-request-id="${CSS.escape(String(runUi.requestId))}"]`)
+      || messagesEl.querySelector('.message.assistant:last-of-type')
+      || addMessage('assistant', '');
+    currentAssistantEl = runAssistantEl;
+    runAssistantEl.dataset.runRequestId = String(runUi.requestId);
+    if (runUi.runId) runAssistantEl.dataset.runId = String(runUi.runId);
+    const lastRenderedSeq = Number(runAssistantEl.dataset.lastRenderedSeq || 0);
+    if (runUi.truncatedBeforeSeq > lastRenderedSeq) {
+      addContextCompactedNote({ message: 'Some hidden-tab progress was compacted.' });
+    }
+    for (const event of Array.isArray(runUi.events) ? runUi.events : []) {
+      if (Number(event?.seq || 0) <= lastRenderedSeq) continue;
+      handleAgentUpdateMessage({
+        target: 'sidepanel',
+        action: 'agent_update',
+        tabId: numericTabId,
+        requestId: runUi.requestId,
+        runId: runUi.runId,
+        seq: event.seq,
+        type: event.type,
+        data: event.data,
+      });
+      runAssistantEl.dataset.lastRenderedSeq = String(event.seq);
+    }
+    const renderedSeq = Number(runAssistantEl.dataset.lastRenderedSeq || 0);
+    if (renderedSeq > Number(runUi.ackedSeq || 0)) {
+      await sendToBackground('agent_run_ack', {
+        tabId: numericTabId,
+        requestId: runUi.requestId,
+        seq: renderedSeq,
+      }).catch(() => {});
+    }
+  }
+  const pendingPlan = state?.pendingPlan;
+  const lastPlanLifecycleEvent = [...(Array.isArray(runUi?.events) ? runUi.events : [])]
+    .reverse()
+    .find(event => event?.type === 'plan_review' || event?.type === 'plan_resolved');
+  const pendingPlanMatchesRun = !!pendingPlan?.planId
+    && runUi?.status === 'awaiting_plan'
+    && (String(runUi.pendingPlanId || '') === String(pendingPlan.planId)
+      || (lastPlanLifecycleEvent?.type === 'plan_review'
+        && String(lastPlanLifecycleEvent.data?.planId || '') === String(pendingPlan.planId)));
+  if (pendingPlanMatchesRun) {
+    renderPlanReviewCard({
+      ...pendingPlan,
+      tabId: numericTabId,
+      requestId: runUi?.requestId || null,
+      runId: runUi?.runId || null,
+    });
     return;
   }
+  invalidatePlanReviewCards({ tabId: numericTabId });
   if (state?.running) {
-    activeRunRestoredFromBackground = true;
-    isProcessing = true;
-    abortRequested = false;
+    setTabProcessing(numericTabId, true);
+    setTabAbortRequested(numericTabId, false);
     hideRecommendedActions();
     showActivity(t('sp.activity.thinking'));
     syncSendButtonState();
   } else {
     setPlanReviewAwaiting(numericTabId, false);
+    setTabProcessing(numericTabId, false);
+    setTabAbortRequested(numericTabId, false);
+    if (runUi && ['completed', 'stopped', 'failed', 'cancelled'].includes(runUi.status)
+        && Number(currentAssistantEl?.dataset.lastRenderedSeq || 0) < Number(runUi.seq || 0)) {
+      handleAgentUpdateMessage({
+        tabId: numericTabId,
+        requestId: runUi.requestId,
+        runId: runUi.runId,
+        seq: runUi.seq,
+        type: 'run_complete',
+        data: { status: runUi.status, finalContent: runUi.finalContent },
+      });
+    }
   }
 }
 
@@ -2704,21 +2806,25 @@ function bindPlanReviewCard(card) {
 function reattachPlanReviewActiveRun(card) {
   const assistantEl = card?.closest?.('.message.assistant');
   if (!assistantEl) return null;
-  clearActiveChatPayloadForTab(currentTabId);
+  const tabId = Number(card?.dataset?.tabId || currentTabId);
+  clearActiveChatPayloadForTab(tabId);
   currentAssistantEl = assistantEl;
-  isProcessing = true;
-  abortRequested = false;
+  setTabProcessing(tabId, true);
+  setTabAbortRequested(tabId, false);
   sendBtn.disabled = true;
   hideRecommendedActions();
   showActivity(t('sp.activity.thinking'));
   return assistantEl;
 }
 
-function clearPlanReviewActiveRun(assistantEl) {
+function clearPlanReviewActiveRun(assistantEl, tabId = currentTabId) {
   if (currentAssistantEl === assistantEl) currentAssistantEl = null;
-  isProcessing = false;
-  sendBtn.disabled = false;
-  hideActivity();
+  setTabProcessing(tabId, false);
+  setTabAbortRequested(tabId, false);
+  if (sameTabId(currentTabId, tabId)) {
+    sendBtn.disabled = false;
+    hideActivity();
+  }
   drainQueuedContextMenuPromptsAfterPendingTabSwitch();
   refreshRecommendedActions();
 }
@@ -3690,6 +3796,7 @@ async function sendMessage(extraChatParams = {}) {
   let text = inputEl.value.trim();
   if (!text) return;
   const tabId = currentTabId;
+  const requestId = createRunRequestId(tabId);
   text = normalizeScreenshotCommandText(text);
   if (isAwaitingPlanReviewForTab(tabId)) {
     showComposerToast(t('sp.plan.awaiting_review'), { duration: 5000 });
@@ -3753,24 +3860,24 @@ async function sendMessage(extraChatParams = {}) {
     syncSendButtonState();
     return;
   }
-  isProcessing = true;
-  abortRequested = false;
+  setTabProcessing(tabId, true);
+  setTabAbortRequested(tabId, false);
   inputEl.value = '';
   autoResizeInput();
   syncSendButtonState();
 
   await prepareChatHistoryForTurn(tabId, modeForSend);
-  if (abortRequested) {
-    isProcessing = false;
-    abortRequested = false;
+  if (isTabAbortRequested(tabId)) {
+    setTabProcessing(tabId, false);
+    setTabAbortRequested(tabId, false);
     syncSendButtonState();
     return false;
   }
   renderToCurrentTab = sameTabId(currentTabId, tabId) && sameTabId(renderedTabId, tabId);
   if (!renderToCurrentTab) {
     if (text) saveInputDraftForTab(tabId, text);
-    isProcessing = false;
-    abortRequested = false;
+    setTabProcessing(tabId, false);
+    setTabAbortRequested(tabId, false);
     syncSendButtonState();
     return false;
   }
@@ -3786,8 +3893,8 @@ async function sendMessage(extraChatParams = {}) {
     attachments: attachmentsForSend,
   };
   if (renderToCurrentTab) {
-    isProcessing = true;
-    abortRequested = false;
+    setTabProcessing(tabId, true);
+    setTabAbortRequested(tabId, false);
     syncSendButtonState();
     hideRecommendedActions();
     if (!retryOptions) {
@@ -3797,10 +3904,13 @@ async function sendMessage(extraChatParams = {}) {
     addMessage('user', text);
     showActivity(t('sp.activity.thinking'));
     assistantEl = addMessage('assistant', '');
+    assistantEl.dataset.runRequestId = requestId;
+    assistantEl.dataset.lastRenderedSeq = '0';
     currentAssistantEl = assistantEl;
   }
   const activePayloadState = createActiveChatPayloadState(retryPayload);
   activeChatPayloadsByTab.set(tabId, activePayloadState);
+  localRunRequestIds.set(tabId, requestId);
 
   let accepted = false;
   let completedSuccessfully = false;
@@ -3808,6 +3918,7 @@ async function sendMessage(extraChatParams = {}) {
   try {
     const res = await sendToBackground('chat', {
       tabId,
+      requestId,
       text,
       mode: modeForSend,
       apiMutationsAllowed: apiMutationsAllowedForSend,
@@ -3824,7 +3935,7 @@ async function sendMessage(extraChatParams = {}) {
     const returnedErrorUpdate = Array.isArray(res?.updates)
       ? res.updates.find(u => u?.type === 'error')
       : null;
-    if (returnedErrorUpdate && renderToCurrentTab && currentTabId === tabId && !abortRequested) {
+    if (returnedErrorUpdate && renderToCurrentTab && currentTabId === tabId && !isTabAbortRequested(tabId)) {
       renderAgentErrorUpdate(returnedErrorUpdate.data, tabId);
     }
 
@@ -3850,7 +3961,7 @@ async function sendMessage(extraChatParams = {}) {
       syncSendButtonState();
     }
 
-    if (renderToCurrentTab && currentTabId === tabId && abortRequested) {
+    if (renderToCurrentTab && currentTabId === tabId && isTabAbortRequested(tabId)) {
       // Agent was stopped — show what we got so far
       const textEl = assistantEl?.querySelector('.message-text');
       if (textEl && !textEl.textContent.trim()) {
@@ -3869,11 +3980,12 @@ async function sendMessage(extraChatParams = {}) {
       }
     }
   } catch (e) {
-    if (renderToCurrentTab && currentTabId === tabId && !abortRequested) {
+    if (renderToCurrentTab && currentTabId === tabId && !isTabAbortRequested(tabId)) {
       takeActiveRetryPayloadForError(tabId, e.message);
       addMessage('error', t('sp.error_prefix', { msg: e.message }), { retryPayload });
     }
   } finally {
+    if (localRunRequestIds.get(tabId) === requestId) localRunRequestIds.delete(tabId);
     if (activeChatPayloadsByTab.get(tabId) === activePayloadState) {
       scheduleActiveChatPayloadCleanup(tabId, activePayloadState);
     }
@@ -3883,10 +3995,10 @@ async function sendMessage(extraChatParams = {}) {
     // error completion — anything that wasn't an explicit user abort. The
     // sound is what takes them from "glance back at the tab" to "know it's
     // done" without having to sit and watch the sidebar.
-    const wasAborted = abortRequested;
-    if (renderToCurrentTab) {
-      isProcessing = false;
-      abortRequested = false;
+    const wasAborted = isTabAbortRequested(tabId);
+    setTabProcessing(tabId, false);
+    setTabAbortRequested(tabId, false);
+    if (renderToCurrentTab && currentTabId === tabId) {
       syncSendButtonState();
       hideActivity();
     }
@@ -4111,6 +4223,36 @@ function summarizeLastTranscript() {
   if (sendBtn) sendBtn.click();
 }
 
+function ensureCurrentRunAssistant(msg) {
+  if (!msg?.requestId) return currentAssistantEl;
+  const requestId = String(msg.requestId);
+  let assistantEl = messagesEl.querySelector(`.message.assistant[data-run-request-id="${CSS.escape(requestId)}"]`);
+  if (!assistantEl && currentAssistantEl
+      && (!currentAssistantEl.dataset.runRequestId || currentAssistantEl.dataset.runRequestId === requestId)) {
+    assistantEl = currentAssistantEl;
+  }
+  if (!assistantEl) assistantEl = addMessage('assistant', '');
+  assistantEl.dataset.runRequestId = requestId;
+  if (msg.runId) assistantEl.dataset.runId = String(msg.runId);
+  currentAssistantEl = assistantEl;
+  return assistantEl;
+}
+
+function invalidatePlanReviewCards({ tabId = currentTabId, planId = '', requestId = '', runId = '', remove = true } = {}) {
+  for (const card of messagesEl.querySelectorAll('.plan-review-card')) {
+    if (tabId != null && String(card.dataset.tabId || '') !== String(tabId)) continue;
+    if (planId && String(card.dataset.planId || '') !== String(planId)) continue;
+    if (requestId && card.dataset.runRequestId && card.dataset.runRequestId !== String(requestId)) continue;
+    if (runId && card.dataset.runId && card.dataset.runId !== String(runId)) continue;
+    setPlanReviewAwaiting(tabId, false);
+    if (remove) card.remove();
+    else {
+      card.classList.add('plan-reviewed');
+      card.querySelectorAll('button, textarea').forEach(el => { el.disabled = true; });
+    }
+  }
+}
+
 function handleAgentUpdateMessage(msg) {
   if (msg.type === 'scheduled_job') {
     handleScheduledJobEvent(msg.data, msg.tabId).catch((err) => {
@@ -4128,6 +4270,20 @@ function handleAgentUpdateMessage(msg) {
   // panel finished mounting. `msg.tabId == null` keeps backward compat
   // for any in-flight events from a pre-tabId background build.
   if (msg.tabId != null && msg.tabId !== currentTabId) return;
+
+  const eventTabId = msg.tabId ?? currentTabId;
+  const localRequestId = localRunRequestIds.get(Number(eventTabId));
+  if (localRequestId && msg.requestId && localRequestId !== String(msg.requestId)) return;
+  const locallyOwnedEvent = !!localRequestId
+    && (!msg.requestId || localRequestId === String(msg.requestId));
+  const sequencedRequestAssistantEl = msg.requestId && Number.isFinite(Number(msg.seq))
+    ? messagesEl.querySelector(`.message.assistant[data-run-request-id="${CSS.escape(String(msg.requestId))}"]`)
+    : null;
+  if (sequencedRequestAssistantEl
+      && Number(sequencedRequestAssistantEl.dataset.lastRenderedSeq || 0) >= Number(msg.seq)) return;
+  const eventAssistantEl = ensureCurrentRunAssistant(msg);
+  if (eventAssistantEl && Number.isFinite(Number(msg.seq))
+      && Number(eventAssistantEl.dataset.lastRenderedSeq || 0) >= Number(msg.seq)) return;
 
   const { type, data } = msg;
 
@@ -4222,17 +4378,24 @@ function handleAgentUpdateMessage(msg) {
 
     case 'run_complete':
       if (currentAssistantEl) finalizeSteps(currentAssistantEl);
-      // When a local send is still in flight (isProcessing), its own finally
-      // resets run state and refreshes recommended actions *after* the final
-      // text renders — so only finalize the steps visually here and let that
-      // owner tear down, avoiding a premature double refresh/drain. When nothing
-      // is processing locally (e.g. the panel remounted on a tab switch away and
-      // back mid-run), run_complete is the sole finalizer and must tear down. (#4)
-      if (!isProcessing || activeRunRestoredFromBackground) {
-        setPlanReviewAwaiting(msg.tabId ?? currentTabId, false);
-        clearPlanReviewActiveRun(currentAssistantEl);
-        activeRunRestoredFromBackground = false;
+      invalidatePlanReviewCards({
+        tabId: msg.tabId ?? currentTabId,
+        requestId: msg.requestId,
+        runId: msg.runId,
+      });
+      if (currentAssistantEl && data?.finalContent) {
+        const textEl = currentAssistantEl.querySelector('.message-text');
+        if (textEl && !textEl.textContent.trim()) {
+          if (data.status === 'stopped' || data.status === 'cancelled') textEl.innerHTML = t('sp.stopped_by_user_html');
+          else textEl.innerHTML = formatMarkdown(data.finalContent);
+          addMessageCopyButton(currentAssistantEl);
+        }
       }
+      setPlanReviewAwaiting(msg.tabId ?? currentTabId, false);
+      if (!locallyOwnedEvent) {
+        clearPlanReviewActiveRun(currentAssistantEl, eventTabId);
+      }
+      schedulePersist();
       scrollToBottom();
       break;
 
@@ -4251,12 +4414,25 @@ function handleAgentUpdateMessage(msg) {
       break;
 
     case 'plan_review':
-      renderPlanReviewCard(data);
+      renderPlanReviewCard({ ...data, tabId: msg.tabId ?? currentTabId, requestId: msg.requestId, runId: msg.runId });
+      break;
+
+    case 'plan_resolved':
+      invalidatePlanReviewCards({
+        tabId: msg.tabId ?? currentTabId,
+        planId: data?.planId,
+        requestId: msg.requestId,
+        runId: msg.runId,
+      });
+      schedulePersist();
       break;
 
     case 'plan_auto_approved':
       addPlanAutoApprovedNote(data);
       break;
+  }
+  if (eventAssistantEl && Number.isFinite(Number(msg.seq))) {
+    eventAssistantEl.dataset.lastRenderedSeq = String(msg.seq);
   }
 }
 
@@ -4475,6 +4651,8 @@ function renderPlanReviewCard(data) {
   const existing = [...messagesEl.querySelectorAll('.plan-review-card')]
     .find(card => String(card.dataset.planId || '') === planId
       && String(card.dataset.tabId || '') === String(tabId)
+      && (!data.requestId || card.dataset.runRequestId === String(data.requestId))
+      && (!data.runId || card.dataset.runId === String(data.runId))
       && !card.classList.contains('plan-reviewed'));
   if (existing) {
     bindPlanReviewCard(existing);
@@ -4490,6 +4668,8 @@ function renderPlanReviewCard(data) {
   card.className = 'plan-review-card';
   card.dataset.planId = planId;
   card.dataset.tabId = String(tabId);
+  if (data.requestId) card.dataset.runRequestId = String(data.requestId);
+  if (data.runId) card.dataset.runId = String(data.runId);
   card.dataset.editing = 'false';
 
   const header = document.createElement('div');
@@ -4593,7 +4773,7 @@ function submitPlanReview(card, tabId, planId, action, editedText) {
         note.textContent = expiredText();
         card.appendChild(note);
         setPlanReviewAwaiting(tabId, false);
-        if (activeAssistantEl) clearPlanReviewActiveRun(activeAssistantEl);
+        if (activeAssistantEl) clearPlanReviewActiveRun(activeAssistantEl, tabId);
       }
       scrollToBottom();
     })
@@ -4602,7 +4782,7 @@ function submitPlanReview(card, tabId, planId, action, editedText) {
         note.textContent = failureText(error);
         card.appendChild(note);
         setPlanReviewAwaiting(tabId, false);
-        if (activeAssistantEl) clearPlanReviewActiveRun(activeAssistantEl);
+        if (activeAssistantEl) clearPlanReviewActiveRun(activeAssistantEl, tabId);
         scrollToBottom();
       }
     });
@@ -4648,7 +4828,8 @@ function submitClarify(card, tabId, clarifyId, answer, source) {
     if (msgEl && (!currentAssistantEl || currentAssistantEl.dataset?.scheduledJobId === scheduledJobId)) {
       currentAssistantEl = msgEl;
     }
-    isProcessing = true;
+    setTabProcessing(tabId, true);
+    setTabAbortRequested(tabId, false);
     syncSendButtonState();
     hideRecommendedActions();
     showActivity(t('sp.activity.thinking'));
@@ -4659,9 +4840,12 @@ function submitClarify(card, tabId, clarifyId, answer, source) {
   sendToBackground('clarify_response', clarifyPayload)
     .catch(() => {
       if (isScheduledClarify) {
-        isProcessing = false;
-        syncSendButtonState();
-        hideActivity();
+        setTabProcessing(tabId, false);
+        setTabAbortRequested(tabId, false);
+        if (sameTabId(currentTabId, tabId)) {
+          syncSendButtonState();
+          hideActivity();
+        }
         drainQueuedContextMenuPromptsAfterPendingTabSwitch();
       }
       /* background may be torn down — clarify state already lives there */
@@ -5102,29 +5286,34 @@ function showContinueButton() {
 
 async function continueAgent() {
   const tabId = currentTabId;
+  const requestId = createRunRequestId(tabId);
   const modeForSend = agentMode;
   clearActiveChatPayloadForTab(tabId);
 
-  isProcessing = true;
-  abortRequested = false;
+  setTabProcessing(tabId, true);
+  setTabAbortRequested(tabId, false);
   syncSendButtonState();
 
   let assistantEl = null;
 
   try {
     await prepareChatHistoryForTurn(tabId, modeForSend);
-    if (abortRequested) return false;
+    if (isTabAbortRequested(tabId)) return false;
     if (!sameTabId(currentTabId, tabId) || !sameTabId(renderedTabId, tabId)) return false;
 
     // Remove the continue bar only after the durable history id is hydrated.
     document.querySelectorAll('.continue-bar').forEach(el => el.remove());
 
     assistantEl = addMessage('assistant', '');
+    assistantEl.dataset.runRequestId = requestId;
+    assistantEl.dataset.lastRenderedSeq = '0';
     currentAssistantEl = assistantEl;
     showActivity(t('sp.activity.continuing'));
+    localRunRequestIds.set(tabId, requestId);
 
     const res = await sendToBackground('continue', {
       tabId,
+      requestId,
       mode: modeForSend,
     });
     if (res?.conversationId) {
@@ -5144,16 +5333,19 @@ async function continueAgent() {
       }
     }
   } catch (e) {
-    if (currentTabId === tabId && assistantEl && !abortRequested) {
+    if (currentTabId === tabId && assistantEl && !isTabAbortRequested(tabId)) {
       addMessage('error', t('sp.error_prefix', { msg: e.message }));
     }
   } finally {
+    if (localRunRequestIds.get(tabId) === requestId) localRunRequestIds.delete(tabId);
     if (currentTabId === tabId && assistantEl) finalizeSteps(assistantEl);
     clearAssistantTextStreamState(assistantEl);
-    isProcessing = false;
-    abortRequested = false;
-    syncSendButtonState();
-    hideActivity();
+    setTabProcessing(tabId, false);
+    setTabAbortRequested(tabId, false);
+    if (currentTabId === tabId) {
+      syncSendButtonState();
+      hideActivity();
+    }
     if (currentAssistantEl === assistantEl) currentAssistantEl = null;
     if (currentTabId === tabId) scrollToBottom();
     if (currentTabId === tabId && renderedTabId === tabId) await flushRenderedTabChat();
@@ -5631,19 +5823,21 @@ modeDevBtn?.addEventListener('click', async () => {
 // --- Stop / Abort ---
 
 async function abortRun() {
-  if (!isProcessing) return;
-  abortRequested = true;
+  const tabId = currentTabId;
+  if (!isTabProcessing(tabId)) return;
+  setTabAbortRequested(tabId, true);
   showActivity(t('sp.activity.stopping'));
 
   try {
-    await sendToBackground('abort', { tabId: currentTabId });
+    await sendToBackground('abort', { tabId });
   } catch {
     // Best effort
   }
 
   // Force UI to settle even if background doesn't respond cleanly
   setTimeout(async () => {
-    if (abortRequested) {
+    if (isTabAbortRequested(tabId)) {
+      if (!sameTabId(currentTabId, tabId) || !sameTabId(renderedTabId, tabId)) return;
       finalizeSteps();
       if (currentAssistantEl) {
         const textEl = currentAssistantEl.querySelector('.message-text');
@@ -5651,11 +5845,11 @@ async function abortRun() {
           textEl.innerHTML = t('sp.stopped_by_user_html');
         }
       }
-      isProcessing = false;
+      setTabProcessing(tabId, false);
       syncSendButtonState();
       hideActivity();
       currentAssistantEl = null;
-      abortRequested = false;
+      setTabAbortRequested(tabId, false);
       await flushRenderedTabChat();
       await drainQueuedContextMenuPromptsAfterPendingTabSwitch();
     }

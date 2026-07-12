@@ -17,7 +17,7 @@ export const AGENT_TOOLS = [
     type: 'function',
     function: {
       name: 'get_accessibility_tree',
-      description: 'PREFERRED page-reading tool. Returns the page as a flat, indented text representation of its accessibility tree. Each kept node is one line of the form `role "accessible name" [ref_id] href="..." type="..." placeholder="..."`. Indentation shows hierarchy. ref_ids are STABLE across calls — re-use them in click_ax / type_ax. If the result is truncated (`truncated:true`, `hasMore:true`), call again with `page:` set to `nextPage` to read the next slice before scrolling. When you pass an explicit `maxChars` and the tree is larger, the tool now AUTO-SLICES to fit and sets `autoDegraded:true` + a `notice` field explaining how to continue — so a single oversized call no longer wastes a round-trip with empty pageContent. Use this first; read_page is a prose fallback for long-form articles only.',
+      description: 'PREFERRED page-reading tool. Returns the page as a flat, indented text representation of its accessibility tree. Each kept node is one line of the form `role "accessible name" [ref_id] href="..." type="..." placeholder="..."`. Indentation shows hierarchy. ref_ids are STABLE across calls — re-use them in click_ax / type_ax. NEVER enumerate sibling or generic ref_ids one-by-one: ref_id is only for one targeted subtree you already know matters. If the result is truncated (`truncated:true`, `hasMore:true`), call again with `page:` set exactly to `nextPage` before trying arbitrary subtrees or scrolling. Once the needed field/button is visible, act on it instead of reading more. When you pass an explicit `maxChars` and the tree is larger, the tool now AUTO-SLICES to fit and sets `autoDegraded:true` + a `notice` field explaining how to continue — so a single oversized call no longer wastes a round-trip with empty pageContent. Use this first; read_page is a prose fallback for long-form articles only.',
       parameters: {
         type: 'object',
         properties: {
@@ -1053,6 +1053,7 @@ ACCESSIBILITY TREE — read this carefully:
     ref_id: anchor the read at a specific element — returns its subtree only
 - \`ref_id\`s are STABLE across calls. A ref_id you saw in a previous turn still points to the same element, unless the element was removed from the DOM or the page navigated.
 - Default read pattern: \`get_accessibility_tree({filter: "visible"})\` → locate what you need → answer.
+- Never enumerate sibling/generic ref_ids. Use ref_id only for one subtree already known to matter; if hasMore is returned, request exactly nextPage, and once the target is visible stop reading and act or answer.
 - Use \`read_page\` only when the user's question is about prose (summarize this article, what does this README say).
 - SHADOW DOM FALLBACK: If the tree is missing expected elements (common on Stripe, Salesforce, Shopify, and other Web Component-heavy pages), the page likely uses shadow DOM. Try \`get_interactive_elements\` which pierces open shadow roots. If that still misses the content, explain that Dev mode has deeper DOM inspection.
 
@@ -1157,6 +1158,7 @@ ACCESSIBILITY TREE — read this carefully:
 - DEFAULT ACT LOOP:
     1. \`get_accessibility_tree({filter: "visible"})\` — see what's on screen.
     2. If the tree is truncated and you cannot find a visible target, call \`get_accessibility_tree({filter: "visible", page: nextPage})\` before scrolling.
+    3. Never enumerate sibling/generic ref_ids. Use one targeted subtree at most; once the target field/button is visible, act on it instead of reading more.
     3. Identify the ref_ids you need for the next step.
     4. \`click_ax({ref_id: "ref_N"})\` or \`type_ax({ref_id: "ref_N", text: "..."})\`.
     5. Re-read the tree or inspect any injected auto-screenshot/visual context to verify the page changed.

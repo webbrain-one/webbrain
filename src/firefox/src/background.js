@@ -20,6 +20,7 @@ import {
 import { getBalance as capsolverGetBalance } from './agent/captcha-solver.js';
 import { buildContextMenuPrompt, createContextMenuStorage } from './context-menu-storage.js';
 import { normalizeOllamaLaunchHandoff } from './ollama-handoff.js';
+import { RunUiJournal } from './run-ui-journal.js';
 import {
   USER_MEMORY_AUTO_CAPTURE_KEY,
   USER_MEMORY_ENABLED_KEY,
@@ -1153,16 +1154,87 @@ browser.tabs.onUpdated.addListener((tabId, changeInfo) => {
 
 browser.tabs.onRemoved.addListener((tabId) => {
   activeIndicatorTabs.delete(tabId);
+  clearRunUiSnapshot(tabId);
 });
 
-function sendAgentRunComplete(tabId) {
-  if (tabId == null) return;
+const RUN_UI_PREFIX = 'runUi:';
+const runUiJournal = new RunUiJournal({
+  onChange(tabId, snapshot) {
+    try { browser.storage.session?.set({ [RUN_UI_PREFIX + tabId]: snapshot }).catch(() => {}); } catch {}
+  },
+});
+
+function beginRunUiSnapshot(tabId, requestId) {
+  return runUiJournal.begin(tabId, requestId);
+}
+
+function recordRunUiEvent(tabId, requestId, type, data) {
+  return runUiJournal.record(tabId, requestId, type, data, agent.currentRunId.get(tabId));
+}
+
+function terminalRunUiStatus(content, updates = [], error = null) {
+  if (error) return 'failed';
+  const text = String(content || '');
+  if (/stopped by user|aborted by user/i.test(text)) return 'stopped';
+  if (/before executing requested tool calls/i.test(text)) return 'cancelled';
+  if (updates.some(update => update?.type === 'error')) return 'failed';
+  return 'completed';
+}
+
+function finishRunUiSnapshot(tabId, requestId, status, finalContent = '') {
+  return runUiJournal.finish(tabId, requestId, status, finalContent, agent.currentRunId.get(tabId));
+}
+
+async function getRunUiSnapshot(tabId) {
+  const live = runUiJournal.get(tabId);
+  if (live) return live;
+  try {
+    const key = RUN_UI_PREFIX + tabId;
+    const stored = await browser.storage.session?.get(key);
+    const snapshot = stored?.[key];
+    if (snapshot && typeof snapshot === 'object') {
+      return runUiJournal.restore(tabId, snapshot);
+    }
+  } catch {}
+  return null;
+}
+
+function clearRunUiSnapshot(tabId) {
+  runUiJournal.clear(tabId);
+  try { browser.storage.session?.remove(RUN_UI_PREFIX + tabId).catch(() => {}); } catch {}
+}
+
+function sendAgentUpdate(tabId, requestId, type, data) {
+  const event = recordRunUiEvent(tabId, requestId, type, data);
+  if (!event) return;
+  browser.runtime.sendMessage({
+    target: 'sidepanel', action: 'agent_update', tabId, requestId,
+    runId: event?.runId || agent.currentRunId.get(tabId) || null,
+    seq: event?.seq || null, type, data: event?.data ?? data,
+  }).catch(() => {});
+}
+
+function assertNoActiveTabRun(tabId) {
+  if (agent.activeRunState(tabId)?.running) {
+    throw new Error('A run is already active for this tab.');
+  }
+}
+
+function sendAgentRunComplete(tabId, snapshot = null) {
+  if (tabId == null || !snapshot) return;
   browser.runtime.sendMessage({
     target: 'sidepanel',
     action: 'agent_update',
     tabId,
+    requestId: snapshot.requestId,
+    runId: snapshot.runId || null,
+    seq: snapshot.seq,
     type: 'run_complete',
-    data: {},
+    data: {
+      status: snapshot.status || 'completed',
+      finalContent: snapshot.finalContent || '',
+      endedAt: snapshot.endedAt || Date.now(),
+    },
   }).catch(() => {});
 }
 
@@ -1298,7 +1370,9 @@ async function handleMessage(msg, sender) {
     case 'chat': {
       const tabId = msg.tabId || sender.tab?.id;
       if (!tabId) throw new Error('No tab ID');
+      assertNoActiveTabRun(tabId);
       const mode = msg.mode || 'ask';
+      const runUi = beginRunUiSnapshot(tabId, msg.requestId);
 
       if (msg.apiMutationsAllowed) agent.setApiMutationsAllowed(tabId, true);
 
@@ -1314,17 +1388,13 @@ async function handleMessage(msg, sender) {
 
       const updates = [];
       let userMemoryTurnContextTaken = false;
+      let result = '';
+      let runError = null;
       try {
         const runOptions = msg.recommendedAction ? { recommendedAction: msg.recommendedAction } : {};
-        const result = await agent.processMessage(tabId, msg.text, (type, data) => {
+        result = await agent.processMessage(tabId, msg.text, (type, data) => {
           updates.push({ type, data });
-          browser.runtime.sendMessage({
-            target: 'sidepanel',
-            action: 'agent_update',
-            tabId,          // see sidepanel onMessage — filters out cross-tab leak
-            type,
-            data,
-          }).catch(() => {});
+          sendAgentUpdate(tabId, runUi.requestId, type, data);
         }, mode, msg.attachments, runOptions);
 
         const userMemoryPayload = takeUserMemoryTurnExtractionPayload(tabId, {
@@ -1335,10 +1405,14 @@ async function handleMessage(msg, sender) {
         });
         userMemoryTurnContextTaken = true;
         enqueueUserMemoryExtractionAfterTurn(userMemoryPayload);
-        return { content: result, updates, conversationId: await agent.getConversationId(tabId) };
+        return { content: result, updates, requestId: runUi.requestId, conversationId: await agent.getConversationId(tabId) };
+      } catch (error) {
+        runError = error;
+        throw error;
       } finally {
         if (!userMemoryTurnContextTaken) clearUserMemoryTurnContext(tabId);
-        sendAgentRunComplete(tabId);
+        const snapshot = finishRunUiSnapshot(tabId, runUi.requestId, terminalRunUiStatus(result, updates, runError), result || (runError ? `Error: ${runError.message}` : ''));
+        sendAgentRunComplete(tabId, snapshot);
         sendIndicatorMessage(tabId, 'WB_HIDE_AGENT_INDICATORS');
       }
     }
@@ -1346,24 +1420,22 @@ async function handleMessage(msg, sender) {
     case 'chat_stream': {
       const tabId = msg.tabId || sender.tab?.id;
       if (!tabId) throw new Error('No tab ID');
+      assertNoActiveTabRun(tabId);
       const mode = msg.mode || 'ask';
+      const runUi = beginRunUiSnapshot(tabId, msg.requestId);
 
       if (msg.apiMutationsAllowed) agent.setApiMutationsAllowed(tabId, true);
 
       sendIndicatorMessage(tabId, 'WB_SHOW_AGENT_INDICATORS');
       let userMemoryTurnContextTaken = false;
       let userMemoryTurnHadError = false;
+      let result = '';
+      let runError = null;
       try {
         const runOptions = msg.recommendedAction ? { recommendedAction: msg.recommendedAction } : {};
-        const result = await agent.processMessageStream(tabId, msg.text, (type, data) => {
+        result = await agent.processMessageStream(tabId, msg.text, (type, data) => {
           if (type === 'error') userMemoryTurnHadError = true;
-          browser.runtime.sendMessage({
-            target: 'sidepanel',
-            action: 'agent_update',
-            tabId,          // see sidepanel onMessage — filters out cross-tab leak
-            type,
-            data,
-          }).catch(() => {});
+          sendAgentUpdate(tabId, runUi.requestId, type, data);
         }, mode, runOptions);
 
         const userMemoryPayload = takeUserMemoryTurnExtractionPayload(tabId, {
@@ -1374,10 +1446,14 @@ async function handleMessage(msg, sender) {
         });
         userMemoryTurnContextTaken = true;
         enqueueUserMemoryExtractionAfterTurn(userMemoryPayload);
-        return { content: result, conversationId: await agent.getConversationId(tabId) };
+        return { content: result, requestId: runUi.requestId, conversationId: await agent.getConversationId(tabId) };
+      } catch (error) {
+        runError = error;
+        throw error;
       } finally {
         if (!userMemoryTurnContextTaken) clearUserMemoryTurnContext(tabId);
-        sendAgentRunComplete(tabId);
+        const snapshot = finishRunUiSnapshot(tabId, runUi.requestId, terminalRunUiStatus(result, userMemoryTurnHadError ? [{ type: 'error' }] : [], runError), result || (runError ? `Error: ${runError.message}` : ''));
+        sendAgentRunComplete(tabId, snapshot);
         sendIndicatorMessage(tabId, 'WB_HIDE_AGENT_INDICATORS');
       }
     }
@@ -1385,21 +1461,19 @@ async function handleMessage(msg, sender) {
     case 'continue': {
       const tabId = msg.tabId || sender.tab?.id;
       if (!tabId) throw new Error('No tab ID');
+      assertNoActiveTabRun(tabId);
       const mode = msg.mode || 'ask';
+      const runUi = beginRunUiSnapshot(tabId, msg.requestId);
 
       sendIndicatorMessage(tabId, 'WB_SHOW_AGENT_INDICATORS');
       let userMemoryTurnContextTaken = false;
       let userMemoryTurnHadError = false;
+      let result = '';
+      let runError = null;
       try {
-        const result = await agent.continueProcessing(tabId, (type, data) => {
+        result = await agent.continueProcessing(tabId, (type, data) => {
           if (type === 'error') userMemoryTurnHadError = true;
-          browser.runtime.sendMessage({
-            target: 'sidepanel',
-            action: 'agent_update',
-            tabId,          // see sidepanel onMessage — filters out cross-tab leak
-            type,
-            data,
-          }).catch(() => {});
+          sendAgentUpdate(tabId, runUi.requestId, type, data);
         }, mode);
 
         const userMemoryPayload = takeUserMemoryTurnExtractionPayload(tabId, {
@@ -1410,10 +1484,14 @@ async function handleMessage(msg, sender) {
         });
         userMemoryTurnContextTaken = true;
         enqueueUserMemoryExtractionAfterTurn(userMemoryPayload);
-        return { content: result, conversationId: await agent.getConversationId(tabId) };
+        return { content: result, requestId: runUi.requestId, conversationId: await agent.getConversationId(tabId) };
+      } catch (error) {
+        runError = error;
+        throw error;
       } finally {
         if (!userMemoryTurnContextTaken) clearUserMemoryTurnContext(tabId);
-        sendAgentRunComplete(tabId);
+        const snapshot = finishRunUiSnapshot(tabId, runUi.requestId, terminalRunUiStatus(result, userMemoryTurnHadError ? [{ type: 'error' }] : [], runError), result || (runError ? `Error: ${runError.message}` : ''));
+        sendAgentRunComplete(tabId, snapshot);
         sendIndicatorMessage(tabId, 'WB_HIDE_AGENT_INDICATORS');
       }
     }
@@ -1424,6 +1502,7 @@ async function handleMessage(msg, sender) {
         const conversationId = await agent.getConversationId(tabId);
         await scheduler.cancelForConversation(tabId, conversationId);
         agent.clearConversation(tabId);
+        clearRunUiSnapshot(tabId);
       }
       return { ok: true };
     }
@@ -1443,7 +1522,13 @@ async function handleMessage(msg, sender) {
     case 'agent_run_state': {
       const tabId = msg.tabId || sender.tab?.id;
       if (!tabId) return { ok: false, error: 'No tab ID' };
-      return { ok: true, ...agent.activeRunState(tabId) };
+      return { ok: true, ...agent.activeRunState(tabId), runUi: await getRunUiSnapshot(tabId) };
+    }
+
+    case 'agent_run_ack': {
+      const tabId = msg.tabId || sender.tab?.id;
+      if (!tabId) return { ok: false, error: 'No tab ID' };
+      return { ok: !!runUiJournal.acknowledge(tabId, String(msg.requestId || ''), msg.seq) };
     }
 
     case 'get_scratchpad': {
@@ -1547,6 +1632,10 @@ async function handleMessage(msg, sender) {
       const markdownMode = msg.markdownMode === 'verbose' ? 'verbose' : 'compact';
       if (!planId) return { ok: false, error: 'planId required' };
       const matched = agent.submitPlanResponse(tabId, planId, decision, editedText, markdownMode);
+      const snapshot = await getRunUiSnapshot(tabId);
+      if (matched && snapshot?.requestId) {
+        sendAgentUpdate(tabId, snapshot.requestId, 'plan_resolved', { planId, decision });
+      }
       return { ok: matched, matched };
     }
 
