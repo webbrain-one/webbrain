@@ -6212,7 +6212,7 @@ test('logo metadata and generated icon assets use the correct canonical artwork 
   }
 });
 
-test('hero scene arrow keys include the focused dot navigation in their scope', () => {
+test('hero scene arrow keys work while the hero is visible or focused', () => {
   const template = fs.readFileSync(path.join(ROOT, 'web/build/template.html'), 'utf8');
   assert.match(
     template,
@@ -6221,8 +6221,13 @@ test('hero scene arrow keys include the focused dot navigation in their scope', 
   );
   assert.match(
     template,
-    /if \(!hovering && !focusScope\.contains\(active\)\) return;/,
-    'focused scene dots should be allowed to use Left/Right navigation without pointer hover',
+    /const heroRect = focusScope\.getBoundingClientRect\(\);[\s\S]*const heroVisible = heroRect\.bottom > 0 && heroRect\.top < window\.innerHeight &&[\s\S]*heroRect\.right > 0 && heroRect\.left < window\.innerWidth;/,
+    'hero keyboard navigation should detect whether the carousel is visible in the viewport',
+  );
+  assert.match(
+    template,
+    /if \(!heroVisible && !hovering && !focusScope\.contains\(active\)\) return;/,
+    'visible heroes and focused scene dots should accept Left/Right navigation without a click',
   );
 });
 
