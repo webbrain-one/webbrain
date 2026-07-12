@@ -138,6 +138,9 @@ export class Agent {
     this.recentCalls = new Map();
     this.loopNudges = new Map();
     this.healthyCallsSinceLoop = new Map();
+    // A model can walk ref_1, ref_2, … forever while every call looks unique
+    // to the exact-argument loop detector. Track that semantic read pattern.
+    this.axReadStates = new Map();
     // Local screenshot redaction (issue #312). When true, screenshots sent
     // to a Vision endpoint are pixelated over DOM-detected PII regions
     // (form fields + email/phone text) BEFORE leaving the extension. Off by
@@ -663,6 +666,7 @@ export class Agent {
     this.recentCalls.delete(tabId);
     this.loopNudges.delete(tabId);
     this.healthyCallsSinceLoop.delete(tabId);
+    this.axReadStates.delete(tabId);
     this.recentCoordClicks.delete(tabId);
     this.bulkApiMutationClicks.delete(tabId);
     this.bulkApiMutationHints.delete(tabId);
@@ -672,6 +676,61 @@ export class Agent {
         this.failedBulkApiReplayShapes.delete(key);
       }
     }
+  }
+
+  _checkAccessibilityReadLoop(tabId, name, args, result) {
+    if (name !== 'get_accessibility_tree') {
+      this.axReadStates.delete(tabId);
+      return { kind: 'none' };
+    }
+
+    const previous = this.axReadStates.get(tabId) || {
+      total: 0,
+      suspicious: 0,
+      nextPage: null,
+      seenPages: new Set(),
+      warned: false,
+    };
+    const page = Number(args?.page || 1);
+    const hasRef = typeof args?.ref_id === 'string' && args.ref_id.trim() !== '';
+    const sequentialPage = !hasRef
+      && previous.total > 0
+      && Number.isFinite(previous.nextPage)
+      && page === previous.nextPage
+      && !previous.seenPages.has(page);
+    const repeatedRootOrPage = !hasRef && previous.total > 0 && !sequentialPage;
+    const content = String(result?.pageContent || '').trim();
+    const meaningfulLines = content ? content.split(/\r?\n/).filter(line => line.trim()).length : 0;
+    const suspicious = hasRef || repeatedRootOrPage || (hasRef && meaningfulLines <= 1);
+
+    const state = {
+      total: previous.total + 1,
+      suspicious: previous.suspicious + (suspicious ? 1 : 0),
+      nextPage: Number.isFinite(Number(result?.nextPage)) ? Number(result.nextPage) : null,
+      seenPages: new Set(previous.seenPages),
+      warned: previous.warned,
+    };
+    state.seenPages.add(page);
+    this.axReadStates.set(tabId, state);
+
+    // A root read followed by the exact returned nextPage can legitimately span
+    // large applications. Keep the consecutive-read cap for every other AX
+    // pattern, but do not stop a valid sequential pagination step.
+    if (state.suspicious >= 6 || (state.total >= 12 && (state.suspicious > 0 || !sequentialPage))) {
+      this.axReadStates.delete(tabId);
+      return {
+        kind: 'stop',
+        message: 'Stopped: I kept reading accessibility-tree nodes without taking an action or changing approach. The tree is not meant to be enumerated ref-by-ref. Use an element already found, request the returned nextPage, switch to read_page/extract_data, or ask for help.',
+      };
+    }
+    if (!state.warned && state.suspicious >= 3) {
+      state.warned = true;
+      return {
+        kind: 'nudge',
+        warning: '[ACCESSIBILITY READ LOOP: Stop enumerating sibling or generic ref_ids. If the result has hasMore/nextPage, request exactly that page. If the needed textbox/button is already visible, use set_field, type_ax, or click_ax now. Otherwise switch once to read_page/extract_data or finish with what you have. Do not call another arbitrary ref_id subtree.]',
+      };
+    }
+    return { kind: 'none' };
   }
 
   /**
@@ -1841,7 +1900,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         return { action: 'return', value: finalResponse };
       }
 
-      // Loop detection — general + coordinate-specific. Strongest wins.
+      // Loop detection — exact calls, semantic AX reads, and coordinates run
+      // in parallel; the strongest action wins.
       let loopCheck = { kind: 'none' };
       const loopKey = this._loopCallKey(fnName, fnArgs, toolResult);
       const failedApiMutation = this._isFailedApiMutationForLoop(fnName, fnArgs, toolResult);
@@ -1853,11 +1913,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       if (fnName === 'click' && fnArgs?.x != null && fnArgs?.y != null) {
         coordCheck = this._checkCoordClickLoop(tabId, fnArgs.x, fnArgs.y);
       }
+      const axReadCheck = this._checkAccessibilityReadLoop(tabId, fnName, fnArgs, toolResult);
 
       let effectiveKind = 'none';
       let nudgeWarning = '';
       let stopMessage = '';
-      if (loopCheck.kind === 'stop' || coordCheck.kind === 'stop') {
+      if (loopCheck.kind === 'stop' || coordCheck.kind === 'stop' || axReadCheck.kind === 'stop') {
         effectiveKind = 'stop';
         // Show the model's actual args, not _checkCoordClickLoop's 5px
         // bucket — for fractional inputs like (0.911, 0.331) the bucket
@@ -1865,12 +1926,16 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         // top-left corner, hiding what really happened.
         stopMessage = coordCheck.kind === 'stop'
           ? `Stopped: I clicked at (or near) coordinates (${fnArgs.x}, ${fnArgs.y}) multiple times and the page never responded. That position is hitting empty space, an overlay, or the wrong element. Please give a different instruction or check the page yourself.`
-          : loopCheck.message;
-      } else if (loopCheck.kind === 'nudge' || coordCheck.kind === 'nudge') {
+          : axReadCheck.kind === 'stop'
+            ? axReadCheck.message
+            : loopCheck.message;
+      } else if (loopCheck.kind === 'nudge' || coordCheck.kind === 'nudge' || axReadCheck.kind === 'nudge') {
         effectiveKind = 'nudge';
         nudgeWarning = coordCheck.kind === 'nudge'
           ? this._coordinateClickRecoveryWarning(fnArgs, allowedToolNames)
-          : loopCheck.warning;
+          : axReadCheck.kind === 'nudge'
+            ? axReadCheck.warning
+            : loopCheck.warning;
       }
 
       // Strip `_attachImage` BEFORE stringifying the tool result — otherwise
@@ -3181,7 +3246,16 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       } catch {}
     }
     try {
-      return await Promise.race([responsePromise, timeoutPromise]);
+      const response = await Promise.race([responsePromise, timeoutPromise]);
+      if (response?.cancelled && typeof onUpdate === 'function') {
+        try {
+          onUpdate('plan_resolved', {
+            planId,
+            decision: response.reason === 'plan review timed out' ? 'timeout' : 'cancelled',
+          });
+        } catch {}
+      }
+      return response;
     } finally {
       // Cancel the 10-minute timer once the race settles so a fast approval
       // doesn't leave an armed timer (and its captured resolve/plan closure)
@@ -8273,12 +8347,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (this._runningTabs.has(tabId)) {
       throw new Error('An agent run is already in progress for this tab.');
     }
+    this._clearLoopState(tabId);
     this._runningTabs.add(tabId);
     try {
       return await this._processMessageInner(tabId, userMessage, onUpdate, mode, attachments, runOptions);
     } finally {
       this.currentCostState.delete(tabId);
       this._runningTabs.delete(tabId);
+      this._clearLoopState(tabId);
     }
   }
 
@@ -8718,12 +8794,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (this._runningTabs.has(tabId)) {
       throw new Error('An agent run is already in progress for this tab.');
     }
+    this._clearLoopState(tabId);
     this._runningTabs.add(tabId);
     try {
       return await this._processMessageStreamInner(tabId, userMessage, onUpdate, mode, runOptions);
     } finally {
       this.currentCostState.delete(tabId);
       this._runningTabs.delete(tabId);
+      this._clearLoopState(tabId);
     }
   }
 

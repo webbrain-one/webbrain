@@ -17,7 +17,7 @@ export const AGENT_TOOLS = [
     type: 'function',
     function: {
       name: 'get_accessibility_tree',
-      description: 'PREFERRED page-reading tool. Returns the page as a flat, indented text representation of its accessibility tree. Each kept node is one line of the form `role "accessible name" [ref_id] href="..." type="..." placeholder="..."`. Indentation shows hierarchy. ref_ids are STABLE across calls — re-use them in click_ax / type_ax / set_field. If the result is truncated (`truncated:true`, `hasMore:true`), call again with `page:` set to `nextPage` to read the next slice before scrolling. When you pass an explicit `maxChars` and the tree is larger, the tool now AUTO-SLICES to fit and sets `autoDegraded:true` + a `notice` field explaining how to continue — so a single oversized call no longer wastes a round-trip with empty pageContent.',
+      description: 'PREFERRED page-reading tool. Returns the page as a flat, indented text representation of its accessibility tree. Each kept node is one line of the form `role "accessible name" [ref_id] href="..." type="..." placeholder="..."`. Indentation shows hierarchy. ref_ids are STABLE across calls — re-use them in click_ax / type_ax / set_field. NEVER enumerate sibling or generic ref_ids one-by-one: ref_id is only for one targeted subtree you already know matters. If the result is truncated (`truncated:true`, `hasMore:true`), call again with `page:` set exactly to `nextPage` before trying arbitrary subtrees or scrolling. Once the needed field/button is visible, act on it instead of reading more. When you pass an explicit `maxChars` and the tree is larger, the tool now AUTO-SLICES to fit and sets `autoDegraded:true` + a `notice` field explaining how to continue — so a single oversized call no longer wastes a round-trip with empty pageContent.',
       parameters: {
         type: 'object',
         properties: {
@@ -1031,7 +1031,9 @@ PATTERN:
 1. get_accessibility_tree({filter:"visible"}) -> find ref_ids
 2. click_ax or set_field with the ref_id
 3. Verify by re-reading the tree or inspecting injected visual context
-4. Repeat until done`;
+4. Repeat until done
+
+Never enumerate sibling or generic ref_ids one-by-one. Use ref_id only for one targeted subtree already known to matter. If hasMore is returned, request exactly nextPage; once the required field or button is visible, act instead of reading more.`;
 
 export const SYSTEM_PROMPT_ASK = `You are WebBrain, a helpful AI browser assistant running in Ask mode.
 
@@ -1073,6 +1075,7 @@ IMPORTANT — Current Page Priority:
 
 READING THE CURRENT TAB vs. FETCHING URLS — read this:
 - If the answer lives on the active tab, READ THE TAB. Use \`get_accessibility_tree\` (default) or \`read_page\` (long-form prose). Use \`extract_data\` for tables, headings, images, or link lists, and \`get_selection\` for highlighted text.
+- Never walk accessibility references one-by-one. A ref_id read is only for one already-identified subtree; follow hasMore with exactly nextPage, and stop inspecting as soon as the actionable element or answer is visible.
 - Exception for YouTube video-content questions: if an enabled skill exposes a transcript tool such as \`read_youtube_transcript\`, call it first. Purpose-built skill tools are not generic \`fetch_url\`. Do not ask for \`/allow-api\` before calling a skill tool; \`/allow-api\` only applies to mutating \`fetch_url\`/\`research_url\` API calls. Read-only skill tools can run in Ask mode; download-job skill tools require Act mode plus download permission.
 - DO NOT call \`fetch_url\` or \`research_url\` against the URL of the active tab, the API equivalent of the active tab, or a "renderable" / "raw" / "amp" / "mobile" variant of the active tab's URL. Re-fetching content the user is already looking at is the most common wasted step. Symptom of this antipattern: you fetch a Wikipedia/MediaWiki API URL for the same page the user is on, get a truncated result, then fetch a slightly different variant hoping for more content. Stop and call \`read_page\` instead.
 - \`fetch_url\` and \`research_url\` are for content on OTHER URLs — a referenced article, an API the page links to, a sibling page, a different site entirely.

@@ -15637,7 +15637,8 @@ const ADAPTERS = [
 - The body is a contenteditable div (rich text), not a textarea. Click into it before typing.
 - Sending: the "Send" button is bottom-left of the compose window; "Send + Schedule" arrow is next to it for scheduled send.
 - Search uses operators: from:, to:, subject:, has:attachment, before:YYYY/MM/DD.
-- Threads collapse old messages — click "Show trimmed content" or the message header to expand.`,
+- Threads collapse old messages — click "Show trimmed content" or the message header to expand.
+- Gmail's accessibility tree is large and noisy. Prefer visible/interactive reads, use compose fields as soon as they appear, and never inspect generic or sibling ref_ids one-by-one; continue with the returned nextPage when truncated.`,
   },
   {
     name: 'google-docs',

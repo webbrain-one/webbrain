@@ -92,6 +92,13 @@ const { sanitizeLink, sanitizeMarkdownLinks } = await import(
   'file://' + path.join(ROOT, 'src/chrome/src/ui/markdown-link.js').replace(/\\/g, '/')
 );
 
+const { RunUiJournal: RunUiJournalCh } = await import(
+  'file://' + path.join(ROOT, 'src/chrome/src/run-ui-journal.js').replace(/\\/g, '/')
+);
+const { RunUiJournal: RunUiJournalFx } = await import(
+  'file://' + path.join(ROOT, 'src/firefox/src/run-ui-journal.js').replace(/\\/g, '/')
+);
+
 // anthropic.js imports cleanly under Node (its chrome.* touches are lazy); we
 // only exercise the pure _convertMessages transform here.
 const { AnthropicProvider: AnthropicProviderCh } = await import(
@@ -489,6 +496,7 @@ class LoopDetectorShim {
     this.loopNudges = new Map();
     this.healthyCallsSinceLoop = new Map();
     this.recentCoordClicks = new Map();
+    this.axReadStates = new Map();
   }
   _checkCoordClickLoop(tabId, x, y) {
     const bx = Math.round(x / 5) * 5;
@@ -566,6 +574,44 @@ class LoopDetectorShim {
       return { kind: 'stop' };
     }
     return { kind: 'nudge' };
+  }
+  _checkAccessibilityReadLoop(tabId, name, args, result) {
+    if (name !== 'get_accessibility_tree') {
+      this.axReadStates.delete(tabId);
+      return { kind: 'none' };
+    }
+    const previous = this.axReadStates.get(tabId) || {
+      total: 0, suspicious: 0, nextPage: null, seenPages: new Set(), warned: false,
+    };
+    const page = Number(args?.page || 1);
+    const hasRef = typeof args?.ref_id === 'string' && args.ref_id.trim() !== '';
+    const sequentialPage = !hasRef
+      && previous.total > 0
+      && Number.isFinite(previous.nextPage)
+      && page === previous.nextPage
+      && !previous.seenPages.has(page);
+    const repeatedRootOrPage = !hasRef && previous.total > 0 && !sequentialPage;
+    const content = String(result?.pageContent || '').trim();
+    const meaningfulLines = content ? content.split(/\r?\n/).filter(line => line.trim()).length : 0;
+    const suspicious = hasRef || repeatedRootOrPage || (hasRef && meaningfulLines <= 1);
+    const state = {
+      total: previous.total + 1,
+      suspicious: previous.suspicious + (suspicious ? 1 : 0),
+      nextPage: Number.isFinite(Number(result?.nextPage)) ? Number(result.nextPage) : null,
+      seenPages: new Set(previous.seenPages),
+      warned: previous.warned,
+    };
+    state.seenPages.add(page);
+    this.axReadStates.set(tabId, state);
+    if (state.suspicious >= 6 || (state.total >= 12 && (state.suspicious > 0 || !sequentialPage))) {
+      this.axReadStates.delete(tabId);
+      return { kind: 'stop' };
+    }
+    if (!state.warned && state.suspicious >= 3) {
+      state.warned = true;
+      return { kind: 'nudge' };
+    }
+    return { kind: 'none' };
   }
   _detectApiShortcut(tabId, loop, buf) {
     if (loop.type !== 'repeat') return null;
@@ -1610,6 +1656,63 @@ test('tabs are isolated from each other', () => {
   d._checkLoop(10, 'click', { selector: '#x' }, { success: true });
   const result = d._checkLoop(20, 'click', { selector: '#x' }, { success: true });
   assert.equal(result.kind, 'none');
+});
+
+test('accessibility-tree ref enumeration nudges at three and stops at six', () => {
+  const d = new LoopDetectorShim();
+  const tab = 21;
+  const root = d._checkAccessibilityReadLoop(tab, 'get_accessibility_tree', { filter: 'visible' }, {
+    pageContent: 'form [ref_1]\n textbox "Subject" [ref_2]',
+    hasMore: true,
+    nextPage: 2,
+  });
+  assert.equal(root.kind, 'none');
+  assert.equal(d._checkAccessibilityReadLoop(tab, 'get_accessibility_tree', { ref_id: 'ref_1' }, { pageContent: 'form [ref_1]\n textbox "Subject" [ref_2]' }).kind, 'none');
+  assert.equal(d._checkAccessibilityReadLoop(tab, 'get_accessibility_tree', { ref_id: 'ref_2' }, { pageContent: 'textbox "Subject" [ref_2]' }).kind, 'none');
+  assert.equal(d._checkAccessibilityReadLoop(tab, 'get_accessibility_tree', { ref_id: 'ref_3' }, { pageContent: 'generic [ref_3]' }).kind, 'nudge');
+  assert.equal(d._checkAccessibilityReadLoop(tab, 'get_accessibility_tree', { ref_id: 'ref_4' }, { pageContent: 'generic [ref_4]' }).kind, 'none');
+  assert.equal(d._checkAccessibilityReadLoop(tab, 'get_accessibility_tree', { ref_id: 'ref_5' }, { pageContent: 'generic [ref_5]' }).kind, 'none');
+  assert.equal(d._checkAccessibilityReadLoop(tab, 'get_accessibility_tree', { ref_id: 'ref_6' }, { pageContent: 'generic [ref_6]' }).kind, 'stop');
+});
+
+test('accessibility-tree nextPage pagination past the read cap is not suspicious and other tools reset it', () => {
+  const d = new LoopDetectorShim();
+  const tab = 22;
+  for (let page = 1; page <= 15; page++) {
+    const result = d._checkAccessibilityReadLoop(
+      tab,
+      'get_accessibility_tree',
+      { filter: 'visible', ...(page > 1 ? { page } : {}) },
+      { pageContent: `button "Page ${page}" [ref_${page}]`, nextPage: page + 1 },
+    );
+    assert.equal(result.kind, 'none');
+  }
+  d._checkAccessibilityReadLoop(tab, 'click_ax', { ref_id: 'ref_15' }, { success: true });
+  assert.equal(d.axReadStates.has(tab), false);
+  assert.equal(d._checkAccessibilityReadLoop(tab, 'get_accessibility_tree', { ref_id: 'ref_9' }, { pageContent: 'generic [ref_9]' }).kind, 'none');
+});
+
+test('accessibility-tree read cap still stops a non-sequential read after long pagination', () => {
+  const d = new LoopDetectorShim();
+  const tab = 23;
+  for (let page = 1; page <= 11; page++) {
+    const result = d._checkAccessibilityReadLoop(
+      tab,
+      'get_accessibility_tree',
+      { filter: 'visible', ...(page > 1 ? { page } : {}) },
+      { pageContent: `button "Page ${page}" [ref_${page}]`, nextPage: page + 1 },
+    );
+    assert.equal(result.kind, 'none');
+  }
+  assert.equal(
+    d._checkAccessibilityReadLoop(
+      tab,
+      'get_accessibility_tree',
+      { filter: 'visible', page: 11 },
+      { pageContent: 'button "Page 11" [ref_11]', nextPage: 12 },
+    ).kind,
+    'stop',
+  );
 });
 
 // ────────────────────────────────────────────────────────────────────────
@@ -3567,7 +3670,7 @@ test('scheduled runs hide suggested actions immediately', () => {
   ]) {
     const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
     const runningIdx = panel.indexOf("} else if (event === 'running') {");
-    const isProcessingIdx = panel.indexOf('isProcessing = true;', runningIdx);
+    const isProcessingIdx = panel.indexOf('setTabProcessing(runTabId, true);', runningIdx);
     const hideIdx = panel.indexOf('hideRecommendedActions();', runningIdx);
     const addAssistantIdx = panel.indexOf("currentAssistantEl = addMessage('assistant', '');", runningIdx);
     assert.notEqual(runningIdx, -1, `${label}: scheduled running branch missing`);
@@ -3586,7 +3689,7 @@ test('scheduled clarify resumes hide suggested actions immediately', () => {
     const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
     const submitIdx = panel.indexOf('function submitClarify(');
     const scheduledIdx = panel.indexOf('if (isScheduledClarify) {', submitIdx);
-    const isProcessingIdx = panel.indexOf('isProcessing = true;', scheduledIdx);
+    const isProcessingIdx = panel.indexOf('setTabProcessing(tabId, true);', scheduledIdx);
     const hideIdx = panel.indexOf('hideRecommendedActions();', scheduledIdx);
     const activityIdx = panel.indexOf("showActivity(t('sp.activity.thinking'));", scheduledIdx);
     assert.notEqual(submitIdx, -1, `${label}: submitClarify missing`);
@@ -7175,15 +7278,13 @@ test('chrome sidepanel drops stale async tab-chat restores', () => {
   const body = match[1];
   const setIdx = body.indexOf('currentTabId = newTabId;');
   const loadIdx = body.indexOf('const html = await loadTabChat(newTabId);');
-  const guardIdx = body.indexOf('if (currentTabId !== newTabId) return;');
+  const guardIdx = body.indexOf('if (switchGeneration !== tabSwitchGeneration || currentTabId !== newTabId) return;');
   const renderedSetIdx = body.indexOf('renderedTabId = newTabId;');
   const restoreIdx = body.indexOf('messagesEl.innerHTML =');
   const consumeIdx = body.indexOf('consumePendingContextMenuPrompt()');
   const flushIdx = body.indexOf('await flushRenderedTabChat();');
   const historyFlushIdx = body.indexOf('await flushChatHistorySnapshot(outgoingTabId);');
-  const postFlushProcessingIdx = body.indexOf('if (isProcessing) {', flushIdx);
-  const postFlushPendingIdx = body.indexOf('pendingTabSwitch = newTabId;', postFlushProcessingIdx);
-  const postFlushReturnIdx = body.indexOf('return;', postFlushPendingIdx);
+  const syncRunFlagsIdx = body.indexOf('syncCurrentTabRunFlags();');
   assert.notEqual(setIdx, -1, 'chrome: switchToTab should set the visible tab before restoring chat');
   assert.notEqual(loadIdx, -1, 'chrome: switchToTab should load persisted tab chat asynchronously');
   assert.notEqual(guardIdx, -1, 'chrome: stale async tab-chat restores should be dropped');
@@ -7192,25 +7293,25 @@ test('chrome sidepanel drops stale async tab-chat restores', () => {
   assert.notEqual(consumeIdx, -1, 'chrome: switchToTab context-menu consume point missing');
   assert.notEqual(flushIdx, -1, 'chrome: switchToTab should flush rendered chat before changing tabs');
   assert.notEqual(historyFlushIdx, -1, 'chrome: switchToTab should flush rendered history before changing tabs');
-  assert.notEqual(postFlushProcessingIdx, -1, 'chrome: switchToTab should recheck processing after the async flush yields');
-  assert.notEqual(postFlushPendingIdx, -1, 'chrome: switchToTab should defer the requested tab switch if a run starts during the flush');
-  assert.notEqual(postFlushReturnIdx, -1, 'chrome: switchToTab should stop before changing currentTabId when a run starts during the flush');
-  assert.equal(flushIdx < postFlushProcessingIdx && postFlushProcessingIdx < postFlushPendingIdx && postFlushPendingIdx < postFlushReturnIdx && postFlushReturnIdx < setIdx, true, 'chrome: post-flush processing recheck must happen before currentTabId changes');
+  assert.notEqual(syncRunFlagsIdx, -1, 'chrome: switchToTab should restore the destination tab run flags');
+  assert.doesNotMatch(body, /if \(isProcessing\)[\s\S]*?pendingTabSwitch = newTabId/, 'chrome: active runs must not defer visible tab switches');
   assert.equal(flushIdx < historyFlushIdx && historyFlushIdx < setIdx, true, 'chrome: pending history snapshots should flush before currentTabId changes');
+  assert.equal(setIdx < syncRunFlagsIdx, true, 'chrome: destination run flags should load after currentTabId changes');
   assert.equal(setIdx < loadIdx && loadIdx < guardIdx && guardIdx < renderedSetIdx && renderedSetIdx < restoreIdx && guardIdx < consumeIdx, true, 'chrome: stale guard must run after async chat load and before rendered-tab/DOM/context-menu work');
   assert.match(body, /if \(renderedTabId != null\) \{[\s\S]*?const outgoingTabId = renderedTabId;[\s\S]*?await flushRenderedTabChat\(\);[\s\S]*?await flushChatHistorySnapshot\(outgoingTabId\);[\s\S]*?captureInputDraftForTab\(outgoingTabId\);[\s\S]*?\}/, 'chrome: overlapping tab switches should flush chat/history and save drafts for the tab represented by the DOM');
   assert.doesNotMatch(body, /persistTabChat\(currentTabId,\s*messagesEl\.innerHTML\)|captureInputDraftForTab\(currentTabId\)/, 'chrome: overlapping tab switches must not save DOM or drafts under a pending target tab');
 });
 
-test('sidepanel queues target-tab updates during async tab switches', () => {
+test('sidepanel queues target-tab updates and suppresses non-target updates during tab switches', () => {
   for (const [label, panelRel] of [
     ['chrome', 'src/chrome/src/ui/sidepanel.js'],
     ['firefox', 'src/firefox/src/ui/sidepanel.js'],
   ]) {
     const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
     assert.match(panel, /let tabSwitchTransitionId = null;/, `${label}: tab switches should track the tab currently being restored`);
+    assert.match(panel, /let tabSwitchGeneration = 0;/, `${label}: overlapping tab switches should invalidate stale async work`);
     assert.match(panel, /let queuedTabSwitchMessages = \[\];/, `${label}: tab switches should keep target-tab messages that arrive mid-restore`);
-    assert.match(panel, /function queueAgentUpdateDuringTabSwitch\(msg\) \{[\s\S]*?const tabId = msg\?\.tabId;[\s\S]*?tabSwitchTransitionId == null[\s\S]*?tabId !== tabSwitchTransitionId[\s\S]*?return false;[\s\S]*?queuedTabSwitchMessages\.push\(msg\);[\s\S]*?return true;[\s\S]*?\}/, `${label}: target-tab messages should be queued while that tab is being restored`);
+    assert.match(panel, /function queueAgentUpdateDuringTabSwitch\(msg\) \{[\s\S]*?tabSwitchTransitionId == null \|\| tabId == null[\s\S]*?if \(tabId === tabSwitchTransitionId\) queuedTabSwitchMessages\.push\(msg\);[\s\S]*?return true;[\s\S]*?\}/, `${label}: target events should queue while non-target events are consumed during a transition`);
     assert.match(panel, /function drainQueuedAgentUpdatesForTab\(tabId\) \{[\s\S]*?queuedTabSwitchMessages = remaining;[\s\S]*?replay\.forEach\(\(msg\) => handleAgentUpdateMessage\(msg\)\);[\s\S]*?\}/, `${label}: queued target-tab messages should replay through the normal agent update handler`);
 
     const switchMatch = panel.match(/async function switchToTab\(newTabId\) \{([\s\S]*?)\n\}/);
@@ -7220,13 +7321,15 @@ test('sidepanel queues target-tab updates during async tab switches', () => {
     const flushIdx = body.indexOf('await flushRenderedTabChat();');
     const historyFlushIdx = body.indexOf('await flushChatHistorySnapshot(outgoingTabId);');
     const loadIdx = body.indexOf('const html = await loadTabChat(newTabId);');
-    const clearTransitionIdx = body.indexOf('if (tabSwitchTransitionId === newTabId) tabSwitchTransitionId = null;');
+    const clearTransitionIdx = body.indexOf('if (switchGeneration === tabSwitchGeneration && tabSwitchTransitionId === newTabId) tabSwitchTransitionId = null;');
     const replayIdx = body.indexOf('drainQueuedAgentUpdatesForTab(newTabId);');
     const consumeIdx = body.indexOf('consumePendingContextMenuPrompt()');
     assert.notEqual(markIdx, -1, `${label}: switchToTab should mark the target tab before any async flush can yield`);
     assert.notEqual(flushIdx, -1, `${label}: switchToTab flush point missing`);
     assert.notEqual(historyFlushIdx, -1, `${label}: switchToTab history flush point missing`);
     assert.notEqual(loadIdx, -1, `${label}: switchToTab restore load point missing`);
+    assert.notEqual(body.indexOf('const switchGeneration = ++tabSwitchGeneration;'), -1, `${label}: switchToTab should invalidate older overlapping transitions`);
+    assert.notEqual(body.indexOf('if (switchGeneration !== tabSwitchGeneration) return;'), -1, `${label}: stale transitions should stop after async flushes`);
     assert.notEqual(clearTransitionIdx, -1, `${label}: switchToTab should clear the transition marker after restore settles`);
     assert.notEqual(replayIdx, -1, `${label}: switchToTab should replay queued target-tab messages after restore`);
     assert.notEqual(consumeIdx, -1, `${label}: switchToTab context-menu consume point missing`);
@@ -7266,7 +7369,7 @@ test('sidepanel hydrates restored history ids before fallback records', () => {
     const loadIdx = switchBody.indexOf('const html = await loadTabChat(newTabId);');
     const restoredHasUserIdx = switchBody.indexOf('if (html) {');
     const hydrateRestoredIdx = switchBody.indexOf('await hydrateRestoredChatHistory(newTabId, html);');
-    const postHydrateGuardIdx = switchBody.indexOf('if (currentTabId !== newTabId) return;', hydrateRestoredIdx);
+    const postHydrateGuardIdx = switchBody.indexOf('if (switchGeneration !== tabSwitchGeneration || currentTabId !== newTabId) return;', hydrateRestoredIdx);
     const restoreDomIdx = switchBody.indexOf('messagesEl.innerHTML = html;');
     assert.notEqual(loadIdx, -1, `${label}: switchToTab should load persisted tab chat`);
     assert.notEqual(restoredHasUserIdx, -1, `${label}: switchToTab should detect restored user chats before DOM insertion`);
@@ -7397,7 +7500,7 @@ test('chrome sidepanel persists tab chat to the tab captured before debounce', (
   assert.doesNotMatch(body, /persistTabChat\(currentTabId,\s*messagesEl\.innerHTML\)/, 'chrome: debounced persistence should not save live DOM under the later currentTabId');
 });
 
-test('sidepanel flushes completed run chat before deferred tab switches', () => {
+test('sidepanel flushes run chat before queue settlement after immediate tab switches', () => {
   for (const [label, panelRel] of [
     ['chrome', 'src/chrome/src/ui/sidepanel.js'],
     ['firefox', 'src/firefox/src/ui/sidepanel.js'],
@@ -7430,7 +7533,7 @@ test('sidepanel flushes completed run chat before deferred tab switches', () => 
     assert.notEqual(continueDrainIdx, -1, `${label}: Continue completion should drain pending tab switches`);
     assert.equal(continueFlushIdx < continueDrainIdx, true, `${label}: Continue completion must flush before deferred tab switching`);
 
-    const scheduledStart = panel.search(/(?:async\s+)?function settleScheduledRun\(event, job\)/);
+    const scheduledStart = panel.search(/(?:async\s+)?function settleScheduledRun\(event, job, tabId = currentTabId\)/);
     const scheduledEnd = panel.search(/(?:async\s+)?function handleScheduledJobEvent\(data, tabId\)/);
     assert.notEqual(scheduledStart, -1, `${label}: scheduled settlement helper missing`);
     assert.notEqual(scheduledEnd, -1, `${label}: scheduled event handler boundary missing`);
@@ -7443,7 +7546,7 @@ test('sidepanel flushes completed run chat before deferred tab switches', () => 
     assert.notEqual(scheduledDrainIdx, -1, `${label}: scheduled completion should drain pending tab switches`);
     assert.equal(scheduledFlushIdx < scheduledDrainIdx, true, `${label}: scheduled completion must flush before deferred tab switching`);
 
-    const abortMatch = panel.match(/setTimeout\(async \(\) => \{[\s\S]*?if \(abortRequested\) \{([\s\S]*?)\n    \}\n  \}, 3000\);/);
+    const abortMatch = panel.match(/setTimeout\(async \(\) => \{[\s\S]*?if \(isTabAbortRequested\(tabId\)\) \{([\s\S]*?)\n    \}\n  \}, 3000\);/);
     assert.ok(abortMatch, `${label}: abort safety timeout body missing`);
     const abortBody = abortMatch[1];
     const abortFlushIdx = abortBody.indexOf('flushRenderedTabChat()');
@@ -8384,12 +8487,12 @@ test('sidepanel preserves stale residual slash-command prompts without hidden ru
     );
     assert.match(
       sendBody,
-      /if \(!text\) \{[\s\S]*?return;[\s\S]*?\}\s*isProcessing = true;\s*abortRequested = false;\s*inputEl\.value = '';\s*autoResizeInput\(\);\s*syncSendButtonState\(\);\s*await prepareChatHistoryForTurn\(tabId, modeForSend\);/,
+      /if \(!text\) \{[\s\S]*?return;[\s\S]*?\}\s*setTabProcessing\(tabId, true\);\s*setTabAbortRequested\(tabId, false\);\s*inputEl\.value = '';\s*autoResizeInput\(\);\s*syncSendButtonState\(\);\s*await prepareChatHistoryForTurn\(tabId, modeForSend\);/,
       `${label}: send should enter a busy state and clear the composer before async history hydration`,
     );
     assert.match(
       sendBody,
-      /await prepareChatHistoryForTurn\(tabId, modeForSend\);\s*if \(abortRequested\) \{[\s\S]*?isProcessing = false;[\s\S]*?abortRequested = false;[\s\S]*?syncSendButtonState\(\);[\s\S]*?return false;[\s\S]*?\}[\s\S]*?renderToCurrentTab = sameTabId\(currentTabId, tabId\) && sameTabId\(renderedTabId, tabId\);/,
+      /await prepareChatHistoryForTurn\(tabId, modeForSend\);\s*if \(isTabAbortRequested\(tabId\)\) \{[\s\S]*?setTabProcessing\(tabId, false\);[\s\S]*?setTabAbortRequested\(tabId, false\);[\s\S]*?syncSendButtonState\(\);[\s\S]*?return false;[\s\S]*?\}[\s\S]*?renderToCurrentTab = sameTabId\(currentTabId, tabId\) && sameTabId\(renderedTabId, tabId\);/,
       `${label}: aborted sends during history hydration should stop before chat dispatch`,
     );
     const staleReturnIdx = sendBody.indexOf('if (!renderToCurrentTab) {');
@@ -8399,7 +8502,7 @@ test('sidepanel preserves stale residual slash-command prompts without hidden ru
     assert.equal(staleReturnIdx < sendIdx, true, `${label}: stale-tab residual guard must run before chat dispatch`);
     assert.match(
       sendBody,
-      /if \(renderToCurrentTab\) \{\s*isProcessing = true;\s*abortRequested = false;\s*syncSendButtonState\(\);[\s\S]*?addMessage\('user', text\);[\s\S]*?currentAssistantEl = assistantEl;[\s\S]*?\}/,
+      /if \(renderToCurrentTab\) \{\s*setTabProcessing\(tabId, true\);\s*setTabAbortRequested\(tabId, false\);\s*syncSendButtonState\(\);[\s\S]*?addMessage\('user', text\);[\s\S]*?currentAssistantEl = assistantEl;[\s\S]*?\}/,
       `${label}: stale-tab residual sends should not mutate or render chat UI in the currently visible tab`,
     );
     assert.doesNotMatch(
@@ -8473,22 +8576,22 @@ test('sidepanel keeps retry metadata long enough for returned error updates', ()
     );
     assert.match(
       source,
-      /else if \(event === 'running'\) \{[\s\S]*?clearActiveChatPayloadForTab\(tabId \?\? currentTabId\);[\s\S]*?isProcessing = true;/,
+      /else if \(event === 'running'\) \{[\s\S]*?clearActiveChatPayloadForTab\(runTabId\);[\s\S]*?setTabProcessing\(runTabId, true\);/,
       `${label}: scheduled runs should clear stale chat retry metadata before starting`,
     );
     assert.match(
       source,
-      /function reattachPlanReviewActiveRun\(card\) \{[\s\S]*?clearActiveChatPayloadForTab\(currentTabId\);[\s\S]*?isProcessing = true;/,
+      /function reattachPlanReviewActiveRun\(card\) \{[\s\S]*?clearActiveChatPayloadForTab\(tabId\);[\s\S]*?setTabProcessing\(tabId, true\);/,
       `${label}: plan review resumes should clear stale chat retry metadata before starting`,
     );
     assert.match(
       source,
-      /const isScheduledClarify = !!card\.dataset\.scheduledJobId;[\s\S]*?if \(isScheduledClarify\) \{[\s\S]*?clearActiveChatPayloadForTab\(tabId\);[\s\S]*?isProcessing = true;/,
+      /const isScheduledClarify = !!card\.dataset\.scheduledJobId;[\s\S]*?if \(isScheduledClarify\) \{[\s\S]*?clearActiveChatPayloadForTab\(tabId\);[\s\S]*?setTabProcessing\(tabId, true\);/,
       `${label}: scheduled clarify resumes should clear stale chat retry metadata before starting`,
     );
     assert.match(
       source,
-      /async function continueAgent\(\) \{[\s\S]*?const tabId = currentTabId;[\s\S]*?clearActiveChatPayloadForTab\(tabId\);[\s\S]*?isProcessing = true;/,
+      /async function continueAgent\(\) \{[\s\S]*?const tabId = currentTabId;[\s\S]*?clearActiveChatPayloadForTab\(tabId\);[\s\S]*?setTabProcessing\(tabId, true\);/,
       `${label}: Continue runs should clear stale chat retry metadata before starting`,
     );
   }
@@ -8637,7 +8740,7 @@ test('sidepanel continue runs use the initiating tab state', () => {
     assert.match(body, /const tabId = currentTabId;[\s\S]*?const modeForSend = agentMode;[\s\S]*?sendToBackground\('continue', \{[\s\S]*?tabId,[\s\S]*?mode: modeForSend,/, `${label}: Continue should send with the tab and mode captured before awaiting`);
     assert.doesNotMatch(body, /sendToBackground\('continue', \{[\s\S]*?tabId: currentTabId/, `${label}: Continue should not read currentTabId inside the async send payload`);
     assert.doesNotMatch(body, /sendToBackground\('continue', \{[\s\S]*?mode: agentMode/, `${label}: Continue should not read agentMode inside the async send payload`);
-    assert.match(body, /await prepareChatHistoryForTurn\(tabId, modeForSend\);[\s\S]*?if \(abortRequested\) return false;[\s\S]*?if \(!sameTabId\(currentTabId, tabId\) \|\| !sameTabId\(renderedTabId, tabId\)\) return false;[\s\S]*?assistantEl = addMessage\('assistant', ''\);/, `${label}: Continue should hydrate history, honor aborts, and re-check the initiating tab before rendering`);
+    assert.match(body, /await prepareChatHistoryForTurn\(tabId, modeForSend\);[\s\S]*?if \(isTabAbortRequested\(tabId\)\) return false;[\s\S]*?if \(!sameTabId\(currentTabId, tabId\) \|\| !sameTabId\(renderedTabId, tabId\)\) return false;[\s\S]*?assistantEl = addMessage\('assistant', ''\);/, `${label}: Continue should hydrate history, honor aborts, and re-check the initiating tab before rendering`);
     assert.match(body, /let assistantEl = null;[\s\S]*?assistantEl = addMessage\('assistant', ''\);[\s\S]*?currentAssistantEl = assistantEl;[\s\S]*?if \(currentTabId === tabId && res\?\.content && assistantEl\) \{[\s\S]*?addMessageCopyButton\(assistantEl\);/, `${label}: Continue should render only into its captured assistant bubble for the initiating tab`);
     assert.match(body, /if \(currentTabId === tabId && assistantEl\) finalizeSteps\(assistantEl\);[\s\S]*?if \(currentAssistantEl === assistantEl\) currentAssistantEl = null;/, `${label}: Continue should finalize and clear only its captured assistant bubble`);
   }
@@ -8657,7 +8760,7 @@ test('sidepanel drains queued context-menu prompts after pending tab switches on
       const match = panel.match(pattern);
       assert.ok(match, `${label}: ${fnName} finally block missing`);
       const finallyBody = match[1];
-      const idleIdx = finallyBody.indexOf('isProcessing = false;');
+      const idleIdx = finallyBody.indexOf('setTabProcessing(tabId, false);');
       const helperIdx = finallyBody.indexOf('await drainQueuedContextMenuPromptsAfterPendingTabSwitch();');
       assert.notEqual(idleIdx, -1, `${label}: ${fnName} should clear processing state`);
       assert.notEqual(helperIdx, -1, `${label}: ${fnName} completion should apply pending tab switches before draining queued prompts`);
@@ -8674,10 +8777,10 @@ test('sidepanel abort safety timeout drains queued prompts after pending tab swi
     ['firefox', 'src/firefox/src/ui/sidepanel.js'],
   ]) {
     const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
-    const match = panel.match(/setTimeout\(async \(\) => \{[\s\S]*?if \(abortRequested\) \{([\s\S]*?)\n    \}\n  \}, 3000\);/);
+    const match = panel.match(/setTimeout\(async \(\) => \{[\s\S]*?if \(isTabAbortRequested\(tabId\)\) \{([\s\S]*?)\n    \}\n  \}, 3000\);/);
     assert.ok(match, `${label}: abort safety timeout body missing`);
     const body = match[1];
-    const idleIdx = body.indexOf('isProcessing = false;');
+    const idleIdx = body.indexOf('setTabProcessing(tabId, false);');
     const helperIdx = body.indexOf('await drainQueuedContextMenuPromptsAfterPendingTabSwitch();');
     assert.notEqual(idleIdx, -1, `${label}: abort timeout should clear processing state`);
     assert.notEqual(helperIdx, -1, `${label}: abort timeout should apply pending tab switches before draining queued prompts`);
@@ -8695,7 +8798,7 @@ test('sidepanel drains scheduled-run context-menu prompts after pending tab swit
     const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
     assert.match(panel, /async function drainQueuedContextMenuPromptsAfterPendingTabSwitch\(\) \{[\s\S]*?if \(pendingTabSwitch == null\) \{[\s\S]*?drainQueuedContextMenuPrompts\(\);[\s\S]*?const pending = pendingTabSwitch;[\s\S]*?pendingTabSwitch = null;[\s\S]*?try \{[\s\S]*?await switchToTab\(pending\);[\s\S]*?\} catch \{[\s\S]*?\}[\s\S]*?drainQueuedContextMenuPrompts\(\);/, `${label}: scheduled completions need a non-throwing pending-tab switch before draining context-menu prompts`);
 
-    const scheduledStart = panel.search(/(?:async\s+)?function settleScheduledRun\(event, job\)/);
+    const scheduledStart = panel.search(/(?:async\s+)?function settleScheduledRun\(event, job, tabId = currentTabId\)/);
     const scheduledEnd = panel.indexOf('if (scheduledJobsEl)', scheduledStart);
     assert.notEqual(scheduledStart, -1, `${label}: scheduled run settlement helper missing`);
     assert.notEqual(scheduledEnd, -1, `${label}: scheduled job event block missing`);
@@ -8714,7 +8817,7 @@ test('sidepanel drains scheduled-clarify rejection prompts after pending tab swi
     const match = panel.match(/sendToBackground\('clarify_response', clarifyPayload\)\s*\.catch\(\(\) => \{\s*if \(isScheduledClarify\) \{([\s\S]*?)\n      \}\s*\/\* background may be torn down/);
     assert.ok(match, `${label}: scheduled clarify rejection handler missing`);
     const body = match[1];
-    const idleIdx = body.indexOf('isProcessing = false;');
+    const idleIdx = body.indexOf('setTabProcessing(tabId, false);');
     const drainIdx = body.indexOf('drainQueuedContextMenuPromptsAfterPendingTabSwitch();');
     assert.notEqual(idleIdx, -1, `${label}: scheduled clarify rejection should clear processing state`);
     assert.notEqual(drainIdx, -1, `${label}: scheduled clarify rejection should apply pending tab switches before draining`);
@@ -20551,6 +20654,136 @@ test('planner gate: background exposes pending plan state for restored sidepanel
     assert.match(agentSource, /pendingPlan:[\s\S]*?null/, `${label}: active run state should include pendingPlan`);
     assert.match(agentSource, /tabPending\.set\(planId, \{ resolve, ts: Date\.now\(\), plan, markdown, verboseMarkdown \}\)/, `${label}: pending plans should keep renderable metadata`);
     assert.match(bgSource, /case 'agent_run_state':[\s\S]*?agent\.activeRunState\(tabId\)/, `${label}: background should expose active run state to the sidepanel`);
+  }
+});
+
+test('run UI journal: mocked tab switching keeps plans and progress scoped to their origin tab', () => {
+  for (const [label, Journal] of [['chrome', RunUiJournalCh], ['firefox', RunUiJournalFx]]) {
+    const journal = new Journal();
+    const gmailTab = 41;
+    const githubTab = 42;
+    const gmailRequest = 'gmail-request';
+    const githubRequest = 'github-request';
+    const mounted = [];
+    let currentTabId = githubTab;
+
+    const deliver = (tabId, requestId, type, data, runId) => {
+      const event = journal.record(tabId, requestId, type, data, runId);
+      const message = { tabId, requestId, runId, type, data, seq: event?.seq };
+      // This is the side-panel runtime routing contract: live events from a
+      // hidden tab are journaled but never mounted in the visible tab.
+      if (message.tabId === currentTabId) mounted.push(message);
+    };
+
+    journal.begin(gmailTab, gmailRequest);
+    deliver(gmailTab, gmailRequest, 'plan_review', { planId: 'gmail-plan', markdown: 'Gmail plan' }, 'gmail-run');
+    journal.begin(githubTab, githubRequest);
+    deliver(githubTab, githubRequest, 'thinking', { content: 'Reading GitHub' }, 'github-run');
+
+    assert.deepEqual(mounted.map(event => event.data?.content), ['Reading GitHub'], `${label}: GitHub must not mount Gmail's plan`);
+    assert.equal(journal.get(gmailTab).status, 'awaiting_plan', `${label}: hidden Gmail plan should remain pending`);
+    assert.equal(journal.get(githubTab).status, 'running', `${label}: GitHub should keep its own run state`);
+
+    currentTabId = gmailTab;
+    const lastRenderedSeq = 0;
+    const replay = journal.get(gmailTab).events.filter(event => event.seq > lastRenderedSeq);
+    assert.deepEqual(replay.map(event => event.data.planId), ['gmail-plan'], `${label}: returning to Gmail should replay its plan exactly once`);
+
+    deliver(gmailTab, gmailRequest, 'plan_resolved', { planId: 'gmail-plan', decision: 'approve' }, 'gmail-run');
+    assert.equal(journal.get(gmailTab).status, 'running', `${label}: resolving the plan should make restored copies non-pending`);
+    assert.equal(journal.get(gmailTab).events.at(-1).type, 'plan_resolved', `${label}: plan resolution should be journaled for every mounted copy`);
+  }
+});
+
+test('run UI journal: concurrent tabs, bounded replay, terminal snapshots, and stale requests are isolated', () => {
+  for (const [label, Journal] of [['chrome', RunUiJournalCh], ['firefox', RunUiJournalFx]]) {
+    const persisted = new Map();
+    const journal = new Journal({ eventLimit: 3, onChange: (tabId, snapshot) => persisted.set(tabId, structuredClone(snapshot)) });
+    journal.begin(1, 'request-a');
+    journal.begin(2, 'request-b');
+    journal.record(1, 'request-a', 'thinking', { content: 'a1' }, 'run-a');
+    journal.record(2, 'request-b', 'thinking', { content: 'b1' }, 'run-b');
+    journal.record(1, 'request-a', 'thinking', { content: 'a2' }, 'run-a');
+    journal.record(1, 'request-a', 'thinking', { content: 'a3' }, 'run-a');
+    journal.record(1, 'request-a', 'thinking', { content: 'a4' }, 'run-a');
+
+    assert.equal(journal.get(1).events.length, 3, `${label}: replay journal should remain bounded`);
+    assert.equal(journal.get(1).truncatedBeforeSeq, 1, `${label}: compaction should expose the missing sequence boundary`);
+    assert.deepEqual(journal.get(2).events.map(event => event.data.content), ['b1'], `${label}: tab B events must remain independent`);
+    assert.equal(journal.record(1, 'stale-request', 'plan_review', { planId: 'stale' }, 'run-stale'), null, `${label}: stale request events must be rejected`);
+
+    journal.finish(1, 'request-a', 'completed', 'A finished', 'run-a');
+    assert.equal(journal.get(1).status, 'completed', `${label}: hidden completion should persist a terminal state`);
+    assert.equal(journal.get(1).finalContent, 'A finished', `${label}: hidden completion should persist final content`);
+    assert.equal(journal.get(1).events.at(-1).type, 'run_complete', `${label}: terminal completion should receive the next ordered sequence`);
+    assert.equal(journal.get(2).status, 'running', `${label}: completing tab A must not stop tab B`);
+
+    const terminalSeq = journal.get(1).seq;
+    assert.ok(journal.acknowledge(1, 'request-a', terminalSeq), `${label}: the rendered tab should acknowledge replay`);
+    assert.equal(journal.get(1).events.length, 0, `${label}: acknowledged replay events should be released`);
+    assert.equal(journal.get(1).finalContent, 'A finished', `${label}: acknowledgement must retain the terminal snapshot`);
+
+    const remounted = new Journal();
+    remounted.restore(1, persisted.get(1));
+    assert.equal(remounted.get(1).finalContent, 'A finished', `${label}: service-worker/panel remount should restore the terminal snapshot`);
+  }
+});
+
+test('plan review: cancellation emits plan_resolved and timeout has an explicit terminal decision', async () => {
+  await withPlannerBrowserGlobals(async () => {
+    for (const [label, AgentClass, sourceRel] of [
+      ['chrome', AgentCh, 'src/chrome/src/agent/agent.js'],
+      ['firefox', AgentFx, 'src/firefox/src/agent/agent.js'],
+    ]) {
+      const tabId = label === 'chrome' ? 9301 : 9302;
+      const agent = new AgentClass({ getActive: () => ({}) });
+      const updates = [];
+      const waiting = agent._waitForPlanReview(
+        tabId,
+        'plan-1',
+        { steps: [] },
+        'Plan',
+        (type, data) => updates.push({ type, data }),
+      );
+      agent._cancelPendingPlans(tabId, 'Stopped by user');
+      const result = await waiting;
+      assert.equal(result.cancelled, true, `${label}: abort should cancel the pending plan`);
+      assert.deepEqual(updates.map(update => update.type), ['plan_review', 'plan_resolved'], `${label}: abort should invalidate all plan copies`);
+      assert.equal(updates.at(-1).data.decision, 'cancelled', `${label}: abort should have an explicit resolution`);
+
+      const source = fs.readFileSync(path.join(ROOT, sourceRel), 'utf8');
+      assert.match(source, /response\.reason === 'plan review timed out' \? 'timeout' : 'cancelled'/, `${label}: timeout should emit an explicit plan resolution`);
+    }
+  });
+});
+
+test('per-tab run UI protocol is wired into both backgrounds and side panels', () => {
+  for (const [label, bgRel, panelRel] of [
+    ['chrome', 'src/chrome/src/background.js', 'src/chrome/src/ui/sidepanel.js'],
+    ['firefox', 'src/firefox/src/background.js', 'src/firefox/src/ui/sidepanel.js'],
+  ]) {
+    const background = fs.readFileSync(path.join(ROOT, bgRel), 'utf8');
+    const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
+    assert.match(background, /new RunUiJournal\(/, `${label}: background should own the bounded run journal`);
+    assert.match(background, /function assertNoActiveTabRun\(tabId\)/, `${label}: background should prevent duplicate runs within one tab`);
+    assert.match(background, /tabId,[\s\S]*?requestId,[\s\S]*?runId:[\s\S]*?seq:/, `${label}: agent updates should carry tab, request, run, and sequence IDs`);
+    assert.match(background, /case 'agent_run_state':[\s\S]*?runUi: await getRunUiSnapshot\(tabId\)/, `${label}: remount state should include the UI journal snapshot`);
+    assert.match(background, /case 'agent_run_ack':[\s\S]*?runUiJournal\.acknowledge/, `${label}: background should accept ordered replay acknowledgements`);
+    assert.match(background, /status: snapshot\.status \|\| 'completed'/, `${label}: run_complete should carry explicit terminal status`);
+    assert.match(panel, /const processingTabs = new Set\(\);/, `${label}: processing state should be tab scoped`);
+    assert.match(panel, /const localRunRequestIds = new Map\(\);/, `${label}: local request ownership should be tab scoped`);
+    assert.match(panel, /function ensureCurrentRunAssistant\(msg\)/, `${label}: rendering should bind updates to their request bubble`);
+    assert.match(panel, /const runAssistantEl = messagesEl\.querySelector[\s\S]*?runAssistantEl\.dataset\.lastRenderedSeq = String\(event\.seq\);[\s\S]*?const renderedSeq = Number\(runAssistantEl\.dataset\.lastRenderedSeq/, `${label}: terminal replay should retain its assistant reference through acknowledgement`);
+    assert.match(panel, /const locallyOwnedEvent = [\s\S]*?if \(!locallyOwnedEvent\) \{[\s\S]*?clearPlanReviewActiveRun/, `${label}: live terminal broadcasts should not tear down their locally owned request`);
+    assert.match(panel, /const sequencedRequestAssistantEl = [\s\S]*?if \(sequencedRequestAssistantEl[\s\S]*?return;[\s\S]*?const eventAssistantEl = ensureCurrentRunAssistant\(msg\);/, `${label}: duplicate queued events should be rejected before rebinding the completed assistant as current`);
+    assert.match(panel, /Number\(event\?\.seq \|\| 0\) <= lastRenderedSeq\) continue;/, `${label}: remount should replay only unseen events`);
+    assert.match(panel, /Number\(eventAssistantEl\.dataset\.lastRenderedSeq \|\| 0\) >= Number\(msg\.seq\)\) return;/, `${label}: queued and journaled events should be sequence-deduplicated`);
+    assert.match(panel, /sendToBackground\('agent_run_ack'/, `${label}: the correct mounted tab should acknowledge replay`);
+    assert.match(panel, /function invalidatePlanReviewCards\(/, `${label}: plan copies should be invalidated by tab and run identity`);
+    assert.match(panel, /const pendingPlanMatchesRun =/, `${label}: restored plan cards should require an exact live journal match`);
+    assert.match(panel, /card\.dataset\.runRequestId/, `${label}: plan cards should store their request identity`);
+    assert.match(panel, /else if \(event === 'running'\) \{[\s\S]*?setTabProcessing\(runTabId, true\);[\s\S]*?setTabAbortRequested\(runTabId, false\);/, `${label}: scheduled runs should participate in tab-scoped stop state`);
+    assert.match(panel, /const switchGeneration = \+\+tabSwitchGeneration;[\s\S]*?if \(switchGeneration !== tabSwitchGeneration\) return;/, `${label}: overlapping tab switches should cancel stale async transitions`);
   }
 });
 
