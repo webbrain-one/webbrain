@@ -4169,12 +4169,81 @@ test('cloud run controller uses the visible tab and persists terminal status', a
   assert.equal(processArgs[3], 'act');
   assert.deepEqual(processArgs[4], []);
   assert.equal(processArgs[5].cloudRun, true);
+  processArgs[2]('thinking', { step: 1, note: 'Opening the page' });
+  processArgs[2]('text_delta', { content: 'Opening ' });
+  processArgs[2]('text_delta', { content: 'the page' });
+  processArgs[2]('tool_call', {
+    name: 'fetch_url',
+    args: {
+      url: 'https://webbrain.one/',
+      authorization: 'Bearer secret-token',
+      nested: {
+        apiKey: 'sk-test',
+        sessionToken: 'session-secret',
+        headers: { 'x-api-key': 'header-secret' },
+      },
+      screenshot: `data:image/png;base64,${'a'.repeat(600)}`,
+    },
+  });
+  processArgs[2]('tool_result', { name: 'fetch_url', result: { success: true } });
+  const running = await controller.status({ run_id: 'run_test' });
+  assert.deepEqual(running.updates.map(update => update.seq), [1, 2, 3, 4]);
+  assert.equal(running.updates[1].data.content, 'Opening the page');
+  assert.equal(running.updates[2].data.args.authorization, '[redacted]');
+  assert.equal(running.updates[2].data.args.nested.apiKey, '[redacted]');
+  assert.equal(running.updates[2].data.args.nested.sessionToken, '[redacted]');
+  assert.equal(running.updates[2].data.args.nested.headers['x-api-key'], '[redacted]');
+  assert.match(running.updates[2].data.args.screenshot, /^\[image omitted:/);
   finishRun('Google');
   await new Promise(resolve => setTimeout(resolve, 0));
   const completed = await controller.status({ run_id: 'run_test' });
   assert.equal(completed.status, 'completed');
   assert.equal(completed.result, 'Google');
   assert.equal(session.webbrainCloudRunSnapshots[0].status, 'completed');
+});
+
+test('cloud run controller keeps the newest 200 monotonically sequenced updates', async () => {
+  const session = {};
+  const tab = { id: 21, url: 'https://webbrain.one/', active: true, windowId: 3 };
+  let finishRun;
+  let emitUpdate;
+  const controller = createCloudRunController({
+    chromeApi: {
+      tabs: {
+        query: async () => [tab],
+        get: async () => tab,
+        update: async () => tab,
+      },
+      windows: { update: async () => ({}) },
+      storage: {
+        local: { get: async () => ({ webbrainCloudBridgeEnabled: false }) },
+        session: {
+          get: async key => ({ [key]: session[key] || [] }),
+          set: async value => Object.assign(session, value),
+        },
+      },
+      runtime: { sendMessage: async () => ({ connected: false }) },
+    },
+    agent: {
+      isRunning: () => false,
+      abort: () => {},
+      processMessage: (_tabId, _task, onUpdate) => {
+        emitUpdate = onUpdate;
+        return new Promise(resolve => { finishRun = resolve; });
+      },
+    },
+    ensureOffscreen: async () => {},
+    makeRunId: () => 'run_updates',
+  });
+
+  await controller.startRun({ task: 'Generate many updates' });
+  for (let i = 1; i <= 205; i += 1) emitUpdate('thinking', { step: i });
+  const running = await controller.status({ runId: 'run_updates' });
+  assert.equal(running.updates.length, 200);
+  assert.equal(running.updates[0].seq, 6);
+  assert.equal(running.updates.at(-1).seq, 205);
+  finishRun('Done');
+  await new Promise(resolve => setTimeout(resolve, 0));
 });
 
 test('cloud run controller fails immediately if an interactive plan review leaks through', async () => {
@@ -4220,7 +4289,17 @@ test('cloud run controller fails immediately if an interactive plan review leaks
 });
 
 test('cloud run controller fails interrupted runs after service-worker restart', async () => {
-  const row = { runId: 'run_old', status: 'running', tabId: 2, task: 'Old task', updates: [], createdAt: '2020-01-01T00:00:00.000Z' };
+  const row = {
+    runId: 'run_old',
+    status: 'running',
+    tabId: 2,
+    task: 'Old task',
+    updates: [
+      { type: 'thinking', data: { step: 1 }, ts: '2020-01-01T00:00:01.000Z' },
+      { seq: 8, type: 'tool_call', data: { name: 'navigate' }, ts: '2020-01-01T00:00:02.000Z' },
+    ],
+    createdAt: '2020-01-01T00:00:00.000Z',
+  };
   const session = { webbrainCloudRunSnapshots: [row] };
   const controller = createCloudRunController({
     chromeApi: {
@@ -4238,6 +4317,7 @@ test('cloud run controller fails interrupted runs after service-worker restart',
   const restored = await controller.status({ runId: 'run_old' });
   assert.equal(restored.status, 'failed');
   assert.match(restored.error, /service worker restarted/i);
+  assert.deepEqual(restored.updates.map(update => update.seq), [1, 8]);
 });
 
 test('cloud run persistence caps oversized strings, runs, and total snapshot bytes', () => {
