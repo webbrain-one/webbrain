@@ -153,6 +153,19 @@ function normalizeTiers(value) {
   return set.size ? [...set] : ['full', 'mid', 'compact'];
 }
 
+function normalizeSiteAdapters(value) {
+  const raw = Array.isArray(value) ? value : [];
+  const seen = new Set();
+  return raw
+    .map((item) => cleanSingleLine(item).toLowerCase())
+    .filter((item) => {
+      if (!/^[a-z0-9_-]{1,80}$/.test(item) || seen.has(item)) return false;
+      seen.add(item);
+      return true;
+    })
+    .slice(0, 20);
+}
+
 function normalizeToolKind(value) {
   const raw = cleanSingleLine(value || 'http').replace(/[-_\s]+/g, '').toLowerCase();
   if (raw === 'httpdownloadjob') return 'httpDownloadJob';
@@ -221,6 +234,7 @@ function normalizeSkillTools(value, skillId) {
       allowedInputUrls: normalizeAllowedInputUrls(item.allowedInputUrls || item.allowed_input_urls || item.inputUrlAllowlist || item.input_url_allowlist),
       resultPolicy: cleanSingleLine(item.resultPolicy || item.result_policy).toLowerCase() === 'trusted' ? 'trusted' : 'untrusted',
       responseLimits: cloneJsonObject(item.responseLimits || item.response_limits, {}),
+      siteAdapters: normalizeSiteAdapters(item.siteAdapters || item.site_adapters),
       job,
       modes: normalizeToolModes(item.modes, kind),
       tiers: normalizeTiers(item.tiers),
@@ -437,6 +451,11 @@ function skillToolAllowedInMode(tool, mode, tier) {
   return true;
 }
 
+function skillToolAllowedForAdapter(tool, siteAdapter) {
+  if (!Array.isArray(tool.siteAdapters) || tool.siteAdapters.length === 0) return true;
+  return !!siteAdapter && tool.siteAdapters.includes(String(siteAdapter).toLowerCase());
+}
+
 export function buildSkillToolDefinitions(skillsValue, opts = {}) {
   const excludeNames = opts.excludeNames instanceof Set ? opts.excludeNames : new Set(opts.excludeNames || []);
   const seen = new Set(excludeNames);
@@ -444,6 +463,7 @@ export function buildSkillToolDefinitions(skillsValue, opts = {}) {
   for (const skill of normalizeCustomSkills(skillsValue)) {
     for (const tool of skill.tools || []) {
       if (!skillToolAllowedInMode(tool, opts.mode, opts.tier || 'full')) continue;
+      if (!skillToolAllowedForAdapter(tool, opts.siteAdapter)) continue;
       if (seen.has(tool.name)) continue;
       seen.add(tool.name);
       definitions.push({
