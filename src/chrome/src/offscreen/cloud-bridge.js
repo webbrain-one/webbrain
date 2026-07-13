@@ -7,6 +7,7 @@
  */
 
 (() => {
+  const ALLOWED_BRIDGE_ACTIONS = new Set(['cloud_run', 'cloud_status', 'cloud_abort']);
   let socket = null;
   let bridgeUrl = null;
   let enabled = false;
@@ -34,10 +35,10 @@
     };
   }
 
-  function sendJson(obj) {
-    if (!socket || socket.readyState !== WebSocket.OPEN) return;
+  function sendJson(obj, target = socket) {
+    if (!target || target.readyState !== WebSocket.OPEN) return;
     try {
-      socket.send(JSON.stringify(obj));
+      target.send(JSON.stringify(obj));
     } catch (e) {
       lastError = e.message || String(e);
     }
@@ -56,18 +57,21 @@
     if (!enabled || !bridgeUrl) return;
     if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) return;
     try {
-      socket = new WebSocket(bridgeUrl);
-      socket.addEventListener('open', () => {
+      const nextSocket = new WebSocket(bridgeUrl);
+      socket = nextSocket;
+      nextSocket.addEventListener('open', () => {
+        if (socket !== nextSocket) return;
         reconnectAttempt = 0;
         lastError = '';
-        sendJson({ type: 'hello', client: 'webbrain-extension', status: status() });
+        sendJson({ type: 'hello', client: 'webbrain-extension', status: status() }, nextSocket);
       });
-      socket.addEventListener('message', async (event) => {
+      nextSocket.addEventListener('message', async (event) => {
+        if (socket !== nextSocket) return;
         let msg;
         try {
           msg = JSON.parse(event.data);
         } catch (e) {
-          sendJson({ ok: false, error: `Invalid JSON message: ${e.message}` });
+          sendJson({ ok: false, error: `Invalid JSON message: ${e.message}` }, nextSocket);
           return;
         }
 
@@ -75,7 +79,11 @@
         const action = msg.action || msg.command;
         const payload = msg.payload || msg;
         if (!action) {
-          sendJson({ id, ok: false, error: 'Missing action' });
+          sendJson({ id, ok: false, error: 'Missing action' }, nextSocket);
+          return;
+        }
+        if (!ALLOWED_BRIDGE_ACTIONS.has(action)) {
+          sendJson({ id, ok: false, error: `Unsupported cloud bridge action: ${action}` }, nextSocket);
           return;
         }
 
@@ -85,20 +93,25 @@
             target: 'background',
             action,
           });
-          if (response && response.error) {
-            sendJson({ id, ok: false, error: response.error });
+          const isRunSnapshot = !!response
+            && (response.runId != null || response.run_id != null)
+            && typeof response.status === 'string';
+          if (response?.error && !isRunSnapshot) {
+            sendJson({ id, ok: false, error: response.error }, nextSocket);
           } else {
-            sendJson({ id, ok: true, result: response });
+            sendJson({ id, ok: true, result: response }, nextSocket);
           }
         } catch (e) {
-          sendJson({ id, ok: false, error: e.message || String(e) });
+          sendJson({ id, ok: false, error: e.message || String(e) }, nextSocket);
         }
       });
-      socket.addEventListener('close', () => {
+      nextSocket.addEventListener('close', () => {
+        if (socket !== nextSocket) return;
         socket = null;
         scheduleReconnect();
       });
-      socket.addEventListener('error', () => {
+      nextSocket.addEventListener('error', () => {
+        if (socket !== nextSocket) return;
         lastError = 'WebSocket error';
       });
     } catch (e) {
@@ -122,8 +135,9 @@
       enabled = true;
       bridgeUrl = nextUrl;
       if (changed && socket) {
-        try { socket.close(); } catch {}
+        const previousSocket = socket;
         socket = null;
+        try { previousSocket.close(); } catch {}
       }
       connect();
       sendResponse(status());
@@ -135,9 +149,10 @@
       reconnectTimer = null;
       reconnectAttempt = 0;
       if (socket) {
-        try { socket.close(); } catch {}
+        const previousSocket = socket;
+        socket = null;
+        try { previousSocket.close(); } catch {}
       }
-      socket = null;
       sendResponse(status());
       return false;
     }

@@ -98,7 +98,7 @@ const { RunUiJournal: RunUiJournalCh } = await import(
 const { RunUiJournal: RunUiJournalFx } = await import(
   'file://' + path.join(ROOT, 'src/firefox/src/run-ui-journal.js').replace(/\\/g, '/')
 );
-const { createCloudRunController, normalizeCloudBridgeUrl } = await import(
+const { buildCloudPersistenceRows, createCloudRunController, normalizeCloudBridgeUrl } = await import(
   'file://' + path.join(ROOT, 'src/chrome/src/cloud-runs.js').replace(/\\/g, '/')
 );
 const { handleDoneJson: handleDoneJsonCh } = await import(
@@ -4225,6 +4225,39 @@ test('cloud run controller fails interrupted runs after service-worker restart',
   assert.match(restored.error, /service worker restarted/i);
 });
 
+test('cloud run persistence caps oversized strings, runs, and total snapshot bytes', () => {
+  const oversized = 'x'.repeat(32 * 1024);
+  const makeRun = (index, chunkCount = 12) => ({
+    runId: `run_${String(index).padStart(2, '0')}`,
+    status: index === 99 ? 'failed' : 'completed',
+    tabId: index,
+    task: oversized,
+    outputSchema: { result: 'string' },
+    result: { chunks: Array.from({ length: chunkCount }, () => oversized) },
+    summary: oversized,
+    content: oversized,
+    finalUrl: `https://example.com/${index}`,
+    error: index === 99 ? 'Expected failure survives compaction.' : '',
+    updates: Array.from({ length: 20 }, () => ({ type: 'tool_result', data: { text: oversized } })),
+    createdAt: new Date(Date.UTC(2026, 0, 1, 0, index === 99 ? 59 : index)).toISOString(),
+    updatedAt: '2026-01-01T01:00:00.000Z',
+    completedAt: '2026-01-01T01:00:00.000Z',
+  });
+  const runs = [makeRun(99, 40), ...Array.from({ length: 49 }, (_, index) => makeRun(index))];
+
+  const rows = buildCloudPersistenceRows(runs);
+  const bytes = new TextEncoder().encode(JSON.stringify(rows)).length;
+
+  assert.ok(bytes <= 4 * 1024 * 1024, `persisted cloud rows exceeded byte budget: ${bytes}`);
+  assert.ok(rows.length < runs.length, 'total byte budget should omit the oldest oversized snapshots');
+  assert.equal(rows[0].runId, 'run_99', 'newest run must survive storage compaction');
+  assert.equal(rows[0].status, 'failed');
+  assert.equal(rows[0].error, 'Expected failure survives compaction.');
+  assert.equal(rows[0].structured, true);
+  assert.equal(rows[0].persistenceTruncated?.omittedResult, true, 'oversized single-run payload should fall back to a minimal restart snapshot');
+  assert.ok(!JSON.stringify(rows).includes(oversized), 'raw oversized strings must not reach storage.session');
+});
+
 test('cloud bridge accepts only loopback WebSocket URLs', () => {
   assert.equal(normalizeCloudBridgeUrl('ws://127.0.0.1:17373/extension'), 'ws://127.0.0.1:17373/extension');
   assert.equal(normalizeCloudBridgeUrl('ws://localhost:17373/extension'), 'ws://localhost:17373/extension');
@@ -4232,14 +4265,16 @@ test('cloud bridge accepts only loopback WebSocket URLs', () => {
   assert.throws(() => normalizeCloudBridgeUrl('ws://192.168.1.10/extension'), /localhost/);
 });
 
-test('offscreen cloud bridge reconnects with backoff and rejects remote control URLs', () => {
+function createOffscreenCloudBridgeHarness({ sendMessage = async () => ({}), closeSynchronously = true } = {}) {
   const source = fs.readFileSync(path.join(ROOT, 'src/chrome/src/offscreen/cloud-bridge.js'), 'utf8');
   const sockets = [];
   const timers = [];
+  const runtimeCalls = [];
   let listener = null;
   class FakeWebSocket {
     static CONNECTING = 0;
     static OPEN = 1;
+    static CLOSING = 2;
     static CLOSED = 3;
     constructor(url) {
       this.url = url;
@@ -4250,22 +4285,42 @@ test('offscreen cloud bridge reconnects with backoff and rejects remote control 
     }
     addEventListener(type, callback) { this.listeners.set(type, callback); }
     send(value) { this.sent.push(JSON.parse(value)); }
-    close() { this.readyState = FakeWebSocket.CLOSED; this.listeners.get('close')?.(); }
-    emit(type, value = {}) { this.listeners.get(type)?.(value); }
+    close() {
+      this.readyState = FakeWebSocket.CLOSING;
+      if (closeSynchronously) this.emit('close');
+    }
+    emit(type, value = {}) {
+      if (type === 'open') this.readyState = FakeWebSocket.OPEN;
+      if (type === 'close') this.readyState = FakeWebSocket.CLOSED;
+      this.listeners.get(type)?.(value);
+    }
   }
   vm.runInNewContext(source, {
     URL,
     WebSocket: FakeWebSocket,
-    chrome: { runtime: { onMessage: { addListener: callback => { listener = callback; } }, sendMessage: async () => ({}) } },
+    chrome: {
+      runtime: {
+        onMessage: { addListener: callback => { listener = callback; } },
+        sendMessage: async message => {
+          runtimeCalls.push(message);
+          return await sendMessage(message);
+        },
+      },
+    },
     setTimeout: (callback, delay) => { timers.push({ callback, delay }); return timers.length; },
     clearTimeout: () => {},
   });
+
+  return { listener: (...args) => listener(...args), runtimeCalls, sockets, timers };
+}
+
+test('offscreen cloud bridge reconnects with backoff and rejects remote control URLs', () => {
+  const { listener, sockets, timers } = createOffscreenCloudBridgeHarness();
 
   let started;
   listener({ type: 'cloud-bridge-start', url: 'ws://127.0.0.1:17373/extension' }, null, value => { started = value; });
   assert.equal(started.enabled, true);
   assert.equal(sockets.length, 1);
-  sockets[0].readyState = FakeWebSocket.OPEN;
   sockets[0].emit('open');
   assert.equal(sockets[0].sent[0].type, 'hello');
   sockets[0].close();
@@ -4277,6 +4332,75 @@ test('offscreen cloud bridge reconnects with backoff and rejects remote control 
   listener({ type: 'cloud-bridge-start', url: 'wss://attacker.example/extension' }, null, value => { rejected = value; });
   assert.match(rejected.error, /localhost/);
   assert.equal(sockets.length, 2);
+});
+
+test('offscreen cloud bridge preserves failed run envelopes and rejects unauthorized actions', async () => {
+  const failed = { runId: 'run_failed', status: 'failed', error: 'Agent failed.' };
+  const aborting = { runId: 'run_abort', status: 'aborting', error: 'Abort requested.' };
+  const { listener, runtimeCalls, sockets } = createOffscreenCloudBridgeHarness({
+    sendMessage: async message => {
+      if (message.action === 'cloud_status' && message.runId === 'run_failed') return failed;
+      if (message.action === 'cloud_status') return { error: 'Unknown cloud run.' };
+      if (message.action === 'cloud_abort') return aborting;
+      return {};
+    },
+  });
+  listener({ type: 'cloud-bridge-start', url: 'ws://127.0.0.1:17373/extension' }, null, () => {});
+  const socket = sockets[0];
+  socket.emit('open');
+
+  socket.emit('message', {
+    data: JSON.stringify({ id: 'status-1', action: 'cloud_status', payload: { runId: 'run_failed' } }),
+  });
+  await new Promise(resolve => setImmediate(resolve));
+  const statusResponse = socket.sent.find(message => message.id === 'status-1');
+  assert.equal(statusResponse.ok, true, 'failed run snapshots are domain results, not bridge failures');
+  assert.equal(statusResponse.result.status, 'failed');
+  assert.equal(statusResponse.result.error, 'Agent failed.');
+
+  socket.emit('message', {
+    data: JSON.stringify({ id: 'abort-1', action: 'cloud_abort', payload: { runId: 'run_abort' } }),
+  });
+  await new Promise(resolve => setImmediate(resolve));
+  const abortResponse = socket.sent.find(message => message.id === 'abort-1');
+  assert.equal(abortResponse.ok, true, 'aborting snapshots with an error explanation must remain successful protocol responses');
+  assert.equal(abortResponse.result.status, 'aborting');
+
+  socket.emit('message', {
+    data: JSON.stringify({ id: 'missing-1', action: 'cloud_status', payload: { runId: 'run_missing' } }),
+  });
+  await new Promise(resolve => setImmediate(resolve));
+  const missing = socket.sent.find(message => message.id === 'missing-1');
+  assert.equal(missing.ok, false, 'background exception envelopes must still reject the bridge request');
+  assert.equal(missing.error, 'Unknown cloud run.');
+
+  const callCount = runtimeCalls.length;
+  socket.emit('message', {
+    data: JSON.stringify({ id: 'forbidden-1', action: 'get_providers', payload: {} }),
+  });
+  await new Promise(resolve => setImmediate(resolve));
+  const forbidden = socket.sent.find(message => message.id === 'forbidden-1');
+  assert.equal(forbidden.ok, false);
+  assert.match(forbidden.error, /unsupported cloud bridge action/i);
+  assert.equal(runtimeCalls.length, callCount, 'unauthorized bridge actions must not reach the background handler');
+});
+
+test('offscreen cloud bridge ignores asynchronous close events from replaced sockets', () => {
+  const { listener, sockets, timers } = createOffscreenCloudBridgeHarness({ closeSynchronously: false });
+  listener({ type: 'cloud-bridge-start', url: 'ws://127.0.0.1:17373/extension' }, null, () => {});
+  const first = sockets[0];
+  first.emit('open');
+
+  listener({ type: 'cloud-bridge-start', url: 'ws://localhost:17374/extension' }, null, () => {});
+  const replacement = sockets[1];
+  assert.ok(replacement, 'URL change should create a replacement WebSocket');
+
+  first.emit('close');
+  replacement.emit('open');
+
+  assert.equal(sockets.length, 2, 'stale close must not create a duplicate connection');
+  assert.equal(timers.length, 0, 'stale close must not schedule reconnect for the replacement');
+  assert.equal(replacement.sent.filter(message => message.type === 'hello').length, 1, 'replacement socket should remain current and announce itself');
 });
 
 test('getToolsForMode: `done` outcome is exposed only in full and mid action modes', () => {
