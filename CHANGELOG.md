@@ -4,6 +4,14 @@ All notable changes to WebBrain are documented in this file.
 
 This changelog was generated from the repository Git history and release tags. Versions without a Git tag are inferred from version-bump commits and the current `package.json` / browser manifest versions.
 
+## [23.0.4] - 2026-07-13
+
+### Added
+- Added a default Mail.tm disposable email skill for Chrome and Firefox, scoped to low-importance verification flows with warnings about temporary inbox access, explicit `clarify` confirmation, and guidance for `/allow-api` Mail.tm API calls.
+
+### Tests
+- Added packaged-skill coverage for the default disposable email skill and Mail.tm safety/API guidance.
+
 ## [23.0.2] - 2026-07-13
 
 ### Added

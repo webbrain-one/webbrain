@@ -20956,8 +20956,8 @@ test('settings exposes custom skills tab and packaged skills resource directory'
   assert.equal(DEFAULT_SKILLS_SEEDED_STORAGE_KEY_FX, 'defaultSkillsSeeded');
   assert.equal(DEFAULT_SKILLS_REMOVED_STORAGE_KEY_CH, 'defaultSkillsRemoved');
   assert.equal(DEFAULT_SKILLS_REMOVED_STORAGE_KEY_FX, 'defaultSkillsRemoved');
-  assert.deepEqual(DEFAULT_SKILL_SOURCES_CH.map((skill) => skill.id), ['freeskillz-xyz']);
-  assert.deepEqual(DEFAULT_SKILL_SOURCES_FX.map((skill) => skill.id), ['freeskillz-xyz']);
+  assert.deepEqual(DEFAULT_SKILL_SOURCES_CH.map((skill) => skill.id), ['freeskillz-xyz', 'disposable-email-mailtm']);
+  assert.deepEqual(DEFAULT_SKILL_SOURCES_FX.map((skill) => skill.id), ['freeskillz-xyz', 'disposable-email-mailtm']);
 
   for (const [label, prefix] of [['chrome', 'src/chrome'], ['firefox', 'src/firefox']]) {
     const html = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/settings.html'), 'utf8');
@@ -21004,6 +21004,16 @@ test('settings exposes custom skills tab and packaged skills resource directory'
     assert.match(freeSkillz, /"endpoint": "https:\/\/freeskillz\.xyz\/v1\/media\/jobs"/, `${label}: FreeSkillz media download endpoint missing`);
     assert.doesNotMatch(freeSkillz, /raw FreeSkillz endpoints only/i, `${label}: bundled FreeSkillz skill should prefer declared tools`);
     assert.doesNotMatch(freeSkillz, /127\.0\.0\.1|localhost|Local development/i, `${label}: FreeSkillz skill should not include local development URLs`);
+    const disposable = fs.readFileSync(path.join(ROOT, prefix, 'skills/disposable-email-mailtm.md'), 'utf8');
+    assert.match(disposable, /Mail\.tm/, `${label}: disposable email skill should use Mail.tm by default`);
+    assert.match(disposable, /disposable and should be used only for unimportant tasks/i, `${label}: disposable email skill should warn about unimportant use only`);
+    assert.match(disposable, /may not be able to access the inbox again/i, `${label}: disposable email skill should warn about mailbox loss`);
+    assert.match(disposable, /use `clarify` to confirm the user understands/i, `${label}: disposable email skill should require explicit user confirmation`);
+    assert.match(disposable, /Continue only after the user confirms/i, `${label}: disposable email skill should stop without confirmation`);
+    assert.match(disposable, /fetch_url/, `${label}: disposable email skill should use fetch_url in normal runs`);
+    assert.match(disposable, /\/allow-api/, `${label}: disposable email skill should explain API mutation approval`);
+    assert.match(disposable, new RegExp(String.raw`"url": "https:\/\/api\.mail\.tm\/accounts"`), `${label}: disposable email skill should document account creation`);
+    assert.match(disposable, /\"Authorization\": \"Bearer REPLACE_TOKEN\"/, `${label}: disposable email skill should document authenticated message reads`);
   }
 });
 

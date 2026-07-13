@@ -13,6 +13,11 @@ export const DEFAULT_SKILL_SOURCES = Object.freeze([
     name: 'FreeSkillz.xyz',
     path: 'skills/freeskillz-xyz.md',
   }),
+  Object.freeze({
+    id: 'disposable-email-mailtm',
+    name: 'Disposable email (Mail.tm)',
+    path: 'skills/disposable-email-mailtm.md',
+  }),
 ]);
 
 function cleanText(value) {
