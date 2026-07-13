@@ -4258,6 +4258,45 @@ test('cloud run persistence caps oversized strings, runs, and total snapshot byt
   assert.ok(!JSON.stringify(rows).includes(oversized), 'raw oversized strings must not reach storage.session');
 });
 
+test('cloud run status exposes persistence truncation after service-worker restart', async () => {
+  const oversized = 'x'.repeat(32 * 1024);
+  const [row] = buildCloudPersistenceRows([{
+    runId: 'run_truncated',
+    status: 'completed',
+    tabId: 7,
+    task: 'Return a large structured result',
+    outputSchema: { chunks: 'string[]' },
+    result: { chunks: Array.from({ length: 40 }, () => oversized) },
+    summary: 'Completed with a result too large to persist.',
+    content: '',
+    finalUrl: 'https://example.com/',
+    error: '',
+    updates: [],
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:01:00.000Z',
+    completedAt: '2026-01-01T00:01:00.000Z',
+  }]);
+  const session = { webbrainCloudRunSnapshots: [row] };
+  const controller = createCloudRunController({
+    chromeApi: {
+      tabs: {},
+      storage: {
+        local: { get: async () => ({}) },
+        session: { get: async key => ({ [key]: session[key] }), set: async value => Object.assign(session, value) },
+      },
+      runtime: { sendMessage: async () => ({}) },
+    },
+    agent: {},
+    ensureOffscreen: async () => {},
+  });
+
+  const restored = await controller.status({ runId: 'run_truncated' });
+  assert.equal(restored.status, 'completed');
+  assert.equal(restored.structured, true);
+  assert.equal(restored.result, undefined);
+  assert.equal(restored.persistenceTruncated?.omittedResult, true);
+});
+
 test('cloud bridge accepts only loopback WebSocket URLs', () => {
   assert.equal(normalizeCloudBridgeUrl('ws://127.0.0.1:17373/extension'), 'ws://127.0.0.1:17373/extension');
   assert.equal(normalizeCloudBridgeUrl('ws://localhost:17373/extension'), 'ws://localhost:17373/extension');

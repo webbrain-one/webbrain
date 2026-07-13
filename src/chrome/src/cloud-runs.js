@@ -103,6 +103,7 @@ function cloudSnapshot(run, { includeUpdates = true } = {}) {
     task: run.task,
     structured: run.structured ?? !!run.outputSchema,
     result: run.result,
+    persistenceTruncated: run.persistenceTruncated,
     summary: run.summary,
     content: run.content,
     finalUrl: run.finalUrl,
