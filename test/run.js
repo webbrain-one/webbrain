@@ -19627,6 +19627,55 @@ test('upload_file schema accepts downloadId and no longer hard-requires filePath
   assert.deepEqual(up.function.parameters.required, ['selector'], 'filePath should no longer be required');
 });
 
+test('upload_file (firefox) rejects non-complete downloads and missing picker base64', async () => {
+  const originalBrowser = globalThis.browser;
+  const originalFetch = globalThis.fetch;
+  try {
+    let fetchCalled = false;
+    globalThis.browser = {
+      downloads: {
+        async search() {
+          return [{ id: 8122, state: 'in_progress', url: 'https://example.com/partial.zip', filename: '/tmp/partial.zip' }];
+        },
+      },
+      tabs: {
+        async get(tabId) {
+          return { id: tabId, url: 'https://example.com/page' };
+        },
+      },
+    };
+    globalThis.fetch = async () => {
+      fetchCalled = true;
+      throw new Error('should not fetch incomplete downloads');
+    };
+
+    const agent = new AgentFx({});
+    const incomplete = await agent.executeTool(42, 'upload_file', { selector: 'input[type=file]', downloadId: 8122 });
+    assert.equal(incomplete.success, false);
+    assert.match(incomplete.error, /not complete/i);
+    assert.equal(fetchCalled, false);
+
+    let pickerId = null;
+    const pickerPromise = agent.executeTool(42, 'upload_file', { selector: 'input[type=file]' }, (evt, data) => {
+      if (evt === 'upload_picker') pickerId = data.pickerId;
+    });
+    await new Promise((r) => setTimeout(r, 10));
+    assert.ok(pickerId);
+    agent.submitUploadPickerResponse(42, pickerId, { name: 'x.txt', type: 'text/plain', size: 3 });
+    const missing = await pickerPromise;
+    assert.equal(missing.success, false);
+    assert.match(missing.error, /no file data/i);
+
+    // Second response for the same pickerId must be ignored (one-shot consume).
+    assert.equal(agent.submitUploadPickerResponse(42, pickerId, { base64: 'YQ==', name: 'late.txt' }), false);
+  } finally {
+    if (originalBrowser === undefined) delete globalThis.browser;
+    else globalThis.browser = originalBrowser;
+    if (originalFetch === undefined) delete globalThis.fetch;
+    else globalThis.fetch = originalFetch;
+  }
+});
+
 test('upload_file (firefox) re-fetches downloadId with manual redirect handling and injects via DataTransfer', async () => {
   const originalBrowser = globalThis.browser;
   const originalFetch = globalThis.fetch;
@@ -19701,6 +19750,7 @@ test('upload_file (firefox) re-fetches downloadId with manual redirect handling 
     assert.ok(executedScripts[0].includes('new DataTransfer()'), 'Script should use DataTransfer');
     assert.ok(executedScripts[0].includes('dt.items.add(file)'), 'Script should add file to DataTransfer');
     assert.ok(executedScripts[0].includes('el.files = dt.files'), 'Script should assign DataTransfer files to input');
+    assert.ok(executedScripts[0].includes('el.type !== \'file\''), 'Script should require input[type=file]');
   } finally {
     if (originalBrowser === undefined) delete globalThis.browser;
     else globalThis.browser = originalBrowser;
@@ -19764,7 +19814,7 @@ test('upload_file (firefox) enforces Content-Length pre-read limit and handles r
     });
 
     const agent = new AgentFx({});
-    const resHuge = await agent.executeTool(42, 'upload_file', { selector: 'input', downloadId: 8124 });
+    const resHuge = await agent.executeTool(42, 'upload_file', { selector: 'input[type=file]', downloadId: 8124 });
     assert.equal(resHuge.success, false);
     assert.match(resHuge.error, /exceeds 25MB limit/i);
 
@@ -19773,7 +19823,7 @@ test('upload_file (firefox) enforces Content-Length pre-read limit and handles r
       status: 404,
       headers: { get: () => null },
     });
-    const resFail = await agent.executeTool(42, 'upload_file', { selector: 'input', downloadId: 8124 });
+    const resFail = await agent.executeTool(42, 'upload_file', { selector: 'input[type=file]', downloadId: 8124 });
     assert.equal(resFail.success, false);
     assert.match(resFail.error, /Failed to re-fetch/i);
   } finally {

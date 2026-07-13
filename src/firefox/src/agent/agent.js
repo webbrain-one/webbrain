@@ -3320,6 +3320,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (!tabPending) return false;
     const entry = tabPending.get(pickerId);
     if (!entry) return false;
+    // One-shot: consume so a late FileReader callback cannot re-resolve.
+    tabPending.delete(pickerId);
+    if (tabPending.size === 0) this._pendingUploadPickers.delete(tabId);
     try { entry.resolve(fileData); } catch {}
     return true;
   }
@@ -7646,182 +7649,216 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       return await downloadFiles(args);
     }
     if (name === 'upload_file') {
-      if (args.filePath) {
-        return {
-          success: false,
-          error: 'Firefox does not support arbitrary local file paths (no CDP access). Please provide downloadId to attach a previously downloaded file, or omit downloadId to prompt the user to select a file manually.',
-        };
-      }
-      if (!args.selector) {
-        return { success: false, error: 'selector parameter is required for upload_file' };
-      }
-
-      let base64, filename, mimeType;
-      if (args.downloadId != null) {
-        const dl = await browser.downloads.search({ id: Number(args.downloadId) });
-        if (!dl || !dl.length || !dl[0].url) {
-          return { success: false, error: `Could not find download item with id ${args.downloadId}` };
+      const UPLOAD_MAX_BYTES = 25 * 1024 * 1024;
+      try {
+        if (args.filePath) {
+          return {
+            success: false,
+            error: 'Firefox does not support arbitrary local file paths (no CDP access). Please provide downloadId to attach a previously downloaded file, or omit downloadId to prompt the user to select a file manually.',
+          };
         }
-        const targetUrl = dl[0].url;
-        let currentUrl = targetUrl;
-        let initialRegDomain = null;
-        let tabRegDomain = null;
-        try {
-          initialRegDomain = registrableDomain(new URL(targetUrl).hostname);
-          const currentTab = await browser.tabs.get(tabId);
-          if (currentTab && currentTab.url) {
-            tabRegDomain = registrableDomain(new URL(currentTab.url).hostname);
-          }
-        } catch {}
+        if (!args.selector) {
+          return { success: false, error: 'selector parameter is required for upload_file' };
+        }
 
-        let attachCookies = !!(tabRegDomain && initialRegDomain && tabRegDomain === initialRegDomain);
-        let res = null;
-        for (let hop = 0; hop < 5; hop++) {
-          const v = validateFetchUrl(currentUrl, { allowLocalNetwork: getAllowLocalNetwork() });
-          if (!v.ok) {
-            return { success: false, error: `Invalid download URL: ${v.error}` };
+        let base64, filename, mimeType;
+        if (args.downloadId != null) {
+          const dl = await browser.downloads.search({ id: Number(args.downloadId) });
+          if (!dl || !dl.length || !dl[0].url) {
+            return { success: false, error: `Could not find download item with id ${args.downloadId}` };
           }
-          res = await fetch(currentUrl, {
-            method: 'GET',
-            credentials: attachCookies ? 'include' : 'omit',
-            redirect: 'manual',
-          });
-          if (res.status >= 300 && res.status < 400) {
-            const location = res.headers.get('location');
-            if (!location) {
-              return { success: false, error: `Redirect from ${currentUrl} missing Location header` };
+          if (dl[0].state !== 'complete') {
+            return {
+              success: false,
+              error: `Download is in state: ${dl[0].state}, not complete. Wait for it to finish (wait_for_stable / list_downloads) then retry.`,
+            };
+          }
+          const targetUrl = dl[0].url;
+          let currentUrl = targetUrl;
+          let initialRegDomain = null;
+          let tabRegDomain = null;
+          try {
+            initialRegDomain = registrableDomain(new URL(targetUrl).hostname);
+            const currentTab = await browser.tabs.get(tabId);
+            if (currentTab && currentTab.url) {
+              tabRegDomain = registrableDomain(new URL(currentTab.url).hostname);
             }
-            const nextUrl = new URL(location, currentUrl).href;
-            const nextV = validateFetchUrl(nextUrl, { allowLocalNetwork: getAllowLocalNetwork() });
-            if (!nextV.ok) {
-              return { success: false, error: `Invalid redirect URL: ${nextV.error}` };
+          } catch {}
+
+          let attachCookies = !!(tabRegDomain && initialRegDomain && tabRegDomain === initialRegDomain);
+          let res = null;
+          for (let hop = 0; hop < 5; hop++) {
+            const v = validateFetchUrl(currentUrl, { allowLocalNetwork: getAllowLocalNetwork() });
+            if (!v.ok) {
+              return { success: false, error: `Invalid download URL: ${v.error}` };
             }
-            try {
-              const nextRegDomain = registrableDomain(new URL(nextUrl).hostname);
-              if (nextRegDomain !== initialRegDomain || (tabRegDomain && nextRegDomain !== tabRegDomain)) {
+            res = await fetch(currentUrl, {
+              method: 'GET',
+              credentials: attachCookies ? 'include' : 'omit',
+              redirect: 'manual',
+            });
+            if (res.status >= 300 && res.status < 400) {
+              const location = res.headers.get('location');
+              if (!location) {
+                return { success: false, error: `Redirect from ${currentUrl} missing Location header` };
+              }
+              const nextUrl = new URL(location, currentUrl).href;
+              const nextV = validateFetchUrl(nextUrl, { allowLocalNetwork: getAllowLocalNetwork() });
+              if (!nextV.ok) {
+                return { success: false, error: `Invalid redirect URL: ${nextV.error}` };
+              }
+              try {
+                const nextRegDomain = registrableDomain(new URL(nextUrl).hostname);
+                if (nextRegDomain !== initialRegDomain || (tabRegDomain && nextRegDomain !== tabRegDomain)) {
+                  attachCookies = false;
+                }
+              } catch {
                 attachCookies = false;
               }
-            } catch {
-              attachCookies = false;
+              currentUrl = nextUrl;
+              continue;
             }
-            currentUrl = nextUrl;
-            continue;
+            break;
           }
-          break;
-        }
-        if (!res || !res.ok) {
-          return { success: false, error: `Failed to re-fetch downloaded file from ${targetUrl} (HTTP ${res ? res.status : 'unknown'})` };
-        }
-        const UPLOAD_MAX_BYTES = 25 * 1024 * 1024;
-        const clHeader = res.headers.get('content-length');
-        if (clHeader != null) {
-          const expectedLen = parseInt(clHeader, 10);
-          if (Number.isFinite(expectedLen) && expectedLen > UPLOAD_MAX_BYTES) {
-            return { success: false, error: 'File size exceeds 25MB limit.' };
+          if (!res || !res.ok) {
+            return { success: false, error: `Failed to re-fetch downloaded file from ${targetUrl} (HTTP ${res ? res.status : 'unknown'})` };
           }
-        }
-        // Stream the body with a hard cap so a missing/lying Content-Length
-        // cannot buffer an arbitrary payload into extension memory.
-        let bytes;
-        if (res.body && typeof res.body.getReader === 'function') {
-          const reader = res.body.getReader();
-          const chunks = [];
-          let total = 0;
-          for (;;) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            const part = value instanceof Uint8Array ? value : new Uint8Array(value);
-            if (total + part.byteLength > UPLOAD_MAX_BYTES) {
-              try { await reader.cancel(); } catch {}
+          const clHeader = res.headers.get('content-length');
+          if (clHeader != null) {
+            const expectedLen = parseInt(clHeader, 10);
+            if (Number.isFinite(expectedLen) && expectedLen > UPLOAD_MAX_BYTES) {
               return { success: false, error: 'File size exceeds 25MB limit.' };
             }
-            chunks.push(part);
-            total += part.byteLength;
           }
-          bytes = new Uint8Array(total);
-          let offset = 0;
-          for (const part of chunks) {
-            bytes.set(part, offset);
-            offset += part.byteLength;
+          // Stream the body with a hard cap so a missing/lying Content-Length
+          // cannot buffer an arbitrary payload into extension memory.
+          let bytes;
+          if (res.body && typeof res.body.getReader === 'function') {
+            const reader = res.body.getReader();
+            const chunks = [];
+            let total = 0;
+            for (;;) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              const part = value instanceof Uint8Array ? value : new Uint8Array(value);
+              if (total + part.byteLength > UPLOAD_MAX_BYTES) {
+                try { await reader.cancel(); } catch {}
+                return { success: false, error: 'File size exceeds 25MB limit.' };
+              }
+              chunks.push(part);
+              total += part.byteLength;
+            }
+            bytes = new Uint8Array(total);
+            let offset = 0;
+            for (const part of chunks) {
+              bytes.set(part, offset);
+              offset += part.byteLength;
+            }
+          } else {
+            const buf = await res.arrayBuffer();
+            if (buf.byteLength > UPLOAD_MAX_BYTES) {
+              return { success: false, error: 'File size exceeds 25MB limit.' };
+            }
+            bytes = new Uint8Array(buf);
           }
+          let binary = '';
+          const chunk = 0x8000;
+          for (let i = 0; i < bytes.length; i += chunk) {
+            binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+          }
+          base64 = btoa(binary);
+          filename = dl[0].filename ? dl[0].filename.split(/[\\/]/).pop() : 'downloaded_file';
+          mimeType = dl[0].mime || res.headers.get('content-type') || 'application/octet-stream';
         } else {
-          const buf = await res.arrayBuffer();
-          if (buf.byteLength > UPLOAD_MAX_BYTES) {
-            return { success: false, error: 'File size exceeds 25MB limit.' };
+          const pickerId = `upk_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+          const tabPending = this._pendingUploadPickers.get(tabId) || new Map();
+          this._pendingUploadPickers.set(tabId, tabPending);
+
+          const responsePromise = new Promise((resolve) => {
+            tabPending.set(pickerId, { resolve, ts: Date.now() });
+          });
+
+          if (typeof onUpdate === 'function') {
+            try {
+              onUpdate('upload_picker', { pickerId, selector: args.selector });
+            } catch {}
           }
-          bytes = new Uint8Array(buf);
-        }
-        let binary = '';
-        const chunk = 0x8000;
-        for (let i = 0; i < bytes.length; i += chunk) {
-          binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
-        }
-        base64 = btoa(binary);
-        filename = dl[0].filename ? dl[0].filename.split(/[\\/]/).pop() : 'downloaded_file';
-        mimeType = dl[0].mime || res.headers.get('content-type') || 'application/octet-stream';
-      } else {
-        const pickerId = `upk_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-        const tabPending = this._pendingUploadPickers.get(tabId) || new Map();
-        this._pendingUploadPickers.set(tabId, tabPending);
 
-        const responsePromise = new Promise((resolve) => {
-          tabPending.set(pickerId, { resolve, ts: Date.now() });
-        });
+          const response = await responsePromise;
+          tabPending.delete(pickerId);
+          if (tabPending.size === 0) this._pendingUploadPickers.delete(tabId);
 
-        if (typeof onUpdate === 'function') {
-          try {
-            onUpdate('upload_picker', { pickerId, selector: args.selector });
-          } catch {}
-        }
-
-        const response = await responsePromise;
-        tabPending.delete(pickerId);
-        if (tabPending.size === 0) this._pendingUploadPickers.delete(tabId);
-
-        if (!response || response.cancelled) {
-          return { success: false, cancelled: true, reason: response?.reason || 'file picker cancelled' };
-        }
-        base64 = response.base64;
-        filename = response.name || 'selected_file';
-        mimeType = response.type || 'application/octet-stream';
-        const size = response.size || 0;
-        if (size > 25 * 1024 * 1024) {
-          return { success: false, error: 'Selected file exceeds 25MB limit.' };
-        }
-      }
-
-      const injectCode = `
-        (function() {
-          const el = document.querySelector(${JSON.stringify(args.selector)});
-          if (!el) return { success: false, error: 'Element not found matching selector: ' + ${JSON.stringify(args.selector)} };
-          try {
-            const b64 = ${JSON.stringify(base64)};
-            const bin = atob(b64);
-            const len = bin.length;
-            const bytes = new Uint8Array(len);
-            for (let i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i);
-            const file = new File([bytes], ${JSON.stringify(filename)}, { type: ${JSON.stringify(mimeType)} });
-            const dt = new DataTransfer();
-            dt.items.add(file);
-            el.files = dt.files;
-            el.dispatchEvent(new Event('input', { bubbles: true }));
-            el.dispatchEvent(new Event('change', { bubbles: true }));
-            return { success: true, file: ${JSON.stringify(filename)}, size: len };
-          } catch (e) {
-            return { success: false, error: e.message || String(e) };
+          if (!response || response.cancelled) {
+            return { success: false, cancelled: true, reason: response?.reason || 'file picker cancelled' };
           }
-        })();
-      `;
-      const results = await browser.tabs.executeScript(tabId, { code: injectCode });
-      const res = results && results[0];
-      if (!res || !res.success) {
-        return { success: false, error: res ? res.error : 'Failed to attach file to input element' };
+          if (typeof response.base64 !== 'string' || !response.base64.length) {
+            return { success: false, error: 'File picker returned no file data' };
+          }
+          // Enforce size from actual base64 payload, not client-trusted size alone.
+          const approxBytes = Math.floor(String(response.base64).replace(/=+$/, '').length * 3 / 4);
+          const claimedSize = Number(response.size);
+          if (approxBytes > UPLOAD_MAX_BYTES || (Number.isFinite(claimedSize) && claimedSize > UPLOAD_MAX_BYTES)) {
+            return { success: false, error: 'Selected file exceeds 25MB limit.' };
+          }
+          base64 = response.base64;
+          filename = (typeof response.name === 'string' && response.name.trim())
+            ? response.name.trim()
+            : 'selected_file';
+          mimeType = (typeof response.type === 'string' && response.type.trim())
+            ? response.type.trim()
+            : 'application/octet-stream';
+        }
+
+        if (typeof base64 !== 'string' || !base64.length) {
+          return { success: false, error: 'No file data available to attach' };
+        }
+
+        const injectCode = `
+          (function() {
+            const el = document.querySelector(${JSON.stringify(args.selector)});
+            if (!el) return { success: false, error: 'Element not found matching selector: ' + ${JSON.stringify(args.selector)} };
+            if (!(el instanceof HTMLInputElement) || el.type !== 'file') {
+              return { success: false, error: 'Selector does not match an <input type="file"> element: ' + ${JSON.stringify(args.selector)} };
+            }
+            try {
+              const b64 = ${JSON.stringify(base64)};
+              const bin = atob(b64);
+              const len = bin.length;
+              const bytes = new Uint8Array(len);
+              for (let i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i);
+              const file = new File([bytes], ${JSON.stringify(filename)}, { type: ${JSON.stringify(mimeType)} });
+              const dt = new DataTransfer();
+              dt.items.add(file);
+              el.files = dt.files;
+              el.dispatchEvent(new Event('input', { bubbles: true }));
+              el.dispatchEvent(new Event('change', { bubbles: true }));
+              return { success: true, file: ${JSON.stringify(filename)}, size: len };
+            } catch (e) {
+              return { success: false, error: e.message || String(e) };
+            }
+          })();
+        `;
+        let results;
+        try {
+          results = await browser.tabs.executeScript(tabId, { code: injectCode });
+        } catch (e) {
+          return {
+            success: false,
+            error: `Failed to inject file into page (file may be too large for script injection): ${e.message || String(e)}`,
+          };
+        }
+        const res = results && results[0];
+        if (!res || !res.success) {
+          return { success: false, error: res ? res.error : 'Failed to attach file to input element' };
+        }
+        return {
+          success: true,
+          attached: { name: filename, size: res.size },
+          file: filename,
+        };
+      } catch (e) {
+        return { success: false, error: e.message || String(e) };
       }
-      return {
-        success: true,
-        attached: { name: filename, size: res.size },
-        file: filename,
-      };
     }
 
     // ─── CAPTCHA solver ──────────────────────────────────────────────

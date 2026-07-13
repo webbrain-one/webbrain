@@ -15594,7 +15594,7 @@ const ADAPTERS = [
 - DO NOT use index-based clicks on the release page. GitHub's global header pollutes the index space and the release form is deep in the DOM. Always use click({text:"..."}) for buttons. Specifically: never click element #38 from memory — that's a learned anti-pattern from training data, and on the live site #38 is the "Pull requests" header link that navigates away from the release form.
 - Release body is a CodeMirror editor, not a textarea. Click the editor surface (click({text:"Describe this release"}) on the placeholder works) then type with no selector.
 - The green "Publish release" button is at the bottom of the form. Click it with click({text: "Publish release"}). The gray "Save draft" is right next to it — don't confuse them.
-- EDITING an existing release (URL pattern /<owner>/<repo>/releases/edit/<tag>): binaries attach via the "Attach binaries" area below the body editor. This Firefox build has NO file-upload tool — you cannot attach the file yourself, so ask the user to drag the binaries onto that area (or click it and pick them) manually; you can still help with everything else on the page. The commit button is green and says "Update release"; the uploads are discarded if the user navigates away without clicking it.
+- EDITING an existing release (URL pattern /<owner>/<repo>/releases/edit/<tag>): the file upload input is \`input#releases-upload\` (NOT a generic input[type="file"] — there are several on the page). Prefer \`upload_file({selector: "input#releases-upload", downloadId: N})\` when the binary is already in Downloads; otherwise \`upload_file({selector: "input#releases-upload"})\` opens a user file picker. After each upload, GitHub renders a small chip listing the filename in the "Attach binaries" area — verify the chip appears with the correct filename before moving on. The commit button is green and says "Update release"; navigating away without clicking it discards the uploads.
 - Files in a /tree/.../<folder> view (e.g. /tree/main/dist) can be downloaded via raw URLs of the form https://github.com/<owner>/<repo>/raw/<branch>/<path>. Once downloaded, the file is on local disk; do not re-download to "verify".
 - Issue/PR comments use the same CodeMirror editor; markdown preview is on a separate tab.
 - File browser: pressing "t" opens the fuzzy file finder (faster than navigating folders).
@@ -16322,7 +16322,7 @@ const ADAPTERS = [
     notes: `
 - Application URLs look like /<employer>/jobs/<id> with the apply form at /<employer>/jobs/<id>/applications/new.
 - Form fields vary per employer but typically include: First name, Last name, Email, Phone, Resume (file upload), Cover letter (textarea), and a set of demographic / EEO questions (usually optional).
-- Resume upload: input[type=file]. This Firefox build cannot attach files programmatically — ask the user to select the resume themselves. PDF is universally accepted; some employers also accept .docx.
+- Resume upload: input[type=file]. Prefer \`upload_file({selector: "input[type=file]", downloadId: N})\` when the resume is already in Downloads; otherwise \`upload_file({selector: "input[type=file]"})\` prompts the user to pick a file. PDF is universally accepted; some employers also accept .docx.
 - Cover letter is a plain textarea (not a rich editor). Click into it, type with no selector.
 - "Apply" / "Submit Application" button at the bottom. Some employers add custom questions below the standard set — scroll the entire form before submitting.
 - Each employer's customization can add required custom questions; an unanswered required field will block submit with an inline error.
@@ -16340,7 +16340,7 @@ const ADAPTERS = [
 - Date pickers are custom widgets. Click the field, type MM/DD/YYYY (or DD/MM/YYYY depending on tenant locale), then Tab. Don't try to click calendar cells — the popup is portal-rendered outside the field's subtree.
 - "Add Another" buttons for experiences / education clone the entire panel — fill the FIRST one fully before clicking Add Another, or the new clone may copy partial state.
 - Some employers wrap Workday in an iframe — if get_accessibility_tree shows almost no form fields, check for an iframe and switch to iframe_read / iframe_type.
-- File upload (resume, CV) lives in the "My Information" or "Resume/CV" step. The drop zone has a "Select Files" button — this Firefox build cannot attach files programmatically, so ask the user to pick the file themselves.
+- File upload (resume, CV) lives in the "My Information" or "Resume/CV" step. The drop zone has a "Select Files" button over an underlying \`input[type=file]\` — use \`upload_file({selector: "input[type=file]", downloadId: N})\` when the file is already downloaded, or omit downloadId to open the user picker.
 - "Review" step at the end shows everything filled — read it back to the user before clicking Submit; mistakes at this stage usually require restarting the whole application.`,
   },
 
