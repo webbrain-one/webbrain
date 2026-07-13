@@ -4331,7 +4331,7 @@ function renderUploadPickerCard(data, tabId) {
 
   const qEl = document.createElement('div');
   qEl.className = 'clarify-question';
-  qEl.textContent = `Please select a file to upload to ${data.selector || 'the page'}`;
+  qEl.textContent = t('sp.upload_picker.question', { selector: data.selector || 'the page' });
   card.appendChild(qEl);
 
   const btnsEl = document.createElement('div');
@@ -4339,11 +4339,11 @@ function renderUploadPickerCard(data, tabId) {
 
   const chooseBtn = document.createElement('button');
   chooseBtn.className = 'clarify-option-btn';
-  chooseBtn.textContent = 'Choose File…';
+  chooseBtn.textContent = t('sp.upload_picker.choose_file');
 
   const cancelBtn = document.createElement('button');
   cancelBtn.className = 'clarify-option-btn';
-  cancelBtn.textContent = 'Cancel';
+  cancelBtn.textContent = t('sp.upload_picker.cancel');
 
   chooseBtn.addEventListener('click', () => {
     const input = document.getElementById('upload-picker-input');
@@ -4352,12 +4352,30 @@ function renderUploadPickerCard(data, tabId) {
     input.onchange = () => {
       const file = input.files && input.files[0];
       if (!file) return;
+      if (file.size > 25 * 1024 * 1024) {
+        card.textContent = '';
+        const statusEl = document.createElement('div');
+        statusEl.className = 'clarify-question';
+        statusEl.textContent = t('sp.upload_picker.too_large');
+        card.appendChild(statusEl);
+        sendToBackground('upload_picker_response', {
+          tabId,
+          pickerId,
+          cancelled: true,
+          reason: 'Selected file exceeds 25MB limit',
+        });
+        return;
+      }
       const reader = new FileReader();
       reader.onload = () => {
         const base64Str = String(reader.result || '');
         const commaIdx = base64Str.indexOf(',');
         const base64 = commaIdx >= 0 ? base64Str.slice(commaIdx + 1) : base64Str;
-        card.innerHTML = `<div class="clarify-question">Selected file: ${file.name} (${file.size} bytes)</div>`;
+        card.textContent = '';
+        const statusEl = document.createElement('div');
+        statusEl.className = 'clarify-question';
+        statusEl.textContent = t('sp.upload_picker.selected', { name: file.name, size: file.size });
+        card.appendChild(statusEl);
         sendToBackground('upload_picker_response', {
           tabId,
           pickerId,
@@ -4367,13 +4385,43 @@ function renderUploadPickerCard(data, tabId) {
           size: file.size,
         });
       };
+      reader.onerror = () => {
+        card.textContent = '';
+        const statusEl = document.createElement('div');
+        statusEl.className = 'clarify-question';
+        statusEl.textContent = t('sp.upload_picker.read_failed');
+        card.appendChild(statusEl);
+        sendToBackground('upload_picker_response', {
+          tabId,
+          pickerId,
+          cancelled: true,
+          reason: 'Failed to read selected file',
+        });
+      };
+      reader.onabort = () => {
+        card.textContent = '';
+        const statusEl = document.createElement('div');
+        statusEl.className = 'clarify-question';
+        statusEl.textContent = t('sp.upload_picker.read_failed');
+        card.appendChild(statusEl);
+        sendToBackground('upload_picker_response', {
+          tabId,
+          pickerId,
+          cancelled: true,
+          reason: 'File read cancelled',
+        });
+      };
       reader.readAsDataURL(file);
     };
     input.click();
   });
 
   cancelBtn.addEventListener('click', () => {
-    card.innerHTML = '<div class="clarify-question">Upload cancelled</div>';
+    card.textContent = '';
+    const statusEl = document.createElement('div');
+    statusEl.className = 'clarify-question';
+    statusEl.textContent = t('sp.upload_picker.cancelled');
+    card.appendChild(statusEl);
     sendToBackground('upload_picker_response', { tabId, pickerId, cancelled: true, reason: 'User cancelled file selection' });
   });
 

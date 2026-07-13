@@ -301,6 +301,13 @@ export default {
   'tool.scroll.direction': 'Scrolling {direction}',
   'tool.extract_data.type': 'Extracting {type}',
   'tool.wait_for_element.selector': 'Waiting for "{selector}"',
+  'sp.upload_picker.question': 'Please select a file to upload to {selector}',
+  'sp.upload_picker.choose_file': 'Choose File…',
+  'sp.upload_picker.cancel': 'Cancel',
+  'sp.upload_picker.selected': 'Selected file: {name} ({size} bytes)',
+  'sp.upload_picker.cancelled': 'Upload cancelled',
+  'sp.upload_picker.too_large': 'Selected file exceeds 25MB limit (max 25MB)',
+  'sp.upload_picker.read_failed': 'Failed to read selected file',
 
   // --- Onboarding --------------------------------------------------------
   'ob.step': '{current} of {total}',

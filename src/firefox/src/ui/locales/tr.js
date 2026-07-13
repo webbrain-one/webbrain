@@ -703,4 +703,11 @@ export default {
   "st.redaction.toggle.label": "Ekran görüntülerindeki hassas içeriği sansürle",
   "st.redaction.toggle.desc": "Bir ekran görüntüsü bir görüntü modeline gönderilmeden önce, form alanlarını ve e-posta ya da telefon numarasına benzeyen metni bulanıklaştırır. Algılama tamamen cihazınızda çalışır — fazladan hiçbir şey iletilmez.",
   "st.redaction.warning": "⚠️ En iyi çaba ilkesiyle çalışır ve fail-open'dır: sansürleme bir sayfada çalışamazsa (örneğin bir gezinmeden hemen sonra, PDF görüntüleyicilerde veya kısıtlı tarayıcı sayfalarında), ekran görüntüsü yine de sansürlenmeden gönderilir. Algılama yalnızca DOM sezgisel yöntemlerini kullanır — bir canvas üzerine çizilmiş metin, görsellerin içindeki kişisel veriler veya form alanı ya da e-posta/telefon metni olarak tanınmayan herhangi bir şey gözden kaçabilir; modele gönderilen sayfa metni de bu ayarla sansürlenmez. Bu bir güvenlik garantisi DEĞİLDİR. Tam gizlilik için yerel/çevrimdışı bir model kullanın (llama.cpp, Ollama): bu durumda ekran görüntüleri makinenizden hiç çıkmaz ve sansürleme gereksiz hale gelir.",
+  "sp.upload_picker.question": "Please select a file to upload to {selector}",
+  "sp.upload_picker.choose_file": "Choose File…",
+  "sp.upload_picker.cancel": "Cancel",
+  "sp.upload_picker.selected": "Selected file: {name} ({size} bytes)",
+  "sp.upload_picker.cancelled": "Upload cancelled",
+  "sp.upload_picker.too_large": "Selected file exceeds 25MB limit (max 25MB)",
+  "sp.upload_picker.read_failed": "Failed to read selected file",
 };

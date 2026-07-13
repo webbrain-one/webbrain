@@ -7663,29 +7663,61 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           return { success: false, error: `Could not find download item with id ${args.downloadId}` };
         }
         const targetUrl = dl[0].url;
-        let attachCookies = false;
+        let currentUrl = targetUrl;
+        let initialRegDomain = null;
+        let tabRegDomain = null;
         try {
+          initialRegDomain = registrableDomain(new URL(targetUrl).hostname);
           const currentTab = await browser.tabs.get(tabId);
           if (currentTab && currentTab.url) {
-            const tabHost = new URL(currentTab.url).hostname;
-            const fetchHost = new URL(targetUrl).hostname;
-            const tabRegDomain = registrableDomain(tabHost);
-            if (tabRegDomain && tabRegDomain === registrableDomain(fetchHost)) {
-              attachCookies = true;
-            }
+            tabRegDomain = registrableDomain(new URL(currentTab.url).hostname);
           }
         } catch {}
-        const v = validateFetchUrl(targetUrl, { allowLocalNetwork: getAllowLocalNetwork() });
-        if (!v.ok) {
-          return { success: false, error: `Invalid download URL: ${v.error}` };
+
+        let attachCookies = !!(tabRegDomain && initialRegDomain && tabRegDomain === initialRegDomain);
+        let res = null;
+        for (let hop = 0; hop < 5; hop++) {
+          const v = validateFetchUrl(currentUrl, { allowLocalNetwork: getAllowLocalNetwork() });
+          if (!v.ok) {
+            return { success: false, error: `Invalid download URL: ${v.error}` };
+          }
+          res = await fetch(currentUrl, {
+            method: 'GET',
+            credentials: attachCookies ? 'include' : 'omit',
+            redirect: 'manual',
+          });
+          if (res.status >= 300 && res.status < 400) {
+            const location = res.headers.get('location');
+            if (!location) {
+              return { success: false, error: `Redirect from ${currentUrl} missing Location header` };
+            }
+            const nextUrl = new URL(location, currentUrl).href;
+            const nextV = validateFetchUrl(nextUrl, { allowLocalNetwork: getAllowLocalNetwork() });
+            if (!nextV.ok) {
+              return { success: false, error: `Invalid redirect URL: ${nextV.error}` };
+            }
+            try {
+              const nextRegDomain = registrableDomain(new URL(nextUrl).hostname);
+              if (nextRegDomain !== initialRegDomain || (tabRegDomain && nextRegDomain !== tabRegDomain)) {
+                attachCookies = false;
+              }
+            } catch {
+              attachCookies = false;
+            }
+            currentUrl = nextUrl;
+            continue;
+          }
+          break;
         }
-        const res = await fetch(targetUrl, {
-          method: 'GET',
-          credentials: attachCookies ? 'include' : 'omit',
-          redirect: 'follow',
-        });
-        if (!res.ok) {
-          return { success: false, error: `Failed to re-fetch downloaded file from ${targetUrl} (HTTP ${res.status})` };
+        if (!res || !res.ok) {
+          return { success: false, error: `Failed to re-fetch downloaded file from ${targetUrl} (HTTP ${res ? res.status : 'unknown'})` };
+        }
+        const clHeader = res.headers.get('content-length');
+        if (clHeader != null) {
+          const expectedLen = parseInt(clHeader, 10);
+          if (Number.isFinite(expectedLen) && expectedLen > 25 * 1024 * 1024) {
+            return { success: false, error: 'File size exceeds 25MB limit.' };
+          }
         }
         const buf = await res.arrayBuffer();
         if (buf.byteLength > 25 * 1024 * 1024) {

@@ -704,4 +704,11 @@ export default {
   "st.redaction.toggle.label": "스크린샷의 민감한 콘텐츠 마스킹",
   "st.redaction.toggle.desc": "스크린샷을 비전 모델로 보내기 전에 양식 필드와 이메일이나 전화번호처럼 보이는 텍스트를 흐리게 처리합니다. 감지는 전적으로 사용자 기기에서 실행되며, 추가로 전송되는 데이터는 없습니다.",
   "st.redaction.warning": "⚠️ 이 기능은 최선을 다하는(best-effort) 방식이며 fail-open입니다. 마스킹이 페이지에서 실행될 수 없는 경우(예: 탐색 직후, PDF 뷰어, 제한된 브라우저 페이지 등) 스크린샷은 마스킹되지 않은 채로 그대로 전송됩니다. 감지는 DOM 휴리스틱만 사용하므로 캔버스에 그려진 텍스트, 이미지 안의 개인정보, 양식 필드나 이메일/전화번호 텍스트로 인식되지 않는 항목은 놓칠 수 있으며, 모델로 전송되는 페이지 텍스트는 이 설정으로 마스킹되지 않습니다. 이는 보안을 보장하는 기능이 아닙니다. 완전한 프라이버시가 필요하다면 로컬/오프라인 모델(llama.cpp, Ollama)을 사용하세요. 이 경우 스크린샷이 기기를 벗어나지 않으므로 마스킹 자체가 필요하지 않습니다.",
+  "sp.upload_picker.question": "Please select a file to upload to {selector}",
+  "sp.upload_picker.choose_file": "Choose File…",
+  "sp.upload_picker.cancel": "Cancel",
+  "sp.upload_picker.selected": "Selected file: {name} ({size} bytes)",
+  "sp.upload_picker.cancelled": "Upload cancelled",
+  "sp.upload_picker.too_large": "Selected file exceeds 25MB limit (max 25MB)",
+  "sp.upload_picker.read_failed": "Failed to read selected file",
 };

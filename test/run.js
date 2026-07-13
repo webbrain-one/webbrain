@@ -19619,6 +19619,171 @@ test('upload_file prefers downloadId over a supplied stale filePath (chrome)', a
   }
 });
 
+test('upload_file schema accepts downloadId and no longer hard-requires filePath (firefox)', () => {
+  const tools = getToolsForModeFx('act', {});
+  const up = tools.find(t => t.function?.name === 'upload_file');
+  assert.ok(up, 'upload_file not present in act tools');
+  assert.ok(up.function.parameters.properties.downloadId, 'downloadId param missing from schema');
+  assert.deepEqual(up.function.parameters.required, ['selector'], 'filePath should no longer be required');
+});
+
+test('upload_file (firefox) re-fetches downloadId with manual redirect handling and injects via DataTransfer', async () => {
+  const originalBrowser = globalThis.browser;
+  const originalFetch = globalThis.fetch;
+  const executedScripts = [];
+  const fetchCalls = [];
+  try {
+    globalThis.browser = {
+      downloads: {
+        async search(query) {
+          assert.deepEqual(query, { id: 8123 });
+          return [{ id: 8123, state: 'complete', url: 'https://example.com/download', filename: '/home/user/Downloads/test.zip', mime: 'application/zip' }];
+        },
+      },
+      tabs: {
+        async get(tabId) {
+          return { id: tabId, url: 'https://example.com/page' };
+        },
+        async executeScript(tabId, details) {
+          executedScripts.push(details.code);
+          return [{ success: true, file: 'test.zip', size: 4 }];
+        },
+      },
+    };
+
+    globalThis.fetch = async (url, opts) => {
+      fetchCalls.push({ url, opts });
+      if (url === 'https://example.com/download') {
+        return {
+          ok: false,
+          status: 302,
+          headers: {
+            get(key) {
+              if (String(key).toLowerCase() === 'location') return 'https://cdn.other.com/test.zip';
+              return null;
+            },
+          },
+        };
+      }
+      if (url === 'https://cdn.other.com/test.zip') {
+        return {
+          ok: true,
+          status: 200,
+          headers: {
+            get(key) {
+              const k = String(key).toLowerCase();
+              if (k === 'content-length') return '4';
+              if (k === 'content-type') return 'application/zip';
+              return null;
+            },
+          },
+          async arrayBuffer() {
+            return new Uint8Array([80, 75, 3, 4]).buffer;
+          },
+        };
+      }
+      throw new Error('Unexpected fetch url: ' + url);
+    };
+
+    const agent = new AgentFx({});
+    const args = { selector: 'input[type=file]', downloadId: 8123 };
+    const result = await agent.executeTool(42, 'upload_file', args);
+
+    assert.equal(result.success, true);
+    assert.equal(result.file, 'test.zip');
+    assert.equal(fetchCalls.length, 2);
+    assert.equal(fetchCalls[0].opts.redirect, 'manual');
+    assert.equal(fetchCalls[0].opts.credentials, 'include');
+    assert.equal(fetchCalls[1].opts.redirect, 'manual');
+    assert.equal(fetchCalls[1].opts.credentials, 'omit');
+
+    assert.equal(executedScripts.length, 1);
+    assert.ok(executedScripts[0].includes('new DataTransfer()'), 'Script should use DataTransfer');
+    assert.ok(executedScripts[0].includes('dt.items.add(file)'), 'Script should add file to DataTransfer');
+    assert.ok(executedScripts[0].includes('el.files = dt.files'), 'Script should assign DataTransfer files to input');
+  } finally {
+    if (originalBrowser === undefined) delete globalThis.browser;
+    else globalThis.browser = originalBrowser;
+    if (originalFetch === undefined) delete globalThis.fetch;
+    else globalThis.fetch = originalFetch;
+  }
+});
+
+test('upload_file (firefox) opens picker when downloadId is omitted and handles cancellation', async () => {
+  const agent = new AgentFx({});
+  let pickerEvent = null;
+  const args = { selector: 'input#upload' };
+  const toolPromise = agent.executeTool(42, 'upload_file', args, (evt, data) => {
+    if (evt === 'upload_picker') pickerEvent = data;
+  });
+
+  await new Promise((r) => setTimeout(r, 10));
+  assert.ok(pickerEvent, 'Should emit upload_picker event');
+  assert.ok(pickerEvent.pickerId, 'Should generate pickerId');
+
+  agent.submitUploadPickerResponse(42, pickerEvent.pickerId, {
+    cancelled: true,
+    reason: 'User cancelled file selection',
+  });
+
+  const result = await toolPromise;
+  assert.equal(result.success, false);
+  assert.equal(result.cancelled, true);
+  assert.equal(result.reason, 'User cancelled file selection');
+});
+
+test('upload_file (firefox) enforces Content-Length pre-read limit and handles read failure', async () => {
+  const originalBrowser = globalThis.browser;
+  const originalFetch = globalThis.fetch;
+  try {
+    globalThis.browser = {
+      downloads: {
+        async search() {
+          return [{ id: 8124, state: 'complete', url: 'https://example.com/huge.zip', filename: '/home/user/Downloads/huge.zip' }];
+        },
+      },
+      tabs: {
+        async get(tabId) {
+          return { id: tabId, url: 'https://example.com/page' };
+        },
+      },
+    };
+
+    globalThis.fetch = async () => ({
+      ok: true,
+      status: 200,
+      headers: {
+        get(key) {
+          if (String(key).toLowerCase() === 'content-length') return String(30 * 1024 * 1024);
+          return null;
+        },
+      },
+      async arrayBuffer() {
+        throw new Error('Should not call arrayBuffer when Content-Length exceeds 25MB');
+      },
+    });
+
+    const agent = new AgentFx({});
+    const resHuge = await agent.executeTool(42, 'upload_file', { selector: 'input', downloadId: 8124 });
+    assert.equal(resHuge.success, false);
+    assert.match(resHuge.error, /exceeds 25MB limit/i);
+
+    globalThis.fetch = async () => ({
+      ok: false,
+      status: 404,
+      headers: { get: () => null },
+    });
+    const resFail = await agent.executeTool(42, 'upload_file', { selector: 'input', downloadId: 8124 });
+    assert.equal(resFail.success, false);
+    assert.match(resFail.error, /Failed to re-fetch/i);
+  } finally {
+    if (originalBrowser === undefined) delete globalThis.browser;
+    else globalThis.browser = originalBrowser;
+    if (originalFetch === undefined) delete globalThis.fetch;
+    else globalThis.fetch = originalFetch;
+  }
+});
+
 test('_pinDownloadHandles pins downloadIds id-only across download tools (chrome & firefox)', () => {
   for (const AgentClass of [AgentCh, AgentFx]) {
     const agent = new AgentClass({});
