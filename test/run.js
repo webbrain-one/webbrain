@@ -886,7 +886,10 @@ test('remaining model-facing screenshot fallbacks apply redaction', () => {
   const chromeEnd = chromeSource.indexOf("if (name === 'done')", chromeStart);
   const chromeBody = chromeSource.slice(chromeStart, chromeEnd);
   const fallbackIndex = chromeBody.indexOf('chrome.tabs.captureVisibleTab');
-  const convergedRedactionIndex = chromeBody.indexOf('// Apply redaction after both capture branches converge');
+  // Save runs first (full-res); model-facing redaction is after both capture branches.
+  const convergedRedactionIndex = chromeBody.indexOf(
+    "if (this.screenshotRedaction) {\n          dataUrl = await this._redactScreenshotDataUrl(tabId, dataUrl, { coordinateSpace: 'viewport' });",
+  );
   assert.ok(fallbackIndex >= 0 && convergedRedactionIndex > fallbackIndex,
     'Chrome tabs-API fallback should converge into redaction before presentation');
 
@@ -2712,6 +2715,58 @@ test('image budget helpers: budget skip notifies warning + trusted message', asy
     // Capture must not have been attempted when budget was already spent.
     assert.equal(agent.autoScreenshotCount.get(tabId), 1);
   }
+});
+
+test('image budget helpers: storage normalization rejects corrupt values', () => {
+  for (const AgentClass of [AgentCh, AgentFx]) {
+    assert.equal(AgentClass.normalizeImageDetail('high'), 'high');
+    assert.equal(AgentClass.normalizeImageDetail('medium'), 'auto');
+    assert.equal(AgentClass.normalizeImageDetail(null, 'low'), 'low');
+    assert.equal(AgentClass.normalizeMaxScreenshotsPerTurn(3), 3);
+    assert.equal(AgentClass.normalizeMaxScreenshotsPerTurn(99), 5);
+    assert.equal(AgentClass.normalizeMaxScreenshotsPerTurn(-1), 0);
+    assert.equal(AgentClass.normalizeMaxScreenshotsPerTurn('nope', 2), 2);
+    assert.equal(AgentClass.normalizeMaxImageDimension(512), 512);
+    assert.equal(AgentClass.normalizeMaxImageDimension(9999), 2048);
+    assert.equal(AgentClass.normalizeMaxImageDimension(0), 1568);
+    assert.equal(AgentClass.normalizeMaxImageDimension('x', 1024), 1024);
+
+    const agent = new AgentClass({});
+    agent.applyImageBudgetFromStorage({
+      imageDetail: 'bogus',
+      maxScreenshotsPerTurn: 100,
+      maxImageDimension: -5,
+    });
+    assert.equal(agent.imageDetail, 'auto', `${AgentClass.name}: bad detail falls back to current/default`);
+    assert.equal(agent.maxScreenshotsPerTurn, 5);
+    // -5 is non-finite-positive → fallback to current default 1568
+    assert.equal(agent.maxImageDimension, 1568);
+
+    agent.applyImageBudgetFromStorage({ imageDetail: 'low', maxImageDimension: 768 });
+    assert.equal(agent.imageDetail, 'low');
+    assert.equal(agent.maxImageDimension, 768);
+    assert.equal(agent.maxScreenshotsPerTurn, 5, 'unspecified keys leave prior value');
+  }
+});
+
+test('chrome screenshot tool saves pre-budget data URL when save:true', () => {
+  // Structural: save path must prefer saveDataUrl (full CSS) over budgeted dataUrl.
+  const source = fs.readFileSync(path.join(ROOT, 'src/chrome/src/agent/agent.js'), 'utf8');
+  const start = source.indexOf("if (name === 'screenshot')");
+  const end = source.indexOf("if (name === 'done')", start);
+  assert.ok(start >= 0 && end > start, 'screenshot tool block not found');
+  const body = source.slice(start, end);
+  assert.match(body, /saveDataUrl/, 'screenshot tool should track pre-budget saveDataUrl');
+  assert.match(
+    body,
+    /const urlForSave = saveDataUrl \|\| dataUrl/,
+    'Downloads must use saveDataUrl when present',
+  );
+  assert.match(
+    body,
+    /wantSave[\s\S]*captureScreenshot[\s\S]*scale: 1[\s\S]*_shrinkImageForBudget/,
+    'save:true non-coord path should full-capture then shrink for the model',
+  );
 });
 
 test('existing dims under caps stay within the monotonic bound', () => {

@@ -203,9 +203,7 @@ const screenshotRedactionReady = loadScreenshotRedaction().catch(() => {});
 // the previous behavior (auto detail, unlimited screenshots, 1568px cap).
 async function loadImageBudget() {
   const stored = await browser.storage.local.get(['imageDetail', 'maxScreenshotsPerTurn', 'maxImageDimension']);
-  if (stored.imageDetail != null) agent.imageDetail = stored.imageDetail;
-  if (stored.maxScreenshotsPerTurn != null) agent.maxScreenshotsPerTurn = stored.maxScreenshotsPerTurn;
-  if (stored.maxImageDimension != null) agent.maxImageDimension = stored.maxImageDimension;
+  agent.applyImageBudgetFromStorage(stored);
 }
 const imageBudgetReady = loadImageBudget().catch(() => {});
 
@@ -728,14 +726,12 @@ browser.storage.onChanged.addListener((changes) => {
   if (changes.screenshotRedaction) {
     agent.screenshotRedaction = !!changes.screenshotRedaction.newValue;
   }
-  if (changes.imageDetail) {
-    agent.imageDetail = changes.imageDetail.newValue;
-  }
-  if (changes.maxScreenshotsPerTurn) {
-    agent.maxScreenshotsPerTurn = changes.maxScreenshotsPerTurn.newValue;
-  }
-  if (changes.maxImageDimension) {
-    agent.maxImageDimension = changes.maxImageDimension.newValue;
+  if (changes.imageDetail || changes.maxScreenshotsPerTurn || changes.maxImageDimension) {
+    agent.applyImageBudgetFromStorage({
+      imageDetail: changes.imageDetail ? changes.imageDetail.newValue : undefined,
+      maxScreenshotsPerTurn: changes.maxScreenshotsPerTurn ? changes.maxScreenshotsPerTurn.newValue : undefined,
+      maxImageDimension: changes.maxImageDimension ? changes.maxImageDimension.newValue : undefined,
+    });
   }
   if (changes.profileText) {
     agent.profileText = changes.profileText.newValue || '';

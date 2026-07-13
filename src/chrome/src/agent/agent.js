@@ -4067,6 +4067,49 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   }
 
   /**
+   * Coerce storage / settings values for image budget (issue #311). Rejects
+   * corrupted or out-of-range values so provider payloads never see e.g.
+   * `detail: "medium"` and counters stay within the UI set (0–5).
+   */
+  static normalizeImageDetail(value, fallback = 'auto') {
+    return (value === 'high' || value === 'low' || value === 'auto') ? value : fallback;
+  }
+
+  static normalizeMaxScreenshotsPerTurn(value, fallback = 0) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return fallback;
+    const i = Math.trunc(n);
+    if (i <= 0) return 0;
+    return Math.min(5, i);
+  }
+
+  static normalizeMaxImageDimension(value, fallback = 1568) {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n <= 0) return fallback;
+    return Math.max(1, Math.min(2048, Math.round(n)));
+  }
+
+  /**
+   * Apply validated image-budget fields from storage. Only keys present on
+   * `stored` are updated; missing keys leave current agent defaults alone.
+   */
+  applyImageBudgetFromStorage(stored = {}) {
+    if (stored.imageDetail != null) {
+      this.imageDetail = Agent.normalizeImageDetail(stored.imageDetail, this.imageDetail);
+    }
+    if (stored.maxScreenshotsPerTurn != null) {
+      this.maxScreenshotsPerTurn = Agent.normalizeMaxScreenshotsPerTurn(
+        stored.maxScreenshotsPerTurn, this.maxScreenshotsPerTurn,
+      );
+    }
+    if (stored.maxImageDimension != null) {
+      this.maxImageDimension = Agent.normalizeMaxImageDimension(
+        stored.maxImageDimension, this.maxImageDimension,
+      );
+    }
+  }
+
+  /**
    * The `detail` value to attach to an OpenAI-style image_url block, driven by
    * the `imageDetail` setting (issue #311). Returns null when the setting is
    * 'auto' so the provider uses its own default (OpenAI's is 'auto'); 'high'
@@ -8520,10 +8563,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         // user message, not a base64 string embedded in a tool-result's JSON
         // text. Either way the model never sees the picture.
         let dataUrl = null;
+        // Pre-budget capture for Downloads when save:true (issue #311 review).
+        // Model path uses the budgeted `dataUrl`; disk gets full CSS when available.
+        let saveDataUrl = null;
         let description = '';
         let probe = null;
         let coordAligned = false;
         let blankFrameRetry = null;
+        const wantSave = !!(args && args.save);
         try {
           await cdpClient.attach(tabId);
           await cdpClient.sendCommand(tabId, 'Page.enable');
@@ -8555,19 +8602,44 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
                 const scaleY = (cssH / Math.max(1, shrunk.height)).toFixed(4);
                 return {
                   dataUrl: shrunk.dataUrl,
+                  saveDataUrl: rawUrl,
                   description: `Screenshot captured via CDP (${screenshot.data.length} bytes). CSS viewport ${cssW}×${cssH} downscaled to ${shrunk.width}×${shrunk.height} for maxImageDimension — multiply image-pixel coords by (${scaleX}, ${scaleY}) to get CSS click coords.`,
                 };
               }
               return {
                 dataUrl: await this._compressJpegToByteCeiling(rawUrl, budget),
+                saveDataUrl: rawUrl,
                 description: `Screenshot captured via CDP (${screenshot.data.length} bytes, CSS-pixel aligned for pixel clicks)`,
               };
             }
 
-            // Budget-aware mode (default): pick target dims via binary
-            // search, ask CDP to capture + scale in one pass, then run
-            // the iterative-quality fallback if bytes are still over.
+            // Budget-aware mode (default). When the user also asked to save,
+            // capture full CSS first so Downloads gets full resolution, then
+            // shrink a model-facing copy (mirrors full_page_screenshot).
             const budget = this._budgetForCapture();
+            if (wantSave) {
+              const screenshot = await this._withIndicatorsHidden(tabId, () =>
+                cdpClient.sendCommand(tabId, 'Page.captureScreenshot', {
+                  format: 'png',
+                  fromSurface: true,
+                  clip: { x: 0, y: 0, width: cssW, height: cssH, scale: 1 },
+                })
+              );
+              if (!screenshot?.data) return null;
+              const rawUrl = `data:image/png;base64,${screenshot.data}`;
+              const shrunk = await this._shrinkImageForBudget(rawUrl, cssW, cssH, budget);
+              const resized = (shrunk.width < cssW || shrunk.height < cssH)
+                ? ` (model copy resized ${cssW}×${cssH} → ${shrunk.width}×${shrunk.height} for vision budget; Downloads keeps full CSS)`
+                : '';
+              return {
+                dataUrl: shrunk.dataUrl,
+                saveDataUrl: rawUrl,
+                description: `Screenshot captured via CDP (${screenshot.data.length} bytes, PNG)${resized}`,
+              };
+            }
+
+            // No save: pick target dims via binary search, ask CDP to capture
+            // + scale in one pass, then iterative-quality fallback if needed.
             const [targetW, targetH] = Agent._fitImageDimensions(cssW, cssH, budget);
             const scale = targetW < cssW ? targetW / cssW : 1;
             const screenshot = await this._withIndicatorsHidden(tabId, () =>
@@ -8589,6 +8661,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           const captured = await this._retryBlankScreenshotCapture(await captureOnce(), captureOnce, { probe });
           if (!captured?.dataUrl) throw new Error('CDP returned an empty screenshot');
           dataUrl = captured.dataUrl;
+          saveDataUrl = captured.saveDataUrl || null;
           description = captured.description || '';
           blankFrameRetry = captured.blankFrameRetry || null;
         } catch {
@@ -8601,6 +8674,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           }
           // Tabs API fallback: no clip/scale available. Capture full, then
           // decode + resize + recompress via OffscreenCanvas to fit budget.
+          // Keep the raw capture for Downloads when save:true.
           const captureOnce = async () => {
             const rawUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png', quality: 80 });
             const cssW = Math.max(1, Math.round(probe?.innerWidth || 1024));
@@ -8610,6 +8684,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
               const shrunk = await this._shrinkImageForBudget(rawUrl, cssW, cssH, budget);
               return {
                 dataUrl: shrunk.dataUrl,
+                saveDataUrl: rawUrl,
                 description: `Screenshot captured via tabs API (${shrunk.dataUrl.length} bytes base64, resized to ${shrunk.width}×${shrunk.height})`,
               };
             }
@@ -8622,17 +8697,20 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
               const scaleY = (cssH / Math.max(1, shrunk.height)).toFixed(4);
               return {
                 dataUrl: shrunk.dataUrl,
+                saveDataUrl: rawUrl,
                 description: `Screenshot captured via tabs API (${shrunk.dataUrl.length} bytes base64). CSS viewport ${cssW}×${cssH} downscaled to ${shrunk.width}×${shrunk.height} for maxImageDimension — multiply image-pixel coords by (${scaleX}, ${scaleY}) to get CSS click coords.`,
               };
             }
             const compressed = await this._compressJpegToByteCeiling(rawUrl, coordBudget);
             return {
               dataUrl: compressed,
+              saveDataUrl: rawUrl,
               description: `Screenshot captured via tabs API (${compressed.length} bytes base64, CSS-pixel aligned)`,
             };
           };
           const captured = await this._retryBlankScreenshotCapture(await captureOnce(), captureOnce, { probe });
           dataUrl = captured?.dataUrl || null;
+          saveDataUrl = captured?.saveDataUrl || null;
           description = captured?.description || '';
           blankFrameRetry = captured?.blankFrameRetry || null;
         }
@@ -8643,23 +8721,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           };
         }
 
-        // Apply redaction after both capture branches converge so the tabs-API
-        // fallback cannot bypass the privacy setting when CDP is unavailable.
-        if (this.screenshotRedaction) {
-          dataUrl = await this._redactScreenshotDataUrl(tabId, dataUrl, { coordinateSpace: 'viewport' });
-        }
-
-        // If the user asked to save this screenshot to Downloads, do it
-        // here — directly from the service worker via chrome.downloads.
-        // This runs BEFORE the vision-presentation branch because saving
-        // is independent of whether the agent can see the image. The
-        // screenshot data URLs are clean (image/png or image/jpeg with
-        // no parameters) so they pass through downloads.download safely
-        // — unlike the recorder's video/webm;codecs=... edge case.
+        // Save first from the pre-budget capture (full CSS when available),
+        // matching full_page_screenshot: Downloads keep full resolution;
+        // only the model-facing copy is budget-resized / redacted.
         let savedFile = null;
-        if (args && args.save) {
+        if (wantSave) {
           try {
-            const mimeMatch = /^data:([^;]+);/.exec(dataUrl);
+            const urlForSave = saveDataUrl || dataUrl;
+            const mimeMatch = /^data:([^;]+);/.exec(urlForSave);
             const mime = mimeMatch ? mimeMatch[1] : 'image/png';
             const ext = mime === 'image/jpeg' ? 'jpg' : 'png';
             const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19).replace('T', '_');
@@ -8669,12 +8738,19 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             filename = filename.split('/').pop().split('\\').pop();
             if (!/\.(png|jpg|jpeg)$/i.test(filename)) filename += `.${ext}`;
             const downloadId = await chrome.downloads.download({
-              url: dataUrl, filename, saveAs: false,
+              url: urlForSave, filename, saveAs: false,
             });
             savedFile = { downloadId, filename, mimeType: mime };
           } catch (e) {
             savedFile = { error: e.message || String(e) };
           }
+        }
+
+        // Apply redaction after save so the local download is untouched
+        // (same pattern as full_page_screenshot). Tabs-API fallback cannot
+        // bypass the privacy setting for the model-facing path.
+        if (this.screenshotRedaction) {
+          dataUrl = await this._redactScreenshotDataUrl(tabId, dataUrl, { coordinateSpace: 'viewport' });
         }
 
         // Pick the presentation path based on what the active providers can

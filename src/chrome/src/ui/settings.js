@@ -821,15 +821,26 @@ autoScreenshotSelect.addEventListener('change', async () => {
 });
 
 imageDetailSelect.addEventListener('change', async () => {
-  await chrome.storage.local.set({ imageDetail: imageDetailSelect.value }).catch(() => {});
+  const v = imageDetailSelect.value;
+  const imageDetail = (v === 'high' || v === 'low' || v === 'auto') ? v : 'auto';
+  imageDetailSelect.value = imageDetail;
+  await chrome.storage.local.set({ imageDetail }).catch(() => {});
 });
 
 maxScreenshotsSelect.addEventListener('change', async () => {
-  await chrome.storage.local.set({ maxScreenshotsPerTurn: parseInt(maxScreenshotsSelect.value, 10) || 0 }).catch(() => {});
+  let n = parseInt(maxScreenshotsSelect.value, 10);
+  if (!Number.isFinite(n) || n < 0) n = 0;
+  if (n > 5) n = 5;
+  maxScreenshotsSelect.value = String(n);
+  await chrome.storage.local.set({ maxScreenshotsPerTurn: n }).catch(() => {});
 });
 
 maxImageDimensionSelect.addEventListener('change', async () => {
-  await chrome.storage.local.set({ maxImageDimension: parseInt(maxImageDimensionSelect.value, 10) || 1568 }).catch(() => {});
+  let n = parseInt(maxImageDimensionSelect.value, 10);
+  if (!Number.isFinite(n) || n <= 0) n = 1568;
+  n = Math.max(1, Math.min(2048, n));
+  maxImageDimensionSelect.value = String(n);
+  await chrome.storage.local.set({ maxImageDimension: n }).catch(() => {});
 });
 
 siteAdaptersToggle.addEventListener('change', async () => {

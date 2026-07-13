@@ -2448,6 +2448,49 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   }
 
   /**
+   * Coerce storage / settings values for image budget (issue #311). Rejects
+   * corrupted or out-of-range values so provider payloads never see e.g.
+   * `detail: "medium"` and counters stay within the UI set (0–5).
+   */
+  static normalizeImageDetail(value, fallback = 'auto') {
+    return (value === 'high' || value === 'low' || value === 'auto') ? value : fallback;
+  }
+
+  static normalizeMaxScreenshotsPerTurn(value, fallback = 0) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return fallback;
+    const i = Math.trunc(n);
+    if (i <= 0) return 0;
+    return Math.min(5, i);
+  }
+
+  static normalizeMaxImageDimension(value, fallback = 1568) {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n <= 0) return fallback;
+    return Math.max(1, Math.min(2048, Math.round(n)));
+  }
+
+  /**
+   * Apply validated image-budget fields from storage. Only keys present on
+   * `stored` are updated; missing keys leave current agent defaults alone.
+   */
+  applyImageBudgetFromStorage(stored = {}) {
+    if (stored.imageDetail != null) {
+      this.imageDetail = Agent.normalizeImageDetail(stored.imageDetail, this.imageDetail);
+    }
+    if (stored.maxScreenshotsPerTurn != null) {
+      this.maxScreenshotsPerTurn = Agent.normalizeMaxScreenshotsPerTurn(
+        stored.maxScreenshotsPerTurn, this.maxScreenshotsPerTurn,
+      );
+    }
+    if (stored.maxImageDimension != null) {
+      this.maxImageDimension = Agent.normalizeMaxImageDimension(
+        stored.maxImageDimension, this.maxImageDimension,
+      );
+    }
+  }
+
+  /**
    * The `detail` value to attach to an OpenAI-style image_url block, driven by
    * the `imageDetail` setting (issue #311). Returns null when the setting is
    * 'auto' so the provider uses its own default; 'high' and 'low' pass through.
