@@ -95,10 +95,10 @@
     },
     {
       "@type": "Question",
-      "name": "How does encrypted Cloud Sync work?",
+      "name": "Cloud Sync แบบเข้ารหัสทำงานอย่างไร?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Cloud Sync is an optional feature for active WebBrain Cloud subscribers. It syncs your WebBrain memories, Profile auto-fill text, and supported provider configuration, including API keys. It does not sync chat history, browser history, page screenshots, or legacy OAuth access and refresh tokens. Your browser encrypts the sync vault before upload with a password you choose. WebBrain Cloud stores only the encrypted vault; it cannot read your memories, profile text, provider settings, or API keys, and it cannot recover the sync password for you. The email field is for WebBrain Cloud magic-link billing/subscription authentication. It is not an account password. If the UI says change password in Cloud Sync, it means the sync encryption password, not a WebBrain account password. If you forget the sync password, the old encrypted cloud vault cannot be decrypted. You can reset the cloud vault and upload a new encrypted copy from a device that still has the data locally."
+        "text": "Cloud Sync เป็นฟีเจอร์เสริมสำหรับสมาชิก WebBrain Cloud ที่ยังใช้งานอยู่ ซิงก์ความจำ WebBrain ข้อความเติมอัตโนมัติของโปรไฟล์ และการตั้งค่าผู้ให้บริการที่รองรับ รวมถึงคีย์ API โดยไม่ซิงก์ประวัติแชท ประวัติเบราว์เซอร์ ภาพหน้าจอหน้าเว็บ หรือโทเค็น OAuth เข้าถึง/รีเฟรชแบบเก่า เบราว์เซอร์จะเข้ารหัสคลังซิงก์ก่อนอัปโหลดด้วยรหัสผ่านที่คุณเลือก WebBrain Cloud เก็บเฉพาะคลังที่เข้ารหัสแล้วเท่านั้น อ่านความจำ ข้อความโปรไฟล์ การตั้งค่าผู้ให้บริการ หรือคีย์ API ของคุณไม่ได้ และกู้รหัสผ่านซิงก์แทนคุณไม่ได้ ช่องอีเมลใช้สำหรับยืนยันตัวตน billing/subscription แบบ magic-link ของ WebBrain Cloud ไม่ใช่รหัสผ่านบัญชี หาก UI บอกให้เปลี่ยนรหัสผ่านใน Cloud Sync หมายถึง รหัสผ่านเข้ารหัสการซิงก์ ไม่ใช่รหัสผ่านบัญชี WebBrain หากลืมรหัสผ่านซิงก์ จะถอดรหัสคลังคลาวด์เก่าไม่ได้ คุณรีเซ็ตคลังคลาวด์แล้วอัปโหลดสำเนาเข้ารหัสใหม่จากอุปกรณ์ที่ยังมีข้อมูลในเครื่องได้"
       }
     },
     {
@@ -2118,7 +2118,7 @@
       <img class="brand-logo" src="/logo-github.png" alt="" aria-hidden="true"> WebBrain<span style="opacity:0.5; font-weight:400; -webkit-text-fill-color:currentColor;">.one</span>
     </a>
     <div class="nav-links">
-      <a href="/docs/">Docs</a>
+      <a href="/docs/">เอกสาร</a>
       <a href="/blog">บล็อก</a>
       <a href="#download" class="nav-cta">ดาวน์โหลด</a>
       <select class="lang-dropdown" id="lang-dropdown" aria-label="เลือกภาษา" data-current="th">
@@ -2230,47 +2230,47 @@
         </div>
         <div class="browser-body">
           <div class="browser-page page-taxform">
-            <h3>Quarterly Tax Return — Form QT-4</h3>
-            <div class="tf-meta">Department of Revenue · All fields required</div>
+            <h3>แบบแสดงรายการภาษีรายไตรมาส — แบบฟอร์ม QT-4</h3>
+            <div class="tf-meta">กรมสรรพากร · ต้องกรอกทุกช่อง</div>
             <div class="tf-grid">
               <div class="tf-field wide">
-                <div class="tf-label"><span><b>1a</b> Legal business name</span> <span class="tf-tags"><span class="tf-mem" style="--d:0.7s;">from memory</span><span class="tf-check" style="--d:0.7s;">&#10003;</span></span></div>
+                <div class="tf-label"><span><b>1a</b> ชื่อธุรกิจตามกฎหมาย</span> <span class="tf-tags"><span class="tf-mem" style="--d:0.7s;">จากหน่วยความจำ</span><span class="tf-check" style="--d:0.7s;">&#10003;</span></span></div>
                 <div class="tf-input"><span class="tf-value" style="--d:0.7s;">Lumen Coffee LLC</span></div>
               </div>
               <div class="tf-field">
-                <div class="tf-label"><span><b>1b</b> EIN / Tax ID</span> <span class="tf-tags"><span class="tf-mem" style="--d:1.1s;">from memory</span><span class="tf-check" style="--d:1.1s;">&#10003;</span></span></div>
+                <div class="tf-label"><span><b>1b</b> EIN / เลขประจำตัวผู้เสียภาษี</span> <span class="tf-tags"><span class="tf-mem" style="--d:1.1s;">จากหน่วยความจำ</span><span class="tf-check" style="--d:1.1s;">&#10003;</span></span></div>
                 <div class="tf-input"><span class="tf-value" style="--d:1.1s;">84-2917465</span></div>
               </div>
               <div class="tf-field">
-                <div class="tf-label"><span><b>2</b> Filing period</span> <span class="tf-check" style="--d:1.6s;">&#10003;</span></div>
+                <div class="tf-label"><span><b>2</b> รอบระยะเวลาการยื่น</span> <span class="tf-check" style="--d:1.6s;">&#10003;</span></div>
                 <div class="tf-input"><span class="tf-value" style="--d:1.6s;">Q2 2026</span></div>
               </div>
               <div class="tf-field">
-                <div class="tf-label"><span><b>5a</b> Gross revenue</span> <span class="tf-check" style="--d:2.0s;">&#10003;</span></div>
+                <div class="tf-label"><span><b>5a</b> รายได้รวม</span> <span class="tf-check" style="--d:2.0s;">&#10003;</span></div>
                 <div class="tf-input"><span class="tf-value" style="--d:2.0s;">$148,220.00</span></div>
               </div>
               <div class="tf-field">
-                <div class="tf-label"><span><b>5b</b> Deductible expenses</span> <span class="tf-check" style="--d:2.4s;">&#10003;</span></div>
+                <div class="tf-label"><span><b>5b</b> ค่าใช้จ่ายที่หักได้</span> <span class="tf-check" style="--d:2.4s;">&#10003;</span></div>
                 <div class="tf-input"><span class="tf-value" style="--d:2.4s;">$61,884.00</span></div>
               </div>
               <div class="tf-field">
-                <div class="tf-label"><span><b>7</b> Total payroll wages</span> <span class="tf-tags"><span class="tf-mem" style="--d:2.8s;">from memory</span><span class="tf-check" style="--d:2.8s;">&#10003;</span></span></div>
+                <div class="tf-label"><span><b>7</b> ค่าจ้างเงินเดือนรวม</span> <span class="tf-tags"><span class="tf-mem" style="--d:2.8s;">จากหน่วยความจำ</span><span class="tf-check" style="--d:2.8s;">&#10003;</span></span></div>
                 <div class="tf-input"><span class="tf-value" style="--d:2.8s;">$38,400.00</span></div>
               </div>
               <div class="tf-field">
-                <div class="tf-label"><span><b>9a</b> Estimated payments made</span> <span class="tf-check" style="--d:3.2s;">&#10003;</span></div>
+                <div class="tf-label"><span><b>9a</b> ภาษีที่ประมาณการและชำระแล้ว</span> <span class="tf-check" style="--d:3.2s;">&#10003;</span></div>
                 <div class="tf-input"><span class="tf-value" style="--d:3.2s;">$9,500.00</span></div>
               </div>
               <div class="tf-field">
-                <div class="tf-label"><span><b>9b</b> Prior-period credit</span> <span class="tf-check" style="--d:3.6s;">&#10003;</span></div>
+                <div class="tf-label"><span><b>9b</b> เครดิตจากงวดก่อน</span> <span class="tf-check" style="--d:3.6s;">&#10003;</span></div>
                 <div class="tf-input"><span class="tf-value" style="--d:3.6s;">$1,250.00</span></div>
               </div>
               <div class="tf-field">
-                <div class="tf-label"><span><b>11</b> Net tax due</span> <span class="tf-check" style="--d:4.0s;">&#10003;</span></div>
+                <div class="tf-label"><span><b>11</b> ภาษีสุทธิที่ต้องชำระ</span> <span class="tf-check" style="--d:4.0s;">&#10003;</span></div>
                 <div class="tf-input"><span class="tf-value" style="--d:4.0s;">$12,067.40</span></div>
               </div>
             </div>
-            <span class="tf-submit">Submit return</span>
+            <span class="tf-submit">ยื่นแบบ</span>
           </div>
           <div class="side-panel">
             <div class="sp-header">
@@ -2279,12 +2279,12 @@
               <span class="sp-status"></span>
             </div>
             <div class="sp-messages">
-              <div class="sp-msg user">Fill out this form</div>
+              <div class="sp-msg user">กรอกฟอร์มนี้ให้หน่อย</div>
               <div class="sp-msg assistant">
-                <div class="step"><span class="check">&#10003;</span> Recalled name, EIN &amp; payroll <strong>from memory</strong></div>
-                <div class="step"><span class="check">&#10003;</span> Found 9 required fields</div>
-                <div class="step"><span class="check">&#10003;</span> Computing totals from figures</div>
-                <div style="margin-top:6px;">Filled <strong>9 fields</strong>. Stopping before submit — review and send when ready.</div>
+                <div class="step"><span class="check">&#10003;</span> ดึงชื่อ EIN และเงินเดือน <strong>จากหน่วยความจำ</strong></div>
+                <div class="step"><span class="check">&#10003;</span> พบช่องที่ต้องกรอก 9 ช่อง</div>
+                <div class="step"><span class="check">&#10003;</span> กำลังคำนวณยอดรวมจากตัวเลข</div>
+                <div style="margin-top:6px;">กรอกแล้ว <strong>9 ช่อง</strong> หยุดก่อนส่ง — ตรวจทานแล้วส่งเมื่อพร้อม</div>
               </div>
             </div>
             <div class="sp-input">
@@ -2323,14 +2323,14 @@
               <span class="sp-status"></span>
             </div>
             <div class="sp-messages">
-              <div class="sp-msg user">How could I make these blocks farther away from each other, with more spacing?</div>
+              <div class="sp-msg user">จะทำให้บล็อกเหล่านี้ห่างกันมากขึ้น มีระยะห่างมากขึ้นได้อย่างไร?</div>
               <div class="sp-msg assistant">
-                <div class="step"><span class="check">&#10003;</span> Inspecting the grid in DevTools</div>
+                <div class="step"><span class="check">&#10003;</span> กำลังตรวจดูกริดใน DevTools</div>
                 <div class="sp-code">
                   <div class="sp-code-bar">styles.css</div>
                   <div class="sp-code-body"><span>.feature-grid {</span><span class="del">-  gap: 10px;</span><span class="add">+  gap: 28px;</span><span class="add">+  margin-top: 32px;</span><span>}</span></div>
                 </div>
-                <div style="margin-top:6px;">Bump the grid <strong>gap</strong> and give the section some margin.</div>
+                <div style="margin-top:6px;">เพิ่ม <strong>gap</strong> ของกริด และใส่ margin ให้ส่วนนี้</div>
               </div>
             </div>
             <div class="sp-input">
@@ -2408,7 +2408,7 @@
         <div class="browser-body">
           <div class="browser-page page-products">
             <h3>แค็ตตาล็อกสินค้า</h3>
-            <div class="pp-sub">248 items · Sorted by bestselling</div>
+            <div class="pp-sub">248 รายการ · เรียงตามขายดี</div>
             <div class="pp-grid">
               <div class="pp-card"><div class="pp-thumb t1"></div><div class="pp-name">Widget Pro</div><div class="pp-price">$29.99</div></div>
               <div class="pp-card"><div class="pp-thumb t2"></div><div class="pp-name">Super Gadget</div><div class="pp-price">$49.99</div></div>
@@ -2453,8 +2453,8 @@
 
     <div class="scene-nav" role="tablist" aria-label="สลับสถานการณ์เดโม">
       <button class="scene-dot is-active" type="button" data-scene="0" role="tab" aria-selected="true" aria-label="เดโมคำถามต่อเนื่อง"></button>
-      <button class="scene-dot" type="button" data-scene="1" role="tab" aria-selected="false" aria-label="Form filling demo"></button>
-      <button class="scene-dot" type="button" data-scene="2" role="tab" aria-selected="false" aria-label="CSS spacing demo"></button>
+      <button class="scene-dot" type="button" data-scene="1" role="tab" aria-selected="false" aria-label="เดโมการกรอกฟอร์ม"></button>
+      <button class="scene-dot" type="button" data-scene="2" role="tab" aria-selected="false" aria-label="เดโมระยะห่าง CSS"></button>
       <button class="scene-dot" type="button" data-scene="3" role="tab" aria-selected="false" aria-label="เดโมดาวน์โหลดวิดีโอ"></button>
       <button class="scene-dot" type="button" data-scene="4" role="tab" aria-selected="false" aria-label="เดโมการสกัดข้อมูลสินค้า"></button>
     </div>
@@ -2807,8 +2807,8 @@
     </details>
 
     <details class="faq-item">
-      <summary>How does encrypted Cloud Sync work?</summary>
-      <p>Cloud Sync is an optional feature for active WebBrain Cloud subscribers. It syncs your WebBrain memories, Profile auto-fill text, and supported provider configuration, including API keys. It does <strong>not</strong> sync chat history, browser history, page screenshots, or legacy OAuth access and refresh tokens.</p><p>Your browser encrypts the sync vault before upload with a password you choose. WebBrain Cloud stores only the encrypted vault; it cannot read your memories, profile text, provider settings, or API keys, and it cannot recover the sync password for you.</p><p>The email field is for WebBrain Cloud magic-link billing/subscription authentication. It is not an account password. If the UI says change password in Cloud Sync, it means the <strong>sync encryption password</strong>, not a WebBrain account password.</p><p>If you forget the sync password, the old encrypted cloud vault cannot be decrypted. You can reset the cloud vault and upload a new encrypted copy from a device that still has the data locally.</p>
+      <summary>Cloud Sync แบบเข้ารหัสทำงานอย่างไร?</summary>
+      <p>Cloud Sync เป็นฟีเจอร์เสริมสำหรับสมาชิก WebBrain Cloud ที่ยังใช้งานอยู่ ซิงก์ความจำ WebBrain ข้อความเติมอัตโนมัติของโปรไฟล์ และการตั้งค่าผู้ให้บริการที่รองรับ รวมถึงคีย์ API โดย<strong>ไม่</strong>ซิงก์ประวัติแชท ประวัติเบราว์เซอร์ ภาพหน้าจอหน้าเว็บ หรือโทเค็น OAuth เข้าถึง/รีเฟรชแบบเก่า</p><p>เบราว์เซอร์จะเข้ารหัสคลังซิงก์ก่อนอัปโหลดด้วยรหัสผ่านที่คุณเลือก WebBrain Cloud เก็บเฉพาะคลังที่เข้ารหัสแล้วเท่านั้น อ่านความจำ ข้อความโปรไฟล์ การตั้งค่าผู้ให้บริการ หรือคีย์ API ของคุณไม่ได้ และกู้รหัสผ่านซิงก์แทนคุณไม่ได้</p><p>ช่องอีเมลใช้สำหรับยืนยันตัวตน billing/subscription แบบ magic-link ของ WebBrain Cloud ไม่ใช่รหัสผ่านบัญชี หาก UI บอกให้เปลี่ยนรหัสผ่านใน Cloud Sync หมายถึง <strong>รหัสผ่านเข้ารหัสการซิงก์</strong> ไม่ใช่รหัสผ่านบัญชี WebBrain</p><p>หากลืมรหัสผ่านซิงก์ จะถอดรหัสคลังคลาวด์เก่าไม่ได้ คุณรีเซ็ตคลังคลาวด์แล้วอัปโหลดสำเนาเข้ารหัสใหม่จากอุปกรณ์ที่ยังมีข้อมูลในเครื่องได้</p>
     </details>
 
     <details class="faq-item">
@@ -2965,7 +2965,7 @@
         <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14" aria-hidden="true"><path d="M12 10.8c-1.1-2.1-4-6-6.8-8C2.6.9 1.6 1.3.9 1.6.1 1.9 0 3.1 0 3.8c0 .7.4 5.7.6 6.5.8 2.7 3.7 3.7 5.6 3.4-3.5.6-6.5 2-2.5 6.5 4.3 4.5 5.9-1 6.3-2.8.1-.5.2-.8.3-.8.1 0 .2.3.3.8.4 1.8 2 7.3 6.3 2.8 4-4.5 1-5.9-2.5-6.5 1.9.3 4.8-.7 5.6-3.4.2-.8.6-5.8.6-6.5 0-.7-.1-1.9-.9-2.2-.7-.3-1.7-.6-4.3 1.2-2.8 2-5.7 5.9-6.8 8Z"/></svg>
       </a>
       <a href="/blog">บล็อก</a>
-      <a href="/docs/">Docs</a>
+      <a href="/docs/">เอกสาร</a>
       <a href="/privacy">นโยบายความเป็นส่วนตัว</a>
       <a href="https://github.com/webbrain-one/webbrain/issues" target="_blank" rel="noopener">รายงานข้อบกพร่อง</a>
       <a href="https://github.com/webbrain-one/webbrain/blob/main/LICENSE" target="_blank" rel="noopener">สัญญาอนุญาต MIT</a>

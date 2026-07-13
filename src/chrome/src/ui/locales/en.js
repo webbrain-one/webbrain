@@ -238,6 +238,7 @@ export default {
   'sp.perm.verb.network_write': 'make a network request to',
   'sp.perm.verb.download': 'download files from',
   'sp.perm.verb.upload': 'upload a file to',
+  'sp.perm.verb.record': 'record the tab (and microphone) on',
   'sp.perm.verb.schedule': 'schedule future work for',
 
   'sp.step.details': 'details',
