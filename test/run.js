@@ -4162,6 +4162,48 @@ test('cloud run controller uses the visible tab and persists terminal status', a
   assert.equal(session.webbrainCloudRunSnapshots[0].status, 'completed');
 });
 
+test('cloud run controller fails immediately if an interactive plan review leaks through', async () => {
+  const session = {};
+  const tab = { id: 19, url: 'https://webbrain.one/', active: true, windowId: 3 };
+  let abortedTabId = null;
+  const agent = {
+    isRunning: () => false,
+    abort: tabId => { abortedTabId = tabId; },
+    processMessage: async (_tabId, _task, onUpdate) => {
+      onUpdate('plan_review', { planId: 'plan_unexpected' });
+      return '[Stopped by user]';
+    },
+  };
+  const controller = createCloudRunController({
+    chromeApi: {
+      tabs: {
+        query: async () => [tab],
+        get: async () => tab,
+        update: async () => tab,
+      },
+      windows: { update: async () => ({}) },
+      storage: {
+        local: { get: async () => ({ webbrainCloudBridgeEnabled: false }) },
+        session: {
+          get: async key => ({ [key]: session[key] || [] }),
+          set: async value => Object.assign(session, value),
+        },
+      },
+      runtime: { sendMessage: async () => ({ connected: false }) },
+    },
+    agent,
+    ensureOffscreen: async () => {},
+    makeRunId: () => 'run_plan_review',
+  });
+
+  await controller.startRun({ task: 'Complex unattended task' });
+  await new Promise(resolve => setTimeout(resolve, 0));
+  const completed = await controller.status({ run_id: 'run_plan_review' });
+  assert.equal(completed.status, 'failed');
+  assert.equal(completed.error, 'Managed cloud runs cannot wait for interactive plan review.');
+  assert.equal(abortedTabId, 19);
+});
+
 test('cloud run controller fails interrupted runs after service-worker restart', async () => {
   const row = { runId: 'run_old', status: 'running', tabId: 2, task: 'Old task', updates: [], createdAt: '2020-01-01T00:00:00.000Z' };
   const session = { webbrainCloudRunSnapshots: [row] };
@@ -21275,6 +21317,45 @@ test('planner gate: scheduled runs auto-approve plan review', async () => {
       assert.match(body, /\[Approved plan — pinned by planner\]/, `${label} should append approved plan marker`);
       assert.match(body, /read_page/, `${label} scheduled auto-approval should pin verbose tool detail`);
       assert.match(body, /Scratchpad: yes/, `${label} scheduled auto-approval should pin verbose memory strategy`);
+    }
+  });
+});
+
+test('planner gate: managed cloud runs bypass planning in Chrome and Firefox', async () => {
+  await withPlannerBrowserGlobals(async () => {
+    for (const [label, AgentClass] of [['chrome', AgentCh], ['firefox', AgentFx]]) {
+      const tabId = label === 'chrome' ? 9223 : 9224;
+      const agent = new AgentClass({ getActive: () => ({}) });
+      agent.setPlanBeforeActMode('strict');
+      agent.setPlanReviewSettings({ mode: 'always', confidenceThreshold: 0.99 });
+      agent.conversations.set(tabId, [{ role: 'system', content: 'system' }]);
+      let plannerCalls = 0;
+      agent._chatWithCostAllowance = async () => {
+        plannerCalls += 1;
+        return { content: plannerFixtureJson() };
+      };
+      agent._waitForPlanReview = async () => {
+        throw new Error('managed cloud run should never request interactive review');
+      };
+
+      const messages = agent.conversations.get(tabId);
+      const updates = [];
+      const outcome = await agent._maybeRunPlannerGate(
+        tabId,
+        messages,
+        { role: 'user', content: 'complex cloud task' },
+        type => updates.push(type),
+        'act',
+        null,
+        null,
+        null,
+        { cloudRun: true },
+      );
+
+      assert.equal(outcome.proceed, true, `${label} cloud run should proceed without planning`);
+      assert.equal(plannerCalls, 0, `${label} cloud run should not call the planner model`);
+      assert.equal(updates.includes('plan_review'), false, `${label} cloud run should not emit plan_review`);
+      assert.equal(messages.at(-1)?.content, 'complex cloud task', `${label} should retain the user turn`);
     }
   });
 });

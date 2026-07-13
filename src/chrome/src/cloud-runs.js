@@ -182,6 +182,11 @@ export function createCloudRunController({
         run.summary = result.summary || run.summary;
       }
     }
+    if (type === 'plan_review' && run.status === 'running') {
+      run.status = 'failed';
+      run.error = 'Managed cloud runs cannot wait for interactive plan review.';
+      agent.abort(run.tabId);
+    }
     schedulePersist();
   }
 

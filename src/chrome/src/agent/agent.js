@@ -4382,7 +4382,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
    * Plan-before-Act gate: push user message, pin approved plan after it, or stop early.
    */
   async _maybeRunPlannerGate(tabId, messages, enriched, onUpdate, mode, costState, runId, tabInfo = null, runOptions = {}) {
-    const plannerMode = this._isActionMode(mode) ? this._plannerMode() : 'off';
+    // Managed cloud runs have no interactive review channel. They must never
+    // enter the planner gate, even if the profile later enables planning for
+    // manual side-panel runs.
+    const plannerMode = this._isActionMode(mode) && runOptions?.cloudRun !== true
+      ? this._plannerMode()
+      : 'off';
     const runPlanner = plannerMode !== 'off';
 
     // Snapshot prior turns for the planner digest BEFORE appending, then always

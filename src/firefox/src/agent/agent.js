@@ -3637,7 +3637,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   }
 
   async _maybeRunPlannerGate(tabId, messages, enriched, onUpdate, mode, costState, runId, tabInfo = null, runOptions = {}) {
-    const plannerMode = this._isActionMode(mode) ? this._plannerMode() : 'off';
+    // Keep managed cloud behavior aligned with Chrome: unattended runs cannot
+    // wait on a side-panel plan review that has no API response channel.
+    const plannerMode = this._isActionMode(mode) && runOptions?.cloudRun !== true
+      ? this._plannerMode()
+      : 'off';
     const runPlanner = plannerMode !== 'off';
 
     // Snapshot prior turns for the planner digest BEFORE appending, then always
