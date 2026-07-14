@@ -13094,6 +13094,7 @@ test('categoryFor: cloud family (openai / anthropic / gemini / mistral / deepsee
     assert.equal(PM.categoryFor('mistral', { type: 'openai' }), 'cloud');
     assert.equal(PM.categoryFor('deepseek', { type: 'openai' }), 'cloud');
     assert.equal(PM.categoryFor('xai', { type: 'openai' }), 'cloud');
+    assert.equal(PM.categoryFor('together', { type: 'openai' }), 'cloud');
     assert.equal(PM.categoryFor('claude_subscription', { type: 'anthropic_oauth' }), 'cloud');
   }
 });
@@ -14460,13 +14461,17 @@ test('_defaultConfigs: new cloud providers present and disabled by default', () 
   for (const PM of [ProviderManagerCh, ProviderManagerFx]) {
     const mgr = new PM();
     const defaults = mgr._defaultConfigs();
-    for (const id of ['gemini', 'mistral', 'deepseek', 'xai']) {
+    for (const id of ['gemini', 'mistral', 'deepseek', 'xai', 'together']) {
       assert.ok(defaults[id], `${PM.name}: missing default config for ${id}`);
       assert.equal(defaults[id].category, 'cloud', `${PM.name}: ${id} should be cloud`);
       assert.equal(defaults[id].enabled, false, `${PM.name}: ${id} should default to disabled`);
       assert.ok(defaults[id].baseUrl, `${PM.name}: ${id} missing baseUrl`);
       assert.ok(defaults[id].model, `${PM.name}: ${id} missing default model`);
     }
+    assert.equal(defaults.together.type, 'openai', `${PM.name}: together should use OpenAI-compatible provider`);
+    assert.equal(defaults.together.baseUrl, 'https://api.together.xyz/v1');
+    assert.equal(defaults.together.model, 'meta-llama/Llama-3.3-70B-Instruct-Turbo');
+    assert.equal(defaults.together.supportsStreamUsageOptions, true);
   }
 });
 

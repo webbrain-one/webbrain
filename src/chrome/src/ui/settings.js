@@ -1849,6 +1849,20 @@ function renderProviders() {
         ...COST_ESTIMATE_FIELDS,
       ],
     },
+    together: {
+      fields: [
+        { key: 'apiKey', labelKey: 'st.provider.field.api_key', type: 'password', placeholder: 'tgp_...' },
+        { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'meta-llama/Llama-3.3-70B-Instruct-Turbo',
+          suggestions: [
+            'meta-llama/Llama-3.3-70B-Instruct-Turbo',
+            'meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo',
+            'Qwen/Qwen2.5-72B-Instruct-Turbo',
+            'deepseek-ai/DeepSeek-V3',
+          ] },
+        { key: 'baseUrl', labelKey: 'st.provider.field.api_base_url', type: 'text', placeholder: 'https://api.together.xyz/v1' },
+        ...COST_ESTIMATE_FIELDS,
+      ],
+    },
     groq: {
       fields: [
         { key: 'apiKey', labelKey: 'st.provider.field.api_key', type: 'password', placeholder: 'gsk_...' },
