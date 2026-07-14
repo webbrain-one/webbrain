@@ -10427,6 +10427,23 @@ test('selection prompt display formatter hides untrusted wrappers from the chat 
       wrongNonce,
       `${label}: non-ctx nonce boxes are not selection prompts and must pass through`,
     );
+
+    const longPrompt = buildSelectionPrompt('legacy selection '.repeat(2000), 'custom', 'What is the key point?');
+    const legacyStoredPrompt = `${longPrompt.slice(0, 20_000)}\n[truncated]`;
+    assert.doesNotMatch(
+      legacyStoredPrompt,
+      /<\/untrusted_page_content>/,
+      `${label}: fixture must reproduce history truncation before the closing boundary`,
+    );
+    const legacyDisplay = formatSelectionPromptForDisplay(legacyStoredPrompt);
+    assert.match(
+      legacyDisplay,
+      /^What is the key point\?\n\nSelected text:\nlegacy selection /,
+      `${label}: truncated legacy prompts should still show their question and selection`,
+    );
+    assert.match(legacyDisplay, /\n\[truncated\]$/, `${label}: history truncation should remain visible`);
+    assert.doesNotMatch(legacyDisplay, /untrusted_page_content/, `${label}: truncated display must hide boundary tags`);
+    assert.doesNotMatch(legacyDisplay, /untrusted page content/, `${label}: truncated display must hide the safety preamble`);
   }
 });
 

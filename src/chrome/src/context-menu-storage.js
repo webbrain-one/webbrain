@@ -34,10 +34,16 @@ const SELECTION_UNTRUSTED_PREAMBLE =
 const CUSTOM_QUESTION_PREFIX = 'Please answer this user question about the selected text:\n';
 const GENERIC_CONTEXT_MENU_INSTRUCTION = 'Please answer about this selected text from the current page.';
 // Match only prompts we generate: exact preamble + ctx- nonce box at the end.
-// Do not rewrite arbitrary user text that merely mentions the tags or preamble.
-const GENERATED_SELECTION_PROMPT_RE = new RegExp(
+// Legacy history may end at the store's exact truncation marker before the
+// closing boundary. Do not rewrite arbitrary text that merely mentions these.
+const GENERATED_SELECTION_PROMPT_PREFIX =
   `^([\\s\\S]*?)\\n\\n${SELECTION_UNTRUSTED_PREAMBLE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\n\\n` +
-    `<untrusted_page_content id="ctx-[^"]+">\\n([\\s\\S]*)\\n</untrusted_page_content>\\s*$`,
+  `<untrusted_page_content id="ctx-[^"]+">\\n`;
+const GENERATED_SELECTION_PROMPT_RE = new RegExp(
+  `${GENERATED_SELECTION_PROMPT_PREFIX}([\\s\\S]*)\\n</untrusted_page_content>\\s*$`,
+);
+const TRUNCATED_GENERATED_SELECTION_PROMPT_RE = new RegExp(
+  `${GENERATED_SELECTION_PROMPT_PREFIX}([\\s\\S]*)\\n\\[truncated\\]\\s*$`,
 );
 
 function wrapSelectedPageText(selectionText, instruction) {
@@ -61,11 +67,13 @@ export function formatSelectionPromptForDisplay(promptText) {
   const text = String(promptText || '');
   if (!text) return '';
 
-  const match = text.match(GENERATED_SELECTION_PROMPT_RE);
+  const completeMatch = text.match(GENERATED_SELECTION_PROMPT_RE);
+  const truncatedMatch = completeMatch ? null : text.match(TRUNCATED_GENERATED_SELECTION_PROMPT_RE);
+  const match = completeMatch || truncatedMatch;
   if (!match) return text;
 
   let instruction = (match[1] || '').trim();
-  const selection = match[2];
+  const selection = truncatedMatch ? `${match[2]}\n[truncated]` : match[2];
 
   if (instruction.startsWith(CUSTOM_QUESTION_PREFIX)) {
     instruction = instruction.slice(CUSTOM_QUESTION_PREFIX.length).trim();
