@@ -5866,8 +5866,11 @@ function setMode(mode) {
   if (mode !== 'ask' && mode !== 'act' && mode !== 'dev') mode = 'ask';
   const previousMode = agentMode;
   agentMode = mode;
-  if (previousMode === 'dev' && mode !== 'dev' && currentTabId != null) {
-    sendToBackground('disable_dev_diagnostics', { tabId: currentTabId }).catch(() => {});
+  if (previousMode === 'dev' && mode !== 'dev') {
+    // Dev mode is panel-wide, while diagnostics may be active on a tab the
+    // user switched away from. Ask the background to drain its tracked set
+    // instead of assuming currentTabId is the tab that started capture.
+    sendToBackground('disable_dev_diagnostics', { all: true }).catch(() => {});
   }
 
   modeAskBtn.classList.toggle('active', mode === 'ask');

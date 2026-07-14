@@ -12281,6 +12281,11 @@ test('CDP Dev diagnostics buffer console/network data and redact sensitive heade
   assert.ok(commands.some(command => command.method === 'Log.disable'));
   assert.ok(commands.some(command => command.method === 'Network.disable'));
   assert.equal(await cdp.disableDevDiagnostics(88), false);
+
+  await cdp.enableDevDiagnostics(88);
+  await cdp.enableDevDiagnostics(89);
+  assert.equal(await cdp.disableAllDevDiagnostics(), 2);
+  assert.equal(cdp.devDiagnostics.size, 0);
 });
 
 test('Chrome Dev diagnostics start on both run paths and stop when Dev mode ends', () => {
@@ -12296,7 +12301,8 @@ test('Chrome Dev diagnostics start on both run paths and stop when Dev mode ends
   assert.match(agentSource, /if \(lastMode === 'dev'\) void cdpClient\.disableDevDiagnostics\(tabId\)/);
   assert.match(backgroundSource, /case 'disable_dev_diagnostics':/);
   assert.match(backgroundSource, /disabled: await agent\.disableDevDiagnostics\(tabId\)/);
-  assert.match(sidepanelSource, /previousMode === 'dev' && mode !== 'dev'[\s\S]*disable_dev_diagnostics/);
+  assert.match(backgroundSource, /msg\.all === true[\s\S]*disabled: await agent\.disableAllDevDiagnostics\(\)/);
+  assert.match(sidepanelSource, /previousMode === 'dev' && mode !== 'dev'[\s\S]*sendToBackground\('disable_dev_diagnostics', \{ all: true \}\)/);
 });
 
 test('Chrome Dev patch handlers keep page-local undo state and avoid MV3 eval', () => {
@@ -12450,6 +12456,72 @@ test('inject_css patch IDs are unique and cannot remove CSS from a replacement d
     if (originalChrome === undefined) delete globalThis.chrome;
     else globalThis.chrome = originalChrome;
   }
+});
+
+test('inject_css removes its exact CSS when navigation races either identity check', async () => {
+  const originalChrome = globalThis.chrome;
+  const session = {};
+  const inserted = [];
+  const removed = [];
+  let documentIds = [];
+  try {
+    globalThis.chrome = {
+      scripting: {
+        insertCSS: async details => { inserted.push(details); },
+        removeCSS: async details => { removed.push(details); },
+      },
+      webNavigation: {
+        getFrame: async () => {
+          const documentId = documentIds.length > 1 ? documentIds.shift() : documentIds[0];
+          return { documentId, url: `https://example.com/${documentId}` };
+        },
+      },
+      storage: {
+        session: {
+          set: async values => { Object.assign(session, values); },
+          get: async key => key == null ? { ...session } : { [key]: session[key] },
+          remove: async keys => { for (const key of Array.isArray(keys) ? keys : [keys]) delete session[key]; },
+        },
+      },
+    };
+
+    documentIds = ['doc-before', 'doc-after-insert'];
+    const insertRaceAgent = new AgentCh({});
+    const insertRace = await insertRaceAgent.executeTool(93, 'inject_css', { css: '.race-one { color: red; }' });
+    assert.equal(insertRace.success, false);
+    assert.equal(insertRace.stale, true);
+    assert.equal(insertRace.cleanupSucceeded, true);
+    assert.deepEqual(removed[0], { target: { tabId: 93 }, css: inserted[0].css, origin: 'AUTHOR' });
+    assert.equal(Object.keys(session).length, 0);
+
+    documentIds = ['doc-before', 'doc-before', 'doc-after-persist'];
+    const persistRaceAgent = new AgentCh({});
+    const persistRace = await persistRaceAgent.executeTool(94, 'inject_css', { css: '.race-two { color: blue; }' });
+    assert.equal(persistRace.success, false);
+    assert.equal(persistRace.stale, true);
+    assert.equal(persistRace.cleanupSucceeded, true);
+    assert.deepEqual(removed[1], { target: { tabId: 94 }, css: inserted[1].css, origin: 'AUTHOR' });
+    assert.equal(persistRaceAgent._devCssPatches?.size || 0, 0);
+    assert.equal(Object.keys(session).length, 0);
+  } finally {
+    if (originalChrome === undefined) delete globalThis.chrome;
+    else globalThis.chrome = originalChrome;
+  }
+});
+
+test('inspect_event_listeners walks from open shadow roots through their hosts', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'src/chrome/src/content/content.js'), 'utf8');
+  const start = source.indexOf('function devParentElement(');
+  const end = source.indexOf('\n\n  function markDevTargets', start);
+  assert.ok(start >= 0 && end > start, 'shadow-aware parent helper should remain independently testable');
+  const getParent = vm.runInNewContext(`(${source.slice(start, end)})`);
+  const outer = { id: 'outer', parentElement: null, getRootNode: () => ({}) };
+  const host = { id: 'host', parentElement: outer };
+  const target = { id: 'target', parentElement: null, getRootNode: () => ({ host }) };
+  assert.equal(getParent(target), host);
+  assert.equal(getParent(host), outer);
+  assert.equal(getParent(outer), null);
+  assert.match(source, /let parent = devParentElement\(resolved\.target\)[\s\S]*parent = devParentElement\(parent\)/);
 });
 
 test('Chrome Dev mutation and state-change classifications cover the new toolkit', () => {

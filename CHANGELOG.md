@@ -16,6 +16,7 @@ This changelog was generated from the repository Git history and release tags. V
 - Propagated Chrome CDP callback failures from `chrome.runtime.lastError`, so timed-out or rejected `execute_js` evaluations report failure instead of an empty successful result.
 - Redacted common API, subscription, access, auth, and client key header-name variants before Dev network diagnostics enter the in-memory buffer.
 - Blocked `javascript:` form actions in structured element patches and permission-gated event-listener inspection and element highlighting because both briefly mutate live DOM.
+- Disabled diagnostics on every tracked Dev tab when leaving panel-wide Dev mode, cleaned up exact injected CSS across navigation races, and followed open-shadow hosts when inspecting ancestor event listeners.
 
 ### Tests
 - Added packaged-skill catalog, opt-in Settings, and Mail.tm safety/API cleanup coverage.

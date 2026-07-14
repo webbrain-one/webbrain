@@ -2126,6 +2126,11 @@
     };
   }
 
+  function devParentElement(element) {
+    if (element?.parentElement) return element.parentElement;
+    return element?.getRootNode?.()?.host || null;
+  }
+
   function markDevTargets(params) {
     const resolved = resolveDevTarget(params);
     if (!resolved.success) return resolved;
@@ -2133,10 +2138,10 @@
     const includeAncestors = params?.includeAncestors !== false;
     const elements = [resolved.target];
     if (includeAncestors) {
-      let parent = resolved.target.parentElement;
+      let parent = devParentElement(resolved.target);
       while (parent && elements.length < 6) {
         elements.push(parent);
-        parent = parent.parentElement;
+        parent = devParentElement(parent);
       }
     }
     const records = elements.map((el, index) => {

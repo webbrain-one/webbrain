@@ -1840,6 +1840,9 @@ async function handleMessage(msg, sender) {
     }
 
     case 'disable_dev_diagnostics': {
+      if (msg.all === true) {
+        return { ok: true, disabled: await agent.disableAllDevDiagnostics() };
+      }
       const tabId = msg.tabId || sender.tab?.id;
       if (!tabId) return { ok: false, error: 'No tab ID' };
       return { ok: true, disabled: await agent.disableDevDiagnostics(tabId) };

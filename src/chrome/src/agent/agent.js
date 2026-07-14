@@ -8189,6 +8189,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     return cdpClient.disableDevDiagnostics(tabId);
   }
 
+  disableAllDevDiagnostics() {
+    return cdpClient.disableAllDevDiagnostics();
+  }
+
   async _getDevDocumentIdentity(tabId) {
     try {
       const frame = await chrome.webNavigation?.getFrame?.({ tabId, frameId: 0 });
@@ -8240,7 +8244,19 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       await chrome.scripting.insertCSS({ target: { tabId }, css: injectedCss, origin: 'AUTHOR' });
       const after = await this._getDevDocumentIdentity(tabId);
       if (after?.documentId !== before.documentId) {
-        return { success: false, stale: true, error: 'inject_css: the page navigated while CSS was being injected; no removable patch was recorded.' };
+        let cleanupSucceeded = false;
+        try {
+          await chrome.scripting.removeCSS({ target: { tabId }, css: injectedCss, origin: 'AUTHOR' });
+          cleanupSucceeded = true;
+        } catch {}
+        return {
+          success: false,
+          stale: true,
+          cleanupSucceeded,
+          error: cleanupSucceeded
+            ? 'inject_css: the page navigated while CSS was being injected; the exact CSS was removed from the replacement document.'
+            : 'inject_css: the page navigated while CSS was being injected and automatic cleanup failed; reload the page if the temporary style remains.',
+        };
       }
       const patch = {
         patchId,
@@ -8261,9 +8277,21 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       }
       const current = await this._getDevDocumentIdentity(tabId);
       if (current?.documentId !== patch.documentId) {
+        let cleanupSucceeded = false;
+        try {
+          await chrome.scripting.removeCSS({ target: { tabId }, css: injectedCss, origin: 'AUTHOR' });
+          cleanupSucceeded = true;
+        } catch {}
         this._devCssPatches.delete(patchId);
         try { await chrome.storage.session.remove(this._devCssPatchStorageKey(patchId)); } catch {}
-        return { success: false, stale: true, error: 'inject_css: the page navigated while the patch was being recorded.' };
+        return {
+          success: false,
+          stale: true,
+          cleanupSucceeded,
+          error: cleanupSucceeded
+            ? 'inject_css: the page navigated while the patch was being recorded; the exact CSS was removed from the replacement document.'
+            : 'inject_css: the page navigated while the patch was being recorded and automatic cleanup failed; reload the page if the temporary style remains.',
+        };
       }
       return {
         success: true,

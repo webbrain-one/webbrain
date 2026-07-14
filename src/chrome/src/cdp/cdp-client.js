@@ -350,6 +350,12 @@ export class CDPClient {
     return true;
   }
 
+  async disableAllDevDiagnostics() {
+    const tabIds = [...this.devDiagnostics.keys()];
+    const results = await Promise.allSettled(tabIds.map(tabId => this.disableDevDiagnostics(tabId)));
+    return results.filter(result => result.status === 'fulfilled' && result.value === true).length;
+  }
+
   async readConsole(tabId, options = {}) {
     const state = await this.enableDevDiagnostics(tabId);
     const levels = new Set(Array.isArray(options.levels) ? options.levels.map(v => this._consoleLevel(v)) : []);
