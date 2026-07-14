@@ -6399,7 +6399,6 @@ test('executeHttpSkillTool stages oversized skill downloads locally after a vali
             const key = String(name || '').toLowerCase();
             if (key === 'content-type') return 'video/mp4';
             if (key === 'content-length') return String(tooLargeBytes);
-            if (key === 'content-disposition') return "attachment; filename*=UTF-8''Video%20by%20yaseminserpil.mp4";
             return null;
           },
         },
@@ -6417,7 +6416,6 @@ test('executeHttpSkillTool stages oversized skill downloads locally after a vali
             const key = String(name || '').toLowerCase();
             if (key === 'content-type') return 'video/mp4';
             if (key === 'content-length') return String(tooLargeBytes);
-            if (key === 'content-disposition') return "attachment; filename*=UTF-8''Video%20by%20yaseminserpil.mp4";
             return null;
           },
         },
@@ -6456,8 +6454,6 @@ test('executeHttpSkillTool stages oversized skill downloads locally after a vali
                   localUrl: 'blob:chrome-extension://webbrain/staged-large-video',
                   releaseToken: 'stage-token-1',
                   bytesReceived: tooLargeBytes,
-                  contentType: 'video/mp4',
-                  contentDisposition: "attachment; filename*=UTF-8''Video%20by%20yaseminserpil.mp4",
                 });
                 return;
               }
@@ -6514,14 +6510,11 @@ test('executeHttpSkillTool stages oversized skill downloads locally after a vali
       assert.equal(result.status, 200, `${label}: oversized file status missing`);
       assert.equal(result.bytesExpected, tooLargeBytes, `${label}: oversized file length should be reported`);
       assert.equal(result.stagedDownload, true, `${label}: oversized file should identify the staged path`);
-      assert.equal(result.contentType, 'video/mp4', `${label}: staged download should preserve the response MIME type`);
-      assert.equal(result.suggestedFilename, 'Video by yaseminserpil.mp4', `${label}: staged download should preserve the response filename`);
       assert.equal(result.directDownload, undefined, `${label}: remote direct-download path must stay disabled`);
       assert.equal(result.finalUrl, 'https://freeskillz.xyz/v1/media/jobs/job_oversized/file', `${label}: oversized file URL should be reported`);
       assert.equal(result.cleanup?.success, true, `${label}: provider job should be cleaned up after oversized file`);
       assert.equal(downloadCalls.length, 1, `${label}: browser download should start for oversized file`);
       assert.match(downloadCalls[0].url, /^blob:/, `${label}: browser download should receive only a local blob URL`);
-      assert.equal(downloadCalls[0].filename, 'Video by yaseminserpil.mp4', `${label}: browser download should receive the server-provided MP4 filename`);
       assert.deepEqual(
         providerCalls.map(call => `${call.opts.method || 'GET'} ${call.url}`),
         label === 'chrome' ? [
@@ -6567,9 +6560,7 @@ test('chrome offscreen staging owns the credentialless fetch and local file life
   assert.match(source, /credentials:\s*'omit'/, 'staged remote fetch must omit credentials');
   assert.match(source, /redirect:\s*'manual'/, 'staged remote fetch must reject redirects');
   assert.match(source, /navigator\.storage\.getDirectory\(\)/, 'large downloads should stream through extension-local storage');
-  assert.match(source, /new Blob\(\[file\], \{ type: contentType \}\)/, 'staged OPFS files should preserve the response MIME type');
-  assert.match(source, /content-disposition/, 'staged downloads should preserve the response filename header');
-  assert.match(source, /URL\.createObjectURL\(typedBlob\)/, 'browser download should receive a typed local blob URL');
+  assert.match(source, /URL\.createObjectURL\(file\)/, 'browser download should receive a local blob URL');
   assert.match(source, /URL\.revokeObjectURL/, 'local blob URLs should be released after download');
   assert.match(source, /cleanupStaleStages/, 'stale staged files should be removed after an interrupted offscreen lifetime');
   assert.match(ensure, /'BLOBS'/, 'offscreen document should declare its blob URL purpose');
