@@ -6944,6 +6944,11 @@ test('packaged Open-Meteo and Open Library skills are opt-in with read-only HTTP
     assert.equal(weather.tools[1].endpoint, 'https://api.open-meteo.com/v1/forecast', `${label}: wrong forecast endpoint`);
     assert.equal(library.tools[0].endpoint, 'https://openlibrary.org/search.json', `${label}: wrong Open Library endpoint`);
     assert.equal(library.tools[0].readOnly, true, `${label}: Open Library search should be read-only`);
+    assert.equal(
+      library.tools[0].defaultArgs?.fields,
+      'key,title,author_name,first_publish_year,cover_edition_key,edition_count,isbn',
+      `${label}: Open Library search should default to a compact fields list`,
+    );
 
     const defs = buildDefs(enabled, { mode: 'ask' });
     const names = defs.map((tool) => tool.function.name);

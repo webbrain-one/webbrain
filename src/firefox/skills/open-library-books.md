@@ -8,7 +8,10 @@ Workflow:
 
 1. Call `search_open_library_books` with a title, author, ISBN, or general query.
 2. Summarize title, authors, first publish year, and Open Library work/edition keys from the results.
-3. If the user needs more detail, prefix a returned work `key` with `https://openlibrary.org` (or build `https://openlibrary.org/books/{cover_edition_key}` for an edition), then open that URL in the browser or use visible page content.
+3. If the user needs more detail, build a full URL from the relative key:
+   - work: `https://openlibrary.org` + `key` (e.g. `key` `/works/OL45804W` → `https://openlibrary.org/works/OL45804W`)
+   - edition: `https://openlibrary.org/books/` + `cover_edition_key` (e.g. `OL7353617M`)
+   Then open that URL in the browser or use visible page content.
 
 Safety:
 
@@ -23,13 +26,14 @@ Finish with visible attribution: Powered by [Open Library](https://openlibrary.o
     {
       "id": "open_library_search",
       "name": "search_open_library_books",
-      "description": "Search Open Library for books by title, author, ISBN, or keyword. Returns titles, authors, publish years, and edition counts.",
+      "description": "Search Open Library for books by title, author, ISBN, or keyword. Returns a compact field set: title, authors, publish year, work/edition keys, and edition count.",
       "kind": "http",
       "readOnly": true,
       "method": "GET",
       "endpoint": "https://openlibrary.org/search.json",
       "defaultArgs": {
-        "limit": 5
+        "limit": 5,
+        "fields": "key,title,author_name,first_publish_year,cover_edition_key,edition_count,isbn"
       },
       "resultPolicy": "untrusted",
       "responseLimits": {
@@ -53,7 +57,7 @@ Finish with visible attribution: Powered by [Open Library](https://openlibrary.o
           },
           "fields": {
             "type": "string",
-            "description": "Optional comma-separated field list to reduce payload, e.g. key,title,author_name,first_publish_year,isbn."
+            "description": "Comma-separated Solr fields to return. Default is a compact set (key,title,author_name,first_publish_year,cover_edition_key,edition_count,isbn). Override only when extra fields are required."
           }
         },
         "required": ["q"]
