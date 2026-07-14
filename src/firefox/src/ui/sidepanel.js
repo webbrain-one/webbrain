@@ -5,6 +5,7 @@
 
 import { t, getLocale, setLocale, LANGUAGES, applyDOMTranslations } from './i18n.js';
 import { sanitizeMarkdownLinks } from './markdown-link.js';
+import { codeFenceLanguage, highlightCode, renderMarkdownHeadings } from './markdown-render.js';
 import { applyMode, loadMode, watch } from './theme.js';
 import { buildRecommendedActions, shouldShowRecommendedActions } from './recommended-actions.js';
 import { createContextMenuPromptHandler } from './context-menu-prompts.js';
@@ -5322,7 +5323,8 @@ function formatMarkdown(text) {
 
   // 1. Extract fenced code blocks BEFORE escaping HTML
   const codeBlocks = [];
-  text = text.replace(/```(\w*)\n?([\s\S]*?)```/g, (_match, lang, code) => {
+  text = text.replace(/```[ \t]*([^`\r\n]*)\r?\n([\s\S]*?)```/g, (_match, info, code) => {
+    const lang = codeFenceLanguage(info);
     const id = `__CODEBLOCK_${codeBlocks.length}__`;
     codeBlocks.push({ lang: lang || '', code });
     return id;
@@ -5342,10 +5344,10 @@ function formatMarkdown(text) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 
-  // 4. Inline formatting (bold + italic), then markdown link sanitization,
-  // then newline → <br>. Links are handled by the dedicated markdown-link
-  // module (unit-tested in test/run.js) — see that file for the rationale
-  // and threat model.
+  // 4. Block headings, inline formatting, markdown link sanitization, then
+  // newline → <br>. Code and inline-code placeholders were extracted above,
+  // so Markdown-looking source inside them is not interpreted here.
+  text = renderMarkdownHeadings(text);
   text = text
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.+?)\*/g, '<em>$1</em>');
@@ -5362,13 +5364,13 @@ function formatMarkdown(text) {
 
   // 6. Restore fenced code blocks with copy button
   codeBlocks.forEach((block, i) => {
-    const escaped = block.code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const highlighted = highlightCode(block.code, block.lang);
     const langLabel = block.lang ? `<span class="code-lang">${escapeHtml(block.lang)}</span>` : '';
     const copyBtn = `<button class="code-copy-btn" data-code-index="${i}" title="${escapeHtml(t('sp.copy.code.title'))}">${escapeHtml(t('sp.copy'))}</button>`;
     const header = `<div class="code-block-header">${langLabel}${copyBtn}</div>`;
     text = text.replace(
       `__CODEBLOCK_${i}__`,
-      () => `<div class="code-block-wrapper">${header}<pre><code>${escaped}</code></pre></div>`
+      () => `<div class="code-block-wrapper">${header}<pre><code>${highlighted}</code></pre></div>`
     );
   });
 
