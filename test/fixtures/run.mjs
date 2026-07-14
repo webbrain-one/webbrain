@@ -266,6 +266,37 @@ for (const [label, sourcePath, manualOpen] of [
     }
   });
 
+  test(`${label}: selection highlight stays bounded for long documents`, async (page) => {
+    await setupSelectionShortcut(page, sourcePath, { requiresManualOpen: manualOpen });
+    const rawRectCount = await page.evaluate(() => {
+      const article = document.createElement('article');
+      article.id = 'long-selection';
+      for (let index = 0; index < 600; index += 1) {
+        const line = document.createElement('div');
+        line.textContent = `Selected article line ${index + 1}`;
+        article.appendChild(line);
+      }
+      document.body.appendChild(article);
+      const range = document.createRange();
+      range.selectNodeContents(article);
+      return Array.from(range.getClientRects()).filter((rect) => rect.width > 0 && rect.height > 0).length;
+    });
+    if (rawRectCount <= 200) throw new Error(`fixture should create more than 200 selection rectangles, got ${rawRectCount}`);
+
+    const selectedState = await selectFixtureText(page, '#long-selection');
+    await page.mouse.click(
+      selectedState.shortcutRect.left + selectedState.shortcutRect.width / 2,
+      selectedState.shortcutRect.top + selectedState.shortcutRect.height / 2,
+    );
+    const openState = await page.evaluate(() => window.__webbrainSelectionShortcut.getState());
+    if (openState.highlightRectCount < 1 || openState.highlightRectCount > 200) {
+      throw new Error(`long selections should render 1-200 highlight rectangles: ${JSON.stringify(openState)}`);
+    }
+    if (openState.highlightRectCount >= rawRectCount) {
+      throw new Error(`offscreen selection rectangles should not all render: ${JSON.stringify({ rawRectCount, openState })}`);
+    }
+  });
+
   test(`${label}: selection shortcut submits once and dismisses before delivery`, async (page) => {
     await setupSelectionShortcut(page, sourcePath, { requiresManualOpen: manualOpen });
     const selectedState = await selectFixtureText(page, '#editor');

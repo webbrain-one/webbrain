@@ -10471,7 +10471,9 @@ test('selection shortcut is shipped, enabled by default, and keeps browser-speci
     assert.match(content, /border:1px solid rgba\(108,99,255,\.34\);[\s\S]*?color:var\(--accent\);/, `${label}: shortcut should use the WebBrain purple treatment`);
     assert.doesNotMatch(content, /M6\.8 8\.5 9\.2 14l2\.8-3\.4 2\.8 3\.4 2\.4-5\.5/, `${label}: discarded WebBrain W outline should be removed`);
     assert.doesNotMatch(content, /M12 2\.8c\.65 3\.78/, `${label}: Claude-like sparkle icon should be removed`);
-    assert.match(content, /rects: \(rects\.length \? rects : \[rect\]\)\.map\(serializeRect\)/, `${label}: selection snapshots should retain every visual line of the selected range`);
+    assert.match(content, /const MAX_SELECTION_HIGHLIGHT_RECTS = 200;/, `${label}: selection highlights should have a hard DOM-node limit`);
+    assert.match(content, /function collectVisibleHighlightRects\(rects\)[\s\S]*?rect\.top < window\.innerHeight[\s\S]*?visibleRects\.length >= MAX_SELECTION_HIGHLIGHT_RECTS/, `${label}: selection snapshots should retain only a bounded set of visible lines`);
+    assert.match(content, /rects: \(highlightRects\.length \? highlightRects : \[rect\]\)\.map\(serializeRect\)/, `${label}: selection snapshots should use the bounded highlight rectangles`);
     assert.match(content, /function showSelectionHighlight\(\)[\s\S]*?highlightLayer\.appendChild\(highlight\);/, `${label}: opening the dialog should render a sticky selection highlight`);
     assert.match(content, /function containSurfaceKeyboardEvent\(event\)[\s\S]*?event\.stopImmediatePropagation\(\);/, `${label}: selection dialog keyboard events should stop page capture listeners`);
     assert.match(content, /window\.addEventListener\('keydown', containSurfaceKeyboardEvent, true\);\s*window\.addEventListener\('keypress', containSurfaceKeyboardEvent, true\);\s*window\.addEventListener\('keyup', containSurfaceKeyboardEvent, true\);/, `${label}: keyboard containment should run during window capture`);

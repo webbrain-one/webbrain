@@ -17,6 +17,7 @@
   const GAP = 8;
   const BUTTON_SIZE = 44;
   const POPUP_WIDTH = 316;
+  const MAX_SELECTION_HIGHLIGHT_RECTS = 200;
   const TRANSLATION_LANGUAGES = Object.freeze([
     'en', 'es', 'fr', 'tr', 'zh', 'ru', 'uk', 'ar',
     'ja', 'ko', 'id', 'th', 'ms', 'tl', 'pl', 'he',
@@ -62,6 +63,20 @@
     };
   }
 
+  function collectVisibleHighlightRects(rects) {
+    const visibleRects = [];
+    for (const rect of rects) {
+      const isVisible = rect.bottom > 0
+        && rect.right > 0
+        && rect.top < window.innerHeight
+        && rect.left < window.innerWidth;
+      if (!isVisible) continue;
+      visibleRects.push(rect);
+      if (visibleRects.length >= MAX_SELECTION_HIGHLIGHT_RECTS) break;
+    }
+    return visibleRects;
+  }
+
   function resolveInterfaceLanguage(value) {
     const preferred = String(value || '').trim().toLowerCase();
     if (isSupportedTranslationLanguage(preferred)) return preferred;
@@ -85,10 +100,11 @@
     const rects = Array.from(range.getClientRects()).filter((rect) => rect.width > 0 && rect.height > 0);
     const rect = rects.at(-1) || range.getBoundingClientRect();
     if (!rect || (!rect.width && !rect.height)) return null;
+    const highlightRects = collectVisibleHighlightRects(rects);
     return {
       text,
       rect: serializeRect(rect),
-      rects: (rects.length ? rects : [rect]).map(serializeRect),
+      rects: (highlightRects.length ? highlightRects : [rect]).map(serializeRect),
     };
   }
 
