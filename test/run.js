@@ -10453,8 +10453,12 @@ test('selection shortcut is shipped, enabled by default, and keeps browser-speci
     ['firefox', 'src/firefox', 'browser'],
   ]) {
     const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, prefix, 'manifest.json'), 'utf8'));
-    const scripts = manifest.content_scripts?.flatMap((entry) => entry.js || []) || [];
+    const contentScripts = manifest.content_scripts || [];
+    const scripts = contentScripts.flatMap((entry) => entry.js || []);
     assert.ok(scripts.includes('src/content/selection-shortcut.js'), `${label}: manifest should ship the selection shortcut`);
+    const selectionEntries = contentScripts.filter((entry) => entry.js?.includes('src/content/selection-shortcut.js'));
+    assert.equal(selectionEntries.length, 1, `${label}: selection shortcut should be injected exactly once`);
+    assert.equal(selectionEntries[0].run_at, 'document_start', `${label}: keyboard containment must register before page capture listeners`);
 
     const content = fs.readFileSync(path.join(ROOT, prefix, 'src/content/selection-shortcut.js'), 'utf8');
     assert.match(content, /attachShadow\(\{ mode: 'closed' \}\)/, `${label}: selection UI should use a closed Shadow DOM`);
@@ -10467,6 +10471,13 @@ test('selection shortcut is shipped, enabled by default, and keeps browser-speci
     assert.match(content, /border:1px solid rgba\(108,99,255,\.34\);[\s\S]*?color:var\(--accent\);/, `${label}: shortcut should use the WebBrain purple treatment`);
     assert.doesNotMatch(content, /M6\.8 8\.5 9\.2 14l2\.8-3\.4 2\.8 3\.4 2\.4-5\.5/, `${label}: discarded WebBrain W outline should be removed`);
     assert.doesNotMatch(content, /M12 2\.8c\.65 3\.78/, `${label}: Claude-like sparkle icon should be removed`);
+    assert.match(content, /const MAX_SELECTION_HIGHLIGHT_RECTS = 200;/, `${label}: selection highlights should have a hard DOM-node limit`);
+    assert.match(content, /function collectVisibleHighlightRects\(rects\)[\s\S]*?rect\.top < window\.innerHeight[\s\S]*?visibleRects\.length >= MAX_SELECTION_HIGHLIGHT_RECTS/, `${label}: selection snapshots should retain only a bounded set of visible lines`);
+    assert.match(content, /rects: \(highlightRects\.length \? highlightRects : \[rect\]\)\.map\(serializeRect\)/, `${label}: selection snapshots should use the bounded highlight rectangles`);
+    assert.match(content, /function showSelectionHighlight\(\)[\s\S]*?highlightLayer\.appendChild\(highlight\);/, `${label}: opening the dialog should render a sticky selection highlight`);
+    assert.match(content, /function containSurfaceKeyboardEvent\(event\)[\s\S]*?event\.stopImmediatePropagation\(\);/, `${label}: selection dialog keyboard events should stop page capture listeners`);
+    assert.match(content, /window\.addEventListener\('keydown', containSurfaceKeyboardEvent, true\);\s*window\.addEventListener\('keypress', containSurfaceKeyboardEvent, true\);\s*window\.addEventListener\('keyup', containSurfaceKeyboardEvent, true\);/, `${label}: keyboard containment should run during window capture`);
+    assert.match(content, /function dismissSurface\(\) \{\s*clearSelectionHighlight\(\);/, `${label}: dismissing the selection surface should clear the sticky highlight`);
     assert.match(content, /message\?\.type === 'WB_HIDE_FOR_TOOL_USE'[\s\S]*?suppressed = true;[\s\S]*?message\?\.type === 'WB_SHOW_AFTER_TOOL_USE'[\s\S]*?suppressed = false;/, `${label}: screenshot capture should suppress and restore future shortcut detection`);
     assert.match(content, /submitting = true;\s*dismissSurface\(\);\s*try \{\s*const response = await api\.runtime\.sendMessage\(request\);/, `${label}: submission should dismiss before sending to prevent duplicates`);
 
