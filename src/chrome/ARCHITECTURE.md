@@ -159,8 +159,8 @@ content instead of trusted instructions.
 Recording is user-driven from slash commands, not model-callable tools. `/record`
 captures the active tab's video + audio + (optionally) microphone into a single
 webm file and shows the red side-panel banner/timer. Add `--transcribe` to
-`/record` or `/record-full-screen` to run Whisper transcription after stop.
-`/record-full-screen` opens Chrome's screen/window picker from the offscreen
+`/record` or `/record --full-screen` to run Whisper transcription after stop.
+`/record --full-screen` opens Chrome's screen/window picker from the offscreen
 recorder context through `getDisplayMedia()`, records without showing the WebBrain
 recording banner, and can be stopped by double Escape on WebBrain or browser
 pages. Chrome's picker decides what can be captured: the user must choose the
@@ -176,7 +176,7 @@ background.js
       ├─ chrome.tabCapture.getMediaStreamId({targetTabId}) → streamId
       └─ offscreen recorder-start {source:'tab', streamId, options}
 
-sidepanel.js  [/record-full-screen]
+sidepanel.js  [/record --full-screen]
       │ prepare_recording_host
       │ runtime.sendMessage {action:'start_display_recording', options}
       ▼
@@ -206,7 +206,7 @@ background.js (on recorder-stop)
               └─ chrome.downloads.download(.txt sibling)
 
 sidepanel listens for recording_update broadcast events:
-   started        → /record shows the banner; /record-full-screen stays hidden
+   started        → /record shows the banner; /record --full-screen stays hidden
    stopped        → banner hides, "saved to Downloads" toast
    transcribing   → "Transcribing audio with Whisper…"
    transcribed    → "Transcript saved" + Summarize button (Phase 3)
@@ -270,7 +270,7 @@ still saved.
 |---|---|
 | Google Meet (browser) | ✓ |
 | Zoom web client (`zoom.us/wc/...`) | ✓ |
-| **Native Zoom desktop app** | ✓ via `/record-full-screen` when the user selects the Zoom window or screen in Chrome's picker; `/record` tab capture cannot reach it. |
+| **Native Zoom desktop app** | ✓ via `/record --full-screen` when the user selects the Zoom window or screen in Chrome's picker; `/record` tab capture cannot reach it. |
 | DRM-protected video (Netflix, Disney+) | ✗ — the browser blocks the encoder at the platform level. |
 | chrome:// / edge:// / chrome-extension:// pages | ✗ — tabCapture is not allowed there. |
 | Background tabs at start time | ⚠ — `getMediaStreamId` requires the target tab to be active; we briefly activate it before capture. The user can switch away after capture starts. |

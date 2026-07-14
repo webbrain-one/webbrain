@@ -1718,7 +1718,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           }
         }
         return blocks.some((text) =>
-          /^\s*\/record(?:-full-screen)?(?:\s|$)/im.test(text) ||
+          /^\s*\/record(?:\s|$)/im.test(text) ||
           /\brecord_tab\b/i.test(text) ||
           /\bRecording started\b/i.test(text)
         );
@@ -1729,7 +1729,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         const kind = rec.source === 'display' ? 'screen/window' : 'tab';
         contextLine += `[Recording status: a ${kind} recording is currently ACTIVE${since}. Recording has no model-callable tools. If the user asks to stop it, tell them to press Escape twice in WebBrain/browser surfaces or use Chrome's Stop sharing control. Do not start another recording.]\n\n`;
       } else if (startedRecording) {
-        contextLine += `[Recording status: no recording is currently active. Recording is user-driven only: tell the user to type /record for current-tab capture or /record-full-screen for screen/window capture.]\n\n`;
+        contextLine += `[Recording status: no recording is currently active. Recording is user-driven only: tell the user to type /record for current-tab capture or /record --full-screen for screen/window capture.]\n\n`;
       }
     } catch (e) { /* recorder state unavailable — skip the status note */ }
 
@@ -6309,7 +6309,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   }
 
   /**
-   * Serialize a tab's conversation to Markdown for /export-with-traces, sourced
+   * Serialize a tab's conversation to Markdown for /export --traces, sourced
    * from the trace store (compaction-immune, raw structured results) — NOT from
    * this.conversations. Hydrates first so it works across service-worker restarts.
    * Returns { ok, markdown|null, turnCount, reason }: reason 'no-conversation', or

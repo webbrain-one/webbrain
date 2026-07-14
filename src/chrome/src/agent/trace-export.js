@@ -1,5 +1,5 @@
 /**
- * Pure trace → Markdown serializer for /export-with-traces.
+ * Pure trace → Markdown serializer for /export --traces.
  *
  * Consumes the trace store's per-run event log (trace/recorder.js) — an
  * append-only, compaction-immune record whose tool results are the RAW structured

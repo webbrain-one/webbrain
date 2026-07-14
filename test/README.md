@@ -106,6 +106,6 @@ with the extension side panel:
 python3 -m http.server 8765 -d test/memory
 ```
 
-Then open `http://127.0.0.1:8765/`. The page walks through `/remember`,
+Then open `http://127.0.0.1:8765/`. The page walks through `/memory --add`,
 form-derived learning, normal auto-learning, replaying saved memories into a
 later form, and Profile auto-fill.

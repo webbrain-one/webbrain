@@ -2338,7 +2338,7 @@ body {
 
 /* ─── Tab Recorder (v7.4) ─────────────────────────────────────────── */
 
-/* (No toolbar button. /record shows this Stop control; /record-full-screen
+/* (No toolbar button. /record shows this Stop control; /record --full-screen
    stays hidden and stops via double Escape or Chrome's Stop sharing UI.) */
 
 /* Live recording banner — sits below the inspection banner. Red bg so the

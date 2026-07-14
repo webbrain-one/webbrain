@@ -44,7 +44,7 @@
 - **Onboarding Wizard** — First-launch walkthrough covering Act mode safety and provider setup
 - **Side Panel UI** — Clean chat interface that lives alongside your browsing
 - **Per-Tab Conversations** — Each tab has its own chat history
-- **User Memory** — Optional local memory for user-stated preferences, with explicit `/remember` commands and opt-in background auto-learning
+- **User Memory** — Optional local memory for user-stated preferences, with explicit `/memory --add` commands and opt-in background auto-learning
 - **Streaming** — Real-time token streaming from all providers
 - **Smart Context** — Token-aware auto-compaction (summarizes older turns once the conversation nears the model's context window, with a visible "Context automatically compacted" notice), tool result limits, and emergency overflow recovery
 - **Browser History Control** — Act mode can use native `go_back` / `go_forward` history tools instead of CSP-sensitive page JavaScript
@@ -140,7 +140,7 @@ Click the gear icon or go to the extension's Options page to configure:
 
 **Profile and Memory:**
 - Profile auto-fill and user memory are stored in plaintext browser local storage.
-- User memory can be managed from Settings -> Profile or with `/remember`, `/show-memory`, and `/forget-memory`.
+- User memory can be managed from Settings -> Profile or with `/memory`, `/memory --add <text>`, and `/memory --forget <id>`.
 - When enabled, active memory records are sent to the configured LLM provider as part of the system prompt; optional auto-learning makes a best-effort provider call only after a turn completes.
 
 **Skills:**
@@ -288,26 +288,28 @@ Source: [`lmstudio-plugin/`](./lmstudio-plugin/).
 
 ## Slash Commands
 
-WebBrain accepts slash commands as the first thing on a line in the input box. Type `/help` to see the list inside the panel.
+WebBrain accepts slash commands as the first thing on a line in the input box. Type `/help` to see complete usage signatures and flag descriptions inside the panel. Typing a canonical command followed by a space opens autocomplete for its available flags.
 
 | Command | What it does |
 |---------|--------------|
 | `/help` | Show the list of available commands |
-| `/schedule` | Create a scheduled task |
-| `/list-schedules` | Show scheduled tasks |
-| `/show-scratchpad` | Show the current scratchpad |
-| `/edit-scratchpad <text>` | Append text to the current scratchpad |
-| `/clear-scratchpad` | Clear the current scratchpad |
+| `/schedule [prompt]` | Create a scheduled task, optionally prefilling its prompt |
+| `/schedule --list` | Show scheduled tasks |
+| `/progress` | Show the current progress ledger |
+| `/scratchpad` | Show the current scratchpad |
+| `/scratchpad --append <text>` | Append text to the current scratchpad |
+| `/scratchpad --clear` | Clear the current scratchpad |
+| `/memory` | Show saved user memory |
+| `/memory --add <text>` | Save a user preference to memory |
+| `/memory --forget <id>` | Forget a saved memory by ID |
 | `/allow-api` | **Per-conversation API mutation override.** Lifts the UI-first restriction so the agent may use POST/PUT/PATCH/DELETE via `fetch_url` when UI is failing. Badge appears while active; clears on `/reset`. |
 | `/dangerously-skip-permissions` | **Global permission-prompt bypass.** Turns off `Ask before consequential actions` without opening Settings. WebBrain will act without per-site prompts until you re-enable the setting. |
 | `/compact` | Force context compaction for the current conversation |
 | `/verbose` | Toggle verbose/compact tool display |
 | `/reset` | Clear the conversation and all per-conversation flags |
-| `/screenshot` | Capture the visible tab and display the image inline in chat |
-| `/full-page-screenshot` | Capture the full scrollable page and display it inline in chat (Chrome only) |
-| `/record` | Start recording the current tab; add `--transcribe` to save a Whisper transcript after stop |
-| `/record-full-screen` | Record a screen or window with Chrome's picker (Chrome only); add `--transcribe` for a transcript |
-| `/export` | Download the current conversation as a Markdown file |
+| `/screenshot [--full-page]` | Capture the visible tab, or the full scrollable page with `--full-page` (Chrome only) |
+| `/record [--full-screen] [--transcribe]` | Record the current tab, or a selected screen/window with `--full-screen` (Chrome only); add `--transcribe` to save a transcript after stop |
+| `/export [--traces]` | Download the conversation as Markdown, or export the tool chain with `--traces` |
 | `/profile` | Toggle profile auto-fill on/off without opening Settings |
 | `/vision` | Toggle vision mode (screenshot understanding) on the active provider |
 | `/ask` | Switch to Ask mode before sending |

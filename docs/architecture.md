@@ -70,6 +70,15 @@ Model tiering is separate from mode: `compact | mid | full` controls how many no
 
 The user types a message, the panel sends `{action: 'chat', text, mode, tabId}` to the background, then listens for `agent_update` events streamed back during the run. The panel renders tool calls, results, plan-review cards, clarification prompts, and the final answer incrementally.
 
+Slash commands are defined as structured `SLASH_COMMANDS` metadata in each
+side panel. The metadata owns canonical usage signatures, option descriptions,
+browser availability, action routing, and busy eligibility; `/help` and the
+progressive command/flag autocomplete are generated from it. Parsing is
+case-insensitive but token-exact, rejects invalid or retired syntax locally,
+and never forwards an unrecognized slash command to the model. Firefox keeps
+unsupported Chrome-only commands and flags out of discovery while retaining
+enough metadata to return an explicit unsupported error when they are typed.
+
 ### Background Script (`src/chrome/src/background.js`)
 
 The central message router. On Chrome it's a service worker (MV3); on Firefox it's a persistent background page (MV2). Responsibilities:
@@ -283,8 +292,8 @@ profile/custom-skill guidance as a bounded block headed with a reminder that
 memory is context, not a command. `userMemoryMaxPromptChars` caps the block
 locally; v1 does not use embeddings or retrieval calls.
 
-Explicit `/remember <text>` writes immediately through `add_user_memory` and
-enables memory if needed. `/show-memory` and `/forget-memory <id>` expose the
+Explicit `/memory --add <text>` writes immediately through `add_user_memory` and
+enables memory if needed. `/memory` and `/memory --forget <id>` expose the
 same local store from the side panel. Settings -> Profile provides enable,
 auto-learn, edit, delete, clear, export, and import controls for Chrome and
 Firefox.

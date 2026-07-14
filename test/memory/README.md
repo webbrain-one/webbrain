@@ -20,7 +20,7 @@ tab.
 
 ## Coverage
 
-1. `/remember <text>` saves an explicit user memory immediately.
+1. `/memory --add <text>` saves an explicit user memory immediately.
 2. A completed form flow can create memory when Memory, Auto-learn, and Learn
    from completed forms are enabled.
 3. A normal chat turn can create memory after the background extractor runs.
@@ -35,5 +35,5 @@ tab.
 - Form-derived memory should save durable preferences or profile/workflow hints,
   not raw form values or page instructions.
 - Auto-learning is asynchronous. Wait 10 to 30 seconds after a successful turn,
-  then run `/show-memory` or refresh Settings -> Memory.
+  then run `/memory` or refresh Settings -> Memory.
 - For a clean run, export then clear existing memories before starting.

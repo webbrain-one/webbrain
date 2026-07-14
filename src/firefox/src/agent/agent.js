@@ -5455,7 +5455,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   }
 
   /**
-   * Serialize a tab's conversation to Markdown for /export-with-traces, sourced
+   * Serialize a tab's conversation to Markdown for /export --traces, sourced
    * from the trace store (compaction-immune, raw structured results) — NOT from
    * this.conversations. Hydrates first so it works across background restarts.
    * Returns { ok, markdown|null, turnCount, reason }: reason 'no-conversation', or

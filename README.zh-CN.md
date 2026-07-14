@@ -231,24 +231,27 @@ lms clone webbrain/web-tools
 
 ## 斜杠命令
 
-WebBrain 接受作为输入框某行开头的斜杠命令。在面板内输入 `/help` 查看列表。
+WebBrain 接受作为输入框某行开头的斜杠命令。在面板内输入 `/help` 可查看完整用法和参数说明。输入规范命令并加一个空格后，自动补全会显示该命令可用的参数。
 
 | 命令 | 作用 |
 |---------|--------------|
 | `/help` | 显示可用命令列表 |
-| `/schedule` | 创建计划任务 |
-| `/list-schedules` | 显示计划任务 |
-| `/show-scratchpad` | 显示当前草稿板 |
-| `/edit-scratchpad <文本>` | 将文本追加到当前草稿板 |
-| `/clear-scratchpad` | 清除当前草稿板 |
+| `/schedule [提示词]` | 创建计划任务，并可预填提示词 |
+| `/schedule --list` | 显示计划任务 |
+| `/progress` | 显示当前进度记录 |
+| `/scratchpad` | 显示当前草稿板 |
+| `/scratchpad --append <文本>` | 将文本追加到当前草稿板 |
+| `/scratchpad --clear` | 清除当前草稿板 |
+| `/memory` | 显示已保存的用户记忆 |
+| `/memory --add <文本>` | 将用户偏好保存到记忆 |
+| `/memory --forget <id>` | 按 ID 删除一条记忆 |
 | `/allow-api` | **按对话的 API 变更覆盖。** 解除 UI 优先限制，使智能体在 UI 失败时可通过 `fetch_url` 使用 POST/PUT/PATCH/DELETE。激活时显示徽章；在 `/reset` 时清除。 |
 | `/compact` | 强制压缩当前对话上下文 |
 | `/verbose` | 切换详细/压缩工具显示（与工具栏按钮相同） |
 | `/reset` | 清除对话与所有按对话的标志 |
-| `/screenshot` | 捕获可见标签页并在聊天中内联显示图像 |
-| `/record` | 开始录制当前标签页 |
-| `/record-full-screen` | 录制屏幕或窗口（仅 Chrome）；添加 `--transcribe` 可在停止后保存转录 |
-| `/export` | 将当前对话下载为 Markdown 文件 |
+| `/screenshot [--full-page]` | 捕获可见标签页；使用 `--full-page` 捕获完整页面（仅 Chrome） |
+| `/record [--full-screen] [--transcribe]` | 录制当前标签页；使用 `--full-screen` 录制屏幕或窗口（仅 Chrome），使用 `--transcribe` 保存转录 |
+| `/export [--traces]` | 将对话下载为 Markdown；使用 `--traces` 导出工具链 |
 | `/profile` | 无需打开设置即可切换资料自动填充开/关 |
 | `/vision` | 在当前提供商上切换视觉模式（截图理解） |
 | `/ask` | 发送前切换到提问模式 |

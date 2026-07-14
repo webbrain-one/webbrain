@@ -3,7 +3,7 @@
  *
  * Two user-driven flows share this:
  *   • `/record` — current-tab capture via chrome.tabCapture.
- *   • `/record-full-screen` — screen/window capture via getDisplayMedia().
+ *   • `/record --full-screen` — screen/window capture via getDisplayMedia().
  *
  * Without this shared module, the two paths would either duplicate the
  * orchestration or have to round-trip messages through each other. Both

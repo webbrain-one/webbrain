@@ -17,6 +17,42 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT = path.resolve(__dirname, '..');
 
+function loadSlashCommandRuntime(panelRel) {
+  const source = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
+  const start = source.indexOf('const SLASH_COMMANDS = [');
+  const end = source.indexOf('function showSlashInvocationError(', start);
+  assert.notEqual(start, -1, `${panelRel}: slash command metadata missing`);
+  assert.notEqual(end, -1, `${panelRel}: slash parser boundary missing`);
+  const block = source.slice(start, end);
+  return Function('escapeHtml', 't', `${block}\nreturn { SLASH_COMMANDS, slashCommandIsDiscoverable, slashOptionIsDiscoverable, findSlashCommand, parseSlashInvocation, slashInvocationIsOutOfBand, buildSlashCommandHelpHtml };`)(
+    (value) => String(value),
+    (key) => key,
+  );
+}
+
+function loadSlashAutocompleteRuntime(panelRel) {
+  const slash = loadSlashCommandRuntime(panelRel);
+  const source = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
+  const start = source.indexOf('function getSlashAutocompleteContext()');
+  const end = source.indexOf('\n}\n\nfunction getRecognizedSlashCommandPrefix', start);
+  assert.notEqual(start, -1, `${panelRel}: slash autocomplete context missing`);
+  assert.notEqual(end, -1, `${panelRel}: slash autocomplete boundary missing`);
+  const functionSource = source.slice(start, end + 2);
+  const getContext = Function(
+    'SLASH_COMMANDS',
+    'findSlashCommand',
+    'slashCommandIsDiscoverable',
+    'slashOptionIsDiscoverable',
+    `let inputEl = null;\n${functionSource}\nreturn (value, cursor = value.length) => { inputEl = { value, selectionStart: cursor, selectionEnd: cursor }; return getSlashAutocompleteContext(); };`,
+  )(
+    slash.SLASH_COMMANDS,
+    slash.findSlashCommand,
+    slash.slashCommandIsDiscoverable,
+    slash.slashOptionIsDiscoverable,
+  );
+  return { ...slash, getContext };
+}
+
 function packagedFreeSkillzRecord(prefix) {
   return {
     id: 'freeskillz-xyz',
@@ -88,7 +124,7 @@ const { getActiveAdapter: getActiveAdapterFx } = await import(
   'file://' + path.join(ROOT, 'src/firefox/src/agent/adapters.js').replace(/\\/g, '/')
 );
 
-// trace-export.js is pure ESM — the /export-with-traces serializer, tested here.
+// trace-export.js is pure ESM — the /export --traces serializer, tested here.
 const { tracesToMarkdown } = await import(
   'file://' + path.join(ROOT, 'src/chrome/src/agent/trace-export.js').replace(/\\/g, '/')
 );
@@ -1240,14 +1276,16 @@ test('user memory browser wiring is mirrored and non-blocking', () => {
     assert.match(background, /async function markUserMemoryExtractionJobFailed\(jobId\)[\s\S]*attempts: attempts \+ 1/, `${label}: extraction jobs should retry once`);
     assert.match(background, /await markUserMemoryExtractionJobFailed\(job\.id\);\s*scheduleUserMemoryExtractionDrain\(USER_MEMORY_EXTRACTION_RETRY_DELAY_MS\);\s*return;/, `${label}: retryable extraction failures should reschedule the drain with a backoff delay`);
 
-    for (const command of ['/remember', '/show-memory', '/forget-memory']) {
-      assert.match(sidepanel, new RegExp(command.replace('/', '\\/')), `${label}: sidepanel missing ${command}`);
-      assert.match(locale, new RegExp(command.replace('/', '\\/')), `${label}: locale missing ${command}`);
-    }
+    assert.match(sidepanel, /usage: '\/memory \[--add <text> \| --forget <id>\]'/, `${label}: canonical /memory usage missing`);
+    assert.match(sidepanel, /value: '--add'[\s\S]*?action: 'add'[\s\S]*?takesRemainder: true/, `${label}: /memory --add metadata missing`);
+    assert.match(sidepanel, /value: '--forget'[\s\S]*?action: 'forget'[\s\S]*?takesRemainder: true/, `${label}: /memory --forget metadata missing`);
+    assert.match(locale, /'sp\.slash\.show_memory':/, `${label}: memory show description missing`);
+    assert.match(locale, /'sp\.slash\.remember':/, `${label}: memory add description missing`);
+    assert.match(locale, /'sp\.slash\.forget_memory':/, `${label}: memory forget description missing`);
     assert.match(sidepanel, /async function rememberUserMemory\(note, tabId = currentTabId\)/, `${label}: remember command function missing`);
-    assert.match(sidepanel, /await rememberUserMemory\(text\.slice\(mRemember\[0\]\.length\), tabId\)/, `${label}: remember command handler missing`);
-    assert.match(sidepanel, /await showUserMemory\(tabId\)/, `${label}: show-memory handler missing`);
-    assert.match(sidepanel, /await forgetUserMemory\(text\.slice\(mForgetMemory\[0\]\.length\), tabId\)/, `${label}: forget-memory handler missing`);
+    assert.match(sidepanel, /command\.value === '\/memory' && action === 'add'[\s\S]*?await rememberUserMemory\(payload, tabId\)/, `${label}: /memory --add handler missing`);
+    assert.match(sidepanel, /command\.value === '\/memory' && action === 'show'[\s\S]*?await showUserMemory\(tabId\)/, `${label}: /memory show handler missing`);
+    assert.match(sidepanel, /command\.value === '\/memory' && action === 'forget'[\s\S]*?await forgetUserMemory\(payload, tabId\)/, `${label}: /memory --forget handler missing`);
     assert.match(sidepanel, /card\.dataset\.memorySource = scheduledJobId[\s\S]*'scheduled_clarification'[\s\S]*'form_confirmation'[\s\S]*'clarification_response'/, `${label}: clarify cards should tag memory source`);
     assert.match(sidepanel, /clarifyPayload\.memorySource = card\.dataset\.memorySource/, `${label}: clarify responses should include memory source metadata`);
 
@@ -1669,7 +1707,7 @@ test('GitHub Enterprise does not match github adapter (strict)', () => {
 });
 
 // ────────────────────────────────────────────────────────────────────────
-// /export-with-traces serializer tests
+// /export --traces serializer tests
 // ────────────────────────────────────────────────────────────────────────
 
 console.log('\ntrace export');
@@ -1750,7 +1788,7 @@ test('trace export: chrome and firefox serializers are identical', () => {
   assert.equal(tracesToMarkdownFx(TRACE_RUNS).markdown, tracesToMarkdown(TRACE_RUNS).markdown);
 });
 
-test('export-with-traces is wired in both side panels and backgrounds', () => {
+test('/export --traces is wired in both side panels and backgrounds', () => {
   for (const [label, panelRel, bgRel] of [
     ['chrome', 'src/chrome/src/ui/sidepanel.js', 'src/chrome/src/background.js'],
     ['firefox', 'src/firefox/src/ui/sidepanel.js', 'src/firefox/src/background.js'],
@@ -1759,23 +1797,18 @@ test('export-with-traces is wired in both side panels and backgrounds', () => {
     const bg = fs.readFileSync(path.join(ROOT, bgRel), 'utf8');
     assert.match(
       panel,
-      /\{ value: '\/export-with-traces', descriptionKey: 'sp\.slash\.export_traces' \}/,
-      `${label}: slash autocomplete should list /export-with-traces`,
+      /usage: '\/export \[--traces\]'[\s\S]*?value: '--traces'[\s\S]*?action: 'traces'[\s\S]*?outOfBand: true/,
+      `${label}: slash metadata should advertise /export --traces`,
     );
     assert.match(
       panel,
-      /const OUT_OF_BAND_SLASH_COMMANDS = new Set\(\[[\s\S]*?'\/export-with-traces'[\s\S]*?\]\);/,
-      `${label}: /export-with-traces should be runnable while busy`,
+      /function slashInvocationIsOutOfBand\(invocation\)[\s\S]*?actionOption\?\.outOfBand \?\? invocation\.command\.outOfBand/,
+      `${label}: variant metadata should control busy eligibility`,
     );
-    const exportWithIdx = panel.indexOf('// /export-with-traces');
-    const exportIdx = panel.indexOf('// /export — export conversation as markdown');
-    assert.notEqual(exportWithIdx, -1, `${label}: /export-with-traces handler missing`);
-    assert.notEqual(exportIdx, -1, `${label}: /export handler missing`);
-    assert.ok(exportWithIdx < exportIdx, `${label}: /export-with-traces must be parsed before /export`);
     assert.match(
       panel,
-      /if \(\/\^\\\/export-with-traces\\b\\s\*\/i\.test\(text\)\) \{[\s\S]*?sendToBackground\('export_traces', \{ tabId \}\)/,
-      `${label}: /export-with-traces should call export_traces on the background`,
+      /if \(command\.value === '\/export' && action === 'traces'\) \{[\s\S]*?sendToBackground\('export_traces', \{ tabId \}\)/,
+      `${label}: /export --traces should call export_traces on the background`,
     );
     assert.match(
       panel,
@@ -5202,12 +5235,12 @@ test('getToolsForMode: retired tools are not model-callable', () => {
         assert.match(prompt, /(?:auto-screenshot|injected visual context|verification screenshot)/i, `[${label}] ${promptLabel} prompt should preserve automatic visual verification guidance`);
       }
       if (label === 'chrome') {
-        assert.match(prompt, /\/full-page-screenshot\b/, `[${label}] ${promptLabel} prompt should direct full-page chat-image requests to the /full-page-screenshot slash command`);
+        assert.match(prompt, /\/screenshot --full-page\b/, `[${label}] ${promptLabel} prompt should direct full-page chat-image requests to /screenshot --full-page`);
         assert.match(prompt, /\/record\b/, `[${label}] ${promptLabel} prompt should direct recording requests to the /record slash command`);
-        assert.match(prompt, /\/record-full-screen\b/, `[${label}] ${promptLabel} prompt should direct screen recording requests to the /record-full-screen slash command`);
+        assert.match(prompt, /\/record --full-screen\b/, `[${label}] ${promptLabel} prompt should direct screen recording requests to /record --full-screen`);
       } else {
-        assert.doesNotMatch(prompt, /\/full-page-screenshot\b/, `[${label}] ${promptLabel} prompt must not mention the Chrome-only full-page screenshot slash command`);
-        assert.doesNotMatch(prompt, /\/record-full-screen\b/, `[${label}] ${promptLabel} prompt must not mention the Chrome-only full-screen recording slash command`);
+        assert.doesNotMatch(prompt, /\/screenshot --full-page\b/, `[${label}] ${promptLabel} prompt must not mention the Chrome-only full-page screenshot flag`);
+        assert.doesNotMatch(prompt, /\/record --full-screen\b/, `[${label}] ${promptLabel} prompt must not mention the Chrome-only full-screen recording flag`);
       }
     }
   }
@@ -7178,8 +7211,9 @@ test('sidepanel exposes schedule slash commands in both builds', () => {
   ]) {
     const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
     const locale = fs.readFileSync(path.join(ROOT, localeRel), 'utf8');
-    assert.match(panel, /\/schedule\b/, `${label}: /schedule parser missing`);
-    assert.match(panel, /\/list-schedules\b/, `${label}: /list-schedules parser missing`);
+    assert.match(panel, /usage: '\/schedule \[prompt\] \| \/schedule --list'/, `${label}: canonical /schedule usage missing`);
+    assert.match(panel, /value: '--list'[\s\S]*?action: 'list'[\s\S]*?outOfBand: true/, `${label}: /schedule --list metadata missing`);
+    assert.match(panel, /command\.value === '\/schedule' && action === 'list'/, `${label}: /schedule --list parser route missing`);
     assert.match(panel, /create_scheduled_job/, `${label}: composer should create scheduled jobs through background`);
     assert.match(panel, /afterInput\.min = '0'/, `${label}: schedule composer should allow immediate relative tasks`);
     assert.match(panel, /afterInput\.max = '10080'/, `${label}: schedule composer should allow seven-day relative delays`);
@@ -7215,12 +7249,13 @@ test('sidepanel exposes schedule slash commands in both builds', () => {
     assert.match(panel, /create_scheduled_job'[\s\S]*?\{\s*tabId,[\s\S]*?job:/, `${label}: schedule form should create jobs for the captured tab`);
     assert.match(panel, /const createdHtml = tSystemHtml\('sp\.schedule_form\.created'[\s\S]*?if \(currentTabId !== tabId\) \{[\s\S]*?replaceCachedScheduleComposer\(tabId, form\.dataset\.composerId, createdHtml\);[\s\S]*?return;[\s\S]*?\}[\s\S]*?form\.remove\(\);/, `${label}: schedule form should update hidden cached composers instead of leaving stale disabled forms`);
     assert.match(panel, /catch \(err\) \{[\s\S]*?if \(currentTabId !== tabId\) \{[\s\S]*?updateCachedScheduleComposerError\(tabId, form\.dataset\.composerId, err\.message\);[\s\S]*?return;[\s\S]*?\}[\s\S]*?submit\.disabled = false;[\s\S]*?errorEl\.textContent = err\.message;/, `${label}: schedule form failures should update hidden cached composers instead of leaving disabled forms`);
-    assert.match(panel, /renderScheduleComposer\(text\.slice\(mSchedule\[0\]\.length\)\.trim\(\), tabId\)/, `${label}: /schedule should pass the initiating tab into the async composer`);
+    assert.match(panel, /renderScheduleComposer\(payload, tabId\)/, `${label}: /schedule should pass the initiating tab into the async composer`);
     assert.match(panel, /urlInput\.value = initialScheduleUrl/, `${label}: schedule form should prefill URL targets from the active tab`);
     assert.match(panel, /targetType\.value = 'url'/, `${label}: schedule form should default http(s) pages to URL targets`);
     assert.match(panel, /content\.appendChild\(form\)/, `${label}: schedule form should append after initial target defaults are applied`);
-    assert.match(locale, /\/schedule/, `${label}: help should mention /schedule`);
-    assert.match(locale, /\/list-schedules/, `${label}: help should mention /list-schedules`);
+    assert.match(locale, /'sp\.slash\.schedule':/, `${label}: /schedule description missing`);
+    assert.match(locale, /'sp\.slash\.list_schedules':/, `${label}: --list description missing`);
+    assert.match(panel, /function buildSlashCommandHelpHtml\(\)[\s\S]*?command\.usage[\s\S]*?option\.value/, `${label}: help should be generated from command and option metadata`);
   }
 });
 
@@ -7247,11 +7282,11 @@ test('sidepanel exposes scratchpad slash commands in both builds', () => {
     const bg = fs.readFileSync(path.join(ROOT, bgRel), 'utf8');
     const agent = fs.readFileSync(path.join(ROOT, agentRel), 'utf8');
     const locale = fs.readFileSync(path.join(ROOT, localeRel), 'utf8');
-    assert.match(panel, /\/show-scratchpad\b/, `${label}: /show-scratchpad parser missing`);
-    assert.match(panel, /\/edit-scratchpad\b/, `${label}: /edit-scratchpad parser missing`);
-    assert.match(panel, /\/clear-scratchpad\b/, `${label}: /clear-scratchpad parser missing`);
+    assert.match(panel, /usage: '\/scratchpad \[--append <text> \| --clear\]'/, `${label}: canonical /scratchpad usage missing`);
+    assert.match(panel, /value: '--append'[\s\S]*?action: 'append'[\s\S]*?takesRemainder: true/, `${label}: /scratchpad --append metadata missing`);
+    assert.match(panel, /value: '--clear'[\s\S]*?action: 'clear'[\s\S]*?disallowPayload: true/, `${label}: /scratchpad --clear metadata missing`);
     assert.match(panel, /get_scratchpad/, `${label}: sidepanel should call background scratchpad reader`);
-    assert.match(panel, /const msgEl = addMessage\('system', [\s\S]*?scratchpad-dump[\s\S]*?\);\s*addScratchpadCopyButton\(msgEl\);/, `${label}: /show-scratchpad should attach a scratchpad-only copy button`);
+    assert.match(panel, /const msgEl = addMessage\('system', [\s\S]*?scratchpad-dump[\s\S]*?\);\s*addScratchpadCopyButton\(msgEl\);/, `${label}: /scratchpad should attach a scratchpad-only copy button`);
     assert.match(panel, /function addScratchpadCopyButton\(msgEl\) \{[\s\S]*?querySelector\('pre\.scratchpad-dump'\)[\s\S]*?scratchpad-copy-btn[\s\S]*?bindMessageCopyButton\(btn\);/, `${label}: scratchpad copy button should target the scratchpad pre`);
     assert.match(panel, /function getMessageCopyText\(btn\) \{[\s\S]*?classList\.contains\('scratchpad-copy-btn'\)[\s\S]*?querySelector\('pre\.scratchpad-dump'\)\?\.textContent/, `${label}: scratchpad copy should copy only pre textContent`);
     assert.match(panel, /write_scratchpad/, `${label}: sidepanel should call background scratchpad writer`);
@@ -7262,23 +7297,23 @@ test('sidepanel exposes scratchpad slash commands in both builds', () => {
     assert.match(agent, /async writeScratchpad\(tabId, text, options = \{\}\) \{[\s\S]*?this\.getConversation\(tabId, mode\);[\s\S]*?this\._scratchpadWrite\(tabId, \{ text, replace: !!options\?\.replace \}\);[\s\S]*?\}/, `${label}: agent should expose scratchpad append wrapper`);
     assert.match(agent, /clearScratchpad\(tabId\) \{[\s\S]*?this\._findScratchpadIndex\(messages\)[\s\S]*?messages\.splice\(idx, 1\)[\s\S]*?scratchpad cleared[\s\S]*?\}/, `${label}: agent should expose synchronous scratchpad clear method`);
     assert.doesNotMatch(agent, /async clearScratchpad\(tabId\)/, `${label}: scratchpad clear method should not be async`);
-    assert.match(locale, /\/show-scratchpad/, `${label}: help should mention /show-scratchpad`);
-    assert.match(locale, /\/edit-scratchpad/, `${label}: help should mention /edit-scratchpad`);
-    assert.match(locale, /\/clear-scratchpad/, `${label}: help should mention /clear-scratchpad`);
+    assert.match(locale, /'sp\.slash\.show_scratchpad':/, `${label}: scratchpad show description missing`);
+    assert.match(locale, /'sp\.slash\.edit_scratchpad':/, `${label}: scratchpad append description missing`);
+    assert.match(locale, /'sp\.slash\.clear_scratchpad':/, `${label}: scratchpad clear description missing`);
   }
 });
 
-test('all locales translate the clear-scratchpad slash command', () => {
+test('all locales translate canonical scratchpad option help', () => {
   for (const [label, localeDir] of [
     ['chrome', 'src/chrome/src/ui/locales'],
     ['firefox', 'src/firefox/src/ui/locales'],
   ]) {
     for (const filename of fs.readdirSync(path.join(ROOT, localeDir)).filter((name) => name.endsWith('.js'))) {
       const locale = fs.readFileSync(path.join(ROOT, localeDir, filename), 'utf8');
-      assert.match(locale, /['"]sp\.slash\.clear_scratchpad['"]:\s*['"][^'"]+['"]/, `${label}/${filename}: missing translated clear-scratchpad slash label`);
+      assert.match(locale, /['"]sp\.slash\.clear_scratchpad['"]:\s*['"][^'"]+['"]/, `${label}/${filename}: missing translated scratchpad clear option label`);
       assert.match(locale, /['"]sp\.scratchpad\.cleared['"]:\s*['"][^'"]+['"]/, `${label}/${filename}: missing translated scratchpad cleared message`);
-      assert.match(locale, /\/clear-scratchpad\b/, `${label}/${filename}: help should mention /clear-scratchpad`);
-      assert.doesNotMatch(locale, /<br><br><code>\/clear-scratchpad/, `${label}/${filename}: help should not add an extra blank line before /clear-scratchpad`);
+      assert.match(locale, /['"]sp\.slash\.invalid_usage['"]:/, `${label}/${filename}: localized usage guidance missing`);
+      assert.match(locale, /['"]sp\.help\.shortcuts_html['"]:/, `${label}/${filename}: localized help shortcuts missing`);
     }
   }
 });
@@ -7506,7 +7541,7 @@ test('chrome /record reports mic denial as a warning, not recording failure', ()
   assert.match(locale, /Recording started with tab audio and video only/, 'chrome: mic warning should say recording started');
 });
 
-test('chrome /record-full-screen is slash-only, Chrome-only, and hidden from the recording banner', () => {
+test('chrome /record --full-screen is slash-only, Chrome-only, and hidden from the recording banner', () => {
   const panel = fs.readFileSync(path.join(ROOT, 'src/chrome/src/ui/sidepanel.js'), 'utf8');
   const firefoxPanel = fs.readFileSync(path.join(ROOT, 'src/firefox/src/ui/sidepanel.js'), 'utf8');
   const manifest = fs.readFileSync(path.join(ROOT, 'src/chrome/manifest.json'), 'utf8');
@@ -7515,23 +7550,24 @@ test('chrome /record-full-screen is slash-only, Chrome-only, and hidden from the
   const offscreen = fs.readFileSync(path.join(ROOT, 'src/chrome/src/offscreen/recorder.js'), 'utf8');
   const locale = fs.readFileSync(path.join(ROOT, 'src/chrome/src/ui/locales/en.js'), 'utf8');
 
-  const slashList = panel.slice(panel.indexOf('const SLASH_COMMANDS = ['), panel.indexOf('const OUT_OF_BAND_SLASH_COMMANDS'));
-  assert.match(slashList, /\/record-full-screen/, 'chrome: slash autocomplete should advertise /record-full-screen');
-  assert.match(locale, /sp\.slash\.record_full_screen/, 'chrome: missing /record-full-screen slash label');
+  const slashList = panel.slice(panel.indexOf('const SLASH_COMMANDS = ['), panel.indexOf('function slashCommandIsDiscoverable'));
+  assert.match(slashList, /usage: '\/record \[--full-screen\] \[--transcribe\]'/, 'chrome: slash metadata should advertise /record flags');
+  assert.match(slashList, /value: '--full-screen'[\s\S]*?action: 'full-screen'/, 'chrome: slash metadata should advertise --full-screen');
+  assert.match(locale, /sp\.slash\.record_full_screen/, 'chrome: missing --full-screen description');
   assert.doesNotMatch(manifest, /"desktopCapture"/, 'chrome: full-screen recording should use getDisplayMedia without desktopCapture permission');
 
-  const fullScreenIdx = panel.indexOf("// /record-full-screen");
-  const recordIdx = panel.indexOf("// /record — start recording");
-  assert.ok(fullScreenIdx >= 0 && recordIdx >= 0 && fullScreenIdx < recordIdx, 'chrome: /record-full-screen parser must run before /record');
+  const fullScreenIdx = panel.indexOf("if (command.value === '/record' && action === 'full-screen')");
+  const recordIdx = panel.indexOf("if (command.value === '/record' && action === 'tab')");
+  assert.ok(fullScreenIdx >= 0 && recordIdx >= 0 && fullScreenIdx < recordIdx, 'chrome: full-screen route must run before tab recording');
   const fullScreenBody = panel.slice(fullScreenIdx, recordIdx);
   const helperStart = panel.indexOf('async function startFullScreenRecording');
   const helperBody = panel.slice(helperStart, panel.indexOf('function updateApiBadge', helperStart));
-  assert.match(fullScreenBody, /startFullScreenRecording\(tabId/, 'chrome: parser should route /record-full-screen through helper');
+  assert.match(fullScreenBody, /startFullScreenRecording\(tabId/, 'chrome: parser should route /record --full-screen through helper');
   assert.match(helperBody, /prepare_recording_host/, 'chrome: full-screen route should prepare offscreen before recording');
   assert.match(helperBody, /start_display_recording[\s\S]*?showBanner:\s*false/, 'chrome: full-screen route should start hidden display recording');
   assert.doesNotMatch(helperBody, /streamId/, 'chrome: sidepanel must not ferry a desktopCapture stream id to the recorder');
   assert.match(panel, /function shouldShowRecordingBanner\(state\)[\s\S]*?state\?\.showBanner !== false/, 'chrome: banner visibility should be state-driven');
-  assert.match(panel, /parseRecordingSlashOptions[\s\S]*?--transcribe/, 'chrome: recording slash commands should support transcript opt-in');
+  assert.match(panel, /optionValues\.has\('--transcribe'\)/, 'chrome: recording slash commands should support transcript opt-in');
 
   assert.match(background, /prepare_recording_host[\s\S]*?start_display_recording/, 'chrome: background should keep recorder routes for slash commands');
   assert.match(host, /export async function startDisplayRecording\(options = \{\}/, 'chrome: recorder host should expose display recording for slash command routing');
@@ -7556,9 +7592,112 @@ test('chrome /record-full-screen is slash-only, Chrome-only, and hidden from the
   assert.match(host, /async function beforeRecordingFinalize\(beforeFinalizeRecording\)[\s\S]*?recordingState\?\.transcribeAfter[\s\S]*?await beforeFinalizeRecording\(\)/, 'chrome: recorder host should only preload providers before finalize when transcription was requested');
   assert.match(host, /async function runTranscription[\s\S]*?providerManagerRef\.providers\?\.size === 0[\s\S]*?await providerManagerRef\.load\(\)/, 'chrome: transcription should also lazy-load providers as a fallback');
 
-  const firefoxSlashList = firefoxPanel.slice(firefoxPanel.indexOf('const SLASH_COMMANDS = ['), firefoxPanel.indexOf('const OUT_OF_BAND_SLASH_COMMANDS'));
-  assert.doesNotMatch(firefoxSlashList, /\/record-full-screen/, 'firefox: autocomplete should not advertise /record-full-screen');
-  assert.match(firefoxPanel, /\/record-full-screen[\s\S]*Full-screen recording is not supported in Firefox/, 'firefox: manual /record-full-screen should return unsupported');
+  const firefoxSlashList = firefoxPanel.slice(firefoxPanel.indexOf('const SLASH_COMMANDS = ['), firefoxPanel.indexOf('function slashCommandIsDiscoverable'));
+  assert.match(firefoxSlashList, /value: '\/record'[\s\S]*?unsupported: true/, 'firefox: canonical /record syntax should be recognized as unsupported');
+  assert.match(firefoxPanel, /function slashCommandIsDiscoverable\(command\) \{[\s\S]*?command\?\.unsupported !== true/, 'firefox: unsupported recording should stay out of autocomplete and help');
+  assert.match(firefoxPanel, /showComposerToast\(t\('sp\.slash\.unsupported'/, 'firefox: unsupported recording should show a local error');
+});
+
+test('canonical slash parser handles flags, values, casing, termination, and hard-cutover errors', () => {
+  const chrome = loadSlashCommandRuntime('src/chrome/src/ui/sidepanel.js');
+  const firefox = loadSlashCommandRuntime('src/firefox/src/ui/sidepanel.js');
+
+  for (const text of [
+    '/record --full-screen --transcribe',
+    '/ReCoRd --TRANSCRIBE --FULL-SCREEN',
+  ]) {
+    const invocation = chrome.parseSlashInvocation(text);
+    assert.equal(invocation.action, 'full-screen', `${text}: should select full-screen recording`);
+    assert.equal(invocation.optionValues.has('--full-screen'), true, `${text}: full-screen flag missing`);
+    assert.equal(invocation.optionValues.has('--transcribe'), true, `${text}: transcribe flag missing`);
+  }
+
+  const scheduleList = chrome.parseSlashInvocation('  /SCHEDULE   --LIST  ');
+  assert.equal(scheduleList.action, 'list');
+  assert.equal(chrome.slashInvocationIsOutOfBand(scheduleList), true);
+  assert.equal(chrome.parseSlashInvocation('/schedule write report --list').payload, 'write report --list', 'flags should stop at the first positional argument');
+  assert.equal(chrome.parseSlashInvocation('/schedule -- --list tomorrow').payload, '--list tomorrow', 'explicit -- should terminate option parsing');
+  assert.equal(chrome.parseSlashInvocation('/scratchpad --append -- --clear literally').payload, '--clear literally', 'value flags should support explicit -- termination');
+  assert.equal(chrome.parseSlashInvocation('/scratchpad --append note --clear').payload, 'note --clear', 'option parsing should stop after a value begins');
+
+  for (const text of [
+    '/record --unknown',
+    '/record --transcribe --transcribe',
+    '/scratchpad --append',
+    '/memory --forget',
+    '/scratchpad --append --clear',
+    '/screenshot trailing text',
+  ]) {
+    assert.equal(chrome.parseSlashInvocation(text).error, 'invalid-usage', `${text}: should be rejected locally`);
+  }
+
+  const retired = [
+    '/list-schedules',
+    '/record-full-screen',
+    '/full-page-screenshot',
+    '/export-with-traces',
+    '/show-scratchpad',
+    '/edit-scratchpad note',
+    '/clear-scratchpad',
+    '/show-memory',
+    '/remember note',
+    '/forget-memory id',
+    '/check-progress',
+  ];
+  for (const text of retired) {
+    assert.equal(chrome.parseSlashInvocation(text).error, 'unknown-command', `${text}: retired syntax must not execute`);
+  }
+
+  const chromeHelp = chrome.buildSlashCommandHelpHtml();
+  for (const command of chrome.SLASH_COMMANDS.filter((item) => !item.unsupported)) {
+    assert.match(chromeHelp, new RegExp(command.usage.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `Chrome help should include ${command.usage}`);
+    for (const option of (command.options || []).filter((item) => !item.unsupported)) {
+      const optionUsage = `${option.value}${option.valueLabel ? ` ${option.valueLabel}` : ''}`;
+      assert.match(chromeHelp, new RegExp(optionUsage.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `Chrome help should describe ${optionUsage}`);
+      assert.match(chromeHelp, new RegExp(option.descriptionKey.replace(/\./g, '\\.')), `Chrome help should localize ${optionUsage}`);
+    }
+  }
+  for (const text of retired) {
+    assert.doesNotMatch(chromeHelp, new RegExp(text.split(' ')[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `Chrome help must omit retired syntax ${text}`);
+  }
+
+  assert.equal(firefox.parseSlashInvocation('/record --full-screen --transcribe').unsupported, true, 'Firefox should reject canonical recording locally');
+  assert.equal(firefox.parseSlashInvocation('/screenshot --full-page').unsupported, true, 'Firefox should reject the unsupported canonical screenshot flag locally');
+  assert.equal(firefox.SLASH_COMMANDS.find((command) => command.value === '/record').unsupported, true, 'Firefox recording should be hidden from discovery');
+  const firefoxHelp = firefox.buildSlashCommandHelpHtml();
+  assert.doesNotMatch(firefoxHelp, /\/record/, 'Firefox help should omit unsupported recording');
+  assert.doesNotMatch(firefoxHelp, /--full-page/, 'Firefox help should omit the unsupported full-page flag');
+});
+
+test('slash autocomplete progressively suggests only available unused flags', () => {
+  const chrome = loadSlashAutocompleteRuntime('src/chrome/src/ui/sidepanel.js');
+  const firefox = loadSlashAutocompleteRuntime('src/firefox/src/ui/sidepanel.js');
+  const optionMatches = (runtime, context) => (context?.command?.options || [])
+    .filter(runtime.slashOptionIsDiscoverable)
+    .filter((option) => !context.selected.has(option.value))
+    .filter((option) => option.value.startsWith(context.query))
+    .map((option) => option.value);
+
+  const initial = chrome.getContext('/record ');
+  assert.equal(initial.kind, 'option');
+  assert.deepEqual(optionMatches(chrome, initial), ['--full-screen', '--transcribe']);
+
+  const partial = chrome.getContext('/record --trans');
+  assert.equal(partial.query, '--trans');
+  assert.deepEqual(optionMatches(chrome, partial), ['--transcribe']);
+
+  const afterFullScreen = chrome.getContext('/record --full-screen ');
+  assert.deepEqual([...afterFullScreen.selected], ['--full-screen']);
+  assert.deepEqual(optionMatches(chrome, afterFullScreen), ['--transcribe']);
+
+  const afterTranscribe = chrome.getContext('/record --transcribe ');
+  assert.deepEqual(optionMatches(chrome, afterTranscribe), ['--full-screen']);
+  assert.deepEqual(optionMatches(chrome, chrome.getContext('/record --transcribe --full-screen ')), []);
+  assert.equal(chrome.getContext('/scratchpad --append '), null, 'value-taking options should hand control back to text entry');
+  assert.equal(chrome.getContext('/record positional'), null, 'positional input should close flag autocomplete');
+
+  assert.equal(firefox.getContext('/record '), null, 'Firefox should not discover unsupported recording');
+  assert.deepEqual(optionMatches(firefox, firefox.getContext('/screenshot ')), [], 'Firefox should not suggest the unsupported full-page flag');
 });
 
 test('chrome offscreen helper recreates an evicted document after ready cache is stale', async () => {
@@ -7952,9 +8091,9 @@ test('sidepanel export keeps blob URLs alive until the download is committed', (
     ['firefox', 'src/firefox/src/ui/sidepanel.js'],
   ]) {
     const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
-    const exportStart = panel.indexOf('// /export');
+    const exportStart = panel.indexOf("if (command.value === '/export' && action === 'conversation')");
     assert.notEqual(exportStart, -1, `${label}: /export handler missing`);
-    const exportBody = panel.slice(exportStart, panel.indexOf('// /profile', exportStart));
+    const exportBody = panel.slice(exportStart, panel.indexOf("if (command.value === '/profile')", exportStart));
     assert.match(
       exportBody,
       /const url = URL\.createObjectURL\(blob\);[\s\S]*?const a = document\.createElement\('a'\);[\s\S]*?document\.body\.appendChild\(a\);[\s\S]*?try \{[\s\S]*?a\.click\(\);[\s\S]*?\} finally \{[\s\S]*?a\.remove\(\);[\s\S]*?setTimeout\(\(\) => URL\.revokeObjectURL\(url\), 7000\);[\s\S]*?\}/,
@@ -7997,16 +8136,17 @@ test('sidepanel escapes dynamic system-message interpolation before raw HTML ins
       /addMessage\('system',\s*(?:tSystemHtml|t\('[^']*_html'|imgHtml)/,
       `${label}: trusted system HTML should be wrapped explicitly`,
     );
-    for (const key of [
+    const dynamicHtmlKeys = [
       'sp.scheduled.created',
       'sp.scheduled.needs_user_input',
       'sp.schedule_form.created',
       'sp.scratchpad.error',
       'sp.compact.failed',
       'sp.screenshot.error',
-      'sp.record.error',
       'sp.vision.error',
-    ]) {
+    ];
+    if (label === 'chrome') dynamicHtmlKeys.push('sp.record.error');
+    for (const key of dynamicHtmlKeys) {
       assert.match(panel, new RegExp(`tSystemHtml\\('${key.replace(/\./g, '\\.')}'`), `${label}: ${key} should escape dynamic params for system HTML`);
     }
   }
@@ -8591,8 +8731,8 @@ test('sidepanel deletes durable history when clearing conversations', () => {
     const helperBody = panel.slice(helperStart, panel.indexOf('refreshScheduledJobs({', helperStart));
     assert.match(helperBody, /await resetChatHistoryStateForTab\(tabId\);[\s\S]*?if \(currentTabId !== tabId\) return;/, `${label}: clear helper should delete durable history before visible-tab guards`);
 
-    const resetIdx = panel.indexOf('// /reset');
-    const resetSlashBody = panel.slice(resetIdx, panel.indexOf('// /screenshot', resetIdx));
+    const resetIdx = panel.indexOf("if (command.value === '/reset')");
+    const resetSlashBody = panel.slice(resetIdx, panel.indexOf("if (command.value === '/screenshot'", resetIdx));
     assert.match(resetSlashBody, /await sendToBackground\('clear_conversation', \{ tabId \}\);[\s\S]*?await renderClearedConversationForTab\(tabId\);/, `${label}: /reset should await durable history deletion`);
 
     const clearStart = panel.indexOf("clearBtn.addEventListener('click', async () => {");
@@ -8928,7 +9068,7 @@ test('sidepanel drops stale provider selection and connection checks', () => {
 
     const testStart = panel.indexOf('async function testConnection(options = {}) {');
     assert.notEqual(testStart, -1, `${label}: testConnection missing`);
-    const testBody = panel.slice(testStart, panel.indexOf('\n}\n\nfunction getSlashCommandQuery', testStart) + 2);
+    const testBody = panel.slice(testStart, panel.indexOf('\n}\n\nfunction getSlashAutocompleteContext', testStart) + 2);
     const captureIdx = testBody.indexOf('const providerId = options.providerId || providerSelect.value;');
     const requestIdx = testBody.indexOf('const requestId = ++providerTestRequestId;');
     const sendIdx = testBody.indexOf("sendToBackground('test_provider'");
@@ -9406,14 +9546,14 @@ test('sidepanel scopes allow-api override to the tab conversation', () => {
     const switchBody = panel.slice(switchStart, panel.indexOf('refreshScheduledJobs({', switchStart));
     assert.match(switchBody, /currentTabId = newTabId;[\s\S]*?syncApiMutationsAllowedForCurrentTab\(\);/, `${label}: switching tabs should load the selected tab's /allow-api state`);
 
-    const resetStart = panel.indexOf('function renderClearedConversationForTab(tabId)');
+    const resetStart = panel.indexOf('async function renderClearedConversationForTab(tabId)');
     assert.notEqual(resetStart, -1, `${label}: renderClearedConversationForTab missing`);
     const resetBody = panel.slice(resetStart, panel.indexOf('refreshScheduledJobs({', resetStart));
     assert.match(resetBody, /clearCachedTabChat\(tabId\);[\s\S]*?setApiMutationsAllowedForTab\(tabId, false\);[\s\S]*?if \(currentTabId !== tabId\) return;/, `${label}: reset should clear the target tab's /allow-api state before visible-tab guards`);
 
-    const allowIdx = panel.indexOf('// /allow-api');
+    const allowIdx = panel.indexOf("if (command.value === '/allow-api')");
     assert.notEqual(allowIdx, -1, `${label}: /allow-api parser missing`);
-    const allowBody = panel.slice(allowIdx, panel.indexOf('// /compact', allowIdx));
+    const allowBody = panel.slice(allowIdx, panel.indexOf("if (command.value === '/dangerously-skip-permissions')", allowIdx));
     assert.match(allowBody, /const wasAlreadyAllowed = isApiMutationsAllowedForTab\(tabId\);[\s\S]*?setApiMutationsAllowedForTab\(tabId, true\);/, `${label}: /allow-api should enable only the initiating tab conversation`);
     assert.doesNotMatch(allowBody, /apiMutationsAllowed = true;/, `${label}: /allow-api should not enable a global mutation override`);
   }
@@ -9427,11 +9567,11 @@ test('sidepanel exposes dangerously-skip-permissions in both builds', () => {
     const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
     const locale = fs.readFileSync(path.join(ROOT, localeRel), 'utf8');
     assert.match(panel, /const PERMISSION_GATE_KEY = 'askBeforeConsequentialActions';/, `${label}: permission gate storage key should be named once`);
-    assert.match(panel, /\{ value: '\/dangerously-skip-permissions', descriptionKey: 'sp\.slash\.dangerously_skip_permissions' \}/, `${label}: slash autocomplete should advertise /dangerously-skip-permissions`);
-    assert.match(panel, /const OUT_OF_BAND_SLASH_COMMANDS = new Set\(\[[\s\S]*?'\/dangerously-skip-permissions'[\s\S]*?\]\);/, `${label}: command should be runnable while a permission-gated run is busy`);
-    const commandIdx = panel.indexOf('// /dangerously-skip-permissions');
+    assert.match(panel, /value: '\/dangerously-skip-permissions'[\s\S]*?descriptionKey: 'sp\.slash\.dangerously_skip_permissions'[\s\S]*?outOfBand: true/, `${label}: slash autocomplete should advertise /dangerously-skip-permissions`);
+    assert.match(panel, /function slashInvocationIsOutOfBand\(invocation\)/, `${label}: command metadata should determine busy eligibility`);
+    const commandIdx = panel.indexOf("if (command.value === '/dangerously-skip-permissions')");
     assert.notEqual(commandIdx, -1, `${label}: parser missing /dangerously-skip-permissions`);
-    const commandBody = panel.slice(commandIdx, panel.indexOf('// /compact', commandIdx));
+    const commandBody = panel.slice(commandIdx, panel.indexOf("if (command.value === '/compact')", commandIdx));
     assert.match(commandBody, /storage\.local\.set\(\{ \[PERMISSION_GATE_KEY\]: false \}\)/, `${label}: command should disable the same storage-backed gate as settings`);
     assert.match(commandBody, /askBeforeConsequential = false;[\s\S]*?updateActWarning\(\);/, `${label}: command should update the local Act-mode warning immediately`);
     assert.match(commandBody, /resolvePendingPermissionPromptsForTab\(tabId\);/, `${label}: command should unblock the active permission prompt after disabling prompts`);
@@ -9444,7 +9584,7 @@ test('sidepanel exposes dangerously-skip-permissions in both builds', () => {
     assert.match(resolverBody, /String\(card\.dataset\.tabId \|\| ''\) !== targetTabId/, `${label}: resolver should answer only prompts for the initiating tab`);
     assert.match(resolverBody, /submitClarify\(card, tabId, clarifyId, 'once', 'slash-command'\);/, `${label}: resolver should use a non-persistent once grant`);
     assert.match(resolverBody, /return resolved;/, `${label}: resolver should report how many prompts it handled`);
-    assert.match(locale, /\/dangerously-skip-permissions/, `${label}: help should mention /dangerously-skip-permissions`);
+    assert.match(panel, /function buildSlashCommandHelpHtml\(\)[\s\S]*?command\.usage/, `${label}: help should render canonical metadata including /dangerously-skip-permissions`);
     assert.match(locale, /'sp\.slash\.dangerously_skip_permissions': 'Disable permission prompts globally'/, `${label}: autocomplete label should have an English fallback`);
     assert.match(locale, /'sp\.permissions\.disabled_html': '⚠️ <strong>Permission prompts are OFF\.<\/strong>/, `${label}: warning message should have an English fallback`);
   }
@@ -9458,14 +9598,14 @@ test('sidepanel scopes async tab commands to the original tab', () => {
     const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
     assert.match(panel, /async function parseSlashCommands\(text, tabId = currentTabId\) \{/, `${label}: slash-command parsing should accept the initiating tab id`);
 
-    const helperStart = panel.indexOf('function renderClearedConversationForTab(tabId)');
+    const helperStart = panel.indexOf('async function renderClearedConversationForTab(tabId)');
     assert.notEqual(helperStart, -1, `${label}: clear helper missing`);
     const helperBody = panel.slice(helperStart, panel.indexOf('\n}', helperStart) + 2);
     assert.match(helperBody, /clearCachedTabChat\(tabId\);[\s\S]*?if \(currentTabId !== tabId\) return;[\s\S]*?messagesEl\.innerHTML = '';/, `${label}: clear helper should clear cached target tab and only mutate visible UI for the same tab`);
     assert.match(helperBody, /refreshScheduledJobs\(\{ tabId \}\);/, `${label}: clear helper should scope async scheduled-job refresh to the cleared tab`);
 
-    const resetIdx = panel.indexOf("// /reset");
-    const resetBody = panel.slice(resetIdx, panel.indexOf("// /screenshot", resetIdx));
+    const resetIdx = panel.indexOf("if (command.value === '/reset')");
+    const resetBody = panel.slice(resetIdx, panel.indexOf("if (command.value === '/screenshot'", resetIdx));
     assert.match(resetBody, /await sendToBackground\('clear_conversation', \{ tabId \}\);[\s\S]*?renderClearedConversationForTab\(tabId\);/, `${label}: /reset should clear the originally requested tab only`);
     assert.doesNotMatch(resetBody, /sendToBackground\('clear_conversation', \{ tabId: currentTabId \}\)/, `${label}: /reset should not use currentTabId after async delay`);
 
@@ -9474,42 +9614,44 @@ test('sidepanel scopes async tab commands to the original tab', () => {
     assert.match(clearBody, /const tabId = currentTabId;[\s\S]*?if \(!window\.confirm\(t\('sp\.clear\.confirm'\)\)\) return;/, `${label}: clear button should confirm before clearing the conversation`);
     assert.match(clearBody, /const tabId = currentTabId;[\s\S]*?await sendToBackground\('clear_conversation', \{ tabId \}\);[\s\S]*?renderClearedConversationForTab\(tabId\);/, `${label}: clear button should clear the originally requested tab only`);
 
-    const compactIdx = panel.indexOf('// /compact');
-    const compactBody = panel.slice(compactIdx, panel.indexOf('// /verbose', compactIdx));
-    assert.match(compactBody, /const remainder = text\.slice\(mCompact\[0\]\.length\)\.trim\(\);[\s\S]*?sendToBackground\('compact_conversation', \{ tabId \}\);[\s\S]*?if \(currentTabId !== tabId\) return remainder;/, `${label}: /compact should preserve residual prompt text after tab switches without rendering into a different tab`);
+    const compactIdx = panel.indexOf("if (command.value === '/compact')");
+    const compactBody = panel.slice(compactIdx, panel.indexOf("if (command.value === '/verbose')", compactIdx));
+    assert.match(compactBody, /const remainder = payload;[\s\S]*?sendToBackground\('compact_conversation', \{ tabId \}\);[\s\S]*?if \(currentTabId !== tabId\) return remainder;/, `${label}: /compact should preserve residual prompt text after tab switches without rendering into a different tab`);
 
-    const listIdx = panel.indexOf('// /list-schedules');
-    const listBody = panel.slice(listIdx, panel.indexOf('// /show-scratchpad', listIdx));
-    assert.match(listBody, /const jobs = await refreshScheduledJobs\(\{ tabId \}\);[\s\S]*?if \(currentTabId !== tabId\) return '';/, `${label}: /list-schedules should not render or refresh results into a different tab`);
+    const listIdx = panel.indexOf("if (command.value === '/schedule' && action === 'list')");
+    const listBody = panel.slice(listIdx, panel.indexOf("if (command.value === '/progress')", listIdx));
+    assert.match(listBody, /const jobs = await refreshScheduledJobs\(\{ tabId \}\);[\s\S]*?if \(currentTabId !== tabId\) return '';/, `${label}: /schedule --list should not render or refresh results into a different tab`);
 
     assert.match(panel, /async function refreshScheduledJobs\(\{ tabId = null \} = \{\}\) \{[\s\S]*?const jobs = response\?\.jobs \|\| \[\];[\s\S]*?if \(tabId != null && currentTabId !== tabId\) return jobs;[\s\S]*?renderScheduledJobs\(jobs\);/, `${label}: scheduled-job refreshes should be able to drop stale tab completions before rendering`);
     assert.match(panel, /await refreshScheduledJobs\(\{ tabId \}\);/, `${label}: tab-scoped scheduled-job actions should not repaint a later visible tab`);
 
-    assert.match(panel, /async function showScratchpad\(tabId = currentTabId\) \{[\s\S]*?sendToBackground\('get_scratchpad', \{ tabId \}\);[\s\S]*?if \(currentTabId !== tabId\) return;[\s\S]*?catch \(e\) \{[\s\S]*?if \(currentTabId !== tabId\) return;[\s\S]*?sp\.scratchpad\.error/, `${label}: /show-scratchpad should not render success or error results into a different tab`);
-    assert.match(panel, /\/\/ \/show-scratchpad[\s\S]*?await showScratchpad\(tabId\);/, `${label}: /show-scratchpad should use the initiating tab id from the parser`);
-    assert.match(panel, /async function editScratchpad\(note, tabId = currentTabId\) \{[\s\S]*?sendToBackground\('write_scratchpad', \{ tabId, text \}\);[\s\S]*?if \(currentTabId !== tabId\) return;[\s\S]*?catch \(e\) \{[\s\S]*?if \(currentTabId !== tabId\) return;[\s\S]*?sp\.scratchpad\.error/, `${label}: /edit-scratchpad should not render success or error results into a different tab`);
-    assert.match(panel, /\/\/ \/edit-scratchpad[\s\S]*?await editScratchpad\(text\.slice\(mEditScratchpad\[0\]\.length\), tabId\);/, `${label}: /edit-scratchpad should use the initiating tab id from the parser`);
-    assert.match(panel, /function clearScratchpad\(tabId = currentTabId\) \{[\s\S]*?sendToBackground\('clear_scratchpad', \{ tabId \}\)[\s\S]*?if \(currentTabId !== tabId\) return;[\s\S]*?catch\(\(e\) => \{[\s\S]*?if \(currentTabId !== tabId\) return;[\s\S]*?sp\.scratchpad\.error/, `${label}: /clear-scratchpad should not render success or error results into a different tab`);
-    const clearScratchpadIdx = panel.indexOf('// /clear-scratchpad');
-    const clearScratchpadBody = panel.slice(clearScratchpadIdx, panel.indexOf('// /schedule', clearScratchpadIdx));
-    assert.match(clearScratchpadBody, /clearScratchpad\(tabId\);\s*return '';/, `${label}: /clear-scratchpad should use the initiating tab id from the parser`);
-    assert.doesNotMatch(clearScratchpadBody, /await clearScratchpad/, `${label}: /clear-scratchpad parser path should not await`);
+    assert.match(panel, /async function showScratchpad\(tabId = currentTabId\) \{[\s\S]*?sendToBackground\('get_scratchpad', \{ tabId \}\);[\s\S]*?if \(currentTabId !== tabId\) return;[\s\S]*?catch \(e\) \{[\s\S]*?if \(currentTabId !== tabId\) return;[\s\S]*?sp\.scratchpad\.error/, `${label}: /scratchpad should not render success or error results into a different tab`);
+    assert.match(panel, /command\.value === '\/scratchpad' && action === 'show'[\s\S]*?await showScratchpad\(tabId\);/, `${label}: /scratchpad should use the initiating tab id from the parser`);
+    assert.match(panel, /async function editScratchpad\(note, tabId = currentTabId\) \{[\s\S]*?sendToBackground\('write_scratchpad', \{ tabId, text \}\);[\s\S]*?if \(currentTabId !== tabId\) return;[\s\S]*?catch \(e\) \{[\s\S]*?if \(currentTabId !== tabId\) return;[\s\S]*?sp\.scratchpad\.error/, `${label}: /scratchpad --append should not render success or error results into a different tab`);
+    assert.match(panel, /command\.value === '\/scratchpad' && action === 'append'[\s\S]*?await editScratchpad\(payload, tabId\);/, `${label}: /scratchpad --append should use the initiating tab id from the parser`);
+    assert.match(panel, /function clearScratchpad\(tabId = currentTabId\) \{[\s\S]*?sendToBackground\('clear_scratchpad', \{ tabId \}\)[\s\S]*?if \(currentTabId !== tabId\) return;[\s\S]*?catch\(\(e\) => \{[\s\S]*?if \(currentTabId !== tabId\) return;[\s\S]*?sp\.scratchpad\.error/, `${label}: /scratchpad --clear should not render success or error results into a different tab`);
+    const clearScratchpadIdx = panel.indexOf("if (command.value === '/scratchpad' && action === 'clear')");
+    const clearScratchpadBody = panel.slice(clearScratchpadIdx, panel.indexOf("if (command.value === '/schedule' && action === 'create')", clearScratchpadIdx));
+    assert.match(clearScratchpadBody, /clearScratchpad\(tabId\);\s*return '';/, `${label}: /scratchpad --clear should use the initiating tab id from the parser`);
+    assert.doesNotMatch(clearScratchpadBody, /await clearScratchpad/, `${label}: /scratchpad --clear parser path should not await`);
 
-    const screenshotIdx = panel.indexOf('// /screenshot');
-    const screenshotEnd = panel.indexOf('// /record', screenshotIdx);
+    const screenshotIdx = panel.indexOf("if (command.value === '/screenshot' && action === 'viewport')");
+    const screenshotEnd = panel.indexOf("if (command.value === '/screenshot' && action === 'full-page')", screenshotIdx) >= 0
+      ? panel.indexOf("if (command.value === '/screenshot' && action === 'full-page')", screenshotIdx)
+      : panel.indexOf("if (command.value === '/export' && action === 'traces')", screenshotIdx);
     const screenshotBody = panel.slice(screenshotIdx, screenshotEnd);
     assert.match(screenshotBody, /if \(currentTabId !== tabId \|\| !tab\?\.active\) return '';[\s\S]*?captureVisibleTab[\s\S]*?if \(currentTabId !== tabId\) return '';[\s\S]*?(?:addMessage\('system', systemHtml\(imgHtml\)\)|addPersistentSlashMessage\(systemHtml\(imgHtml\)\));/, `${label}: /screenshot should not render a captured image into a different tab`);
-    const fullPageIdx = panel.indexOf('// /full-page-screenshot');
+    const fullPageIdx = panel.indexOf("if (command.value === '/screenshot' && action === 'full-page')");
     assert.match(panel, /function normalizeScreenshotRequestText\(text\) \{[\s\S]*?\.normalize\('NFKD'\)[\s\S]*?\.replace\(\/\[\\u0300-\\u036f\]\/g, ''\)[\s\S]*?\.replace\(\/\\u0131\/g, 'i'\)/, `${label}: plain screenshot request normalization should handle accented Turkish text`);
     assert.match(panel, /function isPlainScreenshotRequest\(text\) \{[\s\S]*?const s = normalizeScreenshotRequestText\(text\);[\s\S]*?s\.startsWith\('\/'\)[\s\S]*?ekran goruntusu[\s\S]*?ekran goruntusunu/, `${label}: plain screenshot request routing should cover English and Turkish screenshot-only requests`);
     if (label === 'chrome') {
-      assert.notEqual(fullPageIdx, -1, `${label}: /full-page-screenshot parser missing`);
-      const fullPageBody = panel.slice(fullPageIdx, panel.indexOf('// /record', fullPageIdx));
-      assert.match(fullPageBody, /sendToBackground\('capture_full_page_screenshot', \{ tabId \}\);[\s\S]*?if \(currentTabId !== tabId\) return '';[\s\S]*?(?:addMessage\('system', systemHtml\(imgHtml\)\)|addPersistentSlashMessage\(systemHtml\(imgHtml\)\));/, `${label}: /full-page-screenshot should render only into the initiating tab`);
+      assert.notEqual(fullPageIdx, -1, `${label}: /screenshot --full-page parser missing`);
+      const fullPageBody = panel.slice(fullPageIdx, panel.indexOf("if (command.value === '/record'", fullPageIdx));
+      assert.match(fullPageBody, /sendToBackground\('capture_full_page_screenshot', \{ tabId \}\);[\s\S]*?if \(currentTabId !== tabId\) return '';[\s\S]*?(?:addMessage\('system', systemHtml\(imgHtml\)\)|addPersistentSlashMessage\(systemHtml\(imgHtml\)\));/, `${label}: /screenshot --full-page should render only into the initiating tab`);
       assert.match(panel, /function isPlainFullPageScreenshotRequest\(text\) \{[\s\S]*?full\|whole\|entire\|complete[\s\S]*?tam sayfa[\s\S]*?ekran goruntusu/, `${label}: plain full-page screenshot request routing should cover English and Turkish requests`);
-      assert.match(panel, /function normalizeScreenshotCommandText\(text\) \{[\s\S]*?isPlainFullPageScreenshotRequest\(text\)[\s\S]*?return '\/full-page-screenshot';[\s\S]*?isPlainScreenshotRequest\(text\)[\s\S]*?return '\/screenshot';/, `${label}: screenshot normalization should route full-page requests before viewport screenshots`);
+      assert.match(panel, /function normalizeScreenshotCommandText\(text\) \{[\s\S]*?isPlainFullPageScreenshotRequest\(text\)[\s\S]*?return '\/screenshot --full-page';[\s\S]*?isPlainScreenshotRequest\(text\)[\s\S]*?return '\/screenshot';/, `${label}: screenshot normalization should route full-page requests before viewport screenshots`);
     } else {
-      assert.equal(fullPageIdx, -1, `${label}: /full-page-screenshot parser should stay Chrome-only`);
+      assert.equal(fullPageIdx, -1, `${label}: /screenshot --full-page action should stay Chrome-only`);
       assert.doesNotMatch(panel, /capture_full_page_screenshot/, `${label}: should not call the Chrome-only full-page screenshot route`);
       assert.doesNotMatch(panel, /isPlainFullPageScreenshotRequest/, `${label}: should not normalize full-page screenshot text into an unsupported slash command`);
       assert.match(panel, /function normalizeScreenshotCommandText\(text\) \{[\s\S]*?if \(isPlainScreenshotRequest\(text\)\) return '\/screenshot';[\s\S]*?return text;[\s\S]*?\}/, `${label}: screenshot normalization should only route viewport screenshots`);
@@ -9520,23 +9662,23 @@ test('sidepanel scopes async tab commands to the original tab', () => {
     assert.match(sendBody, /const tabId = currentTabId;[\s\S]*?text = normalizeScreenshotCommandText\(text\);[\s\S]*?if \(isProcessing\)/, `${label}: plain screenshot requests should route to slash commands before busy gating`);
 
     if (label === 'chrome') {
-      const fullScreenRecordIdx = panel.indexOf('// /record-full-screen');
-      const recordIdx = panel.indexOf('// /record — start recording');
-      assert.notEqual(fullScreenRecordIdx, -1, `${label}: /record-full-screen parser missing`);
+      const fullScreenRecordIdx = panel.indexOf("if (command.value === '/record' && action === 'full-screen')");
+      const recordIdx = panel.indexOf("if (command.value === '/record' && action === 'tab')");
+      assert.notEqual(fullScreenRecordIdx, -1, `${label}: /record --full-screen parser missing`);
       assert.notEqual(recordIdx, -1, `${label}: /record parser missing`);
-      assert.ok(fullScreenRecordIdx < recordIdx, `${label}: /record-full-screen should be parsed before /record`);
-      const recordBody = panel.slice(recordIdx, panel.indexOf('// /export', recordIdx));
+      assert.ok(fullScreenRecordIdx < recordIdx, `${label}: full-screen recording should be parsed before tab recording`);
+      const recordBody = panel.slice(recordIdx, panel.indexOf("if (command.value === '/export'", recordIdx));
       assert.match(recordBody, /sendToBackground\('start_tab_recording', \{[\s\S]*?tabId,[\s\S]*?\}\);[\s\S]*?if \(currentTabId !== tabId\) return '';/, `${label}: /record should not render recording status into a different tab`);
       assert.match(recordBody, /showBanner:\s*true/, `${label}: /record should keep the visible recording banner`);
       const fullScreenBody = panel.slice(fullScreenRecordIdx, recordIdx);
-      assert.match(fullScreenBody, /startFullScreenRecording\(tabId/, `${label}: /record-full-screen should use the initiating tab id`);
+      assert.match(fullScreenBody, /startFullScreenRecording\(tabId/, `${label}: /record --full-screen should use the initiating tab id`);
     }
 
-    const profileIdx = panel.indexOf('// /profile');
-    const profileBody = panel.slice(profileIdx, panel.indexOf('// /ask', profileIdx));
+    const profileIdx = panel.indexOf("if (command.value === '/profile')");
+    const profileBody = panel.slice(profileIdx, panel.indexOf("if (command.value === '/ask')", profileIdx));
     assert.match(profileBody, /storage\.local\.get\(\['profileEnabled', 'profileText'\]\);[\s\S]*?storage\.local\.set\(\{ profileEnabled: newState \}\);[\s\S]*?if \(currentTabId !== tabId\) return '';[\s\S]*?(?:addMessage\('system'|showComposerToast\()/, `${label}: /profile should not render a result into a different tab`);
 
-    const visionIdx = panel.indexOf('// /vision');
+    const visionIdx = panel.indexOf("if (command.value === '/vision')");
     const visionBody = panel.slice(visionIdx, panel.indexOf('return text;', visionIdx));
     assert.match(visionBody, /sendToBackground\('get_providers'\);[\s\S]*?sendToBackground\('update_provider'[\s\S]*?if \(currentTabId !== tabId\) return '';[\s\S]*?(?:addMessage\('system'|showComposerToast\()/, `${label}: /vision should not render a result into a different tab`);
   }
@@ -9555,7 +9697,7 @@ test('sidepanel awaits immediate verbose preference writes', () => {
     );
     assert.match(
       panel,
-      /if \(\s*\/\^\\\/verbose\\b\\s\*\/i\.test\(text\)\s*\) \{[\s\S]*?await (chrome|browser)\.storage\.local\.set\(\{ verboseMode \}\)\.catch\(\(\) => \{\}\);[\s\S]*?if \(currentTabId !== tabId\) return '';[\s\S]*?showComposerToast\(verboseMode/,
+      /if \(command\.value === '\/verbose'\) \{[\s\S]*?await (chrome|browser)\.storage\.local\.set\(\{ verboseMode \}\)\.catch\(\(\) => \{\}\);[\s\S]*?if \(currentTabId !== tabId\) return '';[\s\S]*?showComposerToast\(verboseMode/,
       `${label}: /verbose should guard against stale tabs after persisting the mode change`,
     );
   }
@@ -9616,9 +9758,9 @@ test('sidepanel preserves stale residual slash-command prompts without hidden ru
     assert.notEqual(modeHelperStart, -1, `${label}: modeForMessageText missing`);
     const modeHelper = panel.slice(modeHelperStart, panel.indexOf('\n}', modeHelperStart) + 2);
     for (const [snippet, commandLabel] of [
-      ["if (/^\\/(?:ask|plan)\\b/i.test(text)) return 'ask';", '/ask and /plan'],
-      ["if (/^\\/act\\b/i.test(text)) return 'act';", '/act'],
-      ["if (/^\\/dev\\b/i.test(text)) return 'dev';", '/dev'],
+      ["if (invocation?.command?.value === '/ask' || invocation?.command?.value === '/plan') return 'ask';", '/ask and /plan'],
+      ["if (invocation?.command?.value === '/act') return 'act';", '/act'],
+      ["if (invocation?.command?.value === '/dev') return 'dev';", '/dev'],
       ['return agentMode;', 'current mode fallback'],
     ]) {
       assert.ok(modeHelper.includes(snippet), `${label}: modeForMessageText should handle ${commandLabel}`);
@@ -9761,20 +9903,17 @@ test('sidepanel allows safe slash commands and queues normal messages while busy
   ]) {
     const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
     const locale = fs.readFileSync(path.join(ROOT, localeRel), 'utf8');
-    const oobStart = panel.indexOf('const OUT_OF_BAND_SLASH_COMMANDS = new Set([');
-    const oobEnd = panel.indexOf(']);', oobStart);
-    assert.notEqual(oobStart, -1, `${label}: out-of-band slash command set missing`);
-    assert.notEqual(oobEnd, -1, `${label}: out-of-band slash command set should close`);
-    const oobBlock = panel.slice(oobStart, oobEnd);
-    const allowed = ['/help', '/check-progress', '/show-scratchpad', '/show-memory', '/list-schedules', '/screenshot', '/export', '/export-with-traces', '/verbose'];
-    for (const command of allowed) {
-      assert.match(
-        oobBlock,
-        new RegExp(`'${command}'`),
-        `${label}: ${command} should be allowed while busy`,
-      );
+    const slash = loadSlashCommandRuntime(panelRel);
+    for (const command of ['/help', '/progress', '/scratchpad', '/memory', '/schedule --list', '/screenshot', '/export', '/export --traces', '/verbose']) {
+      assert.equal(slash.slashInvocationIsOutOfBand(slash.parseSlashInvocation(command)), true, `${label}: ${command} should be allowed while busy`);
     }
-    assert.doesNotMatch(oobBlock, /'\/full-page-screenshot'/, `${label}: /full-page-screenshot should not be allowed while busy`);
+    for (const command of ['/schedule task', '/scratchpad --append note', '/scratchpad --clear', '/memory --add note', '/memory --forget id']) {
+      assert.equal(slash.slashInvocationIsOutOfBand(slash.parseSlashInvocation(command)), false, `${label}: ${command} should stay gated while busy`);
+    }
+    if (label === 'chrome') {
+      assert.equal(slash.slashInvocationIsOutOfBand(slash.parseSlashInvocation('/screenshot --full-page')), false, `${label}: full-page capture should stay gated while busy`);
+      assert.equal(slash.slashInvocationIsOutOfBand(slash.parseSlashInvocation('/record --full-screen')), false, `${label}: recording should stay gated while busy`);
+    }
     assert.match(
       panel,
       /function syncSendButtonState\(\) \{[\s\S]*?const draft = normalizeScreenshotCommandText\(inputEl\?\.value \|\| ''\)\.trim\(\);[\s\S]*?if \(!isProcessing\) \{[\s\S]*?sendBtn\.disabled = isAttachmentReadPendingForTab\(\);[\s\S]*?return;[\s\S]*?\}[\s\S]*?if \(!draft\) \{[\s\S]*?sendBtn\.disabled = true;[\s\S]*?return;[\s\S]*?\}[\s\S]*?sendBtn\.disabled = draft\.startsWith\('\/'\) && !isOutOfBandSlashDraft\(draft\);[\s\S]*?\}/,
@@ -9782,7 +9921,7 @@ test('sidepanel allows safe slash commands and queues normal messages while busy
     );
     assert.match(
       panel,
-      /function applySlashCommandCompletion\(index = slashCommandSelectedIndex\) \{[\s\S]*?inputEl\.value = `\$\{command\.value\} `;[\s\S]*?autoResizeInput\(\);\s*syncSendButtonState\(\);[\s\S]*?return true;[\s\S]*?\}/,
+      /function applySlashCommandCompletion\(index = slashCommandSelectedIndex\) \{[\s\S]*?inputEl\.value = `\$\{before\}\$\{match\.value\} \$\{after\}`;[\s\S]*?autoResizeInput\(\);\s*updateSlashCommandAutocomplete\(\);\s*syncSendButtonState\(\);[\s\S]*?return true;[\s\S]*?\}/,
       `${label}: slash autocomplete completion should resync send button state`,
     );
     assert.match(
@@ -9797,7 +9936,7 @@ test('sidepanel allows safe slash commands and queues normal messages while busy
     );
     assert.match(
       locale,
-      /'sp\.slash\.busy_only_oob': 'Messages are queued while WebBrain is busy\. Only \/help, \/check-progress, \/show-scratchpad, \/show-memory, \/list-schedules, \/dangerously-skip-permissions, \/screenshot, \/export, \/export-with-traces, and \/verbose can run immediately as slash commands\./,
+      /'sp\.slash\.busy_only_oob': 'Messages are queued while WebBrain is busy\. Only \/help, \/progress, \/scratchpad, \/memory, \/schedule --list, \/dangerously-skip-permissions, \/screenshot, \/export, \/export --traces, and \/verbose can run immediately as slash commands\./,
       `${label}: busy slash notice should explain queued messages and safe slash commands`,
     );
   }
@@ -9852,35 +9991,18 @@ test('sidepanel queued composer messages expose edit and delete controls', () =>
   }
 });
 
-test('sidepanel busy slash notice is updated in every locale', () => {
-  const expected = {
-    en: 'Messages are queued while WebBrain is busy. Only /help, /check-progress, /show-scratchpad, /show-memory, /list-schedules, /dangerously-skip-permissions, /screenshot, /export, /export-with-traces, and /verbose can run immediately as slash commands.',
-    es: 'Los mensajes se ponen en cola mientras WebBrain está ocupado. Solo /help, /check-progress, /show-scratchpad, /show-memory, /list-schedules, /dangerously-skip-permissions, /screenshot, /export, /export-with-traces y /verbose pueden ejecutarse de inmediato como comandos slash.',
-    fr: "Les messages sont mis en file d'attente pendant que WebBrain est occupé. Seuls /help, /check-progress, /show-scratchpad, /show-memory, /list-schedules, /dangerously-skip-permissions, /screenshot, /export, /export-with-traces et /verbose peuvent s'exécuter immédiatement comme commandes slash.",
-    tr: 'WebBrain meşgulken mesajlar kuyruğa alınır. Yalnızca /help, /check-progress, /show-scratchpad, /show-memory, /list-schedules, /dangerously-skip-permissions, /screenshot, /export, /export-with-traces ve /verbose slash komutları olarak hemen çalışabilir.',
-    zh: 'WebBrain 忙碌时，消息会排队。只有 /help、/check-progress、/show-scratchpad、/show-memory、/list-schedules、/dangerously-skip-permissions、/screenshot、/export、/export-with-traces 和 /verbose 可以作为斜杠命令立即运行。',
-    ru: 'Пока WebBrain занят, сообщения ставятся в очередь. Только /help, /check-progress, /show-scratchpad, /show-memory, /list-schedules, /dangerously-skip-permissions, /screenshot, /export, /export-with-traces и /verbose могут запускаться сразу как slash-команды.',
-    uk: 'Поки WebBrain зайнятий, повідомлення ставляться в чергу. Лише /help, /check-progress, /show-scratchpad, /show-memory, /list-schedules, /dangerously-skip-permissions, /screenshot, /export, /export-with-traces та /verbose можуть запускатися одразу як slash-команди.',
-    ar: 'تُضاف الرسائل إلى قائمة الانتظار بينما يكون WebBrain مشغولًا. يمكن فقط لـ /help و /check-progress و /show-scratchpad و /show-memory و /list-schedules و /dangerously-skip-permissions و /screenshot و /export و /export-with-traces و /verbose العمل فورًا كأوامر slash.',
-    ja: 'WebBrain がビジーの間、メッセージはキューに入ります。/help、/check-progress、/show-scratchpad、/show-memory、/list-schedules、/dangerously-skip-permissions、/screenshot、/export、/export-with-traces、/verbose だけがスラッシュコマンドとしてすぐに実行できます。',
-    ko: 'WebBrain이 사용 중일 때 메시지는 대기열에 추가됩니다. /help, /check-progress, /show-scratchpad, /show-memory, /list-schedules, /dangerously-skip-permissions, /screenshot, /export, /export-with-traces, /verbose만 슬래시 명령으로 즉시 실행할 수 있습니다.',
-    id: 'Pesan dimasukkan ke antrean saat WebBrain sibuk. Hanya /help, /check-progress, /show-scratchpad, /show-memory, /list-schedules, /dangerously-skip-permissions, /screenshot, /export, /export-with-traces, dan /verbose yang dapat langsung berjalan sebagai perintah slash.',
-    th: 'ข้อความจะถูกเข้าคิวขณะที่ WebBrain ไม่ว่าง เฉพาะ /help, /check-progress, /show-scratchpad, /show-memory, /list-schedules, /dangerously-skip-permissions, /screenshot, /export, /export-with-traces และ /verbose เท่านั้นที่เรียกใช้ได้ทันทีในฐานะคำสั่ง slash',
-    ms: 'Mesej dimasukkan ke giliran semasa WebBrain sibuk. Hanya /help, /check-progress, /show-scratchpad, /show-memory, /list-schedules, /dangerously-skip-permissions, /screenshot, /export, /export-with-traces, dan /verbose boleh berjalan serta-merta sebagai arahan slash.',
-    tl: 'Nakapila ang mga mensahe habang abala ang WebBrain. Tanging /help, /check-progress, /show-scratchpad, /show-memory, /list-schedules, /dangerously-skip-permissions, /screenshot, /export, /export-with-traces, at /verbose ang maaaring tumakbo agad bilang mga slash command.',
-    pl: 'Wiadomości są kolejkowane, gdy WebBrain jest zajęty. Tylko /help, /check-progress, /show-scratchpad, /show-memory, /list-schedules, /dangerously-skip-permissions, /screenshot, /export, /export-with-traces i /verbose mogą uruchamiać się od razu jako polecenia slash.',
-  };
-
+test('sidepanel busy slash notice is updated in every locale', async () => {
   for (const [label, localeDir] of [
     ['chrome', 'src/chrome/src/ui/locales'],
     ['firefox', 'src/firefox/src/ui/locales'],
   ]) {
-    for (const [code, message] of Object.entries(expected)) {
-      const locale = fs.readFileSync(path.join(ROOT, localeDir, `${code}.js`), 'utf8');
-      const match = locale.match(/'sp\.slash\.busy_only_oob': '((?:\\'|[^'])*)'/);
-      assert.ok(match, `${label}/${code}: busy slash notice key missing`);
-      const actual = match[1].replace(/\\'/g, "'");
-      assert.equal(actual, message, `${label}/${code}: busy slash notice should match queued-send behavior`);
+    for (const filename of fs.readdirSync(path.join(ROOT, localeDir)).filter((name) => name.endsWith('.js'))) {
+      const locale = (await import('file://' + path.join(ROOT, localeDir, filename).replace(/\\/g, '/'))).default;
+      const message = locale['sp.slash.busy_only_oob'];
+      assert.equal(typeof message, 'string', `${label}/${filename}: busy slash notice key missing`);
+      for (const syntax of ['/help', '/progress', '/scratchpad', '/memory', '/schedule --list', '/dangerously-skip-permissions', '/screenshot', '/export --traces', '/verbose']) {
+        assert.match(message, new RegExp(syntax.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `${label}/${filename}: busy notice should mention ${syntax}`);
+      }
     }
   }
 });
