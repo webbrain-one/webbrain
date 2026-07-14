@@ -424,6 +424,18 @@ export class ProviderManager {
         apiKeyUrl: 'https://dashscope.console.aliyun.com/apiKey',
         enabled: false,
       },
+      together: {
+        type: 'openai',
+        category: 'cloud',
+        label: 'Together AI',
+        providerName: 'together',
+        baseUrl: 'https://api.together.xyz/v1',
+        model: 'meta-llama/Llama-3.3-70B-Instruct-Turbo',
+        supportsStreamUsageOptions: true,
+        apiKey: '',
+        apiKeyUrl: 'https://api.together.ai/settings/api-keys',
+        enabled: false,
+      },
       openrouter: {
         type: 'openai',
         category: 'router',
