@@ -1723,6 +1723,20 @@ function renderProviders() {
         PROMPT_TIER_FIELD,
       ],
     },
+    fireworks: {
+      fields: [
+        { key: 'apiKey', labelKey: 'st.provider.field.api_key', type: 'password', placeholder: 'fw_...' },
+        { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'accounts/fireworks/models/llama-v3p3-70b-instruct',
+          suggestions: [
+            'accounts/fireworks/models/llama-v3p3-70b-instruct',
+            'accounts/fireworks/models/llama4-scout-instruct-basic',
+            'accounts/fireworks/models/qwen3-235b-a22b',
+            'accounts/fireworks/models/deepseek-v3',
+          ] },
+        { key: 'baseUrl', labelKey: 'st.provider.field.api_base_url', type: 'text', placeholder: 'https://api.fireworks.ai/inference/v1' },
+        PROMPT_TIER_FIELD,
+      ],
+    },
     anthropic: {
       fields: [
         { key: 'apiKey', labelKey: 'st.provider.field.api_key', type: 'password', placeholder: 'sk-ant-...' },
