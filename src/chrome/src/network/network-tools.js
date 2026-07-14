@@ -12,6 +12,8 @@
  * enough to feed an LLM the readable content of a page.
  */
 
+import { ensureOffscreen } from '../offscreen/ensure.js';
+
 // ─── HTML utilities ─────────────────────────────────────────────────────
 
 const HTML_ENTITIES = {
@@ -79,6 +81,12 @@ const PAGE_SOURCE_RESULT_SAFETY_CHARS = 200;
 const PAGE_SOURCE_ASSET_KINDS = ['stylesheets', 'scripts'];
 const PAGE_SOURCE_BODY_MAX_BYTES = 1000000;
 const SKILL_DOWNLOAD_DATA_URL_MAX_BYTES = 25 * 1024 * 1024;
+const SKILL_DOWNLOAD_STAGED_MAX_BYTES = 1024 * 1024 * 1024;
+const REMOTE_MEDIA_FAILURE_CONTEXT = Object.freeze({
+  executionContext: 'remote_service',
+  browserLoginAffectsRequest: false,
+  retryGuidance: 'The media provider runs on a separate server. Signing into this browser or retrying while logged in will not change the provider request. Try the exact public media permalink or retry later.',
+});
 
 /**
  * Validate a URL before the agent fetches it.
@@ -664,19 +672,56 @@ async function callChromeDownloadAction(name, ...args) {
   }
 }
 
+async function sendOffscreenSkillDownloadMessage(message) {
+  await ensureOffscreen();
+  return await new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage(message, (response) => {
+      if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+      else resolve(response || { success: false, error: 'Offscreen skill download returned no response.' });
+    });
+  });
+}
+
+async function prepareStagedSkillDownload(url, expectedUrl) {
+  try {
+    return await sendOffscreenSkillDownloadMessage({
+      type: 'skill-download-prepare',
+      url,
+      expectedUrl,
+      maxBytes: SKILL_DOWNLOAD_STAGED_MAX_BYTES,
+    });
+  } catch (error) {
+    return { success: false, finalUrl: url, error: `Skill download staging failed: ${error.message}` };
+  }
+}
+
+async function releaseStagedSkillDownload(releaseToken) {
+  if (!releaseToken) return;
+  try {
+    await sendOffscreenSkillDownloadMessage({ type: 'skill-download-release', releaseToken });
+  } catch (_) {
+    // A fresh offscreen-document lifetime removes any files left in OPFS.
+  }
+}
+
 async function removeUnsafeSkillDownload(downloadId, state) {
   if (state !== 'complete') await callChromeDownloadAction('cancel', downloadId);
   if (state === 'complete') await callChromeDownloadAction('removeFile', downloadId);
   await callChromeDownloadAction('erase', { id: downloadId });
 }
 
-function scheduleSkillDownloadCleanup(downloadId, cleanupUrl, endpoint, tool, expectedUrl) {
+function scheduleSkillDownloadCleanup(downloadId, cleanupUrl, endpoint, tool, options = {}) {
   const downloads = chrome.downloads;
   if (!downloads?.onChanged?.addListener) return false;
   const key = String(downloadId);
   if (pendingSkillDownloadCleanups.has(key)) return true;
+  const expectedUrl = options.expectedUrl || '';
+  const releaseToken = options.releaseToken || '';
+  let settled = false;
 
   const finish = async (state, finalUrl) => {
+    if (settled) return;
+    settled = true;
     downloads.onChanged?.removeListener?.(listener);
     pendingSkillDownloadCleanups.delete(key);
     try {
@@ -694,6 +739,7 @@ function scheduleSkillDownloadCleanup(downloadId, cleanupUrl, endpoint, tool, ex
     } catch (_) {
       // Cleanup is still attempted even if validating/removing the local file fails.
     }
+    await releaseStagedSkillDownload(releaseToken);
     try {
       await cleanupSkillDownloadJob(cleanupUrl, endpoint, tool);
     } catch (_) {}
@@ -717,13 +763,32 @@ function scheduleSkillDownloadCleanup(downloadId, cleanupUrl, endpoint, tool, ex
 
   pendingSkillDownloadCleanups.set(key, listener);
   downloads.onChanged.addListener(listener);
+  findDownloadItem(downloadId).then((item) => {
+    if (item?.state === 'complete' || item?.state === 'interrupted') {
+      finish(item.state, item.finalUrl || item.url || '');
+    }
+  }).catch(() => {});
   return true;
 }
 
 async function downloadSkillFile(url, filename, waitMs = 60000) {
   const file = await fetchSkillDownloadData(url, url);
-  const directDownload = file.tooLarge === true;
-  if (!file.success && !directDownload) {
+  let staged = null;
+  if (file.tooLarge === true) {
+    staged = await prepareStagedSkillDownload(url, url);
+    if (!staged?.success) {
+      return {
+        success: false,
+        ...(staged?.blocked ? { blocked: true } : {}),
+        ...(staged?.status != null ? { status: staged.status } : {}),
+        ...(file.bytesExpected != null ? { bytesExpected: file.bytesExpected } : {}),
+        ...(file.bytesReceived != null ? { bytesReceived: file.bytesReceived } : {}),
+        finalUrl: staged?.finalUrl || file.finalUrl || url,
+        error: staged?.error || file.error,
+      };
+    }
+  }
+  if (!file.success && !staged) {
     return {
       success: false,
       ...(file.blocked ? { blocked: true } : {}),
@@ -734,25 +799,33 @@ async function downloadSkillFile(url, filename, waitMs = 60000) {
       error: file.error,
     };
   }
-  const opts = { url: directDownload ? url : file.dataUrl, conflictAction: 'uniquify' };
+  const opts = { url: staged ? staged.localUrl : file.dataUrl, conflictAction: 'uniquify' };
   const safeName = safeDownloadFilename(filename);
   if (safeName) opts.filename = safeName;
-  const downloadId = await new Promise((resolve, reject) => {
-    chrome.downloads.download(opts, (id) => {
-      if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
-      else resolve(id);
+  let downloadId;
+  try {
+    downloadId = await new Promise((resolve, reject) => {
+      chrome.downloads.download(opts, (id) => {
+        if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+        else resolve(id);
+      });
     });
-  });
-  const info = await resolveDownloadInfo(downloadId, waitMs, directDownload ? { expectedUrl: url } : {});
+  } catch (error) {
+    await releaseStagedSkillDownload(staged?.releaseToken);
+    throw error;
+  }
+  const info = await resolveDownloadInfo(downloadId, waitMs);
   const result = {
     downloadId,
     success: false,
     url,
-    finalUrl: file.finalUrl || url,
-    ...(directDownload ? { directDownload: true } : {}),
-    ...(file.status != null ? { status: file.status } : {}),
+    finalUrl: staged?.finalUrl || file.finalUrl || url,
+    ...(staged ? { stagedDownload: true } : {}),
+    ...((staged?.status ?? file.status) != null ? { status: staged?.status ?? file.status } : {}),
     ...(file.bytesExpected != null ? { bytesExpected: file.bytesExpected } : {}),
-    ...(file.bytesReceived != null ? { bytesReceived: file.bytesReceived, totalBytes: file.bytesReceived } : {}),
+    ...((staged?.bytesReceived ?? file.bytesReceived) != null
+      ? { bytesReceived: staged?.bytesReceived ?? file.bytesReceived, totalBytes: staged?.bytesReceived ?? file.bytesReceived }
+      : {}),
   };
   if (info) {
     if (info.filename) result.filename = info.filename;
@@ -760,8 +833,8 @@ async function downloadSkillFile(url, filename, waitMs = 60000) {
     if (info.error) result.error = info.error;
     if (info.bytesReceived != null) result.bytesReceived = info.bytesReceived;
     if (info.totalBytes != null) result.totalBytes = info.totalBytes;
-    if (info.url && !String(info.url).startsWith('data:')) result.url = info.url;
-    if (info.finalUrl && !String(info.finalUrl).startsWith('data:')) result.finalUrl = info.finalUrl;
+    if (info.url && !/^(?:data|blob):/i.test(String(info.url))) result.url = info.url;
+    if (info.finalUrl && !/^(?:data|blob):/i.test(String(info.finalUrl))) result.finalUrl = info.finalUrl;
     if (info.finalUrlBlocked) {
       await removeUnsafeSkillDownload(downloadId, info.state);
       result.blocked = true;
@@ -777,6 +850,10 @@ async function downloadSkillFile(url, filename, waitMs = 60000) {
   } else {
     result.pending = true;
     result.error = 'Download did not report completion before timeout.';
+  }
+  if (staged?.releaseToken) {
+    if (result.pending) result.releaseToken = staged.releaseToken;
+    else await releaseStagedSkillDownload(staged.releaseToken);
   }
   return result;
 }
@@ -822,6 +899,7 @@ async function executeHttpDownloadJobSkillTool(tool, payload, endpoint) {
         skillName: tool.skillName || '',
         jobId,
         jobStatus: status,
+        ...REMOTE_MEDIA_FAILURE_CONTEXT,
         error: providerError(502, poll.data, '') || `Skill download job ${jobId} failed.`,
       }, cleanupEndpoint, endpoint, tool);
     }
@@ -844,6 +922,8 @@ async function executeHttpDownloadJobSkillTool(tool, payload, endpoint) {
   let cleanup = null;
   try {
     const download = await downloadSkillFile(fileEndpoint.url, payload.filename, Math.min(tool.job?.timeoutMs || 90000, 120000));
+    const releaseToken = download.releaseToken || '';
+    if (Object.prototype.hasOwnProperty.call(download, 'releaseToken')) delete download.releaseToken;
     const cleanupDeferred = cleanupEndpoint.ok && download.pending === true;
     const cleanupScheduled = cleanupDeferred
       ? scheduleSkillDownloadCleanup(
@@ -851,7 +931,7 @@ async function executeHttpDownloadJobSkillTool(tool, payload, endpoint) {
         cleanupEndpoint.url,
         endpoint,
         tool,
-        download.directDownload ? fileEndpoint.url : undefined,
+        { releaseToken },
       )
       : false;
     if (cleanupEndpoint.ok && !cleanupDeferred) cleanup = await cleanupSkillDownloadJob(cleanupEndpoint.url, endpoint, tool);

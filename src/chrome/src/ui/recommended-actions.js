@@ -1,3 +1,5 @@
+import { isDirectPublicMediaUrl } from '../agent/public-media-url.js';
+
 const SOCIAL_HOST_RE = /(^|\.)(instagram\.com|tiktok\.com|x\.com|twitter\.com|facebook\.com|fb\.com|threads\.net|youtube\.com|youtu\.be|reddit\.com|pinterest\.com|snapchat\.com)$/i;
 const PUBLIC_MEDIA_HOST_RE = /(^|\.)(youtube\.com|youtu\.be|tiktok\.com|instagram\.com|x\.com|twitter\.com|reddit\.com|redd\.it|facebook\.com|fb\.com|fb\.watch|pinterest\.com|pin\.it|linkedin\.com|threads\.net)$/i;
 const MEETING_HOST_RE = /(^|\.)(zoom\.us|meet\.google\.com|teams\.microsoft\.com|whereby\.com|webex\.com|gotomeeting\.com)$/i;
@@ -14,6 +16,7 @@ const X_PROFILE_RESERVED_PATH_RE = /^\/(home|explore|notifications|messages?|i|s
 const WP_ADMIN_RE = /\/wp-admin(?:\/|$)/i;
 const WP_TEMPLATE_ROUTE_RE = /\/wp-admin\/(?:site-editor\.php|themes\.php|customize\.php|widgets\.php|theme-editor\.php)(?:[/?#]|$)|post_type=wp_template|page=gutenberg-edit-site/i;
 const WP_TEMPLATE_TITLE_RE = /\b(template|templates|template part|site editor|theme editor|customize|patterns)\b/i;
+const REMOTE_MEDIA_LOGIN_NOTE = 'FreeSkillz runs on a separate server: signing into this browser or rerunning while logged in cannot affect download_public_media because browser cookies are not sent to FreeSkillz. Never suggest browser sign-in as a fix.';
 
 function hostFromUrl(url) {
   try {
@@ -81,36 +84,12 @@ function publicMediaKind(pageInfo = {}, path = '/') {
   return 'auto';
 }
 
-function isDirectPublicMediaPage(host = '', path = '/', url = '') {
-  const h = String(host || '').toLowerCase().replace(/^www\./, '');
-  if (h === 'youtu.be') return /^\/[^/?#]+/.test(path);
-  if (h === 'youtube.com' || h.endsWith('.youtube.com')) return isYouTubeVideoPage(h, path, url);
-  if (h === 'instagram.com') return /^\/(?:p|reel|tv)\/[^/?#]+/i.test(path);
-  if (h === 'tiktok.com' || h.endsWith('.tiktok.com')) return /^\/@[^/]+\/video\/[^/?#]+/i.test(path);
-  if (h === 'x.com' || h === 'twitter.com') return /^\/[^/]+\/status\/[^/?#]+/i.test(path);
-  if (h === 'reddit.com' || h.endsWith('.reddit.com')) return /^\/r\/[^/]+\/comments\/[^/?#]+/i.test(path);
-  if (h === 'redd.it' || h === 'fb.watch' || h === 'pin.it') return /^\/[^/?#]+/.test(path);
-  if (h === 'pinterest.com' || h.endsWith('.pinterest.com')) return /^\/pin\/[^/?#]+/i.test(path);
-  if (h === 'linkedin.com' || h.endsWith('.linkedin.com')) return /^\/(?:posts\/|feed\/update\/)/i.test(path);
-  if (h === 'threads.net' || h.endsWith('.threads.net')) return /^\/@[^/]+\/post\/[^/?#]+/i.test(path);
-  if (h === 'facebook.com' || h === 'fb.com' || h.endsWith('.facebook.com')) {
-    if (/^\/(?:reel\/|watch\/|videos\/)/i.test(path)) return true;
-    try {
-      const parsed = new URL(url);
-      return !!(parsed.searchParams.get('story_fbid') || parsed.searchParams.get('v'));
-    } catch {
-      return false;
-    }
-  }
-  return path !== '/';
-}
-
 function publicMediaDownloadPrompt(kind = 'auto', needsExplicitUrl = false) {
   const args = kind === 'auto' ? '{ "kind": "auto" }' : `{ "kind": "${kind}" }`;
   if (needsExplicitUrl) {
-    return `Download the single public media item currently visible in this feed. First use the attached screenshot to identify the intended post/video, then inspect visible links with get_accessibility_tree and obtain that item's exact public post/reel URL. Call download_public_media with ${args} and that explicit url. Never send the feed/profile URL to download_public_media. FreeSkillz must return one final file; do not report separate video/audio tracks or tell the user to merge them with ffmpeg. Do not make a separate plan.`;
+    return `Download the single public media item currently visible in this feed. First use the attached screenshot to identify the intended post/video, then inspect visible links with get_accessibility_tree and obtain that item's exact public post/reel URL. Call download_public_media with ${args} and that explicit url. Never send the feed/profile URL to download_public_media. FreeSkillz must return one final file; do not report separate video/audio tracks or tell the user to merge them with ffmpeg. ${REMOTE_MEDIA_LOGIN_NOTE} Do not make a separate plan.`;
   }
-  return `Download this public media from the current page. Call download_public_media first with ${args} and omit url so it uses the active media page. Do not make a separate plan. FreeSkillz must return one final file; do not report separate video/audio tracks or tell the user to merge them with ffmpeg. Only call download_social_media if download_public_media fails, then report the saved downloadId/result.`;
+  return `Download this public media from the current page. Call download_public_media first with ${args} and omit url so it uses the active media page. Do not make a separate plan. FreeSkillz must return one final file; do not report separate video/audio tracks or tell the user to merge them with ffmpeg. ${REMOTE_MEDIA_LOGIN_NOTE} Only call download_social_media if download_public_media fails, then report the saved downloadId/result.`;
 }
 
 function publicMediaDownloadRunOptions(kind = 'auto', needsExplicitUrl = false) {
@@ -126,10 +105,12 @@ function publicMediaDownloadRunOptions(kind = 'auto', needsExplicitUrl = false) 
         'Read the visible accessibility tree and obtain the exact post/reel permalink for that item.',
         `Call download_public_media with ${args} and the explicit permalink; never pass the feed URL.`,
         'Report the one completed file and downloadId; never hand separate tracks or ffmpeg work to the user.',
+        'If FreeSkillz fails, never suggest signing into this browser; its remote request cannot use browser login state or cookies.',
       ]
       : [
         `Call download_public_media with ${args} and no url so it uses the active media page.`,
         'Report the one completed file and downloadId. Use download_social_media only if download_public_media fails.',
+        'If FreeSkillz fails, never suggest signing into this browser; its remote request cannot use browser login state or cookies.',
       ],
   };
   if (needsExplicitUrl) {
@@ -363,7 +344,7 @@ export function buildRecommendedActions(pageInfo = {}, options = {}) {
   const publicMediaHost = PUBLIC_MEDIA_HOST_RE.test(host);
   if ((publicMediaHost || SOCIAL_HOST_RE.test(host) || /\b(post|status|reel|shorts|watch|pin)\b/i.test(path)) && hasMedia(pageInfo)) {
     const kind = publicMediaKind(pageInfo, path);
-    const needsExplicitUrl = publicMediaHost && !isDirectPublicMediaPage(host, path, pageInfo.url || '');
+    const needsExplicitUrl = publicMediaHost && !isDirectPublicMediaUrl(pageInfo.url || '');
     addUnique(actions, {
       id: 'download-media',
       label: 'Download this video/photo',

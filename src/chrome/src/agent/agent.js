@@ -42,6 +42,7 @@ import {
 import { extractFirstJsonObject } from './json-extract.js';
 import { sanitizeText as sanitizePlannerText } from './text-sanitize.js';
 import { buildCustomSkillsPrompt, buildSkillToolDefinitions, buildSkillToolRegistry, normalizeCustomSkills } from './skills.js';
+import { publicMediaUrlNeedsExplicitTarget } from './public-media-url.js';
 import { USER_MEMORY_DEFAULT_MAX_PROMPT_CHARS, formatUserMemoryPrompt, normalizeUserMemoryMaxPromptChars, normalizeUserMemoryStore } from './user-memory.js';
 import { mergeRedactionFrameRegions, mapRegionsToImage, pixelateDataUrl } from './screenshot-redaction.js';
 import { buildTrustedRuntimeContext, stripTrustedRuntimeContext } from './runtime-context.js';
@@ -1202,37 +1203,7 @@ export class Agent {
   }
 
   _publicMediaUrlNeedsExplicitTarget(url) {
-    if (!url) return false;
-    try {
-      const parsed = new URL(url);
-      const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
-      const path = parsed.pathname || '/';
-      if (host === 'youtu.be') return !/^\/[^/?#]+/.test(path);
-      if (host === 'youtube.com' || host.endsWith('.youtube.com')) {
-        return !(
-          /^\/(?:shorts|live)\/[^/?#]+/i.test(path) ||
-          (path === '/watch' && !!parsed.searchParams.get('v'))
-        );
-      }
-      if (host === 'instagram.com') return !/^\/(?:p|reel|tv)\/[^/?#]+/i.test(path);
-      if (host === 'tiktok.com' || host.endsWith('.tiktok.com')) return !/^\/@[^/]+\/video\/[^/?#]+/i.test(path);
-      if (host === 'x.com' || host === 'twitter.com') return !/^\/[^/]+\/status\/[^/?#]+/i.test(path);
-      if (host === 'reddit.com' || host.endsWith('.reddit.com')) return !/^\/r\/[^/]+\/comments\/[^/?#]+/i.test(path);
-      if (host === 'redd.it' || host === 'fb.watch' || host === 'pin.it') return !/^\/[^/?#]+/.test(path);
-      if (host === 'pinterest.com' || host.endsWith('.pinterest.com')) return !/^\/pin\/[^/?#]+/i.test(path);
-      if (host === 'linkedin.com' || host.endsWith('.linkedin.com')) return !/^\/(?:posts\/|feed\/update\/)/i.test(path);
-      if (host === 'threads.net' || host.endsWith('.threads.net')) return !/^\/@[^/]+\/post\/[^/?#]+/i.test(path);
-      if (host === 'facebook.com' || host === 'fb.com' || host.endsWith('.facebook.com')) {
-        return !(
-          /^\/(?:reel\/|watch\/|videos\/)/i.test(path) ||
-          parsed.searchParams.has('story_fbid') ||
-          parsed.searchParams.has('v')
-        );
-      }
-      return false;
-    } catch {
-      return false;
-    }
+    return publicMediaUrlNeedsExplicitTarget(url);
   }
 
   _publicMediaExplicitUrlRequiredResult(currentUrl) {
@@ -1279,6 +1250,7 @@ export class Agent {
     let attempted = false;
     let succeeded = false;
     let explicitAttempted = false;
+    let explicitSucceeded = false;
     for (const msg of list.slice(scanStart)) {
       if (msg?.role === 'assistant' && Array.isArray(msg.tool_calls)) {
         for (const tc of msg.tool_calls) {
@@ -1295,6 +1267,7 @@ export class Agent {
         attempted = false;
         succeeded = false;
         explicitAttempted = false;
+        explicitSucceeded = false;
         continue;
       }
       if (toolCall?.name !== 'download_public_media') continue;
@@ -1304,9 +1277,11 @@ export class Agent {
       attempted = !explicitUrl || explicitMatchesCurrent;
       let parsed = null;
       try { parsed = JSON.parse(this._unwrapUntrusted(msg.content)); } catch { /* malformed result still counts as an attempt */ }
-      succeeded = attempted && !!(parsed && typeof parsed === 'object' && parsed.success === true);
+      const resultSucceeded = !!(parsed && typeof parsed === 'object' && parsed.success === true);
+      succeeded = attempted && resultSucceeded;
+      explicitSucceeded = explicitAttempted && resultSucceeded;
     }
-    return { attempted, succeeded, explicitAttempted };
+    return { attempted, succeeded, explicitAttempted, explicitSucceeded };
   }
 
   _downloadPublicMediaArgsFromSocialArgs(args) {
@@ -1324,7 +1299,8 @@ export class Agent {
 
     const currentUrl = await this._currentUrl(tabId);
     const publicAttempt = this._downloadPublicMediaAttempt(messages, currentUrl);
-    if (publicAttempt.succeeded) {
+    const needsExplicitTarget = this._publicMediaUrlNeedsExplicitTarget(currentUrl);
+    if (publicAttempt.succeeded || (needsExplicitTarget && publicAttempt.explicitSucceeded)) {
       return {
         success: true,
         skipped: true,
@@ -1332,7 +1308,7 @@ export class Agent {
         error: 'Skipped download_social_media because download_public_media already succeeded. Do not run the browser-side fallback unless the user asks for an additional download.',
       };
     }
-    if (this._publicMediaUrlNeedsExplicitTarget(currentUrl) && !publicAttempt.explicitAttempted) {
+    if (needsExplicitTarget && !publicAttempt.explicitAttempted) {
       return {
         ...this._publicMediaExplicitUrlRequiredResult(currentUrl),
         wrongTool: true,

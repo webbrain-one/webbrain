@@ -4,6 +4,7 @@
   <!--
     Single offscreen document hosting both:
       • offscreen.js — fetch proxy for localhost LLM servers (existing)
+      • skill-download.js — validated large-file staging through OPFS + blob URLs
       • recorder.js  — tab/display capture + mic mix + MediaRecorder
       • cloud-bridge.js — outbound localhost WebSocket for managed cloud runs
 
@@ -16,6 +17,7 @@
     LOCAL_STORAGE (fetch proxy), USER_MEDIA (mic), DISPLAY_MEDIA (tab/display capture).
   -->
   <script src="offscreen.js"></script>
+  <script src="skill-download.js"></script>
   <script src="recorder.js"></script>
   <script src="cloud-bridge.js"></script>
 </head>

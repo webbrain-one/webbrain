@@ -4041,6 +4041,9 @@ test('public media recommendations carry immediate download_public_media fast pa
     { url: 'https://www.tiktok.com/@user/video/123', title: 'TikTok video', media: { videoCount: 1, imageCount: 0 }, expectedKind: 'video' },
     { url: 'https://www.tiktok.com/@user/video/456', title: 'TikTok', media: { videoCount: 0, imageCount: 1 }, expectedKind: 'video' },
     { url: 'https://www.youtube.com/watch?v=abc123', title: 'YouTube', media: { videoCount: 0, imageCount: 1 }, expectedKind: 'video' },
+    { url: 'https://www.youtube.com/embed/abc123', title: 'Embedded YouTube video', media: { videoCount: 1, imageCount: 0 }, expectedKind: 'video' },
+    { url: 'https://m.twitter.com/someone/status/789', title: 'Mobile Twitter video', media: { videoCount: 1, imageCount: 0 }, expectedKind: 'video' },
+    { url: 'https://www.facebook.com/example/videos/123', title: 'Facebook video', media: { videoCount: 1, imageCount: 0 }, expectedKind: 'video' },
     { url: 'https://www.reddit.com/r/pics/comments/abc/photo/', title: 'A photo post', media: { imageCount: 1, videoCount: 0 }, expectedKind: 'image' },
     { url: 'https://www.linkedin.com/posts/example_123', title: 'LinkedIn public post video', media: { videoCount: 1, imageCount: 0 }, expectedKind: 'video' },
     { url: 'https://threads.net/@user/post/abc', title: 'Threads photo', media: { imageCount: 1, videoCount: 0 }, expectedKind: 'image' },
@@ -4052,6 +4055,7 @@ test('public media recommendations carry immediate download_public_media fast pa
       assert.equal(action?.mode, 'act', `download action should use Act mode for ${pageInfo.url}`);
       assert.match(action?.prompt || '', /download_public_media first/, `download prompt should name the skill first for ${pageInfo.url}`);
       assert.match(action?.prompt || '', /Do not make a separate plan/, `download prompt should avoid planner work for ${pageInfo.url}`);
+      assert.match(action?.prompt || '', /separate server[\s\S]*signing into this browser[\s\S]*cannot affect/i, `download prompt should reject browser-login advice for ${pageInfo.url}`);
       assert.equal(action?.runOptions?.skipPlanner, true, `download action should skip planner for ${pageInfo.url}`);
       assert.equal(action?.runOptions?.tool, 'download_public_media', `download action should pin the intended tool for ${pageInfo.url}`);
       assert.equal(action?.runOptions?.firstTool, undefined, `direct media page should not need feed-target preflight for ${pageInfo.url}`);
@@ -4079,12 +4083,20 @@ test('public media recommendations carry immediate download_public_media fast pa
     assert.match(feedAction?.prompt || '', /exact public post\/reel URL/i, 'feed download should resolve the visible permalink');
     assert.match(feedAction?.prompt || '', /Never send the feed\/profile URL/i, 'feed download should reject the generic feed URL');
     assert.match(feedAction?.prompt || '', /do not report separate video\/audio tracks/i, 'feed download should require one final file');
+    assert.match(feedAction?.prompt || '', /browser cookies are not sent to FreeSkillz/i, 'feed download should explain the remote login boundary');
     assert.equal(feedAction?.runOptions?.skipPlanner, true, 'feed download should still skip a separate planner call');
     assert.equal(feedAction?.runOptions?.tool, 'download_public_media', 'feed download should keep FreeSkillz as the intended tool');
     assert.equal(feedAction?.runOptions?.autoExecute, true, 'feed download should auto-run its screenshot preflight');
     assert.equal(feedAction?.runOptions?.firstTool, 'screenshot', 'feed download should take a screenshot before the first model call');
     assert.deepEqual(feedAction?.runOptions?.args, { save: false }, 'feed screenshot should not save an extra file');
     assert.ok(feedAction?.runOptions?.steps?.some((step) => /explicit permalink/.test(step)), 'feed plan should pin explicit permalink resolution');
+
+    const mobileFeedAction = buildRecommendedActions({
+      url: 'https://m.twitter.com/home',
+      title: 'Twitter Home',
+      media: { videoCount: 1, imageCount: 2 },
+    }).find((a) => a.id === 'download-media');
+    assert.equal(mobileFeedAction?.runOptions?.firstTool, 'screenshot', 'mobile social feeds should require visual target resolution');
   }
 });
 
@@ -6355,7 +6367,7 @@ test('executeHttpSkillTool rejects failed skill download file requests before br
   }
 });
 
-test('executeHttpSkillTool streams oversized skill downloads through the browser after safe preflight', async () => {
+test('executeHttpSkillTool stages oversized skill downloads locally after a validated credentialless fetch', async () => {
   const originalFetch = globalThis.fetch;
   const originalChrome = globalThis.chrome;
   const originalBrowser = globalThis.browser;
@@ -6370,7 +6382,9 @@ test('executeHttpSkillTool streams oversized skill downloads through the browser
 
       const providerCalls = [];
       const downloadCalls = [];
+      const stagedMessages = [];
       const tooLargeBytes = (25 * 1024 * 1024) + 1;
+      let fileFetchCount = 0;
       const jsonResponse = (status, body) => ({
         ok: status >= 200 && status < 300,
         status,
@@ -6391,6 +6405,21 @@ test('executeHttpSkillTool streams oversized skill downloads through the browser
         arrayBuffer: async () => {
           throw new Error(`${label}: oversized response should not be buffered`);
         },
+        body: { cancel: async () => {} },
+      });
+      const stagedResponse = (url) => ({
+        ok: true,
+        status: 200,
+        url,
+        headers: {
+          get(name) {
+            const key = String(name || '').toLowerCase();
+            if (key === 'content-type') return 'video/mp4';
+            if (key === 'content-length') return String(tooLargeBytes);
+            return null;
+          },
+        },
+        blob: async () => new Blob([new Uint8Array([1, 2, 3])], { type: 'video/mp4' }),
       });
       globalThis.fetch = async (url, opts = {}) => {
         providerCalls.push({ url, opts });
@@ -6401,7 +6430,8 @@ test('executeHttpSkillTool streams oversized skill downloads through the browser
           return jsonResponse(200, { status: 'complete' });
         }
         if (url === 'https://freeskillz.xyz/v1/media/jobs/job_oversized/file' && opts.method === 'GET') {
-          return oversizedResponse(url);
+          fileFetchCount += 1;
+          return fileFetchCount === 1 ? oversizedResponse(url) : stagedResponse(url);
         }
         if (url === 'https://freeskillz.xyz/v1/media/jobs/job_oversized' && opts.method === 'DELETE') {
           return jsonResponse(204, {});
@@ -6412,7 +6442,28 @@ test('executeHttpSkillTool streams oversized skill downloads through the browser
       if (label === 'chrome') {
         delete globalThis.browser;
         globalThis.chrome = {
-          runtime: { lastError: null },
+          runtime: {
+            lastError: null,
+            sendMessage(message, cb) {
+              stagedMessages.push(message);
+              if (message.type === 'skill-download-prepare') {
+                cb({
+                  success: true,
+                  status: 200,
+                  finalUrl: message.url,
+                  localUrl: 'blob:chrome-extension://webbrain/staged-large-video',
+                  releaseToken: 'stage-token-1',
+                  bytesReceived: tooLargeBytes,
+                });
+                return;
+              }
+              cb({ success: true, released: true });
+            },
+          },
+          offscreen: {
+            async hasDocument() { return true; },
+            async createDocument() {},
+          },
           downloads: {
             download(opts, cb) {
               downloadCalls.push(opts);
@@ -6425,8 +6476,8 @@ test('executeHttpSkillTool streams oversized skill downloads through the browser
                 state: 'complete',
                 bytesReceived: tooLargeBytes,
                 totalBytes: tooLargeBytes,
-                url: 'https://freeskillz.xyz/v1/media/jobs/job_oversized/file',
-                finalUrl: 'https://freeskillz.xyz/v1/media/jobs/job_oversized/file',
+                url: downloadCalls[0].url,
+                finalUrl: downloadCalls[0].url,
               }]);
             },
           },
@@ -6446,8 +6497,8 @@ test('executeHttpSkillTool streams oversized skill downloads through the browser
                 state: 'complete',
                 bytesReceived: tooLargeBytes,
                 totalBytes: tooLargeBytes,
-                url: 'https://freeskillz.xyz/v1/media/jobs/job_oversized/file',
-                finalUrl: 'https://freeskillz.xyz/v1/media/jobs/job_oversized/file',
+                url: downloadCalls[0].url,
+                finalUrl: downloadCalls[0].url,
               }];
             },
           },
@@ -6455,25 +6506,40 @@ test('executeHttpSkillTool streams oversized skill downloads through the browser
       }
 
       const result = await executeTool(tool, { url: 'https://www.instagram.com/reel/abc/' });
-      assert.equal(result.success, true, `${label}: oversized file should use the safe direct browser path`);
+      assert.equal(result.success, true, `${label}: oversized file should use validated local staging`);
       assert.equal(result.status, 200, `${label}: oversized file status missing`);
       assert.equal(result.bytesExpected, tooLargeBytes, `${label}: oversized file length should be reported`);
-      assert.equal(result.directDownload, true, `${label}: oversized file should identify the direct path`);
+      assert.equal(result.stagedDownload, true, `${label}: oversized file should identify the staged path`);
+      assert.equal(result.directDownload, undefined, `${label}: remote direct-download path must stay disabled`);
       assert.equal(result.finalUrl, 'https://freeskillz.xyz/v1/media/jobs/job_oversized/file', `${label}: oversized file URL should be reported`);
       assert.equal(result.cleanup?.success, true, `${label}: provider job should be cleaned up after oversized file`);
       assert.equal(downloadCalls.length, 1, `${label}: browser download should start for oversized file`);
-      assert.equal(downloadCalls[0].url, 'https://freeskillz.xyz/v1/media/jobs/job_oversized/file', `${label}: large file should bypass data-URL buffering`);
+      assert.match(downloadCalls[0].url, /^blob:/, `${label}: browser download should receive only a local blob URL`);
       assert.deepEqual(
         providerCalls.map(call => `${call.opts.method || 'GET'} ${call.url}`),
-        [
+        label === 'chrome' ? [
           'POST https://freeskillz.xyz/v1/media/jobs',
           'GET https://freeskillz.xyz/v1/media/jobs/job_oversized',
+          'GET https://freeskillz.xyz/v1/media/jobs/job_oversized/file',
+          'DELETE https://freeskillz.xyz/v1/media/jobs/job_oversized',
+        ] : [
+          'POST https://freeskillz.xyz/v1/media/jobs',
+          'GET https://freeskillz.xyz/v1/media/jobs/job_oversized',
+          'GET https://freeskillz.xyz/v1/media/jobs/job_oversized/file',
           'GET https://freeskillz.xyz/v1/media/jobs/job_oversized/file',
           'DELETE https://freeskillz.xyz/v1/media/jobs/job_oversized',
         ],
         `${label}: oversized file lifecycle mismatch`,
       );
       assert.equal(providerCalls[2].opts.credentials, 'omit', `${label}: oversized file fetch should omit cookies`);
+      if (label === 'chrome') {
+        assert.equal(stagedMessages[0]?.type, 'skill-download-prepare', 'chrome: large file should be staged in the offscreen document');
+        assert.equal(stagedMessages[0]?.expectedUrl, 'https://freeskillz.xyz/v1/media/jobs/job_oversized/file', 'chrome: staging should carry the validated expected URL');
+        assert.equal(stagedMessages.at(-1)?.type, 'skill-download-release', 'chrome: staged blob should be released after completion');
+      } else {
+        assert.equal(providerCalls[3].opts.credentials, 'omit', 'firefox: actual staged fetch should omit cookies');
+        assert.equal(providerCalls[3].opts.redirect, 'manual', 'firefox: actual staged fetch should reject redirects');
+      }
     }
   } finally {
     if (originalFetch === undefined) delete globalThis.fetch;
@@ -6483,6 +6549,21 @@ test('executeHttpSkillTool streams oversized skill downloads through the browser
     if (originalBrowser === undefined) delete globalThis.browser;
     else globalThis.browser = originalBrowser;
   }
+});
+
+test('chrome offscreen staging owns the credentialless fetch and local file lifecycle', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'src/chrome/src/offscreen/skill-download.js'), 'utf8');
+  const html = fs.readFileSync(path.join(ROOT, 'src/chrome/src/offscreen/offscreen.html'), 'utf8');
+  const ensure = fs.readFileSync(path.join(ROOT, 'src/chrome/src/offscreen/ensure.js'), 'utf8');
+
+  assert.match(html, /<script src="skill-download\.js"><\/script>/, 'offscreen page should load the staging handler');
+  assert.match(source, /credentials:\s*'omit'/, 'staged remote fetch must omit credentials');
+  assert.match(source, /redirect:\s*'manual'/, 'staged remote fetch must reject redirects');
+  assert.match(source, /navigator\.storage\.getDirectory\(\)/, 'large downloads should stream through extension-local storage');
+  assert.match(source, /URL\.createObjectURL\(file\)/, 'browser download should receive a local blob URL');
+  assert.match(source, /URL\.revokeObjectURL/, 'local blob URLs should be released after download');
+  assert.match(source, /cleanupStaleStages/, 'stale staged files should be removed after an interrupted offscreen lifetime');
+  assert.match(ensure, /'BLOBS'/, 'offscreen document should declare its blob URL purpose');
 });
 
 test('executeHttpSkillTool does not require HEAD support for skill downloads', async () => {
@@ -6617,6 +6698,9 @@ test('executeHttpSkillTool cleans up provider jobs on pre-download failures', as
         assertResult(result, label) {
           assert.equal(result.jobStatus, 'failed', `${label}: terminal job status missing`);
           assert.match(result.error, /encoding failed|failed/i, `${label}: terminal failure error missing`);
+          assert.equal(result.executionContext, 'remote_service', `${label}: terminal failure should identify the remote execution context`);
+          assert.equal(result.browserLoginAffectsRequest, false, `${label}: browser login must not be presented as affecting the provider request`);
+          assert.match(result.retryGuidance || '', /Signing into this browser[\s\S]*will not change/i, `${label}: terminal failure should reject logged-in browser retries`);
         },
       },
       {
@@ -16577,14 +16661,19 @@ test('agent prefers download_public_media before download_social_media when avai
 });
 
 test('agent blocks generic feed URLs until the visible media permalink is resolved', async () => {
-  for (const [label, AgentClass] of [['chrome', AgentCh], ['firefox', AgentFx]]) {
+  for (const [label, prefix, AgentClass] of [['chrome', 'src/chrome', AgentCh], ['firefox', 'src/firefox', AgentFx]]) {
     const agent = new AgentClass({});
+    agent.setCustomSkills([packagedFreeSkillzRecord(prefix)]);
     agent._currentUrl = async () => 'https://www.instagram.com/';
 
     assert.equal(agent._publicMediaUrlNeedsExplicitTarget('https://www.instagram.com/'), true, `${label}: Instagram feed should require a permalink`);
     assert.equal(agent._publicMediaUrlNeedsExplicitTarget('https://www.instagram.com/reel/abc/'), false, `${label}: Instagram reel should be a direct target`);
     assert.equal(agent._publicMediaUrlNeedsExplicitTarget('https://x.com/home'), true, `${label}: X feed should require a permalink`);
     assert.equal(agent._publicMediaUrlNeedsExplicitTarget('https://x.com/user/status/123'), false, `${label}: X status should be a direct target`);
+    assert.equal(agent._publicMediaUrlNeedsExplicitTarget('https://m.twitter.com/home'), true, `${label}: mobile Twitter feed should require a permalink`);
+    assert.equal(agent._publicMediaUrlNeedsExplicitTarget('https://m.twitter.com/user/status/123'), false, `${label}: mobile Twitter status should be a direct target`);
+    assert.equal(agent._publicMediaUrlNeedsExplicitTarget('https://www.facebook.com/user/videos/123'), false, `${label}: Facebook user video should be a direct target`);
+    assert.equal(agent._publicMediaUrlNeedsExplicitTarget('https://www.youtube.com/embed/abc'), false, `${label}: YouTube embed should be a direct target`);
 
     const implicit = await agent._downloadPublicMediaExplicitUrlGuard(1, 'download_public_media', { kind: 'video' });
     assert.equal(implicit.needsExplicitMediaUrl, true, `${label}: generic active URL should be blocked`);
@@ -16602,6 +16691,30 @@ test('agent blocks generic feed URLs until the visible media permalink is resolv
       kind: 'video',
     });
     assert.equal(direct, null, `${label}: explicit reel permalink should pass`);
+
+    const explicitSuccessMessages = [
+      {
+        role: 'assistant',
+        tool_calls: [{
+          id: 'feed_explicit_success',
+          function: { name: 'download_public_media', arguments: '{"url":"https://www.instagram.com/reel/abc/","kind":"video"}' },
+        }],
+      },
+      {
+        role: 'tool',
+        tool_call_id: 'feed_explicit_success',
+        content: agent._wrapUntrusted('download_public_media', JSON.stringify({ success: true, downloadId: 91 })),
+      },
+    ];
+    const fallback = await agent._downloadPublicMediaRedirectForSocial(
+      1,
+      'download_social_media',
+      { target: 'video' },
+      new Set(['download_public_media']),
+      explicitSuccessMessages,
+    );
+    assert.equal(fallback?.skipped, true, `${label}: successful explicit feed download should suppress browser fallback`);
+    assert.equal(fallback?.skippedBecause, 'download_public_media_already_succeeded', `${label}: explicit feed success should use duplicate skip reason`);
   }
 });
 
@@ -22502,6 +22615,8 @@ test('settings exposes custom skills tab and packaged skills resource directory'
     assert.match(freeSkillz, /"kind": "httpDownloadJob"/, `${label}: FreeSkillz media download kind missing`);
     assert.match(freeSkillz, /"requiresDownloadPermission": true/, `${label}: FreeSkillz media download permission marker missing`);
     assert.match(freeSkillz, /"endpoint": "https:\/\/freeskillz\.xyz\/v1\/media\/jobs"/, `${label}: FreeSkillz media download endpoint missing`);
+    assert.match(freeSkillz, /separate server[\s\S]*signing into the current browser[\s\S]*cannot affect/i, `${label}: FreeSkillz skill should reject browser-login advice`);
+    assert.match(freeSkillz, /browser cookies are not sent to the service/i, `${label}: FreeSkillz skill should explain the remote cookie boundary`);
     assert.doesNotMatch(freeSkillz, /raw FreeSkillz endpoints only/i, `${label}: bundled FreeSkillz skill should prefer declared tools`);
     assert.doesNotMatch(freeSkillz, /127\.0\.0\.1|localhost|Local development/i, `${label}: FreeSkillz skill should not include local development URLs`);
     const disposable = fs.readFileSync(path.join(ROOT, prefix, 'skills/disposable-email-mailtm.md'), 'utf8');
