@@ -160,7 +160,7 @@ L'exposition des outils est hiérarchisée : `get_shadow_dom`, `shadow_dom_query
 
 ### Firefox
 
-Seules les racines shadow **ouvertes** (`element.shadowRoot`) sont accessibles. Les racines fermées ne peuvent pas être lues via le script de contenu. L'outil `execute_js` est spécifique à Firefox et exposé en tant qu'extension Dev ; il peut aider au parcours manuel, mais le constructeur d'arbre ne peut pas atteindre les racines fermées.
+Seules les racines shadow **ouvertes** (`element.shadowRoot`) sont accessibles. Les racines fermées ne peuvent pas être lues via le script de contenu. `execute_js` est exposé en mode Dev dans les deux versions, mais le JavaScript ordinaire de la page ne peut toujours pas obtenir une racine fermée et le constructeur d'arbre ne peut pas l'atteindre.
 
 ---
 
@@ -178,7 +178,7 @@ Le constructeur d'arbre ne **descend pas** dans les iframes par défaut. L'agent
 |---|---|---|
 | Élément supprimé du DOM | `click_ax` retourne « non trouvé » | Relire l'arbre ; la page a peut-être été régénérée |
 | Ref obsolète après navigation SPA | Tous les refs échouent | L'agent doit relire l'arbre après `/navigate` ou `wait_for_stable` |
-| Racine shadow fermée | L'arbre montre `<my-component>` mais pas ses enfants | Utiliser `get_shadow_dom` + `shadow_dom_query` (Chrome) ou `execute_js` en mode Dev (Firefox) |
+| Racine shadow fermée | L'arbre montre `<my-component>` mais pas ses enfants | Utiliser `get_shadow_dom` + `shadow_dom_query` sur Chrome ; Firefox ne peut pas traverser une racine fermée |
 | iframe absente de l'arbre | L'agent ne trouve pas le contenu de l'iframe | Appeler `get_frames` puis `iframe_read` / `iframe_click` |
 | Arbre tronqué | `truncated: true` + `hasMore: true` | Appeler `get_accessibility_tree` avec `page: nextPage` ou `ref_id` pour zoomer |
 | Superposition par portail non visible | L'arbre montre la combobox mais pas le menu déroulant | La superposition est remontée dans la section `[open overlays]` — relire avec `filter: 'all'` |

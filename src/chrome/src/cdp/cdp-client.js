@@ -8,6 +8,7 @@ export class CDPClient {
   constructor() {
     this.sessions = new Map(); // tabId -> debugger session
     this.eventHandlers = new Map(); // tabId -> { eventName -> [handlers] }
+    this.devDiagnostics = new Map(); // tabId -> bounded console/network buffers
   }
 
   /**
@@ -40,6 +41,7 @@ export class CDPClient {
           if (source.tabId === tabId) {
             this.sessions.delete(tabId);
             this.eventHandlers.delete(tabId);
+            this.devDiagnostics.delete(tabId);
           }
         });
 
@@ -58,6 +60,7 @@ export class CDPClient {
       chrome.debugger.detach({ tabId }, () => {
         this.sessions.delete(tabId);
         this.eventHandlers.delete(tabId);
+        this.devDiagnostics.delete(tabId);
         resolve();
       });
     });
@@ -72,9 +75,14 @@ export class CDPClient {
     }
 
     return new Promise((resolve, reject) => {
-      chrome.debugger.sendCommand({ tabId }, method, params, (result, error) => {
+      chrome.debugger.sendCommand({ tabId }, method, params, (result) => {
+        // Chrome extension APIs expose callback failures through
+        // chrome.runtime.lastError, not a second callback argument. Read it
+        // synchronously while the callback is active; Chrome clears it after
+        // the callback returns.
+        const error = chrome.runtime.lastError;
         if (error) {
-          reject(new Error(error.message || error));
+          reject(new Error(error.message || String(error)));
           return;
         }
         resolve(result);
@@ -94,6 +102,436 @@ export class CDPClient {
       handlers[event] = [];
     }
     handlers[event].push(handler);
+    return handler;
+  }
+
+  off(tabId, event, handler) {
+    const handlers = this.eventHandlers.get(tabId);
+    const list = handlers?.[event];
+    if (!list) return false;
+    const index = list.indexOf(handler);
+    if (index === -1) return false;
+    list.splice(index, 1);
+    if (list.length === 0) delete handlers[event];
+    if (Object.keys(handlers).length === 0) this.eventHandlers.delete(tabId);
+    return true;
+  }
+
+  _pushBounded(list, value, max) {
+    list.push(value);
+    if (list.length > max) list.splice(0, list.length - max);
+  }
+
+  _consoleLevel(value) {
+    const level = String(value || '').toLowerCase();
+    if (level === 'warn' || level === 'warning') return 'warning';
+    if (level === 'error' || level === 'assert') return 'error';
+    if (level === 'debug' || level === 'verbose' || level === 'trace') return 'debug';
+    if (level === 'info') return 'info';
+    return 'log';
+  }
+
+  _remoteObjectText(remote) {
+    if (!remote || typeof remote !== 'object') return '';
+    if (Object.prototype.hasOwnProperty.call(remote, 'value')) {
+      const value = remote.value;
+      if (typeof value === 'string') return value.slice(0, 4000);
+      try { return JSON.stringify(value).slice(0, 4000); } catch {}
+      return String(value).slice(0, 4000);
+    }
+    if (remote.unserializableValue != null) return String(remote.unserializableValue).slice(0, 4000);
+    if (remote.description != null) return String(remote.description).slice(0, 4000);
+    return String(remote.type || '').slice(0, 100);
+  }
+
+  _redactedHeaders(headers) {
+    const out = {};
+    const sensitive = /^(authorization|proxy-authorization|cookie|set-cookie|x-api-key|api-key|x-auth-token|x-csrf-token|x-xsrf-token)$/i;
+    const secretish = /(secret|token|session|credential|password|passwd|(?:private|api|subscription|access|auth|consumer|functions|signing|client|application)[-_]?key)/i;
+    for (const [rawName, rawValue] of Object.entries(headers || {})) {
+      const name = String(rawName).slice(0, 200);
+      out[name] = (sensitive.test(name) || secretish.test(name))
+        ? '[REDACTED]'
+        : String(rawValue ?? '').slice(0, 4000);
+    }
+    return out;
+  }
+
+  /**
+   * Start bounded Dev-mode console and network capture for a tab. Capture is
+   * deliberately opt-in (called when a Dev run starts), and raw bodies are
+   * never buffered. Sensitive headers are redacted at ingestion time so they
+   * cannot leak later even when inspect_network_requests asks for headers.
+   */
+  async enableDevDiagnostics(tabId) {
+    await this.attach(tabId);
+    const existing = this.devDiagnostics.get(tabId);
+    if (existing) return existing;
+
+    const state = {
+      capturingSince: Date.now(),
+      console: [],
+      network: [],
+      networkByRequestId: new Map(),
+      handlers: [],
+    };
+    this.devDiagnostics.set(tabId, state);
+    const register = (event, handler) => {
+      this.on(tabId, event, handler);
+      state.handlers.push({ event, handler });
+    };
+
+    register('Runtime.consoleAPICalled', (params = {}) => {
+      const frame = params.stackTrace?.callFrames?.[0] || null;
+      this._pushBounded(state.console, {
+        level: this._consoleLevel(params.type),
+        source: 'console',
+        text: (params.args || []).map(arg => this._remoteObjectText(arg)).join(' ').slice(0, 8000),
+        seenAt: Date.now(),
+        timestamp: Number(params.timestamp) || null,
+        location: frame ? {
+          url: String(frame.url || '').slice(0, 2000),
+          line: Number(frame.lineNumber) + 1,
+          column: Number(frame.columnNumber) + 1,
+          functionName: String(frame.functionName || '').slice(0, 300),
+        } : null,
+      }, 200);
+    });
+
+    register('Runtime.exceptionThrown', (params = {}) => {
+      const details = params.exceptionDetails || {};
+      const exception = details.exception || {};
+      const frame = details.stackTrace?.callFrames?.[0] || null;
+      this._pushBounded(state.console, {
+        level: 'error',
+        source: 'uncaught_exception',
+        text: String(exception.description || exception.value || details.text || 'Uncaught exception').slice(0, 8000),
+        seenAt: Date.now(),
+        timestamp: Number(params.timestamp) || null,
+        location: frame ? {
+          url: String(frame.url || details.url || '').slice(0, 2000),
+          line: Number(frame.lineNumber) + 1,
+          column: Number(frame.columnNumber) + 1,
+          functionName: String(frame.functionName || '').slice(0, 300),
+        } : {
+          url: String(details.url || '').slice(0, 2000),
+          line: Number(details.lineNumber) + 1,
+          column: Number(details.columnNumber) + 1,
+        },
+      }, 200);
+    });
+
+    register('Log.entryAdded', (params = {}) => {
+      const entry = params.entry || {};
+      this._pushBounded(state.console, {
+        level: this._consoleLevel(entry.level),
+        source: String(entry.source || 'log').slice(0, 100),
+        text: String(entry.text || '').slice(0, 8000),
+        seenAt: Date.now(),
+        timestamp: Number(entry.timestamp) || null,
+        location: entry.url ? {
+          url: String(entry.url).slice(0, 2000),
+          line: Number(entry.lineNumber) + 1,
+          column: null,
+        } : null,
+      }, 200);
+    });
+
+    register('Network.requestWillBeSent', (params = {}) => {
+      const request = params.request || {};
+      const prior = state.networkByRequestId.get(params.requestId);
+      if (prior && params.redirectResponse) {
+        prior.status = Number(params.redirectResponse.status) || null;
+        prior.statusText = String(params.redirectResponse.statusText || '').slice(0, 300);
+        prior.responseHeaders = this._redactedHeaders(params.redirectResponse.headers);
+        prior.redirected = true;
+        prior.finishedAt = Date.now();
+      }
+      const entry = {
+        requestId: String(params.requestId || ''),
+        loaderId: String(params.loaderId || ''),
+        url: String(request.url || '').slice(0, 8000),
+        method: String(request.method || 'GET').toUpperCase().slice(0, 30),
+        resourceType: String(params.type || '').slice(0, 100),
+        documentURL: String(params.documentURL || '').slice(0, 4000),
+        initiatorType: String(params.initiator?.type || '').slice(0, 100),
+        requestHeaders: this._redactedHeaders(request.headers),
+        status: null,
+        statusText: '',
+        mimeType: '',
+        protocol: '',
+        responseHeaders: {},
+        fromDiskCache: false,
+        fromServiceWorker: false,
+        encodedDataLength: null,
+        errorText: '',
+        blockedReason: '',
+        canceled: false,
+        startedAt: Date.now(),
+        cdpTimestamp: Number(params.timestamp) || null,
+        finishedAt: null,
+        redirected: false,
+      };
+      this._pushBounded(state.network, entry, 300);
+      state.networkByRequestId.set(params.requestId, entry);
+      const retained = new Set(state.network.map(item => item.requestId));
+      for (const requestId of state.networkByRequestId.keys()) {
+        if (!retained.has(String(requestId))) state.networkByRequestId.delete(requestId);
+      }
+    });
+
+    register('Network.responseReceived', (params = {}) => {
+      const entry = state.networkByRequestId.get(params.requestId);
+      if (!entry) return;
+      const response = params.response || {};
+      entry.status = Number(response.status) || 0;
+      entry.statusText = String(response.statusText || '').slice(0, 300);
+      entry.mimeType = String(response.mimeType || '').slice(0, 300);
+      entry.protocol = String(response.protocol || '').slice(0, 100);
+      entry.responseHeaders = this._redactedHeaders(response.headers);
+      entry.fromDiskCache = !!response.fromDiskCache;
+      entry.fromServiceWorker = !!response.fromServiceWorker;
+    });
+
+    register('Network.loadingFinished', (params = {}) => {
+      const entry = state.networkByRequestId.get(params.requestId);
+      if (!entry) return;
+      entry.encodedDataLength = Number.isFinite(Number(params.encodedDataLength)) ? Number(params.encodedDataLength) : null;
+      entry.finishedAt = Date.now();
+    });
+
+    register('Network.loadingFailed', (params = {}) => {
+      const entry = state.networkByRequestId.get(params.requestId);
+      if (!entry) return;
+      entry.errorText = String(params.errorText || '').slice(0, 1000);
+      entry.blockedReason = String(params.blockedReason || '').slice(0, 300);
+      entry.canceled = !!params.canceled;
+      entry.finishedAt = Date.now();
+    });
+
+    // Register handlers before enabling domains so no events emitted during
+    // enablement are missed. A single unsupported domain should not disable
+    // the others; callers still receive the buffers that are available.
+    await Promise.allSettled([
+      this.sendCommand(tabId, 'Runtime.enable'),
+      this.sendCommand(tabId, 'Log.enable'),
+      this.sendCommand(tabId, 'Network.enable', {
+        maxTotalBufferSize: 10 * 1024 * 1024,
+        maxResourceBufferSize: 2 * 1024 * 1024,
+        maxPostDataSize: 64 * 1024,
+      }),
+    ]);
+    return state;
+  }
+
+  async disableDevDiagnostics(tabId) {
+    const state = this.devDiagnostics.get(tabId);
+    if (!state) return false;
+    for (const { event, handler } of state.handlers || []) {
+      this.off(tabId, event, handler);
+    }
+    state.handlers = [];
+    state.console.length = 0;
+    state.network.length = 0;
+    state.networkByRequestId.clear();
+    this.devDiagnostics.delete(tabId);
+    // Removing WebBrain's handlers stops local buffering, but the browser
+    // continues producing domain events until the matching CDP domains are
+    // disabled. Issue the commands after local teardown so late events cannot
+    // repopulate the cleared buffers while shutdown is in flight. Other CDP
+    // helpers explicitly re-enable Runtime before using it.
+    if (this.sessions.has(tabId)) {
+      await Promise.allSettled([
+        this.sendCommand(tabId, 'Runtime.disable'),
+        this.sendCommand(tabId, 'Log.disable'),
+        this.sendCommand(tabId, 'Network.disable'),
+      ]);
+    }
+    return true;
+  }
+
+  async disableAllDevDiagnostics() {
+    const tabIds = [...this.devDiagnostics.keys()];
+    const results = await Promise.allSettled(tabIds.map(tabId => this.disableDevDiagnostics(tabId)));
+    return results.filter(result => result.status === 'fulfilled' && result.value === true).length;
+  }
+
+  async readConsole(tabId, options = {}) {
+    const state = await this.enableDevDiagnostics(tabId);
+    const levels = new Set(Array.isArray(options.levels) ? options.levels.map(v => this._consoleLevel(v)) : []);
+    const sinceMs = Number.isFinite(Number(options.sinceMs)) ? Math.max(0, Number(options.sinceMs)) : null;
+    const cutoff = sinceMs == null ? 0 : Date.now() - sinceMs;
+    const limit = Math.max(1, Math.min(200, Math.round(Number(options.limit) || 100)));
+    const entries = state.console
+      .filter(entry => (!levels.size || levels.has(entry.level)) && entry.seenAt >= cutoff)
+      .slice(-limit)
+      .map(entry => ({ ...entry, seenAt: new Date(entry.seenAt).toISOString() }));
+    if (options.clear) state.console.length = 0;
+    return {
+      success: true,
+      capturingSince: new Date(state.capturingSince).toISOString(),
+      count: entries.length,
+      entries,
+      cleared: !!options.clear,
+      note: 'Console capture begins when Dev diagnostics attach; messages logged before that point may be unavailable.',
+    };
+  }
+
+  async inspectNetworkRequests(tabId, options = {}) {
+    const state = await this.enableDevDiagnostics(tabId);
+    const urlPattern = String(options.urlPattern || '').toLowerCase();
+    const methods = new Set(Array.isArray(options.methods) ? options.methods.map(v => String(v).toUpperCase()) : []);
+    const statusMin = Number.isFinite(Number(options.statusMin)) ? Number(options.statusMin) : null;
+    const statusMax = Number.isFinite(Number(options.statusMax)) ? Number(options.statusMax) : null;
+    const sinceMs = Number.isFinite(Number(options.sinceMs)) ? Math.max(0, Number(options.sinceMs)) : null;
+    const cutoff = sinceMs == null ? 0 : Date.now() - sinceMs;
+    const limit = Math.max(1, Math.min(100, Math.round(Number(options.limit) || 50)));
+    const includeHeaders = options.includeHeaders === true;
+    const includeBodies = options.includeBodies === true;
+    const bodyMaxChars = Math.max(100, Math.min(20000, Math.round(Number(options.bodyMaxChars) || 5000)));
+    const selected = state.network.filter(entry => {
+      if (entry.startedAt < cutoff) return false;
+      if (urlPattern && !entry.url.toLowerCase().includes(urlPattern)) return false;
+      if (methods.size && !methods.has(entry.method)) return false;
+      if (statusMin != null && (entry.status == null || entry.status < statusMin)) return false;
+      if (statusMax != null && (entry.status == null || entry.status > statusMax)) return false;
+      return true;
+    }).slice(-limit);
+
+    const requests = [];
+    for (const entry of selected) {
+      const output = {
+        requestId: entry.requestId,
+        url: entry.url,
+        method: entry.method,
+        status: entry.status,
+        statusText: entry.statusText,
+        resourceType: entry.resourceType,
+        mimeType: entry.mimeType,
+        protocol: entry.protocol,
+        encodedDataLength: entry.encodedDataLength,
+        durationMs: entry.finishedAt ? Math.max(0, entry.finishedAt - entry.startedAt) : null,
+        startedAt: new Date(entry.startedAt).toISOString(),
+        finished: !!entry.finishedAt,
+        failed: !!entry.errorText,
+        errorText: entry.errorText || undefined,
+        blockedReason: entry.blockedReason || undefined,
+        canceled: entry.canceled || undefined,
+        redirected: entry.redirected || undefined,
+        fromDiskCache: entry.fromDiskCache,
+        fromServiceWorker: entry.fromServiceWorker,
+        initiatorType: entry.initiatorType || undefined,
+      };
+      if (includeHeaders) {
+        output.requestHeaders = entry.requestHeaders;
+        output.responseHeaders = entry.responseHeaders;
+      }
+      if (includeBodies) {
+        if (!['GET', 'HEAD'].includes(entry.method) && !entry.redirected) {
+          try {
+            const requestBody = await this.sendCommand(tabId, 'Network.getRequestPostData', { requestId: entry.requestId });
+            const body = String(requestBody?.postData || '');
+            output.requestBody = body.length > bodyMaxChars ? body.slice(0, bodyMaxChars) + '\n[...body truncated]' : body;
+          } catch {
+            output.requestBodyUnavailable = true;
+          }
+        }
+        const textual = /^(?:text\/|application\/(?:json|.+\+json|javascript|xml|x-www-form-urlencoded|graphql))/i.test(entry.mimeType || '');
+        if (entry.status != null && textual && !entry.redirected) {
+          try {
+            const responseBody = await this.sendCommand(tabId, 'Network.getResponseBody', { requestId: entry.requestId });
+            if (responseBody?.base64Encoded) {
+              output.responseBodyUnavailable = 'CDP returned a base64-encoded body; binary/base64 payloads are omitted.';
+            } else {
+              const body = String(responseBody?.body || '');
+              output.responseBody = body.length > bodyMaxChars ? body.slice(0, bodyMaxChars) + '\n[...body truncated]' : body;
+            }
+          } catch {
+            output.responseBodyUnavailable = true;
+          }
+        } else if (entry.status != null && !textual) {
+          output.responseBodyUnavailable = 'Non-text response body omitted.';
+        }
+      }
+      requests.push(output);
+    }
+    if (options.clear) {
+      state.network.length = 0;
+      state.networkByRequestId.clear();
+    }
+    return {
+      success: true,
+      capturingSince: new Date(state.capturingSince).toISOString(),
+      count: requests.length,
+      requests,
+      includesHeaders: includeHeaders,
+      includesBodies: includeBodies,
+      sensitiveHeadersRedacted: true,
+      cleared: !!options.clear,
+      note: 'Network capture begins when Dev diagnostics attach; reload or repeat an action when the request you need predates capture.',
+    };
+  }
+
+  async findNodeByAttribute(tabId, attributeName, attributeValue) {
+    await this.sendCommand(tabId, 'DOM.enable');
+    const result = await this.sendCommand(tabId, 'DOM.getFlattenedDocument', { depth: -1, pierce: true });
+    for (const node of result.nodes || []) {
+      const attrs = node.attributes || [];
+      for (let i = 0; i < attrs.length; i += 2) {
+        if (attrs[i] === attributeName && attrs[i + 1] === attributeValue) return node;
+      }
+    }
+    return null;
+  }
+
+  _formatEventListeners(listeners, relation, eventTypes = null) {
+    const wanted = eventTypes?.size ? eventTypes : null;
+    return (listeners || [])
+      .filter(listener => !wanted || wanted.has(String(listener.type || '').toLowerCase()))
+      .map(listener => ({
+        relation,
+        type: String(listener.type || ''),
+        useCapture: !!listener.useCapture,
+        passive: !!listener.passive,
+        once: !!listener.once,
+        scriptId: String(listener.scriptId || ''),
+        line: Number(listener.lineNumber) + 1,
+        column: Number(listener.columnNumber) + 1,
+        handler: this._remoteObjectText(listener.handler || listener.originalHandler).slice(0, 1000),
+      }));
+  }
+
+  async getEventListenersForNode(tabId, nodeId, relation = 'target', eventTypes = null) {
+    const resolved = await this.sendCommand(tabId, 'DOM.resolveNode', { nodeId });
+    const objectId = resolved?.object?.objectId;
+    if (!objectId) return [];
+    try {
+      const result = await this.sendCommand(tabId, 'DOMDebugger.getEventListeners', {
+        objectId,
+        depth: 1,
+        pierce: true,
+      });
+      return this._formatEventListeners(result?.listeners, relation, eventTypes);
+    } finally {
+      try { await this.sendCommand(tabId, 'Runtime.releaseObject', { objectId }); } catch {}
+    }
+  }
+
+  async getEventListenersForExpression(tabId, expression, relation, eventTypes = null) {
+    await this.sendCommand(tabId, 'Runtime.enable');
+    const evaluated = await this.sendCommand(tabId, 'Runtime.evaluate', { expression });
+    const objectId = evaluated?.result?.objectId;
+    if (!objectId) return [];
+    try {
+      const result = await this.sendCommand(tabId, 'DOMDebugger.getEventListeners', {
+        objectId,
+        depth: 1,
+        pierce: true,
+      });
+      return this._formatEventListeners(result?.listeners, relation, eventTypes);
+    } finally {
+      try { await this.sendCommand(tabId, 'Runtime.releaseObject', { objectId }); } catch {}
+    }
   }
 
   /**
@@ -142,15 +580,20 @@ export class CDPClient {
   /**
    * Call a JS function on the page.
    */
-  async evaluate(tabId, expression, returnByValue = true) {
+  async evaluate(tabId, expression, returnByValue = true, options = {}) {
     await this.sendCommand(tabId, 'Runtime.enable');
-    const result = await this.sendCommand(tabId, 'Runtime.evaluate', {
+    const params = {
       expression,
       returnByValue,
       awaitPromise: true,
       userGesture: true,
       allowUnsafeEvalBlockedByCSP: true,
-    });
+    };
+    const requestedTimeout = Number(options?.timeoutMs);
+    if (Number.isFinite(requestedTimeout) && requestedTimeout > 0) {
+      params.timeout = Math.max(1, Math.min(30000, Math.round(requestedTimeout)));
+    }
+    const result = await this.sendCommand(tabId, 'Runtime.evaluate', params);
     return result;
   }
 

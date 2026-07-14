@@ -1360,7 +1360,7 @@ export class Agent {
   }
 
   static NAV_TOOLS = new Set(['navigate', 'new_tab', 'go_back', 'go_forward']);
-  static STATE_CHANGE_TOOLS = new Set(['navigate', 'new_tab', 'go_back', 'go_forward', 'click', 'click_ax', 'type_text', 'type_ax', 'set_field', 'press_keys', 'scroll', 'hover', 'drag_drop']);
+  static STATE_CHANGE_TOOLS = new Set(['navigate', 'new_tab', 'go_back', 'go_forward', 'click', 'click_ax', 'type_text', 'type_ax', 'set_field', 'press_keys', 'scroll', 'hover', 'drag_drop', 'execute_js']);
   static NAV_PRONE_TOOLS = new Set(['click', 'click_ax', 'navigate', 'go_back', 'go_forward', 'execute_js', 'iframe_click']);
   static RECOMMENDED_ACTION_FAST_PATH_IDS = new Set(['download-media']);
   static RECOMMENDED_ACTION_FIRST_TOOLS = Object.freeze({
@@ -5455,7 +5455,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   }
 
   /**
-   * Serialize a tab's conversation to Markdown for /export-with-traces, sourced
+   * Serialize a tab's conversation to Markdown for /export --traces, sourced
    * from the trace store (compaction-immune, raw structured results) — NOT from
    * this.conversations. Hydrates first so it works across background restarts.
    * Returns { ok, markdown|null, turnCount, reason }: reason 'no-conversation', or

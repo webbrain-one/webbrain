@@ -160,7 +160,7 @@ await cdpClient.evaluate(tabId, `
 
 ### Firefox
 
-只有**开放**的 shadow root（`element.shadowRoot`）可访问。封闭的 root 无法通过内容脚本读取。`execute_js` 工具是 Firefox 专用的，作为开发者附加组件暴露；它有助于手动遍历，但树构建器无法访问封闭的 root。
+只有**开放**的 shadow root（`element.shadowRoot`）可访问。封闭的 root 无法通过内容脚本读取。`execute_js` 在两个版本的开发者模式中都可用，但普通页面 JavaScript 仍无法取得封闭 root，树构建器也无法访问它。
 
 ---
 
@@ -178,7 +178,7 @@ await cdpClient.evaluate(tabId, `
 |---|---|---|
 | 元素从 DOM 中移除 | `click_ax` 返回"未找到" | 重新读取树；页面可能已重新渲染 |
 | SPA 导航后引用过期 | 所有引用失效 | 代理应在 `/navigate` 或 `wait_for_stable` 后重新读取树 |
-| Shadow DOM 封闭 root | 树显示 `<my-component>` 但不显示子元素 | 使用 `get_shadow_dom` + `shadow_dom_query`（Chrome）或开发者模式的 `execute_js`（Firefox） |
+| Shadow DOM 封闭 root | 树显示 `<my-component>` 但不显示子元素 | 在 Chrome 中使用 `get_shadow_dom` + `shadow_dom_query`；Firefox 无法穿透封闭 root |
 | iframe 不在树中 | 代理找不到 iframe 内容 | 调用 `get_frames`，然后使用 `iframe_read` / `iframe_click` |
 | 树被截断 | `truncated: true` + `hasMore: true` | 使用 `page: nextPage` 或 `ref_id` 调用 `get_accessibility_tree` 以放大查看 |
 | Portal 叠加层不可见 | 树显示组合框但不显示下拉菜单 | 叠加层已被提升到 `[open overlays]` 部分——使用 `filter: 'all'` 重新读取 |

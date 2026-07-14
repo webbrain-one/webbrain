@@ -1573,8 +1573,8 @@ export class Agent {
   // Tools whose successful completion should trigger an auto-screenshot when
   // the corresponding mode is active.
   static NAV_TOOLS = new Set(['navigate', 'new_tab', 'go_back', 'go_forward']);
-  static STATE_CHANGE_TOOLS = new Set(['navigate', 'new_tab', 'go_back', 'go_forward', 'click', 'click_ax', 'type_text', 'type_ax', 'set_field', 'press_keys', 'scroll', 'hover', 'drag_drop']);
-  static NAV_PRONE_TOOLS = new Set(['click', 'click_ax', 'navigate', 'go_back', 'go_forward', 'iframe_click']);
+  static STATE_CHANGE_TOOLS = new Set(['navigate', 'new_tab', 'go_back', 'go_forward', 'click', 'click_ax', 'type_text', 'type_ax', 'set_field', 'press_keys', 'scroll', 'hover', 'drag_drop', 'inject_css', 'remove_injected_css', 'patch_element', 'revert_patch', 'execute_js', 'inspect_event_listeners', 'highlight_element']);
+  static NAV_PRONE_TOOLS = new Set(['click', 'click_ax', 'navigate', 'go_back', 'go_forward', 'execute_js', 'iframe_click']);
   static RECOMMENDED_ACTION_FAST_PATH_IDS = new Set(['download-media']);
   static RECOMMENDED_ACTION_FIRST_TOOLS = Object.freeze({
     'summarize-page': new Set(['read_page']),
@@ -1718,7 +1718,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           }
         }
         return blocks.some((text) =>
-          /^\s*\/record(?:-full-screen)?(?:\s|$)/im.test(text) ||
+          /^\s*\/record(?:\s|$)/im.test(text) ||
           /\brecord_tab\b/i.test(text) ||
           /\bRecording started\b/i.test(text)
         );
@@ -1729,7 +1729,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         const kind = rec.source === 'display' ? 'screen/window' : 'tab';
         contextLine += `[Recording status: a ${kind} recording is currently ACTIVE${since}. Recording has no model-callable tools. If the user asks to stop it, tell them to press Escape twice in WebBrain/browser surfaces or use Chrome's Stop sharing control. Do not start another recording.]\n\n`;
       } else if (startedRecording) {
-        contextLine += `[Recording status: no recording is currently active. Recording is user-driven only: tell the user to type /record for current-tab capture or /record-full-screen for screen/window capture.]\n\n`;
+        contextLine += `[Recording status: no recording is currently active. Recording is user-driven only: tell the user to type /record for current-tab capture or /record --full-screen for screen/window capture.]\n\n`;
       }
     } catch (e) { /* recorder state unavailable — skip the status note */ }
 
@@ -5472,6 +5472,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const messages = this.conversations.get(tabId);
     const lastMode = this.conversationModes.get(tabId);
     if (lastMode !== mode) {
+      if (lastMode === 'dev') void cdpClient.disableDevDiagnostics(tabId);
       this.conversationModes.set(tabId, mode);
       this._conversationMode = mode;
     }
@@ -5486,6 +5487,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
    * Clear conversation for a tab.
    */
   _cleanupTab(tabId, { preserveRunGuard = false } = {}) {
+    void cdpClient.disableDevDiagnostics(tabId);
     this._cancelPendingPlans(tabId, 'tab closed');
     this._isPdfTabCache.delete(tabId);
     this._lastCdpClickIdent?.delete(tabId);
@@ -6309,7 +6311,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   }
 
   /**
-   * Serialize a tab's conversation to Markdown for /export-with-traces, sourced
+   * Serialize a tab's conversation to Markdown for /export --traces, sourced
    * from the trace store (compaction-immune, raw structured results) — NOT from
    * this.conversations. Hydrates first so it works across service-worker restarts.
    * Returns { ok, markdown|null, turnCount, reason }: reason 'no-conversation', or
@@ -8159,6 +8161,324 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     }
   }
 
+  async _sendDevContentAction(tabId, action, params = {}) {
+    try {
+      return await chrome.tabs.sendMessage(tabId, { target: 'content', action, params });
+    } catch (e) {
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId },
+          files: [
+            'src/content/accessibility-tree.js',
+            'src/content/content.js',
+            'src/content/agent-visual-indicator.js',
+          ],
+        });
+        return await chrome.tabs.sendMessage(tabId, { target: 'content', action, params });
+      } catch (e2) {
+        return { success: false, error: `Failed to communicate with page: ${e2.message || e2}` };
+      }
+    }
+  }
+
+  _devCssPatchStorageKey(patchId) {
+    return `devCssPatch:${patchId}`;
+  }
+
+  disableDevDiagnostics(tabId) {
+    return cdpClient.disableDevDiagnostics(tabId);
+  }
+
+  disableAllDevDiagnostics() {
+    return cdpClient.disableAllDevDiagnostics();
+  }
+
+  async _getDevDocumentIdentity(tabId) {
+    try {
+      const frame = await chrome.webNavigation?.getFrame?.({ tabId, frameId: 0 });
+      if (frame?.documentId) {
+        return { documentId: String(frame.documentId), pageUrl: String(frame.url || '') };
+      }
+    } catch {}
+    try {
+      const [result] = await chrome.scripting.executeScript({
+        target: { tabId },
+        world: 'ISOLATED',
+        func: () => location.href,
+      });
+      if (result?.documentId) {
+        return { documentId: String(result.documentId), pageUrl: String(result.result || '') };
+      }
+    } catch {}
+    return null;
+  }
+
+  async clearDevCssPatchesForTab(tabId) {
+    const keys = new Set();
+    for (const [patchId, patch] of this._devCssPatches || []) {
+      if (Number(patch?.tabId) !== Number(tabId)) continue;
+      keys.add(this._devCssPatchStorageKey(patchId));
+      this._devCssPatches.delete(patchId);
+    }
+    try {
+      const stored = await chrome.storage.session.get(null);
+      for (const [key, patch] of Object.entries(stored || {})) {
+        if (key.startsWith('devCssPatch:') && Number(patch?.tabId) === Number(tabId)) keys.add(key);
+      }
+      if (keys.size) await chrome.storage.session.remove([...keys]);
+    } catch {}
+    return keys.size;
+  }
+
+  async _injectDevCss(tabId, args = {}) {
+    const css = typeof args.css === 'string' ? args.css : '';
+    if (!css.trim()) return { success: false, error: 'inject_css: `css` is required.' };
+    if (css.length > 100000) return { success: false, error: 'inject_css: CSS exceeds the 100,000-character limit.' };
+    const patchId = `wb_css_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`;
+    const injectedCss = `/* webbrain-dev-patch:${patchId} */\n${css}`;
+    try {
+      const before = await this._getDevDocumentIdentity(tabId);
+      if (!before?.documentId) {
+        return { success: false, error: 'inject_css: could not identify the current document.' };
+      }
+      await chrome.scripting.insertCSS({ target: { tabId }, css: injectedCss, origin: 'AUTHOR' });
+      const after = await this._getDevDocumentIdentity(tabId);
+      if (after?.documentId !== before.documentId) {
+        let cleanupSucceeded = false;
+        try {
+          await chrome.scripting.removeCSS({ target: { tabId }, css: injectedCss, origin: 'AUTHOR' });
+          cleanupSucceeded = true;
+        } catch {}
+        return {
+          success: false,
+          stale: true,
+          cleanupSucceeded,
+          error: cleanupSucceeded
+            ? 'inject_css: the page navigated while CSS was being injected; the exact CSS was removed from the replacement document.'
+            : 'inject_css: the page navigated while CSS was being injected and automatic cleanup failed; reload the page if the temporary style remains.',
+        };
+      }
+      const patch = {
+        patchId,
+        tabId,
+        css,
+        injectedCss,
+        documentId: before.documentId,
+        pageUrl: after.pageUrl || before.pageUrl,
+        createdAt: Date.now(),
+      };
+      if (!this._devCssPatches) this._devCssPatches = new Map();
+      this._devCssPatches.set(patchId, patch);
+      let persisted = true;
+      try {
+        await chrome.storage.session.set({ [this._devCssPatchStorageKey(patchId)]: patch });
+      } catch {
+        persisted = false;
+      }
+      const current = await this._getDevDocumentIdentity(tabId);
+      if (current?.documentId !== patch.documentId) {
+        let cleanupSucceeded = false;
+        try {
+          await chrome.scripting.removeCSS({ target: { tabId }, css: injectedCss, origin: 'AUTHOR' });
+          cleanupSucceeded = true;
+        } catch {}
+        this._devCssPatches.delete(patchId);
+        try { await chrome.storage.session.remove(this._devCssPatchStorageKey(patchId)); } catch {}
+        return {
+          success: false,
+          stale: true,
+          cleanupSucceeded,
+          error: cleanupSucceeded
+            ? 'inject_css: the page navigated while the patch was being recorded; the exact CSS was removed from the replacement document.'
+            : 'inject_css: the page navigated while the patch was being recorded and automatic cleanup failed; reload the page if the temporary style remains.',
+        };
+      }
+      return {
+        success: true,
+        patchId,
+        cssLength: css.length,
+        persistedForWorkerRestart: persisted,
+        note: 'Temporary CSS is active on this page. Call remove_injected_css with this patchId to undo it.',
+      };
+    } catch (e) {
+      return { success: false, error: `inject_css failed: ${e.message || e}` };
+    }
+  }
+
+  async _removeInjectedDevCss(tabId, args = {}) {
+    const patchId = typeof args.patchId === 'string' ? args.patchId.trim() : '';
+    if (!patchId) return { success: false, error: 'remove_injected_css: `patchId` is required.' };
+    let patch = this._devCssPatches?.get(patchId) || null;
+    const storageKey = this._devCssPatchStorageKey(patchId);
+    if (!patch) {
+      try { patch = (await chrome.storage.session.get(storageKey))?.[storageKey] || null; } catch {}
+    }
+    if (!patch) {
+      return { success: false, error: `remove_injected_css: CSS patchId "${patchId}" was not found.` };
+    }
+    if (Number(patch.tabId) !== Number(tabId)) {
+      return { success: false, error: `remove_injected_css: patchId "${patchId}" belongs to a different tab.` };
+    }
+    try {
+      const current = await this._getDevDocumentIdentity(tabId);
+      if (!current?.documentId || current.documentId !== patch.documentId) {
+        this._devCssPatches?.delete(patchId);
+        try { await chrome.storage.session.remove(storageKey); } catch {}
+        return {
+          success: false,
+          stale: true,
+          error: `remove_injected_css: patchId "${patchId}" belongs to a document that is no longer loaded.`,
+        };
+      }
+      await chrome.scripting.removeCSS({ target: { tabId }, css: patch.injectedCss || patch.css, origin: 'AUTHOR' });
+      this._devCssPatches?.delete(patchId);
+      try { await chrome.storage.session.remove(storageKey); } catch {}
+      return { success: true, patchId, removed: true };
+    } catch (e) {
+      return { success: false, error: `remove_injected_css failed: ${e.message || e}` };
+    }
+  }
+
+  _boundedCdpValue(value, maxChars = 50000) {
+    if (typeof value === 'string') {
+      return value.length > maxChars
+        ? { value: value.slice(0, maxChars) + '\n[...result truncated]', truncated: true, format: 'string' }
+        : { value, truncated: false, format: 'string' };
+    }
+    try {
+      const serialized = JSON.stringify(value);
+      if (serialized && serialized.length > maxChars) {
+        return {
+          value: serialized.slice(0, maxChars) + '\n[...result truncated]',
+          truncated: true,
+          format: 'json_preview',
+        };
+      }
+    } catch {}
+    return { value, truncated: false, format: 'value' };
+  }
+
+  async _executeDevJavaScript(tabId, args = {}) {
+    const code = typeof args.code === 'string' ? args.code : '';
+    if (!code.trim()) return { success: false, error: 'execute_js: `code` is required.' };
+    if (code.length > 100000) return { success: false, error: 'execute_js: code exceeds the 100,000-character limit.' };
+    try {
+      await cdpClient.enableDevDiagnostics(tabId);
+      // Match Firefox's function-body contract while adding async/await:
+      // callers use an explicit `return` for readback instead of having to
+      // squeeze a multi-statement edit into one JavaScript expression.
+      const expression = `(async () => {\n${code}\n})()\n//# sourceURL=webbrain-dev-execute.js`;
+      const response = await cdpClient.evaluate(tabId, expression, true, { timeoutMs: 15000 });
+      if (response?.exceptionDetails) {
+        const details = response.exceptionDetails;
+        const exception = details.exception || {};
+        const frames = (details.stackTrace?.callFrames || []).slice(0, 8).map(frame => ({
+          functionName: String(frame.functionName || '').slice(0, 300),
+          url: String(frame.url || '').slice(0, 2000),
+          line: Number(frame.lineNumber) + 1,
+          column: Number(frame.columnNumber) + 1,
+        }));
+        return {
+          success: false,
+          error: String(exception.description || exception.value || details.text || 'JavaScript execution failed.').slice(0, 12000),
+          exception: {
+            text: String(details.text || '').slice(0, 1000),
+            url: String(details.url || '').slice(0, 2000),
+            line: Number(details.lineNumber) + 1,
+            column: Number(details.columnNumber) + 1,
+            stack: frames,
+          },
+        };
+      }
+      const remote = response?.result || {};
+      let result = null;
+      let truncated = false;
+      let resultFormat = 'undefined';
+      if (Object.prototype.hasOwnProperty.call(remote, 'value')) {
+        const bounded = this._boundedCdpValue(remote.value);
+        result = bounded.value;
+        truncated = bounded.truncated;
+        resultFormat = bounded.format;
+      } else if (remote.unserializableValue != null) {
+        result = String(remote.unserializableValue);
+        resultFormat = 'unserializable';
+      } else if (remote.type !== 'undefined' && remote.description) {
+        result = String(remote.description).slice(0, 50000);
+        resultFormat = 'description';
+      }
+      return {
+        success: true,
+        result,
+        resultType: String(remote.type || 'undefined'),
+        resultSubtype: remote.subtype ? String(remote.subtype) : null,
+        resultFormat,
+        truncated,
+        description: remote.description ? String(remote.description).slice(0, 1000) : undefined,
+      };
+    } catch (e) {
+      if (/timed?\s*out|timeout/i.test(String(e?.message || e))) {
+        return { success: false, timedOut: true, error: 'execute_js timed out after 15,000 ms.' };
+      }
+      return { success: false, error: `execute_js failed: ${e.message || e}` };
+    }
+  }
+
+  async _inspectDevEventListeners(tabId, args = {}) {
+    const marked = await this._sendDevContentAction(tabId, 'dev_mark_targets', {
+      ref_id: args.ref_id,
+      selector: args.selector,
+      includeAncestors: args.includeAncestors !== false,
+    });
+    if (!marked?.success) return marked || { success: false, error: 'Could not resolve the requested element.' };
+
+    const eventTypes = new Set(
+      (Array.isArray(args.eventTypes) ? args.eventTypes : [])
+        .map(value => String(value || '').trim().toLowerCase())
+        .filter(Boolean)
+    );
+    const listeners = [];
+    const errors = [];
+    try {
+      await cdpClient.enableDevDiagnostics(tabId);
+      for (const target of marked.targets || []) {
+        try {
+          const node = await cdpClient.findNodeByAttribute(tabId, 'data-webbrain-dev-target', target.marker);
+          if (!node?.nodeId) {
+            errors.push(`${target.relation}: CDP could not resolve the marked element.`);
+            continue;
+          }
+          listeners.push(...await cdpClient.getEventListenersForNode(tabId, node.nodeId, target.relation, eventTypes));
+        } catch (e) {
+          errors.push(`${target.relation}: ${e.message || e}`);
+        }
+      }
+      if (args.includeAncestors !== false) {
+        for (const [expression, relation] of [['document', 'document'], ['window', 'window']]) {
+          try {
+            listeners.push(...await cdpClient.getEventListenersForExpression(tabId, expression, relation, eventTypes));
+          } catch (e) {
+            errors.push(`${relation}: ${e.message || e}`);
+          }
+        }
+      }
+      return {
+        success: true,
+        targetMethod: marked.targetMethod,
+        target: marked.targets?.[0] || null,
+        inspectedTargets: (marked.targets || []).map(target => ({ relation: target.relation, tag: target.tag, id: target.id, path: target.path })),
+        count: Math.min(300, listeners.length),
+        listeners: listeners.slice(0, 300),
+        errors,
+        warnings: marked.warnings || [],
+        note: 'Frameworks may delegate handlers or wrap callbacks; includeAncestors checks element ancestors plus document/window, but browser-native default actions are not JavaScript listeners.',
+      };
+    } catch (e) {
+      return { success: false, error: `inspect_event_listeners failed: ${e.message || e}` };
+    } finally {
+      await this._sendDevContentAction(tabId, 'dev_unmark_targets', { groupId: marked.groupId }).catch(() => {});
+    }
+  }
+
   async executeTool(tabId, name, args, onUpdate = null) {
     if (name === 'done_json') {
       return handleDoneJson(this.cloudRunContexts.get(tabId), args);
@@ -8168,6 +8488,32 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     }
     if (name === 'resize_window') {
       return await this._resizeWindow(tabId, args || {});
+    }
+    if (name === 'inject_css') {
+      return await this._injectDevCss(tabId, args || {});
+    }
+    if (name === 'remove_injected_css') {
+      return await this._removeInjectedDevCss(tabId, args || {});
+    }
+    if (name === 'execute_js') {
+      return await this._executeDevJavaScript(tabId, args || {});
+    }
+    if (name === 'read_console') {
+      try {
+        return await cdpClient.readConsole(tabId, args || {});
+      } catch (e) {
+        return { success: false, error: `read_console failed: ${e.message || e}` };
+      }
+    }
+    if (name === 'inspect_network_requests') {
+      try {
+        return await cdpClient.inspectNetworkRequests(tabId, args || {});
+      } catch (e) {
+        return { success: false, error: `inspect_network_requests failed: ${e.message || e}` };
+      }
+    }
+    if (name === 'inspect_event_listeners') {
+      return await this._inspectDevEventListeners(tabId, args || {});
     }
     if (name === 'schedule_resume') {
       if (!this.scheduler) return { success: false, error: 'Scheduling is not available in this build.' };
@@ -11201,6 +11547,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       'scroll': 'scroll',
       'extract_data': 'extract_data',
       'inspect_element_styles': 'inspect_element_styles',
+      'patch_element': 'patch_element',
+      'revert_patch': 'revert_patch',
+      'highlight_element': 'highlight_element',
       'wait_for_element': 'wait_for_element',
       'wait_for_stable': 'wait_for_stable',
       'get_selection': 'get_selection',
@@ -11797,6 +12146,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       return (finalResponse = msg);
     }
 
+    // Start console/network capture before the planning/model loop so Dev
+    // diagnostic tools can inspect activity caused by the run's first page
+    // action. Failure is non-fatal; the individual tool returns a focused CDP
+    // error if the tab cannot be debug-attached.
+    if (mode === 'dev') {
+      try { await cdpClient.enableDevDiagnostics(tabId); } catch {}
+    }
+
     // Validate attachments BEFORE the planner gate / trace start: an
     // unsupported attachment is a plain "tell the user" response, not an
     // agent run, and the message must never be pushed to history this way.
@@ -12228,6 +12585,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       this._persist(tabId);
       onUpdate('warning', { message: msg });
       return finish(msg);
+    }
+
+    // Match the non-streaming path: diagnostics must be live before the first
+    // Dev action so console and network tools include activity from this run.
+    if (mode === 'dev') {
+      try { await cdpClient.enableDevDiagnostics(tabId); } catch {}
     }
 
     // All throwing work — trace start, planner gate, run setup, and the agent

@@ -26,6 +26,7 @@ export const Capability = {
   CLICK: 'click',                // click / click_ax / iframe_click / drag_drop / Enter / submit
   TYPE: 'type',                  // type_text / type_ax / iframe_type / set_field (no submit)
   EXECUTE_JS: 'execute_js',      // execute_js
+  DEV_PATCH: 'dev_patch',        // temporary page edits, including listener target markers
   NETWORK: 'network_write',      // fetch_url / research_url with a write method
   DOWNLOAD: 'download',          // download_* tools
   UPLOAD: 'upload',              // upload_file (selects a local file)
@@ -39,6 +40,7 @@ export const CAPABILITY_LABEL = {
   [Capability.CLICK]: 'click / submit on',
   [Capability.TYPE]: 'type into',
   [Capability.EXECUTE_JS]: 'run JavaScript on',
+  [Capability.DEV_PATCH]: 'temporarily modify the page on',
   [Capability.NETWORK]: 'make a network request to',
   [Capability.DOWNLOAD]: 'download files from',
   [Capability.UPLOAD]: 'upload a file to',
@@ -69,6 +71,12 @@ export const UNTRUSTED_CONTENT_TOOLS = new Set([
   'read_page_source',
   'read_downloaded_file',
   'inspect_element_styles',
+  'read_console',
+  'inspect_network_requests',
+  'inspect_event_listeners',
+  'highlight_element',
+  'patch_element',
+  'revert_patch',
   'progress_update',
   'progress_read',
   // click/type_text can return page-derived labels, option text, aria-labels,
@@ -136,6 +144,12 @@ const TOOL_CAPABILITY = {
   type_ax: Capability.TYPE,
   iframe_type: Capability.TYPE,
   execute_js: Capability.EXECUTE_JS,
+  inject_css: Capability.DEV_PATCH,
+  remove_injected_css: Capability.DEV_PATCH,
+  patch_element: Capability.DEV_PATCH,
+  revert_patch: Capability.DEV_PATCH,
+  inspect_event_listeners: Capability.DEV_PATCH,
+  highlight_element: Capability.DEV_PATCH,
   upload_file: Capability.UPLOAD,
   resize_window: Capability.WINDOW,
   download_file: Capability.DOWNLOAD,

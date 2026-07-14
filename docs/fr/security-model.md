@@ -163,7 +163,8 @@ Firefox n'a pas de CDP (permission `debugger`), donc :
 - Pas d'événements fiables (seulement `el.click()` synthétique)
 - Pas de captures d'écran pleine page
 - Pas de traversée du shadow DOM pour les racines fermées
-- `execute_js` est exclusif à Firefox et exposé comme un module complémentaire Dev, pas dans Act normal
+- `execute_js` est un module complémentaire Dev dans les deux versions : Firefox utilise son évaluateur de script de contenu MV2 et Chrome utilise CDP `Runtime.evaluate` ; aucune version ne l'expose dans Ask ou Act normal
+- Les correctifs CSS/élément réversibles de Chrome sont réservés au mode Dev et soumis à une autorisation par hôte. Les diagnostics console et réseau sont des lectures Dev. L'inspection des écouteurs ajoute puis restaure brièvement un attribut de ciblage interne, tandis que la mise en surbrillance insère une superposition temporaire ; les deux utilisent donc l'autorisation de modification temporaire de la page. Tous les résultats de diagnostic dérivés de la page sont traités comme contenu non fiable. Les en-têtes et corps réseau sont exclus par défaut, et les en-têtes sensibles sont toujours masqués avant la mise en mémoire tampon
 - Pas de document hors écran (les CORS doivent être gérées par les serveurs LLM)
 - Pas d'enregistrement d'onglet/écran par commande (les API de capture de Chrome et `recorder/` sont absentes)
 - Pas de garde anti-soumission en double (la Map d'horodatages est déclarée mais non câblée)

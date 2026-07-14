@@ -82,7 +82,7 @@ sensitive secrets as memory.
 When user memory is enabled, active records are appended to the agent system
 prompt as a bounded block. Settings -> Profile controls whether memory is
 enabled, whether optional auto-learning runs after completed turns, and the
-maximum prompt characters injected. `/remember <text>` writes an explicit memory
+maximum prompt characters injected. `/memory --add <text>` writes an explicit memory
 immediately without an extractor call. Export/import JSON is local-only and is
 the v1 bridge for moving memory between browser profiles.
 

@@ -28,8 +28,8 @@
 
 - **Lecture de page** — Extrait le texte, les liens, les formulaires, les tableaux et les éléments interactifs de n'importe quelle page
 - **Actions du navigateur** — Cliquer, saisir, faire défiler, naviguer et interagir avec les éléments de la page
-- **Modes Ask / Act** — Mode lecture seule par défaut, mode agent complet avec confirmation
-- **Plan avant Act** — Le mode Act peut générer un plan structuré, l'afficher pour approbation, puis épingler le plan approuvé dans le scratchpad avant l'exécution des outils
+- **Modes Ask / Act / Dev** — Lecture seule par défaut, actions normales sur demande et outils Dev dédiés à l'inspection, à l'édition réversible et au diagnostic des pages
+- **Plan avant Act** — Les modes Act et Dev peuvent générer un plan structuré, l'afficher pour approbation, puis épingler le plan approuvé dans le scratchpad avant l'exécution des outils
 - **Agent multi-étapes** — Exécution autonome de tâches via des boucles d'utilisation d'outils (configurable, 130 étapes par défaut)
 - **Continuer depuis la limite** — Lorsque l'agent atteint la limite d'étapes, cliquez sur Continuer pour poursuivre
 - **LLM multi-fournisseurs** — Prend en charge les modèles locaux et cloud :
@@ -196,7 +196,15 @@ Une documentation plus approfondie se trouve dans [`docs/`](docs/) : [architectu
 | `wait_for_element` | -- | Oui | Oui | Attendre qu'un sélecteur apparaisse |
 | `wait_for_stable` | -- | Oui | -- | Attendre que la page soit inactive (aucune mutation du DOM + aucun réseau) |
 | `upload_file` | -- | Oui | -- | Télécharger un fichier vers un champ de fichier (Chrome uniquement) |
-| `execute_js` | -- | Oui | -- | Exécuter du JavaScript personnalisé (**Firefox uniquement** — bloqué par la CSP MV3 sur Chrome) |
+| `inject_css` | -- | Dev uniquement | -- | Injecter du CSS temporaire réversible sur Chrome et retourner un `patchId` |
+| `remove_injected_css` | -- | Dev uniquement | -- | Retirer une injection CSS Chrome par `patchId` |
+| `patch_element` | -- | Dev uniquement | -- | Modifier styles, classes et attributs avec valeurs avant/après sur Chrome |
+| `revert_patch` | -- | Dev uniquement | -- | Restaurer une modification structurée par `patchId` sur Chrome |
+| `execute_js` | -- | Dev uniquement | -- | Exécuter un corps de fonction JavaScript asynchrone via CDP sur Chrome ou l'évaluateur MV2 sur Firefox |
+| `read_console` | -- | Dev uniquement | -- | Lire les messages console et exceptions mis en mémoire tampon sur Chrome |
+| `inspect_network_requests` | -- | Dev uniquement | -- | Inspecter URL, méthode, statut et durée réseau sur Chrome ; en-têtes et corps exclus par défaut |
+| `inspect_event_listeners` | -- | Dev uniquement | -- | Inspecter les écouteurs d'un élément et de ses ancêtres sur Chrome |
+| `highlight_element` | -- | Dev uniquement | -- | Afficher temporairement une surcouche autour d'un élément sur Chrome |
 | `fetch_url` | Oui | Oui | Oui | Récupérer une URL depuis l'arrière-plan avec les cookies de l'utilisateur |
 | `research_url` | Oui | Oui | -- | Ouvrir une URL dans un onglet caché, attendre le rendu JS, retourner le contenu |
 | `download_files` | -- | Oui | -- | Télécharger un ou plusieurs fichiers (url unique ou tableau, max 3 simultanés) |
@@ -212,6 +220,8 @@ Une documentation plus approfondie se trouve dans [`docs/`](docs/) : [architectu
 | `done` | Oui | Oui | Oui | Signaler l'achèvement de la tâche |
 
 **Le mode Compact** est un ensemble d'outils réduit + un prompt système plus court conçu pour les petits modèles locaux (2B-8B). Dans les builds Chrome et Firefox, il réduit le schéma du mode Act de plus de 40 outils à environ 20, diminuant la surface de décision et les hallucinations. Activez-le par fournisseur dans les Paramètres (case à cocher sur les fournisseurs locaux ; désactivé par défaut).
+
+Les ajouts Dev ne sont disponibles qu'avec les niveaux Mid/Full. Sur Chrome, `inject_css` s'annule avec `remove_injected_css` et `patch_element` avec `revert_patch`. `execute_js` est soumis à l'autorisation de l'hôte et à une confirmation de soumission fraîche. Les diagnostics réseau/console sont bornés, les en-têtes et corps sont omis par défaut, les en-têtes sensibles sont caviardés avant stockage et les résultats issus de la page sont traités comme contenu non fiable.
 
 > **Note sur le Shadow DOM :** L'arbre d'accessibilité ne traverse que le light DOM. Sur les pages riches en Web Components (Stripe, Salesforce, Shopify), utilisez `get_interactive_elements` (traverse les shadow roots ouverts) ou `get_shadow_dom` / `shadow_dom_query` pour des lectures ciblées.
 
@@ -231,28 +241,32 @@ Source : [`lmstudio-plugin/`](./lmstudio-plugin/).
 
 ## Commandes slash
 
-WebBrain accepte les commandes slash en tant que premier élément d'une ligne dans le champ de saisie. Tapez `/help` pour voir la liste dans le panneau.
+WebBrain accepte les commandes slash en tant que premier élément d'une ligne dans le champ de saisie. Tapez `/help` pour afficher dans le panneau les syntaxes complètes et la description des options. Saisissez une commande canonique suivie d'une espace pour afficher l'autocomplétion de ses options disponibles.
 
 | Commande | Ce qu'elle fait |
 |---------|--------------|
 | `/help` | Affiche la liste des commandes disponibles |
-| `/schedule` | Créer une tâche planifiée |
-| `/list-schedules` | Afficher les tâches planifiées |
-| `/show-scratchpad` | Afficher le bloc-notes actuel |
-| `/edit-scratchpad <texte>` | Ajouter du texte au bloc-notes actuel |
-| `/clear-scratchpad` | Effacer le bloc-notes actuel |
+| `/schedule [invite]` | Créer une tâche planifiée et éventuellement préremplir son invite |
+| `/schedule --list` | Afficher les tâches planifiées |
+| `/progress` | Afficher le journal de progression actuel |
+| `/scratchpad` | Afficher le bloc-notes actuel |
+| `/scratchpad --append <texte>` | Ajouter du texte au bloc-notes actuel |
+| `/scratchpad --clear` | Effacer le bloc-notes actuel |
+| `/memory` | Afficher la mémoire utilisateur enregistrée |
+| `/memory --add <texte>` | Enregistrer une préférence utilisateur |
+| `/memory --forget <id>` | Oublier une entrée de mémoire par identifiant |
 | `/allow-api` | **Dérogation de mutation API par conversation.** Lève la restriction UI-d'abord afin que l'agent puisse utiliser POST/PUT/PATCH/DELETE via `fetch_url` lorsque l'UI échoue. Un badge apparaît pendant l'activation ; il s'efface au `/reset`. |
 | `/dangerously-skip-permissions` | **Contournement global des demandes d'autorisation.** Désactive `Ask before consequential actions` sans ouvrir les Paramètres. WebBrain agira sans demandes par site jusqu'à ce que vous réactiviez le réglage. |
 | `/compact` | Force le compactage du contexte pour la conversation actuelle |
 | `/verbose` | Bascule l'affichage des outils verbeux/compact (identique au bouton de la barre d'outils) |
 | `/reset` | Efface la conversation et tous les indicateurs par conversation |
-| `/screenshot` | Capture l'onglet visible et affiche l'image en ligne dans le chat |
-| `/record` | Démarrer l'enregistrement de l'onglet actuel |
-| `/record-full-screen` | Enregistrer un écran ou une fenêtre (Chrome uniquement); ajoutez `--transcribe` pour un transcript |
-| `/export` | Télécharge la conversation actuelle sous forme de fichier Markdown |
+| `/screenshot [--full-page]` | Capture l'onglet visible, ou la page entière avec `--full-page` (Chrome uniquement) |
+| `/record [--full-screen] [--transcribe]` | Enregistre l'onglet actuel, ou un écran/une fenêtre avec `--full-screen` (Chrome uniquement) ; `--transcribe` enregistre une transcription |
+| `/export [--traces]` | Télécharge la conversation en Markdown, ou la chaîne d'outils avec `--traces` |
 | `/profile` | Bascule le remplissage automatique du profil sans ouvrir les Paramètres |
 | `/vision` | Bascule le mode vision (compréhension de captures d'écran) sur le fournisseur actif |
 | `/ask` | Passer en mode Demander avant d'envoyer |
+| `/dev` | Passer en mode Dev avant d'envoyer |
 | `/plan` | Passer en mode Demander avec une intention de planification |
 
 La règle UI-d'abord par défaut existe parce que les actions API sont invisibles (vous ne voyez pas ce qui est envoyé), nécessitent souvent des jetons d'authentification distincts que vous n'avez peut-être pas configurés, et peuvent avoir un rayon d'impact bien plus grand qu'un mauvais clic visible. N'utilisez `/allow-api` que lorsque vous avez décidé d'accepter ce compromis pour une tâche spécifique.
@@ -266,6 +280,7 @@ Les raccourcis du panneau latéral Chrome fonctionnent lorsque le panneau latér
 | `Ctrl+/` ou `Cmd+/` | Mettre le focus dans le champ de saisie |
 | `Ctrl+Shift+A` ou `Cmd+Shift+A` | Passer en mode Ask |
 | `Ctrl+Shift+X` ou `Cmd+Shift+X` | Passer en mode Act |
+| `Ctrl+Shift+D` ou `Cmd+Shift+D` | Passer en mode Dev |
 | `Escape` | Arrêter l'exécution active, sauf s'il ne fait que fermer l'autocomplétion des commandes slash |
 | `Escape` deux fois | Arrêter un enregistrement actif depuis WebBrain ou une page du navigateur |
 

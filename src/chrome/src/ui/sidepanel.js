@@ -5,6 +5,7 @@
 
 import { t, getLocale, setLocale, LANGUAGES, applyDOMTranslations } from './i18n.js';
 import { sanitizeMarkdownLinks } from './markdown-link.js';
+import { codeFenceLanguage, highlightCode, renderMarkdownHeadings } from './markdown-render.js';
 import { applyMode, loadMode, watch } from './theme.js';
 import { buildRecommendedActions, shouldShowRecommendedActions } from './recommended-actions.js';
 import { createContextMenuPromptHandler } from './context-menu-prompts.js';
@@ -353,46 +354,247 @@ const ASK_PLACEHOLDER_KEYS = [
   'sp.input.placeholder_tip.record',
 ];
 const SLASH_COMMANDS = [
-  { value: '/help', descriptionKey: 'sp.slash.help' },
-  { value: '/schedule', descriptionKey: 'sp.slash.schedule' },
-  { value: '/list-schedules', descriptionKey: 'sp.slash.list_schedules' },
-  { value: '/check-progress', descriptionKey: 'sp.slash.check_progress' },
-  { value: '/show-scratchpad', descriptionKey: 'sp.slash.show_scratchpad' },
-  { value: '/edit-scratchpad', descriptionKey: 'sp.slash.edit_scratchpad' },
-  { value: '/clear-scratchpad', descriptionKey: 'sp.slash.clear_scratchpad' },
-  { value: '/remember', descriptionKey: 'sp.slash.remember' },
-  { value: '/show-memory', descriptionKey: 'sp.slash.show_memory' },
-  { value: '/forget-memory', descriptionKey: 'sp.slash.forget_memory' },
-  { value: '/allow-api', descriptionKey: 'sp.slash.allow_api' },
-  { value: '/dangerously-skip-permissions', descriptionKey: 'sp.slash.dangerously_skip_permissions' },
-  { value: '/compact', descriptionKey: 'sp.slash.compact' },
-  { value: '/verbose', descriptionKey: 'sp.slash.verbose' },
-  { value: '/reset', descriptionKey: 'sp.slash.reset' },
-  { value: '/screenshot', descriptionKey: 'sp.slash.screenshot' },
-  { value: '/full-page-screenshot', descriptionKey: 'sp.slash.full_page_screenshot' },
-  { value: '/record-full-screen', descriptionKey: 'sp.slash.record_full_screen' },
-  { value: '/record', descriptionKey: 'sp.slash.record' },
-  { value: '/export', descriptionKey: 'sp.slash.export' },
-  { value: '/export-with-traces', descriptionKey: 'sp.slash.export_traces' },
-  { value: '/profile', descriptionKey: 'sp.slash.profile' },
-  { value: '/vision', descriptionKey: 'sp.slash.vision' },
-  { value: '/ask', descriptionKey: 'sp.slash.ask' },
-  { value: '/act', descriptionKey: 'sp.slash.act' },
-  { value: '/dev', descriptionKey: 'sp.slash.dev' },
-  { value: '/plan', descriptionKey: 'sp.slash.plan' },
+  { value: '/help', usage: '/help', descriptionKey: 'sp.slash.help', action: 'show', outOfBand: true },
+  {
+    value: '/schedule',
+    usage: '/schedule [prompt] | /schedule --list',
+    descriptionKey: 'sp.slash.schedule',
+    action: 'create',
+    acceptsPayload: true,
+    options: [
+      { value: '--list', descriptionKey: 'sp.slash.list_schedules', action: 'list', outOfBand: true, disallowPayload: true },
+    ],
+  },
+  { value: '/progress', usage: '/progress', descriptionKey: 'sp.slash.check_progress', action: 'show', outOfBand: true },
+  {
+    value: '/scratchpad',
+    usage: '/scratchpad [--append <text> | --clear]',
+    descriptionKey: 'sp.slash.show_scratchpad',
+    action: 'show',
+    outOfBand: true,
+    options: [
+      { value: '--append', valueLabel: '<text>', descriptionKey: 'sp.slash.edit_scratchpad', action: 'append', takesRemainder: true, outOfBand: false, exclusiveGroup: 'scratchpad-action' },
+      { value: '--clear', descriptionKey: 'sp.slash.clear_scratchpad', action: 'clear', disallowPayload: true, outOfBand: false, exclusiveGroup: 'scratchpad-action' },
+    ],
+  },
+  {
+    value: '/memory',
+    usage: '/memory [--add <text> | --forget <id>]',
+    descriptionKey: 'sp.slash.show_memory',
+    action: 'show',
+    outOfBand: true,
+    options: [
+      { value: '--add', valueLabel: '<text>', descriptionKey: 'sp.slash.remember', action: 'add', takesRemainder: true, outOfBand: false, exclusiveGroup: 'memory-action' },
+      { value: '--forget', valueLabel: '<id>', descriptionKey: 'sp.slash.forget_memory', action: 'forget', takesRemainder: true, outOfBand: false, exclusiveGroup: 'memory-action' },
+    ],
+  },
+  { value: '/allow-api', usage: '/allow-api [prompt]', descriptionKey: 'sp.slash.allow_api', action: 'enable', acceptsPayload: true },
+  { value: '/dangerously-skip-permissions', usage: '/dangerously-skip-permissions [prompt]', descriptionKey: 'sp.slash.dangerously_skip_permissions', action: 'disable', acceptsPayload: true, outOfBand: true },
+  { value: '/compact', usage: '/compact [prompt]', descriptionKey: 'sp.slash.compact', action: 'compact', acceptsPayload: true },
+  { value: '/verbose', usage: '/verbose', descriptionKey: 'sp.slash.verbose', action: 'toggle', outOfBand: true },
+  { value: '/reset', usage: '/reset', descriptionKey: 'sp.slash.reset', action: 'reset' },
+  {
+    value: '/screenshot',
+    usage: '/screenshot [--full-page]',
+    descriptionKey: 'sp.slash.screenshot',
+    action: 'viewport',
+    outOfBand: true,
+    options: [
+      { value: '--full-page', descriptionKey: 'sp.slash.full_page_screenshot', action: 'full-page', outOfBand: false, disallowPayload: true },
+    ],
+  },
+  {
+    value: '/record',
+    usage: '/record [--full-screen] [--transcribe]',
+    descriptionKey: 'sp.slash.record',
+    action: 'tab',
+    options: [
+      { value: '--full-screen', descriptionKey: 'sp.slash.record_full_screen', action: 'full-screen', outOfBand: false },
+      { value: '--transcribe', descriptionKey: 'sp.slash.record_transcribe' },
+    ],
+  },
+  {
+    value: '/export',
+    usage: '/export [--traces]',
+    descriptionKey: 'sp.slash.export',
+    action: 'conversation',
+    outOfBand: true,
+    options: [
+      { value: '--traces', descriptionKey: 'sp.slash.export_traces', action: 'traces', outOfBand: true, disallowPayload: true },
+    ],
+  },
+  { value: '/profile', usage: '/profile', descriptionKey: 'sp.slash.profile', action: 'toggle' },
+  { value: '/vision', usage: '/vision', descriptionKey: 'sp.slash.vision', action: 'toggle' },
+  { value: '/ask', usage: '/ask [prompt]', descriptionKey: 'sp.slash.ask', action: 'ask', acceptsPayload: true },
+  { value: '/act', usage: '/act [prompt]', descriptionKey: 'sp.slash.act', action: 'act', acceptsPayload: true },
+  { value: '/dev', usage: '/dev [prompt]', descriptionKey: 'sp.slash.dev', action: 'dev', acceptsPayload: true },
+  { value: '/plan', usage: '/plan [prompt]', descriptionKey: 'sp.slash.plan', action: 'plan', acceptsPayload: true },
 ];
-const OUT_OF_BAND_SLASH_COMMANDS = new Set([
-  '/help',
-  '/show-scratchpad',
-  '/show-memory',
-  '/check-progress',
-  '/list-schedules',
-  '/dangerously-skip-permissions',
-  '/screenshot',
-  '/export-with-traces',
-  '/export',
-  '/verbose',
-]);
+const SLASH_HELP_OPTION = {
+  value: '--help',
+  action: 'help',
+  outOfBand: true,
+  disallowPayload: true,
+};
+
+function slashCommandOptions(command) {
+  return [...(command?.options || []), SLASH_HELP_OPTION];
+}
+
+function slashCommandIsDiscoverable(command) {
+  return command?.unsupported !== true;
+}
+
+function slashOptionIsDiscoverable(option) {
+  return option?.unsupported !== true;
+}
+
+function slashOptionIsAvailable(option, selectedValues, selectedGroups) {
+  return slashOptionIsDiscoverable(option)
+    && !selectedValues.has(option.value)
+    && !selectedValues.has(SLASH_HELP_OPTION.value)
+    && (option.value !== SLASH_HELP_OPTION.value || selectedValues.size === 0)
+    && (!option.exclusiveGroup || !selectedGroups.has(option.exclusiveGroup));
+}
+
+function findSlashCommand(value) {
+  const needle = String(value || '').toLowerCase();
+  return SLASH_COMMANDS.find((command) => command.value === needle) || null;
+}
+
+function parseSlashInvocation(value) {
+  const text = String(value || '').trimStart();
+  if (!text.startsWith('/')) return null;
+
+  const commandToken = text.match(/^\S+/)?.[0] || '';
+  const command = findSlashCommand(commandToken);
+  if (!command) return { error: 'unknown-command', commandToken };
+
+  const selectedOptions = [];
+  const selectedValues = new Set();
+  const selectedGroups = new Set();
+  let payload = '';
+  let valueOption = null;
+  let rest = text.slice(commandToken.length).trimStart();
+
+  while (rest) {
+    if (!rest.startsWith('--')) {
+      payload = rest;
+      break;
+    }
+
+    const optionToken = rest.match(/^\S+/)?.[0] || '';
+    if (optionToken === '--') {
+      if (!command.acceptsPayload) {
+        return { error: 'invalid-usage', command, commandToken };
+      }
+      payload = rest.slice(optionToken.length).trimStart();
+      rest = '';
+      break;
+    }
+
+    const optionValue = optionToken.toLowerCase();
+    const option = slashCommandOptions(command).find((candidate) => candidate.value === optionValue);
+    if (!option || selectedValues.has(optionValue)) {
+      return { error: 'invalid-usage', command, commandToken };
+    }
+    if (optionValue === SLASH_HELP_OPTION.value ? selectedOptions.length > 0 : selectedValues.has(SLASH_HELP_OPTION.value)) {
+      return { error: 'invalid-usage', command, commandToken };
+    }
+    if (option.exclusiveGroup && selectedGroups.has(option.exclusiveGroup)) {
+      return { error: 'invalid-usage', command, commandToken };
+    }
+
+    selectedOptions.push(option);
+    selectedValues.add(optionValue);
+    if (option.exclusiveGroup) selectedGroups.add(option.exclusiveGroup);
+    rest = rest.slice(optionToken.length).trimStart();
+
+    if (option.takesRemainder) {
+      valueOption = option;
+      if (rest.startsWith('--')) {
+        const nextToken = rest.match(/^\S+/)?.[0] || '';
+        if (nextToken !== '--') {
+          return { error: 'invalid-usage', command, commandToken };
+        }
+        rest = rest.slice(nextToken.length).trimStart();
+      }
+      payload = rest;
+      rest = '';
+      break;
+    }
+  }
+
+  if (valueOption && !payload) {
+    return { error: 'invalid-usage', command, commandToken };
+  }
+  if (payload && !valueOption && !command.acceptsPayload) {
+    return { error: 'invalid-usage', command, commandToken };
+  }
+  if (payload && selectedOptions.some((option) => option.disallowPayload)) {
+    return { error: 'invalid-usage', command, commandToken };
+  }
+
+  const actionOption = selectedOptions.find((option) => option.action);
+  const unsupportedOption = selectedOptions.find((option) => option.unsupported);
+  return {
+    command,
+    action: actionOption?.action || command.action,
+    options: selectedOptions,
+    optionValues: selectedValues,
+    payload,
+    unsupported: command.unsupported === true || !!unsupportedOption,
+    unsupportedUsage: unsupportedOption?.unsupportedUsage || command.usage,
+  };
+}
+
+function slashInvocationIsOutOfBand(invocation) {
+  if (!invocation) return false;
+  if (invocation.error || invocation.unsupported) return true;
+  const actionOption = invocation.options.find((option) => option.action);
+  return (actionOption?.outOfBand ?? invocation.command.outOfBand) === true;
+}
+
+function buildSlashCommandHelpHtml() {
+  const lines = [`<strong>${escapeHtml(t('sp.slash.commands_label'))}</strong>`];
+  for (const command of SLASH_COMMANDS.filter(slashCommandIsDiscoverable)) {
+    lines.push(`<code>${escapeHtml(command.usage)}</code> — ${escapeHtml(t(command.descriptionKey))}`);
+    for (const option of (command.options || []).filter(slashOptionIsDiscoverable)) {
+      const value = `${option.value}${option.valueLabel ? ` ${option.valueLabel}` : ''}`;
+      lines.push(`&nbsp;&nbsp;<code>${escapeHtml(value)}</code> — ${escapeHtml(t(option.descriptionKey))}`);
+    }
+  }
+  const shortcuts = t('sp.help.shortcuts_html');
+  if (shortcuts && shortcuts !== 'sp.help.shortcuts_html') {
+    lines.push('', shortcuts);
+  }
+  return lines.join('<br>');
+}
+
+function buildSlashCommandDetailHtml(command) {
+  if (!command) return buildSlashCommandHelpHtml();
+  const lines = [
+    `<strong><code>${escapeHtml(command.value)}</code></strong>`,
+    `<code>${escapeHtml(command.usage)}</code> — ${escapeHtml(t(command.descriptionKey))}`,
+  ];
+  for (const option of (command.options || []).filter(slashOptionIsDiscoverable)) {
+    const value = `${option.value}${option.valueLabel ? ` ${option.valueLabel}` : ''}`;
+    lines.push(`&nbsp;&nbsp;<code>${escapeHtml(value)}</code> — ${escapeHtml(t(option.descriptionKey))}`);
+  }
+  return lines.join('<br>');
+}
+
+function showSlashInvocationError(invocation) {
+  if (invocation?.error === 'unknown-command') {
+    showComposerToast(t('sp.slash.unknown_command', { command: invocation.commandToken }), { duration: 5000 });
+    return;
+  }
+  if (invocation?.unsupported) {
+    showComposerToast(t('sp.slash.unsupported', { usage: invocation.unsupportedUsage }), { duration: 5000 });
+    return;
+  }
+  showComposerToast(t('sp.slash.invalid_usage', { usage: invocation?.command?.usage || '/help' }), { duration: 5000 });
+}
 
 function normalizeScreenshotRequestText(text) {
   return String(text || '')
@@ -424,7 +626,7 @@ function isPlainFullPageScreenshotRequest(text) {
 }
 
 function normalizeScreenshotCommandText(text) {
-  if (isPlainFullPageScreenshotRequest(text)) return '/full-page-screenshot';
+  if (isPlainFullPageScreenshotRequest(text)) return '/screenshot --full-page';
   if (isPlainScreenshotRequest(text)) return '/screenshot';
   return text;
 }
@@ -434,7 +636,7 @@ const BUSY_SLASH_NOTICE_COOLDOWN_MS = 3000;
 let placeholderRotationIndex = 0;
 let placeholderRotationTimer = null;
 // Tab Recorder (v7.4) — recording is user-driven via slash commands. The
-// `/record` tab-capture path shows this live red banner; `/record-full-screen`
+// `/record` tab-capture path shows this live red banner; `/record --full-screen`
 // deliberately does not, so the selected browser window is less likely to
 // include WebBrain UI in the recording.
 const recordingBanner = document.getElementById('recording-banner');
@@ -1396,6 +1598,15 @@ const TOOL_KEYS = {
   extract_data: 'tool.extract_data',
   inspect_element_styles: 'tool.inspect_element_styles',
   read_page_source: 'tool.read_page_source',
+  inject_css: 'tool.inject_css',
+  remove_injected_css: 'tool.remove_injected_css',
+  patch_element: 'tool.patch_element',
+  revert_patch: 'tool.revert_patch',
+  execute_js: 'tool.execute_js',
+  read_console: 'tool.read_console',
+  inspect_network_requests: 'tool.inspect_network_requests',
+  inspect_event_listeners: 'tool.inspect_event_listeners',
+  highlight_element: 'tool.highlight_element',
   wait_for_element: 'tool.wait_for_element',
   get_selection: 'tool.get_selection',
   new_tab: 'tool.new_tab',
@@ -3146,7 +3357,7 @@ async function testConnection(options = {}) {
   }
 }
 
-function getSlashCommandQuery() {
+function getSlashAutocompleteContext() {
   if (!inputEl) return null;
   const value = inputEl.value;
   const selectionStart = inputEl.selectionStart ?? value.length;
@@ -3155,9 +3366,75 @@ function getSlashCommandQuery() {
 
   const beforeCursor = value.slice(0, selectionStart);
   const afterCursor = value.slice(selectionStart);
-  if (!/^\/[a-z-]*$/i.test(beforeCursor)) return null;
   if (afterCursor.trim()) return null;
-  return beforeCursor.toLowerCase();
+
+  if (/^\/[a-z-]*$/i.test(beforeCursor)) {
+    return {
+      kind: 'command',
+      query: beforeCursor.toLowerCase(),
+      completionStart: 0,
+      completionEnd: selectionStart,
+    };
+  }
+
+  const optionMatch = beforeCursor.match(/^(\/[a-z-]+)\s+(.*)$/i);
+  if (!optionMatch) return null;
+  const command = findSlashCommand(optionMatch[1]);
+  if (!command || !slashCommandIsDiscoverable(command)) return null;
+
+  const args = optionMatch[2];
+  const trailingWhitespace = !args || /\s$/.test(args);
+  const tokens = args.trim() ? args.trim().split(/\s+/) : [];
+  const query = trailingWhitespace ? '' : (tokens.pop() || '');
+  if (query && !query.startsWith('--')) return null;
+
+  const selected = new Set();
+  const selectedGroups = new Set();
+  for (const token of tokens) {
+    if (!token.startsWith('--') || token === '--') return null;
+    const option = slashCommandOptions(command).find((candidate) => candidate.value === token.toLowerCase());
+    if (!option || !slashOptionIsDiscoverable(option) || option.takesRemainder) return null;
+    selected.add(option.value);
+    if (option.exclusiveGroup) selectedGroups.add(option.exclusiveGroup);
+  }
+
+  return {
+    kind: 'option',
+    command,
+    query: query.toLowerCase(),
+    selected,
+    selectedGroups,
+    completionStart: selectionStart - query.length,
+    completionEnd: selectionStart,
+  };
+}
+
+function buildSlashAutocompleteMatches(context) {
+  if (!context) return [];
+  const candidates = context.kind === 'command'
+    ? SLASH_COMMANDS.filter(slashCommandIsDiscoverable)
+    : slashCommandOptions(context.command)
+      .filter((option) => slashOptionIsAvailable(option, context.selected, context.selectedGroups))
+      .map((option) => option === SLASH_HELP_OPTION
+        ? { ...option, descriptionKey: context.command.descriptionKey }
+        : option);
+  const matches = candidates
+    .filter((candidate) => candidate.value.startsWith(context.query))
+    .map((candidate) => ({
+      ...candidate,
+      kind: context.kind,
+      completionStart: context.completionStart,
+      completionEnd: context.completionEnd,
+    }));
+  if (context.kind === 'option' && !context.query && context.selected.size === 0) {
+    matches.unshift({
+      value: context.command.value,
+      label: '↵ Enter',
+      descriptionKey: context.command.descriptionKey,
+      kind: 'base-action',
+    });
+  }
+  return matches;
 }
 
 function getRecognizedSlashCommandPrefix(value) {
@@ -3235,12 +3512,13 @@ function renderSlashCommandAutocomplete() {
     option.type = 'button';
     option.id = `${SLASH_COMMAND_OPTION_ID_PREFIX}${index}`;
     option.className = 'slash-command-option';
+    option.classList.toggle('slash-command-base-action', command.kind === 'base-action');
     option.setAttribute('role', 'option');
     option.setAttribute('aria-selected', String(index === slashCommandSelectedIndex));
 
     const name = document.createElement('span');
     name.className = 'slash-command-name';
-    name.textContent = command.value;
+    name.textContent = command.label || command.value;
 
     const description = document.createElement('span');
     description.className = 'slash-command-description';
@@ -3249,7 +3527,8 @@ function renderSlashCommandAutocomplete() {
     option.append(name, description);
     option.addEventListener('pointerdown', (e) => {
       e.preventDefault();
-      applySlashCommandCompletion(index);
+      if (command.kind === 'base-action') activateSlashCommandBaseAction(index);
+      else applySlashCommandCompletion(index);
     });
     option.addEventListener('mousemove', () => setSlashCommandSelectedIndex(index));
     slashCommandMenuEl.appendChild(option);
@@ -3272,14 +3551,14 @@ function hideSlashCommandAutocomplete() {
 }
 
 function updateSlashCommandAutocomplete() {
-  const query = getSlashCommandQuery();
-  if (!query) {
+  const context = getSlashAutocompleteContext();
+  if (!context) {
     hideSlashCommandAutocomplete();
     return;
   }
 
   const previouslySelected = slashCommandMatches[slashCommandSelectedIndex]?.value;
-  const matches = SLASH_COMMANDS.filter((command) => command.value.startsWith(query));
+  const matches = buildSlashAutocompleteMatches(context);
   if (matches.length === 0) {
     hideSlashCommandAutocomplete();
     return;
@@ -3298,20 +3577,35 @@ function setSlashCommandSelectedIndex(index) {
 }
 
 function applySlashCommandCompletion(index = slashCommandSelectedIndex) {
-  const command = slashCommandMatches[index];
-  if (!command || !inputEl) return false;
-  inputEl.value = `${command.value} `;
-  inputEl.setSelectionRange(inputEl.value.length, inputEl.value.length);
-  hideSlashCommandAutocomplete();
+  const match = slashCommandMatches[index];
+  if (!match || !inputEl) return false;
+  const before = inputEl.value.slice(0, match.completionStart);
+  const after = inputEl.value.slice(match.completionEnd);
+  inputEl.value = `${before}${match.value} ${after}`;
+  const cursor = before.length + match.value.length + 1;
+  inputEl.setSelectionRange(cursor, cursor);
   autoResizeInput();
+  updateSlashCommandAutocomplete();
   syncSendButtonState();
   inputEl.focus();
   return true;
 }
 
+function activateSlashCommandBaseAction(index = slashCommandSelectedIndex) {
+  const match = slashCommandMatches[index];
+  if (match?.kind !== 'base-action' || !inputEl) return false;
+  inputEl.value = inputEl.value.trimEnd();
+  hideSlashCommandAutocomplete();
+  autoResizeInput();
+  syncSendButtonState();
+  inputEl.focus();
+  void sendMessage();
+  return true;
+}
+
 function isExactSlashCommandQuery() {
-  const query = getSlashCommandQuery();
-  return !!query && SLASH_COMMANDS.some((command) => command.value === query);
+  const invocation = parseSlashInvocation(inputEl?.value || '');
+  return !!invocation && !invocation.error;
 }
 
 function handleSlashCommandKeydown(e) {
@@ -3331,11 +3625,22 @@ function handleSlashCommandKeydown(e) {
   }
   if (e.key === 'Tab') {
     e.preventDefault();
-    return applySlashCommandCompletion();
+    const match = slashCommandMatches[slashCommandSelectedIndex];
+    const completionIndex = match?.kind === 'base-action'
+      ? slashCommandSelectedIndex + 1
+      : slashCommandSelectedIndex;
+    return applySlashCommandCompletion(completionIndex);
   }
-  if (e.key === 'Enter' && !isExactSlashCommandQuery()) {
-    e.preventDefault();
-    return applySlashCommandCompletion();
+  if (e.key === 'Enter') {
+    const match = slashCommandMatches[slashCommandSelectedIndex];
+    if (match?.kind === 'base-action') {
+      e.preventDefault();
+      return activateSlashCommandBaseAction();
+    }
+    if (match?.kind === 'option' || !isExactSlashCommandQuery()) {
+      e.preventDefault();
+      return applySlashCommandCompletion();
+    }
   }
   if (e.key === 'Escape') {
     e.preventDefault();
@@ -3378,20 +3683,8 @@ function syncApiMutationsAllowedForCurrentTab() {
   updateApiBadge();
 }
 
-function getLeadingSlashCommand(value) {
-  const text = String(value || '').trimStart();
-  const lowerText = text.toLowerCase();
-  const command = SLASH_COMMANDS.find((candidate) => {
-    if (!lowerText.startsWith(candidate.value)) return false;
-    const next = text.charAt(candidate.value.length);
-    return !next || /\s/.test(next);
-  });
-  return command?.value || null;
-}
-
 function isOutOfBandSlashDraft(value) {
-  const command = getLeadingSlashCommand(value);
-  return !!command && OUT_OF_BAND_SLASH_COMMANDS.has(command);
+  return slashInvocationIsOutOfBand(parseSlashInvocation(value));
 }
 
 function syncSendButtonState() {
@@ -3430,7 +3723,8 @@ function showComposerToast(message, { duration = 2600 } = {}) {
     toast.setAttribute('aria-live', 'polite');
     inputArea?.parentNode?.insertBefore(toast, inputArea);
   }
-  toast.textContent = message;
+  if (isSystemHtml(message)) toast.innerHTML = message.__systemHtml;
+  else toast.textContent = message;
   toast.classList.remove('hidden');
   clearTimeout(composerToastTimer);
   composerToastTimer = setTimeout(() => {
@@ -3463,14 +3757,25 @@ function resolvePendingPermissionPromptsForTab(tabId) {
  * May trigger async UI side effects (screenshot, export, etc.).
  */
 async function parseSlashCommands(text, tabId = currentTabId) {
-  // /help — list all available slash commands
-  if (/^\/help\b\s*/i.test(text)) {
-    addPersistentSlashMessage(systemHtml(t('sp.help_html')));
+  const invocation = parseSlashInvocation(text);
+  if (!invocation) return text;
+  if (invocation.error || invocation.unsupported) {
+    showSlashInvocationError(invocation);
+    return '';
+  }
+  const { command, action, payload, optionValues } = invocation;
+
+  if (action === 'help') {
+    addPersistentSlashMessage(systemHtml(buildSlashCommandDetailHtml(command)));
     return '';
   }
 
-  // /list-schedules — refresh the scheduled job strip
-  if (/^\/list-schedules\b\s*/i.test(text)) {
+  if (command.value === '/help') {
+    addPersistentSlashMessage(systemHtml(buildSlashCommandHelpHtml()));
+    return '';
+  }
+
+  if (command.value === '/schedule' && action === 'list') {
     const jobs = await refreshScheduledJobs({ tabId });
     if (currentTabId !== tabId) return '';
     addPersistentSlashMessage(visibleScheduledJobs(jobs).length
@@ -3479,81 +3784,66 @@ async function parseSlashCommands(text, tabId = currentTabId) {
     return '';
   }
 
-  // /check-progress — dump the current tab's progress_update ledger
-  if (/^\/check-progress\b\s*/i.test(text)) {
+  if (command.value === '/progress') {
     await showProgress(tabId);
     return '';
   }
 
-  // /show-scratchpad — dump the current tab's agent scratchpad
-  if (/^\/show-scratchpad\b\s*/i.test(text)) {
+  if (command.value === '/scratchpad' && action === 'show') {
     await showScratchpad(tabId);
     return '';
   }
 
-  const mRemember = text.match(/^\/remember\b\s*/i);
-  if (mRemember) {
-    await rememberUserMemory(text.slice(mRemember[0].length), tabId);
+  if (command.value === '/memory' && action === 'add') {
+    await rememberUserMemory(payload, tabId);
     return '';
   }
 
-  if (/^\/show-memory\b\s*/i.test(text)) {
+  if (command.value === '/memory' && action === 'show') {
     await showUserMemory(tabId);
     return '';
   }
 
-  const mForgetMemory = text.match(/^\/forget-memory\b\s*/i);
-  if (mForgetMemory) {
-    await forgetUserMemory(text.slice(mForgetMemory[0].length), tabId);
+  if (command.value === '/memory' && action === 'forget') {
+    await forgetUserMemory(payload, tabId);
     return '';
   }
 
-  // /edit-scratchpad — append text after the command to the scratchpad
-  const mEditScratchpad = text.match(/^\/edit-scratchpad\b\s*/i);
-  if (mEditScratchpad) {
-    await editScratchpad(text.slice(mEditScratchpad[0].length), tabId);
+  if (command.value === '/scratchpad' && action === 'append') {
+    await editScratchpad(payload, tabId);
     return '';
   }
 
-  // /clear-scratchpad — clear the current tab's agent scratchpad
-  if (/^\/clear-scratchpad\b\s*/i.test(text)) {
+  if (command.value === '/scratchpad' && action === 'clear') {
     clearScratchpad(tabId);
     return '';
   }
 
-  // /schedule — open a deterministic scheduled-task composer
-  const mSchedule = text.match(/^\/schedule\b\s*/i);
-  if (mSchedule) {
-    renderScheduleComposer(text.slice(mSchedule[0].length).trim(), tabId);
+  if (command.value === '/schedule' && action === 'create') {
+    renderScheduleComposer(payload, tabId);
     return '';
   }
 
-  // /allow-api — enable API mutation override
-  const mApi = text.match(/^\/allow-api\b\s*/i);
-  if (mApi) {
+  if (command.value === '/allow-api') {
     const wasAlreadyAllowed = isApiMutationsAllowedForTab(tabId);
     setApiMutationsAllowedForTab(tabId, true);
     if (!wasAlreadyAllowed) {
       addPersistentSlashMessage(systemHtml(t('sp.api.enabled_html')));
     }
-    return text.slice(mApi[0].length).trim();
+    return payload;
   }
 
-  // /dangerously-skip-permissions — disable the master permission prompt gate
-  const mSkipPermissions = text.match(/^\/dangerously-skip-permissions\b\s*/i);
-  if (mSkipPermissions) {
+  if (command.value === '/dangerously-skip-permissions') {
     await chrome.storage.local.set({ [PERMISSION_GATE_KEY]: false }).catch(() => {});
     askBeforeConsequential = false;
     updateActWarning();
     resolvePendingPermissionPromptsForTab(tabId);
     addPersistentSlashMessage(systemHtml(t('sp.permissions.disabled_html')));
-    return text.slice(mSkipPermissions[0].length).trim();
+    return payload;
   }
 
-  // /compact — force context compaction for this conversation
-  const mCompact = text.match(/^\/compact\b\s*/i);
-  if (mCompact) {
-    const remainder = text.slice(mCompact[0].length).trim();
+  if (command.value === '/compact') {
+    const remainder = payload;
     const res = await sendToBackground('compact_conversation', { tabId });
     if (currentTabId !== tabId) return remainder;
     if (res?.ok && res.compacted) {
@@ -3568,27 +3858,24 @@ async function parseSlashCommands(text, tabId = currentTabId) {
     return remainder;
   }
 
-  // /verbose — toggle verbose/compact tool display
-  if (/^\/verbose\b\s*/i.test(text)) {
+  if (command.value === '/verbose') {
     verboseMode = !verboseMode;
     if (verboseBtn) verboseBtn.classList.toggle('active', verboseMode);
     await chrome.storage.local.set({ verboseMode }).catch(() => {});
     if (currentTabId !== tabId) return '';
-    showComposerToast(verboseMode
+    showComposerToast(systemHtml(verboseMode
       ? t('sp.compact.verbose_on')
-      : t('sp.compact.verbose_off'));
+      : t('sp.compact.verbose_off')));
     return '';
   }
 
-  // /reset — clear conversation (same as clear button)
-  if (/^\/reset\b\s*/i.test(text)) {
+  if (command.value === '/reset') {
     await sendToBackground('clear_conversation', { tabId });
     await renderClearedConversationForTab(tabId);
     return '';
   }
 
-  // /screenshot — capture visible tab and display in chat
-  if (/^\/screenshot\b\s*/i.test(text)) {
+  if (command.value === '/screenshot' && action === 'viewport') {
     try {
       const tab = tabId == null ? null : await chrome.tabs.get(tabId);
       if (currentTabId !== tabId || !tab?.active) return '';
@@ -3606,8 +3893,7 @@ async function parseSlashCommands(text, tabId = currentTabId) {
     return '';
   }
 
-  // /full-page-screenshot — capture the full scrollable page and display in chat
-  if (/^\/full-page-screenshot\b\s*/i.test(text)) {
+  if (command.value === '/screenshot' && action === 'full-page') {
     try {
       const res = await sendToBackground('capture_full_page_screenshot', { tabId });
       if (currentTabId !== tabId) return '';
@@ -3624,17 +3910,12 @@ async function parseSlashCommands(text, tabId = currentTabId) {
     return '';
   }
 
-  // /record-full-screen — start a screen/window recording without LLM involvement
-  const mRecordFullScreen = text.match(/^\/record-full-screen(?:\s|$)/i);
-  if (mRecordFullScreen) {
-    await startFullScreenRecording(tabId, parseRecordingSlashOptions(text, mRecordFullScreen));
+  if (command.value === '/record' && action === 'full-screen') {
+    await startFullScreenRecording(tabId, { transcribeAfter: optionValues.has('--transcribe') });
     return '';
   }
 
-  // /record — start recording the current tab without LLM involvement
-  const mRecord = text.match(/^\/record(?:\s|$)/i);
-  if (mRecord) {
-    const recordOptions = parseRecordingSlashOptions(text, mRecord);
+  if (command.value === '/record' && action === 'tab') {
     try {
       const res = await sendToBackground('start_tab_recording', {
         tabId,
@@ -3642,7 +3923,7 @@ async function parseSlashCommands(text, tabId = currentTabId) {
           video: true,
           mic: true,
           showBanner: true,
-          transcribeAfter: recordOptions.transcribeAfter,
+          transcribeAfter: optionValues.has('--transcribe'),
         },
       });
       if (currentTabId !== tabId) return '';
@@ -3658,9 +3939,7 @@ async function parseSlashCommands(text, tabId = currentTabId) {
     return '';
   }
 
-  // /export-with-traces — export the full tool chain from the trace store.
-  // Checked BEFORE /export because /export\b also matches /export-with-traces.
-  if (/^\/export-with-traces\b\s*/i.test(text)) {
+  if (command.value === '/export' && action === 'traces') {
     let res;
     try {
       res = await sendToBackground('export_traces', { tabId });
@@ -3702,8 +3981,7 @@ async function parseSlashCommands(text, tabId = currentTabId) {
     return '';
   }
 
-  // /export — export conversation as markdown
-  if (/^\/export\b\s*/i.test(text)) {
+  if (command.value === '/export' && action === 'conversation') {
     const messages = messagesEl.querySelectorAll('.message');
     let md = '# WebBrain Conversation\n\n';
     for (const msg of messages) {
@@ -3735,49 +4013,38 @@ async function parseSlashCommands(text, tabId = currentTabId) {
     return '';
   }
 
-  // /profile — toggle profile auto-fill on/off
-  if (/^\/profile\b\s*/i.test(text)) {
+  if (command.value === '/profile') {
     const stored = await chrome.storage.local.get(['profileEnabled', 'profileText']);
     const newState = !stored.profileEnabled;
     await chrome.storage.local.set({ profileEnabled: newState });
     if (currentTabId !== tabId) return '';
-    showComposerToast(newState
+    showComposerToast(systemHtml(newState
       ? t('sp.profile.on')
-      : t('sp.profile.off'));
+      : t('sp.profile.off')));
     return '';
   }
 
-  // /ask — switch to Ask mode, then send remaining text
-  const mAsk = text.match(/^\/ask\b\s*/i);
-  if (mAsk) {
+  if (command.value === '/ask') {
     setMode('ask');
-    return text.slice(mAsk[0].length).trim();
+    return payload;
   }
 
-  // /act — switch to Act mode, then send remaining text
-  const mAct = text.match(/^\/act\b\s*/i);
-  if (mAct) {
+  if (command.value === '/act') {
     const ok = await ensureActMode();
-    return ok ? text.slice(mAct[0].length).trim() : '';
+    return ok ? payload : '';
   }
 
-  // /dev — switch to Dev mode, then send remaining text
-  const mDev = text.match(/^\/dev\b\s*/i);
-  if (mDev) {
+  if (command.value === '/dev') {
     const ok = await ensureDevMode();
-    return ok ? text.slice(mDev[0].length).trim() : '';
+    return ok ? payload : '';
   }
 
-  // /plan — switch to Ask mode with explicit planning intent
-  const mPlan = text.match(/^\/plan\b\s*/i);
-  if (mPlan) {
+  if (command.value === '/plan') {
     setMode('ask');
-    const rest = text.slice(mPlan[0].length).trim();
-    return rest ? `Plan the following step by step: ${rest}` : '';
+    return payload ? `Plan the following step by step: ${payload}` : '';
   }
 
-  // /vision — toggle vision support on active provider
-  if (/^\/vision\b\s*/i.test(text)) {
+  if (command.value === '/vision') {
     try {
       const { providers, active } = await sendToBackground('get_providers');
       const config = providers[active];
@@ -3788,32 +4055,27 @@ async function parseSlashCommands(text, tabId = currentTabId) {
           config: { ...config, supportsVision: newVision },
         });
         if (currentTabId !== tabId) return '';
-        showComposerToast(newVision
+        showComposerToast(systemHtml(newVision
           ? t('sp.vision.on')
-          : t('sp.vision.off'));
+          : t('sp.vision.off')));
       }
     } catch (e) {
       if (currentTabId !== tabId) return '';
-      showComposerToast(tSystemHtml('sp.vision.error', { msg: e.message }), { duration: 5000 });
+      showComposerToast(systemHtml(tSystemHtml('sp.vision.error', { msg: e.message })), { duration: 5000 });
     }
     return '';
   }
 
-  return text;
+  showSlashInvocationError({ error: 'invalid-usage', command });
+  return '';
 }
 
 function modeForMessageText(text) {
-  if (/^\/(?:ask|plan)\b/i.test(text)) return 'ask';
-  if (/^\/act\b/i.test(text)) return 'act';
-  if (/^\/dev\b/i.test(text)) return 'dev';
+  const invocation = parseSlashInvocation(text);
+  if (invocation?.command?.value === '/ask' || invocation?.command?.value === '/plan') return 'ask';
+  if (invocation?.command?.value === '/act') return 'act';
+  if (invocation?.command?.value === '/dev') return 'dev';
   return agentMode;
-}
-
-function parseRecordingSlashOptions(text, commandMatch) {
-  const args = text.slice(commandMatch?.[0]?.length || 0);
-  return {
-    transcribeAfter: /(?:^|\s)--transcribe(?:\s|$)/i.test(args),
-  };
 }
 
 async function startFullScreenRecording(tabId = currentTabId, recordOptions = {}) {
@@ -4101,7 +4363,7 @@ async function sendMessage(extraChatParams = {}) {
 // ─── Tab Recorder (v7.4) ────────────────────────────────────────────
 // State: idle ↔ recording. Slash commands flip the panel into recording mode
 // via background broadcasts. `/record` shows the banner Stop button;
-// `/record-full-screen` stays visually quiet and relies on double Escape or
+// `/record --full-screen` stays visually quiet and relies on double Escape or
 // Chrome's Stop sharing control. The visible banner timer is driven off
 // recordingState.startedAt (received from background), so it survives remount.
 
@@ -5467,7 +5729,7 @@ chrome.storage.onChanged.addListener((changes) => {
 });
 
 // Page inspection banner — shown when agent starts interacting with the page
-const PAGE_TOOLS = new Set(['read_page', 'read_page_source', 'get_interactive_elements', 'click', 'type_text', 'scroll', 'extract_data', 'inspect_element_styles', 'wait_for_element', 'get_selection']);
+const PAGE_TOOLS = new Set(['read_page', 'read_page_source', 'get_interactive_elements', 'click', 'type_text', 'scroll', 'extract_data', 'inspect_element_styles', 'inject_css', 'remove_injected_css', 'patch_element', 'revert_patch', 'execute_js', 'read_console', 'inspect_network_requests', 'inspect_event_listeners', 'highlight_element', 'wait_for_element', 'get_selection']);
 let inspectionBannerShown = false;
 
 function showInspectionBanner(toolName) {
@@ -5551,7 +5813,8 @@ function formatMarkdown(text) {
 
   // 1. Extract fenced code blocks BEFORE escaping HTML
   const codeBlocks = [];
-  text = text.replace(/```(\w*)\n?([\s\S]*?)```/g, (_match, lang, code) => {
+  text = text.replace(/```[ \t]*([^`\r\n]*)\r?\n([\s\S]*?)```/g, (_match, info, code) => {
+    const lang = codeFenceLanguage(info);
     const id = `__CODEBLOCK_${codeBlocks.length}__`;
     codeBlocks.push({ lang: lang || '', code });
     return id;
@@ -5571,10 +5834,10 @@ function formatMarkdown(text) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 
-  // 4. Inline formatting (bold + italic), then markdown link sanitization,
-  // then newline → <br>. Links are handled by the dedicated markdown-link
-  // module (unit-tested in test/run.js) — see that file for the rationale
-  // and threat model.
+  // 4. Block headings, inline formatting, markdown link sanitization, then
+  // newline → <br>. Code and inline-code placeholders were extracted above,
+  // so Markdown-looking source inside them is not interpreted here.
+  text = renderMarkdownHeadings(text);
   text = text
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.+?)\*/g, '<em>$1</em>');
@@ -5591,13 +5854,13 @@ function formatMarkdown(text) {
 
   // 6. Restore fenced code blocks with copy button
   codeBlocks.forEach((block, i) => {
-    const escaped = block.code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const highlighted = highlightCode(block.code, block.lang);
     const langLabel = block.lang ? `<span class="code-lang">${escapeHtml(block.lang)}</span>` : '';
     const copyBtn = `<button class="code-copy-btn" data-code-index="${i}" title="${escapeHtml(t('sp.copy.code.title'))}">${escapeHtml(t('sp.copy'))}</button>`;
     const header = `<div class="code-block-header">${langLabel}${copyBtn}</div>`;
     text = text.replace(
       `__CODEBLOCK_${i}__`,
-      () => `<div class="code-block-wrapper">${header}<pre><code>${escaped}</code></pre></div>`
+      () => `<div class="code-block-wrapper">${header}<pre><code>${highlighted}</code></pre></div>`
     );
   });
 
@@ -5855,7 +6118,14 @@ async function handleGlobalKeydown(e) {
 
 function setMode(mode) {
   if (mode !== 'ask' && mode !== 'act' && mode !== 'dev') mode = 'ask';
+  const previousMode = agentMode;
   agentMode = mode;
+  if (previousMode === 'dev' && mode !== 'dev') {
+    // Dev mode is panel-wide, while diagnostics may be active on a tab the
+    // user switched away from. Ask the background to drain its tracked set
+    // instead of assuming currentTabId is the tab that started capture.
+    sendToBackground('disable_dev_diagnostics', { all: true }).catch(() => {});
+  }
 
   modeAskBtn.classList.toggle('active', mode === 'ask');
   modeAskBtn.classList.remove('act');

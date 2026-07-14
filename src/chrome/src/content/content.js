@@ -1797,6 +1797,447 @@
     });
   }
 
+  // ── Dev-mode reversible page patches and targeting helpers ────────────
+  // Structured element-patch state lives in the content-script world, not the
+  // MV3 service worker, so a patchId remains undoable if the worker is
+  // suspended and restarted while the page itself stays loaded. Navigation
+  // intentionally clears the registry together with the page and its edits.
+  // CSS patches use chrome.scripting.insertCSS/removeCSS in agent.js so they
+  // also work on pages whose Content Security Policy rejects inline styles.
+  const devPatchRegistry = new Map();
+  const devTargetMarkerRegistry = new Map();
+  const DEV_TARGET_MARKER_ATTR = 'data-webbrain-dev-target';
+  let devPatchSequence = 0;
+  let activeDevHighlightCleanup = null;
+
+  function nextDevPatchId(kind) {
+    devPatchSequence += 1;
+    return `wb_${kind}_${Date.now().toString(36)}_${devPatchSequence.toString(36)}`;
+  }
+
+  function devClassList(el) {
+    try { return Array.from(el.classList || []).slice(0, 30); }
+    catch { return []; }
+  }
+
+  function devCssPath(el) {
+    const parts = [];
+    for (let node = el; node && node.nodeType === 1 && parts.length < 10; node = node.parentElement) {
+      let part = String(node.tagName || '').toLowerCase();
+      if (!part) break;
+      if (node.id) {
+        part += '#' + CSS.escape(node.id);
+        parts.unshift(part);
+        break;
+      }
+      const classes = devClassList(node).slice(0, 3);
+      if (classes.length) part += '.' + classes.map(c => CSS.escape(c)).join('.');
+      const parent = node.parentElement;
+      if (parent) {
+        const same = Array.from(parent.children).filter(c => c.tagName === node.tagName);
+        if (same.length > 1) part += `:nth-of-type(${same.indexOf(node) + 1})`;
+      }
+      parts.unshift(part);
+    }
+    return parts.join(' > ');
+  }
+
+  function devElementSummary(el) {
+    const r = el.getBoundingClientRect();
+    return {
+      tag: String(el.tagName || '').toLowerCase(),
+      id: el.id || '',
+      classes: devClassList(el),
+      path: devCssPath(el),
+      rect: {
+        x: Math.round(r.x), y: Math.round(r.y),
+        width: Math.round(r.width), height: Math.round(r.height),
+        top: Math.round(r.top), right: Math.round(r.right),
+        bottom: Math.round(r.bottom), left: Math.round(r.left),
+      },
+    };
+  }
+
+  function resolveDevTarget(params) {
+    params = params || {};
+    const warnings = [];
+    let target = null;
+    let targetMethod = null;
+    const refId = typeof params.ref_id === 'string' ? params.ref_id.trim() : '';
+    const selector = typeof params.selector === 'string' ? params.selector.trim() : '';
+    const x = Number(params.x);
+    const y = Number(params.y);
+
+    if (refId) {
+      if (typeof window.__wb_ax_lookup === 'function') {
+        const found = window.__wb_ax_lookup(refId);
+        if (found?.nodeType === 1) {
+          target = found;
+          targetMethod = 'ref_id';
+        } else {
+          warnings.push(`No element found for ref_id "${refId}".`);
+        }
+      } else {
+        warnings.push('ref_id was provided but accessibility-tree.js is not available.');
+      }
+    }
+    if (!target && selector) {
+      try {
+        const found = document.querySelector(selector);
+        if (found?.nodeType === 1) {
+          target = found;
+          targetMethod = 'selector';
+        } else {
+          warnings.push(`No element matched selector "${selector}".`);
+        }
+      } catch (e) {
+        warnings.push(`Invalid selector: ${e.message}`);
+      }
+    }
+    if (!target && Number.isFinite(x) && Number.isFinite(y)) {
+      const found = document.elementFromPoint?.(x, y);
+      if (found?.nodeType === 1) {
+        target = found;
+        targetMethod = 'coordinates';
+      } else {
+        warnings.push(`No element found at coordinates (${x}, ${y}).`);
+      }
+    }
+    if (!target) {
+      return {
+        success: false,
+        error: 'Could not resolve a target element. Pass a current ref_id or a valid selector.',
+        warnings,
+      };
+    }
+    return { success: true, target, targetMethod, warnings };
+  }
+
+  function isDevJavascriptUrlAttribute(name, value) {
+    if (!/^(href|src|xlink:href|formaction|action)$/i.test(String(name || ''))) return false;
+    // HTML URL parsing ignores ASCII tabs/newlines/carriage returns in the
+    // scheme, so normalize those before checking instead of allowing an
+    // obfuscated `java\nscript:` value through.
+    const normalizedValue = String(value ?? '').replace(/[\t\n\r]/g, '').trimStart();
+    return /^javascript:/i.test(normalizedValue);
+  }
+
+  function normalizeDevPatchOperations(el, params) {
+    const styles = params?.styles && typeof params.styles === 'object' && !Array.isArray(params.styles) ? params.styles : {};
+    const removeStyles = Array.isArray(params?.removeStyles) ? params.removeStyles : [];
+    const addClasses = Array.isArray(params?.addClasses) ? params.addClasses : [];
+    const removeClasses = Array.isArray(params?.removeClasses) ? params.removeClasses : [];
+    const attributes = params?.attributes && typeof params.attributes === 'object' && !Array.isArray(params.attributes) ? params.attributes : {};
+    const removeAttributes = Array.isArray(params?.removeAttributes) ? params.removeAttributes : [];
+    const normalizeStyleName = value => {
+      const name = String(value || '').trim();
+      return name.startsWith('--') ? name : name.toLowerCase();
+    };
+    const isHtmlElement = el?.namespaceURI === 'http://www.w3.org/1999/xhtml';
+    const normalizeAttributeName = value => {
+      const name = String(value || '').trim();
+      return isHtmlElement ? name.toLowerCase() : name;
+    };
+
+    const styleValues = new Map();
+    for (const [name, value] of Object.entries(styles)) {
+      const normalized = normalizeStyleName(name);
+      if (normalized) styleValues.set(normalized, value);
+    }
+    const stylesToRemove = new Set(removeStyles.map(normalizeStyleName).filter(Boolean));
+    const classesToAdd = new Set(addClasses.map(v => String(v || '').trim()).filter(Boolean));
+    const classesToRemove = new Set(removeClasses.map(v => String(v || '').trim()).filter(Boolean));
+    const attributeValues = new Map();
+    for (const [name, value] of Object.entries(attributes)) {
+      const normalized = normalizeAttributeName(name);
+      if (normalized) attributeValues.set(normalized, value);
+    }
+    const attributesToRemove = new Set(removeAttributes.map(normalizeAttributeName).filter(Boolean));
+
+    const styleConflict = [...styleValues.keys()].find(name => stylesToRemove.has(name));
+    if (styleConflict) {
+      return { success: false, error: `patch_element: style "${styleConflict}" cannot be set and removed in the same patch.` };
+    }
+    const classConflict = [...classesToAdd].find(name => classesToRemove.has(name));
+    if (classConflict) {
+      return { success: false, error: `patch_element: class "${classConflict}" cannot be added and removed in the same patch.` };
+    }
+    const attributeConflict = [...attributeValues.keys()].find(name => attributesToRemove.has(name));
+    if (attributeConflict) {
+      return { success: false, error: `patch_element: attribute "${attributeConflict}" cannot be set and removed in the same patch.` };
+    }
+    return {
+      success: true,
+      styleValues,
+      stylesToRemove,
+      styleNames: [...styleValues.keys(), ...stylesToRemove],
+      classesToAdd,
+      classesToRemove,
+      classNames: [...classesToAdd, ...classesToRemove],
+      attributeValues,
+      attributesToRemove,
+      attributeNames: [...attributeValues.keys(), ...attributesToRemove],
+    };
+  }
+
+  function patchDevElement(params) {
+    const resolved = resolveDevTarget(params);
+    if (!resolved.success) return resolved;
+    const el = resolved.target;
+    const normalized = normalizeDevPatchOperations(el, params);
+    if (!normalized.success) return normalized;
+    const {
+      styleValues,
+      styleNames,
+      classesToAdd,
+      classesToRemove,
+      classNames,
+      attributeValues,
+      attributeNames,
+    } = normalized;
+    if (!styleNames.length && !classNames.length && !attributeNames.length) {
+      return { success: false, error: 'patch_element: provide at least one style, class, or attribute change.' };
+    }
+    if (styleNames.length > 100 || classNames.length > 100 || attributeNames.length > 100) {
+      return { success: false, error: 'patch_element: a patch may change at most 100 styles, 100 classes, and 100 attributes.' };
+    }
+    for (const className of classNames) {
+      if (/\s/.test(className) || className.length > 200) {
+        return { success: false, error: `patch_element: invalid class name "${className}".` };
+      }
+    }
+    for (const [name, rawValue] of styleValues) {
+      if (String(rawValue).length > 4000) {
+        return { success: false, error: `patch_element: style value for "${name}" exceeds 4,000 characters.` };
+      }
+    }
+    for (const name of attributeNames) {
+      if (!/^[^\s"'<>/=]+$/.test(name) || name.length > 200) {
+        return { success: false, error: `patch_element: invalid attribute name "${name}".` };
+      }
+      if (/^on/i.test(name) || /^(srcdoc)$/i.test(name)) {
+        return { success: false, error: `patch_element: executable attribute "${name}" is not allowed; use execute_js only when code execution is explicitly needed.` };
+      }
+      const value = attributeValues.has(name) ? String(attributeValues.get(name)) : '';
+      if (isDevJavascriptUrlAttribute(name, value)) {
+        return { success: false, error: `patch_element: javascript: URLs are not allowed in ${name}.` };
+      }
+      if (value.length > 10000) {
+        return { success: false, error: `patch_element: attribute value for "${name}" exceeds 10,000 characters.` };
+      }
+    }
+
+    const patchId = nextDevPatchId('dom');
+    const styleChanges = [];
+    for (const name of styleNames) {
+      const beforePresent = Array.from(el.style).includes(name);
+      const before = el.style.getPropertyValue(name);
+      const beforePriority = el.style.getPropertyPriority(name);
+      if (styleValues.has(name)) {
+        const value = String(styleValues.get(name));
+        el.style.setProperty(name, value);
+      } else {
+        el.style.removeProperty(name);
+      }
+      styleChanges.push({
+        name,
+        before: beforePresent ? before : null,
+        beforePriority,
+        after: Array.from(el.style).includes(name) ? el.style.getPropertyValue(name) : null,
+        afterPriority: el.style.getPropertyPriority(name),
+      });
+    }
+
+    const classChanges = [];
+    for (const name of classNames) {
+      const before = el.classList.contains(name);
+      if (classesToAdd.has(name)) el.classList.add(name);
+      if (classesToRemove.has(name)) el.classList.remove(name);
+      classChanges.push({ name, before, after: el.classList.contains(name) });
+    }
+
+    const attributeChanges = [];
+    for (const name of attributeNames) {
+      const beforePresent = el.hasAttribute(name);
+      const before = beforePresent ? el.getAttribute(name) : null;
+      if (attributeValues.has(name)) {
+        const value = String(attributeValues.get(name));
+        el.setAttribute(name, value);
+      } else {
+        el.removeAttribute(name);
+      }
+      attributeChanges.push({ name, before, after: el.hasAttribute(name) ? el.getAttribute(name) : null });
+    }
+
+    const changes = { styles: styleChanges, classes: classChanges, attributes: attributeChanges };
+    devPatchRegistry.set(patchId, { kind: 'element', element: el, changes });
+    return {
+      success: true,
+      patchId,
+      targetMethod: resolved.targetMethod,
+      target: devElementSummary(el),
+      changes,
+      warnings: resolved.warnings,
+      note: 'Call revert_patch with this patchId to restore the recorded prior values.',
+    };
+  }
+
+  function revertDevElementPatch(params) {
+    const patchId = typeof params?.patchId === 'string' ? params.patchId.trim() : '';
+    if (!patchId) return { success: false, error: 'revert_patch: `patchId` is required.' };
+    const patch = devPatchRegistry.get(patchId);
+    if (!patch || patch.kind !== 'element') {
+      return { success: false, error: `revert_patch: element patchId "${patchId}" was not found on this page.` };
+    }
+    const el = patch.element;
+    if (!el?.isConnected) {
+      devPatchRegistry.delete(patchId);
+      return { success: false, error: `revert_patch: the element for "${patchId}" is no longer in the document.` };
+    }
+
+    const conflicts = [];
+    for (const change of patch.changes.styles) {
+      const current = Array.from(el.style).includes(change.name) ? el.style.getPropertyValue(change.name) : null;
+      if (current !== change.after) conflicts.push({ kind: 'style', name: change.name, expected: change.after, current });
+      if (change.before === null) el.style.removeProperty(change.name);
+      else el.style.setProperty(change.name, change.before, change.beforePriority || '');
+    }
+    for (const change of patch.changes.classes) {
+      const current = el.classList.contains(change.name);
+      if (current !== change.after) conflicts.push({ kind: 'class', name: change.name, expected: change.after, current });
+      el.classList.toggle(change.name, change.before);
+    }
+    for (const change of patch.changes.attributes) {
+      const current = el.hasAttribute(change.name) ? el.getAttribute(change.name) : null;
+      if (current !== change.after) conflicts.push({ kind: 'attribute', name: change.name, expected: change.after, current });
+      if (change.before === null) el.removeAttribute(change.name);
+      else el.setAttribute(change.name, change.before);
+    }
+    devPatchRegistry.delete(patchId);
+    return {
+      success: true,
+      patchId,
+      reverted: true,
+      target: devElementSummary(el),
+      conflicts,
+      warning: conflicts.length
+        ? 'Some values changed again after this patch; revert_patch restored the original recorded values and reports those overlaps in conflicts.'
+        : undefined,
+    };
+  }
+
+  function devParentElement(element) {
+    if (element?.parentElement) return element.parentElement;
+    return element?.getRootNode?.()?.host || null;
+  }
+
+  function markDevTargets(params) {
+    const resolved = resolveDevTarget(params);
+    if (!resolved.success) return resolved;
+    const groupId = nextDevPatchId('target');
+    const includeAncestors = params?.includeAncestors !== false;
+    const elements = [resolved.target];
+    if (includeAncestors) {
+      let parent = devParentElement(resolved.target);
+      while (parent && elements.length < 6) {
+        elements.push(parent);
+        parent = devParentElement(parent);
+      }
+    }
+    const records = elements.map((el, index) => {
+      const marker = `${groupId}_${index}`;
+      const hadAttribute = el.hasAttribute(DEV_TARGET_MARKER_ATTR);
+      const previousValue = hadAttribute ? el.getAttribute(DEV_TARGET_MARKER_ATTR) : null;
+      el.setAttribute(DEV_TARGET_MARKER_ATTR, marker);
+      return { el, marker, hadAttribute, previousValue, relation: index === 0 ? 'target' : `ancestor_${index}` };
+    });
+    devTargetMarkerRegistry.set(groupId, records);
+    return {
+      success: true,
+      groupId,
+      targetMethod: resolved.targetMethod,
+      targets: records.map(record => ({ marker: record.marker, relation: record.relation, ...devElementSummary(record.el) })),
+      warnings: resolved.warnings,
+    };
+  }
+
+  function unmarkDevTargets(params) {
+    const groupId = typeof params?.groupId === 'string' ? params.groupId : '';
+    const records = devTargetMarkerRegistry.get(groupId) || [];
+    for (const record of records) {
+      try {
+        if (record.hadAttribute) record.el.setAttribute(DEV_TARGET_MARKER_ATTR, record.previousValue || '');
+        else record.el.removeAttribute(DEV_TARGET_MARKER_ATTR);
+      } catch {}
+    }
+    devTargetMarkerRegistry.delete(groupId);
+    return { success: true, groupId, removed: records.length };
+  }
+
+  function highlightDevElement(params) {
+    const resolved = resolveDevTarget(params);
+    if (!resolved.success) return resolved;
+    const el = resolved.target;
+    try { el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' }); } catch {}
+    if (activeDevHighlightCleanup) activeDevHighlightCleanup();
+
+    const durationMs = Math.max(250, Math.min(15000, Math.round(Number(params?.durationMs) || 2500)));
+    const requestedColor = typeof params?.color === 'string' ? params.color.trim() : '';
+    const color = requestedColor && globalThis.CSS?.supports?.('color', requestedColor) ? requestedColor : '#7c3aed';
+    const labelText = String(params?.label || '').trim().slice(0, 100);
+    const overlay = document.createElement('div');
+    overlay.setAttribute('data-webbrain-dev-highlight', '');
+    Object.assign(overlay.style, {
+      position: 'fixed',
+      pointerEvents: 'none',
+      zIndex: '2147483647',
+      border: `3px solid ${color}`,
+      borderRadius: '4px',
+      boxSizing: 'border-box',
+      boxShadow: `0 0 0 2px rgba(255,255,255,.9), 0 0 18px ${color}`,
+    });
+    let label = null;
+    if (labelText) {
+      label = document.createElement('div');
+      label.textContent = labelText;
+      Object.assign(label.style, {
+        position: 'absolute', left: '-3px', bottom: 'calc(100% + 5px)',
+        maxWidth: '320px', padding: '3px 7px', borderRadius: '4px',
+        background: color, color: '#fff', font: '600 12px/1.35 system-ui, sans-serif',
+        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+      });
+      overlay.appendChild(label);
+    }
+    (document.documentElement || document.body).appendChild(overlay);
+
+    const update = () => {
+      if (!el.isConnected || !overlay.isConnected) return;
+      const r = el.getBoundingClientRect();
+      overlay.style.left = `${Math.round(r.left)}px`;
+      overlay.style.top = `${Math.round(r.top)}px`;
+      overlay.style.width = `${Math.max(0, Math.round(r.width))}px`;
+      overlay.style.height = `${Math.max(0, Math.round(r.height))}px`;
+    };
+    update();
+    const interval = setInterval(update, 50);
+    const cleanup = () => {
+      clearInterval(interval);
+      try { overlay.remove(); } catch {}
+      if (activeDevHighlightCleanup === cleanup) activeDevHighlightCleanup = null;
+    };
+    activeDevHighlightCleanup = cleanup;
+    setTimeout(cleanup, durationMs);
+    return {
+      success: true,
+      targetMethod: resolved.targetMethod,
+      target: devElementSummary(el),
+      durationMs,
+      color,
+      label: labelText || null,
+      warnings: resolved.warnings,
+    };
+  }
+
   function inspectElementStyles(params) {
     params = params || {};
     const warnings = [];
@@ -2023,6 +2464,14 @@
       'scroll': () => scrollPage(msg.params || {}),
       'extract_data': () => extractData(msg.params || {}),
       'inspect_element_styles': () => inspectElementStyles(msg.params || {}),
+      'patch_element': () => patchDevElement(msg.params || {}),
+      'revert_patch': () => revertDevElementPatch(msg.params || {}),
+      'highlight_element': () => highlightDevElement(msg.params || {}),
+      // Internal bridge used by inspect_event_listeners. The temporary DOM
+      // marker lets CDP resolve the exact ref_id target, including nodes in
+      // open shadow roots, and is removed in a finally block by agent.js.
+      'dev_mark_targets': () => markDevTargets(msg.params || {}),
+      'dev_unmark_targets': () => unmarkDevTargets(msg.params || {}),
       'wait_for_element': () => waitForElement(msg.params || {}),
       'get_selection': () => ({ text: window.getSelection()?.toString() || '' }),
       // ── Accessibility-tree-backed reads and actions ──────────────────
@@ -2498,47 +2947,6 @@
           };
         } catch (e) {
           return { success: false, error: e && e.message || String(e) };
-        }
-      },
-      // execute_js — model-supplied JS body, evaluated in the content
-      // script's isolated world via `new Function()`.
-      //
-      // CSP CONSTRAINT (Chrome MV3, not fixable): `new Function()`
-      // requires `'unsafe-eval'` in the executing context's CSP. For
-      // content scripts in MV3 that's the extension's `extension_pages`
-      // CSP — and MV3 forbids `'unsafe-eval'` in extension_pages
-      // (Chrome's minimum-policy enforcement is strict; adding it
-      // makes the extension fail to install). There's no manifest-side
-      // workaround. Firefox MV2 does allow this and the firefox build
-      // grants `unsafe-eval` — see src/firefox/src/content/content.js
-      // for the parallel handler.
-      //
-      // Net effect on Chrome: execute_js fails on every host with the
-      // same CSP error. Detected below and reported with an actionable
-      // hint so the agent stops thrashing through execute_js variants
-      // and uses the finite-verb tools instead.
-      'execute_js': () => {
-        try {
-          const fn = new Function(msg.params.code);
-          return { success: true, result: fn() };
-        } catch (e) {
-          const errMsg = (e && e.message) || String(e);
-          // Chrome reports CSP eval blocks as EvalError with a message
-          // citing "'unsafe-eval' is not an allowed source of script".
-          // Detect both the name and the message so we catch the case
-          // across Chrome and Firefox.
-          const isCspBlock =
-            (e && e.name === 'EvalError') ||
-            /unsafe-eval|Content Security Policy/i.test(errMsg);
-          if (isCspBlock) {
-            return {
-              success: false,
-              cspBlocked: true,
-              error:
-                'execute_js is blocked by the extension\'s MV3 Content Security Policy — `new Function()` requires `unsafe-eval`, which MV3 forbids in extension_pages. This is a hard browser-level limitation; do NOT retry execute_js with different code, the result is the same. Use the finite tools instead: get_accessibility_tree (read the page), click_ax / type_ax / set_field (interact via ref_id), scroll, navigate, get_selection, iframe_read / iframe_click / iframe_type. If you need a value that has no dedicated tool, read the tree and quote what you see.',
-            };
-          }
-          return { success: false, error: errMsg };
         }
       },
       // ── ref_id → on-screen rect resolver ─────────────────────────────────

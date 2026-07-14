@@ -103,7 +103,7 @@
     // 1. Capture stream — chrome.tabCapture exposes the active tab as a
     // MediaStream when we pass the streamId we got from
     // chrome.tabCapture.getMediaStreamId() on the service-worker side. For
-    // `/record-full-screen`, the offscreen document uses the Web platform's
+    // `/record --full-screen`, the offscreen document uses the Web platform's
     // display-media picker directly; offscreen documents only expose
     // chrome.runtime from the extension API surface, so the desktop-capture
     // extension API is intentionally not used here.

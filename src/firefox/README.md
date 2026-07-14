@@ -145,9 +145,13 @@ Key difference: Chrome uses Manifest V3 (service worker, `chrome.scripting`, `si
 | `type_text` | No | Yes | Type into input fields |
 | `navigate` | No | Yes | Go to a URL |
 | `wait_for_element` | No | Yes | Wait for a selector to appear |
-| `execute_js` | No | Yes | Run custom JavaScript |
+| `execute_js` | No | Dev only | Run one JavaScript function body through the MV2 content-script evaluator |
 | `new_tab` | No | Yes | Open a new tab |
 | `done` | Yes | Yes | Signal task completion |
+
+### Dev-mode difference
+
+Firefox keeps Dev-only `execute_js`, but does not expose Chrome's eight CDP-backed reversible/diagnostic additions: `inject_css`, `remove_injected_css`, `patch_element`, `revert_patch`, `read_console`, `inspect_network_requests`, `inspect_event_listeners`, or `highlight_element`. `execute_js` is absent from Ask and normal Act in both builds.
 
 ## Known Issues
 

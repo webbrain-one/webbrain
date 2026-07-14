@@ -165,7 +165,7 @@ giving Mid normal Act the whole Full UI fallback surface.
 
 ### Firefox
 
-Only **open** shadow roots (`element.shadowRoot`) are accessible. Closed roots cannot be read through the content script. The `execute_js` tool is Firefox-only and exposed as a Dev add-on; it can help with manual traversal, but the tree builder cannot reach closed roots.
+Only **open** shadow roots (`element.shadowRoot`) are accessible. Closed roots cannot be read through the content script. `execute_js` is exposed in Dev mode on both builds, but ordinary page JavaScript still cannot obtain a closed root, and the tree builder cannot reach it.
 
 ---
 
@@ -183,7 +183,7 @@ The tree builder does **not** recurse into iframes by default. The agent must ex
 |---|---|---|
 | Element removed from DOM | `click_ax` returns "not found" | Re-read the tree; the page may have re-rendered |
 | Stale ref after SPA nav | All refs miss | Agent should read the tree again after `/navigate` or `wait_for_stable` |
-| Shadow DOM closed root | Tree shows `<my-component>` but not its children | Use `get_shadow_dom` + `shadow_dom_query` (Chrome) or Dev-mode `execute_js` (Firefox) |
+| Shadow DOM closed root | Tree shows `<my-component>` but not its children | Use `get_shadow_dom` + `shadow_dom_query` on Chrome; Firefox cannot pierce a closed root |
 | iframe not in tree | Agent can't find iframe content | Call `get_frames` then `iframe_read` / `iframe_click` |
 | Truncated tree | `truncated: true` + `hasMore: true` | Call `get_accessibility_tree` with `page: nextPage` or `ref_id` to zoom in |
 | Portaled overlay not visible | Tree shows the combobox but not the dropdown | The overlay is hoisted to the `[open overlays]` section — re-read with `filter: 'all'` |

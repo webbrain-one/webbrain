@@ -446,7 +446,7 @@ async function enqueueUserMemoryExtraction(payload = {}) {
   // Deliberate privacy stance: form-completion turns never forward raw turn
   // text — the typed message and assistant reply may embed form values — so a
   // form turn without sanitized clarification answers is skipped entirely,
-  // even if the user also typed a durable preference. /remember still works.
+  // even if the user also typed a durable preference. /memory --add still works.
   if (formCompletionTurn) {
     if (!await isUserMemoryFormCaptureEnabled()) {
       return { queued: false, reason: 'form_capture_disabled' };
@@ -1271,6 +1271,7 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   savePanelTabs();
   chrome.storage.session?.remove(`tabChat:${tabId}`).catch(() => {});
   scheduler.cancelForTab(tabId).catch(() => {});
+  agent.clearDevCssPatchesForTab(tabId).catch(() => {});
   try { agent._cleanupTab(tabId); } catch { /* ignore */ }
 });
 
@@ -1316,6 +1317,7 @@ chrome.webNavigation?.onCommitted?.addListener((details) => {
   if (details.frameId !== 0) return;
   recordNav(details.tabId, 'committed', details.url);
   invalidateContextMenuForTab(details.tabId);
+  agent.clearDevCssPatchesForTab(details.tabId).catch(() => {});
 });
 chrome.webNavigation?.onCompleted?.addListener((details) => {
   if (details.frameId === 0) recordNav(details.tabId, 'completed', details.url);
@@ -1835,6 +1837,15 @@ async function handleMessage(msg, sender) {
         clearRunUiSnapshot(tabId);
       }
       return { ok: true };
+    }
+
+    case 'disable_dev_diagnostics': {
+      if (msg.all === true) {
+        return { ok: true, disabled: await agent.disableAllDevDiagnostics() };
+      }
+      const tabId = msg.tabId || sender.tab?.id;
+      if (!tabId) return { ok: false, error: 'No tab ID' };
+      return { ok: true, disabled: await agent.disableDevDiagnostics(tabId) };
     }
 
     case 'compact_conversation': {

@@ -70,6 +70,15 @@ Model tiering is separate from mode: `compact | mid | full` controls how many no
 
 The user types a message, the panel sends `{action: 'chat', text, mode, tabId}` to the background, then listens for `agent_update` events streamed back during the run. The panel renders tool calls, results, plan-review cards, clarification prompts, and the final answer incrementally.
 
+Slash commands are defined as structured `SLASH_COMMANDS` metadata in each
+side panel. The metadata owns canonical usage signatures, option descriptions,
+browser availability, action routing, and busy eligibility; `/help` and the
+progressive command/flag autocomplete are generated from it. Parsing is
+case-insensitive but token-exact, rejects invalid or retired syntax locally,
+and never forwards an unrecognized slash command to the model. Firefox keeps
+unsupported Chrome-only commands and flags out of discovery while retaining
+enough metadata to return an explicit unsupported error when they are typed.
+
 ### Background Script (`src/chrome/src/background.js`)
 
 The central message router. On Chrome it's a service worker (MV3); on Firefox it's a persistent background page (MV2). Responsibilities:
@@ -184,7 +193,14 @@ while (steps < maxSteps) {
 | `read_pdf` | pdf-tools.js | Service worker |
 | `scratchpad_write` | agent.js — in-memory pinned note | Service worker |
 | `read_page_source`, `inspect_element_styles` | agent/content helpers | Dev-only source/style inspection |
+| `inject_css`, `remove_injected_css` | `chrome.scripting.insertCSS/removeCSS` + document-bound session patch metadata | Chrome Dev-only reversible CSS |
+| `patch_element`, `revert_patch`, `highlight_element` | permission-gated content-script Dev helpers | Chrome Dev-only structured DOM edits / overlay |
+| `execute_js` | bounded CDP `Runtime.evaluate` (Chrome) / content script (Firefox) | Dev-only page JavaScript |
+| `read_console`, `inspect_network_requests` | mode-scoped bounded CDP Runtime/Log/Network buffers | Chrome Dev-only diagnostics |
+| `inspect_event_listeners` | permission-gated content target marker + CDP `DOMDebugger.getEventListeners` | Chrome Dev-only listener diagnosis |
 | `get_shadow_dom`, `shadow_dom_query`, `get_frames` | content/CDP helpers | Full Act advanced fallbacks; also added to Mid in Dev mode |
+
+Chrome CSS patch records include the top-level `documentId` and a patch-specific CSS marker. Full navigation clears persisted records, and `remove_injected_css` checks the live document before calling `removeCSS`, preventing an old patch ID from removing equivalent CSS on a replacement page. If navigation races either identity check during injection, WebBrain removes that patch's exact uniquely marked CSS from the replacement document before discarding its record. Chrome `execute_js` passes a 15-second timeout to CDP. Dev diagnostic event handlers are registered before either agent-loop variant starts; leaving the panel-wide Dev mode drains every tab in the CDP client's active-diagnostics registry, removes the handlers and buffers, and sends `Runtime.disable`, `Log.disable`, and `Network.disable` so Chrome also stops domain-level diagnostic work.
 
 ### Step 6a: Skills and Dynamic Tool Exposure
 
@@ -283,8 +299,8 @@ profile/custom-skill guidance as a bounded block headed with a reminder that
 memory is context, not a command. `userMemoryMaxPromptChars` caps the block
 locally; v1 does not use embeddings or retrieval calls.
 
-Explicit `/remember <text>` writes immediately through `add_user_memory` and
-enables memory if needed. `/show-memory` and `/forget-memory <id>` expose the
+Explicit `/memory --add <text>` writes immediately through `add_user_memory` and
+enables memory if needed. `/memory` and `/memory --forget <id>` expose the
 same local store from the side panel. Settings -> Profile provides enable,
 auto-learn, edit, delete, clear, export, and import controls for Chrome and
 Firefox.
@@ -435,7 +451,9 @@ MV3 service workers can die between turns. Conversations are persisted to `chrom
 | Offscreen document | Yes (fetch proxy + recorder) | Not available |
 | Trace recorder | IndexedDB (opt-in) | IndexedDB (opt-in) — same `trace/recorder.js` |
 | Duplicate-submit guard | Yes | Not available |
-| `execute_js` | Not model-callable in Chrome | Firefox Dev mode only |
+| `execute_js` | Dev mode through CDP `Runtime.evaluate` | Dev mode through the MV2 content-script evaluator |
+| Reversible Dev patches | CSS + structured element patches with patch IDs | Not yet available |
+| Console/network/listener diagnostics | Bounded CDP-backed Dev tools | Not yet available |
 | Shadow DOM piercing | CDP for closed roots; `shadow_dom_query` is Chrome-only | Open roots only |
 | Localhost CORS | Offscreen proxy fallback | Server must set CORS headers |
 | API shortcut observer | `chrome.webRequest` URL/method buffer | `browser.webRequest` URL/method buffer |

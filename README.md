@@ -44,7 +44,7 @@
 - **Onboarding Wizard** — First-launch walkthrough covering Act mode safety and provider setup
 - **Side Panel UI** — Clean chat interface that lives alongside your browsing
 - **Per-Tab Conversations** — Each tab has its own chat history
-- **User Memory** — Optional local memory for user-stated preferences, with explicit `/remember` commands and opt-in background auto-learning
+- **User Memory** — Optional local memory for user-stated preferences, with explicit `/memory --add` commands and opt-in background auto-learning
 - **Streaming** — Real-time token streaming from all providers
 - **Smart Context** — Token-aware auto-compaction (summarizes older turns once the conversation nears the model's context window, with a visible "Context automatically compacted" notice), tool result limits, and emergency overflow recovery
 - **Browser History Control** — Act mode can use native `go_back` / `go_forward` history tools instead of CSP-sensitive page JavaScript
@@ -140,7 +140,7 @@ Click the gear icon or go to the extension's Options page to configure:
 
 **Profile and Memory:**
 - Profile auto-fill and user memory are stored in plaintext browser local storage.
-- User memory can be managed from Settings -> Profile or with `/remember`, `/show-memory`, and `/forget-memory`.
+- User memory can be managed from Settings -> Profile or with `/memory`, `/memory --add <text>`, and `/memory --forget <id>`.
 - When enabled, active memory records are sent to the configured LLM provider as part of the system prompt; optional auto-learning makes a best-effort provider call only after a turn completes.
 
 **Skills:**
@@ -257,7 +257,15 @@ WebBrain separates model tier from conversation mode:
 | `get_shadow_dom` | No | No | No | Yes | Yes |
 | `shadow_dom_query` | No | No | No | Chrome | Chrome |
 | `get_frames` | No | No | No | Yes | Yes |
-| `execute_js` | No | No | No | No | Firefox |
+| `inject_css` | No | No | No | No | Chrome |
+| `remove_injected_css` | No | No | No | No | Chrome |
+| `patch_element` | No | No | No | No | Chrome |
+| `revert_patch` | No | No | No | No | Chrome |
+| `execute_js` | No | No | No | No | Chrome / Firefox |
+| `read_console` | No | No | No | No | Chrome |
+| `inspect_network_requests` | No | No | No | No | Chrome |
+| `inspect_event_listeners` | No | No | No | No | Chrome |
+| `highlight_element` | No | No | No | No | Chrome |
 
 Enabled skills can append additional tool schemas at runtime. For example,
 the bundled FreeSkillz.xyz skill exposes `read_youtube_transcript` for YouTube
@@ -266,7 +274,14 @@ media URLs. These skill tools are not hard-coded in the static table above:
 if the skill is removed or renamed, the tool disappears or appears under the
 manifest's declared name.
 
-Dev Add-on tools are only exposed in Dev mode, and Dev mode is blocked for Compact-tier providers.
+Dev Add-on tools are only exposed in Dev mode, and Dev mode is blocked for Compact-tier providers. Chrome's reversible editing tools return patch IDs: `inject_css` pairs with `remove_injected_css`, and `patch_element` pairs with `revert_patch`.
+
+### Dev-mode page editing and diagnostics
+
+- `inject_css` / `remove_injected_css` apply and undo temporary CSS by `patchId`. Each patch is unique and bound to the exact page document, and its metadata is kept in session storage so a service-worker restart does not lose the undo handle. Navigating invalidates the old handle instead of letting it affect a replacement page.
+- `patch_element` / `revert_patch` make structured inline-style, class, and attribute changes with exact before/after values. Browser-equivalent style and HTML attribute names are canonicalized before the undo record is created, contradictory set/remove operations are rejected, and executable URL attributes reject `javascript:` values (including form `action`). `highlight_element` provides a temporary pointer-transparent target overlay; because it inserts live DOM, it uses the temporary Dev-patch permission.
+- `execute_js` runs an async JavaScript function body in the page main world. Chrome uses CDP `Runtime.evaluate` with a 15-second execution limit; Firefox uses its MV2 content-script evaluator. The tool is host-permission gated and receives a fresh submit confirmation.
+- `read_console`, `inspect_network_requests`, and `inspect_event_listeners` provide bounded diagnostics on Chrome. Capture starts before either streaming or non-streaming Dev runs and stops when the tab leaves Dev mode or its conversation is cleared; leaving Dev drains every tab with active capture even if the panel switched tabs, removes handlers and buffers, and disables the matching CDP domains. Listener inspection briefly adds and restores an internal target attribute, follows open-shadow hosts when collecting ancestors, and therefore uses the same host permission as temporary Dev patches. Network headers and bodies are omitted by default, sensitive header names (including common API/subscription-key variants) are redacted before buffering, and page-derived diagnostic output is treated as untrusted content.
 
 **Compact tier** is a reduced normal-tool set + shorter system prompt designed for smaller local models. **Mid tier** keeps common task tools, iframe support, downloads, scheduling, and form verification while avoiding advanced DOM/UI fallbacks. **Full tier** adds advanced browser-operation tools such as hover, drag-drop, frames, and shadow DOM. Enable the tier per provider in Settings.
 
@@ -288,26 +303,28 @@ Source: [`lmstudio-plugin/`](./lmstudio-plugin/).
 
 ## Slash Commands
 
-WebBrain accepts slash commands as the first thing on a line in the input box. Type `/help` to see the list inside the panel.
+WebBrain accepts slash commands as the first thing on a line in the input box. Type `/help` to see complete usage signatures and flag descriptions inside the panel. Typing a canonical command followed by a space opens autocomplete for its available flags.
 
 | Command | What it does |
 |---------|--------------|
 | `/help` | Show the list of available commands |
-| `/schedule` | Create a scheduled task |
-| `/list-schedules` | Show scheduled tasks |
-| `/show-scratchpad` | Show the current scratchpad |
-| `/edit-scratchpad <text>` | Append text to the current scratchpad |
-| `/clear-scratchpad` | Clear the current scratchpad |
+| `/schedule [prompt]` | Create a scheduled task, optionally prefilling its prompt |
+| `/schedule --list` | Show scheduled tasks |
+| `/progress` | Show the current progress ledger |
+| `/scratchpad` | Show the current scratchpad |
+| `/scratchpad --append <text>` | Append text to the current scratchpad |
+| `/scratchpad --clear` | Clear the current scratchpad |
+| `/memory` | Show saved user memory |
+| `/memory --add <text>` | Save a user preference to memory |
+| `/memory --forget <id>` | Forget a saved memory by ID |
 | `/allow-api` | **Per-conversation API mutation override.** Lifts the UI-first restriction so the agent may use POST/PUT/PATCH/DELETE via `fetch_url` when UI is failing. Badge appears while active; clears on `/reset`. |
 | `/dangerously-skip-permissions` | **Global permission-prompt bypass.** Turns off `Ask before consequential actions` without opening Settings. WebBrain will act without per-site prompts until you re-enable the setting. |
 | `/compact` | Force context compaction for the current conversation |
 | `/verbose` | Toggle verbose/compact tool display |
 | `/reset` | Clear the conversation and all per-conversation flags |
-| `/screenshot` | Capture the visible tab and display the image inline in chat |
-| `/full-page-screenshot` | Capture the full scrollable page and display it inline in chat (Chrome only) |
-| `/record` | Start recording the current tab; add `--transcribe` to save a Whisper transcript after stop |
-| `/record-full-screen` | Record a screen or window with Chrome's picker (Chrome only); add `--transcribe` for a transcript |
-| `/export` | Download the current conversation as a Markdown file |
+| `/screenshot [--full-page]` | Capture the visible tab, or the full scrollable page with `--full-page` (Chrome only) |
+| `/record [--full-screen] [--transcribe]` | Record the current tab, or a selected screen/window with `--full-screen` (Chrome only); add `--transcribe` to save a transcript after stop |
+| `/export [--traces]` | Download the conversation as Markdown, or export the tool chain with `--traces` |
 | `/profile` | Toggle profile auto-fill on/off without opening Settings |
 | `/vision` | Toggle vision mode (screenshot understanding) on the active provider |
 | `/ask` | Switch to Ask mode before sending |

@@ -173,7 +173,8 @@ Firefox has no CDP (`debugger` permission), so:
 - No trusted events (synthetic `el.click()` only)
 - No full-page screenshots
 - No shadow DOM piercing for closed roots
-- `execute_js` is Firefox-only and exposed as a Dev add-on, not in normal Act
+- `execute_js` is a Dev add-on in both builds: Firefox uses its MV2 content-script evaluator, while Chrome uses CDP `Runtime.evaluate`; neither build exposes it in Ask or normal Act
+- Chrome's reversible CSS/element patches are Dev-only and host-permission gated. Console and network diagnostics are Dev-only reads. Event-listener inspection briefly adds and restores an internal target attribute, while element highlighting inserts a temporary overlay; both use the temporary page-modification permission. All page-derived diagnostic results are wrapped as untrusted content. Network headers/bodies are excluded by default and sensitive header names are always redacted before buffering
 - No offscreen document (CORS must be handled by LLM servers)
 - No slash-driven tab/screen recording (Chrome's capture APIs and `recorder/` are absent)
 - No duplicate-submit guard (the timestamp Map is declared but unwired)

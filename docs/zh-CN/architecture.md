@@ -265,7 +265,7 @@ MV3 Service Worker 将会话持久化到 `chrome.storage.session`。
 | 离屏文档 | 有（fetch 代理 + 录制器） | 不可用 |
 | 轨迹记录器 | IndexedDB（可选） | IndexedDB（可选）— 相同的 `trace/recorder.js` |
 | 重复提交防护 | 有 | 不可用 |
-| `execute_js` | Chrome 中不可由模型调用 | Firefox 仅 Dev 模式 |
+| `execute_js` | 通过 CDP `Runtime.evaluate` 在 Dev 模式中调用 | 通过 MV2 内容脚本求值器在 Dev 模式中调用 |
 | Shadow DOM 穿透 | CDP 用于封闭 root；`shadow_dom_query` 仅 Chrome | 仅开放 root |
 | 本地主机 CORS | 离屏代理回退 | 服务器必须设置 CORS 头 |
 | API 快捷观察器 | `chrome.webRequest` URL/方法缓冲 | `browser.webRequest` URL/方法缓冲 |

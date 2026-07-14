@@ -52,29 +52,31 @@ sidepanel quick-command prompt.
 
 Current static core tools from the local source:
 
-- Chrome: 48 core tools.
-- Firefox: 47 core tools.
-- Chrome-only core tools: `shadow_dom_query`, `upload_file`.
-- Firefox-only core tool: `execute_js`.
+- Chrome: 57 core tools.
+- Firefox: 48 core tools.
+- Chrome-only core tools: `shadow_dom_query` plus the reversible/diagnostic Dev tools `inject_css`, `remove_injected_css`, `patch_element`, `revert_patch`, `read_console`, `inspect_network_requests`, `inspect_event_listeners`, and `highlight_element`.
+- `execute_js` is shared: Chrome Dev uses CDP evaluation and Firefox Dev uses its MV2 content-script evaluator.
 - Dynamic skill tools can add more schemas at runtime and are not included in those counts.
 
 Ask-mode core tools:
 
 ```text
-get_accessibility_tree, read_page, read_pdf, read_page_source,
+get_accessibility_tree, read_page, read_pdf,
 get_window_info, get_interactive_elements, scroll, extract_data,
-inspect_element_styles, get_selection, clarify, done, wait_for_stable,
+get_selection, done, wait_for_stable,
 fetch_url, research_url, list_downloads
 ```
 
-Full Chrome core tool list:
+Chrome static core tool list (the union across modes and tiers):
 
 ```text
 get_accessibility_tree, click_ax, type_ax, set_field, hover, drag_drop,
 read_page, read_pdf, read_page_source, get_window_info, resize_window,
 get_interactive_elements, click, type_text, press_keys, scroll, navigate,
 go_back, go_forward, extract_data, inspect_element_styles, wait_for_element,
-wait_for_stable, schedule_resume, schedule_task, get_selection, new_tab,
+inject_css, remove_injected_css, patch_element, revert_patch, execute_js,
+read_console, inspect_network_requests, inspect_event_listeners,
+highlight_element, wait_for_stable, schedule_resume, schedule_task, get_selection, new_tab,
 done, clarify, get_shadow_dom, shadow_dom_query, get_frames, iframe_read,
 iframe_click, iframe_type, fetch_url, research_url, list_downloads,
 read_downloaded_file, download_resource_from_page, download_files,
@@ -82,8 +84,8 @@ upload_file, scratchpad_write, progress_update, progress_read,
 verify_form, download_social_media, solve_captcha
 ```
 
-Full Firefox differs by replacing Chrome-only `shadow_dom_query` and
-`upload_file` with `execute_js`.
+Firefox omits the Chrome-only Dev tools and `shadow_dom_query`; the remaining
+core surface, including Dev-only `execute_js`, is shared.
 
 ### WebBrain Tool Families
 
@@ -93,6 +95,7 @@ Full Firefox differs by replacing Chrome-only `shadow_dom_query` and
 | Legacy DOM fallback | `get_interactive_elements`, `click`, `type_text`, `press_keys`, `scroll`, `wait_for_element`, `wait_for_stable` |
 | Navigation and tabs | `navigate`, `go_back`, `go_forward`, `new_tab` |
 | Reading/extraction | `read_page`, `read_pdf`, `read_page_source`, `extract_data`, `inspect_element_styles`, `get_selection` |
+| Dev editing and diagnostics | `inject_css`, `remove_injected_css`, `patch_element`, `revert_patch`, `execute_js`, `read_console`, `inspect_network_requests`, `inspect_event_listeners`, `highlight_element` |
 | Shadow DOM and frames | `get_shadow_dom`, `shadow_dom_query` on Chrome, `get_frames`, `iframe_read`, `iframe_click`, `iframe_type` |
 | Network and files | `fetch_url`, `research_url`, `list_downloads`, `read_downloaded_file`, `download_resource_from_page`, `download_files`, `upload_file` on Chrome |
 | Long-running work | `schedule_resume`, `schedule_task`, `scratchpad_write`, `progress_update`, `progress_read` |

@@ -28,8 +28,8 @@
 
 - **页面读取** — 从任意页面提取文本、链接、表单、表格和交互元素
 - **浏览器操作** — 点击、输入、滚动、导航以及与页面元素交互
-- **Ask / Act 模式** — 默认只读模式，完整智能体模式需确认
-- **Act 前规划** — Act 模式可以生成结构化计划，展示给你审批，然后在工具运行前将已批准的计划固定到草稿板
+- **Ask / Act / Dev 模式** — 默认只读；按需执行常规浏览器操作；Dev 提供页面检查、可逆编辑与诊断工具
+- **Act 前规划** — Act 与 Dev 模式可以生成结构化计划，展示给你审批，然后在工具运行前将已批准的计划固定到草稿板
 - **多步骤智能体** — 通过工具调用循环自主执行任务（可配置，默认 130 步）
 - **从限制处继续** — 当智能体达到步数限制时，点击「继续」即可接着运行
 - **多 LLM 提供商** — 支持本地与云端模型：
@@ -196,7 +196,15 @@ web/
 | `wait_for_element` | -- | 是 | 是 | 等待选择器出现 |
 | `wait_for_stable` | -- | 是 | -- | 等待页面空闲（无 DOM 变化 + 无网络） |
 | `upload_file` | -- | 是 | -- | 向文件输入上传文件（仅 Chrome） |
-| `execute_js` | -- | 是 | -- | 运行自定义 JavaScript（**仅 Firefox** — Chrome 上被 MV3 CSP 阻止） |
+| `inject_css` | -- | 仅 Dev | -- | 在 Chrome 中注入可逆的临时 CSS，并返回 `patchId` |
+| `remove_injected_css` | -- | 仅 Dev | -- | 在 Chrome 中按 `patchId` 移除 CSS 注入 |
+| `patch_element` | -- | 仅 Dev | -- | 在 Chrome 中修改样式、类和属性，并返回精确的前后值 |
+| `revert_patch` | -- | 仅 Dev | -- | 在 Chrome 中按 `patchId` 恢复结构化修改 |
+| `execute_js` | -- | 仅 Dev | -- | Chrome 通过 CDP、Firefox 通过 MV2 内容脚本求值器执行异步 JavaScript 函数体 |
+| `read_console` | -- | 仅 Dev | -- | 在 Chrome 中读取缓冲的控制台消息和未捕获异常 |
+| `inspect_network_requests` | -- | 仅 Dev | -- | 在 Chrome 中检查 URL、方法、状态和耗时；默认不含头部和正文 |
+| `inspect_event_listeners` | -- | 仅 Dev | -- | 在 Chrome 中检查元素及其祖先的事件监听器 |
+| `highlight_element` | -- | 仅 Dev | -- | 在 Chrome 中临时高亮目标元素 |
 | `fetch_url` | 是 | 是 | 是 | 在后台使用用户的 cookie 获取 URL |
 | `research_url` | 是 | 是 | -- | 在隐藏标签页中打开 URL，等待 JS 渲染，返回内容 |
 | `download_files` | -- | 是 | -- | 下载一个或多个文件（单个 url 或数组，最多 3 个并发） |
@@ -212,6 +220,8 @@ web/
 | `done` | 是 | 是 | 是 | 标记任务完成 |
 
 **压缩模式** 是为小型本地模型（2B-8B）设计的精简工具集 + 更短系统提示。在 Chrome 和 Firefox 构建中，它将 Act 模式的工具模式从 40+ 个削减到约 20 个，减少决策面与幻觉。在设置中按提供商启用（本地提供商上的复选框；默认关闭）。
+
+Dev 附加工具仅在 Mid/Full 层级可用。在 Chrome 中，`inject_css` 可由 `remove_injected_css` 撤销，`patch_element` 可由 `revert_patch` 撤销。`execute_js` 需要主机权限并始终触发新的提交确认。控制台和网络诊断使用有界缓冲区；默认省略头部与正文，敏感头部会在存储前脱敏，页面派生结果按不可信内容处理。
 
 > **Shadow DOM 注意：** 可访问性树仅遍历 light DOM。在大量使用 Web 组件的页面（Stripe、Salesforce、Shopify）上，请使用 `get_interactive_elements`（穿透开放 shadow root）或 `get_shadow_dom` / `shadow_dom_query` 进行定向读取。
 
@@ -231,27 +241,31 @@ lms clone webbrain/web-tools
 
 ## 斜杠命令
 
-WebBrain 接受作为输入框某行开头的斜杠命令。在面板内输入 `/help` 查看列表。
+WebBrain 接受作为输入框某行开头的斜杠命令。在面板内输入 `/help` 可查看完整用法和参数说明。输入规范命令并加一个空格后，自动补全会显示该命令可用的参数。
 
 | 命令 | 作用 |
 |---------|--------------|
 | `/help` | 显示可用命令列表 |
-| `/schedule` | 创建计划任务 |
-| `/list-schedules` | 显示计划任务 |
-| `/show-scratchpad` | 显示当前草稿板 |
-| `/edit-scratchpad <文本>` | 将文本追加到当前草稿板 |
-| `/clear-scratchpad` | 清除当前草稿板 |
+| `/schedule [提示词]` | 创建计划任务，并可预填提示词 |
+| `/schedule --list` | 显示计划任务 |
+| `/progress` | 显示当前进度记录 |
+| `/scratchpad` | 显示当前草稿板 |
+| `/scratchpad --append <文本>` | 将文本追加到当前草稿板 |
+| `/scratchpad --clear` | 清除当前草稿板 |
+| `/memory` | 显示已保存的用户记忆 |
+| `/memory --add <文本>` | 将用户偏好保存到记忆 |
+| `/memory --forget <id>` | 按 ID 删除一条记忆 |
 | `/allow-api` | **按对话的 API 变更覆盖。** 解除 UI 优先限制，使智能体在 UI 失败时可通过 `fetch_url` 使用 POST/PUT/PATCH/DELETE。激活时显示徽章；在 `/reset` 时清除。 |
 | `/compact` | 强制压缩当前对话上下文 |
 | `/verbose` | 切换详细/压缩工具显示（与工具栏按钮相同） |
 | `/reset` | 清除对话与所有按对话的标志 |
-| `/screenshot` | 捕获可见标签页并在聊天中内联显示图像 |
-| `/record` | 开始录制当前标签页 |
-| `/record-full-screen` | 录制屏幕或窗口（仅 Chrome）；添加 `--transcribe` 可在停止后保存转录 |
-| `/export` | 将当前对话下载为 Markdown 文件 |
+| `/screenshot [--full-page]` | 捕获可见标签页；使用 `--full-page` 捕获完整页面（仅 Chrome） |
+| `/record [--full-screen] [--transcribe]` | 录制当前标签页；使用 `--full-screen` 录制屏幕或窗口（仅 Chrome），使用 `--transcribe` 保存转录 |
+| `/export [--traces]` | 将对话下载为 Markdown；使用 `--traces` 导出工具链 |
 | `/profile` | 无需打开设置即可切换资料自动填充开/关 |
 | `/vision` | 在当前提供商上切换视觉模式（截图理解） |
 | `/ask` | 发送前切换到提问模式 |
+| `/dev` | 发送前切换到 Dev 模式 |
 | `/plan` | 以规划意图切换到提问模式 |
 
 默认的 UI 优先规则之所以存在，是因为 API 操作是不可见的（你看不到发送了什么内容），通常需要你可能尚未配置的独立认证令牌，并且其影响范围可能比一次可见的误点击大得多。只有当你已为某项特定工作权衡决定接受该取舍时，才使用 `/allow-api`。
@@ -265,6 +279,7 @@ Chrome 侧边面板快捷键在 WebBrain 侧边面板获得焦点时生效。
 | `Ctrl+/` 或 `Cmd+/` | 聚焦输入框 |
 | `Ctrl+Shift+A` 或 `Cmd+Shift+A` | 切换到 Ask 模式 |
 | `Ctrl+Shift+X` 或 `Cmd+Shift+X` | 切换到 Act 模式 |
+| `Ctrl+Shift+D` 或 `Cmd+Shift+D` | 切换到 Dev 模式 |
 | `Escape` | 停止当前运行，除非它只是关闭斜杠命令自动补全 |
 | `Escape` 两次 | 从 WebBrain 或浏览器页面停止当前录制 |
 

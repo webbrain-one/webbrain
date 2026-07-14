@@ -375,7 +375,7 @@ Les service workers MV3 peuvent mourir entre les tours. Les conversations sont p
 | Document hors-écran | Oui (proxy fetch + enregistreur) | Non disponible |
 | Enregistreur de trace | IndexedDB (optionnel) | IndexedDB (optionnel) — même `trace/recorder.js` |
 | Garde de soumission en double | Oui | Non disponible |
-| `execute_js` | Non appelable par modèle dans Chrome | Mode Dev Firefox uniquement |
+| `execute_js` | Mode Dev via CDP `Runtime.evaluate` | Mode Dev via l'évaluateur du script de contenu MV2 |
 | Percée Shadow DOM | CDP pour racines fermées ; `shadow_dom_query` est Chrome uniquement | Racines ouvertes uniquement |
 | CORS localhost | Repli proxy hors-écran | Le serveur doit définir les en-têtes CORS |
 | Observateur de raccourci API | Tampon URL/méthode `chrome.webRequest` | Tampon URL/méthode `browser.webRequest` |
