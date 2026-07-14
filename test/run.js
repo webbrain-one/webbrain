@@ -6946,8 +6946,28 @@ test('packaged Open-Meteo and Open Library skills are opt-in with read-only HTTP
     assert.equal(library.tools[0].readOnly, true, `${label}: Open Library search should be read-only`);
     assert.equal(
       library.tools[0].defaultArgs?.fields,
-      'key,title,author_name,first_publish_year,cover_edition_key,edition_count,isbn',
-      `${label}: Open Library search should default to a compact fields list`,
+      'key,title,author_name,first_publish_year,cover_edition_key,edition_count',
+      `${label}: Open Library search should default to a compact fields list without isbn`,
+    );
+    assert.equal(library.tools[0].parameters?.properties?.fields, undefined, `${label}: Open Library fields must stay locked in defaultArgs`);
+    assert.equal(library.tools[0].parameters?.properties?.limit?.maximum, 10, `${label}: Open Library limit max should match docs cap`);
+    assert.match(
+      weather.content,
+      /multiple plausible matches|ambiguous/i,
+      `${label}: Open-Meteo skill should guide geocoding disambiguation`,
+    );
+    assert.match(
+      weather.content,
+      /\*_units|temperature_unit|°C/i,
+      `${label}: Open-Meteo skill should mention temperature units`,
+    );
+    assert.ok(
+      weather.tools[1].parameters?.properties?.temperature_unit,
+      `${label}: Open-Meteo forecast should expose temperature_unit`,
+    );
+    assert.ok(
+      weather.tools[1].parameters?.properties?.wind_speed_unit,
+      `${label}: Open-Meteo forecast should expose wind_speed_unit`,
     );
 
     const defs = buildDefs(enabled, { mode: 'ask' });

@@ -7,8 +7,9 @@ Provider: Open-Meteo (`https://open-meteo.com`) — free, no API key.
 Workflow:
 
 1. Call `search_weather_location` with the place name to get latitude, longitude, country, and timezone.
-2. Call `get_weather_forecast` with those coordinates for current conditions and up to 7 daily highs/lows.
-3. Summarize temperature, weather code, and timezone for the user. Explain WMO weather codes in plain language.
+2. If multiple plausible matches differ by country or admin region, use `clarify` (or pick using a user-provided country/region) before forecasting. Do not silently pick the first hit when the place name is ambiguous.
+3. Call `get_weather_forecast` with the chosen coordinates for current conditions and up to 7 daily highs/lows.
+4. Summarize temperature, weather code, and timezone for the user. Always report units from the response `*_units` fields (Open-Meteo defaults to °C and km/h unless overridden). Explain WMO weather codes in plain language.
 
 Safety:
 
@@ -62,7 +63,7 @@ Finish with visible attribution: Powered by [Open-Meteo](https://open-meteo.com)
     {
       "id": "weather_forecast",
       "name": "get_weather_forecast",
-      "description": "Fetch current weather and daily forecast from Open-Meteo for latitude/longitude. Returns current temperature and weather code plus daily max/min for the requested number of days.",
+      "description": "Fetch current weather and daily forecast from Open-Meteo for latitude/longitude. Returns current temperature and weather code plus daily max/min for the requested number of days. Defaults to °C and km/h; pass temperature_unit/wind_speed_unit when the user asks for imperial units.",
       "kind": "http",
       "readOnly": true,
       "method": "GET",
@@ -97,6 +98,14 @@ Finish with visible attribution: Powered by [Open-Meteo](https://open-meteo.com)
           "timezone": {
             "type": "string",
             "description": "Timezone for daily aggregation. Default auto."
+          },
+          "temperature_unit": {
+            "type": "string",
+            "description": "Temperature unit: celsius (default) or fahrenheit."
+          },
+          "wind_speed_unit": {
+            "type": "string",
+            "description": "Wind speed unit: kmh (default), ms, mph, or kn."
           }
         },
         "required": ["latitude", "longitude"]
