@@ -38,6 +38,7 @@
   <link rel="alternate" hreflang="th" href="https://webbrain.one/th/">
   <link rel="alternate" hreflang="ms" href="https://webbrain.one/ms/">
   <link rel="alternate" hreflang="tl" href="https://webbrain.one/tl/">
+  <link rel="alternate" hreflang="he" href="https://webbrain.one/he/">
   <link rel="alternate" hreflang="x-default" href="https://webbrain.one/">
   <style>
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
@@ -455,6 +456,14 @@
       }
     })();
   </script>
+  <!-- Plausible analytics: start -->
+  <!-- Privacy-friendly analytics by Plausible -->
+  <script async src="https://plausible.io/js/pa-yWGfwxkkKSVs-eTuaKYpy.js"></script>
+  <script>
+    window.plausible=window.plausible||function(){(plausible.q=plausible.q||[]).push(arguments)},plausible.init=plausible.init||function(i){plausible.o=i||{}};
+    plausible.init()
+  </script>
+  <!-- Plausible analytics: end -->
   <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -490,8 +499,9 @@
       <a href="/" class="nav-brand"><img class="brand-logo" src="/logo-github.png" alt="" aria-hidden="true"> WebBrain<span class="domain">.one</span></a>
       <div class="nav-links">
         <a href="/">Home</a>
+        <a href="/docs/">Docs</a>
         <a href="/blog">Blog</a>
-        <select class="lang-dropdown" id="lang-dropdown" aria-label="Select language" data-current="en"><option value="en">English</option><option value="es">Espanol</option><option value="fr">Francais</option><option value="tr">Turkce</option><option value="zh">Chinese</option><option value="ru">Russian</option><option value="uk">Ukrainian</option><option value="ar">Arabic</option><option value="ja">Japanese</option><option value="ko">Korean</option><option value="id">Bahasa Indonesia</option><option value="th">Thai</option><option value="ms">Bahasa Melayu</option><option value="tl">Filipino</option></select>
+        <select class="lang-dropdown" id="lang-dropdown" aria-label="Select language" data-current="en"><option value="en">English</option><option value="es">Español</option><option value="fr">Français</option><option value="tr">Türkçe</option><option value="zh">中文</option><option value="ru">Русский</option><option value="uk">Українська</option><option value="ar">العربية</option><option value="ja">日本語</option><option value="ko">한국어</option><option value="id">Bahasa Indonesia</option><option value="th">ไทย</option><option value="ms">Bahasa Melayu</option><option value="tl">Filipino</option><option value="he">עברית</option></select>
         <button class="theme-toggle" type="button" id="theme-toggle" aria-label="Toggle light / dark theme" title="Toggle light / dark theme">
           <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <circle cx="12" cy="12" r="4"/>
@@ -511,7 +521,7 @@
     <h1>GLM-5.2 is not WebBrain&#39;s new planner reference yet</h1>
     <p class="lede"><code>z-ai/glm-5.2</code> is the kind of open frontier-model candidate that should make WebBrain pay attention. We ran it through the frozen WebBrain planner set and the current Full, Mid, and Compact prompt tiers using NVIDIA&#39;s OpenAI-compatible chat-completions endpoint. The prior expectation was high: this class of model should be better than the older Sonnet reference in many general settings. In WebBrain&#39;s first-tool browser planner harness, though, the result is useful but not reference-setting.</p>
 <h2 id="why-this-run-matters">Why this run matters</h2>
-<p><a href="https://docs.api.nvidia.com/nim/reference/z-ai-glm-5.2" target="_blank" rel="noopener">NVIDIA&#39;s API reference lists @@CODE0@@</a> as a Large Language Model available through its chat-completions API. That made it an easy target for a WebBrain planner check: same runner, same first-tool scoring lens, but a model that should belong closer to the frontier than the older Sonnet snapshot we have been using as a stable reference line.</p>
+<p><a href="https://docs.api.nvidia.com/nim/reference/z-ai-glm-5.2" target="_blank" rel="noopener">NVIDIA&#39;s API reference lists <code>z-ai/glm-5.2</code></a> as a Large Language Model available through its chat-completions API. That made it an easy target for a WebBrain planner check: same runner, same first-tool scoring lens, but a model that should belong closer to the frontier than the older Sonnet snapshot we have been using as a stable reference line.</p>
 <p>That last sentence is important. We do <strong>not</strong> read &quot;Sonnet match&quot; as a universal intelligence score. In these posts, it means something narrower: did the model choose the same first tool name as the saved Claude Sonnet 4.6 row from May 23, 2026? That Sonnet row is useful because it gives us a fixed, real browser-agent behavior trace. It is not sacred.</p>
 <p>The question here was simple: can GLM-5.2 become a better WebBrain planner reference point, or at least clearly displace the old Sonnet-shaped baseline?</p>
 <p>Not from this run.</p>
@@ -554,7 +564,7 @@ NVIDIA_API_KEY=... node test/llm/run-llamacpp.mjs \
 <p>This was a native OpenAI structured-tools run. No chat-template fallback was used, and request payloads were not saved.</p>
 <p>One operational note: we used NVIDIA&#39;s free tier, so the complete set took a long time and needed resumed passes. I would not use this run to make a serving-performance claim.</p>
 <p>Result files in the repo:</p>
-<div class="table-wrap"><table><thead><tr><th>Suite</th><th>Result directory</th></tr></thead><tbody><tr><td>Frozen</td><td><a href="https://github.com/esokullu/webbrain/tree/inactive-models-dont-show-in-sidebar/test/llm/results/2026-07-13-nvidia-glm52_chrome_z-ai_glm-5.2_frozen" target="_blank" rel="noopener">@@CODE0@@</a></td></tr><tr><td>Full</td><td><a href="https://github.com/esokullu/webbrain/tree/inactive-models-dont-show-in-sidebar/test/llm/results/2026-07-13-nvidia-glm52-full_chrome_z-ai_glm-5.2" target="_blank" rel="noopener">@@CODE0@@</a></td></tr><tr><td>Mid</td><td><a href="https://github.com/esokullu/webbrain/tree/inactive-models-dont-show-in-sidebar/test/llm/results/2026-07-13-nvidia-glm52-mid_chrome_z-ai_glm-5.2_mid" target="_blank" rel="noopener">@@CODE0@@</a></td></tr><tr><td>Compact</td><td><a href="https://github.com/esokullu/webbrain/tree/inactive-models-dont-show-in-sidebar/test/llm/results/2026-07-13-nvidia-glm52-compact_chrome_z-ai_glm-5.2_compact" target="_blank" rel="noopener">@@CODE0@@</a></td></tr></tbody></table></div>
+<div class="table-wrap"><table><thead><tr><th>Suite</th><th>Result directory</th></tr></thead><tbody><tr><td>Frozen</td><td><a href="https://github.com/webbrain-one/webbrain/tree/main/test/llm/results/2026-07-13-nvidia-glm52_chrome_z-ai_glm-5.2_frozen" target="_blank" rel="noopener"><code>2026-07-13-nvidia-glm52_chrome_z-ai_glm-5.2_frozen</code></a></td></tr><tr><td>Full</td><td><a href="https://github.com/webbrain-one/webbrain/tree/main/test/llm/results/2026-07-13-nvidia-glm52-full_chrome_z-ai_glm-5.2" target="_blank" rel="noopener"><code>2026-07-13-nvidia-glm52-full_chrome_z-ai_glm-5.2</code></a></td></tr><tr><td>Mid</td><td><a href="https://github.com/webbrain-one/webbrain/tree/main/test/llm/results/2026-07-13-nvidia-glm52-mid_chrome_z-ai_glm-5.2_mid" target="_blank" rel="noopener"><code>2026-07-13-nvidia-glm52-mid_chrome_z-ai_glm-5.2_mid</code></a></td></tr><tr><td>Compact</td><td><a href="https://github.com/webbrain-one/webbrain/tree/main/test/llm/results/2026-07-13-nvidia-glm52-compact_chrome_z-ai_glm-5.2_compact" target="_blank" rel="noopener"><code>2026-07-13-nvidia-glm52-compact_chrome_z-ai_glm-5.2_compact</code></a></td></tr></tbody></table></div>
 <h2 id="results">Results</h2>
 <div class="table-wrap"><table><thead><tr><th>Suite</th><th>Cases</th><th>Parsed / valid</th><th>Exact first call</th><th>Ideal tool name</th><th>Sonnet match</th><th>Sonnet match when Sonnet tooled</th></tr></thead><tbody><tr><td>Frozen</td><td>100/100</td><td>89/89</td><td>21/100</td><td>36/100</td><td>69/100</td><td>64/92</td></tr><tr><td>Full</td><td>100/100</td><td>87/87</td><td>20/100</td><td>35/100</td><td>66/100</td><td>61/92</td></tr><tr><td>Mid</td><td>100/100</td><td>83/83</td><td>23/100</td><td>36/100</td><td>68/100</td><td>61/92</td></tr><tr><td>Compact</td><td>100/100</td><td>85/85</td><td>20/100</td><td>33/100</td><td>64/100</td><td>59/92</td></tr></tbody></table></div>
 <p>The healthiest part of the result is reliability: all four included suites finished at 100/100 cases, and every parsed first tool call used a valid tool name for that suite&#39;s schema.</p>
@@ -606,7 +616,7 @@ NVIDIA_API_KEY=... node test/llm/run-llamacpp.mjs \
   </script>
   <script>
     (function () {
-      const LOCALES = ["en","es","fr","tr","zh","ru","uk","ar","ja","ko","id","th","ms","tl"];
+      const LOCALES = ["en","es","fr","tr","zh","ru","uk","ar","ja","ko","id","th","ms","tl","he"];
       const sel = document.getElementById('lang-dropdown');
       if (!sel) return;
       sel.value = sel.dataset.current || 'en';

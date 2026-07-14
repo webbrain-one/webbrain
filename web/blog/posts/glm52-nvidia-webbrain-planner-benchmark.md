@@ -95,10 +95,10 @@ Result files in the repo:
 
 | Suite | Result directory |
 | --- | --- |
-| Frozen | [`2026-07-13-nvidia-glm52_chrome_z-ai_glm-5.2_frozen`](https://github.com/esokullu/webbrain/tree/inactive-models-dont-show-in-sidebar/test/llm/results/2026-07-13-nvidia-glm52_chrome_z-ai_glm-5.2_frozen) |
-| Full | [`2026-07-13-nvidia-glm52-full_chrome_z-ai_glm-5.2`](https://github.com/esokullu/webbrain/tree/inactive-models-dont-show-in-sidebar/test/llm/results/2026-07-13-nvidia-glm52-full_chrome_z-ai_glm-5.2) |
-| Mid | [`2026-07-13-nvidia-glm52-mid_chrome_z-ai_glm-5.2_mid`](https://github.com/esokullu/webbrain/tree/inactive-models-dont-show-in-sidebar/test/llm/results/2026-07-13-nvidia-glm52-mid_chrome_z-ai_glm-5.2_mid) |
-| Compact | [`2026-07-13-nvidia-glm52-compact_chrome_z-ai_glm-5.2_compact`](https://github.com/esokullu/webbrain/tree/inactive-models-dont-show-in-sidebar/test/llm/results/2026-07-13-nvidia-glm52-compact_chrome_z-ai_glm-5.2_compact) |
+| Frozen | [`2026-07-13-nvidia-glm52_chrome_z-ai_glm-5.2_frozen`](https://github.com/webbrain-one/webbrain/tree/main/test/llm/results/2026-07-13-nvidia-glm52_chrome_z-ai_glm-5.2_frozen) |
+| Full | [`2026-07-13-nvidia-glm52-full_chrome_z-ai_glm-5.2`](https://github.com/webbrain-one/webbrain/tree/main/test/llm/results/2026-07-13-nvidia-glm52-full_chrome_z-ai_glm-5.2) |
+| Mid | [`2026-07-13-nvidia-glm52-mid_chrome_z-ai_glm-5.2_mid`](https://github.com/webbrain-one/webbrain/tree/main/test/llm/results/2026-07-13-nvidia-glm52-mid_chrome_z-ai_glm-5.2_mid) |
+| Compact | [`2026-07-13-nvidia-glm52-compact_chrome_z-ai_glm-5.2_compact`](https://github.com/webbrain-one/webbrain/tree/main/test/llm/results/2026-07-13-nvidia-glm52-compact_chrome_z-ai_glm-5.2_compact) |
 
 ## Results
 
