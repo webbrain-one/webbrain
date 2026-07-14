@@ -24,7 +24,7 @@ function loadSlashCommandRuntime(panelRel) {
   assert.notEqual(start, -1, `${panelRel}: slash command metadata missing`);
   assert.notEqual(end, -1, `${panelRel}: slash parser boundary missing`);
   const block = source.slice(start, end);
-  return Function('escapeHtml', 't', `${block}\nreturn { SLASH_COMMANDS, slashCommandIsDiscoverable, slashOptionIsDiscoverable, findSlashCommand, parseSlashInvocation, slashInvocationIsOutOfBand, buildSlashCommandHelpHtml };`)(
+  return Function('escapeHtml', 't', `${block}\nreturn { SLASH_COMMANDS, slashCommandIsDiscoverable, slashOptionIsDiscoverable, slashOptionIsAvailable, findSlashCommand, parseSlashInvocation, slashInvocationIsOutOfBand, buildSlashCommandHelpHtml };`)(
     (value) => String(value),
     (key) => key,
   );
@@ -7650,15 +7650,15 @@ test('canonical slash parser handles flags, values, casing, termination, and har
 
   const chromeHelp = chrome.buildSlashCommandHelpHtml();
   for (const command of chrome.SLASH_COMMANDS.filter((item) => !item.unsupported)) {
-    assert.match(chromeHelp, new RegExp(command.usage.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `Chrome help should include ${command.usage}`);
+    assert.ok(chromeHelp.includes(command.usage), `Chrome help should include ${command.usage}`);
     for (const option of (command.options || []).filter((item) => !item.unsupported)) {
       const optionUsage = `${option.value}${option.valueLabel ? ` ${option.valueLabel}` : ''}`;
-      assert.match(chromeHelp, new RegExp(optionUsage.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `Chrome help should describe ${optionUsage}`);
-      assert.match(chromeHelp, new RegExp(option.descriptionKey.replace(/\./g, '\\.')), `Chrome help should localize ${optionUsage}`);
+      assert.ok(chromeHelp.includes(optionUsage), `Chrome help should describe ${optionUsage}`);
+      assert.ok(chromeHelp.includes(option.descriptionKey), `Chrome help should localize ${optionUsage}`);
     }
   }
   for (const text of retired) {
-    assert.doesNotMatch(chromeHelp, new RegExp(text.split(' ')[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `Chrome help must omit retired syntax ${text}`);
+    assert.ok(!chromeHelp.includes(text.split(' ')[0]), `Chrome help must omit retired syntax ${text}`);
   }
 
   assert.equal(firefox.parseSlashInvocation('/record --full-screen --transcribe').unsupported, true, 'Firefox should reject canonical recording locally');
@@ -7667,14 +7667,15 @@ test('canonical slash parser handles flags, values, casing, termination, and har
   const firefoxHelp = firefox.buildSlashCommandHelpHtml();
   assert.doesNotMatch(firefoxHelp, /\/record/, 'Firefox help should omit unsupported recording');
   assert.doesNotMatch(firefoxHelp, /--full-page/, 'Firefox help should omit the unsupported full-page flag');
+  const firefoxEnglish = fs.readFileSync(path.join(ROOT, 'src/firefox/src/ui/locales/en.js'), 'utf8');
+  assert.doesNotMatch(firefoxEnglish, /Stop an active recording/, 'Firefox help shortcuts should not advertise unsupported recording');
 });
 
 test('slash autocomplete progressively suggests only available unused flags', () => {
   const chrome = loadSlashAutocompleteRuntime('src/chrome/src/ui/sidepanel.js');
   const firefox = loadSlashAutocompleteRuntime('src/firefox/src/ui/sidepanel.js');
   const optionMatches = (runtime, context) => (context?.command?.options || [])
-    .filter(runtime.slashOptionIsDiscoverable)
-    .filter((option) => !context.selected.has(option.value))
+    .filter((option) => runtime.slashOptionIsAvailable(option, context.selected, context.selectedGroups))
     .filter((option) => option.value.startsWith(context.query))
     .map((option) => option.value);
 
@@ -7693,11 +7694,13 @@ test('slash autocomplete progressively suggests only available unused flags', ()
   const afterTranscribe = chrome.getContext('/record --transcribe ');
   assert.deepEqual(optionMatches(chrome, afterTranscribe), ['--full-screen']);
   assert.deepEqual(optionMatches(chrome, chrome.getContext('/record --transcribe --full-screen ')), []);
+  assert.deepEqual(optionMatches(chrome, chrome.getContext('/scratchpad --clear ')), [], 'conflicting scratchpad actions should not be suggested');
   assert.equal(chrome.getContext('/scratchpad --append '), null, 'value-taking options should hand control back to text entry');
   assert.equal(chrome.getContext('/record positional'), null, 'positional input should close flag autocomplete');
 
   assert.equal(firefox.getContext('/record '), null, 'Firefox should not discover unsupported recording');
   assert.deepEqual(optionMatches(firefox, firefox.getContext('/screenshot ')), [], 'Firefox should not suggest the unsupported full-page flag');
+  assert.deepEqual(optionMatches(firefox, firefox.getContext('/scratchpad --clear ')), [], 'Firefox should not suggest conflicting scratchpad actions');
 });
 
 test('chrome offscreen helper recreates an evicted document after ready cache is stale', async () => {

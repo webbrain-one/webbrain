@@ -439,6 +439,12 @@ function slashOptionIsDiscoverable(option) {
   return option?.unsupported !== true;
 }
 
+function slashOptionIsAvailable(option, selectedValues, selectedGroups) {
+  return slashOptionIsDiscoverable(option)
+    && !selectedValues.has(option.value)
+    && (!option.exclusiveGroup || !selectedGroups.has(option.exclusiveGroup));
+}
+
 function findSlashCommand(value) {
   const needle = String(value || '').toLowerCase();
   return SLASH_COMMANDS.find((command) => command.value === needle) || null;
@@ -3346,11 +3352,13 @@ function getSlashAutocompleteContext() {
   if (query && !query.startsWith('--')) return null;
 
   const selected = new Set();
+  const selectedGroups = new Set();
   for (const token of tokens) {
     if (!token.startsWith('--') || token === '--') return null;
     const option = (command.options || []).find((candidate) => candidate.value === token.toLowerCase());
     if (!option || !slashOptionIsDiscoverable(option) || option.takesRemainder) return null;
     selected.add(option.value);
+    if (option.exclusiveGroup) selectedGroups.add(option.exclusiveGroup);
   }
 
   return {
@@ -3358,6 +3366,7 @@ function getSlashAutocompleteContext() {
     command,
     query: query.toLowerCase(),
     selected,
+    selectedGroups,
     completionStart: selectionStart - query.length,
     completionEnd: selectionStart,
   };
@@ -3485,8 +3494,7 @@ function updateSlashCommandAutocomplete() {
   const candidates = context.kind === 'command'
     ? SLASH_COMMANDS.filter(slashCommandIsDiscoverable)
     : (context.command.options || [])
-      .filter(slashOptionIsDiscoverable)
-      .filter((option) => !context.selected.has(option.value));
+      .filter((option) => slashOptionIsAvailable(option, context.selected, context.selectedGroups));
   const matches = candidates
     .filter((candidate) => candidate.value.startsWith(context.query))
     .map((candidate) => ({
