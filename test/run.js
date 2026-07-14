@@ -14265,6 +14265,16 @@ test('ProviderManager load ignores unsupported stored provider configs', async (
             category: 'cloud',
             apiKey: `${label}-groq-key`,
           },
+          fireworks: {
+            type: 'openai',
+            category: 'cloud',
+            apiKey: `${label}-fireworks-key`,
+          },
+          together: {
+            type: 'openai',
+            category: 'cloud',
+            apiKey: `${label}-together-key`,
+          },
           webbrain_cloud: {
             type: 'openai',
             contextWindow: 256000,
@@ -14321,6 +14331,8 @@ test('ProviderManager load ignores unsupported stored provider configs', async (
       assert.equal(mgr.providers.get('cloudflare')?.config.accountId, '0123456789abcdef0123456789abcdef', `${label}: Cloudflare account ID should survive migration`);
       assert.equal(mgr.providers.get('nvidia')?.config.apiKey, `${label}-nvidia-key`, `${label}: Nvidia API key should survive migration`);
       assert.equal(mgr.providers.get('groq')?.config.apiKey, `${label}-groq-key`, `${label}: Groq API key should survive migration`);
+      assert.equal(mgr.providers.get('fireworks')?.config.apiKey, `${label}-fireworks-key`, `${label}: Fireworks API key should survive migration`);
+      assert.equal(mgr.providers.get('together')?.config.apiKey, `${label}-together-key`, `${label}: Together API key should survive migration`);
       assert.equal(mgr.providers.get('webbrain_cloud')?.config.contextWindow, 1000000, `${label}: legacy WebBrain Cloud context window should migrate`);
       assert.equal(mgr.providers.get('webbrain_cloud')?.config.apiKey, `${label}-cloud-key`, `${label}: WebBrain Cloud API key should survive migration`);
       assert.equal(mgr.providers.get('webbrain_cloud')?.config.configured, false, `${label}: WebBrain Cloud should stay available without being configured`);
