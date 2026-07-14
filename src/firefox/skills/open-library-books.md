@@ -8,7 +8,7 @@ Workflow:
 
 1. Call `search_open_library_books` with a title, author, ISBN, or general query.
 2. Summarize title, authors, first publish year, and Open Library work/edition keys from the results.
-3. If the user needs more detail, open a returned Open Library URL in the browser or use visible page content.
+3. If the user needs more detail, prefix a returned work `key` with `https://openlibrary.org` (or build `https://openlibrary.org/books/{cover_edition_key}` for an edition), then open that URL in the browser or use visible page content.
 
 Safety:
 
