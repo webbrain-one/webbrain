@@ -29,7 +29,7 @@ import {
 
 // Version shown in the subtitle. Kept here so it only needs one update per
 // release; the subtitle string itself is translated.
-const EXT_VERSION = '23.1.5';
+const EXT_VERSION = '23.1.6';
 
 const providersContainer = document.getElementById('providers');
 const displaySettings = document.getElementById('display-settings');
@@ -1802,6 +1802,20 @@ function renderProviders() {
         { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'qwen-max',
           suggestions: ['qwen-max', 'qwen-plus', 'qwen-turbo', 'qwen3-235b-a22b'] },
         { key: 'baseUrl', labelKey: 'st.provider.field.api_base_url', type: 'text', placeholder: 'https://dashscope.aliyuncs.com/compatible-mode/v1' },
+        ...COST_ESTIMATE_FIELDS,
+      ],
+    },
+    together: {
+      fields: [
+        { key: 'apiKey', labelKey: 'st.provider.field.api_key', type: 'password', placeholder: 'tgp_...' },
+        { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'meta-llama/Llama-3.3-70B-Instruct-Turbo',
+          suggestions: [
+            'meta-llama/Llama-3.3-70B-Instruct-Turbo',
+            'meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo',
+            'Qwen/Qwen2.5-72B-Instruct-Turbo',
+            'deepseek-ai/DeepSeek-V3',
+          ] },
+        { key: 'baseUrl', labelKey: 'st.provider.field.api_base_url', type: 'text', placeholder: 'https://api.together.xyz/v1' },
         ...COST_ESTIMATE_FIELDS,
       ],
     },

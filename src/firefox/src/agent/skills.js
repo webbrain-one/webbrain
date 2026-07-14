@@ -18,6 +18,11 @@ export const PACKAGED_SKILL_SOURCES = Object.freeze([
     name: 'Disposable email (Mail.tm)',
     path: 'skills/disposable-email-mailtm.md',
   }),
+  Object.freeze({
+    id: 'temporary-file-share-litterbox',
+    name: 'Temporary file share (Litterbox)',
+    path: 'skills/temporary-file-share-litterbox.md',
+  }),
 ]);
 export const DEFAULT_SKILL_SOURCES = Object.freeze(
   PACKAGED_SKILL_SOURCES.filter((source) => source.id === 'freeskillz-xyz')

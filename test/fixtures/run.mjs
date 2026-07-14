@@ -201,6 +201,102 @@ for (const [label, sourcePath, manualOpen] of [
     }
   });
 
+  test(`${label}: selection dialog contains page shortcuts and keeps the selected text highlighted`, async (page) => {
+    await setupSelectionShortcut(page, sourcePath, { requiresManualOpen: manualOpen });
+    await page.evaluate(() => {
+      window.__selectionPageKeys = [];
+      window.addEventListener('keydown', (event) => window.__selectionPageKeys.push(`window-capture:${event.key}`), true);
+      document.addEventListener('keydown', (event) => window.__selectionPageKeys.push(`document-capture:${event.key}`), true);
+      document.addEventListener('keydown', (event) => window.__selectionPageKeys.push(`down:${event.key}`));
+      document.addEventListener('keypress', (event) => window.__selectionPageKeys.push(`press:${event.key}`));
+      document.addEventListener('keyup', (event) => window.__selectionPageKeys.push(`up:${event.key}`));
+    });
+    const selectedState = await selectFixtureText(page);
+    await page.mouse.click(
+      selectedState.shortcutRect.left + selectedState.shortcutRect.width / 2,
+      selectedState.shortcutRect.top + selectedState.shortcutRect.height / 2,
+    );
+    const openState = await page.evaluate(() => window.__webbrainSelectionShortcut.getState());
+    if (!openState.questionRect || openState.highlightRectCount < 1) {
+      throw new Error(`popup should preserve a visual marker for the selected text: ${JSON.stringify(openState)}`);
+    }
+    await page.mouse.click(
+      openState.questionRect.left + openState.questionRect.width / 2,
+      openState.questionRect.top + openState.questionRect.height / 2,
+    );
+    await page.keyboard.type('j');
+    const typedState = await page.evaluate(() => ({
+      surface: window.__webbrainSelectionShortcut.getState(),
+      pageKeys: window.__selectionPageKeys,
+    }));
+    if (typedState.surface.questionValue !== 'j' || typedState.surface.highlightRectCount < 1) {
+      throw new Error(`typing should keep the custom question and sticky highlight: ${JSON.stringify(typedState)}`);
+    }
+    if (typedState.pageKeys.length) {
+      throw new Error(`dialog keystrokes leaked to the page: ${JSON.stringify(typedState.pageKeys)}`);
+    }
+    await page.keyboard.press('Escape');
+    const closedState = await page.evaluate(() => window.__webbrainSelectionShortcut.getState());
+    if (closedState.popupVisible || closedState.highlightRectCount !== 0) {
+      throw new Error(`closing the popup should remove the sticky highlight: ${JSON.stringify(closedState)}`);
+    }
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => window.__webbrainSelectionShortcut.getState().popupVisible);
+    const reopenedState = await page.evaluate(() => window.__webbrainSelectionShortcut.getState());
+    await page.mouse.click(
+      reopenedState.questionRect.left + reopenedState.questionRect.width / 2,
+      reopenedState.questionRect.top + reopenedState.questionRect.height / 2,
+    );
+    await page.keyboard.type('What is the point?');
+    await page.keyboard.press('Control+Enter');
+    await page.waitForFunction(() => window.__selectionMessages.length === 1);
+    const submittedState = await page.evaluate(() => ({
+      message: window.__selectionMessages[0],
+      surface: window.__webbrainSelectionShortcut.getState(),
+      pageKeys: window.__selectionPageKeys,
+    }));
+    if (submittedState.message.action !== 'custom' || submittedState.message.question !== 'What is the point?') {
+      throw new Error(`capture-phase containment broke keyboard submission: ${JSON.stringify(submittedState)}`);
+    }
+    if (submittedState.surface.popupVisible || submittedState.surface.highlightRectCount !== 0) {
+      throw new Error(`keyboard submission should dismiss the surface and highlight: ${JSON.stringify(submittedState)}`);
+    }
+    if (submittedState.pageKeys.length) {
+      throw new Error(`capture-phase dialog keystrokes leaked to the page: ${JSON.stringify(submittedState.pageKeys)}`);
+    }
+  });
+
+  test(`${label}: selection highlight stays bounded for long documents`, async (page) => {
+    await setupSelectionShortcut(page, sourcePath, { requiresManualOpen: manualOpen });
+    const rawRectCount = await page.evaluate(() => {
+      const article = document.createElement('article');
+      article.id = 'long-selection';
+      for (let index = 0; index < 600; index += 1) {
+        const line = document.createElement('div');
+        line.textContent = `Selected article line ${index + 1}`;
+        article.appendChild(line);
+      }
+      document.body.appendChild(article);
+      const range = document.createRange();
+      range.selectNodeContents(article);
+      return Array.from(range.getClientRects()).filter((rect) => rect.width > 0 && rect.height > 0).length;
+    });
+    if (rawRectCount <= 200) throw new Error(`fixture should create more than 200 selection rectangles, got ${rawRectCount}`);
+
+    const selectedState = await selectFixtureText(page, '#long-selection');
+    await page.mouse.click(
+      selectedState.shortcutRect.left + selectedState.shortcutRect.width / 2,
+      selectedState.shortcutRect.top + selectedState.shortcutRect.height / 2,
+    );
+    const openState = await page.evaluate(() => window.__webbrainSelectionShortcut.getState());
+    if (openState.highlightRectCount < 1 || openState.highlightRectCount > 200) {
+      throw new Error(`long selections should render 1-200 highlight rectangles: ${JSON.stringify(openState)}`);
+    }
+    if (openState.highlightRectCount >= rawRectCount) {
+      throw new Error(`offscreen selection rectangles should not all render: ${JSON.stringify({ rawRectCount, openState })}`);
+    }
+  });
+
   test(`${label}: selection shortcut submits once and dismisses before delivery`, async (page) => {
     await setupSelectionShortcut(page, sourcePath, { requiresManualOpen: manualOpen });
     const selectedState = await selectFixtureText(page, '#editor');

@@ -4,6 +4,7 @@ import {
   deleteChatHistoryRecord,
   clearChatHistoryRecords,
 } from './chat-history-store.js';
+import { formatSelectionPromptForDisplay } from '../context-menu-storage.js';
 import { listRuns } from '../trace/recorder.js';
 import { t } from './i18n.js';
 
@@ -117,7 +118,7 @@ function renderList() {
     const urlLabel = hostLabel(record.url);
     return `
       <div class="history-item${selected}" data-record-id="${escapeAttr(record.id)}">
-        <div class="history-title">${escapeHtml(record.title || t('hist.untitled'))}</div>
+        <div class="history-title">${escapeHtml(displayRecordTitle(record))}</div>
         <div class="history-meta">
           <span>${escapeHtml(updated)}</span>
           ${record.mode ? `<span>${escapeHtml(record.mode)}</span>` : ''}
@@ -177,7 +178,7 @@ async function renderRecord(recordId) {
 
   mainPane.innerHTML = `
     <div class="record-header">
-      <h2>${escapeHtml(record.title || t('hist.untitled'))}</h2>
+      <h2>${escapeHtml(displayRecordTitle(record))}</h2>
       <div class="record-meta">
         <span>${escapeHtml(t('hist.meta.created', { date: formatDate(record.createdAt) }))}</span>
         <span>${escapeHtml(t('hist.meta.updated', { date: formatDate(record.updatedAt) }))}</span>
@@ -219,20 +220,52 @@ function renderTraceBlock(traces) {
   `;
 }
 
+function displayMessageText(message) {
+  const text = message?.text || '';
+  if (message?.role === 'user') return formatSelectionPromptForDisplay(text);
+  return text;
+}
+
+/**
+ * History titles are derived from the first user message (often truncated to
+ * 140 chars). For legacy records saved before display formatting, rebuild from
+ * the full first user message when available so exports/list UI do not show
+ * model-only untrusted wrappers.
+ */
+function displayRecordTitle(record) {
+  const firstUser = Array.isArray(record?.messages)
+    ? record.messages.find((message) => message?.role === 'user' && message?.text)
+    : null;
+  const candidates = [
+    firstUser?.text,
+    record?.firstUserMessage,
+    record?.title,
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    const cleaned = formatSelectionPromptForDisplay(String(candidate))
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (cleaned) return cleaned.slice(0, 140);
+  }
+  return t('hist.untitled');
+}
+
 function renderMessage(message) {
   const role = ['user', 'assistant', 'system', 'error'].includes(message?.role) ? message.role : 'unknown';
   return `
     <article class="message ${escapeAttr(role)}">
       <div class="message-role">${escapeHtml(t(`hist.role.${role}`))}</div>
-      <div class="message-text">${escapeHtml(message?.text || '')}</div>
+      <div class="message-text">${escapeHtml(displayMessageText(message))}</div>
     </article>
   `;
 }
 
 function recordToMarkdown(record) {
   const traces = traceRunsForRecord(record);
+  const title = displayRecordTitle(record);
   const lines = [
-    `# ${record.title || t('hist.untitled')}`,
+    `# ${title}`,
     '',
     `Created: ${formatDate(record.createdAt)}`,
     `Updated: ${formatDate(record.updatedAt)}`,
@@ -247,7 +280,7 @@ function recordToMarkdown(record) {
   for (const message of record.messages || []) {
     lines.push(`## ${t(`hist.role.${message.role}`)}`);
     lines.push('');
-    lines.push(message.text || '');
+    lines.push(displayMessageText(message));
     lines.push('');
   }
   return lines.join('\n');
@@ -256,11 +289,12 @@ function recordToMarkdown(record) {
 function exportSelected() {
   const record = allRecords.find((item) => item.id === selectedRecordId);
   if (!record) return alert(t('hist.select_first'));
+  const title = displayRecordTitle(record);
   const blob = new Blob([recordToMarkdown(record)], { type: 'text/markdown' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `webbrain-chat-${safeFilename(record.title || record.id)}.md`;
+  a.download = `webbrain-chat-${safeFilename(title || record.id)}.md`;
   document.body.appendChild(a);
   try {
     a.click();

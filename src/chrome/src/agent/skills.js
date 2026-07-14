@@ -19,6 +19,11 @@ export const PACKAGED_SKILL_SOURCES = Object.freeze([
     path: 'skills/disposable-email-mailtm.md',
   }),
   Object.freeze({
+    id: 'temporary-file-share-litterbox',
+    name: 'Temporary file share (Litterbox)',
+    path: 'skills/temporary-file-share-litterbox.md',
+  }),
+  Object.freeze({
     id: 'open-meteo-weather',
     name: 'Open-Meteo weather',
     path: 'skills/open-meteo-weather.md',

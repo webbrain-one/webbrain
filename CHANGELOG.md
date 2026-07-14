@@ -4,6 +4,14 @@ All notable changes to WebBrain are documented in this file.
 
 This changelog was generated from the repository Git history and release tags. Versions without a Git tag are inferred from version-bump commits and the current `package.json` / browser manifest versions.
 
+## [Unreleased]
+
+### Added
+- Added an opt-in packaged Litterbox temporary file-share skill for Chrome and Firefox, available from Settings with explicit `clarify` confirmation, public-link and absolute-expiry warnings, blocked-file preflight checks, browser-specific upload limits, and visible provider attribution. Uploads go through the Litterbox page with `upload_file`, so no `/allow-api` override is needed and file bytes never reach the LLM provider.
+
+### Tests
+- Added packaged-skill catalog and Litterbox safety, privacy-disclosure, upload-flow, browser-limit, and expiry coverage.
+
 ## [23.1.2] - 2026-07-14
 
 ### Added

@@ -9,6 +9,7 @@ import { codeFenceLanguage, highlightCode, renderMarkdownHeadings } from './mark
 import { applyMode, loadMode, watch } from './theme.js';
 import { buildRecommendedActions, shouldShowRecommendedActions } from './recommended-actions.js';
 import { createContextMenuPromptHandler } from './context-menu-prompts.js';
+import { formatSelectionPromptForDisplay } from '../context-menu-storage.js';
 import { deleteChatHistoryRecord, saveChatHistoryRecord } from './chat-history-store.js';
 import { claimRunError } from './run-error-dedupe.js';
 import {
@@ -5552,7 +5553,9 @@ function addMessage(role, content, options = {}) {
   const textEl = document.createElement('div');
   textEl.className = 'message-text';
   if (role === 'user') {
-    textEl.textContent = content;
+    // Selection/context-menu prompts include model-only untrusted wrappers;
+    // show a clean version in the bubble while still sending the full prompt.
+    textEl.textContent = formatSelectionPromptForDisplay(content);
   } else if (role === 'system') {
     if (isSystemHtml(content)) textEl.innerHTML = content.__systemHtml;
     else textEl.textContent = content || '';
