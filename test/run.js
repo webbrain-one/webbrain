@@ -1326,6 +1326,14 @@ test('matches gmail.com under mail.google.com', () => {
   assert.match(a?.notes || '', /proceed directly to Subject and Message Body/i);
   assert.match(a?.notes || '', /Never enumerate the compose form's generic sibling ref_ids/i);
   assert.match(a?.notes || '', /focus the recipient row once/i);
+  assert.match(a?.notes || '', /revise or replace the whole draft body/i);
+  assert.match(a?.notes || '', /exactly one set_field\(\{ref_id:"ref_N", text:"<complete revised body>", clear:true, submit:false\}\) call/i);
+  assert.match(a?.notes || '', /Do not click the body first/i);
+  assert.match(a?.notes || '', /do not use press_keys to clear it/i);
+  assert.match(a?.notes || '', /do not use click-by-text or coordinates/i);
+  assert.match(a?.notes || '', /Re-read the body afterward to verify the replacement/i);
+  assert.match(a?.notes || '', /If the user says not to send, never click Send/i);
+  assert.doesNotMatch(a?.notes || '', /Click into it before typing/i);
   const firefox = getActiveAdapterFx('https://mail.google.com/mail/u/0/#inbox');
   assert.equal(firefox?.name, 'gmail');
   assert.equal(firefox?.notes, a?.notes);
