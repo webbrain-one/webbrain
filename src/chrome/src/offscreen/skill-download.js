@@ -37,6 +37,13 @@
     return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
   }
 
+  function safeMimeType(value) {
+    const type = String(value || '').split(';')[0].trim().toLowerCase();
+    return /^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/.test(type)
+      ? type
+      : 'application/octet-stream';
+  }
+
   function sameSafeOrigin(finalUrl, expectedUrl) {
     try {
       const final = new URL(finalUrl);
@@ -68,6 +75,8 @@
     const token = crypto.randomUUID();
     const filename = `${token}.media`;
     const expectedSize = parseLength(response.headers.get('content-length'));
+    const contentType = safeMimeType(response.headers.get('content-type'));
+    const contentDisposition = String(response.headers.get('content-disposition') || '').slice(0, 2048);
     if (expectedSize != null && expectedSize > maxBytes) {
       try { await response.body?.cancel?.(); } catch {}
       throw new Error(`Skill download exceeds the staged-file limit (${expectedSize} bytes > ${maxBytes} bytes).`);
@@ -108,9 +117,10 @@
     }
 
     const file = await handle.getFile();
-    const localUrl = URL.createObjectURL(file);
-    staged.set(token, { localUrl, dir, filename });
-    return { token, localUrl, bytesReceived };
+    const typedBlob = file.type === contentType ? file : new Blob([file], { type: contentType });
+    const localUrl = URL.createObjectURL(typedBlob);
+    staged.set(token, { localUrl, dir, filename, typedBlob });
+    return { token, localUrl, bytesReceived, contentType, contentDisposition };
   }
 
   async function prepare(message) {
@@ -152,6 +162,8 @@
         localUrl: prepared.localUrl,
         releaseToken: prepared.token,
         bytesReceived: prepared.bytesReceived,
+        contentType: prepared.contentType,
+        ...(prepared.contentDisposition ? { contentDisposition: prepared.contentDisposition } : {}),
       };
     } catch (error) {
       return { success: false, finalUrl: url, error: `Skill download staging failed: ${error.message}` };

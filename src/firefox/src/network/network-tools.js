@@ -338,6 +338,38 @@ function safeDownloadFilename(value) {
   return safe || undefined;
 }
 
+function filenameFromContentDisposition(value) {
+  const header = String(value || '').slice(0, 2048);
+  if (!header) return undefined;
+
+  const extended = header.match(/(?:^|;)\s*filename\*\s*=\s*([^;]+)/i);
+  if (extended) {
+    let encoded = extended[1].trim().replace(/^"|"$/g, '');
+    encoded = encoded.replace(/^[^']*'[^']*'/, '');
+    try { encoded = decodeURIComponent(encoded); } catch (_) {}
+    const safe = safeDownloadFilename(encoded);
+    if (safe) return safe;
+  }
+
+  const plain = header.match(/(?:^|;)\s*filename\s*=\s*(?:"((?:\\.|[^"])*)"|([^;]+))/i);
+  const candidate = plain ? String(plain[1] ?? plain[2] ?? '').replace(/\\"/g, '"').trim() : '';
+  return safeDownloadFilename(candidate);
+}
+
+function defaultSkillDownloadFilename(contentType) {
+  const type = safeDataUrlMimeType(contentType);
+  const extension = {
+    'video/mp4': 'mp4',
+    'video/quicktime': 'mov',
+    'audio/mp4': 'm4a',
+    'audio/mpeg': 'mp3',
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+  }[type];
+  return extension ? `public-media.${extension}` : undefined;
+}
+
 async function fetchSkillJson(url, init, endpoint, tool) {
   const urlCheck = validateFetchUrl(url, { allowLocalNetwork: getAllowLocalNetwork() });
   if (!urlCheck.ok) {
@@ -487,7 +519,7 @@ function arrayBufferToDataUrl(buffer, mimeType) {
 }
 
 function skillDownloadTooLargeError(size) {
-  return `Skill download is too large for cookie-free saving (${size} bytes > ${SKILL_DOWNLOAD_DATA_URL_MAX_BYTES} bytes).`;
+  return `Skill download exceeds the in-memory encoding cutoff and requires local staging (${size} bytes > ${SKILL_DOWNLOAD_DATA_URL_MAX_BYTES} bytes).`;
 }
 
 async function readSkillDownloadBuffer(res) {
@@ -584,23 +616,32 @@ async function fetchSkillDownloadData(url, expectedUrl) {
         error: `Skill download file request failed with HTTP ${res.status}.`,
       };
     }
+    const contentType = safeDataUrlMimeType(res.headers?.get?.('content-type'));
+    const contentDisposition = String(res.headers?.get?.('content-disposition') || '').slice(0, 2048);
+    const suggestedFilename = filenameFromContentDisposition(contentDisposition);
     const file = await readSkillDownloadBuffer(res);
     if (!file.success) {
       return {
         success: false,
         status: res.status,
         finalUrl: responseUrl,
+        contentType,
+        ...(contentDisposition ? { contentDisposition } : {}),
+        ...(suggestedFilename ? { suggestedFilename } : {}),
         ...(file.bytesExpected != null ? { bytesExpected: file.bytesExpected } : {}),
         ...(file.bytesReceived != null ? { bytesReceived: file.bytesReceived } : {}),
         ...(file.tooLarge ? { tooLarge: true } : {}),
         error: file.error,
       };
     }
-    const dataUrl = arrayBufferToDataUrl(file.buffer, res.headers?.get?.('content-type'));
+    const dataUrl = arrayBufferToDataUrl(file.buffer, contentType);
     return {
       success: true,
       status: res.status,
       finalUrl: responseUrl,
+      contentType,
+      ...(contentDisposition ? { contentDisposition } : {}),
+      ...(suggestedFilename ? { suggestedFilename } : {}),
       dataUrl,
       bytesReceived: file.bytesReceived,
     };
@@ -649,6 +690,8 @@ async function prepareStagedSkillDownload(url, expectedUrl) {
     if (!response.ok) {
       return { success: false, status: response.status, finalUrl, error: `Skill download file request failed with HTTP ${response.status}.` };
     }
+    const responseContentType = String(response.headers?.get?.('content-type') || '').trim();
+    const contentDisposition = String(response.headers?.get?.('content-disposition') || '').slice(0, 2048);
     const expectedSize = parseContentLength(response.headers?.get?.('content-length'));
     if (expectedSize != null && expectedSize > SKILL_DOWNLOAD_STAGED_MAX_BYTES) {
       try { await response.body?.cancel?.(); } catch (_) {}
@@ -660,9 +703,13 @@ async function prepareStagedSkillDownload(url, expectedUrl) {
         error: `Skill download exceeds the staged-file limit (${expectedSize} bytes > ${SKILL_DOWNLOAD_STAGED_MAX_BYTES} bytes).`,
       };
     }
-    const blob = typeof response.blob === 'function'
+    const responseBlob = typeof response.blob === 'function'
       ? await response.blob()
-      : new Blob([await response.arrayBuffer()], { type: response.headers?.get?.('content-type') || 'application/octet-stream' });
+      : new Blob([await response.arrayBuffer()], { type: responseContentType || 'application/octet-stream' });
+    const contentType = safeDataUrlMimeType(responseContentType || responseBlob.type);
+    const blob = responseBlob.type === contentType
+      ? responseBlob
+      : new Blob([responseBlob], { type: contentType });
     if (blob.size > SKILL_DOWNLOAD_STAGED_MAX_BYTES) {
       return {
         success: false,
@@ -680,6 +727,8 @@ async function prepareStagedSkillDownload(url, expectedUrl) {
       localUrl,
       releaseToken: localUrl,
       bytesReceived: blob.size,
+      contentType,
+      ...(contentDisposition ? { contentDisposition } : {}),
     };
   } catch (error) {
     return { success: false, finalUrl: url, error: `Skill download staging failed: ${error.message}` };
@@ -790,8 +839,13 @@ async function downloadSkillFile(url, filename, waitMs = 60000) {
       error: file.error,
     };
   }
+  const contentType = safeDataUrlMimeType(staged?.contentType || file.contentType);
+  const responseFilename = filenameFromContentDisposition(staged?.contentDisposition)
+    || safeDownloadFilename(staged?.suggestedFilename)
+    || safeDownloadFilename(file.suggestedFilename)
+    || filenameFromContentDisposition(file.contentDisposition);
   const opts = { url: staged ? staged.localUrl : file.dataUrl, conflictAction: 'uniquify' };
-  const safeName = safeDownloadFilename(filename);
+  const safeName = safeDownloadFilename(filename) || responseFilename || defaultSkillDownloadFilename(contentType);
   if (safeName) opts.filename = safeName;
   let downloadId;
   try {
@@ -806,6 +860,8 @@ async function downloadSkillFile(url, filename, waitMs = 60000) {
     success: false,
     url,
     finalUrl: staged?.finalUrl || file.finalUrl || url,
+    contentType,
+    ...(safeName ? { suggestedFilename: safeName } : {}),
     ...(staged ? { stagedDownload: true } : {}),
     ...((staged?.status ?? file.status) != null ? { status: staged?.status ?? file.status } : {}),
     ...(file.bytesExpected != null ? { bytesExpected: file.bytesExpected } : {}),
