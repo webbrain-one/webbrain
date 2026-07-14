@@ -583,7 +583,7 @@ export const AGENT_TOOLS = [
     type: 'function',
     function: {
       name: 'inspect_event_listeners',
-      description: 'DEV ONLY. Inspect registered event listeners for a rendered element through CDP. Target by ref_id or selector. includeAncestors also checks element ancestors plus document/window for delegated click, submit, input, and keyboard handlers.',
+      description: 'DEV ONLY. Inspect registered event listeners for a rendered element through CDP. Target by ref_id or selector. includeAncestors also checks element ancestors plus document/window for delegated click, submit, input, and keyboard handlers. Resolving exact ref targets briefly adds and restores an internal data attribute, so this tool requires temporary page-modification permission.',
       parameters: {
         type: 'object',
         properties: {
@@ -600,7 +600,7 @@ export const AGENT_TOOLS = [
     type: 'function',
     function: {
       name: 'highlight_element',
-      description: 'DEV ONLY. Draw a temporary, pointer-transparent visual overlay around an element targeted by ref_id or selector. Useful for confirming a target before patching it. The overlay removes itself automatically.',
+      description: 'DEV ONLY. Draw a temporary, pointer-transparent visual overlay around an element targeted by ref_id or selector. Useful for confirming a target before patching it. The overlay removes itself automatically and requires temporary page-modification permission.',
       parameters: {
         type: 'object',
         properties: {

@@ -1913,6 +1913,15 @@
     return { success: true, target, targetMethod, warnings };
   }
 
+  function isDevJavascriptUrlAttribute(name, value) {
+    if (!/^(href|src|xlink:href|formaction|action)$/i.test(String(name || ''))) return false;
+    // HTML URL parsing ignores ASCII tabs/newlines/carriage returns in the
+    // scheme, so normalize those before checking instead of allowing an
+    // obfuscated `java\nscript:` value through.
+    const normalizedValue = String(value ?? '').replace(/[\t\n\r]/g, '').trimStart();
+    return /^javascript:/i.test(normalizedValue);
+  }
+
   function normalizeDevPatchOperations(el, params) {
     const styles = params?.styles && typeof params.styles === 'object' && !Array.isArray(params.styles) ? params.styles : {};
     const removeStyles = Array.isArray(params?.removeStyles) ? params.removeStyles : [];
@@ -2010,7 +2019,7 @@
         return { success: false, error: `patch_element: executable attribute "${name}" is not allowed; use execute_js only when code execution is explicitly needed.` };
       }
       const value = attributeValues.has(name) ? String(attributeValues.get(name)) : '';
-      if (/^(href|src|xlink:href|formaction)$/i.test(name) && /^\s*javascript:/i.test(value)) {
+      if (isDevJavascriptUrlAttribute(name, value)) {
         return { success: false, error: `patch_element: javascript: URLs are not allowed in ${name}.` };
       }
       if (value.length > 10000) {

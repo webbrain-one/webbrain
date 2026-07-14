@@ -12306,6 +12306,20 @@ test('patch_element canonicalizes browser-equivalent names before recording undo
   assert.deepEqual([...svg.attributeNames], ['viewBox', 'viewbox']);
 });
 
+test('patch_element rejects javascript URLs in every executable URL attribute', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'src/chrome/src/content/content.js'), 'utf8');
+  const start = source.indexOf('function isDevJavascriptUrlAttribute(');
+  const end = source.indexOf('\n\n  function normalizeDevPatchOperations', start);
+  assert.ok(start >= 0 && end > start, 'JavaScript URL guard should remain independently testable');
+  const isBlocked = vm.runInNewContext(`(${source.slice(start, end)})`);
+  for (const name of ['href', 'src', 'xlink:href', 'formaction', 'action']) {
+    assert.equal(isBlocked(name, ' javascript:alert(1)'), true, `${name} must block javascript URLs`);
+  }
+  assert.equal(isBlocked('ACTION', '\tjava\nscript:alert(1)'), true);
+  assert.equal(isBlocked('action', 'https://example.com/submit'), false);
+  assert.equal(isBlocked('title', 'javascript:alert(1)'), false);
+});
+
 test('inject_css returns a persisted patchId that remove_injected_css can undo after agent restart', async () => {
   const originalChrome = globalThis.chrome;
   const session = {};
@@ -12398,7 +12412,7 @@ test('inject_css patch IDs are unique and cannot remove CSS from a replacement d
 });
 
 test('Chrome Dev mutation and state-change classifications cover the new toolkit', () => {
-  for (const name of ['inject_css', 'remove_injected_css', 'patch_element', 'revert_patch']) {
+  for (const name of ['inject_css', 'remove_injected_css', 'patch_element', 'revert_patch', 'inspect_event_listeners', 'highlight_element']) {
     assert.equal(capabilityForCh(name, {}), CapabilityCh.DEV_PATCH, `${name} should require the Dev patch capability`);
     assert.equal(AgentCh.STATE_CHANGE_TOOLS.has(name), true, `${name} should trigger state-change screenshots`);
   }
@@ -12408,10 +12422,12 @@ test('Chrome Dev mutation and state-change classifications cover the new toolkit
   assert.equal(AgentCh.STATE_CHANGE_TOOLS.has('execute_js'), true);
   assert.equal(AgentCh.NAV_PRONE_TOOLS.has('execute_js'), true);
   assert.equal(AgentFx.STATE_CHANGE_TOOLS.has('execute_js'), true);
-  for (const name of ['read_console', 'inspect_network_requests', 'inspect_event_listeners', 'highlight_element']) {
+  for (const name of ['read_console', 'inspect_network_requests']) {
     assert.equal(capabilityForCh(name, {}), null, `${name} should remain read-only/temporary and ungated`);
     assert.equal(UNTRUSTED_CONTENT_TOOLS_CH.has(name), true, `${name} should be wrapped as page-derived content`);
   }
+  assert.equal(UNTRUSTED_CONTENT_TOOLS_CH.has('inspect_event_listeners'), true);
+  assert.equal(UNTRUSTED_CONTENT_TOOLS_CH.has('highlight_element'), true);
 });
 
 test('HLS implicit-IV derivation does not 32-bit-truncate the media sequence', () => {

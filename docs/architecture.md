@@ -185,10 +185,10 @@ while (steps < maxSteps) {
 | `scratchpad_write` | agent.js — in-memory pinned note | Service worker |
 | `read_page_source`, `inspect_element_styles` | agent/content helpers | Dev-only source/style inspection |
 | `inject_css`, `remove_injected_css` | `chrome.scripting.insertCSS/removeCSS` + document-bound session patch metadata | Chrome Dev-only reversible CSS |
-| `patch_element`, `revert_patch`, `highlight_element` | content-script Dev helpers | Chrome Dev-only structured DOM edits / overlay |
+| `patch_element`, `revert_patch`, `highlight_element` | permission-gated content-script Dev helpers | Chrome Dev-only structured DOM edits / overlay |
 | `execute_js` | bounded CDP `Runtime.evaluate` (Chrome) / content script (Firefox) | Dev-only page JavaScript |
 | `read_console`, `inspect_network_requests` | mode-scoped bounded CDP Runtime/Log/Network buffers | Chrome Dev-only diagnostics |
-| `inspect_event_listeners` | content target marker + CDP `DOMDebugger.getEventListeners` | Chrome Dev-only listener diagnosis |
+| `inspect_event_listeners` | permission-gated content target marker + CDP `DOMDebugger.getEventListeners` | Chrome Dev-only listener diagnosis |
 | `get_shadow_dom`, `shadow_dom_query`, `get_frames` | content/CDP helpers | Full Act advanced fallbacks; also added to Mid in Dev mode |
 
 Chrome CSS patch records include the top-level `documentId` and a patch-specific CSS marker. Full navigation clears persisted records, and `remove_injected_css` checks the live document before calling `removeCSS`, preventing an old patch ID from removing equivalent CSS on a replacement page. Chrome `execute_js` passes a 15-second timeout to CDP. Dev diagnostic event handlers are registered before either agent-loop variant starts; leaving Dev mode removes the handlers and buffers and sends `Runtime.disable`, `Log.disable`, and `Network.disable` so Chrome also stops domain-level diagnostic work.

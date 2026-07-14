@@ -26,7 +26,7 @@ export const Capability = {
   CLICK: 'click',                // click / click_ax / iframe_click / drag_drop / Enter / submit
   TYPE: 'type',                  // type_text / type_ax / iframe_type / set_field (no submit)
   EXECUTE_JS: 'execute_js',      // execute_js
-  DEV_PATCH: 'dev_patch',        // inject_css / patch_element and their undo tools
+  DEV_PATCH: 'dev_patch',        // temporary page edits, including listener target markers
   NETWORK: 'network_write',      // fetch_url / research_url with a write method
   DOWNLOAD: 'download',          // download_* tools
   UPLOAD: 'upload',              // upload_file (selects a local file)
@@ -148,6 +148,8 @@ const TOOL_CAPABILITY = {
   remove_injected_css: Capability.DEV_PATCH,
   patch_element: Capability.DEV_PATCH,
   revert_patch: Capability.DEV_PATCH,
+  inspect_event_listeners: Capability.DEV_PATCH,
+  highlight_element: Capability.DEV_PATCH,
   upload_file: Capability.UPLOAD,
   resize_window: Capability.WINDOW,
   download_file: Capability.DOWNLOAD,
