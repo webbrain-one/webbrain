@@ -157,15 +157,20 @@ stop this data flow entirely.
 The "OTP / verification-code helper (email)" skill
 (`skills/otp-verification-code-helper.md`) is prompt-only and declares no
 external tool or endpoint. It guides WebBrain's existing page-reading tools to
-inspect the minimum browser-visible email/message content needed to find a
-recent, service-matching code. It cannot read SMS, phone notifications, native
-apps, or another device, and it forbids private mailbox APIs or sign-in
-bypasses. The skill itself creates no additional network request. When the user
-asks WebBrain to read a code, however, the inspected page content and extracted
-code are included in the normal request to the user's configured LLM provider
-as part of the current conversation. The instructions treat message content as
-untrusted, reject ambiguous numeric strings and recovery tokens, and prohibit
-storing the code in scratchpad or user memory.
+prefer selected text or a bounded, message-scoped accessibility-tree subtree on
+the active run tab when finding a recent, service-matching code. It cannot list
+or switch to background tabs, read SMS, phone notifications, native apps, or
+another device, and it forbids private mailbox APIs or sign-in bypasses. The
+skill itself creates no additional network request. When the user asks WebBrain
+to read a code, however, the scoped page content and extracted code are included
+in the normal request to the user's configured LLM provider as part of the
+current conversation. When Record traces is enabled, the raw page-reading tool
+result and model response are also retained locally in the `webbrain_traces`
+IndexedDB database until the user deletes those traces; the skill cannot erase
+conversation or trace history after use. Its instructions disclose that
+retention before reading, treat message content as untrusted, honor Strict
+secret handling, reject ambiguous numeric strings and recovery tokens, and
+prohibit intentionally copying the code into scratchpad or user memory.
 
 ---
 
@@ -252,7 +257,7 @@ CDP capture → JPEG/PNG data URL
 | Tracing toggle | Prevents any trace data from being stored |
 | Screenshot fallback | Controls whether page images are sent to the LLM |
 | Auto-screenshot mode | Controls how frequently viewport captures are sent |
-| Strict secret handling | Prevents credentials from appearing in summaries |
+| Strict secret handling | Prevents credentials discovered in chat or page reads from appearing in assistant text or completion summaries |
 | Profile auto-fill | Controls whether user profile text is sent to the LLM |
 | User memory | Controls whether saved memory records are sent to the LLM |
 | User memory auto-learn | Controls whether post-turn extractor calls run |

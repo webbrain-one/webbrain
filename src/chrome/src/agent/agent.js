@@ -1,7 +1,7 @@
 import { AGENT_TOOLS, AGENT_TOOL_NAMES, RESERVED_AGENT_TOOL_NAMES, getToolsForMode, SYSTEM_PROMPT_ASK, SYSTEM_PROMPT_ACT, SYSTEM_PROMPT_ACT_COMPACT, SYSTEM_PROMPT_ACT_MID, SYSTEM_PROMPT_DEV_APPENDIX } from './tools.js';
 import { handleDoneJson } from './cloud-output.js';
 import { URL_FAMILY_TOOLS, resourceBucket, bucketArgsKey } from './loop-bucket.js';
-import { isCredentialField, CREDENTIAL_NOTE_STRICT } from './credential-fields.js';
+import { isCredentialField, CREDENTIAL_NOTE_STRICT, STRICT_SECRET_SYSTEM_NOTE } from './credential-fields.js';
 import { detectProgressAction, formatLedgerRow, formatLedgerSummary, isBlockedLedgerDowngrade, isTerminalLedgerStatus, isValidLedgerStatus, ledgerDoneBlock, normalizeLedgerStatus, progressCounts, selectLedgerRows, unresolvedLedgerRows, upsertLedgerItems } from './progress-ledger.js';
 import { buildGithubStargazerProgressItems } from './observers/github-stargazers.js';
 import { analyzeMastodonPage, mastodonHandoffInstruction, mastodonProgressGuard } from './observers/mastodon.js';
@@ -136,9 +136,9 @@ export class Agent {
     this.cloudCostSpentUsd = 0;
     this._costUpdateQueue = Promise.resolve();
 
-    // Strict secret-handling mode. When true, the `done` tool description
-    // adds a hard prohibition on quoting credentials in summaries and the
-    // post-set_field credential note tells the model to never echo the
+    // Strict secret-handling mode. When true, the system prompt and `done`
+    // tool description add a hard prohibition on quoting credentials, while
+    // the post-set_field credential note tells the model to never echo the
     // value. When false (the default — this is a personal-computer tool,
     // not a third-party deployment), the model gets soft hygiene guidance
     // ("prefer generic phrasing unless the user asks for the value") but
@@ -5383,6 +5383,13 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     // path described there.
     if (this.captchaSolverEnabled) {
       prompt += `\n\n[CAPTCHA SOLVER — the user has configured CapSolver. When a CAPTCHA blocks a step, call \`solve_captcha\` once (with no arguments — it auto-detects reCAPTCHA v2/v3, hCaptcha, and Cloudflare Turnstile). On success, click the form's submit button and continue. On failure, ask the user to solve it manually — do not retry solve_captcha repeatedly.]`;
+    }
+
+    // Keep this last so the opt-in strict setting overrides enabled skills,
+    // including read-only workflows that discover a secret before set_field
+    // has a chance to emit CREDENTIAL_NOTE_STRICT.
+    if (this.strictSecretMode) {
+      prompt += `\n\n${STRICT_SECRET_SYSTEM_NOTE}`;
     }
 
     return prompt;

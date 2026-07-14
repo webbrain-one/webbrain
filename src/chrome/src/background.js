@@ -736,9 +736,9 @@ chrome.storage.onChanged.addListener((changes) => {
   }
   if (changes.strictSecretMode) {
     agent.strictSecretMode = !!changes.strictSecretMode.newValue;
-    // The setting only flips the `done` tool description and the credential
-    // note text — both are rebuilt at turn-start, so no system-prompt
-    // refresh is needed. (System prompt content itself doesn't change.)
+    // Strict mode also appends a global system note after enabled skills, so
+    // refresh live conversations immediately as well as rebuilding at turn start.
+    refreshPrompts = true;
   }
   if (changes.profileEnabled) {
     agent.profileEnabled = !!changes.profileEnabled.newValue;
