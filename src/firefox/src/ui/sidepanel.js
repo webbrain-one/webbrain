@@ -421,6 +421,16 @@ const SLASH_COMMANDS = [
   { value: '/dev', usage: '/dev [prompt]', descriptionKey: 'sp.slash.dev', action: 'dev', acceptsPayload: true },
   { value: '/plan', usage: '/plan [prompt]', descriptionKey: 'sp.slash.plan', action: 'plan', acceptsPayload: true },
 ];
+const SLASH_HELP_OPTION = {
+  value: '--help',
+  action: 'help',
+  outOfBand: true,
+  disallowPayload: true,
+};
+
+function slashCommandOptions(command) {
+  return [...(command?.options || []), SLASH_HELP_OPTION];
+}
 
 function slashCommandIsDiscoverable(command) {
   return command?.unsupported !== true;
@@ -433,6 +443,8 @@ function slashOptionIsDiscoverable(option) {
 function slashOptionIsAvailable(option, selectedValues, selectedGroups) {
   return slashOptionIsDiscoverable(option)
     && !selectedValues.has(option.value)
+    && !selectedValues.has(SLASH_HELP_OPTION.value)
+    && (option.value !== SLASH_HELP_OPTION.value || selectedValues.size === 0)
     && (!option.exclusiveGroup || !selectedGroups.has(option.exclusiveGroup));
 }
 
@@ -473,8 +485,11 @@ function parseSlashInvocation(value) {
     }
 
     const optionValue = optionToken.toLowerCase();
-    const option = (command.options || []).find((candidate) => candidate.value === optionValue);
+    const option = slashCommandOptions(command).find((candidate) => candidate.value === optionValue);
     if (!option || selectedValues.has(optionValue)) {
+      return { error: 'invalid-usage', command, commandToken };
+    }
+    if (optionValue === SLASH_HELP_OPTION.value ? selectedOptions.length > 0 : selectedValues.has(SLASH_HELP_OPTION.value)) {
       return { error: 'invalid-usage', command, commandToken };
     }
     if (option.exclusiveGroup && selectedGroups.has(option.exclusiveGroup)) {
@@ -543,6 +558,19 @@ function buildSlashCommandHelpHtml() {
   const shortcuts = t('sp.help.shortcuts_html');
   if (shortcuts && shortcuts !== 'sp.help.shortcuts_html') {
     lines.push('', shortcuts);
+  }
+  return lines.join('<br>');
+}
+
+function buildSlashCommandDetailHtml(command) {
+  if (!command) return buildSlashCommandHelpHtml();
+  const lines = [
+    `<strong><code>${escapeHtml(command.value)}</code></strong>`,
+    `<code>${escapeHtml(command.usage)}</code> — ${escapeHtml(t(command.descriptionKey))}`,
+  ];
+  for (const option of (command.options || []).filter(slashOptionIsDiscoverable)) {
+    const value = `${option.value}${option.valueLabel ? ` ${option.valueLabel}` : ''}`;
+    lines.push(`&nbsp;&nbsp;<code>${escapeHtml(value)}</code> — ${escapeHtml(t(option.descriptionKey))}`);
   }
   return lines.join('<br>');
 }
@@ -3310,7 +3338,7 @@ function getSlashAutocompleteContext() {
   const selectedGroups = new Set();
   for (const token of tokens) {
     if (!token.startsWith('--') || token === '--') return null;
-    const option = (command.options || []).find((candidate) => candidate.value === token.toLowerCase());
+    const option = slashCommandOptions(command).find((candidate) => candidate.value === token.toLowerCase());
     if (!option || !slashOptionIsDiscoverable(option) || option.takesRemainder) return null;
     selected.add(option.value);
     if (option.exclusiveGroup) selectedGroups.add(option.exclusiveGroup);
@@ -3448,8 +3476,11 @@ function updateSlashCommandAutocomplete() {
   const previouslySelected = slashCommandMatches[slashCommandSelectedIndex]?.value;
   const candidates = context.kind === 'command'
     ? SLASH_COMMANDS.filter(slashCommandIsDiscoverable)
-    : (context.command.options || [])
-      .filter((option) => slashOptionIsAvailable(option, context.selected, context.selectedGroups));
+    : slashCommandOptions(context.command)
+      .filter((option) => slashOptionIsAvailable(option, context.selected, context.selectedGroups))
+      .map((option) => option === SLASH_HELP_OPTION
+        ? { ...option, descriptionKey: context.command.descriptionKey }
+        : option);
   const matches = candidates
     .filter((candidate) => candidate.value.startsWith(context.query))
     .map((candidate) => ({
@@ -3514,9 +3545,12 @@ function handleSlashCommandKeydown(e) {
     e.preventDefault();
     return applySlashCommandCompletion();
   }
-  if (e.key === 'Enter' && !isExactSlashCommandQuery()) {
-    e.preventDefault();
-    return applySlashCommandCompletion();
+  if (e.key === 'Enter') {
+    const match = slashCommandMatches[slashCommandSelectedIndex];
+    if (match?.kind === 'option' || !isExactSlashCommandQuery()) {
+      e.preventDefault();
+      return applySlashCommandCompletion();
+    }
   }
   if (e.key === 'Escape') {
     e.preventDefault();
@@ -3633,6 +3667,11 @@ async function parseSlashCommands(text, tabId = currentTabId) {
     return '';
   }
   const { command, action, payload } = invocation;
+
+  if (action === 'help') {
+    addPersistentSlashMessage(systemHtml(buildSlashCommandDetailHtml(command)));
+    return '';
+  }
 
   if (command.value === '/help') {
     addPersistentSlashMessage(systemHtml(buildSlashCommandHelpHtml()));

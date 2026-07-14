@@ -24,7 +24,7 @@ function loadSlashCommandRuntime(panelRel) {
   assert.notEqual(start, -1, `${panelRel}: slash command metadata missing`);
   assert.notEqual(end, -1, `${panelRel}: slash parser boundary missing`);
   const block = source.slice(start, end);
-  return Function('escapeHtml', 't', `${block}\nreturn { SLASH_COMMANDS, slashCommandIsDiscoverable, slashOptionIsDiscoverable, slashOptionIsAvailable, findSlashCommand, parseSlashInvocation, slashInvocationIsOutOfBand, buildSlashCommandHelpHtml };`)(
+  return Function('escapeHtml', 't', `${block}\nreturn { SLASH_COMMANDS, SLASH_HELP_OPTION, slashCommandOptions, slashCommandIsDiscoverable, slashOptionIsDiscoverable, slashOptionIsAvailable, findSlashCommand, parseSlashInvocation, slashInvocationIsOutOfBand, buildSlashCommandHelpHtml, buildSlashCommandDetailHtml };`)(
     (value) => String(value),
     (key) => key,
   );
@@ -40,12 +40,14 @@ function loadSlashAutocompleteRuntime(panelRel) {
   const functionSource = source.slice(start, end + 2);
   const getContext = Function(
     'SLASH_COMMANDS',
+    'slashCommandOptions',
     'findSlashCommand',
     'slashCommandIsDiscoverable',
     'slashOptionIsDiscoverable',
     `let inputEl = null;\n${functionSource}\nreturn (value, cursor = value.length) => { inputEl = { value, selectionStart: cursor, selectionEnd: cursor }; return getSlashAutocompleteContext(); };`,
   )(
     slash.SLASH_COMMANDS,
+    slash.slashCommandOptions,
     slash.findSlashCommand,
     slash.slashCommandIsDiscoverable,
     slash.slashOptionIsDiscoverable,
@@ -7624,6 +7626,14 @@ test('canonical slash parser handles flags, values, casing, termination, and har
   const scheduleList = chrome.parseSlashInvocation('  /SCHEDULE   --LIST  ');
   assert.equal(scheduleList.action, 'list');
   assert.equal(chrome.slashInvocationIsOutOfBand(scheduleList), true);
+  for (const command of chrome.SLASH_COMMANDS.filter((item) => !item.unsupported)) {
+    const invocation = chrome.parseSlashInvocation(`${command.value} --help`);
+    assert.equal(invocation.action, 'help', `${command.value} --help should route to command help`);
+    assert.equal(chrome.slashInvocationIsOutOfBand(invocation), true, `${command.value} --help should be available while busy`);
+    const detail = chrome.buildSlashCommandDetailHtml(command);
+    assert.ok(detail.includes(command.usage), `${command.value} help should include its usage`);
+    assert.ok(detail.includes(command.descriptionKey), `${command.value} help should include its /help description`);
+  }
   assert.equal(chrome.parseSlashInvocation('/schedule write report --list').payload, 'write report --list', 'flags should stop at the first positional argument');
   assert.equal(chrome.parseSlashInvocation('/schedule -- --list tomorrow').payload, '--list tomorrow', 'explicit -- should terminate option parsing');
   assert.equal(chrome.parseSlashInvocation('/scratchpad --append -- --clear literally').payload, '--clear literally', 'value flags should support explicit -- termination');
@@ -7635,6 +7645,9 @@ test('canonical slash parser handles flags, values, casing, termination, and har
     '/scratchpad --append',
     '/memory --forget',
     '/scratchpad --append --clear',
+    '/schedule --help extra',
+    '/schedule --help --list',
+    '/schedule --list --help',
     '/screenshot trailing text',
   ]) {
     assert.equal(chrome.parseSlashInvocation(text).error, 'invalid-usage', `${text}: should be rejected locally`);
@@ -7678,19 +7691,28 @@ test('canonical slash parser handles flags, values, casing, termination, and har
   assert.doesNotMatch(firefoxHelp, /--full-page/, 'Firefox help should omit the unsupported full-page flag');
   const firefoxEnglish = fs.readFileSync(path.join(ROOT, 'src/firefox/src/ui/locales/en.js'), 'utf8');
   assert.doesNotMatch(firefoxEnglish, /Stop an active recording/, 'Firefox help shortcuts should not advertise unsupported recording');
+
+  for (const [label, panelRel] of [
+    ['chrome', 'src/chrome/src/ui/sidepanel.js'],
+    ['firefox', 'src/firefox/src/ui/sidepanel.js'],
+  ]) {
+    const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
+    assert.match(panel, /if \(action === 'help'\) \{[\s\S]*?addPersistentSlashMessage\(systemHtml\(buildSlashCommandDetailHtml\(command\)\)\);[\s\S]*?return '';[\s\S]*?\}/, `${label}: command help should be posted as a persistent chat response`);
+    assert.match(panel, /if \(e\.key === 'Enter'\) \{[\s\S]*?const match = slashCommandMatches\[slashCommandSelectedIndex\];[\s\S]*?match\?\.kind === 'option'[\s\S]*?applySlashCommandCompletion\(\)/, `${label}: Enter should accept an option suggestion before submitting the parent command`);
+  }
 });
 
 test('slash autocomplete progressively suggests only available unused flags', () => {
   const chrome = loadSlashAutocompleteRuntime('src/chrome/src/ui/sidepanel.js');
   const firefox = loadSlashAutocompleteRuntime('src/firefox/src/ui/sidepanel.js');
-  const optionMatches = (runtime, context) => (context?.command?.options || [])
+  const optionMatches = (runtime, context) => context ? runtime.slashCommandOptions(context.command)
     .filter((option) => runtime.slashOptionIsAvailable(option, context.selected, context.selectedGroups))
     .filter((option) => option.value.startsWith(context.query))
-    .map((option) => option.value);
+    .map((option) => option.value) : [];
 
   const initial = chrome.getContext('/record ');
   assert.equal(initial.kind, 'option');
-  assert.deepEqual(optionMatches(chrome, initial), ['--full-screen', '--transcribe']);
+  assert.deepEqual(optionMatches(chrome, initial), ['--full-screen', '--transcribe', '--help']);
 
   const partial = chrome.getContext('/record --trans');
   assert.equal(partial.query, '--trans');
@@ -7706,9 +7728,12 @@ test('slash autocomplete progressively suggests only available unused flags', ()
   assert.deepEqual(optionMatches(chrome, chrome.getContext('/scratchpad --clear ')), [], 'conflicting scratchpad actions should not be suggested');
   assert.equal(chrome.getContext('/scratchpad --append '), null, 'value-taking options should hand control back to text entry');
   assert.equal(chrome.getContext('/record positional'), null, 'positional input should close flag autocomplete');
+  assert.deepEqual(optionMatches(chrome, chrome.getContext('/schedule ')), ['--list', '--help'], 'schedule should keep its real flags ahead of universal help');
+  assert.deepEqual(optionMatches(chrome, chrome.getContext('/progress ')), ['--help'], 'commands without flags should still offer --help');
+  assert.deepEqual(optionMatches(chrome, chrome.getContext('/schedule --help ')), [], '--help should finish option autocomplete');
 
   assert.equal(firefox.getContext('/record '), null, 'Firefox should not discover unsupported recording');
-  assert.deepEqual(optionMatches(firefox, firefox.getContext('/screenshot ')), [], 'Firefox should not suggest the unsupported full-page flag');
+  assert.deepEqual(optionMatches(firefox, firefox.getContext('/screenshot ')), ['--help'], 'Firefox should omit unsupported flags but still offer command help');
   assert.deepEqual(optionMatches(firefox, firefox.getContext('/scratchpad --clear ')), [], 'Firefox should not suggest conflicting scratchpad actions');
 });
 
