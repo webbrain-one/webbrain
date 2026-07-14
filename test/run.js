@@ -89,6 +89,28 @@ function packagedMailTmRecord(prefix) {
   };
 }
 
+function packagedOpenMeteoRecord(prefix) {
+  return {
+    id: 'open-meteo-weather',
+    name: 'Open-Meteo weather',
+    sourceType: 'built-in',
+    sourceUrl: 'skills/open-meteo-weather.md',
+    content: fs.readFileSync(path.join(ROOT, prefix, 'skills/open-meteo-weather.md'), 'utf8'),
+    createdAt: 0,
+  };
+}
+
+function packagedOpenLibraryRecord(prefix) {
+  return {
+    id: 'open-library-books',
+    name: 'Open Library',
+    sourceType: 'built-in',
+    sourceUrl: 'skills/open-library-books.md',
+    content: fs.readFileSync(path.join(ROOT, prefix, 'skills/open-library-books.md'), 'utf8'),
+    createdAt: 0,
+  };
+}
+
 function skillContentWithTool(name, endpoint) {
   return `# Test Skill
 Use this test skill.
@@ -6882,6 +6904,52 @@ test('packaged Mail.tm skill is opt-in before prompt injection', () => {
     assert.doesNotMatch(buildPrompt(defaults), /Disposable email \(Mail\.tm\)/, `${label}: optional Mail.tm skill leaked into the default prompt`);
     const enabled = normalizeSkills([...defaults, packagedMailTmRecord(prefix)]);
     assert.match(buildPrompt(enabled), /Disposable email \(Mail\.tm\)/, `${label}: enabled Mail.tm skill missing from prompt`);
+  }
+});
+
+test('packaged Open-Meteo and Open Library skills are opt-in with read-only HTTP tools', () => {
+  for (const [label, prefix, normalizeSkills, buildPrompt, buildDefs] of [
+    ['firefox', 'src/firefox', normalizeCustomSkillsFx, buildCustomSkillsPromptFx, buildSkillToolDefinitionsFx],
+  ]) {
+    const defaults = normalizeSkills([packagedFreeSkillzRecord(prefix)]);
+    const promptDefaults = buildPrompt(defaults);
+    assert.doesNotMatch(promptDefaults, /Open-Meteo weather/, `${label}: Open-Meteo skill leaked into default prompt`);
+    assert.doesNotMatch(promptDefaults, /Open Library/, `${label}: Open Library skill leaked into default prompt`);
+
+    const enabled = normalizeSkills([
+      ...defaults,
+      packagedOpenMeteoRecord(prefix),
+      packagedOpenLibraryRecord(prefix),
+    ]);
+    const prompt = buildPrompt(enabled);
+    assert.match(prompt, /Open-Meteo weather/, `${label}: enabled Open-Meteo skill missing from prompt`);
+    assert.match(prompt, /Open Library/, `${label}: enabled Open Library skill missing from prompt`);
+    assert.doesNotMatch(prompt, /"endpoint": "https:\/\/geocoding-api\.open-meteo\.com\/v1\/search"/, `${label}: Open-Meteo endpoint JSON should stay out of prompt`);
+    assert.doesNotMatch(prompt, /"endpoint": "https:\/\/openlibrary\.org\/search\.json"/, `${label}: Open Library endpoint JSON should stay out of prompt`);
+
+    const weather = enabled.find((skill) => skill.id === 'open-meteo-weather');
+    const library = enabled.find((skill) => skill.id === 'open-library-books');
+    assert.deepEqual(
+      weather.tools.map((tool) => tool.name),
+      ['search_weather_location', 'get_weather_forecast'],
+      `${label}: Open-Meteo manifest tools should parse`,
+    );
+    assert.deepEqual(
+      library.tools.map((tool) => tool.name),
+      ['search_open_library_books'],
+      `${label}: Open Library manifest tools should parse`,
+    );
+    assert.equal(weather.tools[0].endpoint, 'https://geocoding-api.open-meteo.com/v1/search', `${label}: wrong geocoding endpoint`);
+    assert.equal(weather.tools[0].resultPolicy, 'untrusted', `${label}: geocoding output should be untrusted`);
+    assert.equal(weather.tools[1].endpoint, 'https://api.open-meteo.com/v1/forecast', `${label}: wrong forecast endpoint`);
+    assert.equal(library.tools[0].endpoint, 'https://openlibrary.org/search.json', `${label}: wrong Open Library endpoint`);
+    assert.equal(library.tools[0].readOnly, true, `${label}: Open Library search should be read-only`);
+
+    const defs = buildDefs(enabled, { mode: 'ask' });
+    const names = defs.map((tool) => tool.function.name);
+    assert.ok(names.includes('search_weather_location'), `${label}: weather geocoding tool missing from ask mode`);
+    assert.ok(names.includes('get_weather_forecast'), `${label}: weather forecast tool missing from ask mode`);
+    assert.ok(names.includes('search_open_library_books'), `${label}: Open Library search tool missing from ask mode`);
   }
 });
 
@@ -22123,7 +22191,12 @@ test('settings exposes custom skills tab and packaged skills resource directory'
   assert.equal(DEFAULT_SKILLS_REMOVED_STORAGE_KEY_CH, 'defaultSkillsRemoved');
   assert.equal(DEFAULT_SKILLS_REMOVED_STORAGE_KEY_FX, 'defaultSkillsRemoved');
   assert.deepEqual(PACKAGED_SKILL_SOURCES_CH.map((skill) => skill.id), ['freeskillz-xyz', 'disposable-email-mailtm']);
-  assert.deepEqual(PACKAGED_SKILL_SOURCES_FX.map((skill) => skill.id), ['freeskillz-xyz', 'disposable-email-mailtm']);
+  assert.deepEqual(PACKAGED_SKILL_SOURCES_FX.map((skill) => skill.id), [
+    'freeskillz-xyz',
+    'disposable-email-mailtm',
+    'open-meteo-weather',
+    'open-library-books',
+  ]);
   assert.deepEqual(DEFAULT_SKILL_SOURCES_CH.map((skill) => skill.id), ['freeskillz-xyz']);
   assert.deepEqual(DEFAULT_SKILL_SOURCES_FX.map((skill) => skill.id), ['freeskillz-xyz']);
 
@@ -22222,6 +22295,20 @@ test('settings exposes custom skills tab and packaged skills resource directory'
     assert.match(disposable, /accounts\/REPLACE_ACCOUNT_ID/, `${label}: disposable email skill should document account deletion`);
     assert.match(disposable, /"method": "DELETE"/, `${label}: disposable email skill should use DELETE for cleanup`);
     assert.match(disposable, /Powered by \[Mail\.tm\]\(https:\/\/mail\.tm\)/, `${label}: disposable email skill should include visible attribution`);
+    if (label === 'firefox') {
+      const weather = fs.readFileSync(path.join(ROOT, prefix, 'skills/open-meteo-weather.md'), 'utf8');
+      assert.match(weather, /open-meteo\.com/i, `${label}: Open-Meteo skill should reference the provider`);
+      assert.match(weather, /"name": "search_weather_location"/, `${label}: Open-Meteo geocoding tool missing`);
+      assert.match(weather, /"endpoint": "https:\/\/geocoding-api\.open-meteo\.com\/v1\/search"/, `${label}: Open-Meteo geocoding endpoint missing`);
+      assert.match(weather, /"name": "get_weather_forecast"/, `${label}: Open-Meteo forecast tool missing`);
+      assert.match(weather, /"endpoint": "https:\/\/api\.open-meteo\.com\/v1\/forecast"/, `${label}: Open-Meteo forecast endpoint missing`);
+      assert.match(weather, /Powered by \[Open-Meteo\]\(https:\/\/open-meteo\.com\)/, `${label}: Open-Meteo skill should include visible attribution`);
+      const library = fs.readFileSync(path.join(ROOT, prefix, 'skills/open-library-books.md'), 'utf8');
+      assert.match(library, /openlibrary\.org/i, `${label}: Open Library skill should reference the provider`);
+      assert.match(library, /"name": "search_open_library_books"/, `${label}: Open Library search tool missing`);
+      assert.match(library, /"endpoint": "https:\/\/openlibrary\.org\/search\.json"/, `${label}: Open Library search endpoint missing`);
+      assert.match(library, /Powered by \[Open Library\]\(https:\/\/openlibrary\.org\)/, `${label}: Open Library skill should include visible attribution`);
+    }
   }
 });
 
