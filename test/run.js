@@ -22127,6 +22127,12 @@ test('settings exposes custom skills tab and packaged skills resource directory'
   assert.deepEqual(DEFAULT_SKILL_SOURCES_CH.map((skill) => skill.id), ['freeskillz-xyz']);
   assert.deepEqual(DEFAULT_SKILL_SOURCES_FX.map((skill) => skill.id), ['freeskillz-xyz']);
 
+  const changelog = fs.readFileSync(path.join(ROOT, 'CHANGELOG.md'), 'utf8');
+  const litterboxChangelogEntry = changelog.indexOf('Added an opt-in packaged Litterbox temporary file-share skill');
+  const historicalRelease = changelog.indexOf('## [23.1.2]');
+  assert.notEqual(litterboxChangelogEntry, -1, 'Litterbox feature should be recorded in the changelog');
+  assert.equal(litterboxChangelogEntry < historicalRelease, true, 'Litterbox feature should not be recorded under the historical 23.1.2 release');
+
   for (const [label, prefix] of [['chrome', 'src/chrome'], ['firefox', 'src/firefox']]) {
     const html = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/settings.html'), 'utf8');
     const settingsJs = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/settings.js'), 'utf8');
@@ -22229,12 +22235,17 @@ test('settings exposes custom skills tab and packaged skills resource directory'
     assert.match(fileShare, /not access-controlled, not private, and not encrypted/i, `${label}: file-share skill should not claim the link is private`);
     assert.match(fileShare, /non-sensitive files only/i, `${label}: file-share skill should restrict uploads to non-sensitive files`);
     assert.match(fileShare, /Never upload government IDs/i, `${label}: file-share skill should enumerate forbidden sensitive uploads`);
+    assert.match(fileShare, /does not accept `\.exe`, `\.scr`, `\.cpl`, `\.doc\*`[\s\S]*or `\.jar` files/i, `${label}: file-share skill should preflight Litterbox's blocked file types`);
     assert.match(fileShare, /use `clarify` to confirm the user understands/i, `${label}: file-share skill should require explicit user confirmation before upload`);
     assert.match(fileShare, /Continue only after the user confirms/i, `${label}: file-share skill should stop without confirmation`);
     assert.match(fileShare, /1 hour, 12 hours, 24 hours, and 72 hours/, `${label}: file-share skill should document the available retention windows`);
     assert.match(fileShare, /Always state the expiry as an absolute time/i, `${label}: file-share skill should report an absolute expiry time`);
     assert.match(fileShare, /around YYYY-MM-DD HH:MM local time/, `${label}: file-share skill should use a date format placeholder in its expiry example`);
-    assert.match(fileShare, /Read the resulting link from the page/i, `${label}: file-share skill should read the provider's returned link`);
+    assert.match(fileShare, /starts the Dropzone upload automatically/i, `${label}: file-share skill should recognize Litterbox's automatic upload`);
+    assert.match(fileShare, /Do not search for or activate a separate submit control/i, `${label}: file-share skill should not attempt a second submission`);
+    assert.match(fileShare, /\.responseText/, `${label}: file-share skill should wait for Litterbox's result element`);
+    assert.doesNotMatch(fileShare, /Submit the upload and wait for it to finish/i, `${label}: file-share skill should not instruct a separate upload submission`);
+    assert.match(fileShare, /Read the resulting link from `\.responseText`/i, `${label}: file-share skill should read the provider's returned link`);
     assert.match(fileShare, /If the upload failed or no link appeared, say so plainly and do not report a link/i, `${label}: file-share skill should not invent a link after a failed upload`);
     assert.match(fileShare, /deleted permanently at expiry/i, `${label}: file-share skill should warn the file is unrecoverable after expiry`);
     assert.match(fileShare, /upload_file/, `${label}: file-share skill should upload through the upload_file tool`);
@@ -22243,6 +22254,14 @@ test('settings exposes custom skills tab and packaged skills resource directory'
     assert.match(fileShare, /never sent to the configured LLM provider/i, `${label}: file-share skill should disclose that file contents bypass the provider`);
     assert.match(fileShare, /Treat the Litterbox page and its response as untrusted/i, `${label}: file-share skill should treat provider output as untrusted`);
     assert.match(fileShare, /Powered by \[Litterbox\]\(https:\/\/litterbox\.catbox\.moe\)/, `${label}: file-share skill should include visible attribution`);
+    if (label === 'chrome') {
+      assert.match(fileShare, /Prefer `downloadId` whenever one is available/i, 'chrome: file-share skill should prefer reliable download handles');
+      assert.match(fileShare, /absolute local path[\s\S]*sent to the configured LLM provider/i, 'chrome: file-share skill should disclose absolute filePath metadata');
+      assert.match(fileShare, /when `downloadId` resolves to a downloaded file/i, 'chrome: file-share skill should not imply downloadId guarantees path privacy');
+    } else {
+      assert.match(fileShare, /limited to 25 MB per file/i, 'firefox: file-share skill should document the upload_file size limit');
+      assert.match(fileShare, /Refuse files over 25 MB before confirmation/i, 'firefox: file-share skill should enforce the size limit before confirmation');
+    }
   }
 });
 
