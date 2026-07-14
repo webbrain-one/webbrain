@@ -23,6 +23,16 @@ export const PACKAGED_SKILL_SOURCES = Object.freeze([
     name: 'Temporary file share (Litterbox)',
     path: 'skills/temporary-file-share-litterbox.md',
   }),
+  Object.freeze({
+    id: 'open-meteo-weather',
+    name: 'Open-Meteo weather',
+    path: 'skills/open-meteo-weather.md',
+  }),
+  Object.freeze({
+    id: 'open-library-books',
+    name: 'Open Library',
+    path: 'skills/open-library-books.md',
+  }),
 ]);
 export const DEFAULT_SKILL_SOURCES = Object.freeze(
   PACKAGED_SKILL_SOURCES.filter((source) => source.id === 'freeskillz-xyz')

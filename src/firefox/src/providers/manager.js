@@ -24,7 +24,7 @@ const OPENROUTER_DEFAULT_MODEL = 'openrouter/free';
 const OPENROUTER_LEGACY_DEFAULT_MODEL = 'stepfun/step-3.7-flash';
 const SUPPORTED_PROVIDER_TYPES = new Set(['llamacpp', 'openai', 'azure_openai', 'aws_bedrock', 'anthropic', 'anthropic_oauth']);
 const SAFE_PROVIDER_ID_RE = /^[A-Za-z0-9_-]+$/;
-const ROUTER_PROVIDER_IDS = ['openrouter', 'cloudflare', 'nvidia', 'groq', 'huggingface'];
+const ROUTER_PROVIDER_IDS = ['openrouter', 'cloudflare', 'nvidia', 'groq', 'huggingface', 'fireworks', 'together'];
 const PROVIDER_CREDENTIAL_KEYS = ['apiKey', 'accessKeyId', 'secretAccessKey', 'sessionToken'];
 
 /**
@@ -404,7 +404,7 @@ export class ProviderManager {
       },
       together: {
         type: 'openai',
-        category: 'cloud',
+        category: 'router',
         label: 'Together AI',
         providerName: 'together',
         baseUrl: 'https://api.together.xyz/v1',
@@ -436,6 +436,18 @@ export class ProviderManager {
         supportsStreamUsageOptions: true,
         apiKey: '',
         apiKeyUrl: 'https://huggingface.co/settings/tokens',
+        enabled: false,
+      },
+      fireworks: {
+        type: 'openai',
+        category: 'router',
+        label: 'Fireworks',
+        providerName: 'fireworks',
+        baseUrl: 'https://api.fireworks.ai/inference/v1',
+        model: 'accounts/fireworks/models/llama-v3p3-70b-instruct',
+        supportsStreamUsageOptions: true,
+        apiKey: '',
+        apiKeyUrl: 'https://fireworks.ai/account/api-keys',
         enabled: false,
       },
     };
