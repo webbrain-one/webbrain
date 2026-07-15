@@ -17070,6 +17070,32 @@ test('agent blocks generic feed URLs until the visible media permalink is resolv
     assert.deepEqual(implicit.suggestedTools, ['screenshot', 'get_accessibility_tree', 'download_public_media'], `${label}: guard should prescribe visual target resolution`);
     assert.match(implicit.error, /do not export separate video\/audio tracks/i, `${label}: guard should not hand merging back to the user`);
 
+    const guardedMessages = [
+      {
+        role: 'assistant',
+        tool_calls: [{
+          id: 'feed_permalink_guard',
+          function: { name: 'download_public_media', arguments: '{"kind":"video"}' },
+        }],
+      },
+      {
+        role: 'tool',
+        tool_call_id: 'feed_permalink_guard',
+        content: JSON.stringify(implicit),
+      },
+    ];
+    const guardedAttempt = agent._downloadPublicMediaAttempt(guardedMessages, 'https://www.instagram.com/');
+    assert.equal(guardedAttempt.attempted, false, `${label}: local permalink guard must not count as a FreeSkillz attempt`);
+    const guardedFallback = await agent._downloadPublicMediaRedirectForSocial(
+      1,
+      'download_social_media',
+      { target: 'video' },
+      new Set(['download_public_media']),
+      guardedMessages,
+    );
+    assert.equal(guardedFallback?.needsExplicitMediaUrl, true, `${label}: browser fallback must remain blocked after the local permalink guard`);
+    assert.equal(guardedFallback?.wrongTool, true, `${label}: guarded feed fallback should redirect to permalink discovery`);
+
     const explicitFeed = await agent._downloadPublicMediaExplicitUrlGuard(1, 'download_public_media', {
       url: 'https://www.instagram.com/',
       kind: 'video',

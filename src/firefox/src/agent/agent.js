@@ -1245,10 +1245,16 @@ export class Agent {
       if (toolCall?.name !== 'download_public_media') continue;
       const explicitUrl = typeof toolCall.args?.url === 'string' ? toolCall.args.url.trim() : '';
       const explicitMatchesCurrent = !!explicitUrl && !!currentMediaUrl && this._normalizePublicMediaAttemptUrl(explicitUrl) === currentMediaUrl;
-      explicitAttempted = !!explicitUrl && !explicitMatchesCurrent;
-      attempted = !explicitUrl || explicitMatchesCurrent;
       let parsed = null;
       try { parsed = JSON.parse(this._unwrapUntrusted(msg.content)); } catch { /* malformed result still counts as an attempt */ }
+      // The feed/profile permalink guard runs before the skill tool and adds a
+      // synthetic tool result. It is not a FreeSkillz request, so do not let it
+      // unlock the browser fallback as though the remote downloader failed.
+      if (parsed?.needsExplicitMediaUrl === true) {
+        continue;
+      }
+      explicitAttempted = !!explicitUrl && !explicitMatchesCurrent;
+      attempted = !explicitUrl || explicitMatchesCurrent;
       const resultSucceeded = !!(parsed && typeof parsed === 'object' && parsed.success === true);
       succeeded = attempted && resultSucceeded;
       explicitSucceeded = explicitAttempted && resultSucceeded;
