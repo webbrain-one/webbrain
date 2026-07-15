@@ -12997,8 +12997,9 @@ test('social media YouTube fallback survives thumbnail-only completions', () => 
     const source = fs.readFileSync(path.join(ROOT, relPath), 'utf8');
     assert.match(source, /completedVideoFromStats[\s\S]*completedVideoCount[\s\S]*_buildRecommendation\(\{[\s\S]*completedVideoCount/);
     assert.match(source, /completedRequestedFromStats[\s\S]*if \(mseBytes > 0 && completedRequestedFromStats === 0\)/);
+    assert.match(source, /completedRequestedFromStats =[\s\S]*=== 'video'[\s\S]*\? completedVideoFromStats[\s\S]*: completedFromStats/);
     assert.match(source, /requestedVideoMissing[\s\S]*success: !\(strictMseFailure \|\| requestedVideoMissing\)/);
-    assert.match(source, /const completed = videoResultRequired \? result\.completedVideoCount : result\.completedCount/);
+    assert.match(source, /const videoResultRequired = toolArgs\.target === 'video';[\s\S]*const completed = videoResultRequired \? result\.completedVideoCount : result\.completedCount/);
   }
 });
 

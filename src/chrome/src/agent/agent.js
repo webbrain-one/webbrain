@@ -10004,9 +10004,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
               } catch (_) { /* recorder optional */ }
               const completedFromStats = Number(stats ? stats.completed : 0) || 0;
               const completedVideoFromStats = Number(stats ? stats.completedVideo : 0) || 0;
-              const completedRequestedFromStats = runOpts.target === 'image'
-                ? completedFromStats
-                : completedVideoFromStats;
+              const completedRequestedFromStats = runOpts.target === 'video'
+                ? completedVideoFromStats
+                : completedFromStats;
               // If the MSE recorder captured bytes, save them HERE rather
               // than asking the agent to call execute_js → saveMse() in a
               // follow-up step. The follow-up pattern was broken by the
@@ -10041,11 +10041,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
                 completedVideoCount,
                 pageUrl: location.href,
               });
-              const videoResultRequired = runOpts.target !== 'image' && (
-                runOpts.target === 'video'
-                || mseBytes > 0
-                || recommendation?.kind === 'youtube_video'
-              );
+              const videoResultRequired = runOpts.target === 'video';
               const requestedVideoMissing = videoResultRequired && completedVideoCount === 0;
               // Honest per-status counts so the agent can detect cases
               // where 713 URLs were "found" but only 1 file actually
@@ -10105,12 +10101,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       };
       const hasCompletedDownload = (result) => {
         if (!result || result.success === false) return false;
-        const videoResultRequired = toolArgs.target === 'video' || (
-          toolArgs.target !== 'image' && (
-            Number(result.mseBytes || 0) > 0
-            || result.recommendation?.kind === 'youtube_video'
-          )
-        );
+        const videoResultRequired = toolArgs.target === 'video';
         const completed = videoResultRequired ? result.completedVideoCount : result.completedCount;
         return Number(completed || 0) > 0;
       };
