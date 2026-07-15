@@ -8324,6 +8324,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
                 for (const b of (rec.orphanBuffers || [])) mseBytes += (b.bytes || 0);
               } catch (_) {}
               const completedFromStats = Number(stats ? stats.completed : 0) || 0;
+              const completedVideoFromStats = Number(stats ? stats.completedVideo : 0) || 0;
               // If the MSE recorder captured bytes, save them inline rather
               // than asking the agent to call execute_js → saveMse() in a
               // follow-up step. The follow-up pattern was broken by the
@@ -8345,13 +8346,19 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
                   mseSaveCode = e && e.code || null;
                 }
               }
+              const mseSavedCount = Array.isArray(mseSavedFiles) ? mseSavedFiles.length : 0;
+              const mseSavedVideoCount = Array.isArray(mseSavedFiles)
+                ? mseSavedFiles.filter(file => String(file?.mime || '').toLowerCase().startsWith('video/')).length
+                : 0;
+              const completedVideoCount = completedVideoFromStats + mseSavedVideoCount;
               const recommendation = window.SocialMediaDownloader._buildRecommendation({
                 urls, profile, mseBytes, mseSavedFiles, mseSaveError, mseSaveCode,
-                completedCount: completedFromStats, pageUrl: location.href,
+                completedCount: completedFromStats,
+                completedVideoCount,
+                pageUrl: location.href,
               });
               // Honest per-status counts. Roll mse-saved files into the
               // completed count so the agent sees one consistent number.
-              const mseSavedCount = Array.isArray(mseSavedFiles) ? mseSavedFiles.length : 0;
               const completedCount = completedFromStats + mseSavedCount;
               const strictMseFailure = mseSaveCode === 'split_mse_requires_server_merge';
               return {
@@ -8361,6 +8368,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
                 count: urls.length + mseSavedCount,
                 triggeredCount: (stats ? stats.triggered : urls.length) + mseSavedCount,
                 completedCount,
+                completedVideoCount,
                 openedInTabCount: stats ? stats.openedInTab : null,
                 failedCount: stats ? stats.failed : null,
                 failures: stats ? stats.failures : [],

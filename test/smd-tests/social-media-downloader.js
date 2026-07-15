@@ -1153,6 +1153,7 @@ window.SocialMediaDownloader = (() => {
     mseSaveError = null,
     mseSaveCode = null,
     completedCount = 0,
+    completedVideoCount = null,
     pageUrl = (typeof location !== 'undefined' ? location.href : ''),
   } = {}) => {
     let parsed = null;
@@ -1160,14 +1161,20 @@ window.SocialMediaDownloader = (() => {
     const href = parsed ? parsed.href : String(pageUrl || '');
     const path = parsed ? (parsed.pathname + parsed.search) : '';
 
-    if (Number(completedCount) > 0) return null;
+    const completedDownloads = Number(completedCount) || 0;
+    // New callers report successful video downloads explicitly. Preserve
+    // compatibility with older callers by treating a completed run that
+    // discovered a video URL as a completed video when the field is absent.
+    const completedVideos = completedVideoCount === null
+      ? (completedDownloads > 0 && urls.some(isVideoDownloadUrl) ? completedDownloads : 0)
+      : (Number(completedVideoCount) || 0);
 
-    // YouTube watch / shorts pages — if no googlevideo URL came back,
-    // the actual stream is signatureCipher-only or Widevine-locked.
+    // YouTube watch / shorts pages — a saved thumbnail or OG image does not
+    // satisfy a video request. Only suppress the fallback after an actual
+    // video stream (including a verified muxed MSE file) completed.
     if (profile === 'youtube') {
       const isWatch = /\/(?:watch|shorts)/i.test(path);
-      const hasVideoUrl = urls.some(u => /googlevideo\.com/.test(u));
-      if (isWatch && !hasVideoUrl) {
+      if (isWatch && completedVideos === 0) {
         return {
           kind: 'youtube_video',
           message:
@@ -1180,6 +1187,8 @@ window.SocialMediaDownloader = (() => {
         };
       }
     }
+
+    if (completedDownloads > 0) return null;
 
     // MSE capture available. The new flow: download_social_media calls
     // saveMse() inline and passes mseSavedFiles / mseSaveError in.
@@ -1716,6 +1725,7 @@ window.SocialMediaDownloader = (() => {
     const stats = {
       triggered: selected.length,
       completed: 0,
+      completedVideo: 0,
       openedInTab: 0,
       failed: 0,
       failures: [], // first ~5 failures only — keeps payload small
@@ -1731,8 +1741,10 @@ window.SocialMediaDownloader = (() => {
       } catch (e) {
         r = { status: 'failed', filename, reason: (e && e.message) || String(e) };
       }
-      if (r.status === 'completed') stats.completed++;
-      else if (r.status === 'opened-in-tab') {
+      if (r.status === 'completed') {
+        stats.completed++;
+        if (isVideo) stats.completedVideo++;
+      } else if (r.status === 'opened-in-tab') {
         stats.openedInTab++;
         if (stats.failures.length < 5) stats.failures.push({ filename, url, reason: r.reason });
       } else {

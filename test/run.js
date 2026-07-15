@@ -12957,6 +12957,48 @@ test('social media MSE strict mode refuses split tracks and accepts verified mux
   assert.equal(muxed.smd._buildRecommendation({ mseBytes: 4, completedCount: 1 }), null, 'completed combined downloads should suppress MSE fallback advice');
 });
 
+test('social media YouTube fallback survives thumbnail-only completions', () => {
+  const { smd } = loadSocialMediaDownloaderRuntime();
+  const pageUrl = 'https://www.youtube.com/watch?v=abc';
+  const thumbnailUrl = 'https://i.ytimg.com/vi/abc/maxresdefault.jpg';
+  const videoUrl = 'https://rr1---sn-foo.googlevideo.com/videoplayback?id=abc&mime=video%2Fmp4';
+
+  const thumbnailOnly = smd._buildRecommendation({
+    profile: 'youtube',
+    urls: [thumbnailUrl],
+    completedCount: 1,
+    completedVideoCount: 0,
+    pageUrl,
+  });
+  assert.equal(thumbnailOnly?.kind, 'youtube_video');
+  assert.match(thumbnailOnly.message, /yt-dlp/);
+
+  const discoveredButFailed = smd._buildRecommendation({
+    profile: 'youtube',
+    urls: [videoUrl, thumbnailUrl],
+    completedCount: 1,
+    completedVideoCount: 0,
+    pageUrl,
+  });
+  assert.equal(discoveredButFailed?.kind, 'youtube_video', 'discovering a video URL is not proof that it downloaded');
+
+  assert.equal(smd._buildRecommendation({
+    profile: 'youtube',
+    urls: [videoUrl, thumbnailUrl],
+    completedCount: 1,
+    completedVideoCount: 1,
+    pageUrl,
+  }), null, 'an actually completed video stream should suppress the fallback');
+
+  for (const relPath of [
+    'src/chrome/src/agent/agent.js',
+    'src/firefox/src/agent/agent.js',
+  ]) {
+    const source = fs.readFileSync(path.join(ROOT, relPath), 'utf8');
+    assert.match(source, /completedVideoFromStats[\s\S]*completedVideoCount[\s\S]*_buildRecommendation\(\{[\s\S]*completedVideoCount/);
+  }
+});
+
 test('social media downloader names extensionless HTTP videos as videos', () => {
   const downloaderPaths = [
     'src/chrome/src/agent/social-media-downloader.js',
@@ -12969,6 +13011,8 @@ test('social media downloader names extensionless HTTP videos as videos', () => 
     assert.match(source, /const isHttpVideoUrl = url =>[\s\S]*googlevideo\\.com\\\/videoplayback\\b[\s\S]*mime\|type\)=video/);
     assert.match(source, /const isVideoDownloadUrl = url =>\s*isHttpVideoUrl\(url\) \|\|[\s\S]*v\\.redd\\.it/);
     assert.match(source, /const isVideo = isVideoDownloadUrl\(url\);/);
+    assert.match(source, /completedVideo: 0/);
+    assert.match(source, /if \(isVideo\) stats\.completedVideo\+\+/);
   }
 });
 
