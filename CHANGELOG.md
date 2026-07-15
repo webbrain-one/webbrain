@@ -4,6 +4,11 @@ All notable changes to WebBrain are documented in this file.
 
 This changelog was generated from the repository Git history and release tags. Versions without a Git tag are inferred from version-bump commits and the current `package.json` / browser manifest versions.
 
+## [23.3.0] - 2026-07-15
+
+### Changed
+- Load browser skills on demand
+
 ## [23.2.2] - 2026-07-15
 
 ### Changed
