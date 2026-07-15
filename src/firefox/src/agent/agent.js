@@ -1279,9 +1279,9 @@ export class Agent {
     const mode = this.conversationModes.get(tabId) || 'act';
     const tier = this._resolvePromptTier();
     let activeTool = this._activeSkillToolForName(tabId, 'download_public_media');
-    const owner = activeTool ? null : this._eligibleSkills(mode, tier).find(
-      (skill) => (skill.tools || []).some((tool) => tool.name === 'download_public_media'),
-    );
+    const owner = activeTool
+      ? null
+      : this._eligibleSkillOwnerForToolName(tabId, 'download_public_media', mode, tier);
     if (!activeTool && !owner) return null;
 
     if (publicAttempt.succeeded || (needsExplicitTarget && publicAttempt.explicitSucceeded)) {
@@ -4659,6 +4659,17 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     }).get(name) || null;
   }
 
+  _eligibleSkillOwnerForToolName(tabId, name, mode, tier) {
+    if (!name) return null;
+    const siteAdapter = this._activeSkillSiteAdapter(tabId);
+    return this._eligibleSkills(mode, tier).find((skill) => buildSkillToolDefinitions([skill], {
+      mode,
+      tier: tier || 'full',
+      siteAdapter,
+      excludeNames: RESERVED_AGENT_TOOL_NAMES,
+    }).some((tool) => tool.function?.name === name)) || null;
+  }
+
   _activateSkillForRun(tabId, skillId, mode, tier) {
     const skill = this._eligibleSkills(mode, tier).find((item) => item.id === skillId);
     if (!skill) return { skill: null, alreadyLoaded: false };
@@ -4721,9 +4732,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       .map((name) => String(name || '').trim())
       .filter(Boolean);
     if (!names.length) return;
-    const eligible = this._eligibleSkills(mode, tier);
     for (const name of names) {
-      const owner = eligible.find((skill) => (skill.tools || []).some((tool) => tool.name === name));
+      const owner = this._eligibleSkillOwnerForToolName(tabId, name, mode, tier);
       if (owner) this._activateSkillForRun(tabId, owner.id, mode, tier);
     }
   }

@@ -16398,6 +16398,48 @@ test('agent prefers download_public_media before download_social_media when avai
     assert.equal(inactiveAgent.activeSkillIds.get(inactiveTabId).has('freeskillz-xyz'), true, `${label}: FreeSkillz should activate for the current run`);
     assert.match(inactiveAgent.conversations.get(inactiveTabId)[0].content, /one finalized MP4 with its audio included/i, `${label}: redirect should rebuild the system prompt with full skill guidance`);
 
+    const adapterScopedTabId = label === 'chrome' ? 4933 : 4934;
+    const adapterScopedSkill = packagedFreeSkillzRecord(prefix);
+    adapterScopedSkill.content = adapterScopedSkill.content.replace(
+      '"name": "download_public_media",',
+      '"name": "download_public_media",\n      "siteAdapters": ["youtube"],',
+    );
+    const adapterScopedAgent = new AgentClass({ getVisionProvider: async () => null });
+    adapterScopedAgent.setCustomSkills([adapterScopedSkill]);
+    adapterScopedAgent.conversationModes.set(adapterScopedTabId, 'act');
+    adapterScopedAgent.lastSeenAdapter.set(adapterScopedTabId, 'instagram');
+    adapterScopedAgent.conversations.set(adapterScopedTabId, [{ role: 'system', content: adapterScopedAgent._buildSystemPrompt('act', adapterScopedTabId) }]);
+    adapterScopedAgent._currentUrl = async () => 'https://www.instagram.com/reel/abc/';
+    adapterScopedAgent._ensureGateSetting = async () => {};
+    adapterScopedAgent._skipPermissionGate = true;
+    let adapterScopedExecutedName = '';
+    adapterScopedAgent.executeTool = async (_tabId, name) => {
+      adapterScopedExecutedName = name;
+      return { success: true, completedCount: 1 };
+    };
+    adapterScopedAgent._preactivateRecommendedActionSkill(
+      adapterScopedTabId,
+      { recommendedAction: { tool: 'download_public_media' } },
+      'act',
+    );
+    assert.equal(adapterScopedAgent.activeSkillIds.has(adapterScopedTabId), false, `${label}: recommended action must not activate an adapter-incompatible skill`);
+    const adapterScopedMessages = [];
+    await adapterScopedAgent._executeToolBatch(
+      adapterScopedTabId,
+      [{
+        id: 'social_with_adapter_incompatible_skill',
+        function: { name: 'download_social_media', arguments: '{"target":"video"}' },
+      }],
+      adapterScopedMessages,
+      () => {},
+      { supportsVision: false },
+      '',
+      new Set(['download_social_media']),
+      1,
+    );
+    assert.equal(adapterScopedExecutedName, 'download_social_media', `${label}: adapter-incompatible skill should leave browser fallback available`);
+    assert.equal(adapterScopedAgent.activeSkillIds.has(adapterScopedTabId), false, `${label}: fallback redirect injected an adapter-incompatible skill prompt`);
+
     const redirectAgent = new AgentClass({ getVisionProvider: async () => null });
     redirectAgent.setCustomSkills([packagedFreeSkillzRecord(prefix)]);
     activateFreeSkillzForMediaTests(redirectAgent);
