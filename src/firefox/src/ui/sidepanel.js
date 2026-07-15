@@ -4728,10 +4728,15 @@ function startClarifyCountdown(card, { tabId, clarifyId, deadlineTs, firstOption
  * Lock a clarify card after the agent auto-selected (timeout). Does not re-send
  * clarify_response — the agent already resolved its pending Promise.
  */
+/**
+ * Lock a clarify card after the agent auto-selected (timeout or Instant).
+ * Does not re-send clarify_response — the agent already resolved its pending Promise.
+ */
 function lockClarifyCardFromAuto(data) {
   const clarifyId = String(data?.clarifyId || '');
   if (!clarifyId) return;
   const answer = String(data?.answer || '').trim();
+  const source = String(data?.source || 'timeout');
   for (const card of document.querySelectorAll('.clarify-card')) {
     if (String(card.dataset.clarifyId || '') !== clarifyId) continue;
     if (card.classList.contains('clarify-answered')) return;
@@ -4743,7 +4748,9 @@ function lockClarifyCardFromAuto(data) {
     }
     const answered = document.createElement('div');
     answered.className = 'clarify-your-answer';
-    const prefix = typeof t === 'function' ? t('sp.clarify.auto_selected') : 'Auto-selected (timed out):';
+    const prefix = source === 'auto'
+      ? (typeof t === 'function' ? t('sp.clarify.auto_selected_instant') : 'Auto-selected (Instant):')
+      : (typeof t === 'function' ? t('sp.clarify.auto_selected') : 'Auto-selected (timed out):');
     answered.textContent = `${prefix} ${answer}`;
     card.appendChild(answered);
     scrollToBottom();
@@ -5058,9 +5065,14 @@ function submitClarify(card, tabId, clarifyId, answer, source) {
     }
     const answered = document.createElement('div');
     answered.className = 'clarify-your-answer';
-    const prefix = source === 'timeout'
-      ? (typeof t === 'function' ? t('sp.clarify.auto_selected') : 'Auto-selected (timed out):')
-      : (typeof t === 'function' ? t('sp.clarify.your_answer') : 'Your answer:');
+    let prefix;
+    if (source === 'timeout') {
+      prefix = typeof t === 'function' ? t('sp.clarify.auto_selected') : 'Auto-selected (timed out):';
+    } else if (source === 'auto') {
+      prefix = typeof t === 'function' ? t('sp.clarify.auto_selected_instant') : 'Auto-selected (Instant):';
+    } else {
+      prefix = typeof t === 'function' ? t('sp.clarify.your_answer') : 'Your answer:';
+    }
     answered.textContent = `${prefix} ${answer}`;
     card.appendChild(answered);
     scrollToBottom();
@@ -5089,11 +5101,12 @@ function submitClarify(card, tabId, clarifyId, answer, source) {
     showActivity(t('sp.activity.thinking'));
   }
   const clarifyPayload = { tabId, clarifyId, answer, source };
-  // Timeout auto-selects are not user answers — never feed them to user-memory.
-  if (source !== 'timeout' && card.dataset.memorySource) {
+  // Timeout / Instant auto-selects are not user-authored answers — skip user-memory.
+  const isAutoClarify = source === 'timeout' || source === 'auto';
+  if (!isAutoClarify && card.dataset.memorySource) {
     clarifyPayload.memorySource = card.dataset.memorySource;
   }
-  if (source !== 'timeout' && card.dataset.memoryQuestion) {
+  if (!isAutoClarify && card.dataset.memoryQuestion) {
     clarifyPayload.question = card.dataset.memoryQuestion;
   }
   sendToBackground('clarify_response', clarifyPayload)

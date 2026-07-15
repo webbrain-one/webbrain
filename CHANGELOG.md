@@ -4,6 +4,15 @@ All notable changes to WebBrain are documented in this file.
 
 This changelog was generated from the repository Git history and release tags. Versions without a Git tag are inferred from version-bump commits and the current `package.json` / browser manifest versions.
 
+## [23.3.3] - 2026-07-15
+
+### Changed
+- Clarify timeout slider semantics: **0 = Instant** (always auto-select the first option), **1–1200s = wait then auto-select**, and **above 1200s (slider max / Off) = wait indefinitely**. Existing stored `0` (old Off) migrates once to Off.
+- Instant clarify auto-selects use `source=auto` and tell the agent to continue (intentional unattended policy, e.g. headless); only waited `source=timeout` keeps the non-confirmation warning.
+
+### Tests
+- Updated Chrome and Firefox clarify-timeout coverage for Instant / Off slider endpoints, one-shot semantics migration, and Instant vs waited-timeout agent notes.
+
 ## [23.3.2] - 2026-07-15
 
 ### Added

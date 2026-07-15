@@ -165,14 +165,29 @@ async function loadMaxSteps() {
 }
 loadMaxSteps();
 
+// Stored slider: 0 = Instant, 1–1200 = wait N s, >1200 (1205) = Off.
+// Runtime agent value: 0 = Instant, 1–1200 = wait, -1 = Off.
+const CLARIFY_TIMEOUT_OFF_SLIDER = 1205;
+
 function normalizeClarifyTimeoutSec(value) {
   const n = Number(value);
   if (!Number.isFinite(n) || n < 0) return 60;
-  return Math.min(1200, Math.floor(n));
+  const sec = Math.floor(n);
+  if (sec > 1200) return -1;
+  return Math.min(1200, sec);
 }
 
 async function loadClarifyTimeout() {
-  const stored = await browser.storage.local.get('clarifyTimeoutSec');
+  const stored = await browser.storage.local.get(['clarifyTimeoutSec', 'clarifyTimeoutSemanticsV2']);
+  // One-shot: old 0 meant Off; new 0 means Instant and Off is >1200.
+  if (!stored.clarifyTimeoutSemanticsV2) {
+    const updates = { clarifyTimeoutSemanticsV2: true };
+    if (Number(stored.clarifyTimeoutSec) === 0) {
+      updates.clarifyTimeoutSec = CLARIFY_TIMEOUT_OFF_SLIDER;
+      stored.clarifyTimeoutSec = CLARIFY_TIMEOUT_OFF_SLIDER;
+    }
+    await browser.storage.local.set(updates).catch(() => {});
+  }
   agent.clarifyTimeoutSec = normalizeClarifyTimeoutSec(
     stored.clarifyTimeoutSec != null ? stored.clarifyTimeoutSec : 60,
   );
@@ -1721,10 +1736,11 @@ async function handleMessage(msg, sender) {
       if (!answer) return { ok: false, error: 'answer required' };
       const source = String(msg.source || 'user');
       const matched = agent.submitClarifyResponse(tabId, clarifyId, answer, source);
-      // Auto-timeout defaults are not user-authored preferences.
-      if (matched && source !== 'timeout' && msg.memorySource === 'clarification_response') {
+      // Waited-timeout and Instant auto-selects are not user-authored preferences.
+      const isAutoClarify = source === 'timeout' || source === 'auto';
+      if (matched && !isAutoClarify && msg.memorySource === 'clarification_response') {
         recordClarificationMemoryCandidate(tabId, msg.question, answer);
-      } else if (matched && source !== 'timeout' && msg.memorySource === 'form_confirmation') {
+      } else if (matched && !isAutoClarify && msg.memorySource === 'form_confirmation') {
         recordFormCompletionMemoryCandidate(tabId, answer);
       }
       return { ok: matched, matched };

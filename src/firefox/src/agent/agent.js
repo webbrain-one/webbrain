@@ -88,7 +88,8 @@ export class Agent {
     this.currentCostState = new Map(); // tabId -> active cloud/router cost state
     this.maxSteps = 130; // safety limit for autonomous loops (configurable via settings)
     // Seconds to wait on clarify() before auto-picking the first option.
-    // 0 = wait indefinitely. Permission/form-submit prompts are never timed out.
+    // 0 = instant auto-select; 1–1200 = wait N seconds; -1 = Off (wait forever).
+    // Permission/form-submit prompts are never timed out.
     // Loaded from browser.storage.local in background.js (default 60).
     this.clarifyTimeoutSec = 60;
     this.maxContextMessages = 50; // minimum soft cap; larger provider windows scale this up
@@ -3438,13 +3439,17 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   }
 
   /**
-   * Clamp clarify auto-timeout seconds from settings (0–1200). Invalid values
-   * fall back to the product default of 60s.
+   * Normalize clarify auto-timeout from settings.
+   * Returns 0 (instant auto-select), 1–1200 (wait N seconds), or -1 (Off /
+   * wait forever). Invalid values fall back to the product default of 60s.
+   * Stored slider values above 1200 mean Off.
    */
   _normalizeClarifyTimeoutSec(value) {
     const n = Number(value);
     if (!Number.isFinite(n) || n < 0) return 60;
-    return Math.min(1200, Math.floor(n));
+    const sec = Math.floor(n);
+    if (sec > 1200) return -1;
+    return Math.min(1200, sec);
   }
 
   _clearClarifyTimer(entry) {
@@ -7740,29 +7745,35 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         : [];
       const reason = args?.reason ? String(args.reason).slice(0, 300) : null;
       const clarifyId = `clr_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+      // 0 = instant auto-select; >0 = wait N s; -1 = Off (wait forever).
       const timeoutSec = this._normalizeClarifyTimeoutSec(this.clarifyTimeoutSec);
-      const deadlineTs = timeoutSec > 0 ? Date.now() + timeoutSec * 1000 : 0;
+      const waitSec = timeoutSec > 0 ? timeoutSec : 0;
+      const deadlineTs = waitSec > 0 ? Date.now() + waitSec * 1000 : 0;
 
       const tabPending = this._pendingClarifications.get(tabId) || new Map();
       this._pendingClarifications.set(tabId, tabPending);
 
       const responsePromise = new Promise((resolve) => {
         const entry = { resolve, ts: Date.now(), timer: null, settled: false };
-        if (timeoutSec > 0) {
+        // Arm auto-select when Instant (0) or a positive wait; Off (-1) waits forever.
+        // Instant uses source=auto (user intentionally set auto-approve, e.g. headless).
+        // A waited timeout uses source=timeout (passive no-reply — not confirmation).
+        if (timeoutSec >= 0) {
+          const autoSource = timeoutSec === 0 ? 'auto' : 'timeout';
           entry.timer = setTimeout(() => {
             entry.timer = null;
             // Prefer the first suggested option; free-text-only prompts get a
             // clear timeout marker so the agent can continue without hanging.
             const answer = options.length > 0
               ? options[0]
-              : '(no response — timed out)';
+              : (autoSource === 'auto' ? '(no options — auto-selected)' : '(no response — timed out)');
             try {
               if (typeof onUpdate === 'function') {
-                onUpdate('clarify_auto', { clarifyId, answer, source: 'timeout', timeoutSec });
+                onUpdate('clarify_auto', { clarifyId, answer, source: autoSource, timeoutSec: waitSec });
               }
             } catch { /* UI emit must never break the run */ }
-            this._settleClarification(entry, { answer, source: 'timeout' });
-          }, timeoutSec * 1000);
+            this._settleClarification(entry, { answer, source: autoSource });
+          }, waitSec * 1000);
         }
         tabPending.set(clarifyId, entry);
       });
@@ -7774,7 +7785,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             question,
             options,
             reason,
-            timeoutSec,
+            timeoutSec: waitSec,
             deadlineTs: deadlineTs || undefined,
           });
         } catch { /* UI emit must never break the run */ }
@@ -7793,14 +7804,21 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       }
       const answer = String(response?.answer || '').trim();
       const source = response?.source || 'user';
-      const timedOut = source === 'timeout';
+      let note;
+      if (source === 'timeout') {
+        // Passive wait expired — not deliberate auto-approve.
+        note = 'This answer was AUTO-SELECTED because the clarify timeout elapsed with no user reply (source=timeout). It is NOT a real user confirmation. Continue only with the safe default path; do NOT treat this as approval for irreversible, costly, or destructive actions — re-ask via clarify or stop if the next step is high-risk. Put the safe/default choice first in options next time.';
+      } else if (source === 'auto') {
+        // Settings Instant auto-approve (headless / unattended). User policy — proceed.
+        note = 'This answer was auto-selected because Clarify timeout is set to Instant (source=auto). The user intentionally configured unattended auto-approve; treat this answer as the chosen default and continue the task. Do not re-ask the same question. Put the intended default first in options when Instant mode may be on.';
+      } else {
+        note = 'This is a direct reply from the user. Treat it as authoritative for the question you asked; do not re-ask. Continue the task with this answer in mind.';
+      }
       return {
         success: true,
         answer,
         source,
-        note: timedOut
-          ? 'This answer was AUTO-SELECTED because the clarify timeout elapsed with no user reply (source=timeout). It is NOT a real user confirmation. Continue only with the safe default path; do NOT treat this as approval for irreversible, costly, or destructive actions — re-ask via clarify or stop if the next step is high-risk. Put the safe/default choice first in options next time.'
-          : 'This is a direct reply from the user. Treat it as authoritative for the question you asked; do not re-ask. Continue the task with this answer in mind.',
+        note,
       };
     }
 

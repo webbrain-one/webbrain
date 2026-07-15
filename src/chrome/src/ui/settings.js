@@ -367,7 +367,7 @@ async function init() {
   chrome.storage.local.remove(['authToken', 'authEmail', 'authDefaultModel']).catch(() => {});
 
   // Load display settings
-  const stored = await chrome.storage.local.get(['verboseMode', 'selectionShortcutEnabled', 'screenshotFallback', 'maxAgentSteps', 'autoScreenshot', 'useSiteAdapters', 'voiceInputEnabled', 'apiMutationObserverEnabled', 'planBeforeActMode', 'planBeforeAct', 'planReviewMode', 'planReviewConfidenceThreshold', 'notifySound', 'completionConfetti', 'tracingEnabled', 'strictSecretMode', 'agentAllowLocalNetwork', 'scheduledTasksEnabled', 'scheduledRequireConsequentialConfirmation', 'providerFilter', 'requestTimeoutMs', 'clarifyTimeoutSec', 'costAllowanceSessionUsd', 'costAllowanceTotalUsd', 'cloudCostSpentUsd', 'screenshotRedaction']);
+  const stored = await chrome.storage.local.get(['verboseMode', 'selectionShortcutEnabled', 'screenshotFallback', 'maxAgentSteps', 'autoScreenshot', 'useSiteAdapters', 'voiceInputEnabled', 'apiMutationObserverEnabled', 'planBeforeActMode', 'planBeforeAct', 'planReviewMode', 'planReviewConfidenceThreshold', 'notifySound', 'completionConfetti', 'tracingEnabled', 'strictSecretMode', 'agentAllowLocalNetwork', 'scheduledTasksEnabled', 'scheduledRequireConsequentialConfirmation', 'providerFilter', 'requestTimeoutMs', 'clarifyTimeoutSec', 'clarifyTimeoutSemanticsV2', 'costAllowanceSessionUsd', 'costAllowanceTotalUsd', 'cloudCostSpentUsd', 'screenshotRedaction']);
   if (typeof stored.providerFilter === 'string' && ['all','local','cloud','router'].includes(stored.providerFilter)) {
     providerFilter = stored.providerFilter;
   }
@@ -391,10 +391,22 @@ async function init() {
     requestTimeoutRange.value = tSec;
     requestTimeoutValueLabel.textContent = tSec + 's';
   }
-  // Clarify auto-timeout: 0 = wait forever, default 60s, max 1200s.
+  // Clarify auto-timeout: 0 = Instant, 1–1200s wait, >1200 (1205) = Off. Default 60s.
   if (clarifyTimeoutRange && clarifyTimeoutValueLabel) {
     const raw = Number(stored.clarifyTimeoutSec);
-    const cSec = Number.isFinite(raw) && raw >= 0 ? Math.min(1200, Math.floor(raw)) : 60;
+    let cSec = 60;
+    if (Number.isFinite(raw) && raw >= 0) {
+      cSec = raw > 1200 ? 1205 : Math.min(1200, Math.floor(raw));
+    }
+    // One-shot migration: old 0 meant Off; new Off is 1205.
+    if (!stored.clarifyTimeoutSemanticsV2) {
+      const updates = { clarifyTimeoutSemanticsV2: true };
+      if (Number(stored.clarifyTimeoutSec) === 0) {
+        cSec = 1205;
+        updates.clarifyTimeoutSec = 1205;
+      }
+      chrome.storage.local.set(updates).catch(() => {});
+    }
     clarifyTimeoutRange.value = cSec;
     clarifyTimeoutValueLabel.textContent = formatClarifyTimeoutLabel(cSec);
   }
@@ -960,6 +972,9 @@ if (requestTimeoutRange) {
 
 function formatClarifyTimeoutLabel(sec) {
   if (sec === 0) {
+    return (typeof t === 'function' ? t('st.display.clarify_timeout.instant') : null) || 'Instant';
+  }
+  if (sec > 1200) {
     return (typeof t === 'function' ? t('st.display.clarify_timeout.off') : null) || 'Off';
   }
   return `${sec}s`;
@@ -972,8 +987,8 @@ if (clarifyTimeoutRange) {
     }
   });
   clarifyTimeoutRange.addEventListener('change', async () => {
-    const sec = Math.max(0, Math.min(1200, parseInt(clarifyTimeoutRange.value, 10) || 0));
-    await chrome.storage.local.set({ clarifyTimeoutSec: sec }).catch(() => {});
+    const sec = Math.max(0, Math.min(1205, parseInt(clarifyTimeoutRange.value, 10) || 0));
+    await chrome.storage.local.set({ clarifyTimeoutSec: sec, clarifyTimeoutSemanticsV2: true }).catch(() => {});
   });
 }
 

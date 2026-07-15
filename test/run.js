@@ -10447,7 +10447,7 @@ test('settings page awaits immediate preference writes before moving on', () => 
     );
     assert.match(
       settings,
-      /clarifyTimeoutRange\.addEventListener\('change', async \(\) => \{[\s\S]*?await (chrome|browser)\.storage\.local\.set\(\{ clarifyTimeoutSec: sec \}\)\.catch\(\(\) => \{\}\);[\s\S]*?\}\);/,
+      /clarifyTimeoutRange\.addEventListener\('change', async \(\) => \{[\s\S]*?await (chrome|browser)\.storage\.local\.set\(\{ clarifyTimeoutSec: sec, clarifyTimeoutSemanticsV2: true \}\)\.catch\(\(\) => \{\}\);[\s\S]*?\}\);/,
       `${label}: clarify timeout changes should await persistence`,
     );
   }
@@ -10489,11 +10489,16 @@ test('clarify tool auto-timeout is configurable and mirrored across browsers', (
     const idLocale = fs.readFileSync(path.join(ROOT, paths.idLocale), 'utf8');
 
     assert.match(agent, /this\.clarifyTimeoutSec = 60/, `${label}: agent default clarify timeout should be 60s`);
-    assert.match(agent, /_normalizeClarifyTimeoutSec/, `${label}: agent should clamp clarify timeout to 0–1200`);
+    assert.match(agent, /_normalizeClarifyTimeoutSec/, `${label}: agent should normalize clarify timeout (instant / wait / off)`);
+    assert.match(agent, /if \(sec > 1200\) return -1/, `${label}: stored values above 1200 should normalize to Off (-1)`);
     assert.match(agent, /_settleClarification/, `${label}: clarify responses should settle once and clear timers`);
-    assert.match(agent, /source: 'timeout'/, `${label}: timed-out clarify should resolve with source timeout`);
+    assert.match(agent, /timeoutSec === 0 \? 'auto' : 'timeout'/, `${label}: Instant should use source=auto; waited timeout uses source=timeout`);
+    assert.match(agent, /source: autoSource/, `${label}: clarify_auto / settle should pass auto or timeout via autoSource`);
+    assert.match(agent, /source === 'timeout'/, `${label}: waited timeout should keep the non-confirmation tool note`);
+    assert.match(agent, /source === 'auto'/, `${label}: Instant auto-approve should get a non-warning tool note`);
+    assert.match(agent, /intentionally configured unattended auto-approve/, `${label}: Instant note should treat auto-approve as intentional`);
     assert.match(agent, /onUpdate\('clarify_auto'/, `${label}: agent should emit clarify_auto for UI lock`);
-    assert.match(agent, /timeoutSec > 0/, `${label}: timeout of 0 should wait indefinitely`);
+    assert.match(agent, /timeoutSec >= 0/, `${label}: Instant (0) and positive waits should arm auto-select; Off (-1) waits forever`);
     assert.match(agent, /NOT a real user confirmation/, `${label}: timeout tool note should deny user-confirmation status`);
     // Permission / form confirm prompts reuse clarify plumbing but must not
     // arm the auto-timeout (first option would grant access).
@@ -10504,9 +10509,10 @@ test('clarify tool auto-timeout is configurable and mirrored across browsers', (
     assert.ok(submitMatch, `${label}: _promptSubmitConfirmation body missing`);
     assert.doesNotMatch(submitMatch[0], /timeoutSec|setTimeout/, `${label}: form-submit prompts must not auto-timeout`);
 
-    assert.match(tools, /options\[0\] is auto-selected/, `${label}: clarify tool schema should document auto-select of first option`);
+    assert.match(tools, /options\[0\] is auto-selected|options\[0\] is selected/, `${label}: clarify tool schema should document auto-select of first option`);
     assert.match(tools, /source=timeout/, `${label}: system prompts should treat timeout answers as non-confirmations`);
-    assert.match(tools, /not a timeout auto-select|source is not timeout|source=timeout is not user approval/, `${label}: prompts should qualify real clarify answers vs timeouts`);
+    assert.match(tools, /source=auto/, `${label}: system prompts should document Instant source=auto`);
+    assert.match(tools, /source=timeout is not user approval|source=timeout \(waited timeout|not source=timeout waited/, `${label}: prompts should qualify real clarify answers vs waited timeouts`);
 
     assert.match(scheduler, /pending\.timeoutSec/, `${label}: scheduled pendingClarify should persist timeoutSec`);
     assert.match(scheduler, /pending\.deadlineTs/, `${label}: scheduled pendingClarify should persist deadlineTs`);
@@ -10532,22 +10538,27 @@ test('clarify tool auto-timeout is configurable and mirrored across browsers', (
     );
     assert.match(
       panel,
-      /source !== 'timeout' && card\.dataset\.memorySource/,
-      `${label}: sidepanel should not attach memorySource for timeout auto-selects`,
+      /isAutoClarify = source === 'timeout' \|\| source === 'auto'/,
+      `${label}: sidepanel should not attach memorySource for timeout or Instant auto-selects`,
     );
     assert.match(
       bg,
-      /source !== 'timeout' && msg\.memorySource === 'clarification_response'/,
-      `${label}: background should not learn timeout clarify answers as user memory`,
+      /isAutoClarify = source === 'timeout' \|\| source === 'auto'/,
+      `${label}: background should not learn timeout or Instant clarify answers as user memory`,
     );
 
     assert.match(bg, /loadClarifyTimeout/, `${label}: background should load clarify timeout from storage`);
     assert.match(bg, /changes\.clarifyTimeoutSec/, `${label}: background should hot-reload clarify timeout`);
-    assert.match(bg, /Math\.min\(1200, Math\.floor\(n\)\)/, `${label}: background should clamp clarify timeout to 1200s`);
+    assert.match(bg, /if \(sec > 1200\) return -1/, `${label}: background should treat >1200 as Off`);
+    assert.match(bg, /clarifyTimeoutSemanticsV2/, `${label}: background should migrate old 0=Off semantics once`);
+    assert.match(bg, /CLARIFY_TIMEOUT_OFF_SLIDER = 1205/, `${label}: Off slider sentinel should be 1205`);
 
-    assert.match(settingsHtml, /id="range-clarify-timeout"[^>]*min="0"[^>]*max="1200"[^>]*value="60"/, `${label}: settings should expose 0–1200s clarify timeout slider`);
+    assert.match(settingsHtml, /id="range-clarify-timeout"[^>]*min="0"[^>]*max="1205"[^>]*value="60"/, `${label}: settings should expose 0–1205 clarify timeout slider (1205=Off)`);
     assert.match(settings, /clarifyTimeoutSec/, `${label}: settings should persist clarifyTimeoutSec`);
     assert.match(settings, /st\.display\.clarify_timeout\.off/, `${label}: settings Off label should be i18n-backed`);
+    assert.match(settings, /st\.display\.clarify_timeout\.instant/, `${label}: settings Instant label should be i18n-backed`);
+    assert.match(settings, /sec === 0/, `${label}: settings should label 0 as Instant`);
+    assert.match(settings, /sec > 1200/, `${label}: settings should label >1200 as Off`);
     assert.match(panel, /startClarifyCountdown/, `${label}: sidepanel should show clarify countdown`);
     assert.match(panel, /case 'clarify_auto':/, `${label}: sidepanel should handle clarify_auto`);
     assert.match(panel, /lockClarifyCardFromAuto/, `${label}: sidepanel should lock cards on auto-select`);
@@ -10555,6 +10566,9 @@ test('clarify tool auto-timeout is configurable and mirrored across browsers', (
     assert.match(panel, /startClarifyCountdown\(card, \{ tabId, clarifyId, deadlineTs, firstOption \}\)/, `${label}: rebind should restart countdown from restored metadata`);
     assert.match(locale, /st\.display\.clarify_timeout\.label/, `${label}: English locale should include clarify timeout label`);
     assert.match(locale, /st\.display\.clarify_timeout\.off/, `${label}: English locale should include Off label`);
+    assert.match(locale, /st\.display\.clarify_timeout\.instant/, `${label}: English locale should include Instant label`);
+    assert.match(locale, /0 = Instant/, `${label}: English locale should document Instant at 0`);
+    assert.match(locale, /above 1200s/, `${label}: English locale should document Off above 1200s`);
     assert.match(locale, /sp\.clarify\.auto_timeout/, `${label}: English locale should include countdown string`);
     assert.match(idLocale, /\{seconds\} dtk/, `${label}: Indonesian countdown should use seconds unit, not bare d`);
   }
