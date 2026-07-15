@@ -19245,7 +19245,7 @@ test('accepted done emits successful result update after progress gate', async (
   }
 });
 
-test('nullish tool responses classify consequential outcomes without interrupting the batch', async () => {
+test('nullish tool responses classify consequential outcomes and stop unsafe batch continuation', async () => {
   for (const [label, AgentClass] of [['chrome', AgentCh], ['firefox', AgentFx]]) {
     for (const [toolName, args, expectedOutcomeUnknown] of [
       ['get_accessibility_tree', { filter: 'interactive' }, false],
@@ -19262,6 +19262,7 @@ test('nullish tool responses classify consequential outcomes without interruptin
       const tabId = 810;
       const messages = [];
       const updates = [];
+      const executedTools = [];
       agent._ensureGateSetting = async () => false;
       agent._skipPermissionGate = true;
       agent._currentUrl = async () => 'https://github.com/account_verifications';
@@ -19269,17 +19270,30 @@ test('nullish tool responses classify consequential outcomes without interruptin
       agent._recordProgressObservation = async () => null;
       agent._autoRecordProgressAction = () => null;
       agent._persist = () => {};
-      agent.executeTool = async () => undefined;
+      agent.executeTool = async (_tabId, name) => {
+        executedTools.push(name);
+        return undefined;
+      };
       if (toolName === 'fetch_url') agent.apiAllowedTabs.add(tabId);
+
+      const toolCalls = [
+        { id: `${toolName}_missing`, function: { name: toolName, arguments: JSON.stringify(args) } },
+      ];
+      if (expectedOutcomeUnknown) {
+        toolCalls.push({
+          id: `${toolName}_unsafe_followup`,
+          function: { name: 'type_ax', arguments: JSON.stringify({ ref_id: 'ref_99', text: 'must not run' }) },
+        });
+      }
 
       const result = await agent._executeToolBatch(
         tabId,
-        [{ id: `${toolName}_missing`, function: { name: toolName, arguments: JSON.stringify(args) } }],
+        toolCalls,
         messages,
         (type, data) => updates.push({ type, data }),
         { supportsVision: false },
         null,
-        new Set([toolName]),
+        new Set([toolName, 'type_ax']),
         1,
       );
 
@@ -19292,6 +19306,9 @@ test('nullish tool responses classify consequential outcomes without interruptin
       assert.match(toolMessage?.content || '', /missingToolResponse/, `${label}/${toolName}: model did not receive the normalized result`);
       if (expectedOutcomeUnknown) {
         assert.match(toolMessage?.content || '', /do not repeat the action blindly/i, `${label}/${toolName}: unsafe retry guidance missing`);
+        assert.deepEqual(executedTools, [toolName], `${label}/${toolName}: later batch action ran after an unknown outcome`);
+        const skippedMessage = messages.find(message => message.tool_call_id === `${toolName}_unsafe_followup`);
+        assert.match(skippedMessage?.content || '', /skipped: an earlier consequential tool returned no response/i, `${label}/${toolName}: later batch action did not receive a synthetic result`);
       }
     }
   }
