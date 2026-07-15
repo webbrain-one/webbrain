@@ -1630,6 +1630,40 @@ test('matches wordpress wp-admin on any host', () => {
   assert.equal(getActiveAdapter('https://example.com/blog/wp-admin-tutorial/'), null);
 });
 
+test('routes AWS console tasks through the specific CloudShell adapter', () => {
+  const cloudShellUrls = [
+    'https://us-east-1.console.aws.amazon.com/cloudshell/home?region=us-east-1#',
+    'https://eu-west-1.console.aws.amazon.com/cloudshell/home?region=eu-west-1',
+    'https://console.aws.amazon.com/cloudshell/home?region=us-east-1',
+  ];
+
+  for (const url of cloudShellUrls) {
+    const chromeAdapter = getActiveAdapter(url);
+    const firefoxAdapter = getActiveAdapterFx(url);
+    assert.equal(chromeAdapter?.name, 'aws-cloudshell', `chrome did not match ${url}`);
+    assert.equal(firefoxAdapter?.name, 'aws-cloudshell', `firefox did not match ${url}`);
+    assert.equal(firefoxAdapter?.notes, chromeAdapter?.notes);
+  }
+
+  const cloudShell = getActiveAdapter(cloudShellUrls[0]);
+  assert.match(cloudShell?.notes || '', /smallest concrete, shell-neutral AWS CLI command sequence/);
+  assert.match(cloudShell?.notes || '', /never type natural-language instructions into the terminal/i);
+  assert.match(cloudShell?.notes || '', /Do not assume the active shell is Bash.*zsh or PowerShell/s);
+  assert.match(cloudShell?.notes || '', /Bash-only heredocs, loops, quoting, or command substitution.*`bash` as a standalone command.*new prompt/s);
+  assert.doesNotMatch(cloudShell?.notes || '', /CloudShell is a Bash terminal/);
+  assert.match(cloudShell?.notes || '', /aws sts get-caller-identity --no-cli-pager/);
+  assert.match(cloudShell?.notes || '', /CloudShell is unavailable.*us-east-1.*--region <target-region>.*never silently operate on the fallback region/s);
+  assert.match(cloudShell?.notes || '', /destructive, permission-changing, or cost-generating.*dry-run or preview.*explicitly authorized by the user/s);
+  assert.match(cloudShell?.notes || '', /get-\*.*describe-\*.*list-\*/s);
+
+  const consoleAdapter = getActiveAdapter('https://us-east-1.console.aws.amazon.com/ec2/home?region=us-east-1');
+  assert.equal(consoleAdapter?.name, 'aws');
+  assert.match(consoleAdapter?.notes || '', /prefer CloudShell/i);
+  assert.match(consoleAdapter?.notes || '', /cloudshell\/home\?region=<region>/);
+  assert.match(consoleAdapter?.notes || '', /console-only surfaces.*Billing\/Support Center.*account-settings.*instead of forcing every task through CloudShell/s);
+  assert.equal(getActiveAdapter('https://console.aws.amazon.com.evil.example/cloudshell/home'), null);
+});
+
 test('matches mastodon profile and interaction URLs on any host', () => {
   const urls = [
     'https://mastoturk.org/@discon@types.pl',
