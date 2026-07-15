@@ -2701,10 +2701,20 @@
           if (typeof window.__generateAccessibilityTree !== 'function') {
             return { error: 'accessibility-tree.js not injected' };
           }
+          const { filter, maxDepth, maxChars, ref_id, page } = msg.params || {};
           const gate = detectPageGate();
           if (gate) {
             const pageGate = pageGatePublic(gate);
             if (gate.surface === 'dialog') {
+              if (typeof window.__generateAccessibilitySubtree === 'function') {
+                const gateFilter = filter === 'interactive' ? 'interactive' : 'visible';
+                const requestedDepth = Number(maxDepth);
+                const requestedChars = Number(maxChars);
+                const gateMaxDepth = Math.min(Number.isFinite(requestedDepth) ? Math.max(1, Math.trunc(requestedDepth)) : 8, 8);
+                const gateMaxChars = Math.min(Number.isFinite(requestedChars) ? Math.max(256, Math.trunc(requestedChars)) : 3000, 5000);
+                const tree = window.__generateAccessibilitySubtree(gate.element, gateFilter, gateMaxDepth, gateMaxChars, page);
+                return { pageGate, ...tree, textSource: 'page-gate' };
+              }
               return { pageGate, pageContent: gate.label, textSource: 'page-gate' };
             }
             const articleRoot = gate.element.closest('article, [role="article"], main, [role="main"]');
@@ -2714,7 +2724,6 @@
               textSource: 'article (pre-gate)',
             };
           }
-          const { filter, maxDepth, maxChars, ref_id, page } = msg.params || {};
           return window.__generateAccessibilityTree(filter, maxDepth, maxChars, ref_id, page);
         } catch (e) {
           return { error: 'Failed to build accessibility tree: ' + (e && e.message || String(e)) };

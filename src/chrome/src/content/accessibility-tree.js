@@ -899,7 +899,19 @@
     }));
   }
 
+  function generateAccessibilitySubtree(rootElement, filter, maxDepth, maxChars, page) {
+    if (!rootElement || rootElement.nodeType !== 1 || !rootElement.isConnected) {
+      return {
+        error: 'Accessibility subtree root is no longer available.',
+        pageContent: '',
+        viewport: { width: window.innerWidth, height: window.innerHeight },
+      };
+    }
+    return generateAccessibilityTree(filter, maxDepth, maxChars, getOrMintRef(rootElement), page);
+  }
+
   window.__generateAccessibilityTree = generateAccessibilityTree;
+  window.__generateAccessibilitySubtree = generateAccessibilitySubtree;
   window.__wb_ax_lookup = lookup;
   window.__wb_ax_suggest = suggestNearRefs;
 })();

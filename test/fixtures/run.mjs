@@ -224,6 +224,16 @@ for (const [label, browserKind] of [['Chrome', 'chrome'], ['Firefox', 'firefox']
     if (tree.textSource !== 'page-gate' || /SECRET_NYT_ARTICLE_BODY/.test(tree.pageContent || '')) {
       throw new Error(`accessibility tree leaked blocked article text: ${JSON.stringify(tree)}`);
     }
+    const gateButtonRef = /button "Continue" \[(ref_\d+)\]/.exec(tree.pageContent || '')?.[1];
+    const gateEmailRef = /textbox "Email" \[(ref_\d+)\]/.exec(tree.pageContent || '')?.[1];
+    if (!gateButtonRef || !gateEmailRef) {
+      throw new Error(`accessibility tree omitted visible gate controls: ${JSON.stringify(tree)}`);
+    }
+    const clickResult = await call(page, 'click_ax', { ref_id: gateButtonRef });
+    const gateControlClicked = await page.evaluate(() => window.__gateControlClicked === true);
+    if (clickResult?.success !== true || !gateControlClicked) {
+      throw new Error(`gate control ref was not actionable: ${JSON.stringify(clickResult)}`);
+    }
     const basicResult = await call(page, 'get_page_info', {});
     if (/SECRET_NYT_(?:ARTICLE|LINK|IMAGE|FORM|SHADOW)/.test(JSON.stringify(basicResult))) {
       throw new Error(`basic page info leaked blocked article data: ${JSON.stringify(basicResult)}`);
