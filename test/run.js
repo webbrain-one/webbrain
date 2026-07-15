@@ -1649,12 +1649,15 @@ test('routes AWS console tasks through the specific CloudShell adapter', () => {
   assert.match(cloudShell?.notes || '', /smallest concrete Bash\/AWS CLI command sequence/);
   assert.match(cloudShell?.notes || '', /never type natural-language instructions into the terminal/i);
   assert.match(cloudShell?.notes || '', /aws sts get-caller-identity --no-cli-pager/);
+  assert.match(cloudShell?.notes || '', /CloudShell is unavailable.*us-east-1.*--region <target-region>.*never silently operate on the fallback region/s);
+  assert.match(cloudShell?.notes || '', /destructive, permission-changing, or cost-generating.*dry-run or preview.*explicitly authorized by the user/s);
   assert.match(cloudShell?.notes || '', /get-\*.*describe-\*.*list-\*/s);
 
   const consoleAdapter = getActiveAdapter('https://us-east-1.console.aws.amazon.com/ec2/home?region=us-east-1');
   assert.equal(consoleAdapter?.name, 'aws');
   assert.match(consoleAdapter?.notes || '', /prefer CloudShell/i);
   assert.match(consoleAdapter?.notes || '', /cloudshell\/home\?region=<region>/);
+  assert.match(consoleAdapter?.notes || '', /console-only surfaces.*Billing\/Support Center.*account-settings.*instead of forcing every task through CloudShell/s);
   assert.equal(getActiveAdapter('https://console.aws.amazon.com.evil.example/cloudshell/home'), null);
 });
 
