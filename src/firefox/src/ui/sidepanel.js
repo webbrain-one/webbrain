@@ -4446,20 +4446,17 @@ async function sendMessage(extraChatParams = {}) {
     // assistant answer). We optimistically cleared the chips on send, so
     // re-add them here — otherwise "switch providers and try again" is
     // impossible without re-picking every file.
-    if (attachmentsForSend.length && currentTabId === tabId
+    if (attachmentsForSend.length
         && res?.updates?.some(u => u?.type === 'attachment_rejected')) {
-      const pending = getPendingAttachmentsForTab(tabId);
-      pending.unshift(...attachmentsForSend.filter(att => !pending.includes(att)));
+      restorePendingAttachmentsForTab(tabId, attachmentsForSend);
       // Restore the prompt only if the user hasn't started typing a new one
       // while the rejected turn was in flight.
-      if (!inputEl.value.trim()) {
+      if (currentTabId === tabId && !inputEl.value.trim()) {
         inputEl.value = text;
         saveInputDraftForTab(tabId, text);
         autoResizeInput();
         updateSlashCommandAutocomplete();
       }
-      renderAttachmentPreviews();
-      syncSendButtonState();
     }
 
     if (renderToCurrentTab && currentTabId === tabId && isTabAbortRequested(tabId)) {
@@ -4486,6 +4483,7 @@ async function sendMessage(extraChatParams = {}) {
     if (captureStartFailed) {
       const message = String(e?.message || '').slice(RUN_CAPTURE_START_ERROR_PREFIX.length);
       reportTrailingRunCaptureError(runCaptureDirective, new Error(message), tabId);
+      restorePendingAttachmentsForTab(tabId, attachmentsForSend);
       if (renderToCurrentTab && currentTabId === tabId) {
         userEl?.remove();
         assistantEl?.remove();
@@ -6552,6 +6550,18 @@ function clearPendingAttachmentsForTab(tabId) {
   if (numericTabId == null) return;
   pendingAttachmentsByTab.delete(numericTabId);
   bumpAttachmentGeneration(numericTabId);
+  if (normalizeAttachmentTabId() === numericTabId) {
+    renderAttachmentPreviews();
+    syncSendButtonState();
+  }
+}
+
+function restorePendingAttachmentsForTab(tabId, attachments) {
+  if (!Array.isArray(attachments) || !attachments.length) return;
+  const numericTabId = normalizeAttachmentTabId(tabId);
+  if (numericTabId == null) return;
+  const pending = getPendingAttachmentsForTab(numericTabId);
+  pending.unshift(...attachments.filter(att => !pending.includes(att)));
   if (normalizeAttachmentTabId() === numericTabId) {
     renderAttachmentPreviews();
     syncSendButtonState();

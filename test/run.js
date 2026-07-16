@@ -27172,8 +27172,18 @@ test('sidepanel: pending attachments are tab-scoped and send-gated while loading
     assert.ok(source.includes('clearPendingAttachmentsForTab(tabId);'), `${label} should clear pending files with the conversation`);
     assert.match(
       source,
-      /u\?\.type === 'attachment_rejected'\)\)[\s\S]*?pending\.unshift\(\.\.\.attachmentsForSend[\s\S]*?if \(!inputEl\.value\.trim\(\)\) \{[\s\S]*?inputEl\.value = text;[\s\S]*?saveInputDraftForTab\(tabId, text\);[\s\S]*?autoResizeInput\(\);[\s\S]*?updateSlashCommandAutocomplete\(\);[\s\S]*?\}[\s\S]*?renderAttachmentPreviews\(\);[\s\S]*?syncSendButtonState\(\);/,
-      `${label} should restore rejected attachments via the structured update and only restore the prompt over an empty draft`,
+      /function restorePendingAttachmentsForTab\(tabId, attachments\) \{[\s\S]*?pending\.unshift\(\.\.\.attachments\.filter\(att => !pending\.includes\(att\)\)\);[\s\S]*?normalizeAttachmentTabId\(\) === numericTabId[\s\S]*?renderAttachmentPreviews\(\);[\s\S]*?syncSendButtonState\(\);/,
+      `${label} should restore sent attachments to their originating tab without duplicating existing objects`,
+    );
+    assert.match(
+      source,
+      /u\?\.type === 'attachment_rejected'\)\)[\s\S]*?restorePendingAttachmentsForTab\(tabId, attachmentsForSend\);[\s\S]*?if \(currentTabId === tabId && !inputEl\.value\.trim\(\)\) \{[\s\S]*?inputEl\.value = text;[\s\S]*?saveInputDraftForTab\(tabId, text\);/,
+      `${label} should restore rejected attachments even after a tab switch and only overwrite an empty current-tab draft`,
+    );
+    assert.match(
+      source,
+      /if \(captureStartFailed\) \{[\s\S]*?reportTrailingRunCaptureError\([\s\S]*?restorePendingAttachmentsForTab\(tabId, attachmentsForSend\);[\s\S]*?if \(renderToCurrentTab && currentTabId === tabId\) \{/,
+      `${label} should restore attachments before capture-preflight failure UI is scoped to the current tab`,
     );
     assert.ok(
       !/does not support \(\?:image\|document\) attachments/.test(source),
