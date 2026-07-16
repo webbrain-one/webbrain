@@ -15590,6 +15590,7 @@ const ADAPTERS = [
     category: 'general',
     matches: (url) => /^https?:\/\/(www\.)?github\.com\//.test(url),
     notes: `
+- Username may only contain alphanumeric characters or single hyphens, and cannot begin or end with a hyphen.
 - Creating a release: navigate to /<owner>/<repo>/releases/new (not /releases). The tag selector is a combobox labeled "Choose a tag" — click({text: "Choose a tag"}) to open it, then type the tag name into the focused popup, then click({text: "Create new tag"}) to confirm.
 - DO NOT use index-based clicks on the release page. GitHub's global header pollutes the index space and the release form is deep in the DOM. Always use click({text:"..."}) for buttons. Specifically: never click element #38 from memory — that's a learned anti-pattern from training data, and on the live site #38 is the "Pull requests" header link that navigates away from the release form.
 - Release body is a CodeMirror editor, not a textarea. Click the editor surface (click({text:"Describe this release"}) on the placeholder works) then type with no selector.

@@ -1454,9 +1454,18 @@ test('chrome target blank redirect ignores browser new-tab placeholders', async 
 
 console.log('\nadapters');
 
-test('matches github.com', () => {
-  const a = getActiveAdapter('https://github.com/esokullu/webbrain');
-  assert.equal(a?.name, 'github');
+test('matches github.com and documents username restrictions', () => {
+  const adapters = [
+    getActiveAdapter('https://github.com/esokullu/webbrain'),
+    getActiveAdapterFx('https://github.com/esokullu/webbrain'),
+  ];
+  for (const adapter of adapters) {
+    assert.equal(adapter?.name, 'github');
+    assert.match(
+      adapter?.notes || '',
+      /Username may only contain alphanumeric characters or single hyphens, and cannot begin or end with a hyphen\./,
+    );
+  }
 });
 
 test('matches www.github.com', () => {
