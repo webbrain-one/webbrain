@@ -23,7 +23,7 @@ This changelog was generated from the repository Git history and release tags. V
 ## [23.3.6] - 2026-07-15
 
 ### Added
-- Added a default-on **Help Improve WebBrain** control under Settings → General → Advanced in Chrome and Firefox. WebBrain Cloud requests now send the current choice as `X-WebBrain-Help-Improve: 1` or `0`; local-model and bring-your-own API requests never receive that header.
+- Added a default-on **Help Improve WebBrain** control at the bottom of the visible Settings → General area in Chrome and Firefox. WebBrain Cloud requests now send the current choice as `X-WebBrain-Help-Improve: 1` or `0`; local-model and bring-your-own API requests never receive that header.
 
 ### Changed
 - Updated the public privacy policy and developer data-flow documentation to disclose selected WebBrain Cloud interaction retention and model-improvement use, the future-interaction opt-out, a 12-month raw-data limit, and a five-year limit for de-identified datasets.

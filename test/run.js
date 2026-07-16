@@ -9384,7 +9384,6 @@ test('settings moves profile and memory controls into Memory while CAPTCHA stays
     assert.match(html, /\.general-search-hidden \{ display: none !important; \}/, `${label}: General search should force-hide filtered rows/cards`);
 
     for (const id of [
-      'toggle-help-improve',
       'toggle-screenshot-fallback',
       'range-clarify-timeout',
       'toggle-site-adapters',
@@ -9419,6 +9418,8 @@ test('settings moves profile and memory controls into Memory while CAPTCHA stays
       'range-max-steps',
       'range-request-timeout',
       'btn-open-traces',
+      'btn-open-history',
+      'toggle-help-improve',
     ]) {
       const index = displayPanel.indexOf(`id="${id}"`);
       assert.notEqual(index, -1, `${label}: ${id} should remain visible in General`);
@@ -9437,14 +9438,27 @@ test('Help Improve WebBrain is default-on, persisted, and reloads Cloud request 
     const html = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/settings.html'), 'utf8');
     const settings = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/settings.js'), 'utf8');
     const locale = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/locales/en.js'), 'utf8');
+    const localeDir = path.join(ROOT, prefix, 'src/ui/locales');
     const manager = fs.readFileSync(path.join(ROOT, prefix, 'src/providers/manager.js'), 'utf8');
     const background = fs.readFileSync(path.join(ROOT, prefix, 'src/background.js'), 'utf8');
 
-    assert.match(html, /id="toggle-help-improve" checked/, `${label}: Help Improve should be on by default in General Advanced`);
+    assert.match(html, /id="toggle-help-improve" checked/, `${label}: Help Improve should be on by default in General`);
+    const helpImproveIndex = html.indexOf('id="toggle-help-improve"');
+    const historyIndex = html.indexOf('id="btn-open-history"');
+    const advancedIndex = html.indexOf('<details class="advanced-settings">');
+    assert.ok(historyIndex > -1 && historyIndex < helpImproveIndex && helpImproveIndex < advancedIndex, `${label}: Help Improve should be the last visible General setting above Advanced`);
     assert.match(settings, /helpImproveToggle\.checked = stored\.helpImproveWebBrain !== false/, `${label}: missing default-on storage hydration`);
     assert.match(settings, new RegExp(`${runtime}\\.storage\\.local\\.set\\(\\{ helpImproveWebBrain: helpImproveToggle\\.checked \\}\\)`), `${label}: setting should persist`);
     assert.match(locale, /'st\.display\.help_improve\.label': 'Help Improve WebBrain'/, `${label}: setting label missing`);
-    assert.match(locale, /On by default[^']*Local-model and bring-your-own API requests are never collected by WebBrain/, `${label}: setting disclosure should explain its default and scope`);
+    assert.match(locale, /On by default[^']*<u>Local-model and bring-your-own API requests are never collected by WebBrain\.<\/u>/, `${label}: setting disclosure should explain and emphasize its default and scope`);
+    assert.match(locale, /Turn it off in General to exclude future Cloud interactions/, `${label}: provider disclosure should point to the visible General setting`);
+    for (const localeFile of fs.readdirSync(localeDir).filter((name) => name.endsWith('.js'))) {
+      const translatedLocale = fs.readFileSync(path.join(localeDir, localeFile), 'utf8');
+      assert.match(translatedLocale, /["']st\.display\.help_improve\.desc_html["']\s*:\s*["'][^\n]*<u>[^<]+<\/u>/, `${label}/${localeFile}: translated local/BYO exclusion should be underlined`);
+      const providerDisclosure = translatedLocale.match(/["']st\.providers\.webbrain_data_use\.body["']\s*:[^\n]+/)?.[0] || '';
+      assert.doesNotMatch(providerDisclosure, /[→←]/, `${label}/${localeFile}: provider disclosure should no longer point to Advanced`);
+      assert.match(providerDisclosure, /<u>[^<]+<\/u>/, `${label}/${localeFile}: provider local/BYO exclusion should also be underlined`);
+    }
     assert.match(manager, /const HELP_IMPROVE_WEBBRAIN_KEY = 'helpImproveWebBrain';/, `${label}: provider manager setting key missing`);
     assert.match(manager, /helpImproveWebBrain = data\[HELP_IMPROVE_WEBBRAIN_KEY\] !== false/, `${label}: Cloud provider config should default improvement use on`);
     assert.match(background, /changes\.providers \|\| changes\.activeProvider \|\| changes\.helpImproveWebBrain/, `${label}: Cloud provider config should reload after opt-out changes`);
@@ -24860,7 +24874,8 @@ test('settings exposes custom skills tab and packaged skills resource directory'
   assert.match(privacyPolicy, /Local models and bring-your-own API:[\s\S]*never collected by WebBrain/i, 'privacy TL;DR should exclude local and BYO requests');
   assert.match(privacyPolicy, /WebBrain Cloud:[\s\S]*evaluation, improvement, fine-tuning, and training/i, 'privacy TL;DR should disclose Cloud improvement use');
   assert.match(privacyPolicy, /Help Improve WebBrain[\s\S]*on by default/i, 'privacy policy should disclose the default-on setting');
-  assert.match(privacyPolicy, /Settings → General → Advanced/, 'privacy policy should identify the opt-out path');
+  assert.match(privacyPolicy, /Settings → General/, 'privacy policy should identify the opt-out path');
+  assert.doesNotMatch(privacyPolicy, /Help Improve WebBrain[^<\n]*Settings → General → Advanced|Settings → General → Advanced[^<\n]*Help Improve WebBrain/, 'privacy policy should not use the old Help Improve opt-out path');
   assert.match(privacyPolicy, /Older WebBrain Cloud clients[\s\S]*default-on setting[\s\S]*install the latest WebBrain client/i, 'privacy policy should disclose legacy default-on capture and the opt-out upgrade path');
   assert.match(privacyPolicy, /next new conversation[\s\S]*cannot make the current conversation eligible again/i, 'privacy policy should explain permanent conversation tainting');
   assert.match(privacyPolicy, /Screenshots and uploaded images may be processed for inference[\s\S]*strips image URLs, base64 media, and image bytes/i, 'privacy policy should distinguish inference processing from improvement storage');

@@ -394,7 +394,7 @@ export default {
   'st.display.search.empty': 'No General settings match.',
   'st.display.advanced': 'Advanced',
   'st.display.help_improve.label': 'Help Improve WebBrain',
-  'st.display.help_improve.desc_html': 'Allow eligible WebBrain Cloud text and tool interactions to be retained and used for evaluation, improvement, fine-tuning, and training. On by default. Turning this off permanently opts out the current conversation; turning it back on applies to the next new conversation. Screenshots and image bytes are not retained in the WebBrain improvement database. Local-model and bring-your-own API requests are never collected by WebBrain. <a href="https://webbrain.one/privacy" target="_blank" rel="noopener noreferrer" style="color:var(--accent);">Privacy policy →</a>',
+  'st.display.help_improve.desc_html': 'Allow eligible WebBrain Cloud text and tool interactions to be retained and used for evaluation, improvement, fine-tuning, and training. On by default. Turning this off permanently opts out the current conversation; turning it back on applies to the next new conversation. Screenshots and image bytes are not retained in the WebBrain improvement database. <u>Local-model and bring-your-own API requests are never collected by WebBrain.</u> <a href="https://webbrain.one/privacy" target="_blank" rel="noopener noreferrer" style="color:var(--accent);">Privacy policy →</a>',
   'st.display.clarify_timeout.label': 'Clarify timeout',
   'st.display.clarify_timeout.desc': 'How long to wait for a reply to a clarify prompt before auto-selecting the first option (or timing out if there are no options). 0 = Instant (always auto-select). Values above 1200s wait indefinitely (Off). Default 60s. Does not apply to permission or form-submit confirmations.',
   'st.display.clarify_timeout.off': 'Off',
@@ -512,7 +512,7 @@ export default {
   'st.providers.compat.value.max': 'Max',
   'st.providers.compat.value.system': 'System',
   'st.providers.compat.value.developer': 'Developer',
-  'st.providers.webbrain_data_use.body': 'Free daily WebBrain Cloud usage is included. While Help Improve WebBrain is on by default, selected Cloud conversations may be retained and used for evaluation, improvement, fine-tuning, and training. Turn it off in General → Advanced to exclude future Cloud interactions from those uses. Local-model and bring-your-own API requests are never collected by WebBrain. {privacyLink}. For more usage, subscribe at {subscribeLink}. Manage billing at {accountLink}.',
+  'st.providers.webbrain_data_use.body': 'Free daily WebBrain Cloud usage is included. While Help Improve WebBrain is on by default, selected Cloud conversations may be retained and used for evaluation, improvement, fine-tuning, and training. Turn it off in General to exclude future Cloud interactions from those uses. <u>Local-model and bring-your-own API requests are never collected by WebBrain.</u> {privacyLink}. For more usage, subscribe at {subscribeLink}. Manage billing at {accountLink}.',
   'st.providers.webbrain_note.body': 'Free daily WebBrain Cloud usage is included. Requests go through api.webbrain.one; by default we log metadata for quota and debugging, not prompt text, page content, screenshots, or model responses. {privacyLink}. For more usage, subscribe at {subscribeLink}. Manage billing at {accountLink}.',
   'st.providers.webbrain_note.privacy_link': 'Privacy policy',
 
