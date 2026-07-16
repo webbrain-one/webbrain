@@ -148,7 +148,7 @@ if (globalThis.chrome?.storage?.onChanged) {
     cloudReady = true;
     localModelChoices = [];
     if (providerBody) {
-      providerBody.textContent = 'WebBrain Cloud is ready with a free daily allowance. Selected Cloud conversations may be retained and used to improve WebBrain while Help Improve WebBrain is on by default. You can turn it off in Settings → General → Advanced.';
+      providerBody.textContent = 'WebBrain Cloud is ready with a free daily allowance. Selected Cloud conversations may be retained and used to improve WebBrain while Help Improve WebBrain is on by default. You can turn it off in Settings → General.';
     }
     if (providerStatus) {
       providerStatus.textContent = '';

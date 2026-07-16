@@ -47,7 +47,7 @@ Local-model and bring-your-own API requests are never collected by WebBrain. Web
 
 ### WebBrain Cloud improvement data
 
-Help Improve WebBrain is available under Settings -> General -> Advanced and is
+Help Improve WebBrain is available under Settings -> General and is
 on by default. When it is on, WebBrain may retain eligible Cloud prompts, model
 responses, relevant page text, tool calls, browser-agent actions, feedback, and
 task outcome information for evaluation, development, improvement, fine-tuning,
@@ -66,7 +66,7 @@ the raw device and prompt-derived fingerprint are not stored or sent upstream.
 Repeated identical opening messages can be grouped together, and compaction can
 split a legacy conversation, so current clients' explicit conversation ids are
 authoritative. Users of older clients must install the latest client to disable
-future collection under Settings -> General -> Advanced.
+future collection under Settings -> General.
 
 An explicit `0` is always opted out. Once any explicit opt-out reaches a
 derived or client-provided session, the Cloud service permanently marks that

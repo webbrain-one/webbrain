@@ -15610,6 +15610,18 @@ const ADAPTERS = [
 - The sidebar collapses on narrow viewports — scroll horizontally or expand it before clicking sidebar items.`,
   },
   {
+    name: 'mozilla-addons-developer',
+    category: 'general',
+    match: (url) => /^https?:\/\/addons\.mozilla\.org\/(?:[a-z]{2,3}(?:-[a-z]{2})?\/)?developers(?:\/|$)/i.test(url),
+    notes: `
+- For an existing add-on, use its "Upload New Version" flow. Do not start from "Submit a New Add-on"; the existing manifest ID will fail validation as a duplicate add-on ID.
+- On the "Describe Version" step, both "Release Notes" (changelog) and "Notes to Reviewer" are optional. Leave both empty unless the user explicitly asks to provide text; do not generate or paste content merely because the fields are present.
+- If those textareas must be inspected, trust their DOM field names over visual order or a possibly misleading label: \`release_notes...\` is the public release-notes field and \`approval_notes\` is the reviewer-notes field. Call \`verify_form\` before final submission.
+- On a URL matching \`/addon/<addon-slug>/versions/submit/<id>/source\`, answer "No" to "Do You Need to Submit Source Code?" Select the radio labeled "No", then verify the page says "You do not need to submit Source Code" before continuing.
+- After navigation or scrolling, re-read the accessibility tree and use the current ref_id. Never reuse or guess a ref_id from an earlier page state.
+- Continue past package validation only when it reports no errors. Read any rejection-related warnings, then use the existing version-submission flow rather than restarting as a new add-on.`,
+  },
+  {
     name: 'stackoverflow',
     category: 'general',
     match: (url) => /^https?:\/\/(.*\.)?stackoverflow\.com\//.test(url) || /^https?:\/\/(.*\.)?stackexchange\.com\//.test(url),
