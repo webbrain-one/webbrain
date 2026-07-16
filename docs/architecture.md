@@ -83,6 +83,14 @@ trailing `/record [--save-as <filename>]` wraps a Chrome run in tab recording,
 while trailing `/screenshot [--save-as <filename>]` saves before/after viewport
 captures in both browsers. The panel strips the suffix before agent dispatch,
 starts capture before `chat`, and finalizes it from the run's `finally` path.
+
+Settings transfer is also slash-driven. `/export --config` asks the background
+for an allowlisted, default-resolved `webbrain-config/1` snapshot, and
+`/import <json>` or `/import --file` validates that schema before replacing the
+portable Settings state and rehydrating providers and live agent settings.
+Provider and auxiliary-model API keys are intentionally included in plaintext;
+device-bound Cloud Sync credentials and device IDs, conversation/runtime data,
+scheduled jobs, usage counters, and spend history are intentionally excluded.
 If a run activates another tab, the screenshot finalizer reactivates the
 originating run tab before capturing its after state.
 

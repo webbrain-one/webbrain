@@ -4,6 +4,18 @@ All notable changes to WebBrain are documented in this file.
 
 This changelog was generated from the repository Git history and release tags. Versions without a Git tag are inferred from version-bump commits and the current `package.json` / browser manifest versions.
 
+## [24.0.2] - 2026-07-16
+
+### Added
+- Added `/export --config` to download a portable JSON snapshot of settings and `/import <json>` or `/import --file` to restore one in Chrome and Firefox.
+- Included provider, vision, transcription, and CAPTCHA API keys in configuration snapshots, with an explicit plaintext-secret warning before export and import.
+
+### Changed
+- Limited configuration snapshots to settings-backed state, excluding device-bound sync identifiers and tokens, conversations, traces, jobs, and usage counters.
+
+### Tests
+- Added mirrored coverage for configuration schema completeness, round trips, validation failures, file selection, slash-command routing, and background import/export handlers.
+
 ## [24.0.1] - 2026-07-16
 
 ### Added

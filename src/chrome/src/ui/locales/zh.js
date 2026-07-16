@@ -771,4 +771,11 @@ export default {
 'st.providers.compat.value.max': '最大',
 'st.providers.compat.value.system': '系统',
 'st.providers.compat.value.developer': '开发者',
+  "sp.slash.export_config": "导出所有设置值，包括提供商 API 密钥",
+  "sp.slash.import_config": "导入 WebBrain 配置 JSON 快照",
+  "sp.slash.import_config_file": "选择 WebBrain 配置 JSON 文件",
+  "sp.export_config.done": "配置已导出为明文 JSON。其中包含提供商 API 密钥、个人资料、用户记忆和其他敏感设置。请安全保存。",
+  "sp.export_config.error": "无法导出配置：{error}",
+  "sp.import_config.done": "已导入 {count} 个设置值。提供商密钥和配置现已生效。",
+  "sp.import_config.error": "无法导入配置：{error}",
 };

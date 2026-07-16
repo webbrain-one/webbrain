@@ -773,4 +773,11 @@ export default {
   "sp.export_traces.no_conversation": "Nothing to export yet — start a conversation first.",
   "sp.export_traces.partial": "Tool chain exported, but some turn events could not be read.",
   "sp.export_traces.truncated": "Tool chain exported. Older turns may be missing if this conversation has many traced runs.",
+  "sp.slash.export_config": "Export all Settings values, including provider API keys",
+  "sp.slash.import_config": "Import a WebBrain configuration JSON snapshot",
+  "sp.slash.import_config_file": "Choose a WebBrain configuration JSON file",
+  "sp.export_config.done": "Configuration exported as plaintext JSON. It includes provider API keys, profile data, user memory, and other sensitive Settings values. Store it securely.",
+  "sp.export_config.error": "Couldn't export configuration: {error}",
+  "sp.import_config.done": "Imported {count} Settings values. Provider keys and configuration are active.",
+  "sp.import_config.error": "Couldn't import configuration: {error}",
 };

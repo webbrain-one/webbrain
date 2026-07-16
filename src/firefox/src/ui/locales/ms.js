@@ -769,4 +769,11 @@ export default {
 'st.providers.compat.value.max': 'Maks',
 'st.providers.compat.value.system': 'Sistem',
 'st.providers.compat.value.developer': 'Pembangun',
+  "sp.slash.export_config": "Eksport semua nilai Tetapan, termasuk kunci API penyedia",
+  "sp.slash.import_config": "Import petikan JSON konfigurasi WebBrain",
+  "sp.slash.import_config_file": "Pilih fail JSON konfigurasi WebBrain",
+  "sp.export_config.done": "Konfigurasi dieksport sebagai JSON teks biasa. Ia mengandungi kunci API penyedia, data profil, memori pengguna dan nilai Tetapan sensitif lain. Simpan dengan selamat.",
+  "sp.export_config.error": "Tidak dapat mengeksport konfigurasi: {error}",
+  "sp.import_config.done": "{count} nilai Tetapan telah diimport. Kunci penyedia dan konfigurasi kini aktif.",
+  "sp.import_config.error": "Tidak dapat mengimport konfigurasi: {error}",
 };

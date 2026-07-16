@@ -769,4 +769,11 @@ export default {
 'st.providers.compat.value.max': 'สูงสุด',
 'st.providers.compat.value.system': 'ระบบ',
 'st.providers.compat.value.developer': 'นักพัฒนา',
+  "sp.slash.export_config": "ส่งออกค่าการตั้งค่าทั้งหมด รวมถึงคีย์ API ของผู้ให้บริการ",
+  "sp.slash.import_config": "นำเข้าสแนปช็อต JSON การกำหนดค่า WebBrain",
+  "sp.slash.import_config_file": "เลือกไฟล์ JSON การกำหนดค่า WebBrain",
+  "sp.export_config.done": "ส่งออกการกำหนดค่าเป็น JSON แบบข้อความธรรมดาแล้ว ไฟล์นี้มีคีย์ API ของผู้ให้บริการ ข้อมูลโปรไฟล์ หน่วยความจำผู้ใช้ และค่าการตั้งค่าที่ละเอียดอ่อนอื่น ๆ โปรดเก็บไว้อย่างปลอดภัย",
+  "sp.export_config.error": "ส่งออกการกำหนดค่าไม่ได้: {error}",
+  "sp.import_config.done": "นำเข้าค่าการตั้งค่า {count} รายการแล้ว คีย์ผู้ให้บริการและการกำหนดค่ามีผลแล้ว",
+  "sp.import_config.error": "นำเข้าการกำหนดค่าไม่ได้: {error}",
 };

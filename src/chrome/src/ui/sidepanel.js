@@ -417,12 +417,23 @@ const SLASH_COMMANDS = [
   },
   {
     value: '/export',
-    usage: '/export [--traces]',
+    usage: '/export [--traces | --config]',
     descriptionKey: 'sp.slash.export',
     action: 'conversation',
     outOfBand: true,
     options: [
-      { value: '--traces', descriptionKey: 'sp.slash.export_traces', action: 'traces', outOfBand: true, disallowPayload: true },
+      { value: '--traces', descriptionKey: 'sp.slash.export_traces', action: 'traces', outOfBand: true, disallowPayload: true, exclusiveGroup: 'export-format' },
+      { value: '--config', descriptionKey: 'sp.slash.export_config', action: 'config', outOfBand: true, disallowPayload: true, exclusiveGroup: 'export-format' },
+    ],
+  },
+  {
+    value: '/import',
+    usage: '/import <json> | /import --file',
+    descriptionKey: 'sp.slash.import_config',
+    action: 'json',
+    acceptsPayload: true,
+    options: [
+      { value: '--file', descriptionKey: 'sp.slash.import_config_file', action: 'file', disallowPayload: true },
     ],
   },
   { value: '/profile', usage: '/profile', descriptionKey: 'sp.slash.profile', action: 'toggle' },
@@ -4026,6 +4037,38 @@ function resolvePendingPermissionPromptsForTab(tabId) {
   return resolved;
 }
 
+async function importConfigurationJson(json, tabId) {
+  try {
+    const res = await sendToBackground('import_config', { json });
+    await loadProviders();
+    if (currentTabId === tabId) {
+      addPersistentSlashMessage(t('sp.import_config.done', { count: res?.settingCount || 0 }));
+    }
+  } catch (error) {
+    if (currentTabId === tabId) {
+      addPersistentSlashMessage(t('sp.import_config.error', { error: error?.message || 'invalid configuration' }));
+    }
+  }
+}
+
+function requestConfigurationFile(tabId) {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json,application/json';
+  input.addEventListener('change', () => {
+    const file = input.files?.[0];
+    if (!file) return;
+    file.text()
+      .then((json) => importConfigurationJson(json, tabId))
+      .catch((error) => {
+        if (currentTabId === tabId) {
+          addPersistentSlashMessage(t('sp.import_config.error', { error: error?.message || 'file read failed' }));
+        }
+      });
+  }, { once: true });
+  input.click();
+}
+
 /**
  * Parse leading slash commands out of the user's message.
  * Returns the cleaned text (empty string if fully consumed).
@@ -4210,6 +4253,39 @@ async function parseSlashCommands(text, tabId = currentTabId) {
     } catch (e) {
       if (currentTabId !== tabId) return '';
       addPersistentSlashMessage(systemHtml(tSystemHtml('sp.record.error', { error: e.message })));
+    }
+    return '';
+  }
+
+  if (command.value === '/import' && action === 'file') {
+    requestConfigurationFile(tabId);
+    return '';
+  }
+
+  if (command.value === '/import' && action === 'json') {
+    await importConfigurationJson(payload, tabId);
+    return '';
+  }
+
+  if (command.value === '/export' && action === 'config') {
+    try {
+      const res = await sendToBackground('export_config', { locale: getLocale() });
+      if (!res?.ok || !res.json) throw new Error(res?.error || 'empty configuration');
+      const blob = new Blob([res.json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `webbrain-config-${Date.now()}.json`;
+      document.body.appendChild(a);
+      try {
+        a.click();
+      } finally {
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 7000);
+      }
+      addPersistentSlashMessage(t('sp.export_config.done'));
+    } catch (error) {
+      addPersistentSlashMessage(t('sp.export_config.error', { error: error?.message || 'unknown error' }));
     }
     return '';
   }

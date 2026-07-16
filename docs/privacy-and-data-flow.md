@@ -141,6 +141,20 @@ maximum prompt characters injected. `/memory --add <text>` writes an explicit me
 immediately without an extractor call. Export/import JSON is local-only and is
 the v1 bridge for moving memory between browser profiles.
 
+### Configuration Snapshot Transfer
+
+`/export --config` creates a local plaintext `webbrain-config/1` JSON file, and
+`/import <json>` or `/import --file` reads that snapshot locally before writing
+the validated Settings values to extension storage. The snapshot intentionally
+includes provider, vision, transcription, and CapSolver API keys as well as
+profile text, user memory, custom skills, and saved permission choices. Users
+should treat the file like a credential backup and store it securely.
+
+The snapshot does not include device-bound Cloud Sync authentication/session
+state, the WebBrain Cloud device ID, conversations, traces, scheduled jobs,
+usage counters, or accumulated spend. Import does not upload the JSON to
+WebBrain Cloud or to the configured LLM provider.
+
 ### Optional Encrypted Cloud Sync
 
 Active WebBrain Cloud subscribers may explicitly enable encrypted profile sync in

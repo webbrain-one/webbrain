@@ -45,6 +45,11 @@ import {
   parseUserMemoryExtractionResult,
 } from './agent/user-memory.js';
 import { PROFILE_SYNC_DATA_KEYS, PROFILE_SYNC_KEYS, ProfileSyncManager } from './profile-sync.js';
+import {
+  CONFIG_STORAGE_KEYS,
+  createConfigExport,
+  parseConfigImport,
+} from './config-transfer.js';
 import { RUN_CAPTURE_START_ERROR_PREFIX, createRunCaptureController } from './run-capture.js';
 
 /**
@@ -1687,6 +1692,47 @@ async function handleMessage(msg, sender) {
       const tabId = msg.tabId || sender.tab?.id;
       if (!tabId) return { ok: false, error: 'No tab ID' };
       return { ok: true, ...(await agent.exportTraces(tabId)) };
+    }
+
+    case 'export_config': {
+      const stored = await browser.storage.local.get(CONFIG_STORAGE_KEYS);
+      const config = createConfigExport(stored, {
+        locale: msg.locale,
+        webbrainVersion: browser.runtime.getManifest().version,
+      });
+      return {
+        ok: true,
+        json: JSON.stringify(config, null, 2),
+        settingCount: CONFIG_STORAGE_KEYS.length,
+      };
+    }
+
+    case 'import_config': {
+      const imported = parseConfigImport(msg.json);
+      await browser.storage.local.set(imported.settings);
+      await providerManager.load();
+      await Promise.all([
+        loadMaxSteps(),
+        loadClarifyTimeout(),
+        loadAutoScreenshot(),
+        loadSiteAdapters(),
+        loadScreenshotRedaction(),
+        loadStrictSecretMode(),
+        loadProfile(),
+        syncAgentUserMemoryFromStorage(),
+        loadCustomSkills(),
+        loadCaptchaSolver(),
+        loadPlanBeforeAct(),
+        loadPlanReviewSettings(),
+        loadApiMutationObserverSetting(),
+        agent._ensureGateSetting({ force: true }),
+      ]);
+      agent._refreshSystemPrompts();
+      return {
+        ok: true,
+        settingCount: CONFIG_STORAGE_KEYS.length,
+        ignoredKeys: imported.ignoredKeys,
+      };
     }
 
     case 'get_progress': {
