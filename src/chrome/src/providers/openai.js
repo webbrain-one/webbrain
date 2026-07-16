@@ -316,6 +316,7 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
       input: this._responsesInput(messages),
       stream,
       store: false,
+      include: ['reasoning.encrypted_content'],
       max_output_tokens: options.maxTokens ?? 4096,
       // Keep reasoning enabled. `none` would recreate the workaround the
       // Responses migration is specifically intended to avoid.

@@ -16002,6 +16002,7 @@ test('GPT-5.6 Responses request preserves reasoning and converts messages and to
     assert.equal(body.model, 'gpt-5.6-terra');
     assert.equal(body.stream, true);
     assert.equal(body.store, false);
+    assert.deepEqual(body.include, ['reasoning.encrypted_content']);
     assert.equal(body.max_output_tokens, 1234);
     assert.deepEqual(body.reasoning, { effort: 'medium' });
     assert.equal(body.messages, undefined);
