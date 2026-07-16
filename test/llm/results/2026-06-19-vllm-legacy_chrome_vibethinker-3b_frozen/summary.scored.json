@@ -1,0 +1,26 @@
+{
+  "grader": "idealFirstToolCall-vs-expected",
+  "expectedDir": "test/llm/expected",
+  "definitions": {
+    "exact": "tool name and args match expected ideal first call",
+    "name": "ideal tool name matches (includes exact); Name >= Exact",
+    "nameOnly": "tool name matches but args differ (exclusive of exact)",
+    "parsedCalls": "cases with a parseable first tool call"
+  },
+  "model": "vibethinker-3b",
+  "runTag": "2026-06-19-vllm-legacy",
+  "cases": 100,
+  "errors": 0,
+  "parsedCalls": 84,
+  "exact": 2,
+  "name": 19,
+  "nameOnly": 17,
+  "exactPct": 2,
+  "namePct": 19,
+  "avgLatencyMs": 6202.13,
+  "medianLatencyMs": 4987.0,
+  "p95LatencyMs": 15133,
+  "maxLatencyMs": 24401,
+  "totalLatencyMs": 620409,
+  "sourceSummary": "summary.json"
+}

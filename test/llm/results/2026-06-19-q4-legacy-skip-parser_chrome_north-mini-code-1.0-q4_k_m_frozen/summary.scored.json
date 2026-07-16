@@ -1,0 +1,26 @@
+{
+  "grader": "idealFirstToolCall-vs-expected",
+  "expectedDir": "test/llm/expected",
+  "definitions": {
+    "exact": "tool name and args match expected ideal first call",
+    "name": "ideal tool name matches (includes exact); Name >= Exact",
+    "nameOnly": "tool name matches but args differ (exclusive of exact)",
+    "parsedCalls": "cases with a parseable first tool call"
+  },
+  "model": "north-mini-code-1.0-q4_k_m",
+  "runTag": "2026-06-19-q4-legacy-skip-parser",
+  "cases": 100,
+  "errors": 0,
+  "parsedCalls": 93,
+  "exact": 9,
+  "name": 24,
+  "nameOnly": 15,
+  "exactPct": 9,
+  "namePct": 24,
+  "avgLatencyMs": 3300.75,
+  "medianLatencyMs": 3199.5,
+  "p95LatencyMs": 4023,
+  "maxLatencyMs": 5162,
+  "totalLatencyMs": 330208,
+  "sourceSummary": "summary.json"
+}

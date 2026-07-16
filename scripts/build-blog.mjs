@@ -1254,7 +1254,7 @@ function renderIndexPage(posts, args) {
         <div class="post-title">${escHtml(post.cardTitle || post.title)}</div>
         <div class="post-excerpt">${escHtml(post.excerpt)}</div>
       </a>`
-  )).join('\n');
+  )).join('\n      ');
 
   const jsonLd = {
     '@context': 'https://schema.org',

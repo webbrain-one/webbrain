@@ -1,0 +1,26 @@
+{
+  "grader": "idealFirstToolCall-vs-expected",
+  "expectedDir": "test/llm/expected",
+  "definitions": {
+    "exact": "tool name and args match expected ideal first call",
+    "name": "ideal tool name matches (includes exact); Name >= Exact",
+    "nameOnly": "tool name matches but args differ (exclusive of exact)",
+    "parsedCalls": "cases with a parseable first tool call"
+  },
+  "model": "diffusiongemma-26b",
+  "runTag": "2026-06-19-vllm-legacy",
+  "cases": 100,
+  "errors": 0,
+  "parsedCalls": 79,
+  "exact": 10,
+  "name": 26,
+  "nameOnly": 16,
+  "exactPct": 10,
+  "namePct": 26,
+  "avgLatencyMs": 376.36,
+  "medianLatencyMs": 350.0,
+  "p95LatencyMs": 646,
+  "maxLatencyMs": 876,
+  "totalLatencyMs": 37771,
+  "sourceSummary": "summary.json"
+}
