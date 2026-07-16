@@ -533,11 +533,13 @@ function renderInline(value, options = {}) {
     .replace(/(^|[^\*])\*([^*\s][^*]*?)\*/g, '$1<em>$2</em>')
     .replace(/(^|[^_])_([^_\s][^_]*?)_/g, '$1<em>$2</em>');
 
-  codeTokens.forEach((html, index) => {
-    text = text.replace(`@@CODE${index}@@`, html);
-  });
+  // Restore links before code. Link labels may embed @@CODEn@@ placeholders
+  // (e.g. [`Q4_K_M`](url)); those only expand after the anchor is reinserted.
   linkTokens.forEach((html, index) => {
     text = text.replace(`@@LINK${index}@@`, html);
+  });
+  codeTokens.forEach((html, index) => {
+    text = text.replace(`@@CODE${index}@@`, html);
   });
 
   return text;
@@ -1230,7 +1232,7 @@ function renderIndexPage(posts, args) {
         <div class="post-title">${escHtml(post.cardTitle || post.title)}</div>
         <div class="post-excerpt">${escHtml(post.excerpt)}</div>
       </a>`
-  )).join('\n');
+  )).join('\n      ');
 
   const jsonLd = {
     '@context': 'https://schema.org',

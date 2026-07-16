@@ -1,0 +1,26 @@
+{
+  "grader": "idealFirstToolCall-vs-expected",
+  "expectedDir": "test/llm/expected",
+  "definitions": {
+    "exact": "tool name and args match expected ideal first call",
+    "name": "ideal tool name matches (includes exact); Name >= Exact",
+    "nameOnly": "tool name matches but args differ (exclusive of exact)",
+    "parsedCalls": "cases with a parseable first tool call"
+  },
+  "model": "gemma4-12b-coder-q4_k_m",
+  "runTag": "2026-06-19-q4-legacy",
+  "cases": 100,
+  "errors": 0,
+  "parsedCalls": 94,
+  "exact": 9,
+  "name": 26,
+  "nameOnly": 17,
+  "exactPct": 9,
+  "namePct": 26,
+  "avgLatencyMs": 2341.0,
+  "medianLatencyMs": 1915.5,
+  "p95LatencyMs": 2814,
+  "maxLatencyMs": 40535,
+  "totalLatencyMs": 234217,
+  "sourceSummary": "summary.json"
+}

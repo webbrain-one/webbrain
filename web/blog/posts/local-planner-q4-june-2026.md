@@ -56,7 +56,7 @@ That means:
 - One active request at a time.
 - `Q4_K_M` GGUFs where a GGUF path exists and can run.
 
-The strict numbers below score only the first model action. **Exact** means tool name and args match the expected first call. **Name** means the tool name matches but args differ. **Parsed calls** measures format reliability, not correctness.
+The strict numbers below score only the first model action. **Exact** means tool name and args both match the expected first call. **Name** means the ideal tool name matches (including exact matches — so Name ≥ Exact). **Parsed calls** measures format reliability, not correctness.
 
 ## Results
 
@@ -291,7 +291,7 @@ VibeThinker should stay out of the browser-agent planner table unless a tool-tra
 
 ## Comparison with earlier planner runs
 
-For context, here is the same strict first-tool comparison across the saved runs we have tested before. This is not the same scoring lens as the May benchmark post, which compared models against consensus and Sonnet. This table replays each saved result against the current `expected/NNN.json` ideal first call: exact is name plus args, name is tool name only.
+For context, here is the same strict first-tool comparison across the saved runs we have tested before. This is not the same scoring lens as the May benchmark post, which compared models against consensus and Sonnet. This table replays each saved result against the current `expected/NNN.json` ideal first call with the same definitions as above: **Exact** = name plus args; **Name** = ideal tool name matches (including exact).
 
 | Model | Parsed calls | Exact | Name | Median latency |
 | --- | ---: | ---: | ---: | ---: |
