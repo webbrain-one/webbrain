@@ -768,4 +768,11 @@ export default {
 'st.providers.compat.value.max': 'Maks',
 'st.providers.compat.value.system': 'Sistem',
 'st.providers.compat.value.developer': 'Geliştirici',
+  "sp.slash.export_config": "Sağlayıcı API anahtarları dahil tüm Ayarlar değerlerini dışa aktar",
+  "sp.slash.import_config": "Bir WebBrain yapılandırma JSON anlık görüntüsünü içe aktar",
+  "sp.slash.import_config_file": "Bir WebBrain yapılandırma JSON dosyası seç",
+  "sp.export_config.done": "Yapılandırma düz metin JSON olarak dışa aktarıldı. Sağlayıcı API anahtarlarını, profil verilerini, kullanıcı belleğini ve diğer hassas Ayarlar değerlerini içerir. Güvenli biçimde saklayın.",
+  "sp.export_config.error": "Yapılandırma dışa aktarılamadı: {error}",
+  "sp.import_config.done": "{count} Ayarlar değeri içe aktarıldı. Sağlayıcı anahtarları ve yapılandırma etkin.",
+  "sp.import_config.error": "Yapılandırma içe aktarılamadı: {error}",
 };

@@ -769,4 +769,11 @@ export default {
 'st.providers.compat.value.max': 'Max',
 'st.providers.compat.value.system': 'System',
 'st.providers.compat.value.developer': 'Developer',
+  "sp.slash.export_config": "I-export ang lahat ng value ng Settings, kasama ang mga provider API key",
+  "sp.slash.import_config": "Mag-import ng WebBrain configuration JSON snapshot",
+  "sp.slash.import_config_file": "Pumili ng WebBrain configuration JSON file",
+  "sp.export_config.done": "Na-export ang configuration bilang plaintext JSON. Kasama rito ang mga provider API key, profile data, user memory, at iba pang sensitibong Settings value. Itago ito nang ligtas.",
+  "sp.export_config.error": "Hindi ma-export ang configuration: {error}",
+  "sp.import_config.done": "Na-import ang {count} Settings value. Aktibo na ang mga provider key at configuration.",
+  "sp.import_config.error": "Hindi ma-import ang configuration: {error}",
 };

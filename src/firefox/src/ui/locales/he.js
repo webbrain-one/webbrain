@@ -722,4 +722,11 @@ export default {
 'st.providers.compat.value.max': 'מקסימום',
 'st.providers.compat.value.system': 'מערכת',
 'st.providers.compat.value.developer': 'מפתח',
+  "sp.slash.export_config": "ייצוא כל ערכי ההגדרות, כולל מפתחות API של ספקים",
+  "sp.slash.import_config": "ייבוא תמונת מצב של תצורת WebBrain בקובץ JSON",
+  "sp.slash.import_config_file": "בחירת קובץ JSON של תצורת WebBrain",
+  "sp.export_config.done": "התצורה יוצאה כ-JSON בטקסט גלוי. היא כוללת מפתחות API של ספקים, נתוני פרופיל, זיכרון משתמש וערכי הגדרות רגישים נוספים. יש לשמור אותה באופן מאובטח.",
+  "sp.export_config.error": "לא ניתן לייצא את התצורה: {error}",
+  "sp.import_config.done": "יובאו {count} ערכי הגדרות. מפתחות הספקים והתצורה פעילים כעת.",
+  "sp.import_config.error": "לא ניתן לייבא את התצורה: {error}",
 };

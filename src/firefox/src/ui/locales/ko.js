@@ -769,4 +769,11 @@ export default {
 'st.providers.compat.value.max': '최대',
 'st.providers.compat.value.system': '시스템',
 'st.providers.compat.value.developer': '개발자',
+  "sp.slash.export_config": "공급자 API 키를 포함한 모든 설정 값 내보내기",
+  "sp.slash.import_config": "WebBrain 구성 JSON 스냅샷 가져오기",
+  "sp.slash.import_config_file": "WebBrain 구성 JSON 파일 선택",
+  "sp.export_config.done": "구성을 일반 텍스트 JSON으로 내보냈습니다. 공급자 API 키, 프로필 데이터, 사용자 메모리 및 기타 민감한 설정 값이 포함됩니다. 안전하게 보관하세요.",
+  "sp.export_config.error": "구성을 내보낼 수 없습니다: {error}",
+  "sp.import_config.done": "설정 값 {count}개를 가져왔습니다. 공급자 키와 구성이 활성화되었습니다.",
+  "sp.import_config.error": "구성을 가져올 수 없습니다: {error}",
 };

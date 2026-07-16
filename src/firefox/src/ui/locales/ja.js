@@ -769,4 +769,11 @@ export default {
 'st.providers.compat.value.max': '最大',
 'st.providers.compat.value.system': 'システム',
 'st.providers.compat.value.developer': '開発者',
+  "sp.slash.export_config": "プロバイダーの API キーを含むすべての設定値をエクスポート",
+  "sp.slash.import_config": "WebBrain 設定の JSON スナップショットをインポート",
+  "sp.slash.import_config_file": "WebBrain 設定の JSON ファイルを選択",
+  "sp.export_config.done": "設定を平文の JSON としてエクスポートしました。プロバイダーの API キー、プロフィール情報、ユーザーメモリ、その他の機密設定が含まれます。安全に保管してください。",
+  "sp.export_config.error": "設定をエクスポートできませんでした: {error}",
+  "sp.import_config.done": "{count} 件の設定値をインポートしました。プロバイダーキーと設定は有効です。",
+  "sp.import_config.error": "設定をインポートできませんでした: {error}",
 };

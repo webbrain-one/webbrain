@@ -196,6 +196,15 @@ const { tracesToMarkdown: tracesToMarkdownFx } = await import(
   'file://' + path.join(ROOT, 'src/firefox/src/agent/trace-export.js').replace(/\\/g, '/')
 );
 
+// config-transfer.js is the pure schema/allowlist boundary used by the
+// /export --config and /import slash-command handlers.
+const ConfigTransferCh = await import(
+  'file://' + path.join(ROOT, 'src/chrome/src/config-transfer.js').replace(/\\/g, '/')
+);
+const ConfigTransferFx = await import(
+  'file://' + path.join(ROOT, 'src/firefox/src/config-transfer.js').replace(/\\/g, '/')
+);
+
 // network-tools.js references chrome.* inside a try/catch at module load, so
 // it imports cleanly under Node — the storage init silently no-ops and
 // validateFetchUrl / registrableDomain are pure functions.
@@ -2041,7 +2050,7 @@ test('/export --traces is wired in both side panels and backgrounds', () => {
     const bg = fs.readFileSync(path.join(ROOT, bgRel), 'utf8');
     assert.match(
       panel,
-      /usage: '\/export \[--traces\]'[\s\S]*?value: '--traces'[\s\S]*?action: 'traces'[\s\S]*?outOfBand: true/,
+      /usage: '\/export \[--traces \| --config\]'[\s\S]*?value: '--traces'[\s\S]*?action: 'traces'[\s\S]*?outOfBand: true/,
       `${label}: slash metadata should advertise /export --traces`,
     );
     assert.match(
@@ -2071,6 +2080,89 @@ test('/export --traces is wired in both side panels and backgrounds', () => {
       `${label}: export_traces should call agent.exportTraces`,
     );
     assert.match(panel, /_Exported with WebBrain v\$\{webbrainVersion\}_/, `${label}: /export should include the current manifest version`);
+  }
+});
+
+test('config transfer exports and restores Settings values including provider keys', () => {
+  const stored = {
+    wbLocale: 'tr',
+    strictSecretMode: true,
+    profileEnabled: true,
+    profileText: 'Use the test profile',
+    capsolverApiKey: 'capsolver-secret',
+    providers: {
+      openai: { type: 'openai', apiKey: 'provider-secret', model: 'gpt-test', configured: true },
+      webbrain_cloud: { type: 'openai', deviceGuid: 'must-stay-on-device' },
+    },
+    activeProvider: 'openai',
+    visionModel: { baseUrl: 'https://vision.example/v1', apiKey: 'vision-secret', model: 'vision-test' },
+    transcriptionModel: { baseUrl: 'https://audio.example/v1', apiKey: 'audio-secret', model: 'whisper-test' },
+    wb_permissions: [{ capability: 'click', host: 'example.com' }],
+    wb_user_memory_v1: { version: 1, records: [{ id: 'mem_1', text: 'Prefer concise answers', kind: 'preference' }] },
+    cloudCostSpentUsd: 8.5,
+    profileSyncToken: 'device-session-secret',
+    webbrainDeviceGuid: 'device-guid',
+  };
+  const options = { exportedAt: '2026-07-16T12:00:00.000Z', webbrainVersion: '24.0.2', locale: 'tr' };
+
+  const chromeExport = ConfigTransferCh.createConfigExport(stored, options);
+  const firefoxExport = ConfigTransferFx.createConfigExport(stored, options);
+  assert.deepEqual(firefoxExport, chromeExport, 'Chrome and Firefox config schemas should remain identical');
+  assert.equal(chromeExport.schema, 'webbrain-config/1');
+  assert.equal(chromeExport.settings.providers.openai.apiKey, 'provider-secret');
+  assert.equal(chromeExport.settings.visionModel.apiKey, 'vision-secret');
+  assert.equal(chromeExport.settings.transcriptionModel.apiKey, 'audio-secret');
+  assert.equal(chromeExport.settings.capsolverApiKey, 'capsolver-secret');
+  assert.equal(chromeExport.settings.profileText, 'Use the test profile');
+  assert.equal(chromeExport.settings.wb_user_memory_v1.records.length, 1);
+  assert.equal(chromeExport.settings.providers.webbrain_cloud.deviceGuid, undefined, 'device identity must not be portable');
+  assert.equal(chromeExport.settings.cloudCostSpentUsd, undefined, 'spend counters are runtime state, not config');
+  assert.equal(chromeExport.settings.profileSyncToken, undefined, 'Cloud Sync sessions must not be exported');
+  assert.equal(chromeExport.settings.webbrainDeviceGuid, undefined, 'device GUID must not be exported');
+  assert.match(chromeExport.warning, /plaintext provider API keys/i);
+
+  const imported = ConfigTransferCh.parseConfigImport(JSON.stringify(chromeExport));
+  assert.equal(imported.settings.providers.openai.apiKey, 'provider-secret');
+  assert.equal(imported.settings.activeProvider, 'openai');
+  assert.equal(imported.settings.themeMode, 'system', 'missing Settings values should restore their product defaults');
+  assert.equal(Object.keys(imported.settings).length, ConfigTransferCh.CONFIG_STORAGE_KEYS.length);
+});
+
+test('config transfer validates schema, size, containers, and unknown keys', () => {
+  assert.throws(() => ConfigTransferCh.parseConfigImport('{nope'), /valid JSON/);
+  assert.throws(() => ConfigTransferCh.parseConfigImport('{}'), /webbrain-config\/1/);
+  assert.throws(
+    () => ConfigTransferCh.parseConfigImport(JSON.stringify({ schema: 'webbrain-config/1', settings: { providers: [] } })),
+    /providers/,
+  );
+  assert.throws(
+    () => ConfigTransferCh.parseConfigImport(' '.repeat(ConfigTransferCh.MAX_CONFIG_IMPORT_CHARS + 1)),
+    /too large/,
+  );
+
+  const parsed = ConfigTransferCh.parseConfigImport(JSON.stringify({
+    schema: 'webbrain-config/1',
+    settings: { verboseMode: true, futureSetting: 'ignored' },
+  }));
+  assert.equal(parsed.settings.verboseMode, true);
+  assert.deepEqual(parsed.ignoredKeys, ['futureSetting']);
+});
+
+test('/export --config and /import JSON or --file are wired in both browsers', () => {
+  for (const [label, prefix] of [
+    ['chrome', 'src/chrome'],
+    ['firefox', 'src/firefox'],
+  ]) {
+    const panel = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/sidepanel.js'), 'utf8');
+    const bg = fs.readFileSync(path.join(ROOT, prefix, 'src/background.js'), 'utf8');
+    assert.match(panel, /value: '--config'[\s\S]*?action: 'config'[\s\S]*?exclusiveGroup: 'export-format'/, `${label}: /export --config metadata missing`);
+    assert.match(panel, /usage: '\/import <json> \| \/import --file'[\s\S]*?value: '--file'[\s\S]*?action: 'file'/, `${label}: /import --file metadata missing`);
+    assert.match(panel, /command\.value === '\/export' && action === 'config'[\s\S]*?sendToBackground\('export_config', \{ locale: getLocale\(\) \}\)/, `${label}: config export handler missing`);
+    assert.match(panel, /command\.value === '\/import' && action === 'json'[\s\S]*?importConfigurationJson\(payload, tabId\)/, `${label}: inline config import handler missing`);
+    assert.match(panel, /command\.value === '\/import' && action === 'file'[\s\S]*?requestConfigurationFile\(tabId\)/, `${label}: file config import handler missing`);
+    assert.match(panel, /input\.accept = '\.json,application\/json'[\s\S]*?file\.text\(\)/, `${label}: file picker should read JSON files`);
+    assert.match(bg, /case 'export_config':[\s\S]*?createConfigExport\(stored/, `${label}: background config export missing`);
+    assert.match(bg, /case 'import_config':[\s\S]*?parseConfigImport\(msg\.json\)[\s\S]*?storage\.local\.set\(imported\.settings\)[\s\S]*?providerManager\.load\(\)/, `${label}: background config import and live provider reload missing`);
   }
 });
 

@@ -769,4 +769,11 @@ export default {
 'st.providers.compat.value.max': 'Макс.',
 'st.providers.compat.value.system': 'Система',
 'st.providers.compat.value.developer': 'Розробник',
+  "sp.slash.export_config": "Експортувати всі налаштування, включно з API-ключами провайдерів",
+  "sp.slash.import_config": "Імпортувати JSON-знімок конфігурації WebBrain",
+  "sp.slash.import_config_file": "Вибрати JSON-файл конфігурації WebBrain",
+  "sp.export_config.done": "Конфігурацію експортовано як незашифрований JSON. Вона містить API-ключі провайдерів, дані профілю, пам’ять користувача та інші конфіденційні налаштування. Зберігайте її безпечно.",
+  "sp.export_config.error": "Не вдалося експортувати конфігурацію: {error}",
+  "sp.import_config.done": "Імпортовано налаштувань: {count}. Ключі провайдерів і конфігурація активні.",
+  "sp.import_config.error": "Не вдалося імпортувати конфігурацію: {error}",
 };

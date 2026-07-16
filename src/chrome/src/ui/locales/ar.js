@@ -771,4 +771,11 @@ export default {
 'st.providers.compat.value.max': 'أقصى',
 'st.providers.compat.value.system': 'نظام',
 'st.providers.compat.value.developer': 'مطوّر',
+  "sp.slash.export_config": "تصدير جميع قيم الإعدادات، بما فيها مفاتيح API لموفري الخدمة",
+  "sp.slash.import_config": "استيراد لقطة إعداد WebBrain بصيغة JSON",
+  "sp.slash.import_config_file": "اختيار ملف إعداد WebBrain بصيغة JSON",
+  "sp.export_config.done": "تم تصدير الإعداد كنص JSON غير مشفر. يتضمن مفاتيح API لموفري الخدمة وبيانات الملف الشخصي وذاكرة المستخدم وقيم إعدادات حساسة أخرى. خزّنه بأمان.",
+  "sp.export_config.error": "تعذر تصدير الإعداد: {error}",
+  "sp.import_config.done": "تم استيراد {count} من قيم الإعدادات. مفاتيح موفري الخدمة والإعداد مفعّلة الآن.",
+  "sp.import_config.error": "تعذر استيراد الإعداد: {error}",
 };

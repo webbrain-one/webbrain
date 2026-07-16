@@ -729,4 +729,11 @@ export default {
   "st.display.help_improve.label": "Pomóż ulepszać WebBrain",
   "st.display.help_improve.desc_html": "Zezwól na przechowywanie wybranych interakcji z WebBrain Cloud i używanie ich do oceny, ulepszania, dostrajania i trenowania. Domyślnie włączone. Wyłącz, aby przyszłe interakcje Cloud nie były używane do tych celów. <u>WebBrain nigdy nie zbiera żądań do modeli lokalnych ani żądań wysyłanych bezpośrednio przy użyciu własnych danych logowania API.</u> <a href=\"https://webbrain.one/privacy\" target=\"_blank\" rel=\"noopener noreferrer\" style=\"color:var(--accent);\">Polityka prywatności →</a>",
   "st.providers.webbrain_data_use.body": "Darmowe dzienne korzystanie z WebBrain Cloud jest wliczone. Gdy opcja „Pomóż ulepszać WebBrain” jest domyślnie włączona, wybrane rozmowy Cloud mogą być przechowywane i używane do oceny, ulepszania, dostrajania i trenowania. Wyłącz ją w Ogólne, aby wykluczyć przyszłe interakcje Cloud z tych zastosowań. <u>WebBrain nigdy nie zbiera żądań do modeli lokalnych ani żądań wysyłanych bezpośrednio przy użyciu własnych danych logowania API.</u> {privacyLink}. Aby korzystać więcej, subskrybuj na {subscribeLink}. Zarządzaj rozliczeniami na {accountLink}.",
+  "sp.slash.export_config": "Eksportuj wszystkie ustawienia, w tym klucze API dostawców",
+  "sp.slash.import_config": "Importuj migawkę konfiguracji WebBrain w formacie JSON",
+  "sp.slash.import_config_file": "Wybierz plik JSON konfiguracji WebBrain",
+  "sp.export_config.done": "Konfigurację wyeksportowano jako niezaszyfrowany JSON. Zawiera klucze API dostawców, dane profilu, pamięć użytkownika i inne poufne ustawienia. Przechowuj ją bezpiecznie.",
+  "sp.export_config.error": "Nie udało się wyeksportować konfiguracji: {error}",
+  "sp.import_config.done": "Zaimportowano ustawienia: {count}. Klucze dostawców i konfiguracja są aktywne.",
+  "sp.import_config.error": "Nie udało się zaimportować konfiguracji: {error}",
 };

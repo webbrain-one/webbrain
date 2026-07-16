@@ -771,4 +771,11 @@ export default {
 'st.providers.compat.value.max': 'Max',
 'st.providers.compat.value.system': 'Système',
 'st.providers.compat.value.developer': 'Développeur',
+  "sp.slash.export_config": "Exporter tous les paramètres, y compris les clés API des fournisseurs",
+  "sp.slash.import_config": "Importer un instantané JSON de configuration WebBrain",
+  "sp.slash.import_config_file": "Choisir un fichier JSON de configuration WebBrain",
+  "sp.export_config.done": "La configuration a été exportée en JSON non chiffré. Elle contient les clés API des fournisseurs, les données de profil, la mémoire utilisateur et d’autres paramètres sensibles. Conservez-la en lieu sûr.",
+  "sp.export_config.error": "Impossible d’exporter la configuration : {error}",
+  "sp.import_config.done": "{count} paramètres ont été importés. Les clés des fournisseurs et la configuration sont actives.",
+  "sp.import_config.error": "Impossible d’importer la configuration : {error}",
 };

@@ -330,13 +330,22 @@ WebBrain accepts slash commands as the first thing on a line in the input box. T
 | `/reset` | Clear the conversation and all per-conversation flags |
 | `/screenshot [--full-page]` | Capture the visible tab, or the full scrollable page with `--full-page` (Chrome only) |
 | `/record [--full-screen] [--transcribe]` | Record the current tab, or a selected screen/window with `--full-screen` (Chrome only); add `--transcribe` to save a transcript after stop |
-| `/export [--traces]` | Download version-stamped conversation Markdown, or export the version-stamped tool chain with `--traces` |
+| `/export [--traces \| --config]` | Download version-stamped conversation Markdown, export the version-stamped tool chain with `--traces`, or export a Settings snapshot with `--config` |
+| `/import <json>` | Import a Settings snapshot pasted inline |
+| `/import --file` | Choose and import a Settings snapshot JSON file |
 | `/profile` | Toggle profile auto-fill on/off without opening Settings |
 | `/vision` | Toggle vision mode (screenshot understanding) on the active provider |
 | `/ask` | Switch to Ask mode before sending |
 | `/act` | Switch to Act mode before sending |
 | `/dev` | Switch to Dev mode before sending |
 | `/plan` | Switch to Ask mode with planning intent |
+
+Configuration snapshots use the `webbrain-config/1` schema and include all
+portable Settings values, including provider, vision, transcription, and
+CapSolver API keys, profile data, user memory, custom skills, and permission
+choices. The JSON is plaintext and should be stored securely. Device-bound
+Cloud Sync sessions/device IDs, conversations, traces, scheduled jobs, usage
+counters, and accumulated spend are not exported.
 
 Advanced run-capture suffixes are intentionally omitted from `/help` and
 autocomplete. Append `/record [--save-as <filename>]` to the end of a normal
