@@ -138,10 +138,13 @@ function safeExtraBody(source) {
 function mappedReasoningEffort(effort, preset) {
   if (effort === 'off') return 'none';
   if (preset === 'openrouter') {
+    // OpenRouter's public effort ladder tops out at high.
     if (effort === 'minimal') return 'low';
     if (effort === 'xhigh' || effort === 'max') return 'high';
   }
-  if (effort === 'max') return 'xhigh';
+  // OpenAI documents `max` as a distinct effort above `xhigh` (GPT-5.6).
+  // Pass it through unchanged for the OpenAI preset and any other preset that
+  // does not define its own clamp above.
   return effort;
 }
 
@@ -182,7 +185,20 @@ export function mergeProviderRequestBody(body, config = {}, perRequestExtraBody 
   if (extras.chat_template_kwargs?.enable_thinking === false) {
     delete extras.chat_template_kwargs.preserve_thinking;
   }
-  return { ...body, ...extras };
+  // Shallow-copy the body so untouched fields keep identity (Responses input
+  // items must replay the exact same object references). Deep-merge only when
+  // both sides have a plain object for the same key, so partial extras like
+  // `{ reasoning: { summary } }` do not drop required nested fields.
+  const result = isPlainObject(body) ? { ...body } : {};
+  for (const [key, value] of Object.entries(extras)) {
+    if (UNSAFE_OBJECT_KEYS.has(key)) continue;
+    if (isPlainObject(value) && isPlainObject(result[key])) {
+      result[key] = deepMerge(result[key], value);
+    } else {
+      result[key] = isPlainObject(value) || Array.isArray(value) ? safeClone(value) : value;
+    }
+  }
+  return result;
 }
 
 export function validateProviderExtraBody(value) {

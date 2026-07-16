@@ -1637,25 +1637,9 @@ function providerExtraBodyText(value) {
 }
 
 function prettyCompatibilityValue(value) {
-  const labels = {
-    auto: 'Auto',
-    qwen: 'Qwen',
-    deepseek: 'DeepSeek',
-    openrouter: 'OpenRouter',
-    openai: 'OpenAI',
-    standard: 'standard',
-    custom: 'Custom',
-    off: 'Off',
-    minimal: 'Minimal',
-    low: 'Low',
-    medium: 'Medium',
-    high: 'High',
-    xhigh: 'XHigh',
-    max: 'Max',
-    system: 'System',
-    developer: 'Developer',
-  };
-  return labels[value] || value;
+  const key = `st.providers.compat.value.${value}`;
+  const translated = t(key);
+  return translated === key ? (value || '') : translated;
 }
 
 function automaticTokenField(config) {
@@ -1672,17 +1656,22 @@ function compatibilitySummary(config) {
   const compat = normalizeProviderCompatibility(config);
   const detected = detectedCompatibilityPreset(config);
   const preset = compat.preset === 'auto'
-    ? `Auto → ${prettyCompatibilityValue(detected)}`
+    ? t('st.providers.compat.auto_detected', { preset: prettyCompatibilityValue(detected) })
     : prettyCompatibilityValue(compat.preset);
   const reasoning = compat.reasoningEffort === 'auto'
-    ? 'provider default'
+    ? t('st.providers.compat.provider_default')
     : prettyCompatibilityValue(compat.reasoningEffort);
-  const role = compat.systemPromptRole === 'auto' ? 'System' : prettyCompatibilityValue(compat.systemPromptRole);
+  const role = compat.systemPromptRole === 'auto'
+    ? prettyCompatibilityValue('system')
+    : prettyCompatibilityValue(compat.systemPromptRole);
   const tokens = compat.maxTokensField === 'auto' ? automaticTokenField(config) : compat.maxTokensField;
-  const extraBody = config.extraBody && typeof config.extraBody === 'object' && !Array.isArray(config.extraBody)
+  const extraCount = config.extraBody && typeof config.extraBody === 'object' && !Array.isArray(config.extraBody)
     ? Object.keys(config.extraBody).length
     : 0;
-  return `${preset} · reasoning ${reasoning} · ${role} role · ${tokens}${extraBody ? ` · ${extraBody} custom field${extraBody === 1 ? '' : 's'}` : ''}`;
+  const extra = extraCount
+    ? t(extraCount === 1 ? 'st.providers.compat.summary_extra' : 'st.providers.compat.summary_extra_plural', { count: extraCount })
+    : '';
+  return t('st.providers.compat.summary', { preset, reasoning, role, tokens, extra });
 }
 
 function currentProviderCompatibilityConfig(id) {
@@ -1722,50 +1711,51 @@ function renderProviderCompatibilitySettings(id, config) {
   const compat = normalizeProviderCompatibility(config);
   const extraBody = providerExtraBodyText(config.extraBody);
   const options = (items, current) => items.map(([value, label]) => (
-    `<option value="${value}"${value === current ? ' selected' : ''}>${label}</option>`
+    `<option value="${value}"${value === current ? ' selected' : ''}>${escapeHtml(label)}</option>`
   )).join('');
+  const valueLabel = (value) => prettyCompatibilityValue(value);
   return `
     <details class="provider-compatibility" data-provider-id="${id}">
       <summary>
-        <span class="provider-compatibility-title">Advanced model compatibility</span>
+        <span class="provider-compatibility-title">${escapeHtml(t('st.providers.compat.title'))}</span>
         <span class="provider-compatibility-summary">${escapeHtml(compatibilitySummary(config))}</span>
       </summary>
       <div class="provider-compatibility-body">
-        <p>Keep these on Auto unless the model or endpoint documents a different request contract.</p>
+        <p>${escapeHtml(t('st.providers.compat.blurb'))}</p>
         <div class="provider-compatibility-grid">
           <div class="field">
-            <label>Compatibility preset</label>
+            <label>${escapeHtml(t('st.providers.compat.preset'))}</label>
             <select data-provider="${id}" data-key="compat.preset" data-type="select">
-              ${options([['auto', 'Auto'], ['openai', 'OpenAI'], ['qwen', 'Qwen'], ['deepseek', 'DeepSeek'], ['openrouter', 'OpenRouter'], ['custom', 'Custom']], compat.preset)}
+              ${options([['auto', valueLabel('auto')], ['openai', valueLabel('openai')], ['qwen', valueLabel('qwen')], ['deepseek', valueLabel('deepseek')], ['openrouter', valueLabel('openrouter')], ['custom', valueLabel('custom')]], compat.preset)}
             </select>
           </div>
           <div class="field">
-            <label>Reasoning</label>
+            <label>${escapeHtml(t('st.providers.compat.reasoning'))}</label>
             <select data-provider="${id}" data-key="compat.reasoningEffort" data-type="select">
-              ${options([['auto', 'Auto'], ['off', 'Off'], ['minimal', 'Minimal'], ['low', 'Low'], ['medium', 'Medium'], ['high', 'High'], ['xhigh', 'XHigh'], ['max', 'Max']], compat.reasoningEffort)}
+              ${options([['auto', valueLabel('auto')], ['off', valueLabel('off')], ['minimal', valueLabel('minimal')], ['low', valueLabel('low')], ['medium', valueLabel('medium')], ['high', valueLabel('high')], ['xhigh', valueLabel('xhigh')], ['max', valueLabel('max')]], compat.reasoningEffort)}
             </select>
           </div>
           <div class="field">
-            <label>System prompt role</label>
+            <label>${escapeHtml(t('st.providers.compat.system_role'))}</label>
             <select data-provider="${id}" data-key="compat.systemPromptRole" data-type="select">
-              ${options([['auto', 'Auto'], ['system', 'System'], ['developer', 'Developer']], compat.systemPromptRole)}
+              ${options([['auto', valueLabel('auto')], ['system', valueLabel('system')], ['developer', valueLabel('developer')]], compat.systemPromptRole)}
             </select>
           </div>
           <div class="field">
-            <label>Token limit field</label>
+            <label>${escapeHtml(t('st.providers.compat.token_field'))}</label>
             <select data-provider="${id}" data-key="compat.maxTokensField" data-type="select">
-              ${options([['auto', 'Auto'], ['max_tokens', 'max_tokens'], ['max_completion_tokens', 'max_completion_tokens']], compat.maxTokensField)}
+              ${options([['auto', valueLabel('auto')], ['max_tokens', 'max_tokens'], ['max_completion_tokens', 'max_completion_tokens']], compat.maxTokensField)}
             </select>
           </div>
         </div>
         <div class="field provider-compatibility-json">
-          <label>Custom request body (JSON)</label>
+          <label>${escapeHtml(t('st.providers.compat.extra_body'))}</label>
           <textarea data-provider="${id}" data-key="extraBody" data-type="json" spellcheck="false"
-                    aria-invalid="false" placeholder='{"chat_template_kwargs":{"enable_thinking":true}}'>${escapeHtml(extraBody)}</textarea>
-          <div class="provider-compatibility-help">Merged after the preset. Per-call WebBrain overrides still win. Model, messages, tools, stream, and token-limit fields are protected.</div>
+                    aria-invalid="false" placeholder="${escapeHtml(t('st.providers.compat.extra_body_placeholder'))}">${escapeHtml(extraBody)}</textarea>
+          <div class="provider-compatibility-help">${escapeHtml(t('st.providers.compat.extra_body_help'))}</div>
         </div>
         <div class="provider-compatibility-footer">
-          <button type="button" class="btn-secondary btn-reset-compatibility" data-provider="${id}">Reset to automatic</button>
+          <button type="button" class="btn-secondary btn-reset-compatibility" data-provider="${id}">${escapeHtml(t('st.providers.compat.reset'))}</button>
           <span class="provider-compatibility-validation" role="status"></span>
         </div>
       </div>
@@ -2602,6 +2592,17 @@ function syncInputsIntoProvidersData() {
     const id = input.dataset.provider;
     const key = input.dataset.key;
     if (!id || !key || !providersData[id]) return;
+    // Keep extraBody as a parsed object in memory (matches saveProvider and
+    // mergeProviderRequestBody). Invalid draft JSON is left unchanged so a
+    // partial edit does not corrupt the last-known-good object.
+    if (input.dataset.type === 'json') {
+      try {
+        setProviderConfigValue(providersData[id], key, parseProviderExtraBodyJson(input.value));
+      } catch {
+        /* keep previous value */
+      }
+      return;
+    }
     setProviderConfigValue(providersData[id], key, providerInputValue(input));
   });
 }

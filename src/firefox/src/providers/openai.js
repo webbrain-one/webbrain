@@ -381,21 +381,38 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
       delete body.reasoning_effort;
     }
 
-    // Preserve json_schema → Responses text.format conversion from extraBody.
-    const extra = options.extraBody;
-    if (extra && typeof extra === 'object') {
-      if (extra.response_format?.type === 'json_schema' && extra.response_format.json_schema) {
-        const schema = extra.response_format.json_schema;
-        body.text = {
-          format: {
-            type: 'json_schema',
-            name: schema.name,
-            schema: schema.schema,
-            strict: schema.strict === true,
-          },
-        };
-      }
+    // Re-assert Responses contract fields that custom/extra JSON must not
+    // silently disable (stateless multi-turn reasoning replay).
+    body.store = false;
+    const include = Array.isArray(body.include) ? body.include.filter((item) => typeof item === 'string') : [];
+    if (!include.includes('reasoning.encrypted_content')) {
+      include.push('reasoning.encrypted_content');
     }
+    body.include = include;
+    if (!body.reasoning || typeof body.reasoning !== 'object' || Array.isArray(body.reasoning)) {
+      body.reasoning = { effort: 'medium' };
+    } else if (!body.reasoning.effort) {
+      body.reasoning.effort = 'medium';
+    }
+
+    // Convert Chat Completions-style response_format (from config or per-call
+    // extras) into Responses text.format, then strip the legacy key so both
+    // are never sent together.
+    const responseFormat = (body.response_format && typeof body.response_format === 'object')
+      ? body.response_format
+      : (options.extraBody && typeof options.extraBody === 'object' ? options.extraBody.response_format : null);
+    if (responseFormat?.type === 'json_schema' && responseFormat.json_schema) {
+      const schema = responseFormat.json_schema;
+      body.text = {
+        format: {
+          type: 'json_schema',
+          name: schema.name,
+          schema: schema.schema,
+          strict: schema.strict === true,
+        },
+      };
+    }
+    delete body.response_format;
     return body;
   }
 
@@ -440,7 +457,38 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
     };
   }
 
+  _responsesIncompleteReason(response) {
+    return response?.incomplete_details?.reason
+      || response?.status_details?.reason
+      || response?.error?.code
+      || null;
+  }
+
+  _responsesIncompleteError(response, { stream = false } = {}) {
+    const reason = this._responsesIncompleteReason(response) || 'incomplete';
+    const detail = response?.error?.message || response?.incomplete_details?.message || '';
+    const prefix = stream ? 'Responses stream incomplete' : 'Responses incomplete';
+    const message = detail
+      ? `${prefix} (${reason}): ${detail}`
+      : `${prefix} (${reason}).`;
+    const error = new Error(message);
+    error.isResponsesStreamError = !!stream;
+    error.incomplete = true;
+    error.incompleteReason = reason;
+    return error;
+  }
+
   _responsesResult(data) {
+    // Official Responses can return HTTP 200 with status incomplete/failed
+    // (max_output_tokens, content filter, etc.). Treat those as hard errors so
+    // truncated answers are not persisted as successful turns.
+    if (data?.status === 'incomplete') {
+      throw this._responsesIncompleteError(data, { stream: false });
+    }
+    if (data?.status === 'failed') {
+      const message = data?.error?.message || 'Responses request failed.';
+      throw new Error(message);
+    }
     const output = Array.isArray(data?.output) ? data.output : [];
     const toolCalls = output
       .map((item, index) => this._responseToolCall(item, index))
@@ -559,7 +607,7 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
               const call = this._responseToolCall(event.item, index);
               if (call) yield { type: 'tool_call', content: [call] };
             }
-          } else if (event.type === 'response.completed' || event.type === 'response.incomplete') {
+          } else if (event.type === 'response.completed') {
             const response = event.response || {};
             const remaining = finalToolCalls(response);
             if (remaining.length) yield { type: 'tool_call', content: remaining };
@@ -568,6 +616,14 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
             }
             yield { type: 'done', content: '', responseItems: response.output || [] };
             return;
+          } else if (event.type === 'response.incomplete') {
+            // Incomplete is terminal (token limit / filter / etc.). Surface it
+            // instead of yielding a normal done that the agent treats as success.
+            const response = event.response || {};
+            if (response.usage) {
+              yield { type: 'usage', usage: this._normalizeResponsesUsage(response.usage) };
+            }
+            throw this._responsesIncompleteError(response, { stream: true });
           } else if (event.type === 'response.failed' || event.type === 'error') {
             const message = event.response?.error?.message || event.error?.message || event.message || 'Responses stream failed.';
             const streamError = new Error(message);

@@ -10384,16 +10384,17 @@ test('settings exposes collapsed compatibility controls only for compatible prov
       /id !== 'webbrain_cloud' && \['openai', 'llamacpp', 'azure_openai'\]\.includes\(config\.type\)/,
       `${label}: compatibility controls should exclude Cloud, Anthropic, and Bedrock`,
     );
-    for (const text of [
-      'Advanced model compatibility',
-      'Compatibility preset',
-      'Reasoning',
-      'System prompt role',
-      'Token limit field',
-      'Custom request body (JSON)',
-      'Reset to automatic',
+    for (const key of [
+      'st.providers.compat.title',
+      'st.providers.compat.preset',
+      'st.providers.compat.reasoning',
+      'st.providers.compat.system_role',
+      'st.providers.compat.token_field',
+      'st.providers.compat.extra_body',
+      'st.providers.compat.reset',
     ]) {
-      assert.match(settings, new RegExp(text.replace(/[()]/g, '\\$&')), `${label}: missing ${text}`);
+      // Literal includes avoids incomplete RegExp escaping of dynamic keys.
+      assert.ok(settings.includes(key), `${label}: missing ${key}`);
     }
     assert.match(settings, /data-key="compat\.reasoningEffort"/, `${label}: reasoning setting should persist under compat`);
     assert.match(settings, /data-key="extraBody" data-type="json"/, `${label}: custom body textarea should be typed as JSON`);
@@ -10405,7 +10406,10 @@ test('settings exposes collapsed compatibility controls only for compatible prov
     const defaults = new PM()._defaultConfigs();
     assert.equal(defaults.openai.model, 'gpt-5.6-terra', `${label}: Terra should be the new-install OpenAI default`);
     for (const model of ['gpt-5.6-terra', 'gpt-5.6-sol', 'gpt-5.6-luna', 'gpt-5.6']) {
-      assert.match(settings, new RegExp(`['"]${model.replace('.', '\\.')}['"]`), `${label}: model picker missing ${model}`);
+      assert.ok(
+        settings.includes(`'${model}'`) || settings.includes(`"${model}"`),
+        `${label}: model picker missing ${model}`,
+      );
     }
   }
 });
@@ -16598,11 +16602,35 @@ test('provider compatibility maps reasoning, roles, token fields, and per-call o
       compat: { reasoningEffort: 'medium' },
     }), { reasoning: { effort: 'medium' } });
     assert.deepEqual(compat.compatibilityRequestBody({
+      providerName: 'openrouter',
+      compat: { reasoningEffort: 'max' },
+    }), { reasoning: { effort: 'high' } }, 'OpenRouter clamps max to high');
+    assert.deepEqual(compat.compatibilityRequestBody({
+      providerName: 'openai',
+      baseUrl: 'https://api.openai.com/v1',
+      model: 'gpt-5.6-terra',
+      compat: { reasoningEffort: 'max' },
+    }), { reasoning: { effort: 'max' } }, 'OpenAI GPT-5.6 keeps max effort');
+    assert.deepEqual(compat.compatibilityRequestBody({
       providerName: 'custom',
       baseUrl: 'https://proxy.example/v1',
       model: 'gpt-5.6-terra',
       compat: { preset: 'openai', reasoningEffort: 'off' },
     }), { reasoning_effort: 'none' });
+
+    // Partial nested extras must not clobber required nested fields.
+    const nestedBase = {
+      store: false,
+      include: ['reasoning.encrypted_content'],
+      reasoning: { effort: 'high' },
+    };
+    const nestedMerged = compat.mergeProviderRequestBody(nestedBase, {
+      extraBody: { reasoning: { summary: 'auto' }, temperature: 0.2 },
+    });
+    assert.deepEqual(nestedMerged.reasoning, { effort: 'high', summary: 'auto' });
+    assert.equal(nestedMerged.store, false);
+    assert.deepEqual(nestedMerged.include, ['reasoning.encrypted_content']);
+    assert.equal(nestedMerged.temperature, 0.2);
 
     assert.throws(
       () => compat.parseProviderExtraBodyJson('{"model":"blocked"}'),
@@ -16648,6 +16676,8 @@ test('official GPT-5.6 uses Responses while older and custom OpenAI-compatible e
     assert.equal(body.max_completion_tokens, undefined);
     assert.equal(body.messages, undefined);
     assert.deepEqual(body.reasoning, { effort: 'high' });
+    assert.equal(body.store, false);
+    assert.deepEqual(body.include, ['reasoning.encrypted_content']);
     assert.equal(body.input[0].role, 'developer');
     assert.deepEqual(body.input[2], {
       type: 'function_call',
@@ -16666,6 +16696,43 @@ test('official GPT-5.6 uses Responses while older and custom OpenAI-compatible e
       description: 'Click something',
       parameters: tools[0].function.parameters,
       strict: false,
+    });
+
+    // Partial custom reasoning extras preserve effort; response_format is
+    // converted to text.format and stripped from the Responses body.
+    const maxProvider = new Provider({
+      category: 'cloud',
+      providerName: 'openai',
+      baseUrl: 'https://api.openai.com/v1',
+      model: 'gpt-5.6-terra',
+      compat: { reasoningEffort: 'max' },
+      extraBody: {
+        reasoning: { summary: 'auto' },
+        response_format: {
+          type: 'json_schema',
+          json_schema: {
+            name: 'answer',
+            schema: { type: 'object', properties: { ok: { type: 'boolean' } } },
+            strict: true,
+          },
+        },
+        store: true,
+        include: [],
+      },
+    });
+    const maxBody = maxProvider._buildResponsesBody([{ role: 'user', content: 'hi' }], {}, false);
+    assert.equal(maxBody.reasoning.effort, 'max');
+    assert.equal(maxBody.reasoning.summary, 'auto');
+    assert.equal(maxBody.store, false, 'store must stay false for stateless Responses');
+    assert.ok(maxBody.include.includes('reasoning.encrypted_content'));
+    assert.equal(maxBody.response_format, undefined);
+    assert.deepEqual(maxBody.text, {
+      format: {
+        type: 'json_schema',
+        name: 'answer',
+        schema: { type: 'object', properties: { ok: { type: 'boolean' } } },
+        strict: true,
+      },
     });
 
     const parsed = provider._parseResponsesData({
@@ -16749,6 +16816,72 @@ test('official GPT-5.6 streaming uses Responses events for text, tools, and usag
       assert.equal(chunks[2].usage.prompt_tokens, 8);
       assert.equal(chunks.at(-1).type, 'done');
       assert.equal(chunks.at(-1).responseItems.length, 2);
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('official GPT-5.6 treats incomplete Responses as hard failures', async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    for (const Provider of [OpenAIProviderCh, OpenAIProviderFx]) {
+      const provider = new Provider({
+        category: 'cloud',
+        providerName: 'openai',
+        baseUrl: 'https://api.openai.com/v1',
+        model: 'gpt-5.6-terra',
+      });
+
+      assert.throws(
+        () => provider._parseResponsesData({
+          status: 'incomplete',
+          incomplete_details: { reason: 'max_output_tokens' },
+          output: [{ type: 'message', content: [{ type: 'output_text', text: 'truncated' }] }],
+        }),
+        /incomplete \(max_output_tokens\)/,
+      );
+      assert.throws(
+        () => provider._parseResponsesData({
+          status: 'failed',
+          error: { message: 'provider refused the request' },
+        }),
+        /provider refused the request/,
+      );
+
+      globalThis.fetch = async () => {
+        const events = [
+          { type: 'response.output_text.delta', delta: 'partial' },
+          {
+            type: 'response.incomplete',
+            response: {
+              status: 'incomplete',
+              incomplete_details: { reason: 'content_filter' },
+              usage: { input_tokens: 3, output_tokens: 1, total_tokens: 4 },
+              output: [{ type: 'message', content: [{ type: 'output_text', text: 'partial' }] }],
+            },
+          },
+        ].map((event) => `data: ${JSON.stringify(event)}\n\n`).join('');
+        return new Response(events, { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+      };
+
+      const chunks = [];
+      let thrown = null;
+      try {
+        for await (const chunk of provider.chatStream([{ role: 'user', content: 'hello' }], { maxTokens: 10 })) {
+          chunks.push(chunk);
+        }
+      } catch (error) {
+        thrown = error;
+      }
+      assert.ok(thrown, 'incomplete streams must throw rather than yield done');
+      assert.match(thrown.message, /incomplete \(content_filter\)/);
+      assert.equal(thrown.incomplete, true);
+      assert.equal(thrown.isResponsesStreamError, true);
+      assert.equal(chunks[0]?.type, 'text');
+      assert.equal(chunks[0]?.content, 'partial');
+      assert.equal(chunks[1]?.type, 'usage');
+      assert.equal(chunks.some((chunk) => chunk.type === 'done'), false);
     }
   } finally {
     globalThis.fetch = originalFetch;
