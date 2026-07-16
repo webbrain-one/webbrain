@@ -15612,7 +15612,7 @@ const ADAPTERS = [
   {
     name: 'stackoverflow',
     category: 'general',
-    matches: (url) => /^https?:\/\/(.*\.)?stackoverflow\.com\//.test(url) || /^https?:\/\/(.*\.)?stackexchange\.com\//.test(url),
+    matches: (url) => /^https?:\/\/(?:[a-z0-9-]+\.)*stackoverflow\.com\//i.test(url) || /^https?:\/\/(?:[a-z0-9-]+\.)*stackexchange\.com\//i.test(url),
     notes: `
 - Answers are sorted by votes by default; the accepted answer has a green check and may not be the highest-voted.
 - The question body and each answer have separate edit histories — link to "edited" timestamps for provenance.
@@ -15754,7 +15754,7 @@ const ADAPTERS = [
   {
     name: 'medium',
     category: 'general',
-    matches: (url) => /^https?:\/\/(.*\.)?medium\.com\//.test(url),
+    matches: (url) => /^https?:\/\/(?:[a-z0-9-]+\.)*medium\.com\//i.test(url),
     notes: `
 - Member-only articles show a paywall partway through — the agent sees "Read more" or a sign-up gate, not the full text.
 - The clap button increments per click up to 50; long-press equivalent is multiple clicks.
@@ -15820,7 +15820,7 @@ const ADAPTERS = [
   {
     name: 'aws',
     category: 'general',
-    matches: (url) => /^https?:\/\/.*\.console\.aws\.amazon\.com\//.test(url) || /^https?:\/\/console\.aws\.amazon\.com\//.test(url),
+    matches: (url) => /^https?:\/\/(?:[a-z0-9-]+\.)?console\.aws\.amazon\.com\//i.test(url),
     notes: `
 - The region selector is in the top-right and persists in the URL — many resources are region-scoped, so check before searching.
 - For AWS operational tasks that the AWS CLI supports, prefer CloudShell over clicking through service wizards: navigate directly to \`https://<region>.console.aws.amazon.com/cloudshell/home?region=<region>#\` using the current/requested region. Keep console-only surfaces, such as Billing/Support Center or account-settings flows with no AWS CLI operation, in the console instead of forcing every task through CloudShell. The \`aws-cloudshell\` adapter will translate supported requests into commands and execute them there.

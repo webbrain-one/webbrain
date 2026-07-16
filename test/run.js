@@ -1689,6 +1689,22 @@ test('routes AWS console tasks through the specific CloudShell adapter', () => {
   assert.equal(getActiveAdapter('https://console.aws.amazon.com.evil.example/cloudshell/home'), null);
 });
 
+test('adapter hostname matchers reject trusted domains embedded in paths', () => {
+  const cases = [
+    ['stackoverflow', 'https://meta.stackoverflow.com/questions/1', 'https://evil.example/foo.stackoverflow.com/questions/1'],
+    ['stackoverflow', 'https://math.stackexchange.com/questions/1', 'https://evil.example/foo.stackexchange.com/questions/1'],
+    ['medium', 'https://engineering.medium.com/example', 'https://evil.example/foo.medium.com/example'],
+    ['aws', 'https://us-east-1.console.aws.amazon.com/ec2/home', 'https://evil.example/us-east-1.console.aws.amazon.com/ec2/home'],
+  ];
+
+  for (const [name, trustedUrl, pathSpoofUrl] of cases) {
+    assert.equal(getActiveAdapter(trustedUrl)?.name, name, `chrome did not match ${trustedUrl}`);
+    assert.equal(getActiveAdapterFx(trustedUrl)?.name, name, `firefox did not match ${trustedUrl}`);
+    assert.notEqual(getActiveAdapter(pathSpoofUrl)?.name, name, `chrome trusted ${pathSpoofUrl}`);
+    assert.notEqual(getActiveAdapterFx(pathSpoofUrl)?.name, name, `firefox trusted ${pathSpoofUrl}`);
+  }
+});
+
 test('matches mastodon profile and interaction URLs on any host', () => {
   const urls = [
     'https://mastoturk.org/@discon@types.pl',
