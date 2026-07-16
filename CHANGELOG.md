@@ -15,6 +15,7 @@ This changelog was generated from the repository Git history and release tags. V
 - Treated Responses streams that end without `response.completed` as incomplete instead of persisting partial output as a successful turn.
 - Preserved unsaved custom request-body JSON drafts across provider search, filtering, and card re-renders, including temporarily invalid JSON while editing.
 - Re-activate the originating run tab before the after screenshot when a run opens another tab.
+- Restored Mozilla Add-ons developer adapter matching after the hostname-hardening matcher rename.
 - Rebuilt the Chrome, Edge, and Firefox 24.0.1 archives from the final source tree.
 
 ### Tests

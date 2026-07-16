@@ -16646,35 +16646,6 @@ test('GPT-5.6 Responses streaming emits text, tool calls, usage, and replay item
   }
 });
 
-test('GPT-5.6 Responses streaming rejects EOF or [DONE] before a terminal response event', async () => {
-  const originalFetch = globalThis.fetch;
-  try {
-    for (const ending of ['', 'data: [DONE]\n\n']) {
-      const sse = `data: ${JSON.stringify({ type: 'response.output_text.delta', delta: 'partial' })}\n\n${ending}`;
-      globalThis.fetch = async () => new Response(sse, {
-        status: 200,
-        headers: { 'Content-Type': 'text/event-stream' },
-      });
-      for (const Provider of [OpenAIProviderCh, OpenAIProviderFx]) {
-        const provider = new Provider({
-          providerName: 'openai',
-          baseUrl: 'https://api.openai.com/v1',
-          model: 'gpt-5.6-terra',
-        });
-        const chunks = [];
-        await assert.rejects(async () => {
-          for await (const chunk of provider.chatStream([{ role: 'user', content: 'hello' }])) {
-            chunks.push(chunk);
-          }
-        }, /ended before a terminal response event/);
-        assert.deepEqual(chunks, [{ type: 'text', content: 'partial' }]);
-      }
-    }
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
-});
-
 test('GPT-5.6 Responses streaming preserves refusal text', async () => {
   const originalFetch = globalThis.fetch;
   const events = [

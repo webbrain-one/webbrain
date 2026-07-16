@@ -15612,7 +15612,7 @@ const ADAPTERS = [
   {
     name: 'mozilla-addons-developer',
     category: 'general',
-    match: (url) => /^https?:\/\/addons\.mozilla\.org\/(?:[a-z]{2,3}(?:-[a-z]{2})?\/)?developers(?:\/|$)/i.test(url),
+    matches: (url) => /^https?:\/\/addons\.mozilla\.org\/(?:[a-z]{2,3}(?:-[a-z]{2})?\/)?developers(?:\/|$)/i.test(url),
     notes: `
 - For an existing add-on, use its "Upload New Version" flow. Do not start from "Submit a New Add-on"; the existing manifest ID will fail validation as a duplicate add-on ID.
 - On the "Describe Version" step, both "Release Notes" (changelog) and "Notes to Reviewer" are optional. Leave both empty unless the user explicitly asks to provide text; do not generate or paste content merely because the fields are present.
