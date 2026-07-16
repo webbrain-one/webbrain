@@ -29,7 +29,7 @@ import {
 
 // Version shown in the subtitle. Kept here so it only needs one update per
 // release; the subtitle string itself is translated.
-const EXT_VERSION = '23.3.8';
+const EXT_VERSION = '23.3.9';
 
 const providersContainer = document.getElementById('providers');
 const displaySettings = document.getElementById('display-settings');
@@ -1787,8 +1787,8 @@ function renderProviders() {
     openai: {
       fields: [
         { key: 'apiKey', labelKey: 'st.provider.field.api_key', type: 'password', placeholder: 'sk-...' },
-        { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'gpt-5.5',
-          suggestions: ['gpt-5.5', 'gpt-5.4', 'gpt-5.2', 'gpt-5.3-codex'] },
+        { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'gpt-5.6-terra',
+          suggestions: ['gpt-5.6-terra', 'gpt-5.6-sol', 'gpt-5.6-luna', 'gpt-5.6', 'gpt-5.5', 'gpt-5.4', 'gpt-5.2', 'gpt-5.3-codex'] },
         { key: 'baseUrl', labelKey: 'st.provider.field.api_base_url', type: 'text', placeholder: 'https://api.openai.com/v1' },
         ...COST_ESTIMATE_FIELDS,
       ],

@@ -1,6 +1,8 @@
 import { BaseLLMProvider } from './base.js';
 import { fetchWithTimeout } from './fetch-timeout.js';
 
+const OPENAI_RESPONSES_MIN_MAX_OUTPUT_TOKENS = 16;
+
 /**
  * Provider for OpenAI-compatible APIs (ChatGPT, OpenRouter, any OpenAI-compatible endpoint).
  */
@@ -21,7 +23,11 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
   }
 
   get model() {
-    return this.config.model || 'gpt-5';
+    if (this.config.model) return this.config.model;
+    return String(this.config.providerName || '').toLowerCase() === 'openai'
+      && this._isOfficialOpenAIBaseUrl()
+      ? 'gpt-5.6-terra'
+      : 'gpt-4o';
   }
 
   get supportsTools() {
@@ -166,10 +172,359 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
     }
   }
 
-  async chat(messages, options = {}) {
+  /**
+   * GPT-5.6 combines reasoning and function tools through the Responses API.
+   * Keep this route deliberately narrow: older OpenAI models and every
+   * OpenAI-compatible provider retain their existing Chat Completions wire
+   * format. A custom base URL also stays on Chat Completions because there is
+   * no guarantee that the proxy implements /v1/responses.
+   */
+  _usesResponsesApi() {
+    if (String(this.config.providerName || '').toLowerCase() !== 'openai') return false;
+    const model = String(this.model || '').trim().toLowerCase();
+    if (!/^gpt-5\.6(?:$|-(?:sol|terra|luna)(?:$|-))/.test(model)) return false;
+    return this._isOfficialOpenAIBaseUrl();
+  }
+
+  _isOfficialOpenAIBaseUrl() {
+    try {
+      const url = new URL(this.baseUrl);
+      return url.protocol === 'https:'
+        && url.hostname === 'api.openai.com'
+        && url.pathname.replace(/\/+$/, '') === '/v1';
+    } catch {
+      return false;
+    }
+  }
+
+  _responsesUrl() {
+    return `${this.baseUrl.replace(/\/+$/, '')}/responses`;
+  }
+
+  _chatMessages(messages) {
+    return (Array.isArray(messages) ? messages : []).map((message) => {
+      if (!message || !Object.hasOwn(message, 'response_items')) return message;
+      const { response_items: _responseItems, ...chatMessage } = message;
+      return chatMessage;
+    });
+  }
+
+  _responsesContent(content) {
+    if (!Array.isArray(content)) return content == null ? '' : String(content);
+    return content.map((block) => {
+      if (!block || typeof block !== 'object') {
+        return { type: 'input_text', text: String(block ?? '') };
+      }
+      if (block.type === 'input_text' || block.type === 'input_image') return block;
+      if (block.type === 'text') {
+        return { type: 'input_text', text: String(block.text || '') };
+      }
+      if (block.type === 'image_url') {
+        const imageUrl = typeof block.image_url === 'string'
+          ? block.image_url
+          : block.image_url?.url;
+        return {
+          type: 'input_image',
+          image_url: imageUrl || '',
+          ...(block.image_url?.detail ? { detail: block.image_url.detail } : {}),
+        };
+      }
+      return { type: 'input_text', text: block.text || JSON.stringify(block) };
+    });
+  }
+
+  _responsesInput(messages) {
+    const input = [];
+    for (const message of Array.isArray(messages) ? messages : []) {
+      if (Array.isArray(message?.response_items) && message.response_items.length) {
+        input.push(...message.response_items);
+        continue;
+      }
+
+      if (message?.role === 'tool') {
+        input.push({
+          type: 'function_call_output',
+          call_id: String(message.tool_call_id || ''),
+          output: typeof message.content === 'string'
+            ? message.content
+            : JSON.stringify(message.content ?? ''),
+        });
+        continue;
+      }
+
+      if (message?.role === 'assistant' && Array.isArray(message.tool_calls)) {
+        if (message.content) {
+          input.push({ role: 'assistant', content: this._responsesContent(message.content) });
+        }
+        for (const toolCall of message.tool_calls) {
+          const fn = toolCall?.function || {};
+          input.push({
+            type: 'function_call',
+            call_id: String(toolCall?.id || ''),
+            name: String(fn.name || ''),
+            arguments: typeof fn.arguments === 'string'
+              ? fn.arguments
+              : JSON.stringify(fn.arguments || {}),
+          });
+        }
+        continue;
+      }
+
+      input.push({
+        role: message?.role || 'user',
+        content: this._responsesContent(message?.content),
+      });
+    }
+    return input;
+  }
+
+  _responsesTools(tools) {
+    return (Array.isArray(tools) ? tools : []).map((tool) => {
+      if (tool?.type !== 'function' || !tool.function) return tool;
+      const fn = tool.function;
+      return {
+        type: 'function',
+        name: fn.name,
+        description: fn.description,
+        parameters: fn.parameters || { type: 'object', properties: {} },
+        strict: fn.strict === true,
+      };
+    });
+  }
+
+  _responsesToolChoice(toolChoice) {
+    if (!toolChoice || typeof toolChoice === 'string') return toolChoice || 'auto';
+    const name = toolChoice.function?.name || toolChoice.name;
+    return name ? { type: 'function', name } : 'auto';
+  }
+
+  _responsesMaxOutputTokens(options) {
+    const max = Number(options.maxTokens ?? 4096);
+    if (!Number.isFinite(max)) return 4096;
+    return Math.max(OPENAI_RESPONSES_MIN_MAX_OUTPUT_TOKENS, Math.floor(max));
+  }
+
+  _responsesBody(messages, options, stream) {
     const body = {
       model: this.model,
-      messages,
+      input: this._responsesInput(messages),
+      stream,
+      store: false,
+      include: ['reasoning.encrypted_content'],
+      max_output_tokens: this._responsesMaxOutputTokens(options),
+      reasoning: {
+        effort: options.reasoningEffort || this.config.reasoningEffort || 'medium',
+      },
+    };
+
+    if (this._shouldSendTools(messages, options)) {
+      body.tools = this._responsesTools(options.tools);
+      body.tool_choice = this._responsesToolChoice(options.toolChoice);
+    }
+
+    const extra = options.extraBody;
+    if (extra && typeof extra === 'object') {
+      if (typeof extra.reasoning_effort === 'string') {
+        body.reasoning = { effort: extra.reasoning_effort };
+      } else if (extra.reasoning && typeof extra.reasoning === 'object') {
+        body.reasoning = { ...body.reasoning, ...extra.reasoning };
+      }
+      if (extra.response_format?.type === 'json_schema' && extra.response_format.json_schema) {
+        const schema = extra.response_format.json_schema;
+        body.text = {
+          format: {
+            type: 'json_schema',
+            name: schema.name,
+            schema: schema.schema,
+            strict: schema.strict === true,
+          },
+        };
+      }
+    }
+    return body;
+  }
+
+  _normalizeResponsesUsage(usage) {
+    if (!usage || typeof usage !== 'object') return usage || null;
+    return {
+      ...usage,
+      prompt_tokens: usage.prompt_tokens ?? usage.input_tokens ?? 0,
+      completion_tokens: usage.completion_tokens ?? usage.output_tokens ?? 0,
+      total_tokens: usage.total_tokens ??
+        ((usage.input_tokens || 0) + (usage.output_tokens || 0)),
+    };
+  }
+
+  _responseText(output) {
+    const text = [];
+    for (const item of Array.isArray(output) ? output : []) {
+      if (item?.type !== 'message') continue;
+      for (const part of Array.isArray(item.content) ? item.content : []) {
+        if (part?.type === 'output_text' && part.text) text.push(part.text);
+        if (part?.type === 'refusal' && part.refusal) text.push(part.refusal);
+      }
+    }
+    return text.join('');
+  }
+
+  _responseToolCall(item, index = 0) {
+    if (item?.type !== 'function_call') return null;
+    return {
+      index,
+      id: item.call_id,
+      type: 'function',
+      function: {
+        name: item.name || '',
+        arguments: item.arguments || '',
+      },
+    };
+  }
+
+  _responsesResult(data) {
+    const output = Array.isArray(data?.output) ? data.output : [];
+    const toolCalls = output
+      .map((item, index) => this._responseToolCall(item, index))
+      .filter(Boolean);
+    const reasoningContent = output
+      .filter(item => item?.type === 'reasoning')
+      .flatMap(item => Array.isArray(item.summary) ? item.summary : [])
+      .map(part => part?.text || '')
+      .join('');
+    return {
+      content: this._responseText(output),
+      reasoningContent,
+      toolCalls: toolCalls.length ? toolCalls : null,
+      usage: this._normalizeResponsesUsage(data?.usage),
+      responseItems: output,
+      raw: data,
+    };
+  }
+
+  async _chatResponses(messages, options) {
+    const url = this._responsesUrl();
+    let res;
+    try {
+      res = await fetchWithTimeout(url, {
+        method: 'POST',
+        headers: this._headers(),
+        body: JSON.stringify(this._responsesBody(messages, options, false)),
+      });
+    } catch (e) {
+      throw new Error(`${this.name} network error — could not reach ${url} (${e.message}). Is the server running?`);
+    }
+    if (!res.ok) {
+      let err = '';
+      try { err = (await res.text()).slice(0, 500); } catch {}
+      throw new Error(`${this.name} error ${res.status}: ${this._formatHttpError(res.status, err)}`);
+    }
+    let data;
+    try { data = await res.json(); } catch {
+      throw new Error(`${this.name} returned invalid JSON in Responses response.`);
+    }
+    return this._responsesResult(data);
+  }
+
+  async *_chatResponsesStream(messages, options) {
+    const url = this._responsesUrl();
+    let res;
+    try {
+      res = await fetchWithTimeout(url, {
+        method: 'POST',
+        headers: this._headers(),
+        body: JSON.stringify(this._responsesBody(messages, options, true)),
+      });
+    } catch (e) {
+      throw new Error(`${this.name} network error — could not reach ${url} (${e.message}). Is the server running?`);
+    }
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`${this.name} stream error ${res.status}: ${this._formatHttpError(res.status, err)}`);
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    const toolItems = new Map();
+    const emittedToolIndexes = new Set();
+    let buffer = '';
+
+    const finalToolCalls = (response) => {
+      const calls = [];
+      for (const [index, item] of (response?.output || []).entries()) {
+        if (emittedToolIndexes.has(index)) continue;
+        const call = this._responseToolCall(item, index);
+        if (call) {
+          emittedToolIndexes.add(index);
+          calls.push(call);
+        }
+      }
+      return calls;
+    };
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith('data: ')) continue;
+        const payload = trimmed.slice(6);
+        if (payload === '[DONE]') {
+          yield { type: 'done', content: '', responseItems: [] };
+          return;
+        }
+        try {
+          const event = JSON.parse(payload);
+          if ((event.type === 'response.output_text.delta' || event.type === 'response.refusal.delta') && event.delta) {
+            yield { type: 'text', content: event.delta };
+          } else if (event.type === 'response.output_item.added' && event.item?.type === 'function_call') {
+            toolItems.set(event.output_index, { ...event.item });
+          } else if (event.type === 'response.function_call_arguments.delta') {
+            const item = toolItems.get(event.output_index);
+            if (item) item.arguments = `${item.arguments || ''}${event.delta || ''}`;
+          } else if (event.type === 'response.function_call_arguments.done') {
+            const item = toolItems.get(event.output_index);
+            if (item && typeof event.arguments === 'string') item.arguments = event.arguments;
+          } else if (event.type === 'response.output_item.done' && event.item?.type === 'function_call') {
+            const index = event.output_index ?? 0;
+            if (!emittedToolIndexes.has(index)) {
+              emittedToolIndexes.add(index);
+              const call = this._responseToolCall(event.item, index);
+              if (call) yield { type: 'tool_call', content: [call] };
+            }
+          } else if (event.type === 'response.completed' || event.type === 'response.incomplete') {
+            const response = event.response || {};
+            const remaining = finalToolCalls(response);
+            if (remaining.length) yield { type: 'tool_call', content: remaining };
+            if (response.usage) {
+              yield { type: 'usage', usage: this._normalizeResponsesUsage(response.usage) };
+            }
+            yield { type: 'done', content: '', responseItems: response.output || [] };
+            return;
+          } else if (event.type === 'response.failed' || event.type === 'error') {
+            const message = event.response?.error?.message || event.error?.message || event.message || 'Responses stream failed.';
+            const streamError = new Error(message);
+            streamError.isResponsesStreamError = true;
+            throw streamError;
+          }
+        } catch (e) {
+          if (e?.isResponsesStreamError) throw e;
+          console.warn(`[${this.name}] malformed Responses SSE chunk skipped:`, payload?.slice(0, 120), e?.message);
+        }
+      }
+    }
+    yield { type: 'done', content: '', responseItems: [] };
+  }
+
+  async chat(messages, options = {}) {
+    if (this._usesResponsesApi()) {
+      return this._chatResponses(messages, options);
+    }
+    const body = {
+      model: this.model,
+      messages: this._chatMessages(messages),
       stream: false,
     };
     this._addTemperature(body, options);
@@ -220,9 +575,13 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
   }
 
   async *chatStream(messages, options = {}) {
+    if (this._usesResponsesApi()) {
+      yield* this._chatResponsesStream(messages, options);
+      return;
+    }
     const body = {
       model: this.model,
-      messages,
+      messages: this._chatMessages(messages),
       stream: true,
     };
     this._addTemperature(body, options);

@@ -42,7 +42,7 @@ class BaseLLMProvider {
 | `vllm` | `openai` | local | (modèle chargé) | Oui (activé par défaut) |
 | `sglang` | `openai` | local | (modèle chargé) | Oui (activé par défaut) |
 | `localai` | `openai` | local | (modèle chargé) | Oui (activé par défaut) |
-| `openai` | `openai` | cloud | `gpt-5.5` | Regex nom de modèle |
+| `openai` | `openai` | cloud | `gpt-5.6-terra` | Regex nom de modèle |
 | `anthropic` | `anthropic` | cloud | `claude-sonnet-4-6` | Regex nom de modèle |
 | `claude_subscription` | `anthropic_oauth` | cloud | `claude-sonnet-4-6` | Oui |
 | `gemini` | `openai` | cloud | `gemini-3.1-flash` | Regex nom de modèle |

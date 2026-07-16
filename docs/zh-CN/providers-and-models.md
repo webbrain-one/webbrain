@@ -42,7 +42,7 @@ class BaseLLMProvider {
 | `vllm` | `openai` | 本地 | （已加载模型） | 是（默认开启） |
 | `sglang` | `openai` | 本地 | （已加载模型） | 是（默认开启） |
 | `localai` | `openai` | 本地 | （已加载模型） | 是（默认开启） |
-| `openai` | `openai` | 云端 | `gpt-5.5` | 模型名正则 |
+| `openai` | `openai` | 云端 | `gpt-5.6-terra` | 模型名正则 |
 | `anthropic` | `anthropic` | 云端 | `claude-sonnet-4-6` | 模型名正则 |
 | `claude_subscription` | `anthropic_oauth` | 云端 | `claude-sonnet-4-6` | 是 |
 | `gemini` | `openai` | 云端 | `gemini-3.1-flash` | 模型名正则 |

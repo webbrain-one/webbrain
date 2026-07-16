@@ -164,7 +164,7 @@ Base URLs are pre-filled in Settings when you select a provider. Local servers u
 | vLLM (`:8000/v1`) | Optional | (your served model) |
 | SGLang (`:30000/v1`) | Optional | (your served model) |
 | LocalAI (`:8080/v1`) | Optional | (your loaded model) |
-| OpenAI | Required | gpt-5.5 |
+| OpenAI | Required | gpt-5.6-terra |
 | Anthropic Claude | Required | claude-sonnet-4-6 |
 | Google Gemini | Required | gemini-3.1-flash |
 | Cloudflare Workers AI | Required (+ Account ID) | @cf/zai-org/glm-5.2 |

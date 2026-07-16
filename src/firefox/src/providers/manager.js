@@ -23,6 +23,8 @@ const WEBBRAIN_DEVICE_GUID_KEY = 'webbrainDeviceGuid';
 const HELP_IMPROVE_WEBBRAIN_KEY = 'helpImproveWebBrain';
 const OPENROUTER_DEFAULT_MODEL = 'openrouter/free';
 const OPENROUTER_LEGACY_DEFAULT_MODEL = 'stepfun/step-3.7-flash';
+const OPENAI_DEFAULT_MODEL = 'gpt-5.6-terra';
+const OPENAI_LEGACY_DEFAULT_MODEL = 'gpt-5.5';
 const SUPPORTED_PROVIDER_TYPES = new Set(['llamacpp', 'openai', 'azure_openai', 'aws_bedrock', 'anthropic', 'anthropic_oauth']);
 const SAFE_PROVIDER_ID_RE = /^[A-Za-z0-9_-]+$/;
 const ROUTER_PROVIDER_IDS = ['openrouter', 'cloudflare', 'nvidia', 'groq', 'huggingface', 'fireworks', 'together'];
@@ -269,9 +271,9 @@ export class ProviderManager {
         label: 'OpenAI',
         providerName: 'openai',
         baseUrl: 'https://api.openai.com/v1',
-        model: 'gpt-5.5',
-        inputCostPerMillionUsd: 5,
-        outputCostPerMillionUsd: 22.5,
+        model: OPENAI_DEFAULT_MODEL,
+        inputCostPerMillionUsd: 2.5,
+        outputCostPerMillionUsd: 15,
         supportsStreamUsageOptions: true,
         apiKey: '',
         apiKeyUrl: 'https://platform.openai.com/api-keys',
@@ -457,6 +459,22 @@ export class ProviderManager {
 
   _migrateStoredProviderConfigs(stored) {
     const migrated = { ...stored };
+    const storedOpenAi = migrated.openai;
+    const openAiBaseUrl = String(storedOpenAi?.baseUrl || 'https://api.openai.com/v1').replace(/\/+$/, '');
+    const untouchedOpenAiDefault = storedOpenAi?.model === OPENAI_LEGACY_DEFAULT_MODEL
+      && storedOpenAi?.configured !== true
+      && !String(storedOpenAi?.apiKey || '').trim()
+      && openAiBaseUrl === 'https://api.openai.com/v1'
+      && (storedOpenAi?.inputCostPerMillionUsd == null || Number(storedOpenAi.inputCostPerMillionUsd) === 5)
+      && (storedOpenAi?.outputCostPerMillionUsd == null || Number(storedOpenAi.outputCostPerMillionUsd) === 22.5);
+    if (untouchedOpenAiDefault) {
+      migrated.openai = {
+        ...storedOpenAi,
+        model: OPENAI_DEFAULT_MODEL,
+        inputCostPerMillionUsd: 2.5,
+        outputCostPerMillionUsd: 15,
+      };
+    }
     if (migrated.openrouter?.model === OPENROUTER_LEGACY_DEFAULT_MODEL) {
       migrated.openrouter = {
         ...migrated.openrouter,

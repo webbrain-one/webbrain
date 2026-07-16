@@ -243,6 +243,7 @@ export function inferContextWindow(config = {}) {
   if (!model) return DEFAULT_CLOUD_CONTEXT_WINDOW;
 
   // OpenAI
+  if (/^gpt-5\.6(?:[.\-]|$)/.test(model) || model.includes('/gpt-5.6')) return 1050000;
   if (model.includes('gpt-5.5-pro')) return 1050000;
   if (/^gpt-5(?:[.\-]|$)/.test(model) || model.includes('/gpt-5')) return 400000;
 

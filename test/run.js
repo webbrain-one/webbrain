@@ -14411,6 +14411,9 @@ test('inferContextWindow: model-aware cloud/router defaults and local 16k fallba
     for (const providerName of ['lmstudio', 'jan', 'vllm', 'sglang', 'localai']) {
       assert.equal(infer({ category: 'local', providerName, model: 'qwen3.7-plus' }), 16384);
     }
+    for (const model of ['gpt-5.6', 'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna']) {
+      assert.equal(infer({ category: 'cloud', providerName: 'openai', model }), 1050000);
+    }
     assert.equal(infer({ category: 'cloud', providerName: 'openai', model: 'gpt-5.5-pro' }), 1050000);
     assert.equal(infer({ category: 'cloud', providerName: 'openai', model: 'gpt-5.5' }), 400000);
     assert.equal(infer({ category: 'cloud', providerName: 'anthropic', model: 'claude-opus-4-8' }), 1000000);
@@ -15824,6 +15827,69 @@ test('_defaultConfigs: OpenRouter defaults to openrouter/free and migrates legac
   }
 });
 
+test('_defaultConfigs: OpenAI defaults to GPT-5.6 Terra and safely migrates the prior shipped default', () => {
+  for (const PM of [ProviderManagerCh, ProviderManagerFx]) {
+    const mgr = new PM();
+    const defaults = mgr._defaultConfigs();
+    assert.equal(defaults.openai.model, 'gpt-5.6-terra');
+    assert.equal(defaults.openai.inputCostPerMillionUsd, 2.5);
+    assert.equal(defaults.openai.outputCostPerMillionUsd, 15);
+
+    const migrated = mgr._migrateStoredProviderConfigs({
+      openai: {
+        model: 'gpt-5.5',
+        inputCostPerMillionUsd: 5,
+        outputCostPerMillionUsd: 22.5,
+        apiKey: '',
+        configured: false,
+      },
+    });
+    assert.equal(migrated.openai.model, 'gpt-5.6-terra');
+    assert.equal(migrated.openai.inputCostPerMillionUsd, 2.5);
+    assert.equal(migrated.openai.outputCostPerMillionUsd, 15);
+    assert.equal(migrated.openai.configured, false);
+
+    const customModel = mgr._migrateStoredProviderConfigs({
+      openai: { model: 'gpt-5.4', inputCostPerMillionUsd: 99 },
+    });
+    assert.deepEqual(customModel.openai, { model: 'gpt-5.4', inputCostPerMillionUsd: 99 });
+
+    const customCosts = mgr._migrateStoredProviderConfigs({
+      openai: {
+        model: 'gpt-5.5',
+        inputCostPerMillionUsd: 7,
+        outputCostPerMillionUsd: 8,
+      },
+    });
+    assert.equal(customCosts.openai.model, 'gpt-5.5');
+    assert.equal(customCosts.openai.inputCostPerMillionUsd, 7);
+    assert.equal(customCosts.openai.outputCostPerMillionUsd, 8);
+
+    for (const configured of [
+      { model: 'gpt-5.5', configured: true, apiKey: 'kept' },
+      { model: 'gpt-5.5', configured: false, baseUrl: 'https://proxy.example.test/v1' },
+    ]) {
+      assert.deepEqual(
+        mgr._migrateStoredProviderConfigs({ openai: configured }).openai,
+        configured,
+        'configured and custom-endpoint GPT-5.5 selections must remain untouched',
+      );
+    }
+  }
+});
+
+test('OpenAI settings list every GPT-5.6 family model with Terra first', () => {
+  for (const prefix of ['src/chrome', 'src/firefox']) {
+    const source = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/settings.js'), 'utf8');
+    assert.match(source, /placeholder: 'gpt-5\.6-terra'/, `${prefix}: Terra should be the OpenAI placeholder`);
+    const terra = source.indexOf("'gpt-5.6-terra'");
+    const sol = source.indexOf("'gpt-5.6-sol'", terra);
+    const luna = source.indexOf("'gpt-5.6-luna'", terra);
+    const alias = source.indexOf("'gpt-5.6'", terra);
+    assert.ok(terra >= 0 && sol > terra && luna > sol && alias > luna, `${prefix}: GPT-5.6 suggestions should lead with Terra, Sol, Luna, and the Sol alias`);
+  }
+});
+
 test('_defaultConfigs: chrome and firefox share the same provider set', () => {
   const chDefaults = new ProviderManagerCh()._defaultConfigs();
   const fxDefaults = new ProviderManagerFx()._defaultConfigs();
@@ -15857,6 +15923,302 @@ test('WebBrain Cloud sends the Help Improve preference without leaking it to BYO
     const bringYourOwn = new Provider({ providerName: 'openai', apiKey: 'test-key' });
     assert.equal(bringYourOwn._headers()['X-WebBrain-Help-Improve'], undefined);
     assert.equal(bringYourOwn._headers()['X-WebBrain-Client'], undefined);
+  }
+});
+
+test('official OpenAI GPT-5.6 alone routes to Responses API', () => {
+  for (const Provider of [OpenAIProviderCh, OpenAIProviderFx]) {
+    assert.equal(new Provider({ providerName: 'openai' }).model, 'gpt-5.6-terra');
+    assert.equal(new Provider({ providerName: 'openrouter' }).model, 'gpt-4o');
+    assert.equal(new Provider({ providerName: 'openai', baseUrl: 'https://proxy.example.test/v1' }).model, 'gpt-4o');
+    for (const model of ['gpt-5.6', 'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.6-terra-2026-07-15']) {
+      const provider = new Provider({
+        providerName: 'openai',
+        baseUrl: 'https://api.openai.com/v1',
+        model,
+      });
+      assert.equal(provider._usesResponsesApi(), true, `${model} should use Responses`);
+      assert.equal(provider._responsesUrl(), 'https://api.openai.com/v1/responses');
+    }
+
+    for (const config of [
+      { providerName: 'openai', baseUrl: 'https://api.openai.com/v1', model: 'gpt-5.5' },
+      { providerName: 'openrouter', baseUrl: 'https://openrouter.ai/api/v1', model: 'openai/gpt-5.6-terra' },
+      { providerName: 'openai', baseUrl: 'https://proxy.example.test/v1', model: 'gpt-5.6-terra' },
+      { providerName: 'lmstudio', category: 'local', baseUrl: 'http://localhost:1234/v1', model: 'gpt-5.6-terra' },
+    ]) {
+      assert.equal(new Provider(config)._usesResponsesApi(), false, `${config.providerName}/${config.model} should keep Chat Completions`);
+    }
+  }
+});
+
+test('GPT-5.6 Responses request preserves reasoning and converts messages and tools', () => {
+  const reasoningItem = {
+    id: 'rs_1',
+    type: 'reasoning',
+    encrypted_content: 'opaque-reasoning-state',
+    summary: [],
+  };
+  const priorCall = {
+    id: 'fc_1',
+    type: 'function_call',
+    call_id: 'call_1',
+    name: 'click',
+    arguments: '{"x":1}',
+    status: 'completed',
+  };
+  const messages = [
+    { role: 'system', content: 'Use tools carefully.' },
+    {
+      role: 'user',
+      content: [
+        { type: 'text', text: 'Inspect this image.' },
+        { type: 'image_url', image_url: { url: 'data:image/png;base64,AA==', detail: 'high' } },
+      ],
+    },
+    { role: 'assistant', content: null, tool_calls: [{ id: 'ignored-chat-copy' }], response_items: [reasoningItem, priorCall] },
+    { role: 'tool', tool_call_id: 'call_1', content: { ok: true } },
+  ];
+  const options = {
+    maxTokens: 1234,
+    tools: [{
+      type: 'function',
+      function: {
+        name: 'click',
+        description: 'Click a point.',
+        parameters: { type: 'object', properties: { x: { type: 'number' } }, required: ['x'] },
+      },
+    }],
+    toolChoice: { type: 'function', function: { name: 'click' } },
+  };
+
+  for (const Provider of [OpenAIProviderCh, OpenAIProviderFx]) {
+    const provider = new Provider({
+      providerName: 'openai',
+      baseUrl: 'https://api.openai.com/v1',
+      model: 'gpt-5.6-terra',
+    });
+    const body = provider._responsesBody(messages, options, true);
+    assert.equal(body.model, 'gpt-5.6-terra');
+    assert.equal(body.stream, true);
+    assert.equal(body.store, false);
+    assert.deepEqual(body.include, ['reasoning.encrypted_content']);
+    assert.equal(body.max_output_tokens, 1234);
+    assert.equal(provider._responsesBody([], { maxTokens: 5 }, false).max_output_tokens, 16);
+    assert.equal(provider._responsesBody([], { maxTokens: 16 }, false).max_output_tokens, 16);
+    assert.deepEqual(body.reasoning, { effort: 'medium' });
+    assert.equal(body.messages, undefined);
+    assert.equal(body.max_completion_tokens, undefined);
+    assert.equal(body.reasoning_effort, undefined);
+    assert.deepEqual(body.tools, [{
+      type: 'function',
+      name: 'click',
+      description: 'Click a point.',
+      parameters: { type: 'object', properties: { x: { type: 'number' } }, required: ['x'] },
+      strict: false,
+    }]);
+    assert.deepEqual(body.tool_choice, { type: 'function', name: 'click' });
+    assert.deepEqual(body.input[1].content, [
+      { type: 'input_text', text: 'Inspect this image.' },
+      { type: 'input_image', image_url: 'data:image/png;base64,AA==', detail: 'high' },
+    ]);
+    assert.equal(body.input[2], reasoningItem, 'the encrypted reasoning item should be replayed exactly');
+    assert.equal(body.input[3], priorCall, 'the matching function call item should be replayed exactly');
+    assert.deepEqual(body.input[4], {
+      type: 'function_call_output',
+      call_id: 'call_1',
+      output: '{"ok":true}',
+    });
+
+    const disabled = provider._responsesBody([], { extraBody: { reasoning_effort: 'none' } }, false);
+    assert.deepEqual(disabled.reasoning, { effort: 'none' }, 'an explicit none remains an opt-out, not the default');
+
+    const compatibleProviderBody = {};
+    new Provider({
+      providerName: 'openrouter',
+      baseUrl: 'https://openrouter.ai/api/v1',
+      model: 'openai/gpt-5.6-terra',
+    })._addMaxTokens(compatibleProviderBody, { maxTokens: 5 });
+    assert.equal(compatibleProviderBody.max_tokens, 5, 'compatible providers should keep their requested token cap');
+  }
+});
+
+test('GPT-5.6 Responses results normalize text, calls, usage, and replay items', () => {
+  const output = [
+    { id: 'rs_2', type: 'reasoning', encrypted_content: 'opaque', summary: [{ type: 'summary_text', text: 'Checked. ' }] },
+    { id: 'fc_2', type: 'function_call', call_id: 'call_2', name: 'read_page', arguments: '{"tabId":1}', status: 'completed' },
+    { id: 'msg_2', type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Done.' }] },
+  ];
+  for (const Provider of [OpenAIProviderCh, OpenAIProviderFx]) {
+    const provider = new Provider({ providerName: 'openai', model: 'gpt-5.6-terra' });
+    const result = provider._responsesResult({
+      output,
+      usage: { input_tokens: 10, output_tokens: 4, total_tokens: 14 },
+    });
+    assert.equal(result.content, 'Done.');
+    assert.equal(result.reasoningContent, 'Checked. ');
+    assert.deepEqual(result.toolCalls, [{
+      index: 1,
+      id: 'call_2',
+      type: 'function',
+      function: { name: 'read_page', arguments: '{"tabId":1}' },
+    }]);
+    assert.equal(result.usage.prompt_tokens, 10);
+    assert.equal(result.usage.completion_tokens, 4);
+    assert.equal(result.usage.total_tokens, 14);
+    assert.equal(result.responseItems, output);
+  }
+});
+
+test('GPT-5.6 uses /responses while older and compatible-provider calls keep /chat/completions', async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    for (const Provider of [OpenAIProviderCh, OpenAIProviderFx]) {
+      const requests = [];
+      globalThis.fetch = async (url, init) => {
+        requests.push({ url: String(url), body: JSON.parse(init.body) });
+        if (String(url).endsWith('/responses')) {
+          return new Response(JSON.stringify({
+            output: [{ type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'terra' }] }],
+            usage: { input_tokens: 2, output_tokens: 1, total_tokens: 3 },
+          }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
+        return new Response(JSON.stringify({
+          choices: [{ message: { content: 'legacy' } }],
+          usage: { prompt_tokens: 2, completion_tokens: 1, total_tokens: 3 },
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      };
+
+      const tool = { type: 'function', function: { name: 'read_page', parameters: { type: 'object', properties: {} } } };
+      const terra = new Provider({ providerName: 'openai', baseUrl: 'https://api.openai.com/v1', model: 'gpt-5.6-terra' });
+      const terraResult = await terra.chat([{ role: 'user', content: 'hello' }], { tools: [tool] });
+      assert.equal(terraResult.content, 'terra');
+      assert.equal(requests.at(-1).url, 'https://api.openai.com/v1/responses');
+      assert.equal(requests.at(-1).body.reasoning.effort, 'medium');
+      assert.equal(requests.at(-1).body.tools[0].name, 'read_page');
+      assert.equal(requests.at(-1).body.messages, undefined);
+
+      const legacy = new Provider({ providerName: 'openai', baseUrl: 'https://api.openai.com/v1', model: 'gpt-5.5' });
+      const legacyResult = await legacy.chat([{
+        role: 'user',
+        content: 'hello',
+        response_items: [{ type: 'reasoning', encrypted_content: 'internal-only' }],
+      }], { tools: [tool] });
+      assert.equal(legacyResult.content, 'legacy');
+      assert.equal(requests.at(-1).url, 'https://api.openai.com/v1/chat/completions');
+      assert.deepEqual(requests.at(-1).body.messages, [{ role: 'user', content: 'hello' }]);
+      assert.equal(requests.at(-1).body.tools[0].function.name, 'read_page');
+      assert.equal(requests.at(-1).body.reasoning, undefined);
+
+      const proxy = new Provider({ providerName: 'openai', baseUrl: 'https://proxy.example.test/v1', model: 'gpt-5.6-terra' });
+      await proxy.chat([{ role: 'user', content: 'hello' }], { tools: [tool] });
+      assert.equal(requests.at(-1).url, 'https://proxy.example.test/v1/chat/completions');
+      assert.equal(requests.at(-1).body.tools[0].function.name, 'read_page');
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('GPT-5.6 Responses streaming emits text, tool calls, usage, and replay items', async () => {
+  const originalFetch = globalThis.fetch;
+  const output = [
+    { id: 'rs_stream', type: 'reasoning', encrypted_content: 'opaque', summary: [] },
+    { id: 'fc_stream', type: 'function_call', call_id: 'call_stream', name: 'click', arguments: '{"x":9}', status: 'completed' },
+  ];
+  const events = [
+    { type: 'response.output_text.delta', delta: 'Working' },
+    { type: 'response.output_item.added', output_index: 1, item: { id: 'fc_stream', type: 'function_call', call_id: 'call_stream', name: 'click', arguments: '' } },
+    { type: 'response.function_call_arguments.delta', output_index: 1, delta: '{"x":9}' },
+    { type: 'response.output_item.done', output_index: 1, item: output[1] },
+    { type: 'response.completed', response: { output, usage: { input_tokens: 8, output_tokens: 3, total_tokens: 11 } } },
+  ];
+  const sse = events.map(event => `data: ${JSON.stringify(event)}\n\n`).join('');
+  try {
+    globalThis.fetch = async () => new Response(sse, {
+      status: 200,
+      headers: { 'Content-Type': 'text/event-stream' },
+    });
+    for (const Provider of [OpenAIProviderCh, OpenAIProviderFx]) {
+      const provider = new Provider({
+        providerName: 'openai',
+        baseUrl: 'https://api.openai.com/v1',
+        model: 'gpt-5.6-terra',
+      });
+      const chunks = [];
+      for await (const chunk of provider.chatStream([{ role: 'user', content: 'click it' }], { tools: [] })) {
+        chunks.push(chunk);
+      }
+      assert.deepEqual(chunks[0], { type: 'text', content: 'Working' });
+      assert.deepEqual(chunks[1], {
+        type: 'tool_call',
+        content: [{
+          index: 1,
+          id: 'call_stream',
+          type: 'function',
+          function: { name: 'click', arguments: '{"x":9}' },
+        }],
+      });
+      assert.equal(chunks[2].type, 'usage');
+      assert.equal(chunks[2].usage.prompt_tokens, 8);
+      assert.equal(chunks[3].type, 'done');
+      assert.deepEqual(chunks[3].responseItems, output);
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('GPT-5.6 Responses streaming preserves refusal text', async () => {
+  const originalFetch = globalThis.fetch;
+  const events = [
+    { type: 'response.refusal.delta', delta: 'I cannot help with that.' },
+    {
+      type: 'response.completed',
+      response: {
+        output: [{
+          type: 'message',
+          role: 'assistant',
+          content: [{ type: 'refusal', refusal: 'I cannot help with that.' }],
+        }],
+      },
+    },
+  ];
+  const sse = events.map(event => `data: ${JSON.stringify(event)}\n\n`).join('');
+  try {
+    globalThis.fetch = async () => new Response(sse, {
+      status: 200,
+      headers: { 'Content-Type': 'text/event-stream' },
+    });
+    for (const Provider of [OpenAIProviderCh, OpenAIProviderFx]) {
+      const provider = new Provider({
+        providerName: 'openai',
+        baseUrl: 'https://api.openai.com/v1',
+        model: 'gpt-5.6-terra',
+      });
+      const chunks = [];
+      for await (const chunk of provider.chatStream([{ role: 'user', content: 'hello' }])) {
+        chunks.push(chunk);
+      }
+      assert.deepEqual(chunks[0], { type: 'text', content: 'I cannot help with that.' });
+      assert.equal(chunks[1].type, 'done');
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('Agent tool loops preserve Responses reasoning items on both execution paths', () => {
+  for (const prefix of ['src/chrome', 'src/firefox']) {
+    const source = fs.readFileSync(path.join(ROOT, prefix, 'src/agent/agent.js'), 'utf8');
+    assert.match(source, /_withResponseItems\(message, responseItems\)[\s\S]*response_items: responseItems/, `${prefix}: assistant helper should retain Responses output Items`);
+    assert.match(source, /content: result\.content \|\| null,[\s\S]*tool_calls: result\.toolCalls,[\s\S]*}, result\.responseItems\)/, `${prefix}: non-stream tool loop should retain response Items`);
+    assert.match(source, /content: result\.content \}, result\.responseItems\)[\s\S]*messages\.push\(\{ role: 'user', content: progressFinalBlock \}/, `${prefix}: non-stream progress continuations should retain response Items`);
+    assert.match(source, /content: finalResponse \}, result\.responseItems\)/, `${prefix}: non-stream final answers should retain response Items`);
+    assert.match(source, /chunk\.responseItems[\s\S]*content: fullText \|\| null,[\s\S]*tool_calls: toolCalls,[\s\S]*}, responseItems\)/, `${prefix}: stream tool loop should retain response Items`);
+    assert.match(source, /content: fullText \}, responseItems\)[\s\S]*messages\.push\(\{ role: 'user', content: progressFinalBlock \}/, `${prefix}: stream progress continuations should retain response Items`);
+    assert.match(source, /content: fullText \}, responseItems\)[\s\S]*return finish\(fullText\)/, `${prefix}: stream final answers should retain response Items`);
+    assert.match(source, /if \(msg\.response_items\) totalChars \+= JSON\.stringify\(msg\.response_items\)\.length/, `${prefix}: context budgeting should include encrypted reasoning Items`);
   }
 });
 
