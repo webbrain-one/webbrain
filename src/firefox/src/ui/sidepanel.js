@@ -12,6 +12,7 @@ import { createContextMenuPromptHandler } from './context-menu-prompts.js';
 import { formatSelectionPromptForDisplay } from '../context-menu-storage.js';
 import { deleteChatHistoryRecord, saveChatHistoryRecord } from './chat-history-store.js';
 import { claimRunError } from './run-error-dedupe.js';
+import { RUN_CAPTURE_START_ERROR_PREFIX } from '../run-capture.js';
 import {
   STORAGE_KEY as STORE_REVIEW_STORAGE_KEY,
   recordSuccessfulTask,
@@ -4243,51 +4244,6 @@ function modeForMessageText(text) {
   return agentMode;
 }
 
-async function captureAndSaveRunScreenshot(tabId, filename) {
-  let tab = tabId == null ? null : await browser.tabs.get(tabId);
-  if (!tab || tab.windowId == null) {
-    throw new Error('The run tab is no longer available.');
-  }
-  // `new_tab` activates its result by default. Bring the originating run tab
-  // back before the after-capture so captureVisibleTab snapshots the page the
-  // run actually operated on instead of failing after saving only "before".
-  if (!tab.active) {
-    tab = await browser.tabs.update(tabId, { active: true });
-  }
-  if (!tab?.active || tab.windowId == null) {
-    throw new Error('The run tab could not be activated for capture.');
-  }
-  const dataUrl = await browser.tabs.captureVisibleTab(tab.windowId, { format: 'png' });
-  const downloadId = await browser.downloads.download({
-    url: dataUrl,
-    filename,
-    saveAs: false,
-    conflictAction: 'uniquify',
-  });
-  return { filename, downloadId };
-}
-
-async function startTrailingRunCapture(directive, tabId) {
-  if (directive.kind === 'record') {
-    throw new Error(t('sp.slash.unsupported', {
-      usage: trailingRunCaptureUsage('record'),
-    }));
-  }
-  const filenames = buildRunScreenshotFilenames(directive.saveAs);
-  const before = await captureAndSaveRunScreenshot(tabId, filenames.before);
-  return { kind: 'screenshot', filenames, before };
-}
-
-async function finishTrailingRunCapture(state, tabId) {
-  if (!state) return;
-  state.after = await captureAndSaveRunScreenshot(tabId, state.filenames.after);
-  if (currentTabId === tabId) {
-    showComposerToast(t('sp.record.saved', {
-      filename: `${state.filenames.before}, ${state.filenames.after}`,
-    }), { duration: 6000 });
-  }
-}
-
 function reportTrailingRunCaptureError(directive, error, tabId) {
   if (currentTabId !== tabId || renderedTabId !== tabId) return;
   const message = error?.message || String(error || 'unknown error');
@@ -4418,25 +4374,7 @@ async function sendMessage(extraChatParams = {}) {
     return false;
   }
 
-  let runCaptureState = null;
-  if (runCaptureDirective) {
-    try {
-      runCaptureState = await startTrailingRunCapture(runCaptureDirective, tabId);
-    } catch (error) {
-      reportTrailingRunCaptureError(runCaptureDirective, error, tabId);
-      setTabProcessing(tabId, false);
-      setTabAbortRequested(tabId, false);
-      if (sameTabId(currentTabId, tabId) && sameTabId(renderedTabId, tabId)) {
-        inputEl.value = submittedText;
-        saveInputDraftForTab(tabId, submittedText);
-        autoResizeInput();
-        updateSlashCommandAutocomplete();
-        syncSendButtonState();
-      }
-      return false;
-    }
-  }
-
+  let userEl = null;
   let assistantEl = null;
   const attachmentsForSend = retryOptions
     ? (Array.isArray(retryOptions.attachments) ? retryOptions.attachments.slice() : [])
@@ -4456,7 +4394,7 @@ async function sendMessage(extraChatParams = {}) {
       clearPendingAttachmentsForTab(tabId);
       renderAttachmentPreviews();
     }
-    addMessage('user', text);
+    userEl = addMessage('user', text);
     showActivity(t('sp.activity.thinking'));
     assistantEl = addMessage('assistant', '');
     assistantEl.dataset.runRequestId = requestId;
@@ -4469,6 +4407,7 @@ async function sendMessage(extraChatParams = {}) {
   localRunRequestIds.set(tabId, requestId);
 
   let accepted = false;
+  let captureStartFailed = false;
   let completedSuccessfully = false;
   let promptEligibleCompletion = false;
   try {
@@ -4478,6 +4417,12 @@ async function sendMessage(extraChatParams = {}) {
       text,
       mode: modeForSend,
       apiMutationsAllowed: apiMutationsAllowedForSend,
+      ...(runCaptureDirective ? {
+        runCapture: {
+          kind: runCaptureDirective.kind,
+          saveAs: runCaptureDirective.saveAs,
+        },
+      } : {}),
       ...(attachmentsForSend.length ? { attachments: attachmentsForSend } : {}),
       ...chatExtraParams,
     });
@@ -4536,18 +4481,27 @@ async function sendMessage(extraChatParams = {}) {
       }
     }
   } catch (e) {
-    if (renderToCurrentTab && currentTabId === tabId && !isTabAbortRequested(tabId)) {
+    captureStartFailed = !!runCaptureDirective
+      && String(e?.message || '').startsWith(RUN_CAPTURE_START_ERROR_PREFIX);
+    if (captureStartFailed) {
+      const message = String(e?.message || '').slice(RUN_CAPTURE_START_ERROR_PREFIX.length);
+      reportTrailingRunCaptureError(runCaptureDirective, new Error(message), tabId);
+      if (renderToCurrentTab && currentTabId === tabId) {
+        userEl?.remove();
+        assistantEl?.remove();
+        if (currentAssistantEl === assistantEl) currentAssistantEl = null;
+        if (!inputEl.value.trim()) {
+          inputEl.value = submittedText;
+          saveInputDraftForTab(tabId, submittedText);
+          autoResizeInput();
+          updateSlashCommandAutocomplete();
+        }
+        syncSendButtonState();
+      }
+    } else if (renderToCurrentTab && currentTabId === tabId && !isTabAbortRequested(tabId)) {
       renderAgentErrorUpdate({ message: e.message }, tabId, requestId);
     }
   } finally {
-    if (runCaptureState) {
-      try {
-        await finishTrailingRunCapture(runCaptureState, tabId);
-      } catch (error) {
-        console.warn('[WebBrain] trailing run capture failed to finish:', error);
-        reportTrailingRunCaptureError(runCaptureDirective, error, tabId);
-      }
-    }
     if (localRunRequestIds.get(tabId) === requestId) localRunRequestIds.delete(tabId);
     if (activeChatPayloadsByTab.get(tabId) === activePayloadState) {
       scheduleActiveChatPayloadCleanup(tabId, activePayloadState);
@@ -4568,7 +4522,7 @@ async function sendMessage(extraChatParams = {}) {
     }
     if (renderToCurrentTab && renderedTabId === tabId) await flushRenderedTabChat();
     if (renderToCurrentTab && renderedTabId === tabId) await flushChatHistorySnapshot(tabId, { refreshTabInfo: true });
-    if (renderToCurrentTab && !wasAborted) {
+    if (renderToCurrentTab && !wasAborted && !captureStartFailed) {
       notifyCompletion({
         success: currentTabId === tabId && completedSuccessfully,
         storeReviewSuccess: currentTabId === tabId && promptEligibleCompletion,
@@ -4719,6 +4673,26 @@ function handleAgentUpdateMessage(msg) {
         }
       }
       scrollToBottom();
+      break;
+
+    case 'run_capture_warning':
+      if (data?.kind === 'record' && data?.message) {
+        addPersistentSlashMessage(systemHtml(tSystemHtml('sp.record.mic_unavailable', {
+          error: data.message,
+        })));
+      }
+      break;
+
+    case 'run_capture_complete':
+      if (data?.kind === 'screenshot' && Array.isArray(data.filenames)) {
+        showComposerToast(t('sp.record.saved', {
+          filename: data.filenames.join(', '),
+        }), { duration: 6000 });
+      }
+      break;
+
+    case 'run_capture_error':
+      reportTrailingRunCaptureError({ kind: data?.kind }, new Error(data?.message || 'unknown error'), eventTabId);
       break;
 
     case 'error':

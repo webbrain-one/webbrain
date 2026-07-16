@@ -45,6 +45,7 @@ import {
   parseUserMemoryExtractionResult,
 } from './agent/user-memory.js';
 import { PROFILE_SYNC_DATA_KEYS, PROFILE_SYNC_KEYS, ProfileSyncManager } from './profile-sync.js';
+import { RUN_CAPTURE_START_ERROR_PREFIX, createRunCaptureController } from './run-capture.js';
 
 /**
  * WebBrain Background Script (Firefox)
@@ -55,6 +56,10 @@ const providerManager = new ProviderManager();
 const agent = new Agent(providerManager);
 const userMemoryStore = createUserMemoryStore(browser.storage.local);
 const profileSync = new ProfileSyncManager(browser.storage.local);
+const runCaptureController = createRunCaptureController({
+  api: browser,
+  unsupportedRecordingMessage: 'Tab recording is not supported in Firefox.',
+});
 const scheduler = new ScheduledJobManager({
   api: browser,
   agent,
@@ -1497,19 +1502,22 @@ async function handleMessage(msg, sender) {
 
       sendIndicatorMessage(tabId, 'WB_SHOW_AGENT_INDICATORS');
 
-      // Clear any linked context-menu prompt from storage here — after the
-      // background has received the message (so a pre-acceptance crash leaves
-      // the prompt recoverable) but before the agent run starts (so a
-      // mid-run panel close does not replay the prompt on reopen).
-      if (msg.contextMenuClear?.tabId != null) {
-        await contextMenuStorage.clear(msg.contextMenuClear.tabId, msg.contextMenuClear.promptId);
-      }
-
       const updates = [];
       let userMemoryTurnContextTaken = false;
+      let runCaptureState = null;
       let result = '';
       let runError = null;
       try {
+        // Capture belongs to the background run lifecycle so it survives the
+        // sidebar closing or reloading while the agent is still working.
+        runCaptureState = await runCaptureController.start(msg.runCapture, tabId);
+
+        // Clear any linked context-menu prompt only after capture preflight
+        // succeeds, but before the agent run starts.
+        if (msg.contextMenuClear?.tabId != null) {
+          await contextMenuStorage.clear(msg.contextMenuClear.tabId, msg.contextMenuClear.promptId);
+        }
+
         const runOptions = msg.recommendedAction ? { recommendedAction: msg.recommendedAction } : {};
         result = await agent.processMessage(tabId, msg.text, (type, data) => {
           updates.push({ type, data });
@@ -1530,9 +1538,25 @@ async function handleMessage(msg, sender) {
         runError = error;
         throw error;
       } finally {
+        if (runCaptureState) {
+          try {
+            const captureResult = await runCaptureController.finish(runCaptureState, tabId);
+            sendAgentUpdate(tabId, runUi.requestId, 'run_capture_complete', captureResult);
+          } catch (error) {
+            console.warn('[WebBrain] trailing run capture failed to finish:', error);
+            sendAgentUpdate(tabId, runUi.requestId, 'run_capture_error', {
+              kind: runCaptureState.kind,
+              message: error?.message || String(error),
+            });
+          }
+        }
         if (!userMemoryTurnContextTaken) clearUserMemoryTurnContext(tabId);
-        const snapshot = finishRunUiSnapshot(tabId, runUi.requestId, terminalRunUiStatus(result, updates, runError), result || (runError ? `Error: ${runError.message}` : ''));
-        sendAgentRunComplete(tabId, snapshot);
+        if (runError && String(runError.message || '').startsWith(RUN_CAPTURE_START_ERROR_PREFIX)) {
+          clearRunUiSnapshot(tabId);
+        } else {
+          const snapshot = finishRunUiSnapshot(tabId, runUi.requestId, terminalRunUiStatus(result, updates, runError), result || (runError ? `Error: ${runError.message}` : ''));
+          sendAgentRunComplete(tabId, snapshot);
+        }
         sendIndicatorMessage(tabId, 'WB_HIDE_AGENT_INDICATORS');
       }
     }
