@@ -10893,6 +10893,11 @@ test('settings warns on missing or short API keys and shows the Ollama localhost
     );
     assert.match(
       settings,
+      /return apiKeyWarning;[\s\S]*?async function activateProvider\(id\) \{[\s\S]*?apiKeyWarning = await saveProvider\(id, \{ showFlash: false \}\);[\s\S]*?activeProviderId = id;[\s\S]*?renderProviders\(\);[\s\S]*?if \(apiKeyWarning\) \{[\s\S]*?providerApiKeyWarning\(id, providersData\[id\]\);[\s\S]*?setProviderTestResult\(id, 'warn', apiKeyWarning\);/,
+      `${label}: Select for chat should restore the invalid-key marker and warning after re-rendering the active provider`,
+    );
+    assert.match(
+      settings,
       /id === 'ollama'[\s\S]*?provider-ollama-warning[\s\S]*?OLLAMA_ORIGINS="\*" ollama serve[\s\S]*?OLLAMA_ORIGINS="chrome-extension:\/\/\*,moz-extension:\/\/\*" ollama serve[\s\S]*?https:\/\/www\.webbrain\.one\/blog\/ollama-launch-handoff[\s\S]*?target="_blank" rel="noopener noreferrer"/,
       `${label}: Ollama card should include both origin commands and the external handoff link`,
     );

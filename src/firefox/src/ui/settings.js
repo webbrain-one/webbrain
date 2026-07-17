@@ -2594,6 +2594,7 @@ async function saveProvider(id, { showFlash = true, markConfigured = true } = {}
       if (testEl) setTimeout(() => testEl.classList.remove('show'), 2000);
     }
   }
+  return apiKeyWarning;
 }
 
 function refreshProviderCardStatus(id) {
@@ -2662,8 +2663,9 @@ async function activateProvider(id) {
   syncInputsIntoProvidersData();
   requestedActiveProviderId = id;
   const requestId = ++providerActivationRequestId;
+  let apiKeyWarning = '';
   try {
-    await saveProvider(id, { showFlash: false });
+    apiKeyWarning = await saveProvider(id, { showFlash: false });
     if (requestId !== providerActivationRequestId || requestedActiveProviderId !== id) return;
     await sendToBackground('set_active_provider', { providerId: id });
   } catch (e) {
@@ -2681,6 +2683,10 @@ async function activateProvider(id) {
   }
   activeProviderId = id;
   renderProviders();
+  if (apiKeyWarning) {
+    providerApiKeyWarning(id, providersData[id]);
+    setProviderTestResult(id, 'warn', apiKeyWarning);
+  }
 }
 
 async function sendToBackground(action, data = {}) {
