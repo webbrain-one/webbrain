@@ -118,6 +118,127 @@ body {
   display: none;
 }
 
+.pin-coachmark {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 142px 22px 24px;
+  background: color-mix(in srgb, var(--bg-primary) 86%, transparent);
+  backdrop-filter: blur(3px);
+  animation: fadeIn 0.25s ease;
+}
+
+.pin-coachmark.hidden {
+  display: none;
+}
+
+.pin-coachmark-arrow {
+  position: absolute;
+  top: 2px;
+  left: 12px;
+  width: min(190px, 54vw);
+  height: 150px;
+  overflow: visible;
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transform: scaleX(-1);
+  transform-origin: center;
+  filter: drop-shadow(0 2px 6px color-mix(in srgb, var(--accent) 24%, transparent));
+}
+
+/* Chrome mirrors its side-panel toolbar controls with the panel. A panel on
+   the left therefore needs the coachmark arrow on the right, as in Vivaldi. */
+:root[data-panel-side="left"] .pin-coachmark-arrow {
+  right: 12px;
+  left: auto;
+  transform: none;
+}
+
+.pin-coachmark-card {
+  width: min(100%, 330px);
+  padding: 25px;
+  border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--border));
+  border-radius: 18px;
+  background: var(--bg-secondary);
+  box-shadow: 0 22px 58px rgba(0, 0, 0, 0.26);
+}
+
+.pin-coachmark-kicker {
+  margin: 0 0 9px;
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.pin-coachmark-card h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 21px;
+  line-height: 1.15;
+  letter-spacing: -0.025em;
+}
+
+.pin-coachmark-card > p:not(.pin-coachmark-kicker) {
+  margin: 13px 0 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.pin-coachmark-actions {
+  display: grid;
+  gap: 9px;
+  margin-top: 22px;
+}
+
+.pin-coachmark-card button {
+  width: 100%;
+  min-height: 42px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  transition: background 0.15s, transform 0.1s;
+}
+
+.pin-coachmark-card button:hover {
+  background: var(--accent-hover);
+}
+
+.pin-coachmark-card .pin-coachmark-skip {
+  min-height: 38px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.pin-coachmark-card .pin-coachmark-skip:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.pin-coachmark-card button:active {
+  transform: scale(0.98);
+}
+
+.pin-coachmark-card button:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent) 42%, transparent);
+  outline-offset: 3px;
+}
+
 .ob-card {
   width: 100%;
   max-width: 400px;
@@ -2488,6 +2609,14 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .pin-coachmark {
+    animation: none;
+  }
+
+  .pin-coachmark-card button {
+    transition: none;
+  }
+
   .completion-confetti {
     display: none;
   }
