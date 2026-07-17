@@ -90,7 +90,7 @@ export class AzureOpenAIProvider extends BaseLLMProvider {
   }
 
   _buildRequestBody(messages, options = {}, stream = false) {
-    let body = { messages: this._mapMessages(messages), stream };
+    let body = { messages: this._chatMessages(messages), stream };
     this._addTemperature(body, options);
     this._addMaxTokens(body, options);
     if (this._shouldSendTools(messages, options)) {
