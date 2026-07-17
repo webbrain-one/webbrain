@@ -38,7 +38,7 @@
   - **OpenAI** (GPT-5.6, etc.)
   - **Anthropic Claude** (native API)
   - **Google Gemini**, **Mistral AI**, **DeepSeek**, **xAI Grok**, **Groq**
-  - **MiniMax**, **Alibaba Cloud (Qwen)**
+  - **MiniMax**, **Kimi**, **Alibaba Cloud (Qwen)**
   - **Cloudflare Workers AI**, **Nvidia NIM**
   - **OpenRouter** (default model: `openrouter/free`; access 100+ models)
 - **Onboarding Wizard** — First-launch walkthrough covering Act mode safety and provider setup
@@ -174,6 +174,7 @@ Base URLs are pre-filled in Settings when you select a provider. Local servers u
 | Nvidia NIM | Required | meta/llama-3.1-8b-instruct |
 | Groq | Required | llama-3.3-70b-versatile |
 | MiniMax | Required | minimax-m2.7 |
+| Kimi | Required | kimi-k2.5 |
 | Alibaba Cloud (Qwen) | Required | qwen-max |
 | OpenRouter | Required | openrouter/free |
 

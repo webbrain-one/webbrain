@@ -2066,6 +2066,15 @@ function renderProviders() {
         ...COST_ESTIMATE_FIELDS,
       ],
     },
+    kimi: {
+      fields: [
+        { key: 'apiKey', labelKey: 'st.provider.field.api_key', type: 'password', placeholder: 'sk-...' },
+        { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'kimi-k2.5',
+          suggestions: ['kimi-k2.5', 'kimi-k3'] },
+        { key: 'baseUrl', labelKey: 'st.provider.field.api_base_url', type: 'text', placeholder: 'https://api.moonshot.ai/v1' },
+        ...COST_ESTIMATE_FIELDS,
+      ],
+    },
     alibaba: {
       fields: [
         { key: 'apiKey', labelKey: 'st.provider.field.api_key', type: 'password', placeholder: 'sk-...' },

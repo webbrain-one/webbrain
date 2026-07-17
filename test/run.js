@@ -15056,6 +15056,12 @@ test('inferContextWindow: model-aware cloud/router defaults and local 16k fallba
     assert.equal(infer({ category: 'router', providerName: 'nvidia', model: 'nvidia/llama-3.3-nemotron-super-49b' }), 131072);
     assert.equal(infer({ category: 'router', providerName: 'openrouter', model: 'minimax/minimax-m3' }), 1000000);
     assert.equal(infer({ category: 'cloud', providerName: 'minimax', model: 'minimax-m2.7' }), 204800);
+    for (const model of ['kimi-k3', 'kimi-k-3']) {
+      assert.equal(infer({ category: 'cloud', providerName: 'kimi', model }), 1000000);
+    }
+    for (const model of ['kimi-k2.5', 'kimi-k2.6', 'kimi-k2.7-code']) {
+      assert.equal(infer({ category: 'cloud', providerName: 'kimi', model }), 262144);
+    }
     assert.equal(infer({ category: 'router', providerName: 'openrouter', model: 'qwen/qwen3.7-max' }), 262144);
     assert.equal(infer({ category: 'router', providerName: 'openrouter', model: 'qwen/qwen3.7-plus' }), 1000000);
     assert.equal(infer({ category: 'cloud', providerName: 'alibaba', model: 'qwen-max' }), 32768);
@@ -16373,13 +16379,26 @@ test('_defaultConfigs: new cloud providers present and disabled by default', () 
   for (const PM of [ProviderManagerCh, ProviderManagerFx]) {
     const mgr = new PM();
     const defaults = mgr._defaultConfigs();
-    for (const id of ['gemini', 'mistral', 'deepseek', 'xai']) {
+    for (const id of ['gemini', 'mistral', 'deepseek', 'xai', 'kimi']) {
       assert.ok(defaults[id], `${PM.name}: missing default config for ${id}`);
       assert.equal(defaults[id].category, 'cloud', `${PM.name}: ${id} should be cloud`);
       assert.equal(defaults[id].enabled, false, `${PM.name}: ${id} should default to disabled`);
       assert.ok(defaults[id].baseUrl, `${PM.name}: ${id} missing baseUrl`);
       assert.ok(defaults[id].model, `${PM.name}: ${id} missing default model`);
     }
+    assert.equal(defaults.kimi.baseUrl, 'https://api.moonshot.ai/v1');
+    assert.equal(defaults.kimi.model, 'kimi-k2.5');
+    assert.equal(defaults.kimi.supportsStreamUsageOptions, true);
+    assert.equal(defaults.kimi.compat?.maxTokensField, 'max_completion_tokens');
+    const kimi = mgr._createProvider('kimi', defaults.kimi);
+    assert.equal(kimi.contextWindow, 262144);
+    assert.equal(kimi.supportsVision, true);
+    const messages = [{ role: 'user', content: 'hello' }];
+    const body = kimi._buildChatCompletionsBody(messages, { maxTokens: 123 }, false);
+    assert.equal(body.max_completion_tokens, 123);
+    assert.equal(body.max_tokens, undefined);
+    const streamBody = kimi._buildChatCompletionsBody(messages, { maxTokens: 123 }, true);
+    assert.deepEqual(streamBody.stream_options, { include_usage: true });
   }
 });
 
@@ -16515,6 +16534,17 @@ test('OpenAI settings list every GPT-5.6 family model with Terra first', () => {
     const luna = source.indexOf("'gpt-5.6-luna'", terra);
     const alias = source.indexOf("'gpt-5.6'", terra);
     assert.ok(terra >= 0 && sol > terra && luna > sol && alias > luna, `${prefix}: GPT-5.6 suggestions should lead with Terra, Sol, Luna, and the Sol alias`);
+  }
+});
+
+test('Kimi settings keep K2.5 as the default and offer K3 as an option', () => {
+  for (const prefix of ['src/chrome', 'src/firefox']) {
+    const source = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/settings.js'), 'utf8');
+    assert.match(
+      source,
+      /kimi:\s*\{[\s\S]*?placeholder: 'kimi-k2\.5'[\s\S]*?suggestions: \['kimi-k2\.5', 'kimi-k3'\][\s\S]*?https:\/\/api\.moonshot\.ai\/v1/,
+      `${prefix}: Kimi should default to K2.5 and list K3 second`,
+    );
   }
 });
 

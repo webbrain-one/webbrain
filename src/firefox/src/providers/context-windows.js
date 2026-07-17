@@ -279,6 +279,10 @@ export function inferContextWindow(config = {}) {
     return 204800;
   }
 
+  // Kimi direct models and compatible router slugs.
+  if (/kimi-k-?3(?:-|$|\/|\.)/.test(model)) return M1;
+  if (/kimi-k2\.(?:5|6|7)(?:-|$|\/|\.)/.test(model)) return K256;
+
   // Alibaba / Qwen direct models and OpenRouter Qwen slugs.
   if (model.includes('qwen3.7-plus')) return M1;
   if (model.includes('qwen3.7-max')) return K256;
