@@ -1685,6 +1685,14 @@ function providerApiKeyWarning(id, config) {
   return looksInvalid ? t('st.providers.api_key_warning') : '';
 }
 
+function restoreProviderApiKeyWarnings() {
+  for (const [id, config] of Object.entries(providersData)) {
+    if (config?.configured !== true) continue;
+    const warning = providerApiKeyWarning(id, config);
+    if (warning) setProviderTestResult(id, 'warn', warning);
+  }
+}
+
 function supportsProviderCompatibilitySettings(id, config = {}) {
   return id !== 'webbrain_cloud' && ['openai', 'llamacpp', 'azure_openai'].includes(config.type);
 }
@@ -2285,6 +2293,8 @@ function renderProviders() {
     providersContainer.appendChild(empty);
   }
 
+  restoreProviderApiKeyWarnings();
+
   document.querySelectorAll('.btn-save').forEach(btn => {
     btn.addEventListener('click', () => saveProvider(btn.dataset.provider));
   });
@@ -2654,7 +2664,6 @@ async function saveProvider(id, { showFlash = true, markConfigured = true } = {}
       if (testEl) setTimeout(() => testEl.classList.remove('show'), 2000);
     }
   }
-  return apiKeyWarning;
 }
 
 function refreshProviderCardStatus(id) {
@@ -2729,9 +2738,8 @@ async function activateProvider(id) {
   syncInputsIntoProvidersData();
   requestedActiveProviderId = id;
   const requestId = ++providerActivationRequestId;
-  let apiKeyWarning = '';
   try {
-    apiKeyWarning = await saveProvider(id, { showFlash: false });
+    await saveProvider(id, { showFlash: false });
     if (requestId !== providerActivationRequestId || requestedActiveProviderId !== id) return;
     await sendToBackground('set_active_provider', { providerId: id });
   } catch (e) {
@@ -2749,10 +2757,6 @@ async function activateProvider(id) {
   }
   activeProviderId = id;
   renderProviders();
-  if (apiKeyWarning) {
-    providerApiKeyWarning(id, providersData[id]);
-    setProviderTestResult(id, 'warn', apiKeyWarning);
-  }
 }
 
 function sendToBackground(action, data = {}) {

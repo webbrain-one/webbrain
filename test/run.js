@@ -10894,8 +10894,13 @@ test('settings warns on missing or short API keys and shows the Ollama localhost
     );
     assert.match(
       settings,
-      /return apiKeyWarning;[\s\S]*?async function activateProvider\(id\) \{[\s\S]*?apiKeyWarning = await saveProvider\(id, \{ showFlash: false \}\);[\s\S]*?activeProviderId = id;[\s\S]*?renderProviders\(\);[\s\S]*?if \(apiKeyWarning\) \{[\s\S]*?providerApiKeyWarning\(id, providersData\[id\]\);[\s\S]*?setProviderTestResult\(id, 'warn', apiKeyWarning\);/,
-      `${label}: Select for chat should restore the invalid-key marker and warning after re-rendering the active provider`,
+      /function restoreProviderApiKeyWarnings\(\) \{[\s\S]*?Object\.entries\(providersData\)[\s\S]*?config\?\.configured !== true[\s\S]*?providerApiKeyWarning\(id, config\)[\s\S]*?setProviderTestResult\(id, 'warn', warning\);[\s\S]*?\}/,
+      `${label}: configured providers should restore invalid-key markers and warnings after every re-render`,
+    );
+    assert.match(
+      settings,
+      /function renderProviders\(\) \{[\s\S]*?providersContainer\.appendChild\(wrapCollapsibleCard[\s\S]*?restoreProviderApiKeyWarnings\(\);/,
+      `${label}: provider rendering should restore saved API-key warnings after rebuilding the cards`,
     );
     assert.match(
       settings,
