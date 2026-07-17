@@ -18,9 +18,9 @@
  *     `recording_update` event:'started' to sidepanels.
  *   • startDisplayRecording(options) — prompts for a display/window stream via
  *     the offscreen recorder and records it with the same stop/download path.
- *   • stopTabRecording()         — halts the offscreen recorder, saves
- *     the .webm to Downloads, broadcasts event:'stopped', kicks off
- *     transcription if it was requested.
+ *   • stopTabRecording()         — halts the offscreen recorder, broadcasts
+ *     event:'saving' (banner down), waits for the browser-resolved .webm path,
+ *     broadcasts event:'stopped', kicks off transcription if requested.
  *
  * Transcription provider lookup is done lazily via setProviderManager()
  * so we can wire it from background.js without a circular import.
@@ -28,7 +28,10 @@
 
 import { ensureOffscreen } from '../offscreen/ensure.js';
 import { transcribeAudio } from '../agent/transcribe.js';
-import { resolveSavedDownload } from '../download-result.js';
+import {
+  RECORDING_DOWNLOAD_TIMEOUT_MS,
+  resolveSavedDownload,
+} from '../download-result.js';
 
 let recordingState = { active: false };
 const RECORDING_STATE_KEY = 'recordingState';
@@ -157,7 +160,7 @@ function broadcast(event, payload = {}) {
     }).catch(() => {});
   } catch {}
   if (event === 'started') broadcastContentRecordingState(true);
-  else if (event === 'stopped') broadcastContentRecordingState(false);
+  else if (event === 'stopped' || event === 'saving') broadcastContentRecordingState(false);
 }
 
 export async function prepareRecordingHost() {
@@ -422,15 +425,24 @@ export async function stopTabRecording(opts = {}) {
     return { ok: true, cleared: true, warning: error };
   }
 
-  // Save webm to Downloads. The data URL is safe — recorder.js strips
-  // the codecs param before passing it to FileReader.readAsDataURL, so
-  // chrome.downloads.download's URL parser doesn't get tripped up.
+  // Capture is over as soon as the offscreen recorder stops. Clear the live
+  // banner before waiting on disk so large .webm writes do not look like the
+  // user is still recording.
   const stamp = new Date()
     .toISOString()
     .replace(/[:.]/g, '-')
     .replace(/T/, '_')
     .slice(0, 19);
   const filename = recordingState.filename || `webbrain-recording-${stamp}.webm`;
+  const wantTranscribeAfter = !!recordingState.transcribeAfter;
+  clearRecordingSafetyWatchdog();
+  recordingState = { active: false };
+  saveRecordingState();
+  broadcast('saving');
+
+  // Save webm to Downloads. The data URL is safe — recorder.js strips
+  // the codecs param before passing it to FileReader.readAsDataURL, so
+  // chrome.downloads.download's URL parser doesn't get tripped up.
   let downloadId = null;
   let savedDownload = null;
   let saveError = null;
@@ -440,12 +452,14 @@ export async function stopTabRecording(opts = {}) {
       filename,
       saveAs: false,
     });
-    savedDownload = await resolveSavedDownload(chrome, downloadId);
+    savedDownload = await resolveSavedDownload(chrome, downloadId, {
+      timeoutMs: RECORDING_DOWNLOAD_TIMEOUT_MS,
+    });
   } catch (e) {
     saveError = `download failed: ${e.message}`;
   }
 
-  const wantTranscribe = recordingState.transcribeAfter && !saveError;
+  const wantTranscribe = wantTranscribeAfter && !saveError;
   const final = {
     ok: !saveError,
     filename: saveError ? null : savedDownload.filename,
@@ -459,11 +473,6 @@ export async function stopTabRecording(opts = {}) {
     reason: opts.reason || undefined,
   };
 
-  // Always clear the recording state once the recorder has stopped, even if the
-  // download failed — the capture is over and the banner must not linger.
-  clearRecordingSafetyWatchdog();
-  recordingState = { active: false };
-  saveRecordingState();
   broadcast('stopped', { result: final });
 
   if (wantTranscribe) {
@@ -526,7 +535,9 @@ async function runTranscription({ dataUrl, mimeType, baseFilename }) {
       filename: txtFilename,
       saveAs: false,
     });
-    savedDownload = await resolveSavedDownload(chrome, downloadId);
+    savedDownload = await resolveSavedDownload(chrome, downloadId, {
+      timeoutMs: RECORDING_DOWNLOAD_TIMEOUT_MS,
+    });
   } catch (e) {
     return broadcastTranscribed({
       ok: false,

@@ -342,6 +342,7 @@ export default {
   "sp.record.error": "Error de grabación: {error}",
   "sp.record.mic_unavailable": "Micrófono no disponible: {error}. La grabación comenzó solo con audio y video de la pestaña.",
   "sp.record.saved": "Guardado en {filename}.",
+  "sp.record.saving": "Guardando la grabación…",
   "sp.record.transcribing": "Transcribiendo audio con Whisper…",
   "sp.record.transcribed": "Transcripción guardada: {filename}",
   "sp.record.transcribe_failed": "Falló la transcripción: {error}",

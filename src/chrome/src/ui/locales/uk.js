@@ -350,6 +350,7 @@ export default {
   "sp.record.error": "Помилка запису: {error}",
   "sp.record.mic_unavailable": "Мікрофон недоступний: {error}. Запис почався лише з аудіо та відео вкладки.",
   "sp.record.saved": "Збережено в {filename}.",
+  "sp.record.saving": "Збереження запису…",
   "sp.record.transcribing": "Транскрибуємо аудіо за допомогою Whisper…",
   "sp.record.transcribed": "Транскрипт збережено: {filename}",
   "sp.record.transcribe_failed": "Не вдалося транскрибувати: {error}",

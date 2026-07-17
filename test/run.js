@@ -9621,12 +9621,28 @@ test('WebBrain save surfaces report completed paths while durable download conte
     assert.match(agent, /resolveSavedDownload\([^,]+,\s*downloadId\)/, `${label}: agent saves should wait for the completed browser item`);
     assert.match(capture, /return resolveSavedDownload\(api, downloadId\)/, `${label}: run screenshots should return the completed browser path`);
     assert.match(capture, /filenames: \[state\.before\.filename, after\.filename\]/, `${label}: run result should surface resolved before/after paths`);
+
+    // Durable auto-scratchpad must pin downloadId only — never a page-derived
+    // basename or absolute path (prompt-injection / privacy).
+    assert.match(agent, /_pinDownloadId\(tabId,\s*downloadId\)/, `${label}: download tools should pin via _pinDownloadId`);
+    const pinNoteMatch = agent.match(
+      /_pinDownloadId\(tabId,\s*downloadId\)\s*\{[\s\S]*?_autoScratchpadNote\(tabId,\s*`([^`]+)`\)/
+    );
+    assert.ok(pinNoteMatch, `${label}: _pinDownloadId should write an [auto] scratchpad note`);
+    const pinNote = pinNoteMatch[1];
+    assert.match(pinNote, /\[auto\] Downloaded file \(downloadId \$\{downloadId\}\)/, `${label}: pin note should include the downloadId handle`);
+    assert.doesNotMatch(pinNote, /\$\{[^}]*filename[^}]*\}/, `${label}: pin note must not interpolate filenames`);
+    assert.doesNotMatch(pinNote, /\/Users\/|\/home\/|Downloads\/|C:\\\\/i, `${label}: pin note must not embed absolute path fragments`);
   }
 
   const chromeAgent = fs.readFileSync(path.join(ROOT, 'src/chrome/src/agent/agent.js'), 'utf8');
   const recorder = fs.readFileSync(path.join(ROOT, 'src/chrome/src/recorder/host.js'), 'utf8');
+  const downloadResult = fs.readFileSync(path.join(ROOT, 'src/chrome/src/download-result.js'), 'utf8');
   assert.doesNotMatch(chromeAgent, /saved to Downloads as/, 'chrome: screenshot messages should not claim a fixed Downloads location');
-  assert.match(recorder, /savedDownload = await resolveSavedDownload\(chrome, downloadId\)/, 'chrome: recordings and transcripts should wait for the completed browser item');
+  assert.match(downloadResult, /RECORDING_DOWNLOAD_TIMEOUT_MS\s*=\s*5\s*\*\s*60\s*\*\s*1000/, 'chrome: recording saves need a longer timeout than screenshots');
+  assert.match(recorder, /timeoutMs:\s*RECORDING_DOWNLOAD_TIMEOUT_MS/, 'chrome: recordings and transcripts should use the longer save timeout');
+  assert.match(recorder, /broadcast\(['"]saving['"]\)/, 'chrome: should clear live-recording UI before waiting on disk');
+  assert.match(recorder, /savedDownload = await resolveSavedDownload\(chrome, downloadId/, 'chrome: recordings and transcripts should wait for the completed browser item');
   assert.match(recorder, /filename: saveError \? null : savedDownload\.filename/, 'chrome: recording results should expose the resolved path');
   assert.match(recorder, /transcriptFilename: savedDownload\.filename/, 'chrome: transcript results should expose the resolved path');
 

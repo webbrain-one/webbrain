@@ -350,6 +350,7 @@ export default {
   "sp.record.error": "녹화 오류: {error}",
   "sp.record.mic_unavailable": "마이크를 사용할 수 없습니다: {error}. 탭 오디오와 비디오만으로 녹화를 시작했습니다.",
   "sp.record.saved": "{filename}에 저장했습니다.",
+  "sp.record.saving": "녹화를 저장하는 중…",
   "sp.record.transcribing": "Whisper로 오디오를 받아쓰는 중…",
   "sp.record.transcribed": "전사본 저장됨: {filename}",
   "sp.record.transcribe_failed": "전사에 실패했습니다: {error}",

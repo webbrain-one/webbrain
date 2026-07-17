@@ -5002,6 +5002,10 @@ chrome.runtime.onMessage.addListener((msg) => {
   if (msg.event === 'started') {
     recordingStartedAt = msg.state?.startedAt || Date.now();
     setRecordingUI(true, msg.state || {});
+  } else if (msg.event === 'saving') {
+    // Capture has stopped; browser is still committing the file to disk.
+    setRecordingUI(false);
+    showRecordingStatus(t('sp.record.saving'));
   } else if (msg.event === 'stopped') {
     setRecordingUI(false);
     lastRecordingResult = msg.result || null;

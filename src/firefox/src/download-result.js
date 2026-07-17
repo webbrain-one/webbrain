@@ -1,4 +1,10 @@
-const DEFAULT_DOWNLOAD_TIMEOUT_MS = 30_000;
+/** Default wait for small WebBrain-initiated saves (screenshots, crops, run captures). */
+export const DEFAULT_DOWNLOAD_TIMEOUT_MS = 30_000;
+/**
+ * Longer budget for large tab recordings / transcript text writes. A 2-hour
+ * capture can produce a multi-GB .webm that stays in_progress well past 30s.
+ */
+export const RECORDING_DOWNLOAD_TIMEOUT_MS = 5 * 60 * 1000;
 const DEFAULT_DOWNLOAD_POLL_MS = 200;
 
 function sleep(ms) {
@@ -14,6 +20,13 @@ function downloadFailure(downloadId, message) {
  * browser-reported DownloadItem. DownloadItem.filename is the resolved,
  * absolute local path; the filename passed to downloads.download() is only a
  * request and may change because of configured folders or conflict handling.
+ *
+ * Contract vs network-tools `resolveDownloadInfo`: that helper is soft — it
+ * returns best-known info (possibly still in_progress) after a short timeout
+ * and never throws. This helper is hard — it throws on interrupt/timeout and
+ * requires a non-empty resolved `filename` on complete. Keep both: soft waits
+ * fit batch `download_files` digests; hard waits fit UI/agent "saved to …"
+ * paths that must not lie.
  */
 export async function waitForCompletedDownload(api, downloadId, {
   timeoutMs = DEFAULT_DOWNLOAD_TIMEOUT_MS,

@@ -342,6 +342,7 @@ export default {
   "sp.record.error": "Ralat rakaman: {error}",
   "sp.record.mic_unavailable": "Mikrofon tidak tersedia: {error}. Rakaman dimulakan dengan audio dan video tab sahaja.",
   "sp.record.saved": "Disimpan ke {filename}.",
+  "sp.record.saving": "Menyimpan rakaman…",
   "sp.record.transcribing": "Menyalin audio dengan Whisper…",
   "sp.record.transcribed": "Transkrip disimpan: {filename}",
   "sp.record.transcribe_failed": "Penyalinan gagal: {error}",

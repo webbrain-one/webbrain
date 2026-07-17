@@ -47,6 +47,7 @@ export default {
   'sp.record.error': 'Błąd nagrywania: {error}',
   'sp.record.mic_unavailable': 'Mikrofon niedostępny: {error}. Nagrywanie rozpoczęto tylko z dźwiękiem i obrazem karty.',
   'sp.record.saved': 'Zapisano w {filename}.',
+  'sp.record.saving': 'Zapisywanie nagrania…',
   'sp.record.transcribing': 'Transkrypcja dźwięku za pomocą Whisper…',
   'sp.record.transcribed': 'Zapisano transkrypcję: {filename}',
   'sp.record.transcribe_failed': 'Transkrypcja nie powiodła się: {error}',

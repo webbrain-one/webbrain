@@ -350,6 +350,7 @@ export default {
   "sp.record.error": "Error sa pag-record: {error}",
   "sp.record.mic_unavailable": "Hindi available ang mikropono: {error}. Nagsimula ang recording gamit lang ang audio at video ng tab.",
   "sp.record.saved": "Na-save sa {filename}.",
+  "sp.record.saving": "Sine-save ang recording…",
   "sp.record.transcribing": "Tina-transcribe ang audio gamit ang Whisper…",
   "sp.record.transcribed": "Na-save ang transcript: {filename}",
   "sp.record.transcribe_failed": "Nabigo ang transcription: {error}",

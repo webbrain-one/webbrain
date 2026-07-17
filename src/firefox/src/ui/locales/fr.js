@@ -342,6 +342,7 @@ export default {
   "sp.record.error": "Erreur d'enregistrement : {error}",
   "sp.record.mic_unavailable": "Microphone indisponible : {error}. L'enregistrement a démarré avec seulement l'audio et la vidéo de l'onglet.",
   "sp.record.saved": "Enregistré dans {filename}.",
+  "sp.record.saving": "Enregistrement en cours de sauvegarde…",
   "sp.record.transcribing": "Transcription de l'audio avec Whisper…",
   "sp.record.transcribed": "Transcription enregistrée : {filename}",
   "sp.record.transcribe_failed": "Échec de la transcription : {error}",

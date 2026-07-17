@@ -48,6 +48,7 @@ export default {
   "sp.record.mic_unavailable": "מיקרופון לא זמין: {error}. ההקלטה החלה עם אודיו ווידאו של כרטיסיות בלבד.",
   "sp.record.full_screen_started_html": "הקלטת המסך או החלון התחילה. לחץ על <code>Escape</code> פעמיים בתוך WebBrain או בדף דפדפן כדי לעצור, או השתמש בבקרת הפסקת השיתוף של Chrome.",
   "sp.record.saved": "נשמר אל {filename}.",
+  "sp.record.saving": "שומר הקלטה…",
   "sp.record.transcribing": "תמלול אודיו עם Whisper…",
   "sp.record.transcribed": "תמלול נשמר: {filename}",
   "sp.record.transcribe_failed": "התמלול נכשל: {error}",

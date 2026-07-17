@@ -350,6 +350,7 @@ export default {
   "sp.record.error": "録画エラー: {error}",
   "sp.record.mic_unavailable": "マイクを使用できません: {error}。タブの音声と映像のみで録画を開始しました。",
   "sp.record.saved": "{filename} に保存しました。",
+  "sp.record.saving": "録画を保存しています…",
   "sp.record.transcribing": "Whisper で音声を文字起こししています…",
   "sp.record.transcribed": "文字起こしを保存しました: {filename}",
   "sp.record.transcribe_failed": "文字起こしに失敗しました: {error}",
