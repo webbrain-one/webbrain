@@ -10879,6 +10879,7 @@ test('settings warns on missing or short API keys and shows the Ollama localhost
     const settings = fs.readFileSync(path.join(ROOT, settingsRel), 'utf8');
     const html = fs.readFileSync(path.join(ROOT, htmlRel), 'utf8');
     const locale = fs.readFileSync(path.join(ROOT, localeRel), 'utf8');
+    const runtimeGlobal = label === 'chrome' ? 'chrome' : 'browser';
 
     assert.match(settings, /const MIN_API_KEY_LENGTH = 12;/, `${label}: conservative API-key minimum missing`);
     assert.match(
@@ -10898,10 +10899,15 @@ test('settings warns on missing or short API keys and shows the Ollama localhost
     );
     assert.match(
       settings,
-      /id === 'ollama'[\s\S]*?provider-ollama-warning[\s\S]*?OLLAMA_ORIGINS="chrome-extension:\/\/\*,moz-extension:\/\/\*" ollama serve[\s\S]*?https:\/\/www\.webbrain\.one\/blog\/ollama-launch-handoff[\s\S]*?target="_blank" rel="noopener noreferrer"/,
-      `${label}: Ollama card should include the extension-scoped origin command and external handoff link`,
+      /id === 'ollama'[\s\S]*?provider-ollama-warning[\s\S]*?OLLAMA_ORIGINS="\$\{escapeHtml\(extensionOrigin\)\}" ollama serve[\s\S]*?https:\/\/www\.webbrain\.one\/blog\/ollama-launch-handoff[\s\S]*?target="_blank" rel="noopener noreferrer"/,
+      `${label}: Ollama card should include the current WebBrain origin command and external handoff link`,
+    );
+    assert.ok(
+      settings.includes(`const extensionOrigin = ${runtimeGlobal}.runtime.getURL('').replace(/\\/$/, '');`),
+      `${label}: Ollama guidance should derive this WebBrain installation's exact extension origin`,
     );
     assert.doesNotMatch(settings, /OLLAMA_ORIGINS="\*" ollama serve/, `${label}: Ollama card should not recommend wildcard web origins`);
+    assert.doesNotMatch(settings, /OLLAMA_ORIGINS="(?:chrome|moz)-extension:\/\/\*/, `${label}: Ollama card should not allow every installed extension`);
     assert.match(locale, /st\.providers\.ollama_warning\.restart'[^;\n]*start Ollama with this command:/, `${label}: Ollama restart copy should describe the single safe command`);
     assert.match(html, /\.provider-warning \{/, `${label}: Ollama FAQ warning styling missing`);
     assert.match(html, /\.test-result\.warn \{/, `${label}: API-key warning status styling missing`);

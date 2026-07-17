@@ -2192,6 +2192,7 @@ function renderProviders() {
            ${t('st.providers.webbrain_data_use.body', { privacyLink, subscribeLink, accountLink })}
          </div>`;
     }
+    const extensionOrigin = browser.runtime.getURL('').replace(/\/$/, '');
     const ollamaWarning = id === 'ollama'
       ? `<aside class="provider-warning provider-ollama-warning" role="note"
                 aria-labelledby="ollama-warning-title">
@@ -2199,7 +2200,7 @@ function renderProviders() {
            <strong class="provider-warning-title" id="ollama-warning-title">${escapeHtml(t('st.providers.ollama_warning.title'))}</strong>
            <p>${escapeHtml(t('st.providers.ollama_warning.body'))}</p>
            <p>${escapeHtml(t('st.providers.ollama_warning.restart'))}</p>
-           <pre><code>OLLAMA_ORIGINS="chrome-extension://*,moz-extension://*" ollama serve</code></pre>
+           <pre><code>OLLAMA_ORIGINS="${escapeHtml(extensionOrigin)}" ollama serve</code></pre>
            <p>${escapeHtml(t('st.providers.ollama_warning.base_url'))}</p>
            <a href="https://www.webbrain.one/blog/ollama-launch-handoff"
               target="_blank" rel="noopener noreferrer">${escapeHtml(t('st.providers.ollama_warning.link'))} ↗</a>
