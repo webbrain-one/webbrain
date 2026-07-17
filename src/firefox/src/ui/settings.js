@@ -1602,6 +1602,7 @@ const ZERO_ALLOWED_NUMBER_FIELDS = new Set([
   'inputCostPerMillionUsd',
   'outputCostPerMillionUsd',
 ]);
+const MIN_API_KEY_LENGTH = 12;
 
 function providerInputValue(input) {
   if (input.dataset.type === 'checkbox' || input.type === 'checkbox') {
@@ -1628,6 +1629,24 @@ function setProviderConfigValue(config, path, value) {
     target = target[key];
   }
   target[keys.at(-1)] = value;
+}
+
+function providerApiKeyWarning(id, config) {
+  const input = document.querySelector(`input[data-provider="${id}"][data-key="apiKey"]`);
+  if (!input) return '';
+  const apiKey = String(config.apiKey || '').trim();
+  const keyIsOptional = providersData[id]?.category === 'local';
+  const looksInvalid = apiKey ? apiKey.length < MIN_API_KEY_LENGTH : !keyIsOptional;
+  input.setAttribute('aria-invalid', looksInvalid ? 'true' : 'false');
+  return looksInvalid ? t('st.providers.api_key_warning') : '';
+}
+
+function restoreProviderApiKeyWarnings() {
+  for (const [id, config] of Object.entries(providersData)) {
+    if (config?.configured !== true) continue;
+    const warning = providerApiKeyWarning(id, config);
+    if (warning) setProviderTestResult(id, 'warn', warning);
+  }
 }
 
 function supportsProviderCompatibilitySettings(id, config = {}) {
@@ -2181,11 +2200,26 @@ function renderProviders() {
            ${t('st.providers.webbrain_data_use.body', { privacyLink, subscribeLink, accountLink })}
          </div>`;
     }
+    const extensionOrigin = browser.runtime.getURL('').replace(/\/$/, '');
+    const ollamaWarning = id === 'ollama'
+      ? `<aside class="provider-warning provider-ollama-warning" role="note"
+                aria-labelledby="ollama-warning-title">
+           <div class="provider-warning-label">${escapeHtml(t('st.providers.ollama_warning.label'))}</div>
+           <strong class="provider-warning-title" id="ollama-warning-title">${escapeHtml(t('st.providers.ollama_warning.title'))}</strong>
+           <p>${escapeHtml(t('st.providers.ollama_warning.body'))}</p>
+           <p>${escapeHtml(t('st.providers.ollama_warning.restart'))}</p>
+           <pre><code>OLLAMA_ORIGINS="${escapeHtml(extensionOrigin)}" ollama serve</code></pre>
+           <p>${escapeHtml(t('st.providers.ollama_warning.base_url'))}</p>
+           <a href="https://www.webbrain.one/blog/ollama-launch-handoff"
+              target="_blank" rel="noopener noreferrer">${escapeHtml(t('st.providers.ollama_warning.link'))} ↗</a>
+         </aside>`
+      : '';
     const compatibilitySettings = renderProviderCompatibilitySettings(id, config);
 
     const body = `
       ${fieldsHTML}
       ${providerNote}
+      ${ollamaWarning}
       ${compatibilitySettings}
       <div class="btn-row">
         <button class="btn-primary btn-save" data-provider="${id}">${escapeHtml(t('st.providers.save'))}</button>
@@ -2207,6 +2241,8 @@ function renderProviders() {
       : t('st.providers.filter.empty');
     providersContainer.appendChild(empty);
   }
+
+  restoreProviderApiKeyWarnings();
 
   document.querySelectorAll('.btn-save').forEach(btn => {
     btn.addEventListener('click', () => saveProvider(btn.dataset.provider));
@@ -2538,6 +2574,7 @@ function setProviderTestResult(id, className, message, color) {
 async function saveProvider(id, { showFlash = true, markConfigured = true } = {}) {
   const inputs = document.querySelectorAll(`input[data-provider="${id}"], select[data-provider="${id}"], textarea[data-provider="${id}"]`);
   const config = {};
+  let apiKeyWarning = '';
 
   try {
     inputs.forEach(input => {
@@ -2546,6 +2583,7 @@ async function saveProvider(id, { showFlash = true, markConfigured = true } = {}
         : providerInputValue(input);
       setProviderConfigValue(config, input.dataset.key, value);
     });
+    apiKeyWarning = providerApiKeyWarning(id, config);
     await sendToBackground('update_provider', { providerId: id, config, markConfigured });
   } catch (e) {
     if (showFlash) setProviderTestResult(id, 'fail', t('st.providers.failed', { error: e.message }));
@@ -2559,8 +2597,12 @@ async function saveProvider(id, { showFlash = true, markConfigured = true } = {}
   refreshProviderCardStatus(id);
 
   if (showFlash) {
-    const testEl = setProviderTestResult(id, 'ok', t('st.providers.saved'));
-    if (testEl) setTimeout(() => testEl.classList.remove('show'), 2000);
+    if (apiKeyWarning) {
+      setProviderTestResult(id, 'warn', apiKeyWarning);
+    } else {
+      const testEl = setProviderTestResult(id, 'ok', t('st.providers.saved'));
+      if (testEl) setTimeout(() => testEl.classList.remove('show'), 2000);
+    }
   }
 }
 
