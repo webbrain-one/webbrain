@@ -48,6 +48,7 @@ import { USER_MEMORY_DEFAULT_MAX_PROMPT_CHARS, formatUserMemoryPrompt, normalize
 import { mergeRedactionFrameRegions, mapRegionsToImage, pixelateDataUrl } from './screenshot-redaction.js';
 import { buildTrustedRuntimeContext, stripTrustedRuntimeContext } from './runtime-context.js';
 import { firefoxHostPermissionFailure, firefoxRestrictedDomainFailure } from '../firefox-restricted-domains.js';
+import { filenameInConfiguredDownloadDirectory } from '../download-directory.js';
 
 const DEFAULT_CLOUD_COST_ALLOWANCE_USD = 10;
 // Product default: auto-approve plans at 75% confidence to reduce review stops.
@@ -3404,6 +3405,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     filename = filename.split('/').pop().split('\\').pop();
     filename = filename.replace(/\.(jpe?g|webp)$/i, '.png');
     if (!/\.png$/i.test(filename)) filename += '.png';
+    filename = await filenameInConfiguredDownloadDirectory(browser, filename, crop.dataUrl);
     const downloadId = await browser.downloads.download({ url: crop.dataUrl, filename, saveAs: false });
 
     return {

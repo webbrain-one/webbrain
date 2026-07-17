@@ -61,6 +61,7 @@ import {
   createConfigExport,
   parseConfigImport,
 } from './config-transfer.js';
+import { installDownloadDirectoryRouting } from './download-directory.js';
 
 /**
  * WebBrain Service Worker (Background Script)
@@ -71,6 +72,7 @@ const providerManager = new ProviderManager();
 const agent = new Agent(providerManager);
 const userMemoryStore = createUserMemoryStore(chrome.storage.local);
 const profileSync = new ProfileSyncManager(chrome.storage.local);
+installDownloadDirectoryRouting(chrome);
 const scheduler = new ScheduledJobManager({
   api: chrome,
   agent,

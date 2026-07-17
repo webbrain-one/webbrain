@@ -204,6 +204,12 @@ const ConfigTransferCh = await import(
 const ConfigTransferFx = await import(
   'file://' + path.join(ROOT, 'src/firefox/src/config-transfer.js').replace(/\\/g, '/')
 );
+const DownloadDirectoryCh = await import(
+  'file://' + path.join(ROOT, 'src/chrome/src/download-directory.js').replace(/\\/g, '/')
+);
+const DownloadDirectoryFx = await import(
+  'file://' + path.join(ROOT, 'src/firefox/src/download-directory.js').replace(/\\/g, '/')
+);
 const { transcribeAudio } = await import(
   'file://' + path.join(ROOT, 'src/chrome/src/agent/transcribe.js').replace(/\\/g, '/')
 );
@@ -2089,6 +2095,7 @@ test('/export --traces is wired in both side panels and backgrounds', () => {
 test('config transfer exports and restores Settings values including provider keys', () => {
   const stored = {
     wbLocale: 'tr',
+    downloadDirectory: 'Work/WebBrain',
     strictSecretMode: true,
     profileEnabled: true,
     profileText: 'Use the test profile',
@@ -2117,6 +2124,7 @@ test('config transfer exports and restores Settings values including provider ke
   assert.equal(chromeExport.settings.transcriptionModel.apiKey, 'audio-secret');
   assert.equal(chromeExport.settings.capsolverApiKey, 'capsolver-secret');
   assert.equal(chromeExport.settings.profileText, 'Use the test profile');
+  assert.equal(chromeExport.settings.downloadDirectory, 'Work/WebBrain');
   assert.equal(chromeExport.settings.wb_user_memory_v1.records.length, 1);
   assert.equal(chromeExport.settings.providers.webbrain_cloud.deviceGuid, undefined, 'device identity must not be portable');
   assert.equal(chromeExport.settings.cloudCostSpentUsd, undefined, 'spend counters are runtime state, not config');
@@ -2127,6 +2135,7 @@ test('config transfer exports and restores Settings values including provider ke
   const imported = ConfigTransferCh.parseConfigImport(JSON.stringify(chromeExport));
   assert.equal(imported.settings.providers.openai.apiKey, 'provider-secret');
   assert.equal(imported.settings.activeProvider, 'openai');
+  assert.equal(imported.settings.downloadDirectory, 'Work/WebBrain');
   assert.equal(imported.settings.themeMode, 'system', 'missing Settings values should restore their product defaults');
   assert.equal(Object.keys(imported.settings).length, ConfigTransferCh.CONFIG_STORAGE_KEYS.length);
 });
@@ -2149,6 +2158,146 @@ test('config transfer validates schema, size, containers, and unknown keys', () 
   }));
   assert.equal(parsed.settings.verboseMode, true);
   assert.deepEqual(parsed.ignoredKeys, ['futureSetting']);
+});
+
+test('download directory routing is relative and uses each browser-supported path', async () => {
+  for (const [label, downloadDirectory] of [
+    ['chrome', DownloadDirectoryCh],
+    ['firefox', DownloadDirectoryFx],
+  ]) {
+    assert.equal(downloadDirectory.normalizeDownloadDirectory(''), '', `${label}: blank should use the system default`);
+    assert.equal(downloadDirectory.normalizeDownloadDirectory(' Work\\WebBrain '), 'Work/WebBrain', `${label}: nested relative directory should normalize`);
+    assert.equal(downloadDirectory.normalizeDownloadDirectory('/tmp/WebBrain'), '', `${label}: absolute POSIX paths should be rejected`);
+    assert.equal(downloadDirectory.normalizeDownloadDirectory('C:\\Downloads\\WebBrain'), '', `${label}: absolute Windows paths should be rejected`);
+    assert.equal(downloadDirectory.normalizeDownloadDirectory('Work/../Other'), '', `${label}: parent traversal should be rejected`);
+    assert.equal(
+      downloadDirectory.filenameInDownloadDirectory('Work/WebBrain', '/Users/test/Downloads/report.pdf'),
+      'Work/WebBrain/report.pdf',
+      `${label}: configured directory should prefix the tentative basename`,
+    );
+  }
+
+  let storageChangeListener = null;
+  let determiningFilenameListener = null;
+  const chromeApi = {
+    runtime: { id: 'webbrain-extension-id' },
+    storage: {
+      local: {
+        async get() {
+          return { downloadDirectory: 'WebBrain' };
+        },
+      },
+      onChanged: {
+        addListener(listener) {
+          storageChangeListener = listener;
+        },
+      },
+    },
+    downloads: {
+      onDeterminingFilename: {
+        addListener(listener) {
+          determiningFilenameListener = listener;
+        },
+      },
+    },
+  };
+
+  const installed = DownloadDirectoryCh.installDownloadDirectoryRouting(chromeApi);
+  assert.equal(installed, determiningFilenameListener, 'chrome: routing listener should register');
+
+  const ownSuggestions = [];
+  assert.equal(
+    installed(
+      {
+        byExtensionId: chromeApi.runtime.id,
+        filename: '/Users/test/Downloads/generated.txt',
+      },
+      (suggestion) => ownSuggestions.push(suggestion),
+    ),
+    true,
+    'chrome: own downloads should wait for the stored directory',
+  );
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(ownSuggestions, [{ filename: 'WebBrain/generated.txt' }], 'chrome: own download should be routed');
+
+  const unrelatedSuggestions = [];
+  assert.equal(
+    installed(
+      { byExtensionId: 'another-extension', filename: '/Users/test/Downloads/other.txt' },
+      (suggestion) => unrelatedSuggestions.push(suggestion),
+    ),
+    undefined,
+    'chrome: unrelated downloads should not wait',
+  );
+  assert.deepEqual(unrelatedSuggestions, [undefined], 'chrome: unrelated downloads should keep their filename');
+
+  storageChangeListener({ downloadDirectory: { newValue: 'Work/Exports' } }, 'local');
+  const updatedSuggestions = [];
+  installed(
+    { byExtensionId: chromeApi.runtime.id, filename: 'next.csv' },
+    (suggestion) => updatedSuggestions.push(suggestion),
+  );
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(updatedSuggestions, [{ filename: 'Work/Exports/next.csv' }], 'chrome: storage changes should apply live');
+
+  const firefoxApi = {
+    storage: {
+      local: {
+        async get() {
+          return { downloadDirectory: 'Work/Exports' };
+        },
+      },
+    },
+  };
+  assert.equal(
+    await DownloadDirectoryFx.filenameInConfiguredDownloadDirectory(firefoxApi, 'report.pdf'),
+    'Work/Exports/report.pdf',
+    'firefox: explicit filenames should be routed before downloads.download',
+  );
+  assert.equal(
+    await DownloadDirectoryFx.filenameInConfiguredDownloadDirectory(firefoxApi, undefined, 'https://example.com/files/report.pdf'),
+    'Work/Exports/report.pdf',
+    'firefox: URL-derived filenames should be routed before downloads.download',
+  );
+});
+
+test('Firefox download_files passes the configured relative directory to downloads.download', async () => {
+  const originalBrowser = globalThis.browser;
+  const downloadCalls = [];
+  try {
+    globalThis.browser = {
+      storage: {
+        local: {
+          async get() {
+            return { downloadDirectory: 'Work/WebBrain' };
+          },
+        },
+      },
+      downloads: {
+        async download(options) {
+          downloadCalls.push(options);
+          return 9101;
+        },
+        async search() {
+          return [{
+            id: 9101,
+            filename: '/Users/test/Downloads/Work/WebBrain/report.pdf',
+            state: 'complete',
+            bytesReceived: 100,
+            totalBytes: 100,
+          }];
+        },
+      },
+    };
+
+    const result = await downloadFilesFx({ urls: ['https://example.com/files/report.pdf'] });
+    assert.equal(result.success, true);
+    assert.equal(downloadCalls.length, 1);
+    assert.equal(downloadCalls[0].filename, 'Work/WebBrain/report.pdf');
+  } finally {
+    if (originalBrowser === undefined) delete globalThis.browser;
+    else globalThis.browser = originalBrowser;
+  }
 });
 
 test('/export --config and /import JSON or --file are wired in both browsers', () => {
@@ -9911,6 +10060,7 @@ test('settings moves profile and memory controls into Memory while CAPTCHA stays
     for (const id of [
       'select-language',
       'select-theme',
+      'input-download-directory',
       'toggle-verbose',
       'select-plan-before-act-mode',
       'toggle-scheduled-tasks',
@@ -9979,6 +10129,40 @@ test('settings General search filters visible and Advanced controls', () => {
     assert.match(settings, /function filterGeneralSettings\(\) \{[\s\S]*?const query = normalizeGeneralSearchText\(generalSearchInput\.value\);[\s\S]*?setGeneralSearchHidden\(item, !!query && !matches\);[\s\S]*?setGeneralSearchHidden\(advancedSettings, !!query && advancedMatches === 0\);[\s\S]*?if \(query && advancedMatches > 0\) advancedSettings\.open = true;[\s\S]*?generalSearchEmpty\.hidden = !query \|\| \(visibleMatches \+ advancedMatches\) > 0;[\s\S]*?\}/, `${label}: General search should filter rows, hide empty Advanced, and auto-open matched Advanced results`);
     assert.match(settings, /generalSearchInput\.addEventListener\('input', filterGeneralSettings\);/, `${label}: General search should filter as the user types`);
     assert.match(settings, /await setLocale\(languageSelect\.value\);[\s\S]*?filterGeneralSettings\(\);[\s\S]*?renderProviders\(\);/, `${label}: language changes should reapply the active General search`);
+  }
+});
+
+test('Settings > General configures WebBrain download subdirectory with system-default fallback', () => {
+  for (const [label, prefix, runtime] of [
+    ['chrome', 'src/chrome', 'chrome'],
+    ['firefox', 'src/firefox', 'browser'],
+  ]) {
+    const html = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/settings.html'), 'utf8');
+    const settings = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/settings.js'), 'utf8');
+    const locale = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/locales/en.js'), 'utf8');
+    const background = fs.readFileSync(path.join(ROOT, prefix, 'src/background.js'), 'utf8');
+    const config = fs.readFileSync(path.join(ROOT, prefix, 'src/config-transfer.js'), 'utf8');
+
+    assert.match(html, /id="input-download-directory"[\s\S]*?data-i18n-placeholder="st\.display\.download_directory\.placeholder"/, `${label}: General should expose the download directory field`);
+    assert.match(locale, /'st\.display\.download_directory\.placeholder': 'System default'/, `${label}: blank field should explain its system default`);
+    assert.match(locale, /Optional subfolder inside your browser or system Downloads directory/, `${label}: setting should explain the browser API boundary`);
+    assert.match(settings, /downloadDirectoryInput\.value = normalizeDownloadDirectory\(stored\[DOWNLOAD_DIRECTORY_STORAGE_KEY\]\)/, `${label}: stored directory should hydrate the field`);
+    assert.match(settings, new RegExp(`${runtime}\\.storage\\.local\\.set\\(\\{ \\[DOWNLOAD_DIRECTORY_STORAGE_KEY\\]: directory \\}\\)`), `${label}: valid directory should persist`);
+    assert.match(settings, /if \(raw && !directory\) \{[\s\S]*?setCustomValidity\(t\('st\.display\.download_directory\.error'\)\)[\s\S]*?return;/, `${label}: invalid absolute or parent paths should not persist`);
+    assert.match(config, /downloadDirectory: ''/, `${label}: portable config should default to the system directory`);
+    assert.match(config, /'downloadDirectory'/, `${label}: portable config should allow the setting`);
+
+    if (label === 'chrome') {
+      assert.match(background, /installDownloadDirectoryRouting\(chrome\);/, 'chrome: background should route extension downloads centrally');
+    } else {
+      const network = fs.readFileSync(path.join(ROOT, prefix, 'src/network/network-tools.js'), 'utf8');
+      const agent = fs.readFileSync(path.join(ROOT, prefix, 'src/agent/agent.js'), 'utf8');
+      const capture = fs.readFileSync(path.join(ROOT, prefix, 'src/run-capture.js'), 'utf8');
+      assert.doesNotMatch(background, /onDeterminingFilename|installDownloadDirectoryRouting/, 'firefox: background must not depend on unsupported filename events');
+      assert.match(network, /filenameInConfiguredDownloadDirectory\(browser,[\s\S]*?browser\.downloads\.download/g, 'firefox: network downloads should resolve the configured path before starting');
+      assert.match(agent, /filenameInConfiguredDownloadDirectory\(browser, filename, crop\.dataUrl\)[\s\S]*?browser\.downloads\.download/, 'firefox: visible-media downloads should resolve the configured path');
+      assert.match(capture, /filenameInConfiguredDownloadDirectory\(api, filename, dataUrl\)[\s\S]*?api\.downloads\.download/, 'firefox: run captures should resolve the configured path');
+    }
   }
 });
 
