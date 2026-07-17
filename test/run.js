@@ -2175,6 +2175,11 @@ test('download directory routing is relative and uses each browser-supported pat
       'Work/WebBrain/report.pdf',
       `${label}: configured directory should prefix the tentative basename`,
     );
+    assert.equal(
+      downloadDirectory.filenameInDownloadDirectory('Work/WebBrain', 'Q1: "report"?.pdf'),
+      'Work/WebBrain/Q1_ _report__.pdf',
+      `${label}: explicit basenames should be safe for downloads.download`,
+    );
   }
 
   let storageChangeListener = null;
@@ -2266,11 +2271,10 @@ test('download directory routing is relative and uses each browser-supported pat
   );
 });
 
-test('Firefox download_files preserves server-selected filenames inside the configured directory', async () => {
+test('Firefox download_files routes known filenames without probing unknown downloads', async () => {
   const originalBrowser = globalThis.browser;
   const originalFetch = globalThis.fetch;
   const downloadCalls = [];
-  const fetchCalls = [];
   let configuredDirectory = 'Work/WebBrain';
   try {
     globalThis.browser = {
@@ -2298,85 +2302,46 @@ test('Firefox download_files preserves server-selected filenames inside the conf
       },
     };
     globalThis.fetch = async (url, options) => {
-      fetchCalls.push({ url, options });
-      return {
-        ok: true,
-        status: 200,
-        type: 'basic',
-        url,
-        headers: {
-          get(name) {
-            return String(name).toLowerCase() === 'content-disposition'
-              ? 'attachment; filename="quarterly-report.pdf"'
-              : null;
-          },
-        },
-      };
+      throw new Error(`filename discovery should not request ${url} with ${options?.method || 'GET'}`);
     };
 
-    const result = await downloadFilesFx({ urls: ['https://example.com/export?id=1'] });
+    const result = await downloadFilesFx({
+      urls: ['https://example.com/export?id=1'],
+      filename: 'quarterly-report.pdf',
+    });
     assert.equal(result.success, true);
     assert.equal(downloadCalls.length, 1);
     assert.equal(downloadCalls[0].filename, 'Work/WebBrain/quarterly-report.pdf');
-    assert.equal(fetchCalls.length, 1);
-    assert.equal(fetchCalls[0].options.method, 'HEAD');
-    assert.equal(fetchCalls[0].options.credentials, 'include');
 
-    globalThis.fetch = async () => ({
-      ok: false,
-      status: 405,
-      type: 'basic',
-      url: 'https://example.com/export?id=2',
-      headers: { get() { return null; } },
-    });
-    const fallback = await downloadFilesFx({ urls: ['https://example.com/export?id=2'] });
+    const fallback = await downloadFilesFx({ urls: ['https://example.com/one-time?id=2'] });
     assert.equal(fallback.success, true);
     assert.equal(downloadCalls.length, 2);
     assert.equal(
       Object.hasOwn(downloadCalls[1], 'filename'),
       false,
-      'an unavailable HEAD response should leave filename selection to Firefox',
+      'an unknown one-time download should be requested exactly once and keep Firefox filename selection',
     );
 
-    globalThis.fetch = async (url) => ({
-      ok: true,
-      status: 200,
-      type: 'basic',
-      url,
-      headers: { get() { return null; } },
-    });
-    const getSelected = await downloadFilesFx({ urls: ['https://example.com/download?id=3'] });
-    assert.equal(getSelected.success, true);
+    configuredDirectory = '';
+    const systemDefault = await downloadFilesFx({ urls: ['https://example.com/export?id=3'] });
+    assert.equal(systemDefault.success, true);
     assert.equal(downloadCalls.length, 3);
     assert.equal(
       Object.hasOwn(downloadCalls[2], 'filename'),
       false,
-      'a successful HEAD without Content-Disposition should not override the actual GET filename',
-    );
-
-    configuredDirectory = '';
-    globalThis.fetch = async () => {
-      throw new Error('filename discovery should not run without a configured directory');
-    };
-    const systemDefault = await downloadFilesFx({ urls: ['https://example.com/export?id=4'] });
-    assert.equal(systemDefault.success, true);
-    assert.equal(downloadCalls.length, 4);
-    assert.equal(
-      Object.hasOwn(downloadCalls[3], 'filename'),
-      false,
-      'the system-default setting should not probe or override Firefox filename selection',
+      'the system-default setting should not override Firefox filename selection',
     );
 
     const explicit = await downloadFilesFx({
-      urls: ['https://example.com/export?id=5'],
+      urls: ['https://example.com/export?id=4'],
       filename: 'manual-report.csv',
     });
     assert.equal(explicit.success, true);
-    assert.equal(downloadCalls.length, 5);
+    assert.equal(downloadCalls.length, 4);
     assert.equal(
-      downloadCalls[4].filename,
+      downloadCalls[3].filename,
       'manual-report.csv',
-      'an explicit user filename should not require a HEAD probe when no directory is configured',
+      'an explicit user filename should be preserved when no directory is configured',
     );
   } finally {
     if (originalBrowser === undefined) delete globalThis.browser;

@@ -1,9 +1,5 @@
 import { firefoxRestrictedDomainFailure } from '../firefox-restricted-domains.js';
-import {
-  configuredDownloadDirectory,
-  filenameInConfiguredDownloadDirectory,
-  filenameInDownloadDirectory,
-} from '../download-directory.js';
+import { filenameInConfiguredDownloadDirectory } from '../download-directory.js';
 
 /**
  * Network & download tools for the WebBrain agent (Firefox).
@@ -423,50 +419,9 @@ export function filenameFromContentDisposition(value) {
   return safeDownloadFilename(parameters.get('filename'));
 }
 
-/**
- * Firefox has no downloads.onDeterminingFilename event, so a complete filename
- * must be supplied to downloads.download() to select a subdirectory. Discover
- * the server's preferred basename with a bounded HEAD request first. If the
- * request cannot be inspected, return undefined and let Firefox preserve its
- * normal Content-Disposition filename instead of fabricating one.
- */
-async function discoverHttpDownloadFilename(url) {
-  const target = String(url || '').trim();
-  const urlCheck = validateFetchUrl(target, { allowLocalNetwork: getAllowLocalNetwork() });
-  if (!urlCheck.ok) return undefined;
-  const controller = typeof AbortController === 'function' ? new AbortController() : null;
-  const timeout = controller ? setTimeout(() => controller.abort(), 5000) : null;
-  try {
-    const response = await fetch(target, {
-      method: 'HEAD',
-      credentials: 'include',
-      redirect: 'manual',
-      cache: 'no-store',
-      ...(controller ? { signal: controller.signal } : {}),
-    });
-    if (response?.type === 'opaqueredirect' || isHttpRedirectStatus(response?.status) || !response?.ok) {
-      return undefined;
-    }
-    const responseUrl = response.url || target;
-    const responseUrlCheck = validateFetchUrl(responseUrl, { allowLocalNetwork: getAllowLocalNetwork() });
-    if (!responseUrlCheck.ok) return undefined;
-    return filenameFromContentDisposition(response.headers?.get?.('content-disposition'));
-  } catch {
-    return undefined;
-  } finally {
-    if (timeout) clearTimeout(timeout);
-  }
-}
-
-async function filenameForConfiguredHttpDownload(filename, url) {
+async function filenameForConfiguredDownload(filename) {
   const explicitFilename = safeDownloadFilename(filename);
-  if (explicitFilename) {
-    return filenameInConfiguredDownloadDirectory(browser, explicitFilename);
-  }
-  const directory = await configuredDownloadDirectory(browser);
-  if (!directory) return undefined;
-  const discoveredFilename = await discoverHttpDownloadFilename(url);
-  return filenameInDownloadDirectory(directory, discoveredFilename) || undefined;
+  return filenameInConfiguredDownloadDirectory(browser, explicitFilename);
 }
 
 function defaultSkillDownloadFilename(contentType) {
@@ -2149,7 +2104,7 @@ export async function downloadResourceFromPage(tabId, args = {}) {
       };
     }
 
-    const downloadFilename = await filenameForConfiguredHttpDownload(filename, r.url);
+    const downloadFilename = await filenameForConfiguredDownload(filename);
     const downloadId = await browser.downloads.download({
       url: r.url,
       filename: downloadFilename,
@@ -2216,10 +2171,7 @@ export async function downloadFiles(args = {}) {
       if (i >= urls.length) return;
       const url = urls[i];
       try {
-        const filename = await filenameForConfiguredHttpDownload(
-          i === 0 ? singleFilename : null,
-          url,
-        );
+        const filename = await filenameForConfiguredDownload(i === 0 ? singleFilename : null);
         const opts = { url, conflictAction: 'uniquify' };
         if (filename) opts.filename = filename;
         const downloadId = await browser.downloads.download(opts);

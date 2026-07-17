@@ -20,13 +20,17 @@ export function filenameInDownloadDirectory(directory, filename) {
   const normalizedDirectory = normalizeDownloadDirectory(directory);
   if (!normalizedDirectory) return '';
 
-  const basename = String(filename ?? '')
+  let basename = String(filename ?? '')
     .replace(/\\/g, '/')
     .split('/')
     .pop()
-    .replace(/[\u0000-\u001f\u007f]/g, '')
+    .replace(/[\u0000-\u001f\u007f<>:"|?*]/g, '_')
     .trim();
-  if (!basename || basename === '.' || basename === '..') return '';
+  basename = basename.replace(/^\.+|\.+$/g, '').trim();
+  if (!basename) return '';
+  if (/^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(basename)) {
+    basename = `_${basename}`;
+  }
   return `${normalizedDirectory}/${basename}`;
 }
 
