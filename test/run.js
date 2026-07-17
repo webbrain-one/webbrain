@@ -10871,6 +10871,65 @@ test('settings provider save and test status updates are DOM-safe', () => {
   }
 });
 
+test('settings warns on missing or short API keys and shows the Ollama localhost FAQ', () => {
+  for (const [label, settingsRel, htmlRel, localeRel] of [
+    ['chrome', 'src/chrome/src/ui/settings.js', 'src/chrome/src/ui/settings.html', 'src/chrome/src/ui/locales/en.js'],
+    ['firefox', 'src/firefox/src/ui/settings.js', 'src/firefox/src/ui/settings.html', 'src/firefox/src/ui/locales/en.js'],
+  ]) {
+    const settings = fs.readFileSync(path.join(ROOT, settingsRel), 'utf8');
+    const html = fs.readFileSync(path.join(ROOT, htmlRel), 'utf8');
+    const locale = fs.readFileSync(path.join(ROOT, localeRel), 'utf8');
+    const runtimeGlobal = label === 'chrome' ? 'chrome' : 'browser';
+
+    assert.match(settings, /const MIN_API_KEY_LENGTH = 12;/, `${label}: conservative API-key minimum missing`);
+    assert.match(
+      settings,
+      /function providerApiKeyWarning\(id, config\) \{[\s\S]*?data-key="apiKey"[\s\S]*?const keyIsOptional = providersData\[id\]\?\.category === 'local';[\s\S]*?apiKey\.length < MIN_API_KEY_LENGTH[\s\S]*?aria-invalid[\s\S]*?st\.providers\.api_key_warning/,
+      `${label}: API-key warning should cover required empty keys and short non-empty keys while allowing empty local auth`,
+    );
+    assert.match(
+      settings,
+      /apiKeyWarning = providerApiKeyWarning\(id, config\);[\s\S]*?await sendToBackground\('update_provider'[\s\S]*?if \(apiKeyWarning\) \{[\s\S]*?setProviderTestResult\(id, 'warn', apiKeyWarning\)/,
+      `${label}: Save should persist the provider and replace the success flash with a persistent warning`,
+    );
+    assert.match(
+      settings,
+      /function restoreProviderApiKeyWarnings\(\) \{[\s\S]*?Object\.entries\(providersData\)[\s\S]*?config\?\.configured !== true[\s\S]*?providerApiKeyWarning\(id, config\)[\s\S]*?setProviderTestResult\(id, 'warn', warning\);[\s\S]*?\}/,
+      `${label}: configured providers should restore invalid-key markers and warnings after every re-render`,
+    );
+    assert.match(
+      settings,
+      /function renderProviders\(\) \{[\s\S]*?providersContainer\.appendChild\(wrapCollapsibleCard[\s\S]*?restoreProviderApiKeyWarnings\(\);/,
+      `${label}: provider rendering should restore saved API-key warnings after rebuilding the cards`,
+    );
+    assert.match(
+      settings,
+      /id === 'ollama'[\s\S]*?provider-ollama-warning[\s\S]*?OLLAMA_ORIGINS="\$\{escapeHtml\(extensionOrigin\)\}" ollama serve[\s\S]*?https:\/\/www\.webbrain\.one\/blog\/ollama-launch-handoff[\s\S]*?target="_blank" rel="noopener noreferrer"/,
+      `${label}: Ollama card should include the current WebBrain origin command and external handoff link`,
+    );
+    assert.ok(
+      settings.includes(`const extensionOrigin = ${runtimeGlobal}.runtime.getURL('').replace(/\\/$/, '');`),
+      `${label}: Ollama guidance should derive this WebBrain installation's exact extension origin`,
+    );
+    assert.doesNotMatch(settings, /OLLAMA_ORIGINS="\*" ollama serve/, `${label}: Ollama card should not recommend wildcard web origins`);
+    assert.doesNotMatch(settings, /OLLAMA_ORIGINS="(?:chrome|moz)-extension:\/\/\*/, `${label}: Ollama card should not allow every installed extension`);
+    assert.match(locale, /st\.providers\.ollama_warning\.restart'[^;\n]*start Ollama with this command:/, `${label}: Ollama restart copy should describe the single safe command`);
+    assert.match(html, /\.provider-warning \{/, `${label}: Ollama FAQ warning styling missing`);
+    assert.match(html, /\.test-result\.warn \{/, `${label}: API-key warning status styling missing`);
+    for (const key of [
+      'st.providers.api_key_warning',
+      'st.providers.ollama_warning.label',
+      'st.providers.ollama_warning.title',
+      'st.providers.ollama_warning.body',
+      'st.providers.ollama_warning.restart',
+      'st.providers.ollama_warning.base_url',
+      'st.providers.ollama_warning.link',
+    ]) {
+      assert.ok(locale.includes(`'${key}'`), `${label}: missing English locale key ${key}`);
+    }
+  }
+});
+
 test('settings exposes a Cloudflare account ID field before the base URL template', () => {
   for (const [label, settingsRel] of [
     ['chrome', 'src/chrome/src/ui/settings.js'],
