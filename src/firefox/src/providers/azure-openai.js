@@ -168,8 +168,8 @@ export class AzureOpenAIProvider extends BaseLLMProvider {
           const delta = json.choices?.[0]?.delta;
           if (delta?.content) yield { type: 'text', content: delta.content };
           if (delta?.tool_calls) yield { type: 'tool_call', content: delta.tool_calls };
-        } catch {
-          // ignore malformed chunk
+        } catch (e) {
+          console.warn(`[${this.name}] malformed SSE chunk skipped:`, payload?.slice(0, 120), e?.message);
         }
       }
     }

@@ -16141,7 +16141,7 @@ const ADAPTERS = [
   },
 
   // ─── Regional — Türkiye (TR) ──────────────────────────────────────────
-  // Regional adapters are the project's #1 wanted contribution (CONTRIBUTIONS.md);
+  // Regional adapters are the project's #1 wanted contribution (CONTRIBUTING.md);
   // Türkiye is top of the priority list. Add more TR sites (trendyol,
   // hepsiburada, n11, getir, yemeksepeti) below as separate, focused entries.
   {
