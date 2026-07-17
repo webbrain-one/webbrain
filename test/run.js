@@ -204,6 +204,9 @@ const ConfigTransferCh = await import(
 const ConfigTransferFx = await import(
   'file://' + path.join(ROOT, 'src/firefox/src/config-transfer.js').replace(/\\/g, '/')
 );
+const { transcribeAudio } = await import(
+  'file://' + path.join(ROOT, 'src/chrome/src/agent/transcribe.js').replace(/\\/g, '/')
+);
 
 // network-tools.js references chrome.* inside a try/catch at module load, so
 // it imports cleanly under Node — the storage init silently no-ops and
@@ -16399,6 +16402,38 @@ test('_defaultConfigs: new cloud providers present and disabled by default', () 
     assert.equal(body.max_tokens, undefined);
     const streamBody = kimi._buildChatCompletionsBody(messages, { maxTokens: 123 }, true);
     assert.deepEqual(streamBody.stream_options, { include_usage: true });
+  }
+});
+
+test('transcribeAudio excludes Kimi from Whisper auto-pick', async () => {
+  const originalFetch = globalThis.fetch;
+  let requestedUrl = null;
+  globalThis.fetch = async (url) => {
+    requestedUrl = String(url);
+    throw new Error('unexpected transcription request');
+  };
+
+  try {
+    const providers = new Map([
+      ['kimi', {
+        config: {
+          type: 'openai',
+          enabled: true,
+          baseUrl: 'https://api.moonshot.ai/v1',
+          apiKey: 'test-key',
+        },
+      }],
+    ]);
+    const result = await transcribeAudio(
+      providers,
+      new Blob(['audio'], { type: 'audio/webm' }),
+    );
+
+    assert.equal(result.ok, false);
+    assert.match(result.error, /No Whisper-compatible provider configured/);
+    assert.equal(requestedUrl, null, 'Kimi should never receive a transcription request');
+  } finally {
+    globalThis.fetch = originalFetch;
   }
 });
 

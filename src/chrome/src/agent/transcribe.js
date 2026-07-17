@@ -19,7 +19,7 @@
  *     anything else of type 'openai' with apiKey + baseUrl
  *
  *   Providers that don't host Whisper (anthropic, deepseek-chat-only, xai,
- *   mistral, gemini's chat endpoint) are skipped.
+ *   mistral, Kimi, gemini's chat endpoint) are skipped.
  *
  * Error model
  *   Returns { ok: false, error: "..." } on failure rather than throwing,
@@ -46,6 +46,7 @@ const NO_WHISPER = new Set([
   'xai',       // chat-only
   'mistral',   // chat-only (audio in private beta as of writing)
   'nvidia',    // chat-only via NIM
+  'kimi',      // Moonshot chat-completions API has no audio transcription endpoint
 ]);
 
 function pickProvider(providers) {
