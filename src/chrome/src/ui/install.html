@@ -9,81 +9,43 @@
 </head>
 <body>
   <main class="install-page">
-    <section class="install-card" aria-labelledby="install-title">
-      <header class="install-header">
-        <div class="brand">
-          <img src="../../icons/icon128.png" width="44" height="44" alt="">
-          <div>
-            <div class="installed-label" data-i18n="install.installed">WebBrain installed</div>
-            <div id="browser-label" class="browser-label" aria-live="polite" data-i18n="install.checking">Checking your browser…</div>
-          </div>
-        </div>
-        <span class="status-chip">
-          <span class="status-dot" aria-hidden="true"></span>
-          <span data-i18n="install.ready">Ready</span>
-        </span>
-      </header>
-
-      <div class="toolbar-rehearsal" aria-hidden="true">
-        <div class="window-controls">
-          <span></span><span></span><span></span>
-        </div>
-        <div class="address-field">webbrain.one</div>
-        <div class="toolbar-action toolbar-action-extensions">
-          <span class="action-number">1</span>
-          <svg viewBox="0 0 24 24">
-            <path d="M20.5 11H19V7a2 2 0 0 0-2-2h-4V3.5a1.5 1.5 0 0 0-3 0V5H7a2 2 0 0 0-2 2v3H3.5a1.5 1.5 0 0 0 0 3H5v4a2 2 0 0 0 2 2h3v1.5a1.5 1.5 0 0 0 3 0V19h4a2 2 0 0 0 2-2v-3h1.5a1.5 1.5 0 0 0 0-3Z"/>
-          </svg>
-        </div>
-        <div class="extension-menu">
-          <div class="menu-title" data-i18n="install.extensions">Extensions</div>
-          <div class="extension-row">
-            <img src="../../icons/icon48.png" width="26" height="26" alt="">
-            <span>WebBrain</span>
-            <div class="pin-target">
-              <span class="action-number">2</span>
-              <svg viewBox="0 0 24 24">
-                <path d="m14 4 6 6-2.5 1.5-3 3L14 19l-1 1-3.2-5.8L4 11l1-1 4.5-.5 3-3L14 4Zm-3.3 9.3-4.2 4.2"/>
-              </svg>
-            </div>
-          </div>
-        </div>
+    <header class="install-header">
+      <div class="brand">
+        <img src="../../icons/icon128.png" width="42" height="42" alt="">
+        <span>WebBrain</span>
       </div>
+      <span class="status-chip">
+        <span class="status-dot" aria-hidden="true"></span>
+        <span data-i18n="install.ready">Ready</span>
+      </span>
+    </header>
 
+    <section class="install-hero" aria-labelledby="install-title">
       <div class="install-copy">
-        <p class="eyebrow" data-i18n="install.eyebrow">One small setup step</p>
-        <h1 id="install-title" data-i18n="install.title">Keep WebBrain one click away</h1>
-        <p id="install-intro" class="intro" data-i18n="install.intro">Your browser may hide newly installed extensions. Keep WebBrain visible so it stays easy to open.</p>
+        <p id="browser-label" class="eyebrow" aria-live="polite" data-i18n="install.checking">Checking your browser…</p>
+        <h1 id="install-title" data-i18n="install.installed">WebBrain installed</h1>
+        <p class="intro" data-i18n="install.open_panel.body">Open WebBrain next to this page to finish setup.</p>
+
+        <button id="open-panel-button" class="open-panel-button" type="button" disabled>
+          <span id="open-panel-label" data-i18n="install.open_panel">Open Side Panel</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M5 12h13M13 6l6 6-6 6"/>
+          </svg>
+        </button>
+
+        <p id="open-panel-status" class="open-panel-status" aria-live="polite"></p>
+        <p id="shortcut-hint" class="shortcut-hint" data-i18n-html="install.open.shortcut_html">Or press <kbd>Alt</kbd><span>+</span><kbd>Shift</kbd><span>+</span><kbd>W</kbd> anytime.</p>
       </div>
 
-      <ol id="guide-steps" class="guide-steps">
-        <li>
-          <span class="step-number">1</span>
-          <div>
-            <strong id="step-one-title" data-i18n="install.open_extensions.title">Open Extensions</strong>
-            <p id="step-one-body" data-i18n="install.open_extensions.body">Open your browser’s extension controls near the address bar.</p>
-          </div>
-        </li>
-        <li>
-          <span class="step-number">2</span>
-          <div>
-            <strong id="step-two-title" data-i18n="install.keep_visible.title">Keep WebBrain visible</strong>
-            <p id="step-two-body" data-i18n="install.keep_visible.body">Find WebBrain and choose the pin, show, or keep-in-toolbar option.</p>
-          </div>
-        </li>
-        <li>
-          <span class="step-number">3</span>
-          <div>
-            <strong data-i18n="install.open.title">Open it from any page</strong>
-            <p><span id="step-three-body" data-i18n="install.open.body">Select the WebBrain icon</span><span id="shortcut-hint" data-i18n-html="install.open.shortcut_html">, or press <kbd>Alt</kbd><span>+</span><kbd>Shift</kbd><span>+</span><kbd>W</kbd></span>.</p>
-          </div>
-        </li>
-      </ol>
-
-      <footer class="install-footer">
-        <p data-i18n="install.footer">This cannot be done automatically—your browser leaves toolbar choices to you.</p>
-        <button id="done-button" type="button" data-i18n="install.done">Got it</button>
-      </footer>
+      <aside class="next-step" aria-labelledby="next-step-title">
+        <div class="next-step-rule" aria-hidden="true">
+          <span></span>
+        </div>
+        <div class="next-step-copy">
+          <p id="next-step-title" class="next-step-label" data-i18n="install.eyebrow">One small setup step</p>
+          <p id="next-step-body" data-i18n="install.pin.next">After the side panel opens, use the pin in its header to add WebBrain to your browser toolbar.</p>
+        </div>
+      </aside>
     </section>
   </main>
 

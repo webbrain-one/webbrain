@@ -4,6 +4,22 @@ All notable changes to WebBrain are documented in this file.
 
 This changelog was generated from the repository Git history and release tags. Versions without a Git tag are inferred from version-bump commits and the current `package.json` / browser manifest versions.
 
+## [24.3.0] - 2026-07-17
+
+### Changed
+- Replaced the first-install fake toolbar walkthrough with a real **Open Side Panel** action in Chromium and **Open Sidebar** action in Firefox.
+- Added an accessible Chromium first-open coachmark that points to the browser's actual side-panel pin, mirrors its arrow for left-side layouts such as Vivaldi, and clearly distinguishes that pin from the toolbar icon it adds.
+- Kept Firefox guidance aligned with its native Extensions menu and refreshed the install flow across all 16 supported locales.
+
+### Fixed
+- Removed non-interactive toolbar and extension-menu illustrations that looked clickable but could not complete setup.
+- Sequenced the Chromium pin coachmark before the existing model and safety onboarding so first-time setup has one clear action at a time.
+- Kept keyboard focus inside the pin coachmark while it is open and added an explicit **Skip this step** exit so first-run setup cannot strand the user.
+- Prevented early install-page clicks from disappearing, kept first-open tabs in the normal WebBrain panel group, and replaced premature success styling with browser-specific recovery guidance.
+
+### Tests
+- Added Chrome and Firefox coverage for real panel opening, first-install coachmark state, modal focus handling, explicit dismissal paths, left/right arrow layout, native Firefox wording, responsive behavior, reduced motion, and locale parity.
+
 ## [24.2.0] - 2026-07-17
 
 ### Changed

@@ -915,6 +915,31 @@ async function ensureWebBrainGroup(tab) {
   }
 }
 
+// The install page opens the sidebar directly from its click handler, then
+// reports the successful open here so first-run tabs use the same visual
+// WebBrain grouping as browser-action opens.
+browser.runtime.onMessage.addListener((msg, sender) => {
+  if (msg?.type !== 'WB_INSTALL_PANEL_OPENED') return;
+
+  const installGuideUrl = browser.runtime.getURL('src/ui/install.html');
+  const senderUrl = String(sender?.url || sender?.tab?.url || '');
+  const tabId = Number(msg.tabId);
+  if (
+    sender?.id !== browser.runtime.id
+    || senderUrl !== installGuideUrl
+    || !Number.isInteger(tabId)
+    || tabId < 0
+    || (sender?.tab?.id != null && sender.tab.id !== tabId)
+  ) {
+    return;
+  }
+
+  browser.tabs.get(tabId).then((tab) => {
+    if (tab?.url !== installGuideUrl) return;
+    ensureWebBrainGroup(tab).catch(() => {});
+  }).catch(() => {});
+});
+
 // Tracks the pending 250 ms retry timer per tab so it can be cancelled if the
 // tab navigates before the timer fires.
 const pendingContextMenuNotifications = new Map();

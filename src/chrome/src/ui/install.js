@@ -1,70 +1,14 @@
-import { applyDOMTranslations, getLocale, t } from './i18n.js';
+import { applyDOMTranslations, t } from './i18n.js';
 
 const GUIDES = {
-  chrome: {
-    name: 'Google Chrome',
-    intro: 'Chrome usually places new extensions inside its Extensions menu. Pin WebBrain so the side panel stays one click away.',
-    firstTitle: 'Open Extensions',
-    firstBody: 'Select the puzzle-piece icon to the right of the address bar.',
-    secondTitle: 'Pin WebBrain',
-    secondBody: 'Find WebBrain, then select the pin icon beside it.',
-  },
-  edge: {
-    name: 'Microsoft Edge',
-    intro: 'Edge may keep new extensions inside its Extensions menu. Keep WebBrain on the toolbar so the side panel stays one click away.',
-    firstTitle: 'Open Extensions',
-    firstBody: 'Select the Extensions icon to the right of the address bar.',
-    secondTitle: 'Show WebBrain',
-    secondBody: 'Find WebBrain, then choose Show in toolbar.',
-  },
-  brave: {
-    name: 'Brave',
-    intro: 'Brave may tuck new extensions into its Extensions menu. Pin WebBrain so the side panel stays one click away.',
-    firstTitle: 'Open Extensions',
-    firstBody: 'Select the puzzle-piece icon to the right of the address bar.',
-    secondTitle: 'Pin WebBrain',
-    secondBody: 'Find WebBrain, then select the pin icon beside it.',
-  },
-  vivaldi: {
-    name: 'Vivaldi',
-    intro: 'Vivaldi can hide extension buttons beside the Address Bar. Keep WebBrain visible so the side panel stays one click away.',
-    firstTitle: 'Check the Address Bar',
-    firstBody: 'Look for the extension controls on the right side of the Address Bar.',
-    secondTitle: 'Show WebBrain',
-    secondBody: 'If it is hidden, open hidden extensions, right-click WebBrain, and choose Show Button.',
-  },
-  opera: {
-    name: 'Opera',
-    intro: 'Opera may keep new extensions inside its Extensions menu. Pin WebBrain so the side panel stays one click away.',
-    firstTitle: 'Open Extensions',
-    firstBody: 'Select the Extensions icon to the right of the address bar.',
-    secondTitle: 'Pin WebBrain',
-    secondBody: 'Find WebBrain, then use its pin control to keep it on the toolbar.',
-  },
-  firefox: {
-    name: 'Firefox',
-    intro: 'Firefox may place new add-ons inside its Extensions panel. Pin WebBrain so the sidebar stays one click away.',
-    firstTitle: 'Open Extensions',
-    firstBody: 'Select the puzzle-piece icon in the toolbar.',
-    secondTitle: 'Pin WebBrain',
-    secondBody: 'Open the gear menu beside WebBrain, then choose Pin to Toolbar.',
-  },
-  chromium: {
-    name: 'Chromium',
-    intro: 'Your browser may hide new extensions in its extension controls. Keep WebBrain visible so the side panel stays one click away.',
-    firstTitle: 'Open extension controls',
-    firstBody: 'Look beside the address bar for Extensions or hidden extension buttons.',
-    secondTitle: 'Keep WebBrain visible',
-    secondBody: 'Find WebBrain and use the pin, show, or keep-in-toolbar control.',
-  },
-  unknown: {
-    name: 'Browser',
-    intro: 'Your browser may hide new extensions in its extension controls. Keep WebBrain visible so it stays easy to open.',
-    firstTitle: 'Open extension controls',
-    firstBody: 'Look near the address bar or in your browser menu for Extensions or Add-ons.',
-    secondTitle: 'Keep WebBrain visible',
-    secondBody: 'Find WebBrain and choose the option that keeps it in your toolbar.',
-  },
+  chrome: { name: 'Google Chrome', openKey: 'install.open_panel', nextKey: 'install.pin.next', failureKey: 'install.open_failed_chromium' },
+  edge: { name: 'Microsoft Edge', openKey: 'install.open_panel', nextKey: 'install.pin.next', failureKey: 'install.open_failed_chromium' },
+  brave: { name: 'Brave', openKey: 'install.open_panel', nextKey: 'install.pin.next', failureKey: 'install.open_failed_chromium' },
+  vivaldi: { name: 'Vivaldi', openKey: 'install.open_panel', nextKey: 'install.pin.next', failureKey: 'install.open_failed_chromium' },
+  opera: { name: 'Opera', openKey: 'install.open_panel', nextKey: 'install.pin.next', failureKey: 'install.open_failed_chromium' },
+  firefox: { name: 'Firefox', openKey: 'install.open_sidebar', nextKey: 'install.firefox_pin.body', failureKey: 'install.open_failed_firefox' },
+  chromium: { name: 'Chromium', openKey: 'install.open_panel', nextKey: 'install.pin.next', failureKey: 'install.open_failed_chromium' },
+  unknown: { name: 'Browser', openKey: 'install.open_panel', nextKey: 'install.pin.next', failureKey: 'install.open_failed_chromium' },
 };
 
 function browserBrands(navigatorLike) {
@@ -95,39 +39,116 @@ export function getBrowserGuide(browserKey) {
   return GUIDES[browserKey] || GUIDES.unknown;
 }
 
-async function closeGuideTab() {
-  const api = globalThis.browser?.tabs ? globalThis.browser : globalThis.chrome;
-  try {
-    const tab = await api?.tabs?.getCurrent?.();
-    if (tab?.id != null) {
-      await api.tabs.remove(tab.id);
-      return;
+/**
+ * Keep the open calls in the click handler's synchronous turn. Both Chrome's
+ * sidePanel.open() and Firefox's sidebarAction.open() require a user gesture.
+ */
+export function openInstalledPanel({ build, tabId, chromeApi = globalThis.chrome, browserApi = globalThis.browser } = {}) {
+  if (build === 'firefox') {
+    if (!browserApi?.sidebarAction?.open) {
+      throw new Error('Sidebar API unavailable');
     }
-  } catch {
-    // window.close() is a harmless fallback when tab lookup is unavailable.
+    return browserApi.sidebarAction.open();
   }
-  window.close();
+
+  if (tabId == null || !chromeApi?.sidePanel?.open) {
+    throw new Error('Side panel API unavailable');
+  }
+  chromeApi.sidePanel.setOptions({
+    tabId,
+    path: 'src/ui/sidepanel.html',
+    enabled: true,
+  }).catch?.(() => {});
+  return chromeApi.sidePanel.open({ tabId });
+}
+
+export function reportInstalledPanelOpened({
+  build,
+  tabId,
+  chromeApi = globalThis.chrome,
+  browserApi = globalThis.browser,
+} = {}) {
+  const runtime = build === 'firefox' ? browserApi?.runtime : chromeApi?.runtime;
+  if (!runtime?.sendMessage || tabId == null) return Promise.resolve(false);
+  return Promise.resolve(runtime.sendMessage({
+    type: 'WB_INSTALL_PANEL_OPENED',
+    tabId,
+  })).then(() => true);
+}
+
+async function getInstallTab(build) {
+  const tabs = build === 'firefox'
+    ? globalThis.browser?.tabs
+    : globalThis.chrome?.tabs;
+  try {
+    return await tabs?.getCurrent?.();
+  } catch {
+    return null;
+  }
 }
 
 async function hydrateGuide() {
-  const browserKey = await detectBrowser();
-  const guide = getBrowserGuide(browserKey);
   applyDOMTranslations(document);
+
+  const build = document.documentElement.dataset.build;
+  const [browserKey, installTab] = await Promise.all([
+    detectBrowser(),
+    getInstallTab(build),
+  ]);
+  const guide = getBrowserGuide(browserKey);
   document.documentElement.dataset.browser = browserKey;
   document.getElementById('browser-label').textContent = t('install.browser.detected', { browser: guide.name });
-  if (getLocale() === 'en') {
-    document.getElementById('install-intro').textContent = guide.intro;
-    document.getElementById('step-one-title').textContent = guide.firstTitle;
-    document.getElementById('step-one-body').textContent = guide.firstBody;
-    document.getElementById('step-two-title').textContent = guide.secondTitle;
-    document.getElementById('step-two-body').textContent = guide.secondBody;
+
+  const openButton = document.getElementById('open-panel-button');
+  const openLabel = document.getElementById('open-panel-label');
+  const status = document.getElementById('open-panel-status');
+  const nextStepBody = document.getElementById('next-step-body');
+  openLabel.textContent = t(guide.openKey);
+  nextStepBody.textContent = t(guide.nextKey);
+
+  openButton.addEventListener('click', () => {
+    openButton.classList.add('is-opening');
+    openButton.disabled = true;
+    openButton.setAttribute('aria-busy', 'true');
+    status.classList.remove('is-error');
+    status.textContent = '';
+
+    let opening;
+    try {
+      opening = openInstalledPanel({ build, tabId: installTab?.id });
+    } catch {
+      opening = Promise.reject(new Error('Panel unavailable'));
+    }
+
+    Promise.resolve(opening).then(() => {
+      openButton.classList.remove('is-opening');
+      openButton.disabled = false;
+      openButton.removeAttribute('aria-busy');
+      status.textContent = t(guide.nextKey);
+      reportInstalledPanelOpened({ build, tabId: installTab?.id }).catch(() => {});
+    }).catch(() => {
+      openButton.classList.remove('is-opening');
+      openButton.disabled = false;
+      openButton.removeAttribute('aria-busy');
+      status.classList.add('is-error');
+      status.textContent = t(guide.failureKey);
+    });
+  });
+  openButton.disabled = false;
+
+  if (build === 'firefox') {
+    document.getElementById('shortcut-hint')?.remove();
   }
-  if (document.documentElement.dataset.build === 'firefox') {
-    document.getElementById('shortcut-hint').remove();
-  }
-  document.getElementById('done-button').addEventListener('click', closeGuideTab);
 }
 
 if (typeof document !== 'undefined') {
-  hydrateGuide().catch(() => {});
+  hydrateGuide().catch(() => {
+    const build = document.documentElement.dataset.build;
+    const guide = getBrowserGuide(build === 'firefox' ? 'firefox' : 'unknown');
+    const status = document.getElementById('open-panel-status');
+    if (status) {
+      status.classList.add('is-error');
+      status.textContent = t(guide.failureKey);
+    }
+  });
 }

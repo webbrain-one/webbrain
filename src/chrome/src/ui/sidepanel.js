@@ -47,8 +47,129 @@ if (globalThis.chrome?.storage?.onChanged) {
   });
 }
 
+// ─── First-open pin coachmark ──────────────────────────────────────
+// Chrome exposes the real pin in browser chrome above this document. Point to
+// that control before the regular product onboarding instead of teaching from
+// a non-interactive toolbar illustration on the install page.
+// Failures here must never block product onboarding (see await below).
+const pinCoachmarkDismissed = (async function initPinCoachmark() {
+  let cleanupCoachmark = () => {};
+  try {
+    const stored = await chrome.storage.local.get('pinCoachmarkPending');
+    if (!stored.pinCoachmarkPending) return;
+
+    document.documentElement.dataset.panelSide = 'right';
+    try {
+      const layout = await chrome.sidePanel?.getLayout?.();
+      if (layout?.side === 'left' || layout?.side === 'right') {
+        document.documentElement.dataset.panelSide = layout.side;
+      }
+    } catch {
+      // Older Chromium forks use the normal right-side fallback.
+    }
+
+    const overlay = document.getElementById('pin-coachmark');
+    const doneButton = document.getElementById('pin-coachmark-done');
+    const skipButton = document.getElementById('pin-coachmark-skip');
+    if (!overlay || !doneButton || !skipButton) return;
+
+    applyDOMTranslations(overlay);
+    const backgroundLayers = [
+      document.getElementById('onboarding'),
+      document.getElementById('app'),
+    ].filter(Boolean);
+    const backgroundInertState = backgroundLayers.map((layer) => [layer, layer.inert]);
+    const previouslyFocusedElement = document.activeElement;
+    let cleanedUp = false;
+
+    cleanupCoachmark = () => {
+      if (cleanedUp) return;
+      cleanedUp = true;
+      overlay.classList.add('hidden');
+      for (const [layer, wasInert] of backgroundInertState) {
+        layer.inert = wasInert;
+      }
+      if (previouslyFocusedElement?.isConnected && typeof previouslyFocusedElement.focus === 'function') {
+        previouslyFocusedElement.focus({ preventScroll: true });
+      }
+    };
+
+    for (const layer of backgroundLayers) {
+      layer.inert = true;
+    }
+    overlay.classList.remove('hidden');
+    doneButton.focus({ preventScroll: true });
+
+    await new Promise((resolve) => {
+      let dismissing = false;
+
+      const focusableElements = () => Array.from(overlay.querySelectorAll(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ));
+
+      const finishDismissal = () => {
+        document.removeEventListener('keydown', onKeydown, true);
+        doneButton.removeEventListener('click', dismiss);
+        skipButton.removeEventListener('click', dismiss);
+        cleanupCoachmark();
+        resolve();
+      };
+
+      const dismiss = async () => {
+        if (dismissing) return;
+        dismissing = true;
+        try {
+          await chrome.storage.local.remove('pinCoachmarkPending');
+        } catch {
+          // The panel should still become usable if persistence is unavailable.
+        } finally {
+          finishDismissal();
+        }
+      };
+
+      const onKeydown = (event) => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          dismiss();
+          return;
+        }
+        if (event.key !== 'Tab') return;
+
+        const focusable = focusableElements();
+        if (focusable.length === 0) {
+          event.preventDefault();
+          overlay.focus({ preventScroll: true });
+          return;
+        }
+
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        const activeElement = document.activeElement;
+        if (event.shiftKey && (activeElement === first || !overlay.contains(activeElement))) {
+          event.preventDefault();
+          last.focus({ preventScroll: true });
+        } else if (!event.shiftKey && (activeElement === last || !overlay.contains(activeElement))) {
+          event.preventDefault();
+          first.focus({ preventScroll: true });
+        }
+      };
+
+      doneButton.addEventListener('click', dismiss);
+      skipButton.addEventListener('click', dismiss);
+      document.addEventListener('keydown', onKeydown, true);
+    });
+  } catch {
+    // Optional coachmark; storage/API failures should not strand first-run setup.
+  } finally {
+    cleanupCoachmark();
+  }
+})();
+
 // ─── Onboarding (first-launch wizard) ───────────────────────────────
 (async function initOnboarding() {
+  // Coachmark setup errors resolve as no-op so the model/safety wizard still runs.
+  await pinCoachmarkDismissed.catch(() => {});
   const stored = await chrome.storage.local.get('onboardingComplete');
   if (stored.onboardingComplete) return;
 

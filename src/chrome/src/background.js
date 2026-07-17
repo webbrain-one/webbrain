@@ -733,19 +733,24 @@ async function loadPlanReviewSettings() {
 const planBeforeActReady = loadPlanBeforeAct();
 const planReviewReady = loadPlanReviewSettings();
 
-function showFirstInstallGuide(details) {
+async function showFirstInstallGuide(details) {
   if (details?.reason !== 'install') return;
-  chrome.tabs.create({
-    url: chrome.runtime.getURL('src/ui/install.html'),
-    active: true,
-  }).catch((error) => {
-    console.warn('[WebBrain] Could not open the first-install pinning guide:', error);
+  await chrome.storage.local.set({ pinCoachmarkPending: true }).catch((error) => {
+    console.warn('[WebBrain] Could not prepare the first-open pin coachmark:', error);
   });
+  try {
+    await chrome.tabs.create({
+      url: chrome.runtime.getURL('src/ui/install.html'),
+      active: true,
+    });
+  } catch (error) {
+    console.warn('[WebBrain] Could not open the first-install pinning guide:', error);
+  }
 }
 
 // Initialize on install
 chrome.runtime.onInstalled.addListener(async (details) => {
-  showFirstInstallGuide(details);
+  await showFirstInstallGuide(details);
   createContextMenus();
   await providerManager.load();
   await loadMaxSteps();
@@ -1010,6 +1015,34 @@ async function ensureWebBrainGroup(tab) {
     return -1;
   }
 }
+
+// The install page must call sidePanel.open() inside its own click handler to
+// retain Chrome's user gesture. Once that succeeds, mirror the bookkeeping
+// performed by chrome.action.onClicked so the first-open tab participates in
+// the same panel visibility and WebBrain group model.
+chrome.runtime.onMessage.addListener((msg, sender) => {
+  if (msg?.type !== 'WB_INSTALL_PANEL_OPENED') return;
+
+  const installGuideUrl = chrome.runtime.getURL('src/ui/install.html');
+  const senderUrl = String(sender?.url || sender?.tab?.url || '');
+  const tabId = Number(msg.tabId);
+  if (
+    sender?.id !== chrome.runtime.id
+    || senderUrl !== installGuideUrl
+    || !Number.isInteger(tabId)
+    || tabId < 0
+    || (sender?.tab?.id != null && sender.tab.id !== tabId)
+  ) {
+    return;
+  }
+
+  chrome.tabs.get(tabId).then((tab) => {
+    if (tab?.url !== installGuideUrl) return;
+    panelTabs.add(tab.id);
+    savePanelTabs();
+    ensureWebBrainGroup(tab).catch(() => {});
+  }).catch(() => {});
+});
 
 // Tracks the pending 250 ms retry timer per tab so it can be cancelled if the
 // tab navigates before the timer fires.

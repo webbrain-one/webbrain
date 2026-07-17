@@ -9025,7 +9025,7 @@ test('sidepanel awaits onboarding completion persistence before hiding', () => {
   }
 });
 
-test('first install opens a browser-aware pinning guide in both builds', async () => {
+test('first install opens a browser-aware panel launcher without fake toolbar controls', async () => {
   for (const [label, prefix, runtime] of [
     ['chrome', 'src/chrome', 'chrome'],
     ['firefox', 'src/firefox', 'browser'],
@@ -9033,30 +9033,45 @@ test('first install opens a browser-aware pinning guide in both builds', async (
     const background = fs.readFileSync(path.join(ROOT, prefix, 'src/background.js'), 'utf8');
     const html = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/install.html'), 'utf8');
     const css = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/install.css'), 'utf8');
+    const installJs = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/install.js'), 'utf8');
     const installModule = await import(pathToFileURL(path.join(ROOT, prefix, 'src/ui/install.js')).href);
 
     assert.match(
       background,
-      /function showFirstInstallGuide\(details\) \{[\s\S]*?details\?\.reason !== 'install'[\s\S]*?tabs\.create\(\{[\s\S]*?runtime\.getURL\('src\/ui\/install\.html'\)/,
+      /(?:async )?function showFirstInstallGuide\(details\) \{[\s\S]*?details\?\.reason !== 'install'[\s\S]*?tabs\.create\(\{[\s\S]*?runtime\.getURL\('src\/ui\/install\.html'\)/,
       `${label}: the guide should open only for a genuine first install`,
     );
     assert.match(
       background,
-      new RegExp(`${runtime}\\.runtime\\.onInstalled\\.addListener\\(async \\(details\\) => \\{\\s*showFirstInstallGuide\\(details\\);`),
+      new RegExp(`${runtime}\\.runtime\\.onInstalled\\.addListener\\(async \\(details\\) => \\{\\s*(?:await )?showFirstInstallGuide\\(details\\);`),
       `${label}: onInstalled should pass install details to the guide gate`,
     );
-    assert.match(html, /class="toolbar-rehearsal"/, `${label}: install guide should include the visual toolbar rehearsal`);
-    assert.match(html, /id="done-button"/, `${label}: install guide should provide a keyboard-accessible dismissal`);
+    assert.match(html, /id="open-panel-button"/, `${label}: install guide should provide a real panel-open action`);
+    assert.match(html, /id="open-panel-button"[^>]*\sdisabled(?:\s|>)/, `${label}: install CTA should start disabled until hydration binds its click handler`);
+    assert.match(
+      installJs,
+      /openButton\.addEventListener\('click',[\s\S]*?openButton\.disabled = false;/,
+      `${label}: install CTA should become interactive only after the click handler is bound`,
+    );
+    assert.doesNotMatch(html, /toolbar-rehearsal|extension-menu|pin-target/, `${label}: install guide must not present fake browser controls`);
     if (label === 'firefox') {
       assert.match(html, /data-build="firefox"/, 'firefox: the install page should identify its build');
       assert.match(
-        fs.readFileSync(path.join(ROOT, prefix, 'src/ui/install.js'), 'utf8'),
-        /dataset\.build === 'firefox'[\s\S]*?getElementById\('shortcut-hint'\)\.remove\(\)/,
+        installJs,
+        /build === 'firefox'[\s\S]*?getElementById\('shortcut-hint'\)\?\.remove\(\)/,
         'firefox: install guidance should remove the undeclared Chromium keyboard shortcut',
       );
     }
     assert.match(css, /@media \(prefers-reduced-motion: reduce\)/, `${label}: install guide should respect reduced motion`);
-    assert.match(css, /@media \(max-width: 680px\)/, `${label}: install guide should adapt to narrow windows`);
+    assert.match(css, /@media \(max-width: 760px\)/, `${label}: install guide should adapt to narrow windows`);
+    assert.match(css, /\.open-panel-button:disabled/, `${label}: install CTA should visibly communicate its unavailable state`);
+    assert.doesNotMatch(css, /\.open-panel-button\.is-open(?:\s|,|\{)/, `${label}: opening the panel should not look like setup completion`);
+    assert.doesNotMatch(installJs, /classList\.(?:add|remove)\('is-open'\)/, `${label}: install logic should not apply the retired success-green state`);
+    assert.match(
+      installJs,
+      /Promise\.resolve\(opening\)\.then\(\(\) => \{[\s\S]*?reportInstalledPanelOpened\(\{ build, tabId: installTab\?\.id \}\)[\s\S]*?\}\)\.catch/,
+      `${label}: install page should report panel bookkeeping only after a successful open`,
+    );
 
     assert.equal(
       await installModule.detectBrowser({ userAgent: 'Mozilla/5.0 Chrome/140.0 Safari/537.36 Edg/140.0' }),
@@ -9099,17 +9114,101 @@ test('first install opens a browser-aware pinning guide in both builds', async (
       'chromium',
       `${label}: unidentified Chromium forks should receive safe generic guidance`,
     );
-    assert.match(
-      installModule.getBrowserGuide('firefox').secondBody,
-      /Pin to Toolbar/,
-      `${label}: Firefox guidance should match its extensions menu wording`,
-    );
-    assert.match(
-      installModule.getBrowserGuide('vivaldi').secondBody,
-      /Show Button/,
-      `${label}: Vivaldi guidance should match its hidden-button wording`,
-    );
+    assert.equal(installModule.getBrowserGuide('firefox').openKey, 'install.open_sidebar', `${label}: Firefox should use native sidebar wording`);
+    assert.equal(installModule.getBrowserGuide('firefox').nextKey, 'install.firefox_pin.body', `${label}: Firefox should keep its native toolbar-pin instructions`);
+    assert.equal(installModule.getBrowserGuide('firefox').failureKey, 'install.open_failed_firefox', `${label}: Firefox should receive its native recovery instructions`);
+    assert.equal(installModule.getBrowserGuide('vivaldi').nextKey, 'install.pin.next', `${label}: Chromium install pages should preview the pin step without coachmark-only spatial copy`);
+    assert.equal(installModule.getBrowserGuide('vivaldi').failureKey, 'install.open_failed_chromium', `${label}: Chromium browsers should receive shortcut and Extensions-menu recovery`);
+
+    const calls = [];
+    const messages = [];
+    if (label === 'chrome') {
+      const chromeApi = {
+        runtime: {
+          sendMessage(message) {
+            messages.push(message);
+            return Promise.resolve();
+          },
+        },
+        sidePanel: {
+          setOptions(options) {
+            calls.push(['setOptions', options]);
+            return Promise.resolve();
+          },
+          open(options) {
+            calls.push(['open', options]);
+            return Promise.resolve();
+          },
+        },
+      };
+      await installModule.openInstalledPanel({ build: 'chromium', tabId: 42, chromeApi });
+      assert.deepEqual(calls, [
+        ['setOptions', { tabId: 42, path: 'src/ui/sidepanel.html', enabled: true }],
+        ['open', { tabId: 42 }],
+      ], 'chrome: the install-page click should enable and open the real panel in the same turn');
+      await installModule.reportInstalledPanelOpened({ build: 'chromium', tabId: 42, chromeApi });
+      assert.deepEqual(messages, [
+        { type: 'WB_INSTALL_PANEL_OPENED', tabId: 42 },
+      ], 'chrome: a successful install-page open should request background panel bookkeeping');
+    } else {
+      const browserApi = {
+        runtime: {
+          sendMessage(message) {
+            messages.push(message);
+            return Promise.resolve();
+          },
+        },
+        sidebarAction: {
+          open() {
+            calls.push(['open']);
+            return Promise.resolve();
+          },
+        },
+      };
+      await installModule.openInstalledPanel({ build: 'firefox', browserApi });
+      assert.deepEqual(calls, [['open']], 'firefox: the install-page click should open the real sidebar');
+      await installModule.reportInstalledPanelOpened({ build: 'firefox', tabId: 42, browserApi });
+      assert.deepEqual(messages, [
+        { type: 'WB_INSTALL_PANEL_OPENED', tabId: 42 },
+      ], 'firefox: a successful install-page open should request background group bookkeeping');
+    }
   }
+
+  const chromeBackground = fs.readFileSync(path.join(ROOT, 'src/chrome/src/background.js'), 'utf8');
+  const firefoxBackground = fs.readFileSync(path.join(ROOT, 'src/firefox/src/background.js'), 'utf8');
+  const chromePanelHtml = fs.readFileSync(path.join(ROOT, 'src/chrome/src/ui/sidepanel.html'), 'utf8');
+  const chromePanelJs = fs.readFileSync(path.join(ROOT, 'src/chrome/src/ui/sidepanel.js'), 'utf8');
+  const chromePanelCss = fs.readFileSync(path.join(ROOT, 'src/chrome/styles/sidepanel.css'), 'utf8');
+  const firefoxPanelHtml = fs.readFileSync(path.join(ROOT, 'src/firefox/src/ui/sidepanel.html'), 'utf8');
+  assert.match(
+    chromeBackground,
+    /storage\.local\.set\(\{ pinCoachmarkPending: true \}\)[\s\S]*?tabs\.create\(/,
+    'chrome: first install should prepare the pin coachmark before opening the guide tab',
+  );
+  assert.match(
+    chromeBackground,
+    /msg\?\.type !== 'WB_INSTALL_PANEL_OPENED'[\s\S]*?senderUrl !== installGuideUrl[\s\S]*?panelTabs\.add\(tab\.id\);[\s\S]*?savePanelTabs\(\);[\s\S]*?ensureWebBrainGroup\(tab\)/,
+    'chrome: verified install-page opens should join normal panel and tab-group state',
+  );
+  assert.match(
+    firefoxBackground,
+    /msg\?\.type !== 'WB_INSTALL_PANEL_OPENED'[\s\S]*?senderUrl !== installGuideUrl[\s\S]*?ensureWebBrainGroup\(tab\)/,
+    'firefox: verified install-page opens should join normal tab-group state',
+  );
+  assert.match(chromePanelHtml, /data-i18n="install\.pin\.body"/, 'chrome: coachmark should keep its spatial side-panel pin copy');
+  assert.match(chromePanelHtml, /id="pin-coachmark"[\s\S]*?aria-modal="true"[\s\S]*?aria-describedby="pin-coachmark-description"/, 'chrome: side panel should expose the first-open coachmark as a described modal dialog');
+  assert.match(chromePanelHtml, /id="pin-coachmark-done"[\s\S]*?id="pin-coachmark-skip"/, 'chrome: pin coachmark should provide confirm and explicit skip actions');
+  assert.doesNotMatch(firefoxPanelHtml, /id="pin-coachmark"/, 'firefox: sidebar should not point at a Chromium-only panel pin');
+  assert.match(chromePanelJs, /sidePanel\?\.getLayout\?\.\(\)/, 'chrome: coachmark should read the real left/right side-panel layout when supported');
+  assert.match(chromePanelJs, /await pinCoachmarkDismissed\.catch\(\(\)\s*=>\s*\{\}\);[\s\S]*?storage\.local\.get\('onboardingComplete'\)/, 'chrome: product onboarding should wait until the pin coachmark is dismissed');
+  assert.match(chromePanelJs, /initPinCoachmark[\s\S]*?catch\s*\{[\s\S]*?\}[\s\S]*?\}\)\(\)/, 'chrome: pin coachmark setup failures must not reject into onboarding');
+  assert.match(chromePanelJs, /for \(const layer of backgroundLayers\) \{[\s\S]*?layer\.inert = true/, 'chrome: modal coachmark should make the rest of the panel inert');
+  assert.match(chromePanelJs, /for \(const \[layer, wasInert\] of backgroundInertState\) \{[\s\S]*?layer\.inert = wasInert/, 'chrome: modal coachmark should restore prior inert state on dismissal');
+  assert.match(chromePanelJs, /event\.key !== 'Tab'[\s\S]*?event\.shiftKey[\s\S]*?overlay\.contains\(activeElement\)/, 'chrome: modal coachmark should keep forward and reverse tab focus inside the dialog');
+  assert.match(chromePanelJs, /doneButton\.addEventListener\('click', dismiss\)/, 'chrome: pin confirmation should dismiss the coachmark');
+  assert.match(chromePanelJs, /skipButton\.addEventListener\('click', dismiss\)/, 'chrome: explicit skip should dismiss the coachmark');
+  assert.match(chromePanelJs, /event\.key === 'Escape'[\s\S]*?stopImmediatePropagation\(\)[\s\S]*?dismiss\(\)/, 'chrome: Escape should be consumed by the modal and use the same dismissal path');
+  assert.match(chromePanelCss, /:root\[data-panel-side="left"\] \.pin-coachmark-arrow/, 'chrome: Vivaldi and other left-side panels should mirror the coachmark arrow');
 
   const localeFilenames = fs.readdirSync(path.join(ROOT, 'src/chrome/src/ui/locales'))
     .filter((name) => name.endsWith('.js'))
@@ -9118,13 +9217,25 @@ test('first install opens a browser-aware pinning guide in both builds', async (
     const chromeLocale = (await import(pathToFileURL(path.join(ROOT, 'src/chrome/src/ui/locales', filename)).href)).default;
     const firefoxLocale = (await import(pathToFileURL(path.join(ROOT, 'src/firefox/src/ui/locales', filename)).href)).default;
     const installKeys = Object.keys(chromeLocale).filter((key) => key.startsWith('install.'));
-    assert.equal(installKeys.length, 18, `${filename}: install guide should translate every user-facing string`);
+    assert.equal(installKeys.length, 29, `${filename}: install guide should translate every user-facing string`);
+    assert.ok(chromeLocale['install.pin.next'], `${filename}: install page should translate its non-spatial pin preview`);
+    assert.ok(chromeLocale['install.pin.confirm'], `${filename}: pin coachmark should translate its confirmation action`);
+    assert.ok(chromeLocale['install.pin.skip'], `${filename}: pin coachmark should translate its skip action`);
+    assert.ok(chromeLocale['install.open_failed_chromium'], `${filename}: Chromium recovery guidance should be translated`);
+    assert.ok(chromeLocale['install.open_failed_firefox'], `${filename}: Firefox recovery guidance should be translated`);
     assert.deepEqual(
       Object.fromEntries(installKeys.map((key) => [key, chromeLocale[key]])),
       Object.fromEntries(installKeys.map((key) => [key, firefoxLocale[key]])),
       `${filename}: install guide translations should match across browser builds`,
     );
   }
+
+  const englishLocale = (await import(pathToFileURL(path.join(ROOT, 'src/chrome/src/ui/locales/en.js')).href)).default;
+  assert.match(englishLocale['install.pin.body'], /side panel header/i, 'chrome: pin guidance should identify the pin in the side-panel header');
+  assert.match(englishLocale['install.pin.body'], /browser toolbar/i, 'chrome: pin guidance should separately explain the toolbar icon that pinning adds');
+  assert.doesNotMatch(englishLocale['install.pin.next'], /\babove\b/i, 'chrome: install-page preview should not use coachmark-only spatial language');
+  assert.match(englishLocale['install.open_failed_chromium'], /Alt\+Shift\+W[\s\S]*Extensions/i, 'chrome: failed open should offer shortcut and Extensions-menu recovery');
+  assert.match(englishLocale['install.open_failed_firefox'], /Firefox Extensions/i, 'firefox: failed open should point to Firefox Extensions');
 });
 
 test('chrome /record reports mic denial as a warning, not recording failure', () => {

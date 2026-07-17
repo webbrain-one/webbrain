@@ -18,6 +18,33 @@
   <script defer src="../../vendor/katex/auto-render.min.js"></script>
 </head>
 <body>
+  <!-- Shown before the regular onboarding when the install page opens the
+       panel. The arrow terminates at Chrome's real side-panel toolbar, so the
+       user never has to translate a fake toolbar drawing into browser chrome. -->
+  <div
+    id="pin-coachmark"
+    class="pin-coachmark hidden"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="pin-coachmark-title"
+    aria-describedby="pin-coachmark-description"
+    tabindex="-1"
+  >
+    <svg class="pin-coachmark-arrow" viewBox="0 0 190 150" aria-hidden="true">
+      <path d="M18 139C26 76 69 108 95 74C117 45 129 22 171 15"/>
+      <path d="m158 7 14 8-10 14"/>
+    </svg>
+    <div class="pin-coachmark-card">
+      <p class="pin-coachmark-kicker" data-i18n="install.eyebrow">One small setup step</p>
+      <h2 id="pin-coachmark-title" data-i18n="install.pin.title">Pin WebBrain to your toolbar</h2>
+      <p id="pin-coachmark-description" data-i18n="install.pin.body">Click the pin in the side panel header above. This adds WebBrain to your browser toolbar for one-click access.</p>
+      <div class="pin-coachmark-actions">
+        <button id="pin-coachmark-done" type="button" data-i18n="install.pin.confirm">I pinned it</button>
+        <button id="pin-coachmark-skip" class="pin-coachmark-skip" type="button" data-i18n="install.pin.skip">Skip this step</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Onboarding Overlay (shown on first launch only) -->
   <div id="onboarding" class="onboarding hidden">
     <div class="ob-card">
