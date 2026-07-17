@@ -3,6 +3,18 @@ import { fetchWithTimeout } from './fetch-timeout.js';
 import { shouldUseOpenAIResponsesApi } from './provider-compatibility.js';
 
 const OPENAI_RESPONSES_MIN_MAX_OUTPUT_TOKENS = 16;
+const KIMI_CURRENT_TOOL_REASONING_MODELS = new Set([
+  'kimi-k3',
+  'kimi-k2.7-code',
+  'kimi-k2.7-code-highspeed',
+  'kimi-k2.6',
+  'kimi-k2.5',
+]);
+const KIMI_PRESERVED_THINKING_MODELS = new Set([
+  'kimi-k3',
+  'kimi-k2.7-code',
+  'kimi-k2.7-code-highspeed',
+]);
 
 /**
  * Provider for OpenAI-compatible APIs (ChatGPT, OpenRouter, any OpenAI-compatible endpoint).
@@ -44,7 +56,7 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
     // checkpoint needed), so qwen3\.[5-9] catches those alongside the
     // older qwen*vl-suffixed lines.
     const m = (this.config.model || '').toLowerCase();
-    return /gpt-4o|gpt-4\.1|gpt-4-turbo|gpt-5|claude|gemini|llava|qwen.*vl|qwen2.*vl|qwen3.*vl|qwen3\.[5-9]|pixtral|llama.*vision|gemma.*vision|gemma-?[34]/.test(m);
+    return /gpt-4o|gpt-4\.1|gpt-4-turbo|gpt-5|claude|gemini|kimi-k(?:-?3|2\.[5-9])|llava|qwen.*vl|qwen2.*vl|qwen3.*vl|qwen3\.[5-9]|pixtral|llama.*vision|gemma.*vision|gemma-?[34]/.test(m);
   }
 
   get useCompactPrompt() {
@@ -94,9 +106,10 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
 
   _addTemperature(body, options) {
     // GPT-5 / o-series only accept the default temperature (1). Sending
-    // anything else returns 400. Omit the field entirely so the API uses
-    // its default; older models keep the explicit value.
-    if (this._isNewOpenAIContract()) return;
+    // anything else returns 400. Provider configs can impose
+    // the same omission for fixed-temperature models such as Kimi K2.5/K3.
+    // In both cases, let the API apply its required default.
+    if (this._isNewOpenAIContract() || this.config.omitTemperature) return;
     body.temperature = options.temperature ?? 0.7;
   }
 
@@ -196,6 +209,48 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
     });
   }
 
+  _supportsReasoningContentReplay(options = {}) {
+    if (String(this.config.providerName || '').trim().toLowerCase() !== 'kimi') return false;
+    const model = String(this.model || '').trim().toLowerCase();
+    if (KIMI_PRESERVED_THINKING_MODELS.has(model)) return true;
+    if (model !== 'kimi-k2.6') return false;
+
+    const configuredThinking = this.config.extraBody?.thinking;
+    const requestThinking = options.extraBody?.thinking;
+    const keep = requestThinking?.keep ?? configuredThinking?.keep;
+    const type = requestThinking?.type ?? configuredThinking?.type;
+    return keep === 'all' && type !== 'disabled';
+  }
+
+  _supportsCurrentToolReasoningReplay() {
+    if (String(this.config.providerName || '').trim().toLowerCase() !== 'kimi') return false;
+    // K2.5 lacks cross-turn Preserved Thinking, but Kimi still requires the
+    // reasoning attached to a tool call on that loop's immediate follow-up.
+    return KIMI_CURRENT_TOOL_REASONING_MODELS.has(
+      String(this.model || '').trim().toLowerCase()
+    );
+  }
+
+  _shouldReplayReasoningContent(message, options = {}) {
+    // Never mix opaque reasoning across providers or model switches.
+    const replay = message?._reasoning_replay;
+    if (!replay || typeof replay !== 'object') return false;
+    const providerName = String(this.config.providerName || '').trim().toLowerCase();
+    const model = String(this.model || '').trim().toLowerCase();
+    if (String(replay.provider || '').trim().toLowerCase() !== providerName) return false;
+    if (String(replay.model || '').trim().toLowerCase() !== model) return false;
+    if (
+      replay.currentToolLoop === true
+      && Array.isArray(message.tool_calls)
+      && message.tool_calls.length > 0
+      && this._supportsCurrentToolReasoningReplay(options)
+    ) {
+      return true;
+    }
+    if (replay.preserveAcrossTurns !== true) return false;
+    return this._supportsReasoningContentReplay(options);
+  }
+
   _isOfficialOpenAIBaseUrl() {
     try {
       const url = new URL(this.baseUrl);
@@ -219,7 +274,7 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
   _buildChatCompletionsBody(messages, options = {}, stream = false) {
     let body = {
       model: this.model,
-      messages: this._chatMessages(messages),
+      messages: this._chatMessages(messages, options),
       stream,
     };
     this._addTemperature(body, options);
@@ -232,17 +287,6 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
     this._addWebBrainCloudContext(body, options);
     if (stream) this._addStreamUsageOptions(body);
     return body;
-  }
-
-  _chatMessages(messages) {
-    // Strip Responses-only replay payload before Chat Completions, then apply
-    // provider compatibility role mapping (e.g. system → developer).
-    const stripped = (Array.isArray(messages) ? messages : []).map((message) => {
-      if (!message || !Object.hasOwn(message, 'response_items')) return message;
-      const { response_items: _responseItems, ...chatMessage } = message;
-      return chatMessage;
-    });
-    return this._mapMessages(stripped);
   }
 
   _responsesContent(content) {
@@ -737,6 +781,10 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
             yield { type: 'usage', usage: json.usage };
           }
           const delta = json.choices?.[0]?.delta;
+          const reasoningDelta = delta?.reasoning_content || delta?.reasoning;
+          if (typeof reasoningDelta === 'string' && reasoningDelta) {
+            yield { type: 'reasoning', content: reasoningDelta };
+          }
           if (delta?.content) {
             yield { type: 'text', content: delta.content };
           }

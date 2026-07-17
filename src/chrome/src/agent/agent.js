@@ -623,10 +623,44 @@ export class Agent {
     return result;
   }
 
-  _withResponseItems(message, responseItems) {
-    return Array.isArray(responseItems) && responseItems.length
-      ? { ...message, response_items: responseItems }
-      : message;
+  _withResponseItems(message, responseItems, reasoningContent = '', provider = null) {
+    if (Array.isArray(responseItems) && responseItems.length) {
+      return { ...message, response_items: responseItems };
+    }
+    if (typeof reasoningContent !== 'string' || !reasoningContent) return message;
+    // K2.5/K2.6 need reasoning returned with an immediate tool call even when
+    // they do not preserve thinking across later user turns.
+    const currentToolLoop = Array.isArray(message?.tool_calls)
+      && message.tool_calls.length > 0
+      && provider?._supportsCurrentToolReasoningReplay?.() === true;
+    const preserveAcrossTurns = provider?._supportsReasoningContentReplay?.() === true;
+    if (!currentToolLoop && !preserveAcrossTurns) return message;
+    return {
+      ...message,
+      reasoning_content: reasoningContent,
+      _reasoning_replay: {
+        provider: String(provider?.config?.providerName || provider?.name || '').trim().toLowerCase(),
+        model: String(provider?.model || provider?.config?.model || '').trim().toLowerCase(),
+        ...(preserveAcrossTurns ? { preserveAcrossTurns: true } : {}),
+        ...(currentToolLoop ? { currentToolLoop: true } : {}),
+      },
+    };
+  }
+
+  _expireCurrentToolReasoning(messages) {
+    // This runs once at the start of a new user turn. Drop immediate-only
+    // traces; keep origin metadata for models with true Preserved Thinking.
+    for (const message of Array.isArray(messages) ? messages : []) {
+      const replay = message?._reasoning_replay;
+      if (!replay || replay.currentToolLoop !== true) continue;
+      if (replay.preserveAcrossTurns !== true) {
+        delete message.reasoning_content;
+        delete message._reasoning_replay;
+        continue;
+      }
+      const { currentToolLoop: _currentToolLoop, ...persistentReplay } = replay;
+      message._reasoning_replay = persistentReplay;
+    }
   }
 
   /**
@@ -7620,6 +7654,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       }
       if (msg.tool_calls) totalChars += JSON.stringify(msg.tool_calls).length;
       if (msg.response_items) totalChars += JSON.stringify(msg.response_items).length;
+      if (typeof msg.reasoning_content === 'string') totalChars += msg.reasoning_content.length;
     }
     if (hasImage) totalChars += Agent.IMAGE_CHAR_COST;
     return totalChars;
@@ -12693,6 +12728,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     await this._hydrate(tabId);
     this._preactivateRecommendedActionSkill(tabId, runOptions, mode);
     const messages = this.getConversation(tabId, mode);
+    this._expireCurrentToolReasoning(messages);
     // Scheduled resumes get the live ledger appended at fire time, so the
     // model's first turn sees current row state even if it never calls
     // progress_read; must run before the message is enriched/pushed.
@@ -12983,7 +13019,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           role: 'assistant',
           content: result.content || null,
           tool_calls: result.toolCalls,
-        }, result.responseItems));
+        }, result.responseItems, result.reasoningContent, provider));
 
         const batchResult = await this._executeToolBatch(
           tabId, result.toolCalls, messages, onUpdate, provider, result.content, allowedToolNames, steps
@@ -13021,7 +13057,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       if (this._isActionMode(mode) && this._isCompressionPlaceholderResponse(result.content)) {
         if (!compressionPlaceholderRecoveryAttempted) {
           compressionPlaceholderRecoveryAttempted = true;
-          messages.push(this._withResponseItems({ role: 'assistant', content: result.content }, result.responseItems));
+          messages.push(this._withResponseItems({ role: 'assistant', content: result.content }, result.responseItems, result.reasoningContent, provider));
           messages.push({
             role: 'user',
             content: '[System nudge: your previous response was a context-compression placeholder, not a real final answer or tool call. Continue the active browser task with tool calls. Do not output "[compressed]".]',
@@ -13072,7 +13108,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       // Genuine final answer — emit and exit.
       const progressFinalBlock = this._plainFinalProgressBlock(tabId);
       if (progressFinalBlock) {
-        messages.push(this._withResponseItems({ role: 'assistant', content: result.content }, result.responseItems));
+        messages.push(this._withResponseItems({ role: 'assistant', content: result.content }, result.responseItems, result.reasoningContent, provider));
         messages.push({ role: 'user', content: progressFinalBlock });
         onUpdate('warning', { message: 'Progress ledger has unresolved rows; continuing.' });
         this._persist(tabId);
@@ -13081,7 +13117,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       finalResponse = result.costAllowanceMessage
         ? `${result.content}\n\n${result.costAllowanceMessage}`
         : result.content;
-      messages.push(this._withResponseItems({ role: 'assistant', content: finalResponse }, result.responseItems));
+      messages.push(this._withResponseItems({ role: 'assistant', content: finalResponse }, result.responseItems, result.reasoningContent, provider));
       onUpdate('text', { content: finalResponse });
       break;
     }
@@ -13145,6 +13181,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     await this._hydrate(tabId);
     this._preactivateRecommendedActionSkill(tabId, runOptions, mode);
     const messages = this.getConversation(tabId, mode);
+    this._expireCurrentToolReasoning(messages);
     const costState = this._newCostRunState();
     this.currentCostState.set(tabId, costState);
     // New user turn: drop transient "allow once" / "deny once" permission grants.
@@ -13271,6 +13308,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         let toolCallsAccumulator = {};
         let hasToolCalls = false;
         let responseItems = null;
+        let reasoningContent = '';
 
         const streamOpts = this._cloudGenerationOptions(provider, {
           tools: provider.supportsTools ? tools : undefined,
@@ -13292,6 +13330,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           if (chunk.type === 'text') {
             fullText += chunk.content;
             onUpdate('text_delta', { content: chunk.content });
+          } else if (chunk.type === 'reasoning') {
+            reasoningContent += String(chunk.content || '');
           } else if (chunk.type === 'usage') {
             costStopMessage = (await this._recordCostUsage(provider, chunk.usage, costState)) || costStopMessage;
           } else if (chunk.type === 'tool_call') {
@@ -13354,7 +13394,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             role: 'assistant',
             content: fullText || null,
             tool_calls: toolCalls,
-          }, responseItems));
+          }, responseItems, reasoningContent, provider));
 
           const batchResult = await this._executeToolBatch(
             tabId, toolCalls, messages, onUpdate, provider, fullText, allowedToolNames, steps
@@ -13403,7 +13443,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         if (this._isActionMode(mode) && this._isCompressionPlaceholderResponse(fullText)) {
           if (!compressionPlaceholderRecoveryAttempted) {
             compressionPlaceholderRecoveryAttempted = true;
-            messages.push(this._withResponseItems({ role: 'assistant', content: fullText }, responseItems));
+            messages.push(this._withResponseItems({ role: 'assistant', content: fullText }, responseItems, reasoningContent, provider));
             messages.push({
               role: 'user',
               content: '[System nudge: your previous response was a context-compression placeholder, not a real final answer or tool call. Continue the active browser task with tool calls. Do not output "[compressed]".]',
@@ -13428,7 +13468,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         compressionPlaceholderRecoveryAttempted = false;
         const progressFinalBlock = this._plainFinalProgressBlock(tabId);
         if (progressFinalBlock) {
-          messages.push(this._withResponseItems({ role: 'assistant', content: fullText }, responseItems));
+          messages.push(this._withResponseItems({ role: 'assistant', content: fullText }, responseItems, reasoningContent, provider));
           messages.push({ role: 'user', content: progressFinalBlock });
           onUpdate('warning', { message: 'Progress ledger has unresolved rows; continuing.' });
           this._persist(tabId);
@@ -13438,7 +13478,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           onUpdate('text_delta', { content: `\n\n${costStopMessage}` });
           fullText = `${fullText}\n\n${costStopMessage}`;
         }
-        messages.push(this._withResponseItems({ role: 'assistant', content: fullText }, responseItems));
+        messages.push(this._withResponseItems({ role: 'assistant', content: fullText }, responseItems, reasoningContent, provider));
         this._persist(tabId);
         return finish(fullText);
 

@@ -38,7 +38,7 @@ export class LlamaCppProvider extends BaseLLMProvider {
 
   _buildRequestBody(messages, options = {}, stream = false) {
     const body = {
-      messages: this._mapMessages(messages),
+      messages: this._chatMessages(messages),
       temperature: options.temperature ?? 0.7,
       stream,
     };
