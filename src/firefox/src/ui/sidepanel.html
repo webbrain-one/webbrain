@@ -67,8 +67,8 @@
         <p class="ob-body" id="ob-provider-body" data-i18n="ob.tokens.body"></p>
         <div class="ob-provider-status" id="ob-provider-status" data-i18n="ob.tokens.scanning"></div>
         <div class="ob-local-models hidden" id="ob-local-models">
-          <label class="ob-local-label" for="ob-local-model-select" data-i18n="ob.tokens.local_models_label"></label>
-          <select class="ob-local-select" id="ob-local-model-select"></select>
+          <label class="ob-local-label" id="ob-local-model-label" data-i18n="ob.tokens.local_models_label"></label>
+          <div class="ob-local-model-list" id="ob-local-model-list" role="listbox" aria-labelledby="ob-local-model-label"></div>
           <p class="ob-note" data-i18n="ob.tokens.context_hint"></p>
           <p class="ob-note" data-i18n="ob.tokens.local_note"></p>
         </div>
@@ -92,7 +92,20 @@
     <!-- Header -->
     <header id="header">
       <div class="header-left">
-        <select id="provider-select" title="LLM Provider"></select>
+        <div class="provider-picker" id="provider-picker">
+          <!-- Native select kept as the value source for existing handlers.
+               Closed button is text-only; brand icons show only in the open menu. -->
+          <select id="provider-select" class="provider-select-native" title="LLM Provider" tabindex="-1" aria-hidden="true"></select>
+          <button type="button" id="provider-picker-btn" class="provider-picker-btn" aria-haspopup="listbox" aria-expanded="false" aria-controls="provider-picker-menu" aria-label="LLM Provider">
+            <span class="provider-picker-label" id="provider-picker-label"></span>
+            <span class="provider-picker-caret" aria-hidden="true">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </span>
+          </button>
+          <div class="provider-picker-menu hidden" id="provider-picker-menu" role="listbox" tabindex="-1"></div>
+        </div>
         <span id="status-dot" class="status-dot offline" data-i18n-title="sp.status.disconnected"></span>
       </div>
       <div class="header-right">

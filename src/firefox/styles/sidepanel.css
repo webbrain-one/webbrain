@@ -288,15 +288,72 @@ body {
   font-weight: 600;
 }
 
-.ob-local-select {
+.ob-local-model-list {
   width: 100%;
-  min-width: 0;
-  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.ob-local-model-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--bg-primary);
   color: var(--text-primary);
+  text-align: left;
+  padding: 10px 12px;
   font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.ob-local-model-option:hover,
+.ob-local-model-option:focus-visible {
+  border-color: var(--accent, #6c63ff);
+  outline: none;
+}
+
+.ob-local-model-option[aria-selected="true"] {
+  border-color: var(--accent, #6c63ff);
+  background: rgba(108, 99, 255, 0.12);
+  box-shadow: 0 0 0 1px rgba(108, 99, 255, 0.25);
+}
+
+.ob-local-model-option .provider-icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.94);
+  padding: 1px;
+  box-sizing: border-box;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.ob-local-model-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ob-local-model-provider {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.ob-local-model-name {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .ob-btn:disabled {
@@ -404,9 +461,11 @@ body {
 .header-left {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex: 1;
   min-width: 0;
+  /* Keep the status-dot glued to the provider picker — don't let the
+     picker stretch across the header and park the dot next to language. */
 }
 
 .header-right {
@@ -420,6 +479,7 @@ body {
   height: 8px;
   border-radius: 50%;
   transition: background 0.3s;
+  flex-shrink: 0;
 }
 
 .status-dot.online { background: var(--success); }
@@ -431,16 +491,185 @@ body {
   50% { opacity: 0.4; }
 }
 
-#provider-select {
+/* Provider picker — closed header is text-only; brand icons appear only
+   in the open menu rows. Native <select> stays as the value source
+   (visually hidden) for existing change handlers. */
+.provider-picker {
+  position: relative;
+  min-width: 0;
+  max-width: 200px;
+  /* Grow to content only — stretching here pushed the online/offline
+     status-dot away from the select and toward the language button. */
+  flex: 0 1 auto;
+}
+
+.provider-select-native {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.provider-picker-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-width: 0;
   background: var(--bg-input);
   color: var(--text-primary);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 4px 8px;
+  padding: 4px 6px 4px 8px;
   font-size: 11px;
+  line-height: 1.2;
   cursor: pointer;
-  max-width: 180px;
+  font-family: inherit;
+}
+
+.provider-picker-btn:hover {
+  border-color: var(--accent, #6c63ff);
+}
+
+.provider-picker-btn:hover .provider-picker-caret {
+  color: var(--text-primary);
+  opacity: 1;
+}
+
+.provider-picker-btn:focus-visible {
+  outline: 2px solid var(--accent, #6c63ff);
+  outline-offset: 1px;
+}
+
+.provider-picker-btn[aria-expanded="true"] {
+  border-color: var(--accent, #6c63ff);
+}
+
+.provider-picker-btn[aria-expanded="true"] .provider-picker-caret {
+  transform: rotate(180deg);
+  color: var(--accent, #6c63ff);
+  opacity: 1;
+}
+
+.provider-picker-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   min-width: 0;
+  flex: 1 1 auto;
+}
+
+.provider-picker-caret {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  margin-left: 2px;
+  color: var(--text-muted, var(--text-secondary));
+  opacity: 0.85;
+  transition: transform 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+}
+
+.provider-picker-caret svg {
+  display: block;
+}
+
+.provider-picker-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 40;
+  min-width: max(100%, 200px);
+  max-width: min(280px, 90vw);
+  max-height: min(320px, 50vh);
+  overflow-y: auto;
+  background: var(--bg-secondary, var(--bg-input));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  padding: 4px;
+}
+
+.provider-picker-menu.hidden {
+  display: none;
+}
+
+.provider-picker-group-label {
+  padding: 6px 8px 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  color: var(--text-muted, var(--text-secondary));
+}
+
+.provider-icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.94);
+  padding: 1px;
+  box-sizing: border-box;
+  object-fit: contain;
+  flex-shrink: 0;
+  display: block;
+}
+
+.provider-icon-sm {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+}
+
+.provider-picker-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  text-align: left;
+  padding: 7px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.provider-picker-option:hover,
+.provider-picker-option:focus-visible {
+  background: rgba(108, 99, 255, 0.12);
+  outline: none;
+}
+
+.provider-picker-option:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--accent, #6c63ff);
+}
+
+.provider-picker-option[aria-selected="true"] {
+  background: rgba(108, 99, 255, 0.18);
+}
+
+.provider-picker-option-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.provider-picker-option-meta {
+  color: var(--text-muted, var(--text-secondary));
+  font-size: 10px;
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
 /* Globe language selector. Native select overlaid on a globe icon so it
@@ -471,7 +700,9 @@ body {
   appearance: none;
 }
 
-#header button {
+/* Icon buttons in the header-right cluster only. Do not target
+   .provider-picker-btn / .provider-picker-option — those need select chrome. */
+#header .header-right button {
   background: none;
   border: none;
   color: var(--text-secondary);
@@ -483,12 +714,12 @@ body {
   transition: color 0.2s, background 0.2s;
 }
 
-#header button:hover {
+#header .header-right button:hover {
   color: var(--text-primary);
   background: var(--accent-dim);
 }
 
-#header button.active {
+#header .header-right button.active {
   color: var(--accent);
   background: var(--accent-dim);
 }

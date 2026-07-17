@@ -283,6 +283,67 @@
       transition: color 0.15s;
     }
     .provider-card.expanded .provider-chevron { color: var(--accent); }
+    /* Brand marks (Lobe Icons + a few official assets). Light chip so mono
+       currentColor SVGs stay legible on dark theme without per-icon filters. */
+    .provider-icon {
+      width: 20px;
+      height: 20px;
+      border-radius: 5px;
+      background: rgba(255, 255, 255, 0.94);
+      padding: 2px;
+      box-sizing: border-box;
+      object-fit: contain;
+      flex-shrink: 0;
+      display: block;
+    }
+    /* Multimodal section headings always show a mono feature icon so the
+       tab has visual anchors even when base URL is empty (brand chip only
+       appears after a known endpoint is sniffed). */
+    .mm-section-heading {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 12px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .mm-section-heading + .provider-card + .mm-section-heading {
+      margin-top: 24px;
+    }
+    .mm-section-icon {
+      width: 18px;
+      height: 18px;
+      color: var(--accent);
+      flex-shrink: 0;
+    }
+    .mm-field-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    /* Brand hint sniffed from base URL — sits on the field label row. */
+    .mm-detected-provider {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin: 0;
+      padding: 2px 8px 2px 4px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.06);
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1.2;
+    }
+    .mm-detected-provider[hidden] { display: none !important; }
+    .mm-detected-provider .provider-icon {
+      width: 16px;
+      height: 16px;
+      padding: 1px;
+    }
     .provider-name { font-weight: 600; font-size: 14px; }
     .provider-type { color: var(--text2); font-size: 11px; }
     .provider-status-badges { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
@@ -345,6 +406,9 @@
       flex-wrap: wrap;
     }
     .provider-filter-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
       background: transparent;
       color: var(--text2);
       border: none;
@@ -356,6 +420,15 @@
       letter-spacing: 0.4px;
       cursor: pointer;
       transition: color 0.12s;
+    }
+    .provider-filter-pill-icon {
+      width: 13px;
+      height: 13px;
+      flex-shrink: 0;
+      opacity: 0.85;
+    }
+    .provider-filter-pill.active .provider-filter-pill-icon {
+      opacity: 1;
     }
     .provider-filter-pill:hover { color: var(--text); }
     .provider-filter-pill.active {
@@ -1352,11 +1425,23 @@
   </section>
 
   <section class="tab-panel" data-panel="multimodal" role="tabpanel">
-    <h3 data-i18n="st.vision.heading" style="margin:0 0 12px;font-size:14px;font-weight:600;"></h3>
+    <h3 class="mm-section-heading">
+      <svg class="mm-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+        <circle cx="12" cy="12" r="3"/>
+      </svg>
+      <span data-i18n="st.vision.heading"></span>
+    </h3>
     <div class="provider-card" id="vision-card">
       <div style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.5;" data-i18n="st.vision.desc"></div>
       <div class="field">
-        <label data-i18n="st.provider.field.api_base_url"></label>
+        <label class="mm-field-label">
+          <span data-i18n="st.provider.field.api_base_url"></span>
+          <span class="mm-detected-provider" id="vision-detected" hidden>
+            <img class="provider-icon" id="vision-detected-icon" alt="" width="16" height="16" decoding="async" draggable="false">
+            <span id="vision-detected-label"></span>
+          </span>
+        </label>
         <input type="text" id="vision-base-url" placeholder="https://api.openai.com/v1">
       </div>
       <div class="field">
@@ -1375,11 +1460,25 @@
       <div class="test-result" id="test-vision"></div>
     </div>
 
-    <h3 data-i18n="st.transcription.heading" style="margin:24px 0 12px;font-size:14px;font-weight:600;"></h3>
+    <h3 class="mm-section-heading">
+      <svg class="mm-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+        <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+        <line x1="12" y1="19" x2="12" y2="23"/>
+        <line x1="8" y1="23" x2="16" y2="23"/>
+      </svg>
+      <span data-i18n="st.transcription.heading"></span>
+    </h3>
     <div class="provider-card" id="transcription-card">
       <div style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.5;" data-i18n="st.transcription.desc"></div>
       <div class="field">
-        <label data-i18n="st.provider.field.api_base_url"></label>
+        <label class="mm-field-label">
+          <span data-i18n="st.provider.field.api_base_url"></span>
+          <span class="mm-detected-provider" id="transcription-detected" hidden>
+            <img class="provider-icon" id="transcription-detected-icon" alt="" width="16" height="16" decoding="async" draggable="false">
+            <span id="transcription-detected-label"></span>
+          </span>
+        </label>
         <input type="text" id="transcription-base-url" placeholder="https://api.openai.com/v1">
       </div>
       <div class="field">

@@ -36,6 +36,12 @@ import {
   DOWNLOAD_DIRECTORY_STORAGE_KEY,
   normalizeDownloadDirectory,
 } from '../download-directory.js';
+import {
+  providerIconHtml,
+  providerIconUrl,
+  PROVIDER_SHORT_LABELS,
+  sniffProviderIdFromBaseUrl,
+} from './provider-icons.js';
 
 // Version shown in the subtitle. Kept here so it only needs one update per
 // release; the subtitle string itself is translated.
@@ -464,6 +470,8 @@ async function init() {
   if (transcriptionBaseUrlInput) transcriptionBaseUrlInput.value = transcription.baseUrl || '';
   if (transcriptionApiKeyInput) transcriptionApiKeyInput.value = transcription.apiKey || '';
   if (transcriptionModelInput) transcriptionModelInput.value = transcription.model || '';
+  updateMultimodalDetectedProvider('vision');
+  updateMultimodalDetectedProvider('transcription');
 
   // Load profile (auto-fill bio + throwaway password)
   const profileStored = await browser.storage.local.get(['profileEnabled', 'profileText']);
@@ -1111,6 +1119,25 @@ scheduledConfirmToggle?.addEventListener('change', async () => {
 
 // --- Vision Model ---
 
+function updateMultimodalDetectedProvider(kind) {
+  const baseInput = kind === 'vision' ? visionBaseUrlInput : transcriptionBaseUrlInput;
+  const hint = document.getElementById(`${kind}-detected`);
+  const icon = document.getElementById(`${kind}-detected-icon`);
+  const label = document.getElementById(`${kind}-detected-label`);
+  if (!baseInput || !hint || !icon || !label) return;
+  const id = sniffProviderIdFromBaseUrl(baseInput.value);
+  const src = providerIconUrl(id);
+  if (!id || !src) {
+    hint.hidden = true;
+    icon.removeAttribute('src');
+    label.textContent = '';
+    return;
+  }
+  icon.src = src;
+  label.textContent = PROVIDER_SHORT_LABELS[id] || id;
+  hint.hidden = false;
+}
+
 function showVisionResult(className, text, color = '') {
   visionTestResult.className = `test-result show${className ? ` ${className}` : ''}`;
   visionTestResult.textContent = text;
@@ -1173,9 +1200,12 @@ btnClearVision.addEventListener('click', async () => {
   visionBaseUrlInput.value = '';
   visionApiKeyInput.value = '';
   visionModelInput.value = '';
+  updateMultimodalDetectedProvider('vision');
   await browser.storage.local.remove('visionModel');
   flashVisionResult('ok', t('st.vision.cleared'));
 });
+
+visionBaseUrlInput?.addEventListener('input', () => updateMultimodalDetectedProvider('vision'));
 
 // --- Transcription Service (Whisper-compatible) ---
 //
@@ -1253,10 +1283,13 @@ if (btnClearTranscription) {
     transcriptionBaseUrlInput.value = '';
     transcriptionApiKeyInput.value = '';
     transcriptionModelInput.value = '';
+    updateMultimodalDetectedProvider('transcription');
     await browser.storage.local.remove('transcriptionModel');
     flashTranscriptionResult('ok', t('st.transcription.cleared'));
   });
 }
+
+transcriptionBaseUrlInput?.addEventListener('input', () => updateMultimodalDetectedProvider('transcription'));
 
 // --- Profile auto-fill ---
 let profileSyncChallenge = null;
@@ -1290,7 +1323,7 @@ function renderProfileSyncState(state) {
   if (profileSyncStatus) profileSyncStatus.textContent = describeProfileSyncState(state || {});
 }
 async function refreshProfileSyncState() { const state = await sendToBackground('profile_sync_state').catch(e => ({ status: 'error', error: e.message })); renderProfileSyncState(state); return state; }
-async function reloadProfileSyncData() { const stored = await browser.storage.local.get(['profileEnabled', 'profileText', 'visionModel', 'transcriptionModel']); if (profileEnabledToggle) profileEnabledToggle.checked = !!stored.profileEnabled; if (profileTextArea) profileTextArea.value = stored.profileText || ''; const vision = stored.visionModel || {}; visionBaseUrlInput.value = vision.baseUrl || ''; visionApiKeyInput.value = vision.apiKey || ''; visionModelInput.value = vision.model || ''; const transcription = stored.transcriptionModel || {}; if (transcriptionBaseUrlInput) transcriptionBaseUrlInput.value = transcription.baseUrl || ''; if (transcriptionApiKeyInput) transcriptionApiKeyInput.value = transcription.apiKey || ''; if (transcriptionModelInput) transcriptionModelInput.value = transcription.model || ''; await loadUserMemorySettings(); const res = await sendToBackground('get_providers'); providersData = res.providers; activeProviderId = res.active; renderProviders(); }
+async function reloadProfileSyncData() { const stored = await browser.storage.local.get(['profileEnabled', 'profileText', 'visionModel', 'transcriptionModel']); if (profileEnabledToggle) profileEnabledToggle.checked = !!stored.profileEnabled; if (profileTextArea) profileTextArea.value = stored.profileText || ''; const vision = stored.visionModel || {}; visionBaseUrlInput.value = vision.baseUrl || ''; visionApiKeyInput.value = vision.apiKey || ''; visionModelInput.value = vision.model || ''; const transcription = stored.transcriptionModel || {}; if (transcriptionBaseUrlInput) transcriptionBaseUrlInput.value = transcription.baseUrl || ''; if (transcriptionApiKeyInput) transcriptionApiKeyInput.value = transcription.apiKey || ''; if (transcriptionModelInput) transcriptionModelInput.value = transcription.model || ''; updateMultimodalDetectedProvider('vision'); updateMultimodalDetectedProvider('transcription'); await loadUserMemorySettings(); const res = await sendToBackground('get_providers'); providersData = res.providers; activeProviderId = res.active; renderProviders(); }
 async function requestProfileSyncDataConsent() { const permissions = await browser.permissions.getAll(); if (!Object.hasOwn(permissions, 'data_collection')) return window.confirm('Turn on encrypted sync? WebBrain will transmit an end-to-end encrypted copy of your memories, profile autofill, and API-key provider settings to WebBrain Cloud. Chat history and OAuth sign-ins are not synced.'); return browser.permissions.request({ data_collection: ['personallyIdentifyingInfo', 'authenticationInfo', 'personalCommunications', 'websiteContent', 'technicalAndInteraction'] }); }
 function profileSyncButtonRestore(button, pendingLabel) {
   if (!button) return () => {};
@@ -2370,6 +2403,14 @@ function renderProviderFilterBar() {
   bar.className = 'provider-filter-bar';
   const pills = document.createElement('div');
   pills.className = 'provider-filter-pills';
+  // Small mono SVGs — category cues, not brand logos. Keep stroke icons so
+  // they track text color (including the active accent state).
+  const filterIcons = {
+    all: '<svg class="provider-filter-pill-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>',
+    local: '<svg class="provider-filter-pill-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>',
+    cloud: '<svg class="provider-filter-pill-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>',
+    router: '<svg class="provider-filter-pill-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49"/><path d="M7.76 16.24a6 6 0 0 1 0-8.49"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M4.93 19.07a10 10 0 0 1 0-14.14"/></svg>',
+  };
   const filters = [
     { key: 'all',    labelKey: 'st.providers.filter.all' },
     { key: 'local',  labelKey: 'st.providers.filter.local' },
@@ -2381,7 +2422,7 @@ function renderProviderFilterBar() {
     btn.type = 'button';
     btn.className = `provider-filter-pill${providerFilter === f.key ? ' active' : ''}`;
     btn.dataset.filter = f.key;
-    btn.textContent = t(f.labelKey);
+    btn.innerHTML = `${filterIcons[f.key] || ''}<span>${escapeHtml(t(f.labelKey))}</span>`;
     btn.addEventListener('click', async () => {
       if (providerFilter === f.key) return;
       // Snapshot whatever the user has typed but not yet saved BEFORE we
@@ -2453,10 +2494,12 @@ function wrapCollapsibleCard(id, config, isSelected, isConfigured, bodyHtml) {
   // LM Studio defaults to whatever's loaded) just renders nothing rather
   // than a placeholder.
   const modelStr = (config.model && String(config.model).trim()) || '';
+  const label = config.label || id;
   header.innerHTML = `
     <div class="provider-header-left">
       <span class="provider-chevron" aria-hidden="true">${expanded ? '▾' : '▸'}</span>
-      <span class="provider-name">${escapeHtml(config.label || id)}</span>
+      ${providerIconHtml(id, label)}
+      <span class="provider-name">${escapeHtml(label)}</span>
       <span class="provider-type">${escapeHtml(config.type)}</span>
       ${config.category ? `<span class="provider-category-badge provider-category-${escapeHtml(config.category)}">${escapeHtml(config.category)}</span>` : ''}
       ${modelStr ? `<span class="provider-model" title="${escapeHtml(modelStr)}">${escapeHtml(modelStr)}</span>` : ''}
