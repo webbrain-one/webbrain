@@ -8825,6 +8825,108 @@ test('sidepanel awaits onboarding completion persistence before hiding', () => {
   }
 });
 
+test('first install opens a browser-aware pinning guide in both builds', async () => {
+  for (const [label, prefix, runtime] of [
+    ['chrome', 'src/chrome', 'chrome'],
+    ['firefox', 'src/firefox', 'browser'],
+  ]) {
+    const background = fs.readFileSync(path.join(ROOT, prefix, 'src/background.js'), 'utf8');
+    const html = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/install.html'), 'utf8');
+    const css = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/install.css'), 'utf8');
+    const installModule = await import(pathToFileURL(path.join(ROOT, prefix, 'src/ui/install.js')).href);
+
+    assert.match(
+      background,
+      /function showFirstInstallGuide\(details\) \{[\s\S]*?details\?\.reason !== 'install'[\s\S]*?tabs\.create\(\{[\s\S]*?runtime\.getURL\('src\/ui\/install\.html'\)/,
+      `${label}: the guide should open only for a genuine first install`,
+    );
+    assert.match(
+      background,
+      new RegExp(`${runtime}\\.runtime\\.onInstalled\\.addListener\\(async \\(details\\) => \\{\\s*showFirstInstallGuide\\(details\\);`),
+      `${label}: onInstalled should pass install details to the guide gate`,
+    );
+    assert.match(html, /class="toolbar-rehearsal"/, `${label}: install guide should include the visual toolbar rehearsal`);
+    assert.match(html, /id="done-button"/, `${label}: install guide should provide a keyboard-accessible dismissal`);
+    if (label === 'firefox') {
+      assert.match(html, /data-build="firefox"/, 'firefox: the install page should identify its build');
+      assert.match(
+        fs.readFileSync(path.join(ROOT, prefix, 'src/ui/install.js'), 'utf8'),
+        /dataset\.build === 'firefox'[\s\S]*?getElementById\('shortcut-hint'\)\.remove\(\)/,
+        'firefox: install guidance should remove the undeclared Chromium keyboard shortcut',
+      );
+    }
+    assert.match(css, /@media \(prefers-reduced-motion: reduce\)/, `${label}: install guide should respect reduced motion`);
+    assert.match(css, /@media \(max-width: 680px\)/, `${label}: install guide should adapt to narrow windows`);
+
+    assert.equal(
+      await installModule.detectBrowser({ userAgent: 'Mozilla/5.0 Chrome/140.0 Safari/537.36 Edg/140.0' }),
+      'edge',
+      `${label}: Edge should be detected before generic Chromium`,
+    );
+    assert.equal(
+      await installModule.detectBrowser({ userAgent: 'Mozilla/5.0 Chrome/140.0 Safari/537.36 Vivaldi/7.5' }),
+      'vivaldi',
+      `${label}: Vivaldi should get its own toolbar guidance`,
+    );
+    assert.equal(
+      await installModule.detectBrowser({ userAgent: 'Mozilla/5.0 Chrome/140.0 Safari/537.36 OPR/121.0' }),
+      'opera',
+      `${label}: Opera should be detected before generic Chromium`,
+    );
+    assert.equal(
+      await installModule.detectBrowser({ userAgent: 'Mozilla/5.0 Firefox/142.0' }),
+      'firefox',
+      `${label}: Firefox should get its native toolbar guidance`,
+    );
+    assert.equal(
+      await installModule.detectBrowser({
+        userAgent: 'Mozilla/5.0 Chrome/140.0 Safari/537.36',
+        brave: { isBrave: async () => true },
+      }),
+      'brave',
+      `${label}: Brave should use its native detection hook`,
+    );
+    assert.equal(
+      await installModule.detectBrowser({
+        userAgent: 'Mozilla/5.0',
+        userAgentData: { brands: [{ brand: 'Google Chrome', version: '140' }] },
+      }),
+      'chrome',
+      `${label}: UA Client Hints should identify Chrome`,
+    );
+    assert.equal(
+      await installModule.detectBrowser({ userAgent: 'Mozilla/5.0 Chrome/140.0 Safari/537.36' }),
+      'chromium',
+      `${label}: unidentified Chromium forks should receive safe generic guidance`,
+    );
+    assert.match(
+      installModule.getBrowserGuide('firefox').secondBody,
+      /Pin to Toolbar/,
+      `${label}: Firefox guidance should match its extensions menu wording`,
+    );
+    assert.match(
+      installModule.getBrowserGuide('vivaldi').secondBody,
+      /Show Button/,
+      `${label}: Vivaldi guidance should match its hidden-button wording`,
+    );
+  }
+
+  const localeFilenames = fs.readdirSync(path.join(ROOT, 'src/chrome/src/ui/locales'))
+    .filter((name) => name.endsWith('.js'))
+    .sort();
+  for (const filename of localeFilenames) {
+    const chromeLocale = (await import(pathToFileURL(path.join(ROOT, 'src/chrome/src/ui/locales', filename)).href)).default;
+    const firefoxLocale = (await import(pathToFileURL(path.join(ROOT, 'src/firefox/src/ui/locales', filename)).href)).default;
+    const installKeys = Object.keys(chromeLocale).filter((key) => key.startsWith('install.'));
+    assert.equal(installKeys.length, 18, `${filename}: install guide should translate every user-facing string`);
+    assert.deepEqual(
+      Object.fromEntries(installKeys.map((key) => [key, chromeLocale[key]])),
+      Object.fromEntries(installKeys.map((key) => [key, firefoxLocale[key]])),
+      `${filename}: install guide translations should match across browser builds`,
+    );
+  }
+});
+
 test('chrome /record reports mic denial as a warning, not recording failure', () => {
   const panel = fs.readFileSync(path.join(ROOT, 'src/chrome/src/ui/sidepanel.js'), 'utf8');
   const locale = fs.readFileSync(path.join(ROOT, 'src/chrome/src/ui/locales/en.js'), 'utf8');

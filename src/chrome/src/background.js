@@ -731,8 +731,19 @@ async function loadPlanReviewSettings() {
 const planBeforeActReady = loadPlanBeforeAct();
 const planReviewReady = loadPlanReviewSettings();
 
+function showFirstInstallGuide(details) {
+  if (details?.reason !== 'install') return;
+  chrome.tabs.create({
+    url: chrome.runtime.getURL('src/ui/install.html'),
+    active: true,
+  }).catch((error) => {
+    console.warn('[WebBrain] Could not open the first-install pinning guide:', error);
+  });
+}
+
 // Initialize on install
-chrome.runtime.onInstalled.addListener(async () => {
+chrome.runtime.onInstalled.addListener(async (details) => {
+  showFirstInstallGuide(details);
   createContextMenus();
   await providerManager.load();
   await loadMaxSteps();
