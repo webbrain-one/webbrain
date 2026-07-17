@@ -46,14 +46,23 @@ export function providerIconUrl(id) {
   return `../../icons/providers/${file}`;
 }
 
-export function providerIconHtml(id, label, className = 'provider-icon') {
+/**
+ * @param {string} id
+ * @param {string} [label] unused when decorative (default); kept for call-site compat
+ * @param {string} [className]
+ * @param {{ decorative?: boolean }} [opts] decorative icons use empty alt (list rows next to a visible name)
+ */
+export function providerIconHtml(id, label, className = 'provider-icon', opts = {}) {
   const src = providerIconUrl(id);
   if (!src) return '';
   const safeSrc = String(src).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
-  const safeAlt = String(label || id || '')
-    .replace(/&/g, '&amp;')
-    .replace(/"/g, '&quot;')
-    .replace(/</g, '&lt;');
+  const decorative = opts.decorative !== false;
+  const safeAlt = decorative
+    ? ''
+    : String(label || id || '')
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;');
   const safeClass = String(className || 'provider-icon').replace(/[^a-zA-Z0-9 _-]/g, '');
   return `<img class="${safeClass}" src="${safeSrc}" alt="${safeAlt}" width="20" height="20" decoding="async" draggable="false">`;
 }
@@ -88,53 +97,63 @@ export const PROVIDER_SHORT_LABELS = {
   fireworks: 'Fireworks',
 };
 
+/** Hostname equals domain or is a subdomain of it (avoids substring spoofing). */
+function hostMatchesDomain(host, domain) {
+  if (!host || !domain) return false;
+  return host === domain || host.endsWith(`.${domain}`);
+}
+
 /**
  * Best-effort provider id from an OpenAI-compatible base URL.
  * Used by Multimodal settings to show a brand mark when the user pastes
  * a known endpoint — not a security boundary, just a UX hint.
+ * Matches on parsed hostname only (CodeQL: no raw-URL substring checks).
  */
 export function sniffProviderIdFromBaseUrl(baseUrl) {
-  const raw = String(baseUrl || '').trim().toLowerCase();
+  const raw = String(baseUrl || '').trim();
   if (!raw) return '';
   let host = '';
   let port = '';
   try {
     const u = new URL(raw.includes('://') ? raw : `http://${raw}`);
-    host = u.hostname || '';
+    host = (u.hostname || '').toLowerCase();
     port = u.port || '';
   } catch {
-    // Fall through with substring matching on the raw string.
+    return '';
   }
-  const hay = `${host} ${raw}`;
+  if (!host) return '';
 
   if (host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0' || host.endsWith('.local')) {
-    if (port === '11434' || hay.includes(':11434')) return 'ollama';
-    if (port === '1234' || hay.includes(':1234')) return 'lmstudio';
-    if (port === '1337' || hay.includes(':1337')) return 'jan';
-    if (port === '30000' || hay.includes(':30000')) return 'sglang';
-    if (port === '8000' || hay.includes(':8000')) return 'vllm';
-    if (port === '8080' || hay.includes(':8080')) return 'llamacpp';
+    if (port === '11434') return 'ollama';
+    if (port === '1234') return 'lmstudio';
+    if (port === '1337') return 'jan';
+    if (port === '30000') return 'sglang';
+    if (port === '8000') return 'vllm';
+    if (port === '8080') return 'llamacpp';
     return '';
   }
 
-  if (hay.includes('openrouter.ai')) return 'openrouter';
-  if (hay.includes('api.openai.com') || host === 'openai.com' || host.endsWith('.openai.com')) return 'openai';
-  if (hay.includes('anthropic.com')) return 'anthropic';
-  if (hay.includes('generativelanguage.googleapis') || (hay.includes('googleapis.com') && hay.includes('gemini'))) return 'gemini';
-  if (hay.includes('api.x.ai') || host === 'x.ai' || host.endsWith('.x.ai')) return 'xai';
-  if (hay.includes('groq.com')) return 'groq';
-  if (hay.includes('mistral.ai')) return 'mistral';
-  if (hay.includes('deepseek.com')) return 'deepseek';
-  if (hay.includes('fireworks.ai')) return 'fireworks';
-  if (hay.includes('together.xyz') || hay.includes('together.ai')) return 'together';
-  if (hay.includes('huggingface.co') || hay.includes('hf.co')) return 'huggingface';
-  if (hay.includes('cloudflare.com') || hay.includes('workers.dev')) return 'cloudflare';
-  if (hay.includes('nvidia.com') || hay.includes('integrate.api.nvidia')) return 'nvidia';
-  if (hay.includes('openai.azure.com') || (hay.includes('azure.com') && hay.includes('openai'))) return 'azure_openai';
-  if (hay.includes('amazonaws.com') || hay.includes('bedrock')) return 'aws_bedrock';
-  if (hay.includes('moonshot') || hay.includes('kimi.ai') || hay.includes('kimi.com')) return 'kimi';
-  if (hay.includes('dashscope') || hay.includes('aliyuncs.com')) return 'alibaba';
-  if (hay.includes('minimax')) return 'minimax';
-  if (hay.includes('api.webbrain') || hay.includes('webbrain.one')) return 'webbrain_cloud';
+  if (hostMatchesDomain(host, 'openrouter.ai')) return 'openrouter';
+  if (host === 'api.openai.com' || hostMatchesDomain(host, 'openai.com')) return 'openai';
+  if (hostMatchesDomain(host, 'anthropic.com')) return 'anthropic';
+  if (host === 'generativelanguage.googleapis.com' || hostMatchesDomain(host, 'googleapis.com')) return 'gemini';
+  if (host === 'api.x.ai' || hostMatchesDomain(host, 'x.ai')) return 'xai';
+  if (hostMatchesDomain(host, 'groq.com')) return 'groq';
+  if (hostMatchesDomain(host, 'mistral.ai')) return 'mistral';
+  if (hostMatchesDomain(host, 'deepseek.com')) return 'deepseek';
+  if (hostMatchesDomain(host, 'fireworks.ai')) return 'fireworks';
+  if (hostMatchesDomain(host, 'together.xyz') || hostMatchesDomain(host, 'together.ai')) return 'together';
+  if (hostMatchesDomain(host, 'huggingface.co') || hostMatchesDomain(host, 'hf.co')) return 'huggingface';
+  if (hostMatchesDomain(host, 'cloudflare.com') || hostMatchesDomain(host, 'workers.dev')) return 'cloudflare';
+  if (host === 'integrate.api.nvidia.com' || hostMatchesDomain(host, 'nvidia.com')) return 'nvidia';
+  if (host === 'openai.azure.com' || host.endsWith('.openai.azure.com')) return 'azure_openai';
+  // Bedrock runtime hosts are subdomains of amazonaws.com.
+  if (hostMatchesDomain(host, 'amazonaws.com')) return 'aws_bedrock';
+  if (hostMatchesDomain(host, 'moonshot.cn') || hostMatchesDomain(host, 'moonshot.ai')
+      || hostMatchesDomain(host, 'kimi.ai') || hostMatchesDomain(host, 'kimi.com')) return 'kimi';
+  if (hostMatchesDomain(host, 'aliyuncs.com')) return 'alibaba';
+  if (hostMatchesDomain(host, 'minimax.chat') || hostMatchesDomain(host, 'minimax.io')
+      || hostMatchesDomain(host, 'minimaxi.com')) return 'minimax';
+  if (hostMatchesDomain(host, 'webbrain.one')) return 'webbrain_cloud';
   return '';
 }

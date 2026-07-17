@@ -3541,10 +3541,39 @@ function rebindRestoredMessageControls() {
   rebindSubscribeButtons();
 }
 
+function getProviderPickerOptions() {
+  if (!providerPickerMenu) return [];
+  return Array.from(providerPickerMenu.querySelectorAll('.provider-picker-option'));
+}
+
 function setProviderPickerOpen(open) {
   if (!providerPickerMenu || !providerPickerBtn) return;
   providerPickerMenu.classList.toggle('hidden', !open);
   providerPickerBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  if (open) {
+    const selected = getProviderPickerOptions().find((btn) => btn.getAttribute('aria-selected') === 'true')
+      || getProviderPickerOptions()[0];
+    // Focus the selected (or first) option so keyboard users can arrow immediately.
+    queueMicrotask(() => selected?.focus());
+  }
+}
+
+function moveProviderPickerFocus(delta) {
+  const options = getProviderPickerOptions();
+  if (!options.length) return;
+  const active = document.activeElement;
+  let idx = options.indexOf(active);
+  if (idx < 0) idx = options.findIndex((btn) => btn.getAttribute('aria-selected') === 'true');
+  if (idx < 0) idx = 0;
+  const next = options[Math.max(0, Math.min(options.length - 1, idx + delta))];
+  next?.focus();
+}
+
+function activateFocusedProviderPickerOption() {
+  const active = document.activeElement;
+  if (active?.classList?.contains('provider-picker-option')) {
+    active.click();
+  }
 }
 
 function syncProviderPickerButton() {
@@ -6989,14 +7018,76 @@ providerPickerBtn?.addEventListener('click', (event) => {
   setProviderPickerOpen(open);
 });
 
+// Open with keyboard from the closed trigger (combobox-ish).
+providerPickerBtn?.addEventListener('keydown', (event) => {
+  if (event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault();
+    if (providerPickerMenu?.classList.contains('hidden')) {
+      setProviderPickerOpen(true);
+      if (event.key === 'ArrowUp') {
+        const options = getProviderPickerOptions();
+        options[options.length - 1]?.focus();
+      }
+    } else if (event.key === 'Enter' || event.key === ' ') {
+      setProviderPickerOpen(false);
+    }
+  }
+});
+
+providerPickerMenu?.addEventListener('keydown', (event) => {
+  if (providerPickerMenu.classList.contains('hidden')) return;
+  if (event.key === 'ArrowDown') {
+    event.preventDefault();
+    moveProviderPickerFocus(1);
+  } else if (event.key === 'ArrowUp') {
+    event.preventDefault();
+    moveProviderPickerFocus(-1);
+  } else if (event.key === 'Home') {
+    event.preventDefault();
+    getProviderPickerOptions()[0]?.focus();
+  } else if (event.key === 'End') {
+    event.preventDefault();
+    const options = getProviderPickerOptions();
+    options[options.length - 1]?.focus();
+  } else if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault();
+    activateFocusedProviderPickerOption();
+  } else if (event.key === 'Escape') {
+    event.preventDefault();
+    setProviderPickerOpen(false);
+    providerPickerBtn?.focus();
+  } else if (event.key === 'Tab') {
+    // Let Tab move focus out; focusout closes the menu.
+    setProviderPickerOpen(false);
+  }
+});
+
 document.addEventListener('click', (event) => {
   if (!providerPickerMenu || providerPickerMenu.classList.contains('hidden')) return;
   const root = document.getElementById('provider-picker');
   if (root && !root.contains(event.target)) setProviderPickerOpen(false);
 });
 
+document.getElementById('provider-picker')?.addEventListener('focusout', (event) => {
+  if (!providerPickerMenu || providerPickerMenu.classList.contains('hidden')) return;
+  const root = document.getElementById('provider-picker');
+  const next = event.relatedTarget;
+  // relatedTarget is null when focus leaves the document; still close.
+  if (!root) return;
+  if (next && root.contains(next)) return;
+  // Defer so option click (focus move then click) still registers.
+  queueMicrotask(() => {
+    if (!providerPickerMenu || providerPickerMenu.classList.contains('hidden')) return;
+    if (root.contains(document.activeElement)) return;
+    setProviderPickerOpen(false);
+  });
+});
+
 document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape') setProviderPickerOpen(false);
+  if (event.key === 'Escape' && providerPickerMenu && !providerPickerMenu.classList.contains('hidden')) {
+    setProviderPickerOpen(false);
+    providerPickerBtn?.focus();
+  }
 });
 
 async function openChatHistoryPage() {

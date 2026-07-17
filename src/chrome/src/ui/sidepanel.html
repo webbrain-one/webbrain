@@ -95,7 +95,7 @@
           <!-- Native select kept as the value source for existing handlers.
                Closed button is text-only; brand icons show only in the open menu. -->
           <select id="provider-select" class="provider-select-native" title="LLM Provider" tabindex="-1" aria-hidden="true"></select>
-          <button type="button" id="provider-picker-btn" class="provider-picker-btn" aria-haspopup="listbox" aria-expanded="false" aria-controls="provider-picker-menu">
+          <button type="button" id="provider-picker-btn" class="provider-picker-btn" aria-haspopup="listbox" aria-expanded="false" aria-controls="provider-picker-menu" aria-label="LLM Provider">
             <span class="provider-picker-label" id="provider-picker-label"></span>
             <span class="provider-picker-caret" aria-hidden="true">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -103,7 +103,7 @@
               </svg>
             </span>
           </button>
-          <div class="provider-picker-menu hidden" id="provider-picker-menu" role="listbox"></div>
+          <div class="provider-picker-menu hidden" id="provider-picker-menu" role="listbox" tabindex="-1"></div>
         </div>
         <span id="status-dot" class="status-dot offline" data-i18n-title="sp.status.disconnected"></span>
       </div>

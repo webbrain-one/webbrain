@@ -650,6 +650,10 @@ body {
   outline: none;
 }
 
+.provider-picker-option:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--accent, #6c63ff);
+}
+
 .provider-picker-option[aria-selected="true"] {
   background: rgba(108, 99, 255, 0.18);
 }
@@ -696,7 +700,9 @@ body {
   appearance: none;
 }
 
-#header button {
+/* Icon buttons in the header-right cluster only. Do not target
+   .provider-picker-btn / .provider-picker-option — those need select chrome. */
+#header .header-right button {
   background: none;
   border: none;
   color: var(--text-secondary);
@@ -708,12 +714,12 @@ body {
   transition: color 0.2s, background 0.2s;
 }
 
-#header button:hover {
+#header .header-right button:hover {
   color: var(--text-primary);
   background: var(--accent-dim);
 }
 
-#header button.active {
+#header .header-right button.active {
   color: var(--accent);
   background: var(--accent-dim);
 }
