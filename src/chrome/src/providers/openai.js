@@ -197,6 +197,19 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
     });
   }
 
+  _supportsReasoningContentReplay(options = {}) {
+    if (String(this.config.providerName || '').trim().toLowerCase() !== 'kimi') return false;
+    const model = String(this.model || '').trim().toLowerCase();
+    if (/^kimi-k(?:3(?:$|-)|2\.7-code(?:$|-))/.test(model)) return true;
+    if (!/^kimi-k2\.6(?:$|-)/.test(model)) return false;
+
+    const configuredThinking = this.config.extraBody?.thinking;
+    const requestThinking = options.extraBody?.thinking;
+    const keep = requestThinking?.keep ?? configuredThinking?.keep;
+    const type = requestThinking?.type ?? configuredThinking?.type;
+    return keep === 'all' && type !== 'disabled';
+  }
+
   _isOfficialOpenAIBaseUrl() {
     try {
       const url = new URL(this.baseUrl);
@@ -220,7 +233,7 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
   _buildChatCompletionsBody(messages, options = {}, stream = false) {
     let body = {
       model: this.model,
-      messages: this._chatMessages(messages),
+      messages: this._chatMessages(messages, options),
       stream,
     };
     this._addTemperature(body, options);

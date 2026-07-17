@@ -92,11 +92,15 @@ export class BaseLLMProvider {
     return mapProviderMessages(messages, this.config);
   }
 
-  _chatMessages(messages) {
+  _supportsReasoningContentReplay(_options = {}) {
+    return false;
+  }
+
+  _chatMessages(messages, options = {}) {
     // Internal replay state is provider-specific. Responses output Items never
     // belong in Chat Completions, and reasoning_content is only valid for
-    // providers that explicitly opt into that extension (currently Kimi).
-    const keepReasoningContent = this.config.supportsReasoningContent === true;
+    // providers/models whose current request supports preserved thinking.
+    const keepReasoningContent = this._supportsReasoningContentReplay(options);
     const sanitized = (Array.isArray(messages) ? messages : []).map((message) => {
       if (!message || typeof message !== 'object') return message;
       const hasResponseItems = Object.hasOwn(message, 'response_items');

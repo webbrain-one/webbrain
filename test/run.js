@@ -16361,7 +16361,6 @@ test('ProviderManager update rejects unknown providers and pins existing provide
       }, { markConfigured: false });
       const savedKimi = mgr.providers.get('kimi');
       assert.equal(savedKimi?.config.omitTemperature, true, `${label}: Settings-style compat saves should preserve Kimi's temperature omission`);
-      assert.equal(savedKimi?.config.supportsReasoningContent, true, `${label}: Settings-style compat saves should preserve Kimi reasoning replay support`);
       assert.equal(
         savedKimi?._buildChatCompletionsBody(
           [{ role: 'user', content: 'hello' }],
@@ -16410,7 +16409,6 @@ test('_defaultConfigs: new cloud providers present and disabled by default', () 
     assert.equal(defaults.kimi.baseUrl, 'https://api.moonshot.ai/v1');
     assert.equal(defaults.kimi.model, 'kimi-k2.5');
     assert.equal(defaults.kimi.supportsStreamUsageOptions, true);
-    assert.equal(defaults.kimi.supportsReasoningContent, true);
     assert.equal(defaults.kimi.omitTemperature, true);
     assert.equal(defaults.kimi.compat?.maxTokensField, 'max_completion_tokens');
     assert.equal(defaults.kimi.compat?.omitTemperature, undefined);
@@ -16983,20 +16981,85 @@ test('Chat Completions scopes reasoning replay to providers that support it', ()
       `${label}: provider switches must strip foreign replay fields`,
     );
 
-    const kimiCompatible = new Provider({
+    const kimiK25 = new Provider({
       providerName: 'kimi',
       model: 'kimi-k2.5',
-      supportsReasoningContent: true,
     });
     assert.deepEqual(
-      kimiCompatible._chatMessages([replayMessage]),
+      kimiK25._chatMessages([replayMessage]),
+      [{
+        role: 'assistant',
+        content: null,
+        tool_calls: replayMessage.tool_calls,
+      }],
+      `${label}: K2.5 must not receive unsupported preserved thinking`,
+    );
+  }
+
+  for (const [label, Provider] of [
+    ['chrome OpenAI-compatible', OpenAIProviderCh],
+    ['firefox OpenAI-compatible', OpenAIProviderFx],
+  ]) {
+    for (const model of ['kimi-k3', 'kimi-k2.7-code', 'kimi-k2.7-code-highspeed']) {
+      const kimiPreserved = new Provider({ providerName: 'kimi', model });
+      assert.deepEqual(
+        kimiPreserved._chatMessages([replayMessage]),
+        [{
+          role: 'assistant',
+          content: null,
+          tool_calls: replayMessage.tool_calls,
+          reasoning_content: 'kimi-only reasoning',
+        }],
+        `${label}: ${model} should retain required preserved thinking`,
+      );
+    }
+
+    const kimiK26Default = new Provider({ providerName: 'kimi', model: 'kimi-k2.6' });
+    assert.deepEqual(
+      kimiK26Default._chatMessages([replayMessage]),
+      [{
+        role: 'assistant',
+        content: null,
+        tool_calls: replayMessage.tool_calls,
+      }],
+      `${label}: K2.6 should not retain historical thinking by default`,
+    );
+
+    const kimiK26Preserved = new Provider({
+      providerName: 'kimi',
+      model: 'kimi-k2.6',
+      extraBody: { thinking: { type: 'enabled', keep: 'all' } },
+    });
+    assert.deepEqual(
+      kimiK26Preserved._chatMessages([replayMessage]),
       [{
         role: 'assistant',
         content: null,
         tool_calls: replayMessage.tool_calls,
         reasoning_content: 'kimi-only reasoning',
       }],
-      `${label}: compatible calls should retain reasoning_content`,
+      `${label}: explicitly preserved K2.6 calls should retain reasoning_content`,
+    );
+
+    const perRequestBody = kimiK26Default._buildChatCompletionsBody(
+      [replayMessage],
+      { extraBody: { thinking: { type: 'enabled', keep: 'all' } } },
+    );
+    assert.equal(
+      perRequestBody.messages[0].reasoning_content,
+      'kimi-only reasoning',
+      `${label}: per-request K2.6 preserved thinking should retain reasoning_content`,
+    );
+    assert.deepEqual(perRequestBody.thinking, { type: 'enabled', keep: 'all' });
+
+    const disabledBody = kimiK26Preserved._buildChatCompletionsBody(
+      [replayMessage],
+      { extraBody: { thinking: { type: 'disabled' } } },
+    );
+    assert.equal(
+      disabledBody.messages[0].reasoning_content,
+      undefined,
+      `${label}: disabling K2.6 thinking should strip historical reasoning`,
     );
   }
 });
