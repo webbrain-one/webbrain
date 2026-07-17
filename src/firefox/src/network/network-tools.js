@@ -1,4 +1,5 @@
 import { firefoxRestrictedDomainFailure } from '../firefox-restricted-domains.js';
+import { filenameInConfiguredDownloadDirectory } from '../download-directory.js';
 
 /**
  * Network & download tools for the WebBrain agent (Firefox).
@@ -416,6 +417,11 @@ export function filenameFromContentDisposition(value) {
   }
 
   return safeDownloadFilename(parameters.get('filename'));
+}
+
+async function filenameForConfiguredDownload(filename) {
+  const explicitFilename = safeDownloadFilename(filename);
+  return filenameInConfiguredDownloadDirectory(browser, explicitFilename);
 }
 
 function defaultSkillDownloadFilename(contentType) {
@@ -908,7 +914,8 @@ async function downloadSkillFile(url, filename, waitMs = 60000) {
     || filenameFromContentDisposition(file.contentDisposition);
   const opts = { url: staged ? staged.localUrl : file.dataUrl, conflictAction: 'uniquify' };
   const safeName = safeDownloadFilename(filename) || responseFilename || defaultSkillDownloadFilename(contentType);
-  if (safeName) opts.filename = safeName;
+  const configuredName = await filenameInConfiguredDownloadDirectory(browser, safeName);
+  if (configuredName) opts.filename = configuredName;
   let downloadId;
   try {
     downloadId = await browser.downloads.download(opts);
@@ -2097,9 +2104,10 @@ export async function downloadResourceFromPage(tabId, args = {}) {
       };
     }
 
+    const downloadFilename = await filenameForConfiguredDownload(filename);
     const downloadId = await browser.downloads.download({
       url: r.url,
-      filename: filename || undefined,
+      filename: downloadFilename,
       conflictAction: 'uniquify',
     });
     return {
@@ -2153,6 +2161,7 @@ export async function downloadFiles(args = {}) {
     return { success: false, error: `Too many URLs (max ${DOWNLOAD_BATCH_MAX})` };
   }
 
+  const singleFilename = (urls.length === 1 && args.filename) ? args.filename : null;
   const results = new Array(urls.length);
   let idx = 0;
 
@@ -2162,9 +2171,10 @@ export async function downloadFiles(args = {}) {
       if (i >= urls.length) return;
       const url = urls[i];
       try {
-        const downloadId = await browser.downloads.download({
-          url, conflictAction: 'uniquify',
-        });
+        const filename = await filenameForConfiguredDownload(i === 0 ? singleFilename : null);
+        const opts = { url, conflictAction: 'uniquify' };
+        if (filename) opts.filename = filename;
+        const downloadId = await browser.downloads.download(opts);
         results[i] = { url, downloadId, success: true };
       } catch (e) {
         results[i] = { url, success: false, error: e.message };

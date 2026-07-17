@@ -32,10 +32,14 @@ import {
   parseProviderExtraBodyJson,
   shouldUseOpenAIResponsesApi,
 } from '../providers/provider-compatibility.js';
+import {
+  DOWNLOAD_DIRECTORY_STORAGE_KEY,
+  normalizeDownloadDirectory,
+} from '../download-directory.js';
 
 // Version shown in the subtitle. Kept here so it only needs one update per
 // release; the subtitle string itself is translated.
-const EXT_VERSION = '24.2.0';
+const EXT_VERSION = '24.2.1';
 
 const providersContainer = document.getElementById('providers');
 const displaySettings = document.getElementById('display-settings');
@@ -145,6 +149,7 @@ const btnClearCaptcha = document.getElementById('btn-clear-captcha');
 const captchaTestResult = document.getElementById('test-captcha');
 const languageSelect = document.getElementById('select-language');
 const themeSelect = document.getElementById('select-theme');
+const downloadDirectoryInput = document.getElementById('input-download-directory');
 const subtitleEl = document.getElementById('subtitle');
 
 // --- Appearance / theme ---
@@ -375,7 +380,7 @@ async function init() {
   browser.storage.local.remove(['authToken', 'authEmail', 'authDefaultModel']).catch(() => {});
 
   // Load display settings
-  const stored = await browser.storage.local.get(['verboseMode', 'selectionShortcutEnabled', 'helpImproveWebBrain', 'screenshotFallback', 'maxAgentSteps', 'autoScreenshot', 'useSiteAdapters', 'voiceInputEnabled', 'apiMutationObserverEnabled', 'planBeforeActMode', 'planBeforeAct', 'planReviewMode', 'planReviewConfidenceThreshold', 'notifySound', 'completionConfetti', 'tracingEnabled', 'strictSecretMode', 'agentAllowLocalNetwork', 'scheduledTasksEnabled', 'scheduledRequireConsequentialConfirmation', 'providerFilter', 'requestTimeoutMs', 'clarifyTimeoutSec', 'clarifyTimeoutSemanticsV2', 'costAllowanceSessionUsd', 'costAllowanceTotalUsd', 'cloudCostSpentUsd', 'screenshotRedaction']);
+  const stored = await browser.storage.local.get(['verboseMode', 'selectionShortcutEnabled', 'helpImproveWebBrain', 'screenshotFallback', 'maxAgentSteps', 'autoScreenshot', 'useSiteAdapters', 'voiceInputEnabled', 'apiMutationObserverEnabled', 'planBeforeActMode', 'planBeforeAct', 'planReviewMode', 'planReviewConfidenceThreshold', DOWNLOAD_DIRECTORY_STORAGE_KEY, 'notifySound', 'completionConfetti', 'tracingEnabled', 'strictSecretMode', 'agentAllowLocalNetwork', 'scheduledTasksEnabled', 'scheduledRequireConsequentialConfirmation', 'providerFilter', 'requestTimeoutMs', 'clarifyTimeoutSec', 'clarifyTimeoutSemanticsV2', 'costAllowanceSessionUsd', 'costAllowanceTotalUsd', 'cloudCostSpentUsd', 'screenshotRedaction']);
   if (typeof stored.providerFilter === 'string' && ['all','local','cloud','router'].includes(stored.providerFilter)) {
     providerFilter = stored.providerFilter;
   }
@@ -427,6 +432,9 @@ async function init() {
   if (planReviewConfidenceRange) {
     planReviewConfidenceRange.value = normalizePlanReviewConfidenceThreshold(stored);
     updatePlanReviewConfidenceUI();
+  }
+  if (downloadDirectoryInput) {
+    downloadDirectoryInput.value = normalizeDownloadDirectory(stored[DOWNLOAD_DIRECTORY_STORAGE_KEY]);
   }
   if (notifySoundToggle) notifySoundToggle.checked = stored.notifySound ?? true;
   if (completionConfettiToggle) completionConfettiToggle.checked = stored.completionConfetti ?? true;
@@ -930,6 +938,23 @@ if (globalThis.browser?.storage?.onChanged) {
 }
 
 // --- Display Settings ---
+
+downloadDirectoryInput?.addEventListener('input', () => {
+  downloadDirectoryInput.setCustomValidity('');
+});
+
+downloadDirectoryInput?.addEventListener('change', async () => {
+  const raw = String(downloadDirectoryInput.value || '').trim();
+  const directory = normalizeDownloadDirectory(raw);
+  if (raw && !directory) {
+    downloadDirectoryInput.setCustomValidity(t('st.display.download_directory.error'));
+    downloadDirectoryInput.reportValidity();
+    return;
+  }
+  downloadDirectoryInput.setCustomValidity('');
+  downloadDirectoryInput.value = directory;
+  await browser.storage.local.set({ [DOWNLOAD_DIRECTORY_STORAGE_KEY]: directory }).catch(() => {});
+});
 
 verboseToggle.addEventListener('change', async () => {
   await browser.storage.local.set({ verboseMode: verboseToggle.checked }).catch(() => {});

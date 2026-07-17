@@ -204,6 +204,12 @@ const ConfigTransferCh = await import(
 const ConfigTransferFx = await import(
   'file://' + path.join(ROOT, 'src/firefox/src/config-transfer.js').replace(/\\/g, '/')
 );
+const DownloadDirectoryCh = await import(
+  'file://' + path.join(ROOT, 'src/chrome/src/download-directory.js').replace(/\\/g, '/')
+);
+const DownloadDirectoryFx = await import(
+  'file://' + path.join(ROOT, 'src/firefox/src/download-directory.js').replace(/\\/g, '/')
+);
 const { transcribeAudio } = await import(
   'file://' + path.join(ROOT, 'src/chrome/src/agent/transcribe.js').replace(/\\/g, '/')
 );
@@ -2089,6 +2095,7 @@ test('/export --traces is wired in both side panels and backgrounds', () => {
 test('config transfer exports and restores Settings values including provider keys', () => {
   const stored = {
     wbLocale: 'tr',
+    downloadDirectory: 'Work/WebBrain',
     strictSecretMode: true,
     profileEnabled: true,
     profileText: 'Use the test profile',
@@ -2117,6 +2124,7 @@ test('config transfer exports and restores Settings values including provider ke
   assert.equal(chromeExport.settings.transcriptionModel.apiKey, 'audio-secret');
   assert.equal(chromeExport.settings.capsolverApiKey, 'capsolver-secret');
   assert.equal(chromeExport.settings.profileText, 'Use the test profile');
+  assert.equal(chromeExport.settings.downloadDirectory, 'Work/WebBrain');
   assert.equal(chromeExport.settings.wb_user_memory_v1.records.length, 1);
   assert.equal(chromeExport.settings.providers.webbrain_cloud.deviceGuid, undefined, 'device identity must not be portable');
   assert.equal(chromeExport.settings.cloudCostSpentUsd, undefined, 'spend counters are runtime state, not config');
@@ -2127,6 +2135,7 @@ test('config transfer exports and restores Settings values including provider ke
   const imported = ConfigTransferCh.parseConfigImport(JSON.stringify(chromeExport));
   assert.equal(imported.settings.providers.openai.apiKey, 'provider-secret');
   assert.equal(imported.settings.activeProvider, 'openai');
+  assert.equal(imported.settings.downloadDirectory, 'Work/WebBrain');
   assert.equal(imported.settings.themeMode, 'system', 'missing Settings values should restore their product defaults');
   assert.equal(Object.keys(imported.settings).length, ConfigTransferCh.CONFIG_STORAGE_KEYS.length);
 });
@@ -2149,6 +2158,197 @@ test('config transfer validates schema, size, containers, and unknown keys', () 
   }));
   assert.equal(parsed.settings.verboseMode, true);
   assert.deepEqual(parsed.ignoredKeys, ['futureSetting']);
+});
+
+test('download directory routing is relative and uses each browser-supported path', async () => {
+  for (const [label, downloadDirectory] of [
+    ['chrome', DownloadDirectoryCh],
+    ['firefox', DownloadDirectoryFx],
+  ]) {
+    assert.equal(downloadDirectory.normalizeDownloadDirectory(''), '', `${label}: blank should use the system default`);
+    assert.equal(downloadDirectory.normalizeDownloadDirectory(' Work\\WebBrain '), 'Work/WebBrain', `${label}: nested relative directory should normalize`);
+    assert.equal(downloadDirectory.normalizeDownloadDirectory('/tmp/WebBrain'), '', `${label}: absolute POSIX paths should be rejected`);
+    assert.equal(downloadDirectory.normalizeDownloadDirectory('C:\\Downloads\\WebBrain'), '', `${label}: absolute Windows paths should be rejected`);
+    assert.equal(downloadDirectory.normalizeDownloadDirectory('Work/../Other'), '', `${label}: parent traversal should be rejected`);
+    assert.equal(
+      downloadDirectory.filenameInDownloadDirectory('Work/WebBrain', '/Users/test/Downloads/report.pdf'),
+      'Work/WebBrain/report.pdf',
+      `${label}: configured directory should prefix the tentative basename`,
+    );
+    assert.equal(
+      downloadDirectory.filenameInDownloadDirectory('Work/WebBrain', 'Q1: "report"?.pdf'),
+      'Work/WebBrain/Q1_ _report__.pdf',
+      `${label}: explicit basenames should be safe for downloads.download`,
+    );
+  }
+
+  let storageChangeListener = null;
+  let determiningFilenameListener = null;
+  const chromeApi = {
+    runtime: { id: 'webbrain-extension-id' },
+    storage: {
+      local: {
+        async get() {
+          return { downloadDirectory: 'WebBrain' };
+        },
+      },
+      onChanged: {
+        addListener(listener) {
+          storageChangeListener = listener;
+        },
+      },
+    },
+    downloads: {
+      onDeterminingFilename: {
+        addListener(listener) {
+          determiningFilenameListener = listener;
+        },
+      },
+    },
+  };
+
+  const installed = DownloadDirectoryCh.installDownloadDirectoryRouting(chromeApi);
+  assert.equal(installed, determiningFilenameListener, 'chrome: routing listener should register');
+
+  const ownSuggestions = [];
+  assert.equal(
+    installed(
+      {
+        byExtensionId: chromeApi.runtime.id,
+        filename: '/Users/test/Downloads/generated.txt',
+      },
+      (suggestion) => ownSuggestions.push(suggestion),
+    ),
+    true,
+    'chrome: own downloads should wait for the stored directory',
+  );
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(ownSuggestions, [{ filename: 'WebBrain/generated.txt' }], 'chrome: own download should be routed');
+
+  const unrelatedSuggestions = [];
+  assert.equal(
+    installed(
+      { byExtensionId: 'another-extension', filename: '/Users/test/Downloads/other.txt' },
+      (suggestion) => unrelatedSuggestions.push(suggestion),
+    ),
+    undefined,
+    'chrome: unrelated downloads should not wait',
+  );
+  assert.deepEqual(unrelatedSuggestions, [undefined], 'chrome: unrelated downloads should keep their filename');
+
+  storageChangeListener({ downloadDirectory: { newValue: 'Work/Exports' } }, 'local');
+  const updatedSuggestions = [];
+  installed(
+    { byExtensionId: chromeApi.runtime.id, filename: 'next.csv' },
+    (suggestion) => updatedSuggestions.push(suggestion),
+  );
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(updatedSuggestions, [{ filename: 'Work/Exports/next.csv' }], 'chrome: storage changes should apply live');
+
+  const firefoxApi = {
+    storage: {
+      local: {
+        async get() {
+          return { downloadDirectory: 'Work/Exports' };
+        },
+      },
+    },
+  };
+  assert.equal(
+    await DownloadDirectoryFx.filenameInConfiguredDownloadDirectory(firefoxApi, 'report.pdf'),
+    'Work/Exports/report.pdf',
+    'firefox: explicit filenames should be routed before downloads.download',
+  );
+  assert.equal(
+    await DownloadDirectoryFx.filenameInConfiguredDownloadDirectory(firefoxApi, undefined),
+    undefined,
+    'firefox: missing filenames should be left to the browser instead of overriding Content-Disposition',
+  );
+  assert.equal(
+    await DownloadDirectoryFx.configuredDownloadDirectory(firefoxApi),
+    'Work/Exports',
+    'firefox: callers should be able to check whether routing is configured before probing a URL',
+  );
+});
+
+test('Firefox download_files routes known filenames without probing unknown downloads', async () => {
+  const originalBrowser = globalThis.browser;
+  const originalFetch = globalThis.fetch;
+  const downloadCalls = [];
+  let configuredDirectory = 'Work/WebBrain';
+  try {
+    globalThis.browser = {
+      storage: {
+        local: {
+          async get() {
+            return { downloadDirectory: configuredDirectory };
+          },
+        },
+      },
+      downloads: {
+        async download(options) {
+          downloadCalls.push(options);
+          return 9100 + downloadCalls.length;
+        },
+        async search({ id }) {
+          return [{
+            id,
+            filename: '/Users/test/Downloads/Work/WebBrain/report.pdf',
+            state: 'complete',
+            bytesReceived: 100,
+            totalBytes: 100,
+          }];
+        },
+      },
+    };
+    globalThis.fetch = async (url, options) => {
+      throw new Error(`filename discovery should not request ${url} with ${options?.method || 'GET'}`);
+    };
+
+    const result = await downloadFilesFx({
+      urls: ['https://example.com/export?id=1'],
+      filename: 'quarterly-report.pdf',
+    });
+    assert.equal(result.success, true);
+    assert.equal(downloadCalls.length, 1);
+    assert.equal(downloadCalls[0].filename, 'Work/WebBrain/quarterly-report.pdf');
+
+    const fallback = await downloadFilesFx({ urls: ['https://example.com/one-time?id=2'] });
+    assert.equal(fallback.success, true);
+    assert.equal(downloadCalls.length, 2);
+    assert.equal(
+      Object.hasOwn(downloadCalls[1], 'filename'),
+      false,
+      'an unknown one-time download should be requested exactly once and keep Firefox filename selection',
+    );
+
+    configuredDirectory = '';
+    const systemDefault = await downloadFilesFx({ urls: ['https://example.com/export?id=3'] });
+    assert.equal(systemDefault.success, true);
+    assert.equal(downloadCalls.length, 3);
+    assert.equal(
+      Object.hasOwn(downloadCalls[2], 'filename'),
+      false,
+      'the system-default setting should not override Firefox filename selection',
+    );
+
+    const explicit = await downloadFilesFx({
+      urls: ['https://example.com/export?id=4'],
+      filename: 'manual-report.csv',
+    });
+    assert.equal(explicit.success, true);
+    assert.equal(downloadCalls.length, 4);
+    assert.equal(
+      downloadCalls[3].filename,
+      'manual-report.csv',
+      'an explicit user filename should be preserved when no directory is configured',
+    );
+  } finally {
+    if (originalBrowser === undefined) delete globalThis.browser;
+    else globalThis.browser = originalBrowser;
+    if (originalFetch === undefined) delete globalThis.fetch;
+    else globalThis.fetch = originalFetch;
+  }
 });
 
 test('/export --config and /import JSON or --file are wired in both browsers', () => {
@@ -8825,6 +9025,108 @@ test('sidepanel awaits onboarding completion persistence before hiding', () => {
   }
 });
 
+test('first install opens a browser-aware pinning guide in both builds', async () => {
+  for (const [label, prefix, runtime] of [
+    ['chrome', 'src/chrome', 'chrome'],
+    ['firefox', 'src/firefox', 'browser'],
+  ]) {
+    const background = fs.readFileSync(path.join(ROOT, prefix, 'src/background.js'), 'utf8');
+    const html = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/install.html'), 'utf8');
+    const css = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/install.css'), 'utf8');
+    const installModule = await import(pathToFileURL(path.join(ROOT, prefix, 'src/ui/install.js')).href);
+
+    assert.match(
+      background,
+      /function showFirstInstallGuide\(details\) \{[\s\S]*?details\?\.reason !== 'install'[\s\S]*?tabs\.create\(\{[\s\S]*?runtime\.getURL\('src\/ui\/install\.html'\)/,
+      `${label}: the guide should open only for a genuine first install`,
+    );
+    assert.match(
+      background,
+      new RegExp(`${runtime}\\.runtime\\.onInstalled\\.addListener\\(async \\(details\\) => \\{\\s*showFirstInstallGuide\\(details\\);`),
+      `${label}: onInstalled should pass install details to the guide gate`,
+    );
+    assert.match(html, /class="toolbar-rehearsal"/, `${label}: install guide should include the visual toolbar rehearsal`);
+    assert.match(html, /id="done-button"/, `${label}: install guide should provide a keyboard-accessible dismissal`);
+    if (label === 'firefox') {
+      assert.match(html, /data-build="firefox"/, 'firefox: the install page should identify its build');
+      assert.match(
+        fs.readFileSync(path.join(ROOT, prefix, 'src/ui/install.js'), 'utf8'),
+        /dataset\.build === 'firefox'[\s\S]*?getElementById\('shortcut-hint'\)\.remove\(\)/,
+        'firefox: install guidance should remove the undeclared Chromium keyboard shortcut',
+      );
+    }
+    assert.match(css, /@media \(prefers-reduced-motion: reduce\)/, `${label}: install guide should respect reduced motion`);
+    assert.match(css, /@media \(max-width: 680px\)/, `${label}: install guide should adapt to narrow windows`);
+
+    assert.equal(
+      await installModule.detectBrowser({ userAgent: 'Mozilla/5.0 Chrome/140.0 Safari/537.36 Edg/140.0' }),
+      'edge',
+      `${label}: Edge should be detected before generic Chromium`,
+    );
+    assert.equal(
+      await installModule.detectBrowser({ userAgent: 'Mozilla/5.0 Chrome/140.0 Safari/537.36 Vivaldi/7.5' }),
+      'vivaldi',
+      `${label}: Vivaldi should get its own toolbar guidance`,
+    );
+    assert.equal(
+      await installModule.detectBrowser({ userAgent: 'Mozilla/5.0 Chrome/140.0 Safari/537.36 OPR/121.0' }),
+      'opera',
+      `${label}: Opera should be detected before generic Chromium`,
+    );
+    assert.equal(
+      await installModule.detectBrowser({ userAgent: 'Mozilla/5.0 Firefox/142.0' }),
+      'firefox',
+      `${label}: Firefox should get its native toolbar guidance`,
+    );
+    assert.equal(
+      await installModule.detectBrowser({
+        userAgent: 'Mozilla/5.0 Chrome/140.0 Safari/537.36',
+        brave: { isBrave: async () => true },
+      }),
+      'brave',
+      `${label}: Brave should use its native detection hook`,
+    );
+    assert.equal(
+      await installModule.detectBrowser({
+        userAgent: 'Mozilla/5.0',
+        userAgentData: { brands: [{ brand: 'Google Chrome', version: '140' }] },
+      }),
+      'chrome',
+      `${label}: UA Client Hints should identify Chrome`,
+    );
+    assert.equal(
+      await installModule.detectBrowser({ userAgent: 'Mozilla/5.0 Chrome/140.0 Safari/537.36' }),
+      'chromium',
+      `${label}: unidentified Chromium forks should receive safe generic guidance`,
+    );
+    assert.match(
+      installModule.getBrowserGuide('firefox').secondBody,
+      /Pin to Toolbar/,
+      `${label}: Firefox guidance should match its extensions menu wording`,
+    );
+    assert.match(
+      installModule.getBrowserGuide('vivaldi').secondBody,
+      /Show Button/,
+      `${label}: Vivaldi guidance should match its hidden-button wording`,
+    );
+  }
+
+  const localeFilenames = fs.readdirSync(path.join(ROOT, 'src/chrome/src/ui/locales'))
+    .filter((name) => name.endsWith('.js'))
+    .sort();
+  for (const filename of localeFilenames) {
+    const chromeLocale = (await import(pathToFileURL(path.join(ROOT, 'src/chrome/src/ui/locales', filename)).href)).default;
+    const firefoxLocale = (await import(pathToFileURL(path.join(ROOT, 'src/firefox/src/ui/locales', filename)).href)).default;
+    const installKeys = Object.keys(chromeLocale).filter((key) => key.startsWith('install.'));
+    assert.equal(installKeys.length, 18, `${filename}: install guide should translate every user-facing string`);
+    assert.deepEqual(
+      Object.fromEntries(installKeys.map((key) => [key, chromeLocale[key]])),
+      Object.fromEntries(installKeys.map((key) => [key, firefoxLocale[key]])),
+      `${filename}: install guide translations should match across browser builds`,
+    );
+  }
+});
+
 test('chrome /record reports mic denial as a warning, not recording failure', () => {
   const panel = fs.readFileSync(path.join(ROOT, 'src/chrome/src/ui/sidepanel.js'), 'utf8');
   const locale = fs.readFileSync(path.join(ROOT, 'src/chrome/src/ui/locales/en.js'), 'utf8');
@@ -9911,6 +10213,7 @@ test('settings moves profile and memory controls into Memory while CAPTCHA stays
     for (const id of [
       'select-language',
       'select-theme',
+      'input-download-directory',
       'toggle-verbose',
       'select-plan-before-act-mode',
       'toggle-scheduled-tasks',
@@ -9979,6 +10282,40 @@ test('settings General search filters visible and Advanced controls', () => {
     assert.match(settings, /function filterGeneralSettings\(\) \{[\s\S]*?const query = normalizeGeneralSearchText\(generalSearchInput\.value\);[\s\S]*?setGeneralSearchHidden\(item, !!query && !matches\);[\s\S]*?setGeneralSearchHidden\(advancedSettings, !!query && advancedMatches === 0\);[\s\S]*?if \(query && advancedMatches > 0\) advancedSettings\.open = true;[\s\S]*?generalSearchEmpty\.hidden = !query \|\| \(visibleMatches \+ advancedMatches\) > 0;[\s\S]*?\}/, `${label}: General search should filter rows, hide empty Advanced, and auto-open matched Advanced results`);
     assert.match(settings, /generalSearchInput\.addEventListener\('input', filterGeneralSettings\);/, `${label}: General search should filter as the user types`);
     assert.match(settings, /await setLocale\(languageSelect\.value\);[\s\S]*?filterGeneralSettings\(\);[\s\S]*?renderProviders\(\);/, `${label}: language changes should reapply the active General search`);
+  }
+});
+
+test('Settings > General configures WebBrain download subdirectory with system-default fallback', () => {
+  for (const [label, prefix, runtime] of [
+    ['chrome', 'src/chrome', 'chrome'],
+    ['firefox', 'src/firefox', 'browser'],
+  ]) {
+    const html = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/settings.html'), 'utf8');
+    const settings = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/settings.js'), 'utf8');
+    const locale = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/locales/en.js'), 'utf8');
+    const background = fs.readFileSync(path.join(ROOT, prefix, 'src/background.js'), 'utf8');
+    const config = fs.readFileSync(path.join(ROOT, prefix, 'src/config-transfer.js'), 'utf8');
+
+    assert.match(html, /id="input-download-directory"[\s\S]*?data-i18n-placeholder="st\.display\.download_directory\.placeholder"/, `${label}: General should expose the download directory field`);
+    assert.match(locale, /'st\.display\.download_directory\.placeholder': 'System default'/, `${label}: blank field should explain its system default`);
+    assert.match(locale, /Optional subfolder inside your browser or system Downloads directory/, `${label}: setting should explain the browser API boundary`);
+    assert.match(settings, /downloadDirectoryInput\.value = normalizeDownloadDirectory\(stored\[DOWNLOAD_DIRECTORY_STORAGE_KEY\]\)/, `${label}: stored directory should hydrate the field`);
+    assert.match(settings, new RegExp(`${runtime}\\.storage\\.local\\.set\\(\\{ \\[DOWNLOAD_DIRECTORY_STORAGE_KEY\\]: directory \\}\\)`), `${label}: valid directory should persist`);
+    assert.match(settings, /if \(raw && !directory\) \{[\s\S]*?setCustomValidity\(t\('st\.display\.download_directory\.error'\)\)[\s\S]*?return;/, `${label}: invalid absolute or parent paths should not persist`);
+    assert.match(config, /downloadDirectory: ''/, `${label}: portable config should default to the system directory`);
+    assert.match(config, /'downloadDirectory'/, `${label}: portable config should allow the setting`);
+
+    if (label === 'chrome') {
+      assert.match(background, /installDownloadDirectoryRouting\(chrome\);/, 'chrome: background should route extension downloads centrally');
+    } else {
+      const network = fs.readFileSync(path.join(ROOT, prefix, 'src/network/network-tools.js'), 'utf8');
+      const agent = fs.readFileSync(path.join(ROOT, prefix, 'src/agent/agent.js'), 'utf8');
+      const capture = fs.readFileSync(path.join(ROOT, prefix, 'src/run-capture.js'), 'utf8');
+      assert.doesNotMatch(background, /onDeterminingFilename|installDownloadDirectoryRouting/, 'firefox: background must not depend on unsupported filename events');
+      assert.match(network, /filenameInConfiguredDownloadDirectory\(browser,[\s\S]*?browser\.downloads\.download/g, 'firefox: network downloads should resolve the configured path before starting');
+      assert.match(agent, /filenameInConfiguredDownloadDirectory\(browser, filename\)[\s\S]*?browser\.downloads\.download/, 'firefox: visible-media downloads should resolve the configured path');
+      assert.match(capture, /filenameInConfiguredDownloadDirectory\(api, filename\)[\s\S]*?api\.downloads\.download/, 'firefox: run captures should resolve the configured path');
+    }
   }
 });
 

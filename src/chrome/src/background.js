@@ -61,6 +61,7 @@ import {
   createConfigExport,
   parseConfigImport,
 } from './config-transfer.js';
+import { installDownloadDirectoryRouting } from './download-directory.js';
 
 /**
  * WebBrain Service Worker (Background Script)
@@ -71,6 +72,7 @@ const providerManager = new ProviderManager();
 const agent = new Agent(providerManager);
 const userMemoryStore = createUserMemoryStore(chrome.storage.local);
 const profileSync = new ProfileSyncManager(chrome.storage.local);
+installDownloadDirectoryRouting(chrome);
 const scheduler = new ScheduledJobManager({
   api: chrome,
   agent,
@@ -731,8 +733,19 @@ async function loadPlanReviewSettings() {
 const planBeforeActReady = loadPlanBeforeAct();
 const planReviewReady = loadPlanReviewSettings();
 
+function showFirstInstallGuide(details) {
+  if (details?.reason !== 'install') return;
+  chrome.tabs.create({
+    url: chrome.runtime.getURL('src/ui/install.html'),
+    active: true,
+  }).catch((error) => {
+    console.warn('[WebBrain] Could not open the first-install pinning guide:', error);
+  });
+}
+
 // Initialize on install
-chrome.runtime.onInstalled.addListener(async () => {
+chrome.runtime.onInstalled.addListener(async (details) => {
+  showFirstInstallGuide(details);
   createContextMenus();
   await providerManager.load();
   await loadMaxSteps();
