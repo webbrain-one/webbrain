@@ -691,6 +691,23 @@
       color: var(--text2);
       line-height: 1.4;
     }
+    .setting-input {
+      flex: 0 1 260px;
+      min-width: 120px;
+      max-width: 42%;
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 7px 10px;
+      font: inherit;
+      font-size: 12px;
+      outline: none;
+    }
+    .setting-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(108,99,255,0.22);
+    }
     .skill-source {
       max-width: 340px;
       overflow: hidden;
@@ -1021,6 +1038,14 @@
           <option value="light" data-i18n="st.display.theme.light"></option>
           <option value="dark" data-i18n="st.display.theme.dark"></option>
         </select>
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-label" data-i18n="st.display.download_directory.label"></div>
+          <div class="setting-desc" data-i18n="st.display.download_directory.desc"></div>
+        </div>
+        <input class="setting-input" type="text" id="input-download-directory" autocomplete="off" spellcheck="false"
+               data-i18n-placeholder="st.display.download_directory.placeholder">
       </div>
       <div class="setting-row">
         <div class="setting-info">
