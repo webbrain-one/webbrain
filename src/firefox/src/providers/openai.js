@@ -94,9 +94,10 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
 
   _addTemperature(body, options) {
     // GPT-5 / o-series only accept the default temperature (1). Sending
-    // anything else returns 400. Omit the field entirely so the API uses
-    // its default; older models keep the explicit value.
-    if (this._isNewOpenAIContract()) return;
+    // anything else returns 400. Provider compatibility presets can impose
+    // the same omission for fixed-temperature models such as Kimi K2.5/K3.
+    // In both cases, let the API apply its required default.
+    if (this._isNewOpenAIContract() || this.config.compat?.omitTemperature) return;
     body.temperature = options.temperature ?? 0.7;
   }
 

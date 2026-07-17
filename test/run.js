@@ -16393,6 +16393,7 @@ test('_defaultConfigs: new cloud providers present and disabled by default', () 
     assert.equal(defaults.kimi.model, 'kimi-k2.5');
     assert.equal(defaults.kimi.supportsStreamUsageOptions, true);
     assert.equal(defaults.kimi.compat?.maxTokensField, 'max_completion_tokens');
+    assert.equal(defaults.kimi.compat?.omitTemperature, true);
     const kimi = mgr._createProvider('kimi', defaults.kimi);
     assert.equal(kimi.contextWindow, 262144);
     assert.equal(kimi.supportsVision, true);
@@ -16400,7 +16401,13 @@ test('_defaultConfigs: new cloud providers present and disabled by default', () 
     const body = kimi._buildChatCompletionsBody(messages, { maxTokens: 123 }, false);
     assert.equal(body.max_completion_tokens, 123);
     assert.equal(body.max_tokens, undefined);
-    const streamBody = kimi._buildChatCompletionsBody(messages, { maxTokens: 123 }, true);
+    assert.equal(body.temperature, undefined);
+    const streamBody = kimi._buildChatCompletionsBody(
+      messages,
+      { maxTokens: 123, temperature: 0.15 },
+      true,
+    );
+    assert.equal(streamBody.temperature, undefined);
     assert.deepEqual(streamBody.stream_options, { include_usage: true });
   }
 });
