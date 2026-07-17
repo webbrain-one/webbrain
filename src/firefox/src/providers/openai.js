@@ -94,10 +94,10 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
 
   _addTemperature(body, options) {
     // GPT-5 / o-series only accept the default temperature (1). Sending
-    // anything else returns 400. Provider compatibility presets can impose
+    // anything else returns 400. Provider configs can impose
     // the same omission for fixed-temperature models such as Kimi K2.5/K3.
     // In both cases, let the API apply its required default.
-    if (this._isNewOpenAIContract() || this.config.compat?.omitTemperature) return;
+    if (this._isNewOpenAIContract() || this.config.omitTemperature) return;
     body.temperature = options.temperature ?? 0.7;
   }
 
@@ -738,6 +738,10 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
             yield { type: 'usage', usage: json.usage };
           }
           const delta = json.choices?.[0]?.delta;
+          const reasoningDelta = delta?.reasoning_content || delta?.reasoning;
+          if (typeof reasoningDelta === 'string' && reasoningDelta) {
+            yield { type: 'reasoning', content: reasoningDelta };
+          }
           if (delta?.content) {
             yield { type: 'text', content: delta.content };
           }

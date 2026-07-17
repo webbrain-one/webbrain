@@ -623,9 +623,12 @@ export class Agent {
     return result;
   }
 
-  _withResponseItems(message, responseItems) {
-    return Array.isArray(responseItems) && responseItems.length
-      ? { ...message, response_items: responseItems }
+  _withResponseItems(message, responseItems, reasoningContent = '') {
+    if (Array.isArray(responseItems) && responseItems.length) {
+      return { ...message, response_items: responseItems };
+    }
+    return typeof reasoningContent === 'string' && reasoningContent
+      ? { ...message, reasoning_content: reasoningContent }
       : message;
   }
 
@@ -7620,6 +7623,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       }
       if (msg.tool_calls) totalChars += JSON.stringify(msg.tool_calls).length;
       if (msg.response_items) totalChars += JSON.stringify(msg.response_items).length;
+      if (typeof msg.reasoning_content === 'string') totalChars += msg.reasoning_content.length;
     }
     if (hasImage) totalChars += Agent.IMAGE_CHAR_COST;
     return totalChars;
@@ -12983,7 +12987,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           role: 'assistant',
           content: result.content || null,
           tool_calls: result.toolCalls,
-        }, result.responseItems));
+        }, result.responseItems, result.reasoningContent));
 
         const batchResult = await this._executeToolBatch(
           tabId, result.toolCalls, messages, onUpdate, provider, result.content, allowedToolNames, steps
@@ -13021,7 +13025,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       if (this._isActionMode(mode) && this._isCompressionPlaceholderResponse(result.content)) {
         if (!compressionPlaceholderRecoveryAttempted) {
           compressionPlaceholderRecoveryAttempted = true;
-          messages.push(this._withResponseItems({ role: 'assistant', content: result.content }, result.responseItems));
+          messages.push(this._withResponseItems({ role: 'assistant', content: result.content }, result.responseItems, result.reasoningContent));
           messages.push({
             role: 'user',
             content: '[System nudge: your previous response was a context-compression placeholder, not a real final answer or tool call. Continue the active browser task with tool calls. Do not output "[compressed]".]',
@@ -13072,7 +13076,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       // Genuine final answer — emit and exit.
       const progressFinalBlock = this._plainFinalProgressBlock(tabId);
       if (progressFinalBlock) {
-        messages.push(this._withResponseItems({ role: 'assistant', content: result.content }, result.responseItems));
+        messages.push(this._withResponseItems({ role: 'assistant', content: result.content }, result.responseItems, result.reasoningContent));
         messages.push({ role: 'user', content: progressFinalBlock });
         onUpdate('warning', { message: 'Progress ledger has unresolved rows; continuing.' });
         this._persist(tabId);
@@ -13081,7 +13085,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       finalResponse = result.costAllowanceMessage
         ? `${result.content}\n\n${result.costAllowanceMessage}`
         : result.content;
-      messages.push(this._withResponseItems({ role: 'assistant', content: finalResponse }, result.responseItems));
+      messages.push(this._withResponseItems({ role: 'assistant', content: finalResponse }, result.responseItems, result.reasoningContent));
       onUpdate('text', { content: finalResponse });
       break;
     }
@@ -13271,6 +13275,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         let toolCallsAccumulator = {};
         let hasToolCalls = false;
         let responseItems = null;
+        let reasoningContent = '';
 
         const streamOpts = this._cloudGenerationOptions(provider, {
           tools: provider.supportsTools ? tools : undefined,
@@ -13292,6 +13297,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           if (chunk.type === 'text') {
             fullText += chunk.content;
             onUpdate('text_delta', { content: chunk.content });
+          } else if (chunk.type === 'reasoning') {
+            reasoningContent += String(chunk.content || '');
           } else if (chunk.type === 'usage') {
             costStopMessage = (await this._recordCostUsage(provider, chunk.usage, costState)) || costStopMessage;
           } else if (chunk.type === 'tool_call') {
@@ -13354,7 +13361,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             role: 'assistant',
             content: fullText || null,
             tool_calls: toolCalls,
-          }, responseItems));
+          }, responseItems, reasoningContent));
 
           const batchResult = await this._executeToolBatch(
             tabId, toolCalls, messages, onUpdate, provider, fullText, allowedToolNames, steps
@@ -13403,7 +13410,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         if (this._isActionMode(mode) && this._isCompressionPlaceholderResponse(fullText)) {
           if (!compressionPlaceholderRecoveryAttempted) {
             compressionPlaceholderRecoveryAttempted = true;
-            messages.push(this._withResponseItems({ role: 'assistant', content: fullText }, responseItems));
+            messages.push(this._withResponseItems({ role: 'assistant', content: fullText }, responseItems, reasoningContent));
             messages.push({
               role: 'user',
               content: '[System nudge: your previous response was a context-compression placeholder, not a real final answer or tool call. Continue the active browser task with tool calls. Do not output "[compressed]".]',
@@ -13428,7 +13435,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         compressionPlaceholderRecoveryAttempted = false;
         const progressFinalBlock = this._plainFinalProgressBlock(tabId);
         if (progressFinalBlock) {
-          messages.push(this._withResponseItems({ role: 'assistant', content: fullText }, responseItems));
+          messages.push(this._withResponseItems({ role: 'assistant', content: fullText }, responseItems, reasoningContent));
           messages.push({ role: 'user', content: progressFinalBlock });
           onUpdate('warning', { message: 'Progress ledger has unresolved rows; continuing.' });
           this._persist(tabId);
@@ -13438,7 +13445,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           onUpdate('text_delta', { content: `\n\n${costStopMessage}` });
           fullText = `${fullText}\n\n${costStopMessage}`;
         }
-        messages.push(this._withResponseItems({ role: 'assistant', content: fullText }, responseItems));
+        messages.push(this._withResponseItems({ role: 'assistant', content: fullText }, responseItems, reasoningContent));
         this._persist(tabId);
         return finish(fullText);
 

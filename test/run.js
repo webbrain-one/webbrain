@@ -16326,6 +16326,7 @@ test('ProviderManager update rejects unknown providers and pins existing provide
       const mgr = new PM();
       const defaults = mgr._defaultConfigs();
       mgr.providers.set('openai', mgr._createProvider('openai', defaults.openai));
+      mgr.providers.set('kimi', mgr._createProvider('kimi', defaults.kimi));
       mgr.activeProviderId = 'openai';
 
       await assert.rejects(
@@ -16353,6 +16354,22 @@ test('ProviderManager update rejects unknown providers and pins existing provide
 
       await mgr.updateProvider('openai', { model: 'second-probe-model' }, { markConfigured: false });
       assert.equal(mgr.providers.get('openai')?.config.configured, true, `${label}: probes should preserve an existing configured marker`);
+
+      await mgr.updateProvider('kimi', {
+        model: 'kimi-k2.5',
+        compat: { maxTokensField: 'max_completion_tokens' },
+      }, { markConfigured: false });
+      const savedKimi = mgr.providers.get('kimi');
+      assert.equal(savedKimi?.config.omitTemperature, true, `${label}: Settings-style compat saves should preserve Kimi's temperature omission`);
+      assert.equal(
+        savedKimi?._buildChatCompletionsBody(
+          [{ role: 'user', content: 'hello' }],
+          { temperature: 0.15 },
+          false,
+        ).temperature,
+        undefined,
+        `${label}: saved Kimi config should still omit explicit agent temperatures`,
+      );
     }
   } finally {
     globalThis.chrome = originalChrome;
@@ -16392,8 +16409,9 @@ test('_defaultConfigs: new cloud providers present and disabled by default', () 
     assert.equal(defaults.kimi.baseUrl, 'https://api.moonshot.ai/v1');
     assert.equal(defaults.kimi.model, 'kimi-k2.5');
     assert.equal(defaults.kimi.supportsStreamUsageOptions, true);
+    assert.equal(defaults.kimi.omitTemperature, true);
     assert.equal(defaults.kimi.compat?.maxTokensField, 'max_completion_tokens');
-    assert.equal(defaults.kimi.compat?.omitTemperature, true);
+    assert.equal(defaults.kimi.compat?.omitTemperature, undefined);
     const kimi = mgr._createProvider('kimi', defaults.kimi);
     assert.equal(kimi.contextWindow, 262144);
     assert.equal(kimi.supportsVision, true);
@@ -16409,6 +16427,73 @@ test('_defaultConfigs: new cloud providers present and disabled by default', () 
     );
     assert.equal(streamBody.temperature, undefined);
     assert.deepEqual(streamBody.stream_options, { include_usage: true });
+  }
+});
+
+test('Kimi Chat Completions exposes reasoning content for non-streaming and streaming replay', async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    for (const Provider of [OpenAIProviderCh, OpenAIProviderFx]) {
+      const provider = new Provider({
+        providerName: 'kimi',
+        category: 'cloud',
+        baseUrl: 'https://api.moonshot.ai/v1',
+        model: 'kimi-k2.5',
+        omitTemperature: true,
+      });
+
+      globalThis.fetch = async () => new Response(JSON.stringify({
+        choices: [{
+          message: {
+            content: null,
+            reasoning_content: 'non-stream reasoning',
+            tool_calls: [{
+              id: 'call_non_stream',
+              type: 'function',
+              function: { name: 'read_page', arguments: '{}' },
+            }],
+          },
+        }],
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      const result = await provider.chat([{ role: 'user', content: 'inspect' }]);
+      assert.equal(result.reasoningContent, 'non-stream reasoning');
+      assert.equal(result.toolCalls?.[0]?.id, 'call_non_stream');
+
+      const streamEvents = [
+        { choices: [{ delta: { reasoning_content: 'stream ' } }] },
+        { choices: [{ delta: { reasoning_content: 'reasoning' } }] },
+        {
+          choices: [{
+            delta: {
+              tool_calls: [{
+                index: 0,
+                id: 'call_stream',
+                type: 'function',
+                function: { name: 'read_page', arguments: '{}' },
+              }],
+            },
+          }],
+        },
+      ];
+      const sse = `${streamEvents.map(event => `data: ${JSON.stringify(event)}\n\n`).join('')}data: [DONE]\n\n`;
+      globalThis.fetch = async () => new Response(sse, {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream' },
+      });
+      const chunks = [];
+      for await (const chunk of provider.chatStream([{ role: 'user', content: 'inspect' }])) {
+        chunks.push(chunk);
+      }
+      assert.deepEqual(chunks.slice(0, 2), [
+        { type: 'reasoning', content: 'stream ' },
+        { type: 'reasoning', content: 'reasoning' },
+      ]);
+      assert.equal(chunks[2].type, 'tool_call');
+      assert.equal(chunks[2].content?.[0]?.id, 'call_stream');
+      assert.equal(chunks[3].type, 'done');
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
   }
 });
 
@@ -16908,17 +16993,44 @@ test('GPT-5.6 Responses streaming preserves refusal text', async () => {
   }
 });
 
-test('Agent tool loops preserve Responses reasoning items on both execution paths', () => {
-  for (const prefix of ['src/chrome', 'src/firefox']) {
+test('Agent tool loops preserve provider reasoning state on both execution paths', () => {
+  for (const [prefix, AgentClass] of [
+    ['src/chrome', AgentCh],
+    ['src/firefox', AgentFx],
+  ]) {
     const source = fs.readFileSync(path.join(ROOT, prefix, 'src/agent/agent.js'), 'utf8');
-    assert.match(source, /_withResponseItems\(message, responseItems\)[\s\S]*response_items: responseItems/, `${prefix}: assistant helper should retain Responses output Items`);
-    assert.match(source, /content: result\.content \|\| null,[\s\S]*tool_calls: result\.toolCalls,[\s\S]*}, result\.responseItems\)/, `${prefix}: non-stream tool loop should retain response Items`);
-    assert.match(source, /content: result\.content \}, result\.responseItems\)[\s\S]*messages\.push\(\{ role: 'user', content: progressFinalBlock \}/, `${prefix}: non-stream progress continuations should retain response Items`);
-    assert.match(source, /content: finalResponse \}, result\.responseItems\)/, `${prefix}: non-stream final answers should retain response Items`);
-    assert.match(source, /chunk\.responseItems[\s\S]*content: fullText \|\| null,[\s\S]*tool_calls: toolCalls,[\s\S]*}, responseItems\)/, `${prefix}: stream tool loop should retain response Items`);
-    assert.match(source, /content: fullText \}, responseItems\)[\s\S]*messages\.push\(\{ role: 'user', content: progressFinalBlock \}/, `${prefix}: stream progress continuations should retain response Items`);
-    assert.match(source, /content: fullText \}, responseItems\)[\s\S]*return finish\(fullText\)/, `${prefix}: stream final answers should retain response Items`);
+    const agent = new AgentClass({});
+    const assistant = {
+      role: 'assistant',
+      content: null,
+      tool_calls: [{ id: 'call_1', function: { name: 'read_page', arguments: '{}' } }],
+    };
+    assert.deepEqual(
+      agent._withResponseItems(assistant, null, 'required Kimi reasoning'),
+      { ...assistant, reasoning_content: 'required Kimi reasoning' },
+      `${prefix}: Chat Completions reasoning should be replayed on the assistant message`,
+    );
+    const responseItems = [{ type: 'reasoning', encrypted_content: 'opaque' }];
+    assert.deepEqual(
+      agent._withResponseItems(assistant, responseItems, 'redundant summary'),
+      { ...assistant, response_items: responseItems },
+      `${prefix}: Responses replay items should remain authoritative`,
+    );
+    assert.ok(
+      agent._estimateContextChars([{ role: 'assistant', content: '', reasoning_content: 'reasoning bytes' }])
+        > agent._estimateContextChars([{ role: 'assistant', content: '' }]),
+      `${prefix}: reasoning replay should count toward context budgeting`,
+    );
+    assert.match(source, /_withResponseItems\(message, responseItems, reasoningContent = ''\)[\s\S]*response_items: responseItems/, `${prefix}: assistant helper should retain Responses output Items`);
+    assert.match(source, /reasoning_content: reasoningContent/, `${prefix}: assistant helper should retain Chat Completions reasoning content`);
+    assert.match(source, /content: result\.content \|\| null,[\s\S]*tool_calls: result\.toolCalls,[\s\S]*}, result\.responseItems, result\.reasoningContent\)/, `${prefix}: non-stream tool loop should retain provider reasoning state`);
+    assert.match(source, /content: result\.content \}, result\.responseItems, result\.reasoningContent\)[\s\S]*messages\.push\(\{ role: 'user', content: progressFinalBlock \}/, `${prefix}: non-stream progress continuations should retain provider reasoning state`);
+    assert.match(source, /content: finalResponse \}, result\.responseItems, result\.reasoningContent\)/, `${prefix}: non-stream final answers should retain provider reasoning state`);
+    assert.match(source, /chunk\.type === 'reasoning'[\s\S]*content: fullText \|\| null,[\s\S]*tool_calls: toolCalls,[\s\S]*}, responseItems, reasoningContent\)/, `${prefix}: stream tool loop should retain provider reasoning state`);
+    assert.match(source, /content: fullText \}, responseItems, reasoningContent\)[\s\S]*messages\.push\(\{ role: 'user', content: progressFinalBlock \}/, `${prefix}: stream progress continuations should retain provider reasoning state`);
+    assert.match(source, /content: fullText \}, responseItems, reasoningContent\)[\s\S]*return finish\(fullText\)/, `${prefix}: stream final answers should retain provider reasoning state`);
     assert.match(source, /if \(msg\.response_items\) totalChars \+= JSON\.stringify\(msg\.response_items\)\.length/, `${prefix}: context budgeting should include encrypted reasoning Items`);
+    assert.match(source, /if \(typeof msg\.reasoning_content === 'string'\) totalChars \+= msg\.reasoning_content\.length/, `${prefix}: context budgeting should include Chat Completions reasoning content`);
   }
 });
 
