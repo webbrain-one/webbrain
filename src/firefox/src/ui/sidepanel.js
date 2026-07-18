@@ -4140,22 +4140,38 @@ function addPersistentSlashMessage(content) {
   return addMessage('system', content, { beforeCurrentAssistant: true });
 }
 
-function screenshotDownloadFilename(fullPage = false, date = new Date()) {
-  const timestamp = date.toISOString()
-    .replace(/[:.]/g, '-')
-    .replace('T', '_')
-    .slice(0, 19);
-  return `webbrain-${fullPage ? 'full-page-' : ''}screenshot-${timestamp}.png`;
+function screenshotFilenamePrefix(pageUrl) {
+  try {
+    const url = new URL(String(pageUrl || ''));
+    if (!/^https?:$/.test(url.protocol)) return '';
+    const hostname = url.hostname.replace(/^www\./i, '');
+    let pathname = url.pathname;
+    try { pathname = decodeURIComponent(pathname); } catch {}
+    const raw = `${hostname}${pathname === '/' ? '' : `-${pathname.replace(/^\/+|\/+$/g, '')}`}`;
+    return raw
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^\p{L}\p{N}._-]+/gu, '-')
+      .slice(0, 160)
+      .replace(/[-.]+$/g, '');
+  } catch {
+    return '';
+  }
 }
 
-function renderScreenshotResult(dataUrl, { fullPage = false, warning = '' } = {}) {
+function screenshotDownloadFilename(pageUrl = '', fullPage = false) {
+  const prefix = screenshotFilenamePrefix(pageUrl) || 'webbrain';
+  return `${prefix}-${fullPage ? 'full-page-' : ''}screenshot.png`;
+}
+
+function renderScreenshotResult(dataUrl, { fullPage = false, warning = '', pageUrl = '' } = {}) {
   const warningHtml = warning
     ? `<div class="screenshot-warning"><strong>⚠️ ${escapeHtml(warning)}</strong></div>`
     : '';
   const imageClass = fullPage
     ? 'screenshot-result-image screenshot-result-image-full-page'
     : 'screenshot-result-image';
-  const filename = screenshotDownloadFilename(fullPage);
+  const filename = screenshotDownloadFilename(pageUrl, fullPage);
   const saveLabel = t('sp.screenshot.save_as');
   return `
     <div class="screenshot-result">
@@ -4192,6 +4208,7 @@ function bindScreenshotSaveButton(btn) {
       await browser.downloads.download({
         url: dataUrl,
         filename: btn.dataset.filename || screenshotDownloadFilename(
+          '',
           result?.querySelector('.screenshot-result-image-full-page') != null,
         ),
         saveAs: true,
@@ -4393,7 +4410,7 @@ async function parseSlashCommands(text, tabId = currentTabId) {
       if (currentTabId !== tabId || !tab?.active) return '';
       const dataUrl = await browser.tabs.captureVisibleTab(tab.windowId, { format: 'png' });
       if (currentTabId !== tabId) return '';
-      addScreenshotResultMessage(dataUrl);
+      addScreenshotResultMessage(dataUrl, { pageUrl: tab.url });
     } catch (e) {
       if (currentTabId !== tabId) return '';
       addPersistentSlashMessage(systemHtml(tSystemHtml('sp.screenshot.error', { msg: e.message })));

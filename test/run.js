@@ -12097,6 +12097,28 @@ test('sidepanel scopes async tab commands to the original tab', () => {
     const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
     const style = fs.readFileSync(path.join(ROOT, styleRel), 'utf8');
     const locale = fs.readFileSync(path.join(ROOT, localeRel), 'utf8');
+    const filenameHelperStart = panel.indexOf('function screenshotFilenamePrefix(pageUrl)');
+    const filenameHelperEnd = panel.indexOf('function renderScreenshotResult', filenameHelperStart);
+    assert.ok(filenameHelperStart >= 0 && filenameHelperEnd > filenameHelperStart, `${label}: screenshot filename helpers missing`);
+    const filenameRuntime = vm.runInNewContext(
+      `(() => { ${panel.slice(filenameHelperStart, filenameHelperEnd)}; return { screenshotFilenamePrefix, screenshotDownloadFilename }; })()`,
+      { URL },
+    );
+    assert.equal(
+      filenameRuntime.screenshotDownloadFilename('https://emresokullu.com/'),
+      'emresokullu.com-screenshot.png',
+      `${label}: screenshot filenames should identify the page host`,
+    );
+    assert.equal(
+      filenameRuntime.screenshotDownloadFilename('https://www.example.com/products/red%20shoe?token=secret#reviews', true),
+      'example.com-products-red-shoe-full-page-screenshot.png',
+      `${label}: screenshot filenames should include a safe path and full-page marker`,
+    );
+    assert.doesNotMatch(
+      filenameRuntime.screenshotDownloadFilename('https://example.com/account?token=secret#private'),
+      /token|secret|private/,
+      `${label}: screenshot filenames must not expose URL queries or fragments`,
+    );
     assert.match(panel, /async function parseSlashCommands\(text, tabId = currentTabId\) \{/, `${label}: slash-command parsing should accept the initiating tab id`);
 
     const helperStart = panel.indexOf('async function renderClearedConversationForTab(tabId)');
@@ -12141,7 +12163,7 @@ test('sidepanel scopes async tab commands to the original tab', () => {
       ? panel.indexOf("if (command.value === '/screenshot' && action === 'full-page')", screenshotIdx)
       : panel.indexOf("if (command.value === '/export' && action === 'traces')", screenshotIdx);
     const screenshotBody = panel.slice(screenshotIdx, screenshotEnd);
-    assert.match(screenshotBody, /if \(currentTabId !== tabId \|\| !tab\?\.active\) return '';[\s\S]*?captureVisibleTab[\s\S]*?if \(currentTabId !== tabId\) return '';[\s\S]*?addScreenshotResultMessage\(dataUrl\);/, `${label}: /screenshot should not render a captured image into a different tab`);
+    assert.match(screenshotBody, /if \(currentTabId !== tabId \|\| !tab\?\.active\) return '';[\s\S]*?captureVisibleTab[\s\S]*?if \(currentTabId !== tabId\) return '';[\s\S]*?addScreenshotResultMessage\(dataUrl, \{ pageUrl: tab\.url \}\);/, `${label}: /screenshot should not render a captured image into a different tab and should retain its URL for naming`);
     assert.match(panel, /function renderScreenshotResult\(dataUrl,[\s\S]*?screenshot-save-btn[\s\S]*?sp\.screenshot\.save_as/, `${label}: screenshot messages should render a visible Save As action`);
     assert.match(panel, /function bindScreenshotSaveButton\(btn\)[\s\S]*?downloads\.download\(\{[\s\S]*?url: dataUrl,[\s\S]*?saveAs: true,[\s\S]*?conflictAction: 'uniquify'/, `${label}: screenshot Save As should use the browser Downloads API and native picker`);
     assert.match(panel, /function rebindRestoredMessageControls\(\)[\s\S]*?rebindScreenshotSaveButtons\(\);/, `${label}: restored screenshot messages should regain their Save As behavior`);
@@ -12154,7 +12176,7 @@ test('sidepanel scopes async tab commands to the original tab', () => {
     if (label === 'chrome') {
       assert.notEqual(fullPageIdx, -1, `${label}: /screenshot --full-page parser missing`);
       const fullPageBody = panel.slice(fullPageIdx, panel.indexOf("if (command.value === '/record'", fullPageIdx));
-      assert.match(fullPageBody, /sendToBackground\('capture_full_page_screenshot', \{ tabId \}\);[\s\S]*?if \(currentTabId !== tabId\) return '';[\s\S]*?addScreenshotResultMessage\(res\.dataUrl, \{ fullPage: true, warning: res\.warning \}\);/, `${label}: /screenshot --full-page should render only into the initiating tab with the same Save As action`);
+      assert.match(fullPageBody, /tabs\.get\(tabId\)[\s\S]*?sendToBackground\('capture_full_page_screenshot', \{ tabId \}\);[\s\S]*?if \(currentTabId !== tabId\) return '';[\s\S]*?addScreenshotResultMessage\(res\.dataUrl, \{ fullPage: true, warning: res\.warning, pageUrl \}\);/, `${label}: /screenshot --full-page should render only into the initiating tab with URL-aware Save As`);
       assert.match(panel, /function renderScreenshotResult\(dataUrl,[\s\S]*?warningHtml = warning[\s\S]*?escapeHtml\(warning\)/, `${label}: fallback full-page images should display their escaped assembly warning`);
       assert.match(panel, /function isPlainFullPageScreenshotRequest\(text\) \{[\s\S]*?full\|whole\|entire\|complete[\s\S]*?tam sayfa[\s\S]*?ekran goruntusu/, `${label}: plain full-page screenshot request routing should cover English and Turkish requests`);
       assert.match(panel, /function normalizeScreenshotCommandText\(text\) \{[\s\S]*?isPlainFullPageScreenshotRequest\(text\)[\s\S]*?return '\/screenshot --full-page';[\s\S]*?isPlainScreenshotRequest\(text\)[\s\S]*?return '\/screenshot';/, `${label}: screenshot normalization should route full-page requests before viewport screenshots`);
