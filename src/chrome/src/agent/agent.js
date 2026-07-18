@@ -7639,7 +7639,6 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         && /\b(?:refus|will not|do not proceed|unauthorized|illegal|fraud|theft|unsafe|cannot assist|can't assist)\b/i.test(planText);
       const plannerShape = typeof object.summary === 'string'
         && Array.isArray(object.steps)
-        && object.steps.length > 0
         && ['confidence', 'memory', 'scheduling', 'risks', 'mode'].some(key => Object.prototype.hasOwnProperty.call(object, key))
         && !safetyRefusal;
       const policyKeys = ['mode', 'allowedActions', 'forbiddenActions', 'targets', 'pageScopePolicy', 'reason'];

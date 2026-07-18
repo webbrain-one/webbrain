@@ -22997,6 +22997,35 @@ test('Act rejects plan-only done summaries even after a successful read', async 
   }
 });
 
+test('empty-step planner JSON remains plan-only after successful task evidence', () => {
+  for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
+    const agent = new AgentClass({});
+    const tabId = 8619 + index;
+    agent._startPlanExecutionGuard(tabId, 'act', {
+      requestKind: 'execute',
+      requiresStateChange: false,
+    });
+    agent._markPlanExecutionToolCall(tabId, 'read_page', { success: true });
+    const leakedPlanner = JSON.stringify({
+      summary: 'I will inspect the page and report back.',
+      confidence: 0.8,
+      steps: [],
+      mode: 'act',
+    });
+
+    assert.equal(
+      agent._looksLikePlanOnlyTerminal(leakedPlanner),
+      true,
+      `${AgentClass.name}: empty-step planner JSON was not recognized`,
+    );
+    assert.equal(
+      agent._planOnlyTerminalDecision(tabId, leakedPlanner, { viaDone: true })?.retry,
+      true,
+      `${AgentClass.name}: prior read evidence let empty-step planner JSON finish`,
+    );
+  }
+});
+
 test('execution evidence ignores failed, denied, skipped, blocked, and unknown outcomes', () => {
   for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
     const agent = new AgentClass({});
