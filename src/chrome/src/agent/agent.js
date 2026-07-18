@@ -7143,7 +7143,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         ids: mastodonGuard.ids,
       };
     }
-    const sessionOpts = { ...opts, sessionId: opts.sessionId || args.sessionId || args.session_id, source: opts.source || args.source || 'model' };
+    // Only internal callers may select a trusted ledger source. Tool arguments
+    // are model-controlled and must not be able to impersonate the classifier.
+    const updateSource = opts.source || 'model';
+    const sessionOpts = { ...opts, sessionId: opts.sessionId || args.sessionId || args.session_id, source: updateSource };
     const session = this._sessionForProgressUpdate(tabId, canonicalItems, sessionOpts);
     const sessionId = sessionOpts.sessionId || session?.sessionId || '';
     const pageScope = opts.pageScope || session?.pageScope || '';
@@ -7155,7 +7158,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const current = this.progressLedgers.get(tabId) || [];
     const taskKey = this._progressTaskKeyHash(tabId);
     const result = upsertLedgerItems(current, scopedItems, {
-      source: opts.source || args.source || 'model',
+      source: updateSource,
       sessionId,
       pageScope,
       taskKey,
@@ -7445,7 +7448,6 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       fields: {
         completionRequirement: true,
         classifierTarget: true,
-        completionAllowedActions: allowedActions,
       },
     })).filter(item => item.label
       && !existingKeys.has(ledgerRowKey({ ...item, sessionId: session.sessionId })));

@@ -1186,6 +1186,9 @@ export function getToolsForMode(mode, opts = {}) {
   } else {
     base = AGENT_TOOLS.filter(t => FULL_TOOL_NAMES.has(t.function.name));
   }
+  // Compact Dev is intentional: the tier still limits the base Act surface,
+  // while an explicit Dev choice adds the audited Dev tools. Runtime
+  // completion invariants apply to Dev mutations at every prompt tier.
   if (normalizedMode === 'dev') {
     const seen = new Set(base.map(t => t.function?.name).filter(Boolean));
     const devTools = AGENT_TOOLS.filter(t => DEV_EXTENDED_TOOL_NAMES.has(t.function.name) && !seen.has(t.function.name));

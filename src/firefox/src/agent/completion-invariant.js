@@ -35,6 +35,11 @@ const DOWNLOAD_ACTION_TOOLS = new Set([
   'download_social_media',
 ]);
 
+// v1 deliberately enforces ordering, not semantic postcondition matching:
+// any successful explicit observation in this allowlist after the latest
+// action clears debt. This deterministically blocks success-without-a-read,
+// but it cannot prove that the read was relevant to the task. Action-specific
+// and domain-specific postconditions belong to a later enforcement layer.
 const OBSERVATION_TOOLS = new Set([
   'get_accessibility_tree',
   'read_page',
@@ -204,7 +209,7 @@ export function recordCompletionToolResult(state, name, args = {}, result) {
         || result?.inconclusive
         || result?.fallbackAttempted
         || result?.noProgress
-        || result?.dispatched === true
+        || (result?.dispatched === true && result?.success !== true)
         || result?.success === false
         || result?.error
       ),

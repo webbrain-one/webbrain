@@ -6192,6 +6192,15 @@ test('completion invariant state machine enforces post-action observation with C
     assert.equal(postDispatchFailure.hadAction, true, `${label}: post-dispatch failure was treated as no action`);
     assert.equal(postDispatchFailure.verificationDebt, true, `${label}: post-dispatch failure did not fail closed`);
     assert.equal(postDispatchFailure.lastAction?.uncertain, true, `${label}: post-dispatch failure lost uncertainty`);
+    const successfulDispatch = invariant.recordCompletionToolResult(
+      invariant.createCompletionInvariantState(`${label}-successful-dispatch`),
+      'execute_js',
+      { code: 'document.body.dataset.changed = "1"' },
+      { success: true, dispatched: true, result: true },
+    );
+    assert.equal(successfulDispatch.hadAction, true, `${label}: successful dispatch was not recorded as an action`);
+    assert.equal(successfulDispatch.verificationDebt, true, `${label}: successful dispatch did not require verification`);
+    assert.equal(successfulDispatch.lastAction?.uncertain, false, `${label}: clean successful dispatch was marked uncertain`);
 
     state = invariant.recordCompletionToolResult(
       state,
@@ -23689,6 +23698,32 @@ test('classifier targets become isolated app-owned completion obligations', asyn
     const rows = agent._rowsForProgressSession(tabId, session.sessionId);
     assert.deepEqual(rows.map(row => row.label), ['soda', 'Cola Zero'], `${AgentClass.name}: targets were not split into separate rows`);
     assert.ok(rows.every(row => row.fields?.completionRequirement === true), `${AgentClass.name}: rows are not app-owned completion requirements`);
+    assert.ok(rows.every(row => row.fields?.classifierTarget === true), `${AgentClass.name}: rows lost the app-owned classifier marker`);
+    assert.ok(
+      rows.every(row => !Object.prototype.hasOwnProperty.call(row.fields || {}, 'completionAllowedActions')),
+      `${AgentClass.name}: dead allowed-action metadata was stored on a row`,
+    );
+    assert.deepEqual(session.allowedActions, ['process_item', 'submit'], `${AgentClass.name}: allowed actions did not remain session-owned`);
+    const stripAttempt = agent._progressUpdate(tabId, {
+      source: 'classifier',
+      items: [{
+        id: rows[0].id,
+        status: 'pending',
+        fields: {
+          completionRequirement: false,
+          classifierTarget: null,
+        },
+      }],
+    }, { sessionId: session.sessionId });
+    assert.equal(stripAttempt.success, true, `${AgentClass.name}: ordinary row update failed`);
+    const pinnedRow = agent._rowsForProgressSession(tabId, session.sessionId).find(row => row.id === rows[0].id);
+    assert.equal(pinnedRow?.fields?.completionRequirement, true, `${AgentClass.name}: model stripped the completion requirement`);
+    assert.equal(pinnedRow?.fields?.classifierTarget, true, `${AgentClass.name}: model stripped the classifier marker`);
+    const strippedThenProcessed = agent._progressUpdate(tabId, {
+      items: [{ id: rows[0].id, status: 'processed' }],
+    }, { sessionId: session.sessionId });
+    assert.equal(strippedThenProcessed.success, false, `${AgentClass.name}: stripped obligation closed without evidence`);
+    assert.equal(strippedThenProcessed.completionInvariant, true, `${AgentClass.name}: stripped obligation bypass lost invariant classification`);
     const acted = agent._progressUpdate(tabId, {
       items: [{ id: rows[0].id, status: 'acted' }],
     }, { sessionId: session.sessionId });
@@ -23822,7 +23857,7 @@ test('classifier requirements allow transparent skipped and failed exits without
           fields: { completionRequirement: true },
         },
       ],
-    }, { sessionId: session.sessionId });
+    }, { source: 'classifier', sessionId: session.sessionId });
     assert.equal(seeded.success, true);
 
     const normalizedIdBypass = agent._progressUpdate(tabId, {
@@ -24433,7 +24468,7 @@ test('agent records GitHub stargazer observations into the progress ledger', asy
         status: 'pending',
         fields: { completionRequirement: true },
       }],
-    });
+    }, { source: 'classifier' });
     const result = { success: true, pageContent: page };
     agent._beginCompletionInvariant(tabId);
     agent._recordCompletionToolResult(tabId, 'get_accessibility_tree', {}, result);
