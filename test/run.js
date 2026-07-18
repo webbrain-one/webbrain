@@ -23689,6 +23689,16 @@ test('classifier targets become isolated app-owned completion obligations', asyn
     const rows = agent._rowsForProgressSession(tabId, session.sessionId);
     assert.deepEqual(rows.map(row => row.label), ['soda', 'Cola Zero'], `${AgentClass.name}: targets were not split into separate rows`);
     assert.ok(rows.every(row => row.fields?.completionRequirement === true), `${AgentClass.name}: rows are not app-owned completion requirements`);
+    const acted = agent._progressUpdate(tabId, {
+      items: [{ id: rows[0].id, status: 'acted' }],
+    }, { sessionId: session.sessionId });
+    assert.equal(acted.success, true, `${AgentClass.name}: seeded requirement could not become acted`);
+    assert.equal(agent._seedClassifierProgressTargets(tabId, session), null, `${AgentClass.name}: existing classifier rows were reseeded`);
+    assert.equal(
+      agent._rowsForProgressSession(tabId, session.sessionId).find(row => row.id === rows[0].id)?.status,
+      'acted',
+      `${AgentClass.name}: reseeding reset an acted requirement to pending`,
+    );
 
     const premature = agent._progressUpdate(tabId, {
       items: [{ id: rows[0].id, status: 'processed' }],
@@ -23866,6 +23876,17 @@ test('classifier requirements allow transparent skipped and failed exits without
     assert.deepEqual(
       agent._rowsForProgressSession(tabId, session.sessionId).map(row => [row.id, row.status]),
       [['soda', 'skipped'], ['cola-zero', 'failed']],
+    );
+    agent._beginCompletionInvariant(tabId);
+    const terminalUpgrade = agent._progressUpdate(tabId, {
+      items: [{ id: 'soda', status: 'processed' }],
+    }, { sessionId: session.sessionId });
+    assert.equal(terminalUpgrade.success, false, `${AgentClass.name}: terminal requirement upgraded to processed without fresh evidence`);
+    assert.equal(terminalUpgrade.completionInvariant, true);
+    assert.equal(
+      agent._rowsForProgressSession(tabId, session.sessionId).find(row => row.id === 'soda')?.status,
+      'skipped',
+      `${AgentClass.name}: blocked terminal upgrade mutated the row`,
     );
     assert.match(agent._progressDoneBlock(tabId, 'success')?.error || '', /outcome:"success" is not allowed/);
     assert.equal(agent._progressDoneBlock(tabId, 'partial'), null);

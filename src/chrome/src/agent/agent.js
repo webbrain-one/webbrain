@@ -7072,7 +7072,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         const row = incomingKey
           ? currentRows.find(candidate => ledgerRowKey(candidate) === incomingKey)
           : null;
-        return row?.fields?.completionRequirement === true && !isTerminalLedgerStatus(row?.status)
+        const changesTerminalStatus = normalizeLedgerStatus(row?.status, '')
+          !== normalizeLedgerStatus(item?.status, '');
+        return row?.fields?.completionRequirement === true
+          && (!isTerminalLedgerStatus(row?.status) || changesTerminalStatus)
           ? { id: row.id, item, row }
           : null;
       })
@@ -7430,6 +7433,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const allowedActions = session.allowedActions.map(normalizeProgressAction).filter(Boolean);
     const action = allowedActions[0];
     if (!action) return null;
+    const existingKeys = new Set((this.progressLedgers.get(tabId) || [])
+      .map(ledgerRowKey)
+      .filter(Boolean));
     const items = session.targets.map((target, index) => ({
       id: `requirement:${index + 1}:${String(target || '').trim()}`,
       label: String(target || '').trim(),
@@ -7441,8 +7447,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         classifierTarget: true,
         completionAllowedActions: allowedActions,
       },
-    })).filter(item => item.label);
-    if (items.length < 2) return null;
+    })).filter(item => item.label
+      && !existingKeys.has(ledgerRowKey({ ...item, sessionId: session.sessionId })));
+    if (!items.length) return null;
     return this._progressUpdate(tabId, { items }, {
       source: 'classifier',
       sessionId: session.sessionId,
