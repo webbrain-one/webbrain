@@ -22637,6 +22637,7 @@ function planOnlyTerminalFixture() {
     request_kind: 'execute',
     requires_state_change: false,
     allows_planner_shaped_result: false,
+    allows_app_state_tool_evidence: false,
     summary: 'Open the current page and collect the requested details.',
     confidence: 0.91,
     steps: [
@@ -22663,6 +22664,7 @@ function plannerIntentFixture({
   requestKind = 'execute',
   requiresStateChange = false,
   allowsPlannerShapedResult = false,
+  allowsAppStateToolEvidence = false,
   locale = 'en',
   localizedSummary = 'Carry out the requested task.',
   localizedSteps = ['Inspect the current state.', 'Complete the requested task.'],
@@ -22672,6 +22674,7 @@ function plannerIntentFixture({
     request_kind: requestKind,
     requires_state_change: requiresStateChange,
     allows_planner_shaped_result: allowsPlannerShapedResult,
+    allows_app_state_tool_evidence: allowsAppStateToolEvidence,
     summary: requestKind === 'clarify'
       ? 'Ask the user for the missing information.'
       : 'Handle the requested task.',
@@ -23413,6 +23416,73 @@ test('execution evidence ignores failed, denied, skipped, blocked, and unknown o
   }
 });
 
+test('only explicitly requested app-state tools count as execution evidence', () => {
+  for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
+    const agent = new AgentClass({});
+
+    const readTabId = 8652 + index;
+    const readState = agent._startPlanExecutionGuard(readTabId, 'act', {
+      requestKind: 'execute',
+      requiresStateChange: false,
+      allowsAppStateToolEvidence: true,
+    });
+    agent._markPlanExecutionToolCall(readTabId, 'progress_read', { success: true, items: [] });
+    assert.equal(
+      agent._executionEvidenceSatisfied(readState),
+      true,
+      `${AgentClass.name}: requested progress read did not count as task evidence`,
+    );
+    assert.equal(
+      agent._planOnlyTerminalDecision(readTabId, 'Progress ledger inspected.', { viaDone: true, outcome: 'success' }),
+      null,
+      `${AgentClass.name}: requested progress read could not complete through done`,
+    );
+
+    const writeTabId = 8654 + index;
+    const writeState = agent._startPlanExecutionGuard(writeTabId, 'act', {
+      requestKind: 'execute',
+      requiresStateChange: true,
+      allowsAppStateToolEvidence: true,
+    });
+    agent._markPlanExecutionToolCall(writeTabId, 'scratchpad_write', { success: true });
+    assert.equal(
+      agent._executionEvidenceSatisfied(writeState),
+      true,
+      `${AgentClass.name}: requested scratchpad write did not count as mutation evidence`,
+    );
+    assert.equal(
+      agent._planOnlyTerminalDecision(writeTabId, 'Scratchpad note saved.', { viaDone: true, outcome: 'success' }),
+      null,
+      `${AgentClass.name}: requested scratchpad write could not complete through done`,
+    );
+
+    const incidentalTabId = 8656 + index;
+    const incidentalState = agent._startPlanExecutionGuard(incidentalTabId, 'act', {
+      requestKind: 'execute',
+      requiresStateChange: false,
+    });
+    agent._markPlanExecutionToolCall(incidentalTabId, 'progress_update', { success: true });
+    assert.equal(
+      agent._executionEvidenceSatisfied(incidentalState),
+      false,
+      `${AgentClass.name}: incidental progress update counted as task evidence`,
+    );
+
+    const clarifyTabId = 8658 + index;
+    const clarifyState = agent._startPlanExecutionGuard(clarifyTabId, 'act', {
+      requestKind: 'execute',
+      requiresStateChange: false,
+      allowsAppStateToolEvidence: true,
+    });
+    agent._markPlanExecutionToolCall(clarifyTabId, 'clarify', { success: true });
+    assert.equal(
+      agent._executionEvidenceSatisfied(clarifyState),
+      false,
+      `${AgentClass.name}: clarify counted as app-state task evidence`,
+    );
+  }
+});
+
 test('repeated plan failure warns when task tools may already have completed', () => {
   for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
     const agent = new AgentClass({});
@@ -23570,6 +23640,42 @@ test('planner intent carries explicit planner-shaped result authorization', asyn
   });
 });
 
+test('planner intent carries explicit app-state evidence authorization', async () => {
+  await withPlannerBrowserGlobals(async () => {
+    for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
+      const agent = new AgentClass({ getActive: () => ({ name: 'intent-test', model: 'intent-test' }) });
+      agent._chatWithCostAllowance = async () => ({
+        content: plannerIntentFixture({
+          requestKind: 'execute',
+          requiresStateChange: true,
+          allowsAppStateToolEvidence: true,
+          localizedSummary: 'Remember the requested note in the WebBrain scratchpad.',
+        }),
+      });
+      const tabId = 8692 + index;
+      const gate = await agent._runPlannerIntentGate(
+        tabId,
+        { role: 'user', content: 'Remember this note in the WebBrain scratchpad.' },
+        () => {},
+        null,
+        null,
+        '',
+        { tabUrl: 'https://example.com', tabTitle: 'Example' },
+        'act',
+        { locale: 'en' },
+      );
+
+      assert.equal(gate.proceed, true, `${AgentClass.name}: app-state task did not execute`);
+      assert.equal(gate.allowsAppStateToolEvidence, true, `${AgentClass.name}: app-state authorization was dropped`);
+      assert.equal(
+        agent._startPlanExecutionGuard(tabId, 'act', gate).allowsAppStateToolEvidence,
+        true,
+        `${AgentClass.name}: execution guard dropped app-state authorization`,
+      );
+    }
+  });
+});
+
 test('full planner carries explicit planner-shaped result authorization', async () => {
   await withPlannerBrowserGlobals(async () => {
     for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
@@ -23599,6 +23705,43 @@ test('full planner carries explicit planner-shaped result authorization', async 
 
       assert.equal(gate.proceed, true, `${AgentClass.name}: full planner blocked structured result`);
       assert.equal(gate.allowsPlannerShapedResult, true, `${AgentClass.name}: full planner dropped structured-result authorization`);
+    }
+  });
+});
+
+test('full planner carries explicit app-state evidence authorization', async () => {
+  await withPlannerBrowserGlobals(async () => {
+    for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
+      const tabId = 8696 + index;
+      const agent = new AgentClass({ getActive: () => ({ name: 'planner-test', model: 'planner-test' }) });
+      agent.conversations.set(tabId, [{ role: 'system', content: 'system' }]);
+      agent.setScheduledRunPolicy(tabId, {
+        requireConsequentialConfirmation: false,
+        autoApprovePlanReview: true,
+      });
+      agent._chatWithCostAllowance = async () => ({
+        content: plannerFixtureJson({
+          requires_state_change: true,
+          allows_app_state_tool_evidence: true,
+          summary: 'Write the requested note to the WebBrain scratchpad',
+        }),
+      });
+
+      const gate = await agent._runPlannerGate(
+        tabId,
+        { role: 'user', content: 'Remember this note in the WebBrain scratchpad.' },
+        () => {},
+        null,
+        null,
+        '',
+        { tabUrl: 'https://example.com', tabTitle: 'Example' },
+        'try',
+        'act',
+        { locale: 'en' },
+      );
+
+      assert.equal(gate.proceed, true, `${AgentClass.name}: full planner blocked app-state task`);
+      assert.equal(gate.allowsAppStateToolEvidence, true, `${AgentClass.name}: full planner dropped app-state authorization`);
     }
   });
 });
@@ -27603,6 +27746,7 @@ function plannerFixtureJson(overrides = {}) {
     request_kind: 'execute',
     requires_state_change: false,
     allows_planner_shaped_result: false,
+    allows_app_state_tool_evidence: false,
     summary: 'Open the page and collect visible account links',
     confidence: 0.75,
     steps: [{ id: '1', action: 'Read the current page', tools: ['read_page'] }],

@@ -1554,6 +1554,8 @@ export class Agent {
   static NAV_TOOLS = new Set(['navigate', 'new_tab', 'go_back', 'go_forward']);
   static STATE_CHANGE_TOOLS = new Set(['navigate', 'new_tab', 'go_back', 'go_forward', 'click', 'click_ax', 'type_text', 'type_ax', 'set_field', 'press_keys', 'scroll', 'hover', 'drag_drop', 'execute_js']);
   static EXECUTION_META_TOOLS = new Set(['clarify', 'scratchpad_write', 'scratchpad_read', 'progress_update', 'progress_read']);
+  static EXECUTION_APP_STATE_TOOLS = new Set(['scratchpad_write', 'scratchpad_read', 'progress_update', 'progress_read']);
+  static EXECUTION_APP_STATE_WRITE_TOOLS = new Set(['scratchpad_write', 'progress_update']);
   static DELIVERY_OBSERVATION_TOOLS = new Set(['read_page', 'get_accessibility_tree', 'get_interactive_elements', 'extract_data', 'get_selection', 'scroll', 'wait_for_stable', 'wait_for_element', 'read_pdf', 'fetch_url', 'research_url', 'read_downloaded_file', 'iframe_read', 'get_window_info', 'list_downloads', 'progress_read', 'screenshot', 'get_frames', 'get_shadow_dom', 'shadow_dom_query', 'read_youtube_transcript']);
   static NAV_PRONE_TOOLS = new Set(['click', 'click_ax', 'navigate', 'go_back', 'go_forward', 'execute_js', 'iframe_click']);
   static RECOMMENDED_ACTION_FAST_PATH_IDS = new Set(['download-media']);
@@ -4120,6 +4122,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       requestKind: gate.requestKind || 'execute',
       requiresStateChange: gate.requiresStateChange === true,
       allowsPlannerShapedResult: gate.allowsPlannerShapedResult === true,
+      allowsAppStateToolEvidence: gate.allowsAppStateToolEvidence === true,
     };
   }
 
@@ -4258,6 +4261,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         requestKind: 'execute',
         requiresStateChange: plan.requires_state_change === true,
         allowsPlannerShapedResult: plan.allows_planner_shaped_result === true,
+        allowsAppStateToolEvidence: plan.allows_app_state_tool_evidence === true,
       };
     } catch (e) {
       if (this._isCostAllowanceError(e)) {
@@ -4382,6 +4386,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           requestKind: 'execute',
           requiresStateChange: plan.requires_state_change === true,
           allowsPlannerShapedResult: plan.allows_planner_shaped_result === true,
+          allowsAppStateToolEvidence: plan.allows_app_state_tool_evidence === true,
         };
       }
       const choice = await this._waitForPlanReview(tabId, planId, plan, markdown, onUpdate, verboseMarkdown);
@@ -4413,6 +4418,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         requestKind: 'execute',
         requiresStateChange: plan.requires_state_change === true,
         allowsPlannerShapedResult: plan.allows_planner_shaped_result === true,
+        allowsAppStateToolEvidence: plan.allows_app_state_tool_evidence === true,
       };
     } catch (e) {
       if (this._isCostAllowanceError(e)) {
@@ -6703,6 +6709,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       && runOptions?.cloudRun !== true
       && requestKind === 'execute';
     const requiresStateChange = gateOutcome?.requiresStateChange === true;
+    const allowsAppStateToolEvidence = gateOutcome?.allowsAppStateToolEvidence === true;
     const carried = runOptions?.trustedContinuation === true
       ? this._continuationExecutionEvidence.get(tabId)
       : null;
@@ -6710,12 +6717,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const carryMatches = enabled
       && carried?.requestKind === 'execute'
       && carried.requiresStateChange === requiresStateChange
+      && carried.allowsAppStateToolEvidence === allowsAppStateToolEvidence
       && carried.conversationId === (this.conversationIds.get(tabId) || null);
     const state = {
       enabled,
       requestKind,
       requiresStateChange,
       allowsPlannerShapedResult: gateOutcome?.allowsPlannerShapedResult === true,
+      allowsAppStateToolEvidence,
       approvedPlan: this._hasApprovedExecutionPlan(this.conversations.get(tabId) || []),
       // Only the app-owned Continue action can carry verified evidence from
       // the immediately preceding run; ordinary user turns always start at 0.
@@ -6761,12 +6770,17 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
   _markPlanExecutionToolCall(tabId, name, result, { consequential = false } = {}) {
     const state = this._planExecutionGuards.get(tabId);
+    const requestedAppStateTool = state?.allowsAppStateToolEvidence === true
+      && this.constructor.EXECUTION_APP_STATE_TOOLS.has(name);
     if (!state?.enabled
         || name === 'done'
-        || this.constructor.EXECUTION_META_TOOLS.has(name)
+        || (this.constructor.EXECUTION_META_TOOLS.has(name) && !requestedAppStateTool)
         || !this._isSuccessfulExecutionEvidence(result)) return;
     state.successfulTaskToolCalls += 1;
-    if (consequential) state.successfulConsequentialToolCalls += 1;
+    if (consequential
+        || (requestedAppStateTool && this.constructor.EXECUTION_APP_STATE_WRITE_TOOLS.has(name))) {
+      state.successfulConsequentialToolCalls += 1;
+    }
   }
 
   _executionEvidenceSatisfied(state) {
@@ -6782,6 +6796,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       this._continuationExecutionEvidence.set(tabId, {
         requestKind: guard.requestKind,
         requiresStateChange: guard.requiresStateChange,
+        allowsAppStateToolEvidence: guard.allowsAppStateToolEvidence,
         successfulTaskToolCalls: guard.successfulTaskToolCalls,
         successfulConsequentialToolCalls: guard.successfulConsequentialToolCalls,
         conversationId: this.conversationIds.get(tabId) || null,
