@@ -652,6 +652,25 @@
     return { visible: true, reason: '' };
   }
 
+  function _axInteractiveHitDescendant(el, topmost) {
+    if (!el || !topmost || topmost === el || !el.contains?.(topmost)) return null;
+    for (let node = topmost; node && node !== el; node = node.parentElement) {
+      const tag = (node.tagName || '').toUpperCase();
+      const role = (node.getAttribute?.('role') || '').trim().toLowerCase();
+      if (
+        _isInteractive(node)
+        || ['LABEL', 'OPTION', 'SUMMARY'].includes(tag)
+        || ['checkbox', 'radio', 'switch', 'combobox', 'textbox', 'searchbox'].includes(role)
+        || !!node.isContentEditable
+        || node.hasAttribute?.('tabindex')
+        || node.hasAttribute?.('download')
+      ) {
+        return node;
+      }
+    }
+    return null;
+  }
+
   /** Walk up from a passive child to find its interactive ancestor (up to 5 levels). */
   function _resolveInteractiveAncestor(el) {
     if (!_PASSIVE_TAGS.has(el.tagName) || _isInteractive(el)) return el;
@@ -3392,6 +3411,9 @@
             topmost === el
             || el.contains?.(topmost)
           );
+          const interactiveHitDescendant = forClickFallback
+            ? _axInteractiveHitDescendant(el, topmost)
+            : null;
           const isEditable = !!el.isContentEditable || tag === 'input' || tag === 'textarea';
           const isNativeControl = ['button', 'a', 'input', 'select', 'textarea', 'label', 'option'].includes(tag);
           const isButtonLike = role === 'button' || !!el.closest?.('[role="button"]');
@@ -3413,6 +3435,7 @@
           if (!visibility.visible) fallbackBlockedReason = visibility.reason;
           else if (!inViewport) fallbackBlockedReason = 'target is outside the viewport or has a zero-sized box';
           else if (!hitOk) fallbackBlockedReason = 'target center is covered by another element';
+          else if (interactiveHitDescendant) fallbackBlockedReason = 'target center resolves to an interactive descendant that must not receive an automatic trusted click';
           else if (isEditable) fallbackBlockedReason = 'editable targets must not be auto-clicked twice';
           else if (tag === 'select') fallbackBlockedReason = 'native select controls must use keyboard selection';
           else if (isNativeControl || isButtonLike) fallbackBlockedReason = 'native/button-like controls keep the existing synthetic path';
@@ -3439,6 +3462,10 @@
               documentToken: window.__wbAxDocumentToken,
               hitOk,
               topmostTag: topmost?.tagName ? topmost.tagName.toLowerCase() : '',
+              interactiveDescendantTag: interactiveHitDescendant?.tagName
+                ? interactiveHitDescendant.tagName.toLowerCase()
+                : undefined,
+              interactiveDescendantRole: interactiveHitDescendant?.getAttribute?.('role') || undefined,
               fallbackEligible: !fallbackBlockedReason,
               fallbackBlockedReason: fallbackBlockedReason || undefined,
               fallbackState: _axFallbackState(el),

@@ -15471,6 +15471,83 @@ test('Chrome click_ax accepts a delayed target-state change without sending a se
   }
 });
 
+test('Chrome click_ax accepts a target-state-only change after the trusted fallback', async () => {
+  const originals = {
+    attach: cdpClientCh.attach,
+    dispatch: cdpClientCh.dispatchMouseEvent,
+  };
+  const agent = new AgentCh({});
+  let dispatched = 0;
+  let resolves = 0;
+  agent._clickAxFinalSettleMs = () => 0;
+  agent._observeClickAxSideEffect = async () => ({
+    changed: false,
+    proved: false,
+    safetyVeto: false,
+    observable: true,
+    reasons: [],
+    proofReasons: [],
+    safetyReasons: [],
+    snapshot: '{"text":"same"}',
+  });
+  agent._clickAxObservedSideEffect = async () => ({
+    changed: false,
+    proved: false,
+    safetyVeto: false,
+    observable: true,
+    reasons: [],
+    proofReasons: [],
+    safetyReasons: [],
+    snapshot: '{"text":"same"}',
+  });
+  agent._captureClickAxObservation = async (_tabId, snapshot, sideEffectWatch, startedAt) => ({
+    startedAt,
+    snapshot,
+    tabIds: '1,42',
+    sideEffectWatch,
+  });
+  agent._resolveClickAxFallbackTarget = async () => {
+    resolves++;
+    return {
+      success: true,
+      fallbackEligible: true,
+      documentToken: 'doc-state-after-trusted',
+      fallbackState: resolves >= 3 ? '{"className":"selected"}' : '{"className":""}',
+      x: 100,
+      y: 200,
+      rect: { x: 50, y: 180, w: 100, h: 40 },
+    };
+  };
+  try {
+    cdpClientCh.attach = async () => ({ tabId: 42, attached: true });
+    cdpClientCh.dispatchMouseEvent = async () => { dispatched++; };
+    const result = await agent._maybeFallbackClickAxWithCdp(
+      42,
+      { ref_id: 'ref_state_after_trusted' },
+      {
+        success: true,
+        method: 'click_ax',
+        ref_id: 'ref_state_after_trusted',
+        tag: 'div',
+        _fallbackStateBefore: '{"className":""}',
+        _fallbackStateAfterImmediate: '{"className":""}',
+      },
+      { snapshot: '{"text":"same"}', sideEffectWatch: { created: [], requests: [] } },
+    );
+    assert.equal(dispatched, 3);
+    assert.equal(resolves, 3, 'the target should be re-resolved after the trusted click');
+    assert.equal(result.success, true);
+    assert.equal(result.fallback, 'cdp_after_synthetic_no_progress');
+    assert.equal(result.fallbackAttempted, true);
+    assert.equal(result.trusted, true);
+    assert.equal(result.verified, true);
+    assert.deepEqual(result.observedEffects, ['target_state']);
+  } finally {
+    cdpClientCh.attach = originals.attach;
+    cdpClientCh.dispatchMouseEvent = originals.dispatch;
+  }
+});
+
 test('Chrome executeTool runs automatic click_ax fallback and reuses its observed snapshot', async () => {
   const originalChrome = globalThis.chrome;
   const originals = {

@@ -12643,6 +12643,29 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     }
 
     const trustedObservation = await this._observeClickAxSideEffect(tabId, fallbackBaseline);
+    let trustedTargetStateChanged = false;
+    if (!trustedObservation.proved) {
+      const trustedTarget = await this._resolveClickAxFallbackTarget(tabId, args?.ref_id);
+      trustedTargetStateChanged = !!(
+        target.fallbackState
+        && trustedTarget?.success
+        && trustedTarget.documentToken === target.documentToken
+        && trustedTarget.fallbackState
+        && target.fallbackState !== trustedTarget.fallbackState
+      );
+    }
+    if (trustedTargetStateChanged) {
+      return withSnapshot({
+        ...response,
+        success: true,
+        fallback: 'cdp_after_synthetic_no_progress',
+        fallbackAttempted: true,
+        trusted: true,
+        verified: true,
+        observedEffects: ['target_state'],
+        rect: target.rect || response.rect,
+      }, trustedObservation);
+    }
     if (!trustedObservation.proved) {
       return withSnapshot({
         ...response,

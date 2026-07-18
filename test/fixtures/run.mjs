@@ -736,11 +736,14 @@ test('click_ax: synthetic-first row needs trusted CDP events only when the page 
   }
 });
 
-test('ax_resolve_rect: trusted fallback eligibility rejects hidden, indirect/localized mutation, stateful, native, form, and download targets', async (page) => {
+test('ax_resolve_rect: trusted fallback eligibility rejects interactive descendants, hidden, mutating, stateful, native, form, and download targets', async (page) => {
   await setup(page, 'trusted-click-fallback.html');
   const tree = await call(page, 'get_accessibility_tree', { filter: 'all', maxDepth: 10, maxChars: 20000 });
   const content = String(tree?.pageContent || '');
   const refs = {
+    nestedButton: content.match(/listitem "Nested button row" \[(ref_\d+)\]/)?.[1],
+    nestedLink: content.match(/listitem "Nested link row" \[(ref_\d+)\]/)?.[1],
+    nestedInput: content.match(/listitem "Nested input row" \[(ref_\d+)\]/)?.[1],
     native: content.match(/button "Native button" \[(ref_\d+)\]/)?.[1],
     destructive: content.match(/listitem "Delete account" \[(ref_\d+)\]/)?.[1],
     indirectDestructive: content.match(/listitem "Delete account indirectly" \[(ref_\d+)\]/)?.[1],
@@ -766,6 +769,15 @@ test('ax_resolve_rect: trusted fallback eligibility rejects hidden, indirect/loc
     if (!result?.success) throw new Error(`${label} ref did not resolve: ${JSON.stringify(result)}`);
     if (result.fallbackEligible !== false || !result.fallbackBlockedReason) {
       throw new Error(`${label} target should be blocked from trusted fallback: ${JSON.stringify(result)}`);
+    }
+  }
+  for (const label of ['nestedButton', 'nestedLink', 'nestedInput']) {
+    const result = await call(page, 'ax_resolve_rect', { ref_id: refs[label], forClickFallback: true });
+    if (!/interactive descendant/.test(result.fallbackBlockedReason || '')) {
+      throw new Error(`${label} should be blocked specifically by its interactive center descendant: ${JSON.stringify(result)}`);
+    }
+    if (!result.interactiveDescendantTag) {
+      throw new Error(`${label} should report the interactive descendant tag: ${JSON.stringify(result)}`);
     }
   }
 

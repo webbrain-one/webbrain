@@ -50,11 +50,42 @@
       display: inline-block;
       margin: 0 12px 12px 0;
     }
+
+    .nested-control-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 56px;
+      padding: 0;
+    }
+
+    .nested-control-row > button,
+    .nested-control-row > a,
+    .nested-control-row > input {
+      box-sizing: border-box;
+      width: 220px;
+      height: 40px;
+    }
+
+    .nested-control-row > a {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
   </style>
 </head>
 <body>
   <div id="trusted-row" class="row" role="listitem" tabindex="0">Defne Sokullu Yesterday Photo</div>
   <div id="synthetic-row" class="row" role="listitem" tabindex="0">Normal synthetic row</div>
+  <div id="nested-button-row" class="row nested-control-row" role="listitem" aria-label="Nested button row">
+    <button type="button">Nested button action</button>
+  </div>
+  <div id="nested-link-row" class="row nested-control-row" role="listitem" aria-label="Nested link row">
+    <a href="#nested-link">Nested link action</a>
+  </div>
+  <div id="nested-input-row" class="row nested-control-row" role="listitem" aria-label="Nested input row">
+    <input type="text" aria-label="Nested input action">
+  </div>
   <button id="native-button" type="button">Native button</button>
   <div id="destructive-row" class="row" role="listitem" tabindex="0">Delete account</div>
   <span id="indirect-delete-label" class="external-label">Delete account indirectly</span>
