@@ -1727,8 +1727,8 @@ export class CDPClient {
    */
   async clickElement(tabId, selector) {
     const info = await this.resolveSelector(tabId, selector);
-    if (!info) return { success: false, error: 'Element not found' };
-    if (info.error) return { success: false, error: info.error };
+    if (!info) return { success: false, dispatched: false, error: 'Element not found' };
+    if (info.error) return { success: false, dispatched: false, error: info.error };
 
     // <select> intercept: don't click — focus the element (so type_text
     // finds it as activeElement) and return guidance.
@@ -1748,6 +1748,7 @@ export class CDPClient {
       const opts = optRes?.result?.value;
       return {
         success: false,
+        dispatched: false,
         tag: 'SELECT',
         text: opts?.current || info.text,
         error: `CANNOT CLICK a <select> dropdown — clicking opens a native OS popup that cannot be controlled. The dropdown is now focused (current: "${opts?.current || ''}"). Use type_text({text: "option name"}) to change the value.` + (opts?.options ? ' Available: ' + opts.options.join(', ') : ''),
@@ -1755,6 +1756,7 @@ export class CDPClient {
     }
 
     // Step 1: real mouse events at center coordinates.
+    let dispatchAttempted = false;
     if (info.inViewport && info.hitOk) {
       try {
         const rect = {
@@ -1766,6 +1768,7 @@ export class CDPClient {
         await this.sendCommand(tabId, 'Input.dispatchMouseEvent', {
           type: 'mouseMoved', x: info.x, y: info.y, button: 'none', buttons: 0,
         });
+        dispatchAttempted = true;
         await this.sendCommand(tabId, 'Input.dispatchMouseEvent', {
           type: 'mousePressed', x: info.x, y: info.y, button: 'left', buttons: 1, clickCount: 1,
         });
@@ -1840,7 +1843,11 @@ export class CDPClient {
         };
       })()
     `);
-    return fb?.result?.value || { success: false, error: 'Click failed' };
+    const fallbackResult = fb?.result?.value || { success: false, error: 'Click failed' };
+    if (fallbackResult.success === false && fallbackResult.dispatched == null) {
+      fallbackResult.dispatched = dispatchAttempted;
+    }
+    return fallbackResult;
   }
 
   /**

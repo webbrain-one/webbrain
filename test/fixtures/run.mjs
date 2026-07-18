@@ -628,6 +628,7 @@ test('modal scoping: click({text:"Publish"}) returns no-match (scoped out)', asy
   await setup(page, 'modal-scoping.html');
   const resp = await call(page, 'click', { text: 'Publish release' });
   if (resp?.success) throw new Error(`expected failure, got success`);
+  if (resp?.dispatched !== false) throw new Error(`no-match must report dispatched:false, got: ${JSON.stringify(resp)}`);
   if (!/scoped to the open modal/i.test(resp?.error || '')) {
     throw new Error(`expected modal-scope note in error, got: ${resp?.error}`);
   }
@@ -638,6 +639,7 @@ test('occlusion: click({text:"Submit"}) refuses when covered', async (page) => {
   await setup(page, 'occlusion.html');
   const resp = await call(page, 'click', { text: 'Submit' });
   if (resp?.success) throw new Error(`expected failure, got success`);
+  if (resp?.dispatched !== false) throw new Error(`occluded preflight must report dispatched:false, got: ${JSON.stringify(resp)}`);
   if (!resp?.occluded) throw new Error(`expected occluded:true, got: ${JSON.stringify(resp)}`);
   if (!resp?.occludedBy) throw new Error(`expected occludedBy payload`);
   const clicked = await clickedSentinel(page);
@@ -659,6 +661,7 @@ test('ambiguity: two Cancels return rich candidates with ancestor', async (page)
   await setup(page, 'ambiguity-candidates.html');
   const resp = await call(page, 'click', { text: 'Cancel' });
   if (resp?.success) throw new Error(`expected ambiguity, got success`);
+  if (resp?.dispatched !== false) throw new Error(`ambiguity must report dispatched:false, got: ${JSON.stringify(resp)}`);
   if (!Array.isArray(resp?.candidates)) throw new Error(`expected candidates array`);
   if (resp.candidates.length < 2) throw new Error(`expected ≥2 candidates, got ${resp.candidates.length}`);
   const ancestors = resp.candidates.map(c => c.ancestor || '');

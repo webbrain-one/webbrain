@@ -6116,6 +6116,21 @@ test('completion invariant state machine enforces post-action observation with C
       { success: false, error: 'target not found', fallbackAttempted: false },
     );
     assert.equal(noDispatch.verificationDebt, false, `${label}: explicit no-dispatch failure opened debt`);
+    const legacyClickPreflight = invariant.recordCompletionToolResult(
+      invariant.createCompletionInvariantState(`${label}-legacy-click-preflight`),
+      'click',
+      { text: 'Cancel' },
+      { success: false, dispatched: false, error: 'Ambiguous text match' },
+    );
+    assert.equal(legacyClickPreflight.hadAction, false, `${label}: pre-dispatch legacy click was recorded as an action`);
+    assert.equal(legacyClickPreflight.verificationDebt, false, `${label}: pre-dispatch legacy click opened debt`);
+    const legacyClickPostDispatch = invariant.recordCompletionToolResult(
+      invariant.createCompletionInvariantState(`${label}-legacy-click-post-dispatch`),
+      'click',
+      { text: 'Submit' },
+      { success: false, dispatched: true, error: 'post-click inspection failed' },
+    );
+    assert.equal(legacyClickPostDispatch.verificationDebt, true, `${label}: post-dispatch legacy click did not fail closed`);
     const postSyntheticSetupFailure = invariant.recordCompletionToolResult(
       invariant.createCompletionInvariantState(`${label}-post-synthetic-click`),
       'click_ax',
@@ -15543,6 +15558,37 @@ test('CDP input dispatchers never call the nonexistent Input.enable command', as
 
   const source = fs.readFileSync(path.join(ROOT, 'src/chrome/src/cdp/cdp-client.js'), 'utf8');
   assert.doesNotMatch(source, /Input\.enable/, 'Chrome CDP client must not reintroduce the unsupported Input.enable command');
+});
+
+test('Chrome selector click distinguishes pre-dispatch failure from uncertain dispatch', async () => {
+  const client = new CDPClient();
+  client.resolveSelector = async () => null;
+  assert.deepEqual(
+    await client.clickElement(42, '#missing'),
+    { success: false, dispatched: false, error: 'Element not found' },
+  );
+
+  client.resolveSelector = async () => ({
+    inViewport: true,
+    hitOk: true,
+    x: 10,
+    y: 20,
+    width: 30,
+    height: 40,
+    tag: 'BUTTON',
+    text: 'Submit',
+  });
+  client.sendCommand = async (_tabId, _method, params) => {
+    if (params.type === 'mousePressed') throw new Error('dispatch response lost');
+    return {};
+  };
+  client.evaluate = async () => ({
+    result: { value: { success: false, error: 'fallback target disappeared' } },
+  });
+
+  const uncertain = await client.clickElement(42, '#submit');
+  assert.equal(uncertain.success, false);
+  assert.equal(uncertain.dispatched, true, 'a mousePressed attempt must fail closed when later fallback also fails');
 });
 
 test('Chrome click_ax keeps successful synthetic clicks and skips trusted fallback', async () => {

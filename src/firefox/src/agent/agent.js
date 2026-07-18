@@ -9828,6 +9828,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       if (Number.isFinite(xn) && Number.isFinite(yn) && xn >= 0 && xn <= 1 && yn >= 0 && yn <= 1) {
         return {
           success: false,
+          dispatched: false,
           error: this._normalizedCoordinateRecoveryError(tabId, args),
         };
       }
@@ -9848,6 +9849,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         if (['read_page', 'get_accessibility_tree', 'get_interactive_elements', 'extract_data'].includes(name)) {
           return await this._restrictedDomainScreenshotFallback(tabId, name, pageUrl, restrictedFailure);
         }
+        if (name === 'click') return { ...restrictedFailure, dispatched: false };
         return restrictedFailure;
       }
       // _isPdfTab does sync URL-pattern match + credentialed HEAD
@@ -9875,6 +9877,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         ) {
           return {
             success: false,
+            ...(name === 'click' ? { dispatched: false } : {}),
             error: `${name} cannot be used on the browser's built-in PDF viewer (a privileged page our scripts cannot reach). Use read_pdf to extract the document's text instead. If you need to read a specific page, pass fromPage/toPage to read_pdf.`,
           };
         }

@@ -11332,6 +11332,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           if (Number.isFinite(xn) && Number.isFinite(yn) && xn >= 0 && xn <= 1 && yn >= 0 && yn <= 1) {
             return {
               success: false,
+              dispatched: false,
               error: this._normalizedCoordinateRecoveryError(tabId, args),
             };
           }
@@ -11362,6 +11363,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             if (match) {
               return {
                 success: false,
+                dispatched: false,
                 blockedDuplicateSubmit: true,
                 error: `Blocked: you already clicked "${rawText}" on this page ${Math.round((now - match.ts) / 1000)}s ago and the URL has not changed since. Stripe-style UIs often reuse the same label for the modal-OPEN button and the SUBMIT button inside the modal — a second click typically creates a duplicate record. Before clicking "${rawText}" again, verify: (a) that all required fields are actually filled by reading the form/page, (b) that this click is intended as a FIRST submit and not a retry. If the previous click did nothing because a field was empty, fill the field first. If you genuinely need to retry, pass _allowResubmit: true in the args.`,
                 previousClickUrl: match.url,
@@ -11431,6 +11433,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         if (args.selector && /:contains\(|:has-text\(/.test(args.selector)) {
           return {
             success: false,
+            dispatched: false,
             error: `Invalid selector: ":contains()" and ":has-text()" are not valid CSS — they are jQuery/Playwright extensions and browsers do not understand them. Use click({text: "..."}) to click by visible text instead, or click({index: N}) using an index from get_interactive_elements.`,
           };
         }
@@ -11845,11 +11848,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
           if (!info?.found) {
             if (info?.error) {
-              return { success: false, error: info.error };
+              return { success: false, dispatched: false, error: info.error };
             }
             if (info?.ambiguous) {
               return {
                 success: false,
+                dispatched: false,
                 error: `Ambiguous text match for "${args.text}" (mode=${info.mode}, matches=${info.count}). Candidates in the candidates field include cx/cy (precomputed click center, CSS pixels) and ancestor context. Call click({x: candidate.cx, y: candidate.cy}) — no arithmetic needed. Use the ancestor field to disambiguate (e.g. an alertdialog's Cancel vs a form's Cancel sit in different containers). Do NOT retry click({text: "${args.text}"}) — it will fail the same way.`,
                 candidates: info.candidates || [],
               };
@@ -11944,6 +11948,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
                     : `There is an input field inside the listbox`;
                 return {
                   success: false,
+                  dispatched: false,
                   error: `"${needle}" is not in the currently-visible options of the open ${openOptions.source}. ${filterHint} — this is a SEARCHABLE combobox (likely virtualized, only ${openOptions.visibleCount} of ${openOptions.totalCount} options rendered). Instead of clicking, TYPE the value to filter: call type_text({text: "${needle}", clear: true}) with NO selector (the combobox input should already be focused), then click the matching option or press Enter. Do NOT retry click({text: "${needle}"}) — the option isn't in the visible window.`,
                   availableOptions: openOptions.options,
                   source: openOptions.source,
@@ -11955,6 +11960,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
               }
               return {
                 success: false,
+                dispatched: false,
                 error: `No clickable element found for text "${args.text}". However, an open ${openOptions.source} is visible on the page with these options: ${openOptions.options.map(o => '"' + o + '"').join(', ')}. Pick one of those exact labels (or "Custom" if the value you want isn't listed) and call click({text: "..."}) again.`,
                 availableOptions: openOptions.options,
                 source: openOptions.source,
@@ -12022,6 +12028,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             } else {
               return {
                 success: false,
+                dispatched: false,
                 error: `No clickable element found for text "${args.text}" (also tried scrolling down and widening to contenteditable/[role=*]/[tabindex]). Try get_interactive_elements to see what's on the page, or use a selector.`,
               };
             }
@@ -12051,6 +12058,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             const opts = optionsInfo?.result?.value;
             return {
               success: false,
+              dispatched: false,
               tag: 'SELECT',
               text: opts?.current || info.text,
               error: 'CANNOT CLICK a <select> dropdown — clicking opens a native OS popup that cannot be controlled. The dropdown is now focused. Use type_text({text: "option name"}) to change the value.' + (opts?.options ? ' Available options: ' + opts.options.join(', ') : ''),
@@ -12287,6 +12295,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           if (coordTag?.isSelect) {
             return {
               success: false,
+              dispatched: false,
               tag: 'SELECT',
               text: coordTag.current,
               error: `CANNOT CLICK a <select> dropdown at (${args.x}, ${args.y}) — clicking opens a native OS popup that cannot be controlled. The dropdown is now focused (current: "${coordTag.current}"). Use type_text({text: "option name"}) to change the value. Available options: ${coordTag.options.join(', ')}`,
@@ -12375,6 +12384,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           if (redir?.isSelect) {
             return {
               success: false,
+              dispatched: false,
               tag: 'SELECT',
               text: redir.current,
               error: `CANNOT CLICK a <select> dropdown at (${args.x}, ${args.y}) — clicking opens a native OS popup that cannot be controlled. The dropdown is now focused (current: "${redir.current}"). Use type_text({text: "option name"}) to change the value. Available options: ${redir.options.join(', ')}`,

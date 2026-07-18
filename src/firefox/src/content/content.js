@@ -1036,6 +1036,7 @@
     if (params.selector && /:contains\(|:has-text\(/.test(params.selector)) {
       return {
         success: false,
+        dispatched: false,
         error: 'Invalid selector: ":contains()" and ":has-text()" are jQuery/Playwright extensions, not valid CSS. Use click({text: "..."}) to click by visible text instead.',
       };
     }
@@ -1109,7 +1110,7 @@
 
       const modes = explicit ? [explicit] : ['exact', 'prefix', 'contains'];
       if (explicit && !['exact', 'prefix', 'contains'].includes(explicit)) {
-        return { success: false, error: `Invalid textMatch "${explicit}". Use exact, prefix, or contains.` };
+        return { success: false, dispatched: false, error: `Invalid textMatch "${explicit}". Use exact, prefix, or contains.` };
       }
 
       let matches = [];
@@ -1207,7 +1208,7 @@
           }
           if (!el) {
             const _noteModal = _modalRoot ? ' (search was scoped to the open modal/dialog; if the target is outside it, dismiss or complete the dialog first)' : '';
-            return { success: false, error: `No clickable element found for text "${params.text}" (also tried scrolling down and widening to contenteditable/[role=*]/[tabindex])${_noteModal}` };
+            return { success: false, dispatched: false, error: `No clickable element found for text "${params.text}" (also tried scrolling down and widening to contenteditable/[role=*]/[tabindex])${_noteModal}` };
           }
         }
       }
@@ -1261,6 +1262,7 @@
           const _scopeNote = _modalRoot ? ' (search was scoped to the open modal/dialog)' : '';
           return {
             success: false,
+            dispatched: false,
             error: `Ambiguous text match for "${params.text}" (mode=${usedMode}, matches=${matches.length})${_scopeNote}. ${candidates.length} candidates returned with cx/cy (precomputed click center, in CSS pixels) and ancestor context. Pick one and call click({x: candidate.cx, y: candidate.cy}) — no arithmetic needed. Use the ancestor field to disambiguate (e.g. an alertdialog's Cancel vs a form's Cancel sit in different containers). Do NOT retry click({text: "${params.text}"}) — it will fail the same way.`,
             candidates,
           };
@@ -1287,12 +1289,12 @@
     } else if (params.index != null) {
       const interactive = queryInteractiveForToolIndex();
       el = interactive[params.index];
-      if (!el) return _staleIndexError(params.index, interactive);
+      if (!el) return { ..._staleIndexError(params.index, interactive), dispatched: false };
     } else if (params.x != null && params.y != null) {
       el = document.elementFromPoint(params.x, params.y);
     }
 
-    if (!el) return { success: false, error: 'Element not found' };
+    if (!el) return { success: false, dispatched: false, error: 'Element not found' };
     const targetIsSubmitControl = _isSubmitControl(el);
 
     // ── Auto-select: if click text matches a <select> option, select it ──
@@ -1326,6 +1328,7 @@
       const options = Array.from(el.options).map(o => o.text.trim());
       return {
         success: false,
+        dispatched: false,
         tag: 'SELECT',
         text: el.options[el.selectedIndex]?.text?.trim() || '',
         error: `CANNOT CLICK a <select> dropdown — clicking opens a native OS popup that cannot be controlled. The dropdown is now focused (current: "${el.options[el.selectedIndex]?.text?.trim() || ''}"). Use type_text({text: "option name"}) to change the value. Available options: ${options.join(', ')}`,
@@ -1346,6 +1349,7 @@
         const options = Array.from(nearbySel.options).map(o => o.text.trim());
         return {
           success: false,
+          dispatched: false,
           tag: 'SELECT',
           text: nearbySel.options[nearbySel.selectedIndex]?.text?.trim() || '',
           error: `CANNOT CLICK — a <select> dropdown is near this element (current: "${nearbySel.options[nearbySel.selectedIndex]?.text?.trim() || ''}"). The dropdown is now focused. Use type_text({text: "option name"}) to change the value. Available options: ${options.join(', ')}`,
@@ -1388,6 +1392,7 @@
             } catch {}
             return {
               success: false,
+              dispatched: false,
               error: `Click blocked: an overlay is covering the target. Topmost element at (${cx}, ${cy}) is <${blockerInfo}>${blockerContainer}, not your target <${el.tagName.toLowerCase()}>. Dismiss the overlay (press Escape, click its close button, or complete the modal flow) before retrying. If you're sure you want to force the click, use click({x: ${cx}, y: ${cy}}) — that will hit whatever's on top.`,
               occluded: true,
               occludedBy: { tag: topmost.tagName.toLowerCase(), text: txt, cx, cy },
@@ -1428,6 +1433,7 @@
       const postOpts = Array.from(postActive.options).map(o => o.text.trim());
       return {
         success: false,
+        dispatched: true,
         tag: 'SELECT',
         text: postActive.options[postActive.selectedIndex]?.text?.trim() || '',
         error: `CANNOT CLICK — a <select> dropdown was activated by this click (current: "${postActive.options[postActive.selectedIndex]?.text?.trim() || ''}"). The dropdown is now focused. Use type_text({text: "option name"}) to change the value. Available options: ${postOpts.join(', ')}`,
