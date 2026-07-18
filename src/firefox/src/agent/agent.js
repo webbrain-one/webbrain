@@ -6886,17 +6886,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       state,
       { ignoreFuturePromise: terminalFailure },
     );
-    if (!viaDone && !looksPlanOnly) {
-      const reported = String(content || '').trim().slice(0, 4000);
-      return {
-        failure: `${reported}\n\n[Agent stopped because Act/Dev returned plain text instead of calling done. The task was not marked complete and completion was not verified.]`,
-        status: 'unverified_output',
-      };
-    }
     const missingEvidence = !terminalFailure && !this._executionEvidenceSatisfied(state);
-    // Every ordinary Act/Dev terminal is invalid: successful completion must
-    // come through done. A done call is invalid only when it is plan-shaped or
-    // lacks the execution evidence required for this task kind.
+    // Every plain Act/Dev terminal gets one protocol recovery regardless of
+    // its language. Successful completion and real blockers must both use
+    // done; this avoids guessing intent from localized prose.
     const invalidPlainFinal = !viaDone;
     const invalidDone = viaDone && (looksPlanOnly || missingEvidence);
     if (!invalidPlainFinal && !invalidDone) return null;
@@ -6904,14 +6897,15 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       state.recoveryAttempted = true;
       return {
         retry: true,
-        nudge: '[PLAN EXECUTION BLOCK: This Act/Dev request authorizes execution, but the previous response did not prove the requested work was completed. Continue with permitted task tools until verified completion, a real blocker, cancellation, or required user input. Read-only tasks need a successful task tool; state-changing tasks need a successful consequential tool. Do not return the plan again, end with plain text, or call done with planner/action-policy metadata or a promise to act.]',
+        nudge: '[PLAN EXECUTION BLOCK: This is an execute task, so plain text cannot end it. If work remains, use permitted task tools. If complete, call done with outcome success. If blocked, unsafe, cancelled, or user input is required, call done with outcome failed or partial; do not take unsafe action. Read-only work needs a successful task tool and state-changing work needs a successful consequential tool. Do not return another plan, promise, or plain terminal.]',
       };
     }
     const hasSuccessfulToolEvidence = state.successfulTaskToolCalls > 0;
     return {
       failure: hasSuccessfulToolEvidence
-        ? '[Agent stopped because the model returned a plan or promise after one recovery nudge. Some task tools completed, but final completion was not verified. Inspect the current state before retrying to avoid duplicate side effects.]'
-        : '[Agent stopped because the model returned a plan or promise instead of executing the approved task, even after one recovery nudge. No successful action was verified.]',
+        ? '[Agent stopped because the model returned another plain terminal or a plan/promise after one recovery nudge. Some task tools completed, but final completion was not verified. Inspect the current state before retrying to avoid duplicate side effects.]'
+        : '[Agent stopped because the model returned another plain terminal or a plan/promise instead of completing the execute protocol, even after one recovery nudge. No successful action was verified.]',
+      status: 'plan_only_output',
     };
   }
 

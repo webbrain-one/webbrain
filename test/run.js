@@ -24986,10 +24986,11 @@ test('Act rejects planner-shaped plain finals and continues into a real tool', a
   }
 });
 
-test('Act converts ordinary plain finals into unverified terminal failures', async () => {
+test('Act routes ordinary plain finals through the language-neutral done protocol', async () => {
   for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
     const responses = [
       { content: 'Here is the page summary.', toolCalls: [] },
+      { content: null, toolCalls: executionToolCalls(`ordinary_plain_${index}`) },
     ];
     const provider = {
       supportsTools: true,
@@ -25000,35 +25001,82 @@ test('Act converts ordinary plain finals into unverified terminal failures', asy
       name: 'test-provider',
       chat: async () => {
         const next = responses.shift();
-        assert.ok(next, `${AgentClass.name}: plain final unexpectedly triggered another model turn`);
+        assert.ok(next, `${AgentClass.name}: model was called too many times`);
         return next;
       },
     };
     const agent = new AgentClass({ getActive: () => provider, getVisionProvider: async () => null });
     const tabId = 8604 + index;
     configurePlanOnlyGuardAgent(agent, tabId);
-    let ended = null;
-    agent._startTraceRun = async () => {
-      agent.currentRunId.set(tabId, `unverified_plain_${index}`);
-      return `unverified_plain_${index}`;
-    };
-    agent._endTraceRun = (_tabId, runId, status, finalContent) => {
-      ended = { runId, status, finalContent };
-      agent.currentRunId.delete(tabId);
-    };
 
     const final = await agent.processMessage(tabId, 'Read the current page and summarize it.', () => {}, 'act');
 
-    assert.match(final, /Here is the page summary\./, `${AgentClass.name}: model output was not preserved`);
-    assert.match(final, /completion was not verified/, `${AgentClass.name}: unverified suffix missing`);
-    assert.equal(ended?.status, 'unverified_output', `${AgentClass.name}: plain final retained a successful trace status`);
-    assert.equal(responses.length, 0, `${AgentClass.name}: plain final triggered a recovery turn`);
+    assert.equal(final, 'Executed and verified.', `${AgentClass.name}: plain final bypassed the done protocol`);
+    assert.equal(responses.length, 0, `${AgentClass.name}: plain final did not recover into tools`);
+    assert.ok(
+      agent.conversations.get(tabId).some(message => message.role === 'user' && String(message.content || '').startsWith('[PLAN EXECUTION BLOCK')),
+      `${AgentClass.name}: plain final missing protocol recovery nudge`,
+    );
   }
 });
 
-test('Act preserves plain-text blockers without pushing the model past them', async () => {
+test('Act recovers localized plain plans without language-specific matchers', async () => {
+  const localizedPlans = [
+    'Önce sayfayı okuyacağım, sonra sonucu özetleyeceğim.',
+    'Primero leeré la página; después resumiré el resultado.',
+    'まずページを読み、その後で結果を要約します。',
+  ];
+  for (const [agentIndex, AgentClass] of [AgentCh, AgentFx].entries()) {
+    for (const [localeIndex, localizedPlan] of localizedPlans.entries()) {
+      const responses = [
+        { content: localizedPlan, toolCalls: [] },
+        { content: null, toolCalls: executionToolCalls(`localized_plain_${agentIndex}_${localeIndex}`) },
+      ];
+      const provider = {
+        supportsTools: true,
+        supportsVision: false,
+        promptTier: 'full',
+        contextWindow: 128000,
+        model: 'test-model',
+        name: 'test-provider',
+        chat: async () => {
+          const next = responses.shift();
+          assert.ok(next, `${AgentClass.name}: localized recovery called the model too many times`);
+          return next;
+        },
+      };
+      const agent = new AgentClass({ getActive: () => provider, getVisionProvider: async () => null });
+      const tabId = 8660 + (agentIndex * 10) + localeIndex;
+      configurePlanOnlyGuardAgent(agent, tabId);
+
+      const final = await agent.processMessage(tabId, 'Complete the requested page task.', () => {}, 'act');
+
+      assert.equal(final, 'Executed and verified.', `${AgentClass.name}: localized plain plan stopped execution: ${localizedPlan}`);
+      assert.equal(responses.length, 0, `${AgentClass.name}: localized plain plan did not recover into tools`);
+      assert.ok(
+        agent.conversations.get(tabId).some(message => message.role === 'user' && String(message.content || '').startsWith('[PLAN EXECUTION BLOCK')),
+        `${AgentClass.name}: localized plain plan missing language-neutral recovery`,
+      );
+    }
+  }
+});
+
+test('Act routes plain-text blockers to a structured failed done without unsafe action', async () => {
   for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
     const blocker = 'Cannot continue because required credentials are missing.';
+    const responses = [
+      { content: blocker, toolCalls: [] },
+      {
+        content: null,
+        toolCalls: [{
+          id: `plain_blocker_done_${index}`,
+          function: {
+            name: 'done',
+            arguments: JSON.stringify({ summary: blocker, outcome: 'failed' }),
+          },
+        }],
+      },
+    ];
     let calls = 0;
     const provider = {
       supportsTools: true,
@@ -25039,32 +25087,24 @@ test('Act preserves plain-text blockers without pushing the model past them', as
       name: 'test-provider',
       chat: async () => {
         calls++;
-        return { content: blocker, toolCalls: [] };
+        const next = responses.shift();
+        assert.ok(next, `${AgentClass.name}: blocker recovery called the model too many times`);
+        return next;
       },
     };
     const agent = new AgentClass({ getActive: () => provider, getVisionProvider: async () => null });
     const tabId = 8606 + index;
     configurePlanOnlyGuardAgent(agent, tabId);
-    let ended = null;
-    agent._startTraceRun = async () => {
-      agent.currentRunId.set(tabId, `plain_blocker_${index}`);
-      return `plain_blocker_${index}`;
-    };
-    agent._endTraceRun = (_tabId, runId, status, finalContent) => {
-      ended = { runId, status, finalContent };
-      agent.currentRunId.delete(tabId);
-    };
 
     const final = await agent.processMessage(tabId, 'Open my account settings.', () => {}, 'act');
 
     assert.match(final, new RegExp(blocker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `${AgentClass.name}: blocker text was hidden`);
-    assert.match(final, /completion was not verified/, `${AgentClass.name}: blocker was presented as completed`);
-    assert.equal(calls, 1, `${AgentClass.name}: blocker triggered a recovery turn`);
-    assert.equal(ended?.status, 'unverified_output', `${AgentClass.name}: blocker retained a successful trace status`);
+    assert.equal(calls, 2, `${AgentClass.name}: blocker did not get exactly one protocol recovery turn`);
+    assert.equal(responses.length, 0, `${AgentClass.name}: blocker recovery did not terminate through done`);
     assert.equal(
       agent.conversations.get(tabId).some(message => message.role === 'user' && String(message.content || '').startsWith('[PLAN EXECUTION BLOCK')),
-      false,
-      `${AgentClass.name}: blocker triggered the plan execution nudge`,
+      true,
+      `${AgentClass.name}: blocker missing structured done recovery guidance`,
     );
   }
 });
