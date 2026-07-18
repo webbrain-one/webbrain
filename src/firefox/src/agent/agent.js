@@ -9288,14 +9288,21 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     // Settings. We re-check on every call so flipping the toggle or
     // rotating the key takes effect without a restart.
     if (name === 'solve_captcha') {
+      let dispatched = false;
+      const noDispatchFailure = (error) => ({
+        success: false,
+        dispatched: false,
+        noDispatch: true,
+        error,
+      });
       try {
         const stored = await browser.storage.local.get(['captchaSolverEnabled', 'capsolverApiKey']);
         if (!stored.captchaSolverEnabled) {
-          return { success: false, error: 'CapSolver is not enabled. Ask the user to enable it in Settings → General → Advanced, or fall back to asking them to solve the captcha manually.' };
+          return noDispatchFailure('CapSolver is not enabled. Ask the user to enable it in Settings → General → Advanced, or fall back to asking them to solve the captcha manually.');
         }
         const apiKey = (stored.capsolverApiKey || '').trim();
         if (!apiKey) {
-          return { success: false, error: 'CapSolver is enabled but no API key is configured. Ask the user to set one in Settings → General → Advanced, or fall back to asking them to solve the captcha manually.' };
+          return noDispatchFailure('CapSolver is enabled but no API key is configured. Ask the user to set one in Settings → General → Advanced, or fall back to asking them to solve the captcha manually.');
         }
 
         let websiteURL = '';
@@ -9308,7 +9315,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         if (!type) {
           const detected = await detectCaptcha(tabId);
           if (!detected) {
-            return { success: false, error: 'No CAPTCHA detected on the page. If the captcha lives inside a cross-origin iframe or uses a non-standard widget, pass `type` and `websiteKey` explicitly.' };
+            return noDispatchFailure('No CAPTCHA detected on the page. If the captcha lives inside a cross-origin iframe or uses a non-standard widget, pass `type` and `websiteKey` explicitly.');
           }
           type = detected.type;
           if (!websiteKey) websiteKey = detected.websiteKey;
@@ -9318,12 +9325,13 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
         if (type === 'image_to_text') {
           if (!imageBase64) {
-            return { success: false, error: 'solve_captcha: image_to_text requires `imageBase64`.' };
+            return noDispatchFailure('solve_captcha: image_to_text requires `imageBase64`.');
           }
         } else if (!websiteKey) {
-          return { success: false, error: `solve_captcha: ${type} requires a websiteKey (data-sitekey). Auto-detection didn't find one — pass it explicitly.` };
+          return noDispatchFailure(`solve_captcha: ${type} requires a websiteKey (data-sitekey). Auto-detection didn't find one — pass it explicitly.`);
         }
 
+        dispatched = true;
         const result = await solveCaptcha(apiKey, {
           type,
           websiteURL,
@@ -9350,6 +9358,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
         return {
           success: true,
+          dispatched: true,
           type,
           taskId: result.taskId,
           token: result.token,
@@ -9361,7 +9370,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             : 'Token returned, not injected. Pass it to the form via type_text on the response field, then submit.',
         };
       } catch (e) {
-        return { success: false, error: `solve_captcha failed: ${e.message}` };
+        const error = `solve_captcha failed: ${e.message}`;
+        return dispatched
+          ? { success: false, dispatched: true, error }
+          : noDispatchFailure(error);
       }
     }
 

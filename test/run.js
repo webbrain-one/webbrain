@@ -6131,6 +6131,19 @@ test('completion invariant state machine enforces post-action observation with C
       },
     );
     assert.equal(noDispatch.verificationDebt, false, `${label}: explicit no-dispatch failure opened debt`);
+    const captchaPreflight = invariant.recordCompletionToolResult(
+      invariant.createCompletionInvariantState(`${label}-captcha-preflight`),
+      'solve_captcha',
+      {},
+      {
+        success: false,
+        error: 'CapSolver is not enabled',
+        dispatched: false,
+        noDispatch: true,
+      },
+    );
+    assert.equal(captchaPreflight.hadAction, false, `${label}: CAPTCHA preflight failure was recorded as an action`);
+    assert.equal(captchaPreflight.verificationDebt, false, `${label}: CAPTCHA preflight failure opened debt`);
     for (const name of ['type_text', 'type_ax', 'set_field']) {
       const inputPreflight = invariant.recordCompletionToolResult(
         invariant.createCompletionInvariantState(`${label}-${name}-preflight`),
@@ -11127,6 +11140,9 @@ test('CAPTCHA guidance points to General Advanced settings', () => {
     assert.doesNotMatch(`${agent}\n${tools}`, removedSettingsPath, `${label}: CAPTCHA setup guidance should not point to removed tab`);
     assert.match(agent, /Settings → General → Advanced/, `${label}: solve_captcha runtime errors should point to General Advanced`);
     assert.match(tools, /Settings → General → Advanced/, `${label}: solve_captcha tool description should point to General Advanced`);
+    assert.match(agent, /const noDispatchFailure = \(error\) => \(\{[\s\S]*?dispatched: false,[\s\S]*?noDispatch: true,/, `${label}: solve_captcha preflight failures should opt out of completion debt`);
+    assert.match(agent, /dispatched = true;\s*const result = await solveCaptcha/, `${label}: solve_captcha should mark the remote solve dispatch boundary`);
+    assert.match(agent, /return dispatched\s*\? \{ success: false, dispatched: true, error \}\s*: noDispatchFailure\(error\);/, `${label}: solve_captcha errors should preserve whether dispatch occurred`);
   }
 });
 
