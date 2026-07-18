@@ -9,6 +9,7 @@
  *   - name: short identifier
  *   - category: 'general' | 'finance' — finance gets an extra safety warning
  *   - notes: short bulleted guidance, injected into the first user message
+ *   - fullPageCapture?.infiniteScroll(url): optional machine-readable capture policy
  *
  * Keep notes SHORT (4–8 bullets max). They cost tokens on every first turn.
  * Only encode things the model can't trivially figure out from reading the page.
@@ -52,6 +53,90 @@ function safeDecodePath(pathname) {
 
 function normalizedHostname(hostname) {
   return String(hostname || '').toLowerCase().replace(/\.$/, '').replace(/^www\./, '');
+}
+
+function adapterUrlParts(url) {
+  const parsed = new URL(url);
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+  const decoded = safeDecodePath(parsed.pathname);
+  return {
+    parsed,
+    path: decoded.replace(/\/+$/, '') || '/',
+  };
+}
+
+function isTwitterInfiniteScrollUrl(url) {
+  const { path } = adapterUrlParts(url) || {};
+  if (!path) return false;
+  if (/^\/(?:home|explore|search|notifications)(?:\/|$)/.test(path)) return true;
+  if (/^\/i\/lists\/[^/]+(?:\/|$)/.test(path)) return true;
+  return /^\/[A-Za-z0-9_]{1,15}(?:\/(?:with_replies|media|likes))?$/.test(path)
+    || /^\/[A-Za-z0-9_]{1,15}\/status\/\d+(?:\/|$)/.test(path);
+}
+
+function isLinkedInInfiniteScrollUrl(url) {
+  const { path } = adapterUrlParts(url) || {};
+  if (!path) return false;
+  return /^\/feed(?:\/|$)/.test(path)
+    || /^\/search\/results(?:\/|$)/.test(path)
+    || /^\/jobs\/search(?:\/|$)/.test(path)
+    || /^\/in\/[^/]+\/recent-activity(?:\/|$)/.test(path)
+    || /^\/company\/[^/]+\/posts(?:\/|$)/.test(path);
+}
+
+function isRedditInfiniteScrollUrl(url) {
+  const parts = adapterUrlParts(url);
+  if (!parts || parts.parsed.hostname.toLowerCase() === 'old.reddit.com') return false;
+  const { path } = parts;
+  if (/^\/(?:r\/[^/]+\/)?comments\/[^/]+(?:\/|$)/.test(path)) return false;
+  if (path === '/' || /^\/(?:best|hot|new|top|rising|controversial|popular|all)(?:\/|$)/.test(path)) return true;
+  if (/^\/search(?:\/|$)/.test(path)) return true;
+  if (/^\/r\/[^/]+(?:\/(?:hot|new|top|rising|controversial))?$/.test(path)) return true;
+  return /^\/user\/[^/]+(?:\/(?:submitted|comments|saved|upvoted|downvoted))?$/.test(path);
+}
+
+function isYouTubeInfiniteScrollUrl(url) {
+  const parts = adapterUrlParts(url);
+  if (!parts || normalizedHostname(parts.parsed.hostname) === 'youtu.be') return false;
+  const { path } = parts;
+  if (path === '/' || /^\/(?:feed|results|watch)(?:\/|$)/.test(path)) return true;
+  return /^\/(?:@[^/]+|channel\/[^/]+|c\/[^/]+|user\/[^/]+)(?:\/(?:videos|shorts|streams|playlists|community|featured))?$/.test(path);
+}
+
+function isInstagramInfiniteScrollUrl(url) {
+  const { path } = adapterUrlParts(url) || {};
+  if (!path) return false;
+  if (path === '/' || /^\/(?:explore|reels|search)(?:\/|$)/.test(path)) return true;
+  const reserved = new Set([
+    'about', 'accounts', 'developer', 'direct', 'legal', 'p', 'privacy',
+    'reel', 'reels', 'search', 'stories', 'web',
+  ]);
+  const profileMatch = path.match(/^\/([A-Za-z0-9._]+)$/);
+  return !!profileMatch && !reserved.has(profileMatch[1].toLowerCase());
+}
+
+function isTikTokInfiniteScrollUrl(url) {
+  const { path } = adapterUrlParts(url) || {};
+  if (!path) return false;
+  if (path === '/' || /^\/(?:foryou|following|explore|search)(?:\/|$)/.test(path)) return true;
+  return /^\/@[^/]+$/.test(path);
+}
+
+function isFacebookInfiniteScrollUrl(url) {
+  const { path } = adapterUrlParts(url) || {};
+  if (!path) return false;
+  if (path === '/' || path === '/home.php') return true;
+  if (/^\/groups\/[^/]+\/(?:posts|permalink)\/[^/]+(?:\/|$)/.test(path)) return false;
+  if (/^\/marketplace\/item\/[^/]+(?:\/|$)/.test(path)) return false;
+  return /^\/(?:watch|groups|marketplace|search)(?:\/|$)/.test(path);
+}
+
+function isMastodonInfiniteScrollUrl(url) {
+  const { path } = adapterUrlParts(url) || {};
+  if (!path) return false;
+  if (/^\/(?:home|public|explore|search)(?:\/|$)/.test(path)) return true;
+  if (/^\/tags\/[^/]+(?:\/|$)/.test(path)) return true;
+  return /^\/@[^/]+$/.test(path);
 }
 
 const KNOWN_MASTODON_HOSTS = new Set([
@@ -15721,6 +15806,7 @@ const ADAPTERS = [
     name: 'twitter',
     category: 'general',
     matches: (url) => /^https?:\/\/(www\.)?(twitter\.com|x\.com)\//.test(url),
+    fullPageCapture: { infiniteScroll: isTwitterInfiniteScrollUrl },
     notes: `
 - The composer is a contenteditable, not a textarea. Character count is enforced client-side at 280 (or higher for Premium).
 - The timeline is virtualized — tweets scroll out of the DOM. To find a specific tweet, use search, don't scroll.
@@ -15731,6 +15817,7 @@ const ADAPTERS = [
     name: 'linkedin',
     category: 'general',
     matches: (url) => /^https?:\/\/(www\.)?linkedin\.com\//.test(url),
+    fullPageCapture: { infiniteScroll: isLinkedInInfiniteScrollUrl },
     notes: `
 - LinkedIn aggressively lazy-loads everything; scroll to populate the feed/profile, but most content lives in modal-style detail panes.
 - "Connect" button on profiles often has a "Send without a note" prompt — read it before clicking.
@@ -15743,6 +15830,7 @@ const ADAPTERS = [
     name: 'reddit',
     category: 'general',
     matches: (url) => /^https?:\/\/(www\.|old\.|new\.)?reddit\.com\//.test(url),
+    fullPageCapture: { infiniteScroll: isRedditInfiniteScrollUrl },
     notes: `
 - Prefer old.reddit.com — its DOM is simpler and easier to automate. If you land on www.reddit.com or new.reddit.com, navigate to the old.reddit.com equivalent first (swap the subdomain, keep the path).
 - old.reddit.com and new.reddit.com have completely different DOMs. Check the URL before assuming selectors.
@@ -15754,6 +15842,7 @@ const ADAPTERS = [
     name: 'youtube',
     category: 'general',
     matches: (url) => /^https?:\/\/((www|m)\.)?youtube\.com\//.test(url) || /^https?:\/\/youtu\.be\//.test(url),
+    fullPageCapture: { infiniteScroll: isYouTubeInfiniteScrollUrl },
     notes: `
 - The video player is a custom element. Keyboard shortcuts: space=play/pause, k=play/pause, j/l=±10s, ←/→=±5s, m=mute.
 - For questions about the current video's content, use any available transcript skill tool first (for example \`read_youtube_transcript\` from FreeSkillz) and ground the answer in it. Transcript skill tools do not require \`/allow-api\`. If no transcript skill tool is available, or it fails or returns no text, say the transcript tool was unavailable and fall back to visible title/description/comments.
@@ -16281,6 +16370,7 @@ const ADAPTERS = [
     name: 'instagram',
     category: 'general',
     matches: (url) => /^https?:\/\/(www\.)?instagram\.com\//.test(url),
+    fullPageCapture: { infiniteScroll: isInstagramInfiniteScrollUrl },
     notes: `
 - Login wall pops mid-scroll on the home feed (/), Explore (/explore), and Reels (/reels). Without sign-in, beyond a handful of posts the user can't view anything — surface that, don't loop trying to scroll past.
 - Story bar at top of profile / feed is keyboard-driven: left/right arrows advance, Esc closes. Clicking is unreliable.
@@ -16294,6 +16384,7 @@ const ADAPTERS = [
     name: 'tiktok',
     category: 'general',
     matches: (url) => /^https?:\/\/(www\.)?tiktok\.com\//.test(url),
+    fullPageCapture: { infiniteScroll: isTikTokInfiniteScrollUrl },
     notes: `
 - "For You" feed swallows clicks that aren't on explicit buttons (Like, Comment, Share). Avoid coord-clicking inside the video area.
 - Login required for comments, likes, follows, saves. Without sign-in, the user can watch but not interact.
@@ -16306,6 +16397,7 @@ const ADAPTERS = [
     name: 'facebook',
     category: 'general',
     matches: (url) => /^https?:\/\/(www\.|m\.)?facebook\.com\//.test(url),
+    fullPageCapture: { infiniteScroll: isFacebookInfiniteScrollUrl },
     notes: `
 - PRIMARY use cases on Facebook web are Marketplace (/marketplace/) and Groups (/groups/<id>). The main news feed is heavily algorithmically personalized noise — don't try to "summarize the feed" usefully.
 - Marketplace listings (/marketplace/item/<id>): contact seller is via Messenger ("Message" button); price + location + condition + description fields. Some sellers gate inquiries behind "Send" templates.
@@ -16428,6 +16520,7 @@ const ADAPTERS = [
     name: 'mastodon',
     category: 'general',
     matches: isMastodonUrl,
+    fullPageCapture: { infiniteScroll: isMastodonInfiniteScrollUrl },
     notes: `
 - Mastodon login is per-instance. If a remote profile asks you to sign in / continue before following, don't create an account on that remote server.
 - To hand a remote Mastodon profile/status back to the user's home instance: open the remote profile/status, wait_for_stable, then use the sign-in/interaction popup to enter the home server DOMAIN ONLY (example: mastoturk.org), not a full URL or @handle.
@@ -16449,6 +16542,27 @@ export function getActiveAdapter(url) {
     } catch (e) { /* malformed URL or broken matcher — skip */ }
   }
   return null;
+}
+
+/**
+ * Return machine-readable full-page capture behavior for the active URL.
+ * This is runtime policy, not prompt guidance, so callers do not need an LLM
+ * turn or the model-facing site-adapter setting to be enabled.
+ */
+export function getFullPageCapturePolicy(url) {
+  const adapter = getActiveAdapter(url);
+  const classifier = adapter?.fullPageCapture?.infiniteScroll;
+  if (!classifier) return null;
+  try {
+    const knownInfiniteScroll = typeof classifier === 'function'
+      ? classifier(url)
+      : classifier === true;
+    return knownInfiniteScroll
+      ? { knownInfiniteScroll: true, adapterName: adapter.name }
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 /**

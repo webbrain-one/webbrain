@@ -185,10 +185,13 @@ function binaryResponse(status, body = 'media-bytes', contentType = 'video/mp4',
 // ────────────────────────────────────────────────────────────────────────
 
 // adapters.js is pure ESM with no chrome.* deps — import directly.
-const { getActiveAdapter, listAdapters } = await import(
+const { getActiveAdapter, getFullPageCapturePolicy, listAdapters } = await import(
   'file://' + path.join(ROOT, 'src/chrome/src/agent/adapters.js').replace(/\\/g, '/')
 );
-const { getActiveAdapter: getActiveAdapterFx } = await import(
+const {
+  getActiveAdapter: getActiveAdapterFx,
+  getFullPageCapturePolicy: getFullPageCapturePolicyFx,
+} = await import(
   'file://' + path.join(ROOT, 'src/firefox/src/agent/adapters.js').replace(/\\/g, '/')
 );
 
@@ -1840,6 +1843,58 @@ test('matches mastodon profile and interaction URLs on any host', () => {
   assert.equal(getActiveAdapter('https://example.com/@alice'), null);
   assert.equal(getActiveAdapterFx('https://example.com/@alice'), null);
   assert.equal(getActiveAdapter('https://example.com/blog/@alice'), null);
+});
+
+test('social adapters expose URL-specific infinite-scroll capture policy in both browsers', () => {
+  const positiveUrls = [
+    ['twitter', 'https://x.com/home'],
+    ['twitter', 'https://twitter.com/openai/status/1234567890'],
+    ['linkedin', 'https://www.linkedin.com/feed/'],
+    ['linkedin', 'https://www.linkedin.com/in/alice/recent-activity/all/'],
+    ['reddit', 'https://www.reddit.com/r/javascript/'],
+    ['youtube', 'https://www.youtube.com/watch?v=abc123'],
+    ['youtube', 'https://www.youtube.com/@OpenAI/videos'],
+    ['instagram', 'https://www.instagram.com/openai/'],
+    ['instagram', 'https://www.instagram.com/explore/'],
+    ['tiktok', 'https://www.tiktok.com/@openai'],
+    ['facebook', 'https://www.facebook.com/groups/12345/'],
+    ['facebook', 'https://www.facebook.com/marketplace/istanbul/'],
+    ['mastodon', 'https://mastoturk.org/home'],
+    ['mastodon', 'https://mastoturk.org/@alice'],
+  ];
+  const finiteUrls = [
+    'https://x.com/settings/account',
+    'https://www.linkedin.com/in/alice/',
+    'https://old.reddit.com/r/javascript/',
+    'https://www.reddit.com/r/javascript/comments/abc123/example/',
+    'https://youtu.be/abc123',
+    'https://www.instagram.com/p/ABC123/',
+    'https://www.instagram.com/reel/ABC123/',
+    'https://www.tiktok.com/@openai/video/1234567890123456789',
+    'https://www.facebook.com/groups/12345/posts/67890/',
+    'https://www.facebook.com/marketplace/item/12345/',
+    'https://mastoturk.org/@alice/123456789012345678',
+  ];
+  const spoofedUrls = [
+    'https://x.com.evil.example/home',
+    'https://linkedin.com.evil.example/feed/',
+    'https://reddit.com.evil.example/r/javascript/',
+    'https://youtube.com.evil.example/watch?v=abc123',
+    'https://instagram.com.evil.example/explore/',
+    'https://tiktok.com.evil.example/@openai',
+    'https://facebook.com.evil.example/groups/12345/',
+    'https://mastoturk.org.evil.example/home',
+  ];
+
+  for (const [adapterName, url] of positiveUrls) {
+    const expected = { knownInfiniteScroll: true, adapterName };
+    assert.deepEqual(getFullPageCapturePolicy(url), expected, `chrome policy missing for ${url}`);
+    assert.deepEqual(getFullPageCapturePolicyFx(url), expected, `firefox policy missing for ${url}`);
+  }
+  for (const url of [...finiteUrls, ...spoofedUrls]) {
+    assert.equal(getFullPageCapturePolicy(url), null, `chrome should not bound ${url}`);
+    assert.equal(getFullPageCapturePolicyFx(url), null, `firefox should not bound ${url}`);
+  }
 });
 
 test('mastodon observer detects recoverable remote-follow handoff', () => {
@@ -15274,6 +15329,67 @@ test('CDP full-page screenshots freeze bounds on infinite-scroll pages', async (
   assert.match(capture.warning, /infinite scrolling[\s\S]*bounded snapshot/i);
 });
 
+test('CDP full-page screenshots report one adapter-aware infinite-scroll warning', async () => {
+  const cdp = new CDPClient();
+  const captures = [];
+  let currentScrollY = 0;
+  let layoutHeight = 1200;
+  let heightAtFirstCapture = 0;
+  let growthEvents = 0;
+  let growthsAtFirstCapture = 0;
+  cdp.sendCommand = async (_tabId, method, params = {}) => {
+    if (method === 'Page.getLayoutMetrics') {
+      return {
+        cssVisualViewport: {
+          offsetX: 0,
+          offsetY: 0,
+          pageX: 0,
+          pageY: currentScrollY,
+          clientWidth: 800,
+          clientHeight: 600,
+          scale: 1,
+        },
+        cssContentSize: { x: 0, y: 0, width: 800, height: layoutHeight },
+      };
+    }
+    if (method === 'Page.captureScreenshot') {
+      if (captures.length === 0) {
+        heightAtFirstCapture = layoutHeight;
+        growthsAtFirstCapture = growthEvents;
+      }
+      captures.push(params.clip);
+      return { data: 'not-a-real-png' };
+    }
+    return {};
+  };
+  cdp.evaluate = async (_tabId, expression) => {
+    if (expression === 'window.devicePixelRatio') return { result: { value: 1 } };
+    const match = expression.match(/^window\.scrollTo\(0, (\d+)\)$/);
+    if (match) {
+      currentScrollY = Number(match[1]);
+      if (currentScrollY >= layoutHeight - 600) {
+        layoutHeight += 600;
+        growthEvents++;
+      }
+    }
+    return { result: { value: null } };
+  };
+
+  const capture = await cdp.captureFullPageScreenshot(42, {
+    knownInfiniteScroll: true,
+    adapterName: 'twitter',
+  });
+  const capturedHeight = Math.max(...captures.map(clip => clip.y + clip.height));
+  const infiniteWarnings = capture.warning.match(/infinite scrolling/gi) || [];
+
+  assert.equal(capturedHeight, heightAtFirstCapture, 'known infinite pages should freeze after five expansions');
+  assert.equal(growthsAtFirstCapture, 5, 'known infinite discovery should allow exactly five expansions');
+  assert.ok(layoutHeight > capturedHeight, 'later infinite content should stay outside the frozen snapshot');
+  assert.equal(infiniteWarnings.length, 1, 'adapter and heuristic detection must not duplicate warnings');
+  assert.match(capture.warning, /twitter page is known to use infinite scrolling/i);
+  assert.match(capture.warning, /at most 5 content expansions[\s\S]*later content may not be included/i);
+});
+
 test('full-page image assembly reports first-tile fallback errors', async () => {
   const originalCreateImageBitmap = globalThis.createImageBitmap;
   const originalOffscreenCanvas = globalThis.OffscreenCanvas;
@@ -15326,6 +15442,47 @@ test('user full-page screenshot responses preserve compositor fallback warnings'
   } finally {
     cdpClientCh.attach = originalAttach;
     cdpClientCh.captureFullPageScreenshot = originalCapture;
+  }
+});
+
+test('user full-page screenshots apply adapter capture policy without LLM adapter injection', async () => {
+  const originalChrome = globalThis.chrome;
+  const originalAttach = cdpClientCh.attach;
+  const originalCapture = cdpClientCh.captureFullPageScreenshot;
+  let receivedOptions = null;
+  try {
+    globalThis.chrome = {
+      ...(originalChrome || {}),
+      tabs: {
+        ...(originalChrome?.tabs || {}),
+        get: async (tabId) => {
+          assert.equal(tabId, 42);
+          return { id: tabId, url: 'https://x.com/home' };
+        },
+      },
+    };
+    cdpClientCh.attach = async () => ({ attached: true });
+    cdpClientCh.captureFullPageScreenshot = async (_tabId, options) => {
+      receivedOptions = options;
+      return { data: 'Zmlyc3QtdGlsZQ==', warning: null };
+    };
+    const agent = new AgentCh({});
+    agent.useSiteAdapters = false;
+    agent._bringToFrontForCapture = async () => {};
+    agent._withIndicatorsHidden = async (_tabId, capture) => capture();
+
+    const result = await agent.captureFullPageScreenshotForUser(42);
+
+    assert.equal(result.ok, true);
+    assert.deepEqual(receivedOptions, {
+      knownInfiniteScroll: true,
+      adapterName: 'twitter',
+    });
+  } finally {
+    cdpClientCh.attach = originalAttach;
+    cdpClientCh.captureFullPageScreenshot = originalCapture;
+    if (originalChrome === undefined) delete globalThis.chrome;
+    else globalThis.chrome = originalChrome;
   }
 });
 

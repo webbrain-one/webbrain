@@ -7,7 +7,7 @@ import { buildGithubStargazerProgressItems } from './observers/github-stargazers
 import { analyzeMastodonPage, mastodonHandoffInstruction, mastodonProgressGuard } from './observers/mastodon.js';
 import { isProgressActionAllowed, isProgressIntentActive, normalizeProgressAction, normalizeProgressIntent } from './progress-intent.js';
 import { cdpClient } from '../cdp/cdp-client.js';
-import { getActiveAdapter, UNIVERSAL_PREAMBLE } from './adapters.js';
+import { getActiveAdapter, getFullPageCapturePolicy, UNIVERSAL_PREAMBLE } from './adapters.js';
 import {
   fetchUrl,
   executeHttpSkillTool,
@@ -383,10 +383,18 @@ export class Agent {
   async captureFullPageScreenshotForUser(tabId) {
     if (!tabId) return { ok: false, error: 'No tab ID' };
     try {
+      let capturePolicy = null;
+      try {
+        const tab = await chrome.tabs.get(tabId);
+        capturePolicy = getFullPageCapturePolicy(tab?.url);
+      } catch {
+        // URL/policy lookup is an optimization. Capture still works without it,
+        // and runtime policy intentionally does not depend on LLM adapter notes.
+      }
       await cdpClient.attach(tabId);
       await this._bringToFrontForCapture(tabId);
       const capture = await this._withIndicatorsHidden(tabId, () =>
-        cdpClient.captureFullPageScreenshot(tabId)
+        cdpClient.captureFullPageScreenshot(tabId, capturePolicy || {})
       );
       const imageData = typeof capture === 'string' ? capture : capture?.data;
       const warning = typeof capture === 'object' ? capture?.warning || null : null;

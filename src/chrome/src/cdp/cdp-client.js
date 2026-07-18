@@ -647,8 +647,10 @@ export class CDPClient {
 
   /**
    * Take a pixel-perfect screenshot of the full page.
+   * @param {number} tabId
+   * @param {{knownInfiniteScroll?:boolean,adapterName?:string}} [options]
    */
-  async captureFullPageScreenshot(tabId) {
+  async captureFullPageScreenshot(tabId, options = {}) {
     await this.sendCommand(tabId, 'Page.enable');
     const metrics = await this.sendCommand(tabId, 'Page.getLayoutMetrics');
     const visualViewport = metrics?.cssVisualViewport;
@@ -671,8 +673,19 @@ export class CDPClient {
     const originalScrollY = Number.isFinite(Number(visualViewport?.pageY)) ? Number(visualViewport.pageY) : 0;
     const tiles = [];
     const warnings = [];
+    const knownInfiniteScroll = options?.knownInfiniteScroll === true;
+    const adapterName = String(options?.adapterName || 'this').trim() || 'this';
     let contentGrowths = 0;
     let captureBoundsFrozen = false;
+    let infiniteScrollWarningAdded = false;
+    const addInfiniteScrollWarning = () => {
+      if (infiniteScrollWarningAdded) return;
+      infiniteScrollWarningAdded = true;
+      warnings.push(knownInfiniteScroll
+        ? `The ${adapterName} page is known to use infinite scrolling. Captured a bounded snapshot after at most ${FULL_PAGE_MAX_CONTENT_GROWTHS} content expansions; later content may not be included.`
+        : `The page appears to use infinite scrolling. Captured a bounded snapshot after ${FULL_PAGE_MAX_CONTENT_GROWTHS} content expansions instead of continuing indefinitely; later content may not be included.`);
+    };
+    if (knownInfiniteScroll) addInfiniteScrollWarning();
     const updateContentBounds = (nextMetrics) => {
       if (captureBoundsFrozen) return false;
       const nextSize = nextMetrics?.cssContentSize;
@@ -691,9 +704,7 @@ export class CDPClient {
         contentGrowths++;
         if (contentGrowths >= FULL_PAGE_MAX_CONTENT_GROWTHS) {
           captureBoundsFrozen = true;
-          warnings.push(
-            `The page appears to use infinite scrolling; captured a bounded snapshot after ${FULL_PAGE_MAX_CONTENT_GROWTHS} content expansions instead of continuing indefinitely.`
-          );
+          addInfiniteScrollWarning();
         }
       }
       return grew;
