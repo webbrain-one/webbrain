@@ -846,6 +846,85 @@ body {
   font-size: 12px;
 }
 
+.screenshot-result {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+
+.screenshot-result-image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  object-fit: contain;
+  object-position: top;
+  border-radius: 6px;
+}
+
+.screenshot-result-image-full-page {
+  max-height: 70vh;
+}
+
+.screenshot-warning {
+  color: var(--warning-color, #b26a00);
+  line-height: 1.4;
+}
+
+.screenshot-result-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.screenshot-save-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.15s;
+}
+
+.screenshot-save-btn svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.screenshot-save-btn:hover,
+.screenshot-save-btn:focus-visible {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+.screenshot-save-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.screenshot-save-btn:active {
+  transform: translateY(1px);
+}
+
+.screenshot-save-btn:disabled {
+  cursor: wait;
+  opacity: 0.65;
+  transform: none;
+}
+
 /* "Context automatically compacted" inline separator. */
 .context-compacted-note {
   align-self: center;

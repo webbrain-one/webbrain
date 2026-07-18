@@ -12090,11 +12090,13 @@ test('sidepanel exposes dangerously-skip-permissions in both builds', () => {
 });
 
 test('sidepanel scopes async tab commands to the original tab', () => {
-  for (const [label, panelRel] of [
-    ['chrome', 'src/chrome/src/ui/sidepanel.js'],
-    ['firefox', 'src/firefox/src/ui/sidepanel.js'],
+  for (const [label, panelRel, styleRel, localeRel] of [
+    ['chrome', 'src/chrome/src/ui/sidepanel.js', 'src/chrome/styles/sidepanel.css', 'src/chrome/src/ui/locales/en.js'],
+    ['firefox', 'src/firefox/src/ui/sidepanel.js', 'src/firefox/styles/sidepanel.css', 'src/firefox/src/ui/locales/en.js'],
   ]) {
     const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
+    const style = fs.readFileSync(path.join(ROOT, styleRel), 'utf8');
+    const locale = fs.readFileSync(path.join(ROOT, localeRel), 'utf8');
     assert.match(panel, /async function parseSlashCommands\(text, tabId = currentTabId\) \{/, `${label}: slash-command parsing should accept the initiating tab id`);
 
     const helperStart = panel.indexOf('async function renderClearedConversationForTab(tabId)');
@@ -12139,15 +12141,21 @@ test('sidepanel scopes async tab commands to the original tab', () => {
       ? panel.indexOf("if (command.value === '/screenshot' && action === 'full-page')", screenshotIdx)
       : panel.indexOf("if (command.value === '/export' && action === 'traces')", screenshotIdx);
     const screenshotBody = panel.slice(screenshotIdx, screenshotEnd);
-    assert.match(screenshotBody, /if \(currentTabId !== tabId \|\| !tab\?\.active\) return '';[\s\S]*?captureVisibleTab[\s\S]*?if \(currentTabId !== tabId\) return '';[\s\S]*?(?:addMessage\('system', systemHtml\(imgHtml\)\)|addPersistentSlashMessage\(systemHtml\(imgHtml\)\));/, `${label}: /screenshot should not render a captured image into a different tab`);
+    assert.match(screenshotBody, /if \(currentTabId !== tabId \|\| !tab\?\.active\) return '';[\s\S]*?captureVisibleTab[\s\S]*?if \(currentTabId !== tabId\) return '';[\s\S]*?addScreenshotResultMessage\(dataUrl\);/, `${label}: /screenshot should not render a captured image into a different tab`);
+    assert.match(panel, /function renderScreenshotResult\(dataUrl,[\s\S]*?screenshot-save-btn[\s\S]*?sp\.screenshot\.save_as/, `${label}: screenshot messages should render a visible Save As action`);
+    assert.match(panel, /function bindScreenshotSaveButton\(btn\)[\s\S]*?downloads\.download\(\{[\s\S]*?url: dataUrl,[\s\S]*?saveAs: true,[\s\S]*?conflictAction: 'uniquify'/, `${label}: screenshot Save As should use the browser Downloads API and native picker`);
+    assert.match(panel, /function rebindRestoredMessageControls\(\)[\s\S]*?rebindScreenshotSaveButtons\(\);/, `${label}: restored screenshot messages should regain their Save As behavior`);
+    assert.match(style, /\.screenshot-save-btn \{[\s\S]*?cursor: pointer;[\s\S]*?\}[\s\S]*?\.screenshot-save-btn:hover,[\s\S]*?\.screenshot-save-btn:focus-visible/, `${label}: screenshot Save As should be styled for pointer and keyboard interaction`);
+    assert.match(locale, /'sp\.screenshot\.save_as': 'Save as…'/, `${label}: screenshot Save As should have an English label`);
+    assert.match(locale, /'sp\.screenshot\.save_failed': 'Could not save screenshot: \{msg\}'/, `${label}: screenshot save failures should have an English fallback`);
     const fullPageIdx = panel.indexOf("if (command.value === '/screenshot' && action === 'full-page')");
     assert.match(panel, /function normalizeScreenshotRequestText\(text\) \{[\s\S]*?\.normalize\('NFKD'\)[\s\S]*?\.replace\(\/\[\\u0300-\\u036f\]\/g, ''\)[\s\S]*?\.replace\(\/\\u0131\/g, 'i'\)/, `${label}: plain screenshot request normalization should handle accented Turkish text`);
     assert.match(panel, /function isPlainScreenshotRequest\(text\) \{[\s\S]*?const s = normalizeScreenshotRequestText\(text\);[\s\S]*?s\.startsWith\('\/'\)[\s\S]*?ekran goruntusu[\s\S]*?ekran goruntusunu/, `${label}: plain screenshot request routing should cover English and Turkish screenshot-only requests`);
     if (label === 'chrome') {
       assert.notEqual(fullPageIdx, -1, `${label}: /screenshot --full-page parser missing`);
       const fullPageBody = panel.slice(fullPageIdx, panel.indexOf("if (command.value === '/record'", fullPageIdx));
-      assert.match(fullPageBody, /sendToBackground\('capture_full_page_screenshot', \{ tabId \}\);[\s\S]*?if \(currentTabId !== tabId\) return '';[\s\S]*?addPersistentSlashMessage\(systemHtml\(`\$\{warningHtml\}\$\{imgHtml\}`\)\);/, `${label}: /screenshot --full-page should render only into the initiating tab`);
-      assert.match(fullPageBody, /res\.warning[\s\S]*?escapeHtml\(res\.warning\)/, `${label}: fallback full-page images should display their escaped assembly warning`);
+      assert.match(fullPageBody, /sendToBackground\('capture_full_page_screenshot', \{ tabId \}\);[\s\S]*?if \(currentTabId !== tabId\) return '';[\s\S]*?addScreenshotResultMessage\(res\.dataUrl, \{ fullPage: true, warning: res\.warning \}\);/, `${label}: /screenshot --full-page should render only into the initiating tab with the same Save As action`);
+      assert.match(panel, /function renderScreenshotResult\(dataUrl,[\s\S]*?warningHtml = warning[\s\S]*?escapeHtml\(warning\)/, `${label}: fallback full-page images should display their escaped assembly warning`);
       assert.match(panel, /function isPlainFullPageScreenshotRequest\(text\) \{[\s\S]*?full\|whole\|entire\|complete[\s\S]*?tam sayfa[\s\S]*?ekran goruntusu/, `${label}: plain full-page screenshot request routing should cover English and Turkish requests`);
       assert.match(panel, /function normalizeScreenshotCommandText\(text\) \{[\s\S]*?isPlainFullPageScreenshotRequest\(text\)[\s\S]*?return '\/screenshot --full-page';[\s\S]*?isPlainScreenshotRequest\(text\)[\s\S]*?return '\/screenshot';/, `${label}: screenshot normalization should route full-page requests before viewport screenshots`);
     } else {
