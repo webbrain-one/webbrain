@@ -4,6 +4,11 @@ All notable changes to WebBrain are documented in this file.
 
 This changelog was generated from the repository Git history and release tags. Versions without a Git tag are inferred from version-bump commits and the current `package.json` / browser manifest versions.
 
+## [24.4.0] - 2026-07-18
+
+### Changed
+- Add guarded CDP click fallback + full screenshot bugfix
+
 ## [24.3.1] - 2026-07-18
 
 ### Changed
