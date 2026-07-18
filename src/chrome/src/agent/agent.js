@@ -2611,9 +2611,16 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             tool_call_id: tc.id,
             content: JSON.stringify(blockedResult),
           });
+          // The remaining calls were generated alongside the invalid done,
+          // before the model saw the recovery instruction. Never execute that
+          // stale batch; close every tool_call and start a fresh model turn.
+          this._appendSyntheticToolResults(
+            tabId, toolCalls, toolIndex + 1, messages, onUpdate, step,
+            () => ({ success: false, skipped: true, error: 'skipped: invalid done requires a fresh execution turn' })
+          );
           onUpdate('warning', { message: 'Plan-only completion was rejected; continuing into execution.' });
           this._persist(tabId);
-          continue;
+          return { action: 'continue' };
         }
         if (planOnlyDecision?.failure) {
           const failedResult = {

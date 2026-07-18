@@ -25175,10 +25175,16 @@ test('Act rejects plan-only done summaries before any non-done tool', async () =
     const responses = [
       {
         content: null,
-        toolCalls: [{
-          id: `premature_done_${index}`,
-          function: { name: 'done', arguments: JSON.stringify({ summary: planOnlyTerminalFixture() }) },
-        }],
+        toolCalls: [
+          {
+            id: `premature_done_${index}`,
+            function: { name: 'done', arguments: JSON.stringify({ summary: planOnlyTerminalFixture() }) },
+          },
+          {
+            id: `stale_after_done_${index}`,
+            function: { name: 'click_ax', arguments: JSON.stringify({ ref_id: 'ax-stale' }) },
+          },
+        ],
       },
       { content: null, toolCalls: executionToolCalls(`done_${index}`) },
     ];
@@ -25206,6 +25212,9 @@ test('Act rejects plan-only done summaries before any non-done tool', async () =
       agent.conversations.get(tabId).some(message => message.role === 'tool' && /"planOnlyTerminal":true/.test(String(message.content || ''))),
       `${AgentClass.name}: premature done was not mechanically blocked`,
     );
+    const staleResult = agent.conversations.get(tabId).find(message => message.role === 'tool' && message.tool_call_id === `stale_after_done_${index}`);
+    assert.match(String(staleResult?.content || ''), /"skipped":true/, `${AgentClass.name}: stale tool after invalid done was not skipped`);
+    assert.match(String(staleResult?.content || ''), /invalid done requires a fresh execution turn/, `${AgentClass.name}: stale skip reason missing`);
   }
 });
 
