@@ -16,7 +16,8 @@ import { chromium } from 'playwright';
 import { fileURLToPath } from 'node:url';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { CDPClient } from '../../src/chrome/src/cdp/cdp-client.js';
+import { Agent } from '../../src/chrome/src/agent/agent.js';
+import { CDPClient, cdpClient } from '../../src/chrome/src/cdp/cdp-client.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..', '..');
@@ -674,7 +675,7 @@ test('ambiguity: two Cancels return rich candidates with ancestor', async (page)
 });
 
 // ─── click_ax same-page anchors ─────────────────────────────────────────────
-test('click_ax: synthetic-first row needs trusted CDP events only when the page ignores synthetic activation', async (page) => {
+test('click_ax: Agent.executeTool keeps synthetic-first behavior and uses trusted CDP only for an ignored generic row', async (page) => {
   await setup(page, 'trusted-click-fallback.html');
   const tree = await call(page, 'get_accessibility_tree', { filter: 'all', maxDepth: 10, maxChars: 20000 });
   const trustedMatch = String(tree?.pageContent || '').match(/listitem "Defne Sokullu Yesterday Photo" \[(ref_\d+)\]/);
@@ -683,56 +684,125 @@ test('click_ax: synthetic-first row needs trusted CDP events only when the page 
     throw new Error(`expected trusted and synthetic fixture rows in AX tree: ${tree?.pageContent}`);
   }
 
-  const syntheticOnly = await call(page, 'click_ax', { ref_id: trustedMatch[1] });
-  if (!syntheticOnly?.success) throw new Error(`expected synthetic click_ax dispatch, got ${JSON.stringify(syntheticOnly)}`);
-  const afterSynthetic = await page.evaluate(() => ({
-    status: document.getElementById('status').textContent,
-    events: window.__trustedClickEvents,
-  }));
-  if (afterSynthetic.status !== 'idle') {
-    throw new Error(`untrusted el.click() must not activate the trusted-only row, got ${afterSynthetic.status}`);
-  }
-  if (afterSynthetic.events.length !== 1 || afterSynthetic.events[0].trusted !== false) {
-    throw new Error(`expected exactly one untrusted synthetic click event, got ${JSON.stringify(afterSynthetic.events)}`);
-  }
-
-  const target = await call(page, 'ax_resolve_rect', { ref_id: trustedMatch[1], forClickFallback: true });
-  if (!target?.success || !target.fallbackEligible || !target.hitOk) {
-    throw new Error(`trusted-only generic row should be eligible for fallback: ${JSON.stringify(target)}`);
-  }
-
+  const originalChrome = globalThis.chrome;
+  const originals = {
+    attach: cdpClient.attach,
+    evaluate: cdpClient.evaluate,
+    dispatch: cdpClient.dispatchMouseEvent,
+  };
   const session = await page.context().newCDPSession(page);
+  const dispatched = [];
+  const listener = { addListener() {}, removeListener() {} };
+  globalThis.chrome = {
+    runtime: {},
+    tabs: {
+      async get(tabId) {
+        return { id: tabId, url: page.url(), title: 'Trusted click fixture' };
+      },
+      async query() {
+        return [{ id: 42, url: page.url() }];
+      },
+      async sendMessage(_tabId, message) {
+        return call(page, message.action, message.params || {});
+      },
+    },
+    downloads: { onCreated: listener },
+    webRequest: { onBeforeRequest: listener },
+    scripting: { async executeScript() {} },
+  };
+
   try {
-    await session.send('Input.dispatchMouseEvent', {
-      type: 'mouseMoved', x: target.x, y: target.y, button: 'none', buttons: 0,
+    cdpClient.attach = async () => ({ tabId: 42, attached: true });
+    cdpClient.evaluate = async (_tabId, expression) => ({
+      result: { value: await page.evaluate(expression) },
     });
-    await session.send('Input.dispatchMouseEvent', {
-      type: 'mousePressed', x: target.x, y: target.y, button: 'left', buttons: 1, clickCount: 1,
-    });
-    await session.send('Input.dispatchMouseEvent', {
-      type: 'mouseReleased', x: target.x, y: target.y, button: 'left', buttons: 0, clickCount: 1,
-    });
+    cdpClient.dispatchMouseEvent = async (_tabId, type, x, y) => {
+      dispatched.push({ type, x, y });
+      return session.send('Input.dispatchMouseEvent', {
+        type,
+        x,
+        y,
+        button: type === 'mouseMoved' ? 'none' : 'left',
+        buttons: type === 'mousePressed' ? 1 : 0,
+        clickCount: type === 'mouseMoved' ? 0 : 1,
+      });
+    };
+
+    const agent = new Agent({});
+    agent._isPdfTab = async () => false;
+    agent._currentUrl = async () => page.url();
+    agent._clickAxFinalSettleMs = () => 60;
+
+    const trustedResult = await agent.executeTool(42, 'click_ax', { ref_id: trustedMatch[1] });
+    const afterTrusted = await page.evaluate(() => ({
+      status: document.getElementById('status').textContent,
+      ambientStatus: document.getElementById('ambient-status').textContent,
+      events: window.__trustedClickEvents,
+      selected: document.getElementById('trusted-row').classList.contains('trusted-opened'),
+    }));
+    if (
+      trustedResult?.success !== true
+      || trustedResult.fallback !== 'cdp_after_synthetic_no_progress'
+      || trustedResult.trusted !== true
+      || trustedResult.verified !== true
+    ) {
+      throw new Error(`actual Agent/content/CDP chain did not complete trusted fallback: ${JSON.stringify(trustedResult)}`);
+    }
+    if (!trustedResult.observedHints?.includes('page_text')) {
+      throw new Error(`unrelated whole-page churn should be retained only as a diagnostic hint: ${JSON.stringify(trustedResult)}`);
+    }
+    if (
+      afterTrusted.status !== 'trusted-opened'
+      || afterTrusted.ambientStatus !== 'unrelated-chat-churn'
+      || !afterTrusted.selected
+    ) {
+      throw new Error(`trusted CDP fallback did not activate the row: ${JSON.stringify(afterTrusted)}`);
+    }
+    if (
+      afterTrusted.events.length !== 2
+      || afterTrusted.events[0].trusted !== false
+      || afterTrusted.events[1].trusted !== true
+    ) {
+      throw new Error(`expected one synthetic then one trusted event: ${JSON.stringify(afterTrusted.events)}`);
+    }
+    if (dispatched.map(event => event.type).join(',') !== 'mouseMoved,mousePressed,mouseReleased') {
+      throw new Error(`unexpected trusted input sequence: ${JSON.stringify(dispatched)}`);
+    }
+
+    await page.evaluate(() => { document.getElementById('status').textContent = 'idle'; });
+    const dispatchCountBeforeNormal = dispatched.length;
+    const normalResult = await agent.executeTool(42, 'click_ax', { ref_id: syntheticMatch[1] });
+    const normalState = await page.evaluate(() => ({
+      status: document.getElementById('status').textContent,
+      events: window.__syntheticClickEvents,
+      selected: document.getElementById('synthetic-row').classList.contains('synthetic-opened'),
+    }));
+    if (
+      normalResult?.success !== true
+      || normalResult.trusted !== false
+      || normalResult.verified !== true
+      || normalResult.observedEffects?.[0] !== 'target_state'
+    ) {
+      throw new Error(`working synthetic target was not accepted from its local state change: ${JSON.stringify(normalResult)}`);
+    }
+    if (
+      normalState.status !== 'synthetic-opened'
+      || !normalState.selected
+      || normalState.events.length !== 1
+      || normalState.events[0].trusted !== false
+    ) {
+      throw new Error(`working synthetic click path regressed or double-activated: ${JSON.stringify(normalState)}`);
+    }
+    if (dispatched.length !== dispatchCountBeforeNormal) {
+      throw new Error('working synthetic target unexpectedly received a trusted second click');
+    }
   } finally {
+    cdpClient.attach = originals.attach;
+    cdpClient.evaluate = originals.evaluate;
+    cdpClient.dispatchMouseEvent = originals.dispatch;
+    if (originalChrome === undefined) delete globalThis.chrome;
+    else globalThis.chrome = originalChrome;
     await session.detach();
-  }
-
-  const afterTrusted = await page.evaluate(() => ({
-    status: document.getElementById('status').textContent,
-    events: window.__trustedClickEvents,
-  }));
-  if (afterTrusted.status !== 'trusted-opened') {
-    throw new Error(`trusted CDP fallback did not activate the row: ${JSON.stringify(afterTrusted)}`);
-  }
-  if (afterTrusted.events.length !== 2 || afterTrusted.events[1].trusted !== true) {
-    throw new Error(`expected one synthetic then one trusted event: ${JSON.stringify(afterTrusted.events)}`);
-  }
-
-  await page.evaluate(() => { document.getElementById('status').textContent = 'idle'; });
-  const normal = await call(page, 'click_ax', { ref_id: syntheticMatch[1] });
-  if (!normal?.success) throw new Error(`normal synthetic row should still work: ${JSON.stringify(normal)}`);
-  const normalStatus = await page.evaluate(() => document.getElementById('status').textContent);
-  if (normalStatus !== 'synthetic-opened') {
-    throw new Error(`working synthetic click path regressed, got ${normalStatus}`);
   }
 });
 
@@ -746,6 +816,7 @@ test('ax_resolve_rect: trusted fallback eligibility rejects interactive descenda
     nestedInput: content.match(/listitem "Nested input row" \[(ref_\d+)\]/)?.[1],
     native: content.match(/button "Native button" \[(ref_\d+)\]/)?.[1],
     destructive: content.match(/listitem "Delete account" \[(ref_\d+)\]/)?.[1],
+    sendMessage: content.match(/listitem "Send message" \[(ref_\d+)\]/)?.[1],
     indirectDestructive: content.match(/listitem "Delete account indirectly" \[(ref_\d+)\]/)?.[1],
     localizedDestructive: content.match(/listitem "Hesabı sil" \[(ref_\d+)\]/)?.[1],
     statefulRole: content.match(/treeitem "Expandable row" \[(ref_\d+)\]/)?.[1],
@@ -760,6 +831,10 @@ test('ax_resolve_rect: trusted fallback eligibility rejects interactive descenda
     pointer: content.match(/listitem "Pointer disabled row" \[(ref_\d+)\]/)?.[1],
     zero: content.match(/listitem "Zero row" \[(ref_\d+)\]/)?.[1],
   };
+  const safeRefs = {
+    dataAction: content.match(/listitem "Generic data action row" \[(ref_\d+)\]/)?.[1],
+    properName: content.match(/listitem "Post Malone" \[(ref_\d+)\]/)?.[1],
+  };
   await page.evaluate(() => {
     document.getElementById('opacity-row').style.opacity = '0';
   });
@@ -769,6 +844,13 @@ test('ax_resolve_rect: trusted fallback eligibility rejects interactive descenda
     if (!result?.success) throw new Error(`${label} ref did not resolve: ${JSON.stringify(result)}`);
     if (result.fallbackEligible !== false || !result.fallbackBlockedReason) {
       throw new Error(`${label} target should be blocked from trusted fallback: ${JSON.stringify(result)}`);
+    }
+  }
+  for (const [label, ref] of Object.entries(safeRefs)) {
+    if (!ref) throw new Error(`missing ${label} ref in AX tree: ${content}`);
+    const result = await call(page, 'ax_resolve_rect', { ref_id: ref, forClickFallback: true });
+    if (!result?.success || result.fallbackEligible !== true || result.fallbackBlockedReason) {
+      throw new Error(`${label} generic row should remain eligible for trusted fallback: ${JSON.stringify(result)}`);
     }
   }
   for (const label of ['nestedButton', 'nestedLink', 'nestedInput']) {

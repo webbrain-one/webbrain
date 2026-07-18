@@ -551,8 +551,8 @@
 
   const _MUTATING_ACTION_TERMS = [
     // English
-    'send', 'delete', 'remove', 'pay', 'purchase', 'buy', 'checkout',
-    'publish', 'post', 'follow', 'unfollow', 'submit', 'confirm', 'approve',
+    'delete', 'remove', 'purchase', 'checkout', 'publish', 'follow',
+    'unfollow', 'submit', 'confirm', 'approve',
     'reject', 'archive',
     // Turkish
     'gönder', 'sil', 'kaldır', 'öde', 'satın al', 'yayınla', 'paylaş',
@@ -599,17 +599,27 @@
     'скачать', 'экспорт', 'تنزيل', 'تصدير', 'डाउनलोड', 'निर्यात',
   ];
 
-  function _hasActionTerm(value, terms) {
-    const normalize = input => String(input || '')
+  const _AMBIGUOUS_ENGLISH_MUTATING_ACTION_PATTERNS = [
+    /^send(?:$|\s+(?:a\s+)?(?:message|email|file|photo|video|reply|invite|request|code|link|now)\b)/u,
+    /^post(?:$|\s+(?:a\s+)?(?:message|update|comment|reply|story|photo|video|status|listing|job|now)\b)/u,
+    /^pay(?:$|\s+(?:bill|invoice|balance|amount|with|via|now)\b)/u,
+    /^buy(?:$|\s+(?:item|product|plan|subscription|ticket|tickets|now)\b)/u,
+  ];
+
+  function _normalizeActionText(value) {
+    return String(value || '')
       .normalize('NFKC')
       .toLocaleLowerCase()
       .normalize('NFKD')
       .replace(/\p{M}/gu, '');
-    const text = normalize(value);
+  }
+
+  function _hasActionTerm(value, terms) {
+    const text = _normalizeActionText(value);
     if (!text) return false;
     const isWordChar = char => !!char && /[\p{L}\p{N}]/u.test(char);
     for (const rawTerm of terms) {
-      const term = normalize(rawTerm);
+      const term = _normalizeActionText(rawTerm);
       let index = text.indexOf(term);
       while (index >= 0) {
         const scriptWithoutWordBoundaries = /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/u.test(term);
@@ -624,7 +634,9 @@
   }
 
   function _hasMutatingActionName(value) {
-    return _hasActionTerm(value, _MUTATING_ACTION_TERMS);
+    if (_hasActionTerm(value, _MUTATING_ACTION_TERMS)) return true;
+    const text = _normalizeActionText(value).trim();
+    return _AMBIGUOUS_ENGLISH_MUTATING_ACTION_PATTERNS.some(pattern => pattern.test(text));
   }
 
   function _hasDownloadActionName(value) {
@@ -650,6 +662,53 @@
       return { visible: false, reason: 'target visibility could not be verified' };
     }
     return { visible: true, reason: '' };
+  }
+
+  function _axFallbackStaticAssessment(el) {
+    const tag = el?.tagName ? el.tagName.toLowerCase() : '';
+    const role = (el?.getAttribute?.('role') || '').trim().toLowerCase();
+    const name = _axAccessibleName(el);
+    const isEditable = !!el?.isContentEditable || tag === 'input' || tag === 'textarea';
+    const isNativeControl = ['button', 'a', 'input', 'select', 'textarea', 'label', 'option'].includes(tag);
+    const isButtonLike = role === 'button' || !!el?.closest?.('[role="button"]');
+    const isSubmitControl = _isSubmitControl(el);
+    const isDownloadControl = !!el?.closest?.('a[download],[download],[data-download]')
+      || _hasDownloadActionName(name);
+    const isDestructiveLike = _hasMutatingActionName(name);
+    const hasStatefulSemantics = ['treeitem', 'option'].includes(role)
+      || ['aria-expanded', 'aria-selected', 'aria-checked', 'aria-pressed', 'aria-haspopup', 'data-state']
+        .some(attr => el?.hasAttribute?.(attr));
+    // Explicit handlers on the generic row itself are precisely where an
+    // isTrusted-only application may need the fallback. Only interactive
+    // ancestors remain a static veto; center-hit descendants are checked
+    // separately against the actual pointer destination.
+    const unsafeAncestor = el?.parentElement?.closest?.(
+      'button,a,input,select,textarea,label,form,[role="button"],[role="link"],[onclick],[data-action]'
+    );
+    const safeRole = !role || ['generic', 'listitem', 'row'].includes(role);
+    let blockedReason = '';
+    if (isEditable) blockedReason = 'editable targets must not be auto-clicked twice';
+    else if (tag === 'select') blockedReason = 'native select controls must use keyboard selection';
+    else if (isNativeControl || isButtonLike) blockedReason = 'native/button-like controls keep the existing synthetic path';
+    else if (isSubmitControl || !!el?.closest?.('form')) blockedReason = 'form controls must not be auto-retried';
+    else if (isDownloadControl) blockedReason = 'download controls must not be auto-retried';
+    else if (isDestructiveLike) blockedReason = 'potentially mutating controls must not be auto-retried';
+    else if (hasStatefulSemantics) blockedReason = 'toggle/selection controls must not be auto-clicked twice';
+    else if (unsafeAncestor) blockedReason = 'targets inside explicit interactive handlers must not be auto-retried';
+    else if (!safeRole) blockedReason = `role "${role}" is not eligible for automatic trusted fallback`;
+    return {
+      tag,
+      role,
+      name,
+      isEditable,
+      isNativeControl,
+      isButtonLike,
+      isSubmitControl,
+      isDownloadControl,
+      isDestructiveLike,
+      hasStatefulSemantics,
+      blockedReason,
+    };
   }
 
   function _axInteractiveHitDescendant(el, topmost) {
@@ -2931,6 +2990,7 @@
           const fallbackStateBefore = _axFallbackState(el);
           const rect = el.getBoundingClientRect();
           const tag = el.tagName ? el.tagName.toLowerCase() : '';
+          const fallbackStatic = _axFallbackStaticAssessment(el);
           let popupRole = '';
           let popupHasPopup = null;
           let isPopupOpener = false;
@@ -2999,6 +3059,7 @@
               _preparedActive: preparedActive,
               _fallbackStateBefore: fallbackStateBefore,
               _fallbackStateAfterImmediate: fallbackStateAfterImmediate,
+              _fallbackStaticBlockedReason: fallbackStatic.blockedReason,
               rect: { x: Math.round(rect.x), y: Math.round(rect.y), w: Math.round(rect.width), h: Math.round(rect.height) },
             };
             // Echo accessible name + href so the model can see exactly what
@@ -3402,32 +3463,28 @@
           const cy = r.top + r.height / 2;
           const vw = window.innerWidth, vh = window.innerHeight;
           const inViewport = r.width > 0 && r.height > 0 && cx >= 0 && cy >= 0 && cx <= vw && cy <= vh;
-          const tag = el.tagName ? el.tagName.toLowerCase() : '';
-          const role = (el.getAttribute?.('role') || '').trim().toLowerCase();
-          const name = _axAccessibleName(el);
+          const fallbackStatic = _axFallbackStaticAssessment(el);
+          const {
+            tag,
+            role,
+            name,
+            isEditable,
+            isNativeControl,
+            isButtonLike,
+            isSubmitControl,
+            isDownloadControl,
+            isDestructiveLike,
+            hasStatefulSemantics,
+          } = fallbackStatic;
           let topmost = null;
           try { if (forClickFallback && inViewport) topmost = document.elementFromPoint(cx, cy); } catch {}
-          const hitOk = !forClickFallback || !!topmost && (
+          const hitOk = !forClickFallback || (!!topmost && (
             topmost === el
             || el.contains?.(topmost)
-          );
+          ));
           const interactiveHitDescendant = forClickFallback
             ? _axInteractiveHitDescendant(el, topmost)
             : null;
-          const isEditable = !!el.isContentEditable || tag === 'input' || tag === 'textarea';
-          const isNativeControl = ['button', 'a', 'input', 'select', 'textarea', 'label', 'option'].includes(tag);
-          const isButtonLike = role === 'button' || !!el.closest?.('[role="button"]');
-          const isSubmitControl = _isSubmitControl(el);
-          const isDownloadControl = !!el.closest?.('a[download],[download],[data-download]')
-            || _hasDownloadActionName(name);
-          const isDestructiveLike = _hasMutatingActionName(name);
-          const hasStatefulSemantics = ['treeitem', 'option'].includes(role)
-            || ['aria-expanded', 'aria-selected', 'aria-checked', 'aria-pressed', 'aria-haspopup', 'data-state']
-              .some(attr => el.hasAttribute?.(attr));
-          const unsafeAncestor = el.closest?.(
-            'button,a,input,select,textarea,label,form,[role="button"],[role="link"],[onclick],[data-action]'
-          );
-          const safeRole = !role || ['generic', 'listitem', 'row'].includes(role);
           const visibility = forClickFallback
             ? _axFallbackVisibility(el)
             : { visible: true, reason: '' };
@@ -3436,15 +3493,7 @@
           else if (!inViewport) fallbackBlockedReason = 'target is outside the viewport or has a zero-sized box';
           else if (!hitOk) fallbackBlockedReason = 'target center is covered by another element';
           else if (interactiveHitDescendant) fallbackBlockedReason = 'target center resolves to an interactive descendant that must not receive an automatic trusted click';
-          else if (isEditable) fallbackBlockedReason = 'editable targets must not be auto-clicked twice';
-          else if (tag === 'select') fallbackBlockedReason = 'native select controls must use keyboard selection';
-          else if (isNativeControl || isButtonLike) fallbackBlockedReason = 'native/button-like controls keep the existing synthetic path';
-          else if (isSubmitControl || !!el.closest?.('form')) fallbackBlockedReason = 'form controls must not be auto-retried';
-          else if (isDownloadControl) fallbackBlockedReason = 'download controls must not be auto-retried';
-          else if (isDestructiveLike) fallbackBlockedReason = 'potentially mutating controls must not be auto-retried';
-          else if (hasStatefulSemantics) fallbackBlockedReason = 'toggle/selection controls must not be auto-clicked twice';
-          else if (unsafeAncestor) fallbackBlockedReason = 'targets with explicit interactive handlers must not be auto-retried';
-          else if (!safeRole) fallbackBlockedReason = `role "${role}" is not eligible for automatic trusted fallback`;
+          else if (fallbackStatic.blockedReason) fallbackBlockedReason = fallbackStatic.blockedReason;
           if (forClickFallback && !window.__wbAxDocumentToken) {
             window.__wbAxDocumentToken = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
           }

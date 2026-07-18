@@ -77,6 +77,9 @@
 <body>
   <div id="trusted-row" class="row" role="listitem" tabindex="0">Defne Sokullu Yesterday Photo</div>
   <div id="synthetic-row" class="row" role="listitem" tabindex="0">Normal synthetic row</div>
+  <div id="data-action-row" class="row" role="listitem" data-action="open-chat" tabindex="0">Generic data action row</div>
+  <div id="proper-name-row" class="row" role="listitem" tabindex="0">Post Malone</div>
+  <div id="send-message-row" class="row" role="listitem" tabindex="0">Send message</div>
   <div id="nested-button-row" class="row nested-control-row" role="listitem" aria-label="Nested button row">
     <button type="button">Nested button action</button>
   </div>
@@ -109,14 +112,25 @@
   <div id="pointer-row" class="row" role="listitem" tabindex="0" style="pointer-events:none">Pointer disabled row</div>
   <div id="zero-row" role="listitem" tabindex="0">Zero row</div>
   <p id="status">idle</p>
+  <p id="ambient-status">ambient-idle</p>
 
   <script>
     window.__trustedClickEvents = [];
+    window.__syntheticClickEvents = [];
     document.getElementById('trusted-row').addEventListener('click', (event) => {
       window.__trustedClickEvents.push({ trusted: event.isTrusted, type: event.type });
-      if (event.isTrusted) document.getElementById('status').textContent = 'trusted-opened';
+      if (event.isTrusted) {
+        event.currentTarget.classList.add('trusted-opened');
+        document.getElementById('status').textContent = 'trusted-opened';
+      } else {
+        setTimeout(() => {
+          document.getElementById('ambient-status').textContent = 'unrelated-chat-churn';
+        }, 40);
+      }
     });
-    document.getElementById('synthetic-row').addEventListener('click', () => {
+    document.getElementById('synthetic-row').addEventListener('click', (event) => {
+      window.__syntheticClickEvents.push({ trusted: event.isTrusted, type: event.type });
+      event.currentTarget.classList.add('synthetic-opened');
       document.getElementById('status').textContent = 'synthetic-opened';
     });
   </script>

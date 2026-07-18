@@ -15115,12 +15115,14 @@ test('Chrome click_ax keeps successful synthetic clicks and skips trusted fallba
   agent._observeClickAxSideEffect = async () => ({
     changed: true,
     proved: true,
+    weakEvidence: false,
     safetyVeto: false,
     observable: true,
-    reasons: ['page_text'],
-    proofReasons: ['page_text'],
+    reasons: ['focus'],
+    proofReasons: ['focus'],
+    weakReasons: [],
     safetyReasons: [],
-    snapshot: '{"text":"after"}',
+    snapshot: '{"active":"after"}',
   });
   agent._resolveClickAxFallbackTarget = async () => {
     resolved = true;
@@ -15138,10 +15140,10 @@ test('Chrome click_ax keeps successful synthetic clicks and skips trusted fallba
   assert.equal(result.success, true);
   assert.equal(result.trusted, false);
   assert.equal(result.verified, true);
-  assert.deepEqual(result.observedEffects, ['page_text']);
+  assert.deepEqual(result.observedEffects, ['focus']);
 });
 
-test('Chrome click_ax uses one trusted fallback for an eligible synthetic no-progress target', async () => {
+test('Chrome click_ax treats broad page churn as weak evidence and still uses one trusted fallback', async () => {
   const originals = {
     attach: cdpClientCh.attach,
     dispatch: cdpClientCh.dispatchMouseEvent,
@@ -15149,26 +15151,28 @@ test('Chrome click_ax uses one trusted fallback for an eligible synthetic no-pro
   const agent = new AgentCh({});
   const observations = [
     {
-      changed: false, proved: false, safetyVeto: false, observable: true,
-      reasons: [], proofReasons: [], safetyReasons: [], snapshot: '{"text":"same"}',
+      changed: true, proved: false, weakEvidence: true, safetyVeto: false, observable: true,
+      reasons: ['page_text'], proofReasons: [], weakReasons: ['page_text'], safetyReasons: [], snapshot: '{"text":"ambient churn"}',
     },
     {
-      changed: true, proved: true, safetyVeto: false, observable: true,
-      reasons: ['page_controls'], proofReasons: ['page_controls'], safetyReasons: [], snapshot: '{"text":"opened"}',
+      changed: true, proved: true, weakEvidence: false, safetyVeto: false, observable: true,
+      reasons: ['focus'], proofReasons: ['focus'], weakReasons: [], safetyReasons: [], snapshot: '{"active":"composer"}',
     },
   ];
   const dispatched = [];
   agent._clickAxFinalSettleMs = () => 0;
   agent._observeClickAxSideEffect = async () => observations.shift();
   agent._clickAxObservedSideEffect = async () => ({
-    changed: false,
+    changed: true,
     proved: false,
+    weakEvidence: true,
     safetyVeto: false,
     observable: true,
-    reasons: [],
+    reasons: ['page_controls'],
     proofReasons: [],
+    weakReasons: ['page_controls'],
     safetyReasons: [],
-    snapshot: '{"text":"same"}',
+    snapshot: '{"controls":"ambient churn"}',
   });
   agent._resolveClickAxFallbackTarget = async () => ({
     success: true,
@@ -15215,7 +15219,8 @@ test('Chrome click_ax uses one trusted fallback for an eligible synthetic no-pro
     assert.equal(result.fallbackAttempted, true);
     assert.equal(result.trusted, true);
     assert.equal(result.verified, true);
-    assert.deepEqual(result.observedEffects, ['page_controls']);
+    assert.deepEqual(result.observedEffects, ['focus']);
+    assert.deepEqual(result.observedHints, ['page_text', 'page_controls']);
   } finally {
     cdpClientCh.attach = originals.attach;
     cdpClientCh.dispatchMouseEvent = originals.dispatch;
@@ -15314,6 +15319,110 @@ test('Chrome click_ax never trusts ineligible targets and never retries one trus
   }
 });
 
+test('Chrome click_ax only consumes the one-shot slot after a CDP press is delivered', async () => {
+  const originals = {
+    attach: cdpClientCh.attach,
+    dispatch: cdpClientCh.dispatchMouseEvent,
+  };
+  const agent = new AgentCh({});
+  const dispatched = [];
+  let attachAttempts = 0;
+  agent._clickAxFinalSettleMs = () => 0;
+  agent._observeClickAxSideEffect = async () => ({
+    changed: false,
+    proved: false,
+    weakEvidence: false,
+    safetyVeto: false,
+    observable: true,
+    reasons: [],
+    proofReasons: [],
+    weakReasons: [],
+    safetyReasons: [],
+    snapshot: '{"text":"same"}',
+  });
+  agent._clickAxObservedSideEffect = async () => ({
+    changed: false,
+    proved: false,
+    weakEvidence: false,
+    safetyVeto: false,
+    observable: true,
+    reasons: [],
+    proofReasons: [],
+    weakReasons: [],
+    safetyReasons: [],
+    snapshot: '{"text":"same"}',
+  });
+  agent._captureClickAxObservation = async (_tabId, snapshot, sideEffectWatch, startedAt) => ({
+    startedAt,
+    snapshot,
+    tabIds: '1,42',
+    sideEffectWatch,
+  });
+  agent._resolveClickAxFallbackTarget = async () => ({
+    success: true,
+    fallbackEligible: true,
+    documentToken: 'doc-dispatch',
+    fallbackState: '{"className":""}',
+    x: 100,
+    y: 200,
+    rect: { x: 50, y: 180, w: 100, h: 40 },
+  });
+
+  try {
+    cdpClientCh.attach = async () => {
+      attachAttempts++;
+      if (attachAttempts === 1) throw new Error('temporary attach failure');
+      return { tabId: 42, attached: true };
+    };
+    cdpClientCh.dispatchMouseEvent = async (_tabId, type) => {
+      dispatched.push(type);
+      if (type === 'mouseReleased') throw new Error('release failed');
+      return {};
+    };
+
+    const attachFailure = await agent._maybeFallbackClickAxWithCdp(
+      42,
+      { ref_id: 'ref_dispatch' },
+      { success: true, method: 'click_ax', ref_id: 'ref_dispatch', tag: 'div' },
+      { snapshot: '{"text":"same"}', sideEffectWatch: { created: [], requests: [] } },
+    );
+    assert.equal(attachFailure.success, false);
+    assert.equal(attachFailure.fallbackAttempted, false);
+    assert.equal(attachFailure.fallbackDispatchStage, 'attach');
+    assert.equal(attachFailure.trusted, false);
+    assert.equal(attachFailure.verified, false);
+    assert.equal(attachFailure.retryable, true);
+    assert.equal(agent._clickAxCdpFallbacks.has(42), false, 'attach failure must leave the one-shot slot available');
+
+    const releaseFailure = await agent._maybeFallbackClickAxWithCdp(
+      42,
+      { ref_id: 'ref_dispatch' },
+      { success: true, method: 'click_ax', ref_id: 'ref_dispatch', tag: 'div' },
+      { snapshot: '{"text":"same"}', sideEffectWatch: { created: [], requests: [] } },
+    );
+    assert.deepEqual(dispatched, ['mouseMoved', 'mousePressed', 'mouseReleased']);
+    assert.equal(releaseFailure.success, false);
+    assert.equal(releaseFailure.fallbackAttempted, true);
+    assert.equal(releaseFailure.fallbackDispatchStage, 'mouseReleased');
+    assert.equal(releaseFailure.trusted, false, 'an incomplete CDP sequence must never claim a trusted click was sent');
+    assert.equal(releaseFailure.verified, false);
+    assert.equal(releaseFailure.retryable, false);
+    assert.equal(releaseFailure.noProgress, true);
+
+    const repeated = await agent._maybeFallbackClickAxWithCdp(
+      42,
+      { ref_id: 'ref_dispatch' },
+      { success: true, method: 'click_ax', ref_id: 'ref_dispatch', tag: 'div' },
+      { snapshot: '{"text":"same"}', sideEffectWatch: { created: [], requests: [] } },
+    );
+    assert.match(repeated.fallbackSkipped, /already attempted/);
+    assert.deepEqual(dispatched, ['mouseMoved', 'mousePressed', 'mouseReleased']);
+  } finally {
+    cdpClientCh.attach = originals.attach;
+    cdpClientCh.dispatchMouseEvent = originals.dispatch;
+  }
+});
+
 test('Chrome click_ax side-effect observer ignores preparatory focus but catches handler focus, network, and downloads', async () => {
   const agent = new AgentCh({});
   const before = JSON.stringify({
@@ -15354,6 +15463,27 @@ test('Chrome click_ax side-effect observer ignores preparatory focus but catches
   assert.equal(handlerFocus.proved, true);
   assert.ok(handlerFocus.reasons.includes('focus'));
 
+  const pageChurn = JSON.stringify({
+    url: 'https://example.com',
+    text: 'Unrelated typing indicator changed',
+    media: 'IMG:avatar',
+    controls: 'DIV:row|DIV:badge',
+    active: 'DIV:listitem:row:10:10',
+  });
+  agent._clickProgressSnapshot = async () => pageChurn;
+  const weakChurn = await agent._clickAxObservedSideEffect(42, {
+    startedAt: 100,
+    snapshot: focusOnly,
+    tabIds: '1,42',
+    preparedActive: 'DIV:listitem:row:10:10',
+    sideEffectWatch: { created: [], requests: [], listeningRequests: true },
+  });
+  assert.equal(weakChurn.changed, true);
+  assert.equal(weakChurn.proved, false, 'whole-page text/media/control churn must not verify the target click');
+  assert.equal(weakChurn.weakEvidence, true);
+  assert.deepEqual(weakChurn.weakReasons, ['page_text', 'page_media', 'page_controls']);
+
+  agent._clickProgressSnapshot = async () => focusOnly;
   const network = await agent._clickAxObservedSideEffect(42, {
     startedAt: 100,
     snapshot: before,
@@ -15387,7 +15517,31 @@ test('Chrome click_ax side-effect observer ignores preparatory focus but catches
   assert.ok(download.reasons.includes('download'));
 });
 
-test('Chrome click_ax treats uncorrelated network activity as a safety veto, not verified progress', async () => {
+test('Chrome click_ax ignores background reads and telemetry but vetoes a nearby mutating request', async () => {
+  const agent = new AgentCh({});
+  assert.equal(agent._clickAxRequestIsSafetyRelevant({
+    url: 'https://example.com/api/messages',
+    method: 'GET',
+    ts: 110,
+  }, 100), false);
+  assert.equal(agent._clickAxRequestIsSafetyRelevant({
+    url: 'https://example.com/api/presence/heartbeat',
+    method: 'POST',
+    ts: 110,
+  }, 100), false);
+  assert.equal(agent._clickAxRequestIsSafetyRelevant({
+    url: 'https://example.com/api/open-chat',
+    method: 'POST',
+    ts: 501,
+  }, 100), false, 'late requests are not safely attributable to the click');
+  assert.equal(agent._clickAxRequestIsSafetyRelevant({
+    url: 'https://example.com/api/open-chat',
+    method: 'POST',
+    ts: 110,
+  }, 100), true);
+});
+
+test('Chrome click_ax reports nearby mutating network activity as inconclusive instead of verified progress', async () => {
   const agent = new AgentCh({});
   let resolved = false;
   agent._observeClickAxSideEffect = async () => ({
@@ -15413,11 +15567,56 @@ test('Chrome click_ax treats uncorrelated network activity as a safety veto, not
   );
 
   assert.equal(resolved, false);
-  assert.equal(result.success, true, 'existing synthetic semantics remain backward compatible');
+  assert.equal(result.success, false, 'a safety veto must not be reported as a successful click');
+  assert.equal(result.noProgress, true);
+  assert.equal(result.inconclusive, true);
   assert.equal(result.verified, false, 'uncorrelated XHR must not prove click progress');
   assert.equal(result.trusted, false);
   assert.deepEqual(result.observedEffects, ['network_request']);
-  assert.match(result.fallbackSkipped, /concurrent tab, network, or download activity/);
+  assert.match(result.fallbackSkipped, /concurrent tab, relevant network mutation, or download activity/);
+});
+
+test('Chrome click_ax skips the second observation delay for statically ineligible targets', async () => {
+  const agent = new AgentCh({});
+  const delays = [];
+  let resolved = false;
+  agent._clickAxDelay = async (ms) => { delays.push(ms); };
+  agent._clickAxObservedSideEffect = async () => ({
+    changed: false,
+    proved: false,
+    weakEvidence: false,
+    safetyVeto: false,
+    observable: true,
+    reasons: [],
+    proofReasons: [],
+    weakReasons: [],
+    safetyReasons: [],
+    snapshot: '{"text":"same"}',
+  });
+  agent._resolveClickAxFallbackTarget = async () => {
+    resolved = true;
+    return { success: false };
+  };
+
+  const result = await agent._maybeFallbackClickAxWithCdp(
+    42,
+    { ref_id: 'ref_button' },
+    {
+      success: true,
+      method: 'click_ax',
+      ref_id: 'ref_button',
+      tag: 'button',
+      _fallbackStaticBlockedReason: 'native/button-like controls keep the existing synthetic path',
+    },
+    { snapshot: '{"text":"same"}' },
+  );
+
+  assert.deepEqual(delays, [250]);
+  assert.equal(resolved, false);
+  assert.equal(result.success, true);
+  assert.equal(result.trusted, false);
+  assert.equal(result.verified, false);
+  assert.match(result.fallbackSkipped, /native\/button-like/);
 });
 
 test('Chrome click_ax accepts a delayed target-state change without sending a second click', async () => {
@@ -15573,7 +15772,7 @@ test('Chrome executeTool runs automatic click_ax fallback and reuses its observe
     text: 'Defne Sokullu Conversation opened',
     media: '',
     controls: 'DIV:Defne Sokullu|DIV:Conversation opened',
-    active: 'DIV::contact:65:459',
+    active: 'DIV:textbox:message-composer:520:700',
   });
   const downloadListener = {
     addListener() { downloadAdds++; },
