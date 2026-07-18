@@ -22767,6 +22767,32 @@ test('Act rejects planner-shaped plain finals and continues into a real tool', a
   }
 });
 
+test('Act rejects ordinary plain finals without execution evidence', async () => {
+  for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
+    const responses = [
+      { content: 'Here is the page summary.', toolCalls: [] },
+      { content: null, toolCalls: executionToolCalls(`ordinary_plain_${index}`) },
+    ];
+    const provider = {
+      supportsTools: true,
+      supportsVision: false,
+      promptTier: 'full',
+      contextWindow: 128000,
+      model: 'test-model',
+      name: 'test-provider',
+      chat: async () => responses.shift(),
+    };
+    const agent = new AgentClass({ getActive: () => provider, getVisionProvider: async () => null });
+    const tabId = 8604 + index;
+    configurePlanOnlyGuardAgent(agent, tabId);
+
+    const final = await agent.processMessage(tabId, 'Read the current page and summarize it.', () => {}, 'act');
+
+    assert.equal(final, 'Executed and verified.', `${AgentClass.name}: ordinary plain final bypassed execution`);
+    assert.equal(responses.length, 0, `${AgentClass.name}: ordinary plain final did not trigger recovery`);
+  }
+});
+
 test('Act rejects pinless prose plans and continues into a real tool', async () => {
   for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
     const responses = [

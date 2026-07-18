@@ -7642,8 +7642,13 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (!viaDone && this._isSafetyRefusalTerminal(content)) return null;
     const looksPlanOnly = this._looksLikePlanOnlyTerminal(content, state);
     const terminalFailure = viaDone && (outcome === 'partial' || outcome === 'failed');
-    const missingEvidence = viaDone && !terminalFailure && !this._executionEvidenceSatisfied(state);
-    if (viaDone && !looksPlanOnly && !missingEvidence) return null;
+    const missingEvidence = !terminalFailure && !this._executionEvidenceSatisfied(state);
+    // Every ordinary Act/Dev terminal is invalid: successful completion must
+    // come through done. A done call is invalid only when it is plan-shaped or
+    // lacks the execution evidence required for this task kind.
+    const invalidPlainFinal = !viaDone;
+    const invalidDone = viaDone && (looksPlanOnly || missingEvidence);
+    if (!invalidPlainFinal && !invalidDone) return null;
     if (!state.recoveryAttempted) {
       state.recoveryAttempted = true;
       return {
