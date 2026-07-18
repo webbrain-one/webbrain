@@ -25086,6 +25086,11 @@ test('max-step exits clear open completion debt', async () => {
     });
     const tabId = 24810;
     agent.planBeforeAct = false;
+    agent._maybeRunPlannerGate = async () => ({
+      proceed: true,
+      requestKind: 'execute',
+      requiresStateChange: true,
+    });
     agent.maxSteps = 2;
     agent.autoScreenshot = 'off';
     agent._skipPermissionGate = true;
@@ -25180,6 +25185,11 @@ test('non-stream and stream runs block plain finals and unverified success until
       });
       const tabId = streaming ? 24812 : 24811;
       agent.planBeforeAct = false;
+      agent._maybeRunPlannerGate = async () => ({
+        proceed: true,
+        requestKind: 'execute',
+        requiresStateChange: true,
+      });
       agent.maxSteps = 7;
       agent.autoScreenshot = 'off';
       agent._skipPermissionGate = true;
@@ -25524,15 +25534,24 @@ function configurePlanOnlyGuardAgent(agent, tabId) {
   };
 }
 
-function executionToolCalls(prefix = 'execution') {
+function executionToolResponses(prefix = 'execution') {
   return [
     {
-      id: `${prefix}_read`,
-      function: { name: 'read_page', arguments: '{}' },
+      content: null,
+      toolCalls: [{
+        id: `${prefix}_read`,
+        function: { name: 'read_page', arguments: '{}' },
+      }],
     },
     {
-      id: `${prefix}_done`,
-      function: { name: 'done', arguments: JSON.stringify({ summary: 'Executed and verified.' }) },
+      content: null,
+      toolCalls: [{
+        id: `${prefix}_done`,
+        function: {
+          name: 'done',
+          arguments: JSON.stringify({ summary: 'Executed and verified.', outcome: 'success' }),
+        },
+      }],
     },
   ];
 }
@@ -25541,7 +25560,7 @@ test('Act rejects planner-shaped plain finals and continues into a real tool', a
   for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
     const responses = [
       { content: planOnlyTerminalFixture(), toolCalls: [] },
-      { content: null, toolCalls: executionToolCalls(`plain_${index}`) },
+      ...executionToolResponses(`plain_${index}`),
     ];
     const provider = {
       supportsTools: true,
@@ -25590,7 +25609,7 @@ test('Act routes ordinary plain finals through the language-neutral done protoco
   for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
     const responses = [
       { content: 'Here is the page summary.', toolCalls: [] },
-      { content: null, toolCalls: executionToolCalls(`ordinary_plain_${index}`) },
+      ...executionToolResponses(`ordinary_plain_${index}`),
     ];
     const provider = {
       supportsTools: true,
@@ -25630,7 +25649,7 @@ test('Act recovers localized plain plans without language-specific matchers', as
     for (const [localeIndex, localizedPlan] of localizedPlans.entries()) {
       const responses = [
         { content: localizedPlan, toolCalls: [] },
-        { content: null, toolCalls: executionToolCalls(`localized_plain_${agentIndex}_${localeIndex}`) },
+        ...executionToolResponses(`localized_plain_${agentIndex}_${localeIndex}`),
       ];
       const provider = {
         supportsTools: true,
@@ -25713,7 +25732,7 @@ test('Act rejects pinless prose plans and continues into a real tool', async () 
   for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
     const responses = [
       { content: 'Plan:\n1. Read the current page.\n2. Summarize the result.', toolCalls: [] },
-      { content: null, toolCalls: executionToolCalls(`pinless_${index}`) },
+      ...executionToolResponses(`pinless_${index}`),
     ];
     const provider = {
       supportsTools: true,
@@ -25778,7 +25797,10 @@ test('Act rejects plan-only done summaries before any non-done tool', async () =
         toolCalls: [
           {
             id: `premature_done_${index}`,
-            function: { name: 'done', arguments: JSON.stringify({ summary: planOnlyTerminalFixture() }) },
+            function: {
+              name: 'done',
+              arguments: JSON.stringify({ summary: planOnlyTerminalFixture(), outcome: 'success' }),
+            },
           },
           {
             id: `stale_after_done_${index}`,
@@ -25786,7 +25808,7 @@ test('Act rejects plan-only done summaries before any non-done tool', async () =
           },
         ],
       },
-      { content: null, toolCalls: executionToolCalls(`done_${index}`) },
+      ...executionToolResponses(`done_${index}`),
     ];
     const provider = {
       supportsTools: true,
@@ -25830,7 +25852,10 @@ test('Act rejects plan-only done summaries even after a successful read', async 
           },
           {
             id: `plan_done_after_read_${index}`,
-            function: { name: 'done', arguments: JSON.stringify({ summary: planOnlyTerminalFixture() }) },
+            function: {
+              name: 'done',
+              arguments: JSON.stringify({ summary: planOnlyTerminalFixture(), outcome: 'success' }),
+            },
           },
         ],
       },
@@ -25838,7 +25863,10 @@ test('Act rejects plan-only done summaries even after a successful read', async 
         content: null,
         toolCalls: [{
           id: `real_done_after_read_${index}`,
-          function: { name: 'done', arguments: JSON.stringify({ summary: 'Executed and verified.' }) },
+          function: {
+            name: 'done',
+            arguments: JSON.stringify({ summary: 'Executed and verified.', outcome: 'success' }),
+          },
         }],
       },
     ];
@@ -26730,7 +26758,7 @@ test('Act keeps execution guard when question-form plan is followed by execute i
   for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
     const responses = [
       { content: planOnlyTerminalFixture(), toolCalls: [] },
-      { content: null, toolCalls: executionToolCalls(`qplan_exec_${index}`) },
+      ...executionToolResponses(`qplan_exec_${index}`),
     ];
     const provider = {
       supportsTools: true,
@@ -26769,7 +26797,7 @@ test('Act keeps execution guard for negated approval waits', async () => {
   for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
     const responses = [
       { content: planOnlyTerminalFixture(), toolCalls: [] },
-      { content: null, toolCalls: executionToolCalls(`neg_approval_${index}`) },
+      ...executionToolResponses(`neg_approval_${index}`),
     ];
     const provider = {
       supportsTools: true,
@@ -26869,10 +26897,11 @@ test('streamed Act finals recover from planner JSON before execution', async () 
           yield { type: 'done' };
           return;
         }
-        if (this.calls === 2) {
+        if (this.calls === 2 || this.calls === 3) {
+          const next = executionToolResponses(`stream_${index}`)[this.calls - 2];
           yield {
             type: 'tool_call',
-            content: executionToolCalls(`stream_${index}`).map((call, callIndex) => ({ index: callIndex, ...call })),
+            content: next.toolCalls.map((call, callIndex) => ({ index: callIndex, ...call })),
           };
           yield { type: 'done' };
           return;
@@ -26893,7 +26922,7 @@ test('streamed Act finals recover from planner JSON before execution', async () 
     );
 
     assert.equal(final, 'Executed and verified.', `${AgentClass.name}: streamed plan-only final was accepted`);
-    assert.equal(provider.calls, 2, `${AgentClass.name}: streamed execution recovery did not run`);
+    assert.equal(provider.calls, 3, `${AgentClass.name}: streamed execution recovery did not run`);
     const clearIdx = updates.findIndex(update => (
       update.type === 'text'
       && update.data?.replace === true
@@ -32427,7 +32456,10 @@ test('planner gate: streaming path clears active trace run after completion', as
               id: this.calls === 1 ? 'read_call' : 'done_call',
               function: this.calls === 1
                 ? { name: 'read_page', arguments: '{}' }
-                : { name: 'done', arguments: JSON.stringify({ summary: 'Streamed plan run complete.' }) },
+                : {
+                  name: 'done',
+                  arguments: JSON.stringify({ summary: 'Streamed plan run complete.', outcome: 'success' }),
+                },
             }],
           };
           yield { type: 'done' };
@@ -32450,7 +32482,7 @@ test('planner gate: streaming path clears active trace run after completion', as
       });
       agent.executeTool = async (_toolTabId, name, args) => (
         name === 'done'
-          ? { done: true, summary: args.summary }
+          ? { done: true, summary: args.summary, outcome: args.outcome }
           : { success: true, text: 'Page content.' }
       );
       agent._persist = () => {};
@@ -32488,7 +32520,10 @@ test('planner gate: a stale abort flag does not cancel a fresh task', async () =
               id: this.calls === 1 ? 'read_call' : 'done_call',
               function: this.calls === 1
                 ? { name: 'read_page', arguments: '{}' }
-                : { name: 'done', arguments: JSON.stringify({ summary: 'Fresh task ran.' }) },
+                : {
+                  name: 'done',
+                  arguments: JSON.stringify({ summary: 'Fresh task ran.', outcome: 'success' }),
+                },
             }],
           };
           yield { type: 'done' };
@@ -32508,7 +32543,7 @@ test('planner gate: a stale abort flag does not cancel a fresh task', async () =
       agent._startTraceRun = async () => null;
       agent.executeTool = async (_toolTabId, name, args) => (
         name === 'done'
-          ? { done: true, summary: args.summary }
+          ? { done: true, summary: args.summary, outcome: args.outcome }
           : { success: true, text: 'Page content.' }
       );
 
