@@ -661,7 +661,7 @@ export class CDPClient {
     let contentHeight = Math.ceil(Number(contentSize?.height));
     const scaleResult = await this.evaluate(tabId, 'window.devicePixelRatio');
     const nativeScale = Number(scaleResult?.result?.value);
-    const captureScale = Number.isFinite(nativeScale) && nativeScale > 0 ? nativeScale : 1;
+    const deviceScale = Number.isFinite(nativeScale) && nativeScale > 0 ? nativeScale : 1;
 
     if (![tileWidth, tileHeight, contentWidth, contentHeight].every(value => Number.isFinite(value) && value > 0)) {
       throw new Error('Could not determine page dimensions for full-page screenshot');
@@ -769,7 +769,10 @@ export class CDPClient {
               y: clipY,
               width,
               height,
-              scale: captureScale,
+              // Chrome already rasterizes CSS clip coordinates at the page's
+              // device scale. Applying DPR here again would produce DPR² tiles
+              // that the CSS×DPR compositor then crops to their top-left.
+              scale: 1,
             },
           });
           tiles.push({ x, y, width, height, data: screenshot.data });
@@ -788,7 +791,7 @@ export class CDPClient {
         ? Math.max(...tiles.map(tile => tile.y + tile.height))
         : contentHeight;
 
-      const data = await combineImages(tiles, assembledWidth, assembledHeight, captureScale, {
+      const data = await combineImages(tiles, assembledWidth, assembledHeight, deviceScale, {
         onWarning: warning => warnings.push(warning),
       });
       return { data, warning: warnings.join(' ') || null };

@@ -15154,7 +15154,7 @@ test('CDP evaluate forwards a bounded Runtime timeout', async () => {
   assert.equal(evaluation.params.awaitPromise, true);
 });
 
-test('CDP full-page screenshots tile the actual viewport without device emulation', async () => {
+test('CDP full-page screenshots tile the actual viewport without applying DPR twice', async () => {
   const cdp = new CDPClient();
   const commands = [];
   const evaluations = [];
@@ -15197,10 +15197,11 @@ test('CDP full-page screenshots tile the actual viewport without device emulatio
   assert.deepEqual(
     captures.map(command => command.params.clip),
     [
-      { x: 0, y: 0, width: 1280, height: 720, scale: 1.5 },
-      { x: 0, y: 720, width: 1280, height: 720, scale: 1.5 },
-      { x: 0, y: 1440, width: 1280, height: 60, scale: 1.5 },
+      { x: 0, y: 0, width: 1280, height: 720, scale: 1 },
+      { x: 0, y: 720, width: 1280, height: 720, scale: 1 },
+      { x: 0, y: 1440, width: 1280, height: 60, scale: 1 },
     ],
+    'Page.captureScreenshot already applies native DPR; clip.scale must remain 1',
   );
   assert.ok(captures.every(command => command.params.captureBeyondViewport === true));
   assert.equal(capture.data, 'not-a-real-png', 'assembly fallback should preserve the first captured tile');
