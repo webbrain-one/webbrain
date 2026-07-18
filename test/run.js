@@ -408,6 +408,9 @@ const {
 const { CDPClient, cdpClient: cdpClientCh } = await import(
   'file://' + path.join(ROOT, 'src/chrome/src/cdp/cdp-client.js').replace(/\\/g, '/')
 );
+const { combineImages } = await import(
+  'file://' + path.join(ROOT, 'src/chrome/src/cdp/image-utils.js').replace(/\\/g, '/')
+);
 
 // Screenshot redaction (issue #312) — pure Node-testable helpers.
 const { selectRedactionRegions, mapRegionsToImage, mergeRedactionFrameRegions, rectIntersects, REGION_KIND } = await import(
@@ -12088,7 +12091,8 @@ test('sidepanel scopes async tab commands to the original tab', () => {
     if (label === 'chrome') {
       assert.notEqual(fullPageIdx, -1, `${label}: /screenshot --full-page parser missing`);
       const fullPageBody = panel.slice(fullPageIdx, panel.indexOf("if (command.value === '/record'", fullPageIdx));
-      assert.match(fullPageBody, /sendToBackground\('capture_full_page_screenshot', \{ tabId \}\);[\s\S]*?if \(currentTabId !== tabId\) return '';[\s\S]*?(?:addMessage\('system', systemHtml\(imgHtml\)\)|addPersistentSlashMessage\(systemHtml\(imgHtml\)\));/, `${label}: /screenshot --full-page should render only into the initiating tab`);
+      assert.match(fullPageBody, /sendToBackground\('capture_full_page_screenshot', \{ tabId \}\);[\s\S]*?if \(currentTabId !== tabId\) return '';[\s\S]*?addPersistentSlashMessage\(systemHtml\(`\$\{warningHtml\}\$\{imgHtml\}`\)\);/, `${label}: /screenshot --full-page should render only into the initiating tab`);
+      assert.match(fullPageBody, /res\.warning[\s\S]*?escapeHtml\(res\.warning\)/, `${label}: fallback full-page images should display their escaped assembly warning`);
       assert.match(panel, /function isPlainFullPageScreenshotRequest\(text\) \{[\s\S]*?full\|whole\|entire\|complete[\s\S]*?tam sayfa[\s\S]*?ekran goruntusu/, `${label}: plain full-page screenshot request routing should cover English and Turkish requests`);
       assert.match(panel, /function normalizeScreenshotCommandText\(text\) \{[\s\S]*?isPlainFullPageScreenshotRequest\(text\)[\s\S]*?return '\/screenshot --full-page';[\s\S]*?isPlainScreenshotRequest\(text\)[\s\S]*?return '\/screenshot';/, `${label}: screenshot normalization should route full-page requests before viewport screenshots`);
     } else {
@@ -15126,7 +15130,7 @@ test('CDP full-page screenshots tile the actual viewport without device emulatio
     return { result: { value: null } };
   };
 
-  await cdp.captureFullPageScreenshot(42);
+  const capture = await cdp.captureFullPageScreenshot(42);
 
   assert.equal(
     commands.some(command => command.method.startsWith('Emulation.')),
@@ -15144,17 +15148,125 @@ test('CDP full-page screenshots tile the actual viewport without device emulatio
     ],
   );
   assert.ok(captures.every(command => command.params.captureBeyondViewport === true));
+  assert.equal(capture.data, 'not-a-real-png', 'assembly fallback should preserve the first captured tile');
+  assert.match(capture.warning, /assembly failed[\s\S]*first captured tile/i);
   assert.deepEqual(
     evaluations.map(({ expression }) => expression),
     [
       'window.devicePixelRatio',
       'window.scrollTo(0, 0)',
       'window.scrollTo(0, 720)',
+      'window.scrollTo(0, 780)',
+      'window.scrollTo(0, 780)',
+      'window.scrollTo(0, 0)',
+      'window.scrollTo(0, 720)',
       'window.scrollTo(0, 1440)',
       'window.scrollTo(17, 29)',
     ],
-    'capture should trigger lazy loading tile-by-tile and restore the original scroll position',
+    'discovery and capture should walk the page before restoring the original scroll position',
   );
+});
+
+test('CDP full-page screenshots extend capture bounds when lazy content moves the footer', async () => {
+  const cdp = new CDPClient();
+  const captures = [];
+  let currentScrollY = 0;
+  let layoutHeight = 1400;
+  cdp.sendCommand = async (_tabId, method, params = {}) => {
+    if (method === 'Page.getLayoutMetrics') {
+      return {
+        cssVisualViewport: {
+          offsetX: 0,
+          offsetY: 0,
+          pageX: 0,
+          pageY: currentScrollY,
+          clientWidth: 800,
+          clientHeight: 600,
+          scale: 1,
+        },
+        cssContentSize: { x: 0, y: 0, width: 800, height: layoutHeight },
+      };
+    }
+    if (method === 'Page.captureScreenshot') {
+      captures.push(params.clip);
+      return { data: 'not-a-real-png' };
+    }
+    return {};
+  };
+  cdp.evaluate = async (_tabId, expression) => {
+    if (expression === 'window.devicePixelRatio') return { result: { value: 1 } };
+    const match = expression.match(/^window\.scrollTo\(0, (\d+)\)$/);
+    if (match) {
+      currentScrollY = Number(match[1]);
+      if (currentScrollY >= 600) layoutHeight = 2400;
+    }
+    return { result: { value: null } };
+  };
+
+  await cdp.captureFullPageScreenshot(42);
+
+  assert.equal(layoutHeight, 2400, 'the fixture should grow after the lazy-load scroll');
+  assert.equal(
+    Math.max(...captures.map(clip => clip.y + clip.height)),
+    2400,
+    'capture should extend through the final lazy-loaded height',
+  );
+  assert.deepEqual(captures.at(-1), { x: 0, y: 1800, width: 800, height: 600, scale: 1 });
+});
+
+test('full-page image assembly reports first-tile fallback errors', async () => {
+  const originalCreateImageBitmap = globalThis.createImageBitmap;
+  const originalOffscreenCanvas = globalThis.OffscreenCanvas;
+  const warnings = [];
+  try {
+    globalThis.createImageBitmap = async () => ({ width: 10, height: 10 });
+    globalThis.OffscreenCanvas = class {
+      getContext() {
+        return { drawImage() {} };
+      }
+      async convertToBlob() {
+        throw new Error('canvas too large');
+      }
+    };
+    const firstTile = 'Zmlyc3QtdGlsZQ==';
+    const result = await combineImages(
+      [{ x: 0, y: 0, width: 10, height: 10, data: firstTile }],
+      10,
+      10,
+      1,
+      { onWarning: warning => warnings.push(warning) },
+    );
+    assert.equal(result, firstTile);
+    assert.match(warnings.join(' '), /canvas too large[\s\S]*first captured tile/i);
+  } finally {
+    if (originalCreateImageBitmap === undefined) delete globalThis.createImageBitmap;
+    else globalThis.createImageBitmap = originalCreateImageBitmap;
+    if (originalOffscreenCanvas === undefined) delete globalThis.OffscreenCanvas;
+    else globalThis.OffscreenCanvas = originalOffscreenCanvas;
+  }
+});
+
+test('user full-page screenshot responses preserve compositor fallback warnings', async () => {
+  const originalAttach = cdpClientCh.attach;
+  const originalCapture = cdpClientCh.captureFullPageScreenshot;
+  try {
+    cdpClientCh.attach = async () => ({ attached: true });
+    cdpClientCh.captureFullPageScreenshot = async () => ({
+      data: 'Zmlyc3QtdGlsZQ==',
+      warning: 'Full-page screenshot assembly failed (canvas too large). Showing the first captured tile instead.',
+    });
+    const agent = new AgentCh({});
+    agent._bringToFrontForCapture = async () => {};
+    agent._withIndicatorsHidden = async (_tabId, capture) => capture();
+
+    const result = await agent.captureFullPageScreenshotForUser(42);
+    assert.equal(result.ok, true);
+    assert.equal(result.dataUrl, 'data:image/png;base64,Zmlyc3QtdGlsZQ==');
+    assert.match(result.warning, /canvas too large[\s\S]*first captured tile/i);
+  } finally {
+    cdpClientCh.attach = originalAttach;
+    cdpClientCh.captureFullPageScreenshot = originalCapture;
+  }
 });
 
 test('inspect_event_listeners resolves marked ref targets through CDP and always removes markers', async () => {

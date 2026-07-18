@@ -4513,8 +4513,11 @@ async function parseSlashCommands(text, tabId = currentTabId) {
         addPersistentSlashMessage(systemHtml(tSystemHtml('sp.screenshot.error', { msg: res?.error || 'unknown error' })));
         return '';
       }
+      const warningHtml = res.warning
+        ? `<div style="margin:4px 0 8px;color:var(--warning-color,#b26a00);"><strong>⚠️ ${escapeHtml(res.warning)}</strong></div>`
+        : '';
       const imgHtml = `<img src="${res.dataUrl}" style="max-width:100%;max-height:70vh;object-fit:contain;object-position:top;border-radius:6px;margin:4px 0;" alt="Full-page screenshot"/>`;
-      addPersistentSlashMessage(systemHtml(imgHtml));
+      addPersistentSlashMessage(systemHtml(`${warningHtml}${imgHtml}`));
     } catch (e) {
       if (currentTabId !== tabId) return '';
       addPersistentSlashMessage(systemHtml(tSystemHtml('sp.screenshot.error', { msg: e.message })));

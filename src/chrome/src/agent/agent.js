@@ -385,11 +385,13 @@ export class Agent {
     try {
       await cdpClient.attach(tabId);
       await this._bringToFrontForCapture(tabId);
-      const imageData = await this._withIndicatorsHidden(tabId, () =>
+      const capture = await this._withIndicatorsHidden(tabId, () =>
         cdpClient.captureFullPageScreenshot(tabId)
       );
+      const imageData = typeof capture === 'string' ? capture : capture?.data;
+      const warning = typeof capture === 'object' ? capture?.warning || null : null;
       if (!imageData) return { ok: false, error: 'Full-page screenshot returned no image data' };
-      return { ok: true, dataUrl: `data:image/png;base64,${imageData}` };
+      return { ok: true, dataUrl: `data:image/png;base64,${imageData}`, warning };
     } catch (e) {
       return { ok: false, error: e?.message || String(e) };
     }
@@ -9900,10 +9902,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       try {
         await cdpClient.attach(tabId);
         await this._bringToFrontForCapture(tabId);
-        const imageData = await this._withIndicatorsHidden(tabId, () =>
+        const capture = await this._withIndicatorsHidden(tabId, () =>
           cdpClient.captureFullPageScreenshot(tabId)
         );
+        const imageData = typeof capture === 'string' ? capture : capture?.data;
+        const captureWarning = typeof capture === 'object' ? capture?.warning || null : null;
+        if (!imageData) throw new Error('Full-page screenshot returned no image data');
         const rawUrl = `data:image/png;base64,${imageData}`;
+        const warningNote = captureWarning ? `\nWarning: ${captureWarning}` : '';
 
         // If the caller asked to save, do it with the RAW (uncompressed,
         // full-resolution) PNG — that's what the user actually wants on
@@ -9925,8 +9931,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           }
         }
 
-        // Full-page captures are the worst case for size — a 1920×8000
-        // document at native DPR easily blows past any provider's image
+        // Full-page captures are the worst case for size — a tall document
+        // at native DPR easily blows past any provider's image
         // budget. Always shrink to the token/byte budget. Dimensions come
         // from decoding the bitmap (we don't know the real doc size up
         // front the way we do for viewport captures).
@@ -9953,7 +9959,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             return {
               success: true,
               method: 'vision_describe',
-              description: `[Full-page screenshot described by vision model ${desc.model}, ${shrunk.width}×${shrunk.height} after budget fit]\n${desc.text}`,
+              description: `[Full-page screenshot described by vision model ${desc.model}, ${shrunk.width}×${shrunk.height} after budget fit]\n${desc.text}${warningNote}`,
+              warning: captureWarning || undefined,
               savedFile: savedFile || undefined,
             };
           }
@@ -9962,7 +9969,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           return {
             success: true,
             method: 'image_attach',
-            description: `Full page screenshot captured and fit to vision budget (${shrunk.width}×${shrunk.height}, ${modelDataUrl.length} base64 chars)`,
+            description: `Full page screenshot captured and fit to vision budget (${shrunk.width}×${shrunk.height}, ${modelDataUrl.length} base64 chars)${warningNote}`,
+            warning: captureWarning || undefined,
             savedFile: savedFile || undefined,
             _attachImage: modelDataUrl,
           };
@@ -9971,7 +9979,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           return {
             success: true,
             method: 'save_only',
-            description: `Full-page screenshot saved to ${savedFile.filename}.`,
+            description: `Full-page screenshot saved to ${savedFile.filename}.${warningNote}`,
+            warning: captureWarning || undefined,
             savedFile,
           };
         }

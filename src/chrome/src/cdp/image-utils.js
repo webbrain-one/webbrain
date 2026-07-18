@@ -20,38 +20,64 @@
  * @param {number} cssHeight  Total content height in CSS pixels.
  * @param {number} [dpr=1]    Pixel scale used when the tiles were captured.
  *   The caller passes the page's current devicePixelRatio for native output.
+ * @param {{onWarning?:(message:string)=>void}} [options]
+ *   Receives best-effort fallback details without suppressing the returned image.
  * @returns {Promise<string>} Combined image as base64 PNG (no data: prefix),
  *   matching the return shape the caller expects.
  */
-export async function combineImages(tiles, cssWidth, cssHeight, dpr = 1) {
+export async function combineImages(tiles, cssWidth, cssHeight, dpr = 1, options = {}) {
   if (!Array.isArray(tiles) || tiles.length === 0) return '';
+  const warn = (message) => {
+    try { options?.onWarning?.(message); } catch {}
+  };
+  const firstTile = () => tiles[0]?.data || '';
+  const assemblyFallback = (reason) => {
+    warn(`Full-page screenshot assembly failed (${reason}). Showing the first captured tile instead.`);
+    return firstTile();
+  };
 
   // Decode every tile in parallel. Bad tiles are dropped rather than
   // aborting the whole composite — a partial full-page image is more useful
   // to the agent than nothing.
+  const decodeErrors = [];
   const decoded = await Promise.all(
     tiles.map(async (t) => {
       try {
         const blob = await (await fetch(`data:image/png;base64,${t.data}`)).blob();
         const bmp = await createImageBitmap(blob);
         return { ...t, bmp };
-      } catch {
+      } catch (error) {
+        decodeErrors.push(error?.message || String(error));
         return null;
       }
     })
   );
 
   const goodTiles = decoded.filter(Boolean);
-  if (goodTiles.length === 0) return '';
+  if (goodTiles.length === 0) {
+    return assemblyFallback(decodeErrors[0] || 'no screenshot tile could be decoded');
+  }
+  if (goodTiles.length < tiles.length) {
+    warn(
+      `Full-page screenshot assembly skipped ${tiles.length - goodTiles.length} tile(s) that could not be decoded; the combined image may be incomplete.`
+    );
+  }
 
   // Canvas dims are native pixels. Guard against the occasional 0-dim input
   // (empty page, very short pages where contentHeight == 0).
   const canvasW = Math.max(1, Math.round(cssWidth * dpr));
   const canvasH = Math.max(1, Math.round(cssHeight * dpr));
-  const canvas = new OffscreenCanvas(canvasW, canvasH);
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return goodTiles[0]?.data || tiles[0]?.data || '';
+  let canvas;
+  let ctx;
+  try {
+    canvas = new OffscreenCanvas(canvasW, canvasH);
+    ctx = canvas.getContext('2d');
+  } catch (error) {
+    return assemblyFallback(error?.message || String(error));
+  }
+  if (!ctx) return assemblyFallback('the browser could not create a 2D canvas context');
 
+  let drawFailures = 0;
   for (const t of goodTiles) {
     const dx = Math.round(t.x * dpr);
     const dy = Math.round(t.y * dpr);
@@ -65,8 +91,13 @@ export async function combineImages(tiles, cssWidth, cssHeight, dpr = 1) {
     try {
       ctx.drawImage(t.bmp, 0, 0, dw, dh, dx, dy, dw, dh);
     } catch {
-      // Skip the tile; keep compositing the rest.
+      drawFailures++;
     }
+  }
+  if (drawFailures > 0) {
+    warn(
+      `Full-page screenshot assembly could not draw ${drawFailures} tile(s); the combined image may be incomplete.`
+    );
   }
 
   // Re-encode as PNG, return base64 (no data URL prefix).
@@ -74,9 +105,8 @@ export async function combineImages(tiles, cssWidth, cssHeight, dpr = 1) {
     const blob = await canvas.convertToBlob({ type: 'image/png' });
     const buf = await blob.arrayBuffer();
     return arrayBufferToBase64(buf);
-  } catch {
-    // Final fallback: return the first tile rather than ''.
-    return tiles[0]?.data || '';
+  } catch (error) {
+    return assemblyFallback(error?.message || String(error));
   }
 }
 
