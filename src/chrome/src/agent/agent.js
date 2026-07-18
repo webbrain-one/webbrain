@@ -12412,7 +12412,18 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (!method) method = 'GET';
     if (['GET', 'HEAD', 'OPTIONS'].includes(method)) return false;
     const url = String(request?.url || '').toLowerCase();
-    if (/(?:analytics|telemetry|heartbeat|presence|poll(?:ing)?|metrics|collect|typing)(?:[/?#_.-]|$)/.test(url)) {
+    const knownTelemetryToken = /(?:analytics|telemetry|heartbeat|presence|poll(?:ing)?|metrics|typing)(?:[/?#_.-]|$)/.test(url);
+    let exactCollectEndpoint = false;
+    try {
+      const pathname = new URL(url).pathname.replace(/\/+$/, '');
+      exactCollectEndpoint = /(?:^|\/)collect$/.test(pathname);
+    } catch {
+      exactCollectEndpoint = /(?:^|\/)collect(?:[?#]|$)/.test(url);
+    }
+    // Analytics commonly POSTs to a terminal /collect endpoint. Do not treat
+    // arbitrary collect-* or /collect/... action routes as telemetry: names
+    // such as /api/collect-payment may represent real user mutations.
+    if (knownTelemetryToken || exactCollectEndpoint) {
       return false;
     }
     return true;
@@ -12952,6 +12963,25 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           ? ['target_state']
           : ['target_state_weak'],
         rect: target.rect || response.rect,
+      }, trustedObservation);
+    }
+    if (!trustedObservation.observable) {
+      return withSnapshot({
+        ...response,
+        // The complete trusted input sequence was delivered. A navigation or
+        // reload can temporarily make CDP/content snapshots unavailable, so
+        // lack of a snapshot is not evidence that the click made no progress.
+        success: true,
+        inconclusive: true,
+        fallback: 'cdp_after_synthetic_no_progress',
+        fallbackAttempted: true,
+        trusted: true,
+        verified: false,
+        observedEffects: trustedObservation.safetyReasons?.length
+          ? trustedObservation.safetyReasons
+          : undefined,
+        rect: target.rect || response.rect,
+        warning: 'The trusted fallback was sent, but page progress became temporarily unobservable, possibly because of a navigation or reload. Do not repeat this target; re-read the page.',
       }, trustedObservation);
     }
     if (!trustedObservation.proved) {

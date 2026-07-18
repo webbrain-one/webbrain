@@ -15764,6 +15764,21 @@ test('Chrome click_ax ignores background reads and telemetry but vetoes a nearby
     type: 'ping',
     ts: 110,
   }, 100), false);
+  assert.equal(agent._clickAxRequestIsSafetyRelevant({
+    url: 'https://www.google-analytics.com/g/collect?v=2',
+    method: 'POST',
+    ts: 110,
+  }, 100), false, 'a terminal analytics /collect endpoint remains ignorable telemetry');
+  assert.equal(agent._clickAxRequestIsSafetyRelevant({
+    url: 'https://example.com/api/collect-payment',
+    method: 'POST',
+    ts: 110,
+  }, 100), true, 'collect-* action routes must not be mistaken for telemetry');
+  assert.equal(agent._clickAxRequestIsSafetyRelevant({
+    url: 'https://example.com/api/collect/payment',
+    method: 'POST',
+    ts: 110,
+  }, 100), true, 'nested action routes below /collect must remain safety-relevant');
 });
 
 test('Chrome click_ax watches non-telemetry sendBeacon requests as ping traffic', () => {
@@ -16325,6 +16340,116 @@ test('Chrome click_ax accepts weak-only target state (class/data-status) after t
     assert.equal(result.trusted, true);
     assert.equal(result.verified, true);
     assert.deepEqual(result.observedEffects, ['target_state_weak']);
+  } finally {
+    cdpClientCh.attach = originals.attach;
+    cdpClientCh.dispatchMouseEvent = originals.dispatch;
+  }
+});
+
+test('Chrome click_ax keeps an unobservable post-CDP navigation successful but unverified', async () => {
+  const originals = {
+    attach: cdpClientCh.attach,
+    dispatch: cdpClientCh.dispatchMouseEvent,
+  };
+  const agent = new AgentCh({});
+  let dispatched = 0;
+  let observeCalls = 0;
+  let resolves = 0;
+  agent._clickAxFinalSettleMs = () => 0;
+  agent._observeClickAxSideEffect = async () => {
+    observeCalls++;
+    if (observeCalls < 3) {
+      return {
+        changed: false,
+        proved: false,
+        safetyVeto: false,
+        observable: true,
+        reasons: [],
+        proofReasons: [],
+        weakReasons: [],
+        safetyReasons: [],
+        snapshot: '{"url":"https://example.com/chat","text":"same"}',
+      };
+    }
+    return {
+      changed: false,
+      proved: false,
+      safetyVeto: false,
+      observable: false,
+      reasons: [],
+      proofReasons: [],
+      weakReasons: [],
+      safetyReasons: [],
+      snapshot: '',
+    };
+  };
+  agent._clickAxObservedSideEffect = async () => ({
+    changed: false,
+    proved: false,
+    safetyVeto: false,
+    observable: true,
+    reasons: [],
+    proofReasons: [],
+    weakReasons: [],
+    safetyReasons: [],
+    snapshot: '{"url":"https://example.com/chat","text":"same"}',
+  });
+  agent._captureClickAxObservation = async (_tabId, snapshot, sideEffectWatch, startedAt) => ({
+    startedAt,
+    snapshot,
+    tabIds: '1,42',
+    sideEffectWatch,
+  });
+  agent._resolveClickAxFallbackTarget = async () => {
+    resolves++;
+    if (resolves >= 3) {
+      return { success: false, error: 'The frame was detached during navigation' };
+    }
+    return {
+      success: true,
+      fallbackEligible: true,
+      documentToken: 'doc-before-navigation',
+      fallbackState: '{"aria-current":"<absent>"}',
+      fallbackStrongState: '{"aria-current":"<absent>"}',
+      fallbackWeakState: '{"className":""}',
+      x: 100,
+      y: 200,
+      rect: { x: 50, y: 180, w: 100, h: 40 },
+    };
+  };
+  try {
+    cdpClientCh.attach = async () => ({ tabId: 42, attached: true });
+    cdpClientCh.dispatchMouseEvent = async () => { dispatched++; };
+    const result = await agent._maybeFallbackClickAxWithCdp(
+      42,
+      { ref_id: 'ref_navigates_after_trusted' },
+      {
+        success: true,
+        method: 'click_ax',
+        ref_id: 'ref_navigates_after_trusted',
+        tag: 'div',
+        _fallbackStateBefore: '{"full":"same"}',
+        _fallbackStateAfterImmediate: '{"full":"same"}',
+        _fallbackStrongStateBefore: '{"aria-current":"<absent>"}',
+        _fallbackStrongStateAfterImmediate: '{"aria-current":"<absent>"}',
+        _fallbackWeakStateBefore: '{"className":""}',
+        _fallbackWeakStateAfterImmediate: '{"className":""}',
+      },
+      {
+        snapshot: '{"url":"https://example.com/chat","text":"same"}',
+        sideEffectWatch: { created: [], requests: [] },
+      },
+    );
+    assert.equal(dispatched, 3);
+    assert.equal(resolves, 3, 'the target should become unavailable after trusted navigation');
+    assert.equal(result.success, true, 'unobservable navigation must not be reported as no progress');
+    assert.equal(result.noProgress, undefined);
+    assert.equal(result.inconclusive, true);
+    assert.equal(result.fallbackAttempted, true);
+    assert.equal(result.trusted, true);
+    assert.equal(result.verified, false);
+    assert.equal(result.error, undefined);
+    assert.match(result.warning, /navigation or reload/);
   } finally {
     cdpClientCh.attach = originals.attach;
     cdpClientCh.dispatchMouseEvent = originals.dispatch;
