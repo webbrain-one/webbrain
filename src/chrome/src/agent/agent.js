@@ -2569,7 +2569,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
       onUpdate('tool_call', { name: fnName, args: fnArgs });
       const _toolStart = Date.now();
-      const rawToolResult = await this.executeTool(tabId, fnName, fnArgs, onUpdate);
+      const rawToolResult = await this.executeTool(tabId, fnName, fnArgs, onUpdate, {
+        completionBatchStartState,
+      });
       const toolResult = this._normalizeToolResult(fnName, rawToolResult, missingResponseOutcomeUnknown);
       if (fnName !== 'done') {
         this._markPlanExecutionToolCall(tabId, fnName, toolResult, {
@@ -7076,11 +7078,19 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         ids: terminalRequirementIds.slice(0, 20),
       };
     }
-    if (terminalRequirementIds.length && !this._hasFreshCompletionObservation(tabId)) {
+    const hasBatchStartState = Object.prototype.hasOwnProperty.call(opts, 'completionBatchStartState');
+    const evidenceState = hasBatchStartState
+      ? opts.completionBatchStartState
+      : this.completionInvariants.get(tabId);
+    const currentCompletionState = this.completionInvariants.get(tabId);
+    const hasNewBatchAction = hasBatchStartState
+      && Number(currentCompletionState?.lastAction?.sequence || 0) > Number(evidenceState?.sequence || 0);
+    if (terminalRequirementIds.length
+      && (!hasUnconsumedCompletionObservation(evidenceState) || hasNewBatchAction)) {
       return {
         success: false,
         completionInvariant: true,
-        error: 'Classifier-seeded completion requirements can become terminal only after a consequential action and a successful explicit observation of the resulting state.',
+        error: 'Classifier-seeded completion requirements can become terminal only after a consequential action and a successful explicit observation whose result was available on a prior assistant turn.',
         ids: terminalRequirementIds.slice(0, 20),
       };
     }
@@ -9629,7 +9639,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     }
   }
 
-  async executeTool(tabId, name, args, onUpdate = null) {
+  async executeTool(tabId, name, args, onUpdate = null, executionContext = null) {
     if (name === 'load_skill') {
       return this._loadSkillForRun(tabId, args || {});
     }
@@ -10170,7 +10180,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     }
 
     if (name === 'progress_update') {
-      return this._progressUpdate(tabId, args);
+      const progressOpts = executionContext
+        && Object.prototype.hasOwnProperty.call(executionContext, 'completionBatchStartState')
+        ? { completionBatchStartState: executionContext.completionBatchStartState }
+        : {};
+      return this._progressUpdate(tabId, args, progressOpts);
     }
 
     if (name === 'progress_read') {

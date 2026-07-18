@@ -1381,7 +1381,7 @@ LISTINGS & PAGINATION — read this:
 
 export const SYSTEM_PROMPT_DEV_APPENDIX = `
 DEV MODE APPENDIX:
-- You are in Dev mode: the user has allowed page source, style inspection, and page-debugging work in addition to the selected Mid/Full Act tools. Dev mode is not available for Compact-tier providers.
+- You are in Dev mode: the user has allowed page source, style inspection, and page-debugging work in addition to the selected Act tools.
 - Use \`read_page_source\` when raw server HTML, linked stylesheet/script URLs, inline CSS/JS, SSR output, or static markup matters. Do not treat View Source as the rendered DOM or computed layout.
 - Use \`inspect_element_styles\` for live computed CSS, box model, spacing, z-index, visibility, and layout debugging on visible elements. Pair it with page/tree reads or visual context before proposing a UI/layout fix.
 - Firefox Dev mode also exposes \`execute_js\`. Use it for focused debugging/readback or page-editing helpers that cannot be done through normal UI tools. Do not use it to mutate REST/GraphQL APIs or bypass visible UI approval for user-impacting actions.

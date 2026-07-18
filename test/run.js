@@ -9003,6 +9003,7 @@ test('Chrome execute_js and page-debugging tools are exposed only in Dev mode', 
   assert.match(SYSTEM_PROMPT_DEV_APPENDIX_CH, /\binject_css\b/);
   assert.match(SYSTEM_PROMPT_DEV_APPENDIX_CH, /\bpatch_element\b/);
   assert.match(SYSTEM_PROMPT_DEV_APPENDIX_CH, /\binspect_network_requests\b/);
+  assert.doesNotMatch(SYSTEM_PROMPT_DEV_APPENDIX_CH, /not available for Compact-tier providers/i);
 });
 
 test('Firefox execute_js is exposed only as a Dev add-on', () => {
@@ -9014,6 +9015,7 @@ test('Firefox execute_js is exposed only as a Dev add-on', () => {
   assert.equal(firefoxDevMidNames.includes('execute_js'), true);
   assert.doesNotMatch(SYSTEM_PROMPT_ASK_FX + SYSTEM_PROMPT_ACT_FX + SYSTEM_PROMPT_ACT_MID_FX + SYSTEM_PROMPT_ACT_COMPACT_FX, /\bexecute_js\b/);
   assert.match(SYSTEM_PROMPT_DEV_APPENDIX_FX, /\bexecute_js\b/);
+  assert.doesNotMatch(SYSTEM_PROMPT_DEV_APPENDIX_FX, /not available for Compact-tier providers/i);
 });
 
 test('getToolsForMode: compact flag does not shrink ask mode', () => {
@@ -23456,7 +23458,7 @@ test('progress intent classifier accepts multilingual structured intent and fail
   }
 });
 
-test('classifier targets become isolated app-owned completion obligations', () => {
+test('classifier targets become isolated app-owned completion obligations', async () => {
   for (const AgentClass of [AgentCh, AgentFx]) {
     const agent = new AgentClass({
       getActive: () => ({ contextWindow: 128000, supportsVision: false }),
@@ -23495,8 +23497,19 @@ test('classifier targets become isolated app-owned completion obligations', () =
     assert.equal(premature.completionInvariant, true, `${AgentClass.name}: premature obligation failure lost invariant classification`);
 
     const token = agent._beginCompletionInvariant(tabId);
+    const sameBatchStartState = agent.completionInvariants.get(tabId);
     agent._recordCompletionToolResult(tabId, 'click_ax', { ref_id: 'ref_soda' }, { success: true, verified: true });
     agent._recordCompletionToolResult(tabId, 'get_accessibility_tree', { filter: 'visible' }, { success: true, tree: 'Cart: soda' });
+    const sameBatchTerminal = await agent.executeTool(
+      tabId,
+      'progress_update',
+      { items: [{ id: rows[0].id, status: 'processed' }] },
+      null,
+      { completionBatchStartState: sameBatchStartState },
+    );
+    assert.equal(sameBatchTerminal.success, false, `${AgentClass.name}: same-batch observation closed an obligation`);
+    assert.equal(sameBatchTerminal.completionInvariant, true, `${AgentClass.name}: same-batch obligation failure lost invariant classification`);
+    assert.match(sameBatchTerminal.error, /prior assistant turn/i, `${AgentClass.name}: same-batch obligation block did not explain the evidence boundary`);
     const bulkTerminal = agent._progressUpdate(tabId, {
       items: rows.map(row => ({ id: row.id, status: 'processed' })),
     });
@@ -23523,9 +23536,13 @@ test('classifier targets become isolated app-owned completion obligations', () =
 
     agent._recordCompletionToolResult(tabId, 'click_ax', { ref_id: 'ref_cola_zero' }, { success: true, verified: true });
     agent._recordCompletionToolResult(tabId, 'get_accessibility_tree', { filter: 'visible' }, { success: true, tree: 'Cart: soda, Cola Zero' });
-    const completedTwo = agent._progressUpdate(tabId, {
-      items: [{ id: rows[1].id, status: 'processed' }],
-    });
+    const completedTwo = await agent.executeTool(
+      tabId,
+      'progress_update',
+      { items: [{ id: rows[1].id, status: 'processed' }] },
+      null,
+      { completionBatchStartState: agent.completionInvariants.get(tabId) },
+    );
     assert.equal(completedTwo.success, true, `${AgentClass.name}: second independent evidence cycle could not close its obligation`);
     assert.equal(agent._progressDoneBlock(tabId, 'success'), null, `${AgentClass.name}: completed obligations still blocked success`);
 
