@@ -739,6 +739,7 @@ test('click_ax: Agent.executeTool keeps synthetic-first behavior and uses truste
       ambientStatus: document.getElementById('ambient-status').textContent,
       events: window.__trustedClickEvents,
       selected: document.getElementById('trusted-row').classList.contains('trusted-opened'),
+      semanticSelected: document.getElementById('trusted-row').getAttribute('aria-current'),
     }));
     if (
       trustedResult?.success !== true
@@ -748,13 +749,17 @@ test('click_ax: Agent.executeTool keeps synthetic-first behavior and uses truste
     ) {
       throw new Error(`actual Agent/content/CDP chain did not complete trusted fallback: ${JSON.stringify(trustedResult)}`);
     }
-    if (!trustedResult.observedHints?.includes('page_text')) {
-      throw new Error(`unrelated whole-page churn should be retained only as a diagnostic hint: ${JSON.stringify(trustedResult)}`);
+    if (
+      !trustedResult.observedHints?.includes('page_text')
+      || !trustedResult.observedHints?.includes('target_state_weak')
+    ) {
+      throw new Error(`unrelated page/target churn should be retained only as diagnostic hints: ${JSON.stringify(trustedResult)}`);
     }
     if (
       afterTrusted.status !== 'trusted-opened'
       || afterTrusted.ambientStatus !== 'unrelated-chat-churn'
       || !afterTrusted.selected
+      || afterTrusted.semanticSelected !== 'true'
     ) {
       throw new Error(`trusted CDP fallback did not activate the row: ${JSON.stringify(afterTrusted)}`);
     }
@@ -767,6 +772,9 @@ test('click_ax: Agent.executeTool keeps synthetic-first behavior and uses truste
     }
     if (dispatched.map(event => event.type).join(',') !== 'mouseMoved,mousePressed,mouseReleased') {
       throw new Error(`unexpected trusted input sequence: ${JSON.stringify(dispatched)}`);
+    }
+    if (Object.keys(trustedResult).some(key => key.startsWith('_fallback') || key === '_syntheticClickStartedAt')) {
+      throw new Error(`internal click state leaked into the agent result: ${JSON.stringify(trustedResult)}`);
     }
 
     await page.evaluate(() => { document.getElementById('status').textContent = 'idle'; });
@@ -832,6 +840,8 @@ test('ax_resolve_rect: trusted fallback eligibility rejects interactive descenda
     zero: content.match(/listitem "Zero row" \[(ref_\d+)\]/)?.[1],
   };
   const safeRefs = {
+    tabindexNegative: content.match(/listitem "Generic row with tabindex minus one wrapper" \[(ref_\d+)\]/)?.[1],
+    tabindexZero: content.match(/listitem "Generic row with tabindex zero wrapper" \[(ref_\d+)\]/)?.[1],
     dataAction: content.match(/listitem "Generic data action row" \[(ref_\d+)\]/)?.[1],
     properName: content.match(/listitem "Post Malone" \[(ref_\d+)\]/)?.[1],
   };
@@ -867,6 +877,8 @@ test('ax_resolve_rect: trusted fallback eligibility rejects interactive descenda
   if (
     ordinaryResolve.fallbackEligible !== undefined
     || ordinaryResolve.fallbackState !== undefined
+    || ordinaryResolve.fallbackStrongState !== undefined
+    || ordinaryResolve.fallbackWeakState !== undefined
     || ordinaryResolve.documentToken !== undefined
   ) {
     throw new Error(`fallback-only metadata leaked into ordinary ref resolution: ${JSON.stringify(ordinaryResolve)}`);

@@ -12335,6 +12335,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       requests.push({
         url: details.url || '',
         method: details.method || '',
+        type: details.type || '',
         requestId: details.requestId,
         ts: Date.now(),
       });
@@ -12351,7 +12352,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       if (chrome.webRequest?.onBeforeRequest?.addListener) {
         chrome.webRequest.onBeforeRequest.addListener(
           requestListener,
-          { urls: ['<all_urls>'], types: ['xmlhttprequest'] },
+          { urls: ['<all_urls>'], types: ['xmlhttprequest', 'ping'] },
         );
         listeningRequests = true;
       }
@@ -12390,7 +12391,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const method = String(request?.method || 'GET').toUpperCase();
     if (['GET', 'HEAD', 'OPTIONS'].includes(method)) return false;
     const url = String(request?.url || '').toLowerCase();
-    if (/(?:analytics|telemetry|heartbeat|presence|poll(?:ing)?|metrics|collect|beacon|typing)(?:[/?#_.-]|$)/.test(url)) {
+    if (/(?:analytics|telemetry|heartbeat|presence|poll(?:ing)?|metrics|collect|typing)(?:[/?#_.-]|$)/.test(url)) {
       return false;
     }
     return true;
@@ -12509,22 +12510,54 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       if (value && observation?.snapshot) value._clickAxAfterSnapshot = observation.snapshot;
       return value;
     };
+    const addObservedHint = hint => {
+      if (!hint) return;
+      response.observedHints = [
+        ...new Set([...(response.observedHints || []), hint]),
+      ];
+    };
     const addObservedHints = observation => {
       if (!observation?.weakReasons?.length) return;
-      response.observedHints = [
-        ...new Set([...(response.observedHints || []), ...observation.weakReasons]),
-      ];
+      for (const reason of observation.weakReasons) addObservedHint(reason);
+    };
+    const strongStateOf = target => (
+      target?.fallbackStrongState
+      || target?.fallbackState
+      || ''
+    );
+    const weakStateOf = target => target?.fallbackWeakState || '';
+    const addWeakTargetHint = (before, after) => {
+      if (before && after && before !== after) addObservedHint('target_state_weak');
     };
     const targetStateBefore = response._fallbackStateBefore || '';
     const targetStateAfterImmediate = response._fallbackStateAfterImmediate || '';
+    const targetStrongStateBefore = response._fallbackStrongStateBefore || '';
+    const targetWeakStateBefore = response._fallbackWeakStateBefore || '';
     const fallbackStaticBlockedReason = response._fallbackStaticBlockedReason || '';
+    const syntheticClickStartedAt = Number(response._syntheticClickStartedAt);
+    const now = Date.now();
+    if (
+      Number.isFinite(syntheticClickStartedAt)
+      && syntheticClickStartedAt >= baseline.startedAt - 1000
+      && syntheticClickStartedAt <= now + 1000
+    ) {
+      // The side-effect listeners start before content messaging so they do
+      // not miss synchronous click work. Attribute only events timestamped
+      // after the content script's actual el.click() boundary.
+      baseline.startedAt = syntheticClickStartedAt;
+    }
     // click_ax focuses its target immediately before el.click(). That
     // preparatory focus is not evidence that the page handled the click;
     // any different focus transition caused by the page still is.
     baseline.preparedActive = response._preparedActive || '';
     delete response._preparedActive;
+    delete response._syntheticClickStartedAt;
     delete response._fallbackStateBefore;
     delete response._fallbackStateAfterImmediate;
+    delete response._fallbackStrongStateBefore;
+    delete response._fallbackStrongStateAfterImmediate;
+    delete response._fallbackWeakStateBefore;
+    delete response._fallbackWeakStateAfterImmediate;
     delete response._fallbackStaticBlockedReason;
 
     const immediateTargetStateChanged = !!(
@@ -12578,10 +12611,13 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     }
 
     let target = await this._resolveClickAxFallbackTarget(tabId, args?.ref_id);
+    let targetStrongState = strongStateOf(target);
+    let targetWeakState = weakStateOf(target);
+    addWeakTargetHint(targetWeakStateBefore, targetWeakState);
     const resolvedTargetStateChanged = !!(
-      targetStateBefore
-      && target?.fallbackState
-      && targetStateBefore !== target.fallbackState
+      targetStrongStateBefore
+      && targetStrongState
+      && targetStrongStateBefore !== targetStrongState
     );
     if (resolvedTargetStateChanged) {
       response.trusted = false;
@@ -12629,14 +12665,18 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     }
 
     const settledTarget = await this._resolveClickAxFallbackTarget(tabId, args?.ref_id);
+    const settledTargetStrongState = strongStateOf(settledTarget);
+    const settledTargetWeakState = weakStateOf(settledTarget);
+    addWeakTargetHint(targetWeakStateBefore, settledTargetWeakState);
+    addWeakTargetHint(targetWeakState, settledTargetWeakState);
     const settledTargetStateChanged = !!(
-      targetStateBefore
-      && settledTarget?.fallbackState
-      && targetStateBefore !== settledTarget.fallbackState
+      targetStrongStateBefore
+      && settledTargetStrongState
+      && targetStrongStateBefore !== settledTargetStrongState
     ) || !!(
-      target?.fallbackState
-      && settledTarget?.fallbackState
-      && target.fallbackState !== settledTarget.fallbackState
+      targetStrongState
+      && settledTargetStrongState
+      && targetStrongState !== settledTargetStrongState
     );
     if (settledTargetStateChanged) {
       response.trusted = false;
@@ -12657,6 +12697,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       return withSnapshot(response, settledObservation);
     }
     target = settledTarget;
+    targetStrongState = settledTargetStrongState;
+    targetWeakState = settledTargetWeakState;
 
     const fallbackKey = `${target.documentToken || 'document'}|${args?.ref_id || ''}`;
     const attempted = this._clickAxCdpFallbacks.get(tabId) || new Set();
@@ -12671,12 +12713,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         error: 'The synthetic click produced no observable change, and the one permitted trusted fallback for this target was already used. Re-read the page and choose a different target.',
       }, settledObservation);
     }
-    const fallbackStartedAt = Date.now();
     const fallbackBaseline = await this._captureClickAxObservation(
       tabId,
       settledObservation.snapshot,
       baseline.sideEffectWatch,
-      fallbackStartedAt,
+      Date.now(),
     );
 
     let dispatchStage = 'attach';
@@ -12688,6 +12729,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       await cdpClient.dispatchMouseEvent(tabId, 'mouseMoved', target.x, target.y);
       dispatchedEvents++;
       dispatchStage = 'mousePressed';
+      // Snapshot/tab baselines must exist before pointer input, but the
+      // mutation window starts at the first click-producing event rather than
+      // CDP attach or mouse movement.
+      fallbackBaseline.startedAt = Date.now();
       await cdpClient.dispatchMouseEvent(tabId, 'mousePressed', target.x, target.y);
       dispatchedEvents++;
       pressedDelivered = true;
@@ -12720,12 +12765,15 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     let trustedTargetStateChanged = false;
     if (!trustedObservation.proved) {
       const trustedTarget = await this._resolveClickAxFallbackTarget(tabId, args?.ref_id);
+      const trustedTargetStrongState = strongStateOf(trustedTarget);
+      const trustedTargetWeakState = weakStateOf(trustedTarget);
+      addWeakTargetHint(targetWeakState, trustedTargetWeakState);
       trustedTargetStateChanged = !!(
-        target.fallbackState
+        targetStrongState
         && trustedTarget?.success
         && trustedTarget.documentToken === target.documentToken
-        && trustedTarget.fallbackState
-        && target.fallbackState !== trustedTarget.fallbackState
+        && trustedTargetStrongState
+        && targetStrongState !== trustedTargetStrongState
       );
     }
     if (trustedTargetStateChanged) {

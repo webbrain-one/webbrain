@@ -15160,6 +15160,7 @@ test('Chrome click_ax treats broad page churn as weak evidence and still uses on
     },
   ];
   const dispatched = [];
+  let fallbackBaseline = null;
   agent._clickAxFinalSettleMs = () => 0;
   agent._observeClickAxSideEffect = async () => observations.shift();
   agent._clickAxObservedSideEffect = async () => ({
@@ -15186,26 +15187,46 @@ test('Chrome click_ax treats broad page churn as weak evidence and still uses on
     rect: { x: 65, y: 459, w: 449, h: 72 },
     inViewport: true,
     hitOk: true,
-    fallbackState: '{"state":"same"}',
+    fallbackState: '{"aria-current":"<absent>"}',
+    fallbackStrongState: '{"aria-current":"<absent>"}',
+    fallbackWeakState: '{"name":"Defne Sokullu — new preview","className":"unread-update","childCount":2}',
   });
-  agent._captureClickAxObservation = async (_tabId, snapshot, sideEffectWatch, startedAt) => ({
-    startedAt,
-    snapshot,
-    tabIds: '1,42',
-    sideEffectWatch,
-  });
+  agent._captureClickAxObservation = async (_tabId, snapshot, sideEffectWatch) => {
+    fallbackBaseline = {
+      startedAt: 1,
+      snapshot,
+      tabIds: '1,42',
+      sideEffectWatch,
+    };
+    return fallbackBaseline;
+  };
 
   try {
     cdpClientCh.attach = async () => ({ tabId: 42, attached: true });
     cdpClientCh.dispatchMouseEvent = async (tabId, type, x, y) => {
       dispatched.push({ tabId, type, x, y });
+      if (type === 'mousePressed') {
+        assert.ok(fallbackBaseline.startedAt > 1, 'trusted mutation timing must start immediately before mousePressed');
+      }
       return {};
     };
 
     const result = await agent._maybeFallbackClickAxWithCdp(
       42,
       { ref_id: 'ref_145' },
-      { success: true, method: 'click_ax', ref_id: 'ref_145', tag: 'div', name: 'Defne Sokullu' },
+      {
+        success: true,
+        method: 'click_ax',
+        ref_id: 'ref_145',
+        tag: 'div',
+        name: 'Defne Sokullu',
+        _fallbackStateBefore: '{"full":"same"}',
+        _fallbackStateAfterImmediate: '{"full":"same"}',
+        _fallbackStrongStateBefore: '{"aria-current":"<absent>"}',
+        _fallbackStrongStateAfterImmediate: '{"aria-current":"<absent>"}',
+        _fallbackWeakStateBefore: '{"name":"Defne Sokullu","className":"","childCount":1}',
+        _fallbackWeakStateAfterImmediate: '{"name":"Defne Sokullu","className":"","childCount":1}',
+      },
       { snapshot: '{"text":"same"}', sideEffectWatch: { created: [], requests: [] } },
     );
 
@@ -15220,7 +15241,7 @@ test('Chrome click_ax treats broad page churn as weak evidence and still uses on
     assert.equal(result.trusted, true);
     assert.equal(result.verified, true);
     assert.deepEqual(result.observedEffects, ['focus']);
-    assert.deepEqual(result.observedHints, ['page_text', 'page_controls']);
+    assert.deepEqual(result.observedHints, ['page_text', 'target_state_weak', 'page_controls']);
   } finally {
     cdpClientCh.attach = originals.attach;
     cdpClientCh.dispatchMouseEvent = originals.dispatch;
@@ -15537,8 +15558,112 @@ test('Chrome click_ax ignores background reads and telemetry but vetoes a nearby
   assert.equal(agent._clickAxRequestIsSafetyRelevant({
     url: 'https://example.com/api/open-chat',
     method: 'POST',
+    type: 'ping',
     ts: 110,
   }, 100), true);
+  assert.equal(agent._clickAxRequestIsSafetyRelevant({
+    url: 'https://example.com/analytics/beacon',
+    method: 'POST',
+    type: 'ping',
+    ts: 110,
+  }, 100), false);
+});
+
+test('Chrome click_ax watches non-telemetry sendBeacon requests as ping traffic', () => {
+  const originalChrome = globalThis.chrome;
+  let requestListener = null;
+  let requestFilter = null;
+  let removed = false;
+  globalThis.chrome = {
+    webRequest: {
+      onBeforeRequest: {
+        addListener(listener, filter) {
+          requestListener = listener;
+          requestFilter = filter;
+        },
+        removeListener(listener) {
+          removed = listener === requestListener;
+        },
+      },
+    },
+  };
+
+  try {
+    const agent = new AgentCh({});
+    const startedAt = Date.now() - 10;
+    const watch = agent._beginClickAxSideEffectWatch(42);
+    assert.deepEqual(requestFilter?.types, ['xmlhttprequest', 'ping']);
+    requestListener({
+      tabId: 42,
+      type: 'ping',
+      method: 'POST',
+      url: 'https://example.com/api/open-chat',
+      requestId: 'beacon-1',
+    });
+    const request = agent._clickAxApiRequestSince(42, startedAt, watch);
+    assert.equal(request?.requestId, 'beacon-1');
+    assert.equal(request?.type, 'ping');
+    watch.stop();
+    assert.equal(removed, true);
+  } finally {
+    if (originalChrome === undefined) delete globalThis.chrome;
+    else globalThis.chrome = originalChrome;
+  }
+});
+
+test('Chrome click_ax attributes network activity from the content click boundary, not the injection gap', async () => {
+  const agent = new AgentCh({});
+  const clickStartedAt = Date.now();
+  let observedStartedAt = 0;
+  let observedRequest = null;
+  agent._observeClickAxSideEffect = async (tabId, baseline) => {
+    observedStartedAt = baseline.startedAt;
+    observedRequest = agent._clickAxApiRequestSince(tabId, baseline.startedAt, baseline.sideEffectWatch);
+    return {
+      changed: true,
+      proved: false,
+      weakEvidence: false,
+      safetyVeto: true,
+      observable: true,
+      reasons: ['network_request'],
+      proofReasons: [],
+      weakReasons: [],
+      safetyReasons: ['network_request'],
+      snapshot: '{"text":"same"}',
+    };
+  };
+
+  const result = await agent._maybeFallbackClickAxWithCdp(
+    42,
+    { ref_id: 'ref_network_boundary' },
+    {
+      success: true,
+      method: 'click_ax',
+      ref_id: 'ref_network_boundary',
+      tag: 'div',
+      _syntheticClickStartedAt: clickStartedAt,
+      _fallbackStateBefore: '{"full":"same"}',
+      _fallbackStateAfterImmediate: '{"full":"same"}',
+    },
+    {
+      startedAt: clickStartedAt - 1000,
+      snapshot: '{"text":"same"}',
+      sideEffectWatch: {
+        listeningRequests: true,
+        created: [],
+        requests: [
+          { url: 'https://example.com/api/pre-click', method: 'POST', ts: clickStartedAt - 10 },
+          { url: 'https://example.com/api/from-click', method: 'POST', ts: clickStartedAt + 5 },
+        ],
+      },
+    },
+  );
+
+  assert.equal(observedStartedAt, clickStartedAt);
+  assert.equal(observedRequest?.url, 'https://example.com/api/from-click');
+  assert.equal(result.success, false);
+  assert.equal(result.inconclusive, true);
+  assert.equal(result._syntheticClickStartedAt, undefined, 'internal click timestamps must not leak');
 });
 
 test('Chrome click_ax reports nearby mutating network activity as inconclusive instead of verified progress', async () => {
@@ -15619,7 +15744,56 @@ test('Chrome click_ax skips the second observation delay for statically ineligib
   assert.match(result.fallbackSkipped, /native\/button-like/);
 });
 
-test('Chrome click_ax accepts a delayed target-state change without sending a second click', async () => {
+test('Chrome click_ax accepts a synchronous full target-state change without observing or retrying', async () => {
+  const agent = new AgentCh({});
+  let observed = false;
+  let resolved = false;
+  agent._observeClickAxSideEffect = async () => {
+    observed = true;
+    throw new Error('synchronous target progress must not enter the observation path');
+  };
+  agent._resolveClickAxFallbackTarget = async () => {
+    resolved = true;
+    return { success: false };
+  };
+
+  const result = await agent._maybeFallbackClickAxWithCdp(
+    42,
+    { ref_id: 'ref_sync_state' },
+    {
+      success: true,
+      method: 'click_ax',
+      ref_id: 'ref_sync_state',
+      tag: 'div',
+      _fallbackStateBefore: '{"className":""}',
+      _fallbackStateAfterImmediate: '{"className":"selected"}',
+      _fallbackStrongStateBefore: '{"aria-current":"<absent>"}',
+      _fallbackStrongStateAfterImmediate: '{"aria-current":"<absent>"}',
+      _fallbackWeakStateBefore: '{"className":""}',
+      _fallbackWeakStateAfterImmediate: '{"className":"selected"}',
+    },
+    { startedAt: Date.now() - 10, snapshot: '{"text":"same"}' },
+  );
+
+  assert.equal(observed, false);
+  assert.equal(resolved, false);
+  assert.equal(result.success, true);
+  assert.equal(result.trusted, false);
+  assert.equal(result.verified, true);
+  assert.deepEqual(result.observedEffects, ['target_state']);
+  for (const key of [
+    '_fallbackStateBefore',
+    '_fallbackStateAfterImmediate',
+    '_fallbackStrongStateBefore',
+    '_fallbackStrongStateAfterImmediate',
+    '_fallbackWeakStateBefore',
+    '_fallbackWeakStateAfterImmediate',
+  ]) {
+    assert.equal(result[key], undefined, `${key} must not leak into the tool response`);
+  }
+});
+
+test('Chrome click_ax accepts a delayed semantic target-state change without sending a second click', async () => {
   const originals = {
     attach: cdpClientCh.attach,
     dispatch: cdpClientCh.dispatchMouseEvent,
@@ -15640,7 +15814,9 @@ test('Chrome click_ax accepts a delayed target-state change without sending a se
     success: true,
     fallbackEligible: true,
     documentToken: 'doc-state',
-    fallbackState: '{"className":"selected"}',
+    fallbackState: '{"aria-current":"true"}',
+    fallbackStrongState: '{"aria-current":"true"}',
+    fallbackWeakState: '{"className":"selected"}',
     x: 100,
     y: 200,
   });
@@ -15655,8 +15831,12 @@ test('Chrome click_ax accepts a delayed target-state change without sending a se
         method: 'click_ax',
         ref_id: 'ref_state',
         tag: 'div',
-        _fallbackStateBefore: '{"className":""}',
-        _fallbackStateAfterImmediate: '{"className":""}',
+        _fallbackStateBefore: '{"full":"same"}',
+        _fallbackStateAfterImmediate: '{"full":"same"}',
+        _fallbackStrongStateBefore: '{"aria-current":"<absent>"}',
+        _fallbackStrongStateAfterImmediate: '{"aria-current":"<absent>"}',
+        _fallbackWeakStateBefore: '{"className":""}',
+        _fallbackWeakStateAfterImmediate: '{"className":""}',
       },
       { snapshot: '{"text":"same"}' },
     );
@@ -15711,7 +15891,9 @@ test('Chrome click_ax accepts a target-state-only change after the trusted fallb
       success: true,
       fallbackEligible: true,
       documentToken: 'doc-state-after-trusted',
-      fallbackState: resolves >= 3 ? '{"className":"selected"}' : '{"className":""}',
+      fallbackState: resolves >= 3 ? '{"aria-current":"true"}' : '{"aria-current":"<absent>"}',
+      fallbackStrongState: resolves >= 3 ? '{"aria-current":"true"}' : '{"aria-current":"<absent>"}',
+      fallbackWeakState: resolves >= 3 ? '{"className":"selected"}' : '{"className":""}',
       x: 100,
       y: 200,
       rect: { x: 50, y: 180, w: 100, h: 40 },
@@ -15728,8 +15910,12 @@ test('Chrome click_ax accepts a target-state-only change after the trusted fallb
         method: 'click_ax',
         ref_id: 'ref_state_after_trusted',
         tag: 'div',
-        _fallbackStateBefore: '{"className":""}',
-        _fallbackStateAfterImmediate: '{"className":""}',
+        _fallbackStateBefore: '{"full":"same"}',
+        _fallbackStateAfterImmediate: '{"full":"same"}',
+        _fallbackStrongStateBefore: '{"aria-current":"<absent>"}',
+        _fallbackStrongStateAfterImmediate: '{"aria-current":"<absent>"}',
+        _fallbackWeakStateBefore: '{"className":""}',
+        _fallbackWeakStateAfterImmediate: '{"className":""}',
       },
       { snapshot: '{"text":"same"}', sideEffectWatch: { created: [], requests: [] } },
     );
@@ -15760,6 +15946,7 @@ test('Chrome executeTool runs automatic click_ax fallback and reuses its observe
   let downloadRemoves = 0;
   let requestAdds = 0;
   let requestRemoves = 0;
+  let requestFilter = null;
   const stableSnapshot = JSON.stringify({
     url: 'https://web.whatsapp.com/',
     text: 'Defne Sokullu',
@@ -15779,7 +15966,10 @@ test('Chrome executeTool runs automatic click_ax fallback and reuses its observe
     removeListener() { downloadRemoves++; },
   };
   const requestListener = {
-    addListener() { requestAdds++; },
+    addListener(_listener, filter) {
+      requestAdds++;
+      requestFilter = filter;
+    },
     removeListener() { requestRemoves++; },
   };
   globalThis.chrome = {
@@ -15802,8 +15992,13 @@ test('Chrome executeTool runs automatic click_ax fallback and reuses its observe
             name: 'Defne Sokullu',
             rect: { x: 65, y: 459, w: 449, h: 72 },
             _preparedActive: 'DIV::contact:65:459',
-            _fallbackStateBefore: '{"className":""}',
-            _fallbackStateAfterImmediate: '{"className":""}',
+            _syntheticClickStartedAt: Date.now(),
+            _fallbackStateBefore: '{"full":"same"}',
+            _fallbackStateAfterImmediate: '{"full":"same"}',
+            _fallbackStrongStateBefore: '{"aria-current":"<absent>"}',
+            _fallbackStrongStateAfterImmediate: '{"aria-current":"<absent>"}',
+            _fallbackWeakStateBefore: '{"className":""}',
+            _fallbackWeakStateAfterImmediate: '{"className":""}',
           };
         }
         if (message.action === 'ax_resolve_rect') {
@@ -15811,7 +16006,9 @@ test('Chrome executeTool runs automatic click_ax fallback and reuses its observe
             success: true,
             fallbackEligible: true,
             documentToken: 'doc-whatsapp',
-            fallbackState: '{"className":""}',
+            fallbackState: '{"aria-current":"<absent>"}',
+            fallbackStrongState: '{"aria-current":"<absent>"}',
+            fallbackWeakState: '{"className":""}',
             x: 289,
             y: 495,
             rect: { x: 65, y: 459, w: 449, h: 72 },
@@ -15854,10 +16051,22 @@ test('Chrome executeTool runs automatic click_ax fallback and reuses its observe
     assert.equal(result.verified, true);
     assert.equal(snapshotCalls, 5, 'annotate must reuse the observer snapshot instead of waiting and evaluating again');
     assert.equal(result._clickAxAfterSnapshot, undefined, 'internal observation state must not leak into tool results');
+    for (const key of [
+      '_syntheticClickStartedAt',
+      '_fallbackStateBefore',
+      '_fallbackStateAfterImmediate',
+      '_fallbackStrongStateBefore',
+      '_fallbackStrongStateAfterImmediate',
+      '_fallbackWeakStateBefore',
+      '_fallbackWeakStateAfterImmediate',
+    ]) {
+      assert.equal(result[key], undefined, `${key} must not leak into executeTool results`);
+    }
     assert.equal(downloadAdds, 1);
     assert.equal(downloadRemoves, 1);
     assert.equal(requestAdds, 1);
     assert.equal(requestRemoves, 1);
+    assert.deepEqual(requestFilter?.types, ['xmlhttprequest', 'ping']);
   } finally {
     cdpClientCh.attach = originals.attach;
     cdpClientCh.dispatchMouseEvent = originals.dispatch;

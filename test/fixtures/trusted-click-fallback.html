@@ -72,11 +72,28 @@
       align-items: center;
       justify-content: center;
     }
+
+    .focus-wrapper-row {
+      padding: 0;
+    }
+
+    .focus-wrapper-row > div {
+      box-sizing: border-box;
+      width: 100%;
+      min-height: 54px;
+      padding: 16px;
+    }
   </style>
 </head>
 <body>
   <div id="trusted-row" class="row" role="listitem" tabindex="0">Defne Sokullu Yesterday Photo</div>
   <div id="synthetic-row" class="row" role="listitem" tabindex="0">Normal synthetic row</div>
+  <div id="tabindex-negative-row" class="row focus-wrapper-row" role="listitem">
+    <div tabindex="-1">Generic row with tabindex minus one wrapper</div>
+  </div>
+  <div id="tabindex-zero-row" class="row focus-wrapper-row" role="listitem">
+    <div tabindex="0">Generic row with tabindex zero wrapper</div>
+  </div>
   <div id="data-action-row" class="row" role="listitem" data-action="open-chat" tabindex="0">Generic data action row</div>
   <div id="proper-name-row" class="row" role="listitem" tabindex="0">Post Malone</div>
   <div id="send-message-row" class="row" role="listitem" tabindex="0">Send message</div>
@@ -121,9 +138,17 @@
       window.__trustedClickEvents.push({ trusted: event.isTrusted, type: event.type });
       if (event.isTrusted) {
         event.currentTarget.classList.add('trusted-opened');
+        event.currentTarget.setAttribute('aria-current', 'true');
         document.getElementById('status').textContent = 'trusted-opened';
       } else {
+        const row = event.currentTarget;
         setTimeout(() => {
+          row.classList.add('unread-update');
+          row.style.setProperty('--ambient-update', '1');
+          const preview = document.createElement('span');
+          preview.textContent = ' New ambient preview';
+          preview.className = 'ambient-preview';
+          row.appendChild(preview);
           document.getElementById('ambient-status').textContent = 'unrelated-chat-churn';
         }, 40);
       }

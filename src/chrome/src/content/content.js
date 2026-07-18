@@ -529,23 +529,41 @@
   }
 
   function _axFallbackState(el) {
-    if (!el) return '';
+    const empty = { full: '', strong: '', weak: '' };
+    if (!el) return empty;
     try {
-      const attrs = [
-        'aria-expanded', 'aria-selected', 'aria-checked', 'aria-pressed',
-        'aria-current', 'aria-busy', 'data-state', 'data-status', 'hidden',
-      ].map(name => `${name}=${el.getAttribute?.(name) || ''}`).join('|');
-      return JSON.stringify({
+      const serializeAttrs = names => names.map(name => (
+        el.hasAttribute?.(name)
+          ? `${name}=${el.getAttribute?.(name) || ''}`
+          : `${name}=<absent>`
+      )).join('|');
+      const strong = JSON.stringify({
         connected: !!el.isConnected,
+        attrs: serializeAttrs([
+          'aria-expanded', 'aria-selected', 'aria-checked', 'aria-pressed',
+          'aria-current', 'data-state', 'hidden',
+        ]),
+      });
+      const weak = JSON.stringify({
         role: (el.getAttribute?.('role') || '').trim().toLowerCase(),
         name: _axAccessibleName(el),
         className: String(el.getAttribute?.('class') || '').slice(0, 240),
         style: String(el.getAttribute?.('style') || '').slice(0, 240),
-        attrs,
+        attrs: serializeAttrs([
+          'aria-busy', 'data-status',
+        ]),
         childCount: Number(el.childElementCount || 0),
       });
+      return {
+        strong,
+        weak,
+        // The full fingerprint is compared only across the synchronous
+        // el.click() call stack, where unrelated page tasks cannot interleave.
+        // Delayed observations compare strong/weak independently.
+        full: JSON.stringify({ strong, weak }),
+      };
     } catch {
-      return '';
+      return empty;
     }
   }
 
@@ -721,7 +739,6 @@
         || ['LABEL', 'OPTION', 'SUMMARY'].includes(tag)
         || ['checkbox', 'radio', 'switch', 'combobox', 'textbox', 'searchbox'].includes(role)
         || !!node.isContentEditable
-        || node.hasAttribute?.('tabindex')
         || node.hasAttribute?.('download')
       ) {
         return node;
@@ -3037,6 +3054,7 @@
             } catch {}
           }
           rememberInteractionPoint(el, 'click_ax');
+          const syntheticClickStartedAt = Date.now();
           el.click();
           const fallbackStateAfterImmediate = _axFallbackState(el);
           // If the model just clicked a text-entry element, its next call must
@@ -3057,8 +3075,13 @@
               ref_id,
               tag,
               _preparedActive: preparedActive,
-              _fallbackStateBefore: fallbackStateBefore,
-              _fallbackStateAfterImmediate: fallbackStateAfterImmediate,
+              _syntheticClickStartedAt: syntheticClickStartedAt,
+              _fallbackStateBefore: fallbackStateBefore.full,
+              _fallbackStateAfterImmediate: fallbackStateAfterImmediate.full,
+              _fallbackStrongStateBefore: fallbackStateBefore.strong,
+              _fallbackStrongStateAfterImmediate: fallbackStateAfterImmediate.strong,
+              _fallbackWeakStateBefore: fallbackStateBefore.weak,
+              _fallbackWeakStateAfterImmediate: fallbackStateAfterImmediate.weak,
               _fallbackStaticBlockedReason: fallbackStatic.blockedReason,
               rect: { x: Math.round(rect.x), y: Math.round(rect.y), w: Math.round(rect.width), h: Math.round(rect.height) },
             };
@@ -3497,6 +3520,7 @@
           if (forClickFallback && !window.__wbAxDocumentToken) {
             window.__wbAxDocumentToken = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
           }
+          const fallbackState = forClickFallback ? _axFallbackState(el) : null;
           return {
             success: true,
             ref_id,
@@ -3517,7 +3541,10 @@
               interactiveDescendantRole: interactiveHitDescendant?.getAttribute?.('role') || undefined,
               fallbackEligible: !fallbackBlockedReason,
               fallbackBlockedReason: fallbackBlockedReason || undefined,
-              fallbackState: _axFallbackState(el),
+              // fallbackState remains a strong-only compatibility alias.
+              fallbackState: fallbackState.strong,
+              fallbackStrongState: fallbackState.strong,
+              fallbackWeakState: fallbackState.weak,
               isComputedVisible: visibility.visible,
               isEditable,
               isNativeControl,
