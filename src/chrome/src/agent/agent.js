@@ -7064,22 +7064,32 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const canonicalItems = this._canonicalizeProgressItems(items);
     const activeSession = this._currentProgressSession(tabId);
     const currentRows = this.progressLedgers.get(tabId) || [];
-    const terminalRequirementIds = canonicalItems
+    const terminalRequirements = canonicalItems
       .filter(item => isTerminalLedgerStatus(item?.status))
       .map(item => {
         const row = currentRows.find(candidate => candidate?.id === item?.id
           && (!activeSession?.sessionId || String(candidate?.sessionId || '') === activeSession.sessionId));
         return row?.fields?.completionRequirement === true && !isTerminalLedgerStatus(row?.status)
-          ? row.id
-          : '';
+          ? { id: row.id, item, row }
+          : null;
       })
       .filter(Boolean);
-    if (terminalRequirementIds.length > 1) {
+    const evidenceRequirementIds = terminalRequirements
+      .filter(({ item, row }) => !(
+        opts.source === 'observe'
+        && opts.trustedObservation === 'github_stargazers'
+        && String(item?.status || '').toLowerCase() === 'skipped'
+        && String(row?.action || '').toLowerCase() === 'follow'
+        && String(item?.reason || '').trim().toLowerCase() === 'already followed before this task'
+        && String(item?.fields?.followState || '').toLowerCase() === 'already_followed'
+      ))
+      .map(requirement => requirement.id);
+    if (evidenceRequirementIds.length > 1) {
       return {
         success: false,
         completionInvariant: true,
         error: 'Each classifier-seeded completion requirement needs its own consequential action and successful explicit observation. Complete one requirement per evidence cycle.',
-        ids: terminalRequirementIds.slice(0, 20),
+        ids: evidenceRequirementIds.slice(0, 20),
       };
     }
     const hasBatchStartState = Object.prototype.hasOwnProperty.call(opts, 'completionBatchStartState');
@@ -7089,7 +7099,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const currentCompletionState = this.completionInvariants.get(tabId);
     const hasNewBatchAction = hasBatchStartState
       && Number(currentCompletionState?.lastAction?.sequence || 0) > Number(evidenceState?.sequence || 0);
-    if (terminalRequirementIds.length
+    if (evidenceRequirementIds.length
       && (
         !hasUnconsumedCompletionObservation(evidenceState)
         || !hasUnconsumedCompletionObservation(currentCompletionState)
@@ -7099,7 +7109,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         success: false,
         completionInvariant: true,
         error: 'Classifier-seeded completion requirements can become terminal only after a consequential action and a successful explicit observation whose result was available on a prior assistant turn.',
-        ids: terminalRequirementIds.slice(0, 20),
+        ids: evidenceRequirementIds.slice(0, 20),
       };
     }
     const mastodonGuard = this._mastodonProgressUpdateGuard(tabId, canonicalItems);
@@ -7132,7 +7142,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (!result.changed) {
       return { success: false, error: 'progress_update: no valid items were provided. Each item needs a stable id.' };
     }
-    if (terminalRequirementIds.length) this._consumeCompletionObservation(tabId);
+    if (evidenceRequirementIds.length) this._consumeCompletionObservation(tabId);
     this.progressLedgers.set(tabId, result.rows);
     const adoption = sessionId
       ? this._adoptUnscopedProgressRows(tabId, sessionId, { allowReopen: args.reopen === true, taskKey })
@@ -7697,7 +7707,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       { excludedUsernames: this._excludedGithubUsernames(tabId), session }
     );
     if (!observed.items.length) return null;
-    const update = this._progressUpdate(tabId, { items: observed.items }, { source: 'observe', pageScope, sessionId: session.sessionId });
+    const update = this._progressUpdate(tabId, { items: observed.items }, {
+      source: 'observe',
+      trustedObservation: 'github_stargazers',
+      pageScope,
+      sessionId: session.sessionId,
+    });
     if (!update?.success) return null;
     const note = {
       ...observed.stats,
