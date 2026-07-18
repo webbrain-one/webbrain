@@ -7379,7 +7379,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (!text) return false;
     // Keep the guard on when the user clearly wants planning followed by action.
     const executeAfterPlanning = /\b(?:then|and then|after that|sonra|ardından|ve sonra)\b.{0,80}\b(?:execute|run|carry out|perform|apply|act|do it|uygula|çalıştır|gerçekleştir|yap)\b/i.test(text);
-    if (executeAfterPlanning) return false;
+    // Negated approval waits authorize immediate action ("Don't wait for approval; run it").
+    // Must not be classified as plan-only or the execution guard turns off.
+    const authorizesImmediateExecution = /\b(?:do not|don't|dont)\b.{0,40}\b(?:wait for|ask for)\b.{0,40}\b(?:approval|confirmation)\b|\b(?:do not|don't|dont)\b.{0,20}\bwait\b.{0,40}\b(?:approval|confirmation)\b|\bno need\b.{0,20}\b(?:approval|confirmation)\b|\bskip (?:the )?(?:approval|confirmation)\b|\bwithout waiting (?:for )?(?:approval|confirmation)\b/i.test(text);
+    if (executeAfterPlanning || authorizesImmediateExecution) return false;
     const planTerm = '(?:plan|strategy|roadmap|outline|workflow|steps|taslak|strateji|yol haritası|adımlar)';
     const asksOnlyForPlan = new RegExp(
       `(?:\\b(?:only|just|merely|sadece|yalnızca)\\b.{0,60}\\b${planTerm}\\b|\\b${planTerm}\\b.{0,40}\\b(?:only|sadece|yalnızca)\\b|^(?:please\\s+)?(?:give|create|make|write|draft|outline|provide|show|prepare|return|hazırla|oluştur|yaz|göster)\\b.{0,100}\\b${planTerm}\\b)`,
@@ -7398,7 +7401,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       `|\\b(?:nasıl bir|bana bir)\\b.{0,40}\\b(?:plan|strateji|yol haritası)\\b`,
       'i',
     ).test(text);
-    const defersExecution = /\b(?:do not|don't|dont|without|before you|wait for|until)\b.{0,70}\b(?:execute|act|run|perform|apply|approval|confirmation)\b|\b(?:uygulama|çalıştırma|harekete geçme|onayımı bekle|onay vermeden)\b/i.test(text);
+    // Positive deferrals only: ban acting, wait/until approval, without approval.
+    // Do not treat bare "do not … approval/confirmation" as deferral (see authorizesImmediateExecution).
+    const defersExecution = /\b(?:do not|don't|dont)\b.{0,40}\b(?:execute|act|run|perform|apply)\b|\bwithout\b.{0,50}\b(?:execut|acting|running|perform|apply)\b|\bbefore you\b.{0,50}\b(?:execute|act|run|perform|apply)\b|\b(?:wait for|until)\b.{0,70}\b(?:execute|act|run|perform|apply|(?:my |your )?approval|confirmation|I approve)\b|\bwithout\b.{0,40}\b(?:my |your )?approval\b|\b(?:uygulama|çalıştırma|harekete geçme|onayımı bekle|onay vermeden)\b/i.test(text);
     const requestedPlanStructure = /\b(?:json|yaml|xml|markdown|structured output|machine-readable)\b/i.test(text)
       && new RegExp(`\\b${planTerm}|action[- ]policy|allowedActions|forbiddenActions\\b`, 'i').test(text);
     return asksOnlyForPlan || asksPlanQuestion || defersExecution || requestedPlanStructure;

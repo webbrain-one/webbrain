@@ -22913,6 +22913,73 @@ test('Act keeps execution guard when question-form plan is followed by execute i
   }
 });
 
+test('Act keeps execution guard for negated approval waits', async () => {
+  for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
+    const agent = new AgentClass({ getActive: () => null, getVisionProvider: async () => null });
+    const immediateTasks = [
+      "Don't wait for approval; run it now",
+      'Do not ask for confirmation before applying the change',
+      'No need for approval — just execute',
+      'Skip the confirmation and apply the update',
+    ];
+    for (const task of immediateTasks) {
+      assert.equal(
+        agent._isExplicitPlanOnlyTask(task),
+        false,
+        `${AgentClass.name}: negated approval wait must keep guard on: ${task}`,
+      );
+    }
+    const deferTasks = [
+      'Wait for my approval before executing',
+      'Do not execute until I confirm',
+      'Prepare the change without my approval',
+      'Do not execute; only plan',
+    ];
+    for (const task of deferTasks) {
+      assert.equal(
+        agent._isExplicitPlanOnlyTask(task),
+        true,
+        `${AgentClass.name}: positive deferral must disable guard: ${task}`,
+      );
+    }
+
+    const responses = [
+      { content: planOnlyTerminalFixture(), toolCalls: [] },
+      { content: null, toolCalls: executionToolCalls(`neg_approval_${index}`) },
+    ];
+    const provider = {
+      supportsTools: true,
+      supportsVision: false,
+      promptTier: 'full',
+      contextWindow: 128000,
+      model: 'test-model',
+      name: 'test-provider',
+      chat: async () => {
+        const next = responses.shift();
+        assert.ok(next, `${AgentClass.name}: model was called too many times`);
+        return next;
+      },
+    };
+    const runAgent = new AgentClass({ getActive: () => provider, getVisionProvider: async () => null });
+    const tabId = 8640 + index;
+    configurePlanOnlyGuardAgent(runAgent, tabId);
+
+    const final = await runAgent.processMessage(
+      tabId,
+      "Don't wait for approval; run it now",
+      () => {},
+      'act',
+    );
+
+    assert.equal(final, 'Executed and verified.', `${AgentClass.name}: negated approval wait accepted plan-only final`);
+    assert.equal(responses.length, 0, `${AgentClass.name}: negated approval wait did not recover`);
+    assert.ok(
+      runAgent.conversations.get(tabId).some(message => message.role === 'user' && String(message.content || '').startsWith('[PLAN EXECUTION BLOCK')),
+      `${AgentClass.name}: negated approval wait missing recovery nudge`,
+    );
+  }
+});
+
 test('Act preserves safety refusals and inactive policy classifications', async () => {
   for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
     const refusal = JSON.stringify({
