@@ -17,6 +17,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT = path.resolve(__dirname, '..');
 
+function escapeRegExpLiteral(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function loadSlashCommandRuntime(panelRel) {
   const source = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
   const start = source.indexOf('const SLASH_COMMANDS = [');
@@ -10374,7 +10378,7 @@ test('sidepanel escapes dynamic system-message interpolation before raw HTML ins
     ];
     if (label === 'chrome') dynamicHtmlKeys.push('sp.record.error');
     for (const key of dynamicHtmlKeys) {
-      assert.match(panel, new RegExp(`tSystemHtml\\('${key.replace(/\./g, '\\.')}'`), `${label}: ${key} should escape dynamic params for system HTML`);
+      assert.match(panel, new RegExp(`tSystemHtml\\('${escapeRegExpLiteral(key)}'`), `${label}: ${key} should escape dynamic params for system HTML`);
     }
   }
 });
@@ -10400,7 +10404,7 @@ test('composer toasts render markup only for explicitly trusted localized HTML',
     ]) {
       assert.match(
         panel,
-        new RegExp(`showComposerToast\\(systemHtml\\([\\s\\S]{0,120}?t\\('${key.replace(/\./g, '\\.')}'\\)`),
+        new RegExp(`showComposerToast\\(systemHtml\\([\\s\\S]{0,120}?t\\('${escapeRegExpLiteral(key)}'\\)`),
         `${label}: ${key} toast should opt in to trusted localized markup`,
       );
     }
@@ -10846,8 +10850,11 @@ test('chrome sidepanel shortcuts are documented in help and README', () => {
   const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8');
 
   for (const shortcut of ['Ctrl/Cmd+/', 'Ctrl/Cmd+Shift+A', 'Ctrl/Cmd+Shift+X', 'Escape']) {
-    assert.match(locale, new RegExp(shortcut.replace(/[+/]/g, '\\$&')), `chrome: /help should mention ${shortcut}`);
-    assert.match(readme, new RegExp(shortcut.replace('Ctrl/Cmd', 'Ctrl.*Cmd').replace(/[+/]/g, '\\$&')), `README should mention ${shortcut}`);
+    assert.match(locale, new RegExp(escapeRegExpLiteral(shortcut)), `chrome: /help should mention ${shortcut}`);
+    const readmePattern = shortcut.startsWith('Ctrl/Cmd')
+      ? `Ctrl.*Cmd${escapeRegExpLiteral(shortcut.slice('Ctrl/Cmd'.length))}`
+      : escapeRegExpLiteral(shortcut);
+    assert.match(readme, new RegExp(readmePattern), `README should mention ${shortcut}`);
   }
   assert.match(locale, /Keyboard Shortcuts/, 'chrome: /help should include a keyboard shortcut section');
   assert.match(readme, /## Keyboard Shortcuts/, 'README should include a keyboard shortcut section');
