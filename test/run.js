@@ -22787,6 +22787,132 @@ test('Act preserves explicit plan-only structured-output requests', async () => 
   }
 });
 
+test('Act treats question-form plan requests as plan-only (no execution guard)', async () => {
+  for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
+    const agent = new AgentClass({ getActive: () => null, getVisionProvider: async () => null });
+    const planOnlyQuestions = [
+      "What's the plan to update my profile?",
+      'What is the plan for fixing this?',
+      'Can you outline a plan for updating my profile?',
+      'Tell me the plan to fix the form.',
+      'Plan nedir?',
+    ];
+    for (const task of planOnlyQuestions) {
+      assert.equal(
+        agent._isExplicitPlanOnlyTask(task),
+        true,
+        `${AgentClass.name}: expected plan-only question: ${task}`,
+      );
+    }
+    assert.equal(
+      agent._isExplicitPlanOnlyTask("What's the plan, then execute it?"),
+      false,
+      `${AgentClass.name}: execute-after-planning must keep the guard on`,
+    );
+    assert.equal(
+      agent._isExplicitPlanOnlyTask('Read the current page and summarize it.'),
+      false,
+      `${AgentClass.name}: ordinary Act task must keep the guard on`,
+    );
+    assert.equal(
+      agent._isExplicitPlanOnlyTask('Can you plan this update for me?'),
+      false,
+      `${AgentClass.name}: bare "can you plan" must not be treated as discussion-only`,
+    );
+
+    // End-to-end: after Plan-before-Act pins an approved plan, a normal prose
+    // Plan: answer must be accepted for question-form plan-only tasks (the
+    // Codex discussion_r3608226380 scenario).
+    const expected = [
+      'Plan:',
+      '1. Open settings',
+      '2. Update the profile fields',
+      '3. Save and verify the page confirms the change',
+    ].join('\n');
+    let calls = 0;
+    const provider = {
+      supportsTools: true,
+      supportsVision: false,
+      promptTier: 'full',
+      contextWindow: 128000,
+      model: 'test-model',
+      name: 'test-provider',
+      chat: async () => {
+        calls += 1;
+        return { content: expected, toolCalls: [] };
+      },
+    };
+    const runAgent = new AgentClass({ getActive: () => provider, getVisionProvider: async () => null });
+    const tabId = 8630 + index;
+    configurePlanOnlyGuardAgent(runAgent, tabId);
+    runAgent.conversations.set(tabId, [
+      { role: 'system', content: 'sys' },
+      runAgent._buildScratchpadMessage(
+        '[Approved plan — pinned by planner]\n1. Open settings\n2. Update profile',
+      ),
+    ]);
+    assert.equal(
+      runAgent._hasApprovedExecutionPlan(runAgent.conversations.get(tabId)),
+      true,
+      `${AgentClass.name}: test fixture must pin an approved plan`,
+    );
+
+    const final = await runAgent.processMessage(
+      tabId,
+      "What's the plan to update my profile?",
+      () => {},
+      'act',
+    );
+
+    assert.equal(final, expected, `${AgentClass.name}: question-form plan answer was rejected`);
+    assert.equal(calls, 1, `${AgentClass.name}: question-form plan triggered execution recovery`);
+    assert.equal(
+      runAgent.conversations.get(tabId).some(message => String(message.content || '').startsWith('[PLAN EXECUTION BLOCK')),
+      false,
+      `${AgentClass.name}: question-form plan received a recovery nudge`,
+    );
+  }
+});
+
+test('Act keeps execution guard when question-form plan is followed by execute intent', async () => {
+  for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
+    const responses = [
+      { content: planOnlyTerminalFixture(), toolCalls: [] },
+      { content: null, toolCalls: executionToolCalls(`qplan_exec_${index}`) },
+    ];
+    const provider = {
+      supportsTools: true,
+      supportsVision: false,
+      promptTier: 'full',
+      contextWindow: 128000,
+      model: 'test-model',
+      name: 'test-provider',
+      chat: async () => {
+        const next = responses.shift();
+        assert.ok(next, `${AgentClass.name}: model was called too many times`);
+        return next;
+      },
+    };
+    const agent = new AgentClass({ getActive: () => provider, getVisionProvider: async () => null });
+    const tabId = 8635 + index;
+    configurePlanOnlyGuardAgent(agent, tabId);
+
+    const final = await agent.processMessage(
+      tabId,
+      "What's the plan, then execute it?",
+      () => {},
+      'act',
+    );
+
+    assert.equal(final, 'Executed and verified.', `${AgentClass.name}: plan+execute final was accepted as plan-only`);
+    assert.equal(responses.length, 0, `${AgentClass.name}: plan+execute did not recover into tools`);
+    assert.ok(
+      agent.conversations.get(tabId).some(message => message.role === 'user' && String(message.content || '').startsWith('[PLAN EXECUTION BLOCK')),
+      `${AgentClass.name}: plan+execute missing recovery nudge`,
+    );
+  }
+});
+
 test('Act preserves safety refusals and inactive policy classifications', async () => {
   for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
     const refusal = JSON.stringify({

@@ -7377,6 +7377,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   _isExplicitPlanOnlyTask(taskText) {
     const text = String(taskText || '').replace(/\s+/g, ' ').trim();
     if (!text) return false;
+    // Keep the guard on when the user clearly wants planning followed by action.
     const executeAfterPlanning = /\b(?:then|and then|after that|sonra|ardından|ve sonra)\b.{0,80}\b(?:execute|run|carry out|perform|apply|act|do it|uygula|çalıştır|gerçekleştir|yap)\b/i.test(text);
     if (executeAfterPlanning) return false;
     const planTerm = '(?:plan|strategy|roadmap|outline|workflow|steps|taslak|strateji|yol haritası|adımlar)';
@@ -7384,10 +7385,23 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       `(?:\\b(?:only|just|merely|sadece|yalnızca)\\b.{0,60}\\b${planTerm}\\b|\\b${planTerm}\\b.{0,40}\\b(?:only|sadece|yalnızca)\\b|^(?:please\\s+)?(?:give|create|make|write|draft|outline|provide|show|prepare|return|hazırla|oluştur|yaz|göster)\\b.{0,100}\\b${planTerm}\\b)`,
       'i',
     ).test(text);
+    // Natural question / discussion forms ("What's the plan to…?") must not enable
+    // the Act execution guard — especially after Plan-before-Act pins an approved plan.
+    // Avoid bare "can you plan …" (often means figure out and do); require a plan-noun
+    // question or an explicit give/outline/show-style ask.
+    const asksPlanQuestion = new RegExp(
+      `\\b(?:what(?:'s|s| is| would be)|which)\\b.{0,40}\\b${planTerm}\\b` +
+      `|\\bhow (?:would you|do (?:i|we|you)|can (?:i|we|you)|should (?:i|we|you))\\b.{0,40}\\b${planTerm}\\b` +
+      `|\\b(?:can you|could you|would you)\\b.{0,20}\\b(?:give|create|make|write|draft|outline|provide|show|prepare|return)\\b.{0,80}\\b${planTerm}\\b` +
+      `|\\b(?:tell me|explain|describe|walk me through|discuss)\\b.{0,60}\\b${planTerm}\\b` +
+      `|\\b(?:plan|strateji|yol haritası|adımlar)\\b.{0,20}\\b(?:nedir|ne)\\b` +
+      `|\\b(?:nasıl bir|bana bir)\\b.{0,40}\\b(?:plan|strateji|yol haritası)\\b`,
+      'i',
+    ).test(text);
     const defersExecution = /\b(?:do not|don't|dont|without|before you|wait for|until)\b.{0,70}\b(?:execute|act|run|perform|apply|approval|confirmation)\b|\b(?:uygulama|çalıştırma|harekete geçme|onayımı bekle|onay vermeden)\b/i.test(text);
     const requestedPlanStructure = /\b(?:json|yaml|xml|markdown|structured output|machine-readable)\b/i.test(text)
       && new RegExp(`\\b${planTerm}|action[- ]policy|allowedActions|forbiddenActions\\b`, 'i').test(text);
-    return asksOnlyForPlan || defersExecution || requestedPlanStructure;
+    return asksOnlyForPlan || asksPlanQuestion || defersExecution || requestedPlanStructure;
   }
 
   _hasApprovedExecutionPlan(messages) {
