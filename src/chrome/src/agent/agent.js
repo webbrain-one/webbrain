@@ -32,6 +32,7 @@ import { getRecordingStateFresh as recorderStateFresh } from '../recorder/host.j
 import { Capability, CAPABILITY_LABEL, capabilitiesFor, requiredHosts, frameHostMatches, isNetworkMutation, normalizeHost, PermissionManager, UNTRUSTED_CONTENT_TOOLS } from './permission-gate.js';
 import {
   buildPlannerMessages,
+  buildPlannerIntentMessages,
   parsePlanFromContent,
   formatPlanMarkdown,
   formatPlanExecutionMetadataMarkdown,
@@ -181,6 +182,8 @@ export class Agent {
     this.planReviewMode = 'confidence'; // confidence | always | never
     this.planReviewConfidenceThreshold = PLAN_REVIEW_CONFIDENCE_DEFAULT;
     this._pendingPlans = new Map(); // tabId → (planId → { resolve, ts })
+    this._planExecutionGuards = new Map(); // tabId → current run's plan-only terminal recovery state
+    this._continuationExecutionEvidence = new Map(); // tabId → app-owned evidence carried only by continueProcessing()
     // Stale click detection: per-tab last clicked element identity.
     this._lastCdpClickIdent = new Map(); // tabId -> string
     this._lastClickProgress = new Map(); // tabId -> { ident, snapshot }
@@ -1777,6 +1780,9 @@ export class Agent {
   // the corresponding mode is active.
   static NAV_TOOLS = new Set(['navigate', 'new_tab', 'go_back', 'go_forward']);
   static STATE_CHANGE_TOOLS = new Set(['navigate', 'new_tab', 'go_back', 'go_forward', 'click', 'click_ax', 'type_text', 'type_ax', 'set_field', 'press_keys', 'scroll', 'hover', 'drag_drop', 'inject_css', 'remove_injected_css', 'patch_element', 'revert_patch', 'execute_js', 'inspect_event_listeners', 'highlight_element']);
+  static EXECUTION_META_TOOLS = new Set(['clarify', 'scratchpad_write', 'scratchpad_read', 'progress_update', 'progress_read']);
+  static EXECUTION_APP_STATE_TOOLS = new Set(['scratchpad_write', 'scratchpad_read', 'progress_update', 'progress_read']);
+  static EXECUTION_APP_STATE_WRITE_TOOLS = new Set(['scratchpad_write', 'progress_update']);
   static DELIVERY_OBSERVATION_TOOLS = new Set(['read_page', 'get_accessibility_tree', 'get_interactive_elements', 'extract_data', 'get_selection', 'scroll', 'wait_for_stable', 'wait_for_element', 'read_pdf', 'fetch_url', 'research_url', 'read_downloaded_file', 'iframe_read', 'get_window_info', 'list_downloads', 'progress_read', 'screenshot', 'get_frames', 'get_shadow_dom', 'shadow_dom_query', 'read_youtube_transcript']);
   static NAV_PRONE_TOOLS = new Set(['click', 'click_ax', 'navigate', 'go_back', 'go_forward', 'execute_js', 'iframe_click']);
   static RECOMMENDED_ACTION_FAST_PATH_IDS = new Set(['download-media']);
@@ -2299,6 +2305,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       // A missing response after any consequential call is an unknown outcome:
       // the side effect may have completed before its reply was lost.
       const missingResponseOutcomeUnknown = capabilities.length > 0 || Agent.STATE_CHANGE_TOOLS.has(fnName);
+      const executionMutationEvidence = this._isExecutionMutationEvidence(fnName, fnArgs, capabilities);
       await this._ensureGateSetting();
       const skillEndpointRedirect = this._skillEndpointToolRedirect(fnName, fnArgs, tabId);
       if (skillEndpointRedirect) {
@@ -2466,6 +2473,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       const _toolStart = Date.now();
       const rawToolResult = await this.executeTool(tabId, fnName, fnArgs, onUpdate);
       const toolResult = this._normalizeToolResult(fnName, rawToolResult, missingResponseOutcomeUnknown);
+      if (fnName !== 'done') {
+        this._markPlanExecutionToolCall(tabId, fnName, toolResult, {
+          consequential: executionMutationEvidence,
+        });
+      }
       const _toolLatency = Date.now() - _toolStart;
       const nytimesPageGateFallback = this._nytimesPageGateFallback(tabId, fnName, toolResult);
       if (nytimesPageGateFallback && toolResult && typeof toolResult === 'object') {
@@ -2569,6 +2581,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             unresolved: progressBlock.unresolved,
           };
           onUpdate('tool_result', { name: fnName, result: blockedResult });
+          // App-authored recovery policy, not page/tool data: keep this raw so
+          // the model receives it as a trusted instruction outside the
+          // untrusted-page wrapper used for ordinary tool results.
           messages.push({
             role: 'tool',
             tool_call_id: tc.id,
@@ -2577,6 +2592,60 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           onUpdate('warning', { message: 'Progress ledger has unresolved rows; continuing.' });
           this._persist(tabId);
           continue;
+        }
+        const planOnlyDecision = this._planOnlyTerminalDecision(
+          tabId,
+          toolResult.summary || partialAssistantText || '',
+          { viaDone: true, outcome: toolResult.outcome },
+        );
+        if (planOnlyDecision?.retry) {
+          const blockedResult = {
+            success: false,
+            blockedDone: true,
+            planOnlyTerminal: true,
+            error: planOnlyDecision.nudge,
+          };
+          onUpdate('tool_result', { name: fnName, result: blockedResult });
+          messages.push({
+            role: 'tool',
+            tool_call_id: tc.id,
+            content: JSON.stringify(blockedResult),
+          });
+          // The remaining calls were generated alongside the invalid done,
+          // before the model saw the recovery instruction. Never execute that
+          // stale batch; close every tool_call and start a fresh model turn.
+          this._appendSyntheticToolResults(
+            tabId, toolCalls, toolIndex + 1, messages, onUpdate, step,
+            () => ({ success: false, skipped: true, error: 'skipped: invalid done requires a fresh execution turn' })
+          );
+          // Drop any partial assistant prose that rode along with the invalid
+          // done so the recovery turn starts with a clean visible bubble.
+          onUpdate('text', { content: '', replace: true });
+          onUpdate('warning', { message: 'Plan-only completion was rejected; continuing into execution.' });
+          this._persist(tabId);
+          return { action: 'continue' };
+        }
+        if (planOnlyDecision?.failure) {
+          const failedResult = {
+            success: false,
+            done: true,
+            outcome: 'failed',
+            planOnlyTerminal: true,
+            summary: planOnlyDecision.failure,
+            error: planOnlyDecision.failure,
+          };
+          onUpdate('tool_result', { name: fnName, result: failedResult });
+          messages.push({
+            role: 'tool',
+            tool_call_id: tc.id,
+            content: JSON.stringify(failedResult),
+          });
+          this._appendSyntheticToolResults(
+            tabId, toolCalls, toolIndex + 1, messages, onUpdate, step,
+            () => ({ success: false, skipped: true, error: 'skipped: plan-only completion failed' })
+          );
+          this._persist(tabId);
+          return { action: 'return', value: planOnlyDecision.failure, status: 'plan_only_output' };
         }
         onUpdate('tool_result', { name: fnName, result: toolResult });
         const finalResponse = this._appendProgressLedgerToFinal(tabId, toolResult.summary || partialAssistantText || 'Task completed.');
@@ -4711,17 +4780,18 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       ? this._plannerMode()
       : 'off';
     const runPlanner = plannerMode !== 'off';
+    const runIntent = this._isActionMode(mode) && runOptions?.cloudRun !== true;
 
     // Snapshot prior turns for the planner digest BEFORE appending, then always
     // record the user's turn first so a planner failure (or a throw while
     // building the digest) can never drop the just-typed message from the
     // transcript.
-    const priorMessages = runPlanner ? messages.slice() : null;
+    const priorMessages = runIntent ? messages.slice() : null;
     messages.push(enriched);
     this._persist(tabId);
-    if (!runPlanner) {
+    if (!runIntent) {
       this.plannerFollowUpSkipTabs.delete(tabId);
-      return { proceed: true };
+      return { proceed: true, requestKind: 'execute', requiresStateChange: false };
     }
     const fastPathPlan = this._recommendedActionFastPathPlan(runOptions);
     if (fastPathPlan) {
@@ -4740,20 +4810,40 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         }
       }
       this._persist(tabId);
-      return { proceed: true };
+      return { proceed: true, requestKind: 'execute', requiresStateChange: true };
     }
     if (this._shouldSkipPlannerForShortFollowUp(tabId, priorMessages, enriched, plannerMode)) {
       this.plannerFollowUpSkipTabs.delete(tabId);
-      return { proceed: true };
+      const historyDigest = this._buildPlannerHistoryDigest(priorMessages);
+      const gate = await this._runPlannerIntentGate(
+        tabId, enriched, onUpdate, costState, runId, historyDigest, tabInfo, mode, runOptions,
+      );
+      if (!gate.proceed) {
+        messages.push({ role: 'assistant', content: gate.message || 'More information is required.' });
+        this._persist(tabId);
+      }
+      return gate;
     }
     this.plannerFollowUpSkipTabs.delete(tabId);
 
     const historyDigest = this._buildPlannerHistoryDigest(priorMessages);
-    const gate = await this._runPlannerGate(tabId, enriched, onUpdate, costState, runId, historyDigest, tabInfo, plannerMode, mode);
+    const gate = runPlanner
+      ? await this._runPlannerGate(
+        tabId, enriched, onUpdate, costState, runId, historyDigest, tabInfo, plannerMode, mode, runOptions,
+      )
+      : await this._runPlannerIntentGate(
+        tabId, enriched, onUpdate, costState, runId, historyDigest, tabInfo, mode, runOptions,
+      );
     if (!gate.proceed) {
-      messages.push({ role: 'assistant', content: gate.message || 'Task cancelled.' });
+      messages.push({ role: 'assistant', content: gate.message || 'More information is required.' });
       this._persist(tabId);
-      return { proceed: false, message: gate.message || 'Task cancelled.', reason: gate.reason };
+      return {
+        proceed: false,
+        message: gate.message || 'More information is required.',
+        reason: gate.reason,
+        requestKind: gate.requestKind,
+        requiresStateChange: gate.requiresStateChange,
+      };
     }
 
     if (gate.skillIds?.length) {
@@ -4779,13 +4869,19 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       }
       this._persist(tabId);
     }
-    return { proceed: true };
+    return {
+      proceed: true,
+      requestKind: gate.requestKind || 'execute',
+      requiresStateChange: gate.requiresStateChange === true,
+      allowsPlannerShapedResult: gate.allowsPlannerShapedResult === true,
+      allowsAppStateToolEvidence: gate.allowsAppStateToolEvidence === true,
+    };
   }
 
-  _plannerChatOptions(provider, retry = false) {
+  _plannerChatOptions(provider, retry = false, intentOnly = false) {
     const opts = {
       temperature: retry ? 0.1 : 0.3,
-      maxTokens: 4096,
+      maxTokens: intentOnly ? 2048 : 4096,
     };
     const providerName = String(provider?.config?.providerName || provider?.name || '').toLowerCase();
     // vLLM/SGLang expose Qwen-style chat_template_kwargs; disabling thinking
@@ -4816,13 +4912,126 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     ];
   }
 
+  _plannerIntentFailureMessage(runOptions = {}) {
+    return sanitizePlannerText(
+      runOptions?.intentFailureMessage
+        || 'I could not reliably determine whether you wanted a plan or execution. Please clarify before I take any action.',
+      500,
+    );
+  }
+
+  _plannerTerminalMessage(plan) {
+    if (plan?.request_kind === 'clarify') {
+      return plan.localized?.summary || plan.summary || 'Please clarify what you want me to do.';
+    }
+    return formatPlanMarkdown(plan, { localized: true })
+      || plan?.localized?.summary
+      || plan?.summary
+      || 'No plan was produced.';
+  }
+
+  /**
+   * Compact semantic intent gate used when Plan-before-Act is off (and for
+   * short follow-ups that intentionally skip a second full plan). It uses the
+   * same provider and structured contract as the full planner, so no
+   * language-specific input matcher can silently authorize execution.
+   */
+  async _runPlannerIntentGate(tabId, enriched, onUpdate, costState, runId = null, historyDigest = '', tabInfo = null, conversationMode = 'act', runOptions = {}) {
+    const { tabUrl, tabTitle } = tabInfo || await this._getTabUrlTitle(tabId);
+    const locale = runOptions?.locale || 'en';
+    const provider = this.providerManager.getActive();
+    const plannerMessages = buildPlannerIntentMessages(enriched, tabUrl, tabTitle, historyDigest, {
+      noThink: this._plannerPrefersNoThinkPrompt(provider),
+      locale,
+    });
+    const plannerStep = 0;
+    onUpdate('thinking', { step: plannerStep, note: 'Understanding request…' });
+
+    try {
+      if (runId) {
+        try {
+          trace.recordLLMRequest(runId, plannerStep, {
+            providerClass: provider?.constructor?.name,
+            model: provider?.model,
+            messageCount: plannerMessages.length,
+            toolsCount: 0,
+            phase: 'intent',
+          });
+        } catch {}
+      }
+      const startedAt = Date.now();
+      let result = await this._chatWithCostAllowance(
+        provider,
+        plannerMessages,
+        this._plannerChatOptions(provider, false, true),
+        costState,
+        { tabId, generationName: 'planner_intent' },
+      );
+      if (runId) {
+        try {
+          trace.recordLLMResponse(runId, plannerStep, {
+            content: result.content,
+            toolCalls: null,
+            usage: result.usage,
+            latencyMs: Date.now() - startedAt,
+            model: provider?.model,
+            phase: 'intent',
+          });
+        } catch {}
+      }
+      if (this._checkAbort(tabId)) return { proceed: false, message: '[Stopped by user]', reason: 'cancelled' };
+
+      let plan = parsePlanFromContent(result.content, { requireIntent: true, locale });
+      if (!plan) {
+        onUpdate('thinking', { step: plannerStep, note: 'Understanding request… retrying JSON output' });
+        result = await this._chatWithCostAllowance(
+          provider,
+          this._plannerRepairMessages(plannerMessages),
+          this._plannerChatOptions(provider, true, true),
+          costState,
+          { tabId, generationName: 'planner_intent' },
+        );
+        plan = parsePlanFromContent(result.content, { requireIntent: true, locale });
+      }
+      if (this._checkAbort(tabId)) return { proceed: false, message: '[Stopped by user]', reason: 'cancelled' };
+      if (!plan) {
+        const message = this._plannerIntentFailureMessage(runOptions);
+        onUpdate('warning', { message });
+        return { proceed: false, message, reason: 'clarify', requestKind: 'clarify', requiresStateChange: false };
+      }
+      if (plan.request_kind !== 'execute') {
+        return {
+          proceed: false,
+          message: this._plannerTerminalMessage(plan),
+          reason: plan.request_kind,
+          requestKind: plan.request_kind,
+          requiresStateChange: false,
+        };
+      }
+      return {
+        proceed: true,
+        requestKind: 'execute',
+        requiresStateChange: plan.requires_state_change === true,
+        allowsPlannerShapedResult: plan.allows_planner_shaped_result === true,
+        allowsAppStateToolEvidence: plan.allows_app_state_tool_evidence === true,
+      };
+    } catch (e) {
+      if (this._isCostAllowanceError(e)) {
+        return { proceed: false, message: e.message, reason: 'cost_limit' };
+      }
+      const message = this._plannerIntentFailureMessage(runOptions);
+      onUpdate('warning', { message });
+      return { proceed: false, message, reason: 'clarify', requestKind: 'clarify', requiresStateChange: false };
+    }
+  }
+
   /**
    * Run the optional pre-execution planner gate for Act mode.
    * Returns { proceed, message?, approvedScratchpadText?, planId? }.
    */
-  async _runPlannerGate(tabId, enriched, onUpdate, costState, runId = null, historyDigest = '', tabInfo = null, plannerMode = this._plannerMode(), conversationMode = 'act') {
+  async _runPlannerGate(tabId, enriched, onUpdate, costState, runId = null, historyDigest = '', tabInfo = null, plannerMode = this._plannerMode(), conversationMode = 'act', runOptions = {}) {
     const { tabUrl, tabTitle } = tabInfo || await this._getTabUrlTitle(tabId);
-    const strictPlanner = this._normalizePlanBeforeActMode(plannerMode) === 'strict';
+    const locale = runOptions?.locale || 'en';
 
     onUpdate('thinking', { step: 0, note: 'Planning…' });
 
@@ -4833,6 +5042,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       noThink: this._plannerPrefersNoThinkPrompt(provider),
       allowApi: this.apiAllowedTabs.has(tabId),
       skillCatalog,
+      locale,
     });
     const plannerStep = 0;
 
@@ -4871,7 +5081,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       if (this._checkAbort(tabId)) {
         return { proceed: false, message: '[Stopped by user]' };
       }
-      let plan = parsePlanFromContent(result.content);
+      let plan = parsePlanFromContent(result.content, { requireIntent: true, locale });
       // Retry whenever the first attempt yields no parseable plan — empty
       // output, thinking-only output, OR non-JSON prose ("Sure, here's the
       // plan…"). The repair prompt exists precisely to coerce JSON out of that
@@ -4885,7 +5095,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           costState,
           { tabId, generationName: 'planner' },
         );
-        plan = parsePlanFromContent(result.content);
+        plan = parsePlanFromContent(result.content, { requireIntent: true, locale });
       }
       // The retry above is a paid LLM call that does not honor the abort flag
       // itself; re-check before pinning the plan or showing the review card so
@@ -4894,21 +5104,27 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         return { proceed: false, message: '[Stopped by user]' };
       }
       if (!plan) {
-        if (!strictPlanner) {
-          onUpdate('warning', { message: 'Planner could not produce a valid structured plan; continuing without a pinned plan.' });
-          return { proceed: true };
-        }
-        const msg = 'Strict Planning is enabled but the planner could not produce a valid structured plan. Task cancelled — no actions were taken.';
+        const msg = this._plannerIntentFailureMessage(runOptions);
         onUpdate('warning', { message: msg });
-        return { proceed: false, message: msg };
+        return { proceed: false, message: msg, reason: 'clarify', requestKind: 'clarify', requiresStateChange: false };
+      }
+      if (plan.request_kind !== 'execute') {
+        return {
+          proceed: false,
+          message: this._plannerTerminalMessage(plan),
+          reason: plan.request_kind,
+          requestKind: plan.request_kind,
+          requiresStateChange: false,
+        };
       }
 
       const eligibleSkillIds = new Set(skillCatalog.map((skill) => skill.id));
       plan.skill_ids = (plan.skill_ids || []).filter((skillId) => eligibleSkillIds.has(skillId));
 
       const planId = `plan_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-      const markdown = formatPlanMarkdown(plan);
-      const verboseMarkdown = formatPlanMarkdown(plan, { verbose: true });
+      const markdown = formatPlanMarkdown(plan, { localized: true });
+      const verboseMarkdown = formatPlanMarkdown(plan, { verbose: true, localized: true });
+      const canonicalVerboseMarkdown = formatPlanMarkdown(plan, { verbose: true });
       const scheduledPolicy = this.scheduledRunPolicies.get(tabId);
       const scheduledAutoApprove = scheduledPolicy?.autoApprovePlanReview === true;
       if (scheduledAutoApprove || !this._shouldReviewPlan(plan)) {
@@ -4917,8 +5133,17 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         if (!scheduledAutoApprove) {
           onUpdate('plan_auto_approved', { planId, confidence: plan.confidence });
         }
-        const approvedScratchpadText = formatPlanScratchpad(plan, '', verboseMarkdown);
-        return { proceed: true, approvedScratchpadText, planId, skillIds: plan.skill_ids };
+        const approvedScratchpadText = formatPlanScratchpad(plan, '', canonicalVerboseMarkdown);
+        return {
+          proceed: true,
+          approvedScratchpadText,
+          planId,
+          skillIds: plan.skill_ids,
+          requestKind: 'execute',
+          requiresStateChange: plan.requires_state_change === true,
+          allowsPlannerShapedResult: plan.allows_planner_shaped_result === true,
+          allowsAppStateToolEvidence: plan.allows_app_state_tool_evidence === true,
+        };
       }
       const choice = await this._waitForPlanReview(tabId, planId, plan, markdown, onUpdate, verboseMarkdown);
 
@@ -4940,19 +5165,24 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       // approved text, fail closed instead of activating IDs from the stale
       // planner object that the edited plan may no longer authorize.
       const approvedSkillIds = verbosePlanEdited ? [] : plan.skill_ids;
-      const approvedScratchpadText = formatPlanScratchpad(plan, approvedText, verboseMarkdown);
-      return { proceed: true, approvedScratchpadText, planId, skillIds: approvedSkillIds };
+      const approvedScratchpadText = formatPlanScratchpad(plan, approvedText, canonicalVerboseMarkdown);
+      return {
+        proceed: true,
+        approvedScratchpadText,
+        planId,
+        skillIds: approvedSkillIds,
+        requestKind: 'execute',
+        requiresStateChange: plan.requires_state_change === true,
+        allowsPlannerShapedResult: plan.allows_planner_shaped_result === true,
+        allowsAppStateToolEvidence: plan.allows_app_state_tool_evidence === true,
+      };
     } catch (e) {
       if (this._isCostAllowanceError(e)) {
         return { proceed: false, message: e.message, reason: 'cost_limit' };
       }
-      if (!strictPlanner) {
-        onUpdate('warning', { message: `Planning failed (${e.message || 'unknown error'}); continuing without a pinned plan.` });
-        return { proceed: true };
-      }
-      const msg = `Strict Planning is enabled but planning failed (${e.message || 'unknown error'}). Task cancelled — no actions were taken.`;
+      const msg = this._plannerIntentFailureMessage(runOptions);
       onUpdate('warning', { message: msg });
-      return { proceed: false, message: msg };
+      return { proceed: false, message: msg, reason: 'clarify', requestKind: 'clarify', requiresStateChange: false };
     }
   }
 
@@ -6923,6 +7153,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       || c.startsWith('[Agent progress ledger')
       || c.startsWith('[Agent memory')
       || c.startsWith('[PROGRESS LEDGER BLOCK')
+      || c.startsWith('[PLAN EXECUTION BLOCK')
       || c.startsWith('[NAVIGATION OCCURRED')
       || c.startsWith('[Auto-screenshot')
       || c.startsWith('[UNTRUSTED CAPTURE')
@@ -7363,6 +7594,201 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       return '[System nudge: your previous response had neither text nor a tool call. Continue the active browser task with tool calls. If the task is truly complete, call the done tool with a real summary. Do not output a plain summary and do not stop without a tool call.]';
     }
     return '[System nudge: your previous response had neither text nor a tool call. You may have run out of output budget on internal reasoning. In ONE short message, summarize what you accomplished, what you tried, and what blocked you - then stop. Do not start any new tool calls.]';
+  }
+
+  _hasApprovedExecutionPlan(messages) {
+    const idx = this._findScratchpadIndex(messages || []);
+    if (idx < 0) return false;
+    const body = this._extractScratchpadBody(messages[idx].content);
+    return /\[Approved plan\b[^\]]*(?:pinned by (?:planner|recommended action)|edited localized text pinned by planner)[^\]]*\]/i.test(body);
+  }
+
+  _startPlanExecutionGuard(tabId, mode, gateOutcome = {}, runOptions = {}) {
+    const requestKind = gateOutcome?.requestKind || (this._isActionMode(mode) ? 'execute' : null);
+    const enabled = this._isActionMode(mode)
+      && runOptions?.cloudRun !== true
+      && requestKind === 'execute';
+    const requiresStateChange = gateOutcome?.requiresStateChange === true;
+    const allowsAppStateToolEvidence = gateOutcome?.allowsAppStateToolEvidence === true;
+    const carried = runOptions?.trustedContinuation === true
+      ? this._continuationExecutionEvidence.get(tabId)
+      : null;
+    this._continuationExecutionEvidence.delete(tabId);
+    const carryMatches = enabled
+      && carried?.requestKind === 'execute'
+      && carried.requiresStateChange === requiresStateChange
+      && carried.allowsAppStateToolEvidence === allowsAppStateToolEvidence
+      && carried.conversationId === (this.conversationIds.get(tabId) || null);
+    const state = {
+      enabled,
+      requestKind,
+      requiresStateChange,
+      allowsPlannerShapedResult: gateOutcome?.allowsPlannerShapedResult === true,
+      allowsAppStateToolEvidence,
+      approvedPlan: this._hasApprovedExecutionPlan(this.conversations.get(tabId) || []),
+      // Only the app-owned Continue action can carry verified evidence from
+      // the immediately preceding run; ordinary user turns always start at 0.
+      successfulTaskToolCalls: carryMatches ? carried.successfulTaskToolCalls : 0,
+      successfulConsequentialToolCalls: carryMatches ? carried.successfulConsequentialToolCalls : 0,
+      recoveryAttempted: false,
+    };
+    this._planExecutionGuards.set(tabId, state);
+    return state;
+  }
+
+  _isSuccessfulExecutionEvidence(result) {
+    if (result == null || result?.done) return false;
+    if (typeof result !== 'object') return true;
+    if (result.success === false
+        || result.denied
+        || result.cancelled
+        || result.skipped
+        || result.failed
+        || result.blocked
+        || result.blockedDone
+        || result.blockedUnsavedChanges
+        || result.invalidToolArguments
+        || result.missingToolResponse
+        || result.outcomeUnknown) return false;
+    if (result.error && result.success !== true) return false;
+    return true;
+  }
+
+  _isExecutionMutationEvidence(name, args = {}, capabilities = []) {
+    const mutationCapabilities = new Set([
+      Capability.CLICK,
+      Capability.TYPE,
+      Capability.EXECUTE_JS,
+      Capability.DEV_PATCH,
+      Capability.DOWNLOAD,
+      Capability.UPLOAD,
+      Capability.SCHEDULE,
+    ]);
+    if (capabilities.includes(Capability.NETWORK)) return isNetworkMutation(name, args);
+    return capabilities.some(capability => mutationCapabilities.has(capability));
+  }
+
+  _markPlanExecutionToolCall(tabId, name, result, { consequential = false } = {}) {
+    const state = this._planExecutionGuards.get(tabId);
+    const requestedAppStateTool = state?.allowsAppStateToolEvidence === true
+      && this.constructor.EXECUTION_APP_STATE_TOOLS.has(name);
+    if (!state?.enabled
+        || name === 'done'
+        || (this.constructor.EXECUTION_META_TOOLS.has(name) && !requestedAppStateTool)
+        || !this._isSuccessfulExecutionEvidence(result)) return;
+    state.successfulTaskToolCalls += 1;
+    if (consequential
+        || (requestedAppStateTool && this.constructor.EXECUTION_APP_STATE_WRITE_TOOLS.has(name))) {
+      state.successfulConsequentialToolCalls += 1;
+    }
+  }
+
+  _executionEvidenceSatisfied(state) {
+    if (!state) return false;
+    return state.requiresStateChange
+      ? state.successfulConsequentialToolCalls > 0
+      : state.successfulTaskToolCalls > 0;
+  }
+
+  _storeContinuationExecutionEvidence(tabId) {
+    const guard = this._planExecutionGuards.get(tabId);
+    if (guard?.enabled && (guard.successfulTaskToolCalls > 0 || guard.successfulConsequentialToolCalls > 0)) {
+      this._continuationExecutionEvidence.set(tabId, {
+        requestKind: guard.requestKind,
+        requiresStateChange: guard.requiresStateChange,
+        allowsAppStateToolEvidence: guard.allowsAppStateToolEvidence,
+        successfulTaskToolCalls: guard.successfulTaskToolCalls,
+        successfulConsequentialToolCalls: guard.successfulConsequentialToolCalls,
+        conversationId: this.conversationIds.get(tabId) || null,
+      });
+    } else {
+      this._continuationExecutionEvidence.delete(tabId);
+    }
+  }
+
+  _isSafetyRefusalTerminal(content) {
+    const object = extractFirstJsonObject(String(content || ''));
+    if (!object || typeof object !== 'object' || Array.isArray(object)) return false;
+    const text = [
+      object.summary,
+      ...(Array.isArray(object.steps) ? object.steps.map(step => step?.action) : []),
+    ].filter(Boolean).join(' ');
+    return Number(object.confidence) === 0
+      && /\b(?:refus|will not|do not proceed|unauthorized|illegal|fraud|theft|unsafe|cannot assist|can't assist)\b/i.test(text);
+  }
+
+  _looksLikePlanOnlyTerminal(content, state = {}, { ignoreFuturePromise = false } = {}) {
+    const text = String(content || '').trim();
+    if (!text) return false;
+    const object = extractFirstJsonObject(text);
+    if (object && typeof object === 'object' && !Array.isArray(object)) {
+      const planText = [
+        object.summary,
+        ...(Array.isArray(object.steps) ? object.steps.map(step => step?.action) : []),
+      ].filter(Boolean).join(' ');
+      const safetyRefusal = Number(object.confidence) === 0
+        && /\b(?:refus|will not|do not proceed|unauthorized|illegal|fraud|theft|unsafe|cannot assist|can't assist)\b/i.test(planText);
+      const plannerShape = typeof object.summary === 'string'
+        && Array.isArray(object.steps)
+        && ['confidence', 'memory', 'scheduling', 'risks', 'mode'].some(key => Object.prototype.hasOwnProperty.call(object, key))
+        && !safetyRefusal;
+      const policyKeys = ['mode', 'allowedActions', 'forbiddenActions', 'targets', 'pageScopePolicy', 'reason'];
+      const policyShape = policyKeys.filter(key => Object.prototype.hasOwnProperty.call(object, key)).length >= 5
+        && (Array.isArray(object.allowedActions) || Array.isArray(object.forbiddenActions))
+        && String(object.mode || '').toLowerCase() !== 'inactive';
+      if (plannerShape || policyShape) return state.allowsPlannerShapedResult !== true;
+    }
+    // "Next, I will …" / "I plan to …" is agent-continue language and is always
+    // invalid as a terminal. Bare "I will …" is evidence-gated so drafted reply
+    // text can finish after a real task tool without a planner exemption flag.
+    const continuePromise = /\b(?:next,?\s+i(?:'ll| will)|i plan to|i intend to)\b/i.test(text);
+    const firstPersonFuture = /\bi(?:'ll| will| am going to)\b/i.test(text);
+    const planHeading = /(?:^|\n)\s*(?:#{1,6}\s*)?(?:execution plan|action plan|proposed plan|plan|steps|workflow)\s*[:\n]/i.test(text);
+    const hasTaskEvidence = state.requiresStateChange
+      ? (state.successfulConsequentialToolCalls || 0) > 0
+      : (state.successfulTaskToolCalls || 0) > 0;
+    if (planHeading && state.allowsPlannerShapedResult !== true) return true;
+    if (!ignoreFuturePromise) {
+      if (continuePromise) return true;
+      if (firstPersonFuture && (!hasTaskEvidence || planHeading)) return true;
+    }
+    return false;
+  }
+
+  _planOnlyTerminalDecision(tabId, content, { viaDone = false, outcome = null } = {}) {
+    const state = this._planExecutionGuards.get(tabId);
+    if (!state?.enabled) return null;
+    if (!viaDone && this._isSafetyRefusalTerminal(content)) return null;
+    const terminalFailure = viaDone && (outcome === 'partial' || outcome === 'failed');
+    // A structured failure may naturally say "I will need credentials".
+    // Ignore only that prose-promise heuristic; explicit planner/policy shapes
+    // and plan headings remain invalid even for failed/partial done calls.
+    const looksPlanOnly = this._looksLikePlanOnlyTerminal(
+      content,
+      state,
+      { ignoreFuturePromise: terminalFailure },
+    );
+    const missingEvidence = !terminalFailure && !this._executionEvidenceSatisfied(state);
+    // Every plain Act/Dev terminal gets one protocol recovery regardless of
+    // its language. Successful completion and real blockers must both use
+    // done; this avoids guessing intent from localized prose.
+    const invalidPlainFinal = !viaDone;
+    const invalidDone = viaDone && (looksPlanOnly || missingEvidence);
+    if (!invalidPlainFinal && !invalidDone) return null;
+    if (!state.recoveryAttempted) {
+      state.recoveryAttempted = true;
+      return {
+        retry: true,
+        nudge: '[PLAN EXECUTION BLOCK: This is an execute task, so plain text cannot end it. If work remains, use permitted task tools. If complete, call done with outcome success. If blocked, unsafe, cancelled, or user input is required, call done with outcome failed or partial; do not take unsafe action. Read-only work needs a successful task tool and state-changing work needs a successful consequential tool. Do not return another plan, promise, or plain terminal.]',
+      };
+    }
+    const hasSuccessfulToolEvidence = state.successfulTaskToolCalls > 0;
+    return {
+      failure: hasSuccessfulToolEvidence
+        ? '[Agent stopped because the model returned another plain terminal or a plan/promise after one recovery nudge. Some task tools completed, but final completion was not verified. Inspect the current state before retrying to avoid duplicate side effects.]'
+        : '[Agent stopped because the model returned another plain terminal or a plan/promise instead of completing the execute protocol, even after one recovery nudge. No successful action was verified.]',
+      status: 'plan_only_output',
+    };
   }
 
   _buildAutoProgressResumeInstruction(tabId) {
@@ -13239,7 +13665,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
    * Adds a "please continue" user message and resumes the agent loop.
    */
   async continueProcessing(tabId, onUpdate = () => {}, mode = 'ask') {
-    return this.processMessage(tabId, 'Please continue from where you left off.', onUpdate, mode);
+    return this.processMessage(
+      tabId,
+      'Please continue from where you left off.',
+      onUpdate,
+      mode,
+      [],
+      { trustedContinuation: true },
+    );
   }
 
   /**
@@ -13427,6 +13860,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     }
     this._resetActiveSkillsForRun(tabId, { refreshPrompt: false });
     this._clearLoopState(tabId);
+    if (runOptions?.trustedContinuation !== true) this._continuationExecutionEvidence.delete(tabId);
     this._clickAxCdpFallbacks.delete(tabId);
     this._runningTabs.add(tabId);
     const previousCloudContext = this.cloudRunContexts.get(tabId);
@@ -13437,6 +13871,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       return await this._processMessageInner(tabId, userMessage, onUpdate, mode, attachments, runOptions);
     } finally {
       this.currentCostState.delete(tabId);
+      this._storeContinuationExecutionEvidence(tabId);
+      this._planExecutionGuards.delete(tabId);
       this._resetActiveSkillsForRun(tabId);
       if (runOptions.cloudRun) {
         if (previousCloudContext) this.cloudRunContexts.set(tabId, previousCloudContext);
@@ -13581,7 +14017,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     // loop. _startTraceRun is the single source of truth (no duplicate tab
     // fetch / startRun payload). (#6)
     let plannerTabInfo = null;
-    if (this._isActionMode(mode) && this._plannerIsEnabled()) {
+    if (this._isActionMode(mode) && runOptions?.cloudRun !== true) {
       // Fetch the tab url/title once and reuse it for both the trace start and
       // the planner gate, instead of fetching the same tab twice.
       plannerTabInfo = await this._getTabUrlTitle(tabId);
@@ -13592,9 +14028,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       tabId, messages, enriched, onUpdate, mode, costState, runId, plannerTabInfo, runOptions,
     );
     if (!gateOutcome.proceed) {
-      _traceStatus = gateOutcome.reason === 'cost_limit' ? 'cost_limit' : 'cancelled';
-      return (finalResponse = gateOutcome.message || 'Task cancelled.');
+      _traceStatus = gateOutcome.reason === 'cost_limit'
+        ? 'cost_limit'
+        : (gateOutcome.reason === 'plan_only' ? 'plan_only_output' : gateOutcome.reason || 'cancelled');
+      return (finalResponse = gateOutcome.message || 'More information is required.');
     }
+    this._startPlanExecutionGuard(tabId, mode, gateOutcome, runOptions);
 
     if (this._isActionMode(mode)) {
       await this._ensureProgressSessionForCurrentTask(tabId, { provider, costState });
@@ -13806,6 +14245,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         );
         if (batchResult.action === 'return') {
           finalResponse = batchResult.value;
+          if (batchResult.status) _traceStatus = batchResult.status;
           return finalResponse;
         }
         if (batchResult.action === 'abort') {
@@ -13885,7 +14325,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         onUpdate('warning', { message: finalResponse });
         break;
       }
-      // Genuine final answer — emit and exit.
+      // Genuine final answer — emit and exit. Repeated-item progress recovery
+      // takes priority so an unresolved ledger can still drive the next tool turn.
       const progressFinalBlock = this._plainFinalProgressBlock(tabId);
       if (progressFinalBlock) {
         messages.push(this._withResponseItems({ role: 'assistant', content: result.content }, result.responseItems, result.reasoningContent, provider));
@@ -13893,6 +14334,25 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         onUpdate('warning', { message: 'Progress ledger has unresolved rows; continuing.' });
         this._persist(tabId);
         continue;
+      }
+      const planOnlyDecision = this._planOnlyTerminalDecision(tabId, result.content);
+      if (planOnlyDecision?.retry) {
+        messages.push(this._withResponseItems({ role: 'assistant', content: result.content }, result.responseItems, result.reasoningContent, provider));
+        messages.push({ role: 'user', content: planOnlyDecision.nudge });
+        // Clear any already-rendered plan/promise so recovery does not leave
+        // rejected terminal text in the assistant bubble (and so run-complete
+        // can write the real summary into an empty bubble).
+        onUpdate('text', { content: '', replace: true });
+        onUpdate('warning', { message: 'Plan-only response was rejected; continuing into execution.' });
+        this._persist(tabId);
+        continue;
+      }
+      if (planOnlyDecision?.failure) {
+        finalResponse = planOnlyDecision.failure;
+        _traceStatus = planOnlyDecision.status || 'plan_only_output';
+        messages.push({ role: 'assistant', content: finalResponse });
+        onUpdate('warning', { message: finalResponse });
+        break;
       }
       finalResponse = result.costAllowanceMessage
         ? `${result.content}\n\n${result.costAllowanceMessage}`
@@ -13938,6 +14398,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     }
     this._resetActiveSkillsForRun(tabId, { refreshPrompt: false });
     this._clearLoopState(tabId);
+    if (runOptions?.trustedContinuation !== true) this._continuationExecutionEvidence.delete(tabId);
     this._clickAxCdpFallbacks.delete(tabId);
     this._runningTabs.add(tabId);
     const previousCloudContext = this.cloudRunContexts.get(tabId);
@@ -13948,6 +14409,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       return await this._processMessageStreamInner(tabId, userMessage, onUpdate, mode, runOptions);
     } finally {
       this.currentCostState.delete(tabId);
+      this._storeContinuationExecutionEvidence(tabId);
+      this._planExecutionGuards.delete(tabId);
       this._resetActiveSkillsForRun(tabId);
       if (runOptions.cloudRun) {
         if (previousCloudContext) this.cloudRunContexts.set(tabId, previousCloudContext);
@@ -14011,7 +14474,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     // clears currentRunId, even on an early throw during setup. (#2)
     try {
     let plannerTabInfo = null;
-    if (this._isActionMode(mode) && this._plannerIsEnabled()) {
+    if (this._isActionMode(mode) && runOptions?.cloudRun !== true) {
       // Fetch the tab url/title once and reuse it for both the trace start and
       // the planner gate, instead of fetching the same tab twice.
       plannerTabInfo = await this._getTabUrlTitle(tabId);
@@ -14022,8 +14485,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       tabId, messages, enriched, onUpdate, mode, costState, runId, plannerTabInfo, runOptions,
     );
     if (!gateOutcome.proceed) {
-      return finish(gateOutcome.message || 'Task cancelled.', gateOutcome.reason === 'cost_limit' ? 'cost_limit' : 'cancelled');
+      const status = gateOutcome.reason === 'cost_limit'
+        ? 'cost_limit'
+        : (gateOutcome.reason === 'plan_only' ? 'plan_only_output' : gateOutcome.reason || 'cancelled');
+      return finish(gateOutcome.message || 'More information is required.', status);
     }
+    this._startPlanExecutionGuard(tabId, mode, gateOutcome, runOptions);
 
     if (this._isActionMode(mode)) {
       await this._ensureProgressSessionForCurrentTask(tabId, { provider, costState });
@@ -14182,7 +14649,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             tabId, toolCalls, messages, onUpdate, provider, fullText, allowedToolNames, steps
           );
           if (batchResult.action === 'return') {
-            return finish(batchResult.value);
+            return finish(batchResult.value, batchResult.status);
           }
           if (batchResult.action === 'abort') {
             return finish(batchResult.value, 'cancelled');
@@ -14248,6 +14715,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         }
         emptyOutputRecoveryAttempted = false;
         compressionPlaceholderRecoveryAttempted = false;
+        // Preserve the progress ledger's purpose-built continuation before
+        // treating other plain terminal text as unverified.
         const progressFinalBlock = this._plainFinalProgressBlock(tabId);
         if (progressFinalBlock) {
           messages.push(this._withResponseItems({ role: 'assistant', content: fullText }, responseItems, reasoningContent, provider));
@@ -14255,6 +14724,27 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           onUpdate('warning', { message: 'Progress ledger has unresolved rows; continuing.' });
           this._persist(tabId);
           continue;
+        }
+        const planOnlyDecision = this._planOnlyTerminalDecision(tabId, fullText);
+        if (planOnlyDecision?.retry) {
+          messages.push(this._withResponseItems({ role: 'assistant', content: fullText }, responseItems, reasoningContent, provider));
+          messages.push({ role: 'user', content: planOnlyDecision.nudge });
+          // Streamed plan text already landed via text_delta. Replace it before
+          // the recovery turn so later deltas do not append onto the plan and
+          // the final done summary is not blocked by a non-empty bubble.
+          onUpdate('text', { content: '', replace: true });
+          onUpdate('warning', { message: 'Plan-only response was rejected; continuing into execution.' });
+          this._persist(tabId);
+          continue;
+        }
+        if (planOnlyDecision?.failure) {
+          messages.push({ role: 'assistant', content: planOnlyDecision.failure });
+          // Replace any rejected plan text already emitted as streaming deltas
+          // so the visible terminal content matches the failed run result.
+          onUpdate('text', { content: planOnlyDecision.failure, replace: true });
+          onUpdate('warning', { message: planOnlyDecision.failure });
+          this._persist(tabId);
+          return finish(planOnlyDecision.failure, planOnlyDecision.status || 'plan_only_output');
         }
         if (costStopMessage) {
           onUpdate('text_delta', { content: `\n\n${costStopMessage}` });

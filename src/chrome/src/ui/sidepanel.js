@@ -5035,6 +5035,8 @@ async function sendMessage(extraChatParams = {}) {
       requestId,
       text,
       mode: modeForSend,
+      locale: getLocale(),
+      intentFailureMessage: t('sp.plan.intent_unavailable'),
       apiMutationsAllowed: apiMutationsAllowedForSend,
       ...(runCaptureDirective ? {
         runCapture: {
@@ -5455,11 +5457,11 @@ function handleAgentUpdateMessage(msg) {
       break;
 
     case 'text':
-      // Empty content means "the model returned nothing new at this step".
-      // Don't wipe any previously-rendered assistant text — earlier steps
-      // may already have put useful intermediate prose in the bubble.
-      if (currentAssistantEl && data.content) {
-        renderAssistantTextUpdate(currentAssistantEl, data.content);
+      // Empty content usually means "nothing new" — keep prior prose. Exception:
+      // replace:true with empty content clears a rejected streamed terminal
+      // (e.g. plan-only recovery) so the bubble is free for the real summary.
+      if (currentAssistantEl && (data.content || data.replace === true)) {
+        renderAssistantTextUpdate(currentAssistantEl, data.content || '', { replace: data.replace === true });
       }
       break;
 
@@ -6277,7 +6279,7 @@ function clearAssistantTextStreamState(assistantEl) {
   delete textEl.dataset.suppressToolCallStream;
 }
 
-function renderAssistantTextUpdate(assistantEl, content) {
+function renderAssistantTextUpdate(assistantEl, content, options = {}) {
   const textEl = assistantEl.querySelector('.message-text');
   if (!textEl) return;
 
@@ -6299,7 +6301,18 @@ function renderAssistantTextUpdate(assistantEl, content) {
   const streamedText = getStreamedAssistantText(textEl);
   const isDuplicateStreamFinal = streamedText && streamedText === String(content);
 
-  if (verboseMode && !isDuplicateStreamFinal) {
+  if (options.replace === true) {
+    // A rejected streamed terminal must replace its already-rendered deltas
+    // even in Verbose mode; appending would leave the invalid plan visible.
+    // Empty content clears the bubble (plan-only retry before recovery tools).
+    if (content) {
+      textEl.innerHTML = formatMarkdown(content);
+      streamedAssistantTextByEl.set(textEl, String(content));
+    } else {
+      textEl.textContent = '';
+      clearStreamedAssistantText(textEl);
+    }
+  } else if (verboseMode && !isDuplicateStreamFinal) {
     // Verbose mode: append each non-streamed turn as its own paragraph so
     // intermediate prose is preserved alongside the steps log. Streaming
     // finals are already visible live, so format the existing stream instead

@@ -1559,7 +1559,11 @@ async function handleMessage(msg, sender) {
           await contextMenuStorage.clear(msg.contextMenuClear.tabId, msg.contextMenuClear.promptId);
         }
 
-        const runOptions = msg.recommendedAction ? { recommendedAction: msg.recommendedAction } : {};
+        const runOptions = {
+          ...(msg.recommendedAction ? { recommendedAction: msg.recommendedAction } : {}),
+          locale: msg.locale,
+          intentFailureMessage: msg.intentFailureMessage,
+        };
         result = await agent.processMessage(tabId, msg.text, (type, data) => {
           updates.push({ type, data });
           sendAgentUpdate(tabId, runUi.requestId, type, data);
@@ -1617,7 +1621,11 @@ async function handleMessage(msg, sender) {
       let result = '';
       let runError = null;
       try {
-        const runOptions = msg.recommendedAction ? { recommendedAction: msg.recommendedAction } : {};
+        const runOptions = {
+          ...(msg.recommendedAction ? { recommendedAction: msg.recommendedAction } : {}),
+          locale: msg.locale,
+          intentFailureMessage: msg.intentFailureMessage,
+        };
         result = await agent.processMessageStream(tabId, msg.text, (type, data) => {
           if (type === 'error') userMemoryTurnHadError = true;
           sendAgentUpdate(tabId, runUi.requestId, type, data);
