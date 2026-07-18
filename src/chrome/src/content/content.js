@@ -567,48 +567,77 @@
     }
   }
 
-  const _MUTATING_ACTION_TERMS = [
+  function _normalizeActionText(value) {
+    return String(value || '')
+      .normalize('NFKC')
+      .toLocaleLowerCase()
+      .normalize('NFKD')
+      .replace(/\p{M}/gu, '');
+  }
+
+  // Keyword blocklist is a last-line gate, not complete safety. Prefer
+  // structural gates (native/form/stateful/interactive descendant) first.
+  // Expanded commercial / social verbs reduce silent double-click on slow
+  // handlers; non-covered languages still rely on structural exclusions.
+  const _MUTATING_ACTION_TERMS_RAW = [
     // English
     'delete', 'remove', 'purchase', 'checkout', 'publish', 'follow',
     'unfollow', 'submit', 'confirm', 'approve',
-    'reject', 'archive',
+    'reject', 'archive', 'order', 'book', 'accept', 'invite', 'sign',
+    'tweet', 'subscribe', 'unsubscribe', 'transfer', 'donate', 'tip',
+    'register', 'install', 'unlock', 'ban', 'block', 'report', 'like',
+    'unlike', 'share', 'retweet', 'purchase now', 'buy now', 'place order',
     // Turkish
     'gönder', 'sil', 'kaldır', 'öde', 'satın al', 'yayınla', 'paylaş',
-    'takip et', 'takibi bırak', 'onayla', 'reddet', 'arşivle',
+    'takip et', 'takibi bırak', 'onayla', 'reddet', 'arşivle', 'sipariş',
+    'kabul et', 'davet', 'kaydol', 'abone',
     // French, Spanish, German, Italian, Portuguese, Dutch
     'envoyer', 'supprimer', 'retirer', 'payer', 'acheter', 'publier',
     'suivre', 'se désabonner', 'confirmer', 'approuver', 'rejeter', 'archiver',
+    'commander', 'réserver', 'accepter', 's\'inscrire',
     'enviar', 'eliminar', 'quitar', 'pagar', 'comprar', 'publicar', 'seguir',
     'dejar de seguir', 'confirmar', 'aprobar', 'rechazar', 'archivar',
+    'pedir', 'reservar', 'aceptar', 'registrarse',
     'senden', 'löschen', 'entfernen', 'bezahlen', 'kaufen', 'veröffentlichen',
     'folgen', 'entfolgen', 'bestätigen', 'genehmigen', 'ablehnen', 'archivieren',
+    'bestellen', 'buchen', 'akzeptieren', 'anmelden',
     'invia', 'eliminare', 'rimuovere', 'pagare', 'acquistare', 'pubblicare',
     'seguire', 'smettere di seguire', 'confermare', 'approvare', 'rifiutare',
-    'archiviare', 'excluir', 'remover', 'deixar de seguir', 'aprovar',
-    'rejeitar', 'arquivar', 'verzenden', 'verwijderen', 'betalen', 'kopen',
+    'archiviare', 'ordinare', 'prenotare', 'accettare',
+    'excluir', 'remover', 'deixar de seguir', 'aprovar',
+    'rejeitar', 'arquivar', 'pedir', 'reservar', 'aceitar',
+    'verzenden', 'verwijderen', 'betalen', 'kopen',
     'publiceren', 'volgen', 'ontvolgen', 'bevestigen', 'goedkeuren',
-    'afwijzen', 'archiveren',
+    'afwijzen', 'archiveren', 'bestellen', 'boeken', 'accepteren',
     // Polish, Russian, Arabic, Hindi, Indonesian, Vietnamese
     'wyślij', 'usuń', 'zapłać', 'kup', 'opublikuj', 'obserwuj',
     'przestań obserwować', 'potwierdź', 'zatwierdź', 'odrzuć', 'archiwizuj',
+    'zamów', 'zarezerwuj', 'zaakceptuj',
     'отправить', 'удалить', 'оплатить', 'купить', 'опубликовать',
     'подписаться', 'отписаться', 'подтвердить', 'одобрить', 'отклонить',
-    'архивировать', 'إرسال', 'حذف', 'إزالة', 'دفع', 'شراء', 'نشر', 'متابعة',
-    'إلغاء المتابعة', 'تأكيد', 'موافقة', 'رفض', 'أرشفة', 'भेजें', 'हटाएं',
+    'архивировать', 'заказать', 'принять', 'зарегистрироваться',
+    'إرسال', 'حذف', 'إزالة', 'دفع', 'شراء', 'نشر', 'متابعة',
+    'إلغاء المتابعة', 'تأكيد', 'موافقة', 'رفض', 'أرشفة', 'طلب', 'قبول',
+    'भेजें', 'हटाएं',
     'भुगतान', 'खरीदें', 'प्रकाशित करें', 'फ़ॉलो', 'अनफ़ॉलो', 'पुष्टि',
-    'स्वीकृत', 'अस्वीकार', 'संग्रह', 'kirim', 'hapus', 'bayar', 'beli',
+    'स्वीकृत', 'अस्वीकार', 'संग्रह', 'ऑर्डर', 'स्वीकार',
+    'kirim', 'hapus', 'bayar', 'beli',
     'terbitkan', 'ikuti', 'berhenti mengikuti', 'konfirmasi', 'setujui',
-    'tolak', 'arsipkan', 'gửi', 'xóa', 'thanh toán', 'mua', 'đăng',
+    'tolak', 'arsipkan', 'pesan', 'terima', 'daftar',
+    'gửi', 'xóa', 'thanh toán', 'mua', 'đăng',
     'theo dõi', 'bỏ theo dõi', 'xác nhận', 'phê duyệt', 'từ chối', 'lưu trữ',
+    'đặt hàng', 'chấp nhận',
     // Chinese, Japanese, Korean (substring matching is intentional).
     '发送', '删除', '移除', '支付', '购买', '发布', '关注', '取消关注', '确认',
-    '批准', '拒绝', '归档', '送信', '削除', '支払', '購入', '公開', 'フォロー',
-    'フォロー解除', '確認', '承認', '拒否', 'アーカイブ', '보내기', '삭제',
+    '批准', '拒绝', '归档', '下单', '接受', '订阅', '登録',
+    '送信', '削除', '支払', '購入', '公開', 'フォロー',
+    'フォロー解除', '確認', '承認', '拒否', 'アーカイブ', '注文', '予約', '承諾',
+    '보내기', '삭제',
     '제거', '결제', '구매', '게시', '팔로우', '언팔로우', '확인', '승인',
-    '거부', '보관',
+    '거부', '보관', '주문', '수락', '구독',
   ];
 
-  const _DOWNLOAD_ACTION_TERMS = [
+  const _DOWNLOAD_ACTION_TERMS_RAW = [
     'download', 'save as', 'export', 'indir', 'farklı kaydet', 'dışa aktar',
     'télécharger', 'enregistrer sous', 'exporter', 'descargar', 'guardar como',
     'exportar', 'herunterladen', 'speichern unter', 'exportieren', 'scarica',
@@ -622,29 +651,37 @@
     /^post(?:$|\s+(?:a\s+)?(?:message|update|comment|reply|story|photo|video|status|listing|job|now)\b)/u,
     /^pay(?:$|\s+(?:bill|invoice|balance|amount|with|via|now)\b)/u,
     /^buy(?:$|\s+(?:item|product|plan|subscription|ticket|tickets|now)\b)/u,
+    /^order(?:$|\s+(?:now|lunch|food|items?|online)\b)/u,
+    /^book(?:$|\s+(?:now|a\s+)?(?:table|room|flight|ticket|tickets|appointment)?\b)/u,
+    /^accept(?:$|\s+(?:invite|invitation|request|offer|terms)\b)/u,
+    /^sign(?:$|\s+(?:up|in|out|the\b|here)\b)/u,
+    /^tweet(?:$|\s)/u,
+    /^share(?:$|\s+(?:now|post|link|with)\b)/u,
   ];
 
-  function _normalizeActionText(value) {
-    return String(value || '')
-      .normalize('NFKC')
-      .toLocaleLowerCase()
-      .normalize('NFKD')
-      .replace(/\p{M}/gu, '');
-  }
+  // Pre-normalize term lists once — click_ax / ax_resolve_rect hit this path
+  // multiple times per click and re-normalizing ~200 terms is pure waste.
+  const _MUTATING_ACTION_TERMS = _MUTATING_ACTION_TERMS_RAW.map(term => ({
+    term: _normalizeActionText(term),
+    noWordBoundary: /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/u.test(term),
+  })).filter(entry => entry.term);
+  const _DOWNLOAD_ACTION_TERMS = _DOWNLOAD_ACTION_TERMS_RAW.map(term => ({
+    term: _normalizeActionText(term),
+    noWordBoundary: /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/u.test(term),
+  })).filter(entry => entry.term);
 
-  function _hasActionTerm(value, terms) {
+  function _hasActionTerm(value, preparedTerms) {
     const text = _normalizeActionText(value);
     if (!text) return false;
     const isWordChar = char => !!char && /[\p{L}\p{N}]/u.test(char);
-    for (const rawTerm of terms) {
-      const term = _normalizeActionText(rawTerm);
+    for (const entry of preparedTerms) {
+      const term = entry.term;
       let index = text.indexOf(term);
       while (index >= 0) {
-        const scriptWithoutWordBoundaries = /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/u.test(term);
         const before = index > 0 ? text[index - 1] : '';
         const afterIndex = index + term.length;
         const after = afterIndex < text.length ? text[afterIndex] : '';
-        if (scriptWithoutWordBoundaries || (!isWordChar(before) && !isWordChar(after))) return true;
+        if (entry.noWordBoundary || (!isWordChar(before) && !isWordChar(after))) return true;
         index = text.indexOf(term, index + term.length);
       }
     }
@@ -2988,17 +3025,17 @@
           }
           try { el.scrollIntoView({ block: 'center', inline: 'center' }); } catch {}
           try { el.focus({ preventScroll: true }); } catch {}
+          // Identity only (tag:role:label) — must match agent-side
+          // _clickAxActiveIdentity / _clickProgressSnapshot.active so layout
+          // shift cannot turn preparatory focus into false "focus" proof.
           const preparedActive = (() => {
             try {
               const active = document.activeElement;
               if (!active || active === document.body || active === document.documentElement) return '';
-              const activeRect = active.getBoundingClientRect?.();
               return [
                 active.tagName || '',
                 active.getAttribute?.('role') || '',
                 active.getAttribute?.('aria-label') || active.getAttribute?.('title') || active.id || '',
-                Math.round(activeRect?.x || 0),
-                Math.round(activeRect?.y || 0),
               ].join(':');
             } catch {
               return '';

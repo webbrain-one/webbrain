@@ -12428,13 +12428,49 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     return requests.find(relevant) || null;
   }
 
-  async _captureClickAxObservation(tabId, snapshot, sideEffectWatch, startedAt = Date.now()) {
+  async _captureClickAxObservation(tabId, snapshot, sideEffectWatch, startedAt = Date.now(), preparedActive = '') {
     return {
       startedAt,
       snapshot: snapshot || await this._clickProgressSnapshot(tabId),
       tabIds: await this._clickAxTabSnapshot(),
       sideEffectWatch,
+      // Carry preparatory / pre-round focus identity so blur-only changes
+      // (e.g. CDP mousedown clearing an unrelated focused input) never count
+      // as proof that this click activated the page.
+      preparedActive: preparedActive || '',
     };
+  }
+
+  /**
+   * Focus identity for click progress: tag + role + stable label only.
+   * Coordinates are intentionally omitted — layout shift / smooth scroll
+   * would otherwise turn preparatory focus into false "focus" proof.
+   * Also strips legacy fingerprints that embedded rounded x/y.
+   */
+  _clickAxActiveIdentity(value) {
+    const raw = String(value || '');
+    if (!raw) return '';
+    const parts = raw.split(':');
+    if (
+      parts.length >= 5
+      && /^-?\d+$/.test(parts[parts.length - 1] || '')
+      && /^-?\d+$/.test(parts[parts.length - 2] || '')
+    ) {
+      return parts.slice(0, -2).join(':');
+    }
+    return raw;
+  }
+
+  _clickAxFocusProvesProgress(beforeActive, afterActive, preparedActive) {
+    const before = this._clickAxActiveIdentity(beforeActive);
+    const after = this._clickAxActiveIdentity(afterActive);
+    const prepared = this._clickAxActiveIdentity(preparedActive);
+    if (before === after) return false;
+    // Blur-to-nothing is not evidence the click activated anything.
+    if (!after) return false;
+    // click_ax focuses its target before el.click(); that identity is not proof.
+    if (after === prepared) return false;
+    return true;
   }
 
   async _clickAxObservedSideEffect(tabId, baseline) {
@@ -12446,7 +12482,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const weakReasons = [];
     const safetyReasons = [];
     let focusChanged = false;
-    if (baseline.snapshot && snapshot && baseline.snapshot !== snapshot) {
+    // Unobservable when either snapshot is missing (e.g. debugger attach
+    // failed because DevTools is open). Callers must not treat that as a
+    // failed click — only as "cannot run the trusted fallback pipeline".
+    const observable = !!(baseline.snapshot && snapshot);
+    if (observable && baseline.snapshot !== snapshot) {
       try {
         const before = JSON.parse(baseline.snapshot);
         const after = JSON.parse(snapshot);
@@ -12454,8 +12494,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         for (const key of ['text', 'media', 'controls']) {
           if (before?.[key] !== after?.[key]) weakReasons.push(`page_${key}`);
         }
-        focusChanged = before?.active !== after?.active;
-        if (focusChanged && after?.active !== baseline.preparedActive) proofReasons.push('focus');
+        focusChanged = this._clickAxActiveIdentity(before?.active) !== this._clickAxActiveIdentity(after?.active);
+        if (this._clickAxFocusProvesProgress(before?.active, after?.active, baseline.preparedActive)) {
+          proofReasons.push('focus');
+        }
       } catch {
         weakReasons.push('page_snapshot');
       }
@@ -12473,7 +12515,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       proved: proofReasons.length > 0,
       weakEvidence: weakReasons.length > 0,
       safetyVeto: safetyReasons.length > 0,
-      observable: !!(baseline.snapshot && snapshot),
+      observable,
       reasons,
       proofReasons,
       weakReasons,
@@ -12490,17 +12532,128 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  async _observeClickAxSideEffect(tabId, baseline, { allowDelayed = true } = {}) {
-    await this._clickAxDelay(250);
+  /**
+   * Observe post-click side effects. Fixed sleeps alone misclassify slow SPA
+   * handlers; progressive polling keeps the upper bound but resolves early on
+   * the first strong proof or safety veto.
+   */
+  async _observeClickAxSideEffect(tabId, baseline, {
+    allowDelayed = true,
+    firstDelayMs = 250,
+    pollMs = 150,
+    maxMs = 1250,
+  } = {}) {
+    // No page snapshot available (debugger attach failed). Do not burn a
+    // 250–1250ms wait budget on every click_ax just to re-discover that.
+    if (!baseline?.snapshot) {
+      return this._clickAxObservedSideEffect(tabId, baseline);
+    }
+    const started = Date.now();
+    await this._clickAxDelay(allowDelayed ? firstDelayMs : Math.min(firstDelayMs, 250));
     let observed = await this._clickAxObservedSideEffect(tabId, baseline);
     if (!allowDelayed || observed.proved || observed.safetyVeto || !observed.observable) return observed;
-    await this._clickAxDelay(500);
-    observed = await this._clickAxObservedSideEffect(tabId, baseline);
+    while (Date.now() - started < maxMs) {
+      await this._clickAxDelay(pollMs);
+      observed = await this._clickAxObservedSideEffect(tabId, baseline);
+      if (observed.proved || observed.safetyVeto || !observed.observable) return observed;
+    }
     return observed;
   }
 
   _clickAxFinalSettleMs() {
-    return 500;
+    return 800;
+  }
+
+  _clickAxAddObservedHint(response, hint) {
+    if (!response || !hint) return;
+    response.observedHints = [
+      ...new Set([...(response.observedHints || []), hint]),
+    ];
+  }
+
+  _clickAxAddObservedHints(response, observation) {
+    if (!observation?.weakReasons?.length) return;
+    for (const reason of observation.weakReasons) this._clickAxAddObservedHint(response, reason);
+    if (observation.safetyReasons?.length) {
+      for (const reason of observation.safetyReasons) this._clickAxAddObservedHint(response, reason);
+    }
+  }
+
+  /**
+   * Shared synthetic/settled-round verdict. Safety vetoes suppress the trusted
+   * CDP retry but must not rewrite a previously-successful click_ax into
+   * success:false — the click's own mutation XHR is indistinguishable from
+   * concurrent traffic, and native/ineligible controls never needed a retry.
+   */
+  _assessClickAxObservationRound(response, observation, {
+    staticBlockedReason = '',
+    phase = 'synthetic',
+  } = {}) {
+    this._clickAxAddObservedHints(response, observation);
+    if (observation?.proved) {
+      return {
+        done: true,
+        value: {
+          ...response,
+          success: true,
+          trusted: false,
+          verified: true,
+          observedEffects: observation.proofReasons,
+        },
+      };
+    }
+    if (observation?.safetyVeto) {
+      const skip = 'concurrent tab, relevant network mutation, or download activity made an automatic trusted retry unsafe';
+      // Keep success:true. Downgrading working "Add to cart" clicks that fire
+      // their own POST within 400ms was a product regression.
+      return {
+        done: true,
+        value: {
+          ...response,
+          success: true,
+          trusted: false,
+          verified: false,
+          inconclusive: true,
+          observedEffects: observation.safetyReasons,
+          fallbackSkipped: staticBlockedReason || skip,
+          // Trace-only; avoid a hard error that pushes the model to retry an
+          // action that may already have mutated server state.
+          warning: staticBlockedReason
+            ? undefined
+            : 'Click side effects were concurrent with tab/network/download activity, so a trusted retry was skipped. Re-read the page before assuming the click failed.',
+        },
+      };
+    }
+    if (staticBlockedReason) {
+      return {
+        done: true,
+        value: {
+          ...response,
+          success: true,
+          trusted: false,
+          verified: false,
+          fallbackSkipped: staticBlockedReason,
+        },
+      };
+    }
+    if (!observation?.observable) {
+      // DevTools open / debugger attach failed: leave the original success
+      // alone and skip the fallback pipeline without model-facing noise.
+      return {
+        done: true,
+        value: {
+          ...response,
+          success: true,
+          trusted: false,
+          // Omit verified rather than verified:false so the model does not
+          // treat a working click as suspect.
+          fallbackSkipped: phase === 'settled'
+            ? 'page progress could not be observed safely during final settle'
+            : 'page progress could not be observed safely',
+        },
+      };
+    }
+    return { done: false };
   }
 
   async _resolveClickAxFallbackTarget(tabId, refId) {
@@ -12531,16 +12684,6 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       if (value && observation?.snapshot) value._clickAxAfterSnapshot = observation.snapshot;
       return value;
     };
-    const addObservedHint = hint => {
-      if (!hint) return;
-      response.observedHints = [
-        ...new Set([...(response.observedHints || []), hint]),
-      ];
-    };
-    const addObservedHints = observation => {
-      if (!observation?.weakReasons?.length) return;
-      for (const reason of observation.weakReasons) addObservedHint(reason);
-    };
     const strongStateOf = target => (
       target?.fallbackStrongState
       || target?.fallbackState
@@ -12548,7 +12691,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     );
     const weakStateOf = target => target?.fallbackWeakState || '';
     const addWeakTargetHint = (before, after) => {
-      if (before && after && before !== after) addObservedHint('target_state_weak');
+      if (before && after && before !== after) {
+        this._clickAxAddObservedHint(response, 'target_state_weak');
+      }
     };
     const targetStateBefore = response._fallbackStateBefore || '';
     const targetStateAfterImmediate = response._fallbackStateAfterImmediate || '';
@@ -12570,7 +12715,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     // click_ax focuses its target immediately before el.click(). That
     // preparatory focus is not evidence that the page handled the click;
     // any different focus transition caused by the page still is.
-    baseline.preparedActive = response._preparedActive || '';
+    baseline.preparedActive = this._clickAxActiveIdentity(response._preparedActive || '');
     delete response._preparedActive;
     delete response._syntheticClickStartedAt;
     delete response._fallbackStateBefore;
@@ -12593,42 +12738,23 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       return response;
     }
 
+    // Ineligible targets only pay a short first sample; eligible candidates
+    // use progressive polling so slow SPA handlers can still prove progress
+    // before a second trusted click is considered.
     const syntheticObservation = await this._observeClickAxSideEffect(
       tabId,
       baseline,
-      { allowDelayed: !fallbackStaticBlockedReason },
+      fallbackStaticBlockedReason
+        ? { allowDelayed: false, firstDelayMs: 250 }
+        : { allowDelayed: true, firstDelayMs: 250, pollMs: 150, maxMs: 1250 },
     );
-    addObservedHints(syntheticObservation);
-    if (syntheticObservation.proved) {
-      response.trusted = false;
-      response.verified = true;
-      response.observedEffects = syntheticObservation.proofReasons;
-      return withSnapshot(response, syntheticObservation);
-    }
-    if (syntheticObservation.safetyVeto) {
-      return withSnapshot({
-        ...response,
-        success: false,
-        noProgress: true,
-        inconclusive: true,
-        trusted: false,
-        verified: false,
-        observedEffects: syntheticObservation.safetyReasons,
-        fallbackSkipped: 'concurrent tab, relevant network mutation, or download activity made an automatic retry unsafe',
-        error: 'The synthetic click could not be verified because concurrent side effects made a trusted retry unsafe. Re-read the page before choosing another target.',
-      }, syntheticObservation);
-    }
-    if (fallbackStaticBlockedReason) {
-      response.trusted = false;
-      response.verified = false;
-      response.fallbackSkipped = fallbackStaticBlockedReason;
-      return withSnapshot(response, syntheticObservation);
-    }
-    if (!syntheticObservation.observable) {
-      response.trusted = false;
-      response.verified = false;
-      response.fallbackSkipped = 'page progress could not be observed safely';
-      return withSnapshot(response, syntheticObservation);
+    {
+      const assessed = this._assessClickAxObservationRound(
+        response,
+        syntheticObservation,
+        { staticBlockedReason: fallbackStaticBlockedReason, phase: 'synthetic' },
+      );
+      if (assessed.done) return withSnapshot(assessed.value, syntheticObservation);
     }
 
     let target = await this._resolveClickAxFallbackTarget(tabId, args?.ref_id);
@@ -12653,36 +12779,21 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       return withSnapshot(response, syntheticObservation);
     }
 
-    // Give async/toggle-style handlers one final settle interval. This wait
-    // is paid only by otherwise-eligible fallback candidates, not by normal
-    // productive click_ax calls.
-    await this._clickAxDelay(this._clickAxFinalSettleMs());
-    const settledObservation = await this._clickAxObservedSideEffect(tabId, baseline);
-    addObservedHints(settledObservation);
-    if (settledObservation.proved) {
-      response.trusted = false;
-      response.verified = true;
-      response.observedEffects = settledObservation.proofReasons;
-      return withSnapshot(response, settledObservation);
-    }
-    if (settledObservation.safetyVeto) {
-      return withSnapshot({
-        ...response,
-        success: false,
-        noProgress: true,
-        inconclusive: true,
-        trusted: false,
-        verified: false,
-        observedEffects: settledObservation.safetyReasons,
-        fallbackSkipped: 'concurrent tab, relevant network mutation, or download activity made an automatic retry unsafe',
-        error: 'The synthetic click could not be verified because concurrent side effects made a trusted retry unsafe. Re-read the page before choosing another target.',
-      }, settledObservation);
-    }
-    if (!settledObservation.observable) {
-      response.trusted = false;
-      response.verified = false;
-      response.fallbackSkipped = 'page progress could not be observed safely during final settle';
-      return withSnapshot(response, settledObservation);
+    // Final settle for eligible candidates only: progressive samples up to
+    // ~finalSettleMs so late DOM/URL/focus still suppress the second click.
+    const settleBudget = this._clickAxFinalSettleMs();
+    const settledObservation = await this._observeClickAxSideEffect(
+      tabId,
+      baseline,
+      { allowDelayed: true, firstDelayMs: Math.min(200, settleBudget), pollMs: 150, maxMs: settleBudget },
+    );
+    {
+      const assessed = this._assessClickAxObservationRound(
+        response,
+        settledObservation,
+        { phase: 'settled' },
+      );
+      if (assessed.done) return withSnapshot(assessed.value, settledObservation);
     }
 
     const settledTarget = await this._resolveClickAxFallbackTarget(tabId, args?.ref_id);
@@ -12734,12 +12845,25 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         error: 'The synthetic click produced no observable change, and the one permitted trusted fallback for this target was already used. Re-read the page and choose a different target.',
       }, settledObservation);
     }
+
+    // Pre-CDP focus identity must travel with the trusted-phase baseline so a
+    // mousedown that merely blurs an unrelated input is not treated as proof.
+    let preCdpActive = '';
+    try {
+      preCdpActive = this._clickAxActiveIdentity(JSON.parse(settledObservation.snapshot || '{}')?.active || '');
+    } catch {
+      preCdpActive = '';
+    }
     const fallbackBaseline = await this._captureClickAxObservation(
       tabId,
       settledObservation.snapshot,
       baseline.sideEffectWatch,
       Date.now(),
+      baseline.preparedActive || preCdpActive,
     );
+    // Prefer the live pre-CDP active as the "preparatory" identity for the
+    // trusted round: blur-only transitions from that identity are not proof.
+    fallbackBaseline.preparedActive = preCdpActive || baseline.preparedActive || '';
 
     let dispatchStage = 'attach';
     let dispatchedEvents = 0;
@@ -12781,8 +12905,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       }, settledObservation);
     }
 
-    const trustedObservation = await this._observeClickAxSideEffect(tabId, fallbackBaseline);
-    addObservedHints(trustedObservation);
+    const trustedObservation = await this._observeClickAxSideEffect(
+      tabId,
+      fallbackBaseline,
+      { allowDelayed: true, firstDelayMs: 250, pollMs: 150, maxMs: 1000 },
+    );
+    this._clickAxAddObservedHints(response, trustedObservation);
     let trustedTargetStateChanged = false;
     let trustedTargetWeakStateChanged = false;
     if (!trustedObservation.proved) {
@@ -12904,13 +13032,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           const active = (() => {
             const el = document.activeElement;
             if (!el || el === document.body || el === document.documentElement) return '';
-            const r = el.getBoundingClientRect?.();
+            // Identity only — no coordinates. Coordinate drift across the
+            // observation window must not manufacture false focus proof.
             return [
               el.tagName || '',
               el.getAttribute?.('role') || '',
               el.getAttribute?.('aria-label') || el.getAttribute?.('title') || el.id || '',
-              Math.round(r?.x || 0),
-              Math.round(r?.y || 0),
             ].join(':');
           })();
           return { url: location.href, text, media, controls, active };

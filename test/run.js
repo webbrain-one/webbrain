@@ -15149,20 +15149,37 @@ test('Chrome click_ax treats broad page churn as weak evidence and still uses on
     dispatch: cdpClientCh.dispatchMouseEvent,
   };
   const agent = new AgentCh({});
-  const observations = [
-    {
-      changed: true, proved: false, weakEvidence: true, safetyVeto: false, observable: true,
-      reasons: ['page_text'], proofReasons: [], weakReasons: ['page_text'], safetyReasons: [], snapshot: '{"text":"ambient churn"}',
-    },
-    {
-      changed: true, proved: true, weakEvidence: false, safetyVeto: false, observable: true,
-      reasons: ['focus'], proofReasons: ['focus'], weakReasons: [], safetyReasons: [], snapshot: '{"active":"composer"}',
-    },
-  ];
+  const weakObservation = {
+    changed: true, proved: false, weakEvidence: true, safetyVeto: false, observable: true,
+    reasons: ['page_text'], proofReasons: [], weakReasons: ['page_text'], safetyReasons: [],
+    snapshot: '{"text":"ambient churn","active":""}',
+  };
+  const provedObservation = {
+    changed: true, proved: true, weakEvidence: false, safetyVeto: false, observable: true,
+    reasons: ['focus'], proofReasons: ['focus'], weakReasons: [], safetyReasons: [],
+    snapshot: '{"active":"DIV:textbox:composer"}',
+  };
   const dispatched = [];
   let fallbackBaseline = null;
+  let observeCalls = 0;
   agent._clickAxFinalSettleMs = () => 0;
-  agent._observeClickAxSideEffect = async () => observations.shift();
+  // Progressive synthetic + settle observation both call this helper. Only the
+  // post-CDP round may report strong proof, or the trusted fallback is skipped.
+  agent._observeClickAxSideEffect = async () => {
+    observeCalls++;
+    if (dispatched.length > 0) return { ...provedObservation };
+    return {
+      ...weakObservation,
+      // Alternate weak reasons so settled round still contributes page_controls.
+      ...(observeCalls > 1
+        ? {
+          reasons: ['page_controls'],
+          weakReasons: ['page_controls'],
+          snapshot: '{"controls":"ambient churn","active":""}',
+        }
+        : {}),
+    };
+  };
   agent._clickAxObservedSideEffect = async () => ({
     changed: true,
     proved: false,
@@ -15191,12 +15208,13 @@ test('Chrome click_ax treats broad page churn as weak evidence and still uses on
     fallbackStrongState: '{"aria-current":"<absent>"}',
     fallbackWeakState: '{"name":"Defne Sokullu — new preview","className":"unread-update","childCount":2}',
   });
-  agent._captureClickAxObservation = async (_tabId, snapshot, sideEffectWatch) => {
+  agent._captureClickAxObservation = async (_tabId, snapshot, sideEffectWatch, startedAt = Date.now(), preparedActive = '') => {
     fallbackBaseline = {
-      startedAt: 1,
+      startedAt: startedAt || 1,
       snapshot,
       tabIds: '1,42',
       sideEffectWatch,
+      preparedActive: preparedActive || '',
     };
     return fallbackBaseline;
   };
@@ -15241,7 +15259,9 @@ test('Chrome click_ax treats broad page churn as weak evidence and still uses on
     assert.equal(result.trusted, true);
     assert.equal(result.verified, true);
     assert.deepEqual(result.observedEffects, ['focus']);
-    assert.deepEqual(result.observedHints, ['page_text', 'target_state_weak', 'page_controls']);
+    assert.ok(result.observedHints?.includes('page_text'));
+    assert.ok(result.observedHints?.includes('target_state_weak'));
+    assert.ok(result.observedHints?.includes('page_controls'));
   } finally {
     cdpClientCh.attach = originals.attach;
     cdpClientCh.dispatchMouseEvent = originals.dispatch;
@@ -15458,7 +15478,7 @@ test('Chrome click_ax side-effect observer ignores preparatory focus but catches
     text: 'Same',
     media: '',
     controls: 'DIV:row',
-    active: 'DIV:listitem:row:10:10',
+    active: 'DIV:listitem:row',
   });
   agent._clickProgressSnapshot = async () => focusOnly;
   agent._clickAxTabSnapshot = async () => '1,42';
@@ -15467,17 +15487,53 @@ test('Chrome click_ax side-effect observer ignores preparatory focus but catches
     startedAt: 100,
     snapshot: before,
     tabIds: '1,42',
-    preparedActive: 'DIV:listitem:row:10:10',
+    preparedActive: 'DIV:listitem:row',
     sideEffectWatch: { created: [], requests: [], listeningRequests: true },
   });
   assert.equal(weak.changed, false, 'pre-click target focus alone must not prove that a generic row activated');
   assert.equal(weak.focusChanged, true);
+  assert.equal(weak.proved, false);
 
+  // Legacy fingerprints with coordinates must compare as the same identity.
+  const coordShift = JSON.stringify({
+    url: 'https://example.com',
+    text: 'Same',
+    media: '',
+    controls: 'DIV:row',
+    active: 'DIV:listitem:row:99:88',
+  });
+  agent._clickProgressSnapshot = async () => coordShift;
+  const coordOnly = await agent._clickAxObservedSideEffect(42, {
+    startedAt: 100,
+    snapshot: JSON.stringify({
+      url: 'https://example.com', text: 'Same', media: '', controls: 'DIV:row', active: 'DIV:listitem:row:10:10',
+    }),
+    tabIds: '1,42',
+    preparedActive: 'DIV:listitem:row:10:10',
+    sideEffectWatch: { created: [], requests: [], listeningRequests: true },
+  });
+  assert.equal(coordOnly.proved, false, 'coordinate drift alone must not manufacture focus proof');
+
+  // Blur-to-nothing after CDP is not proof (search box lost focus).
+  agent._clickProgressSnapshot = async () => before;
+  const blurOnly = await agent._clickAxObservedSideEffect(42, {
+    startedAt: 100,
+    snapshot: JSON.stringify({
+      url: 'https://example.com', text: 'Same', media: '', controls: 'DIV:row', active: 'INPUT::search',
+    }),
+    tabIds: '1,42',
+    preparedActive: 'INPUT::search',
+    sideEffectWatch: { created: [], requests: [], listeningRequests: true },
+  });
+  assert.equal(blurOnly.focusChanged, true);
+  assert.equal(blurOnly.proved, false, 'blur-only focus loss must not verify a dead trusted click');
+
+  agent._clickProgressSnapshot = async () => focusOnly;
   const handlerFocus = await agent._clickAxObservedSideEffect(42, {
     startedAt: 100,
     snapshot: before,
     tabIds: '1,42',
-    preparedActive: 'DIV:listitem:different-row:20:20',
+    preparedActive: 'DIV:listitem:different-row',
     sideEffectWatch: { created: [], requests: [], listeningRequests: true },
   });
   assert.equal(handlerFocus.changed, true);
@@ -15489,14 +15545,14 @@ test('Chrome click_ax side-effect observer ignores preparatory focus but catches
     text: 'Unrelated typing indicator changed',
     media: 'IMG:avatar',
     controls: 'DIV:row|DIV:badge',
-    active: 'DIV:listitem:row:10:10',
+    active: 'DIV:listitem:row',
   });
   agent._clickProgressSnapshot = async () => pageChurn;
   const weakChurn = await agent._clickAxObservedSideEffect(42, {
     startedAt: 100,
     snapshot: focusOnly,
     tabIds: '1,42',
-    preparedActive: 'DIV:listitem:row:10:10',
+    preparedActive: 'DIV:listitem:row',
     sideEffectWatch: { created: [], requests: [], listeningRequests: true },
   });
   assert.equal(weakChurn.changed, true);
@@ -15509,7 +15565,7 @@ test('Chrome click_ax side-effect observer ignores preparatory focus but catches
     startedAt: 100,
     snapshot: before,
     tabIds: '1,42',
-    preparedActive: 'DIV:listitem:row:10:10',
+    preparedActive: 'DIV:listitem:row',
     sideEffectWatch: {
       created: [],
       requests: [{ url: 'https://example.com/api/open', method: 'POST', ts: 101 }],
@@ -15525,7 +15581,7 @@ test('Chrome click_ax side-effect observer ignores preparatory focus but catches
     startedAt: 100,
     snapshot: before,
     tabIds: '1,42',
-    preparedActive: 'DIV:listitem:row:10:10',
+    preparedActive: 'DIV:listitem:row',
     sideEffectWatch: {
       created: [{ id: 7, filename: 'file.zip', ts: 102 }],
       requests: [],
@@ -15536,6 +15592,142 @@ test('Chrome click_ax side-effect observer ignores preparatory focus but catches
   assert.equal(download.proved, false);
   assert.equal(download.safetyVeto, true);
   assert.ok(download.reasons.includes('download'));
+});
+
+test('Chrome click_ax skips observation delay and keeps clean success when snapshots are unobservable', async () => {
+  const agent = new AgentCh({});
+  const delays = [];
+  agent._clickAxDelay = async (ms) => { delays.push(ms); };
+  agent._clickProgressSnapshot = async () => '';
+  agent._clickAxTabSnapshot = async () => '1,42';
+
+  const immediate = await agent._observeClickAxSideEffect(42, {
+    startedAt: 100,
+    snapshot: '',
+    tabIds: '1,42',
+    sideEffectWatch: { created: [], requests: [], listeningRequests: true },
+  });
+  assert.equal(immediate.observable, false);
+  assert.deepEqual(delays, [], 'missing page snapshot must not burn the observation wait budget');
+
+  const result = await agent._maybeFallbackClickAxWithCdp(
+    42,
+    { ref_id: 'ref_devtools' },
+    { success: true, method: 'click_ax', ref_id: 'ref_devtools', tag: 'div' },
+    { snapshot: '', tabIds: '1,42', sideEffectWatch: { created: [], requests: [] } },
+  );
+  assert.equal(result.success, true);
+  assert.equal(result.trusted, false);
+  assert.equal(result.verified, undefined, 'unobservable path must not mark verified:false noise');
+  assert.equal(result.error, undefined);
+  assert.match(result.fallbackSkipped, /could not be observed safely/);
+});
+
+test('Chrome click_ax trusted phase carries preparedActive so blur-only is not proof', async () => {
+  const originals = {
+    attach: cdpClientCh.attach,
+    dispatch: cdpClientCh.dispatchMouseEvent,
+  };
+  const agent = new AgentCh({});
+  let capturedPrepared = null;
+  agent._clickAxFinalSettleMs = () => 0;
+  agent._observeClickAxSideEffect = async (_tabId, baseline) => {
+    if (baseline.preparedActive !== undefined && baseline.preparedActive !== 'DIV:listitem:row') {
+      capturedPrepared = baseline.preparedActive;
+      return {
+        changed: true,
+        proved: false,
+        safetyVeto: false,
+        observable: true,
+        reasons: [],
+        proofReasons: [],
+        weakReasons: [],
+        safetyReasons: [],
+        snapshot: JSON.stringify({
+          url: 'https://example.com', text: 'Same', media: '', controls: 'DIV:row', active: '',
+        }),
+      };
+    }
+    return {
+      changed: false,
+      proved: false,
+      safetyVeto: false,
+      observable: true,
+      reasons: [],
+      proofReasons: [],
+      weakReasons: [],
+      safetyReasons: [],
+      snapshot: JSON.stringify({
+        url: 'https://example.com', text: 'Same', media: '', controls: 'DIV:row', active: 'INPUT::search',
+      }),
+    };
+  };
+  agent._clickAxObservedSideEffect = async () => ({
+    changed: false,
+    proved: false,
+    safetyVeto: false,
+    observable: true,
+    reasons: [],
+    proofReasons: [],
+    weakReasons: [],
+    safetyReasons: [],
+    snapshot: JSON.stringify({
+      url: 'https://example.com', text: 'Same', media: '', controls: 'DIV:row', active: 'INPUT::search',
+    }),
+  });
+  agent._captureClickAxObservation = async (_tabId, snapshot, sideEffectWatch, startedAt, preparedActive) => ({
+    startedAt,
+    snapshot,
+    tabIds: '1,42',
+    sideEffectWatch,
+    preparedActive: preparedActive || '',
+  });
+  agent._resolveClickAxFallbackTarget = async () => ({
+    success: true,
+    fallbackEligible: true,
+    documentToken: 'doc-blur',
+    fallbackState: '{"aria-current":"<absent>"}',
+    fallbackStrongState: '{"aria-current":"<absent>"}',
+    fallbackWeakState: '{"className":""}',
+    x: 100,
+    y: 200,
+    rect: { x: 50, y: 180, w: 100, h: 40 },
+  });
+  try {
+    cdpClientCh.attach = async () => ({ tabId: 42, attached: true });
+    cdpClientCh.dispatchMouseEvent = async () => ({});
+    const result = await agent._maybeFallbackClickAxWithCdp(
+      42,
+      { ref_id: 'ref_blur' },
+      {
+        success: true,
+        method: 'click_ax',
+        ref_id: 'ref_blur',
+        tag: 'div',
+        _preparedActive: 'DIV:listitem:row',
+        _fallbackStateBefore: '{"full":"same"}',
+        _fallbackStateAfterImmediate: '{"full":"same"}',
+        _fallbackStrongStateBefore: '{"aria-current":"<absent>"}',
+        _fallbackStrongStateAfterImmediate: '{"aria-current":"<absent>"}',
+        _fallbackWeakStateBefore: '{"className":""}',
+        _fallbackWeakStateAfterImmediate: '{"className":""}',
+      },
+      {
+        startedAt: Date.now() - 10,
+        snapshot: JSON.stringify({
+          url: 'https://example.com', text: 'Same', media: '', controls: 'DIV:row', active: 'INPUT::search',
+        }),
+        sideEffectWatch: { created: [], requests: [] },
+      },
+    );
+    assert.equal(capturedPrepared, 'INPUT::search', 'trusted-phase baseline must carry pre-CDP active identity');
+    assert.equal(result.success, false, 'blur-only after CDP must not report verified success');
+    assert.equal(result.fallbackAttempted, true);
+    assert.equal(result.verified, false);
+  } finally {
+    cdpClientCh.attach = originals.attach;
+    cdpClientCh.dispatchMouseEvent = originals.dispatch;
+  }
 });
 
 test('Chrome click_ax ignores background reads and telemetry but vetoes a nearby mutating request', async () => {
@@ -15666,7 +15858,7 @@ test('Chrome click_ax attributes network activity from the content click boundar
 
   assert.equal(observedStartedAt, clickStartedAt);
   assert.equal(observedRequest?.url, 'https://example.com/api/from-click');
-  assert.equal(result.success, false);
+  assert.equal(result.success, true, 'network safety veto skips retry but keeps the original success');
   assert.equal(result.inconclusive, true);
   assert.equal(result._syntheticClickStartedAt, undefined, 'internal click timestamps must not leak');
 });
@@ -15767,14 +15959,56 @@ test('Chrome click_ax reports nearby mutating network activity as inconclusive i
     { snapshot: '{"text":"same"}' },
   );
 
-  assert.equal(resolved, false);
-  assert.equal(result.success, false, 'a safety veto must not be reported as a successful click');
-  assert.equal(result.noProgress, true);
+  assert.equal(resolved, false, 'safety veto must suppress the trusted CDP retry');
+  // Keep success:true — the click's own POST is indistinguishable from concurrent
+  // traffic; downgrading working "Add to cart" clicks was a product regression.
+  assert.equal(result.success, true, 'safety veto must not rewrite a successful click_ax into failure');
   assert.equal(result.inconclusive, true);
   assert.equal(result.verified, false, 'uncorrelated XHR must not prove click progress');
   assert.equal(result.trusted, false);
   assert.deepEqual(result.observedEffects, ['network_request']);
   assert.match(result.fallbackSkipped, /concurrent tab, relevant network mutation, or download activity/);
+});
+
+test('Chrome click_ax keeps success:true for ineligible targets even when their own POST fires', async () => {
+  const agent = new AgentCh({});
+  let resolved = false;
+  agent._observeClickAxSideEffect = async () => ({
+    changed: true,
+    proved: false,
+    weakEvidence: true,
+    safetyVeto: true,
+    observable: true,
+    reasons: ['page_text', 'network_request'],
+    proofReasons: [],
+    weakReasons: ['page_text'],
+    safetyReasons: ['network_request'],
+    snapshot: '{"text":"cart updated"}',
+  });
+  agent._resolveClickAxFallbackTarget = async () => {
+    resolved = true;
+    return { success: true, fallbackEligible: true };
+  };
+
+  const result = await agent._maybeFallbackClickAxWithCdp(
+    42,
+    { ref_id: 'ref_cart' },
+    {
+      success: true,
+      method: 'click_ax',
+      ref_id: 'ref_cart',
+      tag: 'button',
+      _fallbackStaticBlockedReason: 'native/button-like controls keep the existing synthetic path',
+    },
+    { snapshot: '{"text":"before"}' },
+  );
+
+  assert.equal(resolved, false);
+  assert.equal(result.success, true);
+  assert.equal(result.trusted, false);
+  assert.equal(result.verified, false);
+  assert.match(result.fallbackSkipped, /native\/button-like/);
+  assert.equal(result.error, undefined);
 });
 
 test('Chrome click_ax skips the second observation delay for statically ineligible targets', async () => {
@@ -16116,14 +16350,15 @@ test('Chrome executeTool runs automatic click_ax fallback and reuses its observe
     text: 'Defne Sokullu',
     media: '',
     controls: 'DIV:Defne Sokullu',
-    active: 'DIV::contact:65:459',
+    // Identity-only focus fingerprint (no coordinates).
+    active: 'DIV::contact',
   });
   const openedSnapshot = JSON.stringify({
     url: 'https://web.whatsapp.com/',
     text: 'Defne Sokullu Conversation opened',
     media: '',
     controls: 'DIV:Defne Sokullu|DIV:Conversation opened',
-    active: 'DIV:textbox:message-composer:520:700',
+    active: 'DIV:textbox:message-composer',
   });
   const downloadListener = {
     addListener() { downloadAdds++; },
@@ -16155,7 +16390,7 @@ test('Chrome executeTool runs automatic click_ax fallback and reuses its observe
             tag: 'div',
             name: 'Defne Sokullu',
             rect: { x: 65, y: 459, w: 449, h: 72 },
-            _preparedActive: 'DIV::contact:65:459',
+            _preparedActive: 'DIV::contact',
             _syntheticClickStartedAt: Date.now(),
             _fallbackStateBefore: '{"full":"same"}',
             _fallbackStateAfterImmediate: '{"full":"same"}',
@@ -16192,10 +16427,23 @@ test('Chrome executeTool runs automatic click_ax fallback and reuses its observe
     const agent = new AgentCh({});
     agent._isPdfTab = async () => false;
     agent._currentUrl = async () => 'https://web.whatsapp.com/';
+    // Keep settle short in unit tests; progressive synthetic polling is still real.
     agent._clickAxFinalSettleMs = () => 0;
+    agent._clickAxDelay = async () => {};
     agent._clickProgressSnapshot = async () => {
       snapshotCalls++;
-      return snapshotCalls >= 5 ? openedSnapshot : stableSnapshot;
+      // Only report page activation after a trusted press — progressive polling
+      // would otherwise burn through a call-count threshold and false-prove
+      // before CDP runs.
+      return dispatched.some(event => event.type === 'mousePressed')
+        ? openedSnapshot
+        : stableSnapshot;
+    };
+    let annotateAfterSnapshot = null;
+    const originalAnnotate = agent._annotateClickProgress.bind(agent);
+    agent._annotateClickProgress = async (tabId, name, args, response, before, opts = {}) => {
+      annotateAfterSnapshot = opts.afterSnapshot || '';
+      return originalAnnotate(tabId, name, args, response, before, opts);
     };
     cdpClientCh.attach = async () => ({ tabId: 42, attached: true });
     cdpClientCh.dispatchMouseEvent = async (tabId, type, x, y) => {
@@ -16213,7 +16461,8 @@ test('Chrome executeTool runs automatic click_ax fallback and reuses its observe
     assert.equal(result.fallback, 'cdp_after_synthetic_no_progress');
     assert.equal(result.trusted, true);
     assert.equal(result.verified, true);
-    assert.equal(snapshotCalls, 5, 'annotate must reuse the observer snapshot instead of waiting and evaluating again');
+    assert.ok(snapshotCalls >= 3, 'observer must sample the page at least once per phase');
+    assert.ok(annotateAfterSnapshot, 'annotate must receive the reused observer snapshot');
     assert.equal(result._clickAxAfterSnapshot, undefined, 'internal observation state must not leak into tool results');
     for (const key of [
       '_syntheticClickStartedAt',

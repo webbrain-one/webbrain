@@ -825,6 +825,8 @@ test('ax_resolve_rect: trusted fallback eligibility rejects interactive descenda
     native: content.match(/button "Native button" \[(ref_\d+)\]/)?.[1],
     destructive: content.match(/listitem "Delete account" \[(ref_\d+)\]/)?.[1],
     sendMessage: content.match(/listitem "Send message" \[(ref_\d+)\]/)?.[1],
+    orderLunch: content.match(/listitem "Order lunch" \[(ref_\d+)\]/)?.[1],
+    bookNow: content.match(/listitem "Book now" \[(ref_\d+)\]/)?.[1],
     indirectDestructive: content.match(/listitem "Delete account indirectly" \[(ref_\d+)\]/)?.[1],
     localizedDestructive: content.match(/listitem "Hesabı sil" \[(ref_\d+)\]/)?.[1],
     statefulRole: content.match(/treeitem "Expandable row" \[(ref_\d+)\]/)?.[1],
