@@ -906,6 +906,32 @@ test('ax_resolve_rect: trusted fallback eligibility rejects interactive descenda
   }
 });
 
+test('ax_resolve_rect: English action labels stay blocked under Turkish locale casing', async (page) => {
+  await page.addInitScript(() => {
+    const original = String.prototype.toLocaleLowerCase;
+    String.prototype.toLocaleLowerCase = function (...locales) {
+      return original.apply(this, locales.length ? locales : ['tr-TR']);
+    };
+  });
+  await setup(page, 'trusted-click-fallback.html');
+  const tree = await call(page, 'get_accessibility_tree', { filter: 'all', maxDepth: 10, maxChars: 20000 });
+  const content = String(tree?.pageContent || '');
+  const refs = {
+    install: content.match(/listitem "Install app" \[(ref_\d+)\]/)?.[1],
+    invite: content.match(/listitem "Invite teammate" \[(ref_\d+)\]/)?.[1],
+  };
+  for (const [label, ref] of Object.entries(refs)) {
+    if (!ref) throw new Error(`missing ${label} ref in Turkish-locale AX tree: ${content}`);
+    const result = await call(page, 'ax_resolve_rect', { ref_id: ref, forClickFallback: true });
+    if (
+      result?.fallbackEligible !== false
+      || !/potentially mutating/.test(result.fallbackBlockedReason || '')
+    ) {
+      throw new Error(`${label} must remain blocked regardless of default locale casing: ${JSON.stringify(result)}`);
+    }
+  }
+});
+
 test('click_ax: same-page anchor reports hash and scroll completion', async (page) => {
   await setup(page, 'anchor-click.html');
   const before = await page.evaluate(() => ({ hash: location.hash, scrollY: window.scrollY }));

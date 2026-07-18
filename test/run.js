@@ -15779,6 +15779,26 @@ test('Chrome click_ax ignores background reads and telemetry but vetoes a nearby
     method: 'POST',
     ts: 110,
   }, 100), true, 'nested action routes below /collect must remain safety-relevant');
+  assert.equal(agent._clickAxRequestIsSafetyRelevant({
+    url: 'https://example.com/api/poll',
+    method: 'POST',
+    ts: 110,
+  }, 100), false, 'a terminal /poll endpoint remains ignorable background polling');
+  assert.equal(agent._clickAxRequestIsSafetyRelevant({
+    url: 'https://example.com/api/polling',
+    method: 'POST',
+    ts: 110,
+  }, 100), false, 'a terminal /polling endpoint remains ignorable background polling');
+  assert.equal(agent._clickAxRequestIsSafetyRelevant({
+    url: 'https://example.com/api/poll-vote',
+    method: 'POST',
+    ts: 110,
+  }, 100), true, 'poll-* action routes must not be mistaken for background polling');
+  assert.equal(agent._clickAxRequestIsSafetyRelevant({
+    url: 'https://example.com/poll-answer',
+    method: 'POST',
+    ts: 110,
+  }, 100), true, 'poll answer mutations must veto the trusted retry');
 });
 
 test('Chrome click_ax watches non-telemetry sendBeacon requests as ping traffic', () => {

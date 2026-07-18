@@ -12412,18 +12412,21 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (!method) method = 'GET';
     if (['GET', 'HEAD', 'OPTIONS'].includes(method)) return false;
     const url = String(request?.url || '').toLowerCase();
-    const knownTelemetryToken = /(?:analytics|telemetry|heartbeat|presence|poll(?:ing)?|metrics|typing)(?:[/?#_.-]|$)/.test(url);
+    const knownTelemetryToken = /(?:^|[/.])(?:analytics|telemetry|heartbeat|presence|metrics|typing)(?:[/?#.]|$)/.test(url);
     let exactCollectEndpoint = false;
+    let exactPollEndpoint = false;
     try {
       const pathname = new URL(url).pathname.replace(/\/+$/, '');
       exactCollectEndpoint = /(?:^|\/)collect$/.test(pathname);
+      exactPollEndpoint = /(?:^|\/)poll(?:ing)?$/.test(pathname);
     } catch {
       exactCollectEndpoint = /(?:^|\/)collect(?:[?#]|$)/.test(url);
+      exactPollEndpoint = /(?:^|\/)poll(?:ing)?(?:[?#]|$)/.test(url);
     }
     // Analytics commonly POSTs to a terminal /collect endpoint. Do not treat
-    // arbitrary collect-* or /collect/... action routes as telemetry: names
-    // such as /api/collect-payment may represent real user mutations.
-    if (knownTelemetryToken || exactCollectEndpoint) {
+    // arbitrary collect-* / poll-* action routes as telemetry: names such as
+    // /api/collect-payment and /api/poll-vote may represent real mutations.
+    if (knownTelemetryToken || exactCollectEndpoint || exactPollEndpoint) {
       return false;
     }
     return true;

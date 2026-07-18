@@ -570,7 +570,10 @@
   function _normalizeActionText(value) {
     return String(value || '')
       .normalize('NFKC')
-      .toLocaleLowerCase()
+      // Safety terms must compare identically in every browser locale.
+      // Turkish casing would otherwise turn leading English "I" into dotless
+      // "ı" while already-lowercase blocklist terms retain plain "i".
+      .toLowerCase()
       .normalize('NFKD')
       .replace(/\p{M}/gu, '');
   }
