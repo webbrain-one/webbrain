@@ -6699,7 +6699,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   _startPlanExecutionGuard(tabId, mode, gateOutcome = {}, runOptions = {}) {
     const requestKind = gateOutcome?.requestKind || (this._isActionMode(mode) ? 'execute' : null);
     const enabled = this._isActionMode(mode)
-      && !(runOptions?.cloudRun && runOptions?.outputSchema)
+      && runOptions?.cloudRun !== true
       && requestKind === 'execute';
     const state = {
       enabled,

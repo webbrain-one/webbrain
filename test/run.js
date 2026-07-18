@@ -23112,6 +23112,19 @@ test('explicit planner-shaped result intent preserves requested structured JSON'
   }
 });
 
+test('planner-bypassed managed cloud runs never enable the execution guard', () => {
+  for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
+    const agent = new AgentClass({});
+    const guard = agent._startPlanExecutionGuard(
+      8637 + index,
+      'act',
+      { proceed: true, requestKind: 'execute', requiresStateChange: false },
+      { cloudRun: true, outputSchema: null },
+    );
+    assert.equal(guard.enabled, false, `${AgentClass.name}: planner-bypassed cloud run enabled the guard`);
+  }
+});
+
 test('execution evidence ignores failed, denied, skipped, blocked, and unknown outcomes', () => {
   for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
     const agent = new AgentClass({});
