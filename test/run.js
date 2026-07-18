@@ -15562,6 +15562,11 @@ test('Chrome click_ax ignores background reads and telemetry but vetoes a nearby
     ts: 110,
   }, 100), true);
   assert.equal(agent._clickAxRequestIsSafetyRelevant({
+    url: 'https://example.com/api/open-chat',
+    type: 'ping',
+    ts: 110,
+  }, 100), true, 'method-less sendBeacon/ping traffic must still veto a trusted retry');
+  assert.equal(agent._clickAxRequestIsSafetyRelevant({
     url: 'https://example.com/analytics/beacon',
     method: 'POST',
     type: 'ping',
@@ -15664,6 +15669,77 @@ test('Chrome click_ax attributes network activity from the content click boundar
   assert.equal(result.success, false);
   assert.equal(result.inconclusive, true);
   assert.equal(result._syntheticClickStartedAt, undefined, 'internal click timestamps must not leak');
+});
+
+test('Chrome executeTool re-stamps the click_ax safety window after content-script injection', async () => {
+  const originalChrome = globalThis.chrome;
+  const agent = new AgentCh({});
+  const actions = [];
+  const captureTimes = [];
+  let sendAttempts = 0;
+  let injectCalls = 0;
+  const listener = { addListener() {}, removeListener() {} };
+  agent._isPdfTab = async () => false;
+  agent._currentUrl = async () => 'https://example.com/';
+  agent._clickProgressSnapshot = async () => '{"text":"stable"}';
+  agent._annotateClickProgress = async () => {};
+  agent._recordInteractionRect = () => {};
+  agent._captureClickAxObservation = async (_tabId, snapshot, sideEffectWatch, startedAt) => {
+    captureTimes.push(startedAt);
+    return {
+      startedAt,
+      snapshot,
+      tabIds: '1,42',
+      sideEffectWatch,
+    };
+  };
+  agent._maybeFallbackClickAxWithCdp = async (_tabId, _args, response, baseline) => ({
+    ...response,
+    baselineStartedAt: baseline?.startedAt,
+  });
+
+  globalThis.chrome = {
+    tabs: {
+      async sendMessage(_tabId, message) {
+        actions.push(message.action);
+        sendAttempts++;
+        if (sendAttempts === 1) throw new Error('Receiving end does not exist');
+        return {
+          success: true,
+          method: 'click_ax',
+          ref_id: message.params?.ref_id,
+          tag: 'div',
+          _syntheticClickStartedAt: Date.now(),
+        };
+      },
+    },
+    scripting: {
+      async executeScript() {
+        injectCalls++;
+        // Simulate a slow inject so a pre-inject timestamp would fall outside
+        // the 400ms network attribution window.
+        await new Promise(resolve => setTimeout(resolve, 5));
+      },
+    },
+    downloads: { onCreated: listener },
+    webRequest: { onBeforeRequest: listener },
+  };
+
+  try {
+    const result = await agent.executeTool(42, 'click_ax', { ref_id: 'ref_inject' });
+    assert.equal(injectCalls, 1);
+    assert.equal(sendAttempts, 2);
+    assert.equal(captureTimes.length, 2, 'baseline must be re-captured after inject');
+    assert.ok(
+      captureTimes[1] >= captureTimes[0],
+      'post-inject safety window must start at or after the pre-inject attempt',
+    );
+    assert.equal(result.success, true);
+    assert.equal(result.baselineStartedAt, captureTimes[1]);
+  } finally {
+    if (originalChrome === undefined) delete globalThis.chrome;
+    else globalThis.chrome = originalChrome;
+  }
 });
 
 test('Chrome click_ax reports nearby mutating network activity as inconclusive instead of verified progress', async () => {
@@ -15927,6 +16003,94 @@ test('Chrome click_ax accepts a target-state-only change after the trusted fallb
     assert.equal(result.trusted, true);
     assert.equal(result.verified, true);
     assert.deepEqual(result.observedEffects, ['target_state']);
+  } finally {
+    cdpClientCh.attach = originals.attach;
+    cdpClientCh.dispatchMouseEvent = originals.dispatch;
+  }
+});
+
+test('Chrome click_ax accepts weak-only target state (class/data-status) after trusted CDP', async () => {
+  const originals = {
+    attach: cdpClientCh.attach,
+    dispatch: cdpClientCh.dispatchMouseEvent,
+  };
+  const agent = new AgentCh({});
+  let dispatched = 0;
+  let resolves = 0;
+  agent._clickAxFinalSettleMs = () => 0;
+  agent._observeClickAxSideEffect = async () => ({
+    changed: false,
+    proved: false,
+    safetyVeto: false,
+    observable: true,
+    reasons: [],
+    proofReasons: [],
+    weakReasons: [],
+    safetyReasons: [],
+    snapshot: '{"text":"same"}',
+  });
+  agent._clickAxObservedSideEffect = async () => ({
+    changed: false,
+    proved: false,
+    safetyVeto: false,
+    observable: true,
+    reasons: [],
+    proofReasons: [],
+    weakReasons: [],
+    safetyReasons: [],
+    snapshot: '{"text":"same"}',
+  });
+  agent._captureClickAxObservation = async (_tabId, snapshot, sideEffectWatch, startedAt) => ({
+    startedAt,
+    snapshot,
+    tabIds: '1,42',
+    sideEffectWatch,
+  });
+  agent._resolveClickAxFallbackTarget = async () => {
+    resolves++;
+    // After CDP (3rd resolve), only weak state changes — selected class +
+    // data-status — with strong semantic attrs unchanged.
+    const afterTrusted = resolves >= 3;
+    return {
+      success: true,
+      fallbackEligible: true,
+      documentToken: 'doc-weak-after-trusted',
+      fallbackState: '{"aria-current":"<absent>"}',
+      fallbackStrongState: '{"aria-current":"<absent>"}',
+      fallbackWeakState: afterTrusted
+        ? '{"className":"selected","attrs":"data-status=open","style":"outline:1px"}'
+        : '{"className":"","attrs":"data-status=<absent>","style":""}',
+      x: 100,
+      y: 200,
+      rect: { x: 50, y: 180, w: 100, h: 40 },
+    };
+  };
+  try {
+    cdpClientCh.attach = async () => ({ tabId: 42, attached: true });
+    cdpClientCh.dispatchMouseEvent = async () => { dispatched++; };
+    const result = await agent._maybeFallbackClickAxWithCdp(
+      42,
+      { ref_id: 'ref_weak_after_trusted' },
+      {
+        success: true,
+        method: 'click_ax',
+        ref_id: 'ref_weak_after_trusted',
+        tag: 'div',
+        _fallbackStateBefore: '{"full":"same"}',
+        _fallbackStateAfterImmediate: '{"full":"same"}',
+        _fallbackStrongStateBefore: '{"aria-current":"<absent>"}',
+        _fallbackStrongStateAfterImmediate: '{"aria-current":"<absent>"}',
+        _fallbackWeakStateBefore: '{"className":"","attrs":"data-status=<absent>","style":""}',
+        _fallbackWeakStateAfterImmediate: '{"className":"","attrs":"data-status=<absent>","style":""}',
+      },
+      { snapshot: '{"text":"same"}', sideEffectWatch: { created: [], requests: [] } },
+    );
+    assert.equal(dispatched, 3);
+    assert.equal(result.success, true, 'trusted click that only toggles class/style/data-status must not be reported as noProgress');
+    assert.equal(result.fallbackAttempted, true);
+    assert.equal(result.trusted, true);
+    assert.equal(result.verified, true);
+    assert.deepEqual(result.observedEffects, ['target_state_weak']);
   } finally {
     cdpClientCh.attach = originals.attach;
     cdpClientCh.dispatchMouseEvent = originals.dispatch;

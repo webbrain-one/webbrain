@@ -12231,14 +12231,27 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const clickProgressBefore = (name === 'click' || name === 'click_ax')
       ? await this._clickProgressSnapshot(tabId)
       : '';
+    // Start network/download listeners early so synchronous click work is not
+    // missed, but stamp the click_ax safety window only immediately before the
+    // content-script message that actually runs el.click(). Otherwise a slow
+    // executeScript inject can push the synthetic click outside the 400ms
+    // attribution window and skip the network veto.
     const clickAxSideEffectWatch = name === 'click_ax' ? this._beginClickAxSideEffectWatch(tabId) : null;
-    const clickAxBaseline = name === 'click_ax'
-      ? await this._captureClickAxObservation(tabId, clickProgressBefore, clickAxSideEffectWatch)
-      : null;
+    let clickAxBaseline = null;
+    const captureClickAxBaseline = async () => {
+      if (name !== 'click_ax') return;
+      clickAxBaseline = await this._captureClickAxObservation(
+        tabId,
+        clickProgressBefore,
+        clickAxSideEffectWatch,
+        Date.now(),
+      );
+    };
 
     try {
       let response;
       try {
+        await captureClickAxBaseline();
         response = await chrome.tabs.sendMessage(tabId, {
           target: 'content',
           action,
@@ -12258,6 +12271,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
               'src/content/agent-visual-indicator.js',
             ],
           });
+          // Re-stamp after inject so the safety window does not include the
+          // injection gap (which can exceed 400ms on cold tabs).
+          await captureClickAxBaseline();
           response = await chrome.tabs.sendMessage(tabId, {
             target: 'content',
             action,
@@ -12388,7 +12404,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   _clickAxRequestIsSafetyRelevant(request, startedAt) {
     const ts = Number(request?.ts);
     if (!Number.isFinite(ts) || ts < startedAt || ts - startedAt > 400) return false;
-    const method = String(request?.method || 'GET').toUpperCase();
+    const type = String(request?.type || '').toLowerCase();
+    // sendBeacon / <a ping> surface as type "ping". Some stacks omit method;
+    // treat that as a mutating POST so the network veto still fires.
+    let method = String(request?.method || '').toUpperCase();
+    if (!method && (type === 'ping' || type === 'beacon')) method = 'POST';
+    if (!method) method = 'GET';
     if (['GET', 'HEAD', 'OPTIONS'].includes(method)) return false;
     const url = String(request?.url || '').toLowerCase();
     if (/(?:analytics|telemetry|heartbeat|presence|poll(?:ing)?|metrics|collect|typing)(?:[/?#_.-]|$)/.test(url)) {
@@ -12763,20 +12784,35 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const trustedObservation = await this._observeClickAxSideEffect(tabId, fallbackBaseline);
     addObservedHints(trustedObservation);
     let trustedTargetStateChanged = false;
+    let trustedTargetWeakStateChanged = false;
     if (!trustedObservation.proved) {
       const trustedTarget = await this._resolveClickAxFallbackTarget(tabId, args?.ref_id);
       const trustedTargetStrongState = strongStateOf(trustedTarget);
       const trustedTargetWeakState = weakStateOf(trustedTarget);
       addWeakTargetHint(targetWeakState, trustedTargetWeakState);
-      trustedTargetStateChanged = !!(
-        targetStrongState
-        && trustedTarget?.success
+      const sameDocument = !!(
+        trustedTarget?.success
         && trustedTarget.documentToken === target.documentToken
+      );
+      trustedTargetStateChanged = !!(
+        sameDocument
+        && targetStrongState
         && trustedTargetStrongState
         && targetStrongState !== trustedTargetStrongState
       );
+      // After a complete trusted click was already delivered, weak-only
+      // activation (selected class/style, data-status) is proof that the
+      // fallback worked. Before CDP those signals stay diagnostic-only so
+      // ambient chat-list churn does not suppress the retry.
+      trustedTargetWeakStateChanged = !!(
+        sameDocument
+        && !trustedTargetStateChanged
+        && targetWeakState
+        && trustedTargetWeakState
+        && targetWeakState !== trustedTargetWeakState
+      );
     }
-    if (trustedTargetStateChanged) {
+    if (trustedTargetStateChanged || trustedTargetWeakStateChanged) {
       return withSnapshot({
         ...response,
         success: true,
@@ -12784,7 +12820,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         fallbackAttempted: true,
         trusted: true,
         verified: true,
-        observedEffects: ['target_state'],
+        observedEffects: trustedTargetStateChanged
+          ? ['target_state']
+          : ['target_state_weak'],
         rect: target.rect || response.rect,
       }, trustedObservation);
     }
