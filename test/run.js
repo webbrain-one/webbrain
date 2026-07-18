@@ -287,8 +287,10 @@ const { AnthropicProvider: AnthropicProviderFx } = await import(
 
 const {
   PLANNER_SYSTEM_PROMPT,
+  PLANNER_INTENT_SYSTEM_PROMPT,
   PLANNER_API_REPLAY_RULE,
   buildPlannerSystemPrompt,
+  buildPlannerIntentMessages,
   parsePlanFromContent,
   formatPlanMarkdown,
   formatPlanScratchpad,
@@ -300,9 +302,11 @@ const {
 );
 const {
   PLANNER_SYSTEM_PROMPT: PLANNER_SYSTEM_PROMPT_FX,
+  PLANNER_INTENT_SYSTEM_PROMPT: PLANNER_INTENT_SYSTEM_PROMPT_FX,
   PLANNER_API_REPLAY_RULE: PLANNER_API_REPLAY_RULE_FX,
   buildPlannerSystemPrompt: buildPlannerSystemPromptFx,
   buildPlannerMessages: buildPlannerMessagesFx,
+  buildPlannerIntentMessages: buildPlannerIntentMessagesFx,
 } = await import(
   'file://' + path.join(ROOT, 'src/firefox/src/agent/planner.js').replace(/\\/g, '/')
 );
@@ -12679,7 +12683,7 @@ test('background awaits context-menu prompt clear before agent chat starts', () 
   }
 });
 
-test('background forwards recommended-action run options to agent chat handlers', () => {
+test('background forwards planner run options to agent chat handlers', () => {
   for (const [label, bgRel] of [
     ['chrome', 'src/chrome/src/background.js'],
     ['firefox', 'src/firefox/src/background.js'],
@@ -12691,9 +12695,13 @@ test('background forwards recommended-action run options to agent chat handlers'
     assert.ok(streamMatch, `${label}: chat_stream handler missing`);
     const chatBody = chatMatch[1];
     const streamBody = streamMatch[1];
-    assert.ok(chatBody.includes('const runOptions = msg.recommendedAction ? { recommendedAction: msg.recommendedAction } : {};'), `${label}: chat handler should build recommended-action run options`);
+    assert.ok(chatBody.includes('...(msg.recommendedAction ? { recommendedAction: msg.recommendedAction } : {})'), `${label}: chat handler should build recommended-action run options`);
+    assert.ok(chatBody.includes('locale: msg.locale'), `${label}: chat handler should forward the display locale`);
+    assert.ok(chatBody.includes('intentFailureMessage: msg.intentFailureMessage'), `${label}: chat handler should forward the localized intent fallback`);
     assert.match(chatBody, /agent\.processMessage\([\s\S]*?, mode, msg\.attachments, runOptions\)/, `${label}: chat handler should pass run options to processMessage`);
-    assert.ok(streamBody.includes('const runOptions = msg.recommendedAction ? { recommendedAction: msg.recommendedAction } : {};'), `${label}: chat_stream handler should build recommended-action run options`);
+    assert.ok(streamBody.includes('...(msg.recommendedAction ? { recommendedAction: msg.recommendedAction } : {})'), `${label}: chat_stream handler should build recommended-action run options`);
+    assert.ok(streamBody.includes('locale: msg.locale'), `${label}: chat_stream handler should forward the display locale`);
+    assert.ok(streamBody.includes('intentFailureMessage: msg.intentFailureMessage'), `${label}: chat_stream handler should forward the localized intent fallback`);
     assert.match(streamBody, /agent\.processMessageStream\([\s\S]*?, mode, runOptions\)/, `${label}: chat_stream handler should pass run options to processMessageStream`);
   }
 });
@@ -22505,6 +22513,11 @@ test('aborted content-plus-tool responses do not become successful finals', asyn
       getVisionProvider: async () => null,
     });
     agent.planBeforeAct = false;
+    agent._maybeRunPlannerGate = async () => ({
+      proceed: true,
+      requestKind: 'execute',
+      requiresStateChange: true,
+    });
     agent.maxSteps = 2;
     agent._skipPermissionGate = true;
     agent._manageContext = async () => {};
@@ -22548,7 +22561,16 @@ test('content-plus-tool responses do not emit intermediate assistant text', asyn
           },
         }],
       },
-      { content: 'Final answer after the tool result.', toolCalls: [] },
+      {
+        content: null,
+        toolCalls: [{
+          id: 'done_call',
+          function: {
+            name: 'done',
+            arguments: JSON.stringify({ summary: 'Final answer after the tool result.' }),
+          },
+        }],
+      },
     ];
     const provider = {
       supportsTools: true,
@@ -22569,6 +22591,11 @@ test('content-plus-tool responses do not emit intermediate assistant text', asyn
     });
     const tabId = 798;
     agent.planBeforeAct = false;
+    agent._maybeRunPlannerGate = async () => ({
+      proceed: true,
+      requestKind: 'execute',
+      requiresStateChange: true,
+    });
     agent.maxSteps = 3;
     agent._skipPermissionGate = true;
     agent._manageContext = async () => {};
@@ -22576,7 +22603,11 @@ test('content-plus-tool responses do not emit intermediate assistant text', asyn
     agent._maybeReinjectAdapter = async () => {};
     agent._ensureProgressSessionForCurrentTask = async () => ({ mode: 'inactive' });
     agent._persist = () => {};
-    agent.executeTool = async () => ({ success: true, method: 'click_ax' });
+    agent.executeTool = async (_toolTabId, name, args) => (
+      name === 'done'
+        ? { done: true, summary: args.summary }
+        : { success: true, method: name }
+    );
 
     const updates = [];
     const final = await agent.processMessage(tabId, 'continue', (type, data) => {
@@ -22594,14 +22625,16 @@ test('content-plus-tool responses do not emit intermediate assistant text', asyn
       `${AgentClass.name}: tool call update missing`,
     );
     assert.ok(
-      updates.some(update => update.type === 'text' && update.data?.content === 'Final answer after the tool result.'),
-      `${AgentClass.name}: final text update missing`,
+      updates.some(update => update.type === 'tool_call' && update.data?.name === 'done'),
+      `${AgentClass.name}: terminal done call update missing`,
     );
   }
 });
 
 function planOnlyTerminalFixture() {
   return JSON.stringify({
+    request_kind: 'execute',
+    requires_state_change: false,
     summary: 'Open the current page and collect the requested details.',
     confidence: 0.91,
     steps: [
@@ -22611,6 +22644,54 @@ function planOnlyTerminalFixture() {
     memory: { use_scratchpad: false, scratchpad_notes: [], use_progress_ledger: false, progress_action: null },
     scheduling: null,
     risks: [],
+    localized: {
+      locale: 'en',
+      summary: 'Open the current page and collect the requested details.',
+      steps: [
+        { id: '1', action: 'Read the current page.' },
+        { id: '2', action: 'Return the result.' },
+      ],
+      risks: [],
+    },
+    mode: 'act',
+  });
+}
+
+function plannerIntentFixture({
+  requestKind = 'execute',
+  requiresStateChange = false,
+  locale = 'en',
+  localizedSummary = 'Carry out the requested task.',
+  localizedSteps = ['Inspect the current state.', 'Complete the requested task.'],
+  localizedRisks = [],
+} = {}) {
+  return JSON.stringify({
+    request_kind: requestKind,
+    requires_state_change: requiresStateChange,
+    summary: requestKind === 'clarify'
+      ? 'Ask the user for the missing information.'
+      : 'Handle the requested task.',
+    confidence: 0.95,
+    steps: localizedSteps.map((_, index) => ({
+      id: String(index + 1),
+      action: `Canonical English step ${index + 1}.`,
+      tools: [],
+    })),
+    skill_ids: [],
+    memory: {
+      use_scratchpad: false,
+      scratchpad_notes: [],
+      use_progress_ledger: false,
+      progress_action: null,
+    },
+    scheduling: null,
+    risks: [],
+    localized: {
+      locale,
+      summary: localizedSummary,
+      steps: localizedSteps.map((action, index) => ({ id: String(index + 1), action })),
+      risks: localizedRisks,
+    },
     mode: 'act',
   });
 }
@@ -22622,6 +22703,11 @@ function configurePlanOnlyGuardAgent(agent, tabId) {
   agent._hydrate = async () => {};
   agent._manageContext = async () => {};
   agent._enrichUserMessageWithCurrentPage = async (_tabId, _messages, content) => ({ role: 'user', content });
+  agent._maybeRunPlannerGate = async () => ({
+    proceed: true,
+    requestKind: 'execute',
+    requiresStateChange: false,
+  });
   agent._maybeReinjectAdapter = async () => {};
   agent._ensureProgressSessionForCurrentTask = async () => ({ mode: 'inactive' });
   agent._persist = () => {};
@@ -22678,6 +22764,32 @@ test('Act rejects planner-shaped plain finals and continues into a real tool', a
       agent.conversations.get(tabId).some(message => message.role === 'user' && String(message.content || '').startsWith('[PLAN EXECUTION BLOCK')),
       `${AgentClass.name}: plan-only recovery nudge missing`,
     );
+  }
+});
+
+test('Act rejects pinless prose plans and continues into a real tool', async () => {
+  for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
+    const responses = [
+      { content: 'Plan:\n1. Read the current page.\n2. Summarize the result.', toolCalls: [] },
+      { content: null, toolCalls: executionToolCalls(`pinless_${index}`) },
+    ];
+    const provider = {
+      supportsTools: true,
+      supportsVision: false,
+      promptTier: 'full',
+      contextWindow: 128000,
+      model: 'test-model',
+      name: 'test-provider',
+      chat: async () => responses.shift(),
+    };
+    const agent = new AgentClass({ getActive: () => provider, getVisionProvider: async () => null });
+    const tabId = 8602 + index;
+    configurePlanOnlyGuardAgent(agent, tabId);
+
+    const final = await agent.processMessage(tabId, 'Read the current page and summarize it.', () => {}, 'act');
+
+    assert.equal(final, 'Executed and verified.', `${AgentClass.name}: pinless prose plan was accepted`);
+    assert.equal(responses.length, 0, `${AgentClass.name}: pinless prose plan did not trigger recovery`);
   }
 });
 
@@ -22755,10 +22867,30 @@ test('Act rejects plan-only done summaries before any non-done tool', async () =
   }
 });
 
-test('Act preserves explicit plan-only structured-output requests', async () => {
+test('Act rejects plan-only done summaries even after a successful read', async () => {
   for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
-    const expected = planOnlyTerminalFixture();
-    let calls = 0;
+    const responses = [
+      {
+        content: null,
+        toolCalls: [
+          {
+            id: `read_before_plan_done_${index}`,
+            function: { name: 'read_page', arguments: '{}' },
+          },
+          {
+            id: `plan_done_after_read_${index}`,
+            function: { name: 'done', arguments: JSON.stringify({ summary: planOnlyTerminalFixture() }) },
+          },
+        ],
+      },
+      {
+        content: null,
+        toolCalls: [{
+          id: `real_done_after_read_${index}`,
+          function: { name: 'done', arguments: JSON.stringify({ summary: 'Executed and verified.' }) },
+        }],
+      },
+    ];
     const provider = {
       supportsTools: true,
       supportsVision: false,
@@ -22766,112 +22898,221 @@ test('Act preserves explicit plan-only structured-output requests', async () => 
       contextWindow: 128000,
       model: 'test-model',
       name: 'test-provider',
-      chat: async () => {
-        calls += 1;
-        return { content: expected, toolCalls: [] };
-      },
+      chat: async () => responses.shift(),
     };
     const agent = new AgentClass({ getActive: () => provider, getVisionProvider: async () => null });
-    const tabId = 8620 + index;
+    const tabId = 8612 + index;
     configurePlanOnlyGuardAgent(agent, tabId);
 
-    const final = await agent.processMessage(tabId, 'Return only an action plan as JSON; do not execute it.', () => {}, 'act');
+    const final = await agent.processMessage(tabId, 'Read the current page and summarize it.', () => {}, 'act');
 
-    assert.equal(final, expected, `${AgentClass.name}: requested plan output was rejected`);
-    assert.equal(calls, 1, `${AgentClass.name}: requested plan triggered an execution recovery`);
-    assert.equal(
-      agent.conversations.get(tabId).some(message => String(message.content || '').startsWith('[PLAN EXECUTION BLOCK')),
-      false,
-      `${AgentClass.name}: explicit plan-only boundary received a recovery nudge`,
+    assert.equal(final, 'Executed and verified.', `${AgentClass.name}: read tool disabled plan-shaped done guard`);
+    assert.ok(
+      agent.conversations.get(tabId).some(message => message.role === 'tool' && /"planOnlyTerminal":true/.test(String(message.content || ''))),
+      `${AgentClass.name}: plan-shaped done after read was not blocked`,
     );
   }
 });
 
-test('Act treats question-form plan requests as plan-only (no execution guard)', async () => {
+test('execution evidence ignores failed, denied, skipped, blocked, and unknown outcomes', () => {
   for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
-    const agent = new AgentClass({ getActive: () => null, getVisionProvider: async () => null });
-    const planOnlyQuestions = [
-      "What's the plan to update my profile?",
-      'What is the plan for fixing this?',
-      'Can you outline a plan for updating my profile?',
-      'Tell me the plan to fix the form.',
-      'Plan nedir?',
-    ];
-    for (const task of planOnlyQuestions) {
-      assert.equal(
-        agent._isExplicitPlanOnlyTask(task),
-        true,
-        `${AgentClass.name}: expected plan-only question: ${task}`,
-      );
+    const agent = new AgentClass({});
+    const tabId = 8614 + index;
+    const state = agent._startPlanExecutionGuard(tabId, 'act', {
+      requestKind: 'execute',
+      requiresStateChange: true,
+    });
+    for (const result of [
+      { success: false },
+      { denied: true },
+      { skipped: true },
+      { blocked: true },
+      { outcomeUnknown: true },
+    ]) {
+      agent._markPlanExecutionToolCall(tabId, 'click_ax', result, { consequential: true });
     }
-    assert.equal(
-      agent._isExplicitPlanOnlyTask("What's the plan, then execute it?"),
-      false,
-      `${AgentClass.name}: execute-after-planning must keep the guard on`,
-    );
-    assert.equal(
-      agent._isExplicitPlanOnlyTask('Read the current page and summarize it.'),
-      false,
-      `${AgentClass.name}: ordinary Act task must keep the guard on`,
-    );
-    assert.equal(
-      agent._isExplicitPlanOnlyTask('Can you plan this update for me?'),
-      false,
-      `${AgentClass.name}: bare "can you plan" must not be treated as discussion-only`,
-    );
+    agent._markPlanExecutionToolCall(tabId, 'read_page', { success: true }, { consequential: false });
+    assert.equal(agent._executionEvidenceSatisfied(state), false, `${AgentClass.name}: invalid mutation evidence was counted`);
 
-    // End-to-end: after Plan-before-Act pins an approved plan, a normal prose
-    // Plan: answer must be accepted for question-form plan-only tasks (the
-    // Codex discussion_r3608226380 scenario).
-    const expected = [
-      'Plan:',
-      '1. Open settings',
-      '2. Update the profile fields',
-      '3. Save and verify the page confirms the change',
-    ].join('\n');
-    let calls = 0;
-    const provider = {
-      supportsTools: true,
-      supportsVision: false,
-      promptTier: 'full',
-      contextWindow: 128000,
-      model: 'test-model',
-      name: 'test-provider',
-      chat: async () => {
-        calls += 1;
-        return { content: expected, toolCalls: [] };
-      },
-    };
-    const runAgent = new AgentClass({ getActive: () => provider, getVisionProvider: async () => null });
-    const tabId = 8630 + index;
-    configurePlanOnlyGuardAgent(runAgent, tabId);
-    runAgent.conversations.set(tabId, [
-      { role: 'system', content: 'sys' },
-      runAgent._buildScratchpadMessage(
-        '[Approved plan — pinned by planner]\n1. Open settings\n2. Update profile',
-      ),
-    ]);
-    assert.equal(
-      runAgent._hasApprovedExecutionPlan(runAgent.conversations.get(tabId)),
-      true,
-      `${AgentClass.name}: test fixture must pin an approved plan`,
-    );
-
-    const final = await runAgent.processMessage(
-      tabId,
-      "What's the plan to update my profile?",
-      () => {},
-      'act',
-    );
-
-    assert.equal(final, expected, `${AgentClass.name}: question-form plan answer was rejected`);
-    assert.equal(calls, 1, `${AgentClass.name}: question-form plan triggered execution recovery`);
-    assert.equal(
-      runAgent.conversations.get(tabId).some(message => String(message.content || '').startsWith('[PLAN EXECUTION BLOCK')),
-      false,
-      `${AgentClass.name}: question-form plan received a recovery nudge`,
-    );
+    agent._markPlanExecutionToolCall(tabId, 'click_ax', { success: true }, { consequential: true });
+    assert.equal(agent._executionEvidenceSatisfied(state), true, `${AgentClass.name}: successful mutation evidence was not counted`);
   }
+});
+
+test('edited localized approved plans remain recognized as execution plans', () => {
+  for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
+    const agent = new AgentClass({});
+    const tabId = 8616 + index;
+    agent.conversations.set(tabId, [
+      { role: 'system', content: 'sys' },
+      agent._buildScratchpadMessage('[Approved plan — edited localized text pinned by planner]\nKullanıcının düzenlediği plan'),
+    ]);
+    assert.equal(agent._hasApprovedExecutionPlan(agent.conversations.get(tabId)), true, `${AgentClass.name}: edited plan marker was ignored`);
+  }
+});
+
+test('planner intent routes plan-only questions across languages without an input matcher', async () => {
+  await withPlannerBrowserGlobals(async () => {
+    const cases = [
+      {
+        task: "What's the plan to update my profile?",
+        locale: 'en',
+        summary: 'Profile update plan',
+        steps: ['Open settings.', 'Review the profile fields.'],
+      },
+      {
+        task: 'Profilimi güncellemek için plan nedir?',
+        locale: 'tr',
+        summary: 'Profil güncelleme planı',
+        steps: ['Ayarları açın.', 'Profil alanlarını inceleyin.'],
+      },
+      {
+        task: 'プロフィール更新の計画を教えてください。',
+        locale: 'ja',
+        summary: 'プロフィール更新計画',
+        steps: ['設定を開きます。', 'プロフィール項目を確認します。'],
+      },
+      {
+        task: 'Can you plan this update for me?',
+        locale: 'en',
+        summary: 'Update plan',
+        steps: ['Inspect the current state.', 'Outline the update.'],
+      },
+      {
+        task: 'Wait for my approval before executing.',
+        locale: 'en',
+        summary: 'Plan pending approval',
+        steps: ['Inspect the current state.', 'Prepare a proposed change.'],
+      },
+      {
+        task: 'Do not execute until I confirm.',
+        locale: 'en',
+        summary: 'Plan pending confirmation',
+        steps: ['Inspect the current state.', 'Outline the proposed action.'],
+      },
+      {
+        task: 'Prepare the change without my approval.',
+        locale: 'en',
+        summary: 'Prepare-only plan',
+        steps: ['Inspect the current state.', 'Prepare the proposed change.'],
+      },
+      {
+        task: 'Do not execute; only plan.',
+        locale: 'en',
+        summary: 'Plan without execution',
+        steps: ['Inspect the current state.', 'Outline the proposed action.'],
+      },
+    ];
+    for (const [agentIndex, AgentClass] of [AgentCh, AgentFx].entries()) {
+      for (const [caseIndex, fixture] of cases.entries()) {
+        const agent = new AgentClass({ getActive: () => ({ name: 'intent-test', model: 'intent-test' }) });
+        agent._chatWithCostAllowance = async () => ({
+          content: plannerIntentFixture({
+            requestKind: 'plan_only',
+            locale: fixture.locale,
+            localizedSummary: fixture.summary,
+            localizedSteps: fixture.steps,
+          }),
+        });
+        const gate = await agent._runPlannerIntentGate(
+          8620 + (agentIndex * 10) + caseIndex,
+          { role: 'user', content: fixture.task },
+          () => {},
+          null,
+          null,
+          '',
+          { tabUrl: 'https://example.com', tabTitle: 'Example' },
+          'act',
+          { locale: fixture.locale },
+        );
+        assert.equal(gate.proceed, false, `${AgentClass.name}: plan-only request should not execute`);
+        assert.equal(gate.reason, 'plan_only', `${AgentClass.name}: plan-only reason`);
+        assert.match(gate.message, new RegExp(fixture.summary), `${AgentClass.name}: localized summary missing`);
+        assert.match(gate.message, new RegExp(fixture.steps[0]), `${AgentClass.name}: localized steps missing`);
+        const guard = agent._startPlanExecutionGuard(
+          8700 + caseIndex,
+          'act',
+          gate,
+        );
+        assert.equal(guard.enabled, false, `${AgentClass.name}: plan-only intent enabled execution guard`);
+      }
+    }
+  });
+});
+
+test('planner intent fails closed with a localized clarification after one repair', async () => {
+  await withPlannerBrowserGlobals(async () => {
+    for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
+      const agent = new AgentClass({ getActive: () => ({ name: 'intent-test', model: 'intent-test' }) });
+      let calls = 0;
+      agent._chatWithCostAllowance = async () => {
+        calls += 1;
+        return { content: 'not valid planner JSON' };
+      };
+      const message = 'Bir plan mı yoksa uygulama mı istediğinizi açıklayın.';
+      const gate = await agent._runPlannerIntentGate(
+        8680 + index,
+        { role: 'user', content: 'Bunu hallet.' },
+        () => {},
+        null,
+        null,
+        '',
+        { tabUrl: 'https://example.com', tabTitle: 'Example' },
+        'act',
+        { locale: 'tr', intentFailureMessage: message },
+      );
+      assert.equal(calls, 2, `${AgentClass.name}: invalid intent should repair exactly once`);
+      assert.equal(gate.proceed, false, `${AgentClass.name}: invalid intent must fail closed`);
+      assert.equal(gate.reason, 'clarify', `${AgentClass.name}: invalid intent should request clarification`);
+      assert.equal(gate.message, message, `${AgentClass.name}: clarification should use localized UI fallback`);
+    }
+  });
+});
+
+test('planner intent keeps execution authorized for plan-and-act and negated approval waits', async () => {
+  await withPlannerBrowserGlobals(async () => {
+    const tasks = [
+      "What's the plan, then execute it?",
+      'Make a plan and execute it.',
+      "Don't wait for approval; run it now.",
+      'Do not ask for confirmation before applying the change.',
+      'No need for approval — just execute.',
+      'Skip the confirmation and apply the update.',
+      'Bir plan yap ve uygula.',
+      'Onay bekleme; şimdi çalıştır.',
+    ];
+    for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
+      const agent = new AgentClass({ getActive: () => ({ name: 'intent-test', model: 'intent-test' }) });
+      agent._chatWithCostAllowance = async () => ({
+        content: plannerIntentFixture({
+          requestKind: 'execute',
+          requiresStateChange: true,
+          locale: 'en',
+        }),
+      });
+      for (const [taskIndex, task] of tasks.entries()) {
+        const gate = await agent._runPlannerIntentGate(
+          8690 + (index * 10) + taskIndex,
+          { role: 'user', content: task },
+          () => {},
+          null,
+          null,
+          '',
+          { tabUrl: 'https://example.com', tabTitle: 'Example' },
+          'act',
+          { locale: task.includes('Bir ') || task.includes('Onay ') ? 'tr' : 'en' },
+        );
+        assert.equal(gate.proceed, true, `${AgentClass.name}: explicit execution intent was not authorized: ${task}`);
+        assert.equal(gate.requestKind, 'execute', `${AgentClass.name}: execute request kind: ${task}`);
+        assert.equal(gate.requiresStateChange, true, `${AgentClass.name}: state-change requirement: ${task}`);
+        assert.equal(
+          agent._startPlanExecutionGuard(8800 + taskIndex, 'act', gate).enabled,
+          true,
+          `${AgentClass.name}: execution guard disabled: ${task}`,
+        );
+      }
+    }
+  });
 });
 
 test('Act keeps execution guard when question-form plan is followed by execute intent', async () => {
@@ -22915,34 +23156,6 @@ test('Act keeps execution guard when question-form plan is followed by execute i
 
 test('Act keeps execution guard for negated approval waits', async () => {
   for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
-    const agent = new AgentClass({ getActive: () => null, getVisionProvider: async () => null });
-    const immediateTasks = [
-      "Don't wait for approval; run it now",
-      'Do not ask for confirmation before applying the change',
-      'No need for approval — just execute',
-      'Skip the confirmation and apply the update',
-    ];
-    for (const task of immediateTasks) {
-      assert.equal(
-        agent._isExplicitPlanOnlyTask(task),
-        false,
-        `${AgentClass.name}: negated approval wait must keep guard on: ${task}`,
-      );
-    }
-    const deferTasks = [
-      'Wait for my approval before executing',
-      'Do not execute until I confirm',
-      'Prepare the change without my approval',
-      'Do not execute; only plan',
-    ];
-    for (const task of deferTasks) {
-      assert.equal(
-        agent._isExplicitPlanOnlyTask(task),
-        true,
-        `${AgentClass.name}: positive deferral must disable guard: ${task}`,
-      );
-    }
-
     const responses = [
       { content: planOnlyTerminalFixture(), toolCalls: [] },
       { content: null, toolCalls: executionToolCalls(`neg_approval_${index}`) },
@@ -23130,6 +23343,11 @@ test('context-compression placeholder recovery resets after tool progress', asyn
       getVisionProvider: async () => null,
     });
     agent.planBeforeAct = false;
+    agent._maybeRunPlannerGate = async () => ({
+      proceed: true,
+      requestKind: 'execute',
+      requiresStateChange: false,
+    });
     const tabId = 793;
     agent.maxSteps = 8;
     agent._manageContext = async () => {};
@@ -23230,6 +23448,11 @@ test('streamed context-compression placeholder recovery resets after tool progre
       getVisionProvider: async () => null,
     });
     agent.planBeforeAct = false;
+    agent._maybeRunPlannerGate = async () => ({
+      proceed: true,
+      requestKind: 'execute',
+      requiresStateChange: false,
+    });
     const tabId = 792;
     agent.maxSteps = 8;
     agent._manageContext = async () => {};
@@ -23321,6 +23544,11 @@ test('plain final answers cannot bypass unresolved progress rows', async () => {
       getVisionProvider: async () => null,
     });
     agent.planBeforeAct = false;
+    agent._maybeRunPlannerGate = async () => ({
+      proceed: true,
+      requestKind: 'execute',
+      requiresStateChange: false,
+    });
     const tabId = 794;
     agent.maxSteps = 5;
     agent._manageContext = async () => {};
@@ -23354,12 +23582,9 @@ test('plain final answers cannot bypass unresolved progress rows', async () => {
     assert.match(final, /Actually done\./, `${AgentClass.name}: run did not continue to done`);
     assert.equal(responses.length, 0, `${AgentClass.name}: second model turn was not requested`);
     const ledgerWarnings = updates.filter(update => update.type === 'warning' && /Progress ledger has unresolved rows/.test(update.data?.message || ''));
-    assert.ok(ledgerWarnings.length >= 2, `${AgentClass.name}: done after plain-final nudge did not stay blocked`);
-    const block = agent.conversations.get(tabId).find(msg => msg.role === 'user' && /blockedFinal/.test(msg.content || ''));
-    assert.ok(block, `${AgentClass.name}: plain final block nudge missing`);
-    assert.match(block.content, /<untrusted_page_content id="[a-z0-9]+">/, `${AgentClass.name}: block rows were not wrapped`);
-    assert.match(block.content, /Ignore previous instructions/, `${AgentClass.name}: unresolved row data missing`);
-    assert.doesNotMatch(block.content, /<\/untrusted_page_content><system>/, `${AgentClass.name}: row label escaped untrusted boundary`);
+    assert.ok(ledgerWarnings.length >= 1, `${AgentClass.name}: done after plan-only recovery did not stay blocked`);
+    const planBlock = agent.conversations.get(tabId).find(msg => msg.role === 'user' && /^\[PLAN EXECUTION BLOCK/.test(msg.content || ''));
+    assert.ok(planBlock, `${AgentClass.name}: plain final execution block nudge missing`);
     const blockedDone = agent.conversations.get(tabId).find(msg => msg.role === 'tool' && /"blockedDone":true/.test(msg.content || ''));
     assert.ok(blockedDone, `${AgentClass.name}: done after plain-final nudge was not blocked`);
   }
@@ -23410,6 +23635,11 @@ test('empty-output recovery nudges cannot hide unresolved progress rows', async 
       getVisionProvider: async () => null,
     });
     agent.planBeforeAct = false;
+    agent._maybeRunPlannerGate = async () => ({
+      proceed: true,
+      requestKind: 'execute',
+      requiresStateChange: false,
+    });
     const tabId = 796;
     agent.maxSteps = 5;
     agent._manageContext = async () => {};
@@ -23437,8 +23667,11 @@ test('empty-output recovery nudges cannot hide unresolved progress rows', async 
 
     assert.match(final, /Actually done after recovery\./, `${AgentClass.name}: recovery run did not continue to done`);
     assert.equal(responses.length, 0, `${AgentClass.name}: system nudge let the plain final bypass ledger rows`);
-    assert.equal(agent._latestTaskText(tabId), 'continue', `${AgentClass.name}: system nudge replaced the latest real task`);
-    assert.ok(updates.some(update => update.type === 'warning' && /Progress ledger has unresolved rows/.test(update.data?.message || '')), `${AgentClass.name}: recovery final was not blocked`);
+    assert.equal(agent._latestTaskText(tabId), 'Follow every stargazer on this page.', `${AgentClass.name}: system nudge replaced the anchored continuation task`);
+    assert.ok(
+      agent.conversations.get(tabId).some(msg => msg.role === 'user' && /^\[PLAN EXECUTION BLOCK/.test(msg.content || '')),
+      `${AgentClass.name}: recovery final did not trigger the execution block`,
+    );
   }
 });
 
@@ -23466,6 +23699,11 @@ test('empty-output recovery auto-schedules unresolved progress tasks', async () 
       getVisionProvider: async () => null,
     });
     agent.planBeforeAct = false;
+    agent._maybeRunPlannerGate = async () => ({
+      proceed: true,
+      requestKind: 'execute',
+      requiresStateChange: false,
+    });
     const tabId = 797;
     agent.maxSteps = 5;
     agent._manageContext = async () => {};
@@ -24925,6 +25163,11 @@ test('streamed plain final answers cannot bypass unresolved progress rows', asyn
       getVisionProvider: async () => null,
     });
     agent.planBeforeAct = false;
+    agent._maybeRunPlannerGate = async () => ({
+      proceed: true,
+      requestKind: 'execute',
+      requiresStateChange: false,
+    });
     const tabId = 795;
     agent.maxSteps = 5;
     agent._manageContext = async () => {};
@@ -24958,11 +25201,9 @@ test('streamed plain final answers cannot bypass unresolved progress rows', asyn
     assert.match(final, /Actually streamed done\./, `${AgentClass.name}: streamed run did not continue to done`);
     assert.equal(provider.calls, 3, `${AgentClass.name}: third streamed model turn was not requested`);
     const ledgerWarnings = updates.filter(update => update.type === 'warning' && /Progress ledger has unresolved rows/.test(update.data?.message || ''));
-    assert.ok(ledgerWarnings.length >= 2, `${AgentClass.name}: streamed done after plain-final nudge did not stay blocked`);
-    const block = agent.conversations.get(tabId).find(msg => msg.role === 'user' && /blockedFinal/.test(msg.content || ''));
-    assert.ok(block, `${AgentClass.name}: streamed plain final block nudge missing`);
-    assert.match(block.content, /<untrusted_page_content id="[a-z0-9]+">/, `${AgentClass.name}: streamed block rows were not wrapped`);
-    assert.doesNotMatch(block.content, /<\/untrusted_page_content><system>/, `${AgentClass.name}: streamed row label escaped untrusted boundary`);
+    assert.ok(ledgerWarnings.length >= 1, `${AgentClass.name}: streamed done after plan-only recovery did not stay blocked`);
+    const planBlock = agent.conversations.get(tabId).find(msg => msg.role === 'user' && /^\[PLAN EXECUTION BLOCK/.test(msg.content || ''));
+    assert.ok(planBlock, `${AgentClass.name}: streamed plain final execution block nudge missing`);
     const blockedDone = agent.conversations.get(tabId).find(msg => msg.role === 'tool' && /"blockedDone":true/.test(msg.content || ''));
     assert.ok(blockedDone, `${AgentClass.name}: streamed done after plain-final nudge was not blocked`);
   }
@@ -25006,7 +25247,17 @@ test('streamed XML-style raw tool calls execute instead of becoming final text',
           yield { type: 'done' };
           return;
         }
-        yield { type: 'text', content: 'Clicked the target.' };
+        yield {
+          type: 'tool_call',
+          content: [{
+            index: 0,
+            id: 'done_call',
+            function: {
+              name: 'done',
+              arguments: JSON.stringify({ summary: 'Clicked the target.' }),
+            },
+          }],
+        };
         yield { type: 'done' };
       },
     };
@@ -25015,6 +25266,11 @@ test('streamed XML-style raw tool calls execute instead of becoming final text',
       getVisionProvider: async () => null,
     });
     agent.planBeforeAct = false;
+    agent._maybeRunPlannerGate = async () => ({
+      proceed: true,
+      requestKind: 'execute',
+      requiresStateChange: true,
+    });
     const tabId = 808;
     agent.maxSteps = 3;
     agent._skipPermissionGate = true;
@@ -25025,6 +25281,7 @@ test('streamed XML-style raw tool calls execute instead of becoming final text',
     agent._persist = () => {};
     const executed = [];
     agent.executeTool = async (_tabId, name, args) => {
+      if (name === 'done') return { done: true, summary: args.summary };
       executed.push({ name, args });
       return { success: true, method: name, ref_id: args.ref_id };
     };
@@ -26718,6 +26975,8 @@ async function withPlannerBrowserGlobals(fn) {
 
 function plannerFixtureJson(overrides = {}) {
   return JSON.stringify({
+    request_kind: 'execute',
+    requires_state_change: false,
     summary: 'Open the page and collect visible account links',
     confidence: 0.75,
     steps: [{ id: '1', action: 'Read the current page', tools: ['read_page'] }],
@@ -26729,6 +26988,12 @@ function plannerFixtureJson(overrides = {}) {
     },
     scheduling: null,
     risks: [],
+    localized: {
+      locale: 'en',
+      summary: 'Open the page and collect visible account links',
+      steps: [{ id: '1', action: 'Read the current page' }],
+      risks: [],
+    },
     mode: 'act',
     ...overrides,
   });
@@ -26747,6 +27012,8 @@ test('planner validates semantic skill ids and activates approved skills before 
         name: 'planner-test',
         chat: async () => ({
           content: JSON.stringify({
+            request_kind: 'execute',
+            requires_state_change: true,
             summary: 'Download the requested public video.',
             confidence: 0.99,
             steps: [{ id: '1', action: 'Load the media skill and follow its workflow.', tools: ['load_skill'] }],
@@ -26754,6 +27021,12 @@ test('planner validates semantic skill ids and activates approved skills before 
             memory: { use_scratchpad: false, scratchpad_notes: [], use_progress_ledger: false, progress_action: null },
             scheduling: null,
             risks: [],
+            localized: {
+              locale: 'tr',
+              summary: 'İstenen herkese açık videoyu indir.',
+              steps: [{ id: '1', action: 'Medya becerisini yükleyip iş akışını uygula.' }],
+              risks: [],
+            },
             mode: 'act',
           }),
           usage: {},
@@ -27279,7 +27552,7 @@ test('planner gate: abort during planner call stops before review card', async (
   });
 });
 
-test('planner gate: try mode continues when plan JSON cannot be parsed', async () => {
+test('planner gate: try mode fails closed when structured intent cannot be parsed', async () => {
   await withPlannerBrowserGlobals(async () => {
     for (const [label, AgentClass] of [['chrome', AgentCh], ['firefox', AgentFx]]) {
       const tabId = label === 'chrome' ? 9151 : 9152;
@@ -27295,9 +27568,9 @@ test('planner gate: try mode continues when plan JSON cannot be parsed', async (
         null,
       );
 
-      assert.equal(gate.proceed, true, `${label} should continue without a pinned plan`);
-      assert.match(warning, /continuing without a pinned plan/i, `${label} warning`);
-      assert.doesNotMatch(warning, /Task cancelled/i, `${label} should not cancel in try mode`);
+      assert.equal(gate.proceed, false, `${label} should fail closed`);
+      assert.equal(gate.requestKind, 'clarify', `${label} should route invalid intent to clarification`);
+      assert.match(warning, /could not reliably determine whether you wanted a plan or execution/i, `${label} warning`);
     }
   });
 });
@@ -27319,8 +27592,8 @@ test('planner gate: strict mode fails closed when plan JSON cannot be parsed', a
       );
 
       assert.equal(gate.proceed, false, `${label} should fail closed`);
-      assert.match(gate.message || '', /Strict Planning is enabled/i, `${label} message`);
-      assert.match(gate.message || '', /could not produce a valid structured plan/i, `${label} message`);
+      assert.equal(gate.requestKind, 'clarify', `${label} should route invalid intent to clarification`);
+      assert.match(gate.message || '', /could not reliably determine whether you wanted a plan or execution/i, `${label} message`);
     }
   });
 });
@@ -27679,14 +27952,21 @@ test('planner gate: skips one short follow-up after a newly approved try-mode pl
       agent.conversations.set(tabId, [{ role: 'system', content: 'system' }]);
 
       let plannerCalls = 0;
+      let intentCalls = 0;
       agent._runPlannerGate = async () => {
         plannerCalls += 1;
         return plannerCalls === 1
           ? {
             proceed: true,
             approvedScratchpadText: '[Approved plan — pinned by planner]\n\n### Summary\nRevise the current draft.',
+            requestKind: 'execute',
+            requiresStateChange: false,
           }
-          : { proceed: true };
+          : { proceed: true, requestKind: 'execute', requiresStateChange: false };
+      };
+      agent._runPlannerIntentGate = async () => {
+        intentCalls += 1;
+        return { proceed: true, requestKind: 'execute', requiresStateChange: false };
       };
 
       const initial = await agent._maybeRunPlannerGate(
@@ -27717,6 +27997,7 @@ test('planner gate: skips one short follow-up after a newly approved try-mode pl
 
       assert.equal(outcome.proceed, true, `${label} should proceed`);
       assert.equal(plannerCalls, 1, `${label} should not run a fresh planner call for a short planned follow-up`);
+      assert.equal(intentCalls, 1, `${label} should still classify short follow-up intent`);
       assert.equal(agent.conversations.get(tabId).at(-1).content, enrichedFollowUp, `${label} should still append the enriched follow-up turn`);
       assert.equal(agent.plannerFollowUpSkipTabs.has(tabId), false, `${label} should consume the one short follow-up skip`);
 
@@ -27732,6 +28013,7 @@ test('planner gate: skips one short follow-up after a newly approved try-mode pl
 
       assert.equal(secondFollowUp.proceed, true, `${label} second short follow-up should proceed`);
       assert.equal(plannerCalls, 2, `${label} second short follow-up should run the planner`);
+      assert.equal(intentCalls, 1, `${label} second follow-up should use the full planner`);
       assert.equal(agent.plannerFollowUpSkipTabs.has(tabId), false, `${label} second short follow-up should not leave a skip armed`);
     }
   });
@@ -28401,14 +28683,25 @@ test('planner gate: streaming path clears active trace run after completion', as
     for (const [label, AgentClass] of [['chrome', AgentCh], ['firefox', AgentFx]]) {
       const tabId = label === 'chrome' ? 9251 : 9252;
       const provider = {
-        supportsTools: false,
+        supportsTools: true,
         supportsVision: false,
         promptTier: 'full',
         contextWindow: 128000,
         model: 'test-model',
         name: 'test-provider',
+        calls: 0,
         async *chatStream() {
-          yield { type: 'text', content: 'Streamed plan run complete.' };
+          this.calls += 1;
+          yield {
+            type: 'tool_call',
+            content: [{
+              index: 0,
+              id: this.calls === 1 ? 'read_call' : 'done_call',
+              function: this.calls === 1
+                ? { name: 'read_page', arguments: '{}' }
+                : { name: 'done', arguments: JSON.stringify({ summary: 'Streamed plan run complete.' }) },
+            }],
+          };
           yield { type: 'done' };
         },
       };
@@ -28417,12 +28710,21 @@ test('planner gate: streaming path clears active trace run after completion', as
         getVisionProvider: async () => null,
       });
       agent.setPlanBeforeActMode('try');
-      agent.maxSteps = 2;
+      agent.maxSteps = 3;
       agent._manageContext = async () => {};
       agent._enrichUserMessageWithCurrentPage = async (_tabId, _messages, content) => ({ role: 'user', content });
       agent._ensureProgressSessionForCurrentTask = async () => ({ mode: 'inactive' });
       agent._maybeReinjectAdapter = async () => {};
-      agent._runPlannerGate = async () => ({ proceed: true });
+      agent._runPlannerGate = async () => ({
+        proceed: true,
+        requestKind: 'execute',
+        requiresStateChange: false,
+      });
+      agent.executeTool = async (_toolTabId, name, args) => (
+        name === 'done'
+          ? { done: true, summary: args.summary }
+          : { success: true, text: 'Page content.' }
+      );
       agent._persist = () => {};
       agent._startTraceRun = async () => {
         agent.currentRunId.set(tabId, 'trace_stream_test');
@@ -28442,14 +28744,25 @@ test('planner gate: a stale abort flag does not cancel a fresh task', async () =
     for (const [label, AgentClass] of [['chrome', AgentCh], ['firefox', AgentFx]]) {
       const tabId = label === 'chrome' ? 9301 : 9302;
       const provider = {
-        supportsTools: false,
+        supportsTools: true,
         supportsVision: false,
         promptTier: 'full',
         contextWindow: 128000,
         model: 'test-model',
         name: 'test-provider',
+        calls: 0,
         async *chatStream() {
-          yield { type: 'text', content: 'Fresh task ran.' };
+          this.calls += 1;
+          yield {
+            type: 'tool_call',
+            content: [{
+              index: 0,
+              id: this.calls === 1 ? 'read_call' : 'done_call',
+              function: this.calls === 1
+                ? { name: 'read_page', arguments: '{}' }
+                : { name: 'done', arguments: JSON.stringify({ summary: 'Fresh task ran.' }) },
+            }],
+          };
           yield { type: 'done' };
         },
       };
@@ -28458,20 +28771,25 @@ test('planner gate: a stale abort flag does not cancel a fresh task', async () =
         getVisionProvider: async () => null,
       });
       agent.setPlanBeforeActMode('try');
-      agent.maxSteps = 2;
+      agent.maxSteps = 3;
       agent._manageContext = async () => {};
       agent._enrichUserMessageWithCurrentPage = async (_tabId, _messages, content) => ({ role: 'user', content });
       agent._ensureProgressSessionForCurrentTask = async () => ({ mode: 'inactive' });
       agent._maybeReinjectAdapter = async () => {};
       agent._persist = () => {};
       agent._startTraceRun = async () => null;
+      agent.executeTool = async (_toolTabId, name, args) => (
+        name === 'done'
+          ? { done: true, summary: args.summary }
+          : { success: true, text: 'Page content.' }
+      );
 
       // Probe the abort state the gate would observe; the run must have cleared
       // any stale flag before the gate so this is false. (#1)
       let abortSeenByGate = null;
       agent._runPlannerGate = async (gateTabId) => {
         abortSeenByGate = agent._checkAbort(gateTabId);
-        return { proceed: true };
+        return { proceed: true, requestKind: 'execute', requiresStateChange: false };
       };
 
       // Stale abort flag left over from a prior, already-finished run.

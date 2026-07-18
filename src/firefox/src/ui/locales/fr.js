@@ -604,6 +604,7 @@ export default {
   'sp.plan.cancelled': 'Plan annulé.',
   'sp.plan.expired': 'Ce plan n\'est plus en attente de révision — l\'exécution a été annulée.',
   'sp.plan.awaiting_review': 'Approuvez ou annulez le plan ci-dessus avant d\'envoyer un autre message.',
+  'sp.plan.intent_unavailable': 'Je n\'ai pas pu déterminer de façon fiable si vous souhaitiez un plan ou son exécution. Veuillez préciser avant toute action.',
   'sp.slash.busy_only_oob': 'Les messages sont mis en file d\'attente pendant que WebBrain est occupé. Seuls /help, /progress, /scratchpad, /memory, /schedule --list, /dangerously-skip-permissions, /screenshot, /export, /export --traces et /verbose peuvent s\'exécuter immédiatement comme commandes slash.',
   'tool.go_back': 'Revenir en arrière',
   'tool.go_forward': 'Aller en avant',

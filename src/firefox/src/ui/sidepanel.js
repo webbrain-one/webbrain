@@ -4665,6 +4665,8 @@ async function sendMessage(extraChatParams = {}) {
       requestId,
       text,
       mode: modeForSend,
+      locale: getLocale(),
+      intentFailureMessage: t('sp.plan.intent_unavailable'),
       apiMutationsAllowed: apiMutationsAllowedForSend,
       ...(runCaptureDirective ? {
         runCapture: {

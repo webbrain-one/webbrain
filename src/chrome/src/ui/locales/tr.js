@@ -618,6 +618,7 @@ export default {
   'sp.plan.cancelled': 'Plan iptal edildi.',
   'sp.plan.expired': 'Bu plan artık inceleme beklenmiyor — çalıştırma iptal edildi.',
   'sp.plan.awaiting_review': 'Başka bir mesaj göndermeden önce yukarıdaki planı onaylayın veya iptal edin.',
+  'sp.plan.intent_unavailable': 'Bir plan mı yoksa uygulama mı istediğinizi güvenilir biçimde belirleyemedim. Herhangi bir işlem yapmadan önce lütfen açıklayın.',
   'sp.slash.busy_only_oob': 'WebBrain meşgulken mesajlar kuyruğa alınır. Yalnızca /help, /progress, /scratchpad, /memory, /schedule --list, /dangerously-skip-permissions, /screenshot, /export, /export --traces ve /verbose slash komutları olarak hemen çalışabilir.',
   'tool.go_back': 'Geri gidiliyor',
   'tool.go_forward': 'İleri gidiliyor',

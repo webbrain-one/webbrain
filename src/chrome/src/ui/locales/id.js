@@ -613,6 +613,7 @@ export default {
   'sp.plan.cancelled': 'Rencana dibatalkan.',
   'sp.plan.expired': 'Rencana ini tidak lagi menunggu peninjauan — proses dibatalkan.',
   'sp.plan.awaiting_review': 'Setujui atau batalkan rencana di atas sebelum mengirim pesan lain.',
+  'sp.plan.intent_unavailable': 'Saya tidak dapat memastikan apakah Anda menginginkan rencana atau pelaksanaannya. Mohon jelaskan sebelum saya melakukan tindakan apa pun.',
   'sp.slash.busy_only_oob': 'Pesan dimasukkan ke antrean saat WebBrain sibuk. Hanya /help, /progress, /scratchpad, /memory, /schedule --list, /dangerously-skip-permissions, /screenshot, /export, /export --traces, dan /verbose yang dapat langsung berjalan sebagai perintah slash.',
   'tool.go_back': 'Kembali',
   'tool.go_forward': 'Maju',

@@ -258,6 +258,7 @@ export default {
   'sp.plan.cancelled': 'Plan cancelled.',
   'sp.plan.expired': 'This plan is no longer awaiting review — the run was cancelled.',
   'sp.plan.awaiting_review': 'Approve or cancel the plan above before sending another message.',
+  'sp.plan.intent_unavailable': 'I could not reliably tell whether you wanted a plan or execution. Please clarify before I take any action.',
 
   // Permission prompt (structured; returns once/always/deny — no free text)
   'sp.perm.question': 'WebBrain wants to {verb} {host}. Allow it?',

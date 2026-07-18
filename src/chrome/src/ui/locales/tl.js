@@ -613,6 +613,7 @@ export default {
   'sp.plan.cancelled': 'Kinansela ang plano.',
   'sp.plan.expired': 'Ang planong ito ay hindi na naghihintay ng pagsusuri — ang pagtakbo ay kinansela.',
   'sp.plan.awaiting_review': 'Aprubahan o kanselahin ang plano sa itaas bago magpadala ng isa pang mensahe.',
+  'sp.plan.intent_unavailable': 'Hindi ko matiyak kung plano lamang ang gusto mo o pati ang pagpapatupad nito. Pakilinaw bago ako gumawa ng anumang aksyon.',
   'sp.slash.busy_only_oob': 'Nakapila ang mga mensahe habang abala ang WebBrain. Tanging /help, /progress, /scratchpad, /memory, /schedule --list, /dangerously-skip-permissions, /screenshot, /export, /export --traces, at /verbose ang maaaring tumakbo agad bilang mga slash command.',
   'tool.go_back': 'Bumabalik',
   'tool.go_forward': 'Sumusulong',

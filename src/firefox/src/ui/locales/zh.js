@@ -604,6 +604,7 @@ export default {
   'sp.plan.cancelled': '计划已取消。',
   'sp.plan.expired': '该计划不再等待审查 — 运行已取消。',
   'sp.plan.awaiting_review': '发送另一条消息前，请先批准或取消上面的计划。',
+  'sp.plan.intent_unavailable': '我无法可靠判断你是只想要计划，还是也希望执行。请在我采取任何操作前说明清楚。',
   'sp.slash.busy_only_oob': 'WebBrain 忙碌时，消息会排队。只有 /help、/progress、/scratchpad、/memory、/schedule --list、/dangerously-skip-permissions、/screenshot、/export、/export --traces 和 /verbose 可以作为斜杠命令立即运行。',
   'tool.go_back': '返回',
   'tool.go_forward': '前进',

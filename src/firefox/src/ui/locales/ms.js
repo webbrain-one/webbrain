@@ -604,6 +604,7 @@ export default {
   'sp.plan.cancelled': 'Rancangan dibatalkan.',
   'sp.plan.expired': 'Rancangan ini tidak lagi menunggu semakan — pelaksanaan dibatalkan.',
   'sp.plan.awaiting_review': 'Luluskan atau batalkan rancangan di atas sebelum menghantar mesej lain.',
+  'sp.plan.intent_unavailable': 'Saya tidak dapat menentukan dengan pasti sama ada anda mahukan rancangan atau pelaksanaannya. Sila jelaskan sebelum saya mengambil sebarang tindakan.',
   'sp.slash.busy_only_oob': 'Mesej dimasukkan ke giliran semasa WebBrain sibuk. Hanya /help, /progress, /scratchpad, /memory, /schedule --list, /dangerously-skip-permissions, /screenshot, /export, /export --traces, dan /verbose boleh berjalan serta-merta sebagai arahan slash.',
   'tool.go_back': 'Kembali',
   'tool.go_forward': 'Maju',

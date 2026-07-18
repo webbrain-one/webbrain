@@ -613,6 +613,7 @@ export default {
   'sp.plan.cancelled': '計画がキャンセルされました。',
   'sp.plan.expired': 'この計画はレビュー待ちではなくなりました — 実行はキャンセルされました。',
   'sp.plan.awaiting_review': '別のメッセージを送信する前に、上の計画を承認またはキャンセルしてください。',
+  'sp.plan.intent_unavailable': '計画だけを求めているのか、実行も求めているのかを確実に判断できませんでした。操作を行う前に明確にしてください。',
   'sp.slash.busy_only_oob': 'WebBrain がビジーの間、メッセージはキューに入ります。/help、/progress、/scratchpad、/memory、/schedule --list、/dangerously-skip-permissions、/screenshot、/export、/export --traces、/verbose だけがスラッシュコマンドとしてすぐに実行できます。',
   'tool.go_back': '戻る',
   'tool.go_forward': '進む',

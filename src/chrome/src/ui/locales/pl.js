@@ -604,6 +604,7 @@ export default {
   'sp.plan.cancelled': 'Plan anulowany.',
   'sp.plan.expired': 'Ten plan nie oczekuje już na przegląd — uruchomienie zostało anulowane.',
   'sp.plan.awaiting_review': 'Zatwierdź lub anuluj powyższy plan przed wysłaniem kolejnej wiadomości.',
+  'sp.plan.intent_unavailable': 'Nie udało mi się wiarygodnie ustalić, czy chcesz tylko plan, czy również jego wykonanie. Doprecyzuj to, zanim podejmę jakiekolwiek działanie.',
   'sp.slash.busy_only_oob': 'Wiadomości są kolejkowane, gdy WebBrain jest zajęty. Tylko /help, /progress, /scratchpad, /memory, /schedule --list, /dangerously-skip-permissions, /screenshot, /export, /export --traces i /verbose mogą uruchamiać się od razu jako polecenia slash.',
   'tool.go_back': 'Cofanie',
   'tool.go_forward': 'Przechodzenie do przodu',
