@@ -2395,9 +2395,11 @@
       // but is possible if the policy ever tightens), report it
       // identically so the cross-browser surface stays consistent.
       'execute_js': () => {
+        let dispatched = false;
         try {
           const fn = new Function(msg.params.code);
-          return { success: true, result: fn() };
+          dispatched = true;
+          return { success: true, dispatched: true, result: fn() };
         } catch (e) {
           const errMsg = (e && e.message) || String(e);
           const isCspBlock =
@@ -2406,12 +2408,13 @@
           if (isCspBlock) {
             return {
               success: false,
+              dispatched,
               cspBlocked: true,
               error:
                 'execute_js is blocked by the extension\'s Content Security Policy — `new Function()` requires `unsafe-eval`. This is unexpected on Firefox (the manifest grants `unsafe-eval`) — the policy may have been changed. Use the finite tools instead: get_accessibility_tree (read the page), click_ax / type_ax / set_field (interact via ref_id), scroll, navigate, get_selection, iframe_read / iframe_click / iframe_type.',
             };
           }
-          return { success: false, error: errMsg };
+          return { success: false, dispatched, error: errMsg };
         }
       },
       'get_shadow_dom': () => getShadowDOM(),
@@ -2477,6 +2480,45 @@
           try { el.scrollIntoView({ block: 'center', inline: 'center' }); } catch {}
           try { el.focus({ preventScroll: true }); } catch {}
           const rect = el.getBoundingClientRect();
+          const targetContext = (() => {
+            try {
+              const ownText = String(
+                (el.getAttribute && (el.getAttribute('aria-label') || el.getAttribute('title')))
+                || el.innerText
+                || ''
+              ).replace(/\s+/g, ' ').trim();
+              let fallback = null;
+              let node = el.parentElement;
+              for (let depth = 0; node && depth < 6; depth++, node = node.parentElement) {
+                const text = String(node.innerText || '').replace(/\s+/g, ' ').trim();
+                if (!text || text === ownText) continue;
+                const headingEl = node.querySelector?.('h1,h2,h3,h4,[role="heading"]');
+                const linkEl = node.querySelector?.('a[href]');
+                const role = String(node.getAttribute?.('role') || '').toLowerCase();
+                const nodeTag = String(node.tagName || '').toLowerCase();
+                const productCard = !!node.matches?.([
+                  '[data-product-id]',
+                  '[data-product]',
+                  '[data-testid*="product" i]',
+                  '[class*="product" i]',
+                  '[class*="card" i]',
+                  '[class*="tile" i]',
+                ].join(','));
+                const context = {
+                  text: text.slice(0, 600),
+                  ...(headingEl ? { heading: String(headingEl.innerText || headingEl.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 160) } : {}),
+                  ...(linkEl ? { href: String(linkEl.href || linkEl.getAttribute('href') || '').slice(0, 500) } : {}),
+                };
+                if (!fallback) fallback = context;
+                if (productCard || headingEl || linkEl || role === 'listitem' || nodeTag === 'li' || nodeTag === 'article') {
+                  return context;
+                }
+              }
+              return fallback;
+            } catch {
+              return null;
+            }
+          })();
           let popupRole = '';
           let popupHasPopup = null;
           let isPopupOpener = false;
@@ -2538,6 +2580,7 @@
               ref_id,
               tag,
               rect: { x: Math.round(rect.x), y: Math.round(rect.y), w: Math.round(rect.width), h: Math.round(rect.height) },
+              ...(targetContext ? { targetContext } : {}),
             };
             try {
               const accName = (el.getAttribute && (el.getAttribute('aria-label') || el.getAttribute('title')))

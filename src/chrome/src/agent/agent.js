@@ -6,6 +6,7 @@ import { detectProgressAction, formatLedgerRow, formatLedgerSummary, isBlockedLe
 import { buildGithubStargazerProgressItems } from './observers/github-stargazers.js';
 import { analyzeMastodonPage, mastodonHandoffInstruction, mastodonProgressGuard } from './observers/mastodon.js';
 import { isProgressActionAllowed, isProgressIntentActive, normalizeProgressAction, normalizeProgressIntent } from './progress-intent.js';
+import { completionDoneBlock, completionPlainFinalBlock, consumeCompletionObservation, createCompletionInvariantState, hasUnconsumedCompletionObservation, recordCompletionToolResult } from './completion-invariant.js';
 import { cdpClient } from '../cdp/cdp-client.js';
 import { getActiveAdapter, getFullPageCapturePolicy, UNIVERSAL_PREAMBLE } from './adapters.js';
 import {
@@ -294,8 +295,57 @@ export class Agent {
     this._doneBlockCount = new Map(); // tabId -> consecutive done-blocks
     this._recentSubmitClicks = new Map(); // tabId -> recent submit click timestamps
     this._runningTabs = new Set(); // tabIds with an active processMessage/Stream in flight
+    this.completionInvariants = new Map(); // tabId -> run-scoped post-action verification state
+    this._completionRunCounter = 0;
     this.scheduler = null;
     this.scheduledRunPolicies = new Map(); // tabId -> { requireConsequentialConfirmation, autoApprovePlanReview }
+  }
+
+  _beginCompletionInvariant(tabId) {
+    this._completionRunCounter += 1;
+    const token = `completion_${tabId}_${Date.now()}_${this._completionRunCounter}`;
+    this.completionInvariants.set(tabId, createCompletionInvariantState(token));
+    return token;
+  }
+
+  _clearCompletionInvariant(tabId, runToken = '') {
+    const state = this.completionInvariants.get(tabId);
+    if (!state) return;
+    if (runToken && state.runToken !== runToken) return;
+    this.completionInvariants.delete(tabId);
+  }
+
+  _recordCompletionToolResult(tabId, name, args, result) {
+    const state = this.completionInvariants.get(tabId);
+    if (!state) return null;
+    const next = recordCompletionToolResult(state, name, args, result);
+    this.completionInvariants.set(tabId, next);
+    return next;
+  }
+
+  _completionDoneBlock(tabId, name, args) {
+    const mode = this.conversationModes.get(tabId) || 'ask';
+    if (!this._isActionMode(mode)) return null;
+    return completionDoneBlock(this.completionInvariants.get(tabId), name, args);
+  }
+
+  _completionPlainFinalBlock(tabId) {
+    const mode = this.conversationModes.get(tabId) || 'ask';
+    if (!this._isActionMode(mode)) return null;
+    return completionPlainFinalBlock(this.completionInvariants.get(tabId));
+  }
+
+  _hasFreshCompletionObservation(tabId) {
+    return hasUnconsumedCompletionObservation(this.completionInvariants.get(tabId));
+  }
+
+  _consumeCompletionObservation(tabId) {
+    const state = this.completionInvariants.get(tabId);
+    if (!state) return false;
+    const next = consumeCompletionObservation(state);
+    if (next === state) return false;
+    this.completionInvariants.set(tabId, next);
+    return true;
   }
 
   setScheduler(scheduler) {
@@ -2460,6 +2510,36 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         }
       }
 
+      if (fnName === 'done' || fnName === 'done_json') {
+        const invariantBlock = this._completionDoneBlock(tabId, fnName, fnArgs);
+        if (invariantBlock) {
+          const blockedResult = {
+            success: false,
+            blockedDone: true,
+            completionInvariant: true,
+            reason: invariantBlock.reason,
+            error: invariantBlock.error,
+            ...(invariantBlock.lastAction ? { lastAction: invariantBlock.lastAction } : {}),
+          };
+          onUpdate('tool_call', { name: fnName, args: fnArgs });
+          onUpdate('tool_result', { name: fnName, result: blockedResult });
+          messages.push({
+            role: 'tool',
+            tool_call_id: tc.id,
+            content: JSON.stringify(blockedResult),
+          });
+          const runId = this.currentRunId.get(tabId);
+          if (runId) {
+            trace.recordToolCall(runId, step, {
+              name: fnName, args: fnArgs, result: blockedResult, latencyMs: 0,
+            });
+          }
+          onUpdate('warning', { message: 'Runtime completion invariant blocked an unverified or ambiguous completion.' });
+          this._persist(tabId);
+          continue;
+        }
+      }
+
       // Snapshot URL before nav-prone calls. Some tools are conditional:
       // Enter and set_field({submit:true}) can navigate, while other key
       // presses and ordinary field edits should avoid the URL-check delay.
@@ -2478,6 +2558,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           consequential: executionMutationEvidence,
         });
       }
+      this._recordCompletionToolResult(tabId, fnName, fnArgs, toolResult);
       const _toolLatency = Date.now() - _toolStart;
       const nytimesPageGateFallback = this._nytimesPageGateFallback(tabId, fnName, toolResult);
       if (nytimesPageGateFallback && toolResult && typeof toolResult === 'object') {
@@ -5841,11 +5922,6 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     return mode === 'act' || mode === 'dev';
   }
 
-  _devModeBlockedMessage(provider = null) {
-    const providerName = provider?.name || provider?.config?.model || 'the active provider';
-    return `Dev mode requires a Mid or Full prompt tier. ${providerName} is currently configured as Compact, so Dev mode is blocked for this provider. Switch to a Mid/Full-tier provider or change this provider's prompt tier, then try Dev again.`;
-  }
-
   /**
    * Compose the full system prompt: base (ASK or ACT) + optional universal
    * cookie/paywall guidance + optional enabled skills + optional user
@@ -6263,6 +6339,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     this._lastInteractionRect.delete(tabId);
     this._doneBlockCount.delete(tabId);
     this._recentSubmitClicks.delete(tabId);
+    this.completionInvariants.delete(tabId);
     if (!preserveRunGuard) {
       this._runningTabs.delete(tabId);
       this.currentRunId.delete(tabId);
@@ -6961,6 +7038,34 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       };
     }
     const canonicalItems = this._canonicalizeProgressItems(items);
+    const activeSession = this._currentProgressSession(tabId);
+    const currentRows = this.progressLedgers.get(tabId) || [];
+    const terminalRequirementIds = canonicalItems
+      .filter(item => isTerminalLedgerStatus(item?.status))
+      .map(item => {
+        const row = currentRows.find(candidate => candidate?.id === item?.id
+          && (!activeSession?.sessionId || String(candidate?.sessionId || '') === activeSession.sessionId));
+        return row?.fields?.completionRequirement === true && !isTerminalLedgerStatus(row?.status)
+          ? row.id
+          : '';
+      })
+      .filter(Boolean);
+    if (terminalRequirementIds.length > 1) {
+      return {
+        success: false,
+        completionInvariant: true,
+        error: 'Each classifier-seeded completion requirement needs its own consequential action and successful explicit observation. Complete one requirement per evidence cycle.',
+        ids: terminalRequirementIds.slice(0, 20),
+      };
+    }
+    if (terminalRequirementIds.length && !this._hasFreshCompletionObservation(tabId)) {
+      return {
+        success: false,
+        completionInvariant: true,
+        error: 'Classifier-seeded completion requirements can become terminal only after a consequential action and a successful explicit observation of the resulting state.',
+        ids: terminalRequirementIds.slice(0, 20),
+      };
+    }
     const mastodonGuard = this._mastodonProgressUpdateGuard(tabId, canonicalItems);
     if (mastodonGuard) {
       return {
@@ -6991,6 +7096,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (!result.changed) {
       return { success: false, error: 'progress_update: no valid items were provided. Each item needs a stable id.' };
     }
+    if (terminalRequirementIds.length) this._consumeCompletionObservation(tabId);
     this.progressLedgers.set(tabId, result.rows);
     const adoption = sessionId
       ? this._adoptUnscopedProgressRows(tabId, sessionId, { allowReopen: args.reopen === true, taskKey })
@@ -7244,12 +7350,50 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     }
   }
 
+  _seedClassifierProgressTargets(tabId, session) {
+    if (
+      !session
+      || session.source !== 'classifier'
+      || !isProgressIntentActive(session)
+      || !Array.isArray(session.targets)
+      || session.targets.length < 2
+      || !Array.isArray(session.allowedActions)
+      || session.allowedActions.length < 1
+    ) {
+      return null;
+    }
+    const allowedActions = session.allowedActions.map(normalizeProgressAction).filter(Boolean);
+    const action = allowedActions[0];
+    if (!action) return null;
+    const items = session.targets.map((target, index) => ({
+      id: `requirement:${index + 1}:${String(target || '').trim()}`,
+      label: String(target || '').trim(),
+      target: String(target || '').trim(),
+      action,
+      status: 'pending',
+      fields: {
+        completionRequirement: true,
+        classifierTarget: true,
+        completionAllowedActions: allowedActions,
+      },
+    })).filter(item => item.label);
+    if (items.length < 2) return null;
+    return this._progressUpdate(tabId, { items }, {
+      source: 'classifier',
+      sessionId: session.sessionId,
+      pageScope: session.pageScope || '',
+    });
+  }
+
   async _ensureProgressSessionForCurrentTask(tabId, opts = {}) {
     const taskText = this._progressTaskTextKey(opts.taskText || this._latestTaskText(tabId));
     if (!taskText) return null;
     const pageScope = String(opts.pageScope || this._currentProgressPageScope(tabId) || '').trim();
     const existing = this._currentProgressSession(tabId, { pageScope });
-    if (existing) return existing;
+    if (existing) {
+      this._seedClassifierProgressTargets(tabId, existing);
+      return existing;
+    }
     if (this._currentTaskIsProgressContinuation(tabId)) {
       const session = this._deriveProgressSessionForCurrentTask(tabId);
       this._syncProgressSessionPrompt(tabId);
@@ -7267,6 +7411,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       return session;
     }
     const session = this._setProgressSession(tabId, classified, { taskText, pageScope, source: 'classifier' });
+    this._seedClassifierProgressTargets(tabId, session);
     this._syncProgressSessionPrompt(tabId);
     return session;
   }
@@ -7591,7 +7736,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
   _emptyOutputRecoveryNudge(mode) {
     if (this._isActionMode(mode)) {
-      return '[System nudge: your previous response had neither text nor a tool call. Continue the active browser task with tool calls. If the task is truly complete, call the done tool with a real summary. Do not output a plain summary and do not stop without a tool call.]';
+      return '[System nudge: your previous response had neither text nor a tool call. Continue the active browser task with tool calls. If the task is truly complete, call done with a real summary and an explicit success, partial, or failed outcome. Do not output a plain summary and do not stop without a tool call.]';
     }
     return '[System nudge: your previous response had neither text nor a tool call. You may have run out of output budget on internal reasoning. In ONE short message, summarize what you accomplished, what you tried, and what blocked you - then stop. Do not start any new tool calls.]';
   }
@@ -7806,7 +7951,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       'Do not redo processed, skipped, or failed rows.',
       'Continue only unresolved pending/acted rows for the current task.',
       'Prefer a small batch of tool calls, then update progress.',
-      'When all rows are processed, skipped, or failed, call done with a real summary.',
+      'When all rows are processed, skipped, or failed, call done with a real summary and an explicit success, partial, or failed outcome.',
       `Current progress snapshot: ${counts.total} row(s), ${unresolved.length} unresolved.`,
     ].join(' ');
   }
@@ -9343,14 +9488,16 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
   async _executeDevJavaScript(tabId, args = {}) {
     const code = typeof args.code === 'string' ? args.code : '';
-    if (!code.trim()) return { success: false, error: 'execute_js: `code` is required.' };
-    if (code.length > 100000) return { success: false, error: 'execute_js: code exceeds the 100,000-character limit.' };
+    if (!code.trim()) return { success: false, dispatched: false, error: 'execute_js: `code` is required.' };
+    if (code.length > 100000) return { success: false, dispatched: false, error: 'execute_js: code exceeds the 100,000-character limit.' };
+    let dispatched = false;
     try {
       await cdpClient.enableDevDiagnostics(tabId);
       // Match Firefox's function-body contract while adding async/await:
       // callers use an explicit `return` for readback instead of having to
       // squeeze a multi-statement edit into one JavaScript expression.
       const expression = `(async () => {\n${code}\n})()\n//# sourceURL=webbrain-dev-execute.js`;
+      dispatched = true;
       const response = await cdpClient.evaluate(tabId, expression, true, { timeoutMs: 15000 });
       if (response?.exceptionDetails) {
         const details = response.exceptionDetails;
@@ -9363,6 +9510,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         }));
         return {
           success: false,
+          dispatched: true,
           error: String(exception.description || exception.value || details.text || 'JavaScript execution failed.').slice(0, 12000),
           exception: {
             text: String(details.text || '').slice(0, 1000),
@@ -9391,6 +9539,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       }
       return {
         success: true,
+        dispatched: true,
         result,
         resultType: String(remote.type || 'undefined'),
         resultSubtype: remote.subtype ? String(remote.subtype) : null,
@@ -9400,9 +9549,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       };
     } catch (e) {
       if (/timed?\s*out|timeout/i.test(String(e?.message || e))) {
-        return { success: false, timedOut: true, error: 'execute_js timed out after 15,000 ms.' };
+        return { success: false, dispatched, timedOut: true, error: 'execute_js timed out after 15,000 ms.' };
       }
-      return { success: false, error: `execute_js failed: ${e.message || e}` };
+      return { success: false, dispatched, error: `execute_js failed: ${e.message || e}` };
     }
   }
 
@@ -11024,6 +11173,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       if (!args.filePath) {
         return { success: false, error: 'upload_file needs either downloadId (from download_files / list_downloads — preferred) or filePath (absolute local path).' };
       }
+      let uploadDispatched = false;
       try {
         await cdpClient.attach(tabId);
         const nodeIds = await cdpClient.querySelectorPierce(tabId, args.selector);
@@ -11055,6 +11205,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         // pre-validation exists to prevent).
         const pathConfirmed = !!(probe && probe.exists && probe.readable === true);
 
+        uploadDispatched = true;
         await cdpClient.setFileInputFiles(tabId, nodeIds[0], [args.filePath]);
 
         // Verify the file actually attached. CDP's DOM.setFileInputFiles does
@@ -11086,7 +11237,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             // If the probe was inconclusive, surface it rather than fabricating
             // a success the agent would treat as completed work.
             if (!pathConfirmed) {
-              return { success: false, error: `Could not confirm "${basename}" uploaded: the target input is empty and the local path "${args.filePath}" was not validated. Check whether "${basename}" appears attached via get_accessibility_tree — if it does, the upload succeeded and you should NOT re-upload; if it does not, re-check the path with list_downloads and retry.` };
+              return { success: false, dispatched: true, error: `Could not confirm "${basename}" uploaded: the target input is empty and the local path "${args.filePath}" was not validated. Check whether "${basename}" appears attached via get_accessibility_tree — if it does, the upload succeeded and you should NOT re-upload; if it does not, re-check the path with list_downloads and retry.` };
             }
             // Path was validated as readable above, so an empty list here is a
             // real upload the page has taken over — report it as an unverified
@@ -11102,7 +11253,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           // must NOT reject on size alone.) readable === null = probe couldn't
           // run; fall through to success rather than block a valid upload.
           if (attached.readable === false) {
-            return { success: false, error: `"${args.filePath}" could not be read — it almost certainly does not exist at that path. Confirm the absolute path (use list_downloads to see where files were actually saved) and retry.` };
+            return { success: false, dispatched: true, error: `"${args.filePath}" could not be read — it almost certainly does not exist at that path. Confirm the absolute path (use list_downloads to see where files were actually saved) and retry.` };
           }
           return { success: true, file: args.filePath, attached: { name: attached.name, size: attached.size } };
         }
@@ -11113,11 +11264,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         // inconclusive too, we have no evidence at all — surface it instead of
         // fabricating a success the agent would treat as completed work.
         if (!pathConfirmed) {
-          return { success: false, error: `Could not confirm "${basename}" uploaded: the input.files list was unreadable and the local path "${args.filePath}" was not validated. Check whether "${basename}" appears attached via get_accessibility_tree — if it does, you're done; if not, re-check the path with list_downloads and the selector, then retry.` };
+          return { success: false, dispatched: true, error: `Could not confirm "${basename}" uploaded: the input.files list was unreadable and the local path "${args.filePath}" was not validated. Check whether "${basename}" appears attached via get_accessibility_tree — if it does, you're done; if not, re-check the path with list_downloads and the selector, then retry.` };
         }
         return { success: true, file: args.filePath, verified: false, note: 'Attachment could not be verified (the input.files list was unreadable), but the local path validated as readable. If the file does not appear attached on the page, re-check the selector.' };
       } catch (e) {
-        return { success: false, error: `Upload failed: ${e.message}` };
+        return { success: false, dispatched: uploadDispatched, error: `Upload failed: ${e.message}` };
       }
     }
 
@@ -13862,6 +14013,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     this._clearLoopState(tabId);
     if (runOptions?.trustedContinuation !== true) this._continuationExecutionEvidence.delete(tabId);
     this._clickAxCdpFallbacks.delete(tabId);
+    const completionRunToken = this._beginCompletionInvariant(tabId);
     this._runningTabs.add(tabId);
     const previousCloudContext = this.cloudRunContexts.get(tabId);
     if (runOptions.cloudRun) {
@@ -13881,6 +14033,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       this._runningTabs.delete(tabId);
       this._clearLoopState(tabId);
       this._clickAxCdpFallbacks.delete(tabId);
+      this._clearCompletionInvariant(tabId, completionRunToken);
     }
   }
 
@@ -13970,15 +14123,6 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     let runId = null;
     let finalResponse = '';
     let _traceStatus = 'done'; // updated on early exits
-
-    if (mode === 'dev' && provider.promptTier === 'compact') {
-      const msg = this._devModeBlockedMessage(provider);
-      messages.push(enriched);
-      messages.push({ role: 'assistant', content: msg });
-      this._persist(tabId);
-      onUpdate('warning', { message: msg });
-      return (finalResponse = msg);
-    }
 
     // Start console/network capture before the planning/model loop so Dev
     // diagnostic tools can inspect activity caused by the run's first page
@@ -14328,10 +14472,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       // Genuine final answer — emit and exit. Repeated-item progress recovery
       // takes priority so an unresolved ledger can still drive the next tool turn.
       const progressFinalBlock = this._plainFinalProgressBlock(tabId);
-      if (progressFinalBlock) {
+      const completionFinalBlock = this._completionPlainFinalBlock(tabId);
+      const plainFinalBlocks = [progressFinalBlock, completionFinalBlock].filter(Boolean);
+      if (plainFinalBlocks.length) {
         messages.push(this._withResponseItems({ role: 'assistant', content: result.content }, result.responseItems, result.reasoningContent, provider));
-        messages.push({ role: 'user', content: progressFinalBlock });
-        onUpdate('warning', { message: 'Progress ledger has unresolved rows; continuing.' });
+        messages.push({ role: 'user', content: plainFinalBlocks.join('\n\n') });
+        onUpdate('warning', { message: completionFinalBlock ? 'Runtime completion invariant requires an explicit done outcome.' : 'Progress ledger has unresolved rows; continuing.' });
         this._persist(tabId);
         continue;
       }
@@ -14400,6 +14546,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     this._clearLoopState(tabId);
     if (runOptions?.trustedContinuation !== true) this._continuationExecutionEvidence.delete(tabId);
     this._clickAxCdpFallbacks.delete(tabId);
+    const completionRunToken = this._beginCompletionInvariant(tabId);
     this._runningTabs.add(tabId);
     const previousCloudContext = this.cloudRunContexts.get(tabId);
     if (runOptions.cloudRun) {
@@ -14419,6 +14566,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       this._runningTabs.delete(tabId);
       this._clearLoopState(tabId);
       this._clickAxCdpFallbacks.delete(tabId);
+      this._clearCompletionInvariant(tabId, completionRunToken);
     }
   }
 
@@ -14453,15 +14601,6 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       _traceStatus = status;
       return response;
     };
-
-    if (mode === 'dev' && provider.promptTier === 'compact') {
-      const msg = this._devModeBlockedMessage(provider);
-      messages.push(enriched);
-      messages.push({ role: 'assistant', content: msg });
-      this._persist(tabId);
-      onUpdate('warning', { message: msg });
-      return finish(msg);
-    }
 
     // Match the non-streaming path: diagnostics must be live before the first
     // Dev action so console and network tools include activity from this run.
@@ -14718,10 +14857,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         // Preserve the progress ledger's purpose-built continuation before
         // treating other plain terminal text as unverified.
         const progressFinalBlock = this._plainFinalProgressBlock(tabId);
-        if (progressFinalBlock) {
+        const completionFinalBlock = this._completionPlainFinalBlock(tabId);
+        const plainFinalBlocks = [progressFinalBlock, completionFinalBlock].filter(Boolean);
+        if (plainFinalBlocks.length) {
           messages.push(this._withResponseItems({ role: 'assistant', content: fullText }, responseItems, reasoningContent, provider));
-          messages.push({ role: 'user', content: progressFinalBlock });
-          onUpdate('warning', { message: 'Progress ledger has unresolved rows; continuing.' });
+          messages.push({ role: 'user', content: plainFinalBlocks.join('\n\n') });
+          onUpdate('warning', { message: completionFinalBlock ? 'Runtime completion invariant requires an explicit done outcome.' : 'Progress ledger has unresolved rows; continuing.' });
           this._persist(tabId);
           continue;
         }

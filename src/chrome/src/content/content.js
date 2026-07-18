@@ -3053,6 +3053,42 @@
           const fallbackStateBefore = _axFallbackState(el);
           const rect = el.getBoundingClientRect();
           const tag = el.tagName ? el.tagName.toLowerCase() : '';
+          const targetContext = (() => {
+            try {
+              const ownText = String(_axAccessibleName(el) || el.innerText || '')
+                .replace(/\s+/g, ' ').trim();
+              let fallback = null;
+              let node = el.parentElement;
+              for (let depth = 0; node && depth < 6; depth++, node = node.parentElement) {
+                const text = String(node.innerText || '').replace(/\s+/g, ' ').trim();
+                if (!text || text === ownText) continue;
+                const headingEl = node.querySelector?.('h1,h2,h3,h4,[role="heading"]');
+                const linkEl = node.querySelector?.('a[href]');
+                const role = String(node.getAttribute?.('role') || '').toLowerCase();
+                const nodeTag = String(node.tagName || '').toLowerCase();
+                const productCard = !!node.matches?.([
+                  '[data-product-id]',
+                  '[data-product]',
+                  '[data-testid*="product" i]',
+                  '[class*="product" i]',
+                  '[class*="card" i]',
+                  '[class*="tile" i]',
+                ].join(','));
+                const context = {
+                  text: text.slice(0, 600),
+                  ...(headingEl ? { heading: String(headingEl.innerText || headingEl.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 160) } : {}),
+                  ...(linkEl ? { href: String(linkEl.href || linkEl.getAttribute('href') || '').slice(0, 500) } : {}),
+                };
+                if (!fallback) fallback = context;
+                if (productCard || headingEl || linkEl || role === 'listitem' || nodeTag === 'li' || nodeTag === 'article') {
+                  return context;
+                }
+              }
+              return fallback;
+            } catch {
+              return null;
+            }
+          })();
           const fallbackStatic = _axFallbackStaticAssessment(el);
           let popupRole = '';
           let popupHasPopup = null;
@@ -3130,6 +3166,7 @@
               _fallbackWeakStateAfterImmediate: fallbackStateAfterImmediate.weak,
               _fallbackStaticBlockedReason: fallbackStatic.blockedReason,
               rect: { x: Math.round(rect.x), y: Math.round(rect.y), w: Math.round(rect.width), h: Math.round(rect.height) },
+              ...(targetContext ? { targetContext } : {}),
             };
             // Echo accessible name + href so the model can see exactly what
             // element it hit. This is critical when a stale ref_id points at

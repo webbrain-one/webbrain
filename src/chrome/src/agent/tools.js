@@ -1063,7 +1063,7 @@ const DONE_TOOL_WITH_OUTCOME = {
   type: 'function',
   function: {
     name: 'done',
-    description: 'Signal that the task is finished for this run. Set outcome="success" only when you have successfully accomplished the user\'s request. Set outcome="partial" when you made useful progress but the request is not fully complete. Set outcome="failed" when you are blocked or have exhausted every reasonable alternative (at least 3-4 different approaches). Provide a summary of what was accomplished. Do NOT call this prematurely — keep trying different strategies if the current one fails. Credentials hygiene: when summarizing, prefer generic references ("logged in with the provided password", "API key updated") over echoing the literal value — keeps summaries tidy and avoids needlessly persisting secrets in trace logs. If the user explicitly asked you to show them a value (a recovery code, an API key on the page, etc.), including the value IS the answer and you should include it.',
+    description: 'Signal that the task is finished for this run. Set outcome="success" only after the latest consequential action was followed by an explicit page/state observation that verifies the request. Set outcome="partial" when you made useful progress but the request is not fully complete. Set outcome="failed" when you are blocked or have exhausted every reasonable alternative (at least 3-4 different approaches). After any consequential action, a plain final answer cannot end the run; call done with an explicit outcome. Provide a summary of what was accomplished. Do NOT call this prematurely — keep trying different strategies if the current one fails. Credentials hygiene: when summarizing, prefer generic references ("logged in with the provided password", "API key updated") over echoing the literal value — keeps summaries tidy and avoids needlessly persisting secrets in trace logs. If the user explicitly asked you to show them a value (a recovery code, an API key on the page, etc.), including the value IS the answer and you should include it.',
     parameters: {
       type: 'object',
       properties: {
@@ -1120,7 +1120,7 @@ const DONE_TOOL_STRICT_WITH_OUTCOME = {
   type: 'function',
   function: {
     name: 'done',
-    description: 'Signal that the task is finished for this run. Set outcome="success" only when you have successfully accomplished the user\'s request. Set outcome="partial" when you made useful progress but the request is not fully complete. Set outcome="failed" when you are blocked or have exhausted every reasonable alternative (at least 3-4 different approaches). Provide a summary of what was accomplished. Do NOT call this prematurely — keep trying different strategies if the current one fails. CREDENTIALS (strict mode is ON): never include passwords, API keys, tokens, OTPs, recovery codes, application-password strings, or any value the user typed into a password field — in the summary. Refer to them generically ("logged in with the provided credentials", "API key updated", "OTP submitted") even if the user explicitly asked you to display the value: in strict mode the answer is "I filled the field with the value you provided" or "the API key on this page is in the field labeled X", not the literal string. This rule applies even if the user typed the value directly into the chat.',
+    description: 'Signal that the task is finished for this run. Set outcome="success" only after the latest consequential action was followed by an explicit page/state observation that verifies the request. Set outcome="partial" when you made useful progress but the request is not fully complete. Set outcome="failed" when you are blocked or have exhausted every reasonable alternative (at least 3-4 different approaches). After any consequential action, a plain final answer cannot end the run; call done with an explicit outcome. Provide a summary of what was accomplished. Do NOT call this prematurely — keep trying different strategies if the current one fails. CREDENTIALS (strict mode is ON): never include passwords, API keys, tokens, OTPs, recovery codes, application-password strings, or any value the user typed into a password field — in the summary. Refer to them generically ("logged in with the provided credentials", "API key updated", "OTP submitted") even if the user explicitly asked you to display the value: in strict mode the answer is "I filled the field with the value you provided" or "the API key on this page is in the field labeled X", not the literal string. This rule applies even if the user typed the value directly into the chat.',
     parameters: {
       type: 'object',
       properties: {
@@ -1152,7 +1152,7 @@ const DONE_JSON_TOOL = {
   type: 'function',
   function: {
     name: 'done_json',
-    description: 'Complete a structured cloud run. Call this only when the task is finished and result exactly matches the requested output schema. If validation fails, repair the result and call done_json once more.',
+    description: 'Complete a structured cloud run. Call this only when the task is finished, the result exactly matches the requested output schema, and any consequential action was followed by an explicit page/state observation. If validation fails, repair the result and call done_json once more.',
     parameters: {
       type: 'object',
       properties: {
@@ -1176,12 +1176,9 @@ export function getToolsForMode(mode, opts = {}) {
   // (compact | mid | full) supersedes it.
   const tier = opts.tier || (opts.compact ? 'compact' : 'full');
   const normalizedMode = mode === 'dev' ? 'dev' : (mode === 'ask' ? 'ask' : 'act');
-  const devCompactBlocked = normalizedMode === 'dev' && tier === 'compact';
   let base;
   if (normalizedMode === 'ask') {
     base = AGENT_TOOLS.filter(t => ASK_ONLY_TOOLS.includes(t.function.name));
-  } else if (devCompactBlocked) {
-    base = [];
   } else if (tier === 'compact') {
     base = AGENT_TOOLS.filter(t => COMPACT_TOOL_NAMES.has(t.function.name));
   } else if (tier === 'mid') {
@@ -1189,15 +1186,15 @@ export function getToolsForMode(mode, opts = {}) {
   } else {
     base = AGENT_TOOLS.filter(t => FULL_TOOL_NAMES.has(t.function.name));
   }
-  if (normalizedMode === 'dev' && tier !== 'compact') {
+  if (normalizedMode === 'dev') {
     const seen = new Set(base.map(t => t.function?.name).filter(Boolean));
     const devTools = AGENT_TOOLS.filter(t => DEV_EXTENDED_TOOL_NAMES.has(t.function.name) && !seen.has(t.function.name));
     base = [...base, ...devTools];
   }
-  if (!devCompactBlocked && tier !== 'compact' && opts.skillLoaderTool?.function?.name === 'load_skill') {
+  if (tier !== 'compact' && opts.skillLoaderTool?.function?.name === 'load_skill') {
     base = [...base, opts.skillLoaderTool];
   }
-  if (!devCompactBlocked && Array.isArray(opts.skillTools) && opts.skillTools.length) {
+  if (Array.isArray(opts.skillTools) && opts.skillTools.length) {
     const seen = new Set([...RESERVED_AGENT_TOOL_NAMES, ...base.map(t => t.function?.name).filter(Boolean)]);
     const extras = opts.skillTools.filter(t => {
       const name = t?.function?.name;

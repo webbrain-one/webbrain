@@ -6,6 +6,7 @@ import { detectProgressAction, formatLedgerRow, formatLedgerSummary, isBlockedLe
 import { buildGithubStargazerProgressItems } from './observers/github-stargazers.js';
 import { analyzeMastodonPage, mastodonHandoffInstruction, mastodonProgressGuard } from './observers/mastodon.js';
 import { isProgressActionAllowed, isProgressIntentActive, normalizeProgressAction, normalizeProgressIntent } from './progress-intent.js';
+import { completionDoneBlock, completionPlainFinalBlock, consumeCompletionObservation, createCompletionInvariantState, hasUnconsumedCompletionObservation, recordCompletionToolResult } from './completion-invariant.js';
 import { getActiveAdapter, UNIVERSAL_PREAMBLE } from './adapters.js';
 import {
   fetchUrl,
@@ -190,6 +191,8 @@ export class Agent {
     this._doneBlockCount = new Map();
     this._recentSubmitClicks = new Map();
     this._runningTabs = new Set(); // tabIds with an active processMessage/Stream in flight
+    this.completionInvariants = new Map(); // tabId -> run-scoped post-action verification state
+    this._completionRunCounter = 0;
     this.scheduler = null;
     this.scheduledRunPolicies = new Map(); // tabId -> { requireConsequentialConfirmation, autoApprovePlanReview }
     // Pending clarify() tool calls awaiting user input — see Chrome
@@ -239,6 +242,53 @@ export class Agent {
         }
       });
     } catch { /* storage API unavailable in this context */ }
+  }
+
+  _beginCompletionInvariant(tabId) {
+    this._completionRunCounter += 1;
+    const token = `completion_${tabId}_${Date.now()}_${this._completionRunCounter}`;
+    this.completionInvariants.set(tabId, createCompletionInvariantState(token));
+    return token;
+  }
+
+  _clearCompletionInvariant(tabId, runToken = '') {
+    const state = this.completionInvariants.get(tabId);
+    if (!state) return;
+    if (runToken && state.runToken !== runToken) return;
+    this.completionInvariants.delete(tabId);
+  }
+
+  _recordCompletionToolResult(tabId, name, args, result) {
+    const state = this.completionInvariants.get(tabId);
+    if (!state) return null;
+    const next = recordCompletionToolResult(state, name, args, result);
+    this.completionInvariants.set(tabId, next);
+    return next;
+  }
+
+  _completionDoneBlock(tabId, name, args) {
+    const mode = this.conversationModes.get(tabId) || 'ask';
+    if (!this._isActionMode(mode)) return null;
+    return completionDoneBlock(this.completionInvariants.get(tabId), name, args);
+  }
+
+  _completionPlainFinalBlock(tabId) {
+    const mode = this.conversationModes.get(tabId) || 'ask';
+    if (!this._isActionMode(mode)) return null;
+    return completionPlainFinalBlock(this.completionInvariants.get(tabId));
+  }
+
+  _hasFreshCompletionObservation(tabId) {
+    return hasUnconsumedCompletionObservation(this.completionInvariants.get(tabId));
+  }
+
+  _consumeCompletionObservation(tabId) {
+    const state = this.completionInvariants.get(tabId);
+    if (!state) return false;
+    const next = consumeCompletionObservation(state);
+    if (next === state) return false;
+    this.completionInvariants.set(tabId, next);
+    return true;
   }
 
   setScheduler(scheduler) {
@@ -2075,6 +2125,36 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         }
       }
 
+      if (fnName === 'done' || fnName === 'done_json') {
+        const invariantBlock = this._completionDoneBlock(tabId, fnName, fnArgs);
+        if (invariantBlock) {
+          const blockedResult = {
+            success: false,
+            blockedDone: true,
+            completionInvariant: true,
+            reason: invariantBlock.reason,
+            error: invariantBlock.error,
+            ...(invariantBlock.lastAction ? { lastAction: invariantBlock.lastAction } : {}),
+          };
+          onUpdate('tool_call', { name: fnName, args: fnArgs });
+          onUpdate('tool_result', { name: fnName, result: blockedResult });
+          messages.push({
+            role: 'tool',
+            tool_call_id: tc.id,
+            content: JSON.stringify(blockedResult),
+          });
+          const runId = this.currentRunId.get(tabId);
+          if (runId) {
+            trace.recordToolCall(runId, step, {
+              name: fnName, args: fnArgs, result: blockedResult, latencyMs: 0,
+            });
+          }
+          onUpdate('warning', { message: 'Runtime completion invariant blocked an unverified or ambiguous completion.' });
+          this._persist(tabId);
+          continue;
+        }
+      }
+
       // Snapshot URL before nav-prone calls. Some tools are conditional:
       // Enter and set_field({submit:true}) can navigate, while other key
       // presses and ordinary field edits should avoid the URL-check delay.
@@ -2093,6 +2173,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           consequential: executionMutationEvidence,
         });
       }
+      this._recordCompletionToolResult(tabId, fnName, fnArgs, toolResult);
       const _toolLatency = Date.now() - _toolStart;
       const nytimesPageGateFallback = this._nytimesPageGateFallback(tabId, fnName, toolResult);
       if (nytimesPageGateFallback && toolResult && typeof toolResult === 'object') {
@@ -4997,11 +5078,6 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     return mode === 'act' || mode === 'dev';
   }
 
-  _devModeBlockedMessage(provider = null) {
-    const providerName = provider?.name || provider?.config?.model || 'the active provider';
-    return `Dev mode requires a Mid or Full prompt tier. ${providerName} is currently configured as Compact, so Dev mode is blocked for this provider. Switch to a Mid/Full-tier provider or change this provider's prompt tier, then try Dev again.`;
-  }
-
   /**
    * Compose the full system prompt: base (ASK or ACT) + optional universal
    * cookie/paywall guidance + optional enabled skills + optional user
@@ -5412,6 +5488,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     this._nytimesPageGateNotified.delete(tabId);
     this._doneBlockCount.delete(tabId);
     this._recentSubmitClicks.delete(tabId);
+    this.completionInvariants.delete(tabId);
     if (!preserveRunGuard) {
       this._runningTabs.delete(tabId);
       this.currentRunId.delete(tabId);
@@ -6089,6 +6166,34 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       };
     }
     const canonicalItems = this._canonicalizeProgressItems(items);
+    const activeSession = this._currentProgressSession(tabId);
+    const currentRows = this.progressLedgers.get(tabId) || [];
+    const terminalRequirementIds = canonicalItems
+      .filter(item => isTerminalLedgerStatus(item?.status))
+      .map(item => {
+        const row = currentRows.find(candidate => candidate?.id === item?.id
+          && (!activeSession?.sessionId || String(candidate?.sessionId || '') === activeSession.sessionId));
+        return row?.fields?.completionRequirement === true && !isTerminalLedgerStatus(row?.status)
+          ? row.id
+          : '';
+      })
+      .filter(Boolean);
+    if (terminalRequirementIds.length > 1) {
+      return {
+        success: false,
+        completionInvariant: true,
+        error: 'Each classifier-seeded completion requirement needs its own consequential action and successful explicit observation. Complete one requirement per evidence cycle.',
+        ids: terminalRequirementIds.slice(0, 20),
+      };
+    }
+    if (terminalRequirementIds.length && !this._hasFreshCompletionObservation(tabId)) {
+      return {
+        success: false,
+        completionInvariant: true,
+        error: 'Classifier-seeded completion requirements can become terminal only after a consequential action and a successful explicit observation of the resulting state.',
+        ids: terminalRequirementIds.slice(0, 20),
+      };
+    }
     const mastodonGuard = this._mastodonProgressUpdateGuard(tabId, canonicalItems);
     if (mastodonGuard) {
       return {
@@ -6119,6 +6224,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (!result.changed) {
       return { success: false, error: 'progress_update: no valid items were provided. Each item needs a stable id.' };
     }
+    if (terminalRequirementIds.length) this._consumeCompletionObservation(tabId);
     this.progressLedgers.set(tabId, result.rows);
     const adoption = sessionId
       ? this._adoptUnscopedProgressRows(tabId, sessionId, { allowReopen: args.reopen === true, taskKey })
@@ -6372,12 +6478,50 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     }
   }
 
+  _seedClassifierProgressTargets(tabId, session) {
+    if (
+      !session
+      || session.source !== 'classifier'
+      || !isProgressIntentActive(session)
+      || !Array.isArray(session.targets)
+      || session.targets.length < 2
+      || !Array.isArray(session.allowedActions)
+      || session.allowedActions.length < 1
+    ) {
+      return null;
+    }
+    const allowedActions = session.allowedActions.map(normalizeProgressAction).filter(Boolean);
+    const action = allowedActions[0];
+    if (!action) return null;
+    const items = session.targets.map((target, index) => ({
+      id: `requirement:${index + 1}:${String(target || '').trim()}`,
+      label: String(target || '').trim(),
+      target: String(target || '').trim(),
+      action,
+      status: 'pending',
+      fields: {
+        completionRequirement: true,
+        classifierTarget: true,
+        completionAllowedActions: allowedActions,
+      },
+    })).filter(item => item.label);
+    if (items.length < 2) return null;
+    return this._progressUpdate(tabId, { items }, {
+      source: 'classifier',
+      sessionId: session.sessionId,
+      pageScope: session.pageScope || '',
+    });
+  }
+
   async _ensureProgressSessionForCurrentTask(tabId, opts = {}) {
     const taskText = this._progressTaskTextKey(opts.taskText || this._latestTaskText(tabId));
     if (!taskText) return null;
     const pageScope = String(opts.pageScope || this._currentProgressPageScope(tabId) || '').trim();
     const existing = this._currentProgressSession(tabId, { pageScope });
-    if (existing) return existing;
+    if (existing) {
+      this._seedClassifierProgressTargets(tabId, existing);
+      return existing;
+    }
     if (this._currentTaskIsProgressContinuation(tabId)) {
       const session = this._deriveProgressSessionForCurrentTask(tabId);
       this._syncProgressSessionPrompt(tabId);
@@ -6395,6 +6539,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       return session;
     }
     const session = this._setProgressSession(tabId, classified, { taskText, pageScope, source: 'classifier' });
+    this._seedClassifierProgressTargets(tabId, session);
     this._syncProgressSessionPrompt(tabId);
     return session;
   }
@@ -6719,7 +6864,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
   _emptyOutputRecoveryNudge(mode) {
     if (this._isActionMode(mode)) {
-      return '[System nudge: your previous response had neither text nor a tool call. Continue the active browser task with tool calls. If the task is truly complete, call the done tool with a real summary. Do not output a plain summary and do not stop without a tool call.]';
+      return '[System nudge: your previous response had neither text nor a tool call. Continue the active browser task with tool calls. If the task is truly complete, call done with a real summary and an explicit success, partial, or failed outcome. Do not output a plain summary and do not stop without a tool call.]';
     }
     return '[System nudge: your previous response had neither text nor a tool call. You may have run out of output budget on internal reasoning. In ONE short message, summarize what you accomplished, what you tried, and what blocked you - then stop. Do not start any new tool calls.]';
   }
@@ -6934,7 +7079,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       'Do not redo processed, skipped, or failed rows.',
       'Continue only unresolved pending/acted rows for the current task.',
       'Prefer a small batch of tool calls, then update progress.',
-      'When all rows are processed, skipped, or failed, call done with a real summary.',
+      'When all rows are processed, skipped, or failed, call done with a real summary and an explicit success, partial, or failed outcome.',
       `Current progress snapshot: ${counts.total} row(s), ${unresolved.length} unresolved.`,
     ].join(' ');
   }
@@ -8982,10 +9127,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         const injectCode = `
           (function() {
             const el = document.querySelector(${JSON.stringify(args.selector)});
-            if (!el) return { success: false, error: 'Element not found matching selector: ' + ${JSON.stringify(args.selector)} };
+            if (!el) return { success: false, dispatched: false, error: 'Element not found matching selector: ' + ${JSON.stringify(args.selector)} };
             if (!(el instanceof HTMLInputElement) || el.type !== 'file') {
-              return { success: false, error: 'Selector does not match an <input type="file"> element: ' + ${JSON.stringify(args.selector)} };
+              return { success: false, dispatched: false, error: 'Selector does not match an <input type="file"> element: ' + ${JSON.stringify(args.selector)} };
             }
+            let dispatched = false;
             try {
               const b64 = ${JSON.stringify(base64)};
               const bin = atob(b64);
@@ -8996,11 +9142,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
               const dt = new DataTransfer();
               dt.items.add(file);
               el.files = dt.files;
+              dispatched = true;
               el.dispatchEvent(new Event('input', { bubbles: true }));
               el.dispatchEvent(new Event('change', { bubbles: true }));
-              return { success: true, file: ${JSON.stringify(filename)}, size: len };
+              return { success: true, dispatched: true, file: ${JSON.stringify(filename)}, size: len };
             } catch (e) {
-              return { success: false, error: e.message || String(e) };
+              return { success: false, dispatched, error: e.message || String(e) };
             }
           })();
         `;
@@ -9010,12 +9157,17 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         } catch (e) {
           return {
             success: false,
+            outcomeUnknown: true,
             error: `Failed to inject file into page (file may be too large for script injection): ${e.message || String(e)}`,
           };
         }
         const res = results && results[0];
         if (!res || !res.success) {
-          return { success: false, error: res ? res.error : 'Failed to attach file to input element' };
+          return {
+            success: false,
+            dispatched: res?.dispatched === true,
+            error: res ? res.error : 'Failed to attach file to input element',
+          };
         }
         return {
           success: true,
@@ -9928,6 +10080,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     this._resetActiveSkillsForRun(tabId, { refreshPrompt: false });
     this._clearLoopState(tabId);
     if (runOptions?.trustedContinuation !== true) this._continuationExecutionEvidence.delete(tabId);
+    const completionRunToken = this._beginCompletionInvariant(tabId);
     this._runningTabs.add(tabId);
     const previousCloudContext = this.cloudRunContexts.get(tabId);
     if (runOptions.cloudRun) {
@@ -9946,6 +10099,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       }
       this._runningTabs.delete(tabId);
       this._clearLoopState(tabId);
+      this._clearCompletionInvariant(tabId, completionRunToken);
     }
   }
 
@@ -10035,15 +10189,6 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     let runId = null;
     let finalResponse = '';
     let _traceStatus = 'done';
-
-    if (mode === 'dev' && provider.promptTier === 'compact') {
-      const msg = this._devModeBlockedMessage(provider);
-      messages.push(enriched);
-      messages.push({ role: 'assistant', content: msg });
-      this._persist(tabId);
-      onUpdate('warning', { message: msg });
-      return (finalResponse = msg);
-    }
 
     // Validate attachments BEFORE the planner gate / trace start: an
     // unsupported attachment is a plain "tell the user" response, not an
@@ -10372,10 +10517,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       // Repeated-item progress recovery takes priority so an unresolved ledger
       // can still drive the next tool turn.
       const progressFinalBlock = this._plainFinalProgressBlock(tabId);
-      if (progressFinalBlock) {
+      const completionFinalBlock = this._completionPlainFinalBlock(tabId);
+      const plainFinalBlocks = [progressFinalBlock, completionFinalBlock].filter(Boolean);
+      if (plainFinalBlocks.length) {
         messages.push(this._withResponseItems({ role: 'assistant', content: result.content }, result.responseItems, result.reasoningContent, provider));
-        messages.push({ role: 'user', content: progressFinalBlock });
-        onUpdate('warning', { message: 'Progress ledger has unresolved rows; continuing.' });
+        messages.push({ role: 'user', content: plainFinalBlocks.join('\n\n') });
+        onUpdate('warning', { message: completionFinalBlock ? 'Runtime completion invariant requires an explicit done outcome.' : 'Progress ledger has unresolved rows; continuing.' });
         this._persist(tabId);
         continue;
       }
@@ -10441,6 +10588,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     this._resetActiveSkillsForRun(tabId, { refreshPrompt: false });
     this._clearLoopState(tabId);
     if (runOptions?.trustedContinuation !== true) this._continuationExecutionEvidence.delete(tabId);
+    const completionRunToken = this._beginCompletionInvariant(tabId);
     this._runningTabs.add(tabId);
     const previousCloudContext = this.cloudRunContexts.get(tabId);
     if (runOptions.cloudRun) {
@@ -10459,6 +10607,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       }
       this._runningTabs.delete(tabId);
       this._clearLoopState(tabId);
+      this._clearCompletionInvariant(tabId, completionRunToken);
     }
   }
 
@@ -10493,15 +10642,6 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       _traceStatus = status;
       return response;
     };
-
-    if (mode === 'dev' && provider.promptTier === 'compact') {
-      const msg = this._devModeBlockedMessage(provider);
-      messages.push(enriched);
-      messages.push({ role: 'assistant', content: msg });
-      this._persist(tabId);
-      onUpdate('warning', { message: msg });
-      return finish(msg);
-    }
 
     // All throwing work — trace start, planner gate, run setup, and the agent
     // loop — runs inside this try so the finally always ends the trace run and
@@ -10750,10 +10890,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         // Preserve the progress ledger's purpose-built continuation before
         // treating other plain terminal text as unverified.
         const progressFinalBlock = this._plainFinalProgressBlock(tabId);
-        if (progressFinalBlock) {
+        const completionFinalBlock = this._completionPlainFinalBlock(tabId);
+        const plainFinalBlocks = [progressFinalBlock, completionFinalBlock].filter(Boolean);
+        if (plainFinalBlocks.length) {
           messages.push(this._withResponseItems({ role: 'assistant', content: fullText }, responseItems, reasoningContent, provider));
-          messages.push({ role: 'user', content: progressFinalBlock });
-          onUpdate('warning', { message: 'Progress ledger has unresolved rows; continuing.' });
+          messages.push({ role: 'user', content: plainFinalBlocks.join('\n\n') });
+          onUpdate('warning', { message: completionFinalBlock ? 'Runtime completion invariant requires an explicit done outcome.' : 'Progress ledger has unresolved rows; continuing.' });
           this._persist(tabId);
           continue;
         }
