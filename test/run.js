@@ -23815,6 +23815,12 @@ test('classifier requirements allow transparent skipped and failed exits without
     }, { sessionId: session.sessionId });
     assert.equal(seeded.success, true);
 
+    const normalizedIdBypass = agent._progressUpdate(tabId, {
+      items: [{ id: ' SODA ', status: 'processed' }],
+    }, { sessionId: session.sessionId });
+    assert.equal(normalizedIdBypass.success, false, `${AgentClass.name}: normalized requirement id bypassed completion evidence`);
+    assert.equal(normalizedIdBypass.completionInvariant, true);
+
     const unobservedExit = agent._progressUpdate(tabId, {
       items: [{ id: 'soda', status: 'skipped', reason: 'already satisfied before this task' }],
     }, { sessionId: session.sessionId });

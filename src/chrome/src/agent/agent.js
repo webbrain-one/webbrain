@@ -2,7 +2,7 @@ import { AGENT_TOOLS, AGENT_TOOL_NAMES, RESERVED_AGENT_TOOL_NAMES, getToolsForMo
 import { handleDoneJson } from './cloud-output.js';
 import { URL_FAMILY_TOOLS, resourceBucket, bucketArgsKey } from './loop-bucket.js';
 import { isCredentialField, CREDENTIAL_NOTE_STRICT, STRICT_SECRET_SYSTEM_NOTE } from './credential-fields.js';
-import { detectProgressAction, formatLedgerRow, formatLedgerSummary, isBlockedLedgerDowngrade, isTerminalLedgerStatus, isValidLedgerStatus, ledgerDoneBlock, normalizeLedgerStatus, progressCounts, selectLedgerRows, unresolvedLedgerRows, upsertLedgerItems } from './progress-ledger.js';
+import { detectProgressAction, formatLedgerRow, formatLedgerSummary, isBlockedLedgerDowngrade, isTerminalLedgerStatus, isValidLedgerStatus, ledgerDoneBlock, ledgerRowKey, normalizeLedgerStatus, progressCounts, selectLedgerRows, unresolvedLedgerRows, upsertLedgerItems } from './progress-ledger.js';
 import { buildGithubStargazerProgressItems } from './observers/github-stargazers.js';
 import { analyzeMastodonPage, mastodonHandoffInstruction, mastodonProgressGuard } from './observers/mastodon.js';
 import { isProgressActionAllowed, isProgressIntentActive, normalizeProgressAction, normalizeProgressIntent } from './progress-intent.js';
@@ -7064,11 +7064,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const canonicalItems = this._canonicalizeProgressItems(items);
     const activeSession = this._currentProgressSession(tabId);
     const currentRows = this.progressLedgers.get(tabId) || [];
+    const requirementSessionId = opts.sessionId || args.sessionId || args.session_id || activeSession?.sessionId || '';
     const terminalRequirements = canonicalItems
       .filter(item => isTerminalLedgerStatus(item?.status))
       .map(item => {
-        const row = currentRows.find(candidate => candidate?.id === item?.id
-          && (!activeSession?.sessionId || String(candidate?.sessionId || '') === activeSession.sessionId));
+        const incomingKey = ledgerRowKey({ ...item, sessionId: requirementSessionId });
+        const row = incomingKey
+          ? currentRows.find(candidate => ledgerRowKey(candidate) === incomingKey)
+          : null;
         return row?.fields?.completionRequirement === true && !isTerminalLedgerStatus(row?.status)
           ? { id: row.id, item, row }
           : null;

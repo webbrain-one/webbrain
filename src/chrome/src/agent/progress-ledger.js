@@ -85,7 +85,7 @@ function sanitizeFields(fields) {
   return Object.keys(out).length ? out : undefined;
 }
 
-function rowKey(row) {
+export function ledgerRowKey(row) {
   const id = sanitizeText(row?.id, 180).toLowerCase();
   if (!id) return '';
   const sessionId = sanitizeText(row?.sessionId || row?.session_id || '', 120).toLowerCase();
@@ -185,7 +185,7 @@ export function upsertLedgerItems(rows = [], items = [], opts = {}) {
   const next = Array.isArray(rows) ? rows.map(row => ({ ...row, fields: row?.fields ? { ...row.fields } : undefined })) : [];
   const indexByKey = new Map();
   next.forEach((row, idx) => {
-    const key = rowKey(row);
+    const key = ledgerRowKey(row);
     if (key) indexByKey.set(key, idx);
   });
 
@@ -194,7 +194,7 @@ export function upsertLedgerItems(rows = [], items = [], opts = {}) {
   for (const rawItem of Array.isArray(items) ? items : []) {
     const incoming = normalizeLedgerItem(rawItem, { source, now, sessionId: opts.sessionId, pageScope: opts.pageScope, taskKey: opts.taskKey });
     if (!incoming) continue;
-    const key = rowKey(incoming);
+    const key = ledgerRowKey(incoming);
     const existingIdx = indexByKey.get(key);
     if (existingIdx == null) {
       next.push(incoming);
@@ -261,10 +261,10 @@ export function formatLedgerSummary(rows = [], opts = {}) {
   const maxRows = Number.isFinite(Number(opts.maxRows)) ? Math.max(1, Math.floor(Number(opts.maxRows))) : 18;
   const counts = progressCounts(safeRows);
   const unresolved = unresolvedLedgerRows(safeRows);
-  const unresolvedKeys = new Set(unresolved.map(rowKey));
+  const unresolvedKeys = new Set(unresolved.map(ledgerRowKey));
   const ordered = [
     ...unresolved,
-    ...safeRows.filter(row => !unresolvedKeys.has(rowKey(row))),
+    ...safeRows.filter(row => !unresolvedKeys.has(ledgerRowKey(row))),
   ].slice(0, maxRows);
   const countText = `total ${counts.total}; pending ${counts.pending}; acted ${counts.acted}; processed ${counts.processed}; skipped ${counts.skipped}; failed ${counts.failed}`;
   const lines = ordered.map(formatLedgerRow).filter(Boolean);
