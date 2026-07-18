@@ -15167,6 +15167,19 @@ test('CDP full-page screenshots tile the actual viewport without device emulatio
   );
 });
 
+test('CDP full-page screenshot compositor is statically imported for MV3 service workers', () => {
+  const source = fs.readFileSync(
+    path.join(ROOT, 'src/chrome/src/cdp/cdp-client.js'),
+    'utf8',
+  );
+  assert.match(source, /import \{ combineImages \} from '\.\/image-utils\.js';/);
+  assert.doesNotMatch(
+    source,
+    /import\(['"]\.\/image-utils\.js['"]\)/,
+    'MV3 service workers reject dynamic import() at runtime',
+  );
+});
+
 test('CDP full-page screenshots extend capture bounds when lazy content moves the footer', async () => {
   const cdp = new CDPClient();
   const captures = [];
@@ -15212,6 +15225,53 @@ test('CDP full-page screenshots extend capture bounds when lazy content moves th
     'capture should extend through the final lazy-loaded height',
   );
   assert.deepEqual(captures.at(-1), { x: 0, y: 1800, width: 800, height: 600, scale: 1 });
+});
+
+test('CDP full-page screenshots freeze bounds on infinite-scroll pages', async () => {
+  const cdp = new CDPClient();
+  const captures = [];
+  let currentScrollY = 0;
+  let layoutHeight = 1200;
+  let heightAtFirstCapture = 0;
+  cdp.sendCommand = async (_tabId, method, params = {}) => {
+    if (method === 'Page.getLayoutMetrics') {
+      return {
+        cssVisualViewport: {
+          offsetX: 0,
+          offsetY: 0,
+          pageX: 0,
+          pageY: currentScrollY,
+          clientWidth: 800,
+          clientHeight: 600,
+          scale: 1,
+        },
+        cssContentSize: { x: 0, y: 0, width: 800, height: layoutHeight },
+      };
+    }
+    if (method === 'Page.captureScreenshot') {
+      if (captures.length === 0) heightAtFirstCapture = layoutHeight;
+      captures.push(params.clip);
+      return { data: 'not-a-real-png' };
+    }
+    return {};
+  };
+  cdp.evaluate = async (_tabId, expression) => {
+    if (expression === 'window.devicePixelRatio') return { result: { value: 1 } };
+    const match = expression.match(/^window\.scrollTo\(0, (\d+)\)$/);
+    if (match) {
+      currentScrollY = Number(match[1]);
+      if (currentScrollY >= layoutHeight - 600) layoutHeight += 600;
+    }
+    return { result: { value: null } };
+  };
+
+  const capture = await cdp.captureFullPageScreenshot(42);
+  const capturedHeight = Math.max(...captures.map(clip => clip.y + clip.height));
+
+  assert.equal(capturedHeight, heightAtFirstCapture, 'capture should freeze the discovered snapshot height');
+  assert.ok(layoutHeight > capturedHeight, 'the fixture should keep growing while the frozen snapshot is captured');
+  assert.ok(captures.length < 20, 'infinite scrolling should stop well before the generic tile limit');
+  assert.match(capture.warning, /infinite scrolling[\s\S]*bounded snapshot/i);
 });
 
 test('full-page image assembly reports first-tile fallback errors', async () => {

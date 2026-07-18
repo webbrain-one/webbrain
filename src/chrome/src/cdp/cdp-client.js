@@ -4,9 +4,12 @@
  * downloads, and uploads via chrome.debugger API.
  */
 
+import { combineImages } from './image-utils.js';
+
 const FULL_PAGE_SCROLL_SETTLE_MS = 100;
 const FULL_PAGE_STABLE_PASSES = 2;
 const FULL_PAGE_MAX_DISCOVERY_STEPS = 100;
+const FULL_PAGE_MAX_CONTENT_GROWTHS = 5;
 const FULL_PAGE_MAX_CAPTURE_TILES = 500;
 
 export class CDPClient {
@@ -668,7 +671,10 @@ export class CDPClient {
     const originalScrollY = Number.isFinite(Number(visualViewport?.pageY)) ? Number(visualViewport.pageY) : 0;
     const tiles = [];
     const warnings = [];
+    let contentGrowths = 0;
+    let captureBoundsFrozen = false;
     const updateContentBounds = (nextMetrics) => {
+      if (captureBoundsFrozen) return false;
       const nextSize = nextMetrics?.cssContentSize;
       const nextWidth = Math.ceil(Number(nextSize?.width));
       const nextHeight = Math.ceil(Number(nextSize?.height));
@@ -681,6 +687,15 @@ export class CDPClient {
         contentHeight = nextHeight;
         grew = true;
       }
+      if (grew) {
+        contentGrowths++;
+        if (contentGrowths >= FULL_PAGE_MAX_CONTENT_GROWTHS) {
+          captureBoundsFrozen = true;
+          warnings.push(
+            `The page appears to use infinite scrolling; captured a bounded snapshot after ${FULL_PAGE_MAX_CONTENT_GROWTHS} content expansions instead of continuing indefinitely.`
+          );
+        }
+      }
       return grew;
     };
 
@@ -691,7 +706,11 @@ export class CDPClient {
       let stablePasses = 0;
       let discoveryOffsetY = 0;
       let discoverySteps = 0;
-      while (stablePasses < FULL_PAGE_STABLE_PASSES && discoverySteps < FULL_PAGE_MAX_DISCOVERY_STEPS) {
+      while (
+        stablePasses < FULL_PAGE_STABLE_PASSES &&
+        discoverySteps < FULL_PAGE_MAX_DISCOVERY_STEPS &&
+        !captureBoundsFrozen
+      ) {
         const bottomY = contentY + Math.max(0, contentHeight - tileHeight);
         const targetY = Math.min(contentY + discoveryOffsetY, bottomY);
         await this.evaluate(tabId, `window.scrollTo(${contentX}, ${targetY})`);
@@ -705,9 +724,9 @@ export class CDPClient {
         }
         discoverySteps++;
       }
-      if (stablePasses < FULL_PAGE_STABLE_PASSES) {
+      if (!captureBoundsFrozen && stablePasses < FULL_PAGE_STABLE_PASSES) {
         warnings.push(
-          `The page kept growing during full-page discovery; capture was limited after ${FULL_PAGE_MAX_DISCOVERY_STEPS} scroll steps.`
+          `Full-page discovery was limited after ${FULL_PAGE_MAX_DISCOVERY_STEPS} scroll steps; the returned image may be partial.`
         );
       }
 
@@ -723,8 +742,11 @@ export class CDPClient {
           await this.evaluate(tabId, `window.scrollTo(${clipX}, ${clipY})`);
           await new Promise(resolve => setTimeout(resolve, FULL_PAGE_SCROLL_SETTLE_MS));
           // The page can still grow during the capture pass. Expand the loop
-          // bounds before sizing this tile so a newly moved footer is included.
-          updateContentBounds(await this.sendCommand(tabId, 'Page.getLayoutMetrics'));
+          // bounds before sizing this tile so a newly moved footer is included,
+          // unless discovery identified an unbounded infinite-scroll feed.
+          if (!captureBoundsFrozen) {
+            updateContentBounds(await this.sendCommand(tabId, 'Page.getLayoutMetrics'));
+          }
           const width = Math.min(tileWidth, contentWidth - x);
           const height = Math.min(tileHeight, contentHeight - y);
           const screenshot = await this.sendCommand(tabId, 'Page.captureScreenshot', {
@@ -755,25 +777,10 @@ export class CDPClient {
         ? Math.max(...tiles.map(tile => tile.y + tile.height))
         : contentHeight;
 
-      let combineImages = null;
-      let importError = null;
-      try {
-        ({ combineImages } = await import('./image-utils.js'));
-      } catch (error) {
-        importError = error;
-      }
-      if (combineImages) {
-        const data = await combineImages(tiles, assembledWidth, assembledHeight, captureScale, {
-          onWarning: warning => warnings.push(warning),
-        });
-        return { data, warning: warnings.join(' ') || null };
-      }
-
-      const reason = importError?.message || 'the image compositor could not be loaded';
-      warnings.push(
-        `Full-page screenshot assembly failed (${reason}). Showing the first captured tile instead.`
-      );
-      return { data: tiles[0]?.data || '', warning: warnings.join(' ') };
+      const data = await combineImages(tiles, assembledWidth, assembledHeight, captureScale, {
+        onWarning: warning => warnings.push(warning),
+      });
+      return { data, warning: warnings.join(' ') || null };
     } finally {
       await this.evaluate(tabId, `window.scrollTo(${originalScrollX}, ${originalScrollY})`).catch(() => {});
     }
