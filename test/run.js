@@ -6131,6 +6131,21 @@ test('completion invariant state machine enforces post-action observation with C
       },
     );
     assert.equal(noDispatch.verificationDebt, false, `${label}: explicit no-dispatch failure opened debt`);
+    for (const name of ['type_text', 'type_ax', 'set_field']) {
+      const inputPreflight = invariant.recordCompletionToolResult(
+        invariant.createCompletionInvariantState(`${label}-${name}-preflight`),
+        name,
+        name === 'type_text' ? { text: 'x' } : { ref_id: 'ref_missing', text: 'x' },
+        {
+          success: false,
+          error: 'input target was not found',
+          dispatched: false,
+          noDispatch: true,
+        },
+      );
+      assert.equal(inputPreflight.hadAction, false, `${label}: ${name} preflight failure was recorded as an action`);
+      assert.equal(inputPreflight.verificationDebt, false, `${label}: ${name} preflight failure opened debt`);
+    }
     const markerlessClickFailure = invariant.recordCompletionToolResult(
       invariant.createCompletionInvariantState(`${label}-markerless-click-failure`),
       'click_ax',
@@ -15650,6 +15665,63 @@ test('Chrome selector click distinguishes pre-dispatch failure from uncertain di
   const uncertain = await client.clickElement(42, '#submit');
   assert.equal(uncertain.success, false);
   assert.equal(uncertain.dispatched, true, 'a mousePressed attempt must fail closed when later fallback also fails');
+});
+
+test('Chrome selector type distinguishes pre-dispatch failure from uncertain dispatch', async () => {
+  const client = new CDPClient();
+  client.resolveSelector = async () => null;
+  assert.deepEqual(
+    await client.typeText(42, '#missing', 'hello'),
+    {
+      success: false,
+      dispatched: false,
+      noDispatch: true,
+      error: 'Element not found',
+    },
+  );
+
+  client.resolveSelector = async () => ({
+    inViewport: false,
+    hitOk: false,
+    nodeId: null,
+    tag: 'INPUT',
+    x: 10,
+    y: 20,
+    width: 30,
+    height: 40,
+  });
+  client.sendCommand = async () => {
+    throw new Error('insert response lost');
+  };
+  let evaluateCalls = 0;
+  client.evaluate = async () => {
+    evaluateCalls++;
+    return evaluateCalls === 1
+      ? { result: { value: null } }
+      : { result: { value: { success: false, error: 'fallback target disappeared' } } };
+  };
+
+  const uncertain = await client.typeText(42, '#field', 'hello');
+  assert.equal(uncertain.success, false);
+  assert.equal(uncertain.dispatched, true, 'an Input.insertText attempt must fail closed when fallback also fails');
+});
+
+test('Chrome focused type_text marks missing focus as a pre-dispatch failure', async () => {
+  const originalAttach = cdpClientCh.attach;
+  const originalEvaluate = cdpClientCh.evaluate;
+  try {
+    cdpClientCh.attach = async () => ({ attached: true });
+    cdpClientCh.evaluate = async () => ({ result: { value: { focused: false } } });
+    const agent = new AgentCh({});
+    const result = await agent.executeTool(42, 'type_text', { text: 'hello' });
+    assert.equal(result.success, false);
+    assert.equal(result.dispatched, false);
+    assert.equal(result.noDispatch, true);
+    assert.match(result.error, /No editable element is currently focused/);
+  } finally {
+    cdpClientCh.attach = originalAttach;
+    cdpClientCh.evaluate = originalEvaluate;
+  }
 });
 
 test('Chrome click_ax keeps successful synthetic clicks and skips trusted fallback', async () => {

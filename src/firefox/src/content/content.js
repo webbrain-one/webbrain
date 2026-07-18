@@ -1556,19 +1556,34 @@
       return _loadDeasciifier().then(() => {
         params.text = _applyLangTransform(params.text, params.lang);
         return _typeTextInner(params);
-      }).catch(e => ({ success: false, error: e.message }));
+      }).catch(e => ({
+        success: false,
+        dispatched: false,
+        noDispatch: true,
+        error: e.message,
+      }));
     }
     return _typeTextInner(params);
   }
 
   function _typeTextInner(params) {
+    const noDispatchFailure = (error, extra = {}) => ({
+      success: false,
+      error,
+      ...extra,
+      dispatched: false,
+      noDispatch: true,
+    });
     let el;
     if (params.selector) {
       el = safeQuerySelector(params.selector);
     } else if (params.index != null) {
       const interactive = queryInteractiveForToolIndex();
       el = interactive[params.index];
-      if (!el) return _staleIndexError(params.index, interactive);
+      if (!el) {
+        const stale = _staleIndexError(params.index, interactive);
+        return noDispatchFailure(stale.error, stale);
+      }
     } else {
       // No selector and no index → type into the currently focused element.
       // Most reliable for click-then-type flows on forms with weird selectors.
@@ -1577,7 +1592,7 @@
         el = _recentEditableTarget();
       }
       if (!el || el === document.body || el === document.documentElement) {
-        return { success: false, error: 'No editable element is currently focused. Click the target input/textarea first, then call type_text again with no selector.' };
+        return noDispatchFailure('No editable element is currently focused. Click the target input/textarea first, then call type_text again with no selector.');
       }
       // Verify it's actually editable
       const editable = _isTypeableElement(el);
@@ -1587,22 +1602,16 @@
           el = recentEditable;
         } else {
           _lastEditableTarget = null;
-          return {
-            success: false,
-            error: `Focused element <${el.tagName.toLowerCase()}> is not an editable field. Click the target input/textarea first, then call type_text again.`,
-          };
+          return noDispatchFailure(`Focused element <${el.tagName.toLowerCase()}> is not an editable field. Click the target input/textarea first, then call type_text again.`);
         }
       }
     }
 
-    if (!el) return { success: false, error: 'Element not found' };
+    if (!el) return noDispatchFailure('Element not found');
 
     if (!_isTypeableElement(el)) {
       const tag = (el.tagName || '').toLowerCase();
-      return {
-        success: false,
-        error: `Cannot type into <${tag}> — it is not an editable field. If you wanted to activate it, use click instead. If the real target is a nearby input, click the input first, then call type_text({text: "..."}) with no selector.`,
-      };
+      return noDispatchFailure(`Cannot type into <${tag}> — it is not an editable field. If you wanted to activate it, use click instead. If the real target is a nearby input, click the input first, then call type_text({text: "..."}) with no selector.`);
     }
 
     el.focus();
@@ -1630,7 +1639,7 @@
         || Array.from(el.options).find(o => o.text.trim().toLowerCase().includes(needle.toLowerCase()));
       const match = byValue || byText;
       if (!match) {
-        return { success: false, error: `No <option> matching "${params.text}" in select.` };
+        return noDispatchFailure(`No <option> matching "${params.text}" in select.`);
       }
       const nativeSetter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set;
       if (nativeSetter) nativeSetter.call(el, match.value);
@@ -2672,23 +2681,32 @@
         }
       },
       'type_ax': () => {
+        let dispatched = false;
+        const failure = (error, extra = {}) => ({
+          success: false,
+          error,
+          ...extra,
+          ...(dispatched
+            ? { dispatched: true }
+            : { dispatched: false, noDispatch: true }),
+        });
         if (msg.params?.lang === 'tr-deasciify') {
           return _loadDeasciifier().then(() => {
             msg.params.text = _applyLangTransform(msg.params.text, msg.params.lang);
             delete msg.params.lang;
             return handlers['type_ax']();
-          }).catch(e => ({ success: false, error: e.message }));
+          }).catch(e => failure(e.message));
         }
         try {
           const { ref_id, text, clear } = msg.params || {};
-          if (typeof ref_id !== 'string') return { success: false, error: 'ref_id (string, e.g. "ref_42") is required' };
-          if (typeof text !== 'string') return { success: false, error: 'text (string) is required' };
-          if (typeof window.__wb_ax_lookup !== 'function') return { success: false, error: 'accessibility-tree.js not injected' };
+          if (typeof ref_id !== 'string') return failure('ref_id (string, e.g. "ref_42") is required');
+          if (typeof text !== 'string') return failure('text (string) is required');
+          if (typeof window.__wb_ax_lookup !== 'function') return failure('accessibility-tree.js not injected');
           const el = window.__wb_ax_lookup(ref_id);
           if (!el) {
             let suggestions = [];
             try { if (typeof window.__wb_ax_suggest === 'function') suggestions = window.__wb_ax_suggest(ref_id, 6); } catch {}
-            return { success: false, error: `ref_id ${ref_id} not found. Re-read the accessibility tree to get fresh ids.`, suggestions };
+            return failure(`ref_id ${ref_id} not found. Re-read the accessibility tree to get fresh ids.`, { suggestions });
           }
           try { el.scrollIntoView({ block: 'center', inline: 'center' }); } catch {}
           try { el.focus({ preventScroll: true }); } catch {}
@@ -2700,6 +2718,7 @@
             } catch { return null; }
           })();
           if (el.isContentEditable) {
+            dispatched = true;
             if (clear) {
               try {
                 const sel = window.getSelection();
@@ -2721,7 +2740,7 @@
               const inputType = (el.type || 'text').toLowerCase();
               const nonTypeable = new Set(['checkbox', 'radio', 'file', 'submit', 'button', 'reset', 'image', 'color', 'range', 'hidden']);
               if (nonTypeable.has(inputType)) {
-                return { success: false, error: `ref_id ${ref_id} is an <input type="${inputType}"> which is not text-typeable. Use click_ax to toggle/activate it instead.` };
+                return failure(`ref_id ${ref_id} is an <input type="${inputType}"> which is not text-typeable. Use click_ax to toggle/activate it instead.`);
               }
             }
             if (el.tagName === 'SELECT') {
@@ -2736,14 +2755,16 @@
                 || Array.from(el.options).find((o) => o.text.trim().toLowerCase().includes(needle.toLowerCase()));
               const match = byValue || byText;
               if (!match) {
-                return { success: false, error: `No <option> matching "${text}" in select ref_id ${ref_id}.` };
+                return failure(`No <option> matching "${text}" in select ref_id ${ref_id}.`);
               }
+              dispatched = true;
               const selSetter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value')?.set;
               if (selSetter) selSetter.call(el, match.value); else el.value = match.value;
               el.dispatchEvent(new Event('input', { bubbles: true }));
               el.dispatchEvent(new Event('change', { bubbles: true }));
               return { success: true, method: 'type_ax_select', ref_id, value: el.value, rect: typeRect };
             }
+            dispatched = true;
             if (clear) el.value = '';
             const proto = el.tagName === 'TEXTAREA'
               ? window.HTMLTextAreaElement.prototype
@@ -2756,12 +2777,21 @@
             el.dispatchEvent(new Event('change', { bubbles: true }));
             return { success: true, method: 'type_ax_input', ref_id, rect: typeRect };
           }
-          return { success: false, error: `ref_id ${ref_id} is not a typeable element (tag=${el.tagName}). Use click_ax then type_text.` };
+          return failure(`ref_id ${ref_id} is not a typeable element (tag=${el.tagName}). Use click_ax then type_text.`);
         } catch (e) {
-          return { success: false, error: e && e.message || String(e) };
+          return failure(e && e.message || String(e));
         }
       },
       'set_field': async () => {
+        let dispatched = false;
+        const failure = (error, extra = {}) => ({
+          success: false,
+          error,
+          ...extra,
+          ...(dispatched
+            ? { dispatched: true }
+            : { dispatched: false, noDispatch: true }),
+        });
         try {
           if (msg.params?.lang === 'tr-deasciify') {
             await _loadDeasciifier();
@@ -2769,11 +2799,11 @@
             delete msg.params.lang;
           }
           const { ref_id, text, clear = true, submit = false } = msg.params || {};
-          if (typeof ref_id !== 'string') return { success: false, error: 'ref_id (string, e.g. "ref_42") is required' };
-          if (typeof text !== 'string') return { success: false, error: 'text (string) is required' };
-          if (typeof window.__wb_ax_lookup !== 'function') return { success: false, error: 'accessibility-tree.js not injected' };
+          if (typeof ref_id !== 'string') return failure('ref_id (string, e.g. "ref_42") is required');
+          if (typeof text !== 'string') return failure('text (string) is required');
+          if (typeof window.__wb_ax_lookup !== 'function') return failure('accessibility-tree.js not injected');
           const el = window.__wb_ax_lookup(ref_id);
-          if (!el) return { success: false, error: `ref_id ${ref_id} not found. Re-read the accessibility tree.` };
+          if (!el) return failure(`ref_id ${ref_id} not found. Re-read the accessibility tree.`);
           try { el.scrollIntoView({ block: 'center', inline: 'center' }); } catch {}
           try { el.focus({ preventScroll: true }); } catch {}
           showAgentWorkingTarget(el, 'set_field');
@@ -2787,12 +2817,13 @@
             const inputType = (el.type || 'text').toLowerCase();
             const nonTypeable = new Set(['checkbox', 'radio', 'file', 'submit', 'button', 'reset', 'image', 'color', 'range', 'hidden']);
             if (nonTypeable.has(inputType)) {
-              return { success: false, error: `ref_id ${ref_id} is an <input type="${inputType}"> which is not text-typeable. Use click_ax to toggle/activate it instead.` };
+              return failure(`ref_id ${ref_id} is an <input type="${inputType}"> which is not text-typeable. Use click_ax to toggle/activate it instead.`);
             }
           } else if (!el.isContentEditable && el.tagName !== 'TEXTAREA' && el.tagName !== 'INPUT') {
-            return { success: false, error: `ref_id ${ref_id} is not a text field (tag=${el.tagName}). set_field works on input/textarea/contenteditable only.` };
+            return failure(`ref_id ${ref_id} is not a text field (tag=${el.tagName}). set_field works on input/textarea/contenteditable only.`);
           }
           let prevValue = '';
+          dispatched = true;
           if (el.isContentEditable) {
             prevValue = el.textContent || '';
             if (clear) {
@@ -2904,7 +2935,7 @@
             fieldMeta,
           };
         } catch (e) {
-          return { success: false, error: e && e.message || String(e) };
+          return failure(e && e.message || String(e));
         }
       },
       // ── hover ──────────────────────────────────────────────────────────────

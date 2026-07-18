@@ -12485,16 +12485,28 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     }
 
     if (name === 'type_text') {
+      let dispatched = false;
       try {
         await cdpClient.attach(tabId);
         if (args.index != null) {
           return {
             success: false,
+            dispatched: false,
+            noDispatch: true,
             error: `type_text does not accept an \`index\` parameter. To type into an element by its index, first call click({index: ${args.index}}) to focus it, then call type_text({text: "${String(args.text || '').slice(0, 60)}"}) with NO selector and NO index. Alternatively, use click_ax + type_ax with a ref_id from get_accessibility_tree.`,
           };
         }
         if (args.selector) {
-          const result = await cdpClient.typeText(tabId, args.selector, args.text || '', !!args.clear);
+          let result;
+          try {
+            result = await cdpClient.typeText(tabId, args.selector, args.text || '', !!args.clear);
+          } catch (error) {
+            return {
+              success: false,
+              dispatched: true,
+              error: `Type failed after selector dispatch became uncertain: ${error?.message || String(error)}`,
+            };
+          }
           if (result.success) this._showAgentTarget(tabId, result.rect || result, 'type_text_selector');
           // Track field for duplicate-typing detection
           if (result.success) {
@@ -12540,6 +12552,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           if (!focus?.focused || !focus?.editable) {
             return {
               success: false,
+              dispatched: false,
+              noDispatch: true,
               error: 'No editable element is currently focused. Click the target input/textarea first, then call type_text with no selector.',
               focusedElement: focus || null,
             };
@@ -12576,9 +12590,16 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
               })()
             `);
             const sInfo = selectInfo?.result?.value;
-            if (!sInfo?.success) return sInfo || { success: false, error: 'Select interaction failed' };
+            if (!sInfo?.success) {
+              return {
+                ...(sInfo || { success: false, error: 'Select interaction failed' }),
+                dispatched: false,
+                noDispatch: true,
+              };
+            }
 
             // Close any open native dropdown first
+            dispatched = true;
             await cdpClient.sendCommand(tabId, 'Input.dispatchKeyEvent', {
               type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27,
             });
@@ -12632,6 +12653,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           }
 
           if (args.clear) {
+            dispatched = true;
             await cdpClient.sendCommand(tabId, 'Input.dispatchKeyEvent', {
               type: 'keyDown', key: 'a', code: 'KeyA', modifiers: 2, windowsVirtualKeyCode: 65,
             });
@@ -12645,6 +12667,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
               type: 'keyUp', key: 'Delete', code: 'Delete', windowsVirtualKeyCode: 46,
             });
           }
+          dispatched = true;
           await cdpClient.sendCommand(tabId, 'Input.insertText', { text: args.text || '' });
 
           // Track field for duplicate-typing detection
@@ -12666,9 +12689,20 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           };
         }
         // Should be unreachable — all branches above return.
-        return { success: false, error: 'type_text: internal — no branch matched. Provide {text} (with focused field) or {selector, text}.' };
+        return {
+          success: false,
+          dispatched: false,
+          noDispatch: true,
+          error: 'type_text: internal — no branch matched. Provide {text} (with focused field) or {selector, text}.',
+        };
       } catch (e) {
-        return { success: false, error: `Type failed: ${e.message}` };
+        return {
+          success: false,
+          ...(dispatched
+            ? { dispatched: true }
+            : { dispatched: false, noDispatch: true }),
+          error: `Type failed: ${e.message}`,
+        };
       }
     }
 

@@ -694,6 +694,25 @@ for (const browserKind of ['chrome', 'firefox']) {
       throw new Error(`expected stale-ref error, got: ${JSON.stringify(result)}`);
     }
   });
+
+  test(`input tools (${browserKind}): stale refs and missing focus are explicit pre-dispatch failures`, async (page) => {
+    await setupContentFixture(page, 'trusted-click-fallback.html', browserKind);
+    const calls = [
+      ['type', { text: 'should not be typed' }],
+      ['type_ax', { ref_id: 'ref_999999', text: 'should not be typed' }],
+      ['set_field', { ref_id: 'ref_999999', text: 'should not be typed' }],
+    ];
+    for (const [action, params] of calls) {
+      const result = await call(page, action, params);
+      if (
+        result?.success !== false
+        || result?.dispatched !== false
+        || result?.noDispatch !== true
+      ) {
+        throw new Error(`${action} should be an explicit pre-dispatch failure, got: ${JSON.stringify(result)}`);
+      }
+    }
+  });
 }
 
 test('click_ax: generic product action returns bounded nearest card context', async (page) => {
