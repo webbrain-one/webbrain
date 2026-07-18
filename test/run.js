@@ -6108,6 +6108,15 @@ test('completion invariant state machine enforces post-action observation with C
     let state = invariant.createCompletionInvariantState(`${label}-run`);
     state = invariant.recordCompletionToolResult(state, 'scroll', { direction: 'down' }, { success: true });
     assert.equal(state.hadAction, false, `${label}: bookkeeping/non-consequential tool opened debt`);
+    const observationWithoutAction = invariant.recordCompletionToolResult(
+      invariant.createCompletionInvariantState(`${label}-observation-only`),
+      'read_page',
+      {},
+      { success: true, content: 'target unavailable' },
+    );
+    assert.equal(observationWithoutAction.hadAction, false, `${label}: observation-only run invented an action`);
+    assert.equal(observationWithoutAction.verificationDebt, false, `${label}: observation-only run opened debt`);
+    assert.equal(observationWithoutAction.lastObservation?.name, 'read_page', `${label}: successful observation without an action was not recorded`);
 
     const noDispatch = invariant.recordCompletionToolResult(
       invariant.createCompletionInvariantState(`${label}-no-dispatch`),
@@ -23651,6 +23660,79 @@ test('classifier targets become isolated app-owned completion obligations', asyn
   }
 });
 
+test('classifier requirements allow transparent skipped and failed exits without fake actions', async () => {
+  for (const AgentClass of [AgentCh, AgentFx]) {
+    const agent = new AgentClass({ getActive: () => ({ contextWindow: 128000, supportsVision: false }) });
+    const tabId = 23266;
+    agent.conversationModes.set(tabId, 'act');
+    agent.conversations.set(tabId, [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: 'Process soda and Cola Zero.' },
+    ]);
+    const session = allowProgress(agent, tabId, ['process_item']);
+    agent._beginCompletionInvariant(tabId);
+    const seeded = agent._progressUpdate(tabId, {
+      items: [
+        {
+          id: 'soda',
+          label: 'soda',
+          action: 'process_item',
+          status: 'pending',
+          fields: { completionRequirement: true },
+        },
+        {
+          id: 'cola-zero',
+          label: 'Cola Zero',
+          action: 'process_item',
+          status: 'pending',
+          fields: { completionRequirement: true },
+        },
+      ],
+    }, { sessionId: session.sessionId });
+    assert.equal(seeded.success, true);
+
+    const unobservedExit = agent._progressUpdate(tabId, {
+      items: [{ id: 'soda', status: 'skipped', reason: 'already satisfied before this task' }],
+    }, { sessionId: session.sessionId });
+    assert.equal(unobservedExit.success, false, `${AgentClass.name}: transparent non-success status closed without an observation`);
+    assert.equal(unobservedExit.completionInvariant, true);
+
+    const sameBatchStartState = agent.completionInvariants.get(tabId);
+    agent._recordCompletionToolResult(tabId, 'read_page', {}, { success: true, content: 'soda already satisfied; Cola Zero unavailable' });
+    const sameBatchExit = await agent.executeTool(
+      tabId,
+      'progress_update',
+      { items: [{ id: 'soda', status: 'skipped', reason: 'already satisfied before this task' }] },
+      null,
+      { completionBatchStartState: sameBatchStartState },
+    );
+    assert.equal(sameBatchExit.success, false, `${AgentClass.name}: same-batch observation authorized a transparent terminal status`);
+    assert.equal(sameBatchExit.completionInvariant, true);
+
+    agent._recordCompletionToolResult(tabId, 'click_ax', { ref_id: 'ref_other' }, { success: true, verified: true });
+    const staleObservationExit = agent._progressUpdate(tabId, {
+      items: [{ id: 'soda', status: 'skipped', reason: 'already satisfied before this task' }],
+    }, { sessionId: session.sessionId });
+    assert.equal(staleObservationExit.success, false, `${AgentClass.name}: observation older than the latest action authorized a transparent terminal status`);
+    agent._recordCompletionToolResult(tabId, 'read_page', {}, { success: true, content: 'soda already satisfied; Cola Zero unavailable' });
+
+    const transparentExit = agent._progressUpdate(tabId, {
+      items: [
+        { id: 'soda', status: 'skipped', reason: 'already satisfied before this task' },
+        { id: 'cola-zero', status: 'failed', reason: 'target unavailable' },
+      ],
+    }, { sessionId: session.sessionId });
+    assert.equal(transparentExit.success, true, `${AgentClass.name}: transparent non-success statuses required a fake action`);
+    assert.deepEqual(
+      agent._rowsForProgressSession(tabId, session.sessionId).map(row => [row.id, row.status]),
+      [['soda', 'skipped'], ['cola-zero', 'failed']],
+    );
+    assert.match(agent._progressDoneBlock(tabId, 'success')?.error || '', /outcome:"success" is not allowed/);
+    assert.equal(agent._progressDoneBlock(tabId, 'partial'), null);
+    assert.equal(agent._progressDoneBlock(tabId, 'failed'), null);
+  }
+});
+
 test('progress session changes remove stale pinned ledger prompts', async () => {
   for (const AgentClass of [AgentCh, AgentFx]) {
     const agent = new AgentClass({ getActive: () => ({ contextWindow: 128000, supportsVision: false }) });
@@ -24191,20 +24273,9 @@ test('agent records GitHub stargazer observations into the progress ledger', asy
         fields: { completionRequirement: true },
       }],
     });
-    const spoofedObservationSkip = agent._progressUpdate(tabId, {
-      source: 'observe',
-      trustedObservation: 'github_stargazers',
-      items: [{
-        id: 'myxvisual',
-        status: 'skipped',
-        reason: 'already followed before this task',
-        fields: { followState: 'already_followed' },
-      }],
-    });
-    assert.equal(spoofedObservationSkip.success, false, `${AgentClass.name}: model-shaped args spoofed a trusted observation skip`);
-    assert.equal(spoofedObservationSkip.completionInvariant, true, `${AgentClass.name}: spoofed observation skip lost invariant classification`);
-
     const result = { success: true, pageContent: page };
+    agent._beginCompletionInvariant(tabId);
+    agent._recordCompletionToolResult(tabId, 'get_accessibility_tree', {}, result);
     const note = await agent._recordProgressObservation(tabId, 'get_accessibility_tree', result);
     assert.equal(note.observedButtons, 3);
     assert.equal(note.alreadyFollowedSkipped, 1);

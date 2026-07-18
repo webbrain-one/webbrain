@@ -7075,14 +7075,15 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       })
       .filter(Boolean);
     const evidenceRequirementIds = terminalRequirements
-      .filter(({ item, row }) => !(
-        opts.source === 'observe'
-        && opts.trustedObservation === 'github_stargazers'
-        && String(item?.status || '').toLowerCase() === 'skipped'
-        && String(row?.action || '').toLowerCase() === 'follow'
-        && String(item?.reason || '').trim().toLowerCase() === 'already followed before this task'
-        && String(item?.fields?.followState || '').toLowerCase() === 'already_followed'
-      ))
+      // processed is a success claim and needs one action -> observation cycle.
+      // skipped/failed are transparent non-success exits: requiring an action
+      // just to admit that a target is absent, unavailable, or already satisfied
+      // would force an unrelated mutation. They still need a prior explicit
+      // observation and prevent outcome:"success" in _progressTerminalDoneBlock.
+      .filter(({ item }) => String(item?.status || '').toLowerCase() === 'processed')
+      .map(requirement => requirement.id);
+    const observationOnlyRequirementIds = terminalRequirements
+      .filter(({ item }) => ['skipped', 'failed'].includes(String(item?.status || '').toLowerCase()))
       .map(requirement => requirement.id);
     if (evidenceRequirementIds.length > 1) {
       return {
@@ -7108,8 +7109,20 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       return {
         success: false,
         completionInvariant: true,
-        error: 'Classifier-seeded completion requirements can become terminal only after a consequential action and a successful explicit observation whose result was available on a prior assistant turn.',
+        error: 'Classifier-seeded completion requirements can be marked processed only after a consequential action and a successful explicit observation whose result was available on a prior assistant turn. Use skipped or failed for transparent non-success outcomes.',
         ids: evidenceRequirementIds.slice(0, 20),
+      };
+    }
+    if (
+      observationOnlyRequirementIds.length
+      && Number(evidenceState?.lastObservation?.sequence || 0)
+        <= Number(evidenceState?.lastAction?.sequence || 0)
+    ) {
+      return {
+        success: false,
+        completionInvariant: true,
+        error: 'Classifier-seeded completion requirements can be marked skipped or failed after a successful explicit observation whose result was available on a prior assistant turn. No consequential action is required for these transparent non-success outcomes.',
+        ids: observationOnlyRequirementIds.slice(0, 20),
       };
     }
     const mastodonGuard = this._mastodonProgressUpdateGuard(tabId, canonicalItems);
@@ -7709,7 +7722,6 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (!observed.items.length) return null;
     const update = this._progressUpdate(tabId, { items: observed.items }, {
       source: 'observe',
-      trustedObservation: 'github_stargazers',
       pageScope,
       sessionId: session.sessionId,
     });

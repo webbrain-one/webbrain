@@ -209,9 +209,9 @@ export function recordCompletionToolResult(state, name, args = {}, result) {
     return next;
   }
 
-  if (current.verificationDebt && isCompletionObservationTool(name, args, result)) {
-    next.verificationDebt = false;
+  if (isCompletionObservationTool(name, args, result)) {
     next.lastObservation = { name, sequence };
+    if (current.verificationDebt) next.verificationDebt = false;
   }
   return next;
 }
