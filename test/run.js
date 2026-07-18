@@ -5934,12 +5934,21 @@ test('all prompt tiers avoid volunteering secrets found in page data', () => {
 
 test('Act prompt tiers continue from approved plans while preserving plan-only boundaries', () => {
   const browsers = [
-    ['chrome', SYSTEM_PROMPT_ASK_CH, [SYSTEM_PROMPT_ACT_COMPACT_CH, SYSTEM_PROMPT_ACT_CH, SYSTEM_PROMPT_ACT_MID_CH]],
-    ['firefox', SYSTEM_PROMPT_ASK_FX, [SYSTEM_PROMPT_ACT_COMPACT_FX, SYSTEM_PROMPT_ACT_FX, SYSTEM_PROMPT_ACT_MID_FX]],
+    ['chrome', SYSTEM_PROMPT_ASK_CH, SYSTEM_PROMPT_ACT_COMPACT_CH, [SYSTEM_PROMPT_ACT_CH, SYSTEM_PROMPT_ACT_MID_CH]],
+    ['firefox', SYSTEM_PROMPT_ASK_FX, SYSTEM_PROMPT_ACT_COMPACT_FX, [SYSTEM_PROMPT_ACT_FX, SYSTEM_PROMPT_ACT_MID_FX]],
   ];
-  for (const [label, askPrompt, actPrompts] of browsers) {
+  for (const [label, askPrompt, compactPrompt, detailedActPrompts] of browsers) {
     assert.doesNotMatch(askPrompt, /PLAN TO EXECUTION/, `${label}: Ask mode must not receive Act execution guidance`);
-    for (const prompt of actPrompts) {
+    assert.match(compactPrompt, /call a permitted non-done tool before done/i, `${label}: compact Act must require execution before done`);
+    assert.match(compactPrompt, /never return a plan[\s\S]*as completion/i, `${label}: compact Act must reject plan-only completion`);
+    assert.match(compactPrompt, /requested only a plan\/structured policy[\s\S]*do not execute/i, `${label}: compact Act must preserve plan-only boundaries`);
+    const compactGuidance = compactPrompt.match(/PLAN TO EXECUTION:\n([\s\S]*?)\n\nTOOLS (?:—|-)/i)?.[1] || '';
+    assert.ok(compactGuidance, `${label}: compact Act guidance block missing`);
+    assert.ok(
+      compactGuidance.trim().split(/\s+/).length <= 45,
+      `${label}: compact Act guidance must stay concise for sub-8B models`,
+    );
+    for (const prompt of detailedActPrompts) {
       assert.match(prompt, /approved or pinned plan is context for doing the task, not a completed user outcome/i, `${label}: approved plan must lead into execution`);
       assert.match(prompt, /call the first permitted tool and continue/i, `${label}: execution must start with a permitted tool`);
       assert.match(prompt, /do not call done with the plan/i, `${label}: done must not accept a plan-only summary`);
