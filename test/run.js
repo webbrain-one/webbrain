@@ -22849,7 +22849,7 @@ test('Act reports failure when plan-only output repeats after its recovery nudge
 
     const final = await agent.processMessage(tabId, 'Read the current page and summarize it.', () => {}, 'act');
 
-    assert.match(final, /No action was performed/, `${AgentClass.name}: repeated plan was accepted as success`);
+    assert.match(final, /No successful action was verified/, `${AgentClass.name}: repeated plan was accepted as success`);
     assert.equal(ended?.status, 'plan_only_output', `${AgentClass.name}: repeated plan retained a successful trace status`);
   }
 });
@@ -22944,6 +22944,31 @@ test('execution evidence ignores failed, denied, skipped, blocked, and unknown o
   for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
     const agent = new AgentClass({});
     const tabId = 8614 + index;
+    assert.equal(
+      agent._isExecutionMutationEvidence('navigate', { url: 'https://example.com/next' }, [Capability.NAVIGATE]),
+      false,
+      `${AgentClass.name}: navigation counted as mutation evidence`,
+    );
+    assert.equal(
+      agent._isExecutionMutationEvidence('scroll', { direction: 'down' }, []),
+      false,
+      `${AgentClass.name}: scroll counted as mutation evidence`,
+    );
+    assert.equal(
+      agent._isExecutionMutationEvidence('fetch_url', { method: 'GET' }, [Capability.NETWORK]),
+      false,
+      `${AgentClass.name}: network read counted as mutation evidence`,
+    );
+    assert.equal(
+      agent._isExecutionMutationEvidence('fetch_url', { method: 'POST' }, [Capability.NETWORK]),
+      true,
+      `${AgentClass.name}: network write was not mutation evidence`,
+    );
+    assert.equal(
+      agent._isExecutionMutationEvidence('click_ax', {}, [Capability.CLICK]),
+      true,
+      `${AgentClass.name}: interaction was not mutation evidence`,
+    );
     const state = agent._startPlanExecutionGuard(tabId, 'act', {
       requestKind: 'execute',
       requiresStateChange: true,
@@ -22957,11 +22982,40 @@ test('execution evidence ignores failed, denied, skipped, blocked, and unknown o
     ]) {
       agent._markPlanExecutionToolCall(tabId, 'click_ax', result, { consequential: true });
     }
+    for (const [name, args, toolCapabilities] of [
+      ['navigate', { url: 'https://example.com/next' }, [Capability.NAVIGATE]],
+      ['scroll', { direction: 'down' }, []],
+      ['fetch_url', { method: 'GET' }, [Capability.NETWORK]],
+    ]) {
+      agent._markPlanExecutionToolCall(tabId, name, { success: true }, {
+        consequential: agent._isExecutionMutationEvidence(name, args, toolCapabilities),
+      });
+    }
     agent._markPlanExecutionToolCall(tabId, 'read_page', { success: true }, { consequential: false });
     assert.equal(agent._executionEvidenceSatisfied(state), false, `${AgentClass.name}: invalid mutation evidence was counted`);
 
     agent._markPlanExecutionToolCall(tabId, 'click_ax', { success: true }, { consequential: true });
     assert.equal(agent._executionEvidenceSatisfied(state), true, `${AgentClass.name}: successful mutation evidence was not counted`);
+  }
+});
+
+test('repeated plan failure warns when task tools may already have completed', () => {
+  for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
+    const agent = new AgentClass({});
+    const tabId = 8618 + index;
+    agent._startPlanExecutionGuard(tabId, 'act', {
+      requestKind: 'execute',
+      requiresStateChange: false,
+    });
+    agent._markPlanExecutionToolCall(tabId, 'read_page', { success: true });
+
+    const retry = agent._planOnlyTerminalDecision(tabId, 'Plan:\n1. Return the result.');
+    const failure = agent._planOnlyTerminalDecision(tabId, 'Plan:\n1. Return the result.');
+
+    assert.equal(retry?.retry, true, `${AgentClass.name}: first plan did not trigger recovery`);
+    assert.match(failure?.failure || '', /Some task tools completed/, `${AgentClass.name}: completed tool evidence was hidden`);
+    assert.match(failure?.failure || '', /avoid duplicate side effects/, `${AgentClass.name}: retry warning missing`);
+    assert.doesNotMatch(failure?.failure || '', /No action was performed/, `${AgentClass.name}: failure denied prior tool activity`);
   }
 });
 
@@ -23335,7 +23389,7 @@ test('streamed repeated plan-only output replaces rejected deltas with the failu
     );
 
     assert.equal(provider.calls, 2, `${AgentClass.name}: repeated plan did not consume the recovery turn`);
-    assert.match(final, /No action was performed/, `${AgentClass.name}: repeated streamed plan was accepted`);
+    assert.match(final, /No successful action was verified/, `${AgentClass.name}: repeated streamed plan was accepted`);
     const finalText = updates.filter(update => update.type === 'text').at(-1);
     assert.equal(finalText?.data?.content, final, `${AgentClass.name}: streamed failure did not replace rejected plan deltas`);
   }

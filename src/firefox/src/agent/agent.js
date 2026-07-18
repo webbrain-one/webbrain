@@ -1916,6 +1916,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       // A missing response after any consequential call is an unknown outcome:
       // the side effect may have completed before its reply was lost.
       const missingResponseOutcomeUnknown = capabilities.length > 0 || Agent.STATE_CHANGE_TOOLS.has(fnName);
+      const executionMutationEvidence = this._isExecutionMutationEvidence(fnName, fnArgs, capabilities);
       await this._ensureGateSetting();
       const skillEndpointRedirect = this._skillEndpointToolRedirect(fnName, fnArgs, tabId);
       if (skillEndpointRedirect) {
@@ -2085,7 +2086,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       const toolResult = this._normalizeToolResult(fnName, rawToolResult, missingResponseOutcomeUnknown);
       if (fnName !== 'done') {
         this._markPlanExecutionToolCall(tabId, fnName, toolResult, {
-          consequential: missingResponseOutcomeUnknown,
+          consequential: executionMutationEvidence,
         });
       }
       const _toolLatency = Date.now() - _toolStart;
@@ -6726,6 +6727,20 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     return true;
   }
 
+  _isExecutionMutationEvidence(name, args = {}, capabilities = []) {
+    const mutationCapabilities = new Set([
+      Capability.CLICK,
+      Capability.TYPE,
+      Capability.EXECUTE_JS,
+      Capability.DEV_PATCH,
+      Capability.DOWNLOAD,
+      Capability.UPLOAD,
+      Capability.SCHEDULE,
+    ]);
+    if (capabilities.includes(Capability.NETWORK)) return isNetworkMutation(name, args);
+    return capabilities.some(capability => mutationCapabilities.has(capability));
+  }
+
   _markPlanExecutionToolCall(tabId, name, result, { consequential = false } = {}) {
     const state = this._planExecutionGuards.get(tabId);
     if (!state?.enabled || name === 'done' || !this._isSuccessfulExecutionEvidence(result)) return;
@@ -6800,8 +6815,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         nudge: '[PLAN EXECUTION BLOCK: This Act/Dev request authorizes execution, but the previous response did not prove the requested work was completed. Continue with permitted task tools until verified completion, a real blocker, cancellation, or required user input. Read-only tasks need a successful task tool; state-changing tasks need a successful consequential tool. Do not return the plan again, end with plain text, or call done with planner/action-policy metadata or a promise to act.]',
       };
     }
+    const hasSuccessfulToolEvidence = state.successfulTaskToolCalls > 0;
     return {
-      failure: '[Agent stopped because the model returned a plan or promise instead of executing the approved task, even after one recovery nudge. No action was performed.]',
+      failure: hasSuccessfulToolEvidence
+        ? '[Agent stopped because the model returned a plan or promise after one recovery nudge. Some task tools completed, but final completion was not verified. Inspect the current state before retrying to avoid duplicate side effects.]'
+        : '[Agent stopped because the model returned a plan or promise instead of executing the approved task, even after one recovery nudge. No successful action was verified.]',
     };
   }
 
