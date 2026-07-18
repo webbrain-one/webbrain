@@ -2707,6 +2707,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
    * @param {string} dataUrl            `data:image/...;base64,...`
    * @param {object} [opts]
    * @param {'viewport'|'page'} [opts.coordinateSpace='viewport']
+   * @param {{x:number,y:number,width:number,height:number}} [opts.capturedCssBounds]
+   * @param {number} [opts.imageWidth]
+   * @param {number} [opts.imageHeight]
    * @returns {Promise<string>}
    */
   async _redactScreenshotDataUrl(tabId, dataUrl, opts = {}) {
@@ -2714,7 +2717,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
     let imageWidth = opts.imageWidth;
     let imageHeight = opts.imageHeight;
-    if (!(Number.isFinite(imageWidth) && Number.isFinite(imageHeight))) {
+    if (!(Number.isFinite(imageWidth) && imageWidth > 0 &&
+          Number.isFinite(imageHeight) && imageHeight > 0)) {
       try {
         const m = await fetch(dataUrl);
         const bmp = await createImageBitmap(await m.blob());
@@ -2750,11 +2754,25 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const resp = frameSnapshots.find((frame) => frame.frameId === 0);
     if (!resp) return dataUrl;
 
-    const cssBox = resp?.viewport || { width: imageWidth, height: imageHeight };
+    const suppliedBounds = opts.capturedCssBounds;
+    const hasCapturedBounds = coordinateSpace === 'page' &&
+      Number.isFinite(suppliedBounds?.x) &&
+      Number.isFinite(suppliedBounds?.y) &&
+      Number.isFinite(suppliedBounds?.width) && suppliedBounds.width > 0 &&
+      Number.isFinite(suppliedBounds?.height) && suppliedBounds.height > 0;
+    const cssBox = hasCapturedBounds
+      ? suppliedBounds
+      : (resp?.viewport || { width: imageWidth, height: imageHeight });
     const cssW = Number.isFinite(cssBox.width) && cssBox.width > 0 ? cssBox.width : imageWidth;
     const cssH = Number.isFinite(cssBox.height) && cssBox.height > 0 ? cssBox.height : imageHeight;
     const scaleX = imageWidth / cssW;
     const scaleY = imageHeight / cssH;
+    const offsetX = hasCapturedBounds
+      ? suppliedBounds.x
+      : (Number.isFinite(opts.offsetX) ? opts.offsetX : 0);
+    const offsetY = hasCapturedBounds
+      ? suppliedBounds.y
+      : (Number.isFinite(opts.offsetY) ? opts.offsetY : 0);
 
     const regions = mergeRedactionFrameRegions(frameSnapshots);
     if (!regions.length) return dataUrl;
@@ -2762,8 +2780,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const imageRegions = mapRegionsToImage(regions, {
       scaleX,
       scaleY,
-      offsetX: 0,
-      offsetY: 0,
+      offsetX,
+      offsetY,
       imageWidth,
       imageHeight,
     });

@@ -95,7 +95,9 @@ role "accessible name" [ref_id] href="..." type="..." placeholder="..." value=".
 
 返回 `{success, method, tag, rect, name, href?, navigates?, hint?}`。
 
-在 Chrome 上，通过 CDP `Input.dispatchMouseEvent` 触发点击 → 受信任事件。在 Firefox 上，使用合成事件 `el.click()`。
+两个版本都会优先保留兼容的合成 `el.click()` 路径。仅在 Chrome 上，当页面和目标经过两个观察区间仍保持稳定时，安全的通用目标才可获得一次受保护的 CDP `Input.dispatchMouseEvent` 回退。URL 变化、由处理器引起的焦点变化、同步的目标局部变化，或 `aria-current` 等延迟语义状态变化可证明已有进展。整页变化以及延迟发生的目标名称、类名、样式或子节点变化只作为诊断提示，因为聊天预览、未读徽标和时间戳可能与本次点击无关。临近的变更型 XHR 或非遥测 beacon、新标签页或下载会使结果变为不确定并阻止重试；后台读取以及明显的遥测或心跳流量会被忽略。被 CSS 隐藏、禁用指针事件、原生、带状态/切换语义、位于表单中、用于下载或可能产生变更的目标绝不会自动重试。Firefox 仍只使用合成点击。
+
+有限的观察窗口无法证明完全不产生 URL、焦点、语义目标、网络、标签页、下载或其他可见信号的应用内部状态。通用目标限制、延迟稳定检查和一次性规则会尽量降低风险，但无法彻底排除一个已静默成功的合成处理器又收到一次可信激活。
 
 ### `type_ax({ref_id, text, clear})`
 

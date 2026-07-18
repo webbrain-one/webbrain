@@ -16,7 +16,8 @@ import { chromium } from 'playwright';
 import { fileURLToPath } from 'node:url';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { CDPClient } from '../../src/chrome/src/cdp/cdp-client.js';
+import { Agent } from '../../src/chrome/src/agent/agent.js';
+import { CDPClient, cdpClient } from '../../src/chrome/src/cdp/cdp-client.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..', '..');
@@ -674,6 +675,263 @@ test('ambiguity: two Cancels return rich candidates with ancestor', async (page)
 });
 
 // ─── click_ax same-page anchors ─────────────────────────────────────────────
+test('click_ax: Agent.executeTool keeps synthetic-first behavior and uses trusted CDP only for an ignored generic row', async (page) => {
+  await setup(page, 'trusted-click-fallback.html');
+  const tree = await call(page, 'get_accessibility_tree', { filter: 'all', maxDepth: 10, maxChars: 20000 });
+  const trustedMatch = String(tree?.pageContent || '').match(/listitem "Defne Sokullu Yesterday Photo" \[(ref_\d+)\]/);
+  const syntheticMatch = String(tree?.pageContent || '').match(/listitem "Normal synthetic row" \[(ref_\d+)\]/);
+  const disclosureMatch = String(tree?.pageContent || '').match(/"Native disclosure" \[(ref_\d+)\]/);
+  if (!trustedMatch || !syntheticMatch || !disclosureMatch) {
+    throw new Error(`expected trusted, synthetic, and disclosure fixture rows in AX tree: ${tree?.pageContent}`);
+  }
+
+  const originalChrome = globalThis.chrome;
+  const originals = {
+    attach: cdpClient.attach,
+    evaluate: cdpClient.evaluate,
+    dispatch: cdpClient.dispatchMouseEvent,
+  };
+  const session = await page.context().newCDPSession(page);
+  const dispatched = [];
+  const listener = { addListener() {}, removeListener() {} };
+  globalThis.chrome = {
+    runtime: {},
+    tabs: {
+      async get(tabId) {
+        return { id: tabId, url: page.url(), title: 'Trusted click fixture' };
+      },
+      async query() {
+        return [{ id: 42, url: page.url() }];
+      },
+      async sendMessage(_tabId, message) {
+        return call(page, message.action, message.params || {});
+      },
+    },
+    downloads: { onCreated: listener },
+    webRequest: { onBeforeRequest: listener },
+    scripting: { async executeScript() {} },
+  };
+
+  try {
+    cdpClient.attach = async () => ({ tabId: 42, attached: true });
+    cdpClient.evaluate = async (_tabId, expression) => ({
+      result: { value: await page.evaluate(expression) },
+    });
+    cdpClient.dispatchMouseEvent = async (_tabId, type, x, y) => {
+      dispatched.push({ type, x, y });
+      return session.send('Input.dispatchMouseEvent', {
+        type,
+        x,
+        y,
+        button: type === 'mouseMoved' ? 'none' : 'left',
+        buttons: type === 'mousePressed' ? 1 : 0,
+        clickCount: type === 'mouseMoved' ? 0 : 1,
+      });
+    };
+
+    const agent = new Agent({});
+    agent._isPdfTab = async () => false;
+    agent._currentUrl = async () => page.url();
+    agent._clickAxFinalSettleMs = () => 60;
+
+    const trustedResult = await agent.executeTool(42, 'click_ax', { ref_id: trustedMatch[1] });
+    const afterTrusted = await page.evaluate(() => ({
+      status: document.getElementById('status').textContent,
+      ambientStatus: document.getElementById('ambient-status').textContent,
+      events: window.__trustedClickEvents,
+      selected: document.getElementById('trusted-row').classList.contains('trusted-opened'),
+      semanticSelected: document.getElementById('trusted-row').getAttribute('aria-current'),
+    }));
+    if (
+      trustedResult?.success !== true
+      || trustedResult.fallback !== 'cdp_after_synthetic_no_progress'
+      || trustedResult.trusted !== true
+      || trustedResult.verified !== true
+    ) {
+      throw new Error(`actual Agent/content/CDP chain did not complete trusted fallback: ${JSON.stringify(trustedResult)}`);
+    }
+    if (
+      !trustedResult.observedHints?.includes('page_text')
+      || !trustedResult.observedHints?.includes('target_state_weak')
+    ) {
+      throw new Error(`unrelated page/target churn should be retained only as diagnostic hints: ${JSON.stringify(trustedResult)}`);
+    }
+    if (
+      afterTrusted.status !== 'trusted-opened'
+      || afterTrusted.ambientStatus !== 'unrelated-chat-churn'
+      || !afterTrusted.selected
+      || afterTrusted.semanticSelected !== 'true'
+    ) {
+      throw new Error(`trusted CDP fallback did not activate the row: ${JSON.stringify(afterTrusted)}`);
+    }
+    if (
+      afterTrusted.events.length !== 2
+      || afterTrusted.events[0].trusted !== false
+      || afterTrusted.events[1].trusted !== true
+    ) {
+      throw new Error(`expected one synthetic then one trusted event: ${JSON.stringify(afterTrusted.events)}`);
+    }
+    if (dispatched.map(event => event.type).join(',') !== 'mouseMoved,mousePressed,mouseReleased') {
+      throw new Error(`unexpected trusted input sequence: ${JSON.stringify(dispatched)}`);
+    }
+    if (Object.keys(trustedResult).some(key => key.startsWith('_fallback') || key === '_syntheticClickStartedAt')) {
+      throw new Error(`internal click state leaked into the agent result: ${JSON.stringify(trustedResult)}`);
+    }
+
+    await page.evaluate(() => { document.getElementById('status').textContent = 'idle'; });
+    const dispatchCountBeforeNormal = dispatched.length;
+    const normalResult = await agent.executeTool(42, 'click_ax', { ref_id: syntheticMatch[1] });
+    const normalState = await page.evaluate(() => ({
+      status: document.getElementById('status').textContent,
+      events: window.__syntheticClickEvents,
+      selected: document.getElementById('synthetic-row').classList.contains('synthetic-opened'),
+    }));
+    if (
+      normalResult?.success !== true
+      || normalResult.trusted !== false
+      || normalResult.verified !== true
+      || normalResult.observedEffects?.[0] !== 'target_state'
+    ) {
+      throw new Error(`working synthetic target was not accepted from its local state change: ${JSON.stringify(normalResult)}`);
+    }
+    if (
+      normalState.status !== 'synthetic-opened'
+      || !normalState.selected
+      || normalState.events.length !== 1
+      || normalState.events[0].trusted !== false
+    ) {
+      throw new Error(`working synthetic click path regressed or double-activated: ${JSON.stringify(normalState)}`);
+    }
+    if (dispatched.length !== dispatchCountBeforeNormal) {
+      throw new Error('working synthetic target unexpectedly received a trusted second click');
+    }
+
+    const dispatchCountBeforeDisclosure = dispatched.length;
+    const disclosureResult = await agent.executeTool(42, 'click_ax', { ref_id: disclosureMatch[1] });
+    const disclosureOpen = await page.evaluate(() => document.getElementById('native-details').open);
+    if (
+      disclosureResult?.success !== true
+      || disclosureResult.trusted !== false
+      || !/native\/button-like/.test(disclosureResult.fallbackSkipped || '')
+    ) {
+      throw new Error(`native disclosure did not stay on its synthetic-only path: ${JSON.stringify(disclosureResult)}`);
+    }
+    if (!disclosureOpen) {
+      throw new Error('synthetic summary click should open the native disclosure exactly once');
+    }
+    if (dispatched.length !== dispatchCountBeforeDisclosure) {
+      throw new Error('native disclosure unexpectedly received a trusted second click');
+    }
+  } finally {
+    cdpClient.attach = originals.attach;
+    cdpClient.evaluate = originals.evaluate;
+    cdpClient.dispatchMouseEvent = originals.dispatch;
+    if (originalChrome === undefined) delete globalThis.chrome;
+    else globalThis.chrome = originalChrome;
+    await session.detach();
+  }
+});
+
+test('ax_resolve_rect: trusted fallback eligibility rejects interactive descendants, hidden, mutating, stateful, native, form, and download targets', async (page) => {
+  await setup(page, 'trusted-click-fallback.html');
+  const tree = await call(page, 'get_accessibility_tree', { filter: 'all', maxDepth: 10, maxChars: 20000 });
+  const content = String(tree?.pageContent || '');
+  const refs = {
+    nestedButton: content.match(/listitem "Nested button row" \[(ref_\d+)\]/)?.[1],
+    nestedLink: content.match(/listitem "Nested link row" \[(ref_\d+)\]/)?.[1],
+    nestedInput: content.match(/listitem "Nested input row" \[(ref_\d+)\]/)?.[1],
+    native: content.match(/button "Native button" \[(ref_\d+)\]/)?.[1],
+    disclosure: content.match(/"Native disclosure" \[(ref_\d+)\]/)?.[1],
+    destructive: content.match(/listitem "Delete account" \[(ref_\d+)\]/)?.[1],
+    sendMessage: content.match(/listitem "Send message" \[(ref_\d+)\]/)?.[1],
+    orderLunch: content.match(/listitem "Order lunch" \[(ref_\d+)\]/)?.[1],
+    bookNow: content.match(/listitem "Book now" \[(ref_\d+)\]/)?.[1],
+    indirectDestructive: content.match(/listitem "Delete account indirectly" \[(ref_\d+)\]/)?.[1],
+    localizedDestructive: content.match(/listitem "Hesabı sil" \[(ref_\d+)\]/)?.[1],
+    statefulRole: content.match(/treeitem "Expandable row" \[(ref_\d+)\]/)?.[1],
+    statefulAttribute: content.match(/listitem "Stateful list row" \[(ref_\d+)\]/)?.[1],
+    input: content.match(/textbox "Native input" \[(ref_\d+)\]/)?.[1],
+    select: content.match(/combobox "Native select" \[(ref_\d+)\]/)?.[1],
+    editable: content.match(/textbox "Editable row" \[(ref_\d+)\]/)?.[1],
+    download: content.match(/listitem "Export report" \[(ref_\d+)\]/)?.[1],
+    form: content.match(/listitem "Form row" \[(ref_\d+)\]/)?.[1],
+    covered: content.match(/listitem "Covered row" \[(ref_\d+)\]/)?.[1],
+    opacity: content.match(/listitem "Opacity row" \[(ref_\d+)\]/)?.[1],
+    pointer: content.match(/listitem "Pointer disabled row" \[(ref_\d+)\]/)?.[1],
+    zero: content.match(/listitem "Zero row" \[(ref_\d+)\]/)?.[1],
+  };
+  const safeRefs = {
+    tabindexNegative: content.match(/listitem "Generic row with tabindex minus one wrapper" \[(ref_\d+)\]/)?.[1],
+    tabindexZero: content.match(/listitem "Generic row with tabindex zero wrapper" \[(ref_\d+)\]/)?.[1],
+    dataAction: content.match(/listitem "Generic data action row" \[(ref_\d+)\]/)?.[1],
+    properName: content.match(/listitem "Post Malone" \[(ref_\d+)\]/)?.[1],
+  };
+  await page.evaluate(() => {
+    document.getElementById('opacity-row').style.opacity = '0';
+  });
+  for (const [label, ref] of Object.entries(refs)) {
+    if (!ref) throw new Error(`missing ${label} ref in AX tree: ${content}`);
+    const result = await call(page, 'ax_resolve_rect', { ref_id: ref, forClickFallback: true });
+    if (!result?.success) throw new Error(`${label} ref did not resolve: ${JSON.stringify(result)}`);
+    if (result.fallbackEligible !== false || !result.fallbackBlockedReason) {
+      throw new Error(`${label} target should be blocked from trusted fallback: ${JSON.stringify(result)}`);
+    }
+  }
+  for (const [label, ref] of Object.entries(safeRefs)) {
+    if (!ref) throw new Error(`missing ${label} ref in AX tree: ${content}`);
+    const result = await call(page, 'ax_resolve_rect', { ref_id: ref, forClickFallback: true });
+    if (!result?.success || result.fallbackEligible !== true || result.fallbackBlockedReason) {
+      throw new Error(`${label} generic row should remain eligible for trusted fallback: ${JSON.stringify(result)}`);
+    }
+  }
+  for (const label of ['nestedButton', 'nestedLink', 'nestedInput']) {
+    const result = await call(page, 'ax_resolve_rect', { ref_id: refs[label], forClickFallback: true });
+    if (!/interactive descendant/.test(result.fallbackBlockedReason || '')) {
+      throw new Error(`${label} should be blocked specifically by its interactive center descendant: ${JSON.stringify(result)}`);
+    }
+    if (!result.interactiveDescendantTag) {
+      throw new Error(`${label} should report the interactive descendant tag: ${JSON.stringify(result)}`);
+    }
+  }
+
+  const ordinaryResolve = await call(page, 'ax_resolve_rect', { ref_id: refs.destructive });
+  if (
+    ordinaryResolve.fallbackEligible !== undefined
+    || ordinaryResolve.fallbackState !== undefined
+    || ordinaryResolve.fallbackStrongState !== undefined
+    || ordinaryResolve.fallbackWeakState !== undefined
+    || ordinaryResolve.documentToken !== undefined
+  ) {
+    throw new Error(`fallback-only metadata leaked into ordinary ref resolution: ${JSON.stringify(ordinaryResolve)}`);
+  }
+});
+
+test('ax_resolve_rect: English action labels stay blocked under Turkish locale casing', async (page) => {
+  await page.addInitScript(() => {
+    const original = String.prototype.toLocaleLowerCase;
+    String.prototype.toLocaleLowerCase = function (...locales) {
+      return original.apply(this, locales.length ? locales : ['tr-TR']);
+    };
+  });
+  await setup(page, 'trusted-click-fallback.html');
+  const tree = await call(page, 'get_accessibility_tree', { filter: 'all', maxDepth: 10, maxChars: 20000 });
+  const content = String(tree?.pageContent || '');
+  const refs = {
+    install: content.match(/listitem "Install app" \[(ref_\d+)\]/)?.[1],
+    invite: content.match(/listitem "Invite teammate" \[(ref_\d+)\]/)?.[1],
+  };
+  for (const [label, ref] of Object.entries(refs)) {
+    if (!ref) throw new Error(`missing ${label} ref in Turkish-locale AX tree: ${content}`);
+    const result = await call(page, 'ax_resolve_rect', { ref_id: ref, forClickFallback: true });
+    if (
+      result?.fallbackEligible !== false
+      || !/potentially mutating/.test(result.fallbackBlockedReason || '')
+    ) {
+      throw new Error(`${label} must remain blocked regardless of default locale casing: ${JSON.stringify(result)}`);
+    }
+  }
+});
+
 test('click_ax: same-page anchor reports hash and scroll completion', async (page) => {
   await setup(page, 'anchor-click.html');
   const before = await page.evaluate(() => ({ hash: location.hash, scrollY: window.scrollY }));

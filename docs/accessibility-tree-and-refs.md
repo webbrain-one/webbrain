@@ -97,7 +97,9 @@ The agent uses this as its first action on almost every turn — it's faster and
 
 Returns `{success, method, tag, rect, name, href?, navigates?, hint?}`.
 
-On Chrome, the click fires via CDP `Input.dispatchMouseEvent` → trusted event. On Firefox, it's a synthetic `el.click()`.
+Both builds first preserve the compatible synthetic `el.click()` path. On Chrome only, a safe generic target may receive one guarded CDP `Input.dispatchMouseEvent` fallback after the page and target remain stable through two observation intervals. A URL change, handler-driven focus change, synchronous target-local mutation, or delayed semantic target state such as `aria-current` proves progress. Whole-page churn and delayed target name/class/style/child changes are retained only as diagnostic hints, because unrelated chat previews, unread badges, and timestamps are common. A nearby mutating XHR or non-telemetry beacon, new tab, or download makes the result inconclusive and vetoes the retry; background reads and obvious telemetry/heartbeat traffic are ignored. CSS-hidden, pointer-disabled, native, stateful/toggle, form, download, and potentially mutating targets are never auto-retried. Firefox remains synthetic-only.
+
+No finite observation window can prove application-internal state that produces no URL, focus, semantic target, network, tab, download, or other visible signal. The generic-target gates, delayed settle, and one-shot rule minimize—but cannot completely eliminate—the possibility that a silent successful synthetic handler receives one trusted second activation.
 
 ### `type_ax({ref_id, text, clear})`
 

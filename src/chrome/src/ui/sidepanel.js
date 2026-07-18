@@ -3708,6 +3708,7 @@ function renderAgentErrorUpdate(data, tabId = currentTabId, requestId = '') {
 
 function rebindRestoredMessageControls() {
   rebindCopyButtons();
+  rebindScreenshotSaveButtons();
   rebindRetryButtons();
   rebindContinueButtons();
   rebindClarifyCards();
@@ -4316,6 +4317,104 @@ function addPersistentSlashMessage(content) {
   return addMessage('system', content, { beforeCurrentAssistant: true });
 }
 
+function screenshotFilenamePrefix(pageUrl) {
+  try {
+    const url = new URL(String(pageUrl || ''));
+    if (!/^https?:$/.test(url.protocol)) return '';
+    const hostname = url.hostname.replace(/^www\./i, '');
+    let pathname = url.pathname;
+    try { pathname = decodeURIComponent(pathname); } catch {}
+    const raw = `${hostname}${pathname === '/' ? '' : `-${pathname.replace(/^\/+|\/+$/g, '')}`}`;
+    return raw
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^\p{L}\p{N}._-]+/gu, '-')
+      .slice(0, 160)
+      .replace(/[-.]+$/g, '');
+  } catch {
+    return '';
+  }
+}
+
+function screenshotDownloadFilename(pageUrl = '', fullPage = false) {
+  const prefix = screenshotFilenamePrefix(pageUrl) || 'webbrain';
+  return `${prefix}-${fullPage ? 'full-page-' : ''}screenshot.png`;
+}
+
+function renderScreenshotResult(dataUrl, { fullPage = false, warning = '', pageUrl = '' } = {}) {
+  const warningHtml = warning
+    ? `<div class="screenshot-warning"><strong>⚠️ ${escapeHtml(warning)}</strong></div>`
+    : '';
+  const imageClass = fullPage
+    ? 'screenshot-result-image screenshot-result-image-full-page'
+    : 'screenshot-result-image';
+  const filename = screenshotDownloadFilename(pageUrl, fullPage);
+  const saveLabel = t('sp.screenshot.save_as');
+  return `
+    <div class="screenshot-result">
+      ${warningHtml}
+      <img src="${escapeHtml(dataUrl)}" class="${imageClass}" alt="${escapeHtml(fullPage ? 'Full-page screenshot' : 'Screenshot')}"/>
+      <div class="screenshot-result-actions">
+        <button type="button" class="screenshot-save-btn" data-filename="${escapeHtml(filename)}" aria-label="${escapeHtml(saveLabel)}">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M12 3v12"></path>
+            <path d="m7 10 5 5 5-5"></path>
+            <path d="M5 21h14"></path>
+          </svg>
+          <span>${escapeHtml(saveLabel)}</span>
+        </button>
+      </div>
+    </div>`;
+}
+
+function bindScreenshotSaveButton(btn) {
+  if (!btn || btn.__wbScreenshotSaveBound) return;
+  btn.__wbScreenshotSaveBound = true;
+  btn.addEventListener('click', async (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const result = btn.closest('.screenshot-result');
+    const dataUrl = result?.querySelector('.screenshot-result-image')?.getAttribute('src') || '';
+    if (!/^data:image\/png;base64,/i.test(dataUrl)) return;
+
+    const label = btn.querySelector('span');
+    btn.disabled = true;
+    btn.setAttribute('aria-busy', 'true');
+    if (label) label.textContent = t('sp.screenshot.saving');
+    try {
+      await chrome.downloads.download({
+        url: dataUrl,
+        filename: btn.dataset.filename || screenshotDownloadFilename(
+          '',
+          result?.querySelector('.screenshot-result-image-full-page') != null,
+        ),
+        saveAs: true,
+        conflictAction: 'uniquify',
+      });
+    } catch (error) {
+      const message = error?.message || String(error);
+      // Closing the native Save As dialog is an ordinary user choice.
+      if (!/cancel(?:led|ed)/i.test(message)) {
+        showComposerToast(t('sp.screenshot.save_failed', { msg: message }), { duration: 5000 });
+      }
+    } finally {
+      btn.disabled = false;
+      btn.removeAttribute('aria-busy');
+      if (label) label.textContent = t('sp.screenshot.save_as');
+    }
+  });
+}
+
+function rebindScreenshotSaveButtons(root = document) {
+  root.querySelectorAll?.('.screenshot-save-btn').forEach(bindScreenshotSaveButton);
+}
+
+function addScreenshotResultMessage(dataUrl, options = {}) {
+  const msgEl = addPersistentSlashMessage(systemHtml(renderScreenshotResult(dataUrl, options)));
+  rebindScreenshotSaveButtons(msgEl);
+  return msgEl;
+}
+
 function resolvePendingPermissionPromptsForTab(tabId) {
   if (tabId == null) return 0;
   const targetTabId = String(tabId);
@@ -4495,8 +4594,7 @@ async function parseSlashCommands(text, tabId = currentTabId) {
       if (windowId != null) {
         const dataUrl = await chrome.tabs.captureVisibleTab(windowId, { format: 'png' });
         if (currentTabId !== tabId) return '';
-        const imgHtml = `<img src="${dataUrl}" style="max-width:100%;border-radius:6px;margin:4px 0;" alt="Screenshot"/>`;
-        addPersistentSlashMessage(systemHtml(imgHtml));
+        addScreenshotResultMessage(dataUrl, { pageUrl: tab.url });
       }
     } catch (e) {
       if (currentTabId !== tabId) return '';
@@ -4507,14 +4605,16 @@ async function parseSlashCommands(text, tabId = currentTabId) {
 
   if (command.value === '/screenshot' && action === 'full-page') {
     try {
+      const pageUrl = tabId == null
+        ? ''
+        : await chrome.tabs.get(tabId).then(tab => tab?.url || '').catch(() => '');
       const res = await sendToBackground('capture_full_page_screenshot', { tabId });
       if (currentTabId !== tabId) return '';
       if (!res?.ok || !res.dataUrl) {
         addPersistentSlashMessage(systemHtml(tSystemHtml('sp.screenshot.error', { msg: res?.error || 'unknown error' })));
         return '';
       }
-      const imgHtml = `<img src="${res.dataUrl}" style="max-width:100%;max-height:70vh;object-fit:contain;object-position:top;border-radius:6px;margin:4px 0;" alt="Full-page screenshot"/>`;
-      addPersistentSlashMessage(systemHtml(imgHtml));
+      addScreenshotResultMessage(res.dataUrl, { fullPage: true, warning: res.warning, pageUrl });
     } catch (e) {
       if (currentTabId !== tabId) return '';
       addPersistentSlashMessage(systemHtml(tSystemHtml('sp.screenshot.error', { msg: e.message })));

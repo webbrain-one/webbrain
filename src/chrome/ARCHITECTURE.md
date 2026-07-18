@@ -329,7 +329,7 @@ Injected before `content.js` via `content_scripts`. Exposes three globals on `wi
 | Tool | Returns | Notes |
 |---|---|---|
 | `get_accessibility_tree` | Text tree + viewport | Primary page read path. |
-| `click_ax({ref_id})` | `{success, method, tag, rect, name, href?, navigates?, hint?}` | Scrolls into view → focuses → `el.click()`. Emits hints: text-entry elements get a `next_required: 'type_ax'` nudge; combobox openers get "the popup is in a portal — re-read the full tree". |
+| `click_ax({ref_id})` | `{success, method, tag, rect, name, href?, navigates?, hint?, trusted?, verified?, fallback?, observedHints?}` | Scrolls into view → focuses → `el.click()`. Chrome considers one CDP trusted-click fallback only after two stable page/target observations. URL, handler-focus, synchronous target mutation, and delayed semantic target state prove progress; broad page churn and delayed name/class/style/child changes are diagnostic hints only. Nearby mutating XHR/ping requests, new tabs, and downloads make the result inconclusive and veto retry, while background reads and obvious telemetry are ignored. Hidden, pointer-disabled, native, stateful/toggle, form, download, and potentially mutating controls never auto-retry. A silent app-internal success can still receive one trusted second activation; generic-only eligibility, settle time, and the one-shot rule bound but cannot eliminate that tradeoff. |
 | `type_ax({ref_id, text, clear})` | `{success, method, rect}` | React-compatible: uses the native HTMLInputElement/HTMLTextAreaElement value setter. Rejects non-typeable INPUT subtypes (checkbox/radio/submit/file/...) with a clear error pointing at `click_ax`. |
 | `set_field({ref_id, text, clear, submit})` | `{success, verified, ...}` | One-shot focus + clear + type + (optional) submit. **Combobox-aware:** if the element or an ancestor looks like a searchbox/combobox/open listbox, `submit:true` dispatches `ArrowDown` → `Enter` with small delays (Stripe-style virtualized pickers need the first option highlighted before Enter commits it). Bare text inputs still get `Enter` + `form.requestSubmit()`. |
 
@@ -466,7 +466,7 @@ CDP events are **trusted** (`event.isTrusted === true`). Many sites reject synth
 | How | `Input.dispatchMouseEvent(x,y)` | `el.click()` |
 | Trusted | Yes | No |
 | Cross-origin | Works | Blocked |
-| Used when | Default in Chrome/Edge, or `click({x,y})` / `click({text})` after coord resolution | `click_ax` (focuses the exact element, dispatches in-page) |
+| Used when | Default in Chrome/Edge, or `click({x,y})` / `click({text})` after coord resolution; one guarded fallback for a safe `click_ax` target after verified synthetic no-progress | `click_ax` first attempt (focuses the exact element and dispatches in-page), plus Firefox's only click path |
 
 ---
 

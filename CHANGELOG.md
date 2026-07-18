@@ -4,6 +4,19 @@ All notable changes to WebBrain are documented in this file.
 
 This changelog was generated from the repository Git history and release tags. Versions without a Git tag are inferred from version-bump commits and the current `package.json` / browser manifest versions.
 
+## [24.3.1] - 2026-07-18
+
+### Changed
+- Chrome `click_ax` stays synthetic-first and may issue one guarded CDP trusted-click fallback only after no observable progress on safe generic targets (visibility, hit-test, interactive-descendant, form/download/mutating/stateful exclusions).
+- Trusted-click progress proof ignores whole-page text churn and blur-only focus loss; safety vetoes skip automatic retry without rewriting working clicks to failure.
+
+### Fixed
+- Removed invalid CDP `Input.enable` usage; trusted mouse events dispatch directly.
+- Observation windows for fallback candidates poll progressively so slower SPA handlers can still prove progress before a second click.
+
+### Tests
+- Added unit and fixture coverage for eligibility gates, one-shot fallback accounting, network/beacon vetoes, and post-CDP target-state verification.
+
 ## [24.3.0] - 2026-07-17
 
 ### Changed

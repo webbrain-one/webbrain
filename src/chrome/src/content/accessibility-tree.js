@@ -42,6 +42,7 @@
  * 5. Additional exports used by click_ax / type_ax:
  *      window.__wb_ax_lookup(refId) → Element | null
  *      window.__wb_ax_release(refId) → void (optional cleanup)
+ *      window.__wb_ax_name(element) → the same accessible name used by the tree
  */
 (() => {
   if (window.__wb_ax_installed) return;
@@ -913,5 +914,6 @@
   window.__generateAccessibilityTree = generateAccessibilityTree;
   window.__generateAccessibilitySubtree = generateAccessibilitySubtree;
   window.__wb_ax_lookup = lookup;
+  window.__wb_ax_name = getAccessibleName;
   window.__wb_ax_suggest = suggestNearRefs;
 })();

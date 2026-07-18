@@ -4,6 +4,14 @@
  * downloads, and uploads via chrome.debugger API.
  */
 
+import { combineImages } from './image-utils.js';
+
+const FULL_PAGE_SCROLL_SETTLE_MS = 100;
+const FULL_PAGE_STABLE_PASSES = 2;
+const FULL_PAGE_MAX_DISCOVERY_STEPS = 100;
+const FULL_PAGE_MAX_CONTENT_GROWTHS = 5;
+const FULL_PAGE_MAX_CAPTURE_TILES = 500;
+
 export class CDPClient {
   constructor() {
     this.sessions = new Map(); // tabId -> debugger session
@@ -639,78 +647,173 @@ export class CDPClient {
 
   /**
    * Take a pixel-perfect screenshot of the full page.
+   * @param {number} tabId
+   * @param {{knownInfiniteScroll?:boolean,adapterName?:string}} [options]
+   * @returns {Promise<{
+   *   data:string,
+   *   warning:string|null,
+   *   captureBounds:{x:number,y:number,width:number,height:number}
+   * }>} Capture bounds are CSS pixels in top-page coordinates.
    */
-  async captureFullPageScreenshot(tabId) {
+  async captureFullPageScreenshot(tabId, options = {}) {
     await this.sendCommand(tabId, 'Page.enable');
-    await this.sendCommand(tabId, 'Emulation.setDeviceMetricsOverride', {
-      deviceScaleFactor: 2,
-      mobile: false,
-      screenWidth: 1920,
-      screenHeight: 1080,
-      viewport: { x: 0, y: 0, width: 1920, height: 1080, scale: 1 },
-    });
+    const metrics = await this.sendCommand(tabId, 'Page.getLayoutMetrics');
+    const visualViewport = metrics?.cssVisualViewport;
+    const contentSize = metrics?.cssContentSize;
+    const tileWidth = Math.floor(Number(visualViewport?.clientWidth));
+    const tileHeight = Math.floor(Number(visualViewport?.clientHeight));
+    let contentWidth = Math.ceil(Number(contentSize?.width));
+    let contentHeight = Math.ceil(Number(contentSize?.height));
+    const scaleResult = await this.evaluate(tabId, 'window.devicePixelRatio');
+    const nativeScale = Number(scaleResult?.result?.value);
+    const deviceScale = Number.isFinite(nativeScale) && nativeScale > 0 ? nativeScale : 1;
 
-    const { visualViewport } = await this.evaluate(tabId, `
-      (() => {
-        const vp = window.visualViewport;
-        return {
-          width: window.innerWidth,
-          height: window.innerHeight,
-          scrollX: window.scrollX,
-          scrollY: window.scrollY,
-          contentWidth: document.documentElement.scrollWidth,
-          contentHeight: document.documentElement.scrollHeight,
-          scale: vp ? vp.scale : 1
-        };
-      })()
-    `);
-
-    const scrollWidth = visualViewport?.contentWidth || 1920;
-    const scrollHeight = visualViewport?.contentHeight || 1080;
-    // Remember pre-capture scroll so we can restore it (we're in an MV3
-    // service worker here — there is no `window`, so read from the page eval).
-    const originalScrollX = visualViewport?.scrollX || 0;
-    const originalScrollY = visualViewport?.scrollY || 0;
-
-    const viewports = [];
-    for (let y = 0; y < scrollHeight; y += 1080) {
-      for (let x = 0; x < scrollWidth; x += 1920) {
-        viewports.push({ x, y, width: Math.min(1920, scrollWidth - x), height: Math.min(1080, scrollHeight - y) });
-      }
+    if (![tileWidth, tileHeight, contentWidth, contentHeight].every(value => Number.isFinite(value) && value > 0)) {
+      throw new Error('Could not determine page dimensions for full-page screenshot');
     }
 
+    const contentX = Number.isFinite(Number(contentSize?.x)) ? Number(contentSize.x) : 0;
+    const contentY = Number.isFinite(Number(contentSize?.y)) ? Number(contentSize.y) : 0;
+    const originalScrollX = Number.isFinite(Number(visualViewport?.pageX)) ? Number(visualViewport.pageX) : 0;
+    const originalScrollY = Number.isFinite(Number(visualViewport?.pageY)) ? Number(visualViewport.pageY) : 0;
     const tiles = [];
-    for (const vp of viewports) {
-      await this.evaluate(tabId, `window.scrollTo(${vp.x}, ${vp.y})`);
-      await new Promise(r => setTimeout(r, 100));
+    const warnings = [];
+    const knownInfiniteScroll = options?.knownInfiniteScroll === true;
+    const adapterName = String(options?.adapterName || 'this').trim() || 'this';
+    let contentGrowths = 0;
+    let captureBoundsFrozen = false;
+    let infiniteScrollWarningAdded = false;
+    const addInfiniteScrollWarning = () => {
+      if (infiniteScrollWarningAdded) return;
+      infiniteScrollWarningAdded = true;
+      warnings.push(knownInfiniteScroll
+        ? `The ${adapterName} page is known to use infinite scrolling. Captured a bounded snapshot after at most ${FULL_PAGE_MAX_CONTENT_GROWTHS} content expansions; later content may not be included.`
+        : `The page appears to use infinite scrolling. Captured a bounded snapshot after ${FULL_PAGE_MAX_CONTENT_GROWTHS} content expansions instead of continuing indefinitely; later content may not be included.`);
+    };
+    if (knownInfiniteScroll) addInfiniteScrollWarning();
+    const updateContentBounds = (nextMetrics) => {
+      if (captureBoundsFrozen) return false;
+      const nextSize = nextMetrics?.cssContentSize;
+      const nextWidth = Math.ceil(Number(nextSize?.width));
+      const nextHeight = Math.ceil(Number(nextSize?.height));
+      let grew = false;
+      if (Number.isFinite(nextWidth) && nextWidth > contentWidth) {
+        contentWidth = nextWidth;
+        grew = true;
+      }
+      if (Number.isFinite(nextHeight) && nextHeight > contentHeight) {
+        contentHeight = nextHeight;
+        grew = true;
+      }
+      if (grew) {
+        contentGrowths++;
+        if (contentGrowths >= FULL_PAGE_MAX_CONTENT_GROWTHS) {
+          captureBoundsFrozen = true;
+          addInfiniteScrollWarning();
+        }
+      }
+      return grew;
+    };
 
-      await this.sendCommand(tabId, 'Emulation.setDeviceMetricsOverride', {
-        deviceScaleFactor: 2,
-        mobile: false,
-        screenWidth: vp.width,
-        screenHeight: vp.height,
-        viewport: { x: 0, y: 0, width: vp.width, height: vp.height, scale: 1 },
+    try {
+      // Discovery pass: walk the page before capture so intersection-based
+      // lazy content can load. Re-read layout metrics until the bottom stays
+      // stable twice; bounded steps keep infinite feeds finite.
+      let stablePasses = 0;
+      let discoveryOffsetY = 0;
+      let discoverySteps = 0;
+      while (
+        stablePasses < FULL_PAGE_STABLE_PASSES &&
+        discoverySteps < FULL_PAGE_MAX_DISCOVERY_STEPS &&
+        !captureBoundsFrozen
+      ) {
+        const bottomY = contentY + Math.max(0, contentHeight - tileHeight);
+        const targetY = Math.min(contentY + discoveryOffsetY, bottomY);
+        await this.evaluate(tabId, `window.scrollTo(${contentX}, ${targetY})`);
+        await new Promise(resolve => setTimeout(resolve, FULL_PAGE_SCROLL_SETTLE_MS));
+        const grew = updateContentBounds(await this.sendCommand(tabId, 'Page.getLayoutMetrics'));
+        const updatedBottomY = contentY + Math.max(0, contentHeight - tileHeight);
+        const atBottom = targetY >= updatedBottomY;
+        stablePasses = atBottom && !grew ? stablePasses + 1 : 0;
+        if (targetY < updatedBottomY) {
+          discoveryOffsetY = targetY - contentY + tileHeight;
+        }
+        discoverySteps++;
+      }
+      if (!captureBoundsFrozen && stablePasses < FULL_PAGE_STABLE_PASSES) {
+        warnings.push(
+          `Full-page discovery was limited after ${FULL_PAGE_MAX_DISCOVERY_STEPS} scroll steps; the returned image may be partial.`
+        );
+      }
+
+      let captureLimitReached = false;
+      for (let y = 0; y < contentHeight && !captureLimitReached; y += tileHeight) {
+        for (let x = 0; x < contentWidth; x += tileWidth) {
+          if (tiles.length >= FULL_PAGE_MAX_CAPTURE_TILES) {
+            captureLimitReached = true;
+            break;
+          }
+          const clipX = contentX + x;
+          const clipY = contentY + y;
+          await this.evaluate(tabId, `window.scrollTo(${clipX}, ${clipY})`);
+          await new Promise(resolve => setTimeout(resolve, FULL_PAGE_SCROLL_SETTLE_MS));
+          // The page can still grow during the capture pass. Expand the loop
+          // bounds before sizing this tile so a newly moved footer is included,
+          // unless discovery identified an unbounded infinite-scroll feed.
+          if (!captureBoundsFrozen) {
+            updateContentBounds(await this.sendCommand(tabId, 'Page.getLayoutMetrics'));
+          }
+          const width = Math.min(tileWidth, contentWidth - x);
+          const height = Math.min(tileHeight, contentHeight - y);
+          const screenshot = await this.sendCommand(tabId, 'Page.captureScreenshot', {
+            format: 'png',
+            fromSurface: true,
+            captureBeyondViewport: true,
+            clip: {
+              x: clipX,
+              y: clipY,
+              width,
+              height,
+              // Chrome already rasterizes CSS clip coordinates at the page's
+              // device scale. Applying DPR here again would produce DPR² tiles
+              // that the CSS×DPR compositor then crops to their top-left.
+              scale: 1,
+            },
+          });
+          tiles.push({ x, y, width, height, data: screenshot.data });
+        }
+      }
+      if (captureLimitReached) {
+        warnings.push(
+          `The page exceeded the ${FULL_PAGE_MAX_CAPTURE_TILES}-tile full-page capture limit; the returned image is partial.`
+        );
+      }
+
+      const assembledWidth = captureLimitReached
+        ? Math.max(...tiles.map(tile => tile.x + tile.width))
+        : contentWidth;
+      const assembledHeight = captureLimitReached
+        ? Math.max(...tiles.map(tile => tile.y + tile.height))
+        : contentHeight;
+
+      let outputBounds = { x: 0, y: 0, width: assembledWidth, height: assembledHeight };
+      const data = await combineImages(tiles, assembledWidth, assembledHeight, deviceScale, {
+        onWarning: warning => warnings.push(warning),
+        onFallback: bounds => { outputBounds = bounds; },
       });
-
-      const screenshot = await this.sendCommand(tabId, 'Page.captureScreenshot', {
-        format: 'png',
-        quality: 100,
-        fromSurface: true,
-      });
-      tiles.push({ x: vp.x, y: vp.y, width: vp.width, height: vp.height, data: screenshot.data });
+      return {
+        data,
+        warning: warnings.join(' ') || null,
+        captureBounds: {
+          x: contentX + outputBounds.x,
+          y: contentY + outputBounds.y,
+          width: outputBounds.width,
+          height: outputBounds.height,
+        },
+      };
+    } finally {
+      await this.evaluate(tabId, `window.scrollTo(${originalScrollX}, ${originalScrollY})`).catch(() => {});
     }
-
-    await this.evaluate(tabId, `window.scrollTo(${originalScrollX}, ${originalScrollY})`);
-
-    const { combineImages } = await import('./image-utils.js').catch(() => ({ combineImages: null }));
-    if (combineImages) {
-      return await combineImages(tiles, scrollWidth, scrollHeight, 2);
-    }
-
-    // Last-resort fallback if image-utils failed to load: return just the
-    // first tile. Previously this returned `images[0]`, which looked like a
-    // full-page screenshot but silently dropped everything below the fold.
-    return tiles[0]?.data || '';
   }
 
   /**
@@ -895,7 +998,6 @@ export class CDPClient {
    * Dispatch mouse event.
    */
   async dispatchMouseEvent(tabId, type, x, y, button = 'left') {
-    await this.sendCommand(tabId, 'Input.enable');
     // Use string button names as required by CDP Input.dispatchMouseEvent.
     // 'buttons' is a bitmask: 1 = left held. clickCount must be 1 on BOTH
     // mousePressed AND mouseReleased for the browser to synthesize a 'click'
@@ -916,7 +1018,6 @@ export class CDPClient {
    * Dispatch key event.
    */
   async dispatchKeyEvent(tabId, type, key, text = '') {
-    await this.sendCommand(tabId, 'Input.enable');
     return await this.sendCommand(tabId, 'Input.dispatchKeyEvent', {
       type,
       key,
@@ -1625,8 +1726,6 @@ export class CDPClient {
    *     element so we still attempt the action.
    */
   async clickElement(tabId, selector) {
-    await this.sendCommand(tabId, 'Input.enable').catch(() => {});
-
     const info = await this.resolveSelector(tabId, selector);
     if (!info) return { success: false, error: 'Element not found' };
     if (info.error) return { success: false, error: info.error };
@@ -1761,8 +1860,6 @@ export class CDPClient {
    *      shadow root with no usable hit point).
    */
   async typeText(tabId, selector, text, clear = false) {
-    await this.sendCommand(tabId, 'Input.enable').catch(() => {});
-
     const info = await this.resolveSelector(tabId, selector);
     if (!info) return { success: false, error: 'Element not found' };
     if (info.error) return { success: false, error: info.error };

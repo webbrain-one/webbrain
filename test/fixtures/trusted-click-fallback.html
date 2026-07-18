@@ -1,0 +1,171 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Trusted click fallback fixture</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 24px;
+      font: 16px/1.4 sans-serif;
+    }
+
+    .row {
+      box-sizing: border-box;
+      width: 360px;
+      min-height: 56px;
+      margin: 0 0 12px;
+      padding: 16px;
+      border: 1px solid #bbb;
+    }
+
+    #covered-wrap {
+      position: relative;
+      width: 360px;
+      height: 56px;
+      margin-bottom: 12px;
+    }
+
+    #covered-row,
+    #cover {
+      position: absolute;
+      inset: 0;
+    }
+
+    #cover {
+      z-index: 2;
+      background: rgba(255, 255, 255, 0.95);
+    }
+
+    #zero-row {
+      width: 0;
+      height: 0;
+      min-height: 0;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+    }
+
+    .external-label {
+      display: inline-block;
+      margin: 0 12px 12px 0;
+    }
+
+    .nested-control-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 56px;
+      padding: 0;
+    }
+
+    .nested-control-row > button,
+    .nested-control-row > a,
+    .nested-control-row > input {
+      box-sizing: border-box;
+      width: 220px;
+      height: 40px;
+    }
+
+    .nested-control-row > a {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .focus-wrapper-row {
+      padding: 0;
+    }
+
+    .focus-wrapper-row > div {
+      box-sizing: border-box;
+      width: 100%;
+      min-height: 54px;
+      padding: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div id="trusted-row" class="row" role="listitem" tabindex="0">Defne Sokullu Yesterday Photo</div>
+  <div id="synthetic-row" class="row" role="listitem" tabindex="0">Normal synthetic row</div>
+  <div id="tabindex-negative-row" class="row focus-wrapper-row" role="listitem">
+    <div tabindex="-1">Generic row with tabindex minus one wrapper</div>
+  </div>
+  <div id="tabindex-zero-row" class="row focus-wrapper-row" role="listitem">
+    <div tabindex="0">Generic row with tabindex zero wrapper</div>
+  </div>
+  <div id="data-action-row" class="row" role="listitem" data-action="open-chat" tabindex="0">Generic data action row</div>
+  <div id="proper-name-row" class="row" role="listitem" tabindex="0">Post Malone</div>
+  <div id="send-message-row" class="row" role="listitem" tabindex="0">Send message</div>
+  <div id="order-lunch-row" class="row" role="listitem" tabindex="0">Order lunch</div>
+  <div id="book-now-row" class="row" role="listitem" tabindex="0">Book now</div>
+  <div id="install-app-row" class="row" role="listitem" tabindex="0">Install app</div>
+  <div id="invite-teammate-row" class="row" role="listitem" tabindex="0">Invite teammate</div>
+  <div id="nested-button-row" class="row nested-control-row" role="listitem" aria-label="Nested button row">
+    <button type="button">Nested button action</button>
+  </div>
+  <div id="nested-link-row" class="row nested-control-row" role="listitem" aria-label="Nested link row">
+    <a href="#nested-link">Nested link action</a>
+  </div>
+  <div id="nested-input-row" class="row nested-control-row" role="listitem" aria-label="Nested input row">
+    <input type="text" aria-label="Nested input action">
+  </div>
+  <button id="native-button" type="button">Native button</button>
+  <details id="native-details" class="row">
+    <summary id="native-summary">Native disclosure</summary>
+    <div>Native disclosure content</div>
+  </details>
+  <div id="destructive-row" class="row" role="listitem" tabindex="0">Delete account</div>
+  <span id="indirect-delete-label" class="external-label">Delete account indirectly</span>
+  <div id="indirect-delete-row" class="row" role="listitem" tabindex="0" aria-labelledby="indirect-delete-label"></div>
+  <span id="turkish-delete-label" class="external-label">Hesabı sil</span>
+  <div id="turkish-delete-row" class="row" role="listitem" tabindex="0" aria-labelledby="turkish-delete-label"></div>
+  <div id="stateful-row" class="row" role="treeitem" aria-expanded="false" tabindex="0">Expandable row</div>
+  <div id="data-state-row" class="row" role="listitem" data-state="closed" tabindex="0">Stateful list row</div>
+  <input id="native-input" type="text" value="Native input" aria-label="Native input">
+  <select id="native-select" aria-label="Native select"><option>Native select</option></select>
+  <div id="editable-row" class="row" role="textbox" aria-label="Editable row" contenteditable="true">Editable row</div>
+  <div id="download-row" class="row" role="listitem" data-download tabindex="0">Export report</div>
+  <form>
+    <div id="form-row" class="row" role="listitem" tabindex="0">Form row</div>
+  </form>
+  <div id="covered-wrap">
+    <div id="covered-row" class="row" role="listitem" tabindex="0">Covered row</div>
+    <div id="cover">Overlay</div>
+  </div>
+  <div id="opacity-row" class="row" role="listitem" tabindex="0">Opacity row</div>
+  <div id="pointer-row" class="row" role="listitem" tabindex="0" style="pointer-events:none">Pointer disabled row</div>
+  <div id="zero-row" role="listitem" tabindex="0">Zero row</div>
+  <p id="status">idle</p>
+  <p id="ambient-status">ambient-idle</p>
+
+  <script>
+    window.__trustedClickEvents = [];
+    window.__syntheticClickEvents = [];
+    document.getElementById('trusted-row').addEventListener('click', (event) => {
+      window.__trustedClickEvents.push({ trusted: event.isTrusted, type: event.type });
+      if (event.isTrusted) {
+        event.currentTarget.classList.add('trusted-opened');
+        event.currentTarget.setAttribute('aria-current', 'true');
+        document.getElementById('status').textContent = 'trusted-opened';
+      } else {
+        const row = event.currentTarget;
+        setTimeout(() => {
+          row.classList.add('unread-update');
+          row.style.setProperty('--ambient-update', '1');
+          const preview = document.createElement('span');
+          preview.textContent = ' New ambient preview';
+          preview.className = 'ambient-preview';
+          row.appendChild(preview);
+          document.getElementById('ambient-status').textContent = 'unrelated-chat-churn';
+        }, 40);
+      }
+    });
+    document.getElementById('synthetic-row').addEventListener('click', (event) => {
+      window.__syntheticClickEvents.push({ trusted: event.isTrusted, type: event.type });
+      event.currentTarget.classList.add('synthetic-opened');
+      document.getElementById('status').textContent = 'synthetic-opened';
+    });
+  </script>
+</body>
+</html>

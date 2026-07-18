@@ -95,7 +95,9 @@ L'agent l'utilise comme première action à presque chaque tour — c'est plus r
 
 Retourne `{success, method, tag, rect, name, href?, navigates?, hint?}`.
 
-Sur Chrome, le clic est déclenché via CDP `Input.dispatchMouseEvent` → événement de confiance. Sur Firefox, c'est un `el.click()` synthétique.
+Les deux versions conservent d'abord le chemin compatible `el.click()` synthétique. Sous Chrome uniquement, une cible générique sûre peut recevoir un unique repli protégé via CDP `Input.dispatchMouseEvent` après deux intervalles d'observation stables de la page et de la cible. Un changement d'URL, de focus provoqué par le gestionnaire, une mutation locale synchrone ou un état sémantique différé tel que `aria-current` prouve une progression. Les variations globales ainsi que les changements différés de nom, classe, style ou enfants de la cible ne sont conservés que comme indices de diagnostic, car les aperçus de conversations, badges non lus et horodatages peuvent être sans rapport. Une requête XHR mutante proche ou un beacon hors télémétrie, un nouvel onglet ou un téléchargement rend le résultat non concluant et interdit la relance ; les lectures en arrière-plan et le trafic manifeste de télémétrie ou de heartbeat sont ignorés. Les cibles masquées par CSS, sans événements de pointeur, natives, avec état/bascule, dans un formulaire, de téléchargement ou potentiellement mutantes ne sont jamais retentées automatiquement. Firefox reste entièrement synthétique.
+
+Aucune fenêtre d'observation finie ne peut prouver un état interne de l'application qui ne produit aucun signal d'URL, de focus, d'état sémantique, de réseau, d'onglet, de téléchargement ou d'interface visible. Les garde-fous des cibles génériques, l'attente différée et la règle d'un seul essai réduisent, sans l'éliminer complètement, le risque qu'un gestionnaire synthétique silencieusement réussi reçoive une seconde activation fiable.
 
 ### `type_ax({ref_id, text, clear})`
 
