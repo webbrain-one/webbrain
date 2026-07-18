@@ -24,6 +24,13 @@ const NAVIGATION_ACTION_TOOLS = new Set([
   'go_forward',
 ]);
 
+const DOWNLOAD_ACTION_TOOLS = new Set([
+  'download_files',
+  'download_file',
+  'download_resource_from_page',
+  'download_social_media',
+]);
+
 const OBSERVATION_TOOLS = new Set([
   'get_accessibility_tree',
   'read_page',
@@ -43,6 +50,8 @@ const OBSERVATION_TOOLS = new Set([
   'get_frames',
   'screenshot',
   'full_page_screenshot',
+  'list_downloads',
+  'read_downloaded_file',
 ]);
 
 const DONE_OUTCOMES = new Set(['success', 'partial', 'failed']);
@@ -61,7 +70,14 @@ function keyText(args = {}) {
 }
 
 export function isCompletionActionTool(name, args = {}) {
-  if (DIRECT_ACTION_TOOLS.has(name) || NAVIGATION_ACTION_TOOLS.has(name)) return true;
+  if (
+    DIRECT_ACTION_TOOLS.has(name)
+    || NAVIGATION_ACTION_TOOLS.has(name)
+    || DOWNLOAD_ACTION_TOOLS.has(name)
+    || args?.__completionDownloadAction === true
+  ) {
+    return true;
+  }
   if (name === 'set_field') return true;
   if (name === 'press_keys') {
     const keys = keyText(args);

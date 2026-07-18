@@ -261,15 +261,32 @@ export class Agent {
   _recordCompletionToolResult(tabId, name, args, result) {
     const state = this.completionInvariants.get(tabId);
     if (!state) return null;
-    const next = recordCompletionToolResult(state, name, args, result);
+    const completionArgs = this._activeSkillToolForName(tabId, name)?.requiresDownloadPermission
+      ? { ...(args || {}), __completionDownloadAction: true }
+      : args;
+    const next = recordCompletionToolResult(state, name, completionArgs, result);
     this.completionInvariants.set(tabId, next);
     return next;
   }
 
-  _completionDoneBlock(tabId, name, args) {
+  _completionDoneBlock(tabId, name, args, batchStartState = null) {
     const mode = this.conversationModes.get(tabId) || 'ask';
     if (!this._isActionMode(mode)) return null;
-    return completionDoneBlock(this.completionInvariants.get(tabId), name, args);
+    const state = this.completionInvariants.get(tabId);
+    const block = completionDoneBlock(state, name, args);
+    if (block) return block;
+    const outcome = name === 'done_json' ? 'success' : String(args?.outcome || '').trim().toLowerCase();
+    if (outcome !== 'success' || !batchStartState) return null;
+    const batchStartSequence = Number(batchStartState.sequence || 0);
+    const lastActionSequence = Number(state?.lastAction?.sequence || 0);
+    if (batchStartState.verificationDebt || lastActionSequence > batchStartSequence) {
+      return {
+        reason: 'prior_turn_verification_required',
+        error: 'A success completion cannot rely on action or observation results from the same assistant tool batch. Let this batch finish, inspect the returned evidence on the next model turn, then call done again; otherwise use outcome="partial" or outcome="failed".',
+        lastAction: state?.lastAction || null,
+      };
+    }
+    return null;
   }
 
   _completionPlainFinalBlock(tabId) {
@@ -1890,6 +1907,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
   async _executeToolBatch(tabId, toolCalls, messages, onUpdate, provider, partialAssistantText = null, allowedToolNames = AGENT_TOOL_NAMES, step = null) {
     let didStateChange = false;
+    const completionBatchStartState = this.completionInvariants.get(tabId) || null;
     const navNotices = [];
     const failedApiMutationLoopKeysThisBatch = new Set();
 
@@ -2126,7 +2144,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       }
 
       if (fnName === 'done' || fnName === 'done_json') {
-        const invariantBlock = this._completionDoneBlock(tabId, fnName, fnArgs);
+        const invariantBlock = this._completionDoneBlock(tabId, fnName, fnArgs, completionBatchStartState);
         if (invariantBlock) {
           const blockedResult = {
             success: false,

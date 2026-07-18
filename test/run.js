@@ -6083,6 +6083,10 @@ test('completion invariant state machine enforces post-action observation with C
       ['patch_element', { selector: '#app' }],
       ['solve_captcha', {}],
       ['fetch_url', { method: 'DELETE' }],
+      ['download_files', { urls: ['https://example.com/file.zip'] }],
+      ['download_resource_from_page', { url: 'https://example.com/file.zip' }],
+      ['download_social_media', {}],
+      ['download_public_media', { __completionDownloadAction: true }],
     ]) {
       assert.equal(invariant.isCompletionActionTool(name, args), true, `${label}: ${name} should open verification debt`);
     }
@@ -6184,6 +6188,22 @@ test('completion invariant state machine enforces post-action observation with C
     state = invariant.recordCompletionToolResult(state, 'fetch_url', { url: 'https://example.com', method: 'POST' }, { success: false, status: 500 });
     assert.equal(state.verificationDebt, true, `${label}: dispatched network mutation failure did not fail closed`);
 
+    let downloadState = invariant.createCompletionInvariantState(`${label}-download`);
+    downloadState = invariant.recordCompletionToolResult(
+      downloadState,
+      'download_files',
+      { urls: ['https://example.com/file.zip'] },
+      null,
+    );
+    assert.equal(downloadState.verificationDebt, true, `${label}: ambiguous download result did not open debt`);
+    downloadState = invariant.recordCompletionToolResult(
+      downloadState,
+      'list_downloads',
+      {},
+      { success: true, downloads: [{ id: 1, state: 'complete' }] },
+    );
+    assert.equal(downloadState.verificationDebt, false, `${label}: list_downloads did not verify download state`);
+
     for (const [caseName, result] of [
       ['noProgress', { success: false, noProgress: true, verified: false }],
       ['fallbackAttempted', { success: false, fallbackAttempted: true, verified: false }],
@@ -6219,6 +6239,14 @@ test('completion invariant run tokens isolate overlapping and cleared runs', () 
     assert.equal(agent.completionInvariants.get(tabId)?.runToken, newToken, `${AgentClass.name}: stale cleanup deleted the active run`);
     agent._clearCompletionInvariant(tabId, newToken);
     assert.equal(agent.completionInvariants.has(tabId), false, `${AgentClass.name}: active run cleanup left stale state`);
+
+    agent._activeSkillToolForName = (_toolTabId, name) => (
+      name === 'download_public_media' ? { requiresDownloadPermission: true } : null
+    );
+    const downloadToken = agent._beginCompletionInvariant(tabId);
+    agent._recordCompletionToolResult(tabId, 'download_public_media', { url: 'https://example.com/post' }, null);
+    assert.equal(agent.completionInvariants.get(tabId)?.verificationDebt, true, `${AgentClass.name}: download skill result bypassed completion debt`);
+    agent._clearCompletionInvariant(tabId, downloadToken);
   }
 });
 
@@ -25188,6 +25216,90 @@ test('non-stream and stream runs block plain finals and unverified success until
       );
       assert.equal(agent.completionInvariants.has(tabId), false, `${AgentClass.name}/${streaming ? 'stream' : 'non-stream'}: completed run leaked invariant state`);
     }
+  }
+});
+
+test('same-batch observations cannot authorize success completion', async () => {
+  for (const AgentClass of [AgentCh, AgentFx]) {
+    const agent = new AgentClass({
+      getActive: () => ({ contextWindow: 128000, supportsVision: false }),
+      getVisionProvider: async () => null,
+    });
+    const tabId = 24814;
+    const messages = [];
+    const updates = [];
+    agent.conversationModes.set(tabId, 'act');
+    agent._skipPermissionGate = true;
+    agent._ensureGateSetting = async () => false;
+    agent._persist = () => {};
+    agent.autoScreenshot = 'off';
+    const token = agent._beginCompletionInvariant(tabId);
+    let executedDone = 0;
+    agent.executeTool = async (_toolTabId, name, args) => {
+      if (name === 'click_ax') return { success: true, verified: true };
+      if (name === 'read_page') return { success: true, content: 'The requested state is visible.' };
+      if (name === 'done') {
+        executedDone++;
+        return { done: true, summary: args.summary, outcome: args.outcome };
+      }
+      throw new Error(`unexpected tool ${name}`);
+    };
+
+    const sameBatch = await agent._executeToolBatch(
+      tabId,
+      [
+        { id: 'same_batch_click', function: { name: 'click_ax', arguments: JSON.stringify({ ref_id: 'ref_6' }) } },
+        { id: 'same_batch_read', function: { name: 'read_page', arguments: '{}' } },
+        { id: 'same_batch_done', function: { name: 'done', arguments: JSON.stringify({ summary: 'Done.', outcome: 'success' }) } },
+      ],
+      messages,
+      (type, data) => updates.push({ type, data }),
+      { supportsVision: false },
+      null,
+      new Set(['click_ax', 'read_page', 'done']),
+      1,
+    );
+    assert.equal(sameBatch.action, 'continue', `${AgentClass.name}: same-batch success ended the run`);
+    assert.equal(executedDone, 0, `${AgentClass.name}: same-batch success reached done execution`);
+    assert.ok(
+      messages.some(message => message.role === 'tool' && /"reason":"prior_turn_verification_required"/.test(message.content || '')),
+      `${AgentClass.name}: same-batch completion block was not persisted`,
+    );
+
+    const nextBatch = await agent._executeToolBatch(
+      tabId,
+      [{ id: 'next_turn_done', function: { name: 'done', arguments: JSON.stringify({ summary: 'Done.', outcome: 'success' }) } }],
+      messages,
+      (type, data) => updates.push({ type, data }),
+      { supportsVision: false },
+      null,
+      new Set(['done']),
+      2,
+    );
+    assert.equal(nextBatch.action, 'return', `${AgentClass.name}: prior-turn verification did not authorize success`);
+    assert.equal(executedDone, 1, `${AgentClass.name}: verified next-turn done did not execute exactly once`);
+
+    agent._clearCompletionInvariant(tabId, token);
+  }
+});
+
+test('same-batch observation cannot clear debt that existed at batch start', () => {
+  for (const AgentClass of [AgentCh, AgentFx]) {
+    const agent = new AgentClass({});
+    const tabId = 24815;
+    agent.conversationModes.set(tabId, 'act');
+    const token = agent._beginCompletionInvariant(tabId);
+    agent._recordCompletionToolResult(tabId, 'click_ax', { ref_id: 'ref_6' }, { success: true, verified: true });
+    const batchStartState = agent.completionInvariants.get(tabId);
+    agent._recordCompletionToolResult(tabId, 'read_page', {}, { success: true, content: 'verified' });
+    const block = agent._completionDoneBlock(
+      tabId,
+      'done',
+      { summary: 'Done.', outcome: 'success' },
+      batchStartState,
+    );
+    assert.equal(block?.reason, 'prior_turn_verification_required', `${AgentClass.name}: same-batch observation cleared prior debt`);
+    agent._clearCompletionInvariant(tabId, token);
   }
 });
 
