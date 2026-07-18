@@ -22767,11 +22767,10 @@ test('Act rejects planner-shaped plain finals and continues into a real tool', a
   }
 });
 
-test('Act rejects ordinary plain finals without execution evidence', async () => {
+test('Act converts ordinary plain finals into unverified terminal failures', async () => {
   for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
     const responses = [
       { content: 'Here is the page summary.', toolCalls: [] },
-      { content: null, toolCalls: executionToolCalls(`ordinary_plain_${index}`) },
     ];
     const provider = {
       supportsTools: true,
@@ -22780,16 +22779,74 @@ test('Act rejects ordinary plain finals without execution evidence', async () =>
       contextWindow: 128000,
       model: 'test-model',
       name: 'test-provider',
-      chat: async () => responses.shift(),
+      chat: async () => {
+        const next = responses.shift();
+        assert.ok(next, `${AgentClass.name}: plain final unexpectedly triggered another model turn`);
+        return next;
+      },
     };
     const agent = new AgentClass({ getActive: () => provider, getVisionProvider: async () => null });
     const tabId = 8604 + index;
     configurePlanOnlyGuardAgent(agent, tabId);
+    let ended = null;
+    agent._startTraceRun = async () => {
+      agent.currentRunId.set(tabId, `unverified_plain_${index}`);
+      return `unverified_plain_${index}`;
+    };
+    agent._endTraceRun = (_tabId, runId, status, finalContent) => {
+      ended = { runId, status, finalContent };
+      agent.currentRunId.delete(tabId);
+    };
 
     const final = await agent.processMessage(tabId, 'Read the current page and summarize it.', () => {}, 'act');
 
-    assert.equal(final, 'Executed and verified.', `${AgentClass.name}: ordinary plain final bypassed execution`);
-    assert.equal(responses.length, 0, `${AgentClass.name}: ordinary plain final did not trigger recovery`);
+    assert.match(final, /Here is the page summary\./, `${AgentClass.name}: model output was not preserved`);
+    assert.match(final, /completion was not verified/, `${AgentClass.name}: unverified suffix missing`);
+    assert.equal(ended?.status, 'unverified_output', `${AgentClass.name}: plain final retained a successful trace status`);
+    assert.equal(responses.length, 0, `${AgentClass.name}: plain final triggered a recovery turn`);
+  }
+});
+
+test('Act preserves plain-text blockers without pushing the model past them', async () => {
+  for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
+    const blocker = 'Cannot continue because required credentials are missing.';
+    let calls = 0;
+    const provider = {
+      supportsTools: true,
+      supportsVision: false,
+      promptTier: 'full',
+      contextWindow: 128000,
+      model: 'test-model',
+      name: 'test-provider',
+      chat: async () => {
+        calls++;
+        return { content: blocker, toolCalls: [] };
+      },
+    };
+    const agent = new AgentClass({ getActive: () => provider, getVisionProvider: async () => null });
+    const tabId = 8606 + index;
+    configurePlanOnlyGuardAgent(agent, tabId);
+    let ended = null;
+    agent._startTraceRun = async () => {
+      agent.currentRunId.set(tabId, `plain_blocker_${index}`);
+      return `plain_blocker_${index}`;
+    };
+    agent._endTraceRun = (_tabId, runId, status, finalContent) => {
+      ended = { runId, status, finalContent };
+      agent.currentRunId.delete(tabId);
+    };
+
+    const final = await agent.processMessage(tabId, 'Open my account settings.', () => {}, 'act');
+
+    assert.match(final, new RegExp(blocker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `${AgentClass.name}: blocker text was hidden`);
+    assert.match(final, /completion was not verified/, `${AgentClass.name}: blocker was presented as completed`);
+    assert.equal(calls, 1, `${AgentClass.name}: blocker triggered a recovery turn`);
+    assert.equal(ended?.status, 'unverified_output', `${AgentClass.name}: blocker retained a successful trace status`);
+    assert.equal(
+      agent.conversations.get(tabId).some(message => message.role === 'user' && String(message.content || '').startsWith('[PLAN EXECUTION BLOCK')),
+      false,
+      `${AgentClass.name}: blocker triggered the plan execution nudge`,
+    );
   }
 });
 
@@ -22973,6 +23030,9 @@ test('execution evidence ignores failed, denied, skipped, blocked, and unknown o
       requestKind: 'execute',
       requiresStateChange: true,
     });
+    for (const name of ['clarify', 'scratchpad_write', 'scratchpad_read', 'progress_update', 'progress_read']) {
+      agent._markPlanExecutionToolCall(tabId, name, { success: true }, { consequential: false });
+    }
     for (const result of [
       { success: false },
       { denied: true },
@@ -23431,6 +23491,10 @@ test('context-compression placeholder recovery resets after tool progress', asyn
             },
           },
           {
+            id: 'task_read',
+            function: { name: 'read_page', arguments: '{}' },
+          },
+          {
             id: 'done_call',
             function: {
               name: 'done',
@@ -23479,6 +23543,7 @@ test('context-compression placeholder recovery resets after tool progress', asyn
     });
     agent.executeTool = async (toolTabId, name, args) => {
       if (name === 'progress_update') return agent._progressUpdate(toolTabId, args);
+      if (name === 'read_page') return { success: true, text: 'Current page state.' };
       if (name === 'done') return { done: true, summary: args.summary };
       throw new Error(`unexpected tool ${name}`);
     };
@@ -23544,6 +23609,11 @@ test('streamed context-compression placeholder recovery resets after tool progre
               },
               {
                 index: 1,
+                id: 'task_read',
+                function: { name: 'read_page', arguments: '{}' },
+              },
+              {
+                index: 2,
                 id: 'done_call',
                 function: {
                   name: 'done',
@@ -23584,6 +23654,7 @@ test('streamed context-compression placeholder recovery resets after tool progre
     });
     agent.executeTool = async (toolTabId, name, args) => {
       if (name === 'progress_update') return agent._progressUpdate(toolTabId, args);
+      if (name === 'read_page') return { success: true, text: 'Current page state.' };
       if (name === 'done') return { done: true, summary: args.summary };
       throw new Error(`unexpected tool ${name}`);
     };
@@ -23630,6 +23701,10 @@ test('plain final answers cannot bypass unresolved progress rows', async () => {
                 items: [{ id: 'evil-user', status: 'processed' }],
               }),
             },
+          },
+          {
+            id: 'task_read',
+            function: { name: 'read_page', arguments: '{}' },
           },
           {
             id: 'done_call_2',
@@ -23685,6 +23760,7 @@ test('plain final answers cannot bypass unresolved progress rows', async () => {
     });
     agent.executeTool = async (toolTabId, name, args) => {
       if (name === 'progress_update') return agent._progressUpdate(toolTabId, args);
+      if (name === 'read_page') return { success: true, text: 'Current page state.' };
       if (name === 'done') return { done: true, summary: args.summary };
       throw new Error(`unexpected tool ${name}`);
     };
@@ -23698,8 +23774,8 @@ test('plain final answers cannot bypass unresolved progress rows', async () => {
     assert.equal(responses.length, 0, `${AgentClass.name}: second model turn was not requested`);
     const ledgerWarnings = updates.filter(update => update.type === 'warning' && /Progress ledger has unresolved rows/.test(update.data?.message || ''));
     assert.ok(ledgerWarnings.length >= 1, `${AgentClass.name}: done after plan-only recovery did not stay blocked`);
-    const planBlock = agent.conversations.get(tabId).find(msg => msg.role === 'user' && /^\[PLAN EXECUTION BLOCK/.test(msg.content || ''));
-    assert.ok(planBlock, `${AgentClass.name}: plain final execution block nudge missing`);
+    const progressBlock = agent.conversations.get(tabId).find(msg => msg.role === 'user' && /^\[PROGRESS LEDGER BLOCK/.test(msg.content || ''));
+    assert.ok(progressBlock, `${AgentClass.name}: plain final progress block nudge missing`);
     const blockedDone = agent.conversations.get(tabId).find(msg => msg.role === 'tool' && /"blockedDone":true/.test(msg.content || ''));
     assert.ok(blockedDone, `${AgentClass.name}: done after plain-final nudge was not blocked`);
   }
@@ -23721,6 +23797,10 @@ test('empty-output recovery nudges cannot hide unresolved progress rows', async 
                 items: [{ id: 'nudge-user', status: 'processed' }],
               }),
             },
+          },
+          {
+            id: 'task_read',
+            function: { name: 'read_page', arguments: '{}' },
           },
           {
             id: 'done_call',
@@ -23771,6 +23851,7 @@ test('empty-output recovery nudges cannot hide unresolved progress rows', async 
     });
     agent.executeTool = async (toolTabId, name, args) => {
       if (name === 'progress_update') return agent._progressUpdate(toolTabId, args);
+      if (name === 'read_page') return { success: true, text: 'Current page state.' };
       if (name === 'done') return { done: true, summary: args.summary };
       throw new Error(`unexpected tool ${name}`);
     };
@@ -23784,8 +23865,8 @@ test('empty-output recovery nudges cannot hide unresolved progress rows', async 
     assert.equal(responses.length, 0, `${AgentClass.name}: system nudge let the plain final bypass ledger rows`);
     assert.equal(agent._latestTaskText(tabId), 'Follow every stargazer on this page.', `${AgentClass.name}: system nudge replaced the anchored continuation task`);
     assert.ok(
-      agent.conversations.get(tabId).some(msg => msg.role === 'user' && /^\[PLAN EXECUTION BLOCK/.test(msg.content || '')),
-      `${AgentClass.name}: recovery final did not trigger the execution block`,
+      agent.conversations.get(tabId).some(msg => msg.role === 'user' && /^\[PROGRESS LEDGER BLOCK/.test(msg.content || '')),
+      `${AgentClass.name}: recovery final did not trigger the progress block`,
     );
   }
 });
@@ -25259,6 +25340,11 @@ test('streamed plain final answers cannot bypass unresolved progress rows', asyn
               },
               {
                 index: 1,
+                id: 'task_read',
+                function: { name: 'read_page', arguments: '{}' },
+              },
+              {
+                index: 2,
                 id: 'done_call_2',
                 function: {
                   name: 'done',
@@ -25304,6 +25390,7 @@ test('streamed plain final answers cannot bypass unresolved progress rows', asyn
     });
     agent.executeTool = async (toolTabId, name, args) => {
       if (name === 'progress_update') return agent._progressUpdate(toolTabId, args);
+      if (name === 'read_page') return { success: true, text: 'Current page state.' };
       if (name === 'done') return { done: true, summary: args.summary };
       throw new Error(`unexpected tool ${name}`);
     };
@@ -25317,8 +25404,8 @@ test('streamed plain final answers cannot bypass unresolved progress rows', asyn
     assert.equal(provider.calls, 3, `${AgentClass.name}: third streamed model turn was not requested`);
     const ledgerWarnings = updates.filter(update => update.type === 'warning' && /Progress ledger has unresolved rows/.test(update.data?.message || ''));
     assert.ok(ledgerWarnings.length >= 1, `${AgentClass.name}: streamed done after plan-only recovery did not stay blocked`);
-    const planBlock = agent.conversations.get(tabId).find(msg => msg.role === 'user' && /^\[PLAN EXECUTION BLOCK/.test(msg.content || ''));
-    assert.ok(planBlock, `${AgentClass.name}: streamed plain final execution block nudge missing`);
+    const progressBlock = agent.conversations.get(tabId).find(msg => msg.role === 'user' && /^\[PROGRESS LEDGER BLOCK/.test(msg.content || ''));
+    assert.ok(progressBlock, `${AgentClass.name}: streamed plain final progress block nudge missing`);
     const blockedDone = agent.conversations.get(tabId).find(msg => msg.role === 'tool' && /"blockedDone":true/.test(msg.content || ''));
     assert.ok(blockedDone, `${AgentClass.name}: streamed done after plain-final nudge was not blocked`);
   }

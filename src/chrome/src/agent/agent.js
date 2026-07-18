@@ -1764,6 +1764,7 @@ export class Agent {
   // the corresponding mode is active.
   static NAV_TOOLS = new Set(['navigate', 'new_tab', 'go_back', 'go_forward']);
   static STATE_CHANGE_TOOLS = new Set(['navigate', 'new_tab', 'go_back', 'go_forward', 'click', 'click_ax', 'type_text', 'type_ax', 'set_field', 'press_keys', 'scroll', 'hover', 'drag_drop', 'inject_css', 'remove_injected_css', 'patch_element', 'revert_patch', 'execute_js', 'inspect_event_listeners', 'highlight_element']);
+  static EXECUTION_META_TOOLS = new Set(['clarify', 'scratchpad_write', 'scratchpad_read', 'progress_update', 'progress_read']);
   static DELIVERY_OBSERVATION_TOOLS = new Set(['read_page', 'get_accessibility_tree', 'get_interactive_elements', 'extract_data', 'get_selection', 'scroll', 'wait_for_stable', 'wait_for_element', 'read_pdf', 'fetch_url', 'research_url', 'read_downloaded_file', 'iframe_read', 'get_window_info', 'list_downloads', 'progress_read', 'screenshot', 'get_frames', 'get_shadow_dom', 'shadow_dom_query', 'read_youtube_transcript']);
   static NAV_PRONE_TOOLS = new Set(['click', 'click_ax', 'navigate', 'go_back', 'go_forward', 'execute_js', 'iframe_click']);
   static RECOMMENDED_ACTION_FAST_PATH_IDS = new Set(['download-media']);
@@ -7599,7 +7600,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
   _markPlanExecutionToolCall(tabId, name, result, { consequential = false } = {}) {
     const state = this._planExecutionGuards.get(tabId);
-    if (!state?.enabled || name === 'done' || !this._isSuccessfulExecutionEvidence(result)) return;
+    if (!state?.enabled
+        || name === 'done'
+        || this.constructor.EXECUTION_META_TOOLS.has(name)
+        || !this._isSuccessfulExecutionEvidence(result)) return;
     state.successfulTaskToolCalls += 1;
     if (consequential) state.successfulConsequentialToolCalls += 1;
   }
@@ -7656,6 +7660,13 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (!state?.enabled) return null;
     if (!viaDone && this._isSafetyRefusalTerminal(content)) return null;
     const looksPlanOnly = this._looksLikePlanOnlyTerminal(content, state);
+    if (!viaDone && !looksPlanOnly) {
+      const reported = String(content || '').trim().slice(0, 4000);
+      return {
+        failure: `${reported}\n\n[Agent stopped because Act/Dev returned plain text instead of calling done. The task was not marked complete and completion was not verified.]`,
+        status: 'unverified_output',
+      };
+    }
     const terminalFailure = viaDone && (outcome === 'partial' || outcome === 'failed');
     const missingEvidence = !terminalFailure && !this._executionEvidenceSatisfied(state);
     // Every ordinary Act/Dev terminal is invalid: successful completion must
@@ -13462,7 +13473,16 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         onUpdate('warning', { message: finalResponse });
         break;
       }
-      // Genuine final answer — emit and exit.
+      // Genuine final answer — emit and exit. Repeated-item progress recovery
+      // takes priority so an unresolved ledger can still drive the next tool turn.
+      const progressFinalBlock = this._plainFinalProgressBlock(tabId);
+      if (progressFinalBlock) {
+        messages.push(this._withResponseItems({ role: 'assistant', content: result.content }, result.responseItems, result.reasoningContent, provider));
+        messages.push({ role: 'user', content: progressFinalBlock });
+        onUpdate('warning', { message: 'Progress ledger has unresolved rows; continuing.' });
+        this._persist(tabId);
+        continue;
+      }
       const planOnlyDecision = this._planOnlyTerminalDecision(tabId, result.content);
       if (planOnlyDecision?.retry) {
         messages.push(this._withResponseItems({ role: 'assistant', content: result.content }, result.responseItems, result.reasoningContent, provider));
@@ -13473,18 +13493,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       }
       if (planOnlyDecision?.failure) {
         finalResponse = planOnlyDecision.failure;
-        _traceStatus = 'plan_only_output';
+        _traceStatus = planOnlyDecision.status || 'plan_only_output';
         messages.push({ role: 'assistant', content: finalResponse });
         onUpdate('warning', { message: finalResponse });
         break;
-      }
-      const progressFinalBlock = this._plainFinalProgressBlock(tabId);
-      if (progressFinalBlock) {
-        messages.push(this._withResponseItems({ role: 'assistant', content: result.content }, result.responseItems, result.reasoningContent, provider));
-        messages.push({ role: 'user', content: progressFinalBlock });
-        onUpdate('warning', { message: 'Progress ledger has unresolved rows; continuing.' });
-        this._persist(tabId);
-        continue;
       }
       finalResponse = result.costAllowanceMessage
         ? `${result.content}\n\n${result.costAllowanceMessage}`
@@ -13843,6 +13855,16 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         }
         emptyOutputRecoveryAttempted = false;
         compressionPlaceholderRecoveryAttempted = false;
+        // Preserve the progress ledger's purpose-built continuation before
+        // treating other plain terminal text as unverified.
+        const progressFinalBlock = this._plainFinalProgressBlock(tabId);
+        if (progressFinalBlock) {
+          messages.push(this._withResponseItems({ role: 'assistant', content: fullText }, responseItems, reasoningContent, provider));
+          messages.push({ role: 'user', content: progressFinalBlock });
+          onUpdate('warning', { message: 'Progress ledger has unresolved rows; continuing.' });
+          this._persist(tabId);
+          continue;
+        }
         const planOnlyDecision = this._planOnlyTerminalDecision(tabId, fullText);
         if (planOnlyDecision?.retry) {
           messages.push(this._withResponseItems({ role: 'assistant', content: fullText }, responseItems, reasoningContent, provider));
@@ -13858,15 +13880,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           onUpdate('text', { content: planOnlyDecision.failure });
           onUpdate('warning', { message: planOnlyDecision.failure });
           this._persist(tabId);
-          return finish(planOnlyDecision.failure, 'plan_only_output');
-        }
-        const progressFinalBlock = this._plainFinalProgressBlock(tabId);
-        if (progressFinalBlock) {
-          messages.push(this._withResponseItems({ role: 'assistant', content: fullText }, responseItems, reasoningContent, provider));
-          messages.push({ role: 'user', content: progressFinalBlock });
-          onUpdate('warning', { message: 'Progress ledger has unresolved rows; continuing.' });
-          this._persist(tabId);
-          continue;
+          return finish(planOnlyDecision.failure, planOnlyDecision.status || 'plan_only_output');
         }
         if (costStopMessage) {
           onUpdate('text_delta', { content: `\n\n${costStopMessage}` });
