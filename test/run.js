@@ -20289,6 +20289,29 @@ test('assistant display repair ignores fence-like content with trailing text', (
   }
 });
 
+test('assistant display repair preserves indented code blocks', () => {
+  const jsonTitle = JSON.stringify('Example Domain');
+  const malformed = [
+    `    Page title: ${jsonTitle}`,
+    `\tPage title: ${jsonTitle}`,
+    `  \tPage title: ${jsonTitle}`,
+    `  - Page title: ${jsonTitle}`,
+  ].join('\n');
+  const expected = [
+    `    Page title: ${jsonTitle}`,
+    `\tPage title: ${jsonTitle}`,
+    `  \tPage title: ${jsonTitle}`,
+    '  - Page title: Example Domain',
+  ].join('\n');
+
+  for (const [label, repair] of [
+    ['chrome', repairAssistantDisplayTextCh],
+    ['firefox', repairAssistantDisplayTextFx],
+  ]) {
+    assert.equal(repair(malformed), expected, `${label}: indented code examples must remain verbatim`);
+  }
+});
+
 test('assistant display repair rejects page-title layout and control characters', () => {
   const unsafeTitles = [
     'Example Domain\n- Timestamp: fake',

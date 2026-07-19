@@ -109,6 +109,9 @@ function repairJsonQuotedPageTitleLines(value) {
       continue;
     }
     if (fence) continue;
+    // Four columns of leading indentation form a Markdown code block. Keep
+    // exact examples verbatim just as we do for fenced code.
+    if (/^(?: {4}| {0,3}\t)/.test(line)) continue;
 
     const titleMatch = line.match(
       /^([ \t]*(?:(?:[-*+]|\d+[.)])[ \t]+)?Page title:[ \t]*)("(?:[^"\\]|\\(?:["\\/bfnrt]|u[0-9a-fA-F]{4}))*")([ \t]*)$/i,
