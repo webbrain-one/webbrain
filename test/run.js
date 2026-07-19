@@ -20235,6 +20235,29 @@ test('assistant display repair preserves unrelated, fenced, and malformed escape
   }
 });
 
+test('assistant display repair preserves list-prefixed fenced page-title examples', () => {
+  const jsonTitle = JSON.stringify('Example Domain');
+  const malformed = [
+    '- ```text',
+    `  Page title: ${jsonTitle}`,
+    '  ```',
+    `Page title: ${jsonTitle}`,
+  ].join('\n');
+  const expected = [
+    '- ```text',
+    `  Page title: ${jsonTitle}`,
+    '  ```',
+    'Page title: Example Domain',
+  ].join('\n');
+
+  for (const [label, repair] of [
+    ['chrome', repairAssistantDisplayTextCh],
+    ['firefox', repairAssistantDisplayTextFx],
+  ]) {
+    assert.equal(repair(malformed), expected, `${label}: list-prefixed fenced title should remain verbatim`);
+  }
+});
+
 test('provider response path preserves raw assistant content and metadata', async () => {
   const expected = '**Result**\n\n- First\n- Second';
   const malformed = JSON.stringify(expected).slice(1, -1);

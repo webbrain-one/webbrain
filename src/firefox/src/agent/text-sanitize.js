@@ -91,7 +91,9 @@ function repairJsonQuotedPageTitleLines(value) {
 
   for (let i = 0; i < parts.length; i += 2) {
     const line = parts[i];
-    const fenceMatch = line.match(/^[ \t]*(`{3,}|~{3,})/);
+    const fenceMatch = line.match(
+      /^[ \t]*(?:(?:>[ \t]*)|(?:(?:[-*+]|\d+[.)])[ \t]+))*(`{3,}|~{3,})/,
+    );
     if (fenceMatch) {
       const marker = fenceMatch[1];
       if (!fence) {
