@@ -23007,6 +23007,20 @@ test('form validation classifier surfaces native and custom submission errors', 
       { isSubmit: true },
     ), false, `${AgentClass.name}: explicit non-submit metadata did not override conservative preflight`);
     assert.equal(agent._formValidationActionLooksSubmit(
+      'click',
+      { text: 'Pay' },
+      { success: true, tag: 'BUTTON', type: 'button', text: 'Pay', isSubmitControl: false },
+      { isSubmit: true, validationSubmitEvidence: 'strong' },
+    ), true, `${AgentClass.name}: strong custom-submit preflight was discarded for type=button`);
+    const customButtonFailure = agent._detectFormValidationFailure(before, revealedRequiredRow, {
+      toolName: 'click',
+      args: { text: 'Pay' },
+      result: { success: true, tag: 'BUTTON', type: 'button', text: 'Pay', isSubmitControl: false },
+      detectedSubmit: { isSubmit: true, validationSubmitEvidence: 'strong' },
+    });
+    assert.ok(customButtonFailure, `${AgentClass.name}: custom type=button submit skipped its validation failure`);
+    assert.match(customButtonFailure.error, /phone number/i);
+    assert.equal(agent._formValidationActionLooksSubmit(
       'execute_js',
       { code: 'return document.title' },
       { success: true, result: 'Example' },
@@ -25086,6 +25100,10 @@ test('submit detector source covers submit controls, Enter, set_field, iframes, 
     assert.match(agent, /const escaped = selector\.replace[\s\S]*return root\.querySelector\(escaped\)/, `${label}: safe selector fallback should retry escaped colons`);
     assert.match(agent, /const labelControlFor = \(el\) => \{[\s\S]*String\(el\.tagName \|\| ''\)\.toUpperCase\(\) !== 'LABEL'[\s\S]*el\.htmlFor[\s\S]*doc\.getElementById\(el\.htmlFor\)[\s\S]*button,input,textarea,select/, `${label}: submit probe should resolve labels to associated controls`);
     assert.match(agent, /const target = labelControlFor\(el\) \|\| el;[\s\S]*const candidate = target\.closest\?\.\('button,input,\[role="button"\],\[onclick\],\[data-action\]'\)/, `${label}: submit-control detection should inspect label-backed controls`);
+    assert.match(agent, /const submitControlEvidence = \(el\) => \{/, `${label}: custom submit controls should classify preflight evidence strength`);
+    assert.match(agent, /const submitInfo = \(form, reason, pendingEl = null, pendingValue = null, validationSubmitEvidence = 'strong'\)/, `${label}: submit summaries should carry preflight evidence strength`);
+    assert.match(agent, /evidence\.strong \? 'strong' : 'heuristic'/, `${label}: custom submit probes should label strong and heuristic evidence`);
+    assert.match(agent, /detected\.validationSubmitEvidence === 'strong' \? 'strong' : 'heuristic'/, `${label}: submit evidence strength should survive page-probe normalization`);
     assert.match(agent, /const findTopmostModal = \(\) => \{[\s\S]*dialog\[open\][\s\S]*\[role="dialog"\]\[aria-modal="true"\][\s\S]*\[class\*="DialogOverlay"\]/, `${label}: text submit probing should mirror modal scoping`);
     assert.match(agent, /Array\.from\(\(findTopmostModal\(\) \|\| doc\)\.querySelectorAll/, `${label}: text submit probing should search inside the topmost modal when present`);
   }

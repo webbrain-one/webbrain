@@ -5523,7 +5523,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const target = result?.frame && typeof result.frame === 'object' ? result.frame : result;
     const tag = String(target?.tag || '').toUpperCase();
     const type = String(target?.type || '').toLowerCase();
-    if (target?.isSubmitControl === false && type === 'button') return false;
+    const strongDetectedSubmit = detectedSubmit?.validationSubmitEvidence === 'strong';
+    if (target?.isSubmitControl === false && type === 'button' && !strongDetectedSubmit) return false;
     if (detectedSubmit?.isSubmit === true) return true;
     if (target?.isSubmitControl === true) return true;
     if (tag === 'BUTTON' && type === 'submit') return true;
@@ -5537,7 +5538,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (['click', 'click_ax', 'iframe_click'].includes(name)) {
       const target = result?.frame && typeof result.frame === 'object' ? result.frame : result;
       const type = String(target?.type || '').toLowerCase();
-      if (target?.isSubmitControl === false && type === 'button') return false;
+      const strongDetectedSubmit = detectedSubmit?.validationSubmitEvidence === 'strong';
+      if (target?.isSubmitControl === false && type === 'button' && !strongDetectedSubmit) return false;
     }
     if (this._formValidationActionHasStrongSubmitEvidence(toolName, args, result, detectedSubmit)) return true;
     if (!['click', 'click_ax', 'iframe_click'].includes(name)) return false;
@@ -6038,6 +6040,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           host,
           tool: name,
           reason: String(detected.reason || 'likely form submission').slice(0, 200),
+          validationSubmitEvidence: detected.validationSubmitEvidence === 'strong' ? 'strong' : 'heuristic',
           summary: String(detected.summary || '').slice(0, 1200),
           fields: Array.isArray(detected.fields) ? detected.fields.slice(0, 12) : [],
           changedFields: Array.isArray(detected.changedFields) ? detected.changedFields.slice(0, 8) : [],
@@ -6294,11 +6297,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         changedFields,
       };
     };
-    const submitInfo = (form, reason, pendingEl = null, pendingValue = null) => ({
+    const submitInfo = (form, reason, pendingEl = null, pendingValue = null, validationSubmitEvidence = 'strong') => ({
       isSubmit: true,
       host,
       url,
       reason,
+      validationSubmitEvidence,
       ...summarizeForm(form, pendingEl, pendingValue),
     });
     const labelControlFor = (el) => {
@@ -6319,21 +6323,37 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       } catch {}
       return target && target.nodeType === 1 ? target : null;
     };
-    const isSubmitControl = (el) => {
+    const submitControlEvidence = (el) => {
       const target = labelControlFor(el) || el;
-      if (!target || target.nodeType !== 1) return false;
+      if (!target || target.nodeType !== 1) return { isSubmit: false, strong: false };
       const candidate = target.closest?.('button,input,[role="button"],[onclick],[data-action]') || target;
       const tag = String(candidate.tagName || '').toLowerCase();
       const type = String(candidate.getAttribute?.('type') || candidate.type || '').toLowerCase();
       const role = String(candidate.getAttribute?.('role') || '').toLowerCase();
       const hasActivationHandler = candidate.hasAttribute?.('onclick') || candidate.hasAttribute?.('data-action');
       const form = candidate.form || candidate.closest?.('form');
-      if (!form) return false;
-      if (tag === 'input') return type === 'submit' || type === 'image' || type === 'button';
-      if (tag === 'button') return !type || type === 'submit' || type === 'button';
-      if (role === 'button' || hasActivationHandler) return true;
-      return false;
+      if (!form) return { isSubmit: false, strong: false };
+      const inlineHandler = String(candidate.getAttribute?.('onclick') || '');
+      const dataAction = String(candidate.getAttribute?.('data-action') || '');
+      const label = compact(
+        candidate.innerText || candidate.textContent || candidate.getAttribute?.('aria-label') || '',
+        120,
+      );
+      const explicitJsSubmit = /\brequestSubmit\s*\(|\.submit\s*\(|\bdispatchEvent\s*\([^)]*\bsubmit\b/i.test(inlineHandler)
+        || /^(?:submit|checkout|pay|place[-_ ]?order|confirm[-_ ]?order|complete[-_ ]?order|purchase|register|sign[-_ ]?in|log[-_ ]?in)$/i.test(dataAction.trim())
+        || /^(?:submit|checkout|pay|place order|confirm order|complete order|purchase|register|sign in|log in)$/i.test(label.trim());
+      if (tag === 'input') {
+        if (type === 'submit' || type === 'image') return { isSubmit: true, strong: true };
+        if (type === 'button') return { isSubmit: true, strong: explicitJsSubmit };
+      }
+      if (tag === 'button') {
+        if (!type || type === 'submit') return { isSubmit: true, strong: true };
+        if (type === 'button') return { isSubmit: true, strong: explicitJsSubmit };
+      }
+      if (role === 'button' || hasActivationHandler) return { isSubmit: true, strong: explicitJsSubmit };
+      return { isSubmit: false, strong: false };
     };
+    const isSubmitControl = el => submitControlEvidence(el).isSubmit;
     const formForSubmitControl = (el) => {
       const target = labelControlFor(el) || el;
       const candidate = target?.closest?.('button,input') || target;
@@ -6490,7 +6510,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         return form ? submitInfo(form, 'Enter key in a form field') : null;
       }
       if (target && isSubmitControl(target)) {
-        return submitInfo(formForSubmitControl(target), 'submit button/control activation');
+        const evidence = submitControlEvidence(target);
+        return submitInfo(
+          formForSubmitControl(target),
+          'submit button/control activation',
+          null,
+          null,
+          evidence.strong ? 'strong' : 'heuristic',
+        );
       }
     } catch {}
     return null;
