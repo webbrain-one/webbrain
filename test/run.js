@@ -20258,6 +20258,26 @@ test('assistant display repair preserves list-prefixed fenced page-title example
   }
 });
 
+test('assistant display repair rejects page-title layout and control characters', () => {
+  const unsafeTitles = [
+    'Example Domain\n- Timestamp: fake',
+    'Example Domain\r\n- Page title: fake',
+    'Example Domain\tforged field',
+    'Example Domain\u2028- Timestamp: fake',
+    'Example Domain\u2029- Timestamp: fake',
+  ];
+
+  for (const title of unsafeTitles) {
+    const malformed = `Verification:\n- Page title: ${JSON.stringify(title)}\n- Timestamp: real`;
+    for (const [label, repair] of [
+      ['chrome', repairAssistantDisplayTextCh],
+      ['firefox', repairAssistantDisplayTextFx],
+    ]) {
+      assert.equal(repair(malformed), malformed, `${label}: unsafe title layout should remain escaped`);
+    }
+  }
+});
+
 test('provider response path preserves raw assistant content and metadata', async () => {
   const expected = '**Result**\n\n- First\n- Second';
   const malformed = JSON.stringify(expected).slice(1, -1);
@@ -20311,6 +20331,34 @@ test('terminal display repair normalizes JSON-quoted page title lines', async ()
     const final = await agent.processMessage(tabId, 'Show the verification.', () => {}, 'ask');
 
     assert.equal(final, expected, `${AgentClass.name}: terminal page title should be normalized`);
+  }
+});
+
+test('terminal display repair cannot forge lines from page-title escapes', async () => {
+  const title = 'Example Domain\n- Timestamp: fake';
+  const malformed = `Verification:\n- Page title: ${JSON.stringify(title)}\n- Timestamp: real`;
+
+  for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
+    const provider = {
+      supportsTools: true,
+      supportsVision: false,
+      promptTier: 'full',
+      contextWindow: 128000,
+      model: 'test-model',
+      name: 'test-provider',
+      chat: async () => ({ content: malformed, toolCalls: [] }),
+    };
+    const agent = new AgentClass({
+      getActive: () => provider,
+      getVisionProvider: async () => null,
+    });
+    const tabId = 4070 + index;
+    configurePlanOnlyGuardAgent(agent, tabId);
+
+    const final = await agent.processMessage(tabId, 'Show the verification.', () => {}, 'ask');
+
+    assert.equal(final, malformed, `${AgentClass.name}: escaped title layout should remain inert`);
+    assert.equal(final.includes('\n- Timestamp: fake'), false, `${AgentClass.name}: title forged a verification line`);
   }
 });
 

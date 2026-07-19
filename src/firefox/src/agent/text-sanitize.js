@@ -112,7 +112,10 @@ function repairJsonQuotedPageTitleLines(value) {
 
     try {
       const decodedTitle = JSON.parse(titleMatch[2]);
-      if (typeof decodedTitle === 'string') {
+      if (
+        typeof decodedTitle === 'string'
+        && !/[\x00-\x1f\x7f\u2028\u2029]/.test(decodedTitle)
+      ) {
         parts[i] = `${titleMatch[1]}${decodedTitle}${titleMatch[3]}`;
       }
     } catch {
