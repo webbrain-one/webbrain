@@ -23058,43 +23058,48 @@ test('form validation probes distinguish same-length password corrections withou
 test('form validation polling catches delayed errors', async () => {
   const url = 'https://example.com/form';
   for (const AgentClass of [AgentCh, AgentFx]) {
-    const agent = new AgentClass({ getVisionProvider: async () => null });
-    const before = [{
-      frameId: 0,
-      url,
-      activeInvalid: false,
-      invalidFields: [],
-      ariaInvalidFields: [],
-      alerts: [],
-      controlFingerprint: 'unchanged',
-    }];
-    const redirected = [{
-      ...before[0],
-      url: `${url}?error=pending#payment`,
-    }];
-    const delayed = [{
-      ...redirected[0],
-      alerts: ['Server rejected this value.'],
-    }];
-    let captures = 0;
-    agent._captureFormValidationState = async () => {
-      captures += 1;
-      return structuredClone(captures === 1 ? redirected : delayed);
-    };
+    for (const redirectedUrl of [
+      `${url}?error=pending#payment`,
+      `${url}/error`,
+    ]) {
+      const agent = new AgentClass({ getVisionProvider: async () => null });
+      const before = [{
+        frameId: 0,
+        url,
+        activeInvalid: false,
+        invalidFields: [],
+        ariaInvalidFields: [],
+        alerts: [],
+        controlFingerprint: 'unchanged',
+      }];
+      const redirected = [{
+        ...before[0],
+        url: redirectedUrl,
+      }];
+      const delayed = [{
+        ...redirected[0],
+        alerts: ['Server rejected this value.'],
+      }];
+      let captures = 0;
+      agent._captureFormValidationState = async () => {
+        captures += 1;
+        return structuredClone(captures === 1 ? redirected : delayed);
+      };
 
-    const failure = await agent._waitForFormValidationFailure(
-      5116,
-      before,
-      {
-        toolName: 'click',
-        args: { text: 'Submit' },
-        result: { success: true, tag: 'BUTTON', type: 'submit', isSubmitControl: true },
-      },
-      { checkpointsMs: [0, 0] },
-    );
-    assert.ok(failure, `${AgentClass.name}: delayed validation feedback was missed`);
-    assert.match(failure.error, /server rejected this value/i);
-    assert.equal(captures, 2, `${AgentClass.name}: validation polling did not retry after a same-form redirect`);
+      const failure = await agent._waitForFormValidationFailure(
+        5116,
+        before,
+        {
+          toolName: 'click',
+          args: { text: 'Submit' },
+          result: { success: true, tag: 'BUTTON', type: 'submit', isSubmitControl: true },
+        },
+        { checkpointsMs: [0, 0] },
+      );
+      assert.ok(failure, `${AgentClass.name}: delayed validation feedback was missed at ${redirectedUrl}`);
+      assert.match(failure.error, /server rejected this value/i);
+      assert.equal(captures, 2, `${AgentClass.name}: validation polling did not retry after redirect to ${redirectedUrl}`);
+    }
   }
 });
 

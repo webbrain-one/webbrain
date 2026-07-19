@@ -5561,11 +5561,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const beforeRoutes = new Set(before
       .map(state => this._normalizeUrlPath(String(state?.url || '')))
       .filter(Boolean));
-    const comparableAfter = after.filter((state) => {
+    const sameRouteAfter = after.filter((state) => {
       const route = this._normalizeUrlPath(String(state?.url || ''));
       return beforeRoutes.size === 0 || !route || beforeRoutes.has(route);
     });
-    if (!comparableAfter.length) return null;
 
     const looksLikeSubmit = this._formValidationActionLooksSubmit(
       context.toolName,
@@ -5577,31 +5576,33 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       && context.priorValidationFailure === true;
     const beforeAlerts = new Set(before.flatMap(state =>
       this._formValidationAlertTexts(state)
-        .map(text => `${this._normalizeUrlPath(String(state?.url || ''))}|${text}`)
     ));
     const beforeAriaInvalid = new Set(before.flatMap(state =>
       (Array.isArray(state?.ariaInvalidFields) ? state.ariaInvalidFields : [])
-        .map(field => `${this._normalizeUrlPath(String(state?.url || ''))}|${field?.label || ''}|${field?.type || ''}|${field?.message || ''}`)
+        .map(field => `${field?.label || ''}|${field?.type || ''}|${field?.message || ''}`)
     ));
     const newAlerts = [];
     const newAriaInvalid = [];
     // Custom alert/live-region and aria-invalid failures must be newly exposed
-    // by the action. With no baseline we still detect native validation via
-    // activeInvalid, but do not mislabel an unrelated pre-existing alert.
-    for (const state of before.length ? comparableAfter : []) {
-      const route = this._normalizeUrlPath(String(state?.url || ''));
+    // by the action. Include redirected routes because servers commonly render
+    // validation feedback at a new path. With no baseline we still detect
+    // native validation via activeInvalid, but do not mislabel an unrelated
+    // pre-existing alert.
+    for (const state of before.length ? after : []) {
       for (const text of this._formValidationAlertTexts(state)) {
-        if (text && (includePersistentValidation || !beforeAlerts.has(`${route}|${text}`))) {
+        if (text && (includePersistentValidation || !beforeAlerts.has(text))) {
           newAlerts.push(text);
         }
       }
       for (const field of Array.isArray(state?.ariaInvalidFields) ? state.ariaInvalidFields : []) {
-        const key = `${route}|${field?.label || ''}|${field?.type || ''}|${field?.message || ''}`;
+        const key = `${field?.label || ''}|${field?.type || ''}|${field?.message || ''}`;
         if (includePersistentValidation || !beforeAriaInvalid.has(key)) newAriaInvalid.push(field);
       }
     }
 
-    const nativeFailureStates = comparableAfter.filter(state => state?.activeInvalid === true);
+    // Native browser validation prevents navigation, so only compare it on the
+    // original route. Redirected pages require explicit alert/ARIA evidence.
+    const nativeFailureStates = sameRouteAfter.filter(state => state?.activeInvalid === true);
     const nativeInvalidFields = looksLikeSubmit
       ? nativeFailureStates.flatMap(state => Array.isArray(state?.invalidFields) ? state.invalidFields : [])
       : [];
@@ -5655,6 +5656,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const beforeRoutes = new Set(before
       .map(state => this._normalizeUrlPath(String(state?.url || '')))
       .filter(Boolean));
+    let changedRouteObservedAt = null;
     const startedAt = Date.now();
     for (const checkpoint of checkpointsMs) {
       const targetDelay = Math.max(0, Number(checkpoint) || 0);
@@ -5671,7 +5673,13 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         && afterRoutes.size > 0
         && ![...afterRoutes].some(route => beforeRoutes.has(route))
       ) {
-        break;
+        if (changedRouteObservedAt == null) {
+          changedRouteObservedAt = Date.now();
+        } else if (Date.now() - changedRouteObservedAt >= 350) {
+          break;
+        }
+      } else {
+        changedRouteObservedAt = null;
       }
     }
     return null;
