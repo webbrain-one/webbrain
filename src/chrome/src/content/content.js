@@ -214,6 +214,30 @@
     'label',
   ];
 
+  function _siteInteractiveSelectors() {
+    try {
+      return window.__wbSiteInteractions?.selectors?.() || [];
+    } catch {
+      return [];
+    }
+  }
+
+  function _siteInteractionText(el) {
+    try {
+      const descriptor = window.__wbSiteInteractions?.describe?.(el);
+      if (descriptor?.name) return descriptor.name;
+    } catch {}
+    return (el?.innerText || el?.value || el?.placeholder || el?.title || el?.ariaLabel || '').trim();
+  }
+
+  function _isSiteInteractive(el) {
+    try {
+      return !!window.__wbSiteInteractions?.isInteractive?.(el);
+    } catch {
+      return false;
+    }
+  }
+
   function isVisiblyInteractive(el) {
     if (!el || el.tagName === 'BODY' || el.tagName === 'HTML') return false;
     // aria-hidden / inert subtrees are non-interactive for assistive tech
@@ -339,7 +363,7 @@
   }
 
   function queryInteractive() {
-    const all = document.querySelectorAll(INTERACTIVE_SELECTORS.join(', '));
+    const all = document.querySelectorAll([...INTERACTIVE_SELECTORS, ..._siteInteractiveSelectors()].join(', '));
     const modal = _findTopmostModal();
     const out = [];
     for (const el of all) {
@@ -433,7 +457,7 @@
         tag: el.tagName.toLowerCase(),
         type: el.type || '',
         role: el.getAttribute('role') || '',
-        text: (el.innerText || el.value || el.placeholder || el.title || el.ariaLabel || '').trim().slice(0, 100),
+        text: _siteInteractionText(el).slice(0, 100),
         id: el.id || '',
         name: el.name || '',
         href: el.href || '',
@@ -468,7 +492,7 @@
     // Compact snapshot — first ~40 elements, just the fields a model
     // needs to pick the right one: index, tag, role, text.
     const available = interactive.slice(0, 40).map((el, i) => {
-      const text = (el.innerText || el.value || el.placeholder || el.title || el.ariaLabel || '').trim().slice(0, 80);
+      const text = _siteInteractionText(el).slice(0, 80);
       return {
         index: i,
         tag: el.tagName.toLowerCase(),
@@ -493,6 +517,7 @@
 
   function _isInteractive(node) {
     if (_INTERACTIVE_TAGS.has(node.tagName)) return true;
+    if (_isSiteInteractive(node)) return true;
     const role = (node.getAttribute && node.getAttribute('role')) || '';
     if (_INTERACTIVE_ROLES.has(role)) return true;
     if (node.hasAttribute && (node.hasAttribute('onclick') || node.hasAttribute('data-action'))) return true;
@@ -867,7 +892,12 @@
       const needle = params.text.toLowerCase();
       const explicit = params.textMatch || '';
       // Include inputs/select/textarea so we can match by placeholder, value, or aria-label
-      const sels = 'a, button, [role="button"], [role="link"], [role="tab"], [role="menuitem"], input:not([type="hidden"]), textarea, select, input[type="button"], input[type="submit"], summary, label, [onclick], [data-action]';
+      const sels = [
+        'a', 'button', '[role="button"]', '[role="link"]', '[role="tab"]', '[role="menuitem"]',
+        'input:not([type="hidden"])', 'textarea', 'select', 'input[type="button"]',
+        'input[type="submit"]', 'summary', 'label', '[onclick]', '[data-action]',
+        ..._siteInteractiveSelectors(),
+      ].join(', ');
       // Modal scoping: if a topmost modal/dialog is open, restrict the search
       // to elements inside it. Without this, click({text: "Create"}) can land
       // on a background button (GitHub's "Create new tag" dialog over the
@@ -878,7 +908,7 @@
       const all = Array.from(_scope.querySelectorAll(sels));
       const normalized = all.map(e => ({
         e,
-        txt: (e.innerText || e.value || e.placeholder || e.ariaLabel || '').trim().toLowerCase(),
+        txt: _siteInteractionText(e).toLowerCase(),
       })).filter(x => !!x.txt);
 
       // Build label→input map so we can match label text and resolve to associated input
@@ -935,7 +965,7 @@
           const allRetry = Array.from(_retryScope.querySelectorAll(sels));
           const normRetry = allRetry.map(e => ({
             e,
-            txt: (e.innerText || e.value || e.placeholder || e.ariaLabel || '').trim().toLowerCase(),
+            txt: _siteInteractionText(e).toLowerCase(),
           })).filter(x => !!x.txt);
           for (const m of modes) {
             if (m === 'exact') matches = normRetry.filter(x => x.txt === needle);
@@ -2278,7 +2308,7 @@
       const selectors = [
         'a[href]', 'button', 'input:not([type="hidden"])', 'textarea', 'select',
         '[role="button"]', '[role="link"]', '[role="tab"]', '[role="menuitem"]',
-        '[onclick]', '[data-action]', 'summary',
+        '[onclick]', '[data-action]', 'summary', ..._siteInteractiveSelectors(),
       ];
       selectors.forEach(sel => {
         try {
@@ -2326,7 +2356,7 @@
         tag: el.tagName.toLowerCase(),
         type: el.type || '',
         role: el.getAttribute('role') || '',
-        text: (el.innerText || el.value || el.placeholder || el.title || el.ariaLabel || '').trim().slice(0, 100),
+        text: _siteInteractionText(el).slice(0, 100),
         id: el.id || '',
         name: el.name || '',
         href: el.href || '',

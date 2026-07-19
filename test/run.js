@@ -1693,6 +1693,111 @@ test('matches youtube video URLs and includes transcript guidance', () => {
   assert.match(a?.notes || '', /Do NOT invent transcript URLs/i);
 });
 
+test('matches Bilibili surfaces with mirrored regional guidance', () => {
+  const urls = [
+    'https://www.bilibili.com/video/BV1FD4y147uH/?p=2',
+    'https://search.bilibili.com/all?keyword=WebBrain',
+    'https://space.bilibili.com/2/dynamic',
+    'https://t.bilibili.com/',
+  ];
+  for (const url of urls) {
+    assert.equal(getActiveAdapter(url)?.name, 'bilibili', `chrome did not match ${url}`);
+    assert.equal(getActiveAdapterFx(url)?.name, 'bilibili', `firefox did not match ${url}`);
+  }
+  assert.notEqual(getActiveAdapter('https://bilibili.com.evil.example/video/BV1')?.name, 'bilibili');
+  assert.notEqual(getActiveAdapter('https://example.com/?next=https://www.bilibili.com/')?.name, 'bilibili');
+
+  const chromeAdapter = getActiveAdapter(urls[0]);
+  const firefoxAdapter = getActiveAdapterFx(urls[0]);
+  assert.equal(firefoxAdapter?.notes, chromeAdapter?.notes);
+  assert.match(chromeAdapter?.notes || '', /视频选集.*分P/s);
+  assert.match(chromeAdapter?.notes || '', /字幕.*弹幕/s);
+  assert.match(chromeAdapter?.notes || '', /search\.bilibili\.com/);
+  assert.match(chromeAdapter?.notes || '', /一键三连.*state-changing/s);
+  assert.match(chromeAdapter?.notes || '', /QR-code or SMS verification/);
+});
+
+test('matches Xiaohongshu surfaces with mirrored regional guidance', () => {
+  const urls = [
+    'https://www.xiaohongshu.com/explore',
+    'https://www.xiaohongshu.com/explore/63f9b8b700000000120335d8?xsec_token=example',
+    'https://www.xiaohongshu.com/search_result?keyword=WebBrain',
+    'https://www.xiaohongshu.com/user/profile/5e92d7f20000000001004bc0',
+    'https://creator.xiaohongshu.com/publish/publish?source=official',
+  ];
+  for (const url of urls) {
+    assert.equal(getActiveAdapter(url)?.name, 'xiaohongshu', `chrome did not match ${url}`);
+    assert.equal(getActiveAdapterFx(url)?.name, 'xiaohongshu', `firefox did not match ${url}`);
+  }
+  assert.notEqual(getActiveAdapter('https://xiaohongshu.com.evil.example/explore')?.name, 'xiaohongshu');
+  assert.notEqual(getActiveAdapter('https://example.com/xiaohongshu.com/explore')?.name, 'xiaohongshu');
+
+  const chromeAdapter = getActiveAdapter(urls[0]);
+  const firefoxAdapter = getActiveAdapterFx(urls[0]);
+  assert.equal(firefoxAdapter?.notes, chromeAdapter?.notes);
+  assert.match(chromeAdapter?.notes || '', /infinite, reflowing masonry feeds/);
+  assert.match(chromeAdapter?.notes || '', /xsec_token \/ xsec_source/);
+  assert.match(chromeAdapter?.notes || '', /topmost modal/);
+  assert.match(chromeAdapter?.notes || '', /收藏内容不可见/);
+  assert.match(chromeAdapter?.notes || '', /Creator Center.*final public note URL/s);
+});
+
+test('regional social action shims expose Bilibili and Xiaohongshu custom controls', () => {
+  const axChrome = fs.readFileSync(path.join(ROOT, 'src/chrome/src/content/accessibility-tree.js'), 'utf8');
+  const axFirefox = fs.readFileSync(path.join(ROOT, 'src/firefox/src/content/accessibility-tree.js'), 'utf8');
+  assert.equal(axChrome, axFirefox, 'site interaction accessibility shims must remain byte-identical');
+
+  const start = axChrome.indexOf('const SITE_INTERACTION_RULES = {');
+  const end = axChrome.indexOf('\n\n  function getRole(el) {', start);
+  assert.ok(start >= 0 && end > start, 'site interaction helper should remain independently testable');
+  const location = { hostname: 'www.bilibili.com' };
+  const context = { window: {}, location };
+  vm.runInNewContext(axChrome.slice(start, end), context);
+  const api = context.window.__wbSiteInteractions;
+  const fakeElement = (selector, { text = '', title = '', ariaLabel = '' } = {}) => ({
+    innerText: text,
+    textContent: text,
+    matches: candidate => candidate === selector,
+    getAttribute: name => name === 'title' ? title : name === 'aria-label' ? ariaLabel : null,
+  });
+
+  assert.ok(api.selectors().includes('.video-like'), 'Bilibili like wrapper should be discoverable');
+  assert.ok(api.selectors().includes('.reply-box-send'), 'legacy Bilibili comment submit wrapper should be discoverable');
+  assert.equal(api.describe(fakeElement('.video-like', { text: '563', title: '\u70b9\u8d5e\uff08Q\uff09' })).name, '\u70b9\u8d5e\uff08Q\uff09');
+  assert.equal(api.isInteractive(fakeElement('.video-fav', { text: '306' })), true);
+  assert.equal(api.shouldPierceShadowRoots(), true, 'Bilibili comment custom elements require open-shadow traversal');
+
+  location.hostname = 'www.xiaohongshu.com';
+  assert.ok(api.selectors().includes('.like-wrapper'), 'Xiaohongshu like wrapper should be discoverable');
+  assert.ok(api.selectors().includes('.collect-wrapper'), 'Xiaohongshu collect wrapper should be discoverable');
+  assert.ok(api.selectors().includes('.chat-wrapper'), 'Xiaohongshu comment wrapper should be discoverable');
+  assert.equal(api.describe(fakeElement('.like-wrapper', { text: '128' })).name, '\u70b9\u8d5e 128');
+  assert.equal(api.describe(fakeElement('.chat-wrapper', { text: '7' })).name, '\u8bc4\u8bba 7');
+  assert.equal(api.shouldPierceShadowRoots(), false);
+
+  location.hostname = 'bilibili.com.example.org';
+  assert.deepEqual(Array.from(api.selectors()), [], 'lookalike hostnames must not activate site controls');
+
+  assert.match(axChrome, /if \(getSiteInteractionDescriptor\(el\)\) return 'button'/, 'custom controls should be rendered as buttons');
+  assert.match(axChrome, /if \(getSiteInteractionDescriptor\(el\)\) return true/, 'custom controls should pass the interactive filter');
+  assert.match(axChrome, /shouldPierceShadowRoots\(\) && el\.shadowRoot/, 'Bilibili shadow roots should be traversed by the accessibility tree');
+
+  for (const [label, rel] of [
+    ['chrome', 'src/chrome/src/content/content.js'],
+    ['firefox', 'src/firefox/src/content/content.js'],
+  ]) {
+    const content = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+    assert.match(content, /\.\.\._siteInteractiveSelectors\(\)/, `${label}: discovery selectors must include site controls`);
+    assert.match(content, /text: _siteInteractionText\(el\)\.slice\(0, 100\)/, `${label}: indexed controls need semantic action names`);
+    assert.match(content, /if \(_isSiteInteractive\(node\)\) return true/, `${label}: text-click ambiguity resolution must prefer site controls`);
+  }
+
+  const cdp = fs.readFileSync(path.join(ROOT, 'src/chrome/src/cdp/cdp-client.js'), 'utf8');
+  assert.match(cdp, /const SITE_RULES = onHost\('bilibili\.com'\)/, 'Chrome CDP discovery should be hostname-scoped');
+  assert.match(cdp, /onHost\('xiaohongshu\.com'\)/, 'Chrome CDP discovery should cover Xiaohongshu');
+  assert.match(cdp, /text: interactiveText\(el\)\.slice\(0, 100\)/, 'Chrome CDP results need semantic action names');
+});
+
 test('matches nytimes.com and scopes article-fetch guidance to that adapter', () => {
   const articleUrl = 'https://www.nytimes.com/2026/07/12/us/politics/example.html';
   const chromeAdapter = getActiveAdapter(articleUrl);
@@ -1964,6 +2069,12 @@ test('social adapters expose URL-specific infinite-scroll capture policy in both
     ['reddit', 'https://www.reddit.com/r/javascript/'],
     ['youtube', 'https://www.youtube.com/watch?v=abc123'],
     ['youtube', 'https://www.youtube.com/@OpenAI/videos'],
+    ['bilibili', 'https://www.bilibili.com/'],
+    ['bilibili', 'https://t.bilibili.com/'],
+    ['bilibili', 'https://space.bilibili.com/2/dynamic'],
+    ['xiaohongshu', 'https://www.xiaohongshu.com/explore'],
+    ['xiaohongshu', 'https://www.xiaohongshu.com/search_result?keyword=WebBrain'],
+    ['xiaohongshu', 'https://www.xiaohongshu.com/user/profile/abc123'],
     ['instagram', 'https://www.instagram.com/openai/'],
     ['instagram', 'https://www.instagram.com/explore/'],
     ['tiktok', 'https://www.tiktok.com/@openai'],
@@ -1978,6 +2089,10 @@ test('social adapters expose URL-specific infinite-scroll capture policy in both
     'https://old.reddit.com/r/javascript/',
     'https://www.reddit.com/r/javascript/comments/abc123/example/',
     'https://youtu.be/abc123',
+    'https://www.bilibili.com/video/BV1FD4y147uH/',
+    'https://search.bilibili.com/all?keyword=WebBrain',
+    'https://www.xiaohongshu.com/explore/63f9b8b700000000120335d8?xsec_token=example',
+    'https://creator.xiaohongshu.com/publish/publish?source=official',
     'https://www.instagram.com/p/ABC123/',
     'https://www.instagram.com/reel/ABC123/',
     'https://www.tiktok.com/@openai/video/1234567890123456789',
@@ -1990,6 +2105,8 @@ test('social adapters expose URL-specific infinite-scroll capture policy in both
     'https://linkedin.com.evil.example/feed/',
     'https://reddit.com.evil.example/r/javascript/',
     'https://youtube.com.evil.example/watch?v=abc123',
+    'https://bilibili.com.evil.example/',
+    'https://xiaohongshu.com.evil.example/explore',
     'https://instagram.com.evil.example/explore/',
     'https://tiktok.com.evil.example/@openai',
     'https://facebook.com.evil.example/groups/12345/',
