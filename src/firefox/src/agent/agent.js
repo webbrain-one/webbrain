@@ -191,6 +191,7 @@ export class Agent {
     this._isPdfTabCache = new Map();
     this._doneBlockCount = new Map();
     this._recentSubmitClicks = new Map();
+    this._formValidationBlocks = new Map(); // tabId -> validation state that must change before another submit
     this._runningTabs = new Set(); // tabIds with an active processMessage/Stream in flight
     this.completionInvariants = new Map(); // tabId -> run-scoped post-action verification state
     this._completionRunCounter = 0;
@@ -2039,10 +2040,40 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         onUpdate('warning', { message: 'API mutation blocked until /allow-api is enabled.' });
         continue;
       }
+      const formValidationCandidate = this._isFormValidationCandidate(fnName, fnArgs);
+      const formValidationAllFrames = fnName === 'iframe_click' || fnName === 'press_keys';
+      let detectedSubmitAction = null;
+      const validationBlock = formValidationCandidate ? this._formValidationBlocks.get(tabId) : null;
+      const obviousSubmitAction = formValidationCandidate
+        && this._formValidationActionLooksSubmit(fnName, fnArgs);
+      let formValidationBefore = (validationBlock || obviousSubmitAction)
+        ? await this._captureFormValidationState(tabId, { allFrames: formValidationAllFrames })
+        : [];
+      if (validationBlock) {
+        const currentValidationStateKey = this._formValidationStateKey(formValidationBefore);
+        if (currentValidationStateKey !== validationBlock.stateKey) {
+          this._formValidationBlocks.delete(tabId);
+        } else {
+          const retryActionKey = this._formValidationActionKey(fnName, fnArgs);
+          if (retryActionKey && retryActionKey === validationBlock.actionKey) {
+            const blockedResult = this._formValidationRetryBlockResult(validationBlock);
+            onUpdate('tool_call', { name: fnName, args: fnArgs });
+            onUpdate('tool_result', { name: fnName, result: blockedResult });
+            messages.push({
+              role: 'tool',
+              tool_call_id: tc.id,
+              content: this._wrapUntrusted(fnName, this._limitToolResult(blockedResult)),
+            });
+            onUpdate('warning', { message: 'Repeat submission blocked until the invalid form changes.' });
+            continue;
+          }
+        }
+      }
       const scheduledPolicy = this.scheduledRunPolicies.get(tabId);
       const scheduledBypassesGate = scheduledPolicy?.requireConsequentialConfirmation === false;
       if (!this._skipPermissionGate && !scheduledBypassesGate) {
-        const submitConfirmation = await this._detectLikelySubmitAction(tabId, fnName, fnArgs);
+        const submitConfirmation = detectedSubmitAction || await this._detectLikelySubmitAction(tabId, fnName, fnArgs);
+        detectedSubmitAction = submitConfirmation;
         if (submitConfirmation?.isSubmit) {
           const choice = await this._promptSubmitConfirmation(tabId, submitConfirmation, onUpdate);
           if (choice === null) {
@@ -2079,6 +2110,19 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             capabilities = capabilities.filter(capability => capability !== Capability.CLICK);
           }
         }
+      }
+      if (
+        formValidationCandidate
+        && formValidationBefore.length === 0
+        && (
+          detectedSubmitAction?.isSubmit
+          || this._skipPermissionGate
+          || scheduledBypassesGate
+        )
+      ) {
+        formValidationBefore = await this._captureFormValidationState(tabId, {
+          allFrames: formValidationAllFrames,
+        });
       }
       if (capabilities.length && !this._skipPermissionGate && !scheduledBypassesGate) {
         await this.permissions.hydrate();
@@ -2204,6 +2248,36 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         completionBatchStartState,
       });
       const toolResult = this._normalizeToolResult(fnName, rawToolResult, missingResponseOutcomeUnknown);
+      const inspectFormValidationAfter = formValidationCandidate
+        && this._formValidationActionLooksSubmit(
+          fnName,
+          fnArgs,
+          toolResult,
+          detectedSubmitAction,
+        );
+      if (
+        inspectFormValidationAfter
+        && toolResult
+        && typeof toolResult === 'object'
+        && !toolResult.done
+        && toolResult.dispatched !== false
+      ) {
+        const formValidationFailure = await this._waitForFormValidationFailure(
+          tabId,
+          formValidationBefore,
+          {
+            toolName: fnName,
+            args: fnArgs,
+            result: toolResult,
+            detectedSubmit: detectedSubmitAction,
+          },
+          { allFrames: formValidationAllFrames },
+        );
+        if (formValidationFailure) {
+          this._applyFormValidationFailure(tabId, toolResult, formValidationFailure);
+          onUpdate('warning', { message: 'Form validation failed; the page error was returned to the agent.' });
+        }
+      }
       if (fnName !== 'done') {
         this._markPlanExecutionToolCall(tabId, fnName, toolResult, {
           consequential: executionMutationEvidence,
@@ -4634,6 +4708,417 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     return 'deny'; // 'deny', or anything unexpected → fail safe
   }
 
+  _isFormValidationCandidate(toolName, args = {}) {
+    const name = String(toolName || '');
+    if (name === 'click' || name === 'click_ax' || name === 'iframe_click') return true;
+    if (name === 'set_field') return args?.submit === true;
+    if (name === 'press_keys') {
+      const keys = JSON.stringify(args?.key ?? args?.keys ?? '').toLowerCase();
+      return /\b(?:enter|return)\b/.test(keys);
+    }
+    return false;
+  }
+
+  _formValidationActionKey(toolName, args = {}) {
+    const name = String(toolName || '');
+    const fields = name === 'set_field'
+      ? ['selector', 'ref_id', 'index', 'name', 'submit']
+      : name === 'press_keys'
+        ? ['selector', 'ref_id', 'index', 'key', 'keys']
+        : ['selector', 'ref_id', 'index', 'text', 'x', 'y', 'urlFilter'];
+    const identity = {};
+    for (const field of fields) {
+      const value = args?.[field];
+      if (value == null || value === '') continue;
+      identity[field] = typeof value === 'string' ? value.slice(0, 500) : value;
+    }
+    return Object.keys(identity).length ? `${name}:${JSON.stringify(identity)}` : '';
+  }
+
+  _formValidationActionLooksSubmit(toolName, args = {}, result = null, detectedSubmit = null) {
+    if (detectedSubmit?.isSubmit) return true;
+    const name = String(toolName || '');
+    if (name === 'set_field') return args?.submit === true;
+    if (name === 'press_keys') {
+      const keys = JSON.stringify(args?.key ?? args?.keys ?? '').toLowerCase();
+      return /\b(?:enter|return)\b/.test(keys);
+    }
+    if (!['click', 'click_ax', 'iframe_click'].includes(name)) return false;
+
+    if (result?.isSubmitControl === true) return true;
+    const tag = String(result?.tag || '').toUpperCase();
+    const type = String(result?.type || '').toLowerCase();
+    if (tag === 'BUTTON' && result?.isSubmitControl !== false) return true;
+    if (tag === 'INPUT' && (type === 'submit' || type === 'image')) return true;
+
+    const label = String(args?.text || result?.name || result?.matched || result?.text || '').trim();
+    if (/^(?:continue|next|create|save|submit|add|post|publish|send|confirm|sign up|sign in|log in|register|place order|pay|checkout|update|apply|finish|done)\b/i.test(label)) {
+      return true;
+    }
+    const selector = String(args?.selector || '').toLowerCase();
+    return /(?:type\s*=\s*["']?(?:submit|image)|\bsubmit\b|\bcontinue\b|\bconfirm\b|\bcheckout\b|\bfinish\b)/.test(selector);
+  }
+
+  _formValidationAlertTexts(state = {}) {
+    const errorPattern = /\b(?:error|invalid|required|failed|failure|missing|must|cannot|can't|could not|unable|unsuccessful|rejected|not (?:valid|allowed|accepted|selected|saved)|please (?:correct|fix|select|choose|enter|provide)|select at least|choose at least|enter a valid)\b/i;
+    const successPattern = /\b(?:success|successfully|saved|submitted|sent|created|updated|published|completed)\b|^done\b|^thank(?:s| you)\b/i;
+    return (Array.isArray(state?.alerts) ? state.alerts : [])
+      .map(alert => String(alert?.text ?? alert ?? '').replace(/\s+/g, ' ').trim().slice(0, 500))
+      .filter((text) => {
+        if (!text) return false;
+        if (errorPattern.test(text)) return true;
+        if (successPattern.test(text)) return false;
+        return state?.alertsAreValidationOnly === true;
+      });
+  }
+
+  _formValidationStateKey(states = []) {
+    return JSON.stringify((Array.isArray(states) ? states : [])
+      .map((state) => ({
+        frameId: state?.frameId ?? null,
+        url: String(state?.url || ''),
+        invalid: (Array.isArray(state?.invalidFields) ? state.invalidFields : [])
+          .map(field => [field?.label || '', field?.type || '', field?.message || '']),
+        ariaInvalid: (Array.isArray(state?.ariaInvalidFields) ? state.ariaInvalidFields : [])
+          .map(field => [field?.label || '', field?.type || '', field?.message || '']),
+        alerts: this._formValidationAlertTexts(state),
+        controls: String(state?.controlFingerprint || ''),
+      }))
+      .sort((a, b) => `${a.frameId}|${a.url}`.localeCompare(`${b.frameId}|${b.url}`)));
+  }
+
+  _detectFormValidationFailure(beforeStates = [], afterStates = [], context = {}) {
+    const before = Array.isArray(beforeStates) ? beforeStates : [];
+    const after = Array.isArray(afterStates) ? afterStates : [];
+    if (!after.length) return null;
+
+    const beforeUrls = new Set(before.map(state => String(state?.url || '')).filter(Boolean));
+    const comparableAfter = after.filter((state) => {
+      const url = String(state?.url || '');
+      return beforeUrls.size === 0 || !url || beforeUrls.has(url);
+    });
+    if (!comparableAfter.length) return null;
+
+    const beforeAlerts = new Set(before.flatMap(state =>
+      this._formValidationAlertTexts(state).map(text => `${state?.url || ''}|${text}`)
+    ));
+    const beforeAriaInvalid = new Set(before.flatMap(state =>
+      (Array.isArray(state?.ariaInvalidFields) ? state.ariaInvalidFields : [])
+        .map(field => `${state?.url || ''}|${field?.label || ''}|${field?.type || ''}|${field?.message || ''}`)
+    ));
+    const newAlerts = [];
+    const newAriaInvalid = [];
+    // Custom alert/live-region and aria-invalid failures must be newly exposed
+    // by the action. With no baseline we still detect native validation via
+    // activeInvalid, but do not mislabel an unrelated pre-existing alert.
+    for (const state of before.length ? comparableAfter : []) {
+      for (const text of this._formValidationAlertTexts(state)) {
+        if (text && !beforeAlerts.has(`${state?.url || ''}|${text}`)) newAlerts.push(text);
+      }
+      for (const field of Array.isArray(state?.ariaInvalidFields) ? state.ariaInvalidFields : []) {
+        const key = `${state?.url || ''}|${field?.label || ''}|${field?.type || ''}|${field?.message || ''}`;
+        if (!beforeAriaInvalid.has(key)) newAriaInvalid.push(field);
+      }
+    }
+
+    const nativeFailureStates = comparableAfter.filter(state => state?.activeInvalid === true);
+    const looksLikeSubmit = this._formValidationActionLooksSubmit(
+      context.toolName,
+      context.args,
+      context.result,
+      context.detectedSubmit,
+    );
+    const nativeInvalidFields = looksLikeSubmit
+      ? nativeFailureStates.flatMap(state => Array.isArray(state?.invalidFields) ? state.invalidFields : [])
+      : [];
+    if (!nativeInvalidFields.length && !newAlerts.length && !newAriaInvalid.length) return null;
+
+    const invalidFields = [];
+    const fieldKeys = new Set();
+    for (const field of [...nativeInvalidFields, ...newAriaInvalid]) {
+      const normalized = {
+        label: String(field?.label || 'field').slice(0, 120),
+        type: String(field?.type || '').slice(0, 40),
+        message: String(field?.message || 'Invalid value.').slice(0, 300),
+      };
+      const key = `${normalized.label}|${normalized.type}|${normalized.message}`;
+      if (!fieldKeys.has(key)) {
+        fieldKeys.add(key);
+        invalidFields.push(normalized);
+      }
+    }
+
+    const validationMessages = [];
+    const messageSet = new Set();
+    for (const message of [
+      ...invalidFields.map(field => `${field.label}: ${field.message}`),
+      ...newAlerts,
+    ]) {
+      const compact = String(message || '').replace(/\s+/g, ' ').trim().slice(0, 500);
+      if (compact && !messageSet.has(compact)) {
+        messageSet.add(compact);
+        validationMessages.push(compact);
+      }
+    }
+    if (!validationMessages.length) validationMessages.push('The page reported that the form contains invalid fields.');
+
+    return {
+      invalidFields: invalidFields.slice(0, 12),
+      validationMessages: validationMessages.slice(0, 12),
+      stateKey: this._formValidationStateKey(after),
+      actionKey: this._formValidationActionKey(context.toolName, context.args),
+      error: `Form submission was rejected by page validation: ${validationMessages.join(' | ')} Fix the reported field(s), verify their state, and only then submit again.`,
+    };
+  }
+
+  async _waitForFormValidationFailure(
+    tabId,
+    beforeStates,
+    context,
+    { allFrames = false, checkpointsMs = [0, 120, 350, 800, 1200] } = {},
+  ) {
+    const before = Array.isArray(beforeStates) ? beforeStates : [];
+    const beforeUrls = new Set(before.map(state => String(state?.url || '')).filter(Boolean));
+    const startedAt = Date.now();
+    for (const checkpoint of checkpointsMs) {
+      const targetDelay = Math.max(0, Number(checkpoint) || 0);
+      const remaining = targetDelay - (Date.now() - startedAt);
+      if (remaining > 0) await new Promise(resolve => setTimeout(resolve, remaining));
+      const after = await this._captureFormValidationState(tabId, { allFrames });
+      const failure = this._detectFormValidationFailure(before, after, context);
+      if (failure) return failure;
+      const afterUrls = new Set(after.map(state => String(state?.url || '')).filter(Boolean));
+      if (
+        beforeUrls.size > 0
+        && afterUrls.size > 0
+        && ![...afterUrls].some(url => beforeUrls.has(url))
+      ) {
+        break;
+      }
+    }
+    return null;
+  }
+
+  _applyFormValidationFailure(tabId, toolResult, failure) {
+    if (!toolResult || typeof toolResult !== 'object' || !failure) return toolResult;
+    toolResult.success = false;
+    toolResult.noProgress = true;
+    toolResult.formValidationFailed = true;
+    toolResult.dispatched = toolResult.dispatched !== false;
+    toolResult.verified = false;
+    toolResult.invalidFields = failure.invalidFields;
+    toolResult.validationMessages = failure.validationMessages;
+    toolResult.error = failure.error;
+    delete toolResult.warning;
+    this._formValidationBlocks.set(tabId, {
+      stateKey: failure.stateKey,
+      actionKey: failure.actionKey,
+      invalidFields: failure.invalidFields,
+      validationMessages: failure.validationMessages,
+    });
+    return toolResult;
+  }
+
+  _formValidationRetryBlockResult(block) {
+    const messages = Array.isArray(block?.validationMessages) && block.validationMessages.length
+      ? block.validationMessages
+      : ['The form still contains the same invalid fields.'];
+    return {
+      success: false,
+      dispatched: false,
+      noProgress: true,
+      formValidationFailed: true,
+      blockedValidationRetry: true,
+      invalidFields: Array.isArray(block?.invalidFields) ? block.invalidFields : [],
+      validationMessages: messages,
+      error: `Blocked repeat submission because the form validation state has not changed: ${messages.join(' | ')} Fix the reported field(s) before trying to submit again.`,
+    };
+  }
+
+  async _captureFormValidationState(tabId, { allFrames = false } = {}) {
+    try {
+      let rawResults = [];
+      if (globalThis.chrome?.scripting?.executeScript) {
+        rawResults = await chrome.scripting.executeScript({
+          target: { tabId, ...(allFrames ? { allFrames: true } : {}) },
+          func: Agent._formValidationStateProbe,
+        });
+        return (Array.isArray(rawResults) ? rawResults : [])
+          .map(item => ({ frameId: item?.frameId ?? null, ...(item?.result || {}) }))
+          .filter(state => state && (state.url || state.invalidFields?.length || state.alerts?.length));
+      }
+      if (globalThis.browser?.tabs?.executeScript) {
+        let probeSource = Agent._formValidationStateProbe.toString();
+        if (!/^\s*(?:async\s+)?function\b/.test(probeSource)) probeSource = `function ${probeSource}`;
+        const code = `(() => { const __wbFormValidationProbe = (${probeSource}); return __wbFormValidationProbe(); })()`;
+        rawResults = await browser.tabs.executeScript(tabId, { code, allFrames });
+        return (Array.isArray(rawResults) ? rawResults : [])
+          .map((result, frameId) => ({ frameId, ...(result || {}) }))
+          .filter(state => state && (state.url || state.invalidFields?.length || state.alerts?.length));
+      }
+    } catch {
+      // Validation inspection is best-effort; the original tool result remains
+      // authoritative when the page or frame cannot be inspected.
+    }
+    return [];
+  }
+
+  /**
+   * Page-side form validation snapshot. Keep self-contained: Firefox
+   * serializes this function into tabs and neither browser may close over Agent.
+   */
+  static _formValidationStateProbe = function _formValidationStateProbe() {
+    const compact = (value, max = 300) => String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
+    const roots = [document];
+    try {
+      const walker = document.createTreeWalker(document, NodeFilter.SHOW_ELEMENT);
+      let node = walker.currentNode;
+      while (node) {
+        if (node.shadowRoot) roots.push(node.shadowRoot);
+        node = walker.nextNode();
+      }
+    } catch {}
+    const queryAll = (selector) => {
+      const found = [];
+      for (const root of roots) {
+        try { found.push(...root.querySelectorAll(selector)); } catch {}
+      }
+      return [...new Set(found)];
+    };
+    const visible = (el) => {
+      try {
+        const rect = el.getBoundingClientRect();
+        const style = getComputedStyle(el);
+        return rect.width > 0 && rect.height > 0
+          && style.display !== 'none'
+          && style.visibility !== 'hidden'
+          && Number(style.opacity || 1) > 0;
+      } catch {
+        return false;
+      }
+    };
+    const labelFor = (el) => {
+      const parts = [];
+      try {
+        if (el.id) {
+          const escaped = globalThis.CSS?.escape ? CSS.escape(el.id) : String(el.id).replace(/["\\]/g, '\\$&');
+          const label = document.querySelector(`label[for="${escaped}"]`);
+          if (label) parts.push(label.innerText || label.textContent || '');
+        }
+      } catch {}
+      try {
+        const wrappingLabel = el.closest?.('label');
+        if (wrappingLabel) parts.push(wrappingLabel.innerText || wrappingLabel.textContent || '');
+      } catch {}
+      parts.push(
+        el.getAttribute?.('aria-label') || '',
+        el.getAttribute?.('placeholder') || '',
+        el.getAttribute?.('name') || '',
+        el.getAttribute?.('id') || '',
+        el.tagName || 'field',
+      );
+      return compact(parts.find(Boolean) || 'field', 120);
+    };
+    const describedMessage = (el) => {
+      const ids = compact(el.getAttribute?.('aria-describedby') || '', 240).split(/\s+/).filter(Boolean);
+      const text = ids.map((id) => {
+        try { return document.getElementById(id)?.innerText || document.getElementById(id)?.textContent || ''; } catch { return ''; }
+      }).filter(Boolean).join(' ');
+      return compact(text || el.validationMessage || '', 300);
+    };
+    const detailFor = (el, fallback = 'Invalid value.') => ({
+      label: labelFor(el),
+      type: compact(el.getAttribute?.('type') || el.tagName || '', 40),
+      message: describedMessage(el) || fallback,
+      visible: visible(el),
+    });
+    const invalidControls = queryAll('input:invalid, textarea:invalid, select:invalid');
+    const ariaInvalidControls = queryAll('input[aria-invalid="true"], textarea[aria-invalid="true"], select[aria-invalid="true"], [contenteditable="true"][aria-invalid="true"]');
+    let active = document.activeElement;
+    try {
+      while (active?.shadowRoot?.activeElement) active = active.shadowRoot.activeElement;
+    } catch {}
+    const activeInvalid = !!active && invalidControls.includes(active);
+    const allInvalidControls = [...new Set([...invalidControls, ...ariaInvalidControls])];
+    const errorMessageIds = new Set();
+    for (const control of allInvalidControls) {
+      for (const attr of ['aria-errormessage', 'aria-describedby']) {
+        for (const id of compact(control.getAttribute?.(attr) || '', 500).split(/\s+/).filter(Boolean)) {
+          errorMessageIds.add(id);
+        }
+      }
+    }
+    const errorPattern = /\b(?:error|invalid|required|failed|failure|missing|must|cannot|can't|could not|unable|unsuccessful|rejected|not (?:valid|allowed|accepted|selected|saved)|please (?:correct|fix|select|choose|enter|provide)|select at least|choose at least|enter a valid)\b/i;
+    const successPattern = /\b(?:success|successfully|saved|submitted|sent|created|updated|published|completed)\b|^done\b|^thank(?:s| you)\b/i;
+    const alerts = queryAll('[role="alert"], [role="alertdialog"], [aria-live="assertive"], [aria-live="polite"]')
+      .filter(visible)
+      .map((el) => {
+        const text = compact(el.innerText || el.textContent || '', 500);
+        const tokens = compact([
+          el.id,
+          el.className,
+          el.getAttribute?.('data-state'),
+          el.getAttribute?.('data-status'),
+          el.getAttribute?.('aria-label'),
+        ].filter(Boolean).join(' '), 500);
+        const form = el.closest?.('form') || null;
+        const formHasInvalidControl = !!form && allInvalidControls.some(control =>
+          control.form === form || control.closest?.('form') === form
+        );
+        const explicitlyErrorLinked = !!el.id && errorMessageIds.has(el.id);
+        const validationLikely = explicitlyErrorLinked
+          || /\b(?:error|invalid|validation|danger|warning|failed|failure)\b/i.test(tokens)
+          || errorPattern.test(text)
+          || formHasInvalidControl;
+        const successLikely = successPattern.test(text) && !errorPattern.test(text);
+        return validationLikely && !successLikely ? text : '';
+      })
+      .filter(Boolean)
+      .slice(0, 12);
+
+    let hash = 2166136261;
+    const addHash = (text) => {
+      const value = String(text || '');
+      for (let i = 0; i < value.length; i++) {
+        hash ^= value.charCodeAt(i);
+        hash = Math.imul(hash, 16777619);
+      }
+    };
+    for (const el of queryAll('input, textarea, select, [contenteditable="true"], button, [role="button"], [onclick], [data-action]')) {
+      const tag = String(el.tagName || '').toLowerCase();
+      const type = String(el.getAttribute?.('type') || el.tagName || '').toLowerCase();
+      let state = '';
+      if (type === 'checkbox' || type === 'radio') {
+        state = el.checked ? 'checked' : 'unchecked';
+      } else if (tag === 'select') {
+        state = Array.from(el.selectedOptions || []).map(option => option.value).join('\u001f');
+      } else if (type === 'file') {
+        state = String(el.files?.length || 0);
+      } else if (
+        tag === 'button'
+        || String(el.getAttribute?.('role') || '').toLowerCase() === 'button'
+        || el.hasAttribute?.('onclick')
+        || el.hasAttribute?.('data-action')
+      ) {
+        state = compact(el.innerText || el.textContent || el.getAttribute?.('aria-label') || '', 120);
+      } else {
+        const value = String(el.value ?? el.textContent ?? '');
+        state = type === 'password' ? `password-length:${value.length}` : value;
+      }
+      addHash(`${el.tagName}|${type}|${el.name || ''}|${el.id || ''}|${visible(el) ? 'visible' : 'hidden'}|${el.disabled ? 'disabled' : 'enabled'}|${state}\u001e`);
+    }
+
+    return {
+      url: (() => { try { return location.href || ''; } catch { return ''; } })(),
+      activeInvalid,
+      invalidFields: invalidControls.map(el => detailFor(el)).slice(0, 20),
+      ariaInvalidFields: ariaInvalidControls.map(el => detailFor(el, 'This field is marked invalid.')).slice(0, 20),
+      alerts: [...new Set(alerts)],
+      alertsAreValidationOnly: true,
+      controlFingerprint: (hash >>> 0).toString(16),
+    };
+  };
+
   _fallbackSubmitConfirmationInfo(host, tool, reason, summary = '') {
     const normalizedHost = normalizeHost(host || '') || String(host || '').trim() || 'this site';
     return {
@@ -5546,6 +6031,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     this._nytimesPageGateNotified.delete(tabId);
     this._doneBlockCount.delete(tabId);
     this._recentSubmitClicks.delete(tabId);
+    this._formValidationBlocks.delete(tabId);
     this._lastAxScopes.delete(tabId);
     this.completionInvariants.delete(tabId);
     if (!preserveRunGuard) {

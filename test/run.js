@@ -22845,6 +22845,244 @@ test('approved iframe submit keeps host gate fail-closed without urlFilter', asy
   }
 });
 
+test('form validation classifier surfaces native and custom submission errors', () => {
+  const url = 'https://addons.mozilla.org/en-US/developers/addon/webbrain/versions/submit/';
+  const invalidField = {
+    label: 'Firefox',
+    type: 'checkbox',
+    message: 'Your extension has to be compatible with at least one application.',
+  };
+
+  for (const AgentClass of [AgentCh, AgentFx]) {
+    const agent = new AgentClass({ getVisionProvider: async () => null });
+    const before = [{
+      frameId: 0,
+      url,
+      activeInvalid: false,
+      invalidFields: [invalidField],
+      ariaInvalidFields: [],
+      alerts: [],
+      controlFingerprint: 'unchecked',
+    }];
+    const nativeAfter = [{
+      ...before[0],
+      activeInvalid: true,
+    }];
+    const nativeFailure = agent._detectFormValidationFailure(before, nativeAfter, {
+      toolName: 'click',
+      args: { text: 'Continue' },
+      result: { success: true, tag: 'BUTTON' },
+    });
+    assert.ok(nativeFailure, `${AgentClass.name}: native validation failure was missed`);
+    assert.match(nativeFailure.error, /compatible with at least one application/i);
+    assert.deepEqual(nativeFailure.invalidFields[0], invalidField);
+
+    const customAfter = [{
+      ...before[0],
+      invalidFields: [],
+      alerts: ['Please correct the highlighted fields.'],
+      controlFingerprint: 'custom-error',
+    }];
+    const customFailure = agent._detectFormValidationFailure(before, customAfter, {
+      toolName: 'click_ax',
+      args: { ref_id: 'ref_submit' },
+      result: { success: true, tag: 'BUTTON' },
+      detectedSubmit: { isSubmit: true },
+    });
+    assert.ok(customFailure, `${AgentClass.name}: custom validation alert was missed`);
+    assert.match(customFailure.error, /correct the highlighted fields/i);
+
+    const existingAlert = agent._detectFormValidationFailure(customAfter, customAfter, {
+      toolName: 'click',
+      args: { text: 'Open help' },
+      result: { success: true, tag: 'BUTTON' },
+    });
+    assert.equal(existingAlert, null, `${AgentClass.name}: pre-existing alert was misclassified as a new form error`);
+
+    const successfulAfter = [{
+      ...before[0],
+      invalidFields: [],
+      alerts: ['Saved successfully'],
+      controlFingerprint: 'saved',
+    }];
+    const successfulAnnouncement = agent._detectFormValidationFailure(before, successfulAfter, {
+      toolName: 'click',
+      args: { text: 'Save' },
+      result: { success: true, tag: 'BUTTON', type: 'submit', isSubmitControl: true },
+    });
+    assert.equal(successfulAnnouncement, null, `${AgentClass.name}: success announcement was misclassified as validation failure`);
+
+    assert.equal(agent._formValidationActionLooksSubmit(
+      'click',
+      { text: 'Continue' },
+      { success: true, tag: 'DIV', text: 'Continue', isSubmitControl: false },
+    ), true, `${AgentClass.name}: custom submit-looking control skipped validation inspection`);
+    assert.equal(agent._formValidationActionLooksSubmit(
+      'click',
+      { text: 'Choose application' },
+      { success: true, tag: 'BUTTON', type: 'button', text: 'Choose application', isSubmitControl: false },
+    ), false, `${AgentClass.name}: corrective type=button was misclassified as a submit`);
+  }
+});
+
+test('form validation polling catches delayed errors', async () => {
+  const url = 'https://example.com/form';
+  for (const AgentClass of [AgentCh, AgentFx]) {
+    const agent = new AgentClass({ getVisionProvider: async () => null });
+    const before = [{
+      frameId: 0,
+      url,
+      activeInvalid: false,
+      invalidFields: [],
+      ariaInvalidFields: [],
+      alerts: [],
+      controlFingerprint: 'unchanged',
+    }];
+    const delayed = [{
+      ...before[0],
+      alerts: ['Server rejected this value.'],
+    }];
+    let captures = 0;
+    agent._captureFormValidationState = async () => {
+      captures += 1;
+      return structuredClone(captures === 1 ? before : delayed);
+    };
+
+    const failure = await agent._waitForFormValidationFailure(
+      5116,
+      before,
+      {
+        toolName: 'click',
+        args: { text: 'Submit' },
+        result: { success: true, tag: 'BUTTON', type: 'submit', isSubmitControl: true },
+      },
+      { checkpointsMs: [0, 0] },
+    );
+    assert.ok(failure, `${AgentClass.name}: delayed validation feedback was missed`);
+    assert.match(failure.error, /server rejected this value/i);
+    assert.equal(captures, 2, `${AgentClass.name}: validation polling did not retry after the immediate snapshot`);
+  }
+});
+
+test('agent returns form validation messages and blocks unchanged repeat submits', async () => {
+  const url = 'https://addons.mozilla.org/en-US/developers/addon/webbrain/versions/submit/';
+  const invalidField = {
+    label: 'Firefox',
+    type: 'checkbox',
+    message: 'Your extension has to be compatible with at least one application.',
+  };
+
+  for (const AgentClass of [AgentCh, AgentFx]) {
+    const agent = new AgentClass({ getVisionProvider: async () => null });
+    const tabId = 5117;
+    let executions = 0;
+    let prompts = 0;
+    let currentState = [{
+      frameId: 0,
+      url,
+      activeInvalid: false,
+      invalidFields: [invalidField],
+      ariaInvalidFields: [],
+      alerts: [],
+      controlFingerprint: 'unchecked',
+    }];
+
+    agent._ensureGateSetting = async () => false;
+    agent._skipPermissionGate = false;
+    agent._currentUrl = async () => url;
+    agent._recordProgressObservation = async () => null;
+    agent._autoRecordProgressAction = () => null;
+    agent._progressWarningForAction = () => '';
+    agent._persist = () => {};
+    agent._captureFormValidationState = async () => structuredClone(currentState);
+    agent._detectLikelySubmitAction = async (_tabId, _toolName, args) => (
+      args?.text === 'Continue'
+        ? {
+            isSubmit: true,
+            host: 'addons.mozilla.org',
+            tool: 'click',
+            reason: 'submit button/control activation',
+          }
+        : null
+    );
+    agent._promptSubmitConfirmation = async () => {
+      prompts += 1;
+      return 'once';
+    };
+    agent.executeTool = async (_tabId, _toolName, args) => {
+      executions += 1;
+      if (args?.text === 'Continue' && currentState[0].invalidFields.length) {
+        currentState = [{ ...currentState[0], activeInvalid: true }];
+      } else if (args?.text === 'Continue') {
+        currentState = [{ ...currentState[0], url: `${url}success` }];
+      }
+      const isSubmit = args?.text === 'Continue';
+      return {
+        success: true,
+        dispatched: true,
+        tag: 'BUTTON',
+        type: isSubmit ? 'submit' : 'button',
+        isSubmitControl: isSubmit,
+        text: args?.text || '',
+      };
+    };
+
+    const runClick = async (id, text) => {
+      const messages = [];
+      await agent._executeToolBatch(
+        tabId,
+        [{
+          id,
+          function: { name: 'click', arguments: JSON.stringify({ text }) },
+        }],
+        messages,
+        () => {},
+        { supportsVision: false },
+        '',
+        new Set(['click']),
+        1,
+      );
+      assert.equal(messages.length, 1, `${AgentClass.name}: expected one tool result`);
+      return JSON.parse(agent._unwrapUntrusted(messages[0].content));
+    };
+
+    const runSubmit = id => runClick(id, 'Continue');
+    const failed = await runSubmit('submit_validation_failure');
+    assert.equal(failed.success, false, `${AgentClass.name}: invalid submit was reported successful`);
+    assert.equal(failed.formValidationFailed, true, `${AgentClass.name}: missing formValidationFailed marker`);
+    assert.match(failed.error, /compatible with at least one application/i);
+    assert.equal(executions, 1, `${AgentClass.name}: first submit did not execute exactly once`);
+
+    const blocked = await runSubmit('submit_validation_retry');
+    assert.equal(blocked.blockedValidationRetry, true, `${AgentClass.name}: unchanged invalid form was resubmitted`);
+    assert.match(blocked.error, /validation state has not changed/i);
+    assert.equal(executions, 1, `${AgentClass.name}: blocked retry still dispatched`);
+    assert.equal(prompts, 1, `${AgentClass.name}: blocked retry asked for submit confirmation again`);
+
+    agent._skipPermissionGate = true;
+    const correction = await runClick('validation_correction_button', 'Choose application');
+    agent._skipPermissionGate = false;
+    assert.equal(correction.success, true, `${AgentClass.name}: corrective type=button was blocked`);
+    assert.equal(correction.blockedValidationRetry, undefined, `${AgentClass.name}: corrective type=button was treated as a repeat submit`);
+    assert.equal(executions, 2, `${AgentClass.name}: corrective type=button did not dispatch`);
+    assert.equal(prompts, 1, `${AgentClass.name}: corrective type=button requested submit confirmation`);
+
+    currentState = [{
+      frameId: 0,
+      url,
+      activeInvalid: false,
+      invalidFields: [],
+      ariaInvalidFields: [],
+      alerts: [],
+      controlFingerprint: 'checked',
+    }];
+    const successful = await runSubmit('submit_after_correction');
+    assert.equal(successful.success, true, `${AgentClass.name}: corrected form remained blocked`);
+    assert.equal(executions, 3, `${AgentClass.name}: corrected form was not submitted`);
+    assert.equal(prompts, 2, `${AgentClass.name}: corrected submit did not receive fresh confirmation`);
+  }
+});
+
 test('submit confirmation card has no always-allow path', async () => {
   for (const AgentClass of [AgentCh, AgentFx]) {
     const agent = new AgentClass({ getVisionProvider: async () => null });
@@ -24214,6 +24452,8 @@ test('submit controls bypass native select guards in click paths', () => {
   assert.match(chromeAgent, /isSubmitControl: isSubmitControl\(el\)/, 'chrome agent: text-resolved controls should expose submit metadata');
   assert.match(chromeAgent, /const coordSelCheck = info\.isSubmitControl \? null : await cdpClient\.evaluate/, 'chrome agent: submit text clicks should skip coordinate select guard');
   assert.match(chromeAgent, /const postClickSel1 = info\.isSubmitControl \? null : await cdpClient\.evaluate/, 'chrome agent: submit text clicks should skip post-click select false errors');
+  assert.match(chromeAgent, /isEditableControl: isEditableControl\(el\)/, 'chrome agent: resolved click target should expose its own editability');
+  assert.match(chromeAgent, /const isEditableTarget = info\.isEditableControl === true;/, 'chrome agent: stale-click exemption should use the clicked target, not post-submit focus');
 
   for (const [label, rel] of [
     ['chrome', 'src/chrome/src/content/content.js'],
@@ -24224,7 +24464,10 @@ test('submit controls bypass native select guards in click paths', () => {
     assert.match(content, /const targetIsSubmitControl = _isSubmitControl\(el\);/, `${label}: click path should classify submit target before select guards`);
     assert.ok(content.includes('if (!(el instanceof HTMLSelectElement) && !targetIsSubmitControl) {'), `${label}: nearby select guard should not block submit controls`);
     assert.ok(content.includes('if (!targetIsSubmitControl && postActive && postActive !== el && postActive instanceof HTMLSelectElement) {'), `${label}: post-click select false error should not block submit controls`);
+    assert.match(content, /isSubmitControl: targetIsSubmitControl,/, `${label}: successful clicks should preserve submit classification for post-click validation`);
   }
+  const chromeContent = fs.readFileSync(path.join(ROOT, 'src/chrome/src/content/content.js'), 'utf8');
+  assert.match(chromeContent, /el\.tagName === 'INPUT' && !\['button', 'checkbox'[\s\S]*?'submit'\]\.includes\(inputType\)/, 'chrome: checkbox/radio focus must not receive the text-editable stale-click exemption');
 });
 
 test('accessibility ref lookup rejects disconnected elements', () => {

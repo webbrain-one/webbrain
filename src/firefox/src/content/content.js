@@ -1492,6 +1492,8 @@
     return {
       success: true,
       tag: el.tagName,
+      type: String(el.getAttribute?.('type') || '').toLowerCase(),
+      isSubmitControl: targetIsSubmitControl,
       text: el.innerText?.slice(0, 50),
       ...(clickedRect ? { rect: clickedRect } : {}),
       ...(warning ? { warning } : {}),
