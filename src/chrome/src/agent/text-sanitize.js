@@ -82,3 +82,63 @@ export function repairDoubleEscapedAssistantText(value) {
 
   return decoded;
 }
+
+function repairJsonQuotedPageTitleLines(value) {
+  if (typeof value !== 'string' || !value) return value;
+
+  const parts = value.split(/(\r\n|\n|\r)/);
+  let fence = null;
+
+  for (let i = 0; i < parts.length; i += 2) {
+    const line = parts[i];
+    const fenceMatch = line.match(
+      /^[ \t]*(?:(?:>[ \t]*)|(?:(?:[-*+]|\d+[.)])[ \t]+))*(`{3,}|~{3,})([\s\S]*)$/,
+    );
+    if (fenceMatch) {
+      const marker = fenceMatch[1];
+      const suffix = fenceMatch[2];
+      if (!fence) {
+        fence = { character: marker[0], length: marker.length };
+      } else if (
+        marker[0] === fence.character
+        && marker.length >= fence.length
+        && /^[ \t]*$/.test(suffix)
+      ) {
+        fence = null;
+      }
+      continue;
+    }
+    if (fence) continue;
+    // Four columns of leading indentation form a Markdown code block. Keep
+    // exact examples verbatim just as we do for fenced code.
+    if (/^(?: {4}| {0,3}\t)/.test(line)) continue;
+
+    const titleMatch = line.match(
+      /^([ \t]*(?:(?:[-*+]|\d+[.)])[ \t]+)?Page title:[ \t]*)("(?:[^"\\]|\\(?:["\\/bfnrt]|u[0-9a-fA-F]{4}))*")([ \t]*)$/i,
+    );
+    if (!titleMatch) continue;
+
+    try {
+      const decodedTitle = JSON.parse(titleMatch[2]);
+      if (
+        typeof decodedTitle === 'string'
+        && !/[\x00-\x1f\x7f\u2028\u2029]/.test(decodedTitle)
+      ) {
+        parts[i] = `${titleMatch[1]}${decodedTitle}${titleMatch[3]}`;
+      }
+    } catch {
+      // Preserve malformed or incomplete JSON-looking text verbatim.
+    }
+  }
+
+  return parts.join('');
+}
+
+/**
+ * Normalize only high-confidence serialization artifacts in terminal assistant
+ * text. Semantic gates and tool-call parsing must always inspect the original
+ * provider content before this display-only repair runs.
+ */
+export function repairAssistantDisplayText(value) {
+  return repairJsonQuotedPageTitleLines(repairDoubleEscapedAssistantText(value));
+}
