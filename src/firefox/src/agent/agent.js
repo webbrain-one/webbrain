@@ -43,7 +43,7 @@ import {
   messageContentToText,
 } from './planner.js';
 import { extractFirstJsonObject } from './json-extract.js';
-import { repairDoubleEscapedAssistantText, sanitizeText as sanitizePlannerText } from './text-sanitize.js';
+import { repairAssistantDisplayText, sanitizeText as sanitizePlannerText } from './text-sanitize.js';
 import { buildCustomSkillsPrompt, buildSkillLoaderDefinition, buildSkillToolDefinitions, buildSkillToolRegistry, getEligibleCustomSkills, getEligibleSkillCatalog, normalizeCustomSkills } from './skills.js';
 import { publicMediaUrlNeedsExplicitTarget } from './public-media-url.js';
 import { USER_MEMORY_DEFAULT_MAX_PROMPT_CHARS, formatUserMemoryPrompt, normalizeUserMemoryMaxPromptChars, normalizeUserMemoryStore } from './user-memory.js';
@@ -10813,7 +10813,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         onUpdate('warning', { message: finalResponse });
         break;
       }
-      const repairedFinalContent = repairDoubleEscapedAssistantText(result.content);
+      const repairedFinalContent = repairAssistantDisplayText(result.content);
       finalResponse = result.costAllowanceMessage
         ? `${repairedFinalContent}\n\n${result.costAllowanceMessage}`
         : repairedFinalContent;
@@ -11199,7 +11199,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           this._persist(tabId);
           return finish(planOnlyDecision.failure, planOnlyDecision.status || 'plan_only_output');
         }
-        const repairedFullText = repairDoubleEscapedAssistantText(fullText);
+        const repairedFullText = repairAssistantDisplayText(fullText);
         if (repairedFullText !== fullText) {
           fullText = repairedFullText;
           // Streaming deltas have already displayed the malformed escapes.

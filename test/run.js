@@ -580,6 +580,12 @@ const { repairDoubleEscapedAssistantText: repairDoubleEscapedAssistantTextCh } =
 const { repairDoubleEscapedAssistantText: repairDoubleEscapedAssistantTextFx } = await import(
   'file://' + path.join(ROOT, 'src/firefox/src/agent/text-sanitize.js').replace(/\\/g, '/')
 );
+const { repairAssistantDisplayText: repairAssistantDisplayTextCh } = await import(
+  'file://' + path.join(ROOT, 'src/chrome/src/agent/text-sanitize.js').replace(/\\/g, '/')
+);
+const { repairAssistantDisplayText: repairAssistantDisplayTextFx } = await import(
+  'file://' + path.join(ROOT, 'src/firefox/src/agent/text-sanitize.js').replace(/\\/g, '/')
+);
 const userMemoryCh = await import(
   'file://' + path.join(ROOT, 'src/chrome/src/agent/user-memory.js').replace(/\\/g, '/')
 );
@@ -20180,6 +20186,49 @@ test('assistant response repair preserves escapes inside double-escaped fenced c
   }
 });
 
+test('assistant display repair decodes JSON-quoted page title verification lines', () => {
+  const title = 'Emre Sokullu on X: "Introducing WebBrain — an open-source AI browser agent…"';
+  const malformed = [
+    'Verification:',
+    `- Page title: ${JSON.stringify(title)}`,
+    '- Timestamp: 3:39 PM · Jul 19, 2026',
+  ].join('\r\n');
+  const expected = [
+    'Verification:',
+    `- Page title: ${title}`,
+    '- Timestamp: 3:39 PM · Jul 19, 2026',
+  ].join('\r\n');
+
+  for (const [label, repair] of [
+    ['chrome', repairAssistantDisplayTextCh],
+    ['firefox', repairAssistantDisplayTextFx],
+  ]) {
+    assert.equal(repair(malformed), expected, `${label}: page title JSON scalar should decode`);
+  }
+});
+
+test('assistant display repair preserves unrelated, fenced, and malformed escapes', () => {
+  const title = 'Emre Sokullu on X: "Introducing WebBrain"';
+  const jsonTitle = JSON.stringify(title);
+  const unchanged = [
+    `Other field: ${jsonTitle}`,
+    `Use this example: Page title: ${jsonTitle}`,
+    `Page title: ${jsonTitle} trailing text`,
+    String.raw`Page title: "Emre Sokullu on X: \q"`,
+    `\`\`\`text\nPage title: ${jsonTitle}\n\`\`\``,
+    `~~~text\n- Page title: ${jsonTitle}\n~~~`,
+  ];
+
+  for (const [label, repair] of [
+    ['chrome', repairAssistantDisplayTextCh],
+    ['firefox', repairAssistantDisplayTextFx],
+  ]) {
+    for (const value of unchanged) {
+      assert.equal(repair(value), value, `${label}: should preserve ${JSON.stringify(value)}`);
+    }
+  }
+});
+
 test('provider response path preserves raw assistant content and metadata', async () => {
   const expected = '**Result**\n\n- First\n- Second';
   const malformed = JSON.stringify(expected).slice(1, -1);
@@ -20205,6 +20254,34 @@ test('provider response path preserves raw assistant content and metadata', asyn
     assert.equal(result.content, malformed, `${label}: raw content should remain available to semantic gates`);
     assert.equal(result.reasoningContent, reasoningContent, `${label}: hidden reasoning should not be decoded`);
     assert.equal(raw.choices[0].message.content, malformed, `${label}: raw provider payload should remain untouched`);
+  }
+});
+
+test('terminal display repair normalizes JSON-quoted page title lines', async () => {
+  const title = 'Emre Sokullu on X: "Introducing WebBrain"';
+  const malformed = `Verification:\n- Page title: ${JSON.stringify(title)}\n- Timestamp: 3:39 PM`;
+  const expected = `Verification:\n- Page title: ${title}\n- Timestamp: 3:39 PM`;
+
+  for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
+    const provider = {
+      supportsTools: true,
+      supportsVision: false,
+      promptTier: 'full',
+      contextWindow: 128000,
+      model: 'test-model',
+      name: 'test-provider',
+      chat: async () => ({ content: malformed, toolCalls: [] }),
+    };
+    const agent = new AgentClass({
+      getActive: () => provider,
+      getVisionProvider: async () => null,
+    });
+    const tabId = 4080 + index;
+    configurePlanOnlyGuardAgent(agent, tabId);
+
+    const final = await agent.processMessage(tabId, 'Show the verification.', () => {}, 'ask');
+
+    assert.equal(final, expected, `${AgentClass.name}: terminal page title should be normalized`);
   }
 });
 
@@ -20255,7 +20332,7 @@ test('agent repairs only terminal content after raw tool-call and plan gates', (
       rawFallback,
     );
     const terminalRepair = source.indexOf(
-      'const repairedFinalContent = repairDoubleEscapedAssistantText(result.content);',
+      'const repairedFinalContent = repairAssistantDisplayText(result.content);',
       planGate,
     );
     assert.ok(
@@ -20271,7 +20348,7 @@ test('agent repairs only terminal content after raw tool-call and plan gates', (
       rawStreamFallback,
     );
     const streamTerminalRepair = source.indexOf(
-      'const repairedFullText = repairDoubleEscapedAssistantText(fullText);',
+      'const repairedFullText = repairAssistantDisplayText(fullText);',
       streamPlanGate,
     );
     assert.ok(

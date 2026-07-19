@@ -82,3 +82,50 @@ export function repairDoubleEscapedAssistantText(value) {
 
   return decoded;
 }
+
+function repairJsonQuotedPageTitleLines(value) {
+  if (typeof value !== 'string' || !value || !value.includes('\\"')) return value;
+
+  const parts = value.split(/(\r\n|\n|\r)/);
+  let fence = null;
+
+  for (let i = 0; i < parts.length; i += 2) {
+    const line = parts[i];
+    const fenceMatch = line.match(/^[ \t]*(`{3,}|~{3,})/);
+    if (fenceMatch) {
+      const marker = fenceMatch[1];
+      if (!fence) {
+        fence = { character: marker[0], length: marker.length };
+      } else if (marker[0] === fence.character && marker.length >= fence.length) {
+        fence = null;
+      }
+      continue;
+    }
+    if (fence) continue;
+
+    const titleMatch = line.match(
+      /^([ \t]*(?:(?:[-*+]|\d+[.)])[ \t]+)?Page title:[ \t]*)("(?:[^"\\]|\\(?:["\\/bfnrt]|u[0-9a-fA-F]{4}))*")([ \t]*)$/i,
+    );
+    if (!titleMatch || !titleMatch[2].includes('\\"')) continue;
+
+    try {
+      const decodedTitle = JSON.parse(titleMatch[2]);
+      if (typeof decodedTitle === 'string') {
+        parts[i] = `${titleMatch[1]}${decodedTitle}${titleMatch[3]}`;
+      }
+    } catch {
+      // Preserve malformed or incomplete JSON-looking text verbatim.
+    }
+  }
+
+  return parts.join('');
+}
+
+/**
+ * Normalize only high-confidence serialization artifacts in terminal assistant
+ * text. Semantic gates and tool-call parsing must always inspect the original
+ * provider content before this display-only repair runs.
+ */
+export function repairAssistantDisplayText(value) {
+  return repairJsonQuotedPageTitleLines(repairDoubleEscapedAssistantText(value));
+}
