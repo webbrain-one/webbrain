@@ -4,6 +4,27 @@ All notable changes to WebBrain are documented in this file.
 
 This changelog was generated from the repository Git history and release tags. Versions without a Git tag are inferred from version-bump commits and the current `package.json` / browser manifest versions.
 
+## [25.0.0] - 2026-07-19
+
+### Added
+- Added runtime completion invariants in Chrome and Firefox that track consequential actions, require a fresh successful observation before accepting a success claim, and preserve verification obligations across batched calls, trusted continuations, restored runs, and scheduled tasks.
+- Added localized permission education after repeated action prompts, with an onboarding note and a safe action that inserts `/dangerously-skip-permissions` for the specific pending prompt without overwriting an existing draft.
+- Added a permanent, fully localized **Tweet about WebBrain** recommended action that opens X's visible composer, publishes reviewed language-specific copy without asking the model to write or translate it, then verifies and reports the post URL when available.
+
+### Changed
+- Action runs now reject plan-only, empty-step, promise-only, and premature terminal replies and continue into execution; explicitly requested plans and Markdown plus honest structured blockers remain valid results.
+- Completion enforcement now distinguishes real dispatch from preflight failures, accepts only model-visible state observations, self-verifies successful scheduler writes, and preserves the intended Compact Dev and managed-cloud execution boundaries.
+
+### Fixed
+- Prevented stale tool calls from running after a rejected `done`, cleared rejected streamed plan text before recovery, preserved terminal obligation and session metadata, and rejected stale or same-batch completion evidence.
+- Repaired high-confidence double-escaped assistant Markdown returned by OpenAI-compatible backends without rewriting legitimate code, paths, or escape-sequence examples.
+- Hardened accessibility actions with document- and SPA-route-scoped refs, fresh-target and visibility checks, canonical accessible names, iframe dispatch tracking, and safer guarded-click progress detection, preventing stale clicks and false agent stops.
+- Made `set_field` wait for controlled and rich-text editors to settle and require an exact normalized readback before submitting; failed sensitive-field readbacks no longer expose typed values.
+- Corrected false completion blocks for denied, skipped, or pre-dispatch actions; pre-existing targets; input and CAPTCHA preflight failures; screenshots not visible to the model; observed non-success outcomes; and self-verified scheduled tasks.
+
+### Tests
+- Expanded mirrored Chrome and Firefox regression coverage for plan-to-execution handoffs, completion-invariant state and recovery, permission education and tab scoping, assistant-text repair, accessibility refs and field verification, and exact localized WebBrain post copy.
+
 ## [24.4.0] - 2026-07-18
 
 ### Changed

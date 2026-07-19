@@ -133,6 +133,9 @@ export default {
   'sp.recommended.title': 'Suggested actions',
   'sp.recommended.collapse': 'Minimize suggested actions',
   'sp.recommended.expand': 'Show suggested actions',
+  'sp.recommended.tweet.label': 'Tweet about WebBrain',
+  'sp.recommended.tweet.prompt': 'Publish this exact text through the visible X interface without changing it: “{post}” Then verify it was posted and report its URL.',
+  'sp.recommended.tweet.text': 'Introducing WebBrain — an open-source AI browser agent that lives in your browser. Chat with any page, automate multi-step workflows, and bring your own LLM. Extensible by design. Try it: https://webbrain.one',
 
   'sp.review.rating_title': 'Enjoying WebBrain?',
   'sp.review.rating_body': 'Tap a star — it helps us know how we\'re doing.',
