@@ -828,7 +828,7 @@
     const weak = window.__wbElementMap[refId];
     if (!weak) return null;
     const el = weak.deref();
-    if (!el) {
+    if (!el || !el.isConnected) {
       delete window.__wbElementMap[refId];
       return null;
     }

@@ -23844,6 +23844,84 @@ test('submit controls bypass native select guards in click paths', () => {
   }
 });
 
+test('accessibility ref lookup rejects disconnected elements', () => {
+  for (const [label, rel] of [
+    ['chrome', 'src/chrome/src/content/accessibility-tree.js'],
+    ['firefox', 'src/firefox/src/content/accessibility-tree.js'],
+  ]) {
+    const source = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+    const start = source.indexOf('function lookup(refId) {');
+    const end = source.indexOf('\n\n  // ── Public: suggest nearby refs', start);
+    assert.ok(start >= 0 && end > start, `${label}: lookup helper should remain independently testable`);
+
+    const connected = { isConnected: true };
+    const elementMap = {
+      ref_live: { deref: () => connected },
+      ref_stale: { deref: () => ({ isConnected: false }) },
+      ref_collected: { deref: () => null },
+    };
+    const lookup = vm.runInNewContext(`(${source.slice(start, end)})`, {
+      window: { __wbElementMap: elementMap },
+    });
+
+    assert.equal(lookup('ref_live'), connected, `${label}: connected refs should remain usable`);
+    assert.equal(lookup('ref_stale'), null, `${label}: disconnected refs must be rejected`);
+    assert.equal(elementMap.ref_stale, undefined, `${label}: disconnected refs should be evicted`);
+    assert.equal(lookup('ref_collected'), null, `${label}: collected refs must be rejected`);
+    assert.equal(elementMap.ref_collected, undefined, `${label}: collected refs should be evicted`);
+  }
+});
+
+test('set_field waits for reconciliation and verifies the complete value', () => {
+  for (const [label, rel] of [
+    ['chrome', 'src/chrome/src/content/content.js'],
+    ['firefox', 'src/firefox/src/content/content.js'],
+  ]) {
+    const source = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+    const helperStart = source.indexOf('function _setFieldValueMatches(');
+    const helperEnd = source.indexOf('\n\n  // --- Message handler', helperStart);
+    assert.ok(helperStart >= 0 && helperEnd > helperStart, `${label}: exact-value helper should remain independently testable`);
+    const matches = vm.runInNewContext(`(${source.slice(helperStart, helperEnd)})`);
+
+    assert.equal(matches('Magnetic Locks', '', 'Magnetic Locks', true), true, `${label}: exact replacement should verify`);
+    assert.equal(matches('Magnetic Locksg', '', 'Magnetic Locks', true), false, `${label}: trailing corruption must not verify`);
+    assert.equal(matches('xMagnetic Locks', '', 'Magnetic Locks', true), false, `${label}: leading corruption must not verify`);
+    assert.equal(matches('old-new', 'old-', 'new', false), true, `${label}: exact append should verify`);
+    assert.equal(matches('new', 'old-', 'new', false), false, `${label}: append verification must preserve prior content`);
+
+    const branchStart = source.indexOf("'set_field': async () => {");
+    const branchEnd = source.indexOf(label === 'chrome' ? "'ax_resolve_rect':" : "'hover':", branchStart);
+    assert.ok(branchStart >= 0 && branchEnd > branchStart, `${label}: set_field handler should be bounded for regression checks`);
+    const branch = source.slice(branchStart, branchEnd);
+    const settleIndex = branch.indexOf('await new Promise(resolve => setTimeout(resolve, SET_FIELD_VERIFY_DELAY_MS))');
+    const readbackIndex = branch.indexOf("const actual = el.isContentEditable");
+    assert.ok(settleIndex >= 0 && readbackIndex > settleIndex, `${label}: verification must happen after controlled-input reconciliation`);
+    assert.match(branch, /!el\.isConnected \|\| !rect \|\| rect\.w < 1 \|\| rect\.h < 1/, `${label}: stale or zero-sized targets must fail before typing`);
+    assert.match(branch, /if \(submit && verified\)/, `${label}: mismatched field values must not be submitted`);
+    assert.match(branch, /if \(!verified\) \{[\s\S]*return failure\(/, `${label}: mismatched field values must be explicit failed actions`);
+    assert.match(branch, /dispatched\s*\?\s*\{ dispatched: true \}/, `${label}: post-dispatch verification failures must preserve action evidence`);
+    assert.doesNotMatch(branch, /actual\.includes\(text\)/, `${label}: substring matches must not count as verified field values`);
+  }
+});
+
+test('click_ax rejects stale zero-sized targets before activation', () => {
+  for (const [label, rel] of [
+    ['chrome', 'src/chrome/src/content/content.js'],
+    ['firefox', 'src/firefox/src/content/content.js'],
+  ]) {
+    const source = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+    const branchStart = source.indexOf("'click_ax': () => {");
+    const branchEnd = source.indexOf("'type_ax':", branchStart);
+    assert.ok(branchStart >= 0 && branchEnd > branchStart, `${label}: click_ax handler should be bounded for regression checks`);
+    const branch = source.slice(branchStart, branchEnd);
+    const staleGuard = branch.indexOf('!el.isConnected || rect.width < 1 || rect.height < 1');
+    const activation = branch.indexOf('el.click()');
+    assert.ok(staleGuard >= 0 && activation > staleGuard, `${label}: zero-sized AX targets must be rejected before click activation`);
+    assert.match(branch, /return failure\([\s\S]*stale or not visibly rendered[\s\S]*Re-read the accessibility tree/, `${label}: stale click errors should direct the agent to refresh refs`);
+    assert.match(branch, /dispatched: false, noDispatch: true, fallbackAttempted: false/, `${label}: pre-click stale failures must remain safe for agent fallback`);
+  }
+});
+
 test('submit detector source covers submit controls, Enter, set_field, iframes, and execute_js', () => {
   for (const [label, rel] of [
     ['chrome', 'src/chrome/src/agent/agent.js'],

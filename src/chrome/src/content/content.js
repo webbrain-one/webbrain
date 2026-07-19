@@ -2969,6 +2969,12 @@
     };
   }
 
+  const SET_FIELD_VERIFY_DELAY_MS = 80;
+
+  function _setFieldValueMatches(actual, previous, text, clear) {
+    return actual === (clear ? text : previous + text);
+  }
+
   // --- Message handler ---
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg.target !== 'content') return;
@@ -3063,6 +3069,16 @@
           }
           try { el.scrollIntoView({ block: 'center', inline: 'center' }); } catch {}
           try { el.focus({ preventScroll: true }); } catch {}
+          const rect = el.getBoundingClientRect();
+          if (!el.isConnected || rect.width < 1 || rect.height < 1) {
+            return failure(
+              `ref_id ${ref_id} is stale or not visibly rendered. Re-read the accessibility tree and retry with the current target ref_id.`,
+              {
+                ref_id,
+                rect: { x: Math.round(rect.x), y: Math.round(rect.y), w: Math.round(rect.width), h: Math.round(rect.height) },
+              },
+            );
+          }
           // Identity only (tag:role:label) — must match agent-side
           // _clickAxActiveIdentity / _clickProgressSnapshot.active so layout
           // shift cannot turn preparatory focus into false "focus" proof.
@@ -3080,7 +3096,6 @@
             }
           })();
           const fallbackStateBefore = _axFallbackState(el);
-          const rect = el.getBoundingClientRect();
           const tag = el.tagName ? el.tagName.toLowerCase() : '';
           const targetContext = (() => {
             try {
@@ -3445,6 +3460,15 @@
               return { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) };
             } catch { return null; }
           })();
+          if (!el.isConnected || !rect || rect.w < 1 || rect.h < 1) {
+            return failure(
+              `ref_id ${ref_id} is stale or not visibly rendered. Re-read the accessibility tree and retry with the current field ref_id.`,
+              {
+                ref_id,
+                rect,
+              },
+            );
+          }
           // Guard: refuse non-typeable elements up-front so the caller gets a
           // clear error instead of a silent no-op.
           if (el.tagName === 'INPUT') {
@@ -3486,9 +3510,18 @@
             el.dispatchEvent(new Event('input', { bubbles: true }));
             el.dispatchEvent(new Event('change', { bubbles: true }));
           }
-          // Verify: read back the value and confirm it contains what we typed.
+          // Controlled inputs can reconcile on the next task and overwrite or
+          // append to the value after their input/change handlers return.
+          // Let that reconciliation settle before verifying the exact result.
+          await new Promise(resolve => setTimeout(resolve, SET_FIELD_VERIFY_DELAY_MS));
+          if (!el.isConnected) {
+            return failure(
+              `ref_id ${ref_id} was replaced while the value was being set. Re-read the accessibility tree and retry with the current field ref_id.`,
+              { ref_id },
+            );
+          }
           const actual = el.isContentEditable ? (el.textContent || '') : (el.value || '');
-          const verified = actual.includes(text);
+          const verified = _setFieldValueMatches(actual, prevValue, text, clear);
 
           // Collect field attributes for credential-field detection. The
           // detector itself lives in src/agent/credential-fields.js (pure
@@ -3522,7 +3555,7 @@
               };
             } catch { return null; }
           })();
-          if (submit) {
+          if (submit && verified) {
             try {
               // Detect combobox/searchbox pattern: if the element is a searchbox,
               // has role=combobox, has aria-controls pointing to a listbox, or a
@@ -3571,13 +3604,25 @@
               }
             } catch {}
           }
+          if (!verified) {
+            return failure(
+              'The field value did not exactly match the requested text after the page settled. Re-read the field and retry with a fresh ref_id.',
+              {
+                method: 'set_field',
+                ref_id,
+                rect,
+                verified: false,
+                actual: actual.slice(0, 200),
+                fieldMeta,
+              },
+            );
+          }
           return {
             success: true,
             method: 'set_field',
             ref_id,
             rect,
-            verified,
-            actual: verified ? undefined : actual.slice(0, 200),
+            verified: true,
             fieldMeta,
           };
         } catch (e) {
