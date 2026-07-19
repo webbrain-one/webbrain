@@ -48,7 +48,9 @@ import { PROFILE_SYNC_DATA_KEYS, PROFILE_SYNC_KEYS, ProfileSyncManager } from '.
 import {
   CONFIG_STORAGE_KEYS,
   createConfigExport,
+  mergeConfigPatchSettings,
   parseConfigImport,
+  parseConfigPatchImport,
 } from './config-transfer.js';
 import { RUN_CAPTURE_START_ERROR_PREFIX, createRunCaptureController } from './run-capture.js';
 
@@ -1754,9 +1756,18 @@ async function handleMessage(msg, sender) {
       };
     }
 
-    case 'import_config': {
-      const imported = parseConfigImport(msg.json);
-      await browser.storage.local.set(imported.settings);
+    case 'import_config':
+    case 'import_config_patch': {
+      const imported = msg.action === 'import_config_patch'
+        ? parseConfigPatchImport(msg.json)
+        : parseConfigImport(msg.json);
+      const settings = msg.action === 'import_config_patch'
+        ? mergeConfigPatchSettings(
+          await browser.storage.local.get(['providers']),
+          imported.settings,
+        )
+        : imported.settings;
+      await browser.storage.local.set(settings);
       await providerManager.load();
       await Promise.all([
         loadMaxSteps(),
@@ -1777,7 +1788,7 @@ async function handleMessage(msg, sender) {
       agent._refreshSystemPrompts();
       return {
         ok: true,
-        settingCount: CONFIG_STORAGE_KEYS.length,
+        settingCount: Object.keys(settings).length,
         ignoredKeys: imported.ignoredKeys,
       };
     }

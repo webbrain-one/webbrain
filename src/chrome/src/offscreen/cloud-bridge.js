@@ -7,6 +7,9 @@
  */
 
 (() => {
+  // Provisioning seeds Settings from a privileged extension page before this
+  // bridge starts. Keep configuration mutations out of the WebSocket command
+  // surface; the bridge is intentionally limited to managed run operations.
   const ALLOWED_BRIDGE_ACTIONS = new Set(['cloud_run', 'cloud_status', 'cloud_respond', 'cloud_abort']);
   let socket = null;
   let bridgeUrl = null;

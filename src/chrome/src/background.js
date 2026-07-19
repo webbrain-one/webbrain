@@ -59,7 +59,9 @@ import { PROFILE_SYNC_DATA_KEYS, PROFILE_SYNC_KEYS, ProfileSyncManager } from '.
 import {
   CONFIG_STORAGE_KEYS,
   createConfigExport,
+  mergeConfigPatchSettings,
   parseConfigImport,
+  parseConfigPatchImport,
 } from './config-transfer.js';
 import { installDownloadDirectoryRouting } from './download-directory.js';
 
@@ -2035,9 +2037,21 @@ async function handleMessage(msg, sender) {
       };
     }
 
-    case 'import_config': {
-      const imported = parseConfigImport(msg.json);
-      await chrome.storage.local.set(imported.settings);
+    // The cloud launcher calls import_config_patch directly from a privileged
+    // extension page. It must not be exposed through the offscreen WebSocket
+    // bridge, whose allowlist is limited to managed run operations.
+    case 'import_config':
+    case 'import_config_patch': {
+      const imported = msg.action === 'import_config_patch'
+        ? parseConfigPatchImport(msg.json)
+        : parseConfigImport(msg.json);
+      const settings = msg.action === 'import_config_patch'
+        ? mergeConfigPatchSettings(
+          await chrome.storage.local.get(['providers']),
+          imported.settings,
+        )
+        : imported.settings;
+      await chrome.storage.local.set(settings);
       await providerManager.load();
       await Promise.all([
         loadMaxSteps(),
@@ -2058,7 +2072,7 @@ async function handleMessage(msg, sender) {
       agent._refreshSystemPrompts();
       return {
         ok: true,
-        settingCount: CONFIG_STORAGE_KEYS.length,
+        settingCount: Object.keys(settings).length,
         ignoredKeys: imported.ignoredKeys,
       };
     }

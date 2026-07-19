@@ -613,6 +613,7 @@ const SLASH_COMMANDS = [
 ];
 const SLASH_HELP_OPTION = {
   value: '--help',
+  descriptionKey: 'sp.slash.help',
   action: 'help',
   outOfBand: true,
   disallowPayload: true,
@@ -4100,7 +4101,7 @@ function getSlashAutocompleteContext() {
   for (const token of tokens) {
     if (!token.startsWith('--') || token === '--') return null;
     const option = slashCommandOptions(command).find((candidate) => candidate.value === token.toLowerCase());
-    if (!option || !slashOptionIsDiscoverable(option) || option.takesRemainder) return null;
+    if (!option || !slashOptionIsAvailable(option, selected, selectedGroups) || option.takesRemainder) return null;
     selected.add(option.value);
     if (option.exclusiveGroup) selectedGroups.add(option.exclusiveGroup);
   }
@@ -4133,11 +4134,13 @@ function buildSlashAutocompleteMatches(context) {
       completionStart: context.completionStart,
       completionEnd: context.completionEnd,
     }));
-  if (context.kind === 'option' && !context.query && context.selected.size === 0) {
+  if (context.kind === 'option' && !context.query) {
+    const selectedAction = slashCommandOptions(context.command)
+      .find((option) => context.selected.has(option.value) && option.action);
     matches.unshift({
       value: context.command.value,
       label: '↵ Enter',
-      descriptionKey: context.command.descriptionKey,
+      descriptionKey: selectedAction?.descriptionKey || context.command.descriptionKey,
       kind: 'base-action',
     });
   }
@@ -4333,11 +4336,12 @@ function handleSlashCommandKeydown(e) {
     return true;
   }
   if (e.key === 'Tab') {
-    e.preventDefault();
     const match = slashCommandMatches[slashCommandSelectedIndex];
     const completionIndex = match?.kind === 'base-action'
       ? slashCommandSelectedIndex + 1
       : slashCommandSelectedIndex;
+    if (!slashCommandMatches[completionIndex]) return false;
+    e.preventDefault();
     return applySlashCommandCompletion(completionIndex);
   }
   if (e.key === 'Enter') {
