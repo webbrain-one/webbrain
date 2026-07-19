@@ -9742,6 +9742,44 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     }
   }
 
+  async _settleContentFilePickerGuard(tabId, response) {
+    const guardId = response?._filePickerGuardId;
+    if (!guardId) return response;
+    const originalResponse = { ...response };
+    delete originalResponse._filePickerGuardId;
+
+    await new Promise(resolve => setTimeout(resolve, 120));
+    try {
+      let settled = await chrome.tabs.sendMessage(tabId, {
+        target: 'content',
+        action: 'consume_file_picker_guard',
+        params: { guardId },
+      });
+      if (settled?.settled === false) {
+        await new Promise(resolve => setTimeout(resolve, 50));
+        settled = await chrome.tabs.sendMessage(tabId, {
+          target: 'content',
+          action: 'consume_file_picker_guard',
+          params: { guardId },
+        });
+      }
+      if (settled?.filePickerBlocked) {
+        const blockedResponse = { ...settled };
+        delete blockedResponse.settled;
+        return {
+          ...blockedResponse,
+          ...(originalResponse.rect ? { rect: originalResponse.rect } : {}),
+          ...(originalResponse.ref_id ? { ref_id: originalResponse.ref_id } : {}),
+        };
+      }
+    } catch {
+      // The delivered click may have navigated or submitted the old document.
+      // Keep its original response and never re-inject/replay the action just
+      // because the best-effort deferred-picker probe lost that document.
+    }
+    return originalResponse;
+  }
+
   async executeTool(tabId, name, args, onUpdate = null, executionContext = null) {
     if (name === 'load_skill') {
       return this._loadSkillForRun(tabId, args || {});
@@ -13211,6 +13249,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         } catch (e2) {
           return { error: `Failed to communicate with page: ${e2.message}` };
         }
+      }
+      if (name === 'click' || name === 'click_ax') {
+        response = await this._settleContentFilePickerGuard(tabId, response);
       }
       if (name === 'get_accessibility_tree' && response?.documentToken) {
         this._lastAxScopes.set(tabId, {

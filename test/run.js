@@ -31343,8 +31343,54 @@ test('Chrome click paths suppress native file choosers and redirect to upload_fi
     assert.match(source, /function clickWithoutNativeFilePicker\(runClick,\s*settleMs\s*=\s*FILE_PICKER_GUARD_SETTLE_MS\)/, `${relPath}: missing one-click file chooser guard`);
     assert.match(source, /setTimeout\(\(\) => \{[\s\S]*removeEventListener\('click', guard, true\)/, `${relPath}: guard should survive deferred picker clicks`);
     assert.match(source, /clickWithoutNativeFilePicker\(\(\) => el\.click\(\)\)/, `${relPath}: synthetic clicks should use the chooser guard`);
-    assert.match(source, /await (?:blockedFileInputPromise|clickWithoutNativeFilePicker)/, `${relPath}: click response should await the deferred guard`);
+    assert.match(source, /_filePickerGuardId:\s*filePickerGuard\.guardId/, `${relPath}: click response should return without waiting on the unloading document`);
+    assert.match(source, /'consume_file_picker_guard':\s*\(\) => consumeFilePickerGuard/, `${relPath}: missing deferred guard result handshake`);
     assert.match(source, /filePickerBlocked:\s*true/, `${relPath}: blocked chooser should be explicit to the model`);
+  }
+
+  for (const relPath of [
+    'src/chrome/src/agent/agent.js',
+    'src/firefox/src/agent/agent.js',
+  ]) {
+    const source = fs.readFileSync(path.join(ROOT, relPath), 'utf8');
+    assert.match(source, /async _settleContentFilePickerGuard\(tabId, response\)/, `${relPath}: missing background-side settle window`);
+    assert.match(source, /action:\s*'consume_file_picker_guard'/, `${relPath}: missing deferred guard result request`);
+    assert.match(source, /never re-inject\/replay the action/, `${relPath}: guard probe failure must not replay a delivered click`);
+  }
+
+  for (const [label, AgentClass, apiName] of [
+    ['chrome', AgentCh, 'chrome'],
+    ['firefox', AgentFx, 'browser'],
+  ]) {
+    const previousApi = globalThis[apiName];
+    let probeCalls = 0;
+    globalThis[apiName] = {
+      tabs: {
+        async sendMessage() {
+          probeCalls++;
+          throw new Error('The message port closed during navigation');
+        },
+      },
+    };
+    try {
+      const agent = Object.create(AgentClass.prototype);
+      const delivered = {
+        success: true,
+        dispatched: true,
+        rect: { x: 1, y: 2, w: 3, h: 4 },
+        _filePickerGuardId: 'guard-from-old-document',
+      };
+      const result = await agent._settleContentFilePickerGuard(42, delivered);
+      assert.deepEqual(result, {
+        success: true,
+        dispatched: true,
+        rect: { x: 1, y: 2, w: 3, h: 4 },
+      }, `${label}: navigation must preserve the delivered click result`);
+      assert.equal(probeCalls, 1, `${label}: a lost old document must not trigger a replay`);
+    } finally {
+      if (previousApi === undefined) delete globalThis[apiName];
+      else globalThis[apiName] = previousApi;
+    }
   }
 });
 

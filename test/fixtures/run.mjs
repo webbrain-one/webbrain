@@ -99,7 +99,7 @@ async function setupAccessibilityTreeHtml(page, html, sourcePath) {
   await page.waitForFunction(() => typeof window.__generateAccessibilityTree === 'function');
 }
 
-async function call(page, action, params) {
+async function rawContentCall(page, action, params) {
   return page.evaluate(({ action, params }) => new Promise((resolve) => {
     const ret = window.__wb_handler(
       { target: 'content', action, params },
@@ -108,6 +108,30 @@ async function call(page, action, params) {
     );
     if (ret !== true && ret !== undefined) resolve(ret);
   }), { action, params });
+}
+
+async function call(page, action, params) {
+  const response = await rawContentCall(page, action, params);
+  const guardId = response?._filePickerGuardId;
+  if (!guardId) return response;
+
+  const originalResponse = { ...response };
+  delete originalResponse._filePickerGuardId;
+  await page.waitForTimeout(120);
+  let settled = await rawContentCall(page, 'consume_file_picker_guard', { guardId });
+  if (settled?.settled === false) {
+    await page.waitForTimeout(50);
+    settled = await rawContentCall(page, 'consume_file_picker_guard', { guardId });
+  }
+  if (!settled?.filePickerBlocked) return originalResponse;
+
+  const blockedResponse = { ...settled };
+  delete blockedResponse.settled;
+  return {
+    ...blockedResponse,
+    ...(originalResponse.rect ? { rect: originalResponse.rect } : {}),
+    ...(originalResponse.ref_id ? { ref_id: originalResponse.ref_id } : {}),
+  };
 }
 
 async function readThroughCdpMirror(page, opts = {}) {

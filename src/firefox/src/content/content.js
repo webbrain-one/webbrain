@@ -1118,9 +1118,19 @@
   }
 
   const FILE_PICKER_GUARD_SETTLE_MS = 100;
+  const FILE_PICKER_GUARD_RETENTION_MS = 5000;
+  const _filePickerGuardStates = new Map();
+  let _filePickerGuardSequence = 0;
 
   function clickWithoutNativeFilePicker(runClick, settleMs = FILE_PICKER_GUARD_SETTLE_MS) {
-    let blocked = null;
+    const guardId = `fpg_${Date.now().toString(36)}_${++_filePickerGuardSequence}`;
+    const state = {
+      blocked: null,
+      settled: false,
+      guard: null,
+      settleTimer: null,
+      cleanupTimer: null,
+    };
     const guard = (event) => {
       const path = typeof event.composedPath === 'function'
         ? event.composedPath()
@@ -1132,21 +1142,45 @@
       if (!input) return;
       event.preventDefault();
       event.stopImmediatePropagation();
-      blocked = { selector: uniqueFileInputSelector(input) };
+      state.blocked = { selector: uniqueFileInputSelector(input) };
     };
+    state.guard = guard;
+    _filePickerGuardStates.set(guardId, state);
     document.addEventListener('click', guard, true);
     try {
       runClick();
     } catch (error) {
       document.removeEventListener('click', guard, true);
+      _filePickerGuardStates.delete(guardId);
       throw error;
     }
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        document.removeEventListener('click', guard, true);
-        resolve(blocked);
-      }, Math.max(0, Number(settleMs) || 0));
-    });
+    if (state.blocked) {
+      document.removeEventListener('click', guard, true);
+      _filePickerGuardStates.delete(guardId);
+      return { blocked: state.blocked, guardId: null };
+    }
+    state.settleTimer = setTimeout(() => {
+      document.removeEventListener('click', guard, true);
+      state.settled = true;
+      state.cleanupTimer = setTimeout(() => {
+        if (_filePickerGuardStates.get(guardId) === state) {
+          _filePickerGuardStates.delete(guardId);
+        }
+      }, FILE_PICKER_GUARD_RETENTION_MS);
+    }, Math.max(0, Number(settleMs) || 0));
+    return { blocked: null, guardId };
+  }
+
+  function consumeFilePickerGuard(guardId) {
+    const state = typeof guardId === 'string' ? _filePickerGuardStates.get(guardId) : null;
+    if (!state) return { success: true, settled: true, filePickerBlocked: false };
+    if (!state.settled) return { success: true, settled: false, filePickerBlocked: false };
+    if (state.cleanupTimer) clearTimeout(state.cleanupTimer);
+    _filePickerGuardStates.delete(guardId);
+    if (state.blocked) {
+      return { ...filePickerBlockedResponse(state.blocked), settled: true };
+    }
+    return { success: true, settled: true, filePickerBlocked: false };
   }
 
   function filePickerBlockedResponse(blocked, label = '') {
@@ -1168,7 +1202,7 @@
   /**
    * Click an element by selector or coordinates.
    */
-  async function clickElement(params) {
+  function clickElement(params) {
     let el;
     // Reject jQuery/Playwright selectors with a clear error.
     if (params.selector && /:contains\(|:has-text\(/.test(params.selector)) {
@@ -1549,13 +1583,16 @@
     }
 
     const clickedRect = rememberInteractionPoint(el, 'click');
-    const blockedFileInput = await clickWithoutNativeFilePicker(() => el.click());
-    if (blockedFileInput) {
+    const filePickerGuard = clickWithoutNativeFilePicker(() => el.click());
+    if (filePickerGuard.blocked) {
       return {
-        ...filePickerBlockedResponse(blockedFileInput, params.text || el.innerText?.trim() || ''),
+        ...filePickerBlockedResponse(filePickerGuard.blocked, params.text || el.innerText?.trim() || ''),
         ...(clickedRect ? { rect: clickedRect } : {}),
       };
     }
+    const filePickerGuardMeta = filePickerGuard.guardId
+      ? { _filePickerGuardId: filePickerGuard.guardId }
+      : {};
 
     // Post-click SELECT detection: the click may have activated a <select>
     // via a label, wrapper, or overlapping element. Return error, not success.
@@ -1581,6 +1618,7 @@
         tag: 'SELECT',
         text: postActive.options[postActive.selectedIndex]?.text?.trim() || '',
         error: `CANNOT CLICK — a <select> dropdown was activated by this click (current: "${postActive.options[postActive.selectedIndex]?.text?.trim() || ''}"). The dropdown is now focused. Use type_text({text: "option name"}) to change the value. Available options: ${postOpts.join(', ')}`,
+        ...filePickerGuardMeta,
       };
     }
 
@@ -1601,6 +1639,7 @@
       text: el.innerText?.slice(0, 50),
       ...(clickedRect ? { rect: clickedRect } : {}),
       ...(warning ? { warning } : {}),
+      ...filePickerGuardMeta,
     };
   }
 
@@ -2546,6 +2585,7 @@
       'get_interactive_elements': () => getInteractiveElements(),
       'get_interactive_elements_cdp': () => getInteractiveElementsFull(),
       'click': () => clickElement(msg.params || {}),
+      'consume_file_picker_guard': () => consumeFilePickerGuard(msg.params?.guardId),
       'type': () => typeText(msg.params || {}),
       'press_keys': () => pressKeys(msg.params || {}),
       'scroll': () => scrollPage(msg.params || {}),
@@ -2642,7 +2682,7 @@
           return { error: 'Failed to build accessibility tree: ' + (e && e.message || String(e)) };
         }
       },
-      'click_ax': async () => {
+      'click_ax': () => {
         let dispatched = false;
         const failure = (error, extra = {}) => ({
           success: false,
@@ -2793,13 +2833,13 @@
           }
           rememberInteractionPoint(el, 'click_ax');
           dispatched = true;
-          const blockedFileInput = await clickWithoutNativeFilePicker(() => el.click());
-          if (blockedFileInput) {
+          const filePickerGuard = clickWithoutNativeFilePicker(() => el.click());
+          if (filePickerGuard.blocked) {
             return failure(
-              filePickerBlockedResponse(blockedFileInput, targetName || '').error,
+              filePickerBlockedResponse(filePickerGuard.blocked, targetName || '').error,
               {
                 filePickerBlocked: true,
-                ...(blockedFileInput.selector ? { selector: blockedFileInput.selector } : {}),
+                ...(filePickerGuard.blocked.selector ? { selector: filePickerGuard.blocked.selector } : {}),
                 ref_id,
               },
             );
@@ -2819,6 +2859,7 @@
               tag,
               rect: { x: Math.round(rect.x), y: Math.round(rect.y), w: Math.round(rect.width), h: Math.round(rect.height) },
               ...(targetContext ? { targetContext } : {}),
+              ...(filePickerGuard.guardId ? { _filePickerGuardId: filePickerGuard.guardId } : {}),
             };
             try {
               if (targetName) resp.name = targetName;
