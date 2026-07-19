@@ -2310,6 +2310,180 @@ test('config transfer exports and restores Settings values including provider ke
   assert.equal(imported.settings.downloadDirectory, 'Work/WebBrain');
   assert.equal(imported.settings.themeMode, 'system', 'missing Settings values should restore their product defaults');
   assert.equal(Object.keys(imported.settings).length, ConfigTransferCh.CONFIG_STORAGE_KEYS.length);
+
+  const sparseJson = JSON.stringify({
+    schema: 'webbrain-config/1',
+    webbrainVersion: '24.0.2',
+    settings: {
+      verboseMode: true,
+      providers: {
+        openai: {
+          type: 'openai',
+          apiKey: 'provider-secret',
+          configured: true,
+          deviceGuid: 'must-not-import',
+        },
+        webbrain_cloud: {
+          type: 'openai',
+          baseUrl: 'https://stale-export.example/v1',
+          apiKey: 'stale-export-secret',
+          configured: true,
+          deviceGuid: 'must-not-import',
+        },
+      },
+      futureSetting: 'ignored',
+    },
+  });
+  const chromePatch = ConfigTransferCh.parseConfigPatchImport(sparseJson);
+  const firefoxPatch = ConfigTransferFx.parseConfigPatchImport(sparseJson);
+  assert.deepEqual(firefoxPatch, chromePatch, 'Chrome and Firefox sparse config imports should remain identical');
+  assert.deepEqual(Object.keys(chromePatch.settings), ['verboseMode', 'providers']);
+  assert.equal(chromePatch.settings.themeMode, undefined, 'sparse import must leave omitted settings untouched');
+  assert.equal(chromePatch.settings.providers.openai.deviceGuid, undefined);
+  assert.deepEqual(chromePatch.ignoredKeys, ['futureSetting']);
+  const currentSettings = {
+    providers: {
+      webbrain_cloud: {
+        type: 'openai',
+        baseUrl: 'https://platform.example/v1',
+        apiKey: 'platform-secret',
+        deviceGuid: 'platform-device',
+      },
+      anthropic: { type: 'anthropic', apiKey: 'existing-secret' },
+    },
+  };
+  const mergedPatch = ConfigTransferCh.mergeConfigPatchSettings(currentSettings, chromePatch.settings);
+  const firefoxMergedPatch = ConfigTransferFx.mergeConfigPatchSettings(currentSettings, firefoxPatch.settings);
+  assert.deepEqual(firefoxMergedPatch, mergedPatch, 'Chrome and Firefox provider merge should remain identical');
+  assert.deepEqual(
+    mergedPatch.providers.webbrain_cloud,
+    currentSettings.providers.webbrain_cloud,
+    'sparse import must preserve the complete platform-managed WebBrain Cloud provider',
+  );
+  assert.equal(mergedPatch.providers.anthropic.apiKey, 'existing-secret');
+  assert.equal(mergedPatch.providers.openai.apiKey, 'provider-secret');
+  assert.equal(currentSettings.providers.openai, undefined, 'provider merge must not mutate current storage');
+  assert.equal(
+    ConfigTransferCh.mergeConfigPatchSettings({}, chromePatch.settings).providers.webbrain_cloud,
+    undefined,
+    'a portable WebBrain Cloud provider must not be introduced without platform state',
+  );
+});
+
+// Runs the real import_config/import_config_patch case block against a mocked
+// storage.local, so the handler's own get(['providers']) -> merge -> set flow
+// is what preserves platform provider state, not a hand-built merge input.
+test('import_config_patch background handler merges against live provider storage', async () => {
+  const sparseJson = JSON.stringify({
+    schema: 'webbrain-config/1',
+    settings: {
+      verboseMode: true,
+      providers: {
+        openai: { type: 'openai', apiKey: 'provider-secret', configured: true },
+        webbrain_cloud: { type: 'openai', baseUrl: 'https://stale-export.example/v1', apiKey: 'stale-export-secret' },
+      },
+    },
+  });
+  const results = [];
+  for (const [label, prefix, configTransfer] of [
+    ['chrome', 'src/chrome', ConfigTransferCh],
+    ['firefox', 'src/firefox', ConfigTransferFx],
+  ]) {
+    const bg = fs.readFileSync(path.join(ROOT, prefix, 'src/background.js'), 'utf8');
+    const start = bg.indexOf("case 'import_config':");
+    const end = bg.indexOf("case 'get_progress':", start);
+    assert.ok(start > -1 && end > start, `${label}: import_config handler block not found`);
+    const handler = vm.runInNewContext(`(async (msg, api, helpers) => {
+      const chrome = api;
+      const browser = api;
+      const {
+        parseConfigImport, parseConfigPatchImport, mergeConfigPatchSettings,
+        providerManager, agent,
+        loadMaxSteps, loadClarifyTimeout, loadAutoScreenshot, loadSiteAdapters,
+        loadScreenshotRedaction, loadStrictSecretMode, loadProfile,
+        syncAgentUserMemoryFromStorage, loadCustomSkills, loadCaptchaSolver,
+        loadPlanBeforeAct, loadPlanReviewSettings, loadApiMutationObserverSetting,
+      } = helpers;
+      switch (msg.action) {
+        ${bg.slice(start, end)}
+      }
+    })`, {}, { filename: `${label}-import-config-handler.js` });
+
+    const stored = {
+      themeMode: 'dark',
+      providers: {
+        webbrain_cloud: {
+          type: 'openai',
+          baseUrl: 'https://platform.example/v1',
+          apiKey: 'platform-secret',
+          deviceGuid: 'platform-device',
+        },
+        anthropic: { type: 'anthropic', apiKey: 'existing-secret' },
+      },
+    };
+    const events = [];
+    const api = {
+      storage: {
+        local: {
+          get: async (keys) => {
+            events.push('get');
+            const list = keys == null ? Object.keys(stored) : Array.isArray(keys) ? keys : [keys];
+            return Object.fromEntries(list.filter(key => key in stored).map(key => [key, structuredClone(stored[key])]));
+          },
+          set: async (values) => {
+            events.push('set');
+            Object.assign(stored, structuredClone(values));
+          },
+        },
+      },
+    };
+    const noop = async () => {};
+    const helpers = {
+      parseConfigImport: configTransfer.parseConfigImport,
+      parseConfigPatchImport: configTransfer.parseConfigPatchImport,
+      mergeConfigPatchSettings: configTransfer.mergeConfigPatchSettings,
+      providerManager: { load: async () => { events.push('providerManager.load'); } },
+      agent: { _ensureGateSetting: noop, _refreshSystemPrompts: () => {} },
+      loadMaxSteps: noop,
+      loadClarifyTimeout: noop,
+      loadAutoScreenshot: noop,
+      loadSiteAdapters: noop,
+      loadScreenshotRedaction: noop,
+      loadStrictSecretMode: noop,
+      loadProfile: noop,
+      syncAgentUserMemoryFromStorage: noop,
+      loadCustomSkills: noop,
+      loadCaptchaSolver: noop,
+      loadPlanBeforeAct: noop,
+      loadPlanReviewSettings: noop,
+      loadApiMutationObserverSetting: noop,
+    };
+
+    const response = { ...(await handler({ action: 'import_config_patch', json: sparseJson }, api, helpers)) };
+    assert.equal(response.ok, true, `${label}: sparse import should succeed`);
+    assert.equal(response.settingCount, 2, `${label}: sparse import should report only the applied settings`);
+    assert.deepEqual(
+      stored.providers.webbrain_cloud,
+      { type: 'openai', baseUrl: 'https://platform.example/v1', apiKey: 'platform-secret', deviceGuid: 'platform-device' },
+      `${label}: the handler's storage read must preserve the platform-managed WebBrain Cloud provider`,
+    );
+    assert.equal(stored.providers.anthropic.apiKey, 'existing-secret', `${label}: existing providers must survive a sparse import`);
+    assert.equal(stored.providers.openai.apiKey, 'provider-secret', `${label}: imported providers must be added`);
+    assert.equal(stored.verboseMode, true, `${label}: patched settings must be written`);
+    assert.equal(stored.themeMode, 'dark', `${label}: omitted settings must stay untouched in storage`);
+    assert.deepEqual(events, ['get', 'set', 'providerManager.load'], `${label}: handler must read current providers before writing, then reload providers`);
+    results.push({ label, response, stored: structuredClone(stored) });
+
+    const fullResponse = await handler({ action: 'import_config', json: sparseJson }, api, helpers);
+    assert.equal(fullResponse.settingCount, configTransfer.CONFIG_STORAGE_KEYS.length, `${label}: full import should still write every setting`);
+    assert.equal(stored.themeMode, 'system', `${label}: full import should still restore omitted settings to defaults`);
+    assert.equal(stored.providers.webbrain_cloud.baseUrl, 'https://stale-export.example/v1', `${label}: full import intentionally keeps its replace-everything semantics`);
+  }
+  assert.deepEqual(
+    { response: results[1].response, stored: results[1].stored },
+    { response: results[0].response, stored: results[0].stored },
+    'Chrome and Firefox sparse import handlers should remain identical',
+  );
 });
 
 test('config transfer validates schema, size, containers, and unknown keys', () => {
@@ -2537,7 +2711,8 @@ test('/export --config and /import JSON or --file are wired in both browsers', (
     assert.match(panel, /command\.value === '\/import' && action === 'file'[\s\S]*?requestConfigurationFile\(tabId\)/, `${label}: file config import handler missing`);
     assert.match(panel, /input\.accept = '\.json,application\/json'[\s\S]*?file\.text\(\)/, `${label}: file picker should read JSON files`);
     assert.match(bg, /case 'export_config':[\s\S]*?createConfigExport\(stored/, `${label}: background config export missing`);
-    assert.match(bg, /case 'import_config':[\s\S]*?parseConfigImport\(msg\.json\)[\s\S]*?storage\.local\.set\(imported\.settings\)[\s\S]*?providerManager\.load\(\)/, `${label}: background config import and live provider reload missing`);
+    assert.match(bg, /case 'import_config':[\s\S]*?parseConfigImport\(msg\.json\)[\s\S]*?storage\.local\.set\(settings\)[\s\S]*?providerManager\.load\(\)/, `${label}: background config import and live provider reload missing`);
+    assert.match(bg, /case 'import_config_patch':[\s\S]*?parseConfigPatchImport\(msg\.json\)[\s\S]*?mergeConfigPatchSettings/, `${label}: background sparse config import and provider merge missing`);
   }
 });
 
@@ -6084,14 +6259,23 @@ test('offscreen cloud bridge preserves failed run envelopes and rejects unauthor
   assert.equal(missing.error, 'Unknown cloud run.');
 
   const callCount = runtimeCalls.length;
-  socket.emit('message', {
-    data: JSON.stringify({ id: 'forbidden-1', action: 'get_providers', payload: {} }),
-  });
-  await new Promise(resolve => setImmediate(resolve));
-  const forbidden = socket.sent.find(message => message.id === 'forbidden-1');
-  assert.equal(forbidden.ok, false);
-  assert.match(forbidden.error, /unsupported cloud bridge action/i);
-  assert.equal(runtimeCalls.length, callCount, 'unauthorized bridge actions must not reach the background handler');
+  for (const [id, action] of [
+    ['forbidden-provider-read', 'get_providers'],
+    ['forbidden-config-write', 'import_config_patch'],
+  ]) {
+    socket.emit('message', {
+      data: JSON.stringify({ id, action, payload: {} }),
+    });
+    await new Promise(resolve => setImmediate(resolve));
+    const forbidden = socket.sent.find(message => message.id === id);
+    assert.equal(forbidden.ok, false);
+    assert.match(forbidden.error, /unsupported cloud bridge action/i);
+  }
+  assert.equal(
+    runtimeCalls.length,
+    callCount,
+    'provider reads and provisioning config writes must not cross the run-only cloud bridge',
+  );
 });
 
 test('offscreen cloud bridge ignores asynchronous close events from replaced sockets', () => {

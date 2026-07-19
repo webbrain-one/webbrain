@@ -213,3 +213,57 @@ export function parseConfigImport(json) {
     sourceVersion: typeof parsed.webbrainVersion === 'string' ? parsed.webbrainVersion : '',
   };
 }
+
+// Provisioning can apply an already-sanitized export as a sparse patch. Unlike
+// the user-facing restore command above, omitted settings remain untouched.
+export function parseConfigPatchImport(json) {
+  const text = String(json || '');
+  if (text.length > MAX_CONFIG_IMPORT_CHARS) throw new Error('Configuration JSON is too large.');
+  if (!text.trim()) throw new Error('Paste configuration JSON or use /import --file.');
+
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new Error('Configuration is not valid JSON.');
+  }
+  if (!isPlainObject(parsed) || parsed.schema !== CONFIG_SCHEMA) {
+    throw new Error(`Expected a ${CONFIG_SCHEMA} export.`);
+  }
+  if (!isPlainObject(parsed.settings)) {
+    throw new Error('Configuration settings must be a JSON object.');
+  }
+
+  const settings = {};
+  const ignoredKeys = [];
+  for (const [key, value] of Object.entries(parsed.settings)) {
+    if (!CONFIG_STORAGE_KEY_SET.has(key)) {
+      ignoredKeys.push(key);
+      continue;
+    }
+    if (!validSettingValue(key, value)) {
+      throw new Error(`Invalid value for configuration setting "${key}".`);
+    }
+    settings[key] = key === 'providers'
+      ? sanitizeProviders(value, { strict: true })
+      : clone(value);
+  }
+  return {
+    settings,
+    ignoredKeys,
+    sourceVersion: typeof parsed.webbrainVersion === 'string' ? parsed.webbrainVersion : '',
+  };
+}
+
+export function mergeConfigPatchSettings(current = {}, patch = {}) {
+  const merged = clone(patch);
+  if (!Object.hasOwn(merged, 'providers')) return merged;
+  const currentProviders = isPlainObject(current.providers) ? clone(current.providers) : {};
+  const patchProviders = isPlainObject(merged.providers) ? merged.providers : {};
+  // Cloud provisioning owns this provider's credentials, endpoint and device
+  // identity. A portable export may contain a stale copy, so never let it
+  // replace the runtime's current WebBrain Cloud configuration.
+  delete patchProviders.webbrain_cloud;
+  merged.providers = { ...currentProviders, ...patchProviders };
+  return merged;
+}
