@@ -2386,7 +2386,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           return { action: 'return', value: planOnlyDecision.failure, status: 'plan_only_output' };
         }
         onUpdate('tool_result', { name: fnName, result: toolResult });
-        const finalResponse = this._appendProgressLedgerToFinal(tabId, toolResult.summary || partialAssistantText || 'Task completed.');
+        const repairedDoneSummary = repairAssistantDisplayText(
+          toolResult.summary || partialAssistantText || 'Task completed.',
+        );
+        const finalResponse = this._appendProgressLedgerToFinal(tabId, repairedDoneSummary);
         messages.push({
           role: 'tool',
           tool_call_id: tc.id,

@@ -20448,6 +20448,18 @@ test('agent repairs only terminal content after raw tool-call and plan gates', (
       `${label}: non-streaming repair must run after raw semantic gates`,
     );
 
+    const rawDoneGate = source.indexOf(
+      "toolResult.summary || partialAssistantText || '',",
+    );
+    const doneTerminalRepair = source.indexOf(
+      'const repairedDoneSummary = repairAssistantDisplayText(',
+      rawDoneGate,
+    );
+    assert.ok(
+      rawDoneGate >= 0 && rawDoneGate < doneTerminalRepair,
+      `${label}: done summary repair must run after the raw plan-only gate`,
+    );
+
     const rawStreamFallback = source.indexOf(
       'const fallback = this._tryParseToolCallsFromText(fullText, allowedToolNames);',
     );
@@ -26166,6 +26178,47 @@ test('accepted done emits successful result update after progress gate', async (
       1,
       `${AgentClass.name}: accepted done should emit one successful done update`,
     );
+  }
+});
+
+test('accepted done repairs only the terminal display summary', async () => {
+  const title = 'Emre Sokullu on X: "Introducing WebBrain"';
+  const malformed = `Verification:\n- Page title: ${JSON.stringify(title)}`;
+  const expected = `Verification:\n- Page title: ${title}`;
+
+  for (const AgentClass of [AgentCh, AgentFx]) {
+    const agent = new AgentClass({ getActive: () => ({ contextWindow: 128000, supportsVision: false }) });
+    const tabId = 795;
+    const messages = [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: 'Finish this task.' },
+    ];
+    agent.conversations.set(tabId, messages);
+    agent.conversationModes.set(tabId, 'act');
+    agent.executeTool = async () => ({ done: true, summary: malformed, outcome: 'success' });
+    agent._persist = () => {};
+    agent.providerManager = { ...(agent.providerManager || {}), getVisionProvider: async () => null };
+
+    const updates = [];
+    const toolCalls = [{
+      id: 'done_repair_call',
+      function: { name: 'done', arguments: JSON.stringify({ summary: malformed, outcome: 'success' }) },
+    }];
+    const result = await agent._executeToolBatch(
+      tabId,
+      toolCalls,
+      messages,
+      (type, data) => updates.push({ type, data }),
+      { supportsVision: false },
+      null,
+      new Set(['done']),
+      1,
+    );
+
+    assert.equal(result.action, 'return', `${AgentClass.name}: accepted done should finish`);
+    assert.equal(result.value, expected, `${AgentClass.name}: done summary display was not repaired`);
+    const rawUpdate = updates.find(update => update.type === 'tool_result' && update.data?.name === 'done');
+    assert.equal(rawUpdate?.data?.result?.summary, malformed, `${AgentClass.name}: raw done summary was mutated before display repair`);
   }
 });
 
