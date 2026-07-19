@@ -52,6 +52,41 @@
   if (!window.__wbElementMap) window.__wbElementMap = Object.create(null);
   if (typeof window.__wbRefCounter !== 'number') window.__wbRefCounter = 0;
 
+  function mintRefScopeId() {
+    try {
+      const words = new Uint32Array(2);
+      globalThis.crypto.getRandomValues(words);
+      const value = (BigInt(words[0]) << 32n) | BigInt(words[1]);
+      return (value % 1000000000000n).toString().padStart(12, '0');
+    } catch {
+      const fallback = `${Date.now()}${Math.random().toString().slice(2)}`.replace(/\D/g, '');
+      return fallback.slice(-12).padStart(12, '0');
+    }
+  }
+
+  function ensureRefScope() {
+    const pageUrl = String(location.href || '');
+    const scope = window.__wbAxRefScope;
+    if (!scope || scope.pageUrl !== pageUrl || !/^\d{12}$/.test(scope.id)) {
+      // A full navigation gets a fresh isolated world automatically. Reset on
+      // SPA route changes too so an old ref can never resolve to a new route's
+      // element with the same local traversal number.
+      window.__wbElementMap = Object.create(null);
+      window.__wbRefCounter = 0;
+      window.__wbAxRefScope = { pageUrl, id: mintRefScopeId() };
+    }
+    return window.__wbAxRefScope;
+  }
+
+  function refOrdinal(refId) {
+    const scope = ensureRefScope();
+    const prefix = `ref_${scope.id}`;
+    const value = String(refId || '');
+    if (!value.startsWith(prefix)) return null;
+    const suffix = value.slice(prefix.length);
+    return /^\d+$/.test(suffix) ? Number(suffix) : null;
+  }
+
   const MAX_NAME_LEN = 100;
 
   // ── Role inference (matches Claude's mapping) ───────────────────────────
@@ -397,13 +432,15 @@
 
   // ── Ref_id management ───────────────────────────────────────────────────
   //
-  // Elements keep the same ref_id across calls: if we already have a WeakRef
-  // pointing at `el`, reuse its key; otherwise mint a new ref_N.
+  // Elements keep the same ref_id across calls on one document route. The
+  // numeric scope prefix changes across documents and SPA routes, so a local
+  // ref counter restart can never alias a target from an older page.
   function getOrMintRef(el) {
+    const prefix = `ref_${ensureRefScope().id}`;
     for (const key in window.__wbElementMap) {
       if (window.__wbElementMap[key].deref() === el) return key;
     }
-    const key = 'ref_' + (++window.__wbRefCounter);
+    const key = prefix + (++window.__wbRefCounter);
     window.__wbElementMap[key] = new WeakRef(el);
     return key;
   }
@@ -664,6 +701,7 @@
 
   function generateAccessibilityTree(filter, maxDepth, maxChars, refId, page) {
     try {
+      ensureRefScope();
       const effFilter = filter || 'all';
       // Tighter defaults for the 'visible' / 'interactive' modes so small
       // models don't drown in 18K-token Stripe trees. Callers can still
@@ -825,6 +863,7 @@
 
   // ── Public: lookup by ref_id (used by click_ax / type_ax) ──────────────
   function lookup(refId) {
+    if (refOrdinal(refId) == null) return null;
     const weak = window.__wbElementMap[refId];
     if (!weak) return null;
     const el = weak.deref();
@@ -848,8 +887,7 @@
   //    interactive text-entry refs to the top of the suggestions.
   function suggestNearRefs(requestedRefId, limit) {
     const cap = typeof limit === 'number' ? limit : 6;
-    const m = /^ref_(\d+)$/.exec(String(requestedRefId || ''));
-    const targetNum = m ? parseInt(m[1], 10) : null;
+    const targetNum = refOrdinal(requestedRefId);
     const live = [];
     for (const key in window.__wbElementMap) {
       const weak = window.__wbElementMap[key];
@@ -859,8 +897,7 @@
         if (!el.isConnected) continue;
         if (!isVisible(el)) continue;
       } catch { continue; }
-      const km = /^ref_(\d+)$/.exec(key);
-      const n = km ? parseInt(km[1], 10) : 0;
+      const n = refOrdinal(key) || 0;
       const role = getRole(el);
       const name = getAccessibleName(el) || '';
       const interactive = isInteractive(el);

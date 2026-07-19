@@ -31440,6 +31440,11 @@ test('click_ax captures bounded nearest product/card context in both content scr
     assert.match(source, /const productCard = .*node\.matches/s, `${label}: product/card ancestor detection missing`);
     assert.match(source, /ambiguousTarget: true/, `${label}: unnamed broad generic click guard missing`);
     assert.match(source, /if \(!canonicalTargetName && genericTags\.has\(tag\)/, `${label}: broad-target guard still trusts innerText fallback names`);
+    assert.match(axSource, /function ensureRefScope\(\)/, `${label}: route-scoped AX ref registry missing`);
+    assert.match(axSource, /scope\.pageUrl !== pageUrl/, `${label}: AX refs are not invalidated across SPA routes`);
+    assert.match(axSource, /window\.__wbElementMap = Object\.create\(null\)/, `${label}: stale AX refs survive a scope change`);
+    assert.match(axSource, /const key = prefix \+ \(\+\+window\.__wbRefCounter\)/, `${label}: AX refs do not carry their document-route scope`);
+    assert.match(axSource, /if \(refOrdinal\(refId\) == null\) return null/, `${label}: stale scoped refs can still reach element lookup`);
     assert.match(source, /expectedDocumentToken/, `${label}: document-scoped AX ref guard missing`);
     assert.match(source, /expectedPageUrl/, `${label}: route-scoped AX ref guard missing`);
     assert.match(source, /\.\.\.\(targetContext \? \{ targetContext \} : \{\}\)/, `${label}: click_ax result does not expose targetContext`);

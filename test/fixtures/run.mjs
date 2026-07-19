@@ -583,6 +583,14 @@ const gmailComposeRecipientFixture = `<!doctype html>
 
 let chromeGmailComposeTree = '';
 
+function normalizeTreeRefs(content) {
+  const refs = new Map();
+  return String(content || '').replace(/ref_\d+/g, ref => {
+    if (!refs.has(ref)) refs.set(ref, `ref_${refs.size + 1}`);
+    return refs.get(ref);
+  });
+}
+
 function assertGmailComposeRecipientTree(tree, label) {
   const content = String(tree?.pageContent || '');
   if (!/generic "Alex Russell \(gmail\.com\)" \[ref_\d+\]/.test(content)) {
@@ -597,7 +605,7 @@ function assertGmailComposeRecipientTree(tree, label) {
   for (const forbidden of ['To recipients', 'Hidden stale recipient', 'Opacity hidden override', 'Offscreen hidden override', 'ARIA hidden override', 'Hidden wrapper text', 'generic "Composite controls', 'x'.repeat(101)]) {
     if (content.includes(forbidden)) throw new Error(`${label}: tree promoted forbidden generic text: ${forbidden}`);
   }
-  return content;
+  return normalizeTreeRefs(content);
 }
 
 test('accessibility tree (Chrome): existing Gmail compose exposes the selected recipient chip', async (page) => {
@@ -715,6 +723,49 @@ for (const browserKind of ['chrome', 'firefox']) {
       || result?.dispatched !== false
     ) {
       throw new Error(`expected route-scoped stale-ref failure, got: ${JSON.stringify(result)}`);
+    }
+  });
+
+  test(`click_ax (${browserKind}): an old ref cannot alias after the new route tree is read`, async (page) => {
+    await setupContentFixture(page, 'trusted-click-fallback.html', browserKind);
+    const firstTree = await call(page, 'get_accessibility_tree', { filter: 'all', maxDepth: 10, maxChars: 20000 });
+    const firstMatch = String(firstTree?.pageContent || '').match(/listitem "Normal synthetic row" \[(ref_\d+)\]/);
+    if (!firstMatch) throw new Error(`expected first-route ref, got: ${JSON.stringify(firstTree)}`);
+
+    await page.evaluate(() => history.pushState({}, '', '#new-tree-route'));
+    const secondTree = await call(page, 'get_accessibility_tree', { filter: 'all', maxDepth: 10, maxChars: 20000 });
+    const secondMatch = String(secondTree?.pageContent || '').match(/listitem "Normal synthetic row" \[(ref_\d+)\]/);
+    if (!secondMatch || !secondTree?.documentToken || !secondTree?.refScopeUrl) {
+      throw new Error(`expected second-route scoped AX ref, got: ${JSON.stringify(secondTree)}`);
+    }
+    if (firstMatch[1] === secondMatch[1]) {
+      throw new Error(`route-scoped refs must not reuse the same identifier: ${firstMatch[1]}`);
+    }
+
+    // Simulate the reviewed failure exactly: the agent has already cached the
+    // latest route scope but the model reuses a ref string from the old tree.
+    const stale = await call(page, 'click_ax', {
+      ref_id: firstMatch[1],
+      expectedDocumentToken: secondTree.documentToken,
+      expectedPageUrl: secondTree.refScopeUrl,
+    });
+    if (
+      stale?.success !== false
+      || stale?.dispatched !== false
+      || stale?.noDispatch !== true
+      || stale?.fallbackAttempted !== false
+      || !/not found/i.test(stale?.error || '')
+    ) {
+      throw new Error(`expected old ref to fail before dispatch, got: ${JSON.stringify(stale)}`);
+    }
+
+    const fresh = await call(page, 'click_ax', {
+      ref_id: secondMatch[1],
+      expectedDocumentToken: secondTree.documentToken,
+      expectedPageUrl: secondTree.refScopeUrl,
+    });
+    if (!fresh?.success) {
+      throw new Error(`expected current-route ref to remain usable, got: ${JSON.stringify(fresh)}`);
     }
   });
 
