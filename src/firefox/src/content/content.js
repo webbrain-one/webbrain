@@ -1066,6 +1066,98 @@
   }
 
   /**
+   * Run one synthetic agent click while suppressing any synchronous
+   * <input type=file>.click() it triggers. upload_file attaches a downloaded
+   * file directly (or presents WebBrain's own picker when no downloadId is
+   * available); clicking the page control first only opens a stale OS dialog.
+   */
+  function uniqueFileInputSelector(input) {
+    const allPiercedMatches = (selector) => {
+      const matches = [];
+      const visit = (root) => {
+        try { matches.push(...root.querySelectorAll(selector)); } catch { return; }
+        let elements = [];
+        try { elements = root.querySelectorAll('*'); } catch {}
+        for (const element of elements) {
+          if (element.shadowRoot) visit(element.shadowRoot);
+        }
+      };
+      visit(document);
+      return matches;
+    };
+    const unique = (selector) => {
+      if (!selector) return null;
+      const matches = allPiercedMatches(selector);
+      return matches.length === 1 && matches[0] === input ? selector : null;
+    };
+    try {
+      if (input.id && window.CSS?.escape) {
+        const byId = unique('#' + CSS.escape(input.id));
+        if (byId) return byId;
+      }
+      if (input.name && window.CSS?.escape) {
+        const byName = unique('input[type="file"][name=' + CSS.escape(String(input.name)) + ']');
+        if (byName) return byName;
+      }
+      const parts = [];
+      let node = input;
+      while (node?.nodeType === Node.ELEMENT_NODE) {
+        let part = node.tagName.toLowerCase();
+        const parent = node.parentElement;
+        if (parent) {
+          const siblings = Array.from(parent.children).filter(child => child.tagName === node.tagName);
+          if (siblings.length > 1) part += ':nth-of-type(' + (siblings.indexOf(node) + 1) + ')';
+        }
+        parts.unshift(part);
+        const byPath = unique(parts.join(' > '));
+        if (byPath) return byPath;
+        node = parent;
+      }
+    } catch {}
+    return null;
+  }
+
+  function clickWithoutNativeFilePicker(runClick) {
+    let blocked = null;
+    const guard = (event) => {
+      const path = typeof event.composedPath === 'function'
+        ? event.composedPath()
+        : [event.target];
+      const input = path.find(node =>
+        node?.tagName === 'INPUT'
+        && String(node.getAttribute?.('type') || node.type || '').toLowerCase() === 'file'
+      );
+      if (!input) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      blocked = { selector: uniqueFileInputSelector(input) };
+    };
+    document.addEventListener('click', guard, true);
+    try {
+      runClick();
+    } finally {
+      document.removeEventListener('click', guard, true);
+    }
+    return blocked;
+  }
+
+  function filePickerBlockedResponse(blocked, label = '') {
+    const selector = typeof blocked?.selector === 'string' && blocked.selector
+      ? blocked.selector
+      : null;
+    const guidance = selector
+      ? `Call upload_file({selector: ${JSON.stringify(selector)}, downloadId: N}) directly; it attaches the downloaded file without opening an OS dialog. If there is no downloadId, call upload_file({selector: ${JSON.stringify(selector)}}) to use WebBrain's own picker.`
+      : 'Re-inspect the page to find an exact, unique <input type=file> selector, then call upload_file directly. Do not use a generic input[type="file"] selector when the page has multiple file inputs.';
+    return {
+      success: false,
+      dispatched: true,
+      filePickerBlocked: true,
+      ...(selector ? { selector } : {}),
+      error: `Blocked a native file chooser${label ? ` opened by "${label}"` : ''}. ${guidance}`,
+    };
+  }
+
+  /**
    * Click an element by selector or coordinates.
    */
   function clickElement(params) {
@@ -1449,7 +1541,13 @@
     }
 
     const clickedRect = rememberInteractionPoint(el, 'click');
-    el.click();
+    const blockedFileInput = clickWithoutNativeFilePicker(() => el.click());
+    if (blockedFileInput) {
+      return {
+        ...filePickerBlockedResponse(blockedFileInput, params.text || el.innerText?.trim() || ''),
+        ...(clickedRect ? { rect: clickedRect } : {}),
+      };
+    }
 
     // Post-click SELECT detection: the click may have activated a <select>
     // via a label, wrapper, or overlapping element. Return error, not success.
@@ -2687,7 +2785,17 @@
           }
           rememberInteractionPoint(el, 'click_ax');
           dispatched = true;
-          el.click();
+          const blockedFileInput = clickWithoutNativeFilePicker(() => el.click());
+          if (blockedFileInput) {
+            return failure(
+              filePickerBlockedResponse(blockedFileInput, targetName || '').error,
+              {
+                filePickerBlocked: true,
+                ...(blockedFileInput.selector ? { selector: blockedFileInput.selector } : {}),
+                ref_id,
+              },
+            );
+          }
           let isTextEntry = false;
           if (tag === 'textarea') isTextEntry = true;
           else if (tag === 'input') {

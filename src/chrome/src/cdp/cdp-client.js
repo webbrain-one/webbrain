@@ -880,6 +880,134 @@ export class CDPClient {
   }
 
   /**
+   * Temporarily suppress renderer-driven <input type=file> activation while an
+   * agent click is being dispatched. The upload_file tool sets files directly
+   * with DOM.setFileInputFiles; clicking a page's "Choose file" affordance
+   * first only opens an OS dialog that CDP cannot operate and leaves it stale
+   * after the direct upload succeeds.
+   *
+   * The capture listener is installed once per document, but it is inert
+   * unless armed. A short expiry is a safety net for early-return/error paths,
+   * so normal user clicks are never permanently affected.
+   */
+  async armFileInputClickGuard(tabId, ttlMs = 2500) {
+    const ttl = Math.max(250, Math.min(Number(ttlMs) || 2500, 5000));
+    await this.evaluate(tabId, `
+      (() => {
+        const uniqueFileInputSelector = (input) => {
+          const allPiercedMatches = (selector) => {
+            const matches = [];
+            const visit = (root) => {
+              try { matches.push(...root.querySelectorAll(selector)); } catch { return; }
+              let elements = [];
+              try { elements = root.querySelectorAll('*'); } catch {}
+              for (const element of elements) {
+                if (element.shadowRoot) visit(element.shadowRoot);
+              }
+            };
+            visit(document);
+            return matches;
+          };
+          const unique = (selector) => {
+            if (!selector) return null;
+            const matches = allPiercedMatches(selector);
+            return matches.length === 1 && matches[0] === input ? selector : null;
+          };
+          try {
+            if (input.id && window.CSS?.escape) {
+              const byId = unique('#' + CSS.escape(input.id));
+              if (byId) return byId;
+            }
+            if (input.name && window.CSS?.escape) {
+              const byName = unique('input[type="file"][name=' + CSS.escape(String(input.name)) + ']');
+              if (byName) return byName;
+            }
+            const parts = [];
+            let node = input;
+            while (node?.nodeType === Node.ELEMENT_NODE) {
+              let part = node.tagName.toLowerCase();
+              const parent = node.parentElement;
+              if (parent) {
+                const siblings = Array.from(parent.children).filter(child => child.tagName === node.tagName);
+                if (siblings.length > 1) part += ':nth-of-type(' + (siblings.indexOf(node) + 1) + ')';
+              }
+              parts.unshift(part);
+              const byPath = unique(parts.join(' > '));
+              if (byPath) return byPath;
+              node = parent;
+            }
+          } catch {}
+          return null;
+        };
+        if (!window.__wb_file_input_click_guard) {
+          window.__wb_file_input_click_guard = (event) => {
+            if (Date.now() > Number(window.__wb_file_input_click_guard_until || 0)) return;
+            const path = typeof event.composedPath === 'function'
+              ? event.composedPath()
+              : [event.target];
+            const input = path.find(node =>
+              node?.tagName === 'INPUT'
+              && String(node.getAttribute?.('type') || node.type || '').toLowerCase() === 'file'
+            );
+            if (!input) return;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            window.__wb_file_input_click_guard_last = {
+              blocked: true,
+              selector: uniqueFileInputSelector(input),
+              ts: Date.now(),
+            };
+          };
+          document.addEventListener('click', window.__wb_file_input_click_guard, true);
+        }
+        window.__wb_file_input_click_guard_last = null;
+        window.__wb_file_input_click_guard_until = Date.now() + ${ttl};
+        return true;
+      })()
+    `);
+  }
+
+  /**
+   * Disarm the temporary file-input click guard and return any intercepted
+   * chooser activation from the current agent click.
+   */
+  async consumeFileInputClickGuard(tabId) {
+    try {
+      const result = await this.evaluate(tabId, `
+        (() => {
+          const blocked = window.__wb_file_input_click_guard_last || null;
+          window.__wb_file_input_click_guard_until = 0;
+          window.__wb_file_input_click_guard_last = null;
+          return blocked;
+        })()
+      `);
+      return result?.result?.value || null;
+    } catch {
+      // A delivered click may navigate or reload before this best-effort probe
+      // runs, destroying its execution context. Never turn that observation
+      // race into a failed click (or let clickElement retry the action); the
+      // short guard TTL disarms the abandoned document automatically.
+      return null;
+    }
+  }
+
+  fileInputClickBlockedResult(blocked, context = '') {
+    const selector = typeof blocked?.selector === 'string' && blocked.selector
+      ? blocked.selector
+      : null;
+    const guidance = selector
+      ? `Call upload_file with selector ${JSON.stringify(selector)} and the existing downloadId or absolute filePath; it attaches the file without opening an OS dialog.`
+      : 'Re-inspect the page to find an exact, unique <input type=file> selector, then call upload_file directly. Do not use a generic input[type="file"] selector when the page has multiple file inputs.';
+    return {
+      success: false,
+      dispatched: true,
+      filePickerBlocked: true,
+      ...(selector ? { selector } : {}),
+      error: ['Blocked a native file chooser.', context, guidance].filter(Boolean).join(' '),
+    };
+  }
+
+  /**
    * Read back the FileList attached to an <input type=file> so callers can
    * confirm a setFileInputFiles actually took effect. CDP's
    * DOM.setFileInputFiles does NOT throw on a non-existent path — it silently
@@ -1759,6 +1887,7 @@ export class CDPClient {
     let dispatchAttempted = false;
     if (info.inViewport && info.hitOk) {
       try {
+        await this.armFileInputClickGuard(tabId);
         const rect = {
           x: Math.round(info.x - (info.width || 1) / 2),
           y: Math.round(info.y - (info.height || 1) / 2),
@@ -1775,6 +1904,13 @@ export class CDPClient {
         await this.sendCommand(tabId, 'Input.dispatchMouseEvent', {
           type: 'mouseReleased', x: info.x, y: info.y, button: 'left', buttons: 0, clickCount: 1,
         });
+        const blockedFileInput = await this.consumeFileInputClickGuard(tabId);
+        if (blockedFileInput?.blocked) {
+          return this.fileInputClickBlockedResult(
+            blockedFileInput,
+            'Do not click file-upload controls before uploading.',
+          );
+        }
         return {
           success: true,
           method: info.viaCDP ? 'cdp-mouse-closed-shadow' : 'cdp-mouse',
@@ -1793,6 +1929,7 @@ export class CDPClient {
     // and Runtime.callFunctionOn to invoke .click() on the resolved object.
     if (info.nodeId) {
       try {
+        await this.armFileInputClickGuard(tabId);
         await this.sendCommand(tabId, 'DOM.focus', { nodeId: info.nodeId }).catch(() => {});
         const { object } = await this.sendCommand(tabId, 'DOM.resolveNode', { nodeId: info.nodeId });
         if (object?.objectId) {
@@ -1801,6 +1938,13 @@ export class CDPClient {
             functionDeclaration: 'function() { this.click(); }',
             awaitPromise: false,
           });
+          const blockedFileInput = await this.consumeFileInputClickGuard(tabId);
+          if (blockedFileInput?.blocked) {
+            return this.fileInputClickBlockedResult(
+              blockedFileInput,
+              'Do not click file-upload controls before uploading.',
+            );
+          }
           return {
             success: true,
             method: 'cdp-node-click',
@@ -1819,6 +1963,7 @@ export class CDPClient {
 
     // Step 3: JS fallback for open shadow roots.
     const selectorJSON = JSON.stringify(selector);
+    await this.armFileInputClickGuard(tabId);
     const fb = await this.evaluate(tabId, `
       (() => {
         const sel = ${selectorJSON};
@@ -1843,6 +1988,13 @@ export class CDPClient {
         };
       })()
     `);
+    const blockedFileInput = await this.consumeFileInputClickGuard(tabId);
+    if (blockedFileInput?.blocked) {
+      return this.fileInputClickBlockedResult(
+        blockedFileInput,
+        'Do not click file-upload controls before uploading.',
+      );
+    }
     const fallbackResult = fb?.result?.value || { success: false, error: 'Click failed' };
     if (fallbackResult.success === false && fallbackResult.dispatched == null) {
       fallbackResult.dispatched = dispatchAttempted;

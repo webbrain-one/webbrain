@@ -12319,9 +12319,17 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             w: Math.round(Number(info.width) || 1),
             h: Math.round(Number(info.height) || 1),
           }, 'click_text');
+          await cdpClient.armFileInputClickGuard(tabId);
           await cdpClient.dispatchMouseEvent(tabId, 'mouseMoved', info.x, info.y);
           await cdpClient.dispatchMouseEvent(tabId, 'mousePressed', info.x, info.y);
           await cdpClient.dispatchMouseEvent(tabId, 'mouseReleased', info.x, info.y);
+          const blockedFileInput = await cdpClient.consumeFileInputClickGuard(tabId);
+          if (blockedFileInput?.blocked) {
+            return cdpClient.fileInputClickBlockedResult(
+              blockedFileInput,
+              `Do not click "${args.text}" before uploading.`,
+            );
+          }
           // Kicked off in parallel with the SELECT post-click check below;
           // awaited before we return so we can fold the redirect into the
           // tool result.
@@ -12588,9 +12596,17 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           const progressBeforeCoord = await this._clickProgressSnapshot(tabId);
           const beforeTabIdsCoord = new Set((await chrome.tabs.query({})).map(t => t.id));
           this._showAgentTarget(tabId, { x: Math.round(clickX), y: Math.round(clickY), w: 1, h: 1 }, 'click_coordinates');
+          await cdpClient.armFileInputClickGuard(tabId);
           await cdpClient.dispatchMouseEvent(tabId, 'mouseMoved', clickX, clickY);
           await cdpClient.dispatchMouseEvent(tabId, 'mousePressed', clickX, clickY);
           await cdpClient.dispatchMouseEvent(tabId, 'mouseReleased', clickX, clickY);
+          const blockedFileInput = await cdpClient.consumeFileInputClickGuard(tabId);
+          if (blockedFileInput?.blocked) {
+            return cdpClient.fileInputClickBlockedResult(
+              blockedFileInput,
+              `The attempted control was at (${args.x}, ${args.y}).`,
+            );
+          }
           const newTabPromiseCoord = this._redirectTargetBlankClick(tabId, beforeTabIdsCoord);
 
           // Post-click SELECT detection (same as text-based path above).

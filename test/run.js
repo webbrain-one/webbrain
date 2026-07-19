@@ -31244,6 +31244,105 @@ test('upload_file schema accepts downloadId and no longer hard-requires filePath
   assert.ok(up, 'upload_file not present in act tools');
   assert.ok(up.function.parameters.properties.downloadId, 'downloadId param missing from schema');
   assert.deepEqual(up.function.parameters.required, ['selector'], 'filePath should no longer be required');
+  assert.match(up.function.description, /without opening the page or OS file-picker dialog/i);
+  assert.match(up.function.description, /Do NOT click "Choose file", "Select a file"/);
+});
+
+test('Chrome click paths suppress native file choosers and redirect to upload_file', async () => {
+  const cdp = new CDPClient();
+  const expressions = [];
+  cdp.evaluate = async (_tabId, expression) => {
+    expressions.push(expression);
+    if (expression.includes('__wb_file_input_click_guard_last || null')) {
+      return { result: { value: { blocked: true, selector: '#upload-addon', ts: Date.now() } } };
+    }
+    return { result: { value: true } };
+  };
+
+  await cdp.armFileInputClickGuard(42);
+  assert.match(expressions[0], /document\.addEventListener\('click'[\s\S]*true\)/);
+  assert.match(expressions[0], /event\.preventDefault\(\)/);
+  assert.match(expressions[0], /event\.stopImmediatePropagation\(\)/);
+  assert.match(expressions[0], /tagName === 'INPUT'[\s\S]*=== 'file'/);
+  assert.match(expressions[0], /matches\.length === 1 && matches\[0\] === input/);
+  const consumed = await cdp.consumeFileInputClickGuard(42);
+  assert.equal(consumed.blocked, true);
+  assert.equal(consumed.selector, '#upload-addon');
+  assert.equal(typeof consumed.ts, 'number');
+
+  cdp.resolveSelector = async () => ({
+    found: true,
+    inViewport: true,
+    hitOk: true,
+    x: 120,
+    y: 80,
+    width: 100,
+    height: 30,
+    tag: 'A',
+    text: 'Select a file...',
+  });
+  cdp.armFileInputClickGuard = async () => {};
+  cdp.consumeFileInputClickGuard = async () => ({ blocked: true, selector: '#upload-addon' });
+  cdp.sendCommand = async () => ({});
+
+  const result = await cdp.clickElement(42, 'a.fileupload-button');
+  assert.equal(result.success, false);
+  assert.equal(result.dispatched, true);
+  assert.equal(result.filePickerBlocked, true);
+  assert.equal(result.selector, '#upload-addon');
+  assert.match(result.error, /upload_file/);
+  assert.match(result.error, /downloadId or absolute filePath/);
+
+  const ambiguousResult = cdp.fileInputClickBlockedResult({ blocked: true, selector: null });
+  assert.equal(ambiguousResult.success, false);
+  assert.equal(ambiguousResult.filePickerBlocked, true);
+  assert.equal(Object.hasOwn(ambiguousResult, 'selector'), false);
+  assert.match(ambiguousResult.error, /exact, unique/);
+  assert.match(ambiguousResult.error, /Do not use a generic input\[type="file"\]/);
+
+  const navigationRace = new CDPClient();
+  let mouseDispatches = 0;
+  let fallbackClicks = 0;
+  navigationRace.resolveSelector = async () => ({
+    found: true,
+    inViewport: true,
+    hitOk: true,
+    x: 120,
+    y: 80,
+    width: 100,
+    height: 30,
+    tag: 'A',
+    text: 'Continue',
+    nodeId: 777,
+  });
+  navigationRace.armFileInputClickGuard = async () => {};
+  navigationRace.evaluate = async () => {
+    throw new Error('Execution context was destroyed during navigation');
+  };
+  navigationRace.sendCommand = async (_tabId, method) => {
+    if (method === 'Input.dispatchMouseEvent') mouseDispatches++;
+    if (method === 'Runtime.callFunctionOn') fallbackClicks++;
+    if (method === 'DOM.resolveNode') return { object: { objectId: 'should-not-be-used' } };
+    return {};
+  };
+
+  const navigationResult = await navigationRace.clickElement(42, '#continue');
+  assert.equal(navigationResult.success, true);
+  assert.equal(navigationResult.method, 'cdp-mouse');
+  assert.equal(mouseDispatches, 3);
+  assert.equal(fallbackClicks, 0, 'post-click observation failure must not dispatch a fallback click');
+
+  for (const relPath of [
+    'src/chrome/src/content/content.js',
+    'src/firefox/src/content/content.js',
+  ]) {
+    const source = fs.readFileSync(path.join(ROOT, relPath), 'utf8');
+    assert.match(source, /function uniqueFileInputSelector\(input\)/, `${relPath}: missing unique selector builder`);
+    assert.match(source, /matches\.length === 1 && matches\[0\] === input/, `${relPath}: selector should be proven unique`);
+    assert.match(source, /function clickWithoutNativeFilePicker\(runClick\)/, `${relPath}: missing one-click file chooser guard`);
+    assert.match(source, /clickWithoutNativeFilePicker\(\(\) => el\.click\(\)\)/, `${relPath}: synthetic clicks should use the chooser guard`);
+    assert.match(source, /filePickerBlocked:\s*true/, `${relPath}: blocked chooser should be explicit to the model`);
+  }
 });
 
 test('upload_file prefers downloadId over a supplied stale filePath (chrome)', async () => {
@@ -31301,6 +31400,8 @@ test('upload_file schema accepts downloadId and no longer hard-requires filePath
   assert.ok(up, 'upload_file not present in act tools');
   assert.ok(up.function.parameters.properties.downloadId, 'downloadId param missing from schema');
   assert.deepEqual(up.function.parameters.required, ['selector'], 'filePath should no longer be required');
+  assert.match(up.function.description, /without clicking the page upload control/i);
+  assert.match(up.function.description, /Do NOT click "Choose file", "Select a file"/);
 });
 
 test('upload_file (firefox) rejects non-complete downloads and missing picker base64', async () => {

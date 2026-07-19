@@ -74,6 +74,15 @@ async function setupContentFixture(page, fixture, browserKind) {
   await page.waitForFunction(() => typeof window.__wb_handler === 'function');
 }
 
+async function setupContentHtml(page, html, browserKind) {
+  const firefox = browserKind === 'firefox';
+  await page.setContent(html, { waitUntil: 'domcontentloaded' });
+  await page.addScriptTag({ content: firefox ? stubFirefoxBrowser : stubChrome });
+  const src = await readFile(firefox ? firefoxContentJsPath : contentJsPath, 'utf-8');
+  await page.addScriptTag({ content: src });
+  await page.waitForFunction(() => typeof window.__wb_handler === 'function');
+}
+
 async function setupFirefoxHtml(page, html) {
   await page.setContent(html, { waitUntil: 'domcontentloaded' });
   await page.addScriptTag({ content: stubFirefoxBrowser });
@@ -686,6 +695,63 @@ test('ambiguity: two Cancels return rich candidates with ancestor', async (page)
 });
 
 // ─── click_ax same-page anchors ─────────────────────────────────────────────
+for (const browserKind of ['chrome', 'firefox']) {
+  test(`file picker guard (${browserKind}): blocks the native chooser and returns the exact input`, async (page) => {
+    await setupContentHtml(page, `<!doctype html>
+      <button id="choose">Select a file...</button>
+      <input type="file" hidden>
+      <input type="file" hidden>
+      <script>
+        document.querySelector('#choose').addEventListener('click', () => {
+          document.querySelectorAll('input[type=file]')[1].click();
+        });
+      </script>`, browserKind);
+
+    let chooserOpened = false;
+    page.once('filechooser', () => { chooserOpened = true; });
+    const result = await call(page, 'click', { text: 'Select a file...' });
+    await page.waitForTimeout(20);
+    if (chooserOpened) throw new Error('native file chooser was not suppressed');
+    if (!result?.filePickerBlocked || result.success !== false || !result.selector) {
+      throw new Error(`expected blocked picker with exact selector, got ${JSON.stringify(result)}`);
+    }
+    const selectorCheck = await page.evaluate((selector) => {
+      const inputs = document.querySelectorAll('input[type=file]');
+      const matches = document.querySelectorAll(selector);
+      return { count: matches.length, correct: matches[0] === inputs[1] };
+    }, result.selector);
+    if (selectorCheck.count !== 1 || !selectorCheck.correct) {
+      throw new Error(`selector did not uniquely resolve the clicked input: ${JSON.stringify({ result, selectorCheck })}`);
+    }
+  });
+
+  test(`file picker guard (${browserKind}): withholds selectors that collide across shadow roots`, async (page) => {
+    await setupContentHtml(page, `<!doctype html>
+      <button id="choose">Select a shadow file...</button>
+      <div id="host-a"></div>
+      <div id="host-b"></div>
+      <script>
+        for (const id of ['host-a', 'host-b']) {
+          document.querySelector('#' + id).attachShadow({ mode: 'open' }).innerHTML = '<input type="file">';
+        }
+        document.querySelector('#choose').addEventListener('click', () => {
+          document.querySelector('#host-b').shadowRoot.querySelector('input').click();
+        });
+      </script>`, browserKind);
+
+    const result = await call(page, 'click', { text: 'Select a shadow file...' });
+    if (!result?.filePickerBlocked || result.success !== false) {
+      throw new Error(`expected blocked picker, got ${JSON.stringify(result)}`);
+    }
+    if (Object.hasOwn(result, 'selector')) {
+      throw new Error(`ambiguous shadow-root input must not return selector ${result.selector}`);
+    }
+    if (!/exact, unique/.test(result.error || '') || !/generic input\[type="file"\]/.test(result.error || '')) {
+      throw new Error(`missing unique-selector recovery guidance: ${JSON.stringify(result)}`);
+    }
+  });
+}
+
 for (const browserKind of ['chrome', 'firefox']) {
   test(`click_ax (${browserKind}): stale refs are explicit pre-dispatch failures`, async (page) => {
     await setupContentFixture(page, 'trusted-click-fallback.html', browserKind);
