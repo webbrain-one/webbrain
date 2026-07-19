@@ -16096,8 +16096,16 @@ test('Chrome selector click distinguishes pre-dispatch failure from uncertain di
     width: 30,
     height: 40,
     tag: 'BUTTON',
+    type: 'button',
+    isSubmitControl: false,
     text: 'Submit',
   });
+  client.sendCommand = async () => ({});
+  const ordinaryButton = await client.clickElement(42, '#open-help');
+  assert.equal(ordinaryButton.success, true);
+  assert.equal(ordinaryButton.type, 'button', 'selector clicks should preserve the resolved button type');
+  assert.equal(ordinaryButton.isSubmitControl, false, 'selector clicks should preserve non-submit metadata');
+
   client.sendCommand = async (_tabId, _method, params) => {
     if (params.type === 'mousePressed') throw new Error('dispatch response lost');
     return {};
@@ -16109,6 +16117,13 @@ test('Chrome selector click distinguishes pre-dispatch failure from uncertain di
   const uncertain = await client.clickElement(42, '#submit');
   assert.equal(uncertain.success, false);
   assert.equal(uncertain.dispatched, true, 'a mousePressed attempt must fail closed when later fallback also fails');
+
+  const source = fs.readFileSync(path.join(ROOT, 'src/chrome/src/cdp/cdp-client.js'), 'utf8');
+  assert.match(
+    source,
+    /const isSubmitControl = tag === 'INPUT'[\s\S]*tag === 'BUTTON'[\s\S]*isSubmitControl,/,
+    'selector resolution should derive submit metadata from the target element',
+  );
 });
 
 test('Chrome selector type distinguishes pre-dispatch failure from uncertain dispatch', async () => {
@@ -22899,6 +22914,15 @@ test('form validation classifier surfaces native and custom submission errors', 
     });
     assert.equal(existingAlert, null, `${AgentClass.name}: pre-existing alert was misclassified as a new form error`);
 
+    const persistentAlert = agent._detectFormValidationFailure(customAfter, customAfter, {
+      toolName: 'click',
+      args: { text: 'Submit' },
+      result: { success: true, tag: 'BUTTON', type: 'submit', isSubmitControl: true },
+      priorValidationFailure: true,
+    });
+    assert.ok(persistentAlert, `${AgentClass.name}: persistent alert was lost on a failed resubmit`);
+    assert.match(persistentAlert.error, /correct the highlighted fields/i);
+
     const successfulAfter = [{
       ...before[0],
       invalidFields: [],
@@ -22922,6 +22946,11 @@ test('form validation classifier surfaces native and custom submission errors', 
       { text: 'Choose application' },
       { success: true, tag: 'BUTTON', type: 'button', text: 'Choose application', isSubmitControl: false },
     ), false, `${AgentClass.name}: corrective type=button was misclassified as a submit`);
+    assert.equal(agent._formValidationActionLooksSubmit(
+      'click',
+      { selector: '#open-help' },
+      { success: true, tag: 'BUTTON', text: 'Open help' },
+    ), false, `${AgentClass.name}: selector-clicked button with missing metadata was misclassified as a submit`);
 
     const failedSetFieldKey = agent._formValidationActionKey('set_field', {
       ref_id: 'ref_email',

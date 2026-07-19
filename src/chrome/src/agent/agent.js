@@ -2676,6 +2676,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             args: fnArgs,
             result: toolResult,
             detectedSubmit: detectedSubmitAction,
+            priorValidationFailure: !!validationBlock,
           },
           { allFrames: formValidationAllFrames },
         );
@@ -5511,7 +5512,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (result?.isSubmitControl === true) return true;
     const tag = String(result?.tag || '').toUpperCase();
     const type = String(result?.type || '').toLowerCase();
-    if (tag === 'BUTTON' && result?.isSubmitControl !== false) return true;
+    if (tag === 'BUTTON' && (result?.isSubmitControl === true || type === 'submit')) return true;
     if (tag === 'INPUT' && (type === 'submit' || type === 'image')) return true;
 
     const label = String(args?.text || result?.name || result?.matched || result?.text || '').trim();
@@ -5564,6 +5565,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     });
     if (!comparableAfter.length) return null;
 
+    const looksLikeSubmit = this._formValidationActionLooksSubmit(
+      context.toolName,
+      context.args,
+      context.result,
+      context.detectedSubmit,
+    );
+    const includePersistentValidation = looksLikeSubmit
+      && context.priorValidationFailure === true;
     const beforeAlerts = new Set(before.flatMap(state =>
       this._formValidationAlertTexts(state)
         .map(text => `${this._normalizeUrlPath(String(state?.url || ''))}|${text}`)
@@ -5580,21 +5589,17 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     for (const state of before.length ? comparableAfter : []) {
       const route = this._normalizeUrlPath(String(state?.url || ''));
       for (const text of this._formValidationAlertTexts(state)) {
-        if (text && !beforeAlerts.has(`${route}|${text}`)) newAlerts.push(text);
+        if (text && (includePersistentValidation || !beforeAlerts.has(`${route}|${text}`))) {
+          newAlerts.push(text);
+        }
       }
       for (const field of Array.isArray(state?.ariaInvalidFields) ? state.ariaInvalidFields : []) {
         const key = `${route}|${field?.label || ''}|${field?.type || ''}|${field?.message || ''}`;
-        if (!beforeAriaInvalid.has(key)) newAriaInvalid.push(field);
+        if (includePersistentValidation || !beforeAriaInvalid.has(key)) newAriaInvalid.push(field);
       }
     }
 
     const nativeFailureStates = comparableAfter.filter(state => state?.activeInvalid === true);
-    const looksLikeSubmit = this._formValidationActionLooksSubmit(
-      context.toolName,
-      context.args,
-      context.result,
-      context.detectedSubmit,
-    );
     const nativeInvalidFields = looksLikeSubmit
       ? nativeFailureStates.flatMap(state => Array.isArray(state?.invalidFields) ? state.invalidFields : [])
       : [];

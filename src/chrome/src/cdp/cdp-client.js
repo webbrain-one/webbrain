@@ -1587,6 +1587,13 @@ export class CDPClient {
         const found = queryDeep(document);
         if (!found) return { found: false };
         if (found.__error) return { found: false, error: found.__error };
+        const tag = String(found.tagName || '').toUpperCase();
+        const type = String(found.getAttribute?.('type') || '').trim().toLowerCase();
+        const isSubmitControl = tag === 'INPUT'
+          ? type === 'submit' || type === 'image'
+          : tag === 'BUTTON'
+            ? type === 'submit' || (!type && !!(found.form || found.closest?.('form')))
+            : false;
         if (found.tagName !== 'SELECT') { try { found.scrollIntoView({ block: 'center', inline: 'center' }); } catch (e) {} }
         const r = found.getBoundingClientRect();
         const cx = r.left + r.width / 2;
@@ -1608,7 +1615,9 @@ export class CDPClient {
           x: cx, y: cy,
           width: r.width, height: r.height,
           inViewport, hitOk,
-          tag: found.tagName,
+          tag,
+          type,
+          isSubmitControl,
           text: (found.innerText || found.value || '').slice(0, 80),
         };
       })()
@@ -1779,6 +1788,8 @@ export class CDPClient {
           success: true,
           method: info.viaCDP ? 'cdp-mouse-closed-shadow' : 'cdp-mouse',
           tag: info.tag,
+          type: info.type,
+          isSubmitControl: info.isSubmitControl === true,
           text: info.text,
           x: info.x,
           y: info.y,
@@ -1831,13 +1842,22 @@ export class CDPClient {
         };
         const el = queryDeep(document);
         if (!el) return { success: false, error: 'Element not found (fallback)' };
+        const tag = String(el.tagName || '').toUpperCase();
+        const type = String(el.getAttribute?.('type') || '').trim().toLowerCase();
+        const isSubmitControl = tag === 'INPUT'
+          ? type === 'submit' || type === 'image'
+          : tag === 'BUTTON'
+            ? type === 'submit' || (!type && !!(el.form || el.closest?.('form')))
+            : false;
         try { el.focus(); } catch (e) {}
         el.click();
         const r = el.getBoundingClientRect();
         return {
           success: true,
           method: 'js-click',
-          tag: el.tagName,
+          tag,
+          type,
+          isSubmitControl,
           text: (el.innerText || '').slice(0, 80),
           rect: { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) },
         };
