@@ -295,10 +295,6 @@ export class Agent {
     return completionPlainFinalBlock(this.completionInvariants.get(tabId));
   }
 
-  _hasFreshCompletionObservation(tabId) {
-    return hasUnconsumedCompletionObservation(this.completionInvariants.get(tabId));
-  }
-
   _consumeCompletionObservation(tabId) {
     const state = this.completionInvariants.get(tabId);
     if (!state) return false;
@@ -1804,7 +1800,13 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         const error = toolName === 'navigate'
           ? `Navigation blocked: the current page has unsaved changes (${detail}) that leaving will discard. Re-navigating resets forms like GitHub's "New release" page — you would lose the tag, title, and attached binaries, then have to start over. Finish the current action first (e.g. click "Publish release"). If discarding is genuinely intended, call navigate again with force:true.`
           : `${toolName} blocked: the current page has unsaved changes (${detail}) that leaving will discard. Finish the current action first, or call ${toolName} again with force:true to discard them intentionally.`;
-        return { success: false, blockedUnsavedChanges: true, error };
+        return {
+          success: false,
+          dispatched: false,
+          noDispatch: true,
+          blockedUnsavedChanges: true,
+          error,
+        };
       }
     } catch { /* probe failed (e.g. privileged page) — nothing to protect, allow navigation */ }
     return null;
@@ -8690,6 +8692,15 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
     // Tools handled by the background/service worker
     if (name === 'navigate') {
+      const rawUrl = String(args.url || '').trim();
+      if (!rawUrl) {
+        return {
+          success: false,
+          dispatched: false,
+          noDispatch: true,
+          error: 'navigate: url is required',
+        };
+      }
       // Guard against discarding unsaved work. Re-navigating (even to the
       // same URL) resets forms like GitHub's "New release" page, silently
       // dropping the tag, title, and any attached binaries. A model that
@@ -8700,10 +8711,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         if (blocked) return blocked;
       }
 
-      await browser.tabs.update(tabId, { url: args.url });
+      await browser.tabs.update(tabId, { url: rawUrl });
       // Wait a moment for navigation
       await new Promise(r => setTimeout(r, 2000));
-      return { success: true, url: args.url };
+      return { success: true, dispatched: true, url: rawUrl };
     }
 
     if (name === 'go_back' || name === 'go_forward') {
@@ -8722,7 +8733,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       // Internal pages (about:, view-source, extension) have no meaningful
       // web session history to walk.
       if (/^(about|moz-extension|view-source|data|chrome):/i.test(beforeUrl)) {
-        return { success: false, error: `${name}: history navigation is not available on internal pages (${beforeUrl || 'unknown'}).` };
+        return {
+          success: false,
+          dispatched: false,
+          noDispatch: true,
+          error: `${name}: history navigation is not available on internal pages (${beforeUrl || 'unknown'}).`,
+        };
       }
 
       // Same unsaved-changes guard as navigate — going back/forward leaves the
@@ -8735,6 +8751,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       // Drive history from the page context (CSP-safe; this is the extension's
       // injected code, not page eval).
       let probe = null;
+      let dispatched = false;
       try {
         const delta = direction === 'back' ? -steps : steps;
         const code = `
@@ -8744,13 +8761,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             return { before };
           })()
         `;
+        dispatched = true;
         const results = await browser.tabs.executeScript(tabId, { code });
         probe = (results && results[0]) || null;
       } catch (e) {
-        return { success: false, error: `${name}: cannot navigate history on this page (${e.message}).` };
+        return { success: false, dispatched, error: `${name}: cannot navigate history on this page (${e.message}).` };
       }
       if (!probe) {
-        return { success: false, error: `${name}: history navigation did not run on this page.` };
+        return { success: false, dispatched, error: `${name}: history navigation did not run on this page.` };
       }
 
       // history.go() commits asynchronously (including bfcache restores), so
@@ -8768,10 +8786,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         const dirWord = direction === 'back' ? 'earlier' : 'later';
         return {
           success: false,
+          dispatched: true,
           error: `${name}: no ${dirWord} entry in this tab's history (the page did not change).`,
         };
       }
-      return { success: true, url: afterUrl, previousUrl: probe.before, direction, steps };
+      return { success: true, dispatched: true, url: afterUrl, previousUrl: probe.before, direction, steps };
     }
 
     if (name === 'new_tab') {
@@ -9770,10 +9789,18 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     }
 
     if (name === 'iframe_click') {
+      let dispatched = false;
       try {
         const urlFilter = args.urlFilter || '';
         const selector = args.selector;
-        if (!selector) return { success: false, error: 'selector is required' };
+        if (!selector) {
+          return {
+            success: false,
+            dispatched: false,
+            noDispatch: true,
+            error: 'selector is required',
+          };
+        }
         const code = `
           (() => {
             const filter = ${JSON.stringify(urlFilter)};
@@ -9803,23 +9830,47 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             } catch (e) { return { ok: false, url: location.href, error: e.message }; }
           })()
         `;
+        dispatched = true;
         const results = await browser.tabs.executeScript(tabId, { code, allFrames: true });
         const successes = (results || []).filter(r => r && r.ok);
-        if (successes.length > 0) return { success: true, method: 'iframe-click', frame: successes[0] };
+        if (successes.length > 0) return { success: true, dispatched: true, method: 'iframe-click', frame: successes[0] };
         const candidates = (results || []).filter(r => r && !r.skipped);
-        return { success: false, error: 'Element not found in any matching iframe', searchedFrames: candidates.length, frameUrls: candidates.map(c => c.url).slice(0, 5) };
+        const targetDispatched = candidates.some(candidate => candidate.reason !== 'not-found');
+        return {
+          success: false,
+          ...(targetDispatched
+            ? { dispatched: true }
+            : { dispatched: false, noDispatch: true }),
+          error: 'Element not found in any matching iframe',
+          searchedFrames: candidates.length,
+          frameUrls: candidates.map(c => c.url).slice(0, 5),
+        };
       } catch (e) {
-        return { success: false, error: `Iframe click failed: ${e.message}` };
+        return {
+          success: false,
+          ...(dispatched
+            ? { dispatched: true }
+            : { dispatched: false, noDispatch: true }),
+          error: `Iframe click failed: ${e.message}`,
+        };
       }
     }
 
     if (name === 'iframe_type') {
+      let dispatched = false;
       try {
         const urlFilter = args.urlFilter || '';
         const selector = args.selector;
         const text = args.text || '';
         const clear = !!args.clear;
-        if (!selector) return { success: false, error: 'selector is required' };
+        if (!selector) {
+          return {
+            success: false,
+            dispatched: false,
+            noDispatch: true,
+            error: 'selector is required',
+          };
+        }
         const code = `
           (() => {
             const filter = ${JSON.stringify(urlFilter)};
@@ -9854,13 +9905,29 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             } catch (e) { return { ok: false, url: location.href, error: e.message }; }
           })()
         `;
+        dispatched = true;
         const results = await browser.tabs.executeScript(tabId, { code, allFrames: true });
         const successes = (results || []).filter(r => r && r.ok);
-        if (successes.length > 0) return { success: true, frame: successes[0] };
+        if (successes.length > 0) return { success: true, dispatched: true, frame: successes[0] };
         const candidates = (results || []).filter(r => r && !r.skipped);
-        return { success: false, error: 'Input not found in any matching iframe', searchedFrames: candidates.length, frameUrls: candidates.map(c => c.url).slice(0, 5) };
+        const targetDispatched = candidates.some(candidate => candidate.reason !== 'not-found');
+        return {
+          success: false,
+          ...(targetDispatched
+            ? { dispatched: true }
+            : { dispatched: false, noDispatch: true }),
+          error: 'Input not found in any matching iframe',
+          searchedFrames: candidates.length,
+          frameUrls: candidates.map(c => c.url).slice(0, 5),
+        };
       } catch (e) {
-        return { success: false, error: `Iframe type failed: ${e.message}` };
+        return {
+          success: false,
+          ...(dispatched
+            ? { dispatched: true }
+            : { dispatched: false, noDispatch: true }),
+          error: `Iframe type failed: ${e.message}`,
+        };
       }
     }
 
@@ -9957,7 +10024,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         ) {
           return {
             success: false,
-            ...(name === 'click' ? { dispatched: false } : {}),
+            dispatched: false,
+            noDispatch: true,
             error: `${name} cannot be used on the browser's built-in PDF viewer (a privileged page our scripts cannot reach). Use read_pdf to extract the document's text instead. If you need to read a specific page, pass fromPage/toPage to read_pdf.`,
           };
         }

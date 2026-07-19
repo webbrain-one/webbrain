@@ -894,6 +894,33 @@
     return false;
   }
 
+  function _axAccessibleName(el) {
+    try {
+      if (typeof window.__wb_ax_name === 'function') {
+        const name = window.__wb_ax_name(el);
+        if (name) return String(name).trim().slice(0, 160);
+      }
+    } catch {}
+    try {
+      const labelledBy = String(el?.getAttribute?.('aria-labelledby') || '').trim();
+      const labelledText = labelledBy
+        .split(/\s+/)
+        .filter(Boolean)
+        .map(id => document.getElementById(id)?.innerText || document.getElementById(id)?.textContent || '')
+        .join(' ')
+        .trim();
+      return String(
+        el?.getAttribute?.('aria-label')
+        || labelledText
+        || el?.getAttribute?.('title')
+        || el?.innerText
+        || ''
+      ).trim().slice(0, 160);
+    } catch {
+      return '';
+    }
+  }
+
   /** Walk up from a passive child to find its interactive ancestor (up to 5 levels). */
   function _resolveInteractiveAncestor(el) {
     if (!_PASSIVE_TAGS.has(el.tagName) || _isInteractive(el)) return el;
@@ -1688,7 +1715,12 @@
     const repeat = Math.max(1, Math.min(3, Number.isFinite(repeatRaw) ? Math.floor(repeatRaw) : 1));
     const SUPPORTED_KEYS = ['Escape', 'Tab', 'Enter', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
     if (!SUPPORTED_KEYS.includes(key)) {
-      return { success: false, error: `Unsupported key "${key}". Supported keys: ${SUPPORTED_KEYS.join(', ')}.` };
+      return {
+        success: false,
+        dispatched: false,
+        noDispatch: true,
+        error: `Unsupported key "${key}". Supported keys: ${SUPPORTED_KEYS.join(', ')}.`,
+      };
     }
 
     // NOTE: Firefox has no `debugger`/CDP permission (see ARCHITECTURE.md's
@@ -1749,7 +1781,7 @@
       if (key === 'Tab') moveTabFocus();
     }
 
-    return { success: true, key, repeat, method: 'keyboardevent', focusedTag: document.activeElement?.tagName || null };
+    return { success: true, dispatched: true, key, repeat, method: 'keyboardevent', focusedTag: document.activeElement?.tagName || null };
   }
 
   /**
@@ -2506,11 +2538,8 @@
           const rect = el.getBoundingClientRect();
           const targetContext = (() => {
             try {
-              const ownText = String(
-                (el.getAttribute && (el.getAttribute('aria-label') || el.getAttribute('title')))
-                || el.innerText
-                || ''
-              ).replace(/\s+/g, ' ').trim();
+              const ownText = String(_axAccessibleName(el) || el.innerText || '')
+                .replace(/\s+/g, ' ').trim();
               let fallback = null;
               let node = el.parentElement;
               for (let depth = 0; node && depth < 6; depth++, node = node.parentElement) {
@@ -2608,9 +2637,7 @@
               ...(targetContext ? { targetContext } : {}),
             };
             try {
-              const accName = (el.getAttribute && (el.getAttribute('aria-label') || el.getAttribute('title')))
-                || (el.innerText && el.innerText.trim().slice(0, 80))
-                || '';
+              const accName = _axAccessibleName(el);
               if (accName) resp.name = accName;
             } catch {}
             if (tag === 'a') {

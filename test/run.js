@@ -6077,6 +6077,7 @@ test('completion invariant state machine enforces post-action observation with C
       ['click', {}],
       ['type_text', { text: 'x' }],
       ['press_keys', { keys: ['ENTER'] }],
+      ['press_keys', { key: 'ArrowDown' }],
       ['navigate', { url: 'https://example.com' }],
       ['upload_file', { filePath: '/tmp/a.txt' }],
       ['execute_js', { code: 'document.body.remove()' }],
@@ -6343,6 +6344,116 @@ test('completion invariant state machine enforces post-action observation with C
       assert.equal(clickState.verificationDebt, true, `${label}: ${caseName} click result did not open debt`);
       assert.equal(clickState.lastAction?.uncertain, true, `${label}: ${caseName} click result lost uncertainty`);
     }
+  }
+});
+
+test('pre-dispatch action failures opt out without weakening ambiguous iframe failures', async () => {
+  const previousChrome = globalThis.chrome;
+  const previousBrowser = globalThis.browser;
+  const assertNoDebt = (label, invariant, name, args, result) => {
+    assert.equal(result?.success, false, `${label}: expected a failed preflight result`);
+    assert.equal(result?.dispatched, false, `${label}: preflight result did not mark dispatched:false`);
+    assert.equal(result?.noDispatch, true, `${label}: preflight result did not mark noDispatch:true`);
+    const state = invariant.recordCompletionToolResult(
+      invariant.createCompletionInvariantState(`${label}-${name}`),
+      name,
+      args,
+      result,
+    );
+    assert.equal(state.hadAction, false, `${label}: ${name} preflight failure was recorded as an action`);
+    assert.equal(state.verificationDebt, false, `${label}: ${name} preflight failure opened debt`);
+  };
+
+  try {
+    globalThis.chrome = {
+      scripting: {
+        executeScript: async () => [{ result: { ok: false, reason: 'not-found', url: 'https://example.test/frame' } }],
+      },
+      tabs: {
+        get: async () => ({ url: 'chrome://settings' }),
+      },
+    };
+    const chromeAgent = new AgentCh({});
+    for (const [name, args] of [
+      ['navigate', {}],
+      ['iframe_click', {}],
+      ['iframe_type', {}],
+      ['press_keys', { key: 'F5' }],
+      ['go_back', {}],
+    ]) {
+      assertNoDebt('chrome', CompletionInvariantCh, name, args, await chromeAgent.executeTool(6401, name, args));
+    }
+    for (const name of ['iframe_click', 'iframe_type']) {
+      const args = { selector: '#missing' };
+      assertNoDebt('chrome', CompletionInvariantCh, name, args, await chromeAgent.executeTool(6401, name, args));
+    }
+
+    globalThis.chrome.scripting.executeScript = async () => [{
+      result: { ok: false, error: 'event handler threw after target resolution', url: 'https://example.test/frame' },
+    }];
+    const ambiguousChromeIframe = await chromeAgent.executeTool(6401, 'iframe_type', { selector: '#field', text: 'x' });
+    assert.equal(ambiguousChromeIframe.dispatched, true, 'chrome: ambiguous iframe failure lost its dispatch marker');
+    assert.equal(
+      CompletionInvariantCh.recordCompletionToolResult(
+        CompletionInvariantCh.createCompletionInvariantState('chrome-ambiguous-iframe'),
+        'iframe_type',
+        { selector: '#field', text: 'x' },
+        ambiguousChromeIframe,
+      ).verificationDebt,
+      true,
+      'chrome: ambiguous iframe failure did not fail closed',
+    );
+
+    globalThis.browser = {
+      tabs: {
+        executeScript: async () => [{ ok: false, reason: 'not-found', url: 'https://example.test/frame' }],
+        get: async () => ({ url: 'about:config' }),
+      },
+    };
+    const firefoxAgent = new AgentFx({});
+    for (const [name, args] of [
+      ['navigate', {}],
+      ['iframe_click', {}],
+      ['iframe_type', {}],
+      ['go_forward', {}],
+    ]) {
+      assertNoDebt('firefox', CompletionInvariantFx, name, args, await firefoxAgent.executeTool(6402, name, args));
+    }
+    for (const name of ['iframe_click', 'iframe_type']) {
+      const args = { selector: '#missing' };
+      assertNoDebt('firefox', CompletionInvariantFx, name, args, await firefoxAgent.executeTool(6402, name, args));
+    }
+
+    globalThis.browser.tabs.executeScript = async () => [{
+      ok: false,
+      error: 'event handler threw after target resolution',
+      url: 'https://example.test/frame',
+    }];
+    const ambiguousFirefoxIframe = await firefoxAgent.executeTool(6402, 'iframe_type', { selector: '#field', text: 'x' });
+    assert.equal(ambiguousFirefoxIframe.dispatched, true, 'firefox: ambiguous iframe failure lost its dispatch marker');
+    assert.equal(
+      CompletionInvariantFx.recordCompletionToolResult(
+        CompletionInvariantFx.createCompletionInvariantState('firefox-ambiguous-iframe'),
+        'iframe_type',
+        { selector: '#field', text: 'x' },
+        ambiguousFirefoxIframe,
+      ).verificationDebt,
+      true,
+      'firefox: ambiguous iframe failure did not fail closed',
+    );
+
+    for (const AgentClass of [AgentCh, AgentFx]) {
+      assert.equal(
+        typeof AgentClass.prototype._hasFreshCompletionObservation,
+        'undefined',
+        `${AgentClass.name}: unused completion-observation wrapper was not removed`,
+      );
+    }
+  } finally {
+    if (previousChrome === undefined) delete globalThis.chrome;
+    else globalThis.chrome = previousChrome;
+    if (previousBrowser === undefined) delete globalThis.browser;
+    else globalThis.browser = previousBrowser;
   }
 });
 
@@ -30893,12 +31004,15 @@ test('click/click_ax/type_text results keep malicious target context inside the 
 });
 
 test('click_ax captures bounded nearest product/card context in both content scripts', () => {
-  for (const [label, rel] of [
-    ['chrome', 'src/chrome/src/content/content.js'],
-    ['firefox', 'src/firefox/src/content/content.js'],
+  for (const [label, rel, axRel] of [
+    ['chrome', 'src/chrome/src/content/content.js', 'src/chrome/src/content/accessibility-tree.js'],
+    ['firefox', 'src/firefox/src/content/content.js', 'src/firefox/src/content/accessibility-tree.js'],
   ]) {
     const source = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+    const axSource = fs.readFileSync(path.join(ROOT, axRel), 'utf8');
     assert.match(source, /const targetContext = \(\(\) => \{/, `${label}: targetContext capture missing`);
+    assert.match(source, /const ownText = String\(_axAccessibleName\(el\) \|\| el\.innerText \|\| ''\)/, `${label}: targetContext does not use the AX accessible name`);
+    assert.match(axSource, /window\.__wb_ax_name = getAccessibleName;/, `${label}: accessibility tree does not expose its canonical name helper`);
     assert.match(source, /depth < 6/, `${label}: ancestor search is not bounded`);
     assert.match(source, /text:\s*text\.slice\(0,\s*600\)/, `${label}: context text is not bounded`);
     assert.match(source, /\.slice\(0,\s*160\)/, `${label}: heading is not bounded`);

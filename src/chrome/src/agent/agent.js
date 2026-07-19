@@ -352,10 +352,6 @@ export class Agent {
     return completionPlainFinalBlock(this.completionInvariants.get(tabId));
   }
 
-  _hasFreshCompletionObservation(tabId) {
-    return hasUnconsumedCompletionObservation(this.completionInvariants.get(tabId));
-  }
-
   _consumeCompletionObservation(tabId) {
     const state = this.completionInvariants.get(tabId);
     if (!state) return false;
@@ -2240,7 +2236,13 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         const error = toolName === 'navigate'
           ? `Navigation blocked: the current page has unsaved changes (${detail}) that leaving will discard. Re-navigating resets forms like GitHub's "New release" page — you would lose the tag, title, and attached binaries, then have to start over. Finish the current action first (e.g. click "Publish release"). If discarding is genuinely intended, call navigate again with force:true.`
           : `${toolName} blocked: the current page has unsaved changes (${detail}) that leaving will discard. Finish the current action first, or call ${toolName} again with force:true to discard them intentionally.`;
-        return { success: false, blockedUnsavedChanges: true, error };
+        return {
+          success: false,
+          dispatched: false,
+          noDispatch: true,
+          blockedUnsavedChanges: true,
+          error,
+        };
       }
     } catch { /* injection failed (chrome:// / PDF viewer / no host perm) — nothing to protect there, allow navigation */ }
     return null;
@@ -9878,7 +9880,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (name === 'navigate') {
       let rawUrl = String(args.url || '').trim();
       if (!rawUrl) {
-        return { success: false, error: 'navigate: url is required' };
+        return {
+          success: false,
+          dispatched: false,
+          noDispatch: true,
+          error: 'navigate: url is required',
+        };
       }
       // Resolve relative URLs (e.g. "/acct_.../products") against the
       // current tab. chrome.tabs.update silently routes bare paths to
@@ -9895,11 +9902,18 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           } else {
             return {
               success: false,
+              dispatched: false,
+              noDispatch: true,
               error: `navigate: "${args.url}" is not an absolute URL. Provide the full URL including scheme and host (e.g. "https://dashboard.stripe.com/${String(args.url).replace(/^\/+/, '')}"). Do NOT pass bare paths — they resolve to local files.`,
             };
           }
         } catch (e) {
-          return { success: false, error: `navigate: cannot resolve relative URL "${args.url}" — no current tab URL available. Pass an absolute URL starting with https://.` };
+          return {
+            success: false,
+            dispatched: false,
+            noDispatch: true,
+            error: `navigate: cannot resolve relative URL "${args.url}" — no current tab URL available. Pass an absolute URL starting with https://.`,
+          };
         }
       }
       // Guard against discarding unsaved work. Re-navigating (even to the
@@ -9921,7 +9935,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         const tab = await chrome.tabs.get(tabId);
         if (tab && tab.url) finalUrl = tab.url;
       } catch {}
-      return { success: true, url: finalUrl, requestedUrl: rawUrl };
+      return { success: true, dispatched: true, url: finalUrl, requestedUrl: rawUrl };
     }
 
     if (name === 'go_back' || name === 'go_forward') {
@@ -9940,7 +9954,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       // Internal pages (chrome://, about:, extension/view-source) have no
       // meaningful web session history to walk.
       if (/^(chrome|edge|brave|about|chrome-extension|moz-extension|view-source|data):/i.test(beforeUrl)) {
-        return { success: false, error: `${name}: history navigation is not available on internal pages (${beforeUrl || 'unknown'}).` };
+        return {
+          success: false,
+          dispatched: false,
+          noDispatch: true,
+          error: `${name}: history navigation is not available on internal pages (${beforeUrl || 'unknown'}).`,
+        };
       }
 
       // Same unsaved-changes guard as navigate — going back/forward leaves the
@@ -9954,8 +9973,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       // (the extension's injected function, NOT page eval) so it works even
       // where execute_js is CSP-blocked.
       let probe = null;
+      let dispatched = false;
       try {
         const delta = direction === 'back' ? -steps : steps;
+        dispatched = true;
         const results = await chrome.scripting.executeScript({
           target: { tabId },
           args: [delta],
@@ -9967,10 +9988,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         });
         probe = results?.[0]?.result || null;
       } catch (e) {
-        return { success: false, error: `${name}: cannot navigate history on this page (${e.message}).` };
+        return { success: false, dispatched, error: `${name}: cannot navigate history on this page (${e.message}).` };
       }
       if (!probe) {
-        return { success: false, error: `${name}: history navigation did not run on this page.` };
+        return { success: false, dispatched, error: `${name}: history navigation did not run on this page.` };
       }
 
       // history.go() commits asynchronously (including bfcache restores), so
@@ -9988,10 +10009,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         const dirWord = direction === 'back' ? 'earlier' : 'later';
         return {
           success: false,
+          dispatched: true,
           error: `${name}: no ${dirWord} entry in this tab's history (the page did not change).`,
         };
       }
-      return { success: true, url: afterUrl, previousUrl: probe.before, direction, steps };
+      return { success: true, dispatched: true, url: afterUrl, previousUrl: probe.before, direction, steps };
     }
 
     if (name === 'new_tab') {
@@ -10897,13 +10919,22 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     }
 
     if (name === 'iframe_click') {
+      let dispatched = false;
       try {
         // Inject into all frames; in each frame, see if the selector resolves
         // and if the URL matches the optional filter, then click. Returns the
         // first successful frame.
         const urlFilter = args.urlFilter || '';
         const selector = args.selector;
-        if (!selector) return { success: false, error: 'selector is required' };
+        if (!selector) {
+          return {
+            success: false,
+            dispatched: false,
+            noDispatch: true,
+            error: 'selector is required',
+          };
+        }
+        dispatched = true;
         const results = await chrome.scripting.executeScript({
           target: { tabId, allFrames: true },
           func: (sel, filter) => {
@@ -10950,27 +10981,46 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         });
         const successes = results.map(r => r.result).filter(r => r && r.ok);
         if (successes.length > 0) {
-          return { success: true, method: 'iframe-click', frame: successes[0] };
+          return { success: true, dispatched: true, method: 'iframe-click', frame: successes[0] };
         }
         const candidates = results.map(r => r.result).filter(r => r && !r.skipped);
+        const targetDispatched = candidates.some(candidate => candidate.reason !== 'not-found');
         return {
           success: false,
+          ...(targetDispatched
+            ? { dispatched: true }
+            : { dispatched: false, noDispatch: true }),
           error: 'Element not found in any matching iframe',
           searchedFrames: candidates.length,
           frameUrls: candidates.map(c => c.url).slice(0, 5),
         };
       } catch (e) {
-        return { success: false, error: `Iframe click failed: ${e.message}` };
+        return {
+          success: false,
+          ...(dispatched
+            ? { dispatched: true }
+            : { dispatched: false, noDispatch: true }),
+          error: `Iframe click failed: ${e.message}`,
+        };
       }
     }
 
     if (name === 'iframe_type') {
+      let dispatched = false;
       try {
         const urlFilter = args.urlFilter || '';
         const selector = args.selector;
         const text = args.text || '';
         const clear = !!args.clear;
-        if (!selector) return { success: false, error: 'selector is required' };
+        if (!selector) {
+          return {
+            success: false,
+            dispatched: false,
+            noDispatch: true,
+            error: 'selector is required',
+          };
+        }
+        dispatched = true;
         const results = await chrome.scripting.executeScript({
           target: { tabId, allFrames: true },
           func: (sel, txt, clr, filter) => {
@@ -11015,17 +11065,27 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         });
         const successes = results.map(r => r.result).filter(r => r && r.ok);
         if (successes.length > 0) {
-          return { success: true, frame: successes[0] };
+          return { success: true, dispatched: true, frame: successes[0] };
         }
         const candidates = results.map(r => r.result).filter(r => r && !r.skipped);
+        const targetDispatched = candidates.some(candidate => candidate.reason !== 'not-found');
         return {
           success: false,
+          ...(targetDispatched
+            ? { dispatched: true }
+            : { dispatched: false, noDispatch: true }),
           error: 'Input not found in any matching iframe',
           searchedFrames: candidates.length,
           frameUrls: candidates.map(c => c.url).slice(0, 5),
         };
       } catch (e) {
-        return { success: false, error: `Iframe type failed: ${e.message}` };
+        return {
+          success: false,
+          ...(dispatched
+            ? { dispatched: true }
+            : { dispatched: false, noDispatch: true }),
+          error: `Iframe type failed: ${e.message}`,
+        };
       }
     }
 
@@ -12762,7 +12822,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       const repeat = Math.max(1, Math.min(3, Number.isFinite(repeatRaw) ? Math.floor(repeatRaw) : 1));
       const SUPPORTED_KEYS = ['Escape', 'Tab', 'Enter', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
       if (!SUPPORTED_KEYS.includes(key)) {
-        return { success: false, error: `Unsupported key "${key}". Supported keys: ${SUPPORTED_KEYS.join(', ')}.` };
+        return {
+          success: false,
+          dispatched: false,
+          noDispatch: true,
+          error: `Unsupported key "${key}". Supported keys: ${SUPPORTED_KEYS.join(', ')}.`,
+        };
       }
 
       try {
@@ -12796,7 +12861,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           });
         }
 
-        return { success: true, method: 'cdp-key', key, repeat };
+        return { success: true, dispatched: true, method: 'cdp-key', key, repeat };
       } catch (e) {
         // Fall through to content-script path if CDP is unavailable.
       }
@@ -13001,6 +13066,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         ) {
           return {
             success: false,
+            dispatched: false,
+            noDispatch: true,
             error: `${name} cannot be used on Chrome's built-in PDF viewer (a chrome-extension:// page our scripts cannot reach). Use read_pdf to extract the document's text instead. If you need to read a specific page, pass fromPage/toPage to read_pdf.`,
           };
         }

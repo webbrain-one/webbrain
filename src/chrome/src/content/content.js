@@ -1418,7 +1418,12 @@
     const repeat = Math.max(1, Math.min(3, Number.isFinite(repeatRaw) ? Math.floor(repeatRaw) : 1));
     const SUPPORTED_KEYS = ['Escape', 'Tab', 'Enter', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
     if (!SUPPORTED_KEYS.includes(key)) {
-      return { success: false, error: `Unsupported key "${key}". Supported keys: ${SUPPORTED_KEYS.join(', ')}.` };
+      return {
+        success: false,
+        dispatched: false,
+        noDispatch: true,
+        error: `Unsupported key "${key}". Supported keys: ${SUPPORTED_KEYS.join(', ')}.`,
+      };
     }
 
     // NOTE: this path dispatches untrusted (isTrusted: false) KeyboardEvents,
@@ -1478,7 +1483,7 @@
       if (key === 'Tab') moveTabFocus();
     }
 
-    return { success: true, key, repeat, method: 'keyboardevent', focusedTag: document.activeElement?.tagName || null };
+    return { success: true, dispatched: true, key, repeat, method: 'keyboardevent', focusedTag: document.activeElement?.tagName || null };
   }
 
   /**

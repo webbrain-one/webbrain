@@ -89,7 +89,12 @@
   <article class="product-card" data-product-id="cola-zero-six-pack">
     <h2>Cola Zero 6-pack</h2>
     <a href="/products/cola-zero-six-pack">Product details</a>
-    <button id="add-cola-zero" type="button">Add to cart</button>
+    <div role="listitem">
+      <span id="add-cola-zero-label">Add to cart</span>
+      <button id="add-cola-zero" type="button" aria-labelledby="add-cola-zero-label">
+        <svg aria-hidden="true" width="16" height="16"><circle cx="8" cy="8" r="6"></circle></svg>
+      </button>
+    </div>
   </article>
   <div id="trusted-row" class="row" role="listitem" tabindex="0">Defne Sokullu Yesterday Photo</div>
   <div id="synthetic-row" class="row" role="listitem" tabindex="0">Normal synthetic row</div>

@@ -94,6 +94,10 @@ export function isCompletionActionTool(name, args = {}) {
     const keys = keyText(args);
     const benign = /\b(tab|escape|esc)\b/.test(keys);
     const risky = /\b(enter|return)\b/.test(keys);
+    // Arrow keys are consequential: Chrome's trusted CDP path can change
+    // native select/range values, and either browser can trigger page key
+    // handlers. Unsupported keys remain fail-closed here; their handlers opt
+    // out with dispatched:false before emitting any keyboard event.
     return !benign || risky;
   }
   if (name === 'fetch_url' || name === 'research_url') {

@@ -695,12 +695,13 @@ for (const browserKind of ['chrome', 'firefox']) {
     }
   });
 
-  test(`input tools (${browserKind}): stale refs and missing focus are explicit pre-dispatch failures`, async (page) => {
+  test(`input tools (${browserKind}): invalid targets and keys are explicit pre-dispatch failures`, async (page) => {
     await setupContentFixture(page, 'trusted-click-fallback.html', browserKind);
     const calls = [
       ['type', { text: 'should not be typed' }],
       ['type_ax', { ref_id: 'ref_999999', text: 'should not be typed' }],
       ['set_field', { ref_id: 'ref_999999', text: 'should not be typed' }],
+      ['press_keys', { key: 'F5' }],
     ];
     for (const [action, params] of calls) {
       const result = await call(page, action, params);
@@ -715,29 +716,32 @@ for (const browserKind of ['chrome', 'firefox']) {
   });
 }
 
-test('click_ax: generic product action returns bounded nearest card context', async (page) => {
-  await setup(page, 'trusted-click-fallback.html');
-  const tree = await call(page, 'get_accessibility_tree', { filter: 'visible', maxDepth: 10, maxChars: 20000 });
-  const match = String(tree?.pageContent || '').match(/button "Add to cart" \[(ref_\d+)\]/);
-  if (!match) throw new Error(`could not find product action in AX tree: ${tree?.pageContent}`);
+for (const browserKind of ['chrome', 'firefox']) {
+  test(`click_ax (${browserKind}): aria-labelledby action returns bounded nearest card context`, async (page) => {
+    await setupContentFixture(page, 'trusted-click-fallback.html', browserKind);
+    const tree = await call(page, 'get_accessibility_tree', { filter: 'visible', maxDepth: 10, maxChars: 20000 });
+    const match = String(tree?.pageContent || '').match(/button "Add to cart" \[(ref_\d+)\]/);
+    if (!match) throw new Error(`could not find product action in AX tree: ${tree?.pageContent}`);
 
-  const result = await call(page, 'click_ax', { ref_id: match[1] });
-  if (!result?.success) throw new Error(`expected click_ax success, got: ${JSON.stringify(result)}`);
-  if (
-    result.targetContext?.heading !== 'Cola Zero 6-pack'
-    || !String(result.targetContext?.text || '').includes('Cola Zero 6-pack')
-    || !String(result.targetContext?.href || '').endsWith('/products/cola-zero-six-pack')
-  ) {
-    throw new Error(`nearest product context missing or wrong: ${JSON.stringify(result.targetContext)}`);
-  }
-  if (
-    String(result.targetContext.text).length > 600
-    || String(result.targetContext.heading).length > 160
-    || String(result.targetContext.href).length > 500
-  ) {
-    throw new Error(`product context bounds regressed: ${JSON.stringify(result.targetContext)}`);
-  }
-});
+    const result = await call(page, 'click_ax', { ref_id: match[1] });
+    if (!result?.success) throw new Error(`expected click_ax success, got: ${JSON.stringify(result)}`);
+    if (
+      result.name !== 'Add to cart'
+      || result.targetContext?.heading !== 'Cola Zero 6-pack'
+      || !String(result.targetContext?.text || '').includes('Cola Zero 6-pack')
+      || !String(result.targetContext?.href || '').endsWith('/products/cola-zero-six-pack')
+    ) {
+      throw new Error(`nearest product context missing or wrong: ${JSON.stringify(result)}`);
+    }
+    if (
+      String(result.targetContext.text).length > 600
+      || String(result.targetContext.heading).length > 160
+      || String(result.targetContext.href).length > 500
+    ) {
+      throw new Error(`product context bounds regressed: ${JSON.stringify(result.targetContext)}`);
+    }
+  });
+}
 
 test('click_ax: Agent.executeTool keeps synthetic-first behavior and uses trusted CDP only for an ignored generic row', async (page) => {
   await setup(page, 'trusted-click-fallback.html');
