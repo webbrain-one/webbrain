@@ -31417,6 +31417,7 @@ test('Chrome click paths suppress native file choosers and redirect to upload_fi
 
   await cdp.armFileInputClickGuard(42);
   assert.match(expressions[0], /document\.addEventListener\('click'[\s\S]*true\)/);
+  assert.match(expressions[0], /webbrain:file-picker-guard-reset/);
   assert.match(expressions[0], /event\.preventDefault\(\)/);
   assert.match(expressions[0], /event\.stopImmediatePropagation\(\)/);
   assert.match(expressions[0], /tagName === 'INPUT'[\s\S]*=== 'file'/);
@@ -31568,6 +31569,7 @@ test('Chrome click paths suppress native file choosers and redirect to upload_fi
     const source = fs.readFileSync(path.join(ROOT, relPath), 'utf8');
     assert.doesNotMatch(source, /window\.__webbrainFilePickerGuardBridge/, `${relPath}: must not expose a stable page global`);
     assert.match(source, /webbrain:file-picker-guard-probe/, `${relPath}: recovery reinjection should use an ephemeral idempotence probe`);
+    assert.match(source, /webbrain:file-picker-guard-reset/, `${relPath}: CDP should be able to reset a residual page guard`);
     assert.match(source, /Object\.getOwnPropertyDescriptor\(proto,\s*'showPicker'\)/, `${relPath}: missing main-world showPicker interception`);
     assert.match(source, /Object\.getOwnPropertyDescriptor\(proto,\s*'click'\)/, `${relPath}: missing closed-shadow click interception`);
     assert.match(source, /reportBlocked\(this\)/, `${relPath}: main-world showPicker should record the input`);

@@ -12,6 +12,7 @@
   const PROBE_ACK_ATTR = 'data-webbrain-file-picker-probe-ack';
   const ARM_EVENT = 'webbrain:file-picker-guard-arm';
   const DISARM_EVENT = 'webbrain:file-picker-guard-disarm';
+  const RESET_EVENT = 'webbrain:file-picker-guard-reset';
   const BLOCKED_EVENT = 'webbrain:file-picker-guard-blocked';
   const GUARD_ATTR = 'data-webbrain-file-picker-guard';
   const BLOCKED_ATTR = 'data-webbrain-file-picker-blocked';
@@ -188,5 +189,6 @@
   document.addEventListener(PROBE_EVENT, acknowledgeProbe, true);
   document.addEventListener(ARM_EVENT, armGuard, true);
   document.addEventListener(DISARM_EVENT, disarmGuard, true);
+  document.addEventListener(RESET_EVENT, clearGuard, true);
   armGuard();
 })();

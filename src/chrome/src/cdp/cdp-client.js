@@ -984,6 +984,11 @@ export class CDPClient {
     await this._armProtocolFileChooserGuard(tabId, ttl);
     await this.evaluate(tabId, `
       (() => {
+        // A prior content-script click may intentionally leave its MAIN-world
+        // programmatic guard alive through a short TTL. Restore that wrapper
+        // before CDP snapshots the native methods, otherwise the two restore
+        // lifecycles can re-install each other's stale wrapper.
+        document.dispatchEvent(new Event('webbrain:file-picker-guard-reset'));
         const uniqueFileInputSelector = (input) => {
           const allPiercedMatches = (selector) => {
             const matches = [];

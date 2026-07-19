@@ -1013,6 +1013,8 @@ test('Chrome CDP file picker guard blocks trusted showPicker activation and rest
       });
       document.querySelector('#choose-closed').addEventListener('click', () => closedInput.click());
     </script>`);
+  const pageGuardSrc = await readFile(filePickerGuardPageJsPath, 'utf-8');
+  await page.addScriptTag({ content: pageGuardSrc });
 
   const client = new CDPClient();
   const protocolSession = await page.context().newCDPSession(page);
@@ -1068,6 +1070,29 @@ test('Chrome CDP file picker guard blocks trusted showPicker activation and rest
   }
   if (!directBlocked?.blocked || directBlocked.selector !== null) {
     throw new Error(`expected protocol-level closed-shadow block, got ${JSON.stringify(directBlocked)}`);
+  }
+
+  await page.evaluate(() => {
+    const root = document.documentElement;
+    root.setAttribute('data-webbrain-file-picker-guard', 'residual-content-guard');
+    document.dispatchEvent(new Event('webbrain:file-picker-guard-arm'));
+    root.removeAttribute('data-webbrain-file-picker-guard');
+  });
+  const residualInstalled = await page.evaluate(
+    () => HTMLInputElement.prototype.click !== window.__originalInputClick,
+  );
+  if (!residualInstalled) throw new Error('residual page-world guard was not installed');
+
+  await client.armFileInputClickGuard(77, 250);
+  const noPickerBlocked = await client.consumeFileInputClickGuard(77, 0);
+  if (noPickerBlocked) throw new Error(`unexpected picker during restore-stack test: ${JSON.stringify(noPickerBlocked)}`);
+  await page.waitForTimeout(350);
+  const stackRestored = await page.evaluate(() => ({
+    showPicker: HTMLInputElement.prototype.showPicker === window.__originalShowPicker,
+    click: HTMLInputElement.prototype.click === window.__originalInputClick,
+  }));
+  if (!stackRestored.showPicker || !stackRestored.click) {
+    throw new Error(`stacked page/CDP guards did not restore native prototypes: ${JSON.stringify(stackRestored)}`);
   }
 });
 
