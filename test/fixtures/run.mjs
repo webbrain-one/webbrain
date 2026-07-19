@@ -695,6 +695,45 @@ for (const browserKind of ['chrome', 'firefox']) {
     }
   });
 
+  test(`click_ax (${browserKind}): refs are rejected after a same-document route change`, async (page) => {
+    await setupContentFixture(page, 'trusted-click-fallback.html', browserKind);
+    const tree = await call(page, 'get_accessibility_tree', { filter: 'all', maxDepth: 10, maxChars: 20000 });
+    const match = String(tree?.pageContent || '').match(/listitem "Normal synthetic row" \[(ref_\d+)\]/);
+    if (!match || !tree?.documentToken || !tree?.refScopeUrl) {
+      throw new Error(`expected scoped AX ref, got: ${JSON.stringify(tree)}`);
+    }
+    await page.evaluate(() => history.pushState({}, '', '#different-route'));
+    const result = await call(page, 'click_ax', {
+      ref_id: match[1],
+      expectedDocumentToken: tree.documentToken,
+      expectedPageUrl: tree.refScopeUrl,
+    });
+    if (
+      result?.success !== false
+      || result?.staleRef !== true
+      || result?.routeChanged !== true
+      || result?.dispatched !== false
+    ) {
+      throw new Error(`expected route-scoped stale-ref failure, got: ${JSON.stringify(result)}`);
+    }
+  });
+
+  test(`click_ax (${browserKind}): unnamed broad generic targets are rejected`, async (page) => {
+    await setupContentFixture(page, 'trusted-click-fallback.html', browserKind);
+    const tree = await call(page, 'get_accessibility_tree', { filter: 'all', maxDepth: 10, maxChars: 20000 });
+    const match = String(tree?.pageContent || '').match(/group \[(ref_\d+)\]/);
+    if (!match) throw new Error(`could not find unnamed broad group in AX tree: ${tree?.pageContent}`);
+    const result = await call(page, 'click_ax', { ref_id: match[1] });
+    if (
+      result?.success !== false
+      || result?.ambiguousTarget !== true
+      || result?.dispatched !== false
+      || result?.targetContext?.truncated !== true
+    ) {
+      throw new Error(`expected ambiguous generic target failure, got: ${JSON.stringify(result)}`);
+    }
+  });
+
   test(`input tools (${browserKind}): invalid targets and keys are explicit pre-dispatch failures`, async (page) => {
     await setupContentFixture(page, 'trusted-click-fallback.html', browserKind);
     const calls = [
@@ -734,7 +773,7 @@ for (const browserKind of ['chrome', 'firefox']) {
       throw new Error(`nearest product context missing or wrong: ${JSON.stringify(result)}`);
     }
     if (
-      String(result.targetContext.text).length > 600
+      String(result.targetContext.text).length > 240
       || String(result.targetContext.heading).length > 160
       || String(result.targetContext.href).length > 500
     ) {

@@ -159,6 +159,7 @@ export class Agent {
     this.recentCalls = new Map();
     this.loopNudges = new Map();
     this.healthyCallsSinceLoop = new Map();
+    this._lastAxScopes = new Map(); // tabId -> { documentToken, pageUrl }, captured by the latest AX read
     // A model can walk ref_1, ref_2, … forever while every call looks unique
     // to the exact-argument loop detector. Track that semantic read pattern.
     this.axReadStates = new Map();
@@ -2289,15 +2290,18 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       if (!toolResult?.done) {
         onUpdate('tool_result', { name: fnName, result: toolResult });
       }
-      try {
-        const runId = this.currentRunId.get(tabId);
-        if (runId) {
-          await trace.recordToolCall(runId, step, {
-            name: fnName, args: fnArgs, result: toolResult,
-            latencyMs: _toolLatency,
-          });
-        }
-      } catch {}
+      const runIdForTool = this.currentRunId.get(tabId);
+      const recordFinalToolTrace = async result => {
+        try {
+          if (runIdForTool) {
+            await trace.recordToolCall(runIdForTool, step, {
+              name: fnName, args: fnArgs, result,
+              latencyMs: _toolLatency,
+            });
+          }
+        } catch {}
+      };
+      if (!toolResult?.done) await recordFinalToolTrace(toolResult);
 
       if (toolResult && toolResult.done) {
         const progressBlock = this._shouldBlockDoneForProgress(tabId)
@@ -2320,6 +2324,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             tool_call_id: tc.id,
             content: this._wrapUntrusted(fnName, this._limitToolResult(blockedResult)),
           });
+          await recordFinalToolTrace(blockedResult);
           onUpdate('warning', { message: 'Progress ledger has unresolved rows; continuing.' });
           this._persist(tabId);
           continue;
@@ -2342,6 +2347,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             tool_call_id: tc.id,
             content: JSON.stringify(blockedResult),
           });
+          await recordFinalToolTrace(blockedResult);
           // The remaining calls were generated alongside the invalid done,
           // before the model saw the recovery instruction. Never execute that
           // stale batch; close every tool_call and start a fresh model turn.
@@ -2371,6 +2377,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             tool_call_id: tc.id,
             content: JSON.stringify(failedResult),
           });
+          await recordFinalToolTrace(failedResult);
           this._appendSyntheticToolResults(
             tabId, toolCalls, toolIndex + 1, messages, onUpdate, step,
             () => ({ success: false, skipped: true, error: 'skipped: plan-only completion failed' })
@@ -2387,6 +2394,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           // are page-derived and get persisted as history for the next turn.
           content: this._wrapUntrusted(fnName, this._limitToolResult(toolResult)),
         });
+        await recordFinalToolTrace(toolResult);
         // If `done` wasn't the last call in the batch, the remaining tool_calls
         // in this assistant message still need matching tool results — otherwise
         // the persisted conversation has orphaned tool_calls and the provider
@@ -5528,6 +5536,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     this._nytimesPageGateNotified.delete(tabId);
     this._doneBlockCount.delete(tabId);
     this._recentSubmitClicks.delete(tabId);
+    this._lastAxScopes.delete(tabId);
     this.completionInvariants.delete(tabId);
     if (!preserveRunGuard) {
       this._runningTabs.delete(tabId);
@@ -7040,6 +7049,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
   _isExecutionMutationEvidence(name, args = {}, capabilities = []) {
     const mutationCapabilities = new Set([
+      Capability.NAVIGATE,
       Capability.CLICK,
       Capability.TYPE,
       Capability.EXECUTE_JS,
@@ -10061,12 +10071,29 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       }
     } catch { /* tab lookup failures are non-fatal — fall through */ }
 
+    const axScope = this._lastAxScopes.get(tabId);
+    const contentArgs = name === 'click_ax' && axScope?.documentToken
+      ? {
+          ...args,
+          expectedDocumentToken: axScope.documentToken,
+          ...(axScope.pageUrl ? { expectedPageUrl: axScope.pageUrl } : {}),
+        }
+      : args;
+
     try {
       const response = await browser.tabs.sendMessage(tabId, {
         target: 'content',
         action,
-        params: args,
+        params: contentArgs,
       });
+      if (name === 'get_accessibility_tree' && response?.documentToken) {
+        this._lastAxScopes.set(tabId, {
+          documentToken: response.documentToken,
+          pageUrl: response.refScopeUrl || '',
+        });
+        delete response.documentToken;
+        delete response.refScopeUrl;
+      }
       this._annotateCredentialField(name, response);
       return response;
     } catch (e) {
@@ -10078,8 +10105,16 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         const response = await browser.tabs.sendMessage(tabId, {
           target: 'content',
           action,
-          params: args,
+          params: contentArgs,
         });
+        if (name === 'get_accessibility_tree' && response?.documentToken) {
+          this._lastAxScopes.set(tabId, {
+            documentToken: response.documentToken,
+            pageUrl: response.refScopeUrl || '',
+          });
+          delete response.documentToken;
+          delete response.refScopeUrl;
+        }
         this._annotateCredentialField(name, response);
         return response;
       } catch (e2) {

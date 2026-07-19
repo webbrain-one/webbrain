@@ -189,6 +189,7 @@ export class Agent {
     this._lastCdpClickIdent = new Map(); // tabId -> string
     this._lastClickProgress = new Map(); // tabId -> { ident, snapshot }
     this._clickAxCdpFallbacks = new Map(); // tabId -> Set(documentToken|ref_id), one trusted fallback per document target
+    this._lastAxScopes = new Map(); // tabId -> { documentToken, pageUrl }, captured by the latest AX read
     // Loop detection: per-tab ring buffer of recent tool calls + nudge count.
     this.recentCalls = new Map(); // tabId -> [{ key, name, ts }]
     this.loopNudges = new Map();  // tabId -> consecutive-nudge counter
@@ -2677,11 +2678,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         onUpdate('tool_result', { name: fnName, result: toolResult });
       }
       const _runIdForTool = this.currentRunId.get(tabId);
-      if (_runIdForTool) {
-        trace.recordToolCall(_runIdForTool, step, {
-          name: fnName, args: fnArgs, result: toolResult, latencyMs: _toolLatency,
-        });
-      }
+      const recordFinalToolTrace = result => {
+        if (_runIdForTool) {
+          trace.recordToolCall(_runIdForTool, step, {
+            name: fnName, args: fnArgs, result, latencyMs: _toolLatency,
+          });
+        }
+      };
+      if (!toolResult?.done) recordFinalToolTrace(toolResult);
 
       // done() short-circuit — push result, persist, and bail out.
       if (toolResult && toolResult.done) {
@@ -2705,6 +2709,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             tool_call_id: tc.id,
             content: this._wrapUntrusted(fnName, this._limitToolResult(blockedResult)),
           });
+          recordFinalToolTrace(blockedResult);
           onUpdate('warning', { message: 'Progress ledger has unresolved rows; continuing.' });
           this._persist(tabId);
           continue;
@@ -2727,6 +2732,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             tool_call_id: tc.id,
             content: JSON.stringify(blockedResult),
           });
+          recordFinalToolTrace(blockedResult);
           // The remaining calls were generated alongside the invalid done,
           // before the model saw the recovery instruction. Never execute that
           // stale batch; close every tool_call and start a fresh model turn.
@@ -2756,6 +2762,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             tool_call_id: tc.id,
             content: JSON.stringify(failedResult),
           });
+          recordFinalToolTrace(failedResult);
           this._appendSyntheticToolResults(
             tabId, toolCalls, toolIndex + 1, messages, onUpdate, step,
             () => ({ success: false, skipped: true, error: 'skipped: plan-only completion failed' })
@@ -2772,6 +2779,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           // are page-derived and get persisted as history for the next turn.
           content: this._wrapUntrusted(fnName, this._limitToolResult(toolResult)),
         });
+        recordFinalToolTrace(toolResult);
         // If `done` wasn't the last call in the batch, the remaining tool_calls
         // in this assistant message still need matching tool results — otherwise
         // the persisted conversation has orphaned tool_calls and the provider
@@ -6379,6 +6387,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     this._lastInteractionRect.delete(tabId);
     this._doneBlockCount.delete(tabId);
     this._recentSubmitClicks.delete(tabId);
+    this._lastAxScopes.delete(tabId);
     this.completionInvariants.delete(tabId);
     if (!preserveRunGuard) {
       this._runningTabs.delete(tabId);
@@ -7912,6 +7921,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
   _isExecutionMutationEvidence(name, args = {}, capabilities = []) {
     const mutationCapabilities = new Set([
+      Capability.NAVIGATE,
       Capability.CLICK,
       Capability.TYPE,
       Capability.EXECUTE_JS,
@@ -13132,6 +13142,15 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       );
     };
 
+    const axScope = this._lastAxScopes.get(tabId);
+    const contentArgs = name === 'click_ax' && axScope?.documentToken
+      ? {
+          ...args,
+          expectedDocumentToken: axScope.documentToken,
+          ...(axScope.pageUrl ? { expectedPageUrl: axScope.pageUrl } : {}),
+        }
+      : args;
+
     try {
       let response;
       try {
@@ -13139,7 +13158,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         response = await chrome.tabs.sendMessage(tabId, {
           target: 'content',
           action,
-          params: args,
+          params: contentArgs,
         });
       } catch (e) {
         // Content script might not be injected — try injecting it.
@@ -13161,11 +13180,19 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           response = await chrome.tabs.sendMessage(tabId, {
             target: 'content',
             action,
-            params: args,
+            params: contentArgs,
           });
         } catch (e2) {
           return { error: `Failed to communicate with page: ${e2.message}` };
         }
+      }
+      if (name === 'get_accessibility_tree' && response?.documentToken) {
+        this._lastAxScopes.set(tabId, {
+          documentToken: response.documentToken,
+          pageUrl: response.refScopeUrl || '',
+        });
+        delete response.documentToken;
+        delete response.refScopeUrl;
       }
       if (name === 'click_ax') {
         response = await this._maybeFallbackClickAxWithCdp(tabId, args, response, clickAxBaseline);

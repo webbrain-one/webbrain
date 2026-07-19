@@ -528,6 +528,13 @@
     }
   }
 
+  function _axDocumentToken() {
+    if (!window.__wbAxDocumentToken) {
+      window.__wbAxDocumentToken = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+    }
+    return window.__wbAxDocumentToken;
+  }
+
   function _axFallbackState(el) {
     const empty = { full: '', strong: '', weak: '' };
     if (!el) return empty;
@@ -3005,6 +3012,8 @@
           if (typeof window.__generateAccessibilityTree !== 'function') {
             return { error: 'accessibility-tree.js not injected' };
           }
+          const documentToken = _axDocumentToken();
+          const refScopeUrl = location.href;
           const { filter, maxDepth, maxChars, ref_id, page } = msg.params || {};
           const gate = detectPageGate();
           if (gate) {
@@ -3017,18 +3026,24 @@
                 const gateMaxDepth = Math.min(Number.isFinite(requestedDepth) ? Math.max(1, Math.trunc(requestedDepth)) : 8, 8);
                 const gateMaxChars = Math.min(Number.isFinite(requestedChars) ? Math.max(256, Math.trunc(requestedChars)) : 3000, 5000);
                 const tree = window.__generateAccessibilitySubtree(gate.element, gateFilter, gateMaxDepth, gateMaxChars, page);
-                return { pageGate, ...tree, textSource: 'page-gate' };
+                return { pageGate, ...tree, textSource: 'page-gate', documentToken, refScopeUrl };
               }
-              return { pageGate, pageContent: gate.label, textSource: 'page-gate' };
+              return { pageGate, pageContent: gate.label, textSource: 'page-gate', documentToken, refScopeUrl };
             }
             const articleRoot = gate.element.closest('article, [role="article"], main, [role="main"]');
             return {
               pageGate,
               pageContent: renderedArticleTextBeforeGate(articleRoot, gate.element),
               textSource: 'article (pre-gate)',
+              documentToken,
+              refScopeUrl,
             };
           }
-          return window.__generateAccessibilityTree(filter, maxDepth, maxChars, ref_id, page);
+          return {
+            ...window.__generateAccessibilityTree(filter, maxDepth, maxChars, ref_id, page),
+            documentToken,
+            refScopeUrl,
+          };
         } catch (e) {
           return { error: 'Failed to build accessibility tree: ' + (e && e.message || String(e)) };
         }
@@ -3044,9 +3059,24 @@
             : { dispatched: false, noDispatch: true, fallbackAttempted: false }),
         });
         try {
-          const { ref_id } = msg.params || {};
+          const { ref_id, expectedDocumentToken, expectedPageUrl } = msg.params || {};
           if (typeof ref_id !== 'string') return failure('ref_id (string, e.g. "ref_42") is required');
           if (typeof window.__wb_ax_lookup !== 'function') return failure('accessibility-tree.js not injected');
+          const documentToken = _axDocumentToken();
+          const documentChanged = !!expectedDocumentToken && expectedDocumentToken !== documentToken;
+          const routeChanged = !!expectedPageUrl && expectedPageUrl !== location.href;
+          if (documentChanged || routeChanged) {
+            return failure(
+              `ref_id ${ref_id} belongs to a previous page or route. Re-read the accessibility tree and choose a fresh ref_id before clicking.`,
+              {
+                staleRef: true,
+                documentChanged,
+                routeChanged,
+                documentToken,
+                refScopeUrl: location.href,
+              },
+            );
+          }
           const el = window.__wb_ax_lookup(ref_id);
           if (!el) {
             let suggestions = [];
@@ -3082,9 +3112,11 @@
           const fallbackStateBefore = _axFallbackState(el);
           const rect = el.getBoundingClientRect();
           const tag = el.tagName ? el.tagName.toLowerCase() : '';
+          const targetRole = String(el.getAttribute?.('role') || '').toLowerCase();
+          const targetName = _axAccessibleName(el);
           const targetContext = (() => {
             try {
-              const ownText = String(_axAccessibleName(el) || el.innerText || '')
+              const ownText = String(targetName || el.innerText || '')
                 .replace(/\s+/g, ' ').trim();
               let fallback = null;
               let node = el.parentElement;
@@ -3104,7 +3136,8 @@
                   '[class*="tile" i]',
                 ].join(','));
                 const context = {
-                  text: text.slice(0, 600),
+                  text: text.slice(0, 240),
+                  ...(text.length > 240 ? { truncated: true } : {}),
                   ...(headingEl ? { heading: String(headingEl.innerText || headingEl.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 160) } : {}),
                   ...(linkEl ? { href: String(linkEl.href || linkEl.getAttribute('href') || '').slice(0, 500) } : {}),
                 };
@@ -3118,6 +3151,14 @@
               return null;
             }
           })();
+          const genericTags = new Set(['body', 'div', 'span', 'section', 'main', 'article', 'nav', 'ul', 'ol', 'li']);
+          const genericRoles = new Set(['', 'generic', 'group', 'list', 'listitem', 'region', 'none', 'presentation']);
+          if (!targetName && genericTags.has(tag) && genericRoles.has(targetRole) && targetContext?.truncated) {
+            return failure(
+              `ref_id ${ref_id} resolves to an unnamed generic element inside a broad container. Re-read the accessibility tree and choose a named row or control instead of clicking this ambiguous target.`,
+              { ambiguousTarget: true, targetContext, documentToken, refScopeUrl: location.href },
+            );
+          }
           const fallbackStatic = _axFallbackStaticAssessment(el);
           let popupRole = '';
           let popupHasPopup = null;
@@ -3203,8 +3244,7 @@
             // the wrong thing — e.g. a sidebar nav link that navigates away
             // from an open modal, silently destroying in-progress form state.
             try {
-              const accName = _axAccessibleName(el);
-              if (accName) resp.name = accName;
+              if (targetName) resp.name = targetName;
             } catch {}
             if (tag === 'a') {
               try {

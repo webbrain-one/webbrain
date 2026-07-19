@@ -27311,8 +27311,8 @@ test('execution evidence ignores failed, denied, skipped, blocked, and unknown o
     const tabId = 8614 + index;
     assert.equal(
       agent._isExecutionMutationEvidence('navigate', { url: 'https://example.com/next' }, [Capability.NAVIGATE]),
-      false,
-      `${AgentClass.name}: navigation counted as mutation evidence`,
+      true,
+      `${AgentClass.name}: navigation was not counted as mutation evidence`,
     );
     assert.equal(
       agent._isExecutionMutationEvidence('scroll', { direction: 'down' }, []),
@@ -27351,7 +27351,6 @@ test('execution evidence ignores failed, denied, skipped, blocked, and unknown o
       agent._markPlanExecutionToolCall(tabId, 'click_ax', result, { consequential: true });
     }
     for (const [name, args, toolCapabilities] of [
-      ['navigate', { url: 'https://example.com/next' }, [Capability.NAVIGATE]],
       ['scroll', { direction: 'down' }, []],
       ['fetch_url', { method: 'GET' }, [Capability.NETWORK]],
     ]) {
@@ -27362,8 +27361,83 @@ test('execution evidence ignores failed, denied, skipped, blocked, and unknown o
     agent._markPlanExecutionToolCall(tabId, 'read_page', { success: true }, { consequential: false });
     assert.equal(agent._executionEvidenceSatisfied(state), false, `${AgentClass.name}: invalid mutation evidence was counted`);
 
-    agent._markPlanExecutionToolCall(tabId, 'click_ax', { success: true }, { consequential: true });
-    assert.equal(agent._executionEvidenceSatisfied(state), true, `${AgentClass.name}: successful mutation evidence was not counted`);
+    agent._markPlanExecutionToolCall(tabId, 'navigate', { success: true }, { consequential: true });
+    assert.equal(agent._executionEvidenceSatisfied(state), true, `${AgentClass.name}: successful navigation evidence was not counted`);
+  }
+});
+
+test('Act accepts a verified navigation as execution for a state-change plan', async () => {
+  for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
+    const responses = [
+      {
+        content: null,
+        toolCalls: [{
+          id: `navigate_${index}`,
+          function: { name: 'navigate', arguments: JSON.stringify({ url: 'https://yahoo.com/' }) },
+        }],
+      },
+      {
+        content: null,
+        toolCalls: [{
+          id: `verify_${index}`,
+          function: { name: 'get_accessibility_tree', arguments: JSON.stringify({ filter: 'visible' }) },
+        }],
+      },
+      {
+        content: null,
+        toolCalls: [{
+          id: `done_${index}`,
+          function: {
+            name: 'done',
+            arguments: JSON.stringify({ summary: 'Yahoo opened and verified.', outcome: 'success' }),
+          },
+        }],
+      },
+    ];
+    const provider = {
+      supportsTools: true,
+      supportsVision: false,
+      promptTier: 'full',
+      contextWindow: 128000,
+      model: 'test-model',
+      name: 'test-provider',
+      chat: async () => {
+        const next = responses.shift();
+        assert.ok(next, `${AgentClass.name}: navigation flow requested an unexpected recovery turn`);
+        return next;
+      },
+    };
+    const agent = new AgentClass({ getActive: () => provider, getVisionProvider: async () => null });
+    const tabId = 8640 + index;
+    configurePlanOnlyGuardAgent(agent, tabId);
+    agent._maybeRunPlannerGate = async () => ({
+      proceed: true,
+      requestKind: 'execute',
+      requiresStateChange: true,
+    });
+    let currentUrl = 'https://example.com/';
+    agent._currentUrl = async () => currentUrl;
+    agent.executeTool = async (_toolTabId, name, args) => {
+      if (name === 'navigate') {
+        currentUrl = args.url;
+        return { success: true, url: currentUrl };
+      }
+      if (name === 'get_accessibility_tree') {
+        return { success: true, pageContent: 'Yahoo homepage', url: currentUrl };
+      }
+      if (name === 'done') return { done: true, summary: args.summary, outcome: args.outcome };
+      throw new Error(`unexpected tool ${name}`);
+    };
+
+    const final = await agent.processMessage(tabId, 'Go to yahoo.com.', () => {}, 'act');
+
+    assert.equal(final, 'Yahoo opened and verified.', `${AgentClass.name}: verified navigation ended as plan-only output`);
+    assert.equal(responses.length, 0, `${AgentClass.name}: navigation flow did not finish in one done call`);
+    assert.equal(
+      agent.conversations.get(tabId).some(message => /"planOnlyTerminal":true/.test(String(message.content || ''))),
+      false,
+      `${AgentClass.name}: successful navigation was incorrectly rejected as plan-only`,
+    );
   }
 });
 
@@ -31354,14 +31428,35 @@ test('click_ax captures bounded nearest product/card context in both content scr
     const source = fs.readFileSync(path.join(ROOT, rel), 'utf8');
     const axSource = fs.readFileSync(path.join(ROOT, axRel), 'utf8');
     assert.match(source, /const targetContext = \(\(\) => \{/, `${label}: targetContext capture missing`);
-    assert.match(source, /const ownText = String\(_axAccessibleName\(el\) \|\| el\.innerText \|\| ''\)/, `${label}: targetContext does not use the AX accessible name`);
+    assert.match(source, /const targetName = _axAccessibleName\(el\)/, `${label}: click target does not cache the canonical AX accessible name`);
+    assert.match(source, /const ownText = String\(targetName \|\| el\.innerText \|\| ''\)/, `${label}: targetContext does not use the AX accessible name`);
     assert.match(axSource, /window\.__wb_ax_name = getAccessibleName;/, `${label}: accessibility tree does not expose its canonical name helper`);
     assert.match(source, /depth < 6/, `${label}: ancestor search is not bounded`);
-    assert.match(source, /text:\s*text\.slice\(0,\s*600\)/, `${label}: context text is not bounded`);
+    assert.match(source, /text:\s*text\.slice\(0,\s*240\)/, `${label}: context text is not tightly bounded`);
+    assert.match(source, /text\.length > 240 \? \{ truncated: true \}/, `${label}: broad target context is not marked as truncated`);
     assert.match(source, /\.slice\(0,\s*160\)/, `${label}: heading is not bounded`);
     assert.match(source, /\.slice\(0,\s*500\)/, `${label}: href is not bounded`);
     assert.match(source, /const productCard = .*node\.matches/s, `${label}: product/card ancestor detection missing`);
+    assert.match(source, /ambiguousTarget: true/, `${label}: unnamed broad generic click guard missing`);
+    assert.match(source, /expectedDocumentToken/, `${label}: document-scoped AX ref guard missing`);
+    assert.match(source, /expectedPageUrl/, `${label}: route-scoped AX ref guard missing`);
     assert.match(source, /\.\.\.\(targetContext \? \{ targetContext \} : \{\}\)/, `${label}: click_ax result does not expose targetContext`);
+  }
+});
+
+test('agent forwards private AX scope and records only the final done verdict', () => {
+  for (const [label, rel] of [
+    ['chrome', 'src/chrome/src/agent/agent.js'],
+    ['firefox', 'src/firefox/src/agent/agent.js'],
+  ]) {
+    const source = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+    assert.match(source, /this\._lastAxScopes = new Map\(\)/, `${label}: per-tab AX ref scope cache missing`);
+    assert.match(source, /expectedDocumentToken: axScope\.documentToken/, `${label}: click_ax does not receive the private document scope`);
+    assert.match(source, /expectedPageUrl: axScope\.pageUrl/, `${label}: click_ax does not receive the private route scope`);
+    assert.match(source, /delete response\.documentToken/, `${label}: private AX document token leaks into model context`);
+    assert.match(source, /if \(!toolResult\?\.done\) (?:await )?recordFinalToolTrace\(toolResult\)/, `${label}: raw done is still recorded before terminal guards`);
+    assert.match(source, /recordFinalToolTrace\(blockedResult\)/, `${label}: blocked done verdict is not recorded`);
+    assert.match(source, /recordFinalToolTrace\(failedResult\)/, `${label}: failed done verdict is not recorded`);
   }
 });
 
