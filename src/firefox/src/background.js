@@ -1409,6 +1409,9 @@ browser.runtime.onMessage.addListener((msg, sender) => {
   const tabId = sender?.tab?.id;
   if (tabId != null) {
     try { agent.abort(tabId); } catch { /* ignore */ }
+    // Always clear the sender tab's page-owned indicator, even when the run
+    // already ended or this background lost its in-memory run state.
+    sendIndicatorMessage(tabId, 'WB_HIDE_AGENT_INDICATORS');
   }
   return Promise.resolve({ ok: true });
 });

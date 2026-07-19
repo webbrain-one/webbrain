@@ -172,6 +172,10 @@
       if (indicatorsActive) button.style.background = '#ffffff';
     });
     button.addEventListener('click', async () => {
+      // Clear the page-owned UI immediately. The background may have
+      // restarted (or the run may already be gone), leaving this indicator
+      // with no live background state to clean it up.
+      hide();
       try {
         await browser.runtime.sendMessage({ type: 'WB_STOP_AGENT' });
       } catch { /* extension context invalidated, ignore */ }

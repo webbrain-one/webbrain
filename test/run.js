@@ -32912,6 +32912,49 @@ test('background reasserts active viewport glow after tab reload', () => {
   }
 });
 
+test('page Stop WebBrain clears stale indicators without stopping recordings', () => {
+  for (const [label, prefix, runtimeApi] of [
+    ['chrome', 'src/chrome', 'chrome'],
+    ['firefox', 'src/firefox', 'browser'],
+  ]) {
+    const indicator = fs.readFileSync(path.join(ROOT, prefix, 'src/content/agent-visual-indicator.js'), 'utf8');
+    const background = fs.readFileSync(path.join(ROOT, prefix, 'src/background.js'), 'utf8');
+
+    const clickStart = indicator.indexOf("button.addEventListener('click', async () => {");
+    const clickEnd = indicator.indexOf('\n    });', clickStart);
+    assert.notEqual(clickStart, -1, `${label}: page Stop handler missing`);
+    assert.notEqual(clickEnd, -1, `${label}: page Stop handler boundary missing`);
+    const clickBody = indicator.slice(clickStart, clickEnd);
+    const localHideIdx = clickBody.indexOf('hide();');
+    const abortMessageIdx = clickBody.indexOf(`${runtimeApi}.runtime.sendMessage({ type: 'WB_STOP_AGENT' })`);
+    assert.notEqual(localHideIdx, -1, `${label}: page Stop should immediately hide its local indicator`);
+    assert.notEqual(abortMessageIdx, -1, `${label}: page Stop should still request agent abort`);
+    assert.equal(localHideIdx < abortMessageIdx, true, `${label}: stale indicator should hide before background abort dispatch`);
+
+    const handlerStart = background.indexOf("if (msg?.type !== 'WB_STOP_AGENT') return;");
+    const handlerEnd = background.indexOf('\n});', handlerStart);
+    assert.notEqual(handlerStart, -1, `${label}: background Stop handler missing`);
+    assert.notEqual(handlerEnd, -1, `${label}: background Stop handler boundary missing`);
+    const handlerBody = background.slice(handlerStart, handlerEnd);
+    assert.match(handlerBody, /agent\.abort\(tabId\)/, `${label}: active agent runs should still be aborted`);
+    assert.match(
+      handlerBody,
+      /sendIndicatorMessage\(tabId, 'WB_HIDE_AGENT_INDICATORS'\)/,
+      `${label}: background should clear stale sender-tab indicators even without an active run`,
+    );
+    assert.doesNotMatch(
+      handlerBody,
+      /agent\.(?:isRunning|activeRunState)\(tabId\)/,
+      `${label}: stale indicator cleanup must not depend on an active agent run`,
+    );
+    assert.doesNotMatch(
+      handlerBody,
+      /stopTabRecording|stop_tab_recording|recording_capture_ended/,
+      `${label}: page Stop must not stop or alter recordings`,
+    );
+  }
+});
+
 test('planner gate: abort during planner call stops before review card', async () => {
   await withPlannerBrowserGlobals(async () => {
     for (const [label, AgentClass] of [['chrome', AgentCh], ['firefox', AgentFx]]) {
