@@ -821,4 +821,9 @@ export default {
   "sp.export_config.error": "Hindi ma-export ang configuration: {error}",
   "sp.import_config.done": "Na-import ang {count} Settings value. Aktibo na ang mga provider key at configuration.",
   "sp.import_config.error": "Hindi ma-import ang configuration: {error}",
+  "sp.input.placeholder_tip.skip_permissions": "Mode na walang prompt: /dangerously-skip-permissions",
+  "sp.perm.skip_hint": "Gusto mo ng mas kaunting pagkaantala? Tinatandaan ng “Palaging payagan” ang site na ito. Ino-off ng command sa ibaba ang mga permission prompt ng WebBrain sa lahat ng site.",
+  "sp.perm.insert_skip_command": "Ilagay ang /dangerously-skip-permissions",
+  "sp.perm.skip_hint_draft": "Hindi binago ang draft mo. I-clear ito bago ilagay ang command.",
+  "ob.act.permissions_tip": "Naka-on bilang default ang mga permission prompt. Maaaring i-off ng advanced users ang mga ito sa lahat ng site gamit ang /dangerously-skip-permissions at i-on muli sa Settings → Permissions.",
 };

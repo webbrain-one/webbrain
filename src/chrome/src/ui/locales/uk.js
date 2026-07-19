@@ -823,4 +823,9 @@ export default {
   "sp.export_config.error": "Не вдалося експортувати конфігурацію: {error}",
   "sp.import_config.done": "Імпортовано налаштувань: {count}. Ключі провайдерів і конфігурація активні.",
   "sp.import_config.error": "Не вдалося імпортувати конфігурацію: {error}",
+  "sp.input.placeholder_tip.skip_permissions": "Режим без запитів: /dangerously-skip-permissions",
+  "sp.perm.skip_hint": "Хочете менше переривань? «Завжди дозволяти» запам’ятовує цей сайт. Команда нижче вимикає запити дозволів WebBrain на всіх сайтах.",
+  "sp.perm.insert_skip_command": "Вставити /dangerously-skip-permissions",
+  "sp.perm.skip_hint_draft": "Чернетку не змінено. Очистьте її перед вставленням команди.",
+  "ob.act.permissions_tip": "Запити дозволів увімкнено за замовчуванням. Досвідчені користувачі можуть вимкнути їх глобально командою /dangerously-skip-permissions і знову ввімкнути в Налаштування → Дозволи.",
 };

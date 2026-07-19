@@ -821,4 +821,9 @@ export default {
   "sp.export_config.error": "Не удалось экспортировать конфигурацию: {error}",
   "sp.import_config.done": "Импортировано настроек: {count}. Ключи провайдеров и конфигурация активны.",
   "sp.import_config.error": "Не удалось импортировать конфигурацию: {error}",
+  "sp.input.placeholder_tip.skip_permissions": "Режим без запросов: /dangerously-skip-permissions",
+  "sp.perm.skip_hint": "Хотите меньше прерываний? «Всегда разрешать» запоминает этот сайт. Команда ниже отключает запросы разрешений WebBrain на всех сайтах.",
+  "sp.perm.insert_skip_command": "Вставить /dangerously-skip-permissions",
+  "sp.perm.skip_hint_draft": "Черновик не изменён. Очистите его перед вставкой команды.",
+  "ob.act.permissions_tip": "Запросы разрешений включены по умолчанию. Опытные пользователи могут отключить их глобально командой /dangerously-skip-permissions и снова включить в Настройки → Разрешения.",
 };

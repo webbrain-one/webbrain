@@ -823,4 +823,9 @@ export default {
   "sp.export_config.error": "Tidak dapat mengeksport konfigurasi: {error}",
   "sp.import_config.done": "{count} nilai Tetapan telah diimport. Kunci penyedia dan konfigurasi kini aktif.",
   "sp.import_config.error": "Tidak dapat mengimport konfigurasi: {error}",
+  "sp.input.placeholder_tip.skip_permissions": "Mod tanpa permintaan izin: /dangerously-skip-permissions",
+  "sp.perm.skip_hint": "Mahukan lebih sedikit gangguan? “Sentiasa benarkan” mengingati laman ini. Perintah di bawah mematikan permintaan izin WebBrain di semua laman.",
+  "sp.perm.insert_skip_command": "Sisipkan /dangerously-skip-permissions",
+  "sp.perm.skip_hint_draft": "Draf anda tidak berubah. Kosongkannya sebelum menyisipkan perintah.",
+  "ob.act.permissions_tip": "Permintaan izin dihidupkan secara lalai. Pengguna lanjutan boleh mematikannya secara global dengan /dangerously-skip-permissions dan menghidupkannya semula di Tetapan → Izin.",
 };

@@ -821,4 +821,9 @@ export default {
   "sp.export_config.error": "設定をエクスポートできませんでした: {error}",
   "sp.import_config.done": "{count} 件の設定値をインポートしました。プロバイダーキーと設定は有効です。",
   "sp.import_config.error": "設定をインポートできませんでした: {error}",
+  "sp.input.placeholder_tip.skip_permissions": "許可確認なしモード：/dangerously-skip-permissions",
+  "sp.perm.skip_hint": "中断を減らしますか？「常に許可」はこのサイトを記憶します。以下のコマンドは、すべてのサイトで WebBrain の許可確認を無効にします。",
+  "sp.perm.insert_skip_command": "/dangerously-skip-permissions を入力",
+  "sp.perm.skip_hint_draft": "下書きは変更されていません。コマンドを入力する前に消去してください。",
+  "ob.act.permissions_tip": "許可確認は既定で有効です。上級ユーザーは /dangerously-skip-permissions ですべてのサイトの確認を無効にし、設定 → 権限から再び有効にできます。",
 };

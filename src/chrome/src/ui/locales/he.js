@@ -776,4 +776,9 @@ export default {
   "sp.export_config.error": "לא ניתן לייצא את התצורה: {error}",
   "sp.import_config.done": "יובאו {count} ערכי הגדרות. מפתחות הספקים והתצורה פעילים כעת.",
   "sp.import_config.error": "לא ניתן לייבא את התצורה: {error}",
+  "sp.input.placeholder_tip.skip_permissions": "מצב ללא בקשות: /dangerously-skip-permissions",
+  "sp.perm.skip_hint": "רוצה פחות הפרעות? ״אפשר תמיד״ זוכר את האתר הזה. הפקודה שלמטה משביתה את בקשות ההרשאה של WebBrain בכל האתרים.",
+  "sp.perm.insert_skip_command": "הוספת /dangerously-skip-permissions",
+  "sp.perm.skip_hint_draft": "הטיוטה שלך לא השתנתה. יש לנקות אותה לפני הוספת הפקודה.",
+  "ob.act.permissions_tip": "בקשות הרשאה מופעלות כברירת מחדל. משתמשים מתקדמים יכולים להשבית אותן בכל האתרים באמצעות /dangerously-skip-permissions ולהפעיל אותן מחדש דרך הגדרות ← הרשאות.",
 };

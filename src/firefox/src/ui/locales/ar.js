@@ -821,4 +821,9 @@ export default {
   "sp.export_config.error": "تعذر تصدير الإعداد: {error}",
   "sp.import_config.done": "تم استيراد {count} من قيم الإعدادات. مفاتيح موفري الخدمة والإعداد مفعّلة الآن.",
   "sp.import_config.error": "تعذر استيراد الإعداد: {error}",
+  "sp.input.placeholder_tip.skip_permissions": "وضع بلا مطالبات: /dangerously-skip-permissions",
+  "sp.perm.skip_hint": "هل تريد مقاطعات أقل؟ يتذكر خيار «السماح دائمًا» هذا الموقع. يعطّل الأمر أدناه مطالبات أذونات WebBrain على جميع المواقع.",
+  "sp.perm.insert_skip_command": "إدراج /dangerously-skip-permissions",
+  "sp.perm.skip_hint_draft": "لم تتغير مسودتك. امسحها قبل إدراج الأمر.",
+  "ob.act.permissions_tip": "تكون مطالبات الأذونات مفعّلة افتراضيًا. يمكن للمستخدمين المتقدمين تعطيلها عالميًا باستخدام /dangerously-skip-permissions وإعادة تفعيلها من الإعدادات ← الأذونات.",
 };

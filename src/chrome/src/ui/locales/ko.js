@@ -823,4 +823,9 @@ export default {
   "sp.export_config.error": "구성을 내보낼 수 없습니다: {error}",
   "sp.import_config.done": "설정 값 {count}개를 가져왔습니다. 공급자 키와 구성이 활성화되었습니다.",
   "sp.import_config.error": "구성을 가져올 수 없습니다: {error}",
+  "sp.input.placeholder_tip.skip_permissions": "권한 확인 없는 모드: /dangerously-skip-permissions",
+  "sp.perm.skip_hint": "방해를 줄이고 싶으신가요? “항상 허용”은 이 사이트를 기억합니다. 아래 명령은 모든 사이트에서 WebBrain 권한 확인을 끕니다.",
+  "sp.perm.insert_skip_command": "/dangerously-skip-permissions 입력",
+  "sp.perm.skip_hint_draft": "초안은 변경되지 않았습니다. 명령을 입력하기 전에 비워 주세요.",
+  "ob.act.permissions_tip": "권한 확인은 기본적으로 켜져 있습니다. 고급 사용자는 /dangerously-skip-permissions로 모든 사이트의 확인을 끄고 설정 → 권한에서 다시 켤 수 있습니다.",
 };

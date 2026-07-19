@@ -823,4 +823,9 @@ export default {
   "sp.export_config.error": "无法导出配置：{error}",
   "sp.import_config.done": "已导入 {count} 个设置值。提供商密钥和配置现已生效。",
   "sp.import_config.error": "无法导入配置：{error}",
+  "sp.input.placeholder_tip.skip_permissions": "免提示模式：/dangerously-skip-permissions",
+  "sp.perm.skip_hint": "想减少打断？“始终允许”会记住此网站。下面的命令会在所有网站上关闭 WebBrain 权限提示。",
+  "sp.perm.insert_skip_command": "插入 /dangerously-skip-permissions",
+  "sp.perm.skip_hint_draft": "草稿未更改。请先清空草稿再插入命令。",
+  "ob.act.permissions_tip": "权限提示默认开启。高级用户可使用 /dangerously-skip-permissions 在所有网站上关闭提示，并在设置 → 权限中重新开启。",
 };

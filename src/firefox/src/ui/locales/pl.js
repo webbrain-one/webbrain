@@ -781,4 +781,9 @@ export default {
   "sp.export_config.error": "Nie udało się wyeksportować konfiguracji: {error}",
   "sp.import_config.done": "Zaimportowano ustawienia: {count}. Klucze dostawców i konfiguracja są aktywne.",
   "sp.import_config.error": "Nie udało się zaimportować konfiguracji: {error}",
+  "sp.input.placeholder_tip.skip_permissions": "Tryb bez pytań: /dangerously-skip-permissions",
+  "sp.perm.skip_hint": "Chcesz mniej przerw? „Zawsze zezwalaj” zapamiętuje tę witrynę. Poniższe polecenie wyłącza pytania WebBrain o uprawnienia we wszystkich witrynach.",
+  "sp.perm.insert_skip_command": "Wstaw /dangerously-skip-permissions",
+  "sp.perm.skip_hint_draft": "Szkic pozostał bez zmian. Wyczyść go przed wstawieniem polecenia.",
+  "ob.act.permissions_tip": "Pytania o uprawnienia są domyślnie włączone. Zaawansowani użytkownicy mogą wyłączyć je globalnie poleceniem /dangerously-skip-permissions i ponownie włączyć w Ustawienia → Uprawnienia.",
 };

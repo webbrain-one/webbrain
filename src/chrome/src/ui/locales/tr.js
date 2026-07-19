@@ -822,4 +822,9 @@ export default {
   "sp.export_config.error": "Yapılandırma dışa aktarılamadı: {error}",
   "sp.import_config.done": "{count} Ayarlar değeri içe aktarıldı. Sağlayıcı anahtarları ve yapılandırma etkin.",
   "sp.import_config.error": "Yapılandırma içe aktarılamadı: {error}",
+  "sp.input.placeholder_tip.skip_permissions": "İzin istemi olmadan: /dangerously-skip-permissions",
+  "sp.perm.skip_hint": "Daha az kesinti mi istiyorsunuz? “Her zaman izin ver” bu siteyi hatırlar. Aşağıdaki komut, WebBrain izin istemlerini tüm sitelerde kapatır.",
+  "sp.perm.insert_skip_command": "/dangerously-skip-permissions komutunu ekle",
+  "sp.perm.skip_hint_draft": "Taslağınız değişmedi. Komutu eklemeden önce taslağı temizleyin.",
+  "ob.act.permissions_tip": "İzin istemleri varsayılan olarak açıktır. İleri düzey kullanıcılar /dangerously-skip-permissions ile bunları tüm sitelerde kapatabilir ve Ayarlar → İzinler bölümünden yeniden açabilir.",
 };

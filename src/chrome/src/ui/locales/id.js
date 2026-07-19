@@ -823,4 +823,9 @@ export default {
   "sp.export_config.error": "Tidak dapat mengekspor konfigurasi: {error}",
   "sp.import_config.done": "Berhasil mengimpor {count} nilai Pengaturan. Kunci penyedia dan konfigurasi sudah aktif.",
   "sp.import_config.error": "Tidak dapat mengimpor konfigurasi: {error}",
+  "sp.input.placeholder_tip.skip_permissions": "Mode tanpa permintaan izin: /dangerously-skip-permissions",
+  "sp.perm.skip_hint": "Ingin lebih sedikit gangguan? “Selalu izinkan” mengingat situs ini. Perintah di bawah menonaktifkan permintaan izin WebBrain di semua situs.",
+  "sp.perm.insert_skip_command": "Sisipkan /dangerously-skip-permissions",
+  "sp.perm.skip_hint_draft": "Draf Anda tidak berubah. Kosongkan sebelum menyisipkan perintah.",
+  "ob.act.permissions_tip": "Permintaan izin aktif secara default. Pengguna tingkat lanjut dapat menonaktifkannya secara global dengan /dangerously-skip-permissions dan mengaktifkannya kembali di Pengaturan → Izin.",
 };

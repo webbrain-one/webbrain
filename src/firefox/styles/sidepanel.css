@@ -205,6 +205,11 @@ body {
   font-style: italic;
 }
 
+.ob-permission-note {
+  margin-top: 12px;
+  line-height: 1.5;
+}
+
 .ob-warn-list,
 .ob-provider-list {
   text-align: left;
@@ -2401,6 +2406,48 @@ body {
   color: var(--text-secondary);
   font-style: italic;
   line-height: 1.4;
+}
+
+.permission-education-hint {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 2px;
+  padding-top: 9px;
+  border-top: 1px solid var(--border);
+}
+
+.permission-education-copy {
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.permission-education-action {
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-input);
+  color: var(--accent);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+  line-height: 1.35;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.permission-education-action:hover,
+.permission-education-action:focus-visible {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.permission-education-action:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .clarify-options {

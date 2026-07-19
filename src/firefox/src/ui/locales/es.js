@@ -821,4 +821,9 @@ export default {
   "sp.export_config.error": "No se pudo exportar la configuración: {error}",
   "sp.import_config.done": "Se importaron {count} valores de Configuración. Las claves de proveedores y la configuración están activas.",
   "sp.import_config.error": "No se pudo importar la configuración: {error}",
+  "sp.input.placeholder_tip.skip_permissions": "Modo sin avisos: /dangerously-skip-permissions",
+  "sp.perm.skip_hint": "¿Quieres menos interrupciones? «Permitir siempre» recuerda este sitio. El comando de abajo desactiva los avisos de permisos de WebBrain en todos los sitios.",
+  "sp.perm.insert_skip_command": "Insertar /dangerously-skip-permissions",
+  "sp.perm.skip_hint_draft": "Tu borrador no ha cambiado. Bórralo antes de insertar el comando.",
+  "ob.act.permissions_tip": "Los avisos de permisos están activados de forma predeterminada. Los usuarios avanzados pueden desactivarlos globalmente con /dangerously-skip-permissions y volver a activarlos en Configuración → Permisos.",
 };

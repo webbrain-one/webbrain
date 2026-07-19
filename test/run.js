@@ -12772,6 +12772,81 @@ test('sidepanel exposes dangerously-skip-permissions in both builds', () => {
   }
 });
 
+test('permission skip education is contextual, one-time, and mirrored', () => {
+  for (const [label, prefix] of [
+    ['chrome', 'src/chrome'],
+    ['firefox', 'src/firefox'],
+  ]) {
+    const panel = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/sidepanel.js'), 'utf8');
+    const html = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/sidepanel.html'), 'utf8');
+    const css = fs.readFileSync(path.join(ROOT, prefix, 'styles/sidepanel.css'), 'utf8');
+    const locale = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/locales/en.js'), 'utf8');
+
+    assert.match(html, /class="ob-note ob-permission-note" data-i18n="ob\.act\.permissions_tip"/, `${label}: Act onboarding should mention the prompt bypass`);
+    assert.match(locale, /'ob\.act\.permissions_tip': '[^']*\/dangerously-skip-permissions/, `${label}: onboarding copy should name the command`);
+    assert.match(panel, /const PERMISSION_EDUCATION_KEY = 'permissionPromptEducation';/, `${label}: education state should have one storage key`);
+    assert.match(panel, /const PERMISSION_EDUCATION_THRESHOLD = 2;/, `${label}: contextual hint should wait for the second permission prompt`);
+    assert.match(panel, /async function maybeShowPermissionEducationHint\(card\) \{[\s\S]*?await permissionEducationReady;[\s\S]*?if \(!askBeforeConsequential \|\| !card\) return;[\s\S]*?promptCount: Math\.min\([\s\S]*?PERMISSION_EDUCATION_THRESHOLD[\s\S]*?hintShown[\s\S]*?card\.isConnected/, `${label}: hint should be gate-aware, counted, and one-time`);
+    assert.match(panel, /if \(changes\[PERMISSION_EDUCATION_KEY\]\) \{[\s\S]*?normalizePermissionEducationState\([\s\S]*?newValue[\s\S]*?updateInputPlaceholder\(\);/, `${label}: education state should stay synchronized across open panels`);
+
+    const renderStart = panel.indexOf('function renderClarifyCard(data) {');
+    const permissionStart = panel.indexOf('if (data.permission && data.permission.capability)', renderStart);
+    const permissionEnd = panel.indexOf('if (data.reason)', permissionStart);
+    const permissionBody = panel.slice(permissionStart, permissionEnd);
+    assert.match(permissionBody, /content\.appendChild\(card\);[\s\S]*?void maybeShowPermissionEducationHint\(card\);/, `${label}: only permission cards should trigger education`);
+
+    assert.match(panel, /function insertPermissionSkipCommand\(card\) \{[\s\S]*?if \(inputEl\.value\.trim\(\)\) \{[\s\S]*?sp\.perm\.skip_hint_draft[\s\S]*?return;[\s\S]*?permissionSkipCommandContextFromCard\(card\)[\s\S]*?inputEl\.value = command;[\s\S]*?updateSlashCommandAutocomplete\(\);[\s\S]*?syncSendButtonState\(\);/, `${label}: insert action should preserve drafts, source context, and composer state`);
+    assert.match(panel, /function permissionSkipCommandContextFromCard\(card\) \{[\s\S]*?card\?\.dataset\?\.scheduledTabId \?\? card\?\.dataset\?\.tabId[\s\S]*?clarifyId[\s\S]*?return \{ composerTabId, targetTabId, clarifyId \};/, `${label}: hint action should retain its scheduled target tab and clarify id`);
+    assert.match(panel, /btn\.addEventListener\('click', \(\) => insertPermissionSkipCommand\(btn\.closest\('\.clarify-card'\)\)\);/, `${label}: hint action should pass its source permission card`);
+    assert.match(panel, /const permissionSkipContext = permissionSkipCommandContextForDraft\(tabId, text\);[\s\S]*?parseSlashCommands\(text, tabId, \{ permissionSkipContext \}\)/, `${label}: sending the inserted command should carry its source context into slash parsing`);
+    assert.match(panel, /querySelectorAll\('\.permission-education-action'\)\.forEach\(bindPermissionEducationAction\)/, `${label}: restored permission hints should regain their action`);
+
+    const targetedResolverStart = panel.indexOf('function resolvePendingPermissionPromptForContext(context) {');
+    const targetedResolverEnd = panel.indexOf('function resolvePendingPermissionPromptsForTab(tabId) {', targetedResolverStart);
+    assert.ok(targetedResolverStart >= 0 && targetedResolverEnd > targetedResolverStart, `${label}: targeted permission resolver missing`);
+    const cards = [
+      { dataset: { tabId: '41', clarifyId: 'current-card' }, classList: { contains: () => false } },
+      { dataset: { tabId: '92', clarifyId: 'scheduled-card' }, classList: { contains: () => false } },
+    ];
+    const submissions = [];
+    const targetedResolver = vm.runInNewContext(
+      `(() => { ${panel.slice(targetedResolverStart, targetedResolverEnd)}; return resolvePendingPermissionPromptForContext; })()`,
+      {
+        document: { querySelectorAll: () => cards },
+        normalizePermissionSkipTabId: (value) => {
+          const numeric = Number(value);
+          return Number.isFinite(numeric) ? numeric : null;
+        },
+        submitClarify: (...args) => submissions.push(args),
+      },
+    );
+    assert.equal(targetedResolver({ targetTabId: 92, clarifyId: 'scheduled-card' }), true, `${label}: scheduled permission context should resolve`);
+    assert.equal(submissions.length, 1, `${label}: targeted resolver should answer exactly one permission card`);
+    assert.equal(submissions[0][0], cards[1], `${label}: targeted resolver should answer the scheduled source card`);
+    assert.deepEqual(submissions[0].slice(1), [92, 'scheduled-card', 'once', 'slash-command'], `${label}: targeted resolver should preserve the source tab and clarify id`);
+    assert.equal(targetedResolver({ targetTabId: 41, clarifyId: 'missing-card' }), false, `${label}: mismatched clarify context should not resolve another prompt`);
+
+    const skipCommandStart = panel.indexOf("if (command.value === '/dangerously-skip-permissions')");
+    const skipCommandEnd = panel.indexOf("if (command.value === '/compact')", skipCommandStart);
+    const skipCommandBody = panel.slice(skipCommandStart, skipCommandEnd);
+    assert.match(skipCommandBody, /if \(options\.permissionSkipContext\) \{[\s\S]*?resolvePendingPermissionPromptForContext\(options\.permissionSkipContext\);[\s\S]*?\} else \{[\s\S]*?resolvePendingPermissionPromptsForTab\(tabId\);/, `${label}: hinted commands should resolve only their source card while manually typed commands keep tab-scoped behavior`);
+
+    assert.match(panel, /function getInputPlaceholderKeys\(\) \{[\s\S]*?askBeforeConsequential && permissionEducationState\.promptCount > 0[\s\S]*?PERMISSION_REMINDER_PLACEHOLDER_KEY/, `${label}: reminder should rotate only after real permission use while prompts remain on`);
+    assert.match(panel, /function startInputPlaceholderRotation\(\)/, `${label}: placeholder rotation should exist in both builds`);
+    const placeholderKeysStart = panel.indexOf('const ASK_PLACEHOLDER_KEYS = [');
+    const placeholderKeysEnd = panel.indexOf('];', placeholderKeysStart);
+    const placeholderKeys = panel.slice(placeholderKeysStart, placeholderKeysEnd);
+    if (label === 'firefox') {
+      assert.doesNotMatch(placeholderKeys, /sp\.input\.placeholder_tip\.record/, 'firefox: placeholder rotation should not advertise unsupported recording');
+    } else {
+      assert.match(placeholderKeys, /sp\.input\.placeholder_tip\.record/, 'chrome: placeholder rotation should retain the recording tip');
+    }
+    assert.match(locale, /'sp\.input\.placeholder_tip\.skip_permissions': 'Prompt-free mode: \/dangerously-skip-permissions'/, `${label}: placeholder reminder should name the command`);
+    assert.match(css, /\.permission-education-hint\s*\{[\s\S]*?border-top:/, `${label}: contextual hint should be visually separated inside the permission card`);
+    assert.match(css, /\.permission-education-action:focus-visible\s*\{[\s\S]*?outline:/, `${label}: insert action should have a keyboard focus treatment`);
+  }
+});
+
 test('sidepanel scopes async tab commands to the original tab', () => {
   for (const [label, panelRel, styleRel, localeRel] of [
     ['chrome', 'src/chrome/src/ui/sidepanel.js', 'src/chrome/styles/sidepanel.css', 'src/chrome/src/ui/locales/en.js'],
@@ -12802,7 +12877,7 @@ test('sidepanel scopes async tab commands to the original tab', () => {
       /token|secret|private/,
       `${label}: screenshot filenames must not expose URL queries or fragments`,
     );
-    assert.match(panel, /async function parseSlashCommands\(text, tabId = currentTabId\) \{/, `${label}: slash-command parsing should accept the initiating tab id`);
+    assert.match(panel, /async function parseSlashCommands\(text, tabId = currentTabId, options = \{\}\) \{/, `${label}: slash-command parsing should accept the initiating tab id and optional source context`);
 
     const helperStart = panel.indexOf('async function renderClearedConversationForTab(tabId)');
     assert.notEqual(helperStart, -1, `${label}: clear helper missing`);
@@ -12985,7 +13060,7 @@ test('sidepanel preserves stale residual slash-command prompts without hidden ru
     const deleteModeIdx = sendBody.indexOf('delete chatExtraParams.__mode;');
     const modeCaptureIdx = sendBody.indexOf(modeCapture);
     const apiCaptureIdx = sendBody.indexOf(apiCapture);
-    const parseIdx = sendBody.indexOf('text = await parseSlashCommands(text, tabId);');
+    const parseIdx = sendBody.indexOf('text = await parseSlashCommands(text, tabId, { permissionSkipContext });');
     assert.notEqual(modeOverrideIdx, -1, `${label}: recommended-action mode override should be captured before send mode selection`);
     assert.notEqual(deleteModeIdx, -1, `${label}: internal recommended-action mode override should not leak into chat payload`);
     assert.notEqual(modeCaptureIdx, -1, `${label}: send mode should be captured from the initiating command before async slash parsing`);
@@ -12994,7 +13069,7 @@ test('sidepanel preserves stale residual slash-command prompts without hidden ru
     assert.equal(modeCaptureIdx < parseIdx && apiCaptureIdx < parseIdx, true, `${label}: stale-tab residual sends should not read visible-tab options after slash parsing`);
     assert.match(
       sendBody,
-      /const tabId = currentTabId;[\s\S]*?text = await parseSlashCommands\(text, tabId\);[\s\S]*?renderToCurrentTab = sameTabId\(currentTabId, tabId\) && sameTabId\(renderedTabId, tabId\);[\s\S]*?if \(!renderToCurrentTab\) \{[\s\S]*?if \(text\) saveInputDraftForTab\(tabId, text\);[\s\S]*?return false;[\s\S]*?\}/,
+      /const tabId = currentTabId;[\s\S]*?text = await parseSlashCommands\(text, tabId, \{ permissionSkipContext \}\);[\s\S]*?renderToCurrentTab = sameTabId\(currentTabId, tabId\) && sameTabId\(renderedTabId, tabId\);[\s\S]*?if \(!renderToCurrentTab\) \{[\s\S]*?if \(text\) saveInputDraftForTab\(tabId, text\);[\s\S]*?return false;[\s\S]*?\}/,
       `${label}: stale residual slash-command prompts should be preserved as drafts instead of hidden runs`,
     );
     assert.match(
@@ -13139,12 +13214,12 @@ test('sidepanel allows safe slash commands and queues normal messages while busy
     );
     assert.match(
       panel,
-      /text = normalizeScreenshotCommandText\(text\);[\s\S]*?if \(isProcessing\) \{[\s\S]*?if \(isOutOfBandSlashDraft\(text\)\) \{[\s\S]*?await parseSlashCommands\(text, tabId\);[\s\S]*?return true;[\s\S]*?\}[\s\S]*?if \(text\.startsWith\('\/'\)\) \{[\s\S]*?showBusySlashCommandNotice\(\);[\s\S]*?return false;[\s\S]*?\}[\s\S]*?return enqueueQueuedComposerMessage\(tabId, text\);[\s\S]*?\}/,
+      /text = normalizeScreenshotCommandText\(text\);[\s\S]*?if \(isProcessing\) \{[\s\S]*?if \(isOutOfBandSlashDraft\(text\)\) \{[\s\S]*?await parseSlashCommands\(text, tabId, \{ permissionSkipContext \}\);[\s\S]*?return true;[\s\S]*?\}[\s\S]*?if \(text\.startsWith\('\/'\)\) \{[\s\S]*?showBusySlashCommandNotice\(\);[\s\S]*?return false;[\s\S]*?\}[\s\S]*?return enqueueQueuedComposerMessage\(tabId, text\);[\s\S]*?\}/,
       `${label}: busy send preflight should run safe slash commands and queue normal drafts`,
     );
     assert.match(
       panel,
-      /await parseSlashCommands\(text, tabId\);[\s\S]*?if \(currentTabId === tabId\) \{[\s\S]*?if \(!inputEl\.value\.trim\(\) \|\| inputEl\.value\.trim\(\) === text\) \{[\s\S]*?inputEl\.value = '';[\s\S]*?autoResizeInput\(\);[\s\S]*?\}[\s\S]*?syncSendButtonState\(\);[\s\S]*?\}/,
+      /await parseSlashCommands\(text, tabId, \{ permissionSkipContext \}\);[\s\S]*?if \(currentTabId === tabId\) \{[\s\S]*?if \(!inputEl\.value\.trim\(\) \|\| inputEl\.value\.trim\(\) === text\) \{[\s\S]*?inputEl\.value = '';[\s\S]*?autoResizeInput\(\);[\s\S]*?\}[\s\S]*?syncSendButtonState\(\);[\s\S]*?\}/,
       `${label}: async busy slash completion should preserve newly typed drafts`,
     );
     assert.match(

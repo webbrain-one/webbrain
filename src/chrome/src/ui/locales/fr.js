@@ -823,4 +823,9 @@ export default {
   "sp.export_config.error": "Impossible d’exporter la configuration : {error}",
   "sp.import_config.done": "{count} paramètres ont été importés. Les clés des fournisseurs et la configuration sont actives.",
   "sp.import_config.error": "Impossible d’importer la configuration : {error}",
+  "sp.input.placeholder_tip.skip_permissions": "Mode sans demandes : /dangerously-skip-permissions",
+  "sp.perm.skip_hint": "Vous voulez moins d’interruptions ? « Toujours autoriser » mémorise ce site. La commande ci-dessous désactive les demandes d’autorisation de WebBrain sur tous les sites.",
+  "sp.perm.insert_skip_command": "Insérer /dangerously-skip-permissions",
+  "sp.perm.skip_hint_draft": "Votre brouillon reste inchangé. Effacez-le avant d’insérer la commande.",
+  "ob.act.permissions_tip": "Les demandes d’autorisation sont activées par défaut. Les utilisateurs avancés peuvent les désactiver partout avec /dangerously-skip-permissions et les réactiver dans Paramètres → Autorisations.",
 };
