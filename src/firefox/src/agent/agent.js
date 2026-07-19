@@ -4722,7 +4722,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   _formValidationActionKey(toolName, args = {}) {
     const name = String(toolName || '');
     const fields = name === 'set_field'
-      ? ['selector', 'ref_id', 'index', 'name', 'submit']
+      ? ['selector', 'ref_id', 'index', 'name', 'text', 'submit']
       : name === 'press_keys'
         ? ['selector', 'ref_id', 'index', 'key', 'keys']
         : ['selector', 'ref_id', 'index', 'text', 'x', 'y', 'urlFilter'];
@@ -4730,6 +4730,16 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     for (const field of fields) {
       const value = args?.[field];
       if (value == null || value === '') continue;
+      if (name === 'set_field' && field === 'text') {
+        const text = String(value);
+        let hash = 2166136261;
+        for (let i = 0; i < text.length; i++) {
+          hash ^= text.charCodeAt(i);
+          hash = Math.imul(hash, 16777619);
+        }
+        identity.textFingerprint = `${text.length}:${(hash >>> 0).toString(16)}`;
+        continue;
+      }
       identity[field] = typeof value === 'string' ? value.slice(0, 500) : value;
     }
     return Object.keys(identity).length ? `${name}:${JSON.stringify(identity)}` : '';

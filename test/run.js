@@ -22922,6 +22922,20 @@ test('form validation classifier surfaces native and custom submission errors', 
       { text: 'Choose application' },
       { success: true, tag: 'BUTTON', type: 'button', text: 'Choose application', isSubmitControl: false },
     ), false, `${AgentClass.name}: corrective type=button was misclassified as a submit`);
+
+    const failedSetFieldKey = agent._formValidationActionKey('set_field', {
+      ref_id: 'ref_email',
+      text: 'wrong@example.com',
+      submit: true,
+    });
+    const correctedSetFieldKey = agent._formValidationActionKey('set_field', {
+      ref_id: 'ref_email',
+      text: 'correct@example.com',
+      submit: true,
+    });
+    assert.notEqual(failedSetFieldKey, correctedSetFieldKey, `${AgentClass.name}: corrected set_field value kept the failed retry key`);
+    assert.doesNotMatch(failedSetFieldKey, /wrong@example\.com/, `${AgentClass.name}: set_field retry key retained raw typed text`);
+    assert.doesNotMatch(correctedSetFieldKey, /correct@example\.com/, `${AgentClass.name}: corrected retry key retained raw typed text`);
   }
 });
 
