@@ -23019,6 +23019,18 @@ test('form validation classifier surfaces native and custom submission errors', 
       { isSubmit: true, validationSubmitEvidence: 'heuristic' },
     ), false, `${AgentClass.name}: heuristic AX preflight was promoted to strong submit evidence`);
     assert.equal(agent._formValidationActionLooksSubmit(
+      'click_ax',
+      { ref_id: 'ref_continue' },
+      { success: true, tag: 'div', name: 'Continue' },
+      { isSubmit: true, validationSubmitEvidence: 'heuristic' },
+    ), true, `${AgentClass.name}: heuristic custom Continue control skipped validation inspection`);
+    assert.equal(agent._formValidationActionLooksSubmit(
+      'click_ax',
+      { ref_id: 'ref_save' },
+      { success: true, tag: 'div', name: 'Save' },
+      { isSubmit: true, validationSubmitEvidence: 'heuristic' },
+    ), true, `${AgentClass.name}: heuristic custom Save control skipped validation inspection`);
+    assert.equal(agent._formValidationActionLooksSubmit(
       'iframe_click',
       { selector: '#add-phone', text: 'Add phone' },
       { success: true, frame: { tag: 'BUTTON', text: 'Add phone' } },

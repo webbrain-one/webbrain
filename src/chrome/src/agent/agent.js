@@ -5543,13 +5543,16 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     }
     if (this._formValidationActionHasStrongSubmitEvidence(toolName, args, result, detectedSubmit)) return true;
     if (!['click', 'click_ax', 'iframe_click'].includes(name)) return false;
-    if (detectedSubmit?.isSubmit === true) return false;
 
     const label = String(args?.text || result?.name || result?.matched || result?.text || '').trim();
+    const selector = String(args?.selector || '').toLowerCase();
+    if (detectedSubmit?.isSubmit === true) {
+      return /^(?:continue|save|submit|post|publish|send|confirm|sign up|sign in|log in|register|place order|pay|checkout|finish)\b/i.test(label)
+        || /(?:type\s*=\s*["']?(?:submit|image)|\bsubmit\b|\bcontinue\b|\bconfirm\b|\bcheckout\b|\bfinish\b)/.test(selector);
+    }
     if (/^(?:continue|next|create|save|submit|add|post|publish|send|confirm|sign up|sign in|log in|register|place order|pay|checkout|update|apply|finish|done)\b/i.test(label)) {
       return true;
     }
-    const selector = String(args?.selector || '').toLowerCase();
     return /(?:type\s*=\s*["']?(?:submit|image)|\bsubmit\b|\bcontinue\b|\bconfirm\b|\bcheckout\b|\bfinish\b)/.test(selector);
   }
 
