@@ -22892,6 +22892,16 @@ test('form validation classifier surfaces native and custom submission errors', 
     assert.match(nativeFailure.error, /compatible with at least one application/i);
     assert.deepEqual(nativeFailure.invalidFields[0], invalidField);
 
+    const alreadyActive = [{
+      ...nativeAfter[0],
+    }];
+    const correctiveNative = agent._detectFormValidationFailure(alreadyActive, alreadyActive, {
+      toolName: 'click',
+      args: { text: 'Continue' },
+      result: { success: true, tag: 'BUTTON', type: 'button', isSubmitControl: false },
+    });
+    assert.equal(correctiveNative, null, `${AgentClass.name}: pre-existing native validation blocked a corrective button`);
+
     const customAfter = [{
       ...before[0],
       invalidFields: [],
@@ -23189,6 +23199,90 @@ test('coordinate iframe submits capture validation state in all frames', async (
   const result = JSON.parse(agent._unwrapUntrusted(messages[0].content));
   assert.equal(result.formValidationFailed, true, 'Chrome: child-frame validation failure was not returned');
   assert.match(result.error, /valid card number/i);
+});
+
+test('unattended iframe submits preflight validation in all frames', async () => {
+  const url = 'https://merchant.example/checkout';
+  for (const AgentClass of [AgentCh, AgentFx]) {
+    const agent = new AgentClass({ getVisionProvider: async () => null });
+    const tabId = AgentClass === AgentCh ? 5121 : 5122;
+    const before = [{
+      frameId: 0,
+      url,
+      activeInvalid: false,
+      invalidFields: [],
+      ariaInvalidFields: [],
+      alerts: [],
+      controlFingerprint: 'top',
+    }, {
+      frameId: 2,
+      url: 'https://payments.example/card',
+      activeInvalid: false,
+      invalidFields: [],
+      ariaInvalidFields: [],
+      alerts: [],
+      controlFingerprint: 'card-ready',
+    }];
+    const after = structuredClone(before);
+    after[1].alerts = ['Card verification failed.'];
+    after[1].controlFingerprint = 'card-error';
+
+    let detections = 0;
+    let captures = 0;
+    const captureOptions = [];
+    agent._ensureGateSetting = async () => true;
+    agent._skipPermissionGate = true;
+    agent._currentUrl = async () => url;
+    agent._recordProgressObservation = async () => null;
+    agent._autoRecordProgressAction = () => null;
+    agent._progressWarningForAction = () => '';
+    agent._persist = () => {};
+    agent._detectLikelySubmitAction = async (_tabId, toolName) => {
+      detections += 1;
+      assert.equal(toolName, 'iframe_click');
+      return {
+        isSubmit: true,
+        host: 'payments.example',
+        tool: 'iframe_click',
+        reason: 'submit button/control activation',
+      };
+    };
+    agent._captureFormValidationState = async (_tabId, options = {}) => {
+      captureOptions.push(options);
+      captures += 1;
+      return structuredClone(captures === 1 ? before : after);
+    };
+    agent.executeTool = async () => ({
+      success: true,
+      dispatched: true,
+      frame: { tag: 'BUTTON', type: 'button' },
+    });
+
+    const messages = [];
+    await agent._executeToolBatch(
+      tabId,
+      [{
+        id: 'unattended_iframe_submit',
+        function: {
+          name: 'iframe_click',
+          arguments: '{"selector":"#pay","urlFilter":"payments.example"}',
+        },
+      }],
+      messages,
+      () => {},
+      { supportsVision: false },
+      '',
+      new Set(['iframe_click']),
+      1,
+    );
+
+    assert.equal(detections, 1, `${AgentClass.name}: iframe submit was not preflight-detected`);
+    assert.ok(captureOptions.length >= 2, `${AgentClass.name}: iframe validation state was not checked`);
+    assert.ok(captureOptions.every(options => options.allFrames === true), `${AgentClass.name}: iframe validation omitted child frames`);
+    const result = JSON.parse(agent._unwrapUntrusted(messages[0].content).split('\n', 1)[0]);
+    assert.equal(result.formValidationFailed, true, `${AgentClass.name}: unattended iframe validation failure was missed`);
+    assert.match(result.error, /card verification failed/i);
+  }
 });
 
 test('execute_js submissions receive form validation feedback', async () => {

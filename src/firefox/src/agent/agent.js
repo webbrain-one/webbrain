@@ -2042,7 +2042,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       }
       const formValidationCandidate = this._isFormValidationCandidate(fnName, fnArgs);
       const formValidationAllFrames = fnName === 'iframe_click' || fnName === 'press_keys';
-      let detectedSubmitAction = null;
+      let detectedSubmitAction = formValidationCandidate && fnName === 'iframe_click'
+        ? await this._detectLikelySubmitAction(tabId, fnName, fnArgs)
+        : null;
       const validationBlock = formValidationCandidate ? this._formValidationBlocks.get(tabId) : null;
       let priorValidationFailure = !!validationBlock;
       const obviousSubmitAction = formValidationCandidate
@@ -4832,6 +4834,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       (Array.isArray(state?.ariaInvalidFields) ? state.ariaInvalidFields : [])
         .map(field => `${field?.label || ''}|${field?.type || ''}|${field?.message || ''}`)
     ));
+    const beforeActiveInvalid = new Set(before
+      .filter(state => state?.activeInvalid === true)
+      .map(state => `${state?.frameId ?? ''}|${this._normalizeUrlPath(String(state?.url || ''))}`));
     const newAlerts = [];
     const newAriaInvalid = [];
     // Custom alert/live-region and aria-invalid failures must be newly exposed
@@ -4853,7 +4858,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
     // Native browser validation prevents navigation, so only compare it on the
     // original route. Redirected pages require explicit alert/ARIA evidence.
-    const nativeFailureStates = sameRouteAfter.filter(state => state?.activeInvalid === true);
+    const nativeFailureStates = sameRouteAfter.filter((state) => {
+      if (state?.activeInvalid !== true) return false;
+      const key = `${state?.frameId ?? ''}|${this._normalizeUrlPath(String(state?.url || ''))}`;
+      return !beforeActiveInvalid.has(key);
+    });
     const nativeInvalidFields = looksLikeSubmit
       ? nativeFailureStates.flatMap(state => Array.isArray(state?.invalidFields) ? state.invalidFields : [])
       : [];

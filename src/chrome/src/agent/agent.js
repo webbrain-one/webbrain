@@ -2442,11 +2442,16 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       const formValidationAllFrames = fnName === 'iframe_click'
         || fnName === 'press_keys'
         || (Array.isArray(formValidationCoordinateFrames) && formValidationCoordinateFrames.length > 0);
-      let detectedSubmitAction = formValidationAllFrames
-        && Array.isArray(formValidationCoordinateFrames)
-        && formValidationCoordinateFrames.length > 0
+      const preflightSubmitDetection = formValidationCandidate
+        && (
+          fnName === 'iframe_click'
+          || (Array.isArray(formValidationCoordinateFrames) && formValidationCoordinateFrames.length > 0)
+        );
+      let detectedSubmitAction = preflightSubmitDetection
         ? await this._detectLikelySubmitAction(tabId, fnName, fnArgs, {
-            coordinateFrames: formValidationCoordinateFrames,
+            ...(Array.isArray(formValidationCoordinateFrames)
+              ? { coordinateFrames: formValidationCoordinateFrames }
+              : {}),
           })
         : null;
       const validationBlock = formValidationCandidate ? this._formValidationBlocks.get(tabId) : null;
@@ -5581,6 +5586,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       (Array.isArray(state?.ariaInvalidFields) ? state.ariaInvalidFields : [])
         .map(field => `${field?.label || ''}|${field?.type || ''}|${field?.message || ''}`)
     ));
+    const beforeActiveInvalid = new Set(before
+      .filter(state => state?.activeInvalid === true)
+      .map(state => `${state?.frameId ?? ''}|${this._normalizeUrlPath(String(state?.url || ''))}`));
     const newAlerts = [];
     const newAriaInvalid = [];
     // Custom alert/live-region and aria-invalid failures must be newly exposed
@@ -5602,7 +5610,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
     // Native browser validation prevents navigation, so only compare it on the
     // original route. Redirected pages require explicit alert/ARIA evidence.
-    const nativeFailureStates = sameRouteAfter.filter(state => state?.activeInvalid === true);
+    const nativeFailureStates = sameRouteAfter.filter((state) => {
+      if (state?.activeInvalid !== true) return false;
+      const key = `${state?.frameId ?? ''}|${this._normalizeUrlPath(String(state?.url || ''))}`;
+      return !beforeActiveInvalid.has(key);
+    });
     const nativeInvalidFields = looksLikeSubmit
       ? nativeFailureStates.flatMap(state => Array.isArray(state?.invalidFields) ? state.invalidFields : [])
       : [];
