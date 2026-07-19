@@ -20452,12 +20452,17 @@ test('agent repairs only terminal content after raw tool-call and plan gates', (
       "toolResult.summary || partialAssistantText || '',",
     );
     const doneTerminalRepair = source.indexOf(
-      'const repairedDoneSummary = repairAssistantDisplayText(',
+      'const repairedDoneSummary = repairAssistantDisplayText(rawDoneSummary);',
       rawDoneGate,
     );
     assert.ok(
       rawDoneGate >= 0 && rawDoneGate < doneTerminalRepair,
       `${label}: done summary repair must run after the raw plan-only gate`,
+    );
+    assert.match(
+      source.slice(doneTerminalRepair, doneTerminalRepair + 900),
+      /if \(repairedDoneSummary !== rawDoneSummary\) \{[\s\S]*?onUpdate\('text', \{ content: finalResponse, replace: true \}\);/,
+      `${label}: repaired done summaries should replace already-streamed terminal text`,
     );
 
     const rawStreamFallback = source.indexOf(
@@ -26178,6 +26183,11 @@ test('accepted done emits successful result update after progress gate', async (
       1,
       `${AgentClass.name}: accepted done should emit one successful done update`,
     );
+    assert.equal(
+      updates.some(update => update.type === 'text'),
+      false,
+      `${AgentClass.name}: an unchanged done summary should not replace visible text`,
+    );
   }
 });
 
@@ -26186,7 +26196,7 @@ test('accepted done repairs only the terminal display summary', async () => {
   const malformed = `Verification:\n- Page title: ${JSON.stringify(title)}`;
   const expected = `Verification:\n- Page title: ${title}`;
 
-  for (const AgentClass of [AgentCh, AgentFx]) {
+  for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
     const agent = new AgentClass({ getActive: () => ({ contextWindow: 128000, supportsVision: false }) });
     const tabId = 795;
     const messages = [
@@ -26195,7 +26205,11 @@ test('accepted done repairs only the terminal display summary', async () => {
     ];
     agent.conversations.set(tabId, messages);
     agent.conversationModes.set(tabId, 'act');
-    agent.executeTool = async () => ({ done: true, summary: malformed, outcome: 'success' });
+    agent.executeTool = async () => ({
+      done: true,
+      summary: index === 0 ? malformed : '',
+      outcome: 'success',
+    });
     agent._persist = () => {};
     agent.providerManager = { ...(agent.providerManager || {}), getVisionProvider: async () => null };
 
@@ -26210,7 +26224,7 @@ test('accepted done repairs only the terminal display summary', async () => {
       messages,
       (type, data) => updates.push({ type, data }),
       { supportsVision: false },
-      null,
+      index === 0 ? null : malformed,
       new Set(['done']),
       1,
     );
@@ -26218,7 +26232,16 @@ test('accepted done repairs only the terminal display summary', async () => {
     assert.equal(result.action, 'return', `${AgentClass.name}: accepted done should finish`);
     assert.equal(result.value, expected, `${AgentClass.name}: done summary display was not repaired`);
     const rawUpdate = updates.find(update => update.type === 'tool_result' && update.data?.name === 'done');
-    assert.equal(rawUpdate?.data?.result?.summary, malformed, `${AgentClass.name}: raw done summary was mutated before display repair`);
+    assert.equal(
+      rawUpdate?.data?.result?.summary,
+      index === 0 ? malformed : '',
+      `${AgentClass.name}: raw done summary was mutated before display repair`,
+    );
+    assert.deepEqual(
+      updates.find(update => update.type === 'text'),
+      { type: 'text', data: { content: expected, replace: true } },
+      `${AgentClass.name}: repaired done summary did not replace streamed terminal text`,
+    );
   }
 });
 

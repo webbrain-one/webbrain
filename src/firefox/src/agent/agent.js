@@ -2386,10 +2386,15 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           return { action: 'return', value: planOnlyDecision.failure, status: 'plan_only_output' };
         }
         onUpdate('tool_result', { name: fnName, result: toolResult });
-        const repairedDoneSummary = repairAssistantDisplayText(
-          toolResult.summary || partialAssistantText || 'Task completed.',
-        );
+        const rawDoneSummary = toolResult.summary || partialAssistantText || 'Task completed.';
+        const repairedDoneSummary = repairAssistantDisplayText(rawDoneSummary);
         const finalResponse = this._appendProgressLedgerToFinal(tabId, repairedDoneSummary);
+        if (repairedDoneSummary !== rawDoneSummary) {
+          // Streaming providers may already have rendered the malformed summary
+          // before the done call. Replace it so the visible bubble matches the
+          // repaired terminal value returned by this batch.
+          onUpdate('text', { content: finalResponse, replace: true });
+        }
         messages.push({
           role: 'tool',
           tool_call_id: tc.id,
