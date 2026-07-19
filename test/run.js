@@ -4857,11 +4857,11 @@ test('recommended actions match issue scenarios', () => {
 });
 
 test('Tweet about WebBrain is permanent and carries a ready-to-go plan', () => {
+  const exactPost = 'Introducing WebBrain — an open-source AI browser agent that lives in your browser. Chat with any page, automate multi-step workflows, and bring your own LLM. Extensible by design. Try it: https://webbrain.one';
   const expectedPlanSteps = [
     'Open https://x.com/compose/post in the current tab through the visible browser UI.',
-    'Draft a concise, engaging tweet that describes WebBrain as an open-source AI browser agent for chatting with pages, automating tasks, and running multi-step workflows with the user’s choice of LLM.',
-    'Include https://webbrain.one, keep the post within X’s character limit, and avoid claims that cannot be verified from the supplied WebBrain description.',
-    'Enter the tweet in the visible X composer and publish it.',
+    `Enter this exact reviewed text in the visible X composer without translating, rewriting, or adding anything: ${JSON.stringify(exactPost)}`,
+    'Publish only after the composer text exactly matches the supplied text.',
     'Verify the new tweet appears, then report its URL when available.',
   ];
   const pages = [
@@ -4876,15 +4876,69 @@ test('Tweet about WebBrain is permanent and carries a ready-to-go plan', () => {
       const tweet = actions.find((action) => action.id === 'tweet-webbrain');
       assert.equal(tweet?.label, 'Tweet about WebBrain');
       assert.equal(tweet?.mode, 'act');
-      assert.match(tweet?.prompt || '', /visible X interface/);
+      assert.match(tweet?.prompt || '', /visible X interface[\s\S]*without changing it/);
+      assert.ok(tweet?.prompt?.includes(exactPost), 'visible action prompt should carry the reviewed English post verbatim');
       assert.equal(tweet?.runOptions?.skipPlanner, true);
       assert.equal(tweet?.runOptions?.tool, 'navigate');
-      assert.match(tweet?.runOptions?.summary || '', /Publish a concise promotional tweet about WebBrain/);
+      assert.equal(tweet?.runOptions?.summary, 'Publish the reviewed localized WebBrain post exactly as supplied.');
       assert.deepEqual(tweet?.runOptions?.steps, expectedPlanSteps);
     }
 
     const fallbackActions = buildRecommendedActions({ url: 'https://example.com/', title: 'Example page' });
     assert.equal(fallbackActions.some((action) => action.id === 'explain-page'), true, 'permanent action should not suppress the generic page action');
+  }
+});
+
+test('WebBrain tweet copy is reviewed, localized, mirrored, and safely bounded', async () => {
+  const localeNames = ['ar', 'en', 'es', 'fr', 'he', 'id', 'ja', 'ko', 'ms', 'pl', 'ru', 'th', 'tl', 'tr', 'uk', 'zh'];
+  const transformedUrlLength = 23;
+  const conservativeXWeight = (value) => {
+    const urls = String(value).match(/https?:\/\/\S+/g) || [];
+    const withoutUrls = String(value).replace(/https?:\/\/\S+/g, '');
+    const textWeight = [...withoutUrls].reduce(
+      (total, char) => total + (char.codePointAt(0) <= 0x10ff ? 1 : 2),
+      0,
+    );
+    return textWeight + (urls.length * transformedUrlLength);
+  };
+
+  for (const locale of localeNames) {
+    const chromeLocale = (await import(pathToFileURL(path.join(ROOT, `src/chrome/src/ui/locales/${locale}.js`)).href)).default;
+    const firefoxLocale = (await import(pathToFileURL(path.join(ROOT, `src/firefox/src/ui/locales/${locale}.js`)).href)).default;
+    for (const key of [
+      'sp.recommended.tweet.label',
+      'sp.recommended.tweet.prompt',
+      'sp.recommended.tweet.text',
+    ]) {
+      assert.equal(typeof chromeLocale[key], 'string', `${locale}: ${key} should be explicit`);
+      assert.ok(chromeLocale[key].trim(), `${locale}: ${key} should not be empty`);
+      assert.equal(firefoxLocale[key], chromeLocale[key], `${locale}: ${key} should match across browsers`);
+    }
+
+    const text = chromeLocale['sp.recommended.tweet.text'];
+    assert.equal((text.match(/https:\/\/webbrain\.one/g) || []).length, 1, `${locale}: post should contain exactly one canonical URL`);
+    assert.ok(text.includes('WebBrain'), `${locale}: post should preserve the product name`);
+    assert.ok(text.includes('LLM'), `${locale}: post should preserve the bring-your-own-LLM claim`);
+    assert.ok(
+      conservativeXWeight(text) <= 280,
+      `${locale}: conservatively weighted post should fit X (${conservativeXWeight(text)}/280)`,
+    );
+    assert.ok(
+      chromeLocale['sp.recommended.tweet.prompt'].includes('{post}'),
+      `${locale}: prompt should interpolate the reviewed post`,
+    );
+  }
+
+  for (const [label, rel] of [
+    ['chrome', 'src/chrome/src/ui/sidepanel.js'],
+    ['firefox', 'src/firefox/src/ui/sidepanel.js'],
+  ]) {
+    const panel = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+    assert.match(
+      panel,
+      /document\.addEventListener\('wb-locale-changed', \(\) => \{[\s\S]*updateRecommendedActionsCollapsedState\(\);[\s\S]*refreshRecommendedActions\(\);[\s\S]*\}\);/,
+      `${label}: changing the locale should refresh localized recommended actions`,
+    );
   }
 });
 
@@ -23930,21 +23984,30 @@ test('accessibility ref lookup rejects disconnected elements', () => {
     const end = source.indexOf('\n\n  // ── Public: suggest nearby refs', start);
     assert.ok(start >= 0 && end > start, `${label}: lookup helper should remain independently testable`);
 
+    const scope = '123456789012';
+    const liveRef = `ref_${scope}1`;
+    const staleRef = `ref_${scope}2`;
+    const collectedRef = `ref_${scope}3`;
     const connected = { isConnected: true };
     const elementMap = {
-      ref_live: { deref: () => connected },
-      ref_stale: { deref: () => ({ isConnected: false }) },
-      ref_collected: { deref: () => null },
+      [liveRef]: { deref: () => connected },
+      [staleRef]: { deref: () => ({ isConnected: false }) },
+      [collectedRef]: { deref: () => null },
     };
     const lookup = vm.runInNewContext(`(${source.slice(start, end)})`, {
       window: { __wbElementMap: elementMap },
+      refOrdinal: refId => {
+        const match = new RegExp(`^ref_${scope}(\\d+)$`).exec(String(refId || ''));
+        return match ? Number(match[1]) : null;
+      },
     });
 
-    assert.equal(lookup('ref_live'), connected, `${label}: connected refs should remain usable`);
-    assert.equal(lookup('ref_stale'), null, `${label}: disconnected refs must be rejected`);
-    assert.equal(elementMap.ref_stale, undefined, `${label}: disconnected refs should be evicted`);
-    assert.equal(lookup('ref_collected'), null, `${label}: collected refs must be rejected`);
-    assert.equal(elementMap.ref_collected, undefined, `${label}: collected refs should be evicted`);
+    assert.equal(lookup(liveRef), connected, `${label}: connected refs should remain usable`);
+    assert.equal(lookup(staleRef), null, `${label}: disconnected refs must be rejected`);
+    assert.equal(elementMap[staleRef], undefined, `${label}: disconnected refs should be evicted`);
+    assert.equal(lookup(collectedRef), null, `${label}: collected refs must be rejected`);
+    assert.equal(elementMap[collectedRef], undefined, `${label}: collected refs should be evicted`);
+    assert.equal(lookup('ref_unscoped'), null, `${label}: unscoped refs must remain invalid`);
   }
 });
 
@@ -32855,10 +32918,10 @@ test('planner gate: trusted WebBrain tweet action skips planner and pins ready p
         id: 'tweet-webbrain',
         skipPlanner: true,
         tool: 'navigate',
-        summary: 'Publish a concise promotional tweet about WebBrain.',
+        summary: 'Publish the reviewed localized WebBrain post exactly as supplied.',
         steps: [
           'Open https://x.com/compose/post in the current tab through the visible browser UI.',
-          'Include https://webbrain.one and publish through the visible X composer.',
+          'Enter this exact reviewed localized text through the visible X composer without rewriting it: "Introducing WebBrain — an open-source AI browser agent that lives in your browser. Chat with any page, automate multi-step workflows, and bring your own LLM. Extensible by design. Try it: https://webbrain.one"',
           'Verify the new tweet appears and report its URL.',
         ],
       };

@@ -4804,8 +4804,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     }
     if (id === 'tweet-webbrain' && tool !== 'navigate') return null;
     const summary = sanitizePlannerText(action.summary || 'Run the selected recommended action.', 500, { collapseWhitespace: true });
+    const stepLimit = id === 'tweet-webbrain' ? 600 : 300;
     const steps = Array.isArray(action.steps)
-      ? action.steps.map(step => sanitizePlannerText(step, 300, { collapseWhitespace: true })).filter(Boolean).slice(0, 5)
+      ? action.steps.map(step => sanitizePlannerText(step, stepLimit, { collapseWhitespace: true })).filter(Boolean).slice(0, 5)
       : [];
     return { id, tool, summary, steps };
   }

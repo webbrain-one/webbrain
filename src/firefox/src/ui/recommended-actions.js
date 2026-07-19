@@ -1,4 +1,5 @@
 import { isDirectPublicMediaUrl } from '../agent/public-media-url.js';
+import { t } from './i18n.js';
 
 const SOCIAL_HOST_RE = /(^|\.)(instagram\.com|tiktok\.com|x\.com|twitter\.com|facebook\.com|fb\.com|threads\.net|youtube\.com|youtu\.be|reddit\.com|pinterest\.com|snapchat\.com)$/i;
 const PUBLIC_MEDIA_HOST_RE = /(^|\.)(youtube\.com|youtu\.be|tiktok\.com|instagram\.com|x\.com|twitter\.com|reddit\.com|redd\.it|facebook\.com|fb\.com|fb\.watch|pinterest\.com|pin\.it|linkedin\.com|threads\.net)$/i;
@@ -135,17 +136,17 @@ function visibleTreeArgs(maxDepth = 10) {
   return { filter: 'visible', maxDepth };
 }
 
-function webbrainTweetRunOptions() {
+function webbrainTweetRunOptions(postText) {
+  const exactPost = String(postText || '').trim();
   return {
     id: 'tweet-webbrain',
     skipPlanner: true,
     tool: 'navigate',
-    summary: 'Publish a concise promotional tweet about WebBrain.',
+    summary: 'Publish the reviewed localized WebBrain post exactly as supplied.',
     steps: [
       'Open https://x.com/compose/post in the current tab through the visible browser UI.',
-      'Draft a concise, engaging tweet that describes WebBrain as an open-source AI browser agent for chatting with pages, automating tasks, and running multi-step workflows with the user’s choice of LLM.',
-      'Include https://webbrain.one, keep the post within X’s character limit, and avoid claims that cannot be verified from the supplied WebBrain description.',
-      'Enter the tweet in the visible X composer and publish it.',
+      `Enter this exact reviewed text in the visible X composer without translating, rewriting, or adding anything: ${JSON.stringify(exactPost)}`,
+      'Publish only after the composer text exactly matches the supplied text.',
       'Verify the new tweet appears, then report its URL when available.',
     ],
   };
@@ -240,13 +241,14 @@ export function buildRecommendedActions(pageInfo = {}, options = {}) {
   const host = hostFromUrl(pageInfo.url || '');
   const path = pathFromUrl(pageInfo.url || '');
   const actions = [];
+  const webbrainPostText = t('sp.recommended.tweet.text');
 
   addUnique(actions, {
     id: 'tweet-webbrain',
-    label: 'Tweet about WebBrain',
-    prompt: 'Publish a concise, engaging tweet about WebBrain through the visible X interface. Describe it as an open-source AI browser agent for chatting with pages, automating tasks, and running multi-step workflows with the user’s choice of LLM. Include https://webbrain.one, verify the tweet was posted, and report its URL when available.',
+    label: t('sp.recommended.tweet.label'),
+    prompt: t('sp.recommended.tweet.prompt', { post: webbrainPostText }),
     mode: 'act',
-    runOptions: webbrainTweetRunOptions(),
+    runOptions: webbrainTweetRunOptions(webbrainPostText),
   });
 
   if (host === 'github.com' && RELEASES_PATH_RE.test(path)) {

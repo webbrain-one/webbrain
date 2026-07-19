@@ -3350,7 +3350,10 @@ chrome.storage.onChanged.addListener((changes, area) => {
   }
 });
 
-document.addEventListener('wb-locale-changed', updateRecommendedActionsCollapsedState);
+document.addEventListener('wb-locale-changed', () => {
+  updateRecommendedActionsCollapsedState();
+  void refreshRecommendedActions();
+});
 
 async function refreshRecommendedActions() {
   const requestId = ++recommendationsRequestId;
