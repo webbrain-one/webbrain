@@ -31422,8 +31422,10 @@ test('Chrome click paths suppress native file choosers and redirect to upload_fi
   assert.match(expressions[0], /tagName === 'INPUT'[\s\S]*=== 'file'/);
   assert.match(expressions[0], /matches\.length === 1 && matches\[0\] === input/);
   assert.match(expressions[0], /Object\.getOwnPropertyDescriptor\(showPickerProto,\s*'showPicker'\)/);
+  assert.match(expressions[0], /Object\.getOwnPropertyDescriptor\(showPickerProto,\s*'click'\)/);
   assert.match(expressions[0], /value:\s*guardedShowPicker/);
-  assert.match(expressions[0], /selector:\s*uniqueFileInputSelector\(this\)/);
+  assert.match(expressions[0], /value:\s*guardedClick/);
+  assert.match(expressions[0], /blockInput\(this\)/);
   const consumed = await cdp.consumeFileInputClickGuard(42, 0);
   assert.equal(consumed.blocked, true);
   assert.equal(consumed.selector, '#upload-addon');
@@ -31498,13 +31500,14 @@ test('Chrome click paths suppress native file choosers and redirect to upload_fi
     const source = fs.readFileSync(path.join(ROOT, relPath), 'utf8');
     assert.match(source, /function uniqueFileInputSelector\(input\)/, `${relPath}: missing unique selector builder`);
     assert.match(source, /matches\.length === 1 && matches\[0\] === input/, `${relPath}: selector should be proven unique`);
-    assert.match(source, /const FILE_PICKER_GUARD_SETTLE_MS = 250/, `${relPath}: missing deferred picker settle window`);
+    assert.match(source, /const FILE_PICKER_GUARD_SETTLE_MS = 500/, `${relPath}: missing deferred picker settle window`);
     assert.match(source, /function clickWithoutNativeFilePicker\(runClick,\s*settleMs\s*=\s*FILE_PICKER_GUARD_SETTLE_MS\)/, `${relPath}: missing one-click file chooser guard`);
     assert.match(source, /setTimeout\(\(\) => \{\s*state\.settled = true/, `${relPath}: guard should survive the settle window`);
     assert.match(source, /state\.cleanupTimer = setTimeout\(\(\) => \{[\s\S]*cleanupGuard\(\)/, `${relPath}: abandoned guards should still expire`);
     assert.match(source, /const installPageShowPickerGuard = \(\) =>/, `${relPath}: missing page-world showPicker bridge handshake`);
     assert.match(source, /webbrain:file-picker-guard-arm/, `${relPath}: missing page-world showPicker arm event`);
     assert.match(source, /webbrain:file-picker-guard-blocked/, `${relPath}: missing page-world blocked result event`);
+    assert.match(source, /cleanupPageShowPickerGuard\?\.\(!!state\.blocked\)/, `${relPath}: delayed programmatic guard should survive an empty consume`);
     assert.match(source, /clickWithoutNativeFilePicker\(\(\) => el\.click\(\)\)/, `${relPath}: synthetic clicks should use the chooser guard`);
     assert.match(source, /_filePickerGuardId:\s*filePickerGuard\.guardId/, `${relPath}: click response should return without waiting on the unloading document`);
     assert.match(source, /'consume_file_picker_guard':\s*\(\) => consumeFilePickerGuard/, `${relPath}: missing deferred guard result handshake`);
@@ -31539,8 +31542,10 @@ test('Chrome click paths suppress native file choosers and redirect to upload_fi
     assert.doesNotMatch(source, /window\.__webbrainFilePickerGuardBridge/, `${relPath}: must not expose a stable page global`);
     assert.match(source, /webbrain:file-picker-guard-probe/, `${relPath}: recovery reinjection should use an ephemeral idempotence probe`);
     assert.match(source, /Object\.getOwnPropertyDescriptor\(proto,\s*'showPicker'\)/, `${relPath}: missing main-world showPicker interception`);
+    assert.match(source, /Object\.getOwnPropertyDescriptor\(proto,\s*'click'\)/, `${relPath}: missing closed-shadow click interception`);
     assert.match(source, /reportBlocked\(this\)/, `${relPath}: main-world showPicker should record the input`);
-    assert.match(source, /Object\.defineProperty\(proto,\s*'showPicker',\s*descriptor\)/, `${relPath}: showPicker interception should be restored`);
+    assert.match(source, /Object\.defineProperty\(proto,\s*'showPicker',\s*showPickerDescriptor\)/, `${relPath}: showPicker interception should be restored`);
+    assert.match(source, /delete proto\.click/, `${relPath}: inherited click interception should be restored`);
   }
 
   const previousChrome = globalThis.chrome;

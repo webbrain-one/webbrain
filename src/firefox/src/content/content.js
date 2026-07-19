@@ -1117,7 +1117,7 @@
     return null;
   }
 
-  const FILE_PICKER_GUARD_SETTLE_MS = 250;
+  const FILE_PICKER_GUARD_SETTLE_MS = 500;
   const FILE_PICKER_GUARD_RETENTION_MS = 5000;
   const _filePickerGuardStates = new Map();
   let _filePickerGuardSequence = 0;
@@ -1171,8 +1171,10 @@
       };
       document.addEventListener(blockedEvent, onBlocked, true);
       armPageGuard();
-      return () => {
-        document.dispatchEvent(new Event('webbrain:file-picker-guard-disarm'));
+      return (disarmPageGuard = true) => {
+        if (disarmPageGuard) {
+          document.dispatchEvent(new Event('webbrain:file-picker-guard-disarm'));
+        }
         if (root.getAttribute(guardAttr) === guardId) root.removeAttribute(guardAttr);
         document.removeEventListener(blockedEvent, onBlocked, true);
       };
@@ -1215,7 +1217,11 @@
     if (!state.settled) return { success: true, settled: false, filePickerBlocked: false };
     if (state.cleanupTimer) clearTimeout(state.cleanupTimer);
     document.removeEventListener('click', state.guard, true);
-    state.cleanupPageShowPickerGuard?.();
+    // If nothing was observed, stop content-side observation but leave the
+    // page-world programmatic click/showPicker guard active until its own
+    // short TTL. This suppresses longer debounces without blocking the tool
+    // response or intercepting a user's direct native input click.
+    state.cleanupPageShowPickerGuard?.(!!state.blocked);
     _filePickerGuardStates.delete(guardId);
     if (state.blocked) {
       return { ...filePickerBlockedResponse(state.blocked), settled: true };

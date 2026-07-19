@@ -29,7 +29,7 @@
   }
 
   let activeGuardId = null;
-  let restoreShowPicker = null;
+  let restorePickerMethods = null;
   let expiryTimer = null;
 
   function allPiercedMatches(selector) {
@@ -90,8 +90,8 @@
       clearTimeout(expiryTimer);
       expiryTimer = null;
     }
-    restoreShowPicker?.();
-    restoreShowPicker = null;
+    restorePickerMethods?.();
+    restorePickerMethods = null;
   }
 
   function reportBlocked(input) {
@@ -112,9 +112,12 @@
     clearGuard();
 
     const proto = window.HTMLInputElement?.prototype;
-    const descriptor = proto && Object.getOwnPropertyDescriptor(proto, 'showPicker');
-    const originalShowPicker = descriptor?.value;
-    if (typeof originalShowPicker !== 'function') return;
+    if (!proto) return;
+    const showPickerDescriptor = Object.getOwnPropertyDescriptor(proto, 'showPicker');
+    const originalShowPicker = showPickerDescriptor?.value;
+    const ownClickDescriptor = Object.getOwnPropertyDescriptor(proto, 'click');
+    const originalClick = proto.click;
+    if (typeof originalShowPicker !== 'function' && typeof originalClick !== 'function') return;
 
     const guardedShowPicker = function(...args) {
       if (activeGuardId && isFileInput(this)) {
@@ -123,17 +126,48 @@
       }
       return Reflect.apply(originalShowPicker, this, args);
     };
-    try {
-      Object.defineProperty(proto, 'showPicker', { ...descriptor, value: guardedShowPicker });
-    } catch {
-      return;
+    const guardedClick = function(...args) {
+      if (activeGuardId && isFileInput(this)) {
+        reportBlocked(this);
+        return undefined;
+      }
+      return Reflect.apply(originalClick, this, args);
+    };
+    let showPickerInstalled = false;
+    let clickInstalled = false;
+    if (typeof originalShowPicker === 'function') {
+      try {
+        Object.defineProperty(proto, 'showPicker', {
+          ...showPickerDescriptor,
+          value: guardedShowPicker,
+        });
+        showPickerInstalled = true;
+      } catch {}
     }
+    if (typeof originalClick === 'function') {
+      try {
+        Object.defineProperty(proto, 'click', {
+          configurable: true,
+          enumerable: ownClickDescriptor?.enumerable ?? false,
+          writable: true,
+          value: guardedClick,
+        });
+        clickInstalled = true;
+      } catch {}
+    }
+    if (!showPickerInstalled && !clickInstalled) return;
 
     activeGuardId = guardId;
-    restoreShowPicker = () => {
+    restorePickerMethods = () => {
       try {
-        if (proto.showPicker === guardedShowPicker) {
-          Object.defineProperty(proto, 'showPicker', descriptor);
+        if (showPickerInstalled && proto.showPicker === guardedShowPicker) {
+          Object.defineProperty(proto, 'showPicker', showPickerDescriptor);
+        }
+      } catch {}
+      try {
+        if (clickInstalled && proto.click === guardedClick) {
+          if (ownClickDescriptor) Object.defineProperty(proto, 'click', ownClickDescriptor);
+          else delete proto.click;
         }
       } catch {}
     };

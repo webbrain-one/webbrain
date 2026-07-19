@@ -1008,37 +1008,81 @@ export class CDPClient {
         const showPickerDescriptor = showPickerProto
           && Object.getOwnPropertyDescriptor(showPickerProto, 'showPicker');
         const originalShowPicker = showPickerDescriptor?.value;
-        if (typeof originalShowPicker === 'function') {
+        const ownClickDescriptor = showPickerProto
+          && Object.getOwnPropertyDescriptor(showPickerProto, 'click');
+        const originalClick = showPickerProto?.click;
+        if (typeof originalShowPicker === 'function' || typeof originalClick === 'function') {
+          const isFileInput = (input) =>
+            input?.tagName === 'INPUT'
+            && String(input.getAttribute?.('type') || input.type || '').toLowerCase() === 'file';
+          const blockInput = (input) => {
+            window.__wb_file_input_click_guard_last = {
+              blocked: true,
+              selector: uniqueFileInputSelector(input),
+              ts: Date.now(),
+            };
+          };
           const guardedShowPicker = function(...args) {
-            const isFileInput = this?.tagName === 'INPUT'
-              && String(this.getAttribute?.('type') || this.type || '').toLowerCase() === 'file';
             if (
-              isFileInput
+              isFileInput(this)
               && Date.now() <= Number(window.__wb_file_input_click_guard_until || 0)
             ) {
-              window.__wb_file_input_click_guard_last = {
-                blocked: true,
-                selector: uniqueFileInputSelector(this),
-                ts: Date.now(),
-              };
+              blockInput(this);
               return undefined;
             }
             return Reflect.apply(originalShowPicker, this, args);
           };
-          try {
-            Object.defineProperty(showPickerProto, 'showPicker', {
-              ...showPickerDescriptor,
-              value: guardedShowPicker,
-            });
+          const guardedClick = function(...args) {
+            if (
+              isFileInput(this)
+              && Date.now() <= Number(window.__wb_file_input_click_guard_until || 0)
+            ) {
+              blockInput(this);
+              return undefined;
+            }
+            return Reflect.apply(originalClick, this, args);
+          };
+          let showPickerInstalled = false;
+          let clickInstalled = false;
+          if (typeof originalShowPicker === 'function') {
+            try {
+              Object.defineProperty(showPickerProto, 'showPicker', {
+                ...showPickerDescriptor,
+                value: guardedShowPicker,
+              });
+              showPickerInstalled = true;
+            } catch {}
+          }
+          if (typeof originalClick === 'function') {
+            try {
+              Object.defineProperty(showPickerProto, 'click', {
+                configurable: true,
+                enumerable: ownClickDescriptor?.enumerable ?? false,
+                writable: true,
+                value: guardedClick,
+              });
+              clickInstalled = true;
+            } catch {}
+          }
+          if (showPickerInstalled || clickInstalled) {
             window.__wb_file_input_show_picker_guard_restore = () => {
               try {
-                if (showPickerProto.showPicker === guardedShowPicker) {
+                if (showPickerInstalled && showPickerProto.showPicker === guardedShowPicker) {
                   Object.defineProperty(showPickerProto, 'showPicker', showPickerDescriptor);
+                }
+              } catch {}
+              try {
+                if (clickInstalled && showPickerProto.click === guardedClick) {
+                  if (ownClickDescriptor) {
+                    Object.defineProperty(showPickerProto, 'click', ownClickDescriptor);
+                  } else {
+                    delete showPickerProto.click;
+                  }
                 }
               } catch {}
               window.__wb_file_input_show_picker_guard_restore = null;
             };
-          } catch {
+          } else {
             window.__wb_file_input_show_picker_guard_restore = null;
           }
         }
@@ -1058,7 +1102,7 @@ export class CDPClient {
    * Disarm the temporary file-input click guard and return any intercepted
    * chooser activation from the current agent click.
    */
-  async consumeFileInputClickGuard(tabId, settleMs = 250) {
+  async consumeFileInputClickGuard(tabId, settleMs = 500) {
     try {
       const delayMs = Math.max(0, Number(settleMs) || 0);
       if (delayMs > 0) {
@@ -1067,13 +1111,15 @@ export class CDPClient {
       const result = await this.evaluate(tabId, `
         (() => {
           const blocked = window.__wb_file_input_click_guard_last || null;
-          window.__wb_file_input_click_guard_until = 0;
           window.__wb_file_input_click_guard_last = null;
-          if (window.__wb_file_input_show_picker_guard_timer) {
-            clearTimeout(window.__wb_file_input_show_picker_guard_timer);
-            window.__wb_file_input_show_picker_guard_timer = null;
+          if (blocked) {
+            window.__wb_file_input_click_guard_until = 0;
+            if (window.__wb_file_input_show_picker_guard_timer) {
+              clearTimeout(window.__wb_file_input_show_picker_guard_timer);
+              window.__wb_file_input_show_picker_guard_timer = null;
+            }
+            window.__wb_file_input_show_picker_guard_restore?.();
           }
-          window.__wb_file_input_show_picker_guard_restore?.();
           return blocked;
         })()
       `);

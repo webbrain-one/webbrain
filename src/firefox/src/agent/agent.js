@@ -8587,7 +8587,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const originalResponse = { ...response };
     delete originalResponse._filePickerGuardId;
 
-    await new Promise(resolve => setTimeout(resolve, 275));
+    await new Promise(resolve => setTimeout(resolve, 525));
     try {
       let settled = await browser.tabs.sendMessage(tabId, {
         target: 'content',

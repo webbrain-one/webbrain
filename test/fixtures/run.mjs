@@ -147,7 +147,7 @@ async function setupIsolatedContentHtml(page, html, browserKind) {
 
     const originalResponse = { ...response };
     delete originalResponse._filePickerGuardId;
-    await page.waitForTimeout(275);
+    await page.waitForTimeout(525);
     let settled = await rawIsolatedCall('consume_file_picker_guard', { guardId });
     if (settled?.settled === false) {
       await page.waitForTimeout(50);
@@ -198,7 +198,7 @@ async function call(page, action, params) {
 
   const originalResponse = { ...response };
   delete originalResponse._filePickerGuardId;
-  await page.waitForTimeout(275);
+  await page.waitForTimeout(525);
   let settled = await rawContentCall(page, 'consume_file_picker_guard', { guardId });
   if (settled?.settled === false) {
     await page.waitForTimeout(50);
@@ -862,6 +862,7 @@ const deferredFilePickerOpeners = [
   ['promise', 'Promise.resolve().then(openPicker)'],
   ['timer', 'setTimeout(openPicker, 0)'],
   ['debounce-150ms', 'setTimeout(openPicker, 150)'],
+  ['debounce-300ms', 'setTimeout(openPicker, 300)'],
   ['animation-frame', 'requestAnimationFrame(openPicker)'],
 ];
 const showPickerOpeners = [
@@ -938,17 +939,75 @@ for (const browserKind of ['chrome', 'firefox']) {
       }
     });
   }
+
+  test(`file picker guard (${browserKind}): blocks programmatic clicks inside closed shadow roots`, async (page) => {
+    const isolatedCall = await setupIsolatedContentHtml(page, `<!doctype html>
+      <button id="choose">Open a closed-shadow picker...</button>
+      <div id="host"></div>
+      <script>
+        const input = document.querySelector('#host')
+          .attachShadow({ mode: 'closed' })
+          .appendChild(document.createElement('input'));
+        input.type = 'file';
+        document.querySelector('#choose').addEventListener('click', () => input.click());
+      </script>`, browserKind);
+
+    let chooserOpened = false;
+    page.once('filechooser', () => { chooserOpened = true; });
+    const result = await isolatedCall('click', { text: 'Open a closed-shadow picker...' });
+    await page.waitForTimeout(20);
+    if (chooserOpened) throw new Error('closed-shadow native chooser was not suppressed');
+    if (!result?.filePickerBlocked || result.success !== false) {
+      throw new Error(`expected blocked closed-shadow picker, got ${JSON.stringify(result)}`);
+    }
+    if (Object.hasOwn(result, 'selector')) {
+      throw new Error(`closed-shadow picker must not expose an unusable selector: ${result.selector}`);
+    }
+  });
+
+  test(`file picker guard (${browserKind}): suppresses long programmatic debounce after result settlement`, async (page) => {
+    const isolatedCall = await setupIsolatedContentHtml(page, `<!doctype html>
+      <button id="choose">Schedule a late picker...</button>
+      <input id="late-picker" type="file" hidden>
+      <script>
+        document.querySelector('#choose').addEventListener('click', () => {
+          setTimeout(() => {
+            window.__latePickerAttempted = true;
+            document.querySelector('#late-picker').click();
+          }, 800);
+        });
+      </script>`, browserKind);
+
+    let chooserOpened = false;
+    page.once('filechooser', () => { chooserOpened = true; });
+    const result = await isolatedCall('click', { text: 'Schedule a late picker...' });
+    if (!result?.success || result.filePickerBlocked) {
+      throw new Error(`late picker should settle before its callback, got ${JSON.stringify(result)}`);
+    }
+    await page.waitForTimeout(350);
+    const attempted = await page.evaluate(() => window.__latePickerAttempted === true);
+    if (!attempted) throw new Error('late picker callback did not execute');
+    if (chooserOpened) throw new Error('post-settlement native chooser was not suppressed');
+  });
 }
 
 test('Chrome CDP file picker guard blocks trusted showPicker activation and restores the prototype', async (page) => {
   await page.setContent(`<!doctype html>
     <button id="choose">Open trusted picker</button>
+    <button id="choose-closed">Open trusted closed picker</button>
     <input id="trusted-show-picker" type="file" hidden>
+    <div id="closed-host"></div>
     <script>
       window.__originalShowPicker = HTMLInputElement.prototype.showPicker;
+      window.__originalInputClick = HTMLInputElement.prototype.click;
+      const closedInput = document.querySelector('#closed-host')
+        .attachShadow({ mode: 'closed' })
+        .appendChild(document.createElement('input'));
+      closedInput.type = 'file';
       document.querySelector('#choose').addEventListener('click', () => {
         document.querySelector('#trusted-show-picker').showPicker();
       });
+      document.querySelector('#choose-closed').addEventListener('click', () => closedInput.click());
     </script>`);
 
   const client = new CDPClient();
@@ -968,9 +1027,25 @@ test('Chrome CDP file picker guard blocks trusted showPicker activation and rest
     throw new Error(`expected trusted showPicker block, got ${JSON.stringify(blocked)}`);
   }
   const restored = await page.evaluate(
-    () => HTMLInputElement.prototype.showPicker === window.__originalShowPicker,
+    () => ({
+      showPicker: HTMLInputElement.prototype.showPicker === window.__originalShowPicker,
+      click: HTMLInputElement.prototype.click === window.__originalInputClick,
+    }),
   );
-  if (!restored) throw new Error('showPicker prototype was not restored after guard consumption');
+  if (!restored.showPicker || !restored.click) {
+    throw new Error(`input prototypes were not restored after guard consumption: ${JSON.stringify(restored)}`);
+  }
+
+  let closedChooserOpened = false;
+  page.once('filechooser', () => { closedChooserOpened = true; });
+  await client.armFileInputClickGuard(77, 500);
+  await page.click('#choose-closed');
+  const closedBlocked = await client.consumeFileInputClickGuard(77, 0);
+  await page.waitForTimeout(20);
+  if (closedChooserOpened) throw new Error('trusted closed-shadow native chooser was not suppressed');
+  if (!closedBlocked?.blocked || closedBlocked.selector !== null) {
+    throw new Error(`expected trusted closed-shadow block without selector, got ${JSON.stringify(closedBlocked)}`);
+  }
 });
 
 test('Firefox upload_file resolves one open-shadow input and rejects ambiguous pierced selectors', async (page) => {
