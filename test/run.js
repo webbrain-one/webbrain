@@ -10234,6 +10234,7 @@ test('canonical slash parser handles flags, values, casing, termination, and har
     assert.match(panel, /function activateSlashCommandBaseAction\(index = slashCommandSelectedIndex\) \{[\s\S]*?match\?\.kind !== 'base-action'[\s\S]*?hideSlashCommandAutocomplete\(\);[\s\S]*?void sendMessage\(\);[\s\S]*?return true;/, `${label}: the base-action row should close autocomplete and execute the exact command`);
     assert.match(panel, /if \(match\?\.kind === 'base-action'\) \{[\s\S]*?e\.preventDefault\(\);[\s\S]*?return activateSlashCommandBaseAction\(\);/, `${label}: Enter should run the selected base-action row`);
     assert.match(panel, /if \(e\.key === 'Enter'\) \{[\s\S]*?const match = slashCommandMatches\[slashCommandSelectedIndex\];[\s\S]*?match\?\.kind === 'option'[\s\S]*?applySlashCommandCompletion\(\)/, `${label}: Enter should accept an option suggestion before submitting the parent command`);
+    assert.match(panel, /if \(e\.key === 'Tab'\) \{[\s\S]*?const completionIndex =[\s\S]*?if \(!slashCommandMatches\[completionIndex\]\) return false;\s*e\.preventDefault\(\);[\s\S]*?applySlashCommandCompletion\(completionIndex\);/, `${label}: Tab should retain its default focus behavior when the Enter row is the only match`);
   }
 });
 
@@ -10550,7 +10551,7 @@ test('slash autocomplete progressively suggests only available unused flags', ()
       { kind: 'option', value: '--clear', label: undefined, descriptionKey: 'sp.slash.clear_scratchpad' },
       { kind: 'option', value: '--help', label: undefined, descriptionKey: 'sp.slash.show_scratchpad' },
     ],
-    'an exact command with no flags should expose its Enter action above flag completions',
+    'a complete command should expose its Enter action above flag completions',
   );
 
   const partial = chrome.getContext('/record --trans');
@@ -10561,20 +10562,47 @@ test('slash autocomplete progressively suggests only available unused flags', ()
   const afterFullScreen = chrome.getContext('/record --full-screen ');
   assert.deepEqual([...afterFullScreen.selected], ['--full-screen']);
   assert.deepEqual(optionMatches(chrome, afterFullScreen), ['--transcribe']);
+  assert.deepEqual(
+    chrome.getMatches(afterFullScreen).map(({ kind, value, label, descriptionKey }) => ({ kind, value, label, descriptionKey })),
+    [
+      { kind: 'base-action', value: '/record', label: '↵ Enter', descriptionKey: 'sp.slash.record_full_screen' },
+      { kind: 'option', value: '--transcribe', label: undefined, descriptionKey: 'sp.slash.record_transcribe' },
+    ],
+    'a selected first flag should keep an explicit Enter action above the next flag',
+  );
 
   const afterTranscribe = chrome.getContext('/record --transcribe ');
   assert.deepEqual(optionMatches(chrome, afterTranscribe), ['--full-screen']);
-  assert.deepEqual(optionMatches(chrome, chrome.getContext('/record --transcribe --full-screen ')), []);
+  const afterBothRecordOptions = chrome.getContext('/record --transcribe --full-screen ');
+  assert.deepEqual(optionMatches(chrome, afterBothRecordOptions), []);
+  assert.deepEqual(
+    chrome.getMatches(afterBothRecordOptions).map(({ kind, value, label, descriptionKey }) => ({ kind, value, label, descriptionKey })),
+    [
+      { kind: 'base-action', value: '/record', label: '↵ Enter', descriptionKey: 'sp.slash.record_full_screen' },
+    ],
+    'the Enter action should remain available after the final flag',
+  );
   assert.deepEqual(optionMatches(chrome, chrome.getContext('/scratchpad --clear ')), [], 'conflicting scratchpad actions should not be suggested');
   assert.equal(chrome.getContext('/scratchpad --append '), null, 'value-taking options should hand control back to text entry');
   assert.equal(chrome.getContext('/record positional'), null, 'positional input should close flag autocomplete');
+  assert.equal(chrome.getContext('/record --full-screen --full-screen '), null, 'duplicate flags should not expose an executable Enter action');
   assert.deepEqual(optionMatches(chrome, chrome.getContext('/schedule ')), ['--list', '--help'], 'schedule should keep its real flags ahead of universal help');
   assert.deepEqual(optionMatches(chrome, chrome.getContext('/progress ')), ['--help'], 'commands without flags should still offer --help');
-  assert.deepEqual(optionMatches(chrome, chrome.getContext('/schedule --help ')), [], '--help should finish option autocomplete');
-  assert.equal(chrome.getMatches(chrome.getContext('/scratchpad --clear ')).some((match) => match.kind === 'base-action'), false, 'selected flags should keep the base action out of autocomplete');
+  const afterHelp = chrome.getContext('/schedule --help ');
+  assert.deepEqual(optionMatches(chrome, afterHelp), [], '--help should finish option autocomplete');
+  assert.deepEqual(
+    chrome.getMatches(afterHelp).map(({ kind, value, label, descriptionKey }) => ({ kind, value, label, descriptionKey })),
+    [
+      { kind: 'base-action', value: '/schedule', label: '↵ Enter', descriptionKey: 'sp.slash.help' },
+    ],
+    'a completed --help invocation should describe the help action that Enter will run',
+  );
+  assert.equal(chrome.getMatches(chrome.getContext('/scratchpad --clear '))[0]?.kind, 'base-action', 'selected flags should keep an explicit Enter action in autocomplete');
 
   assert.equal(firefox.getContext('/record '), null, 'Firefox should not discover unsupported recording');
   assert.equal(firefox.getMatches(firefox.getContext('/scratchpad '))[0]?.kind, 'base-action', 'Firefox should mirror the base-action row');
+  assert.equal(firefox.getMatches(firefox.getContext('/scratchpad --clear '))[0]?.kind, 'base-action', 'Firefox should mirror Enter after a selected flag');
+  assert.equal(firefox.getMatches(firefox.getContext('/schedule --help '))[0]?.descriptionKey, 'sp.slash.help', 'Firefox should describe the completed help action accurately');
   assert.deepEqual(optionMatches(firefox, firefox.getContext('/screenshot ')), ['--help'], 'Firefox should omit unsupported flags but still offer command help');
   assert.deepEqual(optionMatches(firefox, firefox.getContext('/scratchpad --clear ')), [], 'Firefox should not suggest conflicting scratchpad actions');
 });
