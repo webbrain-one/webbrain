@@ -92,13 +92,18 @@ function repairJsonQuotedPageTitleLines(value) {
   for (let i = 0; i < parts.length; i += 2) {
     const line = parts[i];
     const fenceMatch = line.match(
-      /^[ \t]*(?:(?:>[ \t]*)|(?:(?:[-*+]|\d+[.)])[ \t]+))*(`{3,}|~{3,})/,
+      /^[ \t]*(?:(?:>[ \t]*)|(?:(?:[-*+]|\d+[.)])[ \t]+))*(`{3,}|~{3,})([\s\S]*)$/,
     );
     if (fenceMatch) {
       const marker = fenceMatch[1];
+      const suffix = fenceMatch[2];
       if (!fence) {
         fence = { character: marker[0], length: marker.length };
-      } else if (marker[0] === fence.character && marker.length >= fence.length) {
+      } else if (
+        marker[0] === fence.character
+        && marker.length >= fence.length
+        && /^[ \t]*$/.test(suffix)
+      ) {
         fence = null;
       }
       continue;

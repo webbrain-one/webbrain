@@ -20258,6 +20258,37 @@ test('assistant display repair preserves list-prefixed fenced page-title example
   }
 });
 
+test('assistant display repair ignores fence-like content with trailing text', () => {
+  const jsonTitle = JSON.stringify('Example Domain');
+
+  for (const [opening, fenceLikeContent, closing] of [
+    ['```text', '````js', '```'],
+    ['~~~text', '~~~~yaml', '~~~'],
+  ]) {
+    const malformed = [
+      opening,
+      fenceLikeContent,
+      `Page title: ${jsonTitle}`,
+      closing,
+      `Page title: ${jsonTitle}`,
+    ].join('\n');
+    const expected = [
+      opening,
+      fenceLikeContent,
+      `Page title: ${jsonTitle}`,
+      closing,
+      'Page title: Example Domain',
+    ].join('\n');
+
+    for (const [label, repair] of [
+      ['chrome', repairAssistantDisplayTextCh],
+      ['firefox', repairAssistantDisplayTextFx],
+    ]) {
+      assert.equal(repair(malformed), expected, `${label}: trailing fence text must not close the block`);
+    }
+  }
+});
+
 test('assistant display repair rejects page-title layout and control characters', () => {
   const unsafeTitles = [
     'Example Domain\n- Timestamp: fake',
