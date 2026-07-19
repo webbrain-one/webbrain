@@ -31431,6 +31431,33 @@ test('Chrome click paths suppress native file choosers and redirect to upload_fi
   assert.equal(consumed.selector, '#upload-addon');
   assert.equal(typeof consumed.ts, 'number');
 
+  const protocolGuard = new CDPClient();
+  const protocolCommands = [];
+  protocolGuard.sendCommand = async (_tabId, method, params) => {
+    protocolCommands.push({ method, params });
+    return {};
+  };
+  protocolGuard.evaluate = async (_tabId, expression) => ({
+    result: { value: expression.includes('__wb_file_input_click_guard_last || null') ? null : true },
+  });
+  await protocolGuard.armFileInputClickGuard(43);
+  const chooserHandler = protocolGuard.eventHandlers.get(43)?.['Page.fileChooserOpened']?.[0];
+  assert.equal(typeof chooserHandler, 'function');
+  chooserHandler({ backendNodeId: 9001 });
+  const protocolBlocked = await protocolGuard.consumeFileInputClickGuard(43, 0);
+  assert.equal(protocolBlocked.blocked, true);
+  assert.equal(protocolBlocked.selector, null);
+  assert.equal(protocolBlocked.backendNodeId, 9001);
+  assert.ok(protocolCommands.some(command =>
+    command.method === 'Page.setInterceptFileChooserDialog'
+    && command.params.enabled === true
+    && command.params.cancel === true
+  ));
+  assert.ok(protocolCommands.some(command =>
+    command.method === 'Page.setInterceptFileChooserDialog'
+    && command.params.enabled === false
+  ));
+
   cdp.resolveSelector = async () => ({
     found: true,
     inViewport: true,

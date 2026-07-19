@@ -993,6 +993,9 @@ for (const browserKind of ['chrome', 'firefox']) {
 
 test('Chrome CDP file picker guard blocks trusted showPicker activation and restores the prototype', async (page) => {
   await page.setContent(`<!doctype html>
+    <style>
+      #closed-host { display: block; width: 220px; height: 40px; }
+    </style>
     <button id="choose">Open trusted picker</button>
     <button id="choose-closed">Open trusted closed picker</button>
     <input id="trusted-show-picker" type="file" hidden>
@@ -1004,6 +1007,7 @@ test('Chrome CDP file picker guard blocks trusted showPicker activation and rest
         .attachShadow({ mode: 'closed' })
         .appendChild(document.createElement('input'));
       closedInput.type = 'file';
+      closedInput.style.cssText = 'display:block;width:220px;height:40px';
       document.querySelector('#choose').addEventListener('click', () => {
         document.querySelector('#trusted-show-picker').showPicker();
       });
@@ -1011,6 +1015,12 @@ test('Chrome CDP file picker guard blocks trusted showPicker activation and rest
     </script>`);
 
   const client = new CDPClient();
+  const protocolSession = await page.context().newCDPSession(page);
+  client.sendCommand = async (_tabId, method, params = {}) => protocolSession.send(method, params);
+  protocolSession.on('Page.fileChooserOpened', (params) => {
+    const handlers = client.eventHandlers.get(77)?.['Page.fileChooserOpened'] || [];
+    for (const handler of handlers) handler(params);
+  });
   client.evaluate = async (_tabId, expression) => ({
     result: { value: await page.evaluate(expression) },
   });
@@ -1045,6 +1055,19 @@ test('Chrome CDP file picker guard blocks trusted showPicker activation and rest
   if (closedChooserOpened) throw new Error('trusted closed-shadow native chooser was not suppressed');
   if (!closedBlocked?.blocked || closedBlocked.selector !== null) {
     throw new Error(`expected trusted closed-shadow block without selector, got ${JSON.stringify(closedBlocked)}`);
+  }
+
+  let directChooserEventObserved = false;
+  page.once('filechooser', () => { directChooserEventObserved = true; });
+  await client.armFileInputClickGuard(77, 500);
+  await page.click('#closed-host');
+  const directBlocked = await client.consumeFileInputClickGuard(77, 0);
+  await page.waitForTimeout(20);
+  if (!directChooserEventObserved) {
+    throw new Error('direct trusted closed-shadow chooser did not emit the intercepted protocol event');
+  }
+  if (!directBlocked?.blocked || directBlocked.selector !== null) {
+    throw new Error(`expected protocol-level closed-shadow block, got ${JSON.stringify(directBlocked)}`);
   }
 });
 

@@ -17,6 +17,7 @@ export class CDPClient {
     this.sessions = new Map(); // tabId -> debugger session
     this.eventHandlers = new Map(); // tabId -> { eventName -> [handlers] }
     this.devDiagnostics = new Map(); // tabId -> bounded console/network buffers
+    this.fileChooserGuards = new Map(); // tabId -> temporary protocol interception
   }
 
   /**
@@ -50,6 +51,9 @@ export class CDPClient {
             this.sessions.delete(tabId);
             this.eventHandlers.delete(tabId);
             this.devDiagnostics.delete(tabId);
+            const fileChooserGuard = this.fileChooserGuards.get(tabId);
+            if (fileChooserGuard?.timer) clearTimeout(fileChooserGuard.timer);
+            this.fileChooserGuards.delete(tabId);
           }
         });
 
@@ -63,12 +67,14 @@ export class CDPClient {
    */
   async detach(tabId) {
     if (!this.sessions.has(tabId)) return;
+    await this._disarmProtocolFileChooserGuard(tabId);
 
     return new Promise((resolve) => {
       chrome.debugger.detach({ tabId }, () => {
         this.sessions.delete(tabId);
         this.eventHandlers.delete(tabId);
         this.devDiagnostics.delete(tabId);
+        this.fileChooserGuards.delete(tabId);
         resolve();
       });
     });
@@ -916,6 +922,52 @@ export class CDPClient {
     return { success: true };
   }
 
+  async _disarmProtocolFileChooserGuard(tabId) {
+    const state = this.fileChooserGuards.get(tabId);
+    if (!state) return;
+    this.fileChooserGuards.delete(tabId);
+    if (state.timer) clearTimeout(state.timer);
+    this.off(tabId, 'Page.fileChooserOpened', state.handler);
+    try {
+      await this.sendCommand(tabId, 'Page.setInterceptFileChooserDialog', {
+        enabled: false,
+      });
+    } catch {}
+  }
+
+  async _armProtocolFileChooserGuard(tabId, ttlMs) {
+    await this._disarmProtocolFileChooserGuard(tabId);
+    const state = {
+      blocked: null,
+      handler: null,
+      timer: null,
+    };
+    state.handler = (params = {}) => {
+      state.blocked = {
+        blocked: true,
+        selector: null,
+        ts: Date.now(),
+        ...(params.backendNodeId ? { backendNodeId: params.backendNodeId } : {}),
+      };
+    };
+    this.on(tabId, 'Page.fileChooserOpened', state.handler);
+    this.fileChooserGuards.set(tabId, state);
+    try {
+      await this.sendCommand(tabId, 'Page.enable');
+      await this.sendCommand(tabId, 'Page.setInterceptFileChooserDialog', {
+        enabled: true,
+        cancel: true,
+      });
+    } catch {
+      this.off(tabId, 'Page.fileChooserOpened', state.handler);
+      this.fileChooserGuards.delete(tabId);
+      return;
+    }
+    state.timer = setTimeout(() => {
+      this._disarmProtocolFileChooserGuard(tabId).catch(() => {});
+    }, ttlMs);
+  }
+
   /**
    * Temporarily suppress renderer-driven <input type=file> activation while an
    * agent click is being dispatched. The upload_file tool sets files directly
@@ -929,6 +981,7 @@ export class CDPClient {
    */
   async armFileInputClickGuard(tabId, ttlMs = 2500) {
     const ttl = Math.max(250, Math.min(Number(ttlMs) || 2500, 5000));
+    await this._armProtocolFileChooserGuard(tabId, ttl);
     await this.evaluate(tabId, `
       (() => {
         const uniqueFileInputSelector = (input) => {
@@ -1103,11 +1156,12 @@ export class CDPClient {
    * chooser activation from the current agent click.
    */
   async consumeFileInputClickGuard(tabId, settleMs = 500) {
+    const delayMs = Math.max(0, Number(settleMs) || 0);
+    if (delayMs > 0) {
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+    let rendererBlocked = null;
     try {
-      const delayMs = Math.max(0, Number(settleMs) || 0);
-      if (delayMs > 0) {
-        await new Promise(resolve => setTimeout(resolve, delayMs));
-      }
       const result = await this.evaluate(tabId, `
         (() => {
           const blocked = window.__wb_file_input_click_guard_last || null;
@@ -1123,14 +1177,17 @@ export class CDPClient {
           return blocked;
         })()
       `);
-      return result?.result?.value || null;
+      rendererBlocked = result?.result?.value || null;
     } catch {
       // A delivered click may navigate or reload before this best-effort probe
       // runs, destroying its execution context. Never turn that observation
       // race into a failed click (or let clickElement retry the action); the
       // short guard TTL disarms the abandoned document automatically.
-      return null;
     }
+    const protocolBlocked = this.fileChooserGuards.get(tabId)?.blocked || null;
+    const blocked = rendererBlocked || protocolBlocked;
+    if (blocked) await this._disarmProtocolFileChooserGuard(tabId);
+    return blocked;
   }
 
   fileInputClickBlockedResult(blocked, context = '') {
