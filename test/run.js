@@ -22930,7 +22930,7 @@ test('form validation classifier surfaces native and custom submission errors', 
       toolName: 'click_ax',
       args: { ref_id: 'ref_submit' },
       result: { success: true, tag: 'BUTTON' },
-      detectedSubmit: { isSubmit: true },
+      detectedSubmit: { isSubmit: true, validationSubmitEvidence: 'strong' },
     });
     assert.ok(customFailure, `${AgentClass.name}: custom validation alert was missed`);
     assert.match(customFailure.error, /correct the highlighted fields/i);
@@ -23012,6 +23012,24 @@ test('form validation classifier surfaces native and custom submission errors', 
       { success: true, tag: 'BUTTON', type: 'button', text: 'Pay', isSubmitControl: false },
       { isSubmit: true, validationSubmitEvidence: 'strong' },
     ), true, `${AgentClass.name}: strong custom-submit preflight was discarded for type=button`);
+    assert.equal(agent._formValidationActionLooksSubmit(
+      'click_ax',
+      { ref_id: 'ref_choose_application' },
+      { success: true, tag: 'button', name: 'Choose application' },
+      { isSubmit: true, validationSubmitEvidence: 'heuristic' },
+    ), false, `${AgentClass.name}: heuristic AX preflight was promoted to strong submit evidence`);
+    assert.equal(agent._formValidationActionLooksSubmit(
+      'iframe_click',
+      { selector: '#add-phone', text: 'Add phone' },
+      { success: true, frame: { tag: 'BUTTON', text: 'Add phone' } },
+      { isSubmit: true, validationSubmitEvidence: 'heuristic' },
+    ), false, `${AgentClass.name}: heuristic iframe preflight was re-promoted by its Add label`);
+    assert.equal(agent._formValidationActionLooksSubmit(
+      'click_ax',
+      { ref_id: 'ref_pay' },
+      { success: true, tag: 'button', name: 'Pay' },
+      { isSubmit: true, validationSubmitEvidence: 'strong' },
+    ), true, `${AgentClass.name}: strong AX custom-submit preflight was weakened`);
     const customButtonFailure = agent._detectFormValidationFailure(before, revealedRequiredRow, {
       toolName: 'click',
       args: { text: 'Pay' },
@@ -23020,6 +23038,13 @@ test('form validation classifier surfaces native and custom submission errors', 
     });
     assert.ok(customButtonFailure, `${AgentClass.name}: custom type=button submit skipped its validation failure`);
     assert.match(customButtonFailure.error, /phone number/i);
+    const correctiveAxResult = agent._detectFormValidationFailure(before, revealedRequiredRow, {
+      toolName: 'click_ax',
+      args: { ref_id: 'ref_add_phone' },
+      result: { success: true, tag: 'button', name: 'Add phone' },
+      detectedSubmit: { isSubmit: true, validationSubmitEvidence: 'heuristic' },
+    });
+    assert.equal(correctiveAxResult, null, `${AgentClass.name}: heuristic AX correction was reported as a failed submission`);
     assert.equal(agent._formValidationActionLooksSubmit(
       'execute_js',
       { code: 'return document.title' },
@@ -23266,6 +23291,7 @@ test('coordinate iframe submits capture validation state in all frames', async (
     host: 'payments.example',
     tool: 'click',
     reason: 'submit button/control activation',
+    validationSubmitEvidence: 'strong',
   });
   agent._promptSubmitConfirmation = async () => 'once';
   agent._captureFormValidationState = async (_tabId, options = {}) => {
@@ -23345,6 +23371,7 @@ test('unattended iframe submits preflight validation in all frames', async () =>
         host: 'payments.example',
         tool: 'iframe_click',
         reason: 'submit button/control activation',
+        validationSubmitEvidence: 'strong',
       };
     };
     agent._captureFormValidationState = async (_tabId, options = {}) => {
