@@ -4857,6 +4857,13 @@ test('recommended actions match issue scenarios', () => {
 });
 
 test('Tweet about WebBrain is permanent and carries a ready-to-go plan', () => {
+  const expectedPlanSteps = [
+    'Open https://x.com/compose/post in the current tab through the visible browser UI.',
+    'Draft a concise, engaging tweet that describes WebBrain as an open-source AI browser agent for chatting with pages, automating tasks, and running multi-step workflows with the user’s choice of LLM.',
+    'Include https://webbrain.one, keep the post within X’s character limit, and avoid claims that cannot be verified from the supplied WebBrain description.',
+    'Enter the tweet in the visible X composer and publish it.',
+    'Verify the new tweet appears, then report its URL when available.',
+  ];
   const pages = [
     {},
     { url: 'https://example.com/', title: 'Example page' },
@@ -4873,9 +4880,7 @@ test('Tweet about WebBrain is permanent and carries a ready-to-go plan', () => {
       assert.equal(tweet?.runOptions?.skipPlanner, true);
       assert.equal(tweet?.runOptions?.tool, 'navigate');
       assert.match(tweet?.runOptions?.summary || '', /Publish a concise promotional tweet about WebBrain/);
-      assert.ok(tweet?.runOptions?.steps?.some((step) => step.includes('https://x.com/compose/post')));
-      assert.ok(tweet?.runOptions?.steps?.some((step) => step.includes('https://webbrain.one')));
-      assert.ok(tweet?.runOptions?.steps?.some((step) => /Verify the new tweet appears/.test(step)));
+      assert.deepEqual(tweet?.runOptions?.steps, expectedPlanSteps);
     }
 
     const fallbackActions = buildRecommendedActions({ url: 'https://example.com/', title: 'Example page' });
