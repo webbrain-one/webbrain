@@ -23247,6 +23247,63 @@ test('form validation polling catches delayed errors', async () => {
       assert.match(failure.error, /server rejected this value/i);
       assert.equal(captures, 2, `${AgentClass.name}: validation polling did not retry after redirect to ${redirectedUrl}`);
     }
+
+    const remainingError = [{
+      frameId: 0,
+      url,
+      activeInvalid: false,
+      invalidFields: [],
+      ariaInvalidFields: [{
+        label: 'Phone number',
+        type: 'tel',
+        message: 'This field is required.',
+      }],
+      alerts: ['Please correct the highlighted fields.'],
+      controlFingerprint: 'email-fixed-phone-missing',
+    }];
+    const clearedError = [{
+      ...remainingError[0],
+      ariaInvalidFields: [],
+      alerts: [],
+      controlFingerprint: 'submitted',
+    }];
+    const correctedContext = {
+      toolName: 'click',
+      args: { text: 'Submit' },
+      result: { success: true, tag: 'BUTTON', type: 'submit', isSubmitControl: true },
+      priorValidationFailure: false,
+      correctedPriorValidationFailure: true,
+    };
+
+    const correctedAgent = new AgentClass({ getVisionProvider: async () => null });
+    let persistentCaptures = 0;
+    correctedAgent._captureFormValidationState = async () => {
+      persistentCaptures += 1;
+      return structuredClone(remainingError);
+    };
+    const persistentFailure = await correctedAgent._waitForFormValidationFailure(
+      5116,
+      remainingError,
+      correctedContext,
+      { checkpointsMs: [0, 0] },
+    );
+    assert.ok(persistentFailure, `${AgentClass.name}: remaining validation error was lost after a partial correction`);
+    assert.match(persistentFailure.error, /phone number|highlighted fields/i);
+    assert.equal(persistentCaptures, 2, `${AgentClass.name}: corrected persistent error was accepted before the final checkpoint`);
+
+    let clearingCaptures = 0;
+    correctedAgent._captureFormValidationState = async () => {
+      clearingCaptures += 1;
+      return structuredClone(clearingCaptures === 1 ? remainingError : clearedError);
+    };
+    const clearedFailure = await correctedAgent._waitForFormValidationFailure(
+      5116,
+      remainingError,
+      correctedContext,
+      { checkpointsMs: [0, 0] },
+    );
+    assert.equal(clearedFailure, null, `${AgentClass.name}: a clearing stale error blocked a corrected successful submit`);
+    assert.equal(clearingCaptures, 2, `${AgentClass.name}: corrected submit did not wait for stale validation to clear`);
   }
 });
 
@@ -23620,6 +23677,11 @@ test('agent returns form validation messages and blocks unchanged repeat submits
       validationContexts.at(-1)?.priorValidationFailure,
       false,
       `${AgentClass.name}: corrected state kept stale prior-validation detection enabled`,
+    );
+    assert.equal(
+      validationContexts.at(-1)?.correctedPriorValidationFailure,
+      true,
+      `${AgentClass.name}: corrected state did not preserve deferred prior-validation context`,
     );
   }
 });

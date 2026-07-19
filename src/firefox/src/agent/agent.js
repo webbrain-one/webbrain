@@ -2047,6 +2047,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         : null;
       const validationBlock = formValidationCandidate ? this._formValidationBlocks.get(tabId) : null;
       let priorValidationFailure = !!validationBlock;
+      let correctedPriorValidationFailure = false;
       const obviousSubmitAction = formValidationCandidate
         && this._formValidationActionLooksSubmit(fnName, fnArgs);
       let formValidationBefore = (validationBlock || obviousSubmitAction)
@@ -2057,6 +2058,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         if (currentValidationStateKey !== validationBlock.stateKey) {
           this._formValidationBlocks.delete(tabId);
           priorValidationFailure = false;
+          correctedPriorValidationFailure = true;
         } else {
           const retryActionKey = this._formValidationActionKey(fnName, fnArgs);
           if (retryActionKey && retryActionKey === validationBlock.actionKey) {
@@ -2275,6 +2277,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             result: toolResult,
             detectedSubmit: detectedSubmitAction,
             priorValidationFailure,
+            correctedPriorValidationFailure,
           },
           { allFrames: formValidationAllFrames },
         );
@@ -4859,7 +4862,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     );
     if (!looksLikeSubmit) return null;
     const includePersistentValidation = strongSubmitEvidence
-      && context.priorValidationFailure === true;
+      && (
+        context.priorValidationFailure === true
+        || context.includeCorrectedPersistentValidation === true
+      );
     const beforeAlerts = new Set(before.flatMap(state =>
       this._formValidationAlertTexts(state)
     ));
@@ -4951,12 +4957,18 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       .filter(Boolean));
     let changedRouteObservedAt = null;
     const startedAt = Date.now();
-    for (const checkpoint of checkpointsMs) {
+    for (let checkpointIndex = 0; checkpointIndex < checkpointsMs.length; checkpointIndex += 1) {
+      const checkpoint = checkpointsMs[checkpointIndex];
       const targetDelay = Math.max(0, Number(checkpoint) || 0);
       const remaining = targetDelay - (Date.now() - startedAt);
       if (remaining > 0) await new Promise(resolve => setTimeout(resolve, remaining));
       const after = await this._captureFormValidationState(tabId, { allFrames });
-      const failure = this._detectFormValidationFailure(before, after, context);
+      const failure = this._detectFormValidationFailure(before, after, {
+        ...context,
+        includeCorrectedPersistentValidation:
+          context?.correctedPriorValidationFailure === true
+          && checkpointIndex === checkpointsMs.length - 1,
+      });
       if (failure) return failure;
       const afterRoutes = new Set(after
         .map(state => this._normalizeUrlPath(String(state?.url || '')))
