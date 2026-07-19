@@ -2,10 +2,11 @@ import { AGENT_TOOLS, AGENT_TOOL_NAMES, RESERVED_AGENT_TOOL_NAMES, getToolsForMo
 import { handleDoneJson } from './cloud-output.js';
 import { URL_FAMILY_TOOLS, resourceBucket, bucketArgsKey } from './loop-bucket.js';
 import { isCredentialField, CREDENTIAL_NOTE_STRICT, STRICT_SECRET_SYSTEM_NOTE } from './credential-fields.js';
-import { detectProgressAction, formatLedgerRow, formatLedgerSummary, isBlockedLedgerDowngrade, isTerminalLedgerStatus, isValidLedgerStatus, ledgerDoneBlock, normalizeLedgerStatus, progressCounts, selectLedgerRows, unresolvedLedgerRows, upsertLedgerItems } from './progress-ledger.js';
+import { detectProgressAction, formatLedgerRow, formatLedgerSummary, isBlockedLedgerDowngrade, isTerminalLedgerStatus, isValidLedgerStatus, ledgerDoneBlock, ledgerRowKey, normalizeLedgerStatus, progressCounts, selectLedgerRows, unresolvedLedgerRows, upsertLedgerItems } from './progress-ledger.js';
 import { buildGithubStargazerProgressItems } from './observers/github-stargazers.js';
 import { analyzeMastodonPage, mastodonHandoffInstruction, mastodonProgressGuard } from './observers/mastodon.js';
 import { isProgressActionAllowed, isProgressIntentActive, normalizeProgressAction, normalizeProgressIntent } from './progress-intent.js';
+import { completionDoneBlock, completionPlainFinalBlock, consumeCompletionObservation, consumeCompletionObservationResult, createCompletionInvariantState, hasUnconsumedCompletionObservation, hasUnconsumedCompletionObservationResult, recordCompletionToolResult } from './completion-invariant.js';
 import { getActiveAdapter, UNIVERSAL_PREAMBLE } from './adapters.js';
 import {
   fetchUrl,
@@ -33,6 +34,7 @@ import { solveCaptcha, detectCaptcha, injectToken } from './captcha-solver.js';
 import { Capability, CAPABILITY_LABEL, capabilitiesFor, requiredHosts, frameHostMatches, isNetworkMutation, normalizeHost, PermissionManager, UNTRUSTED_CONTENT_TOOLS } from './permission-gate.js';
 import {
   buildPlannerMessages,
+  buildPlannerIntentMessages,
   parsePlanFromContent,
   formatPlanMarkdown,
   formatPlanExecutionMetadataMarkdown,
@@ -41,7 +43,7 @@ import {
   messageContentToText,
 } from './planner.js';
 import { extractFirstJsonObject } from './json-extract.js';
-import { sanitizeText as sanitizePlannerText } from './text-sanitize.js';
+import { repairAssistantDisplayText, sanitizeText as sanitizePlannerText } from './text-sanitize.js';
 import { buildCustomSkillsPrompt, buildSkillLoaderDefinition, buildSkillToolDefinitions, buildSkillToolRegistry, getEligibleCustomSkills, getEligibleSkillCatalog, normalizeCustomSkills } from './skills.js';
 import { publicMediaUrlNeedsExplicitTarget } from './public-media-url.js';
 import { USER_MEMORY_DEFAULT_MAX_PROMPT_CHARS, formatUserMemoryPrompt, normalizeUserMemoryMaxPromptChars, normalizeUserMemoryStore } from './user-memory.js';
@@ -149,12 +151,15 @@ export class Agent {
     this.planReviewMode = 'confidence'; // confidence | always | never
     this.planReviewConfidenceThreshold = PLAN_REVIEW_CONFIDENCE_DEFAULT;
     this._pendingPlans = new Map();
+    this._planExecutionGuards = new Map(); // tabId → current run's plan-only terminal recovery state
+    this._continuationExecutionEvidence = new Map(); // tabId → app-owned evidence carried only by continueProcessing()
     // Strict secret-handling mode — see chrome/agent.js for rationale.
     // Default off; user opts in via Settings → "Strict secret handling".
     this.strictSecretMode = false;
     this.recentCalls = new Map();
     this.loopNudges = new Map();
     this.healthyCallsSinceLoop = new Map();
+    this._lastAxScopes = new Map(); // tabId -> { documentToken, pageUrl }, captured by the latest AX read
     // A model can walk ref_1, ref_2, … forever while every call looks unique
     // to the exact-argument loop detector. Track that semantic read pattern.
     this.axReadStates = new Map();
@@ -187,6 +192,8 @@ export class Agent {
     this._doneBlockCount = new Map();
     this._recentSubmitClicks = new Map();
     this._runningTabs = new Set(); // tabIds with an active processMessage/Stream in flight
+    this.completionInvariants = new Map(); // tabId -> run-scoped post-action verification state
+    this._completionRunCounter = 0;
     this.scheduler = null;
     this.scheduledRunPolicies = new Map(); // tabId -> { requireConsequentialConfirmation, autoApprovePlanReview }
     // Pending clarify() tool calls awaiting user input — see Chrome
@@ -236,6 +243,75 @@ export class Agent {
         }
       });
     } catch { /* storage API unavailable in this context */ }
+  }
+
+  _beginCompletionInvariant(tabId) {
+    this._completionRunCounter += 1;
+    const token = `completion_${tabId}_${Date.now()}_${this._completionRunCounter}`;
+    this.completionInvariants.set(tabId, createCompletionInvariantState(token));
+    return token;
+  }
+
+  _clearCompletionInvariant(tabId, runToken = '') {
+    const state = this.completionInvariants.get(tabId);
+    if (!state) return;
+    if (runToken && state.runToken !== runToken) return;
+    this.completionInvariants.delete(tabId);
+  }
+
+  _recordCompletionToolResult(tabId, name, args, result) {
+    const state = this.completionInvariants.get(tabId);
+    if (!state) return null;
+    const completionArgs = this._activeSkillToolForName(tabId, name)?.requiresDownloadPermission
+      ? { ...(args || {}), __completionDownloadAction: true }
+      : args;
+    const next = recordCompletionToolResult(state, name, completionArgs, result);
+    this.completionInvariants.set(tabId, next);
+    return next;
+  }
+
+  _completionDoneBlock(tabId, name, args, batchStartState = null) {
+    const mode = this.conversationModes.get(tabId) || 'ask';
+    if (!this._isActionMode(mode)) return null;
+    const state = this.completionInvariants.get(tabId);
+    const block = completionDoneBlock(state, name, args);
+    if (block) return block;
+    const outcome = name === 'done_json' ? 'success' : String(args?.outcome || '').trim().toLowerCase();
+    if (outcome !== 'success' || !batchStartState) return null;
+    const batchStartSequence = Number(batchStartState.sequence || 0);
+    const lastActionSequence = Number(state?.lastAction?.sequence || 0);
+    if (batchStartState.verificationDebt || lastActionSequence > batchStartSequence) {
+      return {
+        reason: 'prior_turn_verification_required',
+        error: 'A success completion cannot rely on action or observation results from the same assistant tool batch. Let this batch finish, inspect the returned evidence on the next model turn, then call done again; otherwise use outcome="partial" or outcome="failed".',
+        lastAction: state?.lastAction || null,
+      };
+    }
+    return null;
+  }
+
+  _completionPlainFinalBlock(tabId) {
+    const mode = this.conversationModes.get(tabId) || 'ask';
+    if (!this._isActionMode(mode)) return null;
+    return completionPlainFinalBlock(this.completionInvariants.get(tabId));
+  }
+
+  _consumeCompletionObservation(tabId) {
+    const state = this.completionInvariants.get(tabId);
+    if (!state) return false;
+    const next = consumeCompletionObservation(state);
+    if (next === state) return false;
+    this.completionInvariants.set(tabId, next);
+    return true;
+  }
+
+  _consumeCompletionObservationResult(tabId) {
+    const state = this.completionInvariants.get(tabId);
+    if (!state) return false;
+    const next = consumeCompletionObservationResult(state);
+    if (next === state) return false;
+    this.completionInvariants.set(tabId, next);
+    return true;
   }
 
   setScheduler(scheduler) {
@@ -1550,9 +1626,12 @@ export class Agent {
 
   static NAV_TOOLS = new Set(['navigate', 'new_tab', 'go_back', 'go_forward']);
   static STATE_CHANGE_TOOLS = new Set(['navigate', 'new_tab', 'go_back', 'go_forward', 'click', 'click_ax', 'type_text', 'type_ax', 'set_field', 'press_keys', 'scroll', 'hover', 'drag_drop', 'execute_js']);
+  static EXECUTION_META_TOOLS = new Set(['clarify', 'scratchpad_write', 'scratchpad_read', 'progress_update', 'progress_read']);
+  static EXECUTION_APP_STATE_TOOLS = new Set(['scratchpad_write', 'scratchpad_read', 'progress_update', 'progress_read']);
+  static EXECUTION_APP_STATE_WRITE_TOOLS = new Set(['scratchpad_write', 'progress_update']);
   static DELIVERY_OBSERVATION_TOOLS = new Set(['read_page', 'get_accessibility_tree', 'get_interactive_elements', 'extract_data', 'get_selection', 'scroll', 'wait_for_stable', 'wait_for_element', 'read_pdf', 'fetch_url', 'research_url', 'read_downloaded_file', 'iframe_read', 'get_window_info', 'list_downloads', 'progress_read', 'screenshot', 'get_frames', 'get_shadow_dom', 'shadow_dom_query', 'read_youtube_transcript']);
   static NAV_PRONE_TOOLS = new Set(['click', 'click_ax', 'navigate', 'go_back', 'go_forward', 'execute_js', 'iframe_click']);
-  static RECOMMENDED_ACTION_FAST_PATH_IDS = new Set(['download-media']);
+  static RECOMMENDED_ACTION_FAST_PATH_IDS = new Set(['download-media', 'tweet-webbrain']);
   static RECOMMENDED_ACTION_FIRST_TOOLS = Object.freeze({
     'download-media': new Set(['screenshot']),
     'summarize-page': new Set(['read_page']),
@@ -1722,7 +1801,13 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         const error = toolName === 'navigate'
           ? `Navigation blocked: the current page has unsaved changes (${detail}) that leaving will discard. Re-navigating resets forms like GitHub's "New release" page — you would lose the tag, title, and attached binaries, then have to start over. Finish the current action first (e.g. click "Publish release"). If discarding is genuinely intended, call navigate again with force:true.`
           : `${toolName} blocked: the current page has unsaved changes (${detail}) that leaving will discard. Finish the current action first, or call ${toolName} again with force:true to discard them intentionally.`;
-        return { success: false, blockedUnsavedChanges: true, error };
+        return {
+          success: false,
+          dispatched: false,
+          noDispatch: true,
+          blockedUnsavedChanges: true,
+          error,
+        };
       }
     } catch { /* probe failed (e.g. privileged page) — nothing to protect, allow navigation */ }
     return null;
@@ -1834,6 +1919,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
   async _executeToolBatch(tabId, toolCalls, messages, onUpdate, provider, partialAssistantText = null, allowedToolNames = AGENT_TOOL_NAMES, step = null) {
     let didStateChange = false;
+    const completionBatchStartState = this.completionInvariants.get(tabId) || null;
     const navNotices = [];
     const failedApiMutationLoopKeysThisBatch = new Set();
 
@@ -1914,6 +2000,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       // A missing response after any consequential call is an unknown outcome:
       // the side effect may have completed before its reply was lost.
       const missingResponseOutcomeUnknown = capabilities.length > 0 || Agent.STATE_CHANGE_TOOLS.has(fnName);
+      const executionMutationEvidence = this._isExecutionMutationEvidence(fnName, fnArgs, capabilities);
       await this._ensureGateSetting();
       const skillEndpointRedirect = this._skillEndpointToolRedirect(fnName, fnArgs, tabId);
       if (skillEndpointRedirect) {
@@ -2068,6 +2155,40 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         }
       }
 
+      if (fnName === 'done' || fnName === 'done_json') {
+        const invariantBlock = this._completionDoneBlock(tabId, fnName, fnArgs, completionBatchStartState);
+        if (invariantBlock) {
+          const blockedResult = {
+            success: false,
+            blockedDone: true,
+            completionInvariant: true,
+            reason: invariantBlock.reason,
+            error: invariantBlock.error,
+            ...(invariantBlock.lastAction ? { lastAction: invariantBlock.lastAction } : {}),
+          };
+          onUpdate('tool_call', { name: fnName, args: fnArgs });
+          onUpdate('tool_result', { name: fnName, result: blockedResult });
+          messages.push({
+            role: 'tool',
+            tool_call_id: tc.id,
+            content: JSON.stringify(blockedResult),
+          });
+          const runId = this.currentRunId.get(tabId);
+          if (runId) {
+            trace.recordToolCall(runId, step, {
+              name: fnName, args: fnArgs, result: blockedResult, latencyMs: 0,
+            });
+          }
+          onUpdate('warning', { message: 'Runtime completion invariant blocked an unverified or ambiguous completion.' });
+          this._appendSyntheticToolResults(
+            tabId, toolCalls, toolIndex + 1, messages, onUpdate, step,
+            () => ({ success: false, skipped: true, error: 'skipped: blocked completion requires a fresh verification turn' })
+          );
+          this._persist(tabId);
+          return { action: 'continue' };
+        }
+      }
+
       // Snapshot URL before nav-prone calls. Some tools are conditional:
       // Enter and set_field({submit:true}) can navigate, while other key
       // presses and ordinary field edits should avoid the URL-check delay.
@@ -2079,8 +2200,16 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
       onUpdate('tool_call', { name: fnName, args: fnArgs });
       const _toolStart = Date.now();
-      const rawToolResult = await this.executeTool(tabId, fnName, fnArgs, onUpdate);
+      const rawToolResult = await this.executeTool(tabId, fnName, fnArgs, onUpdate, {
+        completionBatchStartState,
+      });
       const toolResult = this._normalizeToolResult(fnName, rawToolResult, missingResponseOutcomeUnknown);
+      if (fnName !== 'done') {
+        this._markPlanExecutionToolCall(tabId, fnName, toolResult, {
+          consequential: executionMutationEvidence,
+        });
+      }
+      this._recordCompletionToolResult(tabId, fnName, fnArgs, toolResult);
       const _toolLatency = Date.now() - _toolStart;
       const nytimesPageGateFallback = this._nytimesPageGateFallback(tabId, fnName, toolResult);
       if (nytimesPageGateFallback && toolResult && typeof toolResult === 'object') {
@@ -2161,15 +2290,18 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       if (!toolResult?.done) {
         onUpdate('tool_result', { name: fnName, result: toolResult });
       }
-      try {
-        const runId = this.currentRunId.get(tabId);
-        if (runId) {
-          await trace.recordToolCall(runId, step, {
-            name: fnName, args: fnArgs, result: toolResult,
-            latencyMs: _toolLatency,
-          });
-        }
-      } catch {}
+      const runIdForTool = this.currentRunId.get(tabId);
+      const recordFinalToolTrace = async result => {
+        try {
+          if (runIdForTool) {
+            await trace.recordToolCall(runIdForTool, step, {
+              name: fnName, args: fnArgs, result,
+              latencyMs: _toolLatency,
+            });
+          }
+        } catch {}
+      };
+      if (!toolResult?.done) await recordFinalToolTrace(toolResult);
 
       if (toolResult && toolResult.done) {
         const progressBlock = this._shouldBlockDoneForProgress(tabId)
@@ -2184,17 +2316,85 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             unresolved: progressBlock.unresolved,
           };
           onUpdate('tool_result', { name: fnName, result: blockedResult });
+          // App-authored recovery policy, not page/tool data: keep this raw so
+          // the model receives it as a trusted instruction outside the
+          // untrusted-page wrapper used for ordinary tool results.
           messages.push({
             role: 'tool',
             tool_call_id: tc.id,
             content: this._wrapUntrusted(fnName, this._limitToolResult(blockedResult)),
           });
+          await recordFinalToolTrace(blockedResult);
           onUpdate('warning', { message: 'Progress ledger has unresolved rows; continuing.' });
           this._persist(tabId);
           continue;
         }
+        const planOnlyDecision = this._planOnlyTerminalDecision(
+          tabId,
+          toolResult.summary || partialAssistantText || '',
+          { viaDone: true, outcome: toolResult.outcome },
+        );
+        if (planOnlyDecision?.retry) {
+          const blockedResult = {
+            success: false,
+            blockedDone: true,
+            planOnlyTerminal: true,
+            error: planOnlyDecision.nudge,
+          };
+          onUpdate('tool_result', { name: fnName, result: blockedResult });
+          messages.push({
+            role: 'tool',
+            tool_call_id: tc.id,
+            content: JSON.stringify(blockedResult),
+          });
+          await recordFinalToolTrace(blockedResult);
+          // The remaining calls were generated alongside the invalid done,
+          // before the model saw the recovery instruction. Never execute that
+          // stale batch; close every tool_call and start a fresh model turn.
+          this._appendSyntheticToolResults(
+            tabId, toolCalls, toolIndex + 1, messages, onUpdate, step,
+            () => ({ success: false, skipped: true, error: 'skipped: invalid done requires a fresh execution turn' })
+          );
+          // Drop any partial assistant prose that rode along with the invalid
+          // done so the recovery turn starts with a clean visible bubble.
+          onUpdate('text', { content: '', replace: true });
+          onUpdate('warning', { message: 'Plan-only completion was rejected; continuing into execution.' });
+          this._persist(tabId);
+          return { action: 'continue' };
+        }
+        if (planOnlyDecision?.failure) {
+          const failedResult = {
+            success: false,
+            done: true,
+            outcome: 'failed',
+            planOnlyTerminal: true,
+            summary: planOnlyDecision.failure,
+            error: planOnlyDecision.failure,
+          };
+          onUpdate('tool_result', { name: fnName, result: failedResult });
+          messages.push({
+            role: 'tool',
+            tool_call_id: tc.id,
+            content: JSON.stringify(failedResult),
+          });
+          await recordFinalToolTrace(failedResult);
+          this._appendSyntheticToolResults(
+            tabId, toolCalls, toolIndex + 1, messages, onUpdate, step,
+            () => ({ success: false, skipped: true, error: 'skipped: plan-only completion failed' })
+          );
+          this._persist(tabId);
+          return { action: 'return', value: planOnlyDecision.failure, status: 'plan_only_output' };
+        }
         onUpdate('tool_result', { name: fnName, result: toolResult });
-        const finalResponse = this._appendProgressLedgerToFinal(tabId, toolResult.summary || partialAssistantText || 'Task completed.');
+        const rawDoneSummary = toolResult.summary || partialAssistantText || 'Task completed.';
+        const repairedDoneSummary = repairAssistantDisplayText(rawDoneSummary);
+        const finalResponse = this._appendProgressLedgerToFinal(tabId, repairedDoneSummary);
+        if (repairedDoneSummary !== rawDoneSummary) {
+          // Streaming providers may already have rendered the malformed summary
+          // before the done call. Replace it so the visible bubble matches the
+          // repaired terminal value returned by this batch.
+          onUpdate('text', { content: finalResponse, replace: true });
+        }
         messages.push({
           role: 'tool',
           tool_call_id: tc.id,
@@ -2202,6 +2402,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           // are page-derived and get persisted as history for the next turn.
           content: this._wrapUntrusted(fnName, this._limitToolResult(toolResult)),
         });
+        await recordFinalToolTrace(toolResult);
         // If `done` wasn't the last call in the batch, the remaining tool_calls
         // in this assistant message still need matching tool results — otherwise
         // the persisted conversation has orphaned tool_calls and the provider
@@ -3890,9 +4091,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       if (tool !== 'download_public_media') return null;
       if (!this._skillToolForName(tool)) return null;
     }
+    if (id === 'tweet-webbrain' && tool !== 'navigate') return null;
     const summary = sanitizePlannerText(action.summary || 'Run the selected recommended action.', 500, { collapseWhitespace: true });
+    const stepLimit = id === 'tweet-webbrain' ? 600 : 300;
     const steps = Array.isArray(action.steps)
-      ? action.steps.map(step => sanitizePlannerText(step, 300, { collapseWhitespace: true })).filter(Boolean).slice(0, 5)
+      ? action.steps.map(step => sanitizePlannerText(step, stepLimit, { collapseWhitespace: true })).filter(Boolean).slice(0, 5)
       : [];
     return { id, tool, summary, steps };
   }
@@ -3988,17 +4191,18 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       ? this._plannerMode()
       : 'off';
     const runPlanner = plannerMode !== 'off';
+    const runIntent = this._isActionMode(mode) && runOptions?.cloudRun !== true;
 
     // Snapshot prior turns for the planner digest BEFORE appending, then always
     // record the user's turn first so a planner failure (or a throw while
     // building the digest) can never drop the just-typed message from the
     // transcript.
-    const priorMessages = runPlanner ? messages.slice() : null;
+    const priorMessages = runIntent ? messages.slice() : null;
     messages.push(enriched);
     this._persist(tabId);
-    if (!runPlanner) {
+    if (!runIntent) {
       this.plannerFollowUpSkipTabs.delete(tabId);
-      return { proceed: true };
+      return { proceed: true, requestKind: 'execute', requiresStateChange: false };
     }
     const fastPathPlan = this._recommendedActionFastPathPlan(runOptions);
     if (fastPathPlan) {
@@ -4017,20 +4221,40 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         }
       }
       this._persist(tabId);
-      return { proceed: true };
+      return { proceed: true, requestKind: 'execute', requiresStateChange: true };
     }
     if (this._shouldSkipPlannerForShortFollowUp(tabId, priorMessages, enriched, plannerMode)) {
       this.plannerFollowUpSkipTabs.delete(tabId);
-      return { proceed: true };
+      const historyDigest = this._buildPlannerHistoryDigest(priorMessages);
+      const gate = await this._runPlannerIntentGate(
+        tabId, enriched, onUpdate, costState, runId, historyDigest, tabInfo, mode, runOptions,
+      );
+      if (!gate.proceed) {
+        messages.push({ role: 'assistant', content: gate.message || 'More information is required.' });
+        this._persist(tabId);
+      }
+      return gate;
     }
     this.plannerFollowUpSkipTabs.delete(tabId);
 
     const historyDigest = this._buildPlannerHistoryDigest(priorMessages);
-    const gate = await this._runPlannerGate(tabId, enriched, onUpdate, costState, runId, historyDigest, tabInfo, plannerMode, mode);
+    const gate = runPlanner
+      ? await this._runPlannerGate(
+        tabId, enriched, onUpdate, costState, runId, historyDigest, tabInfo, plannerMode, mode, runOptions,
+      )
+      : await this._runPlannerIntentGate(
+        tabId, enriched, onUpdate, costState, runId, historyDigest, tabInfo, mode, runOptions,
+      );
     if (!gate.proceed) {
-      messages.push({ role: 'assistant', content: gate.message || 'Task cancelled.' });
+      messages.push({ role: 'assistant', content: gate.message || 'More information is required.' });
       this._persist(tabId);
-      return { proceed: false, message: gate.message || 'Task cancelled.', reason: gate.reason };
+      return {
+        proceed: false,
+        message: gate.message || 'More information is required.',
+        reason: gate.reason,
+        requestKind: gate.requestKind,
+        requiresStateChange: gate.requiresStateChange,
+      };
     }
 
     if (gate.skillIds?.length) {
@@ -4055,13 +4279,19 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       }
       this._persist(tabId);
     }
-    return { proceed: true };
+    return {
+      proceed: true,
+      requestKind: gate.requestKind || 'execute',
+      requiresStateChange: gate.requiresStateChange === true,
+      allowsPlannerShapedResult: gate.allowsPlannerShapedResult === true,
+      allowsAppStateToolEvidence: gate.allowsAppStateToolEvidence === true,
+    };
   }
 
-  _plannerChatOptions(provider, retry = false) {
+  _plannerChatOptions(provider, retry = false, intentOnly = false) {
     const opts = {
       temperature: retry ? 0.1 : 0.3,
-      maxTokens: 4096,
+      maxTokens: intentOnly ? 2048 : 4096,
     };
     const providerName = String(provider?.config?.providerName || provider?.name || '').toLowerCase();
     // vLLM/SGLang expose Qwen-style chat_template_kwargs; disabling thinking
@@ -4092,9 +4322,122 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     ];
   }
 
-  async _runPlannerGate(tabId, enriched, onUpdate, costState, runId = null, historyDigest = '', tabInfo = null, plannerMode = this._plannerMode(), conversationMode = 'act') {
+  _plannerIntentFailureMessage(runOptions = {}) {
+    return sanitizePlannerText(
+      runOptions?.intentFailureMessage
+        || 'I could not reliably determine whether you wanted a plan or execution. Please clarify before I take any action.',
+      500,
+    );
+  }
+
+  _plannerTerminalMessage(plan) {
+    if (plan?.request_kind === 'clarify') {
+      return plan.localized?.summary || plan.summary || 'Please clarify what you want me to do.';
+    }
+    return formatPlanMarkdown(plan, { localized: true })
+      || plan?.localized?.summary
+      || plan?.summary
+      || 'No plan was produced.';
+  }
+
+  /**
+   * Compact semantic intent gate used when Plan-before-Act is off (and for
+   * short follow-ups that intentionally skip a second full plan). It uses the
+   * same provider and structured contract as the full planner, so no
+   * language-specific input matcher can silently authorize execution.
+   */
+  async _runPlannerIntentGate(tabId, enriched, onUpdate, costState, runId = null, historyDigest = '', tabInfo = null, conversationMode = 'act', runOptions = {}) {
     const { tabUrl, tabTitle } = tabInfo || await this._getTabUrlTitle(tabId);
-    const strictPlanner = this._normalizePlanBeforeActMode(plannerMode) === 'strict';
+    const locale = runOptions?.locale || 'en';
+    const provider = this.providerManager.getActive();
+    const plannerMessages = buildPlannerIntentMessages(enriched, tabUrl, tabTitle, historyDigest, {
+      noThink: this._plannerPrefersNoThinkPrompt(provider),
+      locale,
+    });
+    const plannerStep = 0;
+    onUpdate('thinking', { step: plannerStep, note: 'Understanding request…' });
+
+    try {
+      if (runId) {
+        try {
+          trace.recordLLMRequest(runId, plannerStep, {
+            providerClass: provider?.constructor?.name,
+            model: provider?.model,
+            messageCount: plannerMessages.length,
+            toolsCount: 0,
+            phase: 'intent',
+          });
+        } catch {}
+      }
+      const startedAt = Date.now();
+      let result = await this._chatWithCostAllowance(
+        provider,
+        plannerMessages,
+        this._plannerChatOptions(provider, false, true),
+        costState,
+        { tabId, generationName: 'planner_intent' },
+      );
+      if (runId) {
+        try {
+          trace.recordLLMResponse(runId, plannerStep, {
+            content: result.content,
+            toolCalls: null,
+            usage: result.usage,
+            latencyMs: Date.now() - startedAt,
+            model: provider?.model,
+            phase: 'intent',
+          });
+        } catch {}
+      }
+      if (this._checkAbort(tabId)) return { proceed: false, message: '[Stopped by user]', reason: 'cancelled' };
+
+      let plan = parsePlanFromContent(result.content, { requireIntent: true, locale });
+      if (!plan) {
+        onUpdate('thinking', { step: plannerStep, note: 'Understanding request… retrying JSON output' });
+        result = await this._chatWithCostAllowance(
+          provider,
+          this._plannerRepairMessages(plannerMessages),
+          this._plannerChatOptions(provider, true, true),
+          costState,
+          { tabId, generationName: 'planner_intent' },
+        );
+        plan = parsePlanFromContent(result.content, { requireIntent: true, locale });
+      }
+      if (this._checkAbort(tabId)) return { proceed: false, message: '[Stopped by user]', reason: 'cancelled' };
+      if (!plan) {
+        const message = this._plannerIntentFailureMessage(runOptions);
+        onUpdate('warning', { message });
+        return { proceed: false, message, reason: 'clarify', requestKind: 'clarify', requiresStateChange: false };
+      }
+      if (plan.request_kind !== 'execute') {
+        return {
+          proceed: false,
+          message: this._plannerTerminalMessage(plan),
+          reason: plan.request_kind,
+          requestKind: plan.request_kind,
+          requiresStateChange: false,
+        };
+      }
+      return {
+        proceed: true,
+        requestKind: 'execute',
+        requiresStateChange: plan.requires_state_change === true,
+        allowsPlannerShapedResult: plan.allows_planner_shaped_result === true,
+        allowsAppStateToolEvidence: plan.allows_app_state_tool_evidence === true,
+      };
+    } catch (e) {
+      if (this._isCostAllowanceError(e)) {
+        return { proceed: false, message: e.message, reason: 'cost_limit' };
+      }
+      const message = this._plannerIntentFailureMessage(runOptions);
+      onUpdate('warning', { message });
+      return { proceed: false, message, reason: 'clarify', requestKind: 'clarify', requiresStateChange: false };
+    }
+  }
+
+  async _runPlannerGate(tabId, enriched, onUpdate, costState, runId = null, historyDigest = '', tabInfo = null, plannerMode = this._plannerMode(), conversationMode = 'act', runOptions = {}) {
+    const { tabUrl, tabTitle } = tabInfo || await this._getTabUrlTitle(tabId);
+    const locale = runOptions?.locale || 'en';
 
     onUpdate('thinking', { step: 0, note: 'Planning…' });
 
@@ -4105,6 +4448,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       noThink: this._plannerPrefersNoThinkPrompt(provider),
       allowApi: this.apiAllowedTabs.has(tabId),
       skillCatalog,
+      locale,
     });
     const plannerStep = 0;
 
@@ -4143,7 +4487,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       if (this._checkAbort(tabId)) {
         return { proceed: false, message: '[Stopped by user]' };
       }
-      let plan = parsePlanFromContent(result.content);
+      let plan = parsePlanFromContent(result.content, { requireIntent: true, locale });
       // Retry whenever the first attempt yields no parseable plan — empty
       // output, thinking-only output, OR non-JSON prose ("Sure, here's the
       // plan…"). The repair prompt exists precisely to coerce JSON out of that
@@ -4157,7 +4501,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           costState,
           { tabId, generationName: 'planner' },
         );
-        plan = parsePlanFromContent(result.content);
+        plan = parsePlanFromContent(result.content, { requireIntent: true, locale });
       }
       // The retry above is a paid LLM call that does not honor the abort flag
       // itself; re-check before pinning the plan or showing the review card so
@@ -4166,21 +4510,27 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         return { proceed: false, message: '[Stopped by user]' };
       }
       if (!plan) {
-        if (!strictPlanner) {
-          onUpdate('warning', { message: 'Planner could not produce a valid structured plan; continuing without a pinned plan.' });
-          return { proceed: true };
-        }
-        const msg = 'Strict Planning is enabled but the planner could not produce a valid structured plan. Task cancelled — no actions were taken.';
+        const msg = this._plannerIntentFailureMessage(runOptions);
         onUpdate('warning', { message: msg });
-        return { proceed: false, message: msg };
+        return { proceed: false, message: msg, reason: 'clarify', requestKind: 'clarify', requiresStateChange: false };
+      }
+      if (plan.request_kind !== 'execute') {
+        return {
+          proceed: false,
+          message: this._plannerTerminalMessage(plan),
+          reason: plan.request_kind,
+          requestKind: plan.request_kind,
+          requiresStateChange: false,
+        };
       }
 
       const eligibleSkillIds = new Set(skillCatalog.map((skill) => skill.id));
       plan.skill_ids = (plan.skill_ids || []).filter((skillId) => eligibleSkillIds.has(skillId));
 
       const planId = `plan_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-      const markdown = formatPlanMarkdown(plan);
-      const verboseMarkdown = formatPlanMarkdown(plan, { verbose: true });
+      const markdown = formatPlanMarkdown(plan, { localized: true });
+      const verboseMarkdown = formatPlanMarkdown(plan, { verbose: true, localized: true });
+      const canonicalVerboseMarkdown = formatPlanMarkdown(plan, { verbose: true });
       const scheduledPolicy = this.scheduledRunPolicies.get(tabId);
       const scheduledAutoApprove = scheduledPolicy?.autoApprovePlanReview === true;
       if (scheduledAutoApprove || !this._shouldReviewPlan(plan)) {
@@ -4189,8 +4539,17 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         if (!scheduledAutoApprove) {
           onUpdate('plan_auto_approved', { planId, confidence: plan.confidence });
         }
-        const approvedScratchpadText = formatPlanScratchpad(plan, '', verboseMarkdown);
-        return { proceed: true, approvedScratchpadText, planId, skillIds: plan.skill_ids };
+        const approvedScratchpadText = formatPlanScratchpad(plan, '', canonicalVerboseMarkdown);
+        return {
+          proceed: true,
+          approvedScratchpadText,
+          planId,
+          skillIds: plan.skill_ids,
+          requestKind: 'execute',
+          requiresStateChange: plan.requires_state_change === true,
+          allowsPlannerShapedResult: plan.allows_planner_shaped_result === true,
+          allowsAppStateToolEvidence: plan.allows_app_state_tool_evidence === true,
+        };
       }
       const choice = await this._waitForPlanReview(tabId, planId, plan, markdown, onUpdate, verboseMarkdown);
 
@@ -4212,19 +4571,24 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       // approved text, fail closed instead of activating IDs from the stale
       // planner object that the edited plan may no longer authorize.
       const approvedSkillIds = verbosePlanEdited ? [] : plan.skill_ids;
-      const approvedScratchpadText = formatPlanScratchpad(plan, approvedText, verboseMarkdown);
-      return { proceed: true, approvedScratchpadText, planId, skillIds: approvedSkillIds };
+      const approvedScratchpadText = formatPlanScratchpad(plan, approvedText, canonicalVerboseMarkdown);
+      return {
+        proceed: true,
+        approvedScratchpadText,
+        planId,
+        skillIds: approvedSkillIds,
+        requestKind: 'execute',
+        requiresStateChange: plan.requires_state_change === true,
+        allowsPlannerShapedResult: plan.allows_planner_shaped_result === true,
+        allowsAppStateToolEvidence: plan.allows_app_state_tool_evidence === true,
+      };
     } catch (e) {
       if (this._isCostAllowanceError(e)) {
         return { proceed: false, message: e.message, reason: 'cost_limit' };
       }
-      if (!strictPlanner) {
-        onUpdate('warning', { message: `Planning failed (${e.message || 'unknown error'}); continuing without a pinned plan.` });
-        return { proceed: true };
-      }
-      const msg = `Strict Planning is enabled but planning failed (${e.message || 'unknown error'}). Task cancelled — no actions were taken.`;
+      const msg = this._plannerIntentFailureMessage(runOptions);
       onUpdate('warning', { message: msg });
-      return { proceed: false, message: msg };
+      return { proceed: false, message: msg, reason: 'clarify', requestKind: 'clarify', requiresStateChange: false };
     }
   }
 
@@ -5182,6 +5546,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     this._nytimesPageGateNotified.delete(tabId);
     this._doneBlockCount.delete(tabId);
     this._recentSubmitClicks.delete(tabId);
+    this._lastAxScopes.delete(tabId);
+    this.completionInvariants.delete(tabId);
     if (!preserveRunGuard) {
       this._runningTabs.delete(tabId);
       this.currentRunId.delete(tabId);
@@ -5859,6 +6225,92 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       };
     }
     const canonicalItems = this._canonicalizeProgressItems(items);
+    const activeSession = this._currentProgressSession(tabId);
+    const currentRows = this.progressLedgers.get(tabId) || [];
+    const terminalRequirements = canonicalItems
+      .filter(item => isTerminalLedgerStatus(item?.status))
+      .map(item => {
+        const requirementSessionId = opts.sessionId
+          || args.sessionId
+          || args.session_id
+          || item?.sessionId
+          || item?.session_id
+          || activeSession?.sessionId
+          || '';
+        const incomingKey = ledgerRowKey({ ...item, sessionId: requirementSessionId });
+        const row = incomingKey
+          ? currentRows.find(candidate => ledgerRowKey(candidate) === incomingKey)
+          : null;
+        const changesTerminalStatus = normalizeLedgerStatus(row?.status, '')
+          !== normalizeLedgerStatus(item?.status, '');
+        return row?.fields?.completionRequirement === true
+          && (!isTerminalLedgerStatus(row?.status) || changesTerminalStatus)
+          ? { id: row.id, item, row }
+          : null;
+      })
+      .filter(Boolean);
+    const evidenceRequirementIds = terminalRequirements
+      // processed is a success claim and needs one action -> observation cycle.
+      // skipped/failed are transparent non-success exits: requiring an action
+      // just to admit that a target is absent, unavailable, or already satisfied
+      // would force an unrelated mutation. They still need a prior explicit
+      // observation and prevent outcome:"success" in _progressTerminalDoneBlock.
+      .filter(({ item }) => String(item?.status || '').toLowerCase() === 'processed')
+      .map(requirement => requirement.id);
+    const observationOnlyRequirementIds = terminalRequirements
+      .filter(({ item }) => ['skipped', 'failed'].includes(String(item?.status || '').toLowerCase()))
+      .map(requirement => requirement.id);
+    if (evidenceRequirementIds.length > 1) {
+      return {
+        success: false,
+        completionInvariant: true,
+        error: 'Each classifier-seeded completion requirement needs its own consequential action and successful explicit observation. Complete one requirement per evidence cycle.',
+        ids: evidenceRequirementIds.slice(0, 20),
+      };
+    }
+    const hasBatchStartState = Object.prototype.hasOwnProperty.call(opts, 'completionBatchStartState');
+    const evidenceState = hasBatchStartState
+      ? opts.completionBatchStartState
+      : this.completionInvariants.get(tabId);
+    const currentCompletionState = this.completionInvariants.get(tabId);
+    const hasNewBatchAction = hasBatchStartState
+      && Number(currentCompletionState?.lastAction?.sequence || 0) > Number(evidenceState?.sequence || 0);
+    const hasCurrentRunEvidence = evidenceRequirementIds.length
+      && hasUnconsumedCompletionObservation(evidenceState)
+      && hasUnconsumedCompletionObservation(currentCompletionState)
+      && !hasNewBatchAction;
+    const persistedActedRequirement = terminalRequirements.find(({ item, row }) => (
+      String(item?.status || '').toLowerCase() === 'processed'
+      && String(row?.status || '').toLowerCase() === 'acted'
+      && String(row?.source || '').toLowerCase() === 'auto'
+    ));
+    const hasPersistedActionEvidence = !!persistedActedRequirement
+      && hasUnconsumedCompletionObservationResult(evidenceState)
+      && hasUnconsumedCompletionObservationResult(currentCompletionState)
+      && !hasNewBatchAction;
+    if (evidenceRequirementIds.length && !hasCurrentRunEvidence && !hasPersistedActionEvidence) {
+      return {
+        success: false,
+        completionInvariant: true,
+        error: 'Classifier-seeded completion requirements can be marked processed only after a consequential action and a successful explicit observation whose result was available on a prior assistant turn. A runtime-recorded acted row may instead use one fresh continuation observation. Use skipped or failed for transparent non-success outcomes.',
+        ids: evidenceRequirementIds.slice(0, 20),
+      };
+    }
+    if (
+      observationOnlyRequirementIds.length
+      && (
+        Number(evidenceState?.lastObservation?.sequence || 0)
+          <= Number(evidenceState?.lastAction?.sequence || 0)
+        || hasNewBatchAction
+      )
+    ) {
+      return {
+        success: false,
+        completionInvariant: true,
+        error: 'Classifier-seeded completion requirements can be marked skipped or failed after a successful explicit observation whose result was available on a prior assistant turn. No consequential action is required for these transparent non-success outcomes.',
+        ids: observationOnlyRequirementIds.slice(0, 20),
+      };
+    }
     const mastodonGuard = this._mastodonProgressUpdateGuard(tabId, canonicalItems);
     if (mastodonGuard) {
       return {
@@ -5868,7 +6320,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         ids: mastodonGuard.ids,
       };
     }
-    const sessionOpts = { ...opts, sessionId: opts.sessionId || args.sessionId || args.session_id, source: opts.source || args.source || 'model' };
+    // Only internal callers may select a trusted ledger source. Tool arguments
+    // are model-controlled and must not be able to impersonate the classifier.
+    const updateSource = opts.source || 'model';
+    const sessionOpts = { ...opts, sessionId: opts.sessionId || args.sessionId || args.session_id, source: updateSource };
     const session = this._sessionForProgressUpdate(tabId, canonicalItems, sessionOpts);
     const sessionId = sessionOpts.sessionId || session?.sessionId || '';
     const pageScope = opts.pageScope || session?.pageScope || '';
@@ -5880,7 +6335,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const current = this.progressLedgers.get(tabId) || [];
     const taskKey = this._progressTaskKeyHash(tabId);
     const result = upsertLedgerItems(current, scopedItems, {
-      source: opts.source || args.source || 'model',
+      source: updateSource,
       sessionId,
       pageScope,
       taskKey,
@@ -5888,6 +6343,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     });
     if (!result.changed) {
       return { success: false, error: 'progress_update: no valid items were provided. Each item needs a stable id.' };
+    }
+    if (evidenceRequirementIds.length) {
+      if (hasCurrentRunEvidence) this._consumeCompletionObservation(tabId);
+      else this._consumeCompletionObservationResult(tabId);
     }
     this.progressLedgers.set(tabId, result.rows);
     const adoption = sessionId
@@ -6051,6 +6510,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       || c.startsWith('[Agent progress ledger')
       || c.startsWith('[Agent memory')
       || c.startsWith('[PROGRESS LEDGER BLOCK')
+      || c.startsWith('[PLAN EXECUTION BLOCK')
       || c.startsWith('[NAVIGATION OCCURRED')
       || c.startsWith('[Auto-screenshot')
       || c.startsWith('[UNTRUSTED CAPTURE')
@@ -6141,12 +6601,53 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     }
   }
 
+  _seedClassifierProgressTargets(tabId, session) {
+    if (
+      !session
+      || session.source !== 'classifier'
+      || !isProgressIntentActive(session)
+      || !Array.isArray(session.targets)
+      || session.targets.length < 2
+      || !Array.isArray(session.allowedActions)
+      || session.allowedActions.length < 1
+    ) {
+      return null;
+    }
+    const allowedActions = session.allowedActions.map(normalizeProgressAction).filter(Boolean);
+    const action = allowedActions[0];
+    if (!action) return null;
+    const existingKeys = new Set((this.progressLedgers.get(tabId) || [])
+      .map(ledgerRowKey)
+      .filter(Boolean));
+    const items = session.targets.map((target, index) => ({
+      id: `requirement:${index + 1}:${String(target || '').trim()}`,
+      label: String(target || '').trim(),
+      target: String(target || '').trim(),
+      action,
+      status: 'pending',
+      fields: {
+        completionRequirement: true,
+        classifierTarget: true,
+      },
+    })).filter(item => item.label
+      && !existingKeys.has(ledgerRowKey({ ...item, sessionId: session.sessionId })));
+    if (!items.length) return null;
+    return this._progressUpdate(tabId, { items }, {
+      source: 'classifier',
+      sessionId: session.sessionId,
+      pageScope: session.pageScope || '',
+    });
+  }
+
   async _ensureProgressSessionForCurrentTask(tabId, opts = {}) {
     const taskText = this._progressTaskTextKey(opts.taskText || this._latestTaskText(tabId));
     if (!taskText) return null;
     const pageScope = String(opts.pageScope || this._currentProgressPageScope(tabId) || '').trim();
     const existing = this._currentProgressSession(tabId, { pageScope });
-    if (existing) return existing;
+    if (existing) {
+      this._seedClassifierProgressTargets(tabId, existing);
+      return existing;
+    }
     if (this._currentTaskIsProgressContinuation(tabId)) {
       const session = this._deriveProgressSessionForCurrentTask(tabId);
       this._syncProgressSessionPrompt(tabId);
@@ -6164,6 +6665,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       return session;
     }
     const session = this._setProgressSession(tabId, classified, { taskText, pageScope, source: 'classifier' });
+    this._seedClassifierProgressTargets(tabId, session);
     this._syncProgressSessionPrompt(tabId);
     return session;
   }
@@ -6413,7 +6915,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       { excludedUsernames: this._excludedGithubUsernames(tabId), session }
     );
     if (!observed.items.length) return null;
-    const update = this._progressUpdate(tabId, { items: observed.items }, { source: 'observe', pageScope, sessionId: session.sessionId });
+    const update = this._progressUpdate(tabId, { items: observed.items }, {
+      source: 'observe',
+      pageScope,
+      sessionId: session.sessionId,
+    });
     if (!update?.success) return null;
     const note = {
       ...observed.stats,
@@ -6488,9 +6994,205 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
   _emptyOutputRecoveryNudge(mode) {
     if (this._isActionMode(mode)) {
-      return '[System nudge: your previous response had neither text nor a tool call. Continue the active browser task with tool calls. If the task is truly complete, call the done tool with a real summary. Do not output a plain summary and do not stop without a tool call.]';
+      return '[System nudge: your previous response had neither text nor a tool call. Continue the active browser task with tool calls. If the task is truly complete, call done with a real summary and an explicit success, partial, or failed outcome. Do not output a plain summary and do not stop without a tool call.]';
     }
     return '[System nudge: your previous response had neither text nor a tool call. You may have run out of output budget on internal reasoning. In ONE short message, summarize what you accomplished, what you tried, and what blocked you - then stop. Do not start any new tool calls.]';
+  }
+
+  _hasApprovedExecutionPlan(messages) {
+    const idx = this._findScratchpadIndex(messages || []);
+    if (idx < 0) return false;
+    const body = this._extractScratchpadBody(messages[idx].content);
+    return /\[Approved plan\b[^\]]*(?:pinned by (?:planner|recommended action)|edited localized text pinned by planner)[^\]]*\]/i.test(body);
+  }
+
+  _startPlanExecutionGuard(tabId, mode, gateOutcome = {}, runOptions = {}) {
+    const requestKind = gateOutcome?.requestKind || (this._isActionMode(mode) ? 'execute' : null);
+    const enabled = this._isActionMode(mode)
+      && runOptions?.cloudRun !== true
+      && requestKind === 'execute';
+    const requiresStateChange = gateOutcome?.requiresStateChange === true;
+    const allowsAppStateToolEvidence = gateOutcome?.allowsAppStateToolEvidence === true;
+    const carried = runOptions?.trustedContinuation === true
+      ? this._continuationExecutionEvidence.get(tabId)
+      : null;
+    this._continuationExecutionEvidence.delete(tabId);
+    const carryMatches = enabled
+      && carried?.requestKind === 'execute'
+      && carried.requiresStateChange === requiresStateChange
+      && carried.allowsAppStateToolEvidence === allowsAppStateToolEvidence
+      && carried.conversationId === (this.conversationIds.get(tabId) || null);
+    const state = {
+      enabled,
+      requestKind,
+      requiresStateChange,
+      allowsPlannerShapedResult: gateOutcome?.allowsPlannerShapedResult === true,
+      allowsAppStateToolEvidence,
+      approvedPlan: this._hasApprovedExecutionPlan(this.conversations.get(tabId) || []),
+      // Only the app-owned Continue action can carry verified evidence from
+      // the immediately preceding run; ordinary user turns always start at 0.
+      successfulTaskToolCalls: carryMatches ? carried.successfulTaskToolCalls : 0,
+      successfulConsequentialToolCalls: carryMatches ? carried.successfulConsequentialToolCalls : 0,
+      recoveryAttempted: false,
+    };
+    this._planExecutionGuards.set(tabId, state);
+    return state;
+  }
+
+  _isSuccessfulExecutionEvidence(result) {
+    if (result == null || result?.done) return false;
+    if (typeof result !== 'object') return true;
+    if (result.success === false
+        || result.denied
+        || result.cancelled
+        || result.skipped
+        || result.failed
+        || result.blocked
+        || result.blockedDone
+        || result.blockedUnsavedChanges
+        || result.invalidToolArguments
+        || result.missingToolResponse
+        || result.outcomeUnknown) return false;
+    if (result.error && result.success !== true) return false;
+    return true;
+  }
+
+  _isExecutionMutationEvidence(name, args = {}, capabilities = []) {
+    const mutationCapabilities = new Set([
+      Capability.NAVIGATE,
+      Capability.CLICK,
+      Capability.TYPE,
+      Capability.EXECUTE_JS,
+      Capability.DEV_PATCH,
+      Capability.DOWNLOAD,
+      Capability.UPLOAD,
+      Capability.SCHEDULE,
+    ]);
+    if (capabilities.includes(Capability.NETWORK)) return isNetworkMutation(name, args);
+    return capabilities.some(capability => mutationCapabilities.has(capability));
+  }
+
+  _markPlanExecutionToolCall(tabId, name, result, { consequential = false } = {}) {
+    const state = this._planExecutionGuards.get(tabId);
+    const requestedAppStateTool = state?.allowsAppStateToolEvidence === true
+      && this.constructor.EXECUTION_APP_STATE_TOOLS.has(name);
+    if (!state?.enabled
+        || name === 'done'
+        || (this.constructor.EXECUTION_META_TOOLS.has(name) && !requestedAppStateTool)
+        || !this._isSuccessfulExecutionEvidence(result)) return;
+    state.successfulTaskToolCalls += 1;
+    if (consequential
+        || (requestedAppStateTool && this.constructor.EXECUTION_APP_STATE_WRITE_TOOLS.has(name))) {
+      state.successfulConsequentialToolCalls += 1;
+    }
+  }
+
+  _executionEvidenceSatisfied(state) {
+    if (!state) return false;
+    return state.requiresStateChange
+      ? state.successfulConsequentialToolCalls > 0
+      : state.successfulTaskToolCalls > 0;
+  }
+
+  _storeContinuationExecutionEvidence(tabId) {
+    const guard = this._planExecutionGuards.get(tabId);
+    if (guard?.enabled && (guard.successfulTaskToolCalls > 0 || guard.successfulConsequentialToolCalls > 0)) {
+      this._continuationExecutionEvidence.set(tabId, {
+        requestKind: guard.requestKind,
+        requiresStateChange: guard.requiresStateChange,
+        allowsAppStateToolEvidence: guard.allowsAppStateToolEvidence,
+        successfulTaskToolCalls: guard.successfulTaskToolCalls,
+        successfulConsequentialToolCalls: guard.successfulConsequentialToolCalls,
+        conversationId: this.conversationIds.get(tabId) || null,
+      });
+    } else {
+      this._continuationExecutionEvidence.delete(tabId);
+    }
+  }
+
+  _isSafetyRefusalTerminal(content) {
+    const object = extractFirstJsonObject(String(content || ''));
+    if (!object || typeof object !== 'object' || Array.isArray(object)) return false;
+    const text = [
+      object.summary,
+      ...(Array.isArray(object.steps) ? object.steps.map(step => step?.action) : []),
+    ].filter(Boolean).join(' ');
+    return Number(object.confidence) === 0
+      && /\b(?:refus|will not|do not proceed|unauthorized|illegal|fraud|theft|unsafe|cannot assist|can't assist)\b/i.test(text);
+  }
+
+  _looksLikePlanOnlyTerminal(content, state = {}, { ignoreFuturePromise = false } = {}) {
+    const text = String(content || '').trim();
+    if (!text) return false;
+    const object = extractFirstJsonObject(text);
+    if (object && typeof object === 'object' && !Array.isArray(object)) {
+      const planText = [
+        object.summary,
+        ...(Array.isArray(object.steps) ? object.steps.map(step => step?.action) : []),
+      ].filter(Boolean).join(' ');
+      const safetyRefusal = Number(object.confidence) === 0
+        && /\b(?:refus|will not|do not proceed|unauthorized|illegal|fraud|theft|unsafe|cannot assist|can't assist)\b/i.test(planText);
+      const plannerShape = typeof object.summary === 'string'
+        && Array.isArray(object.steps)
+        && ['confidence', 'memory', 'scheduling', 'risks', 'mode'].some(key => Object.prototype.hasOwnProperty.call(object, key))
+        && !safetyRefusal;
+      const policyKeys = ['mode', 'allowedActions', 'forbiddenActions', 'targets', 'pageScopePolicy', 'reason'];
+      const policyShape = policyKeys.filter(key => Object.prototype.hasOwnProperty.call(object, key)).length >= 5
+        && (Array.isArray(object.allowedActions) || Array.isArray(object.forbiddenActions))
+        && String(object.mode || '').toLowerCase() !== 'inactive';
+      if (plannerShape || policyShape) return state.allowsPlannerShapedResult !== true;
+    }
+    // "Next, I will …" / "I plan to …" is agent-continue language and is always
+    // invalid as a terminal. Bare "I will …" is evidence-gated so drafted reply
+    // text can finish after a real task tool without a planner exemption flag.
+    const continuePromise = /\b(?:next,?\s+i(?:'ll| will)|i plan to|i intend to)\b/i.test(text);
+    const firstPersonFuture = /\bi(?:'ll| will| am going to)\b/i.test(text);
+    const planHeading = /(?:^|\n)\s*(?:#{1,6}\s*)?(?:execution plan|action plan|proposed plan|plan|steps|workflow)\s*[:\n]/i.test(text);
+    const hasTaskEvidence = state.requiresStateChange
+      ? (state.successfulConsequentialToolCalls || 0) > 0
+      : (state.successfulTaskToolCalls || 0) > 0;
+    if (planHeading && state.allowsPlannerShapedResult !== true) return true;
+    if (!ignoreFuturePromise) {
+      if (continuePromise) return true;
+      if (firstPersonFuture && (!hasTaskEvidence || planHeading)) return true;
+    }
+    return false;
+  }
+
+  _planOnlyTerminalDecision(tabId, content, { viaDone = false, outcome = null } = {}) {
+    const state = this._planExecutionGuards.get(tabId);
+    if (!state?.enabled) return null;
+    if (!viaDone && this._isSafetyRefusalTerminal(content)) return null;
+    const terminalFailure = viaDone && (outcome === 'partial' || outcome === 'failed');
+    // A structured failure may naturally say "I will need credentials".
+    // Ignore only that prose-promise heuristic; explicit planner/policy shapes
+    // and plan headings remain invalid even for failed/partial done calls.
+    const looksPlanOnly = this._looksLikePlanOnlyTerminal(
+      content,
+      state,
+      { ignoreFuturePromise: terminalFailure },
+    );
+    const missingEvidence = !terminalFailure && !this._executionEvidenceSatisfied(state);
+    // Every plain Act/Dev terminal gets one protocol recovery regardless of
+    // its language. Successful completion and real blockers must both use
+    // done; this avoids guessing intent from localized prose.
+    const invalidPlainFinal = !viaDone;
+    const invalidDone = viaDone && (looksPlanOnly || missingEvidence);
+    if (!invalidPlainFinal && !invalidDone) return null;
+    if (!state.recoveryAttempted) {
+      state.recoveryAttempted = true;
+      return {
+        retry: true,
+        nudge: '[PLAN EXECUTION BLOCK: This is an execute task, so plain text cannot end it. If work remains, use permitted task tools. If complete, call done with outcome success. If blocked, unsafe, cancelled, or user input is required, call done with outcome failed or partial; do not take unsafe action. Read-only work needs a successful task tool and state-changing work needs a successful consequential tool. Do not return another plan, promise, or plain terminal.]',
+      };
+    }
+    const hasSuccessfulToolEvidence = state.successfulTaskToolCalls > 0;
+    return {
+      failure: hasSuccessfulToolEvidence
+        ? '[Agent stopped because the model returned another plain terminal or a plan/promise after one recovery nudge. Some task tools completed, but final completion was not verified. Inspect the current state before retrying to avoid duplicate side effects.]'
+        : '[Agent stopped because the model returned another plain terminal or a plan/promise instead of completing the execute protocol, even after one recovery nudge. No successful action was verified.]',
+      status: 'plan_only_output',
+    };
   }
 
   _buildAutoProgressResumeInstruction(tabId) {
@@ -6508,7 +7210,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       'Do not redo processed, skipped, or failed rows.',
       'Continue only unresolved pending/acted rows for the current task.',
       'Prefer a small batch of tool calls, then update progress.',
-      'When all rows are processed, skipped, or failed, call done with a real summary.',
+      'When all rows are processed, skipped, or failed, call done with a real summary and an explicit success, partial, or failed outcome.',
       `Current progress snapshot: ${counts.total} row(s), ${unresolved.length} unresolved.`,
     ].join(' ');
   }
@@ -7879,7 +8581,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     };
   }
 
-  async executeTool(tabId, name, args, onUpdate = null) {
+  async executeTool(tabId, name, args, onUpdate = null, executionContext = null) {
     if (name === 'load_skill') {
       return this._loadSkillForRun(tabId, args || {});
     }
@@ -7893,10 +8595,17 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       return await this._resizeWindow(tabId, args || {});
     }
     if (name === 'schedule_resume') {
-      if (!this.scheduler) return { success: false, error: 'Scheduling is not available in this build.' };
+      if (!this.scheduler) {
+        return {
+          success: false,
+          dispatched: false,
+          noDispatch: true,
+          error: 'Scheduling is not available in this build.',
+        };
+      }
       let tab = null;
       try { tab = await browser.tabs.get(tabId); } catch {}
-      return await this.scheduler.createResumeJob({
+      const result = await this.scheduler.createResumeJob({
         tabId,
         conversationId: this.conversationIds.get(tabId) || null,
         mode: this.conversationModes.get(tabId) || 'act',
@@ -7904,12 +8613,22 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         currentUrl: tab?.url || '',
         currentTitle: tab?.title || '',
       });
+      return result?.success === false
+        ? { ...result, dispatched: false, noDispatch: true }
+        : result;
     }
     if (name === 'schedule_task') {
-      if (!this.scheduler) return { success: false, error: 'Scheduling is not available in this build.' };
+      if (!this.scheduler) {
+        return {
+          success: false,
+          dispatched: false,
+          noDispatch: true,
+          error: 'Scheduling is not available in this build.',
+        };
+      }
       let tab = null;
       try { tab = await browser.tabs.get(tabId); } catch {}
-      return await this.scheduler.createTaskJob({
+      const result = await this.scheduler.createTaskJob({
         tabId,
         conversationId: this.conversationIds.get(tabId) || null,
         args: args || {},
@@ -7917,6 +8636,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         currentUrl: tab?.url || '',
         currentTitle: tab?.title || '',
       });
+      return result?.success === false
+        ? { ...result, dispatched: false, noDispatch: true }
+        : result;
     }
 
     // clarify: pause the run and wait for the user to answer. This tool
@@ -8015,6 +8737,15 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
     // Tools handled by the background/service worker
     if (name === 'navigate') {
+      const rawUrl = String(args.url || '').trim();
+      if (!rawUrl) {
+        return {
+          success: false,
+          dispatched: false,
+          noDispatch: true,
+          error: 'navigate: url is required',
+        };
+      }
       // Guard against discarding unsaved work. Re-navigating (even to the
       // same URL) resets forms like GitHub's "New release" page, silently
       // dropping the tag, title, and any attached binaries. A model that
@@ -8025,10 +8756,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         if (blocked) return blocked;
       }
 
-      await browser.tabs.update(tabId, { url: args.url });
+      await browser.tabs.update(tabId, { url: rawUrl });
       // Wait a moment for navigation
       await new Promise(r => setTimeout(r, 2000));
-      return { success: true, url: args.url };
+      return { success: true, dispatched: true, url: rawUrl };
     }
 
     if (name === 'go_back' || name === 'go_forward') {
@@ -8047,7 +8778,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       // Internal pages (about:, view-source, extension) have no meaningful
       // web session history to walk.
       if (/^(about|moz-extension|view-source|data|chrome):/i.test(beforeUrl)) {
-        return { success: false, error: `${name}: history navigation is not available on internal pages (${beforeUrl || 'unknown'}).` };
+        return {
+          success: false,
+          dispatched: false,
+          noDispatch: true,
+          error: `${name}: history navigation is not available on internal pages (${beforeUrl || 'unknown'}).`,
+        };
       }
 
       // Same unsaved-changes guard as navigate — going back/forward leaves the
@@ -8060,6 +8796,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       // Drive history from the page context (CSP-safe; this is the extension's
       // injected code, not page eval).
       let probe = null;
+      let dispatched = false;
       try {
         const delta = direction === 'back' ? -steps : steps;
         const code = `
@@ -8069,13 +8806,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             return { before };
           })()
         `;
+        dispatched = true;
         const results = await browser.tabs.executeScript(tabId, { code });
         probe = (results && results[0]) || null;
       } catch (e) {
-        return { success: false, error: `${name}: cannot navigate history on this page (${e.message}).` };
+        return { success: false, dispatched, error: `${name}: cannot navigate history on this page (${e.message}).` };
       }
       if (!probe) {
-        return { success: false, error: `${name}: history navigation did not run on this page.` };
+        return { success: false, dispatched, error: `${name}: history navigation did not run on this page.` };
       }
 
       // history.go() commits asynchronously (including bfcache restores), so
@@ -8093,10 +8831,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         const dirWord = direction === 'back' ? 'earlier' : 'later';
         return {
           success: false,
+          dispatched: true,
           error: `${name}: no ${dirWord} entry in this tab's history (the page did not change).`,
         };
       }
-      return { success: true, url: afterUrl, previousUrl: probe.before, direction, steps };
+      return { success: true, dispatched: true, url: afterUrl, previousUrl: probe.before, direction, steps };
     }
 
     if (name === 'new_tab') {
@@ -8556,10 +9295,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         const injectCode = `
           (function() {
             const el = document.querySelector(${JSON.stringify(args.selector)});
-            if (!el) return { success: false, error: 'Element not found matching selector: ' + ${JSON.stringify(args.selector)} };
+            if (!el) return { success: false, dispatched: false, error: 'Element not found matching selector: ' + ${JSON.stringify(args.selector)} };
             if (!(el instanceof HTMLInputElement) || el.type !== 'file') {
-              return { success: false, error: 'Selector does not match an <input type="file"> element: ' + ${JSON.stringify(args.selector)} };
+              return { success: false, dispatched: false, error: 'Selector does not match an <input type="file"> element: ' + ${JSON.stringify(args.selector)} };
             }
+            let dispatched = false;
             try {
               const b64 = ${JSON.stringify(base64)};
               const bin = atob(b64);
@@ -8570,11 +9310,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
               const dt = new DataTransfer();
               dt.items.add(file);
               el.files = dt.files;
+              dispatched = true;
               el.dispatchEvent(new Event('input', { bubbles: true }));
               el.dispatchEvent(new Event('change', { bubbles: true }));
-              return { success: true, file: ${JSON.stringify(filename)}, size: len };
+              return { success: true, dispatched: true, file: ${JSON.stringify(filename)}, size: len };
             } catch (e) {
-              return { success: false, error: e.message || String(e) };
+              return { success: false, dispatched, error: e.message || String(e) };
             }
           })();
         `;
@@ -8584,12 +9325,17 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         } catch (e) {
           return {
             success: false,
+            outcomeUnknown: true,
             error: `Failed to inject file into page (file may be too large for script injection): ${e.message || String(e)}`,
           };
         }
         const res = results && results[0];
         if (!res || !res.success) {
-          return { success: false, error: res ? res.error : 'Failed to attach file to input element' };
+          return {
+            success: false,
+            dispatched: res?.dispatched === true,
+            error: res ? res.error : 'Failed to attach file to input element',
+          };
         }
         return {
           success: true,
@@ -8606,14 +9352,21 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     // Settings. We re-check on every call so flipping the toggle or
     // rotating the key takes effect without a restart.
     if (name === 'solve_captcha') {
+      let dispatched = false;
+      const noDispatchFailure = (error) => ({
+        success: false,
+        dispatched: false,
+        noDispatch: true,
+        error,
+      });
       try {
         const stored = await browser.storage.local.get(['captchaSolverEnabled', 'capsolverApiKey']);
         if (!stored.captchaSolverEnabled) {
-          return { success: false, error: 'CapSolver is not enabled. Ask the user to enable it in Settings → General → Advanced, or fall back to asking them to solve the captcha manually.' };
+          return noDispatchFailure('CapSolver is not enabled. Ask the user to enable it in Settings → General → Advanced, or fall back to asking them to solve the captcha manually.');
         }
         const apiKey = (stored.capsolverApiKey || '').trim();
         if (!apiKey) {
-          return { success: false, error: 'CapSolver is enabled but no API key is configured. Ask the user to set one in Settings → General → Advanced, or fall back to asking them to solve the captcha manually.' };
+          return noDispatchFailure('CapSolver is enabled but no API key is configured. Ask the user to set one in Settings → General → Advanced, or fall back to asking them to solve the captcha manually.');
         }
 
         let websiteURL = '';
@@ -8626,7 +9379,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         if (!type) {
           const detected = await detectCaptcha(tabId);
           if (!detected) {
-            return { success: false, error: 'No CAPTCHA detected on the page. If the captcha lives inside a cross-origin iframe or uses a non-standard widget, pass `type` and `websiteKey` explicitly.' };
+            return noDispatchFailure('No CAPTCHA detected on the page. If the captcha lives inside a cross-origin iframe or uses a non-standard widget, pass `type` and `websiteKey` explicitly.');
           }
           type = detected.type;
           if (!websiteKey) websiteKey = detected.websiteKey;
@@ -8636,12 +9389,13 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
         if (type === 'image_to_text') {
           if (!imageBase64) {
-            return { success: false, error: 'solve_captcha: image_to_text requires `imageBase64`.' };
+            return noDispatchFailure('solve_captcha: image_to_text requires `imageBase64`.');
           }
         } else if (!websiteKey) {
-          return { success: false, error: `solve_captcha: ${type} requires a websiteKey (data-sitekey). Auto-detection didn't find one — pass it explicitly.` };
+          return noDispatchFailure(`solve_captcha: ${type} requires a websiteKey (data-sitekey). Auto-detection didn't find one — pass it explicitly.`);
         }
 
+        dispatched = true;
         const result = await solveCaptcha(apiKey, {
           type,
           websiteURL,
@@ -8668,6 +9422,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
         return {
           success: true,
+          dispatched: true,
           type,
           taskId: result.taskId,
           token: result.token,
@@ -8679,7 +9434,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             : 'Token returned, not injected. Pass it to the form via type_text on the response field, then submit.',
         };
       } catch (e) {
-        return { success: false, error: `solve_captcha failed: ${e.message}` };
+        const error = `solve_captcha failed: ${e.message}`;
+        return dispatched
+          ? { success: false, dispatched: true, error }
+          : noDispatchFailure(error);
       }
     }
 
@@ -8967,7 +9725,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     }
 
     if (name === 'progress_update') {
-      return this._progressUpdate(tabId, args);
+      const progressOpts = executionContext
+        && Object.prototype.hasOwnProperty.call(executionContext, 'completionBatchStartState')
+        ? { completionBatchStartState: executionContext.completionBatchStartState }
+        : {};
+      return this._progressUpdate(tabId, args, progressOpts);
     }
 
     if (name === 'progress_read') {
@@ -9072,10 +9834,18 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     }
 
     if (name === 'iframe_click') {
+      let dispatched = false;
       try {
         const urlFilter = args.urlFilter || '';
         const selector = args.selector;
-        if (!selector) return { success: false, error: 'selector is required' };
+        if (!selector) {
+          return {
+            success: false,
+            dispatched: false,
+            noDispatch: true,
+            error: 'selector is required',
+          };
+        }
         const code = `
           (() => {
             const filter = ${JSON.stringify(urlFilter)};
@@ -9090,38 +9860,64 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
               const _hostOk = !_w || _h === _w || _h.endsWith('.' + _w);
               if (!_hostOk || !location.href.includes(filter)) return { ok: false, skipped: 'url-filter', url: location.href };
             }
+            let targetDispatched = false;
             try {
               const el = document.querySelector(${JSON.stringify(selector)});
               if (!el) return { ok: false, url: location.href, reason: 'not-found' };
               el.scrollIntoView({ block: 'center', inline: 'center' });
               const rect = el.getBoundingClientRect();
               const opts = { bubbles: true, cancelable: true, view: window, clientX: rect.left + rect.width/2, clientY: rect.top + rect.height/2, button: 0 };
+              targetDispatched = true;
               try { el.dispatchEvent(new PointerEvent('pointerdown', opts)); } catch (e) {}
               el.dispatchEvent(new MouseEvent('mousedown', opts));
               try { el.dispatchEvent(new PointerEvent('pointerup', opts)); } catch (e) {}
               el.dispatchEvent(new MouseEvent('mouseup', opts));
               el.click();
-              return { ok: true, url: location.href, tag: el.tagName, text: (el.innerText || el.value || '').slice(0, 80) };
-            } catch (e) { return { ok: false, url: location.href, error: e.message }; }
+              return { ok: true, url: location.href, tag: el.tagName, text: (el.innerText || el.value || '').slice(0, 80), dispatched: true };
+            } catch (e) { return { ok: false, url: location.href, dispatched: targetDispatched, error: e.message }; }
           })()
         `;
+        dispatched = true;
         const results = await browser.tabs.executeScript(tabId, { code, allFrames: true });
         const successes = (results || []).filter(r => r && r.ok);
-        if (successes.length > 0) return { success: true, method: 'iframe-click', frame: successes[0] };
+        if (successes.length > 0) return { success: true, dispatched: true, method: 'iframe-click', frame: successes[0] };
         const candidates = (results || []).filter(r => r && !r.skipped);
-        return { success: false, error: 'Element not found in any matching iframe', searchedFrames: candidates.length, frameUrls: candidates.map(c => c.url).slice(0, 5) };
+        const targetDispatched = candidates.some(candidate => candidate.dispatched === true);
+        return {
+          success: false,
+          ...(targetDispatched
+            ? { dispatched: true }
+            : { dispatched: false, noDispatch: true }),
+          error: 'Element not found in any matching iframe',
+          searchedFrames: candidates.length,
+          frameUrls: candidates.map(c => c.url).slice(0, 5),
+        };
       } catch (e) {
-        return { success: false, error: `Iframe click failed: ${e.message}` };
+        return {
+          success: false,
+          ...(dispatched
+            ? { dispatched: true }
+            : { dispatched: false, noDispatch: true }),
+          error: `Iframe click failed: ${e.message}`,
+        };
       }
     }
 
     if (name === 'iframe_type') {
+      let dispatched = false;
       try {
         const urlFilter = args.urlFilter || '';
         const selector = args.selector;
         const text = args.text || '';
         const clear = !!args.clear;
-        if (!selector) return { success: false, error: 'selector is required' };
+        if (!selector) {
+          return {
+            success: false,
+            dispatched: false,
+            noDispatch: true,
+            error: 'selector is required',
+          };
+        }
         const code = `
           (() => {
             const filter = ${JSON.stringify(urlFilter)};
@@ -9136,15 +9932,17 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
               const _hostOk = !_w || _h === _w || _h.endsWith('.' + _w);
               if (!_hostOk || !location.href.includes(filter)) return { ok: false, skipped: 'url-filter', url: location.href };
             }
+            let targetDispatched = false;
             try {
               const el = document.querySelector(${JSON.stringify(selector)});
               if (!el) return { ok: false, url: location.href, reason: 'not-found' };
+              targetDispatched = true;
               el.focus();
               if (el.isContentEditable) {
                 if (${clear}) el.textContent = '';
                 el.textContent += ${JSON.stringify(text)};
                 el.dispatchEvent(new InputEvent('input', { bubbles: true, data: ${JSON.stringify(text)} }));
-                return { ok: true, url: location.href, method: 'contenteditable', value: el.textContent.slice(0, 100) };
+                return { ok: true, url: location.href, method: 'contenteditable', value: el.textContent.slice(0, 100), dispatched: true };
               }
               const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
               const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
@@ -9152,17 +9950,33 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
               if (setter) setter.call(el, newVal); else el.value = newVal;
               el.dispatchEvent(new Event('input', { bubbles: true }));
               el.dispatchEvent(new Event('change', { bubbles: true }));
-              return { ok: true, url: location.href, method: 'native-setter', value: (el.value || '').slice(0, 100) };
-            } catch (e) { return { ok: false, url: location.href, error: e.message }; }
+              return { ok: true, url: location.href, method: 'native-setter', value: (el.value || '').slice(0, 100), dispatched: true };
+            } catch (e) { return { ok: false, url: location.href, dispatched: targetDispatched, error: e.message }; }
           })()
         `;
+        dispatched = true;
         const results = await browser.tabs.executeScript(tabId, { code, allFrames: true });
         const successes = (results || []).filter(r => r && r.ok);
-        if (successes.length > 0) return { success: true, frame: successes[0] };
+        if (successes.length > 0) return { success: true, dispatched: true, frame: successes[0] };
         const candidates = (results || []).filter(r => r && !r.skipped);
-        return { success: false, error: 'Input not found in any matching iframe', searchedFrames: candidates.length, frameUrls: candidates.map(c => c.url).slice(0, 5) };
+        const targetDispatched = candidates.some(candidate => candidate.dispatched === true);
+        return {
+          success: false,
+          ...(targetDispatched
+            ? { dispatched: true }
+            : { dispatched: false, noDispatch: true }),
+          error: 'Input not found in any matching iframe',
+          searchedFrames: candidates.length,
+          frameUrls: candidates.map(c => c.url).slice(0, 5),
+        };
       } catch (e) {
-        return { success: false, error: `Iframe type failed: ${e.message}` };
+        return {
+          success: false,
+          ...(dispatched
+            ? { dispatched: true }
+            : { dispatched: false, noDispatch: true }),
+          error: `Iframe type failed: ${e.message}`,
+        };
       }
     }
 
@@ -9210,6 +10024,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       if (Number.isFinite(xn) && Number.isFinite(yn) && xn >= 0 && xn <= 1 && yn >= 0 && yn <= 1) {
         return {
           success: false,
+          dispatched: false,
           error: this._normalizedCoordinateRecoveryError(tabId, args),
         };
       }
@@ -9230,6 +10045,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         if (['read_page', 'get_accessibility_tree', 'get_interactive_elements', 'extract_data'].includes(name)) {
           return await this._restrictedDomainScreenshotFallback(tabId, name, pageUrl, restrictedFailure);
         }
+        if (name === 'click') return { ...restrictedFailure, dispatched: false };
         return restrictedFailure;
       }
       // _isPdfTab does sync URL-pattern match + credentialed HEAD
@@ -9257,18 +10073,37 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         ) {
           return {
             success: false,
+            dispatched: false,
+            noDispatch: true,
             error: `${name} cannot be used on the browser's built-in PDF viewer (a privileged page our scripts cannot reach). Use read_pdf to extract the document's text instead. If you need to read a specific page, pass fromPage/toPage to read_pdf.`,
           };
         }
       }
     } catch { /* tab lookup failures are non-fatal — fall through */ }
 
+    const axScope = this._lastAxScopes.get(tabId);
+    const contentArgs = name === 'click_ax' && axScope?.documentToken
+      ? {
+          ...args,
+          expectedDocumentToken: axScope.documentToken,
+          ...(axScope.pageUrl ? { expectedPageUrl: axScope.pageUrl } : {}),
+        }
+      : args;
+
     try {
       const response = await browser.tabs.sendMessage(tabId, {
         target: 'content',
         action,
-        params: args,
+        params: contentArgs,
       });
+      if (name === 'get_accessibility_tree' && response?.documentToken) {
+        this._lastAxScopes.set(tabId, {
+          documentToken: response.documentToken,
+          pageUrl: response.refScopeUrl || '',
+        });
+        delete response.documentToken;
+        delete response.refScopeUrl;
+      }
       this._annotateCredentialField(name, response);
       return response;
     } catch (e) {
@@ -9280,8 +10115,16 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         const response = await browser.tabs.sendMessage(tabId, {
           target: 'content',
           action,
-          params: args,
+          params: contentArgs,
         });
+        if (name === 'get_accessibility_tree' && response?.documentToken) {
+          this._lastAxScopes.set(tabId, {
+            documentToken: response.documentToken,
+            pageUrl: response.refScopeUrl || '',
+          });
+          delete response.documentToken;
+          delete response.refScopeUrl;
+        }
         this._annotateCredentialField(name, response);
         return response;
       } catch (e2) {
@@ -9295,18 +10138,21 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   }
 
   /**
-   * If a successful set_field touched a credential/secret field, append a
-   * note to the tool result so the model is reminded not to echo the value
-   * in subsequent text/summaries. Detection lives in credential-fields.js
-   * (pure ESM, node-testable). Content scripts ship `fieldMeta`; we apply
-   * the policy here so the regex stays in one place.
+   * If set_field touched a credential/secret field, redact any failed
+   * verification readback and annotate the result. Detection lives in
+   * credential-fields.js (pure ESM, node-testable). Content scripts ship
+   * `fieldMeta`; we apply the policy here so the regex stays in one place.
    */
   _annotateCredentialField(toolName, response) {
     if (toolName !== 'set_field') return;
-    if (!response || !response.success || !response.fieldMeta) return;
+    if (!response || !response.fieldMeta) return;
     try {
       const det = isCredentialField(response.fieldMeta);
       if (!det.sensitive) return;
+      if (Object.prototype.hasOwnProperty.call(response, 'actual')) {
+        delete response.actual;
+        response.actualRedacted = true;
+      }
       // Always set the flag — useful for trace review and downstream tooling
       // — but only emit a model-facing `note` in STRICT mode. See chrome/
       // agent.js for rationale: mid-run nuanced hints confuse small models;
@@ -9326,7 +10172,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
    * Continue processing from where we left off (after max steps).
    */
   async continueProcessing(tabId, onUpdate = () => {}, mode = 'ask') {
-    return this.processMessage(tabId, 'Please continue from where you left off.', onUpdate, mode);
+    return this.processMessage(
+      tabId,
+      'Please continue from where you left off.',
+      onUpdate,
+      mode,
+      [],
+      { trustedContinuation: true },
+    );
   }
 
   // ── Deep verbose / debug log ──────────────────────────────────────────
@@ -9494,6 +10347,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     }
     this._resetActiveSkillsForRun(tabId, { refreshPrompt: false });
     this._clearLoopState(tabId);
+    if (runOptions?.trustedContinuation !== true) this._continuationExecutionEvidence.delete(tabId);
+    const completionRunToken = this._beginCompletionInvariant(tabId);
     this._runningTabs.add(tabId);
     const previousCloudContext = this.cloudRunContexts.get(tabId);
     if (runOptions.cloudRun) {
@@ -9503,6 +10358,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       return await this._processMessageInner(tabId, userMessage, onUpdate, mode, attachments, runOptions);
     } finally {
       this.currentCostState.delete(tabId);
+      this._storeContinuationExecutionEvidence(tabId);
+      this._planExecutionGuards.delete(tabId);
       this._resetActiveSkillsForRun(tabId);
       if (runOptions.cloudRun) {
         if (previousCloudContext) this.cloudRunContexts.set(tabId, previousCloudContext);
@@ -9510,6 +10367,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       }
       this._runningTabs.delete(tabId);
       this._clearLoopState(tabId);
+      this._clearCompletionInvariant(tabId, completionRunToken);
     }
   }
 
@@ -9638,7 +10496,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     // loop. _startTraceRun is the single source of truth (no duplicate tab
     // fetch / startRun payload). (#6)
     let plannerTabInfo = null;
-    if (this._isActionMode(mode) && this._plannerIsEnabled()) {
+    if (this._isActionMode(mode) && runOptions?.cloudRun !== true) {
       // Fetch the tab url/title once and reuse it for both the trace start and
       // the planner gate, instead of fetching the same tab twice.
       plannerTabInfo = await this._getTabUrlTitle(tabId);
@@ -9649,9 +10507,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       tabId, messages, enriched, onUpdate, mode, costState, runId, plannerTabInfo, runOptions,
     );
     if (!gateOutcome.proceed) {
-      _traceStatus = gateOutcome.reason === 'cost_limit' ? 'cost_limit' : 'cancelled';
-      return (finalResponse = gateOutcome.message || 'Task cancelled.');
+      _traceStatus = gateOutcome.reason === 'cost_limit'
+        ? 'cost_limit'
+        : (gateOutcome.reason === 'plan_only' ? 'plan_only_output' : gateOutcome.reason || 'cancelled');
+      return (finalResponse = gateOutcome.message || 'More information is required.');
     }
+    this._startPlanExecutionGuard(tabId, mode, gateOutcome, runOptions);
 
     if (this._isActionMode(mode)) {
       await this._ensureProgressSessionForCurrentTask(tabId, { provider, costState });
@@ -9858,6 +10719,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         );
         if (batchResult.action === 'return') {
           finalResponse = batchResult.value;
+          if (batchResult.status) _traceStatus = batchResult.status;
           return finalResponse;
         }
         if (batchResult.action === 'abort') {
@@ -9929,17 +10791,41 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         onUpdate('warning', { message: finalResponse });
         break;
       }
+      // Repeated-item progress recovery takes priority so an unresolved ledger
+      // can still drive the next tool turn.
       const progressFinalBlock = this._plainFinalProgressBlock(tabId);
-      if (progressFinalBlock) {
+      const completionFinalBlock = this._completionPlainFinalBlock(tabId);
+      const plainFinalBlocks = [progressFinalBlock, completionFinalBlock].filter(Boolean);
+      if (plainFinalBlocks.length) {
         messages.push(this._withResponseItems({ role: 'assistant', content: result.content }, result.responseItems, result.reasoningContent, provider));
-        messages.push({ role: 'user', content: progressFinalBlock });
-        onUpdate('warning', { message: 'Progress ledger has unresolved rows; continuing.' });
+        messages.push({ role: 'user', content: plainFinalBlocks.join('\n\n') });
+        onUpdate('warning', { message: completionFinalBlock ? 'Runtime completion invariant requires an explicit done outcome.' : 'Progress ledger has unresolved rows; continuing.' });
         this._persist(tabId);
         continue;
       }
+      const planOnlyDecision = this._planOnlyTerminalDecision(tabId, result.content);
+      if (planOnlyDecision?.retry) {
+        messages.push(this._withResponseItems({ role: 'assistant', content: result.content }, result.responseItems, result.reasoningContent, provider));
+        messages.push({ role: 'user', content: planOnlyDecision.nudge });
+        // Clear any already-rendered plan/promise so recovery does not leave
+        // rejected terminal text in the assistant bubble (and so run-complete
+        // can write the real summary into an empty bubble).
+        onUpdate('text', { content: '', replace: true });
+        onUpdate('warning', { message: 'Plan-only response was rejected; continuing into execution.' });
+        this._persist(tabId);
+        continue;
+      }
+      if (planOnlyDecision?.failure) {
+        finalResponse = planOnlyDecision.failure;
+        _traceStatus = planOnlyDecision.status || 'plan_only_output';
+        messages.push({ role: 'assistant', content: finalResponse });
+        onUpdate('warning', { message: finalResponse });
+        break;
+      }
+      const repairedFinalContent = repairAssistantDisplayText(result.content);
       finalResponse = result.costAllowanceMessage
-        ? `${result.content}\n\n${result.costAllowanceMessage}`
-        : result.content;
+        ? `${repairedFinalContent}\n\n${result.costAllowanceMessage}`
+        : repairedFinalContent;
       messages.push(this._withResponseItems({ role: 'assistant', content: finalResponse }, result.responseItems, result.reasoningContent, provider));
       onUpdate('text', { content: finalResponse });
       break;
@@ -9979,6 +10865,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     }
     this._resetActiveSkillsForRun(tabId, { refreshPrompt: false });
     this._clearLoopState(tabId);
+    if (runOptions?.trustedContinuation !== true) this._continuationExecutionEvidence.delete(tabId);
+    const completionRunToken = this._beginCompletionInvariant(tabId);
     this._runningTabs.add(tabId);
     const previousCloudContext = this.cloudRunContexts.get(tabId);
     if (runOptions.cloudRun) {
@@ -9988,6 +10876,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       return await this._processMessageStreamInner(tabId, userMessage, onUpdate, mode, runOptions);
     } finally {
       this.currentCostState.delete(tabId);
+      this._storeContinuationExecutionEvidence(tabId);
+      this._planExecutionGuards.delete(tabId);
       this._resetActiveSkillsForRun(tabId);
       if (runOptions.cloudRun) {
         if (previousCloudContext) this.cloudRunContexts.set(tabId, previousCloudContext);
@@ -9995,6 +10885,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       }
       this._runningTabs.delete(tabId);
       this._clearLoopState(tabId);
+      this._clearCompletionInvariant(tabId, completionRunToken);
     }
   }
 
@@ -10044,7 +10935,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     // clears currentRunId, even on an early throw during setup. (#2)
     try {
     let plannerTabInfo = null;
-    if (this._isActionMode(mode) && this._plannerIsEnabled()) {
+    if (this._isActionMode(mode) && runOptions?.cloudRun !== true) {
       // Fetch the tab url/title once and reuse it for both the trace start and
       // the planner gate, instead of fetching the same tab twice.
       plannerTabInfo = await this._getTabUrlTitle(tabId);
@@ -10055,8 +10946,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       tabId, messages, enriched, onUpdate, mode, costState, runId, plannerTabInfo, runOptions,
     );
     if (!gateOutcome.proceed) {
-      return finish(gateOutcome.message || 'Task cancelled.', gateOutcome.reason === 'cost_limit' ? 'cost_limit' : 'cancelled');
+      const status = gateOutcome.reason === 'cost_limit'
+        ? 'cost_limit'
+        : (gateOutcome.reason === 'plan_only' ? 'plan_only_output' : gateOutcome.reason || 'cancelled');
+      return finish(gateOutcome.message || 'More information is required.', status);
     }
+    this._startPlanExecutionGuard(tabId, mode, gateOutcome, runOptions);
 
     if (this._isActionMode(mode)) {
       await this._ensureProgressSessionForCurrentTask(tabId, { provider, costState });
@@ -10214,7 +11109,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             tabId, toolCalls, messages, onUpdate, provider, fullText, allowedToolNames, steps
           );
           if (batchResult.action === 'return') {
-            return finish(batchResult.value);
+            return finish(batchResult.value, batchResult.status);
           }
           if (batchResult.action === 'abort') {
             return finish(batchResult.value, 'cancelled');
@@ -10279,13 +11174,46 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         }
         emptyOutputRecoveryAttempted = false;
         compressionPlaceholderRecoveryAttempted = false;
+        // Preserve the progress ledger's purpose-built continuation before
+        // treating other plain terminal text as unverified.
         const progressFinalBlock = this._plainFinalProgressBlock(tabId);
-        if (progressFinalBlock) {
+        const completionFinalBlock = this._completionPlainFinalBlock(tabId);
+        const plainFinalBlocks = [progressFinalBlock, completionFinalBlock].filter(Boolean);
+        if (plainFinalBlocks.length) {
           messages.push(this._withResponseItems({ role: 'assistant', content: fullText }, responseItems, reasoningContent, provider));
-          messages.push({ role: 'user', content: progressFinalBlock });
-          onUpdate('warning', { message: 'Progress ledger has unresolved rows; continuing.' });
+          messages.push({ role: 'user', content: plainFinalBlocks.join('\n\n') });
+          if (completionFinalBlock) onUpdate('text', { content: '', replace: true });
+          onUpdate('warning', { message: completionFinalBlock ? 'Runtime completion invariant requires an explicit done outcome.' : 'Progress ledger has unresolved rows; continuing.' });
           this._persist(tabId);
           continue;
+        }
+        const planOnlyDecision = this._planOnlyTerminalDecision(tabId, fullText);
+        if (planOnlyDecision?.retry) {
+          messages.push(this._withResponseItems({ role: 'assistant', content: fullText }, responseItems, reasoningContent, provider));
+          messages.push({ role: 'user', content: planOnlyDecision.nudge });
+          // Streamed plan text already landed via text_delta. Replace it before
+          // the recovery turn so later deltas do not append onto the plan and
+          // the final done summary is not blocked by a non-empty bubble.
+          onUpdate('text', { content: '', replace: true });
+          onUpdate('warning', { message: 'Plan-only response was rejected; continuing into execution.' });
+          this._persist(tabId);
+          continue;
+        }
+        if (planOnlyDecision?.failure) {
+          messages.push({ role: 'assistant', content: planOnlyDecision.failure });
+          // Replace any rejected plan text already emitted as streaming deltas
+          // so the visible terminal content matches the failed run result.
+          onUpdate('text', { content: planOnlyDecision.failure, replace: true });
+          onUpdate('warning', { message: planOnlyDecision.failure });
+          this._persist(tabId);
+          return finish(planOnlyDecision.failure, planOnlyDecision.status || 'plan_only_output');
+        }
+        const repairedFullText = repairAssistantDisplayText(fullText);
+        if (repairedFullText !== fullText) {
+          fullText = repairedFullText;
+          // Streaming deltas have already displayed the malformed escapes.
+          // Replace the transient bubble once with the repaired terminal text.
+          onUpdate('text', { content: fullText, replace: true });
         }
         if (costStopMessage) {
           onUpdate('text_delta', { content: `\n\n${costStopMessage}` });

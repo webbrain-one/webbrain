@@ -522,6 +522,7 @@ const ASK_PLACEHOLDER_KEYS = [
   'sp.input.placeholder_tip.help',
   'sp.input.placeholder_tip.record',
 ];
+const PERMISSION_REMINDER_PLACEHOLDER_KEY = 'sp.input.placeholder_tip.skip_permissions';
 const SLASH_COMMANDS = [
   { value: '/help', usage: '/help', descriptionKey: 'sp.slash.help', action: 'show', outOfBand: true },
   {
@@ -996,15 +997,134 @@ chrome.storage.onChanged.addListener((changes) => {
 // prompted per consequential action, so the standing banner is redundant —
 // only surface it in Act mode when the gate is disabled.
 const PERMISSION_GATE_KEY = 'askBeforeConsequentialActions';
+const PERMISSION_EDUCATION_KEY = 'permissionPromptEducation';
+const PERMISSION_EDUCATION_THRESHOLD = 2;
 let askBeforeConsequential = true; // gate ON by default
+let permissionEducationState = { promptCount: 0, hintShown: false };
+
+function normalizePermissionEducationState(value) {
+  return {
+    promptCount: Math.max(0, Math.floor(Number(value?.promptCount) || 0)),
+    hintShown: value?.hintShown === true,
+  };
+}
+
+const permissionEducationReady = chrome.storage.local.get(PERMISSION_EDUCATION_KEY).then((stored) => {
+  permissionEducationState = normalizePermissionEducationState(stored?.[PERMISSION_EDUCATION_KEY]);
+  updateInputPlaceholder();
+}).catch(() => {});
+
+function persistPermissionEducationState() {
+  return chrome.storage.local.set({
+    [PERMISSION_EDUCATION_KEY]: permissionEducationState,
+  }).catch(() => {});
+}
+
+function normalizePermissionSkipTabId(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function permissionSkipCommandContextFromCard(card) {
+  const composerTabId = normalizePermissionSkipTabId(currentTabId);
+  const targetTabId = normalizePermissionSkipTabId(
+    card?.dataset?.scheduledTabId ?? card?.dataset?.tabId,
+  );
+  const clarifyId = String(card?.dataset?.clarifyId || '');
+  if (composerTabId == null || targetTabId == null || !clarifyId) return null;
+  return { composerTabId, targetTabId, clarifyId };
+}
+
+function isPermissionSkipCommandDraft(text) {
+  return /^\/dangerously-skip-permissions(?:\s|$)/i.test(String(text || '').trimStart());
+}
+
+function permissionSkipCommandContextForDraft(tabId, text) {
+  const numericTabId = normalizePermissionSkipTabId(tabId);
+  if (numericTabId == null || !isPermissionSkipCommandDraft(text)) return null;
+  return permissionSkipCommandContextsByTab.get(numericTabId) || null;
+}
+
+function insertPermissionSkipCommand(card) {
+  if (!inputEl) return;
+  if (inputEl.value.trim()) {
+    showComposerToast(t('sp.perm.skip_hint_draft'), { duration: 5000 });
+    inputEl.focus();
+    return;
+  }
+  const command = '/dangerously-skip-permissions';
+  const context = permissionSkipCommandContextFromCard(card);
+  if (context) permissionSkipCommandContextsByTab.set(context.composerTabId, context);
+  resetComposerHistoryNavigation(currentTabId);
+  inputEl.value = command;
+  inputEl.setSelectionRange(command.length, command.length);
+  autoResizeInput();
+  updateSlashCommandAutocomplete();
+  syncSendButtonState();
+  inputEl.focus();
+}
+
+function bindPermissionEducationAction(btn) {
+  if (!btn || btn.dataset.bound) return;
+  btn.dataset.bound = 'true';
+  btn.addEventListener('click', () => insertPermissionSkipCommand(btn.closest('.clarify-card')));
+}
+
+async function maybeShowPermissionEducationHint(card) {
+  await permissionEducationReady;
+  if (!askBeforeConsequential || !card) return;
+
+  permissionEducationState = {
+    ...permissionEducationState,
+    promptCount: Math.min(
+      PERMISSION_EDUCATION_THRESHOLD,
+      permissionEducationState.promptCount + 1,
+    ),
+  };
+  updateInputPlaceholder();
+
+  const shouldShow = !permissionEducationState.hintShown
+    && permissionEducationState.promptCount >= PERMISSION_EDUCATION_THRESHOLD
+    && card.isConnected
+    && !card.classList.contains('clarify-answered');
+  if (shouldShow) permissionEducationState = { ...permissionEducationState, hintShown: true };
+  void persistPermissionEducationState();
+  if (!shouldShow) return;
+
+  const hint = document.createElement('div');
+  hint.className = 'permission-education-hint';
+
+  const copy = document.createElement('div');
+  copy.className = 'permission-education-copy';
+  copy.textContent = t('sp.perm.skip_hint');
+
+  const action = document.createElement('button');
+  action.type = 'button';
+  action.className = 'permission-education-action';
+  action.textContent = t('sp.perm.insert_skip_command');
+  bindPermissionEducationAction(action);
+
+  hint.append(copy, action);
+  card.appendChild(hint);
+  scrollToBottom();
+}
+
 chrome.storage.local.get(PERMISSION_GATE_KEY).then((stored) => {
   if (stored && stored[PERMISSION_GATE_KEY] === false) askBeforeConsequential = false;
   updateActWarning();
+  updateInputPlaceholder();
 }).catch(() => {});
 chrome.storage.onChanged.addListener((changes) => {
+  if (changes[PERMISSION_EDUCATION_KEY]) {
+    permissionEducationState = normalizePermissionEducationState(
+      changes[PERMISSION_EDUCATION_KEY].newValue,
+    );
+    updateInputPlaceholder();
+  }
   if (changes[PERMISSION_GATE_KEY]) {
     askBeforeConsequential = changes[PERMISSION_GATE_KEY].newValue !== false;
     updateActWarning();
+    updateInputPlaceholder();
   }
 });
 
@@ -1250,6 +1370,7 @@ const tabChats = new Map();
 const TAB_CHAT_PREFIX = 'tabChat:';
 const tabChatOperations = new Map();
 const tabInputDrafts = new Map();
+const permissionSkipCommandContextsByTab = new Map();
 const queuedComposerMessagesByTab = new Map();
 const composerHistoryNavigationByTab = new Map();
 let queuedComposerMessageSeq = 0;
@@ -1330,6 +1451,9 @@ function saveInputDraftForTab(tabId, text) {
   const numericTabId = Number(tabId);
   if (!Number.isFinite(numericTabId)) return;
   const draft = String(text || '');
+  if (!isPermissionSkipCommandDraft(draft)) {
+    permissionSkipCommandContextsByTab.delete(numericTabId);
+  }
   if (draft.trim()) {
     tabInputDrafts.set(numericTabId, draft);
   } else {
@@ -3226,7 +3350,10 @@ chrome.storage.onChanged.addListener((changes, area) => {
   }
 });
 
-document.addEventListener('wb-locale-changed', updateRecommendedActionsCollapsedState);
+document.addEventListener('wb-locale-changed', () => {
+  updateRecommendedActionsCollapsedState();
+  void refreshRecommendedActions();
+});
 
 async function refreshRecommendedActions() {
   const requestId = ++recommendationsRequestId;
@@ -3342,6 +3469,8 @@ function rebindClarifyCards() {
     const rawTabId = card.dataset.scheduledTabId ?? card.dataset.tabId;
     const tabId = rawTabId != null && rawTabId !== '' ? Number(rawTabId) : currentTabId;
     if (tabId == null || Number.isNaN(tabId)) return;
+
+    card.querySelectorAll('.permission-education-action').forEach(bindPermissionEducationAction);
 
     card.querySelectorAll('.clarify-option').forEach(btn => {
       if (btn.dataset.bound) return;
@@ -4232,6 +4361,10 @@ function handleSlashCommandKeydown(e) {
 
 function handleInput() {
   resetComposerHistoryNavigation(currentTabId);
+  if (!isPermissionSkipCommandDraft(inputEl?.value)) {
+    const tabId = normalizePermissionSkipTabId(currentTabId);
+    if (tabId != null) permissionSkipCommandContextsByTab.delete(tabId);
+  }
   autoResizeInput();
   updateSlashCommandAutocomplete();
   syncSendButtonState();
@@ -4415,6 +4548,20 @@ function addScreenshotResultMessage(dataUrl, options = {}) {
   return msgEl;
 }
 
+function resolvePendingPermissionPromptForContext(context) {
+  const targetTabId = normalizePermissionSkipTabId(context?.targetTabId);
+  const targetClarifyId = String(context?.clarifyId || '');
+  if (targetTabId == null || !targetClarifyId) return false;
+  for (const card of document.querySelectorAll('.clarify-card[data-permission="1"]')) {
+    if (card.classList.contains('clarify-answered')) continue;
+    if (String(card.dataset.tabId || '') !== String(targetTabId)) continue;
+    if (String(card.dataset.clarifyId || '') !== targetClarifyId) continue;
+    submitClarify(card, targetTabId, targetClarifyId, 'once', 'slash-command');
+    return true;
+  }
+  return false;
+}
+
 function resolvePendingPermissionPromptsForTab(tabId) {
   if (tabId == null) return 0;
   const targetTabId = String(tabId);
@@ -4467,7 +4614,7 @@ function requestConfigurationFile(tabId) {
  * Returns the cleaned text (empty string if fully consumed).
  * May trigger async UI side effects (screenshot, export, etc.).
  */
-async function parseSlashCommands(text, tabId = currentTabId) {
+async function parseSlashCommands(text, tabId = currentTabId, options = {}) {
   const invocation = parseSlashInvocation(text);
   if (!invocation) return text;
   if (invocation.error || invocation.unsupported) {
@@ -4548,7 +4695,12 @@ async function parseSlashCommands(text, tabId = currentTabId) {
     await chrome.storage.local.set({ [PERMISSION_GATE_KEY]: false }).catch(() => {});
     askBeforeConsequential = false;
     updateActWarning();
-    resolvePendingPermissionPromptsForTab(tabId);
+    updateInputPlaceholder();
+    if (options.permissionSkipContext) {
+      resolvePendingPermissionPromptForContext(options.permissionSkipContext);
+    } else {
+      resolvePendingPermissionPromptsForTab(tabId);
+    }
     addPersistentSlashMessage(systemHtml(t('sp.permissions.disabled_html')));
     return payload;
   }
@@ -4894,6 +5046,7 @@ async function sendMessage(extraChatParams = {}) {
   if (!text) return;
   const submittedText = text;
   const tabId = currentTabId;
+  const permissionSkipContext = permissionSkipCommandContextForDraft(tabId, text);
   const requestId = createRunRequestId(tabId);
   text = normalizeScreenshotCommandText(text);
   if (isAwaitingPlanReviewForTab(tabId)) {
@@ -4913,7 +5066,7 @@ async function sendMessage(extraChatParams = {}) {
       inputEl.value = '';
       autoResizeInput();
       syncSendButtonState();
-      await parseSlashCommands(text, tabId);
+      await parseSlashCommands(text, tabId, { permissionSkipContext });
       if (currentTabId === tabId) {
         if (!inputEl.value.trim() || inputEl.value.trim() === text) {
           inputEl.value = '';
@@ -4957,7 +5110,7 @@ async function sendMessage(extraChatParams = {}) {
 
   // Parse any leading slash command. parseSlashCommands may strip the
   // command from `text` and toggle apiMutationsAllowed as a side effect.
-  if (!retryOptions) text = await parseSlashCommands(text, tabId);
+  if (!retryOptions) text = await parseSlashCommands(text, tabId, { permissionSkipContext });
   let renderToCurrentTab = sameTabId(currentTabId, tabId) && sameTabId(renderedTabId, tabId);
   if (!renderToCurrentTab) {
     if (text) saveInputDraftForTab(tabId, text);
@@ -5035,6 +5188,8 @@ async function sendMessage(extraChatParams = {}) {
       requestId,
       text,
       mode: modeForSend,
+      locale: getLocale(),
+      intentFailureMessage: t('sp.plan.intent_unavailable'),
       apiMutationsAllowed: apiMutationsAllowedForSend,
       ...(runCaptureDirective ? {
         runCapture: {
@@ -5455,11 +5610,11 @@ function handleAgentUpdateMessage(msg) {
       break;
 
     case 'text':
-      // Empty content means "the model returned nothing new at this step".
-      // Don't wipe any previously-rendered assistant text — earlier steps
-      // may already have put useful intermediate prose in the bubble.
-      if (currentAssistantEl && data.content) {
-        renderAssistantTextUpdate(currentAssistantEl, data.content);
+      // Empty content usually means "nothing new" — keep prior prose. Exception:
+      // replace:true with empty content clears a rejected streamed terminal
+      // (e.g. plan-only recovery) so the bubble is free for the real summary.
+      if (currentAssistantEl && (data.content || data.replace === true)) {
+        renderAssistantTextUpdate(currentAssistantEl, data.content || '', { replace: data.replace === true });
       }
       break;
 
@@ -5759,6 +5914,7 @@ function renderClarifyCard(data) {
     }
     card.appendChild(optionsEl);
     content.appendChild(card);
+    void maybeShowPermissionEducationHint(card);
     scrollToBottom();
     return;
   }
@@ -6277,7 +6433,7 @@ function clearAssistantTextStreamState(assistantEl) {
   delete textEl.dataset.suppressToolCallStream;
 }
 
-function renderAssistantTextUpdate(assistantEl, content) {
+function renderAssistantTextUpdate(assistantEl, content, options = {}) {
   const textEl = assistantEl.querySelector('.message-text');
   if (!textEl) return;
 
@@ -6299,7 +6455,18 @@ function renderAssistantTextUpdate(assistantEl, content) {
   const streamedText = getStreamedAssistantText(textEl);
   const isDuplicateStreamFinal = streamedText && streamedText === String(content);
 
-  if (verboseMode && !isDuplicateStreamFinal) {
+  if (options.replace === true) {
+    // A rejected streamed terminal must replace its already-rendered deltas
+    // even in Verbose mode; appending would leave the invalid plan visible.
+    // Empty content clears the bubble (plan-only retry before recovery tools).
+    if (content) {
+      textEl.innerHTML = formatMarkdown(content);
+      streamedAssistantTextByEl.set(textEl, String(content));
+    } else {
+      textEl.textContent = '';
+      clearStreamedAssistantText(textEl);
+    }
+  } else if (verboseMode && !isDuplicateStreamFinal) {
     // Verbose mode: append each non-streamed turn as its own paragraph so
     // intermediate prose is preserved alongside the steps log. Streaming
     // finals are already visible live, so format the existing stream instead
@@ -6947,9 +7114,14 @@ function autoResizeInput() {
 }
 
 function getInputPlaceholderKeys() {
-  if (agentMode === 'ask') return ASK_PLACEHOLDER_KEYS;
-  if (agentMode === 'dev') return ['sp.input.dev_placeholder'];
-  return ['sp.input.act_placeholder'];
+  let keys;
+  if (agentMode === 'ask') keys = ASK_PLACEHOLDER_KEYS;
+  else if (agentMode === 'dev') keys = ['sp.input.dev_placeholder'];
+  else keys = ['sp.input.act_placeholder'];
+  if (askBeforeConsequential && permissionEducationState.promptCount > 0) {
+    return [...keys, PERMISSION_REMINDER_PLACEHOLDER_KEY];
+  }
+  return keys;
 }
 
 function updateInputPlaceholder() {

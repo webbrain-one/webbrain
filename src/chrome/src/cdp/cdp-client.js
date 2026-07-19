@@ -1727,8 +1727,8 @@ export class CDPClient {
    */
   async clickElement(tabId, selector) {
     const info = await this.resolveSelector(tabId, selector);
-    if (!info) return { success: false, error: 'Element not found' };
-    if (info.error) return { success: false, error: info.error };
+    if (!info) return { success: false, dispatched: false, error: 'Element not found' };
+    if (info.error) return { success: false, dispatched: false, error: info.error };
 
     // <select> intercept: don't click — focus the element (so type_text
     // finds it as activeElement) and return guidance.
@@ -1748,6 +1748,7 @@ export class CDPClient {
       const opts = optRes?.result?.value;
       return {
         success: false,
+        dispatched: false,
         tag: 'SELECT',
         text: opts?.current || info.text,
         error: `CANNOT CLICK a <select> dropdown — clicking opens a native OS popup that cannot be controlled. The dropdown is now focused (current: "${opts?.current || ''}"). Use type_text({text: "option name"}) to change the value.` + (opts?.options ? ' Available: ' + opts.options.join(', ') : ''),
@@ -1755,6 +1756,7 @@ export class CDPClient {
     }
 
     // Step 1: real mouse events at center coordinates.
+    let dispatchAttempted = false;
     if (info.inViewport && info.hitOk) {
       try {
         const rect = {
@@ -1766,6 +1768,7 @@ export class CDPClient {
         await this.sendCommand(tabId, 'Input.dispatchMouseEvent', {
           type: 'mouseMoved', x: info.x, y: info.y, button: 'none', buttons: 0,
         });
+        dispatchAttempted = true;
         await this.sendCommand(tabId, 'Input.dispatchMouseEvent', {
           type: 'mousePressed', x: info.x, y: info.y, button: 'left', buttons: 1, clickCount: 1,
         });
@@ -1840,7 +1843,11 @@ export class CDPClient {
         };
       })()
     `);
-    return fb?.result?.value || { success: false, error: 'Click failed' };
+    const fallbackResult = fb?.result?.value || { success: false, error: 'Click failed' };
+    if (fallbackResult.success === false && fallbackResult.dispatched == null) {
+      fallbackResult.dispatched = dispatchAttempted;
+    }
+    return fallbackResult;
   }
 
   /**
@@ -1861,8 +1868,8 @@ export class CDPClient {
    */
   async typeText(tabId, selector, text, clear = false) {
     const info = await this.resolveSelector(tabId, selector);
-    if (!info) return { success: false, error: 'Element not found' };
-    if (info.error) return { success: false, error: info.error };
+    if (!info) return { success: false, dispatched: false, noDispatch: true, error: 'Element not found' };
+    if (info.error) return { success: false, dispatched: false, noDispatch: true, error: info.error };
 
     // ── <select> fast-path ──────────────────────────────────────────────
     // Native <select> elements CANNOT be typed into via Input.insertText.
@@ -1905,7 +1912,13 @@ export class CDPClient {
         })()
       `);
       const sInfo = result?.result?.value;
-      if (!sInfo?.success) return sInfo || { success: false, error: 'Select interaction failed' };
+      if (!sInfo?.success) {
+        return {
+          ...(sInfo || { success: false, error: 'Select interaction failed' }),
+          dispatched: false,
+          noDispatch: true,
+        };
+      }
 
       // Close any open native dropdown
       await this.sendCommand(tabId, 'Input.dispatchKeyEvent', {
@@ -1937,6 +1950,7 @@ export class CDPClient {
     }
 
     let focused = false;
+    let dispatched = false;
 
     // Focus path A: real mouse click (most reliable, fires trusted events).
     if (info.inViewport && info.hitOk) {
@@ -1944,6 +1958,7 @@ export class CDPClient {
         await this.sendCommand(tabId, 'Input.dispatchMouseEvent', {
           type: 'mouseMoved', x: info.x, y: info.y, button: 'none', buttons: 0,
         });
+        dispatched = true;
         await this.sendCommand(tabId, 'Input.dispatchMouseEvent', {
           type: 'mousePressed', x: info.x, y: info.y, button: 'left', buttons: 1, clickCount: 1,
         });
@@ -1986,6 +2001,7 @@ export class CDPClient {
     if (clear) {
       try {
         // Select all
+        dispatched = true;
         await this.sendCommand(tabId, 'Input.dispatchKeyEvent', {
           type: 'keyDown', key: 'a', code: 'KeyA', modifiers: 2 /* Ctrl */, windowsVirtualKeyCode: 65,
         });
@@ -2005,6 +2021,7 @@ export class CDPClient {
     // Type via Input.insertText — atomic, fires beforeinput/input correctly.
     let typed = false;
     try {
+      dispatched = true;
       await this.sendCommand(tabId, 'Input.insertText', { text });
       typed = true;
     } catch (e) { /* fall through to JS setter */ }
@@ -2013,6 +2030,7 @@ export class CDPClient {
       // JS fallback using native setter. Properly escape via JSON.
       const selectorJSON = JSON.stringify(selector);
       const textJSON = JSON.stringify(text);
+      dispatched = true;
       const result = await this.evaluate(tabId, `
         (() => {
           const sel = ${selectorJSON};
@@ -2059,7 +2077,11 @@ export class CDPClient {
           };
         })()
       `);
-      return result?.result?.value || { success: false, error: 'Type failed' };
+      const fallbackResult = result?.result?.value || { success: false, error: 'Type failed' };
+      if (fallbackResult.success === false && fallbackResult.dispatched == null) {
+        fallbackResult.dispatched = dispatched;
+      }
+      return fallbackResult;
     }
 
     return {

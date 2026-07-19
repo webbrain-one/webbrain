@@ -583,6 +583,14 @@ const gmailComposeRecipientFixture = `<!doctype html>
 
 let chromeGmailComposeTree = '';
 
+function normalizeTreeRefs(content) {
+  const refs = new Map();
+  return String(content || '').replace(/ref_\d+/g, ref => {
+    if (!refs.has(ref)) refs.set(ref, `ref_${refs.size + 1}`);
+    return refs.get(ref);
+  });
+}
+
 function assertGmailComposeRecipientTree(tree, label) {
   const content = String(tree?.pageContent || '');
   if (!/generic "Alex Russell \(gmail\.com\)" \[ref_\d+\]/.test(content)) {
@@ -597,7 +605,7 @@ function assertGmailComposeRecipientTree(tree, label) {
   for (const forbidden of ['To recipients', 'Hidden stale recipient', 'Opacity hidden override', 'Offscreen hidden override', 'ARIA hidden override', 'Hidden wrapper text', 'generic "Composite controls', 'x'.repeat(101)]) {
     if (content.includes(forbidden)) throw new Error(`${label}: tree promoted forbidden generic text: ${forbidden}`);
   }
-  return content;
+  return normalizeTreeRefs(content);
 }
 
 test('accessibility tree (Chrome): existing Gmail compose exposes the selected recipient chip', async (page) => {
@@ -628,6 +636,7 @@ test('modal scoping: click({text:"Publish"}) returns no-match (scoped out)', asy
   await setup(page, 'modal-scoping.html');
   const resp = await call(page, 'click', { text: 'Publish release' });
   if (resp?.success) throw new Error(`expected failure, got success`);
+  if (resp?.dispatched !== false) throw new Error(`no-match must report dispatched:false, got: ${JSON.stringify(resp)}`);
   if (!/scoped to the open modal/i.test(resp?.error || '')) {
     throw new Error(`expected modal-scope note in error, got: ${resp?.error}`);
   }
@@ -638,6 +647,7 @@ test('occlusion: click({text:"Submit"}) refuses when covered', async (page) => {
   await setup(page, 'occlusion.html');
   const resp = await call(page, 'click', { text: 'Submit' });
   if (resp?.success) throw new Error(`expected failure, got success`);
+  if (resp?.dispatched !== false) throw new Error(`occluded preflight must report dispatched:false, got: ${JSON.stringify(resp)}`);
   if (!resp?.occluded) throw new Error(`expected occluded:true, got: ${JSON.stringify(resp)}`);
   if (!resp?.occludedBy) throw new Error(`expected occludedBy payload`);
   const clicked = await clickedSentinel(page);
@@ -659,6 +669,7 @@ test('ambiguity: two Cancels return rich candidates with ancestor', async (page)
   await setup(page, 'ambiguity-candidates.html');
   const resp = await call(page, 'click', { text: 'Cancel' });
   if (resp?.success) throw new Error(`expected ambiguity, got success`);
+  if (resp?.dispatched !== false) throw new Error(`ambiguity must report dispatched:false, got: ${JSON.stringify(resp)}`);
   if (!Array.isArray(resp?.candidates)) throw new Error(`expected candidates array`);
   if (resp.candidates.length < 2) throw new Error(`expected ≥2 candidates, got ${resp.candidates.length}`);
   const ancestors = resp.candidates.map(c => c.ancestor || '');
@@ -675,6 +686,153 @@ test('ambiguity: two Cancels return rich candidates with ancestor', async (page)
 });
 
 // ─── click_ax same-page anchors ─────────────────────────────────────────────
+for (const browserKind of ['chrome', 'firefox']) {
+  test(`click_ax (${browserKind}): stale refs are explicit pre-dispatch failures`, async (page) => {
+    await setupContentFixture(page, 'trusted-click-fallback.html', browserKind);
+    const result = await call(page, 'click_ax', { ref_id: 'ref_999999' });
+    if (
+      result?.success !== false
+      || result?.dispatched !== false
+      || result?.noDispatch !== true
+      || result?.fallbackAttempted !== false
+    ) {
+      throw new Error(`expected explicit pre-dispatch markers, got: ${JSON.stringify(result)}`);
+    }
+    if (!/not found/i.test(result.error || '')) {
+      throw new Error(`expected stale-ref error, got: ${JSON.stringify(result)}`);
+    }
+  });
+
+  test(`click_ax (${browserKind}): refs are rejected after a same-document route change`, async (page) => {
+    await setupContentFixture(page, 'trusted-click-fallback.html', browserKind);
+    const tree = await call(page, 'get_accessibility_tree', { filter: 'all', maxDepth: 10, maxChars: 20000 });
+    const match = String(tree?.pageContent || '').match(/listitem "Normal synthetic row" \[(ref_\d+)\]/);
+    if (!match || !tree?.documentToken || !tree?.refScopeUrl) {
+      throw new Error(`expected scoped AX ref, got: ${JSON.stringify(tree)}`);
+    }
+    await page.evaluate(() => history.pushState({}, '', '#different-route'));
+    const result = await call(page, 'click_ax', {
+      ref_id: match[1],
+      expectedDocumentToken: tree.documentToken,
+      expectedPageUrl: tree.refScopeUrl,
+    });
+    if (
+      result?.success !== false
+      || result?.staleRef !== true
+      || result?.routeChanged !== true
+      || result?.dispatched !== false
+    ) {
+      throw new Error(`expected route-scoped stale-ref failure, got: ${JSON.stringify(result)}`);
+    }
+  });
+
+  test(`click_ax (${browserKind}): an old ref cannot alias after the new route tree is read`, async (page) => {
+    await setupContentFixture(page, 'trusted-click-fallback.html', browserKind);
+    const firstTree = await call(page, 'get_accessibility_tree', { filter: 'all', maxDepth: 10, maxChars: 20000 });
+    const firstMatch = String(firstTree?.pageContent || '').match(/listitem "Normal synthetic row" \[(ref_\d+)\]/);
+    if (!firstMatch) throw new Error(`expected first-route ref, got: ${JSON.stringify(firstTree)}`);
+
+    await page.evaluate(() => history.pushState({}, '', '#new-tree-route'));
+    const secondTree = await call(page, 'get_accessibility_tree', { filter: 'all', maxDepth: 10, maxChars: 20000 });
+    const secondMatch = String(secondTree?.pageContent || '').match(/listitem "Normal synthetic row" \[(ref_\d+)\]/);
+    if (!secondMatch || !secondTree?.documentToken || !secondTree?.refScopeUrl) {
+      throw new Error(`expected second-route scoped AX ref, got: ${JSON.stringify(secondTree)}`);
+    }
+    if (firstMatch[1] === secondMatch[1]) {
+      throw new Error(`route-scoped refs must not reuse the same identifier: ${firstMatch[1]}`);
+    }
+
+    // Simulate the reviewed failure exactly: the agent has already cached the
+    // latest route scope but the model reuses a ref string from the old tree.
+    const stale = await call(page, 'click_ax', {
+      ref_id: firstMatch[1],
+      expectedDocumentToken: secondTree.documentToken,
+      expectedPageUrl: secondTree.refScopeUrl,
+    });
+    if (
+      stale?.success !== false
+      || stale?.dispatched !== false
+      || stale?.noDispatch !== true
+      || stale?.fallbackAttempted !== false
+      || !/not found/i.test(stale?.error || '')
+    ) {
+      throw new Error(`expected old ref to fail before dispatch, got: ${JSON.stringify(stale)}`);
+    }
+
+    const fresh = await call(page, 'click_ax', {
+      ref_id: secondMatch[1],
+      expectedDocumentToken: secondTree.documentToken,
+      expectedPageUrl: secondTree.refScopeUrl,
+    });
+    if (!fresh?.success) {
+      throw new Error(`expected current-route ref to remain usable, got: ${JSON.stringify(fresh)}`);
+    }
+  });
+
+  test(`click_ax (${browserKind}): unnamed broad generic targets are rejected`, async (page) => {
+    await setupContentFixture(page, 'trusted-click-fallback.html', browserKind);
+    const tree = await call(page, 'get_accessibility_tree', { filter: 'all', maxDepth: 10, maxChars: 20000 });
+    const match = String(tree?.pageContent || '').match(/group \[(ref_\d+)\]/);
+    if (!match) throw new Error(`could not find unnamed broad group in AX tree: ${tree?.pageContent}`);
+    const result = await call(page, 'click_ax', { ref_id: match[1] });
+    if (
+      result?.success !== false
+      || result?.ambiguousTarget !== true
+      || result?.dispatched !== false
+      || result?.targetContext?.truncated !== true
+    ) {
+      throw new Error(`expected ambiguous generic target failure, got: ${JSON.stringify(result)}`);
+    }
+  });
+
+  test(`input tools (${browserKind}): invalid targets and keys are explicit pre-dispatch failures`, async (page) => {
+    await setupContentFixture(page, 'trusted-click-fallback.html', browserKind);
+    const calls = [
+      ['type', { text: 'should not be typed' }],
+      ['type_ax', { ref_id: 'ref_999999', text: 'should not be typed' }],
+      ['set_field', { ref_id: 'ref_999999', text: 'should not be typed' }],
+      ['press_keys', { key: 'F5' }],
+    ];
+    for (const [action, params] of calls) {
+      const result = await call(page, action, params);
+      if (
+        result?.success !== false
+        || result?.dispatched !== false
+        || result?.noDispatch !== true
+      ) {
+        throw new Error(`${action} should be an explicit pre-dispatch failure, got: ${JSON.stringify(result)}`);
+      }
+    }
+  });
+}
+
+for (const browserKind of ['chrome', 'firefox']) {
+  test(`click_ax (${browserKind}): aria-labelledby action returns bounded nearest card context`, async (page) => {
+    await setupContentFixture(page, 'trusted-click-fallback.html', browserKind);
+    const tree = await call(page, 'get_accessibility_tree', { filter: 'visible', maxDepth: 10, maxChars: 20000 });
+    const match = String(tree?.pageContent || '').match(/button "Add to cart" \[(ref_\d+)\]/);
+    if (!match) throw new Error(`could not find product action in AX tree: ${tree?.pageContent}`);
+
+    const result = await call(page, 'click_ax', { ref_id: match[1] });
+    if (!result?.success) throw new Error(`expected click_ax success, got: ${JSON.stringify(result)}`);
+    if (
+      result.name !== 'Add to cart'
+      || result.targetContext?.heading !== 'Cola Zero 6-pack'
+      || !String(result.targetContext?.text || '').includes('Cola Zero 6-pack')
+      || !String(result.targetContext?.href || '').endsWith('/products/cola-zero-six-pack')
+    ) {
+      throw new Error(`nearest product context missing or wrong: ${JSON.stringify(result)}`);
+    }
+    if (
+      String(result.targetContext.text).length > 240
+      || String(result.targetContext.heading).length > 160
+      || String(result.targetContext.href).length > 500
+    ) {
+      throw new Error(`product context bounds regressed: ${JSON.stringify(result.targetContext)}`);
+    }
+  });
+}
+
 test('click_ax: Agent.executeTool keeps synthetic-first behavior and uses trusted CDP only for an ignored generic row', async (page) => {
   await setup(page, 'trusted-click-fallback.html');
   const tree = await call(page, 'get_accessibility_tree', { filter: 'all', maxDepth: 10, maxChars: 20000 });

@@ -79,9 +79,10 @@ export const UNTRUSTED_CONTENT_TOOLS = new Set([
   'revert_patch',
   'progress_update',
   'progress_read',
-  // click/type_text can return page-derived labels, option text, aria-labels,
-  // and form-state hints (not just control status). Treat them as data.
+  // click/click_ax/type_text can return page-derived labels, target context,
+  // option text, aria-labels, and form-state hints. Treat them as data.
   'click',
+  'click_ax',
   'type_text',
   'execute_js',
   'scroll',
