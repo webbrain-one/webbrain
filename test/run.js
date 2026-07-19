@@ -23000,6 +23000,72 @@ test('form validation probes resolve aria-errormessage text in document and shad
   }
 });
 
+test('form validation probes distinguish same-length password corrections without returning passwords', () => {
+  const priorDocument = globalThis.document;
+  const priorNodeFilter = globalThis.NodeFilter;
+  const priorGetComputedStyle = globalThis.getComputedStyle;
+  let passwordValue = 'first1';
+  const passwordField = {
+    tagName: 'INPUT',
+    name: 'password',
+    id: 'password',
+    disabled: false,
+    get value() { return passwordValue; },
+    getAttribute(name) {
+      if (name === 'type') return 'password';
+      return '';
+    },
+    hasAttribute() { return false; },
+    getBoundingClientRect() { return { width: 120, height: 24 }; },
+  };
+  const controlsSelector = 'input, textarea, select, [contenteditable="true"], button, [role="button"], [onclick], [data-action]';
+
+  try {
+    globalThis.NodeFilter = { SHOW_ELEMENT: 1 };
+    globalThis.getComputedStyle = () => ({
+      display: 'block',
+      visibility: 'visible',
+      opacity: '1',
+    });
+    globalThis.document = {
+      activeElement: null,
+      createTreeWalker() {
+        return {
+          currentNode: null,
+          nextNode() { return null; },
+        };
+      },
+      querySelectorAll(selector) {
+        return selector === controlsSelector ? [passwordField] : [];
+      },
+    };
+
+    for (const AgentClass of [AgentCh, AgentFx]) {
+      passwordValue = 'first1';
+      const first = AgentClass._formValidationStateProbe('test-only-secret');
+      passwordValue = 'second';
+      const second = AgentClass._formValidationStateProbe('test-only-secret');
+      assert.notEqual(
+        first.controlFingerprint,
+        second.controlFingerprint,
+        `${AgentClass.name}: same-length password correction kept the validation state unchanged`,
+      );
+      assert.doesNotMatch(
+        JSON.stringify([first, second]),
+        /first1|second/,
+        `${AgentClass.name}: validation snapshot exposed a password value`,
+      );
+    }
+  } finally {
+    if (priorDocument === undefined) delete globalThis.document;
+    else globalThis.document = priorDocument;
+    if (priorNodeFilter === undefined) delete globalThis.NodeFilter;
+    else globalThis.NodeFilter = priorNodeFilter;
+    if (priorGetComputedStyle === undefined) delete globalThis.getComputedStyle;
+    else globalThis.getComputedStyle = priorGetComputedStyle;
+  }
+});
+
 test('form validation polling catches delayed errors', async () => {
   const url = 'https://example.com/form';
   for (const AgentClass of [AgentCh, AgentFx]) {
@@ -23224,6 +23290,12 @@ test('agent returns form validation messages and blocks unchanged repeat submits
     agent._progressWarningForAction = () => '';
     agent._persist = () => {};
     agent._captureFormValidationState = async () => structuredClone(currentState);
+    const validationContexts = [];
+    const waitForFormValidationFailure = agent._waitForFormValidationFailure.bind(agent);
+    agent._waitForFormValidationFailure = async (currentTabId, before, context, options) => {
+      validationContexts.push(context);
+      return waitForFormValidationFailure(currentTabId, before, context, options);
+    };
     agent._detectLikelySubmitAction = async (_tabId, _toolName, args) => (
       args?.text === 'Continue'
         ? {
@@ -23309,13 +23381,19 @@ test('agent returns form validation messages and blocks unchanged repeat submits
       activeInvalid: false,
       invalidFields: [],
       ariaInvalidFields: [],
-      alerts: [],
+      alerts: ['Your extension has to be compatible with at least one application.'],
+      alertsAreValidationOnly: true,
       controlFingerprint: 'checked',
     }];
     const successful = await runSubmit('submit_after_correction');
     assert.equal(successful.success, true, `${AgentClass.name}: corrected form remained blocked`);
     assert.equal(executions, 3, `${AgentClass.name}: corrected form was not submitted`);
     assert.equal(prompts, 2, `${AgentClass.name}: corrected submit did not receive fresh confirmation`);
+    assert.equal(
+      validationContexts.at(-1)?.priorValidationFailure,
+      false,
+      `${AgentClass.name}: corrected state kept stale prior-validation detection enabled`,
+    );
   }
 });
 
