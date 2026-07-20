@@ -14173,6 +14173,25 @@ test('context-menu prompt recovery does not duplicate an in-flight send', async 
   }
 });
 
+test('sidepanel auto-follow bypasses smooth-scroll lag while messages grow', () => {
+  for (const [label, prefix] of [
+    ['chrome', 'src/chrome'],
+    ['firefox', 'src/firefox'],
+  ]) {
+    const panel = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/sidepanel.js'), 'utf8');
+    assert.match(
+      panel,
+      /function pinChatToBottom\(container\) \{[\s\S]*?container\.style\.scrollBehavior = 'auto';[\s\S]*?container\.scrollTop = container\.scrollHeight;[\s\S]*?container\.style\.scrollBehavior = previousScrollBehavior;[\s\S]*?\}/,
+      `${label}: streaming auto-follow should bypass the container's smooth-scroll animation`,
+    );
+    assert.match(
+      panel,
+      /function scrollToBottom\(\) \{[\s\S]*?pinChatToBottom\(container\);[\s\S]*?requestAnimationFrame\(\(\) => \{[\s\S]*?pinChatToBottom\(container\);[\s\S]*?\}\);[\s\S]*?\}/,
+      `${label}: auto-follow should re-pin after the next layout frame`,
+    );
+  }
+});
+
 test('context-menu deferred prompts dispatch one at a time', async () => {
   for (const [label, createHandler] of [
     ['chrome', createContextMenuPromptHandlerCh],

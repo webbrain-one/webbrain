@@ -6892,9 +6892,29 @@ function hideActivity() {
   hideInspectionBanner();
 }
 
+let scrollToBottomFrame = null;
+
+function pinChatToBottom(container) {
+  // The chat container uses smooth scrolling for user-visible navigation.
+  // During streaming, though, repeatedly assigning scrollTop while that
+  // animation is still running makes the viewport lag behind the growing
+  // conversation. Temporarily bypass smooth behavior for auto-follow.
+  const previousScrollBehavior = container.style.scrollBehavior;
+  container.style.scrollBehavior = 'auto';
+  container.scrollTop = container.scrollHeight;
+  container.style.scrollBehavior = previousScrollBehavior;
+}
+
 function scrollToBottom() {
   const container = document.getElementById('chat-container');
-  container.scrollTop = container.scrollHeight;
+  if (!container) return;
+
+  pinChatToBottom(container);
+  if (scrollToBottomFrame != null) cancelAnimationFrame(scrollToBottomFrame);
+  scrollToBottomFrame = requestAnimationFrame(() => {
+    scrollToBottomFrame = null;
+    if (container.isConnected) pinChatToBottom(container);
+  });
 }
 
 // Debounce math rendering so streaming updates don't re-walk the DOM
