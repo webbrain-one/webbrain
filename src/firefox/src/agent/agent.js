@@ -2957,7 +2957,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         step,
         { tier: promptTier, triggeringTool: fnName, reason: freshTurnReason, navNotices },
       )) {
-        return { action: 'continue' };
+        // The interruption helper already emitted the queued synthetic results
+        // and navigation notice. Continue through the shared post-batch path so
+        // state_change/every_step auto-screenshots still reach the fresh turn.
+        if (this._shouldAutoScreenshot(fnName) && !toolResult?.error) didStateChange = true;
+        navNotices.length = 0;
+        break;
       }
       if (bulkApiShortcut?.apiAllowed && bulkApiShortcut.replayRequestId && toolIndex < toolCalls.length - 1) {
         const instruction = this._bulkApiReplayInstruction(bulkApiShortcut);

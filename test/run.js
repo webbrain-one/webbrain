@@ -29730,6 +29730,70 @@ test('browser batches keep leading reads, then require fresh evidence after unsa
   }
 });
 
+test('fresh-turn batch interruptions preserve configured auto-screenshots', async () => {
+  for (const [label, AgentClass] of [['chrome', AgentCh], ['firefox', AgentFx]]) {
+    for (const autoScreenshot of ['state_change', 'every_step']) {
+      const agent = new AgentClass({
+        getActive: () => ({ promptTier: 'mid', supportsVision: true }),
+        getVisionProvider: async () => null,
+      });
+      const tabId = label === 'chrome' ? 813 : 814;
+      const messages = [];
+      const updates = [];
+      const executed = [];
+      let captures = 0;
+      agent.autoScreenshot = autoScreenshot;
+      agent._ensureGateSetting = async () => {};
+      agent._skipPermissionGate = true;
+      agent._currentUrl = async () => 'https://example.test/results';
+      agent._rememberMastodonObservation = async () => null;
+      agent._recordProgressObservation = async () => null;
+      agent._autoRecordProgressAction = () => null;
+      agent._persist = () => {};
+      agent._captureAutoScreenshot = async () => {
+        captures++;
+        return { dataUrl: 'data:image/png;base64,AA==', width: 800, height: 600 };
+      };
+      agent._getVisibleInteractiveElements = async () => [];
+      agent.executeTool = async (_tabId, name) => {
+        executed.push(name);
+        return { success: true, verified: true };
+      };
+
+      const result = await agent._executeToolBatch(
+        tabId,
+        [
+          { id: 'action', function: { name: 'click_ax', arguments: '{"ref_id":"ref_button"}' } },
+          { id: 'stale_read', function: { name: 'get_accessibility_tree', arguments: '{"filter":"visible"}' } },
+        ],
+        messages,
+        (type, data) => updates.push({ type, data }),
+        { supportsVision: true },
+        null,
+        new Set(['click_ax', 'get_accessibility_tree']),
+        1,
+      );
+
+      assert.equal(result.action, 'continue', `${label}/${autoScreenshot}: interrupted batch did not continue`);
+      assert.deepEqual(executed, ['click_ax'], `${label}/${autoScreenshot}: stale read executed after the action`);
+      assert.equal(captures, 1, `${label}/${autoScreenshot}: action screenshot was skipped`);
+      const skipped = JSON.parse(messages.find(message => message.tool_call_id === 'stale_read').content);
+      assert.equal(skipped.skippedBecause, 'fresh_turn_required', `${label}/${autoScreenshot}: stale result contract changed`);
+      const screenshotMessage = messages.find(message => (
+        message.role === 'user'
+        && Array.isArray(message.content)
+        && message.content.some(block => block?.type === 'image_url')
+      ));
+      assert.ok(screenshotMessage, `${label}/${autoScreenshot}: screenshot was not attached to the fresh turn`);
+      assert.equal(
+        updates.some(update => update.type === 'tool_result' && update.data?.name === 'auto_screenshot'),
+        true,
+        `${label}/${autoScreenshot}: screenshot result update missing`,
+      );
+    }
+  }
+});
+
 test('invalid browser-action arguments interrupt queued calls before dispatch', async () => {
   for (const [label, AgentClass] of [['chrome', AgentCh], ['firefox', AgentFx]]) {
     const agent = new AgentClass({
