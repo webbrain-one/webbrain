@@ -758,11 +758,18 @@ const {
 // only the loop-detection helpers, so we extract them via a tiny standalone
 // shim that mirrors the relevant Agent methods. Keep this in sync with
 // agent.js _loopCallKey / _recordCall / _detectLoop / _checkLoop / _detectApiShortcut.
+const STATE_CHANGE_TOOLS_TEST = new Set([
+  'navigate', 'new_tab', 'go_back', 'go_forward', 'click', 'click_ax',
+  'type_text', 'type_ax', 'set_field', 'press_keys', 'scroll', 'hover',
+  'drag_drop', 'execute_js',
+]);
+
 class LoopDetectorShim {
   constructor() {
     this.recentCalls = new Map();
     this.loopNudges = new Map();
     this.healthyCallsSinceLoop = new Map();
+    this.failedActionLoops = new Map();
     this.recentCoordClicks = new Map();
     this.axReadStates = new Map();
     this.noProgressScrolls = new Map();
@@ -855,6 +862,24 @@ class LoopDetectorShim {
   }
   _checkLoop(tabId, name, args, result) {
     const { buf, key } = this._recordCall(tabId, name, args, result);
+    if (STATE_CHANGE_TOOLS_TEST.has(name)) {
+      const failureScope = String(result?.failureScope || `${name}|${bucketArgsKey(name, args)}`).slice(0, 320);
+      const failures = this.failedActionLoops.get(tabId) || new Map();
+      if (this._isToolResultErroredForLoop(name, args, result)) {
+        const attempts = (failures.get(failureScope) || 0) + 1;
+        failures.set(failureScope, attempts);
+        this.failedActionLoops.set(tabId, failures);
+        if (attempts >= 3) {
+          this.failedActionLoops.delete(tabId);
+          return { kind: 'stop' };
+        }
+        if (attempts === 2) return { kind: 'nudge', warning: '[FAILED ACTION LOOP]' };
+      } else if (result?.success === true && result?.verified !== false) {
+        failures.delete(failureScope);
+        if (failures.size) this.failedActionLoops.set(tabId, failures);
+        else this.failedActionLoops.delete(tabId);
+      }
+    }
     if (result?.nonRetryable) {
       const repeats = buf.filter(entry => entry.key === key).length;
       if (repeats >= 2) return { kind: 'stop' };
@@ -3427,13 +3452,13 @@ test('three identical calls trigger nudge', () => {
   assert.equal(result.kind, 'nudge');
 });
 
-test('three identical errored calls also trigger nudge', () => {
+test('failed actions nudge on attempt two and stop on attempt three', () => {
   const d = new LoopDetectorShim();
   const tab = 3;
-  d._checkLoop(tab, 'click', { selector: '#missing' }, { success: false });
-  d._checkLoop(tab, 'click', { selector: '#missing' }, { success: false });
+  assert.equal(d._checkLoop(tab, 'click', { selector: '#missing' }, { success: false }).kind, 'none');
+  assert.equal(d._checkLoop(tab, 'click', { selector: '#missing' }, { success: false }).kind, 'nudge');
   const result = d._checkLoop(tab, 'click', { selector: '#missing' }, { success: false });
-  assert.equal(result.kind, 'nudge');
+  assert.equal(result.kind, 'stop');
 });
 
 test('three failed read-only URL calls stop instead of issuing eight nudges', () => {
@@ -3540,13 +3565,28 @@ test('a second equivalent non-retryable failure stops across tools and URL varia
   assert.equal(d._checkLoop(tab, 'research_url', { url: 'https://addons.mozilla.org/en-US/firefox/' }, failure).kind, 'stop');
 });
 
-test('three identical no-progress clicks also trigger nudge', () => {
+test('no-progress clicks nudge on attempt two and stop on attempt three', () => {
   const d = new LoopDetectorShim();
   const tab = 33;
-  d._checkLoop(tab, 'click', { text: 'Like' }, { success: false, noProgress: true });
-  d._checkLoop(tab, 'click', { text: 'Like' }, { success: false, noProgress: true });
+  assert.equal(d._checkLoop(tab, 'click', { text: 'Like' }, { success: false, noProgress: true }).kind, 'none');
+  assert.equal(d._checkLoop(tab, 'click', { text: 'Like' }, { success: false, noProgress: true }).kind, 'nudge');
   const result = d._checkLoop(tab, 'click', { text: 'Like' }, { success: false, noProgress: true });
-  assert.equal(result.kind, 'nudge');
+  assert.equal(result.kind, 'stop');
+});
+
+test('ambiguous click failure scope survives unrelated actions', () => {
+  const d = new LoopDetectorShim();
+  const tab = 331;
+  const failure = {
+    success: false,
+    failureScope: 'ambiguous-click:search',
+    error: 'Ambiguous text match for "Search"',
+  };
+  assert.equal(d._checkLoop(tab, 'click', { text: 'Search' }, failure).kind, 'none');
+  assert.equal(d._checkLoop(tab, 'type_ax', { ref_id: 'ref_2', text: 'query' }, { success: true, verified: true }).kind, 'none');
+  assert.equal(d._checkLoop(tab, 'click', { x: 10, y: 20 }, { success: true, verified: true }).kind, 'none');
+  assert.equal(d._checkLoop(tab, 'click', { text: 'Search' }, failure).kind, 'nudge');
+  assert.equal(d._checkLoop(tab, 'click', { text: 'Search' }, failure).kind, 'stop');
 });
 
 test('errored vs successful do not collapse together', () => {
@@ -3839,7 +3879,7 @@ test('no-progress scroll stop synthesizes results for the rest of a tool batch',
   }
 });
 
-test('Enter SPA route changes reset dead-scroll state before refs are reused', async () => {
+test('Enter SPA route changes reset dead-scroll state and defer queued ref reuse', async () => {
   for (const [label, AgentClass] of [['chrome', AgentCh], ['firefox', AgentFx]]) {
     const agent = new AgentClass({ getVisionProvider: async () => null });
     const tabId = label === 'chrome' ? 87 : 88;
@@ -3880,10 +3920,14 @@ test('Enter SPA route changes reset dead-scroll state before refs are reused', a
     );
 
     assert.equal(result.action, 'continue', `${label}: reused refs on the new document must not hard-stop`);
-    assert.deepEqual(executed, ['scroll', 'press_keys', 'scroll', 'scroll'], `${label}: the full batch should execute`);
-    assert.equal(agent.noProgressScrolls.get(tabId)?.count, 2, `${label}: only new-document misses should remain`);
-    const secondNewScroll = messages.find(message => message.tool_call_id === 'new_scroll_2');
-    assert.match(secondNewScroll?.content || '', /NO-PROGRESS SCROLL/, `${label}: second miss on the new page should only nudge`);
+    assert.deepEqual(executed, ['scroll', 'press_keys'], `${label}: stale post-navigation refs must not execute`);
+    assert.equal(agent.noProgressScrolls.has(tabId), false, `${label}: route change should clear dead-scroll state`);
+    for (const id of ['new_scroll_1', 'new_scroll_2']) {
+      const skipped = JSON.parse(messages.find(message => message.tool_call_id === id).content);
+      assert.equal(skipped.skippedBecause, 'fresh_turn_required', `${label}: queued ref reuse needs a structured interruption`);
+      assert.equal(skipped.triggeringTool, 'press_keys', `${label}: navigation trigger metadata missing`);
+      assert.equal(skipped.reason, 'navigation_changed', `${label}: SPA route change reason missing`);
+    }
     assert.equal(messages.some(message => message.role === 'user' && /NAVIGATION OCCURRED/.test(String(message.content || ''))), false, `${label}: query/hash-only changes should not emit a path-level navigation warning`);
   }
 });
@@ -7813,6 +7857,30 @@ test('all prompt tiers avoid volunteering secrets found in page data', () => {
       assert.match(prompt, /explicitly asks to see or quote that exact value/i, `${label}: prompt tier must preserve the explicit-request exception`);
       assert.match(prompt, /\$PASSWORD/, `${label}: prompt tier must teach placeholder use`);
     }
+  }
+});
+
+test('Mid and Compact prompts serialize page actions and prefer verified search filling', () => {
+  for (const [label, prompts] of [
+    ['chrome', [SYSTEM_PROMPT_ACT_MID_CH, SYSTEM_PROMPT_ACT_COMPACT_CH]],
+    ['firefox', [SYSTEM_PROMPT_ACT_MID_FX, SYSTEM_PROMPT_ACT_COMPACT_FX]],
+  ]) {
+    for (const prompt of prompts) {
+      assert.match(prompt, /at most ONE page-changing action per response/i, `${label}: smaller-model action boundary missing`);
+      assert.match(prompt, /runtime skips stale calls after an action or failure/i, `${label}: stale-call behavior missing`);
+      assert.match(prompt, /submit:true for search fields/i, `${label}: verified one-shot search guidance missing`);
+    }
+  }
+});
+
+test('field tool contracts advertise settled verification and recovery', () => {
+  for (const [label, getTools] of [['chrome', getToolsForModeCh], ['firefox', getToolsForModeFx]]) {
+    const tools = getTools('act');
+    const typeAx = tools.find(tool => tool.function.name === 'type_ax');
+    const setField = tools.find(tool => tool.function.name === 'set_field');
+    assert.match(typeAx.function.description, /settle[\s\S]*verified:true/i, `${label}: type_ax verification contract missing`);
+    assert.match(setField.function.description, /verify the exact settled value/i, `${label}: set_field exact verification contract missing`);
+    assert.match(setField.function.description, /recoveryRequired:"fresh_tree"/, `${label}: set_field recovery contract missing`);
   }
 });
 
@@ -20111,7 +20179,7 @@ test('reason is informative', () => {
   assert.match(isCredentialField({ type: 'text', name: 'api_key' }).reason, /name matches credential pattern/);
 });
 
-test('failed sensitive set_field readbacks are annotated and redacted', () => {
+test('failed sensitive field-tool readbacks are annotated and redacted', () => {
   for (const [label, rel, detector, strictNote] of [
     ['chrome', 'src/chrome/src/agent/agent.js', isCredentialField, CREDENTIAL_NOTE_STRICT],
     ['firefox', 'src/firefox/src/agent/agent.js', isCredentialFieldFx, CREDENTIAL_NOTE_STRICT_FX],
@@ -20125,15 +20193,17 @@ test('failed sensitive set_field readbacks are annotated and redacted', () => {
       CREDENTIAL_NOTE_STRICT: strictNote,
     });
 
-    const failedSensitive = {
-      success: false,
-      actual: 'settled-secret-value',
-      fieldMeta: { type: 'password' },
-    };
-    method.call({ strictSecretMode: false }, 'set_field', failedSensitive);
-    assert.equal(Object.hasOwn(failedSensitive, 'actual'), false, `${label}: sensitive readback must not reach the model`);
-    assert.equal(failedSensitive.actualRedacted, true, `${label}: redaction should remain observable without the value`);
-    assert.equal(failedSensitive.sensitiveField, true, `${label}: failed post-dispatch results should retain sensitive-field policy`);
+    for (const toolName of ['set_field', 'type_ax']) {
+      const failedSensitive = {
+        success: false,
+        actual: 'settled-secret-value',
+        fieldMeta: { type: 'password' },
+      };
+      method.call({ strictSecretMode: false }, toolName, failedSensitive);
+      assert.equal(Object.hasOwn(failedSensitive, 'actual'), false, `${label}/${toolName}: sensitive readback must not reach the model`);
+      assert.equal(failedSensitive.actualRedacted, true, `${label}/${toolName}: redaction should remain observable without the value`);
+      assert.equal(failedSensitive.sensitiveField, true, `${label}/${toolName}: failed post-dispatch results should retain sensitive-field policy`);
+    }
 
     const failedOrdinary = {
       success: false,
@@ -26337,8 +26407,10 @@ test('agent prefers download_public_media before download_social_media when avai
     );
     assert.ok(clickNavigationRedirectMessage, `${label}: missing social media result after click navigation`);
     const clickNavigationRedirect = JSON.parse(clickNavigationRedirectMessage.content);
-    assert.equal(clickNavigationRedirect.wrongTool, true, `${label}: current media after click navigation should be redirected to public downloader first`);
-    assert.notEqual(clickNavigationRedirect.skipped, true, `${label}: current media after click navigation must not be silently skipped`);
+    assert.equal(clickNavigationRedirect.skipped, true, `${label}: post-navigation media call should be deferred`);
+    assert.equal(clickNavigationRedirect.skippedBecause, 'fresh_turn_required', `${label}: post-navigation skip reason missing`);
+    assert.equal(clickNavigationRedirect.triggeringTool, 'click', `${label}: click navigation trigger metadata missing`);
+    assert.equal(clickNavigationRedirect.reason, 'navigation_changed', `${label}: click navigation reason missing`);
 
     const nextTurnAgent = new AgentClass({ getVisionProvider: async () => null });
     nextTurnAgent.setCustomSkills([packagedFreeSkillzRecord(prefix)]);
@@ -26990,15 +27062,144 @@ test('set_field waits for reconciliation and verifies the complete value', () =>
     assert.ok(branchStart >= 0 && branchEnd > branchStart, `${label}: set_field handler should be bounded for regression checks`);
     const branch = source.slice(branchStart, branchEnd);
     const settleIndex = branch.indexOf('await new Promise(resolve => setTimeout(resolve, SET_FIELD_VERIFY_DELAY_MS))');
-    const readbackIndex = branch.indexOf("const actual = el.isContentEditable");
+    const readbackIndex = branch.search(/(?:const|let) actual = el\.isContentEditable/);
     assert.ok(settleIndex >= 0 && readbackIndex > settleIndex, `${label}: verification must happen after controlled-input reconciliation`);
-    assert.match(branch, /const actual = el\.isContentEditable \? _editableTextValue\(el\)/, `${label}: rich-editor verification must use rendered text`);
+    assert.match(branch, /(?:const|let) actual = el\.isContentEditable \? _editableTextValue\(el\)/, `${label}: rich-editor verification must use rendered text`);
     assert.match(branch, /_setFieldValueMatches\(actual, prevValue, text, clear, el\.isContentEditable\)/, `${label}: newline normalization must remain contenteditable-only`);
     assert.match(branch, /!el\.isConnected \|\| !rect \|\| rect\.w < 1 \|\| rect\.h < 1/, `${label}: stale or zero-sized targets must fail before typing`);
     assert.match(branch, /if \(submit && verified\)/, `${label}: mismatched field values must not be submitted`);
     assert.match(branch, /if \(!verified\) \{[\s\S]*return failure\(/, `${label}: mismatched field values must be explicit failed actions`);
     assert.match(branch, /dispatched\s*\?\s*\{ dispatched: true \}/, `${label}: post-dispatch verification failures must preserve action evidence`);
     assert.doesNotMatch(branch, /actual\.includes\(text\)/, `${label}: substring matches must not count as verified field values`);
+  }
+});
+
+test('type_ax shares settled exact verification and explicit recovery contract', () => {
+  for (const [label, rel] of [
+    ['chrome', 'src/chrome/src/content/content.js'],
+    ['firefox', 'src/firefox/src/content/content.js'],
+  ]) {
+    const source = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+    const branchStart = source.indexOf("'type_ax': async () => {");
+    const branchEnd = source.indexOf("'set_field': async () => {", branchStart);
+    assert.ok(branchStart >= 0 && branchEnd > branchStart, `${label}: type_ax handler should be bounded for regression checks`);
+    const branch = source.slice(branchStart, branchEnd);
+    const settleIndex = branch.indexOf('await new Promise(resolve => setTimeout(resolve, SET_FIELD_VERIFY_DELAY_MS))');
+    const verifyIndex = branch.indexOf('_setFieldValueMatches(actual, previous, text');
+    assert.ok(settleIndex >= 0 && verifyIndex > settleIndex, `${label}: type_ax must verify after page reconciliation`);
+    const selectMutationIndex = branch.indexOf("method = 'type_ax_select'");
+    const selectVerificationIndex = branch.indexOf('selectExpected !== null', settleIndex);
+    assert.ok(selectMutationIndex >= 0 && selectMutationIndex < settleIndex, `${label}: select mutation should flow into the shared settle delay`);
+    assert.ok(selectVerificationIndex > settleIndex, `${label}: select value must be compared exactly after reconciliation`);
+    assert.doesNotMatch(
+      branch.slice(selectMutationIndex, settleIndex),
+      /return\s+\{\s*success:\s*true/,
+      `${label}: select must not return verified success before settling`,
+    );
+    assert.match(branch, /verified: false[\s\S]*recoveryRequired: 'fresh_tree'/, `${label}: failed type_ax needs a fresh-tree recovery directive`);
+    assert.match(branch, /success: true,[\s\S]*verified: true/, `${label}: successful type_ax must report verified:true`);
+    assert.doesNotMatch(branch, /actual\.includes\(text\)/, `${label}: type_ax must not accept substring matches`);
+    if (label === 'firefox') {
+      assert.match(branch, /_retryFieldWithExecCommand/, 'firefox: type_ax should attempt the strongest in-page fallback');
+    } else {
+      assert.match(branch, /_expectedValue/, 'chrome: type_ax should preserve the exact expected value for its trusted background retry');
+    }
+  }
+});
+
+test('Chrome controlled-field fallback is ref-bound, trusted, verified, and submit-gated', () => {
+  const agent = fs.readFileSync(path.join(ROOT, 'src/chrome/src/agent/agent.js'), 'utf8');
+  const content = fs.readFileSync(path.join(ROOT, 'src/chrome/src/content/content.js'), 'utf8');
+  assert.match(agent, /_maybeFallbackFieldWithCdp[\s\S]*ax_prepare_field_for_trusted_type[\s\S]*Input\.insertText[\s\S]*ax_verify_field_value/, 'chrome: trusted field retry pipeline missing');
+  assert.match(agent, /verification\.verified !== true[\s\S]*if \(toolName === 'set_field' && args\?\.submit === true\)/, 'chrome: submit must remain after trusted verification');
+  assert.match(content, /'ax_prepare_field_for_trusted_type'[\s\S]*window\.__wb_ax_lookup\(ref_id\)[\s\S]*el\.select\(\)/, 'chrome: trusted retry must focus and select the ref-bound field');
+  assert.match(content, /'ax_verify_field_value'[\s\S]*_setFieldValueMatches\(actual, '', expected, true/, 'chrome: trusted retry must use exact settled verification');
+});
+
+test('Chrome controlled-field fallback recovers exactly once and never submits a mismatch', async () => {
+  const originalChrome = globalThis.chrome;
+  const originals = {
+    attach: cdpClientCh.attach,
+    sendCommand: cdpClientCh.sendCommand,
+  };
+  try {
+    const commands = [];
+    let verified = true;
+    globalThis.chrome = {
+      tabs: {
+        async sendMessage(_tabId, message) {
+          if (message.action === 'ax_prepare_field_for_trusted_type') {
+            return { success: true, fieldMeta: { type: 'text' }, isCombobox: false };
+          }
+          if (message.action === 'ax_verify_field_value') {
+            return {
+              success: true,
+              verified,
+              actual: verified ? message.params.expected : '',
+              fieldMeta: { type: 'text' },
+            };
+          }
+          throw new Error(`unexpected action ${message.action}`);
+        },
+      },
+    };
+    cdpClientCh.attach = async () => ({ attached: true });
+    cdpClientCh.sendCommand = async (_tabId, method, params) => {
+      commands.push({ method, params });
+      return {};
+    };
+
+    const agent = new AgentCh({});
+    const recovered = await agent._maybeFallbackFieldWithCdp(
+      42,
+      'set_field',
+      { ref_id: 'ref_search', text: 'gary flake', submit: true },
+      {
+        success: false,
+        verified: false,
+        error: 'controlled input reset',
+        _expectedValue: 'gary flake',
+        recoveryRequired: 'fresh_tree',
+      },
+    );
+    assert.equal(recovered.success, true);
+    assert.equal(recovered.verified, true);
+    assert.equal(recovered.trustedFallback, true);
+    assert.equal(recovered.submitted, true);
+    assert.deepEqual(
+      commands.map(command => [command.method, command.params?.text || command.params?.key]),
+      [
+        ['Input.insertText', 'gary flake'],
+        ['Input.dispatchKeyEvent', 'Enter'],
+        ['Input.dispatchKeyEvent', 'Enter'],
+      ],
+      'trusted text must settle before Enter is dispatched',
+    );
+
+    commands.length = 0;
+    verified = false;
+    const failed = await agent._maybeFallbackFieldWithCdp(
+      42,
+      'set_field',
+      { ref_id: 'ref_search', text: 'gary flake', submit: true },
+      {
+        success: false,
+        verified: false,
+        error: 'controlled input reset',
+        _expectedValue: 'gary flake',
+        recoveryRequired: 'fresh_tree',
+      },
+    );
+    assert.equal(failed.success, false);
+    assert.equal(failed.verified, false);
+    assert.equal(failed.recoveryRequired, 'fresh_tree');
+    assert.equal(commands.filter(command => command.method === 'Input.insertText').length, 1, 'only one trusted retry is allowed');
+    assert.equal(commands.some(command => command.params?.key === 'Enter'), false, 'a mismatched field must never submit');
+  } finally {
+    cdpClientCh.attach = originals.attach;
+    cdpClientCh.sendCommand = originals.sendCommand;
+    if (originalChrome === undefined) delete globalThis.chrome;
+    else globalThis.chrome = originalChrome;
   }
 });
 
@@ -29161,6 +29362,156 @@ test('nullish tool responses classify consequential outcomes and stop unsafe bat
       const skippedMessage = messages.find(message => message.tool_call_id === `${toolName}_unsafe_followup`);
       assert.match(skippedMessage?.content || '', /skipped: an earlier tool returned no response/i, `${label}/${toolName}: later batch action did not receive a synthetic result`);
     }
+  }
+});
+
+test('browser batches keep leading reads, then require fresh evidence after unsafe actions', async () => {
+  const calls = [
+    { id: 'observe', function: { name: 'read_page', arguments: '{}' } },
+    { id: 'field', function: { name: 'set_field', arguments: JSON.stringify({ ref_id: 'ref_stale', text: 'query' }) } },
+    { id: 'queued_read', function: { name: 'get_accessibility_tree', arguments: JSON.stringify({ filter: 'visible' }) } },
+    { id: 'queued_click', function: { name: 'click_ax', arguments: JSON.stringify({ ref_id: 'ref_old_button' }) } },
+    { id: 'queued_type', function: { name: 'type_ax', arguments: JSON.stringify({ ref_id: 'ref_old', text: 'must not run' }) } },
+  ];
+
+  for (const [label, AgentClass] of [['chrome', AgentCh], ['firefox', AgentFx]]) {
+    const run = async (tier, failField) => {
+      const agent = new AgentClass({
+        getActive: () => ({ promptTier: tier, supportsVision: false }),
+        getVisionProvider: async () => null,
+      });
+      const executed = [];
+      const messages = [];
+      agent._ensureGateSetting = async () => {};
+      agent._skipPermissionGate = true;
+      agent._currentUrl = async () => 'https://mail.example.test/inbox';
+      agent._rememberMastodonObservation = async () => null;
+      agent._recordProgressObservation = async () => null;
+      agent._autoRecordProgressAction = () => null;
+      agent._persist = () => {};
+      agent.executeTool = async (_tabId, name) => {
+        executed.push(name);
+        if (name === 'read_page') return { success: true, pageContent: 'Inbox' };
+        if (name === 'set_field' && failField) {
+          return {
+            success: false,
+            verified: false,
+            recoveryRequired: 'fresh_tree',
+            error: 'ref_id is stale',
+          };
+        }
+        return { success: true, verified: true };
+      };
+      const result = await agent._executeToolBatch(
+        label === 'chrome' ? 811 : 812,
+        calls,
+        messages,
+        () => {},
+        { supportsVision: false },
+        null,
+        new Set(['read_page', 'get_accessibility_tree', 'set_field', 'click_ax', 'type_ax']),
+        1,
+      );
+      return { agent, executed, messages, result };
+    };
+
+    for (const tier of ['mid', 'compact', 'full']) {
+      const failed = await run(tier, true);
+      assert.equal(failed.result.action, 'continue', `${label}/${tier}: failed action should start a fresh turn`);
+      assert.deepEqual(failed.executed, ['read_page', 'set_field'], `${label}/${tier}: stale calls executed after field failure`);
+      for (const id of ['queued_read', 'queued_click', 'queued_type']) {
+        const skipped = JSON.parse(failed.messages.find(message => message.tool_call_id === id).content);
+        assert.deepEqual(
+          {
+            skipped: skipped.skipped,
+            skippedBecause: skipped.skippedBecause,
+            triggeringTool: skipped.triggeringTool,
+            reason: skipped.reason,
+          },
+          {
+            skipped: true,
+            skippedBecause: 'fresh_turn_required',
+            triggeringTool: 'set_field',
+            reason: 'action_failed',
+          },
+          `${label}/${tier}/${id}: interrupted result contract mismatch`,
+        );
+      }
+    }
+
+    for (const tier of ['mid', 'compact']) {
+      const serialized = await run(tier, false);
+      assert.deepEqual(serialized.executed, ['read_page', 'set_field'], `${label}/${tier}: more than one successful mutation ran`);
+      const skipped = JSON.parse(serialized.messages.find(message => message.tool_call_id === 'queued_type').content);
+      assert.equal(skipped.reason, 'small_model_action_boundary', `${label}/${tier}: successful mutation boundary missing`);
+    }
+
+    const full = await run('full', false);
+    assert.deepEqual(
+      full.executed,
+      ['read_page', 'set_field', 'get_accessibility_tree', 'click_ax', 'type_ax'],
+      `${label}/full: verified successful batching regressed`,
+    );
+  }
+});
+
+test('invalid browser-action arguments interrupt queued calls before dispatch', async () => {
+  for (const [label, AgentClass] of [['chrome', AgentCh], ['firefox', AgentFx]]) {
+    const agent = new AgentClass({
+      getActive: () => ({ promptTier: 'mid', supportsVision: false }),
+      getVisionProvider: async () => null,
+    });
+    const messages = [];
+    const executed = [];
+    agent._persist = () => {};
+    agent.executeTool = async (_tabId, name) => {
+      executed.push(name);
+      return { success: true, verified: true };
+    };
+    const result = await agent._executeToolBatch(
+      label === 'chrome' ? 821 : 822,
+      [
+        { id: 'invalid_field', function: { name: 'set_field', arguments: '{"ref_id":' } },
+        { id: 'queued_click', function: { name: 'click_ax', arguments: '{"ref_id":"ref_1"}' } },
+      ],
+      messages,
+      () => {},
+      { supportsVision: false },
+      null,
+      new Set(['set_field', 'click_ax']),
+      1,
+    );
+
+    assert.equal(result.action, 'continue', `${label}: invalid mutation should start a fresh turn`);
+    assert.deepEqual(executed, [], `${label}: queued click executed after invalid set_field arguments`);
+    const skipped = JSON.parse(messages.find(message => message.tool_call_id === 'queued_click').content);
+    assert.deepEqual(
+      {
+        skipped: skipped.skipped,
+        skippedBecause: skipped.skippedBecause,
+        triggeringTool: skipped.triggeringTool,
+        reason: skipped.reason,
+      },
+      {
+        skipped: true,
+        skippedBecause: 'fresh_turn_required',
+        triggeringTool: 'set_field',
+        reason: 'action_failed',
+      },
+      `${label}: pre-dispatch interruption result contract mismatch`,
+    );
+  }
+});
+
+test('streaming and non-streaming paths share the hardened batch executor', () => {
+  for (const [label, rel] of [
+    ['chrome', 'src/chrome/src/agent/agent.js'],
+    ['firefox', 'src/firefox/src/agent/agent.js'],
+  ]) {
+    const source = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+    const calls = source.match(/await this\._executeToolBatch\(/g) || [];
+    assert.ok(calls.length >= 2, `${label}: streaming and non-streaming paths must both use _executeToolBatch`);
+    assert.match(source, /skippedBecause: 'fresh_turn_required'[\s\S]*tool_batch_interrupted/, `${label}: batch interruption result and trace note must stay paired`);
   }
 });
 

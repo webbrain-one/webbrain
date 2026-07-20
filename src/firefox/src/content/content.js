@@ -1505,6 +1505,7 @@
           return {
             success: false,
             dispatched: false,
+            failureScope: `ambiguous-click:${String(params.text || '').trim().toLowerCase()}`,
             error: `Ambiguous text match for "${params.text}" (mode=${usedMode}, matches=${matches.length})${_scopeNote}. ${candidates.length} candidates returned with cx/cy (precomputed click center, in CSS pixels) and ancestor context. Pick one and call click({x: candidate.cx, y: candidate.cy}) — no arithmetic needed. Use the ancestor field to disambiguate (e.g. an alertdialog's Cancel vs a form's Cancel sit in different containers). Do NOT retry click({text: "${params.text}"}) — it will fail the same way.`,
             candidates,
           };
@@ -2647,6 +2648,69 @@
     return typeof el.innerText === 'string' ? el.innerText : (el.textContent || '');
   }
 
+  function _fieldMeta(el) {
+    try {
+      const tag = el.tagName ? el.tagName.toLowerCase() : '';
+      const fieldType = el.tagName === 'INPUT' ? (el.type || 'text').toLowerCase() : tag;
+      const elId = el.id || null;
+      let labelText = null;
+      try {
+        if (elId) {
+          const escapedId = window.CSS && CSS.escape ? CSS.escape(elId) : elId.replace(/"/g, '\\"');
+          const label = document.querySelector(`label[for="${escapedId}"]`);
+          if (label) labelText = (label.textContent || '').trim().slice(0, 120);
+        }
+        if (!labelText && el.closest) {
+          const wrappingLabel = el.closest('label');
+          if (wrappingLabel) labelText = (wrappingLabel.textContent || '').trim().slice(0, 120);
+        }
+      } catch {}
+      return {
+        tag,
+        type: fieldType,
+        name: el.getAttribute ? el.getAttribute('name') : null,
+        id: elId,
+        autocomplete: el.getAttribute ? el.getAttribute('autocomplete') : null,
+        ariaLabel: el.getAttribute ? el.getAttribute('aria-label') : null,
+        placeholder: el.getAttribute ? el.getAttribute('placeholder') : null,
+        labelText,
+      };
+    } catch { return null; }
+  }
+
+  async function _retryFieldWithExecCommand(el, expected) {
+    try {
+      el.focus({ preventScroll: true });
+      if (el.isContentEditable) {
+        const selection = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        selection.removeAllRanges();
+        selection.addRange(range);
+      } else if (typeof el.select === 'function') {
+        el.select();
+      } else if (typeof el.setSelectionRange === 'function') {
+        el.setSelectionRange(0, String(el.value || '').length);
+      }
+      const inserted = document.execCommand('insertText', false, expected);
+      if (!inserted) {
+        if (el.isContentEditable) {
+          el.textContent = expected;
+        } else {
+          const proto = el.tagName === 'TEXTAREA'
+            ? window.HTMLTextAreaElement.prototype
+            : window.HTMLInputElement.prototype;
+          const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+          if (setter) setter.call(el, expected); else el.value = expected;
+        }
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      await new Promise(resolve => setTimeout(resolve, SET_FIELD_VERIFY_DELAY_MS));
+      return true;
+    } catch { return false; }
+  }
+
   // --- Message handler ---
   browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg.target !== 'content') return;
@@ -3159,7 +3223,7 @@
           return failure(e && e.message || String(e));
         }
       },
-      'type_ax': () => {
+      'type_ax': async () => {
         let dispatched = false;
         const failure = (error, extra = {}) => ({
           success: false,
@@ -3196,8 +3260,13 @@
               return { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) };
             } catch { return null; }
           })();
+          const fieldMeta = _fieldMeta(el);
+          let previous = '';
+          let method = '';
+          let selectExpected = null;
           if (el.isContentEditable) {
             dispatched = true;
+            previous = _editableTextValue(el);
             if (clear) {
               try {
                 const sel = window.getSelection();
@@ -3209,12 +3278,11 @@
               } catch {}
             }
             try { document.execCommand('insertText', false, text); } catch {
-              el.textContent = (clear ? '' : (el.textContent || '')) + text;
+              el.textContent = (clear ? '' : previous) + text;
               el.dispatchEvent(new Event('input', { bubbles: true }));
             }
-            return { success: true, method: 'type_ax_contenteditable', ref_id, rect: typeRect };
-          }
-          if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT') {
+            method = 'type_ax_contenteditable';
+          } else if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT') {
             if (el.tagName === 'INPUT') {
               const inputType = (el.type || 'text').toLowerCase();
               const nonTypeable = new Set(['checkbox', 'radio', 'file', 'submit', 'button', 'reset', 'image', 'color', 'range', 'hidden']);
@@ -3241,22 +3309,71 @@
               if (selSetter) selSetter.call(el, match.value); else el.value = match.value;
               el.dispatchEvent(new Event('input', { bubbles: true }));
               el.dispatchEvent(new Event('change', { bubbles: true }));
-              return { success: true, method: 'type_ax_select', ref_id, value: el.value, rect: typeRect };
+              selectExpected = match.value;
+              method = 'type_ax_select';
+            } else {
+              dispatched = true;
+              previous = el.value || '';
+              if (clear) el.value = '';
+              const proto = el.tagName === 'TEXTAREA'
+                ? window.HTMLTextAreaElement.prototype
+                : window.HTMLInputElement.prototype;
+              const descriptor = Object.getOwnPropertyDescriptor(proto, 'value');
+              const setter = descriptor && descriptor.set;
+              const newVal = (clear ? '' : previous) + text;
+              if (setter) setter.call(el, newVal); else el.value = newVal;
+              el.dispatchEvent(new Event('input', { bubbles: true }));
+              el.dispatchEvent(new Event('change', { bubbles: true }));
+              method = 'type_ax_input';
             }
-            dispatched = true;
-            if (clear) el.value = '';
-            const proto = el.tagName === 'TEXTAREA'
-              ? window.HTMLTextAreaElement.prototype
-              : window.HTMLInputElement.prototype;
-            const descriptor = Object.getOwnPropertyDescriptor(proto, 'value');
-            const setter = descriptor && descriptor.set;
-            const newVal = (clear ? '' : (el.value || '')) + text;
-            if (setter) setter.call(el, newVal); else el.value = newVal;
-            el.dispatchEvent(new Event('input', { bubbles: true }));
-            el.dispatchEvent(new Event('change', { bubbles: true }));
-            return { success: true, method: 'type_ax_input', ref_id, rect: typeRect };
+          } else {
+            return failure(`ref_id ${ref_id} is not a typeable element (tag=${el.tagName}). Use click_ax then type_text.`);
           }
-          return failure(`ref_id ${ref_id} is not a typeable element (tag=${el.tagName}). Use click_ax then type_text.`);
+
+          await new Promise(resolve => setTimeout(resolve, SET_FIELD_VERIFY_DELAY_MS));
+          if (!el.isConnected) {
+            return failure(
+              `ref_id ${ref_id} was replaced while the value was being typed. Re-read the accessibility tree and retry with the current field ref_id.`,
+              { ref_id, verified: false, recoveryRequired: 'fresh_tree', failureScope: `field-value:${ref_id}`, retryable: false, fieldMeta },
+            );
+          }
+          let actual = el.isContentEditable ? _editableTextValue(el) : (el.value || '');
+          let verified = selectExpected !== null
+            ? actual === selectExpected
+            : _setFieldValueMatches(actual, previous, text, !!clear, el.isContentEditable);
+          let fallbackAttempted = false;
+          if (!verified && selectExpected === null) {
+            fallbackAttempted = await _retryFieldWithExecCommand(el, clear ? text : previous + text);
+            actual = el.isContentEditable ? _editableTextValue(el) : (el.value || '');
+            verified = _setFieldValueMatches(actual, previous, text, !!clear, el.isContentEditable);
+          }
+          if (!verified) {
+            return failure(
+              'The field value did not exactly match the requested text after the page settled. Re-read the field and retry with a fresh ref_id.',
+              {
+                method,
+                ref_id,
+                rect: typeRect,
+                verified: false,
+                actual: actual.slice(0, 200),
+                fieldMeta,
+                fallbackAttempted,
+                recoveryRequired: 'fresh_tree',
+                failureScope: `field-value:${ref_id}`,
+                retryable: false,
+              },
+            );
+          }
+          return {
+            success: true,
+            verified: true,
+            method: fallbackAttempted ? 'type_ax_execcommand_fallback' : method,
+            ref_id,
+            rect: typeRect,
+            ...(selectExpected !== null ? { value: actual } : {}),
+            fieldMeta,
+            fallbackAttempted,
+          };
         } catch (e) {
           return failure(e && e.message || String(e));
         }
@@ -3347,44 +3464,25 @@
           if (!el.isConnected) {
             return failure(
               `ref_id ${ref_id} was replaced while the value was being set. Re-read the accessibility tree and retry with the current field ref_id.`,
-              { ref_id },
+              {
+                ref_id,
+                verified: false,
+                recoveryRequired: 'fresh_tree',
+                failureScope: `field-value:${ref_id}`,
+                retryable: false,
+              },
             );
           }
-          const actual = el.isContentEditable ? _editableTextValue(el) : (el.value || '');
-          const verified = _setFieldValueMatches(actual, prevValue, text, clear, el.isContentEditable);
-
-          // Collect field attributes for credential-field detection. The
-          // detector itself lives in src/agent/credential-fields.js (pure
-          // ESM, runs background-side) so the regex has one home and is
-          // node-testable. We just ship the facts.
-          const fieldMeta = (() => {
-            try {
-              const tag = el.tagName ? el.tagName.toLowerCase() : '';
-              const fieldType = el.tagName === 'INPUT' ? (el.type || 'text').toLowerCase() : tag;
-              const elId = el.id || null;
-              let labelText = null;
-              try {
-                if (elId) {
-                  const lbl = document.querySelector('label[for="' + (window.CSS && CSS.escape ? CSS.escape(elId) : elId.replace(/"/g, '\\"')) + '"]');
-                  if (lbl) labelText = (lbl.textContent || '').trim().slice(0, 120);
-                }
-                if (!labelText && el.closest) {
-                  const wrap = el.closest('label');
-                  if (wrap) labelText = (wrap.textContent || '').trim().slice(0, 120);
-                }
-              } catch {}
-              return {
-                tag,
-                type: fieldType,
-                name: el.getAttribute ? el.getAttribute('name') : null,
-                id: elId,
-                autocomplete: el.getAttribute ? el.getAttribute('autocomplete') : null,
-                ariaLabel: el.getAttribute ? el.getAttribute('aria-label') : null,
-                placeholder: el.getAttribute ? el.getAttribute('placeholder') : null,
-                labelText,
-              };
-            } catch { return null; }
-          })();
+          const fieldMeta = _fieldMeta(el);
+          let actual = el.isContentEditable ? _editableTextValue(el) : (el.value || '');
+          let verified = _setFieldValueMatches(actual, prevValue, text, clear, el.isContentEditable);
+          let fallbackAttempted = false;
+          if (!verified) {
+            fallbackAttempted = true;
+            await _retryFieldWithExecCommand(el, (clear ? '' : prevValue) + text);
+            actual = el.isContentEditable ? _editableTextValue(el) : (el.value || '');
+            verified = _setFieldValueMatches(actual, prevValue, text, clear, el.isContentEditable);
+          }
 
           if (submit && verified) {
             try {
@@ -3433,6 +3531,10 @@
                 verified: false,
                 actual: actual.slice(0, 200),
                 fieldMeta,
+                fallbackAttempted,
+                recoveryRequired: 'fresh_tree',
+                failureScope: `field-value:${ref_id}`,
+                retryable: false,
               },
             );
           }
@@ -3443,6 +3545,7 @@
             rect,
             verified: true,
             fieldMeta,
+            fallbackAttempted,
           };
         } catch (e) {
           return failure(e && e.message || String(e));

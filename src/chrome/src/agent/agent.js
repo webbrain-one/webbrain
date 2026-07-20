@@ -196,6 +196,7 @@ export class Agent {
     this.recentCalls = new Map(); // tabId -> [{ key, name, ts }]
     this.loopNudges = new Map();  // tabId -> consecutive-nudge counter
     this.healthyCallsSinceLoop = new Map(); // tabId -> count of clean calls since last nudge
+    this.failedActionLoops = new Map(); // tabId -> Map(stable failure scope -> count)
     // A model can walk ref_1, ref_2, … forever while every call looks unique
     // to the exact-argument loop detector. Track that semantic read pattern.
     this.axReadStates = new Map(); // tabId -> { total, suspicious, nextPage, seenPages, warned }
@@ -908,6 +909,7 @@ export class Agent {
     this.recentCalls.delete(tabId);
     this.loopNudges.delete(tabId);
     this.healthyCallsSinceLoop.delete(tabId);
+    this.failedActionLoops.delete(tabId);
     this.axReadStates.delete(tabId);
     this.noProgressScrolls.delete(tabId);
     this.deliveryObservationStreaks.delete(tabId);
@@ -1812,6 +1814,35 @@ export class Agent {
    */
   _checkLoop(tabId, toolName, toolArgs, toolResult) {
     const { buf, key } = this._recordCall(tabId, toolName, toolArgs, toolResult);
+    if (this._isBrowserMutationTool(toolName)) {
+      const failureScope = String(
+        toolResult?.failureScope || `${toolName}|${bucketArgsKey(toolName, toolArgs)}`,
+      ).slice(0, 320);
+      const failures = this.failedActionLoops.get(tabId) || new Map();
+      if (this._isToolResultErroredForLoop(toolName, toolArgs, toolResult)) {
+        const attempts = (failures.get(failureScope) || 0) + 1;
+        failures.set(failureScope, attempts);
+        if (failures.size > 32) failures.delete(failures.keys().next().value);
+        this.failedActionLoops.set(tabId, failures);
+        if (attempts >= 3) {
+          this._clearLoopState(tabId);
+          return {
+            kind: 'stop',
+            message: `Stopped: ${toolName} failed or made no progress three times for the same target. Repeating it or switching to a precomputed fallback cannot make progress without fresh page evidence.`,
+          };
+        }
+        if (attempts === 2) {
+          return {
+            kind: 'nudge',
+            warning: `[FAILED ACTION LOOP: ${toolName} has failed or made no progress twice for the same target. Do not retry it or use a queued fallback. Re-read the page/tree and choose a new action from current evidence.]`,
+          };
+        }
+      } else if (toolResult?.success === true && toolResult?.verified !== false) {
+        failures.delete(failureScope);
+        if (failures.size) this.failedActionLoops.set(tabId, failures);
+        else this.failedActionLoops.delete(tabId);
+      }
+    }
     if (toolResult?.nonRetryable) {
       const repeats = buf.filter(entry => entry.key === key).length;
       if (repeats >= 2) {
@@ -2350,8 +2381,83 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     return false;
   }
 
+  _isBrowserMutationTool(toolName) {
+    return Agent.STATE_CHANGE_TOOLS.has(toolName)
+      || toolName === 'iframe_click'
+      || toolName === 'iframe_type'
+      || toolName === 'upload_file'
+      || toolName === 'solve_captcha';
+  }
+
+  _browserActionFreshTurnReason(tier, toolName, toolResult) {
+    if (!this._isBrowserMutationTool(toolName)) return '';
+    if (
+      toolResult?.success === false
+      || toolResult?.error
+      || toolResult?.noProgress
+      || toolResult?.ambiguous
+      || toolResult?.outcomeUnknown
+      || toolResult?.stale
+    ) {
+      return 'action_failed';
+    }
+    if (toolResult?.inconclusive || toolResult?.verified === false) {
+      return 'action_unverified';
+    }
+    if (
+      toolResult?.pageUrlChanged === true
+      || toolName === 'navigate'
+      || toolName === 'go_back'
+      || toolName === 'go_forward'
+    ) {
+      return 'navigation_changed';
+    }
+    if (tier === 'mid' || tier === 'compact') {
+      return 'small_model_action_boundary';
+    }
+    return '';
+  }
+
+  _interruptToolBatchForFreshTurn(tabId, toolCalls, startIndex, messages, onUpdate, step, options = {}) {
+    if (startIndex >= toolCalls.length) return false;
+    const triggeringTool = options.triggeringTool || 'browser_action';
+    const reason = options.reason || 'action_failed';
+    const skippedCount = this._appendSyntheticToolResults(
+      tabId,
+      toolCalls,
+      startIndex,
+      messages,
+      onUpdate,
+      step,
+      (skippedName) => ({
+        success: false,
+        skipped: true,
+        skippedBecause: 'fresh_turn_required',
+        triggeringTool,
+        reason,
+        error: `Skipped ${skippedName}: ${triggeringTool} requires a fresh model turn before any dependent browser action.`,
+      }),
+    );
+    this._injectNavNotices(messages, options.navNotices || [], onUpdate);
+    onUpdate('warning', {
+      message: `Paused ${skippedCount} stale tool call(s) after ${triggeringTool}; continuing from the observed result.`,
+    });
+    const interruptedRunId = this.currentRunId.get(tabId);
+    if (interruptedRunId) {
+      trace.recordNote(interruptedRunId, step, 'tool_batch_interrupted', {
+        tier: options.tier || this._resolvePromptTier(),
+        triggeringTool,
+        reason,
+        skippedCount,
+      });
+    }
+    this._persist(tabId);
+    return true;
+  }
+
   async _executeToolBatch(tabId, toolCalls, messages, onUpdate, provider, partialAssistantText = null, allowedToolNames = AGENT_TOOL_NAMES, step = null, runOptions = {}) {
     let didStateChange = false;
+    const promptTier = this._resolvePromptTier();
     const completionBatchStartState = this.completionInvariants.get(tabId) || null;
     // Set of tools whose side effect can navigate the page. We snapshot the
     // URL before these and re-check after, so we can warn the model when an
@@ -2359,6 +2465,18 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     // executing the original plan on a totally different page").
     const navNotices = []; // accumulated for injection after the loop
     const failedApiMutationLoopKeysThisBatch = new Set();
+    const interruptFailedBrowserAction = (toolIndex, triggeringTool) => (
+      this._isBrowserMutationTool(triggeringTool)
+      && this._interruptToolBatchForFreshTurn(
+        tabId,
+        toolCalls,
+        toolIndex + 1,
+        messages,
+        onUpdate,
+        step,
+        { tier: promptTier, triggeringTool, reason: 'action_failed', navNotices },
+      )
+    );
 
     for (let toolIndex = 0; toolIndex < toolCalls.length; toolIndex++) {
       const tc = toolCalls[toolIndex];
@@ -2385,6 +2503,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           tool_call_id: tc.id,
           content: JSON.stringify({ success: false, denied: true, error }),
         });
+        if (interruptFailedBrowserAction(toolIndex, fnName)) return { action: 'continue' };
         continue;
       }
       const parsedArgs = this._parseToolCallArgs(tc);
@@ -2405,6 +2524,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             latencyMs: 0,
           });
         }
+        if (interruptFailedBrowserAction(toolIndex, fnName)) return { action: 'continue' };
         continue;
       }
       const argRepair = this._repairToolCallArgs(fnName, parsedArgs.args);
@@ -2533,6 +2653,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
               content: this._wrapUntrusted(fnName, this._limitToolResult(blockedResult)),
             });
             onUpdate('warning', { message: 'Repeat submission blocked until the invalid form changes.' });
+            if (interruptFailedBrowserAction(toolIndex, fnName)) return { action: 'continue' };
             continue;
           }
         }
@@ -2566,6 +2687,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
               }),
             });
             onUpdate('warning', { message: 'Form submission blocked until the user confirms.' });
+            if (interruptFailedBrowserAction(toolIndex, fnName)) return { action: 'continue' };
             continue;
           }
           // The submit-specific card is fresher and more precise than the
@@ -2651,6 +2773,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
               error: `Cannot run ${fnName}: the target frame/host couldn't be identified, so it can't be permission-checked. Pass a urlFilter naming the iframe's domain (read it first with iframe_read / get_accessibility_tree) and retry.`,
             }),
           });
+          if (interruptFailedBrowserAction(toolIndex, fnName)) return { action: 'continue' };
           continue;
         }
         if (blocked) {
@@ -2663,6 +2786,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
               error: `The user denied permission to ${CAPABILITY_LABEL[blocked.capability]} ${blocked.host}. Do NOT retry this action on that site. Continue with what you can without it, or ask the user how to proceed.`,
             }),
           });
+          if (interruptFailedBrowserAction(toolIndex, fnName)) return { action: 'continue' };
           continue;
         }
       }
@@ -3181,6 +3305,19 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         this._clearLoopState(tabId);
         this._persist(tabId);
         return { action: 'return', value: stopMessage, status: 'loop_stopped' };
+      }
+
+      const freshTurnReason = this._browserActionFreshTurnReason(promptTier, fnName, toolResult);
+      if (freshTurnReason && this._interruptToolBatchForFreshTurn(
+        tabId,
+        toolCalls,
+        toolIndex + 1,
+        messages,
+        onUpdate,
+        step,
+        { tier: promptTier, triggeringTool: fnName, reason: freshTurnReason, navNotices },
+      )) {
+        return { action: 'continue' };
       }
 
       if (bulkApiShortcut?.apiAllowed && bulkApiShortcut.replayRequestId && toolIndex < toolCalls.length - 1) {
@@ -13275,6 +13412,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
               return {
                 success: false,
                 dispatched: false,
+                failureScope: `ambiguous-click:${String(args.text || '').trim().toLowerCase()}`,
                 error: `Ambiguous text match for "${args.text}" (mode=${info.mode}, matches=${info.count}). Candidates in the candidates field include cx/cy (precomputed click center, CSS pixels) and ancestor context. Call click({x: candidate.cx, y: candidate.cy}) — no arithmetic needed. Use the ancestor field to disambiguate (e.g. an alertdialog's Cancel vs a form's Cancel sit in different containers). Do NOT retry click({text: "${args.text}"}) — it will fail the same way.`,
                 candidates: info.candidates || [],
               };
@@ -14455,6 +14593,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       if (name === 'set_checked') {
         response = await this._completeSetCheckedWithCdp(tabId, args, response, contentArgs);
       }
+      if (name === 'type_ax' || name === 'set_field') {
+        response = await this._maybeFallbackFieldWithCdp(tabId, name, args, response);
+      }
       const observedAfterSnapshot = response?._clickAxAfterSnapshot || '';
       if (response) delete response._clickAxAfterSnapshot;
       await this._annotateClickProgress(
@@ -14480,7 +14621,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
    * `fieldMeta`; we apply the policy here so the regex stays in one place.
    */
   _annotateCredentialField(toolName, response) {
-    if (toolName !== 'set_field') return;
+    if (toolName !== 'set_field' && toolName !== 'type_ax') return;
     if (!response || !response.fieldMeta) return;
     try {
       const det = isCredentialField(response.fieldMeta);
@@ -14840,6 +14981,96 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       };
     }
     return { done: false };
+  }
+
+  async _maybeFallbackFieldWithCdp(tabId, toolName, args, response) {
+    if (!response || (toolName !== 'type_ax' && toolName !== 'set_field')) return response;
+    const expected = typeof response._expectedValue === 'string' ? response._expectedValue : null;
+    delete response._expectedValue;
+    if (response.success !== false || response.verified !== false || expected == null || typeof args?.ref_id !== 'string') {
+      return response;
+    }
+
+    const failed = {
+      ...response,
+      fallbackAttempted: true,
+      trustedFallbackAttempted: true,
+      recoveryRequired: 'fresh_tree',
+    };
+    try {
+      const prepared = await chrome.tabs.sendMessage(tabId, {
+        target: 'content',
+        action: 'ax_prepare_field_for_trusted_type',
+        params: { ref_id: args.ref_id },
+      });
+      if (!prepared?.success) {
+        return {
+          ...failed,
+          error: `${response.error || 'Field verification failed'} Trusted retry could not focus the current ref: ${prepared?.error || 'unknown preparation failure'}`,
+        };
+      }
+
+      await cdpClient.attach(tabId);
+      await cdpClient.sendCommand(tabId, 'Input.insertText', { text: expected });
+      await new Promise(resolve => setTimeout(resolve, 120));
+      const verification = await chrome.tabs.sendMessage(tabId, {
+        target: 'content',
+        action: 'ax_verify_field_value',
+        params: { ref_id: args.ref_id, expected },
+      });
+      if (!verification?.success || verification.verified !== true) {
+        return {
+          ...failed,
+          verified: false,
+          ...(verification?.fieldMeta ? { fieldMeta: verification.fieldMeta } : {}),
+          ...(Object.prototype.hasOwnProperty.call(verification || {}, 'actual') ? { actual: verification.actual } : {}),
+          error: 'The field value still did not exactly match after one trusted Chrome retry. Re-read the accessibility tree before another action.',
+        };
+      }
+
+      const recovered = {
+        ...response,
+        success: true,
+        verified: true,
+        method: `${toolName}_cdp_fallback`,
+        fallbackAttempted: true,
+        trustedFallback: true,
+        fieldMeta: verification.fieldMeta || prepared.fieldMeta || response.fieldMeta,
+      };
+      delete recovered.error;
+      delete recovered.actual;
+      delete recovered.actualRedacted;
+      delete recovered.recoveryRequired;
+      delete recovered.failureScope;
+      delete recovered.retryable;
+
+      // set_field({submit:true}) must never submit until the trusted retry has
+      // itself settled and verified. Use trusted CDP keys for the submission.
+      if (toolName === 'set_field' && args?.submit === true) {
+        if (prepared.isCombobox) {
+          await new Promise(resolve => setTimeout(resolve, 80));
+          await cdpClient.sendCommand(tabId, 'Input.dispatchKeyEvent', {
+            type: 'keyDown', key: 'ArrowDown', code: 'ArrowDown', windowsVirtualKeyCode: 40,
+          });
+          await cdpClient.sendCommand(tabId, 'Input.dispatchKeyEvent', {
+            type: 'keyUp', key: 'ArrowDown', code: 'ArrowDown', windowsVirtualKeyCode: 40,
+          });
+        }
+        await cdpClient.sendCommand(tabId, 'Input.dispatchKeyEvent', {
+          type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13,
+        });
+        await cdpClient.sendCommand(tabId, 'Input.dispatchKeyEvent', {
+          type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13,
+        });
+        recovered.submitted = true;
+      }
+      return recovered;
+    } catch (error) {
+      return {
+        ...failed,
+        error: `${response.error || 'Field verification failed'} Trusted Chrome retry failed: ${error?.message || String(error)}`,
+      };
+    }
   }
 
   async _resolveClickAxFallbackTarget(tabId, refId) {
