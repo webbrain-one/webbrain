@@ -10620,13 +10620,15 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       if (!clickError) clickError = error;
     }
 
-    const checkedAfter = typeof verified?.checkedAfter === 'boolean'
+    const verificationObservedState = typeof verified?.checkedAfter === 'boolean';
+    const verificationLostAfterTrustedClick = trustedClickSucceeded && !verificationObservedState;
+    const checkedAfter = verificationObservedState
       ? verified.checkedAfter
-      : response.checkedAfter;
+      : (verificationLostAfterTrustedClick ? undefined : response.checkedAfter);
     const stateMatches = checkedAfter === args.checked;
-    const success = trustedClickSucceeded && stateMatches;
+    const success = trustedClickSucceeded && (stateMatches || verificationLostAfterTrustedClick);
     const checkboxIdentity = verified?.checkboxIdentity || response.checkboxIdentity;
-    return {
+    const completed = {
       ...response,
       ...(verified || {}),
       success,
@@ -10638,18 +10640,36 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       checkedBefore: response.checkedBefore,
       checkedAfter,
       desiredChecked: args.checked,
-      changed: response.checkedBefore !== checkedAfter,
+      changed: verificationObservedState ? response.checkedBefore !== checkedAfter : undefined,
       idempotent: false,
       checkboxIdentity,
-      checkboxState: {
-        identity: checkboxIdentity,
-        desiredChecked: args.checked,
-        actualChecked: checkedAfter,
-      },
+      checkboxState: verificationObservedState
+        ? {
+            identity: checkboxIdentity,
+            desiredChecked: args.checked,
+            actualChecked: checkedAfter,
+          }
+        : undefined,
       selector: response.selector || verified?.selector || trustedSelector,
       rect: verified?.rect || clickResult?.rect || response.rect,
       marker: undefined,
       trustedSelector: undefined,
+    };
+    if (verificationLostAfterTrustedClick) {
+      return {
+        ...completed,
+        success: true,
+        verified: false,
+        inconclusive: true,
+        navigationMayHaveOccurred: true,
+        observedEffects: ['navigation_or_reload_unobservable'],
+        noProgress: undefined,
+        error: undefined,
+        warning: 'The trusted checkbox click was sent, but its document disappeared before the checked state could be re-read, likely because the click navigated or reloaded the page. Do not repeat set_checked; observe the current page.',
+      };
+    }
+    return {
+      ...completed,
       ...(success ? {
         noProgress: undefined,
         error: undefined,

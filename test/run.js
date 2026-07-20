@@ -1511,6 +1511,112 @@ test('Chrome set_checked preserves partial trusted click dispatch on failure', a
   }
 });
 
+test('Chrome set_checked preserves navigation when post-click verification loses the document', async () => {
+  const originalChrome = globalThis.chrome;
+  const originalAttach = cdpClientCh.attach;
+  const originalClickElement = cdpClientCh.clickElement;
+  try {
+    globalThis.chrome = {
+      runtime: {},
+      tabs: {
+        async sendMessage() {
+          throw new Error('The message port closed before a response was received.');
+        },
+      },
+    };
+    cdpClientCh.attach = async () => ({ attached: true });
+    cdpClientCh.clickElement = async () => ({
+      success: true,
+      method: 'cdp-mouse',
+      rect: { x: 1, y: 2, w: 20, h: 20 },
+    });
+
+    const response = await new AgentCh({})._completeSetCheckedWithCdp(
+      42,
+      { ref_id: 'ref_10', checked: true },
+      {
+        success: true,
+        needsTrustedClick: true,
+        marker: 'marker-10',
+        trustedSelector: '[data-webbrain-set-checked-target="marker-10"]',
+        selector: '#firefox',
+        checkedBefore: false,
+        checkedAfter: false,
+        checkboxIdentity: 'id:firefox',
+      },
+      { ref_id: 'ref_10', checked: true, probeOnly: true, markForTrustedClick: true },
+    );
+
+    assert.equal(response.success, true);
+    assert.equal(response.dispatched, true);
+    assert.equal(response.trusted, true);
+    assert.equal(response.verified, false);
+    assert.equal(response.inconclusive, true);
+    assert.equal(response.navigationMayHaveOccurred, true);
+    assert.deepEqual(response.observedEffects, ['navigation_or_reload_unobservable']);
+    assert.equal(response.checkedAfter, undefined);
+    assert.equal(response.checkboxState, undefined);
+    assert.equal(response.noProgress, undefined);
+    assert.equal(response.error, undefined);
+    assert.match(response.warning, /navigated or reloaded/i);
+    assert.equal(
+      CompletionInvariantCh.didCompletionActionExecute('set_checked', { checked: true }, response),
+      true,
+      'a trusted click whose navigation hides verification must retain completion debt',
+    );
+
+    const batchAgent = new AgentCh({ getVisionProvider: async () => null });
+    const tabId = 5130;
+    const messages = [];
+    let urlReads = 0;
+    batchAgent._ensureGateSetting = async () => {};
+    batchAgent._skipPermissionGate = true;
+    batchAgent._currentUrl = async () => {
+      urlReads += 1;
+      return urlReads === 1
+        ? 'https://example.com/preferences'
+        : 'https://example.com/complete';
+    };
+    batchAgent._rememberMastodonObservation = async () => null;
+    batchAgent._recordProgressObservation = async () => null;
+    batchAgent._autoRecordProgressAction = () => null;
+    batchAgent._persist = () => {};
+    batchAgent.executeTool = async () => ({ ...response });
+
+    const result = await batchAgent._executeToolBatch(
+      tabId,
+      [{
+        id: 'set_checked_navigation',
+        function: { name: 'set_checked', arguments: '{"ref_id":"ref_10","checked":true}' },
+      }],
+      messages,
+      () => {},
+      { supportsVision: false },
+      null,
+      new Set(['set_checked']),
+      1,
+    );
+
+    assert.equal(result.action, 'continue');
+    const toolMessage = messages.find(message => message.tool_call_id === 'set_checked_navigation');
+    const toolResult = JSON.parse(batchAgent._unwrapUntrusted(toolMessage.content));
+    assert.equal(toolResult.pageUrlChanged, true);
+    assert.equal(toolResult.previousUrl, 'https://example.com/preferences');
+    assert.equal(toolResult.currentUrl, 'https://example.com/complete');
+    assert.equal(toolResult.error, undefined);
+    assert.equal(
+      messages.some(message => message.role === 'user' && /NAVIGATION OCCURRED/.test(String(message.content || ''))),
+      true,
+      'the lost verification must not suppress the navigation notice',
+    );
+  } finally {
+    cdpClientCh.attach = originalAttach;
+    cdpClientCh.clickElement = originalClickElement;
+    if (originalChrome === undefined) delete globalThis.chrome;
+    else globalThis.chrome = originalChrome;
+  }
+});
+
 test('navigation-prone detection includes only submit-capable key and field calls', () => {
   for (const [label, AgentClass] of [['chrome', AgentCh], ['firefox', AgentFx]]) {
     const agent = new AgentClass({});
