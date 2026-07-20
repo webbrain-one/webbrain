@@ -1760,7 +1760,13 @@ test('matches foodpanda.pk and includes food-delivery guidance', () => {
   const a = getActiveAdapter('https://www.foodpanda.pk/');
   assert.match(a?.notes || '', /LOCATION-FIRST/);
   assert.match(a?.notes || '', /pandamart/);
-  assert.equal(getActiveAdapterFx('https://www.foodpanda.pk/')?.name, 'foodpanda');   // firefox parity
+  // firefox parity
+  const fx = getActiveAdapterFx('https://www.foodpanda.pk/');
+  assert.equal(fx?.name, a?.name);
+  assert.equal(fx?.notes, a?.notes);
+  assert.equal(getActiveAdapterFx('https://foodpanda.pk/restaurants')?.name, 'foodpanda');
+  assert.notEqual(getActiveAdapterFx('https://foodpanda.pk.phishing.example/')?.name, 'foodpanda');
+  assert.notEqual(getActiveAdapterFx('https://www.foodpanda.com.bd/')?.name, 'foodpanda');
 });
 
 test('matches galaxus + digitec and includes anti-bot fetch guidance', () => {
