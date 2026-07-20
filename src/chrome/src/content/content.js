@@ -1383,7 +1383,10 @@
     // Skip for editable targets — re-clicking a text field / contenteditable
     // is legitimate (positions cursor / re-focuses) and "no page change" is
     // the expected outcome there, not a failure signal.
-    const isEditableTarget = el.isContentEditable || el.tagName === 'INPUT' || el.tagName === 'TEXTAREA';
+    const inputType = String(el.getAttribute?.('type') || 'text').toLowerCase();
+    const isEditableTarget = el.isContentEditable
+      || el.tagName === 'TEXTAREA'
+      || (el.tagName === 'INPUT' && !['button', 'checkbox', 'color', 'file', 'hidden', 'image', 'radio', 'range', 'reset', 'submit'].includes(inputType));
     const ident = `${el.tagName}|${(el.innerText || '').slice(0, 50)}|${location.href}`;
     let warning;
     if (_lastClickIdent === ident && !isEditableTarget) {
@@ -1393,6 +1396,8 @@
     return {
       success: true,
       tag: el.tagName,
+      type: String(el.getAttribute?.('type') || '').toLowerCase(),
+      isSubmitControl: targetIsSubmitControl,
       text: el.innerText?.slice(0, 50),
       ...(clickedRect ? { rect: clickedRect } : {}),
       ...(warning ? { warning } : {}),
