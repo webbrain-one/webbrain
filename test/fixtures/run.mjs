@@ -1366,7 +1366,280 @@ for (const browserKind of ['chrome', 'firefox']) {
       }
     }
   });
+
+  test(`checkbox tools (${browserKind}): AX state and set_checked are explicit and idempotent`, async (page) => {
+    await setupContentFixture(page, 'trusted-click-fallback.html', browserKind);
+    const tree = await call(page, 'get_accessibility_tree', { filter: 'all', maxDepth: 10, maxChars: 30000 });
+    const content = String(tree?.pageContent || '');
+    const match = content.match(/checkbox "Firefox compatibility" \[(ref_\d+)\][^\n]*type="checkbox"[^\n]*checked=false/);
+    if (!match) throw new Error(`expected native unchecked state in AX tree: ${content}`);
+
+    const checked = await call(page, 'click_ax', { ref_id: match[1] });
+    if (
+      checked?.success !== true
+      || checked.checkedBefore !== false
+      || checked.checkedAfter !== true
+      || checked.checkedChanged !== true
+      || checked.verified !== true
+    ) {
+      throw new Error(`click_ax did not report native checkbox transition: ${JSON.stringify(checked)}`);
+    }
+
+    const unchecked = await call(page, 'set_checked', { ref_id: match[1], checked: false });
+    if (
+      unchecked?.success !== true
+      || unchecked.checkedBefore !== true
+      || unchecked.checkedAfter !== false
+      || unchecked.changed !== true
+      || unchecked.verified !== true
+    ) {
+      throw new Error(`set_checked did not reach desired false state: ${JSON.stringify(unchecked)}`);
+    }
+
+    const idempotent = await call(page, 'set_checked', { ref_id: match[1], checked: false });
+    if (
+      idempotent?.success !== true
+      || idempotent.idempotent !== true
+      || idempotent.dispatched !== false
+      || idempotent.checkedBefore !== false
+      || idempotent.checkedAfter !== false
+    ) {
+      throw new Error(`set_checked repeated action was not idempotent: ${JSON.stringify(idempotent)}`);
+    }
+  });
+
+  test(`click_ax (${browserKind}): waits for controlled checkbox reconciliation`, async (page) => {
+    await setupContentFixture(page, 'trusted-click-fallback.html', browserKind);
+    const tree = await call(page, 'get_accessibility_tree', { filter: 'all', maxDepth: 10, maxChars: 30000 });
+    const match = String(tree?.pageContent || '').match(/checkbox "Firefox compatibility" \[(ref_\d+)\][^\n]*checked=false/);
+    if (!match) throw new Error(`expected controlled checkbox ref in AX tree: ${tree?.pageContent}`);
+
+    await page.evaluate(() => {
+      const checkbox = document.getElementById('firefox-checkbox');
+      checkbox.addEventListener('click', () => {
+        setTimeout(() => {
+          checkbox.checked = false;
+        }, 0);
+      });
+    });
+    const result = await call(page, 'click_ax', { ref_id: match[1] });
+    if (
+      result?.success !== false
+      || result.noProgress !== true
+      || result.verified !== false
+      || result.checkedBefore !== false
+      || result.checkedAfter !== false
+      || result.desiredChecked !== true
+      || result.checkboxState?.actualChecked !== false
+    ) {
+      throw new Error(`controlled checkbox rollback was accepted too early: ${JSON.stringify(result)}`);
+    }
+  });
+
+  test(`click_ax (${browserKind}): an already-selected radio keeps desired checked state`, async (page) => {
+    await setupContentFixture(page, 'trusted-click-fallback.html', browserKind);
+    const tree = await call(page, 'get_accessibility_tree', { filter: 'all', maxDepth: 10, maxChars: 30000 });
+    const match = String(tree?.pageContent || '').match(/radio "Selected channel" \[(ref_\d+)\][^\n]*checked=true/);
+    if (!match) throw new Error(`expected selected radio state in AX tree: ${tree?.pageContent}`);
+
+    const result = await call(page, 'click_ax', { ref_id: match[1] });
+    if (
+      result?.success !== true
+      || result.checkedBefore !== true
+      || result.checkedAfter !== true
+      || result.checkedChanged !== false
+      || result.desiredChecked !== true
+      || result.checkboxState?.desiredChecked !== true
+      || result.checkboxState?.actualChecked !== true
+    ) {
+      throw new Error(`selected radio was represented as needing an uncheck: ${JSON.stringify(result)}`);
+    }
+  });
+
+  test(`click_ax (${browserKind}): a prevented radio selection is an explicit failure`, async (page) => {
+    await setupContentFixture(page, 'trusted-click-fallback.html', browserKind);
+    const tree = await call(page, 'get_accessibility_tree', { filter: 'all', maxDepth: 10, maxChars: 30000 });
+    const match = String(tree?.pageContent || '').match(/radio "Blocked channel" \[(ref_\d+)\][^\n]*checked=false/);
+    if (!match) throw new Error(`expected blocked radio state in AX tree: ${tree?.pageContent}`);
+
+    const result = await call(page, 'click_ax', { ref_id: match[1] });
+    if (
+      result?.success !== false
+      || result.noProgress !== true
+      || result.verified !== false
+      || result.checkedBefore !== false
+      || result.checkedAfter !== false
+      || result.desiredChecked !== true
+      || result.checkboxState?.actualChecked !== false
+      || !/Radio remained unselected/.test(String(result.error || ''))
+    ) {
+      throw new Error(`prevented radio selection was not reported as a failure: ${JSON.stringify(result)}`);
+    }
+  });
+
+  test(`verify_form refs (${browserKind}): form controls receive actionable AX refs`, async (page) => {
+    await setupContentFixture(page, 'trusted-click-fallback.html', browserKind);
+    const result = await call(page, 'resolve_form_field_refs', { selector: 'form' });
+    if (
+      result?.success !== true
+      || !Array.isArray(result.refs)
+      || result.refs.length < 4
+      || result.refs.some(ref => !/^ref_\d+$/.test(String(ref || '')))
+      || typeof result.documentToken !== 'string'
+      || !result.documentToken
+      || result.refScopeUrl !== page.url()
+    ) {
+      throw new Error(`form controls did not receive actionable refs: ${JSON.stringify(result)}`);
+    }
+  });
 }
+
+test('set_checked (chrome): post-click verification survives same-document route changes', async (page) => {
+  await setupContentFixture(page, 'trusted-click-fallback.html', 'chrome');
+  const tree = await call(page, 'get_accessibility_tree', { filter: 'all', maxDepth: 10, maxChars: 30000 });
+  const match = String(tree?.pageContent || '').match(/checkbox "Firefox compatibility" \[(ref_\d+)\][^\n]*checked=false/);
+  if (!match) throw new Error(`expected Chrome checkbox ref in AX tree: ${tree?.pageContent}`);
+
+  const preflight = await call(page, 'set_checked', {
+    ref_id: match[1],
+    checked: true,
+    expectedDocumentToken: tree.documentToken,
+    expectedPageUrl: tree.refScopeUrl,
+    probeOnly: true,
+    markForTrustedClick: true,
+  });
+  if (preflight?.needsTrustedClick !== true || !preflight.marker) {
+    throw new Error(`expected trusted checkbox preflight marker: ${JSON.stringify(preflight)}`);
+  }
+
+  await page.locator('#firefox-checkbox').click();
+  await page.evaluate(() => history.pushState({}, '', '#checked-filter'));
+  const verified = await call(page, 'set_checked', {
+    ref_id: match[1],
+    checked: true,
+    expectedDocumentToken: tree.documentToken,
+    probeOnly: true,
+    markForTrustedClick: false,
+    cleanupMarker: preflight.marker,
+  });
+  if (
+    verified?.success !== true
+    || verified.checkedAfter !== true
+    || verified.verified !== true
+    || verified.staleRef === true
+  ) {
+    throw new Error(`same-document route change invalidated marker verification: ${JSON.stringify(verified)}`);
+  }
+});
+
+test('set_checked (chrome): markers are one-shot, unique, and self-cleaning', async (page) => {
+  await setupContentFixture(page, 'trusted-click-fallback.html', 'chrome');
+  const tree = await call(page, 'get_accessibility_tree', { filter: 'all', maxDepth: 10, maxChars: 30000 });
+  const match = String(tree?.pageContent || '').match(/checkbox "Firefox compatibility" \[(ref_\d+)\][^\n]*checked=false/);
+  if (!match) throw new Error(`expected Chrome checkbox ref in AX tree: ${tree?.pageContent}`);
+
+  await page.evaluate(() => {
+    window.__wbOriginalSetTimeout = window.setTimeout;
+    window.__wbMarkerCleanup = null;
+    window.setTimeout = (callback, delay, ...args) => {
+      if (delay === 15000 && !window.__wbMarkerCleanup) {
+        window.__wbMarkerCleanup = callback;
+        return 1;
+      }
+      return window.__wbOriginalSetTimeout(callback, delay, ...args);
+    };
+  });
+  const expiring = await call(page, 'set_checked', {
+    ref_id: match[1],
+    checked: true,
+    expectedDocumentToken: tree.documentToken,
+    expectedPageUrl: tree.refScopeUrl,
+    probeOnly: true,
+    markForTrustedClick: true,
+  });
+  const expiredCount = await page.evaluate((marker) => {
+    window.__wbMarkerCleanup?.();
+    window.setTimeout = window.__wbOriginalSetTimeout;
+    delete window.__wbOriginalSetTimeout;
+    delete window.__wbMarkerCleanup;
+    return document.querySelectorAll(`[data-webbrain-set-checked-target="${marker}"]`).length;
+  }, expiring.marker);
+  if (expiredCount !== 0) throw new Error(`trusted marker did not self-clean: ${expiring.marker}`);
+
+  const ambiguous = await call(page, 'set_checked', {
+    ref_id: match[1],
+    checked: true,
+    expectedDocumentToken: tree.documentToken,
+    expectedPageUrl: tree.refScopeUrl,
+    probeOnly: true,
+    markForTrustedClick: true,
+  });
+  await page.evaluate((marker) => {
+    document.getElementById('trusted-firefox-checkbox')
+      .setAttribute('data-webbrain-set-checked-target', marker);
+  }, ambiguous.marker);
+  const uniqueClient = new CDPClient();
+  uniqueClient.sendCommand = async (_tabId, method) => {
+    if (method === 'Runtime.enable') return {};
+    throw new Error(`unexpected CDP command while resolving marker: ${method}`);
+  };
+  uniqueClient.evaluate = async (_tabId, expression) => ({
+    result: { value: await page.evaluate(expression) },
+  });
+  const duplicateResolution = await uniqueClient.resolveSelector(
+    42,
+    `[data-webbrain-set-checked-target="${ambiguous.marker}"]`,
+    { requireUnique: true, retries: 0 },
+  );
+  if (!duplicateResolution?.error || duplicateResolution?.matchCount !== 2) {
+    throw new Error(`CDP trusted selector did not reject duplicate markers: ${JSON.stringify(duplicateResolution)}`);
+  }
+  const verified = await call(page, 'set_checked', {
+    ref_id: match[1],
+    checked: true,
+    expectedDocumentToken: tree.documentToken,
+    probeOnly: true,
+    markForTrustedClick: false,
+    cleanupMarker: ambiguous.marker,
+  });
+  const remaining = await page.locator(`[data-webbrain-set-checked-target="${ambiguous.marker}"]`).count();
+  if (
+    verified?.success !== false
+    || verified.markerConflict !== true
+    || verified.markerMatchCount !== 2
+    || remaining !== 0
+  ) {
+    throw new Error(`ambiguous trusted marker did not fail closed and clean up: ${JSON.stringify({ verified, remaining })}`);
+  }
+});
+
+test('set_checked (firefox): waits for controlled checkbox reconciliation before verifying', async (page) => {
+  await setupContentFixture(page, 'trusted-click-fallback.html', 'firefox');
+  const tree = await call(page, 'get_accessibility_tree', { filter: 'all', maxDepth: 10, maxChars: 30000 });
+  const match = String(tree?.pageContent || '').match(/checkbox "Firefox compatibility" \[(ref_\d+)\][^\n]*checked=false/);
+  if (!match) throw new Error(`expected Firefox checkbox ref in AX tree: ${tree?.pageContent}`);
+
+  await page.evaluate(() => {
+    const checkbox = document.getElementById('firefox-checkbox');
+    checkbox.addEventListener('click', () => {
+      setTimeout(() => {
+        checkbox.checked = false;
+      }, 0);
+    }, { once: true });
+  });
+
+  const result = await call(page, 'set_checked', { ref_id: match[1], checked: true });
+  if (
+    result?.success !== false
+    || result.dispatched !== true
+    || result.checkedBefore !== false
+    || result.checkedAfter !== false
+    || result.verified !== false
+    || result.noProgress !== true
+  ) {
+    throw new Error(`Firefox set_checked verified before controlled rollback settled: ${JSON.stringify(result)}`);
+  }
+});
 
 for (const browserKind of ['chrome', 'firefox']) {
   test(`click_ax (${browserKind}): aria-labelledby action returns bounded nearest card context`, async (page) => {
@@ -1549,6 +1822,90 @@ test('click_ax: Agent.executeTool keeps synthetic-first behavior and uses truste
     if (originalChrome === undefined) delete globalThis.chrome;
     else globalThis.chrome = originalChrome;
     await session.detach();
+  }
+});
+
+test('set_checked: Agent.executeTool uses one trusted selector click and then becomes idempotent', async (page) => {
+  await setup(page, 'trusted-click-fallback.html');
+  const tree = await call(page, 'get_accessibility_tree', { filter: 'all', maxDepth: 10, maxChars: 30000 });
+  const match = String(tree?.pageContent || '').match(/checkbox "Trusted Firefox compatibility" \[(ref_\d+)\][^\n]*checked=false/);
+  if (!match) throw new Error(`expected trusted checkbox ref in AX tree: ${tree?.pageContent}`);
+
+  const originalChrome = globalThis.chrome;
+  const originalAttach = cdpClient.attach;
+  const originalClickElement = cdpClient.clickElement;
+  try {
+    globalThis.chrome = {
+      runtime: {},
+      tabs: {
+        async get(tabId) {
+          return { id: tabId, url: page.url(), title: 'Trusted checkbox fixture' };
+        },
+        async query() {
+          return [{ id: 42, url: page.url() }];
+        },
+        async sendMessage(_tabId, message) {
+          return call(page, message.action, message.params || {});
+        },
+      },
+    };
+    let trustedClicks = 0;
+    cdpClient.attach = async () => ({ attached: true });
+    cdpClient.clickElement = async (_tabId, selector, options) => {
+      if (options?.trustedOnly !== true || options?.requireUnique !== true) {
+        throw new Error(`expected trusted-only checkbox click, got: ${JSON.stringify(options)}`);
+      }
+      trustedClicks += 1;
+      const locator = page.locator(selector);
+      const box = await locator.boundingBox();
+      await locator.click();
+      return {
+        success: true,
+        method: 'cdp-mouse',
+        rect: box ? {
+          x: Math.round(box.x),
+          y: Math.round(box.y),
+          w: Math.round(box.width),
+          h: Math.round(box.height),
+        } : undefined,
+      };
+    };
+
+    const agent = new Agent({});
+    agent._isPdfTab = async () => false;
+    agent._currentUrl = async () => page.url();
+    const first = await agent.executeTool(42, 'set_checked', { ref_id: match[1], checked: true });
+    const eventsAfterFirst = await page.evaluate(() => window.__trustedCheckboxEvents);
+    if (
+      first?.success !== true
+      || first.trusted !== true
+      || first.verified !== true
+      || first.checkedBefore !== false
+      || first.checkedAfter !== true
+      || first.changed !== true
+      || first.idempotent !== false
+      || trustedClicks !== 1
+      || eventsAfterFirst.length !== 1
+      || eventsAfterFirst[0].trusted !== true
+    ) {
+      throw new Error(`trusted set_checked transition failed: ${JSON.stringify({ first, trustedClicks, eventsAfterFirst })}`);
+    }
+
+    const second = await agent.executeTool(42, 'set_checked', { ref_id: match[1], checked: true });
+    if (
+      second?.success !== true
+      || second.idempotent !== true
+      || second.dispatched !== false
+      || second.checkedAfter !== true
+      || trustedClicks !== 1
+    ) {
+      throw new Error(`idempotent set_checked repeated a click: ${JSON.stringify({ second, trustedClicks })}`);
+    }
+  } finally {
+    cdpClient.attach = originalAttach;
+    cdpClient.clickElement = originalClickElement;
+    if (originalChrome === undefined) delete globalThis.chrome;
+    else globalThis.chrome = originalChrome;
   }
 });
 

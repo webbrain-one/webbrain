@@ -712,12 +712,27 @@ export class ScheduledJobManager {
       await this._setAlarm(saved.job);
       this._emit(saved.job, 'created');
     }
+    const savedScheduleType = saved.job.schedule?.type || parsed.scheduleType;
+    const savedIntervalMinutes = saved.job.schedule?.interval_minutes ?? parsed.intervalMinutes;
+    const firstRunSummary = parsed.immediate
+      ? `Started "${saved.job.title}".`
+      : `Scheduled "${saved.job.title}" for ${saved.job.scheduledAt}.`;
+    const summary = savedScheduleType === 'recurring'
+      ? `${firstRunSummary} Repeats every ${savedIntervalMinutes} minutes as a fixed interval, not a calendar schedule.`
+      : firstRunSummary;
     return {
       success: true,
       scheduled: true,
       jobId: saved.job.id,
       scheduledAt: saved.job.scheduledAt,
-      summary: parsed.immediate ? `Started "${saved.job.title}".` : `Scheduled "${saved.job.title}" for ${saved.job.scheduledAt}.`,
+      schedule: {
+        type: savedScheduleType,
+        first_run_at: saved.job.scheduledAt,
+        ...(savedScheduleType === 'recurring'
+          ? { recurrence: 'fixed_interval', interval_minutes: savedIntervalMinutes }
+          : {}),
+      },
+      summary,
       ...(saved.deduped ? { deduped: true, existingJobId: saved.job.id } : {}),
     };
   }

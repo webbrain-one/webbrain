@@ -64,6 +64,7 @@ const DEFAULT_INPUT_COST_PER_MILLION_USD = 3;
 const DEFAULT_OUTPUT_COST_PER_MILLION_USD = 15;
 const DONE_OUTCOMES = new Set(['success', 'partial', 'failed']);
 const BROWSER_NEW_TAB_URL_PREFIXES = ['chrome://newtab', 'edge://newtab'];
+const SET_CHECKED_VERIFY_DELAY_MS = 80;
 
 function normalizeDoneOutcome(value) {
   const outcome = String(value || '').trim().toLowerCase();
@@ -88,6 +89,7 @@ export class Agent {
     this._progressSessionCounter = 0;
     this.conversationModes = new Map(); // tabId -> 'ask' | 'act' | 'dev'
     this.conversationIds = new Map(); // tabId -> stable conversationId (regenerated on clearConversation)
+    this.submittedRunRequestIds = new Map(); // tabId -> request whose user turn is durable in storage.session
     this.plannerFollowUpSkipTabs = new Set(); // tabIds allowed one short follow-up after an approved try-mode plan
     this.hydratedTabs = new Set(); // tabIds we've already pulled from storage
     this.persistTimers = new Map(); // tabId -> debounce handle
@@ -783,12 +785,39 @@ export class Agent {
     return URL_FAMILY_TOOLS.has(name) && Number.isFinite(status) && status >= 400;
   }
 
+  _fetchUsesHttpByteRange(args) {
+    if (!args?.headers || typeof args.headers !== 'object') return false;
+    for (const [name, value] of Object.entries(args.headers)) {
+      if (String(name).toLowerCase() === 'range' && /^\s*bytes\s*=/i.test(String(value || ''))) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   _loopCallKey(name, args, result) {
     if (result?.nonRetryableScope) {
       // Definitive platform/permission failures keep one identity across
       // tools and URL variants, so changing fetch strategies cannot evade
       // the stop condition.
       return `nonretryable|${String(result.nonRetryableScope).slice(0, 240)}|err`;
+    }
+    const checkboxState = result?.checkboxState;
+    if (
+      checkboxState
+      && typeof checkboxState.desiredChecked === 'boolean'
+      && typeof checkboxState.actualChecked === 'boolean'
+      && checkboxState.desiredChecked !== checkboxState.actualChecked
+    ) {
+      const identity = String(
+        checkboxState.identity
+        || result.checkboxIdentity
+        || result.ref_id
+        || '',
+      ).trim().slice(0, 240);
+      if (identity) {
+        return `checkbox|${identity}|desired:${checkboxState.desiredChecked}|actual:${checkboxState.actualChecked}`;
+      }
     }
     // URL-family tools (fetch_url, research_url, …) bucket by resource
     // identity so the agent can't escape loop detection by fetching the
@@ -1793,6 +1822,22 @@ export class Agent {
         };
       }
     }
+    if (key.startsWith('checkbox|')) {
+      const repeats = buf.filter(entry => entry.key === key).length;
+      if (repeats >= 3) {
+        this._clearLoopState(tabId);
+        return {
+          kind: 'stop',
+          message: 'Stopped: the same checkbox is still in the wrong checked state after three attempts. Changing tools or arguments does not change that semantic state. Re-read the form or ask the user instead of toggling it again.',
+        };
+      }
+      if (repeats >= 2) {
+        return {
+          kind: 'nudge',
+          warning: '[CHECKBOX STATE UNCHANGED: The same checkbox is still in the wrong checked state. Do not toggle it again and do not evade this by switching tools. Call set_checked(ref_id, desiredState) once; if its trusted selector-backed attempt also fails, re-read the form or ask the user.]',
+        };
+      }
+    }
     const loop = this._detectLoop(buf, key);
     if (!loop) {
       // Healthy, non-looping call. We don't reset the nudge counter
@@ -1816,9 +1861,12 @@ export class Agent {
       this._isToolResultErroredForLoop(toolName, toolArgs, toolResult)
     ) {
       this._clearLoopState(tabId);
+      const rangedFetch = toolName === 'fetch_url' && this._fetchUsesHttpByteRange(toolArgs);
       return {
         kind: 'stop',
-        message: `Stopped: ${loop.name} failed three times for the same read-only resource. Repeating it or changing URL variants will not make progress. Please give a different instruction or inspect the page manually.`,
+        message: rangedFetch
+          ? 'Stopped: fetch_url failed three times while probing HTTP byte ranges for the same read-only resource. Use find or semantic offset:nextOffset pagination in a new run, or ask for a partial answer from the evidence already collected.'
+          : `Stopped: ${loop.name} failed three times for the same read-only resource. Repeating it or changing URL variants will not make progress. Please give a different instruction or inspect the page manually.`,
       };
     }
 
@@ -1841,7 +1889,12 @@ export class Agent {
     let warning;
     if (loop.type === 'repeat') {
       const shortcut = this._detectApiShortcut(tabId, loop, buf);
-      warning = shortcut
+      const rangedFetch = toolName === 'fetch_url'
+        && method === 'GET'
+        && this._fetchUsesHttpByteRange(toolArgs);
+      warning = rangedFetch
+        ? '[LOOP DETECTED: You are repeatedly probing the same resource with HTTP byte ranges. Stop guessing byte offsets or file size. Use fetch_url({url, find:"literal"}) to search the full decoded response, continue semantic text pagination with offset:nextOffset, or answer now with the evidence already collected. Do not send another Range header for this resource.]'
+        : shortcut
         ? `[LOOP DETECTED + API SHORTCUT FOUND: You've called ${loop.name} ${loop.count} times. Each click triggered the same background request pattern: ${shortcut.method} ${shortcut.url}. Instead of clicking again, consider fetch_url({url: "${shortcut.url}", method: "${shortcut.method}"${shortcut.replayRequestId ? `, replayRequestId: "${shortcut.replayRequestId}"` : ''}}) with the same method; follow the UI/API mutation policy for mutating methods.]`
         : `[LOOP DETECTED: You've just called ${loop.name} ${loop.count} times with the same arguments and the same outcome. The current approach is NOT working. Try something fundamentally different: a different selector, a different tool, scroll to find a different element, or re-read the page/tree to see what's actually on screen. DO NOT repeat this exact call again — try a creative alternative.]`;
     } else {
@@ -1853,12 +1906,12 @@ export class Agent {
   // Tools whose successful completion should trigger an auto-screenshot when
   // the corresponding mode is active.
   static NAV_TOOLS = new Set(['navigate', 'new_tab', 'go_back', 'go_forward']);
-  static STATE_CHANGE_TOOLS = new Set(['navigate', 'new_tab', 'go_back', 'go_forward', 'click', 'click_ax', 'type_text', 'type_ax', 'set_field', 'press_keys', 'scroll', 'hover', 'drag_drop', 'inject_css', 'remove_injected_css', 'patch_element', 'revert_patch', 'execute_js', 'inspect_event_listeners', 'highlight_element']);
+  static STATE_CHANGE_TOOLS = new Set(['navigate', 'new_tab', 'go_back', 'go_forward', 'click', 'click_ax', 'set_checked', 'type_text', 'type_ax', 'set_field', 'press_keys', 'scroll', 'hover', 'drag_drop', 'inject_css', 'remove_injected_css', 'patch_element', 'revert_patch', 'execute_js', 'inspect_event_listeners', 'highlight_element']);
   static EXECUTION_META_TOOLS = new Set(['clarify', 'scratchpad_write', 'scratchpad_read', 'progress_update', 'progress_read']);
   static EXECUTION_APP_STATE_TOOLS = new Set(['scratchpad_write', 'scratchpad_read', 'progress_update', 'progress_read']);
   static EXECUTION_APP_STATE_WRITE_TOOLS = new Set(['scratchpad_write', 'progress_update']);
   static DELIVERY_OBSERVATION_TOOLS = new Set(['read_page', 'get_accessibility_tree', 'get_interactive_elements', 'extract_data', 'get_selection', 'scroll', 'wait_for_stable', 'wait_for_element', 'read_pdf', 'fetch_url', 'research_url', 'read_downloaded_file', 'iframe_read', 'get_window_info', 'list_downloads', 'progress_read', 'screenshot', 'get_frames', 'get_shadow_dom', 'shadow_dom_query', 'read_youtube_transcript']);
-  static NAV_PRONE_TOOLS = new Set(['click', 'click_ax', 'navigate', 'go_back', 'go_forward', 'execute_js', 'iframe_click']);
+  static NAV_PRONE_TOOLS = new Set(['click', 'click_ax', 'set_checked', 'navigate', 'go_back', 'go_forward', 'execute_js', 'iframe_click']);
   static RECOMMENDED_ACTION_FAST_PATH_IDS = new Set(['download-media', 'tweet-webbrain']);
   static RECOMMENDED_ACTION_FIRST_TOOLS = Object.freeze({
     'download-media': new Set(['screenshot']),
@@ -2297,7 +2350,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     return false;
   }
 
-  async _executeToolBatch(tabId, toolCalls, messages, onUpdate, provider, partialAssistantText = null, allowedToolNames = AGENT_TOOL_NAMES, step = null) {
+  async _executeToolBatch(tabId, toolCalls, messages, onUpdate, provider, partialAssistantText = null, allowedToolNames = AGENT_TOOL_NAMES, step = null, runOptions = {}) {
     let didStateChange = false;
     const completionBatchStartState = this.completionInvariants.get(tabId) || null;
     // Set of tools whose side effect can navigate the page. We snapshot the
@@ -2657,7 +2710,16 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         beforeUrl = await this._currentUrl(tabId);
       }
 
-      onUpdate('tool_call', { name: fnName, args: fnArgs });
+      onUpdate('tool_call', {
+        name: fnName,
+        args: fnArgs,
+        outcomeUnknown: missingResponseOutcomeUnknown,
+      });
+      if (missingResponseOutcomeUnknown && typeof runOptions?.beforeConsequentialTool === 'function') {
+        try {
+          await runOptions.beforeConsequentialTool({ name: fnName });
+        } catch {}
+      }
       const _toolStart = Date.now();
       const rawToolResult = await this.executeTool(tabId, fnName, fnArgs, onUpdate, {
         completionBatchStartState,
@@ -3030,6 +3092,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         tool_call_id: tc.id,
         content: resultContent,
       });
+      if (missingResponseOutcomeUnknown && typeof runOptions?.afterConsequentialTool === 'function') {
+        const conversationDurable = await this._persistNow(tabId).catch(() => false);
+        if (conversationDurable) {
+          try {
+            await runOptions.afterConsequentialTool({ name: fnName });
+          } catch {}
+        }
+      }
 
       // A response can disappear while the page is navigating or reloading,
       // even for a read-only observation. Do not execute the rest of this
@@ -3106,9 +3176,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         messages.push({ role: 'assistant', content: stopMessage });
         onUpdate('text', { content: stopMessage });
         onUpdate('error', { message: 'Stuck in a loop. Stopped.' });
+        const loopRunId = this.currentRunId.get(tabId);
+        if (loopRunId) trace.recordError(loopRunId, step, 'loop', stopMessage);
         this._clearLoopState(tabId);
         this._persist(tabId);
-        return { action: 'return', value: stopMessage };
+        return { action: 'return', value: stopMessage, status: 'loop_stopped' };
       }
 
       if (bulkApiShortcut?.apiAllowed && bulkApiShortcut.replayRequestId && toolIndex < toolCalls.length - 1) {
@@ -4563,6 +4635,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         if (entry.conversationId) {
           this.conversationIds.set(tabId, entry.conversationId);
         }
+        if (entry.submittedRunRequestId) {
+          this.submittedRunRequestIds.set(tabId, String(entry.submittedRunRequestId));
+        }
         if (Array.isArray(entry.progressLedger)) {
           this.progressLedgers.set(tabId, entry.progressLedger);
         }
@@ -4571,6 +4646,32 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         }
       }
     } catch (e) { /* session storage may be unavailable */ }
+  }
+
+  _conversationStorageEntry(tabId) {
+    const messages = this.conversations.get(tabId);
+    if (!messages) return null;
+    return {
+      mode: this.conversationModes.get(tabId) || 'ask',
+      messages,
+      conversationId: this.conversationIds.get(tabId) || null,
+      submittedRunRequestId: this.submittedRunRequestIds.get(tabId) || null,
+      progressLedger: this.progressLedgers.get(tabId) || [],
+      progressSession: this.progressSessions.get(tabId) || null,
+    };
+  }
+
+  async _persistNow(tabId) {
+    if (tabId == null) return false;
+    const existing = this.persistTimers.get(tabId);
+    if (existing) {
+      clearTimeout(existing);
+      this.persistTimers.delete(tabId);
+    }
+    const entry = this._conversationStorageEntry(tabId);
+    if (!entry) return false;
+    await chrome.storage.session.set({ [this._convKey(tabId)]: entry });
+    return true;
   }
 
   /**
@@ -4583,19 +4684,34 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (existing) clearTimeout(existing);
     const handle = setTimeout(() => {
       this.persistTimers.delete(tabId);
-      const messages = this.conversations.get(tabId);
-      if (!messages) return;
-      const mode = this.conversationModes.get(tabId) || 'ask';
-      const conversationId = this.conversationIds.get(tabId) || null;
-      const progressLedger = this.progressLedgers.get(tabId) || [];
-      const progressSession = this.progressSessions.get(tabId) || null;
-      try {
-        chrome.storage.session.set({
-          [this._convKey(tabId)]: { mode, messages, conversationId, progressLedger, progressSession },
-        }).catch(() => {});
-      } catch (e) { /* ignore */ }
+      this._persistNow(tabId).catch(() => {});
     }, 300);
     this.persistTimers.set(tabId, handle);
+  }
+
+  async _persistSubmittedTurn(tabId, requestId = '') {
+    const cleanRequestId = String(requestId || '');
+    if (!cleanRequestId) {
+      this._persist(tabId);
+      return false;
+    }
+    const previousRequestId = this.submittedRunRequestIds.get(tabId);
+    this.submittedRunRequestIds.set(tabId, cleanRequestId);
+    try {
+      await this._persistNow(tabId);
+      return true;
+    } catch {
+      if (previousRequestId) this.submittedRunRequestIds.set(tabId, previousRequestId);
+      else this.submittedRunRequestIds.delete(tabId);
+      return false;
+    }
+  }
+
+  async hasDurableSubmittedTurn(tabId, requestId = '') {
+    const cleanRequestId = String(requestId || '');
+    if (!cleanRequestId) return false;
+    await this._hydrate(tabId);
+    return this.submittedRunRequestIds.get(tabId) === cleanRequestId;
   }
 
   /**
@@ -5028,7 +5144,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     // transcript.
     const priorMessages = runIntent ? messages.slice() : null;
     messages.push(enriched);
-    this._persist(tabId);
+    await this._persistSubmittedTurn(tabId, runOptions?.detachedRequestId);
     if (!runIntent) {
       this.plannerFollowUpSkipTabs.delete(tabId);
       return { proceed: true, requestKind: 'execute', requiresStateChange: false };
@@ -5115,6 +5231,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       requiresStateChange: gate.requiresStateChange === true,
       allowsPlannerShapedResult: gate.allowsPlannerShapedResult === true,
       allowsAppStateToolEvidence: gate.allowsAppStateToolEvidence === true,
+      requiredSchedulingTool: gate.requiredSchedulingTool || null,
     };
   }
 
@@ -5254,6 +5371,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         requiresStateChange: plan.requires_state_change === true,
         allowsPlannerShapedResult: plan.allows_planner_shaped_result === true,
         allowsAppStateToolEvidence: plan.allows_app_state_tool_evidence === true,
+        requiredSchedulingTool: plan.scheduling?.tool || null,
       };
     } catch (e) {
       if (this._isCostAllowanceError(e)) {
@@ -5383,6 +5501,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           requiresStateChange: plan.requires_state_change === true,
           allowsPlannerShapedResult: plan.allows_planner_shaped_result === true,
           allowsAppStateToolEvidence: plan.allows_app_state_tool_evidence === true,
+          requiredSchedulingTool: plan.scheduling?.tool || null,
         };
       }
       const choice = await this._waitForPlanReview(tabId, planId, plan, markdown, onUpdate, verboseMarkdown);
@@ -5405,6 +5524,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       // approved text, fail closed instead of activating IDs from the stale
       // planner object that the edited plan may no longer authorize.
       const approvedSkillIds = verbosePlanEdited ? [] : plan.skill_ids;
+      const approvedSchedulingTool = verbosePlanEdited
+        ? this._schedulingToolFromApprovedPlanText(approvedText)
+        : (plan.scheduling?.tool || null);
       const approvedScratchpadText = formatPlanScratchpad(plan, approvedText, canonicalVerboseMarkdown);
       return {
         proceed: true,
@@ -5415,6 +5537,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         requiresStateChange: plan.requires_state_change === true,
         allowsPlannerShapedResult: plan.allows_planner_shaped_result === true,
         allowsAppStateToolEvidence: plan.allows_app_state_tool_evidence === true,
+        requiredSchedulingTool: approvedSchedulingTool,
       };
     } catch (e) {
       if (this._isCostAllowanceError(e)) {
@@ -5581,15 +5704,41 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       });
   }
 
+  _normalizeFormValidationField(field = {}) {
+    const type = String(field?.type || '').slice(0, 40);
+    return {
+      label: String(field?.label || 'field').slice(0, 120),
+      id: String(field?.id || '').slice(0, 120),
+      name: String(field?.name || '').slice(0, 120),
+      value: /^(?:checkbox|radio)$/i.test(type)
+        ? String(field?.value || '').slice(0, 120)
+        : '',
+      type,
+      message: String(field?.message || 'Invalid value.').slice(0, 300),
+    };
+  }
+
+  _formValidationFieldKey(field = {}) {
+    const normalized = this._normalizeFormValidationField(field);
+    return JSON.stringify([
+      normalized.id,
+      normalized.name,
+      normalized.value,
+      normalized.label,
+      normalized.type,
+      normalized.message,
+    ]);
+  }
+
   _formValidationStateKey(states = []) {
     return JSON.stringify((Array.isArray(states) ? states : [])
       .map((state) => ({
         frameId: state?.frameId ?? null,
         url: String(state?.url || ''),
         invalid: (Array.isArray(state?.invalidFields) ? state.invalidFields : [])
-          .map(field => [field?.label || '', field?.type || '', field?.message || '']),
+          .map(field => this._formValidationFieldKey(field)),
         ariaInvalid: (Array.isArray(state?.ariaInvalidFields) ? state.ariaInvalidFields : [])
-          .map(field => [field?.label || '', field?.type || '', field?.message || '']),
+          .map(field => this._formValidationFieldKey(field)),
         alerts: this._formValidationAlertTexts(state),
         controls: String(state?.controlFingerprint || ''),
       }))
@@ -5635,7 +5784,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     ));
     const beforeAriaInvalid = new Set(before.flatMap(state =>
       (Array.isArray(state?.ariaInvalidFields) ? state.ariaInvalidFields : [])
-        .map(field => `${validationStateScope(state)}|${field?.label || ''}|${field?.type || ''}|${field?.message || ''}`)
+        .map(field => `${validationStateScope(state)}|${this._formValidationFieldKey(field)}`)
     ));
     const beforeActiveInvalid = new Set(before
       .filter(state => state?.activeInvalid === true)
@@ -5658,7 +5807,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         }
       }
       for (const field of Array.isArray(state?.ariaInvalidFields) ? state.ariaInvalidFields : []) {
-        const key = `${validationStateScope(state)}|${field?.label || ''}|${field?.type || ''}|${field?.message || ''}`;
+        const key = `${validationStateScope(state)}|${this._formValidationFieldKey(field)}`;
         if (includePersistentForState || !beforeAriaInvalid.has(key)) newAriaInvalid.push(field);
       }
     }
@@ -5678,12 +5827,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const invalidFields = [];
     const fieldKeys = new Set();
     for (const field of [...nativeInvalidFields, ...newAriaInvalid]) {
-      const normalized = {
-        label: String(field?.label || 'field').slice(0, 120),
-        type: String(field?.type || '').slice(0, 40),
-        message: String(field?.message || 'Invalid value.').slice(0, 300),
-      };
-      const key = `${normalized.label}|${normalized.type}|${normalized.message}`;
+      const normalized = this._normalizeFormValidationField(field);
+      const key = this._formValidationFieldKey(normalized);
       if (!fieldKeys.has(key)) {
         fieldKeys.add(key);
         invalidFields.push(normalized);
@@ -5757,8 +5902,84 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       actionKey: failure.actionKey,
       invalidFields: failure.invalidFields,
       validationMessages: failure.validationMessages,
+      verifyFormCount: 0,
     });
     return toolResult;
+  }
+
+  _applyVerifyFormRecovery(tabId, result, currentStates) {
+    const block = this._formValidationBlocks.get(tabId);
+    if (!block || !result || typeof result !== 'object') return result;
+    const stateKey = this._formValidationStateKey(currentStates);
+    if (stateKey !== block.stateKey) {
+      this._formValidationBlocks.delete(tabId);
+      return result;
+    }
+
+    const invalidCheckboxes = (Array.isArray(block.invalidFields) ? block.invalidFields : [])
+      .filter(field => String(field?.type || '').toLowerCase() === 'checkbox');
+    if (invalidCheckboxes.length === 0) return result;
+
+    const candidates = (Array.isArray(result.fields) ? result.fields : [])
+      .filter(field => field?.type === 'checkbox' && field.checked === false && /^ref_\d+$/.test(String(field.ref_id || '')));
+    const normalize = value => String(value || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    const matchesInvalidCheckbox = (invalid, candidate) => {
+      const invalidId = normalize(invalid?.id);
+      const candidateId = normalize(candidate?.id);
+      if (invalidId) return !!candidateId && candidateId === invalidId;
+
+      const invalidName = normalize(invalid?.name);
+      const invalidValue = normalize(invalid?.value);
+      const candidateName = normalize(candidate?.name);
+      const candidateValue = normalize(candidate?.controlValue);
+      if (invalidName && invalidValue) {
+        return candidateName === invalidName && candidateValue === invalidValue;
+      }
+
+      const invalidLabel = normalize(invalid?.label);
+      const candidateLabels = [candidate?.label, candidate?.id, candidate?.name]
+        .map(normalize)
+        .filter(Boolean);
+      if (invalidLabel) return candidateLabels.includes(invalidLabel);
+      return !!invalidName && candidateName === invalidName;
+    };
+    const matchedCandidates = [];
+    for (const invalid of invalidCheckboxes) {
+      const matches = candidates.filter(candidate => matchesInvalidCheckbox(invalid, candidate));
+      // A recovery ref is safe only when this invalid control maps to one
+      // actionable checkbox. Ambiguous metadata must not target an opt-in.
+      if (matches.length !== 1) return result;
+      matchedCandidates.push(matches[0]);
+    }
+    if (new Set(matchedCandidates.map(field => field.ref_id)).size !== matchedCandidates.length) return result;
+
+    const uncheckedCheckboxes = matchedCandidates
+      .map(field => ({
+        ref_id: field.ref_id,
+        name: field.name || '',
+        id: field.id || '',
+        selector: field.selector || '',
+        checked: false,
+      }));
+    const recoveryCalls = uncheckedCheckboxes
+      .map(field => `set_checked({ref_id: "${field.ref_id}", checked: true})`)
+      .join(', then ');
+
+    block.verifyFormCount = Number(block.verifyFormCount || 0) + 1;
+    result.formValidationRecovery = {
+      stateUnchanged: true,
+      verifyFormCount: block.verifyFormCount,
+      nextTool: 'set_checked',
+      uncheckedCheckboxes,
+      instruction: `The form state is unchanged. Do not call verify_form again and do not toggle any checkbox. Use ${recoveryCalls}; Chrome will use one trusted selector-backed click when a state change is needed.`,
+    };
+    if (block.verifyFormCount > 1) {
+      result.success = false;
+      result.noProgress = true;
+      result.blockedValidationVerifyRepeat = true;
+      result.error = 'Blocked repeated verify_form because the form state has not changed. Correct the reported checkbox with set_checked before verifying or submitting again.';
+    }
+    return result;
   }
 
   _formValidationRetryBlockResult(block) {
@@ -5876,12 +6097,18 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       }).filter(Boolean).join(' ');
       return compact(text || el.validationMessage || '', 300);
     };
-    const detailFor = (el, fallback = 'Invalid value.') => ({
-      label: labelFor(el),
-      type: compact(el.getAttribute?.('type') || el.tagName || '', 40),
-      message: describedMessage(el) || fallback,
-      visible: visible(el),
-    });
+    const detailFor = (el, fallback = 'Invalid value.') => {
+      const type = compact(el.getAttribute?.('type') || el.tagName || '', 40);
+      return {
+        label: labelFor(el),
+        id: compact(el.getAttribute?.('id') || '', 120),
+        name: compact(el.getAttribute?.('name') || '', 120),
+        value: /^(?:checkbox|radio)$/i.test(type) ? compact(el.value || 'on', 120) : '',
+        type,
+        message: describedMessage(el) || fallback,
+        visible: visible(el),
+      };
+    };
     const invalidControls = queryAll('input:invalid, textarea:invalid, select:invalid');
     const ariaInvalidControls = queryAll('input[aria-invalid="true"], textarea[aria-invalid="true"], select[aria-invalid="true"], [contenteditable="true"][aria-invalid="true"]');
     let active = document.activeElement;
@@ -7062,6 +7289,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     this.mastodonStates.delete(tabId);
     this.conversationModes.delete(tabId);
     this.conversationIds.delete(tabId);
+    this.submittedRunRequestIds.delete(tabId);
     this._lastInputTokens.delete(tabId);
     this._lastEstCharsAtReport.delete(tabId);
     this._compactCooldown.delete(tabId);
@@ -8523,6 +8751,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     return /\[Approved plan\b[^\]]*(?:pinned by (?:planner|recommended action)|edited localized text pinned by planner)[^\]]*\]/i.test(body);
   }
 
+  _schedulingToolFromApprovedPlanText(text) {
+    const tools = new Set();
+    const pattern = /(?:^|\n)\s*-\s*(schedule_task|schedule_resume)\s*:/g;
+    let match;
+    while ((match = pattern.exec(String(text || ''))) !== null) tools.add(match[1]);
+    return tools.size === 1 ? [...tools][0] : null;
+  }
+
   _startPlanExecutionGuard(tabId, mode, gateOutcome = {}, runOptions = {}) {
     const requestKind = gateOutcome?.requestKind || (this._isActionMode(mode) ? 'execute' : null);
     const enabled = this._isActionMode(mode)
@@ -8530,6 +8766,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       && requestKind === 'execute';
     const requiresStateChange = gateOutcome?.requiresStateChange === true;
     const allowsAppStateToolEvidence = gateOutcome?.allowsAppStateToolEvidence === true;
+    const requiredSchedulingTool = gateOutcome?.requiredSchedulingTool === 'schedule_task'
+      || gateOutcome?.requiredSchedulingTool === 'schedule_resume'
+      ? gateOutcome.requiredSchedulingTool
+      : null;
     const carried = runOptions?.trustedContinuation === true
       ? this._continuationExecutionEvidence.get(tabId)
       : null;
@@ -8538,6 +8778,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       && carried?.requestKind === 'execute'
       && carried.requiresStateChange === requiresStateChange
       && carried.allowsAppStateToolEvidence === allowsAppStateToolEvidence
+      && carried.requiredSchedulingTool === requiredSchedulingTool
       && carried.conversationId === (this.conversationIds.get(tabId) || null);
     const state = {
       enabled,
@@ -8545,11 +8786,15 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       requiresStateChange,
       allowsPlannerShapedResult: gateOutcome?.allowsPlannerShapedResult === true,
       allowsAppStateToolEvidence,
+      requiredSchedulingTool,
       approvedPlan: this._hasApprovedExecutionPlan(this.conversations.get(tabId) || []),
       // Only the app-owned Continue action can carry verified evidence from
       // the immediately preceding run; ordinary user turns always start at 0.
       successfulTaskToolCalls: carryMatches ? carried.successfulTaskToolCalls : 0,
       successfulConsequentialToolCalls: carryMatches ? carried.successfulConsequentialToolCalls : 0,
+      successfulRequiredSchedulingToolCalls: carryMatches
+        ? (carried.successfulRequiredSchedulingToolCalls || 0)
+        : 0,
       recoveryAttempted: false,
     };
     this._planExecutionGuards.set(tabId, state);
@@ -8574,6 +8819,23 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     return true;
   }
 
+  _isSuccessfulSchedulingEvidence(result) {
+    return !!result
+      && typeof result === 'object'
+      && result.success === true
+      && result.scheduled === true
+      && !result.error
+      && !result.denied
+      && !result.cancelled
+      && !result.skipped
+      && !result.failed
+      && !result.blocked
+      && !result.blockedDone
+      && !result.invalidToolArguments
+      && !result.missingToolResponse
+      && !result.outcomeUnknown;
+  }
+
   _isExecutionMutationEvidence(name, args = {}, capabilities = []) {
     const mutationCapabilities = new Set([
       Capability.NAVIGATE,
@@ -8593,12 +8855,16 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const state = this._planExecutionGuards.get(tabId);
     const requestedAppStateTool = state?.allowsAppStateToolEvidence === true
       && this.constructor.EXECUTION_APP_STATE_TOOLS.has(name);
+    const requiredScheduleSucceeded = state?.requiredSchedulingTool === name
+      && this._isSuccessfulSchedulingEvidence(result);
     if (!state?.enabled
         || name === 'done'
         || (this.constructor.EXECUTION_META_TOOLS.has(name) && !requestedAppStateTool)
-        || !this._isSuccessfulExecutionEvidence(result)) return;
+        || (!this._isSuccessfulExecutionEvidence(result) && !requiredScheduleSucceeded)) return;
     state.successfulTaskToolCalls += 1;
+    if (requiredScheduleSucceeded) state.successfulRequiredSchedulingToolCalls += 1;
     if (consequential
+        || requiredScheduleSucceeded
         || (requestedAppStateTool && this.constructor.EXECUTION_APP_STATE_WRITE_TOOLS.has(name))) {
       state.successfulConsequentialToolCalls += 1;
     }
@@ -8606,9 +8872,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
   _executionEvidenceSatisfied(state) {
     if (!state) return false;
-    return state.requiresStateChange
+    const taskEvidenceSatisfied = state.requiresStateChange
       ? state.successfulConsequentialToolCalls > 0
       : state.successfulTaskToolCalls > 0;
+    const schedulingEvidenceSatisfied = !state.requiredSchedulingTool
+      || state.successfulRequiredSchedulingToolCalls > 0;
+    return taskEvidenceSatisfied && schedulingEvidenceSatisfied;
   }
 
   _storeContinuationExecutionEvidence(tabId) {
@@ -8618,8 +8887,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         requestKind: guard.requestKind,
         requiresStateChange: guard.requiresStateChange,
         allowsAppStateToolEvidence: guard.allowsAppStateToolEvidence,
+        requiredSchedulingTool: guard.requiredSchedulingTool,
         successfulTaskToolCalls: guard.successfulTaskToolCalls,
         successfulConsequentialToolCalls: guard.successfulConsequentialToolCalls,
+        successfulRequiredSchedulingToolCalls: guard.successfulRequiredSchedulingToolCalls,
         conversationId: this.conversationIds.get(tabId) || null,
       });
     } else {
@@ -8665,9 +8936,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const continuePromise = /\b(?:next,?\s+i(?:'ll| will)|i plan to|i intend to)\b/i.test(text);
     const firstPersonFuture = /\bi(?:'ll| will| am going to)\b/i.test(text);
     const planHeading = /(?:^|\n)\s*(?:#{1,6}\s*)?(?:execution plan|action plan|proposed plan|plan|steps|workflow)\s*[:\n]/i.test(text);
-    const hasTaskEvidence = state.requiresStateChange
-      ? (state.successfulConsequentialToolCalls || 0) > 0
-      : (state.successfulTaskToolCalls || 0) > 0;
+    const hasTaskEvidence = this._executionEvidenceSatisfied(state);
     if (planHeading && state.allowsPlannerShapedResult !== true) return true;
     if (!ignoreFuturePromise) {
       if (continuePromise) return true;
@@ -8689,6 +8958,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       state,
       { ignoreFuturePromise: terminalFailure },
     );
+    const missingRequiredSchedulingTool = !terminalFailure
+      && !!state.requiredSchedulingTool
+      && state.successfulRequiredSchedulingToolCalls === 0;
     const missingEvidence = !terminalFailure && !this._executionEvidenceSatisfied(state);
     // Every plain Act/Dev terminal gets one protocol recovery regardless of
     // its language. Successful completion and real blockers must both use
@@ -8700,7 +8972,15 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       state.recoveryAttempted = true;
       return {
         retry: true,
-        nudge: '[PLAN EXECUTION BLOCK: This is an execute task, so plain text cannot end it. If work remains, use permitted task tools. If complete, call done with outcome success. If blocked, unsafe, cancelled, or user input is required, call done with outcome failed or partial; do not take unsafe action. Read-only work needs a successful task tool and state-changing work needs a successful consequential tool. Do not return another plan, promise, or plain terminal.]',
+        nudge: missingRequiredSchedulingTool
+          ? `[PLAN EXECUTION BLOCK: The approved plan requires a successful ${state.requiredSchedulingTool} call before this task can finish successfully. A one-time read, scroll, send, or other action does not create the scheduled work. Call ${state.requiredSchedulingTool} with the user's requested timing and verify success:true plus scheduled:true. If the schedule is unsupported or still lacks required timing, call done with outcome partial or failed and explain the exact limitation; do not claim it was scheduled.]`
+          : '[PLAN EXECUTION BLOCK: This is an execute task, so plain text cannot end it. If work remains, use permitted task tools. If complete, call done with outcome success. If blocked, unsafe, cancelled, or user input is required, call done with outcome failed or partial; do not take unsafe action. Read-only work needs a successful task tool and state-changing work needs a successful consequential tool. Do not return another plan, promise, or plain terminal.]',
+      };
+    }
+    if (missingRequiredSchedulingTool) {
+      return {
+        failure: `[Agent stopped because the approved plan required ${state.requiredSchedulingTool}, but no successful matching scheduling call was verified after one recovery nudge. The task may have performed one-time actions, but the requested future work was not scheduled.]`,
+        status: 'required_tool_missing',
       };
     }
     const hasSuccessfulToolEvidence = state.successfulTaskToolCalls > 0;
@@ -10434,6 +10714,162 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     return originalResponse;
   }
 
+  async _completeSetCheckedWithCdp(tabId, args, response, contentArgs) {
+    if (!response || response.success !== true || response.needsTrustedClick !== true) {
+      return response;
+    }
+    const beforeDocument = await this._getDevDocumentIdentity(tabId);
+    const trustedSelector = String(response.trustedSelector || '');
+    const marker = String(response.marker || '');
+    let clickResult = null;
+    let clickError = null;
+    let verificationError = null;
+    let trustedClickSucceeded = false;
+    try {
+      if (!trustedSelector) throw new Error('Checkbox preflight did not return a trusted selector');
+      await cdpClient.attach(tabId);
+      clickResult = await cdpClient.clickElement(tabId, trustedSelector, {
+        trustedOnly: true,
+        requireUnique: true,
+      });
+      trustedClickSucceeded = clickResult?.success === true
+        && (clickResult.method === 'cdp-mouse' || clickResult.method === 'cdp-mouse-closed-shadow');
+      if (!trustedClickSucceeded) {
+        throw new Error(clickResult?.error || 'Trusted selector click did not use CDP mouse input');
+      }
+    } catch (error) {
+      clickError = error;
+    }
+
+    const clickDispatched = clickResult?.dispatched === true || clickResult?.success === true;
+    if (clickDispatched) {
+      await new Promise(resolve => setTimeout(resolve, SET_CHECKED_VERIFY_DELAY_MS));
+    }
+
+    let verified = null;
+    try {
+      const verificationArgs = { ...contentArgs };
+      // A trusted checkbox handler may update the hash/query in-place. The
+      // document token and one-shot marker still identify the exact control,
+      // while the pre-click URL would incorrectly reject the post-click probe.
+      delete verificationArgs.expectedPageUrl;
+      verified = await chrome.tabs.sendMessage(tabId, {
+        target: 'content',
+        action: 'set_checked',
+        params: {
+          ...verificationArgs,
+          probeOnly: true,
+          markForTrustedClick: false,
+          cleanupMarker: marker || undefined,
+        },
+      });
+    } catch (error) {
+      verificationError = error;
+      if (!clickError) clickError = error;
+    }
+
+    const verificationObservedState = typeof verified?.checkedAfter === 'boolean';
+    let afterDocument = null;
+    if (trustedClickSucceeded && !verificationObservedState) {
+      afterDocument = await this._getDevDocumentIdentity(tabId);
+    }
+    const documentChanged = !!(
+      beforeDocument?.documentId
+      && afterDocument?.documentId
+      && beforeDocument.documentId !== afterDocument.documentId
+    );
+    const pageUrlChanged = !!(
+      beforeDocument?.pageUrl
+      && afterDocument?.pageUrl
+      && this._normalizeUrl(beforeDocument.pageUrl) !== this._normalizeUrl(afterDocument.pageUrl)
+    );
+    const verificationTransportLost = !!(
+      verificationError
+      && /message (?:port|channel) closed|receiving end does not exist|(?:tab|frame).*(?:closed|removed)|no tab with id/i
+        .test(String(verificationError?.message || verificationError))
+    );
+    const verificationLostAfterTrustedClick = !!(
+      trustedClickSucceeded
+      && !verificationObservedState
+      && (verificationTransportLost || documentChanged || pageUrlChanged)
+    );
+    const checkedAfter = verificationObservedState ? verified.checkedAfter : undefined;
+    const expectedCheckboxIdentity = String(response.checkboxIdentity || '');
+    const observedCheckboxIdentity = String(verified?.checkboxIdentity || '');
+    const checkboxIdentityMismatch = verificationObservedState && (
+      !expectedCheckboxIdentity
+      || !observedCheckboxIdentity
+      || expectedCheckboxIdentity !== observedCheckboxIdentity
+    );
+    const stateMatches = !checkboxIdentityMismatch && checkedAfter === args.checked;
+    const success = trustedClickSucceeded && (stateMatches || verificationLostAfterTrustedClick);
+    const checkboxIdentity = expectedCheckboxIdentity || observedCheckboxIdentity;
+    const completed = {
+      ...response,
+      ...(verified || {}),
+      success,
+      dispatched: clickDispatched,
+      noDispatch: clickDispatched ? undefined : true,
+      trusted: trustedClickSucceeded,
+      verified: success,
+      needsTrustedClick: false,
+      checkedBefore: response.checkedBefore,
+      checkedAfter,
+      desiredChecked: args.checked,
+      changed: verificationObservedState && !checkboxIdentityMismatch
+        ? response.checkedBefore !== checkedAfter
+        : undefined,
+      idempotent: false,
+      checkboxIdentity,
+      checkboxState: verificationObservedState && !checkboxIdentityMismatch
+        ? {
+            identity: checkboxIdentity,
+            desiredChecked: args.checked,
+            actualChecked: checkedAfter,
+          }
+        : undefined,
+      ...(checkboxIdentityMismatch ? {
+        checkboxIdentityMismatch: true,
+        expectedCheckboxIdentity,
+        observedCheckboxIdentity,
+      } : {}),
+      selector: response.selector || verified?.selector || trustedSelector,
+      rect: verified?.rect || clickResult?.rect || response.rect,
+      marker: undefined,
+      trustedSelector: undefined,
+    };
+    if (verificationLostAfterTrustedClick) {
+      return {
+        ...completed,
+        success: true,
+        verified: false,
+        inconclusive: true,
+        navigationMayHaveOccurred: true,
+        observedEffects: ['navigation_or_reload_unobservable'],
+        noProgress: undefined,
+        error: undefined,
+        warning: 'The trusted checkbox click was sent, but its document disappeared before the checked state could be re-read, likely because the click navigated or reloaded the page. Do not repeat set_checked; observe the current page.',
+      };
+    }
+    const failureError = clickError
+      ? `Trusted checkbox click did not complete: ${clickError.message || clickError}`
+      : checkboxIdentityMismatch
+        ? 'Checkbox verification failed because the marked target identity changed. Re-read the accessibility tree before retrying.'
+        : verified?.error
+          ? `Checkbox verification failed: ${verified.error}`
+          : 'Checkbox state could not be verified after one trusted selector click.';
+    return {
+      ...completed,
+      ...(success ? {
+        noProgress: undefined,
+        error: undefined,
+      } : {
+        noProgress: true,
+        error: failureError,
+      }),
+    };
+  }
+
   async executeTool(tabId, name, args, onUpdate = null, executionContext = null) {
     if (name === 'load_skill') {
       return this._loadSkillForRun(tabId, args || {});
@@ -11536,8 +11972,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             const fields = [];
             for (const el of form.querySelectorAll('input, select, textarea')) {
               const n = el.name || el.id || el.getAttribute('aria-label') || '';
+              const id = el.id || '';
+              const selector = id ? '#' + CSS.escape(id) : '';
               const t = el.type || el.tagName.toLowerCase();
               if (t === 'hidden' || t === 'submit') continue;
+              const label = Array.from(el.labels || [])
+                .map(item => (item.innerText || item.textContent || '').replace(/\s+/g, ' ').trim())
+                .find(Boolean) || el.getAttribute('aria-label') || '';
+              const controlValue = (t === 'checkbox' || t === 'radio') ? (el.value || 'on') : '';
               let v;
               if (t === 'checkbox' || t === 'radio') {
                 v = el.checked ? (el.value || 'on') : '(unchecked)';
@@ -11547,13 +11989,48 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
               } else {
                 v = el.value;
               }
-              fields.push({ name: n, type: t, value: v, placeholder: el.placeholder || '' });
+              fields.push({
+                name: n,
+                id,
+                selector,
+                type: t,
+                value: v,
+                label,
+                controlValue,
+                placeholder: el.placeholder || '',
+                ...((t === 'checkbox' || t === 'radio') ? { checked: !!el.checked } : {}),
+              });
             }
             return { found: true, action: form.action || '', method: form.method || 'get', fieldCount: fields.length, fields };
           })()
         `);
 
         const result = formData?.result?.value || { found: false, error: 'Evaluation returned no data' };
+
+        try {
+          const resolved = await chrome.tabs.sendMessage(tabId, {
+            target: 'content',
+            action: 'resolve_form_field_refs',
+            params: { selector: args.selector || '' },
+          });
+          if (
+            resolved?.success === true
+            && Array.isArray(resolved.refs)
+            && Array.isArray(result.fields)
+            && resolved.refs.length === result.fields.length
+          ) {
+            if (resolved.documentToken) {
+              this._lastAxScopes.set(tabId, {
+                documentToken: resolved.documentToken,
+                pageUrl: resolved.refScopeUrl || '',
+              });
+            }
+            result.fields = result.fields.map((field, index) => ({
+              ...field,
+              ...(typeof resolved.refs[index] === 'string' ? { ref_id: resolved.refs[index] } : {}),
+            }));
+          }
+        } catch {}
 
         // 2. Capture screenshot
         try {
@@ -11581,6 +12058,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         }
 
         result.success = !!result.found;
+        if (this._formValidationBlocks.has(tabId)) {
+          const currentStates = await this._captureFormValidationState(tabId);
+          this._applyVerifyFormRecovery(tabId, result, currentStates);
+        }
         return result;
       } catch (e) {
         return { success: false, error: `verify_form failed: ${e.message}` };
@@ -13824,6 +14305,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       // flat indented text output with persistent WeakRef-backed ref_ids.
       'get_accessibility_tree': 'get_accessibility_tree',
       'click_ax': 'click_ax',
+      'set_checked': 'set_checked',
       'type_ax': 'type_ax',
       'set_field': 'set_field',
       'click': 'click',
@@ -13870,7 +14352,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           };
         }
         if (
-          name === 'click' || name === 'click_ax' ||
+          name === 'click' || name === 'click_ax' || name === 'set_checked' ||
           name === 'type_text' || name === 'type_ax' || name === 'set_field' ||
           name === 'press_keys' || name === 'scroll' ||
           name === 'get_accessibility_tree' || name === 'get_interactive_elements' ||
@@ -13889,7 +14371,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     } catch { /* tab lookup failures are non-fatal — fall through */ }
 
     const interactionUrl = (
-      name === 'click' || name === 'click_ax' ||
+      name === 'click' || name === 'click_ax' || name === 'set_checked' ||
       name === 'type_ax' || name === 'set_field'
     ) ? await this._currentUrl(tabId) : '';
 
@@ -13917,13 +14399,16 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     };
 
     const axScope = this._lastAxScopes.get(tabId);
-    const contentArgs = name === 'click_ax' && axScope?.documentToken
+    const contentArgs = (name === 'click_ax' || name === 'set_checked') && axScope?.documentToken
       ? {
           ...args,
           expectedDocumentToken: axScope.documentToken,
           ...(axScope.pageUrl ? { expectedPageUrl: axScope.pageUrl } : {}),
+          ...(name === 'set_checked' ? { probeOnly: true, markForTrustedClick: true } : {}),
         }
-      : args;
+      : (name === 'set_checked'
+          ? { ...args, probeOnly: true, markForTrustedClick: true }
+          : args);
 
     try {
       let response;
@@ -13966,6 +14451,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       }
       if (name === 'click_ax') {
         response = await this._maybeFallbackClickAxWithCdp(tabId, args, response, clickAxBaseline);
+      }
+      if (name === 'set_checked') {
+        response = await this._completeSetCheckedWithCdp(tabId, args, response, contentArgs);
       }
       const observedAfterSnapshot = response?._clickAxAfterSnapshot || '';
       if (response) delete response._clickAxAfterSnapshot;
@@ -14855,7 +15343,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
    */
   _recordInteractionRect(tabId, toolName, response, url = '') {
     if (!response || !response.success) return;
-    if (toolName !== 'click' && toolName !== 'click_ax' && toolName !== 'type_ax' && toolName !== 'set_field') return;
+    if (toolName !== 'click' && toolName !== 'click_ax' && toolName !== 'set_checked' && toolName !== 'type_ax' && toolName !== 'set_field') return;
     const r = response.rect;
     if (r && r.w && r.h) {
       this._lastInteractionRect.set(tabId, { x: r.x, y: r.y, w: r.w, h: r.h, ts: Date.now(), url });
@@ -14895,14 +15383,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
    * Continue processing from where we left off (after max steps).
    * Adds a "please continue" user message and resumes the agent loop.
    */
-  async continueProcessing(tabId, onUpdate = () => {}, mode = 'ask') {
+  async continueProcessing(tabId, onUpdate = () => {}, mode = 'ask', runOptions = {}) {
     return this.processMessage(
       tabId,
       'Please continue from where you left off.',
       onUpdate,
       mode,
       [],
-      { trustedContinuation: true },
+      { ...runOptions, trustedContinuation: true },
     );
   }
 
@@ -15195,6 +15683,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
     const provider = this.providerManager.getActive();
 
+    if (typeof runOptions?.isDetachedStartCancelled === 'function'
+        && runOptions.isDetachedStartCancelled()) {
+      this.abortFlags.delete(tabId);
+      return 'Stopped by user before the run started.';
+    }
+
     // Clear any stale abort flag before any LLM work. The planner gate makes a
     // paid LLM call and checks/consumes this flag, so a leftover flag from a
     // prior run must not cancel this fresh task. (#1)
@@ -15208,7 +15702,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       const msg = this._devModeBlockedMessage(provider);
       messages.push(enriched);
       messages.push({ role: 'assistant', content: msg });
-      this._persist(tabId);
+      await this._persistSubmittedTurn(tabId, runOptions?.detachedRequestId);
       onUpdate('warning', { message: msg });
       return (finalResponse = msg);
     }
@@ -15474,7 +15968,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         }, result.responseItems, result.reasoningContent, provider));
 
         const batchResult = await this._executeToolBatch(
-          tabId, result.toolCalls, messages, onUpdate, provider, result.content, allowedToolNames, steps
+          tabId, result.toolCalls, messages, onUpdate, provider, result.content, allowedToolNames, steps, runOptions
         );
         if (batchResult.action === 'return') {
           finalResponse = batchResult.value;
@@ -15884,7 +16378,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           }, responseItems, reasoningContent, provider));
 
           const batchResult = await this._executeToolBatch(
-            tabId, toolCalls, messages, onUpdate, provider, fullText, allowedToolNames, steps
+            tabId, toolCalls, messages, onUpdate, provider, fullText, allowedToolNames, steps, runOptions
           );
           if (batchResult.action === 'return') {
             return finish(batchResult.value, batchResult.status);

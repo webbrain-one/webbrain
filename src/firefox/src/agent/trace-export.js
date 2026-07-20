@@ -82,6 +82,15 @@ function renderResult(result) {
   return { text: truncate(oneLine(s), RESULT_LIMIT), failed };
 }
 
+function exportedRunStatus(run, events = []) {
+  const status = oneLine(run?.status || '');
+  const sawLoopError = events.some(ev => ev?.kind === 'error' && ev?.data?.phase === 'loop');
+  if (status === 'done' && sawLoopError) {
+    return 'loop_stopped';
+  }
+  return status;
+}
+
 export function tracesToMarkdown(runsWithEvents, {
   title = 'WebBrain Conversation — tool chain',
   notes = [],
@@ -100,16 +109,17 @@ export function tracesToMarkdown(runsWithEvents, {
     const run = entry.run;
     const user = oneLine(run.userMessage || '');
     const recordedVersion = oneLine(run.webbrainVersion || '');
+    const events = Array.isArray(entry.events) ? [...entry.events].sort((a, b) => (a?.seq || 0) - (b?.seq || 0)) : [];
     const meta = [
       recordedVersion ? `recorded with WebBrain v${recordedVersion}` : 'recorded WebBrain version unavailable',
       run.model,
-      run.status,
+      exportedRunStatus(run, events),
     ].filter(Boolean).join(' · ');
     md += `## Turn ${turnCount}${user ? ` — ${user}` : ''}\n`;
     if (meta) md += `_${meta}_\n`;
     md += '\n';
 
-    const events = Array.isArray(entry.events) ? [...entry.events].sort((a, b) => (a?.seq || 0) - (b?.seq || 0)) : [];
+    let lastAssistantContent = '';
     for (const ev of events) {
       const d = (ev && ev.data) || {};
       if (ev.kind === 'llm_response') {
@@ -121,6 +131,7 @@ export function tracesToMarkdown(runsWithEvents, {
           md += `**Planner:**\n${fencedBlock(content)}\n`;
         } else {
           md += `**WebBrain:** ${oneLine(content)}\n`;
+          lastAssistantContent = content;
         }
       } else if (ev.kind === 'tool') {
         toolCount += 1;
@@ -130,6 +141,10 @@ export function tracesToMarkdown(runsWithEvents, {
         md += `- ⚠️ error${d.phase ? ` (${d.phase})` : ''}: ${oneLine(d.message || '')}\n`;
       }
       // screenshot / note / vision_sub_call intentionally omitted — see FOOTER.
+    }
+    const finalContent = String(run.finalContent || '').trim();
+    if (finalContent && oneLine(finalContent) !== oneLine(lastAssistantContent)) {
+      md += `**Final:** ${oneLine(finalContent)}\n`;
     }
     md += '\n';
   }

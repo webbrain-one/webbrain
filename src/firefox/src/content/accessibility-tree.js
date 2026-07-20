@@ -41,6 +41,7 @@
  *
  * 5. Additional exports used by click_ax / type_ax:
  *      window.__wb_ax_lookup(refId) → Element | null
+ *      window.__wb_ax_ref(element) → stable refId
  *      window.__wb_ax_release(refId) → void (optional cleanup)
  *      window.__wb_ax_name(element) → the same accessible name used by the tree
  */
@@ -544,11 +545,27 @@
     const ph = el.getAttribute('placeholder');
     if (ph) line += ' placeholder="' + ph + '"';
 
+    // Checkbox/radio state is an action-critical value, not decorative
+    // metadata. Without it the model has to infer state from a focus ring or
+    // screenshot and can accidentally toggle a control back off.
+    const tag = el.tagName.toLowerCase();
+    const inputType = tag === 'input'
+      ? (el.getAttribute('type') || 'text').toLowerCase()
+      : '';
+    if (inputType === 'checkbox' || inputType === 'radio') {
+      line += ` checked=${el.checked ? 'true' : 'false'}`;
+    } else {
+      const role = (el.getAttribute('role') || '').toLowerCase();
+      if (['checkbox', 'radio', 'switch'].includes(role) || el.hasAttribute('aria-checked')) {
+        const ariaChecked = el.getAttribute('aria-checked');
+        if (ariaChecked != null) line += ` checked=${ariaChecked}`;
+      }
+    }
+
     // Surface the current value for text-like inputs/textareas so the model
     // can see what's already filled in. Skipped for submit/button/reset/file
     // (value is the label there), checkboxes/radios, and when the value
     // already matches the rendered name.
-    const tag = el.tagName.toLowerCase();
     if (tag === 'input' || tag === 'textarea') {
       const inputType = (el.getAttribute('type') || 'text').toLowerCase();
       const skipValueTypes = new Set(['submit', 'button', 'reset', 'file', 'checkbox', 'radio', 'image', 'hidden', 'color', 'range', 'password']);
@@ -1030,6 +1047,7 @@
   window.__generateAccessibilityTree = generateAccessibilityTree;
   window.__generateAccessibilitySubtree = generateAccessibilitySubtree;
   window.__wb_ax_lookup = lookup;
+  window.__wb_ax_ref = getOrMintRef;
   window.__wb_ax_name = getAccessibleName;
   window.__wb_ax_suggest = suggestNearRefs;
 })();

@@ -950,6 +950,30 @@
       || String(el?.innerText || '').trim().slice(0, 160);
   }
 
+  function _axCheckboxIdentity(el, refId = '') {
+    try {
+      const id = String(el?.id || '').trim();
+      if (id) return `id:${id}`;
+      const name = String(el?.getAttribute?.('name') || '').trim();
+      const value = String(el?.getAttribute?.('value') || '').trim();
+      if (name) return `name:${name}|value:${value}`;
+    } catch {}
+    return `ref:${String(refId || '')}`;
+  }
+
+  function _axStableControlSelector(el) {
+    try {
+      const id = String(el?.id || '').trim();
+      if (id) {
+        const escaped = globalThis.CSS?.escape
+          ? CSS.escape(id)
+          : id.replace(/["\\]/g, '\\$&');
+        return `#${escaped}`;
+      }
+    } catch {}
+    return '';
+  }
+
   function _axDocumentToken() {
     if (!window.__wbAxDocumentToken) {
       window.__wbAxDocumentToken = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
@@ -2764,6 +2788,33 @@
           return { error: 'Failed to build accessibility tree: ' + (e && e.message || String(e)) };
         }
       },
+      'resolve_form_field_refs': () => {
+        try {
+          if (typeof window.__wb_ax_ref !== 'function') {
+            return { success: false, error: 'accessibility-tree.js not injected' };
+          }
+          const selector = String(msg.params?.selector || '');
+          const focused = document.activeElement;
+          const form = selector
+            ? document.querySelector(selector)
+            : focused?.closest('form') || document.querySelector('form');
+          if (!form) return { success: false, error: 'No form found on page' };
+          const refs = [];
+          for (const el of form.querySelectorAll('input, select, textarea')) {
+            const type = String(el.type || el.tagName || '').toLowerCase();
+            if (type === 'hidden' || type === 'submit') continue;
+            refs.push(window.__wb_ax_ref(el));
+          }
+          return {
+            success: true,
+            refs,
+            documentToken: _axDocumentToken(),
+            refScopeUrl: location.href,
+          };
+        } catch (error) {
+          return { success: false, error: error?.message || String(error) };
+        }
+      },
       'click_ax': () => {
         let dispatched = false;
         const failure = (error, extra = {}) => ({
@@ -2808,6 +2859,9 @@
             return failure(`ref_id ${ref_id} not found.${formatNote} The element may have been removed or the page replaced.${hint} Re-read the accessibility tree to get fresh ids — do NOT guess ref numbers or invent placeholders.`, { suggestions });
           }
           const tag = el.tagName ? el.tagName.toLowerCase() : '';
+          const inputType = tag === 'input' ? String(el.type || '').toLowerCase() : '';
+          const nativeCheckable = inputType === 'checkbox' || inputType === 'radio';
+          const checkedBefore = nativeCheckable ? !!el.checked : null;
           const targetRole = String(el.getAttribute?.('role') || '').toLowerCase();
           const canonicalTargetName = _axCanonicalName(el);
           const targetName = canonicalTargetName || _axAccessibleName(el);
@@ -2934,6 +2988,7 @@
             isTextEntry = !nonText.has(inputType);
           } else if (el.isContentEditable) isTextEntry = true;
           const buildResponse = () => {
+            const checkedAfter = nativeCheckable ? !!el.checked : null;
             const resp = {
               success: true,
               method: 'click_ax',
@@ -2943,6 +2998,32 @@
               ...(targetContext ? { targetContext } : {}),
               ...(filePickerGuard.guardId ? { _filePickerGuardId: filePickerGuard.guardId } : {}),
             };
+            if (nativeCheckable) {
+              const desiredChecked = inputType === 'radio' ? true : !checkedBefore;
+              const checkboxIdentity = _axCheckboxIdentity(el, ref_id);
+              resp.checkedBefore = checkedBefore;
+              resp.checkedAfter = checkedAfter;
+              resp.checkedChanged = checkedBefore !== checkedAfter;
+              resp.desiredChecked = desiredChecked;
+              resp.checkboxIdentity = checkboxIdentity;
+              resp.checkboxState = {
+                identity: checkboxIdentity,
+                desiredChecked,
+                actualChecked: checkedAfter,
+              };
+              const stateMatchesDesired = checkedAfter === desiredChecked;
+              if (stateMatchesDesired) {
+                resp.verified = true;
+                if (resp.checkedChanged) resp.observedEffects = ['checked_state'];
+              } else {
+                resp.success = false;
+                resp.noProgress = true;
+                resp.verified = false;
+                resp.error = inputType === 'checkbox'
+                  ? `Checkbox remained ${checkedAfter ? 'checked' : 'unchecked'} after click_ax. Do not toggle it again; use set_checked({ref_id: "${ref_id}", checked: ${desiredChecked}}) so the requested state is applied idempotently and verified.`
+                  : 'Radio remained unselected after click_ax. Re-read the accessibility tree and retry the intended radio option with a fresh ref_id.';
+              }
+            }
             try {
               if (targetName) resp.name = targetName;
             } catch {}
@@ -2997,7 +3078,10 @@
             }
             return resp;
           };
-          if (anchorMeta?.sameDocumentAnchor) {
+          const responseDelayMs = nativeCheckable
+            ? SET_FIELD_VERIFY_DELAY_MS
+            : (anchorMeta?.sameDocumentAnchor ? 120 : 0);
+          if (responseDelayMs > 0) {
             return new Promise((resolve) => {
               setTimeout(() => {
                 try {
@@ -3005,10 +3089,106 @@
                 } catch (e) {
                   resolve(failure(e && e.message || String(e)));
                 }
-              }, 120);
+              }, responseDelayMs);
             });
           }
           return buildResponse();
+        } catch (e) {
+          return failure(e && e.message || String(e));
+        }
+      },
+      'set_checked': async () => {
+        let dispatched = false;
+        const failure = (error, extra = {}) => ({
+          success: false,
+          error,
+          ...extra,
+          ...(dispatched
+            ? { dispatched: true }
+            : { dispatched: false, noDispatch: true }),
+        });
+        try {
+          const { ref_id, checked, expectedDocumentToken, expectedPageUrl } = msg.params || {};
+          if (typeof ref_id !== 'string') return failure('ref_id (string, e.g. "ref_42") is required');
+          if (typeof checked !== 'boolean') return failure('checked (boolean) is required');
+          if (typeof window.__wb_ax_lookup !== 'function') return failure('accessibility-tree.js not injected');
+          const documentToken = _axDocumentToken();
+          const documentChanged = !!expectedDocumentToken && expectedDocumentToken !== documentToken;
+          const routeChanged = !!expectedPageUrl && expectedPageUrl !== location.href;
+          if (documentChanged || routeChanged) {
+            return failure(
+              `ref_id ${ref_id} belongs to a previous page or route. Re-read the accessibility tree and choose a fresh ref_id before changing the checkbox.`,
+              { staleRef: true, documentChanged, routeChanged, documentToken, refScopeUrl: location.href },
+            );
+          }
+          const el = window.__wb_ax_lookup(ref_id);
+          if (!el) return failure(`ref_id ${ref_id} not found. Re-read the accessibility tree to get a current checkbox ref_id.`);
+          const tag = el.tagName ? el.tagName.toLowerCase() : '';
+          const inputType = tag === 'input' ? String(el.type || '').toLowerCase() : '';
+          if (inputType !== 'checkbox') {
+            return failure(`set_checked only supports native input[type="checkbox"] controls; ${ref_id} resolved to ${tag || 'unknown'}${inputType ? `[type="${inputType}"]` : ''}.`);
+          }
+          try { el.scrollIntoView({ block: 'center', inline: 'center' }); } catch {}
+          try { el.focus({ preventScroll: true }); } catch {}
+          const rect = el.getBoundingClientRect();
+          if (!el.isConnected || rect.width < 1 || rect.height < 1) {
+            return failure(`ref_id ${ref_id} is stale or not visibly rendered. Re-read the accessibility tree and retry.`);
+          }
+          const checkedBefore = !!el.checked;
+          const checkboxIdentity = _axCheckboxIdentity(el, ref_id);
+          const base = {
+            method: 'set_checked',
+            ref_id,
+            tag,
+            type: inputType,
+            name: _axAccessibleName(el),
+            checkboxIdentity,
+            desiredChecked: checked,
+            checkedBefore,
+            checkedAfter: checkedBefore,
+            changed: false,
+            verified: checkedBefore === checked,
+            rect: { x: Math.round(rect.x), y: Math.round(rect.y), w: Math.round(rect.width), h: Math.round(rect.height) },
+            selector: _axStableControlSelector(el),
+            checkboxState: {
+              identity: checkboxIdentity,
+              desiredChecked: checked,
+              actualChecked: checkedBefore,
+            },
+          };
+          if (checkedBefore === checked) {
+            return {
+              success: true,
+              dispatched: false,
+              noDispatch: true,
+              idempotent: true,
+              trusted: false,
+              ...base,
+            };
+          }
+          dispatched = true;
+          el.click();
+          await new Promise(resolve => setTimeout(resolve, SET_FIELD_VERIFY_DELAY_MS));
+          const checkedAfter = !!el.checked;
+          const success = checkedAfter === checked;
+          return {
+            ...base,
+            success,
+            dispatched: true,
+            trusted: false,
+            verified: success,
+            checkedAfter,
+            changed: checkedBefore !== checkedAfter,
+            checkboxState: {
+              identity: checkboxIdentity,
+              desiredChecked: checked,
+              actualChecked: checkedAfter,
+            },
+            ...(success ? {} : {
+              noProgress: true,
+              error: `Checkbox remained ${checkedAfter ? 'checked' : 'unchecked'} after one synthetic click. Firefox cannot synthesize trusted pointer input for page content.`,
+            }),
+          };
         } catch (e) {
           return failure(e && e.message || String(e));
         }

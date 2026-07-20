@@ -3,6 +3,7 @@ const MUTATION_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const DIRECT_ACTION_TOOLS = new Set([
   'click',
   'click_ax',
+  'set_checked',
   'iframe_click',
   'drag_drop',
   'type_text',
@@ -124,6 +125,17 @@ export function didCompletionActionExecute(name, args = {}, result) {
     return true;
   }
   if (result == null) return true;
+  if (
+    name === 'set_checked'
+    && result.success === true
+    && result.idempotent === true
+    && result.verified === true
+    && result.dispatched === false
+    && result.noDispatch === true
+    && result.checkedAfter === args?.checked
+  ) {
+    return false;
+  }
   if (result.dispatched === true) return true;
   if (
     result.missingToolResponse

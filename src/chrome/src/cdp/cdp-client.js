@@ -1916,7 +1916,7 @@ export class CDPClient {
 
     let lastResult = null;
     for (let i = 0; i <= retries; i++) {
-      const result = await this._resolveSelectorOnce(tabId, selector);
+      const result = await this._resolveSelectorOnce(tabId, selector, options);
       // Found and usable → done.
       if (result && result.found && (result.inViewport || result.nodeId)) {
         return result;
@@ -1929,19 +1929,25 @@ export class CDPClient {
     return lastResult;
   }
 
-  async _resolveSelectorOnce(tabId, selector) {
+  async _resolveSelectorOnce(tabId, selector, options = {}) {
     await this.sendCommand(tabId, 'Runtime.enable');
 
     const selectorJSON = JSON.stringify(selector);
+    const requireUnique = options?.requireUnique === true;
 
     // ---- Strategy 1: JS walker (open shadow roots) ----
     const jsExpr = `
       (() => {
         const sel = ${selectorJSON};
+        const requireUnique = ${requireUnique};
+        const matches = [];
         const queryDeep = (root) => {
           try {
-            const hit = root.querySelector(sel);
-            if (hit) return hit;
+            const hits = root.querySelectorAll(sel);
+            if (hits.length) {
+              if (!requireUnique) return hits[0];
+              matches.push(...hits);
+            }
           } catch (e) {
             return { __error: 'Invalid selector: ' + e.message };
           }
@@ -1950,15 +1956,24 @@ export class CDPClient {
           while (node) {
             if (node.shadowRoot) {
               const inner = queryDeep(node.shadowRoot);
-              if (inner) return inner;
+              if (inner?.__error || (!requireUnique && inner)) return inner;
             }
             node = walker.nextNode();
           }
           return null;
         };
-        const found = queryDeep(document);
+        const firstMatch = queryDeep(document);
+        if (firstMatch?.__error) return { found: false, error: firstMatch.__error };
+        if (requireUnique && matches.length !== 1) {
+          return {
+            found: false,
+            error: 'Trusted selector matched ' + matches.length + ' elements; expected exactly one.',
+            nonUnique: true,
+            matchCount: matches.length,
+          };
+        }
+        const found = requireUnique ? matches[0] : firstMatch;
         if (!found) return { found: false };
-        if (found.__error) return { found: false, error: found.__error };
         const tag = String(found.tagName || '').toUpperCase();
         const type = String(found.getAttribute?.('type') || '').trim().toLowerCase();
         const isSubmitControl = tag === 'INPUT'
@@ -1997,30 +2012,58 @@ export class CDPClient {
 
     const jsRes = await this.evaluate(tabId, jsExpr);
     const jsInfo = jsRes?.result?.value;
-    if (jsInfo?.error) return { error: jsInfo.error };
+    if (jsInfo?.error) return jsInfo;
     if (jsInfo?.found) {
       // Wait briefly for scroll to settle, then re-measure once.
       await new Promise(r => setTimeout(r, 60));
       const reMeasure = await this.evaluate(tabId, `
         (() => {
           const sel = ${selectorJSON};
+          const requireUnique = ${requireUnique};
+          const matches = [];
           const queryDeep = (root) => {
-            try { const h = root.querySelector(sel); if (h) return h; } catch (e) { return null; }
+            try {
+              const hits = root.querySelectorAll(sel);
+              if (hits.length) {
+                if (!requireUnique) return hits[0];
+                matches.push(...hits);
+              }
+            } catch (e) { return null; }
             const w = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
             let n = w.currentNode;
-            while (n) { if (n.shadowRoot) { const i = queryDeep(n.shadowRoot); if (i) return i; } n = w.nextNode(); }
+            while (n) {
+              if (n.shadowRoot) {
+                const i = queryDeep(n.shadowRoot);
+                if (!requireUnique && i) return i;
+              }
+              n = w.nextNode();
+            }
             return null;
           };
-          const el = queryDeep(document);
+          const firstMatch = queryDeep(document);
+          if (requireUnique && matches.length !== 1) {
+            return {
+              error: 'Trusted selector matched ' + matches.length + ' elements; expected exactly one.',
+              nonUnique: true,
+              matchCount: matches.length,
+            };
+          }
+          const el = requireUnique ? matches[0] : firstMatch;
           if (!el) return null;
           const r = el.getBoundingClientRect();
           return { x: r.left + r.width / 2, y: r.top + r.height / 2, width: r.width, height: r.height };
         })()
       `);
       const m = reMeasure?.result?.value;
+      if (m?.error) return m;
       if (m) { jsInfo.x = m.x; jsInfo.y = m.y; jsInfo.width = m.width; jsInfo.height = m.height; }
       return jsInfo;
     }
+
+    // One-shot content markers are only created in document/open-shadow DOM.
+    // Do not fall back to first-match closed-shadow traversal for a selector
+    // whose caller requires a unique identity at dispatch time.
+    if (requireUnique) return null;
 
     // ---- Strategy 2: CDP traversal (closed shadow roots) ----
     try {
@@ -2104,10 +2147,11 @@ export class CDPClient {
    *     Components) expect — el.click() alone often isn't enough.
    *  4. If coordinate-based clicking isn't viable (occluded, off-screen after
    *     scroll, zero box), fall back to calling el.click() on the resolved
-   *     element so we still attempt the action.
+   *     element so we still attempt the action, unless trustedOnly is set.
    */
-  async clickElement(tabId, selector) {
-    const info = await this.resolveSelector(tabId, selector);
+  async clickElement(tabId, selector, options = {}) {
+    const trustedOnly = options?.trustedOnly === true;
+    const info = await this.resolveSelector(tabId, selector, options);
     if (!info) return { success: false, dispatched: false, error: 'Element not found' };
     if (info.error) return { success: false, dispatched: false, error: info.error };
 
@@ -2178,6 +2222,18 @@ export class CDPClient {
       } catch (e) {
         // fall through to fallback
       }
+    }
+
+    // Checkbox state changes may depend on event.isTrusted. In that mode a
+    // successful DOM/JS fallback must not masquerade as a trusted click.
+    if (trustedOnly) {
+      return {
+        success: false,
+        dispatched: dispatchAttempted,
+        ...(dispatchAttempted ? {} : { noDispatch: true }),
+        trusted: false,
+        error: 'Trusted CDP mouse click could not be completed for this target.',
+      };
     }
 
     // Step 2: fallback. For closed shadow roots we have a nodeId — use DOM.focus

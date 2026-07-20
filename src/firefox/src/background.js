@@ -26,7 +26,7 @@ import {
   createContextMenuStorage,
 } from './context-menu-storage.js';
 import { normalizeOllamaLaunchHandoff } from './ollama-handoff.js';
-import { RunUiJournal } from './run-ui-journal.js';
+import { RunUiJournal, runUiSnapshotForRequest } from './run-ui-journal.js';
 import {
   USER_MEMORY_AUTO_CAPTURE_KEY,
   USER_MEMORY_ENABLED_KEY,
@@ -1321,17 +1321,68 @@ browser.tabs.onUpdated.addListener((tabId, changeInfo) => {
 browser.tabs.onRemoved.addListener((tabId) => {
   activeIndicatorTabs.delete(tabId);
   clearRunUiSnapshot(tabId);
+  clearDetachedRunFailure(tabId);
 });
 
 const RUN_UI_PREFIX = 'runUi:';
+const runUiPersistenceQueues = new Map();
+const runUiPersistenceFailures = new Map();
+
+function cloneRunUiSnapshot(snapshot) {
+  try {
+    return structuredClone(snapshot);
+  } catch {
+    return JSON.parse(JSON.stringify(snapshot));
+  }
+}
+
+function persistRunUiSnapshot(tabId, snapshot) {
+  const requestId = String(snapshot?.requestId || '');
+  if (runUiPersistenceFailures.get(tabId) === requestId) return Promise.resolve(false);
+  const stableSnapshot = cloneRunUiSnapshot(snapshot);
+  const previous = runUiPersistenceQueues.get(tabId) || Promise.resolve(true);
+  const write = previous.catch(() => false).then(async () => {
+    if (runUiPersistenceFailures.get(tabId) === requestId) return false;
+    try {
+      await browser.storage.session?.set({ [RUN_UI_PREFIX + tabId]: stableSnapshot });
+      return true;
+    } catch {
+      runUiPersistenceFailures.set(tabId, requestId);
+      try { await browser.storage.session?.remove(RUN_UI_PREFIX + tabId); } catch {}
+      return false;
+    }
+  });
+  runUiPersistenceQueues.set(tabId, write);
+  write.finally(() => {
+    if (runUiPersistenceQueues.get(tabId) === write) runUiPersistenceQueues.delete(tabId);
+  }).catch(() => {});
+  return write;
+}
+
+function flushRunUiSnapshot(tabId, requestId) {
+  const pending = runUiPersistenceQueues.get(tabId);
+  if (pending) return pending;
+  return Promise.resolve(runUiPersistenceFailures.get(tabId) !== String(requestId || ''));
+}
+
 const runUiJournal = new RunUiJournal({
   onChange(tabId, snapshot) {
-    try { browser.storage.session?.set({ [RUN_UI_PREFIX + tabId]: snapshot }).catch(() => {}); } catch {}
+    void persistRunUiSnapshot(tabId, snapshot);
   },
 });
 
-function beginRunUiSnapshot(tabId, requestId) {
-  return runUiJournal.begin(tabId, requestId);
+function beginRunUiSnapshot(tabId, requestId, metadata = {}) {
+  runUiPersistenceFailures.delete(tabId);
+  return runUiJournal.begin(tabId, requestId, metadata);
+}
+
+async function beginContinuationRunUiSnapshot(tabId, requestId, metadata = {}) {
+  const existing = await getRunUiSnapshot(tabId);
+  const sameNonTerminalRun = existing
+    && String(existing.requestId || '') === String(requestId || '')
+    && !['completed', 'stopped', 'failed', 'cancelled'].includes(existing.status);
+  if (sameNonTerminalRun) return runUiJournal.resume(tabId, requestId, metadata);
+  return beginRunUiSnapshot(tabId, requestId, metadata);
 }
 
 function recordRunUiEvent(tabId, requestId, type, data) {
@@ -1367,7 +1418,13 @@ async function getRunUiSnapshot(tabId) {
 
 function clearRunUiSnapshot(tabId) {
   runUiJournal.clear(tabId);
-  try { browser.storage.session?.remove(RUN_UI_PREFIX + tabId).catch(() => {}); } catch {}
+  runUiPersistenceFailures.delete(tabId);
+  const previous = runUiPersistenceQueues.get(tabId) || Promise.resolve();
+  const removal = previous.catch(() => {}).then(() => browser.storage.session?.remove(RUN_UI_PREFIX + tabId));
+  runUiPersistenceQueues.set(tabId, removal);
+  removal.finally(() => {
+    if (runUiPersistenceQueues.get(tabId) === removal) runUiPersistenceQueues.delete(tabId);
+  }).catch(() => {});
 }
 
 function sendAgentUpdate(tabId, requestId, type, data) {
@@ -1381,9 +1438,112 @@ function sendAgentUpdate(tabId, requestId, type, data) {
 }
 
 function assertNoActiveTabRun(tabId) {
+  if (agent.activeRunState(tabId)?.running || detachedRunStarts.has(tabId)) {
+    throw new Error('A run is already active for this tab.');
+  }
+}
+
+const detachedRunStarts = new Map();
+const detachedRunFailures = new Map();
+const RUN_KEEPALIVE_INTERVAL_MS = 20_000;
+const DETACHED_RUN_FAILURE_TTL_MS = 60_000;
+
+function clearDetachedRunFailure(tabId) {
+  const failure = detachedRunFailures.get(tabId);
+  if (failure?.expiryTimer) clearTimeout(failure.expiryTimer);
+  detachedRunFailures.delete(tabId);
+}
+
+function rememberDetachedRunFailure(tabId, requestId, error) {
+  clearDetachedRunFailure(tabId);
+  const failure = {
+    requestId,
+    message: String(error?.message || error || 'Detached run failed.'),
+    expiryTimer: null,
+  };
+  failure.expiryTimer = setTimeout(() => {
+    if (detachedRunFailures.get(tabId) === failure) detachedRunFailures.delete(tabId);
+  }, DETACHED_RUN_FAILURE_TTL_MS);
+  detachedRunFailures.set(tabId, failure);
+}
+
+function assertRunCanStart(tabId, msg) {
+  assertDetachedRunStartNotCancelled(tabId, msg);
+  const reserved = detachedRunStarts.get(tabId);
+  const internalRequestId = String(msg?.__detachedRunRequestId || '');
+  if (reserved) {
+    if (!internalRequestId || internalRequestId !== reserved.requestId) {
+      throw new Error('A run is already active for this tab.');
+    }
+  }
   if (agent.activeRunState(tabId)?.running) {
     throw new Error('A run is already active for this tab.');
   }
+}
+
+function isDetachedRunStartCancelled(tabId, msg) {
+  const internalRequestId = String(msg?.__detachedRunRequestId || '');
+  const reserved = detachedRunStarts.get(tabId);
+  return !!internalRequestId
+    && reserved?.requestId === internalRequestId
+    && reserved.cancelled === true;
+}
+
+function assertDetachedRunStartNotCancelled(tabId, msg) {
+  if (isDetachedRunStartCancelled(tabId, msg)) {
+    throw new Error('Run stopped by user before it started.');
+  }
+}
+
+function cancelDetachedRunStart(tabId) {
+  const reserved = detachedRunStarts.get(tabId);
+  if (!reserved) return false;
+  reserved.cancelled = true;
+  return true;
+}
+
+function acquireRunKeepalive() {
+  let released = false;
+  const touch = () => {
+    try {
+      browser.runtime.getPlatformInfo().catch(() => {});
+    } catch {}
+  };
+  touch();
+  const timer = setInterval(touch, RUN_KEEPALIVE_INTERVAL_MS);
+  return () => {
+    if (released) return;
+    released = true;
+    clearInterval(timer);
+  };
+}
+
+function launchDetachedRun(action, msg, sender) {
+  const tabId = msg.tabId || sender.tab?.id;
+  if (!tabId) throw new Error('No tab ID');
+  assertNoActiveTabRun(tabId);
+  clearDetachedRunFailure(tabId);
+  const requestId = String(msg.requestId || `req_${tabId}_${Date.now()}`);
+  const entry = { requestId, promise: null, cancelled: false };
+  detachedRunStarts.set(tabId, entry);
+  const task = Promise.resolve().then(() => {
+    const detachedMessage = {
+      ...msg,
+      action,
+      requestId,
+      __detachedRunRequestId: requestId,
+    };
+    assertDetachedRunStartNotCancelled(tabId, detachedMessage);
+    return handleMessage(detachedMessage, sender);
+  });
+  entry.promise = task;
+  task.catch((error) => {
+    rememberDetachedRunFailure(tabId, requestId, error);
+    console.warn(`[WebBrain] detached ${action} run failed:`, error);
+  }).finally(() => {
+    if (detachedRunStarts.get(tabId) === entry) detachedRunStarts.delete(tabId);
+  });
+  return { ok: true, accepted: true, requestId };
 }
 
 function sendAgentRunComplete(tabId, snapshot = null) {
@@ -1410,6 +1570,7 @@ browser.runtime.onMessage.addListener((msg, sender) => {
   if (msg?.type !== 'WB_STOP_AGENT') return; // not ours
   const tabId = sender?.tab?.id;
   if (tabId != null) {
+    cancelDetachedRunStart(tabId);
     try { agent.abort(tabId); } catch { /* ignore */ }
     // Always clear the sender tab's page-owned indicator, even when the run
     // already ended or this background lost its in-memory run state.
@@ -1537,12 +1698,19 @@ async function handleMessage(msg, sender) {
       };
     }
 
+    case 'chat_start':
+      return launchDetachedRun('chat', msg, sender);
+
+    case 'continue_start':
+      return launchDetachedRun('continue', msg, sender);
+
     case 'chat': {
       const tabId = msg.tabId || sender.tab?.id;
       if (!tabId) throw new Error('No tab ID');
-      assertNoActiveTabRun(tabId);
+      assertRunCanStart(tabId, msg);
       const mode = msg.mode || 'ask';
-      const runUi = beginRunUiSnapshot(tabId, msg.requestId);
+      const runUi = await beginContinuationRunUiSnapshot(tabId, msg.requestId, { mode, kind: 'chat' });
+      const releaseRunKeepalive = acquireRunKeepalive();
 
       if (msg.apiMutationsAllowed) agent.setApiMutationsAllowed(tabId, true);
 
@@ -1568,6 +1736,13 @@ async function handleMessage(msg, sender) {
           ...(msg.recommendedAction ? { recommendedAction: msg.recommendedAction } : {}),
           locale: msg.locale,
           intentFailureMessage: msg.intentFailureMessage,
+          detachedRequestId: runUi.requestId,
+          isDetachedStartCancelled: () => isDetachedRunStartCancelled(tabId, msg),
+          beforeConsequentialTool: () => flushRunUiSnapshot(tabId, runUi.requestId),
+          afterConsequentialTool: async ({ name } = {}) => {
+            runUiJournal.settleToolCall(tabId, runUi.requestId, name);
+            return flushRunUiSnapshot(tabId, runUi.requestId);
+          },
         };
         result = await agent.processMessage(tabId, msg.text, (type, data) => {
           updates.push({ type, data });
@@ -1608,6 +1783,7 @@ async function handleMessage(msg, sender) {
           sendAgentRunComplete(tabId, snapshot);
         }
         sendIndicatorMessage(tabId, 'WB_HIDE_AGENT_INDICATORS');
+        releaseRunKeepalive();
       }
     }
 
@@ -1617,6 +1793,7 @@ async function handleMessage(msg, sender) {
       assertNoActiveTabRun(tabId);
       const mode = msg.mode || 'ask';
       const runUi = beginRunUiSnapshot(tabId, msg.requestId);
+      const releaseRunKeepalive = acquireRunKeepalive();
 
       if (msg.apiMutationsAllowed) agent.setApiMutationsAllowed(tabId, true);
 
@@ -1654,15 +1831,17 @@ async function handleMessage(msg, sender) {
         const snapshot = finishRunUiSnapshot(tabId, runUi.requestId, terminalRunUiStatus(result, userMemoryTurnHadError ? [{ type: 'error' }] : [], runError), result || (runError ? `Error: ${runError.message}` : ''));
         sendAgentRunComplete(tabId, snapshot);
         sendIndicatorMessage(tabId, 'WB_HIDE_AGENT_INDICATORS');
+        releaseRunKeepalive();
       }
     }
 
     case 'continue': {
       const tabId = msg.tabId || sender.tab?.id;
       if (!tabId) throw new Error('No tab ID');
-      assertNoActiveTabRun(tabId);
+      assertRunCanStart(tabId, msg);
       const mode = msg.mode || 'ask';
-      const runUi = beginRunUiSnapshot(tabId, msg.requestId);
+      const runUi = await beginContinuationRunUiSnapshot(tabId, msg.requestId, { mode, kind: 'continue' });
+      const releaseRunKeepalive = acquireRunKeepalive();
 
       sendIndicatorMessage(tabId, 'WB_SHOW_AGENT_INDICATORS');
       let userMemoryTurnContextTaken = false;
@@ -1673,7 +1852,15 @@ async function handleMessage(msg, sender) {
         result = await agent.continueProcessing(tabId, (type, data) => {
           if (type === 'error') userMemoryTurnHadError = true;
           sendAgentUpdate(tabId, runUi.requestId, type, data);
-        }, mode);
+        }, mode, {
+          detachedRequestId: runUi.requestId,
+          isDetachedStartCancelled: () => isDetachedRunStartCancelled(tabId, msg),
+          beforeConsequentialTool: () => flushRunUiSnapshot(tabId, runUi.requestId),
+          afterConsequentialTool: async ({ name } = {}) => {
+            runUiJournal.settleToolCall(tabId, runUi.requestId, name);
+            return flushRunUiSnapshot(tabId, runUi.requestId);
+          },
+        });
 
         const userMemoryPayload = takeUserMemoryTurnExtractionPayload(tabId, {
           userText: 'Please continue from where you left off.',
@@ -1693,6 +1880,7 @@ async function handleMessage(msg, sender) {
         const snapshot = finishRunUiSnapshot(tabId, runUi.requestId, terminalRunUiStatus(result, userMemoryTurnHadError ? [{ type: 'error' }] : [], runError), result || (runError ? `Error: ${runError.message}` : ''));
         sendAgentRunComplete(tabId, snapshot);
         sendIndicatorMessage(tabId, 'WB_HIDE_AGENT_INDICATORS');
+        releaseRunKeepalive();
       }
     }
 
@@ -1715,14 +1903,37 @@ async function handleMessage(msg, sender) {
 
     case 'abort': {
       const tabId = msg.tabId || sender.tab?.id;
-      if (tabId) agent.abort(tabId);
+      if (tabId) {
+        cancelDetachedRunStart(tabId);
+        agent.abort(tabId);
+      }
       return { ok: true };
     }
 
     case 'agent_run_state': {
       const tabId = msg.tabId || sender.tab?.id;
       if (!tabId) return { ok: false, error: 'No tab ID' };
-      return { ok: true, ...agent.activeRunState(tabId), runUi: await getRunUiSnapshot(tabId) };
+      const starting = detachedRunStarts.get(tabId) || null;
+      const requestedRequestId = String(msg.requestId || '');
+      const failure = detachedRunFailures.get(tabId) || null;
+      const detachedError = requestedRequestId && failure?.requestId === requestedRequestId
+        ? { requestId: failure.requestId, message: failure.message }
+        : null;
+      const submittedTurnDurable = requestedRequestId
+        ? await agent.hasDurableSubmittedTurn(tabId, requestedRequestId)
+        : false;
+      const runUiSnapshot = await getRunUiSnapshot(tabId);
+      return {
+        ok: true,
+        ...agent.activeRunState(tabId),
+        starting: !!starting,
+        startingRequestId: starting?.requestId || null,
+        submittedTurnDurable,
+        runUiDurable: !runUiSnapshot
+          || runUiPersistenceFailures.get(tabId) !== String(runUiSnapshot.requestId || ''),
+        detachedError,
+        runUi: runUiSnapshotForRequest(runUiSnapshot, requestedRequestId),
+      };
     }
 
     case 'agent_run_ack': {

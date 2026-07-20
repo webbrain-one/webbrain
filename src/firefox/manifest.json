@@ -21,7 +21,7 @@
   "content_security_policy": "script-src 'self' 'unsafe-eval'; object-src 'self'; connect-src * data: blob: http://* ws://*;",
   "background": {
     "page": "src/background.html",
-    "persistent": false
+    "persistent": true
   },
   "sidebar_action": {
     "default_title": "WebBrain",

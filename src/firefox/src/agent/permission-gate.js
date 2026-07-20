@@ -75,6 +75,7 @@ export const UNTRUSTED_CONTENT_TOOLS = new Set([
   // option text, aria-labels, and form-state hints. Treat them as data.
   'click',
   'click_ax',
+  'set_checked',
   'type_text',
   'execute_js',
   'scroll',
@@ -132,6 +133,7 @@ const TOOL_CAPABILITY = {
   go_forward: Capability.NAVIGATE,
   click: Capability.CLICK,
   click_ax: Capability.CLICK,
+  set_checked: Capability.CLICK,
   iframe_click: Capability.CLICK,
   drag_drop: Capability.CLICK,
   type_text: Capability.TYPE,

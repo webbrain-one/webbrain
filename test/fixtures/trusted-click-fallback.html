@@ -147,6 +147,22 @@
   <div id="download-row" class="row" role="listitem" data-download tabindex="0">Export report</div>
   <form>
     <div id="form-row" class="row" role="listitem" tabindex="0">Form row</div>
+    <label class="external-label" for="firefox-checkbox">
+      <input id="firefox-checkbox" name="compatible_apps" value="firefox" type="checkbox">
+      Firefox compatibility
+    </label>
+    <label class="external-label" for="trusted-firefox-checkbox">
+      <input id="trusted-firefox-checkbox" name="trusted_compatible_apps" value="firefox" type="checkbox">
+      Trusted Firefox compatibility
+    </label>
+    <label class="external-label" for="selected-channel-radio">
+      <input id="selected-channel-radio" name="channel" value="stable" type="radio" checked>
+      Selected channel
+    </label>
+    <label class="external-label" for="blocked-channel-radio">
+      <input id="blocked-channel-radio" name="channel" value="blocked" type="radio">
+      Blocked channel
+    </label>
   </form>
   <div id="covered-wrap">
     <div id="covered-row" class="row" role="listitem" tabindex="0">Covered row</div>
@@ -161,6 +177,14 @@
   <script>
     window.__trustedClickEvents = [];
     window.__syntheticClickEvents = [];
+    window.__trustedCheckboxEvents = [];
+    document.getElementById('trusted-firefox-checkbox').addEventListener('click', (event) => {
+      window.__trustedCheckboxEvents.push({ trusted: event.isTrusted, checked: event.currentTarget.checked });
+      if (!event.isTrusted) event.preventDefault();
+    });
+    document.getElementById('blocked-channel-radio').addEventListener('click', (event) => {
+      event.preventDefault();
+    });
     document.getElementById('trusted-row').addEventListener('click', (event) => {
       window.__trustedClickEvents.push({ trusted: event.isTrusted, type: event.type });
       if (event.isTrusted) {

@@ -14,6 +14,11 @@ import { deleteChatHistoryRecord, saveChatHistoryRecord } from './chat-history-s
 import { claimRunError } from './run-error-dedupe.js';
 import { RUN_CAPTURE_START_ERROR_PREFIX } from '../run-capture.js';
 import {
+  isBackgroundConnectionError,
+  runDetachedWithReconnect,
+  sendPlanResponseWithReconnect,
+} from '../run-reconnect.js';
+import {
   STORAGE_KEY as STORE_REVIEW_STORAGE_KEY,
   recordSuccessfulTask,
   shouldShowPrompt as shouldShowStoreReviewPrompt,
@@ -911,6 +916,8 @@ const awaitingPlanReviewTabs = new Set();
 const processingTabs = new Set();
 const abortRequestedTabs = new Set();
 const localRunRequestIds = new Map();
+const cancelledRunRecoveryRequestIds = new Set();
+const adoptedRunRecoveryRequestIds = new Set();
 let recommendationsRequestId = 0;
 let providerSelectionRequestId = 0;
 let providerTestRequestId = 0;
@@ -3215,6 +3222,75 @@ async function restoreActiveRunState(tabId = currentTabId) {
   } catch {
     return;
   }
+  await applyActiveRunState(numericTabId, state);
+  void adoptRestoredRunState(numericTabId, state);
+}
+
+function isTerminalRunUiStatus(status) {
+  return ['completed', 'stopped', 'failed', 'cancelled'].includes(String(status || ''));
+}
+
+async function adoptRestoredRunState(tabId, state) {
+  const runUi = state?.runUi && typeof state.runUi === 'object' ? state.runUi : null;
+  const requestId = String(runUi?.requestId || '');
+  if (!requestId
+      || isTerminalRunUiStatus(runUi.status)
+      || runUi.status === 'awaiting_plan'
+      || localRunRequestIds.has(Number(tabId))
+      || adoptedRunRecoveryRequestIds.has(requestId)) return;
+
+  adoptedRunRecoveryRequestIds.add(requestId);
+  localRunRequestIds.set(Number(tabId), requestId);
+  setTabProcessing(tabId, true);
+  setTabAbortRequested(tabId, false);
+  syncSendButtonState();
+  if (sameTabId(currentTabId, tabId)) showActivity('Reconnecting…');
+  const assistantEl = messagesEl.querySelector(`.message.assistant[data-run-request-id="${CSS.escape(requestId)}"]`)
+    || currentAssistantEl;
+  const mode = ['ask', 'act', 'dev'].includes(runUi.mode)
+    ? runUi.mode
+    : (['ask', 'act', 'dev'].includes(assistantEl?.dataset?.runMode) ? assistantEl.dataset.runMode : agentMode);
+
+  try {
+    const res = await sendRunWithReconnect('continue_start', {
+      tabId,
+      requestId,
+      mode,
+    }, {
+      probeFirst: true,
+      requireDurableSubmittedTurn: runUi.kind !== 'continue',
+    });
+    const returnedErrorUpdate = Array.isArray(res?.updates)
+      ? res.updates.find(update => update?.type === 'error')
+      : null;
+    if (returnedErrorUpdate && sameTabId(currentTabId, tabId) && !isTabAbortRequested(tabId)) {
+      renderAgentErrorUpdate(returnedErrorUpdate.data, tabId, requestId);
+    }
+  } catch (error) {
+    if (sameTabId(currentTabId, tabId) && !isTabAbortRequested(tabId)) {
+      renderAgentErrorUpdate({ message: error.message }, tabId, requestId);
+    }
+  } finally {
+    adoptedRunRecoveryRequestIds.delete(requestId);
+    if (localRunRequestIds.get(Number(tabId)) === requestId) {
+      localRunRequestIds.delete(Number(tabId));
+      setTabProcessing(tabId, false);
+      setTabAbortRequested(tabId, false);
+    }
+    if (sameTabId(currentTabId, tabId)) {
+      if (assistantEl) finalizeSteps(assistantEl);
+      syncSendButtonState();
+      hideActivity();
+      if (currentAssistantEl === assistantEl) currentAssistantEl = null;
+      if (sameTabId(renderedTabId, tabId)) {
+        await flushRenderedTabChat();
+        await flushChatHistorySnapshot(tabId, { refreshTabInfo: true });
+      }
+    }
+  }
+}
+
+async function applyActiveRunState(numericTabId, state) {
   if (!sameTabId(currentTabId, numericTabId) || !sameTabId(renderedTabId, numericTabId)) return;
   const runUi = state?.runUi && typeof state.runUi === 'object' ? state.runUi : null;
   if (runUi?.requestId) {
@@ -3270,7 +3346,7 @@ async function restoreActiveRunState(tabId = currentTabId) {
     return;
   }
   invalidatePlanReviewCards({ tabId: numericTabId });
-  if (state?.running) {
+  if (state?.running || state?.starting) {
     setTabProcessing(numericTabId, true);
     setTabAbortRequested(numericTabId, false);
     hideRecommendedActions();
@@ -5187,7 +5263,7 @@ async function sendMessage(extraChatParams = {}) {
   let completedSuccessfully = false;
   let promptEligibleCompletion = false;
   try {
-    const res = await sendToBackground('chat', {
+    const res = await sendRunWithReconnect('chat_start', {
       tabId,
       requestId,
       text,
@@ -5209,7 +5285,7 @@ async function sendMessage(extraChatParams = {}) {
       chatHistoryRecordIdsByTab.set(tabId, res.conversationId);
     }
     accepted = true;
-    completedSuccessfully = updatesContainSuccessfulDone(res?.updates);
+    completedSuccessfully = res?.successfulDone === true || updatesContainSuccessfulDone(res?.updates);
     promptEligibleCompletion = completedSuccessfully || isSuccessfulAskCompletion(modeForSend, res);
     const returnedErrorUpdate = Array.isArray(res?.updates)
       ? res.updates.find(u => u?.type === 'error')
@@ -5279,6 +5355,7 @@ async function sendMessage(extraChatParams = {}) {
     }
   } finally {
     if (localRunRequestIds.get(tabId) === requestId) localRunRequestIds.delete(tabId);
+    cancelledRunRecoveryRequestIds.delete(requestId);
     if (activeChatPayloadsByTab.get(tabId) === activePayloadState) {
       scheduleActiveChatPayloadCleanup(tabId, activePayloadState);
     }
@@ -5749,6 +5826,10 @@ function handleAgentUpdateMessage(msg) {
       break;
 
     case 'plan_review':
+      invalidatePlanReviewCards({
+        tabId: msg.tabId ?? currentTabId,
+        requestId: msg.requestId,
+      });
       renderPlanReviewCard({ ...data, tabId: msg.tabId ?? currentTabId, requestId: msg.requestId, runId: msg.runId });
       break;
 
@@ -6082,11 +6163,12 @@ function renderPlanReviewCard(data) {
     .find(card => String(card.dataset.planId || '') === planId
       && String(card.dataset.tabId || '') === String(tabId)
       && (!data.requestId || card.dataset.runRequestId === String(data.requestId))
-      && (!data.runId || card.dataset.runId === String(data.runId))
-      && !card.classList.contains('plan-reviewed'));
+      && (!data.runId || card.dataset.runId === String(data.runId)));
   if (existing) {
-    bindPlanReviewCard(existing);
-    setPlanReviewAwaiting(tabId, true, existing.closest('.message.assistant'));
+    if (!existing.classList.contains('plan-reviewed')) {
+      bindPlanReviewCard(existing);
+      setPlanReviewAwaiting(tabId, true, existing.closest('.message.assistant'));
+    }
     scrollToBottom();
     return;
   }
@@ -6179,9 +6261,14 @@ function submitPlanReview(card, tabId, planId, action, editedText) {
   card.classList.add('plan-reviewed');
   setPlanReviewAwaiting(tabId, false);
   if (action !== 'approve') {
+    const requestId = String(card.dataset.runRequestId || '');
+    if (requestId) cancelledRunRecoveryRequestIds.add(requestId);
+    setTabAbortRequested(tabId, true);
     card.remove();
     scrollToBottom();
-    sendToBackground('plan_response', { tabId, planId, decision: action, editedText, markdownMode }).catch(() => {});
+    sendPlanReviewDecisionWithReconnect({
+      tabId, planId, decision: action, editedText, markdownMode,
+    }, requestId).catch(() => {});
     return;
   }
   for (const el of card.querySelectorAll('button, textarea')) {
@@ -6194,11 +6281,15 @@ function submitPlanReview(card, tabId, planId, action, editedText) {
     ? 'WebBrain reloaded or the background worker stopped before this plan could be approved. Reload the sidebar and try again.'
     : expiredText();
 
-  sendToBackground('plan_response', { tabId, planId, decision: action, editedText, markdownMode })
+  sendPlanReviewDecisionWithReconnect(
+    { tabId, planId, decision: action, editedText, markdownMode },
+    String(card.dataset.runRequestId || ''),
+  )
     .then((res) => {
       if (action !== 'approve') return;
       if (res?.matched) {
         card.remove();
+        void restoreActiveRunState(tabId);
       } else {
         note.textContent = expiredText();
         card.appendChild(note);
@@ -6211,8 +6302,11 @@ function submitPlanReview(card, tabId, planId, action, editedText) {
       if (action === 'approve') {
         note.textContent = failureText(error);
         card.appendChild(note);
-        setPlanReviewAwaiting(tabId, false);
-        if (activeAssistantEl) clearPlanReviewActiveRun(activeAssistantEl, tabId);
+        card.classList.remove('plan-reviewed');
+        for (const el of card.querySelectorAll('button, textarea')) {
+          el.disabled = false;
+        }
+        setPlanReviewAwaiting(tabId, true, activeAssistantEl || card.closest('.message.assistant'));
         scrollToBottom();
       }
     });
@@ -6803,7 +6897,7 @@ async function continueAgent(options = {}) {
     showActivity(t('sp.activity.continuing'));
     localRunRequestIds.set(tabId, requestId);
 
-    const res = await sendToBackground('continue', {
+    const res = await sendRunWithReconnect('continue_start', {
       tabId,
       requestId,
       mode: modeForSend,
@@ -6830,6 +6924,7 @@ async function continueAgent(options = {}) {
     }
   } finally {
     if (localRunRequestIds.get(tabId) === requestId) localRunRequestIds.delete(tabId);
+    cancelledRunRecoveryRequestIds.delete(requestId);
     if (currentTabId === tabId && assistantEl) finalizeSteps(assistantEl);
     clearAssistantTextStreamState(assistantEl);
     setTabProcessing(tabId, false);
@@ -6892,9 +6987,29 @@ function hideActivity() {
   hideInspectionBanner();
 }
 
+let scrollToBottomFrame = null;
+
+function pinChatToBottom(container) {
+  // The chat container uses smooth scrolling for user-visible navigation.
+  // During streaming, though, repeatedly assigning scrollTop while that
+  // animation is still running makes the viewport lag behind the growing
+  // conversation. Temporarily bypass smooth behavior for auto-follow.
+  const previousScrollBehavior = container.style.scrollBehavior;
+  container.style.scrollBehavior = 'auto';
+  container.scrollTop = container.scrollHeight;
+  container.style.scrollBehavior = previousScrollBehavior;
+}
+
 function scrollToBottom() {
   const container = document.getElementById('chat-container');
-  container.scrollTop = container.scrollHeight;
+  if (!container) return;
+
+  pinChatToBottom(container);
+  if (scrollToBottomFrame != null) cancelAnimationFrame(scrollToBottomFrame);
+  scrollToBottomFrame = requestAnimationFrame(() => {
+    scrollToBottomFrame = null;
+    if (container.isConnected) pinChatToBottom(container);
+  });
 }
 
 // Debounce math rendering so streaming updates don't re-walk the DOM
@@ -7153,13 +7268,60 @@ function startInputPlaceholderRotation() {
 
 // --- Communication ---
 
-function isBackgroundConnectionError(error) {
-  const message = String(error?.message || error || '');
-  return /Could not establish connection|Receiving end does not exist|Extension context invalidated|No response from WebBrain background|background script may have restarted|extension connection was lost/i.test(message);
+function sendPlanReviewDecisionWithReconnect(payload, requestId = '') {
+  const tabId = Number(payload?.tabId);
+  return sendPlanResponseWithReconnect({
+    payload,
+    requestId,
+    send: nextPayload => sendToBackground('plan_response', nextPayload),
+    probe: ({ requestId: probedRequestId } = {}) => sendToBackground('agent_run_state', {
+      tabId,
+      requestId: probedRequestId || requestId,
+    }),
+    isConnectionError: isBackgroundConnectionError,
+    onState: state => applyActiveRunState(tabId, state),
+    onStatus: ({ phase }) => {
+      if (!sameTabId(currentTabId, tabId)) return;
+      if (phase === 'reconnecting') showActivity('Reconnecting…');
+      if (phase === 'reconnected' && !isAwaitingPlanReviewForTab(tabId)) {
+        showActivity('Reconnected — continuing…');
+      }
+    },
+  });
+}
+
+async function sendRunWithReconnect(initialAction, payload, recoveryOptions = {}) {
+  const tabId = Number(payload?.tabId);
+  const requestId = String(payload?.requestId || '');
+  cancelledRunRecoveryRequestIds.delete(requestId);
+  return runDetachedWithReconnect({
+    initialAction,
+    payload,
+    start: (action, nextPayload) => sendToBackground(action, nextPayload),
+    probe: ({ requestId: probedRequestId } = {}) => sendToBackground('agent_run_state', {
+      tabId,
+      requestId: probedRequestId || requestId,
+    }),
+    isConnectionError: isBackgroundConnectionError,
+    onState: state => applyActiveRunState(tabId, state),
+    shouldResume: () => !isTabAbortRequested(tabId)
+      && !cancelledRunRecoveryRequestIds.has(requestId),
+    onStatus: ({ phase }) => {
+      if (!sameTabId(currentTabId, tabId)) return;
+      if (phase === 'reconnecting' || phase === 'retrying_start') {
+        showActivity('Reconnecting…');
+      } else if (phase === 'resuming') {
+        showActivity('Reconnected — resuming…');
+      } else if (phase === 'reconnected' && !isAwaitingPlanReviewForTab(tabId)) {
+        showActivity('Reconnected — continuing…');
+      }
+    },
+    ...recoveryOptions,
+  });
 }
 
 function formatBackgroundSendError(action, message) {
-  if (/Could not establish connection|Receiving end does not exist|Extension context invalidated/i.test(String(message || ''))) {
+  if (isBackgroundConnectionError(message)) {
     return `WebBrain extension connection was lost while sending "${action}". Reload the sidebar/extension and try again.`;
   }
   return message;
@@ -7314,6 +7476,12 @@ modeDevBtn?.addEventListener('click', async () => {
 async function abortRun() {
   const tabId = currentTabId;
   if (!isTabProcessing(tabId)) return;
+  const requestId = String(
+    localRunRequestIds.get(Number(tabId))
+      || currentAssistantEl?.dataset?.runRequestId
+      || '',
+  );
+  if (requestId) cancelledRunRecoveryRequestIds.add(requestId);
   setTabAbortRequested(tabId, true);
   showActivity(t('sp.activity.stopping'));
 

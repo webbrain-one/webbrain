@@ -59,18 +59,17 @@ function htmlToText(html) {
 
 // ─── fetch_url ──────────────────────────────────────────────────────────
 
-// Per-call response size caps. The cost here is LLM context (and prompt-
-// cache write on the first turn) — not browser memory — so we keep these
-// generous enough to fit even long Wikipedia articles in a single call.
-//   - TEXT (~192k chars ≈ 48k tokens) covers HTML stripped to readable text
-//     plus text/* responses. Catches the long tail of Wikipedia articles,
-//     biographies, big GitHub READMEs, etc.
-//   - JSON (~96k chars ≈ 24k tokens) — JSON is denser per token (repeated
-//     keys) so it scales sub-linearly with text.
-// Modern frontier models have 200k+ context windows and prompt caching
-// amortizes repeated reads, so the marginal cost of a generous cap is
-// near-zero in practice. Most responses come in well under these limits;
-// the cap only bites on the long tail.
+// fetch_url returns a semantic character window rather than relying on the
+// agent's generic result truncation. This keeps continuation metadata aligned
+// with the text the model actually received and gives large source files a
+// deterministic search/pagination path.
+const FETCH_TEXT_DEFAULT_LIMIT = 7000;
+const FETCH_TEXT_MIN_LIMIT = 1000;
+const FETCH_TEXT_MAX_LIMIT = 7000;
+const FETCH_RESULT_MAX_CHARS = 8000;
+const FETCH_FIND_MAX_MATCHES = 20;
+const FETCH_FIND_CONTEXT_CHARS = 120;
+// Other network helpers keep their existing generous one-shot caps.
 const FETCH_TEXT_LIMIT = 192000;
 const FETCH_JSON_LIMIT = 96000;
 const PAGE_SOURCE_DEFAULT_LIMIT = 6000;
@@ -87,6 +86,122 @@ const REMOTE_MEDIA_FAILURE_CONTEXT = Object.freeze({
   browserLoginAffectsRequest: false,
   retryGuidance: 'The media provider runs on a separate server. Signing into this browser or retrying while logged in will not change the provider request. Try the exact public media permalink or retry later.',
 });
+
+function fetchTextWindow(source, opts = {}, field = 'text') {
+  const text = String(source ?? '');
+  const originalLength = text.length;
+  const find = String(opts.find ?? '').trim().slice(0, 200);
+  if (find) {
+    const haystack = text.toLowerCase();
+    const needle = find.toLowerCase();
+    const matches = [];
+    let index = haystack.indexOf(needle);
+    while (index >= 0 && matches.length < FETCH_FIND_MAX_MATCHES) {
+      const start = Math.max(0, index - FETCH_FIND_CONTEXT_CHARS);
+      const end = Math.min(text.length, index + needle.length + FETCH_FIND_CONTEXT_CHARS);
+      const line = 1 + (text.slice(0, index).match(/\n/g) || []).length;
+      matches.push({
+        offset: index,
+        line,
+        text: text.slice(start, end).replace(/\s+/g, ' ').trim(),
+      });
+      index = haystack.indexOf(needle, index + Math.max(1, needle.length));
+    }
+    const matchesTruncated = index >= 0;
+    return {
+      find,
+      matches,
+      matchCount: matches.length,
+      matchesTruncated,
+      originalLength,
+      nextOffset: null,
+      hasMore: false,
+      truncated: matchesTruncated,
+    };
+  }
+
+  const offset = Math.min(
+    originalLength,
+    Math.max(0, Math.floor(Number(opts.offset) || 0)),
+  );
+  const rawMaxChars = Number(opts.maxChars);
+  const requested = Number.isFinite(rawMaxChars)
+    ? rawMaxChars
+    : FETCH_TEXT_DEFAULT_LIMIT;
+  const maxChars = Math.max(
+    FETCH_TEXT_MIN_LIMIT,
+    Math.min(FETCH_TEXT_MAX_LIMIT, Math.floor(requested)),
+  );
+  const end = Math.min(text.length, offset + maxChars);
+  const nextOffset = end < text.length ? end : null;
+  return {
+    [field]: text.slice(offset, end),
+    offset,
+    maxChars: end - offset,
+    nextOffset,
+    hasMore: nextOffset != null,
+    truncated: nextOffset != null,
+    originalLength,
+  };
+}
+
+function constrainFetchTextResult(result, field, maxResultChars = FETCH_RESULT_MAX_CHARS) {
+  if (JSON.stringify(result).length <= maxResultChars) return result;
+
+  if (Array.isArray(result.matches)) {
+    const fitted = {
+      ...result,
+      matches: result.matches.map(match => ({
+        ...match,
+        text: String(match.text || '').slice(0, 180),
+      })),
+    };
+    while (fitted.matches.length && JSON.stringify(fitted).length > maxResultChars) {
+      fitted.matches.pop();
+    }
+    fitted.matchesTruncated = result.matchesTruncated || fitted.matchCount > fitted.matches.length;
+    fitted.truncated = fitted.matchesTruncated;
+    return fitted;
+  }
+
+  const delivered = typeof result[field] === 'string' ? result[field] : '';
+  let best = { ...result, [field]: '', maxChars: 0 };
+  let low = 0;
+  let high = delivered.length;
+  while (low <= high) {
+    const length = Math.floor((low + high) / 2);
+    const nextOffset = result.offset + length < result.originalLength
+      ? result.offset + length
+      : null;
+    const candidate = {
+      ...result,
+      [field]: delivered.slice(0, length),
+      maxChars: length,
+      nextOffset,
+      hasMore: nextOffset != null,
+      truncated: nextOffset != null,
+    };
+    if (JSON.stringify(candidate).length <= maxResultChars) {
+      best = candidate;
+      low = length + 1;
+    } else {
+      high = length - 1;
+    }
+  }
+  return best;
+}
+
+function safeFetchResponseMetadata(headers) {
+  const read = (name, limit) => String(headers?.get?.(name) || '').trim().slice(0, limit);
+  const contentRange = read('content-range', 200);
+  const acceptRanges = read('accept-ranges', 80);
+  const contentLength = parseContentLength(read('content-length', 40));
+  return {
+    ...(contentRange ? { contentRange } : {}),
+    ...(acceptRanges ? { acceptRanges } : {}),
+    ...(contentLength != null ? { contentLength } : {}),
+  };
+}
 
 /**
  * Validate a URL before the agent fetches it.
@@ -1220,7 +1335,7 @@ function apiReplayOptionsForFetch(rawUrl, opts = {}, ctx = {}) {
   };
 }
 
-function formatTextFetchResult({ status, contentType, finalUrl, text, replayContext = null }) {
+function formatTextFetchResult({ status, contentType, finalUrl, text, replayContext = null }, opts = {}) {
   const normalizedContentType = (contentType || '').toLowerCase();
   const body = String(text ?? '');
   const success = Number(status) < 400;
@@ -1237,23 +1352,19 @@ function formatTextFetchResult({ status, contentType, finalUrl, text, replayCont
   if (normalizedContentType.includes('json')) {
     let pretty = body;
     try { pretty = JSON.stringify(JSON.parse(body), null, 2); } catch (e) {}
-    return {
+    return constrainFetchTextResult({
       ...base,
-      json: pretty.slice(0, FETCH_JSON_LIMIT),
-      truncated: pretty.length > FETCH_JSON_LIMIT,
-      originalLength: pretty.length,
-    };
+      ...fetchTextWindow(pretty, opts, 'json'),
+    }, 'json');
   }
 
   if (normalizedContentType.includes('html') || normalizedContentType.includes('xhtml')) {
     const { title, text: readableText } = htmlToText(body);
-    return {
+    return constrainFetchTextResult({
       ...base,
-      title,
-      text: readableText.slice(0, FETCH_TEXT_LIMIT),
-      truncated: readableText.length > FETCH_TEXT_LIMIT,
-      originalLength: readableText.length,
-    };
+      title: title.slice(0, 500),
+      ...fetchTextWindow(readableText, opts, 'text'),
+    }, 'text');
   }
 
   if (normalizedContentType.startsWith('text/') ||
@@ -1262,21 +1373,17 @@ function formatTextFetchResult({ status, contentType, finalUrl, text, replayCont
       normalizedContentType.includes('csv') ||
       normalizedContentType.includes('markdown') ||
       normalizedContentType === '') {
-    return {
+    return constrainFetchTextResult({
       ...base,
-      text: body.slice(0, FETCH_TEXT_LIMIT),
-      truncated: body.length > FETCH_TEXT_LIMIT,
-      originalLength: body.length,
-    };
+      ...fetchTextWindow(body, opts, 'text'),
+    }, 'text');
   }
 
-  return {
+  return constrainFetchTextResult({
     ...base,
-    text: body.slice(0, FETCH_TEXT_LIMIT),
-    truncated: body.length > FETCH_TEXT_LIMIT,
-    originalLength: body.length,
+    ...fetchTextWindow(body, opts, 'text'),
     note: 'Replay response was read as text because page-context replay cannot stream binary content back to the background.',
-  };
+  }, 'text');
 }
 
 async function fetchReplayInPageContext(url, opts = {}, ctx = {}, allowLocal = false) {
@@ -1408,7 +1515,7 @@ async function fetchReplayInPageContext(url, opts = {}, ctx = {}, allowLocal = f
     finalUrl,
     text: payload.text || '',
     replayContext: 'page',
-  });
+  }, opts);
 }
 
 export function extractPageSourceAssets(html, baseUrl) {
@@ -1824,34 +1931,33 @@ export async function fetchUrl(url, opts = {}, ctx = {}) {
     const finalUrl = res.url;
     const success = status < 400;
     const error = success ? undefined : `Fetch returned HTTP ${status}`;
+    const responseMetadata = safeFetchResponseMetadata(res.headers);
 
     // JSON
     if (contentType.includes('json')) {
       const text = await res.text();
       let pretty = text;
       try { pretty = JSON.stringify(JSON.parse(text), null, 2); } catch (e) {}
-      return {
+      return constrainFetchTextResult({
         success,
         ...(error ? { error } : {}),
         status, contentType, url: finalUrl,
-        json: pretty.slice(0, FETCH_JSON_LIMIT),
-        truncated: pretty.length > FETCH_JSON_LIMIT,
-        originalLength: pretty.length,
-      };
+        ...responseMetadata,
+        ...fetchTextWindow(pretty, opts, 'json'),
+      }, 'json');
     }
 
     // HTML — strip to readable text
     if (contentType.includes('html') || contentType.includes('xhtml')) {
       const html = await res.text();
       const { title, text } = htmlToText(html);
-      return {
+      return constrainFetchTextResult({
         success,
         ...(error ? { error } : {}),
-        status, contentType, url: finalUrl, title,
-        text: text.slice(0, FETCH_TEXT_LIMIT),
-        truncated: text.length > FETCH_TEXT_LIMIT,
-        originalLength: text.length,
-      };
+        status, contentType, url: finalUrl, title: title.slice(0, 500),
+        ...responseMetadata,
+        ...fetchTextWindow(text, opts, 'text'),
+      }, 'text');
     }
 
     // Plain text family
@@ -1862,14 +1968,13 @@ export async function fetchUrl(url, opts = {}, ctx = {}) {
         contentType.includes('markdown') ||
         contentType === '') {
       const text = await res.text();
-      return {
+      return constrainFetchTextResult({
         success,
         ...(error ? { error } : {}),
         status, contentType, url: finalUrl,
-        text: text.slice(0, FETCH_TEXT_LIMIT),
-        truncated: text.length > FETCH_TEXT_LIMIT,
-        originalLength: text.length,
-      };
+        ...responseMetadata,
+        ...fetchTextWindow(text, opts, 'text'),
+      }, 'text');
     }
 
     // Binary or unknown — don't bloat the conversation; tell the model how to get it
@@ -1878,6 +1983,7 @@ export async function fetchUrl(url, opts = {}, ctx = {}) {
       success,
       ...(error ? { error } : {}),
       status, contentType, url: finalUrl,
+      ...responseMetadata,
       note: 'Binary content not inlined. Use download_file({url}) to save it, then read_downloaded_file({downloadId}) if you need to inspect contents.',
       sizeBytes: len ? parseInt(len, 10) : null,
     };

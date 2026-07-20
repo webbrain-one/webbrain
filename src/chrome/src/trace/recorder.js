@@ -261,6 +261,7 @@ export async function endRun(runId, { status = 'done', finalContent = null } = {
     // (OpenRouter & OpenAI: USD). Surfaced in the Traces UI so users can
     // spot expensive-failure runs at a glance.
     let totalIn = 0, totalOut = 0, totalCost = 0, stepCount = 0;
+    let sawLoopError = false;
     await new Promise((resolve) => {
       const idx = tx(db, ['events'], 'readonly').objectStore('events').index('runId');
       const req = idx.openCursor(IDBKeyRange.only(runId));
@@ -268,6 +269,7 @@ export async function endRun(runId, { status = 'done', finalContent = null } = {
         const c = req.result;
         if (!c) return resolve();
         const ev = c.value;
+        if (ev.kind === 'error' && ev.data?.phase === 'loop') sawLoopError = true;
         if (ev.kind === 'llm_response') {
           stepCount = Math.max(stepCount, ev.data?.step || 0);
           const u = ev.data?.usage;
@@ -283,9 +285,10 @@ export async function endRun(runId, { status = 'done', finalContent = null } = {
     });
     const existing = await promisifyReq(tx(db, ['runs'], 'readonly').objectStore('runs').get(runId));
     if (existing) {
+      const finalStatus = status === 'done' && sawLoopError ? 'loop_stopped' : status;
       existing.endedAt = Date.now();
       existing.durationMs = existing.endedAt - existing.startedAt;
-      existing.status = status;
+      existing.status = finalStatus;
       existing.finalContent = finalContent;
       existing.stepCount = stepCount;
       existing.totalInputTokens = totalIn;

@@ -157,7 +157,8 @@ export function bucketArgsKey(name, args) {
     const bucket = resourceBucket(args.url);
     const method = (args.method || 'GET').toUpperCase();
     const pageSourceRange = name === 'read_page_source' ? _pageSourceRangeKey(args) : '';
-    return `url:${bucket}|${method}${pageSourceRange}`;
+    const fetchTextWindow = name === 'fetch_url' ? _fetchTextWindowKey(args) : '';
+    return `url:${bucket}|${method}${pageSourceRange}${fetchTextWindow}`;
   }
   return JSON.stringify(args || {});
 }
@@ -166,6 +167,12 @@ function _pageSourceRangeKey(args) {
   const offset = _nonNegativeInteger(args.offset, 0);
   const maxChars = args.maxChars == null ? '' : _nonNegativeInteger(args.maxChars, 0);
   return `|offset:${offset}|maxChars:${maxChars}`;
+}
+
+function _fetchTextWindowKey(args) {
+  const find = String(args.find ?? '').trim().toLowerCase().slice(0, 200);
+  if (find) return `|find:${find}`;
+  return `|offset:${_nonNegativeInteger(args.offset, 0)}`;
 }
 
 function _nonNegativeInteger(value, fallback) {
