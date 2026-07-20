@@ -1530,13 +1530,42 @@ export class CDPClient {
     // on pages where the two paths race (shadow DOM, overlays, etc.).
     const result = await this.evaluate(tabId, `
       (() => {
+        const hostname = String(location.hostname || '').toLowerCase().replace(/\\.$/, '');
+        const onHost = (domain) => hostname === domain || hostname.endsWith('.' + domain);
+        const SITE_RULES = onHost('bilibili.com') ? [
+          ['.video-like', '点赞'], ['.video-coin', '投币'],
+          ['.video-fav', '收藏'], ['.video-share', '分享'],
+          ['.follow-btn', '关注'], ['.bpx-player-follow', '关注'],
+          ['.reply-box-send', '发布评论'],
+        ] : onHost('xiaohongshu.com') ? [
+          ['.like-wrapper', '点赞'], ['.collect-wrapper', '收藏'],
+          ['.chat-wrapper', '评论'], ['.share-wrapper', '分享'],
+          ['.follow-wrapper', '关注'], ['.follow-btn', '关注'],
+          ['.follow-button', '关注'], ['.send-btn', '发布评论'],
+          ['.publish-btn', '发布'], ['.publish-button', '发布'],
+        ] : [];
         const SELECTORS = [
           'a[href]', 'button', 'input:not([type="hidden"])', 'textarea', 'select',
           '[role="button"]', '[role="link"]', '[role="tab"]', '[role="menuitem"]',
           '[role="textbox"]', '[role="combobox"]', '[role="searchbox"]',
           '[contenteditable=""]', '[contenteditable="true"]', '[contenteditable="plaintext-only"]',
-          '[onclick]', '[data-action]', 'summary', 'label'
+          '[onclick]', '[data-action]', 'summary', 'label',
+          ...SITE_RULES.map(([selector]) => selector)
         ];
+
+        function interactiveText(el) {
+          for (const [selector, label] of SITE_RULES) {
+            try {
+              if (!el.matches(selector)) continue;
+            } catch (e) {
+              continue;
+            }
+            const explicit = String(el.getAttribute('aria-label') || el.getAttribute('title') || '').replace(/\\s+/g, ' ').trim();
+            const rendered = String(el.innerText || el.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 80);
+            return explicit || (rendered && rendered.includes(label) ? rendered : rendered ? label + ' ' + rendered : label);
+          }
+          return (el.innerText || el.value || el.placeholder || el.title || el.ariaLabel || '').trim();
+        }
 
         function isVisiblyInteractive(el) {
           if (!el || el.tagName === 'BODY' || el.tagName === 'HTML') return false;
@@ -1577,7 +1606,7 @@ export class CDPClient {
             tag: el.tagName.toLowerCase(),
             type: el.type || '',
             role: el.getAttribute('role') || '',
-            text: (el.innerText || el.value || el.placeholder || el.title || el.ariaLabel || '').trim().slice(0, 100),
+            text: interactiveText(el).slice(0, 100),
             id: el.id || '',
             name: el.name || '',
             href: el.href || '',

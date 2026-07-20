@@ -457,6 +457,30 @@
     'label',
   ];
 
+  function _siteInteractiveSelectors() {
+    try {
+      return window.__wbSiteInteractions?.selectors?.() || [];
+    } catch {
+      return [];
+    }
+  }
+
+  function _siteInteractionText(el) {
+    try {
+      const descriptor = window.__wbSiteInteractions?.describe?.(el);
+      if (descriptor?.name) return descriptor.name;
+    } catch {}
+    return (el?.innerText || el?.value || el?.placeholder || el?.title || el?.ariaLabel || '').trim();
+  }
+
+  function _isSiteInteractive(el) {
+    try {
+      return !!window.__wbSiteInteractions?.isInteractive?.(el);
+    } catch {
+      return false;
+    }
+  }
+
   function _composedParent(node) {
     if (!node) return null;
     const parent = node.parentNode;
@@ -653,7 +677,7 @@
   }
 
   function queryInteractive() {
-    const all = document.querySelectorAll(INTERACTIVE_SELECTORS.join(', '));
+    const all = document.querySelectorAll([...INTERACTIVE_SELECTORS, ..._siteInteractiveSelectors()].join(', '));
     const modal = _findTopmostBlockingModal();
     const out = [];
     for (const el of all) {
@@ -727,7 +751,7 @@
         tag: el.tagName.toLowerCase(),
         type: el.type || '',
         role: el.getAttribute('role') || '',
-        text: (el.innerText || el.value || el.placeholder || el.title || el.ariaLabel || '').trim().slice(0, 100),
+        text: _siteInteractionText(el).slice(0, 100),
         id: el.id || '',
         name: el.name || '',
         href: el.href || '',
@@ -777,7 +801,7 @@
       const selectors = [
         'a[href]', 'button', 'input:not([type="hidden"])', 'textarea', 'select',
         '[role="button"]', '[role="link"]', '[role="tab"]', '[role="menuitem"]',
-        '[onclick]', '[data-action]', 'summary',
+        '[onclick]', '[data-action]', 'summary', ..._siteInteractiveSelectors(),
       ];
       selectors.forEach(sel => {
         try {
@@ -831,7 +855,7 @@
         tag: el.tagName.toLowerCase(),
         type: el.type || '',
         role: el.getAttribute('role') || '',
-        text: (el.innerText || el.value || el.placeholder || el.title || el.ariaLabel || '').trim().slice(0, 100),
+        text: _siteInteractionText(el).slice(0, 100),
         id: el.id || '',
         name: el.name || '',
         href: el.href || '',
@@ -853,7 +877,7 @@
   function _staleIndexError(requestedIndex, interactive) {
     const total = interactive.length;
     const available = interactive.slice(0, 40).map((el, i) => {
-      const text = (el.innerText || el.value || el.placeholder || el.title || el.ariaLabel || '').trim().slice(0, 80);
+      const text = _siteInteractionText(el).slice(0, 80);
       return {
         index: i,
         tag: el.tagName.toLowerCase(),
@@ -878,6 +902,7 @@
 
   function _isInteractive(node) {
     if (_INTERACTIVE_TAGS.has(node.tagName)) return true;
+    if (_isSiteInteractive(node)) return true;
     const role = (node.getAttribute && node.getAttribute('role')) || '';
     if (_INTERACTIVE_ROLES.has(role)) return true;
     if (node.hasAttribute && (node.hasAttribute('onclick') || node.hasAttribute('data-action'))) return true;
@@ -1289,7 +1314,13 @@
       const needle = params.text.toLowerCase();
       const explicit = params.textMatch || '';
       // Include inputs/select/textarea so we can match by placeholder, value, or aria-label
-      const sels = 'a, button, [role="button"], [role="link"], [role="tab"], [role="menuitem"], [role="option"], [role="menuitemradio"], [role="menuitemcheckbox"], [role="treeitem"], input:not([type="hidden"]), textarea, select, input[type="button"], input[type="submit"], summary, label, [onclick], [data-action]';
+      const sels = [
+        'a', 'button', '[role="button"]', '[role="link"]', '[role="tab"]', '[role="menuitem"]',
+        '[role="option"]', '[role="menuitemradio"]', '[role="menuitemcheckbox"]', '[role="treeitem"]',
+        'input:not([type="hidden"])', 'textarea', 'select', 'input[type="button"]',
+        'input[type="submit"]', 'summary', 'label', '[onclick]', '[data-action]',
+        ..._siteInteractiveSelectors(),
+      ].join(', ');
       // Modal scoping: if a topmost modal/dialog is open, restrict the search
       // to elements inside it. Prevents the classic failure where the model
       // types "Publish release" and the resolver clicks the dimmed Publish
@@ -1328,7 +1359,10 @@
         const t = (el.getAttribute('type') || 'text').toLowerCase();
         return t === 'button' || t === 'submit' || t === 'reset';
       };
-      const _normTxt = (el) => (el.innerText || (_valIsLabel(el) ? el.value : '') || el.placeholder || el.ariaLabel || '').trim().toLowerCase();
+      const _normTxt = (el) => {
+        const siteText = _isSiteInteractive(el) ? _siteInteractionText(el) : '';
+        return (siteText || el.innerText || (_valIsLabel(el) ? el.value : '') || el.placeholder || el.ariaLabel || '').trim().toLowerCase();
+      };
       const all = Array.from(_scope.querySelectorAll(sels)).filter(_keepCandidate);
       const normalized = all.map(e => ({ e, txt: _normTxt(e) })).filter(x => !!x.txt);
 

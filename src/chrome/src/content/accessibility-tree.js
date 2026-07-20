@@ -114,9 +114,90 @@
     label: 'label',
   };
 
+  function isEditableRoot(el) {
+    if (!el || !el.getAttribute) return false;
+    const attr = el.getAttribute('contenteditable');
+    if (attr !== null) {
+      const normalized = String(attr).trim().toLowerCase();
+      if (normalized === '' || normalized === 'true' || normalized === 'plaintext-only') return true;
+      if (normalized === 'false') return false;
+    }
+    // isContentEditable includes inherited editability. Only surface the
+    // outer editing host so every nested span is not emitted as a textbox.
+    return el.isContentEditable === true && el.parentElement?.isContentEditable !== true;
+  }
+
+  // Some high-traffic media sites render their primary actions as plain
+  // div/span wrappers with delegated Vue event handlers. They are genuinely
+  // clickable, but expose none of the native/ARIA signals used below. Keep
+  // this list intentionally narrow and hostname-scoped so generic page
+  // containers are not promoted to buttons elsewhere.
+  const SITE_INTERACTION_RULES = {
+    bilibili: [
+      ['.video-like', '点赞'],
+      ['.video-coin', '投币'],
+      ['.video-fav', '收藏'],
+      ['.video-share', '分享'],
+      ['.follow-btn', '关注'],
+      ['.bpx-player-follow', '关注'],
+      ['.reply-box-send', '发布评论'],
+    ],
+    xiaohongshu: [
+      ['.like-wrapper', '点赞'],
+      ['.collect-wrapper', '收藏'],
+      ['.chat-wrapper', '评论'],
+      ['.share-wrapper', '分享'],
+      ['.follow-wrapper', '关注'],
+      ['.follow-btn', '关注'],
+      ['.follow-button', '关注'],
+      ['.send-btn', '发布评论'],
+      ['.publish-btn', '发布'],
+      ['.publish-button', '发布'],
+    ],
+  };
+
+  function currentSiteInteractionConfig() {
+    const hostname = String(location.hostname || '').toLowerCase().replace(/\.$/, '');
+    const onHost = (domain) => hostname === domain || hostname.endsWith(`.${domain}`);
+    if (onHost('bilibili.com')) return { key: 'bilibili', rules: SITE_INTERACTION_RULES.bilibili };
+    if (onHost('xiaohongshu.com')) return { key: 'xiaohongshu', rules: SITE_INTERACTION_RULES.xiaohongshu };
+    return { key: '', rules: [] };
+  }
+
+  function getSiteInteractionDescriptor(el) {
+    if (!el || typeof el.matches !== 'function') return null;
+    for (const [selector, label] of currentSiteInteractionConfig().rules) {
+      try {
+        if (!el.matches(selector)) continue;
+      } catch {
+        continue;
+      }
+      const explicit = String(
+        el.getAttribute('aria-label') || el.getAttribute('title') || ''
+      ).replace(/\s+/g, ' ').trim();
+      const rendered = String(el.innerText || el.textContent || '')
+        .replace(/\s+/g, ' ').trim().slice(0, 80);
+      const name = explicit || (
+        rendered && rendered.includes(label) ? rendered
+          : rendered ? `${label} ${rendered}` : label
+      );
+      return { selector, label, name };
+    }
+    return null;
+  }
+
+  window.__wbSiteInteractions = Object.freeze({
+    selectors: () => currentSiteInteractionConfig().rules.map(([selector]) => selector),
+    describe: getSiteInteractionDescriptor,
+    isInteractive: (el) => !!getSiteInteractionDescriptor(el),
+    shouldPierceShadowRoots: () => currentSiteInteractionConfig().key === 'bilibili',
+  });
+
   function getRole(el) {
+    if (getSiteInteractionDescriptor(el)) return 'button';
     const explicit = el.getAttribute('role');
     if (explicit) return explicit;
+    if (isEditableRoot(el)) return 'textbox';
     const tag = el.tagName.toLowerCase();
     if (tag === 'input') {
       const t = el.getAttribute('type');
@@ -130,7 +211,7 @@
 
   const NESTED_ACTION_SELECTOR = [
     'a', 'button', 'input', 'select', 'textarea', 'details', 'summary',
-    '[onclick]', '[tabindex]', '[contenteditable="true"]',
+    '[onclick]', '[tabindex]', '[contenteditable]:not([contenteditable="false"])',
     '[role="button"]', '[role="link"]', '[role="textbox"]',
     '[role="searchbox"]', '[role="combobox"]', '[role="option"]',
     '[role="menuitem"]', '[role="tab"]', '[role="checkbox"]', '[role="radio"]',
@@ -163,7 +244,7 @@
 
   function getFocusableGenericDescendantName(el) {
     if (getRole(el) !== 'generic' || !el.hasAttribute('tabindex')) return '';
-    if (el.getAttribute('contenteditable') === 'true') return '';
+    if (isEditableRoot(el)) return '';
     try {
       if (!isVisible(el) || el.querySelector(NESTED_ACTION_SELECTOR)) return '';
       // Inspect each descendant instead of using innerText: browsers include
@@ -180,6 +261,9 @@
   // ── Accessible name (matches Claude's priority order) ───────────────────
   function getAccessibleName(el) {
     const tag = el.tagName.toLowerCase();
+
+    const siteInteraction = getSiteInteractionDescriptor(el);
+    if (siteInteraction) return siteInteraction.name;
 
     // <select> — prefer the currently selected option's label.
     if (tag === 'select') {
@@ -362,11 +446,12 @@
   function isInteractive(el) {
     const tag = el.tagName.toLowerCase();
     if (INTERACTIVE_TAGS.has(tag)) return true;
+    if (getSiteInteractionDescriptor(el)) return true;
     if (el.getAttribute('onclick') !== null) return true;
     if (el.getAttribute('tabindex') !== null) return true;
     const role = el.getAttribute('role');
     if (role === 'button' || role === 'link') return true;
-    if (el.getAttribute('contenteditable') === 'true') return true;
+    if (isEditableRoot(el)) return true;
     return false;
   }
 
@@ -505,6 +590,12 @@
           line += ' value="' + trimmed.replace(/"/g, '\\"') + '"';
         }
       }
+    } else if (isEditableRoot(el)) {
+      const v = String(el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
+      if (v && v !== name) {
+        const trimmed = v.length > 60 ? v.substring(0, 60) + '...' : v;
+        line += ' value="' + trimmed.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
+      }
     }
 
     return line;
@@ -556,6 +647,14 @@
       for (const child of el.children) {
         walk(child, nextDepth, opts, lines);
       }
+      // Bilibili's current comment system is a hierarchy of open custom-
+      // element shadow roots. Traverse it here so the comment editor and
+      // Publish/Reply buttons receive the same stable ref_ids as light DOM.
+      if (window.__wbSiteInteractions.shouldPierceShadowRoots() && el.shadowRoot) {
+        for (const child of el.shadowRoot.children || []) {
+          walk(child, nextDepth, opts, lines);
+        }
+      }
     }
   }
 
@@ -570,7 +669,7 @@
       return !new Set(['submit', 'button', 'reset', 'file', 'checkbox', 'radio', 'image', 'hidden', 'color', 'range']).has(type);
     }
     if (role === 'textbox' || role === 'searchbox') return true;
-    if (el.getAttribute('contenteditable') === 'true') return true;
+    if (isEditableRoot(el)) return true;
     return false;
   }
 
@@ -620,7 +719,7 @@
     const selectors = [
       'textarea',
       'input',
-      '[contenteditable="true"]',
+      '[contenteditable]:not([contenteditable="false"])',
       '[role="textbox"]',
       '[role="searchbox"]',
       'button',

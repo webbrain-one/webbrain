@@ -46,7 +46,7 @@ function htmlToText(html) {
 // agent's generic result truncation. This keeps continuation metadata aligned
 // with the text the model actually received and gives large source files a
 // deterministic search/pagination path.
-const FETCH_TEXT_DEFAULT_LIMIT = 6000;
+const FETCH_TEXT_DEFAULT_LIMIT = 7000;
 const FETCH_TEXT_MIN_LIMIT = 1000;
 const FETCH_TEXT_MAX_LIMIT = 7000;
 const FETCH_RESULT_MAX_CHARS = 8000;
