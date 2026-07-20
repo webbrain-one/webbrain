@@ -7070,7 +7070,7 @@ test('getToolsForMode: mode/tier redesign exposes the intended normal and Dev to
   }
 });
 
-test('schedule_task tool schema advertises every supported run mode', () => {
+test('schedule_task tool schema advertises supported modes and fixed-interval semantics', () => {
   for (const [label, getTools] of [
     ['chrome', getToolsForModeCh],
     ['firefox', getToolsForModeFx],
@@ -7080,6 +7080,14 @@ test('schedule_task tool schema advertises every supported run mode', () => {
 
     assert.ok(modeSchema, `[${label}] schedule_task must expose a mode schema`);
     assert.deepEqual(modeSchema.enum, ['ask', 'act', 'dev'], `[${label}] schedule_task mode enum must match validator modes`);
+    assert.match(scheduleTask.function.description, /fixed-minute-interval/i, `[${label}] schedule_task should name fixed-interval recurrence`);
+    assert.match(scheduleTask.function.description, /Calendar\/cron recurrence.*not supported/i, `[${label}] schedule_task should disclose calendar limitation`);
+    assert.match(scheduleTask.function.description, /do not approximate/i, `[${label}] schedule_task should forbid calendar approximations`);
+    assert.match(
+      scheduleTask.function.parameters.properties.schedule.properties.interval_minutes.description,
+      /Never convert monthly recurrence/i,
+      `[${label}] recurring schema should forbid monthly interval conversion`,
+    );
   }
 });
 
@@ -14540,6 +14548,39 @@ test('scheduler computes recurring next run times', () => {
       `${label}: interval should advance from current time`
     );
     assert.equal(SchedulerMod.computeNextRunAt({ schedule: { interval_minutes: 0 } }, now), null);
+  }
+});
+
+test('ScheduledJobManager confirms recurring tasks as fixed intervals', async () => {
+  const now = Date.UTC(2026, 0, 1, 12, 0, 0);
+  for (const [label, SchedulerMod] of [['chrome', SchedulerCh], ['firefox', SchedulerFx]]) {
+    const h = makeSchedulerHarness(SchedulerMod, { now });
+    const created = await h.manager.createTaskJob({
+      tabId: 77,
+      conversationId: 'conv-1',
+      args: {
+        title: 'Five-minute monitor',
+        prompt: 'Check the page for changes.',
+        schedule: { type: 'recurring', after_seconds: 0, interval_minutes: 5 },
+        target: { type: 'current_tab' },
+      },
+    });
+
+    assert.equal(created.success, true, `${label}: recurring task should schedule`);
+    assert.equal(created.scheduled, true, `${label}: result should confirm scheduling`);
+    assert.deepEqual(
+      created.schedule,
+      {
+        type: 'recurring',
+        first_run_at: new Date(now).toISOString(),
+        recurrence: 'fixed_interval',
+        interval_minutes: 5,
+      },
+      `${label}: result should expose exact recurrence semantics`,
+    );
+    assert.match(created.summary, /Repeats every 5 minutes as a fixed interval/i, `${label}: summary should confirm exact interval`);
+    assert.match(created.summary, /not a calendar schedule/i, `${label}: summary should disclose calendar limitation`);
+    assert.doesNotMatch(created.summary, /monthly/i, `${label}: summary should not invent monthly semantics`);
   }
 });
 
@@ -28520,6 +28561,7 @@ function plannerIntentFixture({
   requiresStateChange = false,
   allowsPlannerShapedResult = false,
   allowsAppStateToolEvidence = false,
+  scheduling = null,
   locale = 'en',
   localizedSummary = 'Carry out the requested task.',
   localizedSteps = ['Inspect the current state.', 'Complete the requested task.'],
@@ -28546,7 +28588,7 @@ function plannerIntentFixture({
       use_progress_ledger: false,
       progress_action: null,
     },
-    scheduling: null,
+    scheduling,
     risks: [],
     localized: {
       locale,
@@ -29396,6 +29438,223 @@ test('execution evidence ignores failed, denied, skipped, blocked, and unknown o
   }
 });
 
+test('planned scheduling requires successful evidence from the matching scheduling tool', () => {
+  for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
+    const agent = new AgentClass({});
+    const missingTabId = 8570 + index;
+    const missingState = agent._startPlanExecutionGuard(missingTabId, 'act', {
+      requestKind: 'execute',
+      requiresStateChange: true,
+      requiredSchedulingTool: 'schedule_task',
+    });
+
+    agent._markPlanExecutionToolCall(missingTabId, 'read_page', { success: true });
+    agent._markPlanExecutionToolCall(missingTabId, 'navigate', { success: true }, { consequential: true });
+    agent._markPlanExecutionToolCall(
+      missingTabId,
+      'schedule_resume',
+      { success: true, scheduled: true, done: true },
+      { consequential: true },
+    );
+    agent._markPlanExecutionToolCall(
+      missingTabId,
+      'schedule_task',
+      { success: false, scheduled: false, error: 'invalid schedule' },
+      { consequential: true },
+    );
+
+    assert.equal(
+      agent._executionEvidenceSatisfied(missingState),
+      false,
+      `${AgentClass.name}: one-time or non-matching tools satisfied planned scheduling`,
+    );
+    const retry = agent._planOnlyTerminalDecision(
+      missingTabId,
+      'The monitor is ready.',
+      { viaDone: true, outcome: 'success' },
+    );
+    assert.equal(retry?.retry, true, `${AgentClass.name}: missing schedule did not trigger recovery`);
+    assert.match(retry?.nudge || '', /requires a successful schedule_task call/i, `${AgentClass.name}: recovery omitted required tool`);
+    assert.match(retry?.nudge || '', /one-time read, scroll, send/i, `${AgentClass.name}: recovery did not reject one-time work`);
+    const failure = agent._planOnlyTerminalDecision(
+      missingTabId,
+      'The monitor is ready.',
+      { viaDone: true, outcome: 'success' },
+    );
+    assert.equal(failure?.status, 'required_tool_missing', `${AgentClass.name}: repeated omission used the wrong status`);
+    assert.match(failure?.failure || '', /future work was not scheduled/i, `${AgentClass.name}: failure overstated scheduling`);
+
+    const taskTabId = 8572 + index;
+    const taskState = agent._startPlanExecutionGuard(taskTabId, 'act', {
+      requestKind: 'execute',
+      requiresStateChange: true,
+      requiredSchedulingTool: 'schedule_task',
+    });
+    agent._markPlanExecutionToolCall(
+      taskTabId,
+      'schedule_task',
+      { success: true, scheduled: true, jobId: 'task_1' },
+      { consequential: true },
+    );
+    assert.equal(agent._executionEvidenceSatisfied(taskState), true, `${AgentClass.name}: successful schedule_task did not satisfy guard`);
+    assert.equal(
+      agent._planOnlyTerminalDecision(taskTabId, 'Five-minute monitor scheduled.', { viaDone: true, outcome: 'success' }),
+      null,
+      `${AgentClass.name}: verified schedule_task could not finish successfully`,
+    );
+
+    const resumeTabId = 8574 + index;
+    const resumeState = agent._startPlanExecutionGuard(resumeTabId, 'act', {
+      requestKind: 'execute',
+      requiresStateChange: true,
+      requiredSchedulingTool: 'schedule_resume',
+    });
+    agent._markPlanExecutionToolCall(
+      resumeTabId,
+      'schedule_resume',
+      { success: true, scheduled: true, done: true, jobId: 'resume_1' },
+      { consequential: true },
+    );
+    assert.equal(
+      agent._executionEvidenceSatisfied(resumeState),
+      true,
+      `${AgentClass.name}: terminal schedule_resume result was not counted`,
+    );
+
+    const blockedTabId = 8576 + index;
+    agent._startPlanExecutionGuard(blockedTabId, 'act', {
+      requestKind: 'execute',
+      requiresStateChange: true,
+      requiredSchedulingTool: 'schedule_task',
+    });
+    assert.equal(
+      agent._planOnlyTerminalDecision(
+        blockedTabId,
+        'Calendar-month recurrence is unsupported.',
+        { viaDone: true, outcome: 'partial' },
+      ),
+      null,
+      `${AgentClass.name}: honest partial outcome was forced to claim scheduling`,
+    );
+  }
+});
+
+test('explicit five-minute monitors cannot finish before schedule_task succeeds', async () => {
+  for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
+    const responses = [
+      {
+        content: null,
+        toolCalls: [
+          {
+            id: `monitor_read_${index}`,
+            function: { name: 'read_page', arguments: '{}' },
+          },
+          {
+            id: `monitor_premature_done_${index}`,
+            function: {
+              name: 'done',
+              arguments: JSON.stringify({ summary: 'The monitor is configured.', outcome: 'success' }),
+            },
+          },
+        ],
+      },
+      {
+        content: null,
+        toolCalls: [{
+          id: `monitor_schedule_${index}`,
+          function: {
+            name: 'schedule_task',
+            arguments: JSON.stringify({
+              title: 'Five-minute monitor',
+              prompt: 'Check this page for changes.',
+              schedule: { type: 'recurring', after_seconds: 0, interval_minutes: 5 },
+              target: { type: 'url', url: 'https://example.com/status' },
+              mode: 'act',
+            }),
+          },
+        }],
+      },
+      {
+        content: null,
+        toolCalls: [{
+          id: `monitor_done_${index}`,
+          function: {
+            name: 'done',
+            arguments: JSON.stringify({ summary: 'Five-minute monitor scheduled.', outcome: 'success' }),
+          },
+        }],
+      },
+    ];
+    const provider = {
+      supportsTools: true,
+      supportsVision: false,
+      promptTier: 'full',
+      contextWindow: 128000,
+      model: 'test-model',
+      name: 'test-provider',
+      chat: async () => {
+        const next = responses.shift();
+        assert.ok(next, `${AgentClass.name}: monitor flow requested an unexpected model turn`);
+        return next;
+      },
+    };
+    const agent = new AgentClass({ getActive: () => provider, getVisionProvider: async () => null });
+    const tabId = 8580 + index;
+    configurePlanOnlyGuardAgent(agent, tabId);
+    agent.maxSteps = 5;
+    agent._maybeRunPlannerGate = async () => ({
+      proceed: true,
+      requestKind: 'execute',
+      requiresStateChange: true,
+      requiredSchedulingTool: 'schedule_task',
+    });
+    const toolCalls = [];
+    agent.executeTool = async (_toolTabId, name, args) => {
+      toolCalls.push(name);
+      if (name === 'read_page') return { success: true, text: 'Current status' };
+      if (name === 'schedule_task') {
+        assert.equal(args.schedule.interval_minutes, 5, `${AgentClass.name}: wrong monitor interval`);
+        return {
+          success: true,
+          scheduled: true,
+          jobId: `monitor_job_${index}`,
+          scheduledAt: '2026-01-01T12:00:00.000Z',
+          schedule: {
+            type: 'recurring',
+            first_run_at: '2026-01-01T12:00:00.000Z',
+            recurrence: 'fixed_interval',
+            interval_minutes: 5,
+          },
+        };
+      }
+      if (name === 'done') return { done: true, summary: args.summary, outcome: args.outcome };
+      throw new Error(`unexpected tool ${name}`);
+    };
+
+    const final = await agent.processMessage(
+      tabId,
+      'Monitor this page every five minutes starting now.',
+      () => {},
+      'act',
+    );
+
+    assert.equal(final, 'Five-minute monitor scheduled.', `${AgentClass.name}: monitor did not finish after scheduling`);
+    assert.deepEqual(
+      toolCalls,
+      ['read_page', 'done', 'schedule_task', 'done'],
+      `${AgentClass.name}: premature completion did not recover through schedule_task`,
+    );
+    assert.equal(responses.length, 0, `${AgentClass.name}: monitor flow left unused responses`);
+    assert.ok(
+      agent.conversations.get(tabId).some(message => (
+        message.role === 'tool'
+        && /requires a successful schedule_task call/i.test(String(message.content || ''))
+      )),
+      `${AgentClass.name}: premature done did not receive scheduling recovery evidence`,
+    );
+  }
+});
+
 test('Act accepts a verified navigation as execution for a state-change plan', async () => {
   for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
     const responses = [
@@ -29727,6 +29986,139 @@ test('planner intent carries explicit app-state evidence authorization', async (
         true,
         `${AgentClass.name}: execution guard dropped app-state authorization`,
       );
+    }
+  });
+});
+
+test('planner scheduling metadata reaches the execution guard with planning on or off', async () => {
+  await withPlannerBrowserGlobals(async () => {
+    for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
+      const intentTabId = 8590 + index;
+      const intentAgent = new AgentClass({ getActive: () => ({ name: 'intent-test', model: 'intent-test' }) });
+      intentAgent.setPlanBeforeActMode('off');
+      intentAgent._chatWithCostAllowance = async () => ({
+        content: plannerIntentFixture({
+          requestKind: 'execute',
+          requiresStateChange: false,
+          scheduling: { tool: 'schedule_task', hint: 'Run a five-minute monitor.' },
+          localizedSummary: 'Run a five-minute monitor.',
+        }),
+      });
+      const intentGate = await intentAgent._runPlannerIntentGate(
+        intentTabId,
+        { role: 'user', content: 'Monitor this page every five minutes.' },
+        () => {},
+        null,
+        null,
+        '',
+        { tabUrl: 'https://example.com/status', tabTitle: 'Status' },
+        'act',
+        { locale: 'en' },
+      );
+      assert.equal(intentGate.requiredSchedulingTool, 'schedule_task', `${AgentClass.name}: intent gate dropped schedule_task`);
+      assert.equal(intentGate.requiresStateChange, true, `${AgentClass.name}: scheduling did not force state-change evidence`);
+      intentAgent._runPlannerIntentGate = async () => intentGate;
+      const intentOutcome = await intentAgent._maybeRunPlannerGate(
+        intentTabId,
+        [],
+        { role: 'user', content: 'Monitor this page every five minutes.' },
+        () => {},
+        'act',
+        null,
+        null,
+        { tabUrl: 'https://example.com/status', tabTitle: 'Status' },
+        { locale: 'en' },
+      );
+      assert.equal(intentOutcome.requiredSchedulingTool, 'schedule_task', `${AgentClass.name}: planner-off routing dropped schedule_task`);
+      assert.equal(
+        intentAgent._startPlanExecutionGuard(intentTabId, 'act', intentOutcome).requiredSchedulingTool,
+        'schedule_task',
+        `${AgentClass.name}: planner-off guard dropped schedule_task`,
+      );
+
+      const fullTabId = 8592 + index;
+      const fullAgent = new AgentClass({ getActive: () => ({ name: 'planner-test', model: 'planner-test' }) });
+      fullAgent.setPlanBeforeActMode('try');
+      fullAgent._chatWithCostAllowance = async () => ({
+        content: plannerFixtureJson({
+          scheduling: { tool: 'schedule_task', hint: 'Run a five-minute monitor.' },
+        }),
+      });
+      const fullGate = await fullAgent._runPlannerGate(
+        fullTabId,
+        { role: 'user', content: 'Monitor this page every five minutes.' },
+        () => {},
+        null,
+        null,
+        '',
+        { tabUrl: 'https://example.com/status', tabTitle: 'Status' },
+        'try',
+        'act',
+        { locale: 'en' },
+      );
+      assert.equal(fullGate.requiredSchedulingTool, 'schedule_task', `${AgentClass.name}: full planner dropped schedule_task`);
+      assert.equal(fullGate.requiresStateChange, true, `${AgentClass.name}: full planner scheduling did not require state change`);
+      fullAgent._runPlannerGate = async () => fullGate;
+      const fullOutcome = await fullAgent._maybeRunPlannerGate(
+        fullTabId,
+        [],
+        { role: 'user', content: 'Monitor this page every five minutes.' },
+        () => {},
+        'act',
+        null,
+        null,
+        { tabUrl: 'https://example.com/status', tabTitle: 'Status' },
+        { locale: 'en' },
+      );
+      assert.equal(fullOutcome.requiredSchedulingTool, 'schedule_task', `${AgentClass.name}: planner-on routing dropped schedule_task`);
+      assert.equal(
+        fullAgent._startPlanExecutionGuard(fullTabId, 'act', fullOutcome).requiredSchedulingTool,
+        'schedule_task',
+        `${AgentClass.name}: planner-on guard dropped schedule_task`,
+      );
+    }
+  });
+});
+
+test('planner intent stops underspecified and calendar schedules for clarification', async () => {
+  await withPlannerBrowserGlobals(async () => {
+    const cases = [
+      {
+        task: 'Run this automatically later.',
+        summary: 'When should this run, and should it repeat?',
+      },
+      {
+        task: 'Run this monitor monthly.',
+        summary: 'Calendar-month recurrence is unsupported; choose a one-shot time or fixed-minute interval.',
+      },
+    ];
+    for (const [agentIndex, AgentClass] of [AgentCh, AgentFx].entries()) {
+      for (const [caseIndex, fixture] of cases.entries()) {
+        const agent = new AgentClass({ getActive: () => ({ name: 'intent-test', model: 'intent-test' }) });
+        agent._chatWithCostAllowance = async () => ({
+          content: plannerIntentFixture({
+            requestKind: 'clarify',
+            localizedSummary: fixture.summary,
+            localizedSteps: [],
+          }),
+        });
+        const gate = await agent._runPlannerIntentGate(
+          8594 + (agentIndex * 10) + caseIndex,
+          { role: 'user', content: fixture.task },
+          () => {},
+          null,
+          null,
+          '',
+          { tabUrl: 'https://example.com/status', tabTitle: 'Status' },
+          'act',
+          { locale: 'en' },
+        );
+
+        assert.equal(gate.proceed, false, `${AgentClass.name}: ambiguous schedule should stop before tools`);
+        assert.equal(gate.reason, 'clarify', `${AgentClass.name}: ambiguous schedule should clarify`);
+        assert.equal(gate.message, fixture.summary, `${AgentClass.name}: clarification should preserve planner message`);
+        assert.equal(gate.requiredSchedulingTool, undefined, `${AgentClass.name}: clarification should not arm scheduling guard`);
+      }
     }
   });
 });
@@ -34210,6 +34602,7 @@ test('planner: parse and format structured plan', () => {
   assert.equal(plan.confidence, 0.92);
   assert.equal(plan.memory.use_progress_ledger, true);
   assert.equal(plan.scheduling.tool, 'schedule_task');
+  assert.equal(plan.requires_state_change, true, 'planned scheduling should always require a state change');
   assert.deepEqual(plan.skill_ids, ['freeskillz-xyz', 'otp-verification-code-helper']);
   const md = formatPlanMarkdown(plan);
   assert.match(md, /Follow GitHub stargazers/, 'compact plan should keep the summary');
@@ -34224,6 +34617,22 @@ test('planner: parse and format structured plan', () => {
   assert.match(verboseMd, /Skills to activate[\s\S]*freeskillz-xyz/);
   const scratch = formatPlanScratchpad(plan);
   assert.match(scratch, /\[Approved plan/);
+
+  const planOnly = parsePlanFromContent(JSON.stringify({
+    request_kind: 'plan_only',
+    requires_state_change: true,
+    summary: 'Describe a monitor plan',
+    steps: [{ id: '1', action: 'Describe the cadence.' }],
+    scheduling: { tool: 'schedule_task', hint: 'Planning only.' },
+    localized: {
+      locale: 'en',
+      summary: 'Describe a monitor plan',
+      steps: [{ id: '1', action: 'Describe the cadence.' }],
+      risks: [],
+    },
+  }), { requireIntent: true, locale: 'en' });
+  assert.equal(planOnly.requires_state_change, false, 'plan-only scheduling metadata must not authorize state change');
+  assert.equal(planOnly.scheduling, null, 'plan-only scheduling metadata must not arm the execution guard');
 });
 
 test('planner: parse JSON inside markdown fence', () => {
@@ -34246,6 +34655,16 @@ test('planner: prompt treats page context as untrusted data', () => {
   assert.match(PLANNER_SYSTEM_PROMPT, /attached JSON\/TXT\/CSV text file content/);
   assert.match(PLANNER_SYSTEM_PROMPT, /brief neutral scratchpad_notes/);
   assert.match(PLANNER_SYSTEM_PROMPT, /Do not plan to copy the full file/);
+  assert.match(PLANNER_SYSTEM_PROMPT, /lacks usable timing or cadence.*clarify/i);
+  assert.match(PLANNER_SYSTEM_PROMPT, /precise fixed interval.*every five minutes.*start now/i);
+  assert.match(PLANNER_SYSTEM_PROMPT, /Calendar\/cron recurrence.*not supported/i);
+  assert.match(PLANNER_SYSTEM_PROMPT, /Never approximate calendar recurrence/i);
+  assert.match(PLANNER_INTENT_SYSTEM_PROMPT, /"scheduling": null/);
+  assert.match(PLANNER_INTENT_SYSTEM_PROMPT, /lacks usable timing or cadence.*clarify/i);
+  assert.match(PLANNER_INTENT_SYSTEM_PROMPT, /Calendar\/cron recurrence.*unsupported/i);
+  assert.match(PLANNER_INTENT_SYSTEM_PROMPT, /Never convert calendar recurrence/i);
+  assert.match(PLANNER_SYSTEM_PROMPT_FX, /lacks usable timing or cadence.*clarify/i);
+  assert.match(PLANNER_INTENT_SYSTEM_PROMPT_FX, /Calendar\/cron recurrence.*unsupported/i);
   assert.match(PLANNER_SYSTEM_PROMPT, /"confidence": 0\.0/);
   assert.match(PLANNER_SYSTEM_PROMPT, /Set confidence from 0\.0 to 1\.0/);
   assert.doesNotMatch(PLANNER_SYSTEM_PROMPT, /read:[^\n]*\bscreenshot\b/);
@@ -34533,6 +34952,63 @@ test('planner clears skill activation when verbose approval text is edited', asy
       );
       assert.equal(outcome.proceed, true, `${label}: edited plan should still proceed`);
       assert.equal(changed.agent.activeSkillIds.has(label === 'chrome' ? 9195 : 9196), false, `${label}: removed verbose skill must not activate`);
+    }
+  });
+});
+
+test('reviewed plan edits preserve only explicitly approved scheduling metadata', async () => {
+  await withPlannerBrowserGlobals(async () => {
+    for (const [label, AgentClass] of [['chrome', AgentCh], ['firefox', AgentFx]]) {
+      const runReviewedPlan = async (tabId, markdownMode, editPlan) => {
+        const provider = {
+          promptTier: 'full',
+          model: 'planner-schedule-edit-test',
+          name: 'planner-schedule-edit-test',
+        };
+        const agent = new AgentClass({ getActive: () => provider, getVisionProvider: async () => null });
+        agent.setPlanReviewSettings({ mode: 'always' });
+        agent._chatWithCostAllowance = async () => ({
+          content: plannerFixtureJson({
+            scheduling: { tool: 'schedule_task', hint: 'Run every five minutes.' },
+          }),
+        });
+        agent._waitForPlanReview = async (_tabId, _planId, _plan, compactMarkdown, _onUpdate, verboseMarkdown) => ({
+          action: 'approve',
+          editedText: editPlan(markdownMode === 'verbose' ? verboseMarkdown : compactMarkdown),
+          markdownMode,
+        });
+        return agent._runPlannerGate(
+          tabId,
+          { role: 'user', content: 'Monitor this page every five minutes.' },
+          () => {},
+          null,
+          null,
+          '',
+          { tabUrl: 'https://example.com/status', tabTitle: 'Status' },
+          'try',
+          'act',
+          { locale: 'en' },
+        );
+      };
+
+      const compact = await runReviewedPlan(label === 'chrome' ? 9210 : 9211, 'compact', () => 'Custom approved monitor plan.');
+      assert.equal(compact.requiredSchedulingTool, 'schedule_task', `${label}: compact edit lost hidden scheduling metadata`);
+      assert.match(compact.approvedScratchpadText, /-\s*schedule_task:/, `${label}: compact edit did not pin scheduling metadata`);
+
+      const removed = await runReviewedPlan(
+        label === 'chrome' ? 9212 : 9213,
+        'verbose',
+        text => text.replace(/(?:^|\n)\s*-\s*schedule_task:.*(?=\n|$)/, ''),
+      );
+      assert.equal(removed.requiredSchedulingTool, null, `${label}: removed verbose schedule stayed authorized`);
+      assert.doesNotMatch(removed.approvedScratchpadText, /-\s*schedule_task:/, `${label}: removed verbose schedule was re-pinned`);
+
+      const changed = await runReviewedPlan(
+        label === 'chrome' ? 9214 : 9215,
+        'verbose',
+        text => text.replace(/-\s*schedule_task:/, '- schedule_resume:'),
+      );
+      assert.equal(changed.requiredSchedulingTool, 'schedule_resume', `${label}: edited schedule tool was not honored`);
     }
   });
 });

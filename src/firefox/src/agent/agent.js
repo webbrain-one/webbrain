@@ -4369,6 +4369,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       requiresStateChange: gate.requiresStateChange === true,
       allowsPlannerShapedResult: gate.allowsPlannerShapedResult === true,
       allowsAppStateToolEvidence: gate.allowsAppStateToolEvidence === true,
+      requiredSchedulingTool: gate.requiredSchedulingTool || null,
     };
   }
 
@@ -4508,6 +4509,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         requiresStateChange: plan.requires_state_change === true,
         allowsPlannerShapedResult: plan.allows_planner_shaped_result === true,
         allowsAppStateToolEvidence: plan.allows_app_state_tool_evidence === true,
+        requiredSchedulingTool: plan.scheduling?.tool || null,
       };
     } catch (e) {
       if (this._isCostAllowanceError(e)) {
@@ -4633,6 +4635,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           requiresStateChange: plan.requires_state_change === true,
           allowsPlannerShapedResult: plan.allows_planner_shaped_result === true,
           allowsAppStateToolEvidence: plan.allows_app_state_tool_evidence === true,
+          requiredSchedulingTool: plan.scheduling?.tool || null,
         };
       }
       const choice = await this._waitForPlanReview(tabId, planId, plan, markdown, onUpdate, verboseMarkdown);
@@ -4655,6 +4658,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       // approved text, fail closed instead of activating IDs from the stale
       // planner object that the edited plan may no longer authorize.
       const approvedSkillIds = verbosePlanEdited ? [] : plan.skill_ids;
+      const approvedSchedulingTool = verbosePlanEdited
+        ? this._schedulingToolFromApprovedPlanText(approvedText)
+        : (plan.scheduling?.tool || null);
       const approvedScratchpadText = formatPlanScratchpad(plan, approvedText, canonicalVerboseMarkdown);
       return {
         proceed: true,
@@ -4665,6 +4671,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         requiresStateChange: plan.requires_state_change === true,
         allowsPlannerShapedResult: plan.allows_planner_shaped_result === true,
         allowsAppStateToolEvidence: plan.allows_app_state_tool_evidence === true,
+        requiredSchedulingTool: approvedSchedulingTool,
       };
     } catch (e) {
       if (this._isCostAllowanceError(e)) {
@@ -7622,6 +7629,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     return /\[Approved plan\b[^\]]*(?:pinned by (?:planner|recommended action)|edited localized text pinned by planner)[^\]]*\]/i.test(body);
   }
 
+  _schedulingToolFromApprovedPlanText(text) {
+    const tools = new Set();
+    const pattern = /(?:^|\n)\s*-\s*(schedule_task|schedule_resume)\s*:/g;
+    let match;
+    while ((match = pattern.exec(String(text || ''))) !== null) tools.add(match[1]);
+    return tools.size === 1 ? [...tools][0] : null;
+  }
+
   _startPlanExecutionGuard(tabId, mode, gateOutcome = {}, runOptions = {}) {
     const requestKind = gateOutcome?.requestKind || (this._isActionMode(mode) ? 'execute' : null);
     const enabled = this._isActionMode(mode)
@@ -7629,6 +7644,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       && requestKind === 'execute';
     const requiresStateChange = gateOutcome?.requiresStateChange === true;
     const allowsAppStateToolEvidence = gateOutcome?.allowsAppStateToolEvidence === true;
+    const requiredSchedulingTool = gateOutcome?.requiredSchedulingTool === 'schedule_task'
+      || gateOutcome?.requiredSchedulingTool === 'schedule_resume'
+      ? gateOutcome.requiredSchedulingTool
+      : null;
     const carried = runOptions?.trustedContinuation === true
       ? this._continuationExecutionEvidence.get(tabId)
       : null;
@@ -7637,6 +7656,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       && carried?.requestKind === 'execute'
       && carried.requiresStateChange === requiresStateChange
       && carried.allowsAppStateToolEvidence === allowsAppStateToolEvidence
+      && carried.requiredSchedulingTool === requiredSchedulingTool
       && carried.conversationId === (this.conversationIds.get(tabId) || null);
     const state = {
       enabled,
@@ -7644,11 +7664,15 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       requiresStateChange,
       allowsPlannerShapedResult: gateOutcome?.allowsPlannerShapedResult === true,
       allowsAppStateToolEvidence,
+      requiredSchedulingTool,
       approvedPlan: this._hasApprovedExecutionPlan(this.conversations.get(tabId) || []),
       // Only the app-owned Continue action can carry verified evidence from
       // the immediately preceding run; ordinary user turns always start at 0.
       successfulTaskToolCalls: carryMatches ? carried.successfulTaskToolCalls : 0,
       successfulConsequentialToolCalls: carryMatches ? carried.successfulConsequentialToolCalls : 0,
+      successfulRequiredSchedulingToolCalls: carryMatches
+        ? (carried.successfulRequiredSchedulingToolCalls || 0)
+        : 0,
       recoveryAttempted: false,
     };
     this._planExecutionGuards.set(tabId, state);
@@ -7673,6 +7697,23 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     return true;
   }
 
+  _isSuccessfulSchedulingEvidence(result) {
+    return !!result
+      && typeof result === 'object'
+      && result.success === true
+      && result.scheduled === true
+      && !result.error
+      && !result.denied
+      && !result.cancelled
+      && !result.skipped
+      && !result.failed
+      && !result.blocked
+      && !result.blockedDone
+      && !result.invalidToolArguments
+      && !result.missingToolResponse
+      && !result.outcomeUnknown;
+  }
+
   _isExecutionMutationEvidence(name, args = {}, capabilities = []) {
     const mutationCapabilities = new Set([
       Capability.NAVIGATE,
@@ -7692,12 +7733,16 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const state = this._planExecutionGuards.get(tabId);
     const requestedAppStateTool = state?.allowsAppStateToolEvidence === true
       && this.constructor.EXECUTION_APP_STATE_TOOLS.has(name);
+    const requiredScheduleSucceeded = state?.requiredSchedulingTool === name
+      && this._isSuccessfulSchedulingEvidence(result);
     if (!state?.enabled
         || name === 'done'
         || (this.constructor.EXECUTION_META_TOOLS.has(name) && !requestedAppStateTool)
-        || !this._isSuccessfulExecutionEvidence(result)) return;
+        || (!this._isSuccessfulExecutionEvidence(result) && !requiredScheduleSucceeded)) return;
     state.successfulTaskToolCalls += 1;
+    if (requiredScheduleSucceeded) state.successfulRequiredSchedulingToolCalls += 1;
     if (consequential
+        || requiredScheduleSucceeded
         || (requestedAppStateTool && this.constructor.EXECUTION_APP_STATE_WRITE_TOOLS.has(name))) {
       state.successfulConsequentialToolCalls += 1;
     }
@@ -7705,9 +7750,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
   _executionEvidenceSatisfied(state) {
     if (!state) return false;
-    return state.requiresStateChange
+    const taskEvidenceSatisfied = state.requiresStateChange
       ? state.successfulConsequentialToolCalls > 0
       : state.successfulTaskToolCalls > 0;
+    const schedulingEvidenceSatisfied = !state.requiredSchedulingTool
+      || state.successfulRequiredSchedulingToolCalls > 0;
+    return taskEvidenceSatisfied && schedulingEvidenceSatisfied;
   }
 
   _storeContinuationExecutionEvidence(tabId) {
@@ -7717,8 +7765,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         requestKind: guard.requestKind,
         requiresStateChange: guard.requiresStateChange,
         allowsAppStateToolEvidence: guard.allowsAppStateToolEvidence,
+        requiredSchedulingTool: guard.requiredSchedulingTool,
         successfulTaskToolCalls: guard.successfulTaskToolCalls,
         successfulConsequentialToolCalls: guard.successfulConsequentialToolCalls,
+        successfulRequiredSchedulingToolCalls: guard.successfulRequiredSchedulingToolCalls,
         conversationId: this.conversationIds.get(tabId) || null,
       });
     } else {
@@ -7764,9 +7814,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const continuePromise = /\b(?:next,?\s+i(?:'ll| will)|i plan to|i intend to)\b/i.test(text);
     const firstPersonFuture = /\bi(?:'ll| will| am going to)\b/i.test(text);
     const planHeading = /(?:^|\n)\s*(?:#{1,6}\s*)?(?:execution plan|action plan|proposed plan|plan|steps|workflow)\s*[:\n]/i.test(text);
-    const hasTaskEvidence = state.requiresStateChange
-      ? (state.successfulConsequentialToolCalls || 0) > 0
-      : (state.successfulTaskToolCalls || 0) > 0;
+    const hasTaskEvidence = this._executionEvidenceSatisfied(state);
     if (planHeading && state.allowsPlannerShapedResult !== true) return true;
     if (!ignoreFuturePromise) {
       if (continuePromise) return true;
@@ -7788,6 +7836,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       state,
       { ignoreFuturePromise: terminalFailure },
     );
+    const missingRequiredSchedulingTool = !terminalFailure
+      && !!state.requiredSchedulingTool
+      && state.successfulRequiredSchedulingToolCalls === 0;
     const missingEvidence = !terminalFailure && !this._executionEvidenceSatisfied(state);
     // Every plain Act/Dev terminal gets one protocol recovery regardless of
     // its language. Successful completion and real blockers must both use
@@ -7799,7 +7850,15 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       state.recoveryAttempted = true;
       return {
         retry: true,
-        nudge: '[PLAN EXECUTION BLOCK: This is an execute task, so plain text cannot end it. If work remains, use permitted task tools. If complete, call done with outcome success. If blocked, unsafe, cancelled, or user input is required, call done with outcome failed or partial; do not take unsafe action. Read-only work needs a successful task tool and state-changing work needs a successful consequential tool. Do not return another plan, promise, or plain terminal.]',
+        nudge: missingRequiredSchedulingTool
+          ? `[PLAN EXECUTION BLOCK: The approved plan requires a successful ${state.requiredSchedulingTool} call before this task can finish successfully. A one-time read, scroll, send, or other action does not create the scheduled work. Call ${state.requiredSchedulingTool} with the user's requested timing and verify success:true plus scheduled:true. If the schedule is unsupported or still lacks required timing, call done with outcome partial or failed and explain the exact limitation; do not claim it was scheduled.]`
+          : '[PLAN EXECUTION BLOCK: This is an execute task, so plain text cannot end it. If work remains, use permitted task tools. If complete, call done with outcome success. If blocked, unsafe, cancelled, or user input is required, call done with outcome failed or partial; do not take unsafe action. Read-only work needs a successful task tool and state-changing work needs a successful consequential tool. Do not return another plan, promise, or plain terminal.]',
+      };
+    }
+    if (missingRequiredSchedulingTool) {
+      return {
+        failure: `[Agent stopped because the approved plan required ${state.requiredSchedulingTool}, but no successful matching scheduling call was verified after one recovery nudge. The task may have performed one-time actions, but the requested future work was not scheduled.]`,
+        status: 'required_tool_missing',
       };
     }
     const hasSuccessfulToolEvidence = state.successfulTaskToolCalls > 0;
