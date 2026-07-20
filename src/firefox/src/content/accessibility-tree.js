@@ -114,6 +114,19 @@
     label: 'label',
   };
 
+  function isEditableRoot(el) {
+    if (!el || !el.getAttribute) return false;
+    const attr = el.getAttribute('contenteditable');
+    if (attr !== null) {
+      const normalized = String(attr).trim().toLowerCase();
+      if (normalized === '' || normalized === 'true' || normalized === 'plaintext-only') return true;
+      if (normalized === 'false') return false;
+    }
+    // isContentEditable includes inherited editability. Only surface the
+    // outer editing host so every nested span is not emitted as a textbox.
+    return el.isContentEditable === true && el.parentElement?.isContentEditable !== true;
+  }
+
   // Some high-traffic media sites render their primary actions as plain
   // div/span wrappers with delegated Vue event handlers. They are genuinely
   // clickable, but expose none of the native/ARIA signals used below. Keep
@@ -184,6 +197,7 @@
     if (getSiteInteractionDescriptor(el)) return 'button';
     const explicit = el.getAttribute('role');
     if (explicit) return explicit;
+    if (isEditableRoot(el)) return 'textbox';
     const tag = el.tagName.toLowerCase();
     if (tag === 'input') {
       const t = el.getAttribute('type');
@@ -197,7 +211,7 @@
 
   const NESTED_ACTION_SELECTOR = [
     'a', 'button', 'input', 'select', 'textarea', 'details', 'summary',
-    '[onclick]', '[tabindex]', '[contenteditable="true"]',
+    '[onclick]', '[tabindex]', '[contenteditable]:not([contenteditable="false"])',
     '[role="button"]', '[role="link"]', '[role="textbox"]',
     '[role="searchbox"]', '[role="combobox"]', '[role="option"]',
     '[role="menuitem"]', '[role="tab"]', '[role="checkbox"]', '[role="radio"]',
@@ -230,7 +244,7 @@
 
   function getFocusableGenericDescendantName(el) {
     if (getRole(el) !== 'generic' || !el.hasAttribute('tabindex')) return '';
-    if (el.getAttribute('contenteditable') === 'true') return '';
+    if (isEditableRoot(el)) return '';
     try {
       if (!isVisible(el) || el.querySelector(NESTED_ACTION_SELECTOR)) return '';
       // Inspect each descendant instead of using innerText: browsers include
@@ -437,7 +451,7 @@
     if (el.getAttribute('tabindex') !== null) return true;
     const role = el.getAttribute('role');
     if (role === 'button' || role === 'link') return true;
-    if (el.getAttribute('contenteditable') === 'true') return true;
+    if (isEditableRoot(el)) return true;
     return false;
   }
 
@@ -576,6 +590,12 @@
           line += ' value="' + trimmed.replace(/"/g, '\\"') + '"';
         }
       }
+    } else if (isEditableRoot(el)) {
+      const v = String(el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
+      if (v && v !== name) {
+        const trimmed = v.length > 60 ? v.substring(0, 60) + '...' : v;
+        line += ' value="' + trimmed.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
+      }
     }
 
     return line;
@@ -649,7 +669,7 @@
       return !new Set(['submit', 'button', 'reset', 'file', 'checkbox', 'radio', 'image', 'hidden', 'color', 'range']).has(type);
     }
     if (role === 'textbox' || role === 'searchbox') return true;
-    if (el.getAttribute('contenteditable') === 'true') return true;
+    if (isEditableRoot(el)) return true;
     return false;
   }
 
@@ -699,7 +719,7 @@
     const selectors = [
       'textarea',
       'input',
-      '[contenteditable="true"]',
+      '[contenteditable]:not([contenteditable="false"])',
       '[role="textbox"]',
       '[role="searchbox"]',
       'button',
