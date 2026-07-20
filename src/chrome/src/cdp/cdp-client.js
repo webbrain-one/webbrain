@@ -452,14 +452,22 @@ export class CDPClient {
     if (expectedFrameId || expectedTargetUrl) {
       const frameUrls = await this._webMCPFrameUrls(tabId);
       const actualTargetUrl = frameUrls.get(tool.frameId) || '';
-      const expectedHost = this._webMCPPermissionHost(expectedTargetUrl);
-      const actualHost = this._webMCPPermissionHost(actualTargetUrl);
+      const originFor = value => {
+        try {
+          const url = new URL(String(value || ''));
+          return url.protocol === 'http:' || url.protocol === 'https:' ? url.origin : '';
+        } catch {
+          return '';
+        }
+      };
+      const expectedOrigin = originFor(expectedTargetUrl);
+      const actualOrigin = originFor(actualTargetUrl);
       if (
         !expectedFrameId
         || tool.frameId !== expectedFrameId
-        || !expectedHost
-        || !actualHost
-        || actualHost !== expectedHost
+        || !expectedOrigin
+        || !actualOrigin
+        || actualOrigin !== expectedOrigin
       ) {
         return {
           success: false,
@@ -500,9 +508,9 @@ export class CDPClient {
     } catch (error) {
       return {
         success: false,
-        dispatched: false,
-        noDispatch: true,
-        error: `WebMCP invocation could not be dispatched: ${error?.message || error}`,
+        dispatched: true,
+        outcomeUnknown: true,
+        error: `WebMCP invocation dispatch status is unknown: ${error?.message || error}`,
       };
     }
     const invocationId = String(invocation?.invocationId || '');
