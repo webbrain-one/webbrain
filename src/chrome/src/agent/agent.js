@@ -6147,12 +6147,17 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         || role === 'button'
         || hasActivationHandler;
       if (!isSubmit) return null;
-      return this._fallbackSubmitConfirmationInfo(
-        host,
-        'click',
-        'selector resolves to a submit control in shadow DOM',
-        'The selector resolves to a submit button/control that the page probe cannot inspect directly.'
-      );
+      const nativeSubmit = (tag === 'input' && (type === 'submit' || type === 'image'))
+        || (tag === 'button' && type === 'submit');
+      return {
+        ...this._fallbackSubmitConfirmationInfo(
+          host,
+          'click',
+          'selector resolves to a submit control in shadow DOM',
+          'The selector resolves to a submit button/control that the page probe cannot inspect directly.'
+        ),
+        validationSubmitEvidence: nativeSubmit ? 'strong' : 'heuristic',
+      };
     } catch {
       return null;
     }

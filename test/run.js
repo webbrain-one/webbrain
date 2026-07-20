@@ -23019,6 +23019,12 @@ test('form validation classifier surfaces native and custom submission errors', 
       { isSubmit: true, validationSubmitEvidence: 'strong' },
     ), true, `${AgentClass.name}: strong custom-submit preflight was discarded for type=button`);
     assert.equal(agent._formValidationActionLooksSubmit(
+      'click',
+      { selector: '#save' },
+      { success: true },
+      { isSubmit: true, validationSubmitEvidence: 'strong' },
+    ), true, `${AgentClass.name}: strong CDP-only submit evidence was discarded without result metadata`);
+    assert.equal(agent._formValidationActionLooksSubmit(
       'click_ax',
       { ref_id: 'ref_choose_application' },
       { success: true, tag: 'button', name: 'Choose application' },
@@ -25362,6 +25368,7 @@ test('chrome submit detector fail-closes CDP-only submit selector targets', () =
   assert.match(agent, /selector resolves to a submit control in shadow DOM/, 'chrome: CDP selector fallback should force submit confirmation for CDP-only submit controls');
   assert.match(agent, /_detectCdpSubmitSelector[\s\S]*type === 'image' \|\| type === 'button'[\s\S]*!type \|\| type === 'submit' \|\| type === 'button'/, 'chrome: CDP selector fallback should fail closed for JS-driven type=button form controls');
   assert.match(agent, /_detectCdpSubmitSelector[\s\S]*const role = String\(attrs\.role \|\| ''\)\.toLowerCase\(\);[\s\S]*Object\.prototype\.hasOwnProperty\.call\(attrs, 'onclick'\)[\s\S]*role === 'button'[\s\S]*hasActivationHandler/, 'chrome: CDP selector fallback should fail closed for non-native JS-driven controls');
+  assert.match(agent, /const nativeSubmit = \(tag === 'input'[\s\S]*validationSubmitEvidence: nativeSubmit \? 'strong' : 'heuristic'/, 'chrome: CDP selector fallback should preserve strong native-submit evidence');
 });
 
 test('firefox submit detector serializes static probe as a function expression', () => {
