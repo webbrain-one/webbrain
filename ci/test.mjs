@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gradeScenario, inferStuckAt, renderSummary } from './lib/grader.mjs';
-import { resolveCloudRunId, suiteShouldFail } from './lib/suite.mjs';
+import { buildSessionSettings, resolveCloudRunId, suiteShouldFail } from './lib/suite.mjs';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const scenarios = JSON.parse(await fs.readFile(path.join(root, 'catalog', 'scenarios.json'), 'utf8'));
@@ -19,6 +19,15 @@ assert.equal(resolveCloudRunId({}), '');
 assert.equal(suiteShouldFail({ failed: 0, skipped: 0 }), false);
 assert.equal(suiteShouldFail({ failed: 1, skipped: 0 }), true);
 assert.equal(suiteShouldFail({ failed: 0, skipped: 1 }), true);
+assert.equal(buildSessionSettings().askBeforeConsequentialActions, false);
+assert.equal(buildSessionSettings().captchaSolverEnabled, false);
+assert.deepEqual(
+  {
+    enabled: buildSessionSettings('captcha-key').captchaSolverEnabled,
+    key: buildSessionSettings('captcha-key').capsolverApiKey,
+  },
+  { enabled: true, key: 'captcha-key' },
+);
 
 const mountainScenario = scenarios.find((scenario) => scenario.id === 'wikipedia-table-extraction');
 const invalidMountainHeights = gradeScenario({

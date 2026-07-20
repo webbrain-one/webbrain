@@ -5,7 +5,7 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { GnippetsE2EClient, WebBrainCloudClient } from './lib/webbrain-client.mjs';
 import { gradeScenario, renderSummary } from './lib/grader.mjs';
-import { resolveCloudRunId, suiteShouldFail } from './lib/suite.mjs';
+import { buildSessionSettings, resolveCloudRunId, suiteShouldFail } from './lib/suite.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const ARTIFACT_ROOT = path.join(ROOT, 'artifacts');
@@ -81,21 +81,6 @@ async function mapLimit(values, limit, worker) {
   return results;
 }
 
-function sessionSettings() {
-  const capsolverApiKey = process.env.CAPSOLVER_API_KEY || '';
-  return {
-    wbLocale: 'en',
-    useSiteAdapters: true,
-    autoScreenshot: 'state_change',
-    maxAgentSteps: 195,
-    requestTimeoutMs: 180_000,
-    verboseMode: true,
-    enableAllPackagedSkills: true,
-    captchaSolverEnabled: Boolean(capsolverApiKey),
-    ...(capsolverApiKey ? { capsolverApiKey } : {}),
-  };
-}
-
 async function executeScenario({ scenario, suiteDir, cloud, gnippets, video }) {
   const scenarioDir = path.join(suiteDir, scenario.id);
   await fs.mkdir(scenarioDir, { recursive: true });
@@ -140,7 +125,7 @@ async function executeScenario({ scenario, suiteDir, cloud, gnippets, video }) {
     const task = scenario.task.replaceAll('{{START_URL}}', startUrl);
     browser = await cloud.createIncognitoBrowser({
       name: `CI ${scenario.id}`.slice(0, 120),
-      settings: sessionSettings(),
+      settings: buildSessionSettings(process.env.CAPSOLVER_API_KEY || ''),
     });
     await cloud.waitForBrowser(browser.id);
     const started = await cloud.startRun(browser.id, {
