@@ -3249,7 +3249,7 @@
       let labelText = null;
       try {
         if (elId) {
-          const escapedId = window.CSS && CSS.escape ? CSS.escape(elId) : elId.replace(/"/g, '\\"');
+          const escapedId = window.CSS && CSS.escape ? CSS.escape(elId) : elId.replace(/["\\]/g, '\\$&');
           const label = document.querySelector(`label[for="${escapedId}"]`);
           if (label) labelText = (label.textContent || '').trim().slice(0, 120);
         }
