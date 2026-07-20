@@ -695,7 +695,7 @@ export const AGENT_TOOLS = [
     type: 'function',
     function: {
       name: 'upload_file',
-      description: 'Attach a file to a <input type="file"> element on the page. Provide EITHER downloadId (preferred — re-fetches the file from its original URL) OR omit it to let the user pick a file manually via a file-picker dialog. NOTE: Firefox cannot set arbitrary local file paths (no CDP); only downloadId and user-picker flows are supported.',
+      description: 'Attach a file directly to an existing <input type="file"> without clicking the page upload control. Do NOT click "Choose file", "Select a file", an upload drop zone, or the input first when the input already exists. Provide downloadId (preferred — re-fetches the file from its original URL without an OS dialog), or omit it only when the user must pick a local file through WebBrain\'s own picker. If no file input exists because the widget creates it lazily, one guarded click on its add-files control may initialize the widget; then retry upload_file with the exact selector returned or discovered. NOTE: Firefox cannot set arbitrary local file paths (no CDP); only downloadId and user-picker flows are supported.',
       parameters: {
         type: 'object',
         properties: {
@@ -1331,6 +1331,7 @@ CLICKING — read this:
 - For buttons and links you can SEE, click by visible text: \`click({text: "Publish release"})\`. Default matching is EXACT (case-insensitive). If exact fails (no match), the system automatically tries prefix then substring matching — but if multiple elements match at any level, it returns an ambiguity error instead of guessing.
 - If you get an ambiguity error, use a more specific text string, switch to \`click({index: N})\` from \`get_interactive_elements\`, or use a selector.
 - You can explicitly control matching with \`textMatch\`: \`"exact"\` (default), \`"prefix"\`, or \`"contains"\`.
+- FILE UPLOADS: when the page already has an \`<input type="file">\`, do not click "Choose file", "Select a file", "Browse", the upload drop zone, or the input first. If the file is already downloaded, find the exact selector and call \`upload_file({selector, downloadId})\` directly; omit downloadId only when the user must choose a local file through WebBrain's own picker. Exception: if \`upload_file\` reports that no input exists because the widget creates it lazily, make one guarded click on the widget's add-files control to initialize it. A blocked-picker result may return the new exact selector; retry \`upload_file\` with that selector. Never substitute a generic \`input[type="file"]\` selector when multiple file inputs exist.
 - Order of preference:
   1. \`click({text: "..."})\` — visible text. Most reliable.
   2. \`click({index: N})\` — index from get_interactive_elements MADE THIS SAME TURN.

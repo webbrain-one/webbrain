@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { Agent } from '../../src/chrome/src/agent/agent.js';
+import { Agent as FirefoxAgent } from '../../src/firefox/src/agent/agent.js';
 import { CDPClient, cdpClient } from '../../src/chrome/src/cdp/cdp-client.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -25,6 +26,8 @@ const accessibilityTreeJsPath = path.join(root, 'src', 'chrome', 'src', 'content
 const firefoxAccessibilityTreeJsPath = path.join(root, 'src', 'firefox', 'src', 'content', 'accessibility-tree.js');
 const contentJsPath = path.join(root, 'src', 'chrome', 'src', 'content', 'content.js');
 const firefoxContentJsPath = path.join(root, 'src', 'firefox', 'src', 'content', 'content.js');
+const filePickerGuardPageJsPath = path.join(root, 'src', 'chrome', 'src', 'content', 'file-picker-guard-page.js');
+const firefoxFilePickerGuardPageJsPath = path.join(root, 'src', 'firefox', 'src', 'content', 'file-picker-guard-page.js');
 const selectionShortcutJsPath = path.join(root, 'src', 'chrome', 'src', 'content', 'selection-shortcut.js');
 const firefoxSelectionShortcutJsPath = path.join(root, 'src', 'firefox', 'src', 'content', 'selection-shortcut.js');
 const smdJsPath = path.join(root, 'src', 'chrome', 'src', 'agent', 'social-media-downloader.js');
@@ -74,6 +77,94 @@ async function setupContentFixture(page, fixture, browserKind) {
   await page.waitForFunction(() => typeof window.__wb_handler === 'function');
 }
 
+async function setupContentHtml(page, html, browserKind) {
+  const firefox = browserKind === 'firefox';
+  await page.setContent(html, { waitUntil: 'domcontentloaded' });
+  const pageGuardSrc = await readFile(
+    firefox ? firefoxFilePickerGuardPageJsPath : filePickerGuardPageJsPath,
+    'utf-8',
+  );
+  await page.addScriptTag({ content: pageGuardSrc });
+  // Simulate manifest injection followed by extension-reload recovery.
+  await page.addScriptTag({ content: pageGuardSrc });
+  await page.addScriptTag({ content: firefox ? stubFirefoxBrowser : stubChrome });
+  const src = await readFile(firefox ? firefoxContentJsPath : contentJsPath, 'utf-8');
+  await page.addScriptTag({ content: src });
+  await page.waitForFunction(() => typeof window.__wb_handler === 'function');
+}
+
+async function setupIsolatedContentHtml(page, html, browserKind) {
+  const firefox = browserKind === 'firefox';
+  await page.setContent(html, { waitUntil: 'domcontentloaded' });
+  const pageGuardSrc = await readFile(
+    firefox ? firefoxFilePickerGuardPageJsPath : filePickerGuardPageJsPath,
+    'utf-8',
+  );
+  await page.addScriptTag({ content: pageGuardSrc });
+  // Simulate recovery reinjection while keeping the content world separate.
+  await page.addScriptTag({ content: pageGuardSrc });
+
+  const session = await page.context().newCDPSession(page);
+  await session.send('Page.enable');
+  await session.send('Runtime.enable');
+  const frameTree = await session.send('Page.getFrameTree');
+  const isolatedWorld = await session.send('Page.createIsolatedWorld', {
+    frameId: frameTree.frameTree.frame.id,
+    worldName: `webbrain-${browserKind}-fixture`,
+  });
+  const contextId = isolatedWorld.executionContextId;
+  const contentSrc = await readFile(firefox ? firefoxContentJsPath : contentJsPath, 'utf-8');
+  const injected = await session.send('Runtime.evaluate', {
+    contextId,
+    expression: `${firefox ? stubFirefoxBrowser : stubChrome}\n${contentSrc}`,
+    awaitPromise: true,
+  });
+  if (injected.exceptionDetails) {
+    throw new Error(`isolated content injection failed: ${injected.exceptionDetails.text}`);
+  }
+
+  const rawIsolatedCall = async (action, params) => {
+    const message = JSON.stringify({ target: 'content', action, params });
+    const evaluated = await session.send('Runtime.evaluate', {
+      contextId,
+      expression: `new Promise((resolve) => {
+        const ret = window.__wb_handler(${message}, {}, (resp) => resolve(resp));
+        if (ret !== true && ret !== undefined) resolve(ret);
+      })`,
+      awaitPromise: true,
+      returnByValue: true,
+    });
+    if (evaluated.exceptionDetails) {
+      throw new Error(`isolated content call failed: ${evaluated.exceptionDetails.text}`);
+    }
+    return evaluated.result.value;
+  };
+
+  return async (action, params) => {
+    const response = await rawIsolatedCall(action, params);
+    const guardId = response?._filePickerGuardId;
+    if (!guardId) return response;
+
+    const originalResponse = { ...response };
+    delete originalResponse._filePickerGuardId;
+    await page.waitForTimeout(525);
+    let settled = await rawIsolatedCall('consume_file_picker_guard', { guardId });
+    if (settled?.settled === false) {
+      await page.waitForTimeout(50);
+      settled = await rawIsolatedCall('consume_file_picker_guard', { guardId });
+    }
+    if (!settled?.filePickerBlocked) return originalResponse;
+
+    const blockedResponse = { ...settled };
+    delete blockedResponse.settled;
+    return {
+      ...blockedResponse,
+      ...(originalResponse.rect ? { rect: originalResponse.rect } : {}),
+      ...(originalResponse.ref_id ? { ref_id: originalResponse.ref_id } : {}),
+    };
+  };
+}
+
 async function setupFirefoxHtml(page, html) {
   await page.setContent(html, { waitUntil: 'domcontentloaded' });
   await page.addScriptTag({ content: stubFirefoxBrowser });
@@ -89,7 +180,7 @@ async function setupAccessibilityTreeHtml(page, html, sourcePath) {
   await page.waitForFunction(() => typeof window.__generateAccessibilityTree === 'function');
 }
 
-async function call(page, action, params) {
+async function rawContentCall(page, action, params) {
   return page.evaluate(({ action, params }) => new Promise((resolve) => {
     const ret = window.__wb_handler(
       { target: 'content', action, params },
@@ -98,6 +189,30 @@ async function call(page, action, params) {
     );
     if (ret !== true && ret !== undefined) resolve(ret);
   }), { action, params });
+}
+
+async function call(page, action, params) {
+  const response = await rawContentCall(page, action, params);
+  const guardId = response?._filePickerGuardId;
+  if (!guardId) return response;
+
+  const originalResponse = { ...response };
+  delete originalResponse._filePickerGuardId;
+  await page.waitForTimeout(525);
+  let settled = await rawContentCall(page, 'consume_file_picker_guard', { guardId });
+  if (settled?.settled === false) {
+    await page.waitForTimeout(50);
+    settled = await rawContentCall(page, 'consume_file_picker_guard', { guardId });
+  }
+  if (!settled?.filePickerBlocked) return originalResponse;
+
+  const blockedResponse = { ...settled };
+  delete blockedResponse.settled;
+  return {
+    ...blockedResponse,
+    ...(originalResponse.rect ? { rect: originalResponse.rect } : {}),
+    ...(originalResponse.ref_id ? { ref_id: originalResponse.ref_id } : {}),
+  };
 }
 
 async function readThroughCdpMirror(page, opts = {}) {
@@ -685,7 +800,454 @@ test('ambiguity: two Cancels return rich candidates with ancestor', async (page)
   }
 });
 
-// ─── click_ax same-page anchors ─────────────────────────────────────────────
+// ─── CDP upload selector bridge ─────────────────────────────────────────────
+test('CDP upload selector bridge resolves hidden and open-shadow file inputs', async (page) => {
+  await page.setContent(`<!doctype html>
+    <input id="upload-addon" type="file" hidden>
+    <div id="shadow-host"></div>
+    <script>
+      document.querySelector('#shadow-host')
+        .attachShadow({ mode: 'open' })
+        .innerHTML = '<input id="shadow-upload" type="file">';
+    </script>`);
+
+  const session = await page.context().newCDPSession(page);
+  const client = new CDPClient();
+  client.sendCommand = async (_tabId, method, params = {}) => session.send(method, params);
+
+  const fixtureFile = path.join(root, 'package.json');
+  const attachThroughSelector = async (selector) => {
+    const query = await client.querySelectorPierce(42, selector);
+    if (query.objectIds.length !== 1 || !query.objectIds[0]) {
+      throw new Error(`file input did not resolve to one CDP object handle: ${JSON.stringify(query)}`);
+    }
+    try {
+      // Refreshing Chrome's DOM mirror invalidates frontend nodeIds. Runtime
+      // object handles must remain valid across an unrelated DOM traversal.
+      await session.send('DOM.getDocument', { depth: -1, pierce: true });
+      await client.setFileInputFiles(42, query.objectIds[0], [fixtureFile]);
+      const files = await client.getFileInputFiles(42, query.objectIds[0]);
+      if (files?.[0]?.name !== 'package.json') {
+        throw new Error(`attached FileList was not readable through the Runtime handle: ${JSON.stringify(files)}`);
+      }
+    } finally {
+      await client.releaseObjectGroup(42, query.objectGroup);
+    }
+  };
+
+  await attachThroughSelector('#upload-addon');
+  await attachThroughSelector('#shadow-upload');
+  const attached = await page.evaluate(() => ({
+    hidden: document.querySelector('#upload-addon').files[0]?.name || '',
+    shadow: document.querySelector('#shadow-host').shadowRoot
+      .querySelector('#shadow-upload').files[0]?.name || '',
+  }));
+  if (attached.hidden !== 'package.json' || attached.shadow !== 'package.json') {
+    throw new Error(`DOM.setFileInputFiles did not attach through resolved nodes: ${JSON.stringify(attached)}`);
+  }
+});
+
+for (const browserKind of ['chrome', 'firefox']) {
+  test(`file picker guard (${browserKind}): blocks the native chooser and returns the exact input`, async (page) => {
+    await setupContentHtml(page, `<!doctype html>
+      <button id="choose">Select a file...</button>
+      <input type="file" hidden>
+      <input type="file" hidden>
+      <script>
+        document.querySelector('#choose').addEventListener('click', () => {
+          document.querySelectorAll('input[type=file]')[1].click();
+        });
+      </script>`, browserKind);
+
+    let chooserOpened = false;
+    page.once('filechooser', () => { chooserOpened = true; });
+    const result = await call(page, 'click', { text: 'Select a file...' });
+    await page.waitForTimeout(20);
+    if (chooserOpened) throw new Error('native file chooser was not suppressed');
+    if (!result?.filePickerBlocked || result.success !== false || !result.selector) {
+      throw new Error(`expected blocked picker with exact selector, got ${JSON.stringify(result)}`);
+    }
+    const selectorCheck = await page.evaluate((selector) => {
+      const inputs = document.querySelectorAll('input[type=file]');
+      const matches = document.querySelectorAll(selector);
+      return { count: matches.length, correct: matches[0] === inputs[1] };
+    }, result.selector);
+    if (selectorCheck.count !== 1 || !selectorCheck.correct) {
+      throw new Error(`selector did not uniquely resolve the clicked input: ${JSON.stringify({ result, selectorCheck })}`);
+    }
+  });
+
+  test(`file picker guard (${browserKind}): withholds selectors that collide across shadow roots`, async (page) => {
+    await setupContentHtml(page, `<!doctype html>
+      <button id="choose">Select a shadow file...</button>
+      <div id="host-a"></div>
+      <div id="host-b"></div>
+      <script>
+        for (const id of ['host-a', 'host-b']) {
+          document.querySelector('#' + id).attachShadow({ mode: 'open' }).innerHTML = '<input type="file">';
+        }
+        document.querySelector('#choose').addEventListener('click', () => {
+          document.querySelector('#host-b').shadowRoot.querySelector('input').click();
+        });
+      </script>`, browserKind);
+
+    const result = await call(page, 'click', { text: 'Select a shadow file...' });
+    if (!result?.filePickerBlocked || result.success !== false) {
+      throw new Error(`expected blocked picker, got ${JSON.stringify(result)}`);
+    }
+    if (Object.hasOwn(result, 'selector')) {
+      throw new Error(`ambiguous shadow-root input must not return selector ${result.selector}`);
+    }
+    if (!/exact, unique/.test(result.error || '') || !/generic input\[type="file"\]/.test(result.error || '')) {
+      throw new Error(`missing unique-selector recovery guidance: ${JSON.stringify(result)}`);
+    }
+  });
+}
+
+const deferredFilePickerOpeners = [
+  ['promise', 'Promise.resolve().then(openPicker)'],
+  ['timer', 'setTimeout(openPicker, 0)'],
+  ['debounce-150ms', 'setTimeout(openPicker, 150)'],
+  ['debounce-300ms', 'setTimeout(openPicker, 300)'],
+  ['animation-frame', 'requestAnimationFrame(openPicker)'],
+];
+const showPickerOpeners = [
+  ['immediate', 'openPicker()'],
+  ...deferredFilePickerOpeners,
+];
+
+for (const browserKind of ['chrome', 'firefox']) {
+  for (const [deferral, scheduleOpen] of deferredFilePickerOpeners) {
+    test(`file picker guard (${browserKind}): blocks lazy ${deferral} chooser activation`, async (page) => {
+      const inputId = `lazy-${browserKind}-${deferral}`;
+      await setupContentHtml(page, `<!doctype html>
+        <button id="choose">Add a deferred file...</button>
+        <script>
+          document.querySelector('#choose').addEventListener('click', () => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.id = ${JSON.stringify(inputId)};
+            input.hidden = true;
+            document.body.appendChild(input);
+            const openPicker = () => input.click();
+            ${scheduleOpen};
+          });
+        </script>`, browserKind);
+
+      let chooserOpened = false;
+      page.once('filechooser', () => { chooserOpened = true; });
+      const result = await call(page, 'click', { text: 'Add a deferred file...' });
+      await page.waitForTimeout(20);
+      if (chooserOpened) throw new Error(`${deferral} native file chooser was not suppressed`);
+      if (!result?.filePickerBlocked || result.success !== false || result.selector !== `#${inputId}`) {
+        throw new Error(`expected blocked lazy picker with #${inputId}, got ${JSON.stringify(result)}`);
+      }
+      const selectorCheck = await page.evaluate((selector) => {
+        const matches = document.querySelectorAll(selector);
+        return { count: matches.length, id: matches[0]?.id || '' };
+      }, result.selector);
+      if (selectorCheck.count !== 1 || selectorCheck.id !== inputId) {
+        throw new Error(`lazy selector did not resolve uniquely: ${JSON.stringify({ result, selectorCheck })}`);
+      }
+    });
+  }
+
+  for (const [deferral, scheduleOpen] of showPickerOpeners) {
+    test(`file picker guard (${browserKind}): blocks ${deferral} showPicker activation`, async (page) => {
+      const inputId = `show-picker-${browserKind}-${deferral}`;
+      const isolatedCall = await setupIsolatedContentHtml(page, `<!doctype html>
+        <button id="choose">Show a file picker...</button>
+        <input id=${JSON.stringify(inputId)} type="file" hidden>
+        <script>
+          document.querySelector('#choose').addEventListener('click', () => {
+            const input = document.querySelector('#' + ${JSON.stringify(inputId)});
+            const openPicker = () => input.showPicker();
+            ${scheduleOpen};
+          });
+        </script>`, browserKind);
+
+      let chooserOpened = false;
+      page.once('filechooser', () => { chooserOpened = true; });
+      const result = await isolatedCall('click', { text: 'Show a file picker...' });
+      await page.waitForTimeout(20);
+      if (chooserOpened) throw new Error(`${deferral} showPicker native chooser was not suppressed`);
+      if (!result?.filePickerBlocked || result.success !== false || result.selector !== `#${inputId}`) {
+        throw new Error(`expected blocked showPicker with #${inputId}, got ${JSON.stringify(result)}`);
+      }
+      const footprint = await page.evaluate(() => ({
+        stableGlobal: Object.hasOwn(window, '__webbrainFilePickerGuardBridge'),
+        attributes: Array.from(document.documentElement.attributes)
+          .map(attribute => attribute.name)
+          .filter(name => name.startsWith('data-webbrain-file-picker-')),
+      }));
+      if (footprint.stableGlobal || footprint.attributes.length) {
+        throw new Error(`page-world guard left a detectable marker: ${JSON.stringify(footprint)}`);
+      }
+    });
+  }
+
+  test(`file picker guard (${browserKind}): blocks programmatic clicks inside closed shadow roots`, async (page) => {
+    const isolatedCall = await setupIsolatedContentHtml(page, `<!doctype html>
+      <button id="choose">Open a closed-shadow picker...</button>
+      <div id="host"></div>
+      <script>
+        const input = document.querySelector('#host')
+          .attachShadow({ mode: 'closed' })
+          .appendChild(document.createElement('input'));
+        input.type = 'file';
+        document.querySelector('#choose').addEventListener('click', () => input.click());
+      </script>`, browserKind);
+
+    let chooserOpened = false;
+    page.once('filechooser', () => { chooserOpened = true; });
+    const result = await isolatedCall('click', { text: 'Open a closed-shadow picker...' });
+    await page.waitForTimeout(20);
+    if (chooserOpened) throw new Error('closed-shadow native chooser was not suppressed');
+    if (!result?.filePickerBlocked || result.success !== false) {
+      throw new Error(`expected blocked closed-shadow picker, got ${JSON.stringify(result)}`);
+    }
+    if (Object.hasOwn(result, 'selector')) {
+      throw new Error(`closed-shadow picker must not expose an unusable selector: ${result.selector}`);
+    }
+  });
+
+  test(`file picker guard (${browserKind}): suppresses long programmatic debounce after result settlement`, async (page) => {
+    const isolatedCall = await setupIsolatedContentHtml(page, `<!doctype html>
+      <button id="choose">Schedule a late picker...</button>
+      <input id="late-picker" type="file" hidden>
+      <script>
+        document.querySelector('#choose').addEventListener('click', () => {
+          setTimeout(() => {
+            window.__latePickerAttempted = true;
+            document.querySelector('#late-picker').click();
+          }, 800);
+        });
+      </script>`, browserKind);
+
+    let chooserOpened = false;
+    page.once('filechooser', () => { chooserOpened = true; });
+    const result = await isolatedCall('click', { text: 'Schedule a late picker...' });
+    if (!result?.success || result.filePickerBlocked) {
+      throw new Error(`late picker should settle before its callback, got ${JSON.stringify(result)}`);
+    }
+    await page.waitForTimeout(350);
+    const attempted = await page.evaluate(() => window.__latePickerAttempted === true);
+    if (!attempted) throw new Error('late picker callback did not execute');
+    if (chooserOpened) throw new Error('post-settlement native chooser was not suppressed');
+  });
+}
+
+test('Chrome CDP file picker guard blocks trusted showPicker activation and restores the prototype', async (page) => {
+  await page.setContent(`<!doctype html>
+    <style>
+      #closed-host { display: block; width: 220px; height: 40px; }
+    </style>
+    <button id="choose">Open trusted picker</button>
+    <button id="choose-closed">Open trusted closed picker</button>
+    <input id="trusted-show-picker" type="file" hidden>
+    <div id="closed-host"></div>
+    <script>
+      window.__originalShowPicker = HTMLInputElement.prototype.showPicker;
+      window.__originalInputClick = HTMLInputElement.prototype.click;
+      const closedInput = document.querySelector('#closed-host')
+        .attachShadow({ mode: 'closed' })
+        .appendChild(document.createElement('input'));
+      closedInput.type = 'file';
+      closedInput.style.cssText = 'display:block;width:220px;height:40px';
+      document.querySelector('#choose').addEventListener('click', () => {
+        document.querySelector('#trusted-show-picker').showPicker();
+      });
+      document.querySelector('#choose-closed').addEventListener('click', () => closedInput.click());
+    </script>`);
+  const pageGuardSrc = await readFile(filePickerGuardPageJsPath, 'utf-8');
+  await page.addScriptTag({ content: pageGuardSrc });
+
+  const client = new CDPClient();
+  const protocolSession = await page.context().newCDPSession(page);
+  client.sendCommand = async (_tabId, method, params = {}) => protocolSession.send(method, params);
+  protocolSession.on('Page.fileChooserOpened', (params) => {
+    const handlers = client.eventHandlers.get(77)?.['Page.fileChooserOpened'] || [];
+    for (const handler of handlers) handler(params);
+  });
+  client.evaluate = async (_tabId, expression) => ({
+    result: { value: await page.evaluate(expression) },
+  });
+
+  let chooserOpened = false;
+  page.once('filechooser', () => { chooserOpened = true; });
+  await client.armFileInputClickGuard(77, 500);
+  await page.click('#choose');
+  const blocked = await client.consumeFileInputClickGuard(77, 0);
+  await page.waitForTimeout(20);
+
+  if (chooserOpened) throw new Error('trusted showPicker native chooser was not suppressed');
+  if (!blocked?.blocked || blocked.selector !== '#trusted-show-picker') {
+    throw new Error(`expected trusted showPicker block, got ${JSON.stringify(blocked)}`);
+  }
+  const restored = await page.evaluate(
+    () => ({
+      showPicker: HTMLInputElement.prototype.showPicker === window.__originalShowPicker,
+      click: HTMLInputElement.prototype.click === window.__originalInputClick,
+    }),
+  );
+  if (!restored.showPicker || !restored.click) {
+    throw new Error(`input prototypes were not restored after guard consumption: ${JSON.stringify(restored)}`);
+  }
+
+  let closedChooserOpened = false;
+  page.once('filechooser', () => { closedChooserOpened = true; });
+  await client.armFileInputClickGuard(77, 500);
+  await page.click('#choose-closed');
+  const closedBlocked = await client.consumeFileInputClickGuard(77, 0);
+  await page.waitForTimeout(20);
+  if (closedChooserOpened) throw new Error('trusted closed-shadow native chooser was not suppressed');
+  if (!closedBlocked?.blocked || closedBlocked.selector !== null) {
+    throw new Error(`expected trusted closed-shadow block without selector, got ${JSON.stringify(closedBlocked)}`);
+  }
+
+  let directChooserEventObserved = false;
+  page.once('filechooser', () => { directChooserEventObserved = true; });
+  await client.armFileInputClickGuard(77, 500);
+  await page.click('#closed-host');
+  const directBlocked = await client.consumeFileInputClickGuard(77, 0);
+  await page.waitForTimeout(20);
+  if (!directChooserEventObserved) {
+    throw new Error('direct trusted closed-shadow chooser did not emit the intercepted protocol event');
+  }
+  if (!directBlocked?.blocked || directBlocked.selector !== null) {
+    throw new Error(`expected protocol-level closed-shadow block, got ${JSON.stringify(directBlocked)}`);
+  }
+
+  await page.evaluate(() => {
+    const root = document.documentElement;
+    root.setAttribute('data-webbrain-file-picker-guard', 'residual-content-guard');
+    document.dispatchEvent(new Event('webbrain:file-picker-guard-arm'));
+    root.removeAttribute('data-webbrain-file-picker-guard');
+  });
+  const residualInstalled = await page.evaluate(
+    () => HTMLInputElement.prototype.click !== window.__originalInputClick,
+  );
+  if (!residualInstalled) throw new Error('residual page-world guard was not installed');
+
+  await client.armFileInputClickGuard(77, 250);
+  const noPickerBlocked = await client.consumeFileInputClickGuard(77, 0);
+  if (noPickerBlocked) throw new Error(`unexpected picker during restore-stack test: ${JSON.stringify(noPickerBlocked)}`);
+  await page.waitForTimeout(350);
+  const stackRestored = await page.evaluate(() => ({
+    showPicker: HTMLInputElement.prototype.showPicker === window.__originalShowPicker,
+    click: HTMLInputElement.prototype.click === window.__originalInputClick,
+  }));
+  if (!stackRestored.showPicker || !stackRestored.click) {
+    throw new Error(`stacked page/CDP guards did not restore native prototypes: ${JSON.stringify(stackRestored)}`);
+  }
+});
+
+test('Firefox upload_file resolves one open-shadow input and rejects ambiguous pierced selectors', async (page) => {
+  await page.setContent(`<!doctype html>
+    <div id="host-a"></div>
+    <div id="host-b"></div>
+    <script>
+      const inputA = document.createElement('input');
+      inputA.type = 'file';
+      inputA.id = 'shadow-upload';
+      window.__uploadEvents = { input: 0, change: 0 };
+      inputA.addEventListener('input', () => window.__uploadEvents.input++);
+      inputA.addEventListener('change', () => window.__uploadEvents.change++);
+      document.querySelector('#host-a').attachShadow({ mode: 'open' }).appendChild(inputA);
+      const inputB = document.createElement('input');
+      inputB.type = 'file';
+      document.querySelector('#host-b').attachShadow({ mode: 'open' }).appendChild(inputB);
+    </script>`);
+
+  const originalBrowser = globalThis.browser;
+  const originalFetch = globalThis.fetch;
+  try {
+    globalThis.browser = {
+      downloads: {
+        async search(query) {
+          if (query?.id !== 9001) throw new Error(`unexpected download query ${JSON.stringify(query)}`);
+          return [{
+            id: 9001,
+            state: 'complete',
+            url: 'https://example.com/shadow-upload.txt',
+            filename: '/home/user/Downloads/shadow-upload.txt',
+            mime: 'text/plain',
+          }];
+        },
+      },
+      tabs: {
+        async get(tabId) {
+          return { id: tabId, url: 'https://example.com/form' };
+        },
+        async executeScript(_tabId, details) {
+          return [await page.evaluate((source) => window.eval(source), details.code)];
+        },
+      },
+    };
+    globalThis.fetch = async () => ({
+      ok: true,
+      status: 200,
+      headers: {
+        get(name) {
+          const key = String(name).toLowerCase();
+          if (key === 'content-length') return '2';
+          if (key === 'content-type') return 'text/plain';
+          return null;
+        },
+      },
+      async arrayBuffer() {
+        return new Uint8Array([111, 107]).buffer;
+      },
+    });
+
+    const agent = new FirefoxAgent({});
+    const uploaded = await agent.executeTool(77, 'upload_file', {
+      selector: '#shadow-upload',
+      downloadId: 9001,
+    });
+    if (!uploaded?.success || uploaded.attached?.name !== 'shadow-upload.txt' || uploaded.attached?.size !== 2) {
+      throw new Error(`open-shadow upload failed: ${JSON.stringify(uploaded)}`);
+    }
+    const state = await page.evaluate(() => {
+      const input = document.querySelector('#host-a').shadowRoot.querySelector('#shadow-upload');
+      return {
+        count: input.files.length,
+        name: input.files[0]?.name || '',
+        size: input.files[0]?.size ?? -1,
+        events: window.__uploadEvents,
+      };
+    });
+    if (
+      state.count !== 1
+      || state.name !== 'shadow-upload.txt'
+      || state.size !== 2
+      || state.events.input !== 1
+      || state.events.change !== 1
+    ) {
+      throw new Error(`open-shadow upload state mismatch: ${JSON.stringify(state)}`);
+    }
+
+    const ambiguous = await agent.executeTool(77, 'upload_file', {
+      selector: 'input[type="file"]',
+      downloadId: 9001,
+    });
+    if (
+      ambiguous?.success !== false
+      || ambiguous.dispatched !== false
+      || ambiguous.ambiguous !== true
+      || ambiguous.matchCount !== 2
+      || !/exact, unique selector/.test(ambiguous.error || '')
+    ) {
+      throw new Error(`ambiguous pierced selector did not fail closed: ${JSON.stringify(ambiguous)}`);
+    }
+  } finally {
+    if (originalBrowser === undefined) delete globalThis.browser;
+    else globalThis.browser = originalBrowser;
+    if (originalFetch === undefined) delete globalThis.fetch;
+    else globalThis.fetch = originalFetch;
+  }
+});
+
 for (const browserKind of ['chrome', 'firefox']) {
   test(`click_ax (${browserKind}): stale refs are explicit pre-dispatch failures`, async (page) => {
     await setupContentFixture(page, 'trusted-click-fallback.html', browserKind);
@@ -1090,6 +1652,7 @@ test('ax_resolve_rect: English action labels stay blocked under Turkish locale c
   }
 });
 
+// ─── click_ax same-page anchors ─────────────────────────────────────────────
 test('click_ax: same-page anchor reports hash and scroll completion', async (page) => {
   await setup(page, 'anchor-click.html');
   const before = await page.evaluate(() => ({ hash: location.hash, scrollY: window.scrollY }));

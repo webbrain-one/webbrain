@@ -17,6 +17,7 @@ export class CDPClient {
     this.sessions = new Map(); // tabId -> debugger session
     this.eventHandlers = new Map(); // tabId -> { eventName -> [handlers] }
     this.devDiagnostics = new Map(); // tabId -> bounded console/network buffers
+    this.fileChooserGuards = new Map(); // tabId -> temporary protocol interception
   }
 
   /**
@@ -50,6 +51,9 @@ export class CDPClient {
             this.sessions.delete(tabId);
             this.eventHandlers.delete(tabId);
             this.devDiagnostics.delete(tabId);
+            const fileChooserGuard = this.fileChooserGuards.get(tabId);
+            if (fileChooserGuard?.timer) clearTimeout(fileChooserGuard.timer);
+            this.fileChooserGuards.delete(tabId);
           }
         });
 
@@ -63,12 +67,14 @@ export class CDPClient {
    */
   async detach(tabId) {
     if (!this.sessions.has(tabId)) return;
+    await this._disarmProtocolFileChooserGuard(tabId);
 
     return new Promise((resolve) => {
       chrome.debugger.detach({ tabId }, () => {
         this.sessions.delete(tabId);
         this.eventHandlers.delete(tabId);
         this.devDiagnostics.delete(tabId);
+        this.fileChooserGuards.delete(tabId);
         resolve();
       });
     });
@@ -553,20 +559,69 @@ export class CDPClient {
   }
 
   /**
-   * Query a selector in the main frame or any iframe/shadow DOM (pierce).
+   * Query a selector in the main document and all open shadow roots.
+   * DOM.querySelectorAll only searches the supplied root node; its protocol
+   * schema has no shadow-piercing option. Resolve matches in page JS and keep
+   * their Runtime object handles alive until the caller finishes using them.
+   * This avoids frontend nodeIds, which are invalidated whenever another CDP
+   * consumer refreshes Chrome's DOM mirror with DOM.getDocument.
    */
   async querySelectorPierce(tabId, selector) {
-    await this.sendCommand(tabId, 'DOM.enable');
-    const doc = await this.sendCommand(tabId, 'DOM.getDocument', { depth: 0, pierce: false });
-    const rootNodeId = doc.root?.nodeId;
-    if (!rootNodeId) throw new Error('No document root');
+    await this.sendCommand(tabId, 'Runtime.enable');
+    const objectGroup = `webbrain-query-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    try {
+      const evaluated = await this.sendCommand(tabId, 'Runtime.evaluate', {
+        expression: `
+          (() => {
+            const selector = ${JSON.stringify(selector)};
+            const matches = [];
+            const visit = (root) => {
+              matches.push(...root.querySelectorAll(selector));
+              for (const element of root.querySelectorAll('*')) {
+                if (element.shadowRoot) visit(element.shadowRoot);
+              }
+            };
+            visit(document);
+            return matches;
+          })()
+        `,
+        objectGroup,
+        returnByValue: false,
+      });
+      if (evaluated?.exceptionDetails) {
+        throw new Error(evaluated.exceptionDetails.text || 'Selector evaluation failed');
+      }
+      const arrayObjectId = evaluated?.result?.objectId;
+      if (!arrayObjectId) {
+        await this.releaseObjectGroup(tabId, objectGroup);
+        return { objectIds: [], objectGroup: null };
+      }
+      const properties = await this.sendCommand(tabId, 'Runtime.getProperties', {
+        objectId: arrayObjectId,
+        ownProperties: true,
+      });
+      const objectIds = [];
+      for (const property of properties?.result || []) {
+        if (!/^\d+$/.test(property?.name || '')) continue;
+        const objectId = property?.value?.objectId;
+        if (!objectId) continue;
+        objectIds.push(objectId);
+      }
+      return { objectIds, objectGroup };
+    } catch (error) {
+      await this.releaseObjectGroup(tabId, objectGroup);
+      throw error;
+    }
+  }
 
-    const result = await this.sendCommand(tabId, 'DOM.querySelectorAll', {
-      nodeId: rootNodeId,
-      selector,
-      piercesShadowDom: true,
-    });
-    return result.nodeIds || [];
+  /**
+   * Release Runtime objects returned by querySelectorPierce.
+   */
+  async releaseObjectGroup(tabId, objectGroup) {
+    if (!objectGroup) return;
+    try {
+      await this.sendCommand(tabId, 'Runtime.releaseObjectGroup', { objectGroup });
+    } catch {}
   }
 
   /**
@@ -870,13 +925,305 @@ export class CDPClient {
   /**
    * Set file input files (for upload).
    */
-  async setFileInputFiles(tabId, nodeId, filePaths) {
-    await this.sendCommand(tabId, 'DOM.enable');
+  async setFileInputFiles(tabId, objectId, filePaths) {
     await this.sendCommand(tabId, 'DOM.setFileInputFiles', {
-      nodeId,
+      objectId,
       files: filePaths,
     });
     return { success: true };
+  }
+
+  async _disarmProtocolFileChooserGuard(tabId) {
+    const state = this.fileChooserGuards.get(tabId);
+    if (!state) return;
+    this.fileChooserGuards.delete(tabId);
+    if (state.timer) clearTimeout(state.timer);
+    this.off(tabId, 'Page.fileChooserOpened', state.handler);
+    try {
+      await this.sendCommand(tabId, 'Page.setInterceptFileChooserDialog', {
+        enabled: false,
+      });
+    } catch {}
+  }
+
+  async _armProtocolFileChooserGuard(tabId, ttlMs) {
+    await this._disarmProtocolFileChooserGuard(tabId);
+    const state = {
+      blocked: null,
+      handler: null,
+      timer: null,
+    };
+    state.handler = (params = {}) => {
+      state.blocked = {
+        blocked: true,
+        selector: null,
+        ts: Date.now(),
+        ...(params.backendNodeId ? { backendNodeId: params.backendNodeId } : {}),
+      };
+    };
+    this.on(tabId, 'Page.fileChooserOpened', state.handler);
+    this.fileChooserGuards.set(tabId, state);
+    try {
+      await this.sendCommand(tabId, 'Page.enable');
+      await this.sendCommand(tabId, 'Page.setInterceptFileChooserDialog', {
+        enabled: true,
+        cancel: true,
+      });
+    } catch {
+      this.off(tabId, 'Page.fileChooserOpened', state.handler);
+      this.fileChooserGuards.delete(tabId);
+      return;
+    }
+    state.timer = setTimeout(() => {
+      this._disarmProtocolFileChooserGuard(tabId).catch(() => {});
+    }, ttlMs);
+  }
+
+  /**
+   * Temporarily suppress renderer-driven <input type=file> activation while an
+   * agent click is being dispatched. The upload_file tool sets files directly
+   * with DOM.setFileInputFiles; clicking a page's "Choose file" affordance
+   * first only opens an OS dialog that CDP cannot operate and leaves it stale
+   * after the direct upload succeeds.
+   *
+   * The capture listener is installed once per document, but it is inert
+   * unless armed. A short expiry is a safety net for early-return/error paths,
+   * so normal user clicks are never permanently affected.
+   */
+  async armFileInputClickGuard(tabId, ttlMs = 2500) {
+    const ttl = Math.max(250, Math.min(Number(ttlMs) || 2500, 5000));
+    await this._armProtocolFileChooserGuard(tabId, ttl);
+    await this.evaluate(tabId, `
+      (() => {
+        // A prior content-script click may intentionally leave its MAIN-world
+        // programmatic guard alive through a short TTL. Restore that wrapper
+        // before CDP snapshots the native methods, otherwise the two restore
+        // lifecycles can re-install each other's stale wrapper.
+        document.dispatchEvent(new Event('webbrain:file-picker-guard-reset'));
+        const uniqueFileInputSelector = (input) => {
+          const allPiercedMatches = (selector) => {
+            const matches = [];
+            const visit = (root) => {
+              try { matches.push(...root.querySelectorAll(selector)); } catch { return; }
+              let elements = [];
+              try { elements = root.querySelectorAll('*'); } catch {}
+              for (const element of elements) {
+                if (element.shadowRoot) visit(element.shadowRoot);
+              }
+            };
+            visit(document);
+            return matches;
+          };
+          const unique = (selector) => {
+            if (!selector) return null;
+            const matches = allPiercedMatches(selector);
+            return matches.length === 1 && matches[0] === input ? selector : null;
+          };
+          try {
+            if (input.id && window.CSS?.escape) {
+              const byId = unique('#' + CSS.escape(input.id));
+              if (byId) return byId;
+            }
+            if (input.name && window.CSS?.escape) {
+              const byName = unique('input[type="file"][name=' + CSS.escape(String(input.name)) + ']');
+              if (byName) return byName;
+            }
+            const parts = [];
+            let node = input;
+            while (node?.nodeType === Node.ELEMENT_NODE) {
+              let part = node.tagName.toLowerCase();
+              const parent = node.parentElement;
+              if (parent) {
+                const siblings = Array.from(parent.children).filter(child => child.tagName === node.tagName);
+                if (siblings.length > 1) part += ':nth-of-type(' + (siblings.indexOf(node) + 1) + ')';
+              }
+              parts.unshift(part);
+              const byPath = unique(parts.join(' > '));
+              if (byPath) return byPath;
+              node = parent;
+            }
+          } catch {}
+          return null;
+        };
+        if (!window.__wb_file_input_click_guard) {
+          window.__wb_file_input_click_guard = (event) => {
+            if (Date.now() > Number(window.__wb_file_input_click_guard_until || 0)) return;
+            const path = typeof event.composedPath === 'function'
+              ? event.composedPath()
+              : [event.target];
+            const input = path.find(node =>
+              node?.tagName === 'INPUT'
+              && String(node.getAttribute?.('type') || node.type || '').toLowerCase() === 'file'
+            );
+            if (!input) return;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            window.__wb_file_input_click_guard_last = {
+              blocked: true,
+              selector: uniqueFileInputSelector(input),
+              ts: Date.now(),
+            };
+          };
+          document.addEventListener('click', window.__wb_file_input_click_guard, true);
+        }
+        if (typeof window.__wb_file_input_show_picker_guard_restore === 'function') {
+          window.__wb_file_input_show_picker_guard_restore();
+        }
+        if (window.__wb_file_input_show_picker_guard_timer) {
+          clearTimeout(window.__wb_file_input_show_picker_guard_timer);
+          window.__wb_file_input_show_picker_guard_timer = null;
+        }
+        const showPickerProto = window.HTMLInputElement?.prototype;
+        const showPickerDescriptor = showPickerProto
+          && Object.getOwnPropertyDescriptor(showPickerProto, 'showPicker');
+        const originalShowPicker = showPickerDescriptor?.value;
+        const ownClickDescriptor = showPickerProto
+          && Object.getOwnPropertyDescriptor(showPickerProto, 'click');
+        const originalClick = showPickerProto?.click;
+        if (typeof originalShowPicker === 'function' || typeof originalClick === 'function') {
+          const isFileInput = (input) =>
+            input?.tagName === 'INPUT'
+            && String(input.getAttribute?.('type') || input.type || '').toLowerCase() === 'file';
+          const blockInput = (input) => {
+            window.__wb_file_input_click_guard_last = {
+              blocked: true,
+              selector: uniqueFileInputSelector(input),
+              ts: Date.now(),
+            };
+          };
+          const guardedShowPicker = function(...args) {
+            if (
+              isFileInput(this)
+              && Date.now() <= Number(window.__wb_file_input_click_guard_until || 0)
+            ) {
+              blockInput(this);
+              return undefined;
+            }
+            return Reflect.apply(originalShowPicker, this, args);
+          };
+          const guardedClick = function(...args) {
+            if (
+              isFileInput(this)
+              && Date.now() <= Number(window.__wb_file_input_click_guard_until || 0)
+            ) {
+              blockInput(this);
+              return undefined;
+            }
+            return Reflect.apply(originalClick, this, args);
+          };
+          let showPickerInstalled = false;
+          let clickInstalled = false;
+          if (typeof originalShowPicker === 'function') {
+            try {
+              Object.defineProperty(showPickerProto, 'showPicker', {
+                ...showPickerDescriptor,
+                value: guardedShowPicker,
+              });
+              showPickerInstalled = true;
+            } catch {}
+          }
+          if (typeof originalClick === 'function') {
+            try {
+              Object.defineProperty(showPickerProto, 'click', {
+                configurable: true,
+                enumerable: ownClickDescriptor?.enumerable ?? false,
+                writable: true,
+                value: guardedClick,
+              });
+              clickInstalled = true;
+            } catch {}
+          }
+          if (showPickerInstalled || clickInstalled) {
+            window.__wb_file_input_show_picker_guard_restore = () => {
+              try {
+                if (showPickerInstalled && showPickerProto.showPicker === guardedShowPicker) {
+                  Object.defineProperty(showPickerProto, 'showPicker', showPickerDescriptor);
+                }
+              } catch {}
+              try {
+                if (clickInstalled && showPickerProto.click === guardedClick) {
+                  if (ownClickDescriptor) {
+                    Object.defineProperty(showPickerProto, 'click', ownClickDescriptor);
+                  } else {
+                    delete showPickerProto.click;
+                  }
+                }
+              } catch {}
+              window.__wb_file_input_show_picker_guard_restore = null;
+            };
+          } else {
+            window.__wb_file_input_show_picker_guard_restore = null;
+          }
+        }
+        window.__wb_file_input_click_guard_last = null;
+        window.__wb_file_input_click_guard_until = Date.now() + ${ttl};
+        window.__wb_file_input_show_picker_guard_timer = setTimeout(() => {
+          if (Date.now() <= Number(window.__wb_file_input_click_guard_until || 0)) return;
+          window.__wb_file_input_show_picker_guard_timer = null;
+          window.__wb_file_input_show_picker_guard_restore?.();
+        }, ${ttl} + 25);
+        return true;
+      })()
+    `);
+  }
+
+  /**
+   * Disarm the temporary file-input click guard and return any intercepted
+   * chooser activation from the current agent click.
+   */
+  async consumeFileInputClickGuard(tabId, settleMs = 500) {
+    const delayMs = Math.max(0, Number(settleMs) || 0);
+    if (delayMs > 0) {
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
+    let rendererBlocked = null;
+    try {
+      const result = await this.evaluate(tabId, `
+        (() => {
+          const blocked = window.__wb_file_input_click_guard_last || null;
+          window.__wb_file_input_click_guard_last = null;
+          if (blocked) {
+            window.__wb_file_input_click_guard_until = 0;
+            if (window.__wb_file_input_show_picker_guard_timer) {
+              clearTimeout(window.__wb_file_input_show_picker_guard_timer);
+              window.__wb_file_input_show_picker_guard_timer = null;
+            }
+            window.__wb_file_input_show_picker_guard_restore?.();
+          }
+          return blocked;
+        })()
+      `);
+      rendererBlocked = result?.result?.value || null;
+    } catch {
+      // A delivered click may navigate or reload before this best-effort probe
+      // runs, destroying its execution context. Never turn that observation
+      // race into a failed click (or let clickElement retry the action); the
+      // short guard TTL disarms the abandoned document automatically.
+    }
+    const protocolBlocked = this.fileChooserGuards.get(tabId)?.blocked || null;
+    const blocked = rendererBlocked || protocolBlocked;
+    // Protocol interception cancels every chooser in the tab, including a
+    // user's later trusted click, so it must never outlive this observation
+    // window. The narrower page-world wrapper can remain on its TTL to cover
+    // delayed programmatic click()/showPicker() callbacks.
+    await this._disarmProtocolFileChooserGuard(tabId);
+    return blocked;
+  }
+
+  fileInputClickBlockedResult(blocked, context = '') {
+    const selector = typeof blocked?.selector === 'string' && blocked.selector
+      ? blocked.selector
+      : null;
+    const guidance = selector
+      ? `Call upload_file with selector ${JSON.stringify(selector)} and the existing downloadId or absolute filePath; it attaches the file without opening an OS dialog.`
+      : 'Re-inspect the page to find an exact, unique <input type=file> selector, then call upload_file directly. Do not use a generic input[type="file"] selector when the page has multiple file inputs.';
+    return {
+      success: false,
+      dispatched: true,
+      filePickerBlocked: true,
+      ...(selector ? { selector } : {}),
+      error: ['Blocked a native file chooser.', context, guidance].filter(Boolean).join(' '),
+    };
   }
 
   /**
@@ -892,12 +1239,8 @@ export class CDPClient {
    * is not a file input / could not be resolved. `readable` is true/false when
    * the probe ran, or null if it couldn't be determined.
    */
-  async getFileInputFiles(tabId, nodeId) {
-    await this.sendCommand(tabId, 'DOM.enable');
+  async getFileInputFiles(tabId, objectId) {
     await this.sendCommand(tabId, 'Runtime.enable');
-    const resolved = await this.sendCommand(tabId, 'DOM.resolveNode', { nodeId });
-    const objectId = resolved?.object?.objectId;
-    if (!objectId) return null;
     const res = await this.sendCommand(tabId, 'Runtime.callFunctionOn', {
       functionDeclaration: `async function () {
         if (!this.files) return null;
@@ -1587,6 +1930,13 @@ export class CDPClient {
         const found = queryDeep(document);
         if (!found) return { found: false };
         if (found.__error) return { found: false, error: found.__error };
+        const tag = String(found.tagName || '').toUpperCase();
+        const type = String(found.getAttribute?.('type') || '').trim().toLowerCase();
+        const isSubmitControl = tag === 'INPUT'
+          ? type === 'submit' || type === 'image'
+          : tag === 'BUTTON'
+            ? type === 'submit' || (!type && !!(found.form || found.closest?.('form')))
+            : false;
         if (found.tagName !== 'SELECT') { try { found.scrollIntoView({ block: 'center', inline: 'center' }); } catch (e) {} }
         const r = found.getBoundingClientRect();
         const cx = r.left + r.width / 2;
@@ -1608,7 +1958,9 @@ export class CDPClient {
           x: cx, y: cy,
           width: r.width, height: r.height,
           inViewport, hitOk,
-          tag: found.tagName,
+          tag,
+          type,
+          isSubmitControl,
           text: (found.innerText || found.value || '').slice(0, 80),
         };
       })()
@@ -1759,6 +2111,7 @@ export class CDPClient {
     let dispatchAttempted = false;
     if (info.inViewport && info.hitOk) {
       try {
+        await this.armFileInputClickGuard(tabId);
         const rect = {
           x: Math.round(info.x - (info.width || 1) / 2),
           y: Math.round(info.y - (info.height || 1) / 2),
@@ -1775,10 +2128,19 @@ export class CDPClient {
         await this.sendCommand(tabId, 'Input.dispatchMouseEvent', {
           type: 'mouseReleased', x: info.x, y: info.y, button: 'left', buttons: 0, clickCount: 1,
         });
+        const blockedFileInput = await this.consumeFileInputClickGuard(tabId);
+        if (blockedFileInput?.blocked) {
+          return this.fileInputClickBlockedResult(
+            blockedFileInput,
+            'Do not click file-upload controls before uploading.',
+          );
+        }
         return {
           success: true,
           method: info.viaCDP ? 'cdp-mouse-closed-shadow' : 'cdp-mouse',
           tag: info.tag,
+          type: info.type,
+          isSubmitControl: info.isSubmitControl === true,
           text: info.text,
           x: info.x,
           y: info.y,
@@ -1793,6 +2155,7 @@ export class CDPClient {
     // and Runtime.callFunctionOn to invoke .click() on the resolved object.
     if (info.nodeId) {
       try {
+        await this.armFileInputClickGuard(tabId);
         await this.sendCommand(tabId, 'DOM.focus', { nodeId: info.nodeId }).catch(() => {});
         const { object } = await this.sendCommand(tabId, 'DOM.resolveNode', { nodeId: info.nodeId });
         if (object?.objectId) {
@@ -1801,6 +2164,13 @@ export class CDPClient {
             functionDeclaration: 'function() { this.click(); }',
             awaitPromise: false,
           });
+          const blockedFileInput = await this.consumeFileInputClickGuard(tabId);
+          if (blockedFileInput?.blocked) {
+            return this.fileInputClickBlockedResult(
+              blockedFileInput,
+              'Do not click file-upload controls before uploading.',
+            );
+          }
           return {
             success: true,
             method: 'cdp-node-click',
@@ -1819,6 +2189,7 @@ export class CDPClient {
 
     // Step 3: JS fallback for open shadow roots.
     const selectorJSON = JSON.stringify(selector);
+    await this.armFileInputClickGuard(tabId);
     const fb = await this.evaluate(tabId, `
       (() => {
         const sel = ${selectorJSON};
@@ -1831,18 +2202,34 @@ export class CDPClient {
         };
         const el = queryDeep(document);
         if (!el) return { success: false, error: 'Element not found (fallback)' };
+        const tag = String(el.tagName || '').toUpperCase();
+        const type = String(el.getAttribute?.('type') || '').trim().toLowerCase();
+        const isSubmitControl = tag === 'INPUT'
+          ? type === 'submit' || type === 'image'
+          : tag === 'BUTTON'
+            ? type === 'submit' || (!type && !!(el.form || el.closest?.('form')))
+            : false;
         try { el.focus(); } catch (e) {}
         el.click();
         const r = el.getBoundingClientRect();
         return {
           success: true,
           method: 'js-click',
-          tag: el.tagName,
+          tag,
+          type,
+          isSubmitControl,
           text: (el.innerText || '').slice(0, 80),
           rect: { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) },
         };
       })()
     `);
+    const blockedFileInput = await this.consumeFileInputClickGuard(tabId);
+    if (blockedFileInput?.blocked) {
+      return this.fileInputClickBlockedResult(
+        blockedFileInput,
+        'Do not click file-upload controls before uploading.',
+      );
+    }
     const fallbackResult = fb?.result?.value || { success: false, error: 'Click failed' };
     if (fallbackResult.success === false && fallbackResult.dispatched == null) {
       fallbackResult.dispatched = dispatchAttempted;

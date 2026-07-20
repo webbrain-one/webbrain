@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "WebBrain",
-  "version": "25.0.2",
+  "version": "25.1.0",
   "description": "Open-source AI browser agent — chat with pages, automate tasks, multi-provider LLM support.",
   "permissions": [
     "activeTab",
@@ -32,6 +32,11 @@
     }
   },
   "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/content/file-picker-guard-loader.js"],
+      "run_at": "document_start"
+    },
     {
       "matches": ["<all_urls>"],
       "js": [
@@ -90,6 +95,7 @@
     "vendor/pdfjs/pdf.mjs",
     "vendor/pdfjs/pdf.worker.mjs",
     "src/agent/social-media-downloader.js",
+    "src/content/file-picker-guard-page.js",
     "vendor/turkish-deasciifier-patterns.json",
     "skills/*"
   ],

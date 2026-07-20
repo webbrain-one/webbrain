@@ -2322,14 +2322,7 @@ async function handleMessage(msg, sender) {
       } catch {
         // Try injecting content script. accessibility-tree.js must load
         // first so content.js's a11y-tree handlers can reach the builder.
-        await chrome.scripting.executeScript({
-          target: { tabId },
-          files: [
-            'src/content/accessibility-tree.js',
-            'src/content/content.js',
-            'src/content/agent-visual-indicator.js',
-          ],
-        });
+        await agent._injectCoreContentScripts(tabId);
         return await chrome.tabs.sendMessage(tabId, {
           target: 'content',
           action: 'get_page_info',

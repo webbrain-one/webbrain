@@ -849,7 +849,7 @@ export const AGENT_TOOLS = [
     type: 'function',
     function: {
       name: 'upload_file',
-      description: 'Upload a file to a file input element. Provide EITHER downloadId (preferred — the id from download_files/list_downloads; you do not need to recall the path) OR filePath (absolute local path). The file must exist on the local filesystem.',
+      description: 'Upload a file directly to an existing file input without opening the page or OS file-picker dialog. Do NOT click "Choose file", "Select a file", an upload drop zone, or the input first when the input already exists. Provide EITHER downloadId (preferred — the id from download_files/list_downloads; you do not need to recall the path) OR filePath (absolute local path). If no file input exists because the widget creates it lazily, one guarded click on its add-files control may initialize the widget; then retry upload_file with the exact selector returned or discovered. The file must exist on the local filesystem.',
       parameters: {
         type: 'object',
         properties: {
@@ -1500,6 +1500,7 @@ CLICKING — read this:
 - For buttons and links you can SEE, click by visible text: \`click({text: "Publish release"})\`. Default matching is EXACT (case-insensitive). If exact fails (no match), the system automatically tries prefix then substring matching — but if multiple elements match at any level, it returns an ambiguity error instead of guessing.
 - If you get an ambiguity error, use a more specific text string, switch to \`click({index: N})\` from \`get_interactive_elements\`, or use a selector.
 - You can explicitly control matching with \`textMatch\`: \`"exact"\` (default), \`"prefix"\`, or \`"contains"\`.
+- FILE UPLOADS: when the page already has an \`<input type="file">\`, do not click "Choose file", "Select a file", "Browse", the upload drop zone, or the input first. Find the exact selector and call \`upload_file({selector, downloadId})\` directly; it attaches the file without opening a native dialog. Exception: if \`upload_file\` reports that no input exists because the widget creates it lazily, make one guarded click on the widget's add-files control to initialize it. A blocked-picker result may return the new exact selector; retry \`upload_file\` with that selector. Never substitute a generic \`input[type="file"]\` selector when multiple file inputs exist.
 - Order of preference:
   1. \`click_ax({ref_id: "ref_N"})\` — ref_id from get_accessibility_tree. Most reliable; carries role+name so you always know what you're clicking, and ref_ids are stable across calls.
   2. \`click({text: "..."})\` — visible button/link text. Good fallback if the tree didn't surface the element cleanly.

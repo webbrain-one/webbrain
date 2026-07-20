@@ -1066,6 +1066,186 @@
   }
 
   /**
+   * Run one synthetic agent click while suppressing any immediate or deferred
+   * <input type=file>.click() it triggers. upload_file attaches a downloaded
+   * file directly (or presents WebBrain's own picker when no downloadId is
+   * available); clicking the page control first only opens a stale OS dialog.
+   */
+  function uniqueFileInputSelector(input) {
+    const allPiercedMatches = (selector) => {
+      const matches = [];
+      const visit = (root) => {
+        try { matches.push(...root.querySelectorAll(selector)); } catch { return; }
+        let elements = [];
+        try { elements = root.querySelectorAll('*'); } catch {}
+        for (const element of elements) {
+          if (element.shadowRoot) visit(element.shadowRoot);
+        }
+      };
+      visit(document);
+      return matches;
+    };
+    const unique = (selector) => {
+      if (!selector) return null;
+      const matches = allPiercedMatches(selector);
+      return matches.length === 1 && matches[0] === input ? selector : null;
+    };
+    try {
+      if (input.id && window.CSS?.escape) {
+        const byId = unique('#' + CSS.escape(input.id));
+        if (byId) return byId;
+      }
+      if (input.name && window.CSS?.escape) {
+        const byName = unique('input[type="file"][name=' + CSS.escape(String(input.name)) + ']');
+        if (byName) return byName;
+      }
+      const parts = [];
+      let node = input;
+      while (node?.nodeType === Node.ELEMENT_NODE) {
+        let part = node.tagName.toLowerCase();
+        const parent = node.parentElement;
+        if (parent) {
+          const siblings = Array.from(parent.children).filter(child => child.tagName === node.tagName);
+          if (siblings.length > 1) part += ':nth-of-type(' + (siblings.indexOf(node) + 1) + ')';
+        }
+        parts.unshift(part);
+        const byPath = unique(parts.join(' > '));
+        if (byPath) return byPath;
+        node = parent;
+      }
+    } catch {}
+    return null;
+  }
+
+  const FILE_PICKER_GUARD_SETTLE_MS = 500;
+  const FILE_PICKER_GUARD_RETENTION_MS = 5000;
+  const _filePickerGuardStates = new Map();
+  let _filePickerGuardSequence = 0;
+
+  function clickWithoutNativeFilePicker(runClick, settleMs = FILE_PICKER_GUARD_SETTLE_MS) {
+    const guardId = `fpg_${Date.now().toString(36)}_${++_filePickerGuardSequence}`;
+    const state = {
+      blocked: null,
+      settled: false,
+      guard: null,
+      cleanupPageShowPickerGuard: null,
+      settleTimer: null,
+      cleanupTimer: null,
+    };
+    const isFileInput = (input) =>
+      input?.tagName === 'INPUT'
+      && String(input.getAttribute?.('type') || input.type || '').toLowerCase() === 'file';
+    const blockFileInput = (input) => {
+      state.blocked = { selector: uniqueFileInputSelector(input) };
+    };
+    const guard = (event) => {
+      const path = typeof event.composedPath === 'function'
+        ? event.composedPath()
+        : [event.target];
+      const input = path.find(isFileInput);
+      if (!input) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      blockFileInput(input);
+    };
+    const installPageShowPickerGuard = () => {
+      const root = document.documentElement;
+      if (!root) return () => {};
+      const guardAttr = 'data-webbrain-file-picker-guard';
+      const blockedAttr = 'data-webbrain-file-picker-blocked';
+      const blockedEvent = 'webbrain:file-picker-guard-blocked';
+      const armPageGuard = () => {
+        root.setAttribute(guardAttr, guardId);
+        document.dispatchEvent(new Event('webbrain:file-picker-guard-arm'));
+      };
+      const onBlocked = () => {
+        try {
+          const payload = JSON.parse(root.getAttribute(blockedAttr) || 'null');
+          if (payload?.guardId !== guardId) return;
+          state.blocked = {
+            selector: typeof payload.selector === 'string' && payload.selector
+              ? payload.selector
+              : null,
+          };
+        } catch {}
+      };
+      document.addEventListener(blockedEvent, onBlocked, true);
+      armPageGuard();
+      return (disarmPageGuard = true) => {
+        if (disarmPageGuard) {
+          document.dispatchEvent(new Event('webbrain:file-picker-guard-disarm'));
+        }
+        if (root.getAttribute(guardAttr) === guardId) root.removeAttribute(guardAttr);
+        document.removeEventListener(blockedEvent, onBlocked, true);
+      };
+    };
+    const cleanupGuard = () => {
+      document.removeEventListener('click', guard, true);
+      state.cleanupPageShowPickerGuard?.();
+    };
+    state.guard = guard;
+    _filePickerGuardStates.set(guardId, state);
+    document.addEventListener('click', guard, true);
+    state.cleanupPageShowPickerGuard = installPageShowPickerGuard();
+    try {
+      runClick();
+    } catch (error) {
+      cleanupGuard();
+      _filePickerGuardStates.delete(guardId);
+      throw error;
+    }
+    if (state.blocked) {
+      cleanupGuard();
+      _filePickerGuardStates.delete(guardId);
+      return { blocked: state.blocked, guardId: null };
+    }
+    state.settleTimer = setTimeout(() => {
+      state.settled = true;
+      state.cleanupTimer = setTimeout(() => {
+        if (_filePickerGuardStates.get(guardId) === state) {
+          cleanupGuard();
+          _filePickerGuardStates.delete(guardId);
+        }
+      }, FILE_PICKER_GUARD_RETENTION_MS);
+    }, Math.max(0, Number(settleMs) || 0));
+    return { blocked: null, guardId };
+  }
+
+  function consumeFilePickerGuard(guardId) {
+    const state = typeof guardId === 'string' ? _filePickerGuardStates.get(guardId) : null;
+    if (!state) return { success: true, settled: true, filePickerBlocked: false };
+    if (!state.settled) return { success: true, settled: false, filePickerBlocked: false };
+    if (state.cleanupTimer) clearTimeout(state.cleanupTimer);
+    document.removeEventListener('click', state.guard, true);
+    // If nothing was observed, stop content-side observation but leave the
+    // page-world programmatic click/showPicker guard active until its own
+    // short TTL. This suppresses longer debounces without blocking the tool
+    // response or intercepting a user's direct native input click.
+    state.cleanupPageShowPickerGuard?.(!!state.blocked);
+    _filePickerGuardStates.delete(guardId);
+    if (state.blocked) {
+      return { ...filePickerBlockedResponse(state.blocked), settled: true };
+    }
+    return { success: true, settled: true, filePickerBlocked: false };
+  }
+
+  function filePickerBlockedResponse(blocked, label = '') {
+    const selector = typeof blocked?.selector === 'string' && blocked.selector
+      ? blocked.selector
+      : null;
+    const guidance = selector
+      ? `Call upload_file({selector: ${JSON.stringify(selector)}, downloadId: N}) directly; it attaches the downloaded file without opening an OS dialog. If there is no downloadId, call upload_file({selector: ${JSON.stringify(selector)}}) to use WebBrain's own picker.`
+      : 'Re-inspect the page to find an exact, unique <input type=file> selector, then call upload_file directly. Do not use a generic input[type="file"] selector when the page has multiple file inputs.';
+    return {
+      success: false,
+      dispatched: true,
+      filePickerBlocked: true,
+      ...(selector ? { selector } : {}),
+      error: `Blocked a native file chooser${label ? ` opened by "${label}"` : ''}. ${guidance}`,
+    };
+  }
+
+  /**
    * Click an element by selector or coordinates.
    */
   function clickElement(params) {
@@ -1449,7 +1629,16 @@
     }
 
     const clickedRect = rememberInteractionPoint(el, 'click');
-    el.click();
+    const filePickerGuard = clickWithoutNativeFilePicker(() => el.click());
+    if (filePickerGuard.blocked) {
+      return {
+        ...filePickerBlockedResponse(filePickerGuard.blocked, params.text || el.innerText?.trim() || ''),
+        ...(clickedRect ? { rect: clickedRect } : {}),
+      };
+    }
+    const filePickerGuardMeta = filePickerGuard.guardId
+      ? { _filePickerGuardId: filePickerGuard.guardId }
+      : {};
 
     // Post-click SELECT detection: the click may have activated a <select>
     // via a label, wrapper, or overlapping element. Return error, not success.
@@ -1475,6 +1664,7 @@
         tag: 'SELECT',
         text: postActive.options[postActive.selectedIndex]?.text?.trim() || '',
         error: `CANNOT CLICK — a <select> dropdown was activated by this click (current: "${postActive.options[postActive.selectedIndex]?.text?.trim() || ''}"). The dropdown is now focused. Use type_text({text: "option name"}) to change the value. Available options: ${postOpts.join(', ')}`,
+        ...filePickerGuardMeta,
       };
     }
 
@@ -1492,9 +1682,12 @@
     return {
       success: true,
       tag: el.tagName,
+      type: String(el.getAttribute?.('type') || '').toLowerCase(),
+      isSubmitControl: targetIsSubmitControl,
       text: el.innerText?.slice(0, 50),
       ...(clickedRect ? { rect: clickedRect } : {}),
       ...(warning ? { warning } : {}),
+      ...filePickerGuardMeta,
     };
   }
 
@@ -2440,6 +2633,7 @@
       'get_interactive_elements': () => getInteractiveElements(),
       'get_interactive_elements_cdp': () => getInteractiveElementsFull(),
       'click': () => clickElement(msg.params || {}),
+      'consume_file_picker_guard': () => consumeFilePickerGuard(msg.params?.guardId),
       'type': () => typeText(msg.params || {}),
       'press_keys': () => pressKeys(msg.params || {}),
       'scroll': () => scrollPage(msg.params || {}),
@@ -2687,7 +2881,17 @@
           }
           rememberInteractionPoint(el, 'click_ax');
           dispatched = true;
-          el.click();
+          const filePickerGuard = clickWithoutNativeFilePicker(() => el.click());
+          if (filePickerGuard.blocked) {
+            return failure(
+              filePickerBlockedResponse(filePickerGuard.blocked, targetName || '').error,
+              {
+                filePickerBlocked: true,
+                ...(filePickerGuard.blocked.selector ? { selector: filePickerGuard.blocked.selector } : {}),
+                ref_id,
+              },
+            );
+          }
           let isTextEntry = false;
           if (tag === 'textarea') isTextEntry = true;
           else if (tag === 'input') {
@@ -2703,6 +2907,7 @@
               tag,
               rect: { x: Math.round(rect.x), y: Math.round(rect.y), w: Math.round(rect.width), h: Math.round(rect.height) },
               ...(targetContext ? { targetContext } : {}),
+              ...(filePickerGuard.guardId ? { _filePickerGuardId: filePickerGuard.guardId } : {}),
             };
             try {
               if (targetName) resp.name = targetName;

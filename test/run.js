@@ -16264,6 +16264,52 @@ test('CDP input dispatchers never call the nonexistent Input.enable command', as
   assert.doesNotMatch(source, /Input\.enable/, 'Chrome CDP client must not reintroduce the unsupported Input.enable command');
 });
 
+test('CDP querySelectorPierce keeps open-shadow Runtime object handles alive until release', async () => {
+  const client = new CDPClient();
+  const commands = [];
+  client.sendCommand = async (_tabId, method, params = {}) => {
+    commands.push({ method, params });
+    if (method === 'Runtime.evaluate') {
+      assert.match(params.expression, /element\.shadowRoot/);
+      assert.match(params.expression, /#shadow-upload/);
+      return { result: { objectId: 'matches-array' } };
+    }
+    if (method === 'Runtime.getProperties') {
+      return {
+        result: [
+          { name: '0', value: { objectId: 'input-a' } },
+          { name: '1', value: { objectId: 'input-b' } },
+          { name: 'length', value: { value: 2 } },
+        ],
+      };
+    }
+    return {};
+  };
+
+  const query = await client.querySelectorPierce(42, '#shadow-upload');
+  assert.deepEqual(query.objectIds, ['input-a', 'input-b']);
+  assert.ok(query.objectGroup, 'querySelectorPierce must return the owning object group');
+  assert.equal(
+    commands.some(command => command.method === 'DOM.getDocument' || command.method === 'DOM.requestNode'),
+    false,
+    'Runtime handles must not depend on Chrome frontend nodeIds or the mutable DOM mirror',
+  );
+  assert.equal(
+    commands.some(command => command.method === 'DOM.querySelectorAll'),
+    false,
+    'document-root DOM.querySelectorAll cannot pierce open shadow roots',
+  );
+  assert.equal(
+    commands.some(command => command.method === 'Runtime.releaseObjectGroup'),
+    false,
+    'query handles must remain alive for upload_file to consume',
+  );
+
+  await client.releaseObjectGroup(42, query.objectGroup);
+  assert.equal(commands.at(-1).method, 'Runtime.releaseObjectGroup');
+  assert.deepEqual(commands.at(-1).params, { objectGroup: query.objectGroup });
+});
+
 test('Chrome selector click distinguishes pre-dispatch failure from uncertain dispatch', async () => {
   const client = new CDPClient();
   client.resolveSelector = async () => null;
@@ -16280,8 +16326,16 @@ test('Chrome selector click distinguishes pre-dispatch failure from uncertain di
     width: 30,
     height: 40,
     tag: 'BUTTON',
+    type: 'button',
+    isSubmitControl: false,
     text: 'Submit',
   });
+  client.sendCommand = async () => ({});
+  const ordinaryButton = await client.clickElement(42, '#open-help');
+  assert.equal(ordinaryButton.success, true);
+  assert.equal(ordinaryButton.type, 'button', 'selector clicks should preserve the resolved button type');
+  assert.equal(ordinaryButton.isSubmitControl, false, 'selector clicks should preserve non-submit metadata');
+
   client.sendCommand = async (_tabId, _method, params) => {
     if (params.type === 'mousePressed') throw new Error('dispatch response lost');
     return {};
@@ -16293,6 +16347,13 @@ test('Chrome selector click distinguishes pre-dispatch failure from uncertain di
   const uncertain = await client.clickElement(42, '#submit');
   assert.equal(uncertain.success, false);
   assert.equal(uncertain.dispatched, true, 'a mousePressed attempt must fail closed when later fallback also fails');
+
+  const source = fs.readFileSync(path.join(ROOT, 'src/chrome/src/cdp/cdp-client.js'), 'utf8');
+  assert.match(
+    source,
+    /const isSubmitControl = tag === 'INPUT'[\s\S]*tag === 'BUTTON'[\s\S]*isSubmitControl,/,
+    'selector resolution should derive submit metadata from the target element',
+  );
 });
 
 test('Chrome selector type distinguishes pre-dispatch failure from uncertain dispatch', async () => {
@@ -16352,6 +16413,17 @@ test('Chrome focused type_text marks missing focus as a pre-dispatch failure', a
   }
 });
 
+function stubChromeCdpFileInputClickGuard(blocked = null) {
+  const arm = cdpClientCh.armFileInputClickGuard;
+  const consume = cdpClientCh.consumeFileInputClickGuard;
+  cdpClientCh.armFileInputClickGuard = async () => {};
+  cdpClientCh.consumeFileInputClickGuard = async () => blocked;
+  return () => {
+    cdpClientCh.armFileInputClickGuard = arm;
+    cdpClientCh.consumeFileInputClickGuard = consume;
+  };
+}
+
 test('Chrome click_ax keeps successful synthetic clicks and skips trusted fallback', async () => {
   const agent = new AgentCh({});
   let resolved = false;
@@ -16392,6 +16464,7 @@ test('Chrome click_ax treats broad page churn as weak evidence and still uses on
     dispatch: cdpClientCh.dispatchMouseEvent,
   };
   const agent = new AgentCh({});
+  const restoreFileInputGuard = stubChromeCdpFileInputClickGuard();
   const weakObservation = {
     changed: true, proved: false, weakEvidence: true, safetyVeto: false, observable: true,
     reasons: ['page_text'], proofReasons: [], weakReasons: ['page_text'], safetyReasons: [],
@@ -16506,7 +16579,100 @@ test('Chrome click_ax treats broad page churn as weak evidence and still uses on
     assert.ok(result.observedHints?.includes('target_state_weak'));
     assert.ok(result.observedHints?.includes('page_controls'));
   } finally {
+    restoreFileInputGuard();
     cdpClientCh.attach = originals.attach;
+    cdpClientCh.dispatchMouseEvent = originals.dispatch;
+  }
+});
+
+test('Chrome click_ax guards the trusted CDP fallback against native file choosers', async () => {
+  const originals = {
+    attach: cdpClientCh.attach,
+    arm: cdpClientCh.armFileInputClickGuard,
+    consume: cdpClientCh.consumeFileInputClickGuard,
+    dispatch: cdpClientCh.dispatchMouseEvent,
+  };
+  const agent = new AgentCh({});
+  const dispatched = [];
+  let armed = 0;
+  let consumed = 0;
+  agent._clickAxFinalSettleMs = () => 0;
+  agent._observeClickAxSideEffect = async () => ({
+    changed: false,
+    proved: false,
+    weakEvidence: false,
+    safetyVeto: false,
+    observable: true,
+    reasons: [],
+    proofReasons: [],
+    weakReasons: [],
+    safetyReasons: [],
+    snapshot: '{"text":"same","active":""}',
+  });
+  agent._captureClickAxObservation = async (_tabId, snapshot, sideEffectWatch, startedAt) => ({
+    startedAt,
+    snapshot,
+    tabIds: '1,42',
+    sideEffectWatch,
+  });
+  agent._resolveClickAxFallbackTarget = async () => ({
+    success: true,
+    fallbackEligible: true,
+    documentToken: 'doc-upload',
+    fallbackState: '{"aria-current":"<absent>"}',
+    fallbackStrongState: '{"aria-current":"<absent>"}',
+    fallbackWeakState: '{"className":""}',
+    x: 120,
+    y: 80,
+    rect: { x: 70, y: 60, w: 100, h: 40 },
+  });
+
+  try {
+    cdpClientCh.attach = async () => ({ tabId: 42, attached: true });
+    cdpClientCh.armFileInputClickGuard = async () => { armed++; };
+    cdpClientCh.consumeFileInputClickGuard = async () => {
+      consumed++;
+      return { blocked: true, selector: '#trusted-upload' };
+    };
+    cdpClientCh.dispatchMouseEvent = async (_tabId, type) => {
+      dispatched.push(type);
+    };
+
+    const result = await agent._maybeFallbackClickAxWithCdp(
+      42,
+      { ref_id: 'ref_upload' },
+      {
+        success: true,
+        method: 'click_ax',
+        ref_id: 'ref_upload',
+        tag: 'div',
+        _fallbackStateBefore: '{"full":"same"}',
+        _fallbackStateAfterImmediate: '{"full":"same"}',
+        _fallbackStrongStateBefore: '{"aria-current":"<absent>"}',
+        _fallbackStrongStateAfterImmediate: '{"aria-current":"<absent>"}',
+        _fallbackWeakStateBefore: '{"className":""}',
+        _fallbackWeakStateAfterImmediate: '{"className":""}',
+      },
+      { snapshot: '{"text":"same"}', sideEffectWatch: { created: [], requests: [] } },
+    );
+
+    assert.equal(armed, 1);
+    assert.equal(consumed, 1);
+    assert.deepEqual(dispatched, ['mouseMoved', 'mousePressed', 'mouseReleased']);
+    assert.equal(result.success, false);
+    assert.equal(result.dispatched, true);
+    assert.equal(result.filePickerBlocked, true);
+    assert.equal(result.selector, '#trusted-upload');
+    assert.equal(result.ref_id, 'ref_upload');
+    assert.equal(result.fallback, 'cdp_after_synthetic_no_progress');
+    assert.equal(result.fallbackAttempted, true);
+    assert.equal(result.trusted, true);
+    assert.equal(result.verified, true);
+    assert.match(result.error, /upload_file/);
+  } finally {
+    cdpClientCh.attach = originals.attach;
+    cdpClientCh.armFileInputClickGuard = originals.arm;
+    cdpClientCh.consumeFileInputClickGuard = originals.consume;
     cdpClientCh.dispatchMouseEvent = originals.dispatch;
   }
 });
@@ -16517,6 +16683,7 @@ test('Chrome click_ax never trusts ineligible targets and never retries one trus
     dispatch: cdpClientCh.dispatchMouseEvent,
   };
   const agent = new AgentCh({});
+  const restoreFileInputGuard = stubChromeCdpFileInputClickGuard();
   let dispatched = 0;
   agent._clickAxFinalSettleMs = () => 0;
   agent._observeClickAxSideEffect = async () => ({
@@ -16598,6 +16765,7 @@ test('Chrome click_ax never trusts ineligible targets and never retries one trus
     assert.match(second.fallbackSkipped, /already attempted/);
     assert.equal(dispatched, 3, 'the same document/ref target must receive at most one trusted fallback');
   } finally {
+    restoreFileInputGuard();
     cdpClientCh.attach = originals.attach;
     cdpClientCh.dispatchMouseEvent = originals.dispatch;
   }
@@ -16609,6 +16777,7 @@ test('Chrome click_ax only consumes the one-shot slot after a CDP press is deliv
     dispatch: cdpClientCh.dispatchMouseEvent,
   };
   const agent = new AgentCh({});
+  const restoreFileInputGuard = stubChromeCdpFileInputClickGuard();
   const dispatched = [];
   let attachAttempts = 0;
   agent._clickAxFinalSettleMs = () => 0;
@@ -16703,6 +16872,7 @@ test('Chrome click_ax only consumes the one-shot slot after a CDP press is deliv
     assert.match(repeated.fallbackSkipped, /already attempted/);
     assert.deepEqual(dispatched, ['mouseMoved', 'mousePressed', 'mouseReleased']);
   } finally {
+    restoreFileInputGuard();
     cdpClientCh.attach = originals.attach;
     cdpClientCh.dispatchMouseEvent = originals.dispatch;
   }
@@ -16873,6 +17043,7 @@ test('Chrome click_ax trusted phase carries preparedActive so blur-only is not p
     dispatch: cdpClientCh.dispatchMouseEvent,
   };
   const agent = new AgentCh({});
+  const restoreFileInputGuard = stubChromeCdpFileInputClickGuard();
   let capturedPrepared = null;
   agent._clickAxFinalSettleMs = () => 0;
   agent._observeClickAxSideEffect = async (_tabId, baseline) => {
@@ -16969,6 +17140,7 @@ test('Chrome click_ax trusted phase carries preparedActive so blur-only is not p
     assert.equal(result.fallbackAttempted, true);
     assert.equal(result.verified, false);
   } finally {
+    restoreFileInputGuard();
     cdpClientCh.attach = originals.attach;
     cdpClientCh.dispatchMouseEvent = originals.dispatch;
   }
@@ -17198,7 +17370,7 @@ test('Chrome executeTool re-stamps the click_ax safety window after content-scri
 
   try {
     const result = await agent.executeTool(42, 'click_ax', { ref_id: 'ref_inject' });
-    assert.equal(injectCalls, 1);
+    assert.equal(injectCalls, 2, 'recovery should inject the MAIN-world guard before isolated content');
     assert.equal(sendAttempts, 2);
     assert.equal(captureTimes.length, 2, 'baseline must be re-captured after inject');
     assert.ok(
@@ -17388,6 +17560,7 @@ test('Chrome click_ax accepts a delayed semantic target-state change without sen
     dispatch: cdpClientCh.dispatchMouseEvent,
   };
   const agent = new AgentCh({});
+  const restoreFileInputGuard = stubChromeCdpFileInputClickGuard();
   let dispatched = 0;
   agent._observeClickAxSideEffect = async () => ({
     changed: false,
@@ -17434,6 +17607,7 @@ test('Chrome click_ax accepts a delayed semantic target-state change without sen
     assert.deepEqual(result.observedEffects, ['target_state']);
     assert.equal(dispatched, 0);
   } finally {
+    restoreFileInputGuard();
     cdpClientCh.attach = originals.attach;
     cdpClientCh.dispatchMouseEvent = originals.dispatch;
   }
@@ -17445,6 +17619,7 @@ test('Chrome click_ax accepts a target-state-only change after the trusted fallb
     dispatch: cdpClientCh.dispatchMouseEvent,
   };
   const agent = new AgentCh({});
+  const restoreFileInputGuard = stubChromeCdpFileInputClickGuard();
   let dispatched = 0;
   let resolves = 0;
   agent._clickAxFinalSettleMs = () => 0;
@@ -17517,6 +17692,7 @@ test('Chrome click_ax accepts a target-state-only change after the trusted fallb
     assert.equal(result.verified, true);
     assert.deepEqual(result.observedEffects, ['target_state']);
   } finally {
+    restoreFileInputGuard();
     cdpClientCh.attach = originals.attach;
     cdpClientCh.dispatchMouseEvent = originals.dispatch;
   }
@@ -17528,6 +17704,7 @@ test('Chrome click_ax accepts weak-only target state (class/data-status) after t
     dispatch: cdpClientCh.dispatchMouseEvent,
   };
   const agent = new AgentCh({});
+  const restoreFileInputGuard = stubChromeCdpFileInputClickGuard();
   let dispatched = 0;
   let resolves = 0;
   agent._clickAxFinalSettleMs = () => 0;
@@ -17605,6 +17782,7 @@ test('Chrome click_ax accepts weak-only target state (class/data-status) after t
     assert.equal(result.verified, true);
     assert.deepEqual(result.observedEffects, ['target_state_weak']);
   } finally {
+    restoreFileInputGuard();
     cdpClientCh.attach = originals.attach;
     cdpClientCh.dispatchMouseEvent = originals.dispatch;
   }
@@ -17616,6 +17794,7 @@ test('Chrome click_ax keeps an unobservable post-CDP navigation successful but u
     dispatch: cdpClientCh.dispatchMouseEvent,
   };
   const agent = new AgentCh({});
+  const restoreFileInputGuard = stubChromeCdpFileInputClickGuard();
   let dispatched = 0;
   let observeCalls = 0;
   let resolves = 0;
@@ -17715,6 +17894,7 @@ test('Chrome click_ax keeps an unobservable post-CDP navigation successful but u
     assert.equal(result.error, undefined);
     assert.match(result.warning, /navigation or reload/);
   } finally {
+    restoreFileInputGuard();
     cdpClientCh.attach = originals.attach;
     cdpClientCh.dispatchMouseEvent = originals.dispatch;
   }
@@ -17726,6 +17906,7 @@ test('Chrome executeTool runs automatic click_ax fallback and reuses its observe
     attach: cdpClientCh.attach,
     dispatch: cdpClientCh.dispatchMouseEvent,
   };
+  const restoreFileInputGuard = stubChromeCdpFileInputClickGuard();
   const actions = [];
   const dispatched = [];
   let snapshotCalls = 0;
@@ -17870,6 +18051,7 @@ test('Chrome executeTool runs automatic click_ax fallback and reuses its observe
     assert.equal(requestRemoves, 1);
     assert.deepEqual(requestFilter?.types, ['xmlhttprequest', 'ping']);
   } finally {
+    restoreFileInputGuard();
     cdpClientCh.attach = originals.attach;
     cdpClientCh.dispatchMouseEvent = originals.dispatch;
     if (originalChrome === undefined) delete globalThis.chrome;
@@ -22907,7 +23089,7 @@ test('submit confirmation honors scheduled and global gate bypasses', async () =
         1,
       );
 
-      assert.equal(submitProbeCalls, 0, `${AgentClass.name} ${scenario.label}: submit probe should be skipped before bypassed prompts`);
+      assert.equal(submitProbeCalls, 1, `${AgentClass.name} ${scenario.label}: validation preflight should run even when the submit prompt is bypassed`);
       assert.equal(executed, true, `${AgentClass.name} ${scenario.label}: bypassed submit tool should execute`);
       assert.equal(messages.length, 1, `${AgentClass.name} ${scenario.label}: expected one tool result`);
       assert.equal(JSON.parse(agent._unwrapUntrusted(messages[0].content)).success, true, `${AgentClass.name} ${scenario.label}: tool result should be successful`);
@@ -23026,6 +23208,1093 @@ test('approved iframe submit keeps host gate fail-closed without urlFilter', asy
     const denied = JSON.parse(messages[0].content);
     assert.equal(denied.denied, true, `${AgentClass.name}: fail-closed result should be denied`);
     assert.match(denied.error, /urlFilter/, `${AgentClass.name}: error should tell the model to provide urlFilter`);
+  }
+});
+
+test('form validation classifier surfaces native and custom submission errors', () => {
+  const url = 'https://addons.mozilla.org/en-US/developers/addon/webbrain/versions/submit/';
+  const invalidField = {
+    label: 'Firefox',
+    type: 'checkbox',
+    message: 'Your extension has to be compatible with at least one application.',
+  };
+
+  for (const AgentClass of [AgentCh, AgentFx]) {
+    const agent = new AgentClass({ getVisionProvider: async () => null });
+    const before = [{
+      frameId: 0,
+      url,
+      activeInvalid: false,
+      invalidFields: [invalidField],
+      ariaInvalidFields: [],
+      alerts: [],
+      controlFingerprint: 'unchecked',
+    }];
+    const nativeAfter = [{
+      ...before[0],
+      activeInvalid: true,
+    }];
+    const nativeFailure = agent._detectFormValidationFailure(before, nativeAfter, {
+      toolName: 'click',
+      args: { text: 'Continue' },
+      result: { success: true, tag: 'BUTTON' },
+    });
+    assert.ok(nativeFailure, `${AgentClass.name}: native validation failure was missed`);
+    assert.match(nativeFailure.error, /compatible with at least one application/i);
+    assert.deepEqual(nativeFailure.invalidFields[0], invalidField);
+
+    const alreadyActive = [{
+      ...nativeAfter[0],
+    }];
+    const correctiveNative = agent._detectFormValidationFailure(alreadyActive, alreadyActive, {
+      toolName: 'click',
+      args: { text: 'Continue' },
+      result: { success: true, tag: 'BUTTON', type: 'button', isSubmitControl: false },
+      detectedSubmit: { isSubmit: true },
+      priorValidationFailure: true,
+    });
+    assert.equal(correctiveNative, null, `${AgentClass.name}: pre-existing native validation blocked a corrective button`);
+
+    const persistentNativeSubmit = agent._detectFormValidationFailure(alreadyActive, alreadyActive, {
+      toolName: 'click',
+      args: { text: 'Submit' },
+      result: { success: true, tag: 'BUTTON', type: 'submit', isSubmitControl: true },
+    });
+    assert.ok(persistentNativeSubmit, `${AgentClass.name}: already-focused native invalid field was missed on a real submit`);
+    assert.match(persistentNativeSubmit.error, /compatible with at least one application/i);
+
+    const executeJsReadback = agent._detectFormValidationFailure(alreadyActive, alreadyActive, {
+      toolName: 'execute_js',
+      args: { code: 'return document.title' },
+      result: { success: true, result: 'Example' },
+      detectedSubmit: { isSubmit: true },
+    });
+    assert.equal(executeJsReadback, null, `${AgentClass.name}: execute_js readback was treated as a failed submit`);
+
+    const customAfter = [{
+      ...before[0],
+      invalidFields: [],
+      alerts: ['Please correct the highlighted fields.'],
+      controlFingerprint: 'custom-error',
+    }];
+    const customFailure = agent._detectFormValidationFailure(before, customAfter, {
+      toolName: 'click_ax',
+      args: { ref_id: 'ref_submit' },
+      result: { success: true, tag: 'BUTTON' },
+      detectedSubmit: { isSubmit: true, validationSubmitEvidence: 'strong' },
+    });
+    assert.ok(customFailure, `${AgentClass.name}: custom validation alert was missed`);
+    assert.match(customFailure.error, /correct the highlighted fields/i);
+
+    const sharedAlertBefore = [{
+      ...before[0],
+      alerts: ['Required'],
+    }];
+    const sharedAlertAfter = [
+      sharedAlertBefore[0],
+      {
+        ...before[0],
+        frameId: 7,
+        alerts: ['Required'],
+        controlFingerprint: 'iframe-required',
+      },
+    ];
+    const sharedAlertFailure = agent._detectFormValidationFailure(sharedAlertBefore, sharedAlertAfter, {
+      toolName: 'iframe_click',
+      args: { selector: '#submit', urlFilter: 'addons.mozilla.org' },
+      result: {
+        success: true,
+        frame: { tag: 'BUTTON', type: 'submit', isSubmitControl: true },
+      },
+      detectedSubmit: { isSubmit: true, validationSubmitEvidence: 'strong' },
+    });
+    assert.ok(sharedAlertFailure, `${AgentClass.name}: duplicate alert text in a newly invalid iframe was deduplicated against another frame`);
+
+    const correctivePersistentAlert = agent._detectFormValidationFailure(customAfter, customAfter, {
+      toolName: 'click',
+      args: { text: 'Continue' },
+      result: { success: true, tag: 'BUTTON', type: 'button', isSubmitControl: false },
+      detectedSubmit: { isSubmit: true },
+      priorValidationFailure: true,
+    });
+    assert.equal(correctivePersistentAlert, null, `${AgentClass.name}: conservative preflight revived a persistent alert for a corrective button`);
+
+    const revealedRequiredRow = [{
+      ...before[0],
+      ariaInvalidFields: [{
+        label: 'Phone number',
+        type: 'tel',
+        message: 'This field is required.',
+      }],
+      controlFingerprint: 'phone-row-added',
+    }];
+    const revealedRowFailure = agent._detectFormValidationFailure(before, revealedRequiredRow, {
+      toolName: 'click',
+      args: { text: 'Add phone' },
+      result: { success: true, tag: 'BUTTON', type: 'button', isSubmitControl: false },
+      detectedSubmit: { isSubmit: true },
+    });
+    assert.equal(revealedRowFailure, null, `${AgentClass.name}: revealing a blank required row was treated as a failed submit`);
+
+    const existingAlert = agent._detectFormValidationFailure(customAfter, customAfter, {
+      toolName: 'click',
+      args: { text: 'Open help' },
+      result: { success: true, tag: 'BUTTON' },
+    });
+    assert.equal(existingAlert, null, `${AgentClass.name}: pre-existing alert was misclassified as a new form error`);
+
+    const persistentAlert = agent._detectFormValidationFailure(customAfter, customAfter, {
+      toolName: 'click',
+      args: { text: 'Submit' },
+      result: { success: true, tag: 'BUTTON', type: 'submit', isSubmitControl: true },
+      priorValidationFailure: true,
+    });
+    assert.ok(persistentAlert, `${AgentClass.name}: persistent alert was lost on a failed resubmit`);
+    assert.match(persistentAlert.error, /correct the highlighted fields/i);
+
+    const successfulAfter = [{
+      ...before[0],
+      invalidFields: [],
+      alerts: ['Saved successfully'],
+      controlFingerprint: 'saved',
+    }];
+    const successfulAnnouncement = agent._detectFormValidationFailure(before, successfulAfter, {
+      toolName: 'click',
+      args: { text: 'Save' },
+      result: { success: true, tag: 'BUTTON', type: 'submit', isSubmitControl: true },
+    });
+    assert.equal(successfulAnnouncement, null, `${AgentClass.name}: success announcement was misclassified as validation failure`);
+
+    assert.equal(agent._formValidationActionLooksSubmit(
+      'click',
+      { text: 'Continue' },
+      { success: true, tag: 'DIV', text: 'Continue', isSubmitControl: false },
+    ), true, `${AgentClass.name}: custom submit-looking control skipped validation inspection`);
+    assert.equal(agent._formValidationActionLooksSubmit(
+      'click',
+      { text: 'Choose application' },
+      { success: true, tag: 'BUTTON', type: 'button', text: 'Choose application', isSubmitControl: false },
+    ), false, `${AgentClass.name}: corrective type=button was misclassified as a submit`);
+    assert.equal(agent._formValidationActionLooksSubmit(
+      'click',
+      { text: 'Add address' },
+      { success: true, tag: 'BUTTON', type: 'button', text: 'Add address', isSubmitControl: false },
+      { isSubmit: true },
+    ), false, `${AgentClass.name}: explicit non-submit metadata did not override conservative preflight`);
+    assert.equal(agent._formValidationActionLooksSubmit(
+      'click',
+      { text: 'Continue' },
+      { success: true, tag: 'BUTTON', type: 'button', text: 'Continue', isSubmitControl: false },
+      { isSubmit: true, validationSubmitEvidence: 'heuristic' },
+    ), true, `${AgentClass.name}: heuristic Continue submit was vetoed by type=button metadata`);
+    assert.equal(agent._formValidationActionLooksSubmit(
+      'click',
+      { text: 'Pay' },
+      { success: true, tag: 'BUTTON', type: 'button', text: 'Pay', isSubmitControl: false },
+      { isSubmit: true, validationSubmitEvidence: 'strong' },
+    ), true, `${AgentClass.name}: strong custom-submit preflight was discarded for type=button`);
+    assert.equal(agent._formValidationActionLooksSubmit(
+      'click',
+      { selector: '#save' },
+      { success: true },
+      { isSubmit: true, validationSubmitEvidence: 'strong' },
+    ), true, `${AgentClass.name}: strong CDP-only submit evidence was discarded without result metadata`);
+    assert.equal(agent._formValidationActionLooksSubmit(
+      'click_ax',
+      { ref_id: 'ref_choose_application' },
+      { success: true, tag: 'button', name: 'Choose application' },
+      { isSubmit: true, validationSubmitEvidence: 'heuristic' },
+    ), false, `${AgentClass.name}: heuristic AX preflight was promoted to strong submit evidence`);
+    assert.equal(agent._formValidationActionLooksSubmit(
+      'click_ax',
+      { ref_id: 'ref_continue' },
+      { success: true, tag: 'div', name: 'Continue' },
+      { isSubmit: true, validationSubmitEvidence: 'heuristic' },
+    ), true, `${AgentClass.name}: heuristic custom Continue control skipped validation inspection`);
+    assert.equal(agent._formValidationActionLooksSubmit(
+      'click_ax',
+      { ref_id: 'ref_save' },
+      { success: true, tag: 'div', name: 'Save' },
+      { isSubmit: true, validationSubmitEvidence: 'heuristic' },
+    ), true, `${AgentClass.name}: heuristic custom Save control skipped validation inspection`);
+    assert.equal(agent._formValidationActionLooksSubmit(
+      'iframe_click',
+      { selector: '#add-phone', text: 'Add phone' },
+      { success: true, frame: { tag: 'BUTTON', text: 'Add phone' } },
+      { isSubmit: true, validationSubmitEvidence: 'heuristic' },
+    ), false, `${AgentClass.name}: heuristic iframe preflight was re-promoted by its Add label`);
+    assert.equal(agent._formValidationActionLooksSubmit(
+      'click_ax',
+      { ref_id: 'ref_pay' },
+      { success: true, tag: 'button', name: 'Pay' },
+      { isSubmit: true, validationSubmitEvidence: 'strong' },
+    ), true, `${AgentClass.name}: strong AX custom-submit preflight was weakened`);
+    const customButtonFailure = agent._detectFormValidationFailure(before, revealedRequiredRow, {
+      toolName: 'click',
+      args: { text: 'Pay' },
+      result: { success: true, tag: 'BUTTON', type: 'button', text: 'Pay', isSubmitControl: false },
+      detectedSubmit: { isSubmit: true, validationSubmitEvidence: 'strong' },
+    });
+    assert.ok(customButtonFailure, `${AgentClass.name}: custom type=button submit skipped its validation failure`);
+    assert.match(customButtonFailure.error, /phone number/i);
+    const heuristicButtonFailure = agent._detectFormValidationFailure(before, customAfter, {
+      toolName: 'click',
+      args: { text: 'Continue' },
+      result: { success: true, tag: 'BUTTON', type: 'button', text: 'Continue', isSubmitControl: false },
+      detectedSubmit: { isSubmit: true, validationSubmitEvidence: 'heuristic' },
+    });
+    assert.ok(heuristicButtonFailure, `${AgentClass.name}: heuristic Continue submit skipped its validation failure`);
+    assert.match(heuristicButtonFailure.error, /correct the highlighted fields/i);
+    const correctiveAxResult = agent._detectFormValidationFailure(before, revealedRequiredRow, {
+      toolName: 'click_ax',
+      args: { ref_id: 'ref_add_phone' },
+      result: { success: true, tag: 'button', name: 'Add phone' },
+      detectedSubmit: { isSubmit: true, validationSubmitEvidence: 'heuristic' },
+    });
+    assert.equal(correctiveAxResult, null, `${AgentClass.name}: heuristic AX correction was reported as a failed submission`);
+    assert.equal(agent._formValidationActionLooksSubmit(
+      'execute_js',
+      { code: 'return document.title' },
+      { success: true, result: 'Example' },
+      { isSubmit: true },
+    ), true, `${AgentClass.name}: detected dynamic execute_js submit was ignored by validation inspection`);
+    assert.equal(agent._formValidationActionLooksSubmit(
+      'execute_js',
+      { code: 'document.querySelector("form").requestSubmit()' },
+      { success: true, result: null },
+    ), true, `${AgentClass.name}: requestSubmit execute_js was not recognized as a submit`);
+    assert.equal(agent._formValidationActionLooksSubmit(
+      'press_keys',
+      { key: 'Enter' },
+      { success: true },
+    ), false, `${AgentClass.name}: Enter without focused form context was treated as a submit`);
+    assert.equal(agent._formValidationActionLooksSubmit(
+      'press_keys',
+      { key: 'Enter' },
+      { success: true },
+      { isSubmit: true, validationSubmitEvidence: 'strong' },
+    ), true, `${AgentClass.name}: Enter in a detected form was not recognized as a submit`);
+    const comboboxEnterFailure = agent._detectFormValidationFailure(before, customAfter, {
+      toolName: 'press_keys',
+      args: { key: 'Enter' },
+      result: { success: true },
+    });
+    assert.equal(comboboxEnterFailure, null, `${AgentClass.name}: non-form Enter misclassified a revealed alert as submit validation`);
+    const formEnterFailure = agent._detectFormValidationFailure(before, customAfter, {
+      toolName: 'press_keys',
+      args: { key: 'Enter' },
+      result: { success: true },
+      detectedSubmit: { isSubmit: true, validationSubmitEvidence: 'strong' },
+    });
+    assert.ok(formEnterFailure, `${AgentClass.name}: detected form Enter skipped validation feedback`);
+    assert.equal(agent._formValidationActionLooksSubmit(
+      'click',
+      { selector: '#open-help' },
+      { success: true, tag: 'BUTTON', text: 'Open help' },
+    ), false, `${AgentClass.name}: selector-clicked button with missing metadata was misclassified as a submit`);
+
+    const failedSetFieldKey = agent._formValidationActionKey('set_field', {
+      ref_id: 'ref_email',
+      text: 'wrong@example.com',
+      submit: true,
+    });
+    const correctedSetFieldKey = agent._formValidationActionKey('set_field', {
+      ref_id: 'ref_email',
+      text: 'correct@example.com',
+      submit: true,
+    });
+    assert.notEqual(failedSetFieldKey, correctedSetFieldKey, `${AgentClass.name}: corrected set_field value kept the failed retry key`);
+    assert.doesNotMatch(failedSetFieldKey, /wrong@example\.com/, `${AgentClass.name}: set_field retry key retained raw typed text`);
+    assert.doesNotMatch(correctedSetFieldKey, /correct@example\.com/, `${AgentClass.name}: corrected retry key retained raw typed text`);
+
+    const failedExecuteJsKey = agent._formValidationActionKey('execute_js', {
+      code: 'document.querySelector("form").requestSubmit()',
+    });
+    const correctedExecuteJsKey = agent._formValidationActionKey('execute_js', {
+      code: 'document.querySelector("#checkout").requestSubmit()',
+    });
+    assert.notEqual(failedExecuteJsKey, correctedExecuteJsKey, `${AgentClass.name}: corrected execute_js kept the failed retry key`);
+    assert.doesNotMatch(failedExecuteJsKey, /requestSubmit/, `${AgentClass.name}: execute_js retry key retained raw code`);
+  }
+});
+
+test('form validation probes resolve aria-errormessage text in document and shadow roots', () => {
+  for (const [label, rel] of [
+    ['chrome', 'src/chrome/src/agent/agent.js'],
+    ['firefox', 'src/firefox/src/agent/agent.js'],
+  ]) {
+    const source = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+    const probeStart = source.indexOf('static _formValidationStateProbe');
+    const probeEnd = source.indexOf('_fallbackSubmitConfirmationInfo', probeStart);
+    assert.ok(probeStart >= 0 && probeEnd > probeStart, `${label}: form validation probe should be bounded`);
+    const probe = source.slice(probeStart, probeEnd);
+    assert.match(
+      probe,
+      /\['aria-errormessage', 'aria-describedby'\]\.flatMap/,
+      `${label}: invalid-field details should include aria-errormessage references`,
+    );
+    assert.match(
+      probe,
+      /for \(const root of roots\)[\s\S]*root\.getElementById\?\.\(id\)/,
+      `${label}: ARIA error references should resolve inside collected shadow roots`,
+    );
+  }
+});
+
+test('form validation probes fingerprint password and ARIA checked-state corrections', () => {
+  const secretControl = {
+    tagName: 'INPUT',
+    name: 'password',
+    id: 'password',
+    disabled: false,
+    value: 'first1',
+    getAttribute(name) {
+      if (name === 'type') return 'password';
+      return '';
+    },
+    hasAttribute() { return false; },
+    getBoundingClientRect() { return { width: 120, height: 24 }; },
+  };
+  let ariaChecked = 'false';
+  const ariaCheckedControl = {
+    tagName: 'DIV',
+    name: 'application',
+    id: 'application',
+    disabled: false,
+    getAttribute(name) {
+      if (name === 'role') return 'checkbox';
+      if (name === 'aria-checked') return ariaChecked;
+      return '';
+    },
+    hasAttribute(name) { return name === 'aria-checked'; },
+    getBoundingClientRect() { return { width: 120, height: 24 }; },
+  };
+  const controlsSelector = 'input, textarea, select, [contenteditable="true"], [role="checkbox"], [role="radio"], [role="switch"], [aria-checked], button, [role="button"], [onclick], [data-action]';
+  const sandbox = {
+    NodeFilter: { SHOW_ELEMENT: 1 },
+    getComputedStyle: () => ({
+      display: 'block',
+      visibility: 'visible',
+      opacity: '1',
+    }),
+    document: {
+      activeElement: null,
+      createTreeWalker() {
+        return {
+          currentNode: null,
+          nextNode() { return null; },
+        };
+      },
+      querySelectorAll(selector) {
+        return selector === controlsSelector ? [secretControl, ariaCheckedControl] : [];
+      },
+    },
+  };
+
+  for (const AgentClass of [AgentCh, AgentFx]) {
+    const probeSource = AgentClass._formValidationStateProbe.toString();
+    secretControl.value = 'first1';
+    const first = vm.runInNewContext(`(${probeSource})()`, sandbox);
+    secretControl.value = 'second';
+    const second = vm.runInNewContext(`(${probeSource})()`, sandbox);
+    assert.notEqual(
+      first.controlFingerprint,
+      second.controlFingerprint,
+      `${AgentClass.name}: same-length password correction kept the validation state unchanged`,
+    );
+    assert.doesNotMatch(
+      JSON.stringify([first, second]),
+      /first1|second/,
+      `${AgentClass.name}: validation snapshot exposed a password value`,
+    );
+
+    secretControl.value = 'second';
+    ariaChecked = 'false';
+    const unchecked = vm.runInNewContext(`(${probeSource})()`, sandbox);
+    ariaChecked = 'true';
+    const checked = vm.runInNewContext(`(${probeSource})()`, sandbox);
+    assert.notEqual(
+      unchecked.controlFingerprint,
+      checked.controlFingerprint,
+      `${AgentClass.name}: aria-checked correction kept the validation state unchanged`,
+    );
+  }
+});
+
+test('form validation polling catches delayed errors', async () => {
+  const url = 'https://example.com/form';
+  for (const AgentClass of [AgentCh, AgentFx]) {
+    for (const redirectedUrl of [
+      `${url}?error=pending#payment`,
+      `${url}/error`,
+    ]) {
+      const agent = new AgentClass({ getVisionProvider: async () => null });
+      const before = [{
+        frameId: 0,
+        url,
+        activeInvalid: false,
+        invalidFields: [],
+        ariaInvalidFields: [],
+        alerts: [],
+        controlFingerprint: 'unchanged',
+      }];
+      const redirected = [{
+        ...before[0],
+        url: redirectedUrl,
+      }];
+      const delayed = [{
+        ...redirected[0],
+        alerts: ['Server rejected this value.'],
+      }];
+      let captures = 0;
+      agent._captureFormValidationState = async () => {
+        captures += 1;
+        return structuredClone(captures === 1 ? redirected : delayed);
+      };
+
+      const failure = await agent._waitForFormValidationFailure(
+        5116,
+        before,
+        {
+          toolName: 'click',
+          args: { text: 'Submit' },
+          result: { success: true, tag: 'BUTTON', type: 'submit', isSubmitControl: true },
+        },
+        { checkpointsMs: [0, 0] },
+      );
+      assert.ok(failure, `${AgentClass.name}: delayed validation feedback was missed at ${redirectedUrl}`);
+      assert.match(failure.error, /server rejected this value/i);
+      assert.equal(captures, 2, `${AgentClass.name}: validation polling did not retry after redirect to ${redirectedUrl}`);
+    }
+
+    const hydratedRoute = `${url}/error`;
+    const redirectedShell = [{
+      frameId: 0,
+      url: hydratedRoute,
+      activeInvalid: false,
+      invalidFields: [],
+      ariaInvalidFields: [],
+      alerts: [],
+      controlFingerprint: 'redirected-shell',
+    }];
+    const hydratedError = [{
+      ...redirectedShell[0],
+      alerts: ['Server rejected this value after hydration.'],
+    }];
+    const hydratedAgent = new AgentClass({ getVisionProvider: async () => null });
+    let hydratedCaptures = 0;
+    hydratedAgent._captureFormValidationState = async () => {
+      hydratedCaptures += 1;
+      return structuredClone(hydratedCaptures < 3 ? redirectedShell : hydratedError);
+    };
+    const hydratedFailure = await hydratedAgent._waitForFormValidationFailure(
+      5116,
+      [{
+        ...redirectedShell[0],
+        url,
+        controlFingerprint: 'submitted',
+      }],
+      {
+        toolName: 'click',
+        args: { text: 'Submit' },
+        result: { success: true, tag: 'BUTTON', type: 'submit', isSubmitControl: true },
+      },
+      { checkpointsMs: [0, 360, 420] },
+    );
+    assert.ok(hydratedFailure, `${AgentClass.name}: hydrated validation feedback was missed after a different-path redirect`);
+    assert.match(hydratedFailure.error, /after hydration/i);
+    assert.equal(hydratedCaptures, 3, `${AgentClass.name}: redirected shell stopped polling before the late checkpoint`);
+
+    const remainingError = [{
+      frameId: 0,
+      url,
+      activeInvalid: false,
+      invalidFields: [],
+      ariaInvalidFields: [{
+        label: 'Phone number',
+        type: 'tel',
+        message: 'This field is required.',
+      }],
+      alerts: ['Please correct the highlighted fields.'],
+      controlFingerprint: 'email-fixed-phone-missing',
+    }];
+    const clearedError = [{
+      ...remainingError[0],
+      ariaInvalidFields: [],
+      alerts: [],
+      controlFingerprint: 'submitted',
+    }];
+    const correctedContext = {
+      toolName: 'click',
+      args: { text: 'Submit' },
+      result: { success: true, tag: 'BUTTON', type: 'submit', isSubmitControl: true },
+      priorValidationFailure: false,
+      correctedPriorValidationFailure: true,
+    };
+
+    const correctedAgent = new AgentClass({ getVisionProvider: async () => null });
+    let persistentCaptures = 0;
+    correctedAgent._captureFormValidationState = async () => {
+      persistentCaptures += 1;
+      return structuredClone(remainingError);
+    };
+    const persistentFailure = await correctedAgent._waitForFormValidationFailure(
+      5116,
+      remainingError,
+      correctedContext,
+      { checkpointsMs: [0, 0] },
+    );
+    assert.ok(persistentFailure, `${AgentClass.name}: remaining validation error was lost after a partial correction`);
+    assert.match(persistentFailure.error, /phone number|highlighted fields/i);
+    assert.equal(persistentCaptures, 2, `${AgentClass.name}: corrected persistent error was accepted before the final checkpoint`);
+
+    let clearingCaptures = 0;
+    correctedAgent._captureFormValidationState = async () => {
+      clearingCaptures += 1;
+      return structuredClone(clearingCaptures === 1 ? remainingError : clearedError);
+    };
+    const clearedFailure = await correctedAgent._waitForFormValidationFailure(
+      5116,
+      remainingError,
+      correctedContext,
+      { checkpointsMs: [0, 0] },
+    );
+    assert.equal(clearedFailure, null, `${AgentClass.name}: a clearing stale error blocked a corrected successful submit`);
+    assert.equal(clearingCaptures, 2, `${AgentClass.name}: corrected submit did not wait for stale validation to clear`);
+  }
+});
+
+test('coordinate iframe submits capture validation state in all frames', async () => {
+  const agent = new AgentCh({ getVisionProvider: async () => null });
+  const tabId = 5118;
+  const url = 'https://merchant.example/checkout';
+  const before = [{
+    frameId: 0,
+    url,
+    activeInvalid: false,
+    invalidFields: [],
+    ariaInvalidFields: [],
+    alerts: [],
+    controlFingerprint: 'top',
+  }, {
+    frameId: 3,
+    url: 'https://payments.example/card',
+    activeInvalid: false,
+    invalidFields: [],
+    ariaInvalidFields: [],
+    alerts: [],
+    controlFingerprint: 'card-ready',
+  }];
+  const after = structuredClone(before);
+  after[1].activeInvalid = true;
+  after[1].invalidFields = [{
+    label: 'Card number',
+    type: 'text',
+    message: 'Enter a valid card number.',
+  }];
+  after[1].controlFingerprint = 'card-invalid';
+
+  const captureOptions = [];
+  let captures = 0;
+  agent._ensureGateSetting = async () => false;
+  agent._skipPermissionGate = false;
+  agent._currentUrl = async () => url;
+  agent._recordProgressObservation = async () => null;
+  agent._autoRecordProgressAction = () => null;
+  agent._progressWarningForAction = () => '';
+  agent._persist = () => {};
+  agent._iframeRectsForCoordinate = async () => [{
+    left: 20,
+    top: 40,
+    width: 400,
+    height: 250,
+    url: 'https://payments.example/card',
+    host: 'payments.example',
+    index: 0,
+  }];
+  agent._detectLikelySubmitAction = async () => ({
+    isSubmit: true,
+    host: 'payments.example',
+    tool: 'click',
+    reason: 'submit button/control activation',
+    validationSubmitEvidence: 'strong',
+  });
+  agent._promptSubmitConfirmation = async () => 'once';
+  agent._captureFormValidationState = async (_tabId, options = {}) => {
+    captureOptions.push(options);
+    captures += 1;
+    return structuredClone(captures === 1 ? before : after);
+  };
+  agent.executeTool = async () => ({
+    success: true,
+    dispatched: true,
+    text: 'Pay',
+  });
+
+  const messages = [];
+  await agent._executeToolBatch(
+    tabId,
+    [{
+      id: 'coordinate_iframe_submit',
+      function: { name: 'click', arguments: '{"x":120,"y":160}' },
+    }],
+    messages,
+    () => {},
+    { supportsVision: false },
+    '',
+    new Set(['click']),
+    1,
+  );
+
+  assert.ok(captureOptions.length >= 2, 'Chrome: coordinate iframe submit did not capture before and after states');
+  assert.ok(captureOptions.every(options => options.allFrames === true), 'Chrome: coordinate iframe validation capture omitted child frames');
+  const result = JSON.parse(agent._unwrapUntrusted(messages[0].content));
+  assert.equal(result.formValidationFailed, true, 'Chrome: child-frame validation failure was not returned');
+  assert.match(result.error, /valid card number/i);
+});
+
+test('Chrome selector submits capture validation state in all frames', async () => {
+  const agent = new AgentCh({ getVisionProvider: async () => null });
+  const tabId = 5123;
+  const url = 'https://merchant.example/checkout';
+  const before = [{
+    frameId: 0,
+    url,
+    activeInvalid: false,
+    invalidFields: [],
+    ariaInvalidFields: [],
+    alerts: [],
+    controlFingerprint: 'top',
+  }, {
+    frameId: 4,
+    url: 'https://payments.example/card',
+    activeInvalid: false,
+    invalidFields: [],
+    ariaInvalidFields: [],
+    alerts: [],
+    controlFingerprint: 'card-ready',
+  }];
+  const after = structuredClone(before);
+  after[1].activeInvalid = true;
+  after[1].invalidFields = [{
+    label: 'Card number',
+    type: 'text',
+    message: 'Enter a valid card number.',
+  }];
+  after[1].controlFingerprint = 'card-invalid';
+
+  const captureOptions = [];
+  let captures = 0;
+  agent._ensureGateSetting = async () => true;
+  agent._skipPermissionGate = true;
+  agent._currentUrl = async () => url;
+  agent._recordProgressObservation = async () => null;
+  agent._autoRecordProgressAction = () => null;
+  agent._progressWarningForAction = () => '';
+  agent._persist = () => {};
+  agent._captureFormValidationState = async (_tabId, options = {}) => {
+    captureOptions.push(options);
+    captures += 1;
+    return structuredClone(captures === 1 ? before : after);
+  };
+  agent.executeTool = async () => ({
+    success: true,
+    dispatched: true,
+    tag: 'BUTTON',
+    type: 'submit',
+    isSubmitControl: true,
+    text: 'Pay',
+  });
+
+  const messages = [];
+  await agent._executeToolBatch(
+    tabId,
+    [{
+      id: 'selector_iframe_submit',
+      function: { name: 'click', arguments: '{"selector":"#pay"}' },
+    }],
+    messages,
+    () => {},
+    { supportsVision: false },
+    '',
+    new Set(['click']),
+    1,
+  );
+
+  assert.ok(captureOptions.length >= 2, 'Chrome: selector iframe submit did not capture before and after states');
+  assert.ok(captureOptions.every(options => options.allFrames === true), 'Chrome: selector iframe validation capture omitted child frames');
+  const result = JSON.parse(agent._unwrapUntrusted(messages[0].content));
+  assert.equal(result.formValidationFailed, true, 'Chrome: selector child-frame validation failure was not returned');
+  assert.match(result.error, /valid card number/i);
+});
+
+test('unattended iframe submits preflight validation in all frames', async () => {
+  const url = 'https://merchant.example/checkout';
+  for (const AgentClass of [AgentCh, AgentFx]) {
+    const agent = new AgentClass({ getVisionProvider: async () => null });
+    const tabId = AgentClass === AgentCh ? 5121 : 5122;
+    const before = [{
+      frameId: 0,
+      url,
+      activeInvalid: false,
+      invalidFields: [],
+      ariaInvalidFields: [],
+      alerts: [],
+      controlFingerprint: 'top',
+    }, {
+      frameId: 2,
+      url: 'https://payments.example/card',
+      activeInvalid: false,
+      invalidFields: [],
+      ariaInvalidFields: [],
+      alerts: [],
+      controlFingerprint: 'card-ready',
+    }];
+    const after = structuredClone(before);
+    after[1].alerts = ['Card verification failed.'];
+    after[1].controlFingerprint = 'card-error';
+
+    let detections = 0;
+    let captures = 0;
+    const captureOptions = [];
+    agent._ensureGateSetting = async () => true;
+    agent._skipPermissionGate = true;
+    agent._currentUrl = async () => url;
+    agent._recordProgressObservation = async () => null;
+    agent._autoRecordProgressAction = () => null;
+    agent._progressWarningForAction = () => '';
+    agent._persist = () => {};
+    agent._detectLikelySubmitAction = async (_tabId, toolName) => {
+      detections += 1;
+      assert.equal(toolName, 'iframe_click');
+      return {
+        isSubmit: true,
+        host: 'payments.example',
+        tool: 'iframe_click',
+        reason: 'submit button/control activation',
+        validationSubmitEvidence: 'strong',
+      };
+    };
+    agent._captureFormValidationState = async (_tabId, options = {}) => {
+      captureOptions.push(options);
+      captures += 1;
+      return structuredClone(captures === 1 ? before : after);
+    };
+    agent.executeTool = async () => ({
+      success: true,
+      dispatched: true,
+      frame: { tag: 'BUTTON', type: 'button' },
+    });
+
+    const messages = [];
+    await agent._executeToolBatch(
+      tabId,
+      [{
+        id: 'unattended_iframe_submit',
+        function: {
+          name: 'iframe_click',
+          arguments: '{"selector":"#pay","urlFilter":"payments.example"}',
+        },
+      }],
+      messages,
+      () => {},
+      { supportsVision: false },
+      '',
+      new Set(['iframe_click']),
+      1,
+    );
+
+    assert.equal(detections, 1, `${AgentClass.name}: iframe submit was not preflight-detected`);
+    assert.ok(captureOptions.length >= 2, `${AgentClass.name}: iframe validation state was not checked`);
+    assert.ok(captureOptions.every(options => options.allFrames === true), `${AgentClass.name}: iframe validation omitted child frames`);
+    const result = JSON.parse(agent._unwrapUntrusted(messages[0].content).split('\n', 1)[0]);
+    assert.equal(result.formValidationFailed, true, `${AgentClass.name}: unattended iframe validation failure was missed`);
+    assert.match(result.error, /card verification failed/i);
+  }
+});
+
+test('unattended custom submits preflight validation', async () => {
+  const url = 'https://example.com/checkout';
+  for (const AgentClass of [AgentCh, AgentFx]) {
+    const agent = new AgentClass({ getVisionProvider: async () => null });
+    const tabId = AgentClass === AgentCh ? 5124 : 5125;
+    const before = [{
+      frameId: 0,
+      url,
+      activeInvalid: false,
+      invalidFields: [],
+      ariaInvalidFields: [],
+      alerts: [],
+      controlFingerprint: 'ready',
+    }];
+    const after = [{
+      ...before[0],
+      alerts: ['Please correct the highlighted fields.'],
+      controlFingerprint: 'rejected',
+    }];
+
+    let detections = 0;
+    let captures = 0;
+    agent._ensureGateSetting = async () => true;
+    agent._skipPermissionGate = true;
+    agent._currentUrl = async () => url;
+    agent._recordProgressObservation = async () => null;
+    agent._autoRecordProgressAction = () => null;
+    agent._progressWarningForAction = () => '';
+    agent._persist = () => {};
+    agent._detectLikelySubmitAction = async (_tabId, toolName) => {
+      detections += 1;
+      assert.equal(toolName, 'click');
+      return {
+        isSubmit: true,
+        host: 'example.com',
+        tool: 'click',
+        reason: 'button inside a form',
+        validationSubmitEvidence: 'heuristic',
+      };
+    };
+    agent._captureFormValidationState = async () => {
+      captures += 1;
+      return structuredClone(captures === 1 ? before : after);
+    };
+    agent.executeTool = async () => ({
+      success: true,
+      dispatched: true,
+      tag: 'BUTTON',
+      type: 'button',
+      isSubmitControl: false,
+      text: 'Continue',
+    });
+
+    const messages = [];
+    await agent._executeToolBatch(
+      tabId,
+      [{
+        id: 'unattended_custom_submit',
+        function: { name: 'click', arguments: '{"text":"Continue"}' },
+      }],
+      messages,
+      () => {},
+      { supportsVision: false },
+      '',
+      new Set(['click']),
+      1,
+    );
+
+    assert.equal(detections, 1, `${AgentClass.name}: unattended custom submit skipped preflight detection`);
+    assert.ok(captures >= 2, `${AgentClass.name}: unattended custom submit skipped validation capture`);
+    const result = JSON.parse(agent._unwrapUntrusted(messages[0].content));
+    assert.equal(result.formValidationFailed, true, `${AgentClass.name}: unattended custom submit missed validation feedback`);
+    assert.match(result.error, /correct the highlighted fields/i);
+  }
+});
+
+test('execute_js submissions receive form validation feedback', async () => {
+  const url = 'https://example.com/checkout';
+  for (const AgentClass of [AgentCh, AgentFx]) {
+    const agent = new AgentClass({ getVisionProvider: async () => null });
+    const tabId = 5119;
+    const before = [{
+      frameId: 0,
+      url,
+      activeInvalid: false,
+      invalidFields: [],
+      ariaInvalidFields: [],
+      alerts: [],
+      controlFingerprint: 'ready',
+    }];
+    const after = [{
+      ...before[0],
+      alerts: ['Please correct the payment details.'],
+      controlFingerprint: 'script-error',
+    }];
+    let captures = 0;
+    agent._ensureGateSetting = async () => true;
+    agent._skipPermissionGate = true;
+    agent._currentUrl = async () => url;
+    agent._recordProgressObservation = async () => null;
+    agent._autoRecordProgressAction = () => null;
+    agent._progressWarningForAction = () => '';
+    agent._persist = () => {};
+    agent._captureFormValidationState = async () => {
+      captures += 1;
+      return structuredClone(captures === 1 ? before : after);
+    };
+    agent.executeTool = async () => ({
+      success: true,
+      dispatched: true,
+      result: null,
+    });
+
+    const messages = [];
+    await agent._executeToolBatch(
+      tabId,
+      [{
+        id: 'execute_js_submit',
+        function: {
+          name: 'execute_js',
+          arguments: '{"code":"submitCheckout()"}',
+        },
+      }],
+      messages,
+      () => {},
+      { supportsVision: false },
+      '',
+      new Set(['execute_js']),
+      1,
+    );
+
+    assert.ok(captures >= 2, `${AgentClass.name}: execute_js submit did not capture validation states`);
+    const result = JSON.parse(agent._unwrapUntrusted(messages[0].content));
+    assert.equal(result.formValidationFailed, true, `${AgentClass.name}: execute_js validation failure was not returned`);
+    assert.match(result.error, /correct the payment details/i);
+  }
+});
+
+test('agent returns form validation messages and blocks unchanged repeat submits', async () => {
+  const url = 'https://addons.mozilla.org/en-US/developers/addon/webbrain/versions/submit/';
+  const invalidField = {
+    label: 'Firefox',
+    type: 'checkbox',
+    message: 'Your extension has to be compatible with at least one application.',
+  };
+
+  for (const AgentClass of [AgentCh, AgentFx]) {
+    const agent = new AgentClass({ getVisionProvider: async () => null });
+    const tabId = 5117;
+    let executions = 0;
+    let prompts = 0;
+    let currentState = [{
+      frameId: 0,
+      url,
+      activeInvalid: false,
+      invalidFields: [invalidField],
+      ariaInvalidFields: [],
+      alerts: [],
+      controlFingerprint: 'unchecked',
+    }];
+
+    agent._ensureGateSetting = async () => false;
+    agent._skipPermissionGate = false;
+    agent._currentUrl = async () => url;
+    agent._recordProgressObservation = async () => null;
+    agent._autoRecordProgressAction = () => null;
+    agent._progressWarningForAction = () => '';
+    agent._persist = () => {};
+    agent._captureFormValidationState = async () => structuredClone(currentState);
+    const validationContexts = [];
+    const waitForFormValidationFailure = agent._waitForFormValidationFailure.bind(agent);
+    agent._waitForFormValidationFailure = async (currentTabId, before, context, options) => {
+      validationContexts.push(context);
+      return waitForFormValidationFailure(currentTabId, before, context, options);
+    };
+    agent._detectLikelySubmitAction = async (_tabId, _toolName, args) => (
+      args?.text === 'Continue'
+        ? {
+            isSubmit: true,
+            host: 'addons.mozilla.org',
+            tool: 'click',
+            reason: 'submit button/control activation',
+          }
+        : null
+    );
+    agent._promptSubmitConfirmation = async () => {
+      prompts += 1;
+      return 'once';
+    };
+    agent.executeTool = async (_tabId, _toolName, args) => {
+      executions += 1;
+      if (args?.text === 'Continue' && currentState[0].invalidFields.length) {
+        currentState = [{ ...currentState[0], activeInvalid: true }];
+      } else if (args?.text === 'Continue') {
+        currentState = [{
+          ...currentState[0],
+          url: `${url}success`,
+          alerts: [],
+        }];
+      }
+      const isSubmit = args?.text === 'Continue';
+      return {
+        success: true,
+        dispatched: true,
+        tag: 'BUTTON',
+        type: isSubmit ? 'submit' : 'button',
+        isSubmitControl: isSubmit,
+        text: args?.text || '',
+      };
+    };
+
+    const runClick = async (id, text) => {
+      const messages = [];
+      await agent._executeToolBatch(
+        tabId,
+        [{
+          id,
+          function: { name: 'click', arguments: JSON.stringify({ text }) },
+        }],
+        messages,
+        () => {},
+        { supportsVision: false },
+        '',
+        new Set(['click']),
+        1,
+      );
+      assert.equal(messages.length, 1, `${AgentClass.name}: expected one tool result`);
+      return JSON.parse(agent._unwrapUntrusted(messages[0].content));
+    };
+
+    const runSubmit = id => runClick(id, 'Continue');
+    agent._recentSubmitClicks.set(tabId, [{
+      key: `continue|${url}`,
+      ts: Date.now(),
+      url,
+      text: 'Continue',
+    }]);
+    const failed = await runSubmit('submit_validation_failure');
+    assert.equal(failed.success, false, `${AgentClass.name}: invalid submit was reported successful`);
+    assert.equal(failed.formValidationFailed, true, `${AgentClass.name}: missing formValidationFailed marker`);
+    assert.match(failed.error, /compatible with at least one application/i);
+    assert.equal(executions, 1, `${AgentClass.name}: first submit did not execute exactly once`);
+    assert.equal(agent._recentSubmitClicks.has(tabId), false, `${AgentClass.name}: rejected submit kept a stale duplicate-click block`);
+
+    const blocked = await runSubmit('submit_validation_retry');
+    assert.equal(blocked.blockedValidationRetry, true, `${AgentClass.name}: unchanged invalid form was resubmitted`);
+    assert.match(blocked.error, /validation state has not changed/i);
+    assert.equal(executions, 1, `${AgentClass.name}: blocked retry still dispatched`);
+    assert.equal(prompts, 1, `${AgentClass.name}: blocked retry asked for submit confirmation again`);
+
+    agent._skipPermissionGate = true;
+    const correction = await runClick('validation_correction_button', 'Choose application');
+    agent._skipPermissionGate = false;
+    assert.equal(correction.success, true, `${AgentClass.name}: corrective type=button was blocked`);
+    assert.equal(correction.blockedValidationRetry, undefined, `${AgentClass.name}: corrective type=button was treated as a repeat submit`);
+    assert.equal(executions, 2, `${AgentClass.name}: corrective type=button did not dispatch`);
+    assert.equal(prompts, 1, `${AgentClass.name}: corrective type=button requested submit confirmation`);
+
+    currentState = [{
+      frameId: 0,
+      url,
+      activeInvalid: false,
+      invalidFields: [],
+      ariaInvalidFields: [],
+      alerts: ['Your extension has to be compatible with at least one application.'],
+      alertsAreValidationOnly: true,
+      controlFingerprint: 'checked',
+    }];
+    const successful = await runSubmit('submit_after_correction');
+    assert.equal(successful.success, true, `${AgentClass.name}: corrected form remained blocked`);
+    assert.equal(executions, 3, `${AgentClass.name}: corrected form was not submitted`);
+    assert.equal(prompts, 2, `${AgentClass.name}: corrected submit did not receive fresh confirmation`);
+    assert.equal(
+      validationContexts.at(-1)?.priorValidationFailure,
+      false,
+      `${AgentClass.name}: corrected state kept stale prior-validation detection enabled`,
+    );
+    assert.equal(
+      validationContexts.at(-1)?.correctedPriorValidationFailure,
+      true,
+      `${AgentClass.name}: corrected state did not preserve deferred prior-validation context`,
+    );
   }
 });
 
@@ -24398,6 +25667,9 @@ test('submit controls bypass native select guards in click paths', () => {
   assert.match(chromeAgent, /isSubmitControl: isSubmitControl\(el\)/, 'chrome agent: text-resolved controls should expose submit metadata');
   assert.match(chromeAgent, /const coordSelCheck = info\.isSubmitControl \? null : await cdpClient\.evaluate/, 'chrome agent: submit text clicks should skip coordinate select guard');
   assert.match(chromeAgent, /const postClickSel1 = info\.isSubmitControl \? null : await cdpClient\.evaluate/, 'chrome agent: submit text clicks should skip post-click select false errors');
+  assert.match(chromeAgent, /isEditableControl: isEditableControl\(el\)/, 'chrome agent: resolved click target should expose its own editability');
+  assert.match(chromeAgent, /widgetFallback: true,[\s\S]*isEditableControl: el\.isContentEditable[\s\S]*role'\) === 'textbox'[\s\S]*role'\) === 'combobox'/, 'chrome agent: widened text-click fallback should preserve contenteditable/widget editability');
+  assert.match(chromeAgent, /const isEditableTarget = info\.isEditableControl === true;/, 'chrome agent: stale-click exemption should use the clicked target, not post-submit focus');
 
   for (const [label, rel] of [
     ['chrome', 'src/chrome/src/content/content.js'],
@@ -24408,7 +25680,10 @@ test('submit controls bypass native select guards in click paths', () => {
     assert.match(content, /const targetIsSubmitControl = _isSubmitControl\(el\);/, `${label}: click path should classify submit target before select guards`);
     assert.ok(content.includes('if (!(el instanceof HTMLSelectElement) && !targetIsSubmitControl) {'), `${label}: nearby select guard should not block submit controls`);
     assert.ok(content.includes('if (!targetIsSubmitControl && postActive && postActive !== el && postActive instanceof HTMLSelectElement) {'), `${label}: post-click select false error should not block submit controls`);
+    assert.match(content, /isSubmitControl: targetIsSubmitControl,/, `${label}: successful clicks should preserve submit classification for post-click validation`);
   }
+  const chromeContent = fs.readFileSync(path.join(ROOT, 'src/chrome/src/content/content.js'), 'utf8');
+  assert.match(chromeContent, /el\.tagName === 'INPUT' && !\['button', 'checkbox'[\s\S]*?'submit'\]\.includes\(inputType\)/, 'chrome: checkbox/radio focus must not receive the text-editable stale-click exemption');
 });
 
 test('accessibility ref lookup rejects disconnected elements', () => {
@@ -24491,7 +25766,7 @@ test('click_ax rejects stale zero-sized targets before activation', () => {
     ['firefox', 'src/firefox/src/content/content.js'],
   ]) {
     const source = fs.readFileSync(path.join(ROOT, rel), 'utf8');
-    const branchStart = source.indexOf("'click_ax': () => {");
+    const branchStart = source.search(/'click_ax': (?:async )?\(\) => \{/);
     const branchEnd = source.indexOf("'type_ax':", branchStart);
     assert.ok(branchStart >= 0 && branchEnd > branchStart, `${label}: click_ax handler should be bounded for regression checks`);
     const branch = source.slice(branchStart, branchEnd);
@@ -24539,6 +25814,10 @@ test('submit detector source covers submit controls, Enter, set_field, iframes, 
     assert.match(agent, /const escaped = selector\.replace[\s\S]*return root\.querySelector\(escaped\)/, `${label}: safe selector fallback should retry escaped colons`);
     assert.match(agent, /const labelControlFor = \(el\) => \{[\s\S]*String\(el\.tagName \|\| ''\)\.toUpperCase\(\) !== 'LABEL'[\s\S]*el\.htmlFor[\s\S]*doc\.getElementById\(el\.htmlFor\)[\s\S]*button,input,textarea,select/, `${label}: submit probe should resolve labels to associated controls`);
     assert.match(agent, /const target = labelControlFor\(el\) \|\| el;[\s\S]*const candidate = target\.closest\?\.\('button,input,\[role="button"\],\[onclick\],\[data-action\]'\)/, `${label}: submit-control detection should inspect label-backed controls`);
+    assert.match(agent, /const submitControlEvidence = \(el\) => \{/, `${label}: custom submit controls should classify preflight evidence strength`);
+    assert.match(agent, /const submitInfo = \(form, reason, pendingEl = null, pendingValue = null, validationSubmitEvidence = 'strong'\)/, `${label}: submit summaries should carry preflight evidence strength`);
+    assert.match(agent, /evidence\.strong \? 'strong' : 'heuristic'/, `${label}: custom submit probes should label strong and heuristic evidence`);
+    assert.match(agent, /detected\.validationSubmitEvidence === 'strong' \? 'strong' : 'heuristic'/, `${label}: submit evidence strength should survive page-probe normalization`);
     assert.match(agent, /const findTopmostModal = \(\) => \{[\s\S]*dialog\[open\][\s\S]*\[role="dialog"\]\[aria-modal="true"\][\s\S]*\[class\*="DialogOverlay"\]/, `${label}: text submit probing should mirror modal scoping`);
     assert.match(agent, /Array\.from\(\(findTopmostModal\(\) \|\| doc\)\.querySelectorAll/, `${label}: text submit probing should search inside the topmost modal when present`);
   }
@@ -24569,6 +25848,39 @@ test('chrome submit detector fail-closes CDP-only submit selector targets', () =
   assert.match(agent, /selector resolves to a submit control in shadow DOM/, 'chrome: CDP selector fallback should force submit confirmation for CDP-only submit controls');
   assert.match(agent, /_detectCdpSubmitSelector[\s\S]*type === 'image' \|\| type === 'button'[\s\S]*!type \|\| type === 'submit' \|\| type === 'button'/, 'chrome: CDP selector fallback should fail closed for JS-driven type=button form controls');
   assert.match(agent, /_detectCdpSubmitSelector[\s\S]*const role = String\(attrs\.role \|\| ''\)\.toLowerCase\(\);[\s\S]*Object\.prototype\.hasOwnProperty\.call\(attrs, 'onclick'\)[\s\S]*role === 'button'[\s\S]*hasActivationHandler/, 'chrome: CDP selector fallback should fail closed for non-native JS-driven controls');
+  assert.match(agent, /const nativeSubmit = \(tag === 'input'[\s\S]*tag === 'button' && \(!type \|\| type === 'submit'\)[\s\S]*validationSubmitEvidence: nativeSubmit \? 'strong' : 'heuristic'/, 'chrome: CDP selector fallback should preserve strong native-submit evidence, including default-type buttons');
+});
+
+test('chrome CDP submit selector treats default buttons as strong native submits', async () => {
+  const previousChrome = globalThis.chrome;
+  const originals = {
+    attach: cdpClientCh.attach,
+    resolveSelector: cdpClientCh.resolveSelector,
+    describeNode: cdpClientCh.describeNode,
+  };
+  try {
+    globalThis.chrome = { ...(previousChrome || {}), debugger: {} };
+    cdpClientCh.attach = async () => ({ attached: true });
+    cdpClientCh.resolveSelector = async () => ({ found: true, nodeId: 41 });
+    let attributes = [];
+    cdpClientCh.describeNode = async () => ({
+      node: { nodeName: 'BUTTON', attributes },
+    });
+    const agent = new AgentCh({ getVisionProvider: async () => null });
+
+    const defaultButton = await agent._detectCdpSubmitSelector(23, '#shadow-submit', 'example.com');
+    assert.equal(defaultButton?.validationSubmitEvidence, 'strong', 'default-type button should carry strong native-submit evidence');
+
+    attributes = ['type', 'button'];
+    const scriptButton = await agent._detectCdpSubmitSelector(23, '#shadow-continue', 'example.com');
+    assert.equal(scriptButton?.validationSubmitEvidence, 'heuristic', 'type=button should remain heuristic without stronger JS evidence');
+  } finally {
+    cdpClientCh.attach = originals.attach;
+    cdpClientCh.resolveSelector = originals.resolveSelector;
+    cdpClientCh.describeNode = originals.describeNode;
+    if (previousChrome === undefined) delete globalThis.chrome;
+    else globalThis.chrome = previousChrome;
+  }
 });
 
 test('firefox submit detector serializes static probe as a function expression', () => {
@@ -31428,6 +32740,298 @@ test('upload_file schema accepts downloadId and no longer hard-requires filePath
   assert.ok(up, 'upload_file not present in act tools');
   assert.ok(up.function.parameters.properties.downloadId, 'downloadId param missing from schema');
   assert.deepEqual(up.function.parameters.required, ['selector'], 'filePath should no longer be required');
+  assert.match(up.function.description, /without opening the page or OS file-picker dialog/i);
+  assert.match(up.function.description, /Do NOT click "Choose file", "Select a file"/);
+});
+
+test('Chrome click paths suppress native file choosers and redirect to upload_file', async () => {
+  const cdp = new CDPClient();
+  const expressions = [];
+  cdp.evaluate = async (_tabId, expression) => {
+    expressions.push(expression);
+    if (expression.includes('__wb_file_input_click_guard_last || null')) {
+      return { result: { value: { blocked: true, selector: '#upload-addon', ts: Date.now() } } };
+    }
+    return { result: { value: true } };
+  };
+
+  await cdp.armFileInputClickGuard(42);
+  assert.match(expressions[0], /document\.addEventListener\('click'[\s\S]*true\)/);
+  assert.match(expressions[0], /webbrain:file-picker-guard-reset/);
+  assert.match(expressions[0], /event\.preventDefault\(\)/);
+  assert.match(expressions[0], /event\.stopImmediatePropagation\(\)/);
+  assert.match(expressions[0], /tagName === 'INPUT'[\s\S]*=== 'file'/);
+  assert.match(expressions[0], /matches\.length === 1 && matches\[0\] === input/);
+  assert.match(expressions[0], /Object\.getOwnPropertyDescriptor\(showPickerProto,\s*'showPicker'\)/);
+  assert.match(expressions[0], /Object\.getOwnPropertyDescriptor\(showPickerProto,\s*'click'\)/);
+  assert.match(expressions[0], /value:\s*guardedShowPicker/);
+  assert.match(expressions[0], /value:\s*guardedClick/);
+  assert.match(expressions[0], /blockInput\(this\)/);
+  const consumed = await cdp.consumeFileInputClickGuard(42, 0);
+  assert.equal(consumed.blocked, true);
+  assert.equal(consumed.selector, '#upload-addon');
+  assert.equal(typeof consumed.ts, 'number');
+
+  const protocolGuard = new CDPClient();
+  const protocolCommands = [];
+  protocolGuard.sendCommand = async (_tabId, method, params) => {
+    protocolCommands.push({ method, params });
+    return {};
+  };
+  protocolGuard.evaluate = async (_tabId, expression) => ({
+    result: { value: expression.includes('__wb_file_input_click_guard_last || null') ? null : true },
+  });
+  await protocolGuard.armFileInputClickGuard(43);
+  const chooserHandler = protocolGuard.eventHandlers.get(43)?.['Page.fileChooserOpened']?.[0];
+  assert.equal(typeof chooserHandler, 'function');
+  chooserHandler({ backendNodeId: 9001 });
+  const protocolBlocked = await protocolGuard.consumeFileInputClickGuard(43, 0);
+  assert.equal(protocolBlocked.blocked, true);
+  assert.equal(protocolBlocked.selector, null);
+  assert.equal(protocolBlocked.backendNodeId, 9001);
+  assert.ok(protocolCommands.some(command =>
+    command.method === 'Page.setInterceptFileChooserDialog'
+    && command.params.enabled === true
+    && command.params.cancel === true
+  ));
+  assert.ok(protocolCommands.some(command =>
+    command.method === 'Page.setInterceptFileChooserDialog'
+    && command.params.enabled === false
+  ));
+
+  const quietProtocolGuard = new CDPClient();
+  const quietProtocolCommands = [];
+  quietProtocolGuard.sendCommand = async (_tabId, method, params) => {
+    quietProtocolCommands.push({ method, params });
+    return {};
+  };
+  quietProtocolGuard.evaluate = async (_tabId, expression) => ({
+    result: { value: expression.includes('__wb_file_input_click_guard_last || null') ? null : true },
+  });
+  await quietProtocolGuard.armFileInputClickGuard(44);
+  const quietBlocked = await quietProtocolGuard.consumeFileInputClickGuard(44, 0);
+  assert.equal(quietBlocked, null);
+  assert.equal(quietProtocolGuard.fileChooserGuards.has(44), false);
+  assert.ok(quietProtocolCommands.some(command =>
+    command.method === 'Page.setInterceptFileChooserDialog'
+    && command.params.enabled === false
+  ), 'empty consume must release tab-wide protocol interception');
+
+  cdp.resolveSelector = async () => ({
+    found: true,
+    inViewport: true,
+    hitOk: true,
+    x: 120,
+    y: 80,
+    width: 100,
+    height: 30,
+    tag: 'A',
+    text: 'Select a file...',
+  });
+  cdp.armFileInputClickGuard = async () => {};
+  cdp.consumeFileInputClickGuard = async () => ({ blocked: true, selector: '#upload-addon' });
+  cdp.sendCommand = async () => ({});
+
+  const result = await cdp.clickElement(42, 'a.fileupload-button');
+  assert.equal(result.success, false);
+  assert.equal(result.dispatched, true);
+  assert.equal(result.filePickerBlocked, true);
+  assert.equal(result.selector, '#upload-addon');
+  assert.match(result.error, /upload_file/);
+  assert.match(result.error, /downloadId or absolute filePath/);
+
+  const ambiguousResult = cdp.fileInputClickBlockedResult({ blocked: true, selector: null });
+  assert.equal(ambiguousResult.success, false);
+  assert.equal(ambiguousResult.filePickerBlocked, true);
+  assert.equal(Object.hasOwn(ambiguousResult, 'selector'), false);
+  assert.match(ambiguousResult.error, /exact, unique/);
+  assert.match(ambiguousResult.error, /Do not use a generic input\[type="file"\]/);
+
+  const navigationRace = new CDPClient();
+  let mouseDispatches = 0;
+  let fallbackClicks = 0;
+  navigationRace.resolveSelector = async () => ({
+    found: true,
+    inViewport: true,
+    hitOk: true,
+    x: 120,
+    y: 80,
+    width: 100,
+    height: 30,
+    tag: 'A',
+    text: 'Continue',
+    nodeId: 777,
+  });
+  navigationRace.armFileInputClickGuard = async () => {};
+  navigationRace.evaluate = async () => {
+    throw new Error('Execution context was destroyed during navigation');
+  };
+  navigationRace.sendCommand = async (_tabId, method) => {
+    if (method === 'Input.dispatchMouseEvent') mouseDispatches++;
+    if (method === 'Runtime.callFunctionOn') fallbackClicks++;
+    if (method === 'DOM.resolveNode') return { object: { objectId: 'should-not-be-used' } };
+    return {};
+  };
+
+  const navigationResult = await navigationRace.clickElement(42, '#continue');
+  assert.equal(navigationResult.success, true);
+  assert.equal(navigationResult.method, 'cdp-mouse');
+  assert.equal(mouseDispatches, 3);
+  assert.equal(fallbackClicks, 0, 'post-click observation failure must not dispatch a fallback click');
+
+  for (const relPath of [
+    'src/chrome/src/content/content.js',
+    'src/firefox/src/content/content.js',
+  ]) {
+    const source = fs.readFileSync(path.join(ROOT, relPath), 'utf8');
+    assert.match(source, /function uniqueFileInputSelector\(input\)/, `${relPath}: missing unique selector builder`);
+    assert.match(source, /matches\.length === 1 && matches\[0\] === input/, `${relPath}: selector should be proven unique`);
+    assert.match(source, /const FILE_PICKER_GUARD_SETTLE_MS = 500/, `${relPath}: missing deferred picker settle window`);
+    assert.match(source, /function clickWithoutNativeFilePicker\(runClick,\s*settleMs\s*=\s*FILE_PICKER_GUARD_SETTLE_MS\)/, `${relPath}: missing one-click file chooser guard`);
+    assert.match(source, /setTimeout\(\(\) => \{\s*state\.settled = true/, `${relPath}: guard should survive the settle window`);
+    assert.match(source, /state\.cleanupTimer = setTimeout\(\(\) => \{[\s\S]*cleanupGuard\(\)/, `${relPath}: abandoned guards should still expire`);
+    assert.match(source, /const installPageShowPickerGuard = \(\) =>/, `${relPath}: missing page-world showPicker bridge handshake`);
+    assert.match(source, /webbrain:file-picker-guard-arm/, `${relPath}: missing page-world showPicker arm event`);
+    assert.match(source, /webbrain:file-picker-guard-blocked/, `${relPath}: missing page-world blocked result event`);
+    assert.match(source, /cleanupPageShowPickerGuard\?\.\(!!state\.blocked\)/, `${relPath}: delayed programmatic guard should survive an empty consume`);
+    assert.match(source, /clickWithoutNativeFilePicker\(\(\) => el\.click\(\)\)/, `${relPath}: synthetic clicks should use the chooser guard`);
+    assert.match(source, /_filePickerGuardId:\s*filePickerGuard\.guardId/, `${relPath}: click response should return without waiting on the unloading document`);
+    assert.match(source, /'consume_file_picker_guard':\s*\(\) => consumeFilePickerGuard/, `${relPath}: missing deferred guard result handshake`);
+    assert.match(source, /filePickerBlocked:\s*true/, `${relPath}: blocked chooser should be explicit to the model`);
+  }
+
+  const chromeManifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'src/chrome/manifest.json'), 'utf8'));
+  const chromeMainGuard = chromeManifest.content_scripts.find(entry =>
+    entry.world === 'MAIN'
+    && entry.js?.includes('src/content/file-picker-guard-page.js')
+  );
+  assert.ok(chromeMainGuard, 'chrome: showPicker guard must run in the page MAIN world');
+  assert.equal(chromeMainGuard.run_at, 'document_start');
+
+  const firefoxManifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'src/firefox/manifest.json'), 'utf8'));
+  const firefoxGuardLoader = firefoxManifest.content_scripts.find(entry =>
+    entry.js?.includes('src/content/file-picker-guard-loader.js')
+  );
+  assert.ok(firefoxGuardLoader, 'firefox: showPicker page-world loader is missing');
+  assert.equal(firefoxGuardLoader.run_at, 'document_start');
+  assert.ok(
+    firefoxManifest.web_accessible_resources.includes('src/content/file-picker-guard-page.js'),
+    'firefox: page-world showPicker guard must be web-accessible',
+  );
+
+  const pageGuardPaths = [
+    'src/chrome/src/content/file-picker-guard-page.js',
+    'src/firefox/src/content/file-picker-guard-page.js',
+  ];
+  for (const relPath of pageGuardPaths) {
+    const source = fs.readFileSync(path.join(ROOT, relPath), 'utf8');
+    assert.doesNotMatch(source, /window\.__webbrainFilePickerGuardBridge/, `${relPath}: must not expose a stable page global`);
+    assert.match(source, /webbrain:file-picker-guard-probe/, `${relPath}: recovery reinjection should use an ephemeral idempotence probe`);
+    assert.match(source, /webbrain:file-picker-guard-reset/, `${relPath}: CDP should be able to reset a residual page guard`);
+    assert.match(source, /Object\.getOwnPropertyDescriptor\(proto,\s*'showPicker'\)/, `${relPath}: missing main-world showPicker interception`);
+    assert.match(source, /Object\.getOwnPropertyDescriptor\(proto,\s*'click'\)/, `${relPath}: missing closed-shadow click interception`);
+    assert.match(source, /reportBlocked\(this\)/, `${relPath}: main-world showPicker should record the input`);
+    assert.match(source, /Object\.defineProperty\(proto,\s*'showPicker',\s*showPickerDescriptor\)/, `${relPath}: showPicker interception should be restored`);
+    assert.match(source, /delete proto\.click/, `${relPath}: inherited click interception should be restored`);
+  }
+
+  const previousChrome = globalThis.chrome;
+  const chromeInjections = [];
+  globalThis.chrome = {
+    scripting: {
+      async executeScript(details) { chromeInjections.push(details); },
+    },
+  };
+  try {
+    const agent = Object.create(AgentCh.prototype);
+    await agent._injectCoreContentScripts(42);
+    assert.deepEqual(chromeInjections[0], {
+      target: { tabId: 42 },
+      world: 'MAIN',
+      files: ['src/content/file-picker-guard-page.js'],
+    });
+    assert.ok(
+      chromeInjections[1].files.includes('src/content/content.js'),
+      'chrome: recovery should inject isolated content after the MAIN-world guard',
+    );
+  } finally {
+    if (previousChrome === undefined) delete globalThis.chrome;
+    else globalThis.chrome = previousChrome;
+  }
+
+  const previousBrowser = globalThis.browser;
+  const firefoxInjections = [];
+  globalThis.browser = {
+    tabs: {
+      async executeScript(tabId, details) { firefoxInjections.push({ tabId, ...details }); },
+    },
+  };
+  try {
+    const agent = Object.create(AgentFx.prototype);
+    await agent._injectCoreContentScripts(43);
+    assert.deepEqual(firefoxInjections.map(injection => injection.file), [
+      'src/content/file-picker-guard-loader.js',
+      'src/content/accessibility-tree.js',
+      'src/content/content.js',
+      'src/content/agent-visual-indicator.js',
+    ]);
+  } finally {
+    if (previousBrowser === undefined) delete globalThis.browser;
+    else globalThis.browser = previousBrowser;
+  }
+
+  for (const relPath of [
+    'src/chrome/src/background.js',
+    'src/firefox/src/background.js',
+  ]) {
+    const source = fs.readFileSync(path.join(ROOT, relPath), 'utf8');
+    assert.match(source, /agent\._injectCoreContentScripts\(tabId\)/, `${relPath}: background recovery should include the page guard`);
+  }
+
+  for (const relPath of [
+    'src/chrome/src/agent/agent.js',
+    'src/firefox/src/agent/agent.js',
+  ]) {
+    const source = fs.readFileSync(path.join(ROOT, relPath), 'utf8');
+    assert.match(source, /async _settleContentFilePickerGuard\(tabId, response\)/, `${relPath}: missing background-side settle window`);
+    assert.match(source, /action:\s*'consume_file_picker_guard'/, `${relPath}: missing deferred guard result request`);
+    assert.match(source, /never re-inject\/replay the action/, `${relPath}: guard probe failure must not replay a delivered click`);
+  }
+
+  for (const [label, AgentClass, apiName] of [
+    ['chrome', AgentCh, 'chrome'],
+    ['firefox', AgentFx, 'browser'],
+  ]) {
+    const previousApi = globalThis[apiName];
+    let probeCalls = 0;
+    globalThis[apiName] = {
+      tabs: {
+        async sendMessage() {
+          probeCalls++;
+          throw new Error('The message port closed during navigation');
+        },
+      },
+    };
+    try {
+      const agent = Object.create(AgentClass.prototype);
+      const delivered = {
+        success: true,
+        dispatched: true,
+        rect: { x: 1, y: 2, w: 3, h: 4 },
+        _filePickerGuardId: 'guard-from-old-document',
+      };
+      const result = await agent._settleContentFilePickerGuard(42, delivered);
+      assert.deepEqual(result, {
+        success: true,
+        dispatched: true,
+        rect: { x: 1, y: 2, w: 3, h: 4 },
+      }, `${label}: navigation must preserve the delivered click result`);
+      assert.equal(probeCalls, 1, `${label}: a lost old document must not trigger a replay`);
+    } finally {
+      if (previousApi === undefined) delete globalThis[apiName];
+      else globalThis[apiName] = previousApi;
+    }
+  }
 });
 
 test('upload_file prefers downloadId over a supplied stale filePath (chrome)', async () => {
@@ -31435,6 +33039,7 @@ test('upload_file prefers downloadId over a supplied stale filePath (chrome)', a
   const originalCdp = {
     attach: cdpClientCh.attach,
     querySelectorPierce: cdpClientCh.querySelectorPierce,
+    releaseObjectGroup: cdpClientCh.releaseObjectGroup,
     probeLocalFile: cdpClientCh.probeLocalFile,
     setFileInputFiles: cdpClientCh.setFileInputFiles,
     getFileInputFiles: cdpClientCh.getFileInputFiles,
@@ -31442,6 +33047,9 @@ test('upload_file prefers downloadId over a supplied stale filePath (chrome)', a
   const realPath = '/Users/x/Downloads/real.zip';
   const stalePath = '/Users/Shared/made-up.zip';
   const uploaded = [];
+  const releasedGroups = [];
+  let queryCount = 0;
+  let selectorMatches = ['input-501'];
 
   try {
     globalThis.chrome = {
@@ -31454,12 +33062,19 @@ test('upload_file prefers downloadId over a supplied stale filePath (chrome)', a
       },
     };
     cdpClientCh.attach = async (tabId) => ({ tabId, attached: true });
-    cdpClientCh.querySelectorPierce = async () => [501];
+    cdpClientCh.querySelectorPierce = async () => ({
+      objectIds: selectorMatches,
+      objectGroup: `upload-query-${++queryCount}`,
+    });
+    cdpClientCh.releaseObjectGroup = async (_tabId, objectGroup) => {
+      releasedGroups.push(objectGroup);
+    };
     cdpClientCh.probeLocalFile = async (_tabId, filePath) => {
       assert.equal(filePath, realPath, 'downloadId-resolved path should override stale filePath before probing');
       return { exists: true, readable: true, size: 123 };
     };
-    cdpClientCh.setFileInputFiles = async (_tabId, _nodeId, files) => {
+    cdpClientCh.setFileInputFiles = async (_tabId, objectId, files) => {
+      assert.equal(objectId, 'input-501');
       uploaded.push(files);
     };
     cdpClientCh.getFileInputFiles = async () => [{ name: 'real.zip', size: 123, readable: true }];
@@ -31472,6 +33087,22 @@ test('upload_file prefers downloadId over a supplied stale filePath (chrome)', a
     assert.equal(result.file, realPath);
     assert.equal(args.filePath, realPath);
     assert.deepEqual(uploaded, [[realPath]]);
+    assert.deepEqual(releasedGroups, ['upload-query-1'], 'successful uploads must release selector handles');
+
+    selectorMatches = ['input-501', 'input-502'];
+    const ambiguous = await agent.executeTool(42, 'upload_file', {
+      selector: 'input[type=file]',
+      downloadId: 9123,
+    });
+    assert.equal(ambiguous.success, false);
+    assert.match(ambiguous.error, /matched 2 elements/);
+    assert.match(ambiguous.error, /exact, unique selector/);
+    assert.deepEqual(uploaded, [[realPath]], 'ambiguous selectors must fail before attaching the file');
+    assert.deepEqual(
+      releasedGroups,
+      ['upload-query-1', 'upload-query-2'],
+      'early upload failures must release selector handles',
+    );
   } finally {
     if (originalChrome === undefined) delete globalThis.chrome;
     else globalThis.chrome = originalChrome;
@@ -31485,6 +33116,8 @@ test('upload_file schema accepts downloadId and no longer hard-requires filePath
   assert.ok(up, 'upload_file not present in act tools');
   assert.ok(up.function.parameters.properties.downloadId, 'downloadId param missing from schema');
   assert.deepEqual(up.function.parameters.required, ['selector'], 'filePath should no longer be required');
+  assert.match(up.function.description, /without clicking the page upload control/i);
+  assert.match(up.function.description, /Do NOT click "Choose file", "Select a file"/);
 });
 
 test('upload_file (firefox) rejects non-complete downloads and missing picker base64', async () => {
@@ -31611,6 +33244,9 @@ test('upload_file (firefox) re-fetches downloadId with manual redirect handling 
     assert.ok(executedScripts[0].includes('dt.items.add(file)'), 'Script should add file to DataTransfer');
     assert.ok(executedScripts[0].includes('el.files = dt.files'), 'Script should assign DataTransfer files to input');
     assert.ok(executedScripts[0].includes('el.type !== \'file\''), 'Script should require input[type=file]');
+    assert.ok(executedScripts[0].includes('collectDeepMatches(element.shadowRoot)'), 'Script should search open shadow roots');
+    assert.ok(executedScripts[0].includes('matches.length > 1'), 'Script should reject ambiguous selectors');
+    assert.ok(executedScripts[0].includes('exact, unique selector'), 'Script should return actionable ambiguity guidance');
   } finally {
     if (originalBrowser === undefined) delete globalThis.browser;
     else globalThis.browser = originalBrowser;
@@ -31852,6 +33488,157 @@ test('getScratchpad returns the current pinned scratchpad body (chrome & firefox
 test('resize_window is gated as a browser-window action', () => {
   assert.equal(capabilityFor('resize_window', { width: 1280, height: 720 }), Capability.WINDOW);
   assert.equal(capabilityForCh('resize_window', { width: 1280, height: 720 }), CapabilityCh.WINDOW);
+});
+
+test('navigate rejects non-web schemes and contains browser API failures', async () => {
+  const originalChrome = globalThis.chrome;
+  const originalBrowser = globalThis.browser;
+  const originalSetTimeout = globalThis.setTimeout;
+  const unsafeUrls = [
+    'javascript:document.body.textContent="owned"',
+    'java\nscript:alert(1)',
+    'data:text/html,<h1>owned</h1>',
+    'file:///Users/example/secret.txt',
+    'chrome-extension://abcdefghijklmnop/page.html',
+    'moz-extension://abcdefghijklmnop/page.html',
+  ];
+  try {
+    globalThis.setTimeout = (fn, _delay, ...args) => originalSetTimeout(fn, 0, ...args);
+
+    let chromeUrl = 'https://trusted.example/base/page';
+    const chromeUpdates = [];
+    globalThis.chrome = {
+      tabs: {
+        async get() {
+          return { id: 42, url: chromeUrl };
+        },
+        async update(_tabId, { url }) {
+          chromeUpdates.push(url);
+          if (url === 'https://reject.example/') throw new Error('synthetic Chrome rejection');
+          chromeUrl = url;
+          return { id: 42, url };
+        },
+      },
+    };
+    const chromeAgent = new AgentCh({});
+    for (const url of unsafeUrls) {
+      const result = await chromeAgent.executeTool(42, 'navigate', { url, force: true });
+      assert.equal(result.success, false, `chrome should reject ${url}`);
+      assert.equal(result.dispatched, false);
+      assert.equal(result.noDispatch, true);
+      assert.match(result.error, /Only http:\/\/ and https:\/\//);
+    }
+    assert.deepEqual(chromeUpdates, [], 'Chrome must reject unsafe schemes before tabs.update');
+
+    const chromeMalformed = await chromeAgent.executeTool(42, 'navigate', {
+      url: 'https://',
+      force: true,
+    });
+    assert.equal(chromeMalformed.success, false);
+    assert.equal(chromeMalformed.dispatched, false);
+    assert.equal(chromeMalformed.noDispatch, true);
+    assert.match(chromeMalformed.error, /invalid URL/);
+    assert.deepEqual(chromeUpdates, [], 'Chrome must reject malformed URLs before tabs.update');
+
+    const chromeRelative = await chromeAgent.executeTool(42, 'navigate', { url: '/next', force: true });
+    assert.equal(chromeRelative.success, true);
+    assert.equal(chromeUpdates.at(-1), 'https://trusted.example/next');
+    assert.equal(chromeRelative.requestedUrl, '/next');
+
+    const chromeHttps = await chromeAgent.executeTool(42, 'navigate', {
+      url: 'https://safe.example/path',
+      force: true,
+    });
+    assert.equal(chromeHttps.success, true);
+    assert.equal(chromeUpdates.at(-1), 'https://safe.example/path');
+
+    const chromeBareHost = await chromeAgent.executeTool(42, 'navigate', {
+      url: 'https://mastodon.turk',
+      force: true,
+    });
+    assert.equal(chromeBareHost.success, true);
+    assert.equal(chromeBareHost.url, 'https://mastodon.turk/');
+    assert.equal(chromeBareHost.requestedUrl, 'https://mastodon.turk');
+
+    const chromeRejected = await chromeAgent.executeTool(42, 'navigate', {
+      url: 'https://reject.example/',
+      force: true,
+    });
+    assert.equal(chromeRejected.success, false);
+    assert.equal(chromeRejected.dispatched, false);
+    assert.equal(chromeRejected.noDispatch, true);
+    assert.match(chromeRejected.error, /synthetic Chrome rejection/);
+
+    let firefoxUrl = 'https://trusted.example/base/page';
+    const firefoxUpdates = [];
+    globalThis.browser = {
+      tabs: {
+        async get() {
+          return { id: 42, url: firefoxUrl };
+        },
+        async update(_tabId, { url }) {
+          firefoxUpdates.push(url);
+          if (url === 'https://reject.example/') throw new Error('synthetic Firefox rejection');
+          firefoxUrl = url;
+          return { id: 42, url };
+        },
+      },
+    };
+    const firefoxAgent = new AgentFx({});
+    for (const url of unsafeUrls) {
+      const result = await firefoxAgent.executeTool(42, 'navigate', { url, force: true });
+      assert.equal(result.success, false, `firefox should reject ${url}`);
+      assert.equal(result.dispatched, false);
+      assert.equal(result.noDispatch, true);
+      assert.match(result.error, /Only http:\/\/ and https:\/\//);
+    }
+    assert.deepEqual(firefoxUpdates, [], 'Firefox must reject unsafe schemes before tabs.update');
+
+    const firefoxMalformed = await firefoxAgent.executeTool(42, 'navigate', {
+      url: 'https://',
+      force: true,
+    });
+    assert.equal(firefoxMalformed.success, false);
+    assert.equal(firefoxMalformed.dispatched, false);
+    assert.equal(firefoxMalformed.noDispatch, true);
+    assert.match(firefoxMalformed.error, /invalid URL/);
+    assert.deepEqual(firefoxUpdates, [], 'Firefox must reject malformed URLs before tabs.update');
+
+    const firefoxRelative = await firefoxAgent.executeTool(42, 'navigate', { url: '/next', force: true });
+    assert.equal(firefoxRelative.success, true);
+    assert.equal(firefoxUpdates.at(-1), 'https://trusted.example/next');
+    assert.equal(firefoxRelative.requestedUrl, '/next');
+
+    const firefoxProtocolRelative = await firefoxAgent.executeTool(42, 'navigate', {
+      url: '//cdn.example/a',
+      force: true,
+    });
+    assert.equal(firefoxProtocolRelative.success, true);
+    assert.equal(firefoxUpdates.at(-1), 'https://cdn.example/a');
+    assert.equal(firefoxProtocolRelative.requestedUrl, '//cdn.example/a');
+
+    const firefoxHttps = await firefoxAgent.executeTool(42, 'navigate', {
+      url: 'https://safe.example/path',
+      force: true,
+    });
+    assert.equal(firefoxHttps.success, true);
+    assert.equal(firefoxUpdates.at(-1), 'https://safe.example/path');
+
+    const firefoxRejected = await firefoxAgent.executeTool(42, 'navigate', {
+      url: 'https://reject.example/',
+      force: true,
+    });
+    assert.equal(firefoxRejected.success, false);
+    assert.equal(firefoxRejected.dispatched, false);
+    assert.equal(firefoxRejected.noDispatch, true);
+    assert.match(firefoxRejected.error, /synthetic Firefox rejection/);
+  } finally {
+    globalThis.setTimeout = originalSetTimeout;
+    if (originalChrome === undefined) delete globalThis.chrome;
+    else globalThis.chrome = originalChrome;
+    if (originalBrowser === undefined) delete globalThis.browser;
+    else globalThis.browser = originalBrowser;
+  }
 });
 
 test('navigation host resolves relative / protocol-relative against current page', () => {
