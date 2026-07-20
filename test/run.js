@@ -36655,6 +36655,40 @@ test('detached run recovery honors a user cancellation instead of auto-resuming'
   }
 });
 
+test('detached run recovery preserves background preflight errors', async () => {
+  for (const [label, runDetachedWithReconnect] of [
+    ['chrome', runDetachedWithReconnectCh],
+    ['firefox', runDetachedWithReconnectFx],
+  ]) {
+    const requestId = `${label}-capture-preflight`;
+    let probes = 0;
+    await assert.rejects(
+      runDetachedWithReconnect({
+        initialAction: 'chat_start',
+        payload: { tabId: 44, requestId, mode: 'act', text: 'record this run' },
+        start: async () => ({ accepted: true, requestId }),
+        probe: async () => {
+          probes += 1;
+          return {
+            running: false,
+            starting: false,
+            detachedError: {
+              requestId,
+              message: 'Run capture could not start: microphone permission denied.',
+            },
+            runUi: null,
+          };
+        },
+        isConnectionError: () => false,
+        wait: async () => {},
+      }),
+      /Run capture could not start: microphone permission denied\./,
+      `${label}: detached capture preflight failure should reach the sidebar unchanged`,
+    );
+    assert.equal(probes, 1, `${label}: a reported detached failure should stop recovery immediately`);
+  }
+});
+
 test('plan approval reconnect recovers a lost reply without submitting twice', async () => {
   for (const [label, sendPlanResponseWithReconnect] of [
     ['chrome', sendPlanResponseWithReconnectCh],
@@ -36739,6 +36773,8 @@ test('reconnect protocol is wired through both sidepanels and backgrounds', () =
     assert.match(background, /case 'chat_start':[\s\S]*?launchDetachedRun\('chat'/, `${label}: background should acknowledge detached chat starts`);
     assert.match(background, /case 'continue_start':[\s\S]*?launchDetachedRun\('continue'/, `${label}: background should acknowledge detached continuation starts`);
     assert.match(background, /startingRequestId: starting\?\.requestId \|\| null/, `${label}: run probes should expose in-flight start reservations`);
+    assert.match(background, /detachedRunFailures/, `${label}: detached task failures should remain queryable by request ID`);
+    assert.match(background, /detachedError,/, `${label}: run probes should return the original detached task failure`);
     assert.match(background, /RUN_KEEPALIVE_INTERVAL_MS = 20_000/, `${label}: active runs should renew the background lease`);
     assert.match(background, /releaseRunKeepalive\(\)/, `${label}: completed runs should release their background lease`);
   }

@@ -123,6 +123,10 @@ export async function runDetachedWithReconnect({
       }
 
       const snapshot = state?.runUi && typeof state.runUi === 'object' ? state.runUi : null;
+      const detachedError = state?.detachedError;
+      if (requestMatches(detachedError?.requestId, requestId)) {
+        throw new Error(detachedError?.message || 'Detached run failed.');
+      }
       const sameSnapshot = requestMatches(snapshot?.requestId, requestId);
       const sameStartingRun = state?.starting === true
         && requestMatches(state?.startingRequestId, requestId);

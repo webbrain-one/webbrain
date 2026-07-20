@@ -6840,7 +6840,10 @@ function sendPlanReviewDecisionWithReconnect(payload, requestId = '') {
     payload,
     requestId,
     send: nextPayload => sendToBackground('plan_response', nextPayload),
-    probe: () => sendToBackground('agent_run_state', { tabId }),
+    probe: ({ requestId: probedRequestId } = {}) => sendToBackground('agent_run_state', {
+      tabId,
+      requestId: probedRequestId || requestId,
+    }),
     isConnectionError: isBackgroundConnectionError,
     onState: state => applyActiveRunState(tabId, state),
     onStatus: ({ phase }) => {
@@ -6861,7 +6864,10 @@ async function sendRunWithReconnect(initialAction, payload) {
     initialAction,
     payload,
     start: (action, nextPayload) => sendToBackground(action, nextPayload),
-    probe: () => sendToBackground('agent_run_state', { tabId }),
+    probe: ({ requestId: probedRequestId } = {}) => sendToBackground('agent_run_state', {
+      tabId,
+      requestId: probedRequestId || requestId,
+    }),
     isConnectionError: isBackgroundConnectionError,
     onState: state => applyActiveRunState(tabId, state),
     shouldResume: () => !isTabAbortRequested(tabId)

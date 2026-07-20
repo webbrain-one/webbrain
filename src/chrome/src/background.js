@@ -1277,7 +1277,28 @@ function assertNoActiveTabRun(tabId) {
 }
 
 const detachedRunStarts = new Map();
+const detachedRunFailures = new Map();
 const RUN_KEEPALIVE_INTERVAL_MS = 20_000;
+const DETACHED_RUN_FAILURE_TTL_MS = 60_000;
+
+function clearDetachedRunFailure(tabId) {
+  const failure = detachedRunFailures.get(tabId);
+  if (failure?.expiryTimer) clearTimeout(failure.expiryTimer);
+  detachedRunFailures.delete(tabId);
+}
+
+function rememberDetachedRunFailure(tabId, requestId, error) {
+  clearDetachedRunFailure(tabId);
+  const failure = {
+    requestId,
+    message: String(error?.message || error || 'Detached run failed.'),
+    expiryTimer: null,
+  };
+  failure.expiryTimer = setTimeout(() => {
+    if (detachedRunFailures.get(tabId) === failure) detachedRunFailures.delete(tabId);
+  }, DETACHED_RUN_FAILURE_TTL_MS);
+  detachedRunFailures.set(tabId, failure);
+}
 
 function assertRunCanStart(tabId, msg) {
   const reserved = detachedRunStarts.get(tabId);
@@ -1312,6 +1333,7 @@ function launchDetachedRun(action, msg, sender) {
   const tabId = msg.tabId || sender.tab?.id;
   if (!tabId) throw new Error('No tab ID');
   assertNoActiveTabRun(tabId);
+  clearDetachedRunFailure(tabId);
   const requestId = String(msg.requestId || `req_${tabId}_${Date.now()}`);
   const entry = { requestId, promise: null };
   detachedRunStarts.set(tabId, entry);
@@ -1323,6 +1345,7 @@ function launchDetachedRun(action, msg, sender) {
   }, sender));
   entry.promise = task;
   task.catch((error) => {
+    rememberDetachedRunFailure(tabId, requestId, error);
     console.warn(`[WebBrain] detached ${action} run failed:`, error);
   }).finally(() => {
     if (detachedRunStarts.get(tabId) === entry) detachedRunStarts.delete(tabId);
@@ -1420,6 +1443,7 @@ chrome.windows?.onRemoved?.addListener?.((windowId) => {
 chrome.tabs.onRemoved.addListener((tabId) => {
   panelTabs.delete(tabId);
   clearRunUiSnapshot(tabId);
+  clearDetachedRunFailure(tabId);
   clearTimeout(pendingContextMenuNotifications.get(tabId));
   pendingContextMenuNotifications.delete(tabId);
   contextMenuStorage.cleanup(tabId);
@@ -2070,11 +2094,17 @@ async function handleMessage(msg, sender) {
       const tabId = msg.tabId || sender.tab?.id;
       if (!tabId) return { ok: false, error: 'No tab ID' };
       const starting = detachedRunStarts.get(tabId) || null;
+      const requestedRequestId = String(msg.requestId || '');
+      const failure = detachedRunFailures.get(tabId) || null;
+      const detachedError = requestedRequestId && failure?.requestId === requestedRequestId
+        ? { requestId: failure.requestId, message: failure.message }
+        : null;
       return {
         ok: true,
         ...agent.activeRunState(tabId),
         starting: !!starting,
         startingRequestId: starting?.requestId || null,
+        detachedError,
         runUi: await getRunUiSnapshot(tabId),
       };
     }
