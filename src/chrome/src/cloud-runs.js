@@ -159,6 +159,8 @@ export function createCloudRunController({
   agent,
   ensureOffscreen,
   sendIndicator = () => {},
+  startRecording = null,
+  stopRecording = null,
   now = () => new Date(),
   makeRunId = () => `run_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`,
 } = {}) {
@@ -346,6 +348,7 @@ export function createCloudRunController({
       tabId,
       task,
       outputSchema,
+      capture: msg.capture === 'video' ? 'video' : 'none',
       result: undefined,
       summary: '',
       content: '',
@@ -362,7 +365,31 @@ export function createCloudRunController({
     await persist();
 
     (async () => {
+      let recordingId = null;
       try {
+        if (run.capture === 'video') {
+          try {
+            if (!startRecording || !stopRecording) throw new Error('Cloud run video capture is unavailable.');
+            const recording = await startRecording(tabId, {
+              video: true,
+              mic: false,
+              showBanner: false,
+              filename: `webbrain-ci-${run.runId}.webm`,
+            });
+            if (!recording?.ok) throw new Error(recording?.error || 'Cloud run video capture could not start.');
+            recordingId = recording.state?.recordingId || null;
+          } catch (captureError) {
+            pushUpdate(run, 'capture_error', {
+              kind: 'video',
+              message: captureError?.message || String(captureError),
+            });
+            throw captureError;
+          }
+          pushUpdate(run, 'artifact_started', {
+            kind: 'video',
+            filename: `webbrain-ci-${run.runId}.webm`,
+          });
+        }
         if (apiMutationsAllowed) agent.setApiMutationsAllowed(tabId, true);
         sendIndicator(tabId, 'WB_SHOW_AGENT_INDICATORS');
         const content = await agent.processMessage(tabId, task, (type, data) => {
@@ -389,6 +416,29 @@ export function createCloudRunController({
         run.error = error?.message || String(error);
         run.finalUrl = await getTabUrl(tabId);
       } finally {
+        // Do not expose a terminal status until the requested recording has
+        // finished flushing to Downloads; pollers use terminality as the cue
+        // that traces and artifacts are complete.
+        const terminalStatus = recordingId && TERMINAL_STATUSES.has(run.status)
+          ? run.status
+          : null;
+        if (terminalStatus) run.status = 'running';
+        if (recordingId) {
+          try {
+            const capture = await stopRecording({ expectedRecordingId: recordingId });
+            if (!capture?.ok) throw new Error(capture?.error || 'Cloud run video capture could not stop.');
+            pushUpdate(run, 'artifact', {
+              kind: 'video',
+              filename: capture.filename || `webbrain-ci-${run.runId}.webm`,
+            });
+          } catch (captureError) {
+            pushUpdate(run, 'capture_error', {
+              kind: 'video',
+              message: captureError?.message || String(captureError),
+            });
+          }
+        }
+        if (terminalStatus) run.status = terminalStatus;
         run.completedAt = isoNow();
         run.updatedAt = run.completedAt;
         sendIndicator(tabId, 'WB_HIDE_AGENT_INDICATORS');

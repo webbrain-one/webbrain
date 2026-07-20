@@ -612,13 +612,17 @@ async function loadCustomSkills() {
     CUSTOM_SKILLS_STORAGE_KEY,
     DEFAULT_SKILLS_REMOVED_STORAGE_KEY,
     DEFAULT_SKILLS_SEEDED_STORAGE_KEY,
+    'enableAllPackagedSkills',
   ]);
   let skills = normalizeCustomSkills(stored[CUSTOM_SKILLS_STORAGE_KEY]);
   const removedDefaultIds = new Set(normalizeDefaultSkillRemovalIds(stored[DEFAULT_SKILLS_REMOVED_STORAGE_KEY]));
   try {
     const existingIds = new Set(skills.map((skill) => skill.id));
     const room = Math.max(0, MAX_CUSTOM_SKILLS - skills.length);
-    const defaultSkills = (await loadDefaultSkillRecords())
+    const packagedSources = stored.enableAllPackagedSkills
+      ? PACKAGED_SKILL_SOURCES
+      : DEFAULT_SKILL_SOURCES;
+    const defaultSkills = (await loadPackagedSkillRecords(packagedSources))
       .filter((skill) => !existingIds.has(skill.id) && !removedDefaultIds.has(skill.id))
       .slice(0, room);
     if (defaultSkills.length || !stored[DEFAULT_SKILLS_SEEDED_STORAGE_KEY]) {
