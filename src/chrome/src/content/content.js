@@ -3500,7 +3500,6 @@
           dispatched = true;
           const filePickerGuard = clickWithoutNativeFilePicker(() => el.click());
           const fallbackStateAfterImmediate = _axFallbackState(el);
-          const checkedAfter = nativeCheckable ? !!el.checked : null;
           if (filePickerGuard.blocked) {
             return failure(
               filePickerBlockedResponse(filePickerGuard.blocked, targetName || '').error,
@@ -3523,6 +3522,7 @@
             isTextEntry = !nonText.has(inputType);
           } else if (el.isContentEditable) isTextEntry = true;
           const buildResponse = () => {
+            const checkedAfter = nativeCheckable ? !!el.checked : null;
             const resp = {
               success: true,
               method: 'click_ax',
@@ -3632,7 +3632,10 @@
             }
             return resp;
           };
-          if (anchorMeta?.sameDocumentAnchor) {
+          const responseDelayMs = nativeCheckable
+            ? SET_FIELD_VERIFY_DELAY_MS
+            : (anchorMeta?.sameDocumentAnchor ? 120 : 0);
+          if (responseDelayMs > 0) {
             return new Promise((resolve) => {
               setTimeout(() => {
                 try {
@@ -3640,7 +3643,7 @@
                 } catch (e) {
                   resolve(failure(e && e.message || String(e)));
                 }
-              }, 120);
+              }, responseDelayMs);
             });
           }
           return buildResponse();

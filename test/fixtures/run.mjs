@@ -1408,6 +1408,34 @@ for (const browserKind of ['chrome', 'firefox']) {
     }
   });
 
+  test(`click_ax (${browserKind}): waits for controlled checkbox reconciliation`, async (page) => {
+    await setupContentFixture(page, 'trusted-click-fallback.html', browserKind);
+    const tree = await call(page, 'get_accessibility_tree', { filter: 'all', maxDepth: 10, maxChars: 30000 });
+    const match = String(tree?.pageContent || '').match(/checkbox "Firefox compatibility" \[(ref_\d+)\][^\n]*checked=false/);
+    if (!match) throw new Error(`expected controlled checkbox ref in AX tree: ${tree?.pageContent}`);
+
+    await page.evaluate(() => {
+      const checkbox = document.getElementById('firefox-checkbox');
+      checkbox.addEventListener('click', () => {
+        setTimeout(() => {
+          checkbox.checked = false;
+        }, 0);
+      });
+    });
+    const result = await call(page, 'click_ax', { ref_id: match[1] });
+    if (
+      result?.success !== false
+      || result.noProgress !== true
+      || result.verified !== false
+      || result.checkedBefore !== false
+      || result.checkedAfter !== false
+      || result.desiredChecked !== true
+      || result.checkboxState?.actualChecked !== false
+    ) {
+      throw new Error(`controlled checkbox rollback was accepted too early: ${JSON.stringify(result)}`);
+    }
+  });
+
   test(`click_ax (${browserKind}): an already-selected radio keeps desired checked state`, async (page) => {
     await setupContentFixture(page, 'trusted-click-fallback.html', browserKind);
     const tree = await call(page, 'get_accessibility_tree', { filter: 'all', maxDepth: 10, maxChars: 30000 });
