@@ -1502,6 +1502,8 @@ test('navigation-prone detection includes only submit-capable key and field call
   for (const [label, AgentClass] of [['chrome', AgentCh], ['firefox', AgentFx]]) {
     const agent = new AgentClass({});
     assert.equal(AgentClass.NAV_PRONE_TOOLS.has('click_ax'), true, `${label} missing click_ax from NAV_PRONE_TOOLS`);
+    assert.equal(AgentClass.NAV_PRONE_TOOLS.has('set_checked'), true, `${label} missing set_checked from NAV_PRONE_TOOLS`);
+    assert.equal(agent._isNavigationProneToolCall('set_checked', { ref_id: 'ref_7', checked: true }), true, `${label}: checkbox handlers can navigate`);
     assert.equal(AgentClass.NAV_PRONE_TOOLS.has('set_field'), false, `${label} should not treat set_field as nav-prone`);
     assert.equal(agent._isNavigationProneToolCall('press_keys', { key: 'Enter' }), true, `${label}: Enter can submit and navigate`);
     assert.equal(agent._isNavigationProneToolCall('press_keys', { key: 'ArrowDown' }), false, `${label}: arrows should avoid URL probes`);
