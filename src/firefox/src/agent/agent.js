@@ -11042,14 +11042,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   /**
    * Continue processing from where we left off (after max steps).
    */
-  async continueProcessing(tabId, onUpdate = () => {}, mode = 'ask') {
+  async continueProcessing(tabId, onUpdate = () => {}, mode = 'ask', runOptions = {}) {
     return this.processMessage(
       tabId,
       'Please continue from where you left off.',
       onUpdate,
       mode,
       [],
-      { trustedContinuation: true },
+      { ...runOptions, trustedContinuation: true },
     );
   }
 
@@ -11319,6 +11319,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     this._preactivateNyTimesSkillForRun(tabId, mode);
 
     const provider = this.providerManager.getActive();
+
+    if (typeof runOptions?.isDetachedStartCancelled === 'function'
+        && runOptions.isDetachedStartCancelled()) {
+      this.abortFlags.delete(tabId);
+      return 'Stopped by user before the run started.';
+    }
 
     // Clear any stale abort flag before any LLM work. The planner gate makes a
     // paid LLM call and checks/consumes this flag, so a leftover flag from a

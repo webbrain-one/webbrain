@@ -185,7 +185,14 @@ export async function runDetachedWithReconnect({
         resumeAttempts += 1;
         everReconnected = true;
         const retryFreshChat = initialAction === 'chat_start'
-          && state?.submittedTurnDurable !== true;
+          && state?.submittedTurnDurable !== true
+          && !startObserved
+          && Number(snapshot.seq || 0) === 0;
+        if (initialAction === 'chat_start'
+            && state?.submittedTurnDurable !== true
+            && !retryFreshChat) {
+          throw new Error('Run recovery stopped because the submitted turn was not persisted after live progress. Retry the request manually to avoid duplicate page actions.');
+        }
         action = retryFreshChat ? initialAction : resumeAction;
         actionPayload = retryFreshChat
           ? payload

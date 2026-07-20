@@ -35473,6 +35473,7 @@ test('page Stop WebBrain clears stale indicators without stopping recordings', (
     assert.notEqual(handlerStart, -1, `${label}: background Stop handler missing`);
     assert.notEqual(handlerEnd, -1, `${label}: background Stop handler boundary missing`);
     const handlerBody = background.slice(handlerStart, handlerEnd);
+    assert.match(handlerBody, /cancelDetachedRunStart\(tabId\)/, `${label}: page Stop should cancel a reserved detached start`);
     assert.match(handlerBody, /agent\.abort\(tabId\)/, `${label}: active agent runs should still be aborted`);
     assert.match(
       handlerBody,
@@ -37038,6 +37039,48 @@ test('fresh chat recovery resubmits the complete payload until its user turn is 
   }
 });
 
+test('fresh chat recovery never replays after live progress without a durable turn', async () => {
+  for (const [label, runDetachedWithReconnect] of [
+    ['chrome', runDetachedWithReconnectCh],
+    ['firefox', runDetachedWithReconnectFx],
+  ]) {
+    const requestId = `${label}-live-progress-without-durable-turn`;
+    const starts = [];
+    const states = [
+      {
+        running: true,
+        starting: false,
+        submittedTurnDurable: false,
+        runUi: { requestId, status: 'running', seq: 3, events: [] },
+      },
+      {
+        running: false,
+        starting: false,
+        submittedTurnDurable: false,
+        runUi: { requestId, status: 'running', seq: 3, events: [] },
+      },
+    ];
+
+    await assert.rejects(
+      runDetachedWithReconnect({
+        initialAction: 'chat_start',
+        payload: { tabId: 51, requestId, mode: 'act', text: 'do this exactly once' },
+        start: async (action) => {
+          starts.push(action);
+          return { accepted: true, requestId };
+        },
+        probe: async () => states.shift(),
+        isConnectionError: () => false,
+        wait: async () => {},
+      }),
+      /avoid duplicate page actions/i,
+      `${label}: live-observed work without a durable turn must fail closed`,
+    );
+
+    assert.deepEqual(starts, ['chat_start'], `${label}: recovery must not replay a chat that already made live progress`);
+  }
+});
+
 test('detached run recovery honors a user cancellation instead of auto-resuming', async () => {
   for (const [label, runDetachedWithReconnect] of [
     ['chrome', runDetachedWithReconnectCh],
@@ -37194,6 +37237,10 @@ test('reconnect protocol is wired through both sidepanels and backgrounds', () =
     assert.match(background, /detachedRequestId: runUi\.requestId/, `${label}: detached chats should bind their persisted user turn to the run request`);
     assert.match(background, /startingRequestId: starting\?\.requestId \|\| null/, `${label}: run probes should expose in-flight start reservations`);
     assert.match(background, /runUi: runUiSnapshotForRequest\(runUiSnapshot, requestedRequestId\)/, `${label}: reconnect probes should not receive another request's journal`);
+    assert.match(background, /const entry = \{ requestId, promise: null, cancelled: false \}/, `${label}: detached starts should retain request-scoped cancellation`);
+    assert.match(background, /assertDetachedRunStartNotCancelled\(tabId, detachedMessage\)/, `${label}: cancelled reservations should not launch queued runs`);
+    assert.match(background, /case 'abort':[\s\S]*?cancelDetachedRunStart\(tabId\)[\s\S]*?agent\.abort\(tabId\)/, `${label}: sidebar Stop should cancel both reserved and active runs`);
+    assert.match(background, /isDetachedStartCancelled: \(\) => isDetachedRunStartCancelled\(tabId, msg\)/, `${label}: cancellation should remain visible through async run setup`);
     assert.match(background, /detachedRunFailures/, `${label}: detached task failures should remain queryable by request ID`);
     assert.match(background, /detachedError,/, `${label}: run probes should return the original detached task failure`);
     assert.match(background, /RUN_KEEPALIVE_INTERVAL_MS = 20_000/, `${label}: active runs should renew the background lease`);
@@ -37508,6 +37555,66 @@ test('planner gate: a stale abort flag does not cancel a fresh task', async () =
 
       assert.equal(abortSeenByGate, false, `${label} stale abort flag should be cleared before the gate`);
       assert.equal(final, 'Fresh task ran.', `${label} fresh task should run, not be cancelled`);
+    }
+  });
+});
+
+test('detached-start cancellation survives setup until before LLM work', async () => {
+  await withPlannerBrowserGlobals(async () => {
+    for (const [label, AgentClass] of [['chrome', AgentCh], ['firefox', AgentFx]]) {
+      const tabId = label === 'chrome' ? 9311 : 9312;
+      const provider = {
+        supportsTools: false,
+        supportsVision: false,
+        promptTier: 'full',
+        contextWindow: 128000,
+        model: 'test-model',
+        name: 'test-provider',
+      };
+      const agent = new AgentClass({
+        getActive: () => provider,
+        getVisionProvider: async () => null,
+      });
+      agent._hydrate = async () => {};
+      agent._manageContext = async () => {};
+      agent._enrichUserMessageWithCurrentPage = async (_tabId, _messages, content) => ({ role: 'user', content });
+      let cancellationChecks = 0;
+
+      const final = await agent.processMessage(
+        tabId,
+        'do not start after Stop',
+        () => {},
+        'act',
+        [],
+        {
+          detachedRequestId: `${label}-cancelled-start`,
+          isDetachedStartCancelled: () => {
+            cancellationChecks += 1;
+            return true;
+          },
+        },
+      );
+
+      assert.equal(final, 'Stopped by user before the run started.', `${label}: cancelled detached start should stop before provider work`);
+      assert.equal(cancellationChecks, 1, `${label}: cancellation should be checked at the final pre-LLM boundary`);
+      assert.equal(agent.activeRunState(tabId).running, false, `${label}: cancelled setup should release active-run state`);
+
+      const continueTabId = tabId + 100;
+      let continueCancellationChecks = 0;
+      const continued = await agent.continueProcessing(
+        continueTabId,
+        () => {},
+        'act',
+        {
+          isDetachedStartCancelled: () => {
+            continueCancellationChecks += 1;
+            return true;
+          },
+        },
+      );
+      assert.equal(continued, 'Stopped by user before the run started.', `${label}: cancelled detached continuation should stop before provider work`);
+      assert.equal(continueCancellationChecks, 1, `${label}: continueProcessing should forward detached cancellation`);
+      assert.equal(agent.activeRunState(continueTabId).running, false, `${label}: cancelled continuation should release active-run state`);
     }
   });
 });

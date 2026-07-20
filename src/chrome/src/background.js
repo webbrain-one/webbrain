@@ -1310,6 +1310,7 @@ function rememberDetachedRunFailure(tabId, requestId, error) {
 }
 
 function assertRunCanStart(tabId, msg) {
+  assertDetachedRunStartNotCancelled(tabId, msg);
   const reserved = detachedRunStarts.get(tabId);
   const internalRequestId = String(msg?.__detachedRunRequestId || '');
   if (reserved) {
@@ -1320,6 +1321,27 @@ function assertRunCanStart(tabId, msg) {
   if (agent.activeRunState(tabId)?.running) {
     throw new Error('A run is already active for this tab.');
   }
+}
+
+function isDetachedRunStartCancelled(tabId, msg) {
+  const internalRequestId = String(msg?.__detachedRunRequestId || '');
+  const reserved = detachedRunStarts.get(tabId);
+  return !!internalRequestId
+    && reserved?.requestId === internalRequestId
+    && reserved.cancelled === true;
+}
+
+function assertDetachedRunStartNotCancelled(tabId, msg) {
+  if (isDetachedRunStartCancelled(tabId, msg)) {
+    throw new Error('Run stopped by user before it started.');
+  }
+}
+
+function cancelDetachedRunStart(tabId) {
+  const reserved = detachedRunStarts.get(tabId);
+  if (!reserved) return false;
+  reserved.cancelled = true;
+  return true;
 }
 
 function acquireRunKeepalive() {
@@ -1344,14 +1366,18 @@ function launchDetachedRun(action, msg, sender) {
   assertNoActiveTabRun(tabId);
   clearDetachedRunFailure(tabId);
   const requestId = String(msg.requestId || `req_${tabId}_${Date.now()}`);
-  const entry = { requestId, promise: null };
+  const entry = { requestId, promise: null, cancelled: false };
   detachedRunStarts.set(tabId, entry);
-  const task = Promise.resolve().then(() => handleMessage({
-    ...msg,
-    action,
-    requestId,
-    __detachedRunRequestId: requestId,
-  }, sender));
+  const task = Promise.resolve().then(() => {
+    const detachedMessage = {
+      ...msg,
+      action,
+      requestId,
+      __detachedRunRequestId: requestId,
+    };
+    assertDetachedRunStartNotCancelled(tabId, detachedMessage);
+    return handleMessage(detachedMessage, sender);
+  });
   entry.promise = task;
   task.catch((error) => {
     rememberDetachedRunFailure(tabId, requestId, error);
@@ -1386,6 +1412,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg?.type !== 'WB_STOP_AGENT') return; // not ours
   const tabId = sender?.tab?.id;
   if (tabId != null) {
+    cancelDetachedRunStart(tabId);
     try { agent.abort(tabId); } catch { /* ignore */ }
     // Always clear the sender tab's page-owned indicator, even when the run
     // already ended or this service worker lost its in-memory run state.
@@ -1920,6 +1947,7 @@ async function handleMessage(msg, sender) {
           locale: msg.locale,
           intentFailureMessage: msg.intentFailureMessage,
           detachedRequestId: runUi.requestId,
+          isDetachedStartCancelled: () => isDetachedRunStartCancelled(tabId, msg),
         };
         result = await agent.processMessage(tabId, msg.text, (type, data) => {
           updates.push({ type, data });
@@ -2039,7 +2067,9 @@ async function handleMessage(msg, sender) {
         result = await agent.continueProcessing(tabId, (type, data) => {
           if (type === 'error') userMemoryTurnHadError = true;
           sendAgentUpdate(tabId, runUi.requestId, type, data);
-        }, mode);
+        }, mode, {
+          isDetachedStartCancelled: () => isDetachedRunStartCancelled(tabId, msg),
+        });
 
         const userMemoryPayload = takeUserMemoryTurnExtractionPayload(tabId, {
           userText: 'Please continue from where you left off.',
@@ -2096,7 +2126,10 @@ async function handleMessage(msg, sender) {
 
     case 'abort': {
       const tabId = msg.tabId || sender.tab?.id;
-      if (tabId) agent.abort(tabId);
+      if (tabId) {
+        cancelDetachedRunStart(tabId);
+        agent.abort(tabId);
+      }
       return { ok: true };
     }
 
