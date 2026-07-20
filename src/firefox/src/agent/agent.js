@@ -8588,6 +8588,16 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (name === 'done_json') {
       return handleDoneJson(this.cloudRunContexts.get(tabId), args);
     }
+    if (name === 'list_webmcp_tools' || name === 'execute_webmcp_tool') {
+      return {
+        success: false,
+        supported: false,
+        unsupported: true,
+        dispatched: false,
+        noDispatch: true,
+        error: 'WebMCP discovery and invocation currently require Chrome DevTools Protocol support and are not available in Firefox.',
+      };
+    }
     if (name === 'get_window_info') {
       return await this._getWindowInfo(tabId);
     }

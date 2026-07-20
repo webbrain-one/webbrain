@@ -202,6 +202,7 @@ while (steps < maxSteps) {
 | `navigate`, `new_tab`, `go_back`, `go_forward` | `chrome.tabs` / `browser.tabs` API | Background script |
 | `fetch_url`, `research_url`, `list_downloads`, etc. | `network-tools.js` | Service worker |
 | Enabled skill tools | `skills.js` registry + `executeHttpSkillTool()` | Service worker |
+| `list_webmcp_tools`, `execute_webmcp_tool` | experimental CDP `WebMCP` domain | Chrome service worker + page-registered callback |
 | `done` | agent.js — captures verification screenshot + page state probe | Service worker + CDP |
 | `clarify` | agent.js — pauses for user input | Service worker |
 | `solve_captcha` | captcha-solver.js | Service worker + CapSolver API |
@@ -502,6 +503,22 @@ Wraps `chrome.debugger` API for:
 - **Trusted events** — `Input.dispatchMouseEvent`, `Input.dispatchKeyEvent` (event.isTrusted === true)
 - **Screenshots** — `Page.captureScreenshot` with clip/scale control
 - **DOM queries** — `Runtime.evaluate` for shadow DOM piercing, `DOM.getDocument` for closed roots
+- **WebMCP** — `WebMCP.enable` maintains a bounded live catalog and
+  `WebMCP.invokeTool` executes a page-registered structured capability. WebBrain
+  exposes opaque `wmcp_*` IDs rather than page-controlled names as call handles.
+
+WebMCP is an experimental Chrome-only fast path. `list_webmcp_tools` is
+available in Ask, Act, and Dev; `execute_webmcp_tool` is restricted to Act/Dev
+and every invocation requires fresh confirmation plus permission against the
+registration frame's actual origin. Page-authored annotations such as
+`readOnly` are advisory and never bypass that boundary. Page-provided names,
+descriptions, schemas, frame
+URLs, outputs, and errors are always wrapped as untrusted content. The frame ID
+and effective HTTP(S) security origin are revalidated immediately before
+dispatch, so navigation, opaque sandbox origins, or stale permission metadata
+fail closed. Tool discovery is bounded to 200 registrations and returned in
+pages of at most 25 entries; invocations time out and issue
+`WebMCP.cancelInvocation` when stopped.
 
 Without CDP (Firefox), all events are synthetic (`el.click()`, `new KeyboardEvent()`).
 
