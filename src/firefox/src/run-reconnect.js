@@ -170,14 +170,23 @@ export async function runDetachedWithReconnect({
         }
         resumeAttempts += 1;
         everReconnected = true;
-        action = resumeAction;
-        actionPayload = {
-          tabId: payload.tabId,
+        const retryFreshChat = initialAction === 'chat_start'
+          && state?.submittedTurnDurable !== true;
+        action = retryFreshChat ? initialAction : resumeAction;
+        actionPayload = retryFreshChat
+          ? payload
+          : {
+              tabId: payload.tabId,
+              requestId,
+              mode: payload.mode,
+              ...(resumePayload || {}),
+            };
+        onStatus({
+          phase: retryFreshChat ? 'retrying_start' : 'resuming',
           requestId,
-          mode: payload.mode,
-          ...(resumePayload || {}),
-        };
-        onStatus({ phase: 'resuming', requestId, state, attempt: resumeAttempts });
+          state,
+          attempt: resumeAttempts,
+        });
         break;
       }
 

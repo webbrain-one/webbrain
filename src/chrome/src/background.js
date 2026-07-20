@@ -1880,7 +1880,7 @@ async function handleMessage(msg, sender) {
       if (!tabId) throw new Error('No tab ID');
       assertRunCanStart(tabId, msg);
       const mode = msg.mode || 'ask';
-      const runUi = beginRunUiSnapshot(tabId, msg.requestId);
+      const runUi = await beginContinuationRunUiSnapshot(tabId, msg.requestId);
       const releaseRunKeepalive = acquireRunKeepalive();
 
       // /allow-api flag is per-conversation. The sidebar tracks it locally
@@ -1919,6 +1919,7 @@ async function handleMessage(msg, sender) {
           ...(msg.recommendedAction ? { recommendedAction: msg.recommendedAction } : {}),
           locale: msg.locale,
           intentFailureMessage: msg.intentFailureMessage,
+          detachedRequestId: runUi.requestId,
         };
         result = await agent.processMessage(tabId, msg.text, (type, data) => {
           updates.push({ type, data });
@@ -2108,11 +2109,15 @@ async function handleMessage(msg, sender) {
       const detachedError = requestedRequestId && failure?.requestId === requestedRequestId
         ? { requestId: failure.requestId, message: failure.message }
         : null;
+      const submittedTurnDurable = requestedRequestId
+        ? await agent.hasDurableSubmittedTurn(tabId, requestedRequestId)
+        : false;
       return {
         ok: true,
         ...agent.activeRunState(tabId),
         starting: !!starting,
         startingRequestId: starting?.requestId || null,
+        submittedTurnDurable,
         detachedError,
         runUi: await getRunUiSnapshot(tabId),
       };
