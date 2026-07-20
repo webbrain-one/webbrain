@@ -131,6 +131,40 @@ function isFacebookInfiniteScrollUrl(url) {
   return /^\/(?:watch|groups|marketplace|search)(?:\/|$)/.test(path);
 }
 
+function isBilibiliUrl(url) {
+  const parts = adapterUrlParts(url);
+  if (!parts) return false;
+  const hostname = normalizedHostname(parts.parsed.hostname);
+  return hostname === 'bilibili.com' || hostname.endsWith('.bilibili.com');
+}
+
+function isBilibiliInfiniteScrollUrl(url) {
+  const parts = adapterUrlParts(url);
+  if (!parts || !isBilibiliUrl(url)) return false;
+  const hostname = normalizedHostname(parts.parsed.hostname);
+  if (hostname === 't.bilibili.com') return true;
+  if (hostname === 'bilibili.com' && parts.path === '/') return true;
+  return hostname === 'space.bilibili.com'
+    && /^\/\d+\/dynamic(?:\/|$)/.test(parts.path);
+}
+
+function isXiaohongshuUrl(url) {
+  const parts = adapterUrlParts(url);
+  if (!parts) return false;
+  const hostname = normalizedHostname(parts.parsed.hostname);
+  return hostname === 'xiaohongshu.com' || hostname.endsWith('.xiaohongshu.com');
+}
+
+function isXiaohongshuInfiniteScrollUrl(url) {
+  const parts = adapterUrlParts(url);
+  if (!parts || !isXiaohongshuUrl(url)) return false;
+  if (normalizedHostname(parts.parsed.hostname) !== 'xiaohongshu.com') return false;
+  return parts.path === '/'
+    || parts.path === '/explore'
+    || parts.path === '/search_result'
+    || /^\/user\/profile\/[^/]+(?:\/|$)/.test(parts.path);
+}
+
 function isMastodonInfiniteScrollUrl(url) {
   const { path } = adapterUrlParts(url) || {};
   if (!path) return false;
@@ -16378,6 +16412,34 @@ const ADAPTERS = [
   },
 
   // ─── Social (gaps) ────────────────────────────────────────────────────
+  {
+    name: 'bilibili',
+    category: 'general',
+    matches: isBilibiliUrl,
+    fullPageCapture: { infiniteScroll: isBilibiliInfiniteScrollUrl },
+    notes: `
+- Video pages (/video/BV...) may contain a multi-part playlist ("视频选集" / "分P"). Confirm the active part and the ?p= value before summarizing or seeking; the page title and description may describe the whole submission.
+- Player-only controls such as "字幕" (subtitles), "弹幕" (danmaku), speed, and episode selection may appear only after the player is focused or hovered. Use the visible tree or screenshot after revealing the controls; do not assume the description is a transcript.
+- Search runs on search.bilibili.com. Result tabs such as "综合", "视频", "番剧", "直播", and "用户" change the result type; re-read the page after switching tabs instead of reusing card indices.
+- Creator profiles live at space.bilibili.com/<uid>. "动态", "投稿", "合集和列表", and "收藏" are separate lazy-loaded views; collect exact video links before scrolling because card order can change.
+- Distinguish scrolling "弹幕" over the player from threaded "评论" below it. Comments and dynamic feeds load incrementally, and pinned comments can remain above newer replies.
+- "关注", "点赞", "投币", "收藏", "弹幕", "评论", and "一键三连" are state-changing. Do not activate them during read-only tasks; after an explicit request, verify the resulting state instead of trusting the click alone.
+- These interactions require sign-in and may open QR-code or SMS verification. Surface the QR/code step to the user rather than retrying or claiming the action succeeded.`,
+  },
+  {
+    name: 'xiaohongshu',
+    category: 'general',
+    matches: isXiaohongshuUrl,
+    fullPageCapture: { infiniteScroll: isXiaohongshuInfiniteScrollUrl },
+    notes: `
+- "发现" (/explore), search results, and profile note grids are infinite, reflowing masonry feeds. Extract each visible card's title, author, and exact link before scrolling; card positions and indices are not stable.
+- Note and profile links commonly carry xsec_token / xsec_source query parameters. Follow or preserve the page's actual href; do not synthesize a URL from the visible note ID or author name.
+- Opening a note from a feed may show it in a topmost modal over the still-mounted feed. Scope reads and actions to that dialog, and scroll the note/comment pane rather than the background page.
+- Note text, hashtags, and comments load incrementally. Expand visible "展开" controls and re-read after scrolling; do not mix neighboring feed-card text into the active note.
+- Profiles at /user/profile/<id> separate "笔记" and "收藏". A missing collection may be private ("收藏内容不可见"), not an empty or failed page.
+- "关注", "点赞", "收藏", "评论", and "发布" are state-changing and normally require sign-in. If a QR-code or phone verification prompt appears, ask the user to complete it.
+- "发布" opens the separate Creator Center on creator.xiaohongshu.com. Filling media, title, and body is not proof of publication; after an explicit publish request, verify the success state and final public note URL.`,
+  },
   {
     name: 'instagram',
     category: 'general',
