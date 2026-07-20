@@ -924,6 +924,29 @@ export class Agent {
     }
   }
 
+  _rememberAxScope(tabId, documentToken, pageUrl = '') {
+    const next = {
+      documentToken: String(documentToken || ''),
+      pageUrl: String(pageUrl || ''),
+    };
+    if (!next.documentToken && !next.pageUrl) return;
+    const previous = this._lastAxScopes.get(tabId);
+    const documentChanged = !!(
+      previous?.documentToken
+      && next.documentToken
+      && previous.documentToken !== next.documentToken
+    );
+    const routeChanged = !!(
+      previous?.pageUrl
+      && next.pageUrl
+      && this._normalizeUrl(previous.pageUrl) !== this._normalizeUrl(next.pageUrl)
+    );
+    // Refs, text targets, and coordinates belong to the observed document and
+    // route. Once either changes, old failures cannot describe the new page.
+    if (documentChanged || routeChanged) this._clearLoopState(tabId);
+    this._lastAxScopes.set(tabId, next);
+  }
+
   _checkAccessibilityReadLoop(tabId, name, args, result) {
     if (name !== 'get_accessibility_tree') {
       this.axReadStates.delete(tabId);
@@ -1813,6 +1836,10 @@ export class Agent {
    *   { kind: 'stop',  message: string }   // hard stop, abort the run
    */
   _checkLoop(tabId, toolName, toolArgs, toolResult) {
+    // A navigation result is authoritative page-state evidence. Clear before
+    // recording this call so same-looking controls on the new page start at
+    // attempt one instead of inheriting an old third-strike counter.
+    if (toolResult?.pageUrlChanged === true) this._clearLoopState(tabId);
     const { buf, key } = this._recordCall(tabId, toolName, toolArgs, toolResult);
     if (this._isBrowserMutationTool(toolName)) {
       const normalizeFailureScope = value => String(value).slice(0, 320);
@@ -12398,10 +12425,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             && resolved.refs.length === result.fields.length
           ) {
             if (resolved.documentToken) {
-              this._lastAxScopes.set(tabId, {
-                documentToken: resolved.documentToken,
-                pageUrl: resolved.refScopeUrl || '',
-              });
+              this._rememberAxScope(tabId, resolved.documentToken, resolved.refScopeUrl || '');
             }
             result.fields = result.fields.map((field, index) => ({
               ...field,
@@ -14820,13 +14844,17 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       if (name === 'click' || name === 'click_ax') {
         response = await this._settleContentFilePickerGuard(tabId, response);
       }
-      if (name === 'get_accessibility_tree' && response?.documentToken) {
-        this._lastAxScopes.set(tabId, {
-          documentToken: response.documentToken,
-          pageUrl: response.refScopeUrl || '',
-        });
-        delete response.documentToken;
-        delete response.refScopeUrl;
+      if (response?.documentToken && (
+        name === 'get_accessibility_tree'
+        || response.documentChanged === true
+        || response.routeChanged === true
+        || response.staleRef === true
+      )) {
+        this._rememberAxScope(tabId, response.documentToken, response.refScopeUrl || '');
+        if (name === 'get_accessibility_tree') {
+          delete response.documentToken;
+          delete response.refScopeUrl;
+        }
       }
       if (name === 'click_ax') {
         response = await this._maybeFallbackClickAxWithCdp(tabId, args, response, clickAxBaseline);

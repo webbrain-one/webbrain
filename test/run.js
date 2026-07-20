@@ -861,6 +861,15 @@ class LoopDetectorShim {
     return null;
   }
   _checkLoop(tabId, name, args, result) {
+    if (result?.pageUrlChanged === true) {
+      this.recentCalls.delete(tabId);
+      this.loopNudges.delete(tabId);
+      this.healthyCallsSinceLoop.delete(tabId);
+      this.failedActionLoops.delete(tabId);
+      this.recentCoordClicks.delete(tabId);
+      this.axReadStates.delete(tabId);
+      this.noProgressScrolls.delete(tabId);
+    }
     const { buf, key } = this._recordCall(tabId, name, args, result);
     if (STATE_CHANGE_TOOLS_TEST.has(name)) {
       const normalizeFailureScope = value => String(value).slice(0, 320);
@@ -3732,6 +3741,42 @@ test('verified field retries clear equivalent scoped failures', () => {
   const nextFailure = d._checkLoop(tab, 'set_field', args, failure);
   assert.notEqual(nextFailure.kind, 'stop', 'the first failure after recovery must not be treated as the third consecutive failure');
   assert.equal(d.failedActionLoops.get(tab)?.get('field-value:ref_7'), 1);
+});
+
+test('failed action counters reset on navigation and replacement-page evidence', () => {
+  const failure = {
+    success: false,
+    failureScope: 'ambiguous-click:search',
+    error: 'Ambiguous text match for "Search"',
+  };
+
+  const shim = new LoopDetectorShim();
+  const shimTab = 333;
+  assert.equal(shim._checkLoop(shimTab, 'click', { text: 'Search' }, failure).kind, 'none');
+  assert.equal(shim._checkLoop(shimTab, 'click', { text: 'Search' }, failure).kind, 'nudge');
+  assert.equal(shim._checkLoop(shimTab, 'navigate', { url: 'https://example.com/next' }, {
+    success: true,
+    pageUrlChanged: true,
+  }).kind, 'none');
+  assert.equal(shim._checkLoop(shimTab, 'click', { text: 'Search' }, failure).kind, 'none');
+
+  for (const [label, AgentClass] of [['chrome', AgentCh], ['firefox', AgentFx]]) {
+    const agent = new AgentClass({});
+    const tab = label === 'chrome' ? 334 : 335;
+    agent._rememberAxScope(tab, 'doc-a', 'https://example.com/search');
+    assert.equal(agent._checkLoop(tab, 'click', { text: 'Search' }, failure).kind, 'none');
+    assert.equal(agent._checkLoop(tab, 'click', { text: 'Search' }, failure).kind, 'nudge');
+
+    agent._rememberAxScope(tab, 'doc-b', 'https://example.com/search');
+    assert.equal(agent.failedActionLoops.has(tab), false, `${label}: replacement document retained old failures`);
+    assert.equal(agent._checkLoop(tab, 'click', { text: 'Search' }, failure).kind, 'none');
+
+    agent._rememberAxScope(tab, 'doc-b', 'https://example.com/search');
+    assert.equal(agent._checkLoop(tab, 'click', { text: 'Search' }, failure).kind, 'nudge', `${label}: unchanged page scope reset failures`);
+    agent._rememberAxScope(tab, 'doc-b', 'https://example.com/results#fresh');
+    assert.equal(agent.failedActionLoops.has(tab), false, `${label}: fresh route retained old failures`);
+    assert.equal(agent._checkLoop(tab, 'click', { text: 'Search' }, failure).kind, 'none');
+  }
 });
 
 test('errored vs successful do not collapse together', () => {
@@ -36141,7 +36186,7 @@ test('agent forwards private AX scope and records only the final done verdict', 
     assert.match(source, /expectedPageUrl: axScope\.pageUrl/, `${label}: click_ax does not receive the private route scope`);
     assert.match(
       source,
-      /resolved\.documentToken[\s\S]{0,240}this\._lastAxScopes\.set\(tabId,[\s\S]{0,240}pageUrl: resolved\.refScopeUrl/,
+      /resolved\.documentToken[\s\S]{0,240}this\._rememberAxScope\(tabId, resolved\.documentToken, resolved\.refScopeUrl/,
       `${label}: verify_form refs do not refresh their private AX scope`,
     );
     assert.match(source, /delete response\.documentToken/, `${label}: private AX document token leaks into model context`);
