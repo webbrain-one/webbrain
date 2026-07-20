@@ -1,5 +1,10 @@
 const TERMINAL_RUN_STATUSES = new Set(['completed', 'stopped', 'failed', 'cancelled']);
 
+export function isBackgroundConnectionError(error) {
+  const message = String(error?.message || error || '');
+  return /Could not establish connection|Receiving end does not exist|Extension context invalidated|message (?:channel|port) closed|No response from WebBrain background|background script may have restarted|extension connection was lost/i.test(message);
+}
+
 function defaultWait(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }

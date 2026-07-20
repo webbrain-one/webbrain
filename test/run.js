@@ -256,12 +256,14 @@ const { RunUiJournal: RunUiJournalFx } = await import(
   'file://' + path.join(ROOT, 'src/firefox/src/run-ui-journal.js').replace(/\\/g, '/')
 );
 const {
+  isBackgroundConnectionError: isBackgroundConnectionErrorCh,
   runDetachedWithReconnect: runDetachedWithReconnectCh,
   sendPlanResponseWithReconnect: sendPlanResponseWithReconnectCh,
 } = await import(
   'file://' + path.join(ROOT, 'src/chrome/src/run-reconnect.js').replace(/\\/g, '/')
 );
 const {
+  isBackgroundConnectionError: isBackgroundConnectionErrorFx,
   runDetachedWithReconnect: runDetachedWithReconnectFx,
   sendPlanResponseWithReconnect: sendPlanResponseWithReconnectFx,
 } = await import(
@@ -11771,9 +11773,13 @@ test('sidepanel reports missing background responses without res.content crash',
     ['firefox', 'src/firefox/src/ui/sidepanel.js'],
   ]) {
     const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
+    const reconnect = fs.readFileSync(
+      path.join(ROOT, panelRel.replace('/ui/sidepanel.js', '/run-reconnect.js')),
+      'utf8',
+    );
     assert.match(panel, /No response from WebBrain background/, `${label}: missing background response should become a clear error`);
     assert.match(panel, /formatBackgroundSendError\(action/, `${label}: runtime disconnects should be rewritten as WebBrain errors`);
-    assert.match(panel, /Receiving end does not exist/, `${label}: Chrome missing-receiver errors should be recognized`);
+    assert.match(reconnect, /Receiving end does not exist/, `${label}: Chrome missing-receiver errors should be recognized`);
     assert.match(panel, /response == null/, `${label}: sendToBackground should reject nullish responses`);
     assert.equal((panel.match(/res\?\.content && (?:currentAssistantEl|assistantEl)/g) || []).length >= 2, true, `${label}: chat and continue should not dereference missing responses`);
     assert.doesNotMatch(panel, /res\.content && (?:currentAssistantEl|assistantEl)/, `${label}: unsafe res.content render guard returned`);
@@ -36698,6 +36704,30 @@ test('detached runs reconnect to a live request without starting it twice', asyn
   }
 });
 
+test('runtime message channel closures are treated as reconnectable background failures', () => {
+  const connectionErrors = [
+    new Error('A listener indicated an asynchronous response by returning true, but the message channel closed before a response was received'),
+    new Error('The message port closed before a response was received.'),
+  ];
+  for (const [label, isBackgroundConnectionError] of [
+    ['chrome', isBackgroundConnectionErrorCh],
+    ['firefox', isBackgroundConnectionErrorFx],
+  ]) {
+    for (const error of connectionErrors) {
+      assert.equal(
+        isBackgroundConnectionError(error),
+        true,
+        `${label}: ${error.message}`,
+      );
+    }
+    assert.equal(
+      isBackgroundConnectionError(new Error('Provider rejected the API key.')),
+      false,
+      `${label}: application failures must not enter the reconnect loop`,
+    );
+  }
+});
+
 test('detached runs never retry an uncertain start after observing the live request', async () => {
   for (const [label, runDetachedWithReconnect] of [
     ['chrome', runDetachedWithReconnectCh],
@@ -37023,7 +37053,7 @@ test('reconnect protocol is wired through both sidepanels and backgrounds', () =
   for (const [label, prefix] of [['chrome', 'src/chrome'], ['firefox', 'src/firefox']]) {
     const background = fs.readFileSync(path.join(ROOT, prefix, 'src/background.js'), 'utf8');
     const panel = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/sidepanel.js'), 'utf8');
-    assert.match(panel, /import \{ runDetachedWithReconnect, sendPlanResponseWithReconnect \} from '\.\.\/run-reconnect\.js';/, `${label}: sidepanel should use the reconnect monitors`);
+    assert.match(panel, /isBackgroundConnectionError,[\s\S]*?runDetachedWithReconnect,[\s\S]*?sendPlanResponseWithReconnect,[\s\S]*?from '\.\.\/run-reconnect\.js';/, `${label}: sidepanel should use the reconnect monitors`);
     assert.match(panel, /sendRunWithReconnect\('chat_start'/, `${label}: chats should use detached starts`);
     assert.match(panel, /sendRunWithReconnect\('continue_start'/, `${label}: manual continuations should use detached starts`);
     assert.match(panel, /sendPlanReviewDecisionWithReconnect\(/, `${label}: plan decisions should survive a lost response channel`);

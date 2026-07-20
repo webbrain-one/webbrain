@@ -13,7 +13,11 @@ import { formatSelectionPromptForDisplay } from '../context-menu-storage.js';
 import { deleteChatHistoryRecord, saveChatHistoryRecord } from './chat-history-store.js';
 import { claimRunError } from './run-error-dedupe.js';
 import { RUN_CAPTURE_START_ERROR_PREFIX } from '../run-capture.js';
-import { runDetachedWithReconnect, sendPlanResponseWithReconnect } from '../run-reconnect.js';
+import {
+  isBackgroundConnectionError,
+  runDetachedWithReconnect,
+  sendPlanResponseWithReconnect,
+} from '../run-reconnect.js';
 import {
   STORAGE_KEY as STORE_REVIEW_STORAGE_KEY,
   recordSuccessfulTask,
@@ -6829,11 +6833,6 @@ function startInputPlaceholderRotation() {
 
 // --- Communication ---
 
-function isBackgroundConnectionError(error) {
-  const message = String(error?.message || error || '');
-  return /Could not establish connection|Receiving end does not exist|Extension context invalidated|No response from WebBrain background|background script may have restarted|extension connection was lost/i.test(message);
-}
-
 function sendPlanReviewDecisionWithReconnect(payload, requestId = '') {
   const tabId = Number(payload?.tabId);
   return sendPlanResponseWithReconnect({
@@ -6886,7 +6885,7 @@ async function sendRunWithReconnect(initialAction, payload) {
 }
 
 function formatBackgroundSendError(action, message) {
-  if (/Could not establish connection|Receiving end does not exist|Extension context invalidated/i.test(String(message || ''))) {
+  if (isBackgroundConnectionError(message)) {
     return `WebBrain extension connection was lost while sending "${action}". Reload the sidebar/extension and try again.`;
   }
   return message;
