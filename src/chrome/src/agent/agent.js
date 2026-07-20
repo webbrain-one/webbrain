@@ -10728,7 +10728,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     try {
       if (!trustedSelector) throw new Error('Checkbox preflight did not return a trusted selector');
       await cdpClient.attach(tabId);
-      clickResult = await cdpClient.clickElement(tabId, trustedSelector, { trustedOnly: true });
+      clickResult = await cdpClient.clickElement(tabId, trustedSelector, {
+        trustedOnly: true,
+        requireUnique: true,
+      });
       trustedClickSucceeded = clickResult?.success === true
         && (clickResult.method === 'cdp-mouse' || clickResult.method === 'cdp-mouse-closed-shadow');
       if (!trustedClickSucceeded) {
@@ -10791,9 +10794,16 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       && (verificationTransportLost || documentChanged || pageUrlChanged)
     );
     const checkedAfter = verificationObservedState ? verified.checkedAfter : undefined;
-    const stateMatches = checkedAfter === args.checked;
+    const expectedCheckboxIdentity = String(response.checkboxIdentity || '');
+    const observedCheckboxIdentity = String(verified?.checkboxIdentity || '');
+    const checkboxIdentityMismatch = verificationObservedState && (
+      !expectedCheckboxIdentity
+      || !observedCheckboxIdentity
+      || expectedCheckboxIdentity !== observedCheckboxIdentity
+    );
+    const stateMatches = !checkboxIdentityMismatch && checkedAfter === args.checked;
     const success = trustedClickSucceeded && (stateMatches || verificationLostAfterTrustedClick);
-    const checkboxIdentity = verified?.checkboxIdentity || response.checkboxIdentity;
+    const checkboxIdentity = expectedCheckboxIdentity || observedCheckboxIdentity;
     const completed = {
       ...response,
       ...(verified || {}),
@@ -10806,16 +10816,23 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       checkedBefore: response.checkedBefore,
       checkedAfter,
       desiredChecked: args.checked,
-      changed: verificationObservedState ? response.checkedBefore !== checkedAfter : undefined,
+      changed: verificationObservedState && !checkboxIdentityMismatch
+        ? response.checkedBefore !== checkedAfter
+        : undefined,
       idempotent: false,
       checkboxIdentity,
-      checkboxState: verificationObservedState
+      checkboxState: verificationObservedState && !checkboxIdentityMismatch
         ? {
             identity: checkboxIdentity,
             desiredChecked: args.checked,
             actualChecked: checkedAfter,
           }
         : undefined,
+      ...(checkboxIdentityMismatch ? {
+        checkboxIdentityMismatch: true,
+        expectedCheckboxIdentity,
+        observedCheckboxIdentity,
+      } : {}),
       selector: response.selector || verified?.selector || trustedSelector,
       rect: verified?.rect || clickResult?.rect || response.rect,
       marker: undefined,
@@ -10836,9 +10853,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     }
     const failureError = clickError
       ? `Trusted checkbox click did not complete: ${clickError.message || clickError}`
-      : verified?.error
-        ? `Checkbox verification failed: ${verified.error}`
-        : 'Checkbox state could not be verified after one trusted selector click.';
+      : checkboxIdentityMismatch
+        ? 'Checkbox verification failed because the marked target identity changed. Re-read the accessibility tree before retrying.'
+        : verified?.error
+          ? `Checkbox verification failed: ${verified.error}`
+          : 'Checkbox state could not be verified after one trusted selector click.';
     return {
       ...completed,
       ...(success ? {

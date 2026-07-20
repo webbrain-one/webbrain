@@ -1532,6 +1532,87 @@ test('set_checked (chrome): post-click verification survives same-document route
   }
 });
 
+test('set_checked (chrome): markers are one-shot, unique, and self-cleaning', async (page) => {
+  await setupContentFixture(page, 'trusted-click-fallback.html', 'chrome');
+  const tree = await call(page, 'get_accessibility_tree', { filter: 'all', maxDepth: 10, maxChars: 30000 });
+  const match = String(tree?.pageContent || '').match(/checkbox "Firefox compatibility" \[(ref_\d+)\][^\n]*checked=false/);
+  if (!match) throw new Error(`expected Chrome checkbox ref in AX tree: ${tree?.pageContent}`);
+
+  await page.evaluate(() => {
+    window.__wbOriginalSetTimeout = window.setTimeout;
+    window.__wbMarkerCleanup = null;
+    window.setTimeout = (callback, delay, ...args) => {
+      if (delay === 15000 && !window.__wbMarkerCleanup) {
+        window.__wbMarkerCleanup = callback;
+        return 1;
+      }
+      return window.__wbOriginalSetTimeout(callback, delay, ...args);
+    };
+  });
+  const expiring = await call(page, 'set_checked', {
+    ref_id: match[1],
+    checked: true,
+    expectedDocumentToken: tree.documentToken,
+    expectedPageUrl: tree.refScopeUrl,
+    probeOnly: true,
+    markForTrustedClick: true,
+  });
+  const expiredCount = await page.evaluate((marker) => {
+    window.__wbMarkerCleanup?.();
+    window.setTimeout = window.__wbOriginalSetTimeout;
+    delete window.__wbOriginalSetTimeout;
+    delete window.__wbMarkerCleanup;
+    return document.querySelectorAll(`[data-webbrain-set-checked-target="${marker}"]`).length;
+  }, expiring.marker);
+  if (expiredCount !== 0) throw new Error(`trusted marker did not self-clean: ${expiring.marker}`);
+
+  const ambiguous = await call(page, 'set_checked', {
+    ref_id: match[1],
+    checked: true,
+    expectedDocumentToken: tree.documentToken,
+    expectedPageUrl: tree.refScopeUrl,
+    probeOnly: true,
+    markForTrustedClick: true,
+  });
+  await page.evaluate((marker) => {
+    document.getElementById('trusted-firefox-checkbox')
+      .setAttribute('data-webbrain-set-checked-target', marker);
+  }, ambiguous.marker);
+  const uniqueClient = new CDPClient();
+  uniqueClient.sendCommand = async (_tabId, method) => {
+    if (method === 'Runtime.enable') return {};
+    throw new Error(`unexpected CDP command while resolving marker: ${method}`);
+  };
+  uniqueClient.evaluate = async (_tabId, expression) => ({
+    result: { value: await page.evaluate(expression) },
+  });
+  const duplicateResolution = await uniqueClient.resolveSelector(
+    42,
+    `[data-webbrain-set-checked-target="${ambiguous.marker}"]`,
+    { requireUnique: true, retries: 0 },
+  );
+  if (!duplicateResolution?.error || duplicateResolution?.matchCount !== 2) {
+    throw new Error(`CDP trusted selector did not reject duplicate markers: ${JSON.stringify(duplicateResolution)}`);
+  }
+  const verified = await call(page, 'set_checked', {
+    ref_id: match[1],
+    checked: true,
+    expectedDocumentToken: tree.documentToken,
+    probeOnly: true,
+    markForTrustedClick: false,
+    cleanupMarker: ambiguous.marker,
+  });
+  const remaining = await page.locator(`[data-webbrain-set-checked-target="${ambiguous.marker}"]`).count();
+  if (
+    verified?.success !== false
+    || verified.markerConflict !== true
+    || verified.markerMatchCount !== 2
+    || remaining !== 0
+  ) {
+    throw new Error(`ambiguous trusted marker did not fail closed and clean up: ${JSON.stringify({ verified, remaining })}`);
+  }
+});
+
 test('set_checked (firefox): waits for controlled checkbox reconciliation before verifying', async (page) => {
   await setupContentFixture(page, 'trusted-click-fallback.html', 'firefox');
   const tree = await call(page, 'get_accessibility_tree', { filter: 'all', maxDepth: 10, maxChars: 30000 });
@@ -1771,7 +1852,7 @@ test('set_checked: Agent.executeTool uses one trusted selector click and then be
     let trustedClicks = 0;
     cdpClient.attach = async () => ({ attached: true });
     cdpClient.clickElement = async (_tabId, selector, options) => {
-      if (options?.trustedOnly !== true) {
+      if (options?.trustedOnly !== true || options?.requireUnique !== true) {
         throw new Error(`expected trusted-only checkbox click, got: ${JSON.stringify(options)}`);
       }
       trustedClicks += 1;

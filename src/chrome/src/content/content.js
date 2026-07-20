@@ -9,8 +9,24 @@
   window.__webbrain_injected = true;
 
   const RECORDING_DOUBLE_ESCAPE_MS = 1400;
+  const SET_CHECKED_MARKER_ATTRIBUTE = 'data-webbrain-set-checked-target';
+  const SET_CHECKED_MARKER_TTL_MS = 15000;
   let recordingEscapeAt = 0;
   let recordingActive = false;
+
+  function setCheckedMarkerSelector(marker) {
+    const escapedMarker = String(marker || '').replace(/["\\]/g, '\\$&');
+    return `[${SET_CHECKED_MARKER_ATTRIBUTE}="${escapedMarker}"]`;
+  }
+
+  function removeSetCheckedMarkers(marker) {
+    if (!marker) return [];
+    const matches = Array.from(document.querySelectorAll(setCheckedMarkerSelector(marker)));
+    for (const marked of matches) {
+      marked.removeAttribute?.(SET_CHECKED_MARKER_ATTRIBUTE);
+    }
+    return matches;
+  }
 
   function setRecordingActive(active) {
     recordingActive = !!active;
@@ -3686,11 +3702,17 @@
           let markedTarget = null;
           if (cleanupMarker) {
             try {
-              const escapedMarker = String(cleanupMarker).replace(/["\\]/g, '\\$&');
-              const marked = document.querySelector(`[data-webbrain-set-checked-target="${escapedMarker}"]`);
-              markedTarget = marked || null;
-              marked?.removeAttribute?.('data-webbrain-set-checked-target');
-            } catch {}
+              const marked = removeSetCheckedMarkers(cleanupMarker);
+              if (marked.length !== 1) {
+                return failure(
+                  `Trusted checkbox marker matched ${marked.length} controls; refusing to verify an ambiguous target. Re-read the accessibility tree and retry.`,
+                  { markerConflict: true, markerMatchCount: marked.length },
+                );
+              }
+              markedTarget = marked[0];
+            } catch (error) {
+              return failure(`Trusted checkbox marker cleanup failed: ${error?.message || error}`);
+            }
           }
           // A same-document route update invalidates the AX registry after the
           // trusted click. The private one-shot marker still points to the
@@ -3746,8 +3768,19 @@
               const markerEntropy = new Uint32Array(3);
               globalThis.crypto.getRandomValues(markerEntropy);
               marker = `wbsc_${Date.now().toString(36)}_${Array.from(markerEntropy, value => value.toString(36)).join('_')}`;
-              el.setAttribute('data-webbrain-set-checked-target', marker);
-              trustedSelector = `[data-webbrain-set-checked-target="${marker}"]`;
+              el.setAttribute(SET_CHECKED_MARKER_ATTRIBUTE, marker);
+              trustedSelector = setCheckedMarkerSelector(marker);
+              const marked = Array.from(document.querySelectorAll(trustedSelector));
+              if (marked.length !== 1 || marked[0] !== el) {
+                removeSetCheckedMarkers(marker);
+                return failure(
+                  `Trusted checkbox marker matched ${marked.length} controls; refusing to click an ambiguous target. Re-read the accessibility tree and retry.`,
+                  { markerConflict: true, markerMatchCount: marked.length },
+                );
+              }
+              setTimeout(() => {
+                try { removeSetCheckedMarkers(marker); } catch {}
+              }, SET_CHECKED_MARKER_TTL_MS);
             }
             return {
               success: true,

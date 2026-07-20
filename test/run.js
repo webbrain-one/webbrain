@@ -1411,7 +1411,7 @@ test('Chrome set_checked completes one selector-backed trusted click and verifie
     cdpClientCh.attach = async () => ({ attached: true });
     cdpClientCh.clickElement = async (_tabId, selector, options) => {
       clickedSelector = selector;
-      assert.deepEqual(options, { trustedOnly: true });
+      assert.deepEqual(options, { trustedOnly: true, requireUnique: true });
       trustedClickCompletedAt = Date.now();
       return { success: true, method: 'cdp-mouse', rect: { x: 1, y: 2, w: 20, h: 20 } };
     };
@@ -1452,6 +1452,66 @@ test('Chrome set_checked completes one selector-backed trusted click and verifie
     assert.equal(response.checkboxState.actualChecked, true);
     assert.equal(response.marker, undefined);
     assert.equal(response.trustedSelector, undefined);
+  } finally {
+    cdpClientCh.attach = originalAttach;
+    cdpClientCh.clickElement = originalClickElement;
+    if (originalChrome === undefined) delete globalThis.chrome;
+    else globalThis.chrome = originalChrome;
+  }
+});
+
+test('Chrome set_checked fails closed when marker verification resolves another checkbox', async () => {
+  const originalChrome = globalThis.chrome;
+  const originalAttach = cdpClientCh.attach;
+  const originalClickElement = cdpClientCh.clickElement;
+  try {
+    globalThis.chrome = {
+      runtime: {},
+      tabs: {
+        async sendMessage() {
+          return {
+            success: true,
+            method: 'set_checked',
+            ref_id: 'ref_7',
+            checkedBefore: false,
+            checkedAfter: true,
+            desiredChecked: true,
+            checkboxIdentity: 'id:attacker-copy',
+            selector: '#attacker-copy',
+          };
+        },
+      },
+    };
+    cdpClientCh.attach = async () => ({ attached: true });
+    cdpClientCh.clickElement = async (_tabId, _selector, options) => {
+      assert.deepEqual(options, { trustedOnly: true, requireUnique: true });
+      return { success: true, method: 'cdp-mouse' };
+    };
+
+    const response = await new AgentCh({})._completeSetCheckedWithCdp(
+      42,
+      { ref_id: 'ref_7', checked: true },
+      {
+        success: true,
+        needsTrustedClick: true,
+        marker: 'marker-identity',
+        trustedSelector: '[data-webbrain-set-checked-target="marker-identity"]',
+        checkedBefore: false,
+        checkedAfter: false,
+        checkboxIdentity: 'id:intended-checkbox',
+      },
+      { ref_id: 'ref_7', checked: true, probeOnly: true, markForTrustedClick: true },
+    );
+
+    assert.equal(response.success, false);
+    assert.equal(response.trusted, true);
+    assert.equal(response.verified, false);
+    assert.equal(response.checkboxIdentityMismatch, true);
+    assert.equal(response.expectedCheckboxIdentity, 'id:intended-checkbox');
+    assert.equal(response.observedCheckboxIdentity, 'id:attacker-copy');
+    assert.equal(response.changed, undefined);
+    assert.equal(response.checkboxState, undefined);
+    assert.match(response.error, /target identity changed/i);
   } finally {
     cdpClientCh.attach = originalAttach;
     cdpClientCh.clickElement = originalClickElement;
