@@ -3115,7 +3115,7 @@ async function applyActiveRunState(numericTabId, state) {
     return;
   }
   invalidatePlanReviewCards({ tabId: numericTabId });
-  if (state?.running) {
+  if (state?.running || state?.starting) {
     setTabProcessing(numericTabId, true);
     setTabAbortRequested(numericTabId, false);
     hideRecommendedActions();

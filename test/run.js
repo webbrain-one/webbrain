@@ -11917,7 +11917,7 @@ test('sidepanel clears shared activity while restoring an idle destination tab',
     assert.notEqual(restoreStart, -1, `${label}: active-run restore helper missing`);
     assert.notEqual(restoreEnd, -1, `${label}: active-run restore helper boundary missing`);
     const restoreBody = panel.slice(restoreStart, restoreEnd);
-    const runningIdx = restoreBody.indexOf('if (state?.running) {');
+    const runningIdx = restoreBody.indexOf('if (state?.running || state?.starting) {');
     const idleIdx = restoreBody.indexOf('} else {', runningIdx);
     const runningBody = restoreBody.slice(runningIdx, idleIdx);
     const idleBody = restoreBody.slice(idleIdx);
@@ -37059,6 +37059,7 @@ test('reconnect protocol is wired through both sidepanels and backgrounds', () =
     assert.match(panel, /sendPlanReviewDecisionWithReconnect\(/, `${label}: plan decisions should survive a lost response channel`);
     assert.match(panel, /showActivity\('Reconnecting…'\)/, `${label}: reconnect attempts should be visible`);
     assert.match(panel, /onState: state => applyActiveRunState\(tabId, state\)/, `${label}: reconnect probes should replay missed UI journal events`);
+    assert.match(panel, /if \(state\?\.running \|\| state\?\.starting\)/, `${label}: a reserved detached start should keep the composer and Stop UI in their active state`);
     assert.match(panel, /cancelledRunRecoveryRequestIds/, `${label}: user cancellation should block automatic resume`);
     const stopSection = panel.slice(
       panel.indexOf('// --- Stop / Abort ---'),
