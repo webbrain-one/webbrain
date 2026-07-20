@@ -23396,6 +23396,81 @@ test('coordinate iframe submits capture validation state in all frames', async (
   assert.match(result.error, /valid card number/i);
 });
 
+test('Chrome selector submits capture validation state in all frames', async () => {
+  const agent = new AgentCh({ getVisionProvider: async () => null });
+  const tabId = 5123;
+  const url = 'https://merchant.example/checkout';
+  const before = [{
+    frameId: 0,
+    url,
+    activeInvalid: false,
+    invalidFields: [],
+    ariaInvalidFields: [],
+    alerts: [],
+    controlFingerprint: 'top',
+  }, {
+    frameId: 4,
+    url: 'https://payments.example/card',
+    activeInvalid: false,
+    invalidFields: [],
+    ariaInvalidFields: [],
+    alerts: [],
+    controlFingerprint: 'card-ready',
+  }];
+  const after = structuredClone(before);
+  after[1].activeInvalid = true;
+  after[1].invalidFields = [{
+    label: 'Card number',
+    type: 'text',
+    message: 'Enter a valid card number.',
+  }];
+  after[1].controlFingerprint = 'card-invalid';
+
+  const captureOptions = [];
+  let captures = 0;
+  agent._ensureGateSetting = async () => true;
+  agent._skipPermissionGate = true;
+  agent._currentUrl = async () => url;
+  agent._recordProgressObservation = async () => null;
+  agent._autoRecordProgressAction = () => null;
+  agent._progressWarningForAction = () => '';
+  agent._persist = () => {};
+  agent._captureFormValidationState = async (_tabId, options = {}) => {
+    captureOptions.push(options);
+    captures += 1;
+    return structuredClone(captures === 1 ? before : after);
+  };
+  agent.executeTool = async () => ({
+    success: true,
+    dispatched: true,
+    tag: 'BUTTON',
+    type: 'submit',
+    isSubmitControl: true,
+    text: 'Pay',
+  });
+
+  const messages = [];
+  await agent._executeToolBatch(
+    tabId,
+    [{
+      id: 'selector_iframe_submit',
+      function: { name: 'click', arguments: '{"selector":"#pay"}' },
+    }],
+    messages,
+    () => {},
+    { supportsVision: false },
+    '',
+    new Set(['click']),
+    1,
+  );
+
+  assert.ok(captureOptions.length >= 2, 'Chrome: selector iframe submit did not capture before and after states');
+  assert.ok(captureOptions.every(options => options.allFrames === true), 'Chrome: selector iframe validation capture omitted child frames');
+  const result = JSON.parse(agent._unwrapUntrusted(messages[0].content));
+  assert.equal(result.formValidationFailed, true, 'Chrome: selector child-frame validation failure was not returned');
+  assert.match(result.error, /valid card number/i);
+});
+
 test('unattended iframe submits preflight validation in all frames', async () => {
   const url = 'https://merchant.example/checkout';
   for (const AgentClass of [AgentCh, AgentFx]) {

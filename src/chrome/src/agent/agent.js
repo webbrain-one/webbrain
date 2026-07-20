@@ -2439,8 +2439,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           fnArgs.y,
         );
       }
+      // CDP selector resolution pierces same-process iframe documents, so a
+      // plain click({selector}) can still dispatch inside a child frame.
       const formValidationAllFrames = fnName === 'iframe_click'
         || fnName === 'press_keys'
+        || (fnName === 'click' && !!fnArgs?.selector)
         || (Array.isArray(formValidationCoordinateFrames) && formValidationCoordinateFrames.length > 0);
       const preflightSubmitDetection = formValidationCandidate
         && (
