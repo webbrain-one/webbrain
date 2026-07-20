@@ -23008,6 +23008,12 @@ test('form validation classifier surfaces native and custom submission errors', 
     ), false, `${AgentClass.name}: explicit non-submit metadata did not override conservative preflight`);
     assert.equal(agent._formValidationActionLooksSubmit(
       'click',
+      { text: 'Continue' },
+      { success: true, tag: 'BUTTON', type: 'button', text: 'Continue', isSubmitControl: false },
+      { isSubmit: true, validationSubmitEvidence: 'heuristic' },
+    ), true, `${AgentClass.name}: heuristic Continue submit was vetoed by type=button metadata`);
+    assert.equal(agent._formValidationActionLooksSubmit(
+      'click',
       { text: 'Pay' },
       { success: true, tag: 'BUTTON', type: 'button', text: 'Pay', isSubmitControl: false },
       { isSubmit: true, validationSubmitEvidence: 'strong' },
@@ -23050,6 +23056,14 @@ test('form validation classifier surfaces native and custom submission errors', 
     });
     assert.ok(customButtonFailure, `${AgentClass.name}: custom type=button submit skipped its validation failure`);
     assert.match(customButtonFailure.error, /phone number/i);
+    const heuristicButtonFailure = agent._detectFormValidationFailure(before, customAfter, {
+      toolName: 'click',
+      args: { text: 'Continue' },
+      result: { success: true, tag: 'BUTTON', type: 'button', text: 'Continue', isSubmitControl: false },
+      detectedSubmit: { isSubmit: true, validationSubmitEvidence: 'heuristic' },
+    });
+    assert.ok(heuristicButtonFailure, `${AgentClass.name}: heuristic Continue submit skipped its validation failure`);
+    assert.match(heuristicButtonFailure.error, /correct the highlighted fields/i);
     const correctiveAxResult = agent._detectFormValidationFailure(before, revealedRequiredRow, {
       toolName: 'click_ax',
       args: { ref_id: 'ref_add_phone' },

@@ -4790,7 +4790,13 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       const target = result?.frame && typeof result.frame === 'object' ? result.frame : result;
       const type = String(target?.type || '').toLowerCase();
       const strongDetectedSubmit = detectedSubmit?.validationSubmitEvidence === 'strong';
-      if (target?.isSubmitControl === false && type === 'button' && !strongDetectedSubmit) return false;
+      const heuristicDetectedSubmit = detectedSubmit?.isSubmit === true && !strongDetectedSubmit;
+      if (
+        target?.isSubmitControl === false
+        && type === 'button'
+        && !strongDetectedSubmit
+        && !heuristicDetectedSubmit
+      ) return false;
     }
     if (this._formValidationActionHasStrongSubmitEvidence(toolName, args, result, detectedSubmit)) return true;
     if (!['click', 'click_ax', 'iframe_click'].includes(name)) return false;
