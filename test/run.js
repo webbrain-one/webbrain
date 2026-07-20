@@ -36741,6 +36741,41 @@ test('detached runs never retry an uncertain start after observing the live requ
   }
 });
 
+test('detached runs honor cancellation before retrying an uncertain start', async () => {
+  for (const [label, runDetachedWithReconnect] of [
+    ['chrome', runDetachedWithReconnectCh],
+    ['firefox', runDetachedWithReconnectFx],
+  ]) {
+    const requestId = `${label}-cancel-uncertain-start`;
+    const starts = [];
+    let probes = 0;
+
+    await assert.rejects(
+      runDetachedWithReconnect({
+        initialAction: 'chat_start',
+        payload: { tabId: 48, requestId, mode: 'act', text: 'do not retry after Stop' },
+        start: async (action) => {
+          starts.push(action);
+          throw new Error('WebBrain extension connection was lost while sending "chat_start".');
+        },
+        probe: async () => {
+          probes += 1;
+          return { running: false, starting: false, runUi: null };
+        },
+        isConnectionError: error => /connection was lost/i.test(error.message),
+        shouldResume: () => false,
+        wait: async () => {},
+        maxUncertainStartRetries: 1,
+      }),
+      /recovery was cancelled/i,
+      `${label}: Stop should cancel an uncertain start before any retry is sent`,
+    );
+
+    assert.equal(probes, 2, `${label}: cancellation should be checked at the first retry boundary`);
+    assert.deepEqual(starts, ['chat_start'], `${label}: cancellation must prevent a second start`);
+  }
+});
+
 test('detached runs resume a persisted non-terminal request after background restart', async () => {
   for (const [label, runDetachedWithReconnect] of [
     ['chrome', runDetachedWithReconnectCh],

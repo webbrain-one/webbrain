@@ -194,6 +194,7 @@ export async function runDetachedWithReconnect({
       if (startWasUncertain
           && missingStateProbes >= 2
           && uncertainStartRetries < maxUncertainStartRetries) {
+        if (!shouldResume()) throw new Error('Run recovery was cancelled.');
         uncertainStartRetries += 1;
         onStatus({ phase: 'retrying_start', requestId, attempt: uncertainStartRetries });
         break;
