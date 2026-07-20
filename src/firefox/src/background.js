@@ -2035,15 +2035,7 @@ async function handleMessage(msg, sender) {
           action: 'get_page_info',
         });
       } catch {
-        await browser.tabs.executeScript(tabId, {
-          file: 'src/content/accessibility-tree.js',
-        });
-        await browser.tabs.executeScript(tabId, {
-          file: 'src/content/content.js',
-        });
-        await browser.tabs.executeScript(tabId, {
-          file: 'src/content/agent-visual-indicator.js',
-        });
+        await agent._injectCoreContentScripts(tabId);
         return await browser.tabs.sendMessage(tabId, {
           target: 'content',
           action: 'get_page_info',
