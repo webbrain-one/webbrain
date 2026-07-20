@@ -37,7 +37,7 @@ import {
 } from './recorder/host.js';
 import { RUN_CAPTURE_START_ERROR_PREFIX, createRunCaptureController } from './run-capture.js';
 import { normalizeOllamaLaunchHandoff } from './ollama-handoff.js';
-import { RunUiJournal } from './run-ui-journal.js';
+import { RunUiJournal, runUiSnapshotForRequest } from './run-ui-journal.js';
 import {
   USER_MEMORY_AUTO_CAPTURE_KEY,
   USER_MEMORY_ENABLED_KEY,
@@ -2112,6 +2112,7 @@ async function handleMessage(msg, sender) {
       const submittedTurnDurable = requestedRequestId
         ? await agent.hasDurableSubmittedTurn(tabId, requestedRequestId)
         : false;
+      const runUiSnapshot = await getRunUiSnapshot(tabId);
       return {
         ok: true,
         ...agent.activeRunState(tabId),
@@ -2119,7 +2120,7 @@ async function handleMessage(msg, sender) {
         startingRequestId: starting?.requestId || null,
         submittedTurnDurable,
         detachedError,
-        runUi: await getRunUiSnapshot(tabId),
+        runUi: runUiSnapshotForRequest(runUiSnapshot, requestedRequestId),
       };
     }
 

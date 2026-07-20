@@ -5,6 +5,12 @@ export function createRunRequestId(tabId, supplied = '') {
   return clean || `req_${tabId}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+export function runUiSnapshotForRequest(snapshot, requestedRequestId = '') {
+  const requested = String(requestedRequestId || '');
+  if (!requested) return snapshot || null;
+  return String(snapshot?.requestId || '') === requested ? snapshot : null;
+}
+
 export function compactRunUiData(type, data) {
   if (!data || typeof data !== 'object') return data;
   if (type === 'tool_result') {

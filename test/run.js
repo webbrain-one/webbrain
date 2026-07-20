@@ -249,10 +249,16 @@ const { renderSkillMarkdown } = await import(
   'file://' + path.join(ROOT, 'src/chrome/src/ui/skill-markdown.js').replace(/\\/g, '/')
 );
 
-const { RunUiJournal: RunUiJournalCh } = await import(
+const {
+  RunUiJournal: RunUiJournalCh,
+  runUiSnapshotForRequest: runUiSnapshotForRequestCh,
+} = await import(
   'file://' + path.join(ROOT, 'src/chrome/src/run-ui-journal.js').replace(/\\/g, '/')
 );
-const { RunUiJournal: RunUiJournalFx } = await import(
+const {
+  RunUiJournal: RunUiJournalFx,
+  runUiSnapshotForRequest: runUiSnapshotForRequestFx,
+} = await import(
   'file://' + path.join(ROOT, 'src/firefox/src/run-ui-journal.js').replace(/\\/g, '/')
 );
 const {
@@ -36704,6 +36710,34 @@ test('detached runs reconnect to a live request without starting it twice', asyn
   }
 });
 
+test('run-state probes only expose the snapshot requested by reconnect recovery', () => {
+  const previousSnapshot = {
+    requestId: 'previous-terminal-request',
+    status: 'completed',
+    finalContent: 'Old answer',
+  };
+  for (const [label, runUiSnapshotForRequest] of [
+    ['chrome', runUiSnapshotForRequestCh],
+    ['firefox', runUiSnapshotForRequestFx],
+  ]) {
+    assert.equal(
+      runUiSnapshotForRequest(previousSnapshot, 'new-starting-request'),
+      null,
+      `${label}: a new detached start must not replay the previous request journal`,
+    );
+    assert.equal(
+      runUiSnapshotForRequest(previousSnapshot, previousSnapshot.requestId),
+      previousSnapshot,
+      `${label}: reconnect recovery should receive its matching journal`,
+    );
+    assert.equal(
+      runUiSnapshotForRequest(previousSnapshot),
+      previousSnapshot,
+      `${label}: unscoped sidepanel restore should still receive the tab snapshot`,
+    );
+  }
+});
+
 test('runtime message channel closures are treated as reconnectable background failures', () => {
   const connectionErrors = [
     new Error('A listener indicated an asynchronous response by returning true, but the message channel closed before a response was received'),
@@ -37074,6 +37108,7 @@ test('reconnect protocol is wired through both sidepanels and backgrounds', () =
     assert.match(background, /await agent\.hasDurableSubmittedTurn\(tabId, requestedRequestId\)/, `${label}: recovery should verify chat durability against persisted conversation state`);
     assert.match(background, /detachedRequestId: runUi\.requestId/, `${label}: detached chats should bind their persisted user turn to the run request`);
     assert.match(background, /startingRequestId: starting\?\.requestId \|\| null/, `${label}: run probes should expose in-flight start reservations`);
+    assert.match(background, /runUi: runUiSnapshotForRequest\(runUiSnapshot, requestedRequestId\)/, `${label}: reconnect probes should not receive another request's journal`);
     assert.match(background, /detachedRunFailures/, `${label}: detached task failures should remain queryable by request ID`);
     assert.match(background, /detachedError,/, `${label}: run probes should return the original detached task failure`);
     assert.match(background, /RUN_KEEPALIVE_INTERVAL_MS = 20_000/, `${label}: active runs should renew the background lease`);
@@ -37212,7 +37247,7 @@ test('per-tab run UI protocol is wired into both backgrounds and side panels', (
     assert.match(background, /new RunUiJournal\(/, `${label}: background should own the bounded run journal`);
     assert.match(background, /function assertNoActiveTabRun\(tabId\)/, `${label}: background should prevent duplicate runs within one tab`);
     assert.match(background, /tabId,[\s\S]*?requestId,[\s\S]*?runId:[\s\S]*?seq:/, `${label}: agent updates should carry tab, request, run, and sequence IDs`);
-    assert.match(background, /case 'agent_run_state':[\s\S]*?runUi: await getRunUiSnapshot\(tabId\)/, `${label}: remount state should include the UI journal snapshot`);
+    assert.match(background, /case 'agent_run_state':[\s\S]*?const runUiSnapshot = await getRunUiSnapshot\(tabId\)[\s\S]*?runUi: runUiSnapshotForRequest\(runUiSnapshot, requestedRequestId\)/, `${label}: remount state should include only the requested UI journal snapshot`);
     assert.match(background, /case 'agent_run_ack':[\s\S]*?runUiJournal\.acknowledge/, `${label}: background should accept ordered replay acknowledgements`);
     assert.match(background, /status: snapshot\.status \|\| 'completed'/, `${label}: run_complete should carry explicit terminal status`);
     assert.match(panel, /const processingTabs = new Set\(\);/, `${label}: processing state should be tab scoped`);
