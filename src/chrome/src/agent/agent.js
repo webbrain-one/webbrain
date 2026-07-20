@@ -5615,15 +5615,41 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       });
   }
 
+  _normalizeFormValidationField(field = {}) {
+    const type = String(field?.type || '').slice(0, 40);
+    return {
+      label: String(field?.label || 'field').slice(0, 120),
+      id: String(field?.id || '').slice(0, 120),
+      name: String(field?.name || '').slice(0, 120),
+      value: /^(?:checkbox|radio)$/i.test(type)
+        ? String(field?.value || '').slice(0, 120)
+        : '',
+      type,
+      message: String(field?.message || 'Invalid value.').slice(0, 300),
+    };
+  }
+
+  _formValidationFieldKey(field = {}) {
+    const normalized = this._normalizeFormValidationField(field);
+    return JSON.stringify([
+      normalized.id,
+      normalized.name,
+      normalized.value,
+      normalized.label,
+      normalized.type,
+      normalized.message,
+    ]);
+  }
+
   _formValidationStateKey(states = []) {
     return JSON.stringify((Array.isArray(states) ? states : [])
       .map((state) => ({
         frameId: state?.frameId ?? null,
         url: String(state?.url || ''),
         invalid: (Array.isArray(state?.invalidFields) ? state.invalidFields : [])
-          .map(field => [field?.label || '', field?.type || '', field?.message || '']),
+          .map(field => this._formValidationFieldKey(field)),
         ariaInvalid: (Array.isArray(state?.ariaInvalidFields) ? state.ariaInvalidFields : [])
-          .map(field => [field?.label || '', field?.type || '', field?.message || '']),
+          .map(field => this._formValidationFieldKey(field)),
         alerts: this._formValidationAlertTexts(state),
         controls: String(state?.controlFingerprint || ''),
       }))
@@ -5669,7 +5695,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     ));
     const beforeAriaInvalid = new Set(before.flatMap(state =>
       (Array.isArray(state?.ariaInvalidFields) ? state.ariaInvalidFields : [])
-        .map(field => `${validationStateScope(state)}|${field?.label || ''}|${field?.type || ''}|${field?.message || ''}`)
+        .map(field => `${validationStateScope(state)}|${this._formValidationFieldKey(field)}`)
     ));
     const beforeActiveInvalid = new Set(before
       .filter(state => state?.activeInvalid === true)
@@ -5692,7 +5718,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         }
       }
       for (const field of Array.isArray(state?.ariaInvalidFields) ? state.ariaInvalidFields : []) {
-        const key = `${validationStateScope(state)}|${field?.label || ''}|${field?.type || ''}|${field?.message || ''}`;
+        const key = `${validationStateScope(state)}|${this._formValidationFieldKey(field)}`;
         if (includePersistentForState || !beforeAriaInvalid.has(key)) newAriaInvalid.push(field);
       }
     }
@@ -5712,12 +5738,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const invalidFields = [];
     const fieldKeys = new Set();
     for (const field of [...nativeInvalidFields, ...newAriaInvalid]) {
-      const normalized = {
-        label: String(field?.label || 'field').slice(0, 120),
-        type: String(field?.type || '').slice(0, 40),
-        message: String(field?.message || 'Invalid value.').slice(0, 300),
-      };
-      const key = `${normalized.label}|${normalized.type}|${normalized.message}`;
+      const normalized = this._normalizeFormValidationField(field);
+      const key = this._formValidationFieldKey(normalized);
       if (!fieldKeys.has(key)) {
         fieldKeys.add(key);
         invalidFields.push(normalized);

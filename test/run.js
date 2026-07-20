@@ -23545,6 +23545,9 @@ test('form validation classifier surfaces native and custom submission errors', 
   const url = 'https://addons.mozilla.org/en-US/developers/addon/webbrain/versions/submit/';
   const invalidField = {
     label: 'Firefox',
+    id: 'firefox-compatibility',
+    name: 'compatible_apps',
+    value: 'firefox',
     type: 'checkbox',
     message: 'Your extension has to be compatible with at least one application.',
   };
@@ -23572,6 +23575,31 @@ test('form validation classifier surfaces native and custom submission errors', 
     assert.ok(nativeFailure, `${AgentClass.name}: native validation failure was missed`);
     assert.match(nativeFailure.error, /compatible with at least one application/i);
     assert.deepEqual(nativeFailure.invalidFields[0], invalidField);
+
+    const duplicateLabelAfter = [{
+      ...nativeAfter[0],
+      invalidFields: [
+        invalidField,
+        {
+          ...invalidField,
+          id: 'firefox-android-compatibility',
+          value: 'firefox_android',
+        },
+      ],
+    }];
+    const duplicateLabelFailure = agent._detectFormValidationFailure(before, duplicateLabelAfter, {
+      toolName: 'click',
+      args: { text: 'Continue' },
+      result: { success: true, tag: 'BUTTON' },
+    });
+    assert.deepEqual(
+      duplicateLabelFailure.invalidFields.map(field => [field.id, field.name, field.value]),
+      [
+        ['firefox-compatibility', 'compatible_apps', 'firefox'],
+        ['firefox-android-compatibility', 'compatible_apps', 'firefox_android'],
+      ],
+      `${AgentClass.name}: same-label invalid checkboxes lost their native identities`,
+    );
 
     const alreadyActive = [{
       ...nativeAfter[0],
@@ -23857,7 +23885,10 @@ test('unchanged failed-submit state permits one verify_form then directs checkbo
       url: 'https://addons.mozilla.org/en-US/developers/addon/webbrain/versions/submit/',
       activeInvalid: true,
       invalidFields: [{
-        label: 'Firefox',
+        label: 'Compatible application',
+        id: '',
+        name: 'compatible_apps',
+        value: 'firefox',
         type: 'checkbox',
         message: 'Your extension has to be compatible with at least one application.',
       }],
@@ -23883,8 +23914,8 @@ test('unchanged failed-submit state permits one verify_form then directs checkbo
           selector: '#newsletter',
           type: 'checkbox',
           value: '(unchecked)',
-          label: 'Product newsletter',
-          controlValue: 'yes',
+          label: 'Compatible application',
+          controlValue: 'firefox_android',
           checked: false,
         },
         {
@@ -23894,7 +23925,7 @@ test('unchanged failed-submit state permits one verify_form then directs checkbo
           selector: '#firefox',
           type: 'checkbox',
           value: '(unchecked)',
-          label: 'Firefox',
+          label: 'Compatible application',
           controlValue: 'firefox',
           checked: false,
         },
