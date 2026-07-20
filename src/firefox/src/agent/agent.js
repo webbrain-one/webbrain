@@ -2043,7 +2043,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       const formValidationCandidate = this._isFormValidationCandidate(fnName, fnArgs);
       const formValidationAllFrames = fnName === 'iframe_click' || fnName === 'press_keys';
       const preflightSubmitDetection = formValidationCandidate
-        && ['click', 'click_ax', 'iframe_click'].includes(fnName);
+        && ['click', 'click_ax', 'iframe_click', 'press_keys'].includes(fnName);
       let detectedSubmitAction = preflightSubmitDetection
         ? await this._detectLikelySubmitAction(tabId, fnName, fnArgs)
         : null;
@@ -4769,7 +4769,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (name === 'execute_js') return this._executeJsLooksLikeFormSubmit(args?.code);
     if (name === 'press_keys') {
       const keys = JSON.stringify(args?.key ?? args?.keys ?? '').toLowerCase();
-      return /\b(?:enter|return)\b/.test(keys);
+      return /\b(?:enter|return)\b/.test(keys) && detectedSubmit?.isSubmit === true;
     }
     if (!['click', 'click_ax', 'iframe_click'].includes(name)) return false;
 

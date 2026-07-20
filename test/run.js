@@ -23089,6 +23089,30 @@ test('form validation classifier surfaces native and custom submission errors', 
       { success: true, result: null },
     ), true, `${AgentClass.name}: requestSubmit execute_js was not recognized as a submit`);
     assert.equal(agent._formValidationActionLooksSubmit(
+      'press_keys',
+      { key: 'Enter' },
+      { success: true },
+    ), false, `${AgentClass.name}: Enter without focused form context was treated as a submit`);
+    assert.equal(agent._formValidationActionLooksSubmit(
+      'press_keys',
+      { key: 'Enter' },
+      { success: true },
+      { isSubmit: true, validationSubmitEvidence: 'strong' },
+    ), true, `${AgentClass.name}: Enter in a detected form was not recognized as a submit`);
+    const comboboxEnterFailure = agent._detectFormValidationFailure(before, customAfter, {
+      toolName: 'press_keys',
+      args: { key: 'Enter' },
+      result: { success: true },
+    });
+    assert.equal(comboboxEnterFailure, null, `${AgentClass.name}: non-form Enter misclassified a revealed alert as submit validation`);
+    const formEnterFailure = agent._detectFormValidationFailure(before, customAfter, {
+      toolName: 'press_keys',
+      args: { key: 'Enter' },
+      result: { success: true },
+      detectedSubmit: { isSubmit: true, validationSubmitEvidence: 'strong' },
+    });
+    assert.ok(formEnterFailure, `${AgentClass.name}: detected form Enter skipped validation feedback`);
+    assert.equal(agent._formValidationActionLooksSubmit(
       'click',
       { selector: '#open-help' },
       { success: true, tag: 'BUTTON', text: 'Open help' },
