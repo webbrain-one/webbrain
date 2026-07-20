@@ -1457,6 +1457,9 @@ for (const browserKind of ['chrome', 'firefox']) {
       || !Array.isArray(result.refs)
       || result.refs.length < 4
       || result.refs.some(ref => !/^ref_\d+$/.test(String(ref || '')))
+      || typeof result.documentToken !== 'string'
+      || !result.documentToken
+      || result.refScopeUrl !== page.url()
     ) {
       throw new Error(`form controls did not receive actionable refs: ${JSON.stringify(result)}`);
     }

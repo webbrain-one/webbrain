@@ -11784,6 +11784,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             && Array.isArray(result.fields)
             && resolved.refs.length === result.fields.length
           ) {
+            if (resolved.documentToken) {
+              this._lastAxScopes.set(tabId, {
+                documentToken: resolved.documentToken,
+                pageUrl: resolved.refScopeUrl || '',
+              });
+            }
             result.fields = result.fields.map((field, index) => ({
               ...field,
               ...(typeof resolved.refs[index] === 'string' ? { ref_id: resolved.refs[index] } : {}),

@@ -34465,6 +34465,11 @@ test('agent forwards private AX scope and records only the final done verdict', 
     assert.match(source, /this\._lastAxScopes = new Map\(\)/, `${label}: per-tab AX ref scope cache missing`);
     assert.match(source, /expectedDocumentToken: axScope\.documentToken/, `${label}: click_ax does not receive the private document scope`);
     assert.match(source, /expectedPageUrl: axScope\.pageUrl/, `${label}: click_ax does not receive the private route scope`);
+    assert.match(
+      source,
+      /resolved\.documentToken[\s\S]{0,240}this\._lastAxScopes\.set\(tabId,[\s\S]{0,240}pageUrl: resolved\.refScopeUrl/,
+      `${label}: verify_form refs do not refresh their private AX scope`,
+    );
     assert.match(source, /delete response\.documentToken/, `${label}: private AX document token leaks into model context`);
     assert.match(source, /if \(!toolResult\?\.done\) (?:await )?recordFinalToolTrace\(toolResult\)/, `${label}: raw done is still recorded before terminal guards`);
     assert.match(source, /recordFinalToolTrace\(blockedResult\)/, `${label}: blocked done verdict is not recorded`);

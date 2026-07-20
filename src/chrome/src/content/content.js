@@ -3315,7 +3315,12 @@
             if (type === 'hidden' || type === 'submit') continue;
             refs.push(window.__wb_ax_ref(el));
           }
-          return { success: true, refs };
+          return {
+            success: true,
+            refs,
+            documentToken: _axDocumentToken(),
+            refScopeUrl: location.href,
+          };
         } catch (error) {
           return { success: false, error: error?.message || String(error) };
         }
