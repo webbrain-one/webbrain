@@ -13,6 +13,10 @@ function checkValue(actual, check) {
   return actual !== undefined;
 }
 
+function getFinalUrl(run, trace) {
+  return run?.final_url || run?.finalUrl || trace?.run?.final_url || trace?.run?.finalUrl || '';
+}
+
 export function inferStuckAt({ run, trace, setupError, artifactError, checks }) {
   if (setupError) return 'setup';
   if (!run) return 'run_start';
@@ -23,7 +27,7 @@ export function inferStuckAt({ run, trace, setupError, artifactError, checks }) 
     .map((update) => update.data?.name || update.data?.tool || '');
   if (run.status !== 'completed') {
     if (!toolNames.length) return 'planning';
-    if (!run.final_url && !trace?.run?.final_url) return 'navigation';
+    if (!getFinalUrl(run, trace)) return 'navigation';
     return 'execution';
   }
   if (checks.some((check) => !check.passed && check.id !== 'artifact:video')) return 'verification';
@@ -78,7 +82,7 @@ export function gradeScenario({
 
   if (scenario.verify?.finalUrlHost) {
     let host = '';
-    try { host = new URL(run?.final_url || trace?.run?.final_url || '').hostname; } catch {}
+    try { host = new URL(getFinalUrl(run, trace)).hostname; } catch {}
     add('final_url', 'Finished on the expected host', 10, host === scenario.verify.finalUrlHost, host);
   }
 

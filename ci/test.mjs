@@ -71,6 +71,25 @@ assert.equal(grade.score, 100);
 assert.equal(grade.stuck_at, null);
 assert.match(renderSummary([{ scenario, grade }]), /PASS/);
 assert.equal(inferStuckAt({ run: { status: 'failed', updates: [] }, checks: [] }), 'planning');
+const camelCaseUrlGrade = gradeScenario({
+  scenario: { id: 'camel-url', verify: { finalUrlHost: 'example.com' } },
+  run: { status: 'completed', finalUrl: 'https://example.com/camel' },
+});
+assert.equal(camelCaseUrlGrade.passed, true);
+const traceCamelCaseUrlGrade = gradeScenario({
+  scenario: { id: 'trace-camel-url', verify: { finalUrlHost: 'example.com' } },
+  run: { status: 'completed' },
+  trace: { run: { finalUrl: 'https://example.com/from-trace' } },
+});
+assert.equal(traceCamelCaseUrlGrade.passed, true);
+assert.equal(inferStuckAt({
+  run: {
+    status: 'failed',
+    finalUrl: 'https://example.com/execution',
+    updates: [{ type: 'tool_call', data: { name: 'click' } }],
+  },
+  checks: [],
+}), 'execution');
 const missingVideo = gradeScenario({
   scenario,
   run,
