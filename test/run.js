@@ -1300,6 +1300,33 @@ test('set_checked is exposed and permission-gated as a click in both browser age
   }
 });
 
+test('compact Act prompts require idempotent checkbox handling in both browsers', () => {
+  for (const [label, prompt] of [
+    ['chrome', SYSTEM_PROMPT_ACT_COMPACT_CH],
+    ['firefox', SYSTEM_PROMPT_ACT_COMPACT_FX],
+  ]) {
+    const toolsStart = prompt.indexOf('TOOLS');
+    const patternStart = prompt.indexOf('\n\nPATTERN:', toolsStart);
+    assert.ok(toolsStart >= 0 && patternStart > toolsStart, `${label}: compact tools block missing`);
+    const toolsBlock = prompt.slice(toolsStart, patternStart);
+    assert.match(
+      toolsBlock,
+      /set_checked\(\{ref_id,\s*checked\}\): Idempotently set and verify a native checkbox/i,
+      `${label}: compact tools block must advertise set_checked`,
+    );
+    assert.match(
+      prompt,
+      /For native checkboxes, use set_checked\(\{ref_id:"ref_N", checked:true\|false\}\) instead of toggling/i,
+      `${label}: compact rules must direct checkboxes to set_checked`,
+    );
+    assert.match(
+      prompt,
+      /click_ax,\s*set_checked,\s*or set_field with (?:the )?ref_id/i,
+      `${label}: compact execution pattern must include set_checked`,
+    );
+  }
+});
+
 test('Chrome set_checked completes one selector-backed trusted click and verifies state', async () => {
   const originalChrome = globalThis.chrome;
   const originalAttach = cdpClientCh.attach;

@@ -1611,7 +1611,7 @@ RULES:
 2. Start by reading the current page: get_accessibility_tree({filter:"visible"}).
 3. After every action, verify with get_accessibility_tree or injected visual context before the next step.
 4. Fill forms ONE FIELD AT A TIME. Use set_field({ref_id, text}) — it focuses, clears, and types in one call.
-5. Click by ref_id: click_ax({ref_id:"ref_N"}). Fallback: click({text:"Submit"}).
+5. Click by ref_id: click_ax({ref_id:"ref_N"}). For native checkboxes, use set_checked({ref_id:"ref_N", checked:true|false}) instead of toggling. Fallback: click({text:"Submit"}).
 6. When done, call done({summary:"...", outcome:"success"}). Verify success first.
 7. If stuck after 2 attempts, try a different approach. Never repeat the same failing action 3 times.
 8. Interact through the visible UI. Do not call APIs directly.
@@ -1633,6 +1633,7 @@ TOOLS — use ONLY these:
 - scroll: Scroll up/down.
 - extract_data: Get tables, headings, images.
 - click_ax({ref_id}): Click by ref_id from the tree. PREFERRED.
+- set_checked({ref_id, checked}): Idempotently set and verify a native checkbox. Never toggle checkboxes repeatedly with click_ax.
 - type_ax({ref_id, text}): Type into a field by ref_id.
 - set_field({ref_id, text}): Focus + clear + type in one call. PREFERRED for forms.
 - click({text}): Click by visible text. Fallback when no ref_id.
@@ -1648,7 +1649,7 @@ TOOLS — use ONLY these:
 
 PATTERN:
 1. get_accessibility_tree({filter:"visible"}) → find ref_ids
-2. click_ax or set_field with ref_id
+2. click_ax, set_checked, or set_field with ref_id
 3. Verify by re-reading the tree or inspecting injected visual context
 4. Repeat until done`;
 
