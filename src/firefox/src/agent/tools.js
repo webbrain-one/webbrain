@@ -1112,6 +1112,7 @@ RULES:
 12. When the task is complete, call done({summary:"...", outcome:"success"}). Verify success first.
 13. If the user wants a page image inserted into chat, tell them to type \`/screenshot\` for the visible viewport.
 14. Recording is not supported in the Firefox build. Do not call or invent recording tools.
+15. Before filling an external email/message/post composer, formulate the exact recipient, subject, and body. For more than a one-line body, save the complete text as \`[pending draft]\` with scratchpad_write first so it can be recovered if the UI fails; never mark it sent until verified.
 
 ${SENSITIVE_PAGE_DATA_GUIDANCE}
 
@@ -1340,7 +1341,8 @@ IFRAMES — read this:
 TYPING — read this:
 - The most reliable way to fill a form field is the CLICK-THEN-TYPE pattern: first call \`click({selector: "..."})\` to focus the field, then immediately call \`type_text({text: "..."})\` WITH NO SELECTOR. The text goes into whatever's focused. Works even when you can't guess the field's selector (GitHub uses \`release[name]\` with literal brackets, Stripe wraps inputs in custom Web Components, etc.).
 - If you DO know the exact selector, \`type_text({selector: "...", text: "..."})\` also works.
-- RICH-TEXT BODY EDITORS (Discourse post body, Gmail compose, Slack message, Notion, Medium): these are \`<div contenteditable="true">\` elements that DON'T show up as interactive in the accessibility tree or \`get_interactive_elements\`. Clicking them by text or selector typically fails. The reliable one-shot is: \`type_text({selector: "div[contenteditable=\\"true\\"]", text: "..."})\`. Use it directly — don't burn steps trying to click the editor first.
+- RICH-TEXT BODY EDITORS (Discourse post body, Gmail compose, Slack message, Notion, Medium): editable roots normally appear as \`textbox\` refs in the accessibility tree, including empty and \`plaintext-only\` contenteditable variants. Prefer \`set_field\` or \`type_ax\` on that ref. If a site hides the editor from the tree, use the direct fallback \`type_text({selector: "[contenteditable]:not([contenteditable=\\"false\\"])", text: "..."})\` instead of repeatedly clicking it.
+- DRAFT CHECKPOINT: before filling an external email/message/post composer, formulate the exact recipient(s), subject (when applicable), and body. If the body is more than a short one-liner, immediately save \`[pending draft]\`, the recipient, subject, and complete body with \`scratchpad_write\` before typing anything into the composer. This is an exception to the short-task/factual-only scratchpad rule. Never label the checkpoint as sent. Then fill the UI from that exact draft.
 - If \`type_text\` returns success but the field doesn't visibly contain your text, focus was lost — re-click the field and try again.
 - CRITICAL: If you're filling multiple fields, you MUST click each field individually before typing into it. NEVER type multiple values without clicking the target field first. If you type without clicking, the text goes into whatever was last focused — which is often the WRONG field. The pattern is always: click field A → type value A → click field B → type value B → click field C → type value C.
 - NEVER concatenate multiple values (name + price + period) into a single type_text call. Each piece of data goes into its own field.
@@ -1494,6 +1496,7 @@ DEFAULT LOOP:
 
 TYPING:
 - For text fields prefer set_field({ref_id, text, submit}) — one call that focuses, clears, types, and (optionally) submits. Otherwise type_ax({ref_id, text}) after reading the tree.
+- DRAFT CHECKPOINT: before filling an external email/message/post composer, formulate the exact recipient(s), subject (when applicable), and body. If the body is more than a short one-liner, save the complete text as \`[pending draft]\` with scratchpad_write before typing; never label it sent until the UI verifies sending.
 - HARD RULE: after click_ax on a text field, your NEXT call MUST be type_ax/set_field on the SAME ref. Do not click_ax again or re-read the tree first.
 - Native <select>: click_ax to focus, then press_keys the first letter (or ArrowDown + Enter). Custom/ARIA dropdowns (role="combobox", Stripe/Radix/React-Select): open it, then type-to-filter + Enter, or arrows + Enter — clicking an option ref usually fails silently.
 - Fill forms ONE FIELD AT A TIME: focus field A → type value A → field B → type value B. Never concatenate multiple values (name + price + period) into one type call.

@@ -736,6 +736,46 @@ test('accessibility tree (Firefox): existing Gmail compose exposes the selected 
   if (firefoxTree !== chromeGmailComposeTree) throw new Error('Chrome/Firefox Gmail compose trees differ');
 });
 
+const richEditorVariantsFixture = `<!doctype html>
+  <style>
+    body { margin: 0; font: 16px sans-serif; }
+    .editor { display: block; width: 520px; min-height: 72px; margin: 12px; border: 1px solid #888; }
+  </style>
+  <div class="editor" contenteditable="" aria-label="Email body">Draft body text</div>
+  <div class="editor" contenteditable="plaintext-only" aria-label="Plain message">Plain draft text</div>
+  <div class="editor" contenteditable="false" aria-label="Read-only copy">Do not edit</div>`;
+
+let chromeRichEditorTree = '';
+
+function assertRichEditorVariants(tree, label) {
+  const content = String(tree?.pageContent || '');
+  if (!/textbox "Email body" \[ref_\d+\] value="Draft body text"/.test(content)) {
+    throw new Error(`${label}: contenteditable="" editor missing as a valued textbox: ${content}`);
+  }
+  if (!/textbox "Plain message" \[ref_\d+\] value="Plain draft text"/.test(content)) {
+    throw new Error(`${label}: plaintext-only editor missing as a valued textbox: ${content}`);
+  }
+  if (/Read-only copy|Do not edit/.test(content)) {
+    throw new Error(`${label}: contenteditable=false leaked into the interactive tree: ${content}`);
+  }
+  const textboxes = content.match(/^\s*textbox\b/gm) || [];
+  if (textboxes.length !== 2) throw new Error(`${label}: expected exactly two editable roots, got ${textboxes.length}: ${content}`);
+  return normalizeTreeRefs(content);
+}
+
+test('accessibility tree (Chrome): contenteditable variants are actionable valued textboxes', async (page) => {
+  await setupAccessibilityTreeHtml(page, richEditorVariantsFixture, accessibilityTreeJsPath);
+  const tree = await page.evaluate(() => window.__generateAccessibilityTree('interactive', 10, null, null, 1));
+  chromeRichEditorTree = assertRichEditorVariants(tree, 'chrome');
+});
+
+test('accessibility tree (Firefox): contenteditable variants keep Chrome parity', async (page) => {
+  await setupAccessibilityTreeHtml(page, richEditorVariantsFixture, firefoxAccessibilityTreeJsPath);
+  const tree = await page.evaluate(() => window.__generateAccessibilityTree('interactive', 10, null, null, 1));
+  const firefoxTree = assertRichEditorVariants(tree, 'firefox');
+  if (firefoxTree !== chromeRichEditorTree) throw new Error('Chrome/Firefox rich editor trees differ');
+});
+
 // ─── modal-scoping ────────────────────────────────────────────────────────
 test('modal scoping: click({text:"Create"}) resolves to dialog Create', async (page) => {
   await setup(page, 'modal-scoping.html');
