@@ -1335,6 +1335,15 @@ function beginRunUiSnapshot(tabId, requestId) {
   return runUiJournal.begin(tabId, requestId);
 }
 
+async function beginContinuationRunUiSnapshot(tabId, requestId) {
+  const existing = await getRunUiSnapshot(tabId);
+  const sameNonTerminalRun = existing
+    && String(existing.requestId || '') === String(requestId || '')
+    && !['completed', 'stopped', 'failed', 'cancelled'].includes(existing.status);
+  if (sameNonTerminalRun) return runUiJournal.resume(tabId, requestId);
+  return beginRunUiSnapshot(tabId, requestId);
+}
+
 function recordRunUiEvent(tabId, requestId, type, data) {
   return runUiJournal.record(tabId, requestId, type, data, agent.currentRunId.get(tabId));
 }
@@ -1750,7 +1759,7 @@ async function handleMessage(msg, sender) {
       if (!tabId) throw new Error('No tab ID');
       assertRunCanStart(tabId, msg);
       const mode = msg.mode || 'ask';
-      const runUi = beginRunUiSnapshot(tabId, msg.requestId);
+      const runUi = await beginContinuationRunUiSnapshot(tabId, msg.requestId);
       const releaseRunKeepalive = acquireRunKeepalive();
 
       sendIndicatorMessage(tabId, 'WB_SHOW_AGENT_INDICATORS');

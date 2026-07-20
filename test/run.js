@@ -36524,6 +36524,44 @@ test('run UI journal: concurrent tabs, bounded replay, terminal snapshots, and s
   }
 });
 
+test('run UI journal: resumed requests preserve sequence and replay boundaries', () => {
+  for (const [label, Journal] of [['chrome', RunUiJournalCh], ['firefox', RunUiJournalFx]]) {
+    const journal = new Journal();
+    journal.begin(7, 'resume-request');
+    journal.record(7, 'resume-request', 'thinking', { content: 'Before restart' }, 'run-before');
+    journal.record(7, 'resume-request', 'plan_review', { planId: 'plan-before' }, 'run-before');
+    journal.acknowledge(7, 'resume-request', 1);
+
+    const before = journal.get(7);
+    assert.equal(before.seq, 2, `${label}: fixture should start above sequence zero`);
+    assert.equal(before.ackedSeq, 1, `${label}: fixture should retain an acknowledged replay boundary`);
+
+    const restarted = new Journal();
+    restarted.restore(7, structuredClone(before));
+    const resumed = restarted.resume(7, 'resume-request');
+    assert.ok(resumed, `${label}: matching request should resume its existing journal`);
+    assert.equal(resumed.seq, 2, `${label}: resume must preserve the prior sequence`);
+    assert.equal(resumed.ackedSeq, 1, `${label}: resume must preserve the acknowledged replay boundary`);
+    assert.equal(resumed.truncatedBeforeSeq, 1, `${label}: resume must preserve the compaction boundary`);
+    assert.equal(resumed.status, 'running', `${label}: resumed journal should return to running`);
+    assert.equal(resumed.pendingPlanId, null, `${label}: stale pre-restart plan ownership should be cleared`);
+    assert.deepEqual(
+      resumed.events.map(event => event.seq),
+      [2],
+      `${label}: unacknowledged pre-restart events should remain replayable`,
+    );
+
+    const next = restarted.record(7, 'resume-request', 'thinking', { content: 'After restart' }, 'run-after');
+    assert.equal(next.seq, 3, `${label}: first resumed event should advance beyond the old sequence`);
+    assert.deepEqual(
+      restarted.get(7).events.map(event => event.seq),
+      [2, 3],
+      `${label}: resumed events should not collide with prior replay sequence numbers`,
+    );
+    assert.equal(restarted.resume(7, 'different-request'), null, `${label}: a manual continuation must not reuse another request journal`);
+  }
+});
+
 test('detached runs reconnect to a live request without starting it twice', async () => {
   for (const [label, runDetachedWithReconnect] of [
     ['chrome', runDetachedWithReconnectCh],
@@ -36815,6 +36853,7 @@ test('reconnect protocol is wired through both sidepanels and backgrounds', () =
     assert.match(panel, /cancelledRunRecoveryRequestIds/, `${label}: user cancellation should block automatic resume`);
     assert.match(background, /case 'chat_start':[\s\S]*?launchDetachedRun\('chat'/, `${label}: background should acknowledge detached chat starts`);
     assert.match(background, /case 'continue_start':[\s\S]*?launchDetachedRun\('continue'/, `${label}: background should acknowledge detached continuation starts`);
+    assert.match(background, /await beginContinuationRunUiSnapshot\(tabId, msg\.requestId\)/, `${label}: resumed continuations should preserve their journal sequence`);
     assert.match(background, /startingRequestId: starting\?\.requestId \|\| null/, `${label}: run probes should expose in-flight start reservations`);
     assert.match(background, /detachedRunFailures/, `${label}: detached task failures should remain queryable by request ID`);
     assert.match(background, /detachedError,/, `${label}: run probes should return the original detached task failure`);

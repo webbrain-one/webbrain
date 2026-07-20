@@ -61,6 +61,17 @@ export class RunUiJournal {
     return this._changed(tabId, snapshot);
   }
 
+  resume(tabId, requestId = '') {
+    const snapshot = this.snapshots.get(tabId);
+    if (!snapshot || String(snapshot.requestId) !== String(requestId)) return null;
+    snapshot.status = 'running';
+    snapshot.pendingPlanId = null;
+    snapshot.finalContent = '';
+    snapshot.successfulDone = false;
+    snapshot.endedAt = null;
+    return this._changed(tabId, snapshot);
+  }
+
   record(tabId, requestId, type, data, runId = null) {
     const snapshot = this.snapshots.get(tabId);
     if (!snapshot || snapshot.requestId !== requestId) return null;
