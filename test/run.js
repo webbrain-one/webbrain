@@ -1776,6 +1776,25 @@ test('matches yemeksepeti.com and includes food-delivery guidance', () => {
   assert.match(a?.notes || '', /Restoran/);
 });
 
+test('matches foodpanda.pk and includes food-delivery guidance', () => {
+  assert.equal(getActiveAdapter('https://www.foodpanda.pk/')?.name, 'foodpanda');
+  assert.equal(getActiveAdapter('https://foodpanda.pk/restaurants')?.name, 'foodpanda');
+  // lookalike / suffix domains must NOT match
+  assert.notEqual(getActiveAdapter('https://foodpanda.pk.phishing.example/')?.name, 'foodpanda');
+  // other foodpanda country TLDs are intentionally out of scope for this .pk-only adapter
+  assert.notEqual(getActiveAdapter('https://www.foodpanda.com.bd/')?.name, 'foodpanda');
+  const a = getActiveAdapter('https://www.foodpanda.pk/');
+  assert.match(a?.notes || '', /LOCATION-FIRST/);
+  assert.match(a?.notes || '', /pandamart/);
+  // firefox parity
+  const fx = getActiveAdapterFx('https://www.foodpanda.pk/');
+  assert.equal(fx?.name, a?.name);
+  assert.equal(fx?.notes, a?.notes);
+  assert.equal(getActiveAdapterFx('https://foodpanda.pk/restaurants')?.name, 'foodpanda');
+  assert.notEqual(getActiveAdapterFx('https://foodpanda.pk.phishing.example/')?.name, 'foodpanda');
+  assert.notEqual(getActiveAdapterFx('https://www.foodpanda.com.bd/')?.name, 'foodpanda');
+});
+
 test('matches galaxus + digitec and includes anti-bot fetch guidance', () => {
   assert.equal(getActiveAdapter('https://www.galaxus.ch/de/s1/product/x-123')?.name, 'galaxus');
   assert.equal(getActiveAdapter('https://www.digitec.ch/de/s1/product/x-123')?.name, 'galaxus');

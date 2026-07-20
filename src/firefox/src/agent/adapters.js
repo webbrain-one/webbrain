@@ -16301,6 +16301,18 @@ const ADAPTERS = [
 - Availability gates: a restaurant may be "Kapalı" (closed — can't order now) and each has a "minimum sepet tutarı" (minimum order total) plus a delivery fee. Check the open status and the minimum before promising delivery.
 - "Yemeksepeti Mahalle" (grocery/market quick delivery) is a separate flow from restaurant food ordering — don't expect restaurant menus there.`,
   },
+  {
+    name: 'foodpanda',
+    category: 'general',
+    matches: (url) => /^https?:\/\/(www\.)?foodpanda\.pk\//.test(url),
+    notes: `
+- foodpanda.pk is Pakistan's main FOOD + GROCERY delivery site (English UI). The top tabs are separate flows, each with its own cart: "Delivery" (restaurant food), "Pick-up", "pandamart" (grocery), and "Shops" (retail). Pick the tab that matches the task — groceries are in pandamart, not restaurant menus.
+- LOCATION-FIRST trap: the site loads a GENERIC city location by default and still lists restaurants, so a shown restaurant may not actually deliver to the user. Set the real delivery address first via the header "Select your address" control (its tooltip reads "You're viewing a generic location…") — which restaurants, prices, and delivery fees appear all depend on it.
+- Per-restaurant carts: each restaurant has its OWN cart and OWN checkout. Adding items from a second restaurant starts a second separate cart — you CANNOT combine two restaurants into one order or delivery. Finish one restaurant's order before starting another.
+- Open/closed status shows on the listing: a "Closed" restaurant can't take an order now, so order from an open one instead of trying to add from a closed page.
+- The menu price is NOT the final total: delivery charges are added at CHECKOUT, so only quote a total after the cart shows the delivery fee. Items sell in fixed portions (e.g. one plate minimum, no half plate) — order whole units.
+- Use the on-page search ("Search for restaurants, cuisines, and dishes") and the left-rail sort/filters (Relevance / Fastest delivery / Distance / Top rated, "Ratings 4+") rather than guessing URL params.`,
+  },
 
   // ─── Regional — Digitec Galaxus (CH + EU: one in-house platform) ──────
   // galaxus.* (CH/DE/AT/FR/IT/BE/NL) and digitec.ch share product IDs, slugs, and
