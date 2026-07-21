@@ -890,16 +890,23 @@ export class Agent {
       usage?.cacheReadInputTokens ??
       0
     );
-    const cacheWrite5mTokens = positiveNumber(
+    const cacheDetails = Array.isArray(usage?.cacheDetails)
+      ? usage.cacheDetails
+      : (Array.isArray(usage?.cache_details) ? usage.cache_details : []);
+    const bedrockCacheWriteTokens = (ttl) => cacheDetails.reduce((sum, detail) => {
+      if (detail?.ttl !== ttl) return sum;
+      return sum + positiveNumber(detail?.inputTokens ?? detail?.input_tokens);
+    }, 0);
+    const cacheWrite5mTokens = Math.max(positiveNumber(
       usage?.cache_creation?.ephemeral_5m_input_tokens ??
       usage?.cacheCreation?.ephemeral5mInputTokens ??
       0
-    );
-    const cacheWrite1hTokens = positiveNumber(
+    ), bedrockCacheWriteTokens('5m'));
+    const cacheWrite1hTokens = Math.max(positiveNumber(
       usage?.cache_creation?.ephemeral_1h_input_tokens ??
       usage?.cacheCreation?.ephemeral1hInputTokens ??
       0
-    );
+    ), bedrockCacheWriteTokens('1h'));
     const reportedCacheWriteTokens = positiveNumber(
       usage?.cache_creation_input_tokens ??
       usage?.cache_write_input_tokens ??

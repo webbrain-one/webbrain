@@ -24261,7 +24261,12 @@ test('GPT-5.6 Responses results normalize text, calls, usage, and replay items',
     const provider = new Provider({ providerName: 'openai', model: 'gpt-5.6-terra' });
     const result = provider._responsesResult({
       output,
-      usage: { input_tokens: 10, output_tokens: 4, total_tokens: 14 },
+      usage: {
+        input_tokens: 10,
+        output_tokens: 4,
+        total_tokens: 14,
+        input_tokens_details: { cached_tokens: 8 },
+      },
     });
     assert.equal(result.content, 'Done.');
     assert.equal(result.reasoningContent, 'Checked. ');
@@ -24274,6 +24279,7 @@ test('GPT-5.6 Responses results normalize text, calls, usage, and replay items',
     assert.equal(result.usage.prompt_tokens, 10);
     assert.equal(result.usage.completion_tokens, 4);
     assert.equal(result.usage.total_tokens, 14);
+    assert.deepEqual(result.usage.input_tokens_details, { cached_tokens: 8 });
     assert.equal(result.responseItems, output);
   }
 });
@@ -24796,12 +24802,28 @@ test('AWS Bedrock provider normalizes usage and indexes parallel tool calls', ()
           ],
         },
       },
-      usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+      usage: {
+        inputTokens: 10,
+        outputTokens: 5,
+        totalTokens: 15,
+        cacheReadInputTokens: 80,
+        cacheWriteInputTokens: 30,
+        cacheDetails: [
+          { ttl: '1h', inputTokens: 20 },
+          { ttl: '5m', inputTokens: 10 },
+        ],
+      },
     });
     assert.deepEqual(parsed.usage, {
       prompt_tokens: 10,
       completion_tokens: 5,
       total_tokens: 15,
+      cacheReadInputTokens: 80,
+      cacheWriteInputTokens: 30,
+      cacheDetails: [
+        { ttl: '1h', inputTokens: 20 },
+        { ttl: '5m', inputTokens: 10 },
+      ],
     });
     assert.equal(parsed.toolCalls.length, 2);
     assert.equal(parsed.toolCalls[0].index, 0);
@@ -25466,6 +25488,30 @@ test('Agent cost estimation prices Anthropic one-hour cache writes separately', 
         ephemeral_5m_input_tokens: 100,
         ephemeral_1h_input_tokens: 200,
       },
+    };
+    assert.equal(agent._estimateUsageCostUsd(provider, usage), 0.0825);
+  }
+});
+
+test('Agent cost estimation prices Bedrock cache detail TTLs separately', () => {
+  for (const AgentClass of [AgentCh, AgentFx]) {
+    const agent = new AgentClass({});
+    const provider = {
+      config: {
+        inputCostPerMillionUsd: 100,
+        cacheWriteCostPerMillionUsd: 125,
+        cacheWrite1hCostPerMillionUsd: 200,
+        outputCostPerMillionUsd: 200,
+      },
+    };
+    const usage = {
+      prompt_tokens: 100,
+      completion_tokens: 100,
+      cacheWriteInputTokens: 300,
+      cacheDetails: [
+        { ttl: '1h', inputTokens: 200 },
+        { ttl: '5m', inputTokens: 100 },
+      ],
     };
     assert.equal(agent._estimateUsageCostUsd(provider, usage), 0.0825);
   }
@@ -42879,6 +42925,80 @@ test('planner input: runtime context does not consume prior user-turn history bu
 // tool_result blocks combined into a SINGLE user message — otherwise the
 // Messages API rejects the consecutive user roles with a 400.
 for (const [label, Provider] of [['chrome', AnthropicProviderCh], ['firefox', AnthropicProviderFx]]) {
+  test(`anthropic (${label}): cache usage survives normalization`, () => {
+    const provider = new Provider({});
+    const usage = provider._normalizeUsage({
+      input_tokens: 200,
+      output_tokens: 100,
+      cache_read_input_tokens: 800,
+      cache_creation_input_tokens: 300,
+      cache_creation: {
+        ephemeral_5m_input_tokens: 100,
+        ephemeral_1h_input_tokens: 200,
+      },
+    });
+    assert.deepEqual(usage, {
+      prompt_tokens: 200,
+      completion_tokens: 100,
+      total_tokens: 1400,
+      cache_read_input_tokens: 800,
+      cache_creation_input_tokens: 300,
+      cache_creation: {
+        ephemeral_5m_input_tokens: 100,
+        ephemeral_1h_input_tokens: 200,
+      },
+    });
+  });
+
+  test(`anthropic (${label}): streaming accumulates cache usage from split events`, async () => {
+    const originalFetch = globalThis.fetch;
+    const events = [
+      {
+        type: 'message_start',
+        message: {
+          usage: {
+            input_tokens: 200,
+            output_tokens: 1,
+            cache_read_input_tokens: 800,
+            cache_creation_input_tokens: 300,
+            cache_creation: {
+              ephemeral_5m_input_tokens: 100,
+              ephemeral_1h_input_tokens: 200,
+            },
+          },
+        },
+      },
+      { type: 'message_delta', usage: { output_tokens: 100 } },
+      { type: 'message_stop' },
+    ];
+    const sse = events.map(event => `data: ${JSON.stringify(event)}\n\n`).join('');
+    try {
+      globalThis.fetch = async () => new Response(sse, {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream' },
+      });
+      const provider = new Provider({ apiKey: 'test-key' });
+      const chunks = [];
+      for await (const chunk of provider.chatStream([{ role: 'user', content: 'hello' }])) {
+        chunks.push(chunk);
+      }
+      const usage = chunks.find(chunk => chunk.type === 'usage')?.usage;
+      assert.deepEqual(usage, {
+        prompt_tokens: 200,
+        completion_tokens: 100,
+        total_tokens: 1400,
+        cache_read_input_tokens: 800,
+        cache_creation_input_tokens: 300,
+        cache_creation: {
+          ephemeral_5m_input_tokens: 100,
+          ephemeral_1h_input_tokens: 200,
+        },
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   test(`anthropic (${label}): parallel tool results merge into one user message`, () => {
     const provider = new Provider({});
     const { messages } = provider._convertMessages([
