@@ -4086,9 +4086,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
   /**
    * Auto-select a <select> option by keyboard arrows.
-   * Scans ALL selects on the page. If `optionText` matches a non-current
-   * option, focuses that select, sends ArrowDown/Up via CDP, verifies,
-   * and returns a success result.  Returns null if no match found.
+   * Scans selects in the active blocking modal, or the full page when no
+   * modal is open. If `optionText` matches a non-current option, focuses that
+   * select, sends ArrowDown/Up via CDP, verifies, and returns a success result.
+   * Returns null if no match is found.
    *
    * When `optionText` matches the ALREADY-SELECTED option, returns a
    * result telling the agent it's already set (no action needed).
@@ -4158,17 +4159,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           const t = (el.getAttribute('type') || 'text').toLowerCase();
           return t === 'button' || t === 'submit' || t === 'reset';
         };
-        for (const el of document.querySelectorAll(clickSels)) {
-          const role = el.getAttribute('role') || '';
-          if (role === 'option' || role === 'menuitemradio' || role === 'menuitemcheckbox' || role === 'treeitem') {
-            try {
-              const r = el.getBoundingClientRect();
-              if (r.width < 1 || r.height < 1) continue;
-              const s = getComputedStyle(el);
-              if (s.visibility === 'hidden' || s.display === 'none' || parseFloat(s.opacity) === 0) continue;
-              if (el.closest('[aria-hidden="true"],[hidden]')) continue;
-            } catch (e) { continue; }
-          }
+        for (const el of scope.querySelectorAll(clickSels)) {
+          try {
+            if (!hasVisibleBox(el)) continue;
+            if (el.closest('[aria-hidden="true"],[hidden]')) continue;
+          } catch (e) { continue; }
           const txt = (el.innerText || (_valIsLabel(el) ? el.value : '') || el.placeholder || el.ariaLabel || '').trim().toLowerCase();
           if (txt && txt === lc) return { found: false, suppressedByClickable: true };
         }

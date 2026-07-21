@@ -891,17 +891,19 @@ test('Firefox: ambiguous native select options do not mutate the first dropdown'
   await assertAmbiguousNativeSelectOptionsAreRejected(page, 'firefox');
 });
 
-test('Chrome Agent: modal auto-select keeps the exact target after Escape blurs it', async (page) => {
+test('Chrome Agent: modal auto-select ignores background/hidden clickables and keeps the exact target', async (page) => {
   await page.setContent(`<!doctype html>
     <style>
       select { width: 180px; height: 40px; }
       #dialog { position: fixed; left: 40px; top: 100px; padding: 20px; background: white; }
     </style>
+    <button id="background-yearly" onclick="window.__backgroundYearlyClicked = true">Yearly</button>
     <select id="background-select">
       <option value="monthly">Monthly</option>
       <option value="yearly">Yearly</option>
     </select>
     <div id="dialog" role="dialog" aria-modal="true">
+      <button style="display: none">Yearly</button>
       <select id="dialog-select">
         <option value="monthly">Monthly</option>
         <option value="yearly">Yearly</option>
@@ -942,13 +944,14 @@ test('Chrome Agent: modal auto-select keeps the exact target after Escape blurs 
   const values = await page.evaluate(() => ({
     background: document.getElementById('background-select').value,
     dialog: document.getElementById('dialog-select').value,
+    backgroundButtonClicked: window.__backgroundYearlyClicked === true,
     leakedTargetSlots: Object.keys(globalThis).filter((key) => key.startsWith('__webbrainAutoSelectTarget_')),
   }));
 
   if (!result?.success || result.method !== 'auto-select-keyboard') {
     throw new Error(`expected exact-target auto-selection, got: ${JSON.stringify(result)}`);
   }
-  if (values.background !== 'monthly' || values.dialog !== 'yearly') {
+  if (values.background !== 'monthly' || values.dialog !== 'yearly' || values.backgroundButtonClicked) {
     throw new Error(`auto-select changed the wrong dropdown after refocus: ${JSON.stringify(values)}`);
   }
   if (values.leakedTargetSlots.length) {

@@ -29448,6 +29448,8 @@ test('chrome CDP auto-select scopes to blocking dialogs and refuses ambiguous dr
   const end = agent.indexOf('\n  async ', start + 10);
   const body = agent.slice(start, end > start ? end : start + 12000);
   assert.match(body, /const scope = findBlockingModal\(\) \|\| document;/, 'chrome: auto-select should be scoped to the blocking dialog');
+  assert.match(body, /for \(const el of scope\.querySelectorAll\(clickSels\)\)/, 'chrome: exact-clickable suppression should stay inside the active modal');
+  assert.match(body, /if \(!hasVisibleBox\(el\)\) continue;/, 'chrome: hidden clickables should not suppress a visible select option');
   assert.match(body, /const sels = scope\.querySelectorAll\('select'\);/, 'chrome: auto-select should not scan background selects');
   assert.match(body, /matchingSelects\.length !== 1/, 'chrome: auto-select should yield instead of choosing among multiple matching selects');
   assert.match(body, /globalThis\[targetSlot\] = sel/, 'chrome: auto-select should preserve the exact scoped select for refocus');
