@@ -21289,6 +21289,98 @@ test('CDP WebMCP recovers tools registered in child frames before enable', async
   assert.ok(commands.some(command => command.method === 'Runtime.evaluate' && command.params.contextId === 12));
 });
 
+test('CDP WebMCP aggregates OOPIF sessions and removes their detached tools', async () => {
+  const cdp = new CDPClient();
+  const commands = [];
+  const emit = (event, params, source = { tabId: 58 }) => {
+    for (const handler of cdp.eventHandlers.get(58)?.[event] || []) handler(params, source);
+  };
+  cdp.attach = async tabId => {
+    cdp.sessions.set(tabId, { tabId, attached: true });
+    return cdp.sessions.get(tabId);
+  };
+  cdp.sendCommand = async (tabId, method, params = {}, sessionId = '') => {
+    commands.push({ tabId, method, params, sessionId });
+    if (method === 'WebMCP.enable' && !sessionId) {
+      emit('WebMCP.toolsAdded', {
+        tools: [{ name: 'parent_tool', description: 'parent', frameId: 'main-frame' }],
+      });
+      return {};
+    }
+    if (method === 'Runtime.enable') return {};
+    if (method === 'Target.setAutoAttach' && !sessionId && params.autoAttach) {
+      emit('Target.attachedToTarget', {
+        sessionId: 'oopif-session',
+        targetInfo: { targetId: 'oopif-frame', type: 'iframe', url: 'https://embed.test/' },
+      });
+      return {};
+    }
+    if (method === 'WebMCP.enable' && sessionId === 'oopif-session') {
+      emit('WebMCP.toolsAdded', {
+        tools: [{ name: 'child_tool', description: 'child', frameId: 'oopif-frame' }],
+      }, { tabId: 58, sessionId });
+      return {};
+    }
+    if (method === 'Page.enable' && sessionId === 'oopif-session') return {};
+    if (method === 'Target.setAutoAttach' && sessionId === 'oopif-session') return {};
+    if (method === 'Page.enable') return {};
+    if (method === 'Page.getFrameTree') {
+      return {
+        frameTree: {
+          frame: { id: 'main-frame', url: 'https://example.com/' },
+          childFrames: [{ frame: { id: 'oopif-frame', url: 'https://embed.test/' } }],
+        },
+      };
+    }
+    if (method === 'WebMCP.invokeTool' && sessionId === 'oopif-session') {
+      assert.deepEqual(params, {
+        frameId: 'oopif-frame',
+        toolName: 'child_tool',
+        input: { value: 'from-child' },
+      });
+      emit('WebMCP.toolResponded', {
+        invocationId: 'oopif-invocation',
+        status: 'Completed',
+        output: { frame: 'oopif' },
+      }, { tabId: 58, sessionId });
+      return { invocationId: 'oopif-invocation' };
+    }
+    return {};
+  };
+
+  const catalog = await cdp.listWebMCPTools(58);
+  assert.equal(catalog.total, 2);
+  const child = catalog.tools.find(tool => tool.name === 'child_tool');
+  assert.equal(child?.frame_url, 'https://embed.test/');
+  assert.ok(commands.some(command => (
+    command.method === 'WebMCP.enable' && command.sessionId === 'oopif-session'
+  )));
+  assert.ok(commands.some(command => (
+    command.method === 'Target.setAutoAttach' && command.sessionId === 'oopif-session'
+  )));
+  const invocation = await cdp.invokeWebMCPTool(58, child.tool_id, { value: 'from-child' });
+  assert.equal(invocation.success, true);
+  assert.deepEqual(invocation.output, { frame: 'oopif' });
+
+  emit('Page.frameNavigated', {
+    frame: { id: 'oopif-frame', url: 'https://embed.test/next' },
+  }, { tabId: 58, sessionId: 'oopif-session' });
+  const afterNavigation = await cdp.listWebMCPTools(58);
+  assert.equal(afterNavigation.total, 1);
+  emit('WebMCP.toolsAdded', {
+    tools: [{ name: 'next_child_tool', description: 'next child', frameId: 'oopif-frame' }],
+  }, { tabId: 58, sessionId: 'oopif-session' });
+  const afterNewRegistration = await cdp.listWebMCPTools(58);
+  assert.equal(
+    afterNewRegistration.tools.find(tool => tool.name === 'next_child_tool')?.frame_url,
+    'https://embed.test/next',
+  );
+  emit('Target.detachedFromTarget', { sessionId: 'oopif-session' });
+  const afterDetach = await cdp.listWebMCPTools(58);
+  assert.equal(afterDetach.total, 1);
+  assert.equal(afterDetach.tools[0].name, 'parent_tool');
+});
+
 test('CDP WebMCP bounds hostile catalogs and cleans up after unsupported-domain errors', async () => {
   const cdp = new CDPClient();
   const emit = (event, params) => {

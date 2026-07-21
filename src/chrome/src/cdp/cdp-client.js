@@ -20,6 +20,11 @@ const WEBMCP_MAX_INVOCATION_TIMEOUT_MS = 60000;
 const WEBMCP_MAX_VALUE_NODES = 500;
 const WEBMCP_MAX_VALUE_CHARS = 20000;
 const WEBMCP_CONTEXT_DISCOVERY_TIMEOUT_MS = 1000;
+const WEBMCP_MAX_TARGET_ATTACH_PASSES = 10;
+const WEBMCP_IFRAME_TARGET_FILTER = [
+  { type: 'iframe', exclude: false },
+  { exclude: true },
+];
 const WEBMCP_CONTEXT_DISCOVERY_EXPRESSION = `
   (async () => {
     const context = document.modelContext;
@@ -78,7 +83,7 @@ export class CDPClient {
           if (source.tabId !== tabId) return;
           const handlers = this.eventHandlers.get(tabId)?.[method];
           if (handlers) {
-            handlers.forEach(h => h(params));
+            handlers.forEach(h => h(params, source));
           }
         });
 
@@ -121,24 +126,29 @@ export class CDPClient {
   /**
    * Send a CDP command and get the result.
    */
-  async sendCommand(tabId, method, params = {}) {
+  async sendCommand(tabId, method, params = {}, sessionId = '') {
     if (!this.sessions.has(tabId)) {
       throw new Error(`Not attached to tab ${tabId}`);
     }
 
     return new Promise((resolve, reject) => {
-      chrome.debugger.sendCommand({ tabId }, method, params, (result) => {
-        // Chrome extension APIs expose callback failures through
-        // chrome.runtime.lastError, not a second callback argument. Read it
-        // synchronously while the callback is active; Chrome clears it after
-        // the callback returns.
-        const error = chrome.runtime.lastError;
-        if (error) {
-          reject(new Error(error.message || String(error)));
-          return;
-        }
-        resolve(result);
-      });
+      chrome.debugger.sendCommand(
+        { tabId, ...(sessionId ? { sessionId } : {}) },
+        method,
+        params,
+        (result) => {
+          // Chrome extension APIs expose callback failures through
+          // chrome.runtime.lastError, not a second callback argument. Read it
+          // synchronously while the callback is active; Chrome clears it after
+          // the callback returns.
+          const error = chrome.runtime.lastError;
+          if (error) {
+            reject(new Error(error.message || String(error)));
+            return;
+          }
+          resolve(result);
+        },
+      );
     });
   }
 
@@ -206,6 +216,10 @@ export class CDPClient {
     return `${String(frameId || '').slice(0, 300)}\u0000${String(name || '').slice(0, 300)}`;
   }
 
+  _webMCPInvocationKey(sessionId, invocationId) {
+    return `${String(sessionId || '').slice(0, 300)}\u0000${String(invocationId || '').slice(0, 300)}`;
+  }
+
   _newWebMCPSession(tabId) {
     return {
       tabId,
@@ -217,6 +231,8 @@ export class CDPClient {
       idsByKey: new Map(),
       pendingInvocations: new Map(),
       completedResponses: new Map(),
+      childSessions: new Map(),
+      childEnablePromises: new Set(),
       handlers: [],
     };
   }
@@ -244,7 +260,7 @@ export class CDPClient {
     if (state) state.handlers = [];
   }
 
-  _storeWebMCPTools(state, tools) {
+  _storeWebMCPTools(state, tools, sessionId = '') {
     for (const rawTool of Array.isArray(tools) ? tools : []) {
       const name = String(rawTool?.name || '').trim().slice(0, 300);
       const frameId = String(rawTool?.frameId || '').trim().slice(0, 300);
@@ -276,6 +292,7 @@ export class CDPClient {
           : { type: 'object', properties: {}, required: [] },
         annotations,
         frameId,
+        sessionId: String(sessionId || ''),
       });
     }
   }
@@ -290,15 +307,29 @@ export class CDPClient {
     }
   }
 
-  _handleWebMCPResponse(state, params = {}) {
+  _removeWebMCPFrameTools(state, frameId) {
+    const targetFrameId = String(frameId || '');
+    if (!targetFrameId) return 0;
+    let removed = 0;
+    for (const [toolId, tool] of state.toolsById) {
+      if (tool.frameId !== targetFrameId) continue;
+      state.toolsById.delete(toolId);
+      state.idsByKey.delete(this._webMCPToolKey(tool.frameId, tool.name));
+      removed++;
+    }
+    return removed;
+  }
+
+  _handleWebMCPResponse(state, params = {}, sessionId = '') {
     const invocationId = String(params.invocationId || '');
     if (!invocationId) return;
-    const pending = state.pendingInvocations.get(invocationId);
+    const invocationKey = this._webMCPInvocationKey(sessionId, invocationId);
+    const pending = state.pendingInvocations.get(invocationKey);
     if (pending) {
       pending.respond(params);
       return;
     }
-    state.completedResponses.set(invocationId, params);
+    state.completedResponses.set(invocationKey, params);
     if (state.completedResponses.size > 20) {
       const oldest = state.completedResponses.keys().next().value;
       state.completedResponses.delete(oldest);
@@ -349,6 +380,54 @@ export class CDPClient {
     return count;
   }
 
+  _enableWebMCPChildSession(tabId, state, params = {}) {
+    const sessionId = String(params.sessionId || '');
+    const targetInfo = params.targetInfo || {};
+    if (!sessionId || targetInfo.type !== 'iframe' || state.childSessions.has(sessionId)) return;
+    const child = {
+      sessionId,
+      targetId: String(targetInfo.targetId || ''),
+      url: String(targetInfo.url || ''),
+      frameIds: new Set(),
+    };
+    state.childSessions.set(sessionId, child);
+    const enabling = (async () => {
+      await Promise.allSettled([
+        this.sendCommand(tabId, 'WebMCP.enable', {}, sessionId),
+        this.sendCommand(tabId, 'Page.enable', {}, sessionId),
+        // Auto-attach is not recursive. Arm each OOPIF session so nested
+        // cross-process frames join the same WebMCP catalog as well.
+        this.sendCommand(tabId, 'Target.setAutoAttach', {
+          autoAttach: true,
+          waitForDebuggerOnStart: false,
+          flatten: true,
+          filter: WEBMCP_IFRAME_TARGET_FILTER,
+        }, sessionId),
+      ]);
+    })().finally(() => state.childEnablePromises.delete(enabling));
+    state.childEnablePromises.add(enabling);
+  }
+
+  async _enableWebMCPOOPIFTargets(tabId, state) {
+    try {
+      await this.sendCommand(tabId, 'Target.setAutoAttach', {
+        autoAttach: true,
+        waitForDebuggerOnStart: false,
+        flatten: true,
+        filter: WEBMCP_IFRAME_TARGET_FILTER,
+      });
+    } catch {
+      return 0;
+    }
+    for (let pass = 0; pass < WEBMCP_MAX_TARGET_ATTACH_PASSES; pass++) {
+      await new Promise(resolve => setTimeout(resolve, WEBMCP_DISCOVERY_SETTLE_MS));
+      const pending = [...state.childEnablePromises];
+      if (!pending.length) break;
+      await Promise.allSettled(pending);
+    }
+    return state.childSessions.size;
+  }
+
   /**
    * Enable Chrome's experimental WebMCP CDP domain. Tool descriptions,
    * schemas, and outputs remain page-controlled; callers must keep them on an
@@ -368,9 +447,50 @@ export class CDPClient {
       this.on(tabId, event, handler);
       state.handlers.push({ event, handler });
     };
-    register('WebMCP.toolsAdded', params => this._storeWebMCPTools(state, params?.tools));
+    register('WebMCP.toolsAdded', (params, source) => {
+      this._storeWebMCPTools(state, params?.tools, source?.sessionId);
+      const child = state.childSessions.get(String(source?.sessionId || ''));
+      if (!child) return;
+      for (const tool of Array.isArray(params?.tools) ? params.tools : []) {
+        const frameId = String(tool?.frameId || '');
+        if (frameId) child.frameIds.add(frameId);
+      }
+    });
     register('WebMCP.toolsRemoved', params => this._removeWebMCPTools(state, params?.tools));
-    register('WebMCP.toolResponded', params => this._handleWebMCPResponse(state, params));
+    register('WebMCP.toolResponded', (params, source) => (
+      this._handleWebMCPResponse(state, params, source?.sessionId)
+    ));
+    register('Target.attachedToTarget', params => this._enableWebMCPChildSession(tabId, state, params));
+    register('Target.detachedFromTarget', params => {
+      const sessionId = String(params?.sessionId || '');
+      const child = state.childSessions.get(sessionId);
+      if (!child) return;
+      for (const frameId of child.frameIds) this._removeWebMCPFrameTools(state, frameId);
+      state.childSessions.delete(sessionId);
+    });
+    register('Target.targetInfoChanged', params => {
+      const targetInfo = params?.targetInfo || {};
+      const child = [...state.childSessions.values()]
+        .find(candidate => candidate.targetId === String(targetInfo.targetId || ''));
+      if (child) child.url = String(targetInfo.url || child.url || '');
+    });
+    register('Page.frameNavigated', (params, source) => {
+      const frame = params?.frame || {};
+      const frameId = String(frame.id || '');
+      if (!frameId) return;
+      this._removeWebMCPFrameTools(state, frameId);
+      const child = state.childSessions.get(String(source?.sessionId || ''));
+      if (!child) return;
+      child.frameIds.clear();
+      child.frameIds.add(frameId);
+      child.url = String(frame.url || child.url || '');
+    });
+    register('Page.frameDetached', (params, source) => {
+      const frameId = String(params?.frameId || '');
+      this._removeWebMCPFrameTools(state, frameId);
+      const child = state.childSessions.get(String(source?.sessionId || ''));
+      child?.frameIds.delete(frameId);
+    });
 
     state.enablingPromise = (async () => {
       try {
@@ -390,6 +510,7 @@ export class CDPClient {
         // browser's ModelContext API so tools registered earlier in child
         // frames enter the same opaque, untrusted CDP-backed registry.
         await this._discoverExistingWebMCPFrameTools(tabId, state);
+        await this._enableWebMCPOOPIFTargets(tabId, state);
         return state;
       } catch (error) {
         this._removeWebMCPHandlers(tabId, state);
@@ -406,12 +527,28 @@ export class CDPClient {
   async disableWebMCP(tabId) {
     const state = this.webMcpSessions.get(tabId);
     if (!state) return false;
-    for (const invocationId of state.pendingInvocations.keys()) {
-      this.sendCommand(tabId, 'WebMCP.cancelInvocation', { invocationId }).catch(() => {});
+    for (const pending of state.pendingInvocations.values()) {
+      this.sendCommand(
+        tabId,
+        'WebMCP.cancelInvocation',
+        { invocationId: pending.invocationId },
+        pending.sessionId,
+      ).catch(() => {});
     }
     if (state.enabled && this.sessions.has(tabId)) {
+      await Promise.allSettled(
+        [...state.childSessions].map(([sessionId]) => (
+          this.sendCommand(tabId, 'WebMCP.disable', {}, sessionId)
+        )),
+      );
+      await this.sendCommand(tabId, 'Target.setAutoAttach', {
+        autoAttach: false,
+        waitForDebuggerOnStart: false,
+        flatten: true,
+      }).catch(() => {});
       await this.sendCommand(tabId, 'WebMCP.disable').catch(() => {});
     }
+    state.childSessions.clear();
     this._removeWebMCPHandlers(tabId, state);
     this._dropWebMCPSession(tabId, 'WebMCP disabled');
     return true;
@@ -425,7 +562,7 @@ export class CDPClient {
 
   async _webMCPFrameUrls(tabId) {
     const frames = await this.getAllFrames(tabId).catch(() => []);
-    return new Map(frames.map(frame => {
+    const frameUrls = new Map(frames.map(frame => {
       const frameId = String(frame.id || '');
       const rawUrl = String(frame.url || '');
       const securityOrigin = String(frame.securityOrigin || '');
@@ -453,6 +590,16 @@ export class CDPClient {
         return [frameId, ''];
       }
     }));
+    const state = this.webMcpSessions.get(tabId);
+    for (const child of state?.childSessions?.values() || []) {
+      let safeUrl = '';
+      try {
+        const url = new URL(child.url);
+        if (url.protocol === 'http:' || url.protocol === 'https:') safeUrl = url.href;
+      } catch {}
+      for (const frameId of child.frameIds) frameUrls.set(frameId, safeUrl);
+    }
+    return frameUrls;
   }
 
   _webMCPPermissionHost(value) {
@@ -592,7 +739,7 @@ export class CDPClient {
         frameId: tool.frameId,
         toolName: tool.name,
         input: safeInput,
-      });
+      }, tool.sessionId);
     } catch (error) {
       return {
         success: false,
@@ -616,6 +763,7 @@ export class CDPClient {
       ? Math.min(WEBMCP_MAX_INVOCATION_TIMEOUT_MS, Math.round(requestedTimeout))
       : WEBMCP_DEFAULT_INVOCATION_TIMEOUT_MS;
     const abortCheck = typeof options.abortCheck === 'function' ? options.abortCheck : null;
+    const invocationKey = this._webMCPInvocationKey(tool.sessionId, invocationId);
     return await new Promise(resolve => {
       let timer = null;
       let abortTimer = null;
@@ -625,8 +773,8 @@ export class CDPClient {
         settled = true;
         if (timer) clearTimeout(timer);
         if (abortTimer) clearInterval(abortTimer);
-        state.pendingInvocations.delete(invocationId);
-        state.completedResponses.delete(invocationId);
+        state.pendingInvocations.delete(invocationKey);
+        state.completedResponses.delete(invocationKey);
         resolve({
           ...result,
           tool_id: tool.toolId,
@@ -655,19 +803,26 @@ export class CDPClient {
           error: String(params.errorText || exceptionText || `WebMCP tool finished with status ${status}`).slice(0, 2000),
         });
       };
-      state.pendingInvocations.set(invocationId, {
+      state.pendingInvocations.set(invocationKey, {
+        invocationId,
+        sessionId: tool.sessionId,
         finish,
         respond,
       });
 
-      const earlyResponse = state.completedResponses.get(invocationId);
+      const earlyResponse = state.completedResponses.get(invocationKey);
       if (earlyResponse) {
         respond(earlyResponse);
         return;
       }
       timer = setTimeout(() => {
-        state.pendingInvocations.delete(invocationId);
-        this.sendCommand(tabId, 'WebMCP.cancelInvocation', { invocationId }).catch(() => {});
+        state.pendingInvocations.delete(invocationKey);
+        this.sendCommand(
+          tabId,
+          'WebMCP.cancelInvocation',
+          { invocationId },
+          tool.sessionId,
+        ).catch(() => {});
         finish({
           success: false,
           dispatched: true,
@@ -681,8 +836,13 @@ export class CDPClient {
           let aborted = false;
           try { aborted = abortCheck() === true; } catch {}
           if (!aborted) return;
-          state.pendingInvocations.delete(invocationId);
-          this.sendCommand(tabId, 'WebMCP.cancelInvocation', { invocationId }).catch(() => {});
+          state.pendingInvocations.delete(invocationKey);
+          this.sendCommand(
+            tabId,
+            'WebMCP.cancelInvocation',
+            { invocationId },
+            tool.sessionId,
+          ).catch(() => {});
           finish({
             success: false,
             dispatched: true,
