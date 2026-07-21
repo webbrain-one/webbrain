@@ -3899,7 +3899,7 @@ test('navigation arrival history survives intra-run resets but clears at run bou
     const source = fs.readFileSync(path.join(ROOT, `src/${label}/src/agent/agent.js`), 'utf8');
     assert.equal(
       (source.match(/this\._clearRunLoopState\(tabId\);/g) || []).length,
-      5,
+      7,
       `${label}: navigation cleanup is not wired to both run paths and tab cleanup`,
     );
   }
@@ -43647,6 +43647,10 @@ test('saved workflow slash commands are out-of-band and wired in both browsers',
     assert.equal(save.action, 'save');
     assert.equal(save.payload, 'Fill checkout');
     assert.equal(runtime.slashInvocationIsOutOfBand(save), true);
+    const run = runtime.parseSlashInvocation('/workflow --run workflow_123');
+    assert.equal(run.action, 'run');
+    assert.equal(run.payload, 'workflow_123');
+    assert.equal(runtime.slashInvocationIsOutOfBand(run), true);
     const remove = runtime.parseSlashInvocation('/workflow --delete workflow_123');
     assert.equal(remove.action, 'delete');
     assert.equal(remove.payload, 'workflow_123');
@@ -43654,6 +43658,10 @@ test('saved workflow slash commands are out-of-band and wired in both browsers',
     assert.match(source, /sendToBackground\('save_latest_workflow', \{ tabId, name \}\)/);
     assert.match(source, /sendToBackground\('list_saved_workflows'\)/);
     assert.match(source, /sendToBackground\('delete_saved_workflow'/);
+    assert.match(source, /sendToBackground\('get_saved_workflow', \{ id: workflowId \}\)/);
+    assert.match(source, /input\.type = parameter\.sensitive \? 'password' : 'text'/);
+    assert.match(source, /inputs\.forEach\(\(input\) => \{ input\.value = ''; \}\)/);
+    assert.doesNotMatch(source, /retryPayload[^\n]+workflowParameters/);
   }
   for (const background of ['src/chrome/src/background.js', 'src/firefox/src/background.js']) {
     const source = fs.readFileSync(path.join(ROOT, background), 'utf8');
@@ -43661,6 +43669,9 @@ test('saved workflow slash commands are out-of-band and wired in both browsers',
     assert.match(source, /compileLatestSuccessfulWorkflow\(workflowTrace/);
     assert.match(source, /case 'list_saved_workflows':/);
     assert.match(source, /case 'delete_saved_workflow':/);
+    assert.match(source, /agent\.replaySavedWorkflow\(/);
+    assert.match(source, /clearUserMemoryTurnContext\(tabId\)/);
+    assert.match(source, /agent\.processMessage\(tabId, replay\.prompt, publishUpdate, 'act', \[\], runOptions\)/);
   }
 });
 
@@ -43714,6 +43725,160 @@ test('saved workflow target matching fails closed on ambiguity', () => {
   assert.equal(matched.status, 'matched');
   assert.equal(matched.candidate.refId, 'ref_3');
 });
+
+test('saved workflow telemetry redacts runtime parameters and validates postconditions', () => {
+  const template = { text: { [SavedWorkflowsCh.WORKFLOW_PARAM_REF_KEY]: 'password' }, clear: true };
+  const redactedArgs = SavedWorkflowsCh.redactWorkflowArgsForTelemetry(template, {
+    text: 'runtime secret',
+    clear: true,
+    ref_id: 'ref_20',
+  });
+  assert.deepEqual(redactedArgs, { text: '<workflow-parameter:password>', clear: true });
+  const redactedResult = SavedWorkflowsCh.redactWorkflowResultForTelemetry('set_field', {
+    success: false,
+    actual: 'runtime secret',
+    fieldMeta: { name: 'password' },
+  });
+  assert.equal(redactedResult.actual, '[workflow parameter redacted]');
+  assert.doesNotMatch(JSON.stringify({ redactedArgs, redactedResult }), /runtime secret|ref_20/);
+  assert.equal(SavedWorkflowsCh.validateWorkflowStepResult({ kind: 'tool_verified' }, { success: true, verified: true }).ok, true);
+  assert.equal(SavedWorkflowsCh.validateWorkflowStepResult({ kind: 'checked', value: true }, { success: true, checkedAfter: false }).ok, false);
+  assert.equal(SavedWorkflowsCh.validateWorkflowStepResult({ kind: 'url_changed' }, { success: true }, { beforeUrl: 'https://a.test/1', afterUrl: 'https://a.test/2' }).ok, true);
+  assert.equal(SavedWorkflowsCh.validateWorkflowStepResult({ kind: 'tool_success' }, { success: false }, { tool: 'click_ax' }).outcomeUnknown, true);
+  assert.equal(SavedWorkflowsCh.validateWorkflowStepResult({ kind: 'tool_success' }, { success: false }, { tool: 'wait_for_element' }).outcomeUnknown, false);
+});
+
+test('saved workflow fallback prompt omits all runtime values', () => {
+  const workflow = {
+    name: 'Sign in',
+    parameters: [{ id: 'password', label: 'Password', sensitive: true }],
+    steps: [{ tool: 'set_field', target: { role: 'textbox', name: 'Password' }, args: { text: { [SavedWorkflowsCh.WORKFLOW_PARAM_REF_KEY]: 'password' } } }],
+  };
+  const prompt = SavedWorkflowsCh.workflowFallbackPrompt(workflow, 0, 'target_mismatch');
+  assert.match(prompt, /fresh element references/);
+  assert.match(prompt, /Ask the user only if this remaining step needs it/);
+  assert.doesNotMatch(prompt, /runtime secret/);
+});
+
+for (const [browser, AgentClass] of [['chrome', AgentCh], ['firefox', AgentFx]]) {
+  test(`${browser} saved workflow replay resolves fresh targets without exposing runtime parameters`, async () => {
+    const workflow = {
+      schema: SavedWorkflowsCh.SAVED_WORKFLOW_SCHEMA,
+      id: 'workflow_test',
+      name: 'Fill email',
+      start: { origin: 'https://example.com', pathFamily: '/form' },
+      parameters: [{ id: 'email', label: 'Email', required: true, sensitive: false, type: 'text' }],
+      steps: [{
+        id: 'step_1',
+        tool: 'set_field',
+        args: { text: { [SavedWorkflowsCh.WORKFLOW_PARAM_REF_KEY]: 'email' }, clear: true, submit: false },
+        target: { role: 'textbox', name: 'Email', type: 'email' },
+        expected: { kind: 'tool_verified' },
+      }],
+    };
+    const agent = new AgentClass({
+      activeProviderId: 'test',
+      getActive: () => ({ id: 'test', model: 'test-model' }),
+    });
+    const runtimeValue = 'runtime@example.com';
+    const updates = [];
+    agent._hydrate = async () => {};
+    agent._persist = () => {};
+    agent.ensureConversationId = async () => 'conversation_test';
+    agent._currentUrl = async () => 'https://example.com/form';
+    agent.executeTool = async (_tabId, name) => {
+      assert.equal(name, 'get_accessibility_tree');
+      return { pageContent: 'textbox "Email" [ref_99] type="email"' };
+    };
+    agent._executeToolBatch = async (_tabId, calls, _messages, onUpdate) => {
+      const args = JSON.parse(calls[0].function.arguments);
+      assert.equal(args.ref_id, 'ref_99');
+      assert.equal(args.text, runtimeValue);
+      onUpdate('tool_call', { name: 'set_field', args });
+      onUpdate('tool_result', { name: 'set_field', result: { success: true, verified: true, actual: runtimeValue } });
+      return { action: 'continue' };
+    };
+
+    const result = await agent.replaySavedWorkflow(
+      77,
+      workflow,
+      { email: runtimeValue },
+      (type, data) => updates.push({ type, data }),
+    );
+
+    assert.equal(result.status, 'completed');
+    assert.equal(result.estimatedLlmCallsSaved, 1);
+    const serialized = JSON.stringify(updates);
+    assert.doesNotMatch(serialized, /runtime@example\.com|ref_99/);
+    assert.match(serialized, /<workflow-parameter:email>/);
+    assert.equal(agent.isRunning(77), false);
+  });
+
+  test(`${browser} saved workflow replay fails closed before a semantic target miss`, async () => {
+    const workflow = {
+      schema: SavedWorkflowsCh.SAVED_WORKFLOW_SCHEMA,
+      id: 'workflow_test',
+      name: 'Fill secret',
+      start: { origin: 'https://example.com', pathFamily: '/form' },
+      parameters: [{ id: 'secret', label: 'Secret', required: true, sensitive: true, type: 'text' }],
+      steps: [{
+        id: 'step_1',
+        tool: 'set_field',
+        args: { text: { [SavedWorkflowsCh.WORKFLOW_PARAM_REF_KEY]: 'secret' } },
+        target: { role: 'textbox', name: 'Secret' },
+        expected: { kind: 'tool_verified' },
+      }],
+    };
+    const agent = new AgentClass({ getActive: () => ({ model: 'test-model' }) });
+    agent._hydrate = async () => {};
+    agent._persist = () => {};
+    agent.ensureConversationId = async () => 'conversation_test';
+    agent._currentUrl = async () => 'https://example.com/form';
+    agent.executeTool = async () => ({ pageContent: 'button "Continue" [ref_1]' });
+    agent._executeToolBatch = async () => { throw new Error('must not execute after a semantic miss'); };
+
+    const result = await agent.replaySavedWorkflow(78, workflow, { secret: 'runtime secret' });
+
+    assert.equal(result.status, 'fallback');
+    assert.doesNotMatch(result.prompt, /runtime secret/);
+    assert.equal(agent.isRunning(78), false);
+  });
+
+  test(`${browser} saved workflow replay never falls back after an action with an unknown outcome`, async () => {
+    const workflow = {
+      schema: SavedWorkflowsCh.SAVED_WORKFLOW_SCHEMA,
+      id: 'workflow_unknown',
+      name: 'Toggle setting',
+      start: { origin: 'https://example.com', pathFamily: '/settings' },
+      parameters: [],
+      steps: [{
+        id: 'step_1',
+        tool: 'click_ax',
+        args: {},
+        target: { role: 'button', name: 'Enable' },
+        expected: { kind: 'tool_success' },
+      }],
+    };
+    const agent = new AgentClass({ getActive: () => ({ model: 'test-model' }) });
+    const updates = [];
+    agent._hydrate = async () => {};
+    agent._persist = () => {};
+    agent.ensureConversationId = async () => 'conversation_test';
+    agent._currentUrl = async () => 'https://example.com/settings';
+    agent.executeTool = async () => ({ pageContent: 'button "Enable" [ref_7]' });
+    agent._executeToolBatch = async (_tabId, _calls, _messages, onUpdate) => {
+      onUpdate('tool_result', { name: 'click_ax', result: { success: false, error: 'response channel closed' } });
+      return { action: 'continue' };
+    };
+
+    const result = await agent.replaySavedWorkflow(79, workflow, {}, (type, data) => updates.push({ type, data }));
+
+    assert.equal(result.status, 'stopped');
+    assert.match(result.reason, /tool_failed/);
+    assert.equal(updates.some((update) => update.type === 'workflow_fallback'), false);
+    assert.equal(agent.isRunning(79), false);
+  });
+}
 
 test('saved workflow store normalizes writes and resolves runtime parameters without persisting values', async () => {
   const memory = {};

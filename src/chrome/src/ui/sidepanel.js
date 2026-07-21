@@ -566,12 +566,13 @@ const SLASH_COMMANDS = [
   },
   {
     value: '/workflow',
-    usage: '/workflow [--save <name> | --delete <id>]',
+    usage: '/workflow [--save <name> | --run <id> | --delete <id>]',
     descriptionKey: 'sp.slash.workflows',
     action: 'list',
     outOfBand: true,
     options: [
       { value: '--save', valueLabel: '<name>', descriptionKey: 'sp.slash.save_workflow', action: 'save', takesRemainder: true, outOfBand: true, exclusiveGroup: 'workflow-action' },
+      { value: '--run', valueLabel: '<id>', descriptionKey: 'sp.slash.run_workflow', action: 'run', takesRemainder: true, outOfBand: true, exclusiveGroup: 'workflow-action' },
       { value: '--delete', valueLabel: '<id>', descriptionKey: 'sp.slash.delete_workflow', action: 'delete', takesRemainder: true, outOfBand: true, exclusiveGroup: 'workflow-action' },
     ],
   },
@@ -3041,6 +3042,122 @@ async function deleteSavedWorkflow(id, tabId = currentTabId) {
   }
 }
 
+const boundWorkflowParameterForms = new WeakSet();
+
+async function startSavedWorkflowRun(workflow, parameters, tabId = currentTabId) {
+  if (!workflow?.id || currentTabId !== tabId) return false;
+  await ensureActMode();
+  inputEl.value = t('sp.workflows.run_prompt', { name: workflow.name });
+  autoResizeInput();
+  return sendMessage({
+    __mode: 'act',
+    workflowId: workflow.id,
+    workflowParameters: parameters,
+  });
+}
+
+async function submitSavedWorkflowParameters(event, form) {
+  event.preventDefault();
+  const tabId = Number(form?.dataset?.tabId);
+  const workflowId = String(form?.dataset?.workflowId || '');
+  const errorEl = form?.querySelector('.schedule-error');
+  const submit = form?.querySelector('.schedule-submit');
+  if (!Number.isFinite(tabId) || !workflowId || !errorEl || !submit) return;
+  errorEl.textContent = '';
+  submit.disabled = true;
+  try {
+    const res = await sendToBackground('get_saved_workflow', { id: workflowId });
+    if (!res?.ok || !res.workflow) throw new Error(savedWorkflowFailureMessage(res));
+    const inputs = new Map(Array.from(form.querySelectorAll('[data-workflow-parameter-id]'))
+      .map((input) => [input.dataset.workflowParameterId, input]));
+    const parameters = {};
+    for (const descriptor of res.workflow.parameters || []) {
+      const input = inputs.get(descriptor.id);
+      if (!input) throw new Error(t('sp.workflows.error', { msg: 'parameter form is incomplete' }));
+      if (descriptor.required !== false && input.value === '') {
+        throw new Error(t('sp.workflows.parameter_required', { name: descriptor.label || descriptor.id }));
+      }
+      parameters[descriptor.id] = input.value;
+    }
+    inputs.forEach((input) => { input.value = ''; });
+    form.closest('.message')?.remove();
+    setTimeout(() => {
+      startSavedWorkflowRun(res.workflow, parameters, tabId)
+        .catch((error) => showComposerToast(t('sp.workflows.error', { msg: error.message }), { duration: 7000 }));
+    }, 0);
+  } catch (error) {
+    submit.disabled = false;
+    errorEl.textContent = error.message;
+  }
+}
+
+function bindSavedWorkflowParameterForm(form) {
+  if (!form || boundWorkflowParameterForms.has(form)) return;
+  boundWorkflowParameterForms.add(form);
+  form.querySelector('.schedule-cancel')?.addEventListener('click', () => form.closest('.message')?.remove());
+  form.addEventListener('submit', (event) => submitSavedWorkflowParameters(event, form));
+}
+
+function renderSavedWorkflowParameterForm(workflow, tabId = currentTabId) {
+  if (!workflow?.id || currentTabId !== tabId) return;
+  const parameterMessage = t('sp.workflows.parameters_for', { name: workflow.name });
+  const msgEl = addMessage('system', parameterMessage);
+  const content = msgEl.querySelector('.message-content');
+  const form = document.createElement('form');
+  form.className = 'schedule-composer workflow-parameter-form';
+  form.dataset.tabId = String(tabId);
+  form.dataset.workflowId = workflow.id;
+  for (const parameter of workflow.parameters || []) {
+    const input = document.createElement('input');
+    input.type = parameter.sensitive ? 'password' : 'text';
+    input.autocomplete = 'off';
+    input.maxLength = 10000;
+    input.required = parameter.required !== false;
+    input.dataset.workflowParameterId = parameter.id;
+    addScheduleField(form, parameter.label || parameter.id, input);
+  }
+  const errorEl = document.createElement('div');
+  errorEl.className = 'schedule-error';
+  form.appendChild(errorEl);
+  const actions = document.createElement('div');
+  actions.className = 'schedule-form-actions';
+  const submit = document.createElement('button');
+  submit.type = 'submit';
+  submit.className = 'schedule-submit';
+  submit.textContent = t('sp.scheduled.run_now');
+  const cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.className = 'schedule-cancel';
+  cancel.textContent = t('sp.schedule_form.cancel');
+  actions.append(submit, cancel);
+  form.appendChild(actions);
+  bindSavedWorkflowParameterForm(form);
+  content.appendChild(form);
+  form.querySelector('input')?.focus();
+  scrollToBottom();
+}
+
+async function prepareSavedWorkflowRun(id, tabId = currentTabId) {
+  try {
+    const res = await sendToBackground('get_saved_workflow', { id: String(id || '').trim() });
+    if (currentTabId !== tabId) return;
+    if (!res?.ok || !res.workflow) {
+      showComposerToast(savedWorkflowFailureMessage(res), { duration: 5000 });
+      return;
+    }
+    if (res.workflow.parameters?.length) {
+      renderSavedWorkflowParameterForm(res.workflow, tabId);
+      return;
+    }
+    setTimeout(() => {
+      startSavedWorkflowRun(res.workflow, {}, tabId)
+        .catch((error) => showComposerToast(t('sp.workflows.error', { msg: error.message }), { duration: 7000 }));
+    }, 0);
+  } catch (error) {
+    if (currentTabId === tabId) showComposerToast(t('sp.workflows.error', { msg: error.message }), { duration: 7000 });
+  }
+}
+
 async function showProgress(tabId = currentTabId) {
   try {
     const res = await sendToBackground('get_progress', { tabId });
@@ -4032,6 +4149,7 @@ function rebindRestoredMessageControls() {
   rebindClarifyCards();
   rebindPlanReviewCards();
   rebindScheduleComposers();
+  document.querySelectorAll('form.workflow-parameter-form').forEach(bindSavedWorkflowParameterForm);
   rebindSubscribeButtons();
 }
 
@@ -4866,6 +4984,11 @@ async function parseSlashCommands(text, tabId = currentTabId, options = {}) {
 
   if (command.value === '/workflow' && action === 'save') {
     await saveLatestWorkflow(payload, tabId);
+    return '';
+  }
+
+  if (command.value === '/workflow' && action === 'run') {
+    await prepareSavedWorkflowRun(payload, tabId);
     return '';
   }
 

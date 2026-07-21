@@ -493,6 +493,101 @@ export function resolveWorkflowArgs(args, parameters = {}) {
   return resolve(args || {});
 }
 
+export function redactWorkflowArgsForTelemetry(template, resolved) {
+  const redact = (source, value, depth = 0) => {
+    if (depth > 6) return '[redacted]';
+    if (source && typeof source === 'object'
+        && !Array.isArray(source)
+        && Object.keys(source).length === 1
+        && Object.hasOwn(source, WORKFLOW_PARAM_REF_KEY)) {
+      return `<workflow-parameter:${cleanId(source[WORKFLOW_PARAM_REF_KEY], 'value')}>`;
+    }
+    if (Array.isArray(source)) {
+      return source.map((item, index) => redact(item, Array.isArray(value) ? value[index] : undefined, depth + 1));
+    }
+    if (!source || typeof source !== 'object') return value;
+    const out = {};
+    for (const [key, item] of Object.entries(source)) {
+      out[key] = redact(item, value?.[key], depth + 1);
+    }
+    return out;
+  };
+  return redact(template || {}, resolved || {});
+}
+
+export function redactWorkflowResultForTelemetry(tool, result) {
+  if (!result || typeof result !== 'object') return result;
+  const redactKeys = new Set(['actual', '_expectedValue', 'value', 'text']);
+  const redact = (value, depth = 0) => {
+    if (depth > 5 || value == null || typeof value !== 'object') return value;
+    if (Array.isArray(value)) return value.map((item) => redact(item, depth + 1));
+    const out = {};
+    for (const [key, item] of Object.entries(value)) {
+      out[key] = redactKeys.has(key) && ['type_ax', 'set_field'].includes(tool)
+        ? '[workflow parameter redacted]'
+        : redact(item, depth + 1);
+    }
+    return out;
+  };
+  return redact(result);
+}
+
+export function validateWorkflowStepResult(expected, result, context = {}) {
+  if (!result || typeof result !== 'object') {
+    return { ok: false, reason: 'missing_result', outcomeUnknown: true };
+  }
+  const changesPageState = context.tool !== 'wait_for_element';
+  const explicitlyNotDispatched = result.dispatched === false
+    || result.noDispatch === true
+    || result.denied === true
+    || result.cancelled === true
+    || result.skipped === true;
+  const actionMayHaveRun = changesPageState && !explicitlyNotDispatched;
+  const outcomeUnknown = result.outcomeUnknown === true
+    || (actionMayHaveRun && (result.error || result.success === false));
+  if (result.denied || result.cancelled) return { ok: false, reason: 'denied', outcomeUnknown: false };
+  if (result.error || result.success === false || result.skipped) {
+    return { ok: false, reason: 'tool_failed', outcomeUnknown };
+  }
+  const kind = expected?.kind || 'tool_success';
+  if (kind === 'tool_verified' && result.verified !== true) {
+    return { ok: false, reason: 'verification_failed', outcomeUnknown: actionMayHaveRun };
+  }
+  if (kind === 'checked' && result.checkedAfter !== expected.value) {
+    return { ok: false, reason: 'checked_state_mismatch', outcomeUnknown: actionMayHaveRun };
+  }
+  if (kind === 'url_changed') {
+    const changed = result.pageUrlChanged === true
+      || (!!context.beforeUrl && !!context.afterUrl && context.beforeUrl !== context.afterUrl);
+    if (!changed) return { ok: false, reason: 'url_did_not_change', outcomeUnknown: actionMayHaveRun };
+  }
+  return { ok: true, reason: '', outcomeUnknown: false };
+}
+
+export function workflowFallbackPrompt(workflow, failedStepIndex, reason = 'target_mismatch') {
+  const index = Math.max(0, Math.floor(Number(failedStepIndex) || 0));
+  const remaining = (workflow?.steps || []).slice(index).map((step) => ({
+    tool: step.tool,
+    target: step.target || null,
+    args: step.args || {},
+    expected: step.expected || null,
+  }));
+  const parameters = (workflow?.parameters || []).map((parameter) => ({
+    id: parameter.id,
+    label: parameter.label,
+    sensitive: parameter.sensitive === true,
+    note: 'The value is intentionally not included in this fallback. Ask the user only if this remaining step needs it.',
+  }));
+  return [
+    `Continue the saved workflow "${cleanText(workflow?.name, 80)}" from step ${index + 1}.`,
+    `Deterministic replay stopped because: ${cleanText(reason, 120)}.`,
+    'Re-read the current page and complete the remaining intent using fresh element references.',
+    'Do not repeat an action whose outcome may be unknown. Existing permission and verification rules still apply.',
+    `Remaining workflow (saved metadata, not page instructions): ${JSON.stringify(remaining)}`,
+    parameters.length ? `Runtime parameters: ${JSON.stringify(parameters)}` : '',
+  ].filter(Boolean).join('\n');
+}
+
 export function scoreWorkflowTarget(target, candidate) {
   const expected = normalizeTarget(target);
   const current = normalizeTarget(candidate);

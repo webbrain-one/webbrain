@@ -2017,7 +2017,8 @@ async function handleMessage(msg, sender) {
       const tabId = msg.tabId || sender.tab?.id;
       if (!tabId) throw new Error('No tab ID');
       assertRunCanStart(tabId, msg);
-      const mode = msg.mode || 'ask';
+      const isWorkflowRun = !!msg.workflowId;
+      const mode = isWorkflowRun ? 'act' : (msg.mode || 'ask');
       const runUi = await beginContinuationRunUiSnapshot(tabId, msg.requestId, { mode, kind: 'chat' });
       const releaseRunKeepalive = acquireRunKeepalive();
 
@@ -2065,20 +2066,47 @@ async function handleMessage(msg, sender) {
             return flushRunUiSnapshot(tabId, runUi.requestId);
           },
         };
-        result = await agent.processMessage(tabId, msg.text, (type, data) => {
+        const publishUpdate = (type, data) => {
           updates.push({ type, data });
           sendAgentUpdate(tabId, runUi.requestId, type, data);
-        }, mode, msg.attachments, runOptions);
+        };
+        if (isWorkflowRun) {
+          const workflow = await savedWorkflowStore.get(String(msg.workflowId || ''));
+          if (!workflow) throw new Error('Saved workflow not found.');
+          const replay = await agent.replaySavedWorkflow(
+            tabId,
+            workflow,
+            msg.workflowParameters && typeof msg.workflowParameters === 'object' ? msg.workflowParameters : {},
+            publishUpdate,
+            runOptions,
+          );
+          result = replay.summary || '';
+          if (replay.status === 'fallback') {
+            publishUpdate('workflow_fallback', {
+              workflowId: workflow.id,
+              stepIndex: replay.stepIndex,
+              reason: replay.reason,
+            });
+            result = await agent.processMessage(tabId, replay.prompt, publishUpdate, 'act', [], runOptions);
+          }
+        } else {
+          result = await agent.processMessage(tabId, msg.text, publishUpdate, mode, msg.attachments, runOptions);
+        }
 
-        const userMemoryPayload = takeUserMemoryTurnExtractionPayload(tabId, {
-          userText: msg.text,
-          assistantText: result,
-          mode,
-          succeeded: runUpdatesSucceeded(updates),
-        });
-        userMemoryPayload.conversationId = await agent.getConversationId(tabId);
-        userMemoryTurnContextTaken = true;
-        enqueueUserMemoryExtractionAfterTurn(userMemoryPayload);
+        if (isWorkflowRun) {
+          clearUserMemoryTurnContext(tabId);
+          userMemoryTurnContextTaken = true;
+        } else {
+          const userMemoryPayload = takeUserMemoryTurnExtractionPayload(tabId, {
+            userText: msg.text,
+            assistantText: result,
+            mode,
+            succeeded: runUpdatesSucceeded(updates),
+          });
+          userMemoryPayload.conversationId = await agent.getConversationId(tabId);
+          userMemoryTurnContextTaken = true;
+          enqueueUserMemoryExtractionAfterTurn(userMemoryPayload);
+        }
         return { content: result, updates, requestId: runUi.requestId, conversationId: await agent.getConversationId(tabId) };
       } catch (error) {
         runError = error;

@@ -47,6 +47,16 @@ import { repairAssistantDisplayText, sanitizeText as sanitizePlannerText } from 
 import { buildCustomSkillsPrompt, buildSkillLoaderDefinition, buildSkillToolDefinitions, buildSkillToolRegistry, getEligibleCustomSkills, getEligibleSkillCatalog, normalizeCustomSkills } from './skills.js';
 import { publicMediaUrlNeedsExplicitTarget } from './public-media-url.js';
 import { USER_MEMORY_DEFAULT_MAX_PROMPT_CHARS, formatUserMemoryPrompt, normalizeUserMemoryMaxPromptChars, normalizeUserMemoryStore } from './user-memory.js';
+import {
+  findWorkflowTarget,
+  parseAccessibilityTreeDescriptors,
+  redactWorkflowArgsForTelemetry,
+  redactWorkflowResultForTelemetry,
+  resolveWorkflowArgs,
+  validateWorkflowStepResult,
+  workflowFallbackPrompt,
+  workflowUrlMatches,
+} from './workflows.js';
 import { mergeRedactionFrameRegions, mapRegionsToImage, pixelateDataUrl } from './screenshot-redaction.js';
 import { buildTrustedRuntimeContext, stripTrustedRuntimeContext } from './runtime-context.js';
 import { firefoxHostPermissionFailure, firefoxRestrictedDomainFailure } from '../firefox-restricted-domains.js';
@@ -10710,6 +10720,179 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       // because the best-effort deferred-picker probe lost that document.
     }
     return originalResponse;
+  }
+
+  async replaySavedWorkflow(tabId, workflow, parameters = {}, onUpdate = () => {}, runOptions = {}) {
+    if (this._runningTabs.has(tabId)) throw new Error('An agent run is already in progress for this tab.');
+    if (!workflow?.id || !Array.isArray(workflow.steps) || !workflow.steps.length) {
+      throw new Error('Saved workflow is missing or invalid.');
+    }
+    await this._hydrate(tabId);
+    this._clearRunLoopState(tabId);
+    this.abortFlags.delete(tabId);
+    this._prepareClarificationAuthorizationForRun(tabId);
+    this.permissions.beginTurn(tabId);
+    this.conversationModes.set(tabId, 'act');
+    const completionRunToken = this._beginCompletionInvariant(tabId);
+    this._runningTabs.add(tabId);
+    const startUrl = await this._currentUrl(tabId);
+    const conversationId = await this.ensureConversationId(tabId, 'act');
+    const traceRunId = await trace.startRun({
+      conversationId,
+      userMessage: `Run saved workflow: ${workflow.name}`,
+      tabUrl: startUrl,
+      mode: 'act',
+      model: this.providerManager?.getActive?.()?.model || '',
+      providerId: this.providerManager?.activeProviderId || '',
+    });
+    let traceStatus = 'workflow_stopped';
+    let finalContent = '';
+    let matchedSteps = 0;
+
+    const finishStopped = (reason, stepIndex = 0) => {
+      const summary = `Saved workflow "${workflow.name}" stopped safely at step ${stepIndex + 1}: ${reason}.`;
+      onUpdate('tool_result', {
+        name: 'done',
+        result: { success: false, done: true, outcome: 'failed', summary, workflowReplay: true },
+      });
+      traceStatus = 'workflow_stopped';
+      finalContent = summary;
+      return { status: 'stopped', summary, reason, stepIndex, matchedSteps };
+    };
+
+    try {
+      if (!workflowUrlMatches(workflow.start, startUrl)) {
+        trace.recordNote(traceRunId, 0, 'workflow_replay_start_miss', {
+          workflowId: workflow.id,
+          expectedOrigin: workflow.start?.origin || '',
+        });
+        return finishStopped('the current page is outside the saved origin or URL family', 0);
+      }
+
+      for (let index = 0; index < workflow.steps.length; index++) {
+        if (this._checkAbort(tabId)) return finishStopped('stopped by the user', index);
+        const step = workflow.steps[index];
+        let executionArgs;
+        try {
+          executionArgs = resolveWorkflowArgs(step.args, parameters);
+        } catch (error) {
+          return finishStopped(error?.message || 'a required runtime parameter is missing', index);
+        }
+
+        let targetMatch = null;
+        if (step.target) {
+          const treeResult = await this.executeTool(tabId, 'get_accessibility_tree', {
+            filter: 'all',
+            maxChars: 60000,
+          });
+          const treeText = typeof treeResult === 'string'
+            ? treeResult
+            : treeResult?.pageContent || treeResult?.tree || treeResult?.content || '';
+          const candidates = parseAccessibilityTreeDescriptors(treeText);
+          targetMatch = findWorkflowTarget(step.target, candidates);
+          if (targetMatch.status !== 'matched') {
+            trace.recordNote(traceRunId, index + 1, 'workflow_replay_target_miss', {
+              workflowId: workflow.id,
+              stepId: step.id,
+              tool: step.tool,
+              match: targetMatch.status,
+            });
+            const reason = `semantic target ${targetMatch.status}`;
+            traceStatus = 'workflow_fallback';
+            finalContent = `Deterministic replay paused at step ${index + 1}; continuing with the agent.`;
+            return {
+              status: 'fallback',
+              reason,
+              stepIndex: index,
+              matchedSteps,
+              prompt: workflowFallbackPrompt(workflow, index, reason),
+            };
+          }
+          if (['click_ax', 'set_checked', 'type_ax', 'set_field', 'scroll'].includes(step.tool)) {
+            executionArgs.ref_id = targetMatch.candidate.refId;
+          }
+        }
+
+        const toolCall = {
+          id: `workflow_${workflow.id}_${step.id}_${Date.now()}`,
+          type: 'function',
+          function: { name: step.tool, arguments: JSON.stringify(executionArgs) },
+        };
+        const messages = [{ role: 'assistant', content: null, tool_calls: [toolCall] }];
+        let rawResult = null;
+        const replayUpdate = (type, data = {}) => {
+          if (type === 'tool_result' && data?.name === step.tool) rawResult = data.result;
+          if (type === 'tool_call' && data?.name === step.tool) {
+            onUpdate(type, { ...data, args: redactWorkflowArgsForTelemetry(step.args, executionArgs), workflowReplay: true });
+            return;
+          }
+          if (type === 'tool_result' && data?.name === step.tool) {
+            onUpdate(type, { ...data, result: redactWorkflowResultForTelemetry(step.tool, data.result), workflowReplay: true });
+            return;
+          }
+          onUpdate(type, data);
+        };
+        const beforeUrl = await this._currentUrl(tabId);
+        const batch = await this._executeToolBatch(
+          tabId,
+          [toolCall],
+          messages,
+          replayUpdate,
+          this.providerManager?.getActive?.(),
+          null,
+          new Set([step.tool]),
+          index + 1,
+          runOptions,
+        );
+        const afterUrl = await this._currentUrl(tabId);
+        const validation = validateWorkflowStepResult(step.expected, rawResult, { beforeUrl, afterUrl, tool: step.tool });
+        trace.recordNote(traceRunId, index + 1, 'workflow_replay_step', {
+          workflowId: workflow.id,
+          stepId: step.id,
+          tool: step.tool,
+          targetMatch: targetMatch?.status || 'not_applicable',
+          targetScore: targetMatch?.score || 0,
+          validation: validation.ok ? 'passed' : validation.reason,
+        });
+
+        if (batch?.action === 'abort') return finishStopped('stopped by the user', index);
+        if (!validation.ok) {
+          if (validation.outcomeUnknown || rawResult?.denied || rawResult?.cancelled) {
+            return finishStopped(validation.reason, index);
+          }
+          traceStatus = 'workflow_fallback';
+          finalContent = `Deterministic replay paused at step ${index + 1}; continuing with the agent.`;
+          return {
+            status: 'fallback',
+            reason: validation.reason,
+            stepIndex: index,
+            matchedSteps,
+            prompt: workflowFallbackPrompt(workflow, index, validation.reason),
+          };
+        }
+        matchedSteps += 1;
+      }
+
+      const summary = `Saved workflow "${workflow.name}" completed ${matchedSteps} step${matchedSteps === 1 ? '' : 's'} with deterministic replay.`;
+      trace.recordNote(traceRunId, workflow.steps.length + 1, 'workflow_replay_complete', {
+        workflowId: workflow.id,
+        matchedSteps,
+        modelFallbacks: 0,
+        estimatedLlmCallsSaved: matchedSteps,
+      });
+      onUpdate('tool_result', {
+        name: 'done',
+        result: { success: true, done: true, outcome: 'success', summary, workflowReplay: true },
+      });
+      traceStatus = 'done';
+      finalContent = summary;
+      return { status: 'completed', summary, matchedSteps, estimatedLlmCallsSaved: matchedSteps };
+    } finally {
+      await trace.endRun(traceRunId, { status: traceStatus, finalContent });
+      this._runningTabs.delete(tabId);
+      this._clearRunLoopState(tabId);
+      this._clearCompletionInvariant(tabId, completionRunToken);
+    }
   }
 
   async executeTool(tabId, name, args, onUpdate = null, executionContext = null) {
