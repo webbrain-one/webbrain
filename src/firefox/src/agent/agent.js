@@ -161,8 +161,9 @@ export class Agent {
     this.loopNudges = new Map();
     this.healthyCallsSinceLoop = new Map();
     this.failedActionLoops = new Map(); // tabId -> Map(stable failure scope -> count)
-    // Last few normalized URLs each tab arrived at. Deliberately NOT cleared
-    // by _clearLoopState: it gates those resets, so it must survive them.
+    // Last few normalized URLs each tab arrived at during the active run.
+    // Deliberately NOT cleared by _clearLoopState: it gates those intra-run
+    // resets, so it must survive them until the outer run boundary.
     this.recentNavUrls = new Map(); // tabId -> [normalized URL, ...]
     this._lastAxScopes = new Map(); // tabId -> { documentToken, pageUrl }, captured by the latest AX read
     // A model can walk ref_1, ref_2, … forever while every call looks unique
@@ -926,6 +927,11 @@ export class Agent {
         this.failedBulkApiReplayShapes.delete(key);
       }
     }
+  }
+
+  _clearRunLoopState(tabId) {
+    this.recentNavUrls.delete(tabId);
+    this._clearLoopState(tabId);
   }
 
   _rememberAxScope(tabId, documentToken, pageUrl = '') {
@@ -6848,7 +6854,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       this._runningTabs.delete(tabId);
       this.currentRunId.delete(tabId);
     }
-    this._clearLoopState(tabId);
+    this._clearRunLoopState(tabId);
   }
 
   // ─── Scratchpad ──────────────────────────────────────────────────────
@@ -11895,7 +11901,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       throw new Error('An agent run is already in progress for this tab.');
     }
     this._resetActiveSkillsForRun(tabId, { refreshPrompt: false });
-    this._clearLoopState(tabId);
+    this._clearRunLoopState(tabId);
     if (runOptions?.trustedContinuation !== true) this._continuationExecutionEvidence.delete(tabId);
     const completionRunToken = this._beginCompletionInvariant(tabId);
     this._runningTabs.add(tabId);
@@ -11915,7 +11921,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         else this.cloudRunContexts.delete(tabId);
       }
       this._runningTabs.delete(tabId);
-      this._clearLoopState(tabId);
+      this._clearRunLoopState(tabId);
       this._clearCompletionInvariant(tabId, completionRunToken);
     }
   }
@@ -12436,7 +12442,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       throw new Error('An agent run is already in progress for this tab.');
     }
     this._resetActiveSkillsForRun(tabId, { refreshPrompt: false });
-    this._clearLoopState(tabId);
+    this._clearRunLoopState(tabId);
     if (runOptions?.trustedContinuation !== true) this._continuationExecutionEvidence.delete(tabId);
     const completionRunToken = this._beginCompletionInvariant(tabId);
     this._runningTabs.add(tabId);
@@ -12456,7 +12462,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         else this.cloudRunContexts.delete(tabId);
       }
       this._runningTabs.delete(tabId);
-      this._clearLoopState(tabId);
+      this._clearRunLoopState(tabId);
       this._clearCompletionInvariant(tabId, completionRunToken);
     }
   }

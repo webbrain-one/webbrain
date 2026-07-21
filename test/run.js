@@ -3845,6 +3845,43 @@ test('revisiting a recent URL keeps loop state so navigation ping-pong is caught
   assert.equal(shim._checkLoop(tab, 'click', { text: 'Next' }, arrive('https://example.com/b')).kind, 'nudge');
 });
 
+test('navigation arrival history survives intra-run resets but clears at run boundaries', () => {
+  const failure = {
+    success: false,
+    failureScope: 'ambiguous-click:search',
+    error: 'Ambiguous text match for "Search"',
+  };
+
+  for (const [label, AgentClass] of [['chrome', AgentCh], ['firefox', AgentFx]]) {
+    const agent = new AgentClass({});
+    const tab = label === 'chrome' ? 339 : 340;
+    const oldRunUrl = 'https://example.com/from-old-run';
+
+    agent._noteNavArrival(tab, oldRunUrl);
+    agent._clearLoopState(tab);
+    assert.equal(agent.recentNavUrls.has(tab), true, `${label}: intra-run reset lost navigation history`);
+
+    agent._clearRunLoopState(tab);
+    assert.equal(agent.recentNavUrls.has(tab), false, `${label}: run boundary retained navigation history`);
+
+    assert.equal(agent._checkLoop(tab, 'click', { text: 'Search' }, failure).kind, 'none');
+    assert.equal(agent._checkLoop(tab, 'click', { text: 'Search' }, failure).kind, 'nudge');
+    assert.equal(agent._checkLoop(tab, 'navigate', { url: oldRunUrl }, {
+      success: true,
+      pageUrlChanged: true,
+      currentUrl: oldRunUrl,
+    }).kind, 'none');
+    assert.equal(agent.failedActionLoops.has(tab), false, `${label}: old-run URL suppressed navigation reset`);
+
+    const source = fs.readFileSync(path.join(ROOT, `src/${label}/src/agent/agent.js`), 'utf8');
+    assert.equal(
+      (source.match(/this\._clearRunLoopState\(tabId\);/g) || []).length,
+      5,
+      `${label}: navigation cleanup is not wired to both run paths and tab cleanup`,
+    );
+  }
+});
+
 test('errored vs successful do not collapse together', () => {
   // Two successes + one failure of the same call should NOT trigger.
   const d = new LoopDetectorShim();
