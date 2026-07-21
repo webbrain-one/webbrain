@@ -25394,6 +25394,96 @@ test('Agent cost extraction estimates only when reported cost is missing', () =>
   }
 });
 
+test('Agent cost estimation discounts OpenAI cached input included in the input total', () => {
+  for (const AgentClass of [AgentCh, AgentFx]) {
+    const agent = new AgentClass({});
+    const provider = {
+      config: {
+        inputCostPerMillionUsd: 100,
+        cacheReadCostPerMillionUsd: 10,
+        outputCostPerMillionUsd: 200,
+      },
+    };
+    const chatCompletionsUsage = {
+      prompt_tokens: 1000,
+      completion_tokens: 100,
+      prompt_tokens_details: { cached_tokens: 800 },
+    };
+    const responsesUsage = {
+      input_tokens: 1000,
+      output_tokens: 100,
+      input_tokens_details: { cached_tokens: 800 },
+    };
+    assert.equal(agent._estimateUsageCostUsd(provider, chatCompletionsUsage), 0.048);
+    assert.equal(agent._estimateUsageCostUsd(provider, responsesUsage), 0.048);
+  }
+});
+
+test('Agent cost estimation handles Anthropic and Bedrock cache tokens as separate input', () => {
+  for (const AgentClass of [AgentCh, AgentFx]) {
+    const agent = new AgentClass({});
+    const provider = {
+      config: {
+        inputCostPerMillionUsd: 100,
+        cacheReadCostPerMillionUsd: 10,
+        cacheWriteCostPerMillionUsd: 125,
+        outputCostPerMillionUsd: 200,
+      },
+    };
+    const anthropicUsage = {
+      input_tokens: 200,
+      output_tokens: 100,
+      cache_read_input_tokens: 800,
+      cache_creation_input_tokens: 400,
+    };
+    const bedrockUsage = {
+      inputTokens: 200,
+      outputTokens: 100,
+      cacheReadInputTokens: 800,
+      cacheWriteInputTokens: 400,
+    };
+    assert.equal(agent._estimateUsageCostUsd(provider, anthropicUsage), 0.098);
+    assert.equal(agent._estimateUsageCostUsd(provider, bedrockUsage), 0.098);
+  }
+});
+
+test('Agent cost estimation prices Anthropic one-hour cache writes separately', () => {
+  for (const AgentClass of [AgentCh, AgentFx]) {
+    const agent = new AgentClass({});
+    const provider = {
+      config: {
+        inputCostPerMillionUsd: 100,
+        cacheWriteCostPerMillionUsd: 125,
+        cacheWrite1hCostPerMillionUsd: 200,
+        outputCostPerMillionUsd: 200,
+      },
+    };
+    const usage = {
+      input_tokens: 100,
+      output_tokens: 100,
+      cache_creation_input_tokens: 300,
+      cache_creation: {
+        ephemeral_5m_input_tokens: 100,
+        ephemeral_1h_input_tokens: 200,
+      },
+    };
+    assert.equal(agent._estimateUsageCostUsd(provider, usage), 0.0825);
+  }
+});
+
+test('Agent cost estimation keeps normal input pricing when cache rates are absent', () => {
+  for (const AgentClass of [AgentCh, AgentFx]) {
+    const agent = new AgentClass({});
+    const provider = { config: { inputCostPerMillionUsd: 100, outputCostPerMillionUsd: 200 } };
+    const usage = {
+      prompt_tokens: 1000,
+      completion_tokens: 100,
+      prompt_tokens_details: { cached_tokens: 800 },
+    };
+    assert.equal(agent._estimateUsageCostUsd(provider, usage), 0.12);
+  }
+});
+
 console.log('\nsheets-tools: A1 parsing');
 
 test('parseA1: single cell A1', () => {
