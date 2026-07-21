@@ -18,4 +18,3 @@ messages:
 modelParameters:
   maxCompletionTokens: 1200
   temperature: 0.2
----

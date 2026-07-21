@@ -112,7 +112,8 @@ jobs:
         uses: actions/ai-inference@v1
         with:
           model: ${{ inputs.model }}
-          prompt-file: .github/prompts/minor-release-changelog.prompt.yml
+          system-prompt-file: .github/prompts/minor-release-changelog-system.txt
+          prompt-file: .github/prompts/minor-release-changelog-user.txt
           input: |
             version: ${{ steps.release_meta.outputs.new_version }}
             date: ${{ steps.release_meta.outputs.release_date }}

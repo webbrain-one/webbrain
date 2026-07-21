@@ -1,0 +1,4 @@
+Draft the changelog body for WebBrain {{version}} released on {{date}}.
+
+Repository context:
+{{release_context}}
