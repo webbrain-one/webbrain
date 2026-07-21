@@ -118,12 +118,12 @@ jobs:
             --arg dt "$DATE" \
             --arg ctx "$RELEASE_CONTEXT" \
             '{
-              model: "gpt-4o",
+              model: "gpt-5.4-nano-2026-03-17",
               messages: [
                 {role: "system", content: $sys},
                 {role: "user", content: ($usr | gsub("\\{\\{version\\}\\}"; $ver) | gsub("\\{\\{date\\}\\}"; $dt) | gsub("\\{\\{release_context\\}\\}"; $ctx))}
               ],
-              max_tokens: 1200,
+              max_completion_tokens: 1200,
               temperature: 0.2
             }' > /tmp/payload.json
 
