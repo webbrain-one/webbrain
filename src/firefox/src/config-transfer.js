@@ -63,6 +63,7 @@ export const DEFAULT_CONFIG_SETTINGS = Object.freeze({
   [USER_MEMORY_MAX_PROMPT_CHARS_KEY]: USER_MEMORY_DEFAULT_MAX_PROMPT_CHARS,
   [CUSTOM_SKILLS_STORAGE_KEY]: [],
   [DEFAULT_SKILLS_REMOVED_STORAGE_KEY]: [],
+  enableAllPackagedSkills: false,
   captchaSolverEnabled: false,
   capsolverApiKey: '',
 });
@@ -93,6 +94,7 @@ const BOOLEAN_KEYS = new Set([
   USER_MEMORY_ENABLED_KEY,
   USER_MEMORY_AUTO_CAPTURE_KEY,
   USER_MEMORY_FORM_CAPTURE_KEY,
+  'enableAllPackagedSkills',
   'captchaSolverEnabled',
 ]);
 const NUMBER_KEYS = new Set([

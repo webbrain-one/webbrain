@@ -2,6 +2,7 @@
 .DS_Store
 node_modules/
 test/anonymous/.test-profile/
+ci/artifacts/
 
 # ---- Expo / React Native local state ----
 .expo/
