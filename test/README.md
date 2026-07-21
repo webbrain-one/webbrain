@@ -25,20 +25,20 @@ No LLM, no API keys, no network. Deterministic, ~5 seconds. Run on every PR.
 
 ### Real Chrome WebMCP smoke test
 
-`test/webmcp-e2e.py` verifies the experimental browser API and CDP domain
+`test/webmcp-e2e.mjs` verifies the experimental browser API and CDP domain
 against a local fixture: discovery, schema transport, asynchronous success,
-script exceptions, UI state changes, and dynamic unregistration. It requires
-Python Playwright plus Chrome 149 or newer. From the repository root, serve the
-repository on port 8765 in one terminal and run the test in another:
+script exceptions, UI state changes, and dynamic unregistration. It uses the
+repository's Playwright dependency and requires Google Chrome 149 or newer.
+The runner starts and stops its own loopback fixture server on a random port:
 
 ```bash
-python -m http.server 8765 --bind 127.0.0.1
-python test/webmcp-e2e.py
+npm run test:webmcp
 ```
 
-Override `WEBMCP_CHROME_PATH` or `WEBMCP_BASE_URL` when Chrome or the fixture
-server uses a different location. The test launches Chrome headlessly with
-`WebMCPTesting,DevToolsWebMCPSupport` enabled.
+Set `WEBMCP_CHROME_PATH` when Chrome is installed outside its standard Windows,
+macOS, or Linux location. The test launches Chrome headlessly with
+`WebMCPTesting,DevToolsWebMCPSupport` enabled. It remains separate from
+`npm test` because the browser API and CDP domain are experimental.
 
 ## 3. Anonymous scenarios — `npm run test:anonymous`
 
