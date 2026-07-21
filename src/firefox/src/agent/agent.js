@@ -394,7 +394,11 @@ export class Agent {
     if (normalizeDoneOutcome(outcome) !== 'success' || !pageState) return null;
     const dialogs = Number(pageState.openDialogCount || 0);
     const relevantForms = Number(pageState.relevantFormCount || 0);
-    const liveSignals = Array.isArray(pageState.successMessages) ? pageState.successMessages : [];
+    const positiveSignal = /success|saved|submitted|created|sent|published|complete|done|updated|added|approved/i;
+    const negativeSignal = /\b(?:not|never|failed|failure|error|unable|cannot|can't|could not|couldn't|did not|didn't|was not|wasn't|were not|weren't|invalid|denied|rejected|unsuccessful)\b/i;
+    const liveSignals = Array.isArray(pageState.successMessages)
+      ? pageState.successMessages.filter(text => positiveSignal.test(String(text || '')) && !negativeSignal.test(String(text || '')))
+      : [];
     const submit = this._completionSubmitStates.get(tabId);
     const executionGuard = this._planExecutionGuards.get(tabId);
     const pendingSubmitVerification = !!submit
@@ -5059,6 +5063,16 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       : { progressLedgerPolicy: 'disabled', progressAction: null };
   }
 
+  _plannerSubmissionGateFieldFromApprovedPlanText(text) {
+    const match = String(text || '').match(
+      /^\s*-\s*Submission required:\s*(yes|no|auto)\s*$/im,
+    );
+    if (!match) return false;
+    if (match[1].toLowerCase() === 'yes') return true;
+    if (match[1].toLowerCase() === 'no') return false;
+    return null;
+  }
+
   /**
    * Compact semantic intent gate used when Plan-before-Act is off (and for
    * short follow-ups that intentionally skip a second full plan). It uses the
@@ -5322,6 +5336,15 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       const approvedProgressLedger = verbosePlanEdited
         ? this._plannerProgressLedgerGateFieldsFromApprovedPlanText(approvedText)
         : this._plannerProgressLedgerGateFields(plan);
+      // A human edit can invalidate the planner's positive submit intent even
+      // when the generated metadata line was left untouched. Drop that stale
+      // authorization on any verbose edit; trusted submit attempts still arm
+      // the verification guard, and edits may opt in from false via the line.
+      const approvedRequiresSubmission = verbosePlanEdited
+        ? (plan.requires_submission === true
+          ? false
+          : this._plannerSubmissionGateFieldFromApprovedPlanText(approvedText))
+        : plan.requires_submission;
       const approvedScratchpadText = formatPlanScratchpad(plan, approvedText, canonicalVerboseMarkdown);
       return {
         proceed: true,
@@ -5330,7 +5353,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         skillIds: approvedSkillIds,
         requestKind: 'execute',
         requiresStateChange: plan.requires_state_change === true,
-        requiresSubmission: plan.requires_submission,
+        requiresSubmission: approvedRequiresSubmission,
         allowsPlannerShapedResult: plan.allows_planner_shaped_result === true,
         allowsAppStateToolEvidence: plan.allows_app_state_tool_evidence === true,
         requiredSchedulingTool: approvedSchedulingTool,
@@ -10740,7 +10763,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
                   .filter(visible)
                   .map(e => (e.innerText || '').trim().slice(0, 120))
                   .filter(Boolean);
-                const successMessages = toasts.filter(text => /success|saved|submitted|created|sent|published|complete|done|updated|added|approved/i.test(text)).slice(0, 5);
+                const successMessages = toasts.filter(text =>
+                  /success|saved|submitted|created|sent|published|complete|done|updated|added|approved/i.test(text)
+                  && !/\\b(?:not|never|failed|failure|error|unable|cannot|can't|could not|couldn't|did not|didn't|was not|wasn't|were not|weren't|invalid|denied|rejected|unsuccessful)\\b/i.test(text)
+                ).slice(0, 5);
                 return {
                   url: location.href,
                   title: document.title,

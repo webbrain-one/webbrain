@@ -369,6 +369,10 @@ function formatPlanConfidence(plan) {
 }
 
 function appendPlanExecutionMetadata(lines, plan) {
+  lines.push('### Completion requirements');
+  lines.push(`- Submission required: ${plan.requires_submission === true ? 'yes' : (plan.requires_submission === false ? 'no' : 'auto')}`);
+  lines.push('');
+
   if (plan.skill_ids?.length) {
     lines.push('### Skills to activate');
     for (const skillId of plan.skill_ids) lines.push(`- ${skillId}`);

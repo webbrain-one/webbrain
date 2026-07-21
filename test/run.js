@@ -30589,6 +30589,19 @@ test('submit-aware completion accepts the observed AMO finish document and rejec
       `${AgentClass.name}: same-page success live-region signal was rejected`,
     );
 
+    assert.match(
+      agent._completionPageWarning(tabId, 'Saved.', 'success', {
+        ...finishState,
+        url: submitUrl,
+        visibleFormCount: 1,
+        relevantFormCount: 1,
+        liveRegionMessages: ['Changes were not saved'],
+        successMessages: ['Changes were not saved'],
+      }, submitUrl)?.warning || '',
+      /task-relevant form/i,
+      `${AgentClass.name}: negated failure alert was accepted as same-page submit success`,
+    );
+
     agent._completionSubmitStates.set(tabId, {
       currentUrl: submitUrl,
       dispatched: true,
@@ -37059,6 +37072,7 @@ test('planner: parse and format structured plan', () => {
   assert.doesNotMatch(md, /Progress ledger|Scratchpad|schedule_task|bulk follow/, 'compact plan should hide planner internals');
   const verboseMd = formatPlanMarkdown(plan, { verbose: true });
   assert.match(verboseMd, /Confidence: 92%/);
+  assert.match(verboseMd, /Submission required: yes/);
   assert.match(verboseMd, /navigate, wait_for_stable/);
   assert.match(verboseMd, /Progress ledger: yes/);
   assert.match(verboseMd, /schedule_task/);
@@ -37608,6 +37622,79 @@ test('reviewed plan edits preserve only explicitly approved progress-ledger meta
       );
       assert.equal(changed.progressLedgerPolicy, 'enabled', `${label}: edited ledger policy was not preserved`);
       assert.equal(changed.progressAction, 'add', `${label}: edited ledger action was not honored`);
+    }
+  });
+});
+
+test('reviewed plan edits preserve only explicitly approved submission metadata', async () => {
+  await withPlannerBrowserGlobals(async () => {
+    for (const [label, AgentClass] of [['chrome', AgentCh], ['firefox', AgentFx]]) {
+      const runReviewedPlan = async (tabId, markdownMode, editPlan) => {
+        const provider = {
+          promptTier: 'full',
+          model: 'planner-submit-edit-test',
+          name: 'planner-submit-edit-test',
+        };
+        const agent = new AgentClass({ getActive: () => provider, getVisionProvider: async () => null });
+        agent.setPlanReviewSettings({ mode: 'always' });
+        agent._chatWithCostAllowance = async () => ({
+          content: plannerFixtureJson({
+            confidence: 0.99,
+            requires_state_change: true,
+            requires_submission: true,
+            summary: 'Fill and submit the form.',
+          }),
+        });
+        agent._waitForPlanReview = async (_tabId, _planId, _plan, compactMarkdown, _onUpdate, verboseMarkdown) => ({
+          action: 'approve',
+          editedText: editPlan(markdownMode === 'verbose' ? verboseMarkdown : compactMarkdown),
+          markdownMode,
+        });
+        return agent._runPlannerGate(
+          tabId,
+          { role: 'user', content: 'Fill and submit the form.' },
+          () => {},
+          null,
+          null,
+          '',
+          { tabUrl: 'https://example.test/items?create=1', tabTitle: 'Create item' },
+          'try',
+          'act',
+          { locale: 'en' },
+        );
+      };
+
+      const compact = await runReviewedPlan(label === 'chrome' ? 9230 : 9231, 'compact', () => 'Custom approved submit plan.');
+      assert.equal(compact.requiresSubmission, true, `${label}: compact edit lost hidden submission metadata`);
+      assert.match(compact.approvedScratchpadText, /Submission required:\s*yes/i,
+        `${label}: compact edit did not pin submission metadata`);
+
+      const unchanged = await runReviewedPlan(label === 'chrome' ? 9232 : 9233, 'verbose', text => text);
+      assert.equal(unchanged.requiresSubmission, true, `${label}: unchanged verbose plan lost submission metadata`);
+
+      const editedElsewhere = await runReviewedPlan(
+        label === 'chrome' ? 9238 : 9239,
+        'verbose',
+        text => text.replace(/Confidence:\s*99%/i, 'Confidence: 98%'),
+      );
+      assert.equal(editedElsewhere.requiresSubmission, false,
+        `${label}: edited verbose plan retained stale positive submission intent`);
+
+      const removed = await runReviewedPlan(
+        label === 'chrome' ? 9234 : 9235,
+        'verbose',
+        text => text.replace(/(?:^|\n)\s*-\s*Submission required:.*(?=\n|$)/i, ''),
+      );
+      assert.equal(removed.requiresSubmission, false, `${label}: removed verbose submission metadata stayed authorized`);
+      assert.doesNotMatch(removed.approvedScratchpadText, /Submission required:/i,
+        `${label}: removed verbose submission metadata was re-pinned`);
+
+      const negated = await runReviewedPlan(
+        label === 'chrome' ? 9236 : 9237,
+        'verbose',
+        text => text.replace(/Submission required:\s*yes/i, 'Submission required: no'),
+      );
+      assert.equal(negated.requiresSubmission, false, `${label}: negated verbose submission metadata was ignored`);
     }
   });
 });
