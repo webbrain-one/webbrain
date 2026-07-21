@@ -2633,20 +2633,20 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           () => ({
             success: false,
             skipped: true,
-            error: 'skipped: a waited clarification timeout requires explicit authorization before consequential actions',
+            error: 'skipped: a waited clarification timeout requires explicit authorization before actions or success completion',
           }),
         );
         onUpdate('warning', {
           message: clarificationAuthorizationBlock.stop
-            ? 'Stopped after a second action attempted to use a timed-out clarification as authorization.'
-            : 'Consequential action blocked until the user answers the clarification explicitly.',
+            ? `Stopped after a repeated blocked attempt tried to use a timed-out clarification as authorization (${clarificationAuthorizationBlock.blockedSuccessCompletion ? 'success completion' : 'consequential action'}).`
+            : `${clarificationAuthorizationBlock.blockedSuccessCompletion ? 'Success completion' : 'Consequential action'} blocked until the user answers the clarification explicitly.`,
         });
         this._persist(tabId);
         if (clarificationAuthorizationBlock.stop) {
           return {
             action: 'return',
             status: 'clarification_required',
-            value: '[Agent stopped before dispatching the requested action because the latest clarification answer was auto-selected after a timeout and was not user authorization. Please answer the clarification explicitly and retry.]',
+            value: '[Agent stopped before dispatching another action or accepting a success completion because the latest clarification answer was auto-selected after a timeout and was not user authorization. Please answer the clarification explicitly and retry.]',
           };
         }
         return { action: 'continue' };
@@ -4546,7 +4546,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     this._cancelClarifications(tabId, 'aborted by user');
     this._cancelUploadPickers(tabId, 'aborted by user');
     this._cancelPendingPlans(tabId, 'aborted by user');
-    this._clarificationAuthorizationGuards.delete(tabId);
+    if (this._clarificationAuthorizationGuards.delete(tabId) && this.conversations.has(tabId)) {
+      this._persist(tabId);
+    }
   }
 
   /**
@@ -4589,10 +4591,16 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     return normalizedSource !== 'timeout';
   }
 
-  _prepareClarificationAuthorizationForRun(tabId, runOptions = {}) {
-    if (runOptions?.trustedContinuation === true) return;
-    if (this._clarificationAuthorizationGuards.delete(tabId) && this.conversations.has(tabId)) {
-      this._persist(tabId);
+  _prepareClarificationAuthorizationForRun(tabId) {
+    const guard = this._clarificationAuthorizationGuards.get(tabId);
+    if (!guard) return;
+    const conversationId = this.conversationIds.get(tabId) || null;
+    // A new user message is not necessarily an answer to the timed-out
+    // question. Keep the guard across turns and reconnects; only discard an
+    // entry that is provably scoped to another conversation.
+    if (guard.conversationId && conversationId && guard.conversationId !== conversationId) {
+      this._clarificationAuthorizationGuards.delete(tabId);
+      if (this.conversations.has(tabId)) this._persist(tabId);
     }
   }
 
@@ -4602,9 +4610,15 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const conversationId = this.conversationIds.get(tabId) || null;
     if (guard.conversationId && conversationId && guard.conversationId !== conversationId) {
       this._clarificationAuthorizationGuards.delete(tabId);
+      if (this.conversations.has(tabId)) this._persist(tabId);
       return null;
     }
-    if (name === 'clarify' || name === 'done' || name === 'done_json') return null;
+    if (name === 'clarify') return null;
+
+    const doneOutcome = name === 'done_json' ? 'success' : normalizeDoneOutcome(args?.outcome);
+    const blockedSuccessCompletion = name === 'done_json'
+      || (name === 'done' && doneOutcome !== 'partial' && doneOutcome !== 'failed');
+    if (name === 'done' && !blockedSuccessCompletion) return null;
 
     const blockedCapabilities = new Set([
       Capability.CLICK,
@@ -4615,7 +4629,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       Capability.UPLOAD,
       Capability.SCHEDULE,
     ]);
-    const changesExternalState = capabilities.some(capability => blockedCapabilities.has(capability))
+    const changesExternalState = blockedSuccessCompletion
+      || capabilities.some(capability => blockedCapabilities.has(capability))
       || (capabilities.includes(Capability.NETWORK) && isNetworkMutation(name, args));
     if (!changesExternalState) return null;
 
@@ -4624,18 +4639,20 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const stop = guard.blockedAttempts > 1;
     return {
       stop,
+      blockedSuccessCompletion,
       result: {
         success: false,
         denied: true,
         blocked: true,
+        ...(blockedSuccessCompletion ? { blockedDone: true } : {}),
         dispatched: false,
         noDispatch: true,
         authorized: false,
         authorizationSource: 'timeout',
         clarificationAuthorizationRequired: true,
         error: stop
-          ? 'A second consequential action was blocked because the latest clarify answer came from a waited timeout, not the user. Stop and ask the user to answer the clarification explicitly before retrying.'
-          : 'This consequential action was blocked because the latest clarify answer was auto-selected after a waited timeout and is not user authorization. Call clarify again and wait for a direct user response, or call done with outcome partial or failed. Do not retry the action unchanged.',
+          ? `A repeated blocked attempt (${blockedSuccessCompletion ? 'success completion' : 'consequential action'}) tried to use a waited clarify timeout as user authorization. Stop and ask the user to answer the clarification explicitly before retrying.`
+          : `This ${blockedSuccessCompletion ? 'success completion' : 'consequential action'} was blocked because the latest clarify answer was auto-selected after a waited timeout and is not user authorization. Call clarify again and wait for a direct user response, or call done with outcome partial or failed. Do not retry unchanged.`,
       },
     };
   }

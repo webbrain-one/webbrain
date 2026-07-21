@@ -14479,7 +14479,7 @@ test('clarify result distinguishes waited timeout from user and Instant authoriz
   }
 });
 
-test('waited clarify timeout guard persists across restart and clears on a fresh user turn', async () => {
+test('waited clarify timeout guard persists across restart and ordinary user turns', async () => {
   const previousChrome = globalThis.chrome;
   const previousBrowser = globalThis.browser;
   try {
@@ -14511,13 +14511,73 @@ test('waited clarify timeout guard persists across restart and clears on a fresh
       restarted._prepareClarificationAuthorizationForRun(tabId, { trustedContinuation: true });
       assert.equal(restarted._clarificationAuthorizationGuards.has(tabId), true, `${AgentClass.name}: trusted continuation cleared the guard`);
       restarted._prepareClarificationAuthorizationForRun(tabId, {});
-      assert.equal(restarted._clarificationAuthorizationGuards.has(tabId), false, `${AgentClass.name}: fresh user turn did not clear the run-scoped guard`);
+      assert.equal(restarted._clarificationAuthorizationGuards.has(tabId), true, `${AgentClass.name}: ordinary user turn cleared the unresolved guard`);
+
+      restarted.conversationIds.set(tabId, `different_conv_${tabId}`);
+      restarted._prepareClarificationAuthorizationForRun(tabId, {});
+      assert.equal(restarted._clarificationAuthorizationGuards.has(tabId), false, `${AgentClass.name}: conversation-scoped guard leaked into a replacement conversation`);
     }
   } finally {
     if (previousChrome === undefined) delete globalThis.chrome;
     else globalThis.chrome = previousChrome;
     if (previousBrowser === undefined) delete globalThis.browser;
     else globalThis.browser = previousBrowser;
+  }
+});
+
+test('waited clarify timeout permits only partial or failed completion', async () => {
+  for (const AgentClass of [AgentCh, AgentFx]) {
+    const tabId = AgentClass === AgentCh ? 4807 : 4808;
+
+    for (const [name, args] of [
+      ['done', { summary: 'Everything completed.', outcome: 'success' }],
+      ['done', { summary: 'Everything completed.' }],
+      ['done_json', { result: { ok: true } }],
+    ]) {
+      const agent = new AgentClass({ getVisionProvider: async () => null });
+      let executed = false;
+      let permissionGateCalls = 0;
+      agent._persist = () => {};
+      agent._ensureGateSetting = async () => { permissionGateCalls += 1; };
+      agent.executeTool = async () => {
+        executed = true;
+        return { done: true, summary: 'should not execute', outcome: 'success' };
+      };
+      agent._recordClarificationAuthorization(tabId, 'timeout');
+
+      const messages = [];
+      const result = await agent._executeToolBatch(
+        tabId,
+        [{ id: `completion_${name}`, function: { name, arguments: JSON.stringify(args) } }],
+        messages,
+        () => {},
+        { supportsVision: false },
+        '',
+        new Set([name]),
+        1,
+      );
+
+      assert.deepEqual(result, { action: 'continue' }, `${AgentClass.name}: ${name} success completion did not request a fresh turn`);
+      assert.equal(executed, false, `${AgentClass.name}: ${name} success completion reached executeTool`);
+      assert.equal(permissionGateCalls, 0, `${AgentClass.name}: ${name} success completion passed the authorization guard`);
+      const blocked = JSON.parse(messages[0].content);
+      assert.equal(blocked.blockedDone, true, `${AgentClass.name}: ${name} result was not marked as blocked completion`);
+      assert.equal(blocked.clarificationAuthorizationRequired, true, `${AgentClass.name}: ${name} block did not require explicit clarification`);
+    }
+
+    const completionAgent = new AgentClass({});
+    completionAgent._persist = () => {};
+    completionAgent._recordClarificationAuthorization(tabId, 'timeout');
+    assert.equal(
+      completionAgent._clarificationAuthorizationBlock(tabId, 'done', { outcome: 'partial' }, []),
+      null,
+      `${AgentClass.name}: partial completion was blocked`,
+    );
+    assert.equal(
+      completionAgent._clarificationAuthorizationBlock(tabId, 'done', { outcome: 'failed' }, []),
+      null,
+      `${AgentClass.name}: failed completion was blocked`,
+    );
   }
 });
 
