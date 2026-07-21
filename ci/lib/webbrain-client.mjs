@@ -146,6 +146,8 @@ export class GnippetsE2EClient {
       method,
       headers: {
         authorization: `Bearer ${this.controlToken}`,
+        accept: 'application/json',
+        'user-agent': 'Mozilla/5.0 (compatible; WebBrainCloudE2E/1.0; +https://webbrain.cloud)',
         ...(body === undefined ? {} : { 'content-type': 'application/json' }),
       },
       body: body === undefined ? undefined : JSON.stringify(body),

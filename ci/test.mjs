@@ -31,26 +31,30 @@ assert.deepEqual(
 );
 
 const diagnosticSecret = 'diagnostic-secret-that-must-not-leak';
+let diagnosticRequest;
 const diagnosticClient = new GnippetsE2EClient({
   baseUrl: 'https://gnippets.example',
   controlToken: diagnosticSecret,
-  fetchImpl: async () => ({
-    ok: false,
-    status: 403,
-    headers: {
-      get(name) {
-        return {
-          server: 'cloudflare',
-          'cf-ray': 'fixture-ray-IST',
-          'cf-mitigated': 'challenge',
-          'content-type': 'text/html',
-        }[name.toLowerCase()] || null;
+  fetchImpl: async (url, options) => {
+    diagnosticRequest = { url, options };
+    return {
+      ok: false,
+      status: 403,
+      headers: {
+        get(name) {
+          return {
+            server: 'cloudflare',
+            'cf-ray': 'fixture-ray-IST',
+            'cf-mitigated': 'challenge',
+            'content-type': 'text/html',
+          }[name.toLowerCase()] || null;
+        },
       },
-    },
-    async text() {
-      return `<html><title>Attention Required</title><body>Bearer ${diagnosticSecret}</body></html>`;
-    },
-  }),
+      async text() {
+        return `<html><title>Attention Required</title><body>Bearer ${diagnosticSecret}</body></html>`;
+      },
+    };
+  },
 });
 await assert.rejects(
   diagnosticClient.createRun('fixture'),
@@ -64,6 +68,8 @@ await assert.rejects(
     return true;
   },
 );
+assert.equal(diagnosticRequest.options.headers.accept, 'application/json');
+assert.match(diagnosticRequest.options.headers['user-agent'], /WebBrainCloudE2E/);
 
 const mountainScenario = scenarios.find((scenario) => scenario.id === 'wikipedia-table-extraction');
 const invalidMountainHeights = gradeScenario({
