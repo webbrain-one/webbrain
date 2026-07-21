@@ -97,6 +97,8 @@ export default {
   'sp.recommended.tweet.label': 'Opublikuj o WebBrain',
   'sp.recommended.tweet.prompt': 'Opublikuj dokładnie ten tekst w widocznym interfejsie X, bez żadnych zmian: „{post}” Następnie sprawdź publikację i podaj jej adres URL.',
   'sp.recommended.tweet.text': 'Poznaj WebBrain — otwartoźródłowego agenta AI działającego w przeglądarce. Rozmawiaj z każdą stroną, automatyzuj wieloetapowe zadania i używaj własnego LLM. Zaprojektowany z myślą o rozszerzaniu. Wypróbuj: https://webbrain.one',
+  'sp.recommended.linkedin.label': 'Opublikuj o WebBrain na LinkedIn',
+  'sp.recommended.linkedin.prompt': 'Opublikuj dokładnie ten tekst w widocznym interfejsie LinkedIn, bez żadnych zmian: „{post}” Następnie sprawdź publikację i podaj jej adres URL.',
   'sp.review.rating_title': 'Podoba Ci się WebBrain?',
   'sp.review.rating_body': 'Wybierz gwiazdkę — pomoże nam to ocenić, jak nam idzie.',
   'sp.review.stars_label': 'Oceń WebBrain',

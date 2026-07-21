@@ -452,6 +452,8 @@ export default {
   'sp.recommended.tweet.label': 'WebBrainについて投稿',
   'sp.recommended.tweet.prompt': '次のテキストを変更せず、表示中のX画面からそのまま投稿してください：「{post}」投稿を確認し、URLを報告してください。',
   'sp.recommended.tweet.text': 'WebBrainをご紹介します。ブラウザで動くオープンソースのAIエージェントです。あらゆるページと対話し、複数ステップの作業を自動化し、お好みのLLMを利用できます。拡張性を重視した設計です。今すぐお試しください：https://webbrain.one',
+  'sp.recommended.linkedin.label': 'LinkedInでWebBrainについて投稿',
+  'sp.recommended.linkedin.prompt': '次の文章を変更せず、表示中のLinkedIn画面からそのまま投稿してください：「{post}」投稿を確認し、URLを報告してください。',
   'sp.review.rating_title': 'WebBrain を気に入っていますか？',
   'sp.review.rating_body': '星を選ぶと、改善の参考になります。',
   'sp.review.stars_label': 'WebBrain を評価',

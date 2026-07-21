@@ -6355,13 +6355,20 @@ test('recommended actions match issue scenarios', () => {
   }
 });
 
-test('Tweet about WebBrain is permanent and carries a ready-to-go plan', () => {
+test('WebBrain promotion has explicit X and LinkedIn variants with ready-to-go plans', () => {
   const exactPost = 'Introducing WebBrain — an open-source AI browser agent that lives in your browser. Chat with any page, automate multi-step workflows, and bring your own LLM. Extensible by design. Try it: https://webbrain.one';
-  const expectedPlanSteps = [
+  const expectedTweetSteps = [
     'Open https://x.com/compose/post in the current tab through the visible browser UI.',
     `Enter this exact reviewed text in the visible X composer without translating, rewriting, or adding anything: ${JSON.stringify(exactPost)}`,
     'Publish only after the composer text exactly matches the supplied text.',
     'Verify the new tweet appears, then report its URL when available.',
+  ];
+  const expectedLinkedInSteps = [
+    'Open https://www.linkedin.com/feed/ in the current tab through the visible browser UI.',
+    'Select Start a post to open LinkedIn\'s visible composer.',
+    `Enter this exact reviewed text without translating, rewriting, or adding anything: ${JSON.stringify(exactPost)}`,
+    'Publish only after the composer text exactly matches the supplied text.',
+    'Verify the new LinkedIn post appears, then report its URL when available.',
   ];
   const pages = [
     {},
@@ -6371,8 +6378,8 @@ test('Tweet about WebBrain is permanent and carries a ready-to-go plan', () => {
 
   for (const buildRecommendedActions of [buildRecommendedActionsCh, buildRecommendedActionsFx]) {
     for (const pageInfo of pages) {
-      const actions = buildRecommendedActions(pageInfo, { max: 1 });
-      const tweet = actions.find((action) => action.id === 'tweet-webbrain');
+      const tweetActions = buildRecommendedActions(pageInfo, { max: 1, webbrainPromotionVariant: 'x' });
+      const tweet = tweetActions.find((action) => action.id === 'tweet-webbrain');
       assert.equal(tweet?.label, 'Tweet about WebBrain');
       assert.equal(tweet?.mode, 'act');
       assert.match(tweet?.prompt || '', /visible X interface[\s\S]*without changing it/);
@@ -6380,15 +6387,71 @@ test('Tweet about WebBrain is permanent and carries a ready-to-go plan', () => {
       assert.equal(tweet?.runOptions?.skipPlanner, true);
       assert.equal(tweet?.runOptions?.tool, 'navigate');
       assert.equal(tweet?.runOptions?.summary, 'Publish the reviewed localized WebBrain post exactly as supplied.');
-      assert.deepEqual(tweet?.runOptions?.steps, expectedPlanSteps);
+      assert.deepEqual(tweet?.runOptions?.steps, expectedTweetSteps);
+
+      const linkedinActions = buildRecommendedActions(pageInfo, { max: 1, webbrainPromotionVariant: 'linkedin' });
+      const linkedin = linkedinActions.find((action) => action.id === 'post-webbrain-linkedin');
+      assert.equal(linkedin?.label, 'Post about WebBrain');
+      assert.equal(linkedin?.mode, 'act');
+      assert.match(linkedin?.prompt || '', /visible LinkedIn interface[\s\S]*without changing it/);
+      assert.ok(linkedin?.prompt?.includes(exactPost), 'LinkedIn prompt should carry the reviewed English post verbatim');
+      assert.equal(linkedin?.runOptions?.skipPlanner, true);
+      assert.equal(linkedin?.runOptions?.tool, 'navigate');
+      assert.equal(linkedin?.runOptions?.summary, 'Publish the reviewed localized WebBrain post on LinkedIn exactly as supplied.');
+      assert.deepEqual(linkedin?.runOptions?.steps, expectedLinkedInSteps);
+      assert.equal(linkedinActions.some((action) => action.id === 'tweet-webbrain'), false, 'one cohort should render only one promotion');
     }
 
-    const fallbackActions = buildRecommendedActions({ url: 'https://example.com/', title: 'Example page' });
-    assert.equal(fallbackActions.some((action) => action.id === 'explain-page'), true, 'permanent action should not suppress the generic page action');
+    for (const webbrainPromotionVariant of ['x', 'linkedin']) {
+      const fallbackActions = buildRecommendedActions(
+        { url: 'https://example.com/', title: 'Example page' },
+        { webbrainPromotionVariant },
+      );
+      assert.equal(fallbackActions.some((action) => action.id === 'explain-page'), true, 'promotion should not suppress the generic page action');
+    }
   }
 });
 
-test('WebBrain tweet copy is reviewed, localized, mirrored, and safely bounded', async () => {
+test('WebBrain promotion chooses a fresh 50/50 variant per display with motion-safe visual treatment', () => {
+  for (const [label, panelRel, cssRel] of [
+    ['chrome', 'src/chrome/src/ui/sidepanel.js', 'src/chrome/styles/sidepanel.css'],
+    ['firefox', 'src/firefox/src/ui/sidepanel.js', 'src/firefox/styles/sidepanel.css'],
+  ]) {
+    const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
+    const css = fs.readFileSync(path.join(ROOT, cssRel), 'utf8');
+
+    assert.match(panel, /const webbrainPromotionVariant = Math\.random\(\) < 0\.5 \? 'linkedin' : 'x';/, `${label}: every render should choose from an even split`);
+    assert.doesNotMatch(panel, /WEBBRAIN_PROMOTION_VARIANT_KEY|webbrainPromotionVariantPromise/, `${label}: display choice should not be persisted`);
+    assert.match(panel, /let webbrainPromotionHasAnimated = false;/, `${label}: promotion entrance should have a session-scoped guard`);
+    assert.match(panel, /btn\.dataset\.actionId = action\.id;/, `${label}: recommended actions should expose their stable IDs to CSS`);
+    assert.match(
+      panel,
+      /WEBBRAIN_PROMOTION_ACTION_IDS\.has\(action\.id\)[\s\S]*?recommended-action-chip-promotion[\s\S]*?createWebbrainPromotionIcon\(action\.id\)/,
+      `${label}: both promotion variants should receive their platform icon and treatment`,
+    );
+    assert.match(
+      panel,
+      /function createWebbrainPromotionIcon\(actionId\) \{[\s\S]*?createElementNS\('http:\/\/www\.w3\.org\/2000\/svg', 'svg'\)[\s\S]*?setAttribute\('aria-hidden', 'true'\)[\s\S]*?actionId === 'post-webbrain-linkedin'[\s\S]*?return icon;[\s\S]*?\}/,
+      `${label}: X and LinkedIn icons should be aria-hidden inline SVGs`,
+    );
+    assert.match(
+      panel,
+      /function animateWebbrainPromotionOnce\(\) \{[\s\S]*?webbrainPromotionHasAnimated \|\| recommendedActionsCollapsed[\s\S]*?recommended-action-chip-promotion-enter[\s\S]*?webbrainPromotionHasAnimated = true;[\s\S]*?\}/,
+      `${label}: glow should run once and wait until the action list is expanded`,
+    );
+    assert.match(panel, /buildRecommendedActions\(pageInfo, \{ max: 4, webbrainPromotionVariant \}\)/, `${label}: rendering should use the per-display choice`);
+
+    assert.match(css, /\.recommended-action-chip-promotion \{[\s\S]*?--promotion-action-accent[\s\S]*?background:/, `${label}: both variants should use the dedicated restrained contrast treatment`);
+    assert.match(css, /@keyframes recommended-promotion-action-glow \{/, `${label}: promotion should define its brief glow`);
+    assert.match(
+      css,
+      /@media \(prefers-reduced-motion: reduce\) \{[\s\S]*?\.recommended-action-chip-promotion-enter \{[\s\S]*?animation: none;/,
+      `${label}: promotion glow should respect reduced-motion preferences`,
+    );
+  }
+});
+
+test('WebBrain social promotion copy is reviewed, localized, mirrored, and safely bounded', async () => {
   const localeNames = ['ar', 'en', 'es', 'fr', 'he', 'id', 'ja', 'ko', 'ms', 'pl', 'ru', 'th', 'tl', 'tr', 'uk', 'zh'];
   const transformedUrlLength = 23;
   const conservativeXWeight = (value) => {
@@ -6408,6 +6471,8 @@ test('WebBrain tweet copy is reviewed, localized, mirrored, and safely bounded',
       'sp.recommended.tweet.label',
       'sp.recommended.tweet.prompt',
       'sp.recommended.tweet.text',
+      'sp.recommended.linkedin.label',
+      'sp.recommended.linkedin.prompt',
     ]) {
       assert.equal(typeof chromeLocale[key], 'string', `${locale}: ${key} should be explicit`);
       assert.ok(chromeLocale[key].trim(), `${locale}: ${key} should not be empty`);
@@ -6425,6 +6490,10 @@ test('WebBrain tweet copy is reviewed, localized, mirrored, and safely bounded',
     assert.ok(
       chromeLocale['sp.recommended.tweet.prompt'].includes('{post}'),
       `${locale}: prompt should interpolate the reviewed post`,
+    );
+    assert.ok(
+      chromeLocale['sp.recommended.linkedin.prompt'].includes('{post}'),
+      `${locale}: LinkedIn prompt should interpolate the reviewed post`,
     );
   }
 
@@ -39169,61 +39238,87 @@ test('planner gate: trusted recommended media action skips planner and pins read
   });
 });
 
-test('planner gate: trusted WebBrain tweet action skips planner and pins ready plan', async () => {
+test('planner gate: trusted WebBrain social promotion actions skip planner and pin ready plans', async () => {
   await withPlannerBrowserGlobals(async () => {
     for (const [label, AgentClass] of [['chrome', AgentCh], ['firefox', AgentFx]]) {
-      const tabId = label === 'chrome' ? 9211 : 9212;
-      const agent = new AgentClass({ getActive: () => ({}) });
-      agent.setPlanBeforeActMode('strict');
-      agent.setPlanReviewSettings({ mode: 'always' });
-      agent.conversations.set(tabId, [{ role: 'system', content: 'system' }]);
-      let plannerCalls = 0;
-      agent._runPlannerGate = async () => {
-        plannerCalls += 1;
-        throw new Error('recommended action fast path should not call planner');
-      };
+      const readyPlans = [
+        {
+          name: 'X',
+          request: 'Publish a concise tweet about WebBrain.',
+          expectedUrl: /https:\/\/x\.com\/compose\/post/,
+          plan: {
+            id: 'tweet-webbrain',
+            skipPlanner: true,
+            tool: 'navigate',
+            summary: 'Publish the reviewed localized WebBrain post exactly as supplied.',
+            steps: [
+              'Open https://x.com/compose/post in the current tab through the visible browser UI.',
+              'Enter this exact reviewed localized text through the visible X composer without rewriting it: "Introducing WebBrain — an open-source AI browser agent that lives in your browser. Chat with any page, automate multi-step workflows, and bring your own LLM. Extensible by design. Try it: https://webbrain.one"',
+              'Verify the new tweet appears and report its URL.',
+            ],
+          },
+        },
+        {
+          name: 'LinkedIn',
+          request: 'Publish a concise LinkedIn post about WebBrain.',
+          expectedUrl: /https:\/\/www\.linkedin\.com\/feed\//,
+          plan: {
+            id: 'post-webbrain-linkedin',
+            skipPlanner: true,
+            tool: 'navigate',
+            summary: 'Publish the reviewed localized WebBrain post on LinkedIn exactly as supplied.',
+            steps: [
+              'Open https://www.linkedin.com/feed/ in the current tab through the visible browser UI.',
+              'Select Start a post and enter this exact reviewed localized text without rewriting it: "Introducing WebBrain — an open-source AI browser agent that lives in your browser. Chat with any page, automate multi-step workflows, and bring your own LLM. Extensible by design. Try it: https://webbrain.one"',
+              'Verify the new LinkedIn post appears and report its URL.',
+            ],
+          },
+        },
+      ];
 
-      const readyPlan = {
-        id: 'tweet-webbrain',
-        skipPlanner: true,
-        tool: 'navigate',
-        summary: 'Publish the reviewed localized WebBrain post exactly as supplied.',
-        steps: [
-          'Open https://x.com/compose/post in the current tab through the visible browser UI.',
-          'Enter this exact reviewed localized text through the visible X composer without rewriting it: "Introducing WebBrain — an open-source AI browser agent that lives in your browser. Chat with any page, automate multi-step workflows, and bring your own LLM. Extensible by design. Try it: https://webbrain.one"',
-          'Verify the new tweet appears and report its URL.',
-        ],
-      };
-      const outcome = await agent._maybeRunPlannerGate(
-        tabId,
-        agent.conversations.get(tabId),
-        { role: 'user', content: 'Publish a concise tweet about WebBrain.' },
-        () => {},
-        'act',
-        null,
-        null,
-        null,
-        { recommendedAction: readyPlan },
-      );
+      for (const [variantIndex, fixture] of readyPlans.entries()) {
+        const tabId = (label === 'chrome' ? 9211 : 9212) + (variantIndex * 10);
+        const agent = new AgentClass({ getActive: () => ({}) });
+        agent.setPlanBeforeActMode('strict');
+        agent.setPlanReviewSettings({ mode: 'always' });
+        agent.conversations.set(tabId, [{ role: 'system', content: 'system' }]);
+        let plannerCalls = 0;
+        agent._runPlannerGate = async () => {
+          plannerCalls += 1;
+          throw new Error('recommended action fast path should not call planner');
+        };
 
-      assert.equal(outcome.proceed, true, `${label} should proceed`);
-      assert.equal(plannerCalls, 0, `${label} should skip the planner call`);
-      const messages = agent.conversations.get(tabId);
-      const idx = agent._findScratchpadIndex(messages);
-      assert.ok(idx >= 0, `${label} should pin the ready tweet plan`);
-      const body = agent._extractScratchpadBody(messages[idx].content);
-      assert.match(body, /\[Approved plan — pinned by recommended action\]/);
-      assert.match(body, /https:\/\/x\.com\/compose\/post/);
-      assert.match(body, /https:\/\/webbrain\.one/);
-      assert.match(body, /Immediate tool[\s\S]*navigate/);
+        const outcome = await agent._maybeRunPlannerGate(
+          tabId,
+          agent.conversations.get(tabId),
+          { role: 'user', content: fixture.request },
+          () => {},
+          'act',
+          null,
+          null,
+          null,
+          { recommendedAction: fixture.plan },
+        );
 
-      assert.equal(
-        agent._recommendedActionFastPathPlan({
-          recommendedAction: { ...readyPlan, tool: 'click_ax' },
-        }),
-        null,
-        `${label} should reject a forged immediate tool for the tweet fast path`,
-      );
+        assert.equal(outcome.proceed, true, `${label} ${fixture.name} should proceed`);
+        assert.equal(plannerCalls, 0, `${label} ${fixture.name} should skip the planner call`);
+        const messages = agent.conversations.get(tabId);
+        const idx = agent._findScratchpadIndex(messages);
+        assert.ok(idx >= 0, `${label} should pin the ready ${fixture.name} plan`);
+        const body = agent._extractScratchpadBody(messages[idx].content);
+        assert.match(body, /\[Approved plan — pinned by recommended action\]/);
+        assert.match(body, fixture.expectedUrl);
+        assert.match(body, /https:\/\/webbrain\.one/);
+        assert.match(body, /Immediate tool[\s\S]*navigate/);
+
+        assert.equal(
+          agent._recommendedActionFastPathPlan({
+            recommendedAction: { ...fixture.plan, tool: 'click_ax' },
+          }),
+          null,
+          `${label} should reject a forged immediate tool for the ${fixture.name} fast path`,
+        );
+      }
     }
   });
 });

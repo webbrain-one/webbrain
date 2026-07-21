@@ -461,6 +461,8 @@ export default {
   'sp.recommended.tweet.label': 'Siarkan tentang WebBrain',
   'sp.recommended.tweet.prompt': 'Siarkan teks tepat ini melalui antara muka X yang kelihatan tanpa mengubahnya: “{post}” Kemudian sahkan siaran diterbitkan dan laporkan URL-nya.',
   'sp.recommended.tweet.text': 'Kenali WebBrain — ejen pelayar AI sumber terbuka yang berfungsi dalam pelayar anda. Berbual dengan mana-mana halaman, automasikan aliran kerja berbilang langkah, dan gunakan LLM pilihan anda. Direka untuk dikembangkan. Cuba: https://webbrain.one',
+  'sp.recommended.linkedin.label': 'Siarkan tentang WebBrain di LinkedIn',
+  'sp.recommended.linkedin.prompt': 'Siarkan teks tepat ini melalui antara muka LinkedIn yang kelihatan tanpa mengubahnya: “{post}” Kemudian sahkan siaran diterbitkan dan laporkan URL-nya.',
   'sp.review.rating_title': 'Suka menggunakan WebBrain?',
   'sp.review.rating_body': 'Pilih satu bintang — ini membantu kami mengetahui prestasi kami.',
   'sp.review.stars_label': 'Nilai WebBrain',

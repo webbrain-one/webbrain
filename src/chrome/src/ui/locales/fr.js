@@ -461,6 +461,8 @@ export default {
   'sp.recommended.tweet.label': 'Publier à propos de WebBrain',
   'sp.recommended.tweet.prompt': 'Publiez ce texte exact dans l’interface visible de X sans le modifier : « {post} » Vérifiez ensuite sa publication et indiquez son URL.',
   'sp.recommended.tweet.text': 'Découvrez WebBrain — un agent de navigateur IA open source intégré à votre navigateur. Discutez avec n’importe quelle page, automatisez des workflows en plusieurs étapes et utilisez votre propre LLM. Extensible par conception. Essayez-le : https://webbrain.one',
+  'sp.recommended.linkedin.label': 'Publier sur WebBrain sur LinkedIn',
+  'sp.recommended.linkedin.prompt': 'Publiez ce texte exact dans l’interface visible de LinkedIn sans le modifier : « {post} » Vérifiez ensuite sa publication et indiquez son URL.',
   'sp.review.rating_title': 'Vous aimez WebBrain ?',
   'sp.review.rating_body': 'Sélectionnez une étoile : cela nous aide à savoir comment nous nous en sortons.',
   'sp.review.stars_label': 'Noter WebBrain',

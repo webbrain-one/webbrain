@@ -452,6 +452,8 @@ export default {
   'sp.recommended.tweet.label': 'Mag-post tungkol sa WebBrain',
   'sp.recommended.tweet.prompt': 'I-post ang eksaktong tekstong ito sa nakikitang X interface nang walang pagbabago: “{post}” Pagkatapos, tiyaking na-post ito at iulat ang URL.',
   'sp.recommended.tweet.text': 'Kilalanin ang WebBrain — isang open-source AI browser agent na nasa browser mo. Makipag-chat sa anumang page, i-automate ang multi-step workflows, at gamitin ang sarili mong LLM. Dinisenyong napapalawak. Subukan: https://webbrain.one',
+  'sp.recommended.linkedin.label': 'Mag-post tungkol sa WebBrain sa LinkedIn',
+  'sp.recommended.linkedin.prompt': 'I-post ang eksaktong tekstong ito sa nakikitang LinkedIn interface nang walang pagbabago: “{post}” Pagkatapos, tiyaking na-post ito at iulat ang URL.',
   'sp.review.rating_title': 'Nagugustuhan mo ba ang WebBrain?',
   'sp.review.rating_body': 'Pumili ng bituin — nakakatulong ito para malaman namin kung kumusta kami.',
   'sp.review.stars_label': 'I-rate ang WebBrain',

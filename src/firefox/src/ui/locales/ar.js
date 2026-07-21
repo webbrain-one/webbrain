@@ -452,6 +452,8 @@ export default {
   'sp.recommended.tweet.label': 'انشر عن WebBrain',
   'sp.recommended.tweet.prompt': 'انشر هذا النص كما هو عبر واجهة X المرئية دون تغييره: «{post}» ثم تحقّق من نشره وأبلغ عن رابطه.',
   'sp.recommended.tweet.text': 'تعرّف على WebBrain — وكيل متصفح بالذكاء الاصطناعي مفتوح المصدر يعمل داخل متصفحك. تحدّث مع أي صفحة، وأتمت سير العمل متعدد الخطوات، واستخدم نموذج LLM الخاص بك. مصمم للتوسعة. جرّبه: https://webbrain.one',
+  'sp.recommended.linkedin.label': 'انشر عن WebBrain على LinkedIn',
+  'sp.recommended.linkedin.prompt': 'انشر هذا النص كما هو عبر واجهة LinkedIn المرئية دون تغييره: «{post}» ثم تحقّق من نشره وأبلغ عن رابطه.',
   'sp.review.rating_title': 'هل تستمتع بـ WebBrain؟',
   'sp.review.rating_body': 'اضغط على نجمة — فهذا يساعدنا على معرفة أدائنا.',
   'sp.review.stars_label': 'قيّم WebBrain',

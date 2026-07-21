@@ -461,6 +461,8 @@ export default {
   'sp.recommended.tweet.label': 'WebBrain 소개 글 게시',
   'sp.recommended.tweet.prompt': '다음 문구를 수정하지 말고 표시된 X 화면에서 그대로 게시하세요. “{post}” 게시 여부를 확인한 뒤 URL을 알려주세요.',
   'sp.recommended.tweet.text': 'WebBrain을 소개합니다. 브라우저에서 작동하는 오픈 소스 AI 에이전트입니다. 모든 페이지와 대화하고, 여러 단계 작업을 자동화하며, 원하는 LLM을 사용하세요. 확장 가능한 설계. 지금 체험하세요: https://webbrain.one',
+  'sp.recommended.linkedin.label': 'LinkedIn에 WebBrain 소개 글 게시',
+  'sp.recommended.linkedin.prompt': '다음 문구를 수정하지 말고 표시된 LinkedIn 화면에서 그대로 게시하세요. “{post}” 게시 여부를 확인한 뒤 URL을 알려주세요.',
   'sp.review.rating_title': 'WebBrain이 마음에 드시나요?',
   'sp.review.rating_body': '별점을 선택해 주세요. 저희가 얼마나 잘하고 있는지 파악하는 데 도움이 됩니다.',
   'sp.review.stars_label': 'WebBrain 평가',

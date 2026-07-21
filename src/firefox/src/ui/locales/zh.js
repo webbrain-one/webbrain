@@ -452,6 +452,8 @@ export default {
   'sp.recommended.tweet.label': '发布 WebBrain 介绍',
   'sp.recommended.tweet.prompt': '请通过可见的 X 界面原样发布以下文本，不要修改：“{post}”然后确认已发布并报告帖子网址。',
   'sp.recommended.tweet.text': '认识 WebBrain：一款运行在浏览器中的开源 AI 浏览器智能代理。你可以与任意网页对话、自动执行多步骤工作流，并使用自己的 LLM。专为扩展而设计。立即体验：https://webbrain.one',
+  'sp.recommended.linkedin.label': '在 LinkedIn 发布 WebBrain 介绍',
+  'sp.recommended.linkedin.prompt': '请通过可见的 LinkedIn 界面原样发布以下文本，不要修改：“{post}”然后确认已发布并报告帖子网址。',
   'sp.review.rating_title': '喜欢 WebBrain 吗？',
   'sp.review.rating_body': '点选星级，帮助我们了解做得如何。',
   'sp.review.stars_label': '为 WebBrain 评分',

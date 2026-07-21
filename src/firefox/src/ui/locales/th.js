@@ -452,6 +452,8 @@ export default {
   'sp.recommended.tweet.label': 'โพสต์เกี่ยวกับ WebBrain',
   'sp.recommended.tweet.prompt': 'โพสต์ข้อความนี้ตามต้นฉบับผ่านหน้าจอ X ที่มองเห็นโดยไม่แก้ไข: “{post}” จากนั้นตรวจสอบว่าโพสต์แล้วและรายงาน URL',
   'sp.recommended.tweet.text': 'พบกับ WebBrain — เอเจนต์ AI โอเพนซอร์สในเบราว์เซอร์ สนทนากับทุกหน้า ทำงานหลายขั้นตอนอัตโนมัติ และใช้ LLM ของคุณเอง ออกแบบให้ต่อยอดได้ ลองเลย: https://webbrain.one',
+  'sp.recommended.linkedin.label': 'โพสต์เกี่ยวกับ WebBrain บน LinkedIn',
+  'sp.recommended.linkedin.prompt': 'โพสต์ข้อความนี้ตามต้นฉบับผ่านหน้าจอ LinkedIn ที่มองเห็นโดยไม่แก้ไข: “{post}” จากนั้นตรวจสอบว่าโพสต์แล้วและรายงาน URL',
   'sp.review.rating_title': 'ชอบ WebBrain ไหม',
   'sp.review.rating_body': 'เลือกดาวหนึ่งดวง เพื่อช่วยให้เรารู้ว่าเราทำได้ดีแค่ไหน',
   'sp.review.stars_label': 'ให้คะแนน WebBrain',

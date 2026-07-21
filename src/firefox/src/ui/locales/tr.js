@@ -491,6 +491,8 @@ export default {
   'sp.recommended.tweet.label': 'WebBrain hakkında paylaş',
   'sp.recommended.tweet.prompt': 'Bu metni görünür X arayüzünden hiç değiştirmeden aynen paylaş: “{post}” Ardından paylaşımın yayınlandığını doğrula ve URL’sini bildir.',
   'sp.recommended.tweet.text': 'WebBrain ile tanışın — tarayıcınızda çalışan açık kaynaklı bir yapay zekâ tarayıcı ajanı. Her sayfayla sohbet edin, çok adımlı iş akışlarını otomatikleştirin ve kendi LLM’inizi kullanın. Genişletilebilir olarak tasarlandı. Deneyin: https://webbrain.one',
+  'sp.recommended.linkedin.label': 'WebBrain hakkında LinkedIn’de paylaş',
+  'sp.recommended.linkedin.prompt': 'Bu metni görünür LinkedIn arayüzünden hiç değiştirmeden aynen paylaş: “{post}” Ardından paylaşımın yayınlandığını doğrula ve URL’sini bildir.',
   'sp.review.rating_title': 'WebBrain’den memnun musun?',
   'sp.review.rating_body': 'Bir yıldız seç; nasıl gittiğimizi anlamamıza yardımcı olur.',
   'sp.review.stars_label': 'WebBrain’i değerlendir',

@@ -153,6 +153,23 @@ function webbrainTweetRunOptions(postText) {
   };
 }
 
+function webbrainLinkedInRunOptions(postText) {
+  const exactPost = String(postText || '').trim();
+  return {
+    id: 'post-webbrain-linkedin',
+    skipPlanner: true,
+    tool: 'navigate',
+    summary: 'Publish the reviewed localized WebBrain post on LinkedIn exactly as supplied.',
+    steps: [
+      'Open https://www.linkedin.com/feed/ in the current tab through the visible browser UI.',
+      'Select Start a post to open LinkedIn\'s visible composer.',
+      `Enter this exact reviewed text without translating, rewriting, or adding anything: ${JSON.stringify(exactPost)}`,
+      'Publish only after the composer text exactly matches the supplied text.',
+      'Verify the new LinkedIn post appears, then report its URL when available.',
+    ],
+  };
+}
+
 function hasCartOrPriceSignal(pageInfo = {}) {
   const haystack = [
     pageInfo.title,
@@ -243,14 +260,23 @@ export function buildRecommendedActions(pageInfo = {}, options = {}) {
   const path = pathFromUrl(pageInfo.url || '');
   const actions = [];
   const webbrainPostText = t('sp.recommended.tweet.text');
+  const webbrainPromotionVariant = options.webbrainPromotionVariant === 'linkedin' ? 'linkedin' : 'x';
 
-  addUnique(actions, {
-    id: 'tweet-webbrain',
-    label: t('sp.recommended.tweet.label'),
-    prompt: t('sp.recommended.tweet.prompt', { post: webbrainPostText }),
-    mode: 'act',
-    runOptions: webbrainTweetRunOptions(webbrainPostText),
-  });
+  addUnique(actions, webbrainPromotionVariant === 'linkedin'
+    ? {
+      id: 'post-webbrain-linkedin',
+      label: t('sp.recommended.linkedin.label'),
+      prompt: t('sp.recommended.linkedin.prompt', { post: webbrainPostText }),
+      mode: 'act',
+      runOptions: webbrainLinkedInRunOptions(webbrainPostText),
+    }
+    : {
+      id: 'tweet-webbrain',
+      label: t('sp.recommended.tweet.label'),
+      prompt: t('sp.recommended.tweet.prompt', { post: webbrainPostText }),
+      mode: 'act',
+      runOptions: webbrainTweetRunOptions(webbrainPostText),
+    });
 
   if (MEETING_HOST_RE.test(host)) {
     addUnique(actions, {
@@ -419,7 +445,7 @@ export function buildRecommendedActions(pageInfo = {}, options = {}) {
     });
   }
 
-  if (!actions.some((action) => action.id !== 'tweet-webbrain') && pageInfo.title) {
+  if (!actions.some((action) => !['tweet-webbrain', 'post-webbrain-linkedin'].includes(action.id)) && pageInfo.title) {
     const explainUsesArticleRead = isLongArticle(pageInfo);
     addUnique(actions, {
       id: 'explain-page',

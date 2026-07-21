@@ -521,6 +521,7 @@ const storeReviewFeedbackEl = document.getElementById('store-review-feedback');
 const scheduledJobsEl = document.getElementById('scheduled-jobs');
 const stopBtn = document.getElementById('btn-stop');
 const RECOMMENDED_ACTIONS_COLLAPSED_KEY = 'recommendedActionsCollapsed';
+const WEBBRAIN_PROMOTION_ACTION_IDS = new Set(['tweet-webbrain', 'post-webbrain-linkedin']);
 const PLACEHOLDER_ROTATION_INTERVAL_MS = 10_000;
 const ASK_PLACEHOLDER_KEYS = [
   'sp.input.ask_placeholder',
@@ -923,6 +924,7 @@ let providerSelectionRequestId = 0;
 let providerTestRequestId = 0;
 let selectedProviderId = 'webbrain_cloud';
 let recommendedActionsCollapsed = false;
+let webbrainPromotionHasAnimated = false;
 let slashCommandMatches = [];
 let slashCommandSelectedIndex = 0;
 let busySlashNoticeLastShownAt = 0;
@@ -3386,6 +3388,29 @@ function hideRecommendedActions() {
   recommendedActionsEl.classList.add('hidden');
 }
 
+function createWebbrainPromotionIcon(actionId) {
+  const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  icon.classList.add('recommended-action-icon');
+  icon.setAttribute('viewBox', '0 0 24 24');
+  icon.setAttribute('aria-hidden', 'true');
+  icon.setAttribute('focusable', 'false');
+
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('d', actionId === 'post-webbrain-linkedin'
+    ? 'M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 1 1 0-4.124 2.062 2.062 0 0 1 0 4.124zM7.119 20.452H3.555V9H7.12v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0z'
+    : 'M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z');
+  icon.appendChild(path);
+  return icon;
+}
+
+function animateWebbrainPromotionOnce() {
+  if (webbrainPromotionHasAnimated || recommendedActionsCollapsed) return;
+  const promotionAction = recommendedActionsListEl?.querySelector('.recommended-action-chip-promotion');
+  if (!promotionAction) return;
+  promotionAction.classList.add('recommended-action-chip-promotion-enter');
+  webbrainPromotionHasAnimated = true;
+}
+
 function updateRecommendedActionsCollapsedState() {
   if (!recommendedActionsEl) return;
   recommendedActionsEl.classList.toggle('collapsed', recommendedActionsCollapsed);
@@ -3403,6 +3428,7 @@ function updateRecommendedActionsCollapsedState() {
 function setRecommendedActionsCollapsed(collapsed, { persist = true } = {}) {
   recommendedActionsCollapsed = Boolean(collapsed);
   updateRecommendedActionsCollapsedState();
+  animateWebbrainPromotionOnce();
   if (persist) {
     void chrome.storage.local.set({ [RECOMMENDED_ACTIONS_COLLAPSED_KEY]: recommendedActionsCollapsed }).catch(() => {});
   }
@@ -3448,7 +3474,8 @@ async function refreshRecommendedActions() {
     const pageInfo = await sendToBackground('get_page_info', { tabId });
     if (requestId !== recommendationsRequestId || currentTabId !== tabId || isProcessing) return;
     const sourceUrl = typeof pageInfo?.url === 'string' ? pageInfo.url : '';
-    const actions = buildRecommendedActions(pageInfo, { max: 4 });
+    const webbrainPromotionVariant = Math.random() < 0.5 ? 'linkedin' : 'x';
+    const actions = buildRecommendedActions(pageInfo, { max: 4, webbrainPromotionVariant });
     recommendedActionsListEl.replaceChildren();
     actions.forEach((action) => {
       const actionForClick = sourceUrl ? { ...action, sourceUrl } : action;
@@ -3456,11 +3483,17 @@ async function refreshRecommendedActions() {
       btn.type = 'button';
       btn.className = 'recommended-action-chip';
       btn.textContent = action.label;
+      btn.dataset.actionId = action.id;
+      if (WEBBRAIN_PROMOTION_ACTION_IDS.has(action.id)) {
+        btn.classList.add('recommended-action-chip-promotion');
+        btn.prepend(createWebbrainPromotionIcon(action.id));
+      }
       btn.dataset.prompt = action.prompt;
       btn.addEventListener('click', () => runRecommendedAction(actionForClick));
       recommendedActionsListEl.appendChild(btn);
     });
     recommendedActionsEl.classList.toggle('hidden', actions.length === 0);
+    animateWebbrainPromotionOnce();
   } catch {
     if (requestId === recommendationsRequestId) hideRecommendedActions();
   }

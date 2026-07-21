@@ -128,6 +128,8 @@ export default {
   "sp.recommended.tweet.label": "פרסום על WebBrain",
   "sp.recommended.tweet.prompt": "פרסם את הטקסט הזה בדיוק דרך ממשק X הגלוי, ללא שינויים: „{post}” לאחר מכן ודא שהוא פורסם ודווח על כתובת ה-URL שלו.",
   "sp.recommended.tweet.text": "הכירו את WebBrain — סוכן דפדפן AI בקוד פתוח שפועל בדפדפן שלכם. שוחחו עם כל דף, הפכו תהליכים מרובי שלבים לאוטומטיים והשתמשו ב-LLM משלכם. תוכנן להרחבה. נסו: https://webbrain.one",
+  "sp.recommended.linkedin.label": "פרסום על WebBrain בלינקדאין",
+  "sp.recommended.linkedin.prompt": "פרסם את הטקסט הזה בדיוק דרך ממשק LinkedIn הגלוי, ללא שינויים: „{post}” לאחר מכן ודא שהוא פורסם ודווח על כתובת ה-URL שלו.",
   "sp.review.rating_title": "נהנים מ-WebBrain?",
   "sp.review.rating_body": "בחרו כוכב — כך נדע איך אנחנו מתפקדים.",
   "sp.review.stars_label": "דירוג WebBrain",

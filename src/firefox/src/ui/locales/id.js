@@ -452,6 +452,8 @@ export default {
   'sp.recommended.tweet.label': 'Posting tentang WebBrain',
   'sp.recommended.tweet.prompt': 'Publikasikan teks persis ini melalui antarmuka X yang terlihat tanpa mengubahnya: “{post}” Setelah itu, pastikan postingan terbit dan laporkan URL-nya.',
   'sp.recommended.tweet.text': 'Kenalkan WebBrain — agen browser AI sumber terbuka yang bekerja di browser Anda. Mengobrol dengan halaman apa pun, mengotomatiskan alur kerja bertahap, dan menggunakan LLM pilihan Anda. Dirancang agar dapat diperluas. Coba: https://webbrain.one',
+  'sp.recommended.linkedin.label': 'Posting tentang WebBrain di LinkedIn',
+  'sp.recommended.linkedin.prompt': 'Publikasikan teks persis ini melalui antarmuka LinkedIn yang terlihat tanpa mengubahnya: “{post}” Setelah itu, pastikan postingan terbit dan laporkan URL-nya.',
   'sp.review.rating_title': 'Suka dengan WebBrain?',
   'sp.review.rating_body': 'Pilih satu bintang — ini membantu kami mengetahui kinerja kami.',
   'sp.review.stars_label': 'Beri rating WebBrain',

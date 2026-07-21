@@ -452,6 +452,8 @@ export default {
   'sp.recommended.tweet.label': 'Опублікувати про WebBrain',
   'sp.recommended.tweet.prompt': 'Опублікуйте цей текст без змін через видимий інтерфейс X: «{post}» Потім перевірте публікацію та повідомте її URL.',
   'sp.recommended.tweet.text': 'Представляємо WebBrain — браузерного ШІ-агента з відкритим кодом, що працює у вашому браузері. Спілкуйтеся з будь-якою сторінкою, автоматизуйте багатоетапні процеси та використовуйте власну LLM. Створений для розширення. Спробуйте: https://webbrain.one',
+  'sp.recommended.linkedin.label': 'Опублікувати про WebBrain у LinkedIn',
+  'sp.recommended.linkedin.prompt': 'Опублікуйте цей текст без змін через видимий інтерфейс LinkedIn: «{post}» Потім перевірте публікацію та повідомте її URL.',
   'sp.review.rating_title': 'Подобається WebBrain?',
   'sp.review.rating_body': 'Виберіть зірку — це допоможе нам зрозуміти, як у нас справи.',
   'sp.review.stars_label': 'Оцінити WebBrain',
