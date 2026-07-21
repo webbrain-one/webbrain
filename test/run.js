@@ -30507,7 +30507,12 @@ test('submit-aware completion accepts the observed AMO finish document and rejec
       `${AgentClass.name}: read-only completion was blocked by an unrelated page form or edit route`,
     );
 
-    agent._planExecutionGuards.set(tabId, { enabled: true, requestKind: 'execute', requiresStateChange: true });
+    agent._planExecutionGuards.set(tabId, {
+      enabled: true,
+      requestKind: 'execute',
+      requiresStateChange: true,
+      requiresSubmission: false,
+    });
     assert.equal(
       agent._completionPageWarning(tabId, 'Filled the requested fields without submitting.', 'success', {
         ...finishState,
@@ -30518,6 +30523,39 @@ test('submit-aware completion accepts the observed AMO finish document and rejec
       `${AgentClass.name}: fill-only form task was forced to submit`,
     );
 
+    agent._planExecutionGuards.set(tabId, {
+      enabled: true,
+      requestKind: 'execute',
+      requiresStateChange: true,
+      requiresSubmission: true,
+    });
+    assert.match(
+      agent._completionPageWarning(tabId, 'Created.', 'success', {
+        ...finishState,
+        visibleFormCount: 1,
+        relevantFormCount: 1,
+      }, 'https://example.test/items?create=1')?.warning || '',
+      /task-relevant form/i,
+      `${AgentClass.name}: submit-required task passed without a submit attempt`,
+    );
+
+    agent._planExecutionGuards.set(tabId, { enabled: true, requestKind: 'execute', requiresStateChange: true });
+    assert.match(
+      agent._completionPageWarning(tabId, 'Created.', 'success', {
+        ...finishState,
+        visibleFormCount: 1,
+        relevantFormCount: 1,
+      }, 'https://example.test/items?create=1')?.warning || '',
+      /task-relevant form/i,
+      `${AgentClass.name}: legacy state-changing plan lost conservative form fallback`,
+    );
+
+    agent._planExecutionGuards.set(tabId, {
+      enabled: true,
+      requestKind: 'execute',
+      requiresStateChange: true,
+      requiresSubmission: false,
+    });
     agent._completionSubmitStates.set(tabId, {
       currentUrl: submitUrl,
       dispatched: false,
@@ -30927,6 +30965,7 @@ function planOnlyTerminalFixture() {
 function plannerIntentFixture({
   requestKind = 'execute',
   requiresStateChange = false,
+  requiresSubmission = false,
   allowsPlannerShapedResult = false,
   allowsAppStateToolEvidence = false,
   scheduling = null,
@@ -30938,6 +30977,7 @@ function plannerIntentFixture({
   return JSON.stringify({
     request_kind: requestKind,
     requires_state_change: requiresStateChange,
+    requires_submission: requiresSubmission,
     allows_planner_shaped_result: allowsPlannerShapedResult,
     allows_app_state_tool_evidence: allowsAppStateToolEvidence,
     summary: requestKind === 'clarify'
@@ -32626,12 +32666,44 @@ test('planner intent keeps execution authorized for plan-and-act and negated app
         assert.equal(gate.proceed, true, `${AgentClass.name}: explicit execution intent was not authorized: ${task}`);
         assert.equal(gate.requestKind, 'execute', `${AgentClass.name}: execute request kind: ${task}`);
         assert.equal(gate.requiresStateChange, true, `${AgentClass.name}: state-change requirement: ${task}`);
-        assert.equal(
-          agent._startPlanExecutionGuard(8800 + taskIndex, 'act', gate).enabled,
-          true,
-          `${AgentClass.name}: execution guard disabled: ${task}`,
-        );
+        assert.equal(gate.requiresSubmission, false, `${AgentClass.name}: non-submit execution gained submit intent: ${task}`);
+        const guard = agent._startPlanExecutionGuard(8800 + taskIndex, 'act', gate);
+        assert.equal(guard.enabled, true, `${AgentClass.name}: execution guard disabled: ${task}`);
+        assert.equal(guard.requiresSubmission, false, `${AgentClass.name}: execution guard lost non-submit intent: ${task}`);
       }
+    }
+  });
+});
+
+test('planner intent carries submit-required completion metadata into the execution guard', async () => {
+  await withPlannerBrowserGlobals(async () => {
+    for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
+      const agent = new AgentClass({ getActive: () => ({ name: 'intent-test', model: 'intent-test' }) });
+      agent._chatWithCostAllowance = async () => ({
+        content: plannerIntentFixture({
+          requestKind: 'execute',
+          requiresStateChange: false,
+          requiresSubmission: true,
+          localizedSummary: 'Submit the completed form.',
+          localizedSteps: ['Fill the required fields.', 'Submit the form.'],
+        }),
+      });
+      const gate = await agent._runPlannerIntentGate(
+        8890 + index,
+        { role: 'user', content: 'Complete and submit this form.' },
+        () => {},
+        null,
+        null,
+        '',
+        { tabUrl: 'https://example.com/items?create=1', tabTitle: 'Create item' },
+        'act',
+        { locale: 'en' },
+      );
+      assert.equal(gate.proceed, true, `${AgentClass.name}: submit-required intent was blocked`);
+      assert.equal(gate.requiresStateChange, true, `${AgentClass.name}: submission did not imply state change`);
+      assert.equal(gate.requiresSubmission, true, `${AgentClass.name}: submission metadata was dropped by the gate`);
+      const guard = agent._startPlanExecutionGuard(8900 + index, 'act', gate);
+      assert.equal(guard.requiresSubmission, true, `${AgentClass.name}: execution guard lost submission metadata`);
     }
   });
 });
@@ -36955,6 +37027,7 @@ test('exhaustiveness: every model-exposed tool is classified', () => {
 
 test('planner: parse and format structured plan', () => {
   const raw = JSON.stringify({
+    requires_submission: true,
     summary: 'Follow GitHub stargazers',
     confidence: 92,
     steps: [{ id: '1', action: 'Open stargazers', tools: ['navigate', 'wait_for_stable'] }],
@@ -36977,6 +37050,7 @@ test('planner: parse and format structured plan', () => {
   assert.equal(plan.memory.progress_ledger_policy, 'enabled');
   assert.equal(plan.scheduling.tool, 'schedule_task');
   assert.equal(plan.requires_state_change, true, 'planned scheduling should always require a state change');
+  assert.equal(plan.requires_submission, true, 'explicit submission intent should be preserved');
   assert.deepEqual(plan.skill_ids, ['freeskillz-xyz', 'otp-verification-code-helper']);
   const md = formatPlanMarkdown(plan);
   assert.match(md, /Follow GitHub stargazers/, 'compact plan should keep the summary');
@@ -37006,6 +37080,7 @@ test('planner: parse and format structured plan', () => {
     },
   }), { requireIntent: true, locale: 'en' });
   assert.equal(planOnly.requires_state_change, false, 'plan-only scheduling metadata must not authorize state change');
+  assert.equal(planOnly.requires_submission, false, 'plan-only metadata must not require submission');
   assert.equal(planOnly.scheduling, null, 'plan-only scheduling metadata must not arm the execution guard');
 
   const respond = parsePlanFromContent(JSON.stringify({
@@ -37023,6 +37098,7 @@ test('planner: parse and format structured plan', () => {
   }), { requireIntent: true, locale: 'en' });
   assert.equal(respond?.request_kind, 'respond', 'tool-free follow-up should be a supported intent');
   assert.equal(respond?.requires_state_change, false, 'respond must never authorize page mutation');
+  assert.equal(respond?.requires_submission, false, 'respond must never require submission');
   assert.equal(respond?.scheduling, null, 'respond must not preserve scheduling metadata');
 });
 
@@ -37036,6 +37112,7 @@ test('planner: parse JSON inside markdown fence', () => {
   for (const parse of [parsePlanFromContent, parsePlanFromContentFx]) {
     const legacy = parse(JSON.stringify({ summary: 'Legacy plan', steps: [], memory: {} }));
     assert.equal(legacy.memory.progress_ledger_policy, 'auto', 'missing legacy metadata should retain classifier fallback');
+    assert.equal(legacy.requires_submission, null, 'missing legacy submission metadata should retain conservative fallback');
   }
 });
 
@@ -37058,6 +37135,8 @@ test('planner: prompt treats page context as untrusted data', () => {
   assert.match(PLANNER_SYSTEM_PROMPT, /Never approximate calendar recurrence/i);
   assert.match(PLANNER_INTENT_SYSTEM_PROMPT, /"scheduling": null/);
   assert.match(PLANNER_INTENT_SYSTEM_PROMPT, /"use_progress_ledger": boolean/);
+  assert.match(PLANNER_INTENT_SYSTEM_PROMPT, /"requires_submission": boolean/);
+  assert.match(PLANNER_INTENT_SYSTEM_PROMPT, /explicit do-not-submit tasks and autosave UIs/i);
   assert.match(PLANNER_INTENT_SYSTEM_PROMPT, /sequential workflow stages, sites, apps, or destinations are not peer items/i);
   assert.match(PLANNER_INTENT_SYSTEM_PROMPT, /lacks usable timing or cadence.*clarify/i);
   assert.match(PLANNER_INTENT_SYSTEM_PROMPT, /Calendar\/cron recurrence.*unsupported/i);
@@ -37065,6 +37144,7 @@ test('planner: prompt treats page context as untrusted data', () => {
   assert.match(PLANNER_SYSTEM_PROMPT_FX, /lacks usable timing or cadence.*clarify/i);
   assert.match(PLANNER_INTENT_SYSTEM_PROMPT_FX, /Calendar\/cron recurrence.*unsupported/i);
   assert.match(PLANNER_INTENT_SYSTEM_PROMPT_FX, /"use_progress_ledger": boolean/);
+  assert.match(PLANNER_INTENT_SYSTEM_PROMPT_FX, /"requires_submission": boolean/);
   assert.match(PLANNER_SYSTEM_PROMPT, /"confidence": 0\.0/);
   assert.match(PLANNER_SYSTEM_PROMPT, /Set confidence from 0\.0 to 1\.0/);
   assert.doesNotMatch(PLANNER_SYSTEM_PROMPT, /read:[^\n]*\bscreenshot\b/);
@@ -37177,6 +37257,7 @@ function plannerFixtureJson(overrides = {}) {
   return JSON.stringify({
     request_kind: 'execute',
     requires_state_change: false,
+    requires_submission: false,
     allows_planner_shaped_result: false,
     allows_app_state_tool_evidence: false,
     summary: 'Open the page and collect visible account links',

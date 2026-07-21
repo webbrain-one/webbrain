@@ -17,6 +17,7 @@ Schema:
 {
   "request_kind": "execute" | "respond" | "plan_only" | "clarify",
   "requires_state_change": boolean,
+  "requires_submission": boolean,
   "allows_planner_shaped_result": boolean,
   "allows_app_state_tool_evidence": boolean,
   "summary": "one-line description of what will be done",
@@ -54,6 +55,7 @@ Rules:
   - plan_only when the user asks for a plan, outline, strategy, or discussion without authorizing action.
   - clarify only when missing or conflicting user information prevents a useful plan; make localized.summary the concise question to ask.
 - requires_state_change is true only when completing an execute request needs a mutation such as interacting with form/account state, modifying page data, downloading/uploading a file, a write-method network request, a Dev patch, or scheduling work. It is false for reads, analysis, summaries, navigation, scrolling, hovering, window/viewport changes, plan_only, and clarify.
+- requires_submission is true only when completing an execute request requires an explicit form/dialog commit action such as Submit, Save, Send, Publish, Post, or Confirm. It is false for filling, editing, checking, or selecting without committing, including explicit do-not-submit tasks and autosave UIs, and false for non-execute requests.
 - allows_planner_shaped_result is true only when the user explicitly requests planner-like final data (summary/steps JSON or Plan/Steps/Workflow markdown). Never changes request_kind.
 - allows_app_state_tool_evidence is true only when the requested work itself is reading/updating WebBrain scratchpad or progress ledger (not incidental bookkeeping).
 - Write canonical summary, steps, and risks in English. Also write localized summary, step actions, and risks in the requested wbLocale. Keep stable tool names, skill_ids, IDs, and execution metadata in English.
@@ -82,6 +84,7 @@ export const PLANNER_INTENT_SYSTEM_PROMPT = `You are the intent and compact plan
 {
   "request_kind": "execute" | "respond" | "plan_only" | "clarify",
   "requires_state_change": boolean,
+  "requires_submission": boolean,
   "allows_planner_shaped_result": boolean,
   "allows_app_state_tool_evidence": boolean,
   "summary": "concise canonical English summary",
@@ -111,6 +114,7 @@ Rules:
 - plan_only means the user asks for a plan, outline, strategy, or discussion without authorizing action.
 - clarify means missing or conflicting user information prevents a useful plan; localized.summary must be the concise question to ask.
 - requires_state_change is true only when an execute request needs a mutation such as interacting with form/account state, modifying page data, downloading/uploading a file, a write-method network request, a Dev patch, or scheduling work. It is false for reads, analysis, summaries, navigation, scrolling, hovering, window/viewport changes, plan_only, and clarify.
+- requires_submission is true only when an execute request must explicitly commit a form/dialog with an action such as Submit, Save, Send, Publish, Post, or Confirm. It is false for filling, editing, checking, or selecting without committing, including explicit do-not-submit tasks and autosave UIs, and false for non-execute requests.
 - allows_planner_shaped_result is true only when the user explicitly requests planner-like final data (summary/steps JSON or Plan/Steps/Workflow markdown). Never changes request_kind.
 - allows_app_state_tool_evidence is true only when the requested work itself is reading/updating WebBrain scratchpad or progress ledger (not incidental bookkeeping).
 - memory.use_progress_ledger is true only for repeated peer-item work that benefits from one row per item. Sequential workflow stages, sites, apps, or destinations are not peer items. Set progress_action to the canonical repeated action, otherwise null.
@@ -235,6 +239,7 @@ export function normalizePlan(obj, opts = {}) {
     ? String(obj.request_kind).trim()
     : null;
   const hasRequiresStateChange = typeof obj.requires_state_change === 'boolean';
+  const hasRequiresSubmission = typeof obj.requires_submission === 'boolean';
   if (opts.requireIntent && (!requestKind || !hasRequiresStateChange)) return null;
   const executablePlan = requestKind === 'execute' || (!opts.requireIntent && requestKind === null);
   const summary = sanitizeText(obj.summary, 400);
@@ -292,11 +297,16 @@ export function normalizePlan(obj, opts = {}) {
       ? localizedInput.risks.map((risk) => sanitizeText(risk, 200)).filter(Boolean).slice(0, 6)
       : [],
   };
+  const requiresSubmission = executablePlan
+    ? (hasRequiresSubmission ? obj.requires_submission === true : null)
+    : false;
+  const requiresStateChange = executablePlan
+    ? (!!obj.requires_state_change || requiresSubmission === true || !!normalizedScheduling)
+    : false;
   return {
     request_kind: requestKind,
-    requires_state_change: executablePlan
-      ? (!!obj.requires_state_change || !!normalizedScheduling)
-      : false,
+    requires_state_change: requiresStateChange,
+    requires_submission: requiresSubmission,
     allows_planner_shaped_result: requestKind === 'execute' && obj.allows_planner_shaped_result === true,
     allows_app_state_tool_evidence: requestKind === 'execute' && obj.allows_app_state_tool_evidence === true,
     summary,

@@ -396,7 +396,10 @@ export class Agent {
     const relevantForms = Number(pageState.relevantFormCount || 0);
     const liveSignals = Array.isArray(pageState.successMessages) ? pageState.successMessages : [];
     const submit = this._completionSubmitStates.get(tabId);
-    const pendingSubmitVerification = !!submit;
+    const executionGuard = this._planExecutionGuards.get(tabId);
+    const pendingSubmitVerification = !!submit
+      || executionGuard?.requiresSubmission === true
+      || (executionGuard?.requiresSubmission == null && executionGuard?.requiresStateChange === true);
     const currentDocumentMatchesSubmit = !!(
       submit?.currentUrl
       && this._normalizeUrl(pageUrl || pageState.url || '') === this._normalizeUrl(submit.currentUrl)
@@ -4972,6 +4975,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       requestKind: gate.requestKind || 'execute',
       responseOnly: gate.responseOnly === true,
       requiresStateChange: gate.requiresStateChange === true,
+      requiresSubmission: typeof gate.requiresSubmission === 'boolean' ? gate.requiresSubmission : null,
       allowsPlannerShapedResult: gate.allowsPlannerShapedResult === true,
       allowsAppStateToolEvidence: gate.allowsAppStateToolEvidence === true,
       requiredSchedulingTool: gate.requiredSchedulingTool || null,
@@ -5147,6 +5151,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         proceed: true,
         requestKind: 'execute',
         requiresStateChange: plan.requires_state_change === true,
+        requiresSubmission: plan.requires_submission,
         allowsPlannerShapedResult: plan.allows_planner_shaped_result === true,
         allowsAppStateToolEvidence: plan.allows_app_state_tool_evidence === true,
         requiredSchedulingTool: plan.scheduling?.tool || null,
@@ -5284,6 +5289,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           skillIds: plan.skill_ids,
           requestKind: 'execute',
           requiresStateChange: plan.requires_state_change === true,
+          requiresSubmission: plan.requires_submission,
           allowsPlannerShapedResult: plan.allows_planner_shaped_result === true,
           allowsAppStateToolEvidence: plan.allows_app_state_tool_evidence === true,
           requiredSchedulingTool: plan.scheduling?.tool || null,
@@ -5324,6 +5330,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         skillIds: approvedSkillIds,
         requestKind: 'execute',
         requiresStateChange: plan.requires_state_change === true,
+        requiresSubmission: plan.requires_submission,
         allowsPlannerShapedResult: plan.allows_planner_shaped_result === true,
         allowsAppStateToolEvidence: plan.allows_app_state_tool_evidence === true,
         requiredSchedulingTool: approvedSchedulingTool,
@@ -8596,6 +8603,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       && runOptions?.cloudRun !== true
       && requestKind === 'execute';
     const requiresStateChange = gateOutcome?.requiresStateChange === true;
+    const requiresSubmission = typeof gateOutcome?.requiresSubmission === 'boolean'
+      ? gateOutcome.requiresSubmission
+      : null;
     const allowsAppStateToolEvidence = gateOutcome?.allowsAppStateToolEvidence === true;
     const requiredSchedulingTool = gateOutcome?.requiredSchedulingTool === 'schedule_task'
       || gateOutcome?.requiredSchedulingTool === 'schedule_resume'
@@ -8608,6 +8618,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const carryMatches = enabled
       && carried?.requestKind === 'execute'
       && carried.requiresStateChange === requiresStateChange
+      && carried.requiresSubmission === requiresSubmission
       && carried.allowsAppStateToolEvidence === allowsAppStateToolEvidence
       && carried.requiredSchedulingTool === requiredSchedulingTool
       && carried.conversationId === (this.conversationIds.get(tabId) || null);
@@ -8615,6 +8626,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       enabled,
       requestKind,
       requiresStateChange,
+      requiresSubmission,
       allowsPlannerShapedResult: gateOutcome?.allowsPlannerShapedResult === true,
       allowsAppStateToolEvidence,
       requiredSchedulingTool,
@@ -8717,6 +8729,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       this._continuationExecutionEvidence.set(tabId, {
         requestKind: guard.requestKind,
         requiresStateChange: guard.requiresStateChange,
+        requiresSubmission: guard.requiresSubmission,
         allowsAppStateToolEvidence: guard.allowsAppStateToolEvidence,
         requiredSchedulingTool: guard.requiredSchedulingTool,
         successfulTaskToolCalls: guard.successfulTaskToolCalls,
