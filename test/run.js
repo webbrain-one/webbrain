@@ -30384,6 +30384,8 @@ test('submit-aware completion accepts the observed AMO finish document and rejec
       url: finishUrl,
       content: 'Version Submitted',
     });
+    assert.equal(agent._completionSubmitStates.get(tabId)?.completionSignalObserved, true,
+      `${AgentClass.name}: explicit AMO confirmation observation did not record success evidence`);
 
     const finishState = {
       url: finishUrl,
@@ -30446,6 +30448,8 @@ test('submit-aware completion accepts the observed AMO finish document and rejec
       `${AgentClass.name}: screenshot page URL did not reconcile the submit destination`);
     assert.equal(screenshotRecoveredSubmit?.documentChanged, true,
       `${AgentClass.name}: screenshot confirmation URL did not establish a document transition`);
+    assert.equal(screenshotRecoveredSubmit?.completionSignalObserved, true,
+      `${AgentClass.name}: screenshot confirmation title did not record success evidence`);
     assert.equal(
       agent._completionPageWarning(tabId, 'Version Submitted.', 'success', finishState, finishUrl),
       null,
@@ -30475,6 +30479,8 @@ test('submit-aware completion accepts the observed AMO finish document and rejec
       `${AgentClass.name}: follow-up page observation did not reconcile the submit destination`);
     assert.equal(recoveredSubmit?.documentChanged, true,
       `${AgentClass.name}: follow-up confirmation URL did not establish a document transition`);
+    assert.equal(recoveredSubmit?.completionSignalObserved, true,
+      `${AgentClass.name}: follow-up confirmation text did not record success evidence`);
     assert.equal(
       agent._completionPageWarning(tabId, 'Version Submitted.', 'success', finishState, finishUrl),
       null,
@@ -30492,6 +30498,34 @@ test('submit-aware completion accepts the observed AMO finish document and rejec
     );
     assert.equal(agent._completionSubmitStates.get(tabId)?.dispatched, false,
       `${AgentClass.name}: explicit no-dispatch result was treated as a possible submit`);
+
+    const wizardStepUrl = 'https://example.test/wizard/step-2';
+    agent._planExecutionGuards.set(tabId, {
+      enabled: true,
+      requestKind: 'execute',
+      requiresStateChange: true,
+      requiresSubmission: true,
+    });
+    agent._completionSubmitStates.set(tabId, {
+      originatingUrl: 'https://example.test/wizard/step-1',
+      currentUrl: wizardStepUrl,
+      dispatched: true,
+      observedAfterSubmit: true,
+      documentChanged: true,
+      formValidationFailed: false,
+      completionSignalObserved: false,
+    });
+    assert.match(
+      agent._completionPageWarning(tabId, 'Completed.', 'success', {
+        ...finishState,
+        url: wizardStepUrl,
+        visibleFormCount: 1,
+        relevantFormCount: 1,
+        successMessages: [],
+      }, wizardStepUrl)?.warning || '',
+      /task-relevant form/i,
+      `${AgentClass.name}: intermediate wizard navigation was accepted as final submission`,
+    );
 
     agent._completionSubmitStates.delete(tabId);
     agent._planExecutionGuards.set(tabId, { enabled: true, requestKind: 'execute', requiresStateChange: false });

@@ -289,6 +289,14 @@ export class Agent {
     this.completionInvariants.delete(tabId);
   }
 
+  _completionTextSignalsSuccess(value) {
+    const text = String(value || '').slice(0, 4000);
+    if (!text) return false;
+    const positive = /\b(?:success(?:ful|fully)?|saved|submitted|created|sent|published|completed|updated|added|approved|received|confirmed|thank you)\b/i;
+    const negative = /\b(?:not|never|failed|failure|error|unable|cannot|can't|could not|couldn't|did not|didn't|was not|wasn't|were not|weren't|invalid|denied|rejected|unsuccessful)\b/i;
+    return positive.test(text) && !negative.test(text);
+  }
+
   _recordCompletionToolResult(tabId, name, args, result) {
     const state = this.completionInvariants.get(tabId);
     if (!state) return null;
@@ -315,8 +323,21 @@ export class Agent {
           ].find(value => typeof value === 'string' && value.trim()) || ''
         : '';
       const observedDocument = String(observedAxScope?.documentToken || '');
+      const completionSignalObserved = [
+        result?.pageTitle,
+        result?.title,
+        result?.page?.title,
+        result?.content,
+        result?.text,
+        result?.pageContent,
+      ].some(value => this._completionTextSignalsSuccess(value));
       const originatingUrl = this._normalizeUrl(submitState.originatingUrl || '');
+      const previousObservedUrl = this._normalizeUrl(submitState.currentUrl || '');
       const normalizedObservedUrl = this._normalizeUrl(observedUrl || submitState.currentUrl || '');
+      const observationChangedDocument = !!(
+        (observedUrl && previousObservedUrl && normalizedObservedUrl !== previousObservedUrl)
+        || (observedDocument && submitState.currentDocument && observedDocument !== submitState.currentDocument)
+      );
       this._completionSubmitStates.set(tabId, {
         ...submitState,
         ...(observedUrl ? { currentUrl: observedUrl } : {}),
@@ -326,6 +347,9 @@ export class Agent {
           || (originatingUrl && normalizedObservedUrl && originatingUrl !== normalizedObservedUrl)
           || (submitState.originatingDocument && observedDocument && submitState.originatingDocument !== observedDocument)
         ),
+        completionSignalObserved: observationChangedDocument
+          ? completionSignalObserved
+          : !!(submitState.completionSignalObserved || completionSignalObserved),
         observedAfterSubmit: true,
       });
     }
@@ -364,6 +388,7 @@ export class Agent {
         || (before && after && before !== after)
       ),
       formValidationFailed: !!result?.formValidationFailed,
+      completionSignalObserved: false,
       observedAfterSubmit: false,
     };
     this._completionSubmitStates.set(tabId, state);
@@ -394,10 +419,8 @@ export class Agent {
     if (normalizeDoneOutcome(outcome) !== 'success' || !pageState) return null;
     const dialogs = Number(pageState.openDialogCount || 0);
     const relevantForms = Number(pageState.relevantFormCount || 0);
-    const positiveSignal = /success|saved|submitted|created|sent|published|complete|done|updated|added|approved/i;
-    const negativeSignal = /\b(?:not|never|failed|failure|error|unable|cannot|can't|could not|couldn't|did not|didn't|was not|wasn't|were not|weren't|invalid|denied|rejected|unsuccessful)\b/i;
     const liveSignals = Array.isArray(pageState.successMessages)
-      ? pageState.successMessages.filter(text => positiveSignal.test(String(text || '')) && !negativeSignal.test(String(text || '')))
+      ? pageState.successMessages.filter(text => this._completionTextSignalsSuccess(text))
       : [];
     const submit = this._completionSubmitStates.get(tabId);
     const executionGuard = this._planExecutionGuards.get(tabId);
@@ -408,13 +431,15 @@ export class Agent {
       submit?.currentUrl
       && this._normalizeUrl(pageUrl || pageState.url || '') === this._normalizeUrl(submit.currentUrl)
     );
+    const observedSuccessSignal = !!submit?.completionSignalObserved || liveSignals.length > 0;
     const verifiedSubmit = !!(
       submit?.dispatched
       && submit.observedAfterSubmit
       && !submit.formValidationFailed
       && currentDocumentMatchesSubmit
-      && (submit.documentChanged || liveSignals.length > 0)
+      && (submit.documentChanged || observedSuccessSignal)
     );
+    const verifiedFinalSubmit = verifiedSubmit && (relevantForms === 0 || observedSuccessSignal);
     const documentKey = this._normalizeUrl(pageUrl || pageState.url || '') || 'unknown-document';
     if (dialogs > 0) {
       const titles = Array.isArray(pageState.dialogTitles) && pageState.dialogTitles.length
@@ -425,7 +450,7 @@ export class Agent {
         warning: `WARNING: A modal/dialog is still open${titles}. Close or complete it and explicitly observe the resulting page before reporting success.`,
       };
     }
-    if (pendingSubmitVerification && relevantForms > 0 && !verifiedSubmit) {
+    if (pendingSubmitVerification && relevantForms > 0 && !verifiedFinalSubmit) {
       return {
         key: `${documentKey}|pending-form|${relevantForms}|${submit?.formValidationFailed ? 'validation' : 'unverified'}`,
         warning: submit?.formValidationFailed
@@ -438,7 +463,7 @@ export class Agent {
       && /\b(created|added|saved|submitted|posted|published|sent|done|completed|finished)\b/i.test(String(summary || ''))
       && /[?&](create|edit|new)\b/i.test(pageUrl || pageState.url || '')
       && liveSignals.length === 0
-      && !verifiedSubmit
+      && !verifiedFinalSubmit
     ) {
       return {
         key: `${documentKey}|create-edit-without-success`,
