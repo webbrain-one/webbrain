@@ -30452,6 +30452,8 @@ test('submit-aware completion accepts the observed AMO finish document and rejec
       `${AgentClass.name}: slow submit navigation stayed blocked after screenshot verification`,
     );
 
+    const missingSubmitResult = agent._normalizeToolResult('click_ax', undefined, true);
+    agent._recordCompletionToolResult(tabId, 'click_ax', { ref_id: 'submit-version' }, missingSubmitResult);
     agent._recordCompletionSubmitAttempt(
       tabId,
       { isSubmit: true },
@@ -30459,8 +30461,10 @@ test('submit-aware completion accepts the observed AMO finish document and rejec
       { ref_id: 'submit-version' },
       submitUrl,
       submitUrl,
-      { success: false, dispatched: true, error: 'post-click inspection failed after dispatch' },
+      missingSubmitResult,
     );
+    assert.equal(agent._completionSubmitStates.get(tabId)?.dispatched, true,
+      `${AgentClass.name}: missing submit response was treated as proof of no dispatch`);
     agent._recordCompletionToolResult(tabId, 'read_page', {}, {
       success: true,
       url: finishUrl,
@@ -30476,6 +30480,18 @@ test('submit-aware completion accepts the observed AMO finish document and rejec
       null,
       `${AgentClass.name}: dispatched submit stayed blocked after explicit confirmation-page observation`,
     );
+
+    agent._recordCompletionSubmitAttempt(
+      tabId,
+      { isSubmit: true },
+      'click_ax',
+      { ref_id: 'submit-version' },
+      submitUrl,
+      submitUrl,
+      { ...missingSubmitResult, dispatched: false, noDispatch: true },
+    );
+    assert.equal(agent._completionSubmitStates.get(tabId)?.dispatched, false,
+      `${AgentClass.name}: explicit no-dispatch result was treated as a possible submit`);
 
     agent._completionSubmitStates.delete(tabId);
     assert.match(

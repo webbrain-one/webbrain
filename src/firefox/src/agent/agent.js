@@ -338,6 +338,16 @@ export class Agent {
     if (!isSubmit) return null;
     const before = this._normalizeUrl(beforeUrl || '');
     const after = this._normalizeUrl(afterUrl || beforeUrl || '');
+    const explicitlyNotDispatched = result?.dispatched === false || result?.noDispatch === true;
+    const dispatchMayHaveOccurred = !!(
+      result
+      && (
+        result.dispatched === true
+        || result.missingToolResponse === true
+        || result.outcomeUnknown === true
+        || (result.success !== false && !result.error)
+      )
+    );
     const state = {
       originatingUrl: beforeUrl || '',
       currentUrl: afterUrl || beforeUrl || '',
@@ -345,12 +355,7 @@ export class Agent {
       currentDocument: afterDocument || beforeDocument || null,
       actionSequence: Number(this.completionInvariants.get(tabId)?.lastAction?.sequence || 0),
       submitLike: true,
-      dispatched: result?.dispatched === true || !!(
-        result
-        && result.dispatched !== false
-        && result.success !== false
-        && !result.error
-      ),
+      dispatched: !explicitlyNotDispatched && dispatchMayHaveOccurred,
       documentChanged: !!(
         result?.pageUrlChanged
         || result?.documentChanged
