@@ -1571,11 +1571,11 @@
       el = document.elementFromPoint(params.x, params.y);
     }
 
-    if (!el) return { success: false, dispatched: false, error: 'Element not found' };
-    const targetIsSubmitControl = _isSubmitControl(el);
-
     // ── Auto-select: if click text matches a <select> option, select it ──
-    if (params.text) {
+    // Only as a rescue when text matching resolved NO clickable element —
+    // otherwise a genuine button/link labeled X would lose to an unrelated
+    // dropdown that merely has an option labeled X.
+    if (!el && params.text) {
       const needle = params.text.trim();
       const lc = needle.toLowerCase();
       const allSels = document.querySelectorAll('select');
@@ -1596,6 +1596,9 @@
         }
       }
     }
+
+    if (!el) return { success: false, dispatched: false, error: 'Element not found' };
+    const targetIsSubmitControl = _isSubmitControl(el);
 
     // <select> intercept: clicking opens a native OS dropdown that cannot be
     // controlled programmatically. Return error so the model uses type_text.
@@ -2037,10 +2040,12 @@
         bubbles: true,
         cancelable: true,
       });
+      // Dispatch once on the target only. The events bubble, so listeners
+      // attached at document/window level already receive them — dispatching
+      // the same event object on document again would fire those listeners
+      // twice per key (double-advancing ARIA listboxes, menus, etc.).
       target.dispatchEvent(down);
-      document.dispatchEvent(down);
       target.dispatchEvent(up);
-      document.dispatchEvent(up);
       if (key === 'Tab') moveTabFocus();
     }
 
@@ -2402,7 +2407,20 @@
   function waitForElement(params) {
     return new Promise((resolve) => {
       const timeout = params.timeout || 5000;
-      const existing = document.querySelector(params.selector);
+      // Validate the selector up front: an invalid selector makes
+      // querySelector throw SyntaxError, which would reject this promise
+      // and leave the caller hanging on a response that never arrives.
+      let existing;
+      try {
+        existing = document.querySelector(params.selector);
+      } catch (e) {
+        resolve({
+          success: false,
+          found: false,
+          error: `Invalid selector "${params.selector}": ${e.message}. Use plain CSS — jQuery/Playwright extensions like :contains() or :has-text() are not supported.`,
+        });
+        return;
+      }
       if (existing) {
         resolve({ success: true, found: true });
         return;
@@ -3852,7 +3870,11 @@
 
     const result = handler();
     if (result instanceof Promise) {
-      result.then(sendResponse);
+      // Always settle sendResponse — a rejecting handler (e.g. a throwing
+      // DOM API) must not leave the caller's await hanging forever.
+      result.then(sendResponse, (err) => {
+        sendResponse({ success: false, error: `${msg.action} failed: ${err?.message || String(err)}` });
+      });
       return true; // async
     }
     sendResponse(result);

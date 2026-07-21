@@ -238,8 +238,25 @@ async function persistTokens(data, fallbackRefreshToken = null) {
  * On a hard failure (refresh token invalid / revoked), wipes the stored
  * tokens and throws — the caller should surface a "please sign in
  * again" state in the UI.
+ *
+ * All callers are deduplicated onto one in-flight request: Anthropic
+ * rotates refresh tokens on every refresh, so two concurrent refreshes
+ * would present the SAME refresh token twice — the first succeeds, the
+ * second gets HTTP 400, and the error handler would then wipe the
+ * freshly-persisted tokens, spuriously signing the user out.
  */
-export async function refreshClaudeAccessToken() {
+let _inflightRefresh = null;
+
+export function refreshClaudeAccessToken() {
+  if (!_inflightRefresh) {
+    _inflightRefresh = _doRefreshClaudeAccessToken().finally(() => {
+      _inflightRefresh = null;
+    });
+  }
+  return _inflightRefresh;
+}
+
+async function _doRefreshClaudeAccessToken() {
   const stored = await chrome.storage.local.get([STORAGE_KEY]);
   const tokens = stored[STORAGE_KEY];
   if (!tokens?.refreshToken) throw new Error('No Claude refresh token on file — sign in first.');

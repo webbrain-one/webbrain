@@ -201,12 +201,16 @@
   // Interactive-element discovery.
   //
   // IMPORTANT: this is the single source of truth for what counts as an
-  // "interactive element" on a page. `getInteractiveElements`,
-  // `clickElement({index})` and `typeText({index})` MUST all go through
-  // `queryInteractive()` so that index N means the same element in all
-  // three code paths. Historically they used three different selector
-  // lists, which caused the "missing inputs" / "clicked the wrong thing"
-  // bug on complex pages (shadow DOM, overlays, rich editors).
+  // "interactive element" on a page. The agent-facing enumeration
+  // (`get_interactive_elements` → `getInteractiveElementsFull`) and every
+  // index-based follow-up action (`clickElement({index})`,
+  // `typeText({index})`) MUST all go through `queryInteractiveFull()` so
+  // that index N means the same element in all code paths. Historically
+  // they used different selector lists / orderings, which caused the
+  // "missing inputs" / "clicked the wrong thing" bug on complex pages
+  // (shadow DOM, overlays, rich editors). The legacy `queryInteractive()`
+  // order is still used by the plain content handler
+  // (`getInteractiveElements`), but it is not the list the agent sees.
   // ---------------------------------------------------------------------
   const INTERACTIVE_SELECTORS = [
     'a[href]',
@@ -398,7 +402,7 @@
     if (params?.index == null) return null;
     const index = Number(params.index);
     if (!Number.isInteger(index) || index < 0) return null;
-    return queryInteractive()[index] || null;
+    return queryInteractiveForToolIndex()[index] || null;
   };
 
   /**
@@ -1302,20 +1306,20 @@
     } else if (params.selector) {
       el = safeQuerySelector(params.selector);
     } else if (params.index != null) {
-      // Must use the SAME traversal as getInteractiveElements so the
+      // Must use the SAME traversal as get_interactive_elements so the
       // index the agent saw is the index we resolve.
-      const interactive = queryInteractive();
+      const interactive = queryInteractiveForToolIndex();
       el = interactive[params.index];
       if (!el) return { ..._staleIndexError(params.index, interactive), dispatched: false };
     } else if (params.x != null && params.y != null) {
       el = document.elementFromPoint(params.x, params.y);
     }
 
-    if (!el) return { success: false, dispatched: false, error: 'Element not found' };
-    const targetIsSubmitControl = _isSubmitControl(el);
-
     // ── Auto-select: if click text matches a <select> option, select it ──
-    if (params.text) {
+    // Only as a rescue when text matching resolved NO clickable element —
+    // otherwise a genuine button/link labeled X would lose to an unrelated
+    // dropdown that merely has an option labeled X.
+    if (!el && params.text) {
       const needle = params.text.trim();
       const lc = needle.toLowerCase();
       const allSels = document.querySelectorAll('select');
@@ -1336,6 +1340,9 @@
         }
       }
     }
+
+    if (!el) return { success: false, dispatched: false, error: 'Element not found' };
+    const targetIsSubmitControl = _isSubmitControl(el);
 
     // <select> intercept: clicking opens a native OS dropdown that cannot be
     // controlled programmatically. Return error so the model uses type_text.
@@ -1600,8 +1607,8 @@
     if (params.selector) {
       el = safeQuerySelector(params.selector);
     } else if (params.index != null) {
-      // Same index space as getInteractiveElements / clickElement.
-      const interactive = queryInteractive();
+      // Same index space as get_interactive_elements / clickElement.
+      const interactive = queryInteractiveForToolIndex();
       el = interactive[params.index];
       if (!el) {
         const stale = _staleIndexError(params.index, interactive);
@@ -1765,10 +1772,12 @@
         bubbles: true,
         cancelable: true,
       });
+      // Dispatch once on the target only. The events bubble, so listeners
+      // attached at document/window level already receive them — dispatching
+      // the same event object on document again would fire those listeners
+      // twice per key (double-advancing ARIA listboxes, menus, etc.).
       target.dispatchEvent(down);
-      document.dispatchEvent(down);
       target.dispatchEvent(up);
-      document.dispatchEvent(up);
       if (key === 'Tab') moveTabFocus();
     }
 
@@ -2132,7 +2141,20 @@
   function waitForElement(params) {
     return new Promise((resolve) => {
       const timeout = params.timeout || 5000;
-      const existing = document.querySelector(params.selector);
+      // Validate the selector up front: an invalid selector makes
+      // querySelector throw SyntaxError, which would reject this promise
+      // and leave the caller hanging on a response that never arrives.
+      let existing;
+      try {
+        existing = document.querySelector(params.selector);
+      } catch (e) {
+        resolve({
+          success: false,
+          found: false,
+          error: `Invalid selector "${params.selector}": ${e.message}. Use plain CSS — jQuery/Playwright extensions like :contains() or :has-text() are not supported.`,
+        });
+        return;
+      }
       if (existing) {
         resolve({ success: true, found: true });
         return;
@@ -2506,7 +2528,7 @@
     };
   }
 
-  function getInteractiveElementsFull() {
+  function queryInteractiveFull() {
     const collected = []; // {el, rect, inShadow}
     const seen = new Set(); // dedupe nested wrappers (button > span > svg etc.)
 
@@ -2589,7 +2611,20 @@
       return a.rect.left - b.rect.left;
     });
 
-    return collected.map((c, i) => {
+    return collected;
+  }
+
+  function queryInteractiveForToolIndex() {
+    // The agent maps get_interactive_elements to the full/CDP collector
+    // above, so index-based follow-up actions (click, type_text) must
+    // resolve against that same ordering. The legacy queryInteractive()
+    // order is still used by the plain content handler but it is not the
+    // list the agent sees.
+    return queryInteractiveFull().map(c => c.el);
+  }
+
+  function getInteractiveElementsFull() {
+    return queryInteractiveFull().map((c, i) => {
       const el = c.el;
       return {
         index: i,
@@ -4618,7 +4653,11 @@
 
     const result = handler();
     if (result instanceof Promise) {
-      result.then(sendResponse);
+      // Always settle sendResponse — a rejecting handler (e.g. a throwing
+      // DOM API) must not leave the caller's await hanging forever.
+      result.then(sendResponse, (err) => {
+        sendResponse({ success: false, error: `${msg.action} failed: ${err?.message || String(err)}` });
+      });
       return true; // async
     }
     sendResponse(result);
