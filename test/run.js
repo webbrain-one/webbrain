@@ -30632,10 +30632,18 @@ test('submit-aware completion accepts the observed AMO finish document and rejec
         { type: 'image_url', image_url: { url: 'data:image/png;base64,AAAA' } },
       ],
     });
-    const persisted = JSON.stringify(agent._conversationStorageEntry(tabId));
+    const persistedEntry = agent._conversationStorageEntry(tabId);
+    const persisted = JSON.stringify(persistedEntry);
     assert.doesNotMatch(persisted, /data:image|base64|AAAA/, `${AgentClass.name}: blocked done screenshot leaked into persisted history`);
     assert.match(persisted, /screenshot omitted from persisted history/i,
       `${AgentClass.name}: persisted history did not retain a compact screenshot marker`);
+    assert.equal(agent._isAgentInjectedUserContent(persistedEntry.messages.at(-1)?.content), true,
+      `${AgentClass.name}: persisted screenshot marker was not recognized as agent-injected content`);
+    agent.conversations.set(tabId, persistedEntry.messages);
+    assert.equal(agent._latestTaskText(tabId), 'Submit this extension version.',
+      `${AgentClass.name}: persisted screenshot marker replaced the latest task after restart`);
+    assert.equal(agent._progressTaskAnchorText(tabId), 'Submit this extension version.',
+      `${AgentClass.name}: persisted screenshot marker replaced the progress task anchor after restart`);
     agent._clearCompletionInvariant(tabId, token);
   }
 });

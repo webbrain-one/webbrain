@@ -8054,6 +8054,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       || c.startsWith('[PLAN EXECUTION BLOCK')
       || c.startsWith('[NAVIGATION OCCURRED')
       || c.startsWith('[Auto-screenshot')
+      || c.startsWith('[Completion verification screenshot omitted')
       || c.startsWith('[UNTRUSTED CAPTURE')
       || c.startsWith('[UNTRUSTED DOCUMENT');
   }
