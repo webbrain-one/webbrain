@@ -146,12 +146,44 @@ export class GnippetsE2EClient {
       method,
       headers: {
         authorization: `Bearer ${this.controlToken}`,
+        accept: 'application/json',
+        'user-agent': 'Mozilla/5.0 (compatible; WebBrainCloudE2E/1.0; +https://webbrain.cloud)',
         ...(body === undefined ? {} : { 'content-type': 'application/json' }),
       },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
-    const value = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(value.error || `Gnippets E2E returned HTTP ${response.status}.`);
+    const text = await response.text();
+    let value;
+    try { value = text ? JSON.parse(text) : {}; } catch { value = {}; }
+    if (!response.ok) {
+      const header = (name) => String(response.headers?.get?.(name) || 'unknown')
+        .replace(/\s+/g, ' ')
+        .slice(0, 160);
+      let preview = text;
+      if (this.controlToken) preview = preview.split(this.controlToken).join('[redacted]');
+      preview = preview
+        .replace(/Bearer\s+[^\s<]+/gi, 'Bearer [redacted]')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 240);
+      const diagnostics = {
+        server: header('server'),
+        cf_ray: header('cf-ray'),
+        cf_mitigated: header('cf-mitigated'),
+        content_type: header('content-type'),
+        body_preview: preview,
+      };
+      const summary = Object.entries(diagnostics)
+        .filter(([, diagnostic]) => diagnostic && diagnostic !== 'unknown')
+        .map(([name, diagnostic]) => `${name}=${diagnostic}`)
+        .join('; ');
+      const error = new Error(
+        value.error || `Gnippets E2E returned HTTP ${response.status}${summary ? ` (${summary})` : ''}.`,
+      );
+      error.status = response.status;
+      error.body = diagnostics;
+      throw error;
+    }
     return value;
   }
 

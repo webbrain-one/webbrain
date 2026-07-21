@@ -18,6 +18,10 @@ on:
         description: Parallel incognito browsers
         required: true
         default: "2"
+      scenario:
+        description: Optional single scenario ID
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -44,7 +48,15 @@ jobs:
           GNIPPETS_BASE_URL: ${{ vars.GNIPPETS_BASE_URL }}
           GNIPPETS_E2E_CONTROL_TOKEN: ${{ secrets.GNIPPETS_E2E_CONTROL_TOKEN }}
           CAPSOLVER_API_KEY: ${{ secrets.CAPSOLVER_API_KEY }}
-        run: node ci/run.mjs --pack "${{ inputs.pack }}" --concurrency "${{ inputs.concurrency }}"
+          E2E_PACK: ${{ inputs.pack }}
+          E2E_CONCURRENCY: ${{ inputs.concurrency }}
+          E2E_SCENARIO: ${{ inputs.scenario }}
+        run: |
+          args=(--pack "$E2E_PACK" --concurrency "$E2E_CONCURRENCY")
+          if [[ -n "$E2E_SCENARIO" ]]; then
+            args+=(--scenario "$E2E_SCENARIO")
+          fi
+          node ci/run.mjs "${args[@]}"
 
       - name: Upload traces, recordings, and rubrics
         if: always()
