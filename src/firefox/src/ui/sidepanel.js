@@ -2879,7 +2879,11 @@ async function saveLatestWorkflow(name, tabId = currentTabId) {
       showComposerToast(savedWorkflowFailureMessage(res), { duration: 7000 });
       return;
     }
-    showComposerToast(t('sp.workflows.saved', { name: res.workflow?.name || name }));
+    const savedMessage = t('sp.workflows.saved', { name: res.workflow?.name || name });
+    const warnings = Array.isArray(res.warnings) ? res.warnings.filter(Boolean) : [];
+    showComposerToast(warnings.length ? `${savedMessage} ${warnings.join(' ')}` : savedMessage, {
+      duration: warnings.length ? 10000 : 3500,
+    });
   } catch (error) {
     if (currentTabId === tabId) showComposerToast(t('sp.workflows.error', { msg: error.message }), { duration: 7000 });
   }

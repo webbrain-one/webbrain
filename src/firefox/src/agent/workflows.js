@@ -117,6 +117,20 @@ export function workflowUrlMatches(scope, value) {
   return expected.every((part, index) => part === ':id' || part === actual[index]);
 }
 
+function normalizeWorkflowScope(input) {
+  const origin = cleanText(input?.origin, 300);
+  try {
+    const parsed = new URL(origin);
+    if (!['http:', 'https:'].includes(parsed.protocol) || parsed.origin !== origin) return null;
+  } catch {
+    return null;
+  }
+  return {
+    origin,
+    pathFamily: cleanText(input?.pathFamily || '/', 500) || '/',
+  };
+}
+
 function parseAttributes(text) {
   const attrs = {};
   const regex = /([A-Za-z_][\w-]*)="([^"]*)"/g;
@@ -294,6 +308,7 @@ export function compileWorkflowFromTrace(run, events, options = {}) {
   const parameters = [];
   const steps = [];
   const refs = new Map();
+  let currentUrl = safeHttpUrl(run.tabUrl);
   let toolCount = 0;
   let skippedToolCount = 0;
 
@@ -302,6 +317,11 @@ export function compileWorkflowFromTrace(run, events, options = {}) {
     toolCount += 1;
     const data = event.data || {};
     if (data.name === 'get_accessibility_tree') {
+      const observedUrl = safeHttpUrl(data.result?.currentUrl || data.result?.pageUrl || data.result?.url);
+      if (observedUrl && observedUrl !== currentUrl) {
+        currentUrl = observedUrl;
+        refs.clear();
+      }
       for (const descriptor of parseAccessibilityTreeDescriptors(treeTextFromResult(data.result))) {
         refs.set(descriptor.refId, descriptor);
       }
@@ -320,13 +340,24 @@ export function compileWorkflowFromTrace(run, events, options = {}) {
       warnings.push(`Skipped ${data.name}: it had no safe, reusable target or arguments.`);
       continue;
     }
+    const stepScope = workflowUrlScope(currentUrl);
     steps.push({
       id: `step_${steps.length + 1}`,
       tool: data.name,
       args,
       ...(target ? { target } : {}),
+      ...(stepScope ? { scope: stepScope } : {}),
       expected: expectedPostcondition(data.result),
     });
+    const resultUrl = safeHttpUrl(
+      data.result?.currentUrl
+      || data.result?.pageUrl
+      || (data.name === 'navigate' ? rawArgs.url : data.result?.url),
+    );
+    if (resultUrl && resultUrl !== currentUrl) {
+      currentUrl = resultUrl;
+      refs.clear();
+    }
     if (steps.length >= MAX_STEPS) break;
   }
 
@@ -400,13 +431,8 @@ export function normalizeSavedWorkflow(input, options = {}) {
   if (input?.schema !== SAVED_WORKFLOW_SCHEMA) return null;
   const name = normalizeSavedWorkflowName(input?.name);
   const id = cleanId(input?.id, createSavedWorkflowId(ts));
-  const origin = cleanText(input?.start?.origin, 300);
-  let validOrigin = '';
-  try {
-    const parsed = new URL(origin);
-    if (['http:', 'https:'].includes(parsed.protocol) && parsed.origin === origin) validOrigin = origin;
-  } catch {}
-  if (!name || !id || !validOrigin) return null;
+  const start = normalizeWorkflowScope(input?.start);
+  if (!name || !id || !start) return null;
 
   const parameters = [];
   const parameterIds = new Set();
@@ -426,12 +452,14 @@ export function normalizeSavedWorkflow(input, options = {}) {
     if (!args || typeof args !== 'object' || Array.isArray(args)) continue;
     if ((tool === 'type_ax' || tool === 'set_field') && !args.text?.[WORKFLOW_PARAM_REF_KEY]) continue;
     const target = normalizeTarget(raw?.target);
+    const scope = normalizeWorkflowScope(raw?.scope);
     if (['click_ax', 'set_checked', 'type_ax', 'set_field'].includes(tool) && !target) continue;
     steps.push({
       id: cleanId(raw?.id, `step_${steps.length + 1}`),
       tool,
       args,
       ...(target ? { target } : {}),
+      ...(scope ? { scope } : {}),
       expected: normalizeExpected(raw?.expected),
     });
     if (steps.length >= MAX_STEPS) break;
@@ -449,10 +477,7 @@ export function normalizeSavedWorkflow(input, options = {}) {
       runId: cleanId(input?.source?.runId),
       webbrainVersion: cleanText(input?.source?.webbrainVersion, 40),
     },
-    start: {
-      origin: validOrigin,
-      pathFamily: cleanText(input?.start?.pathFamily || '/', 500) || '/',
-    },
+    start,
     parameters,
     steps,
     stats: {

@@ -432,6 +432,35 @@ job. A short queue drains best-effort through the active provider using the
 existing cost allowance guard; cost exhaustion skips extraction silently, and
 other failures retry once.
 
+### Saved workflows (`agent/workflows.js`)
+
+Saved workflows are compiled artifacts, not serialized trace events. The
+background reads the newest successful trace in the active conversation and
+normalizes its replayable actions into `webbrain-workflow/1`, stored under
+`wb_saved_workflows_v1`. Compilation removes historical element references,
+coordinates, query strings, fragments, and typed values. Every typed field
+value becomes a declared runtime parameter; unsupported or failed actions are
+skipped and reported to the user as save warnings.
+
+Each compiled step contains semantic target metadata (role, accessible name,
+label, field identity, link, or placeholder), an expected postcondition, and
+the origin/path family observed before that action. `/workflow --run <id>`
+collects parameters in an ephemeral side-panel form. The replay executor then:
+
+1. checks the current origin/path family before every step;
+2. reads a fresh accessibility tree and resolves exactly one semantic match;
+3. calls `_executeToolBatch()` so the existing permission, form-submit,
+   verification, abort, and action-normalization gates remain authoritative;
+4. validates the saved postcondition; and
+5. either continues deterministically, delegates a known-safe mismatch to the
+   normal Agent, or stops when a state-changing action has an unknown outcome.
+
+Replay does not set `currentRunId`, because ordinary tool tracing would retain
+runtime values. It creates a separate run containing sanitized notes and
+redacted UI tool events. Runtime parameter values are also omitted from the
+fallback prompt and user-memory extraction. Chrome and Firefox ship identical
+workflow schema/compiler code and the same replay policy.
+
 ### Scheduled Tasks (`scheduler.js`)
 
 The scheduler lets the agent defer work to a future browser session using the browser's `alarms` API. It lives in `src/chrome/src/agent/scheduler.js` (and the Firefox mirror) and is instantiated as `ScheduledJobManager` in the background script.

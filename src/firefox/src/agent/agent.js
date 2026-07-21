@@ -10772,6 +10772,26 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       for (let index = 0; index < workflow.steps.length; index++) {
         if (this._checkAbort(tabId)) return finishStopped('stopped by the user', index);
         const step = workflow.steps[index];
+        const stepUrl = await this._currentUrl(tabId);
+        if (step.scope && !workflowUrlMatches(step.scope, stepUrl)) {
+          const reason = 'page scope mismatch';
+          trace.recordNote(traceRunId, index + 1, 'workflow_replay_scope_miss', {
+            workflowId: workflow.id,
+            stepId: step.id,
+            tool: step.tool,
+            expectedOrigin: step.scope.origin,
+            expectedPathFamily: step.scope.pathFamily,
+          });
+          traceStatus = 'workflow_fallback';
+          finalContent = `Deterministic replay paused at step ${index + 1}; continuing with the agent.`;
+          return {
+            status: 'fallback',
+            reason,
+            stepIndex: index,
+            matchedSteps,
+            prompt: workflowFallbackPrompt(workflow, index, reason),
+          };
+        }
         let executionArgs;
         try {
           executionArgs = resolveWorkflowArgs(step.args, parameters);
@@ -10832,7 +10852,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           }
           onUpdate(type, data);
         };
-        const beforeUrl = await this._currentUrl(tabId);
+        const beforeUrl = stepUrl;
         const batch = await this._executeToolBatch(
           tabId,
           [toolCall],

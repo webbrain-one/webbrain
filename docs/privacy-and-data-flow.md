@@ -117,6 +117,30 @@ When enabled (Settings → Display → "Record traces"), every agent run is writ
 
 The Traces page (`ui/traces.html`) reads from local IndexedDB only. Export produces a JSON blob saved to the user's Downloads folder. **No trace data ever leaves the browser.**
 
+### Saved Workflows
+
+`/workflow --save <name>` locally compiles the latest successful trace into a
+separate `webbrain-workflow/1` record in browser local storage
+(`wb_saved_workflows_v1`). The saved record contains action names, sanitized
+arguments, semantic target descriptors, URL origin/path families,
+postconditions, and parameter descriptors. It does not contain typed field
+values, raw historical `ref_id` values, coordinates, URL query strings, or URL
+fragments.
+
+`/workflow --run <id>` collects declared values in a temporary side-panel form
+and sends them directly to the background replay executor. The values are not
+written to the workflow, chat text, retry payload, user memory, replay trace,
+or Agent fallback prompt. They necessarily reach the active page when the
+requested field action runs. A source trace is a separate opt-in record and may
+still contain the original raw tool arguments; saving a workflow does not
+delete or redact that source trace.
+
+Replay traces contain workflow/step IDs, semantic match status and score,
+postcondition status, fallback status, and estimated model calls saved. They do
+not contain runtime parameter values or freshly resolved element references.
+If deterministic replay cannot safely continue, a fallback Agent receives only
+saved metadata and must ask the user again for any still-needed value.
+
 ### Settings
 
 Provider configs (API keys, base URLs, model selections) are stored in `chrome.storage.local`. API keys are in plaintext — this is a personal-computer tool and the storage is sandboxed by the browser. The extension has no mechanism to exfiltrate these keys.

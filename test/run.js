@@ -43614,6 +43614,61 @@ test('saved workflow compiler removes historical refs and parameterizes every ty
   }
 });
 
+test('saved workflow compiler binds each action to its observed URL family', () => {
+  const run = {
+    runId: 'run_scoped',
+    status: 'done',
+    tabUrl: 'https://example.com/start?session=discard-me',
+  };
+  const events = [
+    {
+      seq: 1,
+      kind: 'tool',
+      data: {
+        name: 'get_accessibility_tree',
+        args: {},
+        result: { currentUrl: 'https://example.com/start?session=discard-me', pageContent: 'button "Open order" [ref_1]' },
+      },
+    },
+    {
+      seq: 2,
+      kind: 'tool',
+      data: {
+        name: 'click_ax',
+        args: { ref_id: 'ref_1' },
+        result: { success: true, pageUrlChanged: true, currentUrl: 'https://example.com/orders/12345?token=discard-me' },
+      },
+    },
+    {
+      seq: 3,
+      kind: 'tool',
+      data: {
+        name: 'get_accessibility_tree',
+        args: {},
+        result: { currentUrl: 'https://example.com/orders/12345?token=discard-me', pageContent: 'checkbox "Archive" [ref_2]' },
+      },
+    },
+    {
+      seq: 4,
+      kind: 'tool',
+      data: {
+        name: 'set_checked',
+        args: { ref_id: 'ref_2', checked: true },
+        result: { success: true, checkedAfter: true },
+      },
+    },
+  ];
+
+  for (const module of [SavedWorkflowsCh, SavedWorkflowsFx]) {
+    const { workflow } = module.compileWorkflowFromTrace(run, events, { name: 'Archive order', now: 1000 });
+    assert.deepEqual(workflow.steps.map((step) => step.scope), [
+      { origin: 'https://example.com', pathFamily: '/start' },
+      { origin: 'https://example.com', pathFamily: '/orders/:id' },
+    ]);
+    assert.doesNotMatch(JSON.stringify(workflow), /discard-me|12345/);
+  }
+});
+
 test('saved workflow picks only the latest successful run from the active conversation', async () => {
   const calls = [];
   const reader = {
@@ -43659,6 +43714,7 @@ test('saved workflow slash commands are out-of-band and wired in both browsers',
     assert.match(source, /sendToBackground\('list_saved_workflows'\)/);
     assert.match(source, /sendToBackground\('delete_saved_workflow'/);
     assert.match(source, /sendToBackground\('get_saved_workflow', \{ id: workflowId \}\)/);
+    assert.match(source, /Array\.isArray\(res\.warnings\)/);
     assert.match(source, /input\.type = parameter\.sensitive \? 'password' : 'text'/);
     assert.match(source, /inputs\.forEach\(\(input\) => \{ input\.value = ''; \}\)/);
     assert.doesNotMatch(source, /retryPayload[^\n]+workflowParameters/);
@@ -43877,6 +43933,40 @@ for (const [browser, AgentClass] of [['chrome', AgentCh], ['firefox', AgentFx]])
     assert.match(result.reason, /tool_failed/);
     assert.equal(updates.some((update) => update.type === 'workflow_fallback'), false);
     assert.equal(agent.isRunning(79), false);
+  });
+
+  test(`${browser} saved workflow replay delegates before acting on the wrong page family`, async () => {
+    const workflow = {
+      schema: SavedWorkflowsCh.SAVED_WORKFLOW_SCHEMA,
+      id: 'workflow_scoped',
+      name: 'Archive order',
+      start: { origin: 'https://example.com', pathFamily: '/orders/:id' },
+      parameters: [],
+      steps: [{
+        id: 'step_1',
+        tool: 'click_ax',
+        args: {},
+        target: { role: 'button', name: 'Archive' },
+        scope: { origin: 'https://example.com', pathFamily: '/orders/:id' },
+        expected: { kind: 'tool_success' },
+      }],
+    };
+    const agent = new AgentClass({ getActive: () => ({ model: 'test-model' }) });
+    let urlReads = 0;
+    agent._hydrate = async () => {};
+    agent._persist = () => {};
+    agent.ensureConversationId = async () => 'conversation_test';
+    agent._currentUrl = async () => (++urlReads === 1
+      ? 'https://example.com/orders/12345'
+      : 'https://example.com/settings');
+    agent.executeTool = async () => { throw new Error('must not inspect or act on a scope mismatch'); };
+    agent._executeToolBatch = async () => { throw new Error('must not execute on a scope mismatch'); };
+
+    const result = await agent.replaySavedWorkflow(80, workflow, {});
+
+    assert.equal(result.status, 'fallback');
+    assert.equal(result.reason, 'page scope mismatch');
+    assert.equal(agent.isRunning(80), false);
   });
 }
 

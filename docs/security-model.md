@@ -167,6 +167,24 @@ The traces page (`ui/traces.html`) reads from local IndexedDB only. Export produ
 
 ---
 
+## Saved-Workflow Replay Boundary
+
+Saved workflows deliberately do not replay raw trace calls. Compilation uses an
+allowlist, replaces every typed value with a runtime parameter, discards raw
+references/coordinates and URL query or fragment data, and binds each action to
+an origin/path family plus a semantic target and postcondition.
+
+Before an action, replay must be on the recorded URL family and find one
+unambiguous target in a fresh accessibility tree. The action is dispatched
+through the same capability-by-origin permission gate, submit confirmation,
+form validation, and trusted-event path as a normal Act run. A known pre-action
+mismatch can be delegated to the Agent with no parameter values. A failed or
+unverified state-changing action whose dispatch cannot be disproved is treated
+as outcome-unknown and is never automatically retried. Replay telemetry and UI
+events redact runtime values and fresh `ref_id` values.
+
+---
+
 ## Firefox Differences
 
 Firefox has no CDP (`debugger` permission), so:
