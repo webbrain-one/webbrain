@@ -1,0 +1,45 @@
+{
+  "id": "049",
+  "user": "compose an email to alice@example.com",
+  "mode": "act",
+  "tab": {
+    "url": "https://mail.google.com/mail/u/0/#inbox",
+    "title": "Inbox (3) — Gmail"
+  },
+  "latencyMs": 4002,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "\nI'll help you compose an email to alice@example.com. Let me start by reading the current page to see the Gmail interface.\n\n",
+  "usage": {
+    "prompt_tokens": 17541,
+    "completion_tokens": 106,
+    "total_tokens": 17647,
+    "cost": 0.0017981,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 17525,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.0017981,
+      "upstream_inference_prompt_cost": 0.0017557,
+      "upstream_inference_completions_cost": 0.0000424
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 49,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

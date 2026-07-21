@@ -1,0 +1,45 @@
+{
+  "id": "035",
+  "user": "fill the email field with bob@example.com",
+  "mode": "act",
+  "tab": {
+    "url": "https://github.com/login",
+    "title": "Sign in to GitHub"
+  },
+  "latencyMs": 2195,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "\nI'll fill the email field on the GitHub login page with bob@example.com. Let me first read the page to see the form fields.\n\n",
+  "usage": {
+    "prompt_tokens": 17604,
+    "completion_tokens": 100,
+    "total_tokens": 17704,
+    "cost": 0.0018006,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 17602,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.0018006,
+      "upstream_inference_prompt_cost": 0.0017606,
+      "upstream_inference_completions_cost": 0.00004
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 41,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

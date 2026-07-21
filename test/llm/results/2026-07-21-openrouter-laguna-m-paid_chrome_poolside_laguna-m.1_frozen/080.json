@@ -1,0 +1,45 @@
+{
+  "id": "080",
+  "user": "close all my tabs except this one",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 6767,
+  "error": null,
+  "firstToolCall": {
+    "name": "execute_js",
+    "args": {
+      "code": "chrome.tabs.query({currentWindow: true}, function(tabs) {\n  const otherTabs = tabs.filter(tab => tab.active === false);\n  console.log('Other tabs to close:', otherTabs.length);\n  otherTabs.forEach(tab => {\n    chrome.tabs.remove(tab.id);\n  });\n});"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "\nI'll try to close all other tabs for you. Let me check if I can access the browser's tab management APIs.\n\n",
+  "usage": {
+    "prompt_tokens": 17040,
+    "completion_tokens": 396,
+    "total_tokens": 17436,
+    "cost": 0.001864,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 17024,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.001864,
+      "upstream_inference_prompt_cost": 0.0017056,
+      "upstream_inference_completions_cost": 0.0001584
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 279,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

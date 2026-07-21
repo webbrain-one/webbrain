@@ -1,0 +1,45 @@
+{
+  "id": "054",
+  "user": "download this image",
+  "mode": "act",
+  "tab": {
+    "url": "https://example.com/photo.jpg",
+    "title": "photo.jpg"
+  },
+  "latencyMs": 2924,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "\nI'll download this image for you. Let me first check the page and then save it.\n\n",
+  "usage": {
+    "prompt_tokens": 17039,
+    "completion_tokens": 149,
+    "total_tokens": 17188,
+    "cost": 0.0017637,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 17037,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.0017637,
+      "upstream_inference_prompt_cost": 0.0017041,
+      "upstream_inference_completions_cost": 0.0000596
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 99,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

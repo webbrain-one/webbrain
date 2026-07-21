@@ -1,0 +1,45 @@
+{
+  "id": "083",
+  "user": "what time is it in tokyo right now",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 2369,
+  "error": null,
+  "firstToolCall": {
+    "name": "execute_js",
+    "args": {
+      "code": "new Date().toLocaleString(\"en-US\", {timeZone: \"Asia/Tokyo\", hour: 'numeric', minute: 'numeric', second: 'numeric', timeZoneName: 'short'})"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "\nI'll check the current time in Tokyo for you.\n\n",
+  "usage": {
+    "prompt_tokens": 17042,
+    "completion_tokens": 119,
+    "total_tokens": 17161,
+    "cost": 0.001752,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 17040,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.001752,
+      "upstream_inference_prompt_cost": 0.0017044,
+      "upstream_inference_completions_cost": 0.0000476
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 40,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}
