@@ -114,6 +114,7 @@ jobs:
           model: ${{ inputs.model }}
           system-prompt-file: .github/prompts/minor-release-changelog-system.txt
           prompt-file: .github/prompts/minor-release-changelog-user.txt
+          max-completion-tokens: 1200
           input: |
             version: ${{ steps.release_meta.outputs.new_version }}
             date: ${{ steps.release_meta.outputs.release_date }}
