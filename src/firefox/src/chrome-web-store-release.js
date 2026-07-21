@@ -59,7 +59,13 @@ async function responsePayload(response) {
   try { return JSON.parse(text); } catch { return { message: text.slice(0, 1000) }; }
 }
 function responseError(response, payload) {
-  const raw = payload?.error?.message || payload?.message || `HTTP ${response.status}`;
+  const message = payload?.error?.message || payload?.message || `HTTP ${response.status}`;
+  const details = payload?.error?.details;
+  let raw = String(message);
+  if (details != null) {
+    const detailText = typeof details === 'string' ? details : JSON.stringify(details);
+    if (detailText && detailText !== '[]' && detailText !== '{}') raw += ` Details: ${detailText}`;
+  }
   return String(raw).replace(/[A-Za-z0-9_-]{40,}/g, '[REDACTED]').slice(0, 1000);
 }
 function decodeBase64(value) {

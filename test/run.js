@@ -39527,9 +39527,10 @@ test('Chrome Web Store release uses an always-on protected-page guard and opt-in
   assert.equal(failure.dispatched, false);
   assert.equal(failure.recoverySkill, 'chrome-web-store-release');
   assert.match(failure.error, /Do not retry/i);
-  for (const toolName of ['wait_for_stable', 'get_accessibility_tree', 'read_page', 'click_ax', 'upload_file', 'execute_js', 'get_frames']) {
+  for (const toolName of ['wait_for_stable', 'get_accessibility_tree', 'read_page', 'click_ax', 'upload_file', 'download_resource_from_page', 'execute_js', 'get_frames']) {
     assert.equal(isChromeProtectedPageDomTool(toolName), true, `chrome: ${toolName} should be stopped before protected-page dispatch`);
   }
+  assert.equal(isChromeProtectedPageDomTool('download_files'), false, 'chrome: direct URL downloads should remain available without page DOM');
   assert.equal(isChromeProtectedPageDomTool('screenshot'), false, 'chrome: screenshots remain an optional read-only fallback');
   assert.equal(isChromeProtectedPageDomTool('chrome_web_store_status'), false, 'chrome: trusted release tools must bypass the DOM guard');
 
@@ -39634,6 +39635,32 @@ test('Chrome Web Store release uses an always-on protected-page guard and opt-in
     assert.equal(ambiguousFailure.dispatched, true, `${label}: post-dispatch failure lost its dispatch marker`);
     assert.equal(ambiguousFailure.outcomeUnknown, true, `${label}: post-dispatch failure should remain ambiguous`);
     assert.notEqual(ambiguousFailure.noDispatch, true, `${label}: ambiguous upload must retain completion debt`);
+
+    const warningSecret = 'opaque_validation_token_abcdefghijklmnopqrstuvwxyz0123456789';
+    const warningFailure = await runtime.executeChromeWebStoreSkillTool(publishTool, {}, {
+      storage,
+      fetchImpl: async () => ({
+        ok: false,
+        status: 400,
+        text: async () => JSON.stringify({
+          error: {
+            message: 'Publish blocked by validation warnings.',
+            details: [{
+              reason: 'MISSING_PRIVACY_DISCLOSURE',
+              message: 'Add the required privacy disclosure before publishing.',
+              opaqueToken: warningSecret,
+            }],
+          },
+        }),
+      }),
+      accessToken: 'test-token',
+    });
+    assert.equal(warningFailure.success, false, `${label}: warning-blocked publish should fail`);
+    assert.match(warningFailure.error, /Publish blocked by validation warnings/, `${label}: warning failure lost its summary`);
+    assert.match(warningFailure.error, /MISSING_PRIVACY_DISCLOSURE/, `${label}: warning failure lost its detail code`);
+    assert.match(warningFailure.error, /required privacy disclosure/, `${label}: warning failure lost its remediation detail`);
+    assert.equal(warningFailure.error.includes(warningSecret), false, `${label}: warning failure leaked an opaque token`);
+    assert.ok(warningFailure.error.length <= 1000, `${label}: warning detail summary exceeded its bound`);
   }
 
   const originalChrome = globalThis.chrome;

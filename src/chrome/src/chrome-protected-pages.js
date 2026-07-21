@@ -5,6 +5,7 @@ const PROTECTED_DOM_TOOLS = new Set([
   'inspect_network_requests', 'inspect_event_listeners',
   'verify_form', 'get_shadow_dom', 'shadow_dom_query', 'get_frames',
   'iframe_read', 'iframe_click', 'iframe_type', 'upload_file',
+  'download_resource_from_page',
   'read_page', 'get_interactive_elements', 'get_accessibility_tree',
   'click_ax', 'set_checked', 'type_ax', 'set_field', 'click', 'type_text',
   'press_keys', 'scroll', 'extract_data', 'inspect_element_styles',
