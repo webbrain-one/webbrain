@@ -4625,6 +4625,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       Capability.TYPE,
       Capability.EXECUTE_JS,
       Capability.DEV_PATCH,
+      Capability.NETWORK,
       Capability.DOWNLOAD,
       Capability.UPLOAD,
       Capability.SCHEDULE,
@@ -4632,11 +4633,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     // solve_captcha intentionally has no permission capability, but it still
     // spends external solver quota and can inject a token into the page.
     const hasUngatedExternalSideEffect = name === 'solve_captcha';
-    const changesExternalState = blockedSuccessCompletion
+    const requiresExplicitAuthorization = blockedSuccessCompletion
       || hasUngatedExternalSideEffect
-      || capabilities.some(capability => blockedCapabilities.has(capability))
-      || (capabilities.includes(Capability.NETWORK) && isNetworkMutation(name, args));
-    if (!changesExternalState) return null;
+      || capabilities.some(capability => blockedCapabilities.has(capability));
+    if (!requiresExplicitAuthorization) return null;
 
     guard.blockedAttempts = Math.max(0, Number(guard.blockedAttempts) || 0) + 1;
     guard.updatedAt = Date.now();
