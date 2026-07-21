@@ -835,4 +835,7 @@ export default {
   "sp.perm.insert_skip_command": "Вставить /dangerously-skip-permissions",
   "sp.perm.skip_hint_draft": "Черновик не изменён. Очистите его перед вставкой команды.",
   "ob.act.permissions_tip": "Запросы разрешений включены по умолчанию. Опытные пользователи могут отключить их глобально командой /dangerously-skip-permissions и снова включить в Настройки → Разрешения.",
+  'st.provider.field.cache_read_cost_per_million': "Расчётная стоимость чтения из кэша ($ / 1 млн токенов)",
+  'st.provider.field.cache_write_cost_per_million': "Расчётная стоимость записи в кэш на 5 минут ($ / 1 млн токенов)",
+  'st.provider.field.cache_write_1h_cost_per_million': "Расчётная стоимость записи в кэш на 1 час ($ / 1 млн токенов)",
 };

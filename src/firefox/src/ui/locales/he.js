@@ -784,4 +784,7 @@ export default {
   "sp.perm.insert_skip_command": "הוספת /dangerously-skip-permissions",
   "sp.perm.skip_hint_draft": "הטיוטה שלך לא השתנתה. יש לנקות אותה לפני הוספת הפקודה.",
   "ob.act.permissions_tip": "בקשות הרשאה מופעלות כברירת מחדל. משתמשים מתקדמים יכולים להשבית אותן בכל האתרים באמצעות /dangerously-skip-permissions ולהפעיל אותן מחדש דרך הגדרות ← הרשאות.",
+  'st.provider.field.cache_read_cost_per_million': "עלות משוערת לקריאה מהמטמון ($ / מיליון אסימונים)",
+  'st.provider.field.cache_write_cost_per_million': "עלות משוערת לכתיבה למטמון ל-5 דקות ($ / מיליון אסימונים)",
+  'st.provider.field.cache_write_1h_cost_per_million': "עלות משוערת לכתיבה למטמון לשעה ($ / מיליון אסימונים)",
 };

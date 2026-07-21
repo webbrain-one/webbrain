@@ -831,4 +831,7 @@ export default {
   "sp.perm.insert_skip_command": "插入 /dangerously-skip-permissions",
   "sp.perm.skip_hint_draft": "草稿未更改。请先清空草稿再插入命令。",
   "ob.act.permissions_tip": "权限提示默认开启。高级用户可使用 /dangerously-skip-permissions 在所有网站上关闭提示，并在设置 → 权限中重新开启。",
+  'st.provider.field.cache_read_cost_per_million': "估算缓存读取费用（$ / 100 万 token）",
+  'st.provider.field.cache_write_cost_per_million': "估算 5 分钟缓存写入费用（$ / 100 万 token）",
+  'st.provider.field.cache_write_1h_cost_per_million': "估算 1 小时缓存写入费用（$ / 100 万 token）",
 };

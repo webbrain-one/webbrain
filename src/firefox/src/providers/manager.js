@@ -273,6 +273,7 @@ export class ProviderManager {
         baseUrl: 'https://api.openai.com/v1',
         model: OPENAI_DEFAULT_MODEL,
         inputCostPerMillionUsd: 2.5,
+        cacheReadCostPerMillionUsd: 0.25,
         outputCostPerMillionUsd: 15,
         supportsStreamUsageOptions: true,
         apiKey: '',
@@ -286,6 +287,9 @@ export class ProviderManager {
         baseUrl: 'https://api.anthropic.com',
         model: 'claude-sonnet-4-6',
         inputCostPerMillionUsd: 3,
+        cacheReadCostPerMillionUsd: 0.3,
+        cacheWriteCostPerMillionUsd: 3.75,
+        cacheWrite1hCostPerMillionUsd: 6,
         outputCostPerMillionUsd: 15,
         apiKey: '',
         apiKeyUrl: 'https://console.anthropic.com/settings/keys',
@@ -486,6 +490,7 @@ export class ProviderManager {
         ...storedOpenAi,
         model: OPENAI_DEFAULT_MODEL,
         inputCostPerMillionUsd: 2.5,
+        cacheReadCostPerMillionUsd: 0.25,
         outputCostPerMillionUsd: 15,
       };
     }

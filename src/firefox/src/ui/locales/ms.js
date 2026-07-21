@@ -831,4 +831,7 @@ export default {
   "sp.perm.insert_skip_command": "Sisipkan /dangerously-skip-permissions",
   "sp.perm.skip_hint_draft": "Draf anda tidak berubah. Kosongkannya sebelum menyisipkan perintah.",
   "ob.act.permissions_tip": "Permintaan izin dihidupkan secara lalai. Pengguna lanjutan boleh mematikannya secara global dengan /dangerously-skip-permissions dan menghidupkannya semula di Tetapan → Izin.",
+  'st.provider.field.cache_read_cost_per_million': "Anggaran kos bacaan cache ($ / 1 juta token)",
+  'st.provider.field.cache_write_cost_per_million': "Anggaran kos tulis cache 5 minit ($ / 1 juta token)",
+  'st.provider.field.cache_write_1h_cost_per_million': "Anggaran kos tulis cache 1 jam ($ / 1 juta token)",
 };

@@ -24030,7 +24030,11 @@ test('_defaultConfigs: OpenAI defaults to GPT-5.6 Terra and safely migrates the 
     const defaults = mgr._defaultConfigs();
     assert.equal(defaults.openai.model, 'gpt-5.6-terra');
     assert.equal(defaults.openai.inputCostPerMillionUsd, 2.5);
+    assert.equal(defaults.openai.cacheReadCostPerMillionUsd, 0.25);
     assert.equal(defaults.openai.outputCostPerMillionUsd, 15);
+    assert.equal(defaults.anthropic.cacheReadCostPerMillionUsd, 0.3);
+    assert.equal(defaults.anthropic.cacheWriteCostPerMillionUsd, 3.75);
+    assert.equal(defaults.anthropic.cacheWrite1hCostPerMillionUsd, 6);
 
     const migrated = mgr._migrateStoredProviderConfigs({
       openai: {
@@ -24043,6 +24047,7 @@ test('_defaultConfigs: OpenAI defaults to GPT-5.6 Terra and safely migrates the 
     });
     assert.equal(migrated.openai.model, 'gpt-5.6-terra');
     assert.equal(migrated.openai.inputCostPerMillionUsd, 2.5);
+    assert.equal(migrated.openai.cacheReadCostPerMillionUsd, 0.25);
     assert.equal(migrated.openai.outputCostPerMillionUsd, 15);
     assert.equal(migrated.openai.configured, false);
 
@@ -24084,6 +24089,30 @@ test('OpenAI settings list every GPT-5.6 family model with Terra first', () => {
     const luna = source.indexOf("'gpt-5.6-luna'", terra);
     const alias = source.indexOf("'gpt-5.6'", terra);
     assert.ok(terra >= 0 && sol > terra && luna > sol && alias > luna, `${prefix}: GPT-5.6 suggestions should lead with Terra, Sol, Luna, and the Sol alias`);
+  }
+});
+
+test('provider settings expose cache pricing with zero-cost support', () => {
+  for (const prefix of ['src/chrome', 'src/firefox']) {
+    const source = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/settings.js'), 'utf8');
+    for (const key of [
+      'cacheReadCostPerMillionUsd',
+      'cacheWriteCostPerMillionUsd',
+      'cacheWrite1hCostPerMillionUsd',
+    ]) {
+      assert.match(source, new RegExp(`key: '${key}'`), `${prefix}: missing ${key} field`);
+      assert.match(source, new RegExp(`ZERO_ALLOWED_NUMBER_FIELDS[\\s\\S]*?'${key}'`), `${prefix}: ${key} should allow zero`);
+    }
+    assert.match(
+      source,
+      /aws_bedrock:\s*\{[\s\S]*?\.\.\.CACHE_AWARE_COST_ESTIMATE_FIELDS/,
+      `${prefix}: Bedrock should expose cache read and write rates`,
+    );
+    assert.match(
+      source,
+      /anthropic:\s*\{[\s\S]*?\.\.\.CACHE_AWARE_COST_ESTIMATE_FIELDS/,
+      `${prefix}: Anthropic should expose cache read and write rates`,
+    );
   }
 });
 

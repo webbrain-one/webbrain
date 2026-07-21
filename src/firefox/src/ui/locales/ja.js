@@ -831,4 +831,7 @@ export default {
   "sp.perm.insert_skip_command": "/dangerously-skip-permissions を入力",
   "sp.perm.skip_hint_draft": "下書きは変更されていません。コマンドを入力する前に消去してください。",
   "ob.act.permissions_tip": "許可確認は既定で有効です。上級ユーザーは /dangerously-skip-permissions ですべてのサイトの確認を無効にし、設定 → 権限から再び有効にできます。",
+  'st.provider.field.cache_read_cost_per_million': "キャッシュ読み取りの推定費用（$ / 100万トークン）",
+  'st.provider.field.cache_write_cost_per_million': "5分キャッシュ書き込みの推定費用（$ / 100万トークン）",
+  'st.provider.field.cache_write_1h_cost_per_million': "1時間キャッシュ書き込みの推定費用（$ / 100万トークン）",
 };

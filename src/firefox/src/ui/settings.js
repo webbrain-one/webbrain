@@ -1651,13 +1651,30 @@ const CONTEXT_WINDOW_FIELD = {
   step: 1024,
 };
 
+const INPUT_COST_ESTIMATE_FIELD =
+  { key: 'inputCostPerMillionUsd', labelKey: 'st.provider.field.input_cost_per_million', type: 'number', placeholder: '3.00' };
+const CACHE_READ_COST_ESTIMATE_FIELD =
+  { key: 'cacheReadCostPerMillionUsd', labelKey: 'st.provider.field.cache_read_cost_per_million', type: 'number', placeholder: '0.30' };
+const OUTPUT_COST_ESTIMATE_FIELD =
+  { key: 'outputCostPerMillionUsd', labelKey: 'st.provider.field.output_cost_per_million', type: 'number', placeholder: '15.00' };
 const COST_ESTIMATE_FIELDS = [
-  { key: 'inputCostPerMillionUsd', labelKey: 'st.provider.field.input_cost_per_million', type: 'number', placeholder: '3.00' },
-  { key: 'outputCostPerMillionUsd', labelKey: 'st.provider.field.output_cost_per_million', type: 'number', placeholder: '15.00' },
+  INPUT_COST_ESTIMATE_FIELD,
+  CACHE_READ_COST_ESTIMATE_FIELD,
+  OUTPUT_COST_ESTIMATE_FIELD,
+];
+const CACHE_AWARE_COST_ESTIMATE_FIELDS = [
+  INPUT_COST_ESTIMATE_FIELD,
+  CACHE_READ_COST_ESTIMATE_FIELD,
+  { key: 'cacheWriteCostPerMillionUsd', labelKey: 'st.provider.field.cache_write_cost_per_million', type: 'number', placeholder: '3.75' },
+  { key: 'cacheWrite1hCostPerMillionUsd', labelKey: 'st.provider.field.cache_write_1h_cost_per_million', type: 'number', placeholder: '6.00' },
+  OUTPUT_COST_ESTIMATE_FIELD,
 ];
 
 const ZERO_ALLOWED_NUMBER_FIELDS = new Set([
   'inputCostPerMillionUsd',
+  'cacheReadCostPerMillionUsd',
+  'cacheWriteCostPerMillionUsd',
+  'cacheWrite1hCostPerMillionUsd',
   'outputCostPerMillionUsd',
 ]);
 const MIN_API_KEY_LENGTH = 12;
@@ -1977,7 +1994,7 @@ function renderProviders() {
         { key: 'secretAccessKey', labelKey: 'st.provider.field.aws_secret_access_key', type: 'password', placeholder: '********' },
         { key: 'sessionToken', labelKey: 'st.provider.field.aws_session_token', type: 'password', placeholder: 'optional (STS)' },
         { key: 'model', labelKey: 'st.provider.field.bedrock_model_id', type: 'text', placeholder: 'anthropic.claude-3-sonnet-20240229-v1:0' },
-        ...COST_ESTIMATE_FIELDS,
+        ...CACHE_AWARE_COST_ESTIMATE_FIELDS,
       ],
     },
     openai: {
@@ -2032,7 +2049,7 @@ function renderProviders() {
         { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'claude-opus-4-8',
           suggestions: ['claude-opus-4-8', 'claude-sonnet-4-6', 'claude-haiku-4-5'] },
         { key: 'baseUrl', labelKey: 'st.provider.field.api_base_url', type: 'text', placeholder: 'https://api.anthropic.com' },
-        ...COST_ESTIMATE_FIELDS,
+        ...CACHE_AWARE_COST_ESTIMATE_FIELDS,
       ],
     },
     gemini: {
