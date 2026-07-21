@@ -43614,6 +43614,56 @@ test('saved workflow compiler removes historical refs and parameterizes every ty
   }
 });
 
+test('saved workflow picks only the latest successful run from the active conversation', async () => {
+  const calls = [];
+  const reader = {
+    async listRuns(options) {
+      calls.push(options);
+      return [
+        { runId: 'failed', conversationId: 'conv_1', status: 'loop_stopped', tabUrl: 'https://example.com/' },
+        { runId: 'done', conversationId: 'conv_1', status: 'done', tabUrl: 'https://example.com/' },
+      ];
+    },
+    async getRunEvents(runId) {
+      assert.equal(runId, 'done');
+      return [{ seq: 1, kind: 'tool', data: { name: 'navigate', args: { url: 'https://example.com/next' }, result: { success: true } } }];
+    },
+  };
+  const result = await SavedWorkflowsCh.compileLatestSuccessfulWorkflow(reader, {
+    conversationId: 'conv_1',
+    name: 'Latest',
+    now: 1500,
+  });
+  assert.equal(result.workflow.source.runId, 'done');
+  assert.deepEqual(calls, [{ limit: 50, conversationId: 'conv_1' }]);
+  assert.equal((await SavedWorkflowsCh.compileLatestSuccessfulWorkflow(reader, { name: 'Missing' })).reason, 'conversation_required');
+});
+
+test('saved workflow slash commands are out-of-band and wired in both browsers', () => {
+  for (const panel of ['src/chrome/src/ui/sidepanel.js', 'src/firefox/src/ui/sidepanel.js']) {
+    const runtime = loadSlashCommandRuntime(panel);
+    assert.equal(runtime.parseSlashInvocation('/workflow').action, 'list');
+    const save = runtime.parseSlashInvocation('/workflow --save Fill checkout');
+    assert.equal(save.action, 'save');
+    assert.equal(save.payload, 'Fill checkout');
+    assert.equal(runtime.slashInvocationIsOutOfBand(save), true);
+    const remove = runtime.parseSlashInvocation('/workflow --delete workflow_123');
+    assert.equal(remove.action, 'delete');
+    assert.equal(remove.payload, 'workflow_123');
+    const source = fs.readFileSync(path.join(ROOT, panel), 'utf8');
+    assert.match(source, /sendToBackground\('save_latest_workflow', \{ tabId, name \}\)/);
+    assert.match(source, /sendToBackground\('list_saved_workflows'\)/);
+    assert.match(source, /sendToBackground\('delete_saved_workflow'/);
+  }
+  for (const background of ['src/chrome/src/background.js', 'src/firefox/src/background.js']) {
+    const source = fs.readFileSync(path.join(ROOT, background), 'utf8');
+    assert.match(source, /case 'save_latest_workflow':/);
+    assert.match(source, /compileLatestSuccessfulWorkflow\(workflowTrace/);
+    assert.match(source, /case 'list_saved_workflows':/);
+    assert.match(source, /case 'delete_saved_workflow':/);
+  }
+});
+
 test('saved workflow compiler skips unsafe coordinates, failed calls, and unsupported tools', () => {
   const run = { runId: 'run_2', status: 'done', tabUrl: 'https://example.com/dashboard' };
   const events = [

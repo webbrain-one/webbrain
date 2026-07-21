@@ -438,6 +438,17 @@ const SLASH_COMMANDS = [
       { value: '--forget', valueLabel: '<id>', descriptionKey: 'sp.slash.forget_memory', action: 'forget', takesRemainder: true, outOfBand: false, exclusiveGroup: 'memory-action' },
     ],
   },
+  {
+    value: '/workflow',
+    usage: '/workflow [--save <name> | --delete <id>]',
+    descriptionKey: 'sp.slash.workflows',
+    action: 'list',
+    outOfBand: true,
+    options: [
+      { value: '--save', valueLabel: '<name>', descriptionKey: 'sp.slash.save_workflow', action: 'save', takesRemainder: true, outOfBand: true, exclusiveGroup: 'workflow-action' },
+      { value: '--delete', valueLabel: '<id>', descriptionKey: 'sp.slash.delete_workflow', action: 'delete', takesRemainder: true, outOfBand: true, exclusiveGroup: 'workflow-action' },
+    ],
+  },
   { value: '/allow-api', usage: '/allow-api [prompt]', descriptionKey: 'sp.slash.allow_api', action: 'enable', acceptsPayload: true },
   { value: '/dangerously-skip-permissions', usage: '/dangerously-skip-permissions [prompt]', descriptionKey: 'sp.slash.dangerously_skip_permissions', action: 'disable', acceptsPayload: true, outOfBand: true },
   { value: '/compact', usage: '/compact [prompt]', descriptionKey: 'sp.slash.compact', action: 'compact', acceptsPayload: true },
@@ -2822,6 +2833,71 @@ async function forgetUserMemory(id, tabId = currentTabId) {
   }
 }
 
+const SAVED_WORKFLOW_FAILURE_REASON_KEYS = {
+  conversation_required: 'sp.workflows.reason.no_trace',
+  no_successful_trace: 'sp.workflows.reason.no_trace',
+  no_replayable_steps: 'sp.workflows.reason.no_steps',
+  not_found: 'sp.workflows.reason.not_found',
+};
+
+function savedWorkflowFailureMessage(res) {
+  const reasonKey = SAVED_WORKFLOW_FAILURE_REASON_KEYS[res?.reason];
+  return reasonKey
+    ? t(reasonKey)
+    : t('sp.workflows.error', { msg: res?.reason || res?.error || 'unknown error' });
+}
+
+async function showSavedWorkflows(tabId = currentTabId) {
+  try {
+    const res = await sendToBackground('list_saved_workflows');
+    if (currentTabId !== tabId) return;
+    if (!res?.ok) throw new Error(res?.error || 'unknown error');
+    const workflows = Array.isArray(res.workflows) ? res.workflows : [];
+    if (!workflows.length) {
+      addPersistentSlashMessage(t('sp.workflows.empty'));
+      return;
+    }
+    const body = workflows.map((workflow) => t('sp.workflows.item', {
+      id: workflow.id,
+      name: workflow.name,
+      steps: workflow.steps?.length || 0,
+      parameters: workflow.parameters?.length || 0,
+    })).join('\n');
+    const msgEl = addPersistentSlashMessage(systemHtml(`${t('sp.workflows.title_html')}<pre class="scratchpad-dump">${escapeHtml(body)}</pre>`));
+    addScratchpadCopyButton(msgEl);
+  } catch (error) {
+    if (currentTabId === tabId) addPersistentSlashMessage(t('sp.workflows.error', { msg: error.message }));
+  }
+}
+
+async function saveLatestWorkflow(name, tabId = currentTabId) {
+  try {
+    const res = await sendToBackground('save_latest_workflow', { tabId, name });
+    if (currentTabId !== tabId) return;
+    if (!res?.ok) {
+      showComposerToast(savedWorkflowFailureMessage(res), { duration: 7000 });
+      return;
+    }
+    showComposerToast(t('sp.workflows.saved', { name: res.workflow?.name || name }));
+  } catch (error) {
+    if (currentTabId === tabId) showComposerToast(t('sp.workflows.error', { msg: error.message }), { duration: 7000 });
+  }
+}
+
+async function deleteSavedWorkflow(id, tabId = currentTabId) {
+  try {
+    const res = await sendToBackground('delete_saved_workflow', { id: String(id || '').trim() });
+    if (currentTabId !== tabId) return;
+    if (!res?.ok) {
+      showComposerToast(savedWorkflowFailureMessage(res), { duration: 5000 });
+      return;
+    }
+    showComposerToast(t('sp.workflows.deleted', { name: res.workflow?.name || id }));
+  } catch (error) {
+    if (currentTabId === tabId) showComposerToast(t('sp.workflows.error', { msg: error.message }), { duration: 5000 });
+  }
+}
+
 async function showProgress(tabId = currentTabId) {
   try {
     const res = await sendToBackground('get_progress', { tabId });
@@ -4605,6 +4681,21 @@ async function parseSlashCommands(text, tabId = currentTabId, options = {}) {
 
   if (command.value === '/memory' && action === 'forget') {
     await forgetUserMemory(payload, tabId);
+    return '';
+  }
+
+  if (command.value === '/workflow' && action === 'list') {
+    await showSavedWorkflows(tabId);
+    return '';
+  }
+
+  if (command.value === '/workflow' && action === 'save') {
+    await saveLatestWorkflow(payload, tabId);
+    return '';
+  }
+
+  if (command.value === '/workflow' && action === 'delete') {
+    await deleteSavedWorkflow(payload, tabId);
     return '';
   }
 

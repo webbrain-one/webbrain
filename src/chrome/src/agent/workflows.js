@@ -528,6 +528,21 @@ export function findWorkflowTarget(target, candidates) {
   return { status: 'matched', candidate: ranked[0].candidate, score: ranked[0].score };
 }
 
+export async function compileLatestSuccessfulWorkflow(traceReader, options = {}) {
+  if (!traceReader?.listRuns || !traceReader?.getRunEvents) {
+    return { workflow: null, warnings: [], reason: 'trace_reader_required' };
+  }
+  const conversationId = cleanText(options.conversationId, 160);
+  if (!conversationId) return { workflow: null, warnings: [], reason: 'conversation_required' };
+  const runs = await traceReader.listRuns({ limit: 50, conversationId });
+  const run = (Array.isArray(runs) ? runs : []).find((candidate) => (
+    candidate?.conversationId === conversationId && candidate?.status === 'done'
+  ));
+  if (!run) return { workflow: null, warnings: [], reason: 'no_successful_trace' };
+  const events = await traceReader.getRunEvents(run.runId);
+  return compileWorkflowFromTrace(run, events, options);
+}
+
 export function createSavedWorkflowStore(storageArea, options = {}) {
   const now = options.now || nowMs;
   const read = async () => {

@@ -13,6 +13,11 @@ import {
 } from './agent/skills.js';
 import { ScheduledJobManager } from './agent/scheduler.js';
 import {
+  compileLatestSuccessfulWorkflow,
+  createSavedWorkflowStore,
+} from './agent/workflows.js';
+import * as workflowTrace from './trace/recorder.js';
+import {
   startClaudeOAuth,
   refreshClaudeAccessToken,
   signOutClaude,
@@ -62,6 +67,7 @@ import { RUN_CAPTURE_START_ERROR_PREFIX, createRunCaptureController } from './ru
 const providerManager = new ProviderManager();
 const agent = new Agent(providerManager);
 const userMemoryStore = createUserMemoryStore(browser.storage.local);
+const savedWorkflowStore = createSavedWorkflowStore(browser.storage.local);
 const profileSync = new ProfileSyncManager(browser.storage.local);
 const runCaptureController = createRunCaptureController({
   api: browser,
@@ -267,6 +273,7 @@ let userMemoryExtractionDrainPromise = null;
 let userMemoryExtractionTimer = null;
 let userMemoryExtractionQueueLock = Promise.resolve();
 let userMemoryStoreLock = Promise.resolve();
+let savedWorkflowStoreLock = Promise.resolve();
 const userMemoryTurnContextByTab = new Map();
 
 function userMemoryTurnContextKey(tabId) {
@@ -442,6 +449,12 @@ async function markUserMemoryExtractionJobFailed(jobId) {
 async function withUserMemoryStoreLock(task) {
   const run = userMemoryStoreLock.then(task, task);
   userMemoryStoreLock = run.catch(() => {});
+  return run;
+}
+
+async function withSavedWorkflowStoreLock(task) {
+  const run = savedWorkflowStoreLock.then(task, task);
+  savedWorkflowStoreLock = run.catch(() => {});
   return run;
 }
 
@@ -1701,6 +1714,32 @@ async function handleMessage(msg, sender) {
         conversationId: msg.conversationId,
       });
       return { ok: true, ...result };
+    }
+
+    case 'list_saved_workflows':
+      return { ok: true, workflows: await savedWorkflowStore.list() };
+
+    case 'get_saved_workflow': {
+      const workflow = await savedWorkflowStore.get(String(msg.id || ''));
+      return workflow ? { ok: true, workflow } : { ok: false, reason: 'not_found' };
+    }
+
+    case 'save_latest_workflow': {
+      const tabId = msg.tabId || sender.tab?.id;
+      if (!tabId) return { ok: false, reason: 'tab_required' };
+      const conversationId = await agent.getConversationId(tabId);
+      const compiled = await compileLatestSuccessfulWorkflow(workflowTrace, {
+        conversationId,
+        name: msg.name,
+      });
+      if (!compiled.workflow) return { ok: false, ...compiled };
+      const saved = await withSavedWorkflowStoreLock(() => savedWorkflowStore.put(compiled.workflow));
+      return { ok: saved.changed, workflow: saved.workflow, warnings: compiled.warnings, reason: saved.reason || '' };
+    }
+
+    case 'delete_saved_workflow': {
+      const result = await withSavedWorkflowStoreLock(() => savedWorkflowStore.delete(String(msg.id || '')));
+      return { ok: result.changed, ...result };
     }
 
     case 'ensure_conversation_id': {
