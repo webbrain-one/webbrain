@@ -334,6 +334,7 @@ const {
   buildPlannerSystemPrompt: buildPlannerSystemPromptFx,
   buildPlannerMessages: buildPlannerMessagesFx,
   buildPlannerIntentMessages: buildPlannerIntentMessagesFx,
+  parsePlanFromContent: parsePlanFromContentFx,
 } = await import(
   'file://' + path.join(ROOT, 'src/firefox/src/agent/planner.js').replace(/\\/g, '/')
 );
@@ -1314,8 +1315,10 @@ test('remaining model-facing screenshot fallbacks apply redaction', () => {
   const firefoxEnd = firefoxSource.indexOf("if (name === 'get_shadow_dom')", firefoxStart);
   const firefoxBody = firefoxSource.slice(firefoxStart, firefoxEnd);
   assert.match(firefoxBody,
-    /let dataUrl = plannerCanSeeImages[\s\S]*?if \(dataUrl && this\.screenshotRedaction\) \{[\s\S]*?_redactScreenshotDataUrl\(tabId, dataUrl, \{ coordinateSpace: 'viewport' \}\);[\s\S]*?screenshot: dataUrl/,
-    'Firefox done verification should redact before storing the screenshot');
+    /let dataUrl = plannerCanSeeImages[\s\S]*?if \(dataUrl && this\.screenshotRedaction\) \{[\s\S]*?_redactScreenshotDataUrl\(tabId, dataUrl, \{ coordinateSpace: 'viewport' \}\);[\s\S]*?trace\.recordScreenshot\(runId, null, dataUrl, 'done verification'\)/,
+    'Firefox done verification should redact before tracing the screenshot');
+  assert.doesNotMatch(firefoxBody, /screenshot:\s*dataUrl/,
+    'Firefox done verification should not embed base64 in the done result');
 });
 
 test('firefox auto and media screenshot helpers redact model-facing data URLs', () => {
@@ -27826,6 +27829,78 @@ test('progress intent classifier accepts multilingual structured intent and fail
   }
 });
 
+test('planner progress-ledger policy disables fallback or enables the canonical action', async () => {
+  for (const AgentClass of [AgentCh, AgentFx]) {
+    const agent = new AgentClass({ getActive: () => ({ contextWindow: 128000, supportsVision: false, chat: async () => ({ content: '{}' }) }) });
+    const tabId = 761;
+    const taskText = 'Submit this extension version.';
+    const pageScope = 'https://addons.mozilla.org/developers/addon/example/versions/submit/';
+    agent._persist = () => {};
+    agent.conversationModes.set(tabId, 'act');
+    agent.conversations.set(tabId, [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: taskText },
+    ]);
+    const stale = agent._setProgressSession(tabId, {
+      mode: 'active',
+      allowedActions: ['follow'],
+      confidence: 0.9,
+    }, { taskText, pageScope, source: 'classifier' });
+    agent._progressUpdate(tabId, {
+      items: [{ id: 'stale-row', label: 'stale-row', action: 'follow', status: 'pending' }],
+    }, { sessionId: stale.sessionId });
+
+    let classifierCalls = 0;
+    agent._classifyProgressIntentWithProvider = async () => {
+      classifierCalls++;
+      return {
+        mode: 'active',
+        allowedActions: ['follow'],
+        forbiddenActions: [],
+        targets: ['package-a', 'package-b'],
+        confidence: 0.91,
+      };
+    };
+
+    const disabled = await agent._ensureProgressSessionForCurrentTask(tabId, {
+      taskText,
+      pageScope,
+      progressLedgerPolicy: 'disabled',
+    });
+    assert.equal(classifierCalls, 0, `${AgentClass.name}: explicit false still ran the fallback classifier`);
+    assert.equal(disabled.mode, 'inactive', `${AgentClass.name}: explicit false did not create an inactive session`);
+    assert.equal(disabled.source, 'planner', `${AgentClass.name}: disabled session did not retain planner authority`);
+    assert.notEqual(disabled.sessionId, stale.sessionId, `${AgentClass.name}: disabled policy reused the misclassified session`);
+    assert.deepEqual(agent._currentTaskLedgerRows(tabId), [], `${AgentClass.name}: historical rows still blocked the disabled session`);
+
+    const enabled = await agent._ensureProgressSessionForCurrentTask(tabId, {
+      taskText,
+      pageScope,
+      progressLedgerPolicy: 'enabled',
+      progressAction: 'submit',
+    });
+    assert.equal(classifierCalls, 1, `${AgentClass.name}: enabled policy did not use the classifier for targets`);
+    assert.deepEqual(enabled.allowedActions, ['submit'], `${AgentClass.name}: classifier overrode the planner's canonical action`);
+    assert.deepEqual(
+      agent._rowsForProgressSession(tabId, enabled.sessionId).map(row => [row.label, row.action]),
+      [['package-a', 'submit'], ['package-b', 'submit']],
+      `${AgentClass.name}: planner-enabled obligations were not seeded independently`,
+    );
+
+    const legacyTabId = 762;
+    agent.conversations.set(legacyTabId, [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: 'Follow each account.' },
+    ]);
+    await agent._ensureProgressSessionForCurrentTask(legacyTabId, {
+      taskText: 'Follow each account.',
+      pageScope: 'https://example.test/accounts',
+      progressLedgerPolicy: 'auto',
+    });
+    assert.equal(classifierCalls, 2, `${AgentClass.name}: legacy auto policy skipped the fallback classifier`);
+  }
+});
+
 test('classifier targets become isolated app-owned completion obligations', async () => {
   for (const AgentClass of [AgentCh, AgentFx]) {
     const agent = new AgentClass({
@@ -29441,11 +29516,19 @@ test('blocked done progress result stays wrapped as untrusted content', async ()
         status: 'pending',
       }],
     });
-    agent.executeTool = async () => ({ done: true, summary: 'Done.', outcome: 'success' });
+    let executedTools = 0;
+    agent.executeTool = async () => {
+      executedTools++;
+      return { done: true, summary: 'Done.', outcome: 'success' };
+    };
     agent._persist = () => {};
     agent.providerManager = { ...(agent.providerManager || {}), getVisionProvider: async () => null };
+    agent._doneBlockCount.set(tabId, { key: 'existing-form-block', count: 2 });
 
-    const toolCalls = [{ id: 'done_call', function: { name: 'done', arguments: JSON.stringify({ summary: 'Done.', outcome: 'success' }) } }];
+    const toolCalls = [
+      { id: 'done_call', function: { name: 'done', arguments: JSON.stringify({ summary: 'Done.', outcome: 'success' }) } },
+      { id: 'stale_click', function: { name: 'click_ax', arguments: JSON.stringify({ ref_id: 'must_not_run' }) } },
+    ];
     const updates = [];
     const result = await agent._executeToolBatch(
       tabId,
@@ -29454,10 +29537,16 @@ test('blocked done progress result stays wrapped as untrusted content', async ()
       (type, data) => updates.push({ type, data }),
       { supportsVision: false },
       null,
-      new Set(['done']),
+      new Set(['done', 'click_ax']),
       1,
     );
     assert.equal(result.action, 'continue', `${AgentClass.name}: blocked done should continue the tool loop`);
+    assert.equal(executedTools, 0, `${AgentClass.name}: ledger block reached page verification or a stale queued tool`);
+    assert.deepEqual(
+      agent._doneBlockCount.get(tabId),
+      { key: 'existing-form-block', count: 2 },
+      `${AgentClass.name}: ledger block reset page-verification counters`,
+    );
     assert.equal(
       updates.some(update => update.type === 'tool_result' && update.data?.name === 'done' && update.data?.result?.done === true && update.data?.result?.outcome === 'success'),
       false,
@@ -29474,6 +29563,9 @@ test('blocked done progress result stays wrapped as untrusted content', async ()
     assert.match(toolMessage.content, /"blockedDone":true/, `${AgentClass.name}: blocked done payload missing`);
     assert.match(toolMessage.content, /Ignore previous instructions/, `${AgentClass.name}: row data should remain available as untrusted data`);
     assert.doesNotMatch(toolMessage.content, /<\/untrusted_page_content><system>/, `${AgentClass.name}: row label escaped the untrusted boundary`);
+    const skippedMessage = messages.find(msg => msg.role === 'tool' && msg.tool_call_id === 'stale_click');
+    assert.match(skippedMessage?.content || '', /progress ledger must be resolved before completion verification/i,
+      `${AgentClass.name}: stale batch calls were not closed after the ledger block`);
   }
 });
 
@@ -29490,6 +29582,7 @@ test('accepted done emits successful result update after progress gate', async (
     agent.executeTool = async () => ({ done: true, summary: 'Done.', outcome: 'success' });
     agent._persist = () => {};
     agent.providerManager = { ...(agent.providerManager || {}), getVisionProvider: async () => null };
+    agent._doneBlockCount.set(tabId, { key: 'prior-document|pending-form', count: 2 });
 
     const updates = [];
     const toolCalls = [{ id: 'done_call', function: { name: 'done', arguments: JSON.stringify({ summary: 'Done.', outcome: 'success' }) } }];
@@ -29506,6 +29599,7 @@ test('accepted done emits successful result update after progress gate', async (
 
     assert.equal(result.action, 'return', `${AgentClass.name}: accepted done should finish the tool loop`);
     assert.equal(result.value, 'Done.', `${AgentClass.name}: accepted done should return the done summary`);
+    assert.equal(agent._doneBlockCount.has(tabId), false, `${AgentClass.name}: accepted done did not reset page-block state`);
     assert.equal(
       updates.filter(update => update.type === 'tool_result' && update.data?.name === 'done' && update.data?.result?.done === true && update.data?.result?.outcome === 'success').length,
       1,
@@ -30249,6 +30343,490 @@ test('same-batch observation cannot clear debt that existed at batch start', () 
   }
 });
 
+test('submit-aware completion accepts the observed AMO finish document and rejects real pending UI', async () => {
+  for (const AgentClass of [AgentCh, AgentFx]) {
+    const agent = new AgentClass({ getActive: () => ({ contextWindow: 128000, supportsVision: false }) });
+    const tabId = 24820;
+    const submitUrl = 'https://addons.mozilla.org/developers/addon/webbrain/versions/submit/';
+    const finishUrl = 'https://addons.mozilla.org/developers/addon/webbrain/versions/finish';
+    agent._persist = () => {};
+    agent.conversationModes.set(tabId, 'act');
+    agent.conversations.set(tabId, [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: 'Submit this extension version.' },
+    ]);
+    assert.equal(agent._completionTextSignalsSuccess('Done'), false,
+      `${AgentClass.name}: bare completion word was trusted in arbitrary page content`);
+    assert.equal(agent._completionTextSignalsSuccess('Done', { allowBare: true }), true,
+      `${AgentClass.name}: bare completion word was rejected for a trusted live-region context`);
+    let classifierCalls = 0;
+    agent._classifyProgressIntentWithProvider = async () => {
+      classifierCalls++;
+      return null;
+    };
+    const disabled = await agent._ensureProgressSessionForCurrentTask(tabId, {
+      taskText: 'Submit this extension version.',
+      pageScope: submitUrl,
+      progressLedgerPolicy: 'disabled',
+    });
+    assert.equal(disabled.mode, 'inactive', `${AgentClass.name}: AMO task did not honor the planner's disabled ledger`);
+    assert.equal(classifierCalls, 0, `${AgentClass.name}: AMO task still ran the secondary progress classifier`);
+
+    const token = agent._beginCompletionInvariant(tabId);
+    agent._recordCompletionSubmitAttempt(
+      tabId,
+      { isSubmit: true },
+      'execute_js',
+      { code: 'document.querySelector("#profile").classList.add("ready")' },
+      submitUrl,
+      submitUrl,
+      { success: true },
+    );
+    assert.equal(agent._completionSubmitStates.has(tabId), false,
+      `${AgentClass.name}: generic execute_js permission fallback armed submit verification`);
+    agent._recordCompletionSubmitAttempt(
+      tabId,
+      { isSubmit: true },
+      'execute_js',
+      { code: 'document.querySelector("form").requestSubmit()' },
+      submitUrl,
+      submitUrl,
+      { success: true },
+    );
+    assert.equal(agent._completionSubmitStates.has(tabId), true,
+      `${AgentClass.name}: execute_js with strong submit evidence did not arm verification`);
+    agent._completionSubmitStates.delete(tabId);
+
+    agent._recordCompletionToolResult(tabId, 'click_ax', { ref_id: 'submit-version' }, { success: true, verified: true });
+    agent._recordCompletionSubmitAttempt(
+      tabId,
+      { isSubmit: true },
+      'click_ax',
+      { ref_id: 'submit-version' },
+      submitUrl,
+      finishUrl,
+      { success: true, verified: true, pageUrlChanged: true },
+    );
+    agent._recordCompletionToolResult(tabId, 'read_page', {}, {
+      success: true,
+      url: finishUrl,
+      content: 'Version Submitted',
+    });
+    assert.equal(agent._completionSubmitStates.get(tabId)?.completionSignalObserved, true,
+      `${AgentClass.name}: explicit AMO confirmation observation did not record success evidence`);
+
+    const finishState = {
+      url: finishUrl,
+      openDialogCount: 0,
+      dialogTitles: [],
+      visibleFormCount: 21,
+      relevantFormCount: 12,
+      formDescriptors: [{ label: 'Manage version', relevant: true, utility: false, editableCount: 1, submitCount: 1 }],
+      liveRegionMessages: [],
+      successMessages: [],
+    };
+    assert.equal(
+      agent._completionDoneBlock(tabId, 'done', { summary: 'Version Submitted.', outcome: 'success' }),
+      null,
+      `${AgentClass.name}: explicit post-submit observation did not satisfy the invariant`,
+    );
+    assert.equal(agent._progressDoneBlock(tabId, 'success'), null,
+      `${AgentClass.name}: disabled ledger still blocked AMO completion`);
+    assert.equal(
+      agent._completionPageWarning(tabId, 'Version Submitted.', 'success', finishState, finishUrl),
+      null,
+      `${AgentClass.name}: unrelated finish-page forms required approval or public-listing navigation`,
+    );
+
+    agent._recordCompletionToolResult(tabId, 'click_ax', { ref_id: 'submit-version' }, {
+      success: false,
+      dispatched: true,
+      error: 'post-click inspection failed after dispatch',
+    });
+    agent._recordCompletionSubmitAttempt(
+      tabId,
+      { isSubmit: true },
+      'click_ax',
+      { ref_id: 'submit-version' },
+      submitUrl,
+      submitUrl,
+      { success: false, dispatched: true, error: 'post-click inspection failed after dispatch' },
+    );
+    assert.equal(
+      agent._completionSubmitStates.get(tabId)?.dispatched,
+      true,
+      `${AgentClass.name}: explicit dispatch was discarded when post-click inspection failed`,
+    );
+    agent._recordCompletionToolResult(tabId, 'fetch_url', { url: finishUrl }, {
+      success: true,
+      url: finishUrl,
+      text: 'Version Submitted',
+    });
+    assert.equal(
+      agent._completionSubmitStates.get(tabId)?.observedAfterSubmit,
+      false,
+      `${AgentClass.name}: unrelated network read was accepted as a document observation`,
+    );
+    agent._recordCompletionToolResult(tabId, 'screenshot', {}, {
+      success: true,
+      page: { url: finishUrl, title: 'Version Submitted' },
+    });
+    const screenshotRecoveredSubmit = agent._completionSubmitStates.get(tabId);
+    assert.equal(screenshotRecoveredSubmit?.currentUrl, finishUrl,
+      `${AgentClass.name}: screenshot page URL did not reconcile the submit destination`);
+    assert.equal(screenshotRecoveredSubmit?.documentChanged, true,
+      `${AgentClass.name}: screenshot confirmation URL did not establish a document transition`);
+    assert.equal(screenshotRecoveredSubmit?.completionSignalObserved, true,
+      `${AgentClass.name}: screenshot confirmation title did not record success evidence`);
+    assert.equal(
+      agent._completionPageWarning(tabId, 'Version Submitted.', 'success', finishState, finishUrl),
+      null,
+      `${AgentClass.name}: slow submit navigation stayed blocked after screenshot verification`,
+    );
+
+    const missingSubmitResult = agent._normalizeToolResult('click_ax', undefined, true);
+    agent._recordCompletionToolResult(tabId, 'click_ax', { ref_id: 'submit-version' }, missingSubmitResult);
+    agent._recordCompletionSubmitAttempt(
+      tabId,
+      { isSubmit: true },
+      'click_ax',
+      { ref_id: 'submit-version' },
+      submitUrl,
+      submitUrl,
+      missingSubmitResult,
+    );
+    assert.equal(agent._completionSubmitStates.get(tabId)?.dispatched, true,
+      `${AgentClass.name}: missing submit response was treated as proof of no dispatch`);
+    agent._recordCompletionToolResult(tabId, 'read_page', {}, {
+      success: true,
+      url: finishUrl,
+      content: 'Version Submitted',
+    });
+    const recoveredSubmit = agent._completionSubmitStates.get(tabId);
+    assert.equal(recoveredSubmit?.currentUrl, finishUrl,
+      `${AgentClass.name}: follow-up page observation did not reconcile the submit destination`);
+    assert.equal(recoveredSubmit?.documentChanged, true,
+      `${AgentClass.name}: follow-up confirmation URL did not establish a document transition`);
+    assert.equal(recoveredSubmit?.completionSignalObserved, true,
+      `${AgentClass.name}: follow-up confirmation text did not record success evidence`);
+    assert.equal(
+      agent._completionPageWarning(tabId, 'Version Submitted.', 'success', finishState, finishUrl),
+      null,
+      `${AgentClass.name}: dispatched submit stayed blocked after explicit confirmation-page observation`,
+    );
+
+    agent._recordCompletionSubmitAttempt(
+      tabId,
+      { isSubmit: true },
+      'click_ax',
+      { ref_id: 'submit-version' },
+      submitUrl,
+      submitUrl,
+      { ...missingSubmitResult, dispatched: false, noDispatch: true },
+    );
+    assert.equal(agent._completionSubmitStates.get(tabId)?.dispatched, false,
+      `${AgentClass.name}: explicit no-dispatch result was treated as a possible submit`);
+
+    const wizardStepUrl = 'https://example.test/wizard/step-2';
+    agent._planExecutionGuards.set(tabId, {
+      enabled: true,
+      requestKind: 'execute',
+      requiresStateChange: true,
+      requiresSubmission: true,
+    });
+    agent._completionSubmitStates.set(tabId, {
+      originatingUrl: 'https://example.test/wizard/step-1',
+      currentUrl: wizardStepUrl,
+      dispatched: true,
+      observedAfterSubmit: true,
+      documentChanged: true,
+      formValidationFailed: false,
+      completionSignalObserved: false,
+    });
+    assert.match(
+      agent._completionPageWarning(tabId, 'Completed.', 'success', {
+        ...finishState,
+        url: wizardStepUrl,
+        visibleFormCount: 1,
+        relevantFormCount: 1,
+        successMessages: [],
+      }, wizardStepUrl)?.warning || '',
+      /task-relevant form/i,
+      `${AgentClass.name}: intermediate wizard navigation was accepted as final submission`,
+    );
+
+    agent._completionSubmitStates.delete(tabId);
+    agent._planExecutionGuards.set(tabId, { enabled: true, requestKind: 'execute', requiresStateChange: false });
+    assert.equal(
+      agent._completionPageWarning(
+        tabId,
+        'Completed the requested summary.',
+        'success',
+        { ...finishState, visibleFormCount: 1, relevantFormCount: 1 },
+        'https://example.test/article?edit=1',
+      ),
+      null,
+      `${AgentClass.name}: read-only completion was blocked by an unrelated page form or edit route`,
+    );
+
+    agent._planExecutionGuards.set(tabId, {
+      enabled: true,
+      requestKind: 'execute',
+      requiresStateChange: true,
+      requiresSubmission: false,
+    });
+    assert.equal(
+      agent._completionPageWarning(tabId, 'Filled the requested fields without submitting.', 'success', {
+        ...finishState,
+        visibleFormCount: 1,
+        relevantFormCount: 1,
+      }, 'https://example.test/settings?edit=1'),
+      null,
+      `${AgentClass.name}: fill-only form task was forced to submit`,
+    );
+
+    agent._planExecutionGuards.set(tabId, {
+      enabled: true,
+      requestKind: 'execute',
+      requiresStateChange: true,
+      requiresSubmission: true,
+    });
+    assert.match(
+      agent._completionPageWarning(tabId, 'Created.', 'success', {
+        ...finishState,
+        visibleFormCount: 1,
+        relevantFormCount: 1,
+      }, 'https://example.test/items?create=1')?.warning || '',
+      /task-relevant form/i,
+      `${AgentClass.name}: submit-required task passed without a submit attempt`,
+    );
+
+    agent._planExecutionGuards.set(tabId, { enabled: true, requestKind: 'execute', requiresStateChange: true });
+    assert.match(
+      agent._completionPageWarning(tabId, 'Created.', 'success', {
+        ...finishState,
+        visibleFormCount: 1,
+        relevantFormCount: 1,
+      }, 'https://example.test/items?create=1')?.warning || '',
+      /task-relevant form/i,
+      `${AgentClass.name}: legacy state-changing plan lost conservative form fallback`,
+    );
+
+    agent._planExecutionGuards.set(tabId, {
+      enabled: true,
+      requestKind: 'execute',
+      requiresStateChange: true,
+      requiresSubmission: false,
+    });
+    agent._completionSubmitStates.set(tabId, {
+      currentUrl: submitUrl,
+      dispatched: false,
+      observedAfterSubmit: true,
+      documentChanged: false,
+      formValidationFailed: false,
+    });
+    assert.match(
+      agent._completionPageWarning(tabId, 'Submitted.', 'success', { ...finishState, visibleFormCount: 1, relevantFormCount: 1 }, submitUrl)?.warning || '',
+      /task-relevant form/i,
+      `${AgentClass.name}: unchanged form after a submit attempt was accepted`,
+    );
+
+    agent._planExecutionGuards.set(tabId, { enabled: true, requestKind: 'execute', requiresStateChange: false });
+    agent._completionSubmitStates.set(tabId, {
+      currentUrl: submitUrl,
+      dispatched: true,
+      observedAfterSubmit: true,
+      documentChanged: false,
+      formValidationFailed: false,
+    });
+    assert.equal(
+      agent._completionPageWarning(tabId, 'Saved.', 'success', {
+        ...finishState,
+        url: submitUrl,
+        visibleFormCount: 1,
+        relevantFormCount: 1,
+        successMessages: ['Changes saved successfully'],
+      }, submitUrl),
+      null,
+      `${AgentClass.name}: same-page success live-region signal was rejected`,
+    );
+
+    agent._completionSubmitStates.set(tabId, {
+      currentUrl: submitUrl,
+      actionSequence: Number(agent.completionInvariants.get(tabId)?.sequence || 0),
+      dispatched: true,
+      observedAfterSubmit: false,
+      documentChanged: false,
+      formValidationFailed: false,
+      completionSignalObserved: false,
+    });
+    agent._recordCompletionToolResult(tabId, 'read_page', {}, {
+      success: true,
+      url: submitUrl,
+      title: 'Complete checkout',
+      content: 'Complete checkout to continue.',
+    });
+    assert.equal(agent._completionSubmitStates.get(tabId)?.completionSignalObserved, false,
+      `${AgentClass.name}: imperative page title was accepted as submit success evidence`);
+
+    assert.equal(
+      agent._completionPageWarning(tabId, 'Saved.', 'success', {
+        ...finishState,
+        url: submitUrl,
+        visibleFormCount: 1,
+        relevantFormCount: 1,
+        liveRegionMessages: ['Done'],
+        successMessages: ['Done'],
+      }, submitUrl),
+      null,
+      `${AgentClass.name}: short same-page success toast was rejected`,
+    );
+
+    assert.match(
+      agent._completionPageWarning(tabId, 'Saved.', 'success', {
+        ...finishState,
+        url: submitUrl,
+        visibleFormCount: 1,
+        relevantFormCount: 1,
+        liveRegionMessages: ['Changes were not saved'],
+        successMessages: ['Changes were not saved'],
+      }, submitUrl)?.warning || '',
+      /task-relevant form/i,
+      `${AgentClass.name}: negated failure alert was accepted as same-page submit success`,
+    );
+
+    agent._completionSubmitStates.set(tabId, {
+      currentUrl: submitUrl,
+      actionSequence: Number(agent.completionInvariants.get(tabId)?.sequence || 0),
+      dispatched: true,
+      observedAfterSubmit: false,
+      documentChanged: false,
+      formValidationFailed: false,
+      completionSignalObserved: false,
+    });
+    agent._recordCompletionToolResult(tabId, 'screenshot', {}, {
+      success: true,
+      method: 'vision_describe',
+      description: 'A green confirmation banner says Version submitted successfully.',
+      page: { url: submitUrl, title: 'Complete checkout' },
+    });
+    assert.equal(agent._completionSubmitStates.get(tabId)?.completionSignalObserved, true,
+      `${AgentClass.name}: screenshot vision description did not record visible submit success`);
+
+    agent._completionSubmitStates.set(tabId, {
+      currentUrl: submitUrl,
+      dispatched: true,
+      observedAfterSubmit: true,
+      documentChanged: false,
+      formValidationFailed: true,
+    });
+    assert.match(
+      agent._completionPageWarning(tabId, 'Submitted.', 'success', {
+        ...finishState,
+        url: submitUrl,
+        visibleFormCount: 0,
+        relevantFormCount: 0,
+        successMessages: ['Saved'],
+      }, submitUrl)?.warning || '',
+      /failed validation/i,
+      `${AgentClass.name}: validation failure was hidden by a live region when the rejected form disappeared`,
+    );
+
+    agent._completionSubmitStates.delete(tabId);
+    assert.match(
+      agent._completionPageWarning(tabId, 'Done.', 'success', {
+        ...finishState,
+        openDialogCount: 1,
+        dialogTitles: ['Submit version'],
+        relevantFormCount: 0,
+      }, finishUrl)?.warning || '',
+      /modal\/dialog/i,
+      `${AgentClass.name}: open dialog did not block completion`,
+    );
+    assert.equal(
+      agent._completionPageWarning(tabId, 'Done.', 'success', {
+        ...finishState,
+        visibleFormCount: 3,
+        relevantFormCount: 0,
+        formDescriptors: [{ label: 'Search', relevant: false, utility: true, editableCount: 1, submitCount: 1 }],
+      }, finishUrl),
+      null,
+      `${AgentClass.name}: utility-only forms blocked completion`,
+    );
+
+    const verification = agent._doneVerificationPayload({
+      pageUrl: finishUrl,
+      pageTitle: 'Version Submitted',
+      pageState: finishState,
+      screenshotCaptured: true,
+    });
+    const serialized = JSON.stringify({ done: true, verification });
+    assert.equal(verification.screenshotCaptured, true, `${AgentClass.name}: screenshot metadata was not preserved`);
+    assert.doesNotMatch(serialized, /data:image|base64/i, `${AgentClass.name}: done payload retained screenshot bytes`);
+    assert.ok(serialized.length < 8192, `${AgentClass.name}: compact done payload exceeded the fixed size limit`);
+    const oversizedVerification = agent._doneVerificationPayload({
+      pageUrl: `https://example.test/finish?payload=${'u'.repeat(20_000)}`,
+      pageTitle: 't'.repeat(20_000),
+      page: {
+        url: `https://example.test/finish?probe=${'p'.repeat(20_000)}`,
+        title: 'p'.repeat(20_000),
+        readyState: 'complete',
+        visibility: 'visible',
+        domNodes: 50_000,
+      },
+      pageState: {
+        ...finishState,
+        url: `https://example.test/finish?state=${'s'.repeat(20_000)}`,
+        title: 's'.repeat(20_000),
+        dialogTitles: Array.from({ length: 100 }, (_, index) => `Dialog ${index} ${'d'.repeat(200)}`),
+        formDescriptors: Array.from({ length: 100 }, (_, index) => ({
+          label: `Form ${index} ${'f'.repeat(200)}`,
+          relevant: true,
+          utility: false,
+          editableCount: 10,
+          submitCount: 2,
+        })),
+        liveRegionMessages: Array.from({ length: 100 }, (_, index) => `Status ${index} ${'l'.repeat(200)}`),
+        successMessages: Array.from({ length: 100 }, (_, index) => `Success ${index} ${'x'.repeat(200)}`),
+      },
+      completionWarning: 'w'.repeat(20_000),
+      annotatedRect: { x: 1, y: 2, w: 3, h: 4, injected: 'z'.repeat(20_000) },
+      screenshotCaptured: true,
+    });
+    assert.ok(JSON.stringify({ done: true, verification: oversizedVerification }).length < 8192,
+      `${AgentClass.name}: adversarial page metadata exceeded the fixed done-result size limit`);
+    assert.equal(oversizedVerification.pageState.dialogTitles.length, 4,
+      `${AgentClass.name}: dialog diagnostics were not compacted`);
+    assert.equal(oversizedVerification.pageState.formDescriptors.length, 10,
+      `${AgentClass.name}: form diagnostics were not compacted`);
+    assert.equal(oversizedVerification.pageState.liveRegionMessages.length, 6,
+      `${AgentClass.name}: live-region diagnostics were not compacted`);
+    assert.deepEqual(oversizedVerification.annotatedRect, { x: 1, y: 2, w: 3, h: 4 },
+      `${AgentClass.name}: arbitrary annotation metadata leaked into the done payload`);
+    agent.conversations.get(tabId).push({
+      role: 'user',
+      transientCompletionVerification: true,
+      content: [
+        { type: 'text', text: 'blocked completion screenshot' },
+        { type: 'image_url', image_url: { url: 'data:image/png;base64,AAAA' } },
+      ],
+    });
+    const persistedEntry = agent._conversationStorageEntry(tabId);
+    const persisted = JSON.stringify(persistedEntry);
+    assert.doesNotMatch(persisted, /data:image|base64|AAAA/, `${AgentClass.name}: blocked done screenshot leaked into persisted history`);
+    assert.match(persisted, /screenshot omitted from persisted history/i,
+      `${AgentClass.name}: persisted history did not retain a compact screenshot marker`);
+    assert.equal(agent._isAgentInjectedUserContent(persistedEntry.messages.at(-1)?.content), true,
+      `${AgentClass.name}: persisted screenshot marker was not recognized as agent-injected content`);
+    agent.conversations.set(tabId, persistedEntry.messages);
+    assert.equal(agent._latestTaskText(tabId), 'Submit this extension version.',
+      `${AgentClass.name}: persisted screenshot marker replaced the latest task after restart`);
+    assert.equal(agent._progressTaskAnchorText(tabId), 'Submit this extension version.',
+      `${AgentClass.name}: persisted screenshot marker replaced the progress task anchor after restart`);
+    agent._clearCompletionInvariant(tabId, token);
+  }
+});
+
 test('blocked completion skips stale calls that follow in the same batch', async () => {
   for (const AgentClass of [AgentCh, AgentFx]) {
     const agent = new AgentClass({
@@ -30288,6 +30866,67 @@ test('blocked completion skips stale calls that follow in the same batch', async
     const staleResult = messages.find(message => message.tool_call_id === 'stale_click');
     assert.match(String(staleResult?.content || ''), /"skipped":true/, `${AgentClass.name}: stale call did not receive a synthetic result`);
     assert.match(String(staleResult?.content || ''), /fresh verification turn/, `${AgentClass.name}: stale skip reason was not explicit`);
+
+    agent._clearCompletionInvariant(tabId, token);
+  }
+});
+
+test('page-warning completion skips stale calls while preserving its verification screenshot', async () => {
+  for (const AgentClass of [AgentCh, AgentFx]) {
+    const agent = new AgentClass({
+      getActive: () => ({ contextWindow: 128000, supportsVision: false }),
+      getVisionProvider: async () => null,
+    });
+    const tabId = 24817;
+    const messages = [];
+    agent.conversationModes.set(tabId, 'act');
+    agent._skipPermissionGate = true;
+    agent._ensureGateSetting = async () => false;
+    agent._persist = () => {};
+    const token = agent._beginCompletionInvariant(tabId);
+    let staleClicks = 0;
+    agent.executeTool = async (_toolTabId, name) => {
+      if (name === 'done') {
+        return {
+          success: false,
+          blockedDone: true,
+          completionPageBlock: true,
+          error: 'Completion verification found a still-open form.',
+          pageUrl: 'https://example.test/form',
+          pageState: { url: 'https://example.test/form', visibleFormCount: 1 },
+          _attachImage: 'data:image/png;base64,AAAA',
+        };
+      }
+      if (name === 'click_ax') staleClicks++;
+      return { success: true, verified: true };
+    };
+
+    const result = await agent._executeToolBatch(
+      tabId,
+      [
+        { id: 'page_blocked_done', function: { name: 'done', arguments: JSON.stringify({ summary: 'Done.', outcome: 'success' }) } },
+        { id: 'stale_page_click', function: { name: 'click_ax', arguments: JSON.stringify({ ref_id: 'must_not_run' }) } },
+      ],
+      messages,
+      () => {},
+      { supportsVision: false },
+      null,
+      new Set(['done', 'click_ax']),
+      1,
+    );
+
+    assert.equal(result.action, 'continue', `${AgentClass.name}: page warning did not request a fresh turn`);
+    assert.equal(staleClicks, 0, `${AgentClass.name}: stale call after page warning was executed`);
+    const doneResult = messages.find(message => message.tool_call_id === 'page_blocked_done');
+    assert.match(String(doneResult?.content || ''), /"completionPageBlock":true/,
+      `${AgentClass.name}: page-warning result lost its interruption marker`);
+    const verificationImage = messages.find(message => message.transientCompletionVerification === true);
+    assert.ok(verificationImage, `${AgentClass.name}: page-warning screenshot was not forwarded to the fresh turn`);
+    const staleResult = messages.find(message => message.tool_call_id === 'stale_page_click');
+    assert.match(String(staleResult?.content || ''), /"skipped":true/,
+      `${AgentClass.name}: stale call did not receive a synthetic result`);
+    assert.match(String(staleResult?.content || ''), /"reason":"completion_page_block"/,
+      `${AgentClass.name}: stale skip did not identify the page-warning block`);
 
     agent._clearCompletionInvariant(tabId, token);
   }
@@ -30450,6 +31089,7 @@ function planOnlyTerminalFixture() {
 function plannerIntentFixture({
   requestKind = 'execute',
   requiresStateChange = false,
+  requiresSubmission = false,
   allowsPlannerShapedResult = false,
   allowsAppStateToolEvidence = false,
   scheduling = null,
@@ -30461,6 +31101,7 @@ function plannerIntentFixture({
   return JSON.stringify({
     request_kind: requestKind,
     requires_state_change: requiresStateChange,
+    requires_submission: requiresSubmission,
     allows_planner_shaped_result: allowsPlannerShapedResult,
     allows_app_state_tool_evidence: allowsAppStateToolEvidence,
     summary: requestKind === 'clarify'
@@ -31190,6 +31831,61 @@ test('trusted continuation carries consequential evidence without repeating the 
       `${AgentClass.name}: continuation repeated a consequential action`,
     );
     assert.equal(responses.length, 0, `${AgentClass.name}: continuation entered recovery`);
+  }
+});
+
+test('trusted continuation carries verified submit state without permitting ordinary-turn reuse', () => {
+  for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
+    const agent = new AgentClass({});
+    const tabId = 8649 + index;
+    const conversationId = `submit_continuation_conv_${index}`;
+    const guardOutcome = {
+      requestKind: 'execute',
+      requiresStateChange: true,
+      requiresSubmission: true,
+    };
+    agent.conversationIds.set(tabId, conversationId);
+    agent._beginCompletionInvariant(tabId);
+    agent._startPlanExecutionGuard(tabId, 'act', guardOutcome);
+    agent._markPlanExecutionToolCall(tabId, 'click_ax', { success: true }, { consequential: true });
+    agent._completionSubmitStates.set(tabId, {
+      originatingUrl: 'https://example.test/submit',
+      currentUrl: 'https://example.test/finish',
+      originatingDocument: 'doc-before',
+      currentDocument: 'doc-after',
+      actionSequence: 4,
+      submitLike: true,
+      dispatched: true,
+      documentChanged: true,
+      formValidationFailed: false,
+      completionSignalObserved: true,
+      observedAfterSubmit: true,
+    });
+    agent._storeContinuationExecutionEvidence(tabId);
+
+    agent._beginCompletionInvariant(tabId);
+    assert.equal(agent._completionSubmitStates.has(tabId), false,
+      `${AgentClass.name}: fresh completion run retained submit state before continuation authorization`);
+    agent._startPlanExecutionGuard(tabId, 'act', guardOutcome, { trustedContinuation: true });
+    assert.deepEqual(agent._completionSubmitStates.get(tabId), {
+      originatingUrl: 'https://example.test/submit',
+      currentUrl: 'https://example.test/finish',
+      originatingDocument: 'doc-before',
+      currentDocument: 'doc-after',
+      actionSequence: 0,
+      submitLike: true,
+      dispatched: true,
+      documentChanged: true,
+      formValidationFailed: false,
+      completionSignalObserved: true,
+      observedAfterSubmit: true,
+    }, `${AgentClass.name}: trusted continuation did not restore verified submit evidence`);
+
+    agent._storeContinuationExecutionEvidence(tabId);
+    agent._beginCompletionInvariant(tabId);
+    agent._startPlanExecutionGuard(tabId, 'act', guardOutcome);
+    assert.equal(agent._completionSubmitStates.has(tabId), false,
+      `${AgentClass.name}: ordinary turn reused trusted continuation submit evidence`);
   }
 });
 
@@ -32149,12 +32845,44 @@ test('planner intent keeps execution authorized for plan-and-act and negated app
         assert.equal(gate.proceed, true, `${AgentClass.name}: explicit execution intent was not authorized: ${task}`);
         assert.equal(gate.requestKind, 'execute', `${AgentClass.name}: execute request kind: ${task}`);
         assert.equal(gate.requiresStateChange, true, `${AgentClass.name}: state-change requirement: ${task}`);
-        assert.equal(
-          agent._startPlanExecutionGuard(8800 + taskIndex, 'act', gate).enabled,
-          true,
-          `${AgentClass.name}: execution guard disabled: ${task}`,
-        );
+        assert.equal(gate.requiresSubmission, false, `${AgentClass.name}: non-submit execution gained submit intent: ${task}`);
+        const guard = agent._startPlanExecutionGuard(8800 + taskIndex, 'act', gate);
+        assert.equal(guard.enabled, true, `${AgentClass.name}: execution guard disabled: ${task}`);
+        assert.equal(guard.requiresSubmission, false, `${AgentClass.name}: execution guard lost non-submit intent: ${task}`);
       }
+    }
+  });
+});
+
+test('planner intent carries submit-required completion metadata into the execution guard', async () => {
+  await withPlannerBrowserGlobals(async () => {
+    for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
+      const agent = new AgentClass({ getActive: () => ({ name: 'intent-test', model: 'intent-test' }) });
+      agent._chatWithCostAllowance = async () => ({
+        content: plannerIntentFixture({
+          requestKind: 'execute',
+          requiresStateChange: false,
+          requiresSubmission: true,
+          localizedSummary: 'Submit the completed form.',
+          localizedSteps: ['Fill the required fields.', 'Submit the form.'],
+        }),
+      });
+      const gate = await agent._runPlannerIntentGate(
+        8890 + index,
+        { role: 'user', content: 'Complete and submit this form.' },
+        () => {},
+        null,
+        null,
+        '',
+        { tabUrl: 'https://example.com/items?create=1', tabTitle: 'Create item' },
+        'act',
+        { locale: 'en' },
+      );
+      assert.equal(gate.proceed, true, `${AgentClass.name}: submit-required intent was blocked`);
+      assert.equal(gate.requiresStateChange, true, `${AgentClass.name}: submission did not imply state change`);
+      assert.equal(gate.requiresSubmission, true, `${AgentClass.name}: submission metadata was dropped by the gate`);
+      const guard = agent._startPlanExecutionGuard(8900 + index, 'act', gate);
+      assert.equal(guard.requiresSubmission, true, `${AgentClass.name}: execution guard lost submission metadata`);
     }
   });
 });
@@ -36478,6 +37206,7 @@ test('exhaustiveness: every model-exposed tool is classified', () => {
 
 test('planner: parse and format structured plan', () => {
   const raw = JSON.stringify({
+    requires_submission: true,
     summary: 'Follow GitHub stargazers',
     confidence: 92,
     steps: [{ id: '1', action: 'Open stargazers', tools: ['navigate', 'wait_for_stable'] }],
@@ -36497,8 +37226,10 @@ test('planner: parse and format structured plan', () => {
   assert.equal(plan.summary, 'Follow GitHub stargazers');
   assert.equal(plan.confidence, 0.92);
   assert.equal(plan.memory.use_progress_ledger, true);
+  assert.equal(plan.memory.progress_ledger_policy, 'enabled');
   assert.equal(plan.scheduling.tool, 'schedule_task');
   assert.equal(plan.requires_state_change, true, 'planned scheduling should always require a state change');
+  assert.equal(plan.requires_submission, true, 'explicit submission intent should be preserved');
   assert.deepEqual(plan.skill_ids, ['freeskillz-xyz', 'otp-verification-code-helper']);
   const md = formatPlanMarkdown(plan);
   assert.match(md, /Follow GitHub stargazers/, 'compact plan should keep the summary');
@@ -36507,6 +37238,7 @@ test('planner: parse and format structured plan', () => {
   assert.doesNotMatch(md, /Progress ledger|Scratchpad|schedule_task|bulk follow/, 'compact plan should hide planner internals');
   const verboseMd = formatPlanMarkdown(plan, { verbose: true });
   assert.match(verboseMd, /Confidence: 92%/);
+  assert.match(verboseMd, /Submission required: yes/);
   assert.match(verboseMd, /navigate, wait_for_stable/);
   assert.match(verboseMd, /Progress ledger: yes/);
   assert.match(verboseMd, /schedule_task/);
@@ -36528,6 +37260,7 @@ test('planner: parse and format structured plan', () => {
     },
   }), { requireIntent: true, locale: 'en' });
   assert.equal(planOnly.requires_state_change, false, 'plan-only scheduling metadata must not authorize state change');
+  assert.equal(planOnly.requires_submission, false, 'plan-only metadata must not require submission');
   assert.equal(planOnly.scheduling, null, 'plan-only scheduling metadata must not arm the execution guard');
 
   const respond = parsePlanFromContent(JSON.stringify({
@@ -36545,6 +37278,7 @@ test('planner: parse and format structured plan', () => {
   }), { requireIntent: true, locale: 'en' });
   assert.equal(respond?.request_kind, 'respond', 'tool-free follow-up should be a supported intent');
   assert.equal(respond?.requires_state_change, false, 'respond must never authorize page mutation');
+  assert.equal(respond?.requires_submission, false, 'respond must never require submission');
   assert.equal(respond?.scheduling, null, 'respond must not preserve scheduling metadata');
 });
 
@@ -36553,6 +37287,13 @@ test('planner: parse JSON inside markdown fence', () => {
   const plan = parsePlanFromContent(fenced);
   assert.ok(plan);
   assert.equal(plan.summary, 'Go back');
+  assert.equal(plan.memory.progress_ledger_policy, 'disabled');
+
+  for (const parse of [parsePlanFromContent, parsePlanFromContentFx]) {
+    const legacy = parse(JSON.stringify({ summary: 'Legacy plan', steps: [], memory: {} }));
+    assert.equal(legacy.memory.progress_ledger_policy, 'auto', 'missing legacy metadata should retain classifier fallback');
+    assert.equal(legacy.requires_submission, null, 'missing legacy submission metadata should retain conservative fallback');
+  }
 });
 
 test('planner: prompt treats page context as untrusted data', () => {
@@ -36573,11 +37314,17 @@ test('planner: prompt treats page context as untrusted data', () => {
   assert.match(PLANNER_SYSTEM_PROMPT, /Calendar\/cron recurrence.*not supported/i);
   assert.match(PLANNER_SYSTEM_PROMPT, /Never approximate calendar recurrence/i);
   assert.match(PLANNER_INTENT_SYSTEM_PROMPT, /"scheduling": null/);
+  assert.match(PLANNER_INTENT_SYSTEM_PROMPT, /"use_progress_ledger": boolean/);
+  assert.match(PLANNER_INTENT_SYSTEM_PROMPT, /"requires_submission": boolean/);
+  assert.match(PLANNER_INTENT_SYSTEM_PROMPT, /explicit do-not-submit tasks and autosave UIs/i);
+  assert.match(PLANNER_INTENT_SYSTEM_PROMPT, /sequential workflow stages, sites, apps, or destinations are not peer items/i);
   assert.match(PLANNER_INTENT_SYSTEM_PROMPT, /lacks usable timing or cadence.*clarify/i);
   assert.match(PLANNER_INTENT_SYSTEM_PROMPT, /Calendar\/cron recurrence.*unsupported/i);
   assert.match(PLANNER_INTENT_SYSTEM_PROMPT, /Never convert calendar recurrence/i);
   assert.match(PLANNER_SYSTEM_PROMPT_FX, /lacks usable timing or cadence.*clarify/i);
   assert.match(PLANNER_INTENT_SYSTEM_PROMPT_FX, /Calendar\/cron recurrence.*unsupported/i);
+  assert.match(PLANNER_INTENT_SYSTEM_PROMPT_FX, /"use_progress_ledger": boolean/);
+  assert.match(PLANNER_INTENT_SYSTEM_PROMPT_FX, /"requires_submission": boolean/);
   assert.match(PLANNER_SYSTEM_PROMPT, /"confidence": 0\.0/);
   assert.match(PLANNER_SYSTEM_PROMPT, /Set confidence from 0\.0 to 1\.0/);
   assert.doesNotMatch(PLANNER_SYSTEM_PROMPT, /read:[^\n]*\bscreenshot\b/);
@@ -36690,6 +37437,7 @@ function plannerFixtureJson(overrides = {}) {
   return JSON.stringify({
     request_kind: 'execute',
     requires_state_change: false,
+    requires_submission: false,
     allows_planner_shaped_result: false,
     allows_app_state_tool_evidence: false,
     summary: 'Open the page and collect visible account links',
@@ -36978,6 +37726,170 @@ test('reviewed plan edits preserve only explicitly approved scheduling metadata'
         text => text.replace(/-\s*schedule_task:/, '- schedule_resume:'),
       );
       assert.equal(changed.requiredSchedulingTool, 'schedule_resume', `${label}: edited schedule tool was not honored`);
+    }
+  });
+});
+
+test('reviewed plan edits preserve only explicitly approved progress-ledger metadata', async () => {
+  await withPlannerBrowserGlobals(async () => {
+    for (const [label, AgentClass] of [['chrome', AgentCh], ['firefox', AgentFx]]) {
+      const runReviewedPlan = async (tabId, editPlan, memory = {
+        use_scratchpad: true,
+        scratchpad_notes: ['approved plan'],
+        use_progress_ledger: true,
+        progress_action: 'submit',
+      }) => {
+        const provider = {
+          promptTier: 'full',
+          model: 'planner-progress-edit-test',
+          name: 'planner-progress-edit-test',
+        };
+        const agent = new AgentClass({ getActive: () => provider, getVisionProvider: async () => null });
+        agent.setPlanReviewSettings({ mode: 'always' });
+        agent._chatWithCostAllowance = async () => ({
+          content: plannerFixtureJson({
+            confidence: 0.99,
+            memory,
+          }),
+        });
+        agent._waitForPlanReview = async (_tabId, _planId, _plan, _compactMarkdown, _onUpdate, verboseMarkdown) => ({
+          action: 'approve',
+          editedText: editPlan(verboseMarkdown),
+          markdownMode: 'verbose',
+        });
+        return agent._runPlannerGate(
+          tabId,
+          { role: 'user', content: 'Submit each prepared package.' },
+          () => {},
+          null,
+          null,
+          '',
+          { tabUrl: 'https://example.test/packages', tabTitle: 'Packages' },
+          'try',
+          'act',
+          { locale: 'en' },
+        );
+      };
+
+      const unchanged = await runReviewedPlan(label === 'chrome' ? 9220 : 9221, text => text);
+      assert.equal(unchanged.progressLedgerPolicy, 'enabled', `${label}: unchanged ledger policy was not preserved`);
+      assert.equal(unchanged.progressAction, 'submit', `${label}: unchanged ledger action was not preserved`);
+
+      const removed = await runReviewedPlan(
+        label === 'chrome' ? 9222 : 9223,
+        text => text.replace(/(?:^|\n)\s*-\s*Progress ledger:.*(?=\n|$)/i, ''),
+      );
+      assert.equal(removed.progressLedgerPolicy, 'disabled', `${label}: removed ledger metadata stayed enabled`);
+      assert.equal(removed.progressAction, null, `${label}: removed ledger action stayed authorized`);
+
+      const changed = await runReviewedPlan(
+        label === 'chrome' ? 9224 : 9225,
+        text => text.replace(/Progress ledger:\s*yes\s*\(submit\)/i, 'Progress ledger: yes (add)'),
+      );
+      assert.equal(changed.progressLedgerPolicy, 'enabled', `${label}: edited ledger policy was not preserved`);
+      assert.equal(changed.progressAction, 'add', `${label}: edited ledger action was not honored`);
+
+      const legacyAuto = await runReviewedPlan(
+        label === 'chrome' ? 9226 : 9227,
+        text => text.replace(/Confidence:\s*99%/i, 'Confidence: 98%'),
+        {
+          use_scratchpad: true,
+          scratchpad_notes: ['approved plan'],
+          progress_action: null,
+        },
+      );
+      assert.equal(legacyAuto.progressLedgerPolicy, 'auto', `${label}: unrelated verbose edit disabled legacy classifier fallback`);
+      assert.equal(legacyAuto.progressAction, null, `${label}: auto ledger policy gained a canonical action`);
+      assert.match(legacyAuto.approvedScratchpadText, /Progress ledger:\s*auto/i,
+        `${label}: auto ledger policy was not visible in the approved plan`);
+    }
+  });
+});
+
+test('reviewed plan edits preserve only explicitly approved submission metadata', async () => {
+  await withPlannerBrowserGlobals(async () => {
+    for (const [label, AgentClass] of [['chrome', AgentCh], ['firefox', AgentFx]]) {
+      const runReviewedPlan = async (tabId, markdownMode, editPlan) => {
+        const provider = {
+          promptTier: 'full',
+          model: 'planner-submit-edit-test',
+          name: 'planner-submit-edit-test',
+        };
+        const agent = new AgentClass({ getActive: () => provider, getVisionProvider: async () => null });
+        agent.setPlanReviewSettings({ mode: 'always' });
+        agent._chatWithCostAllowance = async () => ({
+          content: plannerFixtureJson({
+            confidence: 0.99,
+            requires_state_change: true,
+            requires_submission: true,
+            summary: 'Fill and submit the form.',
+            steps: [{ id: '1', action: 'Fill and submit the form.', tools: ['set_field', 'click'] }],
+            localized: {
+              locale: 'en',
+              summary: 'Fill and submit the form.',
+              steps: [{ id: '1', action: 'Fill and submit the form.' }],
+              risks: [],
+            },
+          }),
+        });
+        agent._waitForPlanReview = async (_tabId, _planId, _plan, compactMarkdown, _onUpdate, verboseMarkdown) => ({
+          action: 'approve',
+          editedText: editPlan(markdownMode === 'verbose' ? verboseMarkdown : compactMarkdown),
+          markdownMode,
+        });
+        return agent._runPlannerGate(
+          tabId,
+          { role: 'user', content: 'Fill and submit the form.' },
+          () => {},
+          null,
+          null,
+          '',
+          { tabUrl: 'https://example.test/items?create=1', tabTitle: 'Create item' },
+          'try',
+          'act',
+          { locale: 'en' },
+        );
+      };
+
+      const compact = await runReviewedPlan(label === 'chrome' ? 9230 : 9231, 'compact', () => 'Custom approved submit plan.');
+      assert.equal(compact.requiresSubmission, true, `${label}: compact edit lost hidden submission metadata`);
+      assert.match(compact.approvedScratchpadText, /Submission required:\s*yes/i,
+        `${label}: compact edit did not pin submission metadata`);
+
+      const unchanged = await runReviewedPlan(label === 'chrome' ? 9232 : 9233, 'verbose', text => text);
+      assert.equal(unchanged.requiresSubmission, true, `${label}: unchanged verbose plan lost submission metadata`);
+
+      const editedElsewhere = await runReviewedPlan(
+        label === 'chrome' ? 9238 : 9239,
+        'verbose',
+        text => text.replace(/Confidence:\s*99%/i, 'Confidence: 98%'),
+      );
+      assert.equal(editedElsewhere.requiresSubmission, true,
+        `${label}: unrelated verbose edit discarded approved submission metadata`);
+
+      const removedSubmitStep = await runReviewedPlan(
+        label === 'chrome' ? 9240 : 9241,
+        'verbose',
+        text => text.replace(/^1\. Fill and submit the form\..*$/im, ''),
+      );
+      assert.equal(removedSubmitStep.requiresSubmission, false,
+        `${label}: edited steps retained stale positive submission intent`);
+
+      const removed = await runReviewedPlan(
+        label === 'chrome' ? 9234 : 9235,
+        'verbose',
+        text => text.replace(/(?:^|\n)\s*-\s*Submission required:.*(?=\n|$)/i, ''),
+      );
+      assert.equal(removed.requiresSubmission, false, `${label}: removed verbose submission metadata stayed authorized`);
+      assert.doesNotMatch(removed.approvedScratchpadText, /Submission required:/i,
+        `${label}: removed verbose submission metadata was re-pinned`);
+
+      const negated = await runReviewedPlan(
+        label === 'chrome' ? 9236 : 9237,
+        'verbose',
+        text => text.replace(/Submission required:\s*yes/i, 'Submission required: no'),
+      );
+      assert.equal(negated.requiresSubmission, false, `${label}: negated verbose submission metadata was ignored`);
     }
   });
 });
