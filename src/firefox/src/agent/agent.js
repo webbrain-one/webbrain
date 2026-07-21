@@ -185,6 +185,10 @@ export class Agent {
     this.loopNudges = new Map();
     this.healthyCallsSinceLoop = new Map();
     this.failedActionLoops = new Map(); // tabId -> Map(stable failure scope -> count)
+    // Last few normalized URLs each tab arrived at during the active run.
+    // Deliberately NOT cleared by _clearLoopState: it gates those intra-run
+    // resets, so it must survive them until the outer run boundary.
+    this.recentNavUrls = new Map(); // tabId -> [normalized URL, ...]
     this._lastAxScopes = new Map(); // tabId -> { documentToken, pageUrl }, captured by the latest AX read
     // A model can walk ref_1, ref_2, … forever while every call looks unique
     // to the exact-argument loop detector. Track that semantic read pattern.
@@ -1168,10 +1172,7 @@ export class Agent {
     return { method, requestShape, failed };
   }
 
-  _clearLoopState(tabId) {
-    this.recentCalls.delete(tabId);
-    this.loopNudges.delete(tabId);
-    this.healthyCallsSinceLoop.delete(tabId);
+  _clearPageLoopState(tabId) {
     this.failedActionLoops.delete(tabId);
     this.axReadStates.delete(tabId);
     this.noProgressScrolls.delete(tabId);
@@ -1185,6 +1186,18 @@ export class Agent {
         this.failedBulkApiReplayShapes.delete(key);
       }
     }
+  }
+
+  _clearLoopState(tabId) {
+    this.recentCalls.delete(tabId);
+    this.loopNudges.delete(tabId);
+    this.healthyCallsSinceLoop.delete(tabId);
+    this._clearPageLoopState(tabId);
+  }
+
+  _clearRunLoopState(tabId) {
+    this.recentNavUrls.delete(tabId);
+    this._clearLoopState(tabId);
   }
 
   _rememberAxScope(tabId, documentToken, pageUrl = '') {
@@ -1204,10 +1217,39 @@ export class Agent {
       && next.pageUrl
       && this._normalizeUrl(previous.pageUrl) !== this._normalizeUrl(next.pageUrl)
     );
-    // Refs, text targets, and coordinates belong to the observed document and
-    // route. Once either changes, old failures cannot describe the new page.
-    if (documentChanged || routeChanged) this._clearLoopState(tabId);
+    // A same-route replacement or genuinely fresh route invalidates all loop
+    // state. On a recent-route revisit, keep only the cross-route call buffer
+    // and nudge history needed to catch navigation ping-pong; the destination
+    // page must still discard stale ref, coordinate, scroll, and failure state.
+    const revisitingRoute = routeChanged && this._isRecentNavUrl(tabId, next.pageUrl);
+    if ((documentChanged || routeChanged) && !revisitingRoute) {
+      this._clearLoopState(tabId);
+    } else if (revisitingRoute) {
+      this._clearPageLoopState(tabId);
+    }
     this._lastAxScopes.set(tabId, next);
+  }
+
+  /**
+   * Record that `tabId` arrived at `url` and report whether that URL was
+   * already seen in the last few arrivals. A first visit is page-state
+   * progress and justifies resetting loop counters; a quick revisit is the
+   * signature of a navigation loop and must leave them intact.
+   */
+  _noteNavArrival(tabId, url) {
+    const normalized = this._normalizeUrl(url);
+    if (!normalized) return false;
+    const seen = this.recentNavUrls.get(tabId) || [];
+    const revisited = seen.includes(normalized);
+    seen.push(normalized);
+    if (seen.length > 5) seen.shift();
+    this.recentNavUrls.set(tabId, seen);
+    return revisited;
+  }
+
+  _isRecentNavUrl(tabId, url) {
+    const normalized = this._normalizeUrl(url);
+    return !!normalized && (this.recentNavUrls.get(tabId) || []).includes(normalized);
   }
 
   _checkAccessibilityReadLoop(tabId, name, args, result) {
@@ -1926,8 +1968,12 @@ export class Agent {
   _checkLoop(tabId, toolName, toolArgs, toolResult) {
     // A navigation result is authoritative page-state evidence. Clear before
     // recording this call so same-looking controls on the new page start at
-    // attempt one instead of inheriting an old third-strike counter.
-    if (toolResult?.pageUrlChanged === true) this._clearLoopState(tabId);
+    // attempt one instead of inheriting an old third-strike counter. Arriving
+    // back on a recently seen URL is the exception: a click/go_back ping-pong
+    // would otherwise reset the detector on every hop and never be caught.
+    if (toolResult?.pageUrlChanged === true && !this._noteNavArrival(tabId, toolResult.currentUrl)) {
+      this._clearLoopState(tabId);
+    }
     const { buf, key } = this._recordCall(tabId, toolName, toolArgs, toolResult);
     if (this._isBrowserMutationTool(toolName)) {
       const normalizeFailureScope = value => String(value).slice(0, 320);
@@ -2428,6 +2474,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const completionBatchStartState = this.completionInvariants.get(tabId) || null;
     const navNotices = [];
     const failedApiMutationLoopKeysThisBatch = new Set();
+    // When this returns true, the caller must `navNotices.length = 0; break;`
+    // (not return): the helper already injected the queued synthetic results
+    // and nav notices, and breaking lets the shared post-batch path flush
+    // state_change/every_step auto-screenshots from earlier calls in the batch.
     const interruptFailedBrowserAction = (toolIndex, triggeringTool) => (
       this._isBrowserMutationTool(triggeringTool)
       && this._interruptToolBatchForFreshTurn(
@@ -2464,7 +2514,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           tool_call_id: tc.id,
           content: JSON.stringify({ success: false, denied: true, error }),
         });
-        if (interruptFailedBrowserAction(toolIndex, fnName)) return { action: 'continue' };
+        if (interruptFailedBrowserAction(toolIndex, fnName)) { navNotices.length = 0; break; }
         continue;
       }
       const parsedArgs = this._parseToolCallArgs(tc);
@@ -2485,7 +2535,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             latencyMs: 0,
           });
         }
-        if (interruptFailedBrowserAction(toolIndex, fnName)) return { action: 'continue' };
+        if (interruptFailedBrowserAction(toolIndex, fnName)) { navNotices.length = 0; break; }
         continue;
       }
       const argRepair = this._repairToolCallArgs(fnName, parsedArgs.args);
@@ -2592,7 +2642,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
               content: this._wrapUntrusted(fnName, this._limitToolResult(blockedResult)),
             });
             onUpdate('warning', { message: 'Repeat submission blocked until the invalid form changes.' });
-            if (interruptFailedBrowserAction(toolIndex, fnName)) return { action: 'continue' };
+            if (interruptFailedBrowserAction(toolIndex, fnName)) { navNotices.length = 0; break; }
             continue;
           }
         }
@@ -2626,7 +2676,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
               }),
             });
             onUpdate('warning', { message: 'Form submission blocked until the user confirms.' });
-            if (interruptFailedBrowserAction(toolIndex, fnName)) return { action: 'continue' };
+            if (interruptFailedBrowserAction(toolIndex, fnName)) { navNotices.length = 0; break; }
             continue;
           }
           // The submit-specific card is fresher and more precise than the
@@ -2712,7 +2762,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
               error: `Cannot run ${fnName}: the target frame/host couldn't be identified, so it can't be permission-checked. Pass a urlFilter naming the iframe's domain (read it first with iframe_read / get_accessibility_tree) and retry.`,
             }),
           });
-          if (interruptFailedBrowserAction(toolIndex, fnName)) return { action: 'continue' };
+          if (interruptFailedBrowserAction(toolIndex, fnName)) { navNotices.length = 0; break; }
           continue;
         }
         if (blocked) {
@@ -2725,7 +2775,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
               error: `The user denied permission to ${CAPABILITY_LABEL[blocked.capability]} ${blocked.host}. Do NOT retry this action on that site. Continue with what you can without it, or ask the user how to proceed.`,
             }),
           });
-          if (interruptFailedBrowserAction(toolIndex, fnName)) return { action: 'continue' };
+          if (interruptFailedBrowserAction(toolIndex, fnName)) { navNotices.length = 0; break; }
           continue;
         }
       }
@@ -7172,12 +7222,13 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     this._recentSubmitClicks.delete(tabId);
     this._formValidationBlocks.delete(tabId);
     this._lastAxScopes.delete(tabId);
+    this.recentNavUrls.delete(tabId);
     this.completionInvariants.delete(tabId);
     if (!preserveRunGuard) {
       this._runningTabs.delete(tabId);
       this.currentRunId.delete(tabId);
     }
-    this._clearLoopState(tabId);
+    this._clearRunLoopState(tabId);
   }
 
   // ─── Scratchpad ──────────────────────────────────────────────────────
@@ -12300,7 +12351,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       throw new Error('An agent run is already in progress for this tab.');
     }
     this._resetActiveSkillsForRun(tabId, { refreshPrompt: false });
-    this._clearLoopState(tabId);
+    this._clearRunLoopState(tabId);
     if (runOptions?.trustedContinuation !== true) this._continuationExecutionEvidence.delete(tabId);
     const completionRunToken = this._beginCompletionInvariant(tabId);
     this._runningTabs.add(tabId);
@@ -12320,7 +12371,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         else this.cloudRunContexts.delete(tabId);
       }
       this._runningTabs.delete(tabId);
-      this._clearLoopState(tabId);
+      this._clearRunLoopState(tabId);
       this._clearCompletionInvariant(tabId, completionRunToken);
     }
   }
@@ -12846,7 +12897,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       throw new Error('An agent run is already in progress for this tab.');
     }
     this._resetActiveSkillsForRun(tabId, { refreshPrompt: false });
-    this._clearLoopState(tabId);
+    this._clearRunLoopState(tabId);
     if (runOptions?.trustedContinuation !== true) this._continuationExecutionEvidence.delete(tabId);
     const completionRunToken = this._beginCompletionInvariant(tabId);
     this._runningTabs.add(tabId);
@@ -12866,7 +12917,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         else this.cloudRunContexts.delete(tabId);
       }
       this._runningTabs.delete(tabId);
-      this._clearLoopState(tabId);
+      this._clearRunLoopState(tabId);
       this._clearCompletionInvariant(tabId, completionRunToken);
     }
   }
