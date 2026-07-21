@@ -29251,11 +29251,12 @@ test('chrome full interactive indexes stay scoped to the topmost modal', () => {
   assert.match(content, /function _findDialogContentForOverlay\(overlay\)[\s\S]*?const siblings = overlay\?\.parentElement \? Array\.from\(overlay\.parentElement\.children\) : \[\];/, 'chrome: backdrop overlays should resolve an adjacent dialog container');
   assert.match(content, /const dialogContent = _findDialogContentForOverlay\(candidates\[i\]\);\s*if \(dialogContent\) return dialogContent;/, 'chrome: modal scoping should prefer dialog content over a backdrop sibling');
   assert.match(content, /const interactive = candidates\[i\]\.querySelector\?\.\(INTERACTIVE_SELECTORS\.join\(', '\)\);\s*if \(interactive\) return candidates\[i\];/, 'chrome: a backdrop without dialog or interactive descendants must not become the modal scope');
+  assert.match(content, /function _findTopmostBlockingModal\(\) \{\s*return _findTopmostModal\(\{ includeNonModalDialogs: false \}\);\s*\}/, 'chrome: interactive collectors should have a blocking-only modal resolver');
   const fullStart = content.indexOf('function queryInteractiveFull() {');
   const fullEnd = content.indexOf('\n  function queryInteractiveForToolIndex()', fullStart);
   const fullBody = content.slice(fullStart, fullEnd);
   assert.ok(fullStart >= 0 && fullEnd > fullStart, 'chrome: full interactive collector should be independently inspectable');
-  assert.match(fullBody, /const modal = _findTopmostModal\(\);/, 'chrome: full collector should resolve the same modal boundary as the legacy list');
+  assert.match(fullBody, /const modal = _findTopmostBlockingModal\(\);/, 'chrome: full collector should ignore visible but non-modal dialogs');
   assert.match(fullBody, /if \(modal && !_isComposedAncestor\(modal, el\)\) return false;/, 'chrome: full collector must exclude elements behind the modal, including across shadow roots');
 
   const indexedStart = content.indexOf('function queryInteractiveForToolIndex() {', fullEnd);

@@ -368,6 +368,14 @@
     }
   }
 
+  function _isNativeBlockingDialog(dialog) {
+    if (!dialog) return false;
+    try {
+      if (dialog.matches(':modal')) return true;
+    } catch {}
+    return dialog.getAttribute('aria-modal') === 'true';
+  }
+
   function _findDialogContentForOverlay(overlay) {
     const selector = '[role="dialog"],[role="alertdialog"],[aria-modal="true"],dialog[open],[data-state="open"][role="dialog"],[class*="DialogContent"],[class*="ModalContent"],.modal.show';
     const pick = (node) => {
@@ -410,10 +418,13 @@
    *   4. Common overlay class/attribute patterns (Stripe, Material, Radix,
    *      Chakra, etc.): data-overlay, data-state="open", .modal.show, etc.
    */
-  function _findTopmostModal() {
+  function _findTopmostModal(opts = {}) {
+    const includeNonModalDialogs = opts.includeNonModalDialogs !== false;
     // 1. Native <dialog open>
     const dialogs = document.querySelectorAll('dialog[open]');
-    if (dialogs.length > 0) return dialogs[dialogs.length - 1]; // last = topmost
+    for (let i = dialogs.length - 1; i >= 0; i--) {
+      if (includeNonModalDialogs || _isNativeBlockingDialog(dialogs[i])) return dialogs[i];
+    }
 
     // 2. ARIA modal
     const ariaModals = document.querySelectorAll('[role="dialog"][aria-modal="true"]');
@@ -423,17 +434,20 @@
     }
 
     // 3. Visible role="dialog"
-    const roleDialogs = document.querySelectorAll('[role="dialog"]');
-    for (let i = roleDialogs.length - 1; i >= 0; i--) {
-      const r = roleDialogs[i].getBoundingClientRect();
-      if (r.width > 0 && r.height > 0) return roleDialogs[i];
+    if (includeNonModalDialogs) {
+      const roleDialogs = document.querySelectorAll('[role="dialog"]');
+      for (let i = roleDialogs.length - 1; i >= 0; i--) {
+        const r = roleDialogs[i].getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) return roleDialogs[i];
+      }
     }
 
     // 4. Common overlay patterns — look for large, high-z-index containers
     // that cover most of the viewport. These often contain forms/modals on
     // sites like Stripe, GitHub, AWS, etc.
     const candidates = document.querySelectorAll(
-      '[data-overlay], [data-state="open"][role="dialog"], ' +
+      '[data-overlay], ' +
+      (includeNonModalDialogs ? '[data-state="open"][role="dialog"], ' : '') +
       '.modal.show, .modal-overlay, .overlay, [class*="modal"][class*="open"], ' +
       '[class*="overlay"][class*="active"], [class*="DialogOverlay"], ' +
       '[class*="ModalOverlay"]'
@@ -451,9 +465,13 @@
     return null;
   }
 
+  function _findTopmostBlockingModal() {
+    return _findTopmostModal({ includeNonModalDialogs: false });
+  }
+
   function queryInteractive() {
     const all = document.querySelectorAll([...INTERACTIVE_SELECTORS, ..._siteInteractiveSelectors()].join(', '));
-    const modal = _findTopmostModal();
+    const modal = _findTopmostBlockingModal();
     const out = [];
     for (const el of all) {
       if (!isVisiblyInteractive(el)) continue;
@@ -2606,7 +2624,7 @@
   function queryInteractiveFull() {
     const collected = []; // {el, rect, inShadow}
     const seen = new Set(); // dedupe nested wrappers (button > span > svg etc.)
-    const modal = _findTopmostModal();
+    const modal = _findTopmostBlockingModal();
 
     const isUsable = (el, rect) => {
       // Keep the agent-facing list and every indexed follow-up action inside
