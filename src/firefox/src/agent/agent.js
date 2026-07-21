@@ -910,10 +910,7 @@ export class Agent {
     return { method, requestShape, failed };
   }
 
-  _clearLoopState(tabId) {
-    this.recentCalls.delete(tabId);
-    this.loopNudges.delete(tabId);
-    this.healthyCallsSinceLoop.delete(tabId);
+  _clearDocumentLoopState(tabId) {
     this.failedActionLoops.delete(tabId);
     this.axReadStates.delete(tabId);
     this.noProgressScrolls.delete(tabId);
@@ -927,6 +924,13 @@ export class Agent {
         this.failedBulkApiReplayShapes.delete(key);
       }
     }
+  }
+
+  _clearLoopState(tabId) {
+    this.recentCalls.delete(tabId);
+    this.loopNudges.delete(tabId);
+    this.healthyCallsSinceLoop.delete(tabId);
+    this._clearDocumentLoopState(tabId);
   }
 
   _clearRunLoopState(tabId) {
@@ -951,15 +955,15 @@ export class Agent {
       && next.pageUrl
       && this._normalizeUrl(previous.pageUrl) !== this._normalizeUrl(next.pageUrl)
     );
-    // A same-route document replacement always invalidates old failures, even
-    // when that URL was visited recently. URL recency only exempts route
-    // changes: a navigation ping-pong must keep its cross-route call buffer
-    // through tree reads so it cannot launder the loop counters on every hop.
-    if (
-      (documentChanged && !routeChanged)
-      || (routeChanged && !this._isRecentNavUrl(tabId, next.pageUrl))
-    ) {
+    // A same-route replacement or genuinely fresh route invalidates all loop
+    // state. On a recent-route revisit, keep only the cross-route call buffer
+    // and nudge history needed to catch navigation ping-pong; a new document
+    // must still discard stale ref, coordinate, scroll, and failure state.
+    const revisitingRoute = routeChanged && this._isRecentNavUrl(tabId, next.pageUrl);
+    if ((documentChanged || routeChanged) && !revisitingRoute) {
       this._clearLoopState(tabId);
+    } else if (documentChanged) {
+      this._clearDocumentLoopState(tabId);
     }
     this._lastAxScopes.set(tabId, next);
   }
