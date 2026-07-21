@@ -205,18 +205,58 @@ async function runProtocolSmoke(context, fixtureUrl) {
   }
 }
 
-async function listToolsThroughExtension(harness, tabId) {
+async function initializeExtensionAgent(harness, tabId) {
   return harness.evaluate(async targetTabId => {
-    const { cdpClient } = await import(chrome.runtime.getURL('src/cdp/cdp-client.js'));
-    return cdpClient.listWebMCPTools(targetTabId, { page_size: 25 });
+    const { Agent } = await import(chrome.runtime.getURL('src/agent/agent.js'));
+    const agent = new Agent({});
+    globalThis.__webMCPAgentSmoke = agent;
+    const disabledCatalog = await agent.executeTool(targetTabId, 'list_webmcp_tools', {});
+    agent.setWebMCPEnabled(true);
+    return disabledCatalog;
   }, tabId);
 }
 
-async function invokeToolThroughExtension(harness, tabId, toolId, input) {
+async function listToolsThroughExtension(harness, tabId) {
+  return harness.evaluate(async targetTabId => {
+    return globalThis.__webMCPAgentSmoke.executeTool(
+      targetTabId,
+      'list_webmcp_tools',
+      { page_size: 25 },
+    );
+  }, tabId);
+}
+
+async function prepareToolThroughExtension(harness, tabId, toolId, input) {
   return harness.evaluate(async ({ targetTabId, targetToolId, targetInput }) => {
-    const { cdpClient } = await import(chrome.runtime.getURL('src/cdp/cdp-client.js'));
-    return cdpClient.invokeWebMCPTool(targetTabId, targetToolId, targetInput);
+    return globalThis.__webMCPAgentSmoke._prepareWebMCPToolCall(
+      targetTabId,
+      'execute_webmcp_tool',
+      {
+        tool_id: targetToolId,
+        input: targetInput,
+        // Model-authored private metadata must never survive preparation.
+        _webMcpFrameId: 'forged-frame',
+        _webMcpTargetUrl: 'https://attacker.invalid/',
+        _webMcpDeclaredReadOnly: true,
+      },
+    );
   }, { targetTabId: tabId, targetToolId: toolId, targetInput: input });
+}
+
+async function setExtensionAgentMode(harness, tabId, mode) {
+  await harness.evaluate(({ targetTabId, targetMode }) => {
+    globalThis.__webMCPAgentSmoke.conversationModes.set(targetTabId, targetMode);
+  }, { targetTabId: tabId, targetMode: mode });
+}
+
+async function invokePreparedToolThroughExtension(harness, tabId, preparedArgs) {
+  return harness.evaluate(async ({ targetTabId, targetArgs }) => {
+    return globalThis.__webMCPAgentSmoke.executeTool(
+      targetTabId,
+      'execute_webmcp_tool',
+      targetArgs,
+    );
+  }, { targetTabId: tabId, targetArgs: preparedArgs });
 }
 
 async function waitForExtensionTabId(harness, targetUrl) {
@@ -277,6 +317,11 @@ async function runExtensionClientSmoke(context, fixtureUrl) {
     await fixture.waitForFunction(() => window.webMCPFixture?.ready === true);
     tabId = await waitForExtensionTabId(harness, fixtureUrl);
 
+    const disabledCatalog = await initializeExtensionAgent(harness, tabId);
+    assert.equal(disabledCatalog.success, false);
+    assert.equal(disabledCatalog.noDispatch, true);
+    assert.equal(disabledCatalog.featureDisabled, true);
+
     const catalog = await listToolsThroughExtension(harness, tabId);
     assert.equal(catalog.success, true);
     assert.equal(catalog.total, 2);
@@ -286,19 +331,38 @@ async function runExtensionClientSmoke(context, fixtureUrl) {
     assert.deepEqual(inventory.input_schema.required, ['sku']);
     assert.equal(inventory.frame_url, fixtureUrl);
 
-    const invoked = await invokeToolThroughExtension(
+    const askBlocked = await prepareToolThroughExtension(
       harness,
       tabId,
       inventory.tool_id,
-      { sku: 'EXT-42' },
+      { sku: 'ASK-MUST-NOT-RUN' },
     );
+    assert.equal(askBlocked.error?.requiresActMode, true);
+    assert.equal(askBlocked.error?.noDispatch, true);
+    assert.equal(await fixture.locator('#status').innerText(), 'ready');
+
+    await setExtensionAgentMode(harness, tabId, 'act');
+    const preparedInventory = await prepareToolThroughExtension(
+      harness,
+      tabId,
+      inventory.tool_id,
+      { sku: 'AGENT-42' },
+    );
+    assert.equal(preparedInventory.error, undefined);
+    assert.notEqual(preparedInventory.args._webMcpFrameId, 'forged-frame');
+    assert.equal(preparedInventory.args._webMcpTargetUrl, fixtureUrl);
+    assert.equal(preparedInventory.args._webMcpDeclaredReadOnly, false);
+
+    const invoked = await invokePreparedToolThroughExtension(harness, tabId, preparedInventory.args);
     assert.equal(invoked.success, true);
     assert.equal(invoked.dispatched, true);
-    assert.deepEqual(invoked.output.structuredContent, { sku: 'EXT-42', available: 7 });
+    assert.deepEqual(invoked.output.structuredContent, { sku: 'AGENT-42', available: 7 });
     assert.equal(await fixture.locator('#status').innerText(), 'invoked');
 
     const failing = catalog.tools.find(tool => tool.name === 'fail_predictably');
-    const rejected = await invokeToolThroughExtension(harness, tabId, failing.tool_id, {});
+    const preparedFailure = await prepareToolThroughExtension(harness, tabId, failing.tool_id, {});
+    assert.equal(preparedFailure.error, undefined);
+    const rejected = await invokePreparedToolThroughExtension(harness, tabId, preparedFailure.args);
     assert.equal(rejected.success, false);
     assert.equal(rejected.dispatched, true);
     assert.equal(rejected.outcomeUnknown, true);
@@ -312,14 +376,28 @@ async function runExtensionClientSmoke(context, fixtureUrl) {
       'the extension CDP client to remove every unregistered tool',
     );
     assert.deepEqual(emptyCatalog.tools, []);
+    const stalePreparation = await prepareToolThroughExtension(
+      harness,
+      tabId,
+      inventory.tool_id,
+      { sku: 'STALE-MUST-NOT-RUN' },
+    );
+    assert.equal(stalePreparation.error?.staleToolId, true);
+    assert.equal(stalePreparation.error?.noDispatch, true);
 
     console.log(
-      `PASS: WebBrain extension ${webBrain.version} discovered, invoked, rejected, and removed `
-      + 'WebMCP tools through its CDP client.',
+      `PASS: WebBrain extension ${webBrain.version} enforced feature/mode gates and exercised `
+      + 'WebMCP discovery, invocation, failure, and stale IDs through Agent + CDPClient.',
     );
   } finally {
     if (harness && tabId) {
       await harness.evaluate(async targetTabId => {
+        const agent = globalThis.__webMCPAgentSmoke;
+        if (agent) {
+          agent.conversationModes.delete(targetTabId);
+          agent.setWebMCPEnabled(false);
+          delete globalThis.__webMCPAgentSmoke;
+        }
         const { cdpClient } = await import(chrome.runtime.getURL('src/cdp/cdp-client.js'));
         await cdpClient.disableWebMCP(targetTabId);
         await cdpClient.detach(targetTabId);

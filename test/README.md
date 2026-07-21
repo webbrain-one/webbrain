@@ -27,11 +27,12 @@ No LLM, no API keys, no network. Deterministic, ~5 seconds. Run on every PR.
 
 `test/webmcp-e2e.mjs` verifies the experimental browser API and CDP domain
 against a local fixture, then loads the real unpacked WebBrain extension and
-repeats discovery and invocation through its `CDPClient`. The coverage includes
-schema transport, asynchronous success, script exceptions, UI state changes,
-and dynamic unregistration. It uses the repository's Playwright dependency and
-requires Google Chrome 149 or newer. The runner starts and stops its own
-loopback fixture server on a random port:
+repeats discovery and invocation through its `Agent` and `CDPClient`. The
+coverage includes schema transport, default-off and Ask/Act gates, trusted frame
+metadata preparation, asynchronous success, script exceptions, UI state
+changes, dynamic unregistration, and stale tool IDs. It uses the repository's
+Playwright dependency and requires Google Chrome 149 or newer. The runner starts
+and stops its own loopback fixture server on a random port:
 
 ```bash
 npm run test:webmcp
