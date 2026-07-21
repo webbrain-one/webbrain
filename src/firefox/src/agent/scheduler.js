@@ -1073,6 +1073,19 @@ export class ScheduledJobManager {
     if (completed) this._emit(completed, 'completed');
   }
 
+  async _markClarificationRequired(job, result) {
+    const waiting = await this._updateJobIf(job.id, (prev) => (
+      ['running', 'needs_user_input'].includes(prev.status)
+    ), () => ({
+      status: 'needs_user_input',
+      lastResult: String(result || '').slice(0, 2000),
+      lastOutcome: null,
+      lastError: 'Scheduled run stopped because user input or authorization is required.',
+      pendingClarify: null,
+    }));
+    if (waiting) this._emit(waiting, 'needs_user_input');
+  }
+
   async _runJob(jobId) {
     const settings = await this._getSettings();
     const jobs = await this._getJobs();
@@ -1118,9 +1131,11 @@ export class ScheduledJobManager {
     this._emit(running, 'running');
 
     let runOutcome = null;
+    let runStatus = null;
     const onUpdate = (type, data) => {
       const doneOutcome = doneOutcomeFromUpdate(type, data);
       if (doneOutcome) runOutcome = doneOutcome;
+      if (type === 'run_status') runStatus = String(data?.status || '').trim() || null;
       if (type === 'clarify') {
         const pendingClarify = normalizePendingClarify(data, this.now());
         this._waitingForInput.add(job.id);
@@ -1169,7 +1184,11 @@ export class ScheduledJobManager {
       await this.loadProviders();
       const result = await this.agent.processMessage(tabId, this._messageForJob(running), onUpdate, running.mode || 'act');
       this._waitingForInput.delete(job.id);
-      await this._complete(running, result, runOutcome);
+      if (runStatus === 'clarification_required') {
+        await this._markClarificationRequired(running, result);
+      } else {
+        await this._complete(running, result, runOutcome);
+      }
     } catch (e) {
       this._waitingForInput.delete(job.id);
       if (isActiveRunError(e)) {

@@ -14685,6 +14685,17 @@ test('waited clarify timeout blocks consequential dispatch before permission gat
   }
 });
 
+test('agent propagates status-bearing terminal tool-batch returns to callers', () => {
+  for (const [label, rel] of [
+    ['chrome', 'src/chrome/src/agent/agent.js'],
+    ['firefox', 'src/firefox/src/agent/agent.js'],
+  ]) {
+    const source = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+    const emissions = source.match(/onUpdate\('run_status', \{ status: batchResult\.status, message: batchResult\.value \}\);/g) || [];
+    assert.equal(emissions.length, 2, `${label}: streaming and non-streaming terminal returns must both propagate run status`);
+  }
+});
+
 test('sidepanel scopes allow-api override to the tab conversation', () => {
   for (const [label, panelRel] of [
     ['chrome', 'src/chrome/src/ui/sidepanel.js'],
@@ -17021,6 +17032,46 @@ test('ScheduledJobManager keeps live scheduled clarifications resumable', async 
     assert.equal(job.status, 'completed', `${label}: original run should complete after answer`);
     assert.equal(job.lastResult, 'continued after answer');
     assert.equal(job.runCount, 1);
+  }
+});
+
+test('ScheduledJobManager preserves clarification-required terminal runs as needing input', async () => {
+  const now = Date.UTC(2026, 0, 1, 12, 0, 0);
+  for (const [label, SchedulerMod] of [['chrome', SchedulerCh], ['firefox', SchedulerFx]]) {
+    const stoppedMessage = '[Agent stopped before dispatching another consequential action. Please answer the clarification and retry.]';
+    const h = makeSchedulerHarness(SchedulerMod, {
+      now,
+      processMessage: async (_tabId, _message, onUpdate) => {
+        onUpdate('clarify', { clarifyId: 'clr-timeout', question: 'Should I submit this?' });
+        onUpdate('clarify_auto', { clarifyId: 'clr-timeout', reason: 'timeout' });
+        onUpdate('run_status', { status: 'clarification_required', message: stoppedMessage });
+        return stoppedMessage;
+      },
+    });
+    const created = await h.manager.createResumeJob({
+      tabId: 77,
+      conversationId: 'conv-1',
+      args: { after_seconds: 60, reason: 'wait', resume_instruction: 'submit when authorized' },
+    });
+
+    await h.manager.handleAlarm(h.alarmName(created.jobId));
+
+    const job = h.jobs()[0];
+    assert.equal(job.status, 'needs_user_input', `${label}: clarification-required run must not be completed`);
+    assert.equal(job.lastResult, stoppedMessage, `${label}: terminal explanation should be preserved`);
+    assert.equal(job.lastOutcome, null, `${label}: clarification-required run must not record success`);
+    assert.equal(job.runCount, 0, `${label}: clarification-required run must not increment completed run count`);
+    assert.equal(job.pendingClarify, null, `${label}: timed-out clarification must not remain answerable`);
+    assert.match(job.lastError, /user input or authorization is required/i, `${label}: stored job should explain why it stopped`);
+    assert.equal(
+      h.updates.some((u) => u.type === 'scheduled_job' && u.data?.event === 'completed'),
+      false,
+      `${label}: clarification-required run must not emit completion`,
+    );
+    assert.ok(
+      h.updates.some((u) => u.type === 'scheduled_job' && u.data?.event === 'needs_user_input'),
+      `${label}: clarification-required run should emit a needs-input update`,
+    );
   }
 });
 

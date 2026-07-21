@@ -12937,7 +12937,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         );
         if (batchResult.action === 'return') {
           finalResponse = batchResult.value;
-          if (batchResult.status) _traceStatus = batchResult.status;
+          if (batchResult.status) {
+            _traceStatus = batchResult.status;
+            onUpdate('run_status', { status: batchResult.status, message: batchResult.value });
+          }
           return finalResponse;
         }
         if (batchResult.action === 'recover') {
@@ -13348,6 +13351,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             tabId, toolCalls, messages, onUpdate, provider, fullText, allowedToolNames, steps, runOptions
           );
           if (batchResult.action === 'return') {
+            if (batchResult.status) {
+              onUpdate('run_status', { status: batchResult.status, message: batchResult.value });
+            }
             return finish(batchResult.value, batchResult.status);
           }
           if (batchResult.action === 'recover') {
