@@ -244,6 +244,12 @@ async function loadStrictSecretMode() {
 }
 loadStrictSecretMode();
 
+async function loadWebMCPEnabled() {
+  const stored = await chrome.storage.local.get('webMcpEnabled');
+  agent.setWebMCPEnabled(stored.webMcpEnabled === true);
+}
+const webMcpEnabledReady = loadWebMCPEnabled().catch(() => {});
+
 // Profile auto-fill: user-provided text (name, email, etc.) that gets
 // appended to the system prompt when enabled. Plaintext in storage —
 // security warning lives in the settings UI.
@@ -815,6 +821,9 @@ chrome.storage.onChanged.addListener((changes) => {
     // Strict mode also appends a global system note after enabled skills, so
     // refresh live conversations immediately as well as rebuilding at turn start.
     refreshPrompts = true;
+  }
+  if (changes.webMcpEnabled) {
+    agent.setWebMCPEnabled(changes.webMcpEnabled.newValue === true);
   }
   if (changes.profileEnabled) {
     agent.profileEnabled = !!changes.profileEnabled.newValue;
@@ -1783,6 +1792,7 @@ async function handleMessage(msg, sender) {
     // promises so the first chat can't race ahead of hydration, without a
     // storage round-trip on every message.
     await Promise.all([planBeforeActReady, planReviewReady, customSkillsReady, userMemoryReady]);
+    await webMcpEnabledReady;
     await screenshotRedactionReady;
   }
 
@@ -2275,6 +2285,7 @@ async function handleMessage(msg, sender) {
         loadSiteAdapters(),
         loadScreenshotRedaction(),
         loadStrictSecretMode(),
+        loadWebMCPEnabled(),
         loadProfile(),
         syncAgentUserMemoryFromStorage(),
         loadCustomSkills(),

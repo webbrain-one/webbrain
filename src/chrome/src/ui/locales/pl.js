@@ -628,6 +628,8 @@ export default {
   'st.display.plan_before_act.try': 'Spróbuj planowania (domyślnie)',
   'st.display.plan_before_act.strict': 'Ścisłe planowanie',
   'st.display.plan_before_act.off': 'Wyłączone',
+  "st.display.webmcp.label": "Eksperymentalny WebMCP",
+  "st.display.webmcp.desc": "Pozwala WebBrain wykrywać i uruchamiać ustrukturyzowane narzędzia udostępniane przez obsługiwane strony Chrome. Włączenie dodaje eksperymentalne narzędzia WebMCP i wskazówki do kontekstu modelu. Domyślnie wyłączone.",
   // --- Recording, attachments, queue, progress, and voice input ---
   "sp.record.full_screen_started_html": "Rozpoczęto nagrywanie ekranu/okna. Naciśnij dwa razy <code>Escape</code> w WebBrain lub na stronie przeglądarki, aby zatrzymać, albo użyj kontrolki Chrome Zatrzymaj udostępnianie.",
   "sp.btn.attach": "Dołącz plik",

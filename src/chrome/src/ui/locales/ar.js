@@ -637,6 +637,8 @@ export default {
   'st.display.plan_before_act.try': 'محاولة التخطيط (افتراضياً)',
   'st.display.plan_before_act.strict': 'تخطيط صارم',
   'st.display.plan_before_act.off': 'معطل',
+  "st.display.webmcp.label": "WebMCP تجريبي",
+  "st.display.webmcp.desc": "اسمح لـ WebBrain باكتشاف وتشغيل الأدوات المنظمة التي تعرضها صفحات Chrome المدعومة. يؤدي التفعيل إلى إضافة أدوات WebMCP التجريبية وإرشاداتها إلى سياق النموذج. معطل افتراضيًا.",
   // --- Recording, attachments, queue, progress, and voice input ---
   "sp.record.full_screen_started_html": "بدأ تسجيل الشاشة/النافذة. اضغط على <code>Escape</code> مرتين في WebBrain أو في صفحة المتصفح للإيقاف، أو استخدم زر إيقاف المشاركة في Chrome.",
   "sp.btn.attach": "إرفاق ملف",

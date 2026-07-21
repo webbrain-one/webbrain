@@ -1,4 +1,4 @@
-import { AGENT_TOOLS, AGENT_TOOL_NAMES, RESERVED_AGENT_TOOL_NAMES, getToolsForMode, SYSTEM_PROMPT_ASK, SYSTEM_PROMPT_ACT, SYSTEM_PROMPT_ACT_COMPACT, SYSTEM_PROMPT_ACT_MID, SYSTEM_PROMPT_DEV_APPENDIX } from './tools.js';
+import { AGENT_TOOLS, AGENT_TOOL_NAMES, RESERVED_AGENT_TOOL_NAMES, getToolsForMode, SYSTEM_PROMPT_ASK, SYSTEM_PROMPT_ACT, SYSTEM_PROMPT_ACT_COMPACT, SYSTEM_PROMPT_ACT_MID, SYSTEM_PROMPT_DEV_APPENDIX, SYSTEM_PROMPT_WEBMCP_ASK, SYSTEM_PROMPT_WEBMCP_ACT } from './tools.js';
 import { handleDoneJson } from './cloud-output.js';
 import { URL_FAMILY_TOOLS, resourceBucket, bucketArgsKey } from './loop-bucket.js';
 import { isCredentialField, CREDENTIAL_NOTE_STRICT, STRICT_SECRET_SYSTEM_NOTE } from './credential-fields.js';
@@ -180,6 +180,11 @@ export class Agent {
     // me my recovery codes", "what's my API key on this page"). Toggle
     // lives in Settings → "Strict secret handling". Loaded in background.js.
     this.strictSecretMode = false;
+
+    // Experimental Chrome WebMCP integration. Off by default so ordinary
+    // runs do not pay for unused tool schemas or prompt guidance. Users can
+    // opt in from Settings → General → Advanced.
+    this.webMcpEnabled = false;
 
     // Profile auto-fill: when enabled, the user's profile text (name,
     // email, throwaway password, etc.) is appended to the system prompt
@@ -2279,12 +2284,12 @@ export class Agent {
   // Tools whose successful completion should trigger an auto-screenshot when
   // the corresponding mode is active.
   static NAV_TOOLS = new Set(['navigate', 'new_tab', 'go_back', 'go_forward']);
-  static STATE_CHANGE_TOOLS = new Set(['navigate', 'new_tab', 'go_back', 'go_forward', 'click', 'click_ax', 'set_checked', 'type_text', 'type_ax', 'set_field', 'press_keys', 'scroll', 'hover', 'drag_drop', 'inject_css', 'remove_injected_css', 'patch_element', 'revert_patch', 'execute_js', 'inspect_event_listeners', 'highlight_element']);
+  static STATE_CHANGE_TOOLS = new Set(['navigate', 'new_tab', 'go_back', 'go_forward', 'click', 'click_ax', 'set_checked', 'type_text', 'type_ax', 'set_field', 'press_keys', 'scroll', 'hover', 'drag_drop', 'inject_css', 'remove_injected_css', 'patch_element', 'revert_patch', 'execute_js', 'inspect_event_listeners', 'highlight_element', 'execute_webmcp_tool']);
   static EXECUTION_META_TOOLS = new Set(['clarify', 'scratchpad_write', 'scratchpad_read', 'progress_update', 'progress_read']);
   static EXECUTION_APP_STATE_TOOLS = new Set(['scratchpad_write', 'scratchpad_read', 'progress_update', 'progress_read']);
   static EXECUTION_APP_STATE_WRITE_TOOLS = new Set(['scratchpad_write', 'progress_update']);
   static DELIVERY_OBSERVATION_TOOLS = new Set(['read_page', 'get_accessibility_tree', 'get_interactive_elements', 'extract_data', 'get_selection', 'scroll', 'wait_for_stable', 'wait_for_element', 'read_pdf', 'fetch_url', 'research_url', 'read_downloaded_file', 'iframe_read', 'get_window_info', 'list_downloads', 'progress_read', 'screenshot', 'get_frames', 'get_shadow_dom', 'shadow_dom_query', 'read_youtube_transcript']);
-  static NAV_PRONE_TOOLS = new Set(['click', 'click_ax', 'set_checked', 'navigate', 'go_back', 'go_forward', 'execute_js', 'iframe_click']);
+  static NAV_PRONE_TOOLS = new Set(['click', 'click_ax', 'set_checked', 'navigate', 'go_back', 'go_forward', 'execute_js', 'iframe_click', 'execute_webmcp_tool']);
   static RECOMMENDED_ACTION_FAST_PATH_IDS = new Set(['download-media', 'tweet-webbrain']);
   static RECOMMENDED_ACTION_FIRST_TOOLS = Object.freeze({
     'download-media': new Set(['screenshot']),
@@ -2724,6 +2729,78 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     return false;
   }
 
+  async _prepareWebMCPToolCall(tabId, name, args = {}) {
+    if (name !== 'execute_webmcp_tool') return { args };
+    if (!this.webMcpEnabled) {
+      return {
+        error: {
+          success: false,
+          denied: true,
+          noDispatch: true,
+          featureDisabled: true,
+          error: 'Experimental WebMCP is disabled. Enable it in Settings → General → Advanced before using WebMCP tools.',
+        },
+      };
+    }
+    if ((this.conversationModes.get(tabId) || 'ask') === 'ask') {
+      return {
+        error: {
+          success: false,
+          denied: true,
+          noDispatch: true,
+          requiresActMode: true,
+          error: 'WebMCP tool invocation requires Act or Dev mode. Page-supplied readOnly annotations are not trusted as a security boundary.',
+        },
+      };
+    }
+    const toolId = String(args?.tool_id || '').trim();
+    if (!toolId) {
+      return {
+        error: {
+          success: false,
+          denied: true,
+          noDispatch: true,
+          error: 'execute_webmcp_tool requires a tool_id from list_webmcp_tools.',
+        },
+      };
+    }
+    let context;
+    try {
+      context = await cdpClient.getWebMCPToolContext(tabId, toolId);
+    } catch (error) {
+      return {
+        error: {
+          success: false,
+          denied: true,
+          noDispatch: true,
+          unsupported: true,
+          error: String(error?.message || error || 'WebMCP is unavailable.'),
+        },
+      };
+    }
+    if (!context) {
+      return {
+        error: {
+          success: false,
+          denied: true,
+          noDispatch: true,
+          staleToolId: true,
+          error: 'This WebMCP tool ID is no longer registered. Call list_webmcp_tools again.',
+        },
+      };
+    }
+    const preparedArgs = {
+      ...args,
+      tool_id: toolId,
+      // Private gate metadata is overwritten from the trusted CDP registry;
+      // never accept these values from a model-authored argument object.
+      _webMcpDeclaredReadOnly: context.declaredReadOnly === true,
+      _webMcpTargetUrl: String(context.targetUrl || ''),
+      _webMcpFrameId: String(context.frameId || ''),
+    };
+    return { args: preparedArgs };
+  }
+
   _isBrowserMutationTool(toolName) {
     return Agent.STATE_CHANGE_TOOLS.has(toolName)
       || toolName === 'iframe_click'
@@ -2878,8 +2955,20 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         continue;
       }
       const argRepair = this._repairToolCallArgs(fnName, parsedArgs.args);
-      const fnArgs = this._toolCallArgsWithReplayMethod(tabId, fnName, argRepair.args);
+      let fnArgs = this._toolCallArgsWithReplayMethod(tabId, fnName, argRepair.args);
       const argRepairNotice = argRepair.note || '';
+
+      const webMcpPreparation = await this._prepareWebMCPToolCall(tabId, fnName, fnArgs);
+      if (webMcpPreparation.error) {
+        messages.push({
+          role: 'tool',
+          tool_call_id: tc.id,
+          content: JSON.stringify(webMcpPreparation.error),
+        });
+        onUpdate('warning', { message: webMcpPreparation.error.error });
+        continue;
+      }
+      fnArgs = webMcpPreparation.args;
 
       const mediaTargetGuard = await this._downloadPublicMediaExplicitUrlGuard(tabId, fnName, fnArgs);
       if (mediaTargetGuard) {
@@ -2908,7 +2997,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       // path later removes a capability whose prompt was already satisfied.
       // A missing response after any consequential call is an unknown outcome:
       // the side effect may have completed before its reply was lost.
-      const missingResponseOutcomeUnknown = capabilities.length > 0 || Agent.STATE_CHANGE_TOOLS.has(fnName);
+      const isStateChangingCall = Agent.STATE_CHANGE_TOOLS.has(fnName);
+      const missingResponseOutcomeUnknown = capabilities.length > 0 || isStateChangingCall;
       const executionMutationEvidence = this._isExecutionMutationEvidence(fnName, fnArgs, capabilities);
       const clarificationAuthorizationBlock = this._clarificationAuthorizationBlock(
         tabId,
@@ -3059,7 +3149,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       }
       const scheduledPolicy = this.scheduledRunPolicies.get(tabId);
       const scheduledBypassesGate = scheduledPolicy?.requireConsequentialConfirmation === false;
-      if (!this._skipPermissionGate && !scheduledBypassesGate) {
+      // WebMCP callbacks can run arbitrary page logic. Unlike ordinary browser
+      // actions, their documented two-gate boundary is mandatory: neither the
+      // global permission bypass nor an unattended scheduled-run policy may
+      // suppress the fresh invocation confirmation or the frame-host grant.
+      const requiresMandatoryWebMCPGates = fnName === 'execute_webmcp_tool';
+      const bypassesConsequentialGates = !requiresMandatoryWebMCPGates
+        && (this._skipPermissionGate || scheduledBypassesGate);
+      if (!bypassesConsequentialGates) {
         const submitConfirmation = detectedSubmitAction || await this._detectLikelySubmitAction(tabId, fnName, fnArgs);
         detectedSubmitAction = submitConfirmation;
         if (submitConfirmation?.isSubmit) {
@@ -3095,7 +3192,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           // card for same-frame submissions. iframe_click is different: the
           // generic gate is what identifies and fail-closes the target frame host
           // when urlFilter is missing, so keep CLICK for that tool.
-          if (fnName !== 'iframe_click') {
+          if (fnName !== 'iframe_click' && !requiresMandatoryWebMCPGates) {
             capabilities = capabilities.filter(capability => capability !== Capability.CLICK);
           }
         }
@@ -3113,7 +3210,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           allFrames: formValidationAllFrames,
         });
       }
-      if (capabilities.length && !this._skipPermissionGate && !scheduledBypassesGate) {
+      if (capabilities.length && !bypassesConsequentialGates) {
         await this.permissions.hydrate();
         const curUrl = await this._currentUrl(tabId);
         let blocked = null;     // { capability, host }
@@ -3121,7 +3218,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         let failClosed = false;
         let gateDisabled = false;
         for (const capability of capabilities) {
-          if (this._skipPermissionGate) { gateDisabled = true; break; }
+          if (!requiresMandatoryWebMCPGates && this._skipPermissionGate) { gateDisabled = true; break; }
           // /allow-api waives ONLY write-method network egress.
           if (capability === Capability.NETWORK && isNetworkMutation(fnName, fnArgs) && this.apiAllowedTabs.has(tabId)) continue;
           // Every distinct host the call touches must be granted. Usually one,
@@ -3130,7 +3227,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           const hosts = requiredHosts(capability, gateArgs, curUrl, fnName);
           if (hosts.length === 0) { failClosed = true; break; }
           for (const host of hosts) {
-            if (this._skipPermissionGate) { gateDisabled = true; break; }
+            if (!requiresMandatoryWebMCPGates && this._skipPermissionGate) { gateDisabled = true; break; }
             const verdict = this.permissions.check(host, capability, tabId);
             if (verdict.allowed) continue;
             const choice = verdict.needsPrompt
@@ -3142,7 +3239,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
               blocked = { capability, host };
               break;
             }
-            if (await this._ensureGateSetting({ force: true })) {
+            if (!requiresMandatoryWebMCPGates && await this._ensureGateSetting({ force: true })) {
               gateDisabled = true;
               break;
             }
@@ -7217,7 +7314,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
   async _detectLikelySubmitAction(tabId, toolName, args = {}, options = {}) {
     const name = String(toolName || '');
-    const submitCapableTools = new Set(['click', 'click_ax', 'iframe_click', 'set_field', 'press_keys', 'execute_js']);
+    const submitCapableTools = new Set(['click', 'click_ax', 'iframe_click', 'set_field', 'press_keys', 'execute_js', 'execute_webmcp_tool']);
     if (!submitCapableTools.has(name)) return null;
 
     if (name === 'set_field' && !args?.submit) return null;
@@ -7238,6 +7335,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         name,
         'execute_js can run page JavaScript',
         'JavaScript execution can trigger form submission through dynamic code, so it requires fresh submit confirmation.'
+      );
+    }
+    if (name === 'execute_webmcp_tool') {
+      return this._fallbackSubmitConfirmationInfo(
+        normalizeHost(args?._webMcpTargetUrl) || await fallbackHostForPrompt(),
+        name,
+        'page-registered WebMCP callback',
+        'A WebMCP callback can run arbitrary page logic and change remote state, so it requires fresh confirmation for every invocation.'
       );
     }
 
@@ -7831,6 +7936,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     return SYSTEM_PROMPT_ACT;
   }
 
+  setWebMCPEnabled(enabled) {
+    const next = enabled === true;
+    const changed = this.webMcpEnabled !== next;
+    this.webMcpEnabled = next;
+    if (changed && !next) void cdpClient.disableAllWebMCP();
+    if (changed) this._refreshSystemPrompts();
+  }
+
   /**
    * Resolve the active provider's prompt tier ('compact' | 'mid' | 'full').
    * The provider getter already forces 'full' for cloud providers and applies
@@ -7864,9 +7977,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
    * and on settings changes via _refreshSystemPrompts().
    */
   _buildSystemPrompt(mode, tabId = null) {
+    const tier = this._resolvePromptTier();
     let prompt = this._isActionMode(mode) ? this._getActPrompt() : SYSTEM_PROMPT_ASK;
     if (mode === 'dev') {
       prompt += `\n\n${SYSTEM_PROMPT_DEV_APPENDIX.trim()}`;
+    }
+    if (this.webMcpEnabled && (!this._isActionMode(mode) || tier !== 'compact')) {
+      const webMcpPrompt = this._isActionMode(mode) ? SYSTEM_PROMPT_WEBMCP_ACT : SYSTEM_PROMPT_WEBMCP_ASK;
+      prompt += `\n\n${webMcpPrompt}`;
     }
 
     // Universal cookie/paywall guidance. Always relevant for http(s)
@@ -7876,7 +7994,6 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       prompt += `\n\n${UNIVERSAL_PREAMBLE.trim()}`;
     }
 
-    const tier = this._resolvePromptTier();
     const skillsPrompt = buildCustomSkillsPrompt(this.customSkills, {
       mode,
       tier,
@@ -8254,6 +8371,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
    */
   _cleanupTab(tabId, { preserveRunGuard = false } = {}) {
     void cdpClient.disableDevDiagnostics(tabId);
+    void cdpClient.disableWebMCP(tabId);
     this._cancelPendingPlans(tabId, 'tab closed');
     this._isPdfTabCache.delete(tabId);
     this._lastCdpClickIdent?.delete(tabId);
@@ -11946,6 +12064,98 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     }
     if (name === 'done_json') {
       return handleDoneJson(this.cloudRunContexts.get(tabId), args);
+    }
+    if (name === 'list_webmcp_tools') {
+      if (!this.webMcpEnabled) {
+        return {
+          success: false,
+          denied: true,
+          noDispatch: true,
+          featureDisabled: true,
+          error: 'Experimental WebMCP is disabled. Enable it in Settings → General → Advanced before using WebMCP tools.',
+        };
+      }
+      try {
+        return await cdpClient.listWebMCPTools(tabId, args || {});
+      } catch (error) {
+        return {
+          success: false,
+          supported: false,
+          unsupported: true,
+          error: String(error?.message || error || 'WebMCP is unavailable.'),
+          hint: 'WebMCP currently requires a supporting Chrome build/page configuration. Continue with the accessibility tree or DOM tools.',
+        };
+      }
+    }
+    if (name === 'execute_webmcp_tool') {
+      if (!this.webMcpEnabled) {
+        return {
+          success: false,
+          denied: true,
+          dispatched: false,
+          noDispatch: true,
+          featureDisabled: true,
+          error: 'Experimental WebMCP is disabled. Enable it in Settings → General → Advanced before using WebMCP tools.',
+        };
+      }
+      try {
+        if ((this.conversationModes.get(tabId) || 'ask') === 'ask') {
+          return {
+            success: false,
+            denied: true,
+            dispatched: false,
+            noDispatch: true,
+            requiresActMode: true,
+            error: 'WebMCP tool invocation requires Act or Dev mode. Page-supplied readOnly annotations are not trusted as a security boundary.',
+          };
+        }
+        const expectedFrameId = String(args?._webMcpFrameId || '');
+        const expectedTargetUrl = String(args?._webMcpTargetUrl || '');
+        if (!expectedFrameId || !normalizeHost(expectedTargetUrl)) {
+          return {
+            success: false,
+            dispatched: false,
+            noDispatch: true,
+            contextChanged: true,
+            error: 'WebMCP execution is missing trusted frame metadata. Re-list tools and retry.',
+          };
+        }
+        const context = await cdpClient.getWebMCPToolContext(tabId, args?.tool_id);
+        if (!context) {
+          return {
+            success: false,
+            dispatched: false,
+            noDispatch: true,
+            staleToolId: true,
+            error: 'This WebMCP tool ID is no longer registered. Call list_webmcp_tools again.',
+          };
+        }
+        if (
+          String(context.frameId || '') !== expectedFrameId
+          || !normalizeHost(context.targetUrl)
+          || normalizeHost(context.targetUrl) !== normalizeHost(expectedTargetUrl)
+        ) {
+          return {
+            success: false,
+            dispatched: false,
+            noDispatch: true,
+            contextChanged: true,
+            error: 'The WebMCP registration frame changed after permission was checked. Re-list tools and retry so the current frame origin can be authorized.',
+          };
+        }
+        return await cdpClient.invokeWebMCPTool(tabId, args?.tool_id, args?.input || {}, {
+          abortCheck: () => this._checkAbort(tabId),
+          expectedFrameId,
+          expectedTargetUrl,
+        });
+      } catch (error) {
+        return {
+          success: false,
+          dispatched: false,
+          noDispatch: true,
+          error: `execute_webmcp_tool failed: ${error?.message || error}`,
+        };
+      }
     }
     if (name === 'get_window_info') {
       return await this._getWindowInfo(tabId);
@@ -16963,6 +17173,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     let tools = getToolsForMode(mode, {
       strictSecretMode: this.strictSecretMode,
       tier,
+      webMcpAvailable: this.webMcpEnabled === true,
       skillLoaderTool: this._skillLoaderDefinition(mode, tier),
       skillTools,
       cloudRun: !!cloudRunContext,
@@ -17015,6 +17226,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       tools = getToolsForMode(mode, {
         strictSecretMode: this.strictSecretMode,
         tier,
+        webMcpAvailable: this.webMcpEnabled === true,
         skillLoaderTool: this._skillLoaderDefinition(mode, tier),
         skillTools,
         cloudRun: !!cloudRunContext,
@@ -17446,6 +17658,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     let tools = getToolsForMode(mode, {
       strictSecretMode: this.strictSecretMode,
       tier,
+      webMcpAvailable: this.webMcpEnabled === true,
       skillLoaderTool: this._skillLoaderDefinition(mode, tier),
       skillTools,
       cloudRun: !!cloudRunContext,
@@ -17482,6 +17695,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       tools = getToolsForMode(mode, {
         strictSecretMode: this.strictSecretMode,
         tier,
+        webMcpAvailable: this.webMcpEnabled === true,
         skillLoaderTool: this._skillLoaderDefinition(mode, tier),
         skillTools,
         cloudRun: !!cloudRunContext,

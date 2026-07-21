@@ -65,6 +65,10 @@ export const UNTRUSTED_CONTENT_TOOLS = new Set([
   'extract_data',
   'get_selection',
   'iframe_read',
+  // Chrome transports these through CDP, but their catalogs, schemas, frame
+  // URLs, outputs, and errors still originate from the inspected page.
+  'list_webmcp_tools',
+  'execute_webmcp_tool',
   'fetch_url',
   'research_url',
   'read_pdf',
@@ -177,6 +181,11 @@ const TOOL_CAPABILITY = {
  */
 export function capabilityFor(name, args) {
   args = args || {};
+  if (name === 'execute_webmcp_tool') {
+    // readOnly is only a page-authored annotation in the current WebMCP
+    // protocol. Never let that hint bypass a human capability grant.
+    return Capability.CLICK;
+  }
   if (name === 'fetch_url' || name === 'research_url') {
     return Capability.NETWORK;
   }
@@ -283,6 +292,11 @@ function resolveHostAgainst(url, base) {
  */
 export function hostForCapability(capability, args, currentUrlOrHost, toolName) {
   args = args || {};
+  if (toolName === 'execute_webmcp_tool') {
+    // A tool can belong to a cross-origin frame. Charge mutations to that
+    // frame's resolved URL instead of borrowing the top-level page grant.
+    return normalizeHost(args._webMcpTargetUrl);
+  }
   // iframe_click / iframe_type act in a (possibly cross-origin) frame named by
   // `urlFilter`. Charge the FRAME host; if urlFilter is missing we can't
   // identify the frame → '' so the caller fails closed.

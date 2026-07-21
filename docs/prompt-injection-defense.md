@@ -61,6 +61,9 @@ Treat **all** of the following as attacker-controllable:
   `done` result includes `pageTitle` / `pageState` (dialog titles, live-region
   text). Non-obvious, easy to miss — `done` was mis-classified once for exactly
   this reason.
+- **WebMCP catalogs and results** — page-registered tool names, descriptions,
+  schemas, frame URLs, annotations, outputs, and errors remain attacker-
+  controlled even though Chrome transports them through CDP.
 
 Model-authored text (a tool's own status string, the agent's `summary`) and the
 **user's** messages are trusted. `clarify` answers are also trusted when the

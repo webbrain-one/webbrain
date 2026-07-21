@@ -637,6 +637,8 @@ export default {
   'st.display.plan_before_act.try': 'Coba perencanaan (default)',
   'st.display.plan_before_act.strict': 'Perencanaan ketat',
   'st.display.plan_before_act.off': 'Nonaktif',
+  "st.display.webmcp.label": "WebMCP eksperimental",
+  "st.display.webmcp.desc": "Izinkan WebBrain menemukan dan menjalankan alat terstruktur yang disediakan oleh halaman Chrome yang didukung. Mengaktifkannya menambahkan alat WebMCP eksperimental dan panduannya ke konteks model. Dinonaktifkan secara bawaan.",
   // --- Recording, attachments, queue, progress, and voice input ---
   "sp.record.full_screen_started_html": "Perekaman layar/jendela dimulai. Tekan <code>Escape</code> dua kali di WebBrain atau halaman browser untuk berhenti, atau gunakan kontrol Berhenti berbagi milik Chrome.",
   "sp.btn.attach": "Lampirkan file",

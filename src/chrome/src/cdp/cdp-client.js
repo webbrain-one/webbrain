@@ -11,12 +11,21 @@ const FULL_PAGE_STABLE_PASSES = 2;
 const FULL_PAGE_MAX_DISCOVERY_STEPS = 100;
 const FULL_PAGE_MAX_CONTENT_GROWTHS = 5;
 const FULL_PAGE_MAX_CAPTURE_TILES = 500;
+const WEBMCP_DISCOVERY_SETTLE_MS = 50;
+const WEBMCP_MAX_REGISTERED_TOOLS = 200;
+const WEBMCP_DEFAULT_PAGE_SIZE = 10;
+const WEBMCP_MAX_PAGE_SIZE = 25;
+const WEBMCP_DEFAULT_INVOCATION_TIMEOUT_MS = 30000;
+const WEBMCP_MAX_INVOCATION_TIMEOUT_MS = 60000;
+const WEBMCP_MAX_VALUE_NODES = 500;
+const WEBMCP_MAX_VALUE_CHARS = 20000;
 
 export class CDPClient {
   constructor() {
     this.sessions = new Map(); // tabId -> debugger session
     this.eventHandlers = new Map(); // tabId -> { eventName -> [handlers] }
     this.devDiagnostics = new Map(); // tabId -> bounded console/network buffers
+    this.webMcpSessions = new Map(); // tabId -> WebMCP tools + pending invocations
     this.fileChooserGuards = new Map(); // tabId -> temporary protocol interception
   }
 
@@ -48,6 +57,7 @@ export class CDPClient {
 
         chrome.debugger.onDetach.addListener((source, reason) => {
           if (source.tabId === tabId) {
+            this._dropWebMCPSession(tabId, `Debugger detached: ${reason || 'unknown reason'}`);
             this.sessions.delete(tabId);
             this.eventHandlers.delete(tabId);
             this.devDiagnostics.delete(tabId);
@@ -71,6 +81,7 @@ export class CDPClient {
 
     return new Promise((resolve) => {
       chrome.debugger.detach({ tabId }, () => {
+        this._dropWebMCPSession(tabId, 'Debugger detached');
         this.sessions.delete(tabId);
         this.eventHandlers.delete(tabId);
         this.devDiagnostics.delete(tabId);
@@ -129,6 +140,483 @@ export class CDPClient {
     if (list.length === 0) delete handlers[event];
     if (Object.keys(handlers).length === 0) this.eventHandlers.delete(tabId);
     return true;
+  }
+
+  _sanitizeWebMCPValue(value, depth = 0, seen = new WeakSet(), budget = { nodes: 0, chars: 0 }) {
+    if (budget.nodes >= WEBMCP_MAX_VALUE_NODES || budget.chars >= WEBMCP_MAX_VALUE_CHARS) {
+      return '[value budget exhausted]';
+    }
+    budget.nodes++;
+    if (value == null || typeof value === 'boolean') return value;
+    if (typeof value === 'string') {
+      const limit = Math.max(0, Math.min(2000, WEBMCP_MAX_VALUE_CHARS - budget.chars));
+      const text = value.slice(0, limit);
+      budget.chars += text.length;
+      return text;
+    }
+    if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+    if (typeof value !== 'object') return String(value).slice(0, 2000);
+    if (depth >= 8) return '[nested value truncated]';
+    if (seen.has(value)) return '[circular value omitted]';
+    seen.add(value);
+    if (Array.isArray(value)) {
+      return value.slice(0, 50).map(item => this._sanitizeWebMCPValue(item, depth + 1, seen, budget));
+    }
+    const out = {};
+    let count = 0;
+    for (const [rawKey, item] of Object.entries(value)) {
+      if (count >= 50) break;
+      const key = String(rawKey).slice(0, 120);
+      if (!key || key === '__proto__' || key === 'prototype' || key === 'constructor') continue;
+      budget.chars += key.length;
+      out[key] = this._sanitizeWebMCPValue(item, depth + 1, seen, budget);
+      count++;
+    }
+    return out;
+  }
+
+  _webMCPToolKey(frameId, name) {
+    return `${String(frameId || '').slice(0, 300)}\u0000${String(name || '').slice(0, 300)}`;
+  }
+
+  _newWebMCPSession(tabId) {
+    return {
+      tabId,
+      closed: false,
+      enabled: false,
+      enablingPromise: null,
+      nextToolId: 1,
+      toolsById: new Map(),
+      idsByKey: new Map(),
+      pendingInvocations: new Map(),
+      completedResponses: new Map(),
+      handlers: [],
+    };
+  }
+
+  _dropWebMCPSession(tabId, reason = 'WebMCP session closed') {
+    const state = this.webMcpSessions.get(tabId);
+    if (!state) return;
+    state.closed = true;
+    for (const pending of state.pendingInvocations.values()) {
+      try { pending.finish({
+        success: false,
+        dispatched: true,
+        cancelled: true,
+        outcomeUnknown: true,
+        error: reason,
+      }); } catch {}
+    }
+    this.webMcpSessions.delete(tabId);
+  }
+
+  _removeWebMCPHandlers(tabId, state) {
+    for (const { event, handler } of state?.handlers || []) {
+      this.off(tabId, event, handler);
+    }
+    if (state) state.handlers = [];
+  }
+
+  _storeWebMCPTools(state, tools) {
+    for (const rawTool of Array.isArray(tools) ? tools : []) {
+      const name = String(rawTool?.name || '').trim().slice(0, 300);
+      const frameId = String(rawTool?.frameId || '').trim().slice(0, 300);
+      if (!name || !frameId) continue;
+      const key = this._webMCPToolKey(frameId, name);
+      let toolId = state.idsByKey.get(key);
+      if (!toolId) {
+        if (state.toolsById.size >= WEBMCP_MAX_REGISTERED_TOOLS) continue;
+        toolId = `wmcp_${state.nextToolId.toString(36)}`;
+        state.nextToolId++;
+        state.idsByKey.set(key, toolId);
+      }
+      const annotations = rawTool?.annotations && typeof rawTool.annotations === 'object'
+        ? {
+          readOnly: rawTool.annotations.readOnly === true,
+          untrustedContent: rawTool.annotations.untrustedContent === true,
+          autosubmit: rawTool.annotations.autosubmit === true,
+        }
+        : { readOnly: false, untrustedContent: false, autosubmit: false };
+      const sanitizedSchema = this._sanitizeWebMCPValue(rawTool?.inputSchema || {
+        type: 'object', properties: {}, required: [],
+      });
+      state.toolsById.set(toolId, {
+        toolId,
+        name,
+        description: String(rawTool?.description || '').slice(0, 1000),
+        inputSchema: sanitizedSchema && typeof sanitizedSchema === 'object' && !Array.isArray(sanitizedSchema)
+          ? sanitizedSchema
+          : { type: 'object', properties: {}, required: [] },
+        annotations,
+        frameId,
+      });
+    }
+  }
+
+  _removeWebMCPTools(state, tools) {
+    for (const rawTool of Array.isArray(tools) ? tools : []) {
+      const key = this._webMCPToolKey(rawTool?.frameId, rawTool?.name);
+      const toolId = state.idsByKey.get(key);
+      if (!toolId) continue;
+      state.idsByKey.delete(key);
+      state.toolsById.delete(toolId);
+    }
+  }
+
+  _handleWebMCPResponse(state, params = {}) {
+    const invocationId = String(params.invocationId || '');
+    if (!invocationId) return;
+    const pending = state.pendingInvocations.get(invocationId);
+    if (pending) {
+      pending.respond(params);
+      return;
+    }
+    state.completedResponses.set(invocationId, params);
+    if (state.completedResponses.size > 20) {
+      const oldest = state.completedResponses.keys().next().value;
+      state.completedResponses.delete(oldest);
+    }
+  }
+
+  /**
+   * Enable Chrome's experimental WebMCP CDP domain. Tool descriptions,
+   * schemas, and outputs remain page-controlled; callers must keep them on an
+   * untrusted-content path before showing them to a model.
+   */
+  async enableWebMCP(tabId) {
+    await this.attach(tabId);
+    let state = this.webMcpSessions.get(tabId);
+    if (state?.enabled) return state;
+    if (state?.enablingPromise) return await state.enablingPromise;
+    if (!state) {
+      state = this._newWebMCPSession(tabId);
+      this.webMcpSessions.set(tabId, state);
+    }
+
+    const register = (event, handler) => {
+      this.on(tabId, event, handler);
+      state.handlers.push({ event, handler });
+    };
+    register('WebMCP.toolsAdded', params => this._storeWebMCPTools(state, params?.tools));
+    register('WebMCP.toolsRemoved', params => this._removeWebMCPTools(state, params?.tools));
+    register('WebMCP.toolResponded', params => this._handleWebMCPResponse(state, params));
+
+    state.enablingPromise = (async () => {
+      try {
+        await this.sendCommand(tabId, 'WebMCP.enable');
+        if (state.closed || this.webMcpSessions.get(tabId) !== state) {
+          if (!this.webMcpSessions.has(tabId)) {
+            await this.sendCommand(tabId, 'WebMCP.disable').catch(() => {});
+          }
+          throw new Error('WebMCP session closed while it was enabling');
+        }
+        state.enabled = true;
+        // The protocol reports the initial catalog through toolsAdded rather
+        // than the command result. Give that event one short task turn to land.
+        await new Promise(resolve => setTimeout(resolve, WEBMCP_DISCOVERY_SETTLE_MS));
+        return state;
+      } catch (error) {
+        this._removeWebMCPHandlers(tabId, state);
+        if (this.webMcpSessions.get(tabId) === state) this.webMcpSessions.delete(tabId);
+        const message = String(error?.message || error || 'unknown CDP error');
+        throw new Error(`WebMCP is unavailable in this Chrome/page context: ${message}`);
+      } finally {
+        state.enablingPromise = null;
+      }
+    })();
+    return await state.enablingPromise;
+  }
+
+  async disableWebMCP(tabId) {
+    const state = this.webMcpSessions.get(tabId);
+    if (!state) return false;
+    for (const invocationId of state.pendingInvocations.keys()) {
+      this.sendCommand(tabId, 'WebMCP.cancelInvocation', { invocationId }).catch(() => {});
+    }
+    if (state.enabled && this.sessions.has(tabId)) {
+      await this.sendCommand(tabId, 'WebMCP.disable').catch(() => {});
+    }
+    this._removeWebMCPHandlers(tabId, state);
+    this._dropWebMCPSession(tabId, 'WebMCP disabled');
+    return true;
+  }
+
+  async disableAllWebMCP() {
+    const tabIds = Array.from(this.webMcpSessions.keys());
+    await Promise.all(tabIds.map(tabId => this.disableWebMCP(tabId).catch(() => false)));
+    return tabIds.length;
+  }
+
+  async _webMCPFrameUrls(tabId) {
+    const frames = await this.getAllFrames(tabId).catch(() => []);
+    return new Map(frames.map(frame => {
+      const frameId = String(frame.id || '');
+      const rawUrl = String(frame.url || '');
+      const securityOrigin = String(frame.securityOrigin || '');
+      // Prefer Chrome's effective security origin. Sandboxed/opaque frames may
+      // retain an https-looking document URL but must not borrow that host's
+      // grant. Older test doubles omit securityOrigin, so a valid network URL
+      // remains a compatible fallback.
+      if (securityOrigin) {
+        try {
+          const origin = new URL(securityOrigin);
+          if (origin.protocol !== 'http:' && origin.protocol !== 'https:') return [frameId, ''];
+          try {
+            const url = new URL(rawUrl);
+            if (url.origin === origin.origin) return [frameId, url.href];
+          } catch {}
+          return [frameId, origin.origin];
+        } catch {
+          return [frameId, ''];
+        }
+      }
+      try {
+        const url = new URL(rawUrl);
+        return [frameId, url.protocol === 'http:' || url.protocol === 'https:' ? url.href : ''];
+      } catch {
+        return [frameId, ''];
+      }
+    }));
+  }
+
+  _webMCPPermissionHost(value) {
+    try {
+      const url = new URL(String(value || ''));
+      if (url.protocol !== 'http:' && url.protocol !== 'https:') return '';
+      return url.hostname.toLowerCase().replace(/^www\./, '');
+    } catch {
+      return '';
+    }
+  }
+
+  async listWebMCPTools(tabId, options = {}) {
+    const state = await this.enableWebMCP(tabId);
+    const requestedPage = Math.floor(Number(options.page));
+    const requestedPageSize = Math.floor(Number(options.page_size ?? options.pageSize));
+    const page = Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+    const pageSize = Number.isFinite(requestedPageSize) && requestedPageSize > 0
+      ? Math.min(WEBMCP_MAX_PAGE_SIZE, requestedPageSize)
+      : WEBMCP_DEFAULT_PAGE_SIZE;
+    const allTools = Array.from(state.toolsById.values());
+    const total = allTools.length;
+    const start = (page - 1) * pageSize;
+    const selected = allTools.slice(start, start + pageSize);
+    const frameUrls = await this._webMCPFrameUrls(tabId);
+    return {
+      success: true,
+      supported: true,
+      page,
+      pageSize,
+      total,
+      hasMore: start + selected.length < total,
+      nextPage: start + selected.length < total ? page + 1 : null,
+      tools: selected.map(tool => ({
+        tool_id: tool.toolId,
+        name: tool.name,
+        description: tool.description,
+        input_schema: tool.inputSchema,
+        annotations: { ...tool.annotations },
+        frame_url: frameUrls.get(tool.frameId) || '',
+      })),
+      note: total
+        ? 'Names, descriptions, schemas, frame URLs, and later tool outputs are supplied by the page and are untrusted data.'
+        : 'The page currently exposes no WebMCP tools.',
+    };
+  }
+
+  async getWebMCPToolContext(tabId, toolId) {
+    const state = await this.enableWebMCP(tabId);
+    const tool = state.toolsById.get(String(toolId || ''));
+    if (!tool) return null;
+    const frameUrls = await this._webMCPFrameUrls(tabId);
+    return {
+      toolId: tool.toolId,
+      name: tool.name,
+      frameId: tool.frameId,
+      targetUrl: frameUrls.get(tool.frameId) || '',
+      declaredReadOnly: tool.annotations.readOnly === true,
+      autosubmit: tool.annotations.autosubmit === true,
+    };
+  }
+
+  async invokeWebMCPTool(tabId, toolId, input = {}, options = {}) {
+    const state = await this.enableWebMCP(tabId);
+    const tool = state.toolsById.get(String(toolId || ''));
+    if (!tool) {
+      return {
+        success: false,
+        dispatched: false,
+        noDispatch: true,
+        staleToolId: true,
+        error: 'This WebMCP tool ID is no longer registered. Call list_webmcp_tools again.',
+      };
+    }
+    if (!input || typeof input !== 'object' || Array.isArray(input)) {
+      return {
+        success: false,
+        dispatched: false,
+        noDispatch: true,
+        error: 'execute_webmcp_tool: input must be a JSON object matching the listed input_schema.',
+      };
+    }
+    const expectedFrameId = String(options.expectedFrameId || '');
+    const expectedTargetUrl = String(options.expectedTargetUrl || '');
+    if (expectedFrameId || expectedTargetUrl) {
+      const frameUrls = await this._webMCPFrameUrls(tabId);
+      const actualTargetUrl = frameUrls.get(tool.frameId) || '';
+      const originFor = value => {
+        try {
+          const url = new URL(String(value || ''));
+          return url.protocol === 'http:' || url.protocol === 'https:' ? url.origin : '';
+        } catch {
+          return '';
+        }
+      };
+      const expectedOrigin = originFor(expectedTargetUrl);
+      const actualOrigin = originFor(actualTargetUrl);
+      if (
+        !expectedFrameId
+        || tool.frameId !== expectedFrameId
+        || !expectedOrigin
+        || !actualOrigin
+        || actualOrigin !== expectedOrigin
+      ) {
+        return {
+          success: false,
+          dispatched: false,
+          noDispatch: true,
+          contextChanged: true,
+          error: 'The WebMCP registration frame changed after permission was checked. Re-list tools and retry so the current frame origin can be authorized.',
+        };
+      }
+    }
+    let safeInput;
+    try {
+      const serializedInput = JSON.stringify(input);
+      if (serializedInput.length > WEBMCP_MAX_VALUE_CHARS) {
+        return {
+          success: false,
+          dispatched: false,
+          noDispatch: true,
+          error: `execute_webmcp_tool: input exceeds the ${WEBMCP_MAX_VALUE_CHARS.toLocaleString('en-US')}-character limit.`,
+        };
+      }
+      safeInput = JSON.parse(serializedInput);
+    } catch {
+      return {
+        success: false,
+        dispatched: false,
+        noDispatch: true,
+        error: 'execute_webmcp_tool: input must be JSON-serializable.',
+      };
+    }
+    let invocation;
+    try {
+      invocation = await this.sendCommand(tabId, 'WebMCP.invokeTool', {
+        frameId: tool.frameId,
+        toolName: tool.name,
+        input: safeInput,
+      });
+    } catch (error) {
+      return {
+        success: false,
+        dispatched: true,
+        outcomeUnknown: true,
+        error: `WebMCP invocation dispatch status is unknown: ${error?.message || error}`,
+      };
+    }
+    const invocationId = String(invocation?.invocationId || '');
+    if (!invocationId) {
+      return {
+        success: false,
+        dispatched: false,
+        noDispatch: true,
+        error: 'Chrome did not return a WebMCP invocation ID.',
+      };
+    }
+
+    const requestedTimeout = Number(options.timeoutMs);
+    const timeoutMs = Number.isFinite(requestedTimeout) && requestedTimeout > 0
+      ? Math.min(WEBMCP_MAX_INVOCATION_TIMEOUT_MS, Math.round(requestedTimeout))
+      : WEBMCP_DEFAULT_INVOCATION_TIMEOUT_MS;
+    const abortCheck = typeof options.abortCheck === 'function' ? options.abortCheck : null;
+    return await new Promise(resolve => {
+      let timer = null;
+      let abortTimer = null;
+      let settled = false;
+      const finish = result => {
+        if (settled) return;
+        settled = true;
+        if (timer) clearTimeout(timer);
+        if (abortTimer) clearInterval(abortTimer);
+        state.pendingInvocations.delete(invocationId);
+        state.completedResponses.delete(invocationId);
+        resolve({
+          ...result,
+          tool_id: tool.toolId,
+          name: tool.name,
+          declaredReadOnly: tool.annotations.readOnly === true,
+        });
+      };
+      const respond = (params = {}) => {
+        const status = String(params.status || 'Error');
+        if (status === 'Completed') {
+          finish({
+            success: true,
+            dispatched: true,
+            status,
+            output: this._sanitizeWebMCPValue(params.output),
+          });
+          return;
+        }
+        const exceptionText = this._remoteObjectText(params.exception);
+        finish({
+          success: false,
+          dispatched: true,
+          cancelled: status === 'Canceled',
+          outcomeUnknown: true,
+          status,
+          error: String(params.errorText || exceptionText || `WebMCP tool finished with status ${status}`).slice(0, 2000),
+        });
+      };
+      state.pendingInvocations.set(invocationId, {
+        finish,
+        respond,
+      });
+
+      const earlyResponse = state.completedResponses.get(invocationId);
+      if (earlyResponse) {
+        respond(earlyResponse);
+        return;
+      }
+      timer = setTimeout(() => {
+        state.pendingInvocations.delete(invocationId);
+        this.sendCommand(tabId, 'WebMCP.cancelInvocation', { invocationId }).catch(() => {});
+        finish({
+          success: false,
+          dispatched: true,
+          timedOut: true,
+          outcomeUnknown: true,
+          error: `WebMCP tool timed out after ${timeoutMs.toLocaleString('en-US')} ms.`,
+        });
+      }, timeoutMs);
+      if (abortCheck) {
+        abortTimer = setInterval(() => {
+          let aborted = false;
+          try { aborted = abortCheck() === true; } catch {}
+          if (!aborted) return;
+          state.pendingInvocations.delete(invocationId);
+          this.sendCommand(tabId, 'WebMCP.cancelInvocation', { invocationId }).catch(() => {});
+          finish({
+            success: false,
+            dispatched: true,
+            cancelled: true,
+            outcomeUnknown: true,
+            error: 'WebMCP tool invocation was stopped by the user.',
+          });
+        }, 100);
+      }
+    });
   }
 
   _pushBounded(list, value, max) {
@@ -687,6 +1175,7 @@ export class CDPClient {
         frames.push({
           id: frameTree.frame.id,
           url: frameTree.frame.url,
+          securityOrigin: frameTree.frame.securityOrigin,
           name: frameTree.frame.name,
           parentId: frameTree.frame.parentId,
         });

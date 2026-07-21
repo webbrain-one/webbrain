@@ -349,6 +349,20 @@ Chrome 侧边面板快捷键在 WebBrain 侧边面板获得焦点时生效。
 </a>
 
 
+## 引用
+
+如果您在研究或项目中使用 WebBrain，请引用:
+
+```bibtex
+@software{webbrain2026,
+  author = {Sokullu, Emre},
+  title = {WebBrain: 开源 AI 浏览器智能体，用于与网页对话},
+  year = {2026},
+  publisher = {GitHub},
+  url = {https://github.com/webbrain-one/webbrain}
+}
+```
+
 ## 许可证
 
 MIT — 由 [Emre Sokullu](https://emresokullu.com) 构建
