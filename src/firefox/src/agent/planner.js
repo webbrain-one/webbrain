@@ -387,8 +387,13 @@ function appendPlanExecutionMetadata(lines, plan) {
   } else {
     lines.push('- Scratchpad: no');
   }
-  if (mem.use_progress_ledger) {
+  const progressLedgerPolicy = ['enabled', 'disabled', 'auto'].includes(mem.progress_ledger_policy)
+    ? mem.progress_ledger_policy
+    : (mem.use_progress_ledger ? 'enabled' : 'disabled');
+  if (progressLedgerPolicy === 'enabled') {
     lines.push(`- Progress ledger: yes (${mem.progress_action || 'process_item'})`);
+  } else if (progressLedgerPolicy === 'auto') {
+    lines.push('- Progress ledger: auto');
   } else {
     lines.push('- Progress ledger: no');
   }

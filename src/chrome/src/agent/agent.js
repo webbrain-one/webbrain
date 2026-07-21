@@ -5828,10 +5828,13 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
   _plannerProgressLedgerGateFieldsFromApprovedPlanText(text) {
     const match = String(text || '').match(
-      /^\s*-\s*Progress ledger:\s*(yes|no)(?:\s*\(([^)\r\n]+)\))?\s*$/im,
+      /^\s*-\s*Progress ledger:\s*(yes|no|auto)(?:\s*\(([^)\r\n]+)\))?\s*$/im,
     );
     if (!match || match[1].toLowerCase() === 'no') {
       return { progressLedgerPolicy: 'disabled', progressAction: null };
+    }
+    if (match[1].toLowerCase() === 'auto') {
+      return { progressLedgerPolicy: 'auto', progressAction: null };
     }
     const action = normalizeProgressAction(match[2]);
     return action

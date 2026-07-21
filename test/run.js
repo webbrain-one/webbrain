@@ -37733,7 +37733,12 @@ test('reviewed plan edits preserve only explicitly approved scheduling metadata'
 test('reviewed plan edits preserve only explicitly approved progress-ledger metadata', async () => {
   await withPlannerBrowserGlobals(async () => {
     for (const [label, AgentClass] of [['chrome', AgentCh], ['firefox', AgentFx]]) {
-      const runReviewedPlan = async (tabId, editPlan) => {
+      const runReviewedPlan = async (tabId, editPlan, memory = {
+        use_scratchpad: true,
+        scratchpad_notes: ['approved plan'],
+        use_progress_ledger: true,
+        progress_action: 'submit',
+      }) => {
         const provider = {
           promptTier: 'full',
           model: 'planner-progress-edit-test',
@@ -37744,12 +37749,7 @@ test('reviewed plan edits preserve only explicitly approved progress-ledger meta
         agent._chatWithCostAllowance = async () => ({
           content: plannerFixtureJson({
             confidence: 0.99,
-            memory: {
-              use_scratchpad: true,
-              scratchpad_notes: ['approved plan'],
-              use_progress_ledger: true,
-              progress_action: 'submit',
-            },
+            memory,
           }),
         });
         agent._waitForPlanReview = async (_tabId, _planId, _plan, _compactMarkdown, _onUpdate, verboseMarkdown) => ({
@@ -37788,6 +37788,20 @@ test('reviewed plan edits preserve only explicitly approved progress-ledger meta
       );
       assert.equal(changed.progressLedgerPolicy, 'enabled', `${label}: edited ledger policy was not preserved`);
       assert.equal(changed.progressAction, 'add', `${label}: edited ledger action was not honored`);
+
+      const legacyAuto = await runReviewedPlan(
+        label === 'chrome' ? 9226 : 9227,
+        text => text.replace(/Confidence:\s*99%/i, 'Confidence: 98%'),
+        {
+          use_scratchpad: true,
+          scratchpad_notes: ['approved plan'],
+          progress_action: null,
+        },
+      );
+      assert.equal(legacyAuto.progressLedgerPolicy, 'auto', `${label}: unrelated verbose edit disabled legacy classifier fallback`);
+      assert.equal(legacyAuto.progressAction, null, `${label}: auto ledger policy gained a canonical action`);
+      assert.match(legacyAuto.approvedScratchpadText, /Progress ledger:\s*auto/i,
+        `${label}: auto ledger policy was not visible in the approved plan`);
     }
   });
 });
