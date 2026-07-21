@@ -258,6 +258,29 @@
     }
   }
 
+  function _composedParent(node) {
+    if (!node) return null;
+    const parent = node.parentNode;
+    if (parent) {
+      return (typeof ShadowRoot !== 'undefined' && parent instanceof ShadowRoot)
+        ? parent.host
+        : parent;
+    }
+    const root = node.getRootNode?.();
+    return (typeof ShadowRoot !== 'undefined' && root instanceof ShadowRoot)
+      ? root.host
+      : null;
+  }
+
+  function _isComposedAncestor(ancestor, node) {
+    let cur = node;
+    while (cur) {
+      if (cur === ancestor) return true;
+      cur = _composedParent(cur);
+    }
+    return false;
+  }
+
   function isVisiblyInteractive(el) {
     if (!el || el.tagName === 'BODY' || el.tagName === 'HTML') return false;
     // aria-hidden / inert subtrees are non-interactive for assistive tech
@@ -392,7 +415,7 @@
       // This prevents the agent from seeing (and accidentally clicking)
       // elements behind the overlay — the #1 cause of "clicked Export
       // instead of filling the form" on sites like Stripe.
-      if (modal && !modal.contains(el)) continue;
+      if (modal && !_isComposedAncestor(modal, el)) continue;
       out.push(el);
     }
     return out;
@@ -2535,8 +2558,12 @@
   function queryInteractiveFull() {
     const collected = []; // {el, rect, inShadow}
     const seen = new Set(); // dedupe nested wrappers (button > span > svg etc.)
+    const modal = _findTopmostModal();
 
     const isUsable = (el, rect) => {
+      // Keep the agent-facing list and every indexed follow-up action inside
+      // the same topmost modal/dialog boundary as the legacy collector.
+      if (modal && !_isComposedAncestor(modal, el)) return false;
       // Visible and in viewport. Aggressive filtering on purpose: a global
       // header link scrolled offscreen creates noise indices that shift
       // every page and confuse models that trust index across turns.

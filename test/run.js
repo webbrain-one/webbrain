@@ -29182,6 +29182,21 @@ test('submit probe index resolver stays aligned with content click ordering', ()
   }
 });
 
+test('chrome full interactive indexes stay scoped to the topmost modal', () => {
+  const content = fs.readFileSync(path.join(ROOT, 'src/chrome/src/content/content.js'), 'utf8');
+  const fullStart = content.indexOf('function queryInteractiveFull() {');
+  const fullEnd = content.indexOf('\n  function queryInteractiveForToolIndex()', fullStart);
+  const fullBody = content.slice(fullStart, fullEnd);
+  assert.ok(fullStart >= 0 && fullEnd > fullStart, 'chrome: full interactive collector should be independently inspectable');
+  assert.match(fullBody, /const modal = _findTopmostModal\(\);/, 'chrome: full collector should resolve the same modal boundary as the legacy list');
+  assert.match(fullBody, /if \(modal && !_isComposedAncestor\(modal, el\)\) return false;/, 'chrome: full collector must exclude elements behind the modal, including across shadow roots');
+
+  const indexedStart = content.indexOf('function queryInteractiveForToolIndex() {', fullEnd);
+  const indexedEnd = content.indexOf('\n  function ', indexedStart + 10);
+  const indexedBody = content.slice(indexedStart, indexedEnd);
+  assert.match(indexedBody, /return queryInteractiveFull\(\)\.map\(c => c\.el\);/, 'chrome: indexed clicks and typing must use the modal-scoped full collector');
+});
+
 test('submit confirmation UI and scheduled persistence omit always allow', () => {
   for (const [label, prefix] of [
     ['chrome', 'src/chrome'],
