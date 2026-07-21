@@ -30358,7 +30358,7 @@ test('submit-aware completion accepts the observed AMO finish document and rejec
     assert.equal(agent._completionTextSignalsSuccess('Done'), false,
       `${AgentClass.name}: bare completion word was trusted in arbitrary page content`);
     assert.equal(agent._completionTextSignalsSuccess('Done', { allowBare: true }), true,
-      `${AgentClass.name}: bare completion word was rejected for a trusted toast/title context`);
+      `${AgentClass.name}: bare completion word was rejected for a trusted live-region context`);
     let classifierCalls = 0;
     agent._classifyProgressIntentWithProvider = async () => {
       classifierCalls++;
@@ -30373,6 +30373,30 @@ test('submit-aware completion accepts the observed AMO finish document and rejec
     assert.equal(classifierCalls, 0, `${AgentClass.name}: AMO task still ran the secondary progress classifier`);
 
     const token = agent._beginCompletionInvariant(tabId);
+    agent._recordCompletionSubmitAttempt(
+      tabId,
+      { isSubmit: true },
+      'execute_js',
+      { code: 'document.querySelector("#profile").classList.add("ready")' },
+      submitUrl,
+      submitUrl,
+      { success: true },
+    );
+    assert.equal(agent._completionSubmitStates.has(tabId), false,
+      `${AgentClass.name}: generic execute_js permission fallback armed submit verification`);
+    agent._recordCompletionSubmitAttempt(
+      tabId,
+      { isSubmit: true },
+      'execute_js',
+      { code: 'document.querySelector("form").requestSubmit()' },
+      submitUrl,
+      submitUrl,
+      { success: true },
+    );
+    assert.equal(agent._completionSubmitStates.has(tabId), true,
+      `${AgentClass.name}: execute_js with strong submit evidence did not arm verification`);
+    agent._completionSubmitStates.delete(tabId);
+
     agent._recordCompletionToolResult(tabId, 'click_ax', { ref_id: 'submit-version' }, { success: true, verified: true });
     agent._recordCompletionSubmitAttempt(
       tabId,
@@ -30626,6 +30650,24 @@ test('submit-aware completion accepts the observed AMO finish document and rejec
       null,
       `${AgentClass.name}: same-page success live-region signal was rejected`,
     );
+
+    agent._completionSubmitStates.set(tabId, {
+      currentUrl: submitUrl,
+      actionSequence: Number(agent.completionInvariants.get(tabId)?.sequence || 0),
+      dispatched: true,
+      observedAfterSubmit: false,
+      documentChanged: false,
+      formValidationFailed: false,
+      completionSignalObserved: false,
+    });
+    agent._recordCompletionToolResult(tabId, 'read_page', {}, {
+      success: true,
+      url: submitUrl,
+      title: 'Complete checkout',
+      content: 'Complete checkout to continue.',
+    });
+    assert.equal(agent._completionSubmitStates.get(tabId)?.completionSignalObserved, false,
+      `${AgentClass.name}: imperative page title was accepted as submit success evidence`);
 
     assert.equal(
       agent._completionPageWarning(tabId, 'Saved.', 'success', {

@@ -386,7 +386,7 @@ export class Agent {
         result?.pageTitle,
         result?.title,
         result?.page?.title,
-      ].some(value => this._completionTextSignalsSuccess(value, { allowBare: true })) || [
+      ].some(value => this._completionTextSignalsSuccess(value)) || [
         result?.content,
         result?.text,
         result?.pageContent,
@@ -417,8 +417,14 @@ export class Agent {
   }
 
   _recordCompletionSubmitAttempt(tabId, detectedSubmit, name, args, beforeUrl, afterUrl, result, beforeDocument = '', afterDocument = '') {
-    const isSubmit = !!detectedSubmit?.isSubmit
-      || this._formValidationActionLooksSubmit(name, args, result, detectedSubmit);
+    // execute_js is always classified as submit-capable for its permission
+    // prompt, but that conservative fallback is not evidence that this call
+    // actually submitted anything. Only arm completion verification for JS
+    // whose source contains strong submit evidence.
+    const isSubmit = name === 'execute_js'
+      ? this._formValidationActionHasStrongSubmitEvidence(name, args, result, detectedSubmit)
+      : !!detectedSubmit?.isSubmit
+        || this._formValidationActionLooksSubmit(name, args, result, detectedSubmit);
     if (!isSubmit) return null;
     const before = this._normalizeUrl(beforeUrl || '');
     const after = this._normalizeUrl(afterUrl || beforeUrl || '');
