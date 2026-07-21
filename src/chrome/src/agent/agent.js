@@ -17082,7 +17082,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
   async _processMessageInner(tabId, userMessage, onUpdate, mode, attachments = [], runOptions = {}) {
     await this._hydrate(tabId);
-    this._prepareClarificationAuthorizationForRun(tabId, runOptions);
+    this._prepareClarificationAuthorizationForRun(tabId);
     this._preactivateRecommendedActionSkill(tabId, runOptions, mode);
     const messages = this.getConversation(tabId, mode);
     this._expireCurrentToolReasoning(messages);
@@ -17623,7 +17623,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
   async _processMessageStreamInner(tabId, userMessage, onUpdate, mode, runOptions = {}) {
     await this._hydrate(tabId);
-    this._prepareClarificationAuthorizationForRun(tabId, runOptions);
+    this._prepareClarificationAuthorizationForRun(tabId);
     this._preactivateRecommendedActionSkill(tabId, runOptions, mode);
     const messages = this.getConversation(tabId, mode);
     this._expireCurrentToolReasoning(messages);
