@@ -637,6 +637,8 @@ export default {
   'st.display.plan_before_act.try': '계획 시도 (기본값)',
   'st.display.plan_before_act.strict': '엄격한 계획',
   'st.display.plan_before_act.off': '끄기',
+  "st.display.webmcp.label": "실험적 WebMCP",
+  "st.display.webmcp.desc": "지원되는 Chrome 페이지가 제공하는 구조화된 도구를 WebBrain이 검색하고 실행하도록 허용합니다. 활성화하면 실험적 WebMCP 도구와 안내가 모델 컨텍스트에 추가됩니다. 기본값은 꺼짐입니다.",
   // --- Recording, attachments, queue, progress, and voice input ---
   "sp.record.full_screen_started_html": "화면/창 녹화가 시작되었습니다. 중지하려면 WebBrain 또는 브라우저 페이지에서 <code>Escape</code>를 두 번 누르거나 Chrome의 공유 중지 컨트롤을 사용하세요.",
   "sp.btn.attach": "파일 첨부",

@@ -637,6 +637,8 @@ export default {
   'st.display.plan_before_act.try': 'ลองวางแผน (ค่าเริ่มต้น)',
   'st.display.plan_before_act.strict': 'การวางแผนที่เข้มงวด',
   'st.display.plan_before_act.off': 'ปิด',
+  "st.display.webmcp.label": "WebMCP รุ่นทดลอง",
+  "st.display.webmcp.desc": "อนุญาตให้ WebBrain ค้นหาและเรียกใช้เครื่องมือแบบมีโครงสร้างที่หน้า Chrome ที่รองรับเปิดให้ใช้ การเปิดใช้งานจะเพิ่มเครื่องมือ WebMCP รุ่นทดลองและคำแนะนำลงในบริบทของโมเดล ปิดไว้เป็นค่าเริ่มต้น",
   // --- Recording, attachments, queue, progress, and voice input ---
   "sp.record.full_screen_started_html": "เริ่มบันทึกหน้าจอ/หน้าต่างแล้ว กด <code>Escape</code> สองครั้งใน WebBrain หรือหน้าเบราว์เซอร์เพื่อหยุด หรือใช้ปุ่มหยุดแชร์ของ Chrome",
   "sp.btn.attach": "แนบไฟล์",

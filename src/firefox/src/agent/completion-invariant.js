@@ -92,6 +92,7 @@ function isSelfVerifyingActionResult(name, result) {
 }
 
 export function isCompletionActionTool(name, args = {}) {
+  if (name === 'execute_webmcp_tool') return true;
   if (
     DIRECT_ACTION_TOOLS.has(name)
     || NAVIGATION_ACTION_TOOLS.has(name)

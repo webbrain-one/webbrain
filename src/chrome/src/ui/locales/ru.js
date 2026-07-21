@@ -637,6 +637,8 @@ export default {
   'st.display.plan_before_act.try': 'Попробовать планирование (по умолчанию)',
   'st.display.plan_before_act.strict': 'Строгое планирование',
   'st.display.plan_before_act.off': 'Выключено',
+  "st.display.webmcp.label": "Экспериментальный WebMCP",
+  "st.display.webmcp.desc": "Разрешает WebBrain обнаруживать и запускать структурированные инструменты, предоставляемые поддерживаемыми страницами Chrome. При включении экспериментальные инструменты WebMCP и инструкции к ним добавляются в контекст модели. По умолчанию выключено.",
   // --- Recording, attachments, queue, progress, and voice input ---
   "sp.record.full_screen_started_html": "Запись экрана/окна началась. Чтобы остановить её, дважды нажмите <code>Escape</code> в WebBrain или на странице браузера либо используйте кнопку Chrome «Остановить показ».",
   "sp.btn.attach": "Прикрепить файл",

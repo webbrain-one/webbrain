@@ -23,6 +23,23 @@ npx playwright install chromium
 
 No LLM, no API keys, no network. Deterministic, ~5 seconds. Run on every PR.
 
+### Real Chrome WebMCP smoke test
+
+`test/webmcp-e2e.py` verifies the experimental browser API and CDP domain
+against a local fixture: discovery, schema transport, asynchronous success,
+script exceptions, UI state changes, and dynamic unregistration. It requires
+Python Playwright plus Chrome 149 or newer. From the repository root, serve the
+repository on port 8765 in one terminal and run the test in another:
+
+```bash
+python -m http.server 8765 --bind 127.0.0.1
+python test/webmcp-e2e.py
+```
+
+Override `WEBMCP_CHROME_PATH` or `WEBMCP_BASE_URL` when Chrome or the fixture
+server uses a different location. The test launches Chrome headlessly with
+`WebMCPTesting,DevToolsWebMCPSupport` enabled.
+
 ## 3. Anonymous scenarios — `npm run test:anonymous`
 
 `test/anonymous/`. Playwright launches Chromium with the Chrome extension loaded, opens each scenario's URL, fires a `chat` message at the background service worker, waits for the agent's final reply, and runs the scenario's `check`. Uses a persistent profile (`.test-profile/`, gitignored) so configuration sticks between runs.

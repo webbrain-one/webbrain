@@ -49,6 +49,7 @@
 - **Smart Context** — Token-aware auto-compaction (summarizes older turns once the conversation nears the model's context window, with a visible "Context automatically compacted" notice), tool result limits, and emergency overflow recovery
 - **Browser History Control** — Act mode can use native `go_back` / `go_forward` history tools instead of CSP-sensitive page JavaScript
 - **API Shortcut Hints** — Repeated clicks that fire the same XHR/fetch request can surface a matching `fetch_url` suggestion while preserving the UI-first and `/allow-api` mutation policy
+- **WebMCP Fast Path (experimental, opt-in)** — When enabled under Settings → General → Advanced, supporting Chrome pages let Mid/Full and Ask runs discover page-declared structured tools through CDP; Act/Dev can invoke them by opaque ID instead of guessing DOM controls. Catalogs, annotations, and results stay inside the untrusted-page boundary, and every invocation uses the normal permission gate. It is off by default, so normal runs do not receive WebMCP tools or prompt guidance.
 - **On-demand Skills and Skill Tools** — Settings → Skills can import trusted skill text or URLs. Mid/Full runs receive a small eligible ID/name/summary/semantic-intent catalog and load full instructions plus compatible `webbrain-tools` only when relevant; Compact disables skills. FreeSkillz.xyz and the browser-only email verification-code helper are enabled by default, and either can be removed.
 - **Copy Support** — Copy buttons on code blocks and full messages
 - **Page Inspection Banner** — Visual indicator when the agent is interacting with the page
@@ -219,6 +220,8 @@ Legend: **Yes** = available · **-** = not available · **C** = Chrome only · *
 | `get_accessibility_tree` | Yes | Yes | Yes | Yes | - |
 | `read_page` | Yes | Yes | Yes | Yes | - |
 | `read_pdf` | Yes | No | Yes | Yes | - |
+| `list_webmcp_tools` | C | No | C | C | - |
+| `execute_webmcp_tool` | No | No | C | C | - |
 | `read_page_source` | No | No | No | No | Yes |
 | `get_window_info` | Yes | Yes | Yes | Yes | - |
 | `get_interactive_elements` | Yes | No | Yes | Yes | - |
@@ -273,6 +276,15 @@ Legend: **Yes** = available · **-** = not available · **C** = Chrome only · *
 | `inspect_network_requests` | No | No | No | No | C |
 | `inspect_event_listeners` | No | No | No | No | C |
 | `highlight_element` | No | No | No | No | C |
+
+The WebMCP rows above apply only when **Experimental WebMCP** is enabled under
+Settings → General → Advanced. The setting is off by default; while off, the
+tools and their prompt guidance are omitted from model requests. WebMCP
+annotations such as `readOnly` are page-authored hints, not a security
+boundary. Every invocation requires Act or Dev, fresh per-call confirmation,
+and the normal capability × registration-frame-origin permission. WebMCP
+currently requires a supporting Chrome build/page configuration; Firefox does
+not expose these tools.
 
 Loaded skills can append additional tool schemas for the current run. For example,
 the bundled FreeSkillz.xyz skill can expose `read_youtube_transcript` for YouTube

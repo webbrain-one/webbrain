@@ -642,6 +642,8 @@ export default {
   'st.display.plan_before_act.try': 'Planlamayı dene (varsayılan)',
   'st.display.plan_before_act.strict': 'Katı planlama',
   'st.display.plan_before_act.off': 'Kapalı',
+  "st.display.webmcp.label": "Deneysel WebMCP",
+  "st.display.webmcp.desc": "WebBrain'in desteklenen Chrome sayfalarının sunduğu yapılandırılmış araçları keşfetmesine ve çalıştırmasına izin ver. Etkinleştirildiğinde deneysel WebMCP araçları ve yönlendirmesi model bağlamına eklenir. Varsayılan olarak kapalıdır.",
   // --- Recording, attachments, queue, progress, and voice input ---
   "sp.record.full_screen_started_html": "Ekran/pencere kaydı başladı. Durdurmak için WebBrain’de veya bir tarayıcı sayfasında <code>Escape</code> tuşuna iki kez basın ya da Chrome’un Paylaşımı durdur denetimini kullanın.",
   "sp.btn.attach": "Dosya ekle",

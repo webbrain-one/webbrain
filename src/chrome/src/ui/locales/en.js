@@ -459,6 +459,8 @@ export default {
   'st.display.voice_input.desc': 'Let the mic button in the chat input dictate text via your browser\'s speech recognition. On by default in browsers that support it.',
   'st.display.api_mutation_observer.label': 'API mutation observer',
   'st.display.api_mutation_observer.desc': 'Observe same-tab XHR/fetch request URLs and methods so WebBrain can detect repeated UI actions and suggest API shortcut patterns. Off by default; enable only while investigating shortcut behavior or latency.',
+  'st.display.webmcp.label': 'Experimental WebMCP',
+  'st.display.webmcp.desc': 'Allow WebBrain to discover and run structured tools exposed by supported Chrome pages. Enabling this adds experimental WebMCP tools and guidance to the model context. Off by default.',
   'st.display.plan_before_act.label': 'Plan before Act',
   'st.display.plan_before_act.desc': 'Act and Dev always run a structured intent check before tools. Try (default) also builds full plans but may reuse a recently approved plan for a short follow-up; Strict builds a full plan every turn. If intent or planning remains invalid after one repair, both stop before tools and ask for clarification.',
   'st.display.plan_before_act.try': 'Try planning (default)',
