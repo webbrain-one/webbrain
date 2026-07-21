@@ -2837,6 +2837,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (toolName === 'chrome_web_store_upload') {
       return 'chrome_web_store_upload_requires_status';
     }
+    // The status response itself is the publish precondition. Give the model a
+    // fresh turn to inspect it instead of executing a publish call that was
+    // planned before the response existed.
+    if (toolName === 'chrome_web_store_status') {
+      return 'chrome_web_store_status_requires_inspection';
+    }
     if (!this._isBrowserMutationTool(toolName)) return '';
     if (
       toolResult?.success === false

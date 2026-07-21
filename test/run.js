@@ -39777,6 +39777,50 @@ test('Chrome Web Store upload forces a fresh status turn before any batched publ
   }
 });
 
+test('Chrome Web Store status forces a fresh inspection turn before publish', async () => {
+  for (const [label, AgentClass] of [['chrome', AgentCh], ['firefox', AgentFx]]) {
+    const agent = new AgentClass({
+      getActive: () => ({ promptTier: 'full', supportsVision: false }),
+      getVisionProvider: async () => null,
+    });
+    const tabId = label === 'chrome' ? 6026 : 6027;
+    const messages = [];
+    const executed = [];
+    agent._ensureGateSetting = async () => false;
+    agent._skipPermissionGate = true;
+    agent._rememberMastodonObservation = async () => null;
+    agent._recordProgressObservation = async () => null;
+    agent._autoRecordProgressAction = () => null;
+    agent._persist = () => {};
+    agent.executeTool = async (_tabId, name) => {
+      executed.push(name);
+      return { success: true, dispatched: name === 'chrome_web_store_publish' };
+    };
+
+    const result = await agent._executeToolBatch(
+      tabId,
+      [
+        { id: 'release_status', function: { name: 'chrome_web_store_status', arguments: '{}' } },
+        { id: 'release_publish', function: { name: 'chrome_web_store_publish', arguments: '{"publish_type":"default"}' } },
+      ],
+      messages,
+      () => {},
+      { supportsVision: false },
+      null,
+      new Set(['chrome_web_store_status', 'chrome_web_store_publish']),
+      1,
+    );
+
+    assert.equal(result.action, 'continue', `${label}: status boundary should start a fresh turn`);
+    assert.deepEqual(executed, ['chrome_web_store_status'], `${label}: publish ran before status inspection`);
+    const skipped = JSON.parse(messages.find(message => message.tool_call_id === 'release_publish').content);
+    assert.equal(skipped.skipped, true, `${label}: queued publish was not skipped`);
+    assert.equal(skipped.skippedBecause, 'fresh_turn_required', `${label}: fresh-turn marker missing`);
+    assert.equal(skipped.triggeringTool, 'chrome_web_store_status', `${label}: status trigger missing`);
+    assert.equal(skipped.reason, 'chrome_web_store_status_requires_inspection', `${label}: inspection requirement missing`);
+  }
+});
+
 test('settings exposes custom skills tab and packaged skills resource directory', () => {
   assert.equal(CUSTOM_SKILLS_STORAGE_KEY_CH, 'customSkills');
   assert.equal(CUSTOM_SKILLS_STORAGE_KEY_FX, 'customSkills');
