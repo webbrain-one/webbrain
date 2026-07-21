@@ -5849,6 +5849,20 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     return null;
   }
 
+  _approvedPlanStepsText(text) {
+    const lines = String(text || '').replace(/\r\n?/g, '\n').split('\n');
+    const start = lines.findIndex(line => line.trim().toLowerCase() === '### steps');
+    if (start < 0) return '';
+    let end = lines.length;
+    for (let index = start + 1; index < lines.length; index += 1) {
+      if (/^\s*###\s+/.test(lines[index])) {
+        end = index;
+        break;
+      }
+    }
+    return lines.slice(start + 1, end).join('\n').trim();
+  }
+
   /**
    * Compact semantic intent gate used when Plan-before-Act is off (and for
    * short follow-ups that intentionally skip a second full plan). It uses the
@@ -6116,15 +6130,20 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       const approvedProgressLedger = verbosePlanEdited
         ? this._plannerProgressLedgerGateFieldsFromApprovedPlanText(approvedText)
         : this._plannerProgressLedgerGateFields(plan);
-      // A human edit can invalidate the planner's positive submit intent even
-      // when the generated metadata line was left untouched. Drop that stale
-      // authorization on any verbose edit; trusted submit attempts still arm
-      // the verification guard, and edits may opt in from false via the line.
-      const approvedRequiresSubmission = verbosePlanEdited
-        ? (plan.requires_submission === true
-          ? false
-          : this._plannerSubmissionGateFieldFromApprovedPlanText(approvedText))
+      const approvedSubmissionMetadata = verbosePlanEdited
+        ? this._plannerSubmissionGateFieldFromApprovedPlanText(approvedText)
         : plan.requires_submission;
+      const approvedStepsChanged = verbosePlanEdited
+        && this._approvedPlanStepsText(approvedText) !== this._approvedPlanStepsText(verboseMarkdown);
+      // The visible metadata remains authoritative for unrelated edits, but a
+      // changed Steps section can remove the action that justified the
+      // planner's original positive submit intent while leaving its generated
+      // metadata untouched. Fail closed only for that stale combination.
+      const approvedRequiresSubmission = plan.requires_submission === true
+        && approvedSubmissionMetadata === true
+        && approvedStepsChanged
+        ? false
+        : approvedSubmissionMetadata;
       const approvedScratchpadText = formatPlanScratchpad(plan, approvedText, canonicalVerboseMarkdown);
       return {
         proceed: true,

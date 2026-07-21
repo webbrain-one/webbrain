@@ -37809,6 +37809,13 @@ test('reviewed plan edits preserve only explicitly approved submission metadata'
             requires_state_change: true,
             requires_submission: true,
             summary: 'Fill and submit the form.',
+            steps: [{ id: '1', action: 'Fill and submit the form.', tools: ['set_field', 'click'] }],
+            localized: {
+              locale: 'en',
+              summary: 'Fill and submit the form.',
+              steps: [{ id: '1', action: 'Fill and submit the form.' }],
+              risks: [],
+            },
           }),
         });
         agent._waitForPlanReview = async (_tabId, _planId, _plan, compactMarkdown, _onUpdate, verboseMarkdown) => ({
@@ -37843,8 +37850,16 @@ test('reviewed plan edits preserve only explicitly approved submission metadata'
         'verbose',
         text => text.replace(/Confidence:\s*99%/i, 'Confidence: 98%'),
       );
-      assert.equal(editedElsewhere.requiresSubmission, false,
-        `${label}: edited verbose plan retained stale positive submission intent`);
+      assert.equal(editedElsewhere.requiresSubmission, true,
+        `${label}: unrelated verbose edit discarded approved submission metadata`);
+
+      const removedSubmitStep = await runReviewedPlan(
+        label === 'chrome' ? 9240 : 9241,
+        'verbose',
+        text => text.replace(/^1\. Fill and submit the form\..*$/im, ''),
+      );
+      assert.equal(removedSubmitStep.requiresSubmission, false,
+        `${label}: edited steps retained stale positive submission intent`);
 
       const removed = await runReviewedPlan(
         label === 'chrome' ? 9234 : 9235,
