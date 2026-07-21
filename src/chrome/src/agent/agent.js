@@ -909,7 +909,7 @@ export class Agent {
     return { method, requestShape, failed };
   }
 
-  _clearDocumentLoopState(tabId) {
+  _clearPageLoopState(tabId) {
     this.failedActionLoops.delete(tabId);
     this.axReadStates.delete(tabId);
     this.noProgressScrolls.delete(tabId);
@@ -929,7 +929,7 @@ export class Agent {
     this.recentCalls.delete(tabId);
     this.loopNudges.delete(tabId);
     this.healthyCallsSinceLoop.delete(tabId);
-    this._clearDocumentLoopState(tabId);
+    this._clearPageLoopState(tabId);
   }
 
   _clearRunLoopState(tabId) {
@@ -956,13 +956,13 @@ export class Agent {
     );
     // A same-route replacement or genuinely fresh route invalidates all loop
     // state. On a recent-route revisit, keep only the cross-route call buffer
-    // and nudge history needed to catch navigation ping-pong; a new document
-    // must still discard stale ref, coordinate, scroll, and failure state.
+    // and nudge history needed to catch navigation ping-pong; the destination
+    // page must still discard stale ref, coordinate, scroll, and failure state.
     const revisitingRoute = routeChanged && this._isRecentNavUrl(tabId, next.pageUrl);
     if ((documentChanged || routeChanged) && !revisitingRoute) {
       this._clearLoopState(tabId);
-    } else if (documentChanged) {
-      this._clearDocumentLoopState(tabId);
+    } else if (revisitingRoute) {
+      this._clearPageLoopState(tabId);
     }
     this._lastAxScopes.set(tabId, next);
   }

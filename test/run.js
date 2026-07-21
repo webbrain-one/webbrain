@@ -3823,7 +3823,7 @@ test('revisiting a recent URL keeps loop state so navigation ping-pong is caught
     );
 
     // Tree reads on those revisited routes keep cross-route loop history, but
-    // a new document must still discard its stale target/failure counters.
+    // each destination page must still discard stale target/failure counters.
     agent.failedActionLoops.set(tab, new Map([['field-value:ref_1', 2]]));
     agent.recentCoordClicks.set(tab, [{ key: '10,10', ts: Date.now() }]);
     agent._rememberAxScope(tab, 'doc-list', listUrl);
@@ -3832,6 +3832,14 @@ test('revisiting a recent URL keeps loop state so navigation ping-pong is caught
     assert.equal(agent.loopNudges.get(tab), 1, `${label}: AX scope on a revisited route reset the nudge counter`);
     assert.equal(agent.failedActionLoops.has(tab), false, `${label}: new document retained failed target counters`);
     assert.equal(agent.recentCoordClicks.has(tab), false, `${label}: new document retained coordinate history`);
+
+    agent.failedActionLoops.set(tab, new Map([['field-value:ref_2', 2]]));
+    agent.recentCoordClicks.set(tab, [{ key: '20,20', ts: Date.now() }]);
+    agent._rememberAxScope(tab, 'doc-item', listUrl);
+    assert.equal(agent.recentCalls.has(tab), true, `${label}: same-document route revisit wiped the call buffer`);
+    assert.equal(agent.loopNudges.get(tab), 1, `${label}: same-document route revisit reset the nudge counter`);
+    assert.equal(agent.failedActionLoops.has(tab), false, `${label}: same-document route revisit retained failed target counters`);
+    assert.equal(agent.recentCoordClicks.has(tab), false, `${label}: same-document route revisit retained coordinate history`);
 
     // A genuinely new URL is still authoritative progress evidence.
     assert.equal(agent._checkLoop(tab, 'navigate', { url: 'https://example.com/item/2' }, arrive('https://example.com/item/2')).kind, 'none');
