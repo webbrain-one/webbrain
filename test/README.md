@@ -42,7 +42,9 @@ npm run test:webmcp
 Set `WEBMCP_CHROME_PATH` when Chrome is installed outside its standard Windows,
 macOS, or Linux location. The test launches Chrome headlessly with
 `WebMCPTesting,DevToolsWebMCPSupport` enabled. It remains separate from
-`npm test` because the browser API and CDP domain are experimental.
+`npm test` because the browser API and CDP domain are experimental. Each browser
+phase has a 30-second timeout; set `WEBMCP_TIMEOUT_MS` to override it or
+`WEBMCP_DEBUG=1` to print phase progress while diagnosing a failure.
 
 ## 3. Anonymous scenarios — `npm run test:anonymous`
 

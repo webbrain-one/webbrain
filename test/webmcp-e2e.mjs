@@ -23,9 +23,30 @@ const EXTENSION_PATH = path.resolve(__dirname, '..', 'src', 'chrome');
 const FEATURE_FLAGS = 'WebMCPTesting,DevToolsWebMCPSupport';
 const TOP_LEVEL_TOOL_NAMES = ['fail_predictably', 'lookup_inventory'];
 const EXPECTED_TOOL_NAMES = ['fail_predictably', 'lookup_inventory', 'read_frame_context'];
+const requestedPhaseTimeout = Number(process.env.WEBMCP_TIMEOUT_MS);
+const PHASE_TIMEOUT_MS = Number.isFinite(requestedPhaseTimeout) && requestedPhaseTimeout > 0
+  ? Math.round(requestedPhaseTimeout)
+  : 30_000;
 const debug = message => {
   if (process.env.WEBMCP_DEBUG === '1') console.log(`DEBUG: ${message}`);
 };
+
+async function withPhaseTimeout(task, label) {
+  let timer = null;
+  try {
+    return await Promise.race([
+      Promise.resolve().then(task),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(
+          `${label} exceeded ${PHASE_TIMEOUT_MS.toLocaleString('en-US')} ms. `
+          + 'Re-run with WEBMCP_DEBUG=1 to print phase progress.',
+        )), PHASE_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 
 async function firstExistingPath(candidates) {
   for (const candidate of candidates.filter(Boolean)) {
@@ -533,8 +554,14 @@ async function main() {
         `Could not launch Google Chrome. Install Chrome 149+ or set WEBMCP_CHROME_PATH. ${error?.message || error}`,
       );
     }
-    await runProtocolSmoke(context, fixtureServer.url);
-    await runExtensionClientSmoke(context, fixtureServer.url);
+    await withPhaseTimeout(
+      () => runProtocolSmoke(context, fixtureServer.url),
+      'Chrome WebMCP protocol smoke test',
+    );
+    await withPhaseTimeout(
+      () => runExtensionClientSmoke(context, fixtureServer.url),
+      'WebBrain extension WebMCP smoke test',
+    );
   } finally {
     if (context) await context.close();
     await fixtureServer.close();
