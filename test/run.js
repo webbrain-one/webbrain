@@ -12441,6 +12441,70 @@ test('chrome fetch fallback clears offscreen proxy timeout after success', async
   }
 });
 
+test('chrome fetch fallback resolves null-body proxy statuses without hanging', async () => {
+  const previousChrome = globalThis.chrome;
+  const previousFetch = globalThis.fetch;
+  const previousWarn = console.warn;
+  let nextStatus = 204;
+  let disconnects = 0;
+  console.warn = () => {};
+  globalThis.fetch = async () => {
+    throw new TypeError('Failed to fetch');
+  };
+  globalThis.chrome = {
+    offscreen: {
+      async hasDocument() {
+        return true;
+      },
+    },
+    runtime: {
+      connect() {
+        const messageListeners = [];
+        return {
+          onMessage: { addListener: (fn) => messageListeners.push(fn) },
+          onDisconnect: { addListener: () => {} },
+          postMessage() {
+            queueMicrotask(() => {
+              messageListeners.forEach((fn) => fn({
+                type: 'headers',
+                ok: nextStatus >= 200 && nextStatus < 300,
+                status: nextStatus,
+                contentType: 'application/json',
+              }));
+            });
+          },
+          disconnect() {
+            disconnects++;
+          },
+        };
+      },
+    },
+  };
+  try {
+    const fetchUrl = 'file://' + path.join(ROOT, 'src/chrome/src/providers/fetch-with-fallback.js').replace(/\\/g, '/') + `?test=${Date.now()}`;
+    const { fetchWithFallback } = await import(fetchUrl);
+    for (const status of [204, 205, 304]) {
+      nextStatus = status;
+      const res = await fetchWithFallback('http://127.0.0.1:11434/api/models', { timeoutMs: 12345 });
+      assert.equal(res.status, status, `chrome: proxied ${status} status should resolve`);
+      assert.equal(await res.text(), '', `chrome: proxied ${status} response must have no body`);
+    }
+    assert.equal(disconnects, 3, 'chrome: null-body responses should close their streaming ports immediately');
+  } finally {
+    if (previousFetch === undefined) {
+      delete globalThis.fetch;
+    } else {
+      globalThis.fetch = previousFetch;
+    }
+    if (previousChrome === undefined) {
+      delete globalThis.chrome;
+    } else {
+      globalThis.chrome = previousChrome;
+    }
+    console.warn = previousWarn;
+  }
+});
+
 test('trace viewer revokes screenshot object URLs when replacing rendered timelines', () => {
   for (const [label, tracesRel] of [
     ['chrome', 'src/chrome/src/ui/traces.js'],

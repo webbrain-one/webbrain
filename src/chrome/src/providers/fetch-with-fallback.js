@@ -178,15 +178,35 @@ async function _fetchViaOffscreenProxy(url, fetchOptions, timeoutMs) {
         if (settled) return;
         settled = true;
         clearTimeout(timeoutId);
-        const stream = new ReadableStream({
-          start(controller) { streamController = controller; },
-          cancel() { try { port.disconnect(); } catch {} },
-        });
-        resolve(new Response(stream, {
-          status: msg.status,
-          statusText: msg.ok ? 'OK' : 'Error',
-          headers: { 'Content-Type': msg.contentType || 'application/json' },
-        }));
+        // Fetch forbids response bodies for these statuses. Supplying even an
+        // empty ReadableStream makes the Response constructor throw; because
+        // headers already settled the connection phase, that used to leave
+        // the caller hanging forever with no active timeout.
+        const nullBodyStatus = msg.status === 204 || msg.status === 205 || msg.status === 304;
+        const stream = nullBodyStatus
+          ? null
+          : new ReadableStream({
+            start(controller) { streamController = controller; },
+            cancel() { try { port.disconnect(); } catch {} },
+          });
+        try {
+          resolve(new Response(stream, {
+            status: msg.status,
+            statusText: msg.ok ? 'OK' : 'Error',
+            headers: { 'Content-Type': msg.contentType || 'application/json' },
+          }));
+          if (nullBodyStatus) {
+            try { port.disconnect(); } catch {}
+          }
+        } catch (e) {
+          if (streamController) {
+            const sc = streamController;
+            streamController = null;
+            try { sc.error(e); } catch {}
+          }
+          try { port.disconnect(); } catch {}
+          reject(new Error(`offscreen proxy returned invalid response headers: ${e.message}`));
+        }
         return;
       }
       if (msg?.type === 'error') {
