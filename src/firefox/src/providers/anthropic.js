@@ -80,13 +80,24 @@ export class AnthropicProvider extends BaseLLMProvider {
           content.push({ type: 'text', text: msg.content });
         }
         for (const tc of msg.tool_calls) {
+          // Guard the parse: a tool call whose streamed arguments were
+          // truncated (max_tokens mid-call) or emitted malformed by a weak
+          // model is persisted into history verbatim by the agent loop. A
+          // bare JSON.parse here would throw before every subsequent
+          // request, permanently poisoning the conversation. Fall back to
+          // an empty input object — the tool result following this turn
+          // already carries the invalid-arguments error for the model.
+          let input = {};
+          try {
+            input = typeof tc.function.arguments === 'string'
+              ? JSON.parse(tc.function.arguments)
+              : (tc.function.arguments ?? {});
+          } catch { input = {}; }
           content.push({
             type: 'tool_use',
             id: tc.id,
             name: tc.function.name,
-            input: typeof tc.function.arguments === 'string'
-              ? JSON.parse(tc.function.arguments)
-              : tc.function.arguments,
+            input,
           });
         }
         converted.push({ role: 'assistant', content });

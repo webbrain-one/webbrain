@@ -10407,13 +10407,18 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     // recovering, defeating the whole point of the fallback.
     while (recent.length && recent[0].role === 'tool') recent.shift();
 
-    // Also truncate any huge tool results in remaining messages
+    // Also truncate any huge tool results in remaining messages. Use the
+    // wrapper-preserving variant: a plain slice can cut the
+    // </untrusted_page_content> closing tag off an untrusted tool result,
+    // which makes _hasUntrustedWrapper() return false on later passes and
+    // can launder page text into the trusted trim summary (see
+    // _truncatePreservingUntrustedWrapper's doc comment).
     for (const msg of recent) {
       if (msg.role === 'tool' && msg.content && msg.content.length > 2000) {
-        msg.content = msg.content.slice(0, 2000) + '\n[...truncated due to context limit]';
+        msg.content = this._truncatePreservingUntrustedWrapper(msg.content, 2000);
       }
       if (typeof msg.content === 'string' && msg.content.length > 5000) {
-        msg.content = msg.content.slice(0, 5000) + '\n[...truncated due to context limit]';
+        msg.content = this._truncatePreservingUntrustedWrapper(msg.content, 5000);
       }
     }
 

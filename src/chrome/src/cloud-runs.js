@@ -23,7 +23,10 @@ function normalizedCloudKey(key) {
 export function normalizeCloudBridgeUrl(value = DEFAULT_CLOUD_BRIDGE_URL) {
   const url = new URL(String(value || DEFAULT_CLOUD_BRIDGE_URL));
   const host = url.hostname.toLowerCase();
-  if (url.protocol !== 'ws:' || !['127.0.0.1', 'localhost', '::1'].includes(host)) {
+  // WHATWG URL keeps the brackets on IPv6 literals: ws://[::1]/… parses to
+  // hostname "[::1]", so both spellings must be allowlisted (same as
+  // LOCAL_OLLAMA_HOSTS in ollama-handoff.js).
+  if (url.protocol !== 'ws:' || !['127.0.0.1', 'localhost', '::1', '[::1]'].includes(host)) {
     throw new Error('WebBrain cloud bridge URL must use ws:// on localhost.');
   }
   return url.href;

@@ -4100,6 +4100,24 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       (() => {
         const needle = ${JSON.stringify(needle)};
         const lc = needle.toLowerCase();
+        // Yield to the normal text-click path when a genuinely clickable
+        // element matches the text — otherwise click({text:"X"}) would
+        // silently mutate an unrelated <select> that merely has an option
+        // labeled X instead of clicking the button/link the model saw.
+        // Form controls are excluded: matching them by placeholder/value
+        // is the text path's business, and a native <select> element's own
+        // text must not suppress the option rescue this function exists for.
+        const clickables = document.querySelectorAll(
+          'a, button, [role="button"], [role="link"], [role="tab"], [role="menuitem"], [role="option"], [role="menuitemradio"], [role="menuitemcheckbox"], [role="treeitem"], summary, [onclick], [data-action]'
+        );
+        for (const el of clickables) {
+          const r = el.getBoundingClientRect();
+          if (r.width < 2 || r.height < 2) continue;
+          const cs = getComputedStyle(el);
+          if (cs.visibility === 'hidden' || cs.display === 'none') continue;
+          const txt = (el.innerText || el.textContent || '').trim().toLowerCase();
+          if (txt && txt.includes(lc)) return { found: false, suppressedByClickable: true };
+        }
         const sels = document.querySelectorAll('select');
         for (const sel of sels) {
           const opts = Array.from(sel.options);
@@ -11440,13 +11458,18 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     // recovering, defeating the whole point of the fallback.
     while (recent.length && recent[0].role === 'tool') recent.shift();
 
-    // Also truncate any huge tool results in remaining messages
+    // Also truncate any huge tool results in remaining messages. Use the
+    // wrapper-preserving variant: a plain slice can cut the
+    // </untrusted_page_content> closing tag off an untrusted tool result,
+    // which makes _hasUntrustedWrapper() return false on later passes and
+    // can launder page text into the trusted trim summary (see
+    // _truncatePreservingUntrustedWrapper's doc comment).
     for (const msg of recent) {
       if (msg.role === 'tool' && msg.content && msg.content.length > 2000) {
-        msg.content = msg.content.slice(0, 2000) + '\n[...truncated due to context limit]';
+        msg.content = this._truncatePreservingUntrustedWrapper(msg.content, 2000);
       }
       if (typeof msg.content === 'string' && msg.content.length > 5000) {
-        msg.content = msg.content.slice(0, 5000) + '\n[...truncated due to context limit]';
+        msg.content = this._truncatePreservingUntrustedWrapper(msg.content, 5000);
       }
     }
 

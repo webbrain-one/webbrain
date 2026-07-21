@@ -21,7 +21,9 @@
   function normalizeBridgeUrl(value) {
     const url = new URL(String(value || 'ws://127.0.0.1:17373/extension'));
     const host = url.hostname.toLowerCase();
-    if (url.protocol !== 'ws:' || !['127.0.0.1', 'localhost', '::1'].includes(host)) {
+    // WHATWG URL keeps the brackets on IPv6 literals: ws://[::1]/… parses to
+    // hostname "[::1]", so both spellings must be allowlisted.
+    if (url.protocol !== 'ws:' || !['127.0.0.1', 'localhost', '::1', '[::1]'].includes(host)) {
       throw new Error('Cloud bridge URL must use ws:// on localhost.');
     }
     return url.href;

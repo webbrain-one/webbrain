@@ -901,7 +901,6 @@ const recordingStopBtn = document.getElementById('btn-recording-stop');
 
 let currentTabId = null;
 let renderedTabId = null;
-let pendingTabSwitch = null; // tab the user switched to while isProcessing was true
 let tabSwitchTransitionId = null;
 let tabSwitchGeneration = 0;
 let queuedTabSwitchMessages = [];
@@ -1417,13 +1416,34 @@ async function loadTabChat(tabId) {
   return null;
 }
 
+// chrome.storage.session is capped at 10 MB shared across every per-tab
+// chat entry. Screenshot results embed multi-MB base64 data URLs in the
+// message HTML, so a screenshot-heavy conversation can push the serialized
+// chat past the quota — and a rejected set() used to be swallowed
+// silently, so the tab's chat simply stopped persisting with no trace.
+// Over budget, strip image payloads down to a 1px placeholder for the
+// STORED copy only (the in-memory copy keeps the real images, so
+// same-session restores are unaffected), and log real failures.
+const TAB_CHAT_PERSIST_BUDGET = 7 * 1024 * 1024;
+const TRANSPARENT_PIXEL_PNG_DATA_URL =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+
+function stripImagePayloadsForPersist(html) {
+  return html.replace(/data:image\/[a-zA-Z]+;base64,[A-Za-z0-9+/=]+/g, TRANSPARENT_PIXEL_PNG_DATA_URL);
+}
+
 function persistTabChat(tabId, html) {
   if (tabId == null) return;
   return enqueueTabChatOperation(tabId, async (numericTabId) => {
     tabChats.set(numericTabId, html);
+    const toStore = html.length > TAB_CHAT_PERSIST_BUDGET
+      ? stripImagePayloadsForPersist(html)
+      : html;
     const key = TAB_CHAT_PREFIX + numericTabId;
     try {
-      await chrome.storage.session.set({ [key]: html }).catch(() => {});
+      await chrome.storage.session.set({ [key]: toStore }).catch((e) => {
+        console.warn('[WebBrain] persistTabChat: session storage write failed; chat may not survive a panel reopen:', e?.message || e);
+      });
     } catch (e) { /* ignore */ }
     return { ok: true };
   });
@@ -2230,7 +2250,6 @@ function scheduledJobActions(job) {
 
 const SCHEDULED_VISIBLE_STATUSES = new Set(['pending', 'queued', 'paused', 'running', 'needs_user_input', 'failed', 'completed']);
 const COMPLETED_SCHEDULED_JOB_AUTO_HIDE_MS = 15 * 1000;
-const crossPanelScheduledJobIds = new Set();
 const pinnedCompletedScheduledJobIds = new Set();
 let scheduledJobAutoHideTimer = null;
 
@@ -2327,8 +2346,6 @@ function ensureScheduledClarifyCards(jobs = []) {
     const jobTabId = scheduledJobTabId(job);
     if (!isUrlTargetScheduledJob(job) && jobTabId != null && currentTabId != null && String(jobTabId) !== String(currentTabId)) continue;
     if (findScheduledClarifyCard(job.id, pending.clarifyId)) continue;
-    const isCrossPanel = isUrlTargetScheduledJob(job) && jobTabId != null && currentTabId != null && String(jobTabId) !== String(currentTabId);
-    if (isCrossPanel) crossPanelScheduledJobIds.add(String(job.id));
     renderClarifyCard({
       ...pending,
       scheduledJobId: job.id,
@@ -2417,20 +2434,7 @@ async function scheduledJobAction(action, jobId) {
   }
 }
 
-async function drainQueuedContextMenuPromptsAfterPendingTabSwitch() {
-  if (drainQueuedComposerMessageForCurrentTab()) return;
-  if (pendingTabSwitch == null) {
-    drainQueuedContextMenuPrompts();
-    return;
-  }
-  const pending = pendingTabSwitch;
-  pendingTabSwitch = null;
-  try {
-    await switchToTab(pending);
-  } catch {
-    // Still drain any queued prompt for the current tab; tab activation can fail
-    // when the underlying browser tab disappears during run settlement.
-  }
+async function drainQueuedPromptsAfterRunSettles() {
   if (drainQueuedComposerMessageForCurrentTab()) return;
   drainQueuedContextMenuPrompts();
 }
@@ -2459,7 +2463,6 @@ function drainQueuedAgentUpdatesForTab(tabId) {
 
 async function settleScheduledRun(event, job, tabId = currentTabId) {
   const runTabId = normalizePlanReviewTabId(tabId);
-  if (job?.id) crossPanelScheduledJobIds.delete(String(job.id));
   const assistantEl = job?.id ? findScheduledAssistantMessageForJob(job.id) : currentAssistantEl;
   if (assistantEl) {
     finalizeSteps(assistantEl);
@@ -2479,7 +2482,7 @@ async function settleScheduledRun(event, job, tabId = currentTabId) {
     hideActivity();
     if (currentAssistantEl === assistantEl) currentAssistantEl = null;
     if (renderedTabId != null) await flushRenderedTabChat();
-    await drainQueuedContextMenuPromptsAfterPendingTabSwitch();
+    await drainQueuedPromptsAfterRunSettles();
   }
   if (event === 'completed') notifyCompletion({ success: job?.lastOutcome === 'success' });
 }
@@ -2534,7 +2537,7 @@ async function handleScheduledJobEvent(data, tabId) {
       setTabProcessing(runTabId, false);
       syncSendButtonState();
       addMessage('system', systemHtml(tSystemHtml('sp.scheduled.needs_user_input', { title })));
-      drainQueuedContextMenuPromptsAfterPendingTabSwitch();
+      drainQueuedPromptsAfterRunSettles();
     }
   }
 }
@@ -3042,13 +3045,21 @@ async function init() {
   currentTabId = tab?.id;
   renderedTabId = currentTabId;
 
+  // Tab-activation and window-focus events are extension-wide — every
+  // browser window fires them, and each window has its own side panel
+  // instance. Without scoping, activity in window B would silently
+  // retarget window A's panel to B's tab.
+  const ownWindowId = tab?.windowId ?? (await chrome.windows.getCurrent()).id;
+
   chrome.tabs.onActivated.addListener(async (info) => {
+    if (info.windowId !== ownWindowId) return;
     switchToTab(info.tabId);
   });
 
   // Also handle window focus changes
   chrome.windows.onFocusChanged.addListener(async (windowId) => {
     if (windowId === chrome.windows.WINDOW_ID_NONE) return;
+    if (windowId !== ownWindowId) return;
     const [tab] = await chrome.tabs.query({ active: true, windowId });
     if (tab?.id && tab.id !== currentTabId) {
       switchToTab(tab.id);
@@ -3159,9 +3170,8 @@ if (verboseBtn) {
 }
 
 async function switchToTab(newTabId) {
-  if (newTabId === currentTabId && renderedTabId === newTabId) { pendingTabSwitch = null; return; }
+  if (newTabId === currentTabId && renderedTabId === newTabId) { return; }
   const switchGeneration = ++tabSwitchGeneration;
-  pendingTabSwitch = null;
   tabSwitchTransitionId = newTabId;
   queuedTabSwitchMessages = [];
   // The activity strip is a single panel-wide DOM node, unlike the tab-scoped
@@ -3710,7 +3720,7 @@ function clearPlanReviewActiveRun(assistantEl, tabId = currentTabId) {
     sendBtn.disabled = false;
     hideActivity();
   }
-  drainQueuedContextMenuPromptsAfterPendingTabSwitch();
+  drainQueuedPromptsAfterRunSettles();
   refreshRecommendedActions();
 }
 
@@ -5419,7 +5429,7 @@ async function sendMessage(extraChatParams = {}) {
       });
     }
     if (renderToCurrentTab && currentTabId === tabId) refreshRecommendedActions();
-    await drainQueuedContextMenuPromptsAfterPendingTabSwitch();
+    await drainQueuedPromptsAfterRunSettles();
   }
   return accepted;
 }
@@ -6421,7 +6431,7 @@ function submitClarify(card, tabId, clarifyId, answer, source) {
           syncSendButtonState();
           hideActivity();
         }
-        drainQueuedContextMenuPromptsAfterPendingTabSwitch();
+        drainQueuedPromptsAfterRunSettles();
       }
       /* background may be torn down — clarify state already lives there */
     });
@@ -6973,7 +6983,7 @@ async function continueAgent(options = {}) {
     if (currentTabId === tabId) scrollToBottom();
     if (currentTabId === tabId && renderedTabId === tabId) await flushRenderedTabChat();
     if (currentTabId === tabId && renderedTabId === tabId) await flushChatHistorySnapshot(tabId, { refreshTabInfo: true });
-    await drainQueuedContextMenuPromptsAfterPendingTabSwitch();
+    await drainQueuedPromptsAfterRunSettles();
   }
 }
 
@@ -7544,7 +7554,7 @@ async function abortRun() {
       currentAssistantEl = null;
       setTabAbortRequested(tabId, false);
       await flushRenderedTabChat();
-      await drainQueuedContextMenuPromptsAfterPendingTabSwitch();
+      await drainQueuedPromptsAfterRunSettles();
     }
   }, 3000); // safety timeout if background takes too long
 }
