@@ -7024,6 +7024,64 @@ test('cloud run controller uses the visible tab and persists terminal status', a
   assert.equal(session.webbrainCloudRunSnapshots[0].status, 'completed');
 });
 
+test('cloud run controller fails clarification-required terminals without schema fallback', async () => {
+  for (const structured of [false, true]) {
+    const session = {};
+    const tab = { id: structured ? 24 : 23, url: 'https://webbrain.one/', active: true, windowId: 3 };
+    const stoppedMessage = '[Agent stopped because explicit clarification authorization is required.]';
+    const controller = createCloudRunController({
+      chromeApi: {
+        tabs: {
+          query: async () => [tab],
+          get: async () => tab,
+          update: async () => tab,
+        },
+        windows: { update: async () => ({}) },
+        storage: {
+          local: { get: async () => ({ webbrainCloudBridgeEnabled: false }) },
+          session: {
+            get: async key => ({ [key]: session[key] || [] }),
+            set: async value => Object.assign(session, value),
+          },
+        },
+        runtime: { sendMessage: async () => ({ connected: false }) },
+      },
+      agent: {
+        isRunning: () => false,
+        abort: () => {},
+        processMessage: async (_tabId, _task, onUpdate) => {
+          onUpdate('run_status', {
+            status: 'clarification_required',
+            message: stoppedMessage,
+          });
+          return stoppedMessage;
+        },
+      },
+      ensureOffscreen: async () => {},
+      makeRunId: () => `run_clarification_required_${structured ? 'structured' : 'plain'}`,
+    });
+
+    const started = await controller.startRun({
+      task: 'Apply the requested change.',
+      ...(structured ? { outputSchema: { result: 'string' } } : {}),
+    });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    const completed = await controller.status({ runId: started.runId });
+
+    assert.equal(completed.status, 'failed', `${structured ? 'structured' : 'plain'} cloud run treated authorization stop as completion`);
+    assert.equal(completed.error, stoppedMessage, `${structured ? 'structured' : 'plain'} cloud run lost the authorization-stop explanation`);
+    assert.equal(completed.content, stoppedMessage, `${structured ? 'structured' : 'plain'} cloud run lost terminal content`);
+    assert.equal(completed.pendingInput, null, `${structured ? 'structured' : 'plain'} cloud run retained stale pending input`);
+    assert.equal(completed.result, undefined, `${structured ? 'structured' : 'plain'} cloud run exposed a success result`);
+    assert.ok(
+      completed.updates.some(update => update.type === 'run_status' && update.data?.status === 'clarification_required'),
+      `${structured ? 'structured' : 'plain'} cloud run lost structured terminal status`,
+    );
+    assert.equal(session.webbrainCloudRunSnapshots[0].status, 'failed', `${structured ? 'structured' : 'plain'} persisted cloud run was not failed`);
+    assert.notEqual(completed.error, 'Structured cloud run finished without a valid done_json result.', 'structured authorization stop fell through to the generic schema error');
+  }
+});
+
 test('cloud run controller appends child runs to the same tab conversation', async () => {
   const session = {};
   const tab = { id: 17, url: 'https://example.com/', active: true, windowId: 3 };

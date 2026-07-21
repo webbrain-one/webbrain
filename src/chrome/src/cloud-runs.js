@@ -306,6 +306,15 @@ export function createCloudRunController({
       run.status = 'needs_user_input';
       run.pendingInput = scrubbedData;
     }
+    if (type === 'run_status'
+        && scrubbedData?.status === 'clarification_required'
+        && run.status !== 'aborting'
+        && run.status !== 'aborted') {
+      run.status = 'failed';
+      run.error = scrubbedData.message
+        || 'Cloud run stopped because explicit clarification authorization is required.';
+      run.pendingInput = null;
+    }
     if (type === 'plan_review' && run.status === 'running') {
       run.status = 'failed';
       run.error = 'Managed cloud runs cannot wait for interactive plan review.';
