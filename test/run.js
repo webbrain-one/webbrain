@@ -21366,6 +21366,37 @@ test('CDP WebMCP bounds context discovery and detaches excess OOPIF sessions', a
   )));
 });
 
+test('CDP WebMCP disable during discovery cannot re-arm target auto-attach', async () => {
+  const cdp = new CDPClient();
+  const commands = [];
+  let disablePromise = null;
+  cdp.attach = async tabId => {
+    cdp.sessions.set(tabId, { tabId, attached: true });
+    return cdp.sessions.get(tabId);
+  };
+  cdp.sendCommand = async (tabId, method, params = {}, sessionId = '') => {
+    commands.push({ tabId, method, params, sessionId });
+    if (method === 'Runtime.enable') {
+      disablePromise = cdp.disableWebMCP(tabId);
+    }
+    return {};
+  };
+
+  await assert.rejects(
+    () => cdp.enableWebMCP(61),
+    /WebMCP session closed while it was enabling/,
+  );
+  await disablePromise;
+  assert.equal(cdp.webMcpSessions.has(61), false);
+  assert.ok(commands.some(command => (
+    command.method === 'Target.setAutoAttach' && command.params.autoAttach === false
+  )));
+  assert.equal(commands.some(command => (
+    command.method === 'Target.setAutoAttach' && command.params.autoAttach === true
+  )), false);
+  assert.ok(commands.some(command => command.method === 'WebMCP.disable'));
+});
+
 test('CDP WebMCP aggregates OOPIF sessions and removes their detached tools', async () => {
   const cdp = new CDPClient();
   const commands = [];

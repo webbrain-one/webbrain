@@ -437,6 +437,7 @@ export class CDPClient {
     } finally {
       this.off(tabId, 'Runtime.executionContextCreated', onContextCreated);
     }
+    if (state.closed || this.webMcpSessions.get(tabId) !== state) return 0;
 
     const remainingContextBudget = Math.max(
       0,
@@ -472,6 +473,15 @@ export class CDPClient {
     const sessionId = String(params.sessionId || '');
     const targetInfo = params.targetInfo || {};
     if (!sessionId || targetInfo.type !== 'iframe' || state.childSessions.has(sessionId)) return;
+    if (state.closed || this.webMcpSessions.get(tabId) !== state) {
+      this.sendCommand(
+        tabId,
+        'Target.detachFromTarget',
+        { sessionId },
+        source.sessionId,
+      ).catch(() => {});
+      return;
+    }
     if (state.childSessions.size >= WEBMCP_MAX_CHILD_SESSIONS) {
       this.sendCommand(
         tabId,
@@ -515,6 +525,7 @@ export class CDPClient {
   }
 
   async _enableWebMCPOOPIFTargets(tabId, state) {
+    if (state.closed || this.webMcpSessions.get(tabId) !== state) return 0;
     try {
       await this.sendCommand(tabId, 'Target.setAutoAttach', {
         autoAttach: true,
@@ -525,7 +536,18 @@ export class CDPClient {
     } catch {
       return 0;
     }
+    if (state.closed || this.webMcpSessions.get(tabId) !== state) {
+      if (this.webMcpSessions.get(tabId) === state) {
+        await this.sendCommand(tabId, 'Target.setAutoAttach', {
+          autoAttach: false,
+          waitForDebuggerOnStart: false,
+          flatten: true,
+        }).catch(() => {});
+      }
+      return 0;
+    }
     for (let pass = 0; pass < WEBMCP_MAX_TARGET_ATTACH_PASSES; pass++) {
+      if (state.closed || this.webMcpSessions.get(tabId) !== state) break;
       await new Promise(resolve => setTimeout(resolve, WEBMCP_DISCOVERY_SETTLE_MS));
       const pending = [...state.childEnablePromises];
       if (!pending.length) break;
@@ -542,6 +564,9 @@ export class CDPClient {
   async enableWebMCP(tabId) {
     await this.attach(tabId);
     let state = this.webMcpSessions.get(tabId);
+    if (state?.closed) {
+      throw new Error('WebMCP session is closing; retry after cleanup completes.');
+    }
     if (state?.enabled) return state;
     if (state?.enablingPromise) return await state.enablingPromise;
     if (!state) {
@@ -634,16 +659,27 @@ export class CDPClient {
         // The protocol reports the initial catalog through toolsAdded rather
         // than the command result. Give that event one short task turn to land.
         await new Promise(resolve => setTimeout(resolve, WEBMCP_DISCOVERY_SETTLE_MS));
+        if (state.closed || this.webMcpSessions.get(tabId) !== state) {
+          throw new Error('WebMCP session closed while it was enabling');
+        }
         // Chrome currently enumerates only the root frame when WebMCP.enable
         // runs. Query each already-live default execution context through the
         // browser's ModelContext API so tools registered earlier in child
         // frames enter the same opaque, untrusted CDP-backed registry.
         await this._discoverExistingWebMCPFrameTools(tabId, state);
+        if (state.closed || this.webMcpSessions.get(tabId) !== state) {
+          throw new Error('WebMCP session closed while it was enabling');
+        }
         await this._enableWebMCPOOPIFTargets(tabId, state);
+        if (state.closed || this.webMcpSessions.get(tabId) !== state) {
+          throw new Error('WebMCP session closed while it was enabling');
+        }
         return state;
       } catch (error) {
         this._removeWebMCPHandlers(tabId, state);
-        if (this.webMcpSessions.get(tabId) === state) this.webMcpSessions.delete(tabId);
+        if (!state.closed && this.webMcpSessions.get(tabId) === state) {
+          this.webMcpSessions.delete(tabId);
+        }
         const message = String(error?.message || error || 'unknown CDP error');
         throw new Error(`WebMCP is unavailable in this Chrome/page context: ${message}`);
       } finally {
@@ -656,6 +692,9 @@ export class CDPClient {
   async disableWebMCP(tabId) {
     const state = this.webMcpSessions.get(tabId);
     if (!state) return false;
+    // Close the state before awaiting protocol cleanup so in-flight discovery
+    // and attached-target events cannot re-arm child sessions.
+    state.closed = true;
     for (const pending of state.pendingInvocations.values()) {
       this.sendCommand(
         tabId,
@@ -876,6 +915,14 @@ export class CDPClient {
         dispatched: false,
         noDispatch: true,
         error: 'execute_webmcp_tool: input must be JSON-serializable.',
+      };
+    }
+    if (state.closed || this.webMcpSessions.get(tabId) !== state) {
+      return {
+        success: false,
+        dispatched: false,
+        noDispatch: true,
+        error: 'The WebMCP session closed before the tool could be dispatched.',
       };
     }
     let invocation;
