@@ -1,0 +1,43 @@
+{
+  "id": "066",
+  "user": "what did i highlight",
+  "mode": "act",
+  "tab": {
+    "url": "https://en.wikipedia.org/wiki/Closure_(computer_programming)",
+    "title": "Closure (computer programming) — Wikipedia"
+  },
+  "latencyMs": 1043,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_selection",
+    "args": {}
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll check what text you've highlighted on the current page.",
+  "usage": {
+    "prompt_tokens": 16958,
+    "completion_tokens": 18,
+    "total_tokens": 16976,
+    "cost": 0.00017876,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 16896,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.00017876,
+      "upstream_inference_prompt_cost": 0.00017516,
+      "upstream_inference_completions_cost": 0.0000036
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

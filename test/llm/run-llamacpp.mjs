@@ -110,6 +110,8 @@ Run:
   --retry-statuses LIST              Comma-separated HTTP statuses to retry, e.g. 429,500,503
   --retry-max N                      Retries per case for retry-statuses (default: 0)
   --retry-delay-ms MS                Fallback delay between retries (default: 60000)
+  --reasoning-effort LEVEL           OpenRouter-style reasoning effort: max, xhigh,
+                                     high, medium, low, minimal, or none
 
 Local chat-template compatibility:
   --chat-template-compat off
@@ -124,6 +126,7 @@ Local chat-template compatibility:
 
 Environment:
   LLM_BASE_URL, LLM_CHAT_URL, LLM_MODEL, LLM_API_KEY, OPENROUTER_API_KEY
+  LLM_REASONING_EFFORT
   LLM_CHAT_TEMPLATE_COMPAT, WB_FREEZE_BASELINE
 
 Examples:
@@ -150,6 +153,11 @@ const RESUME = !!args.resume;
 const DELAY_MS = Math.max(0, parseInt(args['delay-ms'] || '0', 10));
 const RETRY_MAX = Math.max(0, parseInt(args['retry-max'] || '0', 10));
 const RETRY_DELAY_MS = Math.max(0, parseInt(args['retry-delay-ms'] || '60000', 10));
+const REASONING_EFFORT = String(args['reasoning-effort'] || process.env.LLM_REASONING_EFFORT || '').trim().toLowerCase();
+const REASONING_EFFORTS = new Set(['max', 'xhigh', 'high', 'medium', 'low', 'minimal', 'none']);
+if (REASONING_EFFORT && !REASONING_EFFORTS.has(REASONING_EFFORT)) {
+  throw new Error(`Invalid --reasoning-effort: ${REASONING_EFFORT}`);
+}
 const RETRY_STATUSES = new Set(String(args['retry-statuses'] || '')
   .split(',')
   .map(s => parseInt(s.trim(), 10))
@@ -212,6 +220,9 @@ const promptMode = isFrozen()
 console.error(`▸ ${ids.length} case(s), base=${BASE}, model=${MODEL}, browser=${BROWSER}, concurrency=${CONCURRENCY}`);
 console.error(`▸ endpoint=${CHAT_URL}`);
 console.error(`▸ prompt: ${promptMode}`);
+if (REASONING_EFFORT) {
+  console.error(`▸ reasoning effort: ${REASONING_EFFORT}`);
+}
 if (CHAT_TEMPLATE_COMPAT.mode !== 'off') {
   console.error(`▸ chat template compat: ${chatTemplateCompatLabel(CHAT_TEMPLATE_COMPAT)}`);
 }
@@ -368,6 +379,7 @@ async function runOne(id) {
     messages,
   };
   if (tools) body.tools = tools;
+  if (REASONING_EFFORT) body.reasoning = { effort: REASONING_EFFORT };
 
   const { response, error, latencyMs, attempts, retryErrors } = await fetchChatWithRetries(body);
   const msg = response?.choices?.[0]?.message;
@@ -462,6 +474,7 @@ const summary = {
   modeOverride: isFrozen() ? null : MODE_OVERRIDE,
   chatTemplateCompat: CHAT_TEMPLATE_COMPAT.mode,
   structuredToolsSent: !CHAT_TEMPLATE_COMPAT.omitStructuredTools,
+  reasoningEffort: REASONING_EFFORT || null,
   freeze: isFrozen() ? {
     path: args.freeze && args.freeze !== true ? args.freeze : (process.env.WB_FREEZE_BASELINE || null),
     sourceRun: getFrozenMeta()?.sourceRun || null,

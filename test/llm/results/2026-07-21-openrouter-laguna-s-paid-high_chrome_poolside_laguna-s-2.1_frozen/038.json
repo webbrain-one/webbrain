@@ -1,0 +1,40 @@
+{
+  "id": "038",
+  "user": "close this popup",
+  "mode": "act",
+  "tab": {
+    "url": "https://www.theguardian.com/uk",
+    "title": "The Guardian"
+  },
+  "latencyMs": 1185,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 16948,
+    "completion_tokens": 40,
+    "total_tokens": 16988,
+    "cost": 0.00017928,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 16928,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.00017928,
+      "upstream_inference_prompt_cost": 0.00017128,
+      "upstream_inference_completions_cost": 0.000008
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 27,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

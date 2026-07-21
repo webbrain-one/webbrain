@@ -1,0 +1,40 @@
+{
+  "id": "090",
+  "user": "switch to my netflix tab",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 5664,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I don't have a tool to switch between your existing browser tabs directly. However, I can open Netflix in a new tab for you — would that work, or would you prefer to switch manually?\n\nIf you'd like me to open it, just let me know and I'll navigate to netflix.com.",
+  "usage": {
+    "prompt_tokens": 16945,
+    "completion_tokens": 517,
+    "total_tokens": 17462,
+    "cost": 0.00027438,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 16928,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.00027438,
+      "upstream_inference_prompt_cost": 0.00017098,
+      "upstream_inference_completions_cost": 0.0001034
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 453,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

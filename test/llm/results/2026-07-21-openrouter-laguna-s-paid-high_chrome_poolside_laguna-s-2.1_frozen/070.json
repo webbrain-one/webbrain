@@ -1,0 +1,40 @@
+{
+  "id": "070",
+  "user": "log in",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 2542,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I'm on a blank new tab page. I need to know which site you'd like to log into — could you tell me? For example, are you looking to sign in to GitHub, Gmail, a work tool, or something else?",
+  "usage": {
+    "prompt_tokens": 16941,
+    "completion_tokens": 293,
+    "total_tokens": 17234,
+    "cost": 0.00022918,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 16928,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.00022918,
+      "upstream_inference_prompt_cost": 0.00017058,
+      "upstream_inference_completions_cost": 0.0000586
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 243,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

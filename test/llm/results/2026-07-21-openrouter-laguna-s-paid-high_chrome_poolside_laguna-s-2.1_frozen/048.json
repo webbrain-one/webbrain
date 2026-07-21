@@ -1,0 +1,46 @@
+{
+  "id": "048",
+  "user": "open my inbox",
+  "mode": "act",
+  "tab": {
+    "url": "https://mail.google.com/mail/u/0/#inbox",
+    "title": "Inbox (3) — Gmail"
+  },
+  "latencyMs": 3414,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible",
+      "maxDepth": 6
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll check the current state of your Gmail inbox.",
+  "usage": {
+    "prompt_tokens": 17443,
+    "completion_tokens": 110,
+    "total_tokens": 17553,
+    "cost": 0.00024566,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 16896,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.00024566,
+      "upstream_inference_prompt_cost": 0.00022366,
+      "upstream_inference_completions_cost": 0.000022
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 59,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

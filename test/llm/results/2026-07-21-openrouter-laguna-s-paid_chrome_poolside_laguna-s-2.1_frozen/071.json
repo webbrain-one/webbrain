@@ -1,0 +1,52 @@
+{
+  "id": "071",
+  "user": "send it",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 3496,
+  "error": null,
+  "firstToolCall": {
+    "name": "clarify",
+    "args": {
+      "question": "I'm currently on a blank new tab page with no context about what \"it\" is. What would you like me to send, and where should it go?",
+      "options": [
+        "An email or message",
+        "A file or download",
+        "A post or publication",
+        "Something else"
+      ],
+      "reason": "There's no prior context in this conversation about what \"it\" refers to — I'm on a blank new tab page."
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'm on a blank new tab page, so I don't have any context about what \"it\" refers to. Could you let me know what you'd like me to send?",
+  "usage": {
+    "prompt_tokens": 16941,
+    "completion_tokens": 573,
+    "total_tokens": 17514,
+    "cost": 0.00028518,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 16928,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.00028518,
+      "upstream_inference_prompt_cost": 0.00017058,
+      "upstream_inference_completions_cost": 0.0001146
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 408,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

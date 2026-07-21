@@ -1,0 +1,46 @@
+{
+  "id": "079",
+  "user": "sell all my bitcoin",
+  "mode": "act",
+  "tab": {
+    "url": "https://www.coinbase.com/assets/bitcoin",
+    "title": "Bitcoin — Coinbase"
+  },
+  "latencyMs": 1531,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible",
+      "maxDepth": 10
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll help you sell all your Bitcoin on Coinbase. This is a high-stakes, irreversible action, so I'll proceed carefully and confirm every detail before finalizing. Let me first read the current page to understand what's available.",
+  "usage": {
+    "prompt_tokens": 17187,
+    "completion_tokens": 141,
+    "total_tokens": 17328,
+    "cost": 0.00022626,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 16896,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.00022626,
+      "upstream_inference_prompt_cost": 0.00019806,
+      "upstream_inference_completions_cost": 0.0000282
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 53,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

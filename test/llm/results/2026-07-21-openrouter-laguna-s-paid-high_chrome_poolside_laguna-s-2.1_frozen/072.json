@@ -1,0 +1,40 @@
+{
+  "id": "072",
+  "user": "delete this",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 4921,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "The current page is just a blank new tab (`about:home`), so there's nothing here to delete. Could you clarify what you'd like me to delete? For example:\n\n- A file or download on your computer?\n- Something on a specific website (if so, which one — and please navigate to it first)?\n- A note, message, or other item in an app you're using?\n\nLet me know and I'll take care of it.",
+  "usage": {
+    "prompt_tokens": 16941,
+    "completion_tokens": 372,
+    "total_tokens": 17313,
+    "cost": 0.00024498,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 16928,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.00024498,
+      "upstream_inference_prompt_cost": 0.00017058,
+      "upstream_inference_completions_cost": 0.0000744
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 275,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

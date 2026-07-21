@@ -1,0 +1,45 @@
+{
+  "id": "027",
+  "user": "tldr",
+  "mode": "act",
+  "tab": {
+    "url": "https://en.wikipedia.org/wiki/Closure_(computer_programming)",
+    "title": "Closure (computer programming) — Wikipedia"
+  },
+  "latencyMs": 1234,
+  "error": null,
+  "firstToolCall": {
+    "name": "read_page",
+    "args": {
+      "includeChrome": false
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll read the current page to give you a concise summary.",
+  "usage": {
+    "prompt_tokens": 16956,
+    "completion_tokens": 81,
+    "total_tokens": 17037,
+    "cost": 0.00019116,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 16896,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.00019116,
+      "upstream_inference_prompt_cost": 0.00017496,
+      "upstream_inference_completions_cost": 0.0000162
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 46,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

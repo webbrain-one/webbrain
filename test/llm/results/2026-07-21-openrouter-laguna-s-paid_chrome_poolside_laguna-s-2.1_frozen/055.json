@@ -1,0 +1,45 @@
+{
+  "id": "055",
+  "user": "download this instagram post",
+  "mode": "act",
+  "tab": {
+    "url": "https://www.instagram.com/p/CxAbcExample/",
+    "title": "Photo — Instagram"
+  },
+  "latencyMs": 1128,
+  "error": null,
+  "firstToolCall": {
+    "name": "download_social_media",
+    "args": {
+      "mode": "main"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll download the Instagram post for you using the social media download tool.",
+  "usage": {
+    "prompt_tokens": 17171,
+    "completion_tokens": 123,
+    "total_tokens": 17294,
+    "cost": 0.00022106,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 16896,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.00022106,
+      "upstream_inference_prompt_cost": 0.00019646,
+      "upstream_inference_completions_cost": 0.0000246
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 85,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

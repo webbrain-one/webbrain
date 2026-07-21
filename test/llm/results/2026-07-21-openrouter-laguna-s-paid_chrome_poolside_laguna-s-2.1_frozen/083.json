@@ -1,0 +1,45 @@
+{
+  "id": "083",
+  "user": "what time is it in tokyo right now",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 3484,
+  "error": null,
+  "firstToolCall": {
+    "name": "execute_js",
+    "args": {
+      "code": "const now = new Date();\nconst tokyoTime = now.toLocaleString('en-US', {\n  timeZone: 'Asia/Tokyo',\n  weekday: 'long',\n  year: 'numeric',\n  month: 'long',\n  day: 'numeric',\n  hour: '2-digit',\n  minute: '2-digit',\n  second: '2-digit',\n  hour12: true\n});\nconst utcTime = now.toISOString();\n`Current time in Tokyo (JST, UTC+9):\\n${tokyoTime}\\n\\n(UTC reference: ${utcTime})`"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I can get the current time in Tokyo directly from the browser's clock. Let me fetch it.",
+  "usage": {
+    "prompt_tokens": 16948,
+    "completion_tokens": 614,
+    "total_tokens": 17562,
+    "cost": 0.00029408,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 16928,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.00029408,
+      "upstream_inference_prompt_cost": 0.00017128,
+      "upstream_inference_completions_cost": 0.0001228
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 443,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}
