@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>WebMCP child-frame fixture</title>
+</head>
+<body>
+  <p id="frame-status">registering</p>
+  <script type="module">
+    const status = document.querySelector('#frame-status');
+    const controller = new AbortController();
+    let registered = false;
+
+    window.addEventListener('message', async event => {
+      if (
+        event.source === parent
+        && event.origin === location.origin
+      ) {
+        if (event.data?.type === 'webmcp-unregister') controller.abort();
+        if (event.data?.type === 'webmcp-register' && !registered) {
+          registered = true;
+          await document.modelContext.registerTool({
+            name: 'read_frame_context',
+            description: 'Return a value from the child registration frame.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                topic: { type: 'string' },
+              },
+              required: ['topic'],
+              additionalProperties: false,
+            },
+            execute({ topic }) {
+              status.textContent = 'invoked';
+              return {
+                content: [{ type: 'text', text: `Child frame: ${topic}` }],
+                structuredContent: { topic, frame: 'child' },
+              };
+            },
+          }, { signal: controller.signal });
+          status.textContent = 'ready';
+          parent.postMessage({ type: 'webmcp-frame-tool-ready' }, location.origin);
+        }
+      }
+    });
+
+    if (!document.modelContext?.registerTool) {
+      status.textContent = 'unsupported';
+      throw new Error('document.modelContext.registerTool is unavailable in the child frame');
+    }
+
+    status.textContent = 'listening';
+    parent.postMessage({ type: 'webmcp-frame-listening' }, location.origin);
+  </script>
+</body>
+</html>

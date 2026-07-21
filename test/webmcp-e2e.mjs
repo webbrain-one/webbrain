@@ -17,9 +17,15 @@ import { chromium } from 'playwright';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURE_PATH = path.join(__dirname, 'fixtures', 'webmcp-page.html');
 const FIXTURE_ROUTE = '/test/fixtures/webmcp-page.html';
+const FRAME_FIXTURE_PATH = path.join(__dirname, 'fixtures', 'webmcp-frame.html');
+const FRAME_FIXTURE_ROUTE = '/test/fixtures/webmcp-frame.html';
 const EXTENSION_PATH = path.resolve(__dirname, '..', 'src', 'chrome');
 const FEATURE_FLAGS = 'WebMCPTesting,DevToolsWebMCPSupport';
-const EXPECTED_TOOL_NAMES = ['fail_predictably', 'lookup_inventory'];
+const TOP_LEVEL_TOOL_NAMES = ['fail_predictably', 'lookup_inventory'];
+const EXPECTED_TOOL_NAMES = ['fail_predictably', 'lookup_inventory', 'read_frame_context'];
+const debug = message => {
+  if (process.env.WEBMCP_DEBUG === '1') console.log(`DEBUG: ${message}`);
+};
 
 async function firstExistingPath(candidates) {
   for (const candidate of candidates.filter(Boolean)) {
@@ -50,15 +56,23 @@ async function chromeLaunchTarget() {
 }
 
 async function startFixtureServer() {
-  const fixtureHtml = await readFile(FIXTURE_PATH);
+  const [fixtureHtml, frameFixtureHtml] = await Promise.all([
+    readFile(FIXTURE_PATH),
+    readFile(FRAME_FIXTURE_PATH),
+  ]);
   const server = createServer((request, response) => {
     const pathname = new URL(request.url || '/', 'http://127.0.0.1').pathname;
-    if (pathname === FIXTURE_ROUTE) {
+    const html = pathname === FIXTURE_ROUTE
+      ? fixtureHtml
+      : pathname === FRAME_FIXTURE_ROUTE
+        ? frameFixtureHtml
+        : null;
+    if (html) {
       response.writeHead(200, {
         'Content-Type': 'text/html; charset=utf-8',
         'Cache-Control': 'no-store',
       });
-      response.end(fixtureHtml);
+      response.end(html);
       return;
     }
     if (pathname === '/favicon.ico') {
@@ -139,7 +153,11 @@ async function runProtocolSmoke(context, fixtureUrl) {
     try {
       await cdp.send('WebMCP.enable');
       webMcpEnabled = true;
+      await waitForToolNames(page, added, TOP_LEVEL_TOOL_NAMES, 'top-level WebMCP tool discovery');
+      debug('protocol enabled; requesting child-frame registration');
+      await page.evaluate(() => window.webMCPFixture.registerFrameTool());
       await waitForToolNames(page, added, EXPECTED_TOOL_NAMES, 'complete WebMCP tool discovery');
+      debug('protocol received child-frame registration');
 
       const inventory = added.find(tool => tool.name === 'lookup_inventory');
       assert.deepEqual(inventory.inputSchema.required, ['sku']);
@@ -163,6 +181,32 @@ async function runProtocolSmoke(context, fixtureUrl) {
         '{"sku":"SKU-42","available":7}',
       );
       assert.equal(await page.locator('#status').innerText(), 'invoked');
+
+      const frameTool = added.find(tool => tool.name === 'read_frame_context');
+      assert.ok(frameTool.frameId);
+      assert.notEqual(frameTool.frameId, inventory.frameId);
+      debug('protocol invoking child-frame tool');
+      const frameInvocation = await cdp.send('WebMCP.invokeTool', {
+        frameId: frameTool.frameId,
+        toolName: frameTool.name,
+        input: { topic: 'protocol-frame' },
+      });
+      const frameCompleted = await waitForEntry(
+        page,
+        responses,
+        event => event.invocationId === frameInvocation.invocationId,
+        'cross-frame tool response',
+      );
+      debug('protocol received child-frame tool response');
+      assert.equal(frameCompleted.status, 'Completed');
+      assert.deepEqual(frameCompleted.output.structuredContent, {
+        topic: 'protocol-frame',
+        frame: 'child',
+      });
+      assert.equal(
+        await page.frameLocator('#webmcp-frame').locator('#frame-status').innerText(),
+        'invoked',
+      );
 
       const failing = added.find(tool => tool.name === 'fail_predictably');
       const failedInvocation = await cdp.send('WebMCP.invokeTool', {
@@ -216,14 +260,14 @@ async function initializeExtensionAgent(harness, tabId) {
   }, tabId);
 }
 
-async function listToolsThroughExtension(harness, tabId) {
-  return harness.evaluate(async targetTabId => {
+async function listToolsThroughExtension(harness, tabId, options = { page_size: 25 }) {
+  return harness.evaluate(async ({ targetTabId, listOptions }) => {
     return globalThis.__webMCPAgentSmoke.executeTool(
       targetTabId,
       'list_webmcp_tools',
-      { page_size: 25 },
+      listOptions,
     );
-  }, tabId);
+  }, { targetTabId: tabId, listOptions: options });
 }
 
 async function prepareToolThroughExtension(harness, tabId, toolId, input) {
@@ -322,10 +366,43 @@ async function runExtensionClientSmoke(context, fixtureUrl) {
     assert.equal(disabledCatalog.noDispatch, true);
     assert.equal(disabledCatalog.featureDisabled, true);
 
-    const catalog = await listToolsThroughExtension(harness, tabId);
-    assert.equal(catalog.success, true);
-    assert.equal(catalog.total, 2);
-    const inventory = catalog.tools.find(tool => tool.name === 'lookup_inventory');
+    const topLevelCatalog = await listToolsThroughExtension(harness, tabId);
+    assert.equal(topLevelCatalog.total, 2);
+    assert.deepEqual(
+      topLevelCatalog.tools.map(tool => tool.name).sort(),
+      TOP_LEVEL_TOOL_NAMES,
+    );
+    await fixture.evaluate(() => window.webMCPFixture.registerFrameTool());
+    debug('extension requested child-frame registration');
+    await waitForExtensionCatalog(
+      harness,
+      tabId,
+      candidate => candidate.total === EXPECTED_TOOL_NAMES.length,
+      'the extension CDP client to receive the child-frame tool',
+    );
+    debug('extension received child-frame registration');
+
+    const firstCatalogPage = await listToolsThroughExtension(harness, tabId, {
+      page: 1,
+      page_size: 2,
+    });
+    assert.equal(firstCatalogPage.success, true);
+    assert.equal(firstCatalogPage.total, 3);
+    assert.equal(firstCatalogPage.hasMore, true);
+    assert.equal(firstCatalogPage.nextPage, 2);
+    const secondCatalogPage = await listToolsThroughExtension(harness, tabId, {
+      page: firstCatalogPage.nextPage,
+      page_size: 2,
+    });
+    assert.equal(secondCatalogPage.total, 3);
+    assert.equal(secondCatalogPage.hasMore, false);
+    assert.equal(secondCatalogPage.nextPage, null);
+    const catalogTools = [...firstCatalogPage.tools, ...secondCatalogPage.tools];
+    assert.deepEqual(
+      catalogTools.map(tool => tool.name).sort(),
+      EXPECTED_TOOL_NAMES,
+    );
+    const inventory = catalogTools.find(tool => tool.name === 'lookup_inventory');
     assert.match(inventory.tool_id, /^wmcp_[a-z0-9]+$/);
     assert.doesNotMatch(inventory.tool_id, /lookup|inventory/);
     assert.deepEqual(inventory.input_schema.required, ['sku']);
@@ -359,7 +436,31 @@ async function runExtensionClientSmoke(context, fixtureUrl) {
     assert.deepEqual(invoked.output.structuredContent, { sku: 'AGENT-42', available: 7 });
     assert.equal(await fixture.locator('#status').innerText(), 'invoked');
 
-    const failing = catalog.tools.find(tool => tool.name === 'fail_predictably');
+    const frameTool = catalogTools.find(tool => tool.name === 'read_frame_context');
+    assert.equal(frameTool.frame_url, new URL(FRAME_FIXTURE_ROUTE, fixtureUrl).href);
+    const preparedFrame = await prepareToolThroughExtension(
+      harness,
+      tabId,
+      frameTool.tool_id,
+      { topic: 'agent-frame' },
+    );
+    assert.equal(preparedFrame.error, undefined);
+    assert.notEqual(preparedFrame.args._webMcpFrameId, preparedInventory.args._webMcpFrameId);
+    assert.equal(preparedFrame.args._webMcpTargetUrl, frameTool.frame_url);
+    debug('extension invoking child-frame tool');
+    const invokedFrame = await invokePreparedToolThroughExtension(harness, tabId, preparedFrame.args);
+    debug('extension received child-frame tool response');
+    assert.equal(invokedFrame.success, true);
+    assert.deepEqual(invokedFrame.output.structuredContent, {
+      topic: 'agent-frame',
+      frame: 'child',
+    });
+    assert.equal(
+      await fixture.frameLocator('#webmcp-frame').locator('#frame-status').innerText(),
+      'invoked',
+    );
+
+    const failing = catalogTools.find(tool => tool.name === 'fail_predictably');
     const preparedFailure = await prepareToolThroughExtension(harness, tabId, failing.tool_id, {});
     assert.equal(preparedFailure.error, undefined);
     const rejected = await invokePreparedToolThroughExtension(harness, tabId, preparedFailure.args);
@@ -387,7 +488,8 @@ async function runExtensionClientSmoke(context, fixtureUrl) {
 
     console.log(
       `PASS: WebBrain extension ${webBrain.version} enforced feature/mode gates and exercised `
-      + 'WebMCP discovery, invocation, failure, and stale IDs through Agent + CDPClient.',
+      + 'paginated, cross-frame WebMCP discovery, invocation, failure, and stale IDs '
+      + 'through Agent + CDPClient.',
     );
   } finally {
     if (harness && tabId) {

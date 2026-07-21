@@ -10,21 +10,54 @@
     <h1>WebMCP CDP fixture</h1>
     <p id="status">registering</p>
     <output id="result"></output>
+    <iframe
+      id="webmcp-frame"
+      src="/test/fixtures/webmcp-frame.html"
+      title="WebMCP child-frame fixture"
+    ></iframe>
   </main>
   <script type="module">
     const status = document.querySelector('#status');
     const result = document.querySelector('#result');
+    const frame = document.querySelector('#webmcp-frame');
     const controller = new AbortController();
+    let parentReady = false;
 
     window.webMCPFixture = {
       ready: false,
+      frameListening: false,
+      frameToolReady: false,
       available: !!document.modelContext?.registerTool,
       calls: [],
       errors: [],
+      registerFrameTool() {
+        frame.contentWindow.postMessage({ type: 'webmcp-register' }, location.origin);
+      },
       unregister() {
+        frame.contentWindow.postMessage({ type: 'webmcp-unregister' }, location.origin);
         controller.abort();
       },
     };
+
+    const updateReady = () => {
+      window.webMCPFixture.ready = parentReady && window.webMCPFixture.frameListening;
+      if (window.webMCPFixture.ready) status.textContent = 'ready';
+    };
+    window.addEventListener('message', event => {
+      if (
+        event.source === frame.contentWindow
+        && event.origin === location.origin
+        && event.data?.type === 'webmcp-frame-listening'
+      ) {
+        window.webMCPFixture.frameListening = true;
+        updateReady();
+      }
+      if (
+        event.source === frame.contentWindow
+        && event.origin === location.origin
+        && event.data?.type === 'webmcp-frame-tool-ready'
+      ) window.webMCPFixture.frameToolReady = true;
+    });
 
     if (!window.webMCPFixture.available) {
       status.textContent = 'unsupported';
@@ -65,8 +98,8 @@
         },
       }, { signal: controller.signal });
 
-      window.webMCPFixture.ready = true;
-      status.textContent = 'ready';
+      parentReady = true;
+      updateReady();
     } catch (error) {
       window.webMCPFixture.errors.push(String(error?.stack || error));
       status.textContent = 'registration-failed';
