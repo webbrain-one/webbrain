@@ -15707,7 +15707,7 @@ const ADAPTERS = [
   {
     name: 'chrome-web-store-developer',
     category: 'general',
-    matches: (url) => /^https:\/\/chrome\.google\.com\/webstore\/devconsole(?:\/|$)/i.test(url),
+    matches: (url) => /^https:\/\/chrome\.google\.com\/webstore\/devconsole(?:[/?#]|$)/i.test(url),
     notes: `
 - This dashboard is a Chrome-protected page. Extension DOM, accessibility-tree, script-injection, and debugger tools cannot access it. Never retry those tools here.
 - If the enabled skill catalog contains \`chrome-web-store-release\`, load it and use \`chrome_web_store_status\`, \`chrome_web_store_upload\`, and \`chrome_web_store_publish\` instead of dashboard controls.

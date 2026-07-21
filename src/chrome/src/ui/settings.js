@@ -648,7 +648,7 @@ function escapeHtml(s) {
 // --- Skills ---
 
 function makeSkillId() {
-  return `skill_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+  return `skill_${Date.now().toString(36)}_${globalThis.crypto.randomUUID()}`;
 }
 
 function showSkillsResult(className, text, color = '') {

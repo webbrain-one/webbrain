@@ -2434,6 +2434,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (toolName === 'done' && toolResult?.completionPageBlock === true) {
       return 'completion_page_block';
     }
+    // Publishing must be planned only after the model has seen the upload
+    // result and can verify the staged revision with chrome_web_store_status.
+    // Never execute a publish call generated in the same assistant batch.
+    if (toolName === 'chrome_web_store_upload') {
+      return 'chrome_web_store_upload_requires_status';
+    }
     if (!this._isBrowserMutationTool(toolName)) return '';
     if (
       toolResult?.success === false

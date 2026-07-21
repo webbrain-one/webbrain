@@ -39518,6 +39518,8 @@ test('plan before act: try is default while explicit off is preserved', () => {
 test('Chrome Web Store release uses an always-on protected-page guard and opt-in trusted skill tools', async () => {
   const dashboard = 'https://chrome.google.com/webstore/devconsole/f4a5b26f-27fe-4bc4-ad37-203b236e337c';
   assert.equal(chromeProtectedPageForUrl(dashboard), 'chrome-web-store-developer');
+  assert.equal(chromeProtectedPageForUrl('https://chrome.google.com/webstore/devconsole?hl=en'), 'chrome-web-store-developer');
+  assert.equal(chromeProtectedPageForUrl('https://chrome.google.com/webstore/devconsole#published'), 'chrome-web-store-developer');
   assert.equal(chromeProtectedPageForUrl('https://example.com/?next=https://chrome.google.com/webstore/devconsole'), '');
   const failure = chromeProtectedPageFailure(dashboard, 'get_accessibility_tree');
   assert.equal(failure.errorCode, 'chrome_protected_page');
@@ -39713,7 +39715,9 @@ test('Chrome Web Store release uses an always-on protected-page guard and opt-in
   const adapter = getActiveAdapter(dashboard);
   assert.equal(adapter?.name, 'chrome-web-store-developer');
   assert.match(adapter?.notes || '', /chrome_web_store_status/);
+  assert.equal(getActiveAdapter('https://chrome.google.com/webstore/devconsole?authuser=1')?.name, 'chrome-web-store-developer');
   assert.equal(getActiveAdapterFx(dashboard)?.name, 'chrome-web-store-developer');
+  assert.equal(getActiveAdapterFx('https://chrome.google.com/webstore/devconsole#drafts')?.name, 'chrome-web-store-developer');
 
   const chromeAgentSource = fs.readFileSync(path.join(ROOT, 'src/chrome/src/agent/agent.js'), 'utf8');
   const guardIndex = chromeAgentSource.indexOf('const protectedPageFailure = await this._chromeProtectedPageFailure(tabId, fnName);');
@@ -39724,6 +39728,53 @@ test('Chrome Web Store release uses an always-on protected-page guard and opt-in
     'chrome: protected-page guard must run before WebMCP preparation and tool dispatch',
   );
   assert.match(chromeAgentSource, /TRUSTED RUNTIME ROUTING: Chrome blocks extension DOM\/debugger access/, 'chrome: protected-page recovery should remain outside the untrusted page-content wrapper');
+});
+
+test('Chrome Web Store upload forces a fresh status turn before any batched publish', async () => {
+  for (const [label, AgentClass] of [['chrome', AgentCh], ['firefox', AgentFx]]) {
+    const agent = new AgentClass({
+      getActive: () => ({ promptTier: 'full', supportsVision: false }),
+      getVisionProvider: async () => null,
+    });
+    const tabId = label === 'chrome' ? 6024 : 6025;
+    const messages = [];
+    const executed = [];
+    agent._ensureGateSetting = async () => false;
+    agent._skipPermissionGate = true;
+    agent._rememberMastodonObservation = async () => null;
+    agent._recordProgressObservation = async () => null;
+    agent._autoRecordProgressAction = () => null;
+    agent._persist = () => {};
+    agent.executeTool = async (_tabId, name) => {
+      executed.push(name);
+      return { success: true, dispatched: name !== 'chrome_web_store_status' };
+    };
+
+    const result = await agent._executeToolBatch(
+      tabId,
+      [
+        { id: 'release_upload', function: { name: 'chrome_web_store_upload', arguments: '{}' } },
+        { id: 'release_status', function: { name: 'chrome_web_store_status', arguments: '{}' } },
+        { id: 'release_publish', function: { name: 'chrome_web_store_publish', arguments: '{"publish_type":"default"}' } },
+      ],
+      messages,
+      () => {},
+      { supportsVision: false },
+      null,
+      new Set(['chrome_web_store_upload', 'chrome_web_store_status', 'chrome_web_store_publish']),
+      1,
+    );
+
+    assert.equal(result.action, 'continue', `${label}: upload boundary should start a fresh turn`);
+    assert.deepEqual(executed, ['chrome_web_store_upload'], `${label}: status or publish ran in the upload batch`);
+    for (const id of ['release_status', 'release_publish']) {
+      const skipped = JSON.parse(messages.find(message => message.tool_call_id === id).content);
+      assert.equal(skipped.skipped, true, `${label}/${id}: queued release call was not skipped`);
+      assert.equal(skipped.skippedBecause, 'fresh_turn_required', `${label}/${id}: fresh-turn marker missing`);
+      assert.equal(skipped.triggeringTool, 'chrome_web_store_upload', `${label}/${id}: upload trigger missing`);
+      assert.equal(skipped.reason, 'chrome_web_store_upload_requires_status', `${label}/${id}: status requirement missing`);
+    }
+  }
 });
 
 test('settings exposes custom skills tab and packaged skills resource directory', () => {
@@ -39857,6 +39908,12 @@ test('settings exposes custom skills tab and packaged skills resource directory'
     assert.match(settingsJs, /skill\.tools/, `${label}: settings should show exposed skill tools`);
     assert.match(settingsJs, /CHROME_WEB_STORE_PACKAGE_KEY/, `${label}: release package should use dedicated local storage`);
     assert.match(settingsJs, /crypto\.subtle\.digest\('SHA-256'/, `${label}: release package should record a local integrity digest`);
+    const skillIdFunction = settingsJs.slice(
+      settingsJs.indexOf('function makeSkillId()'),
+      settingsJs.indexOf('function showSkillsResult'),
+    );
+    assert.match(skillIdFunction, /crypto\.randomUUID\(\)/, `${label}: imported skill IDs should use secure randomness`);
+    assert.doesNotMatch(skillIdFunction, /Math\.random\(/, `${label}: imported skill IDs must not use insecure randomness`);
     assert.match(background, /chrome_web_store_oauth_start/, `${label}: release OAuth should run in the durable background context`);
     assert.match(englishLocale, /small catalog sends only each eligible skill\\'s ID, name, summary, and optional semantic intents/, `${label}: settings should explain the semantic skill catalog`);
     assert.match(englishLocale, /full instructions and compatible <code>webbrain-tools<\/code> are exposed only after/i, `${label}: settings should explain on-demand skill loading`);

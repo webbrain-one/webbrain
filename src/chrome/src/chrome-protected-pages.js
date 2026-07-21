@@ -1,4 +1,4 @@
-const CHROME_WEB_STORE_DASHBOARD_RE = /^https:\/\/chrome\.google\.com\/webstore\/devconsole(?:\/|$)/i;
+const CHROME_WEB_STORE_DASHBOARD_RE = /^https:\/\/chrome\.google\.com\/webstore\/devconsole(?:[/?#]|$)/i;
 const PROTECTED_DOM_TOOLS = new Set([
   'list_webmcp_tools', 'execute_webmcp_tool',
   'inject_css', 'remove_injected_css', 'execute_js', 'read_console',
