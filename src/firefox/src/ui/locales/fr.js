@@ -1,5 +1,8 @@
 // French (fr).
+import chromeWebStoreLocale from './chrome-web-store.mjs';
+
 export default {
+  ...chromeWebStoreLocale,
   'sp.providers.no_setup_group': 'Sans configuration',
   'sp.providers.no_setup': 'Aucune configuration requise',
   'sp.providers.active_group': 'Fournisseurs actifs',

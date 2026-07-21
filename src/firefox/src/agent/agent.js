@@ -52,6 +52,7 @@ import { buildTrustedRuntimeContext, stripTrustedRuntimeContext } from './runtim
 import { firefoxHostPermissionFailure, firefoxRestrictedDomainFailure } from '../firefox-restricted-domains.js';
 import { filenameInConfiguredDownloadDirectory } from '../download-directory.js';
 import { resolveSavedDownload } from '../download-result.js';
+import { executeChromeWebStoreSkillTool, isTrustedChromeWebStoreSkillTool } from '../chrome-web-store-release.js';
 
 const DEFAULT_CLOUD_COST_ALLOWANCE_USD = 10;
 // Product default: auto-approve plans at 75% confidence to reduce review stops.
@@ -369,6 +370,9 @@ export class Agent {
   }
 
   _recordCompletionSubmitAttempt(tabId, detectedSubmit, name, args, beforeUrl, afterUrl, result, beforeDocument = '', afterDocument = '') {
+    // API-backed Chrome Web Store submission is verified by the subsequent
+    // chrome_web_store_status observation, not a dashboard DOM transition.
+    if (name === 'chrome_web_store_publish') return null;
     // execute_js is always classified as submit-capable for its permission
     // prompt, but that conservative fallback is not evidence that this call
     // actually submitted anything. Only arm completion verification for JS
@@ -2698,6 +2702,13 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       let detectedSubmitAction = preflightSubmitDetection
         ? await this._detectLikelySubmitAction(tabId, fnName, fnArgs)
         : null;
+      if (fnName === 'chrome_web_store_publish') {
+        detectedSubmitAction = {
+          isSubmit: true,
+          host: 'chromewebstore.googleapis.com',
+          reason: 'submit the configured Chrome Web Store release for review',
+        };
+      }
       const validationBlock = formValidationCandidate ? this._formValidationBlocks.get(tabId) : null;
       let priorValidationFailure = !!validationBlock;
       let correctedPriorValidationFailure = false;
@@ -7279,6 +7290,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   }
 
   _skillPermissionArgsForCapability(skillTool, capability, args) {
+    if (
+      isTrustedChromeWebStoreSkillTool(skillTool)
+      && (capability === Capability.NETWORK || capability === Capability.UPLOAD)
+    ) return capability === Capability.UPLOAD
+      ? { ...(args || {}), _trustedPermissionUrl: skillTool.endpoint }
+      : { ...(args || {}), url: skillTool.endpoint };
     if (capability !== Capability.DOWNLOAD || !skillTool?.requiresDownloadPermission) return args;
     const inputUrlArg = skillTool.inputUrlArg || 'url';
     if (!inputUrlArg || inputUrlArg === 'url') return args;
@@ -9031,6 +9048,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   }
 
   _isExecutionMutationEvidence(name, args = {}, capabilities = []) {
+    if (name === 'chrome_web_store_upload' || name === 'chrome_web_store_publish') return true;
     const mutationCapabilities = new Set([
       Capability.NAVIGATE,
       Capability.CLICK,
@@ -11217,6 +11235,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     // redirect policy.
     const skillTool = this._activeSkillToolForName(tabId, name);
     if (skillTool) {
+      if (isTrustedChromeWebStoreSkillTool(skillTool)) {
+        return await executeChromeWebStoreSkillTool(skillTool, args, { tabId });
+      }
       return await executeHttpSkillTool(skillTool, args, { tabId });
     }
     const skillEndpointRedirect = this._skillEndpointToolRedirect(name, args, tabId);

@@ -10,6 +10,11 @@ export const MAX_CUSTOM_SKILL_TOOL_NAME_CHARS = 64;
 export const MAX_CUSTOM_SKILL_SUMMARY_CHARS = 200;
 export const MAX_CUSTOM_SKILL_INTENTS = 6;
 export const MAX_CUSTOM_SKILL_INTENT_CHARS = 40;
+const PRIVILEGED_BUILT_IN_SKILL_TOOL_NAMES = new Set([
+  'chrome_web_store_status',
+  'chrome_web_store_upload',
+  'chrome_web_store_publish',
+]);
 export const PACKAGED_SKILL_SOURCES = Object.freeze([
   Object.freeze({
     id: 'freeskillz-xyz',
@@ -40,6 +45,11 @@ export const PACKAGED_SKILL_SOURCES = Object.freeze([
     id: 'open-library-books',
     name: 'Open Library',
     path: 'skills/open-library-books.md',
+  }),
+  Object.freeze({
+    id: 'chrome-web-store-release',
+    name: 'Chrome Web Store release',
+    path: 'skills/chrome-web-store-release.md',
   }),
 ]);
 export const DEFAULT_SKILL_SOURCES = Object.freeze(
@@ -295,7 +305,7 @@ function normalizeSkillTools(value, skillId) {
   for (const item of raw) {
     if (!isPlainObject(item) || tools.length >= MAX_CUSTOM_SKILL_TOOLS) continue;
     const name = cleanToolName(item.name || item.expose_as || item.exposeAs || item.id);
-    if (!name || seen.has(name)) continue;
+    if (!name || seen.has(name) || PRIVILEGED_BUILT_IN_SKILL_TOOL_NAMES.has(name)) continue;
     const kind = normalizeToolKind(item.kind || item.type || 'http');
     const readOnly = item.readOnly ?? item.read_only ?? kind === 'http';
     if (kind === 'http' && readOnly !== true) continue;
@@ -348,6 +358,79 @@ function normalizeSkillTools(value, skillId) {
   return tools;
 }
 
+function trustedBuiltInSkillTools(skillId, sourceType, sourceUrl) {
+  if (
+    skillId !== 'chrome-web-store-release'
+    || sourceType !== 'built-in'
+    || sourceUrl !== 'skills/chrome-web-store-release.md'
+  ) return [];
+  const shared = {
+    kind: 'chromeWebStore',
+    endpoint: 'https://chromewebstore.googleapis.com/',
+    credentials: 'oauth',
+    requiresDownloadPermission: false,
+    requiresUploadPermission: false,
+    defaultArgs: {},
+    activeTabUrlArg: '',
+    inputUrlArg: '',
+    allowedInputUrls: [],
+    resultPolicy: 'untrusted',
+    responseLimits: {},
+    siteAdapters: [],
+    job: {},
+    tiers: ['full', 'mid'],
+  };
+  return [
+    {
+      ...shared,
+      id: 'chrome_web_store_status',
+      name: 'chrome_web_store_status',
+      description: 'Read the configured Chrome Web Store item status through the official API. Use after upload or publish to verify the current store state.',
+      method: 'GET',
+      readOnly: true,
+      modes: ['ask', 'act', 'dev'],
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+    {
+      ...shared,
+      id: 'chrome_web_store_upload',
+      name: 'chrome_web_store_upload',
+      description: 'Upload the release ZIP explicitly selected by the user in Settings to the configured existing Chrome Web Store item.',
+      method: 'POST',
+      readOnly: false,
+      requiresUploadPermission: true,
+      modes: ['act', 'dev'],
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+    {
+      ...shared,
+      id: 'chrome_web_store_publish',
+      name: 'chrome_web_store_publish',
+      description: 'Submit the configured Chrome Web Store item for review through the official API. This is a consequential publish action and requires explicit confirmation.',
+      method: 'POST',
+      readOnly: false,
+      modes: ['act', 'dev'],
+      parameters: {
+        type: 'object',
+        properties: {
+          publish_type: {
+            type: 'string',
+            enum: ['default', 'staged'],
+            description: 'default publishes after approval; staged waits for a later manual publish after approval.',
+          },
+          deploy_percentage: {
+            type: 'integer',
+            minimum: 0,
+            maximum: 100,
+            description: 'Optional initial rollout percentage. Omit to preserve the dashboard setting.',
+          },
+        },
+        required: [],
+      },
+    },
+  ];
+}
+
 function normalizeSkills(value, { maxSkills = MAX_CUSTOM_SKILLS } = {}) {
   const raw = Array.isArray(value) ? value : [];
   const seenIds = new Set();
@@ -367,7 +450,16 @@ function normalizeSkills(value, { maxSkills = MAX_CUSTOM_SKILLS } = {}) {
       : '';
     const name = cleanSingleLine(item.name).slice(0, 80) || inferName(content, skills.length);
     const metadata = parseSkillMetadataBlock(content);
-    const toolRecords = Array.isArray(item.tools) ? item.tools : parseSkillToolBlocks(content);
+    const trustedChromeWebStoreSkill = id === 'chrome-web-store-release'
+      && sourceType === 'built-in'
+      && sourceUrl === 'skills/chrome-web-store-release.md';
+    // Never re-normalize privileged runtime tools as generic HTTP tools when
+    // an already-normalized skill record passes through this boundary again.
+    const toolRecords = trustedChromeWebStoreSkill
+      ? []
+      : Array.isArray(item.tools) ? item.tools : parseSkillToolBlocks(content);
+    const normalizedTools = normalizeSkillTools(toolRecords, id);
+    const privilegedTools = trustedBuiltInSkillTools(id, sourceType, sourceUrl);
     skills.push({
       id,
       name,
@@ -377,7 +469,7 @@ function normalizeSkills(value, { maxSkills = MAX_CUSTOM_SKILLS } = {}) {
       summary: metadata?.summary || inferSkillSummary(content, name),
       modes: metadata?.modes || ['act'],
       intents: metadata?.intents || [],
-      tools: normalizeSkillTools(toolRecords, id),
+      tools: [...normalizedTools, ...privilegedTools],
       createdAt: Number.isFinite(Number(item.createdAt)) ? Number(item.createdAt) : 0,
     });
   }

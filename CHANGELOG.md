@@ -4,6 +4,21 @@ All notable changes to WebBrain are documented in this file.
 
 This changelog was generated from the repository Git history and release tags. Versions without a Git tag are inferred from version-bump commits and the current `package.json` / browser manifest versions.
 
+## [25.4.2] - 2026-07-22
+
+### Added
+- Added a default-disabled packaged Chrome Web Store release skill with trusted status, ZIP upload, and publish tools backed by the official v2 API in Chrome and Firefox.
+- Added skill-scoped setup for user-owned Google OAuth credentials, publisher/item IDs, and an explicitly selected local release ZIP.
+
+### Changed
+- Added a Chrome Web Store dashboard adapter that routes enabled runs to the release skill instead of protected DOM controls.
+
+### Fixed
+- Added an always-on Chrome protected-page guard for the Chrome Web Store Developer Dashboard so DOM tools fail immediately and non-retryably instead of entering wait/read retry loops.
+
+### Security
+- Kept OAuth tokens and release ZIP bytes in extension-local storage and out of model prompts, tool arguments, traces, and tool results; upload and publish remain behind consequential-action permission and submission gates.
+
 ## [25.4.0] - 2026-07-21
 
 ### Added

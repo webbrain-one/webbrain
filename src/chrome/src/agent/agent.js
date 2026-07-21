@@ -49,6 +49,8 @@ import { USER_MEMORY_DEFAULT_MAX_PROMPT_CHARS, formatUserMemoryPrompt, normalize
 import { mergeRedactionFrameRegions, mapRegionsToImage, pixelateDataUrl } from './screenshot-redaction.js';
 import { buildTrustedRuntimeContext, stripTrustedRuntimeContext } from './runtime-context.js';
 import { resolveSavedDownload } from '../download-result.js';
+import { executeChromeWebStoreSkillTool, isTrustedChromeWebStoreSkillTool } from '../chrome-web-store-release.js';
+import { chromeProtectedPageFailure, isChromeProtectedPageDomTool } from '../chrome-protected-pages.js';
 
 const DEFAULT_CLOUD_COST_ALLOWANCE_USD = 10;
 // Product default: auto-approve plans at 75% confidence to reduce review stops.
@@ -432,6 +434,10 @@ export class Agent {
   }
 
   _recordCompletionSubmitAttempt(tabId, detectedSubmit, name, args, beforeUrl, afterUrl, result, beforeDocument = '', afterDocument = '') {
+    // API-backed Chrome Web Store submission is verified by the subsequent
+    // chrome_web_store_status observation. Do not create DOM-form transition
+    // state for a dashboard Chrome intentionally prevents us from inspecting.
+    if (name === 'chrome_web_store_publish') return null;
     // execute_js is always classified as submit-capable for its permission
     // prompt, but that conservative fallback is not evidence that this call
     // actually submitted anything. Only arm completion verification for JS
@@ -2729,6 +2735,18 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     return false;
   }
 
+  async _chromeProtectedPageFailure(tabId, toolName) {
+    if (!isChromeProtectedPageDomTool(toolName)) return null;
+    try {
+      const tab = await chrome.tabs.get(tabId);
+      return chromeProtectedPageFailure(tab?.url || '', toolName);
+    } catch {
+      // A missing/closed tab will fail through the ordinary tool handler. Do
+      // not misclassify unrelated tab lookup failures as protected-page hits.
+      return null;
+    }
+  }
+
   async _prepareWebMCPToolCall(tabId, name, args = {}) {
     if (name !== 'execute_webmcp_tool') return { args };
     if (!this.webMcpEnabled) {
@@ -2958,7 +2976,17 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       let fnArgs = this._toolCallArgsWithReplayMethod(tabId, fnName, argRepair.args);
       const argRepairNotice = argRepair.note || '';
 
-      const webMcpPreparation = await this._prepareWebMCPToolCall(tabId, fnName, fnArgs);
+      // Chrome-protected pages must be rejected before any helper can touch
+      // the DOM or debugger. In particular, WebMCP preparation attaches CDP
+      // and submit/form-validation preflights execute page probes before the
+      // call reaches executeTool(). Keep the failure in the ordinary result
+      // pipeline below so tracing, loop handling, and trusted recovery notes
+      // still behave exactly like other tool results.
+      const protectedPageFailure = await this._chromeProtectedPageFailure(tabId, fnName);
+
+      const webMcpPreparation = protectedPageFailure
+        ? { args: fnArgs }
+        : await this._prepareWebMCPToolCall(tabId, fnName, fnArgs);
       if (webMcpPreparation.error) {
         messages.push({
           role: 'tool',
@@ -2989,7 +3017,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       // A call may require MORE THAN ONE capability — e.g. set_field({submit})
       // both types AND submits, so it needs a TYPE grant and a CLICK grant.
       const skillCallTool = this._activeSkillToolForName(tabId, fnName);
-      let capabilities = capabilitiesFor(fnName, fnArgs);
+      let capabilities = protectedPageFailure ? [] : capabilitiesFor(fnName, fnArgs);
       if (skillCallTool?.requiresDownloadPermission && !capabilities.includes(Capability.DOWNLOAD)) {
         capabilities.push(Capability.DOWNLOAD);
       }
@@ -2997,15 +3025,18 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       // path later removes a capability whose prompt was already satisfied.
       // A missing response after any consequential call is an unknown outcome:
       // the side effect may have completed before its reply was lost.
-      const isStateChangingCall = Agent.STATE_CHANGE_TOOLS.has(fnName);
+      const isStateChangingCall = !protectedPageFailure && Agent.STATE_CHANGE_TOOLS.has(fnName);
       const missingResponseOutcomeUnknown = capabilities.length > 0 || isStateChangingCall;
-      const executionMutationEvidence = this._isExecutionMutationEvidence(fnName, fnArgs, capabilities);
-      const clarificationAuthorizationBlock = this._clarificationAuthorizationBlock(
-        tabId,
-        fnName,
-        fnArgs,
-        capabilities,
-      );
+      const executionMutationEvidence = !protectedPageFailure
+        && this._isExecutionMutationEvidence(fnName, fnArgs, capabilities);
+      const clarificationAuthorizationBlock = protectedPageFailure
+        ? null
+        : this._clarificationAuthorizationBlock(
+            tabId,
+            fnName,
+            fnArgs,
+            capabilities,
+          );
       if (clarificationAuthorizationBlock) {
         const blockedResult = clarificationAuthorizationBlock.result;
         onUpdate('tool_call', { name: fnName, args: fnArgs, outcomeUnknown: false });
@@ -3089,7 +3120,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         onUpdate('warning', { message: 'API mutation blocked until /allow-api is enabled.' });
         continue;
       }
-      const formValidationCandidate = this._isFormValidationCandidate(fnName, fnArgs);
+      const formValidationCandidate = !protectedPageFailure
+        && this._isFormValidationCandidate(fnName, fnArgs);
       let formValidationCoordinateFrames = null;
       if (
         formValidationCandidate
@@ -3118,6 +3150,13 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
               : {}),
           })
         : null;
+      if (fnName === 'chrome_web_store_publish') {
+        detectedSubmitAction = {
+          isSubmit: true,
+          host: 'chromewebstore.googleapis.com',
+          reason: 'submit the configured Chrome Web Store release for review',
+        };
+      }
       const validationBlock = formValidationCandidate ? this._formValidationBlocks.get(tabId) : null;
       let priorValidationFailure = !!validationBlock;
       let correctedPriorValidationFailure = false;
@@ -3158,7 +3197,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       const requiresMandatoryWebMCPGates = fnName === 'execute_webmcp_tool';
       const bypassesConsequentialGates = !requiresMandatoryWebMCPGates
         && (this._skipPermissionGate || scheduledBypassesGate);
-      if (!bypassesConsequentialGates) {
+      if (!protectedPageFailure && !bypassesConsequentialGates) {
         const submitConfirmation = detectedSubmitAction || await this._detectLikelySubmitAction(tabId, fnName, fnArgs);
         detectedSubmitAction = submitConfirmation;
         if (submitConfirmation?.isSubmit) {
@@ -3363,7 +3402,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       // Snapshot URL before nav-prone calls. Some tools are conditional:
       // Enter and set_field({submit:true}) can navigate, while other key
       // presses and ordinary field edits should avoid the URL-check delay.
-      const navigationProneCall = this._isNavigationProneToolCall(fnName, fnArgs);
+      const navigationProneCall = !protectedPageFailure
+        && this._isNavigationProneToolCall(fnName, fnArgs);
       let beforeUrl = '';
       let afterUrl = '';
       const beforeDocument = String(this._lastAxScopes.get(tabId)?.documentToken || '');
@@ -3383,9 +3423,13 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         } catch {}
       }
       const _toolStart = Date.now();
-      const rawToolResult = await this.executeTool(tabId, fnName, fnArgs, onUpdate, {
-        completionBatchStartState,
-      });
+      const rawToolResult = protectedPageFailure || await this.executeTool(
+        tabId,
+        fnName,
+        fnArgs,
+        onUpdate,
+        { completionBatchStartState },
+      );
       const toolResult = this._normalizeToolResult(fnName, rawToolResult, missingResponseOutcomeUnknown);
       const inspectFormValidationAfter = formValidationCandidate
         && this._formValidationActionLooksSubmit(
@@ -3681,6 +3725,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       // our own trusted notes (the loop nudge), so the nudge stays outside the
       // <untrusted_page_content> box and is read as an instruction, not data.
       let resultContent = this._wrapUntrusted(fnName, this._limitToolResult(toolResult));
+      if (toolResult?.errorCode === 'chrome_protected_page') {
+        resultContent += '\n[TRUSTED RUNTIME ROUTING: Chrome blocks extension DOM/debugger access on this dashboard. Do not call another DOM, accessibility, wait, script, iframe, WebMCP, or upload_file tool here. If chrome-web-store-release is enabled and visible in the skill catalog, load it and use its chrome_web_store_* tools. Otherwise ask the user to enable/configure that packaged skill or continue manually.]';
+        onUpdate('warning', { message: 'Chrome-protected dashboard detected; DOM automation is unavailable.' });
+      }
       if (nytimesPageGateFallback) {
         resultContent += `\n${nytimesPageGateFallback.note}`;
         onUpdate('warning', {
@@ -8283,6 +8331,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   }
 
   _skillPermissionArgsForCapability(skillTool, capability, args) {
+    if (
+      isTrustedChromeWebStoreSkillTool(skillTool)
+      && (capability === Capability.NETWORK || capability === Capability.UPLOAD)
+    ) {
+      return capability === Capability.UPLOAD
+        ? { ...(args || {}), _trustedPermissionUrl: skillTool.endpoint }
+        : { ...(args || {}), url: skillTool.endpoint };
+    }
     if (capability !== Capability.DOWNLOAD || !skillTool?.requiresDownloadPermission) return args;
     const inputUrlArg = skillTool.inputUrlArg || 'url';
     if (!inputUrlArg || inputUrlArg === 'url') return args;
@@ -10042,6 +10098,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   }
 
   _isExecutionMutationEvidence(name, args = {}, capabilities = []) {
+    if (name === 'chrome_web_store_upload' || name === 'chrome_web_store_publish') return true;
     const mutationCapabilities = new Set([
       Capability.NAVIGATE,
       Capability.CLICK,
@@ -12096,6 +12153,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (name === 'done_json') {
       return handleDoneJson(this.cloudRunContexts.get(tabId), args);
     }
+    const protectedFailure = await this._chromeProtectedPageFailure(tabId, name);
+    if (protectedFailure) return protectedFailure;
     if (name === 'list_webmcp_tools') {
       if (!this.webMcpEnabled) {
         return {
@@ -12976,6 +13035,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
     const skillTool = this._activeSkillToolForName(tabId, name);
     if (skillTool) {
+      if (isTrustedChromeWebStoreSkillTool(skillTool)) {
+        return await executeChromeWebStoreSkillTool(skillTool, args, { tabId });
+      }
       return await executeHttpSkillTool(skillTool, args, { tabId });
     }
     const skillEndpointRedirect = this._skillEndpointToolRedirect(name, args, tabId);

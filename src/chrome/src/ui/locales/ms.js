@@ -1,5 +1,8 @@
 // Malay (ms).
+import chromeWebStoreLocale from './chrome-web-store.mjs';
+
 export default {
+  ...chromeWebStoreLocale,
   'sp.providers.no_setup_group': 'Tanpa persediaan',
   'sp.providers.no_setup': 'Tiada persediaan diperlukan',
   'sp.providers.active_group': 'Penyedia aktif',

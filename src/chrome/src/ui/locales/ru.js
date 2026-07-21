@@ -1,5 +1,8 @@
 // Russian (ru).
+import chromeWebStoreLocale from './chrome-web-store.mjs';
+
 export default {
+  ...chromeWebStoreLocale,
   'sp.providers.no_setup_group': 'Без настройки',
   'sp.providers.no_setup': 'Настройка не требуется',
   'sp.providers.active_group': 'Активные провайдеры',

@@ -1,5 +1,8 @@
 // Filipino / Tagalog (tl).
+import chromeWebStoreLocale from './chrome-web-store.mjs';
+
 export default {
+  ...chromeWebStoreLocale,
   'sp.providers.no_setup_group': 'Walang setup',
   'sp.providers.no_setup': 'Hindi kailangan ng setup',
   'sp.providers.active_group': 'Mga aktibong provider',

@@ -134,6 +134,17 @@ function packagedOpenLibraryRecord(prefix) {
   };
 }
 
+function packagedChromeWebStoreRecord(prefix) {
+  return {
+    id: 'chrome-web-store-release',
+    name: 'Chrome Web Store release',
+    sourceType: 'built-in',
+    sourceUrl: 'skills/chrome-web-store-release.md',
+    content: fs.readFileSync(path.join(ROOT, prefix, 'skills/chrome-web-store-release.md'), 'utf8'),
+    createdAt: 0,
+  };
+}
+
 function activateSkillForTest(agent, tabIds, skillId, mode = 'act') {
   for (const tabId of Array.isArray(tabIds) ? tabIds : [tabIds]) {
     agent.conversationModes.set(tabId, mode);
@@ -236,6 +247,15 @@ const { validateFetchUrl: validateFetchUrlFx, registrableDomain: registrableDoma
 );
 const { firefoxRestrictedDomainForUrl, firefoxRestrictedDomainFailure, firefoxHostPermissionFailure } = await import(
   'file://' + path.join(ROOT, 'src/firefox/src/firefox-restricted-domains.js').replace(/\\/g, '/')
+);
+const { chromeProtectedPageForUrl, chromeProtectedPageFailure, isChromeProtectedPageDomTool } = await import(
+  'file://' + path.join(ROOT, 'src/chrome/src/chrome-protected-pages.js').replace(/\\/g, '/')
+);
+const ChromeWebStoreReleaseCh = await import(
+  'file://' + path.join(ROOT, 'src/chrome/src/chrome-web-store-release.js').replace(/\\/g, '/')
+);
+const ChromeWebStoreReleaseFx = await import(
+  'file://' + path.join(ROOT, 'src/firefox/src/chrome-web-store-release.js').replace(/\\/g, '/')
 );
 
 // markdown-link.js is pure JS with no DOM / chrome.* deps.
@@ -10664,6 +10684,7 @@ test('every bundled skill declares its canonical semantic intents', () => {
     'open-meteo-weather': ['current_weather', 'weather_forecast', 'location_forecast'],
     'open-library-books': ['book_search', 'book_metadata', 'isbn_lookup', 'author_lookup'],
     'temporary-file-share-litterbox': ['temporary_file_share', 'public_upload_link', 'expiring_file_upload'],
+    'chrome-web-store-release': ['chrome-web-store-release', 'extension-publish'],
   };
   for (const [label, prefix, sources, normalizeSkills] of [
     ['chrome', 'src/chrome', PACKAGED_SKILL_SOURCES_CH, normalizeCustomSkillsCh],
@@ -39494,6 +39515,217 @@ test('plan before act: try is default while explicit off is preserved', () => {
   }
 });
 
+test('Chrome Web Store release uses an always-on protected-page guard and opt-in trusted skill tools', async () => {
+  const dashboard = 'https://chrome.google.com/webstore/devconsole/f4a5b26f-27fe-4bc4-ad37-203b236e337c';
+  assert.equal(chromeProtectedPageForUrl(dashboard), 'chrome-web-store-developer');
+  assert.equal(chromeProtectedPageForUrl('https://example.com/?next=https://chrome.google.com/webstore/devconsole'), '');
+  const failure = chromeProtectedPageFailure(dashboard, 'get_accessibility_tree');
+  assert.equal(failure.errorCode, 'chrome_protected_page');
+  assert.equal(failure.nonRetryable, true);
+  assert.equal(failure.dispatched, false);
+  assert.equal(failure.recoverySkill, 'chrome-web-store-release');
+  assert.match(failure.error, /Do not retry/i);
+  for (const toolName of ['wait_for_stable', 'get_accessibility_tree', 'read_page', 'click_ax', 'upload_file', 'execute_js', 'get_frames']) {
+    assert.equal(isChromeProtectedPageDomTool(toolName), true, `chrome: ${toolName} should be stopped before protected-page dispatch`);
+  }
+  assert.equal(isChromeProtectedPageDomTool('screenshot'), false, 'chrome: screenshots remain an optional read-only fallback');
+  assert.equal(isChromeProtectedPageDomTool('chrome_web_store_status'), false, 'chrome: trusted release tools must bypass the DOM guard');
+
+  for (const [label, prefix, normalize, buildDefinitions, buildRegistry, runtime] of [
+    ['chrome', 'src/chrome', normalizeCustomSkillsCh, buildSkillToolDefinitionsCh, buildSkillToolRegistryCh, ChromeWebStoreReleaseCh],
+    ['firefox', 'src/firefox', normalizeCustomSkillsFx, buildSkillToolDefinitionsFx, buildSkillToolRegistryFx, ChromeWebStoreReleaseFx],
+  ]) {
+    const record = packagedChromeWebStoreRecord(prefix);
+    const normalized = normalize([record]);
+    assert.equal(normalized.length, 1, `${label}: packaged release skill should normalize`);
+    assert.deepEqual(normalized[0].tools.map((tool) => tool.name), [
+      'chrome_web_store_status',
+      'chrome_web_store_upload',
+      'chrome_web_store_publish',
+    ], `${label}: exact built-in release skill should receive all trusted tools`);
+    assert.equal(normalized[0].tools.every((tool) => tool.kind === 'chromeWebStore'), true, `${label}: release tools should use the trusted built-in kind`);
+
+    const rawSpoof = normalize([{ ...record, sourceType: 'text', sourceUrl: '' }]);
+    assert.equal(rawSpoof[0].tools.length, 0, `${label}: raw/imported text must not acquire privileged release handlers`);
+    const normalizedRecordSpoof = normalize([{ ...normalized[0], sourceType: 'text', sourceUrl: '' }]);
+    assert.equal(normalizedRecordSpoof[0].tools.length, 0, `${label}: persisted privileged tool objects must not survive without exact built-in provenance`);
+
+    const askNames = buildDefinitions(normalized, { mode: 'ask', tier: 'full' }).map((tool) => tool.function.name);
+    const actNames = buildDefinitions(normalized, { mode: 'act', tier: 'full' }).map((tool) => tool.function.name);
+    assert.deepEqual(askNames, ['chrome_web_store_status'], `${label}: Ask should expose only the read-only status tool`);
+    assert.deepEqual(actNames, ['chrome_web_store_status', 'chrome_web_store_upload', 'chrome_web_store_publish'], `${label}: Act should expose the full release workflow`);
+
+    const registry = buildRegistry(normalized);
+    const statusTool = registry.get('chrome_web_store_status');
+    const uploadTool = registry.get('chrome_web_store_upload');
+    const publishTool = registry.get('chrome_web_store_publish');
+    assert.equal(runtime.isTrustedChromeWebStoreSkillTool(statusTool), true, `${label}: registry should retain the trusted skill provenance`);
+
+    const storageData = {
+      [runtime.CHROME_WEB_STORE_CONFIG_KEY]: {
+        publisherId: 'f4a5b26f-27fe-4bc4-ad37-203b236e337c',
+        itemId: 'abcdefghijklmnopabcdefghijklmnop',
+      },
+      [runtime.CHROME_WEB_STORE_PACKAGE_KEY]: {
+        name: 'webbrain-25.4.2.zip',
+        size: 3,
+        sha256: 'abc123',
+        base64: btoa('zip'),
+      },
+    };
+    const storage = { get: async () => structuredClone(storageData) };
+    const calls = [];
+    const fetchImpl = async (url, init) => {
+      calls.push({ url, init });
+      const result = url.endsWith(':fetchStatus')
+        ? { itemId: storageData[runtime.CHROME_WEB_STORE_CONFIG_KEY].itemId, publishedItemRevisionStatus: { state: 'OK' } }
+        : url.endsWith(':upload')
+          ? { uploadState: 'SUCCEEDED', crxVersion: '25.4.2' }
+          : { state: 'PENDING_REVIEW' };
+      return { ok: true, status: 200, text: async () => JSON.stringify(result) };
+    };
+    const opts = { storage, fetchImpl, accessToken: 'test-token' };
+    const status = await runtime.executeChromeWebStoreSkillTool(statusTool, {}, opts);
+    const upload = await runtime.executeChromeWebStoreSkillTool(uploadTool, {}, opts);
+    const publish = await runtime.executeChromeWebStoreSkillTool(publishTool, { publish_type: 'staged', deploy_percentage: 25 }, opts);
+    const invalidPublish = await runtime.executeChromeWebStoreSkillTool(publishTool, { publish_type: 'stage' }, opts);
+    assert.equal(status.success, true, `${label}: status should execute`);
+    assert.equal(status.dispatched, false, `${label}: status is read-only`);
+    assert.equal(upload.success, true, `${label}: upload should execute`);
+    assert.equal(upload.package.name, 'webbrain-25.4.2.zip', `${label}: upload should return metadata only`);
+    assert.equal(JSON.stringify(upload).includes('emlw'), false, `${label}: upload result must not contain ZIP base64`);
+    assert.equal(publish.success, true, `${label}: publish should execute`);
+    assert.equal(invalidPublish.success, false, `${label}: an unknown publish type must fail closed`);
+    assert.equal(invalidPublish.noDispatch, true, `${label}: an unknown publish type must not dispatch`);
+    assert.match(invalidPublish.error, /publish_type/, `${label}: invalid publish type should identify the bad argument`);
+    assert.equal(calls.length, 3, `${label}: invalid publish type must not send an API request`);
+    assert.equal(calls[0].url.endsWith(':fetchStatus'), true, `${label}: status endpoint mismatch`);
+    assert.equal(calls[1].url.includes('/upload/v2/publishers/'), true, `${label}: upload endpoint mismatch`);
+    assert.equal(calls[1].init.body instanceof Uint8Array, true, `${label}: upload should send binary bytes`);
+    assert.deepEqual(JSON.parse(calls[2].init.body), {
+      publishType: 'STAGED_PUBLISH',
+      blockOnWarnings: true,
+      deployInfos: [{ deployPercentage: 25 }],
+    }, `${label}: publish body should be warning-blocking and preserve explicit rollout`);
+  }
+
+  const originalChrome = globalThis.chrome;
+  try {
+    const tabId = 6023;
+    globalThis.chrome = {
+      tabs: {
+        get: async () => ({ id: tabId, url: dashboard }),
+      },
+    };
+    const agent = new AgentCh({ getVisionProvider: async () => null });
+    const messages = [];
+    let webMcpPreparationCalls = 0;
+    let submitProbeCalls = 0;
+    let permissionPromptCalls = 0;
+    let toolDispatchCalls = 0;
+    agent.conversationModes.set(tabId, 'act');
+    agent.providerManager = { ...(agent.providerManager || {}), getVisionProvider: async () => null };
+    agent._ensureGateSetting = async () => false;
+    agent._prepareWebMCPToolCall = async () => {
+      webMcpPreparationCalls += 1;
+      throw new Error('protected-page WebMCP preparation must not run');
+    };
+    agent._detectLikelySubmitAction = async () => {
+      submitProbeCalls += 1;
+      throw new Error('protected-page submit probing must not run');
+    };
+    agent._promptPermission = async () => {
+      permissionPromptCalls += 1;
+      return 'once';
+    };
+    agent.executeTool = async () => {
+      toolDispatchCalls += 1;
+      throw new Error('protected-page tool dispatch must not run');
+    };
+    agent._rememberMastodonObservation = async () => null;
+    agent._recordProgressObservation = async () => null;
+    agent._autoRecordProgressAction = () => null;
+    agent._persist = () => {};
+
+    const batchResult = await agent._executeToolBatch(
+      tabId,
+      [{
+        id: 'cws_protected_webmcp',
+        function: { name: 'execute_webmcp_tool', arguments: '{"tool_id":"page-tool","input":{}}' },
+      }],
+      messages,
+      () => {},
+      { supportsVision: false },
+      '',
+      new Set(['execute_webmcp_tool']),
+      1,
+    );
+
+    assert.equal(batchResult.action, 'continue', 'chrome: protected failure should return through the normal tool-result pipeline');
+    assert.equal(webMcpPreparationCalls, 0, 'chrome: protected guard must run before WebMCP/CDP preparation');
+    assert.equal(submitProbeCalls, 0, 'chrome: protected guard must run before submit DOM probes');
+    assert.equal(permissionPromptCalls, 0, 'chrome: blocked protected-page tools must not ask for a permission they cannot use');
+    assert.equal(toolDispatchCalls, 0, 'chrome: protected-page tools must not reach executeTool');
+    assert.equal(messages.length, 1, 'chrome: protected failure should produce one ordinary tool result');
+    assert.match(messages[0].content, /"errorCode":"chrome_protected_page"/);
+    assert.match(messages[0].content, /TRUSTED RUNTIME ROUTING/);
+  } finally {
+    if (originalChrome === undefined) delete globalThis.chrome;
+    else globalThis.chrome = originalChrome;
+  }
+
+  assert.equal(capabilityForCh('chrome_web_store_upload', {}), CapabilityCh.UPLOAD);
+  assert.equal(capabilityForCh('chrome_web_store_publish', {}), CapabilityCh.NETWORK);
+  assert.equal(
+    hostForCapabilityCh(CapabilityCh.UPLOAD, { _trustedPermissionUrl: 'https://chromewebstore.googleapis.com/' }, 'https://example.com/', 'chrome_web_store_upload'),
+    'chromewebstore.googleapis.com',
+  );
+  assert.equal(
+    hostForCapabilityCh(CapabilityCh.UPLOAD, { url: 'https://attacker.example/' }, 'https://dashboard.example/', 'upload_file'),
+    'dashboard.example',
+    'ordinary page uploads must remain charged to the current page even if raw args contain a URL',
+  );
+  for (const invariant of [CompletionInvariantCh, CompletionInvariantFx]) {
+    assert.equal(invariant.isCompletionActionTool('chrome_web_store_upload'), true);
+    assert.equal(invariant.isCompletionActionTool('chrome_web_store_publish'), true);
+    assert.equal(invariant.isCompletionObservationTool('chrome_web_store_status', {}, { success: true }), true);
+  }
+  for (const [label, AgentClass, invariant] of [
+    ['chrome', AgentCh, CompletionInvariantCh],
+    ['firefox', AgentFx, CompletionInvariantFx],
+  ]) {
+    const agent = new AgentClass({});
+    const tabId = label === 'chrome' ? 6021 : 6022;
+    agent.completionInvariants.set(tabId, invariant.createCompletionInvariantState(`${label}-cws`));
+    const recorded = agent._recordCompletionSubmitAttempt(
+      tabId,
+      { isSubmit: true },
+      'chrome_web_store_publish',
+      {},
+      '',
+      '',
+      { success: true, dispatched: true },
+    );
+    assert.equal(recorded, null, `${label}: API publishing should not create unverifiable dashboard DOM-submit state`);
+    assert.equal(agent._completionSubmitStates.has(tabId), false, `${label}: API publishing should verify through chrome_web_store_status`);
+  }
+
+  const adapter = getActiveAdapter(dashboard);
+  assert.equal(adapter?.name, 'chrome-web-store-developer');
+  assert.match(adapter?.notes || '', /chrome_web_store_status/);
+  assert.equal(getActiveAdapterFx(dashboard)?.name, 'chrome-web-store-developer');
+
+  const chromeAgentSource = fs.readFileSync(path.join(ROOT, 'src/chrome/src/agent/agent.js'), 'utf8');
+  const guardIndex = chromeAgentSource.indexOf('const protectedPageFailure = await this._chromeProtectedPageFailure(tabId, fnName);');
+  const webMcpPreparationIndex = chromeAgentSource.indexOf('const webMcpPreparation = protectedPageFailure', guardIndex);
+  const toolDispatchIndex = chromeAgentSource.indexOf('const rawToolResult = protectedPageFailure || await this.executeTool(', guardIndex);
+  assert.ok(
+    guardIndex >= 0 && webMcpPreparationIndex > guardIndex && toolDispatchIndex > webMcpPreparationIndex,
+    'chrome: protected-page guard must run before WebMCP preparation and tool dispatch',
+  );
+  assert.match(chromeAgentSource, /TRUSTED RUNTIME ROUTING: Chrome blocks extension DOM\/debugger access/, 'chrome: protected-page recovery should remain outside the untrusted page-content wrapper');
+});
+
 test('settings exposes custom skills tab and packaged skills resource directory', () => {
   assert.equal(CUSTOM_SKILLS_STORAGE_KEY_CH, 'customSkills');
   assert.equal(CUSTOM_SKILLS_STORAGE_KEY_FX, 'customSkills');
@@ -39508,6 +39740,7 @@ test('settings exposes custom skills tab and packaged skills resource directory'
     'temporary-file-share-litterbox',
     'open-meteo-weather',
     'open-library-books',
+    'chrome-web-store-release',
   ]);
   assert.deepEqual(PACKAGED_SKILL_SOURCES_FX.map((skill) => skill.id), [
     'freeskillz-xyz',
@@ -39516,6 +39749,7 @@ test('settings exposes custom skills tab and packaged skills resource directory'
     'temporary-file-share-litterbox',
     'open-meteo-weather',
     'open-library-books',
+    'chrome-web-store-release',
   ]);
   assert.deepEqual(DEFAULT_SKILL_SOURCES_CH.map((skill) => skill.id), [
     'freeskillz-xyz',
@@ -39525,6 +39759,8 @@ test('settings exposes custom skills tab and packaged skills resource directory'
     'freeskillz-xyz',
     'otp-verification-code-helper',
   ]);
+  assert.equal(DEFAULT_SKILL_SOURCES_CH.some((skill) => skill.id === 'chrome-web-store-release'), false, 'chrome: release skill must be disabled by default');
+  assert.equal(DEFAULT_SKILL_SOURCES_FX.some((skill) => skill.id === 'chrome-web-store-release'), false, 'firefox: release skill must be disabled by default');
 
   const privacyPolicy = fs.readFileSync(path.join(ROOT, 'web/privacy.html'), 'utf8');
   const privacyDataFlow = fs.readFileSync(path.join(ROOT, 'docs/privacy-and-data-flow.md'), 'utf8');
@@ -39585,6 +39821,8 @@ test('settings exposes custom skills tab and packaged skills resource directory'
     assert.match(html, /id="skill-url"/, `${label}: URL skill input missing`);
     assert.match(html, /id="skill-text"/, `${label}: raw skill textarea missing`);
     assert.match(html, /id="packaged-skills-list"/, `${label}: available packaged skills list missing`);
+    assert.match(html, /id="chrome-web-store-release-card" hidden/, `${label}: release setup should be hidden until the skill is enabled`);
+    assert.match(html, /id="chrome-web-store-package"[^>]*accept="\.zip,application\/zip"/, `${label}: release ZIP picker missing`);
     assert.match(html, /id="skill-preview-dialog"/, `${label}: skill content preview dialog missing`);
     assert.match(html, /id="skill-preview-rendered"[^>]*tabindex="0"/, `${label}: rendered skill preview should be keyboard-scrollable`);
     assert.match(html, /id="skill-preview-raw"[^>]*tabindex="0"[^>]*hidden/, `${label}: raw skill preview should be available but hidden by default`);
@@ -39617,6 +39855,9 @@ test('settings exposes custom skills tab and packaged skills resource directory'
     assert.match(settingsJs, /installedDefault/, `${label}: reinstalling a default should clear its removal tombstone`);
     assert.match(settingsJs, /st\.skills\.source\.built_in/, `${label}: settings should label packaged skills`);
     assert.match(settingsJs, /skill\.tools/, `${label}: settings should show exposed skill tools`);
+    assert.match(settingsJs, /CHROME_WEB_STORE_PACKAGE_KEY/, `${label}: release package should use dedicated local storage`);
+    assert.match(settingsJs, /crypto\.subtle\.digest\('SHA-256'/, `${label}: release package should record a local integrity digest`);
+    assert.match(background, /chrome_web_store_oauth_start/, `${label}: release OAuth should run in the durable background context`);
     assert.match(englishLocale, /small catalog sends only each eligible skill\\'s ID, name, summary, and optional semantic intents/, `${label}: settings should explain the semantic skill catalog`);
     assert.match(englishLocale, /full instructions and compatible <code>webbrain-tools<\/code> are exposed only after/i, `${label}: settings should explain on-demand skill loading`);
     assert.match(englishLocale, /Compact does not load skills/, `${label}: settings should explain Compact skill isolation`);
@@ -39646,6 +39887,11 @@ test('settings exposes custom skills tab and packaged skills resource directory'
     assert.match(freeSkillz, /browser cookies are not sent to the service/i, `${label}: FreeSkillz skill should explain the remote cookie boundary`);
     assert.doesNotMatch(freeSkillz, /raw FreeSkillz endpoints only/i, `${label}: bundled FreeSkillz skill should prefer declared tools`);
     assert.doesNotMatch(freeSkillz, /127\.0\.0\.1|localhost|Local development/i, `${label}: FreeSkillz skill should not include local development URLs`);
+    const chromeWebStore = fs.readFileSync(path.join(ROOT, prefix, 'skills/chrome-web-store-release.md'), 'utf8');
+    assert.match(chromeWebStore, /chrome_web_store_status/, `${label}: release status instructions missing`);
+    assert.match(chromeWebStore, /chrome_web_store_upload/, `${label}: release upload instructions missing`);
+    assert.match(chromeWebStore, /chrome_web_store_publish/, `${label}: release publish instructions missing`);
+    assert.match(chromeWebStore, /blockOnWarnings: true/, `${label}: publish warnings must fail closed`);
     const disposable = fs.readFileSync(path.join(ROOT, prefix, 'skills/disposable-email-mailtm.md'), 'utf8');
     assert.match(disposable, /Mail\.tm/, `${label}: disposable email skill should use Mail.tm by default`);
     assert.match(disposable, /disposable and should be used only for unimportant tasks/i, `${label}: disposable email skill should warn about unimportant use only`);
