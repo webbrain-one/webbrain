@@ -30697,6 +30697,24 @@ test('submit-aware completion accepts the observed AMO finish document and rejec
 
     agent._completionSubmitStates.set(tabId, {
       currentUrl: submitUrl,
+      actionSequence: Number(agent.completionInvariants.get(tabId)?.sequence || 0),
+      dispatched: true,
+      observedAfterSubmit: false,
+      documentChanged: false,
+      formValidationFailed: false,
+      completionSignalObserved: false,
+    });
+    agent._recordCompletionToolResult(tabId, 'screenshot', {}, {
+      success: true,
+      method: 'vision_describe',
+      description: 'A green confirmation banner says Version submitted successfully.',
+      page: { url: submitUrl, title: 'Complete checkout' },
+    });
+    assert.equal(agent._completionSubmitStates.get(tabId)?.completionSignalObserved, true,
+      `${AgentClass.name}: screenshot vision description did not record visible submit success`);
+
+    agent._completionSubmitStates.set(tabId, {
+      currentUrl: submitUrl,
       dispatched: true,
       observedAfterSubmit: true,
       documentChanged: false,
@@ -31813,6 +31831,61 @@ test('trusted continuation carries consequential evidence without repeating the 
       `${AgentClass.name}: continuation repeated a consequential action`,
     );
     assert.equal(responses.length, 0, `${AgentClass.name}: continuation entered recovery`);
+  }
+});
+
+test('trusted continuation carries verified submit state without permitting ordinary-turn reuse', () => {
+  for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
+    const agent = new AgentClass({});
+    const tabId = 8649 + index;
+    const conversationId = `submit_continuation_conv_${index}`;
+    const guardOutcome = {
+      requestKind: 'execute',
+      requiresStateChange: true,
+      requiresSubmission: true,
+    };
+    agent.conversationIds.set(tabId, conversationId);
+    agent._beginCompletionInvariant(tabId);
+    agent._startPlanExecutionGuard(tabId, 'act', guardOutcome);
+    agent._markPlanExecutionToolCall(tabId, 'click_ax', { success: true }, { consequential: true });
+    agent._completionSubmitStates.set(tabId, {
+      originatingUrl: 'https://example.test/submit',
+      currentUrl: 'https://example.test/finish',
+      originatingDocument: 'doc-before',
+      currentDocument: 'doc-after',
+      actionSequence: 4,
+      submitLike: true,
+      dispatched: true,
+      documentChanged: true,
+      formValidationFailed: false,
+      completionSignalObserved: true,
+      observedAfterSubmit: true,
+    });
+    agent._storeContinuationExecutionEvidence(tabId);
+
+    agent._beginCompletionInvariant(tabId);
+    assert.equal(agent._completionSubmitStates.has(tabId), false,
+      `${AgentClass.name}: fresh completion run retained submit state before continuation authorization`);
+    agent._startPlanExecutionGuard(tabId, 'act', guardOutcome, { trustedContinuation: true });
+    assert.deepEqual(agent._completionSubmitStates.get(tabId), {
+      originatingUrl: 'https://example.test/submit',
+      currentUrl: 'https://example.test/finish',
+      originatingDocument: 'doc-before',
+      currentDocument: 'doc-after',
+      actionSequence: 0,
+      submitLike: true,
+      dispatched: true,
+      documentChanged: true,
+      formValidationFailed: false,
+      completionSignalObserved: true,
+      observedAfterSubmit: true,
+    }, `${AgentClass.name}: trusted continuation did not restore verified submit evidence`);
+
+    agent._storeContinuationExecutionEvidence(tabId);
+    agent._beginCompletionInvariant(tabId);
+    agent._startPlanExecutionGuard(tabId, 'act', guardOutcome);
+    assert.equal(agent._completionSubmitStates.has(tabId), false,
+      `${AgentClass.name}: ordinary turn reused trusted continuation submit evidence`);
   }
 });
 

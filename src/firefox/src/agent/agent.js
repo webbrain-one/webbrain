@@ -329,6 +329,7 @@ export class Agent {
         result?.title,
         result?.page?.title,
       ].some(value => this._completionTextSignalsSuccess(value)) || [
+        result?.description,
         result?.content,
         result?.text,
         result?.pageContent,
@@ -8701,6 +8702,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       recoveryAttempted: false,
     };
     this._planExecutionGuards.set(tabId, state);
+    if (carryMatches && carried.completionSubmitState) {
+      this._completionSubmitStates.set(tabId, {
+        ...carried.completionSubmitState,
+        actionSequence: Number(this.completionInvariants.get(tabId)?.sequence || 0),
+      });
+    }
     return state;
   }
 
@@ -8786,6 +8793,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   _storeContinuationExecutionEvidence(tabId) {
     const guard = this._planExecutionGuards.get(tabId);
     if (guard?.enabled && (guard.successfulTaskToolCalls > 0 || guard.successfulConsequentialToolCalls > 0)) {
+      const submit = this._completionSubmitStates.get(tabId);
       this._continuationExecutionEvidence.set(tabId, {
         requestKind: guard.requestKind,
         requiresStateChange: guard.requiresStateChange,
@@ -8795,6 +8803,18 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         successfulTaskToolCalls: guard.successfulTaskToolCalls,
         successfulConsequentialToolCalls: guard.successfulConsequentialToolCalls,
         successfulRequiredSchedulingToolCalls: guard.successfulRequiredSchedulingToolCalls,
+        completionSubmitState: submit ? {
+          originatingUrl: submit.originatingUrl || '',
+          currentUrl: submit.currentUrl || '',
+          originatingDocument: submit.originatingDocument || null,
+          currentDocument: submit.currentDocument || null,
+          submitLike: submit.submitLike === true,
+          dispatched: submit.dispatched === true,
+          documentChanged: submit.documentChanged === true,
+          formValidationFailed: submit.formValidationFailed === true,
+          completionSignalObserved: submit.completionSignalObserved === true,
+          observedAfterSubmit: submit.observedAfterSubmit === true,
+        } : null,
         conversationId: this.conversationIds.get(tabId) || null,
       });
     } else {
