@@ -20476,6 +20476,100 @@ test('WebMCP page annotations never bypass Act mode or frame-scoped permission',
   }
 });
 
+test('WebMCP invocation gates survive global and scheduled permission bypasses', async () => {
+  for (const scenario of [
+    { label: 'global permission bypass', skipGate: true },
+    { label: 'scheduled confirmation bypass', scheduledBypass: true },
+  ]) {
+    const agent = new AgentCh({ getVisionProvider: async () => null });
+    const tabId = scenario.skipGate ? 20416 : 20417;
+    const permissionPrompts = [];
+    const permissionRecords = [];
+    let submitPrompts = 0;
+    let executedArgs = null;
+    const messages = [];
+
+    agent.setWebMCPEnabled(true);
+    agent.conversationModes.set(tabId, 'act');
+    agent.autoScreenshot = 'off';
+    agent._skipPermissionGate = scenario.skipGate === true;
+    agent._ensureGateSetting = async () => agent._skipPermissionGate;
+    agent._currentUrl = async () => 'https://merchant.test/checkout';
+    agent._recordProgressObservation = async () => null;
+    agent._autoRecordProgressAction = () => null;
+    agent._progressWarningForAction = () => '';
+    agent._persist = () => {};
+    if (scenario.scheduledBypass) {
+      agent.setScheduledRunPolicy(tabId, {
+        requireConsequentialConfirmation: false,
+        autoApprovePlanReview: true,
+      });
+    }
+
+    agent._prepareWebMCPToolCall = async (_tabId, name, args) => {
+      assert.equal(name, 'execute_webmcp_tool');
+      return {
+        args: {
+          ...args,
+          _webMcpDeclaredReadOnly: true,
+          _webMcpTargetUrl: 'https://frame.pay.test/embed',
+          _webMcpFrameId: 'frame-pay',
+        },
+      };
+    };
+    agent._promptSubmitConfirmation = async (_tabId, info) => {
+      submitPrompts += 1;
+      assert.equal(info.host, 'frame.pay.test', `${scenario.label}: confirmation used the top-level host`);
+      return 'once';
+    };
+    agent.permissions.hydrate = async () => {};
+    agent.permissions.check = (host, capability) => {
+      permissionPrompts.push({ host, capability });
+      return { allowed: false, needsPrompt: true };
+    };
+    agent._promptPermission = async (_tabId, capability, host) => {
+      assert.equal(capability, CapabilityCh.CLICK);
+      assert.equal(host, 'frame.pay.test');
+      return 'once';
+    };
+    agent.permissions.record = async (host, capability, action, scope) => {
+      permissionRecords.push({ host, capability, action, scope });
+    };
+    agent.executeTool = async (_tabId, name, args) => {
+      assert.equal(name, 'execute_webmcp_tool');
+      executedArgs = args;
+      return { success: true, dispatched: true };
+    };
+
+    await agent._executeToolBatch(
+      tabId,
+      [{
+        id: `webmcp_${scenario.label}`,
+        function: {
+          name: 'execute_webmcp_tool',
+          arguments: '{"tool_id":"wmcp_1","input":{"amount":1}}',
+        },
+      }],
+      messages,
+      () => {},
+      { supportsVision: false },
+      '',
+      new Set(['execute_webmcp_tool']),
+      1,
+    );
+
+    assert.equal(submitPrompts, 1, `${scenario.label}: fresh WebMCP confirmation was bypassed`);
+    assert.deepEqual(permissionPrompts, [
+      { host: 'frame.pay.test', capability: CapabilityCh.CLICK },
+    ], `${scenario.label}: registration-frame permission was not checked`);
+    assert.deepEqual(permissionRecords, [
+      { host: 'frame.pay.test', capability: CapabilityCh.CLICK, action: 'allow', scope: 'once' },
+    ], `${scenario.label}: registration-frame permission was not recorded`);
+    assert.equal(executedArgs?._webMcpTargetUrl, 'https://frame.pay.test/embed');
+    assert.equal(messages.length, 1, `${scenario.label}: expected one successful tool result`);
+  }
+});
+
 test('CDP Dev diagnostics buffer console/network data and redact sensitive headers', async () => {
   const cdp = new CDPClient();
   const commands = [];

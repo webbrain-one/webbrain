@@ -3095,7 +3095,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       }
       const scheduledPolicy = this.scheduledRunPolicies.get(tabId);
       const scheduledBypassesGate = scheduledPolicy?.requireConsequentialConfirmation === false;
-      if (!this._skipPermissionGate && !scheduledBypassesGate) {
+      // WebMCP callbacks can run arbitrary page logic. Unlike ordinary browser
+      // actions, their documented two-gate boundary is mandatory: neither the
+      // global permission bypass nor an unattended scheduled-run policy may
+      // suppress the fresh invocation confirmation or the frame-host grant.
+      const requiresMandatoryWebMCPGates = fnName === 'execute_webmcp_tool';
+      const bypassesConsequentialGates = !requiresMandatoryWebMCPGates
+        && (this._skipPermissionGate || scheduledBypassesGate);
+      if (!bypassesConsequentialGates) {
         const submitConfirmation = detectedSubmitAction || await this._detectLikelySubmitAction(tabId, fnName, fnArgs);
         detectedSubmitAction = submitConfirmation;
         if (submitConfirmation?.isSubmit) {
@@ -3131,7 +3138,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           // card for same-frame submissions. iframe_click is different: the
           // generic gate is what identifies and fail-closes the target frame host
           // when urlFilter is missing, so keep CLICK for that tool.
-          if (fnName !== 'iframe_click') {
+          if (fnName !== 'iframe_click' && !requiresMandatoryWebMCPGates) {
             capabilities = capabilities.filter(capability => capability !== Capability.CLICK);
           }
         }
@@ -3149,7 +3156,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           allFrames: formValidationAllFrames,
         });
       }
-      if (capabilities.length && !this._skipPermissionGate && !scheduledBypassesGate) {
+      if (capabilities.length && !bypassesConsequentialGates) {
         await this.permissions.hydrate();
         const curUrl = await this._currentUrl(tabId);
         let blocked = null;     // { capability, host }
@@ -3157,7 +3164,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         let failClosed = false;
         let gateDisabled = false;
         for (const capability of capabilities) {
-          if (this._skipPermissionGate) { gateDisabled = true; break; }
+          if (!requiresMandatoryWebMCPGates && this._skipPermissionGate) { gateDisabled = true; break; }
           // /allow-api waives ONLY write-method network egress.
           if (capability === Capability.NETWORK && isNetworkMutation(fnName, fnArgs) && this.apiAllowedTabs.has(tabId)) continue;
           // Every distinct host the call touches must be granted. Usually one,
@@ -3166,7 +3173,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           const hosts = requiredHosts(capability, gateArgs, curUrl, fnName);
           if (hosts.length === 0) { failClosed = true; break; }
           for (const host of hosts) {
-            if (this._skipPermissionGate) { gateDisabled = true; break; }
+            if (!requiresMandatoryWebMCPGates && this._skipPermissionGate) { gateDisabled = true; break; }
             const verdict = this.permissions.check(host, capability, tabId);
             if (verdict.allowed) continue;
             const choice = verdict.needsPrompt
@@ -3178,7 +3185,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
               blocked = { capability, host };
               break;
             }
-            if (await this._ensureGateSetting({ force: true })) {
+            if (!requiresMandatoryWebMCPGates && await this._ensureGateSetting({ force: true })) {
               gateDisabled = true;
               break;
             }
