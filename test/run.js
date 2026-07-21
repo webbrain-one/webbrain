@@ -14581,6 +14581,41 @@ test('waited clarify timeout permits only partial or failed completion', async (
   }
 });
 
+test('waited clarify timeout blocks CAPTCHA solve before solver dispatch', async () => {
+  for (const AgentClass of [AgentCh, AgentFx]) {
+    const agent = new AgentClass({ getVisionProvider: async () => null });
+    const tabId = AgentClass === AgentCh ? 4809 : 4810;
+    const executed = [];
+    let permissionGateCalls = 0;
+    agent._persist = () => {};
+    agent._ensureGateSetting = async () => { permissionGateCalls += 1; };
+    agent.executeTool = async (_tabId, name) => {
+      executed.push(name);
+      return { success: true, dispatched: true, injected: true };
+    };
+    agent._recordClarificationAuthorization(tabId, 'timeout');
+
+    const messages = [];
+    const result = await agent._executeToolBatch(
+      tabId,
+      [{ id: 'captcha_after_timeout', function: { name: 'solve_captcha', arguments: '{}' } }],
+      messages,
+      () => {},
+      { supportsVision: false },
+      '',
+      new Set(['solve_captcha']),
+      1,
+    );
+
+    assert.deepEqual(result, { action: 'continue' }, `${AgentClass.name}: blocked CAPTCHA solve did not request a fresh turn`);
+    assert.deepEqual(executed, [], `${AgentClass.name}: CAPTCHA solver dispatched despite timeout guard`);
+    assert.equal(permissionGateCalls, 0, `${AgentClass.name}: permission setup ran before CAPTCHA timeout guard`);
+    const blocked = JSON.parse(messages[0].content);
+    assert.equal(blocked.clarificationAuthorizationRequired, true, `${AgentClass.name}: CAPTCHA block did not require explicit clarification`);
+    assert.equal(blocked.dispatched, false, `${AgentClass.name}: CAPTCHA block did not prove pre-dispatch denial`);
+  }
+});
+
 test('waited clarify timeout blocks consequential dispatch before permission gates', async () => {
   for (const AgentClass of [AgentCh, AgentFx]) {
     const agent = new AgentClass({ getVisionProvider: async () => null });

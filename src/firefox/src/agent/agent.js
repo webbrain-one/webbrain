@@ -4629,7 +4629,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       Capability.UPLOAD,
       Capability.SCHEDULE,
     ]);
+    // solve_captcha intentionally has no permission capability, but it still
+    // spends external solver quota and can inject a token into the page.
+    const hasUngatedExternalSideEffect = name === 'solve_captcha';
     const changesExternalState = blockedSuccessCompletion
+      || hasUngatedExternalSideEffect
       || capabilities.some(capability => blockedCapabilities.has(capability))
       || (capabilities.includes(Capability.NETWORK) && isNetworkMutation(name, args));
     if (!changesExternalState) return null;
