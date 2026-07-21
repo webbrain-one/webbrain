@@ -17,7 +17,7 @@ on:
         description: GitHub Models model for AI changelog generation.
         required: false
         type: string
-        default: openai/gpt-5.4-mini
+        default: openai/gpt-5-mini
 
 permissions:
   contents: write
