@@ -1316,10 +1316,14 @@
     }
 
     // ── Auto-select: if click text matches a <select> option, select it ──
-    // Only as a rescue when text matching resolved NO clickable element —
-    // otherwise a genuine button/link labeled X would lose to an unrelated
-    // dropdown that merely has an option labeled X.
-    if (!el && params.text) {
+    // Runs when text matching resolved NO element, or resolved the <select>
+    // itself (a select's innerText contains its options, so the contains
+    // level routinely lands here for option clicks — skipping the rescue
+    // then would wrongly fall through to the CANNOT-CLICK intercept).
+    // It must NOT run when a genuine button/link labeled X resolved —
+    // otherwise that element would lose to an unrelated dropdown that
+    // merely has an option labeled X.
+    if (params.text && (!el || el instanceof HTMLSelectElement)) {
       const needle = params.text.trim();
       const lc = needle.toLowerCase();
       const allSels = document.querySelectorAll('select');
