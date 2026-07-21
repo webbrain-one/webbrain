@@ -2646,7 +2646,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           return {
             action: 'return',
             status: 'clarification_required',
-            value: '[Agent stopped before dispatching another action or accepting a success completion because the latest clarification answer was auto-selected after a timeout and was not user authorization. Please answer the clarification explicitly and retry.]',
+            value: this._clarificationAuthorizationStopMessage(),
           };
         }
         return { action: 'continue' };
@@ -4658,6 +4658,26 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           ? `A repeated blocked attempt (${blockedSuccessCompletion ? 'success completion' : 'consequential action'}) tried to use a waited clarify timeout as user authorization. Stop and ask the user to answer the clarification explicitly before retrying.`
           : `This ${blockedSuccessCompletion ? 'success completion' : 'consequential action'} was blocked because the latest clarify answer was auto-selected after a waited timeout and is not user authorization. Call clarify again and wait for a direct user response, or call done with outcome partial or failed. Do not retry unchanged.`,
       },
+    };
+  }
+
+  _clarificationAuthorizationStopMessage() {
+    return '[Agent stopped before dispatching another action or accepting a success completion because the latest clarification answer was auto-selected after a timeout and was not user authorization. Please answer the clarification explicitly and retry.]';
+  }
+
+  _clarificationAuthorizationPlainFinalDecision(tabId) {
+    const block = this._clarificationAuthorizationBlock(
+      tabId,
+      'done',
+      { outcome: 'success' },
+      [],
+    );
+    if (!block) return null;
+    return {
+      retry: !block.stop,
+      ...(block.stop ? {} : { nudge: `[CLARIFICATION AUTHORIZATION BLOCK: ${block.result.error}]` }),
+      failure: this._clarificationAuthorizationStopMessage(),
+      status: 'clarification_required',
     };
   }
 
@@ -13023,6 +13043,26 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       }
       // Repeated-item progress recovery takes priority so an unresolved ledger
       // can still drive the next tool turn.
+      const clarificationFinalDecision = this._isActionMode(mode)
+        ? this._clarificationAuthorizationPlainFinalDecision(tabId)
+        : null;
+      if (clarificationFinalDecision?.retry && steps < this.maxSteps) {
+        messages.push(this._withResponseItems({ role: 'assistant', content: result.content }, result.responseItems, result.reasoningContent, provider));
+        messages.push({ role: 'user', content: clarificationFinalDecision.nudge });
+        onUpdate('warning', { message: 'Plain final completion blocked until the user answers the clarification explicitly.' });
+        this._persist(tabId);
+        continue;
+      }
+      if (clarificationFinalDecision?.failure) {
+        finalResponse = clarificationFinalDecision.failure;
+        _traceStatus = clarificationFinalDecision.status;
+        messages.push({ role: 'assistant', content: finalResponse });
+        onUpdate('text', { content: finalResponse, replace: true });
+        onUpdate('warning', { message: 'Run stopped because explicit clarification authorization is still required.' });
+        onUpdate('run_status', { status: clarificationFinalDecision.status, message: finalResponse });
+        this._persist(tabId);
+        return finalResponse;
+      }
       const progressFinalBlock = this._plainFinalProgressBlock(tabId);
       const completionFinalBlock = this._completionPlainFinalBlock(tabId);
       const plainFinalBlocks = [progressFinalBlock, completionFinalBlock].filter(Boolean);
@@ -13426,6 +13466,28 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         }
         emptyOutputRecoveryAttempted = false;
         compressionPlaceholderRecoveryAttempted = false;
+        const clarificationFinalDecision = this._isActionMode(mode)
+          ? this._clarificationAuthorizationPlainFinalDecision(tabId)
+          : null;
+        if (clarificationFinalDecision?.retry && steps < this.maxSteps) {
+          messages.push(this._withResponseItems({ role: 'assistant', content: fullText }, responseItems, reasoningContent, provider));
+          messages.push({ role: 'user', content: clarificationFinalDecision.nudge });
+          onUpdate('text', { content: '', replace: true });
+          onUpdate('warning', { message: 'Plain final completion blocked until the user answers the clarification explicitly.' });
+          this._persist(tabId);
+          continue;
+        }
+        if (clarificationFinalDecision?.failure) {
+          messages.push({ role: 'assistant', content: clarificationFinalDecision.failure });
+          onUpdate('text', { content: clarificationFinalDecision.failure, replace: true });
+          onUpdate('warning', { message: 'Run stopped because explicit clarification authorization is still required.' });
+          onUpdate('run_status', {
+            status: clarificationFinalDecision.status,
+            message: clarificationFinalDecision.failure,
+          });
+          this._persist(tabId);
+          return finish(clarificationFinalDecision.failure, clarificationFinalDecision.status);
+        }
         // Preserve the progress ledger's purpose-built continuation before
         // treating other plain terminal text as unverified.
         const progressFinalBlock = this._plainFinalProgressBlock(tabId);

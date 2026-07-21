@@ -14733,6 +14733,147 @@ test('waited clarify timeout blocks consequential dispatch before permission gat
   }
 });
 
+test('waited clarify timeout blocks plain finals after a denied action', async () => {
+  for (const streaming of [false, true]) {
+    for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
+      const responses = [
+        {
+          content: null,
+          toolCalls: [{
+            id: `timeout_action_${streaming}_${index}`,
+            function: { name: 'click_ax', arguments: '{"ref_id":"ref_timeout"}' },
+          }],
+        },
+        { content: 'Done.', toolCalls: [] },
+      ];
+      const provider = {
+        supportsTools: true,
+        supportsVision: false,
+        promptTier: 'full',
+        contextWindow: 128000,
+        model: 'test-model',
+        name: 'test-provider',
+        calls: 0,
+      };
+      if (streaming) {
+        provider.chatStream = async function* () {
+          this.calls += 1;
+          const next = responses.shift();
+          assert.ok(next, `${AgentClass.name}: streamed timeout guard called the model too many times`);
+          if (next.content) yield { type: 'text', content: next.content };
+          if (next.toolCalls?.length) {
+            yield {
+              type: 'tool_call',
+              content: next.toolCalls.map((call, toolIndex) => ({
+                index: toolIndex,
+                id: call.id,
+                function: call.function,
+              })),
+            };
+          }
+          yield { type: 'done' };
+        };
+      } else {
+        provider.chat = async () => {
+          provider.calls += 1;
+          const next = responses.shift();
+          assert.ok(next, `${AgentClass.name}: timeout guard called the model too many times`);
+          return next;
+        };
+      }
+
+      const agent = new AgentClass({
+        getActive: () => provider,
+        getVisionProvider: async () => null,
+      });
+      const tabId = 4840 + (streaming ? 10 : 0) + index;
+      configurePlanOnlyGuardAgent(agent, tabId);
+      const executed = [];
+      agent.executeTool = async (_tabId, name) => {
+        executed.push(name);
+        return { success: true };
+      };
+      agent._recordClarificationAuthorization(tabId, 'timeout');
+      const updates = [];
+      const run = streaming ? agent.processMessageStream.bind(agent) : agent.processMessage.bind(agent);
+
+      const final = await run(
+        tabId,
+        'Apply the requested change.',
+        (type, data) => updates.push({ type, data }),
+        'act',
+      );
+
+      assert.equal(final, agent._clarificationAuthorizationStopMessage(), `${AgentClass.name}/${streaming ? 'stream' : 'non-stream'}: plain final escaped the timeout guard`);
+      assert.deepEqual(executed, [], `${AgentClass.name}/${streaming ? 'stream' : 'non-stream'}: denied action reached tool dispatch`);
+      assert.equal(provider.calls, 2, `${AgentClass.name}/${streaming ? 'stream' : 'non-stream'}: timeout guard did not stop after the plain-final laundering attempt`);
+      assert.equal(responses.length, 0, `${AgentClass.name}/${streaming ? 'stream' : 'non-stream'}: timeout guard left unexpected model responses`);
+      assert.equal(agent._clarificationAuthorizationGuards.get(tabId)?.blockedAttempts, 2, `${AgentClass.name}/${streaming ? 'stream' : 'non-stream'}: plain final was not counted as a second blocked completion attempt`);
+      assert.ok(
+        updates.some(update => update.type === 'run_status' && update.data?.status === 'clarification_required'),
+        `${AgentClass.name}/${streaming ? 'stream' : 'non-stream'}: plain-final stop did not propagate terminal run status`,
+      );
+      assert.equal(
+        updates.some(update => update.type === 'text' && /Done\./.test(String(update.data?.content || ''))),
+        false,
+        `${AgentClass.name}/${streaming ? 'stream' : 'non-stream'}: rejected plain final remained visible`,
+      );
+    }
+  }
+});
+
+test('waited clarify timeout plain finals fail closed at the step limit', async () => {
+  for (const streaming of [false, true]) {
+    for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
+      const provider = {
+        supportsTools: true,
+        supportsVision: false,
+        promptTier: 'full',
+        contextWindow: 128000,
+        model: 'test-model',
+        name: 'test-provider',
+      };
+      if (streaming) {
+        provider.chatStream = async function* () {
+          yield { type: 'text', content: 'Done.' };
+          yield { type: 'done' };
+        };
+      } else {
+        provider.chat = async () => ({ content: 'Done.', toolCalls: [] });
+      }
+
+      const agent = new AgentClass({
+        getActive: () => provider,
+        getVisionProvider: async () => null,
+      });
+      const tabId = 4860 + (streaming ? 10 : 0) + index;
+      configurePlanOnlyGuardAgent(agent, tabId);
+      agent.maxSteps = 1;
+      agent._recordClarificationAuthorization(tabId, 'timeout');
+      const updates = [];
+      const run = streaming ? agent.processMessageStream.bind(agent) : agent.processMessage.bind(agent);
+
+      const final = await run(
+        tabId,
+        'Apply the requested change.',
+        (type, data) => updates.push({ type, data }),
+        'act',
+      );
+
+      assert.equal(final, agent._clarificationAuthorizationStopMessage(), `${AgentClass.name}/${streaming ? 'stream' : 'non-stream'}: step limit accepted a guarded plain final`);
+      assert.ok(
+        updates.some(update => update.type === 'run_status' && update.data?.status === 'clarification_required'),
+        `${AgentClass.name}/${streaming ? 'stream' : 'non-stream'}: step-limit stop lost clarification-required status`,
+      );
+      assert.equal(
+        updates.some(update => update.type === 'max_steps_reached'),
+        false,
+        `${AgentClass.name}/${streaming ? 'stream' : 'non-stream'}: max-step fallback replaced the authorization stop`,
+      );
+    }
+  }
+});
+
 test('agent propagates status-bearing terminal tool-batch returns to callers', () => {
   for (const [label, rel] of [
     ['chrome', 'src/chrome/src/agent/agent.js'],
