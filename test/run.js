@@ -17423,6 +17423,30 @@ test('ScheduledJobManager preserves clarification-required terminal runs as need
       `${label}: clarification-required run should emit a distinct terminal update`,
     );
 
+    const terminalSnapshot = JSON.parse(JSON.stringify(h.jobs()));
+    for (const actionName of ['cancelJob', 'pauseJob', 'deleteJob']) {
+      let abortedTabId = null;
+      const actionHarness = makeSchedulerHarness(SchedulerMod, {
+        now,
+        jobs: JSON.parse(JSON.stringify(terminalSnapshot)),
+        abort: (tabId) => { abortedTabId = tabId; },
+      });
+      let actionResult;
+      if (actionName === 'cancelJob') {
+        actionResult = await actionHarness.manager.cancelJob(created.jobId, 'cancel terminal stop');
+      } else if (actionName === 'pauseJob') {
+        actionResult = await actionHarness.manager.pauseJob(created.jobId);
+      } else {
+        actionResult = await actionHarness.manager.deleteJob(created.jobId);
+      }
+      assert.equal(actionResult.ok, true, `${label}: ${actionName} should update a terminal clarification job`);
+      assert.equal(
+        abortedTabId,
+        null,
+        `${label}: ${actionName} must not abort an unrelated live run for a terminal clarification job`,
+      );
+    }
+
     const restarted = makeSchedulerHarness(SchedulerMod, {
       now: now + SchedulerMod.QUEUE_RETRY_MS,
       jobs: h.jobs(),

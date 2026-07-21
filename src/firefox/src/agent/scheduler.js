@@ -15,6 +15,11 @@ const LIVE_SCHEDULED_STATUSES = new Set(['pending', 'queued', 'running', 'needs_
 const DUPLICATE_COALESCED_ERROR = 'Duplicate scheduled job coalesced into an existing live job.';
 const DONE_OUTCOMES = new Set(['success', 'partial', 'failed']);
 
+function hasLiveScheduledAgentRun(job) {
+  return job?.status === 'running'
+    || (job?.status === 'needs_user_input' && job?.clarificationRequired !== true);
+}
+
 function asObject(value) {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
 }
@@ -750,7 +755,7 @@ export class ScheduledJobManager {
     }
     await this._clearAlarm(jobId);
     this._waitingForInput.delete(jobId);
-    if (existing && ['running', 'needs_user_input'].includes(existing.status)) {
+    if (hasLiveScheduledAgentRun(existing)) {
       const tabId = existing.tabId || existing.target?.tabId;
       if (tabId != null) {
         try { this.agent.abort(tabId); } catch {}
@@ -773,7 +778,7 @@ export class ScheduledJobManager {
       if (next.length !== jobs.length) await this._setJobs(next);
       return { existing, removed: next.length !== jobs.length };
     });
-    if (existing && ['running', 'needs_user_input'].includes(existing.status)) {
+    if (hasLiveScheduledAgentRun(existing)) {
       const tabId = existing.tabId || existing.target?.tabId;
       if (tabId != null) {
         try { this.agent.abort(tabId); } catch {}
@@ -792,7 +797,9 @@ export class ScheduledJobManager {
       const existing = jobs[idx];
       if (!['pending', 'queued', 'running', 'needs_user_input'].includes(existing.status)) return null;
       if (['running', 'needs_user_input'].includes(existing.status)) {
-        liveTabId = existing.tabId || existing.target?.tabId || null;
+        if (hasLiveScheduledAgentRun(existing)) {
+          liveTabId = existing.tabId || existing.target?.tabId || null;
+        }
         this._waitingForInput.delete(jobId);
       }
       const updated = {
