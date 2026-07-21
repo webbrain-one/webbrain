@@ -899,23 +899,84 @@ export class Agent {
   }
 
   _usageTokenCounts(usage) {
-    const input = Number(
+    const positiveNumber = (value) => {
+      const number = Number(value ?? 0);
+      return Number.isFinite(number) && number > 0 ? number : 0;
+    };
+    const inputTokens = positiveNumber(
       usage?.prompt_tokens ??
       usage?.input_tokens ??
       usage?.promptTokens ??
       usage?.inputTokens ??
       0
     );
-    const output = Number(
+    const outputTokens = positiveNumber(
       usage?.completion_tokens ??
       usage?.output_tokens ??
       usage?.completionTokens ??
       usage?.outputTokens ??
       0
     );
+    // OpenAI includes cache reads and writes in its input total. Anthropic and
+    // Bedrock report cache reads and writes separately from regular input.
+    let includedCacheReadTokens = positiveNumber(
+      usage?.prompt_tokens_details?.cached_tokens ??
+      usage?.input_tokens_details?.cached_tokens ??
+      usage?.promptTokensDetails?.cachedTokens ??
+      usage?.inputTokensDetails?.cachedTokens ??
+      0
+    );
+    let includedCacheWriteTokens = positiveNumber(
+      usage?.prompt_tokens_details?.cache_write_tokens ??
+      usage?.input_tokens_details?.cache_write_tokens ??
+      usage?.promptTokensDetails?.cacheWriteTokens ??
+      usage?.inputTokensDetails?.cacheWriteTokens ??
+      0
+    );
+    // Nested OpenAI detail counts are subsets of the input total.
+    includedCacheReadTokens = Math.min(includedCacheReadTokens, inputTokens);
+    includedCacheWriteTokens = Math.min(
+      includedCacheWriteTokens,
+      Math.max(0, inputTokens - includedCacheReadTokens)
+    );
+    const cacheReadTokens = positiveNumber(
+      usage?.cache_read_input_tokens ??
+      usage?.cacheReadInputTokens ??
+      0
+    );
+    const cacheDetails = Array.isArray(usage?.cacheDetails)
+      ? usage.cacheDetails
+      : (Array.isArray(usage?.cache_details) ? usage.cache_details : []);
+    const bedrockCacheWriteTokens = (ttl) => cacheDetails.reduce((sum, detail) => {
+      if (detail?.ttl !== ttl) return sum;
+      return sum + positiveNumber(detail?.inputTokens ?? detail?.input_tokens);
+    }, 0);
+    const cacheWrite5mTokens = Math.max(positiveNumber(
+      usage?.cache_creation?.ephemeral_5m_input_tokens ??
+      usage?.cacheCreation?.ephemeral5mInputTokens ??
+      0
+    ), bedrockCacheWriteTokens('5m'));
+    const cacheWrite1hTokens = Math.max(positiveNumber(
+      usage?.cache_creation?.ephemeral_1h_input_tokens ??
+      usage?.cacheCreation?.ephemeral1hInputTokens ??
+      0
+    ), bedrockCacheWriteTokens('1h'));
+    const reportedCacheWriteTokens = positiveNumber(
+      usage?.cache_creation_input_tokens ??
+      usage?.cache_write_input_tokens ??
+      usage?.cacheCreationInputTokens ??
+      usage?.cacheWriteInputTokens ??
+      0
+    );
     return {
-      inputTokens: Number.isFinite(input) && input > 0 ? input : 0,
-      outputTokens: Number.isFinite(output) && output > 0 ? output : 0,
+      inputTokens,
+      outputTokens,
+      includedCacheReadTokens,
+      includedCacheWriteTokens,
+      cacheReadTokens,
+      cacheWriteTokens: Math.max(reportedCacheWriteTokens, cacheWrite5mTokens + cacheWrite1hTokens),
+      cacheWrite5mTokens,
+      cacheWrite1hTokens,
     };
   }
 
@@ -923,9 +984,36 @@ export class Agent {
     const config = provider?.config || {};
     const inputRate = this._normalizeCostRate(config.inputCostPerMillionUsd) ?? DEFAULT_INPUT_COST_PER_MILLION_USD;
     const outputRate = this._normalizeCostRate(config.outputCostPerMillionUsd) ?? DEFAULT_OUTPUT_COST_PER_MILLION_USD;
-    const { inputTokens, outputTokens } = this._usageTokenCounts(usage);
-    if (!inputTokens && !outputTokens) return 0;
-    return ((inputTokens * inputRate) + (outputTokens * outputRate)) / TOKENS_PER_MILLION;
+    const cacheReadRate = this._normalizeCostRate(config.cacheReadCostPerMillionUsd) ?? inputRate;
+    const cacheWriteRate = this._normalizeCostRate(config.cacheWriteCostPerMillionUsd) ?? inputRate;
+    const cacheWrite1hRate = this._normalizeCostRate(config.cacheWrite1hCostPerMillionUsd) ?? cacheWriteRate;
+    const {
+      inputTokens,
+      outputTokens,
+      includedCacheReadTokens,
+      includedCacheWriteTokens,
+      cacheReadTokens,
+      cacheWriteTokens,
+      cacheWrite5mTokens,
+      cacheWrite1hTokens,
+    } = this._usageTokenCounts(usage);
+    const uncachedInputTokens = inputTokens - includedCacheReadTokens - includedCacheWriteTokens;
+    const unspecifiedCacheWriteTokens = Math.max(0, cacheWriteTokens - cacheWrite5mTokens - cacheWrite1hTokens);
+    if (
+      !uncachedInputTokens &&
+      !outputTokens &&
+      !includedCacheReadTokens &&
+      !includedCacheWriteTokens &&
+      !cacheReadTokens &&
+      !cacheWriteTokens
+    ) return 0;
+    return (
+      (uncachedInputTokens * inputRate) +
+      ((includedCacheReadTokens + cacheReadTokens) * cacheReadRate) +
+      ((unspecifiedCacheWriteTokens + cacheWrite5mTokens + includedCacheWriteTokens) * cacheWriteRate) +
+      (cacheWrite1hTokens * cacheWrite1hRate) +
+      (outputTokens * outputRate)
+    ) / TOKENS_PER_MILLION;
   }
 
   _extractUsageCostUsd(provider, usage) {

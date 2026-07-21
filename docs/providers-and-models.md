@@ -148,9 +148,14 @@ Deprecated provider entries (`webbrain`, `openai_subscription`) are filtered out
 Settings exposes session and total cloud cost allowances. The agent prefers a provider-reported `usage.cost`/`usage.cost_usd` value when present (OpenRouter reports this directly). For direct cloud providers that only return token counts, WebBrain estimates spend from the provider config fields:
 
 - `inputCostPerMillionUsd`
+- `cacheReadCostPerMillionUsd`
+- `cacheWriteCostPerMillionUsd` (5-minute or unspecified cache writes)
+- `cacheWrite1hCostPerMillionUsd`
 - `outputCostPerMillionUsd`
 
-Those rates are editable in the provider card so custom model pricing can be adjusted without code changes. If a metered remote provider has token usage but no configured rates, the agent falls back to conservative default estimates (`$3` input / `$15` output per 1M tokens). Local providers are not counted.
+OpenAI reports cache reads and writes inside the input-token total (`prompt_tokens_details.cached_tokens` / `cache_write_tokens`, or the Responses API `input_tokens_details` equivalents), so WebBrain subtracts both before applying the regular input rate and prices writes with `cacheWriteCostPerMillionUsd`. Anthropic and Bedrock report regular input, cache reads, and cache writes separately, so those counts are added as separate billing classes. Anthropic and Bedrock can also distinguish 5-minute and 1-hour cache writes.
+
+Those rates are editable in the provider card so custom model pricing can be adjusted without code changes. If a cache-specific rate is absent, it falls back to the regular input rate; a missing 1-hour write rate falls back to the general cache-write rate. If a metered remote provider has token usage but no configured input/output rates, the agent uses conservative defaults (`$3` input / `$15` output per 1M tokens). Streaming providers contribute only their final cumulative usage snapshot for each request. Local providers are not counted.
 
 ### Dedicated Vision Provider
 

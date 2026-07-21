@@ -835,4 +835,7 @@ export default {
   "sp.perm.insert_skip_command": "แทรก /dangerously-skip-permissions",
   "sp.perm.skip_hint_draft": "แบบร่างของคุณยังไม่เปลี่ยน โปรดล้างก่อนแทรกคำสั่ง",
   "ob.act.permissions_tip": "การถามสิทธิ์เปิดอยู่ตามค่าเริ่มต้น ผู้ใช้ขั้นสูงสามารถปิดทั่วโลกด้วย /dangerously-skip-permissions และเปิดอีกครั้งได้ที่ การตั้งค่า → สิทธิ์",
+  'st.provider.field.cache_read_cost_per_million': "ค่าอ่านแคชโดยประมาณ ($ / 1 ล้านโทเค็น)",
+  'st.provider.field.cache_write_cost_per_million': "ค่าการเขียนแคช 5 นาทีโดยประมาณ ($ / 1 ล้านโทเค็น)",
+  'st.provider.field.cache_write_1h_cost_per_million': "ค่าการเขียนแคช 1 ชั่วโมงโดยประมาณ ($ / 1 ล้านโทเค็น)",
 };

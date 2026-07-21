@@ -831,4 +831,7 @@ export default {
   "sp.perm.insert_skip_command": "Вставити /dangerously-skip-permissions",
   "sp.perm.skip_hint_draft": "Чернетку не змінено. Очистьте її перед вставленням команди.",
   "ob.act.permissions_tip": "Запити дозволів увімкнено за замовчуванням. Досвідчені користувачі можуть вимкнути їх глобально командою /dangerously-skip-permissions і знову ввімкнути в Налаштування → Дозволи.",
+  'st.provider.field.cache_read_cost_per_million': "Орієнтовна вартість читання з кешу ($ / 1 млн токенів)",
+  'st.provider.field.cache_write_cost_per_million': "Орієнтовна вартість запису в кеш на 5 хвилин ($ / 1 млн токенів)",
+  'st.provider.field.cache_write_1h_cost_per_million': "Орієнтовна вартість запису в кеш на 1 годину ($ / 1 млн токенів)",
 };

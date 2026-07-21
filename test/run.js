@@ -24030,7 +24030,17 @@ test('_defaultConfigs: OpenAI defaults to GPT-5.6 Terra and safely migrates the 
     const defaults = mgr._defaultConfigs();
     assert.equal(defaults.openai.model, 'gpt-5.6-terra');
     assert.equal(defaults.openai.inputCostPerMillionUsd, 2.5);
+    assert.equal(defaults.openai.cacheReadCostPerMillionUsd, 0.25);
+    assert.equal(defaults.openai.cacheWriteCostPerMillionUsd, 3.125);
     assert.equal(defaults.openai.outputCostPerMillionUsd, 15);
+    assert.equal(defaults.anthropic.cacheReadCostPerMillionUsd, 0.3);
+    assert.equal(defaults.anthropic.cacheWriteCostPerMillionUsd, 3.75);
+    assert.equal(defaults.anthropic.cacheWrite1hCostPerMillionUsd, 6);
+    assert.equal(defaults.aws_bedrock.inputCostPerMillionUsd, 3);
+    assert.equal(defaults.aws_bedrock.cacheReadCostPerMillionUsd, 0.3);
+    assert.equal(defaults.aws_bedrock.cacheWriteCostPerMillionUsd, 3.75);
+    assert.equal(defaults.aws_bedrock.cacheWrite1hCostPerMillionUsd, 6);
+    assert.equal(defaults.aws_bedrock.outputCostPerMillionUsd, 15);
 
     const migrated = mgr._migrateStoredProviderConfigs({
       openai: {
@@ -24043,6 +24053,8 @@ test('_defaultConfigs: OpenAI defaults to GPT-5.6 Terra and safely migrates the 
     });
     assert.equal(migrated.openai.model, 'gpt-5.6-terra');
     assert.equal(migrated.openai.inputCostPerMillionUsd, 2.5);
+    assert.equal(migrated.openai.cacheReadCostPerMillionUsd, 0.25);
+    assert.equal(migrated.openai.cacheWriteCostPerMillionUsd, 3.125);
     assert.equal(migrated.openai.outputCostPerMillionUsd, 15);
     assert.equal(migrated.openai.configured, false);
 
@@ -24084,6 +24096,35 @@ test('OpenAI settings list every GPT-5.6 family model with Terra first', () => {
     const luna = source.indexOf("'gpt-5.6-luna'", terra);
     const alias = source.indexOf("'gpt-5.6'", terra);
     assert.ok(terra >= 0 && sol > terra && luna > sol && alias > luna, `${prefix}: GPT-5.6 suggestions should lead with Terra, Sol, Luna, and the Sol alias`);
+  }
+});
+
+test('provider settings expose cache pricing with zero-cost support', () => {
+  for (const prefix of ['src/chrome', 'src/firefox']) {
+    const source = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/settings.js'), 'utf8');
+    for (const key of [
+      'cacheReadCostPerMillionUsd',
+      'cacheWriteCostPerMillionUsd',
+      'cacheWrite1hCostPerMillionUsd',
+    ]) {
+      assert.match(source, new RegExp(`key: '${key}'`), `${prefix}: missing ${key} field`);
+      assert.match(source, new RegExp(`ZERO_ALLOWED_NUMBER_FIELDS[\\s\\S]*?'${key}'`), `${prefix}: ${key} should allow zero`);
+    }
+    assert.match(
+      source,
+      /aws_bedrock:\s*\{[\s\S]*?\.\.\.CACHE_AWARE_COST_ESTIMATE_FIELDS/,
+      `${prefix}: Bedrock should expose cache read and write rates`,
+    );
+    assert.match(
+      source,
+      /anthropic:\s*\{[\s\S]*?\.\.\.CACHE_AWARE_COST_ESTIMATE_FIELDS/,
+      `${prefix}: Anthropic should expose cache read and write rates`,
+    );
+    assert.match(
+      source,
+      /openai:\s*\{[\s\S]*?\.\.\.OPENAI_COST_ESTIMATE_FIELDS/,
+      `${prefix}: OpenAI should expose cache read and write rates`,
+    );
   }
 });
 
@@ -24261,7 +24302,12 @@ test('GPT-5.6 Responses results normalize text, calls, usage, and replay items',
     const provider = new Provider({ providerName: 'openai', model: 'gpt-5.6-terra' });
     const result = provider._responsesResult({
       output,
-      usage: { input_tokens: 10, output_tokens: 4, total_tokens: 14 },
+      usage: {
+        input_tokens: 10,
+        output_tokens: 4,
+        total_tokens: 14,
+        input_tokens_details: { cached_tokens: 8 },
+      },
     });
     assert.equal(result.content, 'Done.');
     assert.equal(result.reasoningContent, 'Checked. ');
@@ -24274,6 +24320,7 @@ test('GPT-5.6 Responses results normalize text, calls, usage, and replay items',
     assert.equal(result.usage.prompt_tokens, 10);
     assert.equal(result.usage.completion_tokens, 4);
     assert.equal(result.usage.total_tokens, 14);
+    assert.deepEqual(result.usage.input_tokens_details, { cached_tokens: 8 });
     assert.equal(result.responseItems, output);
   }
 });
@@ -24723,6 +24770,51 @@ test('OpenAI-compatible streams request usage metadata only for supporting provi
   }
 });
 
+test('OpenAI-compatible streams emit only the final cumulative usage snapshot', async () => {
+  const originalFetch = globalThis.fetch;
+  const snapshots = [
+    {
+      prompt_tokens: 100,
+      completion_tokens: 1,
+      prompt_tokens_details: { cached_tokens: 80 },
+    },
+    {
+      prompt_tokens: 100,
+      completion_tokens: 5,
+      prompt_tokens_details: { cached_tokens: 80 },
+    },
+  ];
+  const sse = [
+    `data: ${JSON.stringify({ choices: [{ delta: { content: 'ok' } }], usage: snapshots[0] })}\n\n`,
+    `data: ${JSON.stringify({ choices: [], usage: snapshots[1] })}\n\n`,
+    'data: [DONE]\n\n',
+  ].join('');
+  try {
+    globalThis.fetch = async () => new Response(sse, {
+      status: 200,
+      headers: { 'Content-Type': 'text/event-stream' },
+    });
+    const cases = [
+      [OpenAIProviderCh, { providerName: 'openai', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o' }],
+      [OpenAIProviderFx, { providerName: 'openai', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o' }],
+      [AzureOpenAIProviderCh, { baseUrl: 'https://x.openai.azure.com', model: 'deployment', apiVersion: '2024-10-21' }],
+      [AzureOpenAIProviderFx, { baseUrl: 'https://x.openai.azure.com', model: 'deployment', apiVersion: '2024-10-21' }],
+    ];
+    for (const [Provider, config] of cases) {
+      const chunks = [];
+      for await (const chunk of new Provider(config).chatStream([{ role: 'user', content: 'hello' }])) {
+        chunks.push(chunk);
+      }
+      const usageChunks = chunks.filter(chunk => chunk.type === 'usage');
+      assert.equal(usageChunks.length, 1, `${Provider.name}: cumulative usage was counted more than once`);
+      assert.deepEqual(usageChunks[0].usage, snapshots[1], `${Provider.name}: final usage snapshot was not retained`);
+      assert.equal(chunks.at(-1)?.type, 'done');
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('Azure OpenAI provider builds deployment URL, headers, and model getter', () => {
   for (const Provider of [AzureOpenAIProviderCh, AzureOpenAIProviderFx]) {
     const provider = new Provider({
@@ -24796,12 +24888,28 @@ test('AWS Bedrock provider normalizes usage and indexes parallel tool calls', ()
           ],
         },
       },
-      usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+      usage: {
+        inputTokens: 10,
+        outputTokens: 5,
+        totalTokens: 15,
+        cacheReadInputTokens: 80,
+        cacheWriteInputTokens: 30,
+        cacheDetails: [
+          { ttl: '1h', inputTokens: 20 },
+          { ttl: '5m', inputTokens: 10 },
+        ],
+      },
     });
     assert.deepEqual(parsed.usage, {
       prompt_tokens: 10,
       completion_tokens: 5,
       total_tokens: 15,
+      cacheReadInputTokens: 80,
+      cacheWriteInputTokens: 30,
+      cacheDetails: [
+        { ttl: '1h', inputTokens: 20 },
+        { ttl: '5m', inputTokens: 10 },
+      ],
     });
     assert.equal(parsed.toolCalls.length, 2);
     assert.equal(parsed.toolCalls[0].index, 0);
@@ -25392,6 +25500,175 @@ test('Agent cost extraction estimates only when reported cost is missing', () =>
     assert.equal(agent._extractUsageCostUsd(provider, usage), 0.2);
     assert.equal(agent._extractUsageCostUsd(provider, { ...usage, cost: '' }), 0.2);
   }
+});
+
+test('Agent cost estimation discounts OpenAI cached input included in the input total', () => {
+  for (const AgentClass of [AgentCh, AgentFx]) {
+    const agent = new AgentClass({});
+    const provider = {
+      config: {
+        inputCostPerMillionUsd: 100,
+        cacheReadCostPerMillionUsd: 10,
+        outputCostPerMillionUsd: 200,
+      },
+    };
+    const chatCompletionsUsage = {
+      prompt_tokens: 1000,
+      completion_tokens: 100,
+      prompt_tokens_details: { cached_tokens: 800 },
+    };
+    const responsesUsage = {
+      input_tokens: 1000,
+      output_tokens: 100,
+      input_tokens_details: { cached_tokens: 800 },
+    };
+    assert.equal(agent._estimateUsageCostUsd(provider, chatCompletionsUsage), 0.048);
+    assert.equal(agent._estimateUsageCostUsd(provider, responsesUsage), 0.048);
+  }
+});
+
+test('Agent cost estimation prices OpenAI included cache writes from nested usage details', () => {
+  for (const AgentClass of [AgentCh, AgentFx]) {
+    const agent = new AgentClass({});
+    const provider = {
+      config: {
+        inputCostPerMillionUsd: 100,
+        cacheReadCostPerMillionUsd: 10,
+        cacheWriteCostPerMillionUsd: 125,
+        outputCostPerMillionUsd: 200,
+      },
+    };
+    // uncached 200@100 + read 600@10 + write 200@125 + out 100@200 = 0.071
+    const chatCompletionsUsage = {
+      prompt_tokens: 1000,
+      completion_tokens: 100,
+      prompt_tokens_details: { cached_tokens: 600, cache_write_tokens: 200 },
+    };
+    const responsesUsage = {
+      input_tokens: 1000,
+      output_tokens: 100,
+      input_tokens_details: { cached_tokens: 600, cache_write_tokens: 200 },
+    };
+    assert.equal(agent._estimateUsageCostUsd(provider, chatCompletionsUsage), 0.071);
+    assert.equal(agent._estimateUsageCostUsd(provider, responsesUsage), 0.071);
+
+    const clamped = {
+      prompt_tokens: 100,
+      completion_tokens: 0,
+      prompt_tokens_details: { cached_tokens: 80, cache_write_tokens: 50 },
+    };
+    // Clamp write so read+write <= input: uncached 0 + read 80@10 + write 20@125 = 0.0033
+    assert.equal(agent._estimateUsageCostUsd(provider, clamped), 0.0033);
+  }
+});
+
+test('Agent cost estimation handles Anthropic and Bedrock cache tokens as separate input', () => {
+  for (const AgentClass of [AgentCh, AgentFx]) {
+    const agent = new AgentClass({});
+    const provider = {
+      config: {
+        inputCostPerMillionUsd: 100,
+        cacheReadCostPerMillionUsd: 10,
+        cacheWriteCostPerMillionUsd: 125,
+        outputCostPerMillionUsd: 200,
+      },
+    };
+    const anthropicUsage = {
+      input_tokens: 200,
+      output_tokens: 100,
+      cache_read_input_tokens: 800,
+      cache_creation_input_tokens: 400,
+    };
+    const bedrockUsage = {
+      inputTokens: 200,
+      outputTokens: 100,
+      cacheReadInputTokens: 800,
+      cacheWriteInputTokens: 400,
+    };
+    assert.equal(agent._estimateUsageCostUsd(provider, anthropicUsage), 0.098);
+    assert.equal(agent._estimateUsageCostUsd(provider, bedrockUsage), 0.098);
+  }
+});
+
+test('Agent cost estimation prices Anthropic one-hour cache writes separately', () => {
+  for (const AgentClass of [AgentCh, AgentFx]) {
+    const agent = new AgentClass({});
+    const provider = {
+      config: {
+        inputCostPerMillionUsd: 100,
+        cacheWriteCostPerMillionUsd: 125,
+        cacheWrite1hCostPerMillionUsd: 200,
+        outputCostPerMillionUsd: 200,
+      },
+    };
+    const usage = {
+      input_tokens: 100,
+      output_tokens: 100,
+      cache_creation_input_tokens: 300,
+      cache_creation: {
+        ephemeral_5m_input_tokens: 100,
+        ephemeral_1h_input_tokens: 200,
+      },
+    };
+    assert.equal(agent._estimateUsageCostUsd(provider, usage), 0.0825);
+  }
+});
+
+test('Agent cost estimation prices Bedrock cache detail TTLs separately', () => {
+  for (const AgentClass of [AgentCh, AgentFx]) {
+    const agent = new AgentClass({});
+    const provider = {
+      config: {
+        inputCostPerMillionUsd: 100,
+        cacheWriteCostPerMillionUsd: 125,
+        cacheWrite1hCostPerMillionUsd: 200,
+        outputCostPerMillionUsd: 200,
+      },
+    };
+    const usage = {
+      prompt_tokens: 100,
+      completion_tokens: 100,
+      cacheWriteInputTokens: 300,
+      cacheDetails: [
+        { ttl: '1h', inputTokens: 200 },
+        { ttl: '5m', inputTokens: 100 },
+      ],
+    };
+    assert.equal(agent._estimateUsageCostUsd(provider, usage), 0.0825);
+  }
+});
+
+test('Agent cost estimation keeps normal input pricing when cache rates are absent', () => {
+  for (const AgentClass of [AgentCh, AgentFx]) {
+    const agent = new AgentClass({});
+    const provider = { config: { inputCostPerMillionUsd: 100, outputCostPerMillionUsd: 200 } };
+    const usage = {
+      prompt_tokens: 1000,
+      completion_tokens: 100,
+      prompt_tokens_details: { cached_tokens: 800 },
+    };
+    assert.equal(agent._estimateUsageCostUsd(provider, usage), 0.12);
+  }
+});
+
+test('provider docs describe cache-aware cost semantics and configuration', () => {
+  const docs = [
+    'docs/providers-and-models.md',
+    'docs/zh-CN/providers-and-models.md',
+    'docs/fr/providers-and-models.md',
+  ].map(relativePath => fs.readFileSync(path.join(ROOT, relativePath), 'utf8'));
+  for (const doc of docs) {
+    for (const key of [
+      'cacheReadCostPerMillionUsd',
+      'cacheWriteCostPerMillionUsd',
+      'cacheWrite1hCostPerMillionUsd',
+    ]) {
+      assert.match(doc, new RegExp(`\\b${key}\\b`));
+    }
+  }
+  assert.match(docs[0], /OpenAI reports cache reads and writes inside the input-token total/);
+  assert.match(docs[0], /Anthropic and Bedrock report regular input, cache reads, and cache writes separately/);
+  assert.match(docs[0], /final cumulative usage snapshot/);
 });
 
 console.log('\nsheets-tools: A1 parsing');
@@ -42789,6 +43066,80 @@ test('planner input: runtime context does not consume prior user-turn history bu
 // tool_result blocks combined into a SINGLE user message — otherwise the
 // Messages API rejects the consecutive user roles with a 400.
 for (const [label, Provider] of [['chrome', AnthropicProviderCh], ['firefox', AnthropicProviderFx]]) {
+  test(`anthropic (${label}): cache usage survives normalization`, () => {
+    const provider = new Provider({});
+    const usage = provider._normalizeUsage({
+      input_tokens: 200,
+      output_tokens: 100,
+      cache_read_input_tokens: 800,
+      cache_creation_input_tokens: 300,
+      cache_creation: {
+        ephemeral_5m_input_tokens: 100,
+        ephemeral_1h_input_tokens: 200,
+      },
+    });
+    assert.deepEqual(usage, {
+      prompt_tokens: 200,
+      completion_tokens: 100,
+      total_tokens: 1400,
+      cache_read_input_tokens: 800,
+      cache_creation_input_tokens: 300,
+      cache_creation: {
+        ephemeral_5m_input_tokens: 100,
+        ephemeral_1h_input_tokens: 200,
+      },
+    });
+  });
+
+  test(`anthropic (${label}): streaming accumulates cache usage from split events`, async () => {
+    const originalFetch = globalThis.fetch;
+    const events = [
+      {
+        type: 'message_start',
+        message: {
+          usage: {
+            input_tokens: 200,
+            output_tokens: 1,
+            cache_read_input_tokens: 800,
+            cache_creation_input_tokens: 300,
+            cache_creation: {
+              ephemeral_5m_input_tokens: 100,
+              ephemeral_1h_input_tokens: 200,
+            },
+          },
+        },
+      },
+      { type: 'message_delta', usage: { output_tokens: 100 } },
+      { type: 'message_stop' },
+    ];
+    const sse = events.map(event => `data: ${JSON.stringify(event)}\n\n`).join('');
+    try {
+      globalThis.fetch = async () => new Response(sse, {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream' },
+      });
+      const provider = new Provider({ apiKey: 'test-key' });
+      const chunks = [];
+      for await (const chunk of provider.chatStream([{ role: 'user', content: 'hello' }])) {
+        chunks.push(chunk);
+      }
+      const usage = chunks.find(chunk => chunk.type === 'usage')?.usage;
+      assert.deepEqual(usage, {
+        prompt_tokens: 200,
+        completion_tokens: 100,
+        total_tokens: 1400,
+        cache_read_input_tokens: 800,
+        cache_creation_input_tokens: 300,
+        cache_creation: {
+          ephemeral_5m_input_tokens: 100,
+          ephemeral_1h_input_tokens: 200,
+        },
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   test(`anthropic (${label}): parallel tool results merge into one user message`, () => {
     const provider = new Provider({});
     const { messages } = provider._convertMessages([

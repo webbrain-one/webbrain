@@ -138,9 +138,14 @@ Les entrées de fournisseur obsolètes (`webbrain`, `openai_subscription`) sont 
 Les paramètres exposent des plafonds de coût cloud pour la session et le total. L'agent préfère une valeur `usage.cost`/`usage.cost_usd` rapportée par le fournisseur lorsqu'elle est présente (OpenRouter la rapporte directement). Pour les fournisseurs cloud directs qui ne retournent que des compteurs de tokens, WebBrain estime les dépenses à partir des champs de configuration du fournisseur :
 
 - `inputCostPerMillionUsd`
+- `cacheReadCostPerMillionUsd`
+- `cacheWriteCostPerMillionUsd` (écritures de cache de 5 minutes ou sans durée précisée)
+- `cacheWrite1hCostPerMillionUsd`
 - `outputCostPerMillionUsd`
 
-Ces tarifs sont modifiables dans la carte du fournisseur afin que le prix des modèles personnalisés puisse être ajusté sans modification de code. Si un fournisseur distant facturé a une utilisation de tokens mais aucun tarif configuré, l'agent utilise par défaut des estimations prudentes (`3$` entrée / `15$` sortie par million de tokens). Les fournisseurs locaux ne sont pas comptabilisés.
+OpenAI inclut les lectures et écritures de cache dans le total des tokens d'entrée (`prompt_tokens_details.cached_tokens` / `cache_write_tokens`, ou les équivalents `input_tokens_details` de l'API Responses) ; WebBrain soustrait donc les deux avant d'appliquer le tarif d'entrée normal, et facture les écritures avec `cacheWriteCostPerMillionUsd`. Anthropic et Bedrock rapportent séparément l'entrée normale, les lectures du cache et les écritures dans le cache ; ces compteurs sont donc additionnés comme catégories de facturation distinctes. Ils peuvent également distinguer les écritures de cache de 5 minutes et d'une heure.
+
+Ces tarifs sont modifiables dans la carte du fournisseur afin que le prix des modèles personnalisés puisse être ajusté sans modification de code. Si un tarif propre au cache est absent, le tarif d'entrée normal est utilisé ; si le tarif d'écriture d'une heure est absent, le tarif général d'écriture dans le cache est utilisé. Si un fournisseur distant facturé retourne des compteurs sans tarifs d'entrée/sortie configurés, l'agent utilise des valeurs prudentes (`3$` en entrée / `15$` en sortie par million de tokens). Pour chaque requête en streaming, seul le dernier instantané cumulatif d'utilisation est comptabilisé. Les fournisseurs locaux ne sont pas comptabilisés.
 
 ### Fournisseur de Vision Dédié
 

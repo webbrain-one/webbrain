@@ -791,4 +791,7 @@ export default {
   "sp.perm.insert_skip_command": "Wstaw /dangerously-skip-permissions",
   "sp.perm.skip_hint_draft": "Szkic pozostał bez zmian. Wyczyść go przed wstawieniem polecenia.",
   "ob.act.permissions_tip": "Pytania o uprawnienia są domyślnie włączone. Zaawansowani użytkownicy mogą wyłączyć je globalnie poleceniem /dangerously-skip-permissions i ponownie włączyć w Ustawienia → Uprawnienia.",
+  'st.provider.field.cache_read_cost_per_million': "Szacowany koszt odczytu z pamięci podręcznej ($ / 1M tokenów)",
+  'st.provider.field.cache_write_cost_per_million': "Szacowany koszt zapisu do pamięci podręcznej (5 min) ($ / 1M tokenów)",
+  'st.provider.field.cache_write_1h_cost_per_million': "Szacowany koszt zapisu do pamięci podręcznej (1 godz.) ($ / 1M tokenów)",
 };

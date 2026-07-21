@@ -151,6 +151,7 @@ export class AzureOpenAIProvider extends BaseLLMProvider {
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
+    let finalUsage = null;
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -162,12 +163,13 @@ export class AzureOpenAIProvider extends BaseLLMProvider {
         if (!trimmed || !trimmed.startsWith('data: ')) continue;
         const payload = trimmed.slice(6);
         if (payload === '[DONE]') {
+          if (finalUsage) yield { type: 'usage', usage: finalUsage };
           yield { type: 'done', content: '' };
           return;
         }
         try {
           const json = JSON.parse(payload);
-          if (json.usage) yield { type: 'usage', usage: json.usage };
+          if (json.usage) finalUsage = json.usage;
           const delta = json.choices?.[0]?.delta;
           if (delta?.content) yield { type: 'text', content: delta.content };
           if (delta?.tool_calls) yield { type: 'tool_call', content: delta.tool_calls };
@@ -176,6 +178,7 @@ export class AzureOpenAIProvider extends BaseLLMProvider {
         }
       }
     }
+    if (finalUsage) yield { type: 'usage', usage: finalUsage };
     yield { type: 'done', content: '' };
   }
 }

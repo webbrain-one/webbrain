@@ -831,4 +831,7 @@ export default {
   "sp.perm.insert_skip_command": "Insertar /dangerously-skip-permissions",
   "sp.perm.skip_hint_draft": "Tu borrador no ha cambiado. Bórralo antes de insertar el comando.",
   "ob.act.permissions_tip": "Los avisos de permisos están activados de forma predeterminada. Los usuarios avanzados pueden desactivarlos globalmente con /dangerously-skip-permissions y volver a activarlos en Configuración → Permisos.",
+  'st.provider.field.cache_read_cost_per_million': "Coste estimado de lectura de caché ($ / 1M tokens)",
+  'st.provider.field.cache_write_cost_per_million': "Coste estimado de escritura en caché de 5 min ($ / 1M tokens)",
+  'st.provider.field.cache_write_1h_cost_per_million': "Coste estimado de escritura en caché de 1 h ($ / 1M tokens)",
 };
