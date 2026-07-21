@@ -420,6 +420,20 @@ All providers normalize to a common response format:
   <img src="https://contrib.rocks/image?repo=webbrain-one/webbrain" />
 </a>
 
+## Citation
+
+If you use WebBrain in your research or project, please cite:
+
+```bibtex
+@software{webbrain2026,
+  author = {Sokullu, Emre},
+  title = {WebBrain: Open-source AI browser agent for chatting with pages},
+  year = {2026},
+  publisher = {GitHub},
+  url = {https://github.com/webbrain-one/webbrain}
+}
+```
+
 ## License
 
 MIT — built by [Emre Sokullu](https://emresokullu.com)

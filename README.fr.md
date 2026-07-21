@@ -350,6 +350,20 @@ Tous les fournisseurs se normalisent vers un format de réponse commun :
 </a>
 
 
+## Citation
+
+Si vous utilisez WebBrain dans votre recherche ou votre projet, veuillez citer :
+
+```bibtex
+@software{webbrain2026,
+  author = {Sokullu, Emre},
+  title = {WebBrain : Agent de navigation IA open source pour discuter avec les pages},
+  year = {2026},
+  publisher = {GitHub},
+  url = {https://github.com/webbrain-one/webbrain}
+}
+```
+
 ## Licence
 
 MIT — créé par [Emre Sokullu](https://emresokullu.com)
