@@ -355,6 +355,47 @@
     }
   }
 
+  function _hasVisibleBox(el, minWidth = 1, minHeight = 1) {
+    if (!el || typeof el.getBoundingClientRect !== 'function') return false;
+    try {
+      const r = el.getBoundingClientRect();
+      if (r.width < minWidth || r.height < minHeight) return false;
+      const s = getComputedStyle(el);
+      if (s.visibility === 'hidden' || s.display === 'none' || parseFloat(s.opacity) === 0) return false;
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function _findDialogContentForOverlay(overlay) {
+    const selector = '[role="dialog"],[role="alertdialog"],[aria-modal="true"],dialog[open],[data-state="open"][role="dialog"],[class*="DialogContent"],[class*="ModalContent"],.modal.show';
+    const pick = (node) => {
+      if (!node) return null;
+      try {
+        if (node !== overlay && node.matches?.(selector) && _hasVisibleBox(node, 20, 20)) return node;
+        const match = node.querySelector?.(selector);
+        if (match && _hasVisibleBox(match, 20, 20)) return match;
+      } catch {}
+      return null;
+    };
+
+    const siblings = overlay?.parentElement ? Array.from(overlay.parentElement.children) : [];
+    const idx = siblings.indexOf(overlay);
+    if (idx >= 0) {
+      for (let i = idx + 1; i < siblings.length; i++) {
+        const found = pick(siblings[i]);
+        if (found) return found;
+      }
+      for (let i = idx - 1; i >= 0; i--) {
+        const found = pick(siblings[i]);
+        if (found) return found;
+      }
+    }
+
+    return pick(overlay);
+  }
+
   /**
    * Detect the topmost modal/overlay/dialog on the page. If one is found,
    * only elements inside it (and the backdrop) are "reachable" — everything
@@ -399,7 +440,12 @@
     );
     for (let i = candidates.length - 1; i >= 0; i--) {
       const r = candidates[i].getBoundingClientRect();
-      if (r.width > 100 && r.height > 100) return candidates[i];
+      if (r.width > 100 && r.height > 100) {
+        const dialogContent = _findDialogContentForOverlay(candidates[i]);
+        if (dialogContent) return dialogContent;
+        const interactive = candidates[i].querySelector?.(INTERACTIVE_SELECTORS.join(', '));
+        if (interactive) return candidates[i];
+      }
     }
 
     return null;
@@ -1790,6 +1836,7 @@
         which: keyMeta.keyCode,
         bubbles: true,
         cancelable: true,
+        composed: true,
       });
       const up = new KeyboardEvent('keyup', {
         key,
@@ -1798,6 +1845,7 @@
         which: keyMeta.keyCode,
         bubbles: true,
         cancelable: true,
+        composed: true,
       });
       // Dispatch once on the target only. The events bubble, so listeners
       // attached at document/window level already receive them — dispatching

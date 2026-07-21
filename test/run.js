@@ -29248,6 +29248,9 @@ test('submit probe index resolver stays aligned with content click ordering', ()
 
 test('chrome full interactive indexes stay scoped to the topmost modal', () => {
   const content = fs.readFileSync(path.join(ROOT, 'src/chrome/src/content/content.js'), 'utf8');
+  assert.match(content, /function _findDialogContentForOverlay\(overlay\)[\s\S]*?const siblings = overlay\?\.parentElement \? Array\.from\(overlay\.parentElement\.children\) : \[\];/, 'chrome: backdrop overlays should resolve an adjacent dialog container');
+  assert.match(content, /const dialogContent = _findDialogContentForOverlay\(candidates\[i\]\);\s*if \(dialogContent\) return dialogContent;/, 'chrome: modal scoping should prefer dialog content over a backdrop sibling');
+  assert.match(content, /const interactive = candidates\[i\]\.querySelector\?\.\(INTERACTIVE_SELECTORS\.join\(', '\)\);\s*if \(interactive\) return candidates\[i\];/, 'chrome: a backdrop without dialog or interactive descendants must not become the modal scope');
   const fullStart = content.indexOf('function queryInteractiveFull() {');
   const fullEnd = content.indexOf('\n  function queryInteractiveForToolIndex()', fullStart);
   const fullBody = content.slice(fullStart, fullEnd);
@@ -29259,6 +29262,22 @@ test('chrome full interactive indexes stay scoped to the topmost modal', () => {
   const indexedEnd = content.indexOf('\n  function ', indexedStart + 10);
   const indexedBody = content.slice(indexedStart, indexedEnd);
   assert.match(indexedBody, /return queryInteractiveFull\(\)\.map\(c => c\.el\);/, 'chrome: indexed clicks and typing must use the modal-scoped full collector');
+});
+
+test('synthetic key events cross shadow boundaries without double dispatch', () => {
+  for (const [label, rel] of [
+    ['chrome', 'src/chrome/src/content/content.js'],
+    ['firefox', 'src/firefox/src/content/content.js'],
+  ]) {
+    const content = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+    const start = content.indexOf("const down = new KeyboardEvent('keydown'");
+    const end = content.indexOf("return { success: true, dispatched: true, key, repeat, method: 'keyboardevent'", start);
+    const keyBody = content.slice(start, end);
+    assert.ok(start >= 0 && end > start, `${label}: synthetic key dispatch should be independently inspectable`);
+    assert.match(keyBody, /new KeyboardEvent\('keydown',[\s\S]*?composed: true,[\s\S]*?new KeyboardEvent\('keyup',[\s\S]*?composed: true,/, `${label}: keydown and keyup should escape open shadow roots`);
+    assert.match(keyBody, /target\.dispatchEvent\(down\);\s*target\.dispatchEvent\(up\);/, `${label}: key events should still dispatch exactly once on the focused target`);
+    assert.doesNotMatch(keyBody, /document\.dispatchEvent\((?:down|up)\)/, `${label}: shadow-safe key events must not restore duplicate document dispatch`);
+  }
 });
 
 test('submit confirmation UI and scheduled persistence omit always allow', () => {
