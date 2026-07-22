@@ -2781,7 +2781,6 @@ body {
   resize: none;
   overflow: hidden;
   box-sizing: border-box;
-  field-sizing: content;
 }
 
 .plan-review-summary-input:hover,

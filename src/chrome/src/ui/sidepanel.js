@@ -3795,10 +3795,37 @@ function setPlanReviewStructuredControlsDisabled(card, disabled) {
   for (const control of controls) control.disabled = Boolean(disabled);
 }
 
+const planReviewScrollRestoreFrames = new WeakMap();
+
+function restorePlanReviewScrollTop(container, scrollTop) {
+  const previousScrollBehavior = container.style.scrollBehavior;
+  container.style.scrollBehavior = 'auto';
+  container.scrollTop = scrollTop;
+  container.style.scrollBehavior = previousScrollBehavior;
+}
+
 function autosizePlanReviewField(el) {
   if (!el || el.tagName !== 'TEXTAREA') return;
+  const container = el.closest?.('#chat-container') || null;
+  const preserveScroll = !!container
+    && document.activeElement === el
+    && container.scrollHeight - container.scrollTop - container.clientHeight > 2;
+  const scrollTop = preserveScroll ? container.scrollTop : 0;
+
   el.style.height = 'auto';
   el.style.height = `${Math.max(el.scrollHeight, 28)}px`;
+
+  if (!preserveScroll) return;
+  restorePlanReviewScrollTop(container, scrollTop);
+  const pendingFrame = planReviewScrollRestoreFrames.get(el);
+  if (pendingFrame != null) cancelAnimationFrame(pendingFrame);
+  const frame = requestAnimationFrame(() => {
+    planReviewScrollRestoreFrames.delete(el);
+    if (container.isConnected && document.activeElement === el) {
+      restorePlanReviewScrollTop(container, scrollTop);
+    }
+  });
+  planReviewScrollRestoreFrames.set(el, frame);
 }
 
 function getPlanReviewDraftFromDom(card) {

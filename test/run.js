@@ -43075,6 +43075,85 @@ function loadPlanReviewDraftHelpers(panelRel) {
   return Function(`${block}\nreturn {\n  PLAN_STEP_TOOL_SUFFIX_RE,\n  stripVerbosePlanStepToolSuffix,\n  looksLikeVerbosePlanMarkdown,\n  parsePlanMarkdownToDraft,\n  serializePlanDraftToMarkdown,\n  resolveSavedPlanReviewEdit,\n  setPlanReviewStructuredControlsDisabled,\n};`)();
 }
 
+function loadPlanReviewAutosizeHelper(panelRel, runtime) {
+  const source = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
+  const start = source.indexOf('const planReviewScrollRestoreFrames = new WeakMap();');
+  const end = source.indexOf('\nfunction getPlanReviewDraftFromDom(', start);
+  assert.notEqual(start, -1, `${panelRel}: plan autosize scroll state missing`);
+  assert.notEqual(end, -1, `${panelRel}: plan autosize helper boundary missing`);
+  const block = source.slice(start, end);
+  return Function(
+    'document',
+    'requestAnimationFrame',
+    'cancelAnimationFrame',
+    `${block}\nreturn { autosizePlanReviewField };`,
+  )(
+    runtime.document,
+    runtime.requestAnimationFrame,
+    runtime.cancelAnimationFrame,
+  );
+}
+
+test('plan review: textarea autosize preserves an active off-bottom scroll position', () => {
+  for (const file of [
+    'src/chrome/src/ui/sidepanel.js',
+    'src/firefox/src/ui/sidepanel.js',
+  ]) {
+    const frames = new Map();
+    let nextFrame = 1;
+    const document = { activeElement: null };
+    const runtime = {
+      document,
+      requestAnimationFrame(callback) {
+        const id = nextFrame++;
+        frames.set(id, callback);
+        return id;
+      },
+      cancelAnimationFrame(id) {
+        frames.delete(id);
+      },
+    };
+    const { autosizePlanReviewField } = loadPlanReviewAutosizeHelper(file, runtime);
+    const container = {
+      clientHeight: 300,
+      isConnected: true,
+      scrollHeight: 1000,
+      scrollTop: 180,
+      style: { scrollBehavior: '' },
+    };
+    let fieldHeight = '';
+    const style = {};
+    Object.defineProperty(style, 'height', {
+      get: () => fieldHeight,
+      set(value) {
+        fieldHeight = value;
+        // Simulate focused-textarea scroll anchoring during the auto-height
+        // relayout that originally moved the conversation viewport.
+        container.scrollTop = 640;
+      },
+    });
+    const field = {
+      tagName: 'TEXTAREA',
+      scrollHeight: 84,
+      style,
+      closest(selector) {
+        assert.equal(selector, '#chat-container', file);
+        return container;
+      },
+    };
+    document.activeElement = field;
+
+    autosizePlanReviewField(field);
+    assert.equal(fieldHeight, '84px', `${file} should resize to its content height`);
+    assert.equal(container.scrollTop, 180, `${file} should immediately restore the chat position`);
+    assert.equal(frames.size, 1, `${file} should guard against deferred browser anchoring`);
+
+    container.scrollTop = 640;
+    for (const callback of frames.values()) callback();
+    assert.equal(container.scrollTop, 180, `${file} should restore the chat position after layout`);
+  }
+});
+
 test('plan review: structured draft serialize/parse round-trips step edits', () => {
   for (const file of [
     'src/chrome/src/ui/sidepanel.js',
@@ -43335,6 +43414,7 @@ test('sidepanel: restored plan review cards rebind approve and cancel actions', 
     assert.match(css, /\.plan-review-step-remove/, `${file} css should style one-click step removal`);
     assert.match(css, /\.plan-review-step[\s\S]*grid-template-columns:\s*22px minmax\(0, 1fr\) 26px/, `${file} css should lay out number/input/remove columns`);
     assert.match(css, /\.plan-review-skills[\s\S]*\.plan-review-skill-list[\s\S]*\.plan-review-skill/, `${file} css should make planned skill activation visible`);
+    assert.doesNotMatch(css, /field-sizing:\s*content/, `${file} should not combine CSS and JavaScript textarea autosizing`);
     const enLocale = fs.readFileSync(path.join(ROOT, file.replace(/src\/ui\/sidepanel\.js$/, 'src/ui/locales/en.js')), 'utf8');
     assert.match(enLocale, /'sp\.plan\.skills': 'Skills to activate'/, `${file} should label the visible skill activation disclosure`);
     assert.match(enLocale, /'sp\.plan\.approve': '👍 Run'/, `${file} should use the concise plan run action`);
