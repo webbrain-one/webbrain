@@ -806,6 +806,12 @@ export class Agent {
     this.scheduledRunPolicies.set(tabId, {
       requireConsequentialConfirmation: policy?.requireConsequentialConfirmation !== false,
       autoApprovePlanReview: policy?.autoApprovePlanReview === true,
+      watch: policy?.watch?.beep === true ? {
+        beep: true,
+        beepStyle: ['long', 'short'].includes(policy.watch.beepStyle) ? policy.watch.beepStyle : 'default',
+        lastTriggeredEventKey: String(policy.watch.lastTriggeredEventKey || '').slice(0, 200) || null,
+        armedEventKey: null,
+      } : null,
     });
   }
 
@@ -10719,6 +10725,39 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (name === 'done_json') {
       return handleDoneJson(this.cloudRunContexts.get(tabId), args);
     }
+    if (name === 'beep') {
+      const watch = this.scheduledRunPolicies.get(tabId)?.watch;
+      if (watch?.beep !== true) {
+        return {
+          success: false,
+          denied: true,
+          armed: false,
+          error: 'beep is available only during a /watch run created with /beep.',
+        };
+      }
+      const rawEventKey = typeof args?.event_key === 'string' ? args.event_key.trim() : '';
+      if (!rawEventKey || rawEventKey.length > 200) {
+        return { success: false, armed: false, error: 'event_key must contain 1-200 characters.' };
+      }
+      if (watch.armedEventKey && rawEventKey !== watch.armedEventKey) {
+        return {
+          success: false,
+          armed: false,
+          error: `This watch run already armed event_key "${watch.armedEventKey}". Finish that event before another poll handles a different key.`,
+        };
+      }
+      const message = typeof args?.message === 'string' ? args.message.trim().slice(0, 300) : '';
+      const duplicate = rawEventKey === watch.lastTriggeredEventKey;
+      if (!duplicate) watch.armedEventKey = rawEventKey;
+      return {
+        success: true,
+        armed: !duplicate,
+        duplicate,
+        eventKey: rawEventKey,
+        message: message || null,
+        beepStyle: watch.beepStyle,
+      };
+    }
     if (name === 'list_webmcp_tools' || name === 'execute_webmcp_tool') {
       return {
         success: false,
@@ -12864,6 +12903,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       skillTools,
       cloudRun: !!cloudRunContext,
       outputSchema: cloudRunContext?.outputSchema || null,
+      watchBeep: this.scheduledRunPolicies.get(tabId)?.watch?.beep === true,
     });
     let allowedToolNames = new Set(tools.map(t => t.function.name));
     const plannerTemperature = this._isActionMode(mode) ? 0.15 : 0.3;
@@ -12912,6 +12952,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         skillTools,
         cloudRun: !!cloudRunContext,
         outputSchema: cloudRunContext?.outputSchema || null,
+        watchBeep: this.scheduledRunPolicies.get(tabId)?.watch?.beep === true,
       });
       allowedToolNames = new Set(tools.map(t => t.function.name));
 
@@ -13347,6 +13388,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       skillTools,
       cloudRun: !!cloudRunContext,
       outputSchema: cloudRunContext?.outputSchema || null,
+      watchBeep: this.scheduledRunPolicies.get(tabId)?.watch?.beep === true,
     });
     let allowedToolNames = new Set(tools.map(t => t.function.name));
     const plannerTemperature = this._isActionMode(mode) ? 0.15 : 0.3;
@@ -13383,6 +13425,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         skillTools,
         cloudRun: !!cloudRunContext,
         outputSchema: cloudRunContext?.outputSchema || null,
+        watchBeep: this.scheduledRunPolicies.get(tabId)?.watch?.beep === true,
       });
       allowedToolNames = new Set(tools.map(t => t.function.name));
 

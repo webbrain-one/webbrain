@@ -442,6 +442,7 @@ The scheduler lets the agent defer work to a future browser session using the br
 |---|---|---|
 | `resume` | `schedule_resume` tool | Continues the current conversation in the same tab at a future time. Terminal tool — the current run ends when it fires. |
 | `task` | `schedule_task` tool | Runs a standalone user-authored prompt at a future time, optionally recurring. |
+| `task` with `source: "watch"` | `/watch` slash command | Polls the initiating page for a condition at a fixed 30–120 second interval. |
 
 **Job lifecycle**
 
@@ -468,6 +469,25 @@ pending → running → completed
 
 - `once` — fires at a single `run_at` or `after_seconds` time. `after_seconds: 0` starts the task immediately.
 - `recurring` — fires repeatedly at `interval_minutes` (1 min – 1 year); after each run completes, `nextRunAt` is advanced and the next alarm is set.
+
+**Conditional watches**
+
+Watch jobs use `interval_seconds` (60 by default, 30–120 allowed) and run their
+first check immediately. Each poll carries the previous observation inside an
+untrusted-content boundary. A `partial` outcome records that observation as the
+next baseline and schedules another poll. A successful one-shot watch
+completes; `--keep` schedules another poll only for future distinct events. A
+failed check/action or a run without an explicit `done` outcome stops the watch
+rather than looping silently.
+
+The optional trailing `/beep` flag exposes a scoped
+`beep({event_key, message?})` tool only during that watch. It arms an alert
+before the requested action and reports a duplicate key before an action can be
+repeated; it does not play audio itself. The scheduler first persists a fresh
+event key and requires verified `done(outcome="success")`. Only then does the
+Chrome offscreen document or Firefox background page generate the selected
+default, short, or long tone. Playback follows the existing `notifySound`
+setting.
 
 **Persistence**
 

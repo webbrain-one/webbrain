@@ -35,9 +35,11 @@ const OFFSCREEN_REASONS = [
   // display media) and USER_MEDIA (mic via getUserMedia).
   'DISPLAY_MEDIA',
   'USER_MEDIA',
+  // Conditional watch alerts must play when no side panel is open.
+  'AUDIO_PLAYBACK',
 ];
 const OFFSCREEN_JUSTIFICATION =
-  'Proxy localhost requests; stage validated large downloads; capture active tab and mic; maintain a localhost cloud bridge WebSocket.';
+  'Proxy localhost requests; stage validated large downloads; capture active tab and mic; maintain a localhost cloud bridge WebSocket; play conditional watch alerts.';
 
 let ready = false;
 let inflight = null;

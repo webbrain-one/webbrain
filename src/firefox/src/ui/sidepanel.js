@@ -33,6 +33,7 @@ import {
   normalizeState as normalizeStoreReviewState,
 } from './store-review-prompt.js';
 import { providerIconUrl } from './provider-icons.js';
+import { parseWatchSlashCommand, WATCH_COMMAND_USAGE } from './watch-command.js';
 
 // Hydrate the theme from browser.storage.local (the inline <head> bootstrap
 // only sees localStorage; if the user changes the theme on another device
@@ -413,6 +414,20 @@ const SLASH_COMMANDS = [
     acceptsPayload: true,
     options: [
       { value: '--list', descriptionKey: 'sp.slash.list_schedules', action: 'list', outOfBand: true, disallowPayload: true },
+    ],
+  },
+  {
+    value: '/watch',
+    usage: '/watch [--keep] [--secs <30-120>] [--long | --short] <condition and action> [/beep]',
+    descriptionKey: 'sp.slash.watch',
+    action: 'create',
+    acceptsPayload: true,
+    outOfBand: true,
+    options: [
+      { value: '--keep', descriptionKey: 'sp.slash.watch_keep' },
+      { value: '--secs', valueLabel: '<30-120>', descriptionKey: 'sp.slash.watch_secs' },
+      { value: '--long', descriptionKey: 'sp.slash.watch_long', exclusiveGroup: 'watch-beep-style' },
+      { value: '--short', descriptionKey: 'sp.slash.watch_short', exclusiveGroup: 'watch-beep-style' },
     ],
   },
   { value: '/progress', usage: '/progress', descriptionKey: 'sp.slash.check_progress', action: 'show', outOfBand: true },
@@ -2056,7 +2071,15 @@ function scheduledJobMeta(job) {
   if (job.nextRunAt && ['pending', 'queued', 'paused'].includes(job.status)) {
     parts.push(t('sp.scheduled.next', { time: formatScheduledTime(job.nextRunAt) }));
   }
-  if (job.schedule?.type === 'recurring' && job.schedule?.interval_minutes) {
+  if (job?.source === 'watch') {
+    const seconds = Number(job.watch?.intervalSeconds);
+    if (Number.isFinite(seconds)) parts.push(`${seconds}s`);
+    parts.push(job.watch?.keep ? t('sp.slash.watch_keep') : t('sp.scheduled.watch_once'));
+    if (job.watch?.beep) parts.push(`🔔 ${job.watch?.beepStyle || 'default'}`);
+    if (job.watch?.lastObservation && job.status !== 'completed') {
+      parts.push(truncate(String(job.watch.lastObservation), 80));
+    }
+  } else if (job.schedule?.type === 'recurring' && job.schedule?.interval_minutes) {
     parts.push(t('sp.scheduled.recurring', { minutes: job.schedule.interval_minutes }));
   }
   if (job.status === 'needs_user_input' && job.pendingClarify?.question) {
@@ -2206,6 +2229,7 @@ function renderScheduledJobs(jobs = []) {
     card.className = 'scheduled-job-card';
     card.dataset.jobId = job.id;
     card.dataset.status = job.status;
+    card.dataset.source = job.source || '';
 
     const title = document.createElement('div');
     title.className = 'scheduled-job-title';
@@ -2321,7 +2345,10 @@ async function settleScheduledRun(event, job, tabId = currentTabId) {
   if (assistantEl) {
     finalizeSteps(assistantEl);
     const textEl = assistantEl.querySelector('.message-text');
-    if (textEl && !textEl.textContent.trim() && ['completed', 'clarification_required'].includes(event) && job?.lastResult) {
+    if (textEl && !textEl.textContent.trim() && (
+      ['completed', 'clarification_required'].includes(event)
+      || ['polled', 'triggered'].includes(event)
+    ) && job?.lastResult) {
       textEl.innerHTML = formatMarkdown(job.lastResult);
       addMessageCopyButton(assistantEl);
     }
@@ -2338,7 +2365,9 @@ async function settleScheduledRun(event, job, tabId = currentTabId) {
     if (renderedTabId != null) await flushRenderedTabChat();
     await drainQueuedContextMenuPromptsAfterPendingTabSwitch();
   }
-  if (event === 'completed') notifyCompletion({ success: job?.lastOutcome === 'success' });
+  if (event === 'completed' && job?.source !== 'watch') {
+    notifyCompletion({ success: job?.lastOutcome === 'success' });
+  }
 }
 
 function handleScheduledJobEvent(data, tabId) {
@@ -2351,9 +2380,11 @@ function handleScheduledJobEvent(data, tabId) {
   const runTabId = normalizePlanReviewTabId(tabId ?? currentTabId);
   const jobId = job?.id ? String(job.id) : '';
   const terminalScheduledEvent = ['completed', 'failed', 'clarification_required'].includes(event);
+  const watchPollEvent = ['polled', 'triggered'].includes(event);
   const crossPanelScheduledEvent = isUrlTargetScheduledJob(job) && (
     event === 'needs_user_input' ||
-    terminalScheduledEvent
+    terminalScheduledEvent ||
+    watchPollEvent
   );
   if (!sameTab && !crossPanelScheduledEvent) return;
 
@@ -2370,6 +2401,9 @@ function handleScheduledJobEvent(data, tabId) {
     if (jobId) currentAssistantEl.dataset.scheduledJobId = jobId;
     showActivity(t('sp.scheduled.running', { title }));
   } else if (event === 'completed') {
+    ensureScheduledTerminalMessage(job);
+    settleScheduledRun(event, job, runTabId);
+  } else if (event === 'polled' || event === 'triggered') {
     ensureScheduledTerminalMessage(job);
     settleScheduledRun(event, job, runTabId);
   } else if (event === 'failed') {
@@ -4556,6 +4590,37 @@ function requestConfigurationFile(tabId) {
 }
 
 async function parseSlashCommands(text, tabId = currentTabId, options = {}) {
+  if (/^\s*\/watch(?:\s|$)/i.test(text) && !/^\s*\/watch\s+--help\s*$/i.test(text)) {
+    const watchArgs = parseWatchSlashCommand(text);
+    if (!watchArgs.ok) {
+      showComposerToast(t('sp.slash.invalid_usage', { usage: WATCH_COMMAND_USAGE }), { duration: 5000 });
+      return '';
+    }
+    try {
+      const res = await sendToBackground('create_watch_job', {
+        tabId,
+        watch: {
+          prompt: watchArgs.prompt,
+          keep: watchArgs.keep,
+          interval_seconds: watchArgs.intervalSeconds,
+          beep: watchArgs.beep,
+          beep_style: watchArgs.beepStyle,
+        },
+      });
+      if (res?.success === false || res?.ok === false || !res?.scheduledAt) {
+        throw new Error(res?.error || 'Could not create watch.');
+      }
+      if (currentTabId === tabId) {
+        addPersistentSlashMessage(t('sp.watch.created', { seconds: watchArgs.intervalSeconds }));
+        await refreshScheduledJobs({ tabId });
+      }
+    } catch (error) {
+      if (currentTabId === tabId) {
+        addPersistentSlashMessage(t('sp.watch.error', { error: error?.message || 'unknown error' }));
+      }
+    }
+    return '';
+  }
   const invocation = parseSlashInvocation(text);
   if (!invocation) return text;
   if (invocation.error || invocation.unsupported) {
