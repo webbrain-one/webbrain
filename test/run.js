@@ -7709,6 +7709,107 @@ test('cloud run controller fails immediately if an interactive plan review leaks
   assert.equal(abortedTabId, 19);
 });
 
+test('cloud workflow bridge compiles the correlated trace and never persists runtime values', async () => {
+  const session = {};
+  const tab = { id: 23, url: 'https://example.com/form', active: true, windowId: 1 };
+  let replayParameters = null;
+  let id = 0;
+  const agent = {
+    isRunning: () => false,
+    abort: () => {},
+    setApiMutationsAllowed: () => {},
+    async processMessage(_tabId, _task, _update, _mode, _attachments, options) {
+      options.onTraceStarted?.('trace_exact');
+      return 'Natural run finished.';
+    },
+    async replaySavedWorkflow(_tabId, workflow, parameters, update) {
+      replayParameters = parameters;
+      update('workflow_step', { workflowId: workflow.id, args: { text: '[parameter]' } });
+      const split = Math.floor(parameters.email.length / 2);
+      update('text_delta', { content: parameters.email.slice(0, split) });
+      update('text_delta', { content: parameters.email.slice(split) });
+      return { status: 'completed', summary: `Workflow finished for ${parameters.email}.` };
+    },
+  };
+  const traceEvents = [{
+    seq: 1,
+    kind: 'tool',
+    data: {
+      name: 'get_accessibility_tree',
+      args: {},
+      result: { pageContent: 'textbox "Email" [ref_email] type="email"' },
+    },
+  }, {
+    seq: 2,
+    kind: 'tool',
+    data: {
+      name: 'set_field',
+      args: { ref_id: 'ref_email', text: 'source@example.com', clear: true },
+      result: { success: true, verified: true, fieldMeta: { type: 'email', name: 'email', labelText: 'Email' } },
+    },
+  }];
+  const workflowTrace = {
+    async getRun(runId) {
+      assert.equal(runId, 'trace_exact');
+      return { runId, status: 'done', tabUrl: tab.url };
+    },
+    async getRunEvents(runId) {
+      assert.equal(runId, 'trace_exact');
+      return traceEvents;
+    },
+  };
+  const controller = createCloudRunController({
+    chromeApi: {
+      tabs: {
+        query: async () => [tab],
+        get: async () => tab,
+        update: async () => tab,
+      },
+      windows: { update: async () => ({}) },
+      storage: {
+        local: { get: async () => ({ webbrainCloudBridgeEnabled: false }) },
+        session: {
+          get: async key => ({ [key]: session[key] || [] }),
+          set: async value => Object.assign(session, value),
+        },
+      },
+      runtime: { sendMessage: async () => ({ connected: false }) },
+    },
+    agent,
+    workflowTrace,
+    ensureOffscreen: async () => {},
+    makeRunId: () => `cloud_${++id}`,
+  });
+
+  const source = await controller.startRun({ task: 'Fill the form' });
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal((await controller.status({ runId: source.runId })).status, 'completed');
+  const compiled = await controller.compileWorkflow({ runId: source.runId, name: 'Fill form' });
+  assert.equal(compiled.ok, true);
+  assert.equal(compiled.workflow.source.runId, 'trace_exact');
+  assert.doesNotMatch(JSON.stringify(compiled.workflow), /source@example\.com|ref_email/);
+
+  const runtimeValue = 'runtime-private@example.com';
+  const started = await controller.startWorkflowRun({
+    workflow: compiled.workflow,
+    parameters: { email: runtimeValue },
+    output_schema: { forbidden: 'string' },
+  });
+  await new Promise(resolve => setTimeout(resolve, 0));
+  const completed = await controller.status({ runId: started.runId });
+  assert.equal(completed.status, 'completed');
+  assert.equal(completed.workflowId, compiled.workflow.id);
+  assert.deepEqual({ ...replayParameters }, { email: runtimeValue });
+  assert.doesNotMatch(JSON.stringify(completed), new RegExp(runtimeValue));
+  assert.doesNotMatch(JSON.stringify(session), new RegExp(runtimeValue));
+  const savedWorkflowRow = session.webbrainCloudRunSnapshots.find(row => row.runId === started.runId);
+  assert.equal(savedWorkflowRow.outputSchema, null);
+  await assert.rejects(
+    controller.startWorkflowRun({ workflow: compiled.workflow, parameters: { unknown: 'value' } }),
+    /Unknown workflow parameter/
+  );
+});
+
 test('cloud run controller fails interrupted runs after service-worker restart', async () => {
   const row = {
     runId: 'run_old',
@@ -7888,6 +7989,8 @@ test('offscreen cloud bridge reconnects with backoff and rejects remote control 
   assert.equal(sockets.length, 1);
   sockets[0].emit('open');
   assert.equal(sockets[0].sent[0].type, 'hello');
+  assert.equal(sockets[0].sent[0].protocolVersion, 2);
+  assert.deepEqual(JSON.parse(JSON.stringify(sockets[0].sent[0].capabilities)), ['saved_workflows_v1']);
   sockets[0].close();
   assert.equal(timers[0].delay, 500);
   timers[0].callback();
@@ -7947,6 +8050,17 @@ test('offscreen cloud bridge preserves failed run envelopes and rejects unauthor
     target: 'background',
     action: 'cloud_respond',
   });
+
+  for (const [id, action] of [
+    ['workflow-compile', 'cloud_workflow_compile'],
+    ['workflow-run', 'cloud_workflow_run'],
+  ]) {
+    socket.emit('message', {
+      data: JSON.stringify({ id, action, payload: { runId: 'run_source' } }),
+    });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(runtimeCalls.some(message => message.action === action), true);
+  }
 
   socket.emit('message', {
     data: JSON.stringify({ id: 'missing-1', action: 'cloud_status', payload: { runId: 'run_missing' } }),
@@ -46805,6 +46919,33 @@ test('saved workflow picks only the latest successful run from the active conver
   assert.equal(result.workflow.source.runId, 'done');
   assert.deepEqual(calls, [{ limit: 50, conversationId: 'conv_1' }]);
   assert.equal((await SavedWorkflowsCh.compileLatestSuccessfulWorkflow(reader, { name: 'Missing' })).reason, 'conversation_required');
+});
+
+test('saved workflow exact-run compiler never substitutes a newer trace', async () => {
+  for (const module of [SavedWorkflowsCh, SavedWorkflowsFx]) {
+    const calls = [];
+    const reader = {
+      async getRun(runId) {
+        calls.push(['run', runId]);
+        return { runId, status: 'done', tabUrl: 'https://example.com/form' };
+      },
+      async getRunEvents(runId) {
+        calls.push(['events', runId]);
+        return [{
+          seq: 1,
+          kind: 'tool',
+          data: { name: 'navigate', args: { url: 'https://example.com/done' }, result: { success: true } },
+        }];
+      },
+    };
+    const result = await module.compileSuccessfulWorkflowByRunId(reader, {
+      runId: 'trace_exact',
+      name: 'Exact trace',
+      now: 1600,
+    });
+    assert.equal(result.workflow.source.runId, 'trace_exact');
+    assert.deepEqual(calls, [['run', 'trace_exact'], ['events', 'trace_exact']]);
+  }
 });
 
 test('saved workflow slash commands are out-of-band and wired in both browsers', () => {
