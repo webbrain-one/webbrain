@@ -4681,6 +4681,22 @@ function activeRetryPayloadForRequest(tabId, requestId = '') {
   return state.retryPayload || null;
 }
 
+function retryPayloadForRunAssistant(assistantEl) {
+  let userEl = assistantEl?.previousElementSibling || null;
+  while (userEl && !userEl.matches('.message.user')) userEl = userEl.previousElementSibling;
+  const text = userEl ? getComposerHistoryTextFromMessage(userEl) : '';
+  if (!String(text || '').trim()) return null;
+  return {
+    text,
+    mode: ['ask', 'act', 'dev'].includes(assistantEl?.dataset.runMode)
+      ? assistantEl.dataset.runMode
+      : agentMode,
+    apiMutationsAllowed: assistantEl?.dataset.retryApiMutationsAllowed === 'true',
+    attachments: [],
+    attachmentCount: Number(assistantEl?.dataset.retryAttachmentCount || 0) || 0,
+  };
+}
+
 function clearActiveChatPayloadForTab(tabId) {
   if (tabId != null) activeChatPayloadsByTab.delete(tabId);
 }
@@ -5999,6 +6015,8 @@ async function sendMessage(extraChatParams = {}) {
     assistantEl = addMessage('assistant', '');
     assistantEl.dataset.runRequestId = requestId;
     assistantEl.dataset.runMode = modeForSend;
+    assistantEl.dataset.retryApiMutationsAllowed = apiMutationsAllowedForSend ? 'true' : 'false';
+    assistantEl.dataset.retryAttachmentCount = String(attachmentsForSend.length);
     assistantEl.dataset.lastRenderedSeq = '0';
     currentAssistantEl = assistantEl;
   }
@@ -6332,7 +6350,16 @@ function handleAgentUpdateMessage(msg) {
       invalidatePlanReviewCards({ tabId: msg.tabId ?? currentTabId, requestId: msg.requestId, runId: msg.runId });
       if (currentAssistantEl && data?.finalContent) {
         const textEl = currentAssistantEl.querySelector('.message-text');
-        if (textEl && !textEl.textContent.trim()) {
+        if (textEl && parseCostAllowanceError(data.finalContent)) {
+          if (!textEl.classList.contains('cost-allowance-error')) {
+            renderCostAllowanceError(textEl, data.finalContent, '', {
+              submittedTurnDurable: data.submittedTurnDurable,
+              retryPayload: activeRetryPayloadForRequest(eventTabId, msg.requestId)
+                || retryPayloadForRunAssistant(currentAssistantEl),
+            });
+          }
+          addMessageCopyButton(currentAssistantEl);
+        } else if (textEl && !textEl.textContent.trim()) {
           if (data.status === 'stopped' || data.status === 'cancelled') textEl.innerHTML = t('sp.stopped_by_user_html');
           else if (!renderCostAllowanceError(textEl, data.finalContent, '', {
                 submittedTurnDurable: data.submittedTurnDurable,
@@ -7571,7 +7598,10 @@ function configureRetryButton(btn, retryPayload) {
   btn.dataset.retryText = String(retryPayload.text || '');
   btn.dataset.retryMode = retryPayload.mode || 'ask';
   btn.dataset.retryApiMutationsAllowed = retryPayload.apiMutationsAllowed ? 'true' : 'false';
-  btn.dataset.retryAttachmentCount = String(attachments.length);
+  const attachmentCount = Number.isFinite(Number(retryPayload.attachmentCount))
+    ? Math.max(0, Number(retryPayload.attachmentCount))
+    : attachments.length;
+  btn.dataset.retryAttachmentCount = String(attachmentCount);
   bindErrorRetryButton(btn);
   return true;
 }
