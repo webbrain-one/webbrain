@@ -7553,7 +7553,8 @@ function renderCostAllowanceError(textEl, content, resumeMode = '', resumeOption
   bindCostAllowanceButton(bumpBtn);
   actions.appendChild(bumpBtn);
 
-  const requiresRetry = resumeOptions?.submittedTurnDurable === false;
+  const canContinue = resumeOptions?.submittedTurnDurable === true;
+  const requiresRetry = !canContinue;
   if (requiresRetry && resumeOptions?.retryPayload?.text) {
     const retryBtn = document.createElement('button');
     retryBtn.type = 'button';
@@ -7562,7 +7563,7 @@ function renderCostAllowanceError(textEl, content, resumeMode = '', resumeOption
     retryBtn.hidden = true;
     configureRetryButton(retryBtn, resumeOptions.retryPayload);
     actions.appendChild(retryBtn);
-  } else if (!requiresRetry) {
+  } else if (canContinue) {
     const continueBtn = document.createElement('button');
     continueBtn.type = 'button';
     continueBtn.className = 'cost-allowance-continue-btn';

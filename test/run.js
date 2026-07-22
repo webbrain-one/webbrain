@@ -13777,9 +13777,10 @@ test('sidepanel cloud cost allowance stop offers a persisted one-click $10 bump'
     assert.match(renderBody, /bumpBtn\.textContent = '\+ \$10';/, `${label}: allowance card should expose the one-click $10 action`);
     assert.match(renderBody, /bumpBtn\.setAttribute\('aria-label', bumpBtn\.title\);/, `${label}: compact $10 action should keep a localized accessible label`);
     assert.match(renderBody, /continueBtn\.hidden = true;/, `${label}: continuation should stay gated until persistence succeeds`);
-    assert.match(renderBody, /const requiresRetry = resumeOptions\?\.submittedTurnDurable === false;/, `${label}: a non-durable submitted turn should never use continuation`);
+    assert.match(renderBody, /const canContinue = resumeOptions\?\.submittedTurnDurable === true;[\s\S]*?const requiresRetry = !canContinue;/, `${label}: only explicit durable-turn proof should enable continuation`);
     assert.match(renderBody, /requiresRetry && resumeOptions\?\.retryPayload\?\.text[\s\S]*?configureRetryButton\(retryBtn, resumeOptions\.retryPayload\)/, `${label}: pre-turn allowance stops should retain and use the original retry payload`);
-    assert.match(renderBody, /else if \(!requiresRetry\) \{[\s\S]*?resumeAfterSubscription\(continueBtn\)/, `${label}: continuation should be offered only for durable turns`);
+    assert.match(renderBody, /else if \(canContinue\)/, `${label}: unknown durability should withhold continuation`);
+    assert.match(renderBody, /else if \(canContinue\) \{[\s\S]*?resumeAfterSubscription\(continueBtn\)/, `${label}: continuation should be offered only for durable turns`);
     assert.match(panel, /rebindCostAllowanceButtons\(\);/, `${label}: restored chats should rebind allowance controls`);
     assert.match(panel, /!parseSubscribeError\(content\) && !parseCostAllowanceError\(content\)/, `${label}: allowance stops should not count as successful Ask completions`);
     assert.match(panel, /renderCostAllowanceError\(textEl, res\.content, modeForSend, \{[\s\S]*?submittedTurnDurable: res\.submittedTurnDurable,[\s\S]*?retryPayload,/, `${label}: returned pre-turn stops should render with request-scoped durability and retry state`);
