@@ -13784,7 +13784,8 @@ test('sidepanel cloud cost allowance stop offers a persisted one-click $10 bump'
     assert.match(panel, /!parseSubscribeError\(content\) && !parseCostAllowanceError\(content\)/, `${label}: allowance stops should not count as successful Ask completions`);
     assert.match(panel, /renderCostAllowanceError\(textEl, res\.content, modeForSend, \{[\s\S]*?submittedTurnDurable: res\.submittedTurnDurable,[\s\S]*?retryPayload,/, `${label}: returned pre-turn stops should render with request-scoped durability and retry state`);
     assert.match(panel, /type: 'run_complete',[\s\S]*?submittedTurnDurable: state\?\.submittedTurnDurable === true,/, `${label}: restored terminal cards should retain durable-turn proof`);
-    assert.match(background, /async function sendAgentRunComplete\(tabId, snapshot = null\)[\s\S]*?agent\.hasDurableSubmittedTurn\([\s\S]*?submittedTurnDurable,/, `${label}: terminal UI events should carry durable-turn proof`);
+    assert.match(background, /async function sendAgentRunComplete\(tabId, snapshot = null\)[\s\S]*?snapshot\.kind === 'continue'[\s\S]*?agent\.hasDurableSubmittedTurn\([\s\S]*?submittedTurnDurable,/, `${label}: terminal UI events should treat continuations as resumable and carry durable-turn proof`);
+    assert.match(background, /const requestedRunUi = runUiSnapshotForRequest\(runUiSnapshot, requestedRequestId\);[\s\S]*?requestedRunUi\?\.kind === 'continue'[\s\S]*?submittedTurnDurable,/, `${label}: run probes should keep allowance continuations resumable after restoration`);
     assert.match(reconnect, /submittedTurnDurable: state\?\.submittedTurnDurable === true,/, `${label}: detached terminal responses should preserve durable-turn proof`);
 
     assert.match(styles, /\.cost-allowance-actions\s*\{[\s\S]*?flex-wrap:\s*wrap;/, `${label}: allowance actions should wrap in narrow panels`);
@@ -45694,7 +45695,7 @@ test('reconnect protocol is wired through both sidepanels and backgrounds', () =
     assert.match(background, /runUiDurable:/, `${label}: probes should expose journal persistence failures`);
     assert.match(background, /detachedRequestId: runUi\.requestId/, `${label}: detached chats should bind their persisted user turn to the run request`);
     assert.match(background, /startingRequestId: starting\?\.requestId \|\| null/, `${label}: run probes should expose in-flight start reservations`);
-    assert.match(background, /runUi: runUiSnapshotForRequest\(runUiSnapshot, requestedRequestId\)/, `${label}: reconnect probes should not receive another request's journal`);
+    assert.match(background, /const requestedRunUi = runUiSnapshotForRequest\(runUiSnapshot, requestedRequestId\)[\s\S]*?runUi: requestedRunUi,/, `${label}: reconnect probes should not receive another request's journal`);
     assert.match(background, /const entry = \{ requestId, promise: null, cancelled: false \}/, `${label}: detached starts should retain request-scoped cancellation`);
     assert.match(background, /assertDetachedRunStartNotCancelled\(tabId, detachedMessage\)/, `${label}: cancelled reservations should not launch queued runs`);
     assert.match(background, /case 'abort':[\s\S]*?cancelDetachedRunStart\(tabId\)[\s\S]*?agent\.abort\(tabId\)/, `${label}: sidebar Stop should cancel both reserved and active runs`);
@@ -45837,7 +45838,7 @@ test('per-tab run UI protocol is wired into both backgrounds and side panels', (
     assert.match(background, /new RunUiJournal\(/, `${label}: background should own the bounded run journal`);
     assert.match(background, /function assertNoActiveTabRun\(tabId\)/, `${label}: background should prevent duplicate runs within one tab`);
     assert.match(background, /tabId,[\s\S]*?requestId,[\s\S]*?runId:[\s\S]*?seq:/, `${label}: agent updates should carry tab, request, run, and sequence IDs`);
-    assert.match(background, /case 'agent_run_state':[\s\S]*?const runUiSnapshot = await getRunUiSnapshot\(tabId\)[\s\S]*?runUi: runUiSnapshotForRequest\(runUiSnapshot, requestedRequestId\)/, `${label}: remount state should include only the requested UI journal snapshot`);
+    assert.match(background, /case 'agent_run_state':[\s\S]*?const runUiSnapshot = await getRunUiSnapshot\(tabId\)[\s\S]*?const requestedRunUi = runUiSnapshotForRequest\(runUiSnapshot, requestedRequestId\)[\s\S]*?runUi: requestedRunUi,/, `${label}: remount state should include only the requested UI journal snapshot`);
     assert.match(background, /case 'agent_run_ack':[\s\S]*?runUiJournal\.acknowledge/, `${label}: background should accept ordered replay acknowledgements`);
     assert.match(background, /status: snapshot\.status \|\| 'completed'/, `${label}: run_complete should carry explicit terminal status`);
     assert.match(panel, /const processingTabs = new Set\(\);/, `${label}: processing state should be tab scoped`);

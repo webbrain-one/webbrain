@@ -1605,10 +1605,11 @@ function launchDetachedRun(action, msg, sender) {
 
 async function sendAgentRunComplete(tabId, snapshot = null) {
   if (tabId == null || !snapshot) return;
-  const submittedTurnDurable = await agent.hasDurableSubmittedTurn(
-    tabId,
-    snapshot.requestId,
-  ).catch(() => false);
+  const submittedTurnDurable = snapshot.kind === 'continue'
+    || await agent.hasDurableSubmittedTurn(
+      tabId,
+      snapshot.requestId,
+    ).catch(() => false);
   browser.runtime.sendMessage({
     target: 'sidepanel',
     action: 'agent_update',
@@ -2039,10 +2040,12 @@ async function handleMessage(msg, sender) {
       const detachedError = requestedRequestId && failure?.requestId === requestedRequestId
         ? { requestId: failure.requestId, message: failure.message }
         : null;
-      const submittedTurnDurable = requestedRequestId
-        ? await agent.hasDurableSubmittedTurn(tabId, requestedRequestId)
-        : false;
       const runUiSnapshot = await getRunUiSnapshot(tabId);
+      const requestedRunUi = runUiSnapshotForRequest(runUiSnapshot, requestedRequestId);
+      const submittedTurnDurable = requestedRunUi?.kind === 'continue'
+        || (requestedRequestId
+          ? await agent.hasDurableSubmittedTurn(tabId, requestedRequestId)
+          : false);
       return {
         ok: true,
         ...agent.activeRunState(tabId),
@@ -2052,7 +2055,7 @@ async function handleMessage(msg, sender) {
         runUiDurable: !runUiSnapshot
           || runUiPersistenceFailures.get(tabId) !== String(runUiSnapshot.requestId || ''),
         detachedError,
-        runUi: runUiSnapshotForRequest(runUiSnapshot, requestedRequestId),
+        runUi: requestedRunUi,
       };
     }
 
