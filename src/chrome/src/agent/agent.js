@@ -17349,8 +17349,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       trustedFallbackAttempted: true,
       recoveryRequired: 'fresh_tree',
     };
+    let trustedDispatched = false;
     try {
-      const prepared = await chrome.tabs.sendMessage(tabId, {
+      let prepared = await chrome.tabs.sendMessage(tabId, {
         target: 'content',
         action: 'ax_prepare_field_for_trusted_type',
         params: { ref_id: args.ref_id },
@@ -17363,7 +17364,48 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       }
 
       await cdpClient.attach(tabId);
-      await cdpClient.sendCommand(tabId, 'Input.insertText', { text: expected });
+      if (prepared.contentEditable && prepared.rect?.w > 0 && prepared.rect?.h > 0) {
+        const x = prepared.rect.x + prepared.rect.w / 2;
+        const y = prepared.rect.y + prepared.rect.h / 2;
+        await cdpClient.sendCommand(tabId, 'Input.dispatchMouseEvent', {
+          type: 'mouseMoved', x, y, button: 'none', buttons: 0,
+        });
+        trustedDispatched = true;
+        await cdpClient.sendCommand(tabId, 'Input.dispatchMouseEvent', {
+          type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount: 1,
+        });
+        await cdpClient.sendCommand(tabId, 'Input.dispatchMouseEvent', {
+          type: 'mouseReleased', x, y, button: 'left', buttons: 0, clickCount: 1,
+        });
+        // The trusted click collapses the preflight selection. Re-resolve the
+        // same ref and select all once more before Input.insertText replaces
+        // the editor contents.
+        const reselected = await chrome.tabs.sendMessage(tabId, {
+          target: 'content',
+          action: 'ax_prepare_field_for_trusted_type',
+          params: { ref_id: args.ref_id },
+        });
+        if (!reselected?.success) {
+          return {
+            ...failed,
+            dispatched: true,
+            noDispatch: false,
+            error: `${response.error || 'Field verification failed'} Trusted retry focused the editor but could not reselect it: ${reselected?.error || 'unknown preparation failure'}`,
+          };
+        }
+        prepared = reselected;
+      }
+      trustedDispatched = true;
+      if (expected) {
+        await cdpClient.sendCommand(tabId, 'Input.insertText', { text: expected });
+      } else {
+        await cdpClient.sendCommand(tabId, 'Input.dispatchKeyEvent', {
+          type: 'keyDown', key: 'Delete', code: 'Delete', windowsVirtualKeyCode: 46,
+        });
+        await cdpClient.sendCommand(tabId, 'Input.dispatchKeyEvent', {
+          type: 'keyUp', key: 'Delete', code: 'Delete', windowsVirtualKeyCode: 46,
+        });
+      }
       await new Promise(resolve => setTimeout(resolve, 120));
       const verification = await chrome.tabs.sendMessage(tabId, {
         target: 'content',
@@ -17383,6 +17425,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       const recovered = {
         ...response,
         success: true,
+        dispatched: true,
+        trusted: true,
         verified: true,
         method: `${toolName}_cdp_fallback`,
         fallbackAttempted: true,
@@ -17390,8 +17434,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         fieldMeta: verification.fieldMeta || prepared.fieldMeta || response.fieldMeta,
       };
       delete recovered.error;
+      delete recovered.noDispatch;
       delete recovered.actual;
       delete recovered.actualRedacted;
+      delete recovered.trustedTypeRequired;
       delete recovered.recoveryRequired;
       delete recovered.failureScope;
       delete recovered.retryable;
@@ -17420,6 +17466,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     } catch (error) {
       return {
         ...failed,
+        ...(trustedDispatched ? { dispatched: true, noDispatch: false } : {}),
         error: `${response.error || 'Field verification failed'} Trusted Chrome retry failed: ${error?.message || String(error)}`,
       };
     }

@@ -130,6 +130,8 @@
     <input type="text" aria-label="Nested input action">
   </div>
   <button id="native-button" type="button">Native button</button>
+  <button id="disabled-native-button" type="button" disabled>Disabled native action</button>
+  <button id="disabled-aria-button" type="button" aria-disabled="true">Disabled ARIA action</button>
   <details id="native-details" class="row">
     <summary id="native-summary">Native disclosure</summary>
     <div>Native disclosure content</div>
@@ -144,6 +146,10 @@
   <input id="native-input" type="text" value="Native input" aria-label="Native input">
   <select id="native-select" aria-label="Native select"><option>Native select</option></select>
   <div id="editable-row" class="row" role="textbox" aria-label="Editable row" contenteditable="true">Editable row</div>
+  <section id="framework-composer">
+    <div id="framework-editor" role="textbox" aria-label="Framework post text" contenteditable="true"></div>
+    <button id="framework-post" type="button" aria-disabled="true">Framework Post</button>
+  </section>
   <div id="download-row" class="row" role="listitem" data-download tabindex="0">Export report</div>
   <form>
     <div id="form-row" class="row" role="listitem" tabindex="0">Form row</div>
@@ -178,6 +184,13 @@
     window.__trustedClickEvents = [];
     window.__syntheticClickEvents = [];
     window.__trustedCheckboxEvents = [];
+    window.__frameworkInputEvents = [];
+    document.getElementById('framework-editor').addEventListener('input', (event) => {
+      window.__frameworkInputEvents.push({ trusted: event.isTrusted, text: event.currentTarget.innerText });
+      if (event.isTrusted && event.currentTarget.innerText.trim()) {
+        document.getElementById('framework-post').setAttribute('aria-disabled', 'false');
+      }
+    });
     document.getElementById('trusted-firefox-checkbox').addEventListener('click', (event) => {
       window.__trustedCheckboxEvents.push({ trusted: event.isTrusted, checked: event.currentTarget.checked });
       if (!event.isTrusted) event.preventDefault();

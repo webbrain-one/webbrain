@@ -3519,6 +3519,7 @@
       return {
         tag,
         type: fieldType,
+        contentEditable: !!el.isContentEditable,
         name: el.getAttribute ? el.getAttribute('name') : null,
         id: elId,
         autocomplete: el.getAttribute ? el.getAttribute('autocomplete') : null,
@@ -3672,6 +3673,18 @@
               ? ' Nearest existing refs: ' + suggestions.map(s => `${s.ref} (${s.role}${s.name ? ' "' + s.name + '"' : ''})`).join(', ') + '.'
               : '';
             return failure(`ref_id ${ref_id} not found.${formatNote} The element may have been removed or the page replaced.${hint} Re-read the accessibility tree to get fresh ids — do NOT guess ref numbers or invent placeholders.`, { suggestions });
+          }
+          const disabledOwner = el.closest?.('button:disabled,input:disabled,select:disabled,textarea:disabled,[aria-disabled="true"]');
+          if (disabledOwner) {
+            return failure(
+              `ref_id ${ref_id} is disabled and cannot be activated. Re-read the page after correcting the form or editor state; do not treat this click as submitted.`,
+              {
+                ref_id,
+                disabled: true,
+                nativeDisabled: !!disabledOwner.disabled,
+                ariaDisabled: disabledOwner.getAttribute?.('aria-disabled') === 'true',
+              },
+            );
           }
           try { el.scrollIntoView({ block: 'center', inline: 'center' }); } catch {}
           try { el.focus({ preventScroll: true }); } catch {}
@@ -4160,23 +4173,20 @@
           let method = '';
           let selectExpected = null;
           if (el.isContentEditable) {
-            dispatched = true;
             previous = _editableTextValue(el);
-            if (clear) {
-              try {
-                const sel = window.getSelection();
-                const r = document.createRange();
-                r.selectNodeContents(el);
-                sel.removeAllRanges();
-                sel.addRange(r);
-                document.execCommand('delete');
-              } catch {}
-            }
-            try { document.execCommand('insertText', false, text); } catch {
-              el.textContent = (clear ? '' : previous) + text;
-              el.dispatchEvent(new Event('input', { bubbles: true }));
-            }
-            method = 'type_ax_contenteditable';
+            return failure(
+              'Contenteditable fields require trusted browser typing. Attempting one ref-bound Chrome typing pass.',
+              {
+                method: 'type_ax_contenteditable_trusted',
+                ref_id,
+                rect: typeRect,
+                verified: false,
+                fieldMeta,
+                fallbackAttempted: false,
+                trustedTypeRequired: true,
+                _expectedValue: (clear ? '' : previous) + text,
+              },
+            );
           } else if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT') {
             // Guard against non-typeable INPUT subtypes. These all share the
             // INPUT tagName so without this check a confused model calling
@@ -4341,25 +4351,25 @@
           } else if (!el.isContentEditable && el.tagName !== 'TEXTAREA' && el.tagName !== 'INPUT') {
             return failure(`ref_id ${ref_id} is not a text field (tag=${el.tagName}). set_field works on input/textarea/contenteditable only.`);
           }
+          const fieldMeta = _fieldMeta(el);
           let prevValue = '';
-          dispatched = true;
           if (el.isContentEditable) {
             prevValue = _editableTextValue(el);
-            if (clear) {
-              try {
-                const sel = window.getSelection();
-                const r = document.createRange();
-                r.selectNodeContents(el);
-                sel.removeAllRanges();
-                sel.addRange(r);
-                document.execCommand('delete');
-              } catch {}
-            }
-            try { document.execCommand('insertText', false, text); } catch {
-              el.textContent = (clear ? '' : prevValue) + text;
-              el.dispatchEvent(new Event('input', { bubbles: true }));
-            }
+            return failure(
+              'Contenteditable fields require trusted browser typing. Attempting one ref-bound Chrome typing pass.',
+              {
+                method: 'set_field_contenteditable_trusted',
+                ref_id,
+                rect,
+                verified: false,
+                fieldMeta,
+                fallbackAttempted: false,
+                trustedTypeRequired: true,
+                _expectedValue: (clear ? '' : prevValue) + text,
+              },
+            );
           } else {
+            dispatched = true;
             prevValue = el.value || '';
             const proto = el.tagName === 'TEXTAREA'
               ? window.HTMLTextAreaElement.prototype
@@ -4381,7 +4391,6 @@
               { ref_id, verified: false, recoveryRequired: 'fresh_tree', failureScope: `field-value:${ref_id}`, retryable: false },
             );
           }
-          const fieldMeta = _fieldMeta(el);
           const actual = el.isContentEditable ? _editableTextValue(el) : (el.value || '');
           const verified = _setFieldValueMatches(actual, prevValue, text, clear, el.isContentEditable);
           const fallbackAttempted = false;
@@ -4494,7 +4503,20 @@
           const isCombobox = role === 'combobox'
             || !!(el.getAttribute && el.getAttribute('aria-autocomplete'))
             || (el.getAttribute && el.getAttribute('aria-expanded') === 'true');
-          return { success: true, ref_id, fieldMeta: _fieldMeta(el), isCombobox };
+          const rect = el.getBoundingClientRect();
+          return {
+            success: true,
+            ref_id,
+            fieldMeta: _fieldMeta(el),
+            isCombobox,
+            contentEditable: !!el.isContentEditable,
+            rect: {
+              x: Math.round(rect.x),
+              y: Math.round(rect.y),
+              w: Math.round(rect.width),
+              h: Math.round(rect.height),
+            },
+          };
         } catch (error) {
           return { success: false, error: error && error.message || String(error) };
         }
