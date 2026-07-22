@@ -11981,6 +11981,53 @@ test('new locales are registered in extension and web language dropdowns', () =>
   }
 });
 
+test('new locale dictionaries contain translated copy and preserve functional tokens', async () => {
+  const addedLocales = {
+    hi: /[\u0900-\u097f]/,
+    pt: /[ãõçáéíóúâêô]/i,
+    vi: /[ăâđêôơư]|[a-z][\u0300-\u036f]/i,
+    bn: /[\u0980-\u09ff]/,
+    fa: /[\u0600-\u06ff]/,
+  };
+  const slashCommand = /(?<![A-Za-z0-9])\/(?:help|schedule|progress|scratchpad|memory|workflow|allow-api|dangerously-skip-permissions|compact|verbose|reset|screenshot|record|export|import|profile|vision|ask|act|dev|plan)(?:\s+--(?:help|list|append|clear|add|forget|save|run|delete|full-page|full-screen|transcribe|traces|config|file))?/g;
+  const extract = (value, pattern) => [...String(value).matchAll(pattern)].map((match) => match[0]).sort();
+  const assertTranslated = (label, english, translated, marker) => {
+    const keys = Object.keys(english);
+    assert.deepEqual(Object.keys(translated), keys, `${label}: locale keys should match English exactly`);
+    const changed = keys.filter((key) => translated[key] !== english[key]).length;
+    assert.ok(changed >= keys.length * 0.8, `${label}: locale should contain translated copy rather than English fallbacks`);
+    const marked = keys.filter((key) => marker.test(translated[key])).length;
+    assert.ok(marked >= keys.length * 0.35, `${label}: locale should contain substantial target-language copy`);
+    for (const key of keys) {
+      assert.deepEqual(extract(translated[key], /\{[A-Za-z0-9_]+\}/g), extract(english[key], /\{[A-Za-z0-9_]+\}/g), `${label}/${key}: interpolation placeholders changed`);
+      assert.deepEqual(extract(translated[key], /<[^>]+>/g), extract(english[key], /<[^>]+>/g), `${label}/${key}: HTML structure changed`);
+      assert.deepEqual(extract(translated[key], /<(?:code|kbd)\b[^>]*>[\s\S]*?<\/(?:code|kbd)>/gi), extract(english[key], /<(?:code|kbd)\b[^>]*>[\s\S]*?<\/(?:code|kbd)>/gi), `${label}/${key}: code or keyboard token changed`);
+      assert.deepEqual(extract(translated[key], /`[^`\n]+`/g), extract(english[key], /`[^`\n]+`/g), `${label}/${key}: inline code changed`);
+      assert.deepEqual(extract(translated[key], /&(?:[a-z]+|#\d+|#x[\da-f]+);/gi), extract(english[key], /&(?:[a-z]+|#\d+|#x[\da-f]+);/gi), `${label}/${key}: HTML entity changed`);
+      assert.deepEqual(extract(translated[key], /(?:https?:\/\/|(?:chrome-extension|moz-extension):\/\/|(?:chrome|edge|about):\/\/?)[^\s<>"']+/gi), extract(english[key], /(?:https?:\/\/|(?:chrome-extension|moz-extension):\/\/|(?:chrome|edge|about):\/\/?)[^\s<>"']+/gi), `${label}/${key}: URL changed`);
+      assert.deepEqual(extract(translated[key], slashCommand), extract(english[key], slashCommand), `${label}/${key}: slash command changed`);
+      assert.equal(extract(translated[key], /WebBrain/g).length, extract(english[key], /WebBrain/g).length, `${label}/${key}: WebBrain brand changed`);
+      assert.doesNotMatch(translated[key], /ZXQ(?:PH|ITEM|PROTECTED)/, `${label}/${key}: translation placeholder leaked`);
+    }
+  };
+
+  for (const browser of ['chrome', 'firefox']) {
+    const localeDir = path.join(ROOT, `src/${browser}/src/ui/locales`);
+    const english = (await import(pathToFileURL(path.join(localeDir, 'en.js')).href)).default;
+    for (const [locale, marker] of Object.entries(addedLocales)) {
+      const translated = (await import(pathToFileURL(path.join(localeDir, `${locale}.js`)).href)).default;
+      assertTranslated(`${browser}/${locale}`, english, translated, marker);
+    }
+  }
+
+  const webLocaleDir = path.join(ROOT, 'web/build/locales');
+  const webEnglish = JSON.parse(fs.readFileSync(path.join(webLocaleDir, 'en.json'), 'utf8'));
+  for (const [locale, marker] of Object.entries(addedLocales)) {
+    const translated = JSON.parse(fs.readFileSync(path.join(webLocaleDir, `${locale}.json`), 'utf8'));
+    assertTranslated(`web/${locale}`, webEnglish, translated, marker);
+  }
+});
+
 test('web landing builder preserves template markers and HTML entity escaping', () => {
   const build = fs.readFileSync(path.join(ROOT, 'web/build/build.mjs'), 'utf8');
   assert.ok(build.includes('{{locale_code}}'), 'web build: locale placeholder documentation should remain intact');
