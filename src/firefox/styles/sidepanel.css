@@ -2626,14 +2626,10 @@ body {
   color: var(--text-secondary);
 }
 
-/* The card's data-editing attribute is the single source of truth for
-   read-only vs editing mode; JS only flips the attribute. */
+/* data-editing=true expands the optional raw-markdown editor under the
+   always-visible structured step list. Structured rows stay visible. */
 .plan-review-card:not([data-editing="true"]) .plan-review-hint,
 .plan-review-card:not([data-editing="true"]) .plan-review-edit {
-  display: none;
-}
-.plan-review-card[data-editing="true"] .plan-review-view,
-.plan-review-card[data-editing="true"] .plan-review-change {
   display: none;
 }
 
@@ -2643,12 +2639,46 @@ body {
   gap: 7px;
 }
 
-.plan-review-summary {
+.plan-review-summary,
+.plan-review-summary-input {
   color: var(--text-primary);
   font-size: 12px;
   font-weight: 600;
   line-height: 1.45;
   overflow-wrap: anywhere;
+}
+
+.plan-review-summary-input,
+.plan-review-step-input {
+  width: 100%;
+  min-width: 0;
+  min-height: 28px;
+  padding: 5px 7px;
+  margin: 0;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid transparent;
+  border-radius: 4px;
+  resize: none;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.plan-review-summary-input:hover,
+.plan-review-step-input:hover {
+  border-color: var(--border);
+  background: var(--bg-input);
+}
+
+.plan-review-summary-input:focus,
+.plan-review-step-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--bg-input);
+  box-shadow: 0 0 0 1px var(--accent);
 }
 
 .plan-review-steps {
@@ -2659,14 +2689,19 @@ body {
 
 .plan-review-step {
   display: grid;
-  grid-template-columns: 22px minmax(0, 1fr);
-  gap: 8px;
+  grid-template-columns: 22px minmax(0, 1fr) 26px;
+  gap: 6px;
   align-items: start;
+  border-radius: 4px;
+  transition: box-shadow 120ms ease, opacity 120ms ease;
 }
 
 .plan-review-step-number {
   width: 22px;
   height: 22px;
+  margin-top: 3px;
+  padding: 0;
+  border: 0;
   border-radius: 999px;
   display: inline-flex;
   align-items: center;
@@ -2675,15 +2710,122 @@ body {
   color: #fff;
   font-size: 11px;
   font-weight: 700;
+  font-family: inherit;
   line-height: 1;
+  cursor: grab;
+  user-select: none;
+}
+
+.plan-review-step-number:hover,
+.plan-review-step-number:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
+  outline: none;
+}
+
+.plan-review-step-number:active {
+  cursor: grabbing;
+}
+
+.plan-review-step-dragging {
+  opacity: 0.45;
+}
+
+.plan-review-step-drop-before {
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+
+.plan-review-step-drop-after {
+  box-shadow: inset 0 -2px 0 var(--accent);
 }
 
 .plan-review-step-action,
+.plan-review-step-input,
 .plan-review-step-fallback {
   min-width: 0;
   color: var(--text-primary);
   font-size: 12px;
   line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.plan-review-step-input {
+  font-weight: 400;
+}
+
+.plan-review-step-remove {
+  width: 26px;
+  height: 26px;
+  margin-top: 1px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.plan-review-step-remove:hover,
+.plan-review-step-remove:focus-visible {
+  border-color: var(--border);
+  background: rgba(244, 67, 54, 0.12);
+  color: var(--error, #f44336);
+  outline: none;
+}
+
+.plan-review-reorder-hint {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-secondary);
+  font-size: 10px;
+  line-height: 1.3;
+}
+
+.plan-review-reorder-icon {
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.plan-review-add-step {
+  align-self: flex-start;
+  padding: 4px 8px;
+  border: 1px dashed var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.plan-review-add-step:hover,
+.plan-review-add-step:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent);
+  outline: none;
+}
+
+.plan-review-empty-steps {
+  font-size: 11px;
+  color: var(--error, #f44336);
+}
+
+.plan-review-risks {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 4px;
+}
+
+.plan-review-risk {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.4;
   overflow-wrap: anywhere;
 }
 
@@ -2770,7 +2912,11 @@ body {
 .plan-review-approve:disabled,
 .plan-review-change:disabled,
 .plan-review-cancel:disabled,
-.plan-review-edit:disabled {
+.plan-review-edit:disabled,
+.plan-review-add-step:disabled,
+.plan-review-step-remove:disabled,
+.plan-review-summary-input:disabled,
+.plan-review-step-input:disabled {
   opacity: 0.5;
   cursor: default;
 }
