@@ -3246,6 +3246,21 @@ test('config transfer exports and restores Settings values including provider ke
   );
 });
 
+test('trace recording remains opt-in by default', () => {
+  for (const [label, prefix, configTransfer] of [
+    ['chrome', 'src/chrome', ConfigTransferCh],
+    ['firefox', 'src/firefox', ConfigTransferFx],
+  ]) {
+    assert.equal(configTransfer.DEFAULT_CONFIG_SETTINGS.tracingEnabled, false, `${label}: portable config default should disable traces`);
+    const settings = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/settings.js'), 'utf8');
+    const recorder = fs.readFileSync(path.join(ROOT, prefix, 'src/trace/recorder.js'), 'utf8');
+    const locale = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/locales/en.js'), 'utf8');
+    assert.match(settings, /tracingToggle\.checked = stored\.tracingEnabled === true/, `${label}: unset tracing preference should render disabled`);
+    assert.match(recorder, /return tracingEnabled === true;/, `${label}: recorder should require an explicit opt-in`);
+    assert.match(locale, /Off by default because it adds disk writes per step/i, `${label}: tracing disclosure does not match the opt-in default`);
+  }
+});
+
 // Runs the real import_config/import_config_patch case block against a mocked
 // storage.local, so the handler's own get(['providers']) -> merge -> set flow
 // is what preserves platform provider state, not a hand-built merge input.
@@ -7162,7 +7177,7 @@ test('loose note permits quoting on explicit user request; strict forbids', () =
   assert.match(STRICT_SECRET_SYSTEM_NOTE, /page-reading or other read-only tools/i);
 });
 
-test('getToolsForMode: default `done` description is the loose hygiene hint', () => {
+test('getToolsForMode: default `done` description requires the actual user-facing answer', () => {
   for (const getTools of [getToolsForModeCh, getToolsForModeFx]) {
     const tools = getTools('act');
     const done = tools.find(t => t.function.name === 'done');
@@ -7170,8 +7185,26 @@ test('getToolsForMode: default `done` description is the loose hygiene hint', ()
     assert.match(done.function.description, /hygiene|tidy|prefer generic/i);
     // Loose default must NOT contain hard prohibition language.
     assert.doesNotMatch(done.function.description, /Must NOT contain|never include passwords/);
-    // Summary param description stays minimal in loose mode.
-    assert.equal(done.function.parameters.properties.summary.description, 'Summary of what was accomplished.');
+    assert.match(done.function.description, /displayed verbatim as your final reply/i);
+    assert.match(done.function.description, /Never merely say that you explained, confirmed, provided, or answered/i);
+    assert.match(done.function.parameters.properties.summary.description, /Complete user-facing answer or result, displayed verbatim/i);
+  }
+});
+
+test('getToolsForMode: every `done` variant says its summary is the visible answer', () => {
+  for (const [label, getTools] of [['chrome', getToolsForModeCh], ['firefox', getToolsForModeFx]]) {
+    for (const [variant, tools] of [
+      ['ask', getTools('ask')],
+      ['ask strict', getTools('ask', { strictSecretMode: true })],
+      ['act full', getTools('act')],
+      ['act compact', getTools('act', { tier: 'compact' })],
+      ['act strict full', getTools('act', { strictSecretMode: true })],
+      ['act strict compact', getTools('act', { tier: 'compact', strictSecretMode: true })],
+    ]) {
+      const done = tools.find(tool => tool.function.name === 'done');
+      assert.match(done?.function?.description || '', /displayed verbatim as (?:your |the )?final reply/i, `[${label}] ${variant}: done summary visibility contract missing`);
+      assert.match(done?.function?.parameters?.properties?.summary?.description || '', /user-facing|displayed verbatim/i, `[${label}] ${variant}: summary field is still framed as internal status`);
+    }
   }
 });
 
@@ -33340,6 +33373,84 @@ test('accepted done emits successful result update after progress gate', async (
   }
 });
 
+test('meta-only done summaries are rejected so questions receive the actual answer', async () => {
+  const brokenSummaries = [
+    'Explained how the saved-workflow replay feature is implemented in code, based on the actual files in PR #443.',
+    'Confirmed the exact UI entry points for saved workflows from the sidepanel.js diff in PR #443.',
+  ];
+  const deliveredAnswer = 'Open WebBrain\'s History menu, choose Saved workflows, select a workflow, and click Run.';
+
+  for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
+    const agent = new AgentClass({ getActive: () => ({ contextWindow: 128000, supportsVision: false }) });
+    const tabId = 797 + index;
+    const messages = [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: 'How do I access saved workflows from the WebBrain plugin?' },
+    ];
+    agent.conversations.set(tabId, messages);
+    agent.conversationModes.set(tabId, 'ask');
+    agent._persist = () => {};
+    agent.providerManager = { ...(agent.providerManager || {}), getVisionProvider: async () => null };
+
+    assert.equal(agent._looksLikeMetaOnlyDoneSummary(brokenSummaries[index]), true, `${AgentClass.name}: exported broken summary was not recognized`);
+    assert.equal(agent._looksLikeMetaOnlyDoneSummary(deliveredAnswer), false, `${AgentClass.name}: direct answer was misclassified`);
+    assert.equal(
+      agent._looksLikeMetaOnlyDoneSummary(`Confirmed the exact UI entry points: ${deliveredAnswer}`),
+      false,
+      `${AgentClass.name}: status preface with an actual answer should be accepted`,
+    );
+    for (const directAnswer of [
+      'Confirmed the exact UI entry points are History > Saved workflows.',
+      'Confirmed the requested workflow is available from the History menu.',
+      'Reviewed the requested implementation and found the replay entry point in sidepanel.js.',
+    ]) {
+      assert.equal(
+        agent._looksLikeMetaOnlyDoneSummary(directAnswer),
+        false,
+        `${AgentClass.name}: valid declarative answer was misclassified: ${directAnswer}`,
+      );
+    }
+
+    agent.executeTool = async () => ({ done: true, summary: brokenSummaries[index], outcome: 'success' });
+    const updates = [];
+    const blocked = await agent._executeToolBatch(
+      tabId,
+      [{ id: `meta_done_${index}`, function: { name: 'done', arguments: JSON.stringify({ summary: brokenSummaries[index] }) } }],
+      messages,
+      (type, data) => updates.push({ type, data }),
+      { supportsVision: false },
+      null,
+      new Set(['done']),
+      1,
+    );
+    assert.equal(blocked.action, 'continue', `${AgentClass.name}: meta-only summary ended the run`);
+    assert.equal(
+      updates.some(update => update.type === 'tool_result' && update.data?.result?.metaOnlySummary === true),
+      true,
+      `${AgentClass.name}: meta-only summary did not produce a recovery result`,
+    );
+    assert.equal(
+      updates.some(update => update.type === 'tool_result' && update.data?.result?.done === true),
+      false,
+      `${AgentClass.name}: meta-only summary was exposed as successful completion`,
+    );
+
+    agent.executeTool = async () => ({ done: true, summary: deliveredAnswer, outcome: 'success' });
+    const recovered = await agent._executeToolBatch(
+      tabId,
+      [{ id: `answer_done_${index}`, function: { name: 'done', arguments: JSON.stringify({ summary: deliveredAnswer }) } }],
+      messages,
+      () => {},
+      { supportsVision: false },
+      null,
+      new Set(['done']),
+      2,
+    );
+    assert.equal(recovered.action, 'return', `${AgentClass.name}: recovered answer did not finish`);
+    assert.equal(recovered.value, deliveredAnswer, `${AgentClass.name}: recovered answer was not shown verbatim`);
+  }
+});
+
 test('accepted done repairs only the terminal display summary', async () => {
   const title = 'Emre Sokullu on X: "Introducing WebBrain"';
   const malformed = `Verification:\n- Page title: ${JSON.stringify(title)}`;
@@ -36508,7 +36619,7 @@ test('full planner carries explicit app-state evidence authorization', async () 
   });
 });
 
-test('planner intent fails closed with a localized clarification after one repair', async () => {
+test('planner intent degrades to a localized read-only turn after one repair', async () => {
   await withPlannerBrowserGlobals(async () => {
     for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
       const agent = new AgentClass({ getActive: () => ({ name: 'intent-test', model: 'intent-test' }) });
@@ -36517,11 +36628,12 @@ test('planner intent fails closed with a localized clarification after one repai
         calls += 1;
         return { content: 'not valid planner JSON' };
       };
-      const message = 'Bir plan mı yoksa uygulama mı istediğinizi açıklayın.';
+      const message = 'Planlayıcı bir onarımdan sonra geçerli yapılandırılmış çıktı döndüremedi. Bu tur salt okunur modda devam ediyor.';
+      let warning = '';
       const gate = await agent._runPlannerIntentGate(
         8680 + index,
         { role: 'user', content: 'Bunu hallet.' },
-        () => {},
+        (type, data) => { if (type === 'warning') warning = data?.message || ''; },
         null,
         null,
         '',
@@ -36530,9 +36642,15 @@ test('planner intent fails closed with a localized clarification after one repai
         { locale: 'tr', intentFailureMessage: message },
       );
       assert.equal(calls, 2, `${AgentClass.name}: invalid intent should repair exactly once`);
-      assert.equal(gate.proceed, false, `${AgentClass.name}: invalid intent must fail closed`);
-      assert.equal(gate.reason, 'clarify', `${AgentClass.name}: invalid intent should request clarification`);
-      assert.equal(gate.message, message, `${AgentClass.name}: clarification should use localized UI fallback`);
+      assert.equal(gate.proceed, true, `${AgentClass.name}: invalid planner JSON stopped an otherwise useful turn`);
+      assert.equal(gate.requestKind, 'respond', `${AgentClass.name}: fallback should not authorize execution`);
+      assert.equal(gate.readOnlyFallback, true, `${AgentClass.name}: fallback did not constrain the turn to Ask mode`);
+      assert.equal(gate.requiresStateChange, false, `${AgentClass.name}: fallback authorized state changes`);
+      assert.equal(gate.responseOnly, false, `${AgentClass.name}: fallback should retain read-only browser tools`);
+      assert.equal(gate.progressLedgerPolicy, 'disabled', `${AgentClass.name}: fallback should not create execution progress`);
+      assert.equal(gate.progressAction, null, `${AgentClass.name}: fallback retained an execution action`);
+      assert.equal(gate.message, undefined, `${AgentClass.name}: fallback leaked a fake clarification into chat`);
+      assert.equal(warning, message, `${AgentClass.name}: read-only fallback should use localized UI copy`);
     }
   });
 });
@@ -41698,8 +41816,7 @@ test('plan before act: try is default while explicit off is preserved', () => {
   ]) {
     const locale = fs.readFileSync(path.join(ROOT, file), 'utf8');
     assert.match(locale, /Try \(default\).*may reuse a recently approved plan for a short follow-up/, `${file} should describe try planning as the default with short-follow-up reuse`);
-    assert.match(locale, /If intent or planning remains invalid after one repair, both stop before tools and ask for clarification/, `${file} should describe the shared fail-closed intent behavior`);
-    assert.doesNotMatch(locale, /continues without a pinned plan if planning fails/, `${file} should not promise an unsafe fallback after invalid intent`);
+    assert.match(locale, /Try falls back to a read-only turn if intent or planning remains invalid after one repair; Strict stops before tools/, `${file} should describe the safe read-only planner fallback`);
     assert.match(locale, /'st\.display\.plan_before_act\.try': 'Try planning \(default\)'/, `${file} should label try planning as default`);
     assert.match(locale, /'st\.display\.plan_before_act\.off': 'Off'/, `${file} should not label off as default`);
     assert.doesNotMatch(locale, /plan_before_act\.desc[^\n]*Off by default/, `${file} should not describe plan-before-act as off by default`);
@@ -42448,7 +42565,7 @@ test('planner gate: abort during planner call stops before review card', async (
   });
 });
 
-test('planner gate: try mode fails closed when structured intent cannot be parsed', async () => {
+test('planner gate: try mode degrades to read-only when structured intent cannot be parsed', async () => {
   await withPlannerBrowserGlobals(async () => {
     for (const [label, AgentClass] of [['chrome', AgentCh], ['firefox', AgentFx]]) {
       const tabId = label === 'chrome' ? 9151 : 9152;
@@ -42464,9 +42581,11 @@ test('planner gate: try mode fails closed when structured intent cannot be parse
         null,
       );
 
-      assert.equal(gate.proceed, false, `${label} should fail closed`);
-      assert.equal(gate.requestKind, 'clarify', `${label} should route invalid intent to clarification`);
-      assert.match(warning, /could not reliably determine whether you wanted a plan or execution/i, `${label} warning`);
+      assert.equal(gate.proceed, true, `${label} malformed planner output should not kill the user turn`);
+      assert.equal(gate.requestKind, 'respond', `${label} fallback should not authorize execution`);
+      assert.equal(gate.readOnlyFallback, true, `${label} fallback should switch the run to Ask tools`);
+      assert.equal(gate.requiresStateChange, false, `${label} fallback should prohibit state changes`);
+      assert.match(warning, /could not return valid structured output.*read-only mode/i, `${label} warning`);
     }
   });
 });
@@ -42489,9 +42608,89 @@ test('planner gate: strict mode fails closed when plan JSON cannot be parsed', a
 
       assert.equal(gate.proceed, false, `${label} should fail closed`);
       assert.equal(gate.requestKind, 'clarify', `${label} should route invalid intent to clarification`);
-      assert.match(gate.message || '', /could not reliably determine whether you wanted a plan or execution/i, `${label} message`);
+      assert.equal(gate.reason, 'planner_error', `${label} planner failure should not masquerade as ambiguous user intent`);
+      assert.match(gate.message || '', /Strict Planning could not produce valid structured output/i, `${label} message`);
     }
   });
+});
+
+test('planner request errors stop accurately instead of masquerading as JSON repair failures', async () => {
+  await withPlannerBrowserGlobals(async () => {
+    for (const [label, AgentClass] of [['chrome', AgentCh], ['firefox', AgentFx]]) {
+      const tabId = label === 'chrome' ? 9155 : 9156;
+      const provider = { name: 'broken-provider', model: 'broken-model', config: {} };
+      const agent = new AgentClass({ getActive: () => provider });
+      let calls = 0;
+      agent._chatWithCostAllowance = async () => {
+        calls += 1;
+        throw new Error('401 invalid API key');
+      };
+      let warning = '';
+      const onUpdate = (type, data) => { if (type === 'warning') warning = data?.message || ''; };
+
+      const intent = await agent._runPlannerIntentGate(
+        tabId,
+        { role: 'user', content: 'Answer this question.' },
+        onUpdate,
+        null,
+      );
+      assert.equal(calls, 1, `${label}: intent request error should not trigger repair or main-agent fallback calls`);
+      assert.equal(intent.proceed, false, `${label}: intent request error unexpectedly continued`);
+      assert.equal(intent.reason, 'planner_error', `${label}: intent request error lost its planner status`);
+      assert.equal(intent.requestKind, 'respond', `${label}: provider failure was mislabeled as ambiguous intent`);
+      assert.equal(intent.readOnlyFallback, undefined, `${label}: provider failure was treated as invalid JSON`);
+      assert.match(intent.message || '', /Planner request failed.*401 invalid API key/i, `${label}: intent request error hid the provider failure`);
+      assert.equal(warning, intent.message, `${label}: intent request warning diverged from the terminal error`);
+
+      calls = 0;
+      warning = '';
+      const full = await agent._runPlannerGate(
+        tabId,
+        { role: 'user', content: 'Perform this task.' },
+        onUpdate,
+        null,
+      );
+      assert.equal(calls, 1, `${label}: full planner request error should not trigger repair or main-agent fallback calls`);
+      assert.equal(full.proceed, false, `${label}: full planner request error unexpectedly continued`);
+      assert.equal(full.reason, 'planner_error', `${label}: full planner request error lost its planner status`);
+      assert.equal(full.readOnlyFallback, undefined, `${label}: full planner provider failure was treated as invalid JSON`);
+      assert.match(full.message || '', /Planner request failed.*401 invalid API key/i, `${label}: full planner request error hid the provider failure`);
+      assert.equal(warning, full.message, `${label}: full planner warning diverged from the terminal error`);
+    }
+  });
+});
+
+test('planner read-only fallback applies Ask mode to runtime guards without changing the selected mode', async () => {
+  for (const [label, AgentClass, file] of [
+    ['chrome', AgentCh, 'src/chrome/src/agent/agent.js'],
+    ['firefox', AgentFx, 'src/firefox/src/agent/agent.js'],
+  ]) {
+    const tabId = label === 'chrome' ? 9161 : 9162;
+    const agent = new AgentClass({ getActive: () => ({ promptTier: 'full', supportsVision: false }) });
+    agent._persist = () => {};
+    agent.conversationModes.set(tabId, 'act');
+    agent._runModeOverrides.set(tabId, 'act');
+    const messages = [{ role: 'system', content: 'act system' }];
+    agent.conversations.set(tabId, messages);
+    const token = agent._beginCompletionInvariant(tabId);
+    agent._recordCompletionToolResult(tabId, 'click', {}, { success: true, dispatched: true });
+    assert.match(agent._completionPlainFinalBlock(tabId) || '', /RUNTIME COMPLETION BLOCK/, `${label}: action mode fixture did not arm completion debt`);
+
+    assert.equal(agent._activatePlannerReadOnlyMode(tabId, messages), 'ask');
+    assert.equal(agent._effectiveRunMode(tabId), 'ask', `${label}: fallback did not become the effective runtime mode`);
+    assert.equal(agent.conversationModes.get(tabId), 'act', `${label}: fallback permanently changed the user's selected mode`);
+    assert.equal(agent._completionPlainFinalBlock(tabId), null, `${label}: Ask fallback still used action-mode completion guards`);
+    assert.equal(agent._completionDoneBlock(tabId, 'done', { outcome: 'success' }), null, `${label}: Ask fallback still blocked done as an action completion`);
+    const done = await agent.executeTool(tabId, 'done', { summary: 'Here is the requested answer.', outcome: 'success' });
+    assert.equal(done.done, true, `${label}: Ask fallback could not finish`);
+    assert.equal(done.verification, undefined, `${label}: Ask fallback still ran action-mode done verification`);
+
+    const source = fs.readFileSync(path.join(ROOT, file), 'utf8');
+    const consumers = source.match(/mode = this\._activatePlannerReadOnlyMode\(tabId, messages\)/g) || [];
+    assert.equal(consumers.length, 2, `${label}: streamed and non-streamed loops must both activate the runtime override`);
+    agent._runModeOverrides.delete(tabId);
+    agent._clearCompletionInvariant(tabId, token);
+  }
 });
 
 test('planner gate: retries reasoning-only planner responses for final JSON', async () => {

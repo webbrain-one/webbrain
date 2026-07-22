@@ -137,7 +137,7 @@ Click the gear icon or go to the extension's Options page to configure:
 - Verbose Mode — Show full tool call JSON (off by default)
 - Auto-screenshot — Provide visual context when DOM/page reads are insufficient
 - Max Agent Steps — Configurable step limit (5-195 or unlimited, default 130)
-- Plan before Act — Optionally generate and review a structured Act-mode plan before browser tools run (try mode by default; explicit off is preserved)
+- Plan before Act — Optionally generate and review a structured Act-mode plan before browser tools run (Try by default; failed planner JSON safely falls back to a read-only turn, while explicit Off and Strict are preserved)
 
 **Profile and Memory:**
 - Profile auto-fill and user memory are stored in plaintext browser local storage.

@@ -694,11 +694,11 @@ export const AGENT_TOOLS = [
     type: 'function',
     function: {
       name: 'done',
-      description: 'Signal that the task is finished for this run. Only call this when you have successfully accomplished the user\'s request OR have exhausted every reasonable alternative (at least 3-4 different approaches). Provide a summary of what was accomplished. Do NOT call this prematurely — keep trying different strategies if the current one fails. Credentials hygiene: when summarizing, prefer generic references ("logged in with the provided password", "API key updated") over echoing the literal value — keeps summaries tidy and avoids needlessly persisting secrets in trace logs. If the user explicitly asked you to show them a value (a recovery code, an API key on the page, etc.), including the value IS the answer and you should include it.',
+      description: 'Signal that the task is finished for this run. Only call this when you have successfully accomplished the user\'s request OR have exhausted every reasonable alternative (at least 3-4 different approaches). The summary is displayed verbatim as your final reply to the user, so put the complete answer or result itself in it. Never merely say that you explained, confirmed, provided, or answered something without including the actual explanation, details, content, or answer. Do NOT call this prematurely — keep trying different strategies if the current one fails. Credentials hygiene: when summarizing, prefer generic references ("logged in with the provided password", "API key updated") over echoing the literal value — keeps summaries tidy and avoids needlessly persisting secrets in trace logs. If the user explicitly asked you to show them a value (a recovery code, an API key on the page, etc.), including the value IS the answer and you should include it.',
       parameters: {
         type: 'object',
         properties: {
-          summary: { type: 'string', description: 'Summary of what was accomplished.' },
+          summary: { type: 'string', description: 'Complete user-facing answer or result, displayed verbatim. Do not merely describe that you answered or completed the task.' },
         },
         required: DONE_REQUIRED,
       },
@@ -1130,11 +1130,11 @@ const DONE_TOOL_WITH_OUTCOME = {
   type: 'function',
   function: {
     name: 'done',
-    description: 'Signal that the task is finished for this run. Set outcome="success" only after the latest consequential action was followed by an explicit page/state observation that verifies the request. Set outcome="partial" when you made useful progress but the request is not fully complete. Set outcome="failed" when you are blocked or have exhausted every reasonable alternative (at least 3-4 different approaches). After any consequential action, a plain final answer cannot end the run; call done with an explicit outcome. Provide a summary of what was accomplished. Do NOT call this prematurely — keep trying different strategies if the current one fails. Credentials hygiene: when summarizing, prefer generic references ("logged in with the provided password", "API key updated") over echoing the literal value — keeps summaries tidy and avoids needlessly persisting secrets in trace logs. If the user explicitly asked you to show them a value (a recovery code, an API key on the page, etc.), including the value IS the answer and you should include it.',
+    description: 'Signal that the task is finished for this run. Set outcome="success" only after the latest consequential action was followed by an explicit page/state observation that verifies the request. Set outcome="partial" when you made useful progress but the request is not fully complete. Set outcome="failed" when you are blocked or have exhausted every reasonable alternative (at least 3-4 different approaches). After any consequential action, a plain final answer cannot end the run; call done with an explicit outcome. The summary is displayed verbatim as your final reply to the user, so put the complete answer or result itself in it. Never merely say that you explained, confirmed, provided, or answered something without including the actual explanation, details, content, or answer. Do NOT call this prematurely — keep trying different strategies if the current one fails. Credentials hygiene: when summarizing, prefer generic references ("logged in with the provided password", "API key updated") over echoing the literal value — keeps summaries tidy and avoids needlessly persisting secrets in trace logs. If the user explicitly asked you to show them a value (a recovery code, an API key on the page, etc.), including the value IS the answer and you should include it.',
     parameters: {
       type: 'object',
       properties: {
-        summary: { type: 'string', description: 'Summary of what was accomplished.' },
+        summary: { type: 'string', description: 'Complete user-facing answer or result, displayed verbatim. Do not merely describe that you answered or completed the task.' },
         outcome: DONE_OUTCOME_PROPERTY,
       },
       required: DONE_REQUIRED_WITH_OUTCOME,
@@ -1146,11 +1146,11 @@ const DONE_TOOL_COMPACT_WITH_OUTCOME = {
   type: 'function',
   function: {
     name: 'done',
-    description: 'End this run. Use success only after verified completion, partial for useful incomplete work, and failed for a real blocker or exhausted alternatives.',
+    description: 'End this run. Use success only after verified completion, partial for useful incomplete work, and failed for a real blocker or exhausted alternatives. The summary is displayed verbatim as the final reply, so include the actual answer or result, not a statement that you explained or confirmed it.',
     parameters: {
       type: 'object',
       properties: {
-        summary: { type: 'string', description: 'Concise result or blocker summary.' },
+        summary: { type: 'string', description: 'Concise user-facing answer, result, or blocker, displayed verbatim.' },
         outcome: DONE_OUTCOME_PROPERTY,
       },
       required: DONE_REQUIRED_WITH_OUTCOME,
@@ -1172,11 +1172,11 @@ const DONE_TOOL_STRICT = {
   type: 'function',
   function: {
     name: 'done',
-    description: 'Signal that the task is finished for this run. Only call this when you have successfully accomplished the user\'s request OR have exhausted every reasonable alternative (at least 3-4 different approaches). Provide a summary of what was accomplished. Do NOT call this prematurely — keep trying different strategies if the current one fails. CREDENTIALS (strict mode is ON): never include passwords, API keys, tokens, OTPs, recovery codes, application-password strings, or any value the user typed into a password field — in the summary. Refer to them generically ("logged in with the provided credentials", "API key updated", "OTP submitted") even if the user explicitly asked you to display the value: in strict mode the answer is "I filled the field with the value you provided" or "the API key on this page is in the field labeled X", not the literal string. This rule applies even if the user typed the value directly into the chat.',
+    description: 'Signal that the task is finished for this run. Only call this when you have successfully accomplished the user\'s request OR have exhausted every reasonable alternative (at least 3-4 different approaches). The summary is displayed verbatim as your final reply to the user, so put the complete answer or result itself in it. Never merely say that you explained, confirmed, provided, or answered something without including the actual explanation, details, content, or answer. Do NOT call this prematurely — keep trying different strategies if the current one fails. CREDENTIALS (strict mode is ON): never include passwords, API keys, tokens, OTPs, recovery codes, application-password strings, or any value the user typed into a password field — in the summary. Refer to them generically ("logged in with the provided credentials", "API key updated", "OTP submitted") even if the user explicitly asked you to display the value: in strict mode the answer is "I filled the field with the value you provided" or "the API key on this page is in the field labeled X", not the literal string. This rule applies even if the user typed the value directly into the chat.',
     parameters: {
       type: 'object',
       properties: {
-        summary: { type: 'string', description: 'Summary of what was accomplished. Must NOT contain credentials, passwords, API keys, tokens, OTPs, or any secret the user provided or that you read from a password field.' },
+        summary: { type: 'string', description: 'Complete user-facing answer or result, displayed verbatim. Must NOT contain credentials, passwords, API keys, tokens, OTPs, or any secret the user provided or that you read from a password field.' },
       },
       required: DONE_REQUIRED,
     },
@@ -1187,11 +1187,11 @@ const DONE_TOOL_STRICT_WITH_OUTCOME = {
   type: 'function',
   function: {
     name: 'done',
-    description: 'Signal that the task is finished for this run. Set outcome="success" only after the latest consequential action was followed by an explicit page/state observation that verifies the request. Set outcome="partial" when you made useful progress but the request is not fully complete. Set outcome="failed" when you are blocked or have exhausted every reasonable alternative (at least 3-4 different approaches). After any consequential action, a plain final answer cannot end the run; call done with an explicit outcome. Provide a summary of what was accomplished. Do NOT call this prematurely — keep trying different strategies if the current one fails. CREDENTIALS (strict mode is ON): never include passwords, API keys, tokens, OTPs, recovery codes, application-password strings, or any value the user typed into a password field — in the summary. Refer to them generically ("logged in with the provided credentials", "API key updated", "OTP submitted") even if the user explicitly asked you to display the value: in strict mode the answer is "I filled the field with the value you provided" or "the API key on this page is in the field labeled X", not the literal string. This rule applies even if the user typed the value directly into the chat.',
+    description: 'Signal that the task is finished for this run. Set outcome="success" only after the latest consequential action was followed by an explicit page/state observation that verifies the request. Set outcome="partial" when you made useful progress but the request is not fully complete. Set outcome="failed" when you are blocked or have exhausted every reasonable alternative (at least 3-4 different approaches). After any consequential action, a plain final answer cannot end the run; call done with an explicit outcome. The summary is displayed verbatim as your final reply to the user, so put the complete answer or result itself in it. Never merely say that you explained, confirmed, provided, or answered something without including the actual explanation, details, content, or answer. Do NOT call this prematurely — keep trying different strategies if the current one fails. CREDENTIALS (strict mode is ON): never include passwords, API keys, tokens, OTPs, recovery codes, application-password strings, or any value the user typed into a password field — in the summary. Refer to them generically ("logged in with the provided credentials", "API key updated", "OTP submitted") even if the user explicitly asked you to display the value: in strict mode the answer is "I filled the field with the value you provided" or "the API key on this page is in the field labeled X", not the literal string. This rule applies even if the user typed the value directly into the chat.',
     parameters: {
       type: 'object',
       properties: {
-        summary: { type: 'string', description: 'Summary of what was accomplished. Must NOT contain credentials, passwords, API keys, tokens, OTPs, or any secret the user provided or that you read from a password field.' },
+        summary: { type: 'string', description: 'Complete user-facing answer or result, displayed verbatim. Must NOT contain credentials, passwords, API keys, tokens, OTPs, or any secret the user provided or that you read from a password field.' },
         outcome: DONE_OUTCOME_PROPERTY,
       },
       required: DONE_REQUIRED_WITH_OUTCOME,
@@ -1203,11 +1203,11 @@ const DONE_TOOL_COMPACT_STRICT_WITH_OUTCOME = {
   type: 'function',
   function: {
     name: 'done',
-    description: 'End this run. Use success only after verified completion, partial for useful incomplete work, and failed for a real blocker or exhausted alternatives. Never include credentials or secrets in the summary.',
+    description: 'End this run. Use success only after verified completion, partial for useful incomplete work, and failed for a real blocker or exhausted alternatives. The summary is displayed verbatim as the final reply, so include the actual answer or result, not a statement that you explained or confirmed it. Never include credentials or secrets in the summary.',
     parameters: {
       type: 'object',
       properties: {
-        summary: { type: 'string', description: 'Concise result or blocker summary without credentials or secrets.' },
+        summary: { type: 'string', description: 'Concise user-facing answer, result, or blocker, displayed verbatim and without credentials or secrets.' },
         outcome: DONE_OUTCOME_PROPERTY,
       },
       required: DONE_REQUIRED_WITH_OUTCOME,

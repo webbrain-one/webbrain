@@ -154,9 +154,9 @@ _enrichUserMessageWithCurrentPage(tabId, messages, userMessage)
 
 ### Step 4: Plan-before-Act Gate
 
-When `planBeforeAct` is enabled and the run is in an action mode (Act or Dev), the agent calls the active provider once before the tool loop with `planner.js`'s structured JSON prompt. Unset storage defaults to try mode; explicit off remains off. The planner sees the user task, sanitized URL/title, and a short recent-history digest; page context is wrapped as untrusted data and image blocks are dropped.
+Manual action-mode runs (Act or Dev) call the active provider once before the tool loop with `planner.js`'s structured JSON prompt. Off uses the compact intent schema; Try and Strict use the full plan schema. Unset storage defaults to Try, while explicit Off remains Off. The planner sees the user task, sanitized URL/title, and a short recent-history digest; page context is wrapped as untrusted data and image blocks are dropped.
 
-If the planner returns valid JSON, the side panel receives `agent_update: plan_review` and renders an editable review card. Approval pins the approved plan into the scratchpad so it survives context compaction. Rejection, timeout, invalid JSON after retry, or user abort stops the run before any browser tools execute. Scheduled runs can set `autoApprovePlanReview` and pin the plan without showing the card.
+If the planner returns valid JSON, the side panel receives `agent_update: plan_review` and renders an editable review card. Approval pins the approved plan into the scratchpad so it survives context compaction. Rejection, timeout, or user abort stops the run before any browser tools execute. In Try mode, invalid JSON after one repair degrades only that turn to the Ask prompt and read-only tool catalog; Strict mode still stops before tools. Scheduled runs can set `autoApprovePlanReview` and pin the plan without showing the card.
 
 ### Step 5: Main Agent Loop
 ```
@@ -429,9 +429,9 @@ Background relays these via `chrome.runtime.sendMessage` to the side panel, whic
 
 ### Plan before Act (`planner.js`)
 
-The optional action-mode planning gate runs before the first browser tool call when enabled; unset storage defaults to try mode while explicit off remains off. The planner prompt requires a single JSON object with summary, concrete steps, validated `skill_ids`, memory strategy, scheduling hint, risks, and an action mode. Mid/Full planners receive only the eligible routing catalog, and approved skill IDs are activated before the normal execution model call. `normalizePlan()` bounds and sanitizes each field; `formatPlanMarkdown()` renders the side-panel review card; `formatPlanScratchpad()` pins the approved or edited plan as an `[Approved plan]` scratchpad entry.
+The action-mode intent gate runs before the first browser tool call. Off uses the compact schema; Try and Strict use the full planning schema, with unset storage defaulting to Try. The full planner prompt requires a single JSON object with summary, concrete steps, validated `skill_ids`, memory strategy, scheduling hint, risks, and an action mode. Mid/Full planners receive only the eligible routing catalog, and approved skill IDs are activated before the normal execution model call. `normalizePlan()` bounds and sanitizes each field; `formatPlanMarkdown()` renders the side-panel review card; `formatPlanScratchpad()` pins the approved or edited plan as an `[Approved plan]` scratchpad entry.
 
-Planner calls are traced with `phase: "planner"` when trace recording is enabled. They also use the cost allowance guard, abort checks, a JSON-repair retry, and Qwen/DeepSeek no-think handling before the run is allowed to continue.
+Planner calls are traced with `phase: "planner"` when trace recording is enabled. They also use the cost allowance guard, abort checks, a JSON-repair retry, and Qwen/DeepSeek no-think handling. A failed repair cannot authorize actions: Try falls back to an Ask/read-only turn, while Strict stops.
 
 Each new trace run records the manifest version that created it. `/export`
 Markdown records the exporting version, `/export --traces` records both the

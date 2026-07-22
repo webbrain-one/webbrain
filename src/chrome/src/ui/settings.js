@@ -52,7 +52,7 @@ import {
 
 // Version shown in the subtitle. Kept here so it only needs one update per
 // release; the subtitle string itself is translated.
-const EXT_VERSION = '25.6.0';
+const EXT_VERSION = '25.6.2';
 
 const providersContainer = document.getElementById('providers');
 const displaySettings = document.getElementById('display-settings');
@@ -475,7 +475,7 @@ async function init() {
   }
   notifySoundToggle.checked = stored.notifySound ?? true; // on by default
   completionConfettiToggle.checked = stored.completionConfetti ?? true; // on by default
-  tracingToggle.checked = stored.tracingEnabled === true; // off by default
+  tracingToggle.checked = stored.tracingEnabled === true;
   const sessionLimit = normalizeCostAmount(stored.costAllowanceSessionUsd);
   const totalLimit = normalizeCostAmount(stored.costAllowanceTotalUsd);
   const totalSpent = normalizeCostAmount(stored.cloudCostSpentUsd, 0);

@@ -110,6 +110,7 @@ export class Agent {
     this._progressSessionCounter = 0;
     this.conversationIds = new Map(); // tabId -> stable conversationId (regenerated on clearConversation)
     this.conversationModes = new Map(); // tabId -> 'ask' | 'act' | 'dev'
+    this._runModeOverrides = new Map(); // tabId -> effective mode for the active run only
     this.submittedRunRequestIds = new Map(); // tabId -> request whose user turn is durable in storage.session
     this.plannerFollowUpSkipTabs = new Set(); // tabIds allowed one short follow-up after an approved try-mode plan
     this.hydratedTabs = new Set(); // tabIds we've already pulled from storage
@@ -170,8 +171,8 @@ export class Agent {
     // the user. The API key is read at call time from browser.storage.
     this.captchaSolverEnabled = false;
     // Pre-execution planner (Settings → Plan before Act). Default "try";
-    // attempts a read-only planning LLM call but continues without a pinned
-    // plan if planning itself fails. "strict" fails closed.
+    // attempts a read-only planning LLM call and degrades the current turn to
+    // Ask/read-only if structured planning itself fails. "strict" fails closed.
     this.planBeforeActMode = 'try';
     this.planBeforeAct = true; // legacy boolean mirror for older call sites/tests
     this.planReviewMode = 'confidence'; // confidence | always | never
@@ -418,7 +419,7 @@ export class Agent {
   }
 
   _completionDoneBlock(tabId, name, args, batchStartState = null) {
-    const mode = this.conversationModes.get(tabId) || 'ask';
+    const mode = this._effectiveRunMode(tabId);
     if (!this._isActionMode(mode)) return null;
     const state = this.completionInvariants.get(tabId);
     const block = completionDoneBlock(state, name, args);
@@ -564,7 +565,7 @@ export class Agent {
   }
 
   _completionPlainFinalBlock(tabId) {
-    const mode = this.conversationModes.get(tabId) || 'ask';
+    const mode = this._effectiveRunMode(tabId);
     if (!this._isActionMode(mode)) return null;
     return completionPlainFinalBlock(this.completionInvariants.get(tabId));
   }
@@ -2127,7 +2128,7 @@ export class Agent {
     const currentUrl = await this._currentUrl(tabId);
     const publicAttempt = this._downloadPublicMediaAttempt(messages, currentUrl);
     const needsExplicitTarget = this._publicMediaUrlNeedsExplicitTarget(currentUrl);
-    const mode = this.conversationModes.get(tabId) || 'act';
+    const mode = this._effectiveRunMode(tabId, 'act');
     const tier = this._resolvePromptTier();
     let activeTool = this._activeSkillToolForName(tabId, 'download_public_media');
     const owner = activeTool
@@ -2646,7 +2647,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   }
 
   _devStyleInspectionAvailableForTab(tabId) {
-    return (this.conversationModes.get(tabId) || 'ask') === 'dev'
+    return this._effectiveRunMode(tabId) === 'dev'
       && this._resolvePromptTier() !== 'compact';
   }
 
@@ -3433,9 +3434,32 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           this._persist(tabId);
           return { action: 'return', value: planOnlyDecision.failure, status: 'plan_only_output' };
         }
+        const rawDoneSummary = toolResult.summary || partialAssistantText || 'Task completed.';
+        if (this._looksLikeMetaOnlyDoneSummary(rawDoneSummary)) {
+          const blockedResult = {
+            success: false,
+            blockedDone: true,
+            metaOnlySummary: true,
+            error: 'The done summary is displayed verbatim to the user, but this summary only says that an answer was given and omits the answer itself. Reuse the facts already gathered and call done again with the complete user-facing answer or result. Do not merely say that you explained, confirmed, provided, or answered it.',
+          };
+          onUpdate('tool_result', { name: fnName, result: blockedResult });
+          messages.push({
+            role: 'tool',
+            tool_call_id: tc.id,
+            content: JSON.stringify(blockedResult),
+          });
+          await recordFinalToolTrace(blockedResult);
+          this._appendSyntheticToolResults(
+            tabId, toolCalls, toolIndex + 1, messages, onUpdate, step,
+            () => ({ success: false, skipped: true, error: 'skipped: meta-only done summary requires a fresh answer turn' })
+          );
+          onUpdate('text', { content: '', replace: true });
+          onUpdate('warning', { message: 'Completion summary omitted the actual answer; continuing.' });
+          this._persist(tabId);
+          return { action: 'continue' };
+        }
         onUpdate('tool_result', { name: fnName, result: toolResult });
         this._doneBlockCount.delete(tabId);
-        const rawDoneSummary = toolResult.summary || partialAssistantText || 'Task completed.';
         const repairedDoneSummary = repairAssistantDisplayText(rawDoneSummary);
         const finalResponse = this._appendProgressLedgerToFinal(tabId, repairedDoneSummary);
         if (repairedDoneSummary !== rawDoneSummary) {
@@ -5541,6 +5565,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       proceed: true,
       requestKind: gate.requestKind || 'execute',
       responseOnly: gate.responseOnly === true,
+      readOnlyFallback: gate.readOnlyFallback === true,
       requiresStateChange: gate.requiresStateChange === true,
       requiresSubmission: typeof gate.requiresSubmission === 'boolean' ? gate.requiresSubmission : null,
       allowsPlannerShapedResult: gate.allowsPlannerShapedResult === true,
@@ -5588,9 +5613,62 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   _plannerIntentFailureMessage(runOptions = {}) {
     return sanitizePlannerText(
       runOptions?.intentFailureMessage
-        || 'I could not reliably determine whether you wanted a plan or execution. Please clarify before I take any action.',
+        || 'The planner could not return valid structured output after one repair. Continuing this turn in read-only mode.',
       500,
     );
+  }
+
+  _plannerReadOnlyFallback(runOptions, onUpdate) {
+    const message = this._plannerIntentFailureMessage(runOptions);
+    onUpdate('warning', { message });
+    return {
+      proceed: true,
+      requestKind: 'respond',
+      responseOnly: false,
+      readOnlyFallback: true,
+      requiresStateChange: false,
+      requiresSubmission: false,
+      progressLedgerPolicy: 'disabled',
+      progressAction: null,
+    };
+  }
+
+  _activatePlannerReadOnlyMode(tabId, messages) {
+    this._runModeOverrides.set(tabId, 'ask');
+    if (messages[0]?.role === 'system') {
+      messages[0].content = this._buildSystemPrompt('ask', tabId);
+    }
+    this._persist(tabId);
+    return 'ask';
+  }
+
+  _strictPlannerFailure(onUpdate) {
+    const message = 'Strict Planning could not produce valid structured output after one repair. No tools ran; retry the request or switch Plan before Act to Try.';
+    onUpdate('warning', { message });
+    return {
+      proceed: false,
+      message,
+      reason: 'planner_error',
+      requestKind: 'clarify',
+      requiresStateChange: false,
+    };
+  }
+
+  _plannerRequestFailure(error, onUpdate) {
+    const detail = sanitizePlannerText(
+      error?.message || String(error || 'Unknown planner request error.'),
+      500,
+      { collapseWhitespace: true },
+    );
+    const message = `Planner request failed before a valid response was available: ${detail}`;
+    onUpdate('warning', { message });
+    return {
+      proceed: false,
+      message,
+      reason: 'planner_error',
+      requestKind: 'respond',
+      requiresStateChange: false,
+    };
   }
 
   _plannerTerminalMessage(plan) {
@@ -5720,9 +5798,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       }
       if (this._checkAbort(tabId)) return { proceed: false, message: '[Stopped by user]', reason: 'cancelled' };
       if (!plan) {
-        const message = this._plannerIntentFailureMessage(runOptions);
-        onUpdate('warning', { message });
-        return { proceed: false, message, reason: 'clarify', requestKind: 'clarify', requiresStateChange: false };
+        return this._plannerReadOnlyFallback(runOptions, onUpdate);
       }
       if (plan.request_kind === 'respond') {
         return {
@@ -5752,12 +5828,13 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         ...this._plannerProgressLedgerGateFields(plan),
       };
     } catch (e) {
+      if (this._checkAbort(tabId)) {
+        return { proceed: false, message: '[Stopped by user]', reason: 'cancelled' };
+      }
       if (this._isCostAllowanceError(e)) {
         return { proceed: false, message: e.message, reason: 'cost_limit' };
       }
-      const message = this._plannerIntentFailureMessage(runOptions);
-      onUpdate('warning', { message });
-      return { proceed: false, message, reason: 'clarify', requestKind: 'clarify', requiresStateChange: false };
+      return this._plannerRequestFailure(e, onUpdate);
     }
   }
 
@@ -5838,9 +5915,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         return { proceed: false, message: '[Stopped by user]' };
       }
       if (!plan) {
-        const msg = this._plannerIntentFailureMessage(runOptions);
-        onUpdate('warning', { message: msg });
-        return { proceed: false, message: msg, reason: 'clarify', requestKind: 'clarify', requiresStateChange: false };
+        return this._normalizePlanBeforeActMode(plannerMode) === 'strict'
+          ? this._strictPlannerFailure(onUpdate)
+          : this._plannerReadOnlyFallback(runOptions, onUpdate);
       }
       if (plan.request_kind === 'respond') {
         return {
@@ -5945,12 +6022,13 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         ...approvedProgressLedger,
       };
     } catch (e) {
+      if (this._checkAbort(tabId)) {
+        return { proceed: false, message: '[Stopped by user]', reason: 'cancelled' };
+      }
       if (this._isCostAllowanceError(e)) {
         return { proceed: false, message: e.message, reason: 'cost_limit' };
       }
-      const msg = this._plannerIntentFailureMessage(runOptions);
-      onUpdate('warning', { message: msg });
-      return { proceed: false, message: msg, reason: 'clarify', requestKind: 'clarify', requiresStateChange: false };
+      return this._plannerRequestFailure(e, onUpdate);
     }
   }
 
@@ -7278,6 +7356,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     return mode === 'act' || mode === 'dev';
   }
 
+  _effectiveRunMode(tabId, fallback = 'ask') {
+    return this._runModeOverrides.get(tabId)
+      || this.conversationModes.get(tabId)
+      || fallback;
+  }
+
   _devModeBlockedMessage(provider = null) {
     const providerName = provider?.name || provider?.config?.model || 'the active provider';
     return `Dev mode requires a Mid or Full prompt tier. ${providerName} is currently configured as Compact, so Dev mode is blocked for this provider. Switch to a Mid/Full-tier provider or change this provider's prompt tier, then try Dev again.`;
@@ -7388,7 +7472,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
   _activeSkillToolForName(tabId, name) {
     if (!name) return null;
-    const mode = this.conversationModes.get(tabId) || 'ask';
+    const mode = this._effectiveRunMode(tabId);
     const tier = this._resolvePromptTier();
     const skills = this._activeSkillRecords(tabId, mode, tier);
     const allowed = buildSkillToolDefinitions(skills, {
@@ -7424,7 +7508,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     return { skill, alreadyLoaded };
   }
 
-  _refreshSystemPromptForTab(tabId, mode = this.conversationModes.get(tabId) || 'ask') {
+  _refreshSystemPromptForTab(tabId, mode = this._effectiveRunMode(tabId)) {
     const messages = this.conversations.get(tabId);
     if (messages?.[0]?.role === 'system') {
       messages[0].content = this._buildSystemPrompt(mode, tabId);
@@ -7442,7 +7526,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   }
 
   _loadSkillForRun(tabId, args = {}) {
-    const mode = this.conversationModes.get(tabId) || 'ask';
+    const mode = this._effectiveRunMode(tabId);
     const tier = this._resolvePromptTier();
     const skillId = String(args.skill_id || '').trim();
     const { skill, alreadyLoaded } = this._activateSkillForRun(tabId, skillId, mode, tier);
@@ -7504,7 +7588,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (this._nytimesPageGateNotified.has(tabId)) return null;
     this._nytimesPageGateNotified.add(tabId);
 
-    const mode = this.conversationModes.get(tabId) || 'ask';
+    const mode = this._effectiveRunMode(tabId);
     const tier = this._resolvePromptTier();
     let tool = this._activeSkillToolForName(tabId, 'fetch_nytimes_article');
     let activatedSkillId = '';
@@ -7572,7 +7656,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       ? this._skillToolRegistry()
       : buildSkillToolRegistry(this._activeSkillRecords(
         tabId,
-        this.conversationModes.get(tabId) || 'ask',
+        this._effectiveRunMode(tabId),
         this._resolvePromptTier(),
       ), { excludeNames: RESERVED_AGENT_TOOL_NAMES });
     for (const tool of registry.values()) {
@@ -7698,6 +7782,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     this.lastAutoScreenshotTs.delete(tabId);
     this.lastSeenAdapter.delete(tabId);
     this.activeSkillIds.delete(tabId);
+    this._runModeOverrides.delete(tabId);
     this._nytimesPageGateNotified.delete(tabId);
     this._doneBlockCount.delete(tabId);
     this._completionSubmitStates.delete(tabId);
@@ -9187,7 +9272,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   }
 
   _shouldBlockDoneForProgress(tabId) {
-    if (!this._isActionMode(this.conversationModes.get(tabId) || 'ask')) return false;
+    if (!this._isActionMode(this._effectiveRunMode(tabId))) return false;
     return !!this._progressDoneBlock(tabId, 'success');
   }
 
@@ -9376,6 +9461,29 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     } else {
       this._continuationExecutionEvidence.delete(tabId);
     }
+  }
+
+  _looksLikeMetaOnlyDoneSummary(content) {
+    const text = String(content || '').trim();
+    if (!text || text.length > 500) return false;
+    // A colon, line break, or list usually means the model followed its status
+    // phrase with the actual deliverable. The broken form is a short sentence
+    // such as "Explained how ..." or "Confirmed the exact ..." and nothing
+    // else; because done.summary is rendered verbatim, that leaves the user
+    // without the promised answer.
+    if (/[:\n\r]|(?:^|\s)(?:[-*]|\d+[.)])\s/.test(text)) return false;
+    const status = /^(?:i\s+)?(?:have\s+)?(explained|confirmed|provided|answered|described|outlined|summarized|detailed|clarified|reviewed|analyzed|checked)\s+(?:how|what|why|where|when|whether|the\s+(?:exact|requested|answer|details?|instructions?|steps?|explanation|summary)|your\s+question|this\s+question)\b/i.exec(text);
+    if (!status) return false;
+    const remainder = text.slice(status[0].length);
+    // "Confirmed/checked the exact ... are X" is itself a concise answer,
+    // not a claim that an unseen answer was delivered. Keep the recovery
+    // narrow enough that these direct predicates can finish normally.
+    if (/^(?:confirmed|checked)$/i.test(status[1])
+        && /\b(?:is|are|was|were|equals?|exists?|appears?|opens?|lives?|resides?|sits?|can\s+be\s+(?:found|accessed)|(?:is|are)\s+available)\b/i.test(remainder)) {
+      return false;
+    }
+    if (/\band\s+(?:found|identified|verified|determined|showed)\b/i.test(remainder)) return false;
+    return true;
   }
 
   _isSafetyRefusalTerminal(content) {
@@ -9607,7 +9715,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
   _augmentScheduledResumeMessage(tabId, userMessage) {
     if (typeof userMessage !== 'string') return userMessage;
-    if (!this._isActionMode(this.conversationModes.get(tabId) || 'ask')) return userMessage;
+    if (!this._isActionMode(this._effectiveRunMode(tabId))) return userMessage;
     if (!this._isScheduledResumeTurn(userMessage)) return userMessage;
     const { rows } = this._progressRowsForResumeGuard(tabId);
     if (!rows.length) return userMessage;
@@ -9653,7 +9761,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
   async _scheduleAutoProgressResume(tabId, onUpdate = () => {}) {
     if (!this.scheduler) return null;
-    const mode = this.conversationModes.get(tabId) || 'ask';
+    const mode = this._effectiveRunMode(tabId);
     if (!this._isActionMode(mode)) return null;
     if (!this._shouldBlockDoneForProgress(tabId)) return null;
 
@@ -10938,7 +11046,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       const result = await this.scheduler.createResumeJob({
         tabId,
         conversationId: this.conversationIds.get(tabId) || null,
-        mode: this.conversationModes.get(tabId) || 'act',
+        mode: this._effectiveRunMode(tabId, 'act'),
         args: this._resumeArgsWithProgressGuard(tabId, args || {}),
         currentUrl: tab?.url || '',
         currentTitle: tab?.title || '',
@@ -11355,7 +11463,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (name === 'done') {
       const outcome = normalizeDoneOutcome(args?.outcome);
       // In action modes, require a verification screenshot + page info before completing.
-      const mode = this.conversationModes.get(tabId) || 'ask';
+      const mode = this._effectiveRunMode(tabId);
       if (this._isActionMode(mode)) {
         try {
           const tab = await browser.tabs.get(tabId);
@@ -12860,6 +12968,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (runOptions?.trustedContinuation !== true) this._continuationExecutionEvidence.delete(tabId);
     const completionRunToken = this._beginCompletionInvariant(tabId);
     this._runningTabs.add(tabId);
+    this._runModeOverrides.set(tabId, mode);
     const previousCloudContext = this.cloudRunContexts.get(tabId);
     if (runOptions.cloudRun) {
       this.cloudRunContexts.set(tabId, { outputSchema: runOptions.outputSchema || null, schemaRepairUsed: false });
@@ -12870,6 +12979,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       this.currentCostState.delete(tabId);
       this._storeContinuationExecutionEvidence(tabId);
       this._planExecutionGuards.delete(tabId);
+      this._runModeOverrides.delete(tabId);
       this._resetActiveSkillsForRun(tabId);
       if (runOptions.cloudRun) {
         if (previousCloudContext) this.cloudRunContexts.set(tabId, previousCloudContext);
@@ -13028,6 +13138,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         ? 'cost_limit'
         : (gateOutcome.reason === 'plan_only' ? 'plan_only_output' : gateOutcome.reason || 'cancelled');
       return (finalResponse = gateOutcome.message || 'More information is required.');
+    }
+    if (gateOutcome.readOnlyFallback === true) {
+      // The intent/planner model failed its JSON contract, not the user's
+      // request. Keep the turn useful without silently authorizing actions:
+      // switch this run to the ordinary Ask prompt and Ask tool catalog.
+      mode = this._activatePlannerReadOnlyMode(tabId, messages);
     }
     if (gateOutcome.responseOnly === true) {
       const responseOnly = await this._completeResponseOnlyTurn(
@@ -13483,6 +13599,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (runOptions?.trustedContinuation !== true) this._continuationExecutionEvidence.delete(tabId);
     const completionRunToken = this._beginCompletionInvariant(tabId);
     this._runningTabs.add(tabId);
+    this._runModeOverrides.set(tabId, mode);
     const previousCloudContext = this.cloudRunContexts.get(tabId);
     if (runOptions.cloudRun) {
       this.cloudRunContexts.set(tabId, { outputSchema: runOptions.outputSchema || null, schemaRepairUsed: false });
@@ -13493,6 +13610,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       this.currentCostState.delete(tabId);
       this._storeContinuationExecutionEvidence(tabId);
       this._planExecutionGuards.delete(tabId);
+      this._runModeOverrides.delete(tabId);
       this._resetActiveSkillsForRun(tabId);
       if (runOptions.cloudRun) {
         if (previousCloudContext) this.cloudRunContexts.set(tabId, previousCloudContext);
@@ -13566,6 +13684,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         ? 'cost_limit'
         : (gateOutcome.reason === 'plan_only' ? 'plan_only_output' : gateOutcome.reason || 'cancelled');
       return finish(gateOutcome.message || 'More information is required.', status);
+    }
+    if (gateOutcome.readOnlyFallback === true) {
+      // See processMessage: malformed planner output degrades only this turn
+      // to Ask/read-only instead of pretending the user's intent was unclear.
+      mode = this._activatePlannerReadOnlyMode(tabId, messages);
     }
     if (gateOutcome.responseOnly === true) {
       const responseOnly = await this._completeResponseOnlyTurn(

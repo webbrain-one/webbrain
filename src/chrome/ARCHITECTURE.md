@@ -1,6 +1,6 @@
 # WebBrain Chrome/Edge Extension — Architecture
 
-> Version 25.6.0 · Manifest V3 · Service Worker background
+> Version 25.6.2 · Manifest V3 · Service Worker background
 
 ## High-Level Overview
 
@@ -105,14 +105,17 @@ src/chrome/
 
 ## Plan-before-Act Gate (v18.0.0)
 
-When `planBeforeAct` is enabled, action-mode runs (Act or Dev) call `agent/planner.js`
-before the first tool loop. The planner returns a bounded JSON plan with steps,
-memory strategy, scheduling hints, and risks. The side panel renders that plan
+Manual action-mode runs (Act or Dev) always call `agent/planner.js` before the
+first tool loop. Off uses the compact structured intent schema; Try and Strict
+use the full bounded JSON plan with steps, memory strategy, scheduling hints,
+and risks. The side panel renders a full plan
 as an editable approval card; approving it pins the plan to the scratchpad so it
-survives context compaction. Rejecting, timing out, invalid JSON after retry, or
-pressing Stop cancels before browser tools execute. Scheduled runs can set
+survives context compaction. Rejecting, timing out, or pressing Stop cancels
+before browser tools execute. In the default Try mode, invalid JSON after one
+repair degrades only that turn to the Ask prompt and read-only tool catalog;
+Strict mode still stops before tools. Scheduled runs can set
 `autoApprovePlanReview` so the plan is pinned without blocking on the UI.
-The feature is off by default.
+The feature defaults to Try; an explicit Off setting remains off.
 
 Planner LLM requests are recorded in traces with `phase: "planner"` and use the
 same cost allowance and abort checks as the main loop.

@@ -273,7 +273,7 @@ export default {
   'sp.plan.cancelled': 'Plan cancelled.',
   'sp.plan.expired': 'This plan is no longer awaiting review — the run was cancelled.',
   'sp.plan.awaiting_review': 'Approve or cancel the plan above before sending another message.',
-  'sp.plan.intent_unavailable': 'I could not reliably tell whether you wanted a plan or execution. Please clarify before I take any action.',
+  'sp.plan.intent_unavailable': 'The planner could not return valid structured output after one repair. Continuing this turn in read-only mode.',
 
   // Permission prompt (structured; returns once/always/deny — no free text)
   'sp.perm.question': 'WebBrain wants to {verb} {host}. Allow it?',
@@ -475,7 +475,7 @@ export default {
   'st.display.openai_ask_streaming.label': 'Stream OpenAI Ask responses',
   'st.display.openai_ask_streaming.desc': 'Show official OpenAI Responses text as it arrives in Ask mode. Tool calls wait for response.completed; Act, Dev, scheduled, cloud, and Continue runs stay non-streaming. On by default.',
   'st.display.plan_before_act.label': 'Plan before Act',
-  'st.display.plan_before_act.desc': 'Act and Dev always run a structured intent check before tools. Try (default) also builds full plans but may reuse a recently approved plan for a short follow-up; Strict builds a full plan every turn. If intent or planning remains invalid after one repair, both stop before tools and ask for clarification.',
+  'st.display.plan_before_act.desc': 'Act and Dev always run a structured intent check before tools. Try (default) also builds full plans but may reuse a recently approved plan for a short follow-up; Strict builds a full plan every turn. Try falls back to a read-only turn if intent or planning remains invalid after one repair; Strict stops before tools.',
   'st.display.plan_before_act.try': 'Try planning (default)',
   'st.display.plan_before_act.strict': 'Strict planning',
   'st.display.plan_before_act.off': 'Off',
