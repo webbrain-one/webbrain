@@ -41837,7 +41837,7 @@ function loadPlanReviewDraftHelpers(panelRel) {
   assert.notEqual(start, -1, `${panelRel}: plan draft helpers missing`);
   assert.notEqual(end, -1, `${panelRel}: plan draft helper boundary missing`);
   const block = source.slice(start, end);
-  return Function(`${block}\nreturn {\n  PLAN_STEP_TOOL_SUFFIX_RE,\n  stripVerbosePlanStepToolSuffix,\n  looksLikeVerbosePlanMarkdown,\n  parsePlanMarkdownToDraft,\n  serializePlanDraftToMarkdown,\n  resolveSavedPlanReviewEdit,\n};`)();
+  return Function(`${block}\nreturn {\n  PLAN_STEP_TOOL_SUFFIX_RE,\n  stripVerbosePlanStepToolSuffix,\n  looksLikeVerbosePlanMarkdown,\n  parsePlanMarkdownToDraft,\n  serializePlanDraftToMarkdown,\n  resolveSavedPlanReviewEdit,\n  setPlanReviewStructuredControlsDisabled,\n};`)();
 }
 
 test('plan review: structured draft serialize/parse round-trips step edits', () => {
@@ -41851,6 +41851,7 @@ test('plan review: structured draft serialize/parse round-trips step edits', () 
       looksLikeVerbosePlanMarkdown,
       stripVerbosePlanStepToolSuffix,
       resolveSavedPlanReviewEdit,
+      setPlanReviewStructuredControlsDisabled,
     } = loadPlanReviewDraftHelpers(file);
 
     const original = {
@@ -41900,6 +41901,21 @@ test('plan review: structured draft serialize/parse round-trips step edits', () 
       `${file} should preserve multiline structured steps across restore`,
     );
     assert.equal(multilineRoundTrip.steps[1].action, 'Confirm the selected account', file);
+
+    const bulletContinuation = {
+      summary: 'Review the shipping details',
+      steps: [
+        { id: '1', action: 'Confirm the address\n- verify the postal code\n* record the result' },
+      ],
+      risks: [],
+    };
+    const bulletRoundTrip = parsePlanMarkdownToDraft(serializePlanDraftToMarkdown(bulletContinuation));
+    assert.equal(
+      bulletRoundTrip.steps[0].action,
+      'Confirm the address\n- verify the postal code\n* record the result',
+      `${file} should preserve bullet continuations inside multiline steps`,
+    );
+    assert.deepEqual(bulletRoundTrip.risks, [], `${file} should not misclassify step bullets as risks`);
 
     // Verbose tool suffixes strip; legitimate parentheticals stay.
     assert.equal(
@@ -41994,6 +42010,27 @@ test('plan review: structured draft serialize/parse round-trips step edits', () 
       `${file} should keep the empty-step guard for structured edits`,
     );
 
+    const structuredControls = [{ disabled: false }, { disabled: false }, { disabled: false }];
+    const cardWithStructuredControls = {
+      querySelectorAll(selector) {
+        assert.match(selector, /plan-review-summary-input/, file);
+        assert.match(selector, /plan-review-step-remove/, file);
+        return structuredControls;
+      },
+    };
+    setPlanReviewStructuredControlsDisabled(cardWithStructuredControls, true);
+    assert.equal(
+      structuredControls.every((control) => control.disabled),
+      true,
+      `${file} should disable structured inputs while raw editing is active`,
+    );
+    setPlanReviewStructuredControlsDisabled(cardWithStructuredControls, false);
+    assert.equal(
+      structuredControls.every((control) => !control.disabled),
+      true,
+      `${file} should re-enable structured inputs after raw editing`,
+    );
+
     assert.match(fs.readFileSync(path.join(ROOT, file), 'utf8'), /function resolvePlanReviewApprovalText\(/, file);
     assert.match(fs.readFileSync(path.join(ROOT, file), 'utf8'), /function renderPlanReviewRisks\(/, file);
     assert.match(
@@ -42010,6 +42047,11 @@ test('plan review: structured draft serialize/parse round-trips step edits', () 
       fs.readFileSync(path.join(ROOT, file), 'utf8'),
       /const savedEdit = resolveSavedPlanReviewEdit\(card\);\s*if \(savedEdit\) return savedEdit;\s*const draft = getPlanReviewDraftFromDom\(card\);\s*if \(!draft\.steps\.length\)/,
       `${file} should approve an exact collapsed raw edit before enforcing structured steps`,
+    );
+    assert.match(
+      fs.readFileSync(path.join(ROOT, file), 'utf8'),
+      /setPlanReviewStructuredControlsDisabled\(card, enabled\);/,
+      `${file} should lock structured controls while raw mode owns the edit buffer`,
     );
   }
 });

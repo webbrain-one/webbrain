@@ -3743,12 +3743,16 @@ function parsePlanMarkdownToDraft(text) {
 
     const riskMatch = trimmed.match(/^[-*]\s+(?:⚠️\s*)?(.+)$/);
     if (riskMatch) {
-      activeStep = null;
       const riskText = riskMatch[1].replace(/^⚠️\s*/, '').trim();
       if (!riskText) continue;
       // Only accept risk bullets that are explicitly marked, or that appear
       // under a Risks heading. Plain metadata bullets never qualify.
       const explicitRisk = /⚠️/.test(trimmed) || section === 'risks';
+      if (section === 'steps' && activeStep && !explicitRisk) {
+        activeStep.action += `\n${line.trimEnd()}`;
+        continue;
+      }
+      activeStep = null;
       if (!explicitRisk) continue;
       if (/^skills?\s+to\s+activate/i.test(riskText)) continue;
       if (/^(submission required|scratchpad|progress ledger)\b/i.test(riskText)) continue;
@@ -3782,6 +3786,13 @@ function resolveSavedPlanReviewEdit(card) {
     editedText,
     markdownMode: looksLikeVerbosePlanMarkdown(editedText) ? 'verbose' : 'compact',
   };
+}
+
+function setPlanReviewStructuredControlsDisabled(card, disabled) {
+  const controls = card?.querySelectorAll?.(
+    '.plan-review-summary-input, .plan-review-step-input, .plan-review-add-step, .plan-review-step-remove',
+  ) || [];
+  for (const control of controls) control.disabled = Boolean(disabled);
 }
 
 function autosizePlanReviewField(el) {
@@ -4133,6 +4144,10 @@ function setPlanReviewRawEditing(card, enabled, { focus = false } = {}) {
       changeBtn.textContent = typeof t === 'function' ? t('sp.plan.edit_as_text') : 'Edit as text';
     }
   }
+  // The raw buffer is authoritative while visible. Disable the parallel
+  // structured controls so they cannot collect edits that raw approval/Done
+  // would discard. Re-enable them as soon as raw mode collapses.
+  setPlanReviewStructuredControlsDisabled(card, enabled);
   schedulePersist();
 }
 
