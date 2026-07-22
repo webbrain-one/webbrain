@@ -4,6 +4,27 @@ All notable changes to WebBrain are documented in this file.
 
 This changelog was generated from the repository Git history and release tags. Versions without a Git tag are inferred from version-bump commits and the current `package.json` / browser manifest versions.
 
+## [25.5.0] - 2026-07-22
+
+### Added
+- Improved plan review with structured, in-place editing (Chrome and Firefox parity).
+
+### Changed
+- Drag-and-drop reordering of planner steps.
+- Hardened mixed plan editor modes to keep editing behavior consistent.
+- Preserved multiline plan step edits during editing and review flows.
+- Preserved collapsed raw plan approvals through review.
+- Preserved raw plan edits after review.
+- Stripped canonical plan tool suffixes for cleaner plan tool display.
+
+### Fixed
+- Fixed plan review scroll behavior and the run label during plan review/editing.
+- Kept plan step editing scroll stable while interacting with the editor.
+- Captured plan editor scroll before input to prevent scroll jumps.
+
+### Tests
+- Updated test runner (`test/run.js`) to align with the new plan editor/review behaviors.
+
 ## [25.4.2] - 2026-07-22
 
 ### Added
