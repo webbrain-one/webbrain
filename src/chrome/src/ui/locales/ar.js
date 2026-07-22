@@ -500,6 +500,7 @@ export default {
   'sp.scheduled.time_unknown': 'وقت غير معروف',
   'sp.scheduled.next': 'التالي {time}',
   'sp.scheduled.recurring': 'كل {minutes} دقيقة',
+  'sp.scheduled.watch_once': 'يتوقف بعد أول تطابق',
   'sp.scheduled.run_now': 'تشغيل الآن',
   'sp.scheduled.pause': 'إيقاف مؤقت',
   'sp.scheduled.resume': 'استئناف',

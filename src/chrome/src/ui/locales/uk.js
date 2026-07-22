@@ -500,6 +500,7 @@ export default {
   'sp.scheduled.time_unknown': 'час невідомий',
   'sp.scheduled.next': 'наступне {time}',
   'sp.scheduled.recurring': 'кожні {minutes} хв',
+  'sp.scheduled.watch_once': 'зупиниться після першого збігу',
   'sp.scheduled.run_now': 'Запустити зараз',
   'sp.scheduled.pause': 'Призупинити',
   'sp.scheduled.resume': 'Відновити',

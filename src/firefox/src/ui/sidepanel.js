@@ -2071,7 +2071,15 @@ function scheduledJobMeta(job) {
   if (job.nextRunAt && ['pending', 'queued', 'paused'].includes(job.status)) {
     parts.push(t('sp.scheduled.next', { time: formatScheduledTime(job.nextRunAt) }));
   }
-  if (job.schedule?.type === 'recurring' && job.schedule?.interval_minutes) {
+  if (job?.source === 'watch') {
+    const seconds = Number(job.watch?.intervalSeconds);
+    if (Number.isFinite(seconds)) parts.push(`${seconds}s`);
+    parts.push(job.watch?.keep ? t('sp.slash.watch_keep') : t('sp.scheduled.watch_once'));
+    if (job.watch?.beep) parts.push(`🔔 ${job.watch?.beepStyle || 'default'}`);
+    if (job.watch?.lastObservation && job.status !== 'completed') {
+      parts.push(truncate(String(job.watch.lastObservation), 80));
+    }
+  } else if (job.schedule?.type === 'recurring' && job.schedule?.interval_minutes) {
     parts.push(t('sp.scheduled.recurring', { minutes: job.schedule.interval_minutes }));
   }
   if (job.status === 'needs_user_input' && job.pendingClarify?.question) {
@@ -2221,6 +2229,7 @@ function renderScheduledJobs(jobs = []) {
     card.className = 'scheduled-job-card';
     card.dataset.jobId = job.id;
     card.dataset.status = job.status;
+    card.dataset.source = job.source || '';
 
     const title = document.createElement('div');
     title.className = 'scheduled-job-title';

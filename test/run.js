@@ -16886,6 +16886,9 @@ test('/watch beep is a run-scoped arming tool with stable event-key dedupe', asy
       message: 'Release 11 is available',
       beepStyle: 'long',
     }, `${label}: a fresh stable key should arm one alert`);
+    const secondFreshKey = await agent.executeTool(77, 'beep', { event_key: 'release-12' });
+    assert.equal(secondFreshKey.success, false, `${label}: one poll must not arm multiple distinct events`);
+    assert.match(secondFreshKey.error, /already armed event_key "release-11"/);
 
     agent.setScheduledRunPolicy(77, {
       watch: { beep: true, beepStyle: 'short', lastTriggeredEventKey: 'release-11' },
@@ -16998,6 +17001,22 @@ test('/watch alert audio is background-owned, configurable, and distinct by styl
   }
 });
 
+test('/watch cards and documentation expose polling, baseline, and stop semantics', () => {
+  for (const [label, prefix] of [['chrome', 'src/chrome/src'], ['firefox', 'src/firefox/src']]) {
+    const panel = fs.readFileSync(path.join(ROOT, prefix, 'ui/sidepanel.js'), 'utf8');
+    assert.match(panel, /job\?\.source === 'watch'[\s\S]*?job\.watch\?\.intervalSeconds[\s\S]*?sp\.scheduled\.watch_once/, `${label}: watch cards should show interval and one-shot/keep semantics`);
+    assert.match(panel, /job\.watch\?\.beep[\s\S]*?beepStyle[\s\S]*?lastObservation/, `${label}: watch cards should expose alert style and the last observation`);
+    assert.match(panel, /card\.dataset\.source = job\.source \|\| ''/, `${label}: watch cards should retain a stable source marker`);
+  }
+
+  const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8');
+  const architecture = fs.readFileSync(path.join(ROOT, 'docs/architecture.md'), 'utf8');
+  const security = fs.readFileSync(path.join(ROOT, 'docs/security-model.md'), 'utf8');
+  assert.match(readme, /\/watch \[--keep\] \[--secs <30-120>\][\s\S]*?first check immediately[\s\S]*?stable event key/, 'README should document canonical watch usage and baseline/dedupe behavior');
+  assert.match(architecture, /source: "watch"[\s\S]*?Conditional watches[\s\S]*?untrusted-content boundary[\s\S]*?done\(outcome="success"\)/, 'architecture should document persisted watch state and alert commit order');
+  assert.match(security, /user-authored `\/watch` slash command[\s\S]*?Watch audio receives only a style selector/, 'security model should disclose watch alarms and background audio scope');
+});
+
 test('ScheduledJobManager creates immediate URL-bound watches and dedupes identical intent', async () => {
   const now = Date.UTC(2026, 0, 1, 12, 0, 0);
   for (const [label, SchedulerMod] of [['chrome', SchedulerCh], ['firefox', SchedulerFx]]) {
@@ -17097,6 +17116,7 @@ test('ScheduledJobManager watch outcomes establish baselines, keep distinct runs
     job = h.jobs()[0];
     assert.equal(job.status, 'pending', `${label}: keep watch should continue after success`);
     assert.equal(job.watch.lastObservation, 'release-11 summarized');
+    assert.equal(job.watch.lastTriggeredAt, new Date(now + 60_000).toISOString(), `${label}: successful non-alert keep watches should retain their trigger time`);
     assert.equal(job.lastOutcome, 'success');
     assert.equal(job.runCount, 2);
     assert.equal(h.updates.some((u) => u.data?.event === 'triggered'), true, `${label}: successful keep event missing`);

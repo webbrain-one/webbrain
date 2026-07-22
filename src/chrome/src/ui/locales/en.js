@@ -177,6 +177,7 @@ export default {
   'sp.scheduled.time_unknown': 'unknown time',
   'sp.scheduled.next': 'next {time}',
   'sp.scheduled.recurring': 'every {minutes} min',
+  'sp.scheduled.watch_once': 'stops after the first match',
   'sp.scheduled.run_now': 'Run now',
   'sp.scheduled.pause': 'Pause',
   'sp.scheduled.resume': 'Resume',

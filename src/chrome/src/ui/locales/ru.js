@@ -500,6 +500,7 @@ export default {
   'sp.scheduled.time_unknown': 'время неизвестно',
   'sp.scheduled.next': 'следующий {time}',
   'sp.scheduled.recurring': 'каждые {minutes} мин',
+  'sp.scheduled.watch_once': 'остановится после первого совпадения',
   'sp.scheduled.run_now': 'Запустить сейчас',
   'sp.scheduled.pause': 'Приостановить',
   'sp.scheduled.resume': 'Возобновить',

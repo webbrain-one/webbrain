@@ -491,6 +491,7 @@ export default {
   'sp.scheduled.time_unknown': 'hora desconocida',
   'sp.scheduled.next': 'próxima {time}',
   'sp.scheduled.recurring': 'cada {minutes} min',
+  'sp.scheduled.watch_once': 'se detiene tras la primera coincidencia',
   'sp.scheduled.run_now': 'Ejecutar ahora',
   'sp.scheduled.pause': 'Pausar',
   'sp.scheduled.resume': 'Reanudar',

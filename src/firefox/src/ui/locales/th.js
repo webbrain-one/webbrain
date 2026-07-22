@@ -491,6 +491,7 @@ export default {
   'sp.scheduled.time_unknown': 'ไม่ทราบเวลา',
   'sp.scheduled.next': 'ถัดไป {time}',
   'sp.scheduled.recurring': 'ทุก {minutes} นาที',
+  'sp.scheduled.watch_once': 'หยุดหลังพบครั้งแรก',
   'sp.scheduled.run_now': 'รันทันที',
   'sp.scheduled.pause': 'หยุดชั่วคราว',
   'sp.scheduled.resume': 'ดำเนินต่อ',

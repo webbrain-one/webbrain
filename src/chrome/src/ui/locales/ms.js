@@ -500,6 +500,7 @@ export default {
   'sp.scheduled.time_unknown': 'masa tidak diketahui',
   'sp.scheduled.next': 'seterusnya {time}',
   'sp.scheduled.recurring': 'setiap {minutes} min',
+  'sp.scheduled.watch_once': 'berhenti selepas padanan pertama',
   'sp.scheduled.run_now': 'Jalankan sekarang',
   'sp.scheduled.pause': 'Jeda',
   'sp.scheduled.resume': 'Sambung semula',

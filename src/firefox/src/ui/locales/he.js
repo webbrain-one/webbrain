@@ -167,6 +167,7 @@ export default {
   "sp.scheduled.time_unknown": "זמן לא ידוע",
   "sp.scheduled.next": "הבא: {time}",
   "sp.scheduled.recurring": "כל {minutes} דקות",
+  "sp.scheduled.watch_once": "מפסיק לאחר ההתאמה הראשונה",
   "sp.scheduled.run_now": "הפעל עכשיו",
   "sp.scheduled.pause": "השהה",
   "sp.scheduled.resume": "המשך",

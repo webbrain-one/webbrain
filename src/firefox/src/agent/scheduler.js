@@ -1288,10 +1288,8 @@ export class ScheduledJobManager {
             ...prev.watch,
             baselineEstablished: true,
             lastObservation: observation,
-            ...(freshAlert ? {
-              lastTriggeredEventKey: eventKey,
-              lastTriggeredAt: iso(this.now()),
-            } : {}),
+            ...(effectiveOutcome === 'success' ? { lastTriggeredAt: iso(this.now()) } : {}),
+            ...(freshAlert ? { lastTriggeredEventKey: eventKey } : {}),
           },
         };
       });

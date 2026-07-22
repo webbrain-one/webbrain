@@ -539,6 +539,7 @@ export default {
   'sp.scheduled.time_unknown': 'bilinmeyen saat',
   'sp.scheduled.next': 'sonraki {time}',
   'sp.scheduled.recurring': 'her {minutes} dakikada bir',
+  'sp.scheduled.watch_once': 'ilk eşleşmeden sonra durur',
   'sp.scheduled.run_now': 'Şimdi çalıştır',
   'sp.scheduled.pause': 'Duraklat',
   'sp.scheduled.resume': 'Devam et',

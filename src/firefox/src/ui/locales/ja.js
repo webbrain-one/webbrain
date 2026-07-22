@@ -491,6 +491,7 @@ export default {
   'sp.scheduled.time_unknown': '不明な時刻',
   'sp.scheduled.next': '次回: {time}',
   'sp.scheduled.recurring': '{minutes} 分ごと',
+  'sp.scheduled.watch_once': '最初の一致後に停止',
   'sp.scheduled.run_now': '今すぐ実行',
   'sp.scheduled.pause': '一時停止',
   'sp.scheduled.resume': '再開',

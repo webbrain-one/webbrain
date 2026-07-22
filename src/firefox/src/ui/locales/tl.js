@@ -491,6 +491,7 @@ export default {
   'sp.scheduled.time_unknown': 'hindi kilalang oras',
   'sp.scheduled.next': 'susunod sa {time}',
   'sp.scheduled.recurring': 'bawat {minutes} min',
+  'sp.scheduled.watch_once': 'hihinto pagkatapos ng unang pagtutugma',
   'sp.scheduled.run_now': 'Patakbuhin ngayon',
   'sp.scheduled.pause': 'I-pause',
   'sp.scheduled.resume': 'Ituloy',

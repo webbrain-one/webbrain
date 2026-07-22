@@ -491,6 +491,7 @@ export default {
   'sp.scheduled.time_unknown': '未知时间',
   'sp.scheduled.next': '下次 {time}',
   'sp.scheduled.recurring': '每 {minutes} 分钟',
+  'sp.scheduled.watch_once': '首次匹配后停止',
   'sp.scheduled.run_now': '立即运行',
   'sp.scheduled.pause': '暂停',
   'sp.scheduled.resume': '恢复',

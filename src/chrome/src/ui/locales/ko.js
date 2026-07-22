@@ -500,6 +500,7 @@ export default {
   'sp.scheduled.time_unknown': '알 수 없는 시간',
   'sp.scheduled.next': '다음 {time}',
   'sp.scheduled.recurring': '매 {minutes}분',
+  'sp.scheduled.watch_once': '첫 일치 후 중지',
   'sp.scheduled.run_now': '지금 실행',
   'sp.scheduled.pause': '일시 중지',
   'sp.scheduled.resume': '재개',

@@ -136,6 +136,7 @@ export default {
   'sp.scheduled.time_unknown': 'nieznany czas',
   'sp.scheduled.next': 'następne {time}',
   'sp.scheduled.recurring': 'co {minutes} min',
+  'sp.scheduled.watch_once': 'zatrzymuje się po pierwszym dopasowaniu',
   'sp.scheduled.run_now': 'Uruchom teraz',
   'sp.scheduled.pause': 'Wstrzymaj',
   'sp.scheduled.resume': 'Wznów',
