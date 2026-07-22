@@ -1554,10 +1554,10 @@ function releaseRetryAttachmentPayload(retryId) {
 
 function releaseRetryAttachmentsInTree(root) {
   if (!root) return;
-  if (root.matches?.('.error-retry-btn[data-retry-id]')) {
+  if (root.matches?.('.error-retry-btn[data-retry-id], .cost-allowance-retry-btn[data-retry-id]')) {
     releaseRetryAttachmentPayload(root.dataset.retryId);
   }
-  root.querySelectorAll?.('.error-retry-btn[data-retry-id]').forEach((btn) => {
+  root.querySelectorAll?.('.error-retry-btn[data-retry-id], .cost-allowance-retry-btn[data-retry-id]').forEach((btn) => {
     releaseRetryAttachmentPayload(btn.dataset.retryId);
   });
 }
@@ -3458,7 +3458,9 @@ async function adoptRestoredRunState(tabId, state) {
       ? res.updates.find(update => update?.type === 'error')
       : null;
     if (returnedErrorUpdate && sameTabId(currentTabId, tabId) && !isTabAbortRequested(tabId)) {
-      renderAgentErrorUpdate(returnedErrorUpdate.data, tabId, requestId);
+      renderAgentErrorUpdate(returnedErrorUpdate.data, tabId, requestId, {
+        submittedTurnDurable: res.submittedTurnDurable,
+      });
     }
   } catch (error) {
     if (sameTabId(currentTabId, tabId) && !isTabAbortRequested(tabId)) {
@@ -3558,7 +3560,11 @@ async function applyActiveRunState(numericTabId, state) {
         runId: runUi.runId,
         seq: runUi.seq,
         type: 'run_complete',
-        data: { status: runUi.status, finalContent: runUi.finalContent },
+        data: {
+          status: runUi.status,
+          finalContent: runUi.finalContent,
+          submittedTurnDurable: state?.submittedTurnDurable === true,
+        },
       });
     }
     // Terminal snapshots may already be fully acknowledged, so no replayed
@@ -4757,6 +4763,7 @@ function rebindSubscribeButtons() {
 
 function rebindCostAllowanceButtons() {
   document.querySelectorAll('.cost-allowance-bump-btn').forEach(bindCostAllowanceButton);
+  document.querySelectorAll('.cost-allowance-retry-btn').forEach(bindErrorRetryButton);
   document.querySelectorAll('.cost-allowance-continue-btn').forEach(btn => {
     if (btn.dataset.bound) return;
     btn.dataset.bound = 'true';
@@ -4826,6 +4833,14 @@ function createActiveChatPayloadState(retryPayload, requestId = '') {
   };
 }
 
+function activeRetryPayloadForRequest(tabId, requestId = '') {
+  const state = activeChatPayloadsByTab.get(tabId);
+  if (!state) return null;
+  const cleanRequestId = String(requestId || '');
+  if (cleanRequestId && state.requestId !== cleanRequestId) return null;
+  return state.retryPayload || null;
+}
+
 function clearActiveChatPayloadForTab(tabId) {
   if (tabId != null) activeChatPayloadsByTab.delete(tabId);
 }
@@ -4857,13 +4872,17 @@ function scheduleActiveChatPayloadCleanup(tabId, state) {
   }, 30000);
 }
 
-function renderAgentErrorUpdate(data, tabId = currentTabId, requestId = '') {
+function renderAgentErrorUpdate(data, tabId = currentTabId, requestId = '', options = {}) {
   const message = data?.message || data?.error || 'unknown error';
   const active = takeActiveRetryPayloadForError(tabId, requestId, message);
   if (active.duplicate) return;
   const msgEl = addMessage('error', t('sp.error_prefix', { msg: message }), {
     retryPayload: isTabAbortRequested(tabId) ? null : active.retryPayload,
     subscribeResumeMode: active.retryPayload?.mode,
+    costAllowanceResume: {
+      submittedTurnDurable: options.submittedTurnDurable,
+      retryPayload: active.retryPayload,
+    },
   });
   if (active.requestId) {
     msgEl.dataset.tabId = active.tabId;
@@ -6273,7 +6292,9 @@ async function sendMessage(extraChatParams = {}) {
       ? res.updates.find(u => u?.type === 'error')
       : null;
     if (returnedErrorUpdate && renderToCurrentTab && currentTabId === tabId && !isTabAbortRequested(tabId)) {
-      renderAgentErrorUpdate(returnedErrorUpdate.data, tabId, requestId);
+      renderAgentErrorUpdate(returnedErrorUpdate.data, tabId, requestId, {
+        submittedTurnDurable: res.submittedTurnDurable,
+      });
     }
 
     // An unsupported-attachment rejection never records the turn in history;
@@ -6307,7 +6328,10 @@ async function sendMessage(extraChatParams = {}) {
       if (textEl && getStreamedAssistantText(textEl) === String(res.content)) {
         renderAssistantTextUpdate(assistantEl, res.content);
       } else if (textEl && !textEl.textContent.trim()) {
-        if (!renderCostAllowanceError(textEl, res.content, modeForSend)
+        if (!renderCostAllowanceError(textEl, res.content, modeForSend, {
+              submittedTurnDurable: res.submittedTurnDurable,
+              retryPayload,
+            })
             && !renderSubscribeError(textEl, res.content, modeForSend)) {
           textEl.innerHTML = formatMarkdown(res.content);
         }
@@ -6776,7 +6800,10 @@ function handleAgentUpdateMessage(msg) {
         const textEl = currentAssistantEl.querySelector('.message-text');
         if (textEl && !textEl.textContent.trim()) {
           if (data.status === 'stopped' || data.status === 'cancelled') textEl.innerHTML = t('sp.stopped_by_user_html');
-          else if (!renderCostAllowanceError(textEl, data.finalContent)
+          else if (!renderCostAllowanceError(textEl, data.finalContent, '', {
+                submittedTurnDurable: data.submittedTurnDurable,
+                retryPayload: activeRetryPayloadForRequest(eventTabId, msg.requestId),
+              })
               && !renderSubscribeError(textEl, data.finalContent)) textEl.innerHTML = formatMarkdown(data.finalContent);
           addMessageCopyButton(currentAssistantEl);
         }
@@ -7707,8 +7734,8 @@ function bindCostAllowanceButton(btn) {
       btn.setAttribute('aria-busy', 'false');
       btn.classList.add('cost-allowance-bumped');
       const card = btn.closest('.cost-allowance-error');
-      const continueBtn = card?.querySelector('.cost-allowance-continue-btn');
-      if (continueBtn) continueBtn.hidden = false;
+      const resumeBtn = card?.querySelector('.cost-allowance-retry-btn, .cost-allowance-continue-btn');
+      if (resumeBtn) resumeBtn.hidden = false;
       const status = card?.querySelector('.cost-allowance-status');
       const scopeLabel = t(scope === 'session'
         ? 'st.display.cost_session_limit.label'
@@ -7791,7 +7818,7 @@ function renderSubscribeError(textEl, content, resumeMode = '') {
   return true;
 }
 
-function renderCostAllowanceError(textEl, content, resumeMode = '') {
+function renderCostAllowanceError(textEl, content, resumeMode = '', resumeOptions = {}) {
   const parsed = parseCostAllowanceError(content);
   if (!parsed) return false;
 
@@ -7820,17 +7847,28 @@ function renderCostAllowanceError(textEl, content, resumeMode = '') {
   bindCostAllowanceButton(bumpBtn);
   actions.appendChild(bumpBtn);
 
-  const continueBtn = document.createElement('button');
-  continueBtn.type = 'button';
-  continueBtn.className = 'cost-allowance-continue-btn';
-  continueBtn.textContent = t('sp.continue_btn');
-  continueBtn.dataset.resumeMode = ['ask', 'act', 'dev'].includes(resumeMode)
-    ? resumeMode
-    : (textEl.closest('.message.assistant')?.dataset.runMode || agentMode);
-  continueBtn.hidden = true;
-  continueBtn.dataset.bound = 'true';
-  continueBtn.addEventListener('click', () => resumeAfterSubscription(continueBtn));
-  actions.appendChild(continueBtn);
+  const requiresRetry = resumeOptions?.submittedTurnDurable === false;
+  if (requiresRetry && resumeOptions?.retryPayload?.text) {
+    const retryBtn = document.createElement('button');
+    retryBtn.type = 'button';
+    retryBtn.className = 'cost-allowance-retry-btn';
+    retryBtn.textContent = t('sp.retry');
+    retryBtn.hidden = true;
+    configureRetryButton(retryBtn, resumeOptions.retryPayload);
+    actions.appendChild(retryBtn);
+  } else if (!requiresRetry) {
+    const continueBtn = document.createElement('button');
+    continueBtn.type = 'button';
+    continueBtn.className = 'cost-allowance-continue-btn';
+    continueBtn.textContent = t('sp.continue_btn');
+    continueBtn.dataset.resumeMode = ['ask', 'act', 'dev'].includes(resumeMode)
+      ? resumeMode
+      : (textEl.closest('.message.assistant')?.dataset.runMode || agentMode);
+    continueBtn.hidden = true;
+    continueBtn.dataset.bound = 'true';
+    continueBtn.addEventListener('click', () => resumeAfterSubscription(continueBtn));
+    actions.appendChild(continueBtn);
+  }
 
   textEl.appendChild(actions);
 
@@ -7842,32 +7880,39 @@ function renderCostAllowanceError(textEl, content, resumeMode = '') {
   return true;
 }
 
-function addErrorRetryButton(msgEl, retryPayload) {
-  if (!msgEl || !retryPayload?.text || msgEl.querySelector('.error-retry-btn')) return;
+function configureRetryButton(btn, retryPayload) {
+  if (!btn || !retryPayload?.text) return false;
   const retryId = `retry-${Date.now()}-${++retryPayloadSeq}`;
   const attachments = Array.isArray(retryPayload.attachments) ? retryPayload.attachments.slice() : [];
   if (attachments.length) {
     retryAttachmentPayloads.set(retryId, attachments);
     trackRetryAttachmentId(renderedTabId ?? currentTabId, retryId);
   }
+  btn.dataset.retryId = retryId;
+  btn.dataset.retryText = String(retryPayload.text || '');
+  btn.dataset.retryMode = retryPayload.mode || 'ask';
+  btn.dataset.retryApiMutationsAllowed = retryPayload.apiMutationsAllowed ? 'true' : 'false';
+  btn.dataset.retryAttachmentCount = String(attachments.length);
+  bindErrorRetryButton(btn);
+  return true;
+}
+
+function addErrorRetryButton(msgEl, retryPayload) {
+  if (!msgEl || !retryPayload?.text || msgEl.querySelector('.error-retry-btn, .cost-allowance-retry-btn')) return;
   msgEl.classList.add('retryable');
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'error-retry-btn';
   btn.title = t('sp.retry');
   btn.setAttribute('aria-label', t('sp.retry'));
-  btn.dataset.retryId = retryId;
-  btn.dataset.retryText = String(retryPayload.text || '');
-  btn.dataset.retryMode = retryPayload.mode || 'ask';
-  btn.dataset.retryApiMutationsAllowed = retryPayload.apiMutationsAllowed ? 'true' : 'false';
-  btn.dataset.retryAttachmentCount = String(attachments.length);
   btn.innerHTML = `
     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
       <polyline points="23 4 23 10 17 10"></polyline>
       <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
     </svg>`;
-  bindErrorRetryButton(btn);
-  msgEl.querySelector('.message-content')?.appendChild(btn);
+  if (configureRetryButton(btn, retryPayload)) {
+    msgEl.querySelector('.message-content')?.appendChild(btn);
+  }
 }
 
 function addMessage(role, content, options = {}) {
@@ -7895,7 +7940,12 @@ function addMessage(role, content, options = {}) {
   } else if (role === 'system') {
     if (isSystemHtml(content)) textEl.innerHTML = content.__systemHtml;
     else textEl.textContent = content || '';
-  } else if (!renderCostAllowanceError(textEl, content, options.subscribeResumeMode)
+  } else if (!renderCostAllowanceError(
+    textEl,
+    content,
+    options.subscribeResumeMode,
+    options.costAllowanceResume,
+  )
       && !renderSubscribeError(textEl, content, options.subscribeResumeMode)) {
     textEl.innerHTML = content ? formatMarkdown(content) : '';
   }
@@ -7908,7 +7958,8 @@ function addMessage(role, content, options = {}) {
     messagesEl.appendChild(msgEl);
   }
 
-  if (role === 'error' && options.retryPayload) {
+  if (role === 'error' && options.retryPayload
+      && !textEl.classList.contains('cost-allowance-error')) {
     addErrorRetryButton(msgEl, options.retryPayload);
   }
 

@@ -1603,8 +1603,12 @@ function launchDetachedRun(action, msg, sender) {
   return { ok: true, accepted: true, requestId };
 }
 
-function sendAgentRunComplete(tabId, snapshot = null) {
+async function sendAgentRunComplete(tabId, snapshot = null) {
   if (tabId == null || !snapshot) return;
+  const submittedTurnDurable = await agent.hasDurableSubmittedTurn(
+    tabId,
+    snapshot.requestId,
+  ).catch(() => false);
   browser.runtime.sendMessage({
     target: 'sidepanel',
     action: 'agent_update',
@@ -1617,6 +1621,7 @@ function sendAgentRunComplete(tabId, snapshot = null) {
       status: snapshot.status || 'completed',
       finalContent: snapshot.finalContent || '',
       endedAt: snapshot.endedAt || Date.now(),
+      submittedTurnDurable,
     },
   }).catch(() => {});
 }
@@ -1895,7 +1900,7 @@ async function handleMessage(msg, sender) {
           clearRunUiSnapshot(tabId);
         } else {
           const snapshot = finishRunUiSnapshot(tabId, runUi.requestId, terminalRunUiStatus(result, updates, runError), result || (runError ? `Error: ${runError.message}` : ''));
-          sendAgentRunComplete(tabId, snapshot);
+          await sendAgentRunComplete(tabId, snapshot);
         }
         sendIndicatorMessage(tabId, 'WB_HIDE_AGENT_INDICATORS');
         releaseRunKeepalive();
@@ -1944,7 +1949,7 @@ async function handleMessage(msg, sender) {
       } finally {
         if (!userMemoryTurnContextTaken) clearUserMemoryTurnContext(tabId);
         const snapshot = finishRunUiSnapshot(tabId, runUi.requestId, terminalRunUiStatus(result, updates, runError), result || (runError ? `Error: ${runError.message}` : ''));
-        sendAgentRunComplete(tabId, snapshot);
+        await sendAgentRunComplete(tabId, snapshot);
         sendIndicatorMessage(tabId, 'WB_HIDE_AGENT_INDICATORS');
         releaseRunKeepalive();
       }
@@ -1993,7 +1998,7 @@ async function handleMessage(msg, sender) {
       } finally {
         if (!userMemoryTurnContextTaken) clearUserMemoryTurnContext(tabId);
         const snapshot = finishRunUiSnapshot(tabId, runUi.requestId, terminalRunUiStatus(result, updates, runError), result || (runError ? `Error: ${runError.message}` : ''));
-        sendAgentRunComplete(tabId, snapshot);
+        await sendAgentRunComplete(tabId, snapshot);
         sendIndicatorMessage(tabId, 'WB_HIDE_AGENT_INDICATORS');
         releaseRunKeepalive();
       }

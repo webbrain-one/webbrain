@@ -13716,7 +13716,7 @@ test('sidepanel subscribe error card clears DOM without HTML reinterpretation', 
     assert.notEqual(runCompleteStart, -1, `${label}: run_complete handler missing`);
     assert.notEqual(runCompleteEnd, -1, `${label}: run_complete boundary missing`);
     const runCompleteBody = panel.slice(runCompleteStart, runCompleteEnd);
-    assert.match(runCompleteBody, /else if \(!renderCostAllowanceError\(textEl, data\.finalContent\)[\s\S]*?&& !renderSubscribeError\(textEl, data\.finalContent\)\) textEl\.innerHTML = formatMarkdown\(data\.finalContent\);/, `${label}: restored run finals should render actionable allowance cards before markdown fallback`);
+    assert.match(runCompleteBody, /else if \(!renderCostAllowanceError\(textEl, data\.finalContent,[\s\S]*?submittedTurnDurable: data\.submittedTurnDurable,[\s\S]*?&& !renderSubscribeError\(textEl, data\.finalContent\)\) textEl\.innerHTML = formatMarkdown\(data\.finalContent\);/, `${label}: restored run finals should render durability-aware allowance cards before markdown fallback`);
     assert.match(styles, /\.subscribe-actions\s*\{[\s\S]*?flex-wrap:\s*wrap;/, `${label}: subscribe actions should wrap in narrow panels`);
     assert.match(styles, /\.subscribe-resume-btn\s*\{[\s\S]*?background:\s*transparent;[\s\S]*?border:\s*1px solid var\(--accent\);/, `${label}: resume action should use secondary styling`);
   }
@@ -13726,13 +13726,15 @@ test('sidepanel cloud cost allowance stop offers a persisted one-click $10 bump'
   const totalError = 'Error: Cloud cost allowance reached: total cloud/router usage is $10.02 against the $10.00 limit. Stopping before further cloud/router model calls. Increase or reset the allowance in Settings.';
   const sessionError = 'Cloud cost allowance reached: this session is $4.25 against the $4.00 limit. Stopping before further cloud/router model calls. Increase or reset the allowance in Settings.';
 
-  for (const [label, panelRel, styleRel, settingsRel, storageApi] of [
-    ['chrome', 'src/chrome/src/ui/sidepanel.js', 'src/chrome/styles/sidepanel.css', 'src/chrome/src/ui/settings.js', 'chrome'],
-    ['firefox', 'src/firefox/src/ui/sidepanel.js', 'src/firefox/styles/sidepanel.css', 'src/firefox/src/ui/settings.js', 'browser'],
+  for (const [label, panelRel, styleRel, settingsRel, backgroundRel, reconnectRel, storageApi] of [
+    ['chrome', 'src/chrome/src/ui/sidepanel.js', 'src/chrome/styles/sidepanel.css', 'src/chrome/src/ui/settings.js', 'src/chrome/src/background.js', 'src/chrome/src/run-reconnect.js', 'chrome'],
+    ['firefox', 'src/firefox/src/ui/sidepanel.js', 'src/firefox/styles/sidepanel.css', 'src/firefox/src/ui/settings.js', 'src/firefox/src/background.js', 'src/firefox/src/run-reconnect.js', 'browser'],
   ]) {
     const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
     const styles = fs.readFileSync(path.join(ROOT, styleRel), 'utf8');
     const settings = fs.readFileSync(path.join(ROOT, settingsRel), 'utf8');
+    const background = fs.readFileSync(path.join(ROOT, backgroundRel), 'utf8');
+    const reconnect = fs.readFileSync(path.join(ROOT, reconnectRel), 'utf8');
 
     const constantsStart = panel.indexOf('const COST_ALLOWANCE_ERROR_RE =');
     const parserStart = panel.indexOf('function parseCostAllowanceError(content) {', constantsStart);
@@ -13765,9 +13767,9 @@ test('sidepanel cloud cost allowance stop offers a persisted one-click $10 bump'
     assert.match(bindBody, new RegExp(`await ${storageApi}\\.storage\\.local\\.get\\(\\[storageKey\\]\\)`), `${label}: bump should read the currently persisted limit`);
     assert.match(bindBody, /currentLimit \+ COST_ALLOWANCE_BUMP_USD/, `${label}: bump should add exactly $10 to the current limit`);
     assert.match(bindBody, new RegExp(`await ${storageApi}\\.storage\\.local\\.set\\(\\{ \\[storageKey\\]: nextLimit \\}\\)`), `${label}: bump should persist the raised limit`);
-    assert.match(bindBody, /if \(continueBtn\) continueBtn\.hidden = false;/, `${label}: successful bump should reveal an explicit continuation action`);
+    assert.match(bindBody, /querySelector\('\.cost-allowance-retry-btn, \.cost-allowance-continue-btn'\)/, `${label}: successful bump should reveal the durability-selected resume action`);
 
-    const renderStart = panel.indexOf("function renderCostAllowanceError(textEl, content, resumeMode = '') {");
+    const renderStart = panel.indexOf("function renderCostAllowanceError(textEl, content, resumeMode = '', resumeOptions = {}) {");
     const renderEnd = panel.indexOf('\n}\n\nfunction addErrorRetryButton', renderStart);
     const renderBody = panel.slice(renderStart, renderEnd + 2);
     assert.match(renderBody, /textEl\.replaceChildren\(\);/, `${label}: allowance card should clear via DOM APIs`);
@@ -13775,11 +13777,19 @@ test('sidepanel cloud cost allowance stop offers a persisted one-click $10 bump'
     assert.match(renderBody, /bumpBtn\.textContent = '\+ \$10';/, `${label}: allowance card should expose the one-click $10 action`);
     assert.match(renderBody, /bumpBtn\.setAttribute\('aria-label', bumpBtn\.title\);/, `${label}: compact $10 action should keep a localized accessible label`);
     assert.match(renderBody, /continueBtn\.hidden = true;/, `${label}: continuation should stay gated until persistence succeeds`);
+    assert.match(renderBody, /const requiresRetry = resumeOptions\?\.submittedTurnDurable === false;/, `${label}: a non-durable submitted turn should never use continuation`);
+    assert.match(renderBody, /requiresRetry && resumeOptions\?\.retryPayload\?\.text[\s\S]*?configureRetryButton\(retryBtn, resumeOptions\.retryPayload\)/, `${label}: pre-turn allowance stops should retain and use the original retry payload`);
+    assert.match(renderBody, /else if \(!requiresRetry\) \{[\s\S]*?resumeAfterSubscription\(continueBtn\)/, `${label}: continuation should be offered only for durable turns`);
     assert.match(panel, /rebindCostAllowanceButtons\(\);/, `${label}: restored chats should rebind allowance controls`);
     assert.match(panel, /!parseSubscribeError\(content\) && !parseCostAllowanceError\(content\)/, `${label}: allowance stops should not count as successful Ask completions`);
+    assert.match(panel, /renderCostAllowanceError\(textEl, res\.content, modeForSend, \{[\s\S]*?submittedTurnDurable: res\.submittedTurnDurable,[\s\S]*?retryPayload,/, `${label}: returned pre-turn stops should render with request-scoped durability and retry state`);
+    assert.match(panel, /type: 'run_complete',[\s\S]*?submittedTurnDurable: state\?\.submittedTurnDurable === true,/, `${label}: restored terminal cards should retain durable-turn proof`);
+    assert.match(background, /async function sendAgentRunComplete\(tabId, snapshot = null\)[\s\S]*?agent\.hasDurableSubmittedTurn\([\s\S]*?submittedTurnDurable,/, `${label}: terminal UI events should carry durable-turn proof`);
+    assert.match(reconnect, /submittedTurnDurable: state\?\.submittedTurnDurable === true,/, `${label}: detached terminal responses should preserve durable-turn proof`);
 
     assert.match(styles, /\.cost-allowance-actions\s*\{[\s\S]*?flex-wrap:\s*wrap;/, `${label}: allowance actions should wrap in narrow panels`);
     assert.match(styles, /\.cost-allowance-bump-btn\s*\{[\s\S]*?background:\s*var\(--accent\);/, `${label}: $10 action should use the primary accent treatment`);
+    assert.match(styles, /\.cost-allowance-retry-btn,[\s\S]*?\.cost-allowance-continue-btn\s*\{[\s\S]*?background:\s*transparent;/, `${label}: retry and continuation should share secondary styling`);
     assert.match(styles, /\.cost-allowance-continue-btn\s*\{[\s\S]*?background:\s*transparent;/, `${label}: continuation should be visually secondary`);
 
     assert.match(settings, /costSessionLimitInput\?\.addEventListener\('change',[\s\S]*?storage\.local\.set\(\{ costAllowanceSessionUsd: value \}\)/, `${label}: session allowance edits should autosave on committed changes`);
@@ -16651,8 +16661,8 @@ test('sidepanel keeps retry metadata long enough for returned error updates', ()
     );
     assert.match(
       source,
-      /const returnedErrorUpdate = Array\.isArray\(res\?\.updates\)[\s\S]*?res\.updates\.find\(u => u\?\.type === 'error'\)[\s\S]*?renderAgentErrorUpdate\(returnedErrorUpdate\.data, tabId, requestId\);/,
-      `${label}: returned agent error updates should render with retry metadata even if the broadcast is late`,
+      /const returnedErrorUpdate = Array\.isArray\(res\?\.updates\)[\s\S]*?res\.updates\.find\(u => u\?\.type === 'error'\)[\s\S]*?renderAgentErrorUpdate\(returnedErrorUpdate\.data, tabId, requestId, \{[\s\S]*?submittedTurnDurable: res\.submittedTurnDurable,[\s\S]*?\}\);/,
+      `${label}: returned agent error updates should render with retry metadata and durable-turn proof even if the broadcast is late`,
     );
     assert.match(
       source,
@@ -44957,6 +44967,7 @@ test('detached runs reconnect to a live request without starting it twice', asyn
       {
         running: false,
         starting: false,
+        submittedTurnDurable: true,
         runUi: {
           requestId,
           status: 'completed',
@@ -44993,6 +45004,7 @@ test('detached runs reconnect to a live request without starting it twice', asyn
     assert.equal(response.reconnected, true, `${label}: response should report reconnection`);
     assert.equal(response.resumed, false, `${label}: a still-live run should not be resumed`);
     assert.equal(response.successfulDone, true, `${label}: successful done state should survive journal replay`);
+    assert.equal(response.submittedTurnDurable, true, `${label}: terminal responses should preserve durable-turn proof for safe UI resume routing`);
     assert.ok(statuses.includes('reconnecting'), `${label}: reconnecting status should be visible`);
     assert.ok(statuses.includes('reconnected'), `${label}: reconnected status should be visible`);
     assert.deepEqual(replayedStates, ['running', 'completed'], `${label}: missed UI journal states should be replayable after reconnect`);
@@ -45732,7 +45744,7 @@ test('sidepanel routes every run-error path through request-scoped deduplication
     const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
     assert.match(panel, /import \{ claimRunError \} from '\.\/run-error-dedupe\.js';/, `${label}: sidepanel should use the shared deduper`);
     assert.match(panel, /createActiveChatPayloadState\(retryPayload, requestId\)/, `${label}: active error state should retain request identity`);
-    assert.match(panel, /renderAgentErrorUpdate\(returnedErrorUpdate\.data, tabId, requestId\)/, `${label}: returned errors should use request-scoped rendering`);
+    assert.match(panel, /renderAgentErrorUpdate\(returnedErrorUpdate\.data, tabId, requestId(?:, \{[\s\S]*?submittedTurnDurable: res\.submittedTurnDurable,[\s\S]*?\})?\)/, `${label}: returned errors should use request-scoped rendering`);
     assert.match(panel, /renderAgentErrorUpdate\(\{ message: e\.message \}, tabId, requestId\)/, `${label}: caught errors should use request-scoped rendering`);
     assert.match(panel, /renderAgentErrorUpdate\(data, currentTabId, msg\.requestId\)/, `${label}: streamed errors should use message request identity`);
     assert.match(panel, /msgEl\.dataset\.tabId = active\.tabId;[\s\S]*?msgEl\.dataset\.runRequestId = active\.requestId;[\s\S]*?msgEl\.dataset\.errorMessageKey = active\.key;/, `${label}: persisted error cards should retain their dedupe identity`);

@@ -13,7 +13,11 @@ function requestMatches(value, requestId) {
   return value != null && String(value) === String(requestId);
 }
 
-function runResponseFromSnapshot(snapshot, { reconnected = false, resumed = false } = {}) {
+function runResponseFromSnapshot(snapshot, {
+  reconnected = false,
+  resumed = false,
+  submittedTurnDurable = false,
+} = {}) {
   const updates = (Array.isArray(snapshot?.events) ? snapshot.events : [])
     .filter(event => event?.type && event.type !== 'run_complete')
     .map(event => ({ type: event.type, data: event.data }));
@@ -36,6 +40,7 @@ function runResponseFromSnapshot(snapshot, { reconnected = false, resumed = fals
     success: snapshot?.status === 'completed',
     successfulDone: snapshot?.successfulDone === true,
     hadError: snapshot?.hadError === true || snapshot?.status === 'failed',
+    submittedTurnDurable,
     reconnected,
     resumed,
   };
@@ -170,6 +175,7 @@ export async function runDetachedWithReconnect({
         return runResponseFromSnapshot(snapshot, {
           reconnected: everReconnected,
           resumed: resumeAttempts > 0,
+          submittedTurnDurable: state?.submittedTurnDurable === true,
         });
       }
 

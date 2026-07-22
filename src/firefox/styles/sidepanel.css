@@ -2453,6 +2453,7 @@ body {
 }
 
 .cost-allowance-bump-btn,
+.cost-allowance-retry-btn,
 .cost-allowance-continue-btn {
   padding: 8px 14px;
   border-radius: 6px;
@@ -2485,12 +2486,15 @@ body {
   color: var(--text-primary);
 }
 
+.cost-allowance-retry-btn,
 .cost-allowance-continue-btn {
   background: transparent;
   color: var(--accent);
   border: 1px solid var(--accent);
 }
 
+.cost-allowance-retry-btn:hover,
+.cost-allowance-retry-btn:focus-visible,
 .cost-allowance-continue-btn:hover,
 .cost-allowance-continue-btn:focus-visible {
   background: var(--accent-dim);
@@ -2498,6 +2502,7 @@ body {
 }
 
 .cost-allowance-bump-btn:focus-visible,
+.cost-allowance-retry-btn:focus-visible,
 .cost-allowance-continue-btn:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
