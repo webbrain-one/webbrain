@@ -2899,20 +2899,13 @@ body {
   border: 1px solid var(--border);
 }
 
-.plan-review-cancel-row {
-  margin-top: 6px;
-}
-
 .plan-review-cancel {
-  padding: 0;
+  padding: 6px 12px;
   background: transparent;
   color: var(--text-secondary);
-  border: 0;
-  border-radius: 0;
-  font: inherit;
+  border: 1px solid var(--border);
+  border-radius: 4px;
   font-size: 12px;
-  text-decoration: underline;
-  text-underline-offset: 2px;
   cursor: pointer;
 }
 

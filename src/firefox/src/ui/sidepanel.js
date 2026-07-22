@@ -6637,7 +6637,7 @@ function renderPlanReviewCard(data) {
   const approveBtn = document.createElement('button');
   approveBtn.type = 'button';
   approveBtn.className = 'plan-review-approve';
-  approveBtn.textContent = typeof t === 'function' ? t('sp.plan.approve') : 'Run & approve';
+  approveBtn.textContent = typeof t === 'function' ? t('sp.plan.approve') : '👍 Run';
 
   const changeBtn = document.createElement('button');
   changeBtn.type = 'button';
@@ -6649,14 +6649,10 @@ function renderPlanReviewCard(data) {
   cancelBtn.className = 'plan-review-cancel';
   cancelBtn.textContent = typeof t === 'function' ? t('sp.plan.cancel') : 'Cancel';
 
-  const cancelRow = document.createElement('div');
-  cancelRow.className = 'plan-review-cancel-row';
-  cancelRow.appendChild(cancelBtn);
-
   actions.appendChild(approveBtn);
   actions.appendChild(changeBtn);
+  actions.appendChild(cancelBtn);
   card.appendChild(actions);
-  card.appendChild(cancelRow);
   mountPlanReviewEditor(card, view);
   // Anchor dirty-checks to the structured serializer's output, not the
   // planner markdown string, so renumbering/whitespace alone is not an edit.
