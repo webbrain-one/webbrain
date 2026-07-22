@@ -6337,7 +6337,15 @@ async function sendMessage(extraChatParams = {}) {
       }
     } else if (renderToCurrentTab && currentTabId === tabId && res?.content && assistantEl) {
       const textEl = assistantEl.querySelector('.message-text');
-      if (textEl && getStreamedAssistantText(textEl) === String(res.content)) {
+      if (textEl && parseCostAllowanceError(res.content)) {
+        if (!textEl.classList.contains('cost-allowance-error')) {
+          renderCostAllowanceError(textEl, res.content, modeForSend, {
+            submittedTurnDurable: res.submittedTurnDurable,
+            retryPayload,
+          });
+        }
+        addMessageCopyButton(assistantEl);
+      } else if (textEl && getStreamedAssistantText(textEl) === String(res.content)) {
         renderAssistantTextUpdate(assistantEl, res.content);
       } else if (textEl && !textEl.textContent.trim()) {
         if (!renderCostAllowanceError(textEl, res.content, modeForSend, {
@@ -8103,7 +8111,14 @@ async function continueAgent(options = {}) {
 
     if (currentTabId === tabId && res?.content && assistantEl) {
       const textEl = assistantEl.querySelector('.message-text');
-      if (textEl && getStreamedAssistantText(textEl) === String(res.content)) {
+      if (textEl && parseCostAllowanceError(res.content)) {
+        if (!textEl.classList.contains('cost-allowance-error')) {
+          renderCostAllowanceError(textEl, res.content, modeForSend, {
+            submittedTurnDurable: res.submittedTurnDurable,
+          });
+        }
+        addMessageCopyButton(assistantEl);
+      } else if (textEl && getStreamedAssistantText(textEl) === String(res.content)) {
         renderAssistantTextUpdate(assistantEl, res.content);
       } else if (textEl && !textEl.textContent.trim()) {
         if (!renderCostAllowanceError(textEl, res.content, modeForSend, {
