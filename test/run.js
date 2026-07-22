@@ -41891,9 +41891,24 @@ test('plan review: structured draft serialize/parse round-trips step edits', () 
       file,
     );
     assert.equal(
+      stripVerbosePlanStepToolSuffix('Read and update the form (read_page, type_text, click_ax)'),
+      'Read and update the form',
+      `${file} should strip canonical underscored tool IDs`,
+    );
+    assert.equal(
+      stripVerbosePlanStepToolSuffix('Inspect the page (get_accessibility_tree, wait_for_stable)'),
+      'Inspect the page',
+      `${file} should strip multi-segment canonical tool IDs`,
+    );
+    assert.equal(
       stripVerbosePlanStepToolSuffix('Open invoice (March)'),
       'Open invoice (March)',
       file,
+    );
+    assert.equal(
+      stripVerbosePlanStepToolSuffix('Open the user profile (user_profile)'),
+      'Open the user profile (user_profile)',
+      `${file} should preserve non-tool underscored parentheticals`,
     );
 
     // Verbose metadata must not pollute risks when Done re-parses raw text.
@@ -41904,7 +41919,7 @@ test('plan review: structured draft serialize/parse round-trips step edits', () 
       '',
       '### Steps',
       '1. Open account settings',
-      '2. Click Billing (click)',
+      '2. Click Billing (click_ax, read_page)',
       '',
       '### Completion requirements',
       '- Submission required: no',

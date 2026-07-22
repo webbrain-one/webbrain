@@ -3660,7 +3660,7 @@ function serializePlanDraftToMarkdown(draft) {
 }
 
 // Tool names that may appear in verbose step suffixes like "Click Save (click, type)".
-const PLAN_STEP_TOOL_SUFFIX_RE = /^(?:click|type|press|scroll|navigate|find|wait|select|hover|drag|upload|download|screenshot|extract|read|write|fill|submit|focus|blur|tab|enter|escape|key|keys|js|eval|api|fetch|http|network|clipboard|permission|schedule|resume|tool)(?:\s*,\s*(?:click|type|press|scroll|navigate|find|wait|select|hover|drag|upload|download|screenshot|extract|read|write|fill|submit|focus|blur|tab|enter|escape|key|keys|js|eval|api|fetch|http|network|clipboard|permission|schedule|resume|tool))*$/i;
+const PLAN_STEP_TOOL_SUFFIX_RE = /^(?:click|type|press|scroll|navigate|find|wait|select|hover|drag|upload|download|screenshot|extract|read|write|fill|submit|focus|blur|tab|enter|escape|key|keys|js|eval|api|fetch|http|network|clipboard|permission|schedule|resume|tool|get|set|new|go|execute|inspect|inject|remove|patch|revert|list|progress|research|shadow|iframe|highlight|scratchpad|done)(?:_[a-z0-9]+)*$/i;
 
 function stripVerbosePlanStepToolSuffix(action) {
   const text = String(action || '').trim();
@@ -3669,7 +3669,8 @@ function stripVerbosePlanStepToolSuffix(action) {
   const suffix = match[2].trim();
   // Only strip parentheticals that look like planner tool lists, not user text
   // like "Open invoice (March)" or "Choose plan (annual)".
-  if (!suffix || !PLAN_STEP_TOOL_SUFFIX_RE.test(suffix)) return text;
+  const toolNames = suffix.split(',').map((name) => name.trim()).filter(Boolean);
+  if (!toolNames.length || !toolNames.every((name) => PLAN_STEP_TOOL_SUFFIX_RE.test(name))) return text;
   return match[1].trim();
 }
 
