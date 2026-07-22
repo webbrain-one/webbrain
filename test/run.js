@@ -7821,6 +7821,21 @@ test('cloud workflow bridge compiles the correlated trace and never persists run
   );
 });
 
+test('cloud runs force trace capture without changing the interactive opt-in default', () => {
+  const agentSource = fs.readFileSync(
+    path.join(ROOT, 'src/chrome/src/agent/agent.js'),
+    'utf8',
+  );
+  const recorderSource = fs.readFileSync(
+    path.join(ROOT, 'src/chrome/src/trace/recorder.js'),
+    'utf8',
+  );
+  assert.match(agentSource, /force:\s*runOptions\?\.cloudRun === true/);
+  assert.match(recorderSource, /if \(!forced && !\(await tracingEnabled\(\)\)\) return null/);
+  assert.match(recorderSource, /tracingEnabledForRun\(runId\)/);
+  assert.match(recorderSource, /forced:\s*await isForcedTraceRun\(runId\)/);
+});
+
 test('cloud run controller fails interrupted runs after service-worker restart', async () => {
   const row = {
     runId: 'run_old',
