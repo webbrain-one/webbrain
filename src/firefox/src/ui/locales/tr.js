@@ -713,6 +713,8 @@ export default {
   'sp.plan.edit_as_text': 'Metin olarak düzenle',
   'sp.plan.done_editing_text': 'Bitti',
   'sp.plan.add_step': 'Adım ekle',
+  'sp.plan.reorder_hint': 'Yeniden sıralamak için adım numaralarını sürükleyin',
+  'sp.plan.reorder_step': '{step}. adımı yeniden sıralamak için sürükleyin',
   'sp.plan.remove_step': 'Adımı kaldır',
   'sp.plan.empty_steps': 'Onaylamadan önce en az bir adım ekleyin.',
   'sp.plan.summary_placeholder': 'Plan özeti',

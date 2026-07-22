@@ -3621,7 +3621,7 @@ function resolveSavedPlanReviewEdit(card) {
 
 function setPlanReviewStructuredControlsDisabled(card, disabled) {
   const controls = card?.querySelectorAll?.(
-    '.plan-review-summary-input, .plan-review-step-input, .plan-review-add-step, .plan-review-step-remove',
+    '.plan-review-summary-input, .plan-review-step-input, .plan-review-add-step, .plan-review-step-number, .plan-review-step-remove',
   ) || [];
   for (const control of controls) control.disabled = Boolean(disabled);
 }
@@ -3748,8 +3748,135 @@ function renumberPlanReviewSteps(card) {
   if (!list) return;
   [...list.querySelectorAll('.plan-review-step')].forEach((item, index) => {
     const number = item.querySelector('.plan-review-step-number');
-    if (number) number.textContent = String(index + 1);
+    if (number) {
+      const stepNumber = String(index + 1);
+      const reorderLabel = typeof t === 'function'
+        ? t('sp.plan.reorder_step', { step: stepNumber })
+        : `Drag to reorder step ${stepNumber}`;
+      number.textContent = stepNumber;
+      number.setAttribute('aria-label', reorderLabel);
+      number.title = reorderLabel;
+    }
   });
+}
+
+const planReviewDraggedSteps = new WeakMap();
+
+function clearPlanReviewDropTargets(card) {
+  card?.querySelectorAll?.('.plan-review-step-drop-before, .plan-review-step-drop-after')
+    .forEach((item) => item.classList.remove('plan-review-step-drop-before', 'plan-review-step-drop-after'));
+}
+
+function finishPlanReviewStepDrag(card) {
+  const dragged = planReviewDraggedSteps.get(card);
+  dragged?.classList?.remove('plan-review-step-dragging');
+  planReviewDraggedSteps.delete(card);
+  clearPlanReviewDropTargets(card);
+}
+
+function movePlanReviewStep(card, item, target, placeAfter = false) {
+  const list = card?.querySelector?.('.plan-review-steps');
+  if (!list || !item || !target || item === target) return false;
+  const items = [...list.querySelectorAll('.plan-review-step')];
+  const fromIndex = items.indexOf(item);
+  const targetIndex = items.indexOf(target);
+  if (fromIndex < 0 || targetIndex < 0) return false;
+  const insertionIndex = targetIndex + (placeAfter ? 1 : 0) - (targetIndex > fromIndex ? 1 : 0);
+  if (insertionIndex === fromIndex) return false;
+  const reference = placeAfter ? target.nextElementSibling : target;
+  list.insertBefore(item, reference || null);
+  renumberPlanReviewSteps(card);
+  syncPlanReviewDraft(card);
+  return true;
+}
+
+function bindPlanReviewStepRow(card, item) {
+  if (!card || !item) return;
+  let number = item.querySelector('.plan-review-step-number');
+  const action = item.querySelector('.plan-review-step-input');
+  const removeBtn = item.querySelector('.plan-review-step-remove');
+
+  // Upgrade persisted cards created before step numbers became buttons.
+  if (number && number.tagName !== 'BUTTON') {
+    const handle = document.createElement('button');
+    handle.type = 'button';
+    handle.className = 'plan-review-step-number';
+    handle.textContent = number.textContent;
+    number.replaceWith(handle);
+    number = handle;
+  }
+
+  if (removeBtn && !removeBtn.dataset.bound) {
+    removeBtn.dataset.bound = 'true';
+    removeBtn.addEventListener('click', () => {
+      item.remove();
+      renumberPlanReviewSteps(card);
+      syncPlanReviewDraft(card);
+      const remaining = card.querySelector('.plan-review-step-input');
+      if (remaining) {
+        try { remaining.focus(); } catch {}
+      }
+    });
+  }
+
+  if (action && !action.dataset.bound) {
+    action.dataset.bound = 'true';
+    action.addEventListener('beforeinput', () => capturePlanReviewScrollSnapshot(action));
+    action.addEventListener('input', () => {
+      autosizePlanReviewField(action);
+      syncPlanReviewDraft(card);
+    });
+    autosizePlanReviewField(action);
+  }
+
+  if (number && !number.dataset.bound) {
+    number.dataset.bound = 'true';
+    number.draggable = true;
+    number.setAttribute('aria-keyshortcuts', 'ArrowUp ArrowDown');
+    number.addEventListener('dragstart', (event) => {
+      planReviewDraggedSteps.set(card, item);
+      item.classList.add('plan-review-step-dragging');
+      if (event.dataTransfer) {
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', number.textContent || '');
+      }
+    });
+    number.addEventListener('dragend', () => finishPlanReviewStepDrag(card));
+    number.addEventListener('keydown', (event) => {
+      if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+      const target = event.key === 'ArrowUp' ? item.previousElementSibling : item.nextElementSibling;
+      if (!target?.classList?.contains('plan-review-step')) return;
+      event.preventDefault();
+      if (movePlanReviewStep(card, item, target, event.key === 'ArrowDown')) {
+        try { number.focus(); } catch {}
+      }
+    });
+  }
+
+  if (!item.dataset.bound) {
+    item.dataset.bound = 'true';
+    item.addEventListener('dragover', (event) => {
+      const dragged = planReviewDraggedSteps.get(card);
+      if (!dragged || dragged === item) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+      const bounds = item.getBoundingClientRect();
+      const placeAfter = event.clientY >= bounds.top + (bounds.height / 2);
+      clearPlanReviewDropTargets(card);
+      item.classList.add(placeAfter ? 'plan-review-step-drop-after' : 'plan-review-step-drop-before');
+    });
+    item.addEventListener('drop', (event) => {
+      const dragged = planReviewDraggedSteps.get(card);
+      if (!dragged || dragged === item) return;
+      event.preventDefault();
+      const bounds = item.getBoundingClientRect();
+      const placeAfter = event.clientY >= bounds.top + (bounds.height / 2);
+      const movedHandle = dragged.querySelector('.plan-review-step-number');
+      movePlanReviewStep(card, dragged, item, placeAfter);
+      finishPlanReviewStepDrag(card);
+      try { movedHandle?.focus(); } catch {}
+    });
+  }
 }
 
 function createPlanReviewStepRow(card, step, index) {
@@ -3757,7 +3884,8 @@ function createPlanReviewStepRow(card, step, index) {
   item.className = 'plan-review-step';
   item.setAttribute('role', 'listitem');
 
-  const number = document.createElement('span');
+  const number = document.createElement('button');
+  number.type = 'button';
   number.className = 'plan-review-step-number';
   number.textContent = String(step?.id || index + 1).replace(/\.$/, '') || String(index + 1);
 
@@ -3775,25 +3903,10 @@ function createPlanReviewStepRow(card, step, index) {
   removeBtn.title = typeof t === 'function' ? t('sp.plan.remove_step') : 'Remove step';
   removeBtn.textContent = '×';
 
-  removeBtn.addEventListener('click', () => {
-    item.remove();
-    renumberPlanReviewSteps(card);
-    syncPlanReviewDraft(card);
-    const remaining = card.querySelector('.plan-review-step-input');
-    if (remaining) {
-      try { remaining.focus(); } catch {}
-    }
-  });
-
-  action.addEventListener('beforeinput', () => capturePlanReviewScrollSnapshot(action));
-  action.addEventListener('input', () => {
-    autosizePlanReviewField(action);
-    syncPlanReviewDraft(card);
-  });
-
   item.appendChild(number);
   item.appendChild(action);
   item.appendChild(removeBtn);
+  bindPlanReviewStepRow(card, item);
   queueMicrotask(() => autosizePlanReviewField(action));
   return item;
 }
@@ -3903,6 +4016,19 @@ function renderPlanReviewView(plan, fallbackMarkdown = '') {
   list.setAttribute('role', 'list');
   view.appendChild(list);
 
+  const reorderHint = document.createElement('div');
+  reorderHint.className = 'plan-review-reorder-hint';
+  const reorderIcon = document.createElement('span');
+  reorderIcon.className = 'plan-review-reorder-icon';
+  reorderIcon.setAttribute('aria-hidden', 'true');
+  reorderIcon.textContent = '↕';
+  const reorderText = document.createElement('span');
+  reorderText.textContent = typeof t === 'function'
+    ? t('sp.plan.reorder_hint')
+    : 'Drag step numbers to reorder';
+  reorderHint.append(reorderIcon, reorderText);
+  view.appendChild(reorderHint);
+
   const addBtn = document.createElement('button');
   addBtn.type = 'button';
   addBtn.className = 'plan-review-add-step';
@@ -3946,6 +4072,8 @@ function mountPlanReviewEditor(card, view) {
 }
 
 function bindPlanReviewEditorControls(card, view) {
+  view.querySelectorAll('.plan-review-step').forEach((item) => bindPlanReviewStepRow(card, item));
+
   const summaryInput = view.querySelector('.plan-review-summary-input');
   if (summaryInput && !summaryInput.dataset.bound) {
     summaryInput.dataset.bound = 'true';
@@ -4078,6 +4206,15 @@ function resolvePlanReviewApprovalText(card) {
   return { editedText: '', markdownMode: displayMode };
 }
 
+function planReviewViewNeedsHydration(view, savedText = '') {
+  const stepInputs = [...(view?.querySelectorAll?.('.plan-review-step-input') || [])];
+  const hasLiveBindings = view?.querySelector?.('.plan-review-summary-input')?.dataset?.bound === 'true';
+  if (hasLiveBindings) return false;
+  return stepInputs.length === 0
+    || !stepInputs.some((el) => String(el.value || '').trim())
+    || String(savedText || '') !== '';
+}
+
 function bindPlanReviewCard(card) {
   if (!card || card.classList.contains('plan-reviewed')) return;
   const planId = String(card.dataset.planId || '');
@@ -4092,9 +4229,7 @@ function bindPlanReviewCard(card) {
     // innerHTML). Prefer dataset.editedText, else rebuild from the original
     // compact plan so empty restored inputs do not wipe the draft.
     const saved = card.dataset.editedText;
-    const needsHydrate = !view.querySelector('.plan-review-step-input')
-      || ![...view.querySelectorAll('.plan-review-step-input')].some((el) => String(el.value || '').trim())
-      || (saved != null && saved !== '');
+    const needsHydrate = planReviewViewNeedsHydration(view, saved);
     if (needsHydrate) {
       const sourceText = (saved != null && saved !== '')
         ? saved

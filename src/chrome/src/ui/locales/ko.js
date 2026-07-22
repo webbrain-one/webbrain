@@ -725,6 +725,8 @@ export default {
   'sp.plan.edit_as_text': '텍스트로 편집',
   'sp.plan.done_editing_text': '완료',
   'sp.plan.add_step': '단계 추가',
+  'sp.plan.reorder_hint': '단계 번호를 드래그하여 순서 변경',
+  'sp.plan.reorder_step': '드래그하여 단계 {step} 순서 변경',
   'sp.plan.remove_step': '단계 제거',
   'sp.plan.empty_steps': '승인하기 전에 단계를 하나 이상 추가하세요.',
   'sp.plan.summary_placeholder': '계획 요약',

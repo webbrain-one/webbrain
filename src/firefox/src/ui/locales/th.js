@@ -714,6 +714,8 @@ export default {
   'sp.plan.edit_as_text': 'แก้ไขเป็นข้อความ',
   'sp.plan.done_editing_text': 'เสร็จสิ้น',
   'sp.plan.add_step': 'เพิ่มขั้นตอน',
+  'sp.plan.reorder_hint': 'ลากหมายเลขขั้นตอนเพื่อจัดลำดับใหม่',
+  'sp.plan.reorder_step': 'ลากเพื่อจัดลำดับขั้นตอน {step} ใหม่',
   'sp.plan.remove_step': 'ลบขั้นตอน',
   'sp.plan.empty_steps': 'เพิ่มอย่างน้อยหนึ่งขั้นตอนก่อนอนุมัติ',
   'sp.plan.summary_placeholder': 'สรุปแผน',

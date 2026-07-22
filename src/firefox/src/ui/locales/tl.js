@@ -714,6 +714,8 @@ export default {
   'sp.plan.edit_as_text': 'I-edit bilang text',
   'sp.plan.done_editing_text': 'Tapos na',
   'sp.plan.add_step': 'Magdagdag ng hakbang',
+  'sp.plan.reorder_hint': 'I-drag ang mga numero ng hakbang para muling ayusin',
+  'sp.plan.reorder_step': 'I-drag para muling ayusin ang hakbang {step}',
   'sp.plan.remove_step': 'Alisin ang hakbang',
   'sp.plan.empty_steps': 'Magdagdag ng kahit isang hakbang bago aprubahan.',
   'sp.plan.summary_placeholder': 'Buod ng plano',

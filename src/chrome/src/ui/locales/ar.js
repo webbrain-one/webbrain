@@ -725,6 +725,8 @@ export default {
   'sp.plan.edit_as_text': 'تعديل كنص',
   'sp.plan.done_editing_text': 'تم',
   'sp.plan.add_step': 'إضافة خطوة',
+  'sp.plan.reorder_hint': 'اسحب أرقام الخطوات لإعادة ترتيبها',
+  'sp.plan.reorder_step': 'اسحب لإعادة ترتيب الخطوة {step}',
   'sp.plan.remove_step': 'إزالة الخطوة',
   'sp.plan.empty_steps': 'أضف خطوة واحدة على الأقل قبل الموافقة.',
   'sp.plan.summary_placeholder': 'ملخص الخطة',

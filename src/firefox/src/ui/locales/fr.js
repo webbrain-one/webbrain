@@ -714,6 +714,8 @@ export default {
   'sp.plan.edit_as_text': 'Modifier en texte',
   'sp.plan.done_editing_text': 'Terminé',
   'sp.plan.add_step': 'Ajouter une étape',
+  'sp.plan.reorder_hint': 'Faites glisser les numéros des étapes pour les réorganiser',
+  'sp.plan.reorder_step': 'Faites glisser pour réorganiser l’étape {step}',
   'sp.plan.remove_step': 'Supprimer l’étape',
   'sp.plan.empty_steps': 'Ajoutez au moins une étape avant d’approuver.',
   'sp.plan.summary_placeholder': 'Résumé du plan',

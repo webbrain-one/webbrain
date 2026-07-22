@@ -43094,6 +43094,128 @@ function loadPlanReviewAutosizeHelper(panelRel, runtime) {
   );
 }
 
+function loadPlanReviewHydrationHelper(panelRel) {
+  const source = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
+  const start = source.indexOf('function planReviewViewNeedsHydration(');
+  const end = source.indexOf('\nfunction bindPlanReviewCard(', start);
+  assert.notEqual(start, -1, `${panelRel}: plan hydration helper missing`);
+  assert.notEqual(end, -1, `${panelRel}: plan hydration helper boundary missing`);
+  const block = source.slice(start, end);
+  return Function(`${block}\nreturn planReviewViewNeedsHydration;`)();
+}
+
+function loadPlanReviewMoveHelper(panelRel, runtime) {
+  const source = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
+  const start = source.indexOf('function movePlanReviewStep(');
+  const end = source.indexOf('\nfunction bindPlanReviewStepRow(', start);
+  assert.notEqual(start, -1, `${panelRel}: plan reorder helper missing`);
+  assert.notEqual(end, -1, `${panelRel}: plan reorder helper boundary missing`);
+  const block = source.slice(start, end);
+  return Function(
+    'renumberPlanReviewSteps',
+    'syncPlanReviewDraft',
+    `${block}\nreturn movePlanReviewStep;`,
+  )(runtime.renumberPlanReviewSteps, runtime.syncPlanReviewDraft);
+}
+
+test('plan review: polling preserves the live focused structured editor', () => {
+  for (const file of [
+    'src/chrome/src/ui/sidepanel.js',
+    'src/firefox/src/ui/sidepanel.js',
+  ]) {
+    const planReviewViewNeedsHydration = loadPlanReviewHydrationHelper(file);
+    const makeView = ({ bound, stepValues }) => ({
+      querySelectorAll(selector) {
+        assert.equal(selector, '.plan-review-step-input', file);
+        return stepValues.map(value => ({ value }));
+      },
+      querySelector(selector) {
+        assert.equal(selector, '.plan-review-summary-input', file);
+        return { dataset: bound ? { bound: 'true' } : {} };
+      },
+    });
+
+    assert.equal(
+      planReviewViewNeedsHydration(makeView({ bound: true, stepValues: ['Typing right now'] }), '**saved edit**'),
+      false,
+      `${file} should not replace live textareas during active-run polling`,
+    );
+    assert.equal(
+      planReviewViewNeedsHydration(makeView({ bound: false, stepValues: ['Original step'] }), '**saved edit**'),
+      true,
+      `${file} should restore saved edits into newly restored markup`,
+    );
+    assert.equal(
+      planReviewViewNeedsHydration(makeView({ bound: true, stepValues: [] }), ''),
+      false,
+      `${file} should preserve an intentionally empty live step list`,
+    );
+    assert.equal(
+      planReviewViewNeedsHydration(makeView({ bound: false, stepValues: [] }), ''),
+      true,
+      `${file} should hydrate restored markup whose step controls are missing`,
+    );
+  }
+});
+
+test('plan review: numbered handles reorder steps and persist the draft', () => {
+  for (const file of [
+    'src/chrome/src/ui/sidepanel.js',
+    'src/firefox/src/ui/sidepanel.js',
+  ]) {
+    let renumberCalls = 0;
+    let syncCalls = 0;
+    const movePlanReviewStep = loadPlanReviewMoveHelper(file, {
+      renumberPlanReviewSteps: () => { renumberCalls += 1; },
+      syncPlanReviewDraft: () => { syncCalls += 1; },
+    });
+    const one = { id: 'one' };
+    const two = { id: 'two' };
+    const three = { id: 'three' };
+    const items = [one, two, three];
+    const list = {
+      items,
+      querySelectorAll(selector) {
+        assert.equal(selector, '.plan-review-step', file);
+        return this.items;
+      },
+      insertBefore(item, reference) {
+        const oldIndex = this.items.indexOf(item);
+        this.items.splice(oldIndex, 1);
+        const nextIndex = reference == null ? this.items.length : this.items.indexOf(reference);
+        this.items.splice(nextIndex, 0, item);
+      },
+    };
+    for (const item of items) {
+      Object.defineProperty(item, 'nextElementSibling', {
+        get: () => list.items[list.items.indexOf(item) + 1] || null,
+      });
+    }
+    const card = {
+      querySelector(selector) {
+        assert.equal(selector, '.plan-review-steps', file);
+        return list;
+      },
+    };
+
+    assert.equal(movePlanReviewStep(card, three, one, false), true, file);
+    assert.deepEqual(list.items.map(item => item.id), ['three', 'one', 'two'], file);
+    assert.equal(movePlanReviewStep(card, one, two, true), true, file);
+    assert.deepEqual(list.items.map(item => item.id), ['three', 'two', 'one'], file);
+    assert.equal(renumberCalls, 2, `${file} should renumber after each move`);
+    assert.equal(syncCalls, 2, `${file} should persist each reordered draft`);
+
+    const source = fs.readFileSync(path.join(ROOT, file), 'utf8');
+    assert.match(source, /number\.draggable = true;/, `${file} should make the numbered circle draggable`);
+    assert.match(source, /number\.tagName !== 'BUTTON'[\s\S]*number\.replaceWith\(handle\)/, `${file} should upgrade restored legacy number spans`);
+    assert.match(source, /dataTransfer\.setData\('text\/plain'/, `${file} should start native drag-and-drop in Firefox too`);
+    assert.match(source, /addEventListener\('dragover'/, `${file} should accept step drop targets`);
+    assert.match(source, /addEventListener\('drop'/, `${file} should reorder on drop`);
+    assert.match(source, /aria-keyshortcuts', 'ArrowUp ArrowDown'/, `${file} should expose a keyboard reorder path`);
+    assert.match(source, /t\('sp\.plan\.reorder_hint'\)/, `${file} should show the reorder affordance`);
+  }
+});
+
 test('plan review: textarea autosize preserves an active off-bottom scroll position', () => {
   for (const file of [
     'src/chrome/src/ui/sidepanel.js',
@@ -43432,6 +43554,9 @@ test('sidepanel: restored plan review cards rebind approve and cancel actions', 
     assert.match(css, /\.plan-review-card:not\(\[data-editing="true"\]\) \.plan-review-edit/, `${file} css should hide the raw plan textarea until Edit as text`);
     assert.match(css, /\.plan-review-step-remove/, `${file} css should style one-click step removal`);
     assert.match(css, /\.plan-review-step[\s\S]*grid-template-columns:\s*22px minmax\(0, 1fr\) 26px/, `${file} css should lay out number/input/remove columns`);
+    assert.match(css, /\.plan-review-step-number[\s\S]*cursor:\s*grab/, `${file} css should present step numbers as drag handles`);
+    assert.match(css, /\.plan-review-step-drop-before[\s\S]*\.plan-review-step-drop-after/, `${file} css should show above/below drop positions`);
+    assert.match(css, /\.plan-review-reorder-hint[\s\S]*\.plan-review-reorder-icon/, `${file} css should style the visible reorder hint`);
     assert.match(css, /\.plan-review-skills[\s\S]*\.plan-review-skill-list[\s\S]*\.plan-review-skill/, `${file} css should make planned skill activation visible`);
     assert.doesNotMatch(css, /field-sizing:\s*content/, `${file} should not combine CSS and JavaScript textarea autosizing`);
     const enLocale = fs.readFileSync(path.join(ROOT, file.replace(/src\/ui\/sidepanel\.js$/, 'src/ui/locales/en.js')), 'utf8');
@@ -43440,6 +43565,8 @@ test('sidepanel: restored plan review cards rebind approve and cancel actions', 
     assert.match(enLocale, /'sp\.plan\.edit_as_text': 'Edit as text'/, `${file} should label the raw markdown escape hatch`);
     assert.match(enLocale, /'sp\.plan\.remove_step': 'Remove step'/, `${file} should label one-click step removal`);
     assert.match(enLocale, /'sp\.plan\.add_step': 'Add step'/, `${file} should label add-step`);
+    assert.match(enLocale, /'sp\.plan\.reorder_hint': 'Drag step numbers to reorder'/, `${file} should explain step reordering`);
+    assert.match(enLocale, /'sp\.plan\.reorder_step': 'Drag to reorder step \{step\}'/, `${file} should label each numbered drag handle`);
     assert.match(source, /const useVerbosePlan = verboseMode && !!data\.verboseMarkdown;/, `${file} should use the verbose plan only in verbose mode`);
     assert.match(source, /t\('sp\.plan\.approve'\) : '👍 Run'/, `${file} should retain the concise plan run fallback`);
     const renderPlanReviewStart = source.indexOf('function renderPlanReviewCard(data) {');

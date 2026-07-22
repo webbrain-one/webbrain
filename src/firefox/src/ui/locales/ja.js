@@ -714,6 +714,8 @@ export default {
   'sp.plan.edit_as_text': 'テキストで編集',
   'sp.plan.done_editing_text': '完了',
   'sp.plan.add_step': 'ステップを追加',
+  'sp.plan.reorder_hint': 'ステップ番号をドラッグして並べ替え',
+  'sp.plan.reorder_step': 'ドラッグしてステップ {step} を並べ替え',
   'sp.plan.remove_step': 'ステップを削除',
   'sp.plan.empty_steps': '承認する前に少なくとも1つのステップを追加してください。',
   'sp.plan.summary_placeholder': '計画の概要',

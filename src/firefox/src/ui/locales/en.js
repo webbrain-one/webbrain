@@ -258,6 +258,8 @@ export default {
   'sp.plan.edit_as_text': 'Edit as text',
   'sp.plan.done_editing_text': 'Done',
   'sp.plan.add_step': 'Add step',
+  'sp.plan.reorder_hint': 'Drag step numbers to reorder',
+  'sp.plan.reorder_step': 'Drag to reorder step {step}',
   'sp.plan.remove_step': 'Remove step',
   'sp.plan.empty_steps': 'Add at least one step before approving.',
   'sp.plan.summary_placeholder': 'Plan summary',

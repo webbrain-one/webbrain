@@ -725,6 +725,8 @@ export default {
   'sp.plan.edit_as_text': 'Editar como texto',
   'sp.plan.done_editing_text': 'Listo',
   'sp.plan.add_step': 'Añadir paso',
+  'sp.plan.reorder_hint': 'Arrastra los números de los pasos para reordenarlos',
+  'sp.plan.reorder_step': 'Arrastra para reordenar el paso {step}',
   'sp.plan.remove_step': 'Eliminar paso',
   'sp.plan.empty_steps': 'Añade al menos un paso antes de aprobar.',
   'sp.plan.summary_placeholder': 'Resumen del plan',

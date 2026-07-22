@@ -714,6 +714,8 @@ export default {
   'sp.plan.edit_as_text': '以文本编辑',
   'sp.plan.done_editing_text': '完成',
   'sp.plan.add_step': '添加步骤',
+  'sp.plan.reorder_hint': '拖动步骤编号以重新排序',
+  'sp.plan.reorder_step': '拖动以重新排序步骤 {step}',
   'sp.plan.remove_step': '删除步骤',
   'sp.plan.empty_steps': '批准前请至少添加一个步骤。',
   'sp.plan.summary_placeholder': '计划摘要',

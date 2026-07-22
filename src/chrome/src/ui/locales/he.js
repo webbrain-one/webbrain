@@ -247,6 +247,8 @@ export default {
   "sp.plan.edit_as_text": "ערוך כטקסט",
   "sp.plan.done_editing_text": "סיום",
   "sp.plan.add_step": "הוסף שלב",
+  "sp.plan.reorder_hint": "גרור את מספרי השלבים כדי לשנות את הסדר",
+  "sp.plan.reorder_step": "גרור כדי לשנות את סדר שלב {step}",
   "sp.plan.remove_step": "הסר שלב",
   "sp.plan.empty_steps": "הוסף לפחות שלב אחד לפני האישור.",
   "sp.plan.summary_placeholder": "סיכום התוכנית",

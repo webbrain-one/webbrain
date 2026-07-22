@@ -725,6 +725,8 @@ export default {
   'sp.plan.edit_as_text': 'Edit sebagai teks',
   'sp.plan.done_editing_text': 'Selesai',
   'sp.plan.add_step': 'Tambah langkah',
+  'sp.plan.reorder_hint': 'Seret nombor langkah untuk menyusun semula',
+  'sp.plan.reorder_step': 'Seret untuk menyusun semula langkah {step}',
   'sp.plan.remove_step': 'Buang langkah',
   'sp.plan.empty_steps': 'Tambah sekurang-kurangnya satu langkah sebelum meluluskan.',
   'sp.plan.summary_placeholder': 'Ringkasan rancangan',

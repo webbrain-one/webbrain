@@ -725,6 +725,8 @@ export default {
   'sp.plan.edit_as_text': 'Редагувати як текст',
   'sp.plan.done_editing_text': 'Готово',
   'sp.plan.add_step': 'Додати крок',
+  'sp.plan.reorder_hint': 'Перетягуйте номери кроків, щоб змінити порядок',
+  'sp.plan.reorder_step': 'Перетягніть, щоб змінити порядок кроку {step}',
   'sp.plan.remove_step': 'Видалити крок',
   'sp.plan.empty_steps': 'Додайте принаймні один крок перед схваленням.',
   'sp.plan.summary_placeholder': 'Короткий опис плану',

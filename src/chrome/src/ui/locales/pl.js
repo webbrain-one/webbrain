@@ -716,6 +716,8 @@ export default {
   'sp.plan.edit_as_text': 'Edytuj jako tekst',
   'sp.plan.done_editing_text': 'Gotowe',
   'sp.plan.add_step': 'Dodaj krok',
+  'sp.plan.reorder_hint': 'Przeciągnij numery kroków, aby zmienić kolejność',
+  'sp.plan.reorder_step': 'Przeciągnij, aby zmienić kolejność kroku {step}',
   'sp.plan.remove_step': 'Usuń krok',
   'sp.plan.empty_steps': 'Dodaj co najmniej jeden krok przed zatwierdzeniem.',
   'sp.plan.summary_placeholder': 'Podsumowanie planu',

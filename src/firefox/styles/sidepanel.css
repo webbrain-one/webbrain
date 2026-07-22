@@ -2692,12 +2692,16 @@ body {
   grid-template-columns: 22px minmax(0, 1fr) 26px;
   gap: 6px;
   align-items: start;
+  border-radius: 4px;
+  transition: box-shadow 120ms ease, opacity 120ms ease;
 }
 
 .plan-review-step-number {
   width: 22px;
   height: 22px;
   margin-top: 3px;
+  padding: 0;
+  border: 0;
   border-radius: 999px;
   display: inline-flex;
   align-items: center;
@@ -2706,7 +2710,32 @@ body {
   color: #fff;
   font-size: 11px;
   font-weight: 700;
+  font-family: inherit;
   line-height: 1;
+  cursor: grab;
+  user-select: none;
+}
+
+.plan-review-step-number:hover,
+.plan-review-step-number:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
+  outline: none;
+}
+
+.plan-review-step-number:active {
+  cursor: grabbing;
+}
+
+.plan-review-step-dragging {
+  opacity: 0.45;
+}
+
+.plan-review-step-drop-before {
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+
+.plan-review-step-drop-after {
+  box-shadow: inset 0 -2px 0 var(--accent);
 }
 
 .plan-review-step-action,
@@ -2744,6 +2773,22 @@ body {
   background: rgba(244, 67, 54, 0.12);
   color: var(--error, #f44336);
   outline: none;
+}
+
+.plan-review-reorder-hint {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-secondary);
+  font-size: 10px;
+  line-height: 1.3;
+}
+
+.plan-review-reorder-icon {
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .plan-review-add-step {
