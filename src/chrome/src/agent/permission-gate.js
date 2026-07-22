@@ -64,6 +64,7 @@ export const UNTRUSTED_CONTENT_TOOLS = new Set([
   'get_frames',
   'extract_data',
   'get_selection',
+  'find_text',
   'iframe_read',
   // Chrome transports these through CDP, but their catalogs, schemas, frame
   // URLs, outputs, and errors still originate from the inspected page.

@@ -10,7 +10,7 @@ const PROTECTED_DOM_TOOLS = new Set([
   'click_ax', 'set_checked', 'type_ax', 'set_field', 'click', 'type_text',
   'press_keys', 'scroll', 'extract_data', 'inspect_element_styles',
   'patch_element', 'revert_patch', 'highlight_element', 'hover', 'drag_drop',
-  'wait_for_element', 'wait_for_stable', 'get_selection',
+  'wait_for_element', 'wait_for_stable', 'get_selection', 'find_text',
 ]);
 
 export function isChromeProtectedPageDomTool(toolName) {
