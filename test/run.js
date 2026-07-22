@@ -11688,7 +11688,7 @@ test('all locales cover English keys and preserve interpolation placeholders', a
   }
 });
 
-test('locale helpers apply RTL direction for Arabic and Hebrew', () => {
+test('locale helpers apply RTL direction for Arabic, Hebrew, and Persian', () => {
   for (const [label, rel] of [
     ['chrome', 'src/chrome/src/ui/i18n.js'],
     ['firefox', 'src/firefox/src/ui/i18n.js'],
@@ -11696,14 +11696,60 @@ test('locale helpers apply RTL direction for Arabic and Hebrew', () => {
     const i18n = fs.readFileSync(path.join(ROOT, rel), 'utf8');
     assert.match(
       i18n,
-      /const RTL_LOCALES = new Set\(\['ar', 'he'\]\);/,
-      `${label}: Arabic and Hebrew should be registered as RTL locales`,
+      /const RTL_LOCALES = new Set\(\['ar', 'he', 'fa'\]\);/,
+      `${label}: Arabic, Hebrew, and Persian should be registered as RTL locales`,
     );
     assert.match(
       i18n,
       /document\.documentElement\.dir = RTL_LOCALES\.has\(currentLocale\) \? 'rtl' : 'ltr';/,
       `${label}: locale application should use RTL for registered locales and reset others to LTR`,
     );
+  }
+});
+
+test('new locales are registered in extension and web language dropdowns', () => {
+  const addedLocales = [
+    ['hi', 'हिन्दी'],
+    ['pt', 'Português'],
+    ['vi', 'Tiếng Việt'],
+    ['bn', 'বাংলা'],
+    ['fa', 'فارسی'],
+  ];
+
+  for (const [label, rel] of [
+    ['chrome', 'src/chrome/src/ui/i18n.js'],
+    ['firefox', 'src/firefox/src/ui/i18n.js'],
+  ]) {
+    const i18n = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+    for (const [code, languageLabel] of addedLocales) {
+      assert.match(i18n, new RegExp(`import ${code} from '\\.\\/locales\\/${code}\\.js';`), `${label}: ${code} locale import missing`);
+      assert.ok(i18n.includes(`{ code: '${code}', label: '${languageLabel}' }`), `${label}: ${code} language option missing`);
+    }
+  }
+
+  const webBuild = fs.readFileSync(path.join(ROOT, 'web/build/build.mjs'), 'utf8');
+  const webTemplate = fs.readFileSync(path.join(ROOT, 'web/build/template.html'), 'utf8');
+  const privacy = fs.readFileSync(path.join(ROOT, 'web/privacy.html'), 'utf8');
+  for (const [code, languageLabel] of addedLocales) {
+    assert.match(webBuild, new RegExp(`\\{ code: '${code}', bcp47:`), `web build: ${code} locale missing`);
+    for (const [surface, html] of [['landing template', webTemplate], ['privacy page', privacy]]) {
+      const option = `<option value="${code}">${languageLabel}</option>`;
+      assert.equal(html.split(option).length - 1, 1, `${surface}: ${code} language option should appear exactly once`);
+      assert.match(html, new RegExp(`const LOCALES = \\[[^\\]]*'${code}'`), `${surface}: ${code} routing entry missing`);
+    }
+  }
+});
+
+test('web landing builder preserves template markers and HTML entity escaping', () => {
+  const build = fs.readFileSync(path.join(ROOT, 'web/build/build.mjs'), 'utf8');
+  assert.ok(build.includes('{{locale_code}}'), 'web build: locale placeholder documentation should remain intact');
+  assert.doesNotMatch(build, /\{\{(?:locale_[a-z0-9_]+|docs_url|hreflang_links|faq_jsonld)\)\}/, 'web build: malformed template placeholder found');
+  assert.ok(
+    build.includes(`'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',`),
+    'web build: plain-text substitutions must HTML-escape special characters',
+  );
+  for (const entity of ['&amp;', '&lt;', '&gt;', '&#39;', '&quot;']) {
+    assert.ok(build.includes(`.replace(/${entity}/g,`), `web build: htmlToPlain must decode ${entity}`);
   }
 });
 

@@ -10,16 +10,16 @@
  *
  * Template uses {{t:key}} / {{t-html:key}} markers, plus a few build-only
  * placeholders the script fills per locale:
- *   {{locale_code)}      e.g. "en", "es"
- *   {{locale_bcp47)}     e.g. "en-US", "es-ES" (used in og:locale)
- *   {{locale_home_url)}  e.g. "https://webbrain.one/" or ".../es/"
- *   {{docs_url)}         English docs, or the secondary Chinese docs for zh
- *   {{hreflang_links)}   <link rel="alternate" ...> block for this page
- *   {{faq_jsonld)}       FAQPage schema block generated from faq.* keys
+ *   {{locale_code}}      e.g. "en", "es"
+ *   {{locale_bcp47}}     e.g. "en-US", "es-ES" (used in og:locale)
+ *   {{locale_home_url}}  e.g. "https://webbrain.one/" or ".../es/"
+ *   {{docs_url}}         English docs, or the secondary Chinese docs for zh
+ *   {{hreflang_links}}   <link rel="alternate" ...> block for this page
+ *   {{faq_jsonld}}       FAQPage schema block generated from faq.* keys
  *   {{plausible_analytics}} shared privacy-friendly analytics partial
  *
- * {{t:key)} → plain-text substitution, HTML-escaped.
- * {{t-html:key)} → raw substitution (value is expected to be HTML-ready).
+ * {{t:key}} → plain-text substitution, HTML-escaped.
+ * {{t-html:key}} → raw substitution (value is expected to be HTML-ready).
  * Use t-html only for values containing intentional inline HTML like
  * <strong>, <a>, <code>.
  *
@@ -104,7 +104,7 @@ const BLUESKY_PROFILE_URL = 'https://bsky.app/profile/webbrain-one.bsky.social';
 
 function escHtml(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({
-    '&': '&', '<': '<', '>': '>', '"': '"', "'": ''',
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
   }[c]));
 }
 
@@ -128,16 +128,16 @@ function buildHreflangBlock() {
 
 function htmlToPlain(html) {
   // Good-enough HTML → plain text for JSON-LD. Strips tags, collapses
-  // whitespace, keeps entities like & readable.
+  // whitespace, keeps entities like &amp; readable.
   return String(html)
     .replace(/<\/?(p|br|li|ul|ol|div)[^>]*>/gi, ' ')
     .replace(/<[^>]+>/g, '')
     .replace(/&nbsp;/g, ' ')
-    .replace(/&/g, '&')
-    .replace(/</g, '<')
-    .replace(/>/g, '>')
-    .replace(/'/g, "'")
-    .replace(/"/g, '"')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&#39;/g, "'")
+    .replace(/&quot;/g, '"')
     .replace(/\s+/g, ' ')
     .trim();
 }

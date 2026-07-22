@@ -1895,6 +1895,11 @@
         <option value="ms">Bahasa Melayu</option>
         <option value="tl">Filipino</option>
         <option value="he">עברית</option>
+        <option value="hi">हिन्दी</option>
+        <option value="pt">Português</option>
+        <option value="vi">Tiếng Việt</option>
+        <option value="bn">বাংলা</option>
+        <option value="fa">فارسی</option>
       </select>
       <button class="theme-toggle" type="button" id="theme-toggle" aria-label="{{t:nav.theme_toggle_aria}}" title="{{t:nav.theme_toggle_aria}}">
         <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -3030,7 +3035,7 @@
      instead of collapsing to the locale homepage. -->
 <script>
   (function () {
-    const LOCALES = ['en', 'es', 'fr', 'tr', 'zh', 'ru', 'uk', 'ar', 'ja', 'ko', 'id', 'th', 'ms', 'tl', 'he'];
+    const LOCALES = ['en', 'es', 'fr', 'tr', 'zh', 'ru', 'uk', 'ar', 'ja', 'ko', 'id', 'th', 'ms', 'tl', 'he', 'hi', 'pt', 'vi', 'bn', 'fa'];
     const sel = document.getElementById('lang-dropdown');
     if (!sel) return;
     const current = sel.dataset.current || 'en';
