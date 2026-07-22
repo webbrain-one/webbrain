@@ -339,6 +339,9 @@ export default {
   'sp.workflows.reason.no_trace': 'No successful recorded run was found in this conversation. Enable tracing, complete the task, then save it.',
   'sp.workflows.reason.no_steps': 'That run has no actions that can be safely saved for replay.',
   'sp.workflows.reason.not_found': 'No saved workflow has that ID.',
+  'sp.workflows.reason.name_required': 'Provide a workflow name: /workflow --save <name>.',
+  'sp.workflows.reason.http_start_url': 'The recorded run must start on an http(s) page before it can be saved.',
+  'sp.workflows.reason.normalization_failed': 'That workflow could not be saved because its steps were not safe to replay.',
 
   // --- Tool labels -------------------------------------------------------
   'tool.read_page': 'Reading page',

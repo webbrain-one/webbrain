@@ -736,6 +736,9 @@ export default {
   "sp.workflows.reason.no_steps": "Bu çalışmada güvenle kaydedilip yeniden oynatılabilecek bir eylem yok.",
   "sp.workflows.reason.not_found": "Bu kimliğe sahip kayıtlı iş akışı yok.",
 
+  "sp.workflows.reason.name_required": "Bir iş akışı adı verin: /workflow --save <name>.",
+  "sp.workflows.reason.http_start_url": "Kaydedilebilmesi için kaydedilmiş çalışmanın bir http(s) sayfasında başlaması gerekir.",
+  "sp.workflows.reason.normalization_failed": "Adımları güvenle yeniden oynatılamadığı için bu iş akışı kaydedilemedi.",
   "st.tab.memory": "Bellek",
   "st.display.plan_review.label": "Plan inceleme durakları",
   "st.display.plan_review.desc": "Geçerli bir planın ne zaman onay için duraklayacağını seçin. Varsayılan olarak yalnızca planlayıcının güveni eşikten düşük olduğunda duraklar.",

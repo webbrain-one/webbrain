@@ -748,6 +748,9 @@ export default {
   "sp.workflows.reason.no_steps": "Proses tersebut tidak memiliki tindakan yang aman untuk disimpan dan dijalankan ulang.",
   "sp.workflows.reason.not_found": "Tidak ada alur kerja tersimpan dengan ID tersebut.",
 
+  "sp.workflows.reason.name_required": "Berikan nama alur kerja: /workflow --save <name>.",
+  "sp.workflows.reason.http_start_url": "Proses yang direkam harus dimulai di halaman http(s) sebelum disimpan.",
+  "sp.workflows.reason.normalization_failed": "Alur kerja itu tidak dapat disimpan karena langkahnya tidak aman untuk dijalankan ulang.",
   "st.tab.memory": "Memori",
   "st.display.plan_review.label": "Jeda peninjauan rencana",
   "st.display.plan_review.desc": "Pilih kapan rencana yang valid dijeda untuk persetujuan. Secara default, rencana hanya dijeda ketika perencana melaporkan keyakinan di bawah ambang.",

@@ -739,6 +739,9 @@ export default {
   "sp.workflows.reason.no_steps": "To wykonanie nie zawiera działań, które można bezpiecznie zapisać do ponownego użycia.",
   "sp.workflows.reason.not_found": "Nie ma zapisanego przepływu pracy o tym ID.",
 
+  "sp.workflows.reason.name_required": "Podaj nazwę przepływu pracy: /workflow --save <name>.",
+  "sp.workflows.reason.http_start_url": "Zarejestrowane wykonanie musi zaczynać się na stronie http(s), zanim będzie można je zapisać.",
+  "sp.workflows.reason.normalization_failed": "Nie udało się zapisać tego przepływu, bo jego kroki nie są bezpieczne do ponownego użycia.",
   "st.tab.memory": "Pamięć",
   "st.display.plan_review.label": "Zatrzymania na przegląd planu",
   "st.display.plan_review.desc": "Wybierz, kiedy prawidłowy plan ma się zatrzymać do zatwierdzenia. Domyślnie zatrzymuje się tylko wtedy, gdy planer zgłosi pewność poniżej progu.",

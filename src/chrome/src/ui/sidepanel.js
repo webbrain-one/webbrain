@@ -2980,8 +2980,12 @@ async function forgetUserMemory(id, tabId = currentTabId) {
 const SAVED_WORKFLOW_FAILURE_REASON_KEYS = {
   conversation_required: 'sp.workflows.reason.no_trace',
   no_successful_trace: 'sp.workflows.reason.no_trace',
+  successful_run_required: 'sp.workflows.reason.no_trace',
   no_replayable_steps: 'sp.workflows.reason.no_steps',
   not_found: 'sp.workflows.reason.not_found',
+  name_required: 'sp.workflows.reason.name_required',
+  http_start_url_required: 'sp.workflows.reason.http_start_url',
+  normalization_failed: 'sp.workflows.reason.normalization_failed',
 };
 
 function savedWorkflowFailureMessage(res) {

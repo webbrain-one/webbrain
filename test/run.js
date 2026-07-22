@@ -43717,6 +43717,8 @@ test('saved workflow slash commands are out-of-band and wired in both browsers',
     assert.match(source, /Array\.isArray\(res\.warnings\)/);
     assert.match(source, /input\.type = parameter\.sensitive \? 'password' : 'text'/);
     assert.match(source, /inputs\.forEach\(\(input\) => \{ input\.value = ''; \}\)/);
+    assert.match(source, /name_required:\s*'sp\.workflows\.reason\.name_required'/);
+    assert.match(source, /http_start_url_required:\s*'sp\.workflows\.reason\.http_start_url'/);
     assert.doesNotMatch(source, /retryPayload[^\n]+workflowParameters/);
   }
   for (const background of ['src/chrome/src/background.js', 'src/firefox/src/background.js']) {
@@ -43740,14 +43742,50 @@ test('saved workflow compiler skips unsafe coordinates, failed calls, and unsupp
     { seq: 4, kind: 'tool', data: { name: 'navigate', args: { url: 'https://example.com/next?code=secret' }, result: { success: false, error: 'blocked' } } },
     { seq: 5, kind: 'tool', data: { name: 'navigate', args: { url: 'https://example.com/next?query=public' }, result: { success: true } } },
     { seq: 6, kind: 'tool', data: { name: 'click', args: { text: 'Review' }, result: { success: true } } },
+    { seq: 7, kind: 'tool', data: { name: 'wait_for_element', args: { selector: '.card:nth-child(2) button', timeout: 1000 }, result: { success: true } } },
+    { seq: 8, kind: 'tool', data: { name: 'wait_for_element', args: { text: 'Continue', selector: '.btn-primary', timeout: 1500 }, result: { success: true } } },
   ];
   const { workflow, warnings } = SavedWorkflowsCh.compileWorkflowFromTrace(run, events, { name: 'Safe flow', now: 2000 });
-  assert.equal(workflow.steps.length, 2);
+  assert.equal(workflow.steps.length, 3);
   assert.deepEqual(workflow.steps[0].args, { url: 'https://example.com/next' });
   assert.deepEqual(workflow.steps[1].args, { text: 'Review' });
+  assert.deepEqual(workflow.steps[2].args, { text: 'Continue', timeout: 1500 });
   assert.ok(warnings.some((warning) => /query or fragment/.test(warning)));
-  assert.doesNotMatch(JSON.stringify(workflow), /alert|code=|query=|x.*10|y.*20/);
-  assert.doesNotMatch(JSON.stringify(workflow), /nth-child|selector/);
+  assert.doesNotMatch(JSON.stringify(workflow), /alert\(|code=secret|query=public|"x":\s*10|"y":\s*20/);
+  assert.doesNotMatch(JSON.stringify(workflow), /nth-child|btn-primary|"selector"/);
+});
+
+test('saved workflow compiler rejects weak semantic targets that cannot match', () => {
+  const run = { runId: 'run_weak', status: 'done', tabUrl: 'https://example.com/form' };
+  const events = [
+    {
+      seq: 1,
+      kind: 'tool',
+      data: {
+        name: 'get_accessibility_tree',
+        result: { pageContent: 'button [ref_1]\n textbox "Email" [ref_2] type="email" name="email"' },
+      },
+    },
+    // role-only evidence scores below the match threshold and must not save.
+    { seq: 2, kind: 'tool', data: { name: 'click_ax', args: { ref_id: 'ref_1' }, result: { success: true } } },
+    {
+      seq: 3,
+      kind: 'tool',
+      data: {
+        name: 'set_field',
+        args: { ref_id: 'ref_2', text: 'person@example.com' },
+        result: { success: true, verified: true, fieldMeta: { type: 'email', name: 'email', labelText: 'Email' } },
+      },
+    },
+  ];
+  for (const module of [SavedWorkflowsCh, SavedWorkflowsFx]) {
+    const { workflow, warnings } = module.compileWorkflowFromTrace(run, events, { name: 'Strong only', now: 2100 });
+    assert.equal(workflow.steps.length, 1);
+    assert.equal(workflow.steps[0].tool, 'set_field');
+    assert.equal(module.isReplayableWorkflowTarget({ role: 'button' }), false);
+    assert.equal(module.isReplayableWorkflowTarget({ role: 'button', name: 'Save' }), true);
+    assert.ok(warnings.some((warning) => /click_ax/.test(warning)));
+  }
 });
 
 test('saved workflow normalization rejects imported raw refs and undeclared parameter markers', () => {
@@ -43770,6 +43808,19 @@ test('saved workflow normalization rejects imported raw refs and undeclared para
     ...base,
     steps: [{ tool: 'click', args: { selector: '#destructive-action' }, expected: { kind: 'tool_success' } }],
   }), null);
+  assert.equal(SavedWorkflowsCh.normalizeSavedWorkflow({
+    ...base,
+    steps: [{ tool: 'wait_for_element', args: { selector: '.card:nth-child(2) button' }, expected: { kind: 'tool_success' } }],
+  }), null);
+  assert.equal(SavedWorkflowsCh.normalizeSavedWorkflow({
+    ...base,
+    steps: [{ tool: 'click_ax', args: {}, target: { role: 'button', type: 'submit' }, expected: { kind: 'tool_success' } }],
+  }), null);
+  const waitOk = SavedWorkflowsCh.normalizeSavedWorkflow({
+    ...base,
+    steps: [{ tool: 'wait_for_element', args: { text: 'Continue', selector: '.ignored', timeout: 2000 }, expected: { kind: 'tool_success' } }],
+  });
+  assert.deepEqual(waitOk.steps[0].args, { text: 'Continue', timeout: 2000 });
 });
 
 test('saved workflow target matching fails closed on ambiguity', () => {
@@ -43821,7 +43872,27 @@ test('saved workflow fallback prompt omits all runtime values', () => {
   const prompt = SavedWorkflowsCh.workflowFallbackPrompt(workflow, 0, 'target_mismatch');
   assert.match(prompt, /fresh element references/);
   assert.match(prompt, /Ask the user only if this remaining step needs it/);
-  assert.doesNotMatch(prompt, /runtime secret/);
+  assert.match(prompt, /<ask user for parameter: password>/);
+  assert.doesNotMatch(prompt, /runtime secret|\$workflowParam/);
+});
+
+test('saved workflow clarify telemetry redacts form field values', () => {
+  const redacted = SavedWorkflowsCh.redactWorkflowClarifyForTelemetry({
+    clarifyId: 'submit_1',
+    question: 'Submit?',
+    submitConfirmation: {
+      host: 'checkout.example',
+      tool: 'click_ax',
+      summary: 'Changed/filled fields: Password: runtime secret.',
+      fields: [{ label: 'Password', value: 'runtime secret' }],
+      changedFields: [{ label: 'Password', value: 'runtime secret' }],
+    },
+  });
+  assert.equal(redacted.workflowReplay, true);
+  assert.equal(redacted.submitConfirmation.host, 'checkout.example');
+  assert.equal(redacted.submitConfirmation.summary, '[workflow form summary redacted]');
+  assert.equal(redacted.submitConfirmation.fields[0].value, '[workflow parameter redacted]');
+  assert.doesNotMatch(JSON.stringify(redacted), /runtime secret/);
 });
 
 for (const [browser, AgentClass] of [['chrome', AgentCh], ['firefox', AgentFx]]) {
@@ -43859,6 +43930,15 @@ for (const [browser, AgentClass] of [['chrome', AgentCh], ['firefox', AgentFx]])
       assert.equal(args.ref_id, 'ref_99');
       assert.equal(args.text, runtimeValue);
       onUpdate('tool_call', { name: 'set_field', args });
+      onUpdate('clarify', {
+        clarifyId: 'submit_test',
+        submitConfirmation: {
+          host: 'example.com',
+          summary: `Email: ${runtimeValue}`,
+          fields: [{ label: 'Email', value: runtimeValue }],
+          changedFields: [{ label: 'Email', value: runtimeValue }],
+        },
+      });
       onUpdate('tool_result', { name: 'set_field', result: { success: true, verified: true, actual: runtimeValue } });
       return { action: 'continue' };
     };
@@ -43875,6 +43955,7 @@ for (const [browser, AgentClass] of [['chrome', AgentCh], ['firefox', AgentFx]])
     const serialized = JSON.stringify(updates);
     assert.doesNotMatch(serialized, /runtime@example\.com|ref_99/);
     assert.match(serialized, /<workflow-parameter:email>/);
+    assert.match(serialized, /workflow form summary redacted|workflow parameter redacted/);
     assert.equal(agent.isRunning(77), false);
   });
 

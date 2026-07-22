@@ -748,6 +748,9 @@ export default {
   "sp.workflows.reason.no_steps": "이 실행에는 안전하게 저장하여 다시 실행할 수 있는 동작이 없습니다.",
   "sp.workflows.reason.not_found": "해당 ID의 저장된 워크플로가 없습니다.",
 
+  "sp.workflows.reason.name_required": "워크플로 이름을 입력하세요: /workflow --save <name>.",
+  "sp.workflows.reason.http_start_url": "저장하려면 기록된 실행이 http(s) 페이지에서 시작해야 합니다.",
+  "sp.workflows.reason.normalization_failed": "재생하기에 안전하지 않은 단계가 있어 해당 워크플로를 저장할 수 없습니다.",
   "st.tab.memory": "메모리",
   "st.display.plan_review.label": "계획 검토 중지 조건",
   "st.display.plan_review.desc": "유효한 계획이 언제 승인을 위해 멈출지 선택합니다. 기본적으로 플래너가 보고한 신뢰도가 임계값보다 낮을 때만 멈춥니다.",

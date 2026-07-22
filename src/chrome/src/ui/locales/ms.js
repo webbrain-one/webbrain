@@ -748,6 +748,9 @@ export default {
   "sp.workflows.reason.no_steps": "Pelaksanaan itu tiada tindakan yang boleh disimpan dengan selamat untuk dimainkan semula.",
   "sp.workflows.reason.not_found": "Tiada aliran kerja tersimpan dengan ID tersebut.",
 
+  "sp.workflows.reason.name_required": "Berikan nama aliran kerja: /workflow --save <name>.",
+  "sp.workflows.reason.http_start_url": "Pelaksanaan yang direkod mesti bermula pada halaman http(s) sebelum ia boleh disimpan.",
+  "sp.workflows.reason.normalization_failed": "Aliran kerja itu tidak dapat disimpan kerana langkahnya tidak selamat untuk dimainkan semula.",
   "st.tab.memory": "Memori",
   "st.display.plan_review.label": "Hentian semakan pelan",
   "st.display.plan_review.desc": "Pilih masa pelan yang sah perlu berhenti untuk kelulusan. Secara lalai, pelan hanya berhenti apabila perancang melaporkan keyakinan di bawah ambang.",

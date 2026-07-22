@@ -737,6 +737,9 @@ export default {
   "sp.workflows.reason.no_steps": "该运行没有可以安全保存并重放的操作。",
   "sp.workflows.reason.not_found": "没有使用该 ID 的已保存工作流。",
 
+  "sp.workflows.reason.name_required": "请提供工作流名称：/workflow --save <name>。",
+  "sp.workflows.reason.http_start_url": "已记录的运行必须从 http(s) 页面开始才能保存。",
+  "sp.workflows.reason.normalization_failed": "无法保存该工作流，因为其步骤不安全，不能用于重放。",
   "st.tab.memory": "记忆",
   "st.display.plan_review.label": "计划审查暂停",
   "st.display.plan_review.desc": "选择有效计划何时暂停以等待批准。默认仅在规划器报告的置信度低于阈值时暂停。",

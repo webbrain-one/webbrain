@@ -393,6 +393,9 @@ export default {
   "sp.workflows.reason.no_steps": "בהרצה זו אין פעולות שניתן לשמור בבטחה להפעלה חוזרת.",
   "sp.workflows.reason.not_found": "אין תהליך עבודה שמור עם מזהה זה.",
 
+  "sp.workflows.reason.name_required": "ספקו שם לתהליך העבודה: /workflow --save <name>.",
+  "sp.workflows.reason.http_start_url": "ההרצה המוקלטת חייבת להתחיל בעמוד http(s) לפני שניתן לשמור אותה.",
+  "sp.workflows.reason.normalization_failed": "לא ניתן לשמור את תהליך העבודה כי השלבים שלו אינם בטוחים להפעלה חוזרת.",
   "st.tab.memory": "זיכרון",
   "st.tab.profile": "פרופיל",
   "st.tab.account": "חשבון",

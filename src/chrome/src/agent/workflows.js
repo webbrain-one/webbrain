@@ -17,6 +17,9 @@ const MAX_WORKFLOWS = 100;
 const MAX_STEPS = 100;
 const MAX_PARAMETERS = 50;
 const MAX_TEXT = 240;
+// findWorkflowTarget and compile-time strength checks share this floor so a
+// saved target that can never match uniquely is rejected at save time.
+export const WORKFLOW_TARGET_MATCH_THRESHOLD = 7;
 
 export const REPLAYABLE_WORKFLOW_TOOLS = new Set([
   'navigate',
@@ -244,12 +247,14 @@ function compileStepArgs(name, rawArgs, target, parameters, warnings) {
     return { url };
   }
   if (name === 'go_back' || name === 'go_forward') return {};
-  if (name === 'click_ax') return target ? {} : null;
+  if (name === 'click_ax') return isReplayableWorkflowTarget(target) ? {} : null;
   if (name === 'set_checked') {
-    return target && typeof args.checked === 'boolean' ? { checked: args.checked } : null;
+    return isReplayableWorkflowTarget(target) && typeof args.checked === 'boolean'
+      ? { checked: args.checked }
+      : null;
   }
   if (name === 'type_ax' || name === 'set_field') {
-    if (!target || parameters.length >= MAX_PARAMETERS) return null;
+    if (!isReplayableWorkflowTarget(target) || parameters.length >= MAX_PARAMETERS) return null;
     const base = parameterBase(target, `input_${parameters.length + 1}`);
     const id = uniqueParameterId(base, parameters);
     parameters.push({
@@ -284,13 +289,13 @@ function compileStepArgs(name, rawArgs, target, parameters, warnings) {
     };
   }
   if (name === 'wait_for_element') {
-    const selector = cleanText(args.selector);
+    // Same fail-closed rule as click: bare CSS selectors are brittle across
+    // layout changes and must not be stored for deterministic replay.
     const text = cleanText(args.text);
     const timeout = Number(args.timeout);
-    if (!selector && !text) return null;
+    if (!text) return null;
     return {
-      ...(selector ? { selector } : {}),
-      ...(text ? { text } : {}),
+      text,
       ...(Number.isFinite(timeout) ? { timeout: Math.max(100, Math.min(30000, Math.round(timeout))) } : {}),
     };
   }
@@ -456,10 +461,22 @@ export function normalizeSavedWorkflow(input, options = {}) {
       if (!text) continue;
       args = { text };
     }
+    if (tool === 'wait_for_element') {
+      const text = cleanText(args.text);
+      if (!text) continue;
+      const timeout = Number(args.timeout);
+      args = {
+        text,
+        ...(Number.isFinite(timeout) ? { timeout: Math.max(100, Math.min(30000, Math.round(timeout))) } : {}),
+      };
+    }
     if ((tool === 'type_ax' || tool === 'set_field') && !args.text?.[WORKFLOW_PARAM_REF_KEY]) continue;
     const target = normalizeTarget(raw?.target);
     const scope = normalizeWorkflowScope(raw?.scope);
-    if (['click_ax', 'set_checked', 'type_ax', 'set_field'].includes(tool) && !target) continue;
+    if (['click_ax', 'set_checked', 'type_ax', 'set_field'].includes(tool)
+        && !isReplayableWorkflowTarget(target)) {
+      continue;
+    }
     steps.push({
       id: cleanId(raw?.id, `step_${steps.length + 1}`),
       tool,
@@ -563,6 +580,53 @@ export function redactWorkflowResultForTelemetry(tool, result) {
   return redact(result);
 }
 
+function redactWorkflowSubmitField(field) {
+  if (!field || typeof field !== 'object') return field;
+  const out = { ...field };
+  for (const key of ['value', 'text', 'actual', 'currentValue', 'newValue', 'oldValue']) {
+    if (Object.hasOwn(out, key) && out[key] != null && out[key] !== '') {
+      out[key] = '[workflow parameter redacted]';
+    }
+  }
+  return out;
+}
+
+/**
+ * Submit-confirmation and similar clarify events can carry live form field
+ * values that were just typed as workflow parameters. Keep host/tool labels
+ * for the user prompt, but strip values and free-text summaries from UI
+ * telemetry during replay.
+ */
+export function redactWorkflowClarifyForTelemetry(data = {}) {
+  const out = { ...(data && typeof data === 'object' ? data : {}), workflowReplay: true };
+  if (out.submitConfirmation && typeof out.submitConfirmation === 'object') {
+    const sc = { ...out.submitConfirmation };
+    if (sc.summary) sc.summary = '[workflow form summary redacted]';
+    if (Array.isArray(sc.fields)) sc.fields = sc.fields.map(redactWorkflowSubmitField);
+    if (Array.isArray(sc.changedFields)) {
+      sc.changedFields = sc.changedFields.map(redactWorkflowSubmitField);
+    }
+    out.submitConfirmation = sc;
+  }
+  return out;
+}
+
+function rewriteWorkflowArgsForFallback(args) {
+  const rewrite = (value, depth = 0) => {
+    if (depth > 6) return value;
+    if (Array.isArray(value)) return value.map((item) => rewrite(item, depth + 1));
+    if (!value || typeof value !== 'object') return value;
+    if (Object.keys(value).length === 1 && Object.hasOwn(value, WORKFLOW_PARAM_REF_KEY)) {
+      const id = cleanId(value[WORKFLOW_PARAM_REF_KEY], 'value');
+      return `<ask user for parameter: ${id}>`;
+    }
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, rewrite(item, depth + 1)]),
+    );
+  };
+  return rewrite(args || {});
+}
+
 export function validateWorkflowStepResult(expected, result, context = {}) {
   if (!result || typeof result !== 'object') {
     return { ok: false, reason: 'missing_result', outcomeUnknown: true };
@@ -600,7 +664,9 @@ export function workflowFallbackPrompt(workflow, failedStepIndex, reason = 'targ
   const remaining = (workflow?.steps || []).slice(index).map((step) => ({
     tool: step.tool,
     target: step.target || null,
-    args: step.args || {},
+    // Rewrite internal $workflowParam markers so local models do not treat
+    // the object shape as literal type_ax / set_field text.
+    args: rewriteWorkflowArgsForFallback(step.args || {}),
     expected: step.expected || null,
   }));
   const parameters = (workflow?.parameters || []).map((parameter) => ({
@@ -636,16 +702,21 @@ export function scoreWorkflowTarget(target, candidate) {
   addExact('name', 7);
   addExact('href', 7);
   addExact('placeholder', 5);
-  addExact('selector', 5);
+  // selector is intentionally not scored: TARGET_FIELDS never stores it, and
+  // brittle CSS evidence must not count toward a deterministic match.
   addExact('type', 3);
   addExact('role', 2);
   return score;
 }
 
+export function isReplayableWorkflowTarget(target) {
+  return scoreWorkflowTarget(target, target) >= WORKFLOW_TARGET_MATCH_THRESHOLD;
+}
+
 export function findWorkflowTarget(target, candidates) {
   const ranked = (Array.isArray(candidates) ? candidates : [])
     .map((candidate) => ({ candidate, score: scoreWorkflowTarget(target, candidate) }))
-    .filter((entry) => entry.score >= 7)
+    .filter((entry) => entry.score >= WORKFLOW_TARGET_MATCH_THRESHOLD)
     .sort((a, b) => b.score - a.score);
   if (!ranked.length) return { status: 'miss', candidate: null, score: 0 };
   if (ranked[1] && ranked[1].score === ranked[0].score) {

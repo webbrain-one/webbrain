@@ -737,6 +737,9 @@ export default {
   "sp.workflows.reason.no_steps": "この実行には安全に保存して再実行できる操作がありません。",
   "sp.workflows.reason.not_found": "そのIDの保存済みワークフローはありません。",
 
+  "sp.workflows.reason.name_required": "ワークフロー名を指定してください: /workflow --save <name>。",
+  "sp.workflows.reason.http_start_url": "保存する前に、記録済み実行は http(s) ページで開始している必要があります。",
+  "sp.workflows.reason.normalization_failed": "再生に安全でないステップがあるため、そのワークフローは保存できませんでした。",
   "st.tab.memory": "メモリ",
   "st.display.plan_review.label": "プランレビューの停止条件",
   "st.display.plan_review.desc": "有効なプランを承認待ちで停止する条件を選択します。既定では、プランナーが報告した信頼度がしきい値未満の場合のみ停止します。",

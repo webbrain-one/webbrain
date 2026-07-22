@@ -748,6 +748,9 @@ export default {
   "sp.workflows.reason.no_steps": "В этом запуске нет действий, которые можно безопасно сохранить для повтора.",
   "sp.workflows.reason.not_found": "Сохранённого сценария с таким ID нет.",
 
+  "sp.workflows.reason.name_required": "Укажите имя сценария: /workflow --save <name>.",
+  "sp.workflows.reason.http_start_url": "Записанный запуск должен начинаться на странице http(s), прежде чем его можно сохранить.",
+  "sp.workflows.reason.normalization_failed": "Этот сценарий нельзя сохранить: его шаги небезопасны для повтора.",
   "st.tab.memory": "Память",
   "st.display.plan_review.label": "Остановки для проверки плана",
   "st.display.plan_review.desc": "Выберите, когда корректный план должен останавливаться для одобрения. По умолчанию остановка происходит только тогда, когда планировщик сообщает уверенность ниже порога.",

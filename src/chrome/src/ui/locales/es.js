@@ -748,6 +748,9 @@ export default {
   "sp.workflows.reason.no_steps": "Esa ejecución no contiene acciones que puedan guardarse de forma segura.",
   "sp.workflows.reason.not_found": "No existe un flujo de trabajo guardado con ese ID.",
 
+  "sp.workflows.reason.name_required": "Indica un nombre de flujo: /workflow --save <name>.",
+  "sp.workflows.reason.http_start_url": "La ejecución registrada debe empezar en una página http(s) para poder guardarla.",
+  "sp.workflows.reason.normalization_failed": "No se pudo guardar ese flujo porque sus pasos no son seguros para repetir.",
   "st.tab.memory": "Memoria",
   "st.display.plan_review.label": "Pausas de revisión del plan",
   "st.display.plan_review.desc": "Elige cuándo un plan válido se detiene para pedir aprobación. De forma predeterminada, solo se detiene cuando el planificador indica una confianza inferior al umbral.",

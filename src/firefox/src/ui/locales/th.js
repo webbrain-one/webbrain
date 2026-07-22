@@ -737,6 +737,9 @@ export default {
   "sp.workflows.reason.no_steps": "การทำงานนี้ไม่มีการกระทำที่สามารถบันทึกเพื่อเล่นซ้ำได้อย่างปลอดภัย",
   "sp.workflows.reason.not_found": "ไม่มีเวิร์กโฟลว์ที่บันทึกไว้ด้วย ID นี้",
 
+  "sp.workflows.reason.name_required": "ระบุชื่อเวิร์กโฟลว์: /workflow --save <name>",
+  "sp.workflows.reason.http_start_url": "การทำงานที่บันทึกต้องเริ่มบนหน้า http(s) ก่อนจึงจะบันทึกได้",
+  "sp.workflows.reason.normalization_failed": "บันทึกเวิร์กโฟลว์นั้นไม่ได้เพราะขั้นตอนไม่ปลอดภัยพอที่จะเล่นซ้ำ",
   "st.tab.memory": "หน่วยความจำ",
   "st.display.plan_review.label": "การหยุดเพื่อตรวจทานแผน",
   "st.display.plan_review.desc": "เลือกว่าจะให้แผนที่ถูกต้องหยุดรอการอนุมัติเมื่อใด ค่าเริ่มต้นจะหยุดเฉพาะเมื่อผู้วางแผนรายงานความมั่นใจต่ำกว่าเกณฑ์",

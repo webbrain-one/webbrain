@@ -737,6 +737,9 @@ export default {
   "sp.workflows.reason.no_steps": "Walang aksyon sa run na ito na ligtas i-save para sa muling pagpapatakbo.",
   "sp.workflows.reason.not_found": "Walang naka-save na workflow na may ganitong ID.",
 
+  "sp.workflows.reason.name_required": "Magbigay ng pangalan ng workflow: /workflow --save <name>.",
+  "sp.workflows.reason.http_start_url": "Dapat magsimula ang naitalang run sa http(s) page bago ito ma-save.",
+  "sp.workflows.reason.normalization_failed": "Hindi ma-save ang workflow dahil hindi ligtas i-replay ang mga hakbang nito.",
   "st.tab.memory": "Memory",
   "st.display.plan_review.label": "Mga paghinto para sa pagsusuri ng plano",
   "st.display.plan_review.desc": "Piliin kung kailan hihinto ang wastong plano para sa pag-apruba. Bilang default, hihinto lang ito kapag mas mababa sa threshold ang kumpiyansang iniulat ng planner.",

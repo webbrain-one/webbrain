@@ -51,6 +51,7 @@ import {
   findWorkflowTarget,
   parseAccessibilityTreeDescriptors,
   redactWorkflowArgsForTelemetry,
+  redactWorkflowClarifyForTelemetry,
   redactWorkflowResultForTelemetry,
   resolveWorkflowArgs,
   validateWorkflowStepResult,
@@ -10728,7 +10729,13 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       throw new Error('Saved workflow is missing or invalid.');
     }
     await this._hydrate(tabId);
+    // Align pre-run cleanup with processMessage so a prior Act turn cannot
+    // leak plan guards or active-skill state into deterministic replay (or
+    // the reverse on the next turn). Chrome-only CDP fallback state is
+    // optional here.
+    this._resetActiveSkillsForRun(tabId, { refreshPrompt: false });
     this._clearRunLoopState(tabId);
+    this._clickAxCdpFallbacks?.delete(tabId);
     this.abortFlags.delete(tabId);
     this._prepareClarificationAuthorizationForRun(tabId);
     this.permissions.beginTurn(tabId);
@@ -10850,7 +10857,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             onUpdate(type, { ...data, result: redactWorkflowResultForTelemetry(step.tool, data.result), workflowReplay: true });
             return;
           }
-          onUpdate(type, data);
+          if (type === 'clarify') {
+            onUpdate(type, redactWorkflowClarifyForTelemetry(data));
+            return;
+          }
+          onUpdate(type, { ...(data && typeof data === 'object' ? data : {}), workflowReplay: true });
         };
         const beforeUrl = stepUrl;
         const batch = await this._executeToolBatch(
@@ -10909,8 +10920,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       return { status: 'completed', summary, matchedSteps, estimatedLlmCallsSaved: matchedSteps };
     } finally {
       await trace.endRun(traceRunId, { status: traceStatus, finalContent });
+      this.currentCostState.delete(tabId);
+      this._planExecutionGuards.delete(tabId);
+      this._resetActiveSkillsForRun(tabId);
       this._runningTabs.delete(tabId);
       this._clearRunLoopState(tabId);
+      this._clickAxCdpFallbacks?.delete(tabId);
       this._clearCompletionInvariant(tabId, completionRunToken);
     }
   }

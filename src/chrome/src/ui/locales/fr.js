@@ -748,6 +748,9 @@ export default {
   "sp.workflows.reason.no_steps": "Cette exécution ne contient aucune action pouvant être enregistrée de manière sûre.",
   "sp.workflows.reason.not_found": "Aucun workflow enregistré ne possède cet ID.",
 
+  "sp.workflows.reason.name_required": "Indiquez un nom de workflow : /workflow --save <name>.",
+  "sp.workflows.reason.http_start_url": "L’exécution enregistrée doit commencer sur une page http(s) avant d’être sauvegardée.",
+  "sp.workflows.reason.normalization_failed": "Ce workflow n’a pas pu être enregistré car ses étapes ne sont pas sûres à rejouer.",
   "st.tab.memory": "Mémoire",
   "st.display.plan_review.label": "Arrêts pour révision du plan",
   "st.display.plan_review.desc": "Choisissez quand un plan valide doit s’arrêter pour approbation. Par défaut, il ne s’arrête que lorsque le planificateur indique une confiance inférieure au seuil.",

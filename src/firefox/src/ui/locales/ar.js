@@ -737,6 +737,9 @@ export default {
   "sp.workflows.reason.no_steps": "لا يحتوي هذا التشغيل على إجراءات يمكن حفظها بأمان لإعادة التشغيل.",
   "sp.workflows.reason.not_found": "لا توجد مهمة سير عمل محفوظة بهذا المعرّف.",
 
+  "sp.workflows.reason.name_required": "قدّم اسمًا لسير العمل: /workflow --save <name>.",
+  "sp.workflows.reason.http_start_url": "يجب أن يبدأ التشغيل المسجل على صفحة http(s) قبل حفظه.",
+  "sp.workflows.reason.normalization_failed": "تعذّر حفظ سير العمل لأن خطواته غير آمنة لإعادة التشغيل.",
   "st.tab.memory": "الذاكرة",
   "st.display.plan_review.label": "توقفات مراجعة الخطة",
   "st.display.plan_review.desc": "اختر متى تتوقف الخطة الصالحة للموافقة عليها. افتراضيًا، تتوقف فقط عندما يبلّغ المخطِّط عن ثقة أقل من الحد.",
