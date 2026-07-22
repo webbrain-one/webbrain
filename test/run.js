@@ -43064,6 +43064,233 @@ test('planner gate: managed cloud runs bypass planning in Chrome and Firefox', a
   });
 });
 
+
+function loadPlanReviewDraftHelpers(panelRel) {
+  const source = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
+  const start = source.indexOf('function serializePlanDraftToMarkdown(draft) {');
+  const end = source.indexOf('\nfunction autosizePlanReviewField(', start);
+  assert.notEqual(start, -1, `${panelRel}: plan draft helpers missing`);
+  assert.notEqual(end, -1, `${panelRel}: plan draft helper boundary missing`);
+  const block = source.slice(start, end);
+  return Function(`${block}\nreturn {\n  PLAN_STEP_TOOL_SUFFIX_RE,\n  stripVerbosePlanStepToolSuffix,\n  looksLikeVerbosePlanMarkdown,\n  parsePlanMarkdownToDraft,\n  serializePlanDraftToMarkdown,\n  resolveSavedPlanReviewEdit,\n  setPlanReviewStructuredControlsDisabled,\n};`)();
+}
+
+test('plan review: structured draft serialize/parse round-trips step edits', () => {
+  for (const file of [
+    'src/chrome/src/ui/sidepanel.js',
+    'src/firefox/src/ui/sidepanel.js',
+  ]) {
+    const {
+      serializePlanDraftToMarkdown,
+      parsePlanMarkdownToDraft,
+      looksLikeVerbosePlanMarkdown,
+      stripVerbosePlanStepToolSuffix,
+      resolveSavedPlanReviewEdit,
+      setPlanReviewStructuredControlsDisabled,
+    } = loadPlanReviewDraftHelpers(file);
+
+    const original = {
+      summary: 'Download the invoice',
+      steps: [
+        { id: '1', action: 'Open account settings' },
+        { id: '2', action: 'Click Billing' },
+        { id: '3', action: 'Download the last invoice' },
+      ],
+      risks: ['May require login'],
+    };
+    const md = serializePlanDraftToMarkdown(original);
+    assert.match(md, /\*\*Download the invoice\*\*/, file);
+    assert.match(md, /1\. Open account settings/, file);
+    assert.match(md, /3\. Download the last invoice/, file);
+    assert.match(md, /⚠️ May require login/, file);
+
+    // Remove middle step and renumber via serialize.
+    const edited = {
+      summary: original.summary,
+      steps: [original.steps[0], original.steps[2]],
+      risks: original.risks,
+    };
+    const editedMd = serializePlanDraftToMarkdown(edited);
+    const roundTrip = parsePlanMarkdownToDraft(editedMd);
+    assert.equal(roundTrip.summary, 'Download the invoice', file);
+    assert.equal(roundTrip.steps.length, 2, file);
+    assert.equal(roundTrip.steps[0].action, 'Open account settings', file);
+    assert.equal(roundTrip.steps[1].action, 'Download the last invoice', file);
+    assert.equal(roundTrip.steps[0].id, '1', file);
+    assert.equal(roundTrip.steps[1].id, '2', file);
+    assert.deepEqual(roundTrip.risks, ['May require login'], file);
+
+    const multiline = {
+      summary: 'Review account settings',
+      steps: [
+        { id: '1', action: 'Open settings\n\nChoose the Billing section' },
+        { id: '2', action: 'Confirm the selected account' },
+      ],
+      risks: [],
+    };
+    const multilineMd = serializePlanDraftToMarkdown(multiline);
+    const multilineRoundTrip = parsePlanMarkdownToDraft(multilineMd);
+    assert.equal(
+      multilineRoundTrip.steps[0].action,
+      'Open settings\n\nChoose the Billing section',
+      `${file} should preserve multiline structured steps across restore`,
+    );
+    assert.equal(multilineRoundTrip.steps[1].action, 'Confirm the selected account', file);
+
+    const bulletContinuation = {
+      summary: 'Review the shipping details',
+      steps: [
+        { id: '1', action: 'Confirm the address\n- verify the postal code\n* record the result' },
+      ],
+      risks: [],
+    };
+    const bulletRoundTrip = parsePlanMarkdownToDraft(serializePlanDraftToMarkdown(bulletContinuation));
+    assert.equal(
+      bulletRoundTrip.steps[0].action,
+      'Confirm the address\n- verify the postal code\n* record the result',
+      `${file} should preserve bullet continuations inside multiline steps`,
+    );
+    assert.deepEqual(bulletRoundTrip.risks, [], `${file} should not misclassify step bullets as risks`);
+
+    // Verbose tool suffixes strip; legitimate parentheticals stay.
+    assert.equal(
+      stripVerbosePlanStepToolSuffix('Click Save (click, type)'),
+      'Click Save',
+      file,
+    );
+    assert.equal(
+      stripVerbosePlanStepToolSuffix('Read and update the form (read_page, type_text, click_ax)'),
+      'Read and update the form',
+      `${file} should strip canonical underscored tool IDs`,
+    );
+    assert.equal(
+      stripVerbosePlanStepToolSuffix('Inspect the page (get_accessibility_tree, wait_for_stable)'),
+      'Inspect the page',
+      `${file} should strip multi-segment canonical tool IDs`,
+    );
+    assert.equal(
+      stripVerbosePlanStepToolSuffix('Inspect the page\nThen wait (get_accessibility_tree, wait_for_stable)'),
+      'Inspect the page\nThen wait',
+      `${file} should strip canonical tool IDs from multiline actions`,
+    );
+    assert.equal(
+      stripVerbosePlanStepToolSuffix('Open invoice (March)'),
+      'Open invoice (March)',
+      file,
+    );
+    assert.equal(
+      stripVerbosePlanStepToolSuffix('Open the user profile (user_profile)'),
+      'Open the user profile (user_profile)',
+      `${file} should preserve non-tool underscored parentheticals`,
+    );
+
+    // Verbose metadata must not pollute risks when Done re-parses raw text.
+    const verbose = [
+      '**Download the invoice**',
+      '',
+      'Confidence: 82%',
+      '',
+      '### Steps',
+      '1. Open account settings',
+      '2. Click Billing (click_ax, read_page)',
+      '',
+      '### Completion requirements',
+      '- Submission required: no',
+      '',
+      '### Skills to activate',
+      '- download-invoices',
+      '',
+      '### Memory strategy',
+      '- Scratchpad: yes',
+      '',
+      '### Risks / notes',
+      '- May require login',
+    ].join('\n');
+    assert.equal(looksLikeVerbosePlanMarkdown(verbose), true, file);
+    assert.equal(looksLikeVerbosePlanMarkdown(md), false, file);
+    const fromVerbose = parsePlanMarkdownToDraft(verbose);
+    assert.equal(fromVerbose.summary, 'Download the invoice', file);
+    assert.equal(fromVerbose.steps.length, 2, file);
+    assert.equal(fromVerbose.steps[1].action, 'Click Billing', file);
+    assert.deepEqual(fromVerbose.risks, ['May require login'], file);
+    assert.equal(fromVerbose.risks.some((r) => /download-invoices|Scratchpad|Submission/.test(r)), false, file);
+
+    const editedVerbose = verbose.replace('- download-invoices', '- file-operations');
+    assert.deepEqual(
+      resolveSavedPlanReviewEdit({
+        dataset: { planDirty: 'true', planEditSource: 'raw', editedText: editedVerbose },
+      }),
+      { editedText: editedVerbose, markdownMode: 'verbose' },
+      `${file} should preserve verbose metadata edits after Done`,
+    );
+    assert.deepEqual(
+      resolveSavedPlanReviewEdit({
+        dataset: { planDirty: 'true', planEditSource: 'raw', editedText: editedMd },
+      }),
+      { editedText: editedMd, markdownMode: 'compact' },
+      `${file} should preserve compact raw edits after Done`,
+    );
+    assert.equal(
+      resolveSavedPlanReviewEdit({
+        dataset: { planDirty: 'false', planEditSource: 'raw', editedText: editedVerbose },
+      }),
+      null,
+      `${file} should ignore a clean saved buffer`,
+    );
+    assert.equal(
+      resolveSavedPlanReviewEdit({
+        dataset: { planDirty: 'true', planEditSource: 'structured', editedText: '**No steps**' },
+      }),
+      null,
+      `${file} should keep the empty-step guard for structured edits`,
+    );
+
+    const structuredControls = [{ disabled: false }, { disabled: false }, { disabled: false }];
+    const cardWithStructuredControls = {
+      querySelectorAll(selector) {
+        assert.match(selector, /plan-review-summary-input/, file);
+        assert.match(selector, /plan-review-step-remove/, file);
+        return structuredControls;
+      },
+    };
+    setPlanReviewStructuredControlsDisabled(cardWithStructuredControls, true);
+    assert.equal(
+      structuredControls.every((control) => control.disabled),
+      true,
+      `${file} should disable structured inputs while raw editing is active`,
+    );
+    setPlanReviewStructuredControlsDisabled(cardWithStructuredControls, false);
+    assert.equal(
+      structuredControls.every((control) => !control.disabled),
+      true,
+      `${file} should re-enable structured inputs after raw editing`,
+    );
+
+    assert.match(fs.readFileSync(path.join(ROOT, file), 'utf8'), /function resolvePlanReviewApprovalText\(/, file);
+    assert.match(fs.readFileSync(path.join(ROOT, file), 'utf8'), /function renderPlanReviewRisks\(/, file);
+    assert.match(
+      fs.readFileSync(path.join(ROOT, file), 'utf8'),
+      /planDirty === 'true'[\s\S]*editedText[\s\S]*planReviewOriginalMarkdown/,
+      `${file} should seed raw editor from original when clean`,
+    );
+    assert.match(
+      fs.readFileSync(path.join(ROOT, file), 'utf8'),
+      /looksLikeVerbosePlanMarkdown\(current\) \? 'verbose' : 'compact'/,
+      `${file} should force compact approval for compact-shaped raw buffers`,
+    );
+    assert.match(
+      fs.readFileSync(path.join(ROOT, file), 'utf8'),
+      /const savedEdit = resolveSavedPlanReviewEdit\(card\);\s*if \(savedEdit\) return savedEdit;\s*const draft = getPlanReviewDraftFromDom\(card\);\s*if \(!draft\.steps\.length\)/,
+      `${file} should approve an exact collapsed raw edit before enforcing structured steps`,
+    );
+    assert.match(
+      fs.readFileSync(path.join(ROOT, file), 'utf8'),
+      /setPlanReviewStructuredControlsDisabled\(card, enabled\);/,
+      `${file} should lock structured controls while raw mode owns the edit buffer`,
+    );
+  }
+});
+
 test('sidepanel: restored plan review cards rebind approve and cancel actions', () => {
   for (const file of [
     'src/chrome/src/ui/sidepanel.js',
@@ -43080,21 +43307,51 @@ test('sidepanel: restored plan review cards rebind approve and cancel actions', 
     assert.match(source, /if \(isAwaitingPlanReviewForTab\(tabId\)\) \{[\s\S]*?sp\.plan\.awaiting_review[\s\S]*?return false;/, `${file} should block normal sends while a plan awaits approval`);
     assert.match(source, /rebindPlanReviewCards\(\);/, `${file} should call the rebinder after chat restore`);
     assert.match(source, /plan-review-approve[\s\S]*submitPlanReview\(card, tabId, planId, 'approve'/, `${file} should rebind approve`);
-    assert.match(source, /plan-review-change[\s\S]*revealPlanReviewEditor\(card, true\)/, `${file} should reveal editing only through Change`);
+    assert.match(source, /plan-review-change[\s\S]*setPlanReviewRawEditing\(card, enableRaw/, `${file} should toggle raw markdown via Edit as text`);
     assert.match(source, /plan-review-cancel[\s\S]*submitPlanReview\(card, tabId, planId, 'reject'/, `${file} should rebind cancel`);
-    assert.match(source, /renderPlanReviewView\(data\.plan, compactMarkdown\)/, `${file} should render a read-only steps view`);
-    assert.match(source, /const skillIds = Array\.isArray\(plan\?\.skill_ids\)[\s\S]*plan-review-skills[\s\S]*for \(const skillId of skillIds\)/, `${file} should show planned skill activation before approval`);
-    assert.match(source, /card\.dataset\.editing = 'false';/, `${file} should start plan cards in read-only mode`);
+    assert.match(source, /function serializePlanDraftToMarkdown\(/, `${file} should serialize structured plan drafts to markdown`);
+    assert.match(source, /function parsePlanMarkdownToDraft\(/, `${file} should parse plan markdown back into drafts`);
+    assert.match(source, /function looksLikeVerbosePlanMarkdown\(/, `${file} should detect verbose plan shape for raw approval mode`);
+    assert.match(source, /function renderPlanReviewRisks\(/, `${file} should keep risks DOM in sync with the draft`);
+    assert.match(source, /plan-review-step-remove/, `${file} should offer one-click step removal`);
+    assert.match(source, /plan-review-add-step/, `${file} should offer add-step`);
+    assert.match(source, /function resolvePlanReviewApprovalText\(/, `${file} should resolve structured vs raw approval text`);
+    assert.match(source, /renderPlanReviewView\(data\.plan, compactMarkdown\)/, `${file} should render a structured plan editor view`);
+    assert.match(source, /mountPlanReviewEditor\(card, view\)/, `${file} should mount the structured plan editor`);
+    assert.match(source, /plan-review-skills[\s\S]*for \(const skillId of skillIds\)/, `${file} should show planned skill activation before approval`);
+    assert.match(source, /card\.dataset\.editing = 'false';/, `${file} should start plan cards with raw markdown collapsed`);
+    assert.match(
+      source,
+      /if \(card\.dataset\.planDirty === 'true'\) \{[\s\S]*textarea\.value = card\.dataset\.editedText[\s\S]*\} else \{[\s\S]*textarea\.value = original;/,
+      `${file} should open raw editor from original when clean`,
+    );
+    assert.match(
+      source,
+      /if \(current && current !== original\) \{[\s\S]*fromRaw: true[\s\S]*\} else \{/,
+      `${file} should skip raw re-parse when the buffer is unchanged`,
+    );
     const css = fs.readFileSync(path.join(ROOT, file.replace(/src\/ui\/sidepanel\.js$/, 'styles/sidepanel.css')), 'utf8');
-    assert.match(css, /\.plan-review-card:not\(\[data-editing="true"\]\) \.plan-review-edit/, `${file} css should hide the plan edit textarea until editing`);
-    assert.match(css, /\.plan-review-card\[data-editing="true"\] \.plan-review-view/, `${file} css should hide the read-only view while editing`);
+    assert.match(css, /\.plan-review-card:not\(\[data-editing="true"\]\) \.plan-review-edit/, `${file} css should hide the raw plan textarea until Edit as text`);
+    assert.match(css, /\.plan-review-step-remove/, `${file} css should style one-click step removal`);
+    assert.match(css, /\.plan-review-step[\s\S]*grid-template-columns:\s*22px minmax\(0, 1fr\) 26px/, `${file} css should lay out number/input/remove columns`);
     assert.match(css, /\.plan-review-skills[\s\S]*\.plan-review-skill-list[\s\S]*\.plan-review-skill/, `${file} css should make planned skill activation visible`);
     const enLocale = fs.readFileSync(path.join(ROOT, file.replace(/src\/ui\/sidepanel\.js$/, 'src/ui/locales/en.js')), 'utf8');
     assert.match(enLocale, /'sp\.plan\.skills': 'Skills to activate'/, `${file} should label the visible skill activation disclosure`);
+    assert.match(enLocale, /'sp\.plan\.edit_as_text': 'Edit as text'/, `${file} should label the raw markdown escape hatch`);
+    assert.match(enLocale, /'sp\.plan\.remove_step': 'Remove step'/, `${file} should label one-click step removal`);
+    assert.match(enLocale, /'sp\.plan\.add_step': 'Add step'/, `${file} should label add-step`);
     assert.match(source, /const useVerbosePlan = verboseMode && !!data\.verboseMarkdown;/, `${file} should use the verbose plan only in verbose mode`);
     assert.match(source, /card\.dataset\.planMarkdownMode = useVerbosePlan \? 'verbose' : 'compact';/, `${file} should remember which plan text was displayed`);
-    assert.match(source, /markdownMode === 'verbose'/, `${file} should pin the displayed verbose plan when approved`);
-    assert.match(source, /markdownMode = String\(card\.dataset\.planMarkdownMode \|\| 'compact'\)/, `${file} should send the displayed markdown mode with plan approval`);
+    assert.match(
+      source,
+      /looksLikeVerbosePlanMarkdown\(current\) \? 'verbose' : 'compact'/,
+      `${file} should pin compact-shaped raw edits as compact so skills are not fail-closed`,
+    );
+    assert.match(
+      source,
+      /markdownMode = String\(card\.dataset\.planMarkdownMode \|\| 'compact'\) === 'verbose' \? 'verbose' : 'compact'/,
+      `${file} should send the approval markdown mode with plan responses`,
+    );
     assert.match(source, /decision: action, editedText, markdownMode/, `${file} should include markdown mode in plan responses`);
     assert.match(source, /const activeAssistantEl = action === 'approve' \? reattachPlanReviewActiveRun\(card\) : null;/, `${file} should mark approvals active before posting`);
     assert.match(source, /setPlanReviewAwaiting\(tabId, false\);/, `${file} should clear awaiting-plan state after a plan decision`);

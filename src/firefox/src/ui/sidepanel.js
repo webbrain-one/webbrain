@@ -3446,6 +3446,591 @@ function rebindClarifyCards() {
   });
 }
 
+function planReviewDisplayFields(plan, fallbackMarkdown = '') {
+  const localized = plan?.localized && typeof plan.localized === 'object' ? plan.localized : null;
+  const summary = String(localized?.summary || plan?.summary || '').trim();
+  const stepsSource = Array.isArray(localized?.steps) && localized.steps.length
+    ? localized.steps
+    : (Array.isArray(plan?.steps) ? plan.steps : []);
+  const steps = stepsSource
+    .map((step, index) => ({
+      id: String(step?.id || index + 1).replace(/\.$/, '') || String(index + 1),
+      action: String(step?.action || '').trim(),
+    }))
+    .filter((step) => step.action);
+  const risksSource = Array.isArray(localized?.risks) && localized.risks.length
+    ? localized.risks
+    : (Array.isArray(plan?.risks) ? plan.risks : []);
+  const risks = risksSource.map((risk) => String(risk || '').trim()).filter(Boolean);
+  if (!steps.length && !summary && fallbackMarkdown) {
+    return parsePlanMarkdownToDraft(fallbackMarkdown);
+  }
+  return { summary, steps, risks };
+}
+
+function serializePlanDraftToMarkdown(draft) {
+  const lines = [];
+  const summary = String(draft?.summary || '').trim();
+  if (summary) lines.push(`**${summary}**`, '');
+  const steps = Array.isArray(draft?.steps) ? draft.steps : [];
+  let stepNum = 0;
+  for (const step of steps) {
+    const action = String(step?.action || '').trim();
+    if (!action) continue;
+    stepNum += 1;
+    lines.push(`${stepNum}. ${action}`);
+  }
+  const risks = Array.isArray(draft?.risks)
+    ? draft.risks.map((risk) => String(risk || '').trim()).filter(Boolean)
+    : [];
+  if (risks.length) {
+    if (stepNum) lines.push('');
+    for (const risk of risks) lines.push(`- ⚠️ ${risk}`);
+  }
+  return lines.join('\n').trim();
+}
+
+// Tool names that may appear in verbose step suffixes like "Click Save (click, type)".
+const PLAN_STEP_TOOL_SUFFIX_RE = /^(?:click|type|press|scroll|navigate|find|wait|select|hover|drag|upload|download|screenshot|extract|read|write|fill|submit|focus|blur|tab|enter|escape|key|keys|js|eval|api|fetch|http|network|clipboard|permission|schedule|resume|tool|get|set|new|go|execute|inspect|inject|remove|patch|revert|list|progress|research|shadow|iframe|highlight|scratchpad|done)(?:_[a-z0-9]+)*$/i;
+
+function stripVerbosePlanStepToolSuffix(action) {
+  const text = String(action || '').trim();
+  const match = text.match(/^([\s\S]*?)\s+\(([^()]*)\)\s*$/);
+  if (!match) return text;
+  const suffix = match[2].trim();
+  // Only strip parentheticals that look like planner tool lists, not user text
+  // like "Open invoice (March)" or "Choose plan (annual)".
+  const toolNames = suffix.split(',').map((name) => name.trim()).filter(Boolean);
+  if (!toolNames.length || !toolNames.every((name) => PLAN_STEP_TOOL_SUFFIX_RE.test(name))) return text;
+  return match[1].trim();
+}
+
+function looksLikeVerbosePlanMarkdown(text) {
+  const raw = String(text || '');
+  return /(?:^|\n)\s*Confidence:\s*\d/i.test(raw)
+    || /(?:^|\n)\s*###\s+Completion requirements\b/i.test(raw)
+    || /(?:^|\n)\s*###\s+Skills to activate\b/i.test(raw)
+    || /(?:^|\n)\s*###\s+Memory strategy\b/i.test(raw)
+    || /(?:^|\n)\s*###\s+Scheduling\b/i.test(raw);
+}
+
+function parsePlanMarkdownToDraft(text) {
+  const lines = String(text || '').split('\n');
+  let summary = '';
+  const steps = [];
+  const risks = [];
+  // Ignore planner execution-metadata sections so "Done" from verbose raw mode
+  // does not ingest skill IDs / memory bullets as risks.
+  let section = 'body'; // body | steps | risks | meta
+  let activeStep = null;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      if (section === 'steps' && activeStep) activeStep.action += '\n';
+      continue;
+    }
+
+    const heading = trimmed.match(/^###\s+(.+)$/i);
+    if (heading) {
+      const title = heading[1].trim().toLowerCase();
+      if (/^steps\b/.test(title)) section = 'steps';
+      else if (/^risks?\b/.test(title) || /notes\b/.test(title)) section = 'risks';
+      else if (
+        /completion requirements|skills to activate|memory strategy|scheduling|planner execution metadata/
+          .test(title)
+      ) {
+        section = 'meta';
+      } else {
+        section = 'meta';
+      }
+      activeStep = null;
+      continue;
+    }
+
+    if (section === 'meta') {
+      activeStep = null;
+      continue;
+    }
+    if (/^confidence:\s*/i.test(trimmed)) continue;
+    if (/^(submission required|scratchpad|progress ledger)\b/i.test(trimmed)) continue;
+
+    const bold = trimmed.match(/^\*\*(.+)\*\*$/);
+    if (bold && !summary) {
+      summary = bold[1].trim();
+      activeStep = null;
+      continue;
+    }
+
+    const stepMatch = trimmed.match(/^(\d+)[\.)]\s+(.+)$/);
+    if (stepMatch) {
+      activeStep = {
+        id: stepMatch[1],
+        action: stepMatch[2].trim(),
+      };
+      steps.push(activeStep);
+      section = 'steps';
+      continue;
+    }
+
+    const riskMatch = trimmed.match(/^[-*]\s+(?:⚠️\s*)?(.+)$/);
+    if (riskMatch) {
+      const riskText = riskMatch[1].replace(/^⚠️\s*/, '').trim();
+      if (!riskText) continue;
+      // Only accept risk bullets that are explicitly marked, or that appear
+      // under a Risks heading. Plain metadata bullets never qualify.
+      const explicitRisk = /⚠️/.test(trimmed) || section === 'risks';
+      if (section === 'steps' && activeStep && !explicitRisk) {
+        activeStep.action += `\n${line.trimEnd()}`;
+        continue;
+      }
+      activeStep = null;
+      if (!explicitRisk) continue;
+      if (/^skills?\s+to\s+activate/i.test(riskText)) continue;
+      if (/^(submission required|scratchpad|progress ledger)\b/i.test(riskText)) continue;
+      risks.push(riskText);
+      continue;
+    }
+
+    if (section === 'steps' && activeStep) {
+      activeStep.action += `\n${line.trimEnd()}`;
+      continue;
+    }
+
+    if (!summary && section === 'body' && !/^(confidence|submission required|scratchpad|progress ledger)/i.test(trimmed)) {
+      summary = trimmed.replace(/^#+\s*/, '');
+    }
+  }
+  return {
+    summary,
+    steps: steps
+      .map((step) => ({ ...step, action: stripVerbosePlanStepToolSuffix(step.action) }))
+      .filter((step) => step.action),
+    risks: risks.filter(Boolean),
+  };
+}
+
+function resolveSavedPlanReviewEdit(card) {
+  if (card?.dataset?.planDirty !== 'true' || card.dataset.planEditSource !== 'raw') return null;
+  const editedText = String(card.dataset.editedText || '').trim();
+  if (!editedText) return null;
+  return {
+    editedText,
+    markdownMode: looksLikeVerbosePlanMarkdown(editedText) ? 'verbose' : 'compact',
+  };
+}
+
+function setPlanReviewStructuredControlsDisabled(card, disabled) {
+  const controls = card?.querySelectorAll?.(
+    '.plan-review-summary-input, .plan-review-step-input, .plan-review-add-step, .plan-review-step-remove',
+  ) || [];
+  for (const control of controls) control.disabled = Boolean(disabled);
+}
+
+function autosizePlanReviewField(el) {
+  if (!el || el.tagName !== 'TEXTAREA') return;
+  el.style.height = 'auto';
+  el.style.height = `${Math.max(el.scrollHeight, 28)}px`;
+}
+
+function getPlanReviewDraftFromDom(card) {
+  const summary = String(card?.querySelector?.('.plan-review-summary-input')?.value || '').trim();
+  const steps = [...(card?.querySelectorAll?.('.plan-review-step-input') || [])]
+    .map((input, index) => ({
+      id: String(index + 1),
+      action: String(input.value || '').trim(),
+    }))
+    .filter((step) => step.action);
+  let risks = [];
+  try {
+    risks = JSON.parse(card?.dataset?.planRisks || '[]');
+  } catch {
+    risks = [];
+  }
+  if (!Array.isArray(risks)) risks = [];
+  risks = risks.map((risk) => String(risk || '').trim()).filter(Boolean);
+  return { summary, steps, risks };
+}
+
+function planReviewOriginalMarkdown(card) {
+  return String(card?.dataset?.originalMarkdown || card?.querySelector?.('.plan-review-edit')?.defaultValue || '').trim();
+}
+
+function syncPlanReviewDraft(card, { fromRaw = false } = {}) {
+  if (!card) return getPlanReviewDraftFromDom(card);
+  const rawTextarea = card.querySelector('.plan-review-edit');
+  let draft;
+  if (fromRaw && rawTextarea) {
+    draft = parsePlanMarkdownToDraft(rawTextarea.value);
+    applyPlanDraftToEditor(card, draft, { preserveFocus: false });
+  } else {
+    draft = getPlanReviewDraftFromDom(card);
+  }
+  const serialized = serializePlanDraftToMarkdown(draft);
+  const original = planReviewOriginalMarkdown(card);
+  const originalCompact = String(card.dataset.originalCompactMarkdown || '').trim();
+  const rawMode = card.dataset.editing === 'true';
+  const currentText = rawMode && rawTextarea
+    ? String(rawTextarea.value || '').trim()
+    : serialized;
+  // Dirty relative to the text the user was shown, or to the compact baseline
+  // for structured edits (so verbose display without changes stays clean).
+  const dirty = rawMode
+    ? currentText !== original
+    : serialized !== originalCompact;
+  card.dataset.planDirty = dirty ? 'true' : 'false';
+  if (dirty) {
+    card.dataset.editedText = currentText;
+    if (!fromRaw) card.dataset.planEditSource = 'structured';
+  } else {
+    delete card.dataset.editedText;
+    delete card.dataset.planEditSource;
+  }
+  if (!rawMode && rawTextarea && document.activeElement !== rawTextarea) {
+    // Keep the hidden raw buffer aligned with structured state when dirty;
+    // otherwise leave the original display text (important for verbose).
+    rawTextarea.value = dirty ? (serialized || original) : original;
+  }
+  const emptyNote = card.querySelector('.plan-review-empty-steps');
+  if (emptyNote) {
+    emptyNote.hidden = draft.steps.length > 0;
+  }
+  schedulePersist();
+  return draft;
+}
+
+function renumberPlanReviewSteps(card) {
+  const list = card?.querySelector?.('.plan-review-steps');
+  if (!list) return;
+  [...list.querySelectorAll('.plan-review-step')].forEach((item, index) => {
+    const number = item.querySelector('.plan-review-step-number');
+    if (number) number.textContent = String(index + 1);
+  });
+}
+
+function createPlanReviewStepRow(card, step, index) {
+  const item = document.createElement('div');
+  item.className = 'plan-review-step';
+  item.setAttribute('role', 'listitem');
+
+  const number = document.createElement('span');
+  number.className = 'plan-review-step-number';
+  number.textContent = String(step?.id || index + 1).replace(/\.$/, '') || String(index + 1);
+
+  const action = document.createElement('textarea');
+  action.className = 'plan-review-step-input plan-review-step-action';
+  action.rows = 1;
+  action.value = String(step?.action || '');
+  action.placeholder = typeof t === 'function' ? t('sp.plan.step_placeholder') : 'Step action';
+  action.setAttribute('aria-label', typeof t === 'function' ? t('sp.plan.step_placeholder') : 'Step action');
+
+  const removeBtn = document.createElement('button');
+  removeBtn.type = 'button';
+  removeBtn.className = 'plan-review-step-remove';
+  removeBtn.setAttribute('aria-label', typeof t === 'function' ? t('sp.plan.remove_step') : 'Remove step');
+  removeBtn.title = typeof t === 'function' ? t('sp.plan.remove_step') : 'Remove step';
+  removeBtn.textContent = '×';
+
+  removeBtn.addEventListener('click', () => {
+    item.remove();
+    renumberPlanReviewSteps(card);
+    syncPlanReviewDraft(card);
+    const remaining = card.querySelector('.plan-review-step-input');
+    if (remaining) {
+      try { remaining.focus(); } catch {}
+    }
+  });
+
+  action.addEventListener('input', () => {
+    autosizePlanReviewField(action);
+    syncPlanReviewDraft(card);
+  });
+
+  item.appendChild(number);
+  item.appendChild(action);
+  item.appendChild(removeBtn);
+  queueMicrotask(() => autosizePlanReviewField(action));
+  return item;
+}
+
+function renderPlanReviewRisks(view, risks) {
+  if (!view) return;
+  const list = Array.isArray(risks)
+    ? risks.map((risk) => String(risk || '').trim()).filter(Boolean)
+    : [];
+  let risksEl = view.querySelector('.plan-review-risks');
+  if (!list.length) {
+    risksEl?.remove();
+    return;
+  }
+  if (!risksEl) {
+    risksEl = document.createElement('div');
+    risksEl.className = 'plan-review-risks';
+    // Keep risks above skills when present.
+    const skills = view.querySelector('.plan-review-skills');
+    if (skills) view.insertBefore(risksEl, skills);
+    else view.appendChild(risksEl);
+  }
+  risksEl.replaceChildren();
+  for (const risk of list) {
+    const riskItem = document.createElement('div');
+    riskItem.className = 'plan-review-risk';
+    riskItem.textContent = `⚠️ ${risk}`;
+    risksEl.appendChild(riskItem);
+  }
+}
+
+function applyPlanDraftToEditor(card, draft, { preserveFocus = true } = {}) {
+  const view = card?.querySelector?.('.plan-review-view');
+  if (!view) return;
+  const summaryInput = view.querySelector('.plan-review-summary-input');
+  if (summaryInput && (!preserveFocus || document.activeElement !== summaryInput)) {
+    summaryInput.value = String(draft?.summary || '');
+    autosizePlanReviewField(summaryInput);
+  }
+  const list = view.querySelector('.plan-review-steps');
+  if (!list) return;
+  const active = document.activeElement;
+  const activeIndex = preserveFocus && active?.classList?.contains('plan-review-step-input')
+    ? [...list.querySelectorAll('.plan-review-step-input')].indexOf(active)
+    : -1;
+  const selectionStart = activeIndex >= 0 ? active.selectionStart : null;
+  const selectionEnd = activeIndex >= 0 ? active.selectionEnd : null;
+  list.replaceChildren();
+  const steps = Array.isArray(draft?.steps) && draft.steps.length
+    ? draft.steps
+    : [{ id: '1', action: '' }];
+  steps.forEach((step, index) => {
+    list.appendChild(createPlanReviewStepRow(card, step, index));
+  });
+  renumberPlanReviewSteps(card);
+  const risks = Array.isArray(draft?.risks) ? draft.risks : [];
+  card.dataset.planRisks = JSON.stringify(risks);
+  renderPlanReviewRisks(view, risks);
+  if (activeIndex >= 0) {
+    const next = list.querySelectorAll('.plan-review-step-input')[activeIndex];
+    if (next) {
+      try {
+        next.focus();
+        if (selectionStart != null) next.setSelectionRange(selectionStart, selectionEnd ?? selectionStart);
+      } catch {}
+    }
+  }
+}
+
+function renderPlanReviewSkills(skillIds) {
+  const skills = document.createElement('div');
+  skills.className = 'plan-review-skills';
+  const label = document.createElement('div');
+  label.className = 'plan-review-skills-label';
+  label.textContent = typeof t === 'function' ? t('sp.plan.skills') : 'Skills to activate';
+  skills.appendChild(label);
+  const values = document.createElement('div');
+  values.className = 'plan-review-skill-list';
+  for (const skillId of skillIds) {
+    const value = document.createElement('code');
+    value.className = 'plan-review-skill';
+    value.textContent = skillId;
+    values.appendChild(value);
+  }
+  skills.appendChild(values);
+  return skills;
+}
+
+function renderPlanReviewView(plan, fallbackMarkdown = '') {
+  const view = document.createElement('div');
+  view.className = 'plan-review-view';
+  const draft = planReviewDisplayFields(plan, fallbackMarkdown);
+  const skillIds = Array.isArray(plan?.skill_ids)
+    ? plan.skill_ids.map((id) => String(id || '').trim()).filter(Boolean)
+    : [];
+
+  const summaryInput = document.createElement('textarea');
+  summaryInput.className = 'plan-review-summary-input plan-review-summary';
+  summaryInput.rows = 1;
+  summaryInput.value = draft.summary;
+  summaryInput.placeholder = typeof t === 'function' ? t('sp.plan.summary_placeholder') : 'Plan summary';
+  summaryInput.setAttribute('aria-label', typeof t === 'function' ? t('sp.plan.summary_placeholder') : 'Plan summary');
+  view.appendChild(summaryInput);
+
+  const list = document.createElement('div');
+  list.className = 'plan-review-steps';
+  list.setAttribute('role', 'list');
+  view.appendChild(list);
+
+  const addBtn = document.createElement('button');
+  addBtn.type = 'button';
+  addBtn.className = 'plan-review-add-step';
+  addBtn.textContent = typeof t === 'function' ? t('sp.plan.add_step') : 'Add step';
+  view.appendChild(addBtn);
+
+  const emptyNote = document.createElement('div');
+  emptyNote.className = 'plan-review-empty-steps';
+  emptyNote.hidden = true;
+  emptyNote.textContent = typeof t === 'function'
+    ? t('sp.plan.empty_steps')
+    : 'Add at least one step before approving.';
+  view.appendChild(emptyNote);
+
+  if (skillIds.length) {
+    view.appendChild(renderPlanReviewSkills(skillIds));
+  }
+  // Risks render after skills placeholder so renderPlanReviewRisks can insert
+  // above skills once the view is mounted with the full draft.
+  renderPlanReviewRisks(view, draft.risks);
+
+  // Steps are filled after the view is attached to the card so remove handlers
+  // can reach the card root via apply/create helpers called from bind.
+  view._initialPlanDraft = draft;
+  return view;
+}
+
+function mountPlanReviewEditor(card, view) {
+  if (!card || !view) return;
+  if (view.dataset.mounted === 'true') {
+    // Rebind path: only re-wire controls if the restored markup already has them.
+    bindPlanReviewEditorControls(card, view);
+    return;
+  }
+  view.dataset.mounted = 'true';
+  const draft = view._initialPlanDraft || getPlanReviewDraftFromDom(card);
+  delete view._initialPlanDraft;
+  card.dataset.planRisks = JSON.stringify(Array.isArray(draft.risks) ? draft.risks : []);
+  applyPlanDraftToEditor(card, draft, { preserveFocus: false });
+  bindPlanReviewEditorControls(card, view);
+}
+
+function bindPlanReviewEditorControls(card, view) {
+  const summaryInput = view.querySelector('.plan-review-summary-input');
+  if (summaryInput && !summaryInput.dataset.bound) {
+    summaryInput.dataset.bound = 'true';
+    summaryInput.addEventListener('input', () => {
+      autosizePlanReviewField(summaryInput);
+      syncPlanReviewDraft(card);
+    });
+    autosizePlanReviewField(summaryInput);
+  }
+
+  const addBtn = view.querySelector('.plan-review-add-step');
+  if (addBtn && !addBtn.dataset.bound) {
+    addBtn.dataset.bound = 'true';
+    addBtn.addEventListener('click', () => {
+      const list = view.querySelector('.plan-review-steps');
+      if (!list) return;
+      const index = list.querySelectorAll('.plan-review-step').length;
+      const row = createPlanReviewStepRow(card, { id: String(index + 1), action: '' }, index);
+      list.appendChild(row);
+      renumberPlanReviewSteps(card);
+      syncPlanReviewDraft(card);
+      const input = row.querySelector('.plan-review-step-input');
+      try { input?.focus(); } catch {}
+    });
+  }
+}
+
+function setPlanReviewRawEditing(card, enabled, { focus = false } = {}) {
+  const textarea = card?.querySelector?.('.plan-review-edit');
+  const changeBtn = card?.querySelector?.('.plan-review-change');
+  if (!textarea) return;
+  if (enabled) {
+    // Prefer original display text when clean (especially verbose). Only push
+    // structured serialization when the user already dirtied the draft.
+    const original = planReviewOriginalMarkdown(card);
+    if (card.dataset.planDirty === 'true') {
+      const draft = getPlanReviewDraftFromDom(card);
+      const serialized = serializePlanDraftToMarkdown(draft);
+      textarea.value = card.dataset.editedText || serialized || original;
+    } else {
+      textarea.value = original;
+    }
+    card.dataset.editing = 'true';
+    if (changeBtn) {
+      changeBtn.textContent = typeof t === 'function' ? t('sp.plan.done_editing_text') : 'Done';
+    }
+    if (focus) {
+      try {
+        textarea.focus();
+        textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+      } catch {}
+    }
+  } else {
+    // Collapse raw mode. If the buffer still matches the original display
+    // text, skip re-parse so verbose metadata is never ingested as risks.
+    const original = planReviewOriginalMarkdown(card);
+    const current = String(textarea.value || '').trim();
+    if (current && current !== original) {
+      syncPlanReviewDraft(card, { fromRaw: true });
+    } else {
+      // Restore clean structured state from the compact baseline.
+      const compact = String(card.dataset.originalCompactMarkdown || original).trim();
+      if (compact) {
+        applyPlanDraftToEditor(card, parsePlanMarkdownToDraft(compact), { preserveFocus: false });
+      }
+      card.dataset.planDirty = 'false';
+      delete card.dataset.editedText;
+      delete card.dataset.planEditSource;
+      textarea.value = original;
+    }
+    card.dataset.editing = 'false';
+    if (changeBtn) {
+      changeBtn.textContent = typeof t === 'function' ? t('sp.plan.edit_as_text') : 'Edit as text';
+    }
+  }
+  // The raw buffer is authoritative while visible. Disable the parallel
+  // structured controls so they cannot collect edits that raw approval/Done
+  // would discard. Re-enable them as soon as raw mode collapses.
+  setPlanReviewStructuredControlsDisabled(card, enabled);
+  schedulePersist();
+}
+
+function revealPlanReviewEditor(card, focus = false) {
+  setPlanReviewRawEditing(card, true, { focus });
+}
+
+function resolvePlanReviewApprovalText(card) {
+  const original = planReviewOriginalMarkdown(card);
+  const rawTextarea = card.querySelector('.plan-review-edit');
+  const rawMode = card.dataset.editing === 'true';
+  const displayMode = String(card.dataset.planMarkdownMode || 'compact');
+
+  if (rawMode) {
+    const current = String(rawTextarea?.value || '').trim();
+    if (!current || current === original) {
+      // Unchanged raw buffer — pin original plan object (skills intact).
+      return { editedText: '', markdownMode: displayMode };
+    }
+    // Compact-shaped buffers (or structured serialization after step edits)
+    // must approve as compact so the agent re-appends execution metadata and
+    // does not fail-close skill_ids via verbosePlanEdited.
+    // Verbose-looking buffers keep verbose mode so the agent parses metadata
+    // from the approved text.
+    const markdownMode = looksLikeVerbosePlanMarkdown(current) ? 'verbose' : 'compact';
+    return { editedText: current, markdownMode };
+  }
+
+  // "Done" collapses raw mode after syncing its parsed fields into the
+  // structured editor. Keep the exact dirty buffer as the approval source so
+  // edits to verbose-only metadata (skills, scheduling, submission, etc.) are
+  // not replaced by the lossy structured serialization. A later structured
+  // edit overwrites dataset.editedText with compact markdown via syncPlanReviewDraft.
+  const savedEdit = resolveSavedPlanReviewEdit(card);
+  if (savedEdit) return savedEdit;
+  const draft = getPlanReviewDraftFromDom(card);
+  if (!draft.steps.length) {
+    return { editedText: '', markdownMode: displayMode, emptySteps: true };
+  }
+  const serialized = serializePlanDraftToMarkdown(draft);
+  // Structured edits always approve as compact so the agent re-appends
+  // execution metadata and keeps skill activation from the planner object.
+  // Tradeoff: removing skill-related steps in the structured UI does not
+  // clear planner skill_ids; only verbose raw edits fail-close that path.
+  if (serialized && serialized !== String(card.dataset.originalCompactMarkdown || '').trim()) {
+    return { editedText: serialized, markdownMode: 'compact' };
+  }
+  // Verbose display with no structured changes: leave empty so the agent pins
+  // the original plan object (skills/metadata intact).
+  return { editedText: '', markdownMode: displayMode };
+}
+
 function bindPlanReviewCard(card) {
   if (!card || card.classList.contains('plan-reviewed')) return;
   const planId = String(card.dataset.planId || '');
@@ -3454,9 +4039,34 @@ function bindPlanReviewCard(card) {
   const tabId = rawTabId != null && rawTabId !== '' ? Number(rawTabId) : currentTabId;
   if (tabId == null || Number.isNaN(tabId)) return;
 
+  const view = card.querySelector('.plan-review-view');
+  if (view) {
+    // Restored cards lose live textarea values (only defaultValue survives
+    // innerHTML). Prefer dataset.editedText, else rebuild from the original
+    // compact plan so empty restored inputs do not wipe the draft.
+    const saved = card.dataset.editedText;
+    const needsHydrate = !view.querySelector('.plan-review-step-input')
+      || ![...view.querySelectorAll('.plan-review-step-input')].some((el) => String(el.value || '').trim())
+      || (saved != null && saved !== '');
+    if (needsHydrate) {
+      const sourceText = (saved != null && saved !== '')
+        ? saved
+        : String(card.dataset.originalCompactMarkdown || planReviewOriginalMarkdown(card) || '').trim();
+      if (sourceText) {
+        applyPlanDraftToEditor(card, parsePlanMarkdownToDraft(sourceText), { preserveFocus: false });
+      } else if (view._initialPlanDraft) {
+        applyPlanDraftToEditor(card, view._initialPlanDraft, { preserveFocus: false });
+        delete view._initialPlanDraft;
+      }
+      if (saved != null && saved !== '') card.dataset.planDirty = 'true';
+      view.dataset.mounted = 'true';
+    } else if (view.dataset.mounted !== 'true') {
+      mountPlanReviewEditor(card, view);
+    }
+    bindPlanReviewEditorControls(card, view);
+  }
+
   const textarea = card.querySelector('.plan-review-edit');
-  const originalMarkdown = String(textarea?.defaultValue || textarea?.value || '').trim();
-  const markdownMode = String(card.dataset.planMarkdownMode || 'compact');
   const changeBtn = card.querySelector('.plan-review-change');
 
   // A <textarea>'s live `.value` is NOT captured when the conversation is
@@ -3467,11 +4077,15 @@ function bindPlanReviewCard(card) {
   // textarea from it on rebind. (#3)
   if (textarea) {
     const saved = card.dataset.editedText;
-    if (saved != null && saved !== '') textarea.value = saved;
+    if (saved != null && saved !== '' && card.dataset.editing === 'true') {
+      textarea.value = saved;
+    }
     if (!textarea.dataset.bound) {
       textarea.dataset.bound = 'true';
       textarea.addEventListener('input', () => {
         card.dataset.editedText = textarea.value;
+        card.dataset.planDirty = 'true';
+        card.dataset.planEditSource = 'raw';
         // The persist observer only watches childList/characterData, not
         // attributes, so the data attribute above won't trigger a save on its
         // own — schedule one so the edit reaches storage before a panel reload.
@@ -3480,21 +4094,34 @@ function bindPlanReviewCard(card) {
     }
   }
 
-  if (card.dataset.editing === 'true') revealPlanReviewEditor(card, false);
+  if (card.dataset.editing === 'true') {
+    setPlanReviewRawEditing(card, true, { focus: false });
+  } else if (changeBtn) {
+    changeBtn.textContent = typeof t === 'function' ? t('sp.plan.edit_as_text') : 'Edit as text';
+  }
 
   if (changeBtn && !changeBtn.dataset.bound) {
     changeBtn.dataset.bound = 'true';
-    changeBtn.addEventListener('click', () => revealPlanReviewEditor(card, true));
+    changeBtn.addEventListener('click', () => {
+      const enableRaw = card.dataset.editing !== 'true';
+      setPlanReviewRawEditing(card, enableRaw, { focus: enableRaw });
+    });
   }
 
   const approveBtn = card.querySelector('.plan-review-approve');
   if (approveBtn && !approveBtn.dataset.bound) {
     approveBtn.dataset.bound = 'true';
     approveBtn.addEventListener('click', () => {
-      const current = String(textarea?.value || '').trim();
-      const isEditing = card.dataset.editing === 'true';
-      const editedText = isEditing && current && (current !== originalMarkdown || markdownMode === 'verbose') ? current : '';
-      submitPlanReview(card, tabId, planId, 'approve', editedText);
+      const resolution = resolvePlanReviewApprovalText(card);
+      if (resolution.emptySteps) {
+        const emptyNote = card.querySelector('.plan-review-empty-steps');
+        if (emptyNote) emptyNote.hidden = false;
+        return;
+      }
+      // Persist the markdown mode used for this approval (structured edits force
+      // compact so planner execution metadata is re-appended server-side).
+      card.dataset.planMarkdownMode = resolution.markdownMode;
+      submitPlanReview(card, tabId, planId, 'approve', resolution.editedText);
     });
   }
 
@@ -3537,89 +4164,6 @@ function planReviewConfidenceText(plan) {
   const confidence = Number(plan?.confidence);
   if (!Number.isFinite(confidence)) return '';
   return `${Math.round(Math.max(0, Math.min(1, confidence)) * 100)}%`;
-}
-
-function renderPlanReviewView(plan, fallbackMarkdown = '') {
-  const view = document.createElement('div');
-  view.className = 'plan-review-view';
-  // plan is always normalizePlan output (steps arrive trimmed, non-empty),
-  // so the steps can be rendered as-is.
-  const steps = Array.isArray(plan?.steps) ? plan.steps : [];
-  const summary = String(plan?.summary || '').trim();
-  const skillIds = Array.isArray(plan?.skill_ids)
-    ? plan.skill_ids.map(id => String(id || '').trim()).filter(Boolean)
-    : [];
-
-  if (!steps.length) {
-    const fallback = document.createElement('div');
-    fallback.className = 'plan-review-step-fallback';
-    fallback.textContent = (summary || String(fallbackMarkdown || '')).replace(/^#+\s*/gm, '').trim();
-    view.appendChild(fallback);
-  } else {
-    if (summary) {
-      const summaryEl = document.createElement('div');
-      summaryEl.className = 'plan-review-summary';
-      summaryEl.textContent = summary;
-      view.appendChild(summaryEl);
-    }
-
-    const list = document.createElement('div');
-    list.className = 'plan-review-steps';
-    list.setAttribute('role', 'list');
-    for (const [index, step] of steps.entries()) {
-      const item = document.createElement('div');
-      item.className = 'plan-review-step';
-      item.setAttribute('role', 'listitem');
-
-      const number = document.createElement('span');
-      number.className = 'plan-review-step-number';
-      number.textContent = String(step.id).replace(/\.$/, '') || String(index + 1);
-
-      const action = document.createElement('span');
-      action.className = 'plan-review-step-action';
-      action.textContent = step.action;
-
-      item.appendChild(number);
-      item.appendChild(action);
-      list.appendChild(item);
-    }
-    view.appendChild(list);
-  }
-
-  if (skillIds.length) {
-    const skills = document.createElement('div');
-    skills.className = 'plan-review-skills';
-    const label = document.createElement('div');
-    label.className = 'plan-review-skills-label';
-    label.textContent = typeof t === 'function' ? t('sp.plan.skills') : 'Skills to activate';
-    skills.appendChild(label);
-    const values = document.createElement('div');
-    values.className = 'plan-review-skill-list';
-    for (const skillId of skillIds) {
-      const value = document.createElement('code');
-      value.className = 'plan-review-skill';
-      value.textContent = skillId;
-      values.appendChild(value);
-    }
-    skills.appendChild(values);
-    view.appendChild(skills);
-  }
-  return view;
-}
-
-function revealPlanReviewEditor(card, focus = false) {
-  const textarea = card?.querySelector?.('.plan-review-edit');
-  if (!textarea) return;
-  // The data-editing attribute is the single source of truth; sidepanel.css
-  // shows/hides the read-only view, hint, Change button, and textarea from it.
-  card.dataset.editing = 'true';
-  if (focus) {
-    try {
-      textarea.focus();
-      textarea.setSelectionRange(textarea.value.length, textarea.value.length);
-    } catch {}
-  }
-  schedulePersist();
 }
 
 function rebindPlanReviewCards() {
@@ -5885,12 +6429,18 @@ function renderPlanReviewCard(data) {
   const useVerbosePlan = verboseMode && !!data.verboseMarkdown;
   const originalMarkdown = useVerbosePlan ? verboseMarkdown : compactMarkdown;
   card.dataset.planMarkdownMode = useVerbosePlan ? 'verbose' : 'compact';
+  card.dataset.originalMarkdown = originalMarkdown;
+  // Structured dirty checks always compare against compact display text so
+  // step edits do not look "clean" relative to a verbose original blob.
+  card.dataset.originalCompactMarkdown = compactMarkdown;
+  card.dataset.planDirty = 'false';
 
-  card.appendChild(renderPlanReviewView(data.plan, compactMarkdown));
+  const view = renderPlanReviewView(data.plan, compactMarkdown);
+  card.appendChild(view);
 
   const editHint = document.createElement('div');
   editHint.className = 'plan-review-hint';
-  editHint.textContent = typeof t === 'function' ? t('sp.plan.edit_hint') : 'Optional: edit the plan before approving';
+  editHint.textContent = typeof t === 'function' ? t('sp.plan.edit_hint') : 'Optional: edit the plan as markdown';
   card.appendChild(editHint);
 
   const textarea = document.createElement('textarea');
@@ -5911,7 +6461,7 @@ function renderPlanReviewCard(data) {
   const changeBtn = document.createElement('button');
   changeBtn.type = 'button';
   changeBtn.className = 'plan-review-change';
-  changeBtn.textContent = typeof t === 'function' ? t('sp.plan.change') : 'Change';
+  changeBtn.textContent = typeof t === 'function' ? t('sp.plan.edit_as_text') : 'Edit as text';
 
   const cancelBtn = document.createElement('button');
   cancelBtn.type = 'button';
@@ -5922,6 +6472,16 @@ function renderPlanReviewCard(data) {
   actions.appendChild(changeBtn);
   actions.appendChild(cancelBtn);
   card.appendChild(actions);
+  mountPlanReviewEditor(card, view);
+  // Anchor dirty-checks to the structured serializer's output, not the
+  // planner markdown string, so renumbering/whitespace alone is not an edit.
+  const initialSerialized = serializePlanDraftToMarkdown(getPlanReviewDraftFromDom(card));
+  card.dataset.originalCompactMarkdown = initialSerialized;
+  if (!useVerbosePlan) {
+    card.dataset.originalMarkdown = initialSerialized;
+    textarea.value = initialSerialized;
+    textarea.defaultValue = initialSerialized;
+  }
   bindPlanReviewCard(card);
 
   content.appendChild(card);
