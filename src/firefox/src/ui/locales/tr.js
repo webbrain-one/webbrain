@@ -1,5 +1,8 @@
 // Turkish (tr).
+import chromeWebStoreLocale from './chrome-web-store.mjs';
+
 export default {
+  ...chromeWebStoreLocale,
   'sp.providers.no_setup_group': 'Kurulum gerektirmez',
   'sp.providers.no_setup': 'Kurulum yok',
   'sp.providers.active_group': 'Etkin sağlayıcılar',

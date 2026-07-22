@@ -1,5 +1,8 @@
 // Indonesian (id).
+import chromeWebStoreLocale from './chrome-web-store.mjs';
+
 export default {
+  ...chromeWebStoreLocale,
   'sp.providers.no_setup_group': 'Tanpa penyiapan',
   'sp.providers.no_setup': 'Tidak perlu penyiapan',
   'sp.providers.active_group': 'Penyedia aktif',

@@ -37,6 +37,13 @@ import {
   normalizeDownloadDirectory,
 } from '../download-directory.js';
 import {
+  CHROME_WEB_STORE_CONFIG_KEY,
+  CHROME_WEB_STORE_MAX_PACKAGE_BYTES,
+  CHROME_WEB_STORE_PACKAGE_KEY,
+  CHROME_WEB_STORE_SKILL_ID,
+  normalizeChromeWebStoreConfig,
+} from '../chrome-web-store-release.js';
+import {
   providerIconHtml,
   providerIconUrl,
   PROVIDER_SHORT_LABELS,
@@ -101,6 +108,18 @@ const skillPreviewSource = document.getElementById('skill-preview-source');
 const skillPreviewRendered = document.getElementById('skill-preview-rendered');
 const skillPreviewRaw = document.getElementById('skill-preview-raw');
 const skillPreviewViewButtons = document.querySelectorAll('[data-skill-preview-view]');
+const chromeWebStoreCard = document.getElementById('chrome-web-store-release-card');
+const chromeWebStorePublisherId = document.getElementById('chrome-web-store-publisher-id');
+const chromeWebStoreItemId = document.getElementById('chrome-web-store-item-id');
+const chromeWebStoreOauthClientId = document.getElementById('chrome-web-store-oauth-client-id');
+const chromeWebStoreOauthClientSecret = document.getElementById('chrome-web-store-oauth-client-secret');
+const chromeWebStorePackage = document.getElementById('chrome-web-store-package');
+const chromeWebStorePackageStatus = document.getElementById('chrome-web-store-package-status');
+const chromeWebStoreResult = document.getElementById('chrome-web-store-result');
+const btnSaveChromeWebStore = document.getElementById('btn-save-chrome-web-store');
+const btnConnectChromeWebStore = document.getElementById('btn-connect-chrome-web-store');
+const btnSignoutChromeWebStore = document.getElementById('btn-signout-chrome-web-store');
+const btnClearChromeWebStorePackage = document.getElementById('btn-clear-chrome-web-store-package');
 const btnTestVision = document.getElementById('btn-test-vision');
 const btnClearVision = document.getElementById('btn-clear-vision');
 const visionTestResult = document.getElementById('test-vision');
@@ -611,7 +630,7 @@ function escapeHtml(s) {
 // --- Skills ---
 
 function makeSkillId() {
-  return `skill_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+  return `skill_${Date.now().toString(36)}_${globalThis.crypto.randomUUID()}`;
 }
 
 function showSkillsResult(className, text, color = '') {
@@ -784,6 +803,11 @@ function renderPackagedSkills() {
 function renderSkills() {
   if (!skillsList) return;
   renderPackagedSkills();
+  const chromeWebStoreEnabled = customSkills.some((skill) => (
+    skill.id === CHROME_WEB_STORE_SKILL_ID && skill.sourceType === 'built-in'
+  ));
+  if (chromeWebStoreCard) chromeWebStoreCard.hidden = !chromeWebStoreEnabled;
+  if (chromeWebStoreEnabled) void loadChromeWebStoreSettings();
   if (customSkills.length === 0) {
     skillsList.innerHTML = `<div class="setting-desc">${escapeHtml(t('st.skills.empty'))}</div>`;
     return;
@@ -821,6 +845,65 @@ function renderSkills() {
       flashSkillsResult('ok', t('st.skills.removed'));
     });
   });
+}
+
+function showChromeWebStoreResult(kind, message) {
+  if (!chromeWebStoreResult) return;
+  chromeWebStoreResult.className = `test-result show ${kind}`;
+  chromeWebStoreResult.textContent = message;
+}
+
+function chromeWebStoreConfigFromForm() {
+  return normalizeChromeWebStoreConfig({
+    publisherId: chromeWebStorePublisherId?.value,
+    itemId: chromeWebStoreItemId?.value,
+    oauthClientId: chromeWebStoreOauthClientId?.value,
+    oauthClientSecret: chromeWebStoreOauthClientSecret?.value,
+  });
+}
+
+async function saveChromeWebStoreConfig({ flash = true } = {}) {
+  const config = chromeWebStoreConfigFromForm();
+  await browser.storage.local.set({ [CHROME_WEB_STORE_CONFIG_KEY]: config });
+  if (flash) showChromeWebStoreResult('ok', t('st.skills.cws.saved'));
+  return config;
+}
+
+async function loadChromeWebStoreSettings() {
+  if (!chromeWebStoreCard || chromeWebStoreCard.hidden) return;
+  const stored = await browser.storage.local.get([CHROME_WEB_STORE_CONFIG_KEY, CHROME_WEB_STORE_PACKAGE_KEY]);
+  const config = normalizeChromeWebStoreConfig(stored[CHROME_WEB_STORE_CONFIG_KEY]);
+  if (chromeWebStorePublisherId) chromeWebStorePublisherId.value = config.publisherId;
+  if (chromeWebStoreItemId) chromeWebStoreItemId.value = config.itemId;
+  if (chromeWebStoreOauthClientId) chromeWebStoreOauthClientId.value = config.oauthClientId;
+  if (chromeWebStoreOauthClientSecret) chromeWebStoreOauthClientSecret.value = config.oauthClientSecret;
+  const pkg = stored[CHROME_WEB_STORE_PACKAGE_KEY];
+  if (chromeWebStorePackageStatus) {
+    chromeWebStorePackageStatus.textContent = pkg?.name
+      ? t('st.skills.cws.package_selected', { name: pkg.name, size: Math.ceil((Number(pkg.size) || 0) / 1024) })
+      : t('st.skills.cws.package_empty');
+  }
+  const oauth = await sendToBackground('chrome_web_store_oauth_status').catch(() => ({ signedIn: false }));
+  showChromeWebStoreResult(oauth.signedIn ? 'ok' : 'warn', oauth.signedIn ? t('st.skills.cws.connected') : t('st.skills.cws.disconnected'));
+}
+
+function bytesToBase64(bytes) {
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+  return btoa(binary);
+}
+
+async function selectChromeWebStorePackage(file) {
+  if (!file) return;
+  if (!/\.zip$/i.test(file.name)) throw new Error(t('st.skills.cws.package_zip_only'));
+  if (file.size <= 0 || file.size > CHROME_WEB_STORE_MAX_PACKAGE_BYTES) throw new Error(t('st.skills.cws.package_too_large'));
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
+  const sha256 = [...digest].map((value) => value.toString(16).padStart(2, '0')).join('');
+  await browser.storage.local.set({ [CHROME_WEB_STORE_PACKAGE_KEY]: { name: file.name, size: file.size, lastModified: file.lastModified, sha256, base64: bytesToBase64(bytes), selectedAt: Date.now() } });
+  if (chromeWebStorePackageStatus) chromeWebStorePackageStatus.textContent = t('st.skills.cws.package_selected', { name: file.name, size: Math.ceil(file.size / 1024) });
+  showChromeWebStoreResult('ok', t('st.skills.cws.package_ready'));
 }
 
 async function addCustomSkill(record, opts = {}) {
@@ -935,6 +1018,34 @@ btnClearSkillForm?.addEventListener('click', () => {
   if (skillUrlInput) skillUrlInput.value = '';
   if (skillTextArea) skillTextArea.value = '';
   flashSkillsResult('ok', t('st.skills.form_cleared'));
+});
+
+btnSaveChromeWebStore?.addEventListener('click', () => {
+  saveChromeWebStoreConfig().catch((error) => showChromeWebStoreResult('fail', error.message));
+});
+btnConnectChromeWebStore?.addEventListener('click', async () => {
+  btnConnectChromeWebStore.disabled = true;
+  try {
+    const config = await saveChromeWebStoreConfig({ flash: false });
+    const result = await sendToBackground('chrome_web_store_oauth_start', { config });
+    if (!result.ok) throw new Error(result.error || t('st.skills.cws.connect_failed'));
+    showChromeWebStoreResult('ok', t('st.skills.cws.connected'));
+  } catch (error) { showChromeWebStoreResult('fail', error.message); }
+  finally { btnConnectChromeWebStore.disabled = false; }
+});
+btnSignoutChromeWebStore?.addEventListener('click', async () => {
+  const result = await sendToBackground('chrome_web_store_oauth_signout').catch((error) => ({ ok: false, error: error.message }));
+  showChromeWebStoreResult(result.ok ? 'ok' : 'fail', result.ok ? t('st.skills.cws.signed_out') : result.error);
+});
+chromeWebStorePackage?.addEventListener('change', async () => {
+  try { await selectChromeWebStorePackage(chromeWebStorePackage.files?.[0]); }
+  catch (error) { showChromeWebStoreResult('fail', error.message); }
+  finally { chromeWebStorePackage.value = ''; }
+});
+btnClearChromeWebStorePackage?.addEventListener('click', async () => {
+  await browser.storage.local.remove(CHROME_WEB_STORE_PACKAGE_KEY);
+  if (chromeWebStorePackageStatus) chromeWebStorePackageStatus.textContent = t('st.skills.cws.package_empty');
+  showChromeWebStoreResult('ok', t('st.skills.cws.package_cleared'));
 });
 
 if (globalThis.browser?.storage?.onChanged) {

@@ -1,5 +1,8 @@
 // Ukrainian (uk).
+import chromeWebStoreLocale from './chrome-web-store.mjs';
+
 export default {
+  ...chromeWebStoreLocale,
   'sp.providers.no_setup_group': 'Без налаштування',
   'sp.providers.no_setup': 'Налаштування не потрібне',
   'sp.providers.active_group': 'Активні провайдери',

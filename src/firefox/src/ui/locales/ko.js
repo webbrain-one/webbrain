@@ -1,5 +1,8 @@
 // Korean (ko).
+import chromeWebStoreLocale from './chrome-web-store.mjs';
+
 export default {
+  ...chromeWebStoreLocale,
   'sp.providers.no_setup_group': '설정 필요 없음',
   'sp.providers.no_setup': '설정 없음',
   'sp.providers.active_group': '활성 공급자',

@@ -121,6 +121,17 @@ The Traces page (`ui/traces.html`) reads from local IndexedDB only. Export produ
 
 Provider configs (API keys, base URLs, model selections) are stored in `chrome.storage.local`. API keys are in plaintext — this is a personal-computer tool and the storage is sandboxed by the browser. The extension has no mechanism to exfiltrate these keys.
 
+When the default-disabled Chrome Web Store release skill is enabled, its
+user-owned Google OAuth client credentials, OAuth access/refresh tokens,
+publisher/item IDs, and selected release ZIP are also stored in extension-local
+storage. ZIP bytes are sent only to the official
+`chromewebstore.googleapis.com` upload endpoint after the upload permission is
+approved. Tokens and ZIP bytes are never placed in model prompts, tool
+arguments, traces, configuration exports, or tool results. The model receives
+only bounded package metadata and Chrome Web Store API responses; API responses
+are treated as untrusted content. Disconnecting removes OAuth tokens, while the
+separate Clear selected ZIP control removes the locally staged package.
+
 ### User Profile
 
 If the user enables profile auto-fill, the profile text (name, email, throwaway password) is stored in `chrome.storage.local` in plaintext and sent to the LLM provider as part of the system prompt on every turn.

@@ -1,5 +1,8 @@
 // Polski — translated from en.js. Keys mirror the English canonical file.
+import chromeWebStoreLocale from './chrome-web-store.mjs';
+
 export default {
+  ...chromeWebStoreLocale,
   'sp.providers.no_setup_group': 'Bez konfiguracji',
   'sp.providers.no_setup': 'Konfiguracja nie jest wymagana',
   'sp.providers.active_group': 'Aktywni dostawcy',

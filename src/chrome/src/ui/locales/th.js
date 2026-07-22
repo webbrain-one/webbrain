@@ -1,5 +1,8 @@
 // Thai (th).
+import chromeWebStoreLocale from './chrome-web-store.mjs';
+
 export default {
+  ...chromeWebStoreLocale,
   'sp.providers.no_setup_group': 'ไม่ต้องตั้งค่า',
   'sp.providers.no_setup': 'ไม่ต้องตั้งค่า',
   'sp.providers.active_group': 'ผู้ให้บริการที่ใช้งานอยู่',

@@ -10,6 +10,8 @@ const DIRECT_ACTION_TOOLS = new Set([
   'type_ax',
   'iframe_type',
   'upload_file',
+  'chrome_web_store_upload',
+  'chrome_web_store_publish',
   'execute_js',
   'inject_css',
   'remove_injected_css',
@@ -61,6 +63,7 @@ const OBSERVATION_TOOLS = new Set([
   'full_page_screenshot',
   'list_downloads',
   'read_downloaded_file',
+  'chrome_web_store_status',
 ]);
 // inspect_event_listeners briefly marks the live DOM to resolve refs. Treating
 // that implementation-level mutation as verification would let it clear debt

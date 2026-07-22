@@ -15705,6 +15705,16 @@ function isMastodonUrl(url) {
 const ADAPTERS = [
   // ─── Code & Dev Tools ─────────────────────────────────────────────────
   {
+    name: 'chrome-web-store-developer',
+    category: 'general',
+    matches: (url) => /^https:\/\/chrome\.google\.com\/webstore\/devconsole(?:[/?#]|$)/i.test(url),
+    notes: `
+- This dashboard is a Chrome-protected page. Extension DOM, accessibility-tree, script-injection, and debugger tools cannot access it. Never retry those tools here.
+- If the enabled skill catalog contains \`chrome-web-store-release\`, load it and use \`chrome_web_store_status\`, \`chrome_web_store_upload\`, and \`chrome_web_store_publish\` instead of dashboard controls.
+- If that skill is not enabled, ask the user to enable "Chrome Web Store release" in Settings → Skills and configure OAuth, publisher/item IDs, and a release ZIP. Continue manually if they do not want API access.
+- A screenshot may provide read-only visual context once, but it cannot make dashboard controls interactive or verify an API mutation.`,
+  },
+  {
     name: 'github',
     category: 'general',
     matches: (url) => /^https?:\/\/(www\.)?github\.com\//.test(url),

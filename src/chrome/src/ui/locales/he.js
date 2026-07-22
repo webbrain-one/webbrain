@@ -1,5 +1,8 @@
 // Hebrew (he).
+import chromeWebStoreLocale from './chrome-web-store.mjs';
+
 export default {
+  ...chromeWebStoreLocale,
   'sp.providers.no_setup_group': 'ללא הגדרה',
   'sp.providers.no_setup': 'אין צורך בהגדרה',
   'sp.providers.active_group': 'ספקים פעילים',

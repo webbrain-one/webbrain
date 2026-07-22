@@ -150,6 +150,8 @@ const TOOL_CAPABILITY = {
   download_resource_from_page: Capability.DOWNLOAD,
   download_social_media: Capability.DOWNLOAD,
   upload_file: Capability.UPLOAD,
+  chrome_web_store_upload: Capability.UPLOAD,
+  chrome_web_store_publish: Capability.NETWORK,
   schedule_resume: Capability.SCHEDULE,
   schedule_task: Capability.SCHEDULE,
 };
@@ -283,6 +285,9 @@ export function hostForCapability(capability, args, currentUrlOrHost, toolName) 
     // A tool can belong to a cross-origin frame. Charge mutations to that
     // frame's resolved URL instead of borrowing the top-level page grant.
     return normalizeHost(args._webMcpTargetUrl);
+  }
+  if (capability === Capability.UPLOAD && toolName === 'chrome_web_store_upload') {
+    return normalizeHost(args._trustedPermissionUrl);
   }
   // iframe_click / iframe_type act in a (possibly cross-origin) frame named by
   // `urlFilter`. Charge the FRAME host; if urlFilter is missing we can't

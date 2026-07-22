@@ -1664,6 +1664,28 @@
       <div id="skills-list"></div>
     </div>
 
+    <div class="provider-card" id="chrome-web-store-release-card" hidden>
+      <div class="setting-label" style="margin-bottom:6px;" data-i18n="st.skills.cws.heading"></div>
+      <div class="setting-desc" style="margin-bottom:14px;" data-i18n-html="st.skills.cws.desc_html"></div>
+      <div class="field"><label for="chrome-web-store-publisher-id" data-i18n="st.skills.cws.publisher_id"></label><input type="text" id="chrome-web-store-publisher-id" autocomplete="off"></div>
+      <div class="field"><label for="chrome-web-store-item-id" data-i18n="st.skills.cws.item_id"></label><input type="text" id="chrome-web-store-item-id" autocomplete="off" maxlength="32"></div>
+      <div class="field"><label for="chrome-web-store-oauth-client-id" data-i18n="st.skills.cws.oauth_client_id"></label><input type="text" id="chrome-web-store-oauth-client-id" autocomplete="off"></div>
+      <div class="field"><label for="chrome-web-store-oauth-client-secret" data-i18n="st.skills.cws.oauth_client_secret"></label><input type="password" id="chrome-web-store-oauth-client-secret" autocomplete="off"></div>
+      <div class="setting-desc" style="margin:-4px 0 12px;" data-i18n="st.skills.cws.redirect_help"></div>
+      <div class="btn-row">
+        <button class="btn-secondary" id="btn-save-chrome-web-store" data-i18n="st.skills.cws.save"></button>
+        <button class="btn-primary" id="btn-connect-chrome-web-store" data-i18n="st.skills.cws.connect"></button>
+        <button class="btn-secondary" id="btn-signout-chrome-web-store" data-i18n="st.skills.cws.signout"></button>
+      </div>
+      <div class="field" style="margin-top:16px;">
+        <label for="chrome-web-store-package" data-i18n="st.skills.cws.package"></label>
+        <input type="file" id="chrome-web-store-package" accept=".zip,application/zip">
+        <div class="setting-desc" id="chrome-web-store-package-status"></div>
+      </div>
+      <div class="btn-row"><button class="btn-secondary" id="btn-clear-chrome-web-store-package" data-i18n="st.skills.cws.clear_package"></button></div>
+      <div class="test-result" id="chrome-web-store-result"></div>
+    </div>
+
     <div class="info-box" data-i18n-html="st.skills.security_html"></div>
 
     <dialog class="skill-preview-dialog" id="skill-preview-dialog" aria-labelledby="skill-preview-title">

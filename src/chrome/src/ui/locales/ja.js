@@ -1,5 +1,8 @@
 // Japanese (ja).
+import chromeWebStoreLocale from './chrome-web-store.mjs';
+
 export default {
+  ...chromeWebStoreLocale,
   'sp.providers.no_setup_group': '設定不要',
   'sp.providers.no_setup': '設定なし',
   'sp.providers.active_group': '有効なプロバイダー',

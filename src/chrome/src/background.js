@@ -64,6 +64,11 @@ import {
   parseConfigPatchImport,
 } from './config-transfer.js';
 import { installDownloadDirectoryRouting } from './download-directory.js';
+import {
+  getChromeWebStoreOAuthStatus,
+  signOutChromeWebStoreOAuth,
+  startChromeWebStoreOAuth,
+} from './chrome-web-store-release.js';
 
 /**
  * WebBrain Service Worker (Background Script)
@@ -2491,6 +2496,22 @@ async function handleMessage(msg, sender) {
       } catch (e) {
         return { ok: false, error: e.message };
       }
+    }
+
+    case 'chrome_web_store_oauth_start': {
+      try {
+        await startChromeWebStoreOAuth(msg.config || {});
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    }
+    case 'chrome_web_store_oauth_status': {
+      return { ok: true, ...(await getChromeWebStoreOAuthStatus()) };
+    }
+    case 'chrome_web_store_oauth_signout': {
+      await signOutChromeWebStoreOAuth();
+      return { ok: true };
     }
 
     case 'list_provider_models': {
