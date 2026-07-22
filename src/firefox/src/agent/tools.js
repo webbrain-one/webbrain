@@ -297,7 +297,7 @@ export const AGENT_TOOLS = [
     type: 'function',
     function: {
       name: 'press_keys',
-      description: 'Press keyboard keys. Supports Escape, Tab, Enter, ArrowUp, ArrowDown, ArrowLeft, and ArrowRight. Useful for dismissing modals/dropdowns (Escape), moving focus (Tab), confirming dialogs/forms (Enter), and nudging range sliders or custom widgets that respond to arrow keys (ArrowUp/ArrowDown/ArrowLeft/ArrowRight). Note: Firefox has no CDP, so these are untrusted synthetic events — they reach JS keydown listeners reliably but may not step native controls on every site (see ARCHITECTURE.md).',
+      description: 'Press one unmodified keyboard key. Supports only Escape, Tab, Enter, ArrowUp, ArrowDown, ArrowLeft, and ArrowRight. Ctrl/Cmd/Alt/Shift combinations and browser shortcuts such as Ctrl+F are not supported. Use find_text to locate and highlight page text. Firefox dispatches synthetic events, so native controls may not react on every site.',
       parameters: {
         type: 'object',
         properties: {
@@ -504,6 +504,23 @@ export const AGENT_TOOLS = [
         type: 'object',
         properties: {},
         required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'find_text',
+      description: 'Find and select/highlight the next occurrence of literal text in the current page. Use this instead of Ctrl+F or Cmd+F; press_keys cannot send modifier combinations or open browser UI. Repeating the same search advances to the next match.',
+      parameters: {
+        type: 'object',
+        properties: {
+          text: { type: 'string', maxLength: 500, description: 'Literal page text to find (maximum 500 characters).' },
+          matchCase: { type: 'boolean', description: 'Whether matching is case-sensitive (default: false).' },
+          backwards: { type: 'boolean', description: 'Search backward from the current selection (default: false).' },
+          wrap: { type: 'boolean', description: 'Wrap at the end or beginning of the page (default: true).' },
+        },
+        required: ['text'],
       },
     },
   },
@@ -950,7 +967,7 @@ export const FULL_TOOL_NAMES = new Set(
 export const COMPACT_TOOL_NAMES = new Set([
   'get_accessibility_tree', 'read_page', 'scroll',
   'get_window_info',
-  'extract_data', 'get_selection',
+  'extract_data', 'get_selection', 'find_text',
   'click_ax', 'set_checked', 'type_ax', 'set_field',
   'click', 'type_text', 'press_keys',
   'navigate', 'new_tab', 'wait_for_element',
@@ -1159,14 +1176,15 @@ TOOLS - use only these:
 - get_window_info: Read window/viewport size.
 - scroll: Scroll up/down.
 - extract_data: Get tables, headings, images, or links.
-- get_selection: Read highlighted text.
 - click_ax({ref_id}): Click by ref_id from the tree. Preferred.
 - set_checked({ref_id, checked}): Idempotently set and verify a native checkbox. Never toggle checkboxes repeatedly with click_ax.
 - type_ax({ref_id, text}): Type into a field by ref_id.
 - set_field({ref_id, text, submit}): Focus + clear + type + verify in one call. Preferred for forms and set submit:true for search fields.
 - click({text}): Click by visible text. Fallback when no ref_id works.
 - type_text({text}): Type into the focused element. Click the field first.
-- press_keys({key}): Press Escape, Tab, Enter, ArrowUp, ArrowDown, ArrowLeft, or ArrowRight.
+- get_selection: Read highlighted text.
+- find_text({text}): Locate and highlight literal page text instead of using Ctrl/Cmd+F.
+- press_keys({key}): Press one supported unmodified key. Ctrl/Cmd/Alt/Shift combinations and browser shortcuts are unavailable.
 - navigate({url}): Go to a URL.
 - new_tab({url}): Open a URL in a background tab for user reference. It does not activate or retarget the current run, so never use it as a site-permission workaround.
 - wait_for_element({selector}): Wait for an element to appear.
@@ -1284,6 +1302,8 @@ Available tools:
 - schedule_resume: Durably pause this current task and resume it later in the same tab/conversation. Terminal tool; use only for external waits.
 - schedule_task: Create a one-shot or fixed-minute-interval task only when the user explicitly asks for future scheduled work. It does not support calendar/cron recurrence; never approximate monthly recurrence. Prefer URL targets for repeatable automations; current_tab is strict and fails if the tab changes.
 - get_selection: Get highlighted text
+- find_text: Find and select/highlight literal page text. Use this instead of Ctrl/Cmd+F.
+- press_keys: Press only unmodified Escape/Tab/Enter/arrows. Modifier combinations and browser shortcuts are unsupported.
 - new_tab: Open a background reference tab; the current run stays on its original tab
 - clarify: Pause and ask the user a question. Use ONLY for material ambiguity that you cannot resolve by reading the page (e.g. "my API key" on a site with multiple plugins that each have one). Unanswered clarifies auto-select options[0] after the timeout (default 60s) with source=timeout (not high-risk approval); Settings Instant yields source=auto (intentional auto-approve — continue). Put the safe/default first. Do NOT use to confirm correct actions; do NOT call before every step. Budget 1-2 per run, max.
 - done: Signal task completion
@@ -1468,7 +1488,7 @@ export const MID_TOOL_NAMES = new Set([
   'list_webmcp_tools', 'execute_webmcp_tool',
   'read_page', 'read_pdf', 'get_window_info', 'get_interactive_elements',
   'click', 'type_text', 'press_keys', 'scroll', 'navigate', 'go_back', 'go_forward',
-  'extract_data', 'wait_for_element', 'wait_for_stable', 'get_selection',
+  'extract_data', 'wait_for_element', 'wait_for_stable', 'get_selection', 'find_text',
   'new_tab', 'done', 'clarify', 'schedule_resume', 'schedule_task',
   'iframe_read', 'iframe_click', 'iframe_type',
   'fetch_url', 'research_url', 'list_downloads', 'read_downloaded_file',
@@ -1507,8 +1527,8 @@ TOOLS — use only these:
 - get_accessibility_tree: PREFERRED read. Flat-text tree with roles, names, and stable ref_ids. Use filter:"visible" by default.
 - click_ax({ref_id}) / set_checked({ref_id, checked}) / type_ax({ref_id, text}) / set_field({ref_id, text, submit}): act on nodes by ref_id. set_field is preferred for text fields; set_checked is required for native checkboxes.
 - read_page: prose fallback for long articles. get_window_info: inspect browser window/viewport size. scroll, navigate({url}), go_back()/go_forward(): walk the run tab's history. new_tab({url}) only opens a background reference tab and never retargets the run.
-- get_interactive_elements: legacy indexed element list (use when the tree misses elements). click({text}) / type_text({text}) / press_keys({key}): legacy fallbacks.
-- extract_data: tables/headings/images/links. get_selection: highlighted text. read_pdf: read a PDF.
+- get_interactive_elements: legacy indexed element list (use when the tree misses elements). click({text}) / type_text({text}) / press_keys({key}): legacy fallbacks. press_keys supports only unmodified Escape/Tab/Enter/arrows, never Ctrl/Cmd/Alt/Shift combinations or browser shortcuts.
+- extract_data: tables/headings/images/links. get_selection: read highlighted text. find_text({text}): locate and highlight literal page text instead of Ctrl/Cmd+F. read_pdf: read a PDF.
 - wait_for_element({selector}) / wait_for_stable({quietMs}): wait for an element / for the page to go quiet after an action.
 - schedule_resume({after_seconds|run_at, reason, resume_instruction}): terminal durable pause for this current task.
 - schedule_task({title, prompt, schedule, target, mode}): create one-shot or fixed-minute-interval future work only when explicitly requested by the user. Calendar/cron recurrence is unsupported and must not be approximated. Prefer target.type:"url" for monitors/repeatable automations; use current_tab only for exact current-tab state.
@@ -1535,7 +1555,7 @@ TYPING:
 - For text fields prefer set_field({ref_id, text, submit}) — one call that focuses, clears, verifies, and only then optionally submits. Prefer submit:true for search fields. Otherwise type_ax({ref_id, text}) after reading the tree.
 - DRAFT CHECKPOINT: before filling an external email/message/post composer, formulate the exact recipient(s), subject (when applicable), and body. If the body is more than a short one-liner, save the complete text as \`[pending draft]\` with scratchpad_write before typing; never label it sent until the UI verifies sending.
 - HARD RULE: after click_ax on a text field, your NEXT call MUST be type_ax/set_field on the SAME ref. Do not click_ax again or re-read the tree first.
-- Native <select>: click_ax to focus, then press_keys the first letter (or ArrowDown + Enter). Custom/ARIA dropdowns (role="combobox", Stripe/Radix/React-Select): open it, then type-to-filter + Enter, or arrows + Enter — clicking an option ref usually fails silently.
+- Native <select>: use type_ax({ref_id,text:"exact option label"}); fallback to click_ax, then ArrowDown/ArrowUp + Enter. Custom/ARIA dropdowns (role="combobox", Stripe/Radix/React-Select): open them, use type_text({text:"filter"}) + Enter or arrows + Enter. press_keys does not support letter keys or modifiers.
 - Fill forms ONE FIELD AT A TIME: focus field A → type value A → field B → type value B. Never concatenate multiple values (name + price + period) into one type call.
 
 CLICKING:

@@ -1830,6 +1830,68 @@
   }
 
   /**
+   * Locate and select literal page text without relying on browser chrome or
+   * unsupported Ctrl/Cmd keyboard shortcuts.
+   */
+  function findText(params) {
+    const text = String(params?.text || '').trim();
+    if (!text) {
+      return { success: false, found: false, dispatched: false, noDispatch: true, error: 'find_text: text is required.' };
+    }
+    if (text.length > 500) {
+      return { success: false, found: false, dispatched: false, noDispatch: true, error: 'find_text: text must be 500 characters or fewer.' };
+    }
+    if (typeof window.find !== 'function') {
+      return { success: false, found: false, dispatched: false, noDispatch: true, error: 'find_text is not supported on this page.' };
+    }
+
+    try {
+      const matchCase = params?.matchCase === true;
+      const backwards = params?.backwards === true;
+      const wrap = params?.wrap !== false;
+      // Match browser Find semantics across the whole document, including
+      // embedded frames. Without searchInFrames, find_text falsely reports a
+      // miss for text that Ctrl/Cmd+F would find inside an iframe.
+      const found = window.find(text, matchCase, backwards, wrap, false, true, false);
+      if (!found) {
+        return {
+          success: false,
+          found: false,
+          dispatched: false,
+          noDispatch: true,
+          query: text,
+          error: `find_text: "${text}" was not found on the current page. Re-read the page or try a shorter literal phrase.`,
+        };
+      }
+      const selection = window.getSelection?.();
+      const selectedText = String(selection?.toString?.() || '');
+      let rect;
+      if (selection?.rangeCount) {
+        const bounds = selection.getRangeAt(0).getBoundingClientRect();
+        const scrollX = Number.isFinite(Number(window.scrollX)) ? Number(window.scrollX) : 0;
+        const scrollY = Number.isFinite(Number(window.scrollY)) ? Number(window.scrollY) : 0;
+        rect = {
+          x: bounds.x,
+          y: bounds.y,
+          pageX: bounds.x + scrollX,
+          pageY: bounds.y + scrollY,
+          width: bounds.width,
+          height: bounds.height,
+        };
+      }
+      return {
+        success: true,
+        found: true,
+        query: text,
+        selectedText,
+        ...(rect ? { rect } : {}),
+      };
+    } catch (error) {
+      return { success: false, found: false, dispatched: false, noDispatch: true, error: `find_text failed: ${error.message || error}` };
+    }
+  }
+
+  /**
    * Press supported keyboard keys.
    */
   function pressKeys(params) {
@@ -3493,6 +3555,7 @@
       'dev_unmark_targets': () => unmarkDevTargets(msg.params || {}),
       'wait_for_element': () => waitForElement(msg.params || {}),
       'get_selection': () => ({ text: window.getSelection()?.toString() || '' }),
+      'find_text': () => findText(msg.params || {}),
       // ── Accessibility-tree-backed reads and actions ──────────────────
       //
       // The tree is built by src/content/accessibility-tree.js (a port of

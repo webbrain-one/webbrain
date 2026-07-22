@@ -1161,6 +1161,35 @@ export class Agent {
     return false;
   }
 
+  _findTextMatchLoopIdentity(result) {
+    if (result?.success !== true || !result?.rect || typeof result.rect !== 'object') return '';
+    const rect = result.rect;
+    const pageX = typeof rect.pageX === 'number' ? rect.pageX : NaN;
+    const pageY = typeof rect.pageY === 'number' ? rect.pageY : NaN;
+    const viewportX = typeof rect.x === 'number' ? rect.x : NaN;
+    const viewportY = typeof rect.y === 'number' ? rect.y : NaN;
+    const width = typeof rect.width === 'number' ? rect.width : NaN;
+    const height = typeof rect.height === 'number' ? rect.height : NaN;
+    const x = Number.isFinite(pageX) ? pageX : viewportX;
+    const y = Number.isFinite(pageY) ? pageY : viewportY;
+    if (![x, y, width, height].every(Number.isFinite)) return '';
+    return [x, y, width, height]
+      .map(value => Math.round(value * 2) / 2)
+      .join(',');
+  }
+
+  _noteHealthyLoopCall(tabId) {
+    // Do not reset the nudge counter immediately: one healthy call between
+    // two stuck actions must not launder the surrounding loop.
+    const healthy = (this.healthyCallsSinceLoop.get(tabId) || 0) + 1;
+    this.healthyCallsSinceLoop.set(tabId, healthy);
+    if (healthy >= 2) {
+      this.loopNudges.delete(tabId);
+      this.healthyCallsSinceLoop.delete(tabId);
+    }
+    return { kind: 'none' };
+  }
+
   _loopCallKey(name, args, result) {
     if (result?.nonRetryableScope) {
       // Definitive platform/permission failures keep one identity across
@@ -1190,6 +1219,10 @@ export class Agent {
     // same logical file via 8 different API endpoints. See loop-bucket.js.
     const errored = this._isToolResultErroredForLoop(name, args, result);
     const argsHash = bucketArgsKey(name, args);
+    if (name === 'find_text' && !errored) {
+      const matchIdentity = this._findTextMatchLoopIdentity(result);
+      if (matchIdentity) return `${name}|${argsHash}|match:${matchIdentity}`;
+    }
     return `${name}|${argsHash}|${errored ? 'err' : 'ok'}`;
   }
 
@@ -2247,6 +2280,17 @@ export class Agent {
     if (toolResult?.pageUrlChanged === true && !this._noteNavArrival(tabId, toolResult.currentUrl)) {
       this._clearLoopState(tabId);
     }
+    if (
+      toolName === 'find_text'
+      && toolResult?.success === true
+      && !this._findTextMatchLoopIdentity(toolResult)
+    ) {
+      // A cross-origin frame match can be selected by window.find while its
+      // range is unavailable to the top document. Successful same-query calls
+      // intentionally advance to the next match, so an unlocated match is not
+      // safe evidence of a repeat loop.
+      return this._noteHealthyLoopCall(tabId);
+    }
     const { buf, key } = this._recordCall(tabId, toolName, toolArgs, toolResult);
     if (this._isBrowserMutationTool(toolName)) {
       const normalizeFailureScope = value => String(value).slice(0, 320);
@@ -2311,18 +2355,12 @@ export class Agent {
       }
     }
     const loop = this._detectLoop(buf, key);
+    if (loop?.type === 'oscillation' && loop.a === 'find_text' && loop.b === 'find_text') {
+      // Alternating match positions is normal when a finite page search wraps.
+      return this._noteHealthyLoopCall(tabId);
+    }
     if (!loop) {
-      // Healthy, non-looping call. We don't reset the nudge counter
-      // immediately — that would let the agent escape detection by
-      // doing one read_page between two stuck clicks. Only reset after
-      // a sustained run of healthy calls (a full window's worth).
-      const healthy = (this.healthyCallsSinceLoop.get(tabId) || 0) + 1;
-      this.healthyCallsSinceLoop.set(tabId, healthy);
-      if (healthy >= 2) {
-        this.loopNudges.delete(tabId);
-        this.healthyCallsSinceLoop.delete(tabId);
-      }
-      return { kind: 'none' };
+      return this._noteHealthyLoopCall(tabId);
     }
 
     const method = String(toolArgs?.method || 'GET').toUpperCase();
@@ -2382,7 +2420,7 @@ export class Agent {
   static EXECUTION_META_TOOLS = new Set(['clarify', 'scratchpad_write', 'scratchpad_read', 'progress_update', 'progress_read']);
   static EXECUTION_APP_STATE_TOOLS = new Set(['scratchpad_write', 'scratchpad_read', 'progress_update', 'progress_read']);
   static EXECUTION_APP_STATE_WRITE_TOOLS = new Set(['scratchpad_write', 'progress_update']);
-  static DELIVERY_OBSERVATION_TOOLS = new Set(['read_page', 'get_accessibility_tree', 'get_interactive_elements', 'extract_data', 'get_selection', 'scroll', 'wait_for_stable', 'wait_for_element', 'read_pdf', 'fetch_url', 'research_url', 'read_downloaded_file', 'iframe_read', 'get_window_info', 'list_downloads', 'progress_read', 'screenshot', 'get_frames', 'get_shadow_dom', 'shadow_dom_query', 'read_youtube_transcript']);
+  static DELIVERY_OBSERVATION_TOOLS = new Set(['read_page', 'get_accessibility_tree', 'get_interactive_elements', 'extract_data', 'get_selection', 'find_text', 'scroll', 'wait_for_stable', 'wait_for_element', 'read_pdf', 'fetch_url', 'research_url', 'read_downloaded_file', 'iframe_read', 'get_window_info', 'list_downloads', 'progress_read', 'screenshot', 'get_frames', 'get_shadow_dom', 'shadow_dom_query', 'read_youtube_transcript']);
   static NAV_PRONE_TOOLS = new Set(['click', 'click_ax', 'set_checked', 'navigate', 'go_back', 'go_forward', 'execute_js', 'iframe_click', 'execute_webmcp_tool']);
   static RECOMMENDED_ACTION_FAST_PATH_IDS = new Set(['download-media', 'tweet-webbrain', 'post-webbrain-linkedin']);
   static RECOMMENDED_ACTION_FIRST_TOOLS = Object.freeze({
@@ -15901,6 +15939,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       'wait_for_element': 'wait_for_element',
       'wait_for_stable': 'wait_for_stable',
       'get_selection': 'get_selection',
+      'find_text': 'find_text',
     };
 
     const action = actionMap[name];
@@ -15939,7 +15978,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           name === 'get_accessibility_tree' || name === 'get_interactive_elements' ||
           name === 'extract_data' || name === 'inspect_element_styles' ||
           name === 'wait_for_element' || name === 'wait_for_stable' ||
-          name === 'get_selection'
+          name === 'get_selection' || name === 'find_text'
         ) {
           return {
             success: false,
