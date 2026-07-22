@@ -1081,7 +1081,7 @@ export const ASK_ONLY_TOOLS = [
  */
 export const AGENT_TOOL_NAMES = new Set(AGENT_TOOLS.map(t => t.function.name));
 export const RETIRED_AGENT_TOOL_NAMES = new Set(['screenshot', 'full_page_screenshot', 'record_tab', 'stop_recording']);
-export const RESERVED_AGENT_TOOL_NAMES = new Set([...AGENT_TOOL_NAMES, ...RETIRED_AGENT_TOOL_NAMES, 'done_json', 'load_skill']);
+export const RESERVED_AGENT_TOOL_NAMES = new Set([...AGENT_TOOL_NAMES, ...RETIRED_AGENT_TOOL_NAMES, 'done_json', 'load_skill', 'beep']);
 export const DEV_ONLY_TOOL_NAMES = new Set([
   'read_page_source',
   'inspect_element_styles',
@@ -1214,6 +1214,23 @@ const DONE_JSON_TOOL = {
   },
 };
 
+const WATCH_BEEP_TOOL = {
+  type: 'function',
+  function: {
+    name: 'beep',
+    description: 'Arm the optional alert for the current /watch event. This tool is available only to a watch created with /beep. Call it with a stable event_key after detecting a candidate match and before performing the requested action. If it reports duplicate=true, do not repeat the action; finish this poll with outcome="partial". A newly armed alert is played only after the action is verified and done reports outcome="success".',
+    parameters: {
+      type: 'object',
+      properties: {
+        event_key: { type: 'string', description: 'Stable identifier for this distinct event, such as a commit SHA, release ID, or normalized item URL. Maximum 200 characters.' },
+        message: { type: 'string', description: 'Optional short, non-secret description of the event. Maximum 300 characters.' },
+      },
+      required: ['event_key'],
+      additionalProperties: false,
+    },
+  },
+};
+
 /**
  * Get tools filtered by mode.
  *
@@ -1246,6 +1263,9 @@ export function getToolsForMode(mode, opts = {}) {
   }
   if (opts.webMcpAvailable !== true) {
     base = base.filter(tool => !WEBMCP_TOOL_NAMES.has(tool.function?.name));
+  }
+  if (opts.watchBeep === true && normalizedMode === 'act') {
+    base = [...base, WATCH_BEEP_TOOL];
   }
   if (!devCompactBlocked && tier !== 'compact' && opts.skillLoaderTool?.function?.name === 'load_skill') {
     base = [...base, opts.skillLoaderTool];

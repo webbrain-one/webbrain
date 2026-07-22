@@ -53,6 +53,7 @@ import {
   parseConfigPatchImport,
 } from './config-transfer.js';
 import { RUN_CAPTURE_START_ERROR_PREFIX, createRunCaptureController } from './run-capture.js';
+import { playWatchAlert } from './watch-alert.js';
 
 /**
  * WebBrain Background Script (Firefox)
@@ -85,6 +86,7 @@ const scheduler = new ScheduledJobManager({
   },
   showIndicator: (tabId) => sendIndicatorMessage(tabId, 'WB_SHOW_AGENT_INDICATORS'),
   hideIndicator: (tabId) => sendIndicatorMessage(tabId, 'WB_HIDE_AGENT_INDICATORS'),
+  playWatchAlert: (payload) => playWatchAlert(browser, payload),
 });
 agent.setScheduler(scheduler);
 scheduler.start();

@@ -2336,7 +2336,10 @@ async function settleScheduledRun(event, job, tabId = currentTabId) {
   if (assistantEl) {
     finalizeSteps(assistantEl);
     const textEl = assistantEl.querySelector('.message-text');
-    if (textEl && !textEl.textContent.trim() && ['completed', 'clarification_required'].includes(event) && job?.lastResult) {
+    if (textEl && !textEl.textContent.trim() && (
+      ['completed', 'clarification_required'].includes(event)
+      || ['polled', 'triggered'].includes(event)
+    ) && job?.lastResult) {
       textEl.innerHTML = formatMarkdown(job.lastResult);
       addMessageCopyButton(assistantEl);
     }
@@ -2353,7 +2356,9 @@ async function settleScheduledRun(event, job, tabId = currentTabId) {
     if (renderedTabId != null) await flushRenderedTabChat();
     await drainQueuedContextMenuPromptsAfterPendingTabSwitch();
   }
-  if (event === 'completed') notifyCompletion({ success: job?.lastOutcome === 'success' });
+  if (event === 'completed' && job?.source !== 'watch') {
+    notifyCompletion({ success: job?.lastOutcome === 'success' });
+  }
 }
 
 function handleScheduledJobEvent(data, tabId) {
@@ -2366,9 +2371,11 @@ function handleScheduledJobEvent(data, tabId) {
   const runTabId = normalizePlanReviewTabId(tabId ?? currentTabId);
   const jobId = job?.id ? String(job.id) : '';
   const terminalScheduledEvent = ['completed', 'failed', 'clarification_required'].includes(event);
+  const watchPollEvent = ['polled', 'triggered'].includes(event);
   const crossPanelScheduledEvent = isUrlTargetScheduledJob(job) && (
     event === 'needs_user_input' ||
-    terminalScheduledEvent
+    terminalScheduledEvent ||
+    watchPollEvent
   );
   if (!sameTab && !crossPanelScheduledEvent) return;
 
@@ -2385,6 +2392,9 @@ function handleScheduledJobEvent(data, tabId) {
     if (jobId) currentAssistantEl.dataset.scheduledJobId = jobId;
     showActivity(t('sp.scheduled.running', { title }));
   } else if (event === 'completed') {
+    ensureScheduledTerminalMessage(job);
+    settleScheduledRun(event, job, runTabId);
+  } else if (event === 'polled' || event === 'triggered') {
     ensureScheduledTerminalMessage(job);
     settleScheduledRun(event, job, runTabId);
   } else if (event === 'failed') {

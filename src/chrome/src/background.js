@@ -75,6 +75,20 @@ const agent = new Agent(providerManager);
 const userMemoryStore = createUserMemoryStore(chrome.storage.local);
 const profileSync = new ProfileSyncManager(chrome.storage.local);
 installDownloadDirectoryRouting(chrome);
+
+async function playWatchAlert({ style = 'default' } = {}) {
+  const stored = await chrome.storage.local.get('notifySound');
+  if (stored?.notifySound === false) return { ok: true, muted: true };
+  await ensureOffscreen();
+  const result = await chrome.runtime.sendMessage({
+    target: 'offscreen-watch-audio',
+    action: 'play_watch_alert',
+    style,
+  });
+  if (result?.ok === false) throw new Error(result.error || 'Watch alert playback failed.');
+  return result || { ok: true };
+}
+
 const scheduler = new ScheduledJobManager({
   api: chrome,
   agent,
@@ -93,6 +107,7 @@ const scheduler = new ScheduledJobManager({
   },
   showIndicator: (tabId) => sendIndicatorMessage(tabId, 'WB_SHOW_AGENT_INDICATORS'),
   hideIndicator: (tabId) => sendIndicatorMessage(tabId, 'WB_HIDE_AGENT_INDICATORS'),
+  playWatchAlert,
 });
 agent.setScheduler(scheduler);
 scheduler.start();
