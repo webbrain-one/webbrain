@@ -11304,6 +11304,88 @@ test('sidepanel exposes schedule slash commands in both builds', () => {
   }
 });
 
+test('/watch slash parser keeps Chrome and Firefox validation aligned', async () => {
+  const chromeWatch = await import(pathToFileURL(path.join(ROOT, 'src/chrome/src/ui/watch-command.js')).href);
+  const firefoxWatch = await import(pathToFileURL(path.join(ROOT, 'src/firefox/src/ui/watch-command.js')).href);
+  const parsers = [
+    ['chrome', chromeWatch.parseWatchSlashCommand],
+    ['firefox', firefoxWatch.parseWatchSlashCommand],
+  ];
+  const validCases = [
+    {
+      input: '/watch if CI is green, notify me',
+      expected: {
+        ok: true,
+        prompt: 'if CI is green, notify me',
+        keep: false,
+        intervalSeconds: 60,
+        beep: false,
+        beepStyle: null,
+      },
+    },
+    {
+      input: '/WATCH --keep --secs 30 --long when a new commit appears, request review /BEEP',
+      expected: {
+        ok: true,
+        prompt: 'when a new commit appears, request review',
+        keep: true,
+        intervalSeconds: 30,
+        beep: true,
+        beepStyle: 'long',
+      },
+    },
+    {
+      input: '/watch --short --secs 120 task with   internal spacing /beep',
+      expected: {
+        ok: true,
+        prompt: 'task with   internal spacing',
+        keep: false,
+        intervalSeconds: 120,
+        beep: true,
+        beepStyle: 'short',
+      },
+    },
+    {
+      input: '/watch -- --keep appears in the page /beep',
+      expected: {
+        ok: true,
+        prompt: '--keep appears in the page',
+        keep: false,
+        intervalSeconds: 60,
+        beep: true,
+        beepStyle: 'default',
+      },
+    },
+  ];
+  const invalidCases = [
+    ['/schedule task', 'not-watch-command'],
+    ['/watch', 'missing-prompt'],
+    ['/watch /beep', 'missing-prompt'],
+    ['/watch --secs task', 'invalid-seconds'],
+    ['/watch --secs 29 task', 'invalid-seconds'],
+    ['/watch --secs 121 task', 'invalid-seconds'],
+    ['/watch --secs 60.5 task', 'invalid-seconds'],
+    ['/watch --unknown task', 'unknown-option'],
+    ['/watch --keep --keep task', 'duplicate-option'],
+    ['/watch --long --short task /beep', 'conflicting-beep-style'],
+    ['/watch --long task', 'beep-style-without-beep'],
+    ['/watch task /beep /beep', 'duplicate-beep'],
+  ];
+
+  for (const [label, parse] of parsers) {
+    for (const { input, expected } of validCases) {
+      assert.deepEqual(parse(input), expected, `${label}: should parse ${input}`);
+    }
+    for (const [input, error] of invalidCases) {
+      const result = parse(input);
+      assert.equal(result.ok, false, `${label}: should reject ${input}`);
+      assert.equal(result.error, error, `${label}: wrong rejection for ${input}`);
+      assert.equal(result.usage, chromeWatch.WATCH_COMMAND_USAGE, `${label}: rejection should include canonical usage`);
+    }
+  }
+  assert.equal(chromeWatch.WATCH_COMMAND_USAGE, firefoxWatch.WATCH_COMMAND_USAGE);
+});
+
 test('schedule form time errors mention immediate start in every locale', async () => {
   for (const [label, localeDir] of [
     ['chrome', 'src/chrome/src/ui/locales'],
