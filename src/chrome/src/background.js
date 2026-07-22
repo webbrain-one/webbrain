@@ -15,6 +15,8 @@ import { ScheduledJobManager } from './agent/scheduler.js';
 import {
   compileLatestSuccessfulWorkflow,
   createSavedWorkflowStore,
+  exportPortableWorkflowDefinition,
+  importPortableWorkflowDefinition,
 } from './agent/workflows.js';
 import * as workflowTrace from './trace/recorder.js';
 import {
@@ -2021,6 +2023,22 @@ async function handleMessage(msg, sender) {
     case 'get_saved_workflow': {
       const workflow = await savedWorkflowStore.get(String(msg.id || ''));
       return workflow ? { ok: true, workflow } : { ok: false, reason: 'not_found' };
+    }
+
+    case 'export_saved_workflow': {
+      const workflow = await savedWorkflowStore.get(String(msg.id || ''));
+      if (!workflow) return { ok: false, reason: 'not_found' };
+      const portable = exportPortableWorkflowDefinition(workflow);
+      return portable.workflow
+        ? { ok: true, workflow: portable.workflow }
+        : { ok: false, reason: portable.reason };
+    }
+
+    case 'import_saved_workflow': {
+      const portable = importPortableWorkflowDefinition(msg.definition);
+      if (!portable.workflow) return { ok: false, reason: portable.reason };
+      const saved = await withSavedWorkflowStoreLock(() => savedWorkflowStore.put(portable.workflow));
+      return { ok: saved.changed, workflow: saved.workflow, reason: saved.reason || '' };
     }
 
     case 'save_latest_workflow': {
