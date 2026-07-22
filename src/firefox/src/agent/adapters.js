@@ -15853,6 +15853,9 @@ const ADAPTERS = [
     fullPageCapture: { infiniteScroll: isTwitterInfiniteScrollUrl },
     notes: `
 - The composer is a contenteditable, not a textarea. Character count is enforced client-side at 280 (or higher for Premium).
+- On /compose/post, call wait_for_stable before filling the composer. After typing, re-read the visible accessibility tree and require the Post control to be enabled (no disabled=true) before clicking it.
+- If the exact text is visible but Post remains disabled, keep the composer open and refill the editor with type_text({selector:"[data-testid=\\\"tweetTextarea_0\\\"]", text:"<exact complete post>", clear:true}). Do not dismiss the composer to recover.
+- A click_ax result with verified:false or no observable posting evidence is not proof that the post was published. Keep the composer open and verify a new status URL or matching feed item before reporting success.
 - The timeline is virtualized — tweets scroll out of the DOM. To find a specific tweet, use search, don't scroll.
 - "Reply", "Retweet", "Like" icons are below each tweet; the share menu has "Copy link" for permalinks.
 - Quote tweets vs reposts: the retweet icon opens a menu with both options.`,

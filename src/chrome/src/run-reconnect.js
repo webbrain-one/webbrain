@@ -13,7 +13,11 @@ function requestMatches(value, requestId) {
   return value != null && String(value) === String(requestId);
 }
 
-function runResponseFromSnapshot(snapshot, { reconnected = false, resumed = false } = {}) {
+function runResponseFromSnapshot(snapshot, {
+  reconnected = false,
+  resumed = false,
+  submittedTurnDurable = false,
+} = {}) {
   const updates = (Array.isArray(snapshot?.events) ? snapshot.events : [])
     .filter(event => event?.type && event.type !== 'run_complete')
     .map(event => ({ type: event.type, data: event.data }));
@@ -36,6 +40,7 @@ function runResponseFromSnapshot(snapshot, { reconnected = false, resumed = fals
     success: snapshot?.status === 'completed',
     successfulDone: snapshot?.successfulDone === true,
     hadError: snapshot?.hadError === true || snapshot?.status === 'failed',
+    submittedTurnDurable,
     reconnected,
     resumed,
   };
@@ -154,9 +159,6 @@ export async function runDetachedWithReconnect({
 
       const snapshot = state?.runUi && typeof state.runUi === 'object' ? state.runUi : null;
       const detachedError = state?.detachedError;
-      if (requestMatches(detachedError?.requestId, requestId)) {
-        throw new Error(detachedError?.message || 'Detached run failed.');
-      }
       const sameSnapshot = requestMatches(snapshot?.requestId, requestId);
       const sameStartingRun = state?.starting === true
         && requestMatches(state?.startingRequestId, requestId);
@@ -170,7 +172,15 @@ export async function runDetachedWithReconnect({
         return runResponseFromSnapshot(snapshot, {
           reconnected: everReconnected,
           resumed: resumeAttempts > 0,
+          submittedTurnDurable: state?.submittedTurnDurable === true,
         });
+      }
+
+      // A terminal journal contains the final content and durable-turn proof.
+      // Prefer it over the duplicate detached task rejection recorded after
+      // the run's finally block completed the snapshot.
+      if (requestMatches(detachedError?.requestId, requestId)) {
+        throw new Error(detachedError?.message || 'Detached run failed.');
       }
 
       if (sameStartingRun || sameLiveRun) {

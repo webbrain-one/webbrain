@@ -260,7 +260,7 @@ export default {
   'sp.clarify.auto_selected': "स्वतः-चयनित (समय समाप्त):",
   'sp.clarify.auto_selected_instant': "स्वतः चयनित (तत्काल):",
   'sp.plan.title': "योजना की समीक्षा करें",
-  'sp.plan.approve': "👍भागो",
+  'sp.plan.approve': "भागो",
   'sp.plan.change': "परिवर्तन",
   'sp.plan.edit_as_text': "पाठ के रूप में संपादित करें",
   'sp.plan.done_editing_text': "हो गया",

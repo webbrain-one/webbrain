@@ -1506,8 +1506,13 @@ function launchDetachedRun(action, msg, sender) {
   return { ok: true, accepted: true, requestId };
 }
 
-function sendAgentRunComplete(tabId, snapshot = null) {
+async function sendAgentRunComplete(tabId, snapshot = null) {
   if (tabId == null || !snapshot) return;
+  const submittedTurnDurable = snapshot.kind === 'continue'
+    || await agent.hasDurableSubmittedTurn(
+      tabId,
+      snapshot.requestId,
+    ).catch(() => false);
   chrome.runtime.sendMessage({
     target: 'sidepanel',
     action: 'agent_update',
@@ -1520,6 +1525,7 @@ function sendAgentRunComplete(tabId, snapshot = null) {
       status: snapshot.status || 'completed',
       finalContent: snapshot.finalContent || '',
       endedAt: snapshot.endedAt || Date.now(),
+      submittedTurnDurable,
     },
   }).catch(() => {});
 }
@@ -2193,7 +2199,7 @@ async function handleMessage(msg, sender) {
             terminalRunUiStatus(result, updates, runError),
             result || (runError ? `Error: ${runError.message}` : ''),
           );
-          sendAgentRunComplete(tabId, snapshot);
+          await sendAgentRunComplete(tabId, snapshot);
         }
         sendIndicatorMessage(tabId, 'WB_HIDE_AGENT_INDICATORS');
         releaseRunKeepalive();
@@ -2247,7 +2253,7 @@ async function handleMessage(msg, sender) {
           terminalRunUiStatus(result, updates, runError),
           result || (runError ? `Error: ${runError.message}` : ''),
         );
-        sendAgentRunComplete(tabId, snapshot);
+        await sendAgentRunComplete(tabId, snapshot);
         sendIndicatorMessage(tabId, 'WB_HIDE_AGENT_INDICATORS');
         releaseRunKeepalive();
       }
@@ -2301,7 +2307,7 @@ async function handleMessage(msg, sender) {
           terminalRunUiStatus(result, updates, runError),
           result || (runError ? `Error: ${runError.message}` : ''),
         );
-        sendAgentRunComplete(tabId, snapshot);
+        await sendAgentRunComplete(tabId, snapshot);
         sendIndicatorMessage(tabId, 'WB_HIDE_AGENT_INDICATORS');
         releaseRunKeepalive();
       }
@@ -2351,10 +2357,13 @@ async function handleMessage(msg, sender) {
       const detachedError = requestedRequestId && failure?.requestId === requestedRequestId
         ? { requestId: failure.requestId, message: failure.message }
         : null;
-      const submittedTurnDurable = requestedRequestId
-        ? await agent.hasDurableSubmittedTurn(tabId, requestedRequestId)
-        : false;
       const runUiSnapshot = await getRunUiSnapshot(tabId);
+      const requestedRunUi = runUiSnapshotForRequest(runUiSnapshot, requestedRequestId);
+      const durabilityRequestId = requestedRequestId || String(requestedRunUi?.requestId || '');
+      const submittedTurnDurable = requestedRunUi?.kind === 'continue'
+        || (durabilityRequestId
+          ? await agent.hasDurableSubmittedTurn(tabId, durabilityRequestId)
+          : false);
       return {
         ok: true,
         ...agent.activeRunState(tabId),
@@ -2364,7 +2373,7 @@ async function handleMessage(msg, sender) {
         runUiDurable: !runUiSnapshot
           || runUiPersistenceFailures.get(tabId) !== String(runUiSnapshot.requestId || ''),
         detachedError,
-        runUi: runUiSnapshotForRequest(runUiSnapshot, requestedRequestId),
+        runUi: requestedRunUi,
       };
     }
 

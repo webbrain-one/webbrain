@@ -2837,6 +2837,7 @@
       return {
         tag,
         type: fieldType,
+        contentEditable: !!el.isContentEditable,
         name: el.getAttribute ? el.getAttribute('name') : null,
         id: elId,
         autocomplete: el.getAttribute ? el.getAttribute('autocomplete') : null,
@@ -3057,6 +3058,18 @@
               ? ' Nearest existing refs: ' + suggestions.map(s => `${s.ref} (${s.role}${s.name ? ' "' + s.name + '"' : ''})`).join(', ') + '.'
               : '';
             return failure(`ref_id ${ref_id} not found.${formatNote} The element may have been removed or the page replaced.${hint} Re-read the accessibility tree to get fresh ids — do NOT guess ref numbers or invent placeholders.`, { suggestions });
+          }
+          const disabledOwner = el.closest?.('button:disabled,input:disabled,select:disabled,textarea:disabled,[aria-disabled="true"]');
+          if (disabledOwner) {
+            return failure(
+              `ref_id ${ref_id} is disabled and cannot be activated. Re-read the page after correcting the form or editor state; do not treat this click as submitted.`,
+              {
+                ref_id,
+                disabled: true,
+                nativeDisabled: !!disabledOwner.disabled,
+                ariaDisabled: disabledOwner.getAttribute?.('aria-disabled') === 'true',
+              },
+            );
           }
           const tag = el.tagName ? el.tagName.toLowerCase() : '';
           const inputType = tag === 'input' ? String(el.type || '').toLowerCase() : '';
