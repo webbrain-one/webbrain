@@ -260,7 +260,7 @@ export default {
   'sp.clarify.auto_selected': "Tự động chọn (hết thời gian):",
   'sp.clarify.auto_selected_instant': "Tự động chọn (Tức thì):",
   'sp.plan.title': "Xem xét kế hoạch",
-  'sp.plan.approve': "👍 Chạy",
+  'sp.plan.approve': "Chạy",
   'sp.plan.change': "Thay đổi",
   'sp.plan.edit_as_text': "Chỉnh sửa dưới dạng văn bản",
   'sp.plan.done_editing_text': "Xong",

@@ -260,7 +260,7 @@ export default {
   'sp.clarify.auto_selected': 'Auto-selected (timed out):',
   'sp.clarify.auto_selected_instant': 'Auto-selected (Instant):',
   'sp.plan.title': 'Review plan',
-  'sp.plan.approve': '👍 Run',
+  'sp.plan.approve': 'Run',
   'sp.plan.change': 'Change',
   'sp.plan.edit_as_text': 'Edit as text',
   'sp.plan.done_editing_text': 'Done',
