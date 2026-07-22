@@ -47599,10 +47599,18 @@ test('saved workflow normalization rejects imported raw refs and undeclared para
     start: { origin: 'https://example.com', pathFamily: '/' },
     parameters: [],
   };
-  assert.equal(SavedWorkflowsCh.normalizeSavedWorkflow({
-    ...base,
-    steps: [{ tool: 'click_ax', args: { ref_id: 'ref_99' }, target: { role: 'button', name: 'Save' } }],
-  }), null);
+  for (const module of [SavedWorkflowsCh, SavedWorkflowsFx]) {
+    assert.equal(module.normalizeSavedWorkflow({
+      ...base,
+      steps: [{ tool: 'click_ax', args: { ref_id: 'ref_99' }, target: { role: 'button', name: 'Save' } }],
+    }), null);
+    for (const tool of ['click', 'wait_for_element']) {
+      assert.equal(module.normalizeSavedWorkflow({
+        ...base,
+        steps: [{ tool, args: { text: '  ref_99  ' }, expected: { kind: 'tool_success' } }],
+      }), null);
+    }
+  }
   assert.equal(SavedWorkflowsCh.normalizeSavedWorkflow({
     ...base,
     steps: [{ tool: 'set_field', args: { text: { [SavedWorkflowsCh.WORKFLOW_PARAM_REF_KEY]: 'missing' } }, target: { role: 'textbox', name: 'Email' } }],
@@ -47721,6 +47729,21 @@ test('portable saved workflow export and import round-trip safely with fresh ide
     });
     assert.equal(unexpectedArg.reason, 'invalid_workflow');
     assert.equal(unexpectedArg.workflow, null);
+
+    for (const tool of ['click', 'wait_for_element']) {
+      const rawTextRef = module.importPortableWorkflowDefinition({
+        ...exported.workflow,
+        parameters: [],
+        steps: [{
+          id: 'step_1',
+          tool,
+          args: { text: 'ref_99' },
+          expected: { kind: 'tool_success' },
+        }],
+      });
+      assert.equal(rawTextRef.reason, 'invalid_workflow');
+      assert.equal(rawTextRef.workflow, null);
+    }
 
     const sensitiveFromTarget = module.importPortableWorkflowDefinition({
       ...exported.workflow,

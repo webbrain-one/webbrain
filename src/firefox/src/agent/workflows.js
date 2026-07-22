@@ -410,6 +410,12 @@ function normalizeWorkflowParameterMarker(value, parameterIds) {
   return id === rawId && parameterIds.has(id) ? { [WORKFLOW_PARAM_REF_KEY]: id } : null;
 }
 
+function normalizeWorkflowTextArg(value) {
+  if (typeof value !== 'string') return '';
+  const text = cleanText(value);
+  return /^ref_[A-Za-z0-9_-]+$/i.test(text) ? '' : text;
+}
+
 function normalizeWorkflowStepArgs(tool, input, parameterIds, options = {}) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
   const args = input;
@@ -445,8 +451,8 @@ function normalizeWorkflowStepArgs(tool, input, parameterIds, options = {}) {
     };
   }
   if (tool === 'click') {
-    if (!hasOnlyKeys(['text']) || typeof args.text !== 'string') return null;
-    const text = cleanText(args.text);
+    if (!hasOnlyKeys(['text'])) return null;
+    const text = normalizeWorkflowTextArg(args.text);
     return text ? { text } : null;
   }
   if (tool === 'scroll') {
@@ -461,9 +467,9 @@ function normalizeWorkflowStepArgs(tool, input, parameterIds, options = {}) {
     };
   }
   if (tool === 'wait_for_element') {
-    if (!hasOnlyKeys(['text', 'timeout']) || typeof args.text !== 'string') return null;
+    if (!hasOnlyKeys(['text', 'timeout'])) return null;
     if (Object.hasOwn(args, 'timeout') && !Number.isFinite(args.timeout)) return null;
-    const text = cleanText(args.text);
+    const text = normalizeWorkflowTextArg(args.text);
     if (!text) return null;
     return {
       text,
