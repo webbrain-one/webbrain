@@ -262,7 +262,7 @@ export const AGENT_TOOLS = [
     type: 'function',
     function: {
       name: 'click',
-      description: 'Click an element. FOUR ways to use it: (1) visible text, (2) element index from get_interactive_elements, (3) CSS selector, (4) x/y coordinates. For text clicks, default matching is EXACT and case-insensitive. You can opt into broader matching with `textMatch: "prefix"` or `textMatch: "contains"`. jQuery/Playwright pseudo-classes like `:contains()` and `:has-text()` are NOT valid CSS — use the text parameter instead.',
+      description: 'Click an element. FOUR ways to use it: (1) visible text, (2) element index from get_interactive_elements, (3) CSS selector, (4) x/y coordinates. For text clicks, default matching is EXACT and case-insensitive. You can opt into broader matching with `textMatch: "prefix"` or `textMatch: "contains"`. jQuery/Playwright pseudo-classes like `:contains()` and `:has-text()` are NOT valid CSS — use the text parameter instead. COORDINATES are CSS pixels; if x/y were read off a screenshot image that was reported as downscaled, pass from_screenshot: true and the image pixels are converted to CSS pixels automatically.',
       parameters: {
         type: 'object',
         properties: {
@@ -272,6 +272,7 @@ export const AGENT_TOOLS = [
           index: { type: 'number', description: 'Index from get_interactive_elements result.' },
           x: { type: 'number', description: 'X coordinate to click.' },
           y: { type: 'number', description: 'Y coordinate to click.' },
+          from_screenshot: { type: 'boolean', description: 'Set true when x/y were read off the most recent screenshot image. If that screenshot was downscaled, coordinates are converted from image pixels to CSS pixels automatically; harmless otherwise.' },
         },
       },
     },

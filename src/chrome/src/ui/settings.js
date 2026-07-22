@@ -74,6 +74,9 @@ const costTotalLimitInput = document.getElementById('input-cost-total-limit');
 const costSpentValueLabel = document.getElementById('cost-spent-value');
 const btnResetCostSpend = document.getElementById('btn-reset-cost-spend');
 const autoScreenshotSelect = document.getElementById('select-auto-screenshot');
+const imageDetailSelect = document.getElementById('select-image-detail');
+const maxScreenshotsSelect = document.getElementById('select-max-screenshots');
+const maxImageDimensionSelect = document.getElementById('select-max-image-dimension');
 const siteAdaptersToggle = document.getElementById('toggle-site-adapters');
 const voiceInputToggle = document.getElementById('toggle-voice-input');
 const apiMutationObserverToggle = document.getElementById('toggle-api-mutation-observer');
@@ -410,7 +413,7 @@ async function init() {
   chrome.storage.local.remove(['authToken', 'authEmail', 'authDefaultModel']).catch(() => {});
 
   // Load display settings
-  const stored = await chrome.storage.local.get(['verboseMode', 'selectionShortcutEnabled', 'helpImproveWebBrain', 'screenshotFallback', 'maxAgentSteps', 'autoScreenshot', 'useSiteAdapters', 'voiceInputEnabled', 'apiMutationObserverEnabled', 'webMcpEnabled', 'openaiAskStreamingEnabled', 'planBeforeActMode', 'planBeforeAct', 'planReviewMode', 'planReviewConfidenceThreshold', DOWNLOAD_DIRECTORY_STORAGE_KEY, 'notifySound', 'completionConfetti', 'tracingEnabled', 'strictSecretMode', 'agentAllowLocalNetwork', 'scheduledTasksEnabled', 'scheduledRequireConsequentialConfirmation', 'providerFilter', 'requestTimeoutMs', 'clarifyTimeoutSec', 'clarifyTimeoutSemanticsV2', 'costAllowanceSessionUsd', 'costAllowanceTotalUsd', 'cloudCostSpentUsd', 'screenshotRedaction']);
+  const stored = await chrome.storage.local.get(['verboseMode', 'selectionShortcutEnabled', 'helpImproveWebBrain', 'screenshotFallback', 'maxAgentSteps', 'autoScreenshot', 'useSiteAdapters', 'voiceInputEnabled', 'apiMutationObserverEnabled', 'webMcpEnabled', 'openaiAskStreamingEnabled', 'planBeforeActMode', 'planBeforeAct', 'planReviewMode', 'planReviewConfidenceThreshold', DOWNLOAD_DIRECTORY_STORAGE_KEY, 'notifySound', 'completionConfetti', 'tracingEnabled', 'strictSecretMode', 'agentAllowLocalNetwork', 'scheduledTasksEnabled', 'scheduledRequireConsequentialConfirmation', 'providerFilter', 'requestTimeoutMs', 'clarifyTimeoutSec', 'clarifyTimeoutSemanticsV2', 'costAllowanceSessionUsd', 'costAllowanceTotalUsd', 'cloudCostSpentUsd', 'screenshotRedaction', 'imageDetail', 'maxScreenshotsPerTurn', 'maxImageDimension']);
   if (typeof stored.providerFilter === 'string' && ['all','local','cloud','router'].includes(stored.providerFilter)) {
     providerFilter = stored.providerFilter;
   }
@@ -455,6 +458,9 @@ async function init() {
     clarifyTimeoutValueLabel.textContent = formatClarifyTimeoutLabel(cSec);
   }
   autoScreenshotSelect.value = stored.autoScreenshot || 'state_change';
+  imageDetailSelect.value = stored.imageDetail || 'auto';
+  maxScreenshotsSelect.value = String(stored.maxScreenshotsPerTurn != null ? stored.maxScreenshotsPerTurn : 0);
+  maxImageDimensionSelect.value = String(stored.maxImageDimension || 1568);
   siteAdaptersToggle.checked = stored.useSiteAdapters ?? true;
   if (voiceInputToggle) voiceInputToggle.checked = stored.voiceInputEnabled ?? true;
   apiMutationObserverToggle.checked = stored.apiMutationObserverEnabled === true;
@@ -1185,6 +1191,29 @@ if (clarifyTimeoutRange) {
 
 autoScreenshotSelect.addEventListener('change', async () => {
   await chrome.storage.local.set({ autoScreenshot: autoScreenshotSelect.value }).catch(() => {});
+});
+
+imageDetailSelect.addEventListener('change', async () => {
+  const v = imageDetailSelect.value;
+  const imageDetail = (v === 'high' || v === 'low' || v === 'auto') ? v : 'auto';
+  imageDetailSelect.value = imageDetail;
+  await chrome.storage.local.set({ imageDetail }).catch(() => {});
+});
+
+maxScreenshotsSelect.addEventListener('change', async () => {
+  let n = parseInt(maxScreenshotsSelect.value, 10);
+  if (!Number.isFinite(n) || n < 0) n = 0;
+  if (n > 5) n = 5;
+  maxScreenshotsSelect.value = String(n);
+  await chrome.storage.local.set({ maxScreenshotsPerTurn: n }).catch(() => {});
+});
+
+maxImageDimensionSelect.addEventListener('change', async () => {
+  let n = parseInt(maxImageDimensionSelect.value, 10);
+  if (!Number.isFinite(n) || n <= 0) n = 1568;
+  n = Math.max(1, Math.min(2048, n));
+  maxImageDimensionSelect.value = String(n);
+  await chrome.storage.local.set({ maxImageDimension: n }).catch(() => {});
 });
 
 siteAdaptersToggle.addEventListener('change', async () => {

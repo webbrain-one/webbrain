@@ -706,6 +706,21 @@ export default {
   'st.transcription.failed': 'Failed: {error}',
   'st.transcription.fill_required': 'Fill in Base URL and Model first.',
 
+  // Image budget (issue #311): screenshot quality + capture limits.
+  'st.imageBudget.heading': 'Image budget',
+  'st.imageBudget.desc': 'Control screenshot size and how many the agent captures for vision per turn. Lower detail and dimension cuts cost and latency for smaller endpoints; higher keeps fidelity. Defaults match the previous behavior.',
+  'st.imageBudget.detail.label': 'Image detail',
+  'st.imageBudget.detail.desc': 'Vision image detail sent to the model. "high" keeps more detail (more tokens, higher cost); "low" sends a smaller, cheaper image; "auto" lets the provider decide. Provider-dependent.',
+  'st.imageBudget.detail.high': 'High (more detail, more cost)',
+  'st.imageBudget.detail.low': 'Low (cheaper, less detail)',
+  'st.imageBudget.detail.auto': 'Auto (provider default)',
+  'st.imageBudget.maxPerTurn.label': 'Max screenshots per turn',
+  'st.imageBudget.maxPerTurn.desc': 'How many auto-screenshots the agent may capture for vision within a single turn (0 = unlimited). Lower values reduce cost; once the budget is spent further auto-screenshots are skipped for that turn.',
+  'st.imageBudget.maxPerTurn.unlimited': 'Unlimited',
+  'st.imageBudget.maxDimension.label': 'Max image dimension',
+  'st.imageBudget.maxDimension.desc': 'Largest side (width or height) in pixels for any screenshot sent to vision. Smaller caps shrink images before they are sent, cutting tokens and cost. Larger caps keep fidelity.',
+  'st.imageBudget.warning': '⚠️ These settings apply to screenshots captured for vision (auto-screenshot, /screenshot, full-page, verify_form). Manually saved full-resolution images are unaffected. "Image detail" is honored by OpenAI-style endpoints; other providers may ignore it.',
+
   // Screenshot redaction (issue #312): local, best-effort PII blurring that
   // runs in-browser before any screenshot reaches a vision model.
   'st.redaction.heading': 'Screenshot redaction',

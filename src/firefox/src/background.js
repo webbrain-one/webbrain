@@ -251,6 +251,15 @@ async function loadScreenshotRedaction() {
 }
 const screenshotRedactionReady = loadScreenshotRedaction().catch(() => {});
 
+// Image budget (issue #311): screenshot quality + how many screenshots the
+// agent may capture per turn, and the max image dimension. Defaults preserve
+// the previous behavior (auto detail, unlimited screenshots, 1568px cap).
+async function loadImageBudget() {
+  const stored = await browser.storage.local.get(['imageDetail', 'maxScreenshotsPerTurn', 'maxImageDimension']);
+  agent.applyImageBudgetFromStorage(stored);
+}
+const imageBudgetReady = loadImageBudget().catch(() => {});
+
 async function syncAgentUserMemoryFromStorage() {
   const [store, settings] = await Promise.all([
     userMemoryStore.load(),
@@ -804,6 +813,13 @@ browser.storage.onChanged.addListener((changes) => {
   }
   if (changes.screenshotRedaction) {
     agent.screenshotRedaction = !!changes.screenshotRedaction.newValue;
+  }
+  if (changes.imageDetail || changes.maxScreenshotsPerTurn || changes.maxImageDimension) {
+    agent.applyImageBudgetFromStorage({
+      imageDetail: changes.imageDetail ? changes.imageDetail.newValue : undefined,
+      maxScreenshotsPerTurn: changes.maxScreenshotsPerTurn ? changes.maxScreenshotsPerTurn.newValue : undefined,
+      maxImageDimension: changes.maxImageDimension ? changes.maxImageDimension.newValue : undefined,
+    });
   }
   if (changes.profileText) {
     agent.profileText = changes.profileText.newValue || '';
@@ -1637,6 +1653,7 @@ async function handleMessage(msg, sender) {
   // onChanged keeps them in sync afterward.
   await Promise.all([planBeforeActReady, planReviewReady, customSkillsReady, userMemoryReady]);
   await screenshotRedactionReady;
+  await imageBudgetReady;
 
   switch (msg.action) {
     case 'profile_sync_state': return { ok: true, ...(await profileSync.state()) };

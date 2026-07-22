@@ -249,6 +249,17 @@ async function loadScreenshotRedaction() {
 }
 const screenshotRedactionReady = loadScreenshotRedaction().catch(() => {});
 
+// Image budget (issue #311): screenshot quality + how many screenshots the
+// agent may capture per turn, and the max image dimension. Defaults preserve
+// the previous behavior (auto detail, unlimited screenshots, 1568px cap).
+async function loadImageBudget() {
+  const stored = await chrome.storage.local.get(['imageDetail', 'maxScreenshotsPerTurn', 'maxImageDimension']);
+  agent.applyImageBudgetFromStorage(stored);
+}
+// Retained so handleMessage can await hydration on a cold SW start — the first
+// chat must not race ahead of the persisted image-budget settings (issue #311).
+const imageBudgetReady = loadImageBudget().catch(() => {});
+
 async function loadStrictSecretMode() {
   const stored = await chrome.storage.local.get('strictSecretMode');
   if (stored.strictSecretMode != null) agent.strictSecretMode = !!stored.strictSecretMode;
@@ -830,6 +841,13 @@ chrome.storage.onChanged.addListener((changes) => {
   }
   if (changes.screenshotRedaction) {
     agent.screenshotRedaction = !!changes.screenshotRedaction.newValue;
+  }
+  if (changes.imageDetail || changes.maxScreenshotsPerTurn || changes.maxImageDimension) {
+    agent.applyImageBudgetFromStorage({
+      imageDetail: changes.imageDetail ? changes.imageDetail.newValue : undefined,
+      maxScreenshotsPerTurn: changes.maxScreenshotsPerTurn ? changes.maxScreenshotsPerTurn.newValue : undefined,
+      maxImageDimension: changes.maxImageDimension ? changes.maxImageDimension.newValue : undefined,
+    });
   }
   if (changes[API_MUTATION_OBSERVER_KEY]) {
     setApiMutationObserverEnabled(changes[API_MUTATION_OBSERVER_KEY].newValue === true);
@@ -1831,6 +1849,7 @@ async function handleMessage(msg, sender) {
     await Promise.all([planBeforeActReady, planReviewReady, customSkillsReady, userMemoryReady]);
     await webMcpEnabledReady;
     await screenshotRedactionReady;
+    await imageBudgetReady;
   }
 
   switch (msg.action) {

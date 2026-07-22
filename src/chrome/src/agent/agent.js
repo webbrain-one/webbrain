@@ -179,6 +179,24 @@ export class Agent {
     // (form fields + email/phone text) BEFORE leaving the extension. Off by
     // default — loaded from chrome.storage.local in background.js.
     this.screenshotRedaction = false;
+    // Image budget (issue #311): screenshot quality + capture limits. All
+    // loaded from chrome.storage.local in background.js. Defaults preserve the
+    // previous behavior: no explicit `detail` was ever sent (so the provider
+    // uses its own default — OpenAI's is 'auto'), auto-screenshots were
+    // unlimited per turn, and images were capped at 1568px per side.
+    this.imageDetail = 'auto';       // 'high' | 'low' | 'auto' (provider-dependent)
+    this.maxScreenshotsPerTurn = 0;  // 0 = unlimited
+    this.maxImageDimension = 1568;   // max width/height in px for any vision image
+    // tabId -> auto-screenshot count within the current turn/run. Enforces
+    // `maxScreenshotsPerTurn` for every automatic capture (initial viewport
+    // AND post-action). Reset when a run starts and on tab cleanup.
+    this.autoScreenshotCount = new Map();
+    // tabId -> {scaleX, scaleY} image-pixel→CSS-pixel factors for the most
+    // recent screenshot shown to the model. Set when maxImageDimension forced
+    // a downscale; cleared when the last capture was 1:1. Consumed by
+    // click({x, y, from_screenshot: true}) so the extension — not the model —
+    // does the coordinate conversion.
+    this.screenshotClickScale = new Map();
     this.costAllowanceSessionUsd = DEFAULT_CLOUD_COST_ALLOWANCE_USD;
     this.costAllowanceTotalUsd = DEFAULT_CLOUD_COST_ALLOWANCE_USD;
     this.cloudCostSpentUsd = 0;
@@ -2745,7 +2763,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       return { role: 'user', content: contextLine + userMessage };
     }
 
-    const shot = await this._captureAutoScreenshot(tabId);
+    // Count toward maxScreenshotsPerTurn so a limit of 1 is a true per-turn
+    // maximum (initial + post-action share the same budget). Issue #311.
+    // onUpdate may be null here (enrich runs before some callers wire UI);
+    // budget skips still try trace when a runId exists.
+    const shot = await this._captureBudgetedAutoScreenshot(tabId);
     if (!shot) {
       return { role: 'user', content: contextLine + userMessage };
     }
@@ -2776,7 +2798,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       role: 'user',
       content: [
         { type: 'text', text: contextLine + screenshotNote + userMessage },
-        { type: 'image_url', image_url: { url: shot.dataUrl } },
+        { type: 'image_url', image_url: this._withImageDetail({ url: shot.dataUrl }) },
       ],
     };
   }
@@ -4104,7 +4126,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           ...(fnName === 'done' && toolResult?.blockedDone ? { transientCompletionVerification: true } : {}),
           content: [
             { type: 'text', text: noteText },
-            { type: 'image_url', image_url: { url: attachedImage } },
+            { type: 'image_url', image_url: this._withImageDetail({ url: attachedImage }) },
           ],
         });
         const _runIdForShot = this.currentRunId.get(tabId);
@@ -4229,7 +4251,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       const lastTs = this.lastAutoScreenshotTs.get(tabId) || 0;
       if (Date.now() - lastTs >= 500) {
         await new Promise(r => setTimeout(r, 250));
-        const shot = await this._captureAutoScreenshot(tabId);
+        // Shared budget check+increment (issue #311) — same helper as the
+        // initial viewport capture so the configured value is a true max.
+        // Pass onUpdate + messages so a budget skip is not silent.
+        const shot = await this._captureBudgetedAutoScreenshot(tabId, { onUpdate, messages });
         if (shot) {
           this.lastAutoScreenshotTs.set(tabId, Date.now());
           // Pair the image with a textual list of visible clickables so
@@ -4273,7 +4298,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
               role: 'user',
               content: [
                 { type: 'text', text: textBlock },
-                { type: 'image_url', image_url: { url: shot.dataUrl } },
+                { type: 'image_url', image_url: this._withImageDetail({ url: shot.dataUrl }) },
               ],
             });
             pushed = true;
@@ -4856,6 +4881,65 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     return { ...shot, blankFrameRetry: meta };
   }
 
+  /**
+   * Whether another automatic screenshot is allowed under maxScreenshotsPerTurn
+   * (issue #311). 0 means unlimited. Does not mutate the counter.
+   */
+  _canTakeAutoScreenshot(tabId) {
+    const cap = Number(this.maxScreenshotsPerTurn) || 0;
+    if (cap <= 0) return true;
+    return (this.autoScreenshotCount.get(tabId) || 0) < cap;
+  }
+
+  /**
+   * Record a successful automatic screenshot against the per-turn budget.
+   * No-op when the budget is unlimited.
+   */
+  _recordAutoScreenshot(tabId) {
+    const cap = Number(this.maxScreenshotsPerTurn) || 0;
+    if (cap <= 0) return;
+    this.autoScreenshotCount.set(tabId, (this.autoScreenshotCount.get(tabId) || 0) + 1);
+  }
+
+  /**
+   * Surface a maxScreenshotsPerTurn skip so the agent/user are not silently
+   * "blind" mid-turn (issue #311 review). Trusted note only — not page content.
+   */
+  _notifyAutoScreenshotBudgetSkipped(tabId, { onUpdate = null, messages = null } = {}) {
+    const message = 'auto-screenshot skipped: maxScreenshotsPerTurn reached';
+    try {
+      if (typeof onUpdate === 'function') onUpdate('warning', { message });
+    } catch { /* ignore UI delivery failures */ }
+    try {
+      if (Array.isArray(messages)) {
+        messages.push({ role: 'user', content: `[${message}]` });
+      }
+    } catch { /* ignore */ }
+    try {
+      const runId = this.currentRunId.get(tabId);
+      if (runId) {
+        trace.recordNote(runId, null, 'auto_screenshot_budget_skipped', { message });
+      }
+    } catch { /* ignore */ }
+  }
+
+  /**
+   * Capture an automatic screenshot only when the per-turn budget allows it.
+   * Check-then-capture-then-increment so a failed capture does not burn a slot,
+   * and both the initial viewport shot and post-action shots share one counter.
+   * When the budget blocks a capture, emits a warning/trace/trusted note so the
+   * skip is not silent (opts.onUpdate / opts.messages).
+   */
+  async _captureBudgetedAutoScreenshot(tabId, opts = {}) {
+    if (!this._canTakeAutoScreenshot(tabId)) {
+      this._notifyAutoScreenshotBudgetSkipped(tabId, opts);
+      return null;
+    }
+    const shot = await this._captureAutoScreenshot(tabId, opts);
+    if (shot) this._recordAutoScreenshot(tabId);
+    return shot;
+  }
+
   async _captureAutoScreenshot(tabId, { coordAligned = false } = {}) {
     try {
       await cdpClient.attach(tabId);
@@ -4870,12 +4954,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       const cssH = Math.max(1, Math.round(probe?.innerHeight || 768));
 
       if (coordAligned) {
-        // Pixel-accuracy mode: image pixels must equal CSS pixels so the
-        // planner can click by coordinate off the screenshot. Skip the
-        // token-budget resize — the whole point of this mode is fidelity.
-        // We DO still run the byte-ceiling fallback afterwards: if the
-        // CSS viewport happens to be huge, we'd rather lose some JPEG
-        // quality than overflow the provider's image cap.
+        // Prefer 1:1 CSS↔image pixels so click({x,y}) lands correctly. Cap only
+        // by maxImageDimension (per side), not the vision token budget — so a
+        // normal 1080p viewport stays 1:1 under the default 1568px cap (issue
+        // #311 review). When a side exceeds the cap, resize and report scale.
+        const budget = this._budgetForCoordAlignedCapture();
         const captureOnce = async () => {
           const shot = await this._withIndicatorsHidden(tabId, () =>
             cdpClient.sendCommand(tabId, 'Page.captureScreenshot', {
@@ -4886,8 +4969,23 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           );
           if (!shot?.data) return null;
           const rawDataUrl = `data:image/jpeg;base64,${shot.data}`;
-          const shrunk = await this._compressJpegToByteCeiling(rawDataUrl);
-          const redacted = await this._redactScreenshotDataUrl(tabId, shrunk, { coordinateSpace: 'viewport' });
+          const needsResize = cssW > budget.maxTargetPx || cssH > budget.maxTargetPx;
+          if (needsResize) {
+            const shrunk = await this._shrinkImageForBudget(rawDataUrl, cssW, cssH, budget);
+            const redacted = await this._redactScreenshotDataUrl(tabId, shrunk.dataUrl, { coordinateSpace: 'viewport' });
+            return {
+              dataUrl: redacted,
+              width: shrunk.width,
+              height: shrunk.height,
+              cssWidth: cssW,
+              cssHeight: cssH,
+              scaleX: cssW / Math.max(1, shrunk.width),
+              scaleY: cssH / Math.max(1, shrunk.height),
+              coordAligned: false,
+            };
+          }
+          const compressed = await this._compressJpegToByteCeiling(rawDataUrl, budget);
+          const redacted = await this._redactScreenshotDataUrl(tabId, compressed, { coordinateSpace: 'viewport' });
           return { dataUrl: redacted, width: cssW, height: cssH, coordAligned: true };
         };
         const first = await captureOnce();
@@ -4898,13 +4996,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       // binary-search, then ask CDP to capture + scale in one pass. This
       // avoids ever materializing a multi-MB native-DPR JPEG that we'd
       // then have to decode and resize in the service worker.
-      const [targetW, targetH] = Agent._fitImageDimensions(cssW, cssH);
+      const budget = this._budgetForCapture();
+      const [targetW, targetH] = Agent._fitImageDimensions(cssW, cssH, budget);
       const scale = targetW < cssW ? targetW / cssW : 1;
       const captureOnce = async () => {
         const shot = await this._withIndicatorsHidden(tabId, () =>
           cdpClient.sendCommand(tabId, 'Page.captureScreenshot', {
             format: 'jpeg',
-            quality: Math.round(Agent.IMAGE_BUDGET.initialJpegQuality * 100),
+            quality: Math.round(budget.initialJpegQuality * 100),
             fromSurface: true,
             clip: { x: 0, y: 0, width: cssW, height: cssH, scale },
           })
@@ -4915,7 +5014,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         // CDP-side resize + JPEG q=75 usually fits. Iterative quality
         // downgrade is the safety net for high-DPR screens where the
         // captured image can still exceed the base64 ceiling.
-        const shrunk = await this._compressJpegToByteCeiling(rawDataUrl);
+        const shrunk = await this._compressJpegToByteCeiling(rawDataUrl, budget);
         const redacted = await this._redactScreenshotDataUrl(tabId, shrunk, { coordinateSpace: 'viewport' });
         return {
           dataUrl: redacted,
@@ -5085,7 +5184,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           role: 'user',
           content: [
             { type: 'text', text: 'Describe this screenshot of the current browser viewport for a web-automation agent. Follow the format in the system prompt.' },
-            { type: 'image_url', image_url: { url: dataUrl } },
+            { type: 'image_url', image_url: this._withImageDetail({ url: dataUrl }) },
           ],
         },
       ];
@@ -5191,14 +5290,26 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       );
       if (!shot?.data) return null;
       const cropDataUrl = `data:image/png;base64,${shot.data}`;
-      let dataUrl = await this._compressJpegToByteCeiling(cropDataUrl);
+      // Model-facing path honors maxImageDimension (issue #311). Keep the raw
+      // `cropDataUrl` at full CSS resolution for the local download crop;
+      // `_locateVisibleMediaWithVision` maps vision boxes back to that space.
+      const shrunk = await this._shrinkImageForBudget(cropDataUrl, cssW, cssH, this._budgetForCapture());
+      let dataUrl = shrunk.dataUrl;
       // Local screenshot redaction (issue #312): the model-facing `dataUrl`
       // is sent to vision for media localization, so pixelate PII on it.
       // The raw `cropDataUrl` is kept untouched for the local download.
       if (this.screenshotRedaction) {
         dataUrl = await this._redactScreenshotDataUrl(tabId, dataUrl, { coordinateSpace: 'viewport' });
       }
-      return { dataUrl, cropDataUrl, width: cssW, height: cssH, coordAligned: true };
+      return {
+        dataUrl,
+        cropDataUrl,
+        width: cssW,
+        height: cssH,
+        visionWidth: shrunk.width,
+        visionHeight: shrunk.height,
+        coordAligned: true,
+      };
     } catch (_) {
       const fallback = await this._captureAutoScreenshot(tabId, { coordAligned: true });
       return fallback ? { ...fallback, cropDataUrl: fallback.dataUrl } : null;
@@ -5221,13 +5332,31 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     }
 
     const target = ['image', 'video', 'media'].includes(opts.target) ? opts.target : 'media';
-    const width = Math.max(1, Math.round(screenshot.width || 0));
-    const height = Math.max(1, Math.round(screenshot.height || 0));
+    // Original crop/CSS space (used to map the vision box back for cropping).
+    const origW = Math.max(1, Math.round(screenshot.width || 0));
+    const origH = Math.max(1, Math.round(screenshot.height || 0));
+    // Prefer already-budgeted vision dims from capture — re-shrinking with CSS
+    // dims double-encodes JPEG and can desync scale (issue #311 review).
+    let visionDataUrl;
+    let visionW;
+    let visionH;
+    if (screenshot.visionWidth && screenshot.visionHeight) {
+      visionDataUrl = screenshot.dataUrl;
+      visionW = Math.max(1, Math.round(screenshot.visionWidth));
+      visionH = Math.max(1, Math.round(screenshot.visionHeight));
+    } else {
+      const shrunk = await this._shrinkImageForBudget(
+        screenshot.dataUrl, origW, origH, this._budgetForCapture(),
+      );
+      visionDataUrl = shrunk.dataUrl;
+      visionW = Math.max(1, Math.round(shrunk.width || origW));
+      visionH = Math.max(1, Math.round(shrunk.height || origH));
+    }
     const started = Date.now();
     const runId = this.currentRunId.get(tabId);
     const costState = opts.costState || this.currentCostState.get(tabId) || null;
     const prompt = [
-      `Image size: ${width}x${height} pixels.`,
+      `Image size: ${visionW}x${visionH} pixels.`,
       `Task: locate the single visible ${target} the user most likely means by "this image", "this video", or "this media" on the current page.`,
       'Return JSON only with this exact shape:',
       '{"found":true,"x":0,"y":0,"width":100,"height":100,"confidence":0.9,"mediaType":"image","reason":"largest central visible media"}',
@@ -5241,7 +5370,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           role: 'user',
           content: [
             { type: 'text', text: prompt },
-            { type: 'image_url', image_url: { url: screenshot.dataUrl } },
+            { type: 'image_url', image_url: this._withImageDetail({ url: visionDataUrl }) },
           ],
         },
       ], {
@@ -5251,9 +5380,19 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       }, costState, { tabId, generationName: 'vision' });
 
       const raw = res?.content || '';
-      const rect = Agent._normalizeVisibleMediaLocation(raw, { width, height });
-      if (!rect) throw new Error('vision model did not return a usable media box');
-      if (rect.confidence < 0.45) throw new Error(`vision confidence too low (${rect.confidence})`);
+      const visionRect = Agent._normalizeVisibleMediaLocation(raw, { width: visionW, height: visionH });
+      if (!visionRect) throw new Error('vision model did not return a usable media box');
+      if (visionRect.confidence < 0.45) throw new Error(`vision confidence too low (${visionRect.confidence})`);
+      // Map vision-image pixels back to the original cropDataUrl coordinate space.
+      const scaleX = origW / visionW;
+      const scaleY = origH / visionH;
+      const rect = {
+        ...visionRect,
+        x: Math.round(visionRect.x * scaleX),
+        y: Math.round(visionRect.y * scaleY),
+        width: Math.round(visionRect.width * scaleX),
+        height: Math.round(visionRect.height * scaleY),
+      };
       const latencyMs = Date.now() - started;
       trace.recordVisionSubCall(runId, {
         context: 'download_social_media_visible_media',
@@ -5558,6 +5697,35 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   }
 
   /**
+   * Downscale a capture to exactly `cssW`×`cssH` so image pixel (X, Y) ==
+   * CSS pixel (X, Y). `tabs.captureVisibleTab` has no clip/scale control and
+   * snapshots at native devicePixelRatio, so on hi-DPI displays (e.g. Apple
+   * Retina, DPR 2) the raw image is DPR× larger than the CSS viewport —
+   * pixel coords read off it would be 2× off. Returns the input unchanged
+   * when it already matches (DPR 1) or on any decode failure.
+   */
+  async _normalizeDataUrlToCssPixels(dataUrl, cssW, cssH) {
+    try {
+      if (!dataUrl || !(cssW > 0) || !(cssH > 0)) return dataUrl;
+      const resp = await fetch(dataUrl);
+      const bmp = await createImageBitmap(await resp.blob());
+      if (bmp.width === cssW && bmp.height === cssH) return dataUrl;
+      const canvas = new OffscreenCanvas(cssW, cssH);
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(bmp, 0, 0, bmp.width, bmp.height, 0, 0, cssW, cssH);
+      const blob = await canvas.convertToBlob({
+        type: 'image/jpeg',
+        quality: Agent.IMAGE_BUDGET.initialJpegQuality,
+      });
+      return Agent._bufferToDataUrl(await blob.arrayBuffer(), 'image/jpeg');
+    } catch {
+      return dataUrl;
+    }
+  }
+
+  /**
    * End-to-end "shrink this screenshot to fit the vision budget" pass.
    * Decodes, resizes to the target dims picked by `_fitImageDimensions`,
    * and runs JPEG iterative-quality fallback if bytes are still too large.
@@ -5636,7 +5804,150 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
   }
 
   /**
-   * Draw a red outline rectangle over a base64 PNG/JPEG screenshot, at the
+   * Build a snapshot of the active image budget for a single capture. Starts
+   * from the static defaults and applies the user's `maxImageDimension` cap
+   * (issue #311) so the per-side pixel limit AND the total-token budget both
+   * track the setting. When the cap is the limiting factor, the token budget
+   * is widened to exactly fit a square image at the cap so the dimension cap
+   * (not the legacy 1568px token budget) governs sizing.
+   */
+  _budgetForCapture() {
+    const base = Agent.IMAGE_BUDGET;
+    const cap = Math.max(1, Math.min(2048, Number(this.maxImageDimension) || 1568));
+    const tokensForCap = Math.ceil((cap / base.pxPerToken) * (cap / base.pxPerToken));
+    // Defaults must preserve the pre-#311 behavior. The default cap (1568)
+    // maps to the legacy budget byte-for-byte — same per-side limit AND same
+    // total-token limit — so a square viewport is still downscaled to ~1109px
+    // exactly as before. A LOWER cap shrinks both limits; a HIGHER cap widens
+    // them so the larger dimension is actually honored ("keep fidelity").
+    if (cap === base.maxTargetPx) {
+      return { ...base };
+    }
+    return {
+      ...base,
+      maxTargetPx: cap,
+      maxTargetTokens: tokensForCap,
+    };
+  }
+
+  /**
+   * Budget for coord-aligned (1:1 CSS↔image) captures. Only the per-side
+   * `maxImageDimension` cap applies — the vision token budget does NOT force
+   * a downscale. So 1920×1080 stays 1:1 under the default 1568px cap; resize
+   * only when a side exceeds the cap (issue #311 review option a).
+   */
+  _budgetForCoordAlignedCapture() {
+    const base = this._budgetForCapture();
+    return {
+      ...base,
+      // Large enough that `_fitImageDimensions` is gated only by maxTargetPx.
+      maxTargetTokens: Number.MAX_SAFE_INTEGER,
+    };
+  }
+
+  /**
+   * Record the image-pixel→CSS-pixel factors of the most recent screenshot
+   * shown to the model for `tabId`. Factors of 1 (a true 1:1 capture) clear
+   * the entry so a stale scale from an earlier downscaled capture can never
+   * corrupt clicks planned off a newer aligned one.
+   */
+  _setScreenshotClickScale(tabId, scaleX, scaleY) {
+    const sx = Number(scaleX);
+    const sy = Number(scaleY);
+    if (!Number.isFinite(sx) || !Number.isFinite(sy) || sx <= 0 || sy <= 0) return;
+    if (Math.abs(sx - 1) < 1e-6 && Math.abs(sy - 1) < 1e-6) {
+      this.screenshotClickScale.delete(tabId);
+      return;
+    }
+    this.screenshotClickScale.set(tabId, { scaleX: sx, scaleY: sy });
+  }
+
+  /**
+   * Resolve click({x, y}) args to CSS pixels. When the model sets
+   * `from_screenshot: true` AND the last screenshot for this tab was
+   * downscaled, multiply by the stored factors — the extension does the
+   * conversion mechanically instead of trusting the model to do arithmetic
+   * from a prose note. Otherwise coords pass through unchanged (an aligned
+   * screenshot's image pixels already ARE CSS pixels).
+   */
+  _screenshotClickCoords(tabId, args = {}) {
+    const x = Number(args.x);
+    const y = Number(args.y);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    if (!args.from_screenshot) return { x, y, converted: false };
+    const scale = this.screenshotClickScale.get(tabId);
+    if (!scale) return { x, y, converted: false };
+    return {
+      x: Math.round(x * scale.scaleX),
+      y: Math.round(y * scale.scaleY),
+      converted: true,
+    };
+  }
+
+  /**
+   * Coerce storage / settings values for image budget (issue #311). Rejects
+   * corrupted or out-of-range values so provider payloads never see e.g.
+   * `detail: "medium"` and counters stay within the UI set (0–5).
+   */
+  static normalizeImageDetail(value, fallback = 'auto') {
+    return (value === 'high' || value === 'low' || value === 'auto') ? value : fallback;
+  }
+
+  static normalizeMaxScreenshotsPerTurn(value, fallback = 0) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return fallback;
+    const i = Math.trunc(n);
+    if (i <= 0) return 0;
+    return Math.min(5, i);
+  }
+
+  static normalizeMaxImageDimension(value, fallback = 1568) {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n <= 0) return fallback;
+    return Math.max(1, Math.min(2048, Math.round(n)));
+  }
+
+  /**
+   * Apply validated image-budget fields from storage. Only keys present on
+   * `stored` are updated; missing keys leave current agent defaults alone.
+   */
+  applyImageBudgetFromStorage(stored = {}) {
+    if (stored.imageDetail != null) {
+      this.imageDetail = Agent.normalizeImageDetail(stored.imageDetail, this.imageDetail);
+    }
+    if (stored.maxScreenshotsPerTurn != null) {
+      this.maxScreenshotsPerTurn = Agent.normalizeMaxScreenshotsPerTurn(
+        stored.maxScreenshotsPerTurn, this.maxScreenshotsPerTurn,
+      );
+    }
+    if (stored.maxImageDimension != null) {
+      this.maxImageDimension = Agent.normalizeMaxImageDimension(
+        stored.maxImageDimension, this.maxImageDimension,
+      );
+    }
+  }
+
+  /**
+   * The `detail` value to attach to an OpenAI-style image_url block, driven by
+   * the `imageDetail` setting (issue #311). Returns null when the setting is
+   * 'auto' so the provider uses its own default (OpenAI's is 'auto'); 'high'
+   * and 'low' are passed through. Anthropic ignores unknown `detail`, so this
+   * is harmless there.
+   */
+  _imageDetailField() {
+    return this.imageDetail === 'auto' ? null : this.imageDetail;
+  }
+
+  /**
+   * Return a copy of `imageUrl` with a `detail` field merged in when the user
+   * has chosen a non-auto image detail (issue #311). No-op for 'auto'.
+   */
+  _withImageDetail(imageUrl) {
+    const detail = this._imageDetailField();
+    return detail ? { ...imageUrl, detail } : imageUrl;
+  }
+
+  /**
    * given CSS-pixel rect. Scales the rect by the ratio between the image's
    * actual pixel dimensions and the CSS viewport so it lines up regardless
    * of whether the capture was taken at scale=1 or native DPR.
@@ -8906,6 +9217,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     this.progressSessions.delete(tabId);
     this.mastodonStates.delete(tabId);
     this.lastAutoScreenshotTs.delete(tabId);
+    this.autoScreenshotCount.delete(tabId);
+    this.screenshotClickScale.delete(tabId);
     this.lastSeenAdapter.delete(tabId);
     this.activeSkillIds.delete(tabId);
     this._runModeOverrides.delete(tabId);
@@ -13323,10 +13636,18 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         // user message, not a base64 string embedded in a tool-result's JSON
         // text. Either way the model never sees the picture.
         let dataUrl = null;
+        // Pre-budget capture for Downloads when save:true (issue #311 review).
+        // Model path uses the budgeted `dataUrl`; disk gets full CSS when available.
+        let saveDataUrl = null;
         let description = '';
         let probe = null;
         let coordAligned = false;
+        // True when maxImageDimension forced a resize of a coord_aligned
+        // capture — the structured result must then report coordAligned:
+        // false so the model never trusts raw image pixels as CSS pixels.
+        let coordDownscaled = false;
         let blankFrameRetry = null;
+        const wantSave = !!(args && args.save);
         try {
           await cdpClient.attach(tabId);
           await cdpClient.sendCommand(tabId, 'Page.enable');
@@ -13338,9 +13659,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
           const captureOnce = async () => {
             if (coordAligned) {
-              // Pixel-accuracy mode: image pixels must equal CSS pixels so
-              // click({x,y}) off the screenshot lands on the real element.
-              // PNG (lossless, no quality knob) so no artifacts at glyph edges.
+              // Prefer CSS-pixel fidelity for click({x,y}). Cap only by
+              // maxImageDimension (sides), not the token budget (issue #311).
+              // PNG capture (lossless) so glyph edges stay sharp before re-encode.
+              const budget = this._budgetForCoordAlignedCapture();
               const screenshot = await this._withIndicatorsHidden(tabId, () =>
                 cdpClient.sendCommand(tabId, 'Page.captureScreenshot', {
                   format: 'png',
@@ -13350,21 +13672,62 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
               );
               if (!screenshot?.data) return null;
               const rawUrl = `data:image/png;base64,${screenshot.data}`;
+              const needsResize = cssW > budget.maxTargetPx || cssH > budget.maxTargetPx;
+              if (needsResize) {
+                const shrunk = await this._shrinkImageForBudget(rawUrl, cssW, cssH, budget);
+                this._setScreenshotClickScale(
+                  tabId,
+                  cssW / Math.max(1, shrunk.width),
+                  cssH / Math.max(1, shrunk.height),
+                );
+                return {
+                  dataUrl: shrunk.dataUrl,
+                  saveDataUrl: rawUrl,
+                  coordDownscaled: true,
+                  description: `Screenshot captured via CDP (${screenshot.data.length} bytes). CSS viewport ${cssW}×${cssH} downscaled to ${shrunk.width}×${shrunk.height} for maxImageDimension. To click something you located on this image, pass its image-pixel coords as click({x, y, from_screenshot: true}) — they are converted to CSS pixels automatically.`,
+                };
+              }
+              this._setScreenshotClickScale(tabId, 1, 1);
               return {
-                dataUrl: await this._compressJpegToByteCeiling(rawUrl),
+                dataUrl: await this._compressJpegToByteCeiling(rawUrl, budget),
+                saveDataUrl: rawUrl,
                 description: `Screenshot captured via CDP (${screenshot.data.length} bytes, CSS-pixel aligned for pixel clicks)`,
               };
             }
 
-            // Budget-aware mode (default): pick target dims via binary
-            // search, ask CDP to capture + scale in one pass, then run
-            // the iterative-quality fallback if bytes are still over.
-            const [targetW, targetH] = Agent._fitImageDimensions(cssW, cssH);
+            // Budget-aware mode (default). When the user also asked to save,
+            // capture full CSS first so Downloads gets full resolution, then
+            // shrink a model-facing copy (mirrors full_page_screenshot).
+            const budget = this._budgetForCapture();
+            if (wantSave) {
+              const screenshot = await this._withIndicatorsHidden(tabId, () =>
+                cdpClient.sendCommand(tabId, 'Page.captureScreenshot', {
+                  format: 'png',
+                  fromSurface: true,
+                  clip: { x: 0, y: 0, width: cssW, height: cssH, scale: 1 },
+                })
+              );
+              if (!screenshot?.data) return null;
+              const rawUrl = `data:image/png;base64,${screenshot.data}`;
+              const shrunk = await this._shrinkImageForBudget(rawUrl, cssW, cssH, budget);
+              const resized = (shrunk.width < cssW || shrunk.height < cssH)
+                ? ` (model copy resized ${cssW}×${cssH} → ${shrunk.width}×${shrunk.height} for vision budget; Downloads keeps full CSS)`
+                : '';
+              return {
+                dataUrl: shrunk.dataUrl,
+                saveDataUrl: rawUrl,
+                description: `Screenshot captured via CDP (${screenshot.data.length} bytes, PNG)${resized}`,
+              };
+            }
+
+            // No save: pick target dims via binary search, ask CDP to capture
+            // + scale in one pass, then iterative-quality fallback if needed.
+            const [targetW, targetH] = Agent._fitImageDimensions(cssW, cssH, budget);
             const scale = targetW < cssW ? targetW / cssW : 1;
             const screenshot = await this._withIndicatorsHidden(tabId, () =>
               cdpClient.sendCommand(tabId, 'Page.captureScreenshot', {
                 format: 'jpeg',
-                quality: Math.round(Agent.IMAGE_BUDGET.initialJpegQuality * 100),
+                quality: Math.round(budget.initialJpegQuality * 100),
                 fromSurface: true,
                 clip: { x: 0, y: 0, width: cssW, height: cssH, scale },
               })
@@ -13373,14 +13736,16 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             const rawUrl = `data:image/jpeg;base64,${screenshot.data}`;
             const resized = scale < 1 ? ` (resized ${cssW}×${cssH} → ${targetW}×${targetH} for vision-token budget)` : '';
             return {
-              dataUrl: await this._compressJpegToByteCeiling(rawUrl),
+              dataUrl: await this._compressJpegToByteCeiling(rawUrl, budget),
               description: `Screenshot captured via CDP (${screenshot.data.length} bytes, JPEG)${resized}`,
             };
           };
           const captured = await this._retryBlankScreenshotCapture(await captureOnce(), captureOnce, { probe });
           if (!captured?.dataUrl) throw new Error('CDP returned an empty screenshot');
           dataUrl = captured.dataUrl;
+          saveDataUrl = captured.saveDataUrl || null;
           description = captured.description || '';
+          coordDownscaled = !!captured.coordDownscaled;
           blankFrameRetry = captured.blankFrameRetry || null;
         } catch {
           const tab = await chrome.tabs.get(tabId);
@@ -13392,26 +13757,58 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           }
           // Tabs API fallback: no clip/scale available. Capture full, then
           // decode + resize + recompress via OffscreenCanvas to fit budget.
+          // Keep the raw capture for Downloads when save:true.
           const captureOnce = async () => {
             const rawUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png', quality: 80 });
+            const cssW = Math.max(1, Math.round(probe?.innerWidth || 1024));
+            const cssH = Math.max(1, Math.round(probe?.innerHeight || 768));
+            const budget = this._budgetForCapture();
             if (!coordAligned) {
-              const cssW = Math.max(1, Math.round(probe?.innerWidth || 1024));
-              const cssH = Math.max(1, Math.round(probe?.innerHeight || 768));
-              const shrunk = await this._shrinkImageForBudget(rawUrl, cssW, cssH);
+              // captureVisibleTab snapshots at native DPR — pass 0,0 so the
+              // shrink decodes the real bitmap dims instead of trusting CSS
+              // dims (which would skip the resize entirely on hi-DPI and ship
+              // an oversized image while reporting CSS-sized dimensions).
+              const shrunk = await this._shrinkImageForBudget(rawUrl, 0, 0, budget);
               return {
                 dataUrl: shrunk.dataUrl,
+                saveDataUrl: rawUrl,
                 description: `Screenshot captured via tabs API (${shrunk.dataUrl.length} bytes base64, resized to ${shrunk.width}×${shrunk.height})`,
               };
             }
-            const compressed = await this._compressJpegToByteCeiling(rawUrl);
+            // coord_aligned tabs-API fallback: side cap only (not token budget).
+            const coordBudget = this._budgetForCoordAlignedCapture();
+            const needsResize = cssW > coordBudget.maxTargetPx || cssH > coordBudget.maxTargetPx;
+            if (needsResize) {
+              const shrunk = await this._shrinkImageForBudget(rawUrl, 0, 0, coordBudget);
+              this._setScreenshotClickScale(
+                tabId,
+                cssW / Math.max(1, shrunk.width),
+                cssH / Math.max(1, shrunk.height),
+              );
+              return {
+                dataUrl: shrunk.dataUrl,
+                saveDataUrl: rawUrl,
+                coordDownscaled: true,
+                description: `Screenshot captured via tabs API (${shrunk.dataUrl.length} bytes base64). CSS viewport ${cssW}×${cssH} downscaled to ${shrunk.width}×${shrunk.height} for maxImageDimension. To click something you located on this image, pass its image-pixel coords as click({x, y, from_screenshot: true}) — they are converted to CSS pixels automatically.`,
+              };
+            }
+            // Native-DPR raw → exact CSS dims so "CSS-pixel aligned" is true
+            // on hi-DPI displays too (pre-#311 this shipped the DPR-scaled
+            // image while claiming alignment).
+            const aligned = await this._normalizeDataUrlToCssPixels(rawUrl, cssW, cssH);
+            const compressed = await this._compressJpegToByteCeiling(aligned, coordBudget);
+            this._setScreenshotClickScale(tabId, 1, 1);
             return {
               dataUrl: compressed,
-              description: `Screenshot captured via tabs API (${compressed.length} bytes base64)`,
+              saveDataUrl: rawUrl,
+              description: `Screenshot captured via tabs API (${compressed.length} bytes base64, CSS-pixel aligned)`,
             };
           };
           const captured = await this._retryBlankScreenshotCapture(await captureOnce(), captureOnce, { probe });
           dataUrl = captured?.dataUrl || null;
+          saveDataUrl = captured?.saveDataUrl || null;
           description = captured?.description || '';
+          coordDownscaled = !!captured?.coordDownscaled;
           blankFrameRetry = captured?.blankFrameRetry || null;
         }
         if (!dataUrl) {
@@ -13421,23 +13818,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           };
         }
 
-        // Apply redaction after both capture branches converge so the tabs-API
-        // fallback cannot bypass the privacy setting when CDP is unavailable.
-        if (this.screenshotRedaction) {
-          dataUrl = await this._redactScreenshotDataUrl(tabId, dataUrl, { coordinateSpace: 'viewport' });
-        }
-
-        // If the user asked to save this screenshot to Downloads, do it
-        // here — directly from the service worker via chrome.downloads.
-        // This runs BEFORE the vision-presentation branch because saving
-        // is independent of whether the agent can see the image. The
-        // screenshot data URLs are clean (image/png or image/jpeg with
-        // no parameters) so they pass through downloads.download safely
-        // — unlike the recorder's video/webm;codecs=... edge case.
+        // Save first from the pre-budget capture (full CSS when available),
+        // matching full_page_screenshot: Downloads keep full resolution;
+        // only the model-facing copy is budget-resized / redacted.
         let savedFile = null;
-        if (args && args.save) {
+        if (wantSave) {
           try {
-            const mimeMatch = /^data:([^;]+);/.exec(dataUrl);
+            const urlForSave = saveDataUrl || dataUrl;
+            const mimeMatch = /^data:([^;]+);/.exec(urlForSave);
             const mime = mimeMatch ? mimeMatch[1] : 'image/png';
             const ext = mime === 'image/jpeg' ? 'jpg' : 'png';
             const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19).replace('T', '_');
@@ -13447,13 +13835,20 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             filename = filename.split('/').pop().split('\\').pop();
             if (!/\.(png|jpg|jpeg)$/i.test(filename)) filename += `.${ext}`;
             const downloadId = await chrome.downloads.download({
-              url: dataUrl, filename, saveAs: false,
+              url: urlForSave, filename, saveAs: false,
             });
             const savedDownload = await resolveSavedDownload(chrome, downloadId);
             savedFile = { ...savedDownload, mimeType: mime };
           } catch (e) {
             savedFile = { error: e.message || String(e) };
           }
+        }
+
+        // Apply redaction after save so the local download is untouched
+        // (same pattern as full_page_screenshot). Tabs-API fallback cannot
+        // bypass the privacy setting for the model-facing path.
+        if (this.screenshotRedaction) {
+          dataUrl = await this._redactScreenshotDataUrl(tabId, dataUrl, { coordinateSpace: 'viewport' });
         }
 
         // Pick the presentation path based on what the active providers can
@@ -13472,7 +13867,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
               method: 'vision_describe',
               description: `[Screenshot described by vision model ${desc.model}]\n${desc.text}`,
               page: probe || undefined,
-              coordAligned,
+              coordAligned: coordAligned && !coordDownscaled,
               blankFrameRetry: blankFrameRetry || undefined,
               savedFile: savedFile || undefined,
             };
@@ -13491,7 +13886,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             method: 'image_attach',
             description,
             page: probe || undefined,
-            coordAligned,
+            coordAligned: coordAligned && !coordDownscaled,
             blankFrameRetry: blankFrameRetry || undefined,
             savedFile: savedFile || undefined,
             _attachImage: dataUrl,
@@ -13506,7 +13901,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             description: `Screenshot saved to ${savedFile.filename}. (The active model has no vision, so the image was not shown to the model.)`,
             savedFile,
             page: probe || undefined,
-            coordAligned,
+            coordAligned: coordAligned && !coordDownscaled,
             blankFrameRetry: blankFrameRetry || undefined,
           };
         }
@@ -13946,10 +14341,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
         // Full-page captures are the worst case for size — a tall document
         // at native DPR easily blows past any provider's image
-        // budget. Always shrink to the token/byte budget. Dimensions come
+        // budget. Always shrink to the token/byte budget (which honors the
+        // user's `maxImageDimension` cap, issue #311). Dimensions come
         // from decoding the bitmap (we don't know the real doc size up
         // front the way we do for viewport captures).
-        const shrunk = await this._shrinkImageForBudget(rawUrl, 0, 0);
+        const shrunk = await this._shrinkImageForBudget(rawUrl, 0, 0, this._budgetForCapture());
 
         // Local screenshot redaction (issue #312): pixelate form fields +
         // email/phone text on the image BEFORE it is sent to any vision
@@ -14103,8 +14499,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           // blows past the tool-result char cap and gets truncated to garbage
           // that the vision model can never read.
           let verifyShotUrl = `data:image/png;base64,${shot.data}`;
-          // Local screenshot redaction (issue #312): pixelate form fields +
-          // email/phone text BEFORE the image reaches the model.
+          // Apply the user's image budget (issue #311) before the image
+          // reaches the model, then run local redaction (issue #312) on the
+          // budget-fit copy so PII is pixelated at the size the model sees.
+          verifyShotUrl = (await this._shrinkImageForBudget(verifyShotUrl, 0, 0, this._budgetForCapture())).dataUrl;
           if (this.screenshotRedaction) {
             verifyShotUrl = await this._redactScreenshotDataUrl(tabId, verifyShotUrl, { coordinateSpace: 'viewport' });
           }
@@ -14795,6 +15193,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
               error: this._normalizedCoordinateRecoveryError(tabId, args),
             };
           }
+          // from_screenshot: coords were read off the most recent screenshot;
+          // when that capture was downscaled for maxImageDimension, convert
+          // image pixels → CSS pixels here so the model never does the math.
+          const mapped = this._screenshotClickCoords(tabId, args);
+          if (mapped?.converted) args = { ...args, x: mapped.x, y: mapped.y };
         }
 
         await cdpClient.attach(tabId);
@@ -17773,7 +18176,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
    * provider — the caller surfaces `error` as the turn's plain-text response,
    * without ever pushing the message to the conversation.
    */
-  _applyAttachments(enriched, attachments, provider, options = {}) {
+  async _applyAttachments(enriched, attachments, provider, options = {}) {
     const blocks = [];
     const textAttachmentCount = (attachments || []).filter(att => att?.kind === 'text').length;
     let textBudgetRemaining = this._textAttachmentContentBudget(provider, { ...options, enriched });
@@ -17786,7 +18189,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             error: `The active provider (${provider?.name || 'unknown'}) does not support image attachments. Switch to a vision-capable model (e.g. Claude 3+, GPT-4o) or remove the attached image and try again.`,
           };
         }
-        blocks.push({ type: 'image_url', image_url: { url: att.dataUrl } });
+        // Budget-resize a model-facing copy; leave the original attachment
+        // untouched so the UI/history still has the user-picked full image
+        // (issue #311 maxImageDimension).
+        const shrunk = await this._shrinkImageForBudget(att.dataUrl, 0, 0, this._budgetForCapture());
+        blocks.push({ type: 'image_url', image_url: this._withImageDetail({ url: shrunk.dataUrl }) });
       } else if (att.kind === 'document') {
         if (!provider?.supportsDocuments) {
           return {
@@ -17820,6 +18227,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
   async _processMessageInner(tabId, userMessage, onUpdate, mode, attachments = [], runOptions = {}) {
     await this._hydrate(tabId);
+    // Reset the per-turn auto-screenshot budget (issue #311) for a fresh turn.
+    this.autoScreenshotCount.delete(tabId);
     this._prepareClarificationAuthorizationForRun(tabId);
     this._preactivateRecommendedActionSkill(tabId, runOptions, mode);
     const messages = this.getConversation(tabId, mode);
@@ -17878,7 +18287,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     // agent run, and the message must never be pushed to history this way.
     if (attachments && attachments.length) {
       const canUseScratchpadTool = this._isActionMode(mode);
-      const attachResult = this._applyAttachments(enriched, attachments, provider, {
+      const attachResult = await this._applyAttachments(enriched, attachments, provider, {
         canUseScratchpadTool,
         tabId,
         messages,
@@ -18422,6 +18831,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
   async _processMessageStreamInner(tabId, userMessage, onUpdate, mode, runOptions = {}) {
     await this._hydrate(tabId);
+    // Reset the per-turn auto-screenshot budget (issue #311) for a fresh turn.
+    this.autoScreenshotCount.delete(tabId);
     this._prepareClarificationAuthorizationForRun(tabId);
     this._preactivateRecommendedActionSkill(tabId, runOptions, mode);
     const messages = this.getConversation(tabId, mode);
