@@ -201,6 +201,12 @@ Compared with the existing WebBrain planner benchmark, this is a different bucke
 
 But the result should not be overread. This was a text-only first-tool-call routing test, not a Molmo2 vision or grounding benchmark. Molmo2's headline capability is VLM grounding; this harness did not ask it to point at pixels, track objects in video, or caption a screenshot. Also, because the local chat template forced text-call compatibility, Molmo2 did not get native structured tool schemas. The frozen baseline means the prompt/tool snapshot is controlled; it does **not** mean the benchmark is fair against models that got native tools. A constrained decoder, a model-specific chat template, native tool-schema support, or a small tool-format fine-tune could change this result materially.
 
+## Ai2's official response
+
+The Allen Institute for AI shared this clarification:
+
+> We did not do any post-training for tool calling or add it in our SFT data -- it just wasn't the focus of the project. Using Molmo2 for tool calling would probably require some post-training on top of the released model. (We would like to do this in the future though.)
+
 So the fair read is:
 
 - **As an open-source VLM release:** excellent, and unusually important.
