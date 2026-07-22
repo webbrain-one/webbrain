@@ -10,16 +10,16 @@
  *
  * Template uses {{t:key}} / {{t-html:key}} markers, plus a few build-only
  * placeholders the script fills per locale:
- *   {{locale_code}}      e.g. "en", "es"
- *   {{locale_bcp47}}     e.g. "en-US", "es-ES" (used in og:locale)
- *   {{locale_home_url}}  e.g. "https://webbrain.one/" or ".../es/"
- *   {{docs_url}}         English docs, or the secondary Chinese docs for zh
- *   {{hreflang_links}}   <link rel="alternate" ...> block for this page
- *   {{faq_jsonld}}       FAQPage schema block generated from faq.* keys
+ *   {{locale_code)}      e.g. "en", "es"
+ *   {{locale_bcp47)}     e.g. "en-US", "es-ES" (used in og:locale)
+ *   {{locale_home_url)}  e.g. "https://webbrain.one/" or ".../es/"
+ *   {{docs_url)}         English docs, or the secondary Chinese docs for zh
+ *   {{hreflang_links)}   <link rel="alternate" ...> block for this page
+ *   {{faq_jsonld)}       FAQPage schema block generated from faq.* keys
  *   {{plausible_analytics}} shared privacy-friendly analytics partial
  *
- * {{t:key}} → plain-text substitution, HTML-escaped.
- * {{t-html:key}} → raw substitution (value is expected to be HTML-ready).
+ * {{t:key)} → plain-text substitution, HTML-escaped.
+ * {{t-html:key)} → raw substitution (value is expected to be HTML-ready).
  * Use t-html only for values containing intentional inline HTML like
  * <strong>, <a>, <code>.
  *
@@ -63,6 +63,11 @@ const LOCALES = [
   { code: 'ms', bcp47: 'ms-MY', label: 'Bahasa Melayu',    dir: 'ltr', isDefault: false },
   { code: 'tl', bcp47: 'fil-PH', label: 'Filipino',        dir: 'ltr', isDefault: false },
   { code: 'he', bcp47: 'he-IL', label: 'עברית',           dir: 'rtl', isDefault: false },
+  { code: 'hi', bcp47: 'hi-IN', label: 'हिन्दी', dir: 'ltr', isDefault: false },
+  { code: 'pt', bcp47: 'pt-BR', label: 'Português', dir: 'ltr', isDefault: false },
+  { code: 'vi', bcp47: 'vi-VN', label: 'Tiếng Việt', dir: 'ltr', isDefault: false },
+  { code: 'bn', bcp47: 'bn-BD', label: 'বাংলা', dir: 'ltr', isDefault: false },
+  { code: 'fa', bcp47: 'fa-IR', label: 'فارسی', dir: 'rtl', isDefault: false },
 ];
 
 const FAQ_KEYS = [
@@ -99,7 +104,7 @@ const BLUESKY_PROFILE_URL = 'https://bsky.app/profile/webbrain-one.bsky.social';
 
 function escHtml(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    '&': '&', '<': '<', '>': '>', '"': '"', "'": ''',
   }[c]));
 }
 
@@ -123,16 +128,16 @@ function buildHreflangBlock() {
 
 function htmlToPlain(html) {
   // Good-enough HTML → plain text for JSON-LD. Strips tags, collapses
-  // whitespace, keeps entities like &amp; readable.
+  // whitespace, keeps entities like & readable.
   return String(html)
     .replace(/<\/?(p|br|li|ul|ol|div)[^>]*>/gi, ' ')
     .replace(/<[^>]+>/g, '')
     .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&#39;/g, "'")
-    .replace(/&quot;/g, '"')
+    .replace(/&/g, '&')
+    .replace(/</g, '<')
+    .replace(/>/g, '>')
+    .replace(/'/g, "'")
+    .replace(/"/g, '"')
     .replace(/\s+/g, ' ')
     .trim();
 }
