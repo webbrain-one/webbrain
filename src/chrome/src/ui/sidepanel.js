@@ -3552,13 +3552,16 @@ async function applyActiveRunState(numericTabId, state) {
     setPlanReviewAwaiting(numericTabId, false);
     setTabProcessing(numericTabId, false);
     setTabAbortRequested(numericTabId, false);
+    const restoredAllowanceCardMissing = !!parseCostAllowanceError(runUi?.finalContent)
+      && !currentAssistantEl?.querySelector('.cost-allowance-error');
     if (runUi && ['completed', 'stopped', 'failed', 'cancelled', 'clarification_required'].includes(runUi.status)
-        && Number(currentAssistantEl?.dataset.lastRenderedSeq || 0) < Number(runUi.seq || 0)) {
+        && (Number(currentAssistantEl?.dataset.lastRenderedSeq || 0) < Number(runUi.seq || 0)
+          || restoredAllowanceCardMissing)) {
       handleAgentUpdateMessage({
         tabId: numericTabId,
         requestId: runUi.requestId,
         runId: runUi.runId,
-        seq: runUi.seq,
+        ...(restoredAllowanceCardMissing ? {} : { seq: runUi.seq }),
         type: 'run_complete',
         data: {
           status: runUi.status,
@@ -4874,6 +4877,10 @@ function scheduleActiveChatPayloadCleanup(tabId, state) {
 
 function renderAgentErrorUpdate(data, tabId = currentTabId, requestId = '', options = {}) {
   const message = data?.message || data?.error || 'unknown error';
+  // Allowance routing depends on terminal durable-turn proof. Live error
+  // updates arrive before that proof, so the run_complete/direct response
+  // path owns the single actionable card.
+  if (parseCostAllowanceError(message)) return;
   const active = takeActiveRetryPayloadForError(tabId, requestId, message);
   if (active.duplicate) return;
   const msgEl = addMessage('error', t('sp.error_prefix', { msg: message }), {
@@ -7569,7 +7576,17 @@ function renderAssistantTextUpdate(assistantEl, content, options = {}) {
     return;
   }
 
-  if (renderCostAllowanceError(textEl, content) || renderSubscribeError(textEl, content)) {
+  // Cost-limit text can stream before the terminal snapshot tells us whether
+  // Retry or Continue is safe. Keep the bubble empty so the terminal renderer
+  // can build the card with authoritative resume context.
+  if (parseCostAllowanceError(content)) {
+    textEl.replaceChildren();
+    clearStreamedAssistantText(textEl);
+    delete textEl.dataset.suppressToolCallStream;
+    return;
+  }
+
+  if (renderSubscribeError(textEl, content)) {
     clearStreamedAssistantText(textEl);
     delete textEl.dataset.suppressToolCallStream;
     if (!assistantEl.querySelector('.msg-copy-btn')) addMessageCopyButton(assistantEl);
@@ -8084,7 +8101,9 @@ async function continueAgent(options = {}) {
       if (textEl && getStreamedAssistantText(textEl) === String(res.content)) {
         renderAssistantTextUpdate(assistantEl, res.content);
       } else if (textEl && !textEl.textContent.trim()) {
-        if (!renderCostAllowanceError(textEl, res.content)
+        if (!renderCostAllowanceError(textEl, res.content, modeForSend, {
+              submittedTurnDurable: res.submittedTurnDurable,
+            })
             && !renderSubscribeError(textEl, res.content)) {
           textEl.innerHTML = formatMarkdown(res.content);
         }

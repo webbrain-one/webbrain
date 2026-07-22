@@ -159,9 +159,6 @@ export async function runDetachedWithReconnect({
 
       const snapshot = state?.runUi && typeof state.runUi === 'object' ? state.runUi : null;
       const detachedError = state?.detachedError;
-      if (requestMatches(detachedError?.requestId, requestId)) {
-        throw new Error(detachedError?.message || 'Detached run failed.');
-      }
       const sameSnapshot = requestMatches(snapshot?.requestId, requestId);
       const sameStartingRun = state?.starting === true
         && requestMatches(state?.startingRequestId, requestId);
@@ -177,6 +174,13 @@ export async function runDetachedWithReconnect({
           resumed: resumeAttempts > 0,
           submittedTurnDurable: state?.submittedTurnDurable === true,
         });
+      }
+
+      // A terminal journal contains the final content and durable-turn proof.
+      // Prefer it over the duplicate detached task rejection recorded after
+      // the run's finally block completed the snapshot.
+      if (requestMatches(detachedError?.requestId, requestId)) {
+        throw new Error(detachedError?.message || 'Detached run failed.');
       }
 
       if (sameStartingRun || sameLiveRun) {

@@ -13783,10 +13783,15 @@ test('sidepanel cloud cost allowance stop offers a persisted one-click $10 bump'
     assert.match(panel, /rebindCostAllowanceButtons\(\);/, `${label}: restored chats should rebind allowance controls`);
     assert.match(panel, /!parseSubscribeError\(content\) && !parseCostAllowanceError\(content\)/, `${label}: allowance stops should not count as successful Ask completions`);
     assert.match(panel, /renderCostAllowanceError\(textEl, res\.content, modeForSend, \{[\s\S]*?submittedTurnDurable: res\.submittedTurnDurable,[\s\S]*?retryPayload,/, `${label}: returned pre-turn stops should render with request-scoped durability and retry state`);
+    assert.match(panel, /function renderAgentErrorUpdate[\s\S]*?if \(parseCostAllowanceError\(message\)\) return;/, `${label}: pre-terminal error events should defer allowance card routing`);
+    assert.match(panel, /function renderAssistantTextUpdate[\s\S]*?if \(parseCostAllowanceError\(content\)\) \{[\s\S]*?textEl\.replaceChildren\(\);[\s\S]*?return;/, `${label}: streamed allowance text should stay empty until terminal durability is known`);
+    assert.match(panel, /renderCostAllowanceError\(textEl, res\.content, modeForSend, \{[\s\S]*?submittedTurnDurable: res\.submittedTurnDurable,[\s\S]*?\}\)[\s\S]*?&& !renderSubscribeError/, `${label}: returned continuation stops should render with terminal durability proof`);
+    assert.match(panel, /const restoredAllowanceCardMissing = !!parseCostAllowanceError\(runUi\?\.finalContent\)[\s\S]*?\|\| restoredAllowanceCardMissing[\s\S]*?restoredAllowanceCardMissing \? \{\} : \{ seq: runUi\.seq \}/, `${label}: terminal restoration should rebuild a deferred allowance card even after replaying its final text sequence`);
     assert.match(panel, /type: 'run_complete',[\s\S]*?submittedTurnDurable: state\?\.submittedTurnDurable === true,/, `${label}: restored terminal cards should retain durable-turn proof`);
     assert.match(background, /async function sendAgentRunComplete\(tabId, snapshot = null\)[\s\S]*?snapshot\.kind === 'continue'[\s\S]*?agent\.hasDurableSubmittedTurn\([\s\S]*?submittedTurnDurable,/, `${label}: terminal UI events should treat continuations as resumable and carry durable-turn proof`);
     assert.match(background, /const requestedRunUi = runUiSnapshotForRequest\(runUiSnapshot, requestedRequestId\);[\s\S]*?requestedRunUi\?\.kind === 'continue'[\s\S]*?submittedTurnDurable,/, `${label}: run probes should keep allowance continuations resumable after restoration`);
     assert.match(reconnect, /submittedTurnDurable: state\?\.submittedTurnDurable === true,/, `${label}: detached terminal responses should preserve durable-turn proof`);
+    assert.match(reconnect, /if \(sameSnapshot && TERMINAL_RUN_STATUSES\.has\(snapshot\.status\)\)[\s\S]*?if \(requestMatches\(detachedError\?\.requestId, requestId\)\)/, `${label}: terminal journals should win over duplicate detached error records`);
 
     assert.match(styles, /\.cost-allowance-actions\s*\{[\s\S]*?flex-wrap:\s*wrap;/, `${label}: allowance actions should wrap in narrow panels`);
     assert.match(styles, /\.cost-allowance-bump-btn\s*\{[\s\S]*?background:\s*var\(--accent\);/, `${label}: $10 action should use the primary accent treatment`);
@@ -45009,6 +45014,37 @@ test('detached runs reconnect to a live request without starting it twice', asyn
     assert.ok(statuses.includes('reconnecting'), `${label}: reconnecting status should be visible`);
     assert.ok(statuses.includes('reconnected'), `${label}: reconnected status should be visible`);
     assert.deepEqual(replayedStates, ['running', 'completed'], `${label}: missed UI journal states should be replayable after reconnect`);
+  }
+});
+
+test('detached terminal journals win over duplicate task rejection records', async () => {
+  for (const [label, runDetachedWithReconnect] of [
+    ['chrome', runDetachedWithReconnectCh],
+    ['firefox', runDetachedWithReconnectFx],
+  ]) {
+    const requestId = `${label}-terminal-with-detached-error`;
+    const response = await runDetachedWithReconnect({
+      initialAction: 'chat_start',
+      payload: { tabId: 63, requestId, mode: 'ask', text: 'preserve this prompt' },
+      start: async () => ({ accepted: true, requestId }),
+      probe: async () => ({
+        running: false,
+        starting: false,
+        submittedTurnDurable: false,
+        detachedError: { requestId, message: 'Cloud cost allowance reached.' },
+        runUi: {
+          requestId,
+          status: 'failed',
+          finalContent: 'Error: Cloud cost allowance reached.',
+          events: [],
+        },
+      }),
+      isConnectionError: () => false,
+      wait: async () => {},
+    });
+
+    assert.equal(response.content, 'Error: Cloud cost allowance reached.', `${label}: terminal content should remain renderable`);
+    assert.equal(response.submittedTurnDurable, false, `${label}: terminal durability proof should survive duplicate rejection state`);
   }
 });
 
