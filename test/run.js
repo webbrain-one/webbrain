@@ -13789,7 +13789,7 @@ test('sidepanel cloud cost allowance stop offers a persisted one-click $10 bump'
     assert.match(panel, /const restoredAllowanceCardMissing = !!parseCostAllowanceError\(runUi\?\.finalContent\)[\s\S]*?\|\| restoredAllowanceCardMissing[\s\S]*?restoredAllowanceCardMissing \? \{\} : \{ seq: runUi\.seq \}/, `${label}: terminal restoration should rebuild a deferred allowance card even after replaying its final text sequence`);
     assert.match(panel, /type: 'run_complete',[\s\S]*?submittedTurnDurable: state\?\.submittedTurnDurable === true,/, `${label}: restored terminal cards should retain durable-turn proof`);
     assert.match(background, /async function sendAgentRunComplete\(tabId, snapshot = null\)[\s\S]*?snapshot\.kind === 'continue'[\s\S]*?agent\.hasDurableSubmittedTurn\([\s\S]*?submittedTurnDurable,/, `${label}: terminal UI events should treat continuations as resumable and carry durable-turn proof`);
-    assert.match(background, /const requestedRunUi = runUiSnapshotForRequest\(runUiSnapshot, requestedRequestId\);[\s\S]*?requestedRunUi\?\.kind === 'continue'[\s\S]*?submittedTurnDurable,/, `${label}: run probes should keep allowance continuations resumable after restoration`);
+    assert.match(background, /const requestedRunUi = runUiSnapshotForRequest\(runUiSnapshot, requestedRequestId\);[\s\S]*?const durabilityRequestId = requestedRequestId \|\| String\(requestedRunUi\?\.requestId \|\| ''\);[\s\S]*?requestedRunUi\?\.kind === 'continue'[\s\S]*?hasDurableSubmittedTurn\(tabId, durabilityRequestId\)/, `${label}: run probes should preserve continuation and restored-chat durability proof`);
     assert.match(reconnect, /submittedTurnDurable: state\?\.submittedTurnDurable === true,/, `${label}: detached terminal responses should preserve durable-turn proof`);
     assert.match(reconnect, /if \(sameSnapshot && TERMINAL_RUN_STATUSES\.has\(snapshot\.status\)\)[\s\S]*?if \(requestMatches\(detachedError\?\.requestId, requestId\)\)/, `${label}: terminal journals should win over duplicate detached error records`);
 
@@ -45725,7 +45725,7 @@ test('reconnect protocol is wired through both sidepanels and backgrounds', () =
     assert.match(background, /case 'chat':[\s\S]*?await beginContinuationRunUiSnapshot\(tabId, msg\.requestId,/, `${label}: replayed fresh chats should preserve journal sequence numbers`);
     assert.match(background, /await beginContinuationRunUiSnapshot\(tabId, msg\.requestId,/, `${label}: resumed continuations should preserve their journal sequence`);
     assert.match(background, /submittedTurnDurable:?\s*,/, `${label}: run probes should expose whether the submitted chat turn is durable`);
-    assert.match(background, /await agent\.hasDurableSubmittedTurn\(tabId, requestedRequestId\)/, `${label}: recovery should verify chat durability against persisted conversation state`);
+    assert.match(background, /await agent\.hasDurableSubmittedTurn\(tabId, durabilityRequestId\)/, `${label}: recovery should verify chat durability against persisted conversation state`);
     assert.match(background, /beforeConsequentialTool: \(\) => flushRunUiSnapshot/, `${label}: consequential actions should await their pending journal checkpoint`);
     assert.match(background, /afterConsequentialTool:[\s\S]*?settleToolCall/, `${label}: tool guards should clear only after durable conversation results`);
     assert.match(background, /runUiDurable:/, `${label}: probes should expose journal persistence failures`);

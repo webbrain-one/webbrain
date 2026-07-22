@@ -2341,9 +2341,10 @@ async function handleMessage(msg, sender) {
         : null;
       const runUiSnapshot = await getRunUiSnapshot(tabId);
       const requestedRunUi = runUiSnapshotForRequest(runUiSnapshot, requestedRequestId);
+      const durabilityRequestId = requestedRequestId || String(requestedRunUi?.requestId || '');
       const submittedTurnDurable = requestedRunUi?.kind === 'continue'
-        || (requestedRequestId
-          ? await agent.hasDurableSubmittedTurn(tabId, requestedRequestId)
+        || (durabilityRequestId
+          ? await agent.hasDurableSubmittedTurn(tabId, durabilityRequestId)
           : false);
       return {
         ok: true,
