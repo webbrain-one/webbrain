@@ -1,0 +1,28 @@
+{
+  "id": "080",
+  "user": "close all my tabs except this one",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 30567,
+  "error": null,
+  "firstToolCall": {
+    "name": "execute_js",
+    "args": {
+      "code": "// Attempt to enumerate all open tabs in the browser\nconst tabInfo = [];\n\n// Try various browser APIs to list tabs\ntry {\n  // Chrome/Edge extension context might have page tab API\n  if (typeof page !== 'undefined' && typeof page.tabs !== 'undefined') {\n    for (const tab of page.tabs) {\n      tabInfo.push({ id: tab.id, url: tab.url, title: tab.title });\n    }\n  } else {\n    // Fallback: try window-level tab enumeration\n    console.log('page.tabs not available');\n    \n    // Try navigator or other APIs\n    if (typeof navigator !== 'undefined') {\n      console.log('navigator:', Object.keys(navigator).slice(0, 20));\n    }\n    \n    // Check if we're in an extension context\n    const isExtension = window.location.protocol === 'chrome-extension://' || \n                         window.location.hostname.includes('webbrain');\n    console.log('Is extension context:', isExtension);\n    \n    // Try to access page/tab APIs directly\n    try {\n      const win = window;\n      // Look for any tab-related APIs\n      for (const key of Object.keys(win)) {\n        if (key.toLowerCase().includes('tab') || key.toLowerCase().includes('tabbar')) {\n          console.log('Found tab API:', key, win[key]);\n        }\n      }\n    } catch(e) {\n      console.log('JS error scanning window:', e.message);\n    }\n  }\n} catch (e) {\n  console.log('Error:', e.message);\n}\n\n// Also try the browser's built-in tab management via chrome.tabs API if accessible\ntry {\n  const result = JSON.parse(await new Promise(r => setTimeout(() => {\n    const chrome = window.chrome || window.browser || window.app;\n    if (chrome && typeof chrome.tabs !== 'undefined') {\n      chrome.tabs.enumerate({ includeRestoredTabs: true, includeSelectedTabs: false })\n        .then(tabs => {\n          r(tabs);\n        });\n    } else {\n      r(null);\n    }\n  }, 1000)));\n  if (result) {\n    tabInfo.push({ source: 'chrome.tabs.enumerate', count: result.length, tabs: result.map(t => ({id: t.id, url: t.url, title: t.title, state: t.state}))});\n  }\n} catch(e) {\n  console.log('Chrome tabs enumerate error:', e.message);\n}\n\n// Output what we found\nconsole.log('=== TAB INFO ===');\nconsole.log(JSON.stringify(tabInfo, null, 2));"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll help you close all tabs except the current one. Let me first check what's available to enumerate and manage tabs in this browser environment.",
+  "usage": {
+    "prompt_tokens": 17980,
+    "total_tokens": 19488,
+    "completion_tokens": 1508,
+    "prompt_tokens_details": null
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

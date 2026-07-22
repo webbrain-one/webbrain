@@ -1,0 +1,29 @@
+{
+  "id": "053",
+  "user": "search my email for invoice",
+  "mode": "act",
+  "tab": {
+    "url": "https://mail.google.com/mail/u/0/#inbox",
+    "title": "Inbox (3) — Gmail"
+  },
+  "latencyMs": 6534,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible",
+      "maxDepth": 8
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll search your Gmail inbox for emails related to \"invoice\". Let me start by checking the current page and then use Gmail's search functionality.",
+  "usage": {
+    "prompt_tokens": 18513,
+    "total_tokens": 18665,
+    "completion_tokens": 152,
+    "prompt_tokens_details": null
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

@@ -1,0 +1,28 @@
+{
+  "id": "004",
+  "user": "open my github",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 4846,
+  "error": null,
+  "firstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "https://github.com"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll navigate to GitHub for you. Since you're logged into your browser session, this should take you to your GitHub profile/account.",
+  "usage": {
+    "prompt_tokens": 17976,
+    "total_tokens": 18380,
+    "completion_tokens": 404,
+    "prompt_tokens_details": null
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

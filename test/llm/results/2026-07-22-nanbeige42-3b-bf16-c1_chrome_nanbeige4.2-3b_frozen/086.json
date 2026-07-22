@@ -1,0 +1,23 @@
+{
+  "id": "086",
+  "user": "what does CORS stand for",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 6587,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "\n\n## CORS stands for **Cross-Origin Resource Sharing**\n\n### What it is\n\nCORS is an **HTTP security mechanism** that controls whether a web page (the \"origin\") can make requests to a different origin (a different server/domain). It's enforced by the browser and communicated via special HTTP response headers.\n\n### How it works\n\nWhen your browser makes a cross-origin request (e.g., a JavaScript fetch from `example.com` to `api.service.com`), the receiving server can signal permission using headers like:\n\n| Header | Purpose |\n|---|---|\n| `Access-Control-Allow-Origin` | Which origins are allowed to access the resource |\n| `Access-Control-Allow-Methods` | Which HTTP methods (GET, POST, etc.) are permitted |\n| `Access-Control-Allow-Headers` | Which headers can be sent on the cross-origin request |\n\nIf the server **does not** include these headers, the browser blocks the request for security reasons.\n\n### Why it matters\n\n- **Security**: Prevents malicious sites from stealing data from other origins via cross-origin requests (e.g., CSRF-style attacks).\n- **Flexibility**: Allows legitimate cross-origin APIs to work when the server explicitly grants access.\n- **Standard**: A core web standard — without CORS, modern web apps (SPAs, APIs, third-party widgets) couldn't safely communicate across origins.\n\nIn short: **CORS = Cross-Origin Resource Sharing** — it's the rulebook that lets different web origins safely share resources while keeping the web secure.",
+  "usage": {
+    "prompt_tokens": 17979,
+    "total_tokens": 18529,
+    "completion_tokens": 550,
+    "prompt_tokens_details": null
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

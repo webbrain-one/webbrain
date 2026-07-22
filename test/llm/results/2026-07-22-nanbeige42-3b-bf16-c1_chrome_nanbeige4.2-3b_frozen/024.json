@@ -1,0 +1,28 @@
+{
+  "id": "024",
+  "user": "find tweets about react 19",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 2644,
+  "error": null,
+  "firstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "https://www.google.com/search?q=tweets+about+react+19"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll help you find tweets about React 19. Let me search for them using a search engine and/or Twitter/X directly.",
+  "usage": {
+    "prompt_tokens": 17980,
+    "total_tokens": 18198,
+    "completion_tokens": 218,
+    "prompt_tokens_details": null
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

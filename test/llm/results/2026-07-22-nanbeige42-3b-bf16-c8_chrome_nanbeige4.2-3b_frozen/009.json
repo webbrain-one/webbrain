@@ -1,0 +1,28 @@
+{
+  "id": "009",
+  "user": "open chatgpt in a new tab",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 1727,
+  "error": null,
+  "firstToolCall": {
+    "name": "new_tab",
+    "args": {
+      "url": "https://chatgpt.com"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 17981,
+    "total_tokens": 18045,
+    "completion_tokens": 64,
+    "prompt_tokens_details": null
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

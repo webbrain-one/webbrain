@@ -1,0 +1,29 @@
+{
+  "id": "023",
+  "user": "show me vegan lasagna recipes",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 13910,
+  "error": null,
+  "firstToolCall": {
+    "name": "research_url",
+    "args": {
+      "url": "https://www.allrecipes.com/search?q=vegan+lasagna",
+      "timeout": 10000
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll search for vegan lasagna recipes for you. Let me look up a few reliable sources.",
+  "usage": {
+    "prompt_tokens": 17979,
+    "total_tokens": 18292,
+    "completion_tokens": 313,
+    "prompt_tokens_details": null
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

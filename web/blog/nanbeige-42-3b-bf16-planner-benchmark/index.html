@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nanbeige 4.2 3B BF16 WebBrain planner benchmark - WebBrain Blog</title>
+  <meta name="description" content="We tested Nanbeige4.2-3B in BF16 on an RTX 5090. Its official agent benchmarks beat Qwen 3.5 9B and Gemma 4 12B, but WebBrain&#39;s frozen browser-planner replay did not reproduce that lead.">
+  <meta name="keywords" content="WebBrain, Nanbeige, Nanbeige 4.2 3B, Qwen 3.5 9B, Gemma 4 12B, Gemma 4 E4B, vLLM, BF16, local LLM, browser agent, tool calling">
+  <meta property="og:title" content="Nanbeige 4.2 3B is strong for its size, but does not beat Qwen 3.5 9B here">
+  <meta property="og:description" content="The new 4B-total / 3B-non-embedding model claims wins over Qwen 3.5 9B and Gemma 4 12B. Our frozen browser-agent test finds a smaller, still useful result.">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://webbrain.one/blog/nanbeige-42-3b-bf16-planner-benchmark">
+  <meta property="og:image" content="https://webbrain.one/og-image.png">
+  <meta property="og:image:secure_url" content="https://webbrain.one/og-image.png">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="WebBrain detailed brain logo">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Nanbeige 4.2 3B BF16 browser-planner benchmark">
+  <meta name="twitter:description" content="90 parsed calls, 67% Sonnet alignment, 11 exact actions, and a 1.49s c=1 median. Excellent size efficiency; no Qwen 3.5 9B upset in WebBrain.">
+  <meta name="twitter:image" content="https://webbrain.one/twitter-image.png">
+  <meta name="twitter:image:alt" content="WebBrain detailed brain logo">
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <link rel="canonical" href="https://webbrain.one/blog/nanbeige-42-3b-bf16-planner-benchmark">
+  <!-- Blog is English-only; alternates point to locale homepages. -->
+  <link rel="alternate" hreflang="en" href="https://webbrain.one/">
+  <link rel="alternate" hreflang="es" href="https://webbrain.one/es/">
+  <link rel="alternate" hreflang="fr" href="https://webbrain.one/fr/">
+  <link rel="alternate" hreflang="tr" href="https://webbrain.one/tr/">
+  <link rel="alternate" hreflang="zh" href="https://webbrain.one/zh/">
+  <link rel="alternate" hreflang="ru" href="https://webbrain.one/ru/">
+  <link rel="alternate" hreflang="uk" href="https://webbrain.one/uk/">
+  <link rel="alternate" hreflang="ar" href="https://webbrain.one/ar/">
+  <link rel="alternate" hreflang="ja" href="https://webbrain.one/ja/">
+  <link rel="alternate" hreflang="ko" href="https://webbrain.one/ko/">
+  <link rel="alternate" hreflang="id" href="https://webbrain.one/id/">
+  <link rel="alternate" hreflang="th" href="https://webbrain.one/th/">
+  <link rel="alternate" hreflang="ms" href="https://webbrain.one/ms/">
+  <link rel="alternate" hreflang="tl" href="https://webbrain.one/tl/">
+  <link rel="alternate" hreflang="he" href="https://webbrain.one/he/">
+  <link rel="alternate" hreflang="x-default" href="https://webbrain.one/">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg: #0b0e17;
+      --bg-card: #111827;
+      --bg-card-hover: #1a2233;
+      --surface: #161d2e;
+      --border: rgba(255,255,255,0.07);
+      --text: #e4e4ec;
+      --text-dim: #8b8fa4;
+      --accent: #6c63ff;
+      --accent-glow: rgba(108,99,255,0.25);
+      --accent2: #a78bfa;
+      --success: #34d399;
+      --warning: #fbbf24;
+      --danger: #f87171;
+      --tint-soft: rgba(255,255,255,0.05);
+      --tint-soft-2: rgba(255,255,255,0.04);
+      --tint-medium: rgba(255,255,255,0.08);
+      --nav-bg: rgba(11,14,23,0.85);
+      --code-bg: #0a0e17;
+      --inline-code-bg: rgba(255,255,255,0.06);
+      --shadow-strong: rgba(0,0,0,0.40);
+      --radius: 12px;
+      --radius-lg: 16px;
+      --max-w: 760px;
+      color-scheme: dark;
+    }
+    :root[data-theme="light"] {
+      --bg: #f7f1e6;
+      --bg-card: #fffdf8;
+      --bg-card-hover: #f2e9d4;
+      --surface: #ede2cb;
+      --border: rgba(89,55,25,0.15);
+      --text: #2c1810;
+      --text-dim: #6b5b47;
+      --accent: #5b52e8;
+      --accent-glow: rgba(91,82,232,0.20);
+      --accent2: #7c6ce6;
+      --success: #2d8866;
+      --warning: #9a6500;
+      --danger: #b74747;
+      --tint-soft: rgba(89,55,25,0.05);
+      --tint-soft-2: rgba(89,55,25,0.07);
+      --tint-medium: rgba(89,55,25,0.10);
+      --nav-bg: rgba(247,241,230,0.85);
+      --code-bg: #fff7e6;
+      --inline-code-bg: rgba(89,55,25,0.08);
+      --shadow-strong: rgba(89,55,25,0.18);
+      color-scheme: light;
+    }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.75;
+      font-size: 17px;
+      overflow-x: hidden;
+    }
+    a { color: var(--accent2); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .glow-bg {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    .glow-bg::before,
+    .glow-bg::after {
+      content: '';
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(120px);
+      opacity: 0.26;
+    }
+    .glow-bg::before {
+      width: 500px;
+      height: 500px;
+      background: var(--accent);
+      top: -220px;
+      left: -160px;
+    }
+    .glow-bg::after {
+      width: 500px;
+      height: 500px;
+      background: var(--accent2);
+      right: -180px;
+      bottom: -230px;
+      opacity: 0.18;
+    }
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--nav-bg);
+      backdrop-filter: saturate(160%) blur(12px);
+      -webkit-backdrop-filter: saturate(160%) blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-inner {
+      max-width: var(--max-w);
+      margin: 0 auto;
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+    .nav-brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+      color: var(--text);
+      font-size: 18px;
+      font-weight: 700;
+      text-decoration: none;
+    }
+    .nav-brand:hover { text-decoration: none; }
+    .nav-brand .brand-logo { width: 26px; height: 26px; border-radius: 7px; flex: 0 0 auto; }
+    .nav-brand .domain { opacity: 0.5; font-weight: 400; }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 16px;
+      min-width: 0;
+    }
+    .nav-links a {
+      color: var(--text-dim);
+      font-size: 14px;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+    .nav-links a:hover { color: var(--text); text-decoration: none; }
+    .lang-dropdown {
+      background: var(--tint-soft);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 13px;
+      max-width: 120px;
+    }
+    .lang-dropdown:focus { outline: 2px solid var(--accent-glow); outline-offset: 1px; }
+    .lang-dropdown option { background-color: var(--bg-card-hover); color: var(--text); }
+    .theme-toggle {
+      appearance: none;
+      -webkit-appearance: none;
+      background: var(--tint-soft-2);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      width: 30px;
+      height: 30px;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      cursor: pointer;
+      color: var(--text-dim);
+      transition: background 0.2s, color 0.2s, border-color 0.2s, transform 0.1s;
+    }
+    .theme-toggle:hover {
+      background: var(--tint-medium);
+      border-color: var(--accent);
+      color: var(--text);
+      transform: translateY(-1px);
+    }
+    .theme-toggle:focus-visible {
+      outline: 2px solid var(--accent2);
+      outline-offset: 2px;
+    }
+    .theme-toggle svg { width: 16px; height: 16px; display: block; }
+    .theme-toggle .icon-sun { display: block; }
+    .theme-toggle .icon-moon { display: none; }
+    :root[data-theme="light"] .theme-toggle .icon-sun { display: none; }
+    :root[data-theme="light"] .theme-toggle .icon-moon { display: block; }
+    main,
+    article {
+      max-width: var(--max-w);
+      margin: 0 auto;
+      padding: 64px 24px 80px;
+    }
+    .page-label {
+      display: inline-block;
+      font-size: 12px;
+      letter-spacing: 0;
+      text-transform: uppercase;
+      color: var(--accent2);
+      padding: 4px 10px;
+      border: 1px solid color-mix(in srgb, var(--accent2) 28%, transparent);
+      border-radius: 999px;
+      margin-bottom: 18px;
+    }
+    h1 {
+      font-size: 38px;
+      line-height: 1.2;
+      font-weight: 700;
+      letter-spacing: 0;
+      margin-bottom: 16px;
+    }
+    .page-sub,
+    .lede {
+      color: var(--text-dim);
+      line-height: 1.6;
+    }
+    .page-sub {
+      font-size: 17px;
+      max-width: 580px;
+      margin-bottom: 48px;
+    }
+    .lede {
+      font-size: 19px;
+      margin-bottom: 40px;
+    }
+    .meta {
+      font-size: 13px;
+      color: var(--text-dim);
+      margin-bottom: 12px;
+      letter-spacing: 0;
+    }
+    h2 {
+      font-size: 24px;
+      font-weight: 700;
+      margin-top: 48px;
+      margin-bottom: 14px;
+      letter-spacing: 0;
+    }
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-top: 32px;
+      margin-bottom: 10px;
+      color: var(--text);
+    }
+    h4, h5, h6 {
+      color: var(--text);
+      margin-top: 28px;
+      margin-bottom: 10px;
+      line-height: 1.35;
+    }
+    p { margin-bottom: 16px; }
+    ul, ol { margin: 0 0 16px 20px; }
+    li { margin-bottom: 6px; }
+    code {
+      font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+      font-size: 0.88em;
+      background: var(--inline-code-bg);
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: color-mix(in srgb, var(--accent2) 80%, var(--text));
+    }
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      overflow-x: auto;
+      margin: 20px 0;
+      font-size: 14px;
+      line-height: 1.55;
+      box-shadow: 0 18px 60px var(--shadow-strong);
+    }
+    pre code {
+      background: transparent;
+      padding: 0;
+      color: inherit;
+      font-size: inherit;
+    }
+    blockquote {
+      border-left: 3px solid var(--accent);
+      padding: 4px 0 4px 18px;
+      margin: 20px 0;
+      color: var(--text-dim);
+      font-style: italic;
+    }
+    blockquote p:last-child { margin-bottom: 0; }
+    hr {
+      border: 0;
+      border-top: 1px solid var(--border);
+      margin: 36px 0;
+    }
+    article img {
+      max-width: 100%;
+      height: auto;
+      display: block;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      margin: 24px 0;
+    }
+    .table-wrap { overflow-x: auto; margin: 24px 0; }
+    table {
+      width: 100%;
+      min-width: 560px;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    th, td {
+      text-align: left;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    th {
+      color: var(--text-dim);
+      font-weight: 600;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0;
+      background: var(--tint-soft-2);
+    }
+    td code { font-size: 12px; }
+    .win { color: var(--success); font-weight: 600; }
+    .lose { color: var(--danger); }
+    .meh { color: var(--warning); }
+    .callout {
+      background: color-mix(in srgb, var(--accent) 10%, transparent);
+      border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      margin: 24px 0;
+      font-size: 15px;
+      line-height: 1.65;
+      color: var(--text-dim);
+    }
+    .callout strong { color: var(--text); }
+    .author-box {
+      margin-top: 64px;
+      padding-top: 32px;
+      border-top: 1px solid var(--border);
+      color: var(--text-dim);
+      font-size: 14px;
+    }
+    .post-list { display: flex; flex-direction: column; gap: 18px; }
+    .post-card {
+      display: block;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px 26px;
+      transition: background 0.18s, border-color 0.18s, transform 0.18s;
+    }
+    .post-card:hover {
+      background: var(--bg-card-hover);
+      border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+      transform: translateY(-1px);
+      text-decoration: none;
+    }
+    .post-meta {
+      font-size: 12px;
+      color: var(--text-dim);
+      letter-spacing: 0;
+      margin-bottom: 8px;
+    }
+    .post-title {
+      font-size: 21px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 6px;
+      letter-spacing: 0;
+      line-height: 1.35;
+    }
+    .post-excerpt {
+      color: var(--text-dim);
+      font-size: 15px;
+      line-height: 1.6;
+    }
+    footer {
+      max-width: var(--max-w);
+      margin: 0 auto;
+      padding: 40px 24px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+      color: var(--text-dim);
+      font-size: 13px;
+    }
+    footer a { color: var(--text-dim); }
+    footer a:hover { color: var(--text); }
+    @media (max-width: 700px) {
+      body { font-size: 16px; }
+      .nav-inner { padding: 14px 20px; align-items: flex-start; }
+      .nav-links { gap: 12px; flex-wrap: wrap; }
+      .lang-dropdown { display: none; }
+      h1 { font-size: 28px; }
+      .lede { font-size: 16px; }
+      .page-sub { font-size: 15px; }
+      main, article { padding: 48px 20px 64px; }
+      h2 { font-size: 20px; margin-top: 36px; }
+      .post-card { padding: 20px; }
+      .post-title { font-size: 19px; }
+      footer { flex-direction: column; padding: 32px 20px; }
+    }
+    @media (max-width: 420px) {
+      .nav-inner { gap: 12px; }
+      .nav-links a[href="https://github.com/webbrain-one/webbrain"] { display: none; }
+      .theme-toggle { width: 28px; height: 28px; }
+    }
+  </style>
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('webbrain-theme');
+        var theme = (saved === 'light' || saved === 'dark')
+          ? saved
+          : (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+        document.documentElement.setAttribute('data-theme', theme);
+      } catch (_) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    })();
+  </script>
+  <!-- Plausible analytics: start -->
+  <!-- Privacy-friendly analytics by Plausible -->
+  <script async src="https://plausible.io/js/pa-yWGfwxkkKSVs-eTuaKYpy.js"></script>
+  <script>
+    window.plausible=window.plausible||function(){(plausible.q=plausible.q||[]).push(arguments)},plausible.init=plausible.init||function(i){plausible.o=i||{}};
+    plausible.init()
+  </script>
+  <!-- Plausible analytics: end -->
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "Nanbeige 4.2 3B punches above its size, but Qwen 3.5 9B still wins our frozen planner test",
+  "description": "We tested Nanbeige4.2-3B in BF16 on an RTX 5090. Its official agent benchmarks beat Qwen 3.5 9B and Gemma 4 12B, but WebBrain's frozen browser-planner replay did not reproduce that lead.",
+  "author": {
+    "@type": "Person",
+    "name": "Emre Sokullu",
+    "url": "https://emresokullu.com"
+  },
+  "datePublished": "2026-07-22",
+  "image": "https://webbrain.one/og-image.png",
+  "publisher": {
+    "@type": "Organization",
+    "name": "WebBrain",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://webbrain.one/logo-github.png"
+    }
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://webbrain.one/blog/nanbeige-42-3b-bf16-planner-benchmark"
+  }
+}
+  </script>
+</head>
+<body>
+  <div class="glow-bg"></div>
+  <nav>
+    <div class="nav-inner">
+      <a href="/" class="nav-brand"><img class="brand-logo" src="/logo-github.png" alt="" aria-hidden="true"> WebBrain<span class="domain">.one</span></a>
+      <div class="nav-links">
+        <a href="/">Home</a>
+        <a href="/docs/">Docs</a>
+        <a href="/blog">Blog</a>
+        <select class="lang-dropdown" id="lang-dropdown" aria-label="Select language" data-current="en"><option value="en">English</option><option value="es">Español</option><option value="fr">Français</option><option value="tr">Türkçe</option><option value="zh">中文</option><option value="ru">Русский</option><option value="uk">Українська</option><option value="ar">العربية</option><option value="ja">日本語</option><option value="ko">한국어</option><option value="id">Bahasa Indonesia</option><option value="th">ไทย</option><option value="ms">Bahasa Melayu</option><option value="tl">Filipino</option><option value="he">עברית</option></select>
+        <button class="theme-toggle" type="button" id="theme-toggle" aria-label="Toggle light / dark theme" title="Toggle light / dark theme">
+          <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="4"/>
+            <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+          </svg>
+          <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+          </svg>
+        </button>
+        <a href="https://github.com/webbrain-one/webbrain" target="_blank" rel="noopener">GitHub</a>
+      </div>
+    </div>
+  </nav>
+
+  <article>
+    <div class="meta">July 22, 2026 &middot; 8 min read &middot; <a href="/blog">&larr; All posts</a></div>
+    <h1>Nanbeige 4.2 3B punches above its size, but Qwen 3.5 9B still wins our frozen planner test</h1>
+    <p class="lede"><strong>Nanbeige4.2-3B</strong> makes one of the boldest small-model claims we have seen recently. Its official card reports wins over Qwen 3.5 9B, Gemma 4 12B, and Gemma 4 E4B across a long list of agent and reasoning benchmarks. The naming is slightly confusing but defensible: it has about 4B total parameters and 3B non-embedding parameters. We loaded the full BF16 checkpoint on an RTX 5090 and ran WebBrain&#39;s frozen 100-case first-tool benchmark. It is genuinely capable for its size, highly parseable, and reasonably fast in single-request use. It did not reproduce the claimed ordering here: the clean c=1 run reached 67% Claude Sonnet 4.6 tool-name alignment, below Qwen 3.5 9B at 70% and Gemma 4 E4B at 68%, while strict exact and ideal-tool scores also trailed all three comparison models.</p>
+<h2 id="why-the-official-numbers-are-exciting">Why the official numbers are exciting</h2>
+<p><a href="https://huggingface.co/Nanbeige/Nanbeige4.2-3B" target="_blank" rel="noopener">Nanbeige&#39;s official model card</a> describes 4.2-3B as a compact agentic model built around a <strong>Looped Transformer</strong>. The architecture feeds hidden states through reused transformer layers, aiming to increase effective capacity without adding another conventional stack of parameters.</p>
+<p>That is why both &quot;3B&quot; and &quot;4B&quot; appear around the same checkpoint:</p>
+<div class="table-wrap"><table><thead><tr><th>Size definition</th><th>Nanbeige 4.2</th></tr></thead><tbody><tr><td>Total parameters</td><td>4B</td></tr><tr><td>Non-embedding parameters</td><td>3B</td></tr></tbody></table></div>
+<p>The headline comparison is not subtle. In the team&#39;s table, Nanbeige 4.2 3B beats all three larger comparison models on most agent rows:</p>
+<div class="table-wrap"><table><thead><tr><th>Official benchmark</th><th>Nanbeige 4.2 3B</th><th>Qwen 3.5 9B</th><th>Gemma 4 12B</th><th>Gemma 4 E4B</th></tr></thead><tbody><tr><td>GDPval rubrics</td><td>74.3</td><td>61.9</td><td>68.5</td><td>31.5</td></tr><tr><td>Pinch-Bench V2</td><td>74.7</td><td>68.2</td><td>53.8</td><td>33.3</td></tr><tr><td>Claw-Gym</td><td>65.0</td><td>56.1</td><td>40.8</td><td>16.4</td></tr><tr><td>MCP-Atlas</td><td>57.8</td><td>47.4</td><td>30.5</td><td>15.0</td></tr><tr><td>SWE-Bench Verified</td><td>63.6</td><td>53.1</td><td>44.2</td><td>14.0</td></tr><tr><td>Terminal-Bench 2.0</td><td>44.1</td><td>29.2</td><td>21.1</td><td>12.4</td></tr></tbody></table></div>
+<p>Those are exactly the results that motivated this test. A 4B-total local model beating 10B-total Qwen and 12B Gemma would be a significant efficiency result, especially for personal agents.</p>
+<p>The methodology notes matter, however. Nanbeige says all of its evaluations use thinking mode with <code>preserve_thinking=true</code>. Several agent rows use the team&#39;s own scaffold; the quickstart recommends <code>temperature=1.0</code>, as many as 65,536 new tokens for tool tasks, preserved thinking in multi-turn agents, and <code>tool_call_format=&quot;xml&quot;</code> for best tool-calling performance.</p>
+<p>WebBrain&#39;s frozen replay asks a different and deliberately narrower question: given one browser instruction, the same system prompt, and the same 41 tools, what is the model&#39;s <strong>first action</strong>?</p>
+<h2 id="what-we-ran">What we ran</h2>
+<p>The local vLLM endpoint reported:</p>
+<pre><code class="language-text">model id: nanbeige4.2-3b
+root: Nanbeige/Nanbeige4.2-3B
+dtype: bfloat16
+max model length: 32768
+max sequences: 16
+max batched tokens: 8192
+tool parser: nanbeige
+reasoning parser: nanbeige
+GPU: NVIDIA GeForce RTX 5090, 32 GB</code></pre>
+<p>The server reserved roughly 30 GB of the 5090 because <code>gpu-memory-utilization</code> was set to 0.93. That is <strong>not</strong> the weight size. vLLM pre-allocates most available VRAM for weights, KV cache, and execution buffers even while GPU utilization is 0%.</p>
+<p>We kept the historical frozen harness unchanged:</p>
+<pre><code class="language-bash">node test/llm/run-llamacpp.mjs \
+  --base http://127.0.0.1:8000 \
+  --model nanbeige4.2-3b \
+  --tag 2026-07-22-nanbeige42-3b-bf16-c1 \
+  --concurrency 1 \
+  --timeout 180000 \
+  --no-save-request \
+  --freeze test/llm/freeze/baseline-2026-05-23.json</code></pre>
+<p>That pins the May 23 Claude Sonnet 4.6 WebBrain prompt, its 41-tool schema, and system hash <code>5c4fac1387025050</code>. It sends native OpenAI-style structured tools, uses Act mode&#39;s fixed temperature of 0.15, and allows 4,096 output tokens. We did not force Nanbeige&#39;s XML compatibility format or add <code>preserve_thinking=true</code> to the template.</p>
+<p>This is the right configuration for our historical first-action comparison. It is not a reproduction of Nanbeige&#39;s own benchmark recipe.</p>
+<h2 id="the-clean-singlerequest-result">The clean single-request result</h2>
+<div class="table-wrap"><table><thead><tr><th>Metric</th><th>Nanbeige 4.2 3B BF16, c=1</th></tr></thead><tbody><tr><td>Completed cases</td><td>100/100</td></tr><tr><td>Transport errors</td><td>0</td></tr><tr><td>Parsed calls</td><td>90/100</td></tr><tr><td>Valid tool names</td><td>89/100</td></tr><tr><td>Exact first-call match</td><td>11/100</td></tr><tr><td>Ideal tool-name match</td><td>30/100</td></tr><tr><td>Sonnet match, all cases</td><td>67/100</td></tr><tr><td>Sonnet match when Sonnet tooled</td><td>62/92 (67.4%)</td></tr><tr><td>Mean latency</td><td>2.07s</td></tr><tr><td>Median latency</td><td>1.49s</td></tr><tr><td>p95 latency</td><td>5.38s</td></tr><tr><td>Slowest case</td><td>11.11s</td></tr><tr><td>Benchmark wall time</td><td>206.7s</td></tr></tbody></table></div>
+<p>The operational result is respectable. Ninety calls parsed natively, and only one used a nonexistent tool name: <code>scratchpad_read</code>. The model also handled the no-tool knowledge cases fairly well, matching Sonnet on four of five.</p>
+<p>The quality miss is action selection. Nanbeige chose <code>get_accessibility_tree</code> <strong>49 times</strong>. Qwen 3.5 9B did so 39 times, Gemma 4 12B QAT 43 times, and Gemma 4 E4B 42 times. Reading the page is often a safe first move, but WebBrain&#39;s direct commands frequently have a more specific action available.</p>
+<p>Some category results were strong:</p>
+<ul><li>direct navigation: 10/10 Sonnet matches;</li><li>forms: 8/8;</li><li>email: 5/6;</li><li>shopping: 4/4;</li><li>scroll and inspection: 4/4.</li></ul>
+<p>The weaker groups explain the overall gap:</p>
+<ul><li>browser internals: 1/5 Sonnet matches;</li><li>GitHub: 3/6;</li><li>downloads: 2/6;</li><li>destructive or refusal-sensitive prompts: 2/6;</li><li>UI mutations: 1/4.</li></ul>
+<p>On ambiguous prompts, it usually wrote a clarification in prose rather than calling the available <code>clarify</code> tool. That can be semantically sensible, but it is not dispatchable as a structured browser action.</p>
+<h2 id="the-comparison-useful-but-emphatically-not-apples-to-apples">The comparison: useful, but emphatically not apples to apples</h2>
+<div class="table-wrap"><table><thead><tr><th>Model</th><th>Precision / serving path</th><th>Concurrency</th><th>Parsed</th><th>Exact</th><th>Ideal name</th><th>Sonnet all</th><th>Sonnet tooled</th><th>Median</th><th>p95</th></tr></thead><tbody><tr><td>Qwen 3.5 9B</td><td>int4 AutoRound, vLLM</td><td>historical c=2</td><td>90</td><td>15%</td><td>35%</td><td>70%</td><td>69.6%</td><td>0.91s</td><td>1.65s</td></tr><tr><td>Gemma 4 E4B</td><td>historical LM Studio endpoint</td><td>historical c=1</td><td>87</td><td>14%</td><td>35%</td><td>68%</td><td>68.5%</td><td>4.51s</td><td>13.80s</td></tr><tr><td><strong>Nanbeige 4.2 3B</strong></td><td><strong>BF16, vLLM native tools</strong></td><td><strong>1</strong></td><td><strong>90</strong></td><td><strong>11%</strong></td><td><strong>30%</strong></td><td><strong>67%</strong></td><td><strong>67.4%</strong></td><td><strong>1.49s</strong></td><td><strong>5.38s</strong></td></tr><tr><td>Gemma 4 12B QAT</td><td>W4A16 QAT, vLLM text calls</td><td>8</td><td>92</td><td>14%</td><td>33%</td><td>67%</td><td>67.4%</td><td>0.43s</td><td>0.73s</td></tr></tbody></table></div>
+<p>The quality columns use the same saved cases and scoring rules, so they are useful. The table is still <strong>not a controlled precision or serving comparison</strong>:</p>
+<ul><li>Nanbeige is the full BF16 checkpoint; Qwen is int4 AutoRound and Gemma 12B is a W4A16 QAT checkpoint.</li><li>The historical E4B result records an LM Studio endpoint but not enough checkpoint metadata to claim a controlled quantization comparison.</li><li>Nanbeige and Qwen used native structured tools; the 12B QAT run used legacy text-call compatibility.</li><li>Concurrency ranges from one to eight, and the serving stacks tokenize the same frozen prompt differently.</li><li>Nanbeige&#39;s official recipe uses different temperature, thinking retention, output budget, tool-call format, and agent scaffolds.</li></ul>
+<p>For those reasons, the latency values should not be used as a pure architecture ranking. The first-action quality result is the more interesting signal: on this frozen browser-planner distribution, Nanbeige is close, but it does not beat Qwen 3.5 9B or Gemma 4 E4B. It ties Gemma 4 12B QAT on Sonnet alignment while trailing it by three exact matches and three ideal tool names.</p>
+<h2 id="parallel-throughput-is-real-but-16-was-not-clean">Parallel throughput is real, but 16 was not clean</h2>
+<p>The server advertised 16 concurrent sequences, so we also ran the full replay at concurrency 8 and stress-tested concurrency 16.</p>
+<div class="table-wrap"><table><thead><tr><th>Run</th><th>Completed without transport error</th><th>Wall time</th><th>Throughput</th><th>Median request latency</th><th>p95 request latency</th><th>Sonnet match</th></tr></thead><tbody><tr><td>c=1</td><td>100/100</td><td>206.7s</td><td>0.48 req/s</td><td>1.49s</td><td>5.38s</td><td>67%</td></tr><tr><td>c=8</td><td>100/100</td><td>55.5s</td><td>1.80 req/s</td><td>2.90s</td><td>11.32s</td><td>63%</td></tr><tr><td>c=16 stress</td><td>94/100</td><td>51.6s</td><td>not scored</td><td>not scored</td><td>not scored</td><td>not scored</td></tr></tbody></table></div>
+<p>Eight-way batching increased completed throughput by about <strong>3.7x</strong>, although each individual request waited longer. The 16-way run improved wall time only slightly and produced six immediate <code>fetch failed</code> transport errors in the first batch. We excluded it from quality scoring rather than pretending those were model mistakes.</p>
+<p>Quality also moved by four Sonnet points between the clean c=1 and c=8 runs. The frozen harness uses temperature 0.15 rather than zero, so some sampling variance is expected; batching may also change numerical execution. The c=1 result is our headline quality row, and the c=8 result is the capacity measurement.</p>
+<h2 id="the-practical-downside-no-vision">The practical downside: no vision</h2>
+<p>This checkpoint is a text model. Unlike the Qwen 3.5 9B and Gemma 4 checkpoints in this comparison, it cannot inspect a screenshot, read a canvas application, recover from a broken accessibility tree visually, or perform UI OCR by itself.</p>
+<p>That matters for WebBrain. A compact text planner can still operate over accessibility trees and extracted page content, but it is not a complete replacement for a multimodal local model. Nanbeige&#39;s agent efficiency is impressive; its modality coverage is narrower.</p>
+<h2 id="verdict">Verdict</h2>
+<p>Nanbeige 4.2 3B is not hype-free, but it is also not a disappointment. A 4B-total / 3B-non-embedding model producing 90 structured calls, matching Sonnet&#39;s first tool 67% of the time, and serving at a 1.49-second median is a strong small-model result.</p>
+<p>The stronger claim did not transfer. In WebBrain&#39;s frozen browser-planner test, it did <strong>not</strong> beat Qwen 3.5 9B, and it did not beat Gemma 4 E4B. It tied the quantized Gemma 4 12B QAT run on Sonnet alignment while losing on strict ideal-action scores.</p>
+<p>The fairest conclusion is scope, not contradiction. Nanbeige&#39;s published wins come from long-horizon agent, office, code, and reasoning evaluations under its recommended thinking-oriented scaffolds. Our test isolates one first browser action under a fixed historical prompt. The official results may be correct in their environments; they are not a guarantee that this smaller model will route WebBrain&#39;s first tool better.</p>
+<p>For a text-only local assistant with long tasks and a Nanbeige-aware scaffold, this release deserves more testing. For WebBrain&#39;s current low-latency browser planner, <strong>Qwen 3.5 9B remains the stronger small local default</strong>, while Gemma&#39;s multimodality remains a practical advantage.</p>
+<p>Saved results:</p>
+<pre><code class="language-text">test/llm/results/2026-07-22-nanbeige42-3b-bf16-c1_chrome_nanbeige4.2-3b_frozen
+test/llm/results/2026-07-22-nanbeige42-3b-bf16-c8_chrome_nanbeige4.2-3b_frozen
+test/llm/results/2026-07-22-nanbeige42-3b-bf16-c16_chrome_nanbeige4.2-3b_frozen</code></pre>
+
+    <div class="author-box">
+      Written by <a href="https://emresokullu.com" target="_blank" rel="noopener">Emre Sokullu</a>. WebBrain is MIT-licensed and open on <a href="https://github.com/webbrain-one/webbrain" target="_blank" rel="noopener">GitHub</a>.
+    </div>
+  </article>
+
+  <footer>
+    <div>&copy; 2026 WebBrain &middot; <a href="/privacy">Privacy</a></div>
+    <div><a href="https://github.com/webbrain-one/webbrain" target="_blank" rel="noopener">GitHub</a></div>
+  </footer>
+  <script>
+    (function () {
+      const btn = document.getElementById('theme-toggle');
+      if (!btn) return;
+      const root = document.documentElement;
+
+      function setTheme(theme, persist) {
+        root.setAttribute('data-theme', theme);
+        if (persist) {
+          try { localStorage.setItem('webbrain-theme', theme); } catch (_) {}
+        }
+      }
+
+      btn.addEventListener('click', function () {
+        const next = root.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+        setTheme(next, true);
+      });
+
+      const mq = window.matchMedia('(prefers-color-scheme: light)');
+      function onMQ(e) {
+        try {
+          if (localStorage.getItem('webbrain-theme')) return;
+        } catch (_) {}
+        setTheme(e.matches ? 'light' : 'dark', false);
+      }
+      if (typeof mq.addEventListener === 'function') mq.addEventListener('change', onMQ);
+      else if (typeof mq.addListener === 'function') mq.addListener(onMQ);
+    })();
+  </script>
+  <script>
+    (function () {
+      const LOCALES = ["en","es","fr","tr","zh","ru","uk","ar","ja","ko","id","th","ms","tl","he"];
+      const sel = document.getElementById('lang-dropdown');
+      if (!sel) return;
+      sel.value = sel.dataset.current || 'en';
+      sel.addEventListener('change', function () {
+        const target = sel.value;
+        if (!LOCALES.includes(target)) return;
+        window.location.href = target === 'en' ? '/' : '/' + target + '/';
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+{
+  "id": "016",
+  "user": "search youtube for lo-fi study music",
+  "mode": "act",
+  "tab": {
+    "url": "https://www.youtube.com/",
+    "title": "YouTube"
+  },
+  "latencyMs": 23,
+  "error": "fetch failed",
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": null,
+  "content": null,
+  "usage": null,
+  "attempts": 1,
+  "retryErrors": []
+}

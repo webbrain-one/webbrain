@@ -1,0 +1,23 @@
+{
+  "id": "086",
+  "user": "what does CORS stand for",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 12921,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "\n\n## CORS — Cross-Origin Resource Sharing\n\n**CORS** stands for **Cross-Origin Resource Sharing**.\n\n### What it means\n\nIt's an HTTP security mechanism that allows web browsers to specify which **origin** (domain, scheme, port) can access resources on another origin. In practice:\n\n- **Same-origin resources** — requests from `example.com` to `example.com` — work automatically without any extra permission.\n- **Cross-origin resources** — requests from `example.com` to `api.example.org` — are blocked by the browser by default (to prevent malicious sites from stealing data from others).\n- **CORS** provides a way for the *receiving* server to **explicitly authorize** which origins may make requests to it.\n\n### How it works\n\nWhen a browser makes a cross-origin request, it sends additional **CORS headers**:\n\n| Header | Purpose |\n|---|---|\n| `Origin` | Tells the server *who* is making the request (e.g., `https://example.com`) |\n| `Access-Control-Request-Method` | The HTTP method being used (GET, POST, etc.) |\n| `Access-Control-Request-Headers` | The headers included in the request |\n\nThe server responds with **CORS response headers** to grant or deny access:\n\n```\nAccess-Control-Allow-Origin: https://example.com\nAccess-Control-Allow-Methods: GET, POST, PUT\nAccess-Control-Allow-Headers: Content-Type, Authorization\nAccess-Control-Max-Age: 3600\n```\n\n### Key points\n\n- **It's a browser-enforced standard**, not a server-side feature — the server can't bypass it; the browser decides whether to honor the response.\n- **Simple vs. custom requests**: Simple cross-origin requests (e.g., GET/POST with common headers like `Accept`) often work without explicit CORS configuration. More complex requests (e.g., POST with custom headers or `Content-Type: application/json`) require proper CORS headers.\n- **Security**: Prevents malicious websites from making unauthorized requests to APIs and reading responses from other origins.\n\nIn short: **CORS is the protocol that lets you control, from a server's perspective, which origins are allowed to access your resources across the web.**",
+  "usage": {
+    "prompt_tokens": 17979,
+    "total_tokens": 18569,
+    "completion_tokens": 590,
+    "prompt_tokens_details": null
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

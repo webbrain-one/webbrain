@@ -1,0 +1,23 @@
+{
+  "id": "082",
+  "user": "whats the capital of france",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 2565,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "\n\nThe capital of France is **Paris**.",
+  "usage": {
+    "prompt_tokens": 17979,
+    "total_tokens": 18084,
+    "completion_tokens": 105,
+    "prompt_tokens_details": null
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

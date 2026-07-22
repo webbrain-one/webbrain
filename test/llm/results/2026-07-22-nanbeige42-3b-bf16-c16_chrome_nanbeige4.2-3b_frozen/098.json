@@ -1,0 +1,29 @@
+{
+  "id": "098",
+  "user": "compare these two products",
+  "mode": "act",
+  "tab": {
+    "url": "https://www.amazon.com/dp/B0EXAMPLE",
+    "title": "Acme Earbuds — Amazon"
+  },
+  "latencyMs": 7176,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible",
+      "maxDepth": 20
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "Let me first read the current page to understand the product details we have, then I'll need to clarify about the second product.",
+  "usage": {
+    "prompt_tokens": 18108,
+    "total_tokens": 18401,
+    "completion_tokens": 293,
+    "prompt_tokens_details": null
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

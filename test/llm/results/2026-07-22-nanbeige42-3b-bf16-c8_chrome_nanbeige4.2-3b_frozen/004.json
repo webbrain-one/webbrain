@@ -1,0 +1,28 @@
+{
+  "id": "004",
+  "user": "open my github",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 8177,
+  "error": null,
+  "firstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "https://github.com"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll navigate to your GitHub account. Since you said \"open my github,\" let me go to GitHub and see what's available with your authenticated session.",
+  "usage": {
+    "prompt_tokens": 17976,
+    "total_tokens": 18310,
+    "completion_tokens": 334,
+    "prompt_tokens_details": null
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

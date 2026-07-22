@@ -1,0 +1,28 @@
+{
+  "id": "019",
+  "user": "search reddit for mechanical keyboards",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 1233,
+  "error": null,
+  "firstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "https://www.reddit.com"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll search Reddit for mechanical keyboards. Let me navigate to Reddit and perform the search.",
+  "usage": {
+    "prompt_tokens": 17978,
+    "total_tokens": 18077,
+    "completion_tokens": 99,
+    "prompt_tokens_details": null
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

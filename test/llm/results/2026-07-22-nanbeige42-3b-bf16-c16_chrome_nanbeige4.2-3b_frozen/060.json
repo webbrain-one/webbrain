@@ -1,0 +1,28 @@
+{
+  "id": "060",
+  "user": "find 3 wireless earbuds under $100",
+  "mode": "act",
+  "tab": {
+    "url": "https://www.amazon.com/",
+    "title": "Amazon.com"
+  },
+  "latencyMs": 5271,
+  "error": null,
+  "firstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "https://www.amazon.com/s?k=wireless+earbuds+under+100"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll search Amazon for wireless earbuds under $100. Let me start by navigating to the search results page.",
+  "usage": {
+    "prompt_tokens": 18106,
+    "total_tokens": 18230,
+    "completion_tokens": 124,
+    "prompt_tokens_details": null
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

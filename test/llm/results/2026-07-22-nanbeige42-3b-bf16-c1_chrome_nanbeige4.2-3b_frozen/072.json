@@ -1,0 +1,28 @@
+{
+  "id": "072",
+  "user": "delete this",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 1532,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "Let me first check what's on the current page to understand what you'd like to delete.",
+  "usage": {
+    "prompt_tokens": 17975,
+    "total_tokens": 18098,
+    "completion_tokens": 123,
+    "prompt_tokens_details": null
+  },
+  "attempts": 1,
+  "retryErrors": []
+}
