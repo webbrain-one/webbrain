@@ -2363,6 +2363,14 @@ test('matches google search across TLDs and includes udm=14, without hijacking o
 test('matches twitter.com and x.com', () => {
   assert.equal(getActiveAdapter('https://twitter.com/elonmusk')?.name, 'twitter');
   assert.equal(getActiveAdapter('https://x.com/elonmusk')?.name, 'twitter');
+  for (const getAdapter of [getActiveAdapter, getActiveAdapterFx]) {
+    const notes = getAdapter('https://x.com/compose/post')?.notes || '';
+    assert.match(notes, /wait_for_stable/);
+    assert.match(notes, /disabled=true/);
+    assert.match(notes, /selector:"\[data-testid=\\"tweetTextarea_0\\"\]"/);
+    assert.match(notes, /verified:false/);
+    assert.match(notes, /keep the composer open/i);
+  }
 });
 
 test('matches youtube video URLs and includes transcript guidance', () => {
@@ -6835,8 +6843,10 @@ test('WebBrain promotion has explicit X and LinkedIn variants with ready-to-go p
   const exactPost = 'Introducing WebBrain — an open-source AI browser agent that lives in your browser. Chat with any page, automate multi-step workflows, and bring your own LLM. Extensible by design. Try it: https://webbrain.one';
   const expectedTweetSteps = [
     'Open https://x.com/compose/post in the current tab through the visible browser UI.',
+    'Wait for the visible X composer to become stable before entering text.',
     `Enter this exact reviewed text in the visible X composer without translating, rewriting, or adding anything: ${JSON.stringify(exactPost)}`,
-    'Publish only after the composer text exactly matches the supplied text.',
+    'Publish only after the composer text exactly matches the supplied text and the Post control is enabled. If it remains disabled, keep the composer open and refill it through the trusted typing path.',
+    'Treat an unverified or no-progress Post click as not submitted; keep the composer open and recover instead of dismissing it.',
     'Verify the new tweet appears, then report its URL when available.',
   ];
   const expectedLinkedInSteps = [
@@ -31623,6 +31633,15 @@ test('Chrome controlled-field fallback is ref-bound, trusted, verified, and subm
   assert.match(agent, /verification\.verified !== true[\s\S]*if \(toolName === 'set_field' && args\?\.submit === true\)/, 'chrome: submit must remain after trusted verification');
   assert.match(content, /'ax_prepare_field_for_trusted_type'[\s\S]*window\.__wb_ax_lookup\(ref_id\)[\s\S]*el\.select\(\)/, 'chrome: trusted retry must focus and select the ref-bound field');
   assert.match(content, /'ax_verify_field_value'[\s\S]*_setFieldValueMatches\(actual, '', expected, true/, 'chrome: trusted retry must use exact settled verification');
+  for (const toolName of ['type_ax', 'set_field']) {
+    const branchStart = content.indexOf(`'${toolName}': async () => {`);
+    const branchEnd = toolName === 'type_ax'
+      ? content.indexOf("'set_field': async () => {", branchStart)
+      : content.indexOf("'ax_prepare_field_for_trusted_type':", branchStart);
+    const branch = content.slice(branchStart, branchEnd);
+    assert.match(branch, /el\.isContentEditable[\s\S]*trustedTypeRequired: true[\s\S]*_expectedValue/, `chrome: ${toolName} contenteditables must route through trusted typing`);
+    assert.doesNotMatch(branch, /document\.execCommand\('insertText'/, `chrome: ${toolName} must not accept synthetic contenteditable DOM text as verified input`);
+  }
 });
 
 test('Chrome controlled-field fallback recovers exactly once and never submits a mismatch', async () => {
@@ -31634,11 +31653,20 @@ test('Chrome controlled-field fallback recovers exactly once and never submits a
   try {
     const commands = [];
     let verified = true;
+    let contentEditable = false;
+    let prepareCalls = 0;
     globalThis.chrome = {
       tabs: {
         async sendMessage(_tabId, message) {
           if (message.action === 'ax_prepare_field_for_trusted_type') {
-            return { success: true, fieldMeta: { type: 'text' }, isCombobox: false };
+            prepareCalls += 1;
+            return {
+              success: true,
+              fieldMeta: { type: contentEditable ? 'div' : 'text', contentEditable },
+              isCombobox: false,
+              contentEditable,
+              ...(contentEditable ? { rect: { x: 10, y: 20, w: 300, h: 80 } } : {}),
+            };
           }
           if (message.action === 'ax_verify_field_value') {
             return {
@@ -31686,7 +31714,64 @@ test('Chrome controlled-field fallback recovers exactly once and never submits a
     );
 
     commands.length = 0;
+    contentEditable = true;
+    prepareCalls = 0;
+    const recoveredEditor = await agent._maybeFallbackFieldWithCdp(
+      42,
+      'set_field',
+      { ref_id: 'ref_editor', text: 'exact post', submit: false },
+      {
+        success: false,
+        verified: false,
+        dispatched: false,
+        noDispatch: true,
+        trustedTypeRequired: true,
+        error: 'contenteditable requires trusted typing',
+        _expectedValue: 'exact post',
+      },
+    );
+    assert.equal(recoveredEditor.success, true);
+    assert.equal(recoveredEditor.trusted, true);
+    assert.equal(recoveredEditor.dispatched, true);
+    assert.equal(recoveredEditor.noDispatch, undefined);
+    assert.equal(recoveredEditor.trustedTypeRequired, undefined);
+    assert.equal(prepareCalls, 2, 'contenteditable trusted focus must be followed by ref-bound reselection');
+    assert.deepEqual(
+      commands.map(command => command.method),
+      [
+        'Input.dispatchMouseEvent',
+        'Input.dispatchMouseEvent',
+        'Input.dispatchMouseEvent',
+        'Input.insertText',
+      ],
+      'contenteditable recovery must use trusted focus followed by trusted text insertion',
+    );
+
+    commands.length = 0;
     verified = false;
+    const failedEditor = await agent._maybeFallbackFieldWithCdp(
+      42,
+      'set_field',
+      { ref_id: 'ref_editor', text: 'exact post', submit: false },
+      {
+        success: false,
+        verified: false,
+        dispatched: false,
+        noDispatch: true,
+        trustedTypeRequired: true,
+        error: 'contenteditable requires trusted typing',
+        _expectedValue: 'exact post',
+      },
+    );
+    assert.equal(failedEditor.success, false);
+    assert.equal(failedEditor.verified, false);
+    assert.equal(failedEditor.dispatched, true, 'a failed readback must preserve the trusted input dispatch');
+    assert.equal(failedEditor.noDispatch, false, 'trusted contenteditable input must not remain retry-safe');
+    assert.equal(failedEditor.recoveryRequired, 'fresh_tree');
+    assert.equal(commands.filter(command => command.method === 'Input.insertText').length, 1, 'only one trusted editor retry is allowed');
+
+    commands.length = 0;
+    contentEditable = false;
     const failed = await agent._maybeFallbackFieldWithCdp(
       42,
       'set_field',

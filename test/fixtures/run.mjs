@@ -1549,6 +1549,27 @@ for (const browserKind of ['chrome', 'firefox']) {
     }
   });
 
+  test(`click_ax (${browserKind}): disabled controls are visible and rejected before dispatch`, async (page) => {
+    await setupContentFixture(page, 'trusted-click-fallback.html', browserKind);
+    const tree = await call(page, 'get_accessibility_tree', { filter: 'all', maxDepth: 10, maxChars: 30000 });
+    const content = String(tree?.pageContent || '');
+    for (const label of ['Disabled native action', 'Disabled ARIA action']) {
+      const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const match = content.match(new RegExp(`button "${escaped}" \\[(ref_\\d+)\\][^\\n]*disabled=true`));
+      if (!match) throw new Error(`expected disabled state for ${label} in AX tree: ${content}`);
+      const result = await call(page, 'click_ax', { ref_id: match[1] });
+      if (
+        result?.success !== false
+        || result.disabled !== true
+        || result.dispatched !== false
+        || result.noDispatch !== true
+        || result.fallbackAttempted !== false
+      ) {
+        throw new Error(`disabled ${label} should fail before dispatch: ${JSON.stringify(result)}`);
+      }
+    }
+  });
+
   test(`input tools (${browserKind}): invalid targets and keys are explicit pre-dispatch failures`, async (page) => {
     await setupContentFixture(page, 'trusted-click-fallback.html', browserKind);
     const calls = [
@@ -1869,6 +1890,86 @@ for (const browserKind of ['chrome', 'firefox']) {
     }
   });
 }
+
+test('set_field (chrome): trusted contenteditable input updates framework state and enables submit', async (page) => {
+  await setup(page, 'trusted-click-fallback.html');
+  const tree = await call(page, 'get_accessibility_tree', { filter: 'all', maxDepth: 10, maxChars: 30000 });
+  const content = String(tree?.pageContent || '');
+  const editorMatch = content.match(/textbox "Framework post text" \[(ref_\d+)\]/);
+  if (!editorMatch || !/button "Framework Post" \[(ref_\d+)\][^\n]*disabled=true/.test(content)) {
+    throw new Error(`expected empty framework editor and disabled submit: ${content}`);
+  }
+
+  const preflight = await call(page, 'set_field', {
+    ref_id: editorMatch[1],
+    text: 'Trusted framework post',
+    clear: true,
+  });
+  if (
+    preflight?.success !== false
+    || preflight.trustedTypeRequired !== true
+    || preflight.dispatched !== false
+    || preflight.noDispatch !== true
+  ) {
+    throw new Error(`contenteditable set_field should route to trusted typing before DOM mutation: ${JSON.stringify(preflight)}`);
+  }
+
+  const before = await page.evaluate(() => ({
+    text: document.getElementById('framework-editor').innerText,
+    disabled: document.getElementById('framework-post').getAttribute('aria-disabled'),
+    events: window.__frameworkInputEvents,
+  }));
+  if (before.text || before.disabled !== 'true' || before.events.length !== 0) {
+    throw new Error(`contenteditable preflight mutated framework state: ${JSON.stringify(before)}`);
+  }
+
+  const originalChrome = globalThis.chrome;
+  const originals = {
+    attach: cdpClient.attach,
+    sendCommand: cdpClient.sendCommand,
+  };
+  const session = await page.context().newCDPSession(page);
+  globalThis.chrome = {
+    tabs: {
+      async sendMessage(_tabId, message) {
+        return call(page, message.action, message.params || {});
+      },
+    },
+  };
+  try {
+    cdpClient.attach = async () => ({ tabId: 42, attached: true });
+    cdpClient.sendCommand = async (_tabId, method, params) => session.send(method, params);
+    const agent = new Agent({});
+    const result = await agent._maybeFallbackFieldWithCdp(
+      42,
+      'set_field',
+      { ref_id: editorMatch[1], text: 'Trusted framework post', clear: true },
+      preflight,
+    );
+    const after = await page.evaluate(() => ({
+      text: document.getElementById('framework-editor').innerText,
+      disabled: document.getElementById('framework-post').getAttribute('aria-disabled'),
+      events: window.__frameworkInputEvents,
+    }));
+    if (
+      result?.success !== true
+      || result.trusted !== true
+      || result.verified !== true
+      || result.dispatched !== true
+      || after.text !== 'Trusted framework post'
+      || after.disabled !== 'false'
+      || after.events.length !== 1
+      || after.events[0].trusted !== true
+    ) {
+      throw new Error(`trusted contenteditable path did not update framework state: ${JSON.stringify({ result, after })}`);
+    }
+  } finally {
+    cdpClient.attach = originals.attach;
+    cdpClient.sendCommand = originals.sendCommand;
+    if (originalChrome === undefined) delete globalThis.chrome;
+    else globalThis.chrome = originalChrome;
+  }
+});
 
 test('click_ax: Agent.executeTool keeps synthetic-first behavior and uses trusted CDP only for an ignored generic row', async (page) => {
   await setup(page, 'trusted-click-fallback.html');

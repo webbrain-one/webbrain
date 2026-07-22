@@ -564,6 +564,18 @@
     const ph = el.getAttribute('placeholder');
     if (ph) line += ' placeholder="' + ph + '"';
 
+    // Disabled submit/action state is a blocker the model must see before it
+    // tries to activate a control. In particular, React editors can contain
+    // visually correct DOM text while their application state still leaves
+    // the associated Post/Send button aria-disabled.
+    let disabled = false;
+    try {
+      disabled = !!el.disabled
+        || el.getAttribute('aria-disabled') === 'true'
+        || el.matches(':disabled');
+    } catch {}
+    if (disabled) line += ' disabled=true';
+
     // Checkbox/radio state is an action-critical value, not decorative
     // metadata. Without it the model has to infer state from a focus ring or
     // screenshot and can accidentally toggle a control back off.
