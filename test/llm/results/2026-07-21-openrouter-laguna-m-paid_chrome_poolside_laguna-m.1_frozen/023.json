@@ -1,0 +1,45 @@
+{
+  "id": "023",
+  "user": "show me vegan lasagna recipes",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 2987,
+  "error": null,
+  "firstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "https://www.google.com/search?q=vegan+lasagna+recipes"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "\nI'll search for vegan lasagna recipes for you. Let me look that up.\n\n",
+  "usage": {
+    "prompt_tokens": 17039,
+    "completion_tokens": 130,
+    "total_tokens": 17169,
+    "cost": 0.0017572,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 17026,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.0017572,
+      "upstream_inference_prompt_cost": 0.0017052,
+      "upstream_inference_completions_cost": 0.000052
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 72,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

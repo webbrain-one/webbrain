@@ -1,0 +1,22 @@
+{
+  "id": "086",
+  "user": "what does CORS stand for",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 83284,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "CORS stands for **Cross-Origin Resource Sharing**.\n\nIt's a browser security mechanism that allows a web page from one origin (domain) to access resources from a different origin. It works by using additional HTTP headers — most notably `Access-Control-Allow-Origin` — to let servers declare which origins are permitted to make requests to them.\n\nA quick breakdown:\n- **Cross-Origin** — a request is \"cross-origin\" when the origin of the page making the request differs from the origin of the resource being requested (different protocol, domain, or port).\n- **Resource Sharing** — the server explicitly permits the browser to share its resources with that other origin.\n\nWithout CORS, browsers block cross-origin requests by default via the **Same-Origin Policy**. CORS provides a controlled way to relax that restriction when the server opts in.\n\nLet me know if you'd like a deeper dive into how preflight requests (`OPTIONS`) work or how to configure CORS headers!",
+  "usage": {
+    "prompt_tokens": 20558,
+    "completion_tokens": 192,
+    "total_tokens": 20750
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

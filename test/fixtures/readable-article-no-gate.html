@@ -1,0 +1,23 @@
+<!doctype html>
+<html>
+<head>
+  <meta property="og:type" content="article">
+  <title>Readable article fixture</title>
+  <style>
+    body { margin: 0; font: 18px/1.5 sans-serif; }
+    header { min-height: 48px; }
+    article { max-width: 700px; margin: 32px auto; }
+    .hidden-paywall { display: none; }
+  </style>
+</head>
+<body>
+  <header class="subscription-nav"><a href="/subscribe">Subscribe</a> <a href="/login">Log in</a></header>
+  <article itemprop="articleBody">
+    <h1>Readable fixture headline</h1>
+    <p>READABLE_ARTICLE_BODY remains available because there is no rendered access gate. This paragraph is deliberately long enough to participate in the normal article extractor. It describes an ordinary readable article and repeats useful prose so that the semantic article container comfortably exceeds the minimum extraction threshold without relying on navigation, footer, advertising, or subscription controls.</p>
+    <aside class="subscription-offer"><p>Subscribe for unlimited access to award-winning journalism.</p></aside>
+    <p>READABLE_ARTICLE_AFTER_UPSELL confirms that an ordinary inline subscription promotion does not truncate a signed-in article.</p>
+  </article>
+  <div class="hidden-paywall">Subscribe to continue reading this article.</div>
+</body>
+</html>

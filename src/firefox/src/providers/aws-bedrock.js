@@ -223,11 +223,15 @@ export class AwsBedrockProvider extends BaseLLMProvider {
     if (!usage) return null;
     const input = usage.inputTokens ?? usage.prompt_tokens ?? 0;
     const output = usage.outputTokens ?? usage.completion_tokens ?? 0;
-    return {
+    const normalized = {
       prompt_tokens: input,
       completion_tokens: output,
       total_tokens: usage.totalTokens ?? (input + output),
     };
+    if (usage.cacheReadInputTokens != null) normalized.cacheReadInputTokens = usage.cacheReadInputTokens;
+    if (usage.cacheWriteInputTokens != null) normalized.cacheWriteInputTokens = usage.cacheWriteInputTokens;
+    if (Array.isArray(usage.cacheDetails)) normalized.cacheDetails = usage.cacheDetails.map(detail => ({ ...detail }));
+    return normalized;
   }
 
   _fromBedrockResponse(data) {
@@ -315,4 +319,3 @@ async function getSignatureKey(secretAccessKey, dateStamp, regionName, serviceNa
   const kSigning = await hmacRaw(kService, 'aws4_request');
   return kSigning;
 }
-

@@ -1,0 +1,27 @@
+{
+  "id": "092",
+  "user": "mute this tab",
+  "mode": "act",
+  "tab": {
+    "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    "title": "Rick Astley — YouTube"
+  },
+  "latencyMs": 47135,
+  "error": null,
+  "firstToolCall": {
+    "name": "press_keys",
+    "args": {
+      "key": "m"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll mute the YouTube video player using the keyboard shortcut.",
+  "usage": {
+    "prompt_tokens": 20902,
+    "completion_tokens": 23,
+    "total_tokens": 20925
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

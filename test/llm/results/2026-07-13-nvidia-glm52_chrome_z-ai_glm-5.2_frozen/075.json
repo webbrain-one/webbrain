@@ -1,0 +1,22 @@
+{
+  "id": "075",
+  "user": "finish what we were doing",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 13078,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I don't have any prior context from our conversation — this appears to be a fresh session starting on a new tab page. I don't have a record of what we were working on before.\n\nCould you remind me what task you'd like me to pick up? For example:\n- Were we working on a specific website or document?\n- Was there a form to fill out, a file to download, or research to complete?\n- Is there a particular URL I should navigate to?\n\nAny details you can share will help me jump back in.",
+  "usage": {
+    "prompt_tokens": 16568,
+    "completion_tokens": 110,
+    "total_tokens": 16678
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

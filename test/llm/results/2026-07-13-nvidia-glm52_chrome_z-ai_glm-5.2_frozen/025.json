@@ -1,0 +1,26 @@
+{
+  "id": "025",
+  "user": "search youtube for \"never gonna give you up\"",
+  "mode": "act",
+  "tab": {
+    "url": "https://www.youtube.com/",
+    "title": "YouTube"
+  },
+  "latencyMs": 25131,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "maxDepth": 6,
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll search YouTube for \"never gonna give you up\". Let me use the search box on the current page.",
+  "usage": {
+    "prompt_tokens": 16903,
+    "completion_tokens": 43,
+    "total_tokens": 16946
+  }
+}

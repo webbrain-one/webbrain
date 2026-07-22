@@ -1,0 +1,27 @@
+{
+  "id": "035",
+  "user": "fill the email field with bob@example.com",
+  "mode": "act",
+  "tab": {
+    "url": "https://github.com/login",
+    "title": "Sign in to GitHub"
+  },
+  "latencyMs": 21758,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll fill in the email field for you. Let me first read the current page to find the email input field.",
+  "usage": {
+    "prompt_tokens": 7242,
+    "completion_tokens": 37,
+    "total_tokens": 7279
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

@@ -1,0 +1,29 @@
+{
+  "id": "013",
+  "user": "open the about config page",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 26676,
+  "error": null,
+  "firstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "about:config"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll open the about:config page for you.",
+  "usage": {
+    "prompt_tokens": 16568,
+    "completion_tokens": 23,
+    "total_tokens": 16591,
+    "prompt_tokens_details": {
+      "audio_tokens": null,
+      "cached_tokens": 16512
+    }
+  }
+}

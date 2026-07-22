@@ -1,0 +1,31 @@
+{
+  "id": "005",
+  "user": "show me my downloads",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 18353,
+  "error": null,
+  "firstToolCall": {
+    "name": "list_downloads",
+    "args": {
+      "limit": 10
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll check your recent downloads.",
+  "usage": {
+    "prompt_tokens": 20557,
+    "completion_tokens": 19,
+    "total_tokens": 20576,
+    "prompt_tokens_details": {
+      "audio_tokens": null,
+      "cached_tokens": 20544
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

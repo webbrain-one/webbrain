@@ -80,13 +80,24 @@ export class AnthropicProvider extends BaseLLMProvider {
           content.push({ type: 'text', text: msg.content });
         }
         for (const tc of msg.tool_calls) {
+          // Guard the parse: a tool call whose streamed arguments were
+          // truncated (max_tokens mid-call) or emitted malformed by a weak
+          // model is persisted into history verbatim by the agent loop. A
+          // bare JSON.parse here would throw before every subsequent
+          // request, permanently poisoning the conversation. Fall back to
+          // an empty input object — the tool result following this turn
+          // already carries the invalid-arguments error for the model.
+          let input = {};
+          try {
+            input = typeof tc.function.arguments === 'string'
+              ? JSON.parse(tc.function.arguments)
+              : (tc.function.arguments ?? {});
+          } catch { input = {}; }
           content.push({
             type: 'tool_use',
             id: tc.id,
             name: tc.function.name,
-            input: typeof tc.function.arguments === 'string'
-              ? JSON.parse(tc.function.arguments)
-              : tc.function.arguments,
+            input,
           });
         }
         converted.push({ role: 'assistant', content });
@@ -149,6 +160,29 @@ export class AnthropicProvider extends BaseLLMProvider {
     return { system, messages: converted };
   }
 
+  _normalizeUsage(usage) {
+    if (!usage || typeof usage !== 'object') return null;
+    const count = (value) => {
+      const number = Number(value ?? 0);
+      return Number.isFinite(number) && number > 0 ? number : 0;
+    };
+    const input = count(usage.input_tokens ?? usage.prompt_tokens);
+    const output = count(usage.output_tokens ?? usage.completion_tokens);
+    const cacheRead = count(usage.cache_read_input_tokens);
+    const cacheWrite = count(usage.cache_creation_input_tokens);
+    const normalized = {
+      prompt_tokens: input,
+      completion_tokens: output,
+      total_tokens: count(usage.total_tokens) || input + cacheRead + cacheWrite + output,
+    };
+    if (Object.hasOwn(usage, 'cache_read_input_tokens')) normalized.cache_read_input_tokens = cacheRead;
+    if (Object.hasOwn(usage, 'cache_creation_input_tokens')) normalized.cache_creation_input_tokens = cacheWrite;
+    if (usage.cache_creation && typeof usage.cache_creation === 'object') {
+      normalized.cache_creation = { ...usage.cache_creation };
+    }
+    return normalized;
+  }
+
   async chat(messages, options = {}) {
     const { system, messages: anthropicMessages } = this._convertMessages(messages);
 
@@ -204,11 +238,7 @@ export class AnthropicProvider extends BaseLLMProvider {
     return {
       content,
       toolCalls,
-      usage: data.usage ? {
-        prompt_tokens: data.usage.input_tokens,
-        completion_tokens: data.usage.output_tokens,
-        total_tokens: (data.usage.input_tokens || 0) + (data.usage.output_tokens || 0),
-      } : null,
+      usage: this._normalizeUsage(data.usage),
       raw: data,
     };
   }
@@ -244,23 +274,36 @@ export class AnthropicProvider extends BaseLLMProvider {
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
-    let usageInputTokens = 0;
-    let usageOutputTokens = 0;
+    let sawUsage = false;
+    const accumulatedUsage = {};
     const updateUsage = (usage) => {
       if (!usage || typeof usage !== 'object') return;
-      const input = Number(usage.input_tokens ?? usage.prompt_tokens ?? 0);
-      const output = Number(usage.output_tokens ?? usage.completion_tokens ?? 0);
-      if (Number.isFinite(input) && input > usageInputTokens) usageInputTokens = input;
-      if (Number.isFinite(output) && output > usageOutputTokens) usageOutputTokens = output;
+      sawUsage = true;
+      for (const key of [
+        'input_tokens',
+        'output_tokens',
+        'prompt_tokens',
+        'completion_tokens',
+        'cache_read_input_tokens',
+        'cache_creation_input_tokens',
+      ]) {
+        const value = Number(usage[key] ?? 0);
+        if (Number.isFinite(value) && value > Number(accumulatedUsage[key] ?? 0)) {
+          accumulatedUsage[key] = value;
+        }
+      }
+      if (usage.cache_creation && typeof usage.cache_creation === 'object') {
+        const current = accumulatedUsage.cache_creation || {};
+        accumulatedUsage.cache_creation = { ...current };
+        for (const key of ['ephemeral_5m_input_tokens', 'ephemeral_1h_input_tokens']) {
+          const value = Number(usage.cache_creation[key] ?? 0);
+          if (Number.isFinite(value) && value > Number(current[key] ?? 0)) {
+            accumulatedUsage.cache_creation[key] = value;
+          }
+        }
+      }
     };
-    const usageChunk = () => {
-      if (!usageInputTokens && !usageOutputTokens) return null;
-      return {
-        prompt_tokens: usageInputTokens,
-        completion_tokens: usageOutputTokens,
-        total_tokens: usageInputTokens + usageOutputTokens,
-      };
-    };
+    const usageChunk = () => sawUsage ? this._normalizeUsage(accumulatedUsage) : null;
 
     while (true) {
       const { done, value } = await reader.read();

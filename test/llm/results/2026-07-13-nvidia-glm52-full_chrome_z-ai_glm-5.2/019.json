@@ -1,0 +1,34 @@
+{
+  "id": "019",
+  "user": "search reddit for mechanical keyboards",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 16131,
+  "error": null,
+  "firstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "https://www.reddit.com/search/?q=mechanical%20keyboards"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll search Reddit for mechanical keyboards for you.",
+  "usage": {
+    "prompt_tokens": 20558,
+    "completion_tokens": 35,
+    "total_tokens": 20593
+  },
+  "attempts": 2,
+  "retryErrors": [
+    {
+      "attempt": 1,
+      "error": "HTTP 429: {\"status\":429,\"title\":\"Too Many Requests\"}",
+      "latencyMs": 283,
+      "waitMs": 600000
+    }
+  ]
+}

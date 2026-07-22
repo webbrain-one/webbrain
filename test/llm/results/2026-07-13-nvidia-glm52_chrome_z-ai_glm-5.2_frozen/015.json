@@ -1,0 +1,23 @@
+{
+  "id": "015",
+  "user": "whats my new tab page",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 17896,
+  "error": null,
+  "firstToolCall": {
+    "name": "screenshot",
+    "args": {}
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 16569,
+    "completion_tokens": 5,
+    "total_tokens": 16574
+  }
+}

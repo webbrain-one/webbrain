@@ -95,7 +95,9 @@ role "accessible name" [ref_id] href="..." type="..." placeholder="..." value=".
 
 返回 `{success, method, tag, rect, name, href?, navigates?, hint?}`。
 
-在 Chrome 上，通过 CDP `Input.dispatchMouseEvent` 触发点击 → 受信任事件。在 Firefox 上，使用合成事件 `el.click()`。
+两个版本都会优先保留兼容的合成 `el.click()` 路径。仅在 Chrome 上，当页面和目标经过两个观察区间仍保持稳定时，安全的通用目标才可获得一次受保护的 CDP `Input.dispatchMouseEvent` 回退。URL 变化、由处理器引起的焦点变化、同步的目标局部变化，或 `aria-current` 等延迟语义状态变化可证明已有进展。整页变化以及延迟发生的目标名称、类名、样式或子节点变化只作为诊断提示，因为聊天预览、未读徽标和时间戳可能与本次点击无关。临近的变更型 XHR 或非遥测 beacon、新标签页或下载会使结果变为不确定并阻止重试；后台读取以及明显的遥测或心跳流量会被忽略。被 CSS 隐藏、禁用指针事件、原生、带状态/切换语义、位于表单中、用于下载或可能产生变更的目标绝不会自动重试。Firefox 仍只使用合成点击。
+
+有限的观察窗口无法证明完全不产生 URL、焦点、语义目标、网络、标签页、下载或其他可见信号的应用内部状态。通用目标限制、延迟稳定检查和一次性规则会尽量降低风险，但无法彻底排除一个已静默成功的合成处理器又收到一次可信激活。
 
 ### `type_ax({ref_id, text, clear})`
 
@@ -160,7 +162,7 @@ await cdpClient.evaluate(tabId, `
 
 ### Firefox
 
-只有**开放**的 shadow root（`element.shadowRoot`）可访问。封闭的 root 无法通过内容脚本读取。`execute_js` 工具是 Firefox 专用的，作为开发者附加组件暴露；它有助于手动遍历，但树构建器无法访问封闭的 root。
+只有**开放**的 shadow root（`element.shadowRoot`）可访问。封闭的 root 无法通过内容脚本读取。`execute_js` 在两个版本的开发者模式中都可用，但普通页面 JavaScript 仍无法取得封闭 root，树构建器也无法访问它。
 
 ---
 
@@ -178,7 +180,7 @@ await cdpClient.evaluate(tabId, `
 |---|---|---|
 | 元素从 DOM 中移除 | `click_ax` 返回"未找到" | 重新读取树；页面可能已重新渲染 |
 | SPA 导航后引用过期 | 所有引用失效 | 代理应在 `/navigate` 或 `wait_for_stable` 后重新读取树 |
-| Shadow DOM 封闭 root | 树显示 `<my-component>` 但不显示子元素 | 使用 `get_shadow_dom` + `shadow_dom_query`（Chrome）或开发者模式的 `execute_js`（Firefox） |
+| Shadow DOM 封闭 root | 树显示 `<my-component>` 但不显示子元素 | 在 Chrome 中使用 `get_shadow_dom` + `shadow_dom_query`；Firefox 无法穿透封闭 root |
 | iframe 不在树中 | 代理找不到 iframe 内容 | 调用 `get_frames`，然后使用 `iframe_read` / `iframe_click` |
 | 树被截断 | `truncated: true` + `hasMore: true` | 使用 `page: nextPage` 或 `ref_id` 调用 `get_accessibility_tree` 以放大查看 |
 | Portal 叠加层不可见 | 树显示组合框但不显示下拉菜单 | 叠加层已被提升到 `[open overlays]` 部分——使用 `filter: 'all'` 重新读取 |

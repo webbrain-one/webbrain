@@ -1,3 +1,6 @@
+import { isDirectPublicMediaUrl } from '../agent/public-media-url.js';
+import { t } from './i18n.js';
+
 const SOCIAL_HOST_RE = /(^|\.)(instagram\.com|tiktok\.com|x\.com|twitter\.com|facebook\.com|fb\.com|threads\.net|youtube\.com|youtu\.be|reddit\.com|pinterest\.com|snapchat\.com)$/i;
 const PUBLIC_MEDIA_HOST_RE = /(^|\.)(youtube\.com|youtu\.be|tiktok\.com|instagram\.com|x\.com|twitter\.com|reddit\.com|redd\.it|facebook\.com|fb\.com|fb\.watch|pinterest\.com|pin\.it|linkedin\.com|threads\.net)$/i;
 const DATING_HOST_RE = /(^|\.)(tinder\.com|bumble\.com|hinge\.co|okcupid\.com|match\.com|pof\.com|badoo\.com|happn\.com|coffeemeetsbagel\.com)$/i;
@@ -13,6 +16,7 @@ const X_PROFILE_RESERVED_PATH_RE = /^\/(home|explore|notifications|messages?|i|s
 const WP_ADMIN_RE = /\/wp-admin(?:\/|$)/i;
 const WP_TEMPLATE_ROUTE_RE = /\/wp-admin\/(?:site-editor\.php|themes\.php|customize\.php|widgets\.php|theme-editor\.php)(?:[/?#]|$)|post_type=wp_template|page=gutenberg-edit-site/i;
 const WP_TEMPLATE_TITLE_RE = /\b(template|templates|template part|site editor|theme editor|customize|patterns)\b/i;
+const REMOTE_MEDIA_LOGIN_NOTE = 'FreeSkillz runs on a separate server: signing into this browser or rerunning while logged in cannot affect download_public_media because browser cookies are not sent to FreeSkillz. Never suggest browser sign-in as a fix.';
 
 function hostFromUrl(url) {
   try {
@@ -80,23 +84,41 @@ function publicMediaKind(pageInfo = {}, path = '/') {
   return 'auto';
 }
 
-function publicMediaDownloadPrompt(kind = 'auto') {
+function publicMediaDownloadPrompt(kind = 'auto', needsExplicitUrl = false) {
   const args = kind === 'auto' ? '{ "kind": "auto" }' : `{ "kind": "${kind}" }`;
-  return `Download this public media from the current page. Call download_public_media first with ${args} and omit url so it uses the active tab. Do not make a separate plan or inspect the DOM first. Only call download_social_media if download_public_media fails, then report the saved downloadId/result.`;
+  if (needsExplicitUrl) {
+    return `Download the single public media item currently visible in this feed. First use the attached screenshot to identify the intended post/video, then inspect visible links with get_accessibility_tree and obtain that item's exact public post/reel URL. Call download_public_media with ${args} and that explicit url. Never send the feed/profile URL to download_public_media. FreeSkillz must return one final file; do not report separate video/audio tracks or tell the user to merge them with ffmpeg. ${REMOTE_MEDIA_LOGIN_NOTE} Do not make a separate plan.`;
+  }
+  return `Download this public media from the current page. Call download_public_media first with ${args} and omit url so it uses the active media page. Do not make a separate plan. FreeSkillz must return one final file; do not report separate video/audio tracks or tell the user to merge them with ffmpeg. ${REMOTE_MEDIA_LOGIN_NOTE} Only call download_social_media if download_public_media fails, then report the saved downloadId/result.`;
 }
 
-function publicMediaDownloadRunOptions(kind = 'auto') {
+function publicMediaDownloadRunOptions(kind = 'auto', needsExplicitUrl = false) {
   const args = kind === 'auto' ? 'kind:"auto"' : `kind:"${kind}"`;
-  return {
+  const options = {
     id: 'download-media',
     skipPlanner: true,
     tool: 'download_public_media',
     summary: 'Download the public media from the current page.',
-    steps: [
-      `Call download_public_media with ${args} and no url so it uses the active tab.`,
-      'Report the saved downloadId/result. Use download_social_media only if download_public_media fails.',
-    ],
+    steps: needsExplicitUrl
+      ? [
+        'Inspect the preflight screenshot to identify the single visible media item.',
+        'Read the visible accessibility tree and obtain the exact post/reel permalink for that item.',
+        `Call download_public_media with ${args} and the explicit permalink; never pass the feed URL.`,
+        'Report the one completed file and downloadId; never hand separate tracks or ffmpeg work to the user.',
+        'If FreeSkillz fails, never suggest signing into this browser; its remote request cannot use browser login state or cookies.',
+      ]
+      : [
+        `Call download_public_media with ${args} and no url so it uses the active media page.`,
+        'Report the one completed file and downloadId. Use download_social_media only if download_public_media fails.',
+        'If FreeSkillz fails, never suggest signing into this browser; its remote request cannot use browser login state or cookies.',
+      ],
   };
+  if (needsExplicitUrl) {
+    options.autoExecute = true;
+    options.firstTool = 'screenshot';
+    options.args = { save: false };
+  }
+  return options;
 }
 
 function firstToolRunOptions(id, tool, args = {}, summary = '', steps = []) {
@@ -112,6 +134,39 @@ function firstToolRunOptions(id, tool, args = {}, summary = '', steps = []) {
 
 function visibleTreeArgs(maxDepth = 10) {
   return { filter: 'visible', maxDepth };
+}
+
+function webbrainTweetRunOptions(postText) {
+  const exactPost = String(postText || '').trim();
+  return {
+    id: 'tweet-webbrain',
+    skipPlanner: true,
+    tool: 'navigate',
+    summary: 'Publish the reviewed localized WebBrain post exactly as supplied.',
+    steps: [
+      'Open https://x.com/compose/post in the current tab through the visible browser UI.',
+      `Enter this exact reviewed text in the visible X composer without translating, rewriting, or adding anything: ${JSON.stringify(exactPost)}`,
+      'Publish only after the composer text exactly matches the supplied text.',
+      'Verify the new tweet appears, then report its URL when available.',
+    ],
+  };
+}
+
+function webbrainLinkedInRunOptions(postText) {
+  const exactPost = String(postText || '').trim();
+  return {
+    id: 'post-webbrain-linkedin',
+    skipPlanner: true,
+    tool: 'navigate',
+    summary: 'Publish the reviewed localized WebBrain post on LinkedIn exactly as supplied.',
+    steps: [
+      'Open https://www.linkedin.com/feed/ in the current tab through the visible browser UI.',
+      'Select Start a post to open LinkedIn\'s visible composer.',
+      `Enter this exact reviewed text without translating, rewriting, or adding anything: ${JSON.stringify(exactPost)}`,
+      'Publish only after the composer text exactly matches the supplied text.',
+      'Verify the new LinkedIn post appears, then report its URL when available.',
+    ],
+  };
 }
 
 function hasCartOrPriceSignal(pageInfo = {}) {
@@ -203,6 +258,24 @@ export function buildRecommendedActions(pageInfo = {}, options = {}) {
   const host = hostFromUrl(pageInfo.url || '');
   const path = pathFromUrl(pageInfo.url || '');
   const actions = [];
+  const webbrainPostText = t('sp.recommended.tweet.text');
+  const webbrainPromotionVariant = options.webbrainPromotionVariant === 'linkedin' ? 'linkedin' : 'x';
+
+  addUnique(actions, webbrainPromotionVariant === 'linkedin'
+    ? {
+      id: 'post-webbrain-linkedin',
+      label: t('sp.recommended.linkedin.label'),
+      prompt: t('sp.recommended.linkedin.prompt', { post: webbrainPostText }),
+      mode: 'act',
+      runOptions: webbrainLinkedInRunOptions(webbrainPostText),
+    }
+    : {
+      id: 'tweet-webbrain',
+      label: t('sp.recommended.tweet.label'),
+      prompt: t('sp.recommended.tweet.prompt', { post: webbrainPostText }),
+      mode: 'act',
+      runOptions: webbrainTweetRunOptions(webbrainPostText),
+    });
 
   if (host === 'github.com' && RELEASES_PATH_RE.test(path)) {
     addUnique(actions, {
@@ -313,12 +386,13 @@ export function buildRecommendedActions(pageInfo = {}, options = {}) {
   const publicMediaHost = PUBLIC_MEDIA_HOST_RE.test(host);
   if ((publicMediaHost || SOCIAL_HOST_RE.test(host) || /\b(post|status|reel|shorts|watch|pin)\b/i.test(path)) && hasMedia(pageInfo)) {
     const kind = publicMediaKind(pageInfo, path);
+    const needsExplicitUrl = publicMediaHost && !isDirectPublicMediaUrl(pageInfo.url || '');
     addUnique(actions, {
       id: 'download-media',
       label: 'Download this video/photo',
-      prompt: publicMediaHost ? publicMediaDownloadPrompt(kind) : 'Download the video or photo from this post.',
+      prompt: publicMediaHost ? publicMediaDownloadPrompt(kind, needsExplicitUrl) : 'Download the video or photo from this post.',
       mode: 'act',
-      ...(publicMediaHost ? { runOptions: publicMediaDownloadRunOptions(kind) } : {}),
+      ...(publicMediaHost ? { runOptions: publicMediaDownloadRunOptions(kind, needsExplicitUrl) } : {}),
     });
   }
 
@@ -361,7 +435,7 @@ export function buildRecommendedActions(pageInfo = {}, options = {}) {
     });
   }
 
-  if (!actions.length && pageInfo.title) {
+  if (!actions.some((action) => !['tweet-webbrain', 'post-webbrain-linkedin'].includes(action.id)) && pageInfo.title) {
     const explainUsesArticleRead = isLongArticle(pageInfo);
     addUnique(actions, {
       id: 'explain-page',

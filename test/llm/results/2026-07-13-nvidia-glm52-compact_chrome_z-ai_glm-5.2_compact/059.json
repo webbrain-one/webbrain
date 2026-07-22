@@ -1,0 +1,27 @@
+{
+  "id": "059",
+  "user": "list my downloads",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 15958,
+  "error": null,
+  "firstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "chrome://downloads/"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll list your downloads by navigating to the Chrome downloads page.",
+  "usage": {
+    "prompt_tokens": 6696,
+    "completion_tokens": 26,
+    "total_tokens": 6722
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

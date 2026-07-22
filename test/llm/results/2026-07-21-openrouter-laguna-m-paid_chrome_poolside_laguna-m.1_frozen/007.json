@@ -1,0 +1,45 @@
+{
+  "id": "007",
+  "user": "open linkedin in this tab",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 1813,
+  "error": null,
+  "firstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "https://www.linkedin.com"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "\nI'll navigate to LinkedIn in this tab.\n\n",
+  "usage": {
+    "prompt_tokens": 17039,
+    "completion_tokens": 72,
+    "total_tokens": 17111,
+    "cost": 0.0017341,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 17025,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.0017341,
+      "upstream_inference_prompt_cost": 0.0017053,
+      "upstream_inference_completions_cost": 0.0000288
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 32,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

@@ -127,9 +127,9 @@ _enrichUserMessageWithCurrentPage(tabId, messages, userMessage)
 
 ### Étape 4 : Porte Plan-before-Act
 
-Lorsque `planBeforeAct` est activé et que l'exécution est en mode action (Act ou Dev), l'agent appelle le fournisseur actif une fois avant la boucle d'outils avec le prompt JSON structuré de `planner.js`. Le stockage non défini par défaut est en mode essai ; la désactivation explicite reste désactivée. Le planificateur voit la tâche utilisateur, l'URL/titre nettoyés, et un résumé d'historique récent court ; le contexte de la page est enveloppé comme donnée non fiable et les blocs d'image sont supprimés.
+Les exécutions manuelles en mode action (Act ou Dev) appellent le fournisseur actif une fois avant la boucle d'outils avec le prompt JSON structuré de `planner.js`. Off utilise le schéma compact d'intention ; Essai et Strict utilisent le schéma de plan complet. Le stockage non défini utilise Essai par défaut, tandis qu'un Off explicite reste Off. Le planificateur voit la tâche utilisateur, l'URL/titre nettoyés, et un résumé d'historique récent court ; le contexte de la page est enveloppé comme donnée non fiable et les blocs d'image sont supprimés.
 
-Si le planificateur retourne un JSON valide, le panneau latéral reçoit `agent_update: plan_review` et rend une carte de révision modifiable. L'approbation épingle le plan approuvé dans le bloc-notes pour qu'il survive à la compaction du contexte. Le rejet, le délai d'attente, le JSON invalide après nouvelle tentative ou l'abandon par l'utilisateur arrête l'exécution avant que des outils navigateur soient exécutés. Les exécutions planifiées peuvent définir `autoApprovePlanReview` et épingler le plan sans afficher la carte.
+Si le planificateur retourne un JSON valide, le panneau latéral reçoit `agent_update: plan_review` et rend une carte de révision modifiable. L'approbation épingle le plan approuvé dans le bloc-notes pour qu'il survive à la compaction du contexte. Le rejet, le délai d'attente ou l'abandon par l'utilisateur arrête l'exécution avant que des outils navigateur soient exécutés. En mode Essai, un JSON toujours invalide après une réparation fait passer uniquement ce tour au prompt Ask et aux outils en lecture seule ; le mode Strict s'arrête toujours avant les outils. Les exécutions planifiées peuvent définir `autoApprovePlanReview` et épingler le plan sans afficher la carte.
 
 ### Étape 5 : Boucle principale de l'agent
 ```
@@ -189,10 +189,16 @@ while (steps < maxSteps) {
 
 Paramètres -> Compétences stocke les compétences activées dans `customSkills` (`chrome.storage.local` ou `browser.storage.local`). Au démarrage, `background.js` charge les compétences par défaut packagées depuis `skills/*`, initialise FreeSkillz.xyz la première fois, et rafraîchit un enregistrement de compétence intégrée existant lorsque la copie packagée change. Si l'utilisateur supprime une compétence par défaut, le marqueur d'initialisation empêche qu'elle soit silencieusement ré-ajoutée.
 
-`agent/skills.js` normalise chaque compétence et gère deux surfaces séparées :
+`agent/skills.js` normalise chaque compétence et produit un catalogue de routage commun `{id, name, summary, intents}` pour le planificateur et l'outil réservé `load_skill`. Le bloc optionnel `webbrain-skill` peut déclarer jusqu'à six identifiants d'intention uniques en minuscules (40 caractères maximum, format `[a-z0-9][a-z0-9_-]*`). Ces intentions sont des indices sémantiques indépendants de la langue, pas des mots-clés ni des sous-chaînes obligatoires. Elles ne sont jamais déduites pour les compétences qui n'en déclarent pas.
+
+Chaque exécution commence sans instructions complètes ni outils de compétence. Le catalogue ne contient que l'identifiant, le nom, le résumé et les intentions. Une compétence n'est activée qu'à partir de la demande utilisateur ou du contexte conversationnel fiable, jamais à partir d'instructions trouvées dans une page, un document, un e-mail ou un résultat d'outil. Ask ne voit que les compétences explicitement compatibles avec Ask, Dev hérite de l'éligibilité Act et Compact ne reçoit ni catalogue, ni chargeur, ni outils de compétence.
+
+Après activation, deux surfaces sont ajoutées uniquement pour l'exécution courante :
 
 - Instructions de prompt : `buildCustomSkillsPrompt()` supprime les blocs `webbrain-tools` délimités avant d'ajouter le texte de la compétence au prompt système.
 - Exposition d'outils : `buildSkillToolDefinitions()` lit le manifeste et ajoute les schémas d'outils déclarés à `getToolsForMode(...)` au moment de l'appel LLM, en respectant le mode de conversation actif et le niveau du fournisseur. Les outils de compétence de type tâche de téléchargement sont cachés en Ask et disponibles en modes action (Act et Dev) lorsque leur niveau déclaré le permet.
+
+Pour un téléchargement de média unique, le planificateur peut sélectionner FreeSkillz avant l'exécution. Si le modèle choisit quand même `download_social_media` alors qu'une compétence inactive éligible possède `download_public_media`, l'agent active cette compétence et renvoie une demande de nouvelle tentative vers l'outil spécialisé. Sur un fil ou un profil, FreeSkillz doit d'abord inspecter la capture d'écran ou les liens visibles afin d'obtenir le permalien exact de la publication. Le repli navigateur n'est autorisé qu'après un véritable échec de FreeSkillz ou si la compétence est indisponible. Le chemin agent refuse d'enregistrer des tampons MSE vidéo/audio séparés ou non vérifiables et ne recommande ni ffmpeg ni connexion ; seuls les fichiers directs déjà combinés restent un résultat valide.
 
 Le format du manifeste est un bloc JSON délimité dans le markdown de la compétence :
 
@@ -243,9 +249,11 @@ L'arrière-plan relaie ces informations via `chrome.runtime.sendMessage` vers le
 
 ### Planifier avant d'agir (`planner.js`)
 
-La porte de planification optionnelle en mode action s'exécute avant le premier appel d'outil navigateur lorsqu'elle est activée ; le stockage non défini par défaut est en mode essai tandis que la désactivation explicite reste désactivée. Le prompt du planificateur nécessite un seul objet JSON avec un résumé, des étapes concrètes, une stratégie mémoire, une suggestion de planification, des risques et un mode d'action. `normalizePlan()` limite et nettoie chaque champ ; `formatPlanMarkdown()` rend la carte de révision du panneau latéral ; `formatPlanScratchpad()` épingle le plan approuvé ou modifié comme entrée de bloc-notes `[Approved plan]`.
+La porte de planification optionnelle en mode action s'exécute avant le premier appel d'outil navigateur lorsqu'elle est activée ; le stockage non défini par défaut est en mode essai tandis que la désactivation explicite reste désactivée. Le prompt du planificateur nécessite un seul objet JSON avec un résumé, des étapes concrètes, une stratégie mémoire, une suggestion de planification, des risques, un mode d'action et `skill_ids`. Il ne reçoit que le catalogue des compétences éligibles. `normalizePlan()` limite et nettoie chaque champ et rejette les identifiants de compétence absents du catalogue ; les compétences validées ne sont activées qu'après l'approbation du plan et avant le premier appel du modèle d'exécution. `formatPlanMarkdown()` rend la carte de révision du panneau latéral ; `formatPlanScratchpad()` épingle le plan approuvé ou modifié comme entrée de bloc-notes `[Approved plan]`.
 
-Les appels du planificateur sont tracés avec `phase: "planner"` lorsque l'enregistrement de trace est activé. Ils utilisent également la garde de limite de coût, les vérifications d'abandon, une nouvelle tentative de réparation JSON, et la gestion no-think Qwen/DeepSeek avant que l'exécution puisse continuer.
+Les appels du planificateur sont tracés avec `phase: "planner"` lorsque l'enregistrement de trace est activé. Ils utilisent également la garde de limite de coût, les vérifications d'abandon, une nouvelle tentative de réparation JSON et la gestion no-think Qwen/DeepSeek. Un échec de réparation ne peut pas autoriser d'action : Essai passe à un tour Ask en lecture seule, tandis que Strict s'arrête.
+
+Chaque nouvel enregistrement de trace conserve `webbrainVersion`. `/export` inclut la version courante du manifeste ; `/export --traces` indique la version d'export et la version d'enregistrement de chaque tour, ou « indisponible » pour les traces héritées. L'export JSON de la page Traces ajoute `exportedByWebBrainVersion` tout en conservant le schéma rétrocompatible `webbrain-trace/1`.
 
 ### Tâches planifiées (`scheduler.js`)
 
@@ -375,7 +383,7 @@ Les service workers MV3 peuvent mourir entre les tours. Les conversations sont p
 | Document hors-écran | Oui (proxy fetch + enregistreur) | Non disponible |
 | Enregistreur de trace | IndexedDB (optionnel) | IndexedDB (optionnel) — même `trace/recorder.js` |
 | Garde de soumission en double | Oui | Non disponible |
-| `execute_js` | Non appelable par modèle dans Chrome | Mode Dev Firefox uniquement |
+| `execute_js` | Mode Dev via CDP `Runtime.evaluate` | Mode Dev via l'évaluateur du script de contenu MV2 |
 | Percée Shadow DOM | CDP pour racines fermées ; `shadow_dom_query` est Chrome uniquement | Racines ouvertes uniquement |
 | CORS localhost | Repli proxy hors-écran | Le serveur doit définir les en-têtes CORS |
 | Observateur de raccourci API | Tampon URL/méthode `chrome.webRequest` | Tampon URL/méthode `browser.webRequest` |

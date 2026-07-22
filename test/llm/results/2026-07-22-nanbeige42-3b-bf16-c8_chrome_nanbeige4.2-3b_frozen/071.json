@@ -1,0 +1,23 @@
+{
+  "id": "071",
+  "user": "send it",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 5382,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "\n\nI need more context to understand what you'd like me to \"send.\" The current page is your **New Tab** (`about:home`), which appears to be a blank/default page with no visible content or items to send.\n\nCould you clarify:\n\n1. **What** would you like me to send? (An email? A message? A file? A post? Something from a specific website?)\n2. **To whom/where** should it be sent?\n3. **From where** is the content coming from?\n\nWithout this information, I don't want to guess and potentially send the wrong thing. Please provide details and I'll handle it through the appropriate UI.",
+  "usage": {
+    "prompt_tokens": 17975,
+    "total_tokens": 18209,
+    "completion_tokens": 234,
+    "prompt_tokens_details": null
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

@@ -1,0 +1,27 @@
+<!doctype html>
+<html>
+<head>
+  <meta property="og:type" content="article">
+  <title>The Athletic subscription overlay fixture</title>
+  <style>
+    body { margin: 0; font: 18px/1.5 sans-serif; }
+    article { max-width: 700px; margin: 32px auto; }
+    .subscription-overlay { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: rgba(255,255,255,.98); }
+    .subscription-card { width: 560px; padding: 36px; border: 1px solid #aaa; }
+  </style>
+</head>
+<body>
+  <article>
+    <h1>Fixture headline</h1>
+    <p>SECRET_ATHLETIC_ARTICLE_BODY is server-rendered beneath the subscription overlay and must stay excluded.</p>
+    <a href="https://example.com/SECRET_ATHLETIC_LINK_TARGET">SECRET_ATHLETIC_LINK_TEXT</a>
+    <form action="https://example.com/athletic-secret"><input value="SECRET_ATHLETIC_FORM_VALUE"></form>
+  </article>
+  <div class="subscription-overlay">
+    <div class="subscription-card">
+      <h2>Subscribe to The Athletic for unlimited access</h2>
+      <p>Subscribe to continue reading this article.</p>
+    </div>
+  </div>
+</body>
+</html>

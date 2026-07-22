@@ -1,0 +1,28 @@
+{
+  "id": "048",
+  "user": "open my inbox",
+  "mode": "act",
+  "tab": {
+    "url": "https://mail.google.com/mail/u/0/#inbox",
+    "title": "Inbox (3) — Gmail"
+  },
+  "latencyMs": 6330,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible",
+      "maxDepth": 6
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "You're already looking at your Gmail inbox. Let me read what's there.",
+  "usage": {
+    "prompt_tokens": 16717,
+    "completion_tokens": 36,
+    "total_tokens": 16753
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

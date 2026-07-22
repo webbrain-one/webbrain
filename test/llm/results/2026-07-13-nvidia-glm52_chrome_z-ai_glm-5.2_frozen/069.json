@@ -1,0 +1,27 @@
+{
+  "id": "069",
+  "user": "open it",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 26075,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll help you open it. Let me first check what's currently on the page to understand the context.",
+  "usage": {
+    "prompt_tokens": 16565,
+    "completion_tokens": 35,
+    "total_tokens": 16600
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

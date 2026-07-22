@@ -1,0 +1,45 @@
+{
+  "id": "080",
+  "user": "close all my tabs except this one",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 5232,
+  "error": null,
+  "firstToolCall": {
+    "name": "execute_js",
+    "args": {
+      "code": "chrome.tabs.query({}, function(tabs) {\n  var currentTabId = tabs.filter(t => t.active && t.window === chrome.windows.getCurrent().id)[0];\n  // Get current window's tabs\n  chrome.windows.getCurrent(function(window) {\n    var currentTab = window.tabs.find(t => t.active);\n    var tabsToClose = window.tabs.filter(t => t.id !== currentTab.id);\n    var tabIds = tabsToClose.map(t => t.id);\n    if (tabIds.length > 0) {\n      chrome.tabs.remove(tabIds, function() {\n        console.log('Closed ' + tabIds.length + ' tabs');\n      });\n    } else {\n      console.log('No other tabs to close');\n    }\n  });\n});"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll close all other tabs except the current one. Since I'm running as a browser extension, I can use the Chrome tabs API to do this.",
+  "usage": {
+    "prompt_tokens": 16946,
+    "completion_tokens": 524,
+    "total_tokens": 17470,
+    "cost": 0.00027588,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 16928,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.00027588,
+      "upstream_inference_prompt_cost": 0.00017108,
+      "upstream_inference_completions_cost": 0.0001048
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 308,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

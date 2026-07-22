@@ -28,8 +28,8 @@
 
 - **页面读取** — 从任意页面提取文本、链接、表单、表格和交互元素
 - **浏览器操作** — 点击、输入、滚动、导航以及与页面元素交互
-- **Ask / Act 模式** — 默认只读模式，完整智能体模式需确认
-- **Act 前规划** — Act 模式可以生成结构化计划，展示给你审批，然后在工具运行前将已批准的计划固定到草稿板
+- **Ask / Act / Dev 模式** — 默认只读；按需执行常规浏览器操作；Dev 提供页面检查、可逆编辑与诊断工具
+- **Act 前规划** — Act 与 Dev 模式可以生成结构化计划，展示给你审批，然后在工具运行前将已批准的计划固定到草稿板
 - **多步骤智能体** — 通过工具调用循环自主执行任务（可配置，默认 130 步）
 - **从限制处继续** — 当智能体达到步数限制时，点击「继续」即可接着运行
 - **多 LLM 提供商** — 支持本地与云端模型：
@@ -118,26 +118,29 @@ python -m sglang.launch_server --model-path your-model --port 30000
 
 **提供商：**
 
-| 提供商 | Base URL | API 密钥 | 默认模型 |
-|----------|----------|---------|---------------|
-| llama.cpp | `http://localhost:8080` | 无需 | （你加载的模型） |
-| Ollama | `http://localhost:11434/v1` | 无需 | （你加载的模型） |
-| LM Studio | `http://localhost:1234/v1` | 无需 | （你加载的模型） |
-| Jan | `http://localhost:1337/v1` | 无需 | （你加载的模型） |
-| vLLM | `http://localhost:8000/v1` | 可选 | （你提供服务的模型） |
-| SGLang | `http://localhost:30000/v1` | 可选 | （你提供服务的模型） |
-| OpenAI | `https://api.openai.com/v1` | 必需 | gpt-5.5 |
-| Anthropic Claude | `https://api.anthropic.com` | 必需 | claude-sonnet-4-6 |
-| Google Gemini | `https://generativelanguage.googleapis.com/v1beta/openai` | 必需 | gemini-3.1-flash |
-| Cloudflare Workers AI | `https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1` | 必需（另需 Account ID） | @cf/zai-org/glm-5.2 |
-| Mistral AI | `https://api.mistral.ai/v1` | 必需 | mistral-large-latest |
-| DeepSeek | `https://api.deepseek.com/v1` | 必需 | deepseek-v4-flash |
-| xAI Grok | `https://api.x.ai/v1` | 必需 | grok-4.3 |
-| Nvidia NIM | `https://integrate.api.nvidia.com/v1` | 必需 | meta/llama-3.1-8b-instruct |
-| Groq | `https://api.groq.com/openai/v1` | 必需 | llama-3.3-70b-versatile |
-| MiniMax | `https://api.minimax.chat/v1` | 必需 | minimax-m2.7 |
-| 阿里云（通义千问 Qwen） | `https://dashscope.aliyuncs.com/compatible-mode/v1` | 必需 | qwen-max |
-| OpenRouter | `https://openrouter.ai/api/v1` | 必需 | openrouter/free |
+在设置中选择提供商时会预填 Base URL。本地服务使用下方默认端口。
+
+| 提供商 | API 密钥 | 默认模型 |
+|--------|----------|----------|
+| llama.cpp (`:8080`) | 无需 | （你加载的模型） |
+| Ollama (`:11434/v1`) | 无需 | （你加载的模型） |
+| LM Studio (`:1234/v1`) | 无需 | （你加载的模型） |
+| Jan (`:1337/v1`) | 无需 | （你加载的模型） |
+| vLLM (`:8000/v1`) | 可选 | （你提供服务的模型） |
+| SGLang (`:30000/v1`) | 可选 | （你提供服务的模型） |
+| LocalAI (`:8080/v1`) | 可选 | （你加载的模型） |
+| OpenAI | 必需 | gpt-5.5 |
+| Anthropic Claude | 必需 | claude-sonnet-4-6 |
+| Google Gemini | 必需 | gemini-3.1-flash |
+| Cloudflare Workers AI | 必需（+ Account ID） | @cf/zai-org/glm-5.2 |
+| Mistral AI | 必需 | mistral-large-latest |
+| DeepSeek | 必需 | deepseek-v4-flash |
+| xAI Grok | 必需 | grok-4.3 |
+| Nvidia NIM | 必需 | meta/llama-3.1-8b-instruct |
+| Groq | 必需 | llama-3.3-70b-versatile |
+| MiniMax | 必需 | minimax-m2.7 |
+| 阿里云（通义千问 Qwen） | 必需 | qwen-max |
+| OpenRouter | 必需 | openrouter/free |
 
 ## 架构
 
@@ -168,52 +171,87 @@ web/
 
 ## 智能体工具
 
-| 工具 | Ask | Act | Compact | 描述 |
-|------|-----|-----|---------|-------------|
-| `get_accessibility_tree` | 是 | 是 | 是 | 带持久 ref_id 的页面可访问性树的扁平缩进文本 |
-| `read_page` | 是 | 是 | 是 | 提取页面文本、链接、表单（旧版纯文本回退） |
-| `read_pdf` | 是 | 是 | -- | 通过内置 pdfjs-dist 从 PDF 文档提取文本 |
-| `screenshot` | 是 | 是 | 是 | 捕获可见标签页（可选 `save:true` 保存到下载） |
-| `full_page_screenshot` | 是 | 是 | -- | 捕获完整可滚动页面（仅 Chrome） |
-| `get_interactive_elements` | 是 | 是 | -- | 列出所有可点击/交互元素（旧版，穿透 shadow DOM） |
-| `get_frames` | 是 | 是 | -- | 列出页面上的所有 iframe |
-| `get_shadow_dom` | 是 | 是 | -- | 读取 shadow DOM 树 |
-| `scroll` | 是 | 是 | 是 | 滚动页面 |
-| `extract_data` | 是 | 是 | 是 | 提取表格、标题、图片 |
-| `get_selection` | 是 | 是 | 是 | 获取高亮文本 |
-| `click_ax` | -- | 是 | 是 | 通过可访问性树 ref_id 点击元素（首选） |
-| `type_ax` | -- | 是 | 是 | 通过 ref_id 向字段输入。支持 `lang: "tr-deasciify"` |
-| `set_field` | -- | 是 | 是 | 通过 ref_id 一次性聚焦 + 清空 + 输入 + 验证。支持 `lang: "tr-deasciify"` |
-| `click` | -- | 是 | 是 | 通过选择器、索引或坐标点击元素（旧版回退） |
-| `type_text` | -- | 是 | 是 | 向输入字段输入。支持 `lang: "tr-deasciify"` |
-| `press_keys` | -- | 是 | 是 | 按 Escape、Tab 或 Enter |
-| `hover` | -- | 是 | -- | 用于悬停显示菜单的 CDP 可信悬停（仅 Chrome） |
-| `drag_drop` | -- | 是 | -- | 通过 CDP 指针事件拖放（仅 Chrome） |
-| `navigate` | -- | 是 | 是 | 前往某个 URL |
-| `go_back` | -- | 是 | -- | 在当前标签页的浏览器历史中后退 |
-| `go_forward` | -- | 是 | -- | 在当前标签页的浏览器历史中前进 |
-| `new_tab` | -- | 是 | 是 | 打开新标签页 |
-| `wait_for_element` | -- | 是 | 是 | 等待选择器出现 |
-| `wait_for_stable` | -- | 是 | -- | 等待页面空闲（无 DOM 变化 + 无网络） |
-| `upload_file` | -- | 是 | -- | 向文件输入上传文件（仅 Chrome） |
-| `execute_js` | -- | 是 | -- | 运行自定义 JavaScript（**仅 Firefox** — Chrome 上被 MV3 CSP 阻止） |
-| `fetch_url` | 是 | 是 | 是 | 在后台使用用户的 cookie 获取 URL |
-| `research_url` | 是 | 是 | -- | 在隐藏标签页中打开 URL，等待 JS 渲染，返回内容 |
-| `download_files` | -- | 是 | -- | 下载一个或多个文件（单个 url 或数组，最多 3 个并发） |
-| `download_resource_from_page` | -- | 是 | -- | 从当前页面下载 `<img>`/`<video>`/blob URL |
-| `download_social_media` | -- | 是 | 是 | 一次性社交媒体下载；优先 DOM/CDN，可选可见媒体视觉裁剪回退 |
-| `list_downloads` | 是 | 是 | -- | 列出最近的下载，含状态与来源 URL |
-| `read_downloaded_file` | -- | 是 | -- | 重新获取已下载文件的内容（文本或 base64） |
-| `iframe_read` / `iframe_click` / `iframe_type` | -- | 是 | -- | 读取/点击/输入跨域 iframe 内部 |
-| `scratchpad_write` | 是 | 是 | 是 | 在上下文中固定一条在汇总后仍保留的笔记 |
-| `clarify` | 是 | 是 | 是 | 暂停并向用户提问 |
-| `verify_form` | -- | 是 | -- | 提交前验证表单字段 |
-| `solve_captcha` | -- | 是 | 是 | 通过 CapSolver API 解决验证码（可选，需 API 密钥） |
-| `done` | 是 | 是 | 是 | 标记任务完成 |
+WebBrain 将模型层级与对话模式分开：
 
-**压缩模式** 是为小型本地模型（2B-8B）设计的精简工具集 + 更短系统提示。在 Chrome 和 Firefox 构建中，它将 Act 模式的工具模式从 40+ 个削减到约 20 个，减少决策面与幻觉。在设置中按提供商启用（本地提供商上的复选框；默认关闭）。
+- **层级**（`compact`、`mid`、`full`）控制模型可见的常规浏览器工具数量。
+- **模式**（`ask`、`act`、`dev`）控制用户允许的任务类型。Ask 为只读。Act 暴露所选层级的常规工具。Dev 需要 Mid/Full 提供商，并附加源码/样式/调试工具（Mid 层级 Dev 还包含更深的 DOM/frame 检查）。
 
-> **Shadow DOM 注意：** 可访问性树仅遍历 light DOM。在大量使用 Web 组件的页面（Stripe、Salesforce、Shopify）上，请使用 `get_interactive_elements`（穿透开放 shadow root）或 `get_shadow_dom` / `shadow_dom_query` 进行定向读取。
+图例：**是** = 可用 · **-** = 不可用 · **C** = 仅 Chrome · **Dev** = Dev 模式附加（Mid/Full 提供商；不含 Compact）。
+
+| 工具 | Ask | Compact | Mid | Full | Dev |
+|------|:---:|:-------:|:---:|:----:|:---:|
+| `get_accessibility_tree` | 是 | 是 | 是 | 是 | - |
+| `read_page` | 是 | 是 | 是 | 是 | - |
+| `read_pdf` | 是 | 否 | 是 | 是 | - |
+| `read_page_source` | 否 | 否 | 否 | 否 | 是 |
+| `get_window_info` | 是 | 是 | 是 | 是 | - |
+| `get_interactive_elements` | 是 | 否 | 是 | 是 | - |
+| `scroll` | 是 | 是 | 是 | 是 | - |
+| `extract_data` | 是 | 是 | 是 | 是 | - |
+| `inspect_element_styles` | 否 | 否 | 否 | 否 | 是 |
+| `wait_for_stable` | 是 | 否 | 是 | 是 | - |
+| `get_selection` | 是 | 是 | 是 | 是 | - |
+| `done` | 是 | 是 | 是 | 是 | - |
+| `clarify` | 否 | 是 | 是 | 是 | - |
+| `fetch_url` | 是 | 是 | 是 | 是 | - |
+| `research_url` | 是 | 否 | 是 | 是 | - |
+| `list_downloads` | 是 | 否 | 是 | 是 | - |
+| `click_ax` | 否 | 是 | 是 | 是 | - |
+| `type_ax` | 否 | 是 | 是 | 是 | - |
+| `set_field` | 否 | 是 | 是 | 是 | - |
+| `resize_window` | 否 | 否 | 否 | 是 | - |
+| `click` | 否 | 是 | 是 | 是 | - |
+| `type_text` | 否 | 是 | 是 | 是 | - |
+| `press_keys` | 否 | 是 | 是 | 是 | - |
+| `navigate` | 否 | 是 | 是 | 是 | - |
+| `wait_for_element` | 否 | 是 | 是 | 是 | - |
+| `new_tab` | 否 | 是 | 是 | 是 | - |
+| `scratchpad_write` | 否 | 是 | 是 | 是 | - |
+| `progress_update` | 否 | 是 | 是 | 是 | - |
+| `progress_read` | 否 | 是 | 是 | 是 | - |
+| `download_social_media` | 否 | 否 | 是 | 是 | - |
+| `solve_captcha` | 否 | 否 | 是 | 是 | - |
+| `go_back` | 否 | 否 | 是 | 是 | - |
+| `go_forward` | 否 | 否 | 是 | 是 | - |
+| `schedule_resume` | 否 | 否 | 是 | 是 | - |
+| `schedule_task` | 否 | 否 | 是 | 是 | - |
+| `iframe_read` | 否 | 否 | 是 | 是 | - |
+| `iframe_click` | 否 | 否 | 是 | 是 | - |
+| `iframe_type` | 否 | 否 | 是 | 是 | - |
+| `read_downloaded_file` | 否 | 否 | 是 | 是 | - |
+| `download_files` | 否 | 否 | 是 | 是 | - |
+| `download_resource_from_page` | 否 | 否 | 是 | 是 | - |
+| `upload_file` | 否 | 否 | C | C | - |
+| `verify_form` | 否 | 否 | 是 | 是 | - |
+| `hover` | 否 | 否 | 否 | 是 | - |
+| `drag_drop` | 否 | 否 | 否 | 是 | - |
+| `get_shadow_dom` | 否 | 否 | 否 | 是 | 是 |
+| `shadow_dom_query` | 否 | 否 | 否 | C | C |
+| `get_frames` | 否 | 否 | 否 | 是 | 是 |
+| `inject_css` | 否 | 否 | 否 | 否 | C |
+| `remove_injected_css` | 否 | 否 | 否 | 否 | C |
+| `patch_element` | 否 | 否 | 否 | 否 | C |
+| `revert_patch` | 否 | 否 | 否 | 否 | C |
+| `execute_js` | 否 | 否 | 否 | 否 | 是 |
+| `read_console` | 否 | 否 | 否 | 否 | C |
+| `inspect_network_requests` | 否 | 否 | 否 | 否 | C |
+| `inspect_event_listeners` | 否 | 否 | 否 | 否 | C |
+| `highlight_element` | 否 | 否 | 否 | 否 | C |
+
+已加载的技能可为当前运行追加工具 schema。例如内置 FreeSkillz.xyz 可暴露 `read_youtube_transcript`（YouTube 字幕）以及 `resolve_public_media` / `download_public_media`（公开媒体 URL）。这些技能工具未硬编码在上表中：技能加载前（或被移除后）不存在。即使所属技能已加载，Ask 仍会过滤变更/下载类工具。
+
+Dev 工具仅在 Dev 模式暴露，且 Compact 层级提供商无法使用 Dev。Chrome 的可逆编辑工具返回 patch ID：`inject_css` 对应 `remove_injected_css`，`patch_element` 对应 `revert_patch`。
+
+### Dev 模式页面编辑与诊断
+
+- `inject_css` / `remove_injected_css` 通过 `patchId` 应用与撤销临时 CSS。每个 patch 唯一且绑定到确切文档；导航会使旧句柄失效。
+- `patch_element` / `revert_patch` 以精确前后值修改内联样式、类与属性。`highlight_element` 提供临时目标覆盖层。
+- `execute_js` 在页面主世界执行异步 JavaScript 函数体。Chrome 使用 CDP `Runtime.evaluate`（15 秒限制）；Firefox 使用 MV2 内容脚本求值器。需主机权限与新的提交确认。
+- `read_console`、`inspect_network_requests`、`inspect_event_listeners` 在 Chrome 上提供有界诊断。默认省略网络头/正文；敏感头会脱敏；页面派生输出按不可信内容处理。
+
+**Compact 层级**：精简工具集 + 更短系统提示，面向小型本地模型。**Mid 层级**：常见任务工具、iframe、下载、调度与表单校验。**Full 层级**：hover、drag-drop、frames 与 shadow DOM。在设置中按提供商启用层级。
+
+> **Shadow DOM 注意：** 可访问性树仅遍历 light DOM。在大量使用 Web 组件的页面（Stripe、Salesforce、Shopify）上，请先使用 `get_interactive_elements`；在 Full Act 或 Dev 模式下使用 `get_shadow_dom` / `shadow_dom_query` 做定向读取。
 
 ## LM Studio 插件
 
@@ -231,27 +269,31 @@ lms clone webbrain/web-tools
 
 ## 斜杠命令
 
-WebBrain 接受作为输入框某行开头的斜杠命令。在面板内输入 `/help` 查看列表。
+WebBrain 接受作为输入框某行开头的斜杠命令。在面板内输入 `/help` 可查看完整用法和参数说明。输入规范命令并加一个空格后，自动补全会显示该命令可用的参数。
 
 | 命令 | 作用 |
 |---------|--------------|
 | `/help` | 显示可用命令列表 |
-| `/schedule` | 创建计划任务 |
-| `/list-schedules` | 显示计划任务 |
-| `/show-scratchpad` | 显示当前草稿板 |
-| `/edit-scratchpad <文本>` | 将文本追加到当前草稿板 |
-| `/clear-scratchpad` | 清除当前草稿板 |
+| `/schedule [提示词]` | 创建计划任务，并可预填提示词 |
+| `/schedule --list` | 显示计划任务 |
+| `/progress` | 显示当前进度记录 |
+| `/scratchpad` | 显示当前草稿板 |
+| `/scratchpad --append <文本>` | 将文本追加到当前草稿板 |
+| `/scratchpad --clear` | 清除当前草稿板 |
+| `/memory` | 显示已保存的用户记忆 |
+| `/memory --add <文本>` | 将用户偏好保存到记忆 |
+| `/memory --forget <id>` | 按 ID 删除一条记忆 |
 | `/allow-api` | **按对话的 API 变更覆盖。** 解除 UI 优先限制，使智能体在 UI 失败时可通过 `fetch_url` 使用 POST/PUT/PATCH/DELETE。激活时显示徽章；在 `/reset` 时清除。 |
 | `/compact` | 强制压缩当前对话上下文 |
 | `/verbose` | 切换详细/压缩工具显示（与工具栏按钮相同） |
 | `/reset` | 清除对话与所有按对话的标志 |
-| `/screenshot` | 捕获可见标签页并在聊天中内联显示图像 |
-| `/record` | 开始录制当前标签页 |
-| `/record-full-screen` | 录制屏幕或窗口（仅 Chrome）；添加 `--transcribe` 可在停止后保存转录 |
-| `/export` | 将当前对话下载为 Markdown 文件 |
+| `/screenshot [--full-page]` | 捕获可见标签页；使用 `--full-page` 捕获完整页面（仅 Chrome） |
+| `/record [--full-screen] [--transcribe]` | 录制当前标签页；使用 `--full-screen` 录制屏幕或窗口（仅 Chrome），使用 `--transcribe` 保存转录 |
+| `/export [--traces]` | 将对话下载为 Markdown；使用 `--traces` 导出工具链 |
 | `/profile` | 无需打开设置即可切换资料自动填充开/关 |
 | `/vision` | 在当前提供商上切换视觉模式（截图理解） |
 | `/ask` | 发送前切换到提问模式 |
+| `/dev` | 发送前切换到 Dev 模式 |
 | `/plan` | 以规划意图切换到提问模式 |
 
 默认的 UI 优先规则之所以存在，是因为 API 操作是不可见的（你看不到发送了什么内容），通常需要你可能尚未配置的独立认证令牌，并且其影响范围可能比一次可见的误点击大得多。只有当你已为某项特定工作权衡决定接受该取舍时，才使用 `/allow-api`。
@@ -265,6 +307,7 @@ Chrome 侧边面板快捷键在 WebBrain 侧边面板获得焦点时生效。
 | `Ctrl+/` 或 `Cmd+/` | 聚焦输入框 |
 | `Ctrl+Shift+A` 或 `Cmd+Shift+A` | 切换到 Ask 模式 |
 | `Ctrl+Shift+X` 或 `Cmd+Shift+X` | 切换到 Act 模式 |
+| `Ctrl+Shift+D` 或 `Cmd+Shift+D` | 切换到 Dev 模式 |
 | `Escape` | 停止当前运行，除非它只是关闭斜杠命令自动补全 |
 | `Escape` 两次 | 从 WebBrain 或浏览器页面停止当前录制 |
 
@@ -305,6 +348,20 @@ Chrome 侧边面板快捷键在 WebBrain 侧边面板获得焦点时生效。
  </picture>
 </a>
 
+
+## 引用
+
+如果您在研究或项目中使用 WebBrain，请引用:
+
+```bibtex
+@software{webbrain2026,
+  author = {Sokullu, Emre},
+  title = {WebBrain: 开源 AI 浏览器智能体，用于与网页对话},
+  year = {2026},
+  publisher = {GitHub},
+  url = {https://github.com/webbrain-one/webbrain}
+}
+```
 
 ## 许可证
 

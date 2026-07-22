@@ -170,7 +170,7 @@
       "name": "使用 WebBrain 安全吗?它能修改网页吗?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "WebBrain 有两种模式:询问模式(默认)只读,无法修改页面上的任何内容。执行模式启用完整的浏览器代理能力(点击、输入、导航),但在启用前需要用户显式确认,并会显示明显的警告横幅。你可以随时通过「停止」按钮停止代理。扩展的源代码在 GitHub 上完全开放供审计。"
+        "text": "WebBrain 有三种模式。询问模式(默认)只读,无法修改页面内容。执行模式可进行点击、输入和导航等浏览器操作,开发模式则增加页面调试工具。会产生后果的操作默认需要批准;如果关闭该权限门控,WebBrain 会显示明显的警告横幅。你可以随时通过「停止」按钮停止代理。扩展源代码在 GitHub 上完全开放供审计。"
       }
     },
     {
@@ -1011,90 +1011,119 @@
       box-shadow: 0 0 0 1px var(--tint-strong);
     }
 
-    /* ----- v3 — short-form video player ----- */
+    /* ----- v3 — landscape video player (YouTube-style watch page) ----- */
     .page-video {
       display: flex;
-      align-items: center;
+      flex-direction: column;
       justify-content: center;
-      padding: 14px 24px;
-      background: radial-gradient(circle at 50% 30%, rgba(167,139,250,0.10), transparent 70%);
+      gap: 12px;
+      padding: 18px 16px;
+      background: radial-gradient(circle at 50% 20%, rgba(167,139,250,0.10), transparent 70%);
     }
     .pv-frame {
       position: relative;
-      width: 200px;
-      aspect-ratio: 9 / 16;
-      max-height: 100%;
-      border-radius: 14px;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      border-radius: 10px;
       overflow: hidden;
       border: 1px solid rgba(255,255,255,0.08);
-      box-shadow: 0 12px 36px rgba(0,0,0,0.45);
+      box-shadow: 0 10px 28px rgba(0,0,0,0.40);
       background:
-        linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.55) 75%, rgba(0,0,0,0.85) 100%),
-        linear-gradient(45deg, #2d1b69, #6c63ff 70%, #ec4899);
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      padding: 10px 12px 14px;
+        linear-gradient(180deg, rgba(0,0,0,0) 45%, rgba(0,0,0,0.72) 100%),
+        linear-gradient(135deg, #2d1b69, #6c63ff 65%, #ec4899);
       color: #fff;
     }
+    /* Soft frosted play disc — readable as "video" without the loud
+       YouTube-red brand hit that pulls focus from the agent panel. */
     .pv-frame::before {
-      content: '▶';
+      content: '';
       position: absolute;
       inset: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 30px;
-      color: rgba(255,255,255,0.85);
-      text-shadow: 0 4px 14px rgba(0,0,0,0.5);
+      margin: auto;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.16);
+      border: 1px solid rgba(255,255,255,0.28);
+      box-shadow: 0 6px 18px rgba(0,0,0,0.28);
+      backdrop-filter: blur(6px);
       pointer-events: none;
     }
-    .pv-top {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 10px;
-      color: rgba(255,255,255,0.85);
-      position: relative;
-      z-index: 1;
-    }
-    .pv-time {
-      background: rgba(0,0,0,0.4);
-      padding: 2px 6px;
-      border-radius: 4px;
-    }
-    .pv-bottom {
-      position: relative;
-      z-index: 1;
-      font-size: 11px;
-      line-height: 1.4;
-      padding-inline-end: 30px;
-    }
-    .pv-username {
-      font-weight: 700;
-      margin-bottom: 3px;
-    }
-    .pv-caption {
-      color: rgba(255,255,255,0.85);
-    }
-    .pv-actions {
+    .pv-frame::after {
+      content: '';
       position: absolute;
-      inset-inline-end: 6px;
-      bottom: 24px;
+      inset: 0;
+      margin: auto;
+      width: 0;
+      height: 0;
+      border-style: solid;
+      border-width: 7px 0 7px 12px;
+      border-color: transparent transparent transparent rgba(255,255,255,0.92);
+      transform: translateX(2px);
+      pointer-events: none;
+    }
+    .pv-controls {
+      position: absolute;
+      inset-inline: 0;
+      bottom: 0;
+      z-index: 1;
       display: flex;
       flex-direction: column;
-      gap: 8px;
-      z-index: 1;
+      gap: 6px;
+      padding: 8px 10px 9px;
+      background: linear-gradient(180deg, transparent, rgba(0,0,0,0.72));
     }
-    .pv-actions span {
-      background: rgba(0,0,0,0.4);
-      border-radius: 50%;
-      width: 26px;
-      height: 26px;
+    .pv-progress {
+      position: relative;
+      height: 3px;
+      border-radius: 2px;
+      background: rgba(255,255,255,0.28);
+      overflow: hidden;
+    }
+    .pv-progress::after {
+      content: '';
+      position: absolute;
+      inset-block: 0;
+      inset-inline-start: 0;
+      width: 38%;
+      background: rgba(255,255,255,0.88);
+      border-radius: 2px;
+    }
+    .pv-controls-row {
       display: flex;
       align-items: center;
-      justify-content: center;
+      justify-content: space-between;
+      font-size: 10px;
+      color: rgba(255,255,255,0.9);
+    }
+    .pv-time {
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.2px;
+    }
+    .pv-controls-icons {
+      display: flex;
+      gap: 8px;
+      opacity: 0.85;
+      font-size: 11px;
+    }
+    .pv-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      text-align: start;
+      min-width: 0;
+    }
+    .pv-caption {
+      color: var(--text);
       font-size: 13px;
+      font-weight: 650;
+      line-height: 1.35;
+      letter-spacing: 0.1px;
+    }
+    .pv-username {
+      color: var(--text-dim);
+      font-size: 11px;
+      font-weight: 500;
     }
 
     /* Scene 4 — a compact browser-style completion bubble lands with the
@@ -1872,32 +1901,6 @@
     }
     .footer-links { display: flex; flex-wrap: wrap; gap: 12px 20px; }
 
-    .safety-note {
-      max-width: var(--max-w);
-      margin: 0 auto 24px;
-      background: rgba(251,191,36,0.1);
-      border: 1px solid rgba(251,191,36,0.35);
-      border-radius: var(--radius-sm);
-      padding: 18px 20px;
-      color: var(--text);
-      text-align: start;
-      line-height: 1.55;
-      font-size: 13px;
-    }
-    .safety-note h4 {
-      font-size: 14px;
-      margin-bottom: 8px;
-      letter-spacing: 0.4px;
-      text-transform: uppercase;
-      color: var(--warning);
-    }
-    .safety-note ul {
-      margin: 0;
-      padding-inline-start: 18px;
-    }
-    .safety-note li { margin-bottom: 6px; }
-    .safety-note li:last-child { margin-bottom: 0; }
-
     /* ================================================================
        COMPARISON TABLE
        ================================================================ */
@@ -2344,24 +2347,22 @@
       <div class="browser-mockup" data-scene="3" aria-hidden="true" inert>
         <div class="browser-bar">
           <div class="browser-dots"><span></span><span></span><span></span></div>
-          <div class="browser-url">https://socialvid.app/@nomad/clip-8472</div>
+          <div class="browser-url">https://youtube.com/watch?v=n0m4dB0druM</div>
         </div>
         <div class="browser-body">
           <div class="browser-page page-video">
             <div class="pv-frame">
-              <div class="pv-top">
-                <span></span>
-                <span class="pv-time">0:24</span>
+              <div class="pv-controls">
+                <div class="pv-progress" aria-hidden="true"></div>
+                <div class="pv-controls-row">
+                  <span class="pv-time">0:09 / 0:24</span>
+                  <span class="pv-controls-icons" aria-hidden="true">CC · ⚙ · ⛶</span>
+                </div>
               </div>
-              <div class="pv-bottom">
-                <div class="pv-username">@nomad</div>
-                <div class="pv-caption">博德鲁姆日落延时摄影</div>
-              </div>
-              <div class="pv-actions">
-                <span>♥</span>
-                <span>💬</span>
-                <span>↗</span>
-              </div>
+            </div>
+            <div class="pv-meta">
+              <div class="pv-caption">博德鲁姆日落延时摄影</div>
+              <div class="pv-username">@nomad</div>
             </div>
           </div>
           <div class="side-panel scene-download-panel">
@@ -2852,8 +2853,13 @@
     </details>
 
     <details class="faq-item">
+      <summary>在 Vivaldi 的 Web Panel 中使用 WebBrain 有哪些限制?</summary>
+      <p>有。Vivaldi Web Panel 会屏蔽 <code>confirm()</code>、<code>alert()</code> 和 <code>prompt()</code> 等原生 JavaScript 对话框。WebBrain 的询问、执行和开发模式切换已不再依赖这些对话框,但少数次要操作仍然依赖。</p><p><strong>新建对话:</strong> 在 Web Panel 中,由于确认框被屏蔽,按钮可能看起来毫无反应。右键点击 WebBrain 面板图标,选择<strong>在以下位置打开 → 新标签页</strong>,然后在该普通标签页中使用<strong>新建对话</strong>。</p><p><strong>录制:</strong> 暂时不要在 Vivaldi 中使用 <code>/record</code>。如果录制失败,Vivaldi 可能会隐藏错误提示,因而不会显示任何说明。</p><p><strong>设置、历史记录、跟踪记录和 Ollama 交接:</strong> 这些页面也包含原生对话框,但 WebBrain 通常会在普通标签页中打开它们,因此可以正常工作。如果你手动把其中某个页面放进 Web Panel,请先在普通标签页中打开它,再使用依赖对话框的操作。</p>
+    </details>
+
+    <details class="faq-item">
       <summary>使用 WebBrain 安全吗?它能修改网页吗?</summary>
-      <p>WebBrain 有两种模式:询问模式(默认)只读,无法修改页面上的任何内容。执行模式启用完整的浏览器代理能力(点击、输入、导航),但在启用前需要用户显式确认,并会显示明显的警告横幅。你可以随时通过「停止」按钮停止代理。扩展的源代码在 GitHub 上完全开放供审计。</p>
+      <p>WebBrain 有三种模式。询问模式(默认)只读,无法修改页面内容。执行模式可进行点击、输入和导航等浏览器操作,开发模式则增加页面调试工具。会产生后果的操作默认需要批准;如果关闭该权限门控,WebBrain 会显示明显的警告横幅。你可以随时通过「停止」按钮停止代理。扩展源代码在 GitHub 上完全开放供审计。</p>
     </details>
 
     <details class="faq-item">
@@ -2947,14 +2953,6 @@
 
 <!-- FOOTER -->
 <footer>
-  <div class="safety-note" id="safety">
-    <h4>重要安全提示</h4>
-    <ul>
-      <li>WebBrain 的执行模式可以代表你进行真实操作。在继续之前,由你负责检查提示词、目标页面和结果。</li>
-      <li>WebBrain 可能会为了规划而截图。除非你接受风险,否则请避免在敏感页面上使用代理模式(例如健康、金融、约会或私人账户门户)。</li>
-      <li>网页内容可能包含旨在操纵 AI 行为的恶意提示注入。请始终审查建议的操作,并停止看起来异常的运行。</li>
-    </ul>
-  </div>
   <div class="footer-inner">
     <span>© 2026 WebBrain。由 <a href="https://emresokullu.com" target="_blank">Emre Sokullu</a> 构建。</span>
     <div class="footer-links">

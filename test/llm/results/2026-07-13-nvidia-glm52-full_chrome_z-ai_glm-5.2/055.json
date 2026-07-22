@@ -1,0 +1,28 @@
+{
+  "id": "055",
+  "user": "download this instagram post",
+  "mode": "act",
+  "tab": {
+    "url": "https://www.instagram.com/p/CxAbcExample/",
+    "title": "Photo — Instagram"
+  },
+  "latencyMs": 19476,
+  "error": null,
+  "firstToolCall": {
+    "name": "download_social_media",
+    "args": {
+      "mode": "auto",
+      "strategy": "auto"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll download this Instagram post for you. Let me use the social media downloader.",
+  "usage": {
+    "prompt_tokens": 20780,
+    "completion_tokens": 35,
+    "total_tokens": 20815
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

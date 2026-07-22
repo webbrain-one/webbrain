@@ -475,7 +475,13 @@ document.getElementById('btn-export').addEventListener('click', async () => {
       }
     }
   }
-  const payload = { run, events, exportedAt: Date.now(), schema: 'webbrain-trace/1' };
+  const payload = {
+    run,
+    events,
+    exportedAt: Date.now(),
+    exportedByWebBrainVersion: chrome.runtime.getManifest().version || '',
+    schema: 'webbrain-trace/1',
+  };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

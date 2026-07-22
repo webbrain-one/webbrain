@@ -1,0 +1,22 @@
+<!doctype html>
+<html>
+<head>
+  <meta property="og:type" content="article">
+  <title>Inline article paywall fixture</title>
+  <style>
+    body { margin: 0; font: 18px/1.5 sans-serif; }
+    article { max-width: 700px; margin: 32px auto; }
+    .paywall { min-height: 120px; padding: 24px; border: 1px solid #aaa; }
+  </style>
+</head>
+<body>
+  <article>
+    <h1>Fixture headline</h1>
+    <p>VISIBLE_PREVIEW_PARAGRAPH is available before the inline access gate.</p>
+    <div class="paywall">
+      <h2>Subscribe to continue reading this article</h2>
+    </div>
+    <p>SECRET_POST_GATE_PARAGRAPH must not be returned by read_page.</p>
+  </article>
+</body>
+</html>

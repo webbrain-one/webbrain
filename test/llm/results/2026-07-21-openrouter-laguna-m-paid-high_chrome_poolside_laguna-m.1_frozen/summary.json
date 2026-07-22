@@ -1,0 +1,40 @@
+{
+  "runTag": "2026-07-21-openrouter-laguna-m-paid-high",
+  "model": "poolside/laguna-m.1",
+  "browser": "chrome",
+  "base": "https://openrouter.ai/api/v1",
+  "saveRequest": false,
+  "tier": null,
+  "modeOverride": null,
+  "chatTemplateCompat": "off",
+  "structuredToolsSent": true,
+  "reasoningEffort": "high",
+  "freeze": {
+    "path": "test/llm/freeze/baseline-2026-05-23.json",
+    "sourceRun": "anthropic/claude-sonnet-4.6",
+    "sourceRunTag": "2026-05-23T18-47-31-246Z",
+    "systemHash": "5c4fac1387025050d002fb87fb6ae02af2fba0e232cd40737f844a3a5c4e7abf",
+    "toolCount": 41
+  },
+  "cases": 100,
+  "totalLatencyMs": 112486,
+  "errors": 0,
+  "withToolCall": 92,
+  "withToolCallFromContent": 0,
+  "byTool": {
+    "navigate": 21,
+    "list_downloads": 2,
+    "new_tab": 3,
+    "get_accessibility_tree": 51,
+    "read_page": 4,
+    "extract_data": 1,
+    "download_social_media": 2,
+    "fetch_url": 1,
+    "screenshot": 1,
+    "scroll": 1,
+    "get_selection": 1,
+    "(no_tool_call)": 8,
+    "execute_js": 3,
+    "press_keys": 1
+  }
+}

@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "WebBrain",
-  "version": "23.0.4",
+  "version": "25.7.0",
   "description": "Open-source AI browser agent — chat with pages, automate tasks, multi-provider LLM support.",
   "permissions": [
     "activeTab",
@@ -21,7 +21,7 @@
   "content_security_policy": "script-src 'self' 'unsafe-eval'; object-src 'self'; connect-src * data: blob: http://* ws://*;",
   "background": {
     "page": "src/background.html",
-    "persistent": false
+    "persistent": true
   },
   "sidebar_action": {
     "default_title": "WebBrain",
@@ -34,14 +34,23 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
+      "js": ["src/content/file-picker-guard-loader.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["<all_urls>"],
       "js": [
         "src/content/accessibility-tree.js",
         "src/content/content.js",
         "src/content/agent-visual-indicator.js",
-        "src/content/selection-shortcut.js",
         "src/content/ollama-launch-handoff.js"
       ],
       "run_at": "document_idle"
+    },
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/content/selection-shortcut.js"],
+      "run_at": "document_start"
     },
     {
       "matches": ["<all_urls>"],
@@ -86,6 +95,7 @@
     "vendor/pdfjs/pdf.mjs",
     "vendor/pdfjs/pdf.worker.mjs",
     "src/agent/social-media-downloader.js",
+    "src/content/file-picker-guard-page.js",
     "vendor/turkish-deasciifier-patterns.json",
     "skills/*"
   ],

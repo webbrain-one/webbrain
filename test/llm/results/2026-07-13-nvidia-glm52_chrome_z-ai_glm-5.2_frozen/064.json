@@ -1,0 +1,27 @@
+{
+  "id": "064",
+  "user": "scroll to the bottom",
+  "mode": "act",
+  "tab": {
+    "url": "https://news.ycombinator.com/",
+    "title": "Hacker News"
+  },
+  "latencyMs": 8218,
+  "error": null,
+  "firstToolCall": {
+    "name": "scroll",
+    "args": {
+      "direction": "bottom"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll scroll to the bottom of the page for you.",
+  "usage": {
+    "prompt_tokens": 16647,
+    "completion_tokens": 22,
+    "total_tokens": 16669
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

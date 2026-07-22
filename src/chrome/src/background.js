@@ -13,6 +13,11 @@ import {
 } from './agent/skills.js';
 import { ScheduledJobManager } from './agent/scheduler.js';
 import {
+  compileLatestSuccessfulWorkflow,
+  createSavedWorkflowStore,
+} from './agent/workflows.js';
+import * as workflowTrace from './trace/recorder.js';
+import {
   startClaudeOAuth,
   refreshClaudeAccessToken,
   signOutClaude,
@@ -35,8 +40,9 @@ import {
   getRecordingStateFresh,
   setProviderManager as setRecorderProviderManager,
 } from './recorder/host.js';
+import { RUN_CAPTURE_START_ERROR_PREFIX, createRunCaptureController } from './run-capture.js';
 import { normalizeOllamaLaunchHandoff } from './ollama-handoff.js';
-import { RunUiJournal } from './run-ui-journal.js';
+import { RunUiJournal, RunUiPersistenceScheduler, runUiSnapshotForRequest } from './run-ui-journal.js';
 import {
   USER_MEMORY_AUTO_CAPTURE_KEY,
   USER_MEMORY_ENABLED_KEY,
@@ -55,6 +61,19 @@ import {
   parseUserMemoryExtractionResult,
 } from './agent/user-memory.js';
 import { PROFILE_SYNC_DATA_KEYS, PROFILE_SYNC_KEYS, ProfileSyncManager } from './profile-sync.js';
+import {
+  CONFIG_STORAGE_KEYS,
+  createConfigExport,
+  mergeConfigPatchSettings,
+  parseConfigImport,
+  parseConfigPatchImport,
+} from './config-transfer.js';
+import { installDownloadDirectoryRouting } from './download-directory.js';
+import {
+  getChromeWebStoreOAuthStatus,
+  signOutChromeWebStoreOAuth,
+  startChromeWebStoreOAuth,
+} from './chrome-web-store-release.js';
 
 /**
  * WebBrain Service Worker (Background Script)
@@ -64,7 +83,9 @@ import { PROFILE_SYNC_DATA_KEYS, PROFILE_SYNC_KEYS, ProfileSyncManager } from '.
 const providerManager = new ProviderManager();
 const agent = new Agent(providerManager);
 const userMemoryStore = createUserMemoryStore(chrome.storage.local);
+const savedWorkflowStore = createSavedWorkflowStore(chrome.storage.local);
 const profileSync = new ProfileSyncManager(chrome.storage.local);
+installDownloadDirectoryRouting(chrome);
 const scheduler = new ScheduledJobManager({
   api: chrome,
   agent,
@@ -92,11 +113,19 @@ scheduler.start();
 // happen AFTER providerManager is constructed.
 setRecorderProviderManager(providerManager);
 
+const runCaptureController = createRunCaptureController({
+  api: chrome,
+  startRecording: startTabRecording,
+  stopRecording: stopTabRecording,
+});
+
 const cloudRunController = createCloudRunController({
   chromeApi: chrome,
   agent,
   ensureOffscreen,
   sendIndicator: (tabId, type) => sendIndicatorMessage(tabId, type),
+  startRecording: startTabRecording,
+  stopRecording: stopTabRecording,
 });
 cloudRunController.syncBridge().catch(() => {});
 
@@ -170,6 +199,35 @@ async function loadMaxSteps() {
 }
 loadMaxSteps();
 
+// Stored slider: 0 = Instant, 1–1200 = wait N s, >1200 (1205) = Off.
+// Runtime agent value: 0 = Instant, 1–1200 = wait, -1 = Off.
+const CLARIFY_TIMEOUT_OFF_SLIDER = 1205;
+
+function normalizeClarifyTimeoutSec(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) return 60;
+  const sec = Math.floor(n);
+  if (sec > 1200) return -1;
+  return Math.min(1200, sec);
+}
+
+async function loadClarifyTimeout() {
+  const stored = await chrome.storage.local.get(['clarifyTimeoutSec', 'clarifyTimeoutSemanticsV2']);
+  // One-shot: old 0 meant Off; new 0 means Instant and Off is >1200.
+  if (!stored.clarifyTimeoutSemanticsV2) {
+    const updates = { clarifyTimeoutSemanticsV2: true };
+    if (Number(stored.clarifyTimeoutSec) === 0) {
+      updates.clarifyTimeoutSec = CLARIFY_TIMEOUT_OFF_SLIDER;
+      stored.clarifyTimeoutSec = CLARIFY_TIMEOUT_OFF_SLIDER;
+    }
+    await chrome.storage.local.set(updates).catch(() => {});
+  }
+  agent.clarifyTimeoutSec = normalizeClarifyTimeoutSec(
+    stored.clarifyTimeoutSec != null ? stored.clarifyTimeoutSec : 60,
+  );
+}
+loadClarifyTimeout();
+
 async function loadAutoScreenshot() {
   const stored = await chrome.storage.local.get('autoScreenshot');
   if (stored.autoScreenshot != null) agent.autoScreenshot = stored.autoScreenshot;
@@ -207,6 +265,12 @@ async function loadStrictSecretMode() {
   if (stored.strictSecretMode != null) agent.strictSecretMode = !!stored.strictSecretMode;
 }
 loadStrictSecretMode();
+
+async function loadWebMCPEnabled() {
+  const stored = await chrome.storage.local.get('webMcpEnabled');
+  agent.setWebMCPEnabled(stored.webMcpEnabled === true);
+}
+const webMcpEnabledReady = loadWebMCPEnabled().catch(() => {});
 
 // Profile auto-fill: user-provided text (name, email, etc.) that gets
 // appended to the system prompt when enabled. Plaintext in storage —
@@ -247,6 +311,7 @@ let userMemoryExtractionDrainPromise = null;
 let userMemoryExtractionTimer = null;
 let userMemoryExtractionQueueLock = Promise.resolve();
 let userMemoryStoreLock = Promise.resolve();
+let savedWorkflowStoreLock = Promise.resolve();
 const userMemoryTurnContextByTab = new Map();
 
 function userMemoryTurnContextKey(tabId) {
@@ -425,6 +490,12 @@ async function withUserMemoryStoreLock(task) {
   return run;
 }
 
+async function withSavedWorkflowStoreLock(task) {
+  const run = savedWorkflowStoreLock.then(task, task);
+  savedWorkflowStoreLock = run.catch(() => {});
+  return run;
+}
+
 async function applyUserMemoryExtractionOperationsToCurrentStore(jobId, operations) {
   return withUserMemoryStoreLock(async () => {
     if (!await isUserMemoryExtractionEnabled()) {
@@ -457,7 +528,7 @@ async function enqueueUserMemoryExtraction(payload = {}) {
   // Deliberate privacy stance: form-completion turns never forward raw turn
   // text — the typed message and assistant reply may embed form values — so a
   // form turn without sanitized clarification answers is skipped entirely,
-  // even if the user also typed a durable preference. /remember still works.
+  // even if the user also typed a durable preference. /memory --add still works.
   if (formCompletionTurn) {
     if (!await isUserMemoryFormCaptureEnabled()) {
       return { queued: false, reason: 'form_capture_disabled' };
@@ -482,6 +553,7 @@ async function enqueueUserMemoryExtraction(payload = {}) {
       mode: ['ask', 'act', 'dev'].includes(payload.mode) ? payload.mode : 'ask',
       succeeded: payload.succeeded !== false,
       sourceContext,
+      conversationId: normalizeUserMemoryText(payload.conversationId, 200),
       attempts: 0,
       createdAt: Date.now(),
     });
@@ -524,7 +596,10 @@ async function drainUserMemoryExtractionQueue() {
           mode: job.mode,
           succeeded: job.succeeded,
           sourceContext: job.sourceContext,
-        }), { maxTokens: 600, temperature: 0 }, costState);
+        }), { maxTokens: 600, temperature: 0 }, costState, {
+          conversationId: job.conversationId || null,
+          generationName: 'memory',
+        });
         const operations = parseUserMemoryExtractionResult(result?.content || '');
         const applied = await applyUserMemoryExtractionOperationsToCurrentStore(job.id, operations);
         if (applied.changed) await syncAgentUserMemoryFromStorage();
@@ -588,13 +663,17 @@ async function loadCustomSkills() {
     CUSTOM_SKILLS_STORAGE_KEY,
     DEFAULT_SKILLS_REMOVED_STORAGE_KEY,
     DEFAULT_SKILLS_SEEDED_STORAGE_KEY,
+    'enableAllPackagedSkills',
   ]);
   let skills = normalizeCustomSkills(stored[CUSTOM_SKILLS_STORAGE_KEY]);
   const removedDefaultIds = new Set(normalizeDefaultSkillRemovalIds(stored[DEFAULT_SKILLS_REMOVED_STORAGE_KEY]));
   try {
     const existingIds = new Set(skills.map((skill) => skill.id));
     const room = Math.max(0, MAX_CUSTOM_SKILLS - skills.length);
-    const defaultSkills = (await loadDefaultSkillRecords())
+    const packagedSources = stored.enableAllPackagedSkills
+      ? PACKAGED_SKILL_SOURCES
+      : DEFAULT_SKILL_SOURCES;
+    const defaultSkills = (await loadPackagedSkillRecords(packagedSources))
       .filter((skill) => !existingIds.has(skill.id) && !removedDefaultIds.has(skill.id))
       .slice(0, room);
     if (defaultSkills.length || !stored[DEFAULT_SKILLS_SEEDED_STORAGE_KEY]) {
@@ -697,11 +776,28 @@ async function loadPlanReviewSettings() {
 const planBeforeActReady = loadPlanBeforeAct();
 const planReviewReady = loadPlanReviewSettings();
 
+async function showFirstInstallGuide(details) {
+  if (details?.reason !== 'install') return;
+  await chrome.storage.local.set({ pinCoachmarkPending: true }).catch((error) => {
+    console.warn('[WebBrain] Could not prepare the first-open pin coachmark:', error);
+  });
+  try {
+    await chrome.tabs.create({
+      url: chrome.runtime.getURL('src/ui/install.html'),
+      active: true,
+    });
+  } catch (error) {
+    console.warn('[WebBrain] Could not open the first-install pinning guide:', error);
+  }
+}
+
 // Initialize on install
-chrome.runtime.onInstalled.addListener(async () => {
+chrome.runtime.onInstalled.addListener(async (details) => {
+  await showFirstInstallGuide(details);
   createContextMenus();
   await providerManager.load();
   await loadMaxSteps();
+  await loadClarifyTimeout();
   await syncAgentUserMemoryFromStorage().catch(() => {});
   await cloudRunController.syncBridge().catch(() => {});
   scheduleUserMemoryExtractionDrain(5000);
@@ -713,6 +809,7 @@ chrome.runtime.onStartup?.addListener(async () => {
   createContextMenus();
   await providerManager.load();
   await loadMaxSteps();
+  await loadClarifyTimeout();
   await syncAgentUserMemoryFromStorage().catch(() => {});
   await cloudRunController.syncBridge().catch(() => {});
   scheduleUserMemoryExtractionDrain(5000);
@@ -721,12 +818,15 @@ chrome.runtime.onStartup?.addListener(async () => {
 // Listen for setting changes
 chrome.storage.onChanged.addListener((changes) => {
   if (PROFILE_SYNC_DATA_KEYS.some((key) => changes[key])) profileSync.noteChanges(changes).catch(() => {});
-  if (changes.providers || changes.activeProvider) providerManager.load().catch(() => {});
+  if (changes.providers || changes.activeProvider || changes.helpImproveWebBrain) providerManager.load().catch(() => {});
   if (changes.webbrainCloudBridgeEnabled || changes.webbrainCloudBridgeUrl) {
     cloudRunController.syncBridge().catch(() => {});
   }
   if (changes.maxAgentSteps) {
     agent.maxSteps = normalizeMaxAgentSteps(changes.maxAgentSteps.newValue);
+  }
+  if (changes.clarifyTimeoutSec) {
+    agent.clarifyTimeoutSec = normalizeClarifyTimeoutSec(changes.clarifyTimeoutSec.newValue);
   }
   if (changes.autoScreenshot) {
     agent.autoScreenshot = changes.autoScreenshot.newValue;
@@ -754,9 +854,12 @@ chrome.storage.onChanged.addListener((changes) => {
   }
   if (changes.strictSecretMode) {
     agent.strictSecretMode = !!changes.strictSecretMode.newValue;
-    // The setting only flips the `done` tool description and the credential
-    // note text — both are rebuilt at turn-start, so no system-prompt
-    // refresh is needed. (System prompt content itself doesn't change.)
+    // Strict mode also appends a global system note after enabled skills, so
+    // refresh live conversations immediately as well as rebuilding at turn start.
+    refreshPrompts = true;
+  }
+  if (changes.webMcpEnabled) {
+    agent.setWebMCPEnabled(changes.webMcpEnabled.newValue === true);
   }
   if (changes.profileEnabled) {
     agent.profileEnabled = !!changes.profileEnabled.newValue;
@@ -966,6 +1069,34 @@ async function ensureWebBrainGroup(tab) {
   }
 }
 
+// The install page must call sidePanel.open() inside its own click handler to
+// retain Chrome's user gesture. Once that succeeds, mirror the bookkeeping
+// performed by chrome.action.onClicked so the first-open tab participates in
+// the same panel visibility and WebBrain group model.
+chrome.runtime.onMessage.addListener((msg, sender) => {
+  if (msg?.type !== 'WB_INSTALL_PANEL_OPENED') return;
+
+  const installGuideUrl = chrome.runtime.getURL('src/ui/install.html');
+  const senderUrl = String(sender?.url || sender?.tab?.url || '');
+  const tabId = Number(msg.tabId);
+  if (
+    sender?.id !== chrome.runtime.id
+    || senderUrl !== installGuideUrl
+    || !Number.isInteger(tabId)
+    || tabId < 0
+    || (sender?.tab?.id != null && sender.tab.id !== tabId)
+  ) {
+    return;
+  }
+
+  chrome.tabs.get(tabId).then((tab) => {
+    if (tab?.url !== installGuideUrl) return;
+    panelTabs.add(tab.id);
+    savePanelTabs();
+    ensureWebBrainGroup(tab).catch(() => {});
+  }).catch(() => {});
+});
+
 // Tracks the pending 250 ms retry timer per tab so it can be cancelled if the
 // tab navigates before the timer fires.
 const pendingContextMenuNotifications = new Map();
@@ -1127,20 +1258,85 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 });
 
 const RUN_UI_PREFIX = 'runUi:';
-const runUiJournal = new RunUiJournal({
-  onChange(tabId, snapshot) {
+const runUiPersistenceQueues = new Map();
+const runUiPersistenceFailures = new Map();
+
+function cloneRunUiSnapshot(snapshot) {
+  try {
+    return structuredClone(snapshot);
+  } catch {
+    return JSON.parse(JSON.stringify(snapshot));
+  }
+}
+
+function persistRunUiSnapshot(tabId, snapshot) {
+  const requestId = String(snapshot?.requestId || '');
+  if (runUiPersistenceFailures.get(tabId) === requestId) return Promise.resolve(false);
+  const stableSnapshot = cloneRunUiSnapshot(snapshot);
+  const previous = runUiPersistenceQueues.get(tabId) || Promise.resolve(true);
+  const write = previous.catch(() => false).then(async () => {
+    if (runUiPersistenceFailures.get(tabId) === requestId) return false;
     try {
-      chrome.storage.session?.set({ [RUN_UI_PREFIX + tabId]: snapshot }).catch(() => {});
-    } catch {}
+      await chrome.storage.session?.set({ [RUN_UI_PREFIX + tabId]: stableSnapshot });
+      return true;
+    } catch {
+      runUiPersistenceFailures.set(tabId, requestId);
+      try { await chrome.storage.session?.remove(RUN_UI_PREFIX + tabId); } catch {}
+      return false;
+    }
+  });
+  runUiPersistenceQueues.set(tabId, write);
+  write.finally(() => {
+    if (runUiPersistenceQueues.get(tabId) === write) runUiPersistenceQueues.delete(tabId);
+  }).catch(() => {});
+  return write;
+}
+
+const runUiSnapshotPersistence = new RunUiPersistenceScheduler({
+  persist: persistRunUiSnapshot,
+});
+
+function flushRunUiSnapshot(tabId, requestId) {
+  const pending = runUiSnapshotPersistence.flush(tabId) || runUiPersistenceQueues.get(tabId);
+  if (pending) return pending;
+  return Promise.resolve(runUiPersistenceFailures.get(tabId) !== String(requestId || ''));
+}
+
+const runUiJournal = new RunUiJournal({
+  onChange(tabId, snapshot, change) {
+    if (change?.eventType === 'text_delta') {
+      runUiSnapshotPersistence.defer(tabId, snapshot);
+      return;
+    }
+    void runUiSnapshotPersistence.persistNow(tabId, snapshot);
   },
 });
 
-function beginRunUiSnapshot(tabId, requestId) {
-  return runUiJournal.begin(tabId, requestId);
+function beginRunUiSnapshot(tabId, requestId, metadata = {}) {
+  runUiPersistenceFailures.delete(tabId);
+  return runUiJournal.begin(tabId, requestId, metadata);
+}
+
+async function beginContinuationRunUiSnapshot(tabId, requestId, metadata = {}) {
+  const existing = await getRunUiSnapshot(tabId);
+  const sameNonTerminalRun = existing
+    && String(existing.requestId || '') === String(requestId || '')
+    && !['completed', 'stopped', 'failed', 'cancelled', 'clarification_required'].includes(existing.status);
+  if (sameNonTerminalRun) return runUiJournal.resume(tabId, requestId, metadata);
+  return beginRunUiSnapshot(tabId, requestId, metadata);
 }
 
 function recordRunUiEvent(tabId, requestId, type, data) {
   return runUiJournal.record(tabId, requestId, type, data, agent.currentRunId.get(tabId));
+}
+
+function isClarificationRequiredRunUpdate(update) {
+  return update?.type === 'run_status'
+    && update?.data?.status === 'clarification_required';
+}
+
+function runUpdatesSucceeded(updates = []) {
+  return !updates.some(update => update?.type === 'error' || isClarificationRequiredRunUpdate(update));
 }
 
 function terminalRunUiStatus(content, updates = [], error = null) {
@@ -1149,6 +1345,7 @@ function terminalRunUiStatus(content, updates = [], error = null) {
   if (/stopped by user|aborted by user/i.test(text)) return 'stopped';
   if (/before executing requested tool calls/i.test(text)) return 'cancelled';
   if (updates.some(update => update?.type === 'error')) return 'failed';
+  if (updates.some(isClarificationRequiredRunUpdate)) return 'clarification_required';
   return 'completed';
 }
 
@@ -1171,8 +1368,15 @@ async function getRunUiSnapshot(tabId) {
 }
 
 function clearRunUiSnapshot(tabId) {
+  runUiSnapshotPersistence.cancel(tabId);
   runUiJournal.clear(tabId);
-  try { chrome.storage.session?.remove(RUN_UI_PREFIX + tabId).catch(() => {}); } catch {}
+  runUiPersistenceFailures.delete(tabId);
+  const previous = runUiPersistenceQueues.get(tabId) || Promise.resolve();
+  const removal = previous.catch(() => {}).then(() => chrome.storage.session?.remove(RUN_UI_PREFIX + tabId));
+  runUiPersistenceQueues.set(tabId, removal);
+  removal.finally(() => {
+    if (runUiPersistenceQueues.get(tabId) === removal) runUiPersistenceQueues.delete(tabId);
+  }).catch(() => {});
 }
 
 function sendAgentUpdate(tabId, requestId, type, data) {
@@ -1191,9 +1395,112 @@ function sendAgentUpdate(tabId, requestId, type, data) {
 }
 
 function assertNoActiveTabRun(tabId) {
+  if (agent.activeRunState(tabId)?.running || detachedRunStarts.has(tabId)) {
+    throw new Error('A run is already active for this tab.');
+  }
+}
+
+const detachedRunStarts = new Map();
+const detachedRunFailures = new Map();
+const RUN_KEEPALIVE_INTERVAL_MS = 20_000;
+const DETACHED_RUN_FAILURE_TTL_MS = 60_000;
+
+function clearDetachedRunFailure(tabId) {
+  const failure = detachedRunFailures.get(tabId);
+  if (failure?.expiryTimer) clearTimeout(failure.expiryTimer);
+  detachedRunFailures.delete(tabId);
+}
+
+function rememberDetachedRunFailure(tabId, requestId, error) {
+  clearDetachedRunFailure(tabId);
+  const failure = {
+    requestId,
+    message: String(error?.message || error || 'Detached run failed.'),
+    expiryTimer: null,
+  };
+  failure.expiryTimer = setTimeout(() => {
+    if (detachedRunFailures.get(tabId) === failure) detachedRunFailures.delete(tabId);
+  }, DETACHED_RUN_FAILURE_TTL_MS);
+  detachedRunFailures.set(tabId, failure);
+}
+
+function assertRunCanStart(tabId, msg) {
+  assertDetachedRunStartNotCancelled(tabId, msg);
+  const reserved = detachedRunStarts.get(tabId);
+  const internalRequestId = String(msg?.__detachedRunRequestId || '');
+  if (reserved) {
+    if (!internalRequestId || internalRequestId !== reserved.requestId) {
+      throw new Error('A run is already active for this tab.');
+    }
+  }
   if (agent.activeRunState(tabId)?.running) {
     throw new Error('A run is already active for this tab.');
   }
+}
+
+function isDetachedRunStartCancelled(tabId, msg) {
+  const internalRequestId = String(msg?.__detachedRunRequestId || '');
+  const reserved = detachedRunStarts.get(tabId);
+  return !!internalRequestId
+    && reserved?.requestId === internalRequestId
+    && reserved.cancelled === true;
+}
+
+function assertDetachedRunStartNotCancelled(tabId, msg) {
+  if (isDetachedRunStartCancelled(tabId, msg)) {
+    throw new Error('Run stopped by user before it started.');
+  }
+}
+
+function cancelDetachedRunStart(tabId) {
+  const reserved = detachedRunStarts.get(tabId);
+  if (!reserved) return false;
+  reserved.cancelled = true;
+  return true;
+}
+
+function acquireRunKeepalive() {
+  let released = false;
+  const touch = () => {
+    try {
+      chrome.runtime.getPlatformInfo().catch(() => {});
+    } catch {}
+  };
+  touch();
+  const timer = setInterval(touch, RUN_KEEPALIVE_INTERVAL_MS);
+  return () => {
+    if (released) return;
+    released = true;
+    clearInterval(timer);
+  };
+}
+
+function launchDetachedRun(action, msg, sender) {
+  const tabId = msg.tabId || sender.tab?.id;
+  if (!tabId) throw new Error('No tab ID');
+  assertNoActiveTabRun(tabId);
+  clearDetachedRunFailure(tabId);
+  const requestId = String(msg.requestId || `req_${tabId}_${Date.now()}`);
+  const entry = { requestId, promise: null, cancelled: false };
+  detachedRunStarts.set(tabId, entry);
+  const task = Promise.resolve().then(() => {
+    const detachedMessage = {
+      ...msg,
+      action,
+      requestId,
+      __detachedRunRequestId: requestId,
+    };
+    assertDetachedRunStartNotCancelled(tabId, detachedMessage);
+    return handleMessage(detachedMessage, sender);
+  });
+  entry.promise = task;
+  task.catch((error) => {
+    rememberDetachedRunFailure(tabId, requestId, error);
+    console.warn(`[WebBrain] detached ${action} run failed:`, error);
+  }).finally(() => {
+    if (detachedRunStarts.get(tabId) === entry) detachedRunStarts.delete(tabId);
+  });
+  return { ok: true, accepted: true, requestId };
 }
 
 function sendAgentRunComplete(tabId, snapshot = null) {
@@ -1220,7 +1527,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg?.type !== 'WB_STOP_AGENT') return; // not ours
   const tabId = sender?.tab?.id;
   if (tabId != null) {
+    cancelDetachedRunStart(tabId);
     try { agent.abort(tabId); } catch { /* ignore */ }
+    // Always clear the sender tab's page-owned indicator, even when the run
+    // already ended or this service worker lost its in-memory run state.
+    sendIndicatorMessage(tabId, 'WB_HIDE_AGENT_INDICATORS');
   }
   sendResponse({ ok: true });
   // Synchronous response — return undefined.
@@ -1283,12 +1594,14 @@ chrome.windows?.onRemoved?.addListener?.((windowId) => {
 chrome.tabs.onRemoved.addListener((tabId) => {
   panelTabs.delete(tabId);
   clearRunUiSnapshot(tabId);
+  clearDetachedRunFailure(tabId);
   clearTimeout(pendingContextMenuNotifications.get(tabId));
   pendingContextMenuNotifications.delete(tabId);
   contextMenuStorage.cleanup(tabId);
   savePanelTabs();
   chrome.storage.session?.remove(`tabChat:${tabId}`).catch(() => {});
   scheduler.cancelForTab(tabId).catch(() => {});
+  agent.clearDevCssPatchesForTab(tabId).catch(() => {});
   try { agent._cleanupTab(tabId); } catch { /* ignore */ }
 });
 
@@ -1334,6 +1647,7 @@ chrome.webNavigation?.onCommitted?.addListener((details) => {
   if (details.frameId !== 0) return;
   recordNav(details.tabId, 'committed', details.url);
   invalidateContextMenuForTab(details.tabId);
+  agent.clearDevCssPatchesForTab(details.tabId).catch(() => {});
 });
 chrome.webNavigation?.onCompleted?.addListener((details) => {
   if (details.frameId === 0) recordNav(details.tabId, 'completed', details.url);
@@ -1517,7 +1831,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
   handleMessage(msg, sender)
     .then(sendResponse)
-    .catch(e => sendResponse({ error: e.message }));
+    .catch(e => sendResponse({ error: e.message, status: e.status || 500 }));
 
   return true; // async response
 });
@@ -1533,6 +1847,7 @@ async function handleMessage(msg, sender) {
     // promises so the first chat can't race ahead of hydration, without a
     // storage round-trip on every message.
     await Promise.all([planBeforeActReady, planReviewReady, customSkillsReady, userMemoryReady]);
+    await webMcpEnabledReady;
     await screenshotRedactionReady;
     await imageBudgetReady;
   }
@@ -1542,6 +1857,8 @@ async function handleMessage(msg, sender) {
       return await cloudRunController.startRun(msg);
     case 'cloud_status':
       return await cloudRunController.status(msg);
+    case 'cloud_respond':
+      return await cloudRunController.respond(msg);
     case 'cloud_abort':
       return await cloudRunController.abort(msg);
     case 'cloud_bridge_start':
@@ -1563,7 +1880,7 @@ async function handleMessage(msg, sender) {
       });
     }
     case 'stop_tab_recording':
-      return await stopTabRecording();
+      return await stopTabRecording({ expectedRecordingId: msg.expectedRecordingId || null });
     case 'recording_capture_ended':
       return await stopTabRecording({ reason: 'capture_ended' });
     case 'get_recording_state':
@@ -1681,8 +1998,36 @@ async function handleMessage(msg, sender) {
         succeeded: msg.succeeded,
         sourceContext: msg.sourceContext,
         clarificationText: msg.clarificationText,
+        conversationId: msg.conversationId,
       });
       return { ok: true, ...result };
+    }
+
+    // --- Saved Workflows ---
+    case 'list_saved_workflows':
+      return { ok: true, workflows: await savedWorkflowStore.list() };
+
+    case 'get_saved_workflow': {
+      const workflow = await savedWorkflowStore.get(String(msg.id || ''));
+      return workflow ? { ok: true, workflow } : { ok: false, reason: 'not_found' };
+    }
+
+    case 'save_latest_workflow': {
+      const tabId = msg.tabId || sender.tab?.id;
+      if (!tabId) return { ok: false, reason: 'tab_required' };
+      const conversationId = await agent.getConversationId(tabId);
+      const compiled = await compileLatestSuccessfulWorkflow(workflowTrace, {
+        conversationId,
+        name: msg.name,
+      });
+      if (!compiled.workflow) return { ok: false, ...compiled };
+      const saved = await withSavedWorkflowStoreLock(() => savedWorkflowStore.put(compiled.workflow));
+      return { ok: saved.changed, workflow: saved.workflow, warnings: compiled.warnings, reason: saved.reason || '' };
+    }
+
+    case 'delete_saved_workflow': {
+      const result = await withSavedWorkflowStoreLock(() => savedWorkflowStore.delete(String(msg.id || '')));
+      return { ok: result.changed, ...result };
     }
 
     // --- Chat / Agent ---
@@ -1695,12 +2040,20 @@ async function handleMessage(msg, sender) {
       };
     }
 
+    case 'chat_start':
+      return launchDetachedRun('chat', msg, sender);
+
+    case 'continue_start':
+      return launchDetachedRun('continue', msg, sender);
+
     case 'chat': {
       const tabId = msg.tabId || sender.tab?.id;
       if (!tabId) throw new Error('No tab ID');
-      assertNoActiveTabRun(tabId);
-      const mode = msg.mode || 'ask';
-      const runUi = beginRunUiSnapshot(tabId, msg.requestId);
+      assertRunCanStart(tabId, msg);
+      const isWorkflowRun = !!msg.workflowId;
+      const mode = isWorkflowRun ? 'act' : (msg.mode || 'ask');
+      const runUi = await beginContinuationRunUiSnapshot(tabId, msg.requestId, { mode, kind: 'chat' });
+      const releaseRunKeepalive = acquireRunKeepalive();
 
       // /allow-api flag is per-conversation. The sidebar tracks it locally
       // but sends it on every chat call so the agent stays in sync after a
@@ -1712,34 +2065,154 @@ async function handleMessage(msg, sender) {
       // isn't present (chrome://, chrome-extension://, etc.).
       sendIndicatorMessage(tabId, 'WB_SHOW_AGENT_INDICATORS');
 
-      // Clear any linked context-menu prompt from storage here — after the
-      // background has received the message (so a pre-acceptance crash leaves
-      // the prompt recoverable) but before the agent run starts (so a
-      // mid-run panel close does not replay the prompt on reopen).
-      if (msg.contextMenuClear?.tabId != null) {
-        await contextMenuStorage.clear(msg.contextMenuClear.tabId, msg.contextMenuClear.promptId);
-      }
-
       const updates = [];
       let userMemoryTurnContextTaken = false;
+      let runCaptureState = null;
       let result = '';
       let runError = null;
       try {
-        const runOptions = msg.recommendedAction ? { recommendedAction: msg.recommendedAction } : {};
-        result = await agent.processMessage(tabId, msg.text, (type, data) => {
+        // Capture belongs to the background run lifecycle so it survives the
+        // side panel closing or reloading while the agent is still working.
+        runCaptureState = await runCaptureController.start(msg.runCapture, tabId);
+        if (runCaptureState?.micError) {
+          sendAgentUpdate(tabId, runUi.requestId, 'run_capture_warning', {
+            kind: runCaptureState.kind,
+            message: runCaptureState.micError,
+          });
+        }
+
+        // Clear any linked context-menu prompt only after capture preflight
+        // succeeds, but before the agent run starts.
+        if (msg.contextMenuClear?.tabId != null) {
+          await contextMenuStorage.clear(msg.contextMenuClear.tabId, msg.contextMenuClear.promptId);
+        }
+
+        const askStreamingSettings = await chrome.storage.local.get('openaiAskStreamingEnabled').catch(() => ({}));
+        const runOptions = {
+          ...(msg.recommendedAction ? { recommendedAction: msg.recommendedAction } : {}),
+          locale: msg.locale,
+          intentFailureMessage: msg.intentFailureMessage,
+          interactiveChat: true,
+          openaiAskStreamingEnabled: askStreamingSettings.openaiAskStreamingEnabled !== false,
+          detachedRequestId: runUi.requestId,
+          isDetachedStartCancelled: () => isDetachedRunStartCancelled(tabId, msg),
+          beforeConsequentialTool: () => flushRunUiSnapshot(tabId, runUi.requestId),
+          afterConsequentialTool: async ({ name } = {}) => {
+            runUiJournal.settleToolCall(tabId, runUi.requestId, name);
+            return flushRunUiSnapshot(tabId, runUi.requestId);
+          },
+        };
+        const publishUpdate = (type, data) => {
           updates.push({ type, data });
           sendAgentUpdate(tabId, runUi.requestId, type, data);
-        }, mode, msg.attachments, runOptions);
+        };
+        if (isWorkflowRun) {
+          const workflow = await savedWorkflowStore.get(String(msg.workflowId || ''));
+          if (!workflow) throw new Error('Saved workflow not found.');
+          const replay = await agent.replaySavedWorkflow(
+            tabId,
+            workflow,
+            msg.workflowParameters && typeof msg.workflowParameters === 'object' ? msg.workflowParameters : {},
+            publishUpdate,
+            runOptions,
+          );
+          result = replay.summary || '';
+          if (replay.status === 'fallback') {
+            publishUpdate('workflow_fallback', {
+              workflowId: workflow.id,
+              stepIndex: replay.stepIndex,
+              reason: replay.reason,
+            });
+            result = await agent.processMessage(tabId, replay.prompt, publishUpdate, 'act', [], runOptions);
+          }
+        } else {
+          result = await agent.processMessage(tabId, msg.text, publishUpdate, mode, msg.attachments, runOptions);
+        }
+
+        if (isWorkflowRun) {
+          clearUserMemoryTurnContext(tabId);
+          userMemoryTurnContextTaken = true;
+        } else {
+          const userMemoryPayload = takeUserMemoryTurnExtractionPayload(tabId, {
+            userText: msg.text,
+            assistantText: result,
+            mode,
+            succeeded: runUpdatesSucceeded(updates),
+          });
+          userMemoryPayload.conversationId = await agent.getConversationId(tabId);
+          userMemoryTurnContextTaken = true;
+          enqueueUserMemoryExtractionAfterTurn(userMemoryPayload);
+        }
+        return { content: result, updates, requestId: runUi.requestId, conversationId: await agent.getConversationId(tabId) };
+      } catch (error) {
+        runError = error;
+        throw error;
+      } finally {
+        if (runCaptureState) {
+          try {
+            const captureResult = await runCaptureController.finish(runCaptureState, tabId);
+            sendAgentUpdate(tabId, runUi.requestId, 'run_capture_complete', captureResult);
+          } catch (error) {
+            console.warn('[WebBrain] trailing run capture failed to finish:', error);
+            sendAgentUpdate(tabId, runUi.requestId, 'run_capture_error', {
+              kind: runCaptureState.kind,
+              message: error?.message || String(error),
+            });
+          }
+        }
+        if (!userMemoryTurnContextTaken) clearUserMemoryTurnContext(tabId);
+        if (runError && String(runError.message || '').startsWith(RUN_CAPTURE_START_ERROR_PREFIX)) {
+          clearRunUiSnapshot(tabId);
+        } else {
+          const snapshot = finishRunUiSnapshot(
+            tabId,
+            runUi.requestId,
+            terminalRunUiStatus(result, updates, runError),
+            result || (runError ? `Error: ${runError.message}` : ''),
+          );
+          sendAgentRunComplete(tabId, snapshot);
+        }
+        sendIndicatorMessage(tabId, 'WB_HIDE_AGENT_INDICATORS');
+        releaseRunKeepalive();
+      }
+    }
+
+    case 'chat_stream': {
+      const tabId = msg.tabId || sender.tab?.id;
+      if (!tabId) throw new Error('No tab ID');
+      assertNoActiveTabRun(tabId);
+      const mode = msg.mode || 'ask';
+      const runUi = beginRunUiSnapshot(tabId, msg.requestId);
+      const releaseRunKeepalive = acquireRunKeepalive();
+
+      if (msg.apiMutationsAllowed) agent.setApiMutationsAllowed(tabId, true);
+
+      sendIndicatorMessage(tabId, 'WB_SHOW_AGENT_INDICATORS');
+      let userMemoryTurnContextTaken = false;
+      const updates = [];
+      let result = '';
+      let runError = null;
+      try {
+        const runOptions = {
+          ...(msg.recommendedAction ? { recommendedAction: msg.recommendedAction } : {}),
+          locale: msg.locale,
+          intentFailureMessage: msg.intentFailureMessage,
+        };
+        result = await agent.processMessageStream(tabId, msg.text, (type, data) => {
+          updates.push({ type, data });
+          sendAgentUpdate(tabId, runUi.requestId, type, data);
+        }, mode, runOptions);
 
         const userMemoryPayload = takeUserMemoryTurnExtractionPayload(tabId, {
           userText: msg.text,
           assistantText: result,
           mode,
-          succeeded: !updates.some((update) => update?.type === 'error'),
+          succeeded: runUpdatesSucceeded(updates),
         });
+        userMemoryPayload.conversationId = await agent.getConversationId(tabId);
         userMemoryTurnContextTaken = true;
         enqueueUserMemoryExtractionAfterTurn(userMemoryPayload);
-        return { content: result, updates, requestId: runUi.requestId, conversationId: await agent.getConversationId(tabId) };
+        return { content: result, requestId: runUi.requestId, conversationId: await agent.getConversationId(tabId) };
       } catch (error) {
         runError = error;
         throw error;
@@ -1753,79 +2226,44 @@ async function handleMessage(msg, sender) {
         );
         sendAgentRunComplete(tabId, snapshot);
         sendIndicatorMessage(tabId, 'WB_HIDE_AGENT_INDICATORS');
-      }
-    }
-
-    case 'chat_stream': {
-      const tabId = msg.tabId || sender.tab?.id;
-      if (!tabId) throw new Error('No tab ID');
-      assertNoActiveTabRun(tabId);
-      const mode = msg.mode || 'ask';
-      const runUi = beginRunUiSnapshot(tabId, msg.requestId);
-
-      if (msg.apiMutationsAllowed) agent.setApiMutationsAllowed(tabId, true);
-
-      sendIndicatorMessage(tabId, 'WB_SHOW_AGENT_INDICATORS');
-      let userMemoryTurnContextTaken = false;
-      let userMemoryTurnHadError = false;
-      let result = '';
-      let runError = null;
-      try {
-        const runOptions = msg.recommendedAction ? { recommendedAction: msg.recommendedAction } : {};
-        result = await agent.processMessageStream(tabId, msg.text, (type, data) => {
-          if (type === 'error') userMemoryTurnHadError = true;
-          sendAgentUpdate(tabId, runUi.requestId, type, data);
-        }, mode, runOptions);
-
-        const userMemoryPayload = takeUserMemoryTurnExtractionPayload(tabId, {
-          userText: msg.text,
-          assistantText: result,
-          mode,
-          succeeded: !userMemoryTurnHadError,
-        });
-        userMemoryTurnContextTaken = true;
-        enqueueUserMemoryExtractionAfterTurn(userMemoryPayload);
-        return { content: result, requestId: runUi.requestId, conversationId: await agent.getConversationId(tabId) };
-      } catch (error) {
-        runError = error;
-        throw error;
-      } finally {
-        if (!userMemoryTurnContextTaken) clearUserMemoryTurnContext(tabId);
-        const snapshot = finishRunUiSnapshot(
-          tabId,
-          runUi.requestId,
-          terminalRunUiStatus(result, userMemoryTurnHadError ? [{ type: 'error' }] : [], runError),
-          result || (runError ? `Error: ${runError.message}` : ''),
-        );
-        sendAgentRunComplete(tabId, snapshot);
-        sendIndicatorMessage(tabId, 'WB_HIDE_AGENT_INDICATORS');
+        releaseRunKeepalive();
       }
     }
 
     case 'continue': {
       const tabId = msg.tabId || sender.tab?.id;
       if (!tabId) throw new Error('No tab ID');
-      assertNoActiveTabRun(tabId);
+      assertRunCanStart(tabId, msg);
       const mode = msg.mode || 'ask';
-      const runUi = beginRunUiSnapshot(tabId, msg.requestId);
+      const runUi = await beginContinuationRunUiSnapshot(tabId, msg.requestId, { mode, kind: 'continue' });
+      const releaseRunKeepalive = acquireRunKeepalive();
 
       sendIndicatorMessage(tabId, 'WB_SHOW_AGENT_INDICATORS');
       let userMemoryTurnContextTaken = false;
-      let userMemoryTurnHadError = false;
+      const updates = [];
       let result = '';
       let runError = null;
       try {
         result = await agent.continueProcessing(tabId, (type, data) => {
-          if (type === 'error') userMemoryTurnHadError = true;
+          updates.push({ type, data });
           sendAgentUpdate(tabId, runUi.requestId, type, data);
-        }, mode);
+        }, mode, {
+          detachedRequestId: runUi.requestId,
+          isDetachedStartCancelled: () => isDetachedRunStartCancelled(tabId, msg),
+          beforeConsequentialTool: () => flushRunUiSnapshot(tabId, runUi.requestId),
+          afterConsequentialTool: async ({ name } = {}) => {
+            runUiJournal.settleToolCall(tabId, runUi.requestId, name);
+            return flushRunUiSnapshot(tabId, runUi.requestId);
+          },
+        });
 
         const userMemoryPayload = takeUserMemoryTurnExtractionPayload(tabId, {
           userText: 'Please continue from where you left off.',
           assistantText: result,
           mode,
-          succeeded: !userMemoryTurnHadError,
+          succeeded: runUpdatesSucceeded(updates),
         });
+        userMemoryPayload.conversationId = await agent.getConversationId(tabId);
         userMemoryTurnContextTaken = true;
         enqueueUserMemoryExtractionAfterTurn(userMemoryPayload);
         return { content: result, requestId: runUi.requestId, conversationId: await agent.getConversationId(tabId) };
@@ -1837,11 +2275,12 @@ async function handleMessage(msg, sender) {
         const snapshot = finishRunUiSnapshot(
           tabId,
           runUi.requestId,
-          terminalRunUiStatus(result, userMemoryTurnHadError ? [{ type: 'error' }] : [], runError),
+          terminalRunUiStatus(result, updates, runError),
           result || (runError ? `Error: ${runError.message}` : ''),
         );
         sendAgentRunComplete(tabId, snapshot);
         sendIndicatorMessage(tabId, 'WB_HIDE_AGENT_INDICATORS');
+        releaseRunKeepalive();
       }
     }
 
@@ -1856,6 +2295,15 @@ async function handleMessage(msg, sender) {
       return { ok: true };
     }
 
+    case 'disable_dev_diagnostics': {
+      if (msg.all === true) {
+        return { ok: true, disabled: await agent.disableAllDevDiagnostics() };
+      }
+      const tabId = msg.tabId || sender.tab?.id;
+      if (!tabId) return { ok: false, error: 'No tab ID' };
+      return { ok: true, disabled: await agent.disableDevDiagnostics(tabId) };
+    }
+
     case 'compact_conversation': {
       const tabId = msg.tabId || sender.tab?.id;
       if (!tabId) return { ok: false, error: 'No tab ID' };
@@ -1864,14 +2312,37 @@ async function handleMessage(msg, sender) {
 
     case 'abort': {
       const tabId = msg.tabId || sender.tab?.id;
-      if (tabId) agent.abort(tabId);
+      if (tabId) {
+        cancelDetachedRunStart(tabId);
+        agent.abort(tabId);
+      }
       return { ok: true };
     }
 
     case 'agent_run_state': {
       const tabId = msg.tabId || sender.tab?.id;
       if (!tabId) return { ok: false, error: 'No tab ID' };
-      return { ok: true, ...agent.activeRunState(tabId), runUi: await getRunUiSnapshot(tabId) };
+      const starting = detachedRunStarts.get(tabId) || null;
+      const requestedRequestId = String(msg.requestId || '');
+      const failure = detachedRunFailures.get(tabId) || null;
+      const detachedError = requestedRequestId && failure?.requestId === requestedRequestId
+        ? { requestId: failure.requestId, message: failure.message }
+        : null;
+      const submittedTurnDurable = requestedRequestId
+        ? await agent.hasDurableSubmittedTurn(tabId, requestedRequestId)
+        : false;
+      const runUiSnapshot = await getRunUiSnapshot(tabId);
+      return {
+        ok: true,
+        ...agent.activeRunState(tabId),
+        starting: !!starting,
+        startingRequestId: starting?.requestId || null,
+        submittedTurnDurable,
+        runUiDurable: !runUiSnapshot
+          || runUiPersistenceFailures.get(tabId) !== String(runUiSnapshot.requestId || ''),
+        detachedError,
+        runUi: runUiSnapshotForRequest(runUiSnapshot, requestedRequestId),
+      };
     }
 
     case 'agent_run_ack': {
@@ -1890,6 +2361,60 @@ async function handleMessage(msg, sender) {
       const tabId = msg.tabId || sender.tab?.id;
       if (!tabId) return { ok: false, error: 'No tab ID' };
       return { ok: true, ...(await agent.exportTraces(tabId)) };
+    }
+
+    case 'export_config': {
+      const stored = await chrome.storage.local.get(CONFIG_STORAGE_KEYS);
+      const config = createConfigExport(stored, {
+        locale: msg.locale,
+        webbrainVersion: chrome.runtime.getManifest().version,
+      });
+      return {
+        ok: true,
+        json: JSON.stringify(config, null, 2),
+        settingCount: CONFIG_STORAGE_KEYS.length,
+      };
+    }
+
+    // The cloud launcher calls import_config_patch directly from a privileged
+    // extension page. It must not be exposed through the offscreen WebSocket
+    // bridge, whose allowlist is limited to managed run operations.
+    case 'import_config':
+    case 'import_config_patch': {
+      const imported = msg.action === 'import_config_patch'
+        ? parseConfigPatchImport(msg.json)
+        : parseConfigImport(msg.json);
+      const settings = msg.action === 'import_config_patch'
+        ? mergeConfigPatchSettings(
+          await chrome.storage.local.get(['providers']),
+          imported.settings,
+        )
+        : imported.settings;
+      await chrome.storage.local.set(settings);
+      await providerManager.load();
+      await Promise.all([
+        loadMaxSteps(),
+        loadClarifyTimeout(),
+        loadAutoScreenshot(),
+        loadSiteAdapters(),
+        loadScreenshotRedaction(),
+        loadStrictSecretMode(),
+        loadWebMCPEnabled(),
+        loadProfile(),
+        syncAgentUserMemoryFromStorage(),
+        loadCustomSkills(),
+        loadCaptchaSolver(),
+        loadPlanBeforeAct(),
+        loadPlanReviewSettings(),
+        loadApiMutationObserverSetting(),
+        agent._ensureGateSetting({ force: true }),
+      ]);
+      agent._refreshSystemPrompts();
+      return {
+        ok: true,
+        settingCount: Object.keys(settings).length,
+        ignoredKeys: imported.ignoredKeys,
+      };
     }
 
     case 'get_progress': {
@@ -1969,10 +2494,13 @@ async function handleMessage(msg, sender) {
       const answer = String(msg.answer || '').trim();
       if (!clarifyId) return { ok: false, error: 'clarifyId required' };
       if (!answer) return { ok: false, error: 'answer required' };
-      const matched = agent.submitClarifyResponse(tabId, clarifyId, answer, msg.source || 'user');
-      if (matched && msg.memorySource === 'clarification_response') {
+      const source = String(msg.source || 'user');
+      const matched = agent.submitClarifyResponse(tabId, clarifyId, answer, source);
+      // Waited-timeout and Instant auto-selects are not user-authored preferences.
+      const isAutoClarify = source === 'timeout' || source === 'auto';
+      if (matched && !isAutoClarify && msg.memorySource === 'clarification_response') {
         recordClarificationMemoryCandidate(tabId, msg.question, answer);
-      } else if (matched && msg.memorySource === 'form_confirmation') {
+      } else if (matched && !isAutoClarify && msg.memorySource === 'form_confirmation') {
         recordFormCompletionMemoryCandidate(tabId, answer);
       }
       return { ok: matched, matched };
@@ -2069,6 +2597,22 @@ async function handleMessage(msg, sender) {
       }
     }
 
+    case 'chrome_web_store_oauth_start': {
+      try {
+        await startChromeWebStoreOAuth(msg.config || {});
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    }
+    case 'chrome_web_store_oauth_status': {
+      return { ok: true, ...(await getChromeWebStoreOAuthStatus()) };
+    }
+    case 'chrome_web_store_oauth_signout': {
+      await signOutChromeWebStoreOAuth();
+      return { ok: true };
+    }
+
     case 'list_provider_models': {
       return await providerManager.listProviderModels(msg.providerId);
     }
@@ -2134,14 +2678,7 @@ async function handleMessage(msg, sender) {
       } catch {
         // Try injecting content script. accessibility-tree.js must load
         // first so content.js's a11y-tree handlers can reach the builder.
-        await chrome.scripting.executeScript({
-          target: { tabId },
-          files: [
-            'src/content/accessibility-tree.js',
-            'src/content/content.js',
-            'src/content/agent-visual-indicator.js',
-          ],
-        });
+        await agent._injectCoreContentScripts(tabId);
         return await chrome.tabs.sendMessage(tabId, {
           target: 'content',
           action: 'get_page_info',

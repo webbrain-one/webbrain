@@ -47,7 +47,7 @@ function detect() {
     const saved = localStorage.getItem(LS_KEY);
     if (saved && DICTS[saved]) return saved;
   } catch { /* storage denied */ }
-  const nav = (navigator.language || 'en').slice(0, 2).toLowerCase();
+  const nav = (globalThis.navigator?.language || 'en').slice(0, 2).toLowerCase();
   return DICTS[nav] ? nav : 'en';
 }
 
@@ -118,8 +118,10 @@ try {
 } catch { /* ignore */ }
 
 // Apply on first load. If the DOM isn't ready yet, wait for it.
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => applyDOMTranslations(document));
-} else {
-  applyDOMTranslations(document);
+if (typeof document !== 'undefined') {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => applyDOMTranslations(document));
+  } else {
+    applyDOMTranslations(document);
+  }
 }

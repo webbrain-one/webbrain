@@ -1,0 +1,51 @@
+name: WebMCP E2E
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/webmcp.yml"
+      - "package.json"
+      - "package-lock.json"
+      - "src/chrome/**"
+      - "test/fixtures/webmcp-*.html"
+      - "test/webmcp-e2e.mjs"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/webmcp.yml"
+      - "package.json"
+      - "package-lock.json"
+      - "src/chrome/**"
+      - "test/fixtures/webmcp-*.html"
+      - "test/webmcp-e2e.mjs"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: webmcp-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Report Chrome version
+        run: google-chrome --version
+
+      - name: Run real Chrome WebMCP smoke test
+        env:
+          WEBMCP_CHROME_PATH: /usr/bin/google-chrome
+        run: npm run test:webmcp

@@ -1,0 +1,31 @@
+{
+  "id": "079",
+  "user": "sell all my bitcoin",
+  "mode": "act",
+  "tab": {
+    "url": "https://www.coinbase.com/assets/bitcoin",
+    "title": "Bitcoin — Coinbase"
+  },
+  "latencyMs": 2315,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll help you sell all your Bitcoin on Coinbase. Let me start by reading the current page to understand what's available.",
+  "usage": {
+    "prompt_tokens": 6932,
+    "completion_tokens": 38,
+    "total_tokens": 6970,
+    "prompt_tokens_details": {
+      "audio_tokens": null,
+      "cached_tokens": 6656
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

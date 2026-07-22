@@ -1,0 +1,22 @@
+{
+  "id": "085",
+  "user": "tell me a joke",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 7022,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "Why did the developer go broke?\n\nBecause they used up all their **cache**. 💸\n\nWant another one? I've got a whole stack.",
+  "usage": {
+    "prompt_tokens": 16567,
+    "completion_tokens": 32,
+    "total_tokens": 16599
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

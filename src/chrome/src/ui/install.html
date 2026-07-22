@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en" data-build="chromium">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title data-i18n="install.page_title">WebBrain installed</title>
+  <script src="theme-bootstrap.js"></script>
+  <link rel="stylesheet" href="install.css">
+</head>
+<body>
+  <main class="install-page">
+    <header class="install-header">
+      <div class="brand">
+        <img src="../../icons/icon128.png" width="42" height="42" alt="">
+        <span>WebBrain</span>
+      </div>
+      <span class="status-chip">
+        <span class="status-dot" aria-hidden="true"></span>
+        <span data-i18n="install.ready">Ready</span>
+      </span>
+    </header>
+
+    <section class="install-hero" aria-labelledby="install-title">
+      <div class="install-copy">
+        <p id="browser-label" class="eyebrow" aria-live="polite" data-i18n="install.checking">Checking your browser…</p>
+        <h1 id="install-title" data-i18n="install.installed">WebBrain installed</h1>
+        <p class="intro" data-i18n="install.open_panel.body">Open WebBrain next to this page to finish setup.</p>
+
+        <button id="open-panel-button" class="open-panel-button" type="button" disabled>
+          <span id="open-panel-label" data-i18n="install.open_panel">Open Side Panel</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M5 12h13M13 6l6 6-6 6"/>
+          </svg>
+        </button>
+
+        <p id="open-panel-status" class="open-panel-status" aria-live="polite"></p>
+        <p id="shortcut-hint" class="shortcut-hint" data-i18n-html="install.open.shortcut_html">Or press <kbd>Alt</kbd><span>+</span><kbd>Shift</kbd><span>+</span><kbd>W</kbd> anytime.</p>
+      </div>
+
+      <aside class="next-step" aria-labelledby="next-step-title">
+        <div class="next-step-rule" aria-hidden="true">
+          <span></span>
+        </div>
+        <div class="next-step-copy">
+          <p id="next-step-title" class="next-step-label" data-i18n="install.eyebrow">One small setup step</p>
+          <p id="next-step-body" data-i18n="install.pin.next">After the side panel opens, use the pin in its header to add WebBrain to your browser toolbar.</p>
+        </div>
+      </aside>
+    </section>
+  </main>
+
+  <script type="module" src="install.js"></script>
+</body>
+</html>

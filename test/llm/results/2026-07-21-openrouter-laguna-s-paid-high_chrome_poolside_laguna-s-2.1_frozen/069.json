@@ -1,0 +1,40 @@
+{
+  "id": "069",
+  "user": "open it",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 3305,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I don't have any prior context about what you'd like me to open — this is a fresh session and the current page is just a blank new tab. Could you let me know what you'd like me to open? For example, a URL, a bookmark, or something specific you're looking for.",
+  "usage": {
+    "prompt_tokens": 16941,
+    "completion_tokens": 253,
+    "total_tokens": 17194,
+    "cost": 0.00022118,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 16928,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.00022118,
+      "upstream_inference_prompt_cost": 0.00017058,
+      "upstream_inference_completions_cost": 0.0000506
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 190,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

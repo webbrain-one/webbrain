@@ -1,0 +1,27 @@
+{
+  "id": "015",
+  "user": "whats my new tab page",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 1887,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 20559,
+    "completion_tokens": 13,
+    "total_tokens": 20572
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

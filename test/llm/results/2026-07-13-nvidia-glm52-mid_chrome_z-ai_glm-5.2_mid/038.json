@@ -1,0 +1,27 @@
+{
+  "id": "038",
+  "user": "close this popup",
+  "mode": "act",
+  "tab": {
+    "url": "https://www.theguardian.com/uk",
+    "title": "The Guardian"
+  },
+  "latencyMs": 60734,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll take a look at the current page to see what popup is open.",
+  "usage": {
+    "prompt_tokens": 12858,
+    "completion_tokens": 29,
+    "total_tokens": 12887
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

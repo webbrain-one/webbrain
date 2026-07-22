@@ -170,7 +170,7 @@
       "name": "WebBrain est-il sûr ? Peut-il modifier les pages web ?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "WebBrain a deux modes : le mode Demander (par défaut) est en lecture seule et ne peut rien modifier sur la page. Le mode Agir active les capacités complètes de l'agent (clic, saisie, navigation) mais demande une confirmation explicite de l'utilisateur avant activation et affiche un avertissement visible. Vous pouvez arrêter l'agent à tout moment avec le bouton Arrêter. Le code source de l'extension est entièrement ouvert à l'audit sur GitHub."
+        "text": "WebBrain comporte trois modes. Le mode Demander (par défaut) est en lecture seule et ne peut rien modifier sur la page. Le mode Agir permet de cliquer, saisir et naviguer, tandis que le mode Dev ajoute des outils de débogage de page. Les actions ayant des conséquences demandent une approbation par défaut ; si cette barrière d'autorisation est désactivée, WebBrain affiche un avertissement visible. Vous pouvez arrêter l'agent à tout moment avec le bouton Arrêter. Le code source de l'extension est entièrement ouvert à l'audit sur GitHub."
       }
     },
     {
@@ -1011,90 +1011,119 @@
       box-shadow: 0 0 0 1px var(--tint-strong);
     }
 
-    /* ----- v3 — short-form video player ----- */
+    /* ----- v3 — landscape video player (YouTube-style watch page) ----- */
     .page-video {
       display: flex;
-      align-items: center;
+      flex-direction: column;
       justify-content: center;
-      padding: 14px 24px;
-      background: radial-gradient(circle at 50% 30%, rgba(167,139,250,0.10), transparent 70%);
+      gap: 12px;
+      padding: 18px 16px;
+      background: radial-gradient(circle at 50% 20%, rgba(167,139,250,0.10), transparent 70%);
     }
     .pv-frame {
       position: relative;
-      width: 200px;
-      aspect-ratio: 9 / 16;
-      max-height: 100%;
-      border-radius: 14px;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      border-radius: 10px;
       overflow: hidden;
       border: 1px solid rgba(255,255,255,0.08);
-      box-shadow: 0 12px 36px rgba(0,0,0,0.45);
+      box-shadow: 0 10px 28px rgba(0,0,0,0.40);
       background:
-        linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.55) 75%, rgba(0,0,0,0.85) 100%),
-        linear-gradient(45deg, #2d1b69, #6c63ff 70%, #ec4899);
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      padding: 10px 12px 14px;
+        linear-gradient(180deg, rgba(0,0,0,0) 45%, rgba(0,0,0,0.72) 100%),
+        linear-gradient(135deg, #2d1b69, #6c63ff 65%, #ec4899);
       color: #fff;
     }
+    /* Soft frosted play disc — readable as "video" without the loud
+       YouTube-red brand hit that pulls focus from the agent panel. */
     .pv-frame::before {
-      content: '▶';
+      content: '';
       position: absolute;
       inset: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 30px;
-      color: rgba(255,255,255,0.85);
-      text-shadow: 0 4px 14px rgba(0,0,0,0.5);
+      margin: auto;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.16);
+      border: 1px solid rgba(255,255,255,0.28);
+      box-shadow: 0 6px 18px rgba(0,0,0,0.28);
+      backdrop-filter: blur(6px);
       pointer-events: none;
     }
-    .pv-top {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 10px;
-      color: rgba(255,255,255,0.85);
-      position: relative;
-      z-index: 1;
-    }
-    .pv-time {
-      background: rgba(0,0,0,0.4);
-      padding: 2px 6px;
-      border-radius: 4px;
-    }
-    .pv-bottom {
-      position: relative;
-      z-index: 1;
-      font-size: 11px;
-      line-height: 1.4;
-      padding-inline-end: 30px;
-    }
-    .pv-username {
-      font-weight: 700;
-      margin-bottom: 3px;
-    }
-    .pv-caption {
-      color: rgba(255,255,255,0.85);
-    }
-    .pv-actions {
+    .pv-frame::after {
+      content: '';
       position: absolute;
-      inset-inline-end: 6px;
-      bottom: 24px;
+      inset: 0;
+      margin: auto;
+      width: 0;
+      height: 0;
+      border-style: solid;
+      border-width: 7px 0 7px 12px;
+      border-color: transparent transparent transparent rgba(255,255,255,0.92);
+      transform: translateX(2px);
+      pointer-events: none;
+    }
+    .pv-controls {
+      position: absolute;
+      inset-inline: 0;
+      bottom: 0;
+      z-index: 1;
       display: flex;
       flex-direction: column;
-      gap: 8px;
-      z-index: 1;
+      gap: 6px;
+      padding: 8px 10px 9px;
+      background: linear-gradient(180deg, transparent, rgba(0,0,0,0.72));
     }
-    .pv-actions span {
-      background: rgba(0,0,0,0.4);
-      border-radius: 50%;
-      width: 26px;
-      height: 26px;
+    .pv-progress {
+      position: relative;
+      height: 3px;
+      border-radius: 2px;
+      background: rgba(255,255,255,0.28);
+      overflow: hidden;
+    }
+    .pv-progress::after {
+      content: '';
+      position: absolute;
+      inset-block: 0;
+      inset-inline-start: 0;
+      width: 38%;
+      background: rgba(255,255,255,0.88);
+      border-radius: 2px;
+    }
+    .pv-controls-row {
       display: flex;
       align-items: center;
-      justify-content: center;
+      justify-content: space-between;
+      font-size: 10px;
+      color: rgba(255,255,255,0.9);
+    }
+    .pv-time {
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.2px;
+    }
+    .pv-controls-icons {
+      display: flex;
+      gap: 8px;
+      opacity: 0.85;
+      font-size: 11px;
+    }
+    .pv-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      text-align: start;
+      min-width: 0;
+    }
+    .pv-caption {
+      color: var(--text);
       font-size: 13px;
+      font-weight: 650;
+      line-height: 1.35;
+      letter-spacing: 0.1px;
+    }
+    .pv-username {
+      color: var(--text-dim);
+      font-size: 11px;
+      font-weight: 500;
     }
 
     /* Scene 4 — a compact browser-style completion bubble lands with the
@@ -1872,32 +1901,6 @@
     }
     .footer-links { display: flex; flex-wrap: wrap; gap: 12px 20px; }
 
-    .safety-note {
-      max-width: var(--max-w);
-      margin: 0 auto 24px;
-      background: rgba(251,191,36,0.1);
-      border: 1px solid rgba(251,191,36,0.35);
-      border-radius: var(--radius-sm);
-      padding: 18px 20px;
-      color: var(--text);
-      text-align: start;
-      line-height: 1.55;
-      font-size: 13px;
-    }
-    .safety-note h4 {
-      font-size: 14px;
-      margin-bottom: 8px;
-      letter-spacing: 0.4px;
-      text-transform: uppercase;
-      color: var(--warning);
-    }
-    .safety-note ul {
-      margin: 0;
-      padding-inline-start: 18px;
-    }
-    .safety-note li { margin-bottom: 6px; }
-    .safety-note li:last-child { margin-bottom: 0; }
-
     /* ================================================================
        COMPARISON TABLE
        ================================================================ */
@@ -2344,24 +2347,22 @@
       <div class="browser-mockup" data-scene="3" aria-hidden="true" inert>
         <div class="browser-bar">
           <div class="browser-dots"><span></span><span></span><span></span></div>
-          <div class="browser-url">https://socialvid.app/@nomad/clip-8472</div>
+          <div class="browser-url">https://youtube.com/watch?v=n0m4dB0druM</div>
         </div>
         <div class="browser-body">
           <div class="browser-page page-video">
             <div class="pv-frame">
-              <div class="pv-top">
-                <span></span>
-                <span class="pv-time">0:24</span>
+              <div class="pv-controls">
+                <div class="pv-progress" aria-hidden="true"></div>
+                <div class="pv-controls-row">
+                  <span class="pv-time">0:09 / 0:24</span>
+                  <span class="pv-controls-icons" aria-hidden="true">CC · ⚙ · ⛶</span>
+                </div>
               </div>
-              <div class="pv-bottom">
-                <div class="pv-username">@nomad</div>
-                <div class="pv-caption">Timelapse de coucher de soleil sur Bodrum</div>
-              </div>
-              <div class="pv-actions">
-                <span>♥</span>
-                <span>💬</span>
-                <span>↗</span>
-              </div>
+            </div>
+            <div class="pv-meta">
+              <div class="pv-caption">Timelapse de coucher de soleil sur Bodrum</div>
+              <div class="pv-username">@nomad</div>
             </div>
           </div>
           <div class="side-panel scene-download-panel">
@@ -2852,8 +2853,13 @@
     </details>
 
     <details class="faq-item">
+      <summary>Y a-t-il des limitations lorsque WebBrain est utilisé dans le panneau Web de Vivaldi ?</summary>
+      <p>Oui. Les panneaux Web de Vivaldi bloquent les boîtes de dialogue JavaScript natives telles que <code>confirm()</code>, <code>alert()</code> et <code>prompt()</code>. Le sélecteur des modes Ask, Act et Dev de WebBrain ne dépend plus de ces boîtes de dialogue, mais quelques actions secondaires les utilisent encore.</p><p><strong>Nouvelle conversation :</strong> Dans le panneau Web, le bouton peut sembler ne rien faire, car sa boîte de confirmation est bloquée. Faites un clic droit sur l'icône du panneau WebBrain, choisissez <strong>Ouvrir dans → Nouvel onglet</strong>, puis utilisez <strong>Nouvelle conversation</strong> depuis cet onglet normal.</p><p><strong>Enregistrement :</strong> N'utilisez pas encore <code>/record</code> dans Vivaldi. Si l'enregistrement échoue, Vivaldi peut masquer l'alerte d'erreur et ne fournir aucune explication visible.</p><p><strong>Paramètres, Historique, Traces et transfert vers Ollama :</strong> Ces pages contiennent aussi des boîtes de dialogue natives, mais WebBrain les ouvre normalement dans des onglets ordinaires, où elles fonctionnent. Si vous en placez une manuellement dans un panneau Web, ouvrez-la dans un onglet normal avant d'utiliser une action dépendant d'une boîte de dialogue.</p>
+    </details>
+
+    <details class="faq-item">
       <summary>WebBrain est-il sûr ? Peut-il modifier les pages web ?</summary>
-      <p>WebBrain a deux modes : le mode Demander (par défaut) est en lecture seule et ne peut rien modifier sur la page. Le mode Agir active les capacités complètes de l'agent (clic, saisie, navigation) mais demande une confirmation explicite de l'utilisateur avant activation et affiche un avertissement visible. Vous pouvez arrêter l'agent à tout moment avec le bouton Arrêter. Le code source de l'extension est entièrement ouvert à l'audit sur GitHub.</p>
+      <p>WebBrain comporte trois modes. Le mode Demander (par défaut) est en lecture seule et ne peut rien modifier sur la page. Le mode Agir permet de cliquer, saisir et naviguer, tandis que le mode Dev ajoute des outils de débogage de page. Les actions ayant des conséquences demandent une approbation par défaut ; si cette barrière d'autorisation est désactivée, WebBrain affiche un avertissement visible. Vous pouvez arrêter l'agent à tout moment avec le bouton Arrêter. Le code source de l'extension est entièrement ouvert à l'audit sur GitHub.</p>
     </details>
 
     <details class="faq-item">
@@ -2947,14 +2953,6 @@
 
 <!-- FOOTER -->
 <footer>
-  <div class="safety-note" id="safety">
-    <h4>Avertissement important</h4>
-    <ul>
-      <li>Le mode Agir de WebBrain peut effectuer de véritables actions en votre nom. Vous êtes responsable de la vérification des prompts, des destinations et des résultats avant de continuer.</li>
-      <li>WebBrain peut capturer des captures d&#39;écran pour planifier. Évitez d&#39;utiliser le mode agent sur des pages sensibles (santé, finance, rencontres ou portails de comptes privés) sauf si vous acceptez le risque.</li>
-      <li>Le contenu web peut contenir des injections de prompts malveillantes destinées à manipuler le comportement de l&#39;IA. Vérifiez toujours les actions proposées et stoppez les exécutions qui semblent inattendues.</li>
-    </ul>
-  </div>
   <div class="footer-inner">
     <span>© 2026 WebBrain. Créé par <a href="https://emresokullu.com" target="_blank">Emre Sokullu</a>.</span>
     <div class="footer-links">

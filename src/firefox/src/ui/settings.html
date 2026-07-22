@@ -20,6 +20,7 @@
       --border: rgba(255,255,255,0.08);
       --success: #4caf50;
       --error: #f44336;
+      --warning: #ffc870;
       --radius: 10px;
       color-scheme: dark;
     }
@@ -34,6 +35,7 @@
       --border: rgba(89,55,25,0.15);
       --success: #2d8866;
       --error: #c5363c;
+      --warning: #a85f00;
       color-scheme: light;
     }
     * { margin:0; padding:0; box-sizing:border-box; }
@@ -279,6 +281,67 @@
       transition: color 0.15s;
     }
     .provider-card.expanded .provider-chevron { color: var(--accent); }
+    /* Brand marks (Lobe Icons + a few official assets). Light chip so mono
+       currentColor SVGs stay legible on dark theme without per-icon filters. */
+    .provider-icon {
+      width: 20px;
+      height: 20px;
+      border-radius: 5px;
+      background: rgba(255, 255, 255, 0.94);
+      padding: 2px;
+      box-sizing: border-box;
+      object-fit: contain;
+      flex-shrink: 0;
+      display: block;
+    }
+    /* Multimodal section headings always show a mono feature icon so the
+       tab has visual anchors even when base URL is empty (brand chip only
+       appears after a known endpoint is sniffed). */
+    .mm-section-heading {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 12px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .mm-section-heading + .provider-card + .mm-section-heading {
+      margin-top: 24px;
+    }
+    .mm-section-icon {
+      width: 18px;
+      height: 18px;
+      color: var(--accent);
+      flex-shrink: 0;
+    }
+    .mm-field-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    /* Brand hint sniffed from base URL — sits on the field label row. */
+    .mm-detected-provider {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin: 0;
+      padding: 2px 8px 2px 4px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.06);
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1.2;
+    }
+    .mm-detected-provider[hidden] { display: none !important; }
+    .mm-detected-provider .provider-icon {
+      width: 16px;
+      height: 16px;
+      padding: 1px;
+    }
     .provider-name { font-weight: 600; font-size: 14px; }
     .provider-type { color: var(--text2); font-size: 11px; }
     .provider-status-badges { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
@@ -337,6 +400,9 @@
       flex-wrap: wrap;
     }
     .provider-filter-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
       background: transparent;
       color: var(--text2);
       border: none;
@@ -348,6 +414,15 @@
       letter-spacing: 0.4px;
       cursor: pointer;
       transition: color 0.12s;
+    }
+    .provider-filter-pill-icon {
+      width: 13px;
+      height: 13px;
+      flex-shrink: 0;
+      opacity: 0.85;
+    }
+    .provider-filter-pill.active .provider-filter-pill-icon {
+      opacity: 1;
     }
     .provider-filter-pill:hover { color: var(--text); }
     .provider-filter-pill.active {
@@ -377,6 +452,103 @@
       background: var(--bg2);
       border: 1px dashed var(--border);
       border-radius: var(--radius);
+    }
+
+    .provider-compatibility {
+      margin-top: 14px;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+    .provider-compatibility summary {
+      display: grid;
+      grid-template-columns: minmax(180px, auto) minmax(0, 1fr);
+      align-items: center;
+      gap: 12px;
+      padding: 11px 28px 11px 0;
+      color: var(--text2);
+      cursor: pointer;
+      list-style: none;
+      position: relative;
+      user-select: none;
+    }
+    .provider-compatibility summary::-webkit-details-marker { display: none; }
+    .provider-compatibility summary::after {
+      content: '+';
+      position: absolute;
+      right: 4px;
+      color: var(--text2);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 15px;
+    }
+    .provider-compatibility[open] summary::after { content: '−'; }
+    .provider-compatibility summary:hover,
+    .provider-compatibility[open] summary { color: var(--text); }
+    .provider-compatibility-title {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.45px;
+      text-transform: uppercase;
+    }
+    .provider-compatibility-summary {
+      min-width: 0;
+      overflow: hidden;
+      color: var(--text2);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 10px;
+      text-align: right;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .provider-compatibility-body {
+      padding: 14px;
+      margin-bottom: 12px;
+      background: rgba(108,99,255,0.055);
+      border: 1px solid rgba(108,99,255,0.16);
+      border-radius: 8px;
+    }
+    .provider-compatibility-body > p {
+      margin: 0 0 12px;
+      color: var(--text2);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .provider-compatibility-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0 12px;
+    }
+    .provider-compatibility-json textarea {
+      min-height: 116px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      tab-size: 2;
+    }
+    .provider-compatibility-json textarea[aria-invalid="true"] {
+      border-color: var(--danger, #e66);
+      box-shadow: 0 0 0 1px rgba(238,102,102,0.18);
+    }
+    .provider-compatibility-help {
+      margin-top: 5px;
+      color: var(--text2);
+      font-size: 10px;
+      line-height: 1.45;
+    }
+    .provider-compatibility-footer {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 32px;
+    }
+    .provider-compatibility-validation {
+      color: var(--danger, #e66);
+      font-size: 11px;
+      line-height: 1.35;
+    }
+    @media (max-width: 600px) {
+      .provider-compatibility summary { grid-template-columns: 1fr; gap: 3px; }
+      .provider-compatibility-summary { text-align: left; }
+      .provider-compatibility-grid { grid-template-columns: 1fr; }
+      .provider-compatibility-footer { align-items: flex-start; flex-direction: column; }
     }
 
     .field { margin-bottom: 10px; }
@@ -411,6 +583,57 @@
     .field input[type="password"] {
       font-family: monospace;
     }
+    .field input[data-key="apiKey"][aria-invalid="true"] {
+      border-color: var(--warning);
+    }
+
+    .provider-warning {
+      margin-top: 12px;
+      padding: 12px 14px;
+      border: 1px solid rgba(255, 152, 0, 0.32);
+      border-left: 4px solid var(--warning);
+      border-radius: 6px;
+      background: rgba(255, 152, 0, 0.08);
+      color: var(--text2);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+    .provider-warning-label {
+      margin-bottom: 3px;
+      color: var(--warning);
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 0.9px;
+      text-transform: uppercase;
+    }
+    .provider-warning-title {
+      display: block;
+      margin-bottom: 7px;
+      color: var(--text);
+      font-size: 13px;
+    }
+    .provider-warning p + p { margin-top: 7px; }
+    .provider-warning pre {
+      margin: 8px 0;
+      padding: 9px 10px;
+      overflow-x: auto;
+      border: 1px solid rgba(255, 152, 0, 0.2);
+      border-radius: 5px;
+      background: rgba(0, 0, 0, 0.22);
+      color: var(--text);
+      font-size: 11px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    .provider-warning a {
+      display: inline-block;
+      margin-top: 8px;
+      color: var(--warning);
+      font-weight: 700;
+      text-decoration: none;
+    }
+    .provider-warning a:hover { text-decoration: underline; }
 
     .btn-row {
       display: flex;
@@ -510,6 +733,7 @@
     .test-result.show { display: block; }
     .test-result.ok { background: rgba(76,175,80,0.12); color: var(--success); }
     .test-result.fail { background: rgba(244,67,54,0.12); color: var(--error); }
+    .test-result.warn { background: rgba(255,152,0,0.12); color: var(--warning); }
 
     /* Toggle switch */
     .setting-row {
@@ -540,11 +764,186 @@
       color: var(--text2);
       line-height: 1.4;
     }
+    .setting-input {
+      flex: 0 1 260px;
+      min-width: 120px;
+      max-width: 42%;
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 7px 10px;
+      font: inherit;
+      font-size: 12px;
+      outline: none;
+    }
+    .setting-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(108,99,255,0.22);
+    }
     .skill-source {
       max-width: 340px;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+    .skill-name-button {
+      display: inline;
+      padding: 0;
+      color: var(--text);
+      background: transparent;
+      border-radius: 3px;
+      font: inherit;
+      text-align: start;
+      text-decoration: underline;
+      text-decoration-color: var(--accent);
+      text-decoration-style: dotted;
+      text-underline-offset: 3px;
+    }
+    .skill-name-button:hover {
+      color: var(--accent);
+      text-decoration-style: solid;
+    }
+    .skill-name-button:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 3px;
+    }
+    .skill-name-button:active { transform: none; }
+    .skill-preview-dialog {
+      position: fixed;
+      inset: 0;
+      margin: auto;
+      width: min(720px, calc(100vw - 32px));
+      max-height: calc(100vh - 48px);
+      padding: 0;
+      color: var(--text);
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: 0 18px 48px rgba(0,0,0,0.42);
+    }
+    .skill-preview-dialog::backdrop { background: rgba(0,0,0,0.58); }
+    .skill-preview-dialog-panel { padding: 16px; }
+    .skill-preview-dialog-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 12px;
+    }
+    .skill-preview-dialog-header h3 {
+      margin: 2px 0 0;
+      font-size: 15px;
+      font-weight: 700;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+    .skill-preview-source {
+      color: var(--text2);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      line-height: 1.3;
+      text-transform: uppercase;
+    }
+    .skill-preview-dialog-close {
+      width: 30px;
+      height: 30px;
+      flex-shrink: 0;
+      padding: 0;
+      color: var(--text);
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      font-size: 18px;
+      line-height: 1;
+    }
+    .skill-preview-view-switch {
+      display: inline-flex;
+      margin-bottom: 10px;
+      padding: 2px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
+    .skill-preview-view-button {
+      padding: 5px 10px;
+      color: var(--text2);
+      background: transparent;
+      border: 0;
+      font-size: 11px;
+    }
+    .skill-preview-view-button[aria-pressed="true"] {
+      color: #fff;
+      background: var(--accent);
+    }
+    .skill-preview-body {
+      max-height: min(560px, calc(100vh - 150px));
+      margin: 0;
+      padding: 14px 16px;
+      overflow: auto;
+      color: var(--text);
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 12px;
+      line-height: 1.55;
+      overflow-wrap: anywhere;
+      user-select: text;
+    }
+    .skill-preview-rendered h1,
+    .skill-preview-rendered h2,
+    .skill-preview-rendered h3,
+    .skill-preview-rendered h4,
+    .skill-preview-rendered h5,
+    .skill-preview-rendered h6 {
+      margin: 16px 0 8px;
+      color: var(--text);
+      font-weight: 700;
+      line-height: 1.3;
+      letter-spacing: normal;
+      text-transform: none;
+    }
+    .skill-preview-rendered h1:first-child,
+    .skill-preview-rendered h2:first-child,
+    .skill-preview-rendered h3:first-child { margin-top: 0; }
+    .skill-preview-rendered h1 { font-size: 20px; }
+    .skill-preview-rendered h2 { font-size: 17px; }
+    .skill-preview-rendered h3 { font-size: 14px; }
+    .skill-preview-rendered h4,
+    .skill-preview-rendered h5,
+    .skill-preview-rendered h6 { font-size: 12px; }
+    .skill-preview-rendered a { color: var(--accent); }
+    .skill-preview-rendered ul,
+    .skill-preview-rendered ol {
+      margin: 8px 0;
+      padding-inline-start: 22px;
+    }
+    .skill-preview-rendered li { margin: 3px 0; }
+    .skill-preview-rendered code {
+      padding: 1px 4px;
+      background: var(--bg);
+      border-radius: 3px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.94em;
+    }
+    .skill-preview-rendered pre {
+      margin: 10px 0;
+      padding: 12px;
+      overflow: auto;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      white-space: pre;
+    }
+    .skill-preview-rendered pre code {
+      padding: 0;
+      background: transparent;
+      border-radius: 0;
+    }
+    .skill-preview-raw {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      tab-size: 2;
+      white-space: pre-wrap;
     }
 
     .toggle {
@@ -715,6 +1114,14 @@
       </div>
       <div class="setting-row">
         <div class="setting-info">
+          <div class="setting-label" data-i18n="st.display.download_directory.label"></div>
+          <div class="setting-desc" data-i18n="st.display.download_directory.desc"></div>
+        </div>
+        <input class="setting-input" type="text" id="input-download-directory" autocomplete="off" spellcheck="false"
+               data-i18n-placeholder="st.display.download_directory.placeholder">
+      </div>
+      <div class="setting-row">
+        <div class="setting-info">
           <div class="setting-label" data-i18n="st.display.verbose.label"></div>
           <div class="setting-desc" data-i18n="st.display.verbose.desc"></div>
         </div>
@@ -837,6 +1244,16 @@
            style="background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;text-decoration:none;white-space:nowrap;"
            data-i18n="st.display.history_link.open"></a>
       </div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-label" data-i18n="st.display.help_improve.label"></div>
+          <div class="setting-desc" data-i18n-html="st.display.help_improve.desc_html"></div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="toggle-help-improve" checked>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
 
       <details class="advanced-settings">
         <summary data-i18n="st.display.advanced"></summary>
@@ -850,6 +1267,14 @@
               <input type="checkbox" id="toggle-screenshot-fallback">
               <span class="toggle-slider"></span>
             </label>
+          </div>
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-label"><span data-i18n="st.display.clarify_timeout.label"></span> <span id="clarify-timeout-value" style="color:var(--accent);font-weight:700;margin-left:4px;">60s</span></div>
+              <div class="setting-desc" data-i18n="st.display.clarify_timeout.desc"></div>
+            </div>
+            <input type="range" id="range-clarify-timeout" min="0" max="1205" value="60" step="5"
+                   style="width:120px;accent-color:var(--accent);cursor:pointer;">
           </div>
           <div class="setting-row">
             <div class="setting-info">
@@ -878,6 +1303,16 @@
             </div>
             <label class="toggle">
               <input type="checkbox" id="toggle-api-mutation-observer">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-label" data-i18n="st.display.openai_ask_streaming.label"></div>
+              <div class="setting-desc" data-i18n="st.display.openai_ask_streaming.desc"></div>
+            </div>
+            <label class="toggle">
+              <input type="checkbox" id="toggle-openai-ask-streaming" checked>
               <span class="toggle-slider"></span>
             </label>
           </div>
@@ -991,11 +1426,23 @@
   </section>
 
   <section class="tab-panel" data-panel="multimodal" role="tabpanel">
-    <h3 data-i18n="st.vision.heading" style="margin:0 0 12px;font-size:14px;font-weight:600;"></h3>
+    <h3 class="mm-section-heading">
+      <svg class="mm-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+        <circle cx="12" cy="12" r="3"/>
+      </svg>
+      <span data-i18n="st.vision.heading"></span>
+    </h3>
     <div class="provider-card" id="vision-card">
       <div style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.5;" data-i18n="st.vision.desc"></div>
       <div class="field">
-        <label data-i18n="st.provider.field.api_base_url"></label>
+        <label class="mm-field-label">
+          <span data-i18n="st.provider.field.api_base_url"></span>
+          <span class="mm-detected-provider" id="vision-detected" hidden>
+            <img class="provider-icon" id="vision-detected-icon" alt="" width="16" height="16" decoding="async" draggable="false">
+            <span id="vision-detected-label"></span>
+          </span>
+        </label>
         <input type="text" id="vision-base-url" placeholder="https://api.openai.com/v1">
       </div>
       <div class="field">
@@ -1014,11 +1461,25 @@
       <div class="test-result" id="test-vision"></div>
     </div>
 
-    <h3 data-i18n="st.transcription.heading" style="margin:24px 0 12px;font-size:14px;font-weight:600;"></h3>
+    <h3 class="mm-section-heading">
+      <svg class="mm-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+        <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+        <line x1="12" y1="19" x2="12" y2="23"/>
+        <line x1="8" y1="23" x2="16" y2="23"/>
+      </svg>
+      <span data-i18n="st.transcription.heading"></span>
+    </h3>
     <div class="provider-card" id="transcription-card">
       <div style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.5;" data-i18n="st.transcription.desc"></div>
       <div class="field">
-        <label data-i18n="st.provider.field.api_base_url"></label>
+        <label class="mm-field-label">
+          <span data-i18n="st.provider.field.api_base_url"></span>
+          <span class="mm-detected-provider" id="transcription-detected" hidden>
+            <img class="provider-icon" id="transcription-detected-icon" alt="" width="16" height="16" decoding="async" draggable="false">
+            <span id="transcription-detected-label"></span>
+          </span>
+        </label>
         <input type="text" id="transcription-base-url" placeholder="https://api.openai.com/v1">
       </div>
       <div class="field">
@@ -1256,7 +1717,50 @@
       <div id="skills-list"></div>
     </div>
 
+    <div class="provider-card" id="chrome-web-store-release-card" hidden>
+      <div class="setting-label" style="margin-bottom:6px;" data-i18n="st.skills.cws.heading"></div>
+      <div class="setting-desc" style="margin-bottom:14px;" data-i18n-html="st.skills.cws.desc_html"></div>
+      <div class="field"><label for="chrome-web-store-publisher-id" data-i18n="st.skills.cws.publisher_id"></label><input type="text" id="chrome-web-store-publisher-id" autocomplete="off"></div>
+      <div class="field"><label for="chrome-web-store-item-id" data-i18n="st.skills.cws.item_id"></label><input type="text" id="chrome-web-store-item-id" autocomplete="off" maxlength="32"></div>
+      <div class="field"><label for="chrome-web-store-oauth-client-id" data-i18n="st.skills.cws.oauth_client_id"></label><input type="text" id="chrome-web-store-oauth-client-id" autocomplete="off"></div>
+      <div class="field"><label for="chrome-web-store-oauth-client-secret" data-i18n="st.skills.cws.oauth_client_secret"></label><input type="password" id="chrome-web-store-oauth-client-secret" autocomplete="off"></div>
+      <div class="setting-desc" style="margin:-4px 0 12px;" data-i18n="st.skills.cws.redirect_help"></div>
+      <div class="btn-row">
+        <button class="btn-secondary" id="btn-save-chrome-web-store" data-i18n="st.skills.cws.save"></button>
+        <button class="btn-primary" id="btn-connect-chrome-web-store" data-i18n="st.skills.cws.connect"></button>
+        <button class="btn-secondary" id="btn-signout-chrome-web-store" data-i18n="st.skills.cws.signout"></button>
+      </div>
+      <div class="field" style="margin-top:16px;">
+        <label for="chrome-web-store-package" data-i18n="st.skills.cws.package"></label>
+        <input type="file" id="chrome-web-store-package" accept=".zip,application/zip">
+        <div class="setting-desc" id="chrome-web-store-package-status"></div>
+      </div>
+      <div class="btn-row"><button class="btn-secondary" id="btn-clear-chrome-web-store-package" data-i18n="st.skills.cws.clear_package"></button></div>
+      <div class="test-result" id="chrome-web-store-result"></div>
+    </div>
+
     <div class="info-box" data-i18n-html="st.skills.security_html"></div>
+
+    <dialog class="skill-preview-dialog" id="skill-preview-dialog" aria-labelledby="skill-preview-title">
+      <div class="skill-preview-dialog-panel">
+        <div class="skill-preview-dialog-header">
+          <div>
+            <div class="skill-preview-source" id="skill-preview-source"></div>
+            <h3 id="skill-preview-title"></h3>
+          </div>
+          <button type="button" class="skill-preview-dialog-close"
+                  data-i18n-aria-label="sp.schedule_form.cancel">&times;</button>
+        </div>
+        <div class="skill-preview-view-switch">
+          <button type="button" class="skill-preview-view-button" data-skill-preview-view="rendered"
+                  aria-pressed="true" data-i18n="st.skills.preview.rendered"></button>
+          <button type="button" class="skill-preview-view-button" data-skill-preview-view="raw"
+                  aria-pressed="false" data-i18n="st.skills.preview.raw"></button>
+        </div>
+        <div class="skill-preview-body skill-preview-rendered" id="skill-preview-rendered" tabindex="0"></div>
+        <pre class="skill-preview-body skill-preview-raw" id="skill-preview-raw" tabindex="0" hidden></pre>
+      </div>
+    </dialog>
   </section>
 
   <section class="tab-panel" data-panel="permissions" role="tabpanel">

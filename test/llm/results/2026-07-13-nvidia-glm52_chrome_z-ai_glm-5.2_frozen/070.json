@@ -1,0 +1,22 @@
+{
+  "id": "070",
+  "user": "log in",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 23686,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I'd be happy to help you log in, but I need a bit more information. Which website or service would you like me to log you into?",
+  "usage": {
+    "prompt_tokens": 16565,
+    "completion_tokens": 32,
+    "total_tokens": 16597
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

@@ -423,6 +423,8 @@ def test_recommendation_builder(page, js_path, sdir):
                     profile: 'youtube',
                     urls: ['https://rr1---sn-foo.googlevideo.com/video.mp4?abc'],
                     mseBytes: 0,
+                    completedCount: 1,
+                    completedVideoCount: 1,
                     pageUrl: 'https://www.youtube.com/watch?v=abc',
                 });
 
@@ -434,7 +436,17 @@ def test_recommendation_builder(page, js_path, sdir):
                     pageUrl: 'https://www.pinterest.com/pin/123/',
                 });
 
-                return [r1, r2, r3, r4, r5, r6, r7];
+                // 8. A completed YouTube thumbnail is not a completed video.
+                const r8 = b({
+                    profile: 'youtube',
+                    urls: ['https://i.ytimg.com/vi/abc/maxresdefault.jpg'],
+                    mseBytes: 0,
+                    completedCount: 1,
+                    completedVideoCount: 0,
+                    pageUrl: 'https://www.youtube.com/watch?v=abc',
+                });
+
+                return [r1, r2, r3, r4, r5, r6, r7, r8];
             }"""
         )
     finally:
@@ -451,9 +463,10 @@ def test_recommendation_builder(page, js_path, sdir):
         "r5.kind == 'empty_result' (supported site, no URLs)",
         "r6 == null (YT with progressive URL — healthy)",
         "r7 == null (Pinterest with originals URL — healthy)",
+        "r8.kind == 'youtube_video' (thumbnail completion is not video success)",
     ]
     exp = ['youtube_video', 'mse_capture_available', 'mse_capture_empty',
-           'unsupported_site', 'empty_result', None, None]
+           'unsupported_site', 'empty_result', None, None, 'youtube_video']
     for i, expected in enumerate(exp):
         actual = (out[i] or {}).get('kind') if out and out[i] else None
         if actual != expected:

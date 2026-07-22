@@ -1,0 +1,22 @@
+{
+  "id": "080",
+  "user": "close all my tabs except this one",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 37484,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I can't actually close browser tabs — I don't have a tool for that. Closing tabs is a browser-level action that's outside what I can control through the page.\n\nYou can do it yourself quickly, though:\n- **Close all other tabs**: Right-click the tab you want to keep → \"Close other tabs\" (or press Ctrl+Shift+T is wrong — that reopens closed tabs). The right-click menu option is the fastest way.\n- **Keyboard shortcut**: There isn't a built-in single shortcut for \"close all but this,\" but the right-click → \"Close other tabs\" option does exactly that.\n\nWant me to help with something else instead?",
+  "usage": {
+    "prompt_tokens": 20560,
+    "completion_tokens": 137,
+    "total_tokens": 20697
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

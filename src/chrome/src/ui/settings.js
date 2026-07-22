@@ -4,6 +4,7 @@
 
 import { t, getLocale, setLocale, LANGUAGES } from './i18n.js';
 import { THEME_MODES, applyMode, loadMode, watch } from './theme.js';
+import { renderSkillMarkdown } from './skill-markdown.js';
 import { CAPABILITY_LABEL } from '../agent/permission-gate.js';
 import {
   CUSTOM_SKILLS_STORAGE_KEY,
@@ -25,10 +26,33 @@ import {
   USER_MEMORY_MAX_PROMPT_CHARS_KEY,
   normalizeUserMemoryMaxPromptChars,
 } from '../agent/user-memory.js';
+import {
+  detectedCompatibilityPreset,
+  normalizeProviderCompatibility,
+  parseProviderExtraBodyJson,
+  shouldUseOpenAIResponsesApi,
+} from '../providers/provider-compatibility.js';
+import {
+  DOWNLOAD_DIRECTORY_STORAGE_KEY,
+  normalizeDownloadDirectory,
+} from '../download-directory.js';
+import {
+  CHROME_WEB_STORE_CONFIG_KEY,
+  CHROME_WEB_STORE_MAX_PACKAGE_BYTES,
+  CHROME_WEB_STORE_PACKAGE_KEY,
+  CHROME_WEB_STORE_SKILL_ID,
+  normalizeChromeWebStoreConfig,
+} from '../chrome-web-store-release.js';
+import {
+  providerIconHtml,
+  providerIconUrl,
+  PROVIDER_SHORT_LABELS,
+  sniffProviderIdFromBaseUrl,
+} from './provider-icons.js';
 
 // Version shown in the subtitle. Kept here so it only needs one update per
 // release; the subtitle string itself is translated.
-const EXT_VERSION = '23.0.4';
+const EXT_VERSION = '25.7.0';
 
 const providersContainer = document.getElementById('providers');
 const displaySettings = document.getElementById('display-settings');
@@ -37,11 +61,14 @@ const generalSearchEmpty = document.getElementById('general-search-empty');
 const advancedSettings = document.querySelector('.advanced-settings');
 const verboseToggle = document.getElementById('toggle-verbose');
 const selectionShortcutToggle = document.getElementById('toggle-selection-shortcut');
+const helpImproveToggle = document.getElementById('toggle-help-improve');
 const screenshotToggle = document.getElementById('toggle-screenshot-fallback');
 const maxStepsRange = document.getElementById('range-max-steps');
 const stepsValueLabel = document.getElementById('steps-value');
 const requestTimeoutRange = document.getElementById('range-request-timeout');
 const requestTimeoutValueLabel = document.getElementById('timeout-value');
+const clarifyTimeoutRange = document.getElementById('range-clarify-timeout');
+const clarifyTimeoutValueLabel = document.getElementById('clarify-timeout-value');
 const costSessionLimitInput = document.getElementById('input-cost-session-limit');
 const costTotalLimitInput = document.getElementById('input-cost-total-limit');
 const costSpentValueLabel = document.getElementById('cost-spent-value');
@@ -53,6 +80,8 @@ const maxImageDimensionSelect = document.getElementById('select-max-image-dimens
 const siteAdaptersToggle = document.getElementById('toggle-site-adapters');
 const voiceInputToggle = document.getElementById('toggle-voice-input');
 const apiMutationObserverToggle = document.getElementById('toggle-api-mutation-observer');
+const webMcpToggle = document.getElementById('toggle-webmcp');
+const openAIAskStreamingToggle = document.getElementById('toggle-openai-ask-streaming');
 const planBeforeActModeSelect = document.getElementById('select-plan-before-act-mode');
 const planReviewModeSelect = document.getElementById('select-plan-review-mode');
 const planReviewConfidenceRange = document.getElementById('range-plan-review-confidence');
@@ -78,6 +107,24 @@ const btnClearSkillForm = document.getElementById('btn-clear-skill-form');
 const skillsResult = document.getElementById('skills-result');
 const skillsList = document.getElementById('skills-list');
 const packagedSkillsList = document.getElementById('packaged-skills-list');
+const skillPreviewDialog = document.getElementById('skill-preview-dialog');
+const skillPreviewTitle = document.getElementById('skill-preview-title');
+const skillPreviewSource = document.getElementById('skill-preview-source');
+const skillPreviewRendered = document.getElementById('skill-preview-rendered');
+const skillPreviewRaw = document.getElementById('skill-preview-raw');
+const skillPreviewViewButtons = document.querySelectorAll('[data-skill-preview-view]');
+const chromeWebStoreCard = document.getElementById('chrome-web-store-release-card');
+const chromeWebStorePublisherId = document.getElementById('chrome-web-store-publisher-id');
+const chromeWebStoreItemId = document.getElementById('chrome-web-store-item-id');
+const chromeWebStoreOauthClientId = document.getElementById('chrome-web-store-oauth-client-id');
+const chromeWebStoreOauthClientSecret = document.getElementById('chrome-web-store-oauth-client-secret');
+const chromeWebStorePackage = document.getElementById('chrome-web-store-package');
+const chromeWebStorePackageStatus = document.getElementById('chrome-web-store-package-status');
+const chromeWebStoreResult = document.getElementById('chrome-web-store-result');
+const btnSaveChromeWebStore = document.getElementById('btn-save-chrome-web-store');
+const btnConnectChromeWebStore = document.getElementById('btn-connect-chrome-web-store');
+const btnSignoutChromeWebStore = document.getElementById('btn-signout-chrome-web-store');
+const btnClearChromeWebStorePackage = document.getElementById('btn-clear-chrome-web-store-package');
 
 // Transcription service (Whisper-compatible) — same shape as the vision
 // override but routes to /v1/audio/transcriptions instead of /v1/chat/completions.
@@ -132,6 +179,7 @@ const btnClearCaptcha = document.getElementById('btn-clear-captcha');
 const captchaTestResult = document.getElementById('test-captcha');
 const languageSelect = document.getElementById('select-language');
 const themeSelect = document.getElementById('select-theme');
+const downloadDirectoryInput = document.getElementById('input-download-directory');
 const subtitleEl = document.getElementById('subtitle');
 
 // --- Appearance / theme ---
@@ -254,6 +302,10 @@ if (languageSelect) {
 }
 
 let providersData = {};
+// Unsaved custom-body text must survive provider-card/filter/search renders,
+// including temporarily invalid JSON while the user is still editing it.
+// Keep the raw UI draft separate from the last valid provider config.
+const providerCompatibilityJsonDrafts = new Map();
 let activeProviderId = '';
 let providerActivationRequestId = 0;
 let requestedActiveProviderId = '';
@@ -349,6 +401,7 @@ let providerFilter = 'all';     // 'all' | 'local' | 'cloud' | 'router'
 let providerSearchQuery = '';
 const expandedProviders = new Set(); // ids the user explicitly expanded this session
 let customSkills = [];
+let skillPreviewRequestId = 0;
 const DEFAULT_SKILL_IDS = new Set(DEFAULT_SKILL_SOURCES.map((source) => source.id));
 
 // --- Init ---
@@ -360,12 +413,13 @@ async function init() {
   chrome.storage.local.remove(['authToken', 'authEmail', 'authDefaultModel']).catch(() => {});
 
   // Load display settings
-  const stored = await chrome.storage.local.get(['verboseMode', 'selectionShortcutEnabled', 'screenshotFallback', 'maxAgentSteps', 'autoScreenshot', 'useSiteAdapters', 'voiceInputEnabled', 'apiMutationObserverEnabled', 'planBeforeActMode', 'planBeforeAct', 'planReviewMode', 'planReviewConfidenceThreshold', 'notifySound', 'completionConfetti', 'tracingEnabled', 'strictSecretMode', 'agentAllowLocalNetwork', 'scheduledTasksEnabled', 'scheduledRequireConsequentialConfirmation', 'providerFilter', 'requestTimeoutMs', 'costAllowanceSessionUsd', 'costAllowanceTotalUsd', 'cloudCostSpentUsd', 'screenshotRedaction', 'imageDetail', 'maxScreenshotsPerTurn', 'maxImageDimension']);
+  const stored = await chrome.storage.local.get(['verboseMode', 'selectionShortcutEnabled', 'helpImproveWebBrain', 'screenshotFallback', 'maxAgentSteps', 'autoScreenshot', 'useSiteAdapters', 'voiceInputEnabled', 'apiMutationObserverEnabled', 'webMcpEnabled', 'openaiAskStreamingEnabled', 'planBeforeActMode', 'planBeforeAct', 'planReviewMode', 'planReviewConfidenceThreshold', DOWNLOAD_DIRECTORY_STORAGE_KEY, 'notifySound', 'completionConfetti', 'tracingEnabled', 'strictSecretMode', 'agentAllowLocalNetwork', 'scheduledTasksEnabled', 'scheduledRequireConsequentialConfirmation', 'providerFilter', 'requestTimeoutMs', 'clarifyTimeoutSec', 'clarifyTimeoutSemanticsV2', 'costAllowanceSessionUsd', 'costAllowanceTotalUsd', 'cloudCostSpentUsd', 'screenshotRedaction', 'imageDetail', 'maxScreenshotsPerTurn', 'maxImageDimension']);
   if (typeof stored.providerFilter === 'string' && ['all','local','cloud','router'].includes(stored.providerFilter)) {
     providerFilter = stored.providerFilter;
   }
   verboseToggle.checked = stored.verboseMode || false;
   if (selectionShortcutToggle) selectionShortcutToggle.checked = stored.selectionShortcutEnabled !== false;
+  if (helpImproveToggle) helpImproveToggle.checked = stored.helpImproveWebBrain !== false; // on by default
   screenshotToggle.checked = stored.screenshotFallback ?? true; // on by default
   if (isUnlimitedMaxAgentSteps(stored.maxAgentSteps)) {
     maxStepsRange.value = MAX_AGENT_STEPS_UNLIMITED_SENTINEL;
@@ -384,6 +438,25 @@ async function init() {
     requestTimeoutRange.value = tSec;
     requestTimeoutValueLabel.textContent = tSec + 's';
   }
+  // Clarify auto-timeout: 0 = Instant, 1–1200s wait, >1200 (1205) = Off. Default 60s.
+  if (clarifyTimeoutRange && clarifyTimeoutValueLabel) {
+    const raw = Number(stored.clarifyTimeoutSec);
+    let cSec = 60;
+    if (Number.isFinite(raw) && raw >= 0) {
+      cSec = raw > 1200 ? 1205 : Math.min(1200, Math.floor(raw));
+    }
+    // One-shot migration: old 0 meant Off; new Off is 1205.
+    if (!stored.clarifyTimeoutSemanticsV2) {
+      const updates = { clarifyTimeoutSemanticsV2: true };
+      if (Number(stored.clarifyTimeoutSec) === 0) {
+        cSec = 1205;
+        updates.clarifyTimeoutSec = 1205;
+      }
+      chrome.storage.local.set(updates).catch(() => {});
+    }
+    clarifyTimeoutRange.value = cSec;
+    clarifyTimeoutValueLabel.textContent = formatClarifyTimeoutLabel(cSec);
+  }
   autoScreenshotSelect.value = stored.autoScreenshot || 'state_change';
   imageDetailSelect.value = stored.imageDetail || 'auto';
   maxScreenshotsSelect.value = String(stored.maxScreenshotsPerTurn != null ? stored.maxScreenshotsPerTurn : 0);
@@ -391,6 +464,8 @@ async function init() {
   siteAdaptersToggle.checked = stored.useSiteAdapters ?? true;
   if (voiceInputToggle) voiceInputToggle.checked = stored.voiceInputEnabled ?? true;
   apiMutationObserverToggle.checked = stored.apiMutationObserverEnabled === true;
+  if (webMcpToggle) webMcpToggle.checked = stored.webMcpEnabled === true; // off by default
+  if (openAIAskStreamingToggle) openAIAskStreamingToggle.checked = stored.openaiAskStreamingEnabled !== false;
   if (planBeforeActModeSelect) {
     planBeforeActModeSelect.value = normalizePlanBeforeActMode(stored);
   }
@@ -401,9 +476,12 @@ async function init() {
     planReviewConfidenceRange.value = normalizePlanReviewConfidenceThreshold(stored);
     updatePlanReviewConfidenceUI();
   }
+  if (downloadDirectoryInput) {
+    downloadDirectoryInput.value = normalizeDownloadDirectory(stored[DOWNLOAD_DIRECTORY_STORAGE_KEY]);
+  }
   notifySoundToggle.checked = stored.notifySound ?? true; // on by default
   completionConfettiToggle.checked = stored.completionConfetti ?? true; // on by default
-  tracingToggle.checked = stored.tracingEnabled === true; // off by default
+  tracingToggle.checked = stored.tracingEnabled === true;
   const sessionLimit = normalizeCostAmount(stored.costAllowanceSessionUsd);
   const totalLimit = normalizeCostAmount(stored.costAllowanceTotalUsd);
   const totalSpent = normalizeCostAmount(stored.cloudCostSpentUsd, 0);
@@ -437,6 +515,8 @@ async function init() {
   if (transcriptionBaseUrlInput) transcriptionBaseUrlInput.value = transcription.baseUrl || '';
   if (transcriptionApiKeyInput) transcriptionApiKeyInput.value = transcription.apiKey || '';
   if (transcriptionModelInput) transcriptionModelInput.value = transcription.model || '';
+  updateMultimodalDetectedProvider('vision');
+  updateMultimodalDetectedProvider('transcription');
 
   // Load profile (auto-fill bio + throwaway password)
   const profileStored = await chrome.storage.local.get(['profileEnabled', 'profileText']);
@@ -576,7 +656,7 @@ function escapeHtml(s) {
 // --- Skills ---
 
 function makeSkillId() {
-  return `skill_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+  return `skill_${Date.now().toString(36)}_${globalThis.crypto.randomUUID()}`;
 }
 
 function showSkillsResult(className, text, color = '') {
@@ -622,6 +702,79 @@ function extractSkillText(raw, contentType = '') {
   return text.trim();
 }
 
+function setSkillPreviewView(view) {
+  const showRaw = view === 'raw';
+  if (skillPreviewRendered) skillPreviewRendered.hidden = showRaw;
+  if (skillPreviewRaw) skillPreviewRaw.hidden = !showRaw;
+  skillPreviewViewButtons.forEach((button) => {
+    button.setAttribute('aria-pressed', String(button.dataset.skillPreviewView === view));
+  });
+}
+
+function setSkillPreviewContent(content) {
+  const text = String(content || '');
+  if (skillPreviewRendered) skillPreviewRendered.innerHTML = renderSkillMarkdown(text);
+  if (skillPreviewRaw) skillPreviewRaw.textContent = text;
+}
+
+function openSkillPreview(name, source, content) {
+  if (!skillPreviewDialog || !skillPreviewTitle || !skillPreviewSource || !skillPreviewRendered || !skillPreviewRaw) return;
+  skillPreviewTitle.textContent = name;
+  skillPreviewSource.textContent = source;
+  setSkillPreviewContent(content);
+  setSkillPreviewView('rendered');
+  if (skillPreviewDialog.open) return;
+  if (typeof skillPreviewDialog.showModal === 'function') skillPreviewDialog.showModal();
+  else skillPreviewDialog.setAttribute('open', '');
+}
+
+function closeSkillPreview() {
+  skillPreviewRequestId += 1;
+  if (!skillPreviewDialog) return;
+  if (typeof skillPreviewDialog.close === 'function') skillPreviewDialog.close();
+  else skillPreviewDialog.removeAttribute('open');
+}
+
+async function loadPackagedSkillContent(source) {
+  const response = await fetch(chrome.runtime.getURL(source.path));
+  if (!response.ok) throw new Error(t('st.skills.error.fetch', { status: response.status }));
+  return response.text();
+}
+
+async function previewPackagedSkill(skillId) {
+  const source = PACKAGED_SKILL_SOURCES.find((item) => item.id === skillId);
+  if (!source) return;
+  const requestId = ++skillPreviewRequestId;
+  openSkillPreview(source.name, t('st.skills.source.built_in'), t('st.providers.loading'));
+  try {
+    const content = await loadPackagedSkillContent(source);
+    if (requestId === skillPreviewRequestId) setSkillPreviewContent(content);
+  } catch (error) {
+    if (requestId === skillPreviewRequestId) {
+      setSkillPreviewContent(error?.message || t('st.skills.error.fetch', { status: '—' }));
+    }
+  }
+}
+
+function previewEnabledSkill(skillId) {
+  const skill = customSkills.find((item) => item.id === skillId);
+  if (!skill) return;
+  skillPreviewRequestId += 1;
+  const source = skill.sourceType === 'built-in'
+    ? t('st.skills.source.built_in')
+    : skill.sourceType === 'url' && skill.sourceUrl ? skill.sourceUrl : t('st.skills.source.raw');
+  openSkillPreview(skill.name, source, skill.content);
+}
+
+skillPreviewDialog?.addEventListener('click', (event) => {
+  if (event.target === skillPreviewDialog || event.target.closest('.skill-preview-dialog-close')) {
+    closeSkillPreview();
+  }
+});
+skillPreviewViewButtons.forEach((button) => {
+  button.addEventListener('click', () => setSkillPreviewView(button.dataset.skillPreviewView));
+});
+
 async function loadCustomSkills() {
   if (!skillsList) return;
   const stored = await chrome.storage.local.get(CUSTOM_SKILLS_STORAGE_KEY);
@@ -658,12 +811,16 @@ function renderPackagedSkills() {
   packagedSkillsList.innerHTML = available.map((source) => `
     <div class="setting-row" style="align-items:center;">
       <div class="setting-info">
-        <div class="setting-label">${escapeHtml(source.name)}</div>
+        <button type="button" class="setting-label skill-name-button"
+                data-packaged-skill-preview-id="${escapeHtml(source.id)}">${escapeHtml(source.name)}</button>
         <div class="setting-desc skill-source">${escapeHtml(t('st.skills.source.built_in'))}</div>
       </div>
       <button class="btn-secondary" data-packaged-skill-id="${escapeHtml(source.id)}">${escapeHtml(t('st.skills.enable'))}</button>
     </div>`).join('');
 
+  packagedSkillsList.querySelectorAll('button[data-packaged-skill-preview-id]').forEach((btn) => {
+    btn.addEventListener('click', () => previewPackagedSkill(btn.dataset.packagedSkillPreviewId));
+  });
   packagedSkillsList.querySelectorAll('button[data-packaged-skill-id]').forEach((btn) => {
     btn.addEventListener('click', () => addPackagedSkill(btn.dataset.packagedSkillId, btn));
   });
@@ -672,6 +829,11 @@ function renderPackagedSkills() {
 function renderSkills() {
   if (!skillsList) return;
   renderPackagedSkills();
+  const chromeWebStoreEnabled = customSkills.some((skill) => (
+    skill.id === CHROME_WEB_STORE_SKILL_ID && skill.sourceType === 'built-in'
+  ));
+  if (chromeWebStoreCard) chromeWebStoreCard.hidden = !chromeWebStoreEnabled;
+  if (chromeWebStoreEnabled) void loadChromeWebStoreSettings();
   if (customSkills.length === 0) {
     skillsList.innerHTML = `<div class="setting-desc">${escapeHtml(t('st.skills.empty'))}</div>`;
     return;
@@ -688,13 +850,17 @@ function renderSkills() {
     return `
       <div class="setting-row" style="align-items:center;">
         <div class="setting-info">
-          <div class="setting-label">${escapeHtml(skill.name)}</div>
+          <button type="button" class="setting-label skill-name-button"
+                  data-skill-preview-id="${escapeHtml(skill.id)}">${escapeHtml(skill.name)}</button>
           <div class="setting-desc skill-source">${escapeHtml(source)} · ${escapeHtml(t('st.skills.item.chars', { count: skill.content.length }))}${escapeHtml(toolSummary)}</div>
         </div>
         <button class="btn-secondary" data-skill-id="${escapeHtml(skill.id)}">${escapeHtml(t('st.skills.remove'))}</button>
       </div>`;
   }).join('');
 
+  skillsList.querySelectorAll('button[data-skill-preview-id]').forEach((btn) => {
+    btn.addEventListener('click', () => previewEnabledSkill(btn.dataset.skillPreviewId));
+  });
   skillsList.querySelectorAll('button[data-skill-id]').forEach((btn) => {
     btn.addEventListener('click', async () => {
       const removedSkill = customSkills.find((skill) => skill.id === btn.dataset.skillId);
@@ -705,6 +871,85 @@ function renderSkills() {
       flashSkillsResult('ok', t('st.skills.removed'));
     });
   });
+}
+
+function showChromeWebStoreResult(kind, message) {
+  if (!chromeWebStoreResult) return;
+  chromeWebStoreResult.className = `test-result show ${kind}`;
+  chromeWebStoreResult.textContent = message;
+}
+
+function chromeWebStoreConfigFromForm() {
+  return normalizeChromeWebStoreConfig({
+    publisherId: chromeWebStorePublisherId?.value,
+    itemId: chromeWebStoreItemId?.value,
+    oauthClientId: chromeWebStoreOauthClientId?.value,
+    oauthClientSecret: chromeWebStoreOauthClientSecret?.value,
+  });
+}
+
+async function saveChromeWebStoreConfig({ flash = true } = {}) {
+  const config = chromeWebStoreConfigFromForm();
+  await chrome.storage.local.set({ [CHROME_WEB_STORE_CONFIG_KEY]: config });
+  if (flash) showChromeWebStoreResult('ok', t('st.skills.cws.saved'));
+  return config;
+}
+
+async function loadChromeWebStoreSettings() {
+  if (!chromeWebStoreCard || chromeWebStoreCard.hidden) return;
+  const stored = await chrome.storage.local.get([CHROME_WEB_STORE_CONFIG_KEY, CHROME_WEB_STORE_PACKAGE_KEY]);
+  const config = normalizeChromeWebStoreConfig(stored[CHROME_WEB_STORE_CONFIG_KEY]);
+  if (chromeWebStorePublisherId) chromeWebStorePublisherId.value = config.publisherId;
+  if (chromeWebStoreItemId) chromeWebStoreItemId.value = config.itemId;
+  if (chromeWebStoreOauthClientId) chromeWebStoreOauthClientId.value = config.oauthClientId;
+  if (chromeWebStoreOauthClientSecret) chromeWebStoreOauthClientSecret.value = config.oauthClientSecret;
+  const pkg = stored[CHROME_WEB_STORE_PACKAGE_KEY];
+  if (chromeWebStorePackageStatus) {
+    chromeWebStorePackageStatus.textContent = pkg?.name
+      ? t('st.skills.cws.package_selected', { name: pkg.name, size: Math.ceil((Number(pkg.size) || 0) / 1024) })
+      : t('st.skills.cws.package_empty');
+  }
+  const oauth = await sendToBackground('chrome_web_store_oauth_status').catch(() => ({ signedIn: false }));
+  showChromeWebStoreResult(oauth.signedIn ? 'ok' : 'warn', oauth.signedIn
+    ? t('st.skills.cws.connected')
+    : t('st.skills.cws.disconnected'));
+}
+
+function bytesToBase64(bytes) {
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+  }
+  return btoa(binary);
+}
+
+async function selectChromeWebStorePackage(file) {
+  if (!file) return;
+  if (!/\.zip$/i.test(file.name)) throw new Error(t('st.skills.cws.package_zip_only'));
+  if (file.size <= 0 || file.size > CHROME_WEB_STORE_MAX_PACKAGE_BYTES) {
+    throw new Error(t('st.skills.cws.package_too_large'));
+  }
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
+  const sha256 = [...digest].map((value) => value.toString(16).padStart(2, '0')).join('');
+  await chrome.storage.local.set({
+    [CHROME_WEB_STORE_PACKAGE_KEY]: {
+      name: file.name,
+      size: file.size,
+      lastModified: file.lastModified,
+      sha256,
+      base64: bytesToBase64(bytes),
+      selectedAt: Date.now(),
+    },
+  });
+  if (chromeWebStorePackageStatus) {
+    chromeWebStorePackageStatus.textContent = t('st.skills.cws.package_selected', {
+      name: file.name,
+      size: Math.ceil(file.size / 1024),
+    });
+  }
+  showChromeWebStoreResult('ok', t('st.skills.cws.package_ready'));
 }
 
 async function addCustomSkill(record, opts = {}) {
@@ -723,14 +968,12 @@ async function addPackagedSkill(skillId, button) {
   if (!source || customSkills.some((skill) => skill.id === skillId)) return;
   if (button) button.disabled = true;
   try {
-    const response = await fetch(chrome.runtime.getURL(source.path));
-    if (!response.ok) throw new Error(t('st.skills.error.fetch', { status: response.status }));
     const record = {
       id: source.id,
       name: source.name,
       sourceType: 'built-in',
       sourceUrl: source.path,
-      content: await response.text(),
+      content: await loadPackagedSkillContent(source),
       createdAt: Date.now(),
     };
     await addCustomSkill(record, { installedSkill: record });
@@ -823,6 +1066,41 @@ btnClearSkillForm?.addEventListener('click', () => {
   flashSkillsResult('ok', t('st.skills.form_cleared'));
 });
 
+btnSaveChromeWebStore?.addEventListener('click', () => {
+  saveChromeWebStoreConfig().catch((error) => showChromeWebStoreResult('fail', error.message));
+});
+btnConnectChromeWebStore?.addEventListener('click', async () => {
+  btnConnectChromeWebStore.disabled = true;
+  try {
+    const config = await saveChromeWebStoreConfig({ flash: false });
+    const result = await sendToBackground('chrome_web_store_oauth_start', { config });
+    if (!result.ok) throw new Error(result.error || t('st.skills.cws.connect_failed'));
+    showChromeWebStoreResult('ok', t('st.skills.cws.connected'));
+  } catch (error) {
+    showChromeWebStoreResult('fail', error.message);
+  } finally {
+    btnConnectChromeWebStore.disabled = false;
+  }
+});
+btnSignoutChromeWebStore?.addEventListener('click', async () => {
+  const result = await sendToBackground('chrome_web_store_oauth_signout').catch((error) => ({ ok: false, error: error.message }));
+  showChromeWebStoreResult(result.ok ? 'ok' : 'fail', result.ok ? t('st.skills.cws.signed_out') : result.error);
+});
+chromeWebStorePackage?.addEventListener('change', async () => {
+  try {
+    await selectChromeWebStorePackage(chromeWebStorePackage.files?.[0]);
+  } catch (error) {
+    showChromeWebStoreResult('fail', error.message);
+  } finally {
+    chromeWebStorePackage.value = '';
+  }
+});
+btnClearChromeWebStorePackage?.addEventListener('click', async () => {
+  await chrome.storage.local.remove(CHROME_WEB_STORE_PACKAGE_KEY);
+  if (chromeWebStorePackageStatus) chromeWebStorePackageStatus.textContent = t('st.skills.cws.package_empty');
+  showChromeWebStoreResult('ok', t('st.skills.cws.package_cleared'));
+});
+
 if (globalThis.chrome?.storage?.onChanged) {
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local' || !changes[CUSTOM_SKILLS_STORAGE_KEY]) return;
@@ -833,12 +1111,33 @@ if (globalThis.chrome?.storage?.onChanged) {
 
 // --- Display Settings ---
 
+downloadDirectoryInput?.addEventListener('input', () => {
+  downloadDirectoryInput.setCustomValidity('');
+});
+
+downloadDirectoryInput?.addEventListener('change', async () => {
+  const raw = String(downloadDirectoryInput.value || '').trim();
+  const directory = normalizeDownloadDirectory(raw);
+  if (raw && !directory) {
+    downloadDirectoryInput.setCustomValidity(t('st.display.download_directory.error'));
+    downloadDirectoryInput.reportValidity();
+    return;
+  }
+  downloadDirectoryInput.setCustomValidity('');
+  downloadDirectoryInput.value = directory;
+  await chrome.storage.local.set({ [DOWNLOAD_DIRECTORY_STORAGE_KEY]: directory }).catch(() => {});
+});
+
 verboseToggle.addEventListener('change', async () => {
   await chrome.storage.local.set({ verboseMode: verboseToggle.checked }).catch(() => {});
 });
 
 selectionShortcutToggle?.addEventListener('change', async () => {
   await chrome.storage.local.set({ selectionShortcutEnabled: selectionShortcutToggle.checked }).catch(() => {});
+});
+
+helpImproveToggle?.addEventListener('change', async () => {
+  await chrome.storage.local.set({ helpImproveWebBrain: helpImproveToggle.checked }).catch(() => {});
 });
 
 screenshotToggle.addEventListener('change', async () => {
@@ -865,6 +1164,28 @@ if (requestTimeoutRange) {
     // Stored as ms (the provider code consumes ms). UI shows seconds.
     const sec = parseInt(requestTimeoutRange.value, 10);
     await chrome.storage.local.set({ requestTimeoutMs: sec * 1000 }).catch(() => {});
+  });
+}
+
+function formatClarifyTimeoutLabel(sec) {
+  if (sec === 0) {
+    return (typeof t === 'function' ? t('st.display.clarify_timeout.instant') : null) || 'Instant';
+  }
+  if (sec > 1200) {
+    return (typeof t === 'function' ? t('st.display.clarify_timeout.off') : null) || 'Off';
+  }
+  return `${sec}s`;
+}
+
+if (clarifyTimeoutRange) {
+  clarifyTimeoutRange.addEventListener('input', () => {
+    if (clarifyTimeoutValueLabel) {
+      clarifyTimeoutValueLabel.textContent = formatClarifyTimeoutLabel(parseInt(clarifyTimeoutRange.value, 10) || 0);
+    }
+  });
+  clarifyTimeoutRange.addEventListener('change', async () => {
+    const sec = Math.max(0, Math.min(1205, parseInt(clarifyTimeoutRange.value, 10) || 0));
+    await chrome.storage.local.set({ clarifyTimeoutSec: sec, clarifyTimeoutSemanticsV2: true }).catch(() => {});
   });
 }
 
@@ -908,6 +1229,18 @@ if (voiceInputToggle) {
 apiMutationObserverToggle.addEventListener('change', async () => {
   await chrome.storage.local.set({ apiMutationObserverEnabled: apiMutationObserverToggle.checked }).catch(() => {});
 });
+
+if (webMcpToggle) {
+  webMcpToggle.addEventListener('change', async () => {
+    await chrome.storage.local.set({ webMcpEnabled: webMcpToggle.checked }).catch(() => {});
+  });
+}
+
+if (openAIAskStreamingToggle) {
+  openAIAskStreamingToggle.addEventListener('change', async () => {
+    await chrome.storage.local.set({ openaiAskStreamingEnabled: openAIAskStreamingToggle.checked }).catch(() => {});
+  });
+}
 
 if (planBeforeActModeSelect) {
   planBeforeActModeSelect.addEventListener('change', async () => {
@@ -996,6 +1329,25 @@ if (scheduledConfirmToggle) {
 
 // --- Vision Model ---
 
+function updateMultimodalDetectedProvider(kind) {
+  const baseInput = kind === 'vision' ? visionBaseUrlInput : transcriptionBaseUrlInput;
+  const hint = document.getElementById(`${kind}-detected`);
+  const icon = document.getElementById(`${kind}-detected-icon`);
+  const label = document.getElementById(`${kind}-detected-label`);
+  if (!baseInput || !hint || !icon || !label) return;
+  const id = sniffProviderIdFromBaseUrl(baseInput.value);
+  const src = providerIconUrl(id);
+  if (!id || !src) {
+    hint.hidden = true;
+    icon.removeAttribute('src');
+    label.textContent = '';
+    return;
+  }
+  icon.src = src;
+  label.textContent = PROVIDER_SHORT_LABELS[id] || id;
+  hint.hidden = false;
+}
+
 function showVisionResult(className, text, color = '') {
   visionTestResult.className = `test-result show${className ? ` ${className}` : ''}`;
   visionTestResult.textContent = text;
@@ -1058,9 +1410,12 @@ btnClearVision.addEventListener('click', async () => {
   visionBaseUrlInput.value = '';
   visionApiKeyInput.value = '';
   visionModelInput.value = '';
+  updateMultimodalDetectedProvider('vision');
   await chrome.storage.local.remove('visionModel');
   flashVisionResult('ok', t('st.vision.cleared'));
 });
+
+visionBaseUrlInput?.addEventListener('input', () => updateMultimodalDetectedProvider('vision'));
 
 // --- Transcription Service (Whisper-compatible) ---
 //
@@ -1139,10 +1494,13 @@ if (btnClearTranscription) {
     transcriptionBaseUrlInput.value = '';
     transcriptionApiKeyInput.value = '';
     transcriptionModelInput.value = '';
+    updateMultimodalDetectedProvider('transcription');
     await chrome.storage.local.remove('transcriptionModel');
     flashTranscriptionResult('ok', t('st.transcription.cleared'));
   });
 }
+
+transcriptionBaseUrlInput?.addEventListener('input', () => updateMultimodalDetectedProvider('transcription'));
 
 // --- Profile auto-fill ---
 let profileSyncChallenge = null;
@@ -1176,7 +1534,7 @@ function renderProfileSyncState(state) {
   if (profileSyncStatus) profileSyncStatus.textContent = describeProfileSyncState(state || {});
 }
 async function refreshProfileSyncState() { const state = await sendToBackground('profile_sync_state').catch(e => ({ status: 'error', error: e.message })); renderProfileSyncState(state); return state; }
-async function reloadProfileSyncData() { const stored = await chrome.storage.local.get(['profileEnabled', 'profileText', 'visionModel', 'transcriptionModel']); if (profileEnabledToggle) profileEnabledToggle.checked = !!stored.profileEnabled; if (profileTextArea) profileTextArea.value = stored.profileText || ''; const vision = stored.visionModel || {}; visionBaseUrlInput.value = vision.baseUrl || ''; visionApiKeyInput.value = vision.apiKey || ''; visionModelInput.value = vision.model || ''; const transcription = stored.transcriptionModel || {}; if (transcriptionBaseUrlInput) transcriptionBaseUrlInput.value = transcription.baseUrl || ''; if (transcriptionApiKeyInput) transcriptionApiKeyInput.value = transcription.apiKey || ''; if (transcriptionModelInput) transcriptionModelInput.value = transcription.model || ''; await loadUserMemorySettings(); const res = await sendToBackground('get_providers'); providersData = res.providers; activeProviderId = res.active; renderProviders(); }
+async function reloadProfileSyncData() { const stored = await chrome.storage.local.get(['profileEnabled', 'profileText', 'visionModel', 'transcriptionModel']); if (profileEnabledToggle) profileEnabledToggle.checked = !!stored.profileEnabled; if (profileTextArea) profileTextArea.value = stored.profileText || ''; const vision = stored.visionModel || {}; visionBaseUrlInput.value = vision.baseUrl || ''; visionApiKeyInput.value = vision.apiKey || ''; visionModelInput.value = vision.model || ''; const transcription = stored.transcriptionModel || {}; if (transcriptionBaseUrlInput) transcriptionBaseUrlInput.value = transcription.baseUrl || ''; if (transcriptionApiKeyInput) transcriptionApiKeyInput.value = transcription.apiKey || ''; if (transcriptionModelInput) transcriptionModelInput.value = transcription.model || ''; updateMultimodalDetectedProvider('vision'); updateMultimodalDetectedProvider('transcription'); await loadUserMemorySettings(); const res = await sendToBackground('get_providers'); providersData = res.providers; activeProviderId = res.active; renderProviders(); }
 function profileSyncButtonRestore(button, pendingLabel) {
   if (!button) return () => {};
   const previousDisabled = button.disabled;
@@ -1520,15 +1878,43 @@ const CONTEXT_WINDOW_FIELD = {
   step: 1024,
 };
 
+const INPUT_COST_ESTIMATE_FIELD =
+  { key: 'inputCostPerMillionUsd', labelKey: 'st.provider.field.input_cost_per_million', type: 'number', placeholder: '3.00' };
+const CACHE_READ_COST_ESTIMATE_FIELD =
+  { key: 'cacheReadCostPerMillionUsd', labelKey: 'st.provider.field.cache_read_cost_per_million', type: 'number', placeholder: '0.30' };
+const CACHE_WRITE_COST_ESTIMATE_FIELD =
+  { key: 'cacheWriteCostPerMillionUsd', labelKey: 'st.provider.field.cache_write_cost_per_million', type: 'number', placeholder: '3.75' };
+const OUTPUT_COST_ESTIMATE_FIELD =
+  { key: 'outputCostPerMillionUsd', labelKey: 'st.provider.field.output_cost_per_million', type: 'number', placeholder: '15.00' };
 const COST_ESTIMATE_FIELDS = [
-  { key: 'inputCostPerMillionUsd', labelKey: 'st.provider.field.input_cost_per_million', type: 'number', placeholder: '3.00' },
-  { key: 'outputCostPerMillionUsd', labelKey: 'st.provider.field.output_cost_per_million', type: 'number', placeholder: '15.00' },
+  INPUT_COST_ESTIMATE_FIELD,
+  CACHE_READ_COST_ESTIMATE_FIELD,
+  OUTPUT_COST_ESTIMATE_FIELD,
+];
+// OpenAI nested usage reports included cache writes (1.25× input for GPT-5.6),
+// but not Anthropic/Bedrock-style 1-hour TTL write buckets.
+const OPENAI_COST_ESTIMATE_FIELDS = [
+  INPUT_COST_ESTIMATE_FIELD,
+  CACHE_READ_COST_ESTIMATE_FIELD,
+  { ...CACHE_WRITE_COST_ESTIMATE_FIELD, placeholder: '3.13' },
+  OUTPUT_COST_ESTIMATE_FIELD,
+];
+const CACHE_AWARE_COST_ESTIMATE_FIELDS = [
+  INPUT_COST_ESTIMATE_FIELD,
+  CACHE_READ_COST_ESTIMATE_FIELD,
+  CACHE_WRITE_COST_ESTIMATE_FIELD,
+  { key: 'cacheWrite1hCostPerMillionUsd', labelKey: 'st.provider.field.cache_write_1h_cost_per_million', type: 'number', placeholder: '6.00' },
+  OUTPUT_COST_ESTIMATE_FIELD,
 ];
 
 const ZERO_ALLOWED_NUMBER_FIELDS = new Set([
   'inputCostPerMillionUsd',
+  'cacheReadCostPerMillionUsd',
+  'cacheWriteCostPerMillionUsd',
+  'cacheWrite1hCostPerMillionUsd',
   'outputCostPerMillionUsd',
 ]);
+const MIN_API_KEY_LENGTH = 12;
 
 function providerInputValue(input) {
   if (input.dataset.type === 'checkbox' || input.type === 'checkbox') {
@@ -1544,6 +1930,174 @@ function providerInputValue(input) {
       : (n > 0 ? n : '');
   }
   return input.value;
+}
+
+function setProviderConfigValue(config, path, value) {
+  const keys = String(path || '').split('.').filter(Boolean);
+  if (!keys.length) return;
+  let target = config;
+  for (const key of keys.slice(0, -1)) {
+    if (!target[key] || typeof target[key] !== 'object' || Array.isArray(target[key])) target[key] = {};
+    target = target[key];
+  }
+  target[keys.at(-1)] = value;
+}
+
+function providerApiKeyWarning(id, config) {
+  const input = document.querySelector(`input[data-provider="${id}"][data-key="apiKey"]`);
+  if (!input) return '';
+  const apiKey = String(config.apiKey || '').trim();
+  const keyIsOptional = providersData[id]?.category === 'local';
+  const looksInvalid = apiKey ? apiKey.length < MIN_API_KEY_LENGTH : !keyIsOptional;
+  input.setAttribute('aria-invalid', looksInvalid ? 'true' : 'false');
+  return looksInvalid ? t('st.providers.api_key_warning') : '';
+}
+
+function restoreProviderApiKeyWarnings() {
+  for (const [id, config] of Object.entries(providersData)) {
+    if (config?.configured !== true) continue;
+    const warning = providerApiKeyWarning(id, config);
+    if (warning) setProviderTestResult(id, 'warn', warning);
+  }
+}
+
+function supportsProviderCompatibilitySettings(id, config = {}) {
+  return id !== 'webbrain_cloud' && ['openai', 'llamacpp', 'azure_openai'].includes(config.type);
+}
+
+function providerExtraBodyText(value) {
+  if (typeof value === 'string') return value;
+  if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).length === 0) return '';
+  try { return JSON.stringify(value, null, 2); } catch { return ''; }
+}
+
+function prettyCompatibilityValue(value) {
+  const key = `st.providers.compat.value.${value}`;
+  const translated = t(key);
+  return translated === key ? (value || '') : translated;
+}
+
+function automaticTokenField(config) {
+  if (shouldUseOpenAIResponsesApi(config)) return 'max_output_tokens';
+  const model = String(config.model || '').toLowerCase();
+  const isNewOfficialContract = config.type === 'openai'
+    && config.category !== 'local'
+    && config.providerName !== 'lmstudio'
+    && /^(gpt-5|gpt-4\.1|o1|o3|o4)/.test(model);
+  return isNewOfficialContract ? 'max_completion_tokens' : 'max_tokens';
+}
+
+function compatibilitySummary(config) {
+  const compat = normalizeProviderCompatibility(config);
+  const detected = detectedCompatibilityPreset(config);
+  const preset = compat.preset === 'auto'
+    ? t('st.providers.compat.auto_detected', { preset: prettyCompatibilityValue(detected) })
+    : prettyCompatibilityValue(compat.preset);
+  const reasoning = compat.reasoningEffort === 'auto'
+    ? t('st.providers.compat.provider_default')
+    : prettyCompatibilityValue(compat.reasoningEffort);
+  const role = compat.systemPromptRole === 'auto'
+    ? prettyCompatibilityValue('system')
+    : prettyCompatibilityValue(compat.systemPromptRole);
+  const tokens = compat.maxTokensField === 'auto' ? automaticTokenField(config) : compat.maxTokensField;
+  const extraCount = config.extraBody && typeof config.extraBody === 'object' && !Array.isArray(config.extraBody)
+    ? Object.keys(config.extraBody).length
+    : 0;
+  const extra = extraCount
+    ? t(extraCount === 1 ? 'st.providers.compat.summary_extra' : 'st.providers.compat.summary_extra_plural', { count: extraCount })
+    : '';
+  return t('st.providers.compat.summary', { preset, reasoning, role, tokens, extra });
+}
+
+function currentProviderCompatibilityConfig(id) {
+  const source = providersData[id] || {};
+  const config = { ...source, compat: { ...(source.compat || {}) } };
+  document.querySelectorAll(`.provider-compatibility [data-provider="${id}"]`).forEach((input) => {
+    if (input.dataset.type === 'json') {
+      try { config.extraBody = parseProviderExtraBodyJson(input.value); } catch { config.extraBody = {}; }
+      return;
+    }
+    setProviderConfigValue(config, input.dataset.key, providerInputValue(input));
+  });
+  const modelInput = document.querySelector(`input[data-provider="${id}"][data-key="model"]`);
+  const baseUrlInput = document.querySelector(`input[data-provider="${id}"][data-key="baseUrl"]`);
+  if (modelInput) config.model = modelInput.value;
+  if (baseUrlInput) config.baseUrl = baseUrlInput.value;
+  return config;
+}
+
+function refreshProviderCompatibilitySummary(id) {
+  const details = document.querySelector(`.provider-compatibility[data-provider-id="${id}"]`);
+  if (!details) return;
+  const textarea = details.querySelector('textarea[data-type="json"]');
+  const validation = details.querySelector('.provider-compatibility-validation');
+  let error = '';
+  if (textarea) {
+    try { parseProviderExtraBodyJson(textarea.value); } catch (e) { error = e.message; }
+    textarea.setAttribute('aria-invalid', error ? 'true' : 'false');
+  }
+  if (validation) validation.textContent = error;
+  const summary = details.querySelector('.provider-compatibility-summary');
+  if (summary) summary.textContent = compatibilitySummary(currentProviderCompatibilityConfig(id));
+}
+
+function renderProviderCompatibilitySettings(id, config) {
+  if (!supportsProviderCompatibilitySettings(id, config)) return '';
+  const compat = normalizeProviderCompatibility(config);
+  const extraBody = providerCompatibilityJsonDrafts.has(id)
+    ? providerCompatibilityJsonDrafts.get(id)
+    : providerExtraBodyText(config.extraBody);
+  const options = (items, current) => items.map(([value, label]) => (
+    `<option value="${value}"${value === current ? ' selected' : ''}>${escapeHtml(label)}</option>`
+  )).join('');
+  const valueLabel = (value) => prettyCompatibilityValue(value);
+  return `
+    <details class="provider-compatibility" data-provider-id="${id}">
+      <summary>
+        <span class="provider-compatibility-title">${escapeHtml(t('st.providers.compat.title'))}</span>
+        <span class="provider-compatibility-summary">${escapeHtml(compatibilitySummary(config))}</span>
+      </summary>
+      <div class="provider-compatibility-body">
+        <p>${escapeHtml(t('st.providers.compat.blurb'))}</p>
+        <div class="provider-compatibility-grid">
+          <div class="field">
+            <label>${escapeHtml(t('st.providers.compat.preset'))}</label>
+            <select data-provider="${id}" data-key="compat.preset" data-type="select">
+              ${options([['auto', valueLabel('auto')], ['openai', valueLabel('openai')], ['qwen', valueLabel('qwen')], ['deepseek', valueLabel('deepseek')], ['openrouter', valueLabel('openrouter')], ['custom', valueLabel('custom')]], compat.preset)}
+            </select>
+          </div>
+          <div class="field">
+            <label>${escapeHtml(t('st.providers.compat.reasoning'))}</label>
+            <select data-provider="${id}" data-key="compat.reasoningEffort" data-type="select">
+              ${options([['auto', valueLabel('auto')], ['off', valueLabel('off')], ['minimal', valueLabel('minimal')], ['low', valueLabel('low')], ['medium', valueLabel('medium')], ['high', valueLabel('high')], ['xhigh', valueLabel('xhigh')], ['max', valueLabel('max')]], compat.reasoningEffort)}
+            </select>
+          </div>
+          <div class="field">
+            <label>${escapeHtml(t('st.providers.compat.system_role'))}</label>
+            <select data-provider="${id}" data-key="compat.systemPromptRole" data-type="select">
+              ${options([['auto', valueLabel('auto')], ['system', valueLabel('system')], ['developer', valueLabel('developer')]], compat.systemPromptRole)}
+            </select>
+          </div>
+          <div class="field">
+            <label>${escapeHtml(t('st.providers.compat.token_field'))}</label>
+            <select data-provider="${id}" data-key="compat.maxTokensField" data-type="select">
+              ${options([['auto', valueLabel('auto')], ['max_tokens', 'max_tokens'], ['max_completion_tokens', 'max_completion_tokens']], compat.maxTokensField)}
+            </select>
+          </div>
+        </div>
+        <div class="field provider-compatibility-json">
+          <label>${escapeHtml(t('st.providers.compat.extra_body'))}</label>
+          <textarea data-provider="${id}" data-key="extraBody" data-type="json" spellcheck="false"
+                    aria-invalid="false" placeholder="${escapeHtml(t('st.providers.compat.extra_body_placeholder'))}">${escapeHtml(extraBody)}</textarea>
+          <div class="provider-compatibility-help">${escapeHtml(t('st.providers.compat.extra_body_help'))}</div>
+        </div>
+        <div class="provider-compatibility-footer">
+          <button type="button" class="btn-secondary btn-reset-compatibility" data-provider="${id}">${escapeHtml(t('st.providers.compat.reset'))}</button>
+          <span class="provider-compatibility-validation" role="status"></span>
+        </div>
+      </div>
+    </details>
+  `;
 }
 
 // Effective tier for the dropdown's initial value — same precedence as the
@@ -1576,6 +2130,9 @@ function providerSearchTextForEntry(id, config, fieldDefs) {
     config.model,
     config.baseUrl,
     fieldText,
+    supportsProviderCompatibilitySettings(id, config)
+      ? 'advanced model compatibility reasoning thinking system developer max tokens custom request body json'
+      : '',
   ].filter(Boolean).join(' '));
 }
 
@@ -1674,16 +2231,16 @@ function renderProviders() {
         { key: 'secretAccessKey', labelKey: 'st.provider.field.aws_secret_access_key', type: 'password', placeholder: '********' },
         { key: 'sessionToken', labelKey: 'st.provider.field.aws_session_token', type: 'password', placeholder: 'optional (STS)' },
         { key: 'model', labelKey: 'st.provider.field.bedrock_model_id', type: 'text', placeholder: 'anthropic.claude-3-sonnet-20240229-v1:0' },
-        ...COST_ESTIMATE_FIELDS,
+        ...CACHE_AWARE_COST_ESTIMATE_FIELDS,
       ],
     },
     openai: {
       fields: [
         { key: 'apiKey', labelKey: 'st.provider.field.api_key', type: 'password', placeholder: 'sk-...' },
-        { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'gpt-5.5',
-          suggestions: ['gpt-5.5', 'gpt-5.4', 'gpt-5.2', 'gpt-5.3-codex'] },
+        { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'gpt-5.6-terra',
+          suggestions: ['gpt-5.6-terra', 'gpt-5.6-sol', 'gpt-5.6-luna', 'gpt-5.6', 'gpt-5.5', 'gpt-5.4', 'gpt-5.2', 'gpt-5.3-codex'] },
         { key: 'baseUrl', labelKey: 'st.provider.field.api_base_url', type: 'text', placeholder: 'https://api.openai.com/v1' },
-        ...COST_ESTIMATE_FIELDS,
+        ...OPENAI_COST_ESTIMATE_FIELDS,
       ],
     },
     openrouter: {
@@ -1709,13 +2266,27 @@ function renderProviders() {
         PROMPT_TIER_FIELD,
       ],
     },
+    fireworks: {
+      fields: [
+        { key: 'apiKey', labelKey: 'st.provider.field.api_key', type: 'password', placeholder: 'fw_...' },
+        { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'accounts/fireworks/models/llama-v3p3-70b-instruct',
+          suggestions: [
+            'accounts/fireworks/models/llama-v3p3-70b-instruct',
+            'accounts/fireworks/models/llama4-scout-instruct-basic',
+            'accounts/fireworks/models/qwen3-235b-a22b',
+            'accounts/fireworks/models/deepseek-v3',
+          ] },
+        { key: 'baseUrl', labelKey: 'st.provider.field.api_base_url', type: 'text', placeholder: 'https://api.fireworks.ai/inference/v1' },
+        PROMPT_TIER_FIELD,
+      ],
+    },
     anthropic: {
       fields: [
         { key: 'apiKey', labelKey: 'st.provider.field.api_key', type: 'password', placeholder: 'sk-ant-...' },
         { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'claude-opus-4-8',
           suggestions: ['claude-opus-4-8', 'claude-sonnet-4-6', 'claude-haiku-4-5'] },
         { key: 'baseUrl', labelKey: 'st.provider.field.api_base_url', type: 'text', placeholder: 'https://api.anthropic.com' },
-        ...COST_ESTIMATE_FIELDS,
+        ...CACHE_AWARE_COST_ESTIMATE_FIELDS,
       ],
     },
     gemini: {
@@ -1782,6 +2353,15 @@ function renderProviders() {
         ...COST_ESTIMATE_FIELDS,
       ],
     },
+    kimi: {
+      fields: [
+        { key: 'apiKey', labelKey: 'st.provider.field.api_key', type: 'password', placeholder: 'sk-...' },
+        { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'kimi-k2.5',
+          suggestions: ['kimi-k2.5', 'kimi-k3', 'kimi-k2.7-code', 'kimi-k2.7-code-highspeed', 'kimi-k2.6'] },
+        { key: 'baseUrl', labelKey: 'st.provider.field.api_base_url', type: 'text', placeholder: 'https://api.moonshot.ai/v1' },
+        ...COST_ESTIMATE_FIELDS,
+      ],
+    },
     alibaba: {
       fields: [
         { key: 'apiKey', labelKey: 'st.provider.field.api_key', type: 'password', placeholder: 'sk-...' },
@@ -1791,12 +2371,35 @@ function renderProviders() {
         ...COST_ESTIMATE_FIELDS,
       ],
     },
+    together: {
+      fields: [
+        { key: 'apiKey', labelKey: 'st.provider.field.api_key', type: 'password', placeholder: 'tgp_...' },
+        { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'meta-llama/Llama-3.3-70B-Instruct-Turbo',
+          suggestions: [
+            'meta-llama/Llama-3.3-70B-Instruct-Turbo',
+            'meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo',
+            'Qwen/Qwen2.5-72B-Instruct-Turbo',
+            'deepseek-ai/DeepSeek-V3',
+          ] },
+        { key: 'baseUrl', labelKey: 'st.provider.field.api_base_url', type: 'text', placeholder: 'https://api.together.xyz/v1' },
+        ...COST_ESTIMATE_FIELDS,
+      ],
+    },
     groq: {
       fields: [
         { key: 'apiKey', labelKey: 'st.provider.field.api_key', type: 'password', placeholder: 'gsk_...' },
         { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'openai/gpt-oss-120b',
           suggestions: ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'meta-llama/llama-4-scout-17b-16e-instruct', 'llama-3.3-70b-versatile', 'qwen/qwen3-32b'] },
         { key: 'baseUrl', labelKey: 'st.provider.field.api_base_url', type: 'text', placeholder: 'https://api.groq.com/openai/v1' },
+        ...COST_ESTIMATE_FIELDS,
+      ],
+    },
+    z_ai: {
+      fields: [
+        { key: 'apiKey', labelKey: 'st.provider.field.api_key', type: 'password', placeholder: 'API key' },
+        { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'glm-5.2',
+          suggestions: ['glm-5.2', 'glm-5.1', 'glm-5', 'glm-5-turbo'] },
+        { key: 'baseUrl', labelKey: 'st.provider.field.api_base_url', type: 'text', placeholder: 'https://api.z.ai/api/paas/v4' },
         ...COST_ESTIMATE_FIELDS,
       ],
     },
@@ -1928,13 +2531,30 @@ function renderProviders() {
       providerNote = `<div style="margin-top:10px;padding:10px 12px;border-radius:6px;
                   background:rgba(74,144,217,0.08);border:1px solid rgba(74,144,217,0.22);
                   font-size:12px;color:var(--text2);line-height:1.5;">
-           ${t('st.providers.webbrain_note.body', { privacyLink, subscribeLink, accountLink })}
+           ${t('st.providers.webbrain_data_use.body', { privacyLink, subscribeLink, accountLink })}
          </div>`;
     }
+    const extensionOrigin = chrome.runtime.getURL('').replace(/\/$/, '');
+    const ollamaWarning = id === 'ollama'
+      ? `<aside class="provider-warning provider-ollama-warning" role="note"
+                aria-labelledby="ollama-warning-title">
+           <div class="provider-warning-label">${escapeHtml(t('st.providers.ollama_warning.label'))}</div>
+           <strong class="provider-warning-title" id="ollama-warning-title">${escapeHtml(t('st.providers.ollama_warning.title'))}</strong>
+           <p>${escapeHtml(t('st.providers.ollama_warning.body'))}</p>
+           <p>${escapeHtml(t('st.providers.ollama_warning.restart'))}</p>
+           <pre><code>OLLAMA_ORIGINS="${escapeHtml(extensionOrigin)}" ollama serve</code></pre>
+           <p>${escapeHtml(t('st.providers.ollama_warning.base_url'))}</p>
+           <a href="https://www.webbrain.one/blog/ollama-launch-handoff"
+              target="_blank" rel="noopener noreferrer">${escapeHtml(t('st.providers.ollama_warning.link'))} ↗</a>
+         </aside>`
+      : '';
+    const compatibilitySettings = renderProviderCompatibilitySettings(id, config);
 
     const body = `
       ${fieldsHTML}
       ${providerNote}
+      ${ollamaWarning}
+      ${compatibilitySettings}
       <div class="btn-row">
         <button class="btn-primary btn-save" data-provider="${id}">${escapeHtml(t('st.providers.save'))}</button>
         <button class="btn-secondary btn-test" data-provider="${id}">${escapeHtml(t('st.providers.test'))}</button>
@@ -1958,6 +2578,8 @@ function renderProviders() {
       : t('st.providers.filter.empty');
     providersContainer.appendChild(empty);
   }
+
+  restoreProviderApiKeyWarnings();
 
   document.querySelectorAll('.btn-save').forEach(btn => {
     btn.addEventListener('click', () => saveProvider(btn.dataset.provider));
@@ -1991,7 +2613,36 @@ function renderProviders() {
         input.style.display = 'none';
         input.value = sel.value;
       }
+      refreshProviderCompatibilitySummary(providerId);
     });
+  });
+  document.querySelectorAll('.provider-compatibility select[data-provider], .provider-compatibility textarea[data-provider]').forEach((input) => {
+    const eventName = input.tagName === 'TEXTAREA' ? 'input' : 'change';
+    input.addEventListener(eventName, () => {
+      if (input.tagName === 'TEXTAREA') {
+        providerCompatibilityJsonDrafts.set(input.dataset.provider, input.value);
+      }
+      refreshProviderCompatibilitySummary(input.dataset.provider);
+    });
+  });
+  document.querySelectorAll('input[data-key="model"], input[data-key="baseUrl"]').forEach((input) => {
+    input.addEventListener('input', () => refreshProviderCompatibilitySummary(input.dataset.provider));
+  });
+  document.querySelectorAll('.btn-reset-compatibility').forEach((button) => {
+    button.addEventListener('click', () => {
+      const id = button.dataset.provider;
+      const details = button.closest('.provider-compatibility');
+      details?.querySelectorAll('select[data-provider]').forEach((select) => { select.value = 'auto'; });
+      const textarea = details?.querySelector('textarea[data-type="json"]');
+      if (textarea) {
+        textarea.value = '';
+        providerCompatibilityJsonDrafts.set(id, '');
+      }
+      refreshProviderCompatibilitySummary(id);
+    });
+  });
+  document.querySelectorAll('.provider-compatibility[data-provider-id]').forEach((details) => {
+    refreshProviderCompatibilitySummary(details.dataset.providerId);
   });
   document.querySelectorAll('.loaded-model-dialog').forEach(dialog => {
     dialog.addEventListener('click', (event) => {
@@ -2024,6 +2675,14 @@ function renderProviderFilterBar() {
   bar.className = 'provider-filter-bar';
   const pills = document.createElement('div');
   pills.className = 'provider-filter-pills';
+  // Small mono SVGs — category cues, not brand logos. Keep stroke icons so
+  // they track text color (including the active accent state).
+  const filterIcons = {
+    all: '<svg class="provider-filter-pill-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>',
+    local: '<svg class="provider-filter-pill-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>',
+    cloud: '<svg class="provider-filter-pill-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>',
+    router: '<svg class="provider-filter-pill-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49"/><path d="M7.76 16.24a6 6 0 0 1 0-8.49"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M4.93 19.07a10 10 0 0 1 0-14.14"/></svg>',
+  };
   const filters = [
     { key: 'all',    labelKey: 'st.providers.filter.all' },
     { key: 'local',  labelKey: 'st.providers.filter.local' },
@@ -2035,7 +2694,7 @@ function renderProviderFilterBar() {
     btn.type = 'button';
     btn.className = `provider-filter-pill${providerFilter === f.key ? ' active' : ''}`;
     btn.dataset.filter = f.key;
-    btn.textContent = t(f.labelKey);
+    btn.innerHTML = `${filterIcons[f.key] || ''}<span>${escapeHtml(t(f.labelKey))}</span>`;
     btn.addEventListener('click', async () => {
       if (providerFilter === f.key) return;
       // Snapshot whatever the user has typed but not yet saved BEFORE we
@@ -2110,10 +2769,12 @@ function wrapCollapsibleCard(id, config, isSelected, isConfigured, bodyHtml) {
   // LM Studio defaults to whatever's loaded) just renders nothing rather
   // than a placeholder, to avoid pretending we know what they're running.
   const modelStr = (config.model && String(config.model).trim()) || '';
+  const label = config.label || id;
   header.innerHTML = `
     <div class="provider-header-left">
       <span class="provider-chevron" aria-hidden="true">${expanded ? '▾' : '▸'}</span>
-      <span class="provider-name">${escapeHtml(config.label || id)}</span>
+      ${providerIconHtml(id, label)}
+      <span class="provider-name">${escapeHtml(label)}</span>
       <span class="provider-type">${escapeHtml(config.type)}</span>
       ${config.category ? `<span class="provider-category-badge provider-category-${escapeHtml(config.category)}">${escapeHtml(config.category)}</span>` : ''}
       ${modelStr ? `<span class="provider-model" title="${escapeHtml(modelStr)}">${escapeHtml(modelStr)}</span>` : ''}
@@ -2267,18 +2928,24 @@ function setProviderTestResult(id, className, message, color) {
 }
 
 async function saveProvider(id, { showFlash = true, markConfigured = true } = {}) {
-  const inputs = document.querySelectorAll(`input[data-provider="${id}"], select[data-provider="${id}"]`);
+  const inputs = document.querySelectorAll(`input[data-provider="${id}"], select[data-provider="${id}"], textarea[data-provider="${id}"]`);
   const config = {};
-  inputs.forEach(input => {
-    config[input.dataset.key] = providerInputValue(input);
-  });
+  let apiKeyWarning = '';
 
   try {
+    inputs.forEach(input => {
+      const value = input.dataset.type === 'json'
+        ? parseProviderExtraBodyJson(input.value)
+        : providerInputValue(input);
+      setProviderConfigValue(config, input.dataset.key, value);
+    });
+    apiKeyWarning = providerApiKeyWarning(id, config);
     await sendToBackground('update_provider', { providerId: id, config, markConfigured });
   } catch (e) {
     if (showFlash) setProviderTestResult(id, 'fail', t('st.providers.failed', { error: e.message }));
     throw e;
   }
+  providerCompatibilityJsonDrafts.delete(id);
   if (providersData[id]) {
     Object.assign(providersData[id], config);
     if (markConfigured) providersData[id].configured = id !== 'webbrain_cloud';
@@ -2286,8 +2953,12 @@ async function saveProvider(id, { showFlash = true, markConfigured = true } = {}
   refreshProviderCardStatus(id);
 
   if (showFlash) {
-    const testEl = setProviderTestResult(id, 'ok', t('st.providers.saved'));
-    if (testEl) setTimeout(() => testEl.classList.remove('show'), 2000);
+    if (apiKeyWarning) {
+      setProviderTestResult(id, 'warn', apiKeyWarning);
+    } else {
+      const testEl = setProviderTestResult(id, 'ok', t('st.providers.saved'));
+      if (testEl) setTimeout(() => testEl.classList.remove('show'), 2000);
+    }
   }
 }
 
@@ -2339,11 +3010,23 @@ async function testProvider(id) {
  * silently throws away whatever the user has typed but not yet saved.
  */
 function syncInputsIntoProvidersData() {
-  document.querySelectorAll('input[data-provider], select[data-provider]').forEach((input) => {
+  document.querySelectorAll('input[data-provider], select[data-provider], textarea[data-provider]').forEach((input) => {
     const id = input.dataset.provider;
     const key = input.dataset.key;
     if (!id || !key || !providersData[id]) return;
-    providersData[id][key] = providerInputValue(input);
+    // Keep extraBody as a parsed object in memory (matches saveProvider and
+    // mergeProviderRequestBody). Invalid draft JSON is left unchanged so a
+    // partial edit does not corrupt the last-known-good object.
+    if (input.dataset.type === 'json') {
+      providerCompatibilityJsonDrafts.set(id, input.value);
+      try {
+        setProviderConfigValue(providersData[id], key, parseProviderExtraBodyJson(input.value));
+      } catch {
+        /* keep previous value */
+      }
+      return;
+    }
+    setProviderConfigValue(providersData[id], key, providerInputValue(input));
   });
 }
 

@@ -1,0 +1,31 @@
+{
+  "id": "050",
+  "user": "reply to this",
+  "mode": "act",
+  "tab": {
+    "url": "https://mail.google.com/mail/u/0/#inbox/abc123",
+    "title": "Invoice from Acme — Gmail"
+  },
+  "latencyMs": 8664,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll reply to this email. Let me first read the current page to understand the email content and find the reply button.",
+  "usage": {
+    "prompt_tokens": 16720,
+    "completion_tokens": 38,
+    "total_tokens": 16758,
+    "prompt_tokens_details": {
+      "audio_tokens": null,
+      "cached_tokens": 16512
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

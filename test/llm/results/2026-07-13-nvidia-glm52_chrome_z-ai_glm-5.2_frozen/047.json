@@ -1,0 +1,27 @@
+{
+  "id": "047",
+  "user": "show me the latest commit",
+  "mode": "act",
+  "tab": {
+    "url": "https://github.com/esokullu/webbrain",
+    "title": "esokullu/webbrain — GitHub"
+  },
+  "latencyMs": 2421,
+  "error": null,
+  "firstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "https://github.com/esokullu/webbrain/commits/main"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll look at the latest commit on this repository.",
+  "usage": {
+    "prompt_tokens": 17118,
+    "completion_tokens": 34,
+    "total_tokens": 17152
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

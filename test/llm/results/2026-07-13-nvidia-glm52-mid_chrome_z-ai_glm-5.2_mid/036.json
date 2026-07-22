@@ -1,0 +1,31 @@
+{
+  "id": "036",
+  "user": "submit",
+  "mode": "act",
+  "tab": {
+    "url": "https://forms.example.com/contact",
+    "title": "Contact form"
+  },
+  "latencyMs": 47256,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll help you submit the contact form. Let me first read the page to see what form fields are present.",
+  "usage": {
+    "prompt_tokens": 12853,
+    "completion_tokens": 36,
+    "total_tokens": 12889,
+    "prompt_tokens_details": {
+      "audio_tokens": null,
+      "cached_tokens": 12800
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

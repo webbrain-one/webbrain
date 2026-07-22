@@ -1,0 +1,58 @@
+{
+  "id": "060",
+  "user": "find 3 wireless earbuds under $100",
+  "mode": "act",
+  "tab": {
+    "url": "https://www.amazon.com/",
+    "title": "Amazon.com"
+  },
+  "latencyMs": 136483,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll search Amazon for wireless earbuds under $100. Let me start by using the search bar on the current page.",
+  "usage": {
+    "prompt_tokens": 16684,
+    "completion_tokens": 39,
+    "total_tokens": 16723
+  },
+  "attempts": 6,
+  "retryErrors": [
+    {
+      "attempt": 1,
+      "error": "HTTP 429: {\"status\":429,\"title\":\"Too Many Requests\"}",
+      "latencyMs": 299,
+      "waitMs": 600000
+    },
+    {
+      "attempt": 2,
+      "error": "HTTP 429: {\"status\":429,\"title\":\"Too Many Requests\"}",
+      "latencyMs": 348,
+      "waitMs": 600000
+    },
+    {
+      "attempt": 3,
+      "error": "HTTP 429: {\"status\":429,\"title\":\"Too Many Requests\"}",
+      "latencyMs": 366,
+      "waitMs": 600000
+    },
+    {
+      "attempt": 4,
+      "error": "HTTP 429: {\"status\":429,\"title\":\"Too Many Requests\"}",
+      "latencyMs": 332,
+      "waitMs": 600000
+    },
+    {
+      "attempt": 5,
+      "error": "HTTP 429: {\"status\":429,\"title\":\"Too Many Requests\"}",
+      "latencyMs": 346,
+      "waitMs": 600000
+    }
+  ]
+}

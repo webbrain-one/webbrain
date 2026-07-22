@@ -1,0 +1,31 @@
+{
+  "id": "014",
+  "user": "show me my bookmarks",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 3419,
+  "error": null,
+  "firstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "chrome://bookmarks"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll show you your bookmarks. Let me navigate to the Chrome bookmarks page where you can see all your saved bookmarks.",
+  "usage": {
+    "prompt_tokens": 20557,
+    "completion_tokens": 37,
+    "total_tokens": 20594,
+    "prompt_tokens_details": {
+      "audio_tokens": null,
+      "cached_tokens": 20544
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

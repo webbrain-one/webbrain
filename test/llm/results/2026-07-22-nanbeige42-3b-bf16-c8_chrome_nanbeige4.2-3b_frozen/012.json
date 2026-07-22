@@ -1,0 +1,28 @@
+{
+  "id": "012",
+  "user": "show my browser history",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 11334,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll help you view your browser history. Let me first check the current page context, then navigate to your browser's history page.",
+  "usage": {
+    "prompt_tokens": 17977,
+    "total_tokens": 18454,
+    "completion_tokens": 477,
+    "prompt_tokens_details": null
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

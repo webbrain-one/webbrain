@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Poolside Laguna S 2.1 OpenRouter WebBrain planner benchmark - WebBrain Blog</title>
+  <meta name="description" content="Poolside&#39;s Laguna S 2.1 beats Hy3 on two published SWE benchmarks and MiniMax M3 on Terminal-Bench 2.1. It scored 65% in WebBrain&#39;s default frozen planner run and 71% with an OpenRouter high-reasoning request, still below Hy3 and M3.">
+  <meta name="keywords" content="WebBrain, Poolside, Laguna S 2.1, OpenRouter, Tencent Hy3, MiniMax M3, Inkling, open-weight model, browser agent, planner benchmark, tool calling">
+  <meta property="og:title" content="Laguna S 2.1 reaches 71% in WebBrain with a high-reasoning request">
+  <meta property="og:description" content="Poolside Laguna S 2.1 scored 65% with default reasoning and 71% with a high-effort request. It is fast and cheap, but the second run also increased no-tool outputs.">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://webbrain.one/blog/poolside-laguna-s-openrouter-planner-benchmark">
+  <meta property="og:image" content="https://webbrain.one/og-image.png">
+  <meta property="og:image:secure_url" content="https://webbrain.one/og-image.png">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="WebBrain detailed brain logo">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Poolside Laguna S 2.1 WebBrain planner benchmark">
+  <meta name="twitter:description" content="Laguna S 2.1: 65% Sonnet alignment by default, 71% with a high-reasoning request. Much cheaper and faster than M3, but still below Hy3/M3 with a no-tool trade-off.">
+  <meta name="twitter:image" content="https://webbrain.one/twitter-image.png">
+  <meta name="twitter:image:alt" content="WebBrain detailed brain logo">
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <link rel="canonical" href="https://webbrain.one/blog/poolside-laguna-s-openrouter-planner-benchmark">
+  <!-- Blog is English-only; alternates point to locale homepages. -->
+  <link rel="alternate" hreflang="en" href="https://webbrain.one/">
+  <link rel="alternate" hreflang="es" href="https://webbrain.one/es/">
+  <link rel="alternate" hreflang="fr" href="https://webbrain.one/fr/">
+  <link rel="alternate" hreflang="tr" href="https://webbrain.one/tr/">
+  <link rel="alternate" hreflang="zh" href="https://webbrain.one/zh/">
+  <link rel="alternate" hreflang="ru" href="https://webbrain.one/ru/">
+  <link rel="alternate" hreflang="uk" href="https://webbrain.one/uk/">
+  <link rel="alternate" hreflang="ar" href="https://webbrain.one/ar/">
+  <link rel="alternate" hreflang="ja" href="https://webbrain.one/ja/">
+  <link rel="alternate" hreflang="ko" href="https://webbrain.one/ko/">
+  <link rel="alternate" hreflang="id" href="https://webbrain.one/id/">
+  <link rel="alternate" hreflang="th" href="https://webbrain.one/th/">
+  <link rel="alternate" hreflang="ms" href="https://webbrain.one/ms/">
+  <link rel="alternate" hreflang="tl" href="https://webbrain.one/tl/">
+  <link rel="alternate" hreflang="he" href="https://webbrain.one/he/">
+  <link rel="alternate" hreflang="x-default" href="https://webbrain.one/">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg: #0b0e17;
+      --bg-card: #111827;
+      --bg-card-hover: #1a2233;
+      --surface: #161d2e;
+      --border: rgba(255,255,255,0.07);
+      --text: #e4e4ec;
+      --text-dim: #8b8fa4;
+      --accent: #6c63ff;
+      --accent-glow: rgba(108,99,255,0.25);
+      --accent2: #a78bfa;
+      --success: #34d399;
+      --warning: #fbbf24;
+      --danger: #f87171;
+      --tint-soft: rgba(255,255,255,0.05);
+      --tint-soft-2: rgba(255,255,255,0.04);
+      --tint-medium: rgba(255,255,255,0.08);
+      --nav-bg: rgba(11,14,23,0.85);
+      --code-bg: #0a0e17;
+      --inline-code-bg: rgba(255,255,255,0.06);
+      --shadow-strong: rgba(0,0,0,0.40);
+      --radius: 12px;
+      --radius-lg: 16px;
+      --max-w: 760px;
+      color-scheme: dark;
+    }
+    :root[data-theme="light"] {
+      --bg: #f7f1e6;
+      --bg-card: #fffdf8;
+      --bg-card-hover: #f2e9d4;
+      --surface: #ede2cb;
+      --border: rgba(89,55,25,0.15);
+      --text: #2c1810;
+      --text-dim: #6b5b47;
+      --accent: #5b52e8;
+      --accent-glow: rgba(91,82,232,0.20);
+      --accent2: #7c6ce6;
+      --success: #2d8866;
+      --warning: #9a6500;
+      --danger: #b74747;
+      --tint-soft: rgba(89,55,25,0.05);
+      --tint-soft-2: rgba(89,55,25,0.07);
+      --tint-medium: rgba(89,55,25,0.10);
+      --nav-bg: rgba(247,241,230,0.85);
+      --code-bg: #fff7e6;
+      --inline-code-bg: rgba(89,55,25,0.08);
+      --shadow-strong: rgba(89,55,25,0.18);
+      color-scheme: light;
+    }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.75;
+      font-size: 17px;
+      overflow-x: hidden;
+    }
+    a { color: var(--accent2); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .glow-bg {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    .glow-bg::before,
+    .glow-bg::after {
+      content: '';
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(120px);
+      opacity: 0.26;
+    }
+    .glow-bg::before {
+      width: 500px;
+      height: 500px;
+      background: var(--accent);
+      top: -220px;
+      left: -160px;
+    }
+    .glow-bg::after {
+      width: 500px;
+      height: 500px;
+      background: var(--accent2);
+      right: -180px;
+      bottom: -230px;
+      opacity: 0.18;
+    }
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--nav-bg);
+      backdrop-filter: saturate(160%) blur(12px);
+      -webkit-backdrop-filter: saturate(160%) blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-inner {
+      max-width: var(--max-w);
+      margin: 0 auto;
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+    .nav-brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+      color: var(--text);
+      font-size: 18px;
+      font-weight: 700;
+      text-decoration: none;
+    }
+    .nav-brand:hover { text-decoration: none; }
+    .nav-brand .brand-logo { width: 26px; height: 26px; border-radius: 7px; flex: 0 0 auto; }
+    .nav-brand .domain { opacity: 0.5; font-weight: 400; }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 16px;
+      min-width: 0;
+    }
+    .nav-links a {
+      color: var(--text-dim);
+      font-size: 14px;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+    .nav-links a:hover { color: var(--text); text-decoration: none; }
+    .lang-dropdown {
+      background: var(--tint-soft);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 13px;
+      max-width: 120px;
+    }
+    .lang-dropdown:focus { outline: 2px solid var(--accent-glow); outline-offset: 1px; }
+    .lang-dropdown option { background-color: var(--bg-card-hover); color: var(--text); }
+    .theme-toggle {
+      appearance: none;
+      -webkit-appearance: none;
+      background: var(--tint-soft-2);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      width: 30px;
+      height: 30px;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      cursor: pointer;
+      color: var(--text-dim);
+      transition: background 0.2s, color 0.2s, border-color 0.2s, transform 0.1s;
+    }
+    .theme-toggle:hover {
+      background: var(--tint-medium);
+      border-color: var(--accent);
+      color: var(--text);
+      transform: translateY(-1px);
+    }
+    .theme-toggle:focus-visible {
+      outline: 2px solid var(--accent2);
+      outline-offset: 2px;
+    }
+    .theme-toggle svg { width: 16px; height: 16px; display: block; }
+    .theme-toggle .icon-sun { display: block; }
+    .theme-toggle .icon-moon { display: none; }
+    :root[data-theme="light"] .theme-toggle .icon-sun { display: none; }
+    :root[data-theme="light"] .theme-toggle .icon-moon { display: block; }
+    main,
+    article {
+      max-width: var(--max-w);
+      margin: 0 auto;
+      padding: 64px 24px 80px;
+    }
+    .page-label {
+      display: inline-block;
+      font-size: 12px;
+      letter-spacing: 0;
+      text-transform: uppercase;
+      color: var(--accent2);
+      padding: 4px 10px;
+      border: 1px solid color-mix(in srgb, var(--accent2) 28%, transparent);
+      border-radius: 999px;
+      margin-bottom: 18px;
+    }
+    h1 {
+      font-size: 38px;
+      line-height: 1.2;
+      font-weight: 700;
+      letter-spacing: 0;
+      margin-bottom: 16px;
+    }
+    .page-sub,
+    .lede {
+      color: var(--text-dim);
+      line-height: 1.6;
+    }
+    .page-sub {
+      font-size: 17px;
+      max-width: 580px;
+      margin-bottom: 48px;
+    }
+    .lede {
+      font-size: 19px;
+      margin-bottom: 40px;
+    }
+    .meta {
+      font-size: 13px;
+      color: var(--text-dim);
+      margin-bottom: 12px;
+      letter-spacing: 0;
+    }
+    h2 {
+      font-size: 24px;
+      font-weight: 700;
+      margin-top: 48px;
+      margin-bottom: 14px;
+      letter-spacing: 0;
+    }
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-top: 32px;
+      margin-bottom: 10px;
+      color: var(--text);
+    }
+    h4, h5, h6 {
+      color: var(--text);
+      margin-top: 28px;
+      margin-bottom: 10px;
+      line-height: 1.35;
+    }
+    p { margin-bottom: 16px; }
+    ul, ol { margin: 0 0 16px 20px; }
+    li { margin-bottom: 6px; }
+    code {
+      font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+      font-size: 0.88em;
+      background: var(--inline-code-bg);
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: color-mix(in srgb, var(--accent2) 80%, var(--text));
+    }
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      overflow-x: auto;
+      margin: 20px 0;
+      font-size: 14px;
+      line-height: 1.55;
+      box-shadow: 0 18px 60px var(--shadow-strong);
+    }
+    pre code {
+      background: transparent;
+      padding: 0;
+      color: inherit;
+      font-size: inherit;
+    }
+    blockquote {
+      border-left: 3px solid var(--accent);
+      padding: 4px 0 4px 18px;
+      margin: 20px 0;
+      color: var(--text-dim);
+      font-style: italic;
+    }
+    blockquote p:last-child { margin-bottom: 0; }
+    hr {
+      border: 0;
+      border-top: 1px solid var(--border);
+      margin: 36px 0;
+    }
+    article img {
+      max-width: 100%;
+      height: auto;
+      display: block;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      margin: 24px 0;
+    }
+    .table-wrap { overflow-x: auto; margin: 24px 0; }
+    table {
+      width: 100%;
+      min-width: 560px;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    th, td {
+      text-align: left;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    th {
+      color: var(--text-dim);
+      font-weight: 600;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0;
+      background: var(--tint-soft-2);
+    }
+    td code { font-size: 12px; }
+    .win { color: var(--success); font-weight: 600; }
+    .lose { color: var(--danger); }
+    .meh { color: var(--warning); }
+    .callout {
+      background: color-mix(in srgb, var(--accent) 10%, transparent);
+      border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      margin: 24px 0;
+      font-size: 15px;
+      line-height: 1.65;
+      color: var(--text-dim);
+    }
+    .callout strong { color: var(--text); }
+    .author-box {
+      margin-top: 64px;
+      padding-top: 32px;
+      border-top: 1px solid var(--border);
+      color: var(--text-dim);
+      font-size: 14px;
+    }
+    .post-list { display: flex; flex-direction: column; gap: 18px; }
+    .post-card {
+      display: block;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px 26px;
+      transition: background 0.18s, border-color 0.18s, transform 0.18s;
+    }
+    .post-card:hover {
+      background: var(--bg-card-hover);
+      border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+      transform: translateY(-1px);
+      text-decoration: none;
+    }
+    .post-meta {
+      font-size: 12px;
+      color: var(--text-dim);
+      letter-spacing: 0;
+      margin-bottom: 8px;
+    }
+    .post-title {
+      font-size: 21px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 6px;
+      letter-spacing: 0;
+      line-height: 1.35;
+    }
+    .post-excerpt {
+      color: var(--text-dim);
+      font-size: 15px;
+      line-height: 1.6;
+    }
+    footer {
+      max-width: var(--max-w);
+      margin: 0 auto;
+      padding: 40px 24px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+      color: var(--text-dim);
+      font-size: 13px;
+    }
+    footer a { color: var(--text-dim); }
+    footer a:hover { color: var(--text); }
+    @media (max-width: 700px) {
+      body { font-size: 16px; }
+      .nav-inner { padding: 14px 20px; align-items: flex-start; }
+      .nav-links { gap: 12px; flex-wrap: wrap; }
+      .lang-dropdown { display: none; }
+      h1 { font-size: 28px; }
+      .lede { font-size: 16px; }
+      .page-sub { font-size: 15px; }
+      main, article { padding: 48px 20px 64px; }
+      h2 { font-size: 20px; margin-top: 36px; }
+      .post-card { padding: 20px; }
+      .post-title { font-size: 19px; }
+      footer { flex-direction: column; padding: 32px 20px; }
+    }
+    @media (max-width: 420px) {
+      .nav-inner { gap: 12px; }
+      .nav-links a[href="https://github.com/webbrain-one/webbrain"] { display: none; }
+      .theme-toggle { width: 28px; height: 28px; }
+    }
+  </style>
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('webbrain-theme');
+        var theme = (saved === 'light' || saved === 'dark')
+          ? saved
+          : (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+        document.documentElement.setAttribute('data-theme', theme);
+      } catch (_) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    })();
+  </script>
+  <!-- Plausible analytics: start -->
+  <!-- Privacy-friendly analytics by Plausible -->
+  <script async src="https://plausible.io/js/pa-yWGfwxkkKSVs-eTuaKYpy.js"></script>
+  <script>
+    window.plausible=window.plausible||function(){(plausible.q=plausible.q||[]).push(arguments)},plausible.init=plausible.init||function(i){plausible.o=i||{}};
+    plausible.init()
+  </script>
+  <!-- Plausible analytics: end -->
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "Poolside Laguna S 2.1 reaches 71% with a high-reasoning request, but still trails Hy3",
+  "description": "Poolside's Laguna S 2.1 beats Hy3 on two published SWE benchmarks and MiniMax M3 on Terminal-Bench 2.1. It scored 65% in WebBrain's default frozen planner run and 71% with an OpenRouter high-reasoning request, still below Hy3 and M3.",
+  "author": {
+    "@type": "Person",
+    "name": "Emre Sokullu",
+    "url": "https://emresokullu.com"
+  },
+  "datePublished": "2026-07-21",
+  "image": "https://webbrain.one/og-image.png",
+  "publisher": {
+    "@type": "Organization",
+    "name": "WebBrain",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://webbrain.one/logo-github.png"
+    }
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://webbrain.one/blog/poolside-laguna-s-openrouter-planner-benchmark"
+  }
+}
+  </script>
+</head>
+<body>
+  <div class="glow-bg"></div>
+  <nav>
+    <div class="nav-inner">
+      <a href="/" class="nav-brand"><img class="brand-logo" src="/logo-github.png" alt="" aria-hidden="true"> WebBrain<span class="domain">.one</span></a>
+      <div class="nav-links">
+        <a href="/">Home</a>
+        <a href="/docs/">Docs</a>
+        <a href="/blog">Blog</a>
+        <select class="lang-dropdown" id="lang-dropdown" aria-label="Select language" data-current="en"><option value="en">English</option><option value="es">Español</option><option value="fr">Français</option><option value="tr">Türkçe</option><option value="zh">中文</option><option value="ru">Русский</option><option value="uk">Українська</option><option value="ar">العربية</option><option value="ja">日本語</option><option value="ko">한국어</option><option value="id">Bahasa Indonesia</option><option value="th">ไทย</option><option value="ms">Bahasa Melayu</option><option value="tl">Filipino</option><option value="he">עברית</option></select>
+        <button class="theme-toggle" type="button" id="theme-toggle" aria-label="Toggle light / dark theme" title="Toggle light / dark theme">
+          <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="4"/>
+            <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+          </svg>
+          <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+          </svg>
+        </button>
+        <a href="https://github.com/webbrain-one/webbrain" target="_blank" rel="noopener">GitHub</a>
+      </div>
+    </div>
+  </nav>
+
+  <article>
+    <div class="meta">July 21, 2026 &middot; 9 min read &middot; <a href="/blog">&larr; All posts</a></div>
+    <h1>Poolside Laguna S 2.1 reaches 71% with a high-reasoning request, but still trails Hy3</h1>
+    <p class="lede"><a href="https://poolside.ai/blog/introducing-laguna-s-2-1" target="_blank" rel="noopener">Poolside&#39;s Laguna S 2.1 launch</a> makes a compelling efficiency claim: a US open-weight, 118B-A8B coding model that is close to Tencent Hy3 on Terminal-Bench 2.1, ahead of it on two SWE benchmarks, and ahead of MiniMax M3 on Terminal-Bench. That is exactly the kind of cheap, self-hostable model we want to see challenge the recent Chinese planner leaders. We ran it twice through WebBrain&#39;s frozen 100-case browser-agent first-tool benchmark. The default OpenRouter run landed at 65% Sonnet alignment; an explicit high-reasoning request improved that to 71%. That closes much of the gap, but it also cuts parsed tool calls from 86 to 78 and still trails Hy3 at 73% and MiniMax M3 at 75%.</p>
+<h2 id="why-the-launch-numbers-got-our-attention">Why the launch numbers got our attention</h2>
+<p>Poolside&#39;s published table puts <strong>Laguna S 2.1 (118B-A8B)</strong> in a serious coding-agent tier:</p>
+<div class="table-wrap"><table><thead><tr><th>Published benchmark</th><th>Laguna S 2.1</th><th>Tencent Hy3</th><th>Inkling</th><th>MiniMax M3</th></tr></thead><tbody><tr><td>Terminal-Bench 2.1</td><td>70.2</td><td>71.7</td><td>63.8</td><td>66.0</td></tr><tr><td>SWE-Bench Multilingual</td><td>78.5</td><td>75.8</td><td>—</td><td>—</td></tr><tr><td>SWE-Bench Pro, public dataset</td><td>59.4</td><td>57.9</td><td>54.3</td><td>—</td></tr><tr><td>DeepSWE</td><td>40.4</td><td>—</td><td>—</td><td>—</td></tr><tr><td>SWE Atlas, codebase Q&amp;A</td><td>46.2</td><td>—</td><td>—</td><td>—</td></tr><tr><td>Toolathlon Verified</td><td>49.7</td><td>—</td><td>45.5</td><td>—</td></tr></tbody></table></div>
+<p>The Hy3 comparison is almost exactly what the headline suggests: Laguna S is 1.5 points behind on Terminal-Bench, then 2.7 points ahead on SWE-Bench Multilingual and 1.5 points ahead on SWE-Bench Pro. Poolside also places it 4.2 points above MiniMax M3 on Terminal-Bench 2.1.</p>
+<p>Those are not secret internal numbers. Poolside publishes <a href="https://trajectories.poolside.ai" target="_blank" rel="noopener">the trajectories behind its final evaluation trials</a>, which is unusually helpful. There is still an important methodology caveat: the launch page says pass@1 is averaged over four attempts per task, except DeepSWE, SWE Atlas, and Toolathlon at three attempts, and its comparison table takes the maximum available vendor, benchmark-author, or third-party score for most models. It is a useful overview, but not one uniform independent run.</p>
+<p>More importantly, these are long-horizon coding and terminal benchmarks. WebBrain asks a narrower product question: given a real browser-agent prompt and 41 available tools, does the model choose one valid first action?</p>
+<h2 id="what-laguna-s-2-1-is">What Laguna S 2.1 is</h2>
+<p><a href="https://huggingface.co/poolside/Laguna-S-2.1" target="_blank" rel="noopener">The model card</a> describes a sparse Mixture-of-Experts model with 118B total parameters and roughly 8B active per token. It has 48 layers, a native 1M-token context window, interleaved reasoning between tool calls, downloadable weights, and an OpenMDW 1.1 license.</p>
+<p>At the time of this run, <a href="https://openrouter.ai/poolside/laguna-s-2.1" target="_blank" rel="noopener">OpenRouter&#39;s paid endpoint</a> listed:</p>
+<div class="table-wrap"><table><thead><tr><th>Property</th><th>Laguna S 2.1 on OpenRouter</th></tr></thead><tbody><tr><td>Input</td><td>Text only</td></tr><tr><td>Output</td><td>Text</td></tr><tr><td>Paid context</td><td>1,048,576 tokens</td></tr><tr><td>Paid maximum output</td><td>131,072 tokens</td></tr><tr><td>Paid input price</td><td>$0.10 / 1M tokens</td></tr><tr><td>Paid output price</td><td>$0.20 / 1M tokens</td></tr><tr><td>Cached-input price</td><td>$0.01 / 1M tokens</td></tr><tr><td>Free context</td><td>262,144 tokens</td></tr><tr><td>Free maximum output</td><td>32,768 tokens</td></tr></tbody></table></div>
+<p>That price is genuinely disruptive. It is cheap enough to use as a routine planner, not merely a benchmark curiosity. The weights are also available for local and air-gapped deployment, so this is more than a subsidized API story.</p>
+<p>The downside is immediate for a browser agent: <strong>there is no image input</strong>. Laguna S is text-to-text. Like Tencent Hy3 today, it can be evaluated as a planner over page text and accessibility data, but it cannot be WebBrain&#39;s complete multimodal model.</p>
+<h2 id="what-we-ran">What we ran</h2>
+<p>We used the same frozen May 23, 2026 baseline as the recent Laguna XS, Hy3, MiniMax, Qwen, and local-model posts: Claude Sonnet 4.6&#39;s system prompt and 41-tool schema, system hash <code>5c4fac1387025050</code>.</p>
+<p>We first tried the exact model requested:</p>
+<pre><code class="language-text">poolside/laguna-s-2.1:free</code></pre>
+<p>OpenRouter rejected it before inference with <code>No endpoints available matching your guardrail restrictions and data policy</code>. The free endpoint permits Poolside to use inputs and outputs for model improvement, while this OpenRouter account blocks training-enabled providers. <a href="https://openrouter.ai/docs/guides/privacy/provider-logging/" target="_blank" rel="noopener">OpenRouter documents that routing behavior</a>. We did not weaken the account&#39;s privacy setting just to make the benchmark pass.</p>
+<p>We therefore ran the same model through its very inexpensive paid OpenRouter route, which was compatible with the existing privacy policy:</p>
+<pre><code class="language-bash">node test/llm/run-llamacpp.mjs \
+  --base https://openrouter.ai/api/v1 \
+  --model poolside/laguna-s-2.1 \
+  --tag 2026-07-21-openrouter-laguna-s-paid \
+  --concurrency 2 \
+  --timeout 180000 \
+  --no-save-request \
+  --freeze test/llm/freeze/baseline-2026-05-23.json</code></pre>
+<p>This was a native OpenAI structured-tools run. Thinking was active on the OpenRouter endpoint—the usage records include 9,350 reasoning tokens—and no chat-template fallback was used. The standard WebBrain runner keeps its fixed low-temperature first-tool settings, rather than adopting a model-specific sampling recipe. That is intentional: the question is whether Laguna S works in the same planner slot as the existing rows.</p>
+<p>We then repeated all 100 cases with OpenRouter&#39;s normalized high-effort reasoning request:</p>
+<pre><code class="language-bash">node test/llm/run-llamacpp.mjs \
+  --base https://openrouter.ai/api/v1 \
+  --model poolside/laguna-s-2.1 \
+  --tag 2026-07-21-openrouter-laguna-s-paid-high \
+  --reasoning-effort high \
+  --concurrency 2 \
+  --timeout 180000 \
+  --no-save-request \
+  --freeze test/llm/freeze/baseline-2026-05-23.json</code></pre>
+<p>Result files:</p>
+<pre><code class="language-text">test/llm/results/2026-07-21-openrouter-laguna-s-paid_chrome_poolside_laguna-s-2.1_frozen
+test/llm/results/2026-07-21-openrouter-laguna-s-paid-high_chrome_poolside_laguna-s-2.1_frozen</code></pre>
+<h2 id="headline-result">Headline result</h2>
+<div class="table-wrap"><table><thead><tr><th>Metric</th><th>Default reasoning</th><th>Requested high reasoning</th></tr></thead><tbody><tr><td>Completed cases</td><td>100/100</td><td>100/100</td></tr><tr><td>Transport errors</td><td>0</td><td>0</td></tr><tr><td>Parsed native tool calls</td><td>86/100</td><td>78/100</td></tr><tr><td>Valid frozen-schema tool names</td><td>86/86</td><td>78/78</td></tr><tr><td>Malformed tool names</td><td>0</td><td>0</td></tr><tr><td>No-tool outputs</td><td>14/100</td><td>22/100</td></tr><tr><td>Strict exact first-call match</td><td>15/100</td><td>15/100</td></tr><tr><td>Ideal tool-name match</td><td>33/100</td><td>35/100</td></tr><tr><td>Sonnet match, all cases</td><td>65.0%</td><td><strong>71.0%</strong></td></tr><tr><td>Sonnet match, when Sonnet tooled</td><td>65.2%</td><td><strong>69.6%</strong></td></tr><tr><td>Sonnet no-tool decisions matched</td><td>5/8</td><td><strong>7/8</strong></td></tr><tr><td>Average latency</td><td>1.57s</td><td>2.15s</td></tr><tr><td>Median latency</td><td>1.04s</td><td>1.52s</td></tr><tr><td>p95 latency</td><td>5.23s</td><td>5.17s</td></tr><tr><td>Slowest case</td><td>12.25s</td><td>11.76s</td></tr><tr><td>OpenRouter reported cost</td><td>$0.0286</td><td>$0.0227</td></tr></tbody></table></div>
+<p>High reasoning materially improved this sample&#39;s alignment: six more all-case Sonnet matches and four more matches on the 92 cases where Sonnet used a tool. It also matched seven of Sonnet&#39;s eight no-tool decisions instead of five.</p>
+<p>The trade-off is unusual. High reasoning produced <strong>fewer</strong> dispatchable actions: 78 tool calls instead of 86, with no-tool outputs rising from 14 to 22. Exact first-call matches did not move at all. The model became more Sonnet-like on aggregate while becoming less reliable about actually emitting a tool.</p>
+<p>Both runs were operationally excellent. Median latency stayed below two seconds, each replay cost less than three cents, and every parsed call used a valid frozen-schema function name. Laguna S did not reproduce the malformed function-name problem from Laguna XS.</p>
+<h2 id="can-its-thinking-level-really-be-increased">Can its thinking level really be increased?</h2>
+<p><a href="https://openrouter.ai/docs/guides/best-practices/reasoning-tokens" target="_blank" rel="noopener">OpenRouter&#39;s unified reasoning API</a> accepts <code>reasoning: { effort: &quot;high&quot; }</code>, and the endpoint accepted that request. There are two reasons not to overstate what happened:</p>
+<ul><li>OpenRouter&#39;s Laguna S metadata says reasoning is enabled by default, but does not publish <code>supported_efforts</code> or a <code>default_effort</code>. OpenRouter&#39;s own docs say the missing <code>supported_efforts</code> field means the model does not expose an effort selector.</li><li>Poolside&#39;s model card documents <code>enable_thinking</code> as an on/off chat-template control and recommends preserving thinking across turns. It does not document distinct low, medium, and high native levels for this checkpoint.</li></ul>
+<p>The token counters reinforce that caution. The default run used 9,350 reasoning tokens; the high request used 10,159, an 8.7% increase rather than a dramatic budget expansion. So “requested high reasoning” is the accurate label. The 65% to 71% jump is a useful observed result, but one stochastic second run is not proof that a genuinely deeper native thinking mode caused all six points.</p>
+<h2 id="against-hy3-minimax-m3-and-laguna-xs">Against Hy3, MiniMax M3, and Laguna XS</h2>
+<div class="table-wrap"><table><thead><tr><th>Model</th><th>Parsed calls</th><th>Valid names</th><th>Exact</th><th>Ideal name</th><th>Sonnet all</th><th>Sonnet tooled</th><th>Median</th><th>p95</th><th>Cost</th></tr></thead><tbody><tr><td>MiniMax M3</td><td>85/100</td><td>85/85</td><td>17/100</td><td>32/100</td><td>75.0%</td><td>73.9%</td><td>3.07s</td><td>8.20s</td><td>$1.06</td></tr><tr><td>Tencent Hy3 free</td><td>95/100</td><td>95/95</td><td>20/100</td><td>38/100</td><td>73.0%</td><td>75.0%</td><td>3.68s</td><td>9.16s</td><td>$0.00</td></tr><tr><td><strong>Laguna S 2.1 paid, high request</strong></td><td><strong>78/100</strong></td><td><strong>78/78</strong></td><td><strong>15/100</strong></td><td><strong>35/100</strong></td><td><strong>71.0%</strong></td><td><strong>69.6%</strong></td><td><strong>1.52s</strong></td><td><strong>5.17s</strong></td><td><strong>$0.023</strong></td></tr><tr><td>Laguna S 2.1 paid, default</td><td>86/100</td><td>86/86</td><td>15/100</td><td>33/100</td><td>65.0%</td><td>65.2%</td><td>1.04s</td><td>5.23s</td><td>$0.029</td></tr><tr><td>Laguna XS 2.1 free</td><td>92/100</td><td>89/92</td><td>6/100</td><td>27/100</td><td>65.0%</td><td>65.2%</td><td>1.30s</td><td>3.08s</td><td>$0.00</td></tr></tbody></table></div>
+<p>Laguna S is a real improvement over XS. The default run gains nine exact first actions and six ideal tool-name matches while eliminating malformed names. The high request adds another two ideal-name matches and moves the all-case alignment out of the 65% band entirely.</p>
+<p>The high row gets much closer to Hy3, but does not validate the strongest reading of Poolside&#39;s coding table. Hy3 still has 17 more parsed calls, five more exact matches, three more ideal-name matches, and a two-point all-case alignment lead. On the Sonnet-tooled subset, Hy3 leads by 5.4 points. MiniMax M3 retains a four-point all-case lead. Laguna S wins decisively on latency and paid cost; it does not beat either model on overall planner quality.</p>
+<h2 id="more-thinking-more-narrated-actions">More thinking, more narrated actions</h2>
+<p>The clearest failure pattern was not a bad tool name. It was <strong>no tool at all after announcing a correct next step</strong>.</p>
+<p>The default run returned 14 no-tool responses. Five agreed with Sonnet&#39;s no-tool decisions. On the other nine, Sonnet called a browser tool while Laguna S stopped after prose such as:</p>
+<ul><li>“I&#39;ll read the current page to find all the visible links.”</li><li>“I&#39;ll start by reading the current page to see what&#39;s there.”</li><li>“Let me start by reading the current page to find the Issues section.”</li><li>“I&#39;ll look at the current checkout page to find where to apply the coupon code.”</li></ul>
+<p>The intent is reasonable. The execution contract is not. A browser agent cannot dispatch “I will read the page”; it needs <code>read_page</code>, <code>get_accessibility_tree</code>, or another valid function call in the response.</p>
+<p>This is different from Laguna XS&#39;s malformed multi-call strings. S understands the schema and never invents a function name, but it sometimes narrates the action instead of emitting it. Both failure modes leave the agent stationary.</p>
+<p>The high request amplified this behavior. It returned no tool on 22 cases. Seven matched Sonnet&#39;s no-tool decisions, but 15 did not. Some of those were sensible natural-language clarifications, yet many were the same “I&#39;ll start by reading the page” promise with no call attached. The alignment gain therefore should not be mistaken for a blanket improvement in agent usability.</p>
+<h2 id="where-it-works">Where it works</h2>
+<div class="table-wrap"><table><thead><tr><th>Category</th><th>Cases</th><th>Sonnet-name matches</th><th>Ideal-name matches</th></tr></thead><tbody><tr><td>Direct navigation</td><td>10</td><td>10</td><td>9</td></tr><tr><td>Page reading / summarize</td><td>8</td><td>6</td><td>5</td></tr><tr><td>Forms / interactive</td><td>8</td><td>6</td><td>0</td></tr><tr><td>Email</td><td>6</td><td>5</td><td>0</td></tr><tr><td>Downloads</td><td>6</td><td>5</td><td>3</td></tr><tr><td>Scrolling / inspection</td><td>4</td><td>4</td><td>3</td></tr><tr><td>Knowledge questions</td><td>5</td><td>5</td><td>1</td></tr><tr><td>Translation / accessibility</td><td>3</td><td>3</td><td>1</td></tr><tr><td>Multi-page / listing</td><td>3</td><td>3</td><td>0</td></tr></tbody></table></div>
+<p>This table uses the requested-high run. Direct navigation remains the family&#39;s cleanest slice: Laguna S matches Sonnet on all ten cases and picks the ideal tool name on nine. High reasoning also improves the default run&#39;s page-reading, downloads, knowledge, and translation slices.</p>
+<p>The model is also fast enough to feel interactive. Ninety-five high-request cases finished within 5.17 seconds, and the median was 1.52 seconds.</p>
+<h2 id="where-it-loses">Where it loses</h2>
+<div class="table-wrap"><table><thead><tr><th>Category</th><th>Cases</th><th>Sonnet-name matches</th><th>Pattern</th></tr></thead><tbody><tr><td>Search queries</td><td>10</td><td>7</td><td>High reasoning regressed from nine default-run matches and stopped without a tool twice.</td></tr><tr><td>GitHub flows</td><td>6</td><td>3</td><td>Mixed direct navigation, generic inspection, and narrated starts.</td></tr><tr><td>Shopping</td><td>4</td><td>1</td><td>Three of four first moves still diverged, including two no-tool stops.</td></tr><tr><td>Ambiguous / clarify</td><td>8</td><td>4</td><td>More Sonnet-like no-tool decisions, but only one ideal <code>clarify</code> tool name.</td></tr><tr><td>Destructive / refusal-worthy</td><td>6</td><td>2</td><td>Inspected the page where Sonnet usually asked for confirmation.</td></tr><tr><td>Tab management</td><td>4</td><td>2</td><td>Mixed correct tab actions, generic inspection, and prose-only limitation handling.</td></tr><tr><td>UI mutations</td><td>4</td><td>2</td><td>Better than default, but two cases still ended without a dispatchable action.</td></tr></tbody></table></div>
+<p>The destructive slice matters. Laguna S did not immediately perform the destructive actions—it chose read-only inspection—but it also failed to reproduce Sonnet&#39;s confirmation boundary on “delete all my emails,” “sell all my bitcoin,” and similar prompts. For WebBrain, safe hesitation needs to be explicit and stable, not merely a generic accessibility-tree call.</p>
+<h2 id="why-poolside-s-benchmark-can-be-right-while-ours-is-also-right">Why Poolside&#39;s benchmark can be right while ours is also right</h2>
+<p>The published coding scores and our 65% default / 71% requested-high planner rows measure different capabilities:</p>
+<ol><li>Terminal-Bench and SWE-Bench give the model a long horizon, an executable environment, and many opportunities to recover. WebBrain&#39;s frozen suite scores the first decision only.</li><li>Poolside averages multiple attempts. Our historical comparison uses one response per frozen case.</li><li>Poolside&#39;s launch comparison combines the best available vendor, official-leaderboard, or third-party figure for most models. Our rows all use one prompt, one 41-tool schema, and one local scoring rule.</li><li>Coding agents can recover after narrating or choosing a suboptimal first action. A browser planner that emits no tool simply does not move.</li></ol>
+<p>So the fair conclusion is not “Poolside&#39;s scores are false.” Laguna S can be a strong coding agent and a mediocre WebBrain first-tool router at the same time. The launch benchmarks do <strong>not</strong> predict our use case well enough to replace direct testing.</p>
+<h2 id="the-us-openweight-angle-still-matters">The US open-weight angle still matters</h2>
+<p>The recent inexpensive hosted-agent conversation has been driven heavily by Chinese labs: MiniMax, Tencent, Qwen, and StepFun. <a href="https://poolside.ai/government" target="_blank" rel="noopener">Poolside describes itself as a US-based AI company</a>, releases Laguna S weights, supports local and air-gapped deployments, and prices hosted inference at a level that can compete with those APIs.</p>
+<p>That makes Laguna S important even though neither run is the clean breakthrough we hoped for. A US open-weight model matching Hy3 or MiniMax in WebBrain&#39;s planner harness would materially diversify the shortlist. The high request gets Laguna S close on headline alignment, but its low call rate keeps it from earning an unqualified tie. Its price, latency, local availability, and clean schema discipline still make it a credible model to keep testing as the prompt and tool-calling stack improve.</p>
+<p>The licensing language is worth keeping precise: Laguna S is <strong>open-weight and self-hostable</strong> under OpenMDW 1.1. “Open source” can imply an OSI-style software license, which is not the claim we need to make here.</p>
+<h2 id="do-not-dismiss-inkling-from-one-text-table">Do not dismiss Inkling from one text table</h2>
+<p>Poolside&#39;s chart also makes Laguna S look impressively efficient beside Thinking Machines Lab&#39;s much larger Inkling: 118B-A8B versus 975B-A41B, with Laguna S ahead on Terminal-Bench 2.1 and SWE-Bench Pro.</p>
+<p>That comparison is useful, but it is not a reason to wave Inkling away. <a href="https://thinkingmachines.ai/model-card/inkling/" target="_blank" rel="noopener">Inkling is a general-purpose multimodal model</a> with native text, image, and audio inputs, a 1M context window, downloadable weights, and an Apache 2.0 release. Laguna S is a text-only coding specialist. Inkling spends much more capacity on a broader capability surface that matters directly to browser agents.</p>
+<p>For WebBrain, vision can be more valuable than a few points on a terminal benchmark: screenshots cover canvas apps, broken accessibility trees, visual verification, and interfaces whose state is not represented in page text. Audio is a separate useful lane again. Bigger and lower on one coding score does not mean worse overall; it may mean the model is solving a broader problem.</p>
+<h2 id="token-and-cost-profile">Token and cost profile</h2>
+<div class="table-wrap"><table><thead><tr><th>Token counter</th><th>Default reasoning</th><th>Requested high reasoning</th></tr></thead><tbody><tr><td>Prompt tokens</td><td>1,709,356</td><td>1,709,356</td></tr><tr><td>Cached prompt tokens</td><td>1,613,536</td><td>1,679,744</td></tr><tr><td>Completion tokens</td><td>14,530</td><td>14,680</td></tr><tr><td>Reasoning tokens</td><td>9,350</td><td>10,159</td></tr><tr><td>Total tokens</td><td>1,723,886</td><td>1,724,036</td></tr><tr><td>OpenRouter cost</td><td>$0.028623</td><td>$0.022695</td></tr></tbody></table></div>
+<p>Prompt caching makes both paid runs almost free in practice. The high run&#39;s lower bill is not evidence that more reasoning costs less; it had warmer prompt-cache coverage because it ran second. Completion tokens were nearly unchanged, and reasoning tokens rose by 809.</p>
+<p>That is the strongest part of the product case. MiniMax M3&#39;s saved replay cost $1.06. Even the more expensive Laguna S run was roughly 37 times cheaper while responding much faster. It did not match M3&#39;s planner quality, but its price leaves substantial room for retries, a verifier, or a separate vision model.</p>
+<h2 id="against-thinkingcap-qwen-3-6-27b-and-gemma-4-31b-qat">Against ThinkingCap Qwen 3.6 27B and Gemma 4 31B QAT</h2>
+<p>The final reality check is local. Two models we have already run on the same frozen 100-case baseline are stronger first-action planners than Laguna S in this harness:</p>
+<div class="table-wrap"><table><thead><tr><th>Model</th><th>Serving path</th><th>Parsed calls</th><th>Exact</th><th>Ideal name</th><th>Sonnet all</th><th>Sonnet tooled</th><th>Median</th><th>p95</th></tr></thead><tbody><tr><td><a href="/blog/gemma-4-31b-qat-planner-benchmark/">Gemma 4 31B QAT w4a16</a></td><td>Local vLLM, legacy text-call compatibility</td><td>95/100</td><td>19/100</td><td>37/100</td><td><strong>77.0%</strong></td><td><strong>78.3%</strong></td><td><strong>0.55s</strong></td><td><strong>1.07s</strong></td></tr><tr><td><a href="/blog/thinkingcap-qwen36-27b-planner-benchmark/">ThinkingCap Qwen 3.6 27B INT4</a></td><td>Local vLLM, native structured tools</td><td>91/100</td><td>19/100</td><td>35/100</td><td><strong>77.0%</strong></td><td><strong>76.1%</strong></td><td>2.25s</td><td>3.94s</td></tr><tr><td>Laguna S 2.1 paid, high request</td><td>OpenRouter, native structured tools</td><td>78/100</td><td>15/100</td><td>35/100</td><td>71.0%</td><td>69.6%</td><td>1.52s</td><td>5.17s</td></tr><tr><td>Laguna S 2.1 paid, default</td><td>OpenRouter, native structured tools</td><td>86/100</td><td>15/100</td><td>33/100</td><td>65.0%</td><td>65.2%</td><td>1.04s</td><td>5.23s</td></tr></tbody></table></div>
+<p>ThinkingCap&#39;s comparison is especially clean on quality. It is six points ahead of Laguna S&#39;s high-request all-case score, 6.5 points ahead when Sonnet used a tool, emits 13 more parsed actions, and gains four exact matches. Laguna is faster at the median and matches ThinkingCap&#39;s 35 ideal tool names, but the lower call rate makes it the weaker router overall.</p>
+<p>Gemma 4 31B QAT is the harder result for Laguna S. It leads the high-request row by six all-case points and 8.7 tool-required points, returns 17 more parsed calls, gains four exact and two ideal-name matches, and is also faster. Gemma&#39;s local run additionally demonstrated working vision, while Laguna S has no image input. If an RTX 5090-class local setup with roughly 30 GB of observed GPU-memory use is available, Gemma remains the more complete WebBrain candidate from these measurements.</p>
+<p>This is the same frozen prompt, Sonnet reference, 41-tool schema, and scoring rule, but not an identical inference stack. Laguna S used OpenRouter native tools; ThinkingCap used local vLLM native tools; Gemma used the harness&#39;s legacy text-call compatibility mode. Latency and economics are therefore deployment observations, not controlled hardware comparisons. Laguna still has a deployment advantage for anyone who wants a nearly free hosted API without maintaining a local GPU.</p>
+<h2 id="bottom-line">Bottom line</h2>
+<p>Poolside Laguna S 2.1 did not reproduce its coding-benchmark advantage in WebBrain&#39;s frozen browser-planner test. The default row lands at 65% Sonnet alignment. Requesting high reasoning lifts the second sample to 71%, close to Tencent Hy3 at 73% but still below Hy3 and MiniMax M3—and with only 78 parsed tool calls.</p>
+<p>It is still a meaningful release. Laguna S fixes XS&#39;s malformed function names, raises exact matches from 6 to 15, stays at a 1.04–1.52-second median, costs less than three cents per paid 100-case replay, and can be deployed from downloadable weights. For a coding agent, or a text planner paired with a separate vision model, that combination is compelling.</p>
+<p>For WebBrain&#39;s default planner shortlist, though, the answer is still no—not yet. The high-request result is encouraging enough to keep Laguna S in the conversation, but 22 no-tool outputs are too many for a default action router. The official coding numbers are strong in their domain; they are not evidence that Laguna S beats Hy3, MiniMax M3, ThinkingCap 27B, or Gemma 4 31B QAT for browser first-action routing. And without vision, it remains one component of a browser agent rather than the whole model stack.</p>
+<p>Tags: #Poolside #LagunaS #OpenRouter #TencentHy3 #MiniMaxM3 #Inkling #OpenWeights #ToolCalling #BrowserAgent #WebBrain</p>
+
+    <div class="author-box">
+      Written by <a href="https://emresokullu.com" target="_blank" rel="noopener">Emre Sokullu</a>. WebBrain is MIT-licensed and open on <a href="https://github.com/webbrain-one/webbrain" target="_blank" rel="noopener">GitHub</a>.
+    </div>
+  </article>
+
+  <footer>
+    <div>&copy; 2026 WebBrain &middot; <a href="/privacy">Privacy</a></div>
+    <div><a href="https://github.com/webbrain-one/webbrain" target="_blank" rel="noopener">GitHub</a></div>
+  </footer>
+  <script>
+    (function () {
+      const btn = document.getElementById('theme-toggle');
+      if (!btn) return;
+      const root = document.documentElement;
+
+      function setTheme(theme, persist) {
+        root.setAttribute('data-theme', theme);
+        if (persist) {
+          try { localStorage.setItem('webbrain-theme', theme); } catch (_) {}
+        }
+      }
+
+      btn.addEventListener('click', function () {
+        const next = root.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+        setTheme(next, true);
+      });
+
+      const mq = window.matchMedia('(prefers-color-scheme: light)');
+      function onMQ(e) {
+        try {
+          if (localStorage.getItem('webbrain-theme')) return;
+        } catch (_) {}
+        setTheme(e.matches ? 'light' : 'dark', false);
+      }
+      if (typeof mq.addEventListener === 'function') mq.addEventListener('change', onMQ);
+      else if (typeof mq.addListener === 'function') mq.addListener(onMQ);
+    })();
+  </script>
+  <script>
+    (function () {
+      const LOCALES = ["en","es","fr","tr","zh","ru","uk","ar","ja","ko","id","th","ms","tl","he"];
+      const sel = document.getElementById('lang-dropdown');
+      if (!sel) return;
+      sel.value = sel.dataset.current || 'en';
+      sel.addEventListener('change', function () {
+        const target = sel.value;
+        if (!LOCALES.includes(target)) return;
+        window.location.href = target === 'en' ? '/' : '/' + target + '/';
+      });
+    })();
+  </script>
+</body>
+</html>

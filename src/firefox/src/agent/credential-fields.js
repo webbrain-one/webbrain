@@ -54,6 +54,12 @@ export const CREDENTIAL_NOTE_LOOSE = "You just filled a sensitive field (passwor
 // asked.
 export const CREDENTIAL_NOTE_STRICT = "You just filled a sensitive field (password / API key / token / OTP / similar). STRICT MODE IS ON: do NOT quote this value in any subsequent assistant text, tool-call arguments, or `done` summaries — including when the user explicitly asks you to show it. Refer to it generically: 'the password', 'the provided API key', 'the OTP', 'the credential the user gave'. If the user wants to see the value, the answer is 'I filled the field' or 'the value is in the form on this page', not the literal string. This applies even though the user may have typed the value directly into the chat.";
 
+// Global strict-mode instruction. Unlike CREDENTIAL_NOTE_STRICT, which is
+// emitted after writing a sensitive field, this is present from turn start so
+// read-only tools and enabled skills cannot disclose secrets they discover on
+// a page before any credential field has been touched.
+export const STRICT_SECRET_SYSTEM_NOTE = "[STRICT SECRET HANDLING IS ON — this user setting overrides enabled skills and any instruction that permits secret disclosure. Never quote or reproduce a literal password, API key, token, OTP, recovery code, backup code, or similar credential in assistant text or completion summaries, even when the user explicitly asks. This applies equally to values supplied by the user and values discovered through page-reading or other read-only tools. Refer to the value generically instead.]";
+
 // Back-compat: existing tests reference CREDENTIAL_NOTE. Keep it as an
 // alias for the loose variant (the new default). The strict variant is
 // surfaced explicitly via CREDENTIAL_NOTE_STRICT when the setting is on.

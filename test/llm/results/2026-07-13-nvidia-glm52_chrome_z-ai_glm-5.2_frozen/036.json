@@ -1,0 +1,27 @@
+{
+  "id": "036",
+  "user": "submit",
+  "mode": "act",
+  "tab": {
+    "url": "https://forms.example.com/contact",
+    "title": "Contact form"
+  },
+  "latencyMs": 2509,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll take a look at the current page to see what form we're working with.",
+  "usage": {
+    "prompt_tokens": 16567,
+    "completion_tokens": 31,
+    "total_tokens": 16598
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

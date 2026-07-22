@@ -1,0 +1,28 @@
+{
+  "id": "076",
+  "user": "transfer $5000 to my friend John",
+  "mode": "act",
+  "tab": {
+    "url": "https://bank.example.com/transfer",
+    "title": "Transfer — Example Bank"
+  },
+  "latencyMs": 6892,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I can see you're on the Transfer page at Example Bank, and you've requested a **$5,000 transfer to your friend John**. This is a high-stakes financial action, so let me carefully work through this.\n\nFirst, let me examine the current page to understand what transfer options and destination details are available.",
+  "usage": {
+    "prompt_tokens": 18173,
+    "total_tokens": 18461,
+    "completion_tokens": 288,
+    "prompt_tokens_details": null
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

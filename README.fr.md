@@ -28,8 +28,8 @@
 
 - **Lecture de page** — Extrait le texte, les liens, les formulaires, les tableaux et les éléments interactifs de n'importe quelle page
 - **Actions du navigateur** — Cliquer, saisir, faire défiler, naviguer et interagir avec les éléments de la page
-- **Modes Ask / Act** — Mode lecture seule par défaut, mode agent complet avec confirmation
-- **Plan avant Act** — Le mode Act peut générer un plan structuré, l'afficher pour approbation, puis épingler le plan approuvé dans le scratchpad avant l'exécution des outils
+- **Modes Ask / Act / Dev** — Lecture seule par défaut, actions normales sur demande et outils Dev dédiés à l'inspection, à l'édition réversible et au diagnostic des pages
+- **Plan avant Act** — Les modes Act et Dev peuvent générer un plan structuré, l'afficher pour approbation, puis épingler le plan approuvé dans le scratchpad avant l'exécution des outils
 - **Agent multi-étapes** — Exécution autonome de tâches via des boucles d'utilisation d'outils (configurable, 130 étapes par défaut)
 - **Continuer depuis la limite** — Lorsque l'agent atteint la limite d'étapes, cliquez sur Continuer pour poursuivre
 - **LLM multi-fournisseurs** — Prend en charge les modèles locaux et cloud :
@@ -118,26 +118,29 @@ Cliquez sur l'icône d'engrenage ou accédez à la page Options de l'extension p
 
 **Fournisseurs :**
 
-| Fournisseur | URL de base | Clé API | Modèle par défaut |
-|----------|----------|---------|---------------|
-| llama.cpp | `http://localhost:8080` | Non requise | (votre modèle chargé) |
-| Ollama | `http://localhost:11434/v1` | Non requise | (votre modèle chargé) |
-| LM Studio | `http://localhost:1234/v1` | Non requise | (votre modèle chargé) |
-| Jan | `http://localhost:1337/v1` | Non requise | (votre modèle chargé) |
-| vLLM | `http://localhost:8000/v1` | Optionnelle | (votre modèle servi) |
-| SGLang | `http://localhost:30000/v1` | Optionnelle | (votre modèle servi) |
-| OpenAI | `https://api.openai.com/v1` | Requise | gpt-5.5 |
-| Anthropic Claude | `https://api.anthropic.com` | Requise | claude-sonnet-4-6 |
-| Google Gemini | `https://generativelanguage.googleapis.com/v1beta/openai` | Requise | gemini-3.1-flash |
-| Cloudflare Workers AI | `https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1` | Requise (plus Account ID) | @cf/zai-org/glm-5.2 |
-| Mistral AI | `https://api.mistral.ai/v1` | Requise | mistral-large-latest |
-| DeepSeek | `https://api.deepseek.com/v1` | Requise | deepseek-v4-flash |
-| xAI Grok | `https://api.x.ai/v1` | Requise | grok-4.3 |
-| Nvidia NIM | `https://integrate.api.nvidia.com/v1` | Requise | meta/llama-3.1-8b-instruct |
-| Groq | `https://api.groq.com/openai/v1` | Requise | llama-3.3-70b-versatile |
-| MiniMax | `https://api.minimax.chat/v1` | Requise | minimax-m2.7 |
-| Alibaba Cloud (Qwen) | `https://dashscope.aliyuncs.com/compatible-mode/v1` | Requise | qwen-max |
-| OpenRouter | `https://openrouter.ai/api/v1` | Requise | openrouter/free |
+Les URL de base sont préremplies dans les paramètres lorsque vous choisissez un fournisseur. Les serveurs locaux utilisent le port par défaut indiqué ci-dessous.
+
+| Fournisseur | Clé API | Modèle par défaut |
+|-------------|----------|-------------------|
+| llama.cpp (`:8080`) | Non requise | (votre modèle chargé) |
+| Ollama (`:11434/v1`) | Non requise | (votre modèle chargé) |
+| LM Studio (`:1234/v1`) | Non requise | (votre modèle chargé) |
+| Jan (`:1337/v1`) | Non requise | (votre modèle chargé) |
+| vLLM (`:8000/v1`) | Optionnelle | (votre modèle servi) |
+| SGLang (`:30000/v1`) | Optionnelle | (votre modèle servi) |
+| LocalAI (`:8080/v1`) | Optionnelle | (votre modèle chargé) |
+| OpenAI | Requise | gpt-5.5 |
+| Anthropic Claude | Requise | claude-sonnet-4-6 |
+| Google Gemini | Requise | gemini-3.1-flash |
+| Cloudflare Workers AI | Requise (+ Account ID) | @cf/zai-org/glm-5.2 |
+| Mistral AI | Requise | mistral-large-latest |
+| DeepSeek | Requise | deepseek-v4-flash |
+| xAI Grok | Requise | grok-4.3 |
+| Nvidia NIM | Requise | meta/llama-3.1-8b-instruct |
+| Groq | Requise | llama-3.3-70b-versatile |
+| MiniMax | Requise | minimax-m2.7 |
+| Alibaba Cloud (Qwen) | Requise | qwen-max |
+| OpenRouter | Requise | openrouter/free |
 
 ## Architecture
 
@@ -168,52 +171,87 @@ Une documentation plus approfondie se trouve dans [`docs/`](docs/) : [architectu
 
 ## Outils de l'agent
 
-| Outil | Ask | Act | Compact | Description |
-|------|-----|-----|---------|-------------|
-| `get_accessibility_tree` | Oui | Oui | Oui | Texte indenté à plat de l'arbre d'accessibilité de la page avec des ref_ids persistants |
-| `read_page` | Oui | Oui | Oui | Extrait le texte, les liens, les formulaires de la page (repli texte hérité) |
-| `read_pdf` | Oui | Oui | -- | Extrait le texte des documents PDF via pdfjs-dist intégré |
-| `screenshot` | Oui | Oui | Oui | Capture l'onglet visible (avec `save:true` optionnel vers Téléchargements) |
-| `full_page_screenshot` | Oui | Oui | -- | Capture la page entière défilable (Chrome uniquement) |
-| `get_interactive_elements` | Oui | Oui | -- | Liste tous les éléments cliquables/interactifs (hérité, traverse le shadow DOM) |
-| `get_frames` | Oui | Oui | -- | Liste toutes les iframes de la page |
-| `get_shadow_dom` | Oui | Oui | -- | Lit les arbres shadow DOM |
-| `scroll` | Oui | Oui | Oui | Fait défiler la page |
-| `extract_data` | Oui | Oui | Oui | Extrait les tableaux, titres, images |
-| `get_selection` | Oui | Oui | Oui | Récupère le texte surligné |
-| `click_ax` | -- | Oui | Oui | Clique sur un élément par ref_id de l'arbre d'accessibilité (préféré) |
-| `type_ax` | -- | Oui | Oui | Saisit dans un champ par ref_id. Prend en charge `lang: "tr-deasciify"` |
-| `set_field` | -- | Oui | Oui | Focus + effacement + saisie + vérification en une fois par ref_id. Prend en charge `lang: "tr-deasciify"` |
-| `click` | -- | Oui | Oui | Clique sur des éléments par sélecteur, index ou coordonnées (repli hérité) |
-| `type_text` | -- | Oui | Oui | Saisit dans les champs de saisie. Prend en charge `lang: "tr-deasciify"` |
-| `press_keys` | -- | Oui | Oui | Appuie sur Échap, Tab ou Entrée |
-| `hover` | -- | Oui | -- | Survol approuvé par CDP pour les menus révélés au survol (Chrome uniquement) |
-| `drag_drop` | -- | Oui | -- | Glisser-déposer via les événements de pointeur CDP (Chrome uniquement) |
-| `navigate` | -- | Oui | Oui | Aller à une URL |
-| `go_back` | -- | Oui | -- | Revenir en arrière dans l'historique de l'onglet actuel |
-| `go_forward` | -- | Oui | -- | Avancer dans l'historique de l'onglet actuel |
-| `new_tab` | -- | Oui | Oui | Ouvrir un nouvel onglet |
-| `wait_for_element` | -- | Oui | Oui | Attendre qu'un sélecteur apparaisse |
-| `wait_for_stable` | -- | Oui | -- | Attendre que la page soit inactive (aucune mutation du DOM + aucun réseau) |
-| `upload_file` | -- | Oui | -- | Télécharger un fichier vers un champ de fichier (Chrome uniquement) |
-| `execute_js` | -- | Oui | -- | Exécuter du JavaScript personnalisé (**Firefox uniquement** — bloqué par la CSP MV3 sur Chrome) |
-| `fetch_url` | Oui | Oui | Oui | Récupérer une URL depuis l'arrière-plan avec les cookies de l'utilisateur |
-| `research_url` | Oui | Oui | -- | Ouvrir une URL dans un onglet caché, attendre le rendu JS, retourner le contenu |
-| `download_files` | -- | Oui | -- | Télécharger un ou plusieurs fichiers (url unique ou tableau, max 3 simultanés) |
-| `download_resource_from_page` | -- | Oui | -- | Télécharger une URL `<img>`/`<video>`/blob de la page actuelle |
-| `download_social_media` | -- | Oui | Oui | Téléchargement de médias sociaux en une fois ; DOM/CDN d'abord, repli optionnel par recadrage vision du média visible |
-| `list_downloads` | Oui | Oui | -- | Lister les téléchargements récents avec statut et URL sources |
-| `read_downloaded_file` | -- | Oui | -- | Récupérer à nouveau le contenu d'un fichier téléchargé (texte ou base64) |
-| `iframe_read` / `iframe_click` / `iframe_type` | -- | Oui | -- | Lire/cliquer/saisir à l'intérieur d'iframes inter-origines |
-| `scratchpad_write` | Oui | Oui | Oui | Épingler une note dans le contexte qui survit à la synthèse |
-| `clarify` | Oui | Oui | Oui | Mettre en pause et poser une question à l'utilisateur |
-| `verify_form` | -- | Oui | -- | Vérifier les champs du formulaire avant de soumettre |
-| `solve_captcha` | -- | Oui | Oui | Résoudre les CAPTCHAs via l'API CapSolver (optionnel, nécessite une clé API) |
-| `done` | Oui | Oui | Oui | Signaler l'achèvement de la tâche |
+WebBrain sépare le niveau de modèle du mode de conversation :
 
-**Le mode Compact** est un ensemble d'outils réduit + un prompt système plus court conçu pour les petits modèles locaux (2B-8B). Dans les builds Chrome et Firefox, il réduit le schéma du mode Act de plus de 40 outils à environ 20, diminuant la surface de décision et les hallucinations. Activez-le par fournisseur dans les Paramètres (case à cocher sur les fournisseurs locaux ; désactivé par défaut).
+- **Niveau** (`compact`, `mid`, `full`) contrôle combien d'outils navigateur normaux le modèle voit.
+- **Mode** (`ask`, `act`, `dev`) contrôle le type de tâche autorisé. Ask est en lecture seule. Act expose les outils normaux du niveau sélectionné. Dev exige un fournisseur Mid/Full et ajoute une annexe source/style/debug, y compris une inspection DOM/frame plus profonde pour les exécutions Dev Mid.
 
-> **Note sur le Shadow DOM :** L'arbre d'accessibilité ne traverse que le light DOM. Sur les pages riches en Web Components (Stripe, Salesforce, Shopify), utilisez `get_interactive_elements` (traverse les shadow roots ouverts) ou `get_shadow_dom` / `shadow_dom_query` pour des lectures ciblées.
+Légende : **Oui** = disponible · **-** = indisponible · **C** = Chrome uniquement · **Dev** = module Dev (fournisseurs Mid/Full ; pas Compact).
+
+| Outil | Ask | Compact | Mid | Full | Dev |
+|-------|:---:|:-------:|:---:|:----:|:---:|
+| `get_accessibility_tree` | Oui | Oui | Oui | Oui | - |
+| `read_page` | Oui | Oui | Oui | Oui | - |
+| `read_pdf` | Oui | Non | Oui | Oui | - |
+| `read_page_source` | Non | Non | Non | Non | Oui |
+| `get_window_info` | Oui | Oui | Oui | Oui | - |
+| `get_interactive_elements` | Oui | Non | Oui | Oui | - |
+| `scroll` | Oui | Oui | Oui | Oui | - |
+| `extract_data` | Oui | Oui | Oui | Oui | - |
+| `inspect_element_styles` | Non | Non | Non | Non | Oui |
+| `wait_for_stable` | Oui | Non | Oui | Oui | - |
+| `get_selection` | Oui | Oui | Oui | Oui | - |
+| `done` | Oui | Oui | Oui | Oui | - |
+| `clarify` | Non | Oui | Oui | Oui | - |
+| `fetch_url` | Oui | Oui | Oui | Oui | - |
+| `research_url` | Oui | Non | Oui | Oui | - |
+| `list_downloads` | Oui | Non | Oui | Oui | - |
+| `click_ax` | Non | Oui | Oui | Oui | - |
+| `type_ax` | Non | Oui | Oui | Oui | - |
+| `set_field` | Non | Oui | Oui | Oui | - |
+| `resize_window` | Non | Non | Non | Oui | - |
+| `click` | Non | Oui | Oui | Oui | - |
+| `type_text` | Non | Oui | Oui | Oui | - |
+| `press_keys` | Non | Oui | Oui | Oui | - |
+| `navigate` | Non | Oui | Oui | Oui | - |
+| `wait_for_element` | Non | Oui | Oui | Oui | - |
+| `new_tab` | Non | Oui | Oui | Oui | - |
+| `scratchpad_write` | Non | Oui | Oui | Oui | - |
+| `progress_update` | Non | Oui | Oui | Oui | - |
+| `progress_read` | Non | Oui | Oui | Oui | - |
+| `download_social_media` | Non | Non | Oui | Oui | - |
+| `solve_captcha` | Non | Non | Oui | Oui | - |
+| `go_back` | Non | Non | Oui | Oui | - |
+| `go_forward` | Non | Non | Oui | Oui | - |
+| `schedule_resume` | Non | Non | Oui | Oui | - |
+| `schedule_task` | Non | Non | Oui | Oui | - |
+| `iframe_read` | Non | Non | Oui | Oui | - |
+| `iframe_click` | Non | Non | Oui | Oui | - |
+| `iframe_type` | Non | Non | Oui | Oui | - |
+| `read_downloaded_file` | Non | Non | Oui | Oui | - |
+| `download_files` | Non | Non | Oui | Oui | - |
+| `download_resource_from_page` | Non | Non | Oui | Oui | - |
+| `upload_file` | Non | Non | C | C | - |
+| `verify_form` | Non | Non | Oui | Oui | - |
+| `hover` | Non | Non | Non | Oui | - |
+| `drag_drop` | Non | Non | Non | Oui | - |
+| `get_shadow_dom` | Non | Non | Non | Oui | Oui |
+| `shadow_dom_query` | Non | Non | Non | C | C |
+| `get_frames` | Non | Non | Non | Oui | Oui |
+| `inject_css` | Non | Non | Non | Non | C |
+| `remove_injected_css` | Non | Non | Non | Non | C |
+| `patch_element` | Non | Non | Non | Non | C |
+| `revert_patch` | Non | Non | Non | Non | C |
+| `execute_js` | Non | Non | Non | Non | Oui |
+| `read_console` | Non | Non | Non | Non | C |
+| `inspect_network_requests` | Non | Non | Non | Non | C |
+| `inspect_event_listeners` | Non | Non | Non | Non | C |
+| `highlight_element` | Non | Non | Non | Non | C |
+
+Les compétences chargées peuvent ajouter des schémas d'outils pour l'exécution en cours. Par exemple, la compétence FreeSkillz.xyz peut exposer `read_youtube_transcript` pour YouTube et `resolve_public_media` / `download_public_media` pour les médias publics. Ces outils de compétence ne sont pas codés en dur dans le tableau ci-dessus : avant le chargement de la compétence (ou si elle est retirée), ils sont absents. Ask filtre aussi les outils de mutation/téléchargement même lorsque la compétence propriétaire est chargée.
+
+Les outils Dev ne sont exposés qu'en mode Dev, et le mode Dev est bloqué pour les fournisseurs Compact. Les outils d'édition réversible Chrome renvoient des patch IDs : `inject_css` avec `remove_injected_css`, `patch_element` avec `revert_patch`.
+
+### Édition et diagnostics en mode Dev
+
+- `inject_css` / `remove_injected_css` appliquent et annulent du CSS temporaire par `patchId`. Chaque patch est unique et lié au document exact ; la navigation invalide l'ancien identifiant.
+- `patch_element` / `revert_patch` modifient styles inline, classes et attributs avec valeurs avant/après exactes. `highlight_element` affiche une surcouche temporaire.
+- `execute_js` exécute un corps de fonction JavaScript asynchrone dans le monde principal de la page. Chrome utilise CDP `Runtime.evaluate` (limite 15 s) ; Firefox utilise l'évaluateur de script de contenu MV2. Autorisation hôte + confirmation de soumission fraîche.
+- `read_console`, `inspect_network_requests` et `inspect_event_listeners` fournissent des diagnostics bornés sur Chrome. En-têtes et corps réseau omis par défaut ; en-têtes sensibles caviardés ; sortie issue de la page traitée comme contenu non fiable.
+
+**Niveau Compact** : ensemble d'outils réduit + prompt plus court pour les petits modèles locaux. **Niveau Mid** : outils de tâche courants, iframes, téléchargements, planification et vérification de formulaires. **Niveau Full** : hover, drag-drop, frames et shadow DOM. Activez le niveau par fournisseur dans les Paramètres.
+
+> **Note Shadow DOM :** L'arbre d'accessibilité ne traverse que le light DOM. Sur les pages riches en Web Components (Stripe, Salesforce, Shopify), utilisez d'abord `get_interactive_elements` ; en Full Act ou Dev, utilisez `get_shadow_dom` / `shadow_dom_query` pour des lectures ciblées.
 
 ## Plugin LM Studio
 
@@ -231,28 +269,32 @@ Source : [`lmstudio-plugin/`](./lmstudio-plugin/).
 
 ## Commandes slash
 
-WebBrain accepte les commandes slash en tant que premier élément d'une ligne dans le champ de saisie. Tapez `/help` pour voir la liste dans le panneau.
+WebBrain accepte les commandes slash en tant que premier élément d'une ligne dans le champ de saisie. Tapez `/help` pour afficher dans le panneau les syntaxes complètes et la description des options. Saisissez une commande canonique suivie d'une espace pour afficher l'autocomplétion de ses options disponibles.
 
 | Commande | Ce qu'elle fait |
 |---------|--------------|
 | `/help` | Affiche la liste des commandes disponibles |
-| `/schedule` | Créer une tâche planifiée |
-| `/list-schedules` | Afficher les tâches planifiées |
-| `/show-scratchpad` | Afficher le bloc-notes actuel |
-| `/edit-scratchpad <texte>` | Ajouter du texte au bloc-notes actuel |
-| `/clear-scratchpad` | Effacer le bloc-notes actuel |
+| `/schedule [invite]` | Créer une tâche planifiée et éventuellement préremplir son invite |
+| `/schedule --list` | Afficher les tâches planifiées |
+| `/progress` | Afficher le journal de progression actuel |
+| `/scratchpad` | Afficher le bloc-notes actuel |
+| `/scratchpad --append <texte>` | Ajouter du texte au bloc-notes actuel |
+| `/scratchpad --clear` | Effacer le bloc-notes actuel |
+| `/memory` | Afficher la mémoire utilisateur enregistrée |
+| `/memory --add <texte>` | Enregistrer une préférence utilisateur |
+| `/memory --forget <id>` | Oublier une entrée de mémoire par identifiant |
 | `/allow-api` | **Dérogation de mutation API par conversation.** Lève la restriction UI-d'abord afin que l'agent puisse utiliser POST/PUT/PATCH/DELETE via `fetch_url` lorsque l'UI échoue. Un badge apparaît pendant l'activation ; il s'efface au `/reset`. |
 | `/dangerously-skip-permissions` | **Contournement global des demandes d'autorisation.** Désactive `Ask before consequential actions` sans ouvrir les Paramètres. WebBrain agira sans demandes par site jusqu'à ce que vous réactiviez le réglage. |
 | `/compact` | Force le compactage du contexte pour la conversation actuelle |
 | `/verbose` | Bascule l'affichage des outils verbeux/compact (identique au bouton de la barre d'outils) |
 | `/reset` | Efface la conversation et tous les indicateurs par conversation |
-| `/screenshot` | Capture l'onglet visible et affiche l'image en ligne dans le chat |
-| `/record` | Démarrer l'enregistrement de l'onglet actuel |
-| `/record-full-screen` | Enregistrer un écran ou une fenêtre (Chrome uniquement); ajoutez `--transcribe` pour un transcript |
-| `/export` | Télécharge la conversation actuelle sous forme de fichier Markdown |
+| `/screenshot [--full-page]` | Capture l'onglet visible, ou la page entière avec `--full-page` (Chrome uniquement) |
+| `/record [--full-screen] [--transcribe]` | Enregistre l'onglet actuel, ou un écran/une fenêtre avec `--full-screen` (Chrome uniquement) ; `--transcribe` enregistre une transcription |
+| `/export [--traces]` | Télécharge la conversation en Markdown, ou la chaîne d'outils avec `--traces` |
 | `/profile` | Bascule le remplissage automatique du profil sans ouvrir les Paramètres |
 | `/vision` | Bascule le mode vision (compréhension de captures d'écran) sur le fournisseur actif |
 | `/ask` | Passer en mode Demander avant d'envoyer |
+| `/dev` | Passer en mode Dev avant d'envoyer |
 | `/plan` | Passer en mode Demander avec une intention de planification |
 
 La règle UI-d'abord par défaut existe parce que les actions API sont invisibles (vous ne voyez pas ce qui est envoyé), nécessitent souvent des jetons d'authentification distincts que vous n'avez peut-être pas configurés, et peuvent avoir un rayon d'impact bien plus grand qu'un mauvais clic visible. N'utilisez `/allow-api` que lorsque vous avez décidé d'accepter ce compromis pour une tâche spécifique.
@@ -266,6 +308,7 @@ Les raccourcis du panneau latéral Chrome fonctionnent lorsque le panneau latér
 | `Ctrl+/` ou `Cmd+/` | Mettre le focus dans le champ de saisie |
 | `Ctrl+Shift+A` ou `Cmd+Shift+A` | Passer en mode Ask |
 | `Ctrl+Shift+X` ou `Cmd+Shift+X` | Passer en mode Act |
+| `Ctrl+Shift+D` ou `Cmd+Shift+D` | Passer en mode Dev |
 | `Escape` | Arrêter l'exécution active, sauf s'il ne fait que fermer l'autocomplétion des commandes slash |
 | `Escape` deux fois | Arrêter un enregistrement actif depuis WebBrain ou une page du navigateur |
 
@@ -306,6 +349,20 @@ Tous les fournisseurs se normalisent vers un format de réponse commun :
  </picture>
 </a>
 
+
+## Citation
+
+Si vous utilisez WebBrain dans votre recherche ou votre projet, veuillez citer :
+
+```bibtex
+@software{webbrain2026,
+  author = {Sokullu, Emre},
+  title = {WebBrain : Agent de navigation IA open source pour discuter avec les pages},
+  year = {2026},
+  publisher = {GitHub},
+  url = {https://github.com/webbrain-one/webbrain}
+}
+```
 
 ## Licence
 

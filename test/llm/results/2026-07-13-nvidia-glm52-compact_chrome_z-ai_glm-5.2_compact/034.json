@@ -1,0 +1,27 @@
+{
+  "id": "034",
+  "user": "sign in",
+  "mode": "act",
+  "tab": {
+    "url": "https://github.com/",
+    "title": "GitHub"
+  },
+  "latencyMs": 19954,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll help you sign in to GitHub. Let me first check the current state of the page.",
+  "usage": {
+    "prompt_tokens": 7233,
+    "completion_tokens": 33,
+    "total_tokens": 7266
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

@@ -1,6 +1,6 @@
 # Site Adapters — How to Write One
 
-Site adapters are the **#1 most-wanted contribution** (see CONTRIBUTIONS.md). They inject short, hand-curated guidance into the agent's first message when it operates on a known site. The goal is NOT to encode every selector (those rot fast), but to capture the non-obvious quirks that cost an LLM several dead-end tool calls to discover on its own.
+Site adapters are the **#1 most-wanted contribution** (see CONTRIBUTING.md). They inject short, hand-curated guidance into the agent's first message when it operates on a known site. The goal is NOT to encode every selector (those rot fast), but to capture the non-obvious quirks that cost an LLM several dead-end tool calls to discover on its own.
 
 ---
 

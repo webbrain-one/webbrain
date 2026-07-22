@@ -1,0 +1,25 @@
+{
+  "id": "021",
+  "user": "wiki \"ww2\"",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 49056,
+  "error": null,
+  "firstToolCall": {
+    "name": "fetch_url",
+    "args": {
+      "url": "https://en.wikipedia.org/wiki/World_War_II"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll look up \"WW2\" on Wikipedia for you.",
+  "usage": {
+    "prompt_tokens": 16568,
+    "completion_tokens": 35,
+    "total_tokens": 16603
+  }
+}

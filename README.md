@@ -35,21 +35,22 @@
 - **Multi-Provider LLM** — Supports local and cloud models:
   - **WebBrain Cloud 1.0** (cloud, default) — Built-in managed cloud option; no local setup required
   - **llama.cpp** (local) — No API key needed. Also **Ollama**, **LM Studio**, **Jan**, **vLLM**, **SGLang**, and **LocalAI**
-  - **OpenAI** (GPT-5.5, etc.)
+  - **OpenAI** (GPT-5.6, etc.)
   - **Anthropic Claude** (native API)
   - **Google Gemini**, **Mistral AI**, **DeepSeek**, **xAI Grok**, **Groq**
-  - **MiniMax**, **Alibaba Cloud (Qwen)**
+  - **MiniMax**, **Kimi**, **Alibaba Cloud (Qwen)**
   - **Cloudflare Workers AI**, **Nvidia NIM**
   - **OpenRouter** (default model: `openrouter/free`; access 100+ models)
 - **Onboarding Wizard** — First-launch walkthrough covering Act mode safety and provider setup
 - **Side Panel UI** — Clean chat interface that lives alongside your browsing
 - **Per-Tab Conversations** — Each tab has its own chat history
-- **User Memory** — Optional local memory for user-stated preferences, with explicit `/remember` commands and opt-in background auto-learning
-- **Streaming** — Real-time token streaming from all providers
+- **User Memory** — Optional local memory for user-stated preferences, with explicit `/memory --add` commands and opt-in background auto-learning
+- **Ask streaming** — Interactive Ask chats show official OpenAI Responses text as it arrives; tools and history wait for `response.completed`, with an Advanced kill switch and automatic non-streaming fallback for interrupted streams
 - **Smart Context** — Token-aware auto-compaction (summarizes older turns once the conversation nears the model's context window, with a visible "Context automatically compacted" notice), tool result limits, and emergency overflow recovery
 - **Browser History Control** — Act mode can use native `go_back` / `go_forward` history tools instead of CSP-sensitive page JavaScript
 - **API Shortcut Hints** — Repeated clicks that fire the same XHR/fetch request can surface a matching `fetch_url` suggestion while preserving the UI-first and `/allow-api` mutation policy
-- **Custom Skills and Skill Tools** — Settings → Skills can import trusted skill text or URLs; skills may also expose HTTP or download-job tools through a `webbrain-tools` manifest. FreeSkillz.xyz is enabled by default for YouTube transcripts and public media downloads, and can be removed.
+- **WebMCP Fast Path (experimental, opt-in)** — When enabled under Settings → General → Advanced, supporting Chrome pages let Mid/Full and Ask runs discover page-declared structured tools through CDP; Act/Dev can invoke them by opaque ID instead of guessing DOM controls. Catalogs, annotations, and results stay inside the untrusted-page boundary, and every invocation uses the normal permission gate. It is off by default, so normal runs do not receive WebMCP tools or prompt guidance.
+- **On-demand Skills and Skill Tools** — Settings → Skills can import trusted skill text or URLs. Mid/Full runs receive a small eligible ID/name/summary/semantic-intent catalog and load full instructions plus compatible `webbrain-tools` only when relevant; Compact disables skills. FreeSkillz.xyz and the browser-only email verification-code helper are enabled by default, and either can be removed.
 - **Copy Support** — Copy buttons on code blocks and full messages
 - **Page Inspection Banner** — Visual indicator when the agent is interacting with the page
 - **Stop Button** — Abort the agent mid-execution at any time
@@ -135,43 +136,48 @@ Click the gear icon or go to the extension's Options page to configure:
 **Display Settings:**
 - Verbose Mode — Show full tool call JSON (off by default)
 - Auto-screenshot — Provide visual context when DOM/page reads are insufficient
-- Max Agent Steps — Configurable step limit (5-200, default 60)
-- Plan before Act — Optionally generate and review a structured Act-mode plan before browser tools run (try mode by default; explicit off is preserved)
+- Max Agent Steps — Configurable step limit (5-195 or unlimited, default 130)
+- Plan before Act — Optionally generate and review a structured Act-mode plan before browser tools run (Try by default; failed planner JSON safely falls back to a read-only turn, while explicit Off and Strict are preserved)
 
 **Profile and Memory:**
 - Profile auto-fill and user memory are stored in plaintext browser local storage.
-- User memory can be managed from Settings -> Profile or with `/remember`, `/show-memory`, and `/forget-memory`.
+- User memory can be managed from Settings -> Profile or with `/memory`, `/memory --add <text>`, and `/memory --forget <id>`.
 - When enabled, active memory records are sent to the configured LLM provider as part of the system prompt; optional auto-learning makes a best-effort provider call only after a turn completes.
 
 **Skills:**
-- FreeSkillz.xyz ships enabled by default and exposes `read_youtube_transcript`, `resolve_public_media`, and `download_public_media` through its skill manifest; remove it from Settings → Skills if you do not want those tools available.
-- Imported skills are copied into browser local storage and appended to the agent's system prompt when enabled.
+- FreeSkillz.xyz ships enabled by default and can expose `read_youtube_transcript`, `fetch_nytimes_article`, `resolve_public_media`, and `download_public_media` through its skill manifest. On NYTimes/The Athletic tabs it is preactivated for the current run so a structured blocking `pageGate` can route directly to the credentialless article fallback; remove it from Settings → Skills if you do not want it available.
+- The OTP / verification-code helper also ships enabled by default and loads only for relevant requests. It declares no network tool: on the active run tab, it prefers selected text or a bounded accessibility-tree subtree, matches the newest relevant service code, excludes SMS/native-app access, and honors Strict secret handling. When used, the scoped page content and code are included in the normal request to your configured LLM provider. If Record traces is enabled, raw tool results and model responses are also stored locally until those traces are deleted. Remove the skill from Settings → Skills if you do not want this guidance available.
+- Imported skills are copied into browser local storage. Mid/Full runs send eligible IDs, names, summaries, and optional canonical semantic intents to the planner and `load_skill` catalog; full instructions are appended to the system prompt only after activation for the current run. Compact exposes no loader, skill prompt, or skill tools.
+- Optional fenced `webbrain-skill` JSON metadata can declare a summary (maximum 200 characters), `modes` (`ask`, `act`, or `dev`), and up to six canonical `intents` such as `verification_code` or `public_media_download`. Intents are cross-language meaning hints for the LLM, not literal keyword matching. Skills without metadata infer the first prose paragraph as their summary, have no inferred intents, and default to Act/Dev.
 - A skill can expose read-only HTTP tools or short-lived download-job tools with a fenced `webbrain-tools` JSON manifest. Importing a skill is the trust boundary for its declared HTTPS endpoint; download-job skill tools still run in Act mode and use the normal Downloads permission gate before saving files.
 - Tool results from third-party content should be marked `resultPolicy: "untrusted"` so they are wrapped as data, not instructions.
 
 **Providers:**
 
-| Provider | Base URL | API Key | Default Model |
-|----------|----------|---------|---------------|
-| llama.cpp | `http://localhost:8080` | Not needed | (your loaded model) |
-| Ollama | `http://localhost:11434/v1` | Not needed | (your loaded model) |
-| LM Studio | `http://localhost:1234/v1` | Not needed | (your loaded model) |
-| Jan | `http://localhost:1337/v1` | Not needed | (your loaded model) |
-| vLLM | `http://localhost:8000/v1` | Optional | (your served model) |
-| SGLang | `http://localhost:30000/v1` | Optional | (your served model) |
-| LocalAI | `http://localhost:8080/v1` | Optional | (your loaded model) |
-| OpenAI | `https://api.openai.com/v1` | Required | gpt-5.5 |
-| Anthropic Claude | `https://api.anthropic.com` | Required | claude-sonnet-4-6 |
-| Google Gemini | `https://generativelanguage.googleapis.com/v1beta/openai` | Required | gemini-3.1-flash |
-| Cloudflare Workers AI | `https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1` | Required (plus Account ID) | @cf/zai-org/glm-5.2 |
-| Mistral AI | `https://api.mistral.ai/v1` | Required | mistral-large-latest |
-| DeepSeek | `https://api.deepseek.com/v1` | Required | deepseek-v4-flash |
-| xAI Grok | `https://api.x.ai/v1` | Required | grok-4.3 |
-| Nvidia NIM | `https://integrate.api.nvidia.com/v1` | Required | meta/llama-3.1-8b-instruct |
-| Groq | `https://api.groq.com/openai/v1` | Required | llama-3.3-70b-versatile |
-| MiniMax | `https://api.minimax.chat/v1` | Required | minimax-m2.7 |
-| Alibaba Cloud (Qwen) | `https://dashscope.aliyuncs.com/compatible-mode/v1` | Required | qwen-max |
-| OpenRouter | `https://openrouter.ai/api/v1` | Required | openrouter/free |
+Base URLs are pre-filled in Settings when you select a provider. Local servers use the default port shown below.
+
+| Provider | API Key | Default Model |
+|----------|---------|---------------|
+| llama.cpp (`:8080`) | Not needed | (your loaded model) |
+| Ollama (`:11434/v1`) | Not needed | (your loaded model) |
+| LM Studio (`:1234/v1`) | Not needed | (your loaded model) |
+| Jan (`:1337/v1`) | Not needed | (your loaded model) |
+| vLLM (`:8000/v1`) | Optional | (your served model) |
+| SGLang (`:30000/v1`) | Optional | (your served model) |
+| LocalAI (`:8080/v1`) | Optional | (your loaded model) |
+| OpenAI | Required | gpt-5.6-terra |
+| Anthropic Claude | Required | claude-sonnet-4-6 |
+| Google Gemini | Required | gemini-3.1-flash |
+| Cloudflare Workers AI | Required (+ Account ID) | @cf/zai-org/glm-5.2 |
+| Mistral AI | Required | mistral-large-latest |
+| DeepSeek | Required | deepseek-v4-flash |
+| xAI Grok | Required | grok-4.3 |
+| Nvidia NIM | Required | meta/llama-3.1-8b-instruct |
+| Groq | Required | llama-3.3-70b-versatile |
+| MiniMax | Required | minimax-m2.7 |
+| Kimi | Required | kimi-k2.5 |
+| Alibaba Cloud (Qwen) | Required | qwen-max |
+| OpenRouter | Required | openrouter/free |
 
 ## Architecture
 
@@ -207,66 +213,94 @@ WebBrain separates model tier from conversation mode:
 - **Tier** (`compact`, `mid`, `full`) controls how many normal browser-agent tools a model sees.
 - **Mode** (`ask`, `act`, `dev`) controls what kind of task the user is allowing. Ask is read-only. Act exposes the selected tier's normal tools. Dev requires a Mid or Full provider and adds a small source/style/debug tool appendix, including deeper DOM/frame inspection for Mid-tier Dev runs.
 
-| Tool | Ask | Compact Act | Mid Act | Full Act | Dev Add-on |
-|---|---:|---:|---:|---:|---:|
-| `get_accessibility_tree` | Yes | Yes | Yes | Yes | No |
-| `read_page` | Yes | Yes | Yes | Yes | No |
-| `read_pdf` | Yes | No | Yes | Yes | No |
-| `read_page_source` | No | No | No | No | Yes |
-| `get_window_info` | Yes | Yes | Yes | Yes | No |
-| `get_interactive_elements` | Yes | No | Yes | Yes | No |
-| `scroll` | Yes | Yes | Yes | Yes | No |
-| `extract_data` | Yes | Yes | Yes | Yes | No |
-| `inspect_element_styles` | No | No | No | No | Yes |
-| `wait_for_stable` | Yes | No | Yes | Yes | No |
-| `get_selection` | Yes | Yes | Yes | Yes | No |
-| `done` | Yes | Yes | Yes | Yes | No |
-| `clarify` | No | Yes | Yes | Yes | No |
-| `fetch_url` | Yes | Yes | Yes | Yes | No |
-| `research_url` | Yes | No | Yes | Yes | No |
-| `list_downloads` | Yes | No | Yes | Yes | No |
-| `click_ax` | No | Yes | Yes | Yes | No |
-| `type_ax` | No | Yes | Yes | Yes | No |
-| `set_field` | No | Yes | Yes | Yes | No |
-| `resize_window` | No | No | No | Yes | No |
-| `click` | No | Yes | Yes | Yes | No |
-| `type_text` | No | Yes | Yes | Yes | No |
-| `press_keys` | No | Yes | Yes | Yes | No |
-| `navigate` | No | Yes | Yes | Yes | No |
-| `wait_for_element` | No | Yes | Yes | Yes | No |
-| `new_tab` | No | Yes | Yes | Yes | No |
-| `scratchpad_write` | No | Yes | Yes | Yes | No |
-| `progress_update` | No | Yes | Yes | Yes | No |
-| `progress_read` | No | Yes | Yes | Yes | No |
-| `download_social_media` | No | No | Yes | Yes | No |
-| `solve_captcha` | No | No | Yes | Yes | No |
-| `go_back` | No | No | Yes | Yes | No |
-| `go_forward` | No | No | Yes | Yes | No |
-| `schedule_resume` | No | No | Yes | Yes | No |
-| `schedule_task` | No | No | Yes | Yes | No |
-| `iframe_read` | No | No | Yes | Yes | No |
-| `iframe_click` | No | No | Yes | Yes | No |
-| `iframe_type` | No | No | Yes | Yes | No |
-| `read_downloaded_file` | No | No | Yes | Yes | No |
-| `download_files` | No | No | Yes | Yes | No |
-| `download_resource_from_page` | No | No | Yes | Yes | No |
-| `upload_file` | No | No | Chrome | Chrome | No |
-| `verify_form` | No | No | Yes | Yes | No |
-| `hover` | No | No | No | Yes | No |
-| `drag_drop` | No | No | No | Yes | No |
-| `get_shadow_dom` | No | No | No | Yes | Yes |
-| `shadow_dom_query` | No | No | No | Chrome | Chrome |
-| `get_frames` | No | No | No | Yes | Yes |
-| `execute_js` | No | No | No | No | Firefox |
+Legend: **Yes** = available · **-** = not available · **C** = Chrome only · **Dev** = Dev-mode add-on (Mid/Full providers; not Compact).
 
-Enabled skills can append additional tool schemas at runtime. For example,
-the bundled FreeSkillz.xyz skill exposes `read_youtube_transcript` for YouTube
+| Tool | Ask | Compact | Mid | Full | Dev |
+|------|:---:|:-------:|:---:|:----:|:---:|
+| `get_accessibility_tree` | Yes | Yes | Yes | Yes | - |
+| `read_page` | Yes | Yes | Yes | Yes | - |
+| `read_pdf` | Yes | No | Yes | Yes | - |
+| `list_webmcp_tools` | C | No | C | C | - |
+| `execute_webmcp_tool` | No | No | C | C | - |
+| `read_page_source` | No | No | No | No | Yes |
+| `get_window_info` | Yes | Yes | Yes | Yes | - |
+| `get_interactive_elements` | Yes | No | Yes | Yes | - |
+| `scroll` | Yes | Yes | Yes | Yes | - |
+| `extract_data` | Yes | Yes | Yes | Yes | - |
+| `inspect_element_styles` | No | No | No | No | Yes |
+| `wait_for_stable` | Yes | No | Yes | Yes | - |
+| `get_selection` | Yes | Yes | Yes | Yes | - |
+| `done` | Yes | Yes | Yes | Yes | - |
+| `clarify` | No | Yes | Yes | Yes | - |
+| `fetch_url` | Yes | Yes | Yes | Yes | - |
+| `research_url` | Yes | No | Yes | Yes | - |
+| `list_downloads` | Yes | No | Yes | Yes | - |
+| `click_ax` | No | Yes | Yes | Yes | - |
+| `type_ax` | No | Yes | Yes | Yes | - |
+| `set_field` | No | Yes | Yes | Yes | - |
+| `resize_window` | No | No | No | Yes | - |
+| `click` | No | Yes | Yes | Yes | - |
+| `type_text` | No | Yes | Yes | Yes | - |
+| `press_keys` | No | Yes | Yes | Yes | - |
+| `navigate` | No | Yes | Yes | Yes | - |
+| `wait_for_element` | No | Yes | Yes | Yes | - |
+| `new_tab` | No | Yes | Yes | Yes | - |
+| `scratchpad_write` | No | Yes | Yes | Yes | - |
+| `progress_update` | No | Yes | Yes | Yes | - |
+| `progress_read` | No | Yes | Yes | Yes | - |
+| `download_social_media` | No | No | Yes | Yes | - |
+| `solve_captcha` | No | No | Yes | Yes | - |
+| `go_back` | No | No | Yes | Yes | - |
+| `go_forward` | No | No | Yes | Yes | - |
+| `schedule_resume` | No | No | Yes | Yes | - |
+| `schedule_task` | No | No | Yes | Yes | - |
+| `iframe_read` | No | No | Yes | Yes | - |
+| `iframe_click` | No | No | Yes | Yes | - |
+| `iframe_type` | No | No | Yes | Yes | - |
+| `read_downloaded_file` | No | No | Yes | Yes | - |
+| `download_files` | No | No | Yes | Yes | - |
+| `download_resource_from_page` | No | No | Yes | Yes | - |
+| `upload_file` | No | No | C | C | - |
+| `verify_form` | No | No | Yes | Yes | - |
+| `hover` | No | No | No | Yes | - |
+| `drag_drop` | No | No | No | Yes | - |
+| `get_shadow_dom` | No | No | No | Yes | Yes |
+| `shadow_dom_query` | No | No | No | C | C |
+| `get_frames` | No | No | No | Yes | Yes |
+| `inject_css` | No | No | No | No | C |
+| `remove_injected_css` | No | No | No | No | C |
+| `patch_element` | No | No | No | No | C |
+| `revert_patch` | No | No | No | No | C |
+| `execute_js` | No | No | No | No | Yes |
+| `read_console` | No | No | No | No | C |
+| `inspect_network_requests` | No | No | No | No | C |
+| `inspect_event_listeners` | No | No | No | No | C |
+| `highlight_element` | No | No | No | No | C |
+
+The WebMCP rows above apply only when **Experimental WebMCP** is enabled under
+Settings → General → Advanced. The setting is off by default; while off, the
+tools and their prompt guidance are omitted from model requests. WebMCP
+annotations such as `readOnly` are page-authored hints, not a security
+boundary. Every invocation requires Act or Dev, fresh per-call confirmation,
+and the normal capability × registration-frame-origin permission. WebMCP
+currently requires a supporting Chrome build/page configuration; Firefox does
+not expose these tools.
+
+Loaded skills can append additional tool schemas for the current run. For example,
+the bundled FreeSkillz.xyz skill can expose `read_youtube_transcript` for YouTube
 transcripts plus `resolve_public_media` / `download_public_media` for public
 media URLs. These skill tools are not hard-coded in the static table above:
-if the skill is removed or renamed, the tool disappears or appears under the
-manifest's declared name.
+before the skill is loaded (or if it is removed), the tools are absent. Ask
+also filters out mutating/download tools even when their owning skill is loaded.
 
-Dev Add-on tools are only exposed in Dev mode, and Dev mode is blocked for Compact-tier providers.
+Dev tools are only exposed in Dev mode, and Dev mode is blocked for Compact-tier providers. Chrome's reversible editing tools return patch IDs: `inject_css` pairs with `remove_injected_css`, and `patch_element` pairs with `revert_patch`.
+
+### Dev-mode page editing and diagnostics
+
+- `inject_css` / `remove_injected_css` apply and undo temporary CSS by `patchId`. Each patch is unique and bound to the exact page document, and its metadata is kept in session storage so a service-worker restart does not lose the undo handle. Navigating invalidates the old handle instead of letting it affect a replacement page.
+- `patch_element` / `revert_patch` make structured inline-style, class, and attribute changes with exact before/after values. Browser-equivalent style and HTML attribute names are canonicalized before the undo record is created, contradictory set/remove operations are rejected, and executable URL attributes reject `javascript:` values (including form `action`). `highlight_element` provides a temporary pointer-transparent target overlay; because it inserts live DOM, it uses the temporary Dev-patch permission.
+- `execute_js` runs an async JavaScript function body in the page main world. Chrome uses CDP `Runtime.evaluate` with a 15-second execution limit; Firefox uses its MV2 content-script evaluator. The tool is host-permission gated and receives a fresh submit confirmation.
+- `read_console`, `inspect_network_requests`, and `inspect_event_listeners` provide bounded diagnostics on Chrome. Capture starts before either streaming or non-streaming Dev runs and stops when the tab leaves Dev mode or its conversation is cleared; leaving Dev drains every tab with active capture even if the panel switched tabs, removes handlers and buffers, and disables the matching CDP domains. Listener inspection briefly adds and restores an internal target attribute, follows open-shadow hosts when collecting ancestors, and therefore uses the same host permission as temporary Dev patches. Network headers and bodies are omitted by default, sensitive header names (including common API/subscription-key variants) are redacted before buffering, and page-derived diagnostic output is treated as untrusted content.
 
 **Compact tier** is a reduced normal-tool set + shorter system prompt designed for smaller local models. **Mid tier** keeps common task tools, iframe support, downloads, scheduling, and form verification while avoiding advanced DOM/UI fallbacks. **Full tier** adds advanced browser-operation tools such as hover, drag-drop, frames, and shadow DOM. Enable the tier per provider in Settings.
 
@@ -288,32 +322,73 @@ Source: [`lmstudio-plugin/`](./lmstudio-plugin/).
 
 ## Slash Commands
 
-WebBrain accepts slash commands as the first thing on a line in the input box. Type `/help` to see the list inside the panel.
+WebBrain accepts slash commands as the first thing on a line in the input box. Type `/help` to see complete usage signatures and flag descriptions inside the panel. Typing a canonical command followed by a space opens autocomplete for its available flags.
 
 | Command | What it does |
 |---------|--------------|
 | `/help` | Show the list of available commands |
-| `/schedule` | Create a scheduled task |
-| `/list-schedules` | Show scheduled tasks |
-| `/show-scratchpad` | Show the current scratchpad |
-| `/edit-scratchpad <text>` | Append text to the current scratchpad |
-| `/clear-scratchpad` | Clear the current scratchpad |
+| `/schedule [prompt]` | Create a scheduled task, optionally prefilling its prompt |
+| `/schedule --list` | Show scheduled tasks |
+| `/progress` | Show the current progress ledger |
+| `/scratchpad` | Show the current scratchpad |
+| `/scratchpad --append <text>` | Append text to the current scratchpad |
+| `/scratchpad --clear` | Clear the current scratchpad |
+| `/memory` | Show saved user memory |
+| `/memory --add <text>` | Save a user preference to memory |
+| `/memory --forget <id>` | Forget a saved memory by ID |
+| `/workflow` | List saved workflows and their IDs |
+| `/workflow --save <name>` | Compile the latest successful traced run into a reusable, value-free workflow |
+| `/workflow --run <id>` | Run a saved workflow in Act mode, collecting any runtime parameters locally |
+| `/workflow --delete <id>` | Delete a saved workflow |
 | `/allow-api` | **Per-conversation API mutation override.** Lifts the UI-first restriction so the agent may use POST/PUT/PATCH/DELETE via `fetch_url` when UI is failing. Badge appears while active; clears on `/reset`. |
 | `/dangerously-skip-permissions` | **Global permission-prompt bypass.** Turns off `Ask before consequential actions` without opening Settings. WebBrain will act without per-site prompts until you re-enable the setting. |
 | `/compact` | Force context compaction for the current conversation |
 | `/verbose` | Toggle verbose/compact tool display |
 | `/reset` | Clear the conversation and all per-conversation flags |
-| `/screenshot` | Capture the visible tab and display the image inline in chat |
-| `/full-page-screenshot` | Capture the full scrollable page and display it inline in chat (Chrome only) |
-| `/record` | Start recording the current tab; add `--transcribe` to save a Whisper transcript after stop |
-| `/record-full-screen` | Record a screen or window with Chrome's picker (Chrome only); add `--transcribe` for a transcript |
-| `/export` | Download the current conversation as a Markdown file |
+| `/screenshot [--full-page]` | Capture the visible tab, or the full scrollable page with `--full-page` (Chrome only) |
+| `/record [--full-screen] [--transcribe]` | Record the current tab, or a selected screen/window with `--full-screen` (Chrome only); add `--transcribe` to save a transcript after stop |
+| `/export [--traces \| --config]` | Download version-stamped conversation Markdown, export the version-stamped tool chain with `--traces`, or export a Settings snapshot with `--config` |
+| `/import <json>` | Import a Settings snapshot pasted inline |
+| `/import --file` | Choose and import a Settings snapshot JSON file |
 | `/profile` | Toggle profile auto-fill on/off without opening Settings |
 | `/vision` | Toggle vision mode (screenshot understanding) on the active provider |
 | `/ask` | Switch to Ask mode before sending |
 | `/act` | Switch to Act mode before sending |
 | `/dev` | Switch to Dev mode before sending |
 | `/plan` | Switch to Ask mode with planning intent |
+
+Configuration snapshots use the `webbrain-config/1` schema and include all
+portable Settings values, including provider, vision, transcription, and
+CapSolver API keys, profile data, user memory, custom skills, and permission
+choices. The JSON is plaintext and should be stored securely. Device-bound
+Cloud Sync sessions/device IDs, conversations, traces, scheduled jobs, usage
+counters, and accumulated spend are not exported.
+
+Advanced run-capture suffixes are intentionally omitted from `/help` and
+autocomplete. Append `/record [--save-as <filename>]` to the end of a normal
+prompt to start recording the current tab immediately before the run, then stop
+and save the WebM when that run settles (Chrome only). Append
+`/screenshot [--save-as <filename>]` to save viewport screenshots immediately
+before and after the run (Chrome and Firefox). For example,
+`Test the checkout /screenshot --save-as checkout.png` saves
+`checkout-before.png` and `checkout-after.png`; without `--save-as`, WebBrain
+uses timestamped filenames. If the run opens another tab, WebBrain reactivates
+the originating run tab before saving the after screenshot. If the recording
+or initial screenshot cannot be started and saved, the run is not sent.
+Standalone `/record` and `/screenshot` keep their existing behavior.
+
+Saved workflows use a separate `webbrain-workflow/1` schema; they are not raw
+trace replays. Historical `ref_id` values, action CSS selectors, coordinates,
+query strings, fragments, and typed field values are excluded. Typed values become runtime
+parameters, and each action is bound to the recorded origin and URL family.
+At run time WebBrain resolves a fresh accessibility-tree target and executes
+through the normal Act permission, submit-confirmation, and verification gates.
+Ambiguous targets fail closed. If an action may already have happened but its
+result is unknown, replay stops instead of retrying it. Runtime parameter values
+are not saved to the workflow, conversation, user memory, replay trace, or Agent
+fallback prompt; they are still delivered to the target page by the requested
+browser action. The original opt-in source trace remains separate and can
+contain raw tool arguments until the user deletes that trace.
 
 The default UI-first rule exists because API actions are invisible (you don't see what's being sent), often require separate auth tokens you may not have configured, and can have a much larger blast radius than a visible mis-click. Only use `/allow-api` when you've decided you want that tradeoff for a specific job.
 
@@ -348,9 +423,9 @@ See [CHANGELOG.md](./CHANGELOG.md) for the full version history. Recent highligh
 
 ## Adding a New Provider
 
-1. Create a new class extending `BaseLLMProvider` in `src/providers/`
+1. Create a new class extending `BaseLLMProvider` in `src/chrome/src/providers/` (and mirror to `src/firefox/src/providers/`)
 2. Implement `chat()` and optionally `chatStream()`
-3. Register it in `src/providers/manager.js`
+3. Register it in `src/chrome/src/providers/manager.js` (and mirror to `src/firefox/src/providers/manager.js`)
 
 All providers normalize to a common response format:
 ```js
@@ -373,6 +448,20 @@ All providers normalize to a common response format:
 <a href="https://github.com/webbrain-one/webbrain/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=webbrain-one/webbrain" />
 </a>
+
+## Citation
+
+If you use WebBrain in your research or project, please cite:
+
+```bibtex
+@software{webbrain2026,
+  author = {Sokullu, Emre},
+  title = {WebBrain: Open-source AI browser agent for chatting with pages},
+  year = {2026},
+  publisher = {GitHub},
+  url = {https://github.com/webbrain-one/webbrain}
+}
+```
 
 ## License
 

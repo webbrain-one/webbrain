@@ -1,0 +1,58 @@
+{
+  "id": "063",
+  "user": "whats my shipping address",
+  "mode": "act",
+  "tab": {
+    "url": "https://www.amazon.com/gp/buy/spc/handlers/display.html",
+    "title": "Amazon Checkout"
+  },
+  "latencyMs": 966,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll check your shipping address on the Amazon checkout page.",
+  "usage": {
+    "prompt_tokens": 6819,
+    "completion_tokens": 25,
+    "total_tokens": 6844
+  },
+  "attempts": 6,
+  "retryErrors": [
+    {
+      "attempt": 1,
+      "error": "HTTP 429: {\"status\":429,\"title\":\"Too Many Requests\"}",
+      "latencyMs": 250,
+      "waitMs": 600000
+    },
+    {
+      "attempt": 2,
+      "error": "HTTP 429: {\"status\":429,\"title\":\"Too Many Requests\"}",
+      "latencyMs": 339,
+      "waitMs": 600000
+    },
+    {
+      "attempt": 3,
+      "error": "HTTP 429: {\"status\":429,\"title\":\"Too Many Requests\"}",
+      "latencyMs": 328,
+      "waitMs": 600000
+    },
+    {
+      "attempt": 4,
+      "error": "HTTP 429: {\"status\":429,\"title\":\"Too Many Requests\"}",
+      "latencyMs": 348,
+      "waitMs": 600000
+    },
+    {
+      "attempt": 5,
+      "error": "HTTP 429: {\"status\":429,\"title\":\"Too Many Requests\"}",
+      "latencyMs": 334,
+      "waitMs": 600000
+    }
+  ]
+}

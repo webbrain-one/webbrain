@@ -60,7 +60,7 @@ export class AzureOpenAIProvider extends BaseLLMProvider {
   }
 
   _addMaxTokens(body, options) {
-    body.max_tokens = options.maxTokens ?? 4096;
+    this._addConfiguredMaxTokens(body, options, 'max_tokens');
   }
 
   _addTemperature(body, options) {
@@ -86,17 +86,21 @@ export class AzureOpenAIProvider extends BaseLLMProvider {
     body.stream_options = { ...streamOptions, include_usage: true };
   }
 
-  async chat(messages, options = {}) {
-    const body = { messages, stream: false };
+  _buildRequestBody(messages, options = {}, stream = false) {
+    let body = { messages: this._chatMessages(messages), stream };
     this._addTemperature(body, options);
     this._addMaxTokens(body, options);
     if (this._shouldSendTools(messages, options)) {
       body.tools = options.tools;
       body.tool_choice = options.toolChoice || 'auto';
     }
-    if (options.extraBody && typeof options.extraBody === 'object') {
-      Object.assign(body, options.extraBody);
-    }
+    body = this._mergeConfiguredRequestBody(body, options);
+    if (stream) this._addStreamUsageOptions(body);
+    return body;
+  }
+
+  async chat(messages, options = {}) {
+    const body = this._buildRequestBody(messages, options, false);
 
     const url = this._chatUrl();
     let res;
@@ -126,17 +130,7 @@ export class AzureOpenAIProvider extends BaseLLMProvider {
   }
 
   async *chatStream(messages, options = {}) {
-    const body = { messages, stream: true };
-    this._addTemperature(body, options);
-    this._addMaxTokens(body, options);
-    if (this._shouldSendTools(messages, options)) {
-      body.tools = options.tools;
-      body.tool_choice = options.toolChoice || 'auto';
-    }
-    if (options.extraBody && typeof options.extraBody === 'object') {
-      Object.assign(body, options.extraBody);
-    }
-    this._addStreamUsageOptions(body);
+    const body = this._buildRequestBody(messages, options, true);
 
     const url = this._chatUrl();
     let res;
@@ -154,6 +148,7 @@ export class AzureOpenAIProvider extends BaseLLMProvider {
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
+    let finalUsage = null;
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -165,21 +160,22 @@ export class AzureOpenAIProvider extends BaseLLMProvider {
         if (!trimmed || !trimmed.startsWith('data: ')) continue;
         const payload = trimmed.slice(6);
         if (payload === '[DONE]') {
+          if (finalUsage) yield { type: 'usage', usage: finalUsage };
           yield { type: 'done', content: '' };
           return;
         }
         try {
           const json = JSON.parse(payload);
-          if (json.usage) yield { type: 'usage', usage: json.usage };
+          if (json.usage) finalUsage = json.usage;
           const delta = json.choices?.[0]?.delta;
           if (delta?.content) yield { type: 'text', content: delta.content };
           if (delta?.tool_calls) yield { type: 'tool_call', content: delta.tool_calls };
-        } catch {
-          // ignore malformed chunk
+        } catch (e) {
+          console.warn(`[${this.name}] malformed SSE chunk skipped:`, payload?.slice(0, 120), e?.message);
         }
       }
     }
+    if (finalUsage) yield { type: 'usage', usage: finalUsage };
     yield { type: 'done', content: '' };
   }
 }
-

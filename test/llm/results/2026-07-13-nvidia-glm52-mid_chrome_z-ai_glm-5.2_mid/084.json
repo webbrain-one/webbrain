@@ -1,0 +1,22 @@
+{
+  "id": "084",
+  "user": "explain javascript closures in 2 sentences",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 73197,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "A **closure** is a function that retains access to its outer (enclosing) lexical scope's variables even after that outer function has finished executing, effectively \"remembering\" the environment in which it was created. This lets the inner function continue to read and modify those captured variables across subsequent invocations, which is why closures power patterns like private state, function factories, and partial application in JavaScript.",
+  "usage": {
+    "prompt_tokens": 12856,
+    "completion_tokens": 81,
+    "total_tokens": 12937
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

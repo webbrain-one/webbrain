@@ -1,6 +1,7 @@
 const VALID_STATUSES = new Set(['pending', 'acted', 'processed', 'skipped', 'failed']);
 const TERMINAL_STATUSES = new Set(['processed', 'skipped', 'failed']);
 const CLICK_ACTION_TOOLS = new Set(['click', 'click_ax', 'iframe_click']);
+const APP_OWNED_FIELD_KEYS = new Set(['completionRequirement', 'classifierTarget']);
 const ACTION_RE = /^\s*(follow|unfollow|star|unstar|watch|unwatch|connect|subscribe|unsubscribe|save|unsave|like|unlike|block|unblock|report|send|submit|add|remove)\b(?:\s+(.+?))?\s*$/i;
 const GENERIC_TARGET_RE = /^(button|link|item|result|profile|user|member|person|this|that|it|here|there|more|submit|save|send|add|remove|follow|unfollow|changes?|message|comment|reply|post|form|details|settings|preferences)$/i;
 
@@ -73,19 +74,23 @@ function stableIdFor(action, target, url) {
   return sanitizeText(compact, 160);
 }
 
-function sanitizeFields(fields) {
+function sanitizeFields(fields, opts = {}) {
   if (!fields || typeof fields !== 'object' || Array.isArray(fields)) return undefined;
   const out = {};
   for (const [key, value] of Object.entries(fields).slice(0, 20)) {
     const k = sanitizeText(key, 80);
     if (!k) continue;
+    if (APP_OWNED_FIELD_KEYS.has(k)) {
+      if (opts.allowAppOwnedFields === true && value === true) out[k] = true;
+      continue;
+    }
     const cleaned = sanitizeFieldValue(value);
     if (cleaned !== undefined) out[k] = cleaned;
   }
   return Object.keys(out).length ? out : undefined;
 }
 
-function rowKey(row) {
+export function ledgerRowKey(row) {
   const id = sanitizeText(row?.id, 180).toLowerCase();
   if (!id) return '';
   const sessionId = sanitizeText(row?.sessionId || row?.session_id || '', 120).toLowerCase();
@@ -123,7 +128,7 @@ export function normalizeLedgerItem(item, opts = {}) {
   const sessionId = sanitizeText(item.sessionId || item.session_id || opts.sessionId || '', 120);
   const pageScope = sanitizeText(item.pageScope || item.page_scope || opts.pageScope || '', 240);
   const taskKey = sanitizeText(item.taskKey || opts.taskKey || '', 240);
-  const fields = sanitizeFields(item.fields);
+  const fields = sanitizeFields(item.fields, { allowAppOwnedFields: source === 'classifier' });
   const attempts = Number.isFinite(Number(item.attempts))
     ? Math.max(0, Math.floor(Number(item.attempts)))
     : (source === 'auto' ? 1 : 0);
@@ -185,7 +190,7 @@ export function upsertLedgerItems(rows = [], items = [], opts = {}) {
   const next = Array.isArray(rows) ? rows.map(row => ({ ...row, fields: row?.fields ? { ...row.fields } : undefined })) : [];
   const indexByKey = new Map();
   next.forEach((row, idx) => {
-    const key = rowKey(row);
+    const key = ledgerRowKey(row);
     if (key) indexByKey.set(key, idx);
   });
 
@@ -194,7 +199,7 @@ export function upsertLedgerItems(rows = [], items = [], opts = {}) {
   for (const rawItem of Array.isArray(items) ? items : []) {
     const incoming = normalizeLedgerItem(rawItem, { source, now, sessionId: opts.sessionId, pageScope: opts.pageScope, taskKey: opts.taskKey });
     if (!incoming) continue;
-    const key = rowKey(incoming);
+    const key = ledgerRowKey(incoming);
     const existingIdx = indexByKey.get(key);
     if (existingIdx == null) {
       next.push(incoming);
@@ -261,10 +266,10 @@ export function formatLedgerSummary(rows = [], opts = {}) {
   const maxRows = Number.isFinite(Number(opts.maxRows)) ? Math.max(1, Math.floor(Number(opts.maxRows))) : 18;
   const counts = progressCounts(safeRows);
   const unresolved = unresolvedLedgerRows(safeRows);
-  const unresolvedKeys = new Set(unresolved.map(rowKey));
+  const unresolvedKeys = new Set(unresolved.map(ledgerRowKey));
   const ordered = [
     ...unresolved,
-    ...safeRows.filter(row => !unresolvedKeys.has(rowKey(row))),
+    ...safeRows.filter(row => !unresolvedKeys.has(ledgerRowKey(row))),
   ].slice(0, maxRows);
   const countText = `total ${counts.total}; pending ${counts.pending}; acted ${counts.acted}; processed ${counts.processed}; skipped ${counts.skipped}; failed ${counts.failed}`;
   const lines = ordered.map(formatLedgerRow).filter(Boolean);

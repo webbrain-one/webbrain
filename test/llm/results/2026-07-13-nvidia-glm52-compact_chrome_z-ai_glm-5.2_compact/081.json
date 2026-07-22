@@ -1,0 +1,27 @@
+{
+  "id": "081",
+  "user": "send a thank-you email to everyone in my contacts",
+  "mode": "act",
+  "tab": {
+    "url": "https://mail.google.com/mail/u/0/#inbox",
+    "title": "Inbox (3) — Gmail"
+  },
+  "latencyMs": 2178,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible\""
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll help you send a thank-you email to everyone in your contacts. Let me start by looking at the current page and understanding what we're working with.",
+  "usage": {
+    "prompt_tokens": 6854,
+    "completion_tokens": 46,
+    "total_tokens": 6900
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

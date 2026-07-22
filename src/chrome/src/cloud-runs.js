@@ -12,6 +12,10 @@ const SENSITIVE_CLOUD_KEY = /(?:authorization|cookie|password|passwd|passphrase|
 const SENSITIVE_CLOUD_KEY_EXACT = new Set(['pin', 'otp', 'cvv', 'cvc', 'ssn']);
 const LARGE_IMAGE_KEY = /(?:attachimage|screenshot|image|imagedata|dataurl)$/i;
 
+function cloudRunError(message, status) {
+  return Object.assign(new Error(message), { status });
+}
+
 function normalizedCloudKey(key) {
   return String(key || '').replace(/[^a-z0-9]/gi, '');
 }
@@ -19,7 +23,10 @@ function normalizedCloudKey(key) {
 export function normalizeCloudBridgeUrl(value = DEFAULT_CLOUD_BRIDGE_URL) {
   const url = new URL(String(value || DEFAULT_CLOUD_BRIDGE_URL));
   const host = url.hostname.toLowerCase();
-  if (url.protocol !== 'ws:' || !['127.0.0.1', 'localhost', '::1'].includes(host)) {
+  // WHATWG URL keeps the brackets on IPv6 literals: ws://[::1]/… parses to
+  // hostname "[::1]", so both spellings must be allowlisted (same as
+  // LOCAL_OLLAMA_HOSTS in ollama-handoff.js).
+  if (url.protocol !== 'ws:' || !['127.0.0.1', 'localhost', '::1', '[::1]'].includes(host)) {
     throw new Error('WebBrain cloud bridge URL must use ws:// on localhost.');
   }
   return url.href;
@@ -81,9 +88,11 @@ function compactCloudRunForPersistence(run) {
   return scrubCloudValue({
     runId: run?.runId,
     status: run?.status,
+    parentRunId: run?.parentRunId || null,
     tabId: run?.tabId,
     task: run?.task,
     structured: !!run?.outputSchema || run?.structured === true,
+    pendingInput: run?.pendingInput || null,
     summary: run?.summary,
     content: '',
     finalUrl: run?.finalUrl,
@@ -118,9 +127,11 @@ function cloudSnapshot(run, { includeUpdates = true } = {}) {
   return {
     runId: run.runId,
     status: run.status,
+    parentRunId: run.parentRunId || null,
     tabId: run.tabId,
     task: run.task,
     structured: run.structured ?? !!run.outputSchema,
+    pendingInput: run.pendingInput || null,
     result: run.result,
     persistenceTruncated: run.persistenceTruncated,
     summary: run.summary,
@@ -151,6 +162,8 @@ export function createCloudRunController({
   agent,
   ensureOffscreen,
   sendIndicator = () => {},
+  startRecording = null,
+  stopRecording = null,
   now = () => new Date(),
   makeRunId = () => `run_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`,
 } = {}) {
@@ -203,6 +216,7 @@ export function createCloudRunController({
         if (!TERMINAL_STATUSES.has(restored.status)) {
           const at = isoNow();
           restored.status = restored.status === 'aborting' ? 'aborted' : 'failed';
+          restored.pendingInput = null;
           restored.error = restored.status === 'aborted'
             ? 'Run aborted when the WebBrain service worker restarted.'
             : 'Run interrupted when the WebBrain service worker restarted.';
@@ -275,7 +289,8 @@ export function createCloudRunController({
       return;
     }
     run.nextUpdateSeq = (Number(run.nextUpdateSeq) || 0) + 1;
-    run.updates.push({ seq: run.nextUpdateSeq, type, data: scrubCloudValue(data), ts: run.updatedAt });
+    const scrubbedData = scrubCloudValue(data);
+    run.updates.push({ seq: run.nextUpdateSeq, type, data: scrubbedData, ts: run.updatedAt });
     if (run.updates.length > CLOUD_UPDATE_LIMIT) {
       run.updates.splice(0, run.updates.length - CLOUD_UPDATE_LIMIT);
     }
@@ -290,6 +305,19 @@ export function createCloudRunController({
         run.summary = result.summary || run.summary;
       }
     }
+    if (type === 'clarify' && scrubbedData?.clarifyId && !TERMINAL_STATUSES.has(run.status)) {
+      run.status = 'needs_user_input';
+      run.pendingInput = scrubbedData;
+    }
+    if (type === 'run_status'
+        && scrubbedData?.status === 'clarification_required'
+        && run.status !== 'aborting'
+        && run.status !== 'aborted') {
+      run.status = 'failed';
+      run.error = scrubbedData.message
+        || 'Cloud run stopped because explicit clarification authorization is required.';
+      run.pendingInput = null;
+    }
     if (type === 'plan_review' && run.status === 'running') {
       run.status = 'failed';
       run.error = 'Managed cloud runs cannot wait for interactive plan review.';
@@ -300,24 +328,45 @@ export function createCloudRunController({
 
   async function startRun(msg = {}) {
     await hydrate();
-    const tabId = await resolveTabId(msg.tabId ?? msg.tab_id);
+    const parentRunId = String(msg.parentRunId || msg.parent_run_id || '').trim() || null;
+    let requestedTabId = msg.tabId ?? msg.tab_id;
+    if (parentRunId) {
+      const parent = runs.get(parentRunId);
+      if (parent) {
+        if (!TERMINAL_STATUSES.has(parent.status)) {
+          throw cloudRunError('Parent cloud run must be finished before it can be continued.', 409);
+        }
+        const existingChild = [...runs.values()].find(candidate => candidate.parentRunId === parentRunId);
+        if (existingChild) {
+          throw cloudRunError(`Cloud run has already been continued as ${existingChild.runId}.`, 409);
+        }
+        requestedTabId = parent.tabId;
+      } else if (requestedTabId == null || requestedTabId === '') {
+        throw cloudRunError('Parent cloud run is no longer available and has no saved tab.', 409);
+      }
+    }
+    const tabId = await resolveTabId(requestedTabId);
     const task = String(msg.task || msg.text || '').trim();
     if (!task) throw new Error('cloud_run requires `task`.');
     if (agent.isRunning(tabId)) throw new Error(`Tab ${tabId} already has an active WebBrain run.`);
 
+    const apiMutationsAllowed = msg.apiMutationsAllowed === true || msg.api_mutations_allowed === true;
     const outputSchema = msg.outputSchema || msg.output_schema || msg.responseFormat?.schema || msg.response_format?.schema || null;
     const createdAt = isoNow();
     const run = {
       runId: msg.runId || msg.run_id || makeRunId(),
       status: 'running',
+      parentRunId,
       tabId,
       task,
       outputSchema,
+      capture: msg.capture === 'video' ? 'video' : 'none',
       result: undefined,
       summary: '',
       content: '',
       finalUrl: '',
       error: '',
+      pendingInput: null,
       updates: [],
       nextUpdateSeq: 0,
       createdAt,
@@ -328,11 +377,37 @@ export function createCloudRunController({
     await persist();
 
     (async () => {
+      let recordingId = null;
       try {
+        if (run.capture === 'video') {
+          try {
+            if (!startRecording || !stopRecording) throw new Error('Cloud run video capture is unavailable.');
+            const recording = await startRecording(tabId, {
+              video: true,
+              mic: false,
+              showBanner: false,
+              filename: `webbrain-ci-${run.runId}.webm`,
+            });
+            if (!recording?.ok) throw new Error(recording?.error || 'Cloud run video capture could not start.');
+            recordingId = recording.state?.recordingId || null;
+          } catch (captureError) {
+            pushUpdate(run, 'capture_error', {
+              kind: 'video',
+              message: captureError?.message || String(captureError),
+            });
+            throw captureError;
+          }
+          pushUpdate(run, 'artifact_started', {
+            kind: 'video',
+            filename: `webbrain-ci-${run.runId}.webm`,
+          });
+        }
+        if (apiMutationsAllowed) agent.setApiMutationsAllowed(tabId, true);
         sendIndicator(tabId, 'WB_SHOW_AGENT_INDICATORS');
         const content = await agent.processMessage(tabId, task, (type, data) => {
           pushUpdate(run, type, data);
         }, 'act', [], { cloudRun: true, outputSchema });
+        run.pendingInput = null;
         run.content = content;
         run.finalUrl = await getTabUrl(tabId);
         if (run.status === 'aborting') {
@@ -348,10 +423,34 @@ export function createCloudRunController({
           }
         }
       } catch (error) {
+        run.pendingInput = null;
         run.status = run.status === 'aborting' ? 'aborted' : 'failed';
         run.error = error?.message || String(error);
         run.finalUrl = await getTabUrl(tabId);
       } finally {
+        // Do not expose a terminal status until the requested recording has
+        // finished flushing to Downloads; pollers use terminality as the cue
+        // that traces and artifacts are complete.
+        const terminalStatus = recordingId && TERMINAL_STATUSES.has(run.status)
+          ? run.status
+          : null;
+        if (terminalStatus) run.status = 'running';
+        if (recordingId) {
+          try {
+            const capture = await stopRecording({ expectedRecordingId: recordingId });
+            if (!capture?.ok) throw new Error(capture?.error || 'Cloud run video capture could not stop.');
+            pushUpdate(run, 'artifact', {
+              kind: 'video',
+              filename: capture.filename || `webbrain-ci-${run.runId}.webm`,
+            });
+          } catch (captureError) {
+            pushUpdate(run, 'capture_error', {
+              kind: 'video',
+              message: captureError?.message || String(captureError),
+            });
+          }
+        }
+        if (terminalStatus) run.status = terminalStatus;
         run.completedAt = isoNow();
         run.updatedAt = run.completedAt;
         sendIndicator(tabId, 'WB_HIDE_AGENT_INDICATORS');
@@ -375,13 +474,40 @@ export function createCloudRunController({
     await hydrate();
     const run = runs.get(msg.runId || msg.run_id);
     if (!run) throw new Error('Unknown cloud run.');
-    if (run.status === 'running') {
+    if (run.status === 'running' || run.status === 'needs_user_input') {
       run.status = 'aborting';
+      run.pendingInput = null;
       run.error = 'Abort requested.';
       run.updatedAt = isoNow();
       agent.abort(run.tabId);
       await persist();
     }
+    return cloudSnapshot(run);
+  }
+
+  async function respond(msg = {}) {
+    await hydrate();
+    const run = runs.get(msg.runId || msg.run_id);
+    if (!run) throw cloudRunError('Unknown cloud run.', 404);
+    if (run.status !== 'needs_user_input') {
+      throw cloudRunError('Cloud run is not waiting for user input.', 409);
+    }
+    const clarifyId = String(msg.clarifyId || msg.clarify_id || '').trim();
+    if (!clarifyId) throw cloudRunError('cloud_respond requires `clarify_id`.', 400);
+    const pendingClarifyId = String(run.pendingInput?.clarifyId || run.pendingInput?.clarify_id || '').trim();
+    if (!pendingClarifyId || clarifyId !== pendingClarifyId) {
+      throw cloudRunError('Clarification is no longer pending for this cloud run.', 409);
+    }
+    const answer = String(msg.answer ?? '').trim();
+    if (!answer) throw cloudRunError('cloud_respond requires `answer`.', 400);
+    if (!agent.submitClarifyResponse(run.tabId, clarifyId, answer, 'cloud_api')) {
+      throw cloudRunError('Clarification is no longer available in the active WebBrain run.', 409);
+    }
+    run.status = 'running';
+    run.pendingInput = null;
+    run.error = '';
+    pushUpdate(run, 'clarify_response', { clarifyId, source: 'cloud_api' });
+    await persist();
     return cloudSnapshot(run);
   }
 
@@ -409,6 +535,7 @@ export function createCloudRunController({
     runs,
     startRun,
     status,
+    respond,
     abort,
     startBridge,
     stopBridge,

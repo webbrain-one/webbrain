@@ -1,8 +1,15 @@
 export const RUN_UI_EVENT_LIMIT = 256;
+export const RUN_UI_TEXT_DELTA_PERSIST_DELAY_MS = 200;
 
 export function createRunRequestId(tabId, supplied = '') {
   const clean = String(supplied || '').trim();
   return clean || `req_${tabId}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+export function runUiSnapshotForRequest(snapshot, requestedRequestId = '') {
+  const requested = String(requestedRequestId || '');
+  if (!requested) return snapshot || null;
+  return String(snapshot?.requestId || '') === requested ? snapshot : null;
 }
 
 export function compactRunUiData(type, data) {
@@ -26,6 +33,66 @@ export function compactRunUiData(type, data) {
   return data;
 }
 
+export class RunUiPersistenceScheduler {
+  constructor({
+    persist,
+    delayMs = RUN_UI_TEXT_DELTA_PERSIST_DELAY_MS,
+    setTimeoutFn = setTimeout,
+    clearTimeoutFn = clearTimeout,
+  } = {}) {
+    if (typeof persist !== 'function') throw new TypeError('persist must be a function');
+    this.persist = persist;
+    this.delayMs = delayMs;
+    this.setTimeoutFn = setTimeoutFn;
+    this.clearTimeoutFn = clearTimeoutFn;
+    this.pending = new Map();
+  }
+
+  _persist(tabId, snapshot) {
+    try {
+      return Promise.resolve(this.persist(tabId, snapshot));
+    } catch (error) {
+      return Promise.reject(error);
+    }
+  }
+
+  _take(tabId, cancelTimer = true) {
+    const pending = this.pending.get(tabId);
+    if (!pending) return null;
+    this.pending.delete(tabId);
+    if (cancelTimer && pending.timer != null) this.clearTimeoutFn(pending.timer);
+    return pending.snapshot;
+  }
+
+  defer(tabId, snapshot) {
+    const existing = this.pending.get(tabId);
+    if (existing) {
+      existing.snapshot = snapshot;
+      return;
+    }
+    const pending = { snapshot, timer: null };
+    this.pending.set(tabId, pending);
+    pending.timer = this.setTimeoutFn(() => {
+      const latest = this._take(tabId, false);
+      if (latest) void this._persist(tabId, latest).catch(() => {});
+    }, this.delayMs);
+  }
+
+  persistNow(tabId, snapshot) {
+    this.cancel(tabId);
+    return this._persist(tabId, snapshot);
+  }
+
+  flush(tabId) {
+    const snapshot = this._take(tabId);
+    return snapshot ? this._persist(tabId, snapshot) : null;
+  }
+
+  cancel(tabId) {
+    this._take(tabId);
+  }
+}
+
 export class RunUiJournal {
   constructor({ eventLimit = RUN_UI_EVENT_LIMIT, onChange = null } = {}) {
     this.eventLimit = eventLimit;
@@ -33,15 +100,17 @@ export class RunUiJournal {
     this.snapshots = new Map();
   }
 
-  _changed(tabId, snapshot) {
-    if (typeof this.onChange === 'function') this.onChange(tabId, snapshot);
+  _changed(tabId, snapshot, change = {}) {
+    if (typeof this.onChange === 'function') this.onChange(tabId, snapshot, change);
     return snapshot;
   }
 
-  begin(tabId, requestId = '') {
+  begin(tabId, requestId = '', metadata = {}) {
     const snapshot = {
       tabId,
       requestId: createRunRequestId(tabId, requestId),
+      mode: String(metadata?.mode || ''),
+      kind: metadata?.kind === 'continue' ? 'continue' : 'chat',
       runId: null,
       status: 'running',
       seq: 0,
@@ -49,11 +118,31 @@ export class RunUiJournal {
       truncatedBeforeSeq: 0,
       events: [],
       pendingPlanId: null,
+      lastPlanResolution: null,
       finalContent: '',
+      successfulDone: false,
+      hadError: false,
+      lastError: '',
+      pendingToolCall: null,
       startedAt: Date.now(),
       endedAt: null,
     };
     this.snapshots.set(tabId, snapshot);
+    return this._changed(tabId, snapshot);
+  }
+
+  resume(tabId, requestId = '', metadata = {}) {
+    const snapshot = this.snapshots.get(tabId);
+    if (!snapshot || String(snapshot.requestId) !== String(requestId)) return null;
+    if (metadata?.mode) snapshot.mode = String(metadata.mode);
+    if (!snapshot.kind && metadata?.kind) {
+      snapshot.kind = metadata.kind === 'continue' ? 'continue' : 'chat';
+    }
+    snapshot.status = 'running';
+    snapshot.pendingPlanId = null;
+    snapshot.finalContent = '';
+    snapshot.successfulDone = false;
+    snapshot.endedAt = null;
     return this._changed(tabId, snapshot);
   }
 
@@ -75,13 +164,49 @@ export class RunUiJournal {
     if (type === 'plan_review') {
       snapshot.status = 'awaiting_plan';
       snapshot.pendingPlanId = String(data?.planId || '') || null;
+      snapshot.lastPlanResolution = null;
     }
     if (type === 'plan_resolved') {
       snapshot.status = 'running';
       if (!data?.planId || String(data.planId) === String(snapshot.pendingPlanId)) snapshot.pendingPlanId = null;
+      snapshot.lastPlanResolution = {
+        planId: String(data?.planId || ''),
+        decision: String(data?.decision || ''),
+      };
     }
-    this._changed(tabId, snapshot);
+    if (type === 'tool_call' && data?.outcomeUnknown === true) {
+      snapshot.pendingToolCall = {
+        name: String(data?.name || ''),
+        seq: event.seq,
+      };
+    }
+    if (type === 'tool_result'
+        && data?.name === 'done'
+        && data?.result?.done === true
+        && data?.result?.outcome === 'success'
+        && data?.result?.success !== false
+        && !data?.result?.error
+        && !data?.result?.blockedDone) {
+      snapshot.successfulDone = true;
+    }
+    if (type === 'error' || type === 'attachment_rejected' || type === 'max_steps_reached') {
+      snapshot.hadError = true;
+      snapshot.lastError = String(
+        data?.message
+        || data?.error
+        || (type === 'max_steps_reached' ? 'The run reached its maximum step limit.' : ''),
+      ).slice(0, 2000);
+    }
+    this._changed(tabId, snapshot, { eventType: type });
     return { ...event, requestId: snapshot.requestId, runId: snapshot.runId };
+  }
+
+  settleToolCall(tabId, requestId, name = '') {
+    const snapshot = this.snapshots.get(tabId);
+    if (!snapshot || snapshot.requestId !== requestId || !snapshot.pendingToolCall) return null;
+    if (name && snapshot.pendingToolCall.name && snapshot.pendingToolCall.name !== String(name)) return null;
+    snapshot.pendingToolCall = null;
+    return this._changed(tabId, snapshot);
   }
 
   finish(tabId, requestId, status, finalContent = '', runId = null) {
@@ -90,6 +215,7 @@ export class RunUiJournal {
     snapshot.runId = runId || snapshot.runId || null;
     snapshot.status = status;
     snapshot.pendingPlanId = null;
+    snapshot.pendingToolCall = null;
     snapshot.finalContent = String(finalContent || '').slice(0, 30000);
     snapshot.endedAt = Date.now();
     const event = {
@@ -108,6 +234,17 @@ export class RunUiJournal {
 
   restore(tabId, snapshot) {
     if (!snapshot || typeof snapshot !== 'object') return null;
+    if (snapshot.successfulDone !== true) snapshot.successfulDone = false;
+    if (snapshot.hadError !== true) snapshot.hadError = false;
+    if (typeof snapshot.lastError !== 'string') snapshot.lastError = '';
+    if (!snapshot.pendingToolCall || typeof snapshot.pendingToolCall !== 'object') {
+      snapshot.pendingToolCall = null;
+    }
+    if (typeof snapshot.mode !== 'string') snapshot.mode = '';
+    if (snapshot.kind !== 'continue' && snapshot.kind !== 'chat') snapshot.kind = 'chat';
+    if (!snapshot.lastPlanResolution || typeof snapshot.lastPlanResolution !== 'object') {
+      snapshot.lastPlanResolution = null;
+    }
     this.snapshots.set(tabId, snapshot);
     return snapshot;
   }

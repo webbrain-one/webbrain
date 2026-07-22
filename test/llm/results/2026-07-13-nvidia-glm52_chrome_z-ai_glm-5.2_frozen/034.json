@@ -1,0 +1,27 @@
+{
+  "id": "034",
+  "user": "sign in",
+  "mode": "act",
+  "tab": {
+    "url": "https://github.com/",
+    "title": "GitHub"
+  },
+  "latencyMs": 5650,
+  "error": null,
+  "firstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "https://github.com/login"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll help you sign in to GitHub. Let me navigate to the sign-in page.",
+  "usage": {
+    "prompt_tokens": 17103,
+    "completion_tokens": 32,
+    "total_tokens": 17135
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

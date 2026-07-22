@@ -1,0 +1,40 @@
+{
+  "id": "072",
+  "user": "delete this",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 3425,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "\nI see you're on the Chrome \"New Tab\" page. There's nothing visible to delete here - this is just the default new tab page. \n\nCould you clarify what you'd like me to delete? Are you referring to:\n- Something on a different page you have open?\n- A file or download?\n- Something else?\n\nIf you have a specific page or item in mind, please navigate to it or provide more details about what you want deleted.\n",
+  "usage": {
+    "prompt_tokens": 17035,
+    "completion_tokens": 161,
+    "total_tokens": 17196,
+    "cost": 0.001769,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 17024,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.001769,
+      "upstream_inference_prompt_cost": 0.0017046,
+      "upstream_inference_completions_cost": 0.0000644
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 61,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

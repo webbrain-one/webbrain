@@ -1,0 +1,31 @@
+{
+  "id": "083",
+  "user": "what time is it in tokyo right now",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 29979,
+  "error": null,
+  "firstToolCall": {
+    "name": "fetch_url",
+    "args": {
+      "url": "https://www.timeanddate.com/worldclock/japan/tokyo"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 20563,
+    "completion_tokens": 24,
+    "total_tokens": 20587,
+    "prompt_tokens_details": {
+      "audio_tokens": null,
+      "cached_tokens": 20544
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

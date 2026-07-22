@@ -109,45 +109,14 @@ export async function fetchWithFallback(url, options = {}) {
 
     try {
       await ensureOffscreen();
-
-      // Race the proxy round-trip against the same timeout, since
-      // chrome.runtime.sendMessage has no native cancellation.
-      let proxyTimeoutId = null;
-      const proxyResult = await Promise.race([
-        chrome.runtime.sendMessage({
-          type: 'offscreen-fetch',
-          url,
-          method: fetchOptions.method || 'POST',
-          headers: fetchOptions.headers || {},
-          body: fetchOptions.body || undefined,
-          stream: false,
-        }),
-        new Promise((_, reject) =>
-          proxyTimeoutId = setTimeout(
-            () => reject(new Error(`offscreen proxy timed out after ${timeoutMs}ms`)),
-            timeoutMs
-          )
-        ),
-      ]).finally(() => {
-        if (proxyTimeoutId != null) clearTimeout(proxyTimeoutId);
-      });
-
-      if (proxyResult.error) {
-        throw new Error(
-          `Both direct fetch and offscreen proxy failed for ${url}. ` +
-          `Direct: ${directError.message}. Proxy: ${proxyResult.error}`
-        );
-      }
-
-      return new Response(proxyResult.body, {
-        status: proxyResult.status,
-        statusText: proxyResult.ok ? 'OK' : 'Error',
-        headers: { 'Content-Type': proxyResult.contentType || 'application/json' },
-      });
+      return await _fetchViaOffscreenProxy(url, fetchOptions, timeoutMs);
     } catch (proxyError) {
       // Offscreen proxy also failed — throw the most useful error
-      if (proxyError.message?.includes('Both direct')) {
-        throw proxyError;
+      if (proxyError.bothFailed) {
+        throw new Error(
+          `Both direct fetch and offscreen proxy failed for ${url}. ` +
+          `Direct: ${directError.message}. Proxy: ${proxyError.message}`
+        );
       }
       throw new Error(
         `Could not reach ${url}. Direct: ${directError.message}. ` +
@@ -157,4 +126,133 @@ export async function fetchWithFallback(url, options = {}) {
       );
     }
   }
+}
+
+/**
+ * Fetch through the offscreen document over a streaming port.
+ *
+ * Mirrors the direct path's timeout semantics: `timeoutMs` only covers the
+ * connection phase (time-to-headers). Once the offscreen document reports
+ * response headers, the timer is cleared and the body may stream for as
+ * long as it needs — essential because this proxy exists for local LLM
+ * servers whose generations routinely run for many minutes. (The previous
+ * buffered sendMessage round-trip raced the WHOLE body against the
+ * timeout, killing any stream longer than timeoutMs and delivering all
+ * chunks in one burst.)
+ */
+async function _fetchViaOffscreenProxy(url, fetchOptions, timeoutMs) {
+  return await new Promise((resolve, reject) => {
+    const port = chrome.runtime.connect({ name: 'offscreen-fetch-stream' });
+    let settled = false;           // true once headers are in (or we've failed)
+    let streamController = null;   // non-null while the body is streaming
+    const encoder = new TextEncoder();
+
+    const timeoutId = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      try { port.disconnect(); } catch {}
+      reject(new Error(`offscreen proxy timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    const failBeforeHeaders = (message, { bothFailed = false } = {}) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutId);
+      try { port.disconnect(); } catch {}
+      reject(Object.assign(new Error(message), { bothFailed }));
+    };
+
+    port.onDisconnect.addListener(() => {
+      clearTimeout(timeoutId);
+      if (streamController) {
+        const sc = streamController;
+        streamController = null;
+        try { sc.error(new Error('offscreen proxy disconnected mid-stream')); } catch {}
+      } else if (!settled) {
+        failBeforeHeaders('offscreen proxy disconnected before responding');
+      }
+    });
+
+    port.onMessage.addListener((msg) => {
+      if (msg?.type === 'headers') {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
+        const responseInit = {
+          status: msg.status,
+          statusText: msg.ok ? 'OK' : 'Error',
+          headers: { 'Content-Type': msg.contentType || 'application/json' },
+        };
+        // The Response constructor rejects a non-null body for 204, 205,
+        // and 304. HEAD responses can also have status 200 with no body, so
+        // honor the explicit signal from the offscreen fetch as well. When
+        // headers already settled the connection phase, a constructor throw
+        // used to leave the caller hanging forever with no active timeout.
+        if (msg.hasBody === false || [204, 205, 304].includes(msg.status)) {
+          streamController = null;
+          try {
+            resolve(new Response(null, responseInit));
+          } catch (e) {
+            try { port.disconnect(); } catch {}
+            reject(new Error(`offscreen proxy returned invalid response headers: ${e.message}`));
+            return;
+          }
+          try { port.disconnect(); } catch {}
+          return;
+        }
+        const stream = new ReadableStream({
+          start(controller) { streamController = controller; },
+          cancel() { try { port.disconnect(); } catch {} },
+        });
+        try {
+          resolve(new Response(stream, responseInit));
+        } catch (e) {
+          if (streamController) {
+            const sc = streamController;
+            streamController = null;
+            try { sc.error(e); } catch {}
+          }
+          try { port.disconnect(); } catch {}
+          reject(new Error(`offscreen proxy returned invalid response headers: ${e.message}`));
+        }
+        return;
+      }
+      if (msg?.type === 'error') {
+        // Network-level failure inside the offscreen document. Before
+        // headers this is the "both paths failed" case; mid-stream it
+        // terminates the body with an error.
+        if (!settled) {
+          failBeforeHeaders(msg.error || 'offscreen proxy fetch failed', { bothFailed: true });
+          return;
+        }
+        if (streamController) {
+          const sc = streamController;
+          streamController = null;
+          try { sc.error(new Error(msg.error || 'offscreen proxy fetch failed')); } catch {}
+          try { port.disconnect(); } catch {}
+        }
+        return;
+      }
+      if (!streamController) return;
+      if (msg?.type === 'chunk') {
+        try { streamController.enqueue(encoder.encode(msg.text || '')); } catch {}
+      } else if (msg?.type === 'done') {
+        const sc = streamController;
+        streamController = null;
+        try { sc.close(); } catch {}
+        try { port.disconnect(); } catch {}
+      }
+    });
+
+    try {
+      port.postMessage({
+        url,
+        method: fetchOptions.method || 'POST',
+        headers: fetchOptions.headers || {},
+        body: fetchOptions.body || undefined,
+      });
+    } catch (e) {
+      failBeforeHeaders(`offscreen proxy postMessage failed: ${e.message}`);
+    }
+  });
 }

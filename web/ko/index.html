@@ -170,7 +170,7 @@
       "name": "WebBrain은 안전한가요? 웹 페이지를 수정할 수 있나요?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "WebBrain에는 두 가지 모드가 있습니다: 묻기 모드(기본)는 읽기 전용이며 페이지의 어떤 것도 수정하지 못합니다. 실행 모드는 완전한 브라우저 에이전트 기능(클릭, 입력, 탐색)을 활성화하지만, 활성화 전 명시적인 사용자 확인이 필요하고 눈에 띄는 경고 배너가 함께 표시됩니다. 정지 버튼으로 언제든지 에이전트를 멈출 수 있습니다. 확장의 소스 코드는 GitHub에 완전히 공개되어 감사가 가능합니다."
+        "text": "WebBrain에는 세 가지 모드가 있습니다. 묻기 모드(기본)는 읽기 전용이며 페이지를 수정하지 못합니다. 실행 모드는 클릭, 입력, 탐색 같은 브라우저 동작을 허용하고, Dev 모드는 페이지 디버깅 도구를 추가합니다. 결과를 초래하는 동작은 기본적으로 승인이 필요하며, 이 권한 게이트를 끄면 WebBrain이 눈에 띄는 경고 배너를 표시합니다. 정지 버튼으로 언제든지 에이전트를 멈출 수 있습니다. 확장의 소스 코드는 GitHub에 완전히 공개되어 감사가 가능합니다."
       }
     },
     {
@@ -1011,90 +1011,119 @@
       box-shadow: 0 0 0 1px var(--tint-strong);
     }
 
-    /* ----- v3 — short-form video player ----- */
+    /* ----- v3 — landscape video player (YouTube-style watch page) ----- */
     .page-video {
       display: flex;
-      align-items: center;
+      flex-direction: column;
       justify-content: center;
-      padding: 14px 24px;
-      background: radial-gradient(circle at 50% 30%, rgba(167,139,250,0.10), transparent 70%);
+      gap: 12px;
+      padding: 18px 16px;
+      background: radial-gradient(circle at 50% 20%, rgba(167,139,250,0.10), transparent 70%);
     }
     .pv-frame {
       position: relative;
-      width: 200px;
-      aspect-ratio: 9 / 16;
-      max-height: 100%;
-      border-radius: 14px;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      border-radius: 10px;
       overflow: hidden;
       border: 1px solid rgba(255,255,255,0.08);
-      box-shadow: 0 12px 36px rgba(0,0,0,0.45);
+      box-shadow: 0 10px 28px rgba(0,0,0,0.40);
       background:
-        linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.55) 75%, rgba(0,0,0,0.85) 100%),
-        linear-gradient(45deg, #2d1b69, #6c63ff 70%, #ec4899);
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      padding: 10px 12px 14px;
+        linear-gradient(180deg, rgba(0,0,0,0) 45%, rgba(0,0,0,0.72) 100%),
+        linear-gradient(135deg, #2d1b69, #6c63ff 65%, #ec4899);
       color: #fff;
     }
+    /* Soft frosted play disc — readable as "video" without the loud
+       YouTube-red brand hit that pulls focus from the agent panel. */
     .pv-frame::before {
-      content: '▶';
+      content: '';
       position: absolute;
       inset: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 30px;
-      color: rgba(255,255,255,0.85);
-      text-shadow: 0 4px 14px rgba(0,0,0,0.5);
+      margin: auto;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.16);
+      border: 1px solid rgba(255,255,255,0.28);
+      box-shadow: 0 6px 18px rgba(0,0,0,0.28);
+      backdrop-filter: blur(6px);
       pointer-events: none;
     }
-    .pv-top {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 10px;
-      color: rgba(255,255,255,0.85);
-      position: relative;
-      z-index: 1;
-    }
-    .pv-time {
-      background: rgba(0,0,0,0.4);
-      padding: 2px 6px;
-      border-radius: 4px;
-    }
-    .pv-bottom {
-      position: relative;
-      z-index: 1;
-      font-size: 11px;
-      line-height: 1.4;
-      padding-inline-end: 30px;
-    }
-    .pv-username {
-      font-weight: 700;
-      margin-bottom: 3px;
-    }
-    .pv-caption {
-      color: rgba(255,255,255,0.85);
-    }
-    .pv-actions {
+    .pv-frame::after {
+      content: '';
       position: absolute;
-      inset-inline-end: 6px;
-      bottom: 24px;
+      inset: 0;
+      margin: auto;
+      width: 0;
+      height: 0;
+      border-style: solid;
+      border-width: 7px 0 7px 12px;
+      border-color: transparent transparent transparent rgba(255,255,255,0.92);
+      transform: translateX(2px);
+      pointer-events: none;
+    }
+    .pv-controls {
+      position: absolute;
+      inset-inline: 0;
+      bottom: 0;
+      z-index: 1;
       display: flex;
       flex-direction: column;
-      gap: 8px;
-      z-index: 1;
+      gap: 6px;
+      padding: 8px 10px 9px;
+      background: linear-gradient(180deg, transparent, rgba(0,0,0,0.72));
     }
-    .pv-actions span {
-      background: rgba(0,0,0,0.4);
-      border-radius: 50%;
-      width: 26px;
-      height: 26px;
+    .pv-progress {
+      position: relative;
+      height: 3px;
+      border-radius: 2px;
+      background: rgba(255,255,255,0.28);
+      overflow: hidden;
+    }
+    .pv-progress::after {
+      content: '';
+      position: absolute;
+      inset-block: 0;
+      inset-inline-start: 0;
+      width: 38%;
+      background: rgba(255,255,255,0.88);
+      border-radius: 2px;
+    }
+    .pv-controls-row {
       display: flex;
       align-items: center;
-      justify-content: center;
+      justify-content: space-between;
+      font-size: 10px;
+      color: rgba(255,255,255,0.9);
+    }
+    .pv-time {
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.2px;
+    }
+    .pv-controls-icons {
+      display: flex;
+      gap: 8px;
+      opacity: 0.85;
+      font-size: 11px;
+    }
+    .pv-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      text-align: start;
+      min-width: 0;
+    }
+    .pv-caption {
+      color: var(--text);
       font-size: 13px;
+      font-weight: 650;
+      line-height: 1.35;
+      letter-spacing: 0.1px;
+    }
+    .pv-username {
+      color: var(--text-dim);
+      font-size: 11px;
+      font-weight: 500;
     }
 
     /* Scene 4 — a compact browser-style completion bubble lands with the
@@ -1872,32 +1901,6 @@
     }
     .footer-links { display: flex; flex-wrap: wrap; gap: 12px 20px; }
 
-    .safety-note {
-      max-width: var(--max-w);
-      margin: 0 auto 24px;
-      background: rgba(251,191,36,0.1);
-      border: 1px solid rgba(251,191,36,0.35);
-      border-radius: var(--radius-sm);
-      padding: 18px 20px;
-      color: var(--text);
-      text-align: start;
-      line-height: 1.55;
-      font-size: 13px;
-    }
-    .safety-note h4 {
-      font-size: 14px;
-      margin-bottom: 8px;
-      letter-spacing: 0.4px;
-      text-transform: uppercase;
-      color: var(--warning);
-    }
-    .safety-note ul {
-      margin: 0;
-      padding-inline-start: 18px;
-    }
-    .safety-note li { margin-bottom: 6px; }
-    .safety-note li:last-child { margin-bottom: 0; }
-
     /* ================================================================
        COMPARISON TABLE
        ================================================================ */
@@ -2344,24 +2347,22 @@
       <div class="browser-mockup" data-scene="3" aria-hidden="true" inert>
         <div class="browser-bar">
           <div class="browser-dots"><span></span><span></span><span></span></div>
-          <div class="browser-url">https://socialvid.app/@nomad/clip-8472</div>
+          <div class="browser-url">https://youtube.com/watch?v=n0m4dB0druM</div>
         </div>
         <div class="browser-body">
           <div class="browser-page page-video">
             <div class="pv-frame">
-              <div class="pv-top">
-                <span></span>
-                <span class="pv-time">0:24</span>
+              <div class="pv-controls">
+                <div class="pv-progress" aria-hidden="true"></div>
+                <div class="pv-controls-row">
+                  <span class="pv-time">0:09 / 0:24</span>
+                  <span class="pv-controls-icons" aria-hidden="true">CC · ⚙ · ⛶</span>
+                </div>
               </div>
-              <div class="pv-bottom">
-                <div class="pv-username">@nomad</div>
-                <div class="pv-caption">Bodrum의 일몰 타임랩스</div>
-              </div>
-              <div class="pv-actions">
-                <span>♥</span>
-                <span>💬</span>
-                <span>↗</span>
-              </div>
+            </div>
+            <div class="pv-meta">
+              <div class="pv-caption">Bodrum의 일몰 타임랩스</div>
+              <div class="pv-username">@nomad</div>
             </div>
           </div>
           <div class="side-panel scene-download-panel">
@@ -2852,8 +2853,13 @@
     </details>
 
     <details class="faq-item">
+      <summary>Vivaldi Web Panel에서 WebBrain을 사용할 때 제한이 있나요?</summary>
+      <p>예. Vivaldi Web Panel은 <code>confirm()</code>, <code>alert()</code>, <code>prompt()</code> 같은 기본 JavaScript 대화상자를 차단합니다. WebBrain의 Ask, Act, Dev 모드 전환은 더 이상 이런 대화상자에 의존하지 않지만, 일부 보조 작업은 아직 의존합니다.</p><p><strong>새 대화:</strong> Web Panel에서는 확인 대화상자가 차단되어 버튼이 아무 작업도 하지 않는 것처럼 보일 수 있습니다. WebBrain 패널 아이콘을 오른쪽 클릭하고 <strong>다음에서 열기 → 새 탭</strong>을 선택한 다음, 일반 탭에서 <strong>새 대화</strong>를 사용하세요.</p><p><strong>녹화:</strong> 당분간 Vivaldi에서는 <code>/record</code>를 사용하지 마세요. 녹화가 실패하면 Vivaldi가 오류 경고를 숨겨 아무 설명도 표시되지 않을 수 있습니다.</p><p><strong>설정, 기록, 트레이스, Ollama 핸드오프:</strong> 이 페이지들도 기본 대화상자를 사용하지만 WebBrain은 보통 정상 작동하는 일반 탭에서 엽니다. 수동으로 Web Panel에 넣었다면 대화상자에 의존하는 작업을 사용하기 전에 일반 탭에서 여세요.</p>
+    </details>
+
+    <details class="faq-item">
       <summary>WebBrain은 안전한가요? 웹 페이지를 수정할 수 있나요?</summary>
-      <p>WebBrain에는 두 가지 모드가 있습니다: 묻기 모드(기본)는 읽기 전용이며 페이지의 어떤 것도 수정하지 못합니다. 실행 모드는 완전한 브라우저 에이전트 기능(클릭, 입력, 탐색)을 활성화하지만, 활성화 전 명시적인 사용자 확인이 필요하고 눈에 띄는 경고 배너가 함께 표시됩니다. 정지 버튼으로 언제든지 에이전트를 멈출 수 있습니다. 확장의 소스 코드는 GitHub에 완전히 공개되어 감사가 가능합니다.</p>
+      <p>WebBrain에는 세 가지 모드가 있습니다. 묻기 모드(기본)는 읽기 전용이며 페이지를 수정하지 못합니다. 실행 모드는 클릭, 입력, 탐색 같은 브라우저 동작을 허용하고, Dev 모드는 페이지 디버깅 도구를 추가합니다. 결과를 초래하는 동작은 기본적으로 승인이 필요하며, 이 권한 게이트를 끄면 WebBrain이 눈에 띄는 경고 배너를 표시합니다. 정지 버튼으로 언제든지 에이전트를 멈출 수 있습니다. 확장의 소스 코드는 GitHub에 완전히 공개되어 감사가 가능합니다.</p>
     </details>
 
     <details class="faq-item">
@@ -2947,14 +2953,6 @@
 
 <!-- FOOTER -->
 <footer>
-  <div class="safety-note" id="safety">
-    <h4>중요한 안전 안내</h4>
-    <ul>
-      <li>WebBrain의 실행 모드는 당신을 대신해 실제 동작을 수행할 수 있습니다. 계속하기 전에 프롬프트, 이동할 페이지, 결과를 검토하는 책임은 당신에게 있습니다.</li>
-      <li>WebBrain은 계획을 위해 스크린샷을 캡처할 수 있습니다. 위험을 감수할 의사가 없다면 민감한 페이지(예: 건강, 금융, 데이팅, 개인 계정 포털)에서는 에이전트 모드 사용을 피하세요.</li>
-      <li>웹 콘텐츠에는 AI 동작을 조작하도록 설계된 악성 prompt injection이 포함될 수 있습니다. 제안된 작업은 항상 검토하고, 예상치 못한 실행은 중지하세요.</li>
-    </ul>
-  </div>
   <div class="footer-inner">
     <span>© 2026 WebBrain. <a href="https://emresokullu.com" target="_blank">Emre Sokullu</a>가 만들었습니다.</span>
     <div class="footer-links">

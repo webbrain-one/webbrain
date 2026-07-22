@@ -1,0 +1,40 @@
+{
+  "id": "062",
+  "user": "apply coupon SAVE10",
+  "mode": "act",
+  "tab": {
+    "url": "https://www.amazon.com/gp/buy/spc/handlers/display.html",
+    "title": "Amazon Checkout"
+  },
+  "latencyMs": 819,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I'll look at the current checkout page to find where to apply the coupon code.",
+  "usage": {
+    "prompt_tokens": 17066,
+    "completion_tokens": 70,
+    "total_tokens": 17136,
+    "cost": 0.00019996,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 16896,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.00019996,
+      "upstream_inference_prompt_cost": 0.00018596,
+      "upstream_inference_completions_cost": 0.000014
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 40,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

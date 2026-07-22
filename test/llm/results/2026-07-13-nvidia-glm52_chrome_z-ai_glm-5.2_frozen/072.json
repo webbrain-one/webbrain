@@ -1,0 +1,22 @@
+{
+  "id": "072",
+  "user": "delete this",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 21573,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I'd be happy to help you delete something, but I need a bit more context. You're currently on a New Tab page (about:home), so there's nothing specific on this page to delete.\n\nCould you clarify what you'd like me to delete? For example:\n- An email in Gmail?\n- A file in Google Drive, GitHub, or another service?\n- A post on social media?\n- Something else entirely?\n\nLet me know and I'll take care of it.",
+  "usage": {
+    "prompt_tokens": 16565,
+    "completion_tokens": 99,
+    "total_tokens": 16664
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

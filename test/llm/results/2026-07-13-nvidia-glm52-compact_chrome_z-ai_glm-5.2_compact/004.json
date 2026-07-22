@@ -1,0 +1,34 @@
+{
+  "id": "004",
+  "user": "open my github",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 116229,
+  "error": null,
+  "firstToolCall": {
+    "name": "new_tab",
+    "args": {
+      "url": "https://github.com"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll open GitHub for you in a new tab.",
+  "usage": {
+    "prompt_tokens": 6696,
+    "completion_tokens": 25,
+    "total_tokens": 6721
+  },
+  "attempts": 2,
+  "retryErrors": [
+    {
+      "attempt": 1,
+      "error": "HTTP 504: ",
+      "latencyMs": 302282,
+      "waitMs": 600000
+    }
+  ]
+}

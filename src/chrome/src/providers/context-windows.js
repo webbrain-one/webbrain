@@ -243,6 +243,7 @@ export function inferContextWindow(config = {}) {
   if (!model) return DEFAULT_CLOUD_CONTEXT_WINDOW;
 
   // OpenAI
+  if (/^gpt-5\.6(?:[.\-]|$)/.test(model) || model.includes('/gpt-5.6')) return 1050000;
   if (model.includes('gpt-5.5-pro')) return 1050000;
   if (/^gpt-5(?:[.\-]|$)/.test(model) || model.includes('/gpt-5')) return 400000;
 
@@ -277,6 +278,10 @@ export function inferContextWindow(config = {}) {
   if (/minimax.*(?:m2\.7|m2\.5|m2\.1|m2)(?:-|$|\/|\.)/.test(model) || model.includes('minimax-01')) {
     return 204800;
   }
+
+  // Kimi direct models and compatible router slugs.
+  if (/kimi-k-?3(?:-|$|\/|\.)/.test(model)) return M1;
+  if (/kimi-k2\.(?:5|6|7)(?:-|$|\/|\.)/.test(model)) return K256;
 
   // Alibaba / Qwen direct models and OpenRouter Qwen slugs.
   if (model.includes('qwen3.7-plus')) return M1;

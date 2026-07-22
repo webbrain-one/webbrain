@@ -1,0 +1,22 @@
+{
+  "id": "012",
+  "user": "show my browser history",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 54370,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I can't access your browser history — that's not something I'm able to see or retrieve. Browser history is protected by Chrome's privacy model and isn't exposed to extensions or tools like me.\n\nHere's what I *can* do if it helps:\n\n- **Open the History page** — I can navigate your current tab to `chrome://history` so you can see it yourself (though I can't read the contents from there either, as Chrome's internal pages are restricted).\n- **Recall what we've done in this session** — I can remember pages we've navigated to or interacted with during our current conversation.\n- **Search the web** — if you're looking for a specific site you visited, I can search for it.\n\nWould you like me to open the History page for you, or is there something specific you're trying to find?",
+  "usage": {
+    "prompt_tokens": 12853,
+    "completion_tokens": 177,
+    "total_tokens": 13030
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

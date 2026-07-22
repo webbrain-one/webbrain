@@ -1,0 +1,52 @@
+{
+  "id": "092",
+  "user": "mute this tab",
+  "mode": "act",
+  "tab": {
+    "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    "title": "Rick Astley — YouTube"
+  },
+  "latencyMs": 2099,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll mute the YouTube video tab for you.",
+  "usage": {
+    "prompt_tokens": 7042,
+    "completion_tokens": 23,
+    "total_tokens": 7065
+  },
+  "attempts": 5,
+  "retryErrors": [
+    {
+      "attempt": 1,
+      "error": "HTTP 429: {\"status\":429,\"title\":\"Too Many Requests\"}",
+      "latencyMs": 349,
+      "waitMs": 600000
+    },
+    {
+      "attempt": 2,
+      "error": "HTTP 429: {\"status\":429,\"title\":\"Too Many Requests\"}",
+      "latencyMs": 338,
+      "waitMs": 600000
+    },
+    {
+      "attempt": 3,
+      "error": "HTTP 429: {\"status\":429,\"title\":\"Too Many Requests\"}",
+      "latencyMs": 357,
+      "waitMs": 600000
+    },
+    {
+      "attempt": 4,
+      "error": "HTTP 429: {\"status\":429,\"title\":\"Too Many Requests\"}",
+      "latencyMs": 353,
+      "waitMs": 600000
+    }
+  ]
+}

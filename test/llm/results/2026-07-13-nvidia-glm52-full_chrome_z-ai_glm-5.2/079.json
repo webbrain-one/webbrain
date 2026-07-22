@@ -1,0 +1,46 @@
+{
+  "id": "079",
+  "user": "sell all my bitcoin",
+  "mode": "act",
+  "tab": {
+    "url": "https://www.coinbase.com/assets/bitcoin",
+    "title": "Bitcoin — Coinbase"
+  },
+  "latencyMs": 68885,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll help you sell your bitcoin. Let me first look at the current page to understand what's available.",
+  "usage": {
+    "prompt_tokens": 20792,
+    "completion_tokens": 35,
+    "total_tokens": 20827
+  },
+  "attempts": 4,
+  "retryErrors": [
+    {
+      "attempt": 1,
+      "error": "HTTP 429: {\"status\":429,\"title\":\"Too Many Requests\"}",
+      "latencyMs": 280,
+      "waitMs": 600000
+    },
+    {
+      "attempt": 2,
+      "error": "HTTP 429: {\"status\":429,\"title\":\"Too Many Requests\"}",
+      "latencyMs": 496,
+      "waitMs": 600000
+    },
+    {
+      "attempt": 3,
+      "error": "HTTP 429: {\"status\":429,\"title\":\"Too Many Requests\"}",
+      "latencyMs": 341,
+      "waitMs": 600000
+    }
+  ]
+}

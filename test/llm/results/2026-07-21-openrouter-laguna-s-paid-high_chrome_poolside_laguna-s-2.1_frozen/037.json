@@ -1,0 +1,45 @@
+{
+  "id": "037",
+  "user": "close the cookie banner",
+  "mode": "act",
+  "tab": {
+    "url": "https://www.theguardian.com/uk",
+    "title": "The Guardian"
+  },
+  "latencyMs": 1618,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll read the current page to find the cookie banner and its close options.",
+  "usage": {
+    "prompt_tokens": 16949,
+    "completion_tokens": 76,
+    "total_tokens": 17025,
+    "cost": 0.00018946,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 16896,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.00018946,
+      "upstream_inference_prompt_cost": 0.00017426,
+      "upstream_inference_completions_cost": 0.0000152
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 36,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

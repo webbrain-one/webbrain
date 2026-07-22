@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WebMCP CDP fixture</title>
+</head>
+<body>
+  <main>
+    <h1>WebMCP CDP fixture</h1>
+    <p id="status">registering</p>
+    <output id="result"></output>
+    <iframe
+      id="webmcp-frame"
+      src="/test/fixtures/webmcp-frame.html"
+      title="WebMCP child-frame fixture"
+    ></iframe>
+  </main>
+  <script type="module">
+    const status = document.querySelector('#status');
+    const result = document.querySelector('#result');
+    const frame = document.querySelector('#webmcp-frame');
+    const controller = new AbortController();
+    let parentReady = false;
+
+    window.webMCPFixture = {
+      ready: false,
+      frameListening: false,
+      frameToolReady: false,
+      available: !!document.modelContext?.registerTool,
+      calls: [],
+      errors: [],
+      registerFrameTool() {
+        frame.contentWindow.postMessage({ type: 'webmcp-register' }, location.origin);
+      },
+      unregister() {
+        frame.contentWindow.postMessage({ type: 'webmcp-unregister' }, location.origin);
+        controller.abort();
+      },
+    };
+
+    const updateReady = () => {
+      window.webMCPFixture.ready = parentReady && window.webMCPFixture.frameListening;
+      if (window.webMCPFixture.ready) status.textContent = 'ready';
+    };
+    window.addEventListener('message', event => {
+      if (
+        event.source === frame.contentWindow
+        && event.origin === location.origin
+        && event.data?.type === 'webmcp-frame-listening'
+      ) {
+        window.webMCPFixture.frameListening = true;
+        updateReady();
+      }
+      if (
+        event.source === frame.contentWindow
+        && event.origin === location.origin
+        && event.data?.type === 'webmcp-frame-tool-ready'
+      ) window.webMCPFixture.frameToolReady = true;
+    });
+
+    if (!window.webMCPFixture.available) {
+      status.textContent = 'unsupported';
+      throw new Error('document.modelContext.registerTool is unavailable');
+    }
+
+    try {
+      await document.modelContext.registerTool({
+        name: 'lookup_inventory',
+        description: 'Return inventory without reading the rendered page.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            sku: { type: 'string', description: 'Product stock-keeping unit.' },
+          },
+          required: ['sku'],
+          additionalProperties: false,
+        },
+        async execute({ sku }) {
+          await new Promise(resolve => setTimeout(resolve, 25));
+          window.webMCPFixture.calls.push({ name: 'lookup_inventory', sku });
+          const payload = {
+            content: [{ type: 'text', text: `Inventory for ${sku}: 7` }],
+            structuredContent: { sku, available: 7 },
+          };
+          result.value = JSON.stringify(payload.structuredContent);
+          status.textContent = 'invoked';
+          return payload;
+        },
+      }, { signal: controller.signal });
+
+      await document.modelContext.registerTool({
+        name: 'fail_predictably',
+        description: 'Throw a predictable fixture error.',
+        inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+        execute() {
+          throw new Error('fixture failure');
+        },
+      }, { signal: controller.signal });
+
+      parentReady = true;
+      updateReady();
+    } catch (error) {
+      window.webMCPFixture.errors.push(String(error?.stack || error));
+      status.textContent = 'registration-failed';
+      throw error;
+    }
+  </script>
+</body>
+</html>

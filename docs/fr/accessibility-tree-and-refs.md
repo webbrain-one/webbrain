@@ -95,7 +95,9 @@ L'agent l'utilise comme première action à presque chaque tour — c'est plus r
 
 Retourne `{success, method, tag, rect, name, href?, navigates?, hint?}`.
 
-Sur Chrome, le clic est déclenché via CDP `Input.dispatchMouseEvent` → événement de confiance. Sur Firefox, c'est un `el.click()` synthétique.
+Les deux versions conservent d'abord le chemin compatible `el.click()` synthétique. Sous Chrome uniquement, une cible générique sûre peut recevoir un unique repli protégé via CDP `Input.dispatchMouseEvent` après deux intervalles d'observation stables de la page et de la cible. Un changement d'URL, de focus provoqué par le gestionnaire, une mutation locale synchrone ou un état sémantique différé tel que `aria-current` prouve une progression. Les variations globales ainsi que les changements différés de nom, classe, style ou enfants de la cible ne sont conservés que comme indices de diagnostic, car les aperçus de conversations, badges non lus et horodatages peuvent être sans rapport. Une requête XHR mutante proche ou un beacon hors télémétrie, un nouvel onglet ou un téléchargement rend le résultat non concluant et interdit la relance ; les lectures en arrière-plan et le trafic manifeste de télémétrie ou de heartbeat sont ignorés. Les cibles masquées par CSS, sans événements de pointeur, natives, avec état/bascule, dans un formulaire, de téléchargement ou potentiellement mutantes ne sont jamais retentées automatiquement. Firefox reste entièrement synthétique.
+
+Aucune fenêtre d'observation finie ne peut prouver un état interne de l'application qui ne produit aucun signal d'URL, de focus, d'état sémantique, de réseau, d'onglet, de téléchargement ou d'interface visible. Les garde-fous des cibles génériques, l'attente différée et la règle d'un seul essai réduisent, sans l'éliminer complètement, le risque qu'un gestionnaire synthétique silencieusement réussi reçoive une seconde activation fiable.
 
 ### `type_ax({ref_id, text, clear})`
 
@@ -160,7 +162,7 @@ L'exposition des outils est hiérarchisée : `get_shadow_dom`, `shadow_dom_query
 
 ### Firefox
 
-Seules les racines shadow **ouvertes** (`element.shadowRoot`) sont accessibles. Les racines fermées ne peuvent pas être lues via le script de contenu. L'outil `execute_js` est spécifique à Firefox et exposé en tant qu'extension Dev ; il peut aider au parcours manuel, mais le constructeur d'arbre ne peut pas atteindre les racines fermées.
+Seules les racines shadow **ouvertes** (`element.shadowRoot`) sont accessibles. Les racines fermées ne peuvent pas être lues via le script de contenu. `execute_js` est exposé en mode Dev dans les deux versions, mais le JavaScript ordinaire de la page ne peut toujours pas obtenir une racine fermée et le constructeur d'arbre ne peut pas l'atteindre.
 
 ---
 
@@ -178,7 +180,7 @@ Le constructeur d'arbre ne **descend pas** dans les iframes par défaut. L'agent
 |---|---|---|
 | Élément supprimé du DOM | `click_ax` retourne « non trouvé » | Relire l'arbre ; la page a peut-être été régénérée |
 | Ref obsolète après navigation SPA | Tous les refs échouent | L'agent doit relire l'arbre après `/navigate` ou `wait_for_stable` |
-| Racine shadow fermée | L'arbre montre `<my-component>` mais pas ses enfants | Utiliser `get_shadow_dom` + `shadow_dom_query` (Chrome) ou `execute_js` en mode Dev (Firefox) |
+| Racine shadow fermée | L'arbre montre `<my-component>` mais pas ses enfants | Utiliser `get_shadow_dom` + `shadow_dom_query` sur Chrome ; Firefox ne peut pas traverser une racine fermée |
 | iframe absente de l'arbre | L'agent ne trouve pas le contenu de l'iframe | Appeler `get_frames` puis `iframe_read` / `iframe_click` |
 | Arbre tronqué | `truncated: true` + `hasMore: true` | Appeler `get_accessibility_tree` avec `page: nextPage` ou `ref_id` pour zoomer |
 | Superposition par portail non visible | L'arbre montre la combobox mais pas le menu déroulant | La superposition est remontée dans la section `[open overlays]` — relire avec `filter: 'all'` |

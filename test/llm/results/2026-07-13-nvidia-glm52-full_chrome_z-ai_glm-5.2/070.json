@@ -1,0 +1,27 @@
+{
+  "id": "070",
+  "user": "log in",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 31208,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll help you log in. Let me first check what's currently on the page.",
+  "usage": {
+    "prompt_tokens": 20555,
+    "completion_tokens": 31,
+    "total_tokens": 20586
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

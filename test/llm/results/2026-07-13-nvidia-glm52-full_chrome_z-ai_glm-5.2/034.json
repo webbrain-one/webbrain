@@ -1,0 +1,31 @@
+{
+  "id": "034",
+  "user": "sign in",
+  "mode": "act",
+  "tab": {
+    "url": "https://github.com/",
+    "title": "GitHub"
+  },
+  "latencyMs": 6221,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll help you sign in to GitHub. Let me look at the current page to find the sign-in option.",
+  "usage": {
+    "prompt_tokens": 21093,
+    "completion_tokens": 36,
+    "total_tokens": 21129,
+    "prompt_tokens_details": {
+      "audio_tokens": null,
+      "cached_tokens": 20480
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

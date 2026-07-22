@@ -1,0 +1,22 @@
+{
+  "id": "074",
+  "user": "go back to that other thing",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 11583,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I don't have any record of a previous page or task in this conversation — this is a fresh session starting on a new tab (about:home), so there's no \"other thing\" for me to go back to.\n\nCould you tell me what you'd like me to return to? For example:\n- A specific website URL\n- A task you were working on (e.g., \"the email draft\", \"the GitHub issue\")\n- A page you had open in another tab\n\nIf you think you had something open, you can also try using your browser's history (Ctrl+H / Cmd+Y) to find it, then share the URL with me.",
+  "usage": {
+    "prompt_tokens": 12855,
+    "completion_tokens": 137,
+    "total_tokens": 12992
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

@@ -170,7 +170,7 @@
       "name": "WebBrain は安全ですか? Web ページを変更しますか?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "WebBrain には 2 つのモードがあります。質問モード (デフォルト) は読み取り専用で、ページ上の何も変更できません。実行モードはフルブラウザエージェント機能 (クリック、入力、ナビゲーション) を有効にしますが、起動前に明示的なユーザー確認が必要で、目に見える警告バナーが表示されます。エージェントは「停止」ボタンでいつでも止められます。拡張のソースコードは GitHub で完全公開されており、監査可能です。"
+        "text": "WebBrain には 3 つのモードがあります。質問モード (デフォルト) は読み取り専用で、ページ上の何も変更できません。実行モードではクリック、入力、ナビゲーションなどのブラウザ操作ができ、Dev モードではページのデバッグツールが追加されます。影響を伴う操作はデフォルトで承認が必要です。この権限ゲートを無効にすると、WebBrain は目に見える警告バナーを表示します。エージェントは「停止」ボタンでいつでも止められます。拡張のソースコードは GitHub で完全公開されており、監査可能です。"
       }
     },
     {
@@ -1011,90 +1011,119 @@
       box-shadow: 0 0 0 1px var(--tint-strong);
     }
 
-    /* ----- v3 — short-form video player ----- */
+    /* ----- v3 — landscape video player (YouTube-style watch page) ----- */
     .page-video {
       display: flex;
-      align-items: center;
+      flex-direction: column;
       justify-content: center;
-      padding: 14px 24px;
-      background: radial-gradient(circle at 50% 30%, rgba(167,139,250,0.10), transparent 70%);
+      gap: 12px;
+      padding: 18px 16px;
+      background: radial-gradient(circle at 50% 20%, rgba(167,139,250,0.10), transparent 70%);
     }
     .pv-frame {
       position: relative;
-      width: 200px;
-      aspect-ratio: 9 / 16;
-      max-height: 100%;
-      border-radius: 14px;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      border-radius: 10px;
       overflow: hidden;
       border: 1px solid rgba(255,255,255,0.08);
-      box-shadow: 0 12px 36px rgba(0,0,0,0.45);
+      box-shadow: 0 10px 28px rgba(0,0,0,0.40);
       background:
-        linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.55) 75%, rgba(0,0,0,0.85) 100%),
-        linear-gradient(45deg, #2d1b69, #6c63ff 70%, #ec4899);
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      padding: 10px 12px 14px;
+        linear-gradient(180deg, rgba(0,0,0,0) 45%, rgba(0,0,0,0.72) 100%),
+        linear-gradient(135deg, #2d1b69, #6c63ff 65%, #ec4899);
       color: #fff;
     }
+    /* Soft frosted play disc — readable as "video" without the loud
+       YouTube-red brand hit that pulls focus from the agent panel. */
     .pv-frame::before {
-      content: '▶';
+      content: '';
       position: absolute;
       inset: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 30px;
-      color: rgba(255,255,255,0.85);
-      text-shadow: 0 4px 14px rgba(0,0,0,0.5);
+      margin: auto;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.16);
+      border: 1px solid rgba(255,255,255,0.28);
+      box-shadow: 0 6px 18px rgba(0,0,0,0.28);
+      backdrop-filter: blur(6px);
       pointer-events: none;
     }
-    .pv-top {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 10px;
-      color: rgba(255,255,255,0.85);
-      position: relative;
-      z-index: 1;
-    }
-    .pv-time {
-      background: rgba(0,0,0,0.4);
-      padding: 2px 6px;
-      border-radius: 4px;
-    }
-    .pv-bottom {
-      position: relative;
-      z-index: 1;
-      font-size: 11px;
-      line-height: 1.4;
-      padding-inline-end: 30px;
-    }
-    .pv-username {
-      font-weight: 700;
-      margin-bottom: 3px;
-    }
-    .pv-caption {
-      color: rgba(255,255,255,0.85);
-    }
-    .pv-actions {
+    .pv-frame::after {
+      content: '';
       position: absolute;
-      inset-inline-end: 6px;
-      bottom: 24px;
+      inset: 0;
+      margin: auto;
+      width: 0;
+      height: 0;
+      border-style: solid;
+      border-width: 7px 0 7px 12px;
+      border-color: transparent transparent transparent rgba(255,255,255,0.92);
+      transform: translateX(2px);
+      pointer-events: none;
+    }
+    .pv-controls {
+      position: absolute;
+      inset-inline: 0;
+      bottom: 0;
+      z-index: 1;
       display: flex;
       flex-direction: column;
-      gap: 8px;
-      z-index: 1;
+      gap: 6px;
+      padding: 8px 10px 9px;
+      background: linear-gradient(180deg, transparent, rgba(0,0,0,0.72));
     }
-    .pv-actions span {
-      background: rgba(0,0,0,0.4);
-      border-radius: 50%;
-      width: 26px;
-      height: 26px;
+    .pv-progress {
+      position: relative;
+      height: 3px;
+      border-radius: 2px;
+      background: rgba(255,255,255,0.28);
+      overflow: hidden;
+    }
+    .pv-progress::after {
+      content: '';
+      position: absolute;
+      inset-block: 0;
+      inset-inline-start: 0;
+      width: 38%;
+      background: rgba(255,255,255,0.88);
+      border-radius: 2px;
+    }
+    .pv-controls-row {
       display: flex;
       align-items: center;
-      justify-content: center;
+      justify-content: space-between;
+      font-size: 10px;
+      color: rgba(255,255,255,0.9);
+    }
+    .pv-time {
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.2px;
+    }
+    .pv-controls-icons {
+      display: flex;
+      gap: 8px;
+      opacity: 0.85;
+      font-size: 11px;
+    }
+    .pv-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      text-align: start;
+      min-width: 0;
+    }
+    .pv-caption {
+      color: var(--text);
       font-size: 13px;
+      font-weight: 650;
+      line-height: 1.35;
+      letter-spacing: 0.1px;
+    }
+    .pv-username {
+      color: var(--text-dim);
+      font-size: 11px;
+      font-weight: 500;
     }
 
     /* Scene 4 — a compact browser-style completion bubble lands with the
@@ -1872,32 +1901,6 @@
     }
     .footer-links { display: flex; flex-wrap: wrap; gap: 12px 20px; }
 
-    .safety-note {
-      max-width: var(--max-w);
-      margin: 0 auto 24px;
-      background: rgba(251,191,36,0.1);
-      border: 1px solid rgba(251,191,36,0.35);
-      border-radius: var(--radius-sm);
-      padding: 18px 20px;
-      color: var(--text);
-      text-align: start;
-      line-height: 1.55;
-      font-size: 13px;
-    }
-    .safety-note h4 {
-      font-size: 14px;
-      margin-bottom: 8px;
-      letter-spacing: 0.4px;
-      text-transform: uppercase;
-      color: var(--warning);
-    }
-    .safety-note ul {
-      margin: 0;
-      padding-inline-start: 18px;
-    }
-    .safety-note li { margin-bottom: 6px; }
-    .safety-note li:last-child { margin-bottom: 0; }
-
     /* ================================================================
        COMPARISON TABLE
        ================================================================ */
@@ -2344,24 +2347,22 @@
       <div class="browser-mockup" data-scene="3" aria-hidden="true" inert>
         <div class="browser-bar">
           <div class="browser-dots"><span></span><span></span><span></span></div>
-          <div class="browser-url">https://socialvid.app/@nomad/clip-8472</div>
+          <div class="browser-url">https://youtube.com/watch?v=n0m4dB0druM</div>
         </div>
         <div class="browser-body">
           <div class="browser-page page-video">
             <div class="pv-frame">
-              <div class="pv-top">
-                <span></span>
-                <span class="pv-time">0:24</span>
+              <div class="pv-controls">
+                <div class="pv-progress" aria-hidden="true"></div>
+                <div class="pv-controls-row">
+                  <span class="pv-time">0:09 / 0:24</span>
+                  <span class="pv-controls-icons" aria-hidden="true">CC · ⚙ · ⛶</span>
+                </div>
               </div>
-              <div class="pv-bottom">
-                <div class="pv-username">@nomad</div>
-                <div class="pv-caption">Bodrum に沈む夕日のタイムラプス</div>
-              </div>
-              <div class="pv-actions">
-                <span>♥</span>
-                <span>💬</span>
-                <span>↗</span>
-              </div>
+            </div>
+            <div class="pv-meta">
+              <div class="pv-caption">Bodrum に沈む夕日のタイムラプス</div>
+              <div class="pv-username">@nomad</div>
             </div>
           </div>
           <div class="side-panel scene-download-panel">
@@ -2852,8 +2853,13 @@
     </details>
 
     <details class="faq-item">
+      <summary>Vivaldi の Web Panel で WebBrain を使う場合に制限はありますか?</summary>
+      <p>はい。Vivaldi の Web Panel では、<code>confirm()</code>、<code>alert()</code>、<code>prompt()</code> などのネイティブ JavaScript ダイアログが抑止されます。WebBrain の Ask、Act、Dev モード切り替えはこれらのダイアログに依存しなくなりましたが、一部の補助操作はまだ依存しています。</p><p><strong>新しい会話:</strong> Web Panel では確認ダイアログが抑止されるため、ボタンが何もしていないように見えることがあります。WebBrain のパネルアイコンを右クリックし、<strong>「別の場所で開く → 新しいタブ」</strong>を選び、その通常タブから<strong>「新しい会話」</strong>を使ってください。</p><p><strong>録画:</strong> 当面は Vivaldi で <code>/record</code> を使用しないでください。録画に失敗しても Vivaldi がエラー警告を隠し、説明が表示されない場合があります。</p><p><strong>設定、履歴、トレース、Ollama ハンドオフ:</strong> これらのページにもネイティブダイアログがありますが、通常 WebBrain は正常に動作する通常タブで開きます。手動で Web Panel に追加した場合は、ダイアログに依存する操作を使う前に通常タブで開いてください。</p>
+    </details>
+
+    <details class="faq-item">
       <summary>WebBrain は安全ですか? Web ページを変更しますか?</summary>
-      <p>WebBrain には 2 つのモードがあります。質問モード (デフォルト) は読み取り専用で、ページ上の何も変更できません。実行モードはフルブラウザエージェント機能 (クリック、入力、ナビゲーション) を有効にしますが、起動前に明示的なユーザー確認が必要で、目に見える警告バナーが表示されます。エージェントは「停止」ボタンでいつでも止められます。拡張のソースコードは GitHub で完全公開されており、監査可能です。</p>
+      <p>WebBrain には 3 つのモードがあります。質問モード (デフォルト) は読み取り専用で、ページ上の何も変更できません。実行モードではクリック、入力、ナビゲーションなどのブラウザ操作ができ、Dev モードではページのデバッグツールが追加されます。影響を伴う操作はデフォルトで承認が必要です。この権限ゲートを無効にすると、WebBrain は目に見える警告バナーを表示します。エージェントは「停止」ボタンでいつでも止められます。拡張のソースコードは GitHub で完全公開されており、監査可能です。</p>
     </details>
 
     <details class="faq-item">
@@ -2947,14 +2953,6 @@
 
 <!-- FOOTER -->
 <footer>
-  <div class="safety-note" id="safety">
-    <h4>重要な安全に関する注意</h4>
-    <ul>
-      <li>WebBrain の実行モードはあなたの代わりに実際の操作を行えます。続行する前に、プロンプト、遷移先、結果を確認する責任はあなたにあります。</li>
-      <li>WebBrain は計画のためにスクリーンショットを撮ることがあります。機微なページ (例: 健康、金融、出会い、個人アカウントのポータルなど) でエージェントモードを使うことは、リスクを受け入れる場合を除き避けてください。</li>
-      <li>Web のコンテンツには、AI の挙動を誘導するための悪意ある prompt injection が含まれていることがあります。提案された操作は常に確認し、見覚えのない動作の実行は停止してください。</li>
-    </ul>
-  </div>
   <div class="footer-inner">
     <span>© 2026 WebBrain。Built by <a href="https://emresokullu.com" target="_blank">Emre Sokullu</a>.</span>
     <div class="footer-links">

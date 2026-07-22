@@ -1,0 +1,22 @@
+{
+  "id": "071",
+  "user": "send it",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 25382,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I don't see any file or content to send. You're currently on a blank new tab page (about:home), and there's nothing attached to your message.\n\nCould you clarify what you'd like me to send? For example:\n- An email (to whom, with what content)?\n- A message on a specific platform (Slack, LinkedIn, etc.)?\n- A file that's already downloaded somewhere?\n- Something else entirely?\n\nLet me know and I'll get it done.",
+  "usage": {
+    "prompt_tokens": 16565,
+    "completion_tokens": 100,
+    "total_tokens": 16665
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

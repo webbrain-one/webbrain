@@ -41,6 +41,13 @@ Add a fenced `webbrain-tools` JSON block to the skill markdown:
 
 Use this skill when...
 
+```webbrain-skill
+{
+  "summary": "Read public metadata from Example when the user requests it.",
+  "modes": ["ask", "act"]
+}
+```
+
 ```webbrain-tools
 {
   "tools": [
@@ -74,6 +81,63 @@ Use this skill when...
 }
 ```
 ````
+
+`webbrain-skill` is optional and is stripped from the loaded prompt. Its
+single-line `summary` is capped at 200 characters and appears with the skill ID
+and name in the Mid/Full `load_skill` catalog. `modes` controls catalog
+eligibility; Ask must be listed explicitly, while Dev inherits Act eligibility.
+Without metadata, WebBrain infers the first prose paragraph as the summary and
+defaults the skill to Act/Dev. Compact exposes no skills. Full skill prose and
+declared tools remain absent until `load_skill` activates the skill for the
+current run.
+
+### Write metadata for routing, not documentation
+
+Ordinary selection is semantic: there is no keyword or URL matcher that chooses
+a skill before the model sees the catalog. Write `summary` as one concrete
+sentence describing the user intents the skill owns. Include the relevant
+object or service and the action the user is asking for; omit implementation
+detail, safety prose, endpoint URLs, and generic claims such as "helps with web
+tasks." The full skill body remains the place for workflow and safety rules.
+
+Good:
+
+```json
+{
+  "summary": "Find, read, copy, or enter a one-time verification code from recent message content visible in the active browser tab.",
+  "modes": ["ask", "act"]
+}
+```
+
+Too vague:
+
+```json
+{
+  "summary": "Helps with email.",
+  "modes": ["ask", "act"]
+}
+```
+
+Choose modes according to the workflow, not merely whether an individual HTTP
+tool is read-only:
+
+- Include `ask` only when the skill is genuinely useful without browser or
+  external state changes.
+- Include `act` for action workflows. Dev automatically inherits Act-eligible
+  skills; add `dev` only for a Dev-specific skill that should not appear in Act.
+- Remember that skill eligibility and tool eligibility are separate. Loading an
+  Ask-compatible skill does not expose a tool whose manifest is Act-only.
+
+Avoid overlapping summaries unless the skills are intentionally composable. If
+two skills can both apply, make the distinction explicit—for example, an OTP
+skill for a code in an already visible mailbox versus a disposable-email skill
+that creates and manages a temporary mailbox. The model may load multiple
+relevant skills in one run, and repeated loads are idempotent.
+
+Trusted product-owned recommended actions are a separate path: when they name a
+skill tool as `firstTool` or `tool`, the agent deterministically preactivates the
+enabled, mode-compatible skill that owns it. Do not rely on this behavior for
+ordinary free-form requests; those route through the catalog summary.
 
 A download-job skill uses the same manifest fence, but declares the job
 endpoints. The endpoint origin must stay the same across create, status, file,
@@ -131,6 +195,11 @@ How it is wired:
   tools must be POST, `readOnly: false`, `requiresDownloadPermission: true`,
   and declare same-origin status/file/cleanup endpoint templates with
   `{job_id}`.
+- Privileged packaged integrations are not a third manifest kind. For example,
+  the opt-in Chrome Web Store release skill receives its fixed
+  `chromeWebStore` handlers only when `skills.js` recognizes the exact built-in
+  skill ID and packaged path. A raw or URL-imported skill cannot declare those
+  handlers; its `webbrain-tools` block remains limited to the HTTP kinds above.
 
 Security model:
 

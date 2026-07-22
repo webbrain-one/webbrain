@@ -170,7 +170,7 @@
       "name": "Adakah WebBrain selamat digunakan? Bolehkah ia mengubah suai halaman web?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "WebBrain mempunyai dua mod: mod Tanya (lalai) adalah baca sahaja dan tidak boleh mengubah suai apa-apa pada halaman. Mod Bertindak membolehkan keupayaan ejen pelayar penuh (mengklik, menaip, menavigasi) tetapi memerlukan pengesahan pengguna yang jelas sebelum diaktifkan, dan disertakan dengan sepanduk amaran yang kelihatan. Anda boleh menghentikan ejen pada bila-bila masa dengan butang Henti. Kod sumber sambungan terbuka sepenuhnya untuk audit di GitHub."
+        "text": "WebBrain mempunyai tiga mod. Mod Tanya (lalai) adalah baca sahaja dan tidak boleh mengubah apa-apa pada halaman. Mod Bertindak membolehkan tindakan pelayar seperti mengklik, menaip dan menavigasi, manakala mod Dev menambah alat penyahpepijatan halaman. Tindakan yang membawa kesan memerlukan kelulusan secara lalai; jika pintu kebenaran ini dimatikan, WebBrain memaparkan sepanduk amaran yang jelas. Anda boleh menghentikan ejen pada bila-bila masa dengan butang Henti. Kod sumber sambungan terbuka sepenuhnya untuk audit di GitHub."
       }
     },
     {
@@ -1011,90 +1011,119 @@
       box-shadow: 0 0 0 1px var(--tint-strong);
     }
 
-    /* ----- v3 — short-form video player ----- */
+    /* ----- v3 — landscape video player (YouTube-style watch page) ----- */
     .page-video {
       display: flex;
-      align-items: center;
+      flex-direction: column;
       justify-content: center;
-      padding: 14px 24px;
-      background: radial-gradient(circle at 50% 30%, rgba(167,139,250,0.10), transparent 70%);
+      gap: 12px;
+      padding: 18px 16px;
+      background: radial-gradient(circle at 50% 20%, rgba(167,139,250,0.10), transparent 70%);
     }
     .pv-frame {
       position: relative;
-      width: 200px;
-      aspect-ratio: 9 / 16;
-      max-height: 100%;
-      border-radius: 14px;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      border-radius: 10px;
       overflow: hidden;
       border: 1px solid rgba(255,255,255,0.08);
-      box-shadow: 0 12px 36px rgba(0,0,0,0.45);
+      box-shadow: 0 10px 28px rgba(0,0,0,0.40);
       background:
-        linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.55) 75%, rgba(0,0,0,0.85) 100%),
-        linear-gradient(45deg, #2d1b69, #6c63ff 70%, #ec4899);
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      padding: 10px 12px 14px;
+        linear-gradient(180deg, rgba(0,0,0,0) 45%, rgba(0,0,0,0.72) 100%),
+        linear-gradient(135deg, #2d1b69, #6c63ff 65%, #ec4899);
       color: #fff;
     }
+    /* Soft frosted play disc — readable as "video" without the loud
+       YouTube-red brand hit that pulls focus from the agent panel. */
     .pv-frame::before {
-      content: '▶';
+      content: '';
       position: absolute;
       inset: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 30px;
-      color: rgba(255,255,255,0.85);
-      text-shadow: 0 4px 14px rgba(0,0,0,0.5);
+      margin: auto;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.16);
+      border: 1px solid rgba(255,255,255,0.28);
+      box-shadow: 0 6px 18px rgba(0,0,0,0.28);
+      backdrop-filter: blur(6px);
       pointer-events: none;
     }
-    .pv-top {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 10px;
-      color: rgba(255,255,255,0.85);
-      position: relative;
-      z-index: 1;
-    }
-    .pv-time {
-      background: rgba(0,0,0,0.4);
-      padding: 2px 6px;
-      border-radius: 4px;
-    }
-    .pv-bottom {
-      position: relative;
-      z-index: 1;
-      font-size: 11px;
-      line-height: 1.4;
-      padding-inline-end: 30px;
-    }
-    .pv-username {
-      font-weight: 700;
-      margin-bottom: 3px;
-    }
-    .pv-caption {
-      color: rgba(255,255,255,0.85);
-    }
-    .pv-actions {
+    .pv-frame::after {
+      content: '';
       position: absolute;
-      inset-inline-end: 6px;
-      bottom: 24px;
+      inset: 0;
+      margin: auto;
+      width: 0;
+      height: 0;
+      border-style: solid;
+      border-width: 7px 0 7px 12px;
+      border-color: transparent transparent transparent rgba(255,255,255,0.92);
+      transform: translateX(2px);
+      pointer-events: none;
+    }
+    .pv-controls {
+      position: absolute;
+      inset-inline: 0;
+      bottom: 0;
+      z-index: 1;
       display: flex;
       flex-direction: column;
-      gap: 8px;
-      z-index: 1;
+      gap: 6px;
+      padding: 8px 10px 9px;
+      background: linear-gradient(180deg, transparent, rgba(0,0,0,0.72));
     }
-    .pv-actions span {
-      background: rgba(0,0,0,0.4);
-      border-radius: 50%;
-      width: 26px;
-      height: 26px;
+    .pv-progress {
+      position: relative;
+      height: 3px;
+      border-radius: 2px;
+      background: rgba(255,255,255,0.28);
+      overflow: hidden;
+    }
+    .pv-progress::after {
+      content: '';
+      position: absolute;
+      inset-block: 0;
+      inset-inline-start: 0;
+      width: 38%;
+      background: rgba(255,255,255,0.88);
+      border-radius: 2px;
+    }
+    .pv-controls-row {
       display: flex;
       align-items: center;
-      justify-content: center;
+      justify-content: space-between;
+      font-size: 10px;
+      color: rgba(255,255,255,0.9);
+    }
+    .pv-time {
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.2px;
+    }
+    .pv-controls-icons {
+      display: flex;
+      gap: 8px;
+      opacity: 0.85;
+      font-size: 11px;
+    }
+    .pv-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      text-align: start;
+      min-width: 0;
+    }
+    .pv-caption {
+      color: var(--text);
       font-size: 13px;
+      font-weight: 650;
+      line-height: 1.35;
+      letter-spacing: 0.1px;
+    }
+    .pv-username {
+      color: var(--text-dim);
+      font-size: 11px;
+      font-weight: 500;
     }
 
     /* Scene 4 — a compact browser-style completion bubble lands with the
@@ -1872,32 +1901,6 @@
     }
     .footer-links { display: flex; flex-wrap: wrap; gap: 12px 20px; }
 
-    .safety-note {
-      max-width: var(--max-w);
-      margin: 0 auto 24px;
-      background: rgba(251,191,36,0.1);
-      border: 1px solid rgba(251,191,36,0.35);
-      border-radius: var(--radius-sm);
-      padding: 18px 20px;
-      color: var(--text);
-      text-align: start;
-      line-height: 1.55;
-      font-size: 13px;
-    }
-    .safety-note h4 {
-      font-size: 14px;
-      margin-bottom: 8px;
-      letter-spacing: 0.4px;
-      text-transform: uppercase;
-      color: var(--warning);
-    }
-    .safety-note ul {
-      margin: 0;
-      padding-inline-start: 18px;
-    }
-    .safety-note li { margin-bottom: 6px; }
-    .safety-note li:last-child { margin-bottom: 0; }
-
     /* ================================================================
        COMPARISON TABLE
        ================================================================ */
@@ -2344,24 +2347,22 @@
       <div class="browser-mockup" data-scene="3" aria-hidden="true" inert>
         <div class="browser-bar">
           <div class="browser-dots"><span></span><span></span><span></span></div>
-          <div class="browser-url">https://socialvid.app/@nomad/clip-8472</div>
+          <div class="browser-url">https://youtube.com/watch?v=n0m4dB0druM</div>
         </div>
         <div class="browser-body">
           <div class="browser-page page-video">
             <div class="pv-frame">
-              <div class="pv-top">
-                <span></span>
-                <span class="pv-time">0:24</span>
+              <div class="pv-controls">
+                <div class="pv-progress" aria-hidden="true"></div>
+                <div class="pv-controls-row">
+                  <span class="pv-time">0:09 / 0:24</span>
+                  <span class="pv-controls-icons" aria-hidden="true">CC · ⚙ · ⛶</span>
+                </div>
               </div>
-              <div class="pv-bottom">
-                <div class="pv-username">@nomad</div>
-                <div class="pv-caption">Selang masa matahari terbenam di Bodrum</div>
-              </div>
-              <div class="pv-actions">
-                <span>♥</span>
-                <span>💬</span>
-                <span>↗</span>
-              </div>
+            </div>
+            <div class="pv-meta">
+              <div class="pv-caption">Selang masa matahari terbenam di Bodrum</div>
+              <div class="pv-username">@nomad</div>
             </div>
           </div>
           <div class="side-panel scene-download-panel">
@@ -2852,8 +2853,13 @@
     </details>
 
     <details class="faq-item">
+      <summary>Adakah terdapat batasan apabila menggunakan WebBrain dalam Web Panel Vivaldi?</summary>
+      <p>Ya. Web Panel Vivaldi menyekat dialog JavaScript asli seperti <code>confirm()</code>, <code>alert()</code> dan <code>prompt()</code>. Pertukaran mod Ask, Act dan Dev WebBrain tidak lagi bergantung pada dialog tersebut, tetapi beberapa tindakan sekunder masih bergantung padanya.</p><p><strong>Perbualan baharu:</strong> Dalam Web Panel, butang mungkin kelihatan tidak melakukan apa-apa kerana dialog pengesahannya disekat. Klik kanan ikon panel WebBrain, pilih <strong>Open in → New Tab</strong>, kemudian gunakan <strong>New conversation</strong> dari tab biasa itu.</p><p><strong>Rakaman:</strong> Buat masa ini, jangan gunakan <code>/record</code> dalam Vivaldi. Jika rakaman gagal, Vivaldi boleh menyembunyikan amaran ralat sehingga tiada penjelasan dipaparkan.</p><p><strong>Tetapan, Sejarah, Jejak dan penyerahan Ollama:</strong> Halaman ini juga mengandungi dialog asli, tetapi WebBrain biasanya membukanya sebagai tab biasa yang berfungsi. Jika anda meletakkan salah satunya secara manual dalam Web Panel, bukanya dalam tab biasa sebelum menggunakan tindakan yang bergantung pada dialog.</p>
+    </details>
+
+    <details class="faq-item">
       <summary>Adakah WebBrain selamat digunakan? Bolehkah ia mengubah suai halaman web?</summary>
-      <p>WebBrain mempunyai dua mod: mod Tanya (lalai) adalah baca sahaja dan tidak boleh mengubah suai apa-apa pada halaman. Mod Bertindak membolehkan keupayaan ejen pelayar penuh (mengklik, menaip, menavigasi) tetapi memerlukan pengesahan pengguna yang jelas sebelum diaktifkan, dan disertakan dengan sepanduk amaran yang kelihatan. Anda boleh menghentikan ejen pada bila-bila masa dengan butang Henti. Kod sumber sambungan terbuka sepenuhnya untuk audit di GitHub.</p>
+      <p>WebBrain mempunyai tiga mod. Mod Tanya (lalai) adalah baca sahaja dan tidak boleh mengubah apa-apa pada halaman. Mod Bertindak membolehkan tindakan pelayar seperti mengklik, menaip dan menavigasi, manakala mod Dev menambah alat penyahpepijatan halaman. Tindakan yang membawa kesan memerlukan kelulusan secara lalai; jika pintu kebenaran ini dimatikan, WebBrain memaparkan sepanduk amaran yang jelas. Anda boleh menghentikan ejen pada bila-bila masa dengan butang Henti. Kod sumber sambungan terbuka sepenuhnya untuk audit di GitHub.</p>
     </details>
 
     <details class="faq-item">
@@ -2947,14 +2953,6 @@
 
 <!-- FOOTER -->
 <footer>
-  <div class="safety-note" id="safety">
-    <h4>Notis Keselamatan Penting</h4>
-    <ul>
-      <li>Mod Bertindak WebBrain boleh mengambil tindakan sebenar bagi pihak anda. Anda bertanggungjawab untuk menyemak prompt, destinasi dan hasil sebelum meneruskan.</li>
-      <li>WebBrain mungkin menangkap tangkapan skrin untuk perancangan. Elakkan menggunakan mod ejen pada halaman sensitif (contohnya kesihatan, kewangan, temujodoh atau portal akaun peribadi) melainkan anda menerima risiko itu.</li>
-      <li>Kandungan web boleh mengandungi prompt injection berniat jahat yang direka untuk memanipulasi tingkah laku AI. Sentiasa semak tindakan yang dicadangkan dan hentikan larian yang kelihatan tidak dijangka.</li>
-    </ul>
-  </div>
   <div class="footer-inner">
     <span>© 2026 WebBrain. Dibina oleh <a href="https://emresokullu.com" target="_blank">Emre Sokullu</a>.</span>
     <div class="footer-links">

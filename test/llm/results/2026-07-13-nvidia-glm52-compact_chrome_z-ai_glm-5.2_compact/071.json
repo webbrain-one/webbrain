@@ -1,0 +1,22 @@
+{
+  "id": "071",
+  "user": "send it",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 3362,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I'm on a blank new tab page. I don't have a URL or any content to work with yet.\n\nCould you tell me what you'd like me to do? For example:\n- Navigate to a specific URL\n- Search for something\n- Perform a task on a particular website\n\nOnce you give me a destination or task, I'll get started right away.",
+  "usage": {
+    "prompt_tokens": 6695,
+    "completion_tokens": 76,
+    "total_tokens": 6771
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

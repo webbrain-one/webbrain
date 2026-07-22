@@ -1,0 +1,28 @@
+{
+  "id": "056",
+  "user": "save this youtube thumbnail",
+  "mode": "act",
+  "tab": {
+    "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    "title": "Rick Astley — YouTube"
+  },
+  "latencyMs": 76222,
+  "error": null,
+  "firstToolCall": {
+    "name": "download_files",
+    "args": {
+      "filename": "rick-astley-thumbnail-maxres.jpg",
+      "url": "https://i.ytimg.com/vi/dQw4w9WgXcQ/maxresdefault.jpg"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll download the YouTube thumbnail for this video. The video ID is `dQw4w9WgXcQ`, so I can grab the thumbnail directly from YouTube's thumbnail CDN.",
+  "usage": {
+    "prompt_tokens": 13199,
+    "completion_tokens": 87,
+    "total_tokens": 13286
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

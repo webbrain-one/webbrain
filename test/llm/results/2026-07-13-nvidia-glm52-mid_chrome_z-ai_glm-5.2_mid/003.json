@@ -1,0 +1,31 @@
+{
+  "id": "003",
+  "user": "take me to youtube",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 41470,
+  "error": null,
+  "firstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "https://www.youtube.com"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": null,
+  "usage": {
+    "prompt_tokens": 12853,
+    "completion_tokens": 14,
+    "total_tokens": 12867,
+    "prompt_tokens_details": {
+      "audio_tokens": null,
+      "cached_tokens": 12800
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

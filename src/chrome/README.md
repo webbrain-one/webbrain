@@ -159,14 +159,28 @@ Key difference: Chrome and Edge use Manifest V3 (service worker, `chrome.scripti
 | `type_text` | No | Yes | Type into input fields |
 | `navigate` | No | Yes | Go to a URL |
 | `wait_for_element` | No | Yes | Wait for a selector to appear |
-| `execute_js` | No | Yes | Run custom JavaScript |
+| `inject_css` | No | Dev only | Inject reversible temporary CSS |
+| `remove_injected_css` | No | Dev only | Remove CSS by patchId |
+| `patch_element` | No | Dev only | Patch styles/classes/attributes with before/after values |
+| `revert_patch` | No | Dev only | Restore an element patch by patchId |
+| `execute_js` | No | Dev only | Run one async JavaScript function body through CDP |
+| `read_console` | No | Dev only | Read buffered console messages and exceptions |
+| `inspect_network_requests` | No | Dev only | Inspect redacted request/status/timing data |
+| `inspect_event_listeners` | No | Dev only | Inspect listeners on a ref/selector and ancestors |
+| `highlight_element` | No | Dev only | Show a temporary target overlay |
 | `new_tab` | No | Yes | Open a new tab |
 | `done` | Yes | Yes | Signal task completion |
+
+### Dev-mode page tools
+
+The nine tools above are added only in Mid/Full Dev mode; they are absent from Ask and normal Act. `inject_css` and `patch_element` return patch IDs for their matching undo tools. CSS patch IDs are unique and document-bound, so navigation invalidates an old undo handle rather than applying it to a replacement document. Element patches canonicalize CSS property and HTML attribute names before recording undo state, reject contradictory set/remove requests, and block `javascript:` in executable URL attributes including form `action`. Chrome runs `execute_js` in the page main world through CDP with a 15-second limit, so MV3 extension-page CSP remains intact; JavaScript execution is host-permission gated and always receives a fresh submit confirmation.
+
+Console and network capture start before both streaming and non-streaming Dev runs, use bounded in-memory buffers, and report that earlier activity may be unavailable. The handlers and buffers are removed and the matching Runtime, Log, and Network CDP domains are disabled when the tab leaves Dev mode or its conversation is cleared; leaving the panel-wide Dev mode drains every tab with active diagnostics, even after a tab switch. Listener inspection briefly adds and restores an internal target attribute, follows open-shadow hosts when collecting ancestors, and element highlighting inserts a temporary overlay; both tools therefore require the temporary page-modification permission. Network headers and bodies are omitted unless explicitly requested, and sensitive header names—including common API/subscription-key variants—are redacted before storage. Diagnostic and page-derived tool results are wrapped as untrusted content before they return to the model.
 
 ## Known Issues
 
 - **No file download/upload support** — The agent cannot download files from pages or upload files to file inputs. This is a limitation of the content script architecture. Planned for a future release via the Chromium `chrome.downloads` API and CDP integration.
-- **No DevTools Protocol (CDP) support** — Currently uses content script injection instead of CDP. This means no access to network requests, shadow DOM, cross-origin iframes, or pixel-perfect screenshots. CDP support is planned as an opt-in advanced mode.
+- **Debugger attachment is visible** — Chrome shows its standard debugger-attached indicator while CDP-backed actions or Dev diagnostics are active. This is expected for trusted input, screenshots, closed-shadow access, uploads, and the Dev-only JavaScript/console/network/listener tools.
 - **Shadow DOM limitations** — Web components using closed shadow DOM cannot be read or interacted with by the content script.
 - **SPA navigation detection** — Some single-page applications may not trigger content script re-injection after client-side navigation.
 - **Firefox temporary add-on** — Firefox requires the extension to be loaded as a temporary add-on during development, which is removed on restart.

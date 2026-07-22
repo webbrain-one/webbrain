@@ -1,0 +1,31 @@
+{
+  "id": "041",
+  "user": "tick the subscribe checkbox",
+  "mode": "act",
+  "tab": {
+    "url": "https://example.com/signup",
+    "title": "Sign up"
+  },
+  "latencyMs": 1785,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll read the current page to find the subscribe checkbox.",
+  "usage": {
+    "prompt_tokens": 16569,
+    "completion_tokens": 25,
+    "total_tokens": 16594,
+    "prompt_tokens_details": {
+      "audio_tokens": null,
+      "cached_tokens": 16512
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

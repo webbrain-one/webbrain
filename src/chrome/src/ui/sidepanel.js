@@ -5,11 +5,19 @@
 
 import { t, getLocale, setLocale, LANGUAGES, applyDOMTranslations } from './i18n.js';
 import { sanitizeMarkdownLinks } from './markdown-link.js';
+import { codeFenceLanguage, highlightCode, renderMarkdownHeadings } from './markdown-render.js';
 import { applyMode, loadMode, watch } from './theme.js';
 import { buildRecommendedActions, shouldShowRecommendedActions } from './recommended-actions.js';
 import { createContextMenuPromptHandler } from './context-menu-prompts.js';
+import { formatSelectionPromptForDisplay } from '../context-menu-storage.js';
 import { deleteChatHistoryRecord, saveChatHistoryRecord } from './chat-history-store.js';
 import { claimRunError } from './run-error-dedupe.js';
+import { RUN_CAPTURE_START_ERROR_PREFIX } from '../run-capture.js';
+import {
+  isBackgroundConnectionError,
+  runDetachedWithReconnect,
+  sendPlanResponseWithReconnect,
+} from '../run-reconnect.js';
 import {
   STORAGE_KEY as STORE_REVIEW_STORAGE_KEY,
   recordSuccessfulTask,
@@ -24,6 +32,8 @@ import {
   buildFeedbackUrl,
   normalizeState as normalizeStoreReviewState,
 } from './store-review-prompt.js';
+import { providerIconUrl } from './provider-icons.js';
+import { TAB_CHAT_PREFIX, persistTabChatToSession } from './tab-chat-persistence.js';
 
 // Hydrate the theme from chrome.storage.local (the inline <head> bootstrap
 // only sees localStorage; if the user changes the theme on another device
@@ -44,8 +54,129 @@ if (globalThis.chrome?.storage?.onChanged) {
   });
 }
 
+// ─── First-open pin coachmark ──────────────────────────────────────
+// Chrome exposes the real pin in browser chrome above this document. Point to
+// that control before the regular product onboarding instead of teaching from
+// a non-interactive toolbar illustration on the install page.
+// Failures here must never block product onboarding (see await below).
+const pinCoachmarkDismissed = (async function initPinCoachmark() {
+  let cleanupCoachmark = () => {};
+  try {
+    const stored = await chrome.storage.local.get('pinCoachmarkPending');
+    if (!stored.pinCoachmarkPending) return;
+
+    document.documentElement.dataset.panelSide = 'right';
+    try {
+      const layout = await chrome.sidePanel?.getLayout?.();
+      if (layout?.side === 'left' || layout?.side === 'right') {
+        document.documentElement.dataset.panelSide = layout.side;
+      }
+    } catch {
+      // Older Chromium forks use the normal right-side fallback.
+    }
+
+    const overlay = document.getElementById('pin-coachmark');
+    const doneButton = document.getElementById('pin-coachmark-done');
+    const skipButton = document.getElementById('pin-coachmark-skip');
+    if (!overlay || !doneButton || !skipButton) return;
+
+    applyDOMTranslations(overlay);
+    const backgroundLayers = [
+      document.getElementById('onboarding'),
+      document.getElementById('app'),
+    ].filter(Boolean);
+    const backgroundInertState = backgroundLayers.map((layer) => [layer, layer.inert]);
+    const previouslyFocusedElement = document.activeElement;
+    let cleanedUp = false;
+
+    cleanupCoachmark = () => {
+      if (cleanedUp) return;
+      cleanedUp = true;
+      overlay.classList.add('hidden');
+      for (const [layer, wasInert] of backgroundInertState) {
+        layer.inert = wasInert;
+      }
+      if (previouslyFocusedElement?.isConnected && typeof previouslyFocusedElement.focus === 'function') {
+        previouslyFocusedElement.focus({ preventScroll: true });
+      }
+    };
+
+    for (const layer of backgroundLayers) {
+      layer.inert = true;
+    }
+    overlay.classList.remove('hidden');
+    doneButton.focus({ preventScroll: true });
+
+    await new Promise((resolve) => {
+      let dismissing = false;
+
+      const focusableElements = () => Array.from(overlay.querySelectorAll(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ));
+
+      const finishDismissal = () => {
+        document.removeEventListener('keydown', onKeydown, true);
+        doneButton.removeEventListener('click', dismiss);
+        skipButton.removeEventListener('click', dismiss);
+        cleanupCoachmark();
+        resolve();
+      };
+
+      const dismiss = async () => {
+        if (dismissing) return;
+        dismissing = true;
+        try {
+          await chrome.storage.local.remove('pinCoachmarkPending');
+        } catch {
+          // The panel should still become usable if persistence is unavailable.
+        } finally {
+          finishDismissal();
+        }
+      };
+
+      const onKeydown = (event) => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          dismiss();
+          return;
+        }
+        if (event.key !== 'Tab') return;
+
+        const focusable = focusableElements();
+        if (focusable.length === 0) {
+          event.preventDefault();
+          overlay.focus({ preventScroll: true });
+          return;
+        }
+
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        const activeElement = document.activeElement;
+        if (event.shiftKey && (activeElement === first || !overlay.contains(activeElement))) {
+          event.preventDefault();
+          last.focus({ preventScroll: true });
+        } else if (!event.shiftKey && (activeElement === last || !overlay.contains(activeElement))) {
+          event.preventDefault();
+          first.focus({ preventScroll: true });
+        }
+      };
+
+      doneButton.addEventListener('click', dismiss);
+      skipButton.addEventListener('click', dismiss);
+      document.addEventListener('keydown', onKeydown, true);
+    });
+  } catch {
+    // Optional coachmark; storage/API failures should not strand first-run setup.
+  } finally {
+    cleanupCoachmark();
+  }
+})();
+
 // ─── Onboarding (first-launch wizard) ───────────────────────────────
 (async function initOnboarding() {
+  // Coachmark setup errors resolve as no-op so the model/safety wizard still runs.
+  await pinCoachmarkDismissed.catch(() => {});
   const stored = await chrome.storage.local.get('onboardingComplete');
   if (stored.onboardingComplete) return;
 
@@ -65,12 +196,13 @@ if (globalThis.chrome?.storage?.onChanged) {
   const providerStatus = document.getElementById('ob-provider-status');
   const providerList = document.getElementById('ob-provider-list');
   const localModels = document.getElementById('ob-local-models');
-  const localModelSelect = document.getElementById('ob-local-model-select');
+  const localModelList = document.getElementById('ob-local-model-list');
   const totalSteps = steps.length;
   const LOCAL_PROVIDER_ORDER = ['jan', 'lmstudio', 'ollama', 'llamacpp', 'vllm', 'sglang', 'localai'];
   let current = 0;
   let localScanStarted = false;
   let localModelChoices = [];
+  let selectedLocalModelIndex = 0;
   let cloudReady = false;
 
   async function dismissOnboarding() {
@@ -125,14 +257,51 @@ if (globalThis.chrome?.storage?.onChanged) {
   function showLocalChoices(choices) {
     cloudReady = false;
     localModelChoices = choices;
+    selectedLocalModelIndex = 0;
     if (providerBody) providerBody.textContent = t('ob.tokens.local_body');
-    if (localModelSelect) {
-      localModelSelect.innerHTML = '';
+    if (localModelList) {
+      localModelList.replaceChildren();
       choices.forEach((choice, index) => {
-        const opt = document.createElement('option');
-        opt.value = String(index);
-        opt.textContent = `${choice.providerLabel}: ${choice.model}`;
-        localModelSelect.appendChild(opt);
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'ob-local-model-option';
+        btn.setAttribute('role', 'option');
+        btn.dataset.index = String(index);
+        btn.setAttribute('aria-selected', index === 0 ? 'true' : 'false');
+
+        const iconSrc = providerIconUrl(choice.providerId);
+        if (iconSrc) {
+          const img = document.createElement('img');
+          img.className = 'provider-icon';
+          img.src = iconSrc;
+          img.alt = '';
+          img.width = 18;
+          img.height = 18;
+          img.decoding = 'async';
+          img.draggable = false;
+          btn.appendChild(img);
+        }
+
+        const text = document.createElement('div');
+        text.className = 'ob-local-model-text';
+        const providerEl = document.createElement('div');
+        providerEl.className = 'ob-local-model-provider';
+        providerEl.textContent = choice.providerLabel || choice.providerId;
+        const modelEl = document.createElement('div');
+        modelEl.className = 'ob-local-model-name';
+        modelEl.textContent = choice.model;
+        modelEl.title = choice.model;
+        text.append(providerEl, modelEl);
+        btn.appendChild(text);
+
+        btn.addEventListener('click', () => {
+          selectedLocalModelIndex = index;
+          localModelList.querySelectorAll('.ob-local-model-option').forEach((el) => {
+            el.setAttribute('aria-selected', el.dataset.index === String(index) ? 'true' : 'false');
+          });
+        });
+
+        localModelList.appendChild(btn);
       });
     }
     providerList?.classList.add('hidden');
@@ -146,7 +315,7 @@ if (globalThis.chrome?.storage?.onChanged) {
     cloudReady = true;
     localModelChoices = [];
     if (providerBody) {
-      providerBody.textContent = 'WebBrain Cloud is ready with a free daily allowance. Requests go through api.webbrain.one; debug and quota logs store metadata only by default, not prompt text, screenshots, or responses.';
+      providerBody.textContent = 'WebBrain Cloud is ready with a free daily allowance. Selected Cloud conversations may be retained and used to improve WebBrain while Help Improve WebBrain is on by default. You can turn it off in Settings → General.';
     }
     if (providerStatus) {
       providerStatus.textContent = '';
@@ -284,8 +453,7 @@ if (globalThis.chrome?.storage?.onChanged) {
     }
 
     if (localModelChoices.length > 0) {
-      const selectedIndex = Number(localModelSelect?.value || 0);
-      const choice = localModelChoices[selectedIndex] || localModelChoices[0];
+      const choice = localModelChoices[selectedLocalModelIndex] || localModelChoices[0];
       settingsBtn.disabled = true;
       settingsBtn.textContent = t('ob.btn.enabling');
       setProviderStatus('ob.tokens.enabling');
@@ -296,7 +464,10 @@ if (globalThis.chrome?.storage?.onChanged) {
         });
         await sendToBackground('set_active_provider', { providerId: choice.providerId });
         await loadProviders();
-        if (providerSelect) providerSelect.value = choice.providerId;
+        if (providerSelect) {
+          providerSelect.value = choice.providerId;
+          syncProviderPickerButton();
+        }
         await testConnection({ providerId: choice.providerId });
         dismissOnboarding();
         inputEl?.focus();
@@ -327,8 +498,13 @@ const historyBtn = document.getElementById('btn-history');
 const settingsBtn = document.getElementById('btn-settings');
 const verboseBtn = document.getElementById('btn-verbose');
 const providerSelect = document.getElementById('provider-select');
+const providerPickerBtn = document.getElementById('provider-picker-btn');
+const providerPickerMenu = document.getElementById('provider-picker-menu');
+const providerPickerLabel = document.getElementById('provider-picker-label');
 const MORE_PROVIDERS_OPTION_VALUE = '__more_providers__';
 const statusDot = document.getElementById('status-dot');
+// Short labels for the closed picker button (menu rows keep the longer status text).
+const providerPickerLabelById = new Map();
 const agentActivity = document.getElementById('agent-activity');
 const activityText = document.getElementById('activity-text');
 const modeAskBtn = document.getElementById('btn-mode-ask');
@@ -346,53 +522,348 @@ const storeReviewFeedbackEl = document.getElementById('store-review-feedback');
 const scheduledJobsEl = document.getElementById('scheduled-jobs');
 const stopBtn = document.getElementById('btn-stop');
 const RECOMMENDED_ACTIONS_COLLAPSED_KEY = 'recommendedActionsCollapsed';
+const WEBBRAIN_PROMOTION_ACTION_IDS = new Set(['tweet-webbrain', 'post-webbrain-linkedin']);
 const PLACEHOLDER_ROTATION_INTERVAL_MS = 10_000;
 const ASK_PLACEHOLDER_KEYS = [
   'sp.input.ask_placeholder',
   'sp.input.placeholder_tip.help',
   'sp.input.placeholder_tip.record',
 ];
+const PERMISSION_REMINDER_PLACEHOLDER_KEY = 'sp.input.placeholder_tip.skip_permissions';
 const SLASH_COMMANDS = [
-  { value: '/help', descriptionKey: 'sp.slash.help' },
-  { value: '/schedule', descriptionKey: 'sp.slash.schedule' },
-  { value: '/list-schedules', descriptionKey: 'sp.slash.list_schedules' },
-  { value: '/check-progress', descriptionKey: 'sp.slash.check_progress' },
-  { value: '/show-scratchpad', descriptionKey: 'sp.slash.show_scratchpad' },
-  { value: '/edit-scratchpad', descriptionKey: 'sp.slash.edit_scratchpad' },
-  { value: '/clear-scratchpad', descriptionKey: 'sp.slash.clear_scratchpad' },
-  { value: '/remember', descriptionKey: 'sp.slash.remember' },
-  { value: '/show-memory', descriptionKey: 'sp.slash.show_memory' },
-  { value: '/forget-memory', descriptionKey: 'sp.slash.forget_memory' },
-  { value: '/allow-api', descriptionKey: 'sp.slash.allow_api' },
-  { value: '/dangerously-skip-permissions', descriptionKey: 'sp.slash.dangerously_skip_permissions' },
-  { value: '/compact', descriptionKey: 'sp.slash.compact' },
-  { value: '/verbose', descriptionKey: 'sp.slash.verbose' },
-  { value: '/reset', descriptionKey: 'sp.slash.reset' },
-  { value: '/screenshot', descriptionKey: 'sp.slash.screenshot' },
-  { value: '/full-page-screenshot', descriptionKey: 'sp.slash.full_page_screenshot' },
-  { value: '/record-full-screen', descriptionKey: 'sp.slash.record_full_screen' },
-  { value: '/record', descriptionKey: 'sp.slash.record' },
-  { value: '/export', descriptionKey: 'sp.slash.export' },
-  { value: '/export-with-traces', descriptionKey: 'sp.slash.export_traces' },
-  { value: '/profile', descriptionKey: 'sp.slash.profile' },
-  { value: '/vision', descriptionKey: 'sp.slash.vision' },
-  { value: '/ask', descriptionKey: 'sp.slash.ask' },
-  { value: '/act', descriptionKey: 'sp.slash.act' },
-  { value: '/dev', descriptionKey: 'sp.slash.dev' },
-  { value: '/plan', descriptionKey: 'sp.slash.plan' },
+  { value: '/help', usage: '/help', descriptionKey: 'sp.slash.help', action: 'show', outOfBand: true },
+  {
+    value: '/schedule',
+    usage: '/schedule [prompt] | /schedule --list',
+    descriptionKey: 'sp.slash.schedule',
+    action: 'create',
+    acceptsPayload: true,
+    options: [
+      { value: '--list', descriptionKey: 'sp.slash.list_schedules', action: 'list', outOfBand: true, disallowPayload: true },
+    ],
+  },
+  { value: '/progress', usage: '/progress', descriptionKey: 'sp.slash.check_progress', action: 'show', outOfBand: true },
+  {
+    value: '/scratchpad',
+    usage: '/scratchpad [--append <text> | --clear]',
+    descriptionKey: 'sp.slash.show_scratchpad',
+    action: 'show',
+    outOfBand: true,
+    options: [
+      { value: '--append', valueLabel: '<text>', descriptionKey: 'sp.slash.edit_scratchpad', action: 'append', takesRemainder: true, outOfBand: false, exclusiveGroup: 'scratchpad-action' },
+      { value: '--clear', descriptionKey: 'sp.slash.clear_scratchpad', action: 'clear', disallowPayload: true, outOfBand: false, exclusiveGroup: 'scratchpad-action' },
+    ],
+  },
+  {
+    value: '/memory',
+    usage: '/memory [--add <text> | --forget <id>]',
+    descriptionKey: 'sp.slash.show_memory',
+    action: 'show',
+    outOfBand: true,
+    options: [
+      { value: '--add', valueLabel: '<text>', descriptionKey: 'sp.slash.remember', action: 'add', takesRemainder: true, outOfBand: false, exclusiveGroup: 'memory-action' },
+      { value: '--forget', valueLabel: '<id>', descriptionKey: 'sp.slash.forget_memory', action: 'forget', takesRemainder: true, outOfBand: false, exclusiveGroup: 'memory-action' },
+    ],
+  },
+  {
+    value: '/workflow',
+    usage: '/workflow [--save <name> | --run <id> | --delete <id>]',
+    descriptionKey: 'sp.slash.workflows',
+    action: 'list',
+    outOfBand: true,
+    options: [
+      { value: '--save', valueLabel: '<name>', descriptionKey: 'sp.slash.save_workflow', action: 'save', takesRemainder: true, outOfBand: true, exclusiveGroup: 'workflow-action' },
+      { value: '--run', valueLabel: '<id>', descriptionKey: 'sp.slash.run_workflow', action: 'run', takesRemainder: true, outOfBand: true, exclusiveGroup: 'workflow-action' },
+      { value: '--delete', valueLabel: '<id>', descriptionKey: 'sp.slash.delete_workflow', action: 'delete', takesRemainder: true, outOfBand: true, exclusiveGroup: 'workflow-action' },
+    ],
+  },
+  { value: '/allow-api', usage: '/allow-api [prompt]', descriptionKey: 'sp.slash.allow_api', action: 'enable', acceptsPayload: true },
+  { value: '/dangerously-skip-permissions', usage: '/dangerously-skip-permissions [prompt]', descriptionKey: 'sp.slash.dangerously_skip_permissions', action: 'disable', acceptsPayload: true, outOfBand: true },
+  { value: '/compact', usage: '/compact [prompt]', descriptionKey: 'sp.slash.compact', action: 'compact', acceptsPayload: true },
+  { value: '/verbose', usage: '/verbose', descriptionKey: 'sp.slash.verbose', action: 'toggle', outOfBand: true },
+  { value: '/reset', usage: '/reset', descriptionKey: 'sp.slash.reset', action: 'reset' },
+  {
+    value: '/screenshot',
+    usage: '/screenshot [--full-page]',
+    descriptionKey: 'sp.slash.screenshot',
+    action: 'viewport',
+    outOfBand: true,
+    options: [
+      { value: '--full-page', descriptionKey: 'sp.slash.full_page_screenshot', action: 'full-page', outOfBand: false, disallowPayload: true },
+    ],
+  },
+  {
+    value: '/record',
+    usage: '/record [--full-screen] [--transcribe]',
+    descriptionKey: 'sp.slash.record',
+    action: 'tab',
+    options: [
+      { value: '--full-screen', descriptionKey: 'sp.slash.record_full_screen', action: 'full-screen', outOfBand: false },
+      { value: '--transcribe', descriptionKey: 'sp.slash.record_transcribe' },
+    ],
+  },
+  {
+    value: '/export',
+    usage: '/export [--traces | --config]',
+    descriptionKey: 'sp.slash.export',
+    action: 'conversation',
+    outOfBand: true,
+    options: [
+      { value: '--traces', descriptionKey: 'sp.slash.export_traces', action: 'traces', outOfBand: true, disallowPayload: true, exclusiveGroup: 'export-format' },
+      { value: '--config', descriptionKey: 'sp.slash.export_config', action: 'config', outOfBand: true, disallowPayload: true, exclusiveGroup: 'export-format' },
+    ],
+  },
+  {
+    value: '/import',
+    usage: '/import <json> | /import --file',
+    descriptionKey: 'sp.slash.import_config',
+    action: 'json',
+    acceptsPayload: true,
+    options: [
+      { value: '--file', descriptionKey: 'sp.slash.import_config_file', action: 'file', disallowPayload: true },
+    ],
+  },
+  { value: '/profile', usage: '/profile', descriptionKey: 'sp.slash.profile', action: 'toggle' },
+  { value: '/vision', usage: '/vision', descriptionKey: 'sp.slash.vision', action: 'toggle' },
+  { value: '/ask', usage: '/ask [prompt]', descriptionKey: 'sp.slash.ask', action: 'ask', acceptsPayload: true },
+  { value: '/act', usage: '/act [prompt]', descriptionKey: 'sp.slash.act', action: 'act', acceptsPayload: true },
+  { value: '/dev', usage: '/dev [prompt]', descriptionKey: 'sp.slash.dev', action: 'dev', acceptsPayload: true },
+  { value: '/plan', usage: '/plan [prompt]', descriptionKey: 'sp.slash.plan', action: 'plan', acceptsPayload: true },
 ];
-const OUT_OF_BAND_SLASH_COMMANDS = new Set([
-  '/help',
-  '/show-scratchpad',
-  '/show-memory',
-  '/check-progress',
-  '/list-schedules',
-  '/dangerously-skip-permissions',
-  '/screenshot',
-  '/export-with-traces',
-  '/export',
-  '/verbose',
-]);
+const SLASH_HELP_OPTION = {
+  value: '--help',
+  descriptionKey: 'sp.slash.help',
+  action: 'help',
+  outOfBand: true,
+  disallowPayload: true,
+};
+
+function slashCommandOptions(command) {
+  return [...(command?.options || []), SLASH_HELP_OPTION];
+}
+
+function slashCommandIsDiscoverable(command) {
+  return command?.unsupported !== true;
+}
+
+function slashOptionIsDiscoverable(option) {
+  return option?.unsupported !== true;
+}
+
+function slashOptionIsAvailable(option, selectedValues, selectedGroups) {
+  return slashOptionIsDiscoverable(option)
+    && !selectedValues.has(option.value)
+    && !selectedValues.has(SLASH_HELP_OPTION.value)
+    && (option.value !== SLASH_HELP_OPTION.value || selectedValues.size === 0)
+    && (!option.exclusiveGroup || !selectedGroups.has(option.exclusiveGroup));
+}
+
+function findSlashCommand(value) {
+  const needle = String(value || '').toLowerCase();
+  return SLASH_COMMANDS.find((command) => command.value === needle) || null;
+}
+
+function parseSlashInvocation(value) {
+  const text = String(value || '').trimStart();
+  if (!text.startsWith('/')) return null;
+
+  const commandToken = text.match(/^\S+/)?.[0] || '';
+  const command = findSlashCommand(commandToken);
+  if (!command) return { error: 'unknown-command', commandToken };
+
+  const selectedOptions = [];
+  const selectedValues = new Set();
+  const selectedGroups = new Set();
+  let payload = '';
+  let valueOption = null;
+  let rest = text.slice(commandToken.length).trimStart();
+
+  while (rest) {
+    if (!rest.startsWith('--')) {
+      payload = rest;
+      break;
+    }
+
+    const optionToken = rest.match(/^\S+/)?.[0] || '';
+    if (optionToken === '--') {
+      if (!command.acceptsPayload) {
+        return { error: 'invalid-usage', command, commandToken };
+      }
+      payload = rest.slice(optionToken.length).trimStart();
+      rest = '';
+      break;
+    }
+
+    const optionValue = optionToken.toLowerCase();
+    const option = slashCommandOptions(command).find((candidate) => candidate.value === optionValue);
+    if (!option || selectedValues.has(optionValue)) {
+      return { error: 'invalid-usage', command, commandToken };
+    }
+    if (optionValue === SLASH_HELP_OPTION.value ? selectedOptions.length > 0 : selectedValues.has(SLASH_HELP_OPTION.value)) {
+      return { error: 'invalid-usage', command, commandToken };
+    }
+    if (option.exclusiveGroup && selectedGroups.has(option.exclusiveGroup)) {
+      return { error: 'invalid-usage', command, commandToken };
+    }
+
+    selectedOptions.push(option);
+    selectedValues.add(optionValue);
+    if (option.exclusiveGroup) selectedGroups.add(option.exclusiveGroup);
+    rest = rest.slice(optionToken.length).trimStart();
+
+    if (option.takesRemainder) {
+      valueOption = option;
+      if (rest.startsWith('--')) {
+        const nextToken = rest.match(/^\S+/)?.[0] || '';
+        if (nextToken !== '--') {
+          return { error: 'invalid-usage', command, commandToken };
+        }
+        rest = rest.slice(nextToken.length).trimStart();
+      }
+      payload = rest;
+      rest = '';
+      break;
+    }
+  }
+
+  if (valueOption && !payload) {
+    return { error: 'invalid-usage', command, commandToken };
+  }
+  if (payload && !valueOption && !command.acceptsPayload) {
+    return { error: 'invalid-usage', command, commandToken };
+  }
+  if (payload && selectedOptions.some((option) => option.disallowPayload)) {
+    return { error: 'invalid-usage', command, commandToken };
+  }
+
+  const actionOption = selectedOptions.find((option) => option.action);
+  const unsupportedOption = selectedOptions.find((option) => option.unsupported);
+  return {
+    command,
+    action: actionOption?.action || command.action,
+    options: selectedOptions,
+    optionValues: selectedValues,
+    payload,
+    unsupported: command.unsupported === true || !!unsupportedOption,
+    unsupportedUsage: unsupportedOption?.unsupportedUsage || command.usage,
+  };
+}
+
+function slashInvocationIsOutOfBand(invocation) {
+  if (!invocation) return false;
+  if (invocation.error || invocation.unsupported) return true;
+  const actionOption = invocation.options.find((option) => option.action);
+  return (actionOption?.outOfBand ?? invocation.command.outOfBand) === true;
+}
+
+function buildSlashCommandHelpHtml() {
+  const lines = [`<strong>${escapeHtml(t('sp.slash.commands_label'))}</strong>`];
+  for (const command of SLASH_COMMANDS.filter(slashCommandIsDiscoverable)) {
+    lines.push(`<code>${escapeHtml(command.usage)}</code> — ${escapeHtml(t(command.descriptionKey))}`);
+    for (const option of (command.options || []).filter(slashOptionIsDiscoverable)) {
+      const value = `${option.value}${option.valueLabel ? ` ${option.valueLabel}` : ''}`;
+      lines.push(`&nbsp;&nbsp;<code>${escapeHtml(value)}</code> — ${escapeHtml(t(option.descriptionKey))}`);
+    }
+  }
+  const shortcuts = t('sp.help.shortcuts_html');
+  if (shortcuts && shortcuts !== 'sp.help.shortcuts_html') {
+    lines.push('', shortcuts);
+  }
+  return lines.join('<br>');
+}
+
+function buildSlashCommandDetailHtml(command) {
+  if (!command) return buildSlashCommandHelpHtml();
+  const lines = [
+    `<strong><code>${escapeHtml(command.value)}</code></strong>`,
+    `<code>${escapeHtml(command.usage)}</code> — ${escapeHtml(t(command.descriptionKey))}`,
+  ];
+  for (const option of (command.options || []).filter(slashOptionIsDiscoverable)) {
+    const value = `${option.value}${option.valueLabel ? ` ${option.valueLabel}` : ''}`;
+    lines.push(`&nbsp;&nbsp;<code>${escapeHtml(value)}</code> — ${escapeHtml(t(option.descriptionKey))}`);
+  }
+  return lines.join('<br>');
+}
+
+// Hidden run-capture suffixes. These deliberately stay out of SLASH_COMMANDS,
+// autocomplete, and /help: they modify a normal prompt instead of acting as
+// standalone commands. Examples:
+//   Update the checkout form /record
+//   Test the menu /screenshot --save-as menu-test.png
+function parseTrailingRunCaptureDirective(value) {
+  const text = String(value || '').trim();
+  const match = /(?:^|[ \t\r\n])(\/record|\/screenshot)(?:[ \t]+(--save-as)(?:[ \t]+([^\r\n]+))?)?[ \t]*$/i.exec(text);
+  if (!match) return null;
+
+  const prompt = text.slice(0, match.index).trimEnd();
+  // Preserve the existing standalone /record and /screenshot behavior.
+  if (!prompt) return null;
+
+  const kind = match[1].slice(1).toLowerCase();
+  if (!match[2]) return { kind, prompt, saveAs: null };
+
+  const rawSaveAs = String(match[3] || '').trim();
+  if (!rawSaveAs) return { kind, prompt, saveAs: null, error: 'missing-save-as' };
+
+  const quote = rawSaveAs[0];
+  let saveAs = rawSaveAs;
+  if (quote === '"' || quote === "'") {
+    if (rawSaveAs.length < 2 || rawSaveAs.at(-1) !== quote) {
+      return { kind, prompt, saveAs: null, error: 'invalid-save-as' };
+    }
+    saveAs = rawSaveAs.slice(1, -1).trim();
+  }
+  if (!saveAs) return { kind, prompt, saveAs: null, error: 'missing-save-as' };
+  return { kind, prompt, saveAs };
+}
+
+function trailingRunCaptureUsage(kind) {
+  return `/${kind === 'record' ? 'record' : 'screenshot'} [--save-as <filename>]`;
+}
+
+function sanitizeRunCaptureSaveAs(value) {
+  const filename = String(value || '')
+    .replace(/[\u0000-\u001f\u007f]/g, '')
+    .split(/[\\/]/)
+    .pop()
+    .trim()
+    .replace(/[<>:"|?*]/g, '-')
+    .replace(/[. ]+$/g, '');
+  if (!filename || filename === '.' || filename === '..') return '';
+  return filename.slice(0, 180);
+}
+
+function runCaptureTimestamp(date = new Date()) {
+  return date.toISOString().replace(/[:.]/g, '-').replace(/T/, '_').slice(0, 19);
+}
+
+function buildRunScreenshotFilenames(saveAs, date = new Date()) {
+  const requested = sanitizeRunCaptureSaveAs(saveAs);
+  const stem = (requested.replace(/\.png$/i, '') || `webbrain-run-${runCaptureTimestamp(date)}`).slice(0, 170);
+  return {
+    before: `${stem}-before.png`,
+    after: `${stem}-after.png`,
+  };
+}
+
+function buildRunRecordingFilename(saveAs) {
+  const requested = sanitizeRunCaptureSaveAs(saveAs);
+  if (!requested) return null;
+  const stem = requested.replace(/\.webm$/i, '').replace(/[. ]+$/g, '') || 'webbrain-recording';
+  return `${stem.slice(0, 175)}.webm`;
+}
+
+function showSlashInvocationError(invocation) {
+  if (invocation?.error === 'unknown-command') {
+    showComposerToast(t('sp.slash.unknown_command', { command: invocation.commandToken }), { duration: 5000 });
+    return;
+  }
+  if (invocation?.unsupported) {
+    showComposerToast(t('sp.slash.unsupported', { usage: invocation.unsupportedUsage }), { duration: 5000 });
+    return;
+  }
+  showComposerToast(t('sp.slash.invalid_usage', { usage: invocation?.command?.usage || '/help' }), { duration: 5000 });
+}
 
 function normalizeScreenshotRequestText(text) {
   return String(text || '')
@@ -424,7 +895,7 @@ function isPlainFullPageScreenshotRequest(text) {
 }
 
 function normalizeScreenshotCommandText(text) {
-  if (isPlainFullPageScreenshotRequest(text)) return '/full-page-screenshot';
+  if (isPlainFullPageScreenshotRequest(text)) return '/screenshot --full-page';
   if (isPlainScreenshotRequest(text)) return '/screenshot';
   return text;
 }
@@ -434,7 +905,7 @@ const BUSY_SLASH_NOTICE_COOLDOWN_MS = 3000;
 let placeholderRotationIndex = 0;
 let placeholderRotationTimer = null;
 // Tab Recorder (v7.4) — recording is user-driven via slash commands. The
-// `/record` tab-capture path shows this live red banner; `/record-full-screen`
+// `/record` tab-capture path shows this live red banner; `/record --full-screen`
 // deliberately does not, so the selected browser window is less likely to
 // include WebBrain UI in the recording.
 const recordingBanner = document.getElementById('recording-banner');
@@ -443,7 +914,6 @@ const recordingStopBtn = document.getElementById('btn-recording-stop');
 
 let currentTabId = null;
 let renderedTabId = null;
-let pendingTabSwitch = null; // tab the user switched to while isProcessing was true
 let tabSwitchTransitionId = null;
 let tabSwitchGeneration = 0;
 let queuedTabSwitchMessages = [];
@@ -459,11 +929,14 @@ const awaitingPlanReviewTabs = new Set();
 const processingTabs = new Set();
 const abortRequestedTabs = new Set();
 const localRunRequestIds = new Map();
+const cancelledRunRecoveryRequestIds = new Set();
+const adoptedRunRecoveryRequestIds = new Set();
 let recommendationsRequestId = 0;
 let providerSelectionRequestId = 0;
 let providerTestRequestId = 0;
 let selectedProviderId = 'webbrain_cloud';
 let recommendedActionsCollapsed = false;
+let webbrainPromotionHasAnimated = false;
 let slashCommandMatches = [];
 let slashCommandSelectedIndex = 0;
 let busySlashNoticeLastShownAt = 0;
@@ -546,15 +1019,134 @@ chrome.storage.onChanged.addListener((changes) => {
 // prompted per consequential action, so the standing banner is redundant —
 // only surface it in Act mode when the gate is disabled.
 const PERMISSION_GATE_KEY = 'askBeforeConsequentialActions';
+const PERMISSION_EDUCATION_KEY = 'permissionPromptEducation';
+const PERMISSION_EDUCATION_THRESHOLD = 2;
 let askBeforeConsequential = true; // gate ON by default
+let permissionEducationState = { promptCount: 0, hintShown: false };
+
+function normalizePermissionEducationState(value) {
+  return {
+    promptCount: Math.max(0, Math.floor(Number(value?.promptCount) || 0)),
+    hintShown: value?.hintShown === true,
+  };
+}
+
+const permissionEducationReady = chrome.storage.local.get(PERMISSION_EDUCATION_KEY).then((stored) => {
+  permissionEducationState = normalizePermissionEducationState(stored?.[PERMISSION_EDUCATION_KEY]);
+  updateInputPlaceholder();
+}).catch(() => {});
+
+function persistPermissionEducationState() {
+  return chrome.storage.local.set({
+    [PERMISSION_EDUCATION_KEY]: permissionEducationState,
+  }).catch(() => {});
+}
+
+function normalizePermissionSkipTabId(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function permissionSkipCommandContextFromCard(card) {
+  const composerTabId = normalizePermissionSkipTabId(currentTabId);
+  const targetTabId = normalizePermissionSkipTabId(
+    card?.dataset?.scheduledTabId ?? card?.dataset?.tabId,
+  );
+  const clarifyId = String(card?.dataset?.clarifyId || '');
+  if (composerTabId == null || targetTabId == null || !clarifyId) return null;
+  return { composerTabId, targetTabId, clarifyId };
+}
+
+function isPermissionSkipCommandDraft(text) {
+  return /^\/dangerously-skip-permissions(?:\s|$)/i.test(String(text || '').trimStart());
+}
+
+function permissionSkipCommandContextForDraft(tabId, text) {
+  const numericTabId = normalizePermissionSkipTabId(tabId);
+  if (numericTabId == null || !isPermissionSkipCommandDraft(text)) return null;
+  return permissionSkipCommandContextsByTab.get(numericTabId) || null;
+}
+
+function insertPermissionSkipCommand(card) {
+  if (!inputEl) return;
+  if (inputEl.value.trim()) {
+    showComposerToast(t('sp.perm.skip_hint_draft'), { duration: 5000 });
+    inputEl.focus();
+    return;
+  }
+  const command = '/dangerously-skip-permissions';
+  const context = permissionSkipCommandContextFromCard(card);
+  if (context) permissionSkipCommandContextsByTab.set(context.composerTabId, context);
+  resetComposerHistoryNavigation(currentTabId);
+  inputEl.value = command;
+  inputEl.setSelectionRange(command.length, command.length);
+  autoResizeInput();
+  updateSlashCommandAutocomplete();
+  syncSendButtonState();
+  inputEl.focus();
+}
+
+function bindPermissionEducationAction(btn) {
+  if (!btn || btn.dataset.bound) return;
+  btn.dataset.bound = 'true';
+  btn.addEventListener('click', () => insertPermissionSkipCommand(btn.closest('.clarify-card')));
+}
+
+async function maybeShowPermissionEducationHint(card) {
+  await permissionEducationReady;
+  if (!askBeforeConsequential || !card) return;
+
+  permissionEducationState = {
+    ...permissionEducationState,
+    promptCount: Math.min(
+      PERMISSION_EDUCATION_THRESHOLD,
+      permissionEducationState.promptCount + 1,
+    ),
+  };
+  updateInputPlaceholder();
+
+  const shouldShow = !permissionEducationState.hintShown
+    && permissionEducationState.promptCount >= PERMISSION_EDUCATION_THRESHOLD
+    && card.isConnected
+    && !card.classList.contains('clarify-answered');
+  if (shouldShow) permissionEducationState = { ...permissionEducationState, hintShown: true };
+  void persistPermissionEducationState();
+  if (!shouldShow) return;
+
+  const hint = document.createElement('div');
+  hint.className = 'permission-education-hint';
+
+  const copy = document.createElement('div');
+  copy.className = 'permission-education-copy';
+  copy.textContent = t('sp.perm.skip_hint');
+
+  const action = document.createElement('button');
+  action.type = 'button';
+  action.className = 'permission-education-action';
+  action.textContent = t('sp.perm.insert_skip_command');
+  bindPermissionEducationAction(action);
+
+  hint.append(copy, action);
+  card.appendChild(hint);
+  scrollToBottom();
+}
+
 chrome.storage.local.get(PERMISSION_GATE_KEY).then((stored) => {
   if (stored && stored[PERMISSION_GATE_KEY] === false) askBeforeConsequential = false;
   updateActWarning();
+  updateInputPlaceholder();
 }).catch(() => {});
 chrome.storage.onChanged.addListener((changes) => {
+  if (changes[PERMISSION_EDUCATION_KEY]) {
+    permissionEducationState = normalizePermissionEducationState(
+      changes[PERMISSION_EDUCATION_KEY].newValue,
+    );
+    updateInputPlaceholder();
+  }
   if (changes[PERMISSION_GATE_KEY]) {
     askBeforeConsequential = changes[PERMISSION_GATE_KEY].newValue !== false;
     updateActWarning();
+    updateInputPlaceholder();
   }
 });
 
@@ -797,10 +1389,11 @@ function isSuccessfulAskCompletion(mode, response) {
 // Also mirrored to chrome.storage.session keyed `tabChat:<tabId>` so the
 // conversation survives the side panel being closed and reopened.
 const tabChats = new Map();
-const TAB_CHAT_PREFIX = 'tabChat:';
 const tabChatOperations = new Map();
 const tabInputDrafts = new Map();
+const permissionSkipCommandContextsByTab = new Map();
 const queuedComposerMessagesByTab = new Map();
+const composerHistoryNavigationByTab = new Map();
 let queuedComposerMessageSeq = 0;
 
 function enqueueTabChatOperation(tabId, fn) {
@@ -838,12 +1431,11 @@ async function loadTabChat(tabId) {
 function persistTabChat(tabId, html) {
   if (tabId == null) return;
   return enqueueTabChatOperation(tabId, async (numericTabId) => {
+    // Keep the live transcript lossless. persistTabChatToSession may compact
+    // only the storage.session copy when the shared quota requires it.
     tabChats.set(numericTabId, html);
     const key = TAB_CHAT_PREFIX + numericTabId;
-    try {
-      await chrome.storage.session.set({ [key]: html }).catch(() => {});
-    } catch (e) { /* ignore */ }
-    return { ok: true };
+    return persistTabChatToSession(chrome.storage.session, key, html);
   });
 }
 
@@ -879,6 +1471,9 @@ function saveInputDraftForTab(tabId, text) {
   const numericTabId = Number(tabId);
   if (!Number.isFinite(numericTabId)) return;
   const draft = String(text || '');
+  if (!isPermissionSkipCommandDraft(draft)) {
+    permissionSkipCommandContextsByTab.delete(numericTabId);
+  }
   if (draft.trim()) {
     tabInputDrafts.set(numericTabId, draft);
   } else {
@@ -987,6 +1582,7 @@ function setQueuedComposerMessages(tabId, messages) {
   if (!Number.isFinite(numericTabId)) return;
   if (messages.length) {
     queuedComposerMessagesByTab.set(numericTabId, messages);
+    resetComposerHistoryNavigation(numericTabId);
   } else {
     queuedComposerMessagesByTab.delete(numericTabId);
   }
@@ -1091,6 +1687,7 @@ function editQueuedComposerMessage(tabId, queueId) {
   if (!sameTabId(currentTabId, tabId)) return;
   const item = removeQueuedComposerMessage(tabId, queueId);
   if (!item) return;
+  resetComposerHistoryNavigation(tabId);
   inputEl.value = item.text;
   saveInputDraftForTab(tabId, item.text);
   autoResizeInput();
@@ -1103,12 +1700,167 @@ function editQueuedComposerMessage(tabId, queueId) {
 function editLastQueuedComposerMessageForCurrentTab() {
   if (!inputEl || currentTabId == null) return false;
   const atStart = inputEl.selectionStart === 0 && inputEl.selectionEnd === 0;
-  if (inputEl.value.trim() || !atStart) return false;
+  if (inputEl.value !== '' || !atStart) return false;
   const queue = getQueuedComposerMessages(currentTabId);
   const item = queue[queue.length - 1];
   if (!item) return false;
   editQueuedComposerMessage(currentTabId, item.id);
   return true;
+}
+
+function resetComposerHistoryNavigation(tabId = currentTabId) {
+  const numericTabId = Number(tabId);
+  if (!Number.isFinite(numericTabId)) return;
+  composerHistoryNavigationByTab.delete(numericTabId);
+}
+
+function getComposerHistoryTextFromMessage(messageEl) {
+  const protectedText = messageEl.dataset.composerHistoryText;
+  if (typeof protectedText === 'string') return protectedText;
+
+  const displayText = String(messageEl.querySelector('.message-text')?.textContent || '');
+  // Older saved selection bubbles predate the protected recall payload. Their
+  // display text no longer contains the untrusted-content boundary, so omit
+  // those ambiguous entries rather than resend page text as a trusted prompt.
+  const isLegacySelectionDisplay = messageEl.dataset.composerHistoryVerbatim !== 'true'
+    && /(?:^|\n\n)Selected text:\n/.test(displayText);
+  return isLegacySelectionDisplay ? '' : displayText;
+}
+
+function getComposerHistoryEntriesForCurrentTab() {
+  if (!messagesEl || !sameTabId(currentTabId, renderedTabId)) return [];
+  return Array.from(messagesEl.querySelectorAll(':scope > .message.user'))
+    .map(getComposerHistoryTextFromMessage)
+    .filter((text) => text.trim());
+}
+
+const COMPOSER_MIRROR_STYLE_PROPERTIES = [
+  'direction',
+  'fontFamily',
+  'fontSize',
+  'fontStyle',
+  'fontVariant',
+  'fontWeight',
+  'letterSpacing',
+  'lineHeight',
+  'overflowWrap',
+  'paddingBottom',
+  'paddingLeft',
+  'paddingRight',
+  'paddingTop',
+  'tabSize',
+  'textAlign',
+  'textIndent',
+  'textTransform',
+  'whiteSpace',
+  'wordBreak',
+  'wordSpacing',
+];
+
+function measureComposerCaretTop(position, computedStyle) {
+  const mirror = document.createElement('div');
+  for (const property of COMPOSER_MIRROR_STYLE_PROPERTIES) {
+    mirror.style[property] = computedStyle[property];
+  }
+  mirror.style.position = 'fixed';
+  mirror.style.left = '-100000px';
+  mirror.style.top = '0';
+  mirror.style.boxSizing = 'border-box';
+  mirror.style.width = `${inputEl.clientWidth}px`;
+  mirror.style.height = 'auto';
+  mirror.style.minHeight = '0';
+  mirror.style.maxHeight = 'none';
+  mirror.style.margin = '0';
+  mirror.style.border = '0';
+  mirror.style.overflow = 'hidden';
+  mirror.style.visibility = 'hidden';
+  mirror.style.pointerEvents = 'none';
+  mirror.textContent = inputEl.value.slice(0, position);
+
+  const marker = document.createElement('span');
+  marker.textContent = inputEl.value.slice(position) || '\u200b';
+  mirror.appendChild(marker);
+  document.body.appendChild(mirror);
+  const top = marker.offsetTop;
+  mirror.remove();
+  return top;
+}
+
+function getComposerCaretRowBoundary() {
+  if (!inputEl || inputEl.selectionStart !== inputEl.selectionEnd || inputEl.clientWidth <= 0) {
+    return null;
+  }
+  const computedStyle = getComputedStyle(inputEl);
+  const caretTop = measureComposerCaretTop(inputEl.selectionStart, computedStyle);
+  const firstTop = measureComposerCaretTop(0, computedStyle);
+  const lastTop = measureComposerCaretTop(inputEl.value.length, computedStyle);
+  const parsedLineHeight = Number.parseFloat(computedStyle.lineHeight);
+  const parsedFontSize = Number.parseFloat(computedStyle.fontSize);
+  const lineHeight = Number.isFinite(parsedLineHeight)
+    ? parsedLineHeight
+    : (Number.isFinite(parsedFontSize) ? parsedFontSize * 1.4 : 16);
+  const tolerance = Math.max(1, lineHeight / 3);
+  return {
+    atFirstRow: Math.abs(caretTop - firstTop) < tolerance,
+    atLastRow: Math.abs(caretTop - lastTop) < tolerance,
+  };
+}
+
+function applyComposerHistoryText(tabId, text) {
+  inputEl.value = text;
+  saveInputDraftForTab(tabId, text);
+  autoResizeInput();
+  updateSlashCommandAutocomplete();
+  syncSendButtonState();
+  inputEl.focus();
+  inputEl.setSelectionRange(inputEl.value.length, inputEl.value.length);
+}
+
+function navigateComposerHistory(direction) {
+  if (!inputEl || currentTabId == null || !sameTabId(currentTabId, renderedTabId)) return false;
+  const numericTabId = Number(currentTabId);
+  if (!Number.isFinite(numericTabId)) return false;
+  if (getQueuedComposerMessages(numericTabId).length) {
+    resetComposerHistoryNavigation(numericTabId);
+    return false;
+  }
+
+  let state = composerHistoryNavigationByTab.get(numericTabId);
+  if (!state) {
+    if (direction !== -1 || inputEl.value !== '') return false;
+    const entries = getComposerHistoryEntriesForCurrentTab();
+    if (!entries.length) return false;
+    state = { entries, index: entries.length };
+    composerHistoryNavigationByTab.set(numericTabId, state);
+  } else {
+    const expectedText = state.entries[state.index] ?? '';
+    if (inputEl.value !== expectedText) {
+      resetComposerHistoryNavigation(numericTabId);
+      return false;
+    }
+  }
+
+  const boundary = getComposerCaretRowBoundary();
+  if (!boundary) return false;
+  if (direction === -1) {
+    if (!boundary.atFirstRow) return false;
+    if (state.index === 0) return true;
+    state.index -= 1;
+    applyComposerHistoryText(numericTabId, state.entries[state.index]);
+    return true;
+  }
+  if (direction === 1) {
+    if (!boundary.atLastRow || state.index >= state.entries.length) return false;
+    if (state.index === state.entries.length - 1) {
+      resetComposerHistoryNavigation(numericTabId);
+      applyComposerHistoryText(numericTabId, '');
+      return true;
+    }
+    state.index += 1;
+    applyComposerHistoryText(numericTabId, state.entries[state.index]);
+    return true;
+  }
+  return false;
 }
 
 function deleteQueuedComposerMessage(tabId, queueId) {
@@ -1124,9 +1876,10 @@ function clearQueuedComposerMessagesForTab(tabId) {
 
 function drainQueuedComposerMessageForCurrentTab() {
   if (isProcessing || currentTabId == null || renderedTabId !== currentTabId) return false;
-  if (inputEl.value.trim()) return false;
+  if (inputEl.value !== '') return false;
   const item = shiftQueuedComposerMessage(currentTabId);
   if (!item) return false;
+  resetComposerHistoryNavigation(currentTabId);
   inputEl.value = item.text;
   autoResizeInput();
   updateSlashCommandAutocomplete();
@@ -1139,6 +1892,7 @@ function drainQueuedComposerMessageForCurrentTab() {
 
 async function renderClearedConversationForTab(tabId) {
   clearCachedTabChat(tabId);
+  resetComposerHistoryNavigation(tabId);
   saveInputDraftForTab(tabId, '');
   clearPendingAttachmentsForTab(tabId);
   clearQueuedComposerMessagesForTab(tabId);
@@ -1396,6 +2150,15 @@ const TOOL_KEYS = {
   extract_data: 'tool.extract_data',
   inspect_element_styles: 'tool.inspect_element_styles',
   read_page_source: 'tool.read_page_source',
+  inject_css: 'tool.inject_css',
+  remove_injected_css: 'tool.remove_injected_css',
+  patch_element: 'tool.patch_element',
+  revert_patch: 'tool.revert_patch',
+  execute_js: 'tool.execute_js',
+  read_console: 'tool.read_console',
+  inspect_network_requests: 'tool.inspect_network_requests',
+  inspect_event_listeners: 'tool.inspect_event_listeners',
+  highlight_element: 'tool.highlight_element',
   wait_for_element: 'tool.wait_for_element',
   get_selection: 'tool.get_selection',
   new_tab: 'tool.new_tab',
@@ -1477,7 +2240,6 @@ function scheduledJobActions(job) {
 
 const SCHEDULED_VISIBLE_STATUSES = new Set(['pending', 'queued', 'paused', 'running', 'needs_user_input', 'failed', 'completed']);
 const COMPLETED_SCHEDULED_JOB_AUTO_HIDE_MS = 15 * 1000;
-const crossPanelScheduledJobIds = new Set();
 const pinnedCompletedScheduledJobIds = new Set();
 let scheduledJobAutoHideTimer = null;
 
@@ -1574,8 +2336,6 @@ function ensureScheduledClarifyCards(jobs = []) {
     const jobTabId = scheduledJobTabId(job);
     if (!isUrlTargetScheduledJob(job) && jobTabId != null && currentTabId != null && String(jobTabId) !== String(currentTabId)) continue;
     if (findScheduledClarifyCard(job.id, pending.clarifyId)) continue;
-    const isCrossPanel = isUrlTargetScheduledJob(job) && jobTabId != null && currentTabId != null && String(jobTabId) !== String(currentTabId);
-    if (isCrossPanel) crossPanelScheduledJobIds.add(String(job.id));
     renderClarifyCard({
       ...pending,
       scheduledJobId: job.id,
@@ -1664,20 +2424,7 @@ async function scheduledJobAction(action, jobId) {
   }
 }
 
-async function drainQueuedContextMenuPromptsAfterPendingTabSwitch() {
-  if (drainQueuedComposerMessageForCurrentTab()) return;
-  if (pendingTabSwitch == null) {
-    drainQueuedContextMenuPrompts();
-    return;
-  }
-  const pending = pendingTabSwitch;
-  pendingTabSwitch = null;
-  try {
-    await switchToTab(pending);
-  } catch {
-    // Still drain any queued prompt for the current tab; tab activation can fail
-    // when the underlying browser tab disappears during run settlement.
-  }
+async function drainQueuedPromptsAfterRunSettles() {
   if (drainQueuedComposerMessageForCurrentTab()) return;
   drainQueuedContextMenuPrompts();
 }
@@ -1706,12 +2453,11 @@ function drainQueuedAgentUpdatesForTab(tabId) {
 
 async function settleScheduledRun(event, job, tabId = currentTabId) {
   const runTabId = normalizePlanReviewTabId(tabId);
-  if (job?.id) crossPanelScheduledJobIds.delete(String(job.id));
   const assistantEl = job?.id ? findScheduledAssistantMessageForJob(job.id) : currentAssistantEl;
   if (assistantEl) {
     finalizeSteps(assistantEl);
     const textEl = assistantEl.querySelector('.message-text');
-    if (textEl && !textEl.textContent.trim() && event === 'completed' && job?.lastResult) {
+    if (textEl && !textEl.textContent.trim() && ['completed', 'clarification_required'].includes(event) && job?.lastResult) {
       textEl.innerHTML = formatMarkdown(job.lastResult);
       addMessageCopyButton(assistantEl);
     }
@@ -1726,7 +2472,7 @@ async function settleScheduledRun(event, job, tabId = currentTabId) {
     hideActivity();
     if (currentAssistantEl === assistantEl) currentAssistantEl = null;
     if (renderedTabId != null) await flushRenderedTabChat();
-    await drainQueuedContextMenuPromptsAfterPendingTabSwitch();
+    await drainQueuedPromptsAfterRunSettles();
   }
   if (event === 'completed') notifyCompletion({ success: job?.lastOutcome === 'success' });
 }
@@ -1740,7 +2486,7 @@ async function handleScheduledJobEvent(data, tabId) {
   const sameTab = tabId == null || tabId === currentTabId;
   const runTabId = normalizePlanReviewTabId(tabId ?? currentTabId);
   const jobId = job?.id ? String(job.id) : '';
-  const terminalScheduledEvent = ['completed', 'failed'].includes(event);
+  const terminalScheduledEvent = ['completed', 'failed', 'clarification_required'].includes(event);
   const crossPanelScheduledEvent = isUrlTargetScheduledJob(job) && (
     event === 'needs_user_input' ||
     terminalScheduledEvent
@@ -1765,6 +2511,9 @@ async function handleScheduledJobEvent(data, tabId) {
   } else if (event === 'failed') {
     addMessage('error', t('sp.scheduled.failed', { title, msg: job.lastError || t('sp.scheduled.unknown_error') }));
     await settleScheduledRun(event, job, runTabId);
+  } else if (event === 'clarification_required') {
+    ensureScheduledTerminalMessage(job);
+    await settleScheduledRun(event, job, runTabId);
   } else if (event === 'needs_user_input') {
     ensureScheduledClarifyCards([job]);
     hideActivity();
@@ -1778,7 +2527,7 @@ async function handleScheduledJobEvent(data, tabId) {
       setTabProcessing(runTabId, false);
       syncSendButtonState();
       addMessage('system', systemHtml(tSystemHtml('sp.scheduled.needs_user_input', { title })));
-      drainQueuedContextMenuPromptsAfterPendingTabSwitch();
+      drainQueuedPromptsAfterRunSettles();
     }
   }
 }
@@ -2209,6 +2958,195 @@ async function forgetUserMemory(id, tabId = currentTabId) {
   }
 }
 
+const SAVED_WORKFLOW_FAILURE_REASON_KEYS = {
+  conversation_required: 'sp.workflows.reason.no_trace',
+  no_successful_trace: 'sp.workflows.reason.no_trace',
+  successful_run_required: 'sp.workflows.reason.no_trace',
+  no_replayable_steps: 'sp.workflows.reason.no_steps',
+  not_found: 'sp.workflows.reason.not_found',
+  name_required: 'sp.workflows.reason.name_required',
+  http_start_url_required: 'sp.workflows.reason.http_start_url',
+  normalization_failed: 'sp.workflows.reason.normalization_failed',
+};
+
+function savedWorkflowFailureMessage(res) {
+  const reasonKey = SAVED_WORKFLOW_FAILURE_REASON_KEYS[res?.reason];
+  return reasonKey
+    ? t(reasonKey)
+    : t('sp.workflows.error', { msg: res?.reason || res?.error || 'unknown error' });
+}
+
+async function showSavedWorkflows(tabId = currentTabId) {
+  try {
+    const res = await sendToBackground('list_saved_workflows');
+    if (currentTabId !== tabId) return;
+    if (!res?.ok) throw new Error(res?.error || 'unknown error');
+    const workflows = Array.isArray(res.workflows) ? res.workflows : [];
+    if (!workflows.length) {
+      addPersistentSlashMessage(t('sp.workflows.empty'));
+      return;
+    }
+    const body = workflows.map((workflow) => t('sp.workflows.item', {
+      id: workflow.id,
+      name: workflow.name,
+      steps: workflow.steps?.length || 0,
+      parameters: workflow.parameters?.length || 0,
+    })).join('\n');
+    const msgEl = addPersistentSlashMessage(systemHtml(`${t('sp.workflows.title_html')}<pre class="scratchpad-dump">${escapeHtml(body)}</pre>`));
+    addScratchpadCopyButton(msgEl);
+  } catch (error) {
+    if (currentTabId === tabId) addPersistentSlashMessage(t('sp.workflows.error', { msg: error.message }));
+  }
+}
+
+async function saveLatestWorkflow(name, tabId = currentTabId) {
+  try {
+    const res = await sendToBackground('save_latest_workflow', { tabId, name });
+    if (currentTabId !== tabId) return;
+    if (!res?.ok) {
+      showComposerToast(savedWorkflowFailureMessage(res), { duration: 7000 });
+      return;
+    }
+    const savedMessage = t('sp.workflows.saved', { name: res.workflow?.name || name });
+    const warnings = Array.isArray(res.warnings) ? res.warnings.filter(Boolean) : [];
+    showComposerToast(warnings.length ? `${savedMessage} ${warnings.join(' ')}` : savedMessage, {
+      duration: warnings.length ? 10000 : 3500,
+    });
+  } catch (error) {
+    if (currentTabId === tabId) showComposerToast(t('sp.workflows.error', { msg: error.message }), { duration: 7000 });
+  }
+}
+
+async function deleteSavedWorkflow(id, tabId = currentTabId) {
+  try {
+    const res = await sendToBackground('delete_saved_workflow', { id: String(id || '').trim() });
+    if (currentTabId !== tabId) return;
+    if (!res?.ok) {
+      showComposerToast(savedWorkflowFailureMessage(res), { duration: 5000 });
+      return;
+    }
+    showComposerToast(t('sp.workflows.deleted', { name: res.workflow?.name || id }));
+  } catch (error) {
+    if (currentTabId === tabId) showComposerToast(t('sp.workflows.error', { msg: error.message }), { duration: 5000 });
+  }
+}
+
+const boundWorkflowParameterForms = new WeakSet();
+
+async function startSavedWorkflowRun(workflow, parameters, tabId = currentTabId) {
+  if (!workflow?.id || currentTabId !== tabId) return false;
+  await ensureActMode();
+  inputEl.value = t('sp.workflows.run_prompt', { name: workflow.name });
+  autoResizeInput();
+  return sendMessage({
+    __mode: 'act',
+    workflowId: workflow.id,
+    workflowParameters: parameters,
+  });
+}
+
+async function submitSavedWorkflowParameters(event, form) {
+  event.preventDefault();
+  const tabId = Number(form?.dataset?.tabId);
+  const workflowId = String(form?.dataset?.workflowId || '');
+  const errorEl = form?.querySelector('.schedule-error');
+  const submit = form?.querySelector('.schedule-submit');
+  if (!Number.isFinite(tabId) || !workflowId || !errorEl || !submit) return;
+  errorEl.textContent = '';
+  submit.disabled = true;
+  try {
+    const res = await sendToBackground('get_saved_workflow', { id: workflowId });
+    if (!res?.ok || !res.workflow) throw new Error(savedWorkflowFailureMessage(res));
+    const inputs = new Map(Array.from(form.querySelectorAll('[data-workflow-parameter-id]'))
+      .map((input) => [input.dataset.workflowParameterId, input]));
+    const parameters = {};
+    for (const descriptor of res.workflow.parameters || []) {
+      const input = inputs.get(descriptor.id);
+      if (!input) throw new Error(t('sp.workflows.error', { msg: 'parameter form is incomplete' }));
+      if (descriptor.required !== false && input.value === '') {
+        throw new Error(t('sp.workflows.parameter_required', { name: descriptor.label || descriptor.id }));
+      }
+      parameters[descriptor.id] = input.value;
+    }
+    inputs.forEach((input) => { input.value = ''; });
+    form.closest('.message')?.remove();
+    setTimeout(() => {
+      startSavedWorkflowRun(res.workflow, parameters, tabId)
+        .catch((error) => showComposerToast(t('sp.workflows.error', { msg: error.message }), { duration: 7000 }));
+    }, 0);
+  } catch (error) {
+    submit.disabled = false;
+    errorEl.textContent = error.message;
+  }
+}
+
+function bindSavedWorkflowParameterForm(form) {
+  if (!form || boundWorkflowParameterForms.has(form)) return;
+  boundWorkflowParameterForms.add(form);
+  form.querySelector('.schedule-cancel')?.addEventListener('click', () => form.closest('.message')?.remove());
+  form.addEventListener('submit', (event) => submitSavedWorkflowParameters(event, form));
+}
+
+function renderSavedWorkflowParameterForm(workflow, tabId = currentTabId) {
+  if (!workflow?.id || currentTabId !== tabId) return;
+  const parameterMessage = t('sp.workflows.parameters_for', { name: workflow.name });
+  const msgEl = addMessage('system', parameterMessage);
+  const content = msgEl.querySelector('.message-content');
+  const form = document.createElement('form');
+  form.className = 'schedule-composer workflow-parameter-form';
+  form.dataset.tabId = String(tabId);
+  form.dataset.workflowId = workflow.id;
+  for (const parameter of workflow.parameters || []) {
+    const input = document.createElement('input');
+    input.type = parameter.sensitive ? 'password' : 'text';
+    input.autocomplete = 'off';
+    input.maxLength = 10000;
+    input.required = parameter.required !== false;
+    input.dataset.workflowParameterId = parameter.id;
+    addScheduleField(form, parameter.label || parameter.id, input);
+  }
+  const errorEl = document.createElement('div');
+  errorEl.className = 'schedule-error';
+  form.appendChild(errorEl);
+  const actions = document.createElement('div');
+  actions.className = 'schedule-form-actions';
+  const submit = document.createElement('button');
+  submit.type = 'submit';
+  submit.className = 'schedule-submit';
+  submit.textContent = t('sp.scheduled.run_now');
+  const cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.className = 'schedule-cancel';
+  cancel.textContent = t('sp.schedule_form.cancel');
+  actions.append(submit, cancel);
+  form.appendChild(actions);
+  bindSavedWorkflowParameterForm(form);
+  content.appendChild(form);
+  form.querySelector('input')?.focus();
+  scrollToBottom();
+}
+
+async function prepareSavedWorkflowRun(id, tabId = currentTabId) {
+  try {
+    const res = await sendToBackground('get_saved_workflow', { id: String(id || '').trim() });
+    if (currentTabId !== tabId) return;
+    if (!res?.ok || !res.workflow) {
+      showComposerToast(savedWorkflowFailureMessage(res), { duration: 5000 });
+      return;
+    }
+    if (res.workflow.parameters?.length) {
+      renderSavedWorkflowParameterForm(res.workflow, tabId);
+      return;
+    }
+    setTimeout(() => {
+      startSavedWorkflowRun(res.workflow, {}, tabId)
+        .catch((error) => showComposerToast(t('sp.workflows.error', { msg: error.message }), { duration: 7000 }));
+    }, 0);
+  } catch (error) {
+    if (currentTabId === tabId) showComposerToast(t('sp.workflows.error', { msg: error.message }), { duration: 7000 });
+  }
+}
+
 async function showProgress(tabId = currentTabId) {
   try {
     const res = await sendToBackground('get_progress', { tabId });
@@ -2286,13 +3224,21 @@ async function init() {
   currentTabId = tab?.id;
   renderedTabId = currentTabId;
 
+  // Tab-activation and window-focus events are extension-wide — every
+  // browser window fires them, and each window has its own side panel
+  // instance. Without scoping, activity in window B would silently
+  // retarget window A's panel to B's tab.
+  const ownWindowId = tab?.windowId ?? (await chrome.windows.getCurrent()).id;
+
   chrome.tabs.onActivated.addListener(async (info) => {
+    if (info.windowId !== ownWindowId) return;
     switchToTab(info.tabId);
   });
 
   // Also handle window focus changes
   chrome.windows.onFocusChanged.addListener(async (windowId) => {
     if (windowId === chrome.windows.WINDOW_ID_NONE) return;
+    if (windowId !== ownWindowId) return;
     const [tab] = await chrome.tabs.query({ active: true, windowId });
     if (tab?.id && tab.id !== currentTabId) {
       switchToTab(tab.id);
@@ -2403,11 +3349,15 @@ if (verboseBtn) {
 }
 
 async function switchToTab(newTabId) {
-  if (newTabId === currentTabId && renderedTabId === newTabId) { pendingTabSwitch = null; return; }
+  if (newTabId === currentTabId && renderedTabId === newTabId) { return; }
   const switchGeneration = ++tabSwitchGeneration;
-  pendingTabSwitch = null;
   tabSwitchTransitionId = newTabId;
   queuedTabSwitchMessages = [];
+  // The activity strip is a single panel-wide DOM node, unlike the tab-scoped
+  // chat and run journals. Clear the outgoing tab's transient status before
+  // any async restore work can yield; restoreActiveRunState (or a queued target
+  // update) will show it again if the destination tab is actually running.
+  hideActivity();
 
   try {
     // Save the tab currently represented by the DOM. During an async restore,
@@ -2466,6 +3416,75 @@ async function restoreActiveRunState(tabId = currentTabId) {
   } catch {
     return;
   }
+  await applyActiveRunState(numericTabId, state);
+  void adoptRestoredRunState(numericTabId, state);
+}
+
+function isTerminalRunUiStatus(status) {
+  return ['completed', 'stopped', 'failed', 'cancelled', 'clarification_required'].includes(String(status || ''));
+}
+
+async function adoptRestoredRunState(tabId, state) {
+  const runUi = state?.runUi && typeof state.runUi === 'object' ? state.runUi : null;
+  const requestId = String(runUi?.requestId || '');
+  if (!requestId
+      || isTerminalRunUiStatus(runUi.status)
+      || runUi.status === 'awaiting_plan'
+      || localRunRequestIds.has(Number(tabId))
+      || adoptedRunRecoveryRequestIds.has(requestId)) return;
+
+  adoptedRunRecoveryRequestIds.add(requestId);
+  localRunRequestIds.set(Number(tabId), requestId);
+  setTabProcessing(tabId, true);
+  setTabAbortRequested(tabId, false);
+  syncSendButtonState();
+  if (sameTabId(currentTabId, tabId)) showActivity('Reconnecting…');
+  const assistantEl = messagesEl.querySelector(`.message.assistant[data-run-request-id="${CSS.escape(requestId)}"]`)
+    || currentAssistantEl;
+  const mode = ['ask', 'act', 'dev'].includes(runUi.mode)
+    ? runUi.mode
+    : (['ask', 'act', 'dev'].includes(assistantEl?.dataset?.runMode) ? assistantEl.dataset.runMode : agentMode);
+
+  try {
+    const res = await sendRunWithReconnect('continue_start', {
+      tabId,
+      requestId,
+      mode,
+    }, {
+      probeFirst: true,
+      requireDurableSubmittedTurn: runUi.kind !== 'continue',
+    });
+    const returnedErrorUpdate = Array.isArray(res?.updates)
+      ? res.updates.find(update => update?.type === 'error')
+      : null;
+    if (returnedErrorUpdate && sameTabId(currentTabId, tabId) && !isTabAbortRequested(tabId)) {
+      renderAgentErrorUpdate(returnedErrorUpdate.data, tabId, requestId);
+    }
+  } catch (error) {
+    if (sameTabId(currentTabId, tabId) && !isTabAbortRequested(tabId)) {
+      renderAgentErrorUpdate({ message: error.message }, tabId, requestId);
+    }
+  } finally {
+    adoptedRunRecoveryRequestIds.delete(requestId);
+    if (localRunRequestIds.get(Number(tabId)) === requestId) {
+      localRunRequestIds.delete(Number(tabId));
+      setTabProcessing(tabId, false);
+      setTabAbortRequested(tabId, false);
+    }
+    if (sameTabId(currentTabId, tabId)) {
+      if (assistantEl) finalizeSteps(assistantEl);
+      syncSendButtonState();
+      hideActivity();
+      if (currentAssistantEl === assistantEl) currentAssistantEl = null;
+      if (sameTabId(renderedTabId, tabId)) {
+        await flushRenderedTabChat();
+        await flushChatHistorySnapshot(tabId, { refreshTabInfo: true });
+      }
+    }
+  }
+}
+
+async function applyActiveRunState(numericTabId, state) {
   if (!sameTabId(currentTabId, numericTabId) || !sameTabId(renderedTabId, numericTabId)) return;
   const runUi = state?.runUi && typeof state.runUi === 'object' ? state.runUi : null;
   if (runUi?.requestId) {
@@ -2521,7 +3540,7 @@ async function restoreActiveRunState(tabId = currentTabId) {
     return;
   }
   invalidatePlanReviewCards({ tabId: numericTabId });
-  if (state?.running) {
+  if (state?.running || state?.starting) {
     setTabProcessing(numericTabId, true);
     setTabAbortRequested(numericTabId, false);
     hideRecommendedActions();
@@ -2531,7 +3550,7 @@ async function restoreActiveRunState(tabId = currentTabId) {
     setPlanReviewAwaiting(numericTabId, false);
     setTabProcessing(numericTabId, false);
     setTabAbortRequested(numericTabId, false);
-    if (runUi && ['completed', 'stopped', 'failed', 'cancelled'].includes(runUi.status)
+    if (runUi && ['completed', 'stopped', 'failed', 'cancelled', 'clarification_required'].includes(runUi.status)
         && Number(currentAssistantEl?.dataset.lastRenderedSeq || 0) < Number(runUi.seq || 0)) {
       handleAgentUpdateMessage({
         tabId: numericTabId,
@@ -2542,6 +3561,11 @@ async function restoreActiveRunState(tabId = currentTabId) {
         data: { status: runUi.status, finalContent: runUi.finalContent },
       });
     }
+    // Terminal snapshots may already be fully acknowledged, so no replayed
+    // run_complete event remains to clear the shared activity strip. Make the
+    // destination tab's idle state authoritative even in that case.
+    hideActivity();
+    syncSendButtonState();
   }
 }
 
@@ -2554,6 +3578,29 @@ function hideRecommendedActions() {
   if (!recommendedActionsEl || !recommendedActionsListEl) return;
   recommendedActionsListEl.replaceChildren();
   recommendedActionsEl.classList.add('hidden');
+}
+
+function createWebbrainPromotionIcon(actionId) {
+  const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  icon.classList.add('recommended-action-icon');
+  icon.setAttribute('viewBox', '0 0 24 24');
+  icon.setAttribute('aria-hidden', 'true');
+  icon.setAttribute('focusable', 'false');
+
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('d', actionId === 'post-webbrain-linkedin'
+    ? 'M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 1 1 0-4.124 2.062 2.062 0 0 1 0 4.124zM7.119 20.452H3.555V9H7.12v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0z'
+    : 'M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z');
+  icon.appendChild(path);
+  return icon;
+}
+
+function animateWebbrainPromotionOnce() {
+  if (webbrainPromotionHasAnimated || recommendedActionsCollapsed) return;
+  const promotionAction = recommendedActionsListEl?.querySelector('.recommended-action-chip-promotion');
+  if (!promotionAction) return;
+  promotionAction.classList.add('recommended-action-chip-promotion-enter');
+  webbrainPromotionHasAnimated = true;
 }
 
 function updateRecommendedActionsCollapsedState() {
@@ -2573,6 +3620,7 @@ function updateRecommendedActionsCollapsedState() {
 function setRecommendedActionsCollapsed(collapsed, { persist = true } = {}) {
   recommendedActionsCollapsed = Boolean(collapsed);
   updateRecommendedActionsCollapsedState();
+  animateWebbrainPromotionOnce();
   if (persist) {
     void chrome.storage.local.set({ [RECOMMENDED_ACTIONS_COLLAPSED_KEY]: recommendedActionsCollapsed }).catch(() => {});
   }
@@ -2597,7 +3645,10 @@ chrome.storage.onChanged.addListener((changes, area) => {
   }
 });
 
-document.addEventListener('wb-locale-changed', updateRecommendedActionsCollapsedState);
+document.addEventListener('wb-locale-changed', () => {
+  updateRecommendedActionsCollapsedState();
+  void refreshRecommendedActions();
+});
 
 async function refreshRecommendedActions() {
   const requestId = ++recommendationsRequestId;
@@ -2615,7 +3666,8 @@ async function refreshRecommendedActions() {
     const pageInfo = await sendToBackground('get_page_info', { tabId });
     if (requestId !== recommendationsRequestId || currentTabId !== tabId || isProcessing) return;
     const sourceUrl = typeof pageInfo?.url === 'string' ? pageInfo.url : '';
-    const actions = buildRecommendedActions(pageInfo, { max: 4 });
+    const webbrainPromotionVariant = Math.random() < 0.5 ? 'linkedin' : 'x';
+    const actions = buildRecommendedActions(pageInfo, { max: 4, webbrainPromotionVariant });
     recommendedActionsListEl.replaceChildren();
     actions.forEach((action) => {
       const actionForClick = sourceUrl ? { ...action, sourceUrl } : action;
@@ -2623,11 +3675,17 @@ async function refreshRecommendedActions() {
       btn.type = 'button';
       btn.className = 'recommended-action-chip';
       btn.textContent = action.label;
+      btn.dataset.actionId = action.id;
+      if (WEBBRAIN_PROMOTION_ACTION_IDS.has(action.id)) {
+        btn.classList.add('recommended-action-chip-promotion');
+        btn.prepend(createWebbrainPromotionIcon(action.id));
+      }
       btn.dataset.prompt = action.prompt;
       btn.addEventListener('click', () => runRecommendedAction(actionForClick));
       recommendedActionsListEl.appendChild(btn);
     });
     recommendedActionsEl.classList.toggle('hidden', actions.length === 0);
+    animateWebbrainPromotionOnce();
   } catch {
     if (requestId === recommendationsRequestId) hideRecommendedActions();
   }
@@ -2714,6 +3772,8 @@ function rebindClarifyCards() {
     const tabId = rawTabId != null && rawTabId !== '' ? Number(rawTabId) : currentTabId;
     if (tabId == null || Number.isNaN(tabId)) return;
 
+    card.querySelectorAll('.permission-education-action').forEach(bindPermissionEducationAction);
+
     card.querySelectorAll('.clarify-option').forEach(btn => {
       if (btn.dataset.bound) return;
       btn.dataset.bound = 'true';
@@ -2742,7 +3802,787 @@ function rebindClarifyCards() {
         if (value) submitClarify(card, tabId, clarifyId, value, 'text');
       });
     });
+
+    // Restart countdown after HTML restore when timeout metadata survived on
+    // the card. Skip permission/form-submit cards (they never auto-timeout).
+    if (card.dataset.permission === '1' || card.dataset.submitConfirmation === '1') return;
+    const deadlineTs = Number(card.dataset.deadlineTs);
+    if (!Number.isFinite(deadlineTs) || deadlineTs <= 0) return;
+    const firstOption = card.dataset.firstOption
+      || card.querySelector('.clarify-option')?.dataset?.value
+      || card.querySelector('.clarify-option')?.textContent
+      || '(no response — timed out)';
+    startClarifyCountdown(card, { tabId, clarifyId, deadlineTs, firstOption });
   });
+}
+
+function planReviewDisplayFields(plan, fallbackMarkdown = '') {
+  const localized = plan?.localized && typeof plan.localized === 'object' ? plan.localized : null;
+  const summary = String(localized?.summary || plan?.summary || '').trim();
+  const stepsSource = Array.isArray(localized?.steps) && localized.steps.length
+    ? localized.steps
+    : (Array.isArray(plan?.steps) ? plan.steps : []);
+  const steps = stepsSource
+    .map((step, index) => ({
+      id: String(step?.id || index + 1).replace(/\.$/, '') || String(index + 1),
+      action: String(step?.action || '').trim(),
+    }))
+    .filter((step) => step.action);
+  const risksSource = Array.isArray(localized?.risks) && localized.risks.length
+    ? localized.risks
+    : (Array.isArray(plan?.risks) ? plan.risks : []);
+  const risks = risksSource.map((risk) => String(risk || '').trim()).filter(Boolean);
+  if (!steps.length && !summary && fallbackMarkdown) {
+    return parsePlanMarkdownToDraft(fallbackMarkdown);
+  }
+  return { summary, steps, risks };
+}
+
+function serializePlanDraftToMarkdown(draft) {
+  const lines = [];
+  const summary = String(draft?.summary || '').trim();
+  if (summary) lines.push(`**${summary}**`, '');
+  const steps = Array.isArray(draft?.steps) ? draft.steps : [];
+  let stepNum = 0;
+  for (const step of steps) {
+    const action = String(step?.action || '').trim();
+    if (!action) continue;
+    stepNum += 1;
+    lines.push(`${stepNum}. ${action}`);
+  }
+  const risks = Array.isArray(draft?.risks)
+    ? draft.risks.map((risk) => String(risk || '').trim()).filter(Boolean)
+    : [];
+  if (risks.length) {
+    if (stepNum) lines.push('');
+    for (const risk of risks) lines.push(`- ⚠️ ${risk}`);
+  }
+  return lines.join('\n').trim();
+}
+
+// Tool names that may appear in verbose step suffixes like "Click Save (click, type)".
+const PLAN_STEP_TOOL_SUFFIX_RE = /^(?:click|type|press|scroll|navigate|find|wait|select|hover|drag|upload|download|screenshot|extract|read|write|fill|submit|focus|blur|tab|enter|escape|key|keys|js|eval|api|fetch|http|network|clipboard|permission|schedule|resume|tool|get|set|new|go|execute|inspect|inject|remove|patch|revert|list|progress|research|shadow|iframe|highlight|scratchpad|done)(?:_[a-z0-9]+)*$/i;
+
+function stripVerbosePlanStepToolSuffix(action) {
+  const text = String(action || '').trim();
+  const match = text.match(/^([\s\S]*?)\s+\(([^()]*)\)\s*$/);
+  if (!match) return text;
+  const suffix = match[2].trim();
+  // Only strip parentheticals that look like planner tool lists, not user text
+  // like "Open invoice (March)" or "Choose plan (annual)".
+  const toolNames = suffix.split(',').map((name) => name.trim()).filter(Boolean);
+  if (!toolNames.length || !toolNames.every((name) => PLAN_STEP_TOOL_SUFFIX_RE.test(name))) return text;
+  return match[1].trim();
+}
+
+function looksLikeVerbosePlanMarkdown(text) {
+  const raw = String(text || '');
+  return /(?:^|\n)\s*Confidence:\s*\d/i.test(raw)
+    || /(?:^|\n)\s*###\s+Completion requirements\b/i.test(raw)
+    || /(?:^|\n)\s*###\s+Skills to activate\b/i.test(raw)
+    || /(?:^|\n)\s*###\s+Memory strategy\b/i.test(raw)
+    || /(?:^|\n)\s*###\s+Scheduling\b/i.test(raw);
+}
+
+function parsePlanMarkdownToDraft(text) {
+  const lines = String(text || '').split('\n');
+  let summary = '';
+  const steps = [];
+  const risks = [];
+  // Ignore planner execution-metadata sections so "Done" from verbose raw mode
+  // does not ingest skill IDs / memory bullets as risks.
+  let section = 'body'; // body | steps | risks | meta
+  let activeStep = null;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      if (section === 'steps' && activeStep) activeStep.action += '\n';
+      continue;
+    }
+
+    const heading = trimmed.match(/^###\s+(.+)$/i);
+    if (heading) {
+      const title = heading[1].trim().toLowerCase();
+      if (/^steps\b/.test(title)) section = 'steps';
+      else if (/^risks?\b/.test(title) || /notes\b/.test(title)) section = 'risks';
+      else if (
+        /completion requirements|skills to activate|memory strategy|scheduling|planner execution metadata/
+          .test(title)
+      ) {
+        section = 'meta';
+      } else {
+        section = 'meta';
+      }
+      activeStep = null;
+      continue;
+    }
+
+    if (section === 'meta') {
+      activeStep = null;
+      continue;
+    }
+    if (/^confidence:\s*/i.test(trimmed)) continue;
+    if (/^(submission required|scratchpad|progress ledger)\b/i.test(trimmed)) continue;
+
+    const bold = trimmed.match(/^\*\*(.+)\*\*$/);
+    if (bold && !summary) {
+      summary = bold[1].trim();
+      activeStep = null;
+      continue;
+    }
+
+    const stepMatch = trimmed.match(/^(\d+)[\.)]\s+(.+)$/);
+    if (stepMatch) {
+      activeStep = {
+        id: stepMatch[1],
+        action: stepMatch[2].trim(),
+      };
+      steps.push(activeStep);
+      section = 'steps';
+      continue;
+    }
+
+    const riskMatch = trimmed.match(/^[-*]\s+(?:⚠️\s*)?(.+)$/);
+    if (riskMatch) {
+      const riskText = riskMatch[1].replace(/^⚠️\s*/, '').trim();
+      if (!riskText) continue;
+      // Only accept risk bullets that are explicitly marked, or that appear
+      // under a Risks heading. Plain metadata bullets never qualify.
+      const explicitRisk = /⚠️/.test(trimmed) || section === 'risks';
+      if (section === 'steps' && activeStep && !explicitRisk) {
+        activeStep.action += `\n${line.trimEnd()}`;
+        continue;
+      }
+      activeStep = null;
+      if (!explicitRisk) continue;
+      if (/^skills?\s+to\s+activate/i.test(riskText)) continue;
+      if (/^(submission required|scratchpad|progress ledger)\b/i.test(riskText)) continue;
+      risks.push(riskText);
+      continue;
+    }
+
+    if (section === 'steps' && activeStep) {
+      activeStep.action += `\n${line.trimEnd()}`;
+      continue;
+    }
+
+    if (!summary && section === 'body' && !/^(confidence|submission required|scratchpad|progress ledger)/i.test(trimmed)) {
+      summary = trimmed.replace(/^#+\s*/, '');
+    }
+  }
+  return {
+    summary,
+    steps: steps
+      .map((step) => ({ ...step, action: stripVerbosePlanStepToolSuffix(step.action) }))
+      .filter((step) => step.action),
+    risks: risks.filter(Boolean),
+  };
+}
+
+function resolveSavedPlanReviewEdit(card) {
+  if (card?.dataset?.planDirty !== 'true' || card.dataset.planEditSource !== 'raw') return null;
+  const editedText = String(card.dataset.editedText || '').trim();
+  if (!editedText) return null;
+  return {
+    editedText,
+    markdownMode: looksLikeVerbosePlanMarkdown(editedText) ? 'verbose' : 'compact',
+  };
+}
+
+function setPlanReviewStructuredControlsDisabled(card, disabled) {
+  const controls = card?.querySelectorAll?.(
+    '.plan-review-summary-input, .plan-review-step-input, .plan-review-add-step, .plan-review-step-number, .plan-review-step-remove',
+  ) || [];
+  for (const control of controls) control.disabled = Boolean(disabled);
+}
+
+const planReviewScrollRestoreFrames = new WeakMap();
+const planReviewScrollSnapshots = new WeakMap();
+
+function restorePlanReviewScrollTop(container, scrollTop) {
+  const previousScrollBehavior = container.style.scrollBehavior;
+  container.style.scrollBehavior = 'auto';
+  container.scrollTop = scrollTop;
+  container.style.scrollBehavior = previousScrollBehavior;
+}
+
+function currentPlanReviewScrollSnapshot(el) {
+  const container = el?.closest?.('#chat-container') || null;
+  if (!container || document.activeElement !== el) return null;
+  if (container.scrollHeight - container.scrollTop - container.clientHeight <= 2) return null;
+  return { container, scrollTop: container.scrollTop };
+}
+
+function capturePlanReviewScrollSnapshot(el) {
+  const snapshot = currentPlanReviewScrollSnapshot(el);
+  if (snapshot) planReviewScrollSnapshots.set(el, snapshot);
+  else planReviewScrollSnapshots.delete(el);
+}
+
+function takePlanReviewScrollSnapshot(el) {
+  const snapshot = planReviewScrollSnapshots.get(el) || null;
+  planReviewScrollSnapshots.delete(el);
+  if (snapshot?.container?.isConnected && document.activeElement === el) return snapshot;
+  return currentPlanReviewScrollSnapshot(el);
+}
+
+function autosizePlanReviewField(el) {
+  if (!el || el.tagName !== 'TEXTAREA') return;
+  const snapshot = takePlanReviewScrollSnapshot(el);
+
+  el.style.height = 'auto';
+  el.style.height = `${Math.max(el.scrollHeight, 28)}px`;
+
+  if (!snapshot) return;
+  const { container, scrollTop } = snapshot;
+  restorePlanReviewScrollTop(container, scrollTop);
+  const pendingFrame = planReviewScrollRestoreFrames.get(el);
+  if (pendingFrame != null) cancelAnimationFrame(pendingFrame);
+  const frame = requestAnimationFrame(() => {
+    planReviewScrollRestoreFrames.delete(el);
+    if (container.isConnected && document.activeElement === el) {
+      restorePlanReviewScrollTop(container, scrollTop);
+    }
+  });
+  planReviewScrollRestoreFrames.set(el, frame);
+}
+
+function getPlanReviewDraftFromDom(card) {
+  const summary = String(card?.querySelector?.('.plan-review-summary-input')?.value || '').trim();
+  const steps = [...(card?.querySelectorAll?.('.plan-review-step-input') || [])]
+    .map((input, index) => ({
+      id: String(index + 1),
+      action: String(input.value || '').trim(),
+    }))
+    .filter((step) => step.action);
+  let risks = [];
+  try {
+    risks = JSON.parse(card?.dataset?.planRisks || '[]');
+  } catch {
+    risks = [];
+  }
+  if (!Array.isArray(risks)) risks = [];
+  risks = risks.map((risk) => String(risk || '').trim()).filter(Boolean);
+  return { summary, steps, risks };
+}
+
+function planReviewOriginalMarkdown(card) {
+  return String(card?.dataset?.originalMarkdown || card?.querySelector?.('.plan-review-edit')?.defaultValue || '').trim();
+}
+
+function syncPlanReviewDraft(card, { fromRaw = false } = {}) {
+  if (!card) return getPlanReviewDraftFromDom(card);
+  const rawTextarea = card.querySelector('.plan-review-edit');
+  let draft;
+  if (fromRaw && rawTextarea) {
+    draft = parsePlanMarkdownToDraft(rawTextarea.value);
+    applyPlanDraftToEditor(card, draft, { preserveFocus: false });
+  } else {
+    draft = getPlanReviewDraftFromDom(card);
+  }
+  const serialized = serializePlanDraftToMarkdown(draft);
+  const original = planReviewOriginalMarkdown(card);
+  const originalCompact = String(card.dataset.originalCompactMarkdown || '').trim();
+  const rawMode = card.dataset.editing === 'true';
+  const currentText = rawMode && rawTextarea
+    ? String(rawTextarea.value || '').trim()
+    : serialized;
+  // Dirty relative to the text the user was shown, or to the compact baseline
+  // for structured edits (so verbose display without changes stays clean).
+  const dirty = rawMode
+    ? currentText !== original
+    : serialized !== originalCompact;
+  card.dataset.planDirty = dirty ? 'true' : 'false';
+  if (dirty) {
+    card.dataset.editedText = currentText;
+    if (!fromRaw) card.dataset.planEditSource = 'structured';
+  } else {
+    delete card.dataset.editedText;
+    delete card.dataset.planEditSource;
+  }
+  if (!rawMode && rawTextarea && document.activeElement !== rawTextarea) {
+    // Keep the hidden raw buffer aligned with structured state when dirty;
+    // otherwise leave the original display text (important for verbose).
+    rawTextarea.value = dirty ? (serialized || original) : original;
+  }
+  const emptyNote = card.querySelector('.plan-review-empty-steps');
+  if (emptyNote) {
+    emptyNote.hidden = draft.steps.length > 0;
+  }
+  schedulePersist();
+  return draft;
+}
+
+function renumberPlanReviewSteps(card) {
+  const list = card?.querySelector?.('.plan-review-steps');
+  if (!list) return;
+  [...list.querySelectorAll('.plan-review-step')].forEach((item, index) => {
+    const number = item.querySelector('.plan-review-step-number');
+    if (number) {
+      const stepNumber = String(index + 1);
+      const reorderLabel = typeof t === 'function'
+        ? t('sp.plan.reorder_step', { step: stepNumber })
+        : `Drag to reorder step ${stepNumber}`;
+      number.textContent = stepNumber;
+      number.setAttribute('aria-label', reorderLabel);
+      number.title = reorderLabel;
+    }
+  });
+}
+
+const planReviewDraggedSteps = new WeakMap();
+
+function clearPlanReviewDropTargets(card) {
+  card?.querySelectorAll?.('.plan-review-step-drop-before, .plan-review-step-drop-after')
+    .forEach((item) => item.classList.remove('plan-review-step-drop-before', 'plan-review-step-drop-after'));
+}
+
+function finishPlanReviewStepDrag(card) {
+  const dragged = planReviewDraggedSteps.get(card);
+  dragged?.classList?.remove('plan-review-step-dragging');
+  planReviewDraggedSteps.delete(card);
+  clearPlanReviewDropTargets(card);
+}
+
+function movePlanReviewStep(card, item, target, placeAfter = false) {
+  const list = card?.querySelector?.('.plan-review-steps');
+  if (!list || !item || !target || item === target) return false;
+  const items = [...list.querySelectorAll('.plan-review-step')];
+  const fromIndex = items.indexOf(item);
+  const targetIndex = items.indexOf(target);
+  if (fromIndex < 0 || targetIndex < 0) return false;
+  const insertionIndex = targetIndex + (placeAfter ? 1 : 0) - (targetIndex > fromIndex ? 1 : 0);
+  if (insertionIndex === fromIndex) return false;
+  const reference = placeAfter ? target.nextElementSibling : target;
+  list.insertBefore(item, reference || null);
+  renumberPlanReviewSteps(card);
+  syncPlanReviewDraft(card);
+  return true;
+}
+
+function bindPlanReviewStepRow(card, item) {
+  if (!card || !item) return;
+  let number = item.querySelector('.plan-review-step-number');
+  const action = item.querySelector('.plan-review-step-input');
+  const removeBtn = item.querySelector('.plan-review-step-remove');
+
+  // Upgrade persisted cards created before step numbers became buttons.
+  if (number && number.tagName !== 'BUTTON') {
+    const handle = document.createElement('button');
+    handle.type = 'button';
+    handle.className = 'plan-review-step-number';
+    handle.textContent = number.textContent;
+    number.replaceWith(handle);
+    number = handle;
+  }
+
+  if (removeBtn && !removeBtn.dataset.bound) {
+    removeBtn.dataset.bound = 'true';
+    removeBtn.addEventListener('click', () => {
+      item.remove();
+      renumberPlanReviewSteps(card);
+      syncPlanReviewDraft(card);
+      const remaining = card.querySelector('.plan-review-step-input');
+      if (remaining) {
+        try { remaining.focus(); } catch {}
+      }
+    });
+  }
+
+  if (action && !action.dataset.bound) {
+    action.dataset.bound = 'true';
+    action.addEventListener('beforeinput', () => capturePlanReviewScrollSnapshot(action));
+    action.addEventListener('input', () => {
+      autosizePlanReviewField(action);
+      syncPlanReviewDraft(card);
+    });
+    autosizePlanReviewField(action);
+  }
+
+  if (number && !number.dataset.bound) {
+    number.dataset.bound = 'true';
+    number.draggable = true;
+    number.setAttribute('aria-keyshortcuts', 'ArrowUp ArrowDown');
+    number.addEventListener('dragstart', (event) => {
+      planReviewDraggedSteps.set(card, item);
+      item.classList.add('plan-review-step-dragging');
+      if (event.dataTransfer) {
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', number.textContent || '');
+      }
+    });
+    number.addEventListener('dragend', () => finishPlanReviewStepDrag(card));
+    number.addEventListener('keydown', (event) => {
+      if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+      const target = event.key === 'ArrowUp' ? item.previousElementSibling : item.nextElementSibling;
+      if (!target?.classList?.contains('plan-review-step')) return;
+      event.preventDefault();
+      if (movePlanReviewStep(card, item, target, event.key === 'ArrowDown')) {
+        try { number.focus(); } catch {}
+      }
+    });
+  }
+
+  if (!item.dataset.bound) {
+    item.dataset.bound = 'true';
+    item.addEventListener('dragover', (event) => {
+      const dragged = planReviewDraggedSteps.get(card);
+      if (!dragged || dragged === item) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+      const bounds = item.getBoundingClientRect();
+      const placeAfter = event.clientY >= bounds.top + (bounds.height / 2);
+      clearPlanReviewDropTargets(card);
+      item.classList.add(placeAfter ? 'plan-review-step-drop-after' : 'plan-review-step-drop-before');
+    });
+    item.addEventListener('drop', (event) => {
+      const dragged = planReviewDraggedSteps.get(card);
+      if (!dragged || dragged === item) return;
+      event.preventDefault();
+      const bounds = item.getBoundingClientRect();
+      const placeAfter = event.clientY >= bounds.top + (bounds.height / 2);
+      const movedHandle = dragged.querySelector('.plan-review-step-number');
+      movePlanReviewStep(card, dragged, item, placeAfter);
+      finishPlanReviewStepDrag(card);
+      try { movedHandle?.focus(); } catch {}
+    });
+  }
+}
+
+function createPlanReviewStepRow(card, step, index) {
+  const item = document.createElement('div');
+  item.className = 'plan-review-step';
+  item.setAttribute('role', 'listitem');
+
+  const number = document.createElement('button');
+  number.type = 'button';
+  number.className = 'plan-review-step-number';
+  number.textContent = String(step?.id || index + 1).replace(/\.$/, '') || String(index + 1);
+
+  const action = document.createElement('textarea');
+  action.className = 'plan-review-step-input plan-review-step-action';
+  action.rows = 1;
+  action.value = String(step?.action || '');
+  action.placeholder = typeof t === 'function' ? t('sp.plan.step_placeholder') : 'Step action';
+  action.setAttribute('aria-label', typeof t === 'function' ? t('sp.plan.step_placeholder') : 'Step action');
+
+  const removeBtn = document.createElement('button');
+  removeBtn.type = 'button';
+  removeBtn.className = 'plan-review-step-remove';
+  removeBtn.setAttribute('aria-label', typeof t === 'function' ? t('sp.plan.remove_step') : 'Remove step');
+  removeBtn.title = typeof t === 'function' ? t('sp.plan.remove_step') : 'Remove step';
+  removeBtn.textContent = '×';
+
+  item.appendChild(number);
+  item.appendChild(action);
+  item.appendChild(removeBtn);
+  bindPlanReviewStepRow(card, item);
+  queueMicrotask(() => autosizePlanReviewField(action));
+  return item;
+}
+
+function renderPlanReviewRisks(view, risks) {
+  if (!view) return;
+  const list = Array.isArray(risks)
+    ? risks.map((risk) => String(risk || '').trim()).filter(Boolean)
+    : [];
+  let risksEl = view.querySelector('.plan-review-risks');
+  if (!list.length) {
+    risksEl?.remove();
+    return;
+  }
+  if (!risksEl) {
+    risksEl = document.createElement('div');
+    risksEl.className = 'plan-review-risks';
+    // Keep risks above skills when present.
+    const skills = view.querySelector('.plan-review-skills');
+    if (skills) view.insertBefore(risksEl, skills);
+    else view.appendChild(risksEl);
+  }
+  risksEl.replaceChildren();
+  for (const risk of list) {
+    const riskItem = document.createElement('div');
+    riskItem.className = 'plan-review-risk';
+    riskItem.textContent = `⚠️ ${risk}`;
+    risksEl.appendChild(riskItem);
+  }
+}
+
+function applyPlanDraftToEditor(card, draft, { preserveFocus = true } = {}) {
+  const view = card?.querySelector?.('.plan-review-view');
+  if (!view) return;
+  const summaryInput = view.querySelector('.plan-review-summary-input');
+  if (summaryInput && (!preserveFocus || document.activeElement !== summaryInput)) {
+    summaryInput.value = String(draft?.summary || '');
+    autosizePlanReviewField(summaryInput);
+  }
+  const list = view.querySelector('.plan-review-steps');
+  if (!list) return;
+  const active = document.activeElement;
+  const activeIndex = preserveFocus && active?.classList?.contains('plan-review-step-input')
+    ? [...list.querySelectorAll('.plan-review-step-input')].indexOf(active)
+    : -1;
+  const selectionStart = activeIndex >= 0 ? active.selectionStart : null;
+  const selectionEnd = activeIndex >= 0 ? active.selectionEnd : null;
+  list.replaceChildren();
+  const steps = Array.isArray(draft?.steps) && draft.steps.length
+    ? draft.steps
+    : [{ id: '1', action: '' }];
+  steps.forEach((step, index) => {
+    list.appendChild(createPlanReviewStepRow(card, step, index));
+  });
+  renumberPlanReviewSteps(card);
+  const risks = Array.isArray(draft?.risks) ? draft.risks : [];
+  card.dataset.planRisks = JSON.stringify(risks);
+  renderPlanReviewRisks(view, risks);
+  if (activeIndex >= 0) {
+    const next = list.querySelectorAll('.plan-review-step-input')[activeIndex];
+    if (next) {
+      try {
+        next.focus();
+        if (selectionStart != null) next.setSelectionRange(selectionStart, selectionEnd ?? selectionStart);
+      } catch {}
+    }
+  }
+}
+
+function renderPlanReviewSkills(skillIds) {
+  const skills = document.createElement('div');
+  skills.className = 'plan-review-skills';
+  const label = document.createElement('div');
+  label.className = 'plan-review-skills-label';
+  label.textContent = typeof t === 'function' ? t('sp.plan.skills') : 'Skills to activate';
+  skills.appendChild(label);
+  const values = document.createElement('div');
+  values.className = 'plan-review-skill-list';
+  for (const skillId of skillIds) {
+    const value = document.createElement('code');
+    value.className = 'plan-review-skill';
+    value.textContent = skillId;
+    values.appendChild(value);
+  }
+  skills.appendChild(values);
+  return skills;
+}
+
+function renderPlanReviewView(plan, fallbackMarkdown = '') {
+  const view = document.createElement('div');
+  view.className = 'plan-review-view';
+  const draft = planReviewDisplayFields(plan, fallbackMarkdown);
+  const skillIds = Array.isArray(plan?.skill_ids)
+    ? plan.skill_ids.map((id) => String(id || '').trim()).filter(Boolean)
+    : [];
+
+  const summaryInput = document.createElement('textarea');
+  summaryInput.className = 'plan-review-summary-input plan-review-summary';
+  summaryInput.rows = 1;
+  summaryInput.value = draft.summary;
+  summaryInput.placeholder = typeof t === 'function' ? t('sp.plan.summary_placeholder') : 'Plan summary';
+  summaryInput.setAttribute('aria-label', typeof t === 'function' ? t('sp.plan.summary_placeholder') : 'Plan summary');
+  view.appendChild(summaryInput);
+
+  const list = document.createElement('div');
+  list.className = 'plan-review-steps';
+  list.setAttribute('role', 'list');
+  view.appendChild(list);
+
+  const reorderHint = document.createElement('div');
+  reorderHint.className = 'plan-review-reorder-hint';
+  const reorderIcon = document.createElement('span');
+  reorderIcon.className = 'plan-review-reorder-icon';
+  reorderIcon.setAttribute('aria-hidden', 'true');
+  reorderIcon.textContent = '↕';
+  const reorderText = document.createElement('span');
+  reorderText.textContent = typeof t === 'function'
+    ? t('sp.plan.reorder_hint')
+    : 'Drag step numbers to reorder';
+  reorderHint.append(reorderIcon, reorderText);
+  view.appendChild(reorderHint);
+
+  const addBtn = document.createElement('button');
+  addBtn.type = 'button';
+  addBtn.className = 'plan-review-add-step';
+  addBtn.textContent = typeof t === 'function' ? t('sp.plan.add_step') : 'Add step';
+  view.appendChild(addBtn);
+
+  const emptyNote = document.createElement('div');
+  emptyNote.className = 'plan-review-empty-steps';
+  emptyNote.hidden = true;
+  emptyNote.textContent = typeof t === 'function'
+    ? t('sp.plan.empty_steps')
+    : 'Add at least one step before approving.';
+  view.appendChild(emptyNote);
+
+  if (skillIds.length) {
+    view.appendChild(renderPlanReviewSkills(skillIds));
+  }
+  // Risks render after skills placeholder so renderPlanReviewRisks can insert
+  // above skills once the view is mounted with the full draft.
+  renderPlanReviewRisks(view, draft.risks);
+
+  // Steps are filled after the view is attached to the card so remove handlers
+  // can reach the card root via apply/create helpers called from bind.
+  view._initialPlanDraft = draft;
+  return view;
+}
+
+function mountPlanReviewEditor(card, view) {
+  if (!card || !view) return;
+  if (view.dataset.mounted === 'true') {
+    // Rebind path: only re-wire controls if the restored markup already has them.
+    bindPlanReviewEditorControls(card, view);
+    return;
+  }
+  view.dataset.mounted = 'true';
+  const draft = view._initialPlanDraft || getPlanReviewDraftFromDom(card);
+  delete view._initialPlanDraft;
+  card.dataset.planRisks = JSON.stringify(Array.isArray(draft.risks) ? draft.risks : []);
+  applyPlanDraftToEditor(card, draft, { preserveFocus: false });
+  bindPlanReviewEditorControls(card, view);
+}
+
+function bindPlanReviewEditorControls(card, view) {
+  view.querySelectorAll('.plan-review-step').forEach((item) => bindPlanReviewStepRow(card, item));
+
+  const summaryInput = view.querySelector('.plan-review-summary-input');
+  if (summaryInput && !summaryInput.dataset.bound) {
+    summaryInput.dataset.bound = 'true';
+    summaryInput.addEventListener('beforeinput', () => capturePlanReviewScrollSnapshot(summaryInput));
+    summaryInput.addEventListener('input', () => {
+      autosizePlanReviewField(summaryInput);
+      syncPlanReviewDraft(card);
+    });
+    autosizePlanReviewField(summaryInput);
+  }
+
+  const addBtn = view.querySelector('.plan-review-add-step');
+  if (addBtn && !addBtn.dataset.bound) {
+    addBtn.dataset.bound = 'true';
+    addBtn.addEventListener('click', () => {
+      const list = view.querySelector('.plan-review-steps');
+      if (!list) return;
+      const index = list.querySelectorAll('.plan-review-step').length;
+      const row = createPlanReviewStepRow(card, { id: String(index + 1), action: '' }, index);
+      list.appendChild(row);
+      renumberPlanReviewSteps(card);
+      syncPlanReviewDraft(card);
+      const input = row.querySelector('.plan-review-step-input');
+      try { input?.focus(); } catch {}
+    });
+  }
+}
+
+function setPlanReviewRawEditing(card, enabled, { focus = false } = {}) {
+  const textarea = card?.querySelector?.('.plan-review-edit');
+  const changeBtn = card?.querySelector?.('.plan-review-change');
+  if (!textarea) return;
+  if (enabled) {
+    // Prefer original display text when clean (especially verbose). Only push
+    // structured serialization when the user already dirtied the draft.
+    const original = planReviewOriginalMarkdown(card);
+    if (card.dataset.planDirty === 'true') {
+      const draft = getPlanReviewDraftFromDom(card);
+      const serialized = serializePlanDraftToMarkdown(draft);
+      textarea.value = card.dataset.editedText || serialized || original;
+    } else {
+      textarea.value = original;
+    }
+    card.dataset.editing = 'true';
+    if (changeBtn) {
+      changeBtn.textContent = typeof t === 'function' ? t('sp.plan.done_editing_text') : 'Done';
+    }
+    if (focus) {
+      try {
+        textarea.focus();
+        textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+      } catch {}
+    }
+  } else {
+    // Collapse raw mode. If the buffer still matches the original display
+    // text, skip re-parse so verbose metadata is never ingested as risks.
+    const original = planReviewOriginalMarkdown(card);
+    const current = String(textarea.value || '').trim();
+    if (current && current !== original) {
+      syncPlanReviewDraft(card, { fromRaw: true });
+    } else {
+      // Restore clean structured state from the compact baseline.
+      const compact = String(card.dataset.originalCompactMarkdown || original).trim();
+      if (compact) {
+        applyPlanDraftToEditor(card, parsePlanMarkdownToDraft(compact), { preserveFocus: false });
+      }
+      card.dataset.planDirty = 'false';
+      delete card.dataset.editedText;
+      delete card.dataset.planEditSource;
+      textarea.value = original;
+    }
+    card.dataset.editing = 'false';
+    if (changeBtn) {
+      changeBtn.textContent = typeof t === 'function' ? t('sp.plan.edit_as_text') : 'Edit as text';
+    }
+  }
+  // The raw buffer is authoritative while visible. Disable the parallel
+  // structured controls so they cannot collect edits that raw approval/Done
+  // would discard. Re-enable them as soon as raw mode collapses.
+  setPlanReviewStructuredControlsDisabled(card, enabled);
+  schedulePersist();
+}
+
+function revealPlanReviewEditor(card, focus = false) {
+  setPlanReviewRawEditing(card, true, { focus });
+}
+
+function resolvePlanReviewApprovalText(card) {
+  const original = planReviewOriginalMarkdown(card);
+  const rawTextarea = card.querySelector('.plan-review-edit');
+  const rawMode = card.dataset.editing === 'true';
+  const displayMode = String(card.dataset.planMarkdownMode || 'compact');
+
+  if (rawMode) {
+    const current = String(rawTextarea?.value || '').trim();
+    if (!current || current === original) {
+      // Unchanged raw buffer — pin original plan object (skills intact).
+      return { editedText: '', markdownMode: displayMode };
+    }
+    // Compact-shaped buffers (or structured serialization after step edits)
+    // must approve as compact so the agent re-appends execution metadata and
+    // does not fail-close skill_ids via verbosePlanEdited.
+    // Verbose-looking buffers keep verbose mode so the agent parses metadata
+    // from the approved text.
+    const markdownMode = looksLikeVerbosePlanMarkdown(current) ? 'verbose' : 'compact';
+    return { editedText: current, markdownMode };
+  }
+
+  // "Done" collapses raw mode after syncing its parsed fields into the
+  // structured editor. Keep the exact dirty buffer as the approval source so
+  // edits to verbose-only metadata (skills, scheduling, submission, etc.) are
+  // not replaced by the lossy structured serialization. A later structured
+  // edit overwrites dataset.editedText with compact markdown via syncPlanReviewDraft.
+  const savedEdit = resolveSavedPlanReviewEdit(card);
+  if (savedEdit) return savedEdit;
+  const draft = getPlanReviewDraftFromDom(card);
+  if (!draft.steps.length) {
+    return { editedText: '', markdownMode: displayMode, emptySteps: true };
+  }
+  const serialized = serializePlanDraftToMarkdown(draft);
+  // Structured edits always approve as compact so the agent re-appends
+  // execution metadata and keeps skill activation from the planner object.
+  // Tradeoff: removing skill-related steps in the structured UI does not
+  // clear planner skill_ids; only verbose raw edits fail-close that path.
+  if (serialized && serialized !== String(card.dataset.originalCompactMarkdown || '').trim()) {
+    return { editedText: serialized, markdownMode: 'compact' };
+  }
+  // Verbose display with no structured changes: leave empty so the agent pins
+  // the original plan object (skills/metadata intact).
+  return { editedText: '', markdownMode: displayMode };
+}
+
+function planReviewViewNeedsHydration(view, savedText = '') {
+  const stepInputs = [...(view?.querySelectorAll?.('.plan-review-step-input') || [])];
+  const hasLiveBindings = view?.querySelector?.('.plan-review-summary-input')?.dataset?.bound === 'true';
+  if (hasLiveBindings) return false;
+  return stepInputs.length === 0
+    || !stepInputs.some((el) => String(el.value || '').trim())
+    || String(savedText || '') !== '';
 }
 
 function bindPlanReviewCard(card) {
@@ -2753,9 +4593,32 @@ function bindPlanReviewCard(card) {
   const tabId = rawTabId != null && rawTabId !== '' ? Number(rawTabId) : currentTabId;
   if (tabId == null || Number.isNaN(tabId)) return;
 
+  const view = card.querySelector('.plan-review-view');
+  if (view) {
+    // Restored cards lose live textarea values (only defaultValue survives
+    // innerHTML). Prefer dataset.editedText, else rebuild from the original
+    // compact plan so empty restored inputs do not wipe the draft.
+    const saved = card.dataset.editedText;
+    const needsHydrate = planReviewViewNeedsHydration(view, saved);
+    if (needsHydrate) {
+      const sourceText = (saved != null && saved !== '')
+        ? saved
+        : String(card.dataset.originalCompactMarkdown || planReviewOriginalMarkdown(card) || '').trim();
+      if (sourceText) {
+        applyPlanDraftToEditor(card, parsePlanMarkdownToDraft(sourceText), { preserveFocus: false });
+      } else if (view._initialPlanDraft) {
+        applyPlanDraftToEditor(card, view._initialPlanDraft, { preserveFocus: false });
+        delete view._initialPlanDraft;
+      }
+      if (saved != null && saved !== '') card.dataset.planDirty = 'true';
+      view.dataset.mounted = 'true';
+    } else if (view.dataset.mounted !== 'true') {
+      mountPlanReviewEditor(card, view);
+    }
+    bindPlanReviewEditorControls(card, view);
+  }
+
   const textarea = card.querySelector('.plan-review-edit');
-  const originalMarkdown = String(textarea?.defaultValue || textarea?.value || '').trim();
-  const markdownMode = String(card.dataset.planMarkdownMode || 'compact');
   const changeBtn = card.querySelector('.plan-review-change');
 
   // A <textarea>'s live `.value` is NOT captured when the conversation is
@@ -2766,11 +4629,15 @@ function bindPlanReviewCard(card) {
   // textarea from it on rebind. (#3)
   if (textarea) {
     const saved = card.dataset.editedText;
-    if (saved != null && saved !== '') textarea.value = saved;
+    if (saved != null && saved !== '' && card.dataset.editing === 'true') {
+      textarea.value = saved;
+    }
     if (!textarea.dataset.bound) {
       textarea.dataset.bound = 'true';
       textarea.addEventListener('input', () => {
         card.dataset.editedText = textarea.value;
+        card.dataset.planDirty = 'true';
+        card.dataset.planEditSource = 'raw';
         // The persist observer only watches childList/characterData, not
         // attributes, so the data attribute above won't trigger a save on its
         // own — schedule one so the edit reaches storage before a panel reload.
@@ -2779,21 +4646,34 @@ function bindPlanReviewCard(card) {
     }
   }
 
-  if (card.dataset.editing === 'true') revealPlanReviewEditor(card, false);
+  if (card.dataset.editing === 'true') {
+    setPlanReviewRawEditing(card, true, { focus: false });
+  } else if (changeBtn) {
+    changeBtn.textContent = typeof t === 'function' ? t('sp.plan.edit_as_text') : 'Edit as text';
+  }
 
   if (changeBtn && !changeBtn.dataset.bound) {
     changeBtn.dataset.bound = 'true';
-    changeBtn.addEventListener('click', () => revealPlanReviewEditor(card, true));
+    changeBtn.addEventListener('click', () => {
+      const enableRaw = card.dataset.editing !== 'true';
+      setPlanReviewRawEditing(card, enableRaw, { focus: enableRaw });
+    });
   }
 
   const approveBtn = card.querySelector('.plan-review-approve');
   if (approveBtn && !approveBtn.dataset.bound) {
     approveBtn.dataset.bound = 'true';
     approveBtn.addEventListener('click', () => {
-      const current = String(textarea?.value || '').trim();
-      const isEditing = card.dataset.editing === 'true';
-      const editedText = isEditing && current && (current !== originalMarkdown || markdownMode === 'verbose') ? current : '';
-      submitPlanReview(card, tabId, planId, 'approve', editedText);
+      const resolution = resolvePlanReviewApprovalText(card);
+      if (resolution.emptySteps) {
+        const emptyNote = card.querySelector('.plan-review-empty-steps');
+        if (emptyNote) emptyNote.hidden = false;
+        return;
+      }
+      // Persist the markdown mode used for this approval (structured edits force
+      // compact so planner execution metadata is re-appended server-side).
+      card.dataset.planMarkdownMode = resolution.markdownMode;
+      submitPlanReview(card, tabId, planId, 'approve', resolution.editedText);
     });
   }
 
@@ -2828,7 +4708,7 @@ function clearPlanReviewActiveRun(assistantEl, tabId = currentTabId) {
     sendBtn.disabled = false;
     hideActivity();
   }
-  drainQueuedContextMenuPromptsAfterPendingTabSwitch();
+  drainQueuedPromptsAfterRunSettles();
   refreshRecommendedActions();
 }
 
@@ -2836,68 +4716,6 @@ function planReviewConfidenceText(plan) {
   const confidence = Number(plan?.confidence);
   if (!Number.isFinite(confidence)) return '';
   return `${Math.round(Math.max(0, Math.min(1, confidence)) * 100)}%`;
-}
-
-function renderPlanReviewView(plan, fallbackMarkdown = '') {
-  const view = document.createElement('div');
-  view.className = 'plan-review-view';
-  // plan is always normalizePlan output (steps arrive trimmed, non-empty),
-  // so the steps can be rendered as-is.
-  const steps = Array.isArray(plan?.steps) ? plan.steps : [];
-  const summary = String(plan?.summary || '').trim();
-
-  if (!steps.length) {
-    const fallback = document.createElement('div');
-    fallback.className = 'plan-review-step-fallback';
-    fallback.textContent = (summary || String(fallbackMarkdown || '')).replace(/^#+\s*/gm, '').trim();
-    view.appendChild(fallback);
-    return view;
-  }
-
-  if (summary) {
-    const summaryEl = document.createElement('div');
-    summaryEl.className = 'plan-review-summary';
-    summaryEl.textContent = summary;
-    view.appendChild(summaryEl);
-  }
-
-  const list = document.createElement('div');
-  list.className = 'plan-review-steps';
-  list.setAttribute('role', 'list');
-  for (const [index, step] of steps.entries()) {
-    const item = document.createElement('div');
-    item.className = 'plan-review-step';
-    item.setAttribute('role', 'listitem');
-
-    const number = document.createElement('span');
-    number.className = 'plan-review-step-number';
-    number.textContent = String(step.id).replace(/\.$/, '') || String(index + 1);
-
-    const action = document.createElement('span');
-    action.className = 'plan-review-step-action';
-    action.textContent = step.action;
-
-    item.appendChild(number);
-    item.appendChild(action);
-    list.appendChild(item);
-  }
-  view.appendChild(list);
-  return view;
-}
-
-function revealPlanReviewEditor(card, focus = false) {
-  const textarea = card?.querySelector?.('.plan-review-edit');
-  if (!textarea) return;
-  // The data-editing attribute is the single source of truth; sidepanel.css
-  // shows/hides the read-only view, hint, Change button, and textarea from it.
-  card.dataset.editing = 'true';
-  if (focus) {
-    try {
-      textarea.focus();
-      textarea.setSelectionRange(textarea.value.length, textarea.value.length);
-    } catch {}
-  }
-  schedulePersist();
 }
 
 function rebindPlanReviewCards() {
@@ -3047,38 +4865,165 @@ function renderAgentErrorUpdate(data, tabId = currentTabId, requestId = '') {
 
 function rebindRestoredMessageControls() {
   rebindCopyButtons();
+  rebindScreenshotSaveButtons();
   rebindRetryButtons();
   rebindContinueButtons();
   rebindClarifyCards();
   rebindPlanReviewCards();
   rebindScheduleComposers();
+  document.querySelectorAll('form.workflow-parameter-form').forEach(bindSavedWorkflowParameterForm);
   rebindSubscribeButtons();
+}
+
+function getProviderPickerOptions() {
+  if (!providerPickerMenu) return [];
+  return Array.from(providerPickerMenu.querySelectorAll('.provider-picker-option'));
+}
+
+function setProviderPickerOpen(open) {
+  if (!providerPickerMenu || !providerPickerBtn) return;
+  providerPickerMenu.classList.toggle('hidden', !open);
+  providerPickerBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  if (open) {
+    const selected = getProviderPickerOptions().find((btn) => btn.getAttribute('aria-selected') === 'true')
+      || getProviderPickerOptions()[0];
+    // Focus the selected (or first) option so keyboard users can arrow immediately.
+    queueMicrotask(() => selected?.focus());
+  }
+}
+
+function moveProviderPickerFocus(delta) {
+  const options = getProviderPickerOptions();
+  if (!options.length) return;
+  const active = document.activeElement;
+  let idx = options.indexOf(active);
+  if (idx < 0) idx = options.findIndex((btn) => btn.getAttribute('aria-selected') === 'true');
+  if (idx < 0) idx = 0;
+  const next = options[Math.max(0, Math.min(options.length - 1, idx + delta))];
+  next?.focus();
+}
+
+function activateFocusedProviderPickerOption() {
+  const active = document.activeElement;
+  if (active?.classList?.contains('provider-picker-option')) {
+    active.click();
+  }
+}
+
+function syncProviderPickerButton() {
+  if (!providerSelect || !providerPickerLabel) return;
+  const id = providerSelect.value;
+  const shortLabel = providerPickerLabelById.get(id)
+    || providerSelect.selectedOptions?.[0]?.textContent
+    || id
+    || '';
+  providerPickerLabel.textContent = shortLabel;
+  if (providerPickerBtn) {
+    providerPickerBtn.title = providerSelect.selectedOptions?.[0]?.textContent || shortLabel;
+  }
+  if (providerPickerMenu) {
+    providerPickerMenu.querySelectorAll('.provider-picker-option').forEach((btn) => {
+      btn.setAttribute('aria-selected', btn.dataset.value === id ? 'true' : 'false');
+    });
+  }
+}
+
+function appendProviderPickerGroup(label) {
+  if (!providerPickerMenu || !label) return;
+  const el = document.createElement('div');
+  el.className = 'provider-picker-group-label';
+  el.textContent = label;
+  providerPickerMenu.appendChild(el);
+}
+
+function appendProviderPickerOption(id, name, meta) {
+  if (!providerPickerMenu) return;
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'provider-picker-option';
+  btn.setAttribute('role', 'option');
+  btn.dataset.value = id;
+  btn.setAttribute('aria-selected', 'false');
+
+  // Icons only in the open menu — closed header stays text-only so the
+  // WebBrain mark (and other brand chips) don't compete with the chrome.
+  const iconSrc = providerIconUrl(id);
+  if (iconSrc) {
+    const img = document.createElement('img');
+    img.className = 'provider-icon provider-icon-sm';
+    img.src = iconSrc;
+    img.alt = '';
+    img.width = 16;
+    img.height = 16;
+    img.decoding = 'async';
+    img.draggable = false;
+    btn.appendChild(img);
+  }
+
+  const text = document.createElement('span');
+  text.className = 'provider-picker-option-text';
+  text.textContent = name;
+  btn.appendChild(text);
+
+  if (meta) {
+    const metaEl = document.createElement('span');
+    metaEl.className = 'provider-picker-option-meta';
+    metaEl.textContent = meta;
+    btn.appendChild(metaEl);
+  }
+
+  btn.addEventListener('click', () => {
+    setProviderPickerOpen(false);
+    if (!providerSelect || providerSelect.value === id) {
+      // Re-selecting "More providers…" should still open settings.
+      if (id === MORE_PROVIDERS_OPTION_VALUE) {
+        providerSelect.value = id;
+        providerSelect.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      return;
+    }
+    providerSelect.value = id;
+    syncProviderPickerButton();
+    providerSelect.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+
+  providerPickerMenu.appendChild(btn);
 }
 
 async function loadProviders() {
   try {
     const res = await sendToBackground('get_providers');
     providerSelect.replaceChildren();
+    providerPickerMenu?.replaceChildren();
+    providerPickerLabelById.clear();
 
     const cloudConfig = res.providers.webbrain_cloud || { label: 'WebBrain Cloud' };
+    const cloudLabel = cloudConfig.label || 'WebBrain Cloud';
     const cloudGroup = document.createElement('optgroup');
     cloudGroup.label = t('sp.providers.no_setup_group');
     const cloudOption = document.createElement('option');
     cloudOption.value = 'webbrain_cloud';
-    cloudOption.textContent = `${cloudConfig.label || 'WebBrain Cloud'} — ${t('sp.providers.no_setup')}`;
+    cloudOption.textContent = `${cloudLabel} — ${t('sp.providers.no_setup')}`;
     cloudGroup.appendChild(cloudOption);
     providerSelect.appendChild(cloudGroup);
+    providerPickerLabelById.set('webbrain_cloud', cloudLabel);
+    appendProviderPickerGroup(cloudGroup.label);
+    appendProviderPickerOption('webbrain_cloud', cloudLabel, t('sp.providers.no_setup'));
 
     const configuredEntries = Object.entries(res.providers)
       .filter(([id, config]) => id !== 'webbrain_cloud' && config?.configured === true);
     if (configuredEntries.length) {
       const activeGroup = document.createElement('optgroup');
       activeGroup.label = t('sp.providers.active_group');
+      appendProviderPickerGroup(activeGroup.label);
       for (const [id, config] of configuredEntries) {
+        const name = config.label || id;
         const opt = document.createElement('option');
         opt.value = id;
-        opt.textContent = `${config.label || id} — ${t('sp.providers.active')}`;
+        opt.textContent = `${name} — ${t('sp.providers.active')}`;
         activeGroup.appendChild(opt);
+        providerPickerLabelById.set(id, name);
+        appendProviderPickerOption(id, name, t('sp.providers.active'));
       }
       providerSelect.appendChild(activeGroup);
     }
@@ -3087,10 +5032,12 @@ async function loadProviders() {
     moreOption.value = MORE_PROVIDERS_OPTION_VALUE;
     moreOption.textContent = t('sp.providers.more');
     providerSelect.appendChild(moreOption);
+    appendProviderPickerOption(MORE_PROVIDERS_OPTION_VALUE, t('sp.providers.more'), '');
 
     const selectableProviderIds = new Set(['webbrain_cloud', ...configuredEntries.map(([id]) => id)]);
     selectedProviderId = selectableProviderIds.has(res.active) ? res.active : 'webbrain_cloud';
     providerSelect.value = selectedProviderId;
+    syncProviderPickerButton();
   } catch (e) {
     console.error('Failed to load providers:', e);
   }
@@ -3146,7 +5093,7 @@ async function testConnection(options = {}) {
   }
 }
 
-function getSlashCommandQuery() {
+function getSlashAutocompleteContext() {
   if (!inputEl) return null;
   const value = inputEl.value;
   const selectionStart = inputEl.selectionStart ?? value.length;
@@ -3155,9 +5102,77 @@ function getSlashCommandQuery() {
 
   const beforeCursor = value.slice(0, selectionStart);
   const afterCursor = value.slice(selectionStart);
-  if (!/^\/[a-z-]*$/i.test(beforeCursor)) return null;
   if (afterCursor.trim()) return null;
-  return beforeCursor.toLowerCase();
+
+  if (/^\/[a-z-]*$/i.test(beforeCursor)) {
+    return {
+      kind: 'command',
+      query: beforeCursor.toLowerCase(),
+      completionStart: 0,
+      completionEnd: selectionStart,
+    };
+  }
+
+  const optionMatch = beforeCursor.match(/^(\/[a-z-]+)\s+(.*)$/i);
+  if (!optionMatch) return null;
+  const command = findSlashCommand(optionMatch[1]);
+  if (!command || !slashCommandIsDiscoverable(command)) return null;
+
+  const args = optionMatch[2];
+  const trailingWhitespace = !args || /\s$/.test(args);
+  const tokens = args.trim() ? args.trim().split(/\s+/) : [];
+  const query = trailingWhitespace ? '' : (tokens.pop() || '');
+  if (query && !query.startsWith('--')) return null;
+
+  const selected = new Set();
+  const selectedGroups = new Set();
+  for (const token of tokens) {
+    if (!token.startsWith('--') || token === '--') return null;
+    const option = slashCommandOptions(command).find((candidate) => candidate.value === token.toLowerCase());
+    if (!option || !slashOptionIsAvailable(option, selected, selectedGroups) || option.takesRemainder) return null;
+    selected.add(option.value);
+    if (option.exclusiveGroup) selectedGroups.add(option.exclusiveGroup);
+  }
+
+  return {
+    kind: 'option',
+    command,
+    query: query.toLowerCase(),
+    selected,
+    selectedGroups,
+    completionStart: selectionStart - query.length,
+    completionEnd: selectionStart,
+  };
+}
+
+function buildSlashAutocompleteMatches(context) {
+  if (!context) return [];
+  const candidates = context.kind === 'command'
+    ? SLASH_COMMANDS.filter(slashCommandIsDiscoverable)
+    : slashCommandOptions(context.command)
+      .filter((option) => slashOptionIsAvailable(option, context.selected, context.selectedGroups))
+      .map((option) => option === SLASH_HELP_OPTION
+        ? { ...option, descriptionKey: context.command.descriptionKey }
+        : option);
+  const matches = candidates
+    .filter((candidate) => candidate.value.startsWith(context.query))
+    .map((candidate) => ({
+      ...candidate,
+      kind: context.kind,
+      completionStart: context.completionStart,
+      completionEnd: context.completionEnd,
+    }));
+  if (context.kind === 'option' && !context.query) {
+    const selectedAction = slashCommandOptions(context.command)
+      .find((option) => context.selected.has(option.value) && option.action);
+    matches.unshift({
+      value: context.command.value,
+      label: '↵ Enter',
+      descriptionKey: selectedAction?.descriptionKey || context.command.descriptionKey,
+      kind: 'base-action',
+    });
+  }
+  return matches;
 }
 
 function getRecognizedSlashCommandPrefix(value) {
@@ -3235,12 +5250,13 @@ function renderSlashCommandAutocomplete() {
     option.type = 'button';
     option.id = `${SLASH_COMMAND_OPTION_ID_PREFIX}${index}`;
     option.className = 'slash-command-option';
+    option.classList.toggle('slash-command-base-action', command.kind === 'base-action');
     option.setAttribute('role', 'option');
     option.setAttribute('aria-selected', String(index === slashCommandSelectedIndex));
 
     const name = document.createElement('span');
     name.className = 'slash-command-name';
-    name.textContent = command.value;
+    name.textContent = command.label || command.value;
 
     const description = document.createElement('span');
     description.className = 'slash-command-description';
@@ -3249,7 +5265,8 @@ function renderSlashCommandAutocomplete() {
     option.append(name, description);
     option.addEventListener('pointerdown', (e) => {
       e.preventDefault();
-      applySlashCommandCompletion(index);
+      if (command.kind === 'base-action') activateSlashCommandBaseAction(index);
+      else applySlashCommandCompletion(index);
     });
     option.addEventListener('mousemove', () => setSlashCommandSelectedIndex(index));
     slashCommandMenuEl.appendChild(option);
@@ -3272,14 +5289,14 @@ function hideSlashCommandAutocomplete() {
 }
 
 function updateSlashCommandAutocomplete() {
-  const query = getSlashCommandQuery();
-  if (!query) {
+  const context = getSlashAutocompleteContext();
+  if (!context) {
     hideSlashCommandAutocomplete();
     return;
   }
 
   const previouslySelected = slashCommandMatches[slashCommandSelectedIndex]?.value;
-  const matches = SLASH_COMMANDS.filter((command) => command.value.startsWith(query));
+  const matches = buildSlashAutocompleteMatches(context);
   if (matches.length === 0) {
     hideSlashCommandAutocomplete();
     return;
@@ -3298,20 +5315,37 @@ function setSlashCommandSelectedIndex(index) {
 }
 
 function applySlashCommandCompletion(index = slashCommandSelectedIndex) {
-  const command = slashCommandMatches[index];
-  if (!command || !inputEl) return false;
-  inputEl.value = `${command.value} `;
-  inputEl.setSelectionRange(inputEl.value.length, inputEl.value.length);
-  hideSlashCommandAutocomplete();
+  const match = slashCommandMatches[index];
+  if (!match || !inputEl) return false;
+  const before = inputEl.value.slice(0, match.completionStart);
+  const after = inputEl.value.slice(match.completionEnd);
+  resetComposerHistoryNavigation(currentTabId);
+  inputEl.value = `${before}${match.value} ${after}`;
+  const cursor = before.length + match.value.length + 1;
+  inputEl.setSelectionRange(cursor, cursor);
   autoResizeInput();
+  updateSlashCommandAutocomplete();
   syncSendButtonState();
   inputEl.focus();
   return true;
 }
 
+function activateSlashCommandBaseAction(index = slashCommandSelectedIndex) {
+  const match = slashCommandMatches[index];
+  if (match?.kind !== 'base-action' || !inputEl) return false;
+  resetComposerHistoryNavigation(currentTabId);
+  inputEl.value = inputEl.value.trimEnd();
+  hideSlashCommandAutocomplete();
+  autoResizeInput();
+  syncSendButtonState();
+  inputEl.focus();
+  void sendMessage();
+  return true;
+}
+
 function isExactSlashCommandQuery() {
-  const query = getSlashCommandQuery();
-  return !!query && SLASH_COMMANDS.some((command) => command.value === query);
+  const invocation = parseSlashInvocation(inputEl?.value || '');
+  return !!invocation && !invocation.error;
 }
 
 function handleSlashCommandKeydown(e) {
@@ -3330,12 +5364,24 @@ function handleSlashCommandKeydown(e) {
     return true;
   }
   if (e.key === 'Tab') {
+    const match = slashCommandMatches[slashCommandSelectedIndex];
+    const completionIndex = match?.kind === 'base-action'
+      ? slashCommandSelectedIndex + 1
+      : slashCommandSelectedIndex;
+    if (!slashCommandMatches[completionIndex]) return false;
     e.preventDefault();
-    return applySlashCommandCompletion();
+    return applySlashCommandCompletion(completionIndex);
   }
-  if (e.key === 'Enter' && !isExactSlashCommandQuery()) {
-    e.preventDefault();
-    return applySlashCommandCompletion();
+  if (e.key === 'Enter') {
+    const match = slashCommandMatches[slashCommandSelectedIndex];
+    if (match?.kind === 'base-action') {
+      e.preventDefault();
+      return activateSlashCommandBaseAction();
+    }
+    if (match?.kind === 'option' || !isExactSlashCommandQuery()) {
+      e.preventDefault();
+      return applySlashCommandCompletion();
+    }
   }
   if (e.key === 'Escape') {
     e.preventDefault();
@@ -3346,6 +5392,11 @@ function handleSlashCommandKeydown(e) {
 }
 
 function handleInput() {
+  resetComposerHistoryNavigation(currentTabId);
+  if (!isPermissionSkipCommandDraft(inputEl?.value)) {
+    const tabId = normalizePermissionSkipTabId(currentTabId);
+    if (tabId != null) permissionSkipCommandContextsByTab.delete(tabId);
+  }
   autoResizeInput();
   updateSlashCommandAutocomplete();
   syncSendButtonState();
@@ -3378,20 +5429,8 @@ function syncApiMutationsAllowedForCurrentTab() {
   updateApiBadge();
 }
 
-function getLeadingSlashCommand(value) {
-  const text = String(value || '').trimStart();
-  const lowerText = text.toLowerCase();
-  const command = SLASH_COMMANDS.find((candidate) => {
-    if (!lowerText.startsWith(candidate.value)) return false;
-    const next = text.charAt(candidate.value.length);
-    return !next || /\s/.test(next);
-  });
-  return command?.value || null;
-}
-
 function isOutOfBandSlashDraft(value) {
-  const command = getLeadingSlashCommand(value);
-  return !!command && OUT_OF_BAND_SLASH_COMMANDS.has(command);
+  return slashInvocationIsOutOfBand(parseSlashInvocation(value));
 }
 
 function syncSendButtonState() {
@@ -3430,7 +5469,8 @@ function showComposerToast(message, { duration = 2600 } = {}) {
     toast.setAttribute('aria-live', 'polite');
     inputArea?.parentNode?.insertBefore(toast, inputArea);
   }
-  toast.textContent = message;
+  if (isSystemHtml(message)) toast.innerHTML = message.__systemHtml;
+  else toast.textContent = message;
   toast.classList.remove('hidden');
   clearTimeout(composerToastTimer);
   composerToastTimer = setTimeout(() => {
@@ -3440,6 +5480,118 @@ function showComposerToast(message, { duration = 2600 } = {}) {
 
 function addPersistentSlashMessage(content) {
   return addMessage('system', content, { beforeCurrentAssistant: true });
+}
+
+function screenshotFilenamePrefix(pageUrl) {
+  try {
+    const url = new URL(String(pageUrl || ''));
+    if (!/^https?:$/.test(url.protocol)) return '';
+    const hostname = url.hostname.replace(/^www\./i, '');
+    let pathname = url.pathname;
+    try { pathname = decodeURIComponent(pathname); } catch {}
+    const raw = `${hostname}${pathname === '/' ? '' : `-${pathname.replace(/^\/+|\/+$/g, '')}`}`;
+    return raw
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^\p{L}\p{N}._-]+/gu, '-')
+      .slice(0, 160)
+      .replace(/[-.]+$/g, '');
+  } catch {
+    return '';
+  }
+}
+
+function screenshotDownloadFilename(pageUrl = '', fullPage = false) {
+  const prefix = screenshotFilenamePrefix(pageUrl) || 'webbrain';
+  return `${prefix}-${fullPage ? 'full-page-' : ''}screenshot.png`;
+}
+
+function renderScreenshotResult(dataUrl, { fullPage = false, warning = '', pageUrl = '' } = {}) {
+  const warningHtml = warning
+    ? `<div class="screenshot-warning"><strong>⚠️ ${escapeHtml(warning)}</strong></div>`
+    : '';
+  const imageClass = fullPage
+    ? 'screenshot-result-image screenshot-result-image-full-page'
+    : 'screenshot-result-image';
+  const filename = screenshotDownloadFilename(pageUrl, fullPage);
+  const saveLabel = t('sp.screenshot.save_as');
+  return `
+    <div class="screenshot-result">
+      ${warningHtml}
+      <img src="${escapeHtml(dataUrl)}" class="${imageClass}" alt="${escapeHtml(fullPage ? 'Full-page screenshot' : 'Screenshot')}"/>
+      <div class="screenshot-result-actions">
+        <button type="button" class="screenshot-save-btn" data-filename="${escapeHtml(filename)}" aria-label="${escapeHtml(saveLabel)}">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M12 3v12"></path>
+            <path d="m7 10 5 5 5-5"></path>
+            <path d="M5 21h14"></path>
+          </svg>
+          <span>${escapeHtml(saveLabel)}</span>
+        </button>
+      </div>
+    </div>`;
+}
+
+function bindScreenshotSaveButton(btn) {
+  if (!btn || btn.__wbScreenshotSaveBound) return;
+  btn.__wbScreenshotSaveBound = true;
+  btn.addEventListener('click', async (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const result = btn.closest('.screenshot-result');
+    const dataUrl = result?.querySelector('.screenshot-result-image')?.getAttribute('src') || '';
+    if (!/^data:image\/png;base64,/i.test(dataUrl)) return;
+
+    const label = btn.querySelector('span');
+    btn.disabled = true;
+    btn.setAttribute('aria-busy', 'true');
+    if (label) label.textContent = t('sp.screenshot.saving');
+    try {
+      await chrome.downloads.download({
+        url: dataUrl,
+        filename: btn.dataset.filename || screenshotDownloadFilename(
+          '',
+          result?.querySelector('.screenshot-result-image-full-page') != null,
+        ),
+        saveAs: true,
+        conflictAction: 'uniquify',
+      });
+    } catch (error) {
+      const message = error?.message || String(error);
+      // Closing the native Save As dialog is an ordinary user choice.
+      if (!/cancel(?:led|ed)/i.test(message)) {
+        showComposerToast(t('sp.screenshot.save_failed', { msg: message }), { duration: 5000 });
+      }
+    } finally {
+      btn.disabled = false;
+      btn.removeAttribute('aria-busy');
+      if (label) label.textContent = t('sp.screenshot.save_as');
+    }
+  });
+}
+
+function rebindScreenshotSaveButtons(root = document) {
+  root.querySelectorAll?.('.screenshot-save-btn').forEach(bindScreenshotSaveButton);
+}
+
+function addScreenshotResultMessage(dataUrl, options = {}) {
+  const msgEl = addPersistentSlashMessage(systemHtml(renderScreenshotResult(dataUrl, options)));
+  rebindScreenshotSaveButtons(msgEl);
+  return msgEl;
+}
+
+function resolvePendingPermissionPromptForContext(context) {
+  const targetTabId = normalizePermissionSkipTabId(context?.targetTabId);
+  const targetClarifyId = String(context?.clarifyId || '');
+  if (targetTabId == null || !targetClarifyId) return false;
+  for (const card of document.querySelectorAll('.clarify-card[data-permission="1"]')) {
+    if (card.classList.contains('clarify-answered')) continue;
+    if (String(card.dataset.tabId || '') !== String(targetTabId)) continue;
+    if (String(card.dataset.clarifyId || '') !== targetClarifyId) continue;
+    submitClarify(card, targetTabId, targetClarifyId, 'once', 'slash-command');
+    return true;
+  }
+  return false;
 }
 
 function resolvePendingPermissionPromptsForTab(tabId) {
@@ -3457,20 +5609,63 @@ function resolvePendingPermissionPromptsForTab(tabId) {
   return resolved;
 }
 
+async function importConfigurationJson(json, tabId) {
+  try {
+    const res = await sendToBackground('import_config', { json });
+    await loadProviders();
+    if (currentTabId === tabId) {
+      addPersistentSlashMessage(t('sp.import_config.done', { count: res?.settingCount || 0 }));
+    }
+  } catch (error) {
+    if (currentTabId === tabId) {
+      addPersistentSlashMessage(t('sp.import_config.error', { error: error?.message || 'invalid configuration' }));
+    }
+  }
+}
+
+function requestConfigurationFile(tabId) {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json,application/json';
+  input.addEventListener('change', () => {
+    const file = input.files?.[0];
+    if (!file) return;
+    file.text()
+      .then((json) => importConfigurationJson(json, tabId))
+      .catch((error) => {
+        if (currentTabId === tabId) {
+          addPersistentSlashMessage(t('sp.import_config.error', { error: error?.message || 'file read failed' }));
+        }
+      });
+  }, { once: true });
+  input.click();
+}
+
 /**
  * Parse leading slash commands out of the user's message.
  * Returns the cleaned text (empty string if fully consumed).
  * May trigger async UI side effects (screenshot, export, etc.).
  */
-async function parseSlashCommands(text, tabId = currentTabId) {
-  // /help — list all available slash commands
-  if (/^\/help\b\s*/i.test(text)) {
-    addPersistentSlashMessage(systemHtml(t('sp.help_html')));
+async function parseSlashCommands(text, tabId = currentTabId, options = {}) {
+  const invocation = parseSlashInvocation(text);
+  if (!invocation) return text;
+  if (invocation.error || invocation.unsupported) {
+    showSlashInvocationError(invocation);
+    return '';
+  }
+  const { command, action, payload, optionValues } = invocation;
+
+  if (action === 'help') {
+    addPersistentSlashMessage(systemHtml(buildSlashCommandDetailHtml(command)));
     return '';
   }
 
-  // /list-schedules — refresh the scheduled job strip
-  if (/^\/list-schedules\b\s*/i.test(text)) {
+  if (command.value === '/help') {
+    addPersistentSlashMessage(systemHtml(buildSlashCommandHelpHtml()));
+    return '';
+  }
+
+  if (command.value === '/schedule' && action === 'list') {
     const jobs = await refreshScheduledJobs({ tabId });
     if (currentTabId !== tabId) return '';
     addPersistentSlashMessage(visibleScheduledJobs(jobs).length
@@ -3479,81 +5674,91 @@ async function parseSlashCommands(text, tabId = currentTabId) {
     return '';
   }
 
-  // /check-progress — dump the current tab's progress_update ledger
-  if (/^\/check-progress\b\s*/i.test(text)) {
+  if (command.value === '/progress') {
     await showProgress(tabId);
     return '';
   }
 
-  // /show-scratchpad — dump the current tab's agent scratchpad
-  if (/^\/show-scratchpad\b\s*/i.test(text)) {
+  if (command.value === '/scratchpad' && action === 'show') {
     await showScratchpad(tabId);
     return '';
   }
 
-  const mRemember = text.match(/^\/remember\b\s*/i);
-  if (mRemember) {
-    await rememberUserMemory(text.slice(mRemember[0].length), tabId);
+  if (command.value === '/memory' && action === 'add') {
+    await rememberUserMemory(payload, tabId);
     return '';
   }
 
-  if (/^\/show-memory\b\s*/i.test(text)) {
+  if (command.value === '/memory' && action === 'show') {
     await showUserMemory(tabId);
     return '';
   }
 
-  const mForgetMemory = text.match(/^\/forget-memory\b\s*/i);
-  if (mForgetMemory) {
-    await forgetUserMemory(text.slice(mForgetMemory[0].length), tabId);
+  if (command.value === '/memory' && action === 'forget') {
+    await forgetUserMemory(payload, tabId);
     return '';
   }
 
-  // /edit-scratchpad — append text after the command to the scratchpad
-  const mEditScratchpad = text.match(/^\/edit-scratchpad\b\s*/i);
-  if (mEditScratchpad) {
-    await editScratchpad(text.slice(mEditScratchpad[0].length), tabId);
+  if (command.value === '/workflow' && action === 'list') {
+    await showSavedWorkflows(tabId);
     return '';
   }
 
-  // /clear-scratchpad — clear the current tab's agent scratchpad
-  if (/^\/clear-scratchpad\b\s*/i.test(text)) {
+  if (command.value === '/workflow' && action === 'save') {
+    await saveLatestWorkflow(payload, tabId);
+    return '';
+  }
+
+  if (command.value === '/workflow' && action === 'run') {
+    await prepareSavedWorkflowRun(payload, tabId);
+    return '';
+  }
+
+  if (command.value === '/workflow' && action === 'delete') {
+    await deleteSavedWorkflow(payload, tabId);
+    return '';
+  }
+
+  if (command.value === '/scratchpad' && action === 'append') {
+    await editScratchpad(payload, tabId);
+    return '';
+  }
+
+  if (command.value === '/scratchpad' && action === 'clear') {
     clearScratchpad(tabId);
     return '';
   }
 
-  // /schedule — open a deterministic scheduled-task composer
-  const mSchedule = text.match(/^\/schedule\b\s*/i);
-  if (mSchedule) {
-    renderScheduleComposer(text.slice(mSchedule[0].length).trim(), tabId);
+  if (command.value === '/schedule' && action === 'create') {
+    renderScheduleComposer(payload, tabId);
     return '';
   }
 
-  // /allow-api — enable API mutation override
-  const mApi = text.match(/^\/allow-api\b\s*/i);
-  if (mApi) {
+  if (command.value === '/allow-api') {
     const wasAlreadyAllowed = isApiMutationsAllowedForTab(tabId);
     setApiMutationsAllowedForTab(tabId, true);
     if (!wasAlreadyAllowed) {
       addPersistentSlashMessage(systemHtml(t('sp.api.enabled_html')));
     }
-    return text.slice(mApi[0].length).trim();
+    return payload;
   }
 
-  // /dangerously-skip-permissions — disable the master permission prompt gate
-  const mSkipPermissions = text.match(/^\/dangerously-skip-permissions\b\s*/i);
-  if (mSkipPermissions) {
+  if (command.value === '/dangerously-skip-permissions') {
     await chrome.storage.local.set({ [PERMISSION_GATE_KEY]: false }).catch(() => {});
     askBeforeConsequential = false;
     updateActWarning();
-    resolvePendingPermissionPromptsForTab(tabId);
+    updateInputPlaceholder();
+    if (options.permissionSkipContext) {
+      resolvePendingPermissionPromptForContext(options.permissionSkipContext);
+    } else {
+      resolvePendingPermissionPromptsForTab(tabId);
+    }
     addPersistentSlashMessage(systemHtml(t('sp.permissions.disabled_html')));
-    return text.slice(mSkipPermissions[0].length).trim();
+    return payload;
   }
 
-  // /compact — force context compaction for this conversation
-  const mCompact = text.match(/^\/compact\b\s*/i);
-  if (mCompact) {
-    const remainder = text.slice(mCompact[0].length).trim();
+  if (command.value === '/compact') {
+    const remainder = payload;
     const res = await sendToBackground('compact_conversation', { tabId });
     if (currentTabId !== tabId) return remainder;
     if (res?.ok && res.compacted) {
@@ -3568,27 +5773,24 @@ async function parseSlashCommands(text, tabId = currentTabId) {
     return remainder;
   }
 
-  // /verbose — toggle verbose/compact tool display
-  if (/^\/verbose\b\s*/i.test(text)) {
+  if (command.value === '/verbose') {
     verboseMode = !verboseMode;
     if (verboseBtn) verboseBtn.classList.toggle('active', verboseMode);
     await chrome.storage.local.set({ verboseMode }).catch(() => {});
     if (currentTabId !== tabId) return '';
-    showComposerToast(verboseMode
+    showComposerToast(systemHtml(verboseMode
       ? t('sp.compact.verbose_on')
-      : t('sp.compact.verbose_off'));
+      : t('sp.compact.verbose_off')));
     return '';
   }
 
-  // /reset — clear conversation (same as clear button)
-  if (/^\/reset\b\s*/i.test(text)) {
+  if (command.value === '/reset') {
     await sendToBackground('clear_conversation', { tabId });
     await renderClearedConversationForTab(tabId);
     return '';
   }
 
-  // /screenshot — capture visible tab and display in chat
-  if (/^\/screenshot\b\s*/i.test(text)) {
+  if (command.value === '/screenshot' && action === 'viewport') {
     try {
       const tab = tabId == null ? null : await chrome.tabs.get(tabId);
       if (currentTabId !== tabId || !tab?.active) return '';
@@ -3596,8 +5798,7 @@ async function parseSlashCommands(text, tabId = currentTabId) {
       if (windowId != null) {
         const dataUrl = await chrome.tabs.captureVisibleTab(windowId, { format: 'png' });
         if (currentTabId !== tabId) return '';
-        const imgHtml = `<img src="${dataUrl}" style="max-width:100%;border-radius:6px;margin:4px 0;" alt="Screenshot"/>`;
-        addPersistentSlashMessage(systemHtml(imgHtml));
+        addScreenshotResultMessage(dataUrl, { pageUrl: tab.url });
       }
     } catch (e) {
       if (currentTabId !== tabId) return '';
@@ -3606,17 +5807,18 @@ async function parseSlashCommands(text, tabId = currentTabId) {
     return '';
   }
 
-  // /full-page-screenshot — capture the full scrollable page and display in chat
-  if (/^\/full-page-screenshot\b\s*/i.test(text)) {
+  if (command.value === '/screenshot' && action === 'full-page') {
     try {
+      const pageUrl = tabId == null
+        ? ''
+        : await chrome.tabs.get(tabId).then(tab => tab?.url || '').catch(() => '');
       const res = await sendToBackground('capture_full_page_screenshot', { tabId });
       if (currentTabId !== tabId) return '';
       if (!res?.ok || !res.dataUrl) {
         addPersistentSlashMessage(systemHtml(tSystemHtml('sp.screenshot.error', { msg: res?.error || 'unknown error' })));
         return '';
       }
-      const imgHtml = `<img src="${res.dataUrl}" style="max-width:100%;max-height:70vh;object-fit:contain;object-position:top;border-radius:6px;margin:4px 0;" alt="Full-page screenshot"/>`;
-      addPersistentSlashMessage(systemHtml(imgHtml));
+      addScreenshotResultMessage(res.dataUrl, { fullPage: true, warning: res.warning, pageUrl });
     } catch (e) {
       if (currentTabId !== tabId) return '';
       addPersistentSlashMessage(systemHtml(tSystemHtml('sp.screenshot.error', { msg: e.message })));
@@ -3624,17 +5826,12 @@ async function parseSlashCommands(text, tabId = currentTabId) {
     return '';
   }
 
-  // /record-full-screen — start a screen/window recording without LLM involvement
-  const mRecordFullScreen = text.match(/^\/record-full-screen(?:\s|$)/i);
-  if (mRecordFullScreen) {
-    await startFullScreenRecording(tabId, parseRecordingSlashOptions(text, mRecordFullScreen));
+  if (command.value === '/record' && action === 'full-screen') {
+    await startFullScreenRecording(tabId, { transcribeAfter: optionValues.has('--transcribe') });
     return '';
   }
 
-  // /record — start recording the current tab without LLM involvement
-  const mRecord = text.match(/^\/record(?:\s|$)/i);
-  if (mRecord) {
-    const recordOptions = parseRecordingSlashOptions(text, mRecord);
+  if (command.value === '/record' && action === 'tab') {
     try {
       const res = await sendToBackground('start_tab_recording', {
         tabId,
@@ -3642,7 +5839,7 @@ async function parseSlashCommands(text, tabId = currentTabId) {
           video: true,
           mic: true,
           showBanner: true,
-          transcribeAfter: recordOptions.transcribeAfter,
+          transcribeAfter: optionValues.has('--transcribe'),
         },
       });
       if (currentTabId !== tabId) return '';
@@ -3658,9 +5855,40 @@ async function parseSlashCommands(text, tabId = currentTabId) {
     return '';
   }
 
-  // /export-with-traces — export the full tool chain from the trace store.
-  // Checked BEFORE /export because /export\b also matches /export-with-traces.
-  if (/^\/export-with-traces\b\s*/i.test(text)) {
+  if (command.value === '/import' && action === 'file') {
+    requestConfigurationFile(tabId);
+    return '';
+  }
+
+  if (command.value === '/import' && action === 'json') {
+    await importConfigurationJson(payload, tabId);
+    return '';
+  }
+
+  if (command.value === '/export' && action === 'config') {
+    try {
+      const res = await sendToBackground('export_config', { locale: getLocale() });
+      if (!res?.ok || !res.json) throw new Error(res?.error || 'empty configuration');
+      const blob = new Blob([res.json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `webbrain-config-${Date.now()}.json`;
+      document.body.appendChild(a);
+      try {
+        a.click();
+      } finally {
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 7000);
+      }
+      addPersistentSlashMessage(t('sp.export_config.done'));
+    } catch (error) {
+      addPersistentSlashMessage(t('sp.export_config.error', { error: error?.message || 'unknown error' }));
+    }
+    return '';
+  }
+
+  if (command.value === '/export' && action === 'traces') {
     let res;
     try {
       res = await sendToBackground('export_traces', { tabId });
@@ -3702,10 +5930,10 @@ async function parseSlashCommands(text, tabId = currentTabId) {
     return '';
   }
 
-  // /export — export conversation as markdown
-  if (/^\/export\b\s*/i.test(text)) {
+  if (command.value === '/export' && action === 'conversation') {
     const messages = messagesEl.querySelectorAll('.message');
-    let md = '# WebBrain Conversation\n\n';
+    const webbrainVersion = chrome.runtime.getManifest().version || 'unknown';
+    let md = `# WebBrain Conversation\n\n_Exported with WebBrain v${webbrainVersion}_\n\n`;
     for (const msg of messages) {
       const textEl = msg.querySelector('.message-text');
       if (!textEl) continue;
@@ -3735,49 +5963,38 @@ async function parseSlashCommands(text, tabId = currentTabId) {
     return '';
   }
 
-  // /profile — toggle profile auto-fill on/off
-  if (/^\/profile\b\s*/i.test(text)) {
+  if (command.value === '/profile') {
     const stored = await chrome.storage.local.get(['profileEnabled', 'profileText']);
     const newState = !stored.profileEnabled;
     await chrome.storage.local.set({ profileEnabled: newState });
     if (currentTabId !== tabId) return '';
-    showComposerToast(newState
+    showComposerToast(systemHtml(newState
       ? t('sp.profile.on')
-      : t('sp.profile.off'));
+      : t('sp.profile.off')));
     return '';
   }
 
-  // /ask — switch to Ask mode, then send remaining text
-  const mAsk = text.match(/^\/ask\b\s*/i);
-  if (mAsk) {
+  if (command.value === '/ask') {
     setMode('ask');
-    return text.slice(mAsk[0].length).trim();
+    return payload;
   }
 
-  // /act — switch to Act mode, then send remaining text
-  const mAct = text.match(/^\/act\b\s*/i);
-  if (mAct) {
+  if (command.value === '/act') {
     const ok = await ensureActMode();
-    return ok ? text.slice(mAct[0].length).trim() : '';
+    return ok ? payload : '';
   }
 
-  // /dev — switch to Dev mode, then send remaining text
-  const mDev = text.match(/^\/dev\b\s*/i);
-  if (mDev) {
+  if (command.value === '/dev') {
     const ok = await ensureDevMode();
-    return ok ? text.slice(mDev[0].length).trim() : '';
+    return ok ? payload : '';
   }
 
-  // /plan — switch to Ask mode with explicit planning intent
-  const mPlan = text.match(/^\/plan\b\s*/i);
-  if (mPlan) {
+  if (command.value === '/plan') {
     setMode('ask');
-    const rest = text.slice(mPlan[0].length).trim();
-    return rest ? `Plan the following step by step: ${rest}` : '';
+    return payload ? `Plan the following step by step: ${payload}` : '';
   }
 
-  // /vision — toggle vision support on active provider
-  if (/^\/vision\b\s*/i.test(text)) {
+  if (command.value === '/vision') {
     try {
       const { providers, active } = await sendToBackground('get_providers');
       const config = providers[active];
@@ -3788,32 +6005,36 @@ async function parseSlashCommands(text, tabId = currentTabId) {
           config: { ...config, supportsVision: newVision },
         });
         if (currentTabId !== tabId) return '';
-        showComposerToast(newVision
+        showComposerToast(systemHtml(newVision
           ? t('sp.vision.on')
-          : t('sp.vision.off'));
+          : t('sp.vision.off')));
       }
     } catch (e) {
       if (currentTabId !== tabId) return '';
-      showComposerToast(tSystemHtml('sp.vision.error', { msg: e.message }), { duration: 5000 });
+      showComposerToast(systemHtml(tSystemHtml('sp.vision.error', { msg: e.message })), { duration: 5000 });
     }
     return '';
   }
 
-  return text;
+  showSlashInvocationError({ error: 'invalid-usage', command });
+  return '';
 }
 
 function modeForMessageText(text) {
-  if (/^\/(?:ask|plan)\b/i.test(text)) return 'ask';
-  if (/^\/act\b/i.test(text)) return 'act';
-  if (/^\/dev\b/i.test(text)) return 'dev';
+  const invocation = parseSlashInvocation(text);
+  if (invocation?.command?.value === '/ask' || invocation?.command?.value === '/plan') return 'ask';
+  if (invocation?.command?.value === '/act') return 'act';
+  if (invocation?.command?.value === '/dev') return 'dev';
   return agentMode;
 }
 
-function parseRecordingSlashOptions(text, commandMatch) {
-  const args = text.slice(commandMatch?.[0]?.length || 0);
-  return {
-    transcribeAfter: /(?:^|\s)--transcribe(?:\s|$)/i.test(args),
-  };
+function reportTrailingRunCaptureError(directive, error, tabId) {
+  if (currentTabId !== tabId || renderedTabId !== tabId) return;
+  const message = error?.message || String(error || 'unknown error');
+  const html = directive?.kind === 'record'
+    ? tSystemHtml('sp.record.error', { error: message })
+    : tSystemHtml('sp.screenshot.error', { msg: message });
+  addPersistentSlashMessage(systemHtml(html));
 }
 
 async function startFullScreenRecording(tabId = currentTabId, recordOptions = {}) {
@@ -3875,7 +6096,9 @@ async function sendMessage(extraChatParams = {}) {
   stopListening();
   let text = inputEl.value.trim();
   if (!text) return;
+  const submittedText = text;
   const tabId = currentTabId;
+  const permissionSkipContext = permissionSkipCommandContextForDraft(tabId, text);
   const requestId = createRunRequestId(tabId);
   text = normalizeScreenshotCommandText(text);
   if (isAwaitingPlanReviewForTab(tabId)) {
@@ -3889,12 +6112,13 @@ async function sendMessage(extraChatParams = {}) {
   }
   if (isProcessing) {
     if (isOutOfBandSlashDraft(text)) {
+      resetComposerHistoryNavigation(tabId);
       saveInputDraftForTab(tabId, '');
       hideSlashCommandAutocomplete();
       inputEl.value = '';
       autoResizeInput();
       syncSendButtonState();
-      await parseSlashCommands(text, tabId);
+      await parseSlashCommands(text, tabId, { permissionSkipContext });
       if (currentTabId === tabId) {
         if (!inputEl.value.trim() || inputEl.value.trim() === text) {
           inputEl.value = '';
@@ -3910,10 +6134,22 @@ async function sendMessage(extraChatParams = {}) {
     }
     return enqueueQueuedComposerMessage(tabId, text);
   }
+  let runCaptureDirective = null;
+  if (!retryOptions) {
+    runCaptureDirective = parseTrailingRunCaptureDirective(text);
+    if (runCaptureDirective?.error) {
+      showComposerToast(t('sp.slash.invalid_usage', {
+        usage: trailingRunCaptureUsage(runCaptureDirective.kind),
+      }), { duration: 5000 });
+      return false;
+    }
+    if (runCaptureDirective) text = runCaptureDirective.prompt;
+  }
   const modeForSend = retryOptions?.mode || modeOverride || modeForMessageText(text);
   const apiMutationsAllowedForSend = retryOptions
     ? !!retryOptions.apiMutationsAllowed
     : isApiMutationsAllowedForTab(tabId) || /^\/allow-api\b/i.test(text);
+  resetComposerHistoryNavigation(tabId);
   saveInputDraftForTab(tabId, '');
   hideSlashCommandAutocomplete();
 
@@ -3926,7 +6162,7 @@ async function sendMessage(extraChatParams = {}) {
 
   // Parse any leading slash command. parseSlashCommands may strip the
   // command from `text` and toggle apiMutationsAllowed as a side effect.
-  if (!retryOptions) text = await parseSlashCommands(text, tabId);
+  if (!retryOptions) text = await parseSlashCommands(text, tabId, { permissionSkipContext });
   let renderToCurrentTab = sameTabId(currentTabId, tabId) && sameTabId(renderedTabId, tabId);
   if (!renderToCurrentTab) {
     if (text) saveInputDraftForTab(tabId, text);
@@ -3962,6 +6198,7 @@ async function sendMessage(extraChatParams = {}) {
     return false;
   }
 
+  let userEl = null;
   let assistantEl = null;
   const attachmentsForSend = retryOptions
     ? (Array.isArray(retryOptions.attachments) ? retryOptions.attachments.slice() : [])
@@ -3981,7 +6218,7 @@ async function sendMessage(extraChatParams = {}) {
       clearPendingAttachmentsForTab(tabId);
       renderAttachmentPreviews();
     }
-    addMessage('user', text);
+    userEl = addMessage('user', text);
     showActivity(t('sp.activity.thinking'));
     assistantEl = addMessage('assistant', '');
     assistantEl.dataset.runRequestId = requestId;
@@ -3994,15 +6231,24 @@ async function sendMessage(extraChatParams = {}) {
   localRunRequestIds.set(tabId, requestId);
 
   let accepted = false;
+  let captureStartFailed = false;
   let completedSuccessfully = false;
   let promptEligibleCompletion = false;
   try {
-    const res = await sendToBackground('chat', {
+    const res = await sendRunWithReconnect('chat_start', {
       tabId,
       requestId,
       text,
       mode: modeForSend,
+      locale: getLocale(),
+      intentFailureMessage: t('sp.plan.intent_unavailable'),
       apiMutationsAllowed: apiMutationsAllowedForSend,
+      ...(runCaptureDirective ? {
+        runCapture: {
+          kind: runCaptureDirective.kind,
+          saveAs: runCaptureDirective.saveAs,
+        },
+      } : {}),
       ...(attachmentsForSend.length ? { attachments: attachmentsForSend } : {}),
       ...chatExtraParams,
     });
@@ -4011,7 +6257,7 @@ async function sendMessage(extraChatParams = {}) {
       chatHistoryRecordIdsByTab.set(tabId, res.conversationId);
     }
     accepted = true;
-    completedSuccessfully = updatesContainSuccessfulDone(res?.updates);
+    completedSuccessfully = res?.successfulDone === true || updatesContainSuccessfulDone(res?.updates);
     promptEligibleCompletion = completedSuccessfully || isSuccessfulAskCompletion(modeForSend, res);
     const returnedErrorUpdate = Array.isArray(res?.updates)
       ? res.updates.find(u => u?.type === 'error')
@@ -4026,20 +6272,17 @@ async function sendMessage(extraChatParams = {}) {
     // assistant answer). We optimistically cleared the chips on send, so
     // re-add them here — otherwise "switch providers and try again" is
     // impossible without re-picking every file.
-    if (attachmentsForSend.length && currentTabId === tabId
+    if (attachmentsForSend.length
         && res?.updates?.some(u => u?.type === 'attachment_rejected')) {
-      const pending = getPendingAttachmentsForTab(tabId);
-      pending.unshift(...attachmentsForSend.filter(att => !pending.includes(att)));
+      restorePendingAttachmentsForTab(tabId, attachmentsForSend);
       // Restore the prompt only if the user hasn't started typing a new one
       // while the rejected turn was in flight.
-      if (!inputEl.value.trim()) {
+      if (currentTabId === tabId && !inputEl.value.trim()) {
         inputEl.value = text;
         saveInputDraftForTab(tabId, text);
         autoResizeInput();
         updateSlashCommandAutocomplete();
       }
-      renderAttachmentPreviews();
-      syncSendButtonState();
     }
 
     if (renderToCurrentTab && currentTabId === tabId && isTabAbortRequested(tabId)) {
@@ -4061,11 +6304,30 @@ async function sendMessage(extraChatParams = {}) {
       }
     }
   } catch (e) {
-    if (renderToCurrentTab && currentTabId === tabId && !isTabAbortRequested(tabId)) {
+    captureStartFailed = !!runCaptureDirective
+      && String(e?.message || '').startsWith(RUN_CAPTURE_START_ERROR_PREFIX);
+    if (captureStartFailed) {
+      const message = String(e?.message || '').slice(RUN_CAPTURE_START_ERROR_PREFIX.length);
+      reportTrailingRunCaptureError(runCaptureDirective, new Error(message), tabId);
+      restorePendingAttachmentsForTab(tabId, attachmentsForSend);
+      if (renderToCurrentTab && currentTabId === tabId) {
+        userEl?.remove();
+        assistantEl?.remove();
+        if (currentAssistantEl === assistantEl) currentAssistantEl = null;
+        if (!inputEl.value.trim()) {
+          inputEl.value = submittedText;
+          saveInputDraftForTab(tabId, submittedText);
+          autoResizeInput();
+          updateSlashCommandAutocomplete();
+        }
+        syncSendButtonState();
+      }
+    } else if (renderToCurrentTab && currentTabId === tabId && !isTabAbortRequested(tabId)) {
       renderAgentErrorUpdate({ message: e.message }, tabId, requestId);
     }
   } finally {
     if (localRunRequestIds.get(tabId) === requestId) localRunRequestIds.delete(tabId);
+    cancelledRunRecoveryRequestIds.delete(requestId);
     if (activeChatPayloadsByTab.get(tabId) === activePayloadState) {
       scheduleActiveChatPayloadCleanup(tabId, activePayloadState);
     }
@@ -4086,14 +6348,14 @@ async function sendMessage(extraChatParams = {}) {
     if (renderToCurrentTab && currentTabId === tabId) scrollToBottom();
     if (renderToCurrentTab && renderedTabId === tabId) await flushRenderedTabChat();
     if (renderToCurrentTab && renderedTabId === tabId) await flushChatHistorySnapshot(tabId, { refreshTabInfo: true });
-    if (renderToCurrentTab && !wasAborted) {
+    if (renderToCurrentTab && !wasAborted && !captureStartFailed) {
       notifyCompletion({
         success: currentTabId === tabId && completedSuccessfully,
         storeReviewSuccess: currentTabId === tabId && promptEligibleCompletion,
       });
     }
     if (renderToCurrentTab && currentTabId === tabId) refreshRecommendedActions();
-    await drainQueuedContextMenuPromptsAfterPendingTabSwitch();
+    await drainQueuedPromptsAfterRunSettles();
   }
   return accepted;
 }
@@ -4101,7 +6363,7 @@ async function sendMessage(extraChatParams = {}) {
 // ─── Tab Recorder (v7.4) ────────────────────────────────────────────
 // State: idle ↔ recording. Slash commands flip the panel into recording mode
 // via background broadcasts. `/record` shows the banner Stop button;
-// `/record-full-screen` stays visually quiet and relies on double Escape or
+// `/record --full-screen` stays visually quiet and relies on double Escape or
 // Chrome's Stop sharing control. The visible banner timer is driven off
 // recordingState.startedAt (received from background), so it survives remount.
 
@@ -4221,6 +6483,22 @@ chrome.runtime.onMessage.addListener((msg) => {
   if (msg.event === 'started') {
     recordingStartedAt = msg.state?.startedAt || Date.now();
     setRecordingUI(true, msg.state || {});
+  } else if (msg.event === 'saving') {
+    // Capture has stopped; browser is still committing the file to disk.
+    setRecordingUI(false);
+    showRecordingStatus(t('sp.record.saving'));
+  } else if (msg.event === 'saved') {
+    // Prior session finished saving. Host normally blocks concurrent starts, so
+    // this is defensive for a live banner from another path.
+    lastRecordingResult = msg.result || null;
+    if (lastRecordingResult && lastRecordingResult.ok === false) {
+      showRecordingStatus(
+        t('sp.record.error', { error: lastRecordingResult.error || 'unknown' }),
+        { autoHide: 8000 }
+      );
+    } else if (lastRecordingResult?.filename) {
+      showRecordingStatus(t('sp.record.saved', { filename: lastRecordingResult.filename }), { autoHide: 6000 });
+    }
   } else if (msg.event === 'stopped') {
     setRecordingUI(false);
     lastRecordingResult = msg.result || null;
@@ -4253,7 +6531,7 @@ chrome.runtime.onMessage.addListener((msg) => {
 });
 
 // Minimal status strip just below the (now-hidden) recording banner.
-// Carries post-recording notifications: "saved to Downloads", "transcribing…",
+// Carries post-recording notifications: saved path, "transcribing…",
 // "transcript ready" + optional Summarize CTA (Phase 3).
 function showRecordingStatus(text, opts = {}) {
   let el = document.getElementById('recording-status');
@@ -4385,11 +6663,11 @@ function handleAgentUpdateMessage(msg) {
       break;
 
     case 'text':
-      // Empty content means "the model returned nothing new at this step".
-      // Don't wipe any previously-rendered assistant text — earlier steps
-      // may already have put useful intermediate prose in the bubble.
-      if (currentAssistantEl && data.content) {
-        renderAssistantTextUpdate(currentAssistantEl, data.content);
+      // Empty content usually means "nothing new" — keep prior prose. Exception:
+      // replace:true with empty content clears a rejected streamed terminal
+      // (e.g. plan-only recovery) so the bubble is free for the real summary.
+      if (currentAssistantEl && (data.content || data.replace === true)) {
+        renderAssistantTextUpdate(currentAssistantEl, data.content || '', { replace: data.replace === true });
       }
       break;
 
@@ -4434,6 +6712,26 @@ function handleAgentUpdateMessage(msg) {
         }
       }
       scrollToBottom();
+      break;
+
+    case 'run_capture_warning':
+      if (data?.kind === 'record' && data?.message) {
+        addPersistentSlashMessage(systemHtml(tSystemHtml('sp.record.mic_unavailable', {
+          error: data.message,
+        })));
+      }
+      break;
+
+    case 'run_capture_complete':
+      if (data?.kind === 'screenshot' && Array.isArray(data.filenames)) {
+        showComposerToast(t('sp.record.saved', {
+          filename: data.filenames.join(', '),
+        }), { duration: 6000 });
+      }
+      break;
+
+    case 'run_capture_error':
+      reportTrailingRunCaptureError({ kind: data?.kind }, new Error(data?.message || 'unknown error'), eventTabId);
       break;
 
     case 'error':
@@ -4493,7 +6791,17 @@ function handleAgentUpdateMessage(msg) {
       renderClarifyCard(data);
       break;
 
+    case 'clarify_auto':
+      // Agent auto-selected an answer after the clarify timeout. Lock the
+      // matching card in the UI (agent already resolved the pending Promise).
+      lockClarifyCardFromAuto(data);
+      break;
+
     case 'plan_review':
+      invalidatePlanReviewCards({
+        tabId: msg.tabId ?? currentTabId,
+        requestId: msg.requestId,
+      });
       renderPlanReviewCard({ ...data, tabId: msg.tabId ?? currentTabId, requestId: msg.requestId, runId: msg.runId });
       break;
 
@@ -4572,6 +6880,14 @@ function renderClarifyCard(data) {
   }
   if (data.scheduledTabId != null) {
     card.dataset.scheduledTabId = String(data.scheduledTabId);
+  }
+  // Persist timeout metadata on the card so chat HTML restore / rebind can
+  // restart the countdown after the panel is closed and reopened.
+  const timeoutSec = Number(data.timeoutSec);
+  const deadlineTs = Number(data.deadlineTs);
+  if (Number.isFinite(timeoutSec) && timeoutSec > 0 && Number.isFinite(deadlineTs) && deadlineTs > 0) {
+    card.dataset.timeoutSec = String(Math.floor(timeoutSec));
+    card.dataset.deadlineTs = String(Math.floor(deadlineTs));
   }
 
   const qEl = document.createElement('div');
@@ -4655,6 +6971,7 @@ function renderClarifyCard(data) {
     }
     card.appendChild(optionsEl);
     content.appendChild(card);
+    void maybeShowPermissionEducationHint(card);
     scrollToBottom();
     return;
   }
@@ -4707,9 +7024,95 @@ function renderClarifyCard(data) {
   row.appendChild(submitBtn);
   card.appendChild(row);
 
+  // Countdown for auto-select (agent is authoritative; UI is display + backup).
+  const firstOption = options[0] || '(no response — timed out)';
+  if (firstOption) card.dataset.firstOption = String(firstOption).slice(0, 200);
+  if (data.timeoutSec > 0 && data.deadlineTs) {
+    startClarifyCountdown(card, {
+      tabId,
+      clarifyId,
+      deadlineTs: Number(data.deadlineTs),
+      firstOption,
+    });
+  }
+
   content.appendChild(card);
   scrollToBottom();
   try { input.focus(); } catch {}
+}
+
+function clearClarifyCountdown(card) {
+  if (!card) return;
+  if (card._clarifyCountdownTimer) {
+    try { clearInterval(card._clarifyCountdownTimer); } catch {}
+    card._clarifyCountdownTimer = null;
+  }
+  const timerEl = card.querySelector('.clarify-timeout');
+  if (timerEl) timerEl.remove();
+}
+
+/**
+ * Show a live countdown on a regular clarify card. When the deadline hits,
+ * lock the card and post the first option as a backup if the agent timer
+ * already fired, submitClarifyResponse is a no-op.
+ */
+function startClarifyCountdown(card, { tabId, clarifyId, deadlineTs, firstOption }) {
+  if (!card || !deadlineTs || deadlineTs <= 0) return;
+  clearClarifyCountdown(card);
+
+  const timerEl = document.createElement('div');
+  timerEl.className = 'clarify-timeout';
+  card.appendChild(timerEl);
+
+  const tick = () => {
+    if (card.classList.contains('clarify-answered')) {
+      clearClarifyCountdown(card);
+      return;
+    }
+    const remainingMs = Math.max(0, deadlineTs - Date.now());
+    const remainingSec = Math.ceil(remainingMs / 1000);
+    timerEl.textContent = typeof t === 'function'
+      ? t('sp.clarify.auto_timeout', { seconds: remainingSec })
+      : `Auto-selects in ${remainingSec}s`;
+    if (remainingMs <= 0) {
+      clearClarifyCountdown(card);
+      // Backup path: if agent already settled, this is a no-op on the agent
+      // side; still locks the card for the user.
+      submitClarify(card, tabId, clarifyId, firstOption, 'timeout');
+    }
+  };
+  tick();
+  card._clarifyCountdownTimer = setInterval(tick, 250);
+}
+
+/**
+ * Lock a clarify card after the agent auto-selected (timeout or Instant).
+ * Does not re-send clarify_response — the agent already resolved its pending Promise.
+ */
+function lockClarifyCardFromAuto(data) {
+  const clarifyId = String(data?.clarifyId || '');
+  if (!clarifyId) return;
+  const answer = String(data?.answer || '').trim();
+  const source = String(data?.source || 'timeout');
+  for (const card of document.querySelectorAll('.clarify-card')) {
+    if (String(card.dataset.clarifyId || '') !== clarifyId) continue;
+    if (card.classList.contains('clarify-answered')) return;
+    if (card.dataset.permission === '1' || card.dataset.submitConfirmation === '1') return;
+    clearClarifyCountdown(card);
+    card.classList.add('clarify-answered');
+    for (const el of card.querySelectorAll('button, input')) {
+      el.disabled = true;
+    }
+    const answered = document.createElement('div');
+    answered.className = 'clarify-your-answer';
+    const prefix = source === 'auto'
+      ? (typeof t === 'function' ? t('sp.clarify.auto_selected_instant') : 'Auto-selected (Instant):')
+      : (typeof t === 'function' ? t('sp.clarify.auto_selected') : 'Auto-selected (timed out):');
+    answered.textContent = `${prefix} ${answer}`;
+    card.appendChild(answered);
+    scrollToBottom();
+    return;
+  }
 }
 
 /**
@@ -4732,12 +7135,12 @@ function renderPlanReviewCard(data) {
     .find(card => String(card.dataset.planId || '') === planId
       && String(card.dataset.tabId || '') === String(tabId)
       && (!data.requestId || card.dataset.runRequestId === String(data.requestId))
-      && (!data.runId || card.dataset.runId === String(data.runId))
-      && !card.classList.contains('plan-reviewed'));
+      && (!data.runId || card.dataset.runId === String(data.runId)));
   if (existing) {
-    bindPlanReviewCard(existing);
-    setPlanReviewAwaiting(tabId, true, existing.closest('.message.assistant'));
-    scrollToBottom();
+    if (!existing.classList.contains('plan-reviewed')) {
+      bindPlanReviewCard(existing);
+      setPlanReviewAwaiting(tabId, true, existing.closest('.message.assistant'));
+    }
     return;
   }
 
@@ -4778,12 +7181,18 @@ function renderPlanReviewCard(data) {
   const useVerbosePlan = verboseMode && !!data.verboseMarkdown;
   const originalMarkdown = useVerbosePlan ? verboseMarkdown : compactMarkdown;
   card.dataset.planMarkdownMode = useVerbosePlan ? 'verbose' : 'compact';
+  card.dataset.originalMarkdown = originalMarkdown;
+  // Structured dirty checks always compare against compact display text so
+  // step edits do not look "clean" relative to a verbose original blob.
+  card.dataset.originalCompactMarkdown = compactMarkdown;
+  card.dataset.planDirty = 'false';
 
-  card.appendChild(renderPlanReviewView(data.plan, compactMarkdown));
+  const view = renderPlanReviewView(data.plan, compactMarkdown);
+  card.appendChild(view);
 
   const editHint = document.createElement('div');
   editHint.className = 'plan-review-hint';
-  editHint.textContent = typeof t === 'function' ? t('sp.plan.edit_hint') : 'Optional: edit the plan before approving';
+  editHint.textContent = typeof t === 'function' ? t('sp.plan.edit_hint') : 'Optional: edit the plan as markdown';
   card.appendChild(editHint);
 
   const textarea = document.createElement('textarea');
@@ -4799,12 +7208,12 @@ function renderPlanReviewCard(data) {
   const approveBtn = document.createElement('button');
   approveBtn.type = 'button';
   approveBtn.className = 'plan-review-approve';
-  approveBtn.textContent = typeof t === 'function' ? t('sp.plan.approve') : 'Approve & run';
+  approveBtn.textContent = typeof t === 'function' ? t('sp.plan.approve') : '👍 Run';
 
   const changeBtn = document.createElement('button');
   changeBtn.type = 'button';
   changeBtn.className = 'plan-review-change';
-  changeBtn.textContent = typeof t === 'function' ? t('sp.plan.change') : 'Change';
+  changeBtn.textContent = typeof t === 'function' ? t('sp.plan.edit_as_text') : 'Edit as text';
 
   const cancelBtn = document.createElement('button');
   cancelBtn.type = 'button';
@@ -4815,6 +7224,16 @@ function renderPlanReviewCard(data) {
   actions.appendChild(changeBtn);
   actions.appendChild(cancelBtn);
   card.appendChild(actions);
+  mountPlanReviewEditor(card, view);
+  // Anchor dirty-checks to the structured serializer's output, not the
+  // planner markdown string, so renumbering/whitespace alone is not an edit.
+  const initialSerialized = serializePlanDraftToMarkdown(getPlanReviewDraftFromDom(card));
+  card.dataset.originalCompactMarkdown = initialSerialized;
+  if (!useVerbosePlan) {
+    card.dataset.originalMarkdown = initialSerialized;
+    textarea.value = initialSerialized;
+    textarea.defaultValue = initialSerialized;
+  }
   bindPlanReviewCard(card);
 
   content.appendChild(card);
@@ -4829,9 +7248,14 @@ function submitPlanReview(card, tabId, planId, action, editedText) {
   card.classList.add('plan-reviewed');
   setPlanReviewAwaiting(tabId, false);
   if (action !== 'approve') {
+    const requestId = String(card.dataset.runRequestId || '');
+    if (requestId) cancelledRunRecoveryRequestIds.add(requestId);
+    setTabAbortRequested(tabId, true);
     card.remove();
     scrollToBottom();
-    sendToBackground('plan_response', { tabId, planId, decision: action, editedText, markdownMode }).catch(() => {});
+    sendPlanReviewDecisionWithReconnect({
+      tabId, planId, decision: action, editedText, markdownMode,
+    }, requestId).catch(() => {});
     return;
   }
   for (const el of card.querySelectorAll('button, textarea')) {
@@ -4844,11 +7268,15 @@ function submitPlanReview(card, tabId, planId, action, editedText) {
     ? 'WebBrain reloaded or the background worker stopped before this plan could be approved. Reload the sidebar and try again.'
     : expiredText();
 
-  sendToBackground('plan_response', { tabId, planId, decision: action, editedText, markdownMode })
+  sendPlanReviewDecisionWithReconnect(
+    { tabId, planId, decision: action, editedText, markdownMode },
+    String(card.dataset.runRequestId || ''),
+  )
     .then((res) => {
       if (action !== 'approve') return;
       if (res?.matched) {
         card.remove();
+        void restoreActiveRunState(tabId);
       } else {
         note.textContent = expiredText();
         card.appendChild(note);
@@ -4861,8 +7289,11 @@ function submitPlanReview(card, tabId, planId, action, editedText) {
       if (action === 'approve') {
         note.textContent = failureText(error);
         card.appendChild(note);
-        setPlanReviewAwaiting(tabId, false);
-        if (activeAssistantEl) clearPlanReviewActiveRun(activeAssistantEl, tabId);
+        card.classList.remove('plan-reviewed');
+        for (const el of card.querySelectorAll('button, textarea')) {
+          el.disabled = false;
+        }
+        setPlanReviewAwaiting(tabId, true, activeAssistantEl || card.closest('.message.assistant'));
         scrollToBottom();
       }
     });
@@ -4874,6 +7305,7 @@ function submitClarify(card, tabId, clarifyId, answer, source) {
   // accepts the first response anyway, but UI feedback matters.
   if (card.classList.contains('clarify-answered')) return;
   card.classList.add('clarify-answered');
+  clearClarifyCountdown(card);
 
   // Permission cards are transient: once the user chooses, remove the card
   // entirely so it doesn't linger at the bottom of the conversation (it could
@@ -4887,7 +7319,15 @@ function submitClarify(card, tabId, clarifyId, answer, source) {
     }
     const answered = document.createElement('div');
     answered.className = 'clarify-your-answer';
-    answered.textContent = (typeof t === 'function' ? t('sp.clarify.your_answer') : 'Your answer:') + ' ' + answer;
+    let prefix;
+    if (source === 'timeout') {
+      prefix = typeof t === 'function' ? t('sp.clarify.auto_selected') : 'Auto-selected (timed out):';
+    } else if (source === 'auto') {
+      prefix = typeof t === 'function' ? t('sp.clarify.auto_selected_instant') : 'Auto-selected (Instant):';
+    } else {
+      prefix = typeof t === 'function' ? t('sp.clarify.your_answer') : 'Your answer:';
+    }
+    answered.textContent = `${prefix} ${answer}`;
     card.appendChild(answered);
     scrollToBottom();
   }
@@ -4915,8 +7355,14 @@ function submitClarify(card, tabId, clarifyId, answer, source) {
     showActivity(t('sp.activity.thinking'));
   }
   const clarifyPayload = { tabId, clarifyId, answer, source };
-  if (card.dataset.memorySource) clarifyPayload.memorySource = card.dataset.memorySource;
-  if (card.dataset.memoryQuestion) clarifyPayload.question = card.dataset.memoryQuestion;
+  // Timeout / Instant auto-selects are not user-authored answers — skip user-memory.
+  const isAutoClarify = source === 'timeout' || source === 'auto';
+  if (!isAutoClarify && card.dataset.memorySource) {
+    clarifyPayload.memorySource = card.dataset.memorySource;
+  }
+  if (!isAutoClarify && card.dataset.memoryQuestion) {
+    clarifyPayload.question = card.dataset.memoryQuestion;
+  }
   sendToBackground('clarify_response', clarifyPayload)
     .catch(() => {
       if (isScheduledClarify) {
@@ -4926,7 +7372,7 @@ function submitClarify(card, tabId, clarifyId, answer, source) {
           syncSendButtonState();
           hideActivity();
         }
-        drainQueuedContextMenuPromptsAfterPendingTabSwitch();
+        drainQueuedPromptsAfterRunSettles();
       }
       /* background may be torn down — clarify state already lives there */
     });
@@ -5072,7 +7518,7 @@ function clearAssistantTextStreamState(assistantEl) {
   delete textEl.dataset.suppressToolCallStream;
 }
 
-function renderAssistantTextUpdate(assistantEl, content) {
+function renderAssistantTextUpdate(assistantEl, content, options = {}) {
   const textEl = assistantEl.querySelector('.message-text');
   if (!textEl) return;
 
@@ -5094,7 +7540,18 @@ function renderAssistantTextUpdate(assistantEl, content) {
   const streamedText = getStreamedAssistantText(textEl);
   const isDuplicateStreamFinal = streamedText && streamedText === String(content);
 
-  if (verboseMode && !isDuplicateStreamFinal) {
+  if (options.replace === true) {
+    // A rejected streamed terminal must replace its already-rendered deltas
+    // even in Verbose mode; appending would leave the invalid plan visible.
+    // Empty content clears the bubble (plan-only retry before recovery tools).
+    if (content) {
+      textEl.innerHTML = formatMarkdown(content);
+      streamedAssistantTextByEl.set(textEl, String(content));
+    } else {
+      textEl.textContent = '';
+      clearStreamedAssistantText(textEl);
+    }
+  } else if (verboseMode && !isDuplicateStreamFinal) {
     // Verbose mode: append each non-streamed turn as its own paragraph so
     // intermediate prose is preserved alongside the steps log. Streaming
     // finals are already visible live, so format the existing stream instead
@@ -5290,7 +7747,18 @@ function addMessage(role, content, options = {}) {
   const textEl = document.createElement('div');
   textEl.className = 'message-text';
   if (role === 'user') {
-    textEl.textContent = content;
+    // Selection/context-menu prompts include model-only untrusted wrappers;
+    // show a clean version in the bubble while still sending the full prompt.
+    const userText = String(content || '');
+    const displayText = formatSelectionPromptForDisplay(userText);
+    textEl.textContent = displayText;
+    if (displayText === userText) {
+      msgEl.dataset.composerHistoryVerbatim = 'true';
+    } else {
+      // Keep the model-facing boundary intact when the bubble is recalled.
+      // Dataset assignment is inert and survives messagesEl.innerHTML restore.
+      msgEl.dataset.composerHistoryText = userText;
+    }
   } else if (role === 'system') {
     if (isSystemHtml(content)) textEl.innerHTML = content.__systemHtml;
     else textEl.textContent = content || '';
@@ -5416,7 +7884,7 @@ async function continueAgent(options = {}) {
     showActivity(t('sp.activity.continuing'));
     localRunRequestIds.set(tabId, requestId);
 
-    const res = await sendToBackground('continue', {
+    const res = await sendRunWithReconnect('continue_start', {
       tabId,
       requestId,
       mode: modeForSend,
@@ -5443,6 +7911,7 @@ async function continueAgent(options = {}) {
     }
   } finally {
     if (localRunRequestIds.get(tabId) === requestId) localRunRequestIds.delete(tabId);
+    cancelledRunRecoveryRequestIds.delete(requestId);
     if (currentTabId === tabId && assistantEl) finalizeSteps(assistantEl);
     clearAssistantTextStreamState(assistantEl);
     setTabProcessing(tabId, false);
@@ -5455,7 +7924,7 @@ async function continueAgent(options = {}) {
     if (currentTabId === tabId) scrollToBottom();
     if (currentTabId === tabId && renderedTabId === tabId) await flushRenderedTabChat();
     if (currentTabId === tabId && renderedTabId === tabId) await flushChatHistorySnapshot(tabId, { refreshTabInfo: true });
-    await drainQueuedContextMenuPromptsAfterPendingTabSwitch();
+    await drainQueuedPromptsAfterRunSettles();
   }
 }
 
@@ -5467,7 +7936,7 @@ chrome.storage.onChanged.addListener((changes) => {
 });
 
 // Page inspection banner — shown when agent starts interacting with the page
-const PAGE_TOOLS = new Set(['read_page', 'read_page_source', 'get_interactive_elements', 'click', 'type_text', 'scroll', 'extract_data', 'inspect_element_styles', 'wait_for_element', 'get_selection']);
+const PAGE_TOOLS = new Set(['read_page', 'read_page_source', 'get_interactive_elements', 'click', 'type_text', 'scroll', 'extract_data', 'inspect_element_styles', 'inject_css', 'remove_injected_css', 'patch_element', 'revert_patch', 'execute_js', 'read_console', 'inspect_network_requests', 'inspect_event_listeners', 'highlight_element', 'wait_for_element', 'get_selection']);
 let inspectionBannerShown = false;
 
 function showInspectionBanner(toolName) {
@@ -5505,9 +7974,29 @@ function hideActivity() {
   hideInspectionBanner();
 }
 
+let scrollToBottomFrame = null;
+
+function pinChatToBottom(container) {
+  // The chat container uses smooth scrolling for user-visible navigation.
+  // During streaming, though, repeatedly assigning scrollTop while that
+  // animation is still running makes the viewport lag behind the growing
+  // conversation. Temporarily bypass smooth behavior for auto-follow.
+  const previousScrollBehavior = container.style.scrollBehavior;
+  container.style.scrollBehavior = 'auto';
+  container.scrollTop = container.scrollHeight;
+  container.style.scrollBehavior = previousScrollBehavior;
+}
+
 function scrollToBottom() {
   const container = document.getElementById('chat-container');
-  container.scrollTop = container.scrollHeight;
+  if (!container) return;
+
+  pinChatToBottom(container);
+  if (scrollToBottomFrame != null) cancelAnimationFrame(scrollToBottomFrame);
+  scrollToBottomFrame = requestAnimationFrame(() => {
+    scrollToBottomFrame = null;
+    if (container.isConnected) pinChatToBottom(container);
+  });
 }
 
 // Debounce math rendering so streaming updates don't re-walk the DOM
@@ -5551,7 +8040,8 @@ function formatMarkdown(text) {
 
   // 1. Extract fenced code blocks BEFORE escaping HTML
   const codeBlocks = [];
-  text = text.replace(/```(\w*)\n?([\s\S]*?)```/g, (_match, lang, code) => {
+  text = text.replace(/```[ \t]*([^`\r\n]*)\r?\n([\s\S]*?)```/g, (_match, info, code) => {
+    const lang = codeFenceLanguage(info);
     const id = `__CODEBLOCK_${codeBlocks.length}__`;
     codeBlocks.push({ lang: lang || '', code });
     return id;
@@ -5571,10 +8061,10 @@ function formatMarkdown(text) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 
-  // 4. Inline formatting (bold + italic), then markdown link sanitization,
-  // then newline → <br>. Links are handled by the dedicated markdown-link
-  // module (unit-tested in test/run.js) — see that file for the rationale
-  // and threat model.
+  // 4. Block headings, inline formatting, markdown link sanitization, then
+  // newline → <br>. Code and inline-code placeholders were extracted above,
+  // so Markdown-looking source inside them is not interpreted here.
+  text = renderMarkdownHeadings(text);
   text = text
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.+?)\*/g, '<em>$1</em>');
@@ -5591,13 +8081,13 @@ function formatMarkdown(text) {
 
   // 6. Restore fenced code blocks with copy button
   codeBlocks.forEach((block, i) => {
-    const escaped = block.code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const highlighted = highlightCode(block.code, block.lang);
     const langLabel = block.lang ? `<span class="code-lang">${escapeHtml(block.lang)}</span>` : '';
     const copyBtn = `<button class="code-copy-btn" data-code-index="${i}" title="${escapeHtml(t('sp.copy.code.title'))}">${escapeHtml(t('sp.copy'))}</button>`;
     const header = `<div class="code-block-header">${langLabel}${copyBtn}</div>`;
     text = text.replace(
       `__CODEBLOCK_${i}__`,
-      () => `<div class="code-block-wrapper">${header}<pre><code>${escaped}</code></pre></div>`
+      () => `<div class="code-block-wrapper">${header}<pre><code>${highlighted}</code></pre></div>`
     );
   });
 
@@ -5713,20 +8203,31 @@ function truncate(str, len) {
 }
 
 function autoResizeInput() {
+  const maxHeight = 120;
   inputEl.style.height = 'auto';
   if (!inputEl.value) {
     inputEl.style.height = '';
+    inputEl.style.overflowY = 'hidden';
     updateSlashCommandHighlight();
     return;
   }
-  inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + 'px';
+  // Measure unconstrained height first; only scroll once past max-height so a
+  // single-line / empty composer does not show a dead vertical scrollbar.
+  const contentHeight = inputEl.scrollHeight;
+  inputEl.style.height = Math.min(contentHeight, maxHeight) + 'px';
+  inputEl.style.overflowY = contentHeight > maxHeight ? 'auto' : 'hidden';
   updateSlashCommandHighlight();
 }
 
 function getInputPlaceholderKeys() {
-  if (agentMode === 'ask') return ASK_PLACEHOLDER_KEYS;
-  if (agentMode === 'dev') return ['sp.input.dev_placeholder'];
-  return ['sp.input.act_placeholder'];
+  let keys;
+  if (agentMode === 'ask') keys = ASK_PLACEHOLDER_KEYS;
+  else if (agentMode === 'dev') keys = ['sp.input.dev_placeholder'];
+  else keys = ['sp.input.act_placeholder'];
+  if (askBeforeConsequential && permissionEducationState.promptCount > 0) {
+    return [...keys, PERMISSION_REMINDER_PLACEHOLDER_KEY];
+  }
+  return keys;
 }
 
 function updateInputPlaceholder() {
@@ -5754,13 +8255,60 @@ function startInputPlaceholderRotation() {
 
 // --- Communication ---
 
-function isBackgroundConnectionError(error) {
-  const message = String(error?.message || error || '');
-  return /Could not establish connection|Receiving end does not exist|Extension context invalidated|No response from WebBrain background|background script may have restarted|extension connection was lost/i.test(message);
+function sendPlanReviewDecisionWithReconnect(payload, requestId = '') {
+  const tabId = Number(payload?.tabId);
+  return sendPlanResponseWithReconnect({
+    payload,
+    requestId,
+    send: nextPayload => sendToBackground('plan_response', nextPayload),
+    probe: ({ requestId: probedRequestId } = {}) => sendToBackground('agent_run_state', {
+      tabId,
+      requestId: probedRequestId || requestId,
+    }),
+    isConnectionError: isBackgroundConnectionError,
+    onState: state => applyActiveRunState(tabId, state),
+    onStatus: ({ phase }) => {
+      if (!sameTabId(currentTabId, tabId)) return;
+      if (phase === 'reconnecting') showActivity('Reconnecting…');
+      if (phase === 'reconnected' && !isAwaitingPlanReviewForTab(tabId)) {
+        showActivity('Reconnected — continuing…');
+      }
+    },
+  });
+}
+
+async function sendRunWithReconnect(initialAction, payload, recoveryOptions = {}) {
+  const tabId = Number(payload?.tabId);
+  const requestId = String(payload?.requestId || '');
+  cancelledRunRecoveryRequestIds.delete(requestId);
+  return runDetachedWithReconnect({
+    initialAction,
+    payload,
+    start: (action, nextPayload) => sendToBackground(action, nextPayload),
+    probe: ({ requestId: probedRequestId } = {}) => sendToBackground('agent_run_state', {
+      tabId,
+      requestId: probedRequestId || requestId,
+    }),
+    isConnectionError: isBackgroundConnectionError,
+    onState: state => applyActiveRunState(tabId, state),
+    shouldResume: () => !isTabAbortRequested(tabId)
+      && !cancelledRunRecoveryRequestIds.has(requestId),
+    onStatus: ({ phase }) => {
+      if (!sameTabId(currentTabId, tabId)) return;
+      if (phase === 'reconnecting' || phase === 'retrying_start') {
+        showActivity('Reconnecting…');
+      } else if (phase === 'resuming') {
+        showActivity('Reconnected — resuming…');
+      } else if (phase === 'reconnected' && !isAwaitingPlanReviewForTab(tabId)) {
+        showActivity('Reconnected — continuing…');
+      }
+    },
+    ...recoveryOptions,
+  });
 }
 
 function formatBackgroundSendError(action, message) {
-  if (/Could not establish connection|Receiving end does not exist|Extension context invalidated/i.test(String(message || ''))) {
+  if (isBackgroundConnectionError(message)) {
     return `WebBrain extension connection was lost while sending "${action}". Reload the sidebar/extension and try again.`;
   }
   return message;
@@ -5855,7 +8403,14 @@ async function handleGlobalKeydown(e) {
 
 function setMode(mode) {
   if (mode !== 'ask' && mode !== 'act' && mode !== 'dev') mode = 'ask';
+  const previousMode = agentMode;
   agentMode = mode;
+  if (previousMode === 'dev' && mode !== 'dev') {
+    // Dev mode is panel-wide, while diagnostics may be active on a tab the
+    // user switched away from. Ask the background to drain its tracked set
+    // instead of assuming currentTabId is the tab that started capture.
+    sendToBackground('disable_dev_diagnostics', { all: true }).catch(() => {});
+  }
 
   modeAskBtn.classList.toggle('active', mode === 'ask');
   modeAskBtn.classList.remove('act');
@@ -5870,18 +8425,6 @@ function setMode(mode) {
 
 async function ensureActMode() {
   if (agentMode === 'act') return true;
-  // Show a confirmation dialog the very first time the user enables Act
-  // mode on this install — tracked via chrome.storage.local so it only
-  // happens once, not on every click. Recommended action chips share this
-  // path so they cannot silently bypass the Act-mode warning.
-  try {
-    const stored = await chrome.storage.local.get('actConfirmed');
-    if (!stored.actConfirmed) {
-      const ok = confirm(t('sp.mode.act.confirm'));
-      if (!ok) return false;
-      await chrome.storage.local.set({ actConfirmed: true }).catch(() => {});
-    }
-  } catch (e) { /* storage unavailable, fall through */ }
   setMode('act');
   return true;
 }
@@ -5900,16 +8443,6 @@ async function ensureDevMode() {
     // The agent also enforces this server-side; don't block Dev on a stale
     // sidepanel/background lookup failure.
   }
-  const actOk = await ensureActMode();
-  if (!actOk) return false;
-  try {
-    const stored = await chrome.storage.local.get('devConfirmed');
-    if (!stored.devConfirmed) {
-      const ok = confirm(t('sp.mode.dev.confirm'));
-      if (!ok) return false;
-      await chrome.storage.local.set({ devConfirmed: true }).catch(() => {});
-    }
-  } catch (e) { /* storage unavailable, fall through */ }
   setMode('dev');
   return true;
 }
@@ -5930,6 +8463,12 @@ modeDevBtn?.addEventListener('click', async () => {
 async function abortRun() {
   const tabId = currentTabId;
   if (!isTabProcessing(tabId)) return;
+  const requestId = String(
+    localRunRequestIds.get(Number(tabId))
+      || currentAssistantEl?.dataset?.runRequestId
+      || '',
+  );
+  if (requestId) cancelledRunRecoveryRequestIds.add(requestId);
   setTabAbortRequested(tabId, true);
   showActivity(t('sp.activity.stopping'));
 
@@ -5956,7 +8495,7 @@ async function abortRun() {
       currentAssistantEl = null;
       setTabAbortRequested(tabId, false);
       await flushRenderedTabChat();
-      await drainQueuedContextMenuPromptsAfterPendingTabSwitch();
+      await drainQueuedPromptsAfterRunSettles();
     }
   }, 3000); // safety timeout if background takes too long
 }
@@ -6266,6 +8805,18 @@ function clearPendingAttachmentsForTab(tabId) {
   }
 }
 
+function restorePendingAttachmentsForTab(tabId, attachments) {
+  if (!Array.isArray(attachments) || !attachments.length) return;
+  const numericTabId = normalizeAttachmentTabId(tabId);
+  if (numericTabId == null) return;
+  const pending = getPendingAttachmentsForTab(numericTabId);
+  pending.unshift(...attachments.filter(att => !pending.includes(att)));
+  if (normalizeAttachmentTabId() === numericTabId) {
+    renderAttachmentPreviews();
+    syncSendButtonState();
+  }
+}
+
 function renderAttachmentPreviews() {
   if (!attachmentPreviewList) return;
   const previewTabId = normalizeAttachmentTabId();
@@ -6400,9 +8951,20 @@ queuedMessagesEl?.addEventListener('click', (e) => {
 
 inputEl.addEventListener('keydown', (e) => {
   if (handleSlashCommandKeydown(e)) return;
-  if (e.key === 'ArrowUp' && editLastQueuedComposerMessageForCurrentTab()) {
-    e.preventDefault();
-    return;
+  const isPlainArrow = !e.isComposing && !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey;
+  if (isPlainArrow) {
+    if (e.key === 'ArrowUp' && editLastQueuedComposerMessageForCurrentTab()) {
+      e.preventDefault();
+      return;
+    }
+    if (e.key === 'ArrowUp' && navigateComposerHistory(-1)) {
+      e.preventDefault();
+      return;
+    }
+    if (e.key === 'ArrowDown' && navigateComposerHistory(1)) {
+      e.preventDefault();
+      return;
+    }
   }
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
@@ -6432,9 +8994,11 @@ providerSelect.addEventListener('change', async () => {
   const providerId = providerSelect.value;
   if (providerId === MORE_PROVIDERS_OPTION_VALUE) {
     providerSelect.value = selectedProviderId;
+    syncProviderPickerButton();
     await openProvidersSettingsPage();
     return;
   }
+  syncProviderPickerButton();
   const requestId = ++providerSelectionRequestId;
   providerTestRequestId += 1;
   try {
@@ -6454,6 +9018,84 @@ providerSelect.addEventListener('change', async () => {
   }
   selectedProviderId = providerId;
   await testConnection({ providerId });
+});
+
+providerPickerBtn?.addEventListener('click', (event) => {
+  event.stopPropagation();
+  const open = providerPickerMenu?.classList.contains('hidden') !== false;
+  setProviderPickerOpen(open);
+});
+
+// Open with keyboard from the closed trigger (combobox-ish).
+providerPickerBtn?.addEventListener('keydown', (event) => {
+  if (event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault();
+    if (providerPickerMenu?.classList.contains('hidden')) {
+      setProviderPickerOpen(true);
+      if (event.key === 'ArrowUp') {
+        const options = getProviderPickerOptions();
+        options[options.length - 1]?.focus();
+      }
+    } else if (event.key === 'Enter' || event.key === ' ') {
+      setProviderPickerOpen(false);
+    }
+  }
+});
+
+providerPickerMenu?.addEventListener('keydown', (event) => {
+  if (providerPickerMenu.classList.contains('hidden')) return;
+  if (event.key === 'ArrowDown') {
+    event.preventDefault();
+    moveProviderPickerFocus(1);
+  } else if (event.key === 'ArrowUp') {
+    event.preventDefault();
+    moveProviderPickerFocus(-1);
+  } else if (event.key === 'Home') {
+    event.preventDefault();
+    getProviderPickerOptions()[0]?.focus();
+  } else if (event.key === 'End') {
+    event.preventDefault();
+    const options = getProviderPickerOptions();
+    options[options.length - 1]?.focus();
+  } else if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault();
+    activateFocusedProviderPickerOption();
+  } else if (event.key === 'Escape') {
+    event.preventDefault();
+    setProviderPickerOpen(false);
+    providerPickerBtn?.focus();
+  } else if (event.key === 'Tab') {
+    // Let Tab move focus out; focusout closes the menu.
+    setProviderPickerOpen(false);
+  }
+});
+
+document.addEventListener('click', (event) => {
+  if (!providerPickerMenu || providerPickerMenu.classList.contains('hidden')) return;
+  const root = document.getElementById('provider-picker');
+  if (root && !root.contains(event.target)) setProviderPickerOpen(false);
+});
+
+document.getElementById('provider-picker')?.addEventListener('focusout', (event) => {
+  if (!providerPickerMenu || providerPickerMenu.classList.contains('hidden')) return;
+  const root = document.getElementById('provider-picker');
+  const next = event.relatedTarget;
+  // relatedTarget is null when focus leaves the document; still close.
+  if (!root) return;
+  if (next && root.contains(next)) return;
+  // Defer so option click (focus move then click) still registers.
+  queueMicrotask(() => {
+    if (!providerPickerMenu || providerPickerMenu.classList.contains('hidden')) return;
+    if (root.contains(document.activeElement)) return;
+    setProviderPickerOpen(false);
+  });
+});
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && providerPickerMenu && !providerPickerMenu.classList.contains('hidden')) {
+    setProviderPickerOpen(false);
+    providerPickerBtn?.focus();
+  }
 });
 
 async function openChatHistoryPage() {

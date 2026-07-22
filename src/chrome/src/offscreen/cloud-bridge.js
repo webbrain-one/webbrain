@@ -7,7 +7,10 @@
  */
 
 (() => {
-  const ALLOWED_BRIDGE_ACTIONS = new Set(['cloud_run', 'cloud_status', 'cloud_abort']);
+  // Provisioning seeds Settings from a privileged extension page before this
+  // bridge starts. Keep configuration mutations out of the WebSocket command
+  // surface; the bridge is intentionally limited to managed run operations.
+  const ALLOWED_BRIDGE_ACTIONS = new Set(['cloud_run', 'cloud_status', 'cloud_respond', 'cloud_abort']);
   let socket = null;
   let bridgeUrl = null;
   let enabled = false;
@@ -18,7 +21,9 @@
   function normalizeBridgeUrl(value) {
     const url = new URL(String(value || 'ws://127.0.0.1:17373/extension'));
     const host = url.hostname.toLowerCase();
-    if (url.protocol !== 'ws:' || !['127.0.0.1', 'localhost', '::1'].includes(host)) {
+    // WHATWG URL keeps the brackets on IPv6 literals: ws://[::1]/… parses to
+    // hostname "[::1]", so both spellings must be allowlisted.
+    if (url.protocol !== 'ws:' || !['127.0.0.1', 'localhost', '::1', '[::1]'].includes(host)) {
       throw new Error('Cloud bridge URL must use ws:// on localhost.');
     }
     return url.href;
@@ -97,7 +102,7 @@
             && (response.runId != null || response.run_id != null)
             && typeof response.status === 'string';
           if (response?.error && !isRunSnapshot) {
-            sendJson({ id, ok: false, error: response.error }, nextSocket);
+            sendJson({ id, ok: false, error: response.error, status: response.status || 500 }, nextSocket);
           } else {
             sendJson({ id, ok: true, result: response }, nextSocket);
           }

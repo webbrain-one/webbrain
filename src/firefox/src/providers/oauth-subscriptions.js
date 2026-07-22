@@ -108,8 +108,9 @@ function makeOAuthClient(def) {
     return def.redirect || `https://${browser.runtime.id}.chromiumapp.org/`;
   }
 
-  async function start(clientIdArg) {
+  async function start(clientIdArg, clientSecretArg = '') {
     const clientId = (clientIdArg || def.staticClientId || '').trim();
+    const clientSecret = String(clientSecretArg || '').trim();
     if (!clientId) {
       throw new Error(`${def.label}: no OAuth client ID configured. Register your own OAuth app in the vendor's console and enter its client ID first.`);
     }
@@ -131,7 +132,7 @@ function makeOAuthClient(def) {
     const authUrl = `${def.authUrl}?${params.toString()}`;
 
     const code = await openTabAndAwaitCode(authUrl, redirect, state);
-    return await exchange({ code, codeVerifier, clientId, redirect });
+    return await exchange({ code, codeVerifier, clientId, clientSecret, redirect });
   }
 
   // Open the auth URL in a tab and resolve with the `code` once the tab
@@ -183,26 +184,28 @@ function makeOAuthClient(def) {
     });
   }
 
-  async function exchange({ code, codeVerifier, clientId, redirect }) {
+  async function exchange({ code, codeVerifier, clientId, clientSecret, redirect }) {
     const res = await postToken(def.tokenUrl, {
       grant_type: 'authorization_code',
       code,
       redirect_uri: redirect,
       client_id: clientId,
+      ...(clientSecret ? { client_secret: clientSecret } : {}),
       code_verifier: codeVerifier,
     }, def.tokenBodyFormat);
     if (!res.ok) throw await tokenError(`${def.label} token exchange`, res);
     const data = await res.json().catch(() => { throw new Error(`${def.label}: token exchange returned invalid JSON.`); });
-    return await persist(data, { clientId });
+    return await persist(data, { clientId, clientSecret });
   }
 
-  async function persist(data, { clientId, fallbackRefresh = null } = {}) {
+  async function persist(data, { clientId, clientSecret = '', fallbackRefresh = null } = {}) {
     if (!data.access_token) throw new Error(`${def.label}: token response missing access_token`);
     const tokens = {
       accessToken: data.access_token,
       refreshToken: data.refresh_token || fallbackRefresh,
       expiresAt: Date.now() + ((data.expires_in || 3600) * 1000) - 60_000,
       clientId,
+      ...(clientSecret ? { clientSecret } : {}),
       scope: data.scope || def.scopes,
       obtainedAt: Date.now(),
     };
@@ -218,6 +221,7 @@ function makeOAuthClient(def) {
       grant_type: 'refresh_token',
       refresh_token: tokens.refreshToken,
       client_id: tokens.clientId || def.staticClientId,
+      ...(tokens.clientSecret ? { client_secret: tokens.clientSecret } : {}),
     }, def.tokenBodyFormat);
     if (!res.ok) {
       if (res.status === 400 || res.status === 401) {
@@ -227,7 +231,11 @@ function makeOAuthClient(def) {
       throw await tokenError(`${def.label} token refresh`, res);
     }
     const data = await res.json().catch(() => { throw new Error(`${def.label}: token refresh returned invalid JSON.`); });
-    return await persist(data, { clientId: tokens.clientId, fallbackRefresh: tokens.refreshToken });
+    return await persist(data, {
+      clientId: tokens.clientId,
+      clientSecret: tokens.clientSecret,
+      fallbackRefresh: tokens.refreshToken,
+    });
   }
 
   async function getAccessToken() {
@@ -288,17 +296,32 @@ const GEMINI_OAUTH = makeOAuthClient({
   extraAuthParams: { access_type: 'offline', prompt: 'consent' },
 });
 
+// Chrome Web Store publishing. The user owns the Google Cloud OAuth client;
+// WebBrain never ships a shared publishing identity. The loopback redirect is
+// observed in the temporary auth tab, so no local HTTP server is required.
+const CHROME_WEB_STORE_OAUTH = makeOAuthClient({
+  label: 'Chrome Web Store',
+  storageKey: 'chromeWebStoreOauthTokens',
+  authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
+  tokenUrl: 'https://oauth2.googleapis.com/token',
+  redirect: 'http://localhost:1457/auth/callback',
+  scopes: 'https://www.googleapis.com/auth/chromewebstore',
+  tokenBodyFormat: 'form',
+  extraAuthParams: { access_type: 'offline', prompt: 'consent' },
+});
+
 const CLIENTS = {
   openai: OPENAI_OAUTH,
   gemini: GEMINI_OAUTH,
+  chrome_web_store: CHROME_WEB_STORE_OAUTH,
 };
 
 // ─── Registry dispatch (used by background.js + providers) ───────────
 
-export async function startSubscriptionOAuth(provider, clientId) {
+export async function startSubscriptionOAuth(provider, clientId, clientSecret = '') {
   const c = CLIENTS[provider];
   if (!c) throw new Error(`Unknown OAuth provider: ${provider}`);
-  return c.start(clientId);
+  return c.start(clientId, clientSecret);
 }
 
 export async function signOutSubscription(provider) {

@@ -1,0 +1,25 @@
+{
+  "id": "075",
+  "user": "finish what we were doing",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 32917,
+  "error": null,
+  "firstToolCall": {
+    "name": "progress_read",
+    "args": {}
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll check my scratchpad and progress ledger to see what we were working on.",
+  "usage": {
+    "prompt_tokens": 20558,
+    "completion_tokens": 22,
+    "total_tokens": 20580
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

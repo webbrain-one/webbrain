@@ -1,0 +1,31 @@
+{
+  "runTag": "2026-07-13-nvidia-glm52-compact",
+  "model": "z-ai/glm-5.2",
+  "browser": "chrome",
+  "base": "https://integrate.api.nvidia.com/v1",
+  "saveRequest": false,
+  "tier": "compact",
+  "modeOverride": null,
+  "chatTemplateCompat": "off",
+  "structuredToolsSent": true,
+  "freeze": null,
+  "cases": 100,
+  "totalLatencyMs": 13922560,
+  "errors": 0,
+  "withToolCall": 85,
+  "withToolCallFromContent": 0,
+  "byTool": {
+    "navigate": 23,
+    "new_tab": 5,
+    "(no_tool_call)": 15,
+    "get_accessibility_tree": 43,
+    "read_page": 5,
+    "extract_data": 2,
+    "click": 1,
+    "scroll": 1,
+    "get_selection": 1,
+    "done": 2,
+    "fetch_url": 1,
+    "get_window_info": 1
+  }
+}

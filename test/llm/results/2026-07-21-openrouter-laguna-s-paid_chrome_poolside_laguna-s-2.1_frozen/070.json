@@ -1,0 +1,52 @@
+{
+  "id": "070",
+  "user": "log in",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 9713,
+  "error": null,
+  "firstToolCall": {
+    "name": "clarify",
+    "args": {
+      "question": "You said \"log in\" — which site or service should I sign you into?",
+      "options": [
+        "GitHub",
+        "Google/Gmail",
+        "AWS Console",
+        "A specific URL you'll provide"
+      ],
+      "reason": "The current page is a blank new tab (about:home) with no site context, so I can't determine which login flow to open."
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'm on a blank new tab page, so I don't have any site context to work from. Where would you like me to log you in?",
+  "usage": {
+    "prompt_tokens": 16941,
+    "completion_tokens": 410,
+    "total_tokens": 17351,
+    "cost": 0.00025258,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 16928,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.00025258,
+      "upstream_inference_prompt_cost": 0.00017058,
+      "upstream_inference_completions_cost": 0.000082
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 266,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

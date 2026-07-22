@@ -11,17 +11,43 @@ npx playwright install chromium
 
 ## 1. Unit — `npm test`
 
-`test/run.js`. Pure-JS tests of loop detection + adapter routing. No browser, no network. Already green (32 passed as of v4.0.1).
+`test/run.js`. Pure-JS tests covering loop detection, adapter routing, provider parity, permission gates, tool classifications, planner logic, skills, slash commands, credential fields, and context management. No browser, no network. Run the complete unit suite with `npm test`.
 
 ## 2. Fixtures — `npm run test:fixtures`
 
-`test/fixtures/`. Playwright loads local HTML files that reproduce the exact failure modes v4.0.1's overlay defenses fix:
+`test/fixtures/`. Playwright loads local HTML files that reproduce failure modes for overlay defenses and interaction patterns:
 
 - `modal-scoping.html` — dialog with "Create" over a background that also has "Create" + "Publish release". Verifies `_findTopmostModal()` scopes the text resolver, so `click({text:"Create"})` picks the dialog's button and `click({text:"Publish release"})` returns a scoped no-match.
 - `occlusion.html` — target button covered by a transparent overlay with higher z-index. Verifies the post-click `elementFromPoint` hit-test refuses with `{occluded:true}`, and that coord clicks correctly bypass the check.
 - `ambiguity-candidates.html` — two "Cancel" buttons in different landmarks. Verifies the ambiguity response carries `{cx, cy, ancestor}` with the containing form / section identified.
 
 No LLM, no API keys, no network. Deterministic, ~5 seconds. Run on every PR.
+
+### Real Chrome WebMCP smoke test
+
+`test/webmcp-e2e.mjs` verifies the experimental browser API and CDP domain
+against a local fixture, then loads the real unpacked WebBrain extension and
+repeats discovery and invocation through its `Agent` and `CDPClient`. The
+coverage includes schema transport, default-off and Ask/Act gates, trusted frame
+metadata preparation, paginated and cross-frame discovery, asynchronous
+success, script exceptions, UI state changes, dynamic unregistration, and stale
+tool IDs. It uses the repository's Playwright dependency and requires Google
+Chrome 149 or newer. The runner starts and stops its own loopback fixture server
+on a random port:
+
+```bash
+npm run test:webmcp
+```
+
+Set `WEBMCP_CHROME_PATH` when Chrome is installed outside its standard Windows,
+macOS, or Linux location. The test launches Chrome headlessly with
+`WebMCPTesting,DevToolsWebMCPSupport` enabled. It remains separate from
+`npm test` because the browser API and CDP domain are experimental. Each browser
+phase has a 30-second timeout; set `WEBMCP_TIMEOUT_MS` to override it or
+`WEBMCP_DEBUG=1` to print phase progress while diagnosing a failure. The
+dedicated `WebMCP E2E` workflow runs it for pull requests and main-branch pushes
+that touch the Chrome extension, WebMCP fixtures, runner, dependencies, or the
+workflow itself.
 
 ## 3. Anonymous scenarios — `npm run test:anonymous`
 
@@ -106,6 +132,6 @@ with the extension side panel:
 python3 -m http.server 8765 -d test/memory
 ```
 
-Then open `http://127.0.0.1:8765/`. The page walks through `/remember`,
+Then open `http://127.0.0.1:8765/`. The page walks through `/memory --add`,
 form-derived learning, normal auto-learning, replaying saved memories into a
 later form, and Profile auto-fill.

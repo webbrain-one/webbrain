@@ -1,5 +1,5 @@
 /**
- * Pure trace → Markdown serializer for /export-with-traces.
+ * Pure trace → Markdown serializer for /export --traces.
  *
  * Consumes the trace store's per-run event log (trace/recorder.js) — an
  * append-only, compaction-immune record whose tool results are the RAW structured
@@ -70,7 +70,7 @@ function stringifyArgs(args) {
 // A trace tool result is a RAW value: a structured object ({success,error,...}),
 // a string, or the recorder's large-result marker { _truncated, length, head }.
 function renderResult(result) {
-  if (result == null) return { text: '(no result recorded)', failed: false };
+  if (result == null) return { text: '(missing tool result)', failed: true };
   if (typeof result === 'object' && result._truncated) {
     return {
       text: `${truncate(oneLine(String(result.head ?? '')), RESULT_LIMIT)}  [recorder-truncated, ${humanSize(result.length || 0)} total]`,
@@ -82,12 +82,24 @@ function renderResult(result) {
   return { text: truncate(oneLine(s), RESULT_LIMIT), failed };
 }
 
+function exportedRunStatus(run, events = []) {
+  const status = oneLine(run?.status || '');
+  const sawLoopError = events.some(ev => ev?.kind === 'error' && ev?.data?.phase === 'loop');
+  if (status === 'done' && sawLoopError) {
+    return 'loop_stopped';
+  }
+  return status;
+}
+
 export function tracesToMarkdown(runsWithEvents, {
   title = 'WebBrain Conversation — tool chain',
   notes = [],
+  exportedByWebBrainVersion = '',
 } = {}) {
   const runs = Array.isArray(runsWithEvents) ? runsWithEvents : [];
   let md = `# ${title}\n\n`;
+  const exportVersion = oneLine(exportedByWebBrainVersion);
+  if (exportVersion) md += `_Exported with WebBrain v${exportVersion}_\n\n`;
   let turnCount = 0;
   let toolCount = 0;
 
@@ -96,12 +108,18 @@ export function tracesToMarkdown(runsWithEvents, {
     turnCount += 1;
     const run = entry.run;
     const user = oneLine(run.userMessage || '');
-    const meta = [run.model, run.status].filter(Boolean).join(' · ');
+    const recordedVersion = oneLine(run.webbrainVersion || '');
+    const events = Array.isArray(entry.events) ? [...entry.events].sort((a, b) => (a?.seq || 0) - (b?.seq || 0)) : [];
+    const meta = [
+      recordedVersion ? `recorded with WebBrain v${recordedVersion}` : 'recorded WebBrain version unavailable',
+      run.model,
+      exportedRunStatus(run, events),
+    ].filter(Boolean).join(' · ');
     md += `## Turn ${turnCount}${user ? ` — ${user}` : ''}\n`;
     if (meta) md += `_${meta}_\n`;
     md += '\n';
 
-    const events = Array.isArray(entry.events) ? [...entry.events].sort((a, b) => (a?.seq || 0) - (b?.seq || 0)) : [];
+    let lastAssistantContent = '';
     for (const ev of events) {
       const d = (ev && ev.data) || {};
       if (ev.kind === 'llm_response') {
@@ -113,6 +131,7 @@ export function tracesToMarkdown(runsWithEvents, {
           md += `**Planner:**\n${fencedBlock(content)}\n`;
         } else {
           md += `**WebBrain:** ${oneLine(content)}\n`;
+          lastAssistantContent = content;
         }
       } else if (ev.kind === 'tool') {
         toolCount += 1;
@@ -122,6 +141,10 @@ export function tracesToMarkdown(runsWithEvents, {
         md += `- ⚠️ error${d.phase ? ` (${d.phase})` : ''}: ${oneLine(d.message || '')}\n`;
       }
       // screenshot / note / vision_sub_call intentionally omitted — see FOOTER.
+    }
+    const finalContent = String(run.finalContent || '').trim();
+    if (finalContent && oneLine(finalContent) !== oneLine(lastAssistantContent)) {
+      md += `**Final:** ${oneLine(finalContent)}\n`;
     }
     md += '\n';
   }

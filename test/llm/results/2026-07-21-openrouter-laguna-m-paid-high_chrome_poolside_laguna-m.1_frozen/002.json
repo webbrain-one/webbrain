@@ -1,0 +1,45 @@
+{
+  "id": "002",
+  "user": "open gmail",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 1708,
+  "error": null,
+  "firstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "https://mail.google.com"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "\nI'll open Gmail for you.\n\n",
+  "usage": {
+    "prompt_tokens": 17035,
+    "completion_tokens": 61,
+    "total_tokens": 17096,
+    "cost": 0.0017281,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 17033,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.0017281,
+      "upstream_inference_prompt_cost": 0.0017037,
+      "upstream_inference_completions_cost": 0.0000244
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 23,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

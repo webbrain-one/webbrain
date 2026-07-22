@@ -1,0 +1,22 @@
+{
+  "id": "012",
+  "user": "show my browser history",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 19760,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I can't show your browser history — Chrome's history page (`chrome://history`) is a privileged internal page that my tools can't read or interact with, and there's no other way for me to access your browsing history from the current tab.\n\nYou can view it yourself by pressing **Ctrl+H** (or **Cmd+Y** on Mac), or by typing `chrome://history` into your address bar.\n\nIs there something else I can help you with?",
+  "usage": {
+    "prompt_tokens": 20557,
+    "completion_tokens": 96,
+    "total_tokens": 20653
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

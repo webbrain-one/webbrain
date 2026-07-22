@@ -1,0 +1,46 @@
+{
+  "id": "056",
+  "user": "save this youtube thumbnail",
+  "mode": "act",
+  "tab": {
+    "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    "title": "Rick Astley — YouTube"
+  },
+  "latencyMs": 2609,
+  "error": null,
+  "firstToolCall": {
+    "name": "download_file",
+    "args": {
+      "url": "https://img.youtube.com/vi/dQw4w9WgXcQ/maxresdefault.jpg",
+      "filename": "rick-astley-thumbnail.jpg"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll download the YouTube thumbnail for this video. The video ID is `dQw4w9WgXcQ`, so I'll grab the highest-resolution thumbnail from YouTube's thumbnail CDN.",
+  "usage": {
+    "prompt_tokens": 17292,
+    "completion_tokens": 462,
+    "total_tokens": 17754,
+    "cost": 0.00030096,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 16896,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.00030096,
+      "upstream_inference_prompt_cost": 0.00020856,
+      "upstream_inference_completions_cost": 0.0000924
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 367,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

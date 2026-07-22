@@ -1,0 +1,23 @@
+{
+  "id": "086",
+  "user": "what does CORS stand for",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 17139,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "\n\n**CORS** stands for **Cross-Origin Resource Sharing**.\n\nHere's a quick breakdown of what that means:\n\n---\n\n### What is CORS?\n\nCORS is an **HTTP security mechanism** that allows web browsers to specify which **origin** (domain, scheme, port) can make **cross-origin requests** to a resource — such as fetching data from an API, reading a JSON file, or accessing a database endpoint.\n\n### Why it exists\n\nThe **Same-Origin Policy** is a fundamental browser security rule that prevents a page loaded from `example.com` from accessing resources from `api.example.org` directly. This prevents malicious scripts from stealing data across different sites.\n\nHowever, this policy creates a **limitation**: legitimate applications often need to communicate across origins (e.g., a frontend app on `app.com` calling a backend API on `api.com`). CORS was introduced to **balance security with functionality** — giving developers a controlled way to allow cross-origin access.\n\n### How it works\n\nWhen a browser makes a cross-origin request, it sends an extra **`Origin` header** indicating the requesting origin. The server then decides whether to permit the request by including one of these headers in the response:\n\n| Response Header | Meaning |\n|---|---|\n| `Access-Control-Allow-Origin` | Specifies which origins are allowed (e.g., `\"https://app.com\"` or `\"\"` for any origin) |\n| `Access-Control-Allow-Methods` | Lists allowed HTTP methods (GET, POST, PUT, DELETE, etc.) |\n| `Access-Control-Allow-Headers` | Lists allowed request headers |\n| `Access-Control-Allow-Credentials` | Allows cookies/auth headers to be sent (must be combined with `Allow-Origin`) |\n\nIf the server **does not** include these headers, the browser blocks the cross-origin request per the Same-Origin Policy.\n\n### Example\n\n```javascript\n// Frontend (origin: https://app.com)\nfetch('https://api.example.org/data')\n  .then(response => response.json())\n  .then(data => console.log(data));\n```\n\nFor this to work, the API server must respond with:\n\n```\nAccess-Control-Allow-Origin: https://app.com\nAccess-Control-Allow-Methods: GET, POST, PUT, DELETE\nAccess-Control-Allow-Headers: Content-Type, Authorization\nAccess-Control-Allow-Credentials: true\n```\n\n---\n\n### In short\n\n> **CORS = Cross-Origin Resource Sharing** — a security framework that lets servers explicitly authorize cross-origin web requests while keeping the browser's Same-Origin Policy as the default guard against malicious cross-site attacks.",
+  "usage": {
+    "prompt_tokens": 17979,
+    "total_tokens": 18671,
+    "completion_tokens": 692,
+    "prompt_tokens_details": null
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

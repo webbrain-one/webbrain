@@ -1,0 +1,22 @@
+{
+  "id": "080",
+  "user": "close all my tabs except this one",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 102498,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I can't close browser tabs — I don't have a tool for that. I can navigate the current tab, open new tabs, or go back/forward in history, but closing other tabs isn't something I'm able to do.\n\nYou can do this quickly yourself:\n- **Close all other tabs at once:** Right-click the current tab → \"Close other tabs\" (or press Ctrl+Shift+T is undo — but the shortcut to close others is usually via the right-click menu).\n- **Close tabs to the right:** Right-click this tab → \"Close tabs to the right\"\n- **On Chrome:** Right-click any tab → \"Close other tabs\" closes everything except the one you right-clicked.\n\nIs there something else I can help with on this page?",
+  "usage": {
+    "prompt_tokens": 12856,
+    "completion_tokens": 158,
+    "total_tokens": 13014
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

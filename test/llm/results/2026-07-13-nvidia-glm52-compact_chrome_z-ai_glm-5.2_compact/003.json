@@ -1,0 +1,27 @@
+{
+  "id": "003",
+  "user": "take me to youtube",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 130489,
+  "error": null,
+  "firstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "https://www.youtube.com"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll take you to YouTube.",
+  "usage": {
+    "prompt_tokens": 6697,
+    "completion_tokens": 21,
+    "total_tokens": 6718
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

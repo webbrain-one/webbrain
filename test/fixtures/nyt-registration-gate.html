@@ -1,0 +1,37 @@
+<!doctype html>
+<html>
+<head>
+  <meta property="og:type" content="article">
+  <meta name="description" content="Public article description.">
+  <title>NYTimes registration gate fixture</title>
+  <style>
+    body { margin: 0; font: 18px/1.5 sans-serif; }
+    article { max-width: 700px; margin: 32px auto; }
+    [role="dialog"] { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; background: white; }
+    .card { width: 520px; padding: 32px; border: 1px solid #aaa; }
+  </style>
+</head>
+<body>
+  <article itemprop="articleBody">
+    <h1>Fixture headline</h1>
+    <p>SECRET_NYT_ARTICLE_BODY must never be returned while the registration dialog blocks this article.</p>
+    <a href="https://example.com/SECRET_NYT_LINK_TARGET">SECRET_NYT_LINK_TEXT</a>
+    <img src="https://example.com/secret.jpg" alt="SECRET_NYT_IMAGE_ALT">
+    <form action="https://example.com/secret-form"><input name="article" value="SECRET_NYT_FORM_VALUE"></form>
+    <div id="secret-shadow-host"></div>
+  </article>
+  <div role="dialog" aria-modal="true">
+    <div class="card">
+      <h2>Create a free account or log in</h2>
+      <p>Log in to continue reading this article.</p>
+      <form>
+        <label>Email <input type="email" name="email" autocomplete="email"></label>
+        <button type="button" onclick="window.__gateControlClicked = true">Continue</button>
+      </form>
+    </div>
+  </div>
+  <script>
+    document.getElementById('secret-shadow-host').attachShadow({ mode: 'open' }).innerHTML = '<p>SECRET_NYT_SHADOW_TEXT</p>';
+  </script>
+</body>
+</html>

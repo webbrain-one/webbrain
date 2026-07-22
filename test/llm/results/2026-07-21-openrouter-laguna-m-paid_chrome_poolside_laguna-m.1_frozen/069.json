@@ -1,0 +1,45 @@
+{
+  "id": "069",
+  "user": "open it",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 3703,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "\nI see you're on a \"New Tab\" page. Let me check what's visible here to understand what you'd like me to open.\n\n",
+  "usage": {
+    "prompt_tokens": 17035,
+    "completion_tokens": 193,
+    "total_tokens": 17228,
+    "cost": 0.0017817,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 17025,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.0017817,
+      "upstream_inference_prompt_cost": 0.0017045,
+      "upstream_inference_completions_cost": 0.0000772
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 133,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

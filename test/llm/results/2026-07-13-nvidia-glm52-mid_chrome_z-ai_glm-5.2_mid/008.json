@@ -1,0 +1,27 @@
+{
+  "id": "008",
+  "user": "wikipedia please",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 44056,
+  "error": null,
+  "firstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "https://www.wikipedia.org"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll open Wikipedia for you.",
+  "usage": {
+    "prompt_tokens": 12852,
+    "completion_tokens": 21,
+    "total_tokens": 12873
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

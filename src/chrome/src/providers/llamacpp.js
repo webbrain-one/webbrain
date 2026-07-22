@@ -38,22 +38,23 @@ export class LlamaCppProvider extends BaseLLMProvider {
     return !!this.config.useCompactPrompt;
   }
 
-  async chat(messages, options = {}) {
+  _buildRequestBody(messages, options = {}, stream = false) {
     const body = {
-      messages,
+      messages: this._chatMessages(messages),
       temperature: options.temperature ?? 0.7,
-      max_tokens: options.maxTokens ?? 4096,
-      stream: false,
+      stream,
     };
-
-    if (this.model) {
-      body.model = this.model;
-    }
-
+    this._addConfiguredMaxTokens(body, options, 'max_tokens');
+    if (this.model) body.model = this.model;
     if (options.tools && options.tools.length > 0) {
       body.tools = options.tools;
       body.tool_choice = options.toolChoice || 'auto';
     }
+    return this._mergeConfiguredRequestBody(body, options);
+  }
+
+  async chat(messages, options = {}) {
+    const body = this._buildRequestBody(messages, options, false);
 
     const url = `${this.baseUrl}/v1/chat/completions`;
     let res;
@@ -90,21 +91,7 @@ export class LlamaCppProvider extends BaseLLMProvider {
   }
 
   async *chatStream(messages, options = {}) {
-    const body = {
-      messages,
-      temperature: options.temperature ?? 0.7,
-      max_tokens: options.maxTokens ?? 4096,
-      stream: true,
-    };
-
-    if (this.model) {
-      body.model = this.model;
-    }
-
-    if (options.tools && options.tools.length > 0) {
-      body.tools = options.tools;
-      body.tool_choice = options.toolChoice || 'auto';
-    }
+    const body = this._buildRequestBody(messages, options, true);
 
     const streamUrl = `${this.baseUrl}/v1/chat/completions`;
     let res;

@@ -1,0 +1,23 @@
+{
+  "id": "027",
+  "user": "tldr",
+  "mode": "act",
+  "tab": {
+    "url": "https://en.wikipedia.org/wiki/Closure_(computer_programming)",
+    "title": "Closure (computer programming) — Wikipedia"
+  },
+  "latencyMs": 53613,
+  "error": null,
+  "firstToolCall": {
+    "name": "read_page",
+    "args": {}
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "The user wants a TL;DR of the Wikipedia article on closures. Let me read the page content.",
+  "usage": {
+    "prompt_tokens": 16580,
+    "completion_tokens": 26,
+    "total_tokens": 16606
+  }
+}

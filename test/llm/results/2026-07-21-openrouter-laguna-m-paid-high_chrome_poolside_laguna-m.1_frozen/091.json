@@ -1,0 +1,45 @@
+{
+  "id": "091",
+  "user": "toggle dark mode on this site",
+  "mode": "act",
+  "tab": {
+    "url": "https://stackoverflow.com/questions/111/javascript-closures",
+    "title": "JavaScript closures — Stack Overflow"
+  },
+  "latencyMs": 1919,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "\nI'll help you toggle dark mode on Stack Overflow. Let me first check the current page to find the dark mode toggle.\n\n",
+  "usage": {
+    "prompt_tokens": 17129,
+    "completion_tokens": 90,
+    "total_tokens": 17219,
+    "cost": 0.0017491,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 17127,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.0017491,
+      "upstream_inference_prompt_cost": 0.0017131,
+      "upstream_inference_completions_cost": 0.000036
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 34,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

@@ -538,12 +538,11 @@ export async function fillSheet(tabId, args) {
 // ─────────────────────────────────────────────────────────────────────────
 
 async function _getTabUrl(tabId) {
-  // chrome.tabs.get works the same in MV3 service workers and MV2
-  // backgrounds; both `chrome` and `browser` globals expose it. Wrapped in
-  // try/catch because the tab may have been closed between the agent's
-  // last tool call and now.
+  // browser.tabs.get in the MV2 background page. Wrapped in try/catch
+  // because the tab may have been closed between the agent's last tool
+  // call and now.
   try {
-    const tab = await chrome.tabs.get(tabId);
+    const tab = await browser.tabs.get(tabId);
     return tab?.url || '';
   } catch {
     return '';

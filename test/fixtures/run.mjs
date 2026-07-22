@@ -16,6 +16,9 @@ import { chromium } from 'playwright';
 import { fileURLToPath } from 'node:url';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { Agent } from '../../src/chrome/src/agent/agent.js';
+import { Agent as FirefoxAgent } from '../../src/firefox/src/agent/agent.js';
+import { CDPClient, cdpClient } from '../../src/chrome/src/cdp/cdp-client.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..', '..');
@@ -23,6 +26,8 @@ const accessibilityTreeJsPath = path.join(root, 'src', 'chrome', 'src', 'content
 const firefoxAccessibilityTreeJsPath = path.join(root, 'src', 'firefox', 'src', 'content', 'accessibility-tree.js');
 const contentJsPath = path.join(root, 'src', 'chrome', 'src', 'content', 'content.js');
 const firefoxContentJsPath = path.join(root, 'src', 'firefox', 'src', 'content', 'content.js');
+const filePickerGuardPageJsPath = path.join(root, 'src', 'chrome', 'src', 'content', 'file-picker-guard-page.js');
+const firefoxFilePickerGuardPageJsPath = path.join(root, 'src', 'firefox', 'src', 'content', 'file-picker-guard-page.js');
 const selectionShortcutJsPath = path.join(root, 'src', 'chrome', 'src', 'content', 'selection-shortcut.js');
 const firefoxSelectionShortcutJsPath = path.join(root, 'src', 'firefox', 'src', 'content', 'selection-shortcut.js');
 const smdJsPath = path.join(root, 'src', 'chrome', 'src', 'agent', 'social-media-downloader.js');
@@ -61,10 +66,117 @@ async function setup(page, fixture) {
   await page.waitForFunction(() => typeof window.__wb_handler === 'function');
 }
 
+async function setupContentFixture(page, fixture, browserKind) {
+  const firefox = browserKind === 'firefox';
+  await page.addInitScript(firefox ? stubFirefoxBrowser : stubChrome);
+  await page.goto(fixtureUrl(fixture));
+  const axSrc = await readFile(firefox ? firefoxAccessibilityTreeJsPath : accessibilityTreeJsPath, 'utf-8');
+  await page.addScriptTag({ content: axSrc });
+  const contentSrc = await readFile(firefox ? firefoxContentJsPath : contentJsPath, 'utf-8');
+  await page.addScriptTag({ content: contentSrc });
+  await page.waitForFunction(() => typeof window.__wb_handler === 'function');
+}
+
+async function setupContentHtml(page, html, browserKind) {
+  const firefox = browserKind === 'firefox';
+  await page.setContent(html, { waitUntil: 'domcontentloaded' });
+  const pageGuardSrc = await readFile(
+    firefox ? firefoxFilePickerGuardPageJsPath : filePickerGuardPageJsPath,
+    'utf-8',
+  );
+  await page.addScriptTag({ content: pageGuardSrc });
+  // Simulate manifest injection followed by extension-reload recovery.
+  await page.addScriptTag({ content: pageGuardSrc });
+  await page.addScriptTag({ content: firefox ? stubFirefoxBrowser : stubChrome });
+  const src = await readFile(firefox ? firefoxContentJsPath : contentJsPath, 'utf-8');
+  await page.addScriptTag({ content: src });
+  await page.waitForFunction(() => typeof window.__wb_handler === 'function');
+}
+
+async function setupIsolatedContentHtml(page, html, browserKind) {
+  const firefox = browserKind === 'firefox';
+  await page.setContent(html, { waitUntil: 'domcontentloaded' });
+  const pageGuardSrc = await readFile(
+    firefox ? firefoxFilePickerGuardPageJsPath : filePickerGuardPageJsPath,
+    'utf-8',
+  );
+  await page.addScriptTag({ content: pageGuardSrc });
+  // Simulate recovery reinjection while keeping the content world separate.
+  await page.addScriptTag({ content: pageGuardSrc });
+
+  const session = await page.context().newCDPSession(page);
+  await session.send('Page.enable');
+  await session.send('Runtime.enable');
+  const frameTree = await session.send('Page.getFrameTree');
+  const isolatedWorld = await session.send('Page.createIsolatedWorld', {
+    frameId: frameTree.frameTree.frame.id,
+    worldName: `webbrain-${browserKind}-fixture`,
+  });
+  const contextId = isolatedWorld.executionContextId;
+  const contentSrc = await readFile(firefox ? firefoxContentJsPath : contentJsPath, 'utf-8');
+  const injected = await session.send('Runtime.evaluate', {
+    contextId,
+    expression: `${firefox ? stubFirefoxBrowser : stubChrome}\n${contentSrc}`,
+    awaitPromise: true,
+  });
+  if (injected.exceptionDetails) {
+    throw new Error(`isolated content injection failed: ${injected.exceptionDetails.text}`);
+  }
+
+  const rawIsolatedCall = async (action, params) => {
+    const message = JSON.stringify({ target: 'content', action, params });
+    const evaluated = await session.send('Runtime.evaluate', {
+      contextId,
+      expression: `new Promise((resolve) => {
+        const ret = window.__wb_handler(${message}, {}, (resp) => resolve(resp));
+        if (ret !== true && ret !== undefined) resolve(ret);
+      })`,
+      awaitPromise: true,
+      returnByValue: true,
+    });
+    if (evaluated.exceptionDetails) {
+      throw new Error(`isolated content call failed: ${evaluated.exceptionDetails.text}`);
+    }
+    return evaluated.result.value;
+  };
+
+  return async (action, params) => {
+    const response = await rawIsolatedCall(action, params);
+    const guardId = response?._filePickerGuardId;
+    if (!guardId) return response;
+
+    const originalResponse = { ...response };
+    delete originalResponse._filePickerGuardId;
+    await page.waitForTimeout(525);
+    let settled = await rawIsolatedCall('consume_file_picker_guard', { guardId });
+    if (settled?.settled === false) {
+      await page.waitForTimeout(50);
+      settled = await rawIsolatedCall('consume_file_picker_guard', { guardId });
+    }
+    if (!settled?.filePickerBlocked) return originalResponse;
+
+    const blockedResponse = { ...settled };
+    delete blockedResponse.settled;
+    return {
+      ...blockedResponse,
+      ...(originalResponse.rect ? { rect: originalResponse.rect } : {}),
+      ...(originalResponse.ref_id ? { ref_id: originalResponse.ref_id } : {}),
+    };
+  };
+}
+
 async function setupFirefoxHtml(page, html) {
   await page.setContent(html, { waitUntil: 'domcontentloaded' });
   await page.addScriptTag({ content: stubFirefoxBrowser });
   const src = await readFile(firefoxContentJsPath, 'utf-8');
+  await page.addScriptTag({ content: src });
+  await page.waitForFunction(() => typeof window.__wb_handler === 'function');
+}
+
+async function setupChromeHtml(page, html) {
+  await page.setContent(html, { waitUntil: 'domcontentloaded' });
+  await page.addScriptTag({ content: stubChrome });
+  const src = await readFile(contentJsPath, 'utf-8');
   await page.addScriptTag({ content: src });
   await page.waitForFunction(() => typeof window.__wb_handler === 'function');
 }
@@ -76,7 +188,7 @@ async function setupAccessibilityTreeHtml(page, html, sourcePath) {
   await page.waitForFunction(() => typeof window.__generateAccessibilityTree === 'function');
 }
 
-async function call(page, action, params) {
+async function rawContentCall(page, action, params) {
   return page.evaluate(({ action, params }) => new Promise((resolve) => {
     const ret = window.__wb_handler(
       { target: 'content', action, params },
@@ -85,6 +197,38 @@ async function call(page, action, params) {
     );
     if (ret !== true && ret !== undefined) resolve(ret);
   }), { action, params });
+}
+
+async function call(page, action, params) {
+  const response = await rawContentCall(page, action, params);
+  const guardId = response?._filePickerGuardId;
+  if (!guardId) return response;
+
+  const originalResponse = { ...response };
+  delete originalResponse._filePickerGuardId;
+  await page.waitForTimeout(525);
+  let settled = await rawContentCall(page, 'consume_file_picker_guard', { guardId });
+  if (settled?.settled === false) {
+    await page.waitForTimeout(50);
+    settled = await rawContentCall(page, 'consume_file_picker_guard', { guardId });
+  }
+  if (!settled?.filePickerBlocked) return originalResponse;
+
+  const blockedResponse = { ...settled };
+  delete blockedResponse.settled;
+  return {
+    ...blockedResponse,
+    ...(originalResponse.rect ? { rect: originalResponse.rect } : {}),
+    ...(originalResponse.ref_id ? { ref_id: originalResponse.ref_id } : {}),
+  };
+}
+
+async function readThroughCdpMirror(page, opts = {}) {
+  const client = new CDPClient();
+  client.evaluate = async (_tabId, expression) => ({
+    result: { value: await page.evaluate(expression) },
+  });
+  return client.readPage(1, opts);
 }
 
 async function clickedSentinel(page) {
@@ -180,6 +324,132 @@ async function selectFixtureText(page, selector = '#copy') {
 const tests = [];
 function test(name, fn) { tests.push({ name, fn }); }
 
+for (const [label, browserKind] of [['Chrome', 'chrome'], ['Firefox', 'firefox']]) {
+  test(`${label}: blocking NYTimes registration dialog suppresses article DOM`, async (page) => {
+    await setupContentFixture(page, 'nyt-registration-gate.html', browserKind);
+    const result = await call(page, 'get_page_info_cdp', {});
+    if (result.pageGate?.blocking !== true || result.pageGate?.surface !== 'dialog' || result.pageGate?.type !== 'registration') {
+      throw new Error(`registration pageGate mismatch: ${JSON.stringify(result.pageGate)}`);
+    }
+    const serializedResult = JSON.stringify(result);
+    if (result.textSource !== 'page-gate' || /SECRET_NYT_(?:ARTICLE|LINK|IMAGE|FORM|SHADOW)/.test(serializedResult)) {
+      throw new Error(`blocked article data leaked: ${serializedResult}`);
+    }
+    if (result.links?.length || result.forms?.length || result.shadowDOM?.length || result.iframes?.length || result.media?.imageCount || result.media?.videoCount) {
+      throw new Error(`blocking gate retained auxiliary page data: ${serializedResult}`);
+    }
+    if (JSON.stringify(result).indexOf('"pageGate"') > JSON.stringify(result).indexOf('"text"')) {
+      throw new Error('pageGate must serialize before long article text for trace visibility');
+    }
+    const tree = await call(page, 'get_accessibility_tree', { filter: 'visible', maxDepth: 5 });
+    if (tree.pageGate?.blocking !== true || !/Create a free account/i.test(tree.pageGate.label || '')) {
+      throw new Error(`accessibility tree omitted structured pageGate: ${JSON.stringify(tree.pageGate)}`);
+    }
+    if (tree.textSource !== 'page-gate' || /SECRET_NYT_ARTICLE_BODY/.test(tree.pageContent || '')) {
+      throw new Error(`accessibility tree leaked blocked article text: ${JSON.stringify(tree)}`);
+    }
+    const gateButtonRef = /button "Continue" \[(ref_\d+)\]/.exec(tree.pageContent || '')?.[1];
+    const gateEmailRef = /textbox "Email" \[(ref_\d+)\]/.exec(tree.pageContent || '')?.[1];
+    if (!gateButtonRef || !gateEmailRef) {
+      throw new Error(`accessibility tree omitted visible gate controls: ${JSON.stringify(tree)}`);
+    }
+    const clickResult = await call(page, 'click_ax', { ref_id: gateButtonRef });
+    const gateControlClicked = await page.evaluate(() => window.__gateControlClicked === true);
+    if (clickResult?.success !== true || !gateControlClicked) {
+      throw new Error(`gate control ref was not actionable: ${JSON.stringify(clickResult)}`);
+    }
+    const basicResult = await call(page, 'get_page_info', {});
+    if (/SECRET_NYT_(?:ARTICLE|LINK|IMAGE|FORM|SHADOW)/.test(JSON.stringify(basicResult))) {
+      throw new Error(`basic page info leaked blocked article data: ${JSON.stringify(basicResult)}`);
+    }
+  });
+
+  test(`${label}: The Athletic covering subscription overlay suppresses server-rendered body`, async (page) => {
+    await setupContentFixture(page, 'athletic-subscription-overlay.html', browserKind);
+    const result = await call(page, 'get_page_info_cdp', {});
+    if (result.pageGate?.type !== 'subscription' || result.pageGate?.surface !== 'dialog') {
+      throw new Error(`Athletic pageGate mismatch: ${JSON.stringify(result.pageGate)}`);
+    }
+    if (/SECRET_ATHLETIC_(?:ARTICLE|LINK|FORM)/.test(JSON.stringify(result)) || result.textSource !== 'page-gate') {
+      throw new Error(`Athletic article data leaked: ${JSON.stringify(result)}`);
+    }
+  });
+
+  test(`${label}: inline article gate returns only the visible preview`, async (page) => {
+    await setupContentFixture(page, 'inline-article-paywall.html', browserKind);
+    const result = await call(page, 'get_page_info_cdp', {});
+    if (result.pageGate?.blocking !== true || result.pageGate?.surface !== 'inline') {
+      throw new Error(`inline pageGate mismatch: ${JSON.stringify(result.pageGate)}`);
+    }
+    if (!/VISIBLE_PREVIEW_PARAGRAPH/.test(result.text || '') || /SECRET_POST_GATE_PARAGRAPH/.test(result.text || '')) {
+      throw new Error(`inline preview boundary mismatch: ${JSON.stringify(result.text)}`);
+    }
+    if (!/\(pre-gate\)$/.test(result.textSource || '')) {
+      throw new Error(`inline textSource missing pre-gate marker: ${result.textSource}`);
+    }
+    const tree = await call(page, 'get_accessibility_tree', { filter: 'visible', maxDepth: 5 });
+    if (!/VISIBLE_PREVIEW_PARAGRAPH/.test(tree.pageContent || '') || /SECRET_POST_GATE_PARAGRAPH/.test(tree.pageContent || '')) {
+      throw new Error(`inline accessibility boundary mismatch: ${JSON.stringify(tree)}`);
+    }
+  });
+
+  test(`${label}: readable article ignores header controls, inline upsells, and hidden gate markup`, async (page) => {
+    await setupContentFixture(page, 'readable-article-no-gate.html', browserKind);
+    const result = await call(page, 'get_page_info_cdp', {});
+    if (result.pageGate) throw new Error(`false-positive pageGate: ${JSON.stringify(result.pageGate)}`);
+    if (!/READABLE_ARTICLE_BODY/.test(result.text || '') || !/READABLE_ARTICLE_AFTER_UPSELL/.test(result.text || '') || result.textSource === 'page-gate') {
+      throw new Error(`readable article body missing: ${JSON.stringify({ textSource: result.textSource, text: result.text })}`);
+    }
+  });
+
+  test(`${label}: non-article signup dialog preserves form controls`, async (page) => {
+    await setupContentFixture(page, 'non-article-signup-dialog.html', browserKind);
+    const result = await call(page, 'get_page_info_cdp', {});
+    if (result.pageGate) throw new Error(`non-article dialog became a page gate: ${JSON.stringify(result.pageGate)}`);
+    if (result.forms?.length !== 1 || result.forms[0]?.inputs?.[0]?.name !== 'email') {
+      throw new Error(`signup form was stripped from page info: ${JSON.stringify(result.forms)}`);
+    }
+    const basicResult = await call(page, 'get_page_info', {});
+    if (basicResult.pageGate || basicResult.forms?.length !== 1) {
+      throw new Error(`basic page info stripped the signup form: ${JSON.stringify(basicResult)}`);
+    }
+    const tree = await call(page, 'get_accessibility_tree', { filter: 'visible', maxDepth: 6 });
+    if (tree.pageGate || !/Work email/.test(tree.pageContent || '')) {
+      throw new Error(`signup accessibility tree was stripped: ${JSON.stringify(tree)}`);
+    }
+  });
+}
+
+test('Chrome CDP mirror suppresses a blocking Athletic article body', async (page) => {
+  await page.goto(fixtureUrl('athletic-subscription-overlay.html'));
+  const result = await readThroughCdpMirror(page);
+  if (result.pageGate?.type !== 'subscription' || result.pageGate?.surface !== 'dialog') {
+    throw new Error(`CDP pageGate mismatch: ${JSON.stringify(result.pageGate)}`);
+  }
+  if (result.textSource !== 'page-gate' || /SECRET_ATHLETIC_(?:ARTICLE|LINK|FORM)/.test(JSON.stringify(result))) {
+    throw new Error(`CDP mirror leaked blocked article data: ${JSON.stringify(result)}`);
+  }
+  if (result.links?.length || result.forms?.length || result.shadowHosts?.length || result.iframes?.length) {
+    throw new Error(`CDP blocking gate retained auxiliary page data: ${JSON.stringify(result)}`);
+  }
+});
+
+test('Chrome CDP mirror preserves a readable article across an inline upsell', async (page) => {
+  await page.goto(fixtureUrl('readable-article-no-gate.html'));
+  const result = await readThroughCdpMirror(page);
+  if (result.pageGate || !/READABLE_ARTICLE_BODY/.test(result.text || '') || !/READABLE_ARTICLE_AFTER_UPSELL/.test(result.text || '')) {
+    throw new Error(`CDP readable article mismatch: ${JSON.stringify({ pageGate: result.pageGate, text: result.text })}`);
+  }
+});
+
+test('Chrome CDP mirror preserves a non-article signup dialog', async (page) => {
+  await page.goto(fixtureUrl('non-article-signup-dialog.html'));
+  const result = await readThroughCdpMirror(page);
+  if (result.pageGate || result.forms?.length !== 1 || result.forms[0]?.inputs?.[0]?.name !== 'email') {
+    throw new Error(`CDP non-article signup mismatch: ${JSON.stringify(result)}`);
+  }
+});
+
 for (const [label, sourcePath, manualOpen] of [
   ['Chrome', selectionShortcutJsPath, false],
   ['Firefox', firefoxSelectionShortcutJsPath, true],
@@ -198,6 +468,102 @@ for (const [label, sourcePath, manualOpen] of [
     popupState = await page.evaluate(() => window.__webbrainSelectionShortcut.getState());
     if (popupState.popupVisible || !popupState.shortcutVisible) {
       throw new Error(`Escape should close the popup and retain the shortcut: ${JSON.stringify(popupState)}`);
+    }
+  });
+
+  test(`${label}: selection dialog contains page shortcuts and keeps the selected text highlighted`, async (page) => {
+    await setupSelectionShortcut(page, sourcePath, { requiresManualOpen: manualOpen });
+    await page.evaluate(() => {
+      window.__selectionPageKeys = [];
+      window.addEventListener('keydown', (event) => window.__selectionPageKeys.push(`window-capture:${event.key}`), true);
+      document.addEventListener('keydown', (event) => window.__selectionPageKeys.push(`document-capture:${event.key}`), true);
+      document.addEventListener('keydown', (event) => window.__selectionPageKeys.push(`down:${event.key}`));
+      document.addEventListener('keypress', (event) => window.__selectionPageKeys.push(`press:${event.key}`));
+      document.addEventListener('keyup', (event) => window.__selectionPageKeys.push(`up:${event.key}`));
+    });
+    const selectedState = await selectFixtureText(page);
+    await page.mouse.click(
+      selectedState.shortcutRect.left + selectedState.shortcutRect.width / 2,
+      selectedState.shortcutRect.top + selectedState.shortcutRect.height / 2,
+    );
+    const openState = await page.evaluate(() => window.__webbrainSelectionShortcut.getState());
+    if (!openState.questionRect || openState.highlightRectCount < 1) {
+      throw new Error(`popup should preserve a visual marker for the selected text: ${JSON.stringify(openState)}`);
+    }
+    await page.mouse.click(
+      openState.questionRect.left + openState.questionRect.width / 2,
+      openState.questionRect.top + openState.questionRect.height / 2,
+    );
+    await page.keyboard.type('j');
+    const typedState = await page.evaluate(() => ({
+      surface: window.__webbrainSelectionShortcut.getState(),
+      pageKeys: window.__selectionPageKeys,
+    }));
+    if (typedState.surface.questionValue !== 'j' || typedState.surface.highlightRectCount < 1) {
+      throw new Error(`typing should keep the custom question and sticky highlight: ${JSON.stringify(typedState)}`);
+    }
+    if (typedState.pageKeys.length) {
+      throw new Error(`dialog keystrokes leaked to the page: ${JSON.stringify(typedState.pageKeys)}`);
+    }
+    await page.keyboard.press('Escape');
+    const closedState = await page.evaluate(() => window.__webbrainSelectionShortcut.getState());
+    if (closedState.popupVisible || closedState.highlightRectCount !== 0) {
+      throw new Error(`closing the popup should remove the sticky highlight: ${JSON.stringify(closedState)}`);
+    }
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => window.__webbrainSelectionShortcut.getState().popupVisible);
+    const reopenedState = await page.evaluate(() => window.__webbrainSelectionShortcut.getState());
+    await page.mouse.click(
+      reopenedState.questionRect.left + reopenedState.questionRect.width / 2,
+      reopenedState.questionRect.top + reopenedState.questionRect.height / 2,
+    );
+    await page.keyboard.type('What is the point?');
+    await page.keyboard.press('Control+Enter');
+    await page.waitForFunction(() => window.__selectionMessages.length === 1);
+    const submittedState = await page.evaluate(() => ({
+      message: window.__selectionMessages[0],
+      surface: window.__webbrainSelectionShortcut.getState(),
+      pageKeys: window.__selectionPageKeys,
+    }));
+    if (submittedState.message.action !== 'custom' || submittedState.message.question !== 'What is the point?') {
+      throw new Error(`capture-phase containment broke keyboard submission: ${JSON.stringify(submittedState)}`);
+    }
+    if (submittedState.surface.popupVisible || submittedState.surface.highlightRectCount !== 0) {
+      throw new Error(`keyboard submission should dismiss the surface and highlight: ${JSON.stringify(submittedState)}`);
+    }
+    if (submittedState.pageKeys.length) {
+      throw new Error(`capture-phase dialog keystrokes leaked to the page: ${JSON.stringify(submittedState.pageKeys)}`);
+    }
+  });
+
+  test(`${label}: selection highlight stays bounded for long documents`, async (page) => {
+    await setupSelectionShortcut(page, sourcePath, { requiresManualOpen: manualOpen });
+    const rawRectCount = await page.evaluate(() => {
+      const article = document.createElement('article');
+      article.id = 'long-selection';
+      for (let index = 0; index < 600; index += 1) {
+        const line = document.createElement('div');
+        line.textContent = `Selected article line ${index + 1}`;
+        article.appendChild(line);
+      }
+      document.body.appendChild(article);
+      const range = document.createRange();
+      range.selectNodeContents(article);
+      return Array.from(range.getClientRects()).filter((rect) => rect.width > 0 && rect.height > 0).length;
+    });
+    if (rawRectCount <= 200) throw new Error(`fixture should create more than 200 selection rectangles, got ${rawRectCount}`);
+
+    const selectedState = await selectFixtureText(page, '#long-selection');
+    await page.mouse.click(
+      selectedState.shortcutRect.left + selectedState.shortcutRect.width / 2,
+      selectedState.shortcutRect.top + selectedState.shortcutRect.height / 2,
+    );
+    const openState = await page.evaluate(() => window.__webbrainSelectionShortcut.getState());
+    if (openState.highlightRectCount < 1 || openState.highlightRectCount > 200) {
+      throw new Error(`long selections should render 1-200 highlight rectangles: ${JSON.stringify(openState)}`);
+    }
+    if (openState.highlightRectCount >= rawRectCount) {
+      throw new Error(`offscreen selection rectangles should not all render: ${JSON.stringify({ rawRectCount, openState })}`);
     }
   });
 
@@ -340,6 +706,14 @@ const gmailComposeRecipientFixture = `<!doctype html>
 
 let chromeGmailComposeTree = '';
 
+function normalizeTreeRefs(content) {
+  const refs = new Map();
+  return String(content || '').replace(/ref_\d+/g, ref => {
+    if (!refs.has(ref)) refs.set(ref, `ref_${refs.size + 1}`);
+    return refs.get(ref);
+  });
+}
+
 function assertGmailComposeRecipientTree(tree, label) {
   const content = String(tree?.pageContent || '');
   if (!/generic "Alex Russell \(gmail\.com\)" \[ref_\d+\]/.test(content)) {
@@ -354,7 +728,7 @@ function assertGmailComposeRecipientTree(tree, label) {
   for (const forbidden of ['To recipients', 'Hidden stale recipient', 'Opacity hidden override', 'Offscreen hidden override', 'ARIA hidden override', 'Hidden wrapper text', 'generic "Composite controls', 'x'.repeat(101)]) {
     if (content.includes(forbidden)) throw new Error(`${label}: tree promoted forbidden generic text: ${forbidden}`);
   }
-  return content;
+  return normalizeTreeRefs(content);
 }
 
 test('accessibility tree (Chrome): existing Gmail compose exposes the selected recipient chip', async (page) => {
@@ -368,6 +742,46 @@ test('accessibility tree (Firefox): existing Gmail compose exposes the selected 
   const tree = await page.evaluate(() => window.__generateAccessibilityTree('visible', 10, null, null, 1));
   const firefoxTree = assertGmailComposeRecipientTree(tree, 'firefox');
   if (firefoxTree !== chromeGmailComposeTree) throw new Error('Chrome/Firefox Gmail compose trees differ');
+});
+
+const richEditorVariantsFixture = `<!doctype html>
+  <style>
+    body { margin: 0; font: 16px sans-serif; }
+    .editor { display: block; width: 520px; min-height: 72px; margin: 12px; border: 1px solid #888; }
+  </style>
+  <div class="editor" contenteditable="" aria-label="Email body">Draft body text</div>
+  <div class="editor" contenteditable="plaintext-only" aria-label="Plain message">Plain draft text</div>
+  <div class="editor" contenteditable="false" aria-label="Read-only copy">Do not edit</div>`;
+
+let chromeRichEditorTree = '';
+
+function assertRichEditorVariants(tree, label) {
+  const content = String(tree?.pageContent || '');
+  if (!/textbox "Email body" \[ref_\d+\] value="Draft body text"/.test(content)) {
+    throw new Error(`${label}: contenteditable="" editor missing as a valued textbox: ${content}`);
+  }
+  if (!/textbox "Plain message" \[ref_\d+\] value="Plain draft text"/.test(content)) {
+    throw new Error(`${label}: plaintext-only editor missing as a valued textbox: ${content}`);
+  }
+  if (/Read-only copy|Do not edit/.test(content)) {
+    throw new Error(`${label}: contenteditable=false leaked into the interactive tree: ${content}`);
+  }
+  const textboxes = content.match(/^\s*textbox\b/gm) || [];
+  if (textboxes.length !== 2) throw new Error(`${label}: expected exactly two editable roots, got ${textboxes.length}: ${content}`);
+  return normalizeTreeRefs(content);
+}
+
+test('accessibility tree (Chrome): contenteditable variants are actionable valued textboxes', async (page) => {
+  await setupAccessibilityTreeHtml(page, richEditorVariantsFixture, accessibilityTreeJsPath);
+  const tree = await page.evaluate(() => window.__generateAccessibilityTree('interactive', 10, null, null, 1));
+  chromeRichEditorTree = assertRichEditorVariants(tree, 'chrome');
+});
+
+test('accessibility tree (Firefox): contenteditable variants keep Chrome parity', async (page) => {
+  await setupAccessibilityTreeHtml(page, richEditorVariantsFixture, firefoxAccessibilityTreeJsPath);
+  const tree = await page.evaluate(() => window.__generateAccessibilityTree('interactive', 10, null, null, 1));
+  const firefoxTree = assertRichEditorVariants(tree, 'firefox');
+  if (firefoxTree !== chromeRichEditorTree) throw new Error('Chrome/Firefox rich editor trees differ');
 });
 
 // ─── modal-scoping ────────────────────────────────────────────────────────
@@ -385,8 +799,163 @@ test('modal scoping: click({text:"Publish"}) returns no-match (scoped out)', asy
   await setup(page, 'modal-scoping.html');
   const resp = await call(page, 'click', { text: 'Publish release' });
   if (resp?.success) throw new Error(`expected failure, got success`);
+  if (resp?.dispatched !== false) throw new Error(`no-match must report dispatched:false, got: ${JSON.stringify(resp)}`);
   if (!/scoped to the open modal/i.test(resp?.error || '')) {
     throw new Error(`expected modal-scope note in error, got: ${resp?.error}`);
+  }
+});
+
+async function assertModalAutoSelectTargetsResolvedSelect(page, browserKind) {
+  const label = browserKind === 'chrome' ? 'Chrome' : 'Firefox';
+  const setupHtml = browserKind === 'chrome' ? setupChromeHtml : setupFirefoxHtml;
+  await setupHtml(page, `<!doctype html>
+    <style>
+      select { width: 180px; height: 40px; }
+      #dialog { position: fixed; left: 40px; top: 100px; padding: 20px; background: white; }
+    </style>
+    <select id="background-select">
+      <option value="monthly">Monthly</option>
+      <option value="yearly">Yearly</option>
+    </select>
+    <div id="dialog" role="dialog" aria-modal="true">
+      <select id="dialog-select">
+        <option value="monthly">Monthly</option>
+        <option value="yearly">Yearly</option>
+      </select>
+    </div>`);
+
+  const response = await call(page, 'click', { text: 'Yearly' });
+  if (!response?.success || response?.method !== 'auto-select') {
+    throw new Error(`${label}: expected modal select auto-selection, got: ${JSON.stringify(response)}`);
+  }
+  const values = await page.evaluate(() => ({
+    background: document.getElementById('background-select').value,
+    dialog: document.getElementById('dialog-select').value,
+  }));
+  if (values.background !== 'monthly' || values.dialog !== 'yearly') {
+    throw new Error(`${label}: auto-select mutated the wrong dropdown: ${JSON.stringify(values)}`);
+  }
+}
+
+test('Chrome: modal auto-select changes the resolved select, not a background select', async (page) => {
+  await assertModalAutoSelectTargetsResolvedSelect(page, 'chrome');
+});
+
+test('Firefox: modal auto-select changes the resolved select, not a background select', async (page) => {
+  await assertModalAutoSelectTargetsResolvedSelect(page, 'firefox');
+});
+
+async function assertAmbiguousNativeSelectOptionsAreRejected(page, browserKind) {
+  const label = browserKind === 'chrome' ? 'Chrome' : 'Firefox';
+  const setupHtml = browserKind === 'chrome' ? setupChromeHtml : setupFirefoxHtml;
+  await setupHtml(page, `<!doctype html>
+    <style>select, button { width: 180px; height: 40px; display: block; margin: 8px; }</style>
+    <button id="contact" onclick="window.__contactClicked = true">Contact us</button>
+    <label>Billing country
+      <select id="billing">
+        <option value="CA">Canada</option>
+        <option value="US">United States</option>
+      </select>
+    </label>
+    <label>Shipping country
+      <select id="shipping">
+        <option value="CA">Canada</option>
+        <option value="US">United States</option>
+      </select>
+    </label>`);
+
+  const response = await call(page, 'click', { text: 'US' });
+  const state = await page.evaluate(() => ({
+    billing: document.getElementById('billing').value,
+    shipping: document.getElementById('shipping').value,
+    contactClicked: window.__contactClicked === true,
+  }));
+  if (
+    response?.success !== false
+    || response?.dispatched !== false
+    || response?.failureScope !== 'ambiguous-select-option:us'
+    || !/Ambiguous select option match/.test(response?.error || '')
+  ) {
+    throw new Error(`${label}: expected explicit select-option ambiguity, got: ${JSON.stringify(response)}`);
+  }
+  if (state.billing !== 'CA' || state.shipping !== 'CA' || state.contactClicked) {
+    throw new Error(`${label}: ambiguous select rescue mutated page state: ${JSON.stringify(state)}`);
+  }
+}
+
+test('Chrome: ambiguous native select options do not mutate the first dropdown', async (page) => {
+  await assertAmbiguousNativeSelectOptionsAreRejected(page, 'chrome');
+});
+
+test('Firefox: ambiguous native select options do not mutate the first dropdown', async (page) => {
+  await assertAmbiguousNativeSelectOptionsAreRejected(page, 'firefox');
+});
+
+test('Chrome Agent: modal auto-select ignores background/hidden clickables and keeps the exact target', async (page) => {
+  await page.setContent(`<!doctype html>
+    <style>
+      select { width: 180px; height: 40px; }
+      #dialog { position: fixed; left: 40px; top: 100px; padding: 20px; background: white; }
+    </style>
+    <button id="background-yearly" onclick="window.__backgroundYearlyClicked = true">Yearly</button>
+    <select id="background-select">
+      <option value="monthly">Monthly</option>
+      <option value="yearly">Yearly</option>
+    </select>
+    <div id="dialog" role="dialog" aria-modal="true">
+      <button style="display: none">Yearly</button>
+      <select id="dialog-select">
+        <option value="monthly">Monthly</option>
+        <option value="yearly">Yearly</option>
+      </select>
+    </div>
+    <script>
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && document.activeElement?.id === 'dialog-select') {
+          document.activeElement.blur();
+        }
+      }, true);
+    </script>`);
+
+  const session = await page.context().newCDPSession(page);
+  const client = {
+    async evaluate(_tabId, expression) {
+      return { result: { value: await page.evaluate(expression) } };
+    },
+    async sendCommand(_tabId, method, params) {
+      // Headless Chromium does not apply the native <select> default action
+      // for this raw CDP key sequence consistently. Model that one browser
+      // action on whichever exact control the production code focused; the
+      // Escape event itself still goes through CDP and triggers the blur above.
+      if (method === 'Input.dispatchKeyEvent' && params?.type === 'keyDown' && /^(ArrowDown|ArrowUp)$/.test(params.key || '')) {
+        await page.evaluate((key) => {
+          const target = document.activeElement;
+          if (!(target instanceof HTMLSelectElement)) return;
+          const delta = key === 'ArrowDown' ? 1 : -1;
+          target.selectedIndex = Math.max(0, Math.min(target.options.length - 1, target.selectedIndex + delta));
+        }, params.key);
+        return {};
+      }
+      return session.send(method, params);
+    },
+  };
+  const agent = new Agent({});
+  const result = await agent._autoSelectOption(42, client, 'Yearly');
+  const values = await page.evaluate(() => ({
+    background: document.getElementById('background-select').value,
+    dialog: document.getElementById('dialog-select').value,
+    backgroundButtonClicked: window.__backgroundYearlyClicked === true,
+    leakedTargetSlots: Object.keys(globalThis).filter((key) => key.startsWith('__webbrainAutoSelectTarget_')),
+  }));
+
+  if (!result?.success || result.method !== 'auto-select-keyboard') {
+    throw new Error(`expected exact-target auto-selection, got: ${JSON.stringify(result)}`);
+  }
+  if (values.background !== 'monthly' || values.dialog !== 'yearly' || values.backgroundButtonClicked) {
+    throw new Error(`auto-select changed the wrong dropdown after refocus: ${JSON.stringify(values)}`);
+  }
+  if (values.leakedTargetSlots.length) {
+    throw new Error(`auto-select target reference was not cleaned up: ${JSON.stringify(values.leakedTargetSlots)}`);
   }
 });
 
@@ -395,6 +964,7 @@ test('occlusion: click({text:"Submit"}) refuses when covered', async (page) => {
   await setup(page, 'occlusion.html');
   const resp = await call(page, 'click', { text: 'Submit' });
   if (resp?.success) throw new Error(`expected failure, got success`);
+  if (resp?.dispatched !== false) throw new Error(`occluded preflight must report dispatched:false, got: ${JSON.stringify(resp)}`);
   if (!resp?.occluded) throw new Error(`expected occluded:true, got: ${JSON.stringify(resp)}`);
   if (!resp?.occludedBy) throw new Error(`expected occludedBy payload`);
   const clicked = await clickedSentinel(page);
@@ -416,6 +986,7 @@ test('ambiguity: two Cancels return rich candidates with ancestor', async (page)
   await setup(page, 'ambiguity-candidates.html');
   const resp = await call(page, 'click', { text: 'Cancel' });
   if (resp?.success) throw new Error(`expected ambiguity, got success`);
+  if (resp?.dispatched !== false) throw new Error(`ambiguity must report dispatched:false, got: ${JSON.stringify(resp)}`);
   if (!Array.isArray(resp?.candidates)) throw new Error(`expected candidates array`);
   if (resp.candidates.length < 2) throw new Error(`expected ≥2 candidates, got ${resp.candidates.length}`);
   const ancestors = resp.candidates.map(c => c.ancestor || '');
@@ -427,6 +998,1215 @@ test('ambiguity: two Cancels return rich candidates with ancestor', async (page)
   for (const c of resp.candidates) {
     if (typeof c.cx !== 'number' || typeof c.cy !== 'number') {
       throw new Error(`candidate missing cx/cy: ${JSON.stringify(c)}`);
+    }
+  }
+});
+
+// ─── CDP upload selector bridge ─────────────────────────────────────────────
+test('CDP upload selector bridge resolves hidden and open-shadow file inputs', async (page) => {
+  await page.setContent(`<!doctype html>
+    <input id="upload-addon" type="file" hidden>
+    <div id="shadow-host"></div>
+    <script>
+      document.querySelector('#shadow-host')
+        .attachShadow({ mode: 'open' })
+        .innerHTML = '<input id="shadow-upload" type="file">';
+    </script>`);
+
+  const session = await page.context().newCDPSession(page);
+  const client = new CDPClient();
+  client.sendCommand = async (_tabId, method, params = {}) => session.send(method, params);
+
+  const fixtureFile = path.join(root, 'package.json');
+  const attachThroughSelector = async (selector) => {
+    const query = await client.querySelectorPierce(42, selector);
+    if (query.objectIds.length !== 1 || !query.objectIds[0]) {
+      throw new Error(`file input did not resolve to one CDP object handle: ${JSON.stringify(query)}`);
+    }
+    try {
+      // Refreshing Chrome's DOM mirror invalidates frontend nodeIds. Runtime
+      // object handles must remain valid across an unrelated DOM traversal.
+      await session.send('DOM.getDocument', { depth: -1, pierce: true });
+      await client.setFileInputFiles(42, query.objectIds[0], [fixtureFile]);
+      const files = await client.getFileInputFiles(42, query.objectIds[0]);
+      if (files?.[0]?.name !== 'package.json') {
+        throw new Error(`attached FileList was not readable through the Runtime handle: ${JSON.stringify(files)}`);
+      }
+    } finally {
+      await client.releaseObjectGroup(42, query.objectGroup);
+    }
+  };
+
+  await attachThroughSelector('#upload-addon');
+  await attachThroughSelector('#shadow-upload');
+  const attached = await page.evaluate(() => ({
+    hidden: document.querySelector('#upload-addon').files[0]?.name || '',
+    shadow: document.querySelector('#shadow-host').shadowRoot
+      .querySelector('#shadow-upload').files[0]?.name || '',
+  }));
+  if (attached.hidden !== 'package.json' || attached.shadow !== 'package.json') {
+    throw new Error(`DOM.setFileInputFiles did not attach through resolved nodes: ${JSON.stringify(attached)}`);
+  }
+});
+
+for (const browserKind of ['chrome', 'firefox']) {
+  test(`file picker guard (${browserKind}): blocks the native chooser and returns the exact input`, async (page) => {
+    await setupContentHtml(page, `<!doctype html>
+      <button id="choose">Select a file...</button>
+      <input type="file" hidden>
+      <input type="file" hidden>
+      <script>
+        document.querySelector('#choose').addEventListener('click', () => {
+          document.querySelectorAll('input[type=file]')[1].click();
+        });
+      </script>`, browserKind);
+
+    let chooserOpened = false;
+    page.once('filechooser', () => { chooserOpened = true; });
+    const result = await call(page, 'click', { text: 'Select a file...' });
+    await page.waitForTimeout(20);
+    if (chooserOpened) throw new Error('native file chooser was not suppressed');
+    if (!result?.filePickerBlocked || result.success !== false || !result.selector) {
+      throw new Error(`expected blocked picker with exact selector, got ${JSON.stringify(result)}`);
+    }
+    const selectorCheck = await page.evaluate((selector) => {
+      const inputs = document.querySelectorAll('input[type=file]');
+      const matches = document.querySelectorAll(selector);
+      return { count: matches.length, correct: matches[0] === inputs[1] };
+    }, result.selector);
+    if (selectorCheck.count !== 1 || !selectorCheck.correct) {
+      throw new Error(`selector did not uniquely resolve the clicked input: ${JSON.stringify({ result, selectorCheck })}`);
+    }
+  });
+
+  test(`file picker guard (${browserKind}): withholds selectors that collide across shadow roots`, async (page) => {
+    await setupContentHtml(page, `<!doctype html>
+      <button id="choose">Select a shadow file...</button>
+      <div id="host-a"></div>
+      <div id="host-b"></div>
+      <script>
+        for (const id of ['host-a', 'host-b']) {
+          document.querySelector('#' + id).attachShadow({ mode: 'open' }).innerHTML = '<input type="file">';
+        }
+        document.querySelector('#choose').addEventListener('click', () => {
+          document.querySelector('#host-b').shadowRoot.querySelector('input').click();
+        });
+      </script>`, browserKind);
+
+    const result = await call(page, 'click', { text: 'Select a shadow file...' });
+    if (!result?.filePickerBlocked || result.success !== false) {
+      throw new Error(`expected blocked picker, got ${JSON.stringify(result)}`);
+    }
+    if (Object.hasOwn(result, 'selector')) {
+      throw new Error(`ambiguous shadow-root input must not return selector ${result.selector}`);
+    }
+    if (!/exact, unique/.test(result.error || '') || !/generic input\[type="file"\]/.test(result.error || '')) {
+      throw new Error(`missing unique-selector recovery guidance: ${JSON.stringify(result)}`);
+    }
+  });
+}
+
+const deferredFilePickerOpeners = [
+  ['promise', 'Promise.resolve().then(openPicker)'],
+  ['timer', 'setTimeout(openPicker, 0)'],
+  ['debounce-150ms', 'setTimeout(openPicker, 150)'],
+  ['debounce-300ms', 'setTimeout(openPicker, 300)'],
+  ['animation-frame', 'requestAnimationFrame(openPicker)'],
+];
+const showPickerOpeners = [
+  ['immediate', 'openPicker()'],
+  ...deferredFilePickerOpeners,
+];
+
+for (const browserKind of ['chrome', 'firefox']) {
+  for (const [deferral, scheduleOpen] of deferredFilePickerOpeners) {
+    test(`file picker guard (${browserKind}): blocks lazy ${deferral} chooser activation`, async (page) => {
+      const inputId = `lazy-${browserKind}-${deferral}`;
+      await setupContentHtml(page, `<!doctype html>
+        <button id="choose">Add a deferred file...</button>
+        <script>
+          document.querySelector('#choose').addEventListener('click', () => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.id = ${JSON.stringify(inputId)};
+            input.hidden = true;
+            document.body.appendChild(input);
+            const openPicker = () => input.click();
+            ${scheduleOpen};
+          });
+        </script>`, browserKind);
+
+      let chooserOpened = false;
+      page.once('filechooser', () => { chooserOpened = true; });
+      const result = await call(page, 'click', { text: 'Add a deferred file...' });
+      await page.waitForTimeout(20);
+      if (chooserOpened) throw new Error(`${deferral} native file chooser was not suppressed`);
+      if (!result?.filePickerBlocked || result.success !== false || result.selector !== `#${inputId}`) {
+        throw new Error(`expected blocked lazy picker with #${inputId}, got ${JSON.stringify(result)}`);
+      }
+      const selectorCheck = await page.evaluate((selector) => {
+        const matches = document.querySelectorAll(selector);
+        return { count: matches.length, id: matches[0]?.id || '' };
+      }, result.selector);
+      if (selectorCheck.count !== 1 || selectorCheck.id !== inputId) {
+        throw new Error(`lazy selector did not resolve uniquely: ${JSON.stringify({ result, selectorCheck })}`);
+      }
+    });
+  }
+
+  for (const [deferral, scheduleOpen] of showPickerOpeners) {
+    test(`file picker guard (${browserKind}): blocks ${deferral} showPicker activation`, async (page) => {
+      const inputId = `show-picker-${browserKind}-${deferral}`;
+      const isolatedCall = await setupIsolatedContentHtml(page, `<!doctype html>
+        <button id="choose">Show a file picker...</button>
+        <input id=${JSON.stringify(inputId)} type="file" hidden>
+        <script>
+          document.querySelector('#choose').addEventListener('click', () => {
+            const input = document.querySelector('#' + ${JSON.stringify(inputId)});
+            const openPicker = () => input.showPicker();
+            ${scheduleOpen};
+          });
+        </script>`, browserKind);
+
+      let chooserOpened = false;
+      page.once('filechooser', () => { chooserOpened = true; });
+      const result = await isolatedCall('click', { text: 'Show a file picker...' });
+      await page.waitForTimeout(20);
+      if (chooserOpened) throw new Error(`${deferral} showPicker native chooser was not suppressed`);
+      if (!result?.filePickerBlocked || result.success !== false || result.selector !== `#${inputId}`) {
+        throw new Error(`expected blocked showPicker with #${inputId}, got ${JSON.stringify(result)}`);
+      }
+      const footprint = await page.evaluate(() => ({
+        stableGlobal: Object.hasOwn(window, '__webbrainFilePickerGuardBridge'),
+        attributes: Array.from(document.documentElement.attributes)
+          .map(attribute => attribute.name)
+          .filter(name => name.startsWith('data-webbrain-file-picker-')),
+      }));
+      if (footprint.stableGlobal || footprint.attributes.length) {
+        throw new Error(`page-world guard left a detectable marker: ${JSON.stringify(footprint)}`);
+      }
+    });
+  }
+
+  test(`file picker guard (${browserKind}): blocks programmatic clicks inside closed shadow roots`, async (page) => {
+    const isolatedCall = await setupIsolatedContentHtml(page, `<!doctype html>
+      <button id="choose">Open a closed-shadow picker...</button>
+      <div id="host"></div>
+      <script>
+        const input = document.querySelector('#host')
+          .attachShadow({ mode: 'closed' })
+          .appendChild(document.createElement('input'));
+        input.type = 'file';
+        document.querySelector('#choose').addEventListener('click', () => input.click());
+      </script>`, browserKind);
+
+    let chooserOpened = false;
+    page.once('filechooser', () => { chooserOpened = true; });
+    const result = await isolatedCall('click', { text: 'Open a closed-shadow picker...' });
+    await page.waitForTimeout(20);
+    if (chooserOpened) throw new Error('closed-shadow native chooser was not suppressed');
+    if (!result?.filePickerBlocked || result.success !== false) {
+      throw new Error(`expected blocked closed-shadow picker, got ${JSON.stringify(result)}`);
+    }
+    if (Object.hasOwn(result, 'selector')) {
+      throw new Error(`closed-shadow picker must not expose an unusable selector: ${result.selector}`);
+    }
+  });
+
+  test(`file picker guard (${browserKind}): suppresses long programmatic debounce after result settlement`, async (page) => {
+    const isolatedCall = await setupIsolatedContentHtml(page, `<!doctype html>
+      <button id="choose">Schedule a late picker...</button>
+      <input id="late-picker" type="file" hidden>
+      <script>
+        document.querySelector('#choose').addEventListener('click', () => {
+          setTimeout(() => {
+            window.__latePickerAttempted = true;
+            document.querySelector('#late-picker').click();
+          }, 800);
+        });
+      </script>`, browserKind);
+
+    let chooserOpened = false;
+    page.once('filechooser', () => { chooserOpened = true; });
+    const result = await isolatedCall('click', { text: 'Schedule a late picker...' });
+    if (!result?.success || result.filePickerBlocked) {
+      throw new Error(`late picker should settle before its callback, got ${JSON.stringify(result)}`);
+    }
+    await page.waitForTimeout(350);
+    const attempted = await page.evaluate(() => window.__latePickerAttempted === true);
+    if (!attempted) throw new Error('late picker callback did not execute');
+    if (chooserOpened) throw new Error('post-settlement native chooser was not suppressed');
+  });
+}
+
+test('Chrome CDP file picker guard blocks trusted showPicker activation and restores the prototype', async (page) => {
+  await page.setContent(`<!doctype html>
+    <style>
+      #closed-host { display: block; width: 220px; height: 40px; }
+    </style>
+    <button id="choose">Open trusted picker</button>
+    <button id="choose-closed">Open trusted closed picker</button>
+    <input id="trusted-show-picker" type="file" hidden>
+    <div id="closed-host"></div>
+    <script>
+      window.__originalShowPicker = HTMLInputElement.prototype.showPicker;
+      window.__originalInputClick = HTMLInputElement.prototype.click;
+      const closedInput = document.querySelector('#closed-host')
+        .attachShadow({ mode: 'closed' })
+        .appendChild(document.createElement('input'));
+      closedInput.type = 'file';
+      closedInput.style.cssText = 'display:block;width:220px;height:40px';
+      document.querySelector('#choose').addEventListener('click', () => {
+        document.querySelector('#trusted-show-picker').showPicker();
+      });
+      document.querySelector('#choose-closed').addEventListener('click', () => closedInput.click());
+    </script>`);
+  const pageGuardSrc = await readFile(filePickerGuardPageJsPath, 'utf-8');
+  await page.addScriptTag({ content: pageGuardSrc });
+
+  const client = new CDPClient();
+  const protocolSession = await page.context().newCDPSession(page);
+  client.sendCommand = async (_tabId, method, params = {}) => protocolSession.send(method, params);
+  protocolSession.on('Page.fileChooserOpened', (params) => {
+    const handlers = client.eventHandlers.get(77)?.['Page.fileChooserOpened'] || [];
+    for (const handler of handlers) handler(params);
+  });
+  client.evaluate = async (_tabId, expression) => ({
+    result: { value: await page.evaluate(expression) },
+  });
+
+  let chooserOpened = false;
+  page.once('filechooser', () => { chooserOpened = true; });
+  await client.armFileInputClickGuard(77, 500);
+  await page.click('#choose');
+  const blocked = await client.consumeFileInputClickGuard(77, 0);
+  await page.waitForTimeout(20);
+
+  if (chooserOpened) throw new Error('trusted showPicker native chooser was not suppressed');
+  if (!blocked?.blocked || blocked.selector !== '#trusted-show-picker') {
+    throw new Error(`expected trusted showPicker block, got ${JSON.stringify(blocked)}`);
+  }
+  const restored = await page.evaluate(
+    () => ({
+      showPicker: HTMLInputElement.prototype.showPicker === window.__originalShowPicker,
+      click: HTMLInputElement.prototype.click === window.__originalInputClick,
+    }),
+  );
+  if (!restored.showPicker || !restored.click) {
+    throw new Error(`input prototypes were not restored after guard consumption: ${JSON.stringify(restored)}`);
+  }
+
+  let closedChooserOpened = false;
+  page.once('filechooser', () => { closedChooserOpened = true; });
+  await client.armFileInputClickGuard(77, 500);
+  await page.click('#choose-closed');
+  const closedBlocked = await client.consumeFileInputClickGuard(77, 0);
+  await page.waitForTimeout(20);
+  if (closedChooserOpened) throw new Error('trusted closed-shadow native chooser was not suppressed');
+  if (!closedBlocked?.blocked || closedBlocked.selector !== null) {
+    throw new Error(`expected trusted closed-shadow block without selector, got ${JSON.stringify(closedBlocked)}`);
+  }
+
+  let directChooserEventObserved = false;
+  page.once('filechooser', () => { directChooserEventObserved = true; });
+  await client.armFileInputClickGuard(77, 500);
+  await page.click('#closed-host');
+  const directBlocked = await client.consumeFileInputClickGuard(77, 0);
+  await page.waitForTimeout(20);
+  if (!directChooserEventObserved) {
+    throw new Error('direct trusted closed-shadow chooser did not emit the intercepted protocol event');
+  }
+  if (!directBlocked?.blocked || directBlocked.selector !== null) {
+    throw new Error(`expected protocol-level closed-shadow block, got ${JSON.stringify(directBlocked)}`);
+  }
+
+  await page.evaluate(() => {
+    const root = document.documentElement;
+    root.setAttribute('data-webbrain-file-picker-guard', 'residual-content-guard');
+    document.dispatchEvent(new Event('webbrain:file-picker-guard-arm'));
+    root.removeAttribute('data-webbrain-file-picker-guard');
+  });
+  const residualInstalled = await page.evaluate(
+    () => HTMLInputElement.prototype.click !== window.__originalInputClick,
+  );
+  if (!residualInstalled) throw new Error('residual page-world guard was not installed');
+
+  await client.armFileInputClickGuard(77, 250);
+  const noPickerBlocked = await client.consumeFileInputClickGuard(77, 0);
+  if (noPickerBlocked) throw new Error(`unexpected picker during restore-stack test: ${JSON.stringify(noPickerBlocked)}`);
+  await page.waitForTimeout(350);
+  const stackRestored = await page.evaluate(() => ({
+    showPicker: HTMLInputElement.prototype.showPicker === window.__originalShowPicker,
+    click: HTMLInputElement.prototype.click === window.__originalInputClick,
+  }));
+  if (!stackRestored.showPicker || !stackRestored.click) {
+    throw new Error(`stacked page/CDP guards did not restore native prototypes: ${JSON.stringify(stackRestored)}`);
+  }
+});
+
+test('Firefox upload_file resolves one open-shadow input and rejects ambiguous pierced selectors', async (page) => {
+  await page.setContent(`<!doctype html>
+    <div id="host-a"></div>
+    <div id="host-b"></div>
+    <script>
+      const inputA = document.createElement('input');
+      inputA.type = 'file';
+      inputA.id = 'shadow-upload';
+      window.__uploadEvents = { input: 0, change: 0 };
+      inputA.addEventListener('input', () => window.__uploadEvents.input++);
+      inputA.addEventListener('change', () => window.__uploadEvents.change++);
+      document.querySelector('#host-a').attachShadow({ mode: 'open' }).appendChild(inputA);
+      const inputB = document.createElement('input');
+      inputB.type = 'file';
+      document.querySelector('#host-b').attachShadow({ mode: 'open' }).appendChild(inputB);
+    </script>`);
+
+  const originalBrowser = globalThis.browser;
+  const originalFetch = globalThis.fetch;
+  try {
+    globalThis.browser = {
+      downloads: {
+        async search(query) {
+          if (query?.id !== 9001) throw new Error(`unexpected download query ${JSON.stringify(query)}`);
+          return [{
+            id: 9001,
+            state: 'complete',
+            url: 'https://example.com/shadow-upload.txt',
+            filename: '/home/user/Downloads/shadow-upload.txt',
+            mime: 'text/plain',
+          }];
+        },
+      },
+      tabs: {
+        async get(tabId) {
+          return { id: tabId, url: 'https://example.com/form' };
+        },
+        async executeScript(_tabId, details) {
+          return [await page.evaluate((source) => window.eval(source), details.code)];
+        },
+      },
+    };
+    globalThis.fetch = async () => ({
+      ok: true,
+      status: 200,
+      headers: {
+        get(name) {
+          const key = String(name).toLowerCase();
+          if (key === 'content-length') return '2';
+          if (key === 'content-type') return 'text/plain';
+          return null;
+        },
+      },
+      async arrayBuffer() {
+        return new Uint8Array([111, 107]).buffer;
+      },
+    });
+
+    const agent = new FirefoxAgent({});
+    const uploaded = await agent.executeTool(77, 'upload_file', {
+      selector: '#shadow-upload',
+      downloadId: 9001,
+    });
+    if (!uploaded?.success || uploaded.attached?.name !== 'shadow-upload.txt' || uploaded.attached?.size !== 2) {
+      throw new Error(`open-shadow upload failed: ${JSON.stringify(uploaded)}`);
+    }
+    const state = await page.evaluate(() => {
+      const input = document.querySelector('#host-a').shadowRoot.querySelector('#shadow-upload');
+      return {
+        count: input.files.length,
+        name: input.files[0]?.name || '',
+        size: input.files[0]?.size ?? -1,
+        events: window.__uploadEvents,
+      };
+    });
+    if (
+      state.count !== 1
+      || state.name !== 'shadow-upload.txt'
+      || state.size !== 2
+      || state.events.input !== 1
+      || state.events.change !== 1
+    ) {
+      throw new Error(`open-shadow upload state mismatch: ${JSON.stringify(state)}`);
+    }
+
+    const ambiguous = await agent.executeTool(77, 'upload_file', {
+      selector: 'input[type="file"]',
+      downloadId: 9001,
+    });
+    if (
+      ambiguous?.success !== false
+      || ambiguous.dispatched !== false
+      || ambiguous.ambiguous !== true
+      || ambiguous.matchCount !== 2
+      || !/exact, unique selector/.test(ambiguous.error || '')
+    ) {
+      throw new Error(`ambiguous pierced selector did not fail closed: ${JSON.stringify(ambiguous)}`);
+    }
+  } finally {
+    if (originalBrowser === undefined) delete globalThis.browser;
+    else globalThis.browser = originalBrowser;
+    if (originalFetch === undefined) delete globalThis.fetch;
+    else globalThis.fetch = originalFetch;
+  }
+});
+
+for (const browserKind of ['chrome', 'firefox']) {
+  test(`click_ax (${browserKind}): stale refs are explicit pre-dispatch failures`, async (page) => {
+    await setupContentFixture(page, 'trusted-click-fallback.html', browserKind);
+    const result = await call(page, 'click_ax', { ref_id: 'ref_999999' });
+    if (
+      result?.success !== false
+      || result?.dispatched !== false
+      || result?.noDispatch !== true
+      || result?.fallbackAttempted !== false
+    ) {
+      throw new Error(`expected explicit pre-dispatch markers, got: ${JSON.stringify(result)}`);
+    }
+    if (!/not found/i.test(result.error || '')) {
+      throw new Error(`expected stale-ref error, got: ${JSON.stringify(result)}`);
+    }
+  });
+
+  test(`click_ax (${browserKind}): refs are rejected after a same-document route change`, async (page) => {
+    await setupContentFixture(page, 'trusted-click-fallback.html', browserKind);
+    const tree = await call(page, 'get_accessibility_tree', { filter: 'all', maxDepth: 10, maxChars: 20000 });
+    const match = String(tree?.pageContent || '').match(/listitem "Normal synthetic row" \[(ref_\d+)\]/);
+    if (!match || !tree?.documentToken || !tree?.refScopeUrl) {
+      throw new Error(`expected scoped AX ref, got: ${JSON.stringify(tree)}`);
+    }
+    await page.evaluate(() => history.pushState({}, '', '#different-route'));
+    const result = await call(page, 'click_ax', {
+      ref_id: match[1],
+      expectedDocumentToken: tree.documentToken,
+      expectedPageUrl: tree.refScopeUrl,
+    });
+    if (
+      result?.success !== false
+      || result?.staleRef !== true
+      || result?.routeChanged !== true
+      || result?.dispatched !== false
+    ) {
+      throw new Error(`expected route-scoped stale-ref failure, got: ${JSON.stringify(result)}`);
+    }
+  });
+
+  test(`click_ax (${browserKind}): an old ref cannot alias after the new route tree is read`, async (page) => {
+    await setupContentFixture(page, 'trusted-click-fallback.html', browserKind);
+    const firstTree = await call(page, 'get_accessibility_tree', { filter: 'all', maxDepth: 10, maxChars: 20000 });
+    const firstMatch = String(firstTree?.pageContent || '').match(/listitem "Normal synthetic row" \[(ref_\d+)\]/);
+    if (!firstMatch) throw new Error(`expected first-route ref, got: ${JSON.stringify(firstTree)}`);
+
+    await page.evaluate(() => history.pushState({}, '', '#new-tree-route'));
+    const secondTree = await call(page, 'get_accessibility_tree', { filter: 'all', maxDepth: 10, maxChars: 20000 });
+    const secondMatch = String(secondTree?.pageContent || '').match(/listitem "Normal synthetic row" \[(ref_\d+)\]/);
+    if (!secondMatch || !secondTree?.documentToken || !secondTree?.refScopeUrl) {
+      throw new Error(`expected second-route scoped AX ref, got: ${JSON.stringify(secondTree)}`);
+    }
+    if (firstMatch[1] === secondMatch[1]) {
+      throw new Error(`route-scoped refs must not reuse the same identifier: ${firstMatch[1]}`);
+    }
+
+    // Simulate the reviewed failure exactly: the agent has already cached the
+    // latest route scope but the model reuses a ref string from the old tree.
+    const stale = await call(page, 'click_ax', {
+      ref_id: firstMatch[1],
+      expectedDocumentToken: secondTree.documentToken,
+      expectedPageUrl: secondTree.refScopeUrl,
+    });
+    if (
+      stale?.success !== false
+      || stale?.dispatched !== false
+      || stale?.noDispatch !== true
+      || stale?.fallbackAttempted !== false
+      || !/not found/i.test(stale?.error || '')
+    ) {
+      throw new Error(`expected old ref to fail before dispatch, got: ${JSON.stringify(stale)}`);
+    }
+
+    const fresh = await call(page, 'click_ax', {
+      ref_id: secondMatch[1],
+      expectedDocumentToken: secondTree.documentToken,
+      expectedPageUrl: secondTree.refScopeUrl,
+    });
+    if (!fresh?.success) {
+      throw new Error(`expected current-route ref to remain usable, got: ${JSON.stringify(fresh)}`);
+    }
+  });
+
+  test(`click_ax (${browserKind}): unnamed broad generic targets are rejected`, async (page) => {
+    await setupContentFixture(page, 'trusted-click-fallback.html', browserKind);
+    const tree = await call(page, 'get_accessibility_tree', { filter: 'all', maxDepth: 10, maxChars: 20000 });
+    const match = String(tree?.pageContent || '').match(/group \[(ref_\d+)\]/);
+    if (!match) throw new Error(`could not find unnamed broad group in AX tree: ${tree?.pageContent}`);
+    const result = await call(page, 'click_ax', { ref_id: match[1] });
+    if (
+      result?.success !== false
+      || result?.ambiguousTarget !== true
+      || result?.dispatched !== false
+      || result?.targetContext?.truncated !== true
+    ) {
+      throw new Error(`expected ambiguous generic target failure, got: ${JSON.stringify(result)}`);
+    }
+  });
+
+  test(`input tools (${browserKind}): invalid targets and keys are explicit pre-dispatch failures`, async (page) => {
+    await setupContentFixture(page, 'trusted-click-fallback.html', browserKind);
+    const calls = [
+      ['type', { text: 'should not be typed' }],
+      ['type_ax', { ref_id: 'ref_999999', text: 'should not be typed' }],
+      ['set_field', { ref_id: 'ref_999999', text: 'should not be typed' }],
+      ['press_keys', { key: 'F5' }],
+    ];
+    for (const [action, params] of calls) {
+      const result = await call(page, action, params);
+      if (
+        result?.success !== false
+        || result?.dispatched !== false
+        || result?.noDispatch !== true
+      ) {
+        throw new Error(`${action} should be an explicit pre-dispatch failure, got: ${JSON.stringify(result)}`);
+      }
+    }
+  });
+
+  test(`checkbox tools (${browserKind}): AX state and set_checked are explicit and idempotent`, async (page) => {
+    await setupContentFixture(page, 'trusted-click-fallback.html', browserKind);
+    const tree = await call(page, 'get_accessibility_tree', { filter: 'all', maxDepth: 10, maxChars: 30000 });
+    const content = String(tree?.pageContent || '');
+    const match = content.match(/checkbox "Firefox compatibility" \[(ref_\d+)\][^\n]*type="checkbox"[^\n]*checked=false/);
+    if (!match) throw new Error(`expected native unchecked state in AX tree: ${content}`);
+
+    const checked = await call(page, 'click_ax', { ref_id: match[1] });
+    if (
+      checked?.success !== true
+      || checked.checkedBefore !== false
+      || checked.checkedAfter !== true
+      || checked.checkedChanged !== true
+      || checked.verified !== true
+    ) {
+      throw new Error(`click_ax did not report native checkbox transition: ${JSON.stringify(checked)}`);
+    }
+
+    const unchecked = await call(page, 'set_checked', { ref_id: match[1], checked: false });
+    if (
+      unchecked?.success !== true
+      || unchecked.checkedBefore !== true
+      || unchecked.checkedAfter !== false
+      || unchecked.changed !== true
+      || unchecked.verified !== true
+    ) {
+      throw new Error(`set_checked did not reach desired false state: ${JSON.stringify(unchecked)}`);
+    }
+
+    const idempotent = await call(page, 'set_checked', { ref_id: match[1], checked: false });
+    if (
+      idempotent?.success !== true
+      || idempotent.idempotent !== true
+      || idempotent.dispatched !== false
+      || idempotent.checkedBefore !== false
+      || idempotent.checkedAfter !== false
+    ) {
+      throw new Error(`set_checked repeated action was not idempotent: ${JSON.stringify(idempotent)}`);
+    }
+  });
+
+  test(`click_ax (${browserKind}): waits for controlled checkbox reconciliation`, async (page) => {
+    await setupContentFixture(page, 'trusted-click-fallback.html', browserKind);
+    const tree = await call(page, 'get_accessibility_tree', { filter: 'all', maxDepth: 10, maxChars: 30000 });
+    const match = String(tree?.pageContent || '').match(/checkbox "Firefox compatibility" \[(ref_\d+)\][^\n]*checked=false/);
+    if (!match) throw new Error(`expected controlled checkbox ref in AX tree: ${tree?.pageContent}`);
+
+    await page.evaluate(() => {
+      const checkbox = document.getElementById('firefox-checkbox');
+      checkbox.addEventListener('click', () => {
+        setTimeout(() => {
+          checkbox.checked = false;
+        }, 0);
+      });
+    });
+    const result = await call(page, 'click_ax', { ref_id: match[1] });
+    if (
+      result?.success !== false
+      || result.noProgress !== true
+      || result.verified !== false
+      || result.checkedBefore !== false
+      || result.checkedAfter !== false
+      || result.desiredChecked !== true
+      || result.checkboxState?.actualChecked !== false
+    ) {
+      throw new Error(`controlled checkbox rollback was accepted too early: ${JSON.stringify(result)}`);
+    }
+  });
+
+  test(`click_ax (${browserKind}): an already-selected radio keeps desired checked state`, async (page) => {
+    await setupContentFixture(page, 'trusted-click-fallback.html', browserKind);
+    const tree = await call(page, 'get_accessibility_tree', { filter: 'all', maxDepth: 10, maxChars: 30000 });
+    const match = String(tree?.pageContent || '').match(/radio "Selected channel" \[(ref_\d+)\][^\n]*checked=true/);
+    if (!match) throw new Error(`expected selected radio state in AX tree: ${tree?.pageContent}`);
+
+    const result = await call(page, 'click_ax', { ref_id: match[1] });
+    if (
+      result?.success !== true
+      || result.checkedBefore !== true
+      || result.checkedAfter !== true
+      || result.checkedChanged !== false
+      || result.desiredChecked !== true
+      || result.checkboxState?.desiredChecked !== true
+      || result.checkboxState?.actualChecked !== true
+    ) {
+      throw new Error(`selected radio was represented as needing an uncheck: ${JSON.stringify(result)}`);
+    }
+  });
+
+  test(`click_ax (${browserKind}): a prevented radio selection is an explicit failure`, async (page) => {
+    await setupContentFixture(page, 'trusted-click-fallback.html', browserKind);
+    const tree = await call(page, 'get_accessibility_tree', { filter: 'all', maxDepth: 10, maxChars: 30000 });
+    const match = String(tree?.pageContent || '').match(/radio "Blocked channel" \[(ref_\d+)\][^\n]*checked=false/);
+    if (!match) throw new Error(`expected blocked radio state in AX tree: ${tree?.pageContent}`);
+
+    const result = await call(page, 'click_ax', { ref_id: match[1] });
+    if (
+      result?.success !== false
+      || result.noProgress !== true
+      || result.verified !== false
+      || result.checkedBefore !== false
+      || result.checkedAfter !== false
+      || result.desiredChecked !== true
+      || result.checkboxState?.actualChecked !== false
+      || !/Radio remained unselected/.test(String(result.error || ''))
+    ) {
+      throw new Error(`prevented radio selection was not reported as a failure: ${JSON.stringify(result)}`);
+    }
+  });
+
+  test(`verify_form refs (${browserKind}): form controls receive actionable AX refs`, async (page) => {
+    await setupContentFixture(page, 'trusted-click-fallback.html', browserKind);
+    const result = await call(page, 'resolve_form_field_refs', { selector: 'form' });
+    if (
+      result?.success !== true
+      || !Array.isArray(result.refs)
+      || result.refs.length < 4
+      || result.refs.some(ref => !/^ref_\d+$/.test(String(ref || '')))
+      || typeof result.documentToken !== 'string'
+      || !result.documentToken
+      || result.refScopeUrl !== page.url()
+    ) {
+      throw new Error(`form controls did not receive actionable refs: ${JSON.stringify(result)}`);
+    }
+  });
+}
+
+test('set_checked (chrome): post-click verification survives same-document route changes', async (page) => {
+  await setupContentFixture(page, 'trusted-click-fallback.html', 'chrome');
+  const tree = await call(page, 'get_accessibility_tree', { filter: 'all', maxDepth: 10, maxChars: 30000 });
+  const match = String(tree?.pageContent || '').match(/checkbox "Firefox compatibility" \[(ref_\d+)\][^\n]*checked=false/);
+  if (!match) throw new Error(`expected Chrome checkbox ref in AX tree: ${tree?.pageContent}`);
+
+  const preflight = await call(page, 'set_checked', {
+    ref_id: match[1],
+    checked: true,
+    expectedDocumentToken: tree.documentToken,
+    expectedPageUrl: tree.refScopeUrl,
+    probeOnly: true,
+    markForTrustedClick: true,
+  });
+  if (preflight?.needsTrustedClick !== true || !preflight.marker) {
+    throw new Error(`expected trusted checkbox preflight marker: ${JSON.stringify(preflight)}`);
+  }
+
+  await page.locator('#firefox-checkbox').click();
+  await page.evaluate(() => history.pushState({}, '', '#checked-filter'));
+  const verified = await call(page, 'set_checked', {
+    ref_id: match[1],
+    checked: true,
+    expectedDocumentToken: tree.documentToken,
+    probeOnly: true,
+    markForTrustedClick: false,
+    cleanupMarker: preflight.marker,
+  });
+  if (
+    verified?.success !== true
+    || verified.checkedAfter !== true
+    || verified.verified !== true
+    || verified.staleRef === true
+  ) {
+    throw new Error(`same-document route change invalidated marker verification: ${JSON.stringify(verified)}`);
+  }
+});
+
+test('set_checked (chrome): markers are one-shot, unique, and self-cleaning', async (page) => {
+  await setupContentFixture(page, 'trusted-click-fallback.html', 'chrome');
+  const tree = await call(page, 'get_accessibility_tree', { filter: 'all', maxDepth: 10, maxChars: 30000 });
+  const match = String(tree?.pageContent || '').match(/checkbox "Firefox compatibility" \[(ref_\d+)\][^\n]*checked=false/);
+  if (!match) throw new Error(`expected Chrome checkbox ref in AX tree: ${tree?.pageContent}`);
+
+  await page.evaluate(() => {
+    window.__wbOriginalSetTimeout = window.setTimeout;
+    window.__wbMarkerCleanup = null;
+    window.setTimeout = (callback, delay, ...args) => {
+      if (delay === 15000 && !window.__wbMarkerCleanup) {
+        window.__wbMarkerCleanup = callback;
+        return 1;
+      }
+      return window.__wbOriginalSetTimeout(callback, delay, ...args);
+    };
+  });
+  const expiring = await call(page, 'set_checked', {
+    ref_id: match[1],
+    checked: true,
+    expectedDocumentToken: tree.documentToken,
+    expectedPageUrl: tree.refScopeUrl,
+    probeOnly: true,
+    markForTrustedClick: true,
+  });
+  const expiredCount = await page.evaluate((marker) => {
+    window.__wbMarkerCleanup?.();
+    window.setTimeout = window.__wbOriginalSetTimeout;
+    delete window.__wbOriginalSetTimeout;
+    delete window.__wbMarkerCleanup;
+    return document.querySelectorAll(`[data-webbrain-set-checked-target="${marker}"]`).length;
+  }, expiring.marker);
+  if (expiredCount !== 0) throw new Error(`trusted marker did not self-clean: ${expiring.marker}`);
+
+  const ambiguous = await call(page, 'set_checked', {
+    ref_id: match[1],
+    checked: true,
+    expectedDocumentToken: tree.documentToken,
+    expectedPageUrl: tree.refScopeUrl,
+    probeOnly: true,
+    markForTrustedClick: true,
+  });
+  await page.evaluate((marker) => {
+    document.getElementById('trusted-firefox-checkbox')
+      .setAttribute('data-webbrain-set-checked-target', marker);
+  }, ambiguous.marker);
+  const uniqueClient = new CDPClient();
+  uniqueClient.sendCommand = async (_tabId, method) => {
+    if (method === 'Runtime.enable') return {};
+    throw new Error(`unexpected CDP command while resolving marker: ${method}`);
+  };
+  uniqueClient.evaluate = async (_tabId, expression) => ({
+    result: { value: await page.evaluate(expression) },
+  });
+  const duplicateResolution = await uniqueClient.resolveSelector(
+    42,
+    `[data-webbrain-set-checked-target="${ambiguous.marker}"]`,
+    { requireUnique: true, retries: 0 },
+  );
+  if (!duplicateResolution?.error || duplicateResolution?.matchCount !== 2) {
+    throw new Error(`CDP trusted selector did not reject duplicate markers: ${JSON.stringify(duplicateResolution)}`);
+  }
+  const verified = await call(page, 'set_checked', {
+    ref_id: match[1],
+    checked: true,
+    expectedDocumentToken: tree.documentToken,
+    probeOnly: true,
+    markForTrustedClick: false,
+    cleanupMarker: ambiguous.marker,
+  });
+  const remaining = await page.locator(`[data-webbrain-set-checked-target="${ambiguous.marker}"]`).count();
+  if (
+    verified?.success !== false
+    || verified.markerConflict !== true
+    || verified.markerMatchCount !== 2
+    || remaining !== 0
+  ) {
+    throw new Error(`ambiguous trusted marker did not fail closed and clean up: ${JSON.stringify({ verified, remaining })}`);
+  }
+});
+
+test('set_checked (firefox): waits for controlled checkbox reconciliation before verifying', async (page) => {
+  await setupContentFixture(page, 'trusted-click-fallback.html', 'firefox');
+  const tree = await call(page, 'get_accessibility_tree', { filter: 'all', maxDepth: 10, maxChars: 30000 });
+  const match = String(tree?.pageContent || '').match(/checkbox "Firefox compatibility" \[(ref_\d+)\][^\n]*checked=false/);
+  if (!match) throw new Error(`expected Firefox checkbox ref in AX tree: ${tree?.pageContent}`);
+
+  await page.evaluate(() => {
+    const checkbox = document.getElementById('firefox-checkbox');
+    checkbox.addEventListener('click', () => {
+      setTimeout(() => {
+        checkbox.checked = false;
+      }, 0);
+    }, { once: true });
+  });
+
+  const result = await call(page, 'set_checked', { ref_id: match[1], checked: true });
+  if (
+    result?.success !== false
+    || result.dispatched !== true
+    || result.checkedBefore !== false
+    || result.checkedAfter !== false
+    || result.verified !== false
+    || result.noProgress !== true
+  ) {
+    throw new Error(`Firefox set_checked verified before controlled rollback settled: ${JSON.stringify(result)}`);
+  }
+});
+
+for (const browserKind of ['chrome', 'firefox']) {
+  test(`click_ax (${browserKind}): aria-labelledby action returns bounded nearest card context`, async (page) => {
+    await setupContentFixture(page, 'trusted-click-fallback.html', browserKind);
+    const tree = await call(page, 'get_accessibility_tree', { filter: 'visible', maxDepth: 10, maxChars: 20000 });
+    const match = String(tree?.pageContent || '').match(/button "Add to cart" \[(ref_\d+)\]/);
+    if (!match) throw new Error(`could not find product action in AX tree: ${tree?.pageContent}`);
+
+    const result = await call(page, 'click_ax', { ref_id: match[1] });
+    if (!result?.success) throw new Error(`expected click_ax success, got: ${JSON.stringify(result)}`);
+    if (
+      result.name !== 'Add to cart'
+      || result.targetContext?.heading !== 'Cola Zero 6-pack'
+      || !String(result.targetContext?.text || '').includes('Cola Zero 6-pack')
+      || !String(result.targetContext?.href || '').endsWith('/products/cola-zero-six-pack')
+    ) {
+      throw new Error(`nearest product context missing or wrong: ${JSON.stringify(result)}`);
+    }
+    if (
+      String(result.targetContext.text).length > 240
+      || String(result.targetContext.heading).length > 160
+      || String(result.targetContext.href).length > 500
+    ) {
+      throw new Error(`product context bounds regressed: ${JSON.stringify(result.targetContext)}`);
+    }
+  });
+}
+
+test('click_ax: Agent.executeTool keeps synthetic-first behavior and uses trusted CDP only for an ignored generic row', async (page) => {
+  await setup(page, 'trusted-click-fallback.html');
+  const tree = await call(page, 'get_accessibility_tree', { filter: 'all', maxDepth: 10, maxChars: 20000 });
+  const trustedMatch = String(tree?.pageContent || '').match(/listitem "Defne Sokullu Yesterday Photo" \[(ref_\d+)\]/);
+  const syntheticMatch = String(tree?.pageContent || '').match(/listitem "Normal synthetic row" \[(ref_\d+)\]/);
+  const disclosureMatch = String(tree?.pageContent || '').match(/"Native disclosure" \[(ref_\d+)\]/);
+  if (!trustedMatch || !syntheticMatch || !disclosureMatch) {
+    throw new Error(`expected trusted, synthetic, and disclosure fixture rows in AX tree: ${tree?.pageContent}`);
+  }
+
+  const originalChrome = globalThis.chrome;
+  const originals = {
+    attach: cdpClient.attach,
+    evaluate: cdpClient.evaluate,
+    dispatch: cdpClient.dispatchMouseEvent,
+  };
+  const session = await page.context().newCDPSession(page);
+  const dispatched = [];
+  const listener = { addListener() {}, removeListener() {} };
+  globalThis.chrome = {
+    runtime: {},
+    tabs: {
+      async get(tabId) {
+        return { id: tabId, url: page.url(), title: 'Trusted click fixture' };
+      },
+      async query() {
+        return [{ id: 42, url: page.url() }];
+      },
+      async sendMessage(_tabId, message) {
+        return call(page, message.action, message.params || {});
+      },
+    },
+    downloads: { onCreated: listener },
+    webRequest: { onBeforeRequest: listener },
+    scripting: { async executeScript() {} },
+  };
+
+  try {
+    cdpClient.attach = async () => ({ tabId: 42, attached: true });
+    cdpClient.evaluate = async (_tabId, expression) => ({
+      result: { value: await page.evaluate(expression) },
+    });
+    cdpClient.dispatchMouseEvent = async (_tabId, type, x, y) => {
+      dispatched.push({ type, x, y });
+      return session.send('Input.dispatchMouseEvent', {
+        type,
+        x,
+        y,
+        button: type === 'mouseMoved' ? 'none' : 'left',
+        buttons: type === 'mousePressed' ? 1 : 0,
+        clickCount: type === 'mouseMoved' ? 0 : 1,
+      });
+    };
+
+    const agent = new Agent({});
+    agent._isPdfTab = async () => false;
+    agent._currentUrl = async () => page.url();
+    agent._clickAxFinalSettleMs = () => 60;
+
+    const trustedResult = await agent.executeTool(42, 'click_ax', { ref_id: trustedMatch[1] });
+    const afterTrusted = await page.evaluate(() => ({
+      status: document.getElementById('status').textContent,
+      ambientStatus: document.getElementById('ambient-status').textContent,
+      events: window.__trustedClickEvents,
+      selected: document.getElementById('trusted-row').classList.contains('trusted-opened'),
+      semanticSelected: document.getElementById('trusted-row').getAttribute('aria-current'),
+    }));
+    if (
+      trustedResult?.success !== true
+      || trustedResult.fallback !== 'cdp_after_synthetic_no_progress'
+      || trustedResult.trusted !== true
+      || trustedResult.verified !== true
+    ) {
+      throw new Error(`actual Agent/content/CDP chain did not complete trusted fallback: ${JSON.stringify(trustedResult)}`);
+    }
+    if (
+      !trustedResult.observedHints?.includes('page_text')
+      || !trustedResult.observedHints?.includes('target_state_weak')
+    ) {
+      throw new Error(`unrelated page/target churn should be retained only as diagnostic hints: ${JSON.stringify(trustedResult)}`);
+    }
+    if (
+      afterTrusted.status !== 'trusted-opened'
+      || afterTrusted.ambientStatus !== 'unrelated-chat-churn'
+      || !afterTrusted.selected
+      || afterTrusted.semanticSelected !== 'true'
+    ) {
+      throw new Error(`trusted CDP fallback did not activate the row: ${JSON.stringify(afterTrusted)}`);
+    }
+    if (
+      afterTrusted.events.length !== 2
+      || afterTrusted.events[0].trusted !== false
+      || afterTrusted.events[1].trusted !== true
+    ) {
+      throw new Error(`expected one synthetic then one trusted event: ${JSON.stringify(afterTrusted.events)}`);
+    }
+    if (dispatched.map(event => event.type).join(',') !== 'mouseMoved,mousePressed,mouseReleased') {
+      throw new Error(`unexpected trusted input sequence: ${JSON.stringify(dispatched)}`);
+    }
+    if (Object.keys(trustedResult).some(key => key.startsWith('_fallback') || key === '_syntheticClickStartedAt')) {
+      throw new Error(`internal click state leaked into the agent result: ${JSON.stringify(trustedResult)}`);
+    }
+
+    await page.evaluate(() => { document.getElementById('status').textContent = 'idle'; });
+    const dispatchCountBeforeNormal = dispatched.length;
+    const normalResult = await agent.executeTool(42, 'click_ax', { ref_id: syntheticMatch[1] });
+    const normalState = await page.evaluate(() => ({
+      status: document.getElementById('status').textContent,
+      events: window.__syntheticClickEvents,
+      selected: document.getElementById('synthetic-row').classList.contains('synthetic-opened'),
+    }));
+    if (
+      normalResult?.success !== true
+      || normalResult.trusted !== false
+      || normalResult.verified !== true
+      || normalResult.observedEffects?.[0] !== 'target_state'
+    ) {
+      throw new Error(`working synthetic target was not accepted from its local state change: ${JSON.stringify(normalResult)}`);
+    }
+    if (
+      normalState.status !== 'synthetic-opened'
+      || !normalState.selected
+      || normalState.events.length !== 1
+      || normalState.events[0].trusted !== false
+    ) {
+      throw new Error(`working synthetic click path regressed or double-activated: ${JSON.stringify(normalState)}`);
+    }
+    if (dispatched.length !== dispatchCountBeforeNormal) {
+      throw new Error('working synthetic target unexpectedly received a trusted second click');
+    }
+
+    const dispatchCountBeforeDisclosure = dispatched.length;
+    const disclosureResult = await agent.executeTool(42, 'click_ax', { ref_id: disclosureMatch[1] });
+    const disclosureOpen = await page.evaluate(() => document.getElementById('native-details').open);
+    if (
+      disclosureResult?.success !== true
+      || disclosureResult.trusted !== false
+      || !/native\/button-like/.test(disclosureResult.fallbackSkipped || '')
+    ) {
+      throw new Error(`native disclosure did not stay on its synthetic-only path: ${JSON.stringify(disclosureResult)}`);
+    }
+    if (!disclosureOpen) {
+      throw new Error('synthetic summary click should open the native disclosure exactly once');
+    }
+    if (dispatched.length !== dispatchCountBeforeDisclosure) {
+      throw new Error('native disclosure unexpectedly received a trusted second click');
+    }
+  } finally {
+    cdpClient.attach = originals.attach;
+    cdpClient.evaluate = originals.evaluate;
+    cdpClient.dispatchMouseEvent = originals.dispatch;
+    if (originalChrome === undefined) delete globalThis.chrome;
+    else globalThis.chrome = originalChrome;
+    await session.detach();
+  }
+});
+
+test('set_checked: Agent.executeTool uses one trusted selector click and then becomes idempotent', async (page) => {
+  await setup(page, 'trusted-click-fallback.html');
+  const tree = await call(page, 'get_accessibility_tree', { filter: 'all', maxDepth: 10, maxChars: 30000 });
+  const match = String(tree?.pageContent || '').match(/checkbox "Trusted Firefox compatibility" \[(ref_\d+)\][^\n]*checked=false/);
+  if (!match) throw new Error(`expected trusted checkbox ref in AX tree: ${tree?.pageContent}`);
+
+  const originalChrome = globalThis.chrome;
+  const originalAttach = cdpClient.attach;
+  const originalClickElement = cdpClient.clickElement;
+  try {
+    globalThis.chrome = {
+      runtime: {},
+      tabs: {
+        async get(tabId) {
+          return { id: tabId, url: page.url(), title: 'Trusted checkbox fixture' };
+        },
+        async query() {
+          return [{ id: 42, url: page.url() }];
+        },
+        async sendMessage(_tabId, message) {
+          return call(page, message.action, message.params || {});
+        },
+      },
+    };
+    let trustedClicks = 0;
+    cdpClient.attach = async () => ({ attached: true });
+    cdpClient.clickElement = async (_tabId, selector, options) => {
+      if (options?.trustedOnly !== true || options?.requireUnique !== true) {
+        throw new Error(`expected trusted-only checkbox click, got: ${JSON.stringify(options)}`);
+      }
+      trustedClicks += 1;
+      const locator = page.locator(selector);
+      const box = await locator.boundingBox();
+      await locator.click();
+      return {
+        success: true,
+        method: 'cdp-mouse',
+        rect: box ? {
+          x: Math.round(box.x),
+          y: Math.round(box.y),
+          w: Math.round(box.width),
+          h: Math.round(box.height),
+        } : undefined,
+      };
+    };
+
+    const agent = new Agent({});
+    agent._isPdfTab = async () => false;
+    agent._currentUrl = async () => page.url();
+    const first = await agent.executeTool(42, 'set_checked', { ref_id: match[1], checked: true });
+    const eventsAfterFirst = await page.evaluate(() => window.__trustedCheckboxEvents);
+    if (
+      first?.success !== true
+      || first.trusted !== true
+      || first.verified !== true
+      || first.checkedBefore !== false
+      || first.checkedAfter !== true
+      || first.changed !== true
+      || first.idempotent !== false
+      || trustedClicks !== 1
+      || eventsAfterFirst.length !== 1
+      || eventsAfterFirst[0].trusted !== true
+    ) {
+      throw new Error(`trusted set_checked transition failed: ${JSON.stringify({ first, trustedClicks, eventsAfterFirst })}`);
+    }
+
+    const second = await agent.executeTool(42, 'set_checked', { ref_id: match[1], checked: true });
+    if (
+      second?.success !== true
+      || second.idempotent !== true
+      || second.dispatched !== false
+      || second.checkedAfter !== true
+      || trustedClicks !== 1
+    ) {
+      throw new Error(`idempotent set_checked repeated a click: ${JSON.stringify({ second, trustedClicks })}`);
+    }
+  } finally {
+    cdpClient.attach = originalAttach;
+    cdpClient.clickElement = originalClickElement;
+    if (originalChrome === undefined) delete globalThis.chrome;
+    else globalThis.chrome = originalChrome;
+  }
+});
+
+test('ax_resolve_rect: trusted fallback eligibility rejects interactive descendants, hidden, mutating, stateful, native, form, and download targets', async (page) => {
+  await setup(page, 'trusted-click-fallback.html');
+  const tree = await call(page, 'get_accessibility_tree', { filter: 'all', maxDepth: 10, maxChars: 20000 });
+  const content = String(tree?.pageContent || '');
+  const refs = {
+    nestedButton: content.match(/listitem "Nested button row" \[(ref_\d+)\]/)?.[1],
+    nestedLink: content.match(/listitem "Nested link row" \[(ref_\d+)\]/)?.[1],
+    nestedInput: content.match(/listitem "Nested input row" \[(ref_\d+)\]/)?.[1],
+    native: content.match(/button "Native button" \[(ref_\d+)\]/)?.[1],
+    disclosure: content.match(/"Native disclosure" \[(ref_\d+)\]/)?.[1],
+    destructive: content.match(/listitem "Delete account" \[(ref_\d+)\]/)?.[1],
+    sendMessage: content.match(/listitem "Send message" \[(ref_\d+)\]/)?.[1],
+    orderLunch: content.match(/listitem "Order lunch" \[(ref_\d+)\]/)?.[1],
+    bookNow: content.match(/listitem "Book now" \[(ref_\d+)\]/)?.[1],
+    indirectDestructive: content.match(/listitem "Delete account indirectly" \[(ref_\d+)\]/)?.[1],
+    localizedDestructive: content.match(/listitem "Hesabı sil" \[(ref_\d+)\]/)?.[1],
+    statefulRole: content.match(/treeitem "Expandable row" \[(ref_\d+)\]/)?.[1],
+    statefulAttribute: content.match(/listitem "Stateful list row" \[(ref_\d+)\]/)?.[1],
+    input: content.match(/textbox "Native input" \[(ref_\d+)\]/)?.[1],
+    select: content.match(/combobox "Native select" \[(ref_\d+)\]/)?.[1],
+    editable: content.match(/textbox "Editable row" \[(ref_\d+)\]/)?.[1],
+    download: content.match(/listitem "Export report" \[(ref_\d+)\]/)?.[1],
+    form: content.match(/listitem "Form row" \[(ref_\d+)\]/)?.[1],
+    covered: content.match(/listitem "Covered row" \[(ref_\d+)\]/)?.[1],
+    opacity: content.match(/listitem "Opacity row" \[(ref_\d+)\]/)?.[1],
+    pointer: content.match(/listitem "Pointer disabled row" \[(ref_\d+)\]/)?.[1],
+    zero: content.match(/listitem "Zero row" \[(ref_\d+)\]/)?.[1],
+  };
+  const safeRefs = {
+    tabindexNegative: content.match(/listitem "Generic row with tabindex minus one wrapper" \[(ref_\d+)\]/)?.[1],
+    tabindexZero: content.match(/listitem "Generic row with tabindex zero wrapper" \[(ref_\d+)\]/)?.[1],
+    dataAction: content.match(/listitem "Generic data action row" \[(ref_\d+)\]/)?.[1],
+    properName: content.match(/listitem "Post Malone" \[(ref_\d+)\]/)?.[1],
+  };
+  await page.evaluate(() => {
+    document.getElementById('opacity-row').style.opacity = '0';
+  });
+  for (const [label, ref] of Object.entries(refs)) {
+    if (!ref) throw new Error(`missing ${label} ref in AX tree: ${content}`);
+    const result = await call(page, 'ax_resolve_rect', { ref_id: ref, forClickFallback: true });
+    if (!result?.success) throw new Error(`${label} ref did not resolve: ${JSON.stringify(result)}`);
+    if (result.fallbackEligible !== false || !result.fallbackBlockedReason) {
+      throw new Error(`${label} target should be blocked from trusted fallback: ${JSON.stringify(result)}`);
+    }
+  }
+  for (const [label, ref] of Object.entries(safeRefs)) {
+    if (!ref) throw new Error(`missing ${label} ref in AX tree: ${content}`);
+    const result = await call(page, 'ax_resolve_rect', { ref_id: ref, forClickFallback: true });
+    if (!result?.success || result.fallbackEligible !== true || result.fallbackBlockedReason) {
+      throw new Error(`${label} generic row should remain eligible for trusted fallback: ${JSON.stringify(result)}`);
+    }
+  }
+  for (const label of ['nestedButton', 'nestedLink', 'nestedInput']) {
+    const result = await call(page, 'ax_resolve_rect', { ref_id: refs[label], forClickFallback: true });
+    if (!/interactive descendant/.test(result.fallbackBlockedReason || '')) {
+      throw new Error(`${label} should be blocked specifically by its interactive center descendant: ${JSON.stringify(result)}`);
+    }
+    if (!result.interactiveDescendantTag) {
+      throw new Error(`${label} should report the interactive descendant tag: ${JSON.stringify(result)}`);
+    }
+  }
+
+  const ordinaryResolve = await call(page, 'ax_resolve_rect', { ref_id: refs.destructive });
+  if (
+    ordinaryResolve.fallbackEligible !== undefined
+    || ordinaryResolve.fallbackState !== undefined
+    || ordinaryResolve.fallbackStrongState !== undefined
+    || ordinaryResolve.fallbackWeakState !== undefined
+    || ordinaryResolve.documentToken !== undefined
+  ) {
+    throw new Error(`fallback-only metadata leaked into ordinary ref resolution: ${JSON.stringify(ordinaryResolve)}`);
+  }
+});
+
+test('ax_resolve_rect: English action labels stay blocked under Turkish locale casing', async (page) => {
+  await page.addInitScript(() => {
+    const original = String.prototype.toLocaleLowerCase;
+    String.prototype.toLocaleLowerCase = function (...locales) {
+      return original.apply(this, locales.length ? locales : ['tr-TR']);
+    };
+  });
+  await setup(page, 'trusted-click-fallback.html');
+  const tree = await call(page, 'get_accessibility_tree', { filter: 'all', maxDepth: 10, maxChars: 20000 });
+  const content = String(tree?.pageContent || '');
+  const refs = {
+    install: content.match(/listitem "Install app" \[(ref_\d+)\]/)?.[1],
+    invite: content.match(/listitem "Invite teammate" \[(ref_\d+)\]/)?.[1],
+  };
+  for (const [label, ref] of Object.entries(refs)) {
+    if (!ref) throw new Error(`missing ${label} ref in Turkish-locale AX tree: ${content}`);
+    const result = await call(page, 'ax_resolve_rect', { ref_id: ref, forClickFallback: true });
+    if (
+      result?.fallbackEligible !== false
+      || !/potentially mutating/.test(result.fallbackBlockedReason || '')
+    ) {
+      throw new Error(`${label} must remain blocked regardless of default locale casing: ${JSON.stringify(result)}`);
     }
   }
 });
@@ -629,8 +2409,10 @@ test('Firefox: type_text returns an error after focus moves to a noneditable ele
   if (value !== 'Ada') throw new Error(`expected stale fallback not to mutate input, got: ${value}`);
 });
 
-test('Firefox: full indexed elements exclude inert background controls', async (page) => {
-  await setupFirefoxHtml(page, `<!doctype html>
+async function assertFullIndexedElementsExcludeModalBackground(page, browserKind) {
+  const label = browserKind === 'chrome' ? 'Chrome' : 'Firefox';
+  const setupHtml = browserKind === 'chrome' ? setupChromeHtml : setupFirefoxHtml;
+  await setupHtml(page, `<!doctype html>
     <style>
       body { margin: 0; font: 16px sans-serif; }
       #background { position: absolute; left: 20px; top: 20px; }
@@ -649,14 +2431,14 @@ test('Firefox: full indexed elements exclude inert background controls', async (
 
   const elements = await call(page, 'get_interactive_elements_cdp', {});
   if (elements.some(e => e.id === 'background-action' || e.id === 'inert-action')) {
-    throw new Error(`expected hidden/inert background controls to be filtered, got: ${JSON.stringify(elements)}`);
+    throw new Error(`${label}: expected hidden/inert background controls to be filtered, got: ${JSON.stringify(elements)}`);
   }
   if (elements?.[0]?.id !== 'dialog-action') {
-    throw new Error(`expected dialog action to be first actionable index, got: ${JSON.stringify(elements?.[0])}`);
+    throw new Error(`${label}: expected dialog action to be first actionable index, got: ${JSON.stringify(elements?.[0])}`);
   }
 
   const click = await call(page, 'click', { index: 0 });
-  if (!click?.success) throw new Error(`expected dialog click success, got: ${JSON.stringify(click)}`);
+  if (!click?.success) throw new Error(`${label}: expected dialog click success, got: ${JSON.stringify(click)}`);
 
   const state = await page.evaluate(() => ({
     dialog: window.__dialogClicked === true,
@@ -664,8 +2446,16 @@ test('Firefox: full indexed elements exclude inert background controls', async (
     inert: window.__inertClicked === true,
   }));
   if (!state.dialog || state.background || state.inert) {
-    throw new Error(`expected only dialog action to run, got: ${JSON.stringify(state)}`);
+    throw new Error(`${label}: expected only dialog action to run, got: ${JSON.stringify(state)}`);
   }
+}
+
+test('Chrome: full indexed elements exclude inert background controls', async (page) => {
+  await assertFullIndexedElementsExcludeModalBackground(page, 'chrome');
+});
+
+test('Firefox: full indexed elements exclude inert background controls', async (page) => {
+  await assertFullIndexedElementsExcludeModalBackground(page, 'firefox');
 });
 
 test('Firefox: blocking overlay resolves sibling dialog content for indexed controls', async (page) => {

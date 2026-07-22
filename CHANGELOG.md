@@ -4,13 +4,380 @@ All notable changes to WebBrain are documented in this file.
 
 This changelog was generated from the repository Git history and release tags. Versions without a Git tag are inferred from version-bump commits and the current `package.json` / browser manifest versions.
 
+## [25.7.0] - 2026-07-22
+
+### Added
+- Added safe saved workflow schema and UI support for saving and managing traced runs (Chrome and Firefox parity).
+
+### Changed
+- Updated workflow replay to use the new safe saved workflow schema, improving reliability and reducing brittle replay behavior (Chrome and Firefox parity).
+- Updated documentation for privacy/data flow and security model to reflect saved workflow/replay behavior.
+
+### Fixed
+- Guarded workflow replay by page scope to prevent cross-page/brittle replays.
+- Rejected brittle selector replay during saved workflow replay to avoid incorrect actions.
+- Improved workflow replay safety by replaying saved actions in a more controlled manner.
+- Closed workflow gaps for save, replay, and telemetry to ensure consistent end-to-end behavior (Chrome and Firefox parity).
+
+### Tests
+- Updated test runner (`test/run.js`) to align with the saved workflow/replay changes.
+
+## [25.6.0] - 2026-07-22
+
+### Added
+- Added Ask-only OpenAI Responses streaming for interactive Ask-mode chats (Chrome and Firefox parity).
+
+### Changed
+- Updated planner benchmark coverage by adding Nanbeige 4.2 planner benchmark results to the repo.
+
+### Fixed
+- Improved structured plan review/editor stability by preserving editor scroll position across input and keeping step editing scroll stable (Chrome and Firefox parity).
+
+### Tests
+- Added Nanbeige 4.2 planner benchmark fixtures/results to the test suite.
+
+## [25.5.0] - 2026-07-22
+
+### Added
+- Added a default-on Advanced setting to disable OpenAI Ask response streaming immediately and return new chats to the established non-streaming provider path.
+- Improved plan review with structured, in-place editing (Chrome and Firefox parity).
+
+### Changed
+- Official OpenAI Responses calls now stream visible text for interactive Ask-mode chats while retaining the detached `chat_start` lifecycle, reconnect journal, and image/text attachment handling.
+- Tool calls and assistant-history persistence remain buffered until `response.completed`; Act, Dev, scheduled, cloud, and Continue runs remain on `provider.chat()`.
+- Drag-and-drop reordering of planner steps.
+- Hardened mixed plan editor modes to keep editing behavior consistent.
+- Preserved multiline plan step edits during editing and review flows.
+- Preserved collapsed raw plan approvals through review.
+- Preserved raw plan edits after review.
+- Stripped canonical plan tool suffixes for cleaner plan tool display.
+
+### Fixed
+- Interrupted OpenAI Ask transports now clear their partial visible text, open a per-run circuit breaker, and retry through `provider.chat()` without accepting incomplete tool calls or persisting an incomplete assistant turn; terminal HTTP, API, and `response.incomplete` errors propagate without a duplicate fallback request.
+- Live Ask text deltas remain immediate while durable reconnect snapshots are coalesced on a short trailing interval, avoiding a full journal clone and `storage.session` write for every SSE chunk; terminal updates and tool checkpoints still flush immediately.
+- Fixed plan review scroll behavior and the run label during plan review/editing.
+- Kept plan step editing scroll stable while interacting with the editor.
+- Captured plan editor scroll before input to prevent scroll jumps.
+
+### Tests
+- Added mirrored Chrome/Firefox coverage for streaming scope, attachment delivery, terminal tool-call gating, coalesced reconnect persistence, detached lifecycle wiring, the kill switch, and transport-only non-streaming fallback.
+- Updated test runner (`test/run.js`) to align with the new plan editor/review behaviors.
+
+## [25.4.2] - 2026-07-22
+
+### Added
+- Added a default-disabled packaged Chrome Web Store release skill with trusted status, ZIP upload, and publish tools backed by the official v2 API in Chrome and Firefox.
+- Added skill-scoped setup for user-owned Google OAuth credentials, publisher/item IDs, and an explicitly selected local release ZIP.
+
+### Changed
+- Added a Chrome Web Store dashboard adapter that routes enabled runs to the release skill instead of protected DOM controls.
+
+### Fixed
+- Added an always-on Chrome protected-page guard for the Chrome Web Store Developer Dashboard so DOM tools fail immediately and non-retryably instead of entering wait/read retry loops.
+
+### Security
+- Kept OAuth tokens and release ZIP bytes in extension-local storage and out of model prompts, tool arguments, traces, and tool results; upload and publish remain behind consequential-action permission and submission gates.
+
+## [25.4.0] - 2026-07-21
+
+### Added
+- Added round-trip automatic progress policy to improve completion reliability across the full submit → completion → evidence loop.
+
+### Changed
+- Updated OpenAI model invocation to use `gpt-5.4-nano-2026-03-17` with `max_completion_tokens`.
+- Preserved reviewed submit requirements across continuations to keep validation consistent when a run resumes.
+- Hardened submit completion evidence requirements (including final-form completion evidence) to reduce false positives.
+- Improved submit-state reconciliation by carrying submit verification across continuations and reconciling from screenshot URLs.
+- Updated Chrome and Firefox builds to reflect the above completion/submit policy changes for parity.
+
+### Fixed
+- Prevented completion guard loops and stopped stale calls after completion-page blocks.
+- Tightened completion success evidence to avoid accepting incomplete or uncertain outcomes.
+- Improved handling of validation failures so they remain blocking for completion.
+- Fixed CI/release robustness issues related to changelog prompt parsing and release-context substitution.
+
+### Tests
+- Added/expanded CI grading and E2E coverage to diagnose Gnippets HTTP failures and validate cloud E2E control requests.
+- Added CI robustness improvements for unattended runs (disabling action prompts) and tightened grading inputs (e.g., accepting camelCase final URLs in CI grading).
+
+## [25.3.0] - 2026-07-21
+
+### Added
+- Added initial release note scaffolding for WebBrain.
+
+### Changed
+- Updated OpenAI model usage to **gpt-5.4-nano-2026-03-17** and switched to `max_completion_tokens` for completion limits.
+- Switched WebBrain Cloud provider integration from **GitHub Models** to direct **OpenAI API** calls (using `OPENAI_SECRET` via curl), improving consistency across providers.
+- Updated Chrome and Firefox builds to reflect the provider/model changes and associated configuration/UI updates.
+
+### Fixed
+- Resolved model-parameter compatibility issues by ensuring `max_completion_tokens` is used where required (avoids deprecated `max_tokens` errors).
+- Corrected prior provider model ID handling during the transition away from GitHub Models.
+- Improved release/changelog generation robustness by avoiding YAML parsing issues in the release prompt pipeline.
+
+### Tests
+- Added/expanded CI grading and E2E infrastructure coverage to better diagnose HTTP failures and validate cloud E2E control requests.
+- Added CI robustness improvements for unattended runs (disabling action prompts) and tightened grading inputs (e.g., accepting camelCase final URLs).
+
+## [25.2.0] - 2026-07-21
+
+### Added
+
+### Changed
+
+### Fixed
+
+### Tests
+- Comprehensive test suite established for validating core functionality and browser compatibility.
+
+## [25.0.0] - 2026-07-19
+
+### Added
+- Added runtime completion invariants in Chrome and Firefox that track consequential actions, require a fresh successful observation before accepting a success claim, and preserve verification obligations across batched calls, trusted continuations, restored runs, and scheduled tasks.
+- Added localized permission education after repeated action prompts, with an onboarding note and a safe action that inserts `/dangerously-skip-permissions` for the specific pending prompt without overwriting an existing draft.
+- Added a permanent, fully localized **Tweet about WebBrain** recommended action that opens X's visible composer, publishes reviewed language-specific copy without asking the model to write or translate it, then verifies and reports the post URL when available.
+
+### Changed
+- Action runs now reject plan-only, empty-step, promise-only, and premature terminal replies and continue into execution; explicitly requested plans and Markdown plus honest structured blockers remain valid results.
+- Completion enforcement now distinguishes real dispatch from preflight failures, accepts only model-visible state observations, self-verifies successful scheduler writes, and preserves the intended Compact Dev and managed-cloud execution boundaries.
+
+### Fixed
+- Prevented stale tool calls from running after a rejected `done`, cleared rejected streamed plan text before recovery, preserved terminal obligation and session metadata, and rejected stale or same-batch completion evidence.
+- Repaired high-confidence double-escaped assistant Markdown returned by OpenAI-compatible backends without rewriting legitimate code, paths, or escape-sequence examples.
+- Hardened accessibility actions with document- and SPA-route-scoped refs, fresh-target and visibility checks, canonical accessible names, iframe dispatch tracking, and safer guarded-click progress detection, preventing stale clicks and false agent stops.
+- Made `set_field` wait for controlled and rich-text editors to settle and require an exact normalized readback before submitting; failed sensitive-field readbacks no longer expose typed values.
+- Corrected false completion blocks for denied, skipped, or pre-dispatch actions; pre-existing targets; input and CAPTCHA preflight failures; screenshots not visible to the model; observed non-success outcomes; and self-verified scheduled tasks.
+
+### Tests
+- Expanded mirrored Chrome and Firefox regression coverage for plan-to-execution handoffs, completion-invariant state and recovery, permission education and tab scoping, assistant-text repair, accessibility refs and field verification, and exact localized WebBrain post copy.
+
+## [24.4.0] - 2026-07-18
+
+### Changed
+- Add guarded CDP click fallback + full screenshot bugfix
+
+## [24.3.1] - 2026-07-18
+
+### Changed
+- Chrome `click_ax` stays synthetic-first and may issue one guarded CDP trusted-click fallback only after no observable progress on safe generic targets (visibility, hit-test, interactive-descendant, form/download/mutating/stateful exclusions).
+- Trusted-click progress proof ignores whole-page text churn and blur-only focus loss; safety vetoes skip automatic retry without rewriting working clicks to failure.
+
+### Fixed
+- Removed invalid CDP `Input.enable` usage; trusted mouse events dispatch directly.
+- Observation windows for fallback candidates poll progressively so slower SPA handlers can still prove progress before a second click.
+
+### Tests
+- Added unit and fixture coverage for eligibility gates, one-shot fallback accounting, network/beacon vetoes, and post-CDP target-state verification.
+
+## [24.3.0] - 2026-07-17
+
+### Changed
+- Replaced the first-install fake toolbar walkthrough with a real **Open Side Panel** action in Chromium and **Open Sidebar** action in Firefox.
+- Added an accessible Chromium first-open coachmark that points to the browser's actual side-panel pin, mirrors its arrow for left-side layouts such as Vivaldi, and clearly distinguishes that pin from the toolbar icon it adds.
+- Kept Firefox guidance aligned with its native Extensions menu and refreshed the install flow across all 16 supported locales.
+- Report the browser-resolved absolute path after WebBrain screenshots, recordings, transcripts, and run captures finish saving, including configured subfolders and uniquified filenames.
+
+### Fixed
+- Removed non-interactive toolbar and extension-menu illustrations that looked clickable but could not complete setup.
+- Sequenced the Chromium pin coachmark before the existing model and safety onboarding so first-time setup has one clear action at a time.
+- Kept keyboard focus inside the pin coachmark while it is open and added an explicit **Skip this step** exit so first-run setup cannot strand the user.
+- Prevented early install-page clicks from disappearing, kept first-open tabs in the normal WebBrain panel group, and replaced premature success styling with browser-specific recovery guidance.
+
+### Tests
+- Added Chrome and Firefox coverage for real panel opening, first-install coachmark state, modal focus handling, explicit dismissal paths, left/right arrow layout, native Firefox wording, responsive behavior, reduced motion, and locale parity.
+
+## [24.2.0] - 2026-07-17
+
+### Changed
+- Add Kimi provider support
+
+## [24.1.0] - 2026-07-16
+
+### Changed
+- import/export configs
+
+## [24.0.2] - 2026-07-16
+
+### Added
+- Added `/export --config` to download a portable JSON snapshot of settings and `/import <json>` or `/import --file` to restore one in Chrome and Firefox.
+- Included provider, vision, transcription, and CAPTCHA API keys in configuration snapshots, with an explicit plaintext-secret warning before export and import.
+
+### Changed
+- Limited configuration snapshots to settings-backed state, excluding device-bound sync identifiers and tokens, conversations, traces, jobs, and usage counters.
+
+### Tests
+- Added mirrored coverage for configuration schema completeness, round trips, validation failures, file selection, slash-command routing, and background import/export handlers.
+
+## [24.0.1] - 2026-07-16
+
+### Added
+- Added hidden trailing `/record [--save-as <filename>]` and `/screenshot [--save-as <filename>]` prompt suffixes. Recording now wraps a Chrome run and saves automatically; screenshot capture saves timestamped or custom-named before/after PNGs in Chrome and Firefox. The suffixes remain intentionally absent from `/help` and autocomplete.
+
+### Fixed
+- Kept agent-created reference tabs in the background so Chrome and Firefox runs remain visibly attached to their original tab.
+- Detected Firefox-protected Mozilla domains before blocked DOM or network reads, used one active-tab screenshot fallback where possible, and stopped equivalent non-retryable attempts instead of looping.
+- Treated Responses streams that end without `response.completed` as incomplete instead of persisting partial output as a successful turn.
+- Preserved unsaved custom request-body JSON drafts across provider search, filtering, and card re-renders, including temporarily invalid JSON while editing.
+- Re-activate the originating run tab before the after screenshot when a run opens another tab.
+- Restored Mozilla Add-ons developer adapter matching after the hostname-hardening matcher rename.
+- Rebuilt the Chrome, Edge, and Firefox 24.0.1 archives from the final source tree.
+
+### Tests
+- Added regression coverage for background tab ownership, Firefox restricted-domain handling, bounded read retries, premature Responses stream termination, and compatibility JSON draft persistence.
+- Added mirrored parser, filename sanitization, lifecycle ordering, Downloads saving, Chrome recorder identity, and Firefox unsupported-recording coverage for hidden run capture.
+
+## [24.0.0] - 2026-07-16
+
+### Added
+- First-class **GPT-5.6** support for official OpenAI: default model `gpt-5.6-terra`, UI suggestions for Terra / Sol / Luna, and a **1,050,000**-token context window for the `gpt-5.6*` family.
+- Official OpenAI GPT-5.6 routes through the **Responses API** (`/v1/responses`) with encrypted reasoning replay (`response_items`), function-call conversion, streaming, and usage normalization. Older models and custom/proxy base URLs stay on Chat Completions.
+- **Advanced model compatibility** settings on every provider card: preset (Auto / OpenAI / Qwen / DeepSeek / OpenRouter / Custom), reasoning effort, system vs developer role, max-token field, and safe custom request-body JSON.
+- Shared `provider-compatibility.js` layer (Chrome + Firefox) that maps roles, token fields, reasoning knobs, and merges protected extra body fields for OpenAI-compatible, Azure OpenAI, and llama.cpp request builders.
+- Documented the release in `WHATS_NEW_IN_V24.md` at the repository root.
+
+### Changed
+- OpenAI-compatible request building is centralized so compatibility presets apply consistently without mutating stored chat history.
+- OpenAI default cost metadata migrates safely when upgrading from earlier shipped defaults.
+
+### Tests
+- Added / retained coverage for Responses routing, reasoning replay, streaming, provider-compatibility merges, GPT-5.6 context windows, and default-model migration.
+
+## [23.3.6] - 2026-07-15
+
+### Added
+- Added a default-on **Help Improve WebBrain** control at the bottom of the visible Settings → General area in Chrome and Firefox. WebBrain Cloud requests now send the current choice as `X-WebBrain-Help-Improve: 1` or `0`; local-model and bring-your-own API requests never receive that header.
+
+### Changed
+- Updated the public privacy policy and developer data-flow documentation to disclose selected WebBrain Cloud interaction retention and model-improvement use, the future-interaction opt-out, a 12-month raw-data limit, and a five-year limit for de-identified datasets.
+- Added opaque per-conversation WebBrain Cloud session grouping across main, planner, compaction, intent, memory, and vision generations, with permanent opt-out tainting and no collection metadata on local or bring-your-own providers.
+- Added encrypted, compressed, text-and-tool-only Cloud improvement storage with image omission, authenticated session browsing, de-identified JSONL export, 12-month pruning, and isolated OpenRouter logging/no-logging key routing.
+
+### Tests
+- Added mirrored coverage for the default-on UI, persistence and live provider reload, Cloud-only request headers, locale completeness, and privacy-policy retention language.
+
+## [23.3.3] - 2026-07-15
+
+### Changed
+- Clarify timeout slider semantics: **0 = Instant** (always auto-select the first option), **1–1200s = wait then auto-select**, and **above 1200s (slider max / Off) = wait indefinitely**. Existing stored `0` (old Off) migrates once to Off.
+- Instant clarify auto-selects use `source=auto` and tell the agent to continue (intentional unattended policy, e.g. headless); only waited `source=timeout` keeps the non-confirmation warning.
+
+### Tests
+- Updated Chrome and Firefox clarify-timeout coverage for Instant / Off slider endpoints, one-shot semantics migration, and Instant vs waited-timeout agent notes.
+
+## [23.3.2] - 2026-07-15
+
+### Added
+- Added a configurable clarify auto-timeout (default 60s, 0–1200s under Settings → General → Advanced) for Chrome and Firefox. Unanswered `clarify` prompts auto-select the first option (or a timeout marker when options are empty); permission and form-submit confirmations stay untimed.
+
+### Changed
+- Documented that timeout auto-selects are not real user confirmations in the `clarify` tool schema and system prompts, and kept timeout answers out of user-memory extraction.
+
+### Fixed
+- Cleared scheduled-job `needs_user_input` / `pendingClarify` on clarify auto-timeout without replaying a start-of-run `running` event that could orphan the original assistant bubble.
+- Restarted clarify countdown metadata after sidepanel restore/rebind so closed panels do not leave stale open cards.
+
+### Tests
+- Added Chrome and Firefox regression coverage for clarify timeout settings, schema/prompt guidance, scheduler wait-state cleanup, restore countdown metadata, and memory exclusion of timeout sources.
+
+## [23.3.1] - 2026-07-15
+
+### Changed
+- Added bounded canonical semantic intents to the shared on-demand skill catalog so the planner and `load_skill` can route multilingual requests without literal keyword matching or an extra embedding call.
+- Let approved Act plans activate validated skill IDs before execution, with Dev inheriting Act-compatible skills, Ask limited to explicitly compatible skills, and Compact remaining skill-free.
+- Added recording and exporting WebBrain versions to new traces, conversation Markdown, trace Markdown, and Traces-page JSON while labeling legacy recording versions unavailable.
+
+### Fixed
+- Redirected single-media browser download attempts to an eligible inactive FreeSkillz skill, including exact-permalink discovery on feeds and profiles, while preserving browser fallback only after a real server failure or unavailable skill.
+- Prevented the agent path from saving split or unverifiably muxed MSE audio/video buffers or presenting ffmpeg and login advice as a successful result.
+
+### Tests
+- Added Chrome and Firefox coverage for intent normalization and catalog isolation, planner activation and rejection, multilingual routing metadata, inactive-skill redirects, strict MSE refusal, and versioned current and legacy exports.
+
+## [23.3.0] - 2026-07-15
+
+### Changed
+- Load browser skills on demand
+
+## [23.2.2] - 2026-07-15
+
+### Changed
+- Made enabled skills available on demand: Mid/Full Ask, Act, and Dev runs receive a small eligible name/summary catalog, full instructions and compatible tools load only for the current relevant run, and Compact exposes no skill surface.
+- Added optional prompt-stripped `webbrain-skill` metadata for capped summaries and explicit Ask/Act compatibility while preserving existing skill storage and `webbrain-tools` manifests.
+
+### Fixed
+- Replaced ambiguous Content-Disposition filename matching in Chrome and Firefox public-media downloads with a bounded single-pass parameter parser that preserves RFC 5987 precedence and fails closed on malformed quoted values.
+
+### Tests
+- Added mirrored coverage for skill catalog eligibility, activation isolation and reset, strict-secret ordering, recommended-action preactivation, and adversarial Content-Disposition filename parsing.
+
+## [23.2.0] - 2026-07-14
+
+### Added
+- Added an opt-in packaged Litterbox temporary file-share skill for Chrome and Firefox, available from Settings with explicit `clarify` confirmation, public-link and absolute-expiry warnings, blocked-file preflight checks, browser-specific upload limits, and visible provider attribution. Uploads go through the Litterbox page with `upload_file`, so no `/allow-api` override is needed and file bytes never reach the LLM provider.
+- Added opt-in Open-Meteo weather and Open Library book-search skills for Chrome and Firefox. The read-only, no-key integrations clarify ambiguous locations, keep metric and imperial weather units consistent, limit catalog responses, treat provider data as untrusted, and show visible source attribution.
+- Added disabled-by-default Together AI and Fireworks OpenAI-compatible router providers for Chrome and Firefox, including Settings fields, suggested models, configurable endpoints, API-key links, and streaming-usage support.
+
+### Changed
+- Classified Together AI and Fireworks consistently as router providers and migrated older saved category values without dropping stored credentials.
+
+### Fixed
+- Prevented host-page capture listeners from intercepting keyboard input inside the selection shortcut by loading its containment handler at `document_start` and isolating keydown, keypress, and keyup events.
+- Kept the selected text visibly highlighted while the selection menu is open, bounded the overlay to 200 visible rectangles, and cleared highlights when the menu closes or is dismissed.
+
+### Tests
+- Added packaged-skill catalog and Litterbox safety, privacy-disclosure, upload-flow, browser-limit, and expiry coverage.
+- Added Chrome and Firefox coverage for Open-Meteo units and tool manifests, Open Library search and attribution, Together AI and Fireworks provider defaults and migrations, and selection-shortcut keyboard containment and bounded highlights.
+
+## [23.1.2] - 2026-07-14
+
+### Added
+- Added universal `<command> --help` support for slash commands, returning the selected command's usage, description, and available options directly in chat.
+- Published the WebMCP integration blog post.
+
+### Fixed
+- Made Enter accept highlighted slash-command flag completions such as `/schedule --list` without prematurely executing the parent `/schedule` command.
+- Restored intentional localized formatting in trusted composer toasts while keeping dynamic error text escaped.
+
+### Tests
+- Added Chrome and Firefox regression coverage for command-specific help, flag autocomplete ordering and completion, invalid mixed help flags, and trusted toast rendering.
+
+## [23.1.0] - 2026-07-14
+
+### Added
+- Added `/export --traces` in Chrome and Firefox to download the current conversation's recorded planner turns, assistant prose, and tool calls as privacy-scrubbed Markdown while keeping `/export` messages-only.
+- Added safe syntax highlighting for fenced Markdown code blocks in both side panels across JavaScript, CSS, markup, JSON, Python, shell, SQL, YAML, and C-like languages.
+- Published the NVIDIA GLM-5.2 planner benchmark blog and complete frozen, Full, Mid, and Compact 100-case result sets.
+
+### Changed
+- Consolidated overlapping slash commands around canonical commands and flags, including `/schedule --list`, `/scratchpad --append` / `--clear`, `/memory --add` / `--forget`, `/screenshot --full-page`, `/record --full-screen` / `--transcribe`, and `/export --traces`, with flag-aware help and autocomplete.
+- Changed Mail.tm inbox waits to perform one immediate check and use scheduled resumes for later checks instead of polling inside an active run.
+
+### Fixed
+- Sequenced and coalesced managed Chrome cloud-run updates while applying size limits, image omission, and sensitive-key redaction to persisted and live text-delta data.
+- Guided Chrome and Firefox Gmail draft replacement through one clearing `set_field` call followed by verification, avoiding fragile click-and-keyboard clearing flows.
+- Brought non-English Chrome and Firefox slash-command help and permission copy to parity with the English command lists and keyboard shortcuts.
+- Corrected the GLM-5.2 benchmark result links.
+
+### Tests
+- Expanded regression coverage for trace export privacy and ordering, canonical slash-command flags, Markdown highlighting, scheduled inbox waits, Gmail draft replacement, locale parity, and managed cloud update sequencing and scrubbing.
+
 ## [23.0.4] - 2026-07-13
 
 ### Added
 - Added an opt-in packaged Mail.tm disposable email skill for Chrome and Firefox, available from Settings with explicit confirmation, honest session-retention guidance, automatic account cleanup, and visible provider attribution.
+- Added nine Chrome Dev-mode tools for reversible CSS/DOM experiments and page diagnosis: `inject_css`, `remove_injected_css`, `patch_element`, `revert_patch`, CDP-backed `execute_js`, `read_console`, `inspect_network_requests`, `inspect_event_listeners`, and `highlight_element`.
+
+### Fixed
+- Stopped Chrome Dev diagnostic handlers, buffers, and their Runtime/Log/Network CDP domains when leaving Dev mode, and enabled the same capture lifecycle for streaming runs.
+- Bounded Chrome `execute_js` evaluation to 15 seconds, made CSS undo handles unique and document-bound, and canonicalized structured element patch names before recording reversible state.
+- Propagated Chrome CDP callback failures from `chrome.runtime.lastError`, so timed-out or rejected `execute_js` evaluations report failure instead of an empty successful result.
+- Redacted common API, subscription, access, auth, and client key header-name variants before Dev network diagnostics enter the in-memory buffer.
+- Blocked `javascript:` form actions in structured element patches and permission-gated event-listener inspection and element highlighting because both briefly mutate live DOM.
+- Disabled diagnostics on every tracked Dev tab when leaving panel-wide Dev mode, cleaned up exact injected CSS across navigation races, and followed open-shadow hosts when inspecting ancestor event listeners.
 
 ### Tests
 - Added packaged-skill catalog, opt-in Settings, and Mail.tm safety/API cleanup coverage.
+- Added Dev-only exposure, bounded CDP execution, diagnostic lifecycle, sensitive-header redaction, document-safe CSS undo, canonical element patching, permission classification, and state-change coverage for the new Chrome Dev toolkit.
 
 ## [23.0.2] - 2026-07-13
 

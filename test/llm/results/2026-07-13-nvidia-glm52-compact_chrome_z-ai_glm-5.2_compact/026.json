@@ -1,0 +1,25 @@
+{
+  "id": "026",
+  "user": "summarize this page",
+  "mode": "act",
+  "tab": {
+    "url": "https://www.cnn.com/2026/05/world/example-story/index.html",
+    "title": "Example story — CNN"
+  },
+  "latencyMs": 72102,
+  "error": null,
+  "firstToolCall": {
+    "name": "read_page",
+    "args": {}
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll read the current page to summarize it.",
+  "usage": {
+    "prompt_tokens": 6713,
+    "completion_tokens": 15,
+    "total_tokens": 6728
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

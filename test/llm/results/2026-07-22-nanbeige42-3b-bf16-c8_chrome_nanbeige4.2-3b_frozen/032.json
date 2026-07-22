@@ -1,0 +1,28 @@
+{
+  "id": "032",
+  "user": "how many comments does this thread have",
+  "mode": "act",
+  "tab": {
+    "url": "https://www.reddit.com/r/MechanicalKeyboards/comments/abc123/example/",
+    "title": "Example thread — r/MechanicalKeyboards"
+  },
+  "latencyMs": 4724,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll start by checking the current page, then follow the Reddit site guidance to use old.reddit.com for easier interaction.",
+  "usage": {
+    "prompt_tokens": 18157,
+    "total_tokens": 18341,
+    "completion_tokens": 184,
+    "prompt_tokens_details": null
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

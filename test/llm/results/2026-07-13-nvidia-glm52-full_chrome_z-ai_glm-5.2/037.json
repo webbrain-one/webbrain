@@ -1,0 +1,27 @@
+{
+  "id": "037",
+  "user": "close the cookie banner",
+  "mode": "act",
+  "tab": {
+    "url": "https://www.theguardian.com/uk",
+    "title": "The Guardian"
+  },
+  "latencyMs": 11868,
+  "error": null,
+  "firstToolCall": {
+    "name": "click",
+    "args": {
+      "text": "Reject all"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll dismiss the cookie banner first, then verify it's gone.",
+  "usage": {
+    "prompt_tokens": 20563,
+    "completion_tokens": 25,
+    "total_tokens": 20588
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

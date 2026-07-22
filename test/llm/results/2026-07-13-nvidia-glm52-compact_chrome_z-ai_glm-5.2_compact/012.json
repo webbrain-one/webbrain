@@ -1,0 +1,22 @@
+{
+  "id": "012",
+  "user": "show my browser history",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 73223,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I can't show your browser history — I don't have a tool to read Chrome's browsing history. The tools I have access to only let me interact with the current web page (reading, clicking, typing, navigating), not browser-level data like history, bookmarks, downloads, or cookies.\n\nTo view your history yourself:\n- Press **Ctrl+H** (Windows/Linux) or **Cmd+Y** (Mac) to open the History page, or\n- Go to `chrome://history` in your address bar.\n\nIf you'd like, I can navigate a tab to `chrome://history` for you, but I won't be able to read its contents from there either (Chrome internal pages are off-limits to my tools). Is there something else I can help with on a regular web page?",
+  "usage": {
+    "prompt_tokens": 6697,
+    "completion_tokens": 165,
+    "total_tokens": 6862
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

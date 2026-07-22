@@ -1,0 +1,46 @@
+{
+  "id": "054",
+  "user": "download this image",
+  "mode": "act",
+  "tab": {
+    "url": "https://example.com/photo.jpg",
+    "title": "photo.jpg"
+  },
+  "latencyMs": 6041,
+  "error": null,
+  "firstToolCall": {
+    "name": "download_file",
+    "args": {
+      "url": "https://example.com/photo.jpg",
+      "filename": "photo.jpg"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "\nI'll download this image for you. Since this is a direct image URL, I'll use the download tool.\n\n",
+  "usage": {
+    "prompt_tokens": 17039,
+    "completion_tokens": 162,
+    "total_tokens": 17201,
+    "cost": 0.0017708,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 17018,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.0017708,
+      "upstream_inference_prompt_cost": 0.001706,
+      "upstream_inference_completions_cost": 0.0000648
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 85,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

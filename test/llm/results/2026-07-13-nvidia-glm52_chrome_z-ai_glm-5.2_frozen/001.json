@@ -1,0 +1,25 @@
+{
+  "id": "001",
+  "user": "go to firefox extensions management pagr",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 31293,
+  "error": null,
+  "firstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "about:addons"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll take you to the Firefox extensions/add-ons management page.",
+  "usage": {
+    "prompt_tokens": 16570,
+    "completion_tokens": 25,
+    "total_tokens": 16595
+  }
+}

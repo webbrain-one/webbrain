@@ -1,0 +1,27 @@
+{
+  "id": "056",
+  "user": "save this youtube thumbnail",
+  "mode": "act",
+  "tab": {
+    "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    "title": "Rick Astley — YouTube"
+  },
+  "latencyMs": 14645,
+  "error": null,
+  "firstToolCall": {
+    "name": "new_tab",
+    "args": {
+      "url": "https://i.ytimg.com/vi/dQw4w9WgXcQ/maxresdefault.jpg"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll save the YouTube thumbnail for this video. The standard YouTube thumbnail URL follows a predictable pattern using the video ID.",
+  "usage": {
+    "prompt_tokens": 7043,
+    "completion_tokens": 58,
+    "total_tokens": 7101
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

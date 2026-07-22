@@ -4,8 +4,9 @@
  * Chrome MV3 allows only ONE offscreen document per extension at a time,
  * and the set of `reasons` declared at createDocument time is fixed — you
  * cannot add reasons later. So both consumers of the offscreen document
- * (the localhost-fetch proxy in offscreen.js, the tab-recorder in
- * recorder.js, and the cloud bridge in cloud-bridge.js) must agree on a single
+ * (the localhost-fetch proxy in offscreen.js, large-file staging in
+ * skill-download.js, the tab-recorder in recorder.js, and the cloud bridge in
+ * cloud-bridge.js) must agree on a single
  * createDocument call that lists
  * every reason either of them might ever need.
  *
@@ -27,13 +28,16 @@ const OFFSCREEN_REASONS = [
   // Localhost fetch proxy — no perfectly matching reason, LOCAL_STORAGE is
   // what we've used historically.
   'LOCAL_STORAGE',
+  // Large validated skill downloads are staged in OPFS and exposed through a
+  // short-lived blob URL so chrome.downloads never re-fetches the remote URL.
+  'BLOBS',
   // Tab recorder needs DISPLAY_MEDIA (chrome.tabCapture stream pulls in as
   // display media) and USER_MEDIA (mic via getUserMedia).
   'DISPLAY_MEDIA',
   'USER_MEDIA',
 ];
 const OFFSCREEN_JUSTIFICATION =
-  'Proxy fetch to localhost LLM servers; capture active tab + mic for the optional Record feature; maintain a localhost cloud bridge WebSocket.';
+  'Proxy localhost requests; stage validated large downloads; capture active tab and mic; maintain a localhost cloud bridge WebSocket.';
 
 let ready = false;
 let inflight = null;

@@ -3,7 +3,7 @@
  *
  * Two user-driven flows share this:
  *   • `/record` — current-tab capture via chrome.tabCapture.
- *   • `/record-full-screen` — screen/window capture via getDisplayMedia().
+ *   • `/record --full-screen` — screen/window capture via getDisplayMedia().
  *
  * Without this shared module, the two paths would either duplicate the
  * orchestration or have to round-trip messages through each other. Both
@@ -18,9 +18,9 @@
  *     `recording_update` event:'started' to sidepanels.
  *   • startDisplayRecording(options) — prompts for a display/window stream via
  *     the offscreen recorder and records it with the same stop/download path.
- *   • stopTabRecording()         — halts the offscreen recorder, saves
- *     the .webm to Downloads, broadcasts event:'stopped', kicks off
- *     transcription if it was requested.
+ *   • stopTabRecording()         — halts the offscreen recorder, broadcasts
+ *     event:'saving' (banner down), waits for the browser-resolved .webm path,
+ *     broadcasts event:'stopped', kicks off transcription if requested.
  *
  * Transcription provider lookup is done lazily via setProviderManager()
  * so we can wire it from background.js without a circular import.
@@ -28,6 +28,10 @@
 
 import { ensureOffscreen } from '../offscreen/ensure.js';
 import { transcribeAudio } from '../agent/transcribe.js';
+import {
+  RECORDING_DOWNLOAD_TIMEOUT_MS,
+  resolveSavedDownload,
+} from '../download-result.js';
 
 let recordingState = { active: false };
 const RECORDING_STATE_KEY = 'recordingState';
@@ -35,6 +39,19 @@ const RECORDING_SAFETY_ALARM_NAME = 'webbrain-recording-safety-cap';
 export const MAX_RECORDING_MS = 2 * 60 * 60 * 1000; // 2 hours
 let recordingSafetyTimeout = null;
 let recordingStateReady = null;
+
+function normalizeRecordingFilename(value) {
+  const filename = String(value || '')
+    .replace(/[\u0000-\u001f\u007f]/g, '')
+    .split(/[\\/]/)
+    .pop()
+    .trim()
+    .replace(/[<>:"|?*]/g, '-')
+    .replace(/[. ]+$/g, '');
+  if (!filename || filename === '.' || filename === '..') return null;
+  const stem = filename.replace(/\.webm$/i, '').replace(/[. ]+$/g, '') || 'webbrain-recording';
+  return `${stem.slice(0, 175)}.webm`;
+}
 
 let providerManagerRef = null;
 
@@ -44,6 +61,11 @@ export function setProviderManager(pm) {
 
 export function getRecordingState() {
   return recordingState;
+}
+
+/** Live capture or in-flight disk flush — either blocks a concurrent start. */
+function isRecordingBusy(state = recordingState) {
+  return !!(state?.active || state?.saving);
 }
 
 function getRecordingSafetyDueAt(state = recordingState) {
@@ -84,6 +106,15 @@ async function loadRecordingState() {
     const stored = await chrome.storage.session.get(RECORDING_STATE_KEY);
     if (stored[RECORDING_STATE_KEY]) recordingState = stored[RECORDING_STATE_KEY];
   } catch { /* session storage unavailable */ }
+  // A saving reservation only makes sense while this process is awaiting
+  // resolveSavedDownload. After a service-worker restart the wait is gone —
+  // free the slot so the user is not blocked forever.
+  if (recordingState?.saving && !recordingState?.active) {
+    recordingState = { active: false };
+    try {
+      await chrome.storage.session?.set?.({ [RECORDING_STATE_KEY]: recordingState });
+    } catch { /* best-effort */ }
+  }
   if (recordingState.active) scheduleRecordingSafetyWatchdog(recordingState);
 }
 recordingStateReady = loadRecordingState();
@@ -133,7 +164,7 @@ function broadcastContentRecordingState(active) {
   } catch {}
 }
 
-function broadcast(event, payload = {}) {
+function broadcast(event, payload = {}, { contentActive } = {}) {
   try {
     chrome.runtime.sendMessage({
       target: 'sidepanel',
@@ -142,8 +173,10 @@ function broadcast(event, payload = {}) {
       ...payload,
     }).catch(() => {});
   } catch {}
-  if (event === 'started') broadcastContentRecordingState(true);
-  else if (event === 'stopped') broadcastContentRecordingState(false);
+  if (contentActive === true) broadcastContentRecordingState(true);
+  else if (contentActive === false) broadcastContentRecordingState(false);
+  else if (event === 'started') broadcastContentRecordingState(true);
+  else if (event === 'stopped' || event === 'saving') broadcastContentRecordingState(false);
 }
 
 export async function prepareRecordingHost() {
@@ -236,10 +269,18 @@ async function reconcileStaleRecordingState({ finalizeInactiveSession = false, b
  *   • source      "tab" or "display"
  *   • tabId       source tab for tab capture, optional origin tab for display
  *   • streamId    tabCapture stream id; only used for source:"tab"
- *   • options     video/audio/mic/transcribe/showBanner/mimeType
+ *   • options     video/audio/mic/transcribe/showBanner/mimeType/filename
  */
 async function startRecordingSession({ source, tabId = null, streamId = null, options = {} }) {
   await ensureRecordingStateLoaded();
+  if (recordingState.saving) {
+    // Disk flush can take minutes for large .webm writes. Keep the slot reserved
+    // so a late stopped broadcast cannot clobber a second session's UI.
+    return {
+      ok: false,
+      error: 'A recording is still being saved. Wait a moment and try again.',
+    };
+  }
   if (recordingState.active) {
     const cleared = await reconcileStaleRecordingState({ finalizeInactiveSession: true });
     if (!cleared) {
@@ -312,6 +353,8 @@ async function startRecordingSession({ source, tabId = null, streamId = null, op
   const startedAt = Date.now();
   recordingState = {
     active: true,
+    recordingId: globalThis.crypto?.randomUUID?.()
+      || `${startedAt}-${Math.random().toString(36).slice(2, 10)}`,
     source,
     tabId,
     startedAt,
@@ -323,6 +366,7 @@ async function startRecordingSession({ source, tabId = null, streamId = null, op
     captureAudioError: recResult.captureAudioError || null,
     transcribeAfter: !!options.transcribeAfter,
     showBanner: source === 'tab' ? options.showBanner !== false : options.showBanner === true,
+    filename: normalizeRecordingFilename(options.filename),
   };
   saveRecordingState();
   scheduleRecordingSafetyWatchdog(recordingState);
@@ -365,7 +409,20 @@ async function stopRecordingForSafetyCap({ beforeFinalizeRecording = null } = {}
 
 export async function stopTabRecording(opts = {}) {
   await ensureRecordingStateLoaded();
+  if (opts.expectedRecordingId
+      && isRecordingBusy()
+      && recordingState.recordingId !== opts.expectedRecordingId) {
+    return { ok: true, skipped: true, reason: 'different-recording' };
+  }
+  if (recordingState.saving) {
+    // Capture already stopped; disk flush is still running for this session.
+    return { ok: true, alreadyStopped: true, saving: true };
+  }
   if (!recordingState.active) {
+    // Scoped run cleanup may arrive after the user already stopped and saved
+    // this recording. Do not rebroadcast an empty stopped result: that would
+    // overwrite the panel's useful filename/transcript state.
+    if (opts.expectedRecordingId) return { ok: true, alreadyStopped: true };
     // Nothing active. Still broadcast 'stopped' so any sidepanel showing a
     // stale banner clears it, and report success — the user's goal (no active
     // recording) is already met. This is benign (no failure to surface), so
@@ -396,16 +453,34 @@ export async function stopTabRecording(opts = {}) {
     return { ok: true, cleared: true, warning: error };
   }
 
-  // Save webm to Downloads. The data URL is safe — recorder.js strips
-  // the codecs param before passing it to FileReader.readAsDataURL, so
-  // chrome.downloads.download's URL parser doesn't get tripped up.
+  // Capture is over as soon as the offscreen recorder stops. Drop the live
+  // banner, but keep a saving reservation so a second start cannot race the
+  // disk flush and then get wiped by this session's final stopped broadcast.
   const stamp = new Date()
     .toISOString()
     .replace(/[:.]/g, '-')
     .replace(/T/, '_')
     .slice(0, 19);
-  const filename = `webbrain-recording-${stamp}.webm`;
+  const filename = recordingState.filename || `webbrain-recording-${stamp}.webm`;
+  const wantTranscribeAfter = !!recordingState.transcribeAfter;
+  const savingRecordingId = recordingState.recordingId;
+  clearRecordingSafetyWatchdog();
+  recordingState = {
+    active: false,
+    saving: true,
+    recordingId: savingRecordingId,
+    tabId: recordingState.tabId,
+    source: recordingState.source,
+    startedAt: recordingState.startedAt,
+  };
+  saveRecordingState();
+  broadcast('saving');
+
+  // Save webm to Downloads. The data URL is safe — recorder.js strips
+  // the codecs param before passing it to FileReader.readAsDataURL, so
+  // chrome.downloads.download's URL parser doesn't get tripped up.
   let downloadId = null;
+  let savedDownload = null;
   let saveError = null;
   try {
     downloadId = await chrome.downloads.download({
@@ -413,29 +488,44 @@ export async function stopTabRecording(opts = {}) {
       filename,
       saveAs: false,
     });
+    savedDownload = await resolveSavedDownload(chrome, downloadId, {
+      timeoutMs: RECORDING_DOWNLOAD_TIMEOUT_MS,
+    });
   } catch (e) {
     saveError = `download failed: ${e.message}`;
   }
 
-  const wantTranscribe = recordingState.transcribeAfter && !saveError;
+  const wantTranscribe = wantTranscribeAfter && !saveError;
   const final = {
     ok: !saveError,
-    filename: saveError ? null : filename,
+    filename: saveError ? null : savedDownload.filename,
     downloadId,
+    state: savedDownload?.state,
     error: saveError || undefined,
     sizeBytes: res.sizeBytes,
     durationMs: res.durationMs,
     mimeType: res.mimeType,
     transcribeAfter: wantTranscribe,
     reason: opts.reason || undefined,
+    recordingId: savingRecordingId,
   };
 
-  // Always clear the recording state once the recorder has stopped, even if the
-  // download failed — the capture is over and the banner must not linger.
-  clearRecordingSafetyWatchdog();
-  recordingState = { active: false };
-  saveRecordingState();
-  broadcast('stopped', { result: final });
+  // Defense in depth: only clear/broadcast terminal stopped for this save if
+  // the reservation is still ours (another path should not have started).
+  const stillOurSave = recordingState.saving
+    && recordingState.recordingId === savingRecordingId
+    && !recordingState.active;
+  if (stillOurSave) {
+    recordingState = { active: false };
+    saveRecordingState();
+    broadcast('stopped', { result: final });
+  } else if (recordingState.active) {
+    // A newer live session exists — deliver the path toast without content:false
+    // or banner teardown.
+    broadcast('saved', { result: final }, { contentActive: true });
+  } else {
+    broadcast('stopped', { result: final });
+  }
 
   if (wantTranscribe) {
     runTranscription({
@@ -490,11 +580,15 @@ async function runTranscription({ dataUrl, mimeType, baseFilename }) {
   const txtFilename = `${baseFilename}.txt`;
   const txtDataUrl = 'data:text/plain;charset=utf-8,' + encodeURIComponent(result.text);
   let downloadId = null;
+  let savedDownload = null;
   try {
     downloadId = await chrome.downloads.download({
       url: txtDataUrl,
       filename: txtFilename,
       saveAs: false,
+    });
+    savedDownload = await resolveSavedDownload(chrome, downloadId, {
+      timeoutMs: RECORDING_DOWNLOAD_TIMEOUT_MS,
     });
   } catch (e) {
     return broadcastTranscribed({
@@ -510,7 +604,7 @@ async function runTranscription({ dataUrl, mimeType, baseFilename }) {
     ok: true,
     text: result.text,
     transcriptDownloadId: downloadId,
-    transcriptFilename: txtFilename,
+    transcriptFilename: savedDownload.filename,
     providerId: result.providerId,
     model: result.model,
     latencyMs: result.latencyMs,

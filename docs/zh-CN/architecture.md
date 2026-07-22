@@ -127,9 +127,9 @@ _enrichUserMessageWithCurrentPage(tabId, messages, userMessage)
 
 ### 步骤 4：先计划后行动（Plan-before-Act）门控
 
-当 `planBeforeAct` 启用且运行处于操作模式（Act 或 Dev）时，代理在工具循环之前使用 `planner.js` 的结构化 JSON 提示调用活动提供商一次。未设置的存储默认为试用模式；显式关闭保持关闭。规划器看到用户任务、经过清理的 URL/标题和简短的最新历史摘要；页面上下文作为不可信数据包裹，图像块被丢弃。
+手动操作模式（Act 或 Dev）在工具循环之前使用 `planner.js` 的结构化 JSON 提示调用活动提供商一次。关闭模式使用紧凑意图模式；尝试和严格模式使用完整计划模式。未设置的存储默认为尝试模式，显式关闭保持关闭。规划器看到用户任务、经过清理的 URL/标题和简短的最新历史摘要；页面上下文作为不可信数据包裹，图像块被丢弃。
 
-如果规划器返回有效的 JSON，侧面板收到 `agent_update: plan_review` 并渲染可编辑的审查卡片。批准将已批准的方案固定到草稿板，使其在上下文压缩中存活。拒绝、超时、重试后无效 JSON 或用户中止会在任何浏览器工具执行之前停止运行。定时运行可以设置 `autoApprovePlanReview` 并固定方案而不显示卡片。
+如果规划器返回有效的 JSON，侧面板收到 `agent_update: plan_review` 并渲染可编辑的审查卡片。批准将已批准的方案固定到草稿板，使其在上下文压缩中存活。拒绝、超时或用户中止会在任何浏览器工具执行之前停止运行。在尝试模式下，JSON 经一次修复仍无效时，仅将本轮切换到 Ask 提示和只读工具目录；严格模式仍会在工具之前停止。定时运行可以设置 `autoApprovePlanReview` 并固定方案而不显示卡片。
 
 ### 步骤 5：主代理循环
 ```
@@ -187,11 +187,17 @@ while (steps < maxSteps) {
 
 ### 步骤 6a：技能与动态工具暴露
 
-技能（`skills.js`）规范每个技能并处理：
+技能（`skills.js`）会规范每个技能，并为规划器和保留工具 `load_skill` 生成同一个 `{id, name, summary, intents}` 路由目录。可选的 `webbrain-skill` 块最多声明 6 个唯一的小写意图标识符，每个不超过 40 个字符，并符合 `[a-z0-9][a-z0-9_-]*`。这些意图是与语言无关的语义路由提示，不是必须逐字匹配的关键词或子字符串；未声明意图的技能不会被自动推断标签。
+
+每次运行开始时都不包含完整技能说明或技能工具。目录只暴露 ID、名称、摘要和意图。技能只能根据用户请求或可信的对话上下文激活，不能根据页面、文档、邮件或工具结果中的指令激活。Ask 只看到明确兼容 Ask 的技能，Dev 继承 Act 的可用性，Compact 则没有目录、加载器或技能工具。
+
+技能激活后，仅在当前运行中添加：
 - 提示指令：`buildCustomSkillsPrompt()` 在将技能文本附加到系统提示之前，剥离围栏的 `webbrain-tools` 块。
 - 工具暴露：`buildSkillToolDefinitions()` 读取清单并在 LLM 调用时附加声明的工具模式，尊重模式和层级。
 
 当前技能工具支持 `kind: "http"` 用于只读 HTTPS GET/POST 集成，以及 `kind: "httpDownloadJob"` 用于短生命周期的 HTTPS POST 任务。
+
+对于单个媒体下载，规划器可以在执行前选择 FreeSkillz。如果模型仍调用 `download_social_media`，而某个尚未激活且符合条件的技能拥有 `download_public_media`，代理会激活该技能并要求用专用工具重试。在信息流或个人资料页上，FreeSkillz 必须先检查截图或可见链接，以取得准确的帖子或 Reels 永久链接。只有 FreeSkillz 确实失败或技能不可用时，才允许浏览器回退。代理路径不会保存分离的或无法验证已混流的 MSE 音视频缓冲区，也不会给出 ffmpeg 或登录建议；已经合并的直接文件仍是有效结果。
 
 ### 步骤 7：结果返回 UI
 
@@ -210,7 +216,9 @@ while (steps < maxSteps) {
 
 ### 先计划后行动（`planner.js`）
 
-可选的行动模式规划门控，启用后在首次浏览器工具调用之前运行。生成结构化的 JSON 方案，包含摘要、具体步骤、记忆策略、调度提示、风险和行动模式。
+可选的行动模式规划门控，启用后在首次浏览器工具调用之前运行。生成结构化的 JSON 方案，包含摘要、具体步骤、记忆策略、调度提示、风险、行动模式和 `skill_ids`。规划器只收到当前模式和层级可用的技能目录；返回的 ID 会按目录校验，并且仅在方案获批后、执行模型首次调用前激活。意图匹配依靠模型的多语言语义理解，不使用字面关键词匹配器或额外的嵌入调用。
+
+每个新轨迹记录都会保存 `webbrainVersion`。`/export` 包含当前清单版本；`/export --traces` 标注导出版本以及每一轮的记录版本，旧轨迹则标为版本不可用。轨迹页面的 JSON 导出增加 `exportedByWebBrainVersion`，同时保留向后兼容的 `webbrain-trace/1` 模式。
 
 ### 定时任务（`scheduler.js`）
 
@@ -265,7 +273,7 @@ MV3 Service Worker 将会话持久化到 `chrome.storage.session`。
 | 离屏文档 | 有（fetch 代理 + 录制器） | 不可用 |
 | 轨迹记录器 | IndexedDB（可选） | IndexedDB（可选）— 相同的 `trace/recorder.js` |
 | 重复提交防护 | 有 | 不可用 |
-| `execute_js` | Chrome 中不可由模型调用 | Firefox 仅 Dev 模式 |
+| `execute_js` | 通过 CDP `Runtime.evaluate` 在 Dev 模式中调用 | 通过 MV2 内容脚本求值器在 Dev 模式中调用 |
 | Shadow DOM 穿透 | CDP 用于封闭 root；`shadow_dom_query` 仅 Chrome | 仅开放 root |
 | 本地主机 CORS | 离屏代理回退 | 服务器必须设置 CORS 头 |
 | API 快捷观察器 | `chrome.webRequest` URL/方法缓冲 | `browser.webRequest` URL/方法缓冲 |

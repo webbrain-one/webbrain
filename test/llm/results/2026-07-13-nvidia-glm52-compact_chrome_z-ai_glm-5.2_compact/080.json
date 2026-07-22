@@ -1,0 +1,22 @@
+{
+  "id": "080",
+  "user": "close all my tabs except this one",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 12429,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I can't close browser tabs — I don't have a tool for that. Tab management (closing tabs, switching between them) is handled by your browser, not by anything I can control through the page.\n\nHere's how you can do it yourself quickly:\n\n- **Close all other tabs at once:** Right-click the tab you want to keep → choose **\"Close other tabs\"**.\n- **Keyboard shortcut:** If you're on the tab to keep, in Chrome you can use `Ctrl+Shift+T` is for reopening — but for closing others, the right-click menu is the reliable way.\n- **Close tabs to the right:** Right-click a tab → **\"Close tabs to the right\"** (useful if the ones you want gone are all on one side).\n\nIs there something else on this page you'd like me to help with instead?",
+  "usage": {
+    "prompt_tokens": 6700,
+    "completion_tokens": 177,
+    "total_tokens": 6877
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

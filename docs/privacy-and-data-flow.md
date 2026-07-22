@@ -33,16 +33,71 @@ and success state. It does not include page/tool results, raw trace events,
 screenshots, or attachment bodies. If the provider cost allowance is exhausted,
 the extractor is skipped silently.
 
-**No other data is sent to the provider.** The extension does not inject tracking, telemetry, or analytics.
+**No separate analytics payload is added to provider requests.** The request data above is sent only as needed to run the selected provider and agent features.
 
 ### Which provider receives the data?
 
 The user chooses their provider in Settings. Options include:
 
-- **Cloud providers**: OpenAI, Anthropic, Google Gemini, Mistral, DeepSeek, xAI, Groq, OpenRouter, etc. — data leaves the user's machine for these
+- **WebBrain Cloud**: requests go through `api.webbrain.one`; selected interactions may be retained and used for evaluation, improvement, fine-tuning, and training while Help Improve WebBrain is enabled
+- **Bring-your-own cloud providers**: OpenAI, Anthropic, Google Gemini, Mistral, DeepSeek, xAI, Groq, OpenRouter, etc. — requests go directly to the provider using the user's credentials and are never collected by WebBrain
 - **Local providers**: llama.cpp, Ollama, LM Studio, Jan, vLLM, SGLang — data stays on the user's machine
 
-The extension itself never receives or stores user data on any remote server.
+Local-model and bring-your-own API requests are never collected by WebBrain. WebBrain Cloud requests are processed and may be retained as described below.
+
+### WebBrain Cloud improvement data
+
+Help Improve WebBrain is available under Settings -> General and is
+on by default. When it is on, WebBrain may retain eligible Cloud prompts, model
+responses, relevant page text, tool calls, browser-agent actions, feedback, and
+task outcome information for evaluation, development, improvement, fine-tuning,
+training, safety, and browser-automation research. Screenshots and uploaded
+images may be processed to answer the request, but image bytes, base64 media,
+and image URLs are excluded from WebBrain's improvement database. The extension
+sends the current preference, stable conversation id, and an allowlisted
+generation label with every WebBrain Cloud model request. It never attaches
+those collection fields to local or bring-your-own providers.
+
+Current clients explicitly send `X-WebBrain-Help-Improve: 1` or `0`. Older
+WebBrain Cloud clients that send neither the preference header nor a session id
+are treated as using the default-on setting. The Cloud service derives a
+best-effort opaque legacy session from the device and the first user message;
+the raw device and prompt-derived fingerprint are not stored or sent upstream.
+Repeated identical opening messages can be grouped together, and compaction can
+split a legacy conversation, so current clients' explicit conversation ids are
+authoritative. Users of older clients must install the latest client to disable
+future collection under Settings -> General.
+
+An explicit `0` is always opted out. Once any explicit opt-out reaches a
+derived or client-provided session, the Cloud service permanently marks that
+opaque session ineligible. Turning the setting back on applies to the next new
+conversation; it cannot make the current conversation eligible again.
+
+Help Improve-off content is not retained in the improvement database and is
+routed through an OpenRouter workspace where content logging is disabled. This
+does not prevent the minimal metadata-only operational logging required to
+provide the service, enforce quotas, prevent abuse, maintain security, or debug
+failures. Requests sent to local models or directly to providers using the
+user's own credentials never pass through WebBrain Cloud and are never eligible
+for WebBrain training.
+
+For eligible completed generations, MySQL is WebBrain's canonical store. The
+service strips media, compresses the request/response payload, encrypts it with
+AES-256-GCM, and stores it with an opaque HMAC session id. Interrupted streams
+and failed generations are not stored as improvement content. Eligible requests
+also use an isolated OpenRouter workspace with private Input & Output Logging
+enabled as a redundant review copy. OpenRouter documents a minimum retention of
+three months and says data may be retained longer unless deletion is requested.
+Its separate **Use Inputs/Outputs** training/discount option remains disabled.
+OpenRouter logging is not treated as permanent storage or an image backup. See
+[OpenRouter Input & Output Logging](https://openrouter.ai/docs/guides/features/input-output-logging).
+
+Before retained Cloud interactions are used for model development, WebBrain
+applies technical measures designed to remove or mask direct identifiers,
+credentials, secrets, and other sensitive information. Raw Cloud interactions
+selected for improvement are retained for no longer than 12 months before
+deletion or de-identification. De-identified datasets may be retained for up to
+5 years for model development, evaluation, security, and reproducibility.
 
 ---
 
@@ -50,7 +105,7 @@ The extension itself never receives or stores user data on any remote server.
 
 ### Conversation History
 
-Stored in `chrome.storage.session` (Chrome) or in-memory (Firefox). Used to restore conversation across service-worker restarts. Never transmitted.
+Stored in `chrome.storage.session` (Chrome) or in-memory (Firefox). Used to restore conversation across service-worker restarts. Relevant conversation content is sent to the configured provider as request context; the stored copy is not separately synced to WebBrain.
 
 ### Trace Recorder
 
@@ -62,9 +117,44 @@ When enabled (Settings → Display → "Record traces"), every agent run is writ
 
 The Traces page (`ui/traces.html`) reads from local IndexedDB only. Export produces a JSON blob saved to the user's Downloads folder. **No trace data ever leaves the browser.**
 
+### Saved Workflows
+
+`/workflow --save <name>` locally compiles the latest successful trace into a
+separate `webbrain-workflow/1` record in browser local storage
+(`wb_saved_workflows_v1`). The saved record contains action names, sanitized
+arguments, semantic target descriptors, URL origin/path families,
+postconditions, and parameter descriptors. It does not contain typed field
+values, raw historical `ref_id` values, action CSS selectors, coordinates, URL query strings, or URL
+fragments.
+
+`/workflow --run <id>` collects declared values in a temporary side-panel form
+and sends them directly to the background replay executor. The values are not
+written to the workflow, chat text, retry payload, user memory, replay trace,
+or Agent fallback prompt. They necessarily reach the active page when the
+requested field action runs. A source trace is a separate opt-in record and may
+still contain the original raw tool arguments; saving a workflow does not
+delete or redact that source trace.
+
+Replay traces contain workflow/step IDs, semantic match status and score,
+postcondition status, fallback status, and estimated model calls saved. They do
+not contain runtime parameter values or freshly resolved element references.
+If deterministic replay cannot safely continue, a fallback Agent receives only
+saved metadata and must ask the user again for any still-needed value.
+
 ### Settings
 
 Provider configs (API keys, base URLs, model selections) are stored in `chrome.storage.local`. API keys are in plaintext — this is a personal-computer tool and the storage is sandboxed by the browser. The extension has no mechanism to exfiltrate these keys.
+
+When the default-disabled Chrome Web Store release skill is enabled, its
+user-owned Google OAuth client credentials, OAuth access/refresh tokens,
+publisher/item IDs, and selected release ZIP are also stored in extension-local
+storage. ZIP bytes are sent only to the official
+`chromewebstore.googleapis.com` upload endpoint after the upload permission is
+approved. Tokens and ZIP bytes are never placed in model prompts, tool
+arguments, traces, configuration exports, or tool results. The model receives
+only bounded package metadata and Chrome Web Store API responses; API responses
+are treated as untrusted content. Disconnecting removes OAuth tokens, while the
+separate Clear selected ZIP control removes the locally staged package.
 
 ### User Profile
 
@@ -82,9 +172,23 @@ sensitive secrets as memory.
 When user memory is enabled, active records are appended to the agent system
 prompt as a bounded block. Settings -> Profile controls whether memory is
 enabled, whether optional auto-learning runs after completed turns, and the
-maximum prompt characters injected. `/remember <text>` writes an explicit memory
+maximum prompt characters injected. `/memory --add <text>` writes an explicit memory
 immediately without an extractor call. Export/import JSON is local-only and is
 the v1 bridge for moving memory between browser profiles.
+
+### Configuration Snapshot Transfer
+
+`/export --config` creates a local plaintext `webbrain-config/1` JSON file, and
+`/import <json>` or `/import --file` reads that snapshot locally before writing
+the validated Settings values to extension storage. The snapshot intentionally
+includes provider, vision, transcription, and CapSolver API keys as well as
+profile text, user memory, custom skills, and saved permission choices. Users
+should treat the file like a credential backup and store it securely.
+
+The snapshot does not include device-bound Cloud Sync authentication/session
+state, the WebBrain Cloud device ID, conversations, traces, scheduled jobs,
+usage counters, or accumulated spend. Import does not upload the JSON to
+WebBrain Cloud or to the configured LLM provider.
 
 ### Optional Encrypted Cloud Sync
 
@@ -112,20 +216,41 @@ bodies and response bodies are not captured. The buffer is deleted when the tab
 closes, and no observer data leaves the browser unless a loop warning surfaces
 the URL + method to the active LLM conversation.
 
+### Experimental WebMCP
+
+WebMCP is off by default. A user must enable **Experimental WebMCP** under
+Settings → General → Advanced before WebBrain sends its tool schemas or prompt
+guidance to the configured LLM. On supporting Chrome pages, WebBrain can then
+enable the experimental CDP `WebMCP` domain. Chrome reports the structured tools registered by the current page,
+including their page-supplied name, description, input schema, annotations, and
+registration frame. WebBrain keeps a bounded in-memory per-tab catalog, assigns
+opaque `wmcp_*` IDs, and removes it when the conversation/tab CDP session is
+cleaned up. The catalog is not uploaded separately, but catalog fields and tool
+results enter the ordinary conversation context when the model calls
+`list_webmcp_tools` or `execute_webmcp_tool`, so they are sent to the configured
+LLM provider like other page content. They are always wrapped as untrusted page
+data. Turning the setting off closes active WebMCP sessions. Firefox does not
+support this path.
+
 ---
 
 ## Telemetry / Analytics
 
-**None.** The extension does not include any analytics SDK, telemetry, crash reporting, or usage tracking. There is no "phone home" endpoint.
+The extension does not include an analytics SDK, crash-reporting SDK, or a
+separate product-telemetry endpoint. When WebBrain Cloud is selected, the model
+request itself goes to `api.webbrain.one` and is subject to the Cloud data-use
+terms above. Operational request metadata is retained separately for quota,
+security, abuse prevention, and debugging.
 
 The only outbound HTTP requests are:
-1. **LLM provider API calls** (to URLs the user configured)
-2. **CapSolver API calls** (if the user enables CAPTCHA solving)
-3. **Content fetches** via `fetch_url` / `research_url` tools (to URLs the agent is asked to fetch)
-4. **Skill tool calls** (to the HTTPS endpoint(s) declared by enabled skills — see "Bundled Skills" below for the one enabled by default)
-5. **User memory extraction calls** (only if auto-learn is enabled; sent to the configured LLM provider after a completed turn)
-6. **Encrypted Cloud Sync calls** to `https://api.webbrain.one/v1/sync` (only after a subscriber explicitly enables sync; vault content is encrypted before upload)
-7. **Slash-driven tab/screen recording** creates no outbound traffic (the .webm is saved to the Downloads folder via `chrome.downloads.download`)
+1. **WebBrain Cloud model calls** to `https://api.webbrain.one/v1` (when WebBrain Cloud is selected; the Help Improve WebBrain preference is sent with each request)
+2. **Other LLM provider API calls** (directly to URLs the user configured)
+3. **CapSolver API calls** (if the user enables CAPTCHA solving)
+4. **Content fetches** via `fetch_url` / `research_url` tools (to URLs the agent is asked to fetch)
+5. **Skill tool calls** (to the HTTPS endpoint(s) declared by network-capable enabled skills — see "Bundled Skills" below; the default email verification-code helper declares no endpoint)
+6. **User memory extraction calls** (only if auto-learn is enabled; sent to the configured LLM provider after a completed turn)
+7. **Encrypted Cloud Sync calls** to `https://api.webbrain.one/v1/sync` (only after a subscriber explicitly enables sync; vault content is encrypted before upload)
+8. **Slash-driven tab/screen recording** creates no outbound traffic (the .webm is saved to the Downloads folder via `chrome.downloads.download`)
 
 The opt-in `webRequest` API shortcut observer is off by default and does not
 create outbound requests; when enabled, it observes replay metadata for requests
@@ -133,17 +258,45 @@ the page already made so repeated UI mutations can be diagnosed.
 
 ### Bundled Skills
 
-A built-in "FreeSkillz.xyz" skill (`skills/freeskillz-xyz.md`) is seeded into
-Settings → Skills on first run, enabled by default, and can be removed there.
-It declares `read_youtube_transcript`, `resolve_public_media`, and
+Two built-in skills are enabled by default and can be removed independently in
+Settings → Skills. A removed default is remembered and is not silently restored.
+Enabled means available on demand, not injected into every request. Mid/Full
+runs send the configured LLM provider a small mode-eligible catalog containing
+skill IDs, names, summaries, and optional canonical semantic intents (each
+summary is capped at 200 characters; intents are capped at six 40-character
+identifiers). The Act/Dev planner receives the same routing-only catalog so it
+can select relevant skills before execution. Intents are semantic hints, not a
+literal keyword matcher.
+Full skill instructions and compatible tool schemas are sent only after
+`load_skill` activates a relevant skill for the current run; active skills reset
+before the next user turn. Compact sends no skill catalog, prose, or tools. Ask
+catalogs only explicitly Ask-compatible skills and still filters out mutating
+or download tools. Trusted recommended actions may preactivate their owning
+skill, such as FreeSkillz for `download_public_media`. NYTimes/The Athletic
+tabs also preactivate the enabled FreeSkillz skill for the current run so a
+structured blocking `pageGate` can expose its site-scoped read-only fallback
+without a second `load_skill` turn.
+
+Trace records store the WebBrain version that created each run. Conversation
+Markdown records the exporting version; trace Markdown records both the
+exporting version and each turn's recording version, while trace JSON includes
+`exportedByWebBrainVersion` plus the run's `webbrainVersion` when available.
+Legacy runs without recording metadata are labeled as version unavailable.
+
+The "FreeSkillz.xyz" skill (`skills/freeskillz-xyz.md`) is explicitly Ask/Act
+compatible and declares
+`read_youtube_transcript`, `fetch_nytimes_article`, `resolve_public_media`, and
 `download_public_media` tools. When the model calls one of those tools,
 WebBrain sends only the current or model-provided URL, plus declared options
 such as transcript language, media kind, maximum height, or filename hint, to
 the declared `https://freeskillz.xyz` endpoint over HTTPS — a first-party
 service operated by the extension's developer, separate from the user's
-configured LLM provider. The transcript tool is limited to YouTube/youtu.be
-URLs, while the media tools are limited to public media hosts declared in the
-skill manifest. The read-only transcript and resolver tools do not require
+configured LLM provider. The article fallback is limited to allowlisted
+`nytimes.com` URLs (including The Athletic paths) and sends only that URL
+without browser credentials or cookies. The transcript tool is limited to
+YouTube/youtu.be URLs, while the media tools are limited to public media hosts
+declared in the skill manifest. The read-only article, transcript, and resolver
+tools do not require
 `/allow-api`; `download_public_media` is available only in action modes and
 requires download permission because it creates a short-lived provider job,
 saves the completed file through the browser Downloads API, and then asks the
@@ -151,6 +304,25 @@ provider to delete the job. These calls do not send page content, chat history,
 or browsing history beyond the URL and declared tool arguments. Users can
 remove this skill, or any user-imported skill tool, from Settings → Skills to
 stop this data flow entirely.
+
+The "OTP / verification-code helper (email)" skill
+(`skills/otp-verification-code-helper.md`) is explicitly Ask/Act compatible,
+is prompt-only, and declares no external tool or endpoint. It guides WebBrain's
+existing page-reading tools to
+prefer selected text or a bounded, message-scoped accessibility-tree subtree on
+the active run tab when finding a recent, service-matching code. It cannot list
+or switch to background tabs, read SMS, phone notifications, native apps, or
+another device, and it forbids private mailbox APIs or sign-in bypasses. The
+skill itself creates no additional network request. When the user asks WebBrain
+to read a code, however, the scoped page content and extracted code are included
+in the normal request to the user's configured LLM provider as part of the
+current conversation. When Record traces is enabled, the raw page-reading tool
+result and model response are also retained locally in the `webbrain_traces`
+IndexedDB database until the user deletes those traces; the skill cannot erase
+conversation or trace history after use. Its instructions disclose that
+retention before reading, treat message content as untrusted, honor Strict
+secret handling, reject ambiguous numeric strings and recovery tokens, and
+prohibit intentionally copying the code into scratchpad or user memory.
 
 ---
 
@@ -237,7 +409,7 @@ CDP capture → JPEG/PNG data URL
 | Tracing toggle | Prevents any trace data from being stored |
 | Screenshot fallback | Controls whether page images are sent to the LLM |
 | Auto-screenshot mode | Controls how frequently viewport captures are sent |
-| Strict secret handling | Prevents credentials from appearing in summaries |
+| Strict secret handling | Prevents credentials discovered in chat or page reads from appearing in assistant text or completion summaries |
 | Profile auto-fill | Controls whether user profile text is sent to the LLM |
 | User memory | Controls whether saved memory records are sent to the LLM |
 | User memory auto-learn | Controls whether post-turn extractor calls run |

@@ -1,0 +1,27 @@
+{
+  "id": "030",
+  "user": "list all the visible links here",
+  "mode": "act",
+  "tab": {
+    "url": "https://news.ycombinator.com/",
+    "title": "Hacker News"
+  },
+  "latencyMs": 151636,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll read the visible links on the Hacker News front page.",
+  "usage": {
+    "prompt_tokens": 12935,
+    "completion_tokens": 26,
+    "total_tokens": 12961
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

@@ -9,8 +9,24 @@
   window.__webbrain_injected = true;
 
   const RECORDING_DOUBLE_ESCAPE_MS = 1400;
+  const SET_CHECKED_MARKER_ATTRIBUTE = 'data-webbrain-set-checked-target';
+  const SET_CHECKED_MARKER_TTL_MS = 15000;
   let recordingEscapeAt = 0;
   let recordingActive = false;
+
+  function setCheckedMarkerSelector(marker) {
+    const escapedMarker = String(marker || '').replace(/["\\]/g, '\\$&');
+    return `[${SET_CHECKED_MARKER_ATTRIBUTE}="${escapedMarker}"]`;
+  }
+
+  function removeSetCheckedMarkers(marker) {
+    if (!marker) return [];
+    const matches = Array.from(document.querySelectorAll(setCheckedMarkerSelector(marker)));
+    for (const marked of matches) {
+      marked.removeAttribute?.(SET_CHECKED_MARKER_ATTRIBUTE);
+    }
+    return matches;
+  }
 
   function setRecordingActive(active) {
     recordingActive = !!active;
@@ -135,6 +151,27 @@
    * Get page metadata.
    */
   function getPageInfo() {
+    const gate = detectPageGate();
+    if (gate) {
+      const pageGate = pageGatePublic(gate);
+      const articleRoot = gate.surface === 'inline'
+        ? gate.element.closest('article, [role="article"], main, [role="main"]')
+        : null;
+      return {
+        url: window.location.href,
+        title: document.title,
+        description: document.querySelector('meta[name="description"]')?.content || '',
+        pageGate,
+        text: gate.surface === 'dialog'
+          ? gate.label
+          : (renderedArticleTextBeforeGate(articleRoot, gate.element) || gate.label),
+        textSource: gate.surface === 'dialog' ? 'page-gate' : 'article (pre-gate)',
+        media: { videoCount: 0, imageCount: 0, videos: [], images: [] },
+        activeElement: null,
+        links: [],
+        forms: [],
+      };
+    }
     return {
       url: window.location.href,
       title: document.title,
@@ -164,12 +201,16 @@
   // Interactive-element discovery.
   //
   // IMPORTANT: this is the single source of truth for what counts as an
-  // "interactive element" on a page. `getInteractiveElements`,
-  // `clickElement({index})` and `typeText({index})` MUST all go through
-  // `queryInteractive()` so that index N means the same element in all
-  // three code paths. Historically they used three different selector
-  // lists, which caused the "missing inputs" / "clicked the wrong thing"
-  // bug on complex pages (shadow DOM, overlays, rich editors).
+  // "interactive element" on a page. The agent-facing enumeration
+  // (`get_interactive_elements` → `getInteractiveElementsFull`) and every
+  // index-based follow-up action (`clickElement({index})`,
+  // `typeText({index})`) MUST all go through `queryInteractiveFull()` so
+  // that index N means the same element in all code paths. Historically
+  // they used different selector lists / orderings, which caused the
+  // "missing inputs" / "clicked the wrong thing" bug on complex pages
+  // (shadow DOM, overlays, rich editors). The legacy `queryInteractive()`
+  // order is still used by the plain content handler
+  // (`getInteractiveElements`), but it is not the list the agent sees.
   // ---------------------------------------------------------------------
   const INTERACTIVE_SELECTORS = [
     'a[href]',
@@ -193,11 +234,69 @@
     'label',
   ];
 
+  function _siteInteractiveSelectors() {
+    try {
+      return window.__wbSiteInteractions?.selectors?.() || [];
+    } catch {
+      return [];
+    }
+  }
+
+  function _siteInteractionText(el) {
+    try {
+      const descriptor = window.__wbSiteInteractions?.describe?.(el);
+      if (descriptor?.name) return descriptor.name;
+    } catch {}
+    return (el?.innerText || el?.value || el?.placeholder || el?.title || el?.ariaLabel || '').trim();
+  }
+
+  function _isSiteInteractive(el) {
+    try {
+      return !!window.__wbSiteInteractions?.isInteractive?.(el);
+    } catch {
+      return false;
+    }
+  }
+
+  function _composedParent(node) {
+    if (!node) return null;
+    const parent = node.parentNode;
+    if (parent) {
+      return (typeof ShadowRoot !== 'undefined' && parent instanceof ShadowRoot)
+        ? parent.host
+        : parent;
+    }
+    const root = node.getRootNode?.();
+    return (typeof ShadowRoot !== 'undefined' && root instanceof ShadowRoot)
+      ? root.host
+      : null;
+  }
+
+  function _isComposedAncestor(ancestor, node) {
+    let cur = node;
+    while (cur) {
+      if (cur === ancestor) return true;
+      cur = _composedParent(cur);
+    }
+    return false;
+  }
+
+  function _hasComposedClosest(el, selector) {
+    let cur = el;
+    while (cur) {
+      try {
+        if (cur.nodeType === Node.ELEMENT_NODE && cur.matches(selector)) return true;
+      } catch {}
+      cur = _composedParent(cur);
+    }
+    return false;
+  }
+
   function isVisiblyInteractive(el) {
     if (!el || el.tagName === 'BODY' || el.tagName === 'HTML') return false;
     // aria-hidden / inert subtrees are non-interactive for assistive tech
     // and should be for us too.
-    if (el.closest('[aria-hidden="true"], [inert]')) return false;
+    if (_hasComposedClosest(el, '[aria-hidden="true"], [inert]')) return false;
 
     const style = el.ownerDocument.defaultView.getComputedStyle(el);
     if (style.display === 'none' || style.visibility === 'hidden') return false;
@@ -267,6 +366,55 @@
     }
   }
 
+  function _isNativeBlockingDialog(dialog) {
+    if (!dialog) return false;
+    try {
+      if (dialog.matches(':modal')) return true;
+    } catch {}
+    return dialog.getAttribute('aria-modal') === 'true';
+  }
+
+  function _hasVisibleBox(el, minWidth = 1, minHeight = 1) {
+    if (!el || typeof el.getBoundingClientRect !== 'function') return false;
+    try {
+      const r = el.getBoundingClientRect();
+      if (r.width < minWidth || r.height < minHeight) return false;
+      const s = getComputedStyle(el);
+      if (s.visibility === 'hidden' || s.display === 'none' || parseFloat(s.opacity) === 0) return false;
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function _findDialogContentForOverlay(overlay) {
+    const selector = '[role="dialog"],[role="alertdialog"],[aria-modal="true"],dialog[open],[data-state="open"][role="dialog"],[class*="DialogContent"],[class*="ModalContent"],.modal.show';
+    const pick = (node) => {
+      if (!node || node === overlay) return null;
+      try {
+        if (node.matches?.(selector) && _hasVisibleBox(node, 20, 20)) return node;
+        const match = node.querySelector?.(selector);
+        if (match && _hasVisibleBox(match, 20, 20)) return match;
+      } catch {}
+      return null;
+    };
+
+    const siblings = overlay?.parentElement ? Array.from(overlay.parentElement.children) : [];
+    const idx = siblings.indexOf(overlay);
+    if (idx >= 0) {
+      for (let i = idx + 1; i < siblings.length; i++) {
+        const found = pick(siblings[i]);
+        if (found) return found;
+      }
+      for (let i = idx - 1; i >= 0; i--) {
+        const found = pick(siblings[i]);
+        if (found) return found;
+      }
+    }
+
+    return pick(overlay);
+  }
+
   /**
    * Detect the topmost modal/overlay/dialog on the page. If one is found,
    * only elements inside it (and the backdrop) are "reachable" — everything
@@ -281,12 +429,14 @@
    *   4. Common overlay class/attribute patterns (Stripe, Material, Radix,
    *      Chakra, etc.): data-overlay, data-state="open", .modal.show, etc.
    */
-  function _findTopmostModal() {
+  function _findTopmostModal(opts = {}) {
+    const includeNonModalDialogs = opts.includeNonModalDialogs !== false;
     // 1. Native <dialog open>
     const dialogs = document.querySelectorAll('dialog[open]');
-    if (dialogs.length > 0) return dialogs[dialogs.length - 1]; // last = topmost
+    for (let i = dialogs.length - 1; i >= 0; i--) {
+      if (includeNonModalDialogs || _isNativeBlockingDialog(dialogs[i])) return dialogs[i];
+    }
 
-    // 2. ARIA modal
     const ariaModals = document.querySelectorAll('[role="dialog"][aria-modal="true"]');
     for (let i = ariaModals.length - 1; i >= 0; i--) {
       const r = ariaModals[i].getBoundingClientRect();
@@ -294,32 +444,41 @@
     }
 
     // 3. Visible role="dialog"
-    const roleDialogs = document.querySelectorAll('[role="dialog"]');
-    for (let i = roleDialogs.length - 1; i >= 0; i--) {
-      const r = roleDialogs[i].getBoundingClientRect();
-      if (r.width > 0 && r.height > 0) return roleDialogs[i];
+    if (includeNonModalDialogs) {
+      const roleDialogs = document.querySelectorAll('[role="dialog"]');
+      for (let i = roleDialogs.length - 1; i >= 0; i--) {
+        const r = roleDialogs[i].getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) return roleDialogs[i];
+      }
     }
 
-    // 4. Common overlay patterns — look for large, high-z-index containers
-    // that cover most of the viewport. These often contain forms/modals on
-    // sites like Stripe, GitHub, AWS, etc.
     const candidates = document.querySelectorAll(
-      '[data-overlay], [data-state="open"][role="dialog"], ' +
+      '[data-overlay], ' +
+      (includeNonModalDialogs ? '[data-state="open"][role="dialog"], ' : '') +
       '.modal.show, .modal-overlay, .overlay, [class*="modal"][class*="open"], ' +
       '[class*="overlay"][class*="active"], [class*="DialogOverlay"], ' +
       '[class*="ModalOverlay"]'
     );
     for (let i = candidates.length - 1; i >= 0; i--) {
       const r = candidates[i].getBoundingClientRect();
-      if (r.width > 100 && r.height > 100) return candidates[i];
+      if (r.width > 100 && r.height > 100) {
+        const dialogContent = _findDialogContentForOverlay(candidates[i]);
+        if (dialogContent) return dialogContent;
+        const interactive = candidates[i].querySelector?.(INTERACTIVE_SELECTORS.join(', '));
+        if (interactive) return candidates[i];
+      }
     }
 
     return null;
   }
 
+  function _findTopmostBlockingModal() {
+    return _findTopmostModal({ includeNonModalDialogs: false });
+  }
+
   function queryInteractive() {
-    const all = document.querySelectorAll(INTERACTIVE_SELECTORS.join(', '));
-    const modal = _findTopmostModal();
+    const all = document.querySelectorAll([...INTERACTIVE_SELECTORS, ..._siteInteractiveSelectors()].join(', '));
+    const modal = _findTopmostBlockingModal();
     const out = [];
     for (const el of all) {
       if (!isVisiblyInteractive(el)) continue;
@@ -327,7 +486,7 @@
       // This prevents the agent from seeing (and accidentally clicking)
       // elements behind the overlay — the #1 cause of "clicked Export
       // instead of filling the form" on sites like Stripe.
-      if (modal && !modal.contains(el)) continue;
+      if (modal && !_isComposedAncestor(modal, el)) continue;
       out.push(el);
     }
     return out;
@@ -337,7 +496,7 @@
     if (params?.index == null) return null;
     const index = Number(params.index);
     if (!Number.isInteger(index) || index < 0) return null;
-    return queryInteractive()[index] || null;
+    return queryInteractiveForToolIndex()[index] || null;
   };
 
   /**
@@ -412,7 +571,7 @@
         tag: el.tagName.toLowerCase(),
         type: el.type || '',
         role: el.getAttribute('role') || '',
-        text: (el.innerText || el.value || el.placeholder || el.title || el.ariaLabel || '').trim().slice(0, 100),
+        text: _siteInteractionText(el).slice(0, 100),
         id: el.id || '',
         name: el.name || '',
         href: el.href || '',
@@ -447,7 +606,7 @@
     // Compact snapshot — first ~40 elements, just the fields a model
     // needs to pick the right one: index, tag, role, text.
     const available = interactive.slice(0, 40).map((el, i) => {
-      const text = (el.innerText || el.value || el.placeholder || el.title || el.ariaLabel || '').trim().slice(0, 80);
+      const text = _siteInteractionText(el).slice(0, 80);
       return {
         index: i,
         tag: el.tagName.toLowerCase(),
@@ -472,6 +631,7 @@
 
   function _isInteractive(node) {
     if (_INTERACTIVE_TAGS.has(node.tagName)) return true;
+    if (_isSiteInteractive(node)) return true;
     const role = (node.getAttribute && node.getAttribute('role')) || '';
     if (_INTERACTIVE_ROLES.has(role)) return true;
     if (node.hasAttribute && (node.hasAttribute('onclick') || node.hasAttribute('data-action'))) return true;
@@ -486,6 +646,337 @@
     if (tag === 'INPUT') return type === 'submit' || type === 'image';
     if (tag === 'BUTTON') return type === 'submit' || (!type && !!(control.form || control.closest?.('form')));
     return false;
+  }
+
+  function _axCanonicalName(el) {
+    try {
+      if (typeof window.__wb_ax_name === 'function') {
+        const name = window.__wb_ax_name(el);
+        if (name) return String(name).trim().slice(0, 160);
+      }
+    } catch {}
+    try {
+      const labelledBy = String(el?.getAttribute?.('aria-labelledby') || '').trim();
+      const labelledText = labelledBy
+        .split(/\s+/)
+        .filter(Boolean)
+        .map(id => document.getElementById(id)?.innerText || document.getElementById(id)?.textContent || '')
+        .join(' ')
+        .trim();
+      return String(
+        el?.getAttribute?.('aria-label')
+        || labelledText
+        || el?.getAttribute?.('title')
+        || ''
+      ).trim().slice(0, 160);
+    } catch {
+      return '';
+    }
+  }
+
+  function _axAccessibleName(el) {
+    return _axCanonicalName(el)
+      || String(el?.innerText || '').trim().slice(0, 160);
+  }
+
+  function _axCheckboxIdentity(el, refId = '') {
+    try {
+      const id = String(el?.id || '').trim();
+      if (id) return `id:${id}`;
+      const name = String(el?.getAttribute?.('name') || '').trim();
+      const value = String(el?.getAttribute?.('value') || '').trim();
+      if (name) return `name:${name}|value:${value}`;
+    } catch {}
+    return `ref:${String(refId || '')}`;
+  }
+
+  function _axStableControlSelector(el) {
+    try {
+      const id = String(el?.id || '').trim();
+      if (id) {
+        const escaped = globalThis.CSS?.escape
+          ? CSS.escape(id)
+          : id.replace(/["\\]/g, '\\$&');
+        return `#${escaped}`;
+      }
+    } catch {}
+    return '';
+  }
+
+  function _axDocumentToken() {
+    if (!window.__wbAxDocumentToken) {
+      window.__wbAxDocumentToken = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+    }
+    return window.__wbAxDocumentToken;
+  }
+
+  function _axFallbackState(el) {
+    const empty = { full: '', strong: '', weak: '' };
+    if (!el) return empty;
+    try {
+      const serializeAttrs = names => names.map(name => (
+        el.hasAttribute?.(name)
+          ? `${name}=${el.getAttribute?.(name) || ''}`
+          : `${name}=<absent>`
+      )).join('|');
+      const strong = JSON.stringify({
+        connected: !!el.isConnected,
+        nativeChecked: (
+          el.tagName?.toLowerCase() === 'input'
+          && ['checkbox', 'radio'].includes(String(el.type || '').toLowerCase())
+        ) ? !!el.checked : null,
+        attrs: serializeAttrs([
+          'aria-expanded', 'aria-selected', 'aria-checked', 'aria-pressed',
+          'aria-current', 'data-state', 'hidden',
+        ]),
+      });
+      const weak = JSON.stringify({
+        role: (el.getAttribute?.('role') || '').trim().toLowerCase(),
+        name: _axAccessibleName(el),
+        className: String(el.getAttribute?.('class') || '').slice(0, 240),
+        style: String(el.getAttribute?.('style') || '').slice(0, 240),
+        attrs: serializeAttrs([
+          'aria-busy', 'data-status',
+        ]),
+        childCount: Number(el.childElementCount || 0),
+      });
+      return {
+        strong,
+        weak,
+        // The full fingerprint is compared only across the synchronous
+        // el.click() call stack, where unrelated page tasks cannot interleave.
+        // Delayed observations compare strong/weak independently.
+        full: JSON.stringify({ strong, weak }),
+      };
+    } catch {
+      return empty;
+    }
+  }
+
+  function _normalizeActionText(value) {
+    return String(value || '')
+      .normalize('NFKC')
+      // Safety terms must compare identically in every browser locale.
+      // Turkish casing would otherwise turn leading English "I" into dotless
+      // "ı" while already-lowercase blocklist terms retain plain "i".
+      .toLowerCase()
+      .normalize('NFKD')
+      .replace(/\p{M}/gu, '');
+  }
+
+  // Keyword blocklist is a last-line gate, not complete safety. Prefer
+  // structural gates (native/form/stateful/interactive descendant) first.
+  // Expanded commercial / social verbs reduce silent double-click on slow
+  // handlers; non-covered languages still rely on structural exclusions.
+  const _MUTATING_ACTION_TERMS_RAW = [
+    // English
+    'delete', 'remove', 'purchase', 'checkout', 'publish', 'follow',
+    'unfollow', 'submit', 'confirm', 'approve',
+    'reject', 'archive', 'order', 'book', 'accept', 'invite', 'sign',
+    'tweet', 'subscribe', 'unsubscribe', 'transfer', 'donate', 'tip',
+    'register', 'install', 'unlock', 'ban', 'block', 'report', 'like',
+    'unlike', 'share', 'retweet', 'purchase now', 'buy now', 'place order',
+    // Turkish
+    'gönder', 'sil', 'kaldır', 'öde', 'satın al', 'yayınla', 'paylaş',
+    'takip et', 'takibi bırak', 'onayla', 'reddet', 'arşivle', 'sipariş',
+    'kabul et', 'davet', 'kaydol', 'abone',
+    // French, Spanish, German, Italian, Portuguese, Dutch
+    'envoyer', 'supprimer', 'retirer', 'payer', 'acheter', 'publier',
+    'suivre', 'se désabonner', 'confirmer', 'approuver', 'rejeter', 'archiver',
+    'commander', 'réserver', 'accepter', 's\'inscrire',
+    'enviar', 'eliminar', 'quitar', 'pagar', 'comprar', 'publicar', 'seguir',
+    'dejar de seguir', 'confirmar', 'aprobar', 'rechazar', 'archivar',
+    'pedir', 'reservar', 'aceptar', 'registrarse',
+    'senden', 'löschen', 'entfernen', 'bezahlen', 'kaufen', 'veröffentlichen',
+    'folgen', 'entfolgen', 'bestätigen', 'genehmigen', 'ablehnen', 'archivieren',
+    'bestellen', 'buchen', 'akzeptieren', 'anmelden',
+    'invia', 'eliminare', 'rimuovere', 'pagare', 'acquistare', 'pubblicare',
+    'seguire', 'smettere di seguire', 'confermare', 'approvare', 'rifiutare',
+    'archiviare', 'ordinare', 'prenotare', 'accettare',
+    'excluir', 'remover', 'deixar de seguir', 'aprovar',
+    'rejeitar', 'arquivar', 'pedir', 'reservar', 'aceitar',
+    'verzenden', 'verwijderen', 'betalen', 'kopen',
+    'publiceren', 'volgen', 'ontvolgen', 'bevestigen', 'goedkeuren',
+    'afwijzen', 'archiveren', 'bestellen', 'boeken', 'accepteren',
+    // Polish, Russian, Arabic, Hindi, Indonesian, Vietnamese
+    'wyślij', 'usuń', 'zapłać', 'kup', 'opublikuj', 'obserwuj',
+    'przestań obserwować', 'potwierdź', 'zatwierdź', 'odrzuć', 'archiwizuj',
+    'zamów', 'zarezerwuj', 'zaakceptuj',
+    'отправить', 'удалить', 'оплатить', 'купить', 'опубликовать',
+    'подписаться', 'отписаться', 'подтвердить', 'одобрить', 'отклонить',
+    'архивировать', 'заказать', 'принять', 'зарегистрироваться',
+    'إرسال', 'حذف', 'إزالة', 'دفع', 'شراء', 'نشر', 'متابعة',
+    'إلغاء المتابعة', 'تأكيد', 'موافقة', 'رفض', 'أرشفة', 'طلب', 'قبول',
+    'भेजें', 'हटाएं',
+    'भुगतान', 'खरीदें', 'प्रकाशित करें', 'फ़ॉलो', 'अनफ़ॉलो', 'पुष्टि',
+    'स्वीकृत', 'अस्वीकार', 'संग्रह', 'ऑर्डर', 'स्वीकार',
+    'kirim', 'hapus', 'bayar', 'beli',
+    'terbitkan', 'ikuti', 'berhenti mengikuti', 'konfirmasi', 'setujui',
+    'tolak', 'arsipkan', 'pesan', 'terima', 'daftar',
+    'gửi', 'xóa', 'thanh toán', 'mua', 'đăng',
+    'theo dõi', 'bỏ theo dõi', 'xác nhận', 'phê duyệt', 'từ chối', 'lưu trữ',
+    'đặt hàng', 'chấp nhận',
+    // Chinese, Japanese, Korean (substring matching is intentional).
+    '发送', '删除', '移除', '支付', '购买', '发布', '关注', '取消关注', '确认',
+    '批准', '拒绝', '归档', '下单', '接受', '订阅', '登録',
+    '送信', '削除', '支払', '購入', '公開', 'フォロー',
+    'フォロー解除', '確認', '承認', '拒否', 'アーカイブ', '注文', '予約', '承諾',
+    '보내기', '삭제',
+    '제거', '결제', '구매', '게시', '팔로우', '언팔로우', '확인', '승인',
+    '거부', '보관', '주문', '수락', '구독',
+  ];
+
+  const _DOWNLOAD_ACTION_TERMS_RAW = [
+    'download', 'save as', 'export', 'indir', 'farklı kaydet', 'dışa aktar',
+    'télécharger', 'enregistrer sous', 'exporter', 'descargar', 'guardar como',
+    'exportar', 'herunterladen', 'speichern unter', 'exportieren', 'scarica',
+    'salva come', 'esporta', 'baixar', 'salvar como', 'exportar',
+    '下载', '导出', 'ダウンロード', '書き出す', '다운로드', '내보내기',
+    'скачать', 'экспорт', 'تنزيل', 'تصدير', 'डाउनलोड', 'निर्यात',
+  ];
+
+  const _AMBIGUOUS_ENGLISH_MUTATING_ACTION_PATTERNS = [
+    /^send(?:$|\s+(?:a\s+)?(?:message|email|file|photo|video|reply|invite|request|code|link|now)\b)/u,
+    /^post(?:$|\s+(?:a\s+)?(?:message|update|comment|reply|story|photo|video|status|listing|job|now)\b)/u,
+    /^pay(?:$|\s+(?:bill|invoice|balance|amount|with|via|now)\b)/u,
+    /^buy(?:$|\s+(?:item|product|plan|subscription|ticket|tickets|now)\b)/u,
+    /^order(?:$|\s+(?:now|lunch|food|items?|online)\b)/u,
+    /^book(?:$|\s+(?:now|a\s+)?(?:table|room|flight|ticket|tickets|appointment)?\b)/u,
+    /^accept(?:$|\s+(?:invite|invitation|request|offer|terms)\b)/u,
+    /^sign(?:$|\s+(?:up|in|out|the\b|here)\b)/u,
+    /^tweet(?:$|\s)/u,
+    /^share(?:$|\s+(?:now|post|link|with)\b)/u,
+  ];
+
+  // Pre-normalize term lists once — click_ax / ax_resolve_rect hit this path
+  // multiple times per click and re-normalizing ~200 terms is pure waste.
+  const _MUTATING_ACTION_TERMS = _MUTATING_ACTION_TERMS_RAW.map(term => ({
+    term: _normalizeActionText(term),
+    noWordBoundary: /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/u.test(term),
+  })).filter(entry => entry.term);
+  const _DOWNLOAD_ACTION_TERMS = _DOWNLOAD_ACTION_TERMS_RAW.map(term => ({
+    term: _normalizeActionText(term),
+    noWordBoundary: /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/u.test(term),
+  })).filter(entry => entry.term);
+
+  function _hasActionTerm(value, preparedTerms) {
+    const text = _normalizeActionText(value);
+    if (!text) return false;
+    const isWordChar = char => !!char && /[\p{L}\p{N}]/u.test(char);
+    for (const entry of preparedTerms) {
+      const term = entry.term;
+      let index = text.indexOf(term);
+      while (index >= 0) {
+        const before = index > 0 ? text[index - 1] : '';
+        const afterIndex = index + term.length;
+        const after = afterIndex < text.length ? text[afterIndex] : '';
+        if (entry.noWordBoundary || (!isWordChar(before) && !isWordChar(after))) return true;
+        index = text.indexOf(term, index + term.length);
+      }
+    }
+    return false;
+  }
+
+  function _hasMutatingActionName(value) {
+    if (_hasActionTerm(value, _MUTATING_ACTION_TERMS)) return true;
+    const text = _normalizeActionText(value).trim();
+    return _AMBIGUOUS_ENGLISH_MUTATING_ACTION_PATTERNS.some(pattern => pattern.test(text));
+  }
+
+  function _hasDownloadActionName(value) {
+    return _hasActionTerm(value, _DOWNLOAD_ACTION_TERMS);
+  }
+
+  function _axFallbackVisibility(el) {
+    if (!el?.isConnected) return { visible: false, reason: 'target is no longer connected to the document' };
+    try {
+      for (let node = el; node && node.nodeType === Node.ELEMENT_NODE; node = node.parentElement) {
+        const style = getComputedStyle(node);
+        if (style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse') {
+          return { visible: false, reason: 'target or an ancestor is CSS-hidden' };
+        }
+        if (Number.parseFloat(style.opacity || '1') <= 0) {
+          return { visible: false, reason: 'target or an ancestor is fully transparent' };
+        }
+        if (style.pointerEvents === 'none') {
+          return { visible: false, reason: 'target or an ancestor does not receive pointer events' };
+        }
+      }
+    } catch {
+      return { visible: false, reason: 'target visibility could not be verified' };
+    }
+    return { visible: true, reason: '' };
+  }
+
+  function _axFallbackStaticAssessment(el) {
+    const tag = el?.tagName ? el.tagName.toLowerCase() : '';
+    const role = (el?.getAttribute?.('role') || '').trim().toLowerCase();
+    const name = _axAccessibleName(el);
+    const isEditable = !!el?.isContentEditable || tag === 'input' || tag === 'textarea';
+    const isNativeControl = [
+      'button', 'a', 'input', 'select', 'textarea', 'label', 'option',
+      // Native disclosure activation toggles <details open>. Retrying its
+      // <summary> with trusted input can immediately undo a working
+      // synthetic click, so both disclosure elements stay synthetic-only.
+      'summary', 'details',
+    ].includes(tag);
+    const isButtonLike = role === 'button' || !!el?.closest?.('[role="button"]');
+    const isSubmitControl = _isSubmitControl(el);
+    const isDownloadControl = !!el?.closest?.('a[download],[download],[data-download]')
+      || _hasDownloadActionName(name);
+    const isDestructiveLike = _hasMutatingActionName(name);
+    const hasStatefulSemantics = ['treeitem', 'option'].includes(role)
+      || ['aria-expanded', 'aria-selected', 'aria-checked', 'aria-pressed', 'aria-haspopup', 'data-state']
+        .some(attr => el?.hasAttribute?.(attr));
+    // Explicit handlers on the generic row itself are precisely where an
+    // isTrusted-only application may need the fallback. Only interactive
+    // ancestors remain a static veto; center-hit descendants are checked
+    // separately against the actual pointer destination.
+    const unsafeAncestor = el?.parentElement?.closest?.(
+      'button,a,input,select,textarea,label,form,[role="button"],[role="link"],[onclick],[data-action]'
+    );
+    const safeRole = !role || ['generic', 'listitem', 'row'].includes(role);
+    let blockedReason = '';
+    if (isEditable) blockedReason = 'editable targets must not be auto-clicked twice';
+    else if (tag === 'select') blockedReason = 'native select controls must use keyboard selection';
+    else if (isNativeControl || isButtonLike) blockedReason = 'native/button-like controls keep the existing synthetic path';
+    else if (isSubmitControl || !!el?.closest?.('form')) blockedReason = 'form controls must not be auto-retried';
+    else if (isDownloadControl) blockedReason = 'download controls must not be auto-retried';
+    else if (isDestructiveLike) blockedReason = 'potentially mutating controls must not be auto-retried';
+    else if (hasStatefulSemantics) blockedReason = 'toggle/selection controls must not be auto-clicked twice';
+    else if (unsafeAncestor) blockedReason = 'targets inside explicit interactive handlers must not be auto-retried';
+    else if (!safeRole) blockedReason = `role "${role}" is not eligible for automatic trusted fallback`;
+    return {
+      tag,
+      role,
+      name,
+      isEditable,
+      isNativeControl,
+      isButtonLike,
+      isSubmitControl,
+      isDownloadControl,
+      isDestructiveLike,
+      hasStatefulSemantics,
+      blockedReason,
+    };
+  }
+
+  function _axInteractiveHitDescendant(el, topmost) {
+    if (!el || !topmost || topmost === el || !el.contains?.(topmost)) return null;
+    for (let node = topmost; node && node !== el; node = node.parentElement) {
+      const tag = (node.tagName || '').toUpperCase();
+      const role = (node.getAttribute?.('role') || '').trim().toLowerCase();
+      if (
+        _isInteractive(node)
+        || ['LABEL', 'OPTION', 'SUMMARY'].includes(tag)
+        || ['checkbox', 'radio', 'switch', 'combobox', 'textbox', 'searchbox'].includes(role)
+        || !!node.isContentEditable
+        || node.hasAttribute?.('download')
+      ) {
+        return node;
+      }
+    }
+    return null;
   }
 
   /** Walk up from a passive child to find its interactive ancestor (up to 5 levels). */
@@ -525,6 +1016,186 @@
     return null;
   }
 
+  /**
+   * Run one synthetic agent click while suppressing any immediate or deferred
+   * <input type=file>.click() it triggers. Uploads should go through
+   * upload_file, which attaches the bytes directly; allowing the page click
+   * first opens an OS picker that remains orphaned after the direct upload.
+   */
+  function uniqueFileInputSelector(input) {
+    const allPiercedMatches = (selector) => {
+      const matches = [];
+      const visit = (root) => {
+        try { matches.push(...root.querySelectorAll(selector)); } catch { return; }
+        let elements = [];
+        try { elements = root.querySelectorAll('*'); } catch {}
+        for (const element of elements) {
+          if (element.shadowRoot) visit(element.shadowRoot);
+        }
+      };
+      visit(document);
+      return matches;
+    };
+    const unique = (selector) => {
+      if (!selector) return null;
+      const matches = allPiercedMatches(selector);
+      return matches.length === 1 && matches[0] === input ? selector : null;
+    };
+    try {
+      if (input.id && window.CSS?.escape) {
+        const byId = unique('#' + CSS.escape(input.id));
+        if (byId) return byId;
+      }
+      if (input.name && window.CSS?.escape) {
+        const byName = unique('input[type="file"][name=' + CSS.escape(String(input.name)) + ']');
+        if (byName) return byName;
+      }
+      const parts = [];
+      let node = input;
+      while (node?.nodeType === Node.ELEMENT_NODE) {
+        let part = node.tagName.toLowerCase();
+        const parent = node.parentElement;
+        if (parent) {
+          const siblings = Array.from(parent.children).filter(child => child.tagName === node.tagName);
+          if (siblings.length > 1) part += ':nth-of-type(' + (siblings.indexOf(node) + 1) + ')';
+        }
+        parts.unshift(part);
+        const byPath = unique(parts.join(' > '));
+        if (byPath) return byPath;
+        node = parent;
+      }
+    } catch {}
+    return null;
+  }
+
+  const FILE_PICKER_GUARD_SETTLE_MS = 500;
+  const FILE_PICKER_GUARD_RETENTION_MS = 5000;
+  const _filePickerGuardStates = new Map();
+  let _filePickerGuardSequence = 0;
+
+  function clickWithoutNativeFilePicker(runClick, settleMs = FILE_PICKER_GUARD_SETTLE_MS) {
+    const guardId = `fpg_${Date.now().toString(36)}_${++_filePickerGuardSequence}`;
+    const state = {
+      blocked: null,
+      settled: false,
+      guard: null,
+      cleanupPageShowPickerGuard: null,
+      settleTimer: null,
+      cleanupTimer: null,
+    };
+    const isFileInput = (input) =>
+      input?.tagName === 'INPUT'
+      && String(input.getAttribute?.('type') || input.type || '').toLowerCase() === 'file';
+    const blockFileInput = (input) => {
+      state.blocked = { selector: uniqueFileInputSelector(input) };
+    };
+    const guard = (event) => {
+      const path = typeof event.composedPath === 'function'
+        ? event.composedPath()
+        : [event.target];
+      const input = path.find(isFileInput);
+      if (!input) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      blockFileInput(input);
+    };
+    const installPageShowPickerGuard = () => {
+      const root = document.documentElement;
+      if (!root) return () => {};
+      const guardAttr = 'data-webbrain-file-picker-guard';
+      const blockedAttr = 'data-webbrain-file-picker-blocked';
+      const blockedEvent = 'webbrain:file-picker-guard-blocked';
+      const armPageGuard = () => {
+        root.setAttribute(guardAttr, guardId);
+        document.dispatchEvent(new Event('webbrain:file-picker-guard-arm'));
+      };
+      const onBlocked = () => {
+        try {
+          const payload = JSON.parse(root.getAttribute(blockedAttr) || 'null');
+          if (payload?.guardId !== guardId) return;
+          state.blocked = {
+            selector: typeof payload.selector === 'string' && payload.selector
+              ? payload.selector
+              : null,
+          };
+        } catch {}
+      };
+      document.addEventListener(blockedEvent, onBlocked, true);
+      armPageGuard();
+      return (disarmPageGuard = true) => {
+        if (disarmPageGuard) {
+          document.dispatchEvent(new Event('webbrain:file-picker-guard-disarm'));
+        }
+        if (root.getAttribute(guardAttr) === guardId) root.removeAttribute(guardAttr);
+        document.removeEventListener(blockedEvent, onBlocked, true);
+      };
+    };
+    const cleanupGuard = () => {
+      document.removeEventListener('click', guard, true);
+      state.cleanupPageShowPickerGuard?.();
+    };
+    state.guard = guard;
+    _filePickerGuardStates.set(guardId, state);
+    document.addEventListener('click', guard, true);
+    state.cleanupPageShowPickerGuard = installPageShowPickerGuard();
+    try {
+      runClick();
+    } catch (error) {
+      cleanupGuard();
+      _filePickerGuardStates.delete(guardId);
+      throw error;
+    }
+    if (state.blocked) {
+      cleanupGuard();
+      _filePickerGuardStates.delete(guardId);
+      return { blocked: state.blocked, guardId: null };
+    }
+    state.settleTimer = setTimeout(() => {
+      state.settled = true;
+      state.cleanupTimer = setTimeout(() => {
+        if (_filePickerGuardStates.get(guardId) === state) {
+          cleanupGuard();
+          _filePickerGuardStates.delete(guardId);
+        }
+      }, FILE_PICKER_GUARD_RETENTION_MS);
+    }, Math.max(0, Number(settleMs) || 0));
+    return { blocked: null, guardId };
+  }
+
+  function consumeFilePickerGuard(guardId) {
+    const state = typeof guardId === 'string' ? _filePickerGuardStates.get(guardId) : null;
+    if (!state) return { success: true, settled: true, filePickerBlocked: false };
+    if (!state.settled) return { success: true, settled: false, filePickerBlocked: false };
+    if (state.cleanupTimer) clearTimeout(state.cleanupTimer);
+    document.removeEventListener('click', state.guard, true);
+    // If nothing was observed, stop content-side observation but leave the
+    // page-world programmatic click/showPicker guard active until its own
+    // short TTL. This suppresses longer debounces without blocking the tool
+    // response or intercepting a user's direct native input click.
+    state.cleanupPageShowPickerGuard?.(!!state.blocked);
+    _filePickerGuardStates.delete(guardId);
+    if (state.blocked) {
+      return { ...filePickerBlockedResponse(state.blocked), settled: true };
+    }
+    return { success: true, settled: true, filePickerBlocked: false };
+  }
+
+  function filePickerBlockedResponse(blocked, label = '') {
+    const selector = typeof blocked?.selector === 'string' && blocked.selector
+      ? blocked.selector
+      : null;
+    const guidance = selector
+      ? `Call upload_file with selector ${JSON.stringify(selector)} and the existing downloadId or absolute filePath; it attaches the file without opening an OS dialog.`
+      : 'Re-inspect the page to find an exact, unique <input type=file> selector, then call upload_file directly. Do not use a generic input[type="file"] selector when the page has multiple file inputs.';
+    return {
+      success: false,
+      dispatched: true,
+      filePickerBlocked: true,
+      ...(selector ? { selector } : {}),
+      error: `Blocked a native file chooser${label ? ` opened by "${label}"` : ''}. ${guidance}`,
+    };
+  }
+
   let _lastClickIdent = null;
 
   /**
@@ -532,9 +1203,15 @@
    */
   function clickElement(params) {
     let el;
+    // Tracks whether text matching below resolved el via an EXACT-tier
+    // match. The auto-select rescue yields only to exact clickables — a
+    // contains-tier match (e.g. "Contact us" for needle "US") must not
+    // suppress selecting an exactly-matching <select> option.
+    let textResolvedExact = false;
     if (params.selector && /:contains\(|:has-text\(/.test(params.selector)) {
       return {
         success: false,
+        dispatched: false,
         error: 'Invalid selector: ":contains()" and ":has-text()" are jQuery/Playwright extensions, not valid CSS. Use click({text: "..."}) instead.',
       };
     }
@@ -542,7 +1219,12 @@
       const needle = params.text.toLowerCase();
       const explicit = params.textMatch || '';
       // Include inputs/select/textarea so we can match by placeholder, value, or aria-label
-      const sels = 'a, button, [role="button"], [role="link"], [role="tab"], [role="menuitem"], input:not([type="hidden"]), textarea, select, input[type="button"], input[type="submit"], summary, label, [onclick], [data-action]';
+      const sels = [
+        'a', 'button', '[role="button"]', '[role="link"]', '[role="tab"]', '[role="menuitem"]',
+        'input:not([type="hidden"])', 'textarea', 'select', 'input[type="button"]',
+        'input[type="submit"]', 'summary', 'label', '[onclick]', '[data-action]',
+        ..._siteInteractiveSelectors(),
+      ].join(', ');
       // Modal scoping: if a topmost modal/dialog is open, restrict the search
       // to elements inside it. Without this, click({text: "Create"}) can land
       // on a background button (GitHub's "Create new tag" dialog over the
@@ -553,7 +1235,7 @@
       const all = Array.from(_scope.querySelectorAll(sels));
       const normalized = all.map(e => ({
         e,
-        txt: (e.innerText || e.value || e.placeholder || e.ariaLabel || '').trim().toLowerCase(),
+        txt: _siteInteractionText(e).toLowerCase(),
       })).filter(x => !!x.txt);
 
       // Build label→input map so we can match label text and resolve to associated input
@@ -576,7 +1258,7 @@
 
       const modes = explicit ? [explicit] : ['exact', 'prefix', 'contains'];
       if (explicit && !['exact', 'prefix', 'contains'].includes(explicit)) {
-        return { success: false, error: `Invalid textMatch "${explicit}". Use exact, prefix, or contains.` };
+        return { success: false, dispatched: false, error: `Invalid textMatch "${explicit}". Use exact, prefix, or contains.` };
       }
 
       let matches = [];
@@ -596,6 +1278,7 @@
             inp.scrollIntoView({ block: 'center', inline: 'center' });
             inp.focus();
             el = inp;
+            textResolvedExact = (needle === ltxt);
             break;
           }
         }
@@ -610,7 +1293,7 @@
           const allRetry = Array.from(_retryScope.querySelectorAll(sels));
           const normRetry = allRetry.map(e => ({
             e,
-            txt: (e.innerText || e.value || e.placeholder || e.ariaLabel || '').trim().toLowerCase(),
+            txt: _siteInteractionText(e).toLowerCase(),
           })).filter(x => !!x.txt);
           for (const m of modes) {
             if (m === 'exact') matches = normRetry.filter(x => x.txt === needle);
@@ -636,6 +1319,7 @@
                 inp.scrollIntoView({ block: 'center', inline: 'center' });
                 inp.focus();
                 el = inp;
+                textResolvedExact = (needle === ltxt);
                 break;
               }
             }
@@ -644,7 +1328,7 @@
         }
         if (!el && matches.length === 0) {
           const _noteModal = _modalRoot ? ' (search was scoped to the open modal/dialog; if the target is outside it, dismiss or complete the dialog first)' : '';
-          return { success: false, error: `No clickable element found for text "${params.text}" (also tried scrolling down)${_noteModal}` };
+          return { success: false, dispatched: false, error: `No clickable element found for text "${params.text}" (also tried scrolling down)${_noteModal}` };
         }
       }
       if (!el && matches.length > 1) {
@@ -698,6 +1382,7 @@
           const _scopeNote = _modalRoot ? ' (search was scoped to the open modal/dialog)' : '';
           return {
             success: false,
+            dispatched: false,
             error: `Ambiguous text match for "${params.text}" (mode=${usedMode}, matches=${matches.length})${_scopeNote}. ${candidates.length} candidates returned with cx/cy (precomputed click center, in CSS pixels) and ancestor context. Pick one and call click({x: candidate.cx, y: candidate.cy}) — no arithmetic needed. Use the ancestor field to disambiguate (e.g. an alertdialog's Cancel vs a form's Cancel sit in different containers). Do NOT retry click({text: "${params.text}"}) — it will fail the same way.`,
             candidates,
           };
@@ -705,6 +1390,7 @@
       }
       if (!el) {
         let resolved = matches[0].e;
+        textResolvedExact = (usedMode === 'exact');
         // LABEL → associated input resolution
         if (resolved.tagName === 'LABEL') {
           let target = null;
@@ -722,40 +1408,65 @@
     } else if (params.selector) {
       el = safeQuerySelector(params.selector);
     } else if (params.index != null) {
-      // Must use the SAME traversal as getInteractiveElements so the
+      // Must use the SAME traversal as get_interactive_elements so the
       // index the agent saw is the index we resolve.
-      const interactive = queryInteractive();
+      const interactive = queryInteractiveForToolIndex();
       el = interactive[params.index];
-      if (!el) return _staleIndexError(params.index, interactive);
+      if (!el) return { ..._staleIndexError(params.index, interactive), dispatched: false };
     } else if (params.x != null && params.y != null) {
       el = document.elementFromPoint(params.x, params.y);
     }
 
-    if (!el) return { success: false, error: 'Element not found' };
-    const targetIsSubmitControl = _isSubmitControl(el);
-
     // ── Auto-select: if click text matches a <select> option, select it ──
-    if (params.text) {
+    // Runs when text matching resolved NO element, resolved the <select>
+    // itself (a select's innerText contains its options, so the contains
+    // level routinely lands here for option clicks — skipping the rescue
+    // then would wrongly fall through to the CANNOT-CLICK intercept), or
+    // resolved a clickable only via a NON-exact tier (option text matches
+    // exactly, so it beats a "Contact us"-style contains hit for "US").
+    // It must NOT run when a genuine button/link labeled X matched
+    // exactly — that element is what the model meant.
+    if (params.text && (!el || el instanceof HTMLSelectElement || !textResolvedExact)) {
       const needle = params.text.trim();
       const lc = needle.toLowerCase();
-      const allSels = document.querySelectorAll('select');
+      const selectScope = _findTopmostModal() || document;
+      const allSels = el instanceof HTMLSelectElement
+        ? [el]
+        : selectScope.querySelectorAll('select');
+      const matchingSelects = [];
       for (const sel of allSels) {
         const opts = Array.from(sel.options);
         const match = opts.find(o => o.text.trim() === needle)
           || opts.find(o => o.text.trim().toLowerCase() === lc)
           || opts.find(o => o.value === needle)
           || opts.find(o => o.value.toLowerCase() === lc);
-        if (match && sel.selectedIndex !== match.index) {
-          sel.focus();
-          const nativeSetter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set;
-          if (nativeSetter) nativeSetter.call(sel, match.value);
-          else sel.value = match.value;
-          sel.dispatchEvent(new Event('input', { bubbles: true }));
-          sel.dispatchEvent(new Event('change', { bubbles: true }));
-          return { success: true, method: 'auto-select', selectedText: match.text.trim(), selectedValue: match.value };
+        if (match) matchingSelects.push({ sel, match });
+      }
+      if (matchingSelects.length > 1) {
+        return {
+          success: false,
+          dispatched: false,
+          failureScope: `ambiguous-select-option:${lc}`,
+          error: `Ambiguous select option match for "${needle}" (${matchingSelects.length} dropdowns). Identify the intended field and use type_text on that select instead.`,
+        };
+      }
+      if (matchingSelects.length === 1) {
+        const { sel, match } = matchingSelects[0];
+        if (sel.selectedIndex === match.index) {
+          return { success: true, method: 'select-already-set', selectedText: match.text.trim(), selectedValue: match.value };
         }
+        sel.focus();
+        const nativeSetter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set;
+        if (nativeSetter) nativeSetter.call(sel, match.value);
+        else sel.value = match.value;
+        sel.dispatchEvent(new Event('input', { bubbles: true }));
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+        return { success: true, method: 'auto-select', selectedText: match.text.trim(), selectedValue: match.value };
       }
     }
+
+    if (!el) return { success: false, dispatched: false, error: 'Element not found' };
+    const targetIsSubmitControl = _isSubmitControl(el);
 
     // <select> intercept: clicking opens a native OS dropdown that cannot be
     // controlled programmatically. Return error so the model uses type_text.
@@ -765,6 +1476,7 @@
       const options = Array.from(el.options).map(o => o.text.trim());
       return {
         success: false,
+        dispatched: false,
         tag: 'SELECT',
         text: el.options[el.selectedIndex]?.text?.trim() || '',
         error: `CANNOT CLICK a <select> dropdown — clicking opens a native OS popup that cannot be controlled. The dropdown is now focused (current: "${el.options[el.selectedIndex]?.text?.trim() || ''}"). Use type_text({text: "option name"}) to change the value. Available options: ${options.join(', ')}`,
@@ -785,6 +1497,7 @@
         const options = Array.from(nearbySel.options).map(o => o.text.trim());
         return {
           success: false,
+          dispatched: false,
           tag: 'SELECT',
           text: nearbySel.options[nearbySel.selectedIndex]?.text?.trim() || '',
           error: `CANNOT CLICK — a <select> dropdown is near this element (current: "${nearbySel.options[nearbySel.selectedIndex]?.text?.trim() || ''}"). The dropdown is now focused. Use type_text({text: "option name"}) to change the value. Available options: ${options.join(', ')}`,
@@ -832,6 +1545,7 @@
             } catch {}
             return {
               success: false,
+              dispatched: false,
               error: `Click blocked: an overlay is covering the target. Topmost element at (${cx}, ${cy}) is <${blockerInfo}>${blockerContainer}, not your target <${el.tagName.toLowerCase()}>. Dismiss the overlay (press Escape, click its close button, or complete the modal flow) before retrying. If you're sure you want to force the click, use click({x: ${cx}, y: ${cy}}) — that will hit whatever's on top.`,
               occluded: true,
               occludedBy: { tag: topmost.tagName.toLowerCase(), text: txt, cx, cy },
@@ -842,7 +1556,16 @@
     }
 
     const clickedRect = rememberInteractionPoint(el, 'click');
-    el.click();
+    const filePickerGuard = clickWithoutNativeFilePicker(() => el.click());
+    if (filePickerGuard.blocked) {
+      return {
+        ...filePickerBlockedResponse(filePickerGuard.blocked, params.text || el.innerText?.trim() || ''),
+        ...(clickedRect ? { rect: clickedRect } : {}),
+      };
+    }
+    const filePickerGuardMeta = filePickerGuard.guardId
+      ? { _filePickerGuardId: filePickerGuard.guardId }
+      : {};
 
     // Post-click SELECT detection: the click may have activated a <select>
     // via a label, wrapper, or overlapping element. Return error, not success.
@@ -853,9 +1576,11 @@
       const postOpts = Array.from(postActive.options).map(o => o.text.trim());
       return {
         success: false,
+        dispatched: true,
         tag: 'SELECT',
         text: postActive.options[postActive.selectedIndex]?.text?.trim() || '',
         error: `CANNOT CLICK — a <select> dropdown was activated by this click (current: "${postActive.options[postActive.selectedIndex]?.text?.trim() || ''}"). The dropdown is now focused. Use type_text({text: "option name"}) to change the value. Available options: ${postOpts.join(', ')}`,
+        ...filePickerGuardMeta,
       };
     }
 
@@ -863,7 +1588,10 @@
     // Skip for editable targets — re-clicking a text field / contenteditable
     // is legitimate (positions cursor / re-focuses) and "no page change" is
     // the expected outcome there, not a failure signal.
-    const isEditableTarget = el.isContentEditable || el.tagName === 'INPUT' || el.tagName === 'TEXTAREA';
+    const inputType = String(el.getAttribute?.('type') || 'text').toLowerCase();
+    const isEditableTarget = el.isContentEditable
+      || el.tagName === 'TEXTAREA'
+      || (el.tagName === 'INPUT' && !['button', 'checkbox', 'color', 'file', 'hidden', 'image', 'radio', 'range', 'reset', 'submit'].includes(inputType));
     const ident = `${el.tagName}|${(el.innerText || '').slice(0, 50)}|${location.href}`;
     let warning;
     if (_lastClickIdent === ident && !isEditableTarget) {
@@ -873,9 +1601,12 @@
     return {
       success: true,
       tag: el.tagName,
+      type: String(el.getAttribute?.('type') || '').toLowerCase(),
+      isSubmitControl: targetIsSubmitControl,
       text: el.innerText?.slice(0, 50),
       ...(clickedRect ? { rect: clickedRect } : {}),
       ...(warning ? { warning } : {}),
+      ...filePickerGuardMeta,
     };
   }
 
@@ -978,39 +1709,51 @@
       return _loadDeasciifier().then(() => {
         params.text = _applyLangTransform(params.text, params.lang);
         return _typeTextInner(params);
-      }).catch(e => ({ success: false, error: e.message }));
+      }).catch(e => ({
+        success: false,
+        dispatched: false,
+        noDispatch: true,
+        error: e.message,
+      }));
     }
     return _typeTextInner(params);
   }
 
   function _typeTextInner(params) {
+    const noDispatchFailure = (error, extra = {}) => ({
+      success: false,
+      error,
+      ...extra,
+      dispatched: false,
+      noDispatch: true,
+    });
     let el;
     if (params.selector) {
       el = safeQuerySelector(params.selector);
     } else if (params.index != null) {
-      // Same index space as getInteractiveElements / clickElement.
-      const interactive = queryInteractive();
+      // Same index space as get_interactive_elements / clickElement.
+      const interactive = queryInteractiveForToolIndex();
       el = interactive[params.index];
-      if (!el) return _staleIndexError(params.index, interactive);
+      if (!el) {
+        const stale = _staleIndexError(params.index, interactive);
+        return noDispatchFailure(stale.error, stale);
+      }
     } else {
       // Fallback path: type into the currently focused element. Used when
       // CDP isn't available or as the secondary path. Usually unreached on
       // chrome because agent.js routes type_text → cdpClient first.
       el = document.activeElement;
       if (!el || el === document.body || el === document.documentElement) {
-        return { success: false, error: 'No editable element is currently focused. Click the target input/textarea first, then call type_text again with no selector.' };
+        return noDispatchFailure('No editable element is currently focused. Click the target input/textarea first, then call type_text again with no selector.');
       }
       // Verify it's actually editable
       const editable = el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName);
       if (!editable) {
-        return {
-          success: false,
-          error: `Focused element <${el.tagName.toLowerCase()}> is not an editable field. Click the target input/textarea first, then call type_text again.`,
-        };
+        return noDispatchFailure(`Focused element <${el.tagName.toLowerCase()}> is not an editable field. Click the target input/textarea first, then call type_text again.`);
       }
     }
 
-    if (!el) return { success: false, error: 'Element not found' };
+    if (!el) return noDispatchFailure('Element not found');
 
     // Guard: only INPUT, TEXTAREA, SELECT, and contenteditable are typeable.
     // Calling HTMLInputElement's native value setter on anything else throws
@@ -1021,10 +1764,7 @@
       || el instanceof HTMLSelectElement;
     if (!isTypeable) {
       const tag = (el.tagName || '').toLowerCase();
-      return {
-        success: false,
-        error: `Cannot type into <${tag}> — it is not an editable field. If you wanted to activate it, use click instead. If the real target is a nearby input, click the input first, then call type_text({text: "..."}) with no selector.`,
-      };
+      return noDispatchFailure(`Cannot type into <${tag}> — it is not an editable field. If you wanted to activate it, use click instead. If the real target is a nearby input, click the input first, then call type_text({text: "..."}) with no selector.`);
     }
 
     el.focus();
@@ -1050,7 +1790,7 @@
         || Array.from(el.options).find(o => o.text.trim().toLowerCase().includes(needle.toLowerCase()));
       const match = byValue || byText;
       if (!match) {
-        return { success: false, error: `No <option> matching "${params.text}" in select.` };
+        return noDispatchFailure(`No <option> matching "${params.text}" in select.`);
       }
       const nativeSetter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set;
       if (nativeSetter) nativeSetter.call(el, match.value);
@@ -1090,6 +1830,68 @@
   }
 
   /**
+   * Locate and select literal page text without relying on browser chrome or
+   * unsupported Ctrl/Cmd keyboard shortcuts.
+   */
+  function findText(params) {
+    const text = String(params?.text || '').trim();
+    if (!text) {
+      return { success: false, found: false, dispatched: false, noDispatch: true, error: 'find_text: text is required.' };
+    }
+    if (text.length > 500) {
+      return { success: false, found: false, dispatched: false, noDispatch: true, error: 'find_text: text must be 500 characters or fewer.' };
+    }
+    if (typeof window.find !== 'function') {
+      return { success: false, found: false, dispatched: false, noDispatch: true, error: 'find_text is not supported on this page.' };
+    }
+
+    try {
+      const matchCase = params?.matchCase === true;
+      const backwards = params?.backwards === true;
+      const wrap = params?.wrap !== false;
+      // Match browser Find semantics across the whole document, including
+      // embedded frames. Without searchInFrames, find_text falsely reports a
+      // miss for text that Ctrl/Cmd+F would find inside an iframe.
+      const found = window.find(text, matchCase, backwards, wrap, false, true, false);
+      if (!found) {
+        return {
+          success: false,
+          found: false,
+          dispatched: false,
+          noDispatch: true,
+          query: text,
+          error: `find_text: "${text}" was not found on the current page. Re-read the page or try a shorter literal phrase.`,
+        };
+      }
+      const selection = window.getSelection?.();
+      const selectedText = String(selection?.toString?.() || '');
+      let rect;
+      if (selection?.rangeCount) {
+        const bounds = selection.getRangeAt(0).getBoundingClientRect();
+        const scrollX = Number.isFinite(Number(window.scrollX)) ? Number(window.scrollX) : 0;
+        const scrollY = Number.isFinite(Number(window.scrollY)) ? Number(window.scrollY) : 0;
+        rect = {
+          x: bounds.x,
+          y: bounds.y,
+          pageX: bounds.x + scrollX,
+          pageY: bounds.y + scrollY,
+          width: bounds.width,
+          height: bounds.height,
+        };
+      }
+      return {
+        success: true,
+        found: true,
+        query: text,
+        selectedText,
+        ...(rect ? { rect } : {}),
+      };
+    } catch (error) {
+      return { success: false, found: false, dispatched: false, noDispatch: true, error: `find_text failed: ${error.message || error}` };
+    }
+  }
+
+  /**
    * Press supported keyboard keys.
    */
   function pressKeys(params) {
@@ -1098,7 +1900,12 @@
     const repeat = Math.max(1, Math.min(3, Number.isFinite(repeatRaw) ? Math.floor(repeatRaw) : 1));
     const SUPPORTED_KEYS = ['Escape', 'Tab', 'Enter', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
     if (!SUPPORTED_KEYS.includes(key)) {
-      return { success: false, error: `Unsupported key "${key}". Supported keys: ${SUPPORTED_KEYS.join(', ')}.` };
+      return {
+        success: false,
+        dispatched: false,
+        noDispatch: true,
+        error: `Unsupported key "${key}". Supported keys: ${SUPPORTED_KEYS.join(', ')}.`,
+      };
     }
 
     // NOTE: this path dispatches untrusted (isTrusted: false) KeyboardEvents,
@@ -1142,6 +1949,7 @@
         which: keyMeta.keyCode,
         bubbles: true,
         cancelable: true,
+        composed: true,
       });
       const up = new KeyboardEvent('keyup', {
         key,
@@ -1150,15 +1958,18 @@
         which: keyMeta.keyCode,
         bubbles: true,
         cancelable: true,
+        composed: true,
       });
+      // Dispatch once on the target only. The events bubble, so listeners
+      // attached at document/window level already receive them — dispatching
+      // the same event object on document again would fire those listeners
+      // twice per key (double-advancing ARIA listboxes, menus, etc.).
       target.dispatchEvent(down);
-      document.dispatchEvent(down);
       target.dispatchEvent(up);
-      document.dispatchEvent(up);
       if (key === 'Tab') moveTabFocus();
     }
 
-    return { success: true, key, repeat, method: 'keyboardevent', focusedTag: document.activeElement?.tagName || null };
+    return { success: true, dispatched: true, key, repeat, method: 'keyboardevent', focusedTag: document.activeElement?.tagName || null };
   }
 
   /**
@@ -1518,7 +2329,20 @@
   function waitForElement(params) {
     return new Promise((resolve) => {
       const timeout = params.timeout || 5000;
-      const existing = document.querySelector(params.selector);
+      // Validate the selector up front: an invalid selector makes
+      // querySelector throw SyntaxError, which would reject this promise
+      // and leave the caller hanging on a response that never arrives.
+      let existing;
+      try {
+        existing = document.querySelector(params.selector);
+      } catch (e) {
+        resolve({
+          success: false,
+          found: false,
+          error: `Invalid selector "${params.selector}": ${e.message}. Use plain CSS — jQuery/Playwright extensions like :contains() or :has-text() are not supported.`,
+        });
+        return;
+      }
       if (existing) {
         resolve({ success: true, found: true });
         return;
@@ -1538,6 +2362,185 @@
         resolve({ success: true, found: false, timedOut: true });
       }, timeout);
     });
+  }
+
+  const PAGE_GATE_SELECTORS = [
+    '[role="dialog"]', '[role="alertdialog"]', 'dialog[open]', '[aria-modal="true"]',
+    '[class*="paywall" i]', '[id*="paywall" i]',
+    '[class*="gateway" i]', '[id*="gateway" i]',
+    '[class*="regiwall" i]', '[id*="regiwall" i]',
+    '[class*="subscription" i]', '[id*="subscription" i]',
+    '[data-testid*="paywall" i]', '[data-testid*="gateway" i]',
+    '[data-testid*="subscription" i]', '[data-testid*="registration" i]',
+  ];
+
+  function gateElementIsRendered(el) {
+    if (!el || !el.isConnected) return false;
+    let rect;
+    try {
+      rect = el.getBoundingClientRect();
+      for (let node = el; node; node = node.parentElement) {
+        const style = getComputedStyle(node);
+        if (style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse') return false;
+        if (Number.parseFloat(style.opacity || '1') <= 0.01) return false;
+        if (node.getAttribute?.('aria-hidden') === 'true') return false;
+      }
+    } catch {
+      return false;
+    }
+    return rect.width >= 20 && rect.height >= 20;
+  }
+
+  function pageGateType(text) {
+    const value = String(text || '').toLowerCase();
+    if (/\bsubscribe\b|\bsubscription\b|subscriber[- ]only|unlimited access|unlock (?:this|the) article|start (?:your )?(?:free )?trial/.test(value)) {
+      return 'subscription';
+    }
+    if (/create (?:a )?(?:free )?account|register to (?:continue|read)|sign up to (?:continue|read)/.test(value)) {
+      return 'registration';
+    }
+    if (/(?:log|sign) in to (?:continue|read)|already have an account|create (?:a )?(?:free )?account or log in/.test(value)) {
+      return 'login';
+    }
+    return 'unknown';
+  }
+
+  function pageGateHasAccessLanguage(text) {
+    const value = String(text || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    if (!value) return false;
+    return /(?:(?:subscribe|subscription).{0,48}(?:continue|read|access|article|options|required|unlock)|subscriber[- ]only|unlimited access|unlock (?:this|the) article|start (?:your )?(?:free )?trial|create (?:a )?(?:free )?account|register to (?:continue|read)|sign up to (?:continue|read)|(?:log|sign) in to (?:continue|read)|continue reading (?:with|by)|to continue reading|already have an account)/.test(value);
+  }
+
+  function pageGateHasInlineBlockingLanguage(text) {
+    const value = String(text || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    if (!value) return false;
+    return /(?:to continue reading|continue reading (?:with|by)|subscriber[- ]only|(?:subscribe|subscription required|register|sign up|log in|sign in|create (?:a )?(?:free )?account).{0,64}(?:continue reading|read (?:this |the )?(?:full )?(?:article|story)|unlock (?:this|the) (?:article|story)|access (?:this|the) (?:article|story)))/.test(value);
+  }
+
+  function pageHasArticleContext() {
+    try {
+      return !!(
+        document.querySelector('meta[property="og:type"][content="article"]') ||
+        document.querySelector('meta[name="article:published_time"]') ||
+        document.querySelector('[itemtype*="Article" i]') ||
+        document.querySelector('article, [role="article"]')
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  function boundedPageGateLabel(el, rawLabel) {
+    const options = [];
+    let boundaryElement = null;
+    for (const value of [el.getAttribute('aria-label'), el.getAttribute('title')]) {
+      const normalized = String(value || '').replace(/\s+/g, ' ').trim();
+      if (pageGateHasAccessLanguage(normalized)) options.push(normalized);
+    }
+    let descendants = [];
+    try {
+      descendants = el.querySelectorAll('h1, h2, h3, p, button, a, label, [role="heading"]');
+    } catch { /* use the bounded surface text below */ }
+    for (const node of Array.from(descendants).slice(0, 80)) {
+      if (!gateElementIsRendered(node)) continue;
+      const normalized = String(node.innerText || '').replace(/\s+/g, ' ').trim();
+      if (normalized.length <= 600 && pageGateHasAccessLanguage(normalized)) {
+        boundaryElement ||= node;
+        options.push(normalized);
+      }
+    }
+    options.sort((a, b) => a.length - b.length);
+    if (options[0]) return { label: options[0].slice(0, 240), boundaryElement };
+    const accessStart = rawLabel.search(/\b(?:subscribe|subscription|subscriber|unlock|register|sign up|log in|sign in|create an? account|continue reading)\b/i);
+    return {
+      label: rawLabel.slice(Math.max(0, accessStart), Math.max(0, accessStart) + 240),
+      boundaryElement,
+    };
+  }
+
+  function pageGatePublic(gate) {
+    if (!gate) return null;
+    return {
+      type: gate.type,
+      blocking: true,
+      surface: gate.surface,
+      label: gate.label,
+    };
+  }
+
+  function detectPageGate() {
+    const seen = new Set();
+    const candidates = [];
+    const articleContext = pageHasArticleContext();
+    for (const selector of PAGE_GATE_SELECTORS) {
+      let matches = [];
+      try { matches = document.querySelectorAll(selector); } catch { continue; }
+      for (const el of matches) {
+        if (seen.has(el) || !gateElementIsRendered(el)) continue;
+        seen.add(el);
+        const rawLabel = String(el.innerText || '').replace(/\s+/g, ' ').trim();
+
+        const role = String(el.getAttribute('role') || '').toLowerCase();
+        let surface = (
+          role === 'dialog' || role === 'alertdialog' ||
+          el.tagName === 'DIALOG' || el.getAttribute('aria-modal') === 'true'
+        ) ? 'dialog' : 'inline';
+        const inArticle = !!el.closest('article, [role="article"], main, [role="main"]');
+        let coveringOverlay = false;
+        try {
+          const rect = el.getBoundingClientRect();
+          const style = getComputedStyle(el);
+          const viewportArea = Math.max(1, window.innerWidth * window.innerHeight);
+          const visibleWidth = Math.max(0, Math.min(rect.right, window.innerWidth) - Math.max(rect.left, 0));
+          const visibleHeight = Math.max(0, Math.min(rect.bottom, window.innerHeight) - Math.max(rect.top, 0));
+          coveringOverlay = ['fixed', 'sticky', 'absolute'].includes(style.position) &&
+            ((visibleWidth * visibleHeight) / viewportArea) >= 0.2;
+        } catch { /* rendered check already supplied safe defaults */ }
+        if (coveringOverlay) surface = 'dialog';
+        if (surface === 'dialog') {
+          if (!articleContext || !pageGateHasAccessLanguage(rawLabel)) continue;
+        } else {
+          if (!inArticle || !pageGateHasInlineBlockingLanguage(rawLabel)) continue;
+        }
+        const gateText = boundedPageGateLabel(el, rawLabel);
+        const label = gateText.label;
+        const namedGate = /paywall|gateway|regiwall|subscription|registration/i.test([
+          el.id,
+          typeof el.className === 'string' ? el.className : '',
+          el.getAttribute('data-testid') || '',
+        ].join(' '));
+
+        const score = (surface === 'dialog' ? 100 : 0) + (inArticle ? 40 : 0) +
+          (coveringOverlay ? 30 : 0) + (namedGate ? 15 : 0) - Math.min(label.length, 2000) / 2000;
+        candidates.push({
+          element: surface === 'inline' ? (gateText.boundaryElement || el) : el,
+          type: pageGateType(rawLabel),
+          surface,
+          label: label.slice(0, 240),
+          score,
+        });
+      }
+    }
+    candidates.sort((a, b) => b.score - a.score);
+    return candidates[0] || null;
+  }
+
+  function renderedArticleTextBeforeGate(root, gateElement) {
+    if (!root || !gateElement || !root.contains(gateElement)) return '';
+    const blocks = [];
+    const seenText = new Set();
+    let nodes = [];
+    try { nodes = root.querySelectorAll('h1, h2, h3, p, li, blockquote, figcaption'); } catch { return ''; }
+    for (const node of nodes) {
+      if (node === gateElement || gateElement.contains(node) || node.contains(gateElement)) continue;
+      if (!(node.compareDocumentPosition(gateElement) & Node.DOCUMENT_POSITION_FOLLOWING)) continue;
+      if (!gateElementIsRendered(node) || node.closest('nav, header, footer, aside, [aria-hidden="true"]')) continue;
+      const value = String(node.innerText || '').replace(/\s+/g, ' ').trim();
+      if (!value || seenText.has(value)) continue;
+      seenText.add(value);
+      blocks.push(value);
+    }
+    return blocks.join('\n\n').trim();
   }
 
   function getPageInfoFull(params) {
@@ -1621,7 +2624,19 @@
       );
     } catch { /* malformed selector engines — ignore */ }
 
+    const gate = detectPageGate();
+    const pageGate = pageGatePublic(gate);
+
     const getText = () => {
+      if (gate?.surface === 'dialog') {
+        textSource = 'page-gate';
+        return gate.label;
+      }
+      if (gate?.surface === 'inline') {
+        const articleRoot = gate.element.closest('article, [role="article"], main, [role="main"]');
+        textSource = 'article (pre-gate)';
+        return renderedArticleTextBeforeGate(articleRoot, gate.element) || gate.label;
+      }
       for (const sel of ARTICLE_SELECTORS) {
         let el;
         try { el = document.querySelector(sel); } catch { continue; }
@@ -1655,10 +2670,12 @@
     };
 
     const text = getText();
+    const blockedAuxiliaryContent = pageGate?.blocking === true;
     return {
       url: window.location.href,
       title: document.title,
       description: document.querySelector('meta[name="description"]')?.content || '',
+      ...(pageGate ? { pageGate } : {}),
       text,
       // Tells the model where this text came from. When `textSource` is a
       // real article selector and `isArticlePage` is true, the model can
@@ -1669,13 +2686,15 @@
       textSource,
       isArticlePage,
       includeChrome,
-      media: getPageMediaSummary(),
-      activeElement: getActiveEditableSummary(),
-      links: Array.from(document.querySelectorAll('a[href]')).slice(0, 100).map(a => ({
+      media: blockedAuxiliaryContent
+        ? { videoCount: 0, imageCount: 0, videos: [], images: [] }
+        : getPageMediaSummary(),
+      activeElement: blockedAuxiliaryContent ? null : getActiveEditableSummary(),
+      links: blockedAuxiliaryContent ? [] : Array.from(document.querySelectorAll('a[href]')).slice(0, 100).map(a => ({
         text: a.innerText.trim().slice(0, 100),
         href: a.href,
       })),
-      forms: Array.from(document.querySelectorAll('form')).map((form, i) => ({
+      forms: blockedAuxiliaryContent ? [] : Array.from(document.querySelectorAll('form')).map((form, i) => ({
         id: form.id || `form-${i}`,
         action: form.action,
         inputs: Array.from(form.querySelectorAll('input, textarea, select')).map(el => ({
@@ -1686,8 +2705,8 @@
           value: el.value || '',
         })),
       })),
-      shadowDOM: getShadowContent(),
-      iframes: Array.from(document.querySelectorAll('iframe')).map((iframe, i) => ({
+      shadowDOM: blockedAuxiliaryContent ? [] : getShadowContent(),
+      iframes: blockedAuxiliaryContent ? [] : Array.from(document.querySelectorAll('iframe')).map((iframe, i) => ({
         index: i,
         src: iframe.src,
         id: iframe.id || '',
@@ -1697,11 +2716,16 @@
     };
   }
 
-  function getInteractiveElementsFull() {
+  function queryInteractiveFull() {
     const collected = []; // {el, rect, inShadow}
     const seen = new Set(); // dedupe nested wrappers (button > span > svg etc.)
+    const modal = _findTopmostBlockingModal();
 
     const isUsable = (el, rect) => {
+      if (_hasComposedClosest(el, '[aria-hidden="true"], [inert]')) return false;
+      // Keep the agent-facing list and every indexed follow-up action inside
+      // the same topmost modal/dialog boundary as the legacy collector.
+      if (modal && !_isComposedAncestor(modal, el)) return false;
       // Visible and in viewport. Aggressive filtering on purpose: a global
       // header link scrolled offscreen creates noise indices that shift
       // every page and confuse models that trust index across turns.
@@ -1739,7 +2763,7 @@
       const selectors = [
         'a[href]', 'button', 'input:not([type="hidden"])', 'textarea', 'select',
         '[role="button"]', '[role="link"]', '[role="tab"]', '[role="menuitem"]',
-        '[onclick]', '[data-action]', 'summary',
+        '[onclick]', '[data-action]', 'summary', ..._siteInteractiveSelectors(),
       ];
       selectors.forEach(sel => {
         try {
@@ -1780,14 +2804,27 @@
       return a.rect.left - b.rect.left;
     });
 
-    return collected.map((c, i) => {
+    return collected;
+  }
+
+  function queryInteractiveForToolIndex() {
+    // The agent maps get_interactive_elements to the full/CDP collector
+    // above, so index-based follow-up actions (click, type_text) must
+    // resolve against that same ordering. The legacy queryInteractive()
+    // order is still used by the plain content handler but it is not the
+    // list the agent sees.
+    return queryInteractiveFull().map(c => c.el);
+  }
+
+  function getInteractiveElementsFull() {
+    return queryInteractiveFull().map((c, i) => {
       const el = c.el;
       return {
         index: i,
         tag: el.tagName.toLowerCase(),
         type: el.type || '',
         role: el.getAttribute('role') || '',
-        text: (el.innerText || el.value || el.placeholder || el.title || el.ariaLabel || '').trim().slice(0, 100),
+        text: _siteInteractionText(el).slice(0, 100),
         id: el.id || '',
         name: el.name || '',
         href: el.href || '',
@@ -1795,6 +2832,447 @@
         inShadowDOM: c.inShadow,
       };
     });
+  }
+
+  // ── Dev-mode reversible page patches and targeting helpers ────────────
+  // Structured element-patch state lives in the content-script world, not the
+  // MV3 service worker, so a patchId remains undoable if the worker is
+  // suspended and restarted while the page itself stays loaded. Navigation
+  // intentionally clears the registry together with the page and its edits.
+  // CSS patches use chrome.scripting.insertCSS/removeCSS in agent.js so they
+  // also work on pages whose Content Security Policy rejects inline styles.
+  const devPatchRegistry = new Map();
+  const devTargetMarkerRegistry = new Map();
+  const DEV_TARGET_MARKER_ATTR = 'data-webbrain-dev-target';
+  let devPatchSequence = 0;
+  let activeDevHighlightCleanup = null;
+
+  function nextDevPatchId(kind) {
+    devPatchSequence += 1;
+    return `wb_${kind}_${Date.now().toString(36)}_${devPatchSequence.toString(36)}`;
+  }
+
+  function devClassList(el) {
+    try { return Array.from(el.classList || []).slice(0, 30); }
+    catch { return []; }
+  }
+
+  function devCssPath(el) {
+    const parts = [];
+    for (let node = el; node && node.nodeType === 1 && parts.length < 10; node = node.parentElement) {
+      let part = String(node.tagName || '').toLowerCase();
+      if (!part) break;
+      if (node.id) {
+        part += '#' + CSS.escape(node.id);
+        parts.unshift(part);
+        break;
+      }
+      const classes = devClassList(node).slice(0, 3);
+      if (classes.length) part += '.' + classes.map(c => CSS.escape(c)).join('.');
+      const parent = node.parentElement;
+      if (parent) {
+        const same = Array.from(parent.children).filter(c => c.tagName === node.tagName);
+        if (same.length > 1) part += `:nth-of-type(${same.indexOf(node) + 1})`;
+      }
+      parts.unshift(part);
+    }
+    return parts.join(' > ');
+  }
+
+  function devElementSummary(el) {
+    const r = el.getBoundingClientRect();
+    return {
+      tag: String(el.tagName || '').toLowerCase(),
+      id: el.id || '',
+      classes: devClassList(el),
+      path: devCssPath(el),
+      rect: {
+        x: Math.round(r.x), y: Math.round(r.y),
+        width: Math.round(r.width), height: Math.round(r.height),
+        top: Math.round(r.top), right: Math.round(r.right),
+        bottom: Math.round(r.bottom), left: Math.round(r.left),
+      },
+    };
+  }
+
+  function resolveDevTarget(params) {
+    params = params || {};
+    const warnings = [];
+    let target = null;
+    let targetMethod = null;
+    const refId = typeof params.ref_id === 'string' ? params.ref_id.trim() : '';
+    const selector = typeof params.selector === 'string' ? params.selector.trim() : '';
+    const x = Number(params.x);
+    const y = Number(params.y);
+
+    if (refId) {
+      if (typeof window.__wb_ax_lookup === 'function') {
+        const found = window.__wb_ax_lookup(refId);
+        if (found?.nodeType === 1) {
+          target = found;
+          targetMethod = 'ref_id';
+        } else {
+          warnings.push(`No element found for ref_id "${refId}".`);
+        }
+      } else {
+        warnings.push('ref_id was provided but accessibility-tree.js is not available.');
+      }
+    }
+    if (!target && selector) {
+      try {
+        const found = document.querySelector(selector);
+        if (found?.nodeType === 1) {
+          target = found;
+          targetMethod = 'selector';
+        } else {
+          warnings.push(`No element matched selector "${selector}".`);
+        }
+      } catch (e) {
+        warnings.push(`Invalid selector: ${e.message}`);
+      }
+    }
+    if (!target && Number.isFinite(x) && Number.isFinite(y)) {
+      const found = document.elementFromPoint?.(x, y);
+      if (found?.nodeType === 1) {
+        target = found;
+        targetMethod = 'coordinates';
+      } else {
+        warnings.push(`No element found at coordinates (${x}, ${y}).`);
+      }
+    }
+    if (!target) {
+      return {
+        success: false,
+        error: 'Could not resolve a target element. Pass a current ref_id or a valid selector.',
+        warnings,
+      };
+    }
+    return { success: true, target, targetMethod, warnings };
+  }
+
+  function isDevJavascriptUrlAttribute(name, value) {
+    if (!/^(href|src|xlink:href|formaction|action)$/i.test(String(name || ''))) return false;
+    // HTML URL parsing ignores ASCII tabs/newlines/carriage returns in the
+    // scheme, so normalize those before checking instead of allowing an
+    // obfuscated `java\nscript:` value through.
+    const normalizedValue = String(value ?? '').replace(/[\t\n\r]/g, '').trimStart();
+    return /^javascript:/i.test(normalizedValue);
+  }
+
+  function normalizeDevPatchOperations(el, params) {
+    const styles = params?.styles && typeof params.styles === 'object' && !Array.isArray(params.styles) ? params.styles : {};
+    const removeStyles = Array.isArray(params?.removeStyles) ? params.removeStyles : [];
+    const addClasses = Array.isArray(params?.addClasses) ? params.addClasses : [];
+    const removeClasses = Array.isArray(params?.removeClasses) ? params.removeClasses : [];
+    const attributes = params?.attributes && typeof params.attributes === 'object' && !Array.isArray(params.attributes) ? params.attributes : {};
+    const removeAttributes = Array.isArray(params?.removeAttributes) ? params.removeAttributes : [];
+    const normalizeStyleName = value => {
+      const name = String(value || '').trim();
+      return name.startsWith('--') ? name : name.toLowerCase();
+    };
+    const isHtmlElement = el?.namespaceURI === 'http://www.w3.org/1999/xhtml';
+    const normalizeAttributeName = value => {
+      const name = String(value || '').trim();
+      return isHtmlElement ? name.toLowerCase() : name;
+    };
+
+    const styleValues = new Map();
+    for (const [name, value] of Object.entries(styles)) {
+      const normalized = normalizeStyleName(name);
+      if (normalized) styleValues.set(normalized, value);
+    }
+    const stylesToRemove = new Set(removeStyles.map(normalizeStyleName).filter(Boolean));
+    const classesToAdd = new Set(addClasses.map(v => String(v || '').trim()).filter(Boolean));
+    const classesToRemove = new Set(removeClasses.map(v => String(v || '').trim()).filter(Boolean));
+    const attributeValues = new Map();
+    for (const [name, value] of Object.entries(attributes)) {
+      const normalized = normalizeAttributeName(name);
+      if (normalized) attributeValues.set(normalized, value);
+    }
+    const attributesToRemove = new Set(removeAttributes.map(normalizeAttributeName).filter(Boolean));
+
+    const styleConflict = [...styleValues.keys()].find(name => stylesToRemove.has(name));
+    if (styleConflict) {
+      return { success: false, error: `patch_element: style "${styleConflict}" cannot be set and removed in the same patch.` };
+    }
+    const classConflict = [...classesToAdd].find(name => classesToRemove.has(name));
+    if (classConflict) {
+      return { success: false, error: `patch_element: class "${classConflict}" cannot be added and removed in the same patch.` };
+    }
+    const attributeConflict = [...attributeValues.keys()].find(name => attributesToRemove.has(name));
+    if (attributeConflict) {
+      return { success: false, error: `patch_element: attribute "${attributeConflict}" cannot be set and removed in the same patch.` };
+    }
+    return {
+      success: true,
+      styleValues,
+      stylesToRemove,
+      styleNames: [...styleValues.keys(), ...stylesToRemove],
+      classesToAdd,
+      classesToRemove,
+      classNames: [...classesToAdd, ...classesToRemove],
+      attributeValues,
+      attributesToRemove,
+      attributeNames: [...attributeValues.keys(), ...attributesToRemove],
+    };
+  }
+
+  function patchDevElement(params) {
+    const resolved = resolveDevTarget(params);
+    if (!resolved.success) return resolved;
+    const el = resolved.target;
+    const normalized = normalizeDevPatchOperations(el, params);
+    if (!normalized.success) return normalized;
+    const {
+      styleValues,
+      styleNames,
+      classesToAdd,
+      classesToRemove,
+      classNames,
+      attributeValues,
+      attributeNames,
+    } = normalized;
+    if (!styleNames.length && !classNames.length && !attributeNames.length) {
+      return { success: false, error: 'patch_element: provide at least one style, class, or attribute change.' };
+    }
+    if (styleNames.length > 100 || classNames.length > 100 || attributeNames.length > 100) {
+      return { success: false, error: 'patch_element: a patch may change at most 100 styles, 100 classes, and 100 attributes.' };
+    }
+    for (const className of classNames) {
+      if (/\s/.test(className) || className.length > 200) {
+        return { success: false, error: `patch_element: invalid class name "${className}".` };
+      }
+    }
+    for (const [name, rawValue] of styleValues) {
+      if (String(rawValue).length > 4000) {
+        return { success: false, error: `patch_element: style value for "${name}" exceeds 4,000 characters.` };
+      }
+    }
+    for (const name of attributeNames) {
+      if (!/^[^\s"'<>/=]+$/.test(name) || name.length > 200) {
+        return { success: false, error: `patch_element: invalid attribute name "${name}".` };
+      }
+      if (/^on/i.test(name) || /^(srcdoc)$/i.test(name)) {
+        return { success: false, error: `patch_element: executable attribute "${name}" is not allowed; use execute_js only when code execution is explicitly needed.` };
+      }
+      const value = attributeValues.has(name) ? String(attributeValues.get(name)) : '';
+      if (isDevJavascriptUrlAttribute(name, value)) {
+        return { success: false, error: `patch_element: javascript: URLs are not allowed in ${name}.` };
+      }
+      if (value.length > 10000) {
+        return { success: false, error: `patch_element: attribute value for "${name}" exceeds 10,000 characters.` };
+      }
+    }
+
+    const patchId = nextDevPatchId('dom');
+    const styleChanges = [];
+    for (const name of styleNames) {
+      const beforePresent = Array.from(el.style).includes(name);
+      const before = el.style.getPropertyValue(name);
+      const beforePriority = el.style.getPropertyPriority(name);
+      if (styleValues.has(name)) {
+        const value = String(styleValues.get(name));
+        el.style.setProperty(name, value);
+      } else {
+        el.style.removeProperty(name);
+      }
+      styleChanges.push({
+        name,
+        before: beforePresent ? before : null,
+        beforePriority,
+        after: Array.from(el.style).includes(name) ? el.style.getPropertyValue(name) : null,
+        afterPriority: el.style.getPropertyPriority(name),
+      });
+    }
+
+    const classChanges = [];
+    for (const name of classNames) {
+      const before = el.classList.contains(name);
+      if (classesToAdd.has(name)) el.classList.add(name);
+      if (classesToRemove.has(name)) el.classList.remove(name);
+      classChanges.push({ name, before, after: el.classList.contains(name) });
+    }
+
+    const attributeChanges = [];
+    for (const name of attributeNames) {
+      const beforePresent = el.hasAttribute(name);
+      const before = beforePresent ? el.getAttribute(name) : null;
+      if (attributeValues.has(name)) {
+        const value = String(attributeValues.get(name));
+        el.setAttribute(name, value);
+      } else {
+        el.removeAttribute(name);
+      }
+      attributeChanges.push({ name, before, after: el.hasAttribute(name) ? el.getAttribute(name) : null });
+    }
+
+    const changes = { styles: styleChanges, classes: classChanges, attributes: attributeChanges };
+    devPatchRegistry.set(patchId, { kind: 'element', element: el, changes });
+    return {
+      success: true,
+      patchId,
+      targetMethod: resolved.targetMethod,
+      target: devElementSummary(el),
+      changes,
+      warnings: resolved.warnings,
+      note: 'Call revert_patch with this patchId to restore the recorded prior values.',
+    };
+  }
+
+  function revertDevElementPatch(params) {
+    const patchId = typeof params?.patchId === 'string' ? params.patchId.trim() : '';
+    if (!patchId) return { success: false, error: 'revert_patch: `patchId` is required.' };
+    const patch = devPatchRegistry.get(patchId);
+    if (!patch || patch.kind !== 'element') {
+      return { success: false, error: `revert_patch: element patchId "${patchId}" was not found on this page.` };
+    }
+    const el = patch.element;
+    if (!el?.isConnected) {
+      devPatchRegistry.delete(patchId);
+      return { success: false, error: `revert_patch: the element for "${patchId}" is no longer in the document.` };
+    }
+
+    const conflicts = [];
+    for (const change of patch.changes.styles) {
+      const current = Array.from(el.style).includes(change.name) ? el.style.getPropertyValue(change.name) : null;
+      if (current !== change.after) conflicts.push({ kind: 'style', name: change.name, expected: change.after, current });
+      if (change.before === null) el.style.removeProperty(change.name);
+      else el.style.setProperty(change.name, change.before, change.beforePriority || '');
+    }
+    for (const change of patch.changes.classes) {
+      const current = el.classList.contains(change.name);
+      if (current !== change.after) conflicts.push({ kind: 'class', name: change.name, expected: change.after, current });
+      el.classList.toggle(change.name, change.before);
+    }
+    for (const change of patch.changes.attributes) {
+      const current = el.hasAttribute(change.name) ? el.getAttribute(change.name) : null;
+      if (current !== change.after) conflicts.push({ kind: 'attribute', name: change.name, expected: change.after, current });
+      if (change.before === null) el.removeAttribute(change.name);
+      else el.setAttribute(change.name, change.before);
+    }
+    devPatchRegistry.delete(patchId);
+    return {
+      success: true,
+      patchId,
+      reverted: true,
+      target: devElementSummary(el),
+      conflicts,
+      warning: conflicts.length
+        ? 'Some values changed again after this patch; revert_patch restored the original recorded values and reports those overlaps in conflicts.'
+        : undefined,
+    };
+  }
+
+  function devParentElement(element) {
+    if (element?.parentElement) return element.parentElement;
+    return element?.getRootNode?.()?.host || null;
+  }
+
+  function markDevTargets(params) {
+    const resolved = resolveDevTarget(params);
+    if (!resolved.success) return resolved;
+    const groupId = nextDevPatchId('target');
+    const includeAncestors = params?.includeAncestors !== false;
+    const elements = [resolved.target];
+    if (includeAncestors) {
+      let parent = devParentElement(resolved.target);
+      while (parent && elements.length < 6) {
+        elements.push(parent);
+        parent = devParentElement(parent);
+      }
+    }
+    const records = elements.map((el, index) => {
+      const marker = `${groupId}_${index}`;
+      const hadAttribute = el.hasAttribute(DEV_TARGET_MARKER_ATTR);
+      const previousValue = hadAttribute ? el.getAttribute(DEV_TARGET_MARKER_ATTR) : null;
+      el.setAttribute(DEV_TARGET_MARKER_ATTR, marker);
+      return { el, marker, hadAttribute, previousValue, relation: index === 0 ? 'target' : `ancestor_${index}` };
+    });
+    devTargetMarkerRegistry.set(groupId, records);
+    return {
+      success: true,
+      groupId,
+      targetMethod: resolved.targetMethod,
+      targets: records.map(record => ({ marker: record.marker, relation: record.relation, ...devElementSummary(record.el) })),
+      warnings: resolved.warnings,
+    };
+  }
+
+  function unmarkDevTargets(params) {
+    const groupId = typeof params?.groupId === 'string' ? params.groupId : '';
+    const records = devTargetMarkerRegistry.get(groupId) || [];
+    for (const record of records) {
+      try {
+        if (record.hadAttribute) record.el.setAttribute(DEV_TARGET_MARKER_ATTR, record.previousValue || '');
+        else record.el.removeAttribute(DEV_TARGET_MARKER_ATTR);
+      } catch {}
+    }
+    devTargetMarkerRegistry.delete(groupId);
+    return { success: true, groupId, removed: records.length };
+  }
+
+  function highlightDevElement(params) {
+    const resolved = resolveDevTarget(params);
+    if (!resolved.success) return resolved;
+    const el = resolved.target;
+    try { el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' }); } catch {}
+    if (activeDevHighlightCleanup) activeDevHighlightCleanup();
+
+    const durationMs = Math.max(250, Math.min(15000, Math.round(Number(params?.durationMs) || 2500)));
+    const requestedColor = typeof params?.color === 'string' ? params.color.trim() : '';
+    const color = requestedColor && globalThis.CSS?.supports?.('color', requestedColor) ? requestedColor : '#7c3aed';
+    const labelText = String(params?.label || '').trim().slice(0, 100);
+    const overlay = document.createElement('div');
+    overlay.setAttribute('data-webbrain-dev-highlight', '');
+    Object.assign(overlay.style, {
+      position: 'fixed',
+      pointerEvents: 'none',
+      zIndex: '2147483647',
+      border: `3px solid ${color}`,
+      borderRadius: '4px',
+      boxSizing: 'border-box',
+      boxShadow: `0 0 0 2px rgba(255,255,255,.9), 0 0 18px ${color}`,
+    });
+    let label = null;
+    if (labelText) {
+      label = document.createElement('div');
+      label.textContent = labelText;
+      Object.assign(label.style, {
+        position: 'absolute', left: '-3px', bottom: 'calc(100% + 5px)',
+        maxWidth: '320px', padding: '3px 7px', borderRadius: '4px',
+        background: color, color: '#fff', font: '600 12px/1.35 system-ui, sans-serif',
+        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+      });
+      overlay.appendChild(label);
+    }
+    (document.documentElement || document.body).appendChild(overlay);
+
+    const update = () => {
+      if (!el.isConnected || !overlay.isConnected) return;
+      const r = el.getBoundingClientRect();
+      overlay.style.left = `${Math.round(r.left)}px`;
+      overlay.style.top = `${Math.round(r.top)}px`;
+      overlay.style.width = `${Math.max(0, Math.round(r.width))}px`;
+      overlay.style.height = `${Math.max(0, Math.round(r.height))}px`;
+    };
+    update();
+    const interval = setInterval(update, 50);
+    const cleanup = () => {
+      clearInterval(interval);
+      try { overlay.remove(); } catch {}
+      if (activeDevHighlightCleanup === cleanup) activeDevHighlightCleanup = null;
+    };
+    activeDevHighlightCleanup = cleanup;
+    setTimeout(cleanup, durationMs);
+    return {
+      success: true,
+      targetMethod: resolved.targetMethod,
+      target: devElementSummary(el),
+      durationMs,
+      color,
+      label: labelText || null,
+      warnings: resolved.warnings,
+    };
   }
 
   function inspectElementStyles(params) {
@@ -2008,6 +3486,49 @@
     };
   }
 
+  const SET_FIELD_VERIFY_DELAY_MS = 80;
+
+  function _setFieldValueMatches(actual, previous, text, clear, normalizeNewlines = false) {
+    const expected = clear ? text : previous + text;
+    if (!normalizeNewlines) return actual === expected;
+    const normalize = value => String(value).replace(/\r\n?/g, '\n');
+    return normalize(actual) === normalize(expected);
+  }
+
+  function _editableTextValue(el) {
+    return typeof el.innerText === 'string' ? el.innerText : (el.textContent || '');
+  }
+
+  function _fieldMeta(el) {
+    try {
+      const tag = el.tagName ? el.tagName.toLowerCase() : '';
+      const fieldType = el.tagName === 'INPUT' ? (el.type || 'text').toLowerCase() : tag;
+      const elId = el.id || null;
+      let labelText = null;
+      try {
+        if (elId) {
+          const escapedId = window.CSS && CSS.escape ? CSS.escape(elId) : elId.replace(/["\\]/g, '\\$&');
+          const label = document.querySelector(`label[for="${escapedId}"]`);
+          if (label) labelText = (label.textContent || '').trim().slice(0, 120);
+        }
+        if (!labelText && el.closest) {
+          const wrappingLabel = el.closest('label');
+          if (wrappingLabel) labelText = (wrappingLabel.textContent || '').trim().slice(0, 120);
+        }
+      } catch {}
+      return {
+        tag,
+        type: fieldType,
+        name: el.getAttribute ? el.getAttribute('name') : null,
+        id: elId,
+        autocomplete: el.getAttribute ? el.getAttribute('autocomplete') : null,
+        ariaLabel: el.getAttribute ? el.getAttribute('aria-label') : null,
+        placeholder: el.getAttribute ? el.getAttribute('placeholder') : null,
+        labelText,
+      };
+    } catch { return null; }
+  }
+
   // --- Message handler ---
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg.target !== 'content') return;
@@ -2018,13 +3539,23 @@
       'get_interactive_elements': () => getInteractiveElements(),
       'get_interactive_elements_cdp': () => getInteractiveElementsFull(),
       'click': () => clickElement(msg.params || {}),
+      'consume_file_picker_guard': () => consumeFilePickerGuard(msg.params?.guardId),
       'type': () => typeText(msg.params || {}),
       'press_keys': () => pressKeys(msg.params || {}),
       'scroll': () => scrollPage(msg.params || {}),
       'extract_data': () => extractData(msg.params || {}),
       'inspect_element_styles': () => inspectElementStyles(msg.params || {}),
+      'patch_element': () => patchDevElement(msg.params || {}),
+      'revert_patch': () => revertDevElementPatch(msg.params || {}),
+      'highlight_element': () => highlightDevElement(msg.params || {}),
+      // Internal bridge used by inspect_event_listeners. The temporary DOM
+      // marker lets CDP resolve the exact ref_id target, including nodes in
+      // open shadow roots, and is removed in a finally block by agent.js.
+      'dev_mark_targets': () => markDevTargets(msg.params || {}),
+      'dev_unmark_targets': () => unmarkDevTargets(msg.params || {}),
       'wait_for_element': () => waitForElement(msg.params || {}),
       'get_selection': () => ({ text: window.getSelection()?.toString() || '' }),
+      'find_text': () => findText(msg.params || {}),
       // ── Accessibility-tree-backed reads and actions ──────────────────
       //
       // The tree is built by src/content/accessibility-tree.js (a port of
@@ -2036,17 +3567,98 @@
           if (typeof window.__generateAccessibilityTree !== 'function') {
             return { error: 'accessibility-tree.js not injected' };
           }
+          const documentToken = _axDocumentToken();
+          const refScopeUrl = location.href;
           const { filter, maxDepth, maxChars, ref_id, page } = msg.params || {};
-          return window.__generateAccessibilityTree(filter, maxDepth, maxChars, ref_id, page);
+          const gate = detectPageGate();
+          if (gate) {
+            const pageGate = pageGatePublic(gate);
+            if (gate.surface === 'dialog') {
+              if (typeof window.__generateAccessibilitySubtree === 'function') {
+                const gateFilter = filter === 'interactive' ? 'interactive' : 'visible';
+                const requestedDepth = Number(maxDepth);
+                const requestedChars = Number(maxChars);
+                const gateMaxDepth = Math.min(Number.isFinite(requestedDepth) ? Math.max(1, Math.trunc(requestedDepth)) : 8, 8);
+                const gateMaxChars = Math.min(Number.isFinite(requestedChars) ? Math.max(256, Math.trunc(requestedChars)) : 3000, 5000);
+                const tree = window.__generateAccessibilitySubtree(gate.element, gateFilter, gateMaxDepth, gateMaxChars, page);
+                return { pageGate, ...tree, textSource: 'page-gate', documentToken, refScopeUrl };
+              }
+              return { pageGate, pageContent: gate.label, textSource: 'page-gate', documentToken, refScopeUrl };
+            }
+            const articleRoot = gate.element.closest('article, [role="article"], main, [role="main"]');
+            return {
+              pageGate,
+              pageContent: renderedArticleTextBeforeGate(articleRoot, gate.element),
+              textSource: 'article (pre-gate)',
+              documentToken,
+              refScopeUrl,
+            };
+          }
+          return {
+            ...window.__generateAccessibilityTree(filter, maxDepth, maxChars, ref_id, page),
+            documentToken,
+            refScopeUrl,
+          };
         } catch (e) {
           return { error: 'Failed to build accessibility tree: ' + (e && e.message || String(e)) };
         }
       },
-      'click_ax': () => {
+      'resolve_form_field_refs': () => {
         try {
-          const { ref_id } = msg.params || {};
-          if (typeof ref_id !== 'string') return { success: false, error: 'ref_id (string, e.g. "ref_42") is required' };
-          if (typeof window.__wb_ax_lookup !== 'function') return { success: false, error: 'accessibility-tree.js not injected' };
+          if (typeof window.__wb_ax_ref !== 'function') {
+            return { success: false, error: 'accessibility-tree.js not injected' };
+          }
+          const selector = String(msg.params?.selector || '');
+          const focused = document.activeElement;
+          const form = selector
+            ? document.querySelector(selector)
+            : focused?.closest('form') || document.querySelector('form');
+          if (!form) return { success: false, error: 'No form found on page' };
+          const refs = [];
+          for (const el of form.querySelectorAll('input, select, textarea')) {
+            const type = String(el.type || el.tagName || '').toLowerCase();
+            if (type === 'hidden' || type === 'submit') continue;
+            refs.push(window.__wb_ax_ref(el));
+          }
+          return {
+            success: true,
+            refs,
+            documentToken: _axDocumentToken(),
+            refScopeUrl: location.href,
+          };
+        } catch (error) {
+          return { success: false, error: error?.message || String(error) };
+        }
+      },
+      'click_ax': () => {
+        let dispatched = false;
+        const failure = (error, extra = {}) => ({
+          success: false,
+          error,
+          ...extra,
+          ...(dispatched
+            ? { dispatched: true }
+            : { dispatched: false, noDispatch: true, fallbackAttempted: false }),
+        });
+        try {
+          const { ref_id, expectedDocumentToken, expectedPageUrl } = msg.params || {};
+          if (typeof ref_id !== 'string') return failure('ref_id (string, e.g. "ref_42") is required');
+          if (typeof window.__wb_ax_lookup !== 'function') return failure('accessibility-tree.js not injected');
+          const documentToken = _axDocumentToken();
+          const documentChanged = !!expectedDocumentToken && expectedDocumentToken !== documentToken;
+          const routeChanged = !!expectedPageUrl && expectedPageUrl !== location.href;
+          if (documentChanged || routeChanged) {
+            return failure(
+              `ref_id ${ref_id} belongs to a previous page or route. Re-read the accessibility tree and choose a fresh ref_id before clicking.`,
+              {
+                staleRef: true,
+                documentChanged,
+                routeChanged,
+                documentToken,
+                refScopeUrl: location.href,
+              },
+            );
+          }
           const el = window.__wb_ax_lookup(ref_id);
           if (!el) {
             let suggestions = [];
@@ -2059,12 +3671,90 @@
             const hint = suggestions.length
               ? ' Nearest existing refs: ' + suggestions.map(s => `${s.ref} (${s.role}${s.name ? ' "' + s.name + '"' : ''})`).join(', ') + '.'
               : '';
-            return { success: false, error: `ref_id ${ref_id} not found.${formatNote} The element may have been removed or the page replaced.${hint} Re-read the accessibility tree to get fresh ids — do NOT guess ref numbers or invent placeholders.`, suggestions };
+            return failure(`ref_id ${ref_id} not found.${formatNote} The element may have been removed or the page replaced.${hint} Re-read the accessibility tree to get fresh ids — do NOT guess ref numbers or invent placeholders.`, { suggestions });
           }
           try { el.scrollIntoView({ block: 'center', inline: 'center' }); } catch {}
           try { el.focus({ preventScroll: true }); } catch {}
           const rect = el.getBoundingClientRect();
+          if (!el.isConnected || rect.width < 1 || rect.height < 1) {
+            return failure(
+              `ref_id ${ref_id} is stale or not visibly rendered. Re-read the accessibility tree and retry with the current target ref_id.`,
+              {
+                ref_id,
+                rect: { x: Math.round(rect.x), y: Math.round(rect.y), w: Math.round(rect.width), h: Math.round(rect.height) },
+              },
+            );
+          }
+          // Identity only (tag:role:label) — must match agent-side
+          // _clickAxActiveIdentity / _clickProgressSnapshot.active so layout
+          // shift cannot turn preparatory focus into false "focus" proof.
+          const preparedActive = (() => {
+            try {
+              const active = document.activeElement;
+              if (!active || active === document.body || active === document.documentElement) return '';
+              return [
+                active.tagName || '',
+                active.getAttribute?.('role') || '',
+                active.getAttribute?.('aria-label') || active.getAttribute?.('title') || active.id || '',
+              ].join(':');
+            } catch {
+              return '';
+            }
+          })();
+          const fallbackStateBefore = _axFallbackState(el);
           const tag = el.tagName ? el.tagName.toLowerCase() : '';
+          const inputType = tag === 'input' ? String(el.type || '').toLowerCase() : '';
+          const nativeCheckable = inputType === 'checkbox' || inputType === 'radio';
+          const checkedBefore = nativeCheckable ? !!el.checked : null;
+          const targetRole = String(el.getAttribute?.('role') || '').toLowerCase();
+          const canonicalTargetName = _axCanonicalName(el);
+          const targetName = canonicalTargetName || _axAccessibleName(el);
+          const targetContext = (() => {
+            try {
+              const ownText = String(targetName || el.innerText || '')
+                .replace(/\s+/g, ' ').trim();
+              let fallback = null;
+              let node = el.parentElement;
+              for (let depth = 0; node && depth < 6; depth++, node = node.parentElement) {
+                const text = String(node.innerText || '').replace(/\s+/g, ' ').trim();
+                if (!text || text === ownText) continue;
+                const headingEl = node.querySelector?.('h1,h2,h3,h4,[role="heading"]');
+                const linkEl = node.querySelector?.('a[href]');
+                const role = String(node.getAttribute?.('role') || '').toLowerCase();
+                const nodeTag = String(node.tagName || '').toLowerCase();
+                const productCard = !!node.matches?.([
+                  '[data-product-id]',
+                  '[data-product]',
+                  '[data-testid*="product" i]',
+                  '[class*="product" i]',
+                  '[class*="card" i]',
+                  '[class*="tile" i]',
+                ].join(','));
+                const context = {
+                  text: text.slice(0, 240),
+                  ...(text.length > 240 ? { truncated: true } : {}),
+                  ...(headingEl ? { heading: String(headingEl.innerText || headingEl.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 160) } : {}),
+                  ...(linkEl ? { href: String(linkEl.href || linkEl.getAttribute('href') || '').slice(0, 500) } : {}),
+                };
+                if (!fallback) fallback = context;
+                if (productCard || headingEl || linkEl || role === 'listitem' || nodeTag === 'li' || nodeTag === 'article') {
+                  return context;
+                }
+              }
+              return fallback;
+            } catch {
+              return null;
+            }
+          })();
+          const genericTags = new Set(['body', 'div', 'span', 'section', 'main', 'article', 'nav', 'ul', 'ol', 'li']);
+          const genericRoles = new Set(['', 'generic', 'group', 'list', 'listitem', 'region', 'none', 'presentation']);
+          if (!canonicalTargetName && genericTags.has(tag) && genericRoles.has(targetRole) && targetContext?.truncated) {
+            return failure(
+              `ref_id ${ref_id} resolves to an unnamed generic element inside a broad container. Re-read the accessibility tree and choose a named row or control instead of clicking this ambiguous target.`,
+              { ambiguousTarget: true, targetContext, documentToken, refScopeUrl: location.href },
+            );
+          }
+          const fallbackStatic = _axFallbackStaticAssessment(el);
           let popupRole = '';
           let popupHasPopup = null;
           let isPopupOpener = false;
@@ -2111,7 +3801,20 @@
             } catch {}
           }
           rememberInteractionPoint(el, 'click_ax');
-          el.click();
+          const syntheticClickStartedAt = Date.now();
+          dispatched = true;
+          const filePickerGuard = clickWithoutNativeFilePicker(() => el.click());
+          const fallbackStateAfterImmediate = _axFallbackState(el);
+          if (filePickerGuard.blocked) {
+            return failure(
+              filePickerBlockedResponse(filePickerGuard.blocked, targetName || '').error,
+              {
+                filePickerBlocked: true,
+                ...(filePickerGuard.blocked.selector ? { selector: filePickerGuard.blocked.selector } : {}),
+                ref_id,
+              },
+            );
+          }
           // If the model just clicked a text-entry element, its next call must
           // be type_ax on the same ref_id. Putting the directive in the tool
           // payload (rather than only in the system prompt) keeps it in the
@@ -2124,22 +3827,57 @@
             isTextEntry = !nonText.has(inputType);
           } else if (el.isContentEditable) isTextEntry = true;
           const buildResponse = () => {
+            const checkedAfter = nativeCheckable ? !!el.checked : null;
             const resp = {
               success: true,
               method: 'click_ax',
               ref_id,
               tag,
+              _preparedActive: preparedActive,
+              _syntheticClickStartedAt: syntheticClickStartedAt,
+              _fallbackStateBefore: fallbackStateBefore.full,
+              _fallbackStateAfterImmediate: fallbackStateAfterImmediate.full,
+              _fallbackStrongStateBefore: fallbackStateBefore.strong,
+              _fallbackStrongStateAfterImmediate: fallbackStateAfterImmediate.strong,
+              _fallbackWeakStateBefore: fallbackStateBefore.weak,
+              _fallbackWeakStateAfterImmediate: fallbackStateAfterImmediate.weak,
+              _fallbackStaticBlockedReason: fallbackStatic.blockedReason,
               rect: { x: Math.round(rect.x), y: Math.round(rect.y), w: Math.round(rect.width), h: Math.round(rect.height) },
+              ...(targetContext ? { targetContext } : {}),
+              ...(filePickerGuard.guardId ? { _filePickerGuardId: filePickerGuard.guardId } : {}),
             };
+            if (nativeCheckable) {
+              const desiredChecked = inputType === 'radio' ? true : !checkedBefore;
+              const checkboxIdentity = _axCheckboxIdentity(el, ref_id);
+              resp.checkedBefore = checkedBefore;
+              resp.checkedAfter = checkedAfter;
+              resp.checkedChanged = checkedBefore !== checkedAfter;
+              resp.desiredChecked = desiredChecked;
+              resp.checkboxIdentity = checkboxIdentity;
+              resp.checkboxState = {
+                identity: checkboxIdentity,
+                desiredChecked,
+                actualChecked: checkedAfter,
+              };
+              const stateMatchesDesired = checkedAfter === desiredChecked;
+              if (stateMatchesDesired) {
+                resp.verified = true;
+                if (resp.checkedChanged) resp.observedEffects = ['checked_state'];
+              } else {
+                resp.success = false;
+                resp.noProgress = true;
+                resp.verified = false;
+                resp.error = inputType === 'checkbox'
+                  ? `Checkbox remained ${checkedAfter ? 'checked' : 'unchecked'} after click_ax. Do not toggle it again; use set_checked({ref_id: "${ref_id}", checked: ${desiredChecked}}) so the requested state is applied idempotently and verified.`
+                  : 'Radio remained unselected after click_ax. Re-read the accessibility tree and retry the intended radio option with a fresh ref_id.';
+              }
+            }
             // Echo accessible name + href so the model can see exactly what
             // element it hit. This is critical when a stale ref_id points at
             // the wrong thing — e.g. a sidebar nav link that navigates away
             // from an open modal, silently destroying in-progress form state.
             try {
-              const accName = (el.getAttribute && (el.getAttribute('aria-label') || el.getAttribute('title')))
-                || (el.innerText && el.innerText.trim().slice(0, 80))
-                || '';
-              if (accName) resp.name = accName;
+              if (targetName) resp.name = targetName;
             } catch {}
             if (tag === 'a') {
               try {
@@ -2199,35 +3937,198 @@
             }
             return resp;
           };
-          if (anchorMeta?.sameDocumentAnchor) {
+          const responseDelayMs = nativeCheckable
+            ? SET_FIELD_VERIFY_DELAY_MS
+            : (anchorMeta?.sameDocumentAnchor ? 120 : 0);
+          if (responseDelayMs > 0) {
             return new Promise((resolve) => {
               setTimeout(() => {
                 try {
                   resolve(buildResponse());
                 } catch (e) {
-                  resolve({ success: false, error: e && e.message || String(e) });
+                  resolve(failure(e && e.message || String(e)));
                 }
-              }, 120);
+              }, responseDelayMs);
             });
           }
           return buildResponse();
         } catch (e) {
-          return { success: false, error: e && e.message || String(e) };
+          return failure(e && e.message || String(e));
         }
       },
-      'type_ax': () => {
+      'set_checked': () => {
+        let dispatched = false;
+        const failure = (error, extra = {}) => ({
+          success: false,
+          error,
+          ...extra,
+          ...(dispatched
+            ? { dispatched: true }
+            : { dispatched: false, noDispatch: true }),
+        });
+        try {
+          const {
+            ref_id,
+            checked,
+            expectedDocumentToken,
+            expectedPageUrl,
+            probeOnly,
+            markForTrustedClick,
+            cleanupMarker,
+          } = msg.params || {};
+          if (typeof ref_id !== 'string') return failure('ref_id (string, e.g. "ref_42") is required');
+          if (typeof checked !== 'boolean') return failure('checked (boolean) is required');
+          if (typeof window.__wb_ax_lookup !== 'function') return failure('accessibility-tree.js not injected');
+          const documentToken = _axDocumentToken();
+          const documentChanged = !!expectedDocumentToken && expectedDocumentToken !== documentToken;
+          const routeChanged = !!expectedPageUrl && expectedPageUrl !== location.href;
+          if (documentChanged || routeChanged) {
+            return failure(
+              `ref_id ${ref_id} belongs to a previous page or route. Re-read the accessibility tree and choose a fresh ref_id before changing the checkbox.`,
+              { staleRef: true, documentChanged, routeChanged, documentToken, refScopeUrl: location.href },
+            );
+          }
+          let markedTarget = null;
+          if (cleanupMarker) {
+            try {
+              const marked = removeSetCheckedMarkers(cleanupMarker);
+              if (marked.length !== 1) {
+                return failure(
+                  `Trusted checkbox marker matched ${marked.length} controls; refusing to verify an ambiguous target. Re-read the accessibility tree and retry.`,
+                  { markerConflict: true, markerMatchCount: marked.length },
+                );
+              }
+              markedTarget = marked[0];
+            } catch (error) {
+              return failure(`Trusted checkbox marker cleanup failed: ${error?.message || error}`);
+            }
+          }
+          // A same-document route update invalidates the AX registry after the
+          // trusted click. The private one-shot marker still points to the
+          // exact preflighted element for this verification pass.
+          const el = markedTarget || window.__wb_ax_lookup(ref_id);
+          if (!el) return failure(`ref_id ${ref_id} not found. Re-read the accessibility tree to get a current checkbox ref_id.`);
+          const tag = el.tagName ? el.tagName.toLowerCase() : '';
+          const inputType = tag === 'input' ? String(el.type || '').toLowerCase() : '';
+          if (inputType !== 'checkbox') {
+            return failure(`set_checked only supports native input[type="checkbox"] controls; ${ref_id} resolved to ${tag || 'unknown'}${inputType ? `[type="${inputType}"]` : ''}.`);
+          }
+          try { el.scrollIntoView({ block: 'center', inline: 'center' }); } catch {}
+          try { el.focus({ preventScroll: true }); } catch {}
+          const rect = el.getBoundingClientRect();
+          if (!el.isConnected || rect.width < 1 || rect.height < 1) {
+            return failure(`ref_id ${ref_id} is stale or not visibly rendered. Re-read the accessibility tree and retry.`);
+          }
+          const checkedBefore = !!el.checked;
+          const checkboxIdentity = _axCheckboxIdentity(el, ref_id);
+          const base = {
+            method: 'set_checked',
+            ref_id,
+            tag,
+            type: inputType,
+            name: _axAccessibleName(el),
+            checkboxIdentity,
+            desiredChecked: checked,
+            checkedBefore,
+            checkedAfter: checkedBefore,
+            changed: false,
+            verified: checkedBefore === checked,
+            rect: { x: Math.round(rect.x), y: Math.round(rect.y), w: Math.round(rect.width), h: Math.round(rect.height) },
+            selector: _axStableControlSelector(el),
+            checkboxState: {
+              identity: checkboxIdentity,
+              desiredChecked: checked,
+              actualChecked: checkedBefore,
+            },
+          };
+          if (checkedBefore === checked) {
+            return {
+              success: true,
+              dispatched: false,
+              noDispatch: true,
+              idempotent: true,
+              ...base,
+            };
+          }
+          if (probeOnly === true) {
+            let marker = '';
+            let trustedSelector = '';
+            if (markForTrustedClick === true) {
+              const markerEntropy = new Uint32Array(3);
+              globalThis.crypto.getRandomValues(markerEntropy);
+              marker = `wbsc_${Date.now().toString(36)}_${Array.from(markerEntropy, value => value.toString(36)).join('_')}`;
+              el.setAttribute(SET_CHECKED_MARKER_ATTRIBUTE, marker);
+              trustedSelector = setCheckedMarkerSelector(marker);
+              const marked = Array.from(document.querySelectorAll(trustedSelector));
+              if (marked.length !== 1 || marked[0] !== el) {
+                removeSetCheckedMarkers(marker);
+                return failure(
+                  `Trusted checkbox marker matched ${marked.length} controls; refusing to click an ambiguous target. Re-read the accessibility tree and retry.`,
+                  { markerConflict: true, markerMatchCount: marked.length },
+                );
+              }
+              setTimeout(() => {
+                try { removeSetCheckedMarkers(marker); } catch {}
+              }, SET_CHECKED_MARKER_TTL_MS);
+            }
+            return {
+              success: true,
+              dispatched: false,
+              noDispatch: true,
+              needsTrustedClick: true,
+              marker: marker || undefined,
+              trustedSelector: trustedSelector || undefined,
+              ...base,
+            };
+          }
+          dispatched = true;
+          el.click();
+          const checkedAfter = !!el.checked;
+          const success = checkedAfter === checked;
+          return {
+            ...base,
+            success,
+            dispatched: true,
+            trusted: false,
+            verified: success,
+            checkedAfter,
+            changed: checkedBefore !== checkedAfter,
+            checkboxState: {
+              identity: checkboxIdentity,
+              desiredChecked: checked,
+              actualChecked: checkedAfter,
+            },
+            ...(success ? {} : {
+              noProgress: true,
+              error: `Checkbox remained ${checkedAfter ? 'checked' : 'unchecked'} after one synthetic click. This page may require trusted pointer input.`,
+            }),
+          };
+        } catch (e) {
+          return failure(e && e.message || String(e));
+        }
+      },
+      'type_ax': async () => {
+        let dispatched = false;
+        const failure = (error, extra = {}) => ({
+          success: false,
+          error,
+          ...extra,
+          ...(dispatched
+            ? { dispatched: true }
+            : { dispatched: false, noDispatch: true }),
+        });
         if (msg.params?.lang === 'tr-deasciify') {
           return _loadDeasciifier().then(() => {
             msg.params.text = _applyLangTransform(msg.params.text, msg.params.lang);
             delete msg.params.lang;
             return handlers['type_ax']();
-          }).catch(e => ({ success: false, error: e.message }));
+          }).catch(e => failure(e.message));
         }
         try {
           const { ref_id, text, clear } = msg.params || {};
-          if (typeof ref_id !== 'string') return { success: false, error: 'ref_id (string, e.g. "ref_42") is required' };
-          if (typeof text !== 'string') return { success: false, error: 'text (string) is required' };
-          if (typeof window.__wb_ax_lookup !== 'function') return { success: false, error: 'accessibility-tree.js not injected' };
+          if (typeof ref_id !== 'string') return failure('ref_id (string, e.g. "ref_42") is required');
+          if (typeof text !== 'string') return failure('text (string) is required');
+          if (typeof window.__wb_ax_lookup !== 'function') return failure('accessibility-tree.js not injected');
           const el = window.__wb_ax_lookup(ref_id);
           if (!el) {
             let suggestions = [];
@@ -2240,7 +4141,7 @@
             const hint = suggestions.length
               ? ' Nearest existing refs: ' + suggestions.map(s => `${s.ref} (${s.role}${s.name ? ' "' + s.name + '"' : ''})`).join(', ') + '.'
               : '';
-            return { success: false, error: `ref_id ${ref_id} not found.${formatNote} The element may have been removed or the page replaced.${hint} Re-read the accessibility tree to get fresh ids — do NOT guess ref numbers or invent placeholders.`, suggestions };
+            return failure(`ref_id ${ref_id} not found.${formatNote} The element may have been removed or the page replaced.${hint} Re-read the accessibility tree to get fresh ids — do NOT guess ref numbers or invent placeholders.`, { suggestions });
           }
           try { el.scrollIntoView({ block: 'center', inline: 'center' }); } catch {}
           try { el.focus({ preventScroll: true }); } catch {}
@@ -2254,7 +4155,13 @@
               return { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) };
             } catch { return null; }
           })();
+          const fieldMeta = _fieldMeta(el);
+          let previous = '';
+          let method = '';
+          let selectExpected = null;
           if (el.isContentEditable) {
+            dispatched = true;
+            previous = _editableTextValue(el);
             if (clear) {
               try {
                 const sel = window.getSelection();
@@ -2266,12 +4173,11 @@
               } catch {}
             }
             try { document.execCommand('insertText', false, text); } catch {
-              el.textContent = (clear ? '' : (el.textContent || '')) + text;
+              el.textContent = (clear ? '' : previous) + text;
               el.dispatchEvent(new Event('input', { bubbles: true }));
             }
-            return { success: true, method: 'type_ax_contenteditable', ref_id, rect: typeRect };
-          }
-          if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT') {
+            method = 'type_ax_contenteditable';
+          } else if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT') {
             // Guard against non-typeable INPUT subtypes. These all share the
             // INPUT tagName so without this check a confused model calling
             // type_ax on, say, a checkbox would silently set the value
@@ -2284,10 +4190,7 @@
                 'reset', 'image', 'color', 'range', 'hidden',
               ]);
               if (nonTypeable.has(inputType)) {
-                return {
-                  success: false,
-                  error: `ref_id ${ref_id} is an <input type="${inputType}"> which is not text-typeable. Use click_ax to toggle/activate it instead.`,
-                };
+                return failure(`ref_id ${ref_id} is an <input type="${inputType}"> which is not text-typeable. Use click_ax to toggle/activate it instead.`);
               }
             }
             if (el.tagName === 'SELECT') {
@@ -2302,33 +4205,89 @@
                 || Array.from(el.options).find((o) => o.text.trim().toLowerCase().includes(needle.toLowerCase()));
               const match = byValue || byText;
               if (!match) {
-                return { success: false, error: `No <option> matching "${text}" in select ref_id ${ref_id}.` };
+                return failure(`No <option> matching "${text}" in select ref_id ${ref_id}.`);
               }
+              dispatched = true;
               const selSetter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value')?.set;
               if (selSetter) selSetter.call(el, match.value); else el.value = match.value;
               el.dispatchEvent(new Event('input', { bubbles: true }));
               el.dispatchEvent(new Event('change', { bubbles: true }));
-              return { success: true, method: 'type_ax_select', ref_id, value: el.value, rect: typeRect };
+              selectExpected = match.value;
+              method = 'type_ax_select';
+            } else {
+              dispatched = true;
+              previous = el.value || '';
+              if (clear) el.value = '';
+              // Use the native setter so React's synthetic event system picks it up.
+              const proto = el.tagName === 'TEXTAREA'
+                ? window.HTMLTextAreaElement.prototype
+                : window.HTMLInputElement.prototype;
+              const descriptor = Object.getOwnPropertyDescriptor(proto, 'value');
+              const setter = descriptor && descriptor.set;
+              const newVal = (clear ? '' : previous) + text;
+              if (setter) setter.call(el, newVal); else el.value = newVal;
+              el.dispatchEvent(new Event('input', { bubbles: true }));
+              el.dispatchEvent(new Event('change', { bubbles: true }));
+              method = 'type_ax_input';
             }
-            if (clear) el.value = '';
-            // Use the native setter so React's synthetic event system picks it up.
-            const proto = el.tagName === 'TEXTAREA'
-              ? window.HTMLTextAreaElement.prototype
-              : window.HTMLInputElement.prototype;
-            const descriptor = Object.getOwnPropertyDescriptor(proto, 'value');
-            const setter = descriptor && descriptor.set;
-            const newVal = (clear ? '' : (el.value || '')) + text;
-            if (setter) setter.call(el, newVal); else el.value = newVal;
-            el.dispatchEvent(new Event('input', { bubbles: true }));
-            el.dispatchEvent(new Event('change', { bubbles: true }));
-            return { success: true, method: 'type_ax_input', ref_id, rect: typeRect };
+          } else {
+            return failure(`ref_id ${ref_id} is not a typeable element (tag=${el.tagName}). Use click_ax then type_text.`);
           }
-          return { success: false, error: `ref_id ${ref_id} is not a typeable element (tag=${el.tagName}). Use click_ax then type_text.` };
+
+          await new Promise(resolve => setTimeout(resolve, SET_FIELD_VERIFY_DELAY_MS));
+          if (!el.isConnected) {
+            return failure(
+              `ref_id ${ref_id} was replaced while the value was being typed. Re-read the accessibility tree and retry with the current field ref_id.`,
+              { ref_id, verified: false, recoveryRequired: 'fresh_tree', failureScope: `field-value:${ref_id}`, retryable: false, fieldMeta },
+            );
+          }
+          const actual = el.isContentEditable ? _editableTextValue(el) : (el.value || '');
+          const verified = selectExpected !== null
+            ? actual === selectExpected
+            : _setFieldValueMatches(actual, previous, text, !!clear, el.isContentEditable);
+          const fallbackAttempted = false;
+          if (!verified) {
+            return failure(
+              'The field value did not exactly match the requested text after the page settled. Re-read the field and retry with a fresh ref_id.',
+              {
+                method,
+                ref_id,
+                rect: typeRect,
+                verified: false,
+                actual: actual.slice(0, 200),
+                fieldMeta,
+                fallbackAttempted,
+                ...(selectExpected === null ? { _expectedValue: (clear ? '' : previous) + text } : {}),
+                recoveryRequired: 'fresh_tree',
+                failureScope: `field-value:${ref_id}`,
+                retryable: false,
+              },
+            );
+          }
+          return {
+            success: true,
+            verified: true,
+            method,
+            ref_id,
+            rect: typeRect,
+            ...(selectExpected !== null ? { value: actual } : {}),
+            fieldMeta,
+            fallbackAttempted,
+          };
         } catch (e) {
-          return { success: false, error: e && e.message || String(e) };
+          return failure(e && e.message || String(e));
         }
       },
       'set_field': async () => {
+        let dispatched = false;
+        const failure = (error, extra = {}) => ({
+          success: false,
+          error,
+          ...extra,
+          ...(dispatched
+            ? { dispatched: true }
+            : { dispatched: false, noDispatch: true }),
+        });
         try {
           if (msg.params?.lang === 'tr-deasciify') {
             await _loadDeasciifier();
@@ -2336,9 +4295,9 @@
             delete msg.params.lang;
           }
           const { ref_id, text, clear = true, submit = false } = msg.params || {};
-          if (typeof ref_id !== 'string') return { success: false, error: 'ref_id (string, e.g. "ref_42") is required' };
-          if (typeof text !== 'string') return { success: false, error: 'text (string) is required' };
-          if (typeof window.__wb_ax_lookup !== 'function') return { success: false, error: 'accessibility-tree.js not injected' };
+          if (typeof ref_id !== 'string') return failure('ref_id (string, e.g. "ref_42") is required');
+          if (typeof text !== 'string') return failure('text (string) is required');
+          if (typeof window.__wb_ax_lookup !== 'function') return failure('accessibility-tree.js not injected');
           const el = window.__wb_ax_lookup(ref_id);
           if (!el) {
             let suggestions = [];
@@ -2351,7 +4310,7 @@
             const hint = suggestions.length
               ? ' Nearest existing refs: ' + suggestions.map(s => `${s.ref} (${s.role}${s.name ? ' "' + s.name + '"' : ''})`).join(', ') + '.'
               : '';
-            return { success: false, error: `ref_id ${ref_id} not found.${formatNote} The element may have been removed or the page replaced.${hint} Re-read the accessibility tree to get fresh ids — do NOT guess ref numbers or invent placeholders.`, suggestions };
+            return failure(`ref_id ${ref_id} not found.${formatNote} The element may have been removed or the page replaced.${hint} Re-read the accessibility tree to get fresh ids — do NOT guess ref numbers or invent placeholders.`, { suggestions });
           }
           try { el.scrollIntoView({ block: 'center', inline: 'center' }); } catch {}
           try { el.focus({ preventScroll: true }); } catch {}
@@ -2362,20 +4321,30 @@
               return { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) };
             } catch { return null; }
           })();
+          if (!el.isConnected || !rect || rect.w < 1 || rect.h < 1) {
+            return failure(
+              `ref_id ${ref_id} is stale or not visibly rendered. Re-read the accessibility tree and retry with the current field ref_id.`,
+              {
+                ref_id,
+                rect,
+              },
+            );
+          }
           // Guard: refuse non-typeable elements up-front so the caller gets a
           // clear error instead of a silent no-op.
           if (el.tagName === 'INPUT') {
             const inputType = (el.type || 'text').toLowerCase();
             const nonTypeable = new Set(['checkbox', 'radio', 'file', 'submit', 'button', 'reset', 'image', 'color', 'range', 'hidden']);
             if (nonTypeable.has(inputType)) {
-              return { success: false, error: `ref_id ${ref_id} is an <input type="${inputType}"> which is not text-typeable. Use click_ax to toggle/activate it instead.` };
+              return failure(`ref_id ${ref_id} is an <input type="${inputType}"> which is not text-typeable. Use click_ax to toggle/activate it instead.`);
             }
           } else if (!el.isContentEditable && el.tagName !== 'TEXTAREA' && el.tagName !== 'INPUT') {
-            return { success: false, error: `ref_id ${ref_id} is not a text field (tag=${el.tagName}). set_field works on input/textarea/contenteditable only.` };
+            return failure(`ref_id ${ref_id} is not a text field (tag=${el.tagName}). set_field works on input/textarea/contenteditable only.`);
           }
           let prevValue = '';
+          dispatched = true;
           if (el.isContentEditable) {
-            prevValue = el.textContent || '';
+            prevValue = _editableTextValue(el);
             if (clear) {
               try {
                 const sel = window.getSelection();
@@ -2402,43 +4371,21 @@
             el.dispatchEvent(new Event('input', { bubbles: true }));
             el.dispatchEvent(new Event('change', { bubbles: true }));
           }
-          // Verify: read back the value and confirm it contains what we typed.
-          const actual = el.isContentEditable ? (el.textContent || '') : (el.value || '');
-          const verified = actual.includes(text);
-
-          // Collect field attributes for credential-field detection. The
-          // detector itself lives in src/agent/credential-fields.js (pure
-          // ESM, runs background-side) so the regex has one home and is
-          // node-testable. We just ship the facts.
-          const fieldMeta = (() => {
-            try {
-              const tag = el.tagName ? el.tagName.toLowerCase() : '';
-              const fieldType = el.tagName === 'INPUT' ? (el.type || 'text').toLowerCase() : tag;
-              const elId = el.id || null;
-              let labelText = null;
-              try {
-                if (elId) {
-                  const lbl = document.querySelector('label[for="' + (window.CSS && CSS.escape ? CSS.escape(elId) : elId.replace(/"/g, '\\"')) + '"]');
-                  if (lbl) labelText = (lbl.textContent || '').trim().slice(0, 120);
-                }
-                if (!labelText && el.closest) {
-                  const wrap = el.closest('label');
-                  if (wrap) labelText = (wrap.textContent || '').trim().slice(0, 120);
-                }
-              } catch {}
-              return {
-                tag,
-                type: fieldType,
-                name: el.getAttribute ? el.getAttribute('name') : null,
-                id: elId,
-                autocomplete: el.getAttribute ? el.getAttribute('autocomplete') : null,
-                ariaLabel: el.getAttribute ? el.getAttribute('aria-label') : null,
-                placeholder: el.getAttribute ? el.getAttribute('placeholder') : null,
-                labelText,
-              };
-            } catch { return null; }
-          })();
-          if (submit) {
+          // Controlled inputs can reconcile on the next task and overwrite or
+          // append to the value after their input/change handlers return.
+          // Let that reconciliation settle before verifying the exact result.
+          await new Promise(resolve => setTimeout(resolve, SET_FIELD_VERIFY_DELAY_MS));
+          if (!el.isConnected) {
+            return failure(
+              `ref_id ${ref_id} was replaced while the value was being set. Re-read the accessibility tree and retry with the current field ref_id.`,
+              { ref_id, verified: false, recoveryRequired: 'fresh_tree', failureScope: `field-value:${ref_id}`, retryable: false },
+            );
+          }
+          const fieldMeta = _fieldMeta(el);
+          const actual = el.isContentEditable ? _editableTextValue(el) : (el.value || '');
+          const verified = _setFieldValueMatches(actual, prevValue, text, clear, el.isContentEditable);
+          const fallbackAttempted = false;
+          if (submit && verified) {
             try {
               // Detect combobox/searchbox pattern: if the element is a searchbox,
               // has role=combobox, has aria-controls pointing to a listbox, or a
@@ -2487,58 +4434,89 @@
               }
             } catch {}
           }
+          if (!verified) {
+            return failure(
+              'The field value did not exactly match the requested text after the page settled. Re-read the field and retry with a fresh ref_id.',
+              {
+                method: 'set_field',
+                ref_id,
+                rect,
+                verified: false,
+                actual: actual.slice(0, 200),
+                fieldMeta,
+                fallbackAttempted,
+                _expectedValue: (clear ? '' : prevValue) + text,
+                recoveryRequired: 'fresh_tree',
+                failureScope: `field-value:${ref_id}`,
+                retryable: false,
+              },
+            );
+          }
           return {
             success: true,
             method: 'set_field',
             ref_id,
             rect,
-            verified,
-            actual: verified ? undefined : actual.slice(0, 200),
+            verified: true,
             fieldMeta,
+            fallbackAttempted,
           };
         } catch (e) {
-          return { success: false, error: e && e.message || String(e) };
+          return failure(e && e.message || String(e));
         }
       },
-      // execute_js — model-supplied JS body, evaluated in the content
-      // script's isolated world via `new Function()`.
-      //
-      // CSP CONSTRAINT (Chrome MV3, not fixable): `new Function()`
-      // requires `'unsafe-eval'` in the executing context's CSP. For
-      // content scripts in MV3 that's the extension's `extension_pages`
-      // CSP — and MV3 forbids `'unsafe-eval'` in extension_pages
-      // (Chrome's minimum-policy enforcement is strict; adding it
-      // makes the extension fail to install). There's no manifest-side
-      // workaround. Firefox MV2 does allow this and the firefox build
-      // grants `unsafe-eval` — see src/firefox/src/content/content.js
-      // for the parallel handler.
-      //
-      // Net effect on Chrome: execute_js fails on every host with the
-      // same CSP error. Detected below and reported with an actionable
-      // hint so the agent stops thrashing through execute_js variants
-      // and uses the finite-verb tools instead.
-      'execute_js': () => {
+      // Internal Chrome recovery helpers. The background resolves the exact
+      // ref again, selects its current value, sends trusted CDP text, then
+      // asks this content script for a settled exact readback.
+      'ax_prepare_field_for_trusted_type': () => {
         try {
-          const fn = new Function(msg.params.code);
-          return { success: true, result: fn() };
-        } catch (e) {
-          const errMsg = (e && e.message) || String(e);
-          // Chrome reports CSP eval blocks as EvalError with a message
-          // citing "'unsafe-eval' is not an allowed source of script".
-          // Detect both the name and the message so we catch the case
-          // across Chrome and Firefox.
-          const isCspBlock =
-            (e && e.name === 'EvalError') ||
-            /unsafe-eval|Content Security Policy/i.test(errMsg);
-          if (isCspBlock) {
-            return {
-              success: false,
-              cspBlocked: true,
-              error:
-                'execute_js is blocked by the extension\'s MV3 Content Security Policy — `new Function()` requires `unsafe-eval`, which MV3 forbids in extension_pages. This is a hard browser-level limitation; do NOT retry execute_js with different code, the result is the same. Use the finite tools instead: get_accessibility_tree (read the page), click_ax / type_ax / set_field (interact via ref_id), scroll, navigate, get_selection, iframe_read / iframe_click / iframe_type. If you need a value that has no dedicated tool, read the tree and quote what you see.',
-            };
+          const { ref_id } = msg.params || {};
+          if (typeof ref_id !== 'string') return { success: false, error: 'ref_id is required' };
+          if (typeof window.__wb_ax_lookup !== 'function') return { success: false, error: 'accessibility-tree.js not injected' };
+          const el = window.__wb_ax_lookup(ref_id);
+          if (!el || !el.isConnected) return { success: false, error: `ref_id ${ref_id} is stale` };
+          const typeable = el.isContentEditable || el.tagName === 'INPUT' || el.tagName === 'TEXTAREA';
+          if (!typeable) return { success: false, error: `ref_id ${ref_id} is not a text field` };
+          try { el.scrollIntoView({ block: 'center', inline: 'center' }); } catch {}
+          try { el.focus({ preventScroll: true }); } catch {}
+          if (el.isContentEditable) {
+            const selection = window.getSelection();
+            const range = document.createRange();
+            range.selectNodeContents(el);
+            selection.removeAllRanges();
+            selection.addRange(range);
+          } else if (typeof el.select === 'function') {
+            el.select();
+          } else if (typeof el.setSelectionRange === 'function') {
+            el.setSelectionRange(0, String(el.value || '').length);
           }
-          return { success: false, error: errMsg };
+          const role = (el.getAttribute && el.getAttribute('role') || '').toLowerCase();
+          const isCombobox = role === 'combobox'
+            || !!(el.getAttribute && el.getAttribute('aria-autocomplete'))
+            || (el.getAttribute && el.getAttribute('aria-expanded') === 'true');
+          return { success: true, ref_id, fieldMeta: _fieldMeta(el), isCombobox };
+        } catch (error) {
+          return { success: false, error: error && error.message || String(error) };
+        }
+      },
+      'ax_verify_field_value': () => {
+        try {
+          const { ref_id, expected } = msg.params || {};
+          if (typeof ref_id !== 'string' || typeof expected !== 'string') {
+            return { success: false, verified: false, error: 'ref_id and expected are required' };
+          }
+          if (typeof window.__wb_ax_lookup !== 'function') return { success: false, verified: false, error: 'accessibility-tree.js not injected' };
+          const el = window.__wb_ax_lookup(ref_id);
+          if (!el || !el.isConnected) return { success: false, verified: false, error: `ref_id ${ref_id} is stale` };
+          const actual = el.isContentEditable ? _editableTextValue(el) : (el.value || '');
+          return {
+            success: true,
+            verified: _setFieldValueMatches(actual, '', expected, true, el.isContentEditable),
+            actual: actual.slice(0, 200),
+            fieldMeta: _fieldMeta(el),
+          };
+        } catch (error) {
+          return { success: false, verified: false, error: error && error.message || String(error) };
         }
       },
       // ── ref_id → on-screen rect resolver ─────────────────────────────────
@@ -2551,7 +4529,7 @@
       // miss are identical so error messages stay consistent.
       'ax_resolve_rect': () => {
         try {
-          const { ref_id } = msg.params || {};
+          const { ref_id, forClickFallback = false } = msg.params || {};
           if (typeof ref_id !== 'string') return { success: false, error: 'ref_id (string, e.g. "ref_42") is required' };
           if (typeof window.__wb_ax_lookup !== 'function') return { success: false, error: 'accessibility-tree.js not injected' };
           const el = window.__wb_ax_lookup(ref_id);
@@ -2575,21 +4553,74 @@
           const cy = r.top + r.height / 2;
           const vw = window.innerWidth, vh = window.innerHeight;
           const inViewport = r.width > 0 && r.height > 0 && cx >= 0 && cy >= 0 && cx <= vw && cy <= vh;
-          let name = '';
-          try {
-            name = (el.getAttribute && (el.getAttribute('aria-label') || el.getAttribute('title')))
-              || (el.innerText && el.innerText.trim().slice(0, 80))
-              || '';
-          } catch {}
+          const fallbackStatic = _axFallbackStaticAssessment(el);
+          const {
+            tag,
+            role,
+            name,
+            isEditable,
+            isNativeControl,
+            isButtonLike,
+            isSubmitControl,
+            isDownloadControl,
+            isDestructiveLike,
+            hasStatefulSemantics,
+          } = fallbackStatic;
+          let topmost = null;
+          try { if (forClickFallback && inViewport) topmost = document.elementFromPoint(cx, cy); } catch {}
+          const hitOk = !forClickFallback || (!!topmost && (
+            topmost === el
+            || el.contains?.(topmost)
+          ));
+          const interactiveHitDescendant = forClickFallback
+            ? _axInteractiveHitDescendant(el, topmost)
+            : null;
+          const visibility = forClickFallback
+            ? _axFallbackVisibility(el)
+            : { visible: true, reason: '' };
+          let fallbackBlockedReason = '';
+          if (!visibility.visible) fallbackBlockedReason = visibility.reason;
+          else if (!inViewport) fallbackBlockedReason = 'target is outside the viewport or has a zero-sized box';
+          else if (!hitOk) fallbackBlockedReason = 'target center is covered by another element';
+          else if (interactiveHitDescendant) fallbackBlockedReason = 'target center resolves to an interactive descendant that must not receive an automatic trusted click';
+          else if (fallbackStatic.blockedReason) fallbackBlockedReason = fallbackStatic.blockedReason;
+          if (forClickFallback && !window.__wbAxDocumentToken) {
+            window.__wbAxDocumentToken = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+          }
+          const fallbackState = forClickFallback ? _axFallbackState(el) : null;
           return {
             success: true,
             ref_id,
-            tag: el.tagName ? el.tagName.toLowerCase() : '',
+            tag,
+            role,
             name,
             x: Math.round(cx),
             y: Math.round(cy),
             rect: { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) },
             inViewport,
+            ...(forClickFallback ? {
+              documentToken: window.__wbAxDocumentToken,
+              hitOk,
+              topmostTag: topmost?.tagName ? topmost.tagName.toLowerCase() : '',
+              interactiveDescendantTag: interactiveHitDescendant?.tagName
+                ? interactiveHitDescendant.tagName.toLowerCase()
+                : undefined,
+              interactiveDescendantRole: interactiveHitDescendant?.getAttribute?.('role') || undefined,
+              fallbackEligible: !fallbackBlockedReason,
+              fallbackBlockedReason: fallbackBlockedReason || undefined,
+              // fallbackState remains a strong-only compatibility alias.
+              fallbackState: fallbackState.strong,
+              fallbackStrongState: fallbackState.strong,
+              fallbackWeakState: fallbackState.weak,
+              isComputedVisible: visibility.visible,
+              isEditable,
+              isNativeControl,
+              isButtonLike,
+              isSubmitControl,
+              isDownloadControl,
+              isDestructiveLike,
+              hasStatefulSemantics,
+            } : {}),
           };
         } catch (e) {
           return { success: false, error: e && e.message || String(e) };
@@ -2816,7 +4847,11 @@
 
     const result = handler();
     if (result instanceof Promise) {
-      result.then(sendResponse);
+      // Always settle sendResponse — a rejecting handler (e.g. a throwing
+      // DOM API) must not leave the caller's await hanging forever.
+      result.then(sendResponse, (err) => {
+        sendResponse({ success: false, error: `${msg.action} failed: ${err?.message || String(err)}` });
+      });
       return true; // async
     }
     sendResponse(result);

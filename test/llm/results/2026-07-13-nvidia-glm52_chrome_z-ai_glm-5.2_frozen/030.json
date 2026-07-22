@@ -1,0 +1,58 @@
+{
+  "id": "030",
+  "user": "list all the visible links here",
+  "mode": "act",
+  "tab": {
+    "url": "https://news.ycombinator.com/",
+    "title": "Hacker News"
+  },
+  "latencyMs": 3202,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll read the current page to find all visible links.",
+  "usage": {
+    "prompt_tokens": 16649,
+    "completion_tokens": 25,
+    "total_tokens": 16674
+  },
+  "attempts": 6,
+  "retryErrors": [
+    {
+      "attempt": 1,
+      "error": "HTTP 429: {\"status\":429,\"title\":\"Too Many Requests\"}",
+      "latencyMs": 388,
+      "waitMs": 600000
+    },
+    {
+      "attempt": 2,
+      "error": "HTTP 429: {\"status\":429,\"title\":\"Too Many Requests\"}",
+      "latencyMs": 320,
+      "waitMs": 600000
+    },
+    {
+      "attempt": 3,
+      "error": "HTTP 429: {\"status\":429,\"title\":\"Too Many Requests\"}",
+      "latencyMs": 349,
+      "waitMs": 600000
+    },
+    {
+      "attempt": 4,
+      "error": "HTTP 429: {\"status\":429,\"title\":\"Too Many Requests\"}",
+      "latencyMs": 561,
+      "waitMs": 600000
+    },
+    {
+      "attempt": 5,
+      "error": "HTTP 429: {\"status\":429,\"title\":\"Too Many Requests\"}",
+      "latencyMs": 458,
+      "waitMs": 600000
+    }
+  ]
+}

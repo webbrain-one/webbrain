@@ -424,7 +424,7 @@ http://127.0.0.1:8765/</pre>
         <div class="panel">
           <h3>What counts as a pass</h3>
           <ul>
-            <li><code>/remember</code> saves immediately and appears in <code>/show-memory</code>.</li>
+            <li><code>/memory --add</code> saves immediately and appears in <code>/memory</code>.</li>
             <li>Auto-learning runs after the assistant response, so it can take a few seconds.</li>
             <li>Form-derived learning saves durable preferences, not raw form field dumps.</li>
             <li>The final forms are filled from saved memory and Profile text without re-asking.</li>
@@ -452,12 +452,12 @@ http://127.0.0.1:8765/</pre>
               <strong>Paste in WebBrain</strong>
               <button class="secondary" type="button" data-copy="#prompt-step-1">Copy</button>
             </div>
-            <pre id="prompt-step-1">/remember Prefer memory tutorial answers in concise bullets, use USD for budgets, and use America/New_York when scheduling.</pre>
+            <pre id="prompt-step-1">/memory --add Prefer memory tutorial answers in concise bullets, use USD for budgets, and use America/New_York when scheduling.</pre>
           </div>
           <div class="panel">
             <h3>Then verify</h3>
             <ol>
-              <li>Run <code>/show-memory</code>.</li>
+              <li>Run <code>/memory</code>.</li>
               <li>Confirm a memory appears with the text above or an equivalent normalized version.</li>
               <li>Open Settings, Memory tab, and confirm the same record appears in the editable list.</li>
             </ol>
@@ -486,7 +486,7 @@ http://127.0.0.1:8765/</pre>
               <li>Ask WebBrain to process the form using the prompt below.</li>
               <li>If WebBrain asks what to remember, answer with a durable preference sentence.</li>
               <li>If WebBrain asks to submit, answer <code>submit</code>.</li>
-              <li>Wait, then run <code>/show-memory</code>.</li>
+              <li>Wait, then run <code>/memory</code>.</li>
             </ol>
           </div>
           <div class="panel">
@@ -570,7 +570,7 @@ http://127.0.0.1:8765/</pre>
             <h3>Verify after the turn</h3>
             <ol>
               <li>Wait 10 to 30 seconds after the assistant finishes.</li>
-              <li>Run <code>/show-memory</code>, or refresh Settings, Memory tab.</li>
+              <li>Run <code>/memory</code>, or refresh Settings, Memory tab.</li>
               <li>Expect a new memory about the two-section reply format.</li>
             </ol>
           </div>
@@ -730,7 +730,7 @@ http://127.0.0.1:8765/</pre>
     <section class="setup">
       <h2>Final checklist</h2>
       <div class="checklist">
-        <label><input type="checkbox"> Step 1 memory appeared immediately after <code>/remember</code>.</label>
+        <label><input type="checkbox"> Step 1 memory appeared immediately after <code>/memory --add</code>.</label>
         <label><input type="checkbox"> Step 2 produced a durable form preference after waiting for extraction.</label>
         <label><input type="checkbox"> Step 3 produced a durable chat preference after waiting for extraction.</label>
         <label><input type="checkbox"> Step 4 form was filled from saved memories, not from visible hints alone.</label>

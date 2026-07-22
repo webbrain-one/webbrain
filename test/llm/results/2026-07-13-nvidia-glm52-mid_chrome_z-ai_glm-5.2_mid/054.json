@@ -1,0 +1,34 @@
+{
+  "id": "054",
+  "user": "download this image",
+  "mode": "act",
+  "tab": {
+    "url": "https://example.com/photo.jpg",
+    "title": "photo.jpg"
+  },
+  "latencyMs": 167723,
+  "error": null,
+  "firstToolCall": {
+    "name": "download_files",
+    "args": {
+      "url": "https://example.com/photo.jpg"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll download this image for you.",
+  "usage": {
+    "prompt_tokens": 12855,
+    "completion_tokens": 24,
+    "total_tokens": 12879
+  },
+  "attempts": 2,
+  "retryErrors": [
+    {
+      "attempt": 1,
+      "error": "HTTP 504: ",
+      "latencyMs": 302288,
+      "waitMs": 600000
+    }
+  ]
+}

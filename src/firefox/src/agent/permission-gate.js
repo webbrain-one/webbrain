@@ -62,7 +62,12 @@ export const UNTRUSTED_CONTENT_TOOLS = new Set([
   'get_frames',
   'extract_data',
   'get_selection',
+  'find_text',
   'iframe_read',
+  // Chrome transports these through CDP, but their catalogs, schemas, frame
+  // URLs, outputs, and errors still originate from the inspected page.
+  'list_webmcp_tools',
+  'execute_webmcp_tool',
   'fetch_url',
   'research_url',
   'read_pdf',
@@ -71,9 +76,11 @@ export const UNTRUSTED_CONTENT_TOOLS = new Set([
   'inspect_element_styles',
   'progress_update',
   'progress_read',
-  // click/type_text can return page-derived labels, option text, aria-labels,
-  // and form-state hints (not just control status). Treat them as data.
+  // click/click_ax/type_text can return page-derived labels, target context,
+  // option text, aria-labels, and form-state hints. Treat them as data.
   'click',
+  'click_ax',
+  'set_checked',
   'type_text',
   'execute_js',
   'scroll',
@@ -131,6 +138,7 @@ const TOOL_CAPABILITY = {
   go_forward: Capability.NAVIGATE,
   click: Capability.CLICK,
   click_ax: Capability.CLICK,
+  set_checked: Capability.CLICK,
   iframe_click: Capability.CLICK,
   drag_drop: Capability.CLICK,
   type_text: Capability.TYPE,
@@ -143,6 +151,8 @@ const TOOL_CAPABILITY = {
   download_resource_from_page: Capability.DOWNLOAD,
   download_social_media: Capability.DOWNLOAD,
   upload_file: Capability.UPLOAD,
+  chrome_web_store_upload: Capability.UPLOAD,
+  chrome_web_store_publish: Capability.NETWORK,
   schedule_resume: Capability.SCHEDULE,
   schedule_task: Capability.SCHEDULE,
 };
@@ -161,6 +171,11 @@ const TOOL_CAPABILITY = {
  */
 export function capabilityFor(name, args) {
   args = args || {};
+  if (name === 'execute_webmcp_tool') {
+    // readOnly is only a page-authored annotation in the current WebMCP
+    // protocol. Never let that hint bypass a human capability grant.
+    return Capability.CLICK;
+  }
   if (name === 'fetch_url' || name === 'research_url') {
     return Capability.NETWORK;
   }
@@ -267,6 +282,14 @@ function resolveHostAgainst(url, base) {
  */
 export function hostForCapability(capability, args, currentUrlOrHost, toolName) {
   args = args || {};
+  if (toolName === 'execute_webmcp_tool') {
+    // A tool can belong to a cross-origin frame. Charge mutations to that
+    // frame's resolved URL instead of borrowing the top-level page grant.
+    return normalizeHost(args._webMcpTargetUrl);
+  }
+  if (capability === Capability.UPLOAD && toolName === 'chrome_web_store_upload') {
+    return normalizeHost(args._trustedPermissionUrl);
+  }
   // iframe_click / iframe_type act in a (possibly cross-origin) frame named by
   // `urlFilter`. Charge the FRAME host; if urlFilter is missing we can't
   // identify the frame → '' so the caller fails closed.

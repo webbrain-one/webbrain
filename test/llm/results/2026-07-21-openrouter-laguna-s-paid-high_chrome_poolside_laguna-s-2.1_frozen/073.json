@@ -1,0 +1,46 @@
+{
+  "id": "073",
+  "user": "buy it",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 2786,
+  "error": null,
+  "firstToolCall": {
+    "name": "clarify",
+    "args": {
+      "question": "I'm on a blank new tab and don't see what \"it\" refers to. What would you like me to buy, and where?",
+      "reason": "The current page is about:home (a blank new tab) with no product context, so \"it\" is genuinely ambiguous."
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'm on a blank new tab page right now, so I don't have any context for what \"it\" is. Could you let me know what you'd like me to buy?\n\nFor example:\n- Are you looking at a product on a specific website (Amazon, Shopify store, etc.)?\n- Should I navigate to a particular site to find something?\n- Is there a specific item, price, or link you have in mind?\n\nJust give me a bit more detail and I'll take care of the rest.",
+  "usage": {
+    "prompt_tokens": 16941,
+    "completion_tokens": 350,
+    "total_tokens": 17291,
+    "cost": 0.00024058,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 16928,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.00024058,
+      "upstream_inference_prompt_cost": 0.00017058,
+      "upstream_inference_completions_cost": 0.00007
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 154,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

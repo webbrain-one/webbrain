@@ -1,0 +1,27 @@
+{
+  "id": "013",
+  "user": "open the about config page",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 9531,
+  "error": null,
+  "firstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "about:config"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll open the about:config page for you.",
+  "usage": {
+    "prompt_tokens": 20558,
+    "completion_tokens": 23,
+    "total_tokens": 20581
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

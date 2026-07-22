@@ -1,0 +1,27 @@
+{
+  "id": "011",
+  "user": "open firefox settings",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 24946,
+  "error": null,
+  "firstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "about:preferences"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll open the Firefox settings for you.",
+  "usage": {
+    "prompt_tokens": 20556,
+    "completion_tokens": 21,
+    "total_tokens": 20577
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

@@ -1,0 +1,43 @@
+{
+  "id": "005",
+  "user": "show me my downloads",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 1080,
+  "error": null,
+  "firstToolCall": {
+    "name": "list_downloads",
+    "args": {}
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "\n\n",
+  "usage": {
+    "prompt_tokens": 17037,
+    "completion_tokens": 36,
+    "total_tokens": 17073,
+    "cost": 0.0017183,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 17035,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.0017183,
+      "upstream_inference_prompt_cost": 0.0017039,
+      "upstream_inference_completions_cost": 0.0000144
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 27,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

@@ -1,6 +1,6 @@
 # WebBrain Chrome/Edge Extension — Architecture
 
-> Version 23.0.4 · Manifest V3 · Service Worker background
+> Version 25.7.0 · Manifest V3 · Service Worker background
 
 ## High-Level Overview
 
@@ -105,14 +105,17 @@ src/chrome/
 
 ## Plan-before-Act Gate (v18.0.0)
 
-When `planBeforeAct` is enabled, action-mode runs (Act or Dev) call `agent/planner.js`
-before the first tool loop. The planner returns a bounded JSON plan with steps,
-memory strategy, scheduling hints, and risks. The side panel renders that plan
+Manual action-mode runs (Act or Dev) always call `agent/planner.js` before the
+first tool loop. Off uses the compact structured intent schema; Try and Strict
+use the full bounded JSON plan with steps, memory strategy, scheduling hints,
+and risks. The side panel renders a full plan
 as an editable approval card; approving it pins the plan to the scratchpad so it
-survives context compaction. Rejecting, timing out, invalid JSON after retry, or
-pressing Stop cancels before browser tools execute. Scheduled runs can set
+survives context compaction. Rejecting, timing out, or pressing Stop cancels
+before browser tools execute. In the default Try mode, invalid JSON after one
+repair degrades only that turn to the Ask prompt and read-only tool catalog;
+Strict mode still stops before tools. Scheduled runs can set
 `autoApprovePlanReview` so the plan is pinned without blocking on the UI.
-The feature is off by default.
+The feature defaults to Try; an explicit Off setting remains off.
 
 Planner LLM requests are recorded in traces with `phase: "planner"` and use the
 same cost allowance and abort checks as the main loop.
@@ -159,8 +162,12 @@ content instead of trusted instructions.
 Recording is user-driven from slash commands, not model-callable tools. `/record`
 captures the active tab's video + audio + (optionally) microphone into a single
 webm file and shows the red side-panel banner/timer. Add `--transcribe` to
-`/record` or `/record-full-screen` to run Whisper transcription after stop.
-`/record-full-screen` opens Chrome's screen/window picker from the offscreen
+`/record` or `/record --full-screen` to run Whisper transcription after stop.
+As an intentionally undiscoverable convenience, a normal prompt may end in
+`/record [--save-as <filename>]`; the side panel strips that suffix, starts the
+tab recording before dispatch, and automatically stops it from the run cleanup
+path. `--save-as` supplies the Downloads filename (with `.webm` normalized).
+`/record --full-screen` opens Chrome's screen/window picker from the offscreen
 recorder context through `getDisplayMedia()`, records without showing the WebBrain
 recording banner, and can be stopped by double Escape on WebBrain or browser
 pages. Chrome's picker decides what can be captured: the user must choose the
@@ -176,7 +183,7 @@ background.js
       ├─ chrome.tabCapture.getMediaStreamId({targetTabId}) → streamId
       └─ offscreen recorder-start {source:'tab', streamId, options}
 
-sidepanel.js  [/record-full-screen]
+sidepanel.js  [/record --full-screen]
       │ prepare_recording_host
       │ runtime.sendMessage {action:'start_display_recording', options}
       ▼
@@ -198,7 +205,7 @@ offscreen/recorder.js
                                   → on stop, Blob → dataURL → background
 
 background.js (on recorder-stop)
-      ├─ chrome.downloads.download(dataURL → webbrain-recording-<ts>.webm)
+      ├─ chrome.downloads.download(dataURL → requested name or webbrain-recording-<ts>.webm)
       └─ if transcribeAfter → runTranscription()
               ├─ providerManager.providers → pick first OpenAI-compatible
               │   (openai → whisper-1, groq → whisper-large-v3, …)
@@ -206,7 +213,7 @@ background.js (on recorder-stop)
               └─ chrome.downloads.download(.txt sibling)
 
 sidepanel listens for recording_update broadcast events:
-   started        → /record shows the banner; /record-full-screen stays hidden
+   started        → /record shows the banner; /record --full-screen stays hidden
    stopped        → banner hides, "saved to Downloads" toast
    transcribing   → "Transcribing audio with Whisper…"
    transcribed    → "Transcript saved" + Summarize button (Phase 3)
@@ -270,7 +277,7 @@ still saved.
 |---|---|
 | Google Meet (browser) | ✓ |
 | Zoom web client (`zoom.us/wc/...`) | ✓ |
-| **Native Zoom desktop app** | ✓ via `/record-full-screen` when the user selects the Zoom window or screen in Chrome's picker; `/record` tab capture cannot reach it. |
+| **Native Zoom desktop app** | ✓ via `/record --full-screen` when the user selects the Zoom window or screen in Chrome's picker; `/record` tab capture cannot reach it. |
 | DRM-protected video (Netflix, Disney+) | ✗ — the browser blocks the encoder at the platform level. |
 | chrome:// / edge:// / chrome-extension:// pages | ✗ — tabCapture is not allowed there. |
 | Background tabs at start time | ⚠ — `getMediaStreamId` requires the target tab to be active; we briefly activate it before capture. The user can switch away after capture starts. |
@@ -325,7 +332,7 @@ Injected before `content.js` via `content_scripts`. Exposes three globals on `wi
 | Tool | Returns | Notes |
 |---|---|---|
 | `get_accessibility_tree` | Text tree + viewport | Primary page read path. |
-| `click_ax({ref_id})` | `{success, method, tag, rect, name, href?, navigates?, hint?}` | Scrolls into view → focuses → `el.click()`. Emits hints: text-entry elements get a `next_required: 'type_ax'` nudge; combobox openers get "the popup is in a portal — re-read the full tree". |
+| `click_ax({ref_id})` | `{success, method, tag, rect, name, href?, navigates?, hint?, trusted?, verified?, fallback?, observedHints?}` | Scrolls into view → focuses → `el.click()`. Chrome considers one CDP trusted-click fallback only after two stable page/target observations. URL, handler-focus, synchronous target mutation, and delayed semantic target state prove progress; broad page churn and delayed name/class/style/child changes are diagnostic hints only. Nearby mutating XHR/ping requests, new tabs, and downloads make the result inconclusive and veto retry, while background reads and obvious telemetry are ignored. Hidden, pointer-disabled, native, stateful/toggle, form, download, and potentially mutating controls never auto-retry. A silent app-internal success can still receive one trusted second activation; generic-only eligibility, settle time, and the one-shot rule bound but cannot eliminate that tradeoff. |
 | `type_ax({ref_id, text, clear})` | `{success, method, rect}` | React-compatible: uses the native HTMLInputElement/HTMLTextAreaElement value setter. Rejects non-typeable INPUT subtypes (checkbox/radio/submit/file/...) with a clear error pointing at `click_ax`. |
 | `set_field({ref_id, text, clear, submit})` | `{success, verified, ...}` | One-shot focus + clear + type + (optional) submit. **Combobox-aware:** if the element or an ancestor looks like a searchbox/combobox/open listbox, `submit:true` dispatches `ArrowDown` → `Enter` with small delays (Stripe-style virtualized pickers need the first option highlighted before Enter commits it). Bare text inputs still get `Enter` + `form.requestSubmit()`. |
 
@@ -347,7 +354,9 @@ _enrichFirstUserMessage()
     │
     ▼
 Main loop (max steps from Settings, default 60)
-    1. provider.chat(messages, {tools, temp, maxTokens})
+    1. chatMainTurn(messages, {tools, temp, maxTokens})
+       • provider.chat() by default
+       • official OpenAI Responses streaming only for interactive Ask runs
     2. If response has tool_calls:
        a. _executeToolBatch() — run each tool
        b. Push tool results into messages
@@ -362,11 +371,28 @@ Main loop (max steps from Settings, default 60)
 
 ### Execution modes
 
-| | `processMessage()` | `processMessageStream()` |
+| | Production `processMessage()` lifecycle | Legacy explicit `processMessageStream()` lifecycle |
 |---|---|---|
-| LLM call | `provider.chat()` | `provider.chatStream()` (SSE) |
-| UI updates | `onUpdate('text', ...)` at end | `onUpdate('text_delta', ...)` live |
-| Tool calls | Parsed from `result.toolCalls` | Accumulated from stream deltas |
+| LLM call | `provider.chat()` by default; terminal-gated `provider.chatStream()` for eligible OpenAI Ask turns | `provider.chatStream()` (SSE) |
+| UI updates | Terminal `text`; eligible Ask turns also emit live `text_delta` | Live `text_delta` |
+| Tool calls | Returned only after a complete provider result | Accumulated by the separate streaming loop |
+
+The Ask integration does not route through the legacy full streaming loop.
+Normal side-panel sends still use detached `chat_start`, background-owned run
+journaling/reconnect, attachment enrichment, and `processMessage()`. The stream
+branch is eligible only for interactive Ask mode using the official OpenAI
+Responses route and when the default-on Advanced kill switch is enabled. Act,
+Dev, scheduled, cloud, and Continue runs stay on `provider.chat()`.
+
+During an eligible call, output text is forwarded live, but function calls,
+usage, reasoning, and Responses output Items are buffered until
+`response.completed`. Transport/protocol interruptions clear any partial
+visible text, disable streaming for the remainder of that run, and retry the
+generation via `provider.chat()`; terminal HTTP/API and `response.incomplete`
+errors propagate without a duplicate fallback request. Incomplete tool calls
+and partial assistant text are never executed or persisted. Live deltas remain
+immediate, while reconnect snapshots coalesce on a 200 ms trailing interval;
+terminal updates and pre-tool durability checkpoints flush immediately.
 
 ### done() blocking (v3.6.4+)
 
@@ -412,7 +438,9 @@ tier:
   `clarify`, `read_page_source`, `inspect_element_styles`, and action tools.
 - **Act**: the selected provider tier's normal browser-agent tools.
 - **Dev**: Mid/Full only. Uses the selected Act tier, then adds source/style
-  tools and Dev-extended shadow/frame inspection. Compact Dev is blocked.
+  inspection, reversible CSS/DOM patches, CDP JavaScript/console/network/event
+  diagnostics, temporary element highlighting, and Dev-extended shadow/frame
+  inspection. Compact Dev is blocked.
 
 ### Core page reading
 `get_accessibility_tree`, `read_page`, `read_pdf`, `get_window_info`, `get_interactive_elements`, `get_selection`, `extract_data`, `wait_for_stable`
@@ -422,7 +450,7 @@ tier:
 
 Full Act also adds advanced UI/DOM fallbacks: `resize_window`, `hover` (CDP-trusted, for reveal-on-hover menus), `drag_drop` (CDP-trusted pointer sequence, for Trello/Linear-style reordering), `get_shadow_dom`, `shadow_dom_query`, and `get_frames`. Mid Dev gets the shadow/frame inspection tools as Dev-extended debugging tools, but not hover/drag-drop.
 
-> **Note:** `execute_js` was removed from the Chrome/Edge MV3 tool schema — `new Function()` is blocked by the extension_pages CSP and always throws EvalError. The agent uses `read_page`, `click`, `type_text`, `scroll`, and other fine-grained tools instead. `execute_js` is available only as a Firefox Dev add-on.
+> **Note:** Chrome/Edge Dev mode implements `execute_js` with CDP `Runtime.evaluate`, not content-script `eval`/`new Function()`. That keeps the MV3 extension-page CSP intact while allowing one-shot page-main-world evaluation. The tool remains absent from Ask and normal Act, is host-permission gated, and receives a fresh submit confirmation because arbitrary page JavaScript can submit forms.
 
 ### Network / files
 `fetch_url`, `research_url`, `list_downloads`, `read_downloaded_file`, `download_resource_from_page`, `download_files`, `download_social_media`
@@ -431,7 +459,7 @@ Full Act also adds advanced UI/DOM fallbacks: `resize_window`, `hover` (CDP-trus
 `verify_form`, `clarify`, `done`, `schedule_resume`, `schedule_task`, `scratchpad_write`, `progress_update`, `progress_read`, `solve_captcha`
 
 ### Dev add-ons
-`read_page_source` and `inspect_element_styles` are Dev-only: they do not appear in Ask or normal Act. Future HTML/CSS editing/debugging tools should attach to Dev mode unless they are normal browser-operation tools.
+`read_page_source`, `inspect_element_styles`, `inject_css`, `remove_injected_css`, `patch_element`, `revert_patch`, `execute_js`, `read_console`, `inspect_network_requests`, `inspect_event_listeners`, and `highlight_element` are Dev-only: they do not appear in Ask or normal Act. CSS injection uses `chrome.scripting.insertCSS/removeCSS` and persists its patch metadata in `chrome.storage.session`; a navigation race removes the exact uniquely marked CSS from the replacement document before stale metadata is discarded. Structured element patches keep exact before/after values in the page's content-script world. Listener inspection briefly adds and restores an internal target attribute, follows open-shadow hosts for ancestor listeners, and highlighting inserts a temporary overlay, so both are gated as temporary page modifications. Console and network capture start when a Dev run attaches, use bounded buffers, omit headers/bodies by default, redact sensitive headers before storage, and are drained for every tracked tab when the panel leaves Dev mode.
 
 ---
 
@@ -443,6 +471,10 @@ Full Act also adds advanced UI/DOM fallbacks: `resize_window`, `hover` (CDP-trus
 |---|---|---|
 | Screenshot | `Page.captureScreenshot` | Viewport + full-page |
 | Click | `Input.dispatchMouseEvent` | Trusted mouse events |
+| JavaScript evaluation | `Runtime.evaluate` | Dev-only one-shot async function bodies |
+| Console diagnostics | `Runtime.consoleAPICalled`, `Runtime.exceptionThrown`, `Log.entryAdded` | Bounded Dev console/error buffer |
+| Network diagnostics | `Network.*` events and bounded body reads | Dev request/status/timing inspection |
+| Event listeners | `DOMDebugger.getEventListeners` | Listener inspection for ref/selector targets |
 | Keyboard | `Input.dispatchKeyEvent` | Trusted keystrokes |
 | Evaluate | `Runtime.evaluate` | Run code in page context |
 | DOM query | `DOM.*` | Shadow DOM piercing |
@@ -456,7 +488,7 @@ CDP events are **trusted** (`event.isTrusted === true`). Many sites reject synth
 | How | `Input.dispatchMouseEvent(x,y)` | `el.click()` |
 | Trusted | Yes | No |
 | Cross-origin | Works | Blocked |
-| Used when | Default in Chrome/Edge, or `click({x,y})` / `click({text})` after coord resolution | `click_ax` (focuses the exact element, dispatches in-page) |
+| Used when | Default in Chrome/Edge, or `click({x,y})` / `click({text})` after coord resolution; one guarded fallback for a safe `click_ax` target after verified synthetic no-progress | `click_ax` first attempt (focuses the exact element and dispatches in-page), plus Firefox's only click path |
 
 ---
 

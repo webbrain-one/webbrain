@@ -185,10 +185,14 @@
 
 <div class="container">
   <h1>Privacy Policy</h1>
-  <p class="updated">Last updated: June 30, 2026</p>
+  <p class="updated">Last updated: July 16, 2026</p>
 
   <div class="highlight-box">
-    <p><strong>TL;DR:</strong> WebBrain can run with local or bring-your-own API providers, where your keys stay on your device and requests go directly to the provider you select. If you use WebBrain Cloud, the request is sent through our API so we can provide the hosted model, enforce quotas, process subscriptions, and keep privacy-preserving debug logs. WebBrain Cloud does not store prompt text, page content, screenshots, uploaded image data, or model responses by default.</p>
+    <p><strong>TL;DR:</strong></p>
+    <ul>
+      <li><strong>Local models and bring-your-own API:</strong> your requests are never collected by WebBrain. Local-model requests stay on your device; bring-your-own API requests go directly to the provider you configure.</li>
+      <li><strong>WebBrain Cloud:</strong> information needed to process your request is sent to WebBrain. While Help Improve WebBrain is on by default, eligible Cloud text and tool interactions may be retained and used for evaluation, improvement, fine-tuning, and training. Help Improve-off interaction content is not retained. You can turn the setting off at any time in Settings → General.</li>
+    </ul>
   </div>
 
   <h2>What WebBrain Is</h2>
@@ -197,19 +201,19 @@
   <h2>Data We Collect</h2>
   <p>The data we receive depends on the provider mode you choose:</p>
   <ul>
-    <li><strong>Local or bring-your-own API providers</strong> - WebBrain does not send data to WebBrain servers. Your API keys are stored locally in browser extension storage and requests go from your browser to the provider you configured.</li>
-    <li><strong>WebBrain Cloud</strong> - Requests are sent to <code>api.webbrain.one</code> and forwarded to our upstream model provider. We receive the prompt, page context, screenshots, images, and tool context needed to answer that request, but we do not store that request content by default.</li>
+    <li><strong>Local or bring-your-own API providers</strong> - WebBrain never collects these requests. Local-model requests stay on your device. Your API keys are stored locally in browser extension storage, and bring-your-own API requests go directly from your browser to the provider you configured.</li>
+    <li><strong>WebBrain Cloud</strong> - Requests are sent to <code>api.webbrain.one</code> and forwarded to our upstream model provider. We receive the prompt, model response, relevant page context, screenshots or images, tool calls, browser-agent actions, feedback, and task outcome information needed to provide the service. Eligible Cloud text and tool interactions may be retained as described below; screenshot and uploaded-image bytes are not retained in WebBrain's improvement database.</li>
     <li><strong>Quota and subscription records</strong> - We store a stable WebBrain device identifier for quota enforcement. For paid subscriptions, Stripe payment events are stored with subscription status and Stripe customer, subscription, checkout session, and payment link identifiers.</li>
   </ul>
 
   <h2>How Your Data Flows</h2>
   <p>When you use WebBrain with a local model or your own API provider, data flows directly between your browser and the AI provider you have configured:</p>
   <ul>
-    <li><strong>Page content</strong> — When you ask a question about a page, the relevant page content is sent directly from your browser to your chosen AI provider's API. WebBrain does not relay, intercept, or store this data.</li>
+    <li><strong>Page content</strong> — When you ask a question about a page, relevant page content is sent to the configured AI provider. Local-model requests stay on your device, and bring-your-own API requests go directly to that provider without passing through WebBrain. When WebBrain Cloud is selected, WebBrain processes and may retain eligible page text under “Use of WebBrain Cloud Data to Improve WebBrain” below.</li>
     <li><strong>API keys</strong> — Your API keys are stored locally in your browser's extension storage (<code>chrome.storage.local</code> or <code>browser.storage.local</code>). They are never transmitted to us or any third party. They are only sent directly to the AI provider you have selected.</li>
-    <li><strong>Conversations</strong> — Your chat history exists only in your browser's memory during the session. It is not persisted to disk or sent anywhere other than to your configured AI provider for generating responses.</li>
+    <li><strong>Conversations</strong> — Your browser keeps the current chat history for the session and sends it only to the configured AI provider as needed to generate responses. WebBrain does not collect requests sent to local models or directly to providers using your own API credentials. WebBrain Cloud interactions are handled as described in “Use of WebBrain Cloud Data to Improve WebBrain” below.</li>
   </ul>
-  <p>When you use WebBrain Cloud, your browser sends the request to <code>api.webbrain.one</code>. WebBrain Cloud forwards it to OpenRouter and the selected upstream model provider, currently configured as StepFun. The model response is returned to your browser.</p>
+  <p>When you use WebBrain Cloud, your browser sends the request to <code>api.webbrain.one</code>. WebBrain Cloud forwards it to OpenRouter and the configured upstream model provider. The model response is returned to your browser.</p>
 
   <h2>WebBrain Cloud Logs</h2>
   <p>WebBrain Cloud keeps metadata and error logs so we can debug failures, understand usage, and enforce the free and paid daily allowances. Default request logs may include:</p>
@@ -218,8 +222,27 @@
     <li><strong>Quota metadata</strong> - hashed device id, tier, daily allowance, token counts, estimated request cost, and daily usage totals.</li>
     <li><strong>Network/debug metadata</strong> - hashed IP address, hashed user agent, HTTP status, upstream status, and short upstream error snippets.</li>
   </ul>
-  <p>Default request logs do <strong>not</strong> store prompt text, page content, screenshots, uploaded image data, or model responses. Raw request/response capture may be enabled temporarily for debugging, but it is disabled by default and should be retained only briefly.</p>
+  <p>These operational request logs do <strong>not</strong> store prompt text, page content, screenshots, uploaded image data, or model responses. They are separate from Cloud interactions selected for product improvement under the policy below. Raw request/response capture may also be enabled temporarily for debugging and is retained only as long as needed for the investigation.</p>
   <p>Our web server or hosting provider may also keep standard access logs such as IP address, path, timestamp, and user agent for security and operations. These logs are separate from the WebBrain Cloud application request logs described above.</p>
+
+  <h2>Use of WebBrain Cloud Data to Improve WebBrain</h2>
+  <p>When you use WebBrain Cloud, information required to process your request is transmitted to and processed by WebBrain. Depending on the features you use, this information may include your prompts, model responses, relevant webpage content, screenshots or images, tool calls, browser-agent actions, feedback, and information about whether a task succeeded or failed.</p>
+  <p>Unless you disable <strong>Help Improve WebBrain</strong> in Settings → General, WebBrain may retain eligible Cloud text, responses, relevant page text, tool calls, agent actions, feedback, usage, and outcomes and use them to evaluate, develop, improve, fine-tune, and train WebBrain's models, systems, safety mechanisms, and browser-automation capabilities. Help Improve WebBrain is on by default. Screenshots and uploaded images may be processed for inference, but WebBrain strips image URLs, base64 media, and image bytes before writing an interaction to its improvement database.</p>
+  <p>Older WebBrain Cloud clients that do not send a Help Improve preference are treated as using the default-on setting. WebBrain derives a best-effort opaque session for those clients so related generations can be grouped without retaining the raw device or conversation fingerprint used for that derivation. To disable collection of future Cloud interactions, install the latest WebBrain client and turn off Help Improve WebBrain in Settings → General. An explicit disabled preference always opts out. Once a conversation receives an opt-out request, that conversation is permanently ineligible for further collection. If you turn Help Improve WebBrain back on, collection begins with your next new conversation and cannot make the current conversation eligible again.</p>
+  <p>WebBrain MySQL is the canonical store for eligible completed generations. Stored request and response payloads are compressed and encrypted, and related calls are grouped with an opaque session identifier derived from the device and conversation identifiers. Raw identifiers are not stored with the payload or sent to OpenRouter for grouping. Failed generations and interrupted streams are not stored as improvement content.</p>
+  <p>Before retained interactions are used for model development, WebBrain applies technical measures designed to remove or mask direct identifiers, credentials, secrets, and other sensitive information. These measures reduce privacy risks but may not eliminate every possibility that information could be associated with an individual.</p>
+  <p>WebBrain does not use the following for model training:</p>
+  <ul>
+    <li>Requests processed entirely through a local model;</li>
+    <li>Requests sent directly to a provider using your own API credentials;</li>
+    <li>WebBrain Cloud interactions made while Help Improve WebBrain is disabled;</li>
+    <li>Passwords, authentication tokens, private keys, payment-card details, or other credentials that our systems identify; or</li>
+    <li>Data from accounts that WebBrain knows belong to children.</li>
+  </ul>
+  <p>You should not submit confidential information or personal information about another person unless you are authorized to do so.</p>
+  <p>You may disable the use of future Cloud interactions for model improvement at any time through Settings → General in the latest WebBrain client. Disabling this option prevents new interaction content from being added to improvement or training datasets and routes the conversation through an OpenRouter workspace where content logging is disabled. It does not prevent the minimal metadata-only processing and retention needed to provide the service, enforce quotas, prevent abuse, maintain security, or debug failures. It may not be possible to remove information already incorporated into a trained model, but WebBrain will honor applicable deletion and objection rights for retained source data.</p>
+  <p>Raw Cloud interactions selected for improvement are retained for no longer than <strong>12 months</strong> before deletion or de-identification, and may be deleted or de-identified earlier when no longer needed. De-identified datasets may be retained for up to <strong>5 years</strong> for model development, evaluation, security, and reproducibility.</p>
+  <p>Eligible interactions are also stored privately in an isolated OpenRouter Logs workspace with Input &amp; Output Logging enabled as a redundant review copy. <a href="https://openrouter.ai/docs/guides/features/input-output-logging" target="_blank" rel="noopener noreferrer">OpenRouter documents</a> a minimum retention of three months and says data may be retained longer unless deletion is requested. OpenRouter's separate “Use Inputs/Outputs” training and discount option is disabled. OpenRouter logging is not permanent storage or a guaranteed image backup.</p>
 
   <h2>Third-Party AI Providers</h2>
   <p>WebBrain connects to the AI provider of your choice. Each provider has its own privacy policy and data handling practices:</p>
@@ -242,10 +265,12 @@
   <p>No permission is used to monitor, track, or collect your browsing activity.</p>
 
   <h2>Act Mode</h2>
-  <p>When you enable Act mode, WebBrain can interact with web pages on your behalf (clicking, typing, scrolling, navigating). This is done via content scripts running in your browser — no data about these actions is sent to us. All actions are performed locally and are visible to you in real time. Act mode requires explicit activation and displays a visible warning banner.</p>
+  <p>When you enable Act mode, WebBrain can interact with web pages on your behalf (clicking, typing, scrolling, navigating). The actions are performed by content scripts in your browser and are visible to you in real time. The configured AI provider receives the tool calls, action results, and relevant page context needed to operate the agent. WebBrain never collects this information when you use a local model or bring your own API credentials; when you use WebBrain Cloud, it is handled under the Cloud data-use terms above. Act mode requires explicit activation and displays a visible warning banner.</p>
 
   <h2>Bundled Skills</h2>
-  <p>WebBrain ships with one skill enabled by default: <strong>FreeSkillz.xyz</strong>, a first-party service we operate. It can read YouTube video transcripts and resolve or download public media from the hosts declared in the bundled skill manifest. When you use these tools, WebBrain sends only the current or specified URL plus declared options such as transcript language, media kind, maximum height, or filename hint to <code>freeskillz.xyz</code>. It does not receive your page content, chat history, or browsing history. Public media downloads create a short-lived provider job, save the completed file through the browser Downloads API, and then ask the provider to delete the job. You can remove this skill at any time in Settings → Skills, and any additional skills you import yourself are off by default and run only against the HTTPS endpoint they declare.</p>
+  <p>WebBrain ships with two skills enabled by default. “Enabled” means available on demand, not injected into every request. Mid and Full runs send your configured LLM provider a small eligible catalog containing skill IDs, names, summaries, and optional canonical semantic intents (up to six 40-character identifiers per skill). The Act/Dev planner receives the same routing-only catalog so it can select relevant skills before execution; intents are meaning hints across languages, not literal keyword matching. Full instructions and compatible tools are sent only after a relevant skill is activated for the current run. Skills reset before the next user turn. Compact sends no skill catalog, instructions, or tools, and Ask lists only explicitly compatible skills while continuing to hide mutating and download tools.</p>
+  <p><strong>FreeSkillz.xyz</strong> is a first-party service we operate. It can read YouTube video transcripts and resolve or download public media from the hosts declared in the bundled skill manifest after the skill is loaded (or preactivated by a trusted recommended download action). When you use these tools, WebBrain sends only the current or specified URL plus declared options such as transcript language, media kind, maximum height, or filename hint to <code>freeskillz.xyz</code>. It does not receive your page content, chat history, or browsing history. Public media downloads create a short-lived provider job, save the completed file through the browser Downloads API, and then ask the provider to delete the job.</p>
+  <p>The <strong>OTP / verification-code helper (email)</strong> declares no external tool or endpoint. On the active run tab, it guides WebBrain's existing page-reading tools to prefer selected text or a bounded, message-scoped accessibility-tree subtree for a recent, service-matching code; it cannot switch to background tabs or read SMS, native apps, phone notifications, or another device. The skill creates no additional network request, but when you ask WebBrain to read a code, the scoped page content and extracted code are included in the normal request to your configured LLM provider as part of the current conversation. If Record traces is enabled, raw page-reading results and model responses are also retained locally in WebBrain's trace database until you delete those traces. The instructions disclose this before reading, honor Strict secret handling, treat messages as untrusted, and prohibit intentionally copying the code into scratchpad or user memory. You can remove either default skill at any time in Settings → Skills, and any additional skills you import yourself are off by default and run only against the HTTPS endpoint they declare.</p>
 
   <h2>Cookies &amp; Analytics</h2>
   <p>The WebBrain browser extension does not use cookies. The webbrain.one website uses Plausible Analytics for aggregate, privacy-friendly page-view metrics. There are no ads or tracking pixels. WebBrain Cloud API request logs are separate from website analytics.</p>

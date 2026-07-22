@@ -1,0 +1,45 @@
+{
+  "id": "040",
+  "user": "clear the search box",
+  "mode": "act",
+  "tab": {
+    "url": "https://www.google.com/search?q=foo",
+    "title": "foo - Google Search"
+  },
+  "latencyMs": 1976,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "\nI'll clear the search box on this Google search page. Let me first read the page to find the search input.\n\n",
+  "usage": {
+    "prompt_tokens": 17334,
+    "completion_tokens": 93,
+    "total_tokens": 17427,
+    "cost": 0.0017708,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 17332,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.0017708,
+      "upstream_inference_prompt_cost": 0.0017336,
+      "upstream_inference_completions_cost": 0.0000372
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 38,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

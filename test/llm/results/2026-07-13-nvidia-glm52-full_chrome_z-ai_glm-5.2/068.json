@@ -1,0 +1,34 @@
+{
+  "id": "068",
+  "user": "click that",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 40973,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'm looking at a New Tab page (about:home), but I don't see any specific element you're referring to as \"that.\" There's no prior context in our conversation pointing to a particular link or button.\n\nCould you clarify what you'd like me to click? For example:\n- A specific item on your new tab page (a shortcut, a bookmark, a search bar)?\n- A link or button you mentioned that I should navigate to?\n\nLet me take a quick look at what's actually on the page so I can help:",
+  "usage": {
+    "prompt_tokens": 20555,
+    "completion_tokens": 123,
+    "total_tokens": 20678
+  },
+  "attempts": 2,
+  "retryErrors": [
+    {
+      "attempt": 1,
+      "error": "HTTP 504: ",
+      "latencyMs": 302352,
+      "waitMs": 600000
+    }
+  ]
+}

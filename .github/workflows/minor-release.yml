@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       use_ai:
-        description: Generate the changelog with GitHub Models when manual notes are empty.
+        description: Generate the changelog with AI when manual notes are empty.
         required: true
         type: boolean
         default: true
@@ -13,15 +13,9 @@ on:
         required: false
         type: string
         default: ''
-      model:
-        description: GitHub Models model for AI changelog generation.
-        required: false
-        type: string
-        default: openai/gpt-4o
 
 permissions:
   contents: write
-  models: read
 
 concurrency:
   group: minor-release-${{ github.ref }}
@@ -108,21 +102,43 @@ jobs:
 
       - name: Generate changelog notes with AI
         if: ${{ inputs.manual_changelog == '' && inputs.use_ai }}
-        id: ai_changelog
-        uses: actions/ai-inference@v1
-        with:
-          model: ${{ inputs.model }}
-          prompt-file: .github/prompts/minor-release-changelog.prompt.yml
-          input: |
-            version: ${{ steps.release_meta.outputs.new_version }}
-            date: ${{ steps.release_meta.outputs.release_date }}
-          file_input: |
-            release_context: .release/release-context.md
-
-      - name: Save AI changelog notes
-        if: ${{ inputs.manual_changelog == '' && inputs.use_ai }}
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_SECRET }}
         run: |
-          cp "${{ steps.ai_changelog.outputs.response-file }}" .release/changelog-body.md
+          SYSTEM_PROMPT=$(cat .github/prompts/minor-release-changelog-system.txt)
+          USER_TEMPLATE=$(cat .github/prompts/minor-release-changelog-user.txt)
+          RELEASE_CONTEXT=$(cat .release/release-context.md)
+          VERSION="${{ steps.release_meta.outputs.new_version }}"
+          DATE="${{ steps.release_meta.outputs.release_date }}"
+
+          jq -n \
+            --arg sys "$SYSTEM_PROMPT" \
+            --arg usr "$USER_TEMPLATE" \
+            --arg ver "$VERSION" \
+            --arg dt "$DATE" \
+            --arg ctx "$RELEASE_CONTEXT" \
+            '{
+              model: "gpt-5.4-nano-2026-03-17",
+              messages: [
+                {role: "system", content: $sys},
+                {role: "user", content: ($usr | gsub("\\{\\{version\\}\\}"; $ver) | gsub("\\{\\{date\\}\\}"; $dt) | gsub("\\{\\{release_context\\}\\}"; $ctx))}
+              ],
+              max_completion_tokens: 1200,
+              temperature: 0.2
+            }' > /tmp/payload.json
+
+          RESPONSE=$(curl -s https://api.openai.com/v1/chat/completions \
+            -H "Authorization: Bearer $OPENAI_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d @/tmp/payload.json)
+
+          ERROR=$(echo "$RESPONSE" | jq -r '.error.message // empty')
+          if [ -n "$ERROR" ]; then
+            echo "API error: $ERROR" >&2
+            exit 1
+          fi
+
+          echo "$RESPONSE" | jq -r '.choices[0].message.content' > .release/changelog-body.md
 
       - name: Require changelog notes
         run: |

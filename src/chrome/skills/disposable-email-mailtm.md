@@ -1,5 +1,13 @@
 # Disposable email (Mail.tm)
 
+```webbrain-skill
+{
+  "summary": "Create and use a disposable Mail.tm inbox for low-importance signups and email verification flows.",
+  "modes": ["act"],
+  "intents": ["temporary_email", "disposable_email", "signup_email", "email_verification"]
+}
+```
+
 Use this skill only for low-importance, disposable signups where the user needs a temporary email address or an email verification code/link and the account is not important.
 
 Default provider: Mail.tm (`https://api.mail.tm`).

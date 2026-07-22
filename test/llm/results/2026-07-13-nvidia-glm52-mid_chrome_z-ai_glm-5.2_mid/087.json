@@ -1,0 +1,27 @@
+{
+  "id": "087",
+  "user": "open this link in a new tab",
+  "mode": "act",
+  "tab": {
+    "url": "https://www.cnn.com/2026/05/world/example-story/index.html",
+    "title": "Example story — CNN"
+  },
+  "latencyMs": 68275,
+  "error": null,
+  "firstToolCall": {
+    "name": "new_tab",
+    "args": {
+      "url": "https://www.cnn.com/2026/05/world/example-story/index.html"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll open that link in a new tab for you.",
+  "usage": {
+    "prompt_tokens": 12871,
+    "completion_tokens": 38,
+    "total_tokens": 12909
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

@@ -20,11 +20,14 @@ const LOCAL_MODEL_LIST_PROVIDER_IDS = ['llamacpp', 'ollama', 'lmstudio', 'jan', 
 const WEBBRAIN_CLOUD_CONTEXT_WINDOW = 1000000;
 const WEBBRAIN_CLOUD_LEGACY_CONTEXT_WINDOW = 256000;
 const WEBBRAIN_DEVICE_GUID_KEY = 'webbrainDeviceGuid';
+const HELP_IMPROVE_WEBBRAIN_KEY = 'helpImproveWebBrain';
 const OPENROUTER_DEFAULT_MODEL = 'openrouter/free';
 const OPENROUTER_LEGACY_DEFAULT_MODEL = 'stepfun/step-3.7-flash';
+const OPENAI_DEFAULT_MODEL = 'gpt-5.6-terra';
+const OPENAI_LEGACY_DEFAULT_MODEL = 'gpt-5.5';
 const SUPPORTED_PROVIDER_TYPES = new Set(['llamacpp', 'openai', 'azure_openai', 'aws_bedrock', 'anthropic', 'anthropic_oauth']);
 const SAFE_PROVIDER_ID_RE = /^[A-Za-z0-9_-]+$/;
-const ROUTER_PROVIDER_IDS = ['openrouter', 'cloudflare', 'nvidia', 'groq', 'huggingface'];
+const ROUTER_PROVIDER_IDS = ['openrouter', 'cloudflare', 'nvidia', 'groq', 'huggingface', 'fireworks', 'together'];
 const PROVIDER_CREDENTIAL_KEYS = ['apiKey', 'accessKeyId', 'secretAccessKey', 'sessionToken'];
 
 /**
@@ -49,7 +52,7 @@ export class ProviderManager {
    * defaults do not stay visible forever for existing users.
    */
   async load() {
-    const data = await browser.storage.local.get(['providers', 'activeProvider', WEBBRAIN_DEVICE_GUID_KEY]);
+    const data = await browser.storage.local.get(['providers', 'activeProvider', WEBBRAIN_DEVICE_GUID_KEY, HELP_IMPROVE_WEBBRAIN_KEY]);
     const hadLegacyClaudeSubscription = Object.hasOwn(data.providers || {}, 'claude_subscription');
     const stored = this._migrateStoredProviderConfigs(data.providers || {});
     const legacyActiveProviderId = ['webbrain', 'openai_subscription'].includes(data.activeProvider)
@@ -95,6 +98,7 @@ export class ProviderManager {
     if (hadLegacyClaudeSubscription) await signOutClaude();
     if (configs[WEBBRAIN_CLOUD_PROVIDER_ID]) {
       configs[WEBBRAIN_CLOUD_PROVIDER_ID].deviceGuid = await this._getDeviceGuid(data[WEBBRAIN_DEVICE_GUID_KEY]);
+      configs[WEBBRAIN_CLOUD_PROVIDER_ID].helpImproveWebBrain = data[HELP_IMPROVE_WEBBRAIN_KEY] !== false;
     }
     this.activeProviderId = legacyActiveProviderId || WEBBRAIN_CLOUD_PROVIDER_ID;
     if (!configs[this.activeProviderId]) this.activeProviderId = WEBBRAIN_CLOUD_PROVIDER_ID;
@@ -259,6 +263,12 @@ export class ProviderManager {
         secretAccessKey: '',
         sessionToken: '',
         supportsVision: false,
+        // Seed Claude-class rates; users should adjust for other Bedrock models.
+        inputCostPerMillionUsd: 3,
+        cacheReadCostPerMillionUsd: 0.3,
+        cacheWriteCostPerMillionUsd: 3.75,
+        cacheWrite1hCostPerMillionUsd: 6,
+        outputCostPerMillionUsd: 15,
         enabled: false,
       },
       openai: {
@@ -267,9 +277,12 @@ export class ProviderManager {
         label: 'OpenAI',
         providerName: 'openai',
         baseUrl: 'https://api.openai.com/v1',
-        model: 'gpt-5.5',
-        inputCostPerMillionUsd: 5,
-        outputCostPerMillionUsd: 22.5,
+        model: OPENAI_DEFAULT_MODEL,
+        inputCostPerMillionUsd: 2.5,
+        cacheReadCostPerMillionUsd: 0.25,
+        // GPT-5.6 family bills included cache writes at 1.25× input.
+        cacheWriteCostPerMillionUsd: 3.125,
+        outputCostPerMillionUsd: 15,
         supportsStreamUsageOptions: true,
         apiKey: '',
         apiKeyUrl: 'https://platform.openai.com/api-keys',
@@ -282,6 +295,9 @@ export class ProviderManager {
         baseUrl: 'https://api.anthropic.com',
         model: 'claude-sonnet-4-6',
         inputCostPerMillionUsd: 3,
+        cacheReadCostPerMillionUsd: 0.3,
+        cacheWriteCostPerMillionUsd: 3.75,
+        cacheWrite1hCostPerMillionUsd: 6,
         outputCostPerMillionUsd: 15,
         apiKey: '',
         apiKeyUrl: 'https://console.anthropic.com/settings/keys',
@@ -391,6 +407,20 @@ export class ProviderManager {
         apiKeyUrl: 'https://platform.minimaxi.com/user-center/basic-information/interface-key',
         enabled: false,
       },
+      kimi: {
+        type: 'openai',
+        category: 'cloud',
+        label: 'Kimi',
+        providerName: 'kimi',
+        baseUrl: 'https://api.moonshot.ai/v1',
+        model: 'kimi-k2.5',
+        supportsStreamUsageOptions: true,
+        omitTemperature: true,
+        compat: { maxTokensField: 'max_completion_tokens' },
+        apiKey: '',
+        apiKeyUrl: 'https://platform.kimi.ai/console/api-keys',
+        enabled: false,
+      },
       alibaba: {
         type: 'openai',
         category: 'cloud',
@@ -400,6 +430,18 @@ export class ProviderManager {
         model: 'qwen-max',
         apiKey: '',
         apiKeyUrl: 'https://dashscope.console.aliyun.com/apiKey',
+        enabled: false,
+      },
+      together: {
+        type: 'openai',
+        category: 'router',
+        label: 'Together AI',
+        providerName: 'together',
+        baseUrl: 'https://api.together.xyz/v1',
+        model: 'meta-llama/Llama-3.3-70B-Instruct-Turbo',
+        supportsStreamUsageOptions: true,
+        apiKey: '',
+        apiKeyUrl: 'https://api.together.ai/settings/api-keys',
         enabled: false,
       },
       openrouter: {
@@ -426,11 +468,56 @@ export class ProviderManager {
         apiKeyUrl: 'https://huggingface.co/settings/tokens',
         enabled: false,
       },
+      fireworks: {
+        type: 'openai',
+        category: 'router',
+        label: 'Fireworks',
+        providerName: 'fireworks',
+        baseUrl: 'https://api.fireworks.ai/inference/v1',
+        model: 'accounts/fireworks/models/llama-v3p3-70b-instruct',
+        supportsStreamUsageOptions: true,
+        apiKey: '',
+        apiKeyUrl: 'https://fireworks.ai/account/api-keys',
+        enabled: false,
+      },
+      z_ai: {
+        type: 'openai',
+        category: 'cloud',
+        label: 'z.ai GLM',
+        providerName: 'z_ai',
+        baseUrl: 'https://api.z.ai/api/paas/v4',
+        model: 'glm-5.2',
+        contextWindow: 1000000,
+        inputCostPerMillionUsd: 1.4,
+        cacheReadCostPerMillionUsd: 0.26,
+        outputCostPerMillionUsd: 4.4,
+        apiKey: '',
+        apiKeyUrl: 'https://docs.z.ai/guides/overview/quick-start',
+        enabled: false,
+      },
     };
   }
 
   _migrateStoredProviderConfigs(stored) {
     const migrated = { ...stored };
+    const storedOpenAi = migrated.openai;
+    const openAiBaseUrl = String(storedOpenAi?.baseUrl || 'https://api.openai.com/v1').replace(/\/+$/, '');
+    const untouchedOpenAiDefault = storedOpenAi?.model === OPENAI_LEGACY_DEFAULT_MODEL
+      && storedOpenAi?.configured !== true
+      && !String(storedOpenAi?.apiKey || '').trim()
+      && openAiBaseUrl === 'https://api.openai.com/v1'
+      && (storedOpenAi?.inputCostPerMillionUsd == null || Number(storedOpenAi.inputCostPerMillionUsd) === 5)
+      && (storedOpenAi?.outputCostPerMillionUsd == null || Number(storedOpenAi.outputCostPerMillionUsd) === 22.5);
+    if (untouchedOpenAiDefault) {
+      migrated.openai = {
+        ...storedOpenAi,
+        model: OPENAI_DEFAULT_MODEL,
+        inputCostPerMillionUsd: 2.5,
+        cacheReadCostPerMillionUsd: 0.25,
+        cacheWriteCostPerMillionUsd: 3.125,
+        outputCostPerMillionUsd: 15,
+      };
+    }
     if (migrated.openrouter?.model === OPENROUTER_LEGACY_DEFAULT_MODEL) {
       migrated.openrouter = {
         ...migrated.openrouter,
@@ -767,11 +854,17 @@ export class ProviderManager {
           let errBody = '';
           try { errBody = await res.text(); } catch {}
           if (res.status === 403) {
-            if (!firstFailure) firstFailure = {
-              ok: false,
-              error:
-                'Ollama returned 403 - set OLLAMA_ORIGINS="*" (or moz-extension://*,chrome-extension://*) and restart `ollama serve`.',
-            };
+            // The OLLAMA_ORIGINS remediation only applies to Ollama — for
+            // the other local providers sharing this path (llamacpp,
+            // lmstudio, jan, vllm, sglang, localai) a 403 means something
+            // else (auth proxy, --api-key, ...), so report it generically.
+            if (!firstFailure) firstFailure = id === 'ollama'
+              ? {
+                  ok: false,
+                  error:
+                    'Ollama returned 403 - set OLLAMA_ORIGINS="*" (or moz-extension://*,chrome-extension://*) and restart `ollama serve`.',
+                }
+              : this._modelListFailure(res.status, errBody, res.statusText);
             continue;
           }
           if (!firstFailure) firstFailure = this._modelListFailure(res.status, errBody, res.statusText);

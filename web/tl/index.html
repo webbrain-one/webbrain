@@ -170,7 +170,7 @@
       "name": "Ligtas bang gamitin ang WebBrain? Maaari ba nitong baguhin ang mga web page?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "May dalawang mode ang WebBrain: ang mode ng Pagtatanong (default) ay read-only at hindi maaaring baguhin ang anumang bagay sa pahina. Ang mode ng Pagkilos ay nag-e-enable ng buong browser agent capabilities (pag-click, pag-type, pagna-navigate) ngunit nangangailangan ng tahasang kumpirmasyon ng user bago i-activate, at may kasamang nakikitang warning banner. Maaari mong itigil ang ahente anumang oras gamit ang Stop button. Ang source code ng extension ay buong nakabukas sa GitHub para sa audit."
+        "text": "May tatlong mode ang WebBrain. Ang mode ng Pagtatanong (default) ay read-only at hindi maaaring baguhin ang pahina. Ang mode ng Pagkilos ay nagpapahintulot ng browser actions gaya ng pag-click, pag-type, at pag-navigate, habang nagdaragdag ang Dev mode ng page-debugging tools. Ang mga action na may epekto ay nangangailangan ng approval by default; kapag pinatay ang permission gate na ito, nagpapakita ang WebBrain ng nakikitang warning banner. Maaari mong itigil ang ahente anumang oras gamit ang Stop button. Ang source code ng extension ay buong nakabukas sa GitHub para sa audit."
       }
     },
     {
@@ -1011,90 +1011,119 @@
       box-shadow: 0 0 0 1px var(--tint-strong);
     }
 
-    /* ----- v3 — short-form video player ----- */
+    /* ----- v3 — landscape video player (YouTube-style watch page) ----- */
     .page-video {
       display: flex;
-      align-items: center;
+      flex-direction: column;
       justify-content: center;
-      padding: 14px 24px;
-      background: radial-gradient(circle at 50% 30%, rgba(167,139,250,0.10), transparent 70%);
+      gap: 12px;
+      padding: 18px 16px;
+      background: radial-gradient(circle at 50% 20%, rgba(167,139,250,0.10), transparent 70%);
     }
     .pv-frame {
       position: relative;
-      width: 200px;
-      aspect-ratio: 9 / 16;
-      max-height: 100%;
-      border-radius: 14px;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      border-radius: 10px;
       overflow: hidden;
       border: 1px solid rgba(255,255,255,0.08);
-      box-shadow: 0 12px 36px rgba(0,0,0,0.45);
+      box-shadow: 0 10px 28px rgba(0,0,0,0.40);
       background:
-        linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.55) 75%, rgba(0,0,0,0.85) 100%),
-        linear-gradient(45deg, #2d1b69, #6c63ff 70%, #ec4899);
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      padding: 10px 12px 14px;
+        linear-gradient(180deg, rgba(0,0,0,0) 45%, rgba(0,0,0,0.72) 100%),
+        linear-gradient(135deg, #2d1b69, #6c63ff 65%, #ec4899);
       color: #fff;
     }
+    /* Soft frosted play disc — readable as "video" without the loud
+       YouTube-red brand hit that pulls focus from the agent panel. */
     .pv-frame::before {
-      content: '▶';
+      content: '';
       position: absolute;
       inset: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 30px;
-      color: rgba(255,255,255,0.85);
-      text-shadow: 0 4px 14px rgba(0,0,0,0.5);
+      margin: auto;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.16);
+      border: 1px solid rgba(255,255,255,0.28);
+      box-shadow: 0 6px 18px rgba(0,0,0,0.28);
+      backdrop-filter: blur(6px);
       pointer-events: none;
     }
-    .pv-top {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 10px;
-      color: rgba(255,255,255,0.85);
-      position: relative;
-      z-index: 1;
-    }
-    .pv-time {
-      background: rgba(0,0,0,0.4);
-      padding: 2px 6px;
-      border-radius: 4px;
-    }
-    .pv-bottom {
-      position: relative;
-      z-index: 1;
-      font-size: 11px;
-      line-height: 1.4;
-      padding-inline-end: 30px;
-    }
-    .pv-username {
-      font-weight: 700;
-      margin-bottom: 3px;
-    }
-    .pv-caption {
-      color: rgba(255,255,255,0.85);
-    }
-    .pv-actions {
+    .pv-frame::after {
+      content: '';
       position: absolute;
-      inset-inline-end: 6px;
-      bottom: 24px;
+      inset: 0;
+      margin: auto;
+      width: 0;
+      height: 0;
+      border-style: solid;
+      border-width: 7px 0 7px 12px;
+      border-color: transparent transparent transparent rgba(255,255,255,0.92);
+      transform: translateX(2px);
+      pointer-events: none;
+    }
+    .pv-controls {
+      position: absolute;
+      inset-inline: 0;
+      bottom: 0;
+      z-index: 1;
       display: flex;
       flex-direction: column;
-      gap: 8px;
-      z-index: 1;
+      gap: 6px;
+      padding: 8px 10px 9px;
+      background: linear-gradient(180deg, transparent, rgba(0,0,0,0.72));
     }
-    .pv-actions span {
-      background: rgba(0,0,0,0.4);
-      border-radius: 50%;
-      width: 26px;
-      height: 26px;
+    .pv-progress {
+      position: relative;
+      height: 3px;
+      border-radius: 2px;
+      background: rgba(255,255,255,0.28);
+      overflow: hidden;
+    }
+    .pv-progress::after {
+      content: '';
+      position: absolute;
+      inset-block: 0;
+      inset-inline-start: 0;
+      width: 38%;
+      background: rgba(255,255,255,0.88);
+      border-radius: 2px;
+    }
+    .pv-controls-row {
       display: flex;
       align-items: center;
-      justify-content: center;
+      justify-content: space-between;
+      font-size: 10px;
+      color: rgba(255,255,255,0.9);
+    }
+    .pv-time {
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.2px;
+    }
+    .pv-controls-icons {
+      display: flex;
+      gap: 8px;
+      opacity: 0.85;
+      font-size: 11px;
+    }
+    .pv-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      text-align: start;
+      min-width: 0;
+    }
+    .pv-caption {
+      color: var(--text);
       font-size: 13px;
+      font-weight: 650;
+      line-height: 1.35;
+      letter-spacing: 0.1px;
+    }
+    .pv-username {
+      color: var(--text-dim);
+      font-size: 11px;
+      font-weight: 500;
     }
 
     /* Scene 4 — a compact browser-style completion bubble lands with the
@@ -1872,32 +1901,6 @@
     }
     .footer-links { display: flex; flex-wrap: wrap; gap: 12px 20px; }
 
-    .safety-note {
-      max-width: var(--max-w);
-      margin: 0 auto 24px;
-      background: rgba(251,191,36,0.1);
-      border: 1px solid rgba(251,191,36,0.35);
-      border-radius: var(--radius-sm);
-      padding: 18px 20px;
-      color: var(--text);
-      text-align: start;
-      line-height: 1.55;
-      font-size: 13px;
-    }
-    .safety-note h4 {
-      font-size: 14px;
-      margin-bottom: 8px;
-      letter-spacing: 0.4px;
-      text-transform: uppercase;
-      color: var(--warning);
-    }
-    .safety-note ul {
-      margin: 0;
-      padding-inline-start: 18px;
-    }
-    .safety-note li { margin-bottom: 6px; }
-    .safety-note li:last-child { margin-bottom: 0; }
-
     /* ================================================================
        COMPARISON TABLE
        ================================================================ */
@@ -2344,24 +2347,22 @@
       <div class="browser-mockup" data-scene="3" aria-hidden="true" inert>
         <div class="browser-bar">
           <div class="browser-dots"><span></span><span></span><span></span></div>
-          <div class="browser-url">https://socialvid.app/@nomad/clip-8472</div>
+          <div class="browser-url">https://youtube.com/watch?v=n0m4dB0druM</div>
         </div>
         <div class="browser-body">
           <div class="browser-page page-video">
             <div class="pv-frame">
-              <div class="pv-top">
-                <span></span>
-                <span class="pv-time">0:24</span>
+              <div class="pv-controls">
+                <div class="pv-progress" aria-hidden="true"></div>
+                <div class="pv-controls-row">
+                  <span class="pv-time">0:09 / 0:24</span>
+                  <span class="pv-controls-icons" aria-hidden="true">CC · ⚙ · ⛶</span>
+                </div>
               </div>
-              <div class="pv-bottom">
-                <div class="pv-username">@nomad</div>
-                <div class="pv-caption">Timelapse ng paglubog ng araw sa Bodrum</div>
-              </div>
-              <div class="pv-actions">
-                <span>♥</span>
-                <span>💬</span>
-                <span>↗</span>
-              </div>
+            </div>
+            <div class="pv-meta">
+              <div class="pv-caption">Timelapse ng paglubog ng araw sa Bodrum</div>
+              <div class="pv-username">@nomad</div>
             </div>
           </div>
           <div class="side-panel scene-download-panel">
@@ -2852,8 +2853,13 @@
     </details>
 
     <details class="faq-item">
+      <summary>May mga limitasyon ba kapag ginagamit ang WebBrain sa Web Panel ng Vivaldi?</summary>
+      <p>Oo. Hinaharang ng Vivaldi Web Panels ang mga native JavaScript dialog gaya ng <code>confirm()</code>, <code>alert()</code>, at <code>prompt()</code>. Hindi na umaasa sa mga dialog na ito ang paglipat sa Ask, Act, at Dev mode ng WebBrain, pero umaasa pa rin dito ang ilang secondary action.</p><p><strong>Bagong conversation:</strong> Sa Web Panel, maaaring mukhang walang ginagawa ang button dahil hinaharang ang confirmation dialog nito. Mag-right-click sa WebBrain panel icon, piliin ang <strong>Open in → New Tab</strong>, at gamitin ang <strong>New conversation</strong> mula sa regular na tab na iyon.</p><p><strong>Recording:</strong> Huwag munang gamitin ang <code>/record</code> sa Vivaldi. Kapag pumalya ang recording, maaaring itago ng Vivaldi ang error alert at walang maipakitang paliwanag.</p><p><strong>Settings, History, Traces, at Ollama handoff:</strong> May native dialogs din ang mga page na ito, pero karaniwang binubuksan sila ng WebBrain bilang regular na tabs kung saan gumagana ang mga ito. Kung manu-mano mong inilagay ang isa sa Web Panel, buksan muna ito sa regular na tab bago gumamit ng action na umaasa sa dialog.</p>
+    </details>
+
+    <details class="faq-item">
       <summary>Ligtas bang gamitin ang WebBrain? Maaari ba nitong baguhin ang mga web page?</summary>
-      <p>May dalawang mode ang WebBrain: ang mode ng Pagtatanong (default) ay read-only at hindi maaaring baguhin ang anumang bagay sa pahina. Ang mode ng Pagkilos ay nag-e-enable ng buong browser agent capabilities (pag-click, pag-type, pagna-navigate) ngunit nangangailangan ng tahasang kumpirmasyon ng user bago i-activate, at may kasamang nakikitang warning banner. Maaari mong itigil ang ahente anumang oras gamit ang Stop button. Ang source code ng extension ay buong nakabukas sa GitHub para sa audit.</p>
+      <p>May tatlong mode ang WebBrain. Ang mode ng Pagtatanong (default) ay read-only at hindi maaaring baguhin ang pahina. Ang mode ng Pagkilos ay nagpapahintulot ng browser actions gaya ng pag-click, pag-type, at pag-navigate, habang nagdaragdag ang Dev mode ng page-debugging tools. Ang mga action na may epekto ay nangangailangan ng approval by default; kapag pinatay ang permission gate na ito, nagpapakita ang WebBrain ng nakikitang warning banner. Maaari mong itigil ang ahente anumang oras gamit ang Stop button. Ang source code ng extension ay buong nakabukas sa GitHub para sa audit.</p>
     </details>
 
     <details class="faq-item">
@@ -2947,14 +2953,6 @@
 
 <!-- FOOTER -->
 <footer>
-  <div class="safety-note" id="safety">
-    <h4>Mahalagang Babala sa Kaligtasan</h4>
-    <ul>
-      <li>Ang Mode ng Pagkilos ng WebBrain ay maaaring gumawa ng mga totoong aksyon para sa iyo. Ikaw ang may responsibilidad na suriin ang mga prompt, destinasyon, at resulta bago magpatuloy.</li>
-      <li>Maaaring kumuha ng screenshot ang WebBrain para sa pagpaplano. Iwasang gamitin ang agent mode sa mga sensitibong pahina (halimbawa kalusugan, pananalapi, dating, o pribadong account portal) maliban kung tanggap mo ang panganib na iyon.</li>
-      <li>Ang web content ay maaaring maglaman ng mga malisyosong prompt injection na dinisenyo para manipulahin ang pag-uugali ng AI. Palaging suriin ang mga iminumungkahing aksyon at itigil ang mga run na mukhang hindi inaasahan.</li>
-    </ul>
-  </div>
   <div class="footer-inner">
     <span>© 2026 WebBrain. Ginawa ni <a href="https://emresokullu.com" target="_blank">Emre Sokullu</a>.</span>
     <div class="footer-links">

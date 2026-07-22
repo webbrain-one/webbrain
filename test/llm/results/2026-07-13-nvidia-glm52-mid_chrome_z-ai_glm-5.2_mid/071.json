@@ -1,0 +1,26 @@
+{
+  "id": "071",
+  "user": "send it",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 9158,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I don't see a previous message or context describing what \"it\" refers to. Could you clarify what you'd like me to send? For example:\n\n- An email to someone\n- A message on a specific platform\n- A file or document\n- A form submission\n\nPlease provide more details so I can help.",
+  "usage": {
+    "prompt_tokens": 12851,
+    "completion_tokens": 66,
+    "total_tokens": 12917,
+    "prompt_tokens_details": {
+      "audio_tokens": null,
+      "cached_tokens": 12800
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

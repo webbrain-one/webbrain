@@ -541,11 +541,13 @@ function renderInline(value, options = {}) {
     .replace(/(^|[^\*])\*([^*\s][^*]*?)\*/g, '$1<em>$2</em>')
     .replace(/(^|[^_])_([^_\s][^_]*?)_/g, '$1<em>$2</em>');
 
-  codeTokens.forEach((html, index) => {
-    text = text.replace(`@@CODE${index}@@`, html);
-  });
+  // Restore links before inline code so code spans used as link labels are
+  // replaced after the surrounding anchor has been put back into the text.
   linkTokens.forEach((html, index) => {
     text = text.replace(`@@LINK${index}@@`, html);
+  });
+  codeTokens.forEach((html, index) => {
+    text = text.replace(`@@CODE${index}@@`, html);
   });
 
   return text;

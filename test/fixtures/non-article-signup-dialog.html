@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+<head>
+  <title>Non-article signup dialog fixture</title>
+  <style>
+    body { margin: 0; font: 16px/1.5 sans-serif; }
+    main { max-width: 760px; margin: 40px auto; }
+    [role="dialog"] { position: fixed; inset: 40px; padding: 32px; background: white; border: 1px solid #aaa; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Project dashboard</h1>
+    <p>NON_ARTICLE_PAGE_CONTENT describes a normal application surface rather than a publication article.</p>
+  </main>
+  <div role="dialog" aria-modal="true" aria-label="Create a free account">
+    <h2>Create a free account</h2>
+    <p>Sign up to continue setting up your workspace.</p>
+    <form action="/signup">
+      <label>Work email <input name="email" type="email"></label>
+      <button type="submit">Create account</button>
+    </form>
+  </div>
+</body>
+</html>

@@ -1,0 +1,27 @@
+{
+  "id": "040",
+  "user": "clear the search box",
+  "mode": "act",
+  "tab": {
+    "url": "https://www.google.com/search?q=foo",
+    "title": "foo - Google Search"
+  },
+  "latencyMs": 1478,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll clear the Google search box for you. Let me first look at the current page to find the search input.",
+  "usage": {
+    "prompt_tokens": 16861,
+    "completion_tokens": 37,
+    "total_tokens": 16898
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

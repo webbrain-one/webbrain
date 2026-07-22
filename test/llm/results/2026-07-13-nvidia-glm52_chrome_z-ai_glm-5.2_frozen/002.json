@@ -1,0 +1,25 @@
+{
+  "id": "002",
+  "user": "open gmail",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 8716,
+  "error": null,
+  "firstToolCall": {
+    "name": "new_tab",
+    "args": {
+      "url": "https://mail.google.com"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll open Gmail for you in a new tab.",
+  "usage": {
+    "prompt_tokens": 16565,
+    "completion_tokens": 26,
+    "total_tokens": 16591
+  }
+}

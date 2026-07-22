@@ -24,6 +24,7 @@
  *            'main'           - force "main content" mode
  *            'all'            - force "everything on page" mode
  *   all:     true|false       - scroll-and-collect (only useful in 'all')
+ *   target:  'auto'|'media'|'image'|'video' - filter before saving
  *   limit:   N                - max downloads
  *
  * --------------------------------------------------------------------
@@ -909,6 +910,14 @@ window.SocialMediaDownloader = (() => {
     return '.bin';
   };
 
+  const _mseEntryHasMuxedAudioVideo = entry => {
+    const mime = String(entry && entry.mime || '');
+    if (!/^video\//i.test(mime)) return false;
+    const hasVideoCodec = /\b(?:avc1|avc3|hvc1|hev1|vp0?[89]|av01|theora)\b/i.test(mime);
+    const hasAudioCodec = /(?:mp4a|aac|ac-3|ec-3|opus|vorbis)/i.test(mime);
+    return hasVideoCodec && hasAudioCodec;
+  };
+
   // Group captured SourceBuffers by their parent MediaSource. Each
   // MediaSource ≈ one stream on the page — typically one reel on
   // infinite-feed viewers like Instagram /reels/, where the player
@@ -1022,12 +1031,21 @@ window.SocialMediaDownloader = (() => {
   //   'all'   → every captured group
   // Default 'all' preserves the pre-v4 contract for direct console
   // callers of saveMse() — only download_social_media plumbs the mode.
-  const saveMse = async ({ prefix = 'mse', minBytes = 1, mode = 'all' } = {}) => {
+  const saveMse = async ({ prefix = 'mse', minBytes = 1, mode = 'all', requireMuxedAudioVideo = false } = {}) => {
     const groups = _groupMseBuffers(minBytes);
     const primaryOnly = mode === 'main' || mode === 'auto';
     const toSave = (primaryOnly && groups.length > 1)
       ? [_pickPrimaryMseGroup(groups)]
       : groups;
+    if (requireMuxedAudioVideo && toSave.some((group) => (
+      group.entries.length !== 1 || !_mseEntryHasMuxedAudioVideo(group.entries[0])
+    ))) {
+      const error = new Error(
+        'The browser MSE capture contains split or unverifiably muxed media. No files were saved because a video request must produce one file with audio included.',
+      );
+      error.code = 'split_mse_requires_server_merge';
+      throw error;
+    }
     let i = 1;
     const saved = [];
     for (const group of toSave) {
@@ -1134,6 +1152,10 @@ window.SocialMediaDownloader = (() => {
     // get the legacy `mse_capture_available` recommendation.
     mseSavedFiles = null,
     mseSaveError = null,
+    mseSaveCode = null,
+    completedCount = 0,
+    completedVideoCount = null,
+    requestedTarget = 'auto',
     pageUrl = (typeof location !== 'undefined' ? location.href : ''),
   } = {}) => {
     let parsed = null;
@@ -1141,12 +1163,23 @@ window.SocialMediaDownloader = (() => {
     const href = parsed ? parsed.href : String(pageUrl || '');
     const path = parsed ? (parsed.pathname + parsed.search) : '';
 
-    // YouTube watch / shorts pages — if no googlevideo URL came back,
-    // the actual stream is signatureCipher-only or Widevine-locked.
-    if (profile === 'youtube') {
+    const completedDownloads = Number(completedCount) || 0;
+    // New callers report successful video downloads explicitly. Preserve
+    // compatibility with older callers by treating a completed run that
+    // discovered a video URL as a completed video when the field is absent.
+    const completedVideos = completedVideoCount === null
+      ? (completedDownloads > 0 && urls.some(isVideoDownloadUrl) ? completedDownloads : 0)
+      : (Number(completedVideoCount) || 0);
+
+    // YouTube watch / shorts pages — a saved thumbnail or OG image does not
+    // satisfy a video request. Only suppress the fallback after an actual
+    // video stream (including a verified muxed MSE file) completed.
+    const youtubeVideoRequested = requestedTarget === 'auto'
+      || requestedTarget === 'media'
+      || requestedTarget === 'video';
+    if (profile === 'youtube' && youtubeVideoRequested) {
       const isWatch = /\/(?:watch|shorts)/i.test(path);
-      const hasVideoUrl = urls.some(u => /googlevideo\.com/.test(u));
-      if (isWatch && !hasVideoUrl) {
+      if (isWatch && completedVideos === 0) {
         return {
           kind: 'youtube_video',
           message:
@@ -1159,6 +1192,11 @@ window.SocialMediaDownloader = (() => {
         };
       }
     }
+
+    const completedRequestedDownloads = requestedTarget === 'video'
+      ? completedVideos
+      : completedDownloads;
+    if (completedRequestedDownloads > 0) return null;
 
     // MSE capture available. The new flow: download_social_media calls
     // saveMse() inline and passes mseSavedFiles / mseSaveError in.
@@ -1176,7 +1214,16 @@ window.SocialMediaDownloader = (() => {
     //     for backwards compat with any external callers of
     //     _buildRecommendation. NOT consumed by download_social_media
     //     anymore.
-    if (mseBytes > 0) {
+    if (mseBytes > 0 && requestedTarget !== 'image') {
+      if (mseSaveCode === 'split_mse_requires_server_merge') {
+        return {
+          kind: 'split_mse_unmerged',
+          message:
+            'The browser fallback detected split or unverifiably muxed media. ' +
+            'It intentionally saved nothing because the requested video must be one file with audio included. ' +
+            'Use the dedicated public-media downloader for server-side finalization; if that service already failed, report its failure honestly.',
+        };
+      }
       if (Array.isArray(mseSavedFiles) && mseSavedFiles.length > 0) {
         return null; // bytes saved — nothing to recommend
       }
@@ -1317,6 +1364,12 @@ window.SocialMediaDownloader = (() => {
     isHttpVideoUrl(url) ||
     String(url || '').startsWith('blob:') ||
     /v\.redd\.it/i.test(url || '');
+
+  const filterUrlsForTarget = (urls, target = 'auto') => {
+    if (target === 'video') return urls.filter(isVideoDownloadUrl);
+    if (target === 'image') return urls.filter(url => !isVideoDownloadUrl(url));
+    return urls;
+  };
 
   const focusedDownloadUrls = urls => {
     urls = videoFirstUrls(urls);
@@ -1667,6 +1720,7 @@ window.SocialMediaDownloader = (() => {
   // ---------- Public API ----------
   const run = async ({
     mode = 'auto',
+    target = 'auto',
     all = false,
     maxScrolls = 40, scrollDelay = 1000, settleDelay = 1500,
     limit = Infinity,
@@ -1677,8 +1731,9 @@ window.SocialMediaDownloader = (() => {
       ? await scrollAndCollect({ maxScrolls, scrollDelay, settleDelay,
                                   mode: mode === 'auto' ? 'all' : mode })
       : list(mode);
-    const selected = urls.slice(0, limit);
-    console.log(`[SMD] downloading ${selected.length} of ${urls.length}`);
+    const eligibleUrls = filterUrlsForTarget(urls, target);
+    const selected = eligibleUrls.slice(0, limit);
+    console.log(`[SMD] downloading ${selected.length} of ${eligibleUrls.length} target-matching URLs`);
     // Track per-status counts so the calling tool can report honestly to
     // the agent. Before this we returned only the URL list, which made it
     // look like a 713-URL run completed 713 downloads when in practice
@@ -1686,6 +1741,7 @@ window.SocialMediaDownloader = (() => {
     const stats = {
       triggered: selected.length,
       completed: 0,
+      completedVideo: 0,
       openedInTab: 0,
       failed: 0,
       failures: [], // first ~5 failures only — keeps payload small
@@ -1701,8 +1757,10 @@ window.SocialMediaDownloader = (() => {
       } catch (e) {
         r = { status: 'failed', filename, reason: (e && e.message) || String(e) };
       }
-      if (r.status === 'completed') stats.completed++;
-      else if (r.status === 'opened-in-tab') {
+      if (r.status === 'completed') {
+        stats.completed++;
+        if (isVideo) stats.completedVideo++;
+      } else if (r.status === 'opened-in-tab') {
         stats.openedInTab++;
         if (stats.failures.length < 5) stats.failures.push({ filename, url, reason: r.reason });
       } else {
@@ -1743,6 +1801,7 @@ window.SocialMediaDownloader = (() => {
     _hexToBytes,
     _extractYoutubeProgressive,
     _buildRecommendation,
+    _filterUrlsForTarget: filterUrlsForTarget,
     _groupRedditDash: groupRedditDash,
     _preferHighQuality: preferHighQuality
   };

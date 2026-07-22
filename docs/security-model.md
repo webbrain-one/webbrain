@@ -108,8 +108,9 @@ The primary threat: a malicious page crafts content that, when read by the agent
 | **Tool result cap** | Individual tool results truncated at 8,000 chars (`_limitToolResult`). Injected text beyond that is silently dropped. |
 | **Ask/Act/Dev mode** | Ask mode exposes only semantic read-only tools. The user must explicitly switch to an action mode for clicks/types/navigation. Act exposes the selected provider tier's normal tools. Dev requires Mid/Full tier and adds source/style/page-inspection tools for developer debugging. |
 | **Tiered tool exposure** | Provider tiers (`compact | mid | full`) limit the normal browser-agent surface for smaller models. Compact gets the smallest action surface; Mid adds common task tools; Full adds advanced UI/DOM fallbacks. Compact Dev is blocked. |
-| **Plan before Act** | When enabled, action-mode runs first produce a structured plan and wait for side-panel approval before any browser tool executes. Scheduled runs can auto-approve the plan only through scheduler policy. |
+| **Plan before Act** | When enabled, action-mode runs first produce a structured plan and wait for side-panel approval before any browser tool executes. In Try mode, planner JSON that remains invalid after repair degrades that turn to Ask/read-only; Strict stops. Scheduled runs can auto-approve the plan only through scheduler policy. |
 | **Skill import boundary** | Skills can expose read-only HTTP tools and download-job tools through a `webbrain-tools` manifest. Importing or keeping the skill enabled is the trust decision for the declared HTTPS endpoint; declared skill tools use `credentials: "omit"` and should mark third-party results `resultPolicy: "untrusted"`. Download-job skill tools still require an action mode and the normal Downloads permission gate before saving files. |
+| **WebMCP boundary** | Experimental WebMCP is off by default, so its tools and prompt guidance do not enter ordinary model requests unless the user opts in under Settings → General → Advanced. When enabled, Chrome page-registered names, descriptions, schemas, frame URLs, annotations, outputs, and errors are page-controlled and always use the untrusted-content wrapper. Calls use opaque IDs. Ask may list tools but cannot invoke them. Because a callback can run arbitrary page logic, every invocation requires Act/Dev, fresh per-call confirmation, and a permission grant for the actual registration-frame origin; a page-authored `readOnly` hint never bypasses those gates. Missing/opaque frame identity fails closed, and the frame plus effective HTTP(S) security origin are revalidated immediately before dispatch to prevent navigation races from borrowing an old grant. |
 | **`/allow-api`** | A per-conversation `/allow-api` flag that *waives* the permission prompt for write-method network egress (`fetch_url`/`research_url` with POST/PUT/PATCH/DELETE). It does NOT waive GET egress or any other capability. Clears on conversation reset. |
 | **`done()` blocking** | Before accepting completion, the agent probes for open dialogs/forms. If the summary claims "created"/"saved" but a modal is still open, the agent is forced to continue. |
 | **Duplicate-submit guard** | Clicks on submit-like text (create/save/submit/add/post/publish/send/confirm/sign up/log in/pay/checkout/order, etc.) are blocked within a 45-second window per tab+URL (Chrome). |
@@ -166,6 +167,24 @@ The traces page (`ui/traces.html`) reads from local IndexedDB only. Export produ
 
 ---
 
+## Saved-Workflow Replay Boundary
+
+Saved workflows deliberately do not replay raw trace calls. Compilation uses an
+allowlist, replaces every typed value with a runtime parameter, discards raw
+references, action CSS selectors, coordinates and URL query or fragment data, and binds each action to
+an origin/path family plus a semantic target and postcondition.
+
+Before an action, replay must be on the recorded URL family and find one
+unambiguous target in a fresh accessibility tree. The action is dispatched
+through the same capability-by-origin permission gate, submit confirmation,
+form validation, and trusted-event path as a normal Act run. A known pre-action
+mismatch can be delegated to the Agent with no parameter values. A failed or
+unverified state-changing action whose dispatch cannot be disproved is treated
+as outcome-unknown and is never automatically retried. Replay telemetry and UI
+events redact runtime values and fresh `ref_id` values.
+
+---
+
 ## Firefox Differences
 
 Firefox has no CDP (`debugger` permission), so:
@@ -173,7 +192,9 @@ Firefox has no CDP (`debugger` permission), so:
 - No trusted events (synthetic `el.click()` only)
 - No full-page screenshots
 - No shadow DOM piercing for closed roots
-- `execute_js` is Firefox-only and exposed as a Dev add-on, not in normal Act
+- No WebMCP discovery or invocation (the integration uses Chrome's experimental CDP `WebMCP` domain)
+- `execute_js` is a Dev add-on in both builds: Firefox uses its MV2 content-script evaluator, while Chrome uses CDP `Runtime.evaluate`; neither build exposes it in Ask or normal Act
+- Chrome's reversible CSS/element patches are Dev-only and host-permission gated. Console and network diagnostics are Dev-only reads. Event-listener inspection briefly adds and restores an internal target attribute, while element highlighting inserts a temporary overlay; both use the temporary page-modification permission. All page-derived diagnostic results are wrapped as untrusted content. Network headers/bodies are excluded by default and sensitive header names are always redacted before buffering
 - No offscreen document (CORS must be handled by LLM servers)
 - No slash-driven tab/screen recording (Chrome's capture APIs and `recorder/` are absent)
 - No duplicate-submit guard (the timestamp Map is declared but unwired)

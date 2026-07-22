@@ -1,0 +1,68 @@
+name: WebBrain Cloud E2E
+
+on:
+  workflow_dispatch:
+    inputs:
+      pack:
+        description: Scenario pack
+        required: true
+        default: gnippets-spa
+        type: choice
+        options:
+          - gnippets-spa
+          - gnippets-captcha
+          - gnippets-readonly
+          - public-readonly
+          - all
+      concurrency:
+        description: Parallel incognito browsers
+        required: true
+        default: "2"
+      scenario:
+        description: Optional single scenario ID
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run test:ci
+
+      - name: Run cloud scenarios
+        env:
+          WEBBRAIN_API_KEY: ${{ secrets.WEBBRAIN_API_KEY }}
+          WEBBRAIN_BASE_URL: ${{ vars.WEBBRAIN_BASE_URL }}
+          GNIPPETS_BASE_URL: ${{ vars.GNIPPETS_BASE_URL }}
+          GNIPPETS_E2E_CONTROL_TOKEN: ${{ secrets.GNIPPETS_E2E_CONTROL_TOKEN }}
+          CAPSOLVER_API_KEY: ${{ secrets.CAPSOLVER_API_KEY }}
+          E2E_PACK: ${{ inputs.pack }}
+          E2E_CONCURRENCY: ${{ inputs.concurrency }}
+          E2E_SCENARIO: ${{ inputs.scenario }}
+        run: |
+          args=(--pack "$E2E_PACK" --concurrency "$E2E_CONCURRENCY")
+          if [[ -n "$E2E_SCENARIO" ]]; then
+            args+=(--scenario "$E2E_SCENARIO")
+          fi
+          node ci/run.mjs "${args[@]}"
+
+      - name: Upload traces, recordings, and rubrics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: webbrain-cloud-e2e-${{ github.run_id }}
+          path: ci/artifacts/
+          if-no-files-found: warn
+          retention-days: 14

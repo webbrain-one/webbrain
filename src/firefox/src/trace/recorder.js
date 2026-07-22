@@ -8,7 +8,7 @@
  *   - shots      keyPath=[runId, seq]           // screenshot Blobs
  *
  * All writes are fire-and-forget. Recording is gated on the `tracingEnabled`
- * setting; when disabled, every call is a cheap no-op.
+ * setting. When disabled, every call is a cheap no-op.
  */
 
 const DB_NAME = 'webbrain_traces';
@@ -57,6 +57,7 @@ function promisifyReq(req) {
 
 async function tracingEnabled() {
   try {
+    if (typeof indexedDB === 'undefined') return false;
     const storageApi = (typeof browser !== 'undefined' ? browser : chrome).storage.local;
     const { tracingEnabled } = await storageApi.get(['tracingEnabled']);
     return tracingEnabled === true;
@@ -112,6 +113,7 @@ export async function startRun(meta) {
       model: meta.model || '',
       providerId: meta.providerId || '',
       providerClass: meta.providerClass || '',
+      webbrainVersion: meta.webbrainVersion || '',
       userMessage: meta.userMessage || '',
       tabUrl: meta.tabUrl || '',
       tabTitle: meta.tabTitle || '',
@@ -260,6 +262,7 @@ export async function endRun(runId, { status = 'done', finalContent = null } = {
     // across all llm_response events — providers report this in their
     // native units (OpenRouter & OpenAI: USD).
     let totalIn = 0, totalOut = 0, totalCost = 0, stepCount = 0;
+    let sawLoopError = false;
     await new Promise((resolve) => {
       const idx = tx(db, ['events'], 'readonly').objectStore('events').index('runId');
       const req = idx.openCursor(IDBKeyRange.only(runId));
@@ -267,6 +270,7 @@ export async function endRun(runId, { status = 'done', finalContent = null } = {
         const c = req.result;
         if (!c) return resolve();
         const ev = c.value;
+        if (ev.kind === 'error' && ev.data?.phase === 'loop') sawLoopError = true;
         if (ev.kind === 'llm_response') {
           stepCount = Math.max(stepCount, ev.data?.step || 0);
           const u = ev.data?.usage;
@@ -282,9 +286,10 @@ export async function endRun(runId, { status = 'done', finalContent = null } = {
     });
     const existing = await promisifyReq(tx(db, ['runs'], 'readonly').objectStore('runs').get(runId));
     if (existing) {
+      const finalStatus = status === 'done' && sawLoopError ? 'loop_stopped' : status;
       existing.endedAt = Date.now();
       existing.durationMs = existing.endedAt - existing.startedAt;
-      existing.status = status;
+      existing.status = finalStatus;
       existing.finalContent = finalContent;
       existing.stepCount = stepCount;
       existing.totalInputTokens = totalIn;

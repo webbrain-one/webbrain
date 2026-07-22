@@ -1,0 +1,22 @@
+{
+  "id": "070",
+  "user": "log in",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 5066,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I'd be happy to help you log in, but I need a bit more information. Which website or service would you like me to log into? For example:\n\n- A specific website URL (e.g., \"log into github.com\")\n- An app or service name (e.g., \"log into my Gmail\", \"log into Netflix\")\n\nAlso, if you have credentials you'd like me to use, please share them — otherwise I'll look for a login page and let you know what fields are needed.",
+  "usage": {
+    "prompt_tokens": 12851,
+    "completion_tokens": 104,
+    "total_tokens": 12955
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

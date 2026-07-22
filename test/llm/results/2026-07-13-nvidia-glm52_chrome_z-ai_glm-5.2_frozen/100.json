@@ -1,0 +1,28 @@
+{
+  "id": "100",
+  "user": "whats the highest rated item here",
+  "mode": "act",
+  "tab": {
+    "url": "https://www.amazon.com/s?k=wireless+earbuds",
+    "title": "Amazon.com : wireless earbuds"
+  },
+  "latencyMs": 22141,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible",
+      "maxDepth": 8
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll look at the search results to find the highest rated wireless earbuds.",
+  "usage": {
+    "prompt_tokens": 16695,
+    "completion_tokens": 37,
+    "total_tokens": 16732
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

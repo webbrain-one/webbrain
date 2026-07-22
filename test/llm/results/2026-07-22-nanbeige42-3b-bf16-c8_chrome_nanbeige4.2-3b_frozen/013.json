@@ -1,0 +1,28 @@
+{
+  "id": "013",
+  "user": "open the about config page",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 5323,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "interactive"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll start by examining the current page to find the \"about config page\" link.",
+  "usage": {
+    "prompt_tokens": 17978,
+    "total_tokens": 18202,
+    "completion_tokens": 224,
+    "prompt_tokens_details": null
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

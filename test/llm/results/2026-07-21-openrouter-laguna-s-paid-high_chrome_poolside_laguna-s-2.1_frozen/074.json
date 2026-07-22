@@ -1,0 +1,40 @@
+{
+  "id": "074",
+  "user": "go back to that other thing",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 638,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "I'm not sure which \"other thing\" you're referring to. Could you give me a bit more detail about what you'd like me to go back to?",
+  "usage": {
+    "prompt_tokens": 16945,
+    "completion_tokens": 34,
+    "total_tokens": 16979,
+    "cost": 0.00017778,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 16928,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.00017778,
+      "upstream_inference_prompt_cost": 0.00017098,
+      "upstream_inference_completions_cost": 0.0000068
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

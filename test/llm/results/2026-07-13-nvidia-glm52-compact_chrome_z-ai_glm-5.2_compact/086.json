@@ -1,0 +1,29 @@
+{
+  "id": "086",
+  "user": "what does CORS stand for",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 11473,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "CORS stands for **Cross-Origin Resource Sharing**.\n\nIt's a browser security mechanism that allows a web page to request resources (like fonts, images, scripts, data) from a different domain/origin than the one that served the page itself. The server includes specific HTTP headers (most notably `Access-Control-Allow-Origin`) to grant permission for these cross-origin requests, preventing the browser's same-origin policy from blocking them.\n\nA few key points:\n- **Same-Origin Policy** is the default browser restriction that blocks cross-origin requests; CORS is the opt-in mechanism that relaxes it.\n- **Preflight requests**: For non-simple requests (e.g., using methods like `PUT`/`DELETE` or custom headers), the browser sends an `OPTIONS` request first to check whether the actual request is permitted.\n- **Common headers**: `Access-Control-Allow-Origin`, `Access-Control-Allow-Methods`, `Access-Control-Allow-Headers`, and `Access-Control-Allow-Credentials`.\n\nLet me know if you'd like a deeper dive into how it works or how to configure it.",
+  "usage": {
+    "prompt_tokens": 6698,
+    "completion_tokens": 216,
+    "total_tokens": 6914
+  },
+  "attempts": 2,
+  "retryErrors": [
+    {
+      "attempt": 1,
+      "error": "HTTP 504: ",
+      "latencyMs": 302288,
+      "waitMs": 600000
+    }
+  ]
+}

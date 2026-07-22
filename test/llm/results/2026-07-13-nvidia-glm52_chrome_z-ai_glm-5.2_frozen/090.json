@@ -1,0 +1,52 @@
+{
+  "id": "090",
+  "user": "switch to my netflix tab",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 12909,
+  "error": null,
+  "firstToolCall": {
+    "name": "execute_js",
+    "args": {
+      "code": "// We can't directly switch tabs from here, but let's check what tabs are open\n// Actually, the browser agent doesn't have a tab-switch tool. Let me see what's available.\n// The navigate tool goes to a URL in the current tab. new_tab opens a new tab.\n// There's no explicit \"switch to tab\" tool listed.\n// Let me check if there's a way to find the Netflix tab URL first.\n\"checking available options\""
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll look for your Netflix tab and switch to it.",
+  "usage": {
+    "prompt_tokens": 16569,
+    "completion_tokens": 117,
+    "total_tokens": 16686
+  },
+  "attempts": 5,
+  "retryErrors": [
+    {
+      "attempt": 1,
+      "error": "HTTP 429: {\"status\":429,\"title\":\"Too Many Requests\"}",
+      "latencyMs": 302,
+      "waitMs": 600000
+    },
+    {
+      "attempt": 2,
+      "error": "HTTP 429: {\"status\":429,\"title\":\"Too Many Requests\"}",
+      "latencyMs": 483,
+      "waitMs": 600000
+    },
+    {
+      "attempt": 3,
+      "error": "HTTP 429: {\"status\":429,\"title\":\"Too Many Requests\"}",
+      "latencyMs": 327,
+      "waitMs": 600000
+    },
+    {
+      "attempt": 4,
+      "error": "HTTP 429: {\"status\":429,\"title\":\"Too Many Requests\"}",
+      "latencyMs": 342,
+      "waitMs": 600000
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "id": "063",
+  "user": "whats my shipping address",
+  "mode": "act",
+  "tab": {
+    "url": "https://www.amazon.com/gp/buy/spc/handlers/display.html",
+    "title": "Amazon Checkout"
+  },
+  "latencyMs": 193887,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll check your Amazon checkout page to find your shipping address.",
+  "usage": {
+    "prompt_tokens": 16689,
+    "completion_tokens": 26,
+    "total_tokens": 16715
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

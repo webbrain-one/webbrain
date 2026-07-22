@@ -1,0 +1,26 @@
+{
+  "id": "090",
+  "user": "switch to my netflix tab",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 3247,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_frames",
+    "args": {}
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll help you switch to your Netflix tab. Let me first check what tabs or frames are available on the current page to locate your Netflix tab.",
+  "usage": {
+    "prompt_tokens": 17979,
+    "total_tokens": 18121,
+    "completion_tokens": 142,
+    "prompt_tokens_details": null
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

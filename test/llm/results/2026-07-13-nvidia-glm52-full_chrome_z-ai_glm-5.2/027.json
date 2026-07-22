@@ -1,0 +1,26 @@
+{
+  "id": "027",
+  "user": "tldr",
+  "mode": "act",
+  "tab": {
+    "url": "https://en.wikipedia.org/wiki/Closure_(computer_programming)",
+    "title": "Closure (computer programming) — Wikipedia"
+  },
+  "latencyMs": 13156,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "# Closure (computer programming) — TL;DR\n\nA **closure** is a function that \"remembers\" the variables from the scope where it was created — even after that outer scope has finished running.\n\n**The core idea:**\n```javascript\nfunction makeCounter() {\n  let count = 0;              // captured variable\n  return () => ++count;        // the closure\n}\nconst c = makeCounter();\nc(); // 1\nc(); // 2  — count is still alive!\n```\n\n**Key points:**\n- **A closure = a function + its lexical environment** (the variables in scope when it was defined).\n- The outer function's local variables **persist** as long as the closure exists — they aren't garbage-collected.\n- This lets you create **private state**, **data hiding**, and **function factories** without classes.\n- Closures are a natural consequence of **lexical scoping** (functions look up variables from where they're *written*, not where they're *called*).\n\n**Common uses:**\n- Private variables / encapsulation\n- Callbacks & event handlers that remember context\n- Partial application & currying\n- Module patterns\n\n**Gotcha:** Capturing a loop variable by reference can surprise you — all closures may share the same (mutated) variable. Fix it with a block-scoped `let` or an IIFE.\n\nSupported in virtually all modern languages: JavaScript, Python, Rust, Go, Swift, C#, Java (lambdas), and more.",
+  "usage": {
+    "prompt_tokens": 20570,
+    "completion_tokens": 316,
+    "total_tokens": 20886,
+    "prompt_tokens_details": {
+      "audio_tokens": null,
+      "cached_tokens": 20480
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

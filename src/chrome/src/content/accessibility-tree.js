@@ -41,7 +41,9 @@
  *
  * 5. Additional exports used by click_ax / type_ax:
  *      window.__wb_ax_lookup(refId) → Element | null
+ *      window.__wb_ax_ref(element) → stable refId
  *      window.__wb_ax_release(refId) → void (optional cleanup)
+ *      window.__wb_ax_name(element) → the same accessible name used by the tree
  */
 (() => {
   if (window.__wb_ax_installed) return;
@@ -50,6 +52,41 @@
   // ── Persistent ref_id registry ──────────────────────────────────────────
   if (!window.__wbElementMap) window.__wbElementMap = Object.create(null);
   if (typeof window.__wbRefCounter !== 'number') window.__wbRefCounter = 0;
+
+  function mintRefScopeId() {
+    try {
+      const words = new Uint32Array(2);
+      globalThis.crypto.getRandomValues(words);
+      const value = (BigInt(words[0]) << 32n) | BigInt(words[1]);
+      return (value % 1000000000000n).toString().padStart(12, '0');
+    } catch {
+      const fallback = `${Date.now()}${Math.random().toString().slice(2)}`.replace(/\D/g, '');
+      return fallback.slice(-12).padStart(12, '0');
+    }
+  }
+
+  function ensureRefScope() {
+    const pageUrl = String(location.href || '');
+    const scope = window.__wbAxRefScope;
+    if (!scope || scope.pageUrl !== pageUrl || !/^\d{12}$/.test(scope.id)) {
+      // A full navigation gets a fresh isolated world automatically. Reset on
+      // SPA route changes too so an old ref can never resolve to a new route's
+      // element with the same local traversal number.
+      window.__wbElementMap = Object.create(null);
+      window.__wbRefCounter = 0;
+      window.__wbAxRefScope = { pageUrl, id: mintRefScopeId() };
+    }
+    return window.__wbAxRefScope;
+  }
+
+  function refOrdinal(refId) {
+    const scope = ensureRefScope();
+    const prefix = `ref_${scope.id}`;
+    const value = String(refId || '');
+    if (!value.startsWith(prefix)) return null;
+    const suffix = value.slice(prefix.length);
+    return /^\d+$/.test(suffix) ? Number(suffix) : null;
+  }
 
   const MAX_NAME_LEN = 100;
 
@@ -77,9 +114,90 @@
     label: 'label',
   };
 
+  function isEditableRoot(el) {
+    if (!el || !el.getAttribute) return false;
+    const attr = el.getAttribute('contenteditable');
+    if (attr !== null) {
+      const normalized = String(attr).trim().toLowerCase();
+      if (normalized === '' || normalized === 'true' || normalized === 'plaintext-only') return true;
+      if (normalized === 'false') return false;
+    }
+    // isContentEditable includes inherited editability. Only surface the
+    // outer editing host so every nested span is not emitted as a textbox.
+    return el.isContentEditable === true && el.parentElement?.isContentEditable !== true;
+  }
+
+  // Some high-traffic media sites render their primary actions as plain
+  // div/span wrappers with delegated Vue event handlers. They are genuinely
+  // clickable, but expose none of the native/ARIA signals used below. Keep
+  // this list intentionally narrow and hostname-scoped so generic page
+  // containers are not promoted to buttons elsewhere.
+  const SITE_INTERACTION_RULES = {
+    bilibili: [
+      ['.video-like', '点赞'],
+      ['.video-coin', '投币'],
+      ['.video-fav', '收藏'],
+      ['.video-share', '分享'],
+      ['.follow-btn', '关注'],
+      ['.bpx-player-follow', '关注'],
+      ['.reply-box-send', '发布评论'],
+    ],
+    xiaohongshu: [
+      ['.like-wrapper', '点赞'],
+      ['.collect-wrapper', '收藏'],
+      ['.chat-wrapper', '评论'],
+      ['.share-wrapper', '分享'],
+      ['.follow-wrapper', '关注'],
+      ['.follow-btn', '关注'],
+      ['.follow-button', '关注'],
+      ['.send-btn', '发布评论'],
+      ['.publish-btn', '发布'],
+      ['.publish-button', '发布'],
+    ],
+  };
+
+  function currentSiteInteractionConfig() {
+    const hostname = String(location.hostname || '').toLowerCase().replace(/\.$/, '');
+    const onHost = (domain) => hostname === domain || hostname.endsWith(`.${domain}`);
+    if (onHost('bilibili.com')) return { key: 'bilibili', rules: SITE_INTERACTION_RULES.bilibili };
+    if (onHost('xiaohongshu.com')) return { key: 'xiaohongshu', rules: SITE_INTERACTION_RULES.xiaohongshu };
+    return { key: '', rules: [] };
+  }
+
+  function getSiteInteractionDescriptor(el) {
+    if (!el || typeof el.matches !== 'function') return null;
+    for (const [selector, label] of currentSiteInteractionConfig().rules) {
+      try {
+        if (!el.matches(selector)) continue;
+      } catch {
+        continue;
+      }
+      const explicit = String(
+        el.getAttribute('aria-label') || el.getAttribute('title') || ''
+      ).replace(/\s+/g, ' ').trim();
+      const rendered = String(el.innerText || el.textContent || '')
+        .replace(/\s+/g, ' ').trim().slice(0, 80);
+      const name = explicit || (
+        rendered && rendered.includes(label) ? rendered
+          : rendered ? `${label} ${rendered}` : label
+      );
+      return { selector, label, name };
+    }
+    return null;
+  }
+
+  window.__wbSiteInteractions = Object.freeze({
+    selectors: () => currentSiteInteractionConfig().rules.map(([selector]) => selector),
+    describe: getSiteInteractionDescriptor,
+    isInteractive: (el) => !!getSiteInteractionDescriptor(el),
+    shouldPierceShadowRoots: () => currentSiteInteractionConfig().key === 'bilibili',
+  });
+
   function getRole(el) {
+    if (getSiteInteractionDescriptor(el)) return 'button';
     const explicit = el.getAttribute('role');
     if (explicit) return explicit;
+    if (isEditableRoot(el)) return 'textbox';
     const tag = el.tagName.toLowerCase();
     if (tag === 'input') {
       const t = el.getAttribute('type');
@@ -93,7 +211,7 @@
 
   const NESTED_ACTION_SELECTOR = [
     'a', 'button', 'input', 'select', 'textarea', 'details', 'summary',
-    '[onclick]', '[tabindex]', '[contenteditable="true"]',
+    '[onclick]', '[tabindex]', '[contenteditable]:not([contenteditable="false"])',
     '[role="button"]', '[role="link"]', '[role="textbox"]',
     '[role="searchbox"]', '[role="combobox"]', '[role="option"]',
     '[role="menuitem"]', '[role="tab"]', '[role="checkbox"]', '[role="radio"]',
@@ -126,7 +244,7 @@
 
   function getFocusableGenericDescendantName(el) {
     if (getRole(el) !== 'generic' || !el.hasAttribute('tabindex')) return '';
-    if (el.getAttribute('contenteditable') === 'true') return '';
+    if (isEditableRoot(el)) return '';
     try {
       if (!isVisible(el) || el.querySelector(NESTED_ACTION_SELECTOR)) return '';
       // Inspect each descendant instead of using innerText: browsers include
@@ -143,6 +261,9 @@
   // ── Accessible name (matches Claude's priority order) ───────────────────
   function getAccessibleName(el) {
     const tag = el.tagName.toLowerCase();
+
+    const siteInteraction = getSiteInteractionDescriptor(el);
+    if (siteInteraction) return siteInteraction.name;
 
     // <select> — prefer the currently selected option's label.
     if (tag === 'select') {
@@ -325,11 +446,12 @@
   function isInteractive(el) {
     const tag = el.tagName.toLowerCase();
     if (INTERACTIVE_TAGS.has(tag)) return true;
+    if (getSiteInteractionDescriptor(el)) return true;
     if (el.getAttribute('onclick') !== null) return true;
     if (el.getAttribute('tabindex') !== null) return true;
     const role = el.getAttribute('role');
     if (role === 'button' || role === 'link') return true;
-    if (el.getAttribute('contenteditable') === 'true') return true;
+    if (isEditableRoot(el)) return true;
     return false;
   }
 
@@ -396,13 +518,15 @@
 
   // ── Ref_id management ───────────────────────────────────────────────────
   //
-  // Elements keep the same ref_id across calls: if we already have a WeakRef
-  // pointing at `el`, reuse its key; otherwise mint a new ref_N.
+  // Elements keep the same ref_id across calls on one document route. The
+  // numeric scope prefix changes across documents and SPA routes, so a local
+  // ref counter restart can never alias a target from an older page.
   function getOrMintRef(el) {
+    const prefix = `ref_${ensureRefScope().id}`;
     for (const key in window.__wbElementMap) {
       if (window.__wbElementMap[key].deref() === el) return key;
     }
-    const key = 'ref_' + (++window.__wbRefCounter);
+    const key = prefix + (++window.__wbRefCounter);
     window.__wbElementMap[key] = new WeakRef(el);
     return key;
   }
@@ -435,11 +559,27 @@
     const ph = el.getAttribute('placeholder');
     if (ph) line += ' placeholder="' + ph + '"';
 
+    // Checkbox/radio state is an action-critical value, not decorative
+    // metadata. Without it the model has to infer state from a focus ring or
+    // screenshot and can accidentally toggle a control back off.
+    const tag = el.tagName.toLowerCase();
+    const inputType = tag === 'input'
+      ? (el.getAttribute('type') || 'text').toLowerCase()
+      : '';
+    if (inputType === 'checkbox' || inputType === 'radio') {
+      line += ` checked=${el.checked ? 'true' : 'false'}`;
+    } else {
+      const role = (el.getAttribute('role') || '').toLowerCase();
+      if (['checkbox', 'radio', 'switch'].includes(role) || el.hasAttribute('aria-checked')) {
+        const ariaChecked = el.getAttribute('aria-checked');
+        if (ariaChecked != null) line += ` checked=${ariaChecked}`;
+      }
+    }
+
     // Surface the current value for text-like inputs/textareas so the model
     // can see what's already filled in. Skipped for submit/button/reset/file
     // (value is the label there), checkboxes/radios, and when the value
     // already matches the rendered name.
-    const tag = el.tagName.toLowerCase();
     if (tag === 'input' || tag === 'textarea') {
       const inputType = (el.getAttribute('type') || 'text').toLowerCase();
       const skipValueTypes = new Set(['submit', 'button', 'reset', 'file', 'checkbox', 'radio', 'image', 'hidden', 'color', 'range', 'password']);
@@ -449,6 +589,12 @@
           const trimmed = v.length > 60 ? v.substring(0, 60) + '...' : v;
           line += ' value="' + trimmed.replace(/"/g, '\\"') + '"';
         }
+      }
+    } else if (isEditableRoot(el)) {
+      const v = String(el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
+      if (v && v !== name) {
+        const trimmed = v.length > 60 ? v.substring(0, 60) + '...' : v;
+        line += ' value="' + trimmed.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
       }
     }
 
@@ -501,6 +647,14 @@
       for (const child of el.children) {
         walk(child, nextDepth, opts, lines);
       }
+      // Bilibili's current comment system is a hierarchy of open custom-
+      // element shadow roots. Traverse it here so the comment editor and
+      // Publish/Reply buttons receive the same stable ref_ids as light DOM.
+      if (window.__wbSiteInteractions.shouldPierceShadowRoots() && el.shadowRoot) {
+        for (const child of el.shadowRoot.children || []) {
+          walk(child, nextDepth, opts, lines);
+        }
+      }
     }
   }
 
@@ -515,7 +669,7 @@
       return !new Set(['submit', 'button', 'reset', 'file', 'checkbox', 'radio', 'image', 'hidden', 'color', 'range']).has(type);
     }
     if (role === 'textbox' || role === 'searchbox') return true;
-    if (el.getAttribute('contenteditable') === 'true') return true;
+    if (isEditableRoot(el)) return true;
     return false;
   }
 
@@ -565,7 +719,7 @@
     const selectors = [
       'textarea',
       'input',
-      '[contenteditable="true"]',
+      '[contenteditable]:not([contenteditable="false"])',
       '[role="textbox"]',
       '[role="searchbox"]',
       'button',
@@ -663,6 +817,7 @@
 
   function generateAccessibilityTree(filter, maxDepth, maxChars, refId, page) {
     try {
+      ensureRefScope();
       const effFilter = filter || 'all';
       // Tighter defaults for the 'visible' / 'interactive' modes so small
       // models don't drown in 18K-token Stripe trees. Callers can still
@@ -824,10 +979,11 @@
 
   // ── Public: lookup by ref_id (used by click_ax / type_ax) ──────────────
   function lookup(refId) {
+    if (refOrdinal(refId) == null) return null;
     const weak = window.__wbElementMap[refId];
     if (!weak) return null;
     const el = weak.deref();
-    if (!el) {
+    if (!el || !el.isConnected) {
       delete window.__wbElementMap[refId];
       return null;
     }
@@ -847,8 +1003,7 @@
   //    interactive text-entry refs to the top of the suggestions.
   function suggestNearRefs(requestedRefId, limit) {
     const cap = typeof limit === 'number' ? limit : 6;
-    const m = /^ref_(\d+)$/.exec(String(requestedRefId || ''));
-    const targetNum = m ? parseInt(m[1], 10) : null;
+    const targetNum = refOrdinal(requestedRefId);
     const live = [];
     for (const key in window.__wbElementMap) {
       const weak = window.__wbElementMap[key];
@@ -858,8 +1013,7 @@
         if (!el.isConnected) continue;
         if (!isVisible(el)) continue;
       } catch { continue; }
-      const km = /^ref_(\d+)$/.exec(key);
-      const n = km ? parseInt(km[1], 10) : 0;
+      const n = refOrdinal(key) || 0;
       const role = getRole(el);
       const name = getAccessibleName(el) || '';
       const interactive = isInteractive(el);
@@ -899,7 +1053,21 @@
     }));
   }
 
+  function generateAccessibilitySubtree(rootElement, filter, maxDepth, maxChars, page) {
+    if (!rootElement || rootElement.nodeType !== 1 || !rootElement.isConnected) {
+      return {
+        error: 'Accessibility subtree root is no longer available.',
+        pageContent: '',
+        viewport: { width: window.innerWidth, height: window.innerHeight },
+      };
+    }
+    return generateAccessibilityTree(filter, maxDepth, maxChars, getOrMintRef(rootElement), page);
+  }
+
   window.__generateAccessibilityTree = generateAccessibilityTree;
+  window.__generateAccessibilitySubtree = generateAccessibilitySubtree;
   window.__wb_ax_lookup = lookup;
+  window.__wb_ax_ref = getOrMintRef;
+  window.__wb_ax_name = getAccessibleName;
   window.__wb_ax_suggest = suggestNearRefs;
 })();
