@@ -69,13 +69,45 @@ function scrubCloudValue(value) {
 
 function redactWorkflowRuntimeValues(value, runtimeValues = []) {
   if (value == null) return value;
-  const values = [...new Set(runtimeValues.filter(item => typeof item === 'string' && item.length > 0))]
+  const variants = new Set();
+  for (const parameterValue of runtimeValues) {
+    if (typeof parameterValue !== 'string' || !parameterValue.length) continue;
+    variants.add(parameterValue);
+    try {
+      const componentEncoded = encodeURIComponent(parameterValue);
+      variants.add(componentEncoded);
+      variants.add(componentEncoded.replace(/%20/g, '+'));
+      variants.add(encodeURI(parameterValue));
+      const formEncoded = new URLSearchParams([['value', parameterValue]])
+        .toString()
+        .slice('value='.length);
+      variants.add(formEncoded);
+    } catch {
+      // Raw replacement above still protects malformed strings that URI
+      // encoders cannot represent (for example, lone UTF-16 surrogates).
+    }
+  }
+  const values = [...variants]
     .sort((a, b) => b.length - a.length);
   if (!values.length) return value;
-  const redactString = (input) => values.reduce(
-    (text, parameterValue) => text.split(parameterValue).join('[workflow parameter]'),
-    input,
+  const normalizePercentEscapes = input => input.replace(
+    /%[0-9a-f]{2}/gi,
+    match => match.toUpperCase(),
   );
+  const redactString = (input) => values.reduce((text, parameterValue) => {
+    const normalizedText = normalizePercentEscapes(text);
+    const normalizedValue = normalizePercentEscapes(parameterValue);
+    if (!normalizedText.includes(normalizedValue)) return text;
+    let result = '';
+    let offset = 0;
+    let index = normalizedText.indexOf(normalizedValue, offset);
+    while (index !== -1) {
+      result += `${text.slice(offset, index)}[workflow parameter]`;
+      offset = index + parameterValue.length;
+      index = normalizedText.indexOf(normalizedValue, offset);
+    }
+    return result + text.slice(offset);
+  }, input);
   try {
     return JSON.parse(JSON.stringify(value, (_key, item) => (
       typeof item === 'string' ? redactString(item) : item
