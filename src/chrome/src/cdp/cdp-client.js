@@ -281,6 +281,9 @@ export class CDPClient {
       // Per-frame generation bumped on navigate/detach/session cleanup so
       // discovery cannot insert tools for a document that already left.
       frameMutationGens: new Map(),
+      // Session-wide epoch bumped on main-target root navigation so in-flight
+      // discovery cannot reinsert tools for frames that never had a gen entry.
+      discoveryEpoch: 0,
       pendingInvocations: new Map(),
       completedResponses: new Map(),
       childSessions: new Map(),
@@ -312,6 +315,75 @@ export class CDPClient {
     const next = this._webMCPFrameMutationGen(state, key) + 1;
     state.frameMutationGens.set(key, next);
     return next;
+  }
+
+  _bumpWebMCPDiscoveryEpoch(state) {
+    state.discoveryEpoch = (state.discoveryEpoch || 0) + 1;
+    return state.discoveryEpoch;
+  }
+
+  /**
+   * Drop mutation gens that no longer back a live tool/frame after a catalog
+   * wipe. Safe only once discoveryEpoch has already invalidated in-flight
+   * discovery (clearing gens alone would reset them to 0 and re-admit stale
+   * snapshots).
+   */
+  _pruneWebMCPMutationMaps(state) {
+    const liveToolKeys = new Set(state.idsByKey.keys());
+    for (const key of state.toolMutationGens.keys()) {
+      if (!liveToolKeys.has(key)) state.toolMutationGens.delete(key);
+    }
+    const liveFrameIds = new Set();
+    for (const tool of state.toolsById.values()) {
+      if (tool.frameId) liveFrameIds.add(tool.frameId);
+    }
+    for (const child of state.childSessions.values()) {
+      for (const frameId of child.frameIds) liveFrameIds.add(frameId);
+    }
+    for (const frameId of state.frameMutationGens.keys()) {
+      if (!liveFrameIds.has(frameId)) state.frameMutationGens.delete(frameId);
+    }
+  }
+
+  /**
+   * Main-document navigation: wipe the catalog, invalidate in-flight discovery,
+   * and tear down OOPIF child sessions so late toolsAdded/discovery cannot
+   * repopulate tools from the previous page.
+   */
+  _handleWebMCPMainRootNavigation(tabId, state, rootFrameId) {
+    this._bumpWebMCPDiscoveryEpoch(state);
+    // Bump every frame gen we already know about, plus main-session runtime
+    // contexts discovery may still be evaluating (including never-registered
+    // frames whose gen is still the default 0).
+    for (const frameId of [...state.frameMutationGens.keys()]) {
+      this._bumpWebMCPFrameMutation(state, frameId);
+    }
+    for (const context of this.runtimeContexts.get(tabId)?.values() || []) {
+      if (context.sessionId) continue;
+      this._bumpWebMCPFrameMutation(state, context.frameId);
+    }
+    if (rootFrameId) this._bumpWebMCPFrameMutation(state, rootFrameId);
+
+    const childSessionIds = [...state.childSessions.keys()];
+    const affectedSessionIds = ['', ...childSessionIds];
+    for (const affectedSessionId of affectedSessionIds) {
+      this._removeWebMCPSessionTools(state, affectedSessionId);
+      this._finishWebMCPSessionInvocations(
+        state,
+        affectedSessionId,
+        'The WebMCP document navigated before Chrome reported the invocation outcome.',
+      );
+    }
+
+    // Drop children from the map first so store/discovery fail closed, then
+    // best-effort tear down their CDP sessions (disable + autoAttach off).
+    for (const childSessionId of childSessionIds) {
+      state.childSessions.delete(childSessionId);
+      this._teardownWebMCPChildSession(tabId, childSessionId).catch(() => {});
+    }
+
+    state.discoveryContextsUsed = 0;
+    this._pruneWebMCPMutationMaps(state);
   }
 
   async _acquireWebMCPDiscoverySlot(state) {
@@ -369,6 +441,13 @@ export class CDPClient {
     const owningSessionId = String(sessionId || '');
     // Child-session tools must not re-enter the catalog after detach.
     if (owningSessionId && !state.childSessions.has(owningSessionId)) return;
+    // Root navigation bumps discoveryEpoch; drop snapshots captured earlier.
+    if (
+      options.discoveryEpoch != null
+      && options.discoveryEpoch !== state.discoveryEpoch
+    ) {
+      return;
+    }
     const mutationGuard = options.mutationGuard instanceof Map ? options.mutationGuard : null;
     const frameMutationGuard = options.frameMutationGuard instanceof Map
       ? options.frameMutationGuard
@@ -553,7 +632,9 @@ export class CDPClient {
     const selectedContexts = [...contextsByFrame].slice(0, remainingContextBudget);
     state.discoveryContextsUsed += selectedContexts.length;
     // Capture generations before evaluate so concurrent toolsRemoved /
-    // toolsAdded / frame cleanup invalidate these results at merge time.
+    // toolsAdded / frame cleanup / root navigation invalidate these results
+    // at merge time.
+    const discoveryEpoch = state.discoveryEpoch;
     const mutationGuard = new Map(state.toolMutationGens);
     const frameMutationGuard = new Map(state.frameMutationGens);
     const discovered = [];
@@ -606,6 +687,7 @@ export class CDPClient {
     for (const result of discovered) {
       if (!result || result.status !== 'fulfilled') continue;
       this._storeWebMCPTools(state, result.value, owningSessionId, {
+        discoveryEpoch,
         mutationGuard,
         frameMutationGuard,
       });
@@ -668,7 +750,23 @@ export class CDPClient {
           await this._teardownWebMCPChildSession(tabId, sessionId);
           return;
         }
-        await this.sendCommand(tabId, method, commandParams, sessionId).catch(() => {});
+        try {
+          await this.sendCommand(tabId, method, commandParams, sessionId);
+        } catch {
+          // WebMCP.enable is required to dispatch invoke/cancel. Page.enable
+          // and setAutoAttach remain best-effort on children when unavailable.
+          if (method === 'WebMCP.enable') {
+            state.childSessions.delete(sessionId);
+            await this._teardownWebMCPChildSession(tabId, sessionId);
+            this.sendCommand(
+              tabId,
+              'Target.detachFromTarget',
+              { sessionId },
+              source.sessionId,
+            ).catch(() => {});
+            return;
+          }
+        }
       }
       if (!childStillOwned()) {
         await this._teardownWebMCPChildSession(tabId, sessionId);
@@ -777,24 +875,22 @@ export class CDPClient {
       const sessionId = String(source?.sessionId || '');
       const child = state.childSessions.get(sessionId);
       if (!frame.parentId) {
-        const affectedSessionIds = sessionId
-          ? [sessionId]
-          : ['', ...state.childSessions.keys()];
-        for (const affectedSessionId of affectedSessionIds) {
-          this._removeWebMCPSessionTools(state, affectedSessionId);
-          this._finishWebMCPSessionInvocations(
-            state,
-            affectedSessionId,
-            'The WebMCP document navigated before Chrome reported the invocation outcome.',
-          );
-        }
-        this._bumpWebMCPFrameMutation(state, frameId);
         if (!sessionId) {
-          // Root document navigation starts a new discovery wave for later
-          // OOPIF re-attach cycles; without this the context budget stays spent.
-          state.discoveryContextsUsed = 0;
-          for (const nestedChild of state.childSessions.values()) nestedChild.frameIds.clear();
+          // Main-document root navigation: invalidate discovery epoch, wipe
+          // tools, and tear down OOPIF children so pre-nav sessions cannot
+          // repopulate the catalog.
+          this._handleWebMCPMainRootNavigation(tabId, state, frameId);
+          return;
         }
+        // OOPIF document root navigation: clear only that child session's
+        // tools/invocations and re-seed its root frame id.
+        this._removeWebMCPSessionTools(state, sessionId);
+        this._finishWebMCPSessionInvocations(
+          state,
+          sessionId,
+          'The WebMCP document navigated before Chrome reported the invocation outcome.',
+        );
+        this._bumpWebMCPFrameMutation(state, frameId);
         if (child) {
           child.frameIds.clear();
           child.frameIds.add(frameId);
@@ -826,8 +922,10 @@ export class CDPClient {
       try {
         await this.sendCommand(tabId, 'WebMCP.enable');
         // Page domain is required for frameNavigated/frameDetached on the main
-        // target. Child OOPIF sessions enable Page separately when attached.
-        await this.sendCommand(tabId, 'Page.enable').catch(() => {});
+        // target. Fail enable without it so we never mark the session healthy
+        // without lifecycle cleanup. Child OOPIF sessions enable Page
+        // separately when attached (best-effort there).
+        await this.sendCommand(tabId, 'Page.enable');
         if (state.closed || this.webMcpSessions.get(tabId) !== state) {
           if (!this.webMcpSessions.has(tabId)) {
             await this.sendCommand(tabId, 'WebMCP.disable').catch(() => {});

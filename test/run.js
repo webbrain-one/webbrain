@@ -22086,6 +22086,203 @@ test('CDP WebMCP discovery ignores frames navigated before evaluate results merg
   assert.equal(catalog.total, 0, 'frame navigation must invalidate discovery without prior tools');
 });
 
+test('CDP WebMCP root navigation invalidates in-flight discovery for tool-less child frames', async () => {
+  const cdp = new CDPClient();
+  const emit = (event, params, source = { tabId: 71 }) => {
+    for (const handler of cdp.eventHandlers.get(71)?.[event] || []) handler(params, source);
+  };
+  cdp.attach = async tabId => {
+    cdp.sessions.set(tabId, { tabId, attached: true });
+    return cdp.sessions.get(tabId);
+  };
+  cdp.sendCommand = async (tabId, method, params = {}) => {
+    if (method === 'WebMCP.enable') return {};
+    if (method === 'Page.enable') return {};
+    if (method === 'Runtime.enable') {
+      emit('Runtime.executionContextCreated', {
+        context: { id: 201, auxData: { isDefault: true, frameId: 'never-registered-child' } },
+      });
+      return {};
+    }
+    if (method === 'Runtime.evaluate') {
+      // Top-level navigation while evaluate is pending for a child frame that
+      // never had tools (so remove-by-tool cannot bump its gen).
+      emit('Page.frameNavigated', {
+        frame: {
+          id: 'main-frame',
+          url: 'https://example.com/next',
+        },
+      });
+      return {
+        result: {
+          value: [{ name: 'stale_child_tool', description: 'from previous page child frame' }],
+        },
+      };
+    }
+    if (method === 'Page.getFrameTree') {
+      return { frameTree: { frame: { id: 'main-frame', url: 'https://example.com/next' } } };
+    }
+    if (method === 'Target.setAutoAttach') return {};
+    return {};
+  };
+
+  const catalog = await cdp.listWebMCPTools(71);
+  assert.equal(
+    catalog.total,
+    0,
+    'root navigation must drop discovery for never-registered child frames',
+  );
+});
+
+test('CDP WebMCP root navigation tears down OOPIF child sessions', async () => {
+  const cdp = new CDPClient();
+  const commands = [];
+  const emit = (event, params, source = { tabId: 72 }) => {
+    for (const handler of cdp.eventHandlers.get(72)?.[event] || []) handler(params, source);
+  };
+  cdp.attach = async tabId => {
+    cdp.sessions.set(tabId, { tabId, attached: true });
+    return cdp.sessions.get(tabId);
+  };
+  cdp.sendCommand = async (tabId, method, params = {}, sessionId = '') => {
+    commands.push({ tabId, method, params, sessionId });
+    if (method === 'WebMCP.enable' && !sessionId) return {};
+    if (method === 'Page.enable') return {};
+    if (method === 'Target.setAutoAttach' && !sessionId && params.autoAttach) {
+      emit('Target.attachedToTarget', {
+        sessionId: 'oopif-session',
+        targetInfo: {
+          targetId: 'oopif-frame',
+          type: 'iframe',
+          url: 'https://embed.test/',
+        },
+      });
+      return {};
+    }
+    if (method === 'WebMCP.enable' && sessionId === 'oopif-session') {
+      emit('WebMCP.toolsAdded', {
+        tools: [{
+          name: 'embed_tool',
+          description: 'from OOPIF',
+          frameId: 'oopif-frame',
+        }],
+      }, { tabId: 72, sessionId: 'oopif-session' });
+      return {};
+    }
+    if (method === 'Runtime.enable') return {};
+    if (method === 'Page.getFrameTree') {
+      return { frameTree: { frame: { id: 'main-frame', url: 'https://example.com/' } } };
+    }
+    return {};
+  };
+
+  const before = await cdp.listWebMCPTools(72);
+  assert.equal(before.total, 1);
+  assert.equal(cdp.webMcpSessions.get(72).childSessions.has('oopif-session'), true);
+
+  emit('Page.frameNavigated', {
+    frame: { id: 'main-frame', url: 'https://example.com/next' },
+  });
+
+  const state = cdp.webMcpSessions.get(72);
+  assert.equal(state.childSessions.has('oopif-session'), false, 'root nav must drop childSessions');
+  assert.equal((await cdp.listWebMCPTools(72)).total, 0);
+
+  // Late toolsAdded from the detached pre-nav OOPIF must not re-enter.
+  emit('WebMCP.toolsAdded', {
+    tools: [{
+      name: 'late_embed_tool',
+      description: 'should be rejected',
+      frameId: 'oopif-frame',
+    }],
+  }, { tabId: 72, sessionId: 'oopif-session' });
+  assert.equal((await cdp.listWebMCPTools(72)).total, 0, 'late OOPIF toolsAdded must fail closed');
+
+  assert.ok(commands.some(command => (
+    command.sessionId === 'oopif-session'
+    && (
+      command.method === 'WebMCP.disable'
+      || (command.method === 'Target.setAutoAttach' && command.params.autoAttach === false)
+    )
+  )), 'root nav must tear down the OOPIF CDP session');
+});
+
+test('CDP WebMCP skips discovery when child WebMCP.enable fails', async () => {
+  const cdp = new CDPClient();
+  const commands = [];
+  const emit = (event, params, source = { tabId: 73 }) => {
+    for (const handler of cdp.eventHandlers.get(73)?.[event] || []) handler(params, source);
+  };
+  cdp.attach = async tabId => {
+    cdp.sessions.set(tabId, { tabId, attached: true });
+    return cdp.sessions.get(tabId);
+  };
+  cdp.sendCommand = async (tabId, method, params = {}, sessionId = '') => {
+    commands.push({ tabId, method, params, sessionId });
+    if (method === 'WebMCP.enable' && !sessionId) return {};
+    if (method === 'Page.enable' && !sessionId) return {};
+    if (method === 'Target.setAutoAttach' && !sessionId && params.autoAttach) {
+      emit('Target.attachedToTarget', {
+        sessionId: 'broken-oopif',
+        targetInfo: {
+          targetId: 'broken-frame',
+          type: 'iframe',
+          url: 'https://broken.test/',
+        },
+      });
+      return {};
+    }
+    if (method === 'WebMCP.enable' && sessionId === 'broken-oopif') {
+      throw new Error('WebMCP domain unavailable in child');
+    }
+    if (method === 'Runtime.evaluate' && sessionId === 'broken-oopif') {
+      return {
+        result: {
+          value: [{ name: 'undeliverable', description: 'enable failed' }],
+        },
+      };
+    }
+    if (method === 'Page.getFrameTree') {
+      return { frameTree: { frame: { id: 'main-frame', url: 'https://example.com/' } } };
+    }
+    return {};
+  };
+
+  const catalog = await cdp.listWebMCPTools(73);
+  assert.equal(catalog.total, 0, 'failed child enable must not catalog tools via discovery');
+  assert.equal(
+    cdp.webMcpSessions.get(73)?.childSessions.has('broken-oopif'),
+    false,
+    'failed child enable must drop the child session',
+  );
+  assert.equal(
+    commands.some(command => (
+      command.sessionId === 'broken-oopif' && command.method === 'Runtime.evaluate'
+    )),
+    false,
+    'failed child enable must skip Runtime discovery',
+  );
+});
+
+test('CDP WebMCP fails enable when main Page.enable is unavailable', async () => {
+  const cdp = new CDPClient();
+  cdp.attach = async tabId => {
+    cdp.sessions.set(tabId, { tabId, attached: true });
+    return cdp.sessions.get(tabId);
+  };
+  cdp.sendCommand = async (tabId, method) => {
+    if (method === 'WebMCP.enable') return {};
+    if (method === 'Page.enable') throw new Error('Page domain unavailable');
+    return {};
+  };
+
+  await assert.rejects(
+    () => cdp.enableWebMCP(74),
+    /Page domain unavailable|WebMCP is unavailable/,
+  );
+  assert.equal(cdp.webMcpSessions.has(74), false, 'failed Page.enable must not leave a session');
+});
+
 test('CDP WebMCP resets discovery context budget after top-level navigation', async () => {
   const cdp = new CDPClient();
   const state = cdp._newWebMCPSession(69);
