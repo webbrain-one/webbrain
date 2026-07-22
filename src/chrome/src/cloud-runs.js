@@ -1,3 +1,8 @@
+import {
+  compileSuccessfulWorkflowByRunId,
+  normalizeSavedWorkflow,
+} from './agent/workflows.js';
+
 const DEFAULT_CLOUD_BRIDGE_URL = 'ws://127.0.0.1:17373/extension';
 const CLOUD_RUN_STORAGE_KEY = 'webbrainCloudRunSnapshots';
 const CLOUD_UPDATE_LIMIT = 200;
@@ -11,6 +16,7 @@ const TERMINAL_STATUSES = new Set(['completed', 'failed', 'aborted']);
 const SENSITIVE_CLOUD_KEY = /(?:authorization|cookie|password|passwd|passphrase|passcode|pincode|secret|credential|privatekey|apikey|token|accesskeyid|secretaccesskey)$/i;
 const SENSITIVE_CLOUD_KEY_EXACT = new Set(['pin', 'otp', 'cvv', 'cvc', 'ssn']);
 const LARGE_IMAGE_KEY = /(?:attachimage|screenshot|image|imagedata|dataurl)$/i;
+const WORKFLOW_PARAMETER_VALUE_LIMIT = 10_000;
 
 function cloudRunError(message, status) {
   return Object.assign(new Error(message), { status });
@@ -61,6 +67,56 @@ function scrubCloudValue(value) {
   }
 }
 
+function redactWorkflowRuntimeValues(value, runtimeValues = []) {
+  if (value == null) return value;
+  const variants = new Set();
+  for (const parameterValue of runtimeValues) {
+    if (typeof parameterValue !== 'string' || !parameterValue.length) continue;
+    variants.add(parameterValue);
+    try {
+      const componentEncoded = encodeURIComponent(parameterValue);
+      variants.add(componentEncoded);
+      variants.add(componentEncoded.replace(/%20/g, '+'));
+      variants.add(encodeURI(parameterValue));
+      const formEncoded = new URLSearchParams([['value', parameterValue]])
+        .toString()
+        .slice('value='.length);
+      variants.add(formEncoded);
+    } catch {
+      // Raw replacement above still protects malformed strings that URI
+      // encoders cannot represent (for example, lone UTF-16 surrogates).
+    }
+  }
+  const values = [...variants]
+    .sort((a, b) => b.length - a.length);
+  if (!values.length) return value;
+  const normalizePercentEscapes = input => input.replace(
+    /%[0-9a-f]{2}/gi,
+    match => match.toUpperCase(),
+  );
+  const redactString = (input) => values.reduce((text, parameterValue) => {
+    const normalizedText = normalizePercentEscapes(text);
+    const normalizedValue = normalizePercentEscapes(parameterValue);
+    if (!normalizedText.includes(normalizedValue)) return text;
+    let result = '';
+    let offset = 0;
+    let index = normalizedText.indexOf(normalizedValue, offset);
+    while (index !== -1) {
+      result += `${text.slice(offset, index)}[workflow parameter]`;
+      offset = index + parameterValue.length;
+      index = normalizedText.indexOf(normalizedValue, offset);
+    }
+    return result + text.slice(offset);
+  }, input);
+  try {
+    return JSON.parse(JSON.stringify(value, (_key, item) => (
+      typeof item === 'string' ? redactString(item) : item
+    )));
+  } catch {
+    return { unserializable: true };
+  }
+}
+
 function serializedBytes(value) {
   return new TextEncoder().encode(JSON.stringify(value)).length;
 }
@@ -88,6 +144,8 @@ function compactCloudRunForPersistence(run) {
   return scrubCloudValue({
     runId: run?.runId,
     status: run?.status,
+    workflowId: run?.workflowId || null,
+    traceRunId: run?.traceRunId || null,
     parentRunId: run?.parentRunId || null,
     tabId: run?.tabId,
     task: run?.task,
@@ -127,6 +185,7 @@ function cloudSnapshot(run, { includeUpdates = true } = {}) {
   return {
     runId: run.runId,
     status: run.status,
+    workflowId: run.workflowId || null,
     parentRunId: run.parentRunId || null,
     tabId: run.tabId,
     task: run.task,
@@ -164,6 +223,7 @@ export function createCloudRunController({
   sendIndicator = () => {},
   startRecording = null,
   stopRecording = null,
+  workflowTrace = null,
   now = () => new Date(),
   makeRunId = () => `run_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`,
 } = {}) {
@@ -272,7 +332,7 @@ export function createCloudRunController({
     }
   }
 
-  function pushUpdate(run, type, data) {
+  function pushUpdate(run, type, data, runtimeValues = []) {
     run.updatedAt = isoNow();
     const previous = run.updates.at(-1);
     // Consecutive text_delta events upsert the same seq: content grows in place
@@ -280,16 +340,16 @@ export function createCloudRunController({
     // clients must re-read that row (or take a full snapshot) rather than
     // assuming each seq is immutable.
     if (type === 'text_delta' && previous?.type === 'text_delta') {
-      previous.data = scrubCloudValue({
+      previous.data = scrubCloudValue(redactWorkflowRuntimeValues({
         ...previous.data,
         content: `${previous.data?.content || ''}${data?.content || ''}`,
-      });
+      }, runtimeValues));
       previous.ts = run.updatedAt;
       schedulePersist();
       return;
     }
     run.nextUpdateSeq = (Number(run.nextUpdateSeq) || 0) + 1;
-    const scrubbedData = scrubCloudValue(data);
+    const scrubbedData = scrubCloudValue(redactWorkflowRuntimeValues(data, runtimeValues));
     run.updates.push({ seq: run.nextUpdateSeq, type, data: scrubbedData, ts: run.updatedAt });
     if (run.updates.length > CLOUD_UPDATE_LIMIT) {
       run.updates.splice(0, run.updates.length - CLOUD_UPDATE_LIMIT);
@@ -326,6 +386,28 @@ export function createCloudRunController({
     schedulePersist();
   }
 
+  function validateWorkflowParameters(workflow, input) {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) {
+      throw cloudRunError('`parameters` must be an object.', 400);
+    }
+    const descriptors = new Map((workflow.parameters || []).map(parameter => [parameter.id, parameter]));
+    const parameters = Object.create(null);
+    for (const [id, value] of Object.entries(input)) {
+      if (!descriptors.has(id)) throw cloudRunError(`Unknown workflow parameter: ${id}`, 400);
+      if (typeof value !== 'string') throw cloudRunError(`Workflow parameter ${id} must be a string.`, 400);
+      if (value.length > WORKFLOW_PARAMETER_VALUE_LIMIT) {
+        throw cloudRunError(`Workflow parameter ${id} exceeds ${WORKFLOW_PARAMETER_VALUE_LIMIT} characters.`, 400);
+      }
+      parameters[id] = value;
+    }
+    for (const descriptor of descriptors.values()) {
+      if (descriptor.required !== false && !Object.hasOwn(parameters, descriptor.id)) {
+        throw cloudRunError(`Missing workflow parameter: ${descriptor.id}`, 400);
+      }
+    }
+    return parameters;
+  }
+
   async function startRun(msg = {}) {
     await hydrate();
     const parentRunId = String(msg.parentRunId || msg.parent_run_id || '').trim() || null;
@@ -346,16 +428,26 @@ export function createCloudRunController({
       }
     }
     const tabId = await resolveTabId(requestedTabId);
-    const task = String(msg.task || msg.text || '').trim();
+    const workflow = msg._workflow || null;
+    const workflowParameters = msg._workflowParameters || {};
+    const workflowParameterValues = workflow ? Object.values(workflowParameters) : [];
+    const redactWorkflowValue = value => redactWorkflowRuntimeValues(value, workflowParameterValues);
+    const task = workflow
+      ? `Run saved workflow: ${workflow.name}`
+      : String(msg.task || msg.text || '').trim();
     if (!task) throw new Error('cloud_run requires `task`.');
     if (agent.isRunning(tabId)) throw new Error(`Tab ${tabId} already has an active WebBrain run.`);
 
     const apiMutationsAllowed = msg.apiMutationsAllowed === true || msg.api_mutations_allowed === true;
-    const outputSchema = msg.outputSchema || msg.output_schema || msg.responseFormat?.schema || msg.response_format?.schema || null;
+    const outputSchema = workflow
+      ? null
+      : msg.outputSchema || msg.output_schema || msg.responseFormat?.schema || msg.response_format?.schema || null;
     const createdAt = isoNow();
     const run = {
       runId: msg.runId || msg.run_id || makeRunId(),
       status: 'running',
+      workflowId: workflow?.id || null,
+      traceRunId: null,
       parentRunId,
       tabId,
       task,
@@ -404,12 +496,53 @@ export function createCloudRunController({
         }
         if (apiMutationsAllowed) agent.setApiMutationsAllowed(tabId, true);
         sendIndicator(tabId, 'WB_SHOW_AGENT_INDICATORS');
-        const content = await agent.processMessage(tabId, task, (type, data) => {
-          pushUpdate(run, type, data);
-        }, 'act', [], { cloudRun: true, outputSchema });
+        const publishUpdate = (type, data) => pushUpdate(
+          run,
+          type,
+          workflow && type === 'text_delta'
+            ? { ...(data || {}), content: '[workflow output redacted]' }
+            : data,
+          workflowParameterValues,
+        );
+        let content;
+        if (workflow) {
+          const replay = await agent.replaySavedWorkflow(
+            tabId,
+            workflow,
+            workflowParameters,
+            publishUpdate,
+            { cloudRun: true },
+          );
+          content = redactWorkflowValue(replay.summary || '');
+          run.summary = redactWorkflowValue(replay.summary || run.summary);
+          if (replay.status === 'fallback') {
+            pushUpdate(run, 'workflow_fallback', {
+              workflowId: workflow.id,
+              stepIndex: replay.stepIndex,
+              reason: replay.reason,
+            });
+            content = redactWorkflowValue(await agent.processMessage(
+              tabId, replay.prompt, publishUpdate, 'act', [], { cloudRun: true },
+            ));
+          } else if (replay.status === 'stopped') {
+            run.status = 'failed';
+            run.error = redactWorkflowValue(
+              replay.summary || replay.reason || 'Saved workflow stopped safely.'
+            );
+          }
+        } else {
+          content = await agent.processMessage(tabId, task, publishUpdate, 'act', [], {
+            cloudRun: true,
+            outputSchema,
+            onTraceStarted(traceRunId) {
+              run.traceRunId = traceRunId;
+              schedulePersist();
+            },
+          });
+        }
         run.pendingInput = null;
-        run.content = content;
-        run.finalUrl = await getTabUrl(tabId);
+        run.content = redactWorkflowValue(content);
+        run.finalUrl = redactWorkflowValue(await getTabUrl(tabId));
         if (run.status === 'aborting') {
           run.status = 'aborted';
           run.error = run.error || 'Aborted by cloud_abort.';
@@ -419,14 +552,14 @@ export function createCloudRunController({
             run.error = 'Structured cloud run finished without a valid done_json result.';
           } else {
             run.status = 'completed';
-            if (!outputSchema) run.result = content;
+            if (!outputSchema) run.result = redactWorkflowValue(content);
           }
         }
       } catch (error) {
         run.pendingInput = null;
         run.status = run.status === 'aborting' ? 'aborted' : 'failed';
-        run.error = error?.message || String(error);
-        run.finalUrl = await getTabUrl(tabId);
+        run.error = redactWorkflowValue(error?.message || String(error));
+        run.finalUrl = redactWorkflowValue(await getTabUrl(tabId));
       } finally {
         // Do not expose a terminal status until the requested recording has
         // finished flushing to Downloads; pollers use terminality as the cue
@@ -459,6 +592,64 @@ export function createCloudRunController({
     })();
 
     return cloudSnapshot(run, { includeUpdates: false });
+  }
+
+  async function startWorkflowRun(msg = {}) {
+    const workflow = normalizeSavedWorkflow(msg.workflow);
+    if (!workflow) throw cloudRunError('Saved workflow is missing or invalid.', 400);
+    if (msg.parentRunId || msg.parent_run_id) {
+      throw cloudRunError('Saved workflow runs cannot be continuations.', 400);
+    }
+    const parameters = validateWorkflowParameters(
+      workflow,
+      msg.parameters ?? {},
+    );
+    return startRun({
+      ...msg,
+      task: '',
+      text: '',
+      outputSchema: null,
+      output_schema: null,
+      _workflow: workflow,
+      _workflowParameters: parameters,
+    });
+  }
+
+  async function compileWorkflow(msg = {}) {
+    await hydrate();
+    const runId = String(msg.runId || msg.run_id || '').trim();
+    const name = String(msg.name || '').trim();
+    if (!runId) return { ok: false, status: 400, reason: 'run_required', warnings: [] };
+    if (!name) return { ok: false, status: 400, reason: 'name_required', warnings: [] };
+    const run = runs.get(runId);
+    if (!run) return { ok: false, status: 404, reason: 'run_not_found', warnings: [] };
+    if (run.workflowId) {
+      return { ok: false, status: 422, reason: 'workflow_run_not_compilable', warnings: [] };
+    }
+    if (run.status !== 'completed') {
+      return { ok: false, status: 409, reason: 'successful_run_required', warnings: [] };
+    }
+    if (!run.traceRunId || !workflowTrace) {
+      return { ok: false, status: 409, reason: 'trace_unavailable', warnings: [] };
+    }
+    let compiled = null;
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      compiled = await compileSuccessfulWorkflowByRunId(workflowTrace, {
+        runId: run.traceRunId,
+        name,
+      });
+      if (compiled.workflow || compiled.reason !== 'successful_run_required') break;
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    if (!compiled?.workflow) {
+      return {
+        ok: false,
+        status: compiled?.reason === 'no_replayable_steps' ? 422 : 409,
+        reason: compiled?.reason || 'workflow_compilation_failed',
+        warnings: compiled?.warnings || [],
+      };
+    }
+    return { ok: true, workflow: compiled.workflow, warnings: compiled.warnings || [] };
   }
 
   async function status(msg = {}) {
@@ -534,6 +725,8 @@ export function createCloudRunController({
   return {
     runs,
     startRun,
+    startWorkflowRun,
+    compileWorkflow,
     status,
     respond,
     abort,

@@ -10,7 +10,16 @@
   // Provisioning seeds Settings from a privileged extension page before this
   // bridge starts. Keep configuration mutations out of the WebSocket command
   // surface; the bridge is intentionally limited to managed run operations.
-  const ALLOWED_BRIDGE_ACTIONS = new Set(['cloud_run', 'cloud_status', 'cloud_respond', 'cloud_abort']);
+  const BRIDGE_PROTOCOL_VERSION = 2;
+  const BRIDGE_CAPABILITIES = ['saved_workflows_v1'];
+  const ALLOWED_BRIDGE_ACTIONS = new Set([
+    'cloud_run',
+    'cloud_workflow_compile',
+    'cloud_workflow_run',
+    'cloud_status',
+    'cloud_respond',
+    'cloud_abort',
+  ]);
   let socket = null;
   let bridgeUrl = null;
   let enabled = false;
@@ -68,7 +77,13 @@
         if (socket !== nextSocket) return;
         reconnectAttempt = 0;
         lastError = '';
-        sendJson({ type: 'hello', client: 'webbrain-extension', status: status() }, nextSocket);
+        sendJson({
+          type: 'hello',
+          client: 'webbrain-extension',
+          protocolVersion: BRIDGE_PROTOCOL_VERSION,
+          capabilities: BRIDGE_CAPABILITIES,
+          status: status(),
+        }, nextSocket);
       });
       nextSocket.addEventListener('message', async (event) => {
         if (socket !== nextSocket) return;
