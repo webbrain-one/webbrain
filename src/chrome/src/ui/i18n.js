@@ -18,10 +18,15 @@ import ms from './locales/ms.js';
 import tl from './locales/tl.js';
 import pl from './locales/pl.js';
 import he from './locales/he.js';
+import hi from './locales/hi.js';
+import pt from './locales/pt.js';
+import vi from './locales/vi.js';
+import bn from './locales/bn.js';
+import fa from './locales/fa.js';
 
-const DICTS = { en, es, fr, tr, zh, ru, uk, ar, ja, ko, id, th, ms, tl, pl, he };
+const DICTS = { en, es, fr, tr, zh, ru, uk, ar, ja, ko, id, th, ms, tl, pl, he, hi, pt, vi, bn, fa };
 const LS_KEY = 'wbLocale';
-const RTL_LOCALES = new Set(['ar', 'he']);
+const RTL_LOCALES = new Set(['ar', 'he', 'fa']);
 
 export const LANGUAGES = [
   { code: 'en', label: 'English' },
@@ -40,6 +45,11 @@ export const LANGUAGES = [
   { code: 'tl', label: 'Filipino' },
   { code: 'pl', label: 'Polski' },
   { code: 'he', label: 'עברית' },
+  { code: 'hi', label: 'हिन्दी' },
+  { code: 'pt', label: 'Português' },
+  { code: 'vi', label: 'Tiếng Việt' },
+  { code: 'bn', label: 'বাংলা' },
+  { code: 'fa', label: 'فارسی' },
 ];
 
 function detect() {
