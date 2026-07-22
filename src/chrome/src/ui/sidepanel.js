@@ -1382,7 +1382,7 @@ function isSuccessfulAskCompletion(mode, response) {
   if (!response || response.success === false || response.ok === false) return false;
   if (updatesContainStoreReviewFailure(response.updates)) return false;
   const content = typeof response.content === 'string' ? response.content.trim() : '';
-  return !!content && !parseSubscribeError(content);
+  return !!content && !parseSubscribeError(content) && !parseCostAllowanceError(content);
 }
 
 // Per-tab chat history (stores innerHTML of messages container).
@@ -4755,6 +4755,15 @@ function rebindSubscribeButtons() {
   });
 }
 
+function rebindCostAllowanceButtons() {
+  document.querySelectorAll('.cost-allowance-bump-btn').forEach(bindCostAllowanceButton);
+  document.querySelectorAll('.cost-allowance-continue-btn').forEach(btn => {
+    if (btn.dataset.bound) return;
+    btn.dataset.bound = 'true';
+    btn.addEventListener('click', () => resumeAfterSubscription(btn));
+  });
+}
+
 function retryPayloadFromButton(btn) {
   const text = String(btn?.dataset?.retryText || '').trim();
   if (!text) return null;
@@ -4873,6 +4882,7 @@ function rebindRestoredMessageControls() {
   rebindScheduleComposers();
   document.querySelectorAll('form.workflow-parameter-form').forEach(bindSavedWorkflowParameterForm);
   rebindSubscribeButtons();
+  rebindCostAllowanceButtons();
 }
 
 function getProviderPickerOptions() {
@@ -6297,7 +6307,8 @@ async function sendMessage(extraChatParams = {}) {
       if (textEl && getStreamedAssistantText(textEl) === String(res.content)) {
         renderAssistantTextUpdate(assistantEl, res.content);
       } else if (textEl && !textEl.textContent.trim()) {
-        if (!renderSubscribeError(textEl, res.content)) {
+        if (!renderCostAllowanceError(textEl, res.content, modeForSend)
+            && !renderSubscribeError(textEl, res.content, modeForSend)) {
           textEl.innerHTML = formatMarkdown(res.content);
         }
         addMessageCopyButton(assistantEl);
@@ -6765,7 +6776,8 @@ function handleAgentUpdateMessage(msg) {
         const textEl = currentAssistantEl.querySelector('.message-text');
         if (textEl && !textEl.textContent.trim()) {
           if (data.status === 'stopped' || data.status === 'cancelled') textEl.innerHTML = t('sp.stopped_by_user_html');
-          else if (!renderSubscribeError(textEl, data.finalContent)) textEl.innerHTML = formatMarkdown(data.finalContent);
+          else if (!renderCostAllowanceError(textEl, data.finalContent)
+              && !renderSubscribeError(textEl, data.finalContent)) textEl.innerHTML = formatMarkdown(data.finalContent);
           addMessageCopyButton(currentAssistantEl);
         }
       }
@@ -7530,7 +7542,7 @@ function renderAssistantTextUpdate(assistantEl, content, options = {}) {
     return;
   }
 
-  if (renderSubscribeError(textEl, content)) {
+  if (renderCostAllowanceError(textEl, content) || renderSubscribeError(textEl, content)) {
     clearStreamedAssistantText(textEl);
     delete textEl.dataset.suppressToolCallStream;
     if (!assistantEl.querySelector('.msg-copy-btn')) addMessageCopyButton(assistantEl);
@@ -7648,6 +7660,76 @@ function appendVerboseToolResult(name, result) {
 // line once the free daily allowance runs out. Detect that shape so we can turn
 // the bare URL into a real Subscribe button instead of making the user copy it.
 const SUBSCRIBE_ERROR_RE = /Subscribe for more usage:\s*(https?:\/\/\S+)/i;
+const COST_ALLOWANCE_ERROR_RE = /Cloud cost allowance reached:\s*(this session|total cloud\/router usage)\s+is\s+\$[\d.]+\s+against\s+the\s+\$([\d.]+)\s+limit\./i;
+const COST_ALLOWANCE_BUMP_USD = 10;
+
+function parseCostAllowanceError(content) {
+  if (typeof content !== 'string') return null;
+  const match = content.match(COST_ALLOWANCE_ERROR_RE);
+  if (!match) return null;
+  const limitUsd = Number(match[2]);
+  if (!Number.isFinite(limitUsd) || limitUsd < 0) return null;
+  return {
+    scope: match[1].toLowerCase() === 'this session' ? 'session' : 'total',
+    limitUsd,
+    message: content.replace(/\s*Increase or reset the allowance in Settings\.\s*$/i, '').trim(),
+  };
+}
+
+function formatCostAllowanceUsd(value) {
+  const amount = Number(value);
+  return '$' + (Number.isFinite(amount) && amount >= 0 ? amount : 0).toFixed(2);
+}
+
+function bindCostAllowanceButton(btn) {
+  if (!btn || btn.dataset.bound) return;
+  btn.dataset.bound = 'true';
+  btn.addEventListener('click', async () => {
+    if (btn.disabled) return;
+    const scope = btn.dataset.costAllowanceScope === 'session' ? 'session' : 'total';
+    const storageKey = scope === 'session' ? 'costAllowanceSessionUsd' : 'costAllowanceTotalUsd';
+    const parsedLimit = Number(btn.dataset.costAllowanceLimit);
+    btn.disabled = true;
+    btn.textContent = '…';
+    btn.setAttribute('aria-busy', 'true');
+
+    try {
+      const stored = await chrome.storage.local.get([storageKey]);
+      const storedLimit = Number(stored?.[storageKey]);
+      const currentLimit = Number.isFinite(storedLimit) && storedLimit >= 0
+        ? storedLimit
+        : (Number.isFinite(parsedLimit) && parsedLimit >= 0 ? parsedLimit : COST_ALLOWANCE_BUMP_USD);
+      const nextLimit = Math.round((currentLimit + COST_ALLOWANCE_BUMP_USD) * 100) / 100;
+      await chrome.storage.local.set({ [storageKey]: nextLimit });
+
+      btn.dataset.costAllowanceLimit = String(nextLimit);
+      btn.textContent = `✓ ${formatCostAllowanceUsd(nextLimit)}`;
+      btn.setAttribute('aria-busy', 'false');
+      btn.classList.add('cost-allowance-bumped');
+      const card = btn.closest('.cost-allowance-error');
+      const continueBtn = card?.querySelector('.cost-allowance-continue-btn');
+      if (continueBtn) continueBtn.hidden = false;
+      const status = card?.querySelector('.cost-allowance-status');
+      const scopeLabel = t(scope === 'session'
+        ? 'st.display.cost_session_limit.label'
+        : 'st.display.cost_total_limit.label');
+      const success = `${scopeLabel}: ${formatCostAllowanceUsd(nextLimit)}`;
+      if (status) status.textContent = success;
+      showComposerToast(success, { duration: 5000 });
+      schedulePersist();
+    } catch (error) {
+      btn.disabled = false;
+      btn.textContent = '+ $10';
+      btn.setAttribute('aria-busy', 'false');
+      const failure = t('sp.error_prefix', {
+        msg: error?.message || String(error || 'unknown error'),
+      });
+      const status = btn.closest('.cost-allowance-error')?.querySelector('.cost-allowance-status');
+      if (status) status.textContent = failure;
+      showComposerToast(failure, { duration: 5000 });
+    }
+  });
+}
 
 function parseSubscribeError(content) {
   if (typeof content !== 'string') return null;
@@ -7709,6 +7791,57 @@ function renderSubscribeError(textEl, content, resumeMode = '') {
   return true;
 }
 
+function renderCostAllowanceError(textEl, content, resumeMode = '') {
+  const parsed = parseCostAllowanceError(content);
+  if (!parsed) return false;
+
+  textEl.replaceChildren();
+  textEl.classList.add('cost-allowance-error');
+
+  const msg = document.createElement('div');
+  msg.className = 'cost-allowance-error-text';
+  msg.textContent = parsed.message;
+  textEl.appendChild(msg);
+
+  const actions = document.createElement('div');
+  actions.className = 'cost-allowance-actions';
+
+  const bumpBtn = document.createElement('button');
+  bumpBtn.type = 'button';
+  bumpBtn.className = 'cost-allowance-bump-btn';
+  bumpBtn.textContent = '+ $10';
+  bumpBtn.dataset.costAllowanceScope = parsed.scope;
+  bumpBtn.dataset.costAllowanceLimit = String(parsed.limitUsd);
+  const allowanceLabel = t(parsed.scope === 'session'
+    ? 'st.display.cost_session_limit.label'
+    : 'st.display.cost_total_limit.label');
+  bumpBtn.title = `${allowanceLabel}: +$10`;
+  bumpBtn.setAttribute('aria-label', bumpBtn.title);
+  bindCostAllowanceButton(bumpBtn);
+  actions.appendChild(bumpBtn);
+
+  const continueBtn = document.createElement('button');
+  continueBtn.type = 'button';
+  continueBtn.className = 'cost-allowance-continue-btn';
+  continueBtn.textContent = t('sp.continue_btn');
+  continueBtn.dataset.resumeMode = ['ask', 'act', 'dev'].includes(resumeMode)
+    ? resumeMode
+    : (textEl.closest('.message.assistant')?.dataset.runMode || agentMode);
+  continueBtn.hidden = true;
+  continueBtn.dataset.bound = 'true';
+  continueBtn.addEventListener('click', () => resumeAfterSubscription(continueBtn));
+  actions.appendChild(continueBtn);
+
+  textEl.appendChild(actions);
+
+  const status = document.createElement('div');
+  status.className = 'cost-allowance-status';
+  status.setAttribute('role', 'status');
+  status.setAttribute('aria-live', 'polite');
+  textEl.appendChild(status);
+  return true;
+}
+
 function addErrorRetryButton(msgEl, retryPayload) {
   if (!msgEl || !retryPayload?.text || msgEl.querySelector('.error-retry-btn')) return;
   const retryId = `retry-${Date.now()}-${++retryPayloadSeq}`;
@@ -7762,7 +7895,8 @@ function addMessage(role, content, options = {}) {
   } else if (role === 'system') {
     if (isSystemHtml(content)) textEl.innerHTML = content.__systemHtml;
     else textEl.textContent = content || '';
-  } else if (!renderSubscribeError(textEl, content, options.subscribeResumeMode)) {
+  } else if (!renderCostAllowanceError(textEl, content, options.subscribeResumeMode)
+      && !renderSubscribeError(textEl, content, options.subscribeResumeMode)) {
     textEl.innerHTML = content ? formatMarkdown(content) : '';
   }
 
@@ -7899,7 +8033,8 @@ async function continueAgent(options = {}) {
       if (textEl && getStreamedAssistantText(textEl) === String(res.content)) {
         renderAssistantTextUpdate(assistantEl, res.content);
       } else if (textEl && !textEl.textContent.trim()) {
-        if (!renderSubscribeError(textEl, res.content)) {
+        if (!renderCostAllowanceError(textEl, res.content)
+            && !renderSubscribeError(textEl, res.content)) {
           textEl.innerHTML = formatMarkdown(res.content);
         }
         addMessageCopyButton(assistantEl);

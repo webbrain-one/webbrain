@@ -13716,9 +13716,74 @@ test('sidepanel subscribe error card clears DOM without HTML reinterpretation', 
     assert.notEqual(runCompleteStart, -1, `${label}: run_complete handler missing`);
     assert.notEqual(runCompleteEnd, -1, `${label}: run_complete boundary missing`);
     const runCompleteBody = panel.slice(runCompleteStart, runCompleteEnd);
-    assert.match(runCompleteBody, /else if \(!renderSubscribeError\(textEl, data\.finalContent\)\) textEl\.innerHTML = formatMarkdown\(data\.finalContent\);/, `${label}: restored run finals should render subscribe actions before markdown fallback`);
+    assert.match(runCompleteBody, /else if \(!renderCostAllowanceError\(textEl, data\.finalContent\)[\s\S]*?&& !renderSubscribeError\(textEl, data\.finalContent\)\) textEl\.innerHTML = formatMarkdown\(data\.finalContent\);/, `${label}: restored run finals should render actionable allowance cards before markdown fallback`);
     assert.match(styles, /\.subscribe-actions\s*\{[\s\S]*?flex-wrap:\s*wrap;/, `${label}: subscribe actions should wrap in narrow panels`);
     assert.match(styles, /\.subscribe-resume-btn\s*\{[\s\S]*?background:\s*transparent;[\s\S]*?border:\s*1px solid var\(--accent\);/, `${label}: resume action should use secondary styling`);
+  }
+});
+
+test('sidepanel cloud cost allowance stop offers a persisted one-click $10 bump', () => {
+  const totalError = 'Error: Cloud cost allowance reached: total cloud/router usage is $10.02 against the $10.00 limit. Stopping before further cloud/router model calls. Increase or reset the allowance in Settings.';
+  const sessionError = 'Cloud cost allowance reached: this session is $4.25 against the $4.00 limit. Stopping before further cloud/router model calls. Increase or reset the allowance in Settings.';
+
+  for (const [label, panelRel, styleRel, settingsRel, storageApi] of [
+    ['chrome', 'src/chrome/src/ui/sidepanel.js', 'src/chrome/styles/sidepanel.css', 'src/chrome/src/ui/settings.js', 'chrome'],
+    ['firefox', 'src/firefox/src/ui/sidepanel.js', 'src/firefox/styles/sidepanel.css', 'src/firefox/src/ui/settings.js', 'browser'],
+  ]) {
+    const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
+    const styles = fs.readFileSync(path.join(ROOT, styleRel), 'utf8');
+    const settings = fs.readFileSync(path.join(ROOT, settingsRel), 'utf8');
+
+    const constantsStart = panel.indexOf('const COST_ALLOWANCE_ERROR_RE =');
+    const parserStart = panel.indexOf('function parseCostAllowanceError(content) {', constantsStart);
+    const parserEnd = panel.indexOf('\n}\n\nfunction formatCostAllowanceUsd', parserStart);
+    assert.notEqual(constantsStart, -1, `${label}: cost allowance matcher missing`);
+    assert.notEqual(parserStart, -1, `${label}: cost allowance parser missing`);
+    assert.notEqual(parserEnd, -1, `${label}: cost allowance parser boundary missing`);
+    const declarations = panel.slice(constantsStart, parserStart);
+    const parserSource = panel.slice(parserStart, parserEnd + 2);
+    const parseCostAllowanceError = Function(
+      `${declarations}\n${parserSource}\nreturn parseCostAllowanceError;`,
+    )();
+
+    assert.deepEqual(
+      parseCostAllowanceError(totalError),
+      {
+        scope: 'total',
+        limitUsd: 10,
+        message: 'Error: Cloud cost allowance reached: total cloud/router usage is $10.02 against the $10.00 limit. Stopping before further cloud/router model calls.',
+      },
+      `${label}: total allowance error should expose its active limit without the Settings-only instruction`,
+    );
+    assert.equal(parseCostAllowanceError(sessionError)?.scope, 'session', `${label}: session allowance errors should target the session guard`);
+    assert.equal(parseCostAllowanceError(sessionError)?.limitUsd, 4, `${label}: session allowance limit should parse as a number`);
+    assert.equal(parseCostAllowanceError('ordinary provider failure'), null, `${label}: unrelated failures should keep normal rendering`);
+
+    const bindStart = panel.indexOf('function bindCostAllowanceButton(btn) {');
+    const bindEnd = panel.indexOf('\n}\n\nfunction parseSubscribeError', bindStart);
+    const bindBody = panel.slice(bindStart, bindEnd + 2);
+    assert.match(bindBody, new RegExp(`await ${storageApi}\\.storage\\.local\\.get\\(\\[storageKey\\]\\)`), `${label}: bump should read the currently persisted limit`);
+    assert.match(bindBody, /currentLimit \+ COST_ALLOWANCE_BUMP_USD/, `${label}: bump should add exactly $10 to the current limit`);
+    assert.match(bindBody, new RegExp(`await ${storageApi}\\.storage\\.local\\.set\\(\\{ \\[storageKey\\]: nextLimit \\}\\)`), `${label}: bump should persist the raised limit`);
+    assert.match(bindBody, /if \(continueBtn\) continueBtn\.hidden = false;/, `${label}: successful bump should reveal an explicit continuation action`);
+
+    const renderStart = panel.indexOf("function renderCostAllowanceError(textEl, content, resumeMode = '') {");
+    const renderEnd = panel.indexOf('\n}\n\nfunction addErrorRetryButton', renderStart);
+    const renderBody = panel.slice(renderStart, renderEnd + 2);
+    assert.match(renderBody, /textEl\.replaceChildren\(\);/, `${label}: allowance card should clear via DOM APIs`);
+    assert.match(renderBody, /msg\.textContent = parsed\.message;/, `${label}: allowance message should remain textContent`);
+    assert.match(renderBody, /bumpBtn\.textContent = '\+ \$10';/, `${label}: allowance card should expose the one-click $10 action`);
+    assert.match(renderBody, /bumpBtn\.setAttribute\('aria-label', bumpBtn\.title\);/, `${label}: compact $10 action should keep a localized accessible label`);
+    assert.match(renderBody, /continueBtn\.hidden = true;/, `${label}: continuation should stay gated until persistence succeeds`);
+    assert.match(panel, /rebindCostAllowanceButtons\(\);/, `${label}: restored chats should rebind allowance controls`);
+    assert.match(panel, /!parseSubscribeError\(content\) && !parseCostAllowanceError\(content\)/, `${label}: allowance stops should not count as successful Ask completions`);
+
+    assert.match(styles, /\.cost-allowance-actions\s*\{[\s\S]*?flex-wrap:\s*wrap;/, `${label}: allowance actions should wrap in narrow panels`);
+    assert.match(styles, /\.cost-allowance-bump-btn\s*\{[\s\S]*?background:\s*var\(--accent\);/, `${label}: $10 action should use the primary accent treatment`);
+    assert.match(styles, /\.cost-allowance-continue-btn\s*\{[\s\S]*?background:\s*transparent;/, `${label}: continuation should be visually secondary`);
+
+    assert.match(settings, /costSessionLimitInput\?\.addEventListener\('change',[\s\S]*?storage\.local\.set\(\{ costAllowanceSessionUsd: value \}\)/, `${label}: session allowance edits should autosave on committed changes`);
+    assert.match(settings, /costTotalLimitInput\?\.addEventListener\('change',[\s\S]*?storage\.local\.set\(\{ costAllowanceTotalUsd: value \}\)/, `${label}: total allowance edits should autosave on committed changes`);
   }
 });
 

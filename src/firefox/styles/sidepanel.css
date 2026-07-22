@@ -2434,6 +2434,86 @@ body {
   outline-offset: 2px;
 }
 
+/* Paid-provider allowance stop — let the user raise the active guard in place. */
+.message-text.cost-allowance-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.cost-allowance-error-text {
+  line-height: 1.45;
+}
+
+.cost-allowance-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cost-allowance-bump-btn,
+.cost-allowance-continue-btn {
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, opacity 0.15s;
+}
+
+.cost-allowance-bump-btn {
+  background: var(--accent);
+  color: #fff;
+  border: 1px solid var(--accent);
+}
+
+.cost-allowance-bump-btn:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.cost-allowance-bump-btn:disabled {
+  cursor: default;
+  opacity: 0.76;
+}
+
+.cost-allowance-bump-btn.cost-allowance-bumped {
+  background: rgba(76, 175, 80, 0.14);
+  border-color: rgba(76, 175, 80, 0.46);
+  color: var(--text-primary);
+}
+
+.cost-allowance-continue-btn {
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+}
+
+.cost-allowance-continue-btn:hover,
+.cost-allowance-continue-btn:focus-visible {
+  background: var(--accent-dim);
+  color: var(--text-primary);
+}
+
+.cost-allowance-bump-btn:focus-visible,
+.cost-allowance-continue-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.cost-allowance-status {
+  min-height: 15px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.cost-allowance-status:empty {
+  display: none;
+}
+
 /* Clarify card — agent paused to ask user a question */
 .clarify-card {
   margin: 8px 0;
