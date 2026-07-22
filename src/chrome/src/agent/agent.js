@@ -6413,7 +6413,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     }
   }
 
-  async _startTraceRun(tabId, userMessage, mode, provider, tabInfo = null) {
+  async _startTraceRun(tabId, userMessage, mode, provider, tabInfo = null, runOptions = {}) {
     const { tabUrl, tabTitle } = tabInfo || await this._getTabUrlTitle(tabId);
     // Tracing must never break a run: a recorder failure returns null and the
     // run proceeds untraced rather than throwing out of the message path.
@@ -6429,11 +6429,17 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         tabTitle,
         mode,
         conversationId: this.conversationIds.get(tabId) || null,
+        force: runOptions?.cloudRun === true,
       });
     } catch {
       return null;
     }
-    if (runId) this.currentRunId.set(tabId, runId);
+    if (runId) {
+      this.currentRunId.set(tabId, runId);
+      if (typeof runOptions?.onTraceStarted === 'function') {
+        try { runOptions.onTraceStarted(runId); } catch {}
+      }
+    }
     return runId;
   }
 
@@ -18315,7 +18321,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       // Fetch the tab url/title once and reuse it for both the trace start and
       // the planner gate, instead of fetching the same tab twice.
       plannerTabInfo = await this._getTabUrlTitle(tabId);
-      runId = await this._startTraceRun(tabId, userMessage, mode, provider, plannerTabInfo);
+      runId = await this._startTraceRun(
+        tabId, userMessage, mode, provider, plannerTabInfo, runOptions,
+      );
     }
 
     const gateOutcome = await this._maybeRunPlannerGate(
@@ -18426,7 +18434,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     };
 
     if (!runId) {
-      runId = await this._startTraceRun(tabId, userMessage, mode, provider);
+      runId = await this._startTraceRun(
+        tabId, userMessage, mode, provider, null, runOptions,
+      );
     }
 
     const recommendedFirstTool = await this._maybeExecuteRecommendedActionFirstTool(
@@ -18888,7 +18898,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       // Fetch the tab url/title once and reuse it for both the trace start and
       // the planner gate, instead of fetching the same tab twice.
       plannerTabInfo = await this._getTabUrlTitle(tabId);
-      runId = await this._startTraceRun(tabId, userMessage, mode, provider, plannerTabInfo);
+      runId = await this._startTraceRun(
+        tabId, userMessage, mode, provider, plannerTabInfo, runOptions?.onTraceStarted,
+      );
     }
 
     const gateOutcome = await this._maybeRunPlannerGate(

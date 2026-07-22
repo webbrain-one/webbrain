@@ -126,6 +126,7 @@ const cloudRunController = createCloudRunController({
   sendIndicator: (tabId, type) => sendIndicatorMessage(tabId, type),
   startRecording: startTabRecording,
   stopRecording: stopTabRecording,
+  workflowTrace,
 });
 cloudRunController.syncBridge().catch(() => {});
 
@@ -1855,6 +1856,10 @@ async function handleMessage(msg, sender) {
   switch (msg.action) {
     case 'cloud_run':
       return await cloudRunController.startRun(msg);
+    case 'cloud_workflow_compile':
+      return await cloudRunController.compileWorkflow(msg);
+    case 'cloud_workflow_run':
+      return await cloudRunController.startWorkflowRun(msg);
     case 'cloud_status':
       return await cloudRunController.status(msg);
     case 'cloud_respond':

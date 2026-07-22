@@ -740,6 +740,19 @@ export async function compileLatestSuccessfulWorkflow(traceReader, options = {})
   return compileWorkflowFromTrace(run, events, options);
 }
 
+export async function compileSuccessfulWorkflowByRunId(traceReader, options = {}) {
+  if (!traceReader?.getRun || !traceReader?.getRunEvents) {
+    return { workflow: null, warnings: [], reason: 'trace_reader_required' };
+  }
+  const runId = cleanId(options.runId);
+  if (!runId) return { workflow: null, warnings: [], reason: 'run_required' };
+  const run = await traceReader.getRun(runId);
+  if (!run) return { workflow: null, warnings: [], reason: 'trace_not_found' };
+  if (run.status !== 'done') return { workflow: null, warnings: [], reason: 'successful_run_required' };
+  const events = await traceReader.getRunEvents(run.runId);
+  return compileWorkflowFromTrace(run, events, options);
+}
+
 export function createSavedWorkflowStore(storageArea, options = {}) {
   const now = options.now || nowMs;
   const read = async () => {
