@@ -260,7 +260,7 @@ export default {
   'sp.clarify.auto_selected': "انتخاب خودکار (به پایان رسیده):",
   'sp.clarify.auto_selected_instant': "انتخاب خودکار (فوری):",
   'sp.plan.title': "بررسی طرح",
-  'sp.plan.approve': "👍 دویدن",
+  'sp.plan.approve': "دویدن",
   'sp.plan.change': "تغییر دهید",
   'sp.plan.edit_as_text': "ویرایش به عنوان متن",
   'sp.plan.done_editing_text': "انجام شد",

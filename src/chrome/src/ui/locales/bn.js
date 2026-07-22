@@ -260,7 +260,7 @@ export default {
   'sp.clarify.auto_selected': "স্বতঃ-নির্বাচিত (সময় শেষ):",
   'sp.clarify.auto_selected_instant': "স্বতঃ-নির্বাচিত (তাত্ক্ষণিক):",
   'sp.plan.title': "পরিকল্পনা পর্যালোচনা করুন",
-  'sp.plan.approve': "👍 রান",
+  'sp.plan.approve': "রান",
   'sp.plan.change': "পরিবর্তন",
   'sp.plan.edit_as_text': "পাঠ্য হিসাবে সম্পাদনা করুন",
   'sp.plan.done_editing_text': "সম্পন্ন",

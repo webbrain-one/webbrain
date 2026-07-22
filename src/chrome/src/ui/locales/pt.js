@@ -260,7 +260,7 @@ export default {
   'sp.clarify.auto_selected': "Selecionado automaticamente (tempo limite):",
   'sp.clarify.auto_selected_instant': "Selecionado automaticamente (instantâneo):",
   'sp.plan.title': "Revise o plano",
-  'sp.plan.approve': "👍 Corra",
+  'sp.plan.approve': "Corra",
   'sp.plan.change': "Mudança",
   'sp.plan.edit_as_text': "Editar como texto",
   'sp.plan.done_editing_text': "Concluído",
