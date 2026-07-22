@@ -47290,11 +47290,22 @@ test('saved workflow slash commands are out-of-band and wired in both browsers',
     const remove = runtime.parseSlashInvocation('/workflow --delete workflow_123');
     assert.equal(remove.action, 'delete');
     assert.equal(remove.payload, 'workflow_123');
+    const exported = runtime.parseSlashInvocation('/workflow --export workflow_123');
+    assert.equal(exported.action, 'export');
+    assert.equal(exported.payload, 'workflow_123');
+    const imported = runtime.parseSlashInvocation('/workflow --import --file');
+    assert.equal(imported.action, 'import');
+    assert.equal(runtime.slashInvocationIsOutOfBand(imported), true);
+    assert.equal(runtime.parseSlashInvocation('/workflow --import').error, 'invalid-usage');
+    assert.equal(runtime.parseSlashInvocation('/workflow --file').error, 'invalid-usage');
     const source = fs.readFileSync(path.join(ROOT, panel), 'utf8');
     assert.match(source, /sendToBackground\('save_latest_workflow', \{ tabId, name \}\)/);
     assert.match(source, /sendToBackground\('list_saved_workflows'\)/);
     assert.match(source, /sendToBackground\('delete_saved_workflow'/);
     assert.match(source, /sendToBackground\('get_saved_workflow', \{ id: workflowId \}\)/);
+    assert.match(source, /sendToBackground\('export_saved_workflow'/);
+    assert.match(source, /sendToBackground\('import_saved_workflow'/);
+    assert.match(source, /MAX_PORTABLE_WORKFLOW_FILE_BYTES = 1024 \* 1024/);
     assert.match(source, /Array\.isArray\(res\.warnings\)/);
     assert.match(source, /input\.type = parameter\.sensitive \? 'password' : 'text'/);
     assert.match(source, /inputs\.forEach\(\(input\) => \{ input\.value = ''; \}\)/);
@@ -47308,6 +47319,8 @@ test('saved workflow slash commands are out-of-band and wired in both browsers',
     assert.match(source, /compileLatestSuccessfulWorkflow\(workflowTrace/);
     assert.match(source, /case 'list_saved_workflows':/);
     assert.match(source, /case 'delete_saved_workflow':/);
+    assert.match(source, /case 'export_saved_workflow':/);
+    assert.match(source, /case 'import_saved_workflow':/);
     assert.match(source, /agent\.replaySavedWorkflow\(/);
     assert.match(source, /clearUserMemoryTurnContext\(tabId\)/);
     assert.match(source, /agent\.processMessage\(tabId, replay\.prompt, publishUpdate, 'act', \[\], runOptions\)/);
@@ -47402,6 +47415,69 @@ test('saved workflow normalization rejects imported raw refs and undeclared para
     steps: [{ tool: 'wait_for_element', args: { text: 'Continue', selector: '.ignored', timeout: 2000 }, expected: { kind: 'tool_success' } }],
   });
   assert.deepEqual(waitOk.steps[0].args, { text: 'Continue', timeout: 2000 });
+});
+
+test('portable saved workflow export and import round-trip safely with fresh identity', () => {
+  const original = SavedWorkflowsCh.compileWorkflowFromTrace(
+    { runId: 'run_portable', status: 'done', tabUrl: 'https://example.com/form' },
+    [
+      { seq: 1, kind: 'tool', data: { name: 'get_accessibility_tree', result: { pageContent: 'textbox "Email" [ref_5] type="email"' } } },
+      { seq: 2, kind: 'tool', data: { name: 'type_ax', args: { ref_id: 'ref_5', text: 'captured@example.com' }, result: { success: true, verified: true } } },
+    ],
+    { name: 'Portable email', now: 2500 },
+  ).workflow;
+
+  for (const module of [SavedWorkflowsCh, SavedWorkflowsFx]) {
+    const exported = module.exportPortableWorkflowDefinition(original);
+    assert.equal(exported.reason, '');
+    assert.equal(exported.workflow.schema, module.SAVED_WORKFLOW_SCHEMA);
+    assert.doesNotMatch(JSON.stringify(exported.workflow), /captured@example\.com|ref_5/);
+
+    const imported = module.importPortableWorkflowDefinition(exported.workflow, { now: 2600 });
+    assert.equal(imported.reason, '');
+    assert.notEqual(imported.workflow.id, exported.workflow.id);
+    assert.equal(imported.workflow.createdAt, 2600);
+    assert.equal(imported.workflow.updatedAt, 2600);
+    assert.deepEqual(imported.workflow.steps, exported.workflow.steps);
+    assert.deepEqual(imported.workflow.parameters, exported.workflow.parameters);
+
+    const oversized = module.importPortableWorkflowDefinition({
+      ...exported.workflow,
+      ignored: 'x'.repeat(module.MAX_PORTABLE_WORKFLOW_BYTES),
+    });
+    assert.equal(oversized.reason, 'workflow_too_large');
+    assert.equal(oversized.workflow, null);
+
+    const unsafe = module.importPortableWorkflowDefinition({
+      ...exported.workflow,
+      steps: [...exported.workflow.steps, { id: 'unsafe', tool: 'evaluate', args: { code: '1 + 1' } }],
+    });
+    assert.equal(unsafe.reason, 'invalid_workflow');
+    assert.equal(unsafe.workflow, null);
+
+    const overStepLimit = module.importPortableWorkflowDefinition({
+      ...exported.workflow,
+      steps: Array.from({ length: 101 }, (_, index) => ({
+        id: `step_${index + 1}`,
+        tool: 'navigate',
+        args: { url: `https://example.com/page/${index}` },
+      })),
+    });
+    assert.equal(overStepLimit.reason, 'invalid_workflow');
+    assert.equal(overStepLimit.workflow, null);
+
+    const sanitizedNavigation = module.importPortableWorkflowDefinition({
+      ...exported.workflow,
+      steps: [{
+        id: 'step_1',
+        tool: 'navigate',
+        args: { url: 'https://example.com/next?token=runtime-value#private' },
+      }],
+    }, { now: 2700 });
+    assert.equal(sanitizedNavigation.reason, '');
+    assert.deepEqual(sanitizedNavigation.workflow.steps[0].args, { url: 'https://example.com/next' });
+    assert.doesNotMatch(JSON.stringify(sanitizedNavigation.workflow), /runtime-value|private/);
+  }
 });
 
 test('saved workflow target matching fails closed on ambiguity', () => {
@@ -47665,6 +47741,31 @@ test('saved workflow store normalizes writes and resolves runtime parameters wit
   assert.doesNotMatch(JSON.stringify(memory), /person@example\.com|new@example\.com|ref_5/);
   assert.equal((await store.delete(compiled.id)).changed, true);
   assert.equal((await store.list()).length, 0);
+});
+
+test('saved workflow store rejects a new workflow after the 100-workflow limit', async () => {
+  const memory = {};
+  const storage = {
+    async get(key) { return { [key]: structuredClone(memory[key]) }; },
+    async set(values) { Object.assign(memory, structuredClone(values)); },
+  };
+  let now = 4000;
+  const store = SavedWorkflowsCh.createSavedWorkflowStore(storage, { now: () => now++ });
+  const base = {
+    schema: SavedWorkflowsCh.SAVED_WORKFLOW_SCHEMA,
+    name: 'Imported',
+    start: { origin: 'https://example.com', pathFamily: '/' },
+    parameters: [],
+    steps: [{ id: 'step_1', tool: 'click', args: { text: 'Continue' }, expected: { kind: 'tool_success' } }],
+  };
+  for (let index = 0; index < 100; index += 1) {
+    const result = await store.put({ ...base, id: `workflow_${index}` });
+    assert.equal(result.changed, true);
+  }
+  const rejected = await store.put({ ...base, id: 'workflow_101' });
+  assert.equal(rejected.changed, false);
+  assert.equal(rejected.reason, 'workflow_limit');
+  assert.equal((await store.list()).length, 100);
 });
 
 test('profile sync reset does not re-unlock after an in-flight lock', async () => {

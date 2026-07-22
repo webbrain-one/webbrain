@@ -340,6 +340,8 @@ WebBrain accepts slash commands as the first thing on a line in the input box. T
 | `/workflow --save <name>` | Compile the latest successful traced run into a reusable, value-free workflow |
 | `/workflow --run <id>` | Run a saved workflow in Act mode, collecting any runtime parameters locally |
 | `/workflow --delete <id>` | Delete a saved workflow |
+| `/workflow --export <id>` | Download a sanitized portable `webbrain-workflow/1` JSON file |
+| `/workflow --import --file` | Import a portable workflow file as a new local saved workflow |
 | `/allow-api` | **Per-conversation API mutation override.** Lifts the UI-first restriction so the agent may use POST/PUT/PATCH/DELETE via `fetch_url` when UI is failing. Badge appears while active; clears on `/reset`. |
 | `/dangerously-skip-permissions` | **Global permission-prompt bypass.** Turns off `Ask before consequential actions` without opening Settings. WebBrain will act without per-site prompts until you re-enable the setting. |
 | `/compact` | Force context compaction for the current conversation |
@@ -389,6 +391,12 @@ are not saved to the workflow, conversation, user memory, replay trace, or Agent
 fallback prompt; they are still delivered to the target page by the requested
 browser action. The original opt-in source trace remains separate and can
 contain raw tool arguments until the user deletes that trace.
+
+Portable workflow files contain the raw sanitized `webbrain-workflow/1`
+definition and are limited to 1 MiB. Export re-normalizes the definition before
+download. Import normalizes it again, assigns a fresh local ID and timestamps,
+and never overwrites an existing workflow, so the same file can safely move
+between Chrome, Firefox, and WebBrain Cloud.
 
 The default UI-first rule exists because API actions are invisible (you don't see what's being sent), often require separate auth tokens you may not have configured, and can have a much larger blast radius than a visible mis-click. Only use `/allow-api` when you've decided you want that tradeoff for a specific job.
 

@@ -441,7 +441,7 @@ const SLASH_COMMANDS = [
   },
   {
     value: '/workflow',
-    usage: '/workflow [--save <name> | --run <id> | --delete <id>]',
+    usage: '/workflow [--save <name> | --run <id> | --delete <id> | --export <id> | --import --file]',
     descriptionKey: 'sp.slash.workflows',
     action: 'list',
     outOfBand: true,
@@ -449,6 +449,9 @@ const SLASH_COMMANDS = [
       { value: '--save', valueLabel: '<name>', descriptionKey: 'sp.slash.save_workflow', action: 'save', takesRemainder: true, outOfBand: true, exclusiveGroup: 'workflow-action' },
       { value: '--run', valueLabel: '<id>', descriptionKey: 'sp.slash.run_workflow', action: 'run', takesRemainder: true, outOfBand: true, exclusiveGroup: 'workflow-action' },
       { value: '--delete', valueLabel: '<id>', descriptionKey: 'sp.slash.delete_workflow', action: 'delete', takesRemainder: true, outOfBand: true, exclusiveGroup: 'workflow-action' },
+      { value: '--export', valueLabel: '<id>', descriptionKey: 'sp.slash.workflows', action: 'export', takesRemainder: true, outOfBand: true, exclusiveGroup: 'workflow-action' },
+      { value: '--import', descriptionKey: 'sp.slash.workflows', action: 'import', outOfBand: true, exclusiveGroup: 'workflow-action', requires: '--file' },
+      { value: '--file', descriptionKey: 'sp.slash.import_config_file', disallowPayload: true, requires: '--import' },
     ],
   },
   { value: '/allow-api', usage: '/allow-api [prompt]', descriptionKey: 'sp.slash.allow_api', action: 'enable', acceptsPayload: true },
@@ -608,6 +611,9 @@ function parseSlashInvocation(value) {
     return { error: 'invalid-usage', command, commandToken };
   }
   if (payload && selectedOptions.some((option) => option.disallowPayload)) {
+    return { error: 'invalid-usage', command, commandToken };
+  }
+  if (selectedOptions.some((option) => option.requires && !selectedValues.has(option.requires))) {
     return { error: 'invalid-usage', command, commandToken };
   }
 
@@ -2824,9 +2830,18 @@ const SAVED_WORKFLOW_FAILURE_REASON_KEYS = {
   name_required: 'sp.workflows.reason.name_required',
   http_start_url_required: 'sp.workflows.reason.http_start_url',
   normalization_failed: 'sp.workflows.reason.normalization_failed',
+  invalid_workflow: 'sp.workflows.reason.normalization_failed',
 };
 
+const MAX_PORTABLE_WORKFLOW_FILE_BYTES = 1024 * 1024;
+
 function savedWorkflowFailureMessage(res) {
+  if (res?.reason === 'workflow_too_large') {
+    return t('sp.workflows.error', { msg: 'portable workflow files must not exceed 1 MiB' });
+  }
+  if (res?.reason === 'workflow_limit') {
+    return t('sp.workflows.error', { msg: 'the saved workflow limit of 100 has been reached' });
+  }
   const reasonKey = SAVED_WORKFLOW_FAILURE_REASON_KEYS[res?.reason];
   return reasonKey
     ? t(reasonKey)
@@ -2886,6 +2901,85 @@ async function deleteSavedWorkflow(id, tabId = currentTabId) {
   } catch (error) {
     if (currentTabId === tabId) showComposerToast(t('sp.workflows.error', { msg: error.message }), { duration: 5000 });
   }
+}
+
+function savedWorkflowDownloadFilename(name) {
+  const stem = String(name || 'workflow')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Za-z0-9._-]+/g, '-')
+    .replace(/^[.-]+|[.-]+$/g, '')
+    .slice(0, 120) || 'workflow';
+  return `${stem}.webbrain-workflow.json`;
+}
+
+async function exportSavedWorkflow(id, tabId = currentTabId) {
+  try {
+    const res = await sendToBackground('export_saved_workflow', { id: String(id || '').trim() });
+    if (currentTabId !== tabId) return;
+    if (!res?.ok || !res.workflow) {
+      showComposerToast(savedWorkflowFailureMessage(res), { duration: 7000 });
+      return;
+    }
+    const json = `${JSON.stringify(res.workflow, null, 2)}\n`;
+    const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = savedWorkflowDownloadFilename(res.workflow.name);
+    document.body.appendChild(link);
+    try {
+      link.click();
+    } finally {
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 7000);
+    }
+    showComposerToast(savedWorkflowDownloadFilename(res.workflow.name));
+  } catch (error) {
+    if (currentTabId === tabId) showComposerToast(t('sp.workflows.error', { msg: error.message }), { duration: 7000 });
+  }
+}
+
+async function importSavedWorkflowDefinition(definition, tabId = currentTabId) {
+  try {
+    const res = await sendToBackground('import_saved_workflow', { definition });
+    if (currentTabId !== tabId) return;
+    if (!res?.ok || !res.workflow) {
+      showComposerToast(savedWorkflowFailureMessage(res), { duration: 7000 });
+      return;
+    }
+    showComposerToast(t('sp.workflows.saved', { name: res.workflow.name }), { duration: 5000 });
+  } catch (error) {
+    if (currentTabId === tabId) showComposerToast(t('sp.workflows.error', { msg: error.message }), { duration: 7000 });
+  }
+}
+
+function requestSavedWorkflowFile(tabId) {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json,.webbrain-workflow.json,application/json';
+  input.addEventListener('change', () => {
+    const file = input.files?.[0];
+    if (!file) return;
+    if (file.size > MAX_PORTABLE_WORKFLOW_FILE_BYTES) {
+      showComposerToast(savedWorkflowFailureMessage({ reason: 'workflow_too_large' }), { duration: 7000 });
+      return;
+    }
+    file.text()
+      .then((json) => {
+        if (new TextEncoder().encode(json).byteLength > MAX_PORTABLE_WORKFLOW_FILE_BYTES) {
+          throw Object.assign(new Error('workflow_too_large'), { workflowReason: 'workflow_too_large' });
+        }
+        return JSON.parse(json);
+      })
+      .then((definition) => importSavedWorkflowDefinition(definition, tabId))
+      .catch((error) => {
+        if (currentTabId !== tabId) return;
+        const reason = error?.workflowReason || 'invalid_workflow';
+        showComposerToast(savedWorkflowFailureMessage({ reason }), { duration: 7000 });
+      });
+  }, { once: true });
+  input.click();
 }
 
 const boundWorkflowParameterForms = new WeakSet();
@@ -5540,6 +5634,16 @@ async function parseSlashCommands(text, tabId = currentTabId, options = {}) {
 
   if (command.value === '/workflow' && action === 'delete') {
     await deleteSavedWorkflow(payload, tabId);
+    return '';
+  }
+
+  if (command.value === '/workflow' && action === 'export') {
+    await exportSavedWorkflow(payload, tabId);
+    return '';
+  }
+
+  if (command.value === '/workflow' && action === 'import') {
+    requestSavedWorkflowFile(tabId);
     return '';
   }
 

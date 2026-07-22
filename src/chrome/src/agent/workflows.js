@@ -17,6 +17,7 @@ const MAX_WORKFLOWS = 100;
 const MAX_STEPS = 100;
 const MAX_PARAMETERS = 50;
 const MAX_TEXT = 240;
+export const MAX_PORTABLE_WORKFLOW_BYTES = 1024 * 1024;
 // findWorkflowTarget and compile-time strength checks share this floor so a
 // saved target that can never match uniquely is rejected at save time.
 export const WORKFLOW_TARGET_MATCH_THRESHOLD = 7;
@@ -456,6 +457,11 @@ export function normalizeSavedWorkflow(input, options = {}) {
     if (!REPLAYABLE_WORKFLOW_TOOLS.has(tool)) continue;
     let args = normalizeArgsValue(raw?.args || {}, parameterIds);
     if (!args || typeof args !== 'object' || Array.isArray(args)) continue;
+    if (tool === 'navigate') {
+      const url = safeHttpUrl(args.url);
+      if (!url) continue;
+      args = { url };
+    }
     if (tool === 'click') {
       const text = cleanText(args.text);
       if (!text) continue;
@@ -509,6 +515,60 @@ export function normalizeSavedWorkflow(input, options = {}) {
       skippedToolCount: Math.max(0, Math.floor(Number(input?.stats?.skippedToolCount) || 0)),
     },
   };
+}
+
+function portableWorkflowByteLength(input) {
+  try {
+    return new TextEncoder().encode(JSON.stringify(input)).byteLength;
+  } catch {
+    return Number.POSITIVE_INFINITY;
+  }
+}
+
+/**
+ * Return a canonical, size-bounded workflow suitable for a portable JSON file.
+ * Runtime parameter values are never part of the saved definition: typed
+ * fields remain $workflowParam placeholders after normalization.
+ */
+export function exportPortableWorkflowDefinition(input, options = {}) {
+  const workflow = normalizeSavedWorkflow(input, options);
+  if (!workflow) return { workflow: null, reason: 'invalid_workflow' };
+  if (portableWorkflowByteLength(workflow) > MAX_PORTABLE_WORKFLOW_BYTES) {
+    return { workflow: null, reason: 'workflow_too_large' };
+  }
+  return { workflow, reason: '' };
+}
+
+/**
+ * Import a portable definition as a new local resource. Imported identity and
+ * timestamps are intentionally ignored so importing the same file twice
+ * creates two independent saved workflows instead of overwriting one.
+ */
+export function importPortableWorkflowDefinition(input, options = {}) {
+  if (portableWorkflowByteLength(input) > MAX_PORTABLE_WORKFLOW_BYTES) {
+    return { workflow: null, reason: 'workflow_too_large' };
+  }
+  const inputParameters = Array.isArray(input?.parameters) ? input.parameters : [];
+  const inputSteps = Array.isArray(input?.steps) ? input.steps : [];
+  if (inputParameters.length > MAX_PARAMETERS || inputSteps.length > MAX_STEPS) {
+    return { workflow: null, reason: 'invalid_workflow' };
+  }
+  const ts = timestamp(options.now, nowMs());
+  const normalized = normalizeSavedWorkflow(input, { now: ts });
+  if (!normalized) return { workflow: null, reason: 'invalid_workflow' };
+  if (normalized.parameters.length !== inputParameters.length || normalized.steps.length !== inputSteps.length) {
+    return { workflow: null, reason: 'invalid_workflow' };
+  }
+  const workflow = normalizeSavedWorkflow({
+    ...normalized,
+    id: createSavedWorkflowId(ts),
+    createdAt: ts,
+    updatedAt: ts,
+  }, { now: ts });
+  if (!workflow || portableWorkflowByteLength(workflow) > MAX_PORTABLE_WORKFLOW_BYTES) {
+    return { workflow: null, reason: workflow ? 'workflow_too_large' : 'invalid_workflow' };
+  }
+  return { workflow, reason: '' };
 }
 
 export function normalizeSavedWorkflowStore(input, options = {}) {
@@ -774,6 +834,9 @@ export function createSavedWorkflowStore(storageArea, options = {}) {
       if (!workflow) return { changed: false, reason: 'invalid_workflow', workflow: null, store: await read() };
       const store = await read();
       const index = store.workflows.findIndex((item) => item.id === workflow.id);
+      if (index < 0 && store.workflows.length >= MAX_WORKFLOWS) {
+        return { changed: false, reason: 'workflow_limit', workflow: null, store };
+      }
       workflow.updatedAt = now();
       if (index >= 0) store.workflows[index] = workflow;
       else store.workflows.unshift(workflow);
