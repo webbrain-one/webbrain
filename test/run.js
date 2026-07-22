@@ -26111,15 +26111,28 @@ test('_defaultConfigs: OpenAI defaults to GPT-5.6 Terra and safely migrates the 
   }
 });
 
-test('OpenAI settings list every GPT-5.6 family model with Terra first', () => {
+test('OpenAI settings list only the GPT-5.6 family and current dated models', () => {
+  const expectedModels = [
+    'gpt-5.6-terra',
+    'gpt-5.6-sol',
+    'gpt-5.6-luna',
+    'gpt-5.6',
+    'gpt-5.5-2026-04-23',
+    'gpt-5.5-pro-2026-04-23',
+    'gpt-5.4-2026-03-05',
+    'gpt-5.4-pro-2026-03-05',
+    'gpt-5.4-mini-2026-03-17',
+    'gpt-5.4-nano-2026-03-17',
+  ];
+
   for (const prefix of ['src/chrome', 'src/firefox']) {
     const source = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/settings.js'), 'utf8');
     assert.match(source, /placeholder: 'gpt-5\.6-terra'/, `${prefix}: Terra should be the OpenAI placeholder`);
-    const terra = source.indexOf("'gpt-5.6-terra'");
-    const sol = source.indexOf("'gpt-5.6-sol'", terra);
-    const luna = source.indexOf("'gpt-5.6-luna'", terra);
-    const alias = source.indexOf("'gpt-5.6'", terra);
-    assert.ok(terra >= 0 && sol > terra && luna > sol && alias > luna, `${prefix}: GPT-5.6 suggestions should lead with Terra, Sol, Luna, and the Sol alias`);
+    const suggestionsMatch = source.match(/openai:\s*\{[\s\S]*?suggestions:\s*\[([^\]]+)\]/);
+    assert.ok(suggestionsMatch, `${prefix}: OpenAI model suggestions should exist`);
+    const suggestions = [...suggestionsMatch[1].matchAll(/'([^']+)'/g)].map((match) => match[1]);
+    assert.deepEqual(suggestions, expectedModels, `${prefix}: OpenAI model suggestions should match the curated list exactly`);
+    assert.match(source, /<option value="__custom__"/, `${prefix}: the model picker should keep the Custom option`);
   }
 });
 
