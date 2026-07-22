@@ -633,6 +633,8 @@ export default {
   'st.display.clarify_timeout.instant': 'Anında',
   'st.display.api_mutation_observer.label': 'API mutasyon gözlemcisi',
   'st.display.api_mutation_observer.desc': 'WebBrain\'in tekrarlanan UI eylemlerini tespit etmesi ve API kısayol kalıpları önermesi için aynı sekmedeki XHR/fetch istek URL\'lerini ve yöntemlerini gözlemle. Varsayılan olarak kapalı; yalnızca kısayol davranışını veya gecikmeyi araştırırken etkinleştir.',
+  'st.display.openai_ask_streaming.label': 'Ask modunda OpenAI yanıtlarını yayınla',
+  'st.display.openai_ask_streaming.desc': 'Ask modunda resmi OpenAI Responses metnini geldikçe göster. Araç çağrıları response.completed olayını bekler; Act, Dev, zamanlanmış, bulut ve Continue çalıştırmaları akışsız kalır. Varsayılan olarak açık.',
   'st.display.plan_before_act.label': 'Eylemden önce planla',
   'st.display.plan_before_act.desc': 'Aktif ve Dev modları araçlardan önce her zaman yapılandırılmış bir niyet kontrolü çalıştırır. Dene (varsayılan) ayrıca tam planlar oluşturur ancak kısa bir takipte yakın zamanda onaylanmış planı yeniden kullanabilir; Katı her turda tam plan oluşturur. Niyet veya planlama bir onarımdan sonra hâlâ geçersizse iki mod da araçlardan önce durur ve açıklama ister.',
   'st.display.plan_before_act.try': 'Planlamayı dene (varsayılan)',

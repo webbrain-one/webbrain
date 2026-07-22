@@ -7,9 +7,12 @@ This changelog was generated from the repository Git history and release tags. V
 ## [25.5.0] - 2026-07-22
 
 ### Added
+- Added a default-on Advanced setting to disable OpenAI Ask response streaming immediately and return new chats to the established non-streaming provider path.
 - Improved plan review with structured, in-place editing (Chrome and Firefox parity).
 
 ### Changed
+- Official OpenAI Responses calls now stream visible text for interactive Ask-mode chats while retaining the detached `chat_start` lifecycle, reconnect journal, and image/text attachment handling.
+- Tool calls and assistant-history persistence remain buffered until `response.completed`; Act, Dev, scheduled, cloud, and Continue runs remain on `provider.chat()`.
 - Drag-and-drop reordering of planner steps.
 - Hardened mixed plan editor modes to keep editing behavior consistent.
 - Preserved multiline plan step edits during editing and review flows.
@@ -18,11 +21,14 @@ This changelog was generated from the repository Git history and release tags. V
 - Stripped canonical plan tool suffixes for cleaner plan tool display.
 
 ### Fixed
+- Interrupted OpenAI Ask transports now clear their partial visible text, open a per-run circuit breaker, and retry through `provider.chat()` without accepting incomplete tool calls or persisting an incomplete assistant turn; terminal HTTP, API, and `response.incomplete` errors propagate without a duplicate fallback request.
+- Live Ask text deltas remain immediate while durable reconnect snapshots are coalesced on a short trailing interval, avoiding a full journal clone and `storage.session` write for every SSE chunk; terminal updates and tool checkpoints still flush immediately.
 - Fixed plan review scroll behavior and the run label during plan review/editing.
 - Kept plan step editing scroll stable while interacting with the editor.
 - Captured plan editor scroll before input to prevent scroll jumps.
 
 ### Tests
+- Added mirrored Chrome/Firefox coverage for streaming scope, attachment delivery, terminal tool-call gating, coalesced reconnect persistence, detached lifecycle wiring, the kill switch, and transport-only non-streaming fallback.
 - Updated test runner (`test/run.js`) to align with the new plan editor/review behaviors.
 
 ## [25.4.2] - 2026-07-22

@@ -637,6 +637,8 @@ export default {
   'st.display.clarify_timeout.instant': 'Segera',
   'st.display.api_mutation_observer.label': 'Pemerhati mutasi API',
   'st.display.api_mutation_observer.desc': 'Perhatikan URL dan metode permintaan XHR/fetch tab yang sama supaya WebBrain dapat mengesan tindakan UI berulang dan mencadangkan corak pintasan API. Dimatikan secara lalai; aktifkan hanya semasa menyiasat tingkah laku pintasan atau kependaman.',
+  'st.display.openai_ask_streaming.label': 'Strim respons OpenAI dalam mod Ask',
+  'st.display.openai_ask_streaming.desc': 'Paparkan teks OpenAI Responses rasmi sebaik sahaja tiba dalam mod Ask. Panggilan alat menunggu response.completed; Act, Dev, tugas berjadual, awan dan Continue kekal tanpa penstriman. Dihidupkan secara lalai.',
   'st.display.plan_before_act.label': 'Rancang sebelum Bertindak',
   'st.display.plan_before_act.desc': 'Mod Bertindak dan Dev sentiasa menjalankan semakan niat berstruktur sebelum alatan. Cuba (lalai) turut membina rancangan penuh tetapi boleh menggunakan semula rancangan yang baru diluluskan untuk susulan ringkas; Ketat membina rancangan penuh setiap giliran. Jika niat atau rancangan masih tidak sah selepas satu pembaikan, kedua-duanya berhenti sebelum alatan dan meminta penjelasan.',
   'st.display.plan_before_act.try': 'Cuba perancangan (lalai)',

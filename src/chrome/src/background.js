@@ -37,7 +37,7 @@ import {
 } from './recorder/host.js';
 import { RUN_CAPTURE_START_ERROR_PREFIX, createRunCaptureController } from './run-capture.js';
 import { normalizeOllamaLaunchHandoff } from './ollama-handoff.js';
-import { RunUiJournal, runUiSnapshotForRequest } from './run-ui-journal.js';
+import { RunUiJournal, RunUiPersistenceScheduler, runUiSnapshotForRequest } from './run-ui-journal.js';
 import {
   USER_MEMORY_AUTO_CAPTURE_KEY,
   USER_MEMORY_ENABLED_KEY,
@@ -1261,15 +1261,23 @@ function persistRunUiSnapshot(tabId, snapshot) {
   return write;
 }
 
+const runUiSnapshotPersistence = new RunUiPersistenceScheduler({
+  persist: persistRunUiSnapshot,
+});
+
 function flushRunUiSnapshot(tabId, requestId) {
-  const pending = runUiPersistenceQueues.get(tabId);
+  const pending = runUiSnapshotPersistence.flush(tabId) || runUiPersistenceQueues.get(tabId);
   if (pending) return pending;
   return Promise.resolve(runUiPersistenceFailures.get(tabId) !== String(requestId || ''));
 }
 
 const runUiJournal = new RunUiJournal({
-  onChange(tabId, snapshot) {
-    void persistRunUiSnapshot(tabId, snapshot);
+  onChange(tabId, snapshot, change) {
+    if (change?.eventType === 'text_delta') {
+      runUiSnapshotPersistence.defer(tabId, snapshot);
+      return;
+    }
+    void runUiSnapshotPersistence.persistNow(tabId, snapshot);
   },
 });
 
@@ -1329,6 +1337,7 @@ async function getRunUiSnapshot(tabId) {
 }
 
 function clearRunUiSnapshot(tabId) {
+  runUiSnapshotPersistence.cancel(tabId);
   runUiJournal.clear(tabId);
   runUiPersistenceFailures.delete(tabId);
   const previous = runUiPersistenceQueues.get(tabId) || Promise.resolve();
@@ -2018,10 +2027,13 @@ async function handleMessage(msg, sender) {
           await contextMenuStorage.clear(msg.contextMenuClear.tabId, msg.contextMenuClear.promptId);
         }
 
+        const askStreamingSettings = await chrome.storage.local.get('openaiAskStreamingEnabled').catch(() => ({}));
         const runOptions = {
           ...(msg.recommendedAction ? { recommendedAction: msg.recommendedAction } : {}),
           locale: msg.locale,
           intentFailureMessage: msg.intentFailureMessage,
+          interactiveChat: true,
+          openaiAskStreamingEnabled: askStreamingSettings.openaiAskStreamingEnabled !== false,
           detachedRequestId: runUi.requestId,
           isDetachedStartCancelled: () => isDetachedRunStartCancelled(tabId, msg),
           beforeConsequentialTool: () => flushRunUiSnapshot(tabId, runUi.requestId),

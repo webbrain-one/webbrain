@@ -45,7 +45,7 @@
 - **Side Panel UI** — Clean chat interface that lives alongside your browsing
 - **Per-Tab Conversations** — Each tab has its own chat history
 - **User Memory** — Optional local memory for user-stated preferences, with explicit `/memory --add` commands and opt-in background auto-learning
-- **Streaming** — Real-time token streaming from all providers
+- **Ask streaming** — Interactive Ask chats show official OpenAI Responses text as it arrives; tools and history wait for `response.completed`, with an Advanced kill switch and automatic non-streaming fallback for interrupted streams
 - **Smart Context** — Token-aware auto-compaction (summarizes older turns once the conversation nears the model's context window, with a visible "Context automatically compacted" notice), tool result limits, and emergency overflow recovery
 - **Browser History Control** — Act mode can use native `go_back` / `go_forward` history tools instead of CSP-sensitive page JavaScript
 - **API Shortcut Hints** — Repeated clicks that fire the same XHR/fetch request can surface a matching `fetch_url` suggestion while preserving the UI-first and `/allow-api` mutation policy

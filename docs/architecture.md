@@ -1,6 +1,6 @@
 # WebBrain Architecture
 
-> Version 24.0.1
+> Version 25.5.0
 
 ## Overview
 
@@ -68,7 +68,7 @@ The chat UI. Communicates with the background script via `chrome.runtime.sendMes
 
 Model tiering is separate from mode: `compact | mid | full` controls how many normal tools the model sees, while `ask | act | dev` controls what kind of task the user is allowing.
 
-The user types a message, the panel sends `{action: 'chat', text, mode, tabId}` to the background, then listens for `agent_update` events streamed back during the run. The panel renders tool calls, results, plan-review cards, clarification prompts, and the final answer incrementally.
+The user types a message, the panel sends a detached `{action: 'chat_start', text, mode, tabId, requestId}` request, then reconnects to the background-owned run journal for `agent_update` events. The acknowledged start becomes the existing `chat` handler and `agent.processMessage()` lifecycle; closing or reloading the panel does not transfer ownership or start the run again. The panel renders tool calls, results, plan-review cards, clarification prompts, and the final answer incrementally.
 
 Slash commands are defined as structured `SLASH_COMMANDS` metadata in each
 side panel. The metadata owns canonical usage signatures, option descriptions,
@@ -122,18 +122,20 @@ User types "create a product 'namaz' priced 500 CNY, recurring every 2 months"
 
 ### Step 1: Side Panel → Background
 ```
-sidepanel.js → chrome.runtime.sendMessage({
-  action: 'chat',
+sidepanel.js → sendRunWithReconnect('chat_start', {
   text: 'create a product ...',
   mode: 'act',
-  tabId: 42
+  tabId: 42,
+  requestId: '...'
 })
 ```
 
 ### Step 2: Background → Agent
 ```
-background.js handleMessage('chat')
-  → agent.processMessage(tabId, text, onUpdate, mode)
+background.js handleMessage('chat_start')
+  → launchDetachedRun('chat', request)
+  → background.js handleMessage('chat')
+  → agent.processMessage(tabId, text, onUpdate, mode, attachments, runOptions)
 ```
 
 ### Step 3: Enrich First User Message
@@ -161,7 +163,7 @@ If the planner returns valid JSON, the side panel receives `agent_update: plan_r
 while (steps < maxSteps) {
   // 5a. Call LLM
   const tier = provider.promptTier;
-  const result = await provider.chat(messages, {
+  const result = await chatMainTurn(messages, {
     tools: getToolsForMode(mode, { tier }),
     temperature: mode === 'ask' ? 0.3 : 0.15,
     maxTokens: 4096,
@@ -190,6 +192,42 @@ while (steps < maxSteps) {
   }
 }
 ```
+
+### Ask-only OpenAI Responses streaming
+
+`chatMainTurn()` normally delegates to the established cost-aware
+`provider.chat()` call. It selects the stream aggregator only when all of these
+conditions are true:
+
+- the mode is `ask`;
+- the run came from the normal interactive detached `chat_start` path;
+- the Advanced `openaiAskStreamingEnabled` kill switch is not off;
+- the provider reports the deliberately narrow official OpenAI Responses route
+  (`api.openai.com/v1` with a supported GPT-5.6 model);
+- the run is not a trusted Continue, cloud run, scheduled/non-interactive run,
+  or a run whose stream circuit breaker already opened.
+
+The aggregator forwards only output-text deltas to the side panel. Reasoning,
+usage, response Items, and function calls remain in memory until the provider
+emits its terminal `response.completed` event. Only then does it return the
+canonical result to the existing agent loop, which may execute buffered tools
+or persist the assistant turn. A transport read failure, malformed/premature
+EOF, or missing `response.completed` clears emitted text, disables streaming
+for the rest of that run, and retries the same generation once through
+`provider.chat()`. Terminal HTTP/API errors, `response.incomplete`, and
+`response.failed` propagate without issuing a duplicate non-streaming request.
+The persistent setting is unchanged by a transient failure.
+
+Live `text_delta` messages are broadcast immediately. Reconnect-journal
+snapshots for consecutive deltas are cloned and written to `storage.session`
+on a 200 ms trailing interval; any non-delta update, terminal state, or
+pre-tool durability checkpoint cancels that timer and persists the latest
+snapshot immediately.
+
+This is intentionally an integration inside `processMessage()`, not a handoff
+to the older full `processMessageStream()` loop. Attachments, detached-run
+ownership, reconnect replay, persistence, traces, tool guards, and completion
+invariants therefore keep one production lifecycle.
 
 ### Step 6: Tool Execution
 

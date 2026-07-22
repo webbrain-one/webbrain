@@ -628,6 +628,8 @@ export default {
   'st.display.clarify_timeout.instant': 'Natychmiast',
   'st.display.api_mutation_observer.label': 'Obserwator mutacji API',
   'st.display.api_mutation_observer.desc': 'Obserwuj URL-e i metody żądań XHR/fetch w tej samej karcie, aby WebBrain mógł wykrywać powtarzające się akcje UI i sugerować wzorce skrótów API. Wyłączone domyślnie; włącz tylko podczas badania zachowania skrótów lub opóźnień.',
+  'st.display.openai_ask_streaming.label': 'Strumieniuj odpowiedzi OpenAI w Ask',
+  'st.display.openai_ask_streaming.desc': 'Pokazuj tekst oficjalnego OpenAI Responses w miarę napływania w trybie Ask. Wywołania narzędzi czekają na response.completed; Act, Dev, zadania zaplanowane, chmurowe i Continue pozostają bez strumieniowania. Domyślnie włączone.',
   'st.display.plan_before_act.label': 'Planuj przed działaniem',
   'st.display.plan_before_act.desc': 'Tryby Działaj i Dev zawsze wykonują ustrukturyzowaną kontrolę intencji przed użyciem narzędzi. Próba (domyślnie) tworzy też pełne plany, ale przy krótkiej kontynuacji może ponownie użyć niedawno zatwierdzonego planu; tryb Ścisły tworzy pełny plan w każdej turze. Jeśli intencja lub plan nadal są nieprawidłowe po jednej naprawie, oba tryby zatrzymują się przed narzędziami i proszą o wyjaśnienie.',
   'st.display.plan_before_act.try': 'Spróbuj planowania (domyślnie)',
