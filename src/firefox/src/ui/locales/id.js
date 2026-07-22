@@ -628,6 +628,8 @@ export default {
   'st.display.clarify_timeout.instant': 'Instan',
   'st.display.api_mutation_observer.label': 'Pengamat mutasi API',
   'st.display.api_mutation_observer.desc': 'Amati URL dan metode permintaan XHR/fetch pada tab yang sama sehingga WebBrain dapat mendeteksi tindakan UI berulang dan menyarankan pola pintasan API. Nonaktif secara default; aktifkan hanya saat menyelidiki perilaku pintasan atau latensi.',
+  'st.display.openai_ask_streaming.label': 'Streaming respons OpenAI di mode Ask',
+  'st.display.openai_ask_streaming.desc': 'Tampilkan teks OpenAI Responses resmi saat tiba di mode Ask. Panggilan alat menunggu response.completed; Act, Dev, proses terjadwal, cloud, dan Continue tetap tanpa streaming. Aktif secara default.',
   'st.display.plan_before_act.label': 'Rencanakan sebelum Bertindak',
   'st.display.plan_before_act.desc': 'Mode Bertindak dan Dev selalu menjalankan pemeriksaan niat terstruktur sebelum alat. Coba (default) juga membuat rencana lengkap, tetapi dapat memakai kembali rencana yang baru disetujui untuk tindak lanjut singkat; Ketat membuat rencana lengkap setiap giliran. Jika niat atau rencana masih tidak valid setelah satu perbaikan, keduanya berhenti sebelum alat dan meminta klarifikasi.',
   'st.display.plan_before_act.try': 'Coba perencanaan (default)',

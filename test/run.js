@@ -277,12 +277,14 @@ const { renderSkillMarkdown } = await import(
 
 const {
   RunUiJournal: RunUiJournalCh,
+  RunUiPersistenceScheduler: RunUiPersistenceSchedulerCh,
   runUiSnapshotForRequest: runUiSnapshotForRequestCh,
 } = await import(
   'file://' + path.join(ROOT, 'src/chrome/src/run-ui-journal.js').replace(/\\/g, '/')
 );
 const {
   RunUiJournal: RunUiJournalFx,
+  RunUiPersistenceScheduler: RunUiPersistenceSchedulerFx,
   runUiSnapshotForRequest: runUiSnapshotForRequestFx,
 } = await import(
   'file://' + path.join(ROOT, 'src/firefox/src/run-ui-journal.js').replace(/\\/g, '/')
@@ -25933,6 +25935,261 @@ test('GPT-5.6 Responses streaming emits text, tool calls, usage, and replay item
   }
 });
 
+test('Ask streaming eligibility is limited to interactive official OpenAI Responses runs', () => {
+  for (const [label, AgentClass] of [['chrome', AgentCh], ['firefox', AgentFx]]) {
+    const agent = new AgentClass({});
+    const responsesProvider = {
+      chatStream: async function* () {},
+      _usesResponsesApi: () => true,
+    };
+    const interactive = { interactiveChat: true, openaiAskStreamingEnabled: true };
+
+    assert.equal(agent._shouldStreamOpenAIAsk(responsesProvider, 'ask', interactive), true, `${label}: eligible Ask chat should stream`);
+    assert.equal(agent._shouldStreamOpenAIAsk(responsesProvider, 'act', interactive), false, `${label}: Act must stay non-streaming`);
+    assert.equal(agent._shouldStreamOpenAIAsk(responsesProvider, 'dev', interactive), false, `${label}: Dev must stay non-streaming`);
+    assert.equal(agent._shouldStreamOpenAIAsk(responsesProvider, 'ask', {}), false, `${label}: scheduled/non-interactive Ask must stay non-streaming`);
+    assert.equal(agent._shouldStreamOpenAIAsk(responsesProvider, 'ask', { ...interactive, trustedContinuation: true }), false, `${label}: Continue must stay non-streaming`);
+    assert.equal(agent._shouldStreamOpenAIAsk(responsesProvider, 'ask', { ...interactive, cloudRun: true }), false, `${label}: cloud Ask must stay non-streaming`);
+    assert.equal(agent._shouldStreamOpenAIAsk(responsesProvider, 'ask', { ...interactive, openaiAskStreamingEnabled: false }), false, `${label}: kill switch must disable streaming`);
+    assert.equal(agent._shouldStreamOpenAIAsk(responsesProvider, 'ask', interactive, true), false, `${label}: per-run circuit breaker must disable streaming`);
+    assert.equal(agent._shouldStreamOpenAIAsk({ ...responsesProvider, _usesResponsesApi: () => false }, 'ask', interactive), false, `${label}: compatible/Chat Completions providers must stay non-streaming`);
+  }
+});
+
+test('Ask stream fallback is limited to transport and missing-completion failures', () => {
+  for (const [label, AgentClass, Provider] of [
+    ['chrome', AgentCh, OpenAIProviderCh],
+    ['firefox', AgentFx, OpenAIProviderFx],
+  ]) {
+    const agent = new AgentClass({});
+    const provider = new Provider({
+      providerName: 'openai',
+      baseUrl: 'https://api.openai.com/v1',
+      model: 'gpt-5.6-terra',
+    });
+    const transportError = provider._responsesStreamTransportError('connection reset');
+    const missingCompletion = provider._responsesIncompleteError({
+      incomplete_details: { reason: 'missing_response_completed' },
+    }, { stream: true });
+    const terminalIncomplete = provider._responsesIncompleteError({
+      incomplete_details: { reason: 'max_output_tokens' },
+    }, { stream: true });
+    const terminalApiError = new Error('rate limited');
+    terminalApiError.isResponsesStreamError = true;
+
+    assert.equal(agent._shouldFallbackOpenAIAskStream(transportError), true, `${label}: transport interruptions should fall back`);
+    assert.equal(agent._shouldFallbackOpenAIAskStream(missingCompletion), true, `${label}: a stream missing response.completed should fall back`);
+    assert.equal(agent._shouldFallbackOpenAIAskStream(terminalIncomplete), false, `${label}: response.incomplete must propagate`);
+    assert.equal(agent._shouldFallbackOpenAIAskStream(terminalApiError), false, `${label}: terminal API errors must propagate`);
+  }
+});
+
+test('Ask stream aggregation exposes text live but withholds tool calls until response.completed', async () => {
+  for (const [label, AgentClass] of [['chrome', AgentCh], ['firefox', AgentFx]]) {
+    let releaseCompleted;
+    const completedGate = new Promise(resolve => { releaseCompleted = resolve; });
+    const responseItems = [{ type: 'function_call', call_id: 'call_wait', name: 'read_page', arguments: '{}' }];
+    const provider = {
+      async *chatStream() {
+        yield { type: 'text', content: 'Checking' };
+        yield {
+          type: 'tool_call',
+          content: [{ index: 0, id: 'call_wait', type: 'function', function: { name: 'read_page', arguments: '{}' } }],
+        };
+        await completedGate;
+        yield { type: 'usage', usage: { prompt_tokens: 5, completion_tokens: 2, total_tokens: 7 } };
+        yield { type: 'done', responseItems };
+      },
+    };
+    const agent = new AgentClass({});
+    agent._checkCostAllowance = async () => null;
+    agent._recordCostUsage = async () => null;
+    const deltas = [];
+    let settled = false;
+    const pending = agent._chatStreamWithCostAllowance(
+      provider,
+      [{ role: 'user', content: 'check' }],
+      {},
+      {},
+      null,
+      delta => deltas.push(delta),
+    );
+    pending.finally(() => { settled = true; });
+    await new Promise(resolve => setImmediate(resolve));
+
+    assert.deepEqual(deltas, ['Checking'], `${label}: text should be visible before completion`);
+    assert.equal(settled, false, `${label}: tool-bearing result must remain unavailable before response.completed`);
+
+    releaseCompleted();
+    const result = await pending;
+    assert.equal(result.content, 'Checking', `${label}: final text aggregation mismatch`);
+    assert.equal(result.toolCalls?.[0]?.function?.name, 'read_page', `${label}: completed tool call missing`);
+    assert.deepEqual(result.responseItems, responseItems, `${label}: completed replay items missing`);
+  }
+});
+
+test('interactive Ask streaming preserves attachments and persists only the completed assistant turn', async () => {
+  for (const [index, [label, AgentClass]] of [['chrome', AgentCh], ['firefox', AgentFx]].entries()) {
+    let streamedMessages = null;
+    let chatCalls = 0;
+    const responseItems = [{ type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Image received.' }] }];
+    const provider = {
+      supportsTools: false,
+      supportsVision: true,
+      promptTier: 'full',
+      contextWindow: 128000,
+      model: 'gpt-5.6-terra',
+      name: 'openai',
+      _usesResponsesApi: () => true,
+      chat: async () => {
+        chatCalls += 1;
+        return { content: 'unexpected fallback', toolCalls: null };
+      },
+      async *chatStream(messages) {
+        streamedMessages = messages;
+        yield { type: 'text', content: 'Image ' };
+        yield { type: 'text', content: 'received.' };
+        yield { type: 'done', responseItems };
+      },
+    };
+    const agent = new AgentClass({
+      getActive: () => provider,
+      getVisionProvider: async () => null,
+    });
+    const tabId = 9550 + index;
+    configurePlanOnlyGuardAgent(agent, tabId);
+    agent.conversationModes.set(tabId, 'ask');
+    agent._maybeRunPlannerGate = async (_tabId, messages, enriched) => {
+      messages.push(enriched);
+      return { proceed: true, requestKind: 'execute', requiresStateChange: false };
+    };
+    agent._startTraceRun = async () => null;
+    agent._endTraceRun = () => {};
+
+    const updates = [];
+    const imageUrl = 'data:image/png;base64,AA==';
+    const final = await agent.processMessage(
+      tabId,
+      'What is in this image?',
+      (type, data) => updates.push({ type, data }),
+      'ask',
+      [{ kind: 'image', dataUrl: imageUrl, name: 'sample.png' }],
+      { interactiveChat: true, openaiAskStreamingEnabled: true },
+    );
+
+    assert.equal(final, 'Image received.', `${label}: streamed final mismatch`);
+    assert.equal(chatCalls, 0, `${label}: successful stream should not call provider.chat()`);
+    const userMessage = streamedMessages.find(message => message.role === 'user');
+    assert.ok(Array.isArray(userMessage?.content), `${label}: attachment should reach the streamed request as content blocks`);
+    assert.ok(userMessage.content.some(block => block.type === 'image_url' && block.image_url?.url === imageUrl), `${label}: image block missing from streamed request`);
+    assert.deepEqual(updates.filter(update => update.type === 'text_delta').map(update => update.data.content), ['Image ', 'received.'], `${label}: visible deltas mismatch`);
+    assert.equal(updates.filter(update => update.type === 'text').at(-1)?.data?.content, 'Image received.', `${label}: terminal formatting update missing`);
+    const assistants = agent.conversations.get(tabId).filter(message => message.role === 'assistant');
+    assert.equal(assistants.length, 1, `${label}: partial stream text must not be persisted as assistant history`);
+    assert.equal(assistants[0].content, 'Image received.', `${label}: only completed assistant text should persist`);
+    assert.deepEqual(assistants[0].response_items, responseItems, `${label}: terminal Responses items should persist`);
+  }
+});
+
+test('Ask stream failure clears partial text and falls back once for the rest of the run', async () => {
+  for (const [index, [label, AgentClass]] of [['chrome', AgentCh], ['firefox', AgentFx]].entries()) {
+    let streamCalls = 0;
+    let chatCalls = 0;
+    const executed = [];
+    const provider = {
+      supportsTools: true,
+      supportsVision: false,
+      promptTier: 'full',
+      contextWindow: 128000,
+      model: 'gpt-5.6-terra',
+      name: 'openai',
+      _usesResponsesApi: () => true,
+      async *chatStream() {
+        streamCalls += 1;
+        yield { type: 'text', content: 'Partial answer' };
+        yield {
+          type: 'tool_call',
+          content: [{ index: 0, id: 'streamed_click', type: 'function', function: { name: 'click', arguments: '{"x":1,"y":1}' } }],
+        };
+        const error = new Error('connection reset before response.completed');
+        error.isResponsesStreamError = true;
+        error.isResponsesStreamFallbackSafe = true;
+        throw error;
+      },
+      async chat() {
+        chatCalls += 1;
+        if (chatCalls === 1) {
+          return {
+            content: null,
+            toolCalls: [{ id: 'fallback_read', type: 'function', function: { name: 'read_page', arguments: '{}' } }],
+          };
+        }
+        return { content: 'Recovered answer.', toolCalls: null };
+      },
+    };
+    const agent = new AgentClass({
+      getActive: () => provider,
+      getVisionProvider: async () => null,
+    });
+    const tabId = 9560 + index;
+    configurePlanOnlyGuardAgent(agent, tabId);
+    agent.conversationModes.set(tabId, 'ask');
+    agent._maybeRunPlannerGate = async (_tabId, messages, enriched) => {
+      messages.push(enriched);
+      return { proceed: true, requestKind: 'execute', requiresStateChange: false };
+    };
+    agent._startTraceRun = async () => null;
+    agent._endTraceRun = () => {};
+    agent.executeTool = async (_tabId, name) => {
+      executed.push(name);
+      return { success: true, text: 'Fallback page result.' };
+    };
+
+    const updates = [];
+    const final = await agent.processMessage(
+      tabId,
+      'Read the page.',
+      (type, data) => updates.push({ type, data }),
+      'ask',
+      [],
+      { interactiveChat: true, openaiAskStreamingEnabled: true },
+    );
+
+    assert.equal(final, 'Recovered answer.', `${label}: fallback final mismatch`);
+    assert.equal(streamCalls, 1, `${label}: stream circuit breaker should stay open for later model turns in the run`);
+    assert.equal(chatCalls, 2, `${label}: failed generation and its tool follow-up should use provider.chat()`);
+    assert.deepEqual(executed, ['read_page'], `${label}: pre-completion streamed tool call must never execute`);
+    assert.ok(updates.some(update => update.type === 'text' && update.data?.replace === true && update.data?.content === ''), `${label}: partial streamed text should be cleared`);
+    assert.equal(updates.filter(update => update.type === 'warning' && /retrying this Ask turn without streaming/.test(update.data?.message || '')).length, 1, `${label}: fallback warning should be emitted once`);
+    assert.equal(agent.conversations.get(tabId).some(message => message.role === 'assistant' && message.content === 'Partial answer'), false, `${label}: failed partial text must not persist`);
+  }
+});
+
+test('detached chat lifecycle owns the default-on Ask streaming kill switch', () => {
+  assert.equal(ConfigTransferCh.DEFAULT_CONFIG_SETTINGS.openaiAskStreamingEnabled, true, 'Chrome config export should preserve the default-on streaming setting');
+  assert.equal(ConfigTransferFx.DEFAULT_CONFIG_SETTINGS.openaiAskStreamingEnabled, true, 'Firefox config export should preserve the default-on streaming setting');
+  for (const [label, prefix, storageName] of [
+    ['chrome', 'src/chrome', 'chrome'],
+    ['firefox', 'src/firefox', 'browser'],
+  ]) {
+    const background = fs.readFileSync(path.join(ROOT, prefix, 'src/background.js'), 'utf8');
+    const panel = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/sidepanel.js'), 'utf8');
+    const settings = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/settings.js'), 'utf8');
+    const settingsHtml = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/settings.html'), 'utf8');
+    const chatBody = background.match(/case 'chat': \{([\s\S]*?)\n\s+case 'chat_stream':/)?.[1] || '';
+    const continueBody = background.match(/case 'continue': \{([\s\S]*?)\n\s+case 'abort'/)?.[1] || '';
+
+    assert.match(panel, /sendRunWithReconnect\('chat_start'/, `${label}: sidepanel must retain detached chat_start`);
+    assert.match(background, /case 'chat_start':\s*return launchDetachedRun\('chat'/, `${label}: background must retain detached launch/reconnect ownership`);
+    assert.match(chatBody, new RegExp(`await ${storageName}\\.storage\\.local\\.get\\('openaiAskStreamingEnabled'\\)`), `${label}: each detached chat should read the current kill switch`);
+    assert.match(chatBody, /interactiveChat: true/, `${label}: only interactive chat should receive streaming capability`);
+    assert.match(chatBody, /openaiAskStreamingEnabled: askStreamingSettings\.openaiAskStreamingEnabled !== false/, `${label}: streaming should default on`);
+    assert.doesNotMatch(continueBody, /interactiveChat|openaiAskStreamingEnabled/, `${label}: Continue must not inherit streaming capability`);
+    assert.match(settingsHtml, /id="toggle-openai-ask-streaming" checked/, `${label}: Advanced kill switch should default on`);
+    assert.match(settings, /openAIAskStreamingToggle\.checked = stored\.openaiAskStreamingEnabled !== false/, `${label}: unset storage should render the kill switch on`);
+  }
+});
+
 test('Chat Completions scopes reasoning replay to providers that support it', () => {
   const reasoningMessage = (model, currentToolLoop = false, preserveAcrossTurns = false) => ({
     role: 'assistant',
@@ -26863,6 +27120,7 @@ test('official GPT-5.6 treats incomplete Responses as hard failures', async () =
       assert.match(thrown.message, /incomplete \(content_filter\)/);
       assert.equal(thrown.incomplete, true);
       assert.equal(thrown.isResponsesStreamError, true);
+      assert.equal(thrown.isResponsesStreamFallbackSafe, false, 'terminal response.incomplete must not trigger provider.chat() fallback');
       assert.equal(chunks[0]?.type, 'text');
       assert.equal(chunks[0]?.content, 'partial');
       assert.equal(chunks[1]?.type, 'usage');
@@ -26904,8 +27162,40 @@ test('official GPT-5.6 rejects premature Responses EOF and bare DONE sentinels',
         assert.match(thrown.message, /incomplete \(missing_response_completed\)/);
         assert.equal(thrown.incomplete, true);
         assert.equal(thrown.isResponsesStreamError, true);
+        assert.equal(thrown.isResponsesStreamFallbackSafe, true, 'missing response.completed should allow the non-streaming recovery path');
         assert.equal(chunks.some((chunk) => chunk.type === 'done'), false);
       }
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('official GPT-5.6 keeps HTTP stream errors terminal', async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = async () => new Response('{"error":{"message":"rate limited"}}', {
+      status: 429,
+      headers: { 'Content-Type': 'application/json' },
+    });
+    for (const Provider of [OpenAIProviderCh, OpenAIProviderFx]) {
+      const provider = new Provider({
+        category: 'cloud',
+        providerName: 'openai',
+        baseUrl: 'https://api.openai.com/v1',
+        model: 'gpt-5.6-terra',
+      });
+      let thrown = null;
+      try {
+        for await (const _chunk of provider.chatStream([{ role: 'user', content: 'hello' }])) {
+          // No chunks are expected for an HTTP failure.
+        }
+      } catch (error) {
+        thrown = error;
+      }
+      assert.match(thrown?.message || '', /stream error 429/);
+      assert.equal(thrown?.isResponsesStreamError, true);
+      assert.notEqual(thrown?.isResponsesStreamFallbackSafe, true, 'HTTP/API failures must propagate without provider.chat() fallback');
     }
   } finally {
     globalThis.fetch = originalFetch;
@@ -43616,6 +43906,60 @@ test('planner gate: background exposes pending plan state for restored sidepanel
     assert.match(agentSource, /pendingPlan:[\s\S]*?null/, `${label}: active run state should include pendingPlan`);
     assert.match(agentSource, /tabPending\.set\(planId, \{ resolve, ts: Date\.now\(\), plan, markdown, verboseMarkdown \}\)/, `${label}: pending plans should keep renderable metadata`);
     assert.match(bgSource, /case 'agent_run_state':[\s\S]*?agent\.activeRunState\(tabId\)/, `${label}: background should expose active run state to the sidepanel`);
+  }
+});
+
+test('run UI journal: streamed deltas coalesce durable snapshots without delaying live events', async () => {
+  for (const [label, Journal, PersistenceScheduler, backgroundRel] of [
+    ['chrome', RunUiJournalCh, RunUiPersistenceSchedulerCh, 'src/chrome/src/background.js'],
+    ['firefox', RunUiJournalFx, RunUiPersistenceSchedulerFx, 'src/firefox/src/background.js'],
+  ]) {
+    let nextTimerId = 0;
+    const timers = new Map();
+    const persisted = [];
+    const persistence = new PersistenceScheduler({
+      persist: (_tabId, snapshot) => persisted.push(structuredClone(snapshot)),
+      setTimeoutFn: (callback) => {
+        const timerId = ++nextTimerId;
+        timers.set(timerId, () => {
+          timers.delete(timerId);
+          callback();
+        });
+        return timerId;
+      },
+      clearTimeoutFn: timerId => timers.delete(timerId),
+    });
+    const journal = new Journal({
+      onChange(tabId, snapshot, change) {
+        if (change?.eventType === 'text_delta') persistence.defer(tabId, snapshot);
+        else void persistence.persistNow(tabId, snapshot);
+      },
+    });
+
+    journal.begin(40, `${label}-stream`);
+    journal.record(40, `${label}-stream`, 'text_delta', { content: 'one' });
+    journal.record(40, `${label}-stream`, 'text_delta', { content: 'two' });
+    assert.equal(persisted.length, 1, `${label}: deltas should not clone/write a durable snapshot immediately`);
+    assert.equal(timers.size, 1, `${label}: consecutive deltas should share one trailing timer`);
+
+    timers.values().next().value();
+    await Promise.resolve();
+    assert.equal(persisted.at(-1).seq, 2, `${label}: the trailing write should capture the latest delta sequence`);
+
+    journal.record(40, `${label}-stream`, 'text_delta', { content: 'three' });
+    journal.record(40, `${label}-stream`, 'thinking', { content: 'done streaming' });
+    assert.equal(timers.size, 0, `${label}: a non-delta update should cancel the trailing timer`);
+    assert.equal(persisted.at(-1).seq, 4, `${label}: a non-delta update should persist all prior deltas immediately`);
+
+    journal.record(40, `${label}-stream`, 'text_delta', { content: 'cancelled' });
+    persistence.cancel(40);
+    assert.equal(timers.size, 0, `${label}: clearing a run should discard its deferred persistence timer`);
+
+    const background = fs.readFileSync(path.join(ROOT, backgroundRel), 'utf8');
+    assert.match(background, /change\?\.eventType === 'text_delta'[\s\S]*?runUiSnapshotPersistence\.defer\(tabId, snapshot\)/, `${label}: background should defer only text deltas`);
+    assert.match(background, /runUiSnapshotPersistence\.flush\(tabId\) \|\| runUiPersistenceQueues\.get\(tabId\)/, `${label}: durability checkpoints should flush deferred deltas`);
+    assert.match(background, /function clearRunUiSnapshot\(tabId\) \{\s*runUiSnapshotPersistence\.cancel\(tabId\)/, `${label}: clearing a run should cancel deferred persistence`);
+    assert.match(background, /function sendAgentUpdate\([\s\S]{0,700}?runtime\.sendMessage\(/, `${label}: live event broadcast should remain immediate`);
   }
 });
 

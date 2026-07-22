@@ -637,6 +637,8 @@ export default {
   'st.display.clarify_timeout.instant': 'Immédiat',
   'st.display.api_mutation_observer.label': 'Observateur de mutations API',
   'st.display.api_mutation_observer.desc': 'Observer les URLs et méthodes des requêtes XHR/fetch dans le même onglet pour que WebBrain puisse détecter des actions UI répétées et suggérer des modèles de raccourcis API. Désactivé par défaut ; activer seulement lors de l\'investigation de comportements de raccourci ou de latence.',
+  'st.display.openai_ask_streaming.label': 'Diffuser les réponses OpenAI en mode Ask',
+  'st.display.openai_ask_streaming.desc': 'Afficher le texte officiel de OpenAI Responses au fil de son arrivée en mode Ask. Les appels outils attendent response.completed ; Act, Dev, les exécutions planifiées, cloud et Continue restent sans diffusion. Activé par défaut.',
   'st.display.plan_before_act.label': 'Planifier avant d\'agir',
   'st.display.plan_before_act.desc': 'Les modes Act et Dev effectuent toujours une vérification structurée de l\'intention avant les outils. Essai (par défaut) crée aussi des plans complets, mais peut réutiliser un plan récemment approuvé pour un bref suivi ; Strict crée un plan complet à chaque tour. Si l\'intention ou le plan reste invalide après une réparation, les deux s\'arrêtent avant les outils et demandent une clarification.',
   'st.display.plan_before_act.try': 'Essayer la planification (par défaut)',

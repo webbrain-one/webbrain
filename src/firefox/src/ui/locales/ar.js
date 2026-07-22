@@ -628,6 +628,8 @@ export default {
   'st.display.clarify_timeout.instant': 'فوري',
   'st.display.api_mutation_observer.label': 'مراقب تحولات API',
   'st.display.api_mutation_observer.desc': 'مراقبة عناوين URL وطرق طلبات XHR/fetch في نفس التبويب ليتمكن WebBrain من اكتشاف إجراءات الواجهة المتكررة واقتراح أنماط اختصارات API. معطل افتراضياً؛ قم بتفعيله فقط أثناء التحقيق في سلوك الاختصار أو زمن الاستجابة.',
+  'st.display.openai_ask_streaming.label': 'بث ردود OpenAI في وضع السؤال',
+  'st.display.openai_ask_streaming.desc': 'اعرض نص OpenAI Responses الرسمية فور وصوله في وضع السؤال. تنتظر استدعاءات الأدوات response.completed؛ وتبقى تشغيلات Act وDev والمجدولة والسحابية وContinue بدون بث. مفعّل افتراضياً.',
   'st.display.plan_before_act.label': 'التخطيط قبل التنفيذ',
   'st.display.plan_before_act.desc': 'يجري وضعا Act وDev دائمًا فحصًا منظمًا للنية قبل تشغيل الأدوات. وضع المحاولة (الافتراضي) ينشئ أيضًا خططًا كاملة، لكنه قد يعيد استخدام خطة معتمدة حديثًا لمتابعة قصيرة؛ الوضع الصارم ينشئ خطة كاملة في كل دورة. إذا ظل القصد أو التخطيط غير صالح بعد محاولة إصلاح واحدة، يتوقف الوضعان قبل الأدوات ويطلبان توضيحًا.',
   'st.display.plan_before_act.try': 'محاولة التخطيط (افتراضياً)',

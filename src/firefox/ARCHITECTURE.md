@@ -1,6 +1,6 @@
 # WebBrain Firefox Extension — Architecture
 
-> Version 25.5.0 · Manifest V2 · Background Page
+> Version 25.5.2 · Manifest V2 · Background Page
 
 ## How Firefox Differs from Chrome
 
@@ -230,11 +230,35 @@ _enrichFirstUserMessage()     ← same as Chrome (URL/title + screenshot + adapt
     ▼
 Main Loop (max 120 steps)
     │
-    ├─ provider.chat(messages, {tools, temp, maxTokens:4096})
+    ├─ chatMainTurn(messages, {tools, temp, maxTokens:4096})
+    │  ├─ provider.chat() by default
+    │  └─ official OpenAI Responses streaming for interactive Ask only
     ├─ If tool_calls → _executeToolBatch() → push results → continue
     ├─ If text only → return as final answer
     └─ If done() → return summary
 ```
+
+### Ask-only OpenAI Responses streaming
+
+Firefox uses the same narrow integration as Chrome inside the production
+`processMessage()` loop. Normal sidebar sends remain detached `chat_start`
+runs owned and journaled by the background page, including reconnect replay and
+Ask attachments. Only an interactive Ask run using the official OpenAI
+Responses route can call `provider.chatStream()`, and the default-on Advanced
+kill switch can force new chats back to `provider.chat()` immediately. Act,
+Dev, scheduled, cloud, and Continue runs are non-streaming.
+
+Text deltas may render before completion, but tool calls, usage, reasoning, and
+Responses output Items are withheld from the loop until `response.completed`.
+Transport/protocol interruptions clear partial text, disable streaming for the
+rest of that run, and retry the generation through `provider.chat()`; terminal
+HTTP/API and `response.incomplete` errors propagate without a duplicate
+fallback request. No incomplete assistant turn or tool call is persisted or
+executed. Live deltas remain immediate, while reconnect snapshots coalesce on
+a 200 ms trailing interval; terminal updates and pre-tool durability
+checkpoints flush immediately. The older full `processMessageStream()`
+lifecycle remains separate; this feature does not move normal chat traffic
+into it.
 
 ### Conversation persistence (parity with Chrome)
 

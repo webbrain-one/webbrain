@@ -1,6 +1,6 @@
 # WebBrain Chrome/Edge Extension — Architecture
 
-> Version 25.5.0 · Manifest V3 · Service Worker background
+> Version 25.5.2 · Manifest V3 · Service Worker background
 
 ## High-Level Overview
 
@@ -351,7 +351,9 @@ _enrichFirstUserMessage()
     │
     ▼
 Main loop (max steps from Settings, default 60)
-    1. provider.chat(messages, {tools, temp, maxTokens})
+    1. chatMainTurn(messages, {tools, temp, maxTokens})
+       • provider.chat() by default
+       • official OpenAI Responses streaming only for interactive Ask runs
     2. If response has tool_calls:
        a. _executeToolBatch() — run each tool
        b. Push tool results into messages
@@ -366,11 +368,28 @@ Main loop (max steps from Settings, default 60)
 
 ### Execution modes
 
-| | `processMessage()` | `processMessageStream()` |
+| | Production `processMessage()` lifecycle | Legacy explicit `processMessageStream()` lifecycle |
 |---|---|---|
-| LLM call | `provider.chat()` | `provider.chatStream()` (SSE) |
-| UI updates | `onUpdate('text', ...)` at end | `onUpdate('text_delta', ...)` live |
-| Tool calls | Parsed from `result.toolCalls` | Accumulated from stream deltas |
+| LLM call | `provider.chat()` by default; terminal-gated `provider.chatStream()` for eligible OpenAI Ask turns | `provider.chatStream()` (SSE) |
+| UI updates | Terminal `text`; eligible Ask turns also emit live `text_delta` | Live `text_delta` |
+| Tool calls | Returned only after a complete provider result | Accumulated by the separate streaming loop |
+
+The Ask integration does not route through the legacy full streaming loop.
+Normal side-panel sends still use detached `chat_start`, background-owned run
+journaling/reconnect, attachment enrichment, and `processMessage()`. The stream
+branch is eligible only for interactive Ask mode using the official OpenAI
+Responses route and when the default-on Advanced kill switch is enabled. Act,
+Dev, scheduled, cloud, and Continue runs stay on `provider.chat()`.
+
+During an eligible call, output text is forwarded live, but function calls,
+usage, reasoning, and Responses output Items are buffered until
+`response.completed`. Transport/protocol interruptions clear any partial
+visible text, disable streaming for the remainder of that run, and retry the
+generation via `provider.chat()`; terminal HTTP/API and `response.incomplete`
+errors propagate without a duplicate fallback request. Incomplete tool calls
+and partial assistant text are never executed or persisted. Live deltas remain
+immediate, while reconnect snapshots coalesce on a 200 ms trailing interval;
+terminal updates and pre-tool durability checkpoints flush immediately.
 
 ### done() blocking (v3.6.4+)
 

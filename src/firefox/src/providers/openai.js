@@ -517,8 +517,16 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
       : `${prefix} (${reason}).`;
     const error = new Error(message);
     error.isResponsesStreamError = !!stream;
+    error.isResponsesStreamFallbackSafe = !!stream && reason === 'missing_response_completed';
     error.incomplete = true;
     error.incompleteReason = reason;
+    return error;
+  }
+
+  _responsesStreamTransportError(message) {
+    const error = new Error(message);
+    error.isResponsesStreamError = true;
+    error.isResponsesStreamFallbackSafe = true;
     return error;
   }
 
@@ -591,14 +599,29 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
         body: JSON.stringify(this._responsesBody(messages, options, true)),
       });
     } catch (e) {
-      throw new Error(`${this.name} network error — could not reach ${url} (${e.message}). Is the server running?`);
+      throw this._responsesStreamTransportError(
+        `${this.name} network error — could not reach ${url} (${e.message}). Is the server running?`,
+      );
     }
     if (!res.ok) {
       const err = await res.text();
-      throw new Error(`${this.name} stream error ${res.status}: ${this._formatHttpError(res.status, err)}`);
+      const streamError = new Error(`${this.name} stream error ${res.status}: ${this._formatHttpError(res.status, err)}`);
+      streamError.isResponsesStreamError = true;
+      throw streamError;
     }
 
-    const reader = res.body.getReader();
+    if (!res.body?.getReader) {
+      throw this._responsesStreamTransportError(`${this.name} Responses stream returned no readable body.`);
+    }
+
+    let reader;
+    try {
+      reader = res.body.getReader();
+    } catch (error) {
+      throw this._responsesStreamTransportError(
+        `${this.name} Responses stream could not open its response body (${error?.message || 'reader unavailable'}).`,
+      );
+    }
     const decoder = new TextDecoder();
     const toolItems = new Map();
     const emittedToolIndexes = new Set();
@@ -618,7 +641,15 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
     };
 
     while (true) {
-      const { done, value } = await reader.read();
+      let chunk;
+      try {
+        chunk = await reader.read();
+      } catch (error) {
+        throw this._responsesStreamTransportError(
+          `${this.name} Responses stream transport error (${error?.message || 'read failed'}).`,
+        );
+      }
+      const { done, value } = chunk;
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n');

@@ -637,6 +637,8 @@ export default {
   'st.display.clarify_timeout.instant': 'ทันที',
   'st.display.api_mutation_observer.label': 'ตัวสังเกตการกลายพันธุ์ของ API',
   'st.display.api_mutation_observer.desc': 'สังเกต URL และวิธีการของคำขอ XHR/fetch ในแท็บเดียวกัน เพื่อให้ WebBrain ตรวจจับการกระทำ UI ที่ซ้ำและแนะนำรูปแบบทางลัด API ปิดโดยค่าเริ่มต้น เปิดใช้งานเฉพาะเมื่อตรวจสอบพฤติกรรมทางลัดหรือความหน่วง',
+  'st.display.openai_ask_streaming.label': 'สตรีมคำตอบ OpenAI ในโหมด Ask',
+  'st.display.openai_ask_streaming.desc': 'แสดงข้อความจาก OpenAI Responses อย่างเป็นทางการทันทีที่มาถึงในโหมด Ask การเรียกเครื่องมือจะรอ response.completed ส่วน Act, Dev, งานตามกำหนดเวลา งานคลาวด์ และ Continue จะยังไม่สตรีม เปิดโดยค่าเริ่มต้น',
   'st.display.plan_before_act.label': 'วางแผนก่อนดำเนินการ',
   'st.display.plan_before_act.desc': 'โหมดดำเนินการและ Dev จะตรวจสอบเจตนาแบบมีโครงสร้างก่อนใช้เครื่องมือเสมอ โหมดลอง (ค่าเริ่มต้น) จะสร้างแผนฉบับเต็มด้วย แต่อาจใช้แผนที่เพิ่งอนุมัติซ้ำสำหรับคำขอต่อเนื่องสั้น ๆ ส่วนโหมดเข้มงวดจะสร้างแผนฉบับเต็มทุกครั้ง หากเจตนาหรือแผนยังไม่ถูกต้องหลังซ่อมหนึ่งครั้ง ทั้งสองโหมดจะหยุดก่อนใช้เครื่องมือและขอคำชี้แจง',
   'st.display.plan_before_act.try': 'ลองวางแผน (ค่าเริ่มต้น)',

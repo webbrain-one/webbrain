@@ -637,6 +637,8 @@ export default {
   'st.display.clarify_timeout.instant': '즉시',
   'st.display.api_mutation_observer.label': 'API 변경 관찰자',
   'st.display.api_mutation_observer.desc': '동일한 탭의 XHR/fetch 요청 URL 및 메서드를 관찰하여 WebBrain이 반복되는 UI 작업을 감지하고 API 바로가기 패턴을 제안할 수 있도록 합니다. 기본적으로 꺼져 있습니다. 바로가기 동작이나 지연 시간을 조사할 때만 활성화하세요.',
+  'st.display.openai_ask_streaming.label': 'Ask에서 OpenAI 응답 스트리밍',
+  'st.display.openai_ask_streaming.desc': 'Ask 모드에서 공식 OpenAI Responses 텍스트를 도착하는 즉시 표시합니다. 도구 호출은 response.completed를 기다리며 Act, Dev, 예약, 클라우드 및 Continue 실행은 스트리밍하지 않습니다. 기본적으로 켜져 있습니다.',
   'st.display.plan_before_act.label': '실행 전 계획',
   'st.display.plan_before_act.desc': 'Act 및 Dev 모드는 도구 실행 전에 항상 구조화된 의도 확인을 수행합니다. 시도(기본값)는 전체 계획도 만들지만 짧은 후속 요청에서는 최근 승인된 계획을 재사용할 수 있습니다. 엄격 모드는 매 턴 전체 계획을 만듭니다. 의도나 계획이 한 번의 복구 후에도 유효하지 않으면 두 모드 모두 도구 실행 전에 중지하고 설명을 요청합니다.',
   'st.display.plan_before_act.try': '계획 시도 (기본값)',
