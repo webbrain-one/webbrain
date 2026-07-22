@@ -31659,8 +31659,30 @@ test('Chrome controlled-field fallback recovers exactly once and never submits a
     );
 
     commands.length = 0;
-    contentEditable = false;
     verified = false;
+    const failedEditor = await agent._maybeFallbackFieldWithCdp(
+      42,
+      'set_field',
+      { ref_id: 'ref_editor', text: 'exact post', submit: false },
+      {
+        success: false,
+        verified: false,
+        dispatched: false,
+        noDispatch: true,
+        trustedTypeRequired: true,
+        error: 'contenteditable requires trusted typing',
+        _expectedValue: 'exact post',
+      },
+    );
+    assert.equal(failedEditor.success, false);
+    assert.equal(failedEditor.verified, false);
+    assert.equal(failedEditor.dispatched, true, 'a failed readback must preserve the trusted input dispatch');
+    assert.equal(failedEditor.noDispatch, false, 'trusted contenteditable input must not remain retry-safe');
+    assert.equal(failedEditor.recoveryRequired, 'fresh_tree');
+    assert.equal(commands.filter(command => command.method === 'Input.insertText').length, 1, 'only one trusted editor retry is allowed');
+
+    commands.length = 0;
+    contentEditable = false;
     const failed = await agent._maybeFallbackFieldWithCdp(
       42,
       'set_field',

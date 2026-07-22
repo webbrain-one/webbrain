@@ -17415,6 +17415,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       if (!verification?.success || verification.verified !== true) {
         return {
           ...failed,
+          dispatched: true,
+          noDispatch: false,
           verified: false,
           ...(verification?.fieldMeta ? { fieldMeta: verification.fieldMeta } : {}),
           ...(Object.prototype.hasOwnProperty.call(verification || {}, 'actual') ? { actual: verification.actual } : {}),
