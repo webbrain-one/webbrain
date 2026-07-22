@@ -876,11 +876,17 @@ export class ProviderManager {
           let errBody = '';
           try { errBody = await res.text(); } catch {}
           if (res.status === 403) {
-            if (!firstFailure) firstFailure = {
-              ok: false,
-              error:
-                'Ollama returned 403 - set OLLAMA_ORIGINS="*" (or moz-extension://*,chrome-extension://*) and restart `ollama serve`.',
-            };
+            // The OLLAMA_ORIGINS remediation only applies to Ollama — for
+            // the other local providers sharing this path (llamacpp,
+            // lmstudio, jan, vllm, sglang, localai) a 403 means something
+            // else (auth proxy, --api-key, ...), so report it generically.
+            if (!firstFailure) firstFailure = id === 'ollama'
+              ? {
+                  ok: false,
+                  error:
+                    'Ollama returned 403 - set OLLAMA_ORIGINS="*" (or moz-extension://*,chrome-extension://*) and restart `ollama serve`.',
+                }
+              : this._modelListFailure(res.status, errBody, res.statusText);
             continue;
           }
           if (!firstFailure) firstFailure = this._modelListFailure(res.status, errBody, res.statusText);

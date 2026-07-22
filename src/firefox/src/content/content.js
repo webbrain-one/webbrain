@@ -601,9 +601,9 @@
   function _findDialogContentForOverlay(overlay) {
     const selector = '[role="dialog"],[role="alertdialog"],[aria-modal="true"],dialog[open],[data-state="open"][role="dialog"],[class*="DialogContent"],[class*="ModalContent"],.modal.show';
     const pick = (node) => {
-      if (!node || node === overlay) return null;
+      if (!node) return null;
       try {
-        if (node.matches?.(selector) && _hasVisibleBox(node, 20, 20)) return node;
+        if (node !== overlay && node.matches?.(selector) && _hasVisibleBox(node, 20, 20)) return node;
         const match = node.querySelector?.(selector);
         if (match && _hasVisibleBox(match, 20, 20)) return match;
       } catch {}
@@ -664,6 +664,8 @@
         if (!includeNonModalDialogs) {
           const dialogContent = _findDialogContentForOverlay(candidates[i]);
           if (dialogContent) return dialogContent;
+          const interactive = candidates[i].querySelector?.(INTERACTIVE_SELECTORS.join(', '));
+          if (!interactive) continue;
         }
         return candidates[i];
       }
@@ -1299,6 +1301,9 @@
    */
   function clickElement(params) {
     let el;
+    // The native-select rescue yields only to exact text matches. Prefix or
+    // contains matches can be unrelated controls ("Book" for needle "OK").
+    let textResolvedExact = false;
     // Reject jQuery/Playwright selectors with a clear error.
     if (params.selector && /:contains\(|:has-text\(/.test(params.selector)) {
       return {
@@ -1406,6 +1411,7 @@
             inp.scrollIntoView({ block: 'center', inline: 'center' });
             inp.focus();
             el = inp;
+            textResolvedExact = (needle === ltxt);
             break;
           }
         }
@@ -1446,6 +1452,7 @@
                 inp.scrollIntoView({ block: 'center', inline: 'center' });
                 inp.focus();
                 el = inp;
+                textResolvedExact = (needle === ltxt);
                 break;
               }
             }
@@ -1479,6 +1486,7 @@
             if (found.length >= 1) {
               found[0].e.scrollIntoView({ block: 'center', inline: 'center' });
               el = found[0].e;
+              textResolvedExact = (m === 'exact');
               break;
             }
           }
@@ -1547,6 +1555,7 @@
       }
       if (!el) {
         let resolved = matches[0].e;
+        textResolvedExact = (usedMode === 'exact');
         // LABEL → associated input resolution
         if (resolved.tagName === 'LABEL') {
           let target = null;
@@ -1571,31 +1580,54 @@
       el = document.elementFromPoint(params.x, params.y);
     }
 
-    if (!el) return { success: false, dispatched: false, error: 'Element not found' };
-    const targetIsSubmitControl = _isSubmitControl(el);
-
     // ── Auto-select: if click text matches a <select> option, select it ──
-    if (params.text) {
+    // Runs when text matching resolved NO element, resolved the <select>
+    // itself (a select's innerText contains its options, so the contains
+    // level routinely lands here for option clicks — skipping the rescue
+    // then would wrongly fall through to the CANNOT-CLICK intercept), or a
+    // clickable resolved only by prefix/contains. It must not run when a
+    // genuine button/link labeled X matched exactly.
+    if (params.text && (!el || el instanceof HTMLSelectElement || !textResolvedExact)) {
       const needle = params.text.trim();
       const lc = needle.toLowerCase();
-      const allSels = document.querySelectorAll('select');
+      const selectScope = _findTopmostModal() || document;
+      const allSels = el instanceof HTMLSelectElement
+        ? [el]
+        : selectScope.querySelectorAll('select');
+      const matchingSelects = [];
       for (const sel of allSels) {
         const opts = Array.from(sel.options);
         const match = opts.find(o => o.text.trim() === needle)
           || opts.find(o => o.text.trim().toLowerCase() === lc)
           || opts.find(o => o.value === needle)
           || opts.find(o => o.value.toLowerCase() === lc);
-        if (match && sel.selectedIndex !== match.index) {
-          sel.focus();
-          const nativeSetter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set;
-          if (nativeSetter) nativeSetter.call(sel, match.value);
-          else sel.value = match.value;
-          sel.dispatchEvent(new Event('input', { bubbles: true }));
-          sel.dispatchEvent(new Event('change', { bubbles: true }));
-          return { success: true, method: 'auto-select', selectedText: match.text.trim(), selectedValue: match.value };
+        if (match) matchingSelects.push({ sel, match });
+      }
+      if (matchingSelects.length > 1) {
+        return {
+          success: false,
+          dispatched: false,
+          failureScope: `ambiguous-select-option:${lc}`,
+          error: `Ambiguous select option match for "${needle}" (${matchingSelects.length} dropdowns). Identify the intended field and use type_text on that select instead.`,
+        };
+      }
+      if (matchingSelects.length === 1) {
+        const { sel, match } = matchingSelects[0];
+        if (sel.selectedIndex === match.index) {
+          return { success: true, method: 'select-already-set', selectedText: match.text.trim(), selectedValue: match.value };
         }
+        sel.focus();
+        const nativeSetter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set;
+        if (nativeSetter) nativeSetter.call(sel, match.value);
+        else sel.value = match.value;
+        sel.dispatchEvent(new Event('input', { bubbles: true }));
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+        return { success: true, method: 'auto-select', selectedText: match.text.trim(), selectedValue: match.value };
       }
     }
+
+    if (!el) return { success: false, dispatched: false, error: 'Element not found' };
+    const targetIsSubmitControl = _isSubmitControl(el);
 
     // <select> intercept: clicking opens a native OS dropdown that cannot be
     // controlled programmatically. Return error so the model uses type_text.
@@ -2028,6 +2060,7 @@
         which: keyMeta.keyCode,
         bubbles: true,
         cancelable: true,
+        composed: true,
       });
       const up = new KeyboardEvent('keyup', {
         key,
@@ -2036,11 +2069,14 @@
         which: keyMeta.keyCode,
         bubbles: true,
         cancelable: true,
+        composed: true,
       });
+      // Dispatch once on the target only. The events bubble, so listeners
+      // attached at document/window level already receive them — dispatching
+      // the same event object on document again would fire those listeners
+      // twice per key (double-advancing ARIA listboxes, menus, etc.).
       target.dispatchEvent(down);
-      document.dispatchEvent(down);
       target.dispatchEvent(up);
-      document.dispatchEvent(up);
       if (key === 'Tab') moveTabFocus();
     }
 
@@ -2402,7 +2438,20 @@
   function waitForElement(params) {
     return new Promise((resolve) => {
       const timeout = params.timeout || 5000;
-      const existing = document.querySelector(params.selector);
+      // Validate the selector up front: an invalid selector makes
+      // querySelector throw SyntaxError, which would reject this promise
+      // and leave the caller hanging on a response that never arrives.
+      let existing;
+      try {
+        existing = document.querySelector(params.selector);
+      } catch (e) {
+        resolve({
+          success: false,
+          found: false,
+          error: `Invalid selector "${params.selector}": ${e.message}. Use plain CSS — jQuery/Playwright extensions like :contains() or :has-text() are not supported.`,
+        });
+        return;
+      }
       if (existing) {
         resolve({ success: true, found: true });
         return;
@@ -3852,7 +3901,11 @@
 
     const result = handler();
     if (result instanceof Promise) {
-      result.then(sendResponse);
+      // Always settle sendResponse — a rejecting handler (e.g. a throwing
+      // DOM API) must not leave the caller's await hanging forever.
+      result.then(sendResponse, (err) => {
+        sendResponse({ success: false, error: `${msg.action} failed: ${err?.message || String(err)}` });
+      });
       return true; // async
     }
     sendResponse(result);

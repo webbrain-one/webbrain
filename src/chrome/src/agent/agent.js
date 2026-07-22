@@ -4248,6 +4248,28 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       (() => {
         const needle = ${JSON.stringify(needle)};
         const lc = needle.toLowerCase();
+        // Yield to the normal text-click path only for an exact-tier match.
+        // An exact <option> label must beat a prefix/contains clickable: for
+        // example, "OK" selects the OK option instead of clicking "Book".
+        // Keep <select> out of this list because this rescue is its click path.
+        const clickables = document.querySelectorAll(
+          'a, button, [role="button"], [role="link"], [role="tab"], [role="menuitem"], [role="option"], [role="menuitemradio"], [role="menuitemcheckbox"], [role="treeitem"], input:not([type="hidden"]), textarea, input[type="button"], input[type="submit"], summary, label, [onclick], [data-action]'
+        );
+        const _valIsLabel = (el) => {
+          if (el.tagName === 'TEXTAREA') return false;
+          if (el.tagName !== 'INPUT') return true;
+          const type = (el.getAttribute('type') || 'text').toLowerCase();
+          return type === 'button' || type === 'submit' || type === 'reset';
+        };
+        for (const el of clickables) {
+          const r = el.getBoundingClientRect();
+          if (r.width < 2 || r.height < 2) continue;
+          const cs = getComputedStyle(el);
+          if (cs.visibility === 'hidden' || cs.display === 'none') continue;
+          const txt = (el.innerText || (_valIsLabel(el) ? el.value : '') || el.placeholder || el.ariaLabel || '').trim().toLowerCase();
+          if (txt && txt === lc) return { found: false, suppressedByClickable: true };
+        }
+        const matchingSelects = [];
         const sels = document.querySelectorAll('select');
         for (const sel of sels) {
           const opts = Array.from(sel.options);
@@ -4255,22 +4277,26 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             || opts.find(o => o.text.trim().toLowerCase() === lc)
             || opts.find(o => o.value === needle)
             || opts.find(o => o.value.toLowerCase() === lc);
-          if (match) {
-            sel.focus();
-            const cur = sel.selectedIndex;
-            return {
-              found: true,
-              alreadySelected: cur === match.index,
-              currentIndex: cur,
-              targetIndex: match.index,
-              targetText: match.text.trim(),
-              targetValue: match.value,
-              currentText: sel.options[cur]?.text?.trim() || '',
-              allOptions: opts.map(o => o.text.trim()),
-            };
-          }
+          if (match) matchingSelects.push({ sel, match, opts });
         }
-        return { found: false };
+        // Never mutate the first of several dropdowns that offer the same
+        // option. The normal resolver can surface the ambiguity instead.
+        if (matchingSelects.length !== 1) {
+          return { found: false, matchingSelectCount: matchingSelects.length };
+        }
+        const { sel, match, opts } = matchingSelects[0];
+        sel.focus();
+        const cur = sel.selectedIndex;
+        return {
+          found: true,
+          alreadySelected: cur === match.index,
+          currentIndex: cur,
+          targetIndex: match.index,
+          targetText: match.text.trim(),
+          targetValue: match.value,
+          currentText: sel.options[cur]?.text?.trim() || '',
+          allOptions: opts.map(o => o.text.trim()),
+        };
       })()
     `);
     const scan = scanResult?.result?.value;
@@ -11597,13 +11623,18 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     // recovering, defeating the whole point of the fallback.
     while (recent.length && recent[0].role === 'tool') recent.shift();
 
-    // Also truncate any huge tool results in remaining messages
+    // Also truncate any huge tool results in remaining messages. Use the
+    // wrapper-preserving variant: a plain slice can cut the
+    // </untrusted_page_content> closing tag off an untrusted tool result,
+    // which makes _hasUntrustedWrapper() return false on later passes and
+    // can launder page text into the trusted trim summary (see
+    // _truncatePreservingUntrustedWrapper's doc comment).
     for (const msg of recent) {
       if (msg.role === 'tool' && msg.content && msg.content.length > 2000) {
-        msg.content = msg.content.slice(0, 2000) + '\n[...truncated due to context limit]';
+        msg.content = this._truncatePreservingUntrustedWrapper(msg.content, 2000);
       }
       if (typeof msg.content === 'string' && msg.content.length > 5000) {
-        msg.content = msg.content.slice(0, 5000) + '\n[...truncated due to context limit]';
+        msg.content = this._truncatePreservingUntrustedWrapper(msg.content, 5000);
       }
     }
 

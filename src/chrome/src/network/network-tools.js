@@ -1996,6 +1996,13 @@ export async function fetchUrl(url, opts = {}, ctx = {}) {
 
 export async function researchUrl(url, opts = {}) {
   if (!url) return { success: false, error: 'url is required' };
+  // Same SSRF backstop as fetch_url / read_page_source: research_url opens
+  // the URL in a hidden tab under the extension's <all_urls> host
+  // permission, so the cloud-metadata / RFC1918 / localhost blocklist must
+  // run before chrome.tabs.create — the permission gate alone is not a
+  // substitute (fetch_url still applies this check after a grant).
+  const urlCheck = validateFetchUrl(url, { allowLocalNetwork: getAllowLocalNetwork() });
+  if (!urlCheck.ok) return { success: false, error: `URL is blocked: ${urlCheck.error}` };
   const timeoutMs = Math.min(opts.timeout || 8000, 30000);
   let createdTab = null;
   try {
@@ -2121,9 +2128,17 @@ export async function readDownloadedFile(downloadId, ctx = {}) {
 
     // Re-fetch the source URL. Validate first; apply same cookie policy as
     // fetchUrl (eTLD+1 of active tab), and re-validate after redirects.
+    // data: URLs are exempt from the http(s)-only validator:
+    // downloadResourceFromPage saves blob: resources as data: URLs
+    // (chrome.downloads can't follow blob: from the background), and a
+    // data: URL's content is already inline — there is no network request
+    // to guard.
     const allowLocal = getAllowLocalNetwork();
-    const v = validateFetchUrl(item.url, { allowLocalNetwork: allowLocal });
-    if (!v.ok) return { success: false, error: v.error };
+    const isDataUrl = typeof item.url === 'string' && item.url.startsWith('data:');
+    if (!isDataUrl) {
+      const v = validateFetchUrl(item.url, { allowLocalNetwork: allowLocal });
+      if (!v.ok) return { success: false, error: v.error };
+    }
 
     let attachCookies = false;
     let tabRegDomain = null;
@@ -2145,7 +2160,7 @@ export async function readDownloadedFile(downloadId, ctx = {}) {
       credentials: attachCookies ? 'include' : 'omit',
       redirect: 'follow',
     });
-    if (res.url && res.url !== item.url) {
+    if (!isDataUrl && res.url && res.url !== item.url) {
       const v2 = validateFetchUrl(res.url, { allowLocalNetwork: allowLocal });
       if (!v2.ok) return { success: false, error: `Redirect to blocked URL: ${v2.error}`, finalUrl: res.url };
       if (attachCookies && tabRegDomain) {

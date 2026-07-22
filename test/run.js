@@ -11291,7 +11291,6 @@ test('sidepanel exposes schedule slash commands in both builds', () => {
     assert.match(panel, /Date\.parse\(job\?\.completedAt/, `${label}: completed job auto-hide should use completion time`);
     assert.match(panel, /scheduleCompletedJobAutoHide\(jobs\)/, `${label}: completed job auto-hide should reschedule the scheduled-job strip`);
     assert.match(panel, /job\.status === 'completed' && job\.lastResult/, `${label}: completed job cards should expose saved results after refresh`);
-    assert.match(panel, /crossPanelScheduledJobIds/, `${label}: cross-panel scheduled jobs should stay tracked until terminal events`);
     assert.match(panel, /terminalScheduledEvent/, `${label}: cross-panel scheduled terminal events should settle the panel`);
     assert.match(panel, /event === 'needs_user_input' \|\|\s*terminalScheduledEvent/, `${label}: URL-target terminal events should return to the scheduling panel without a prior clarify card`);
     assert.match(panel, /ensureScheduledTerminalMessage/, `${label}: URL-target terminal events should create a visible result message`);
@@ -12412,12 +12411,23 @@ test('chrome fetch fallback clears offscreen proxy timeout after success', async
       },
     },
     runtime: {
-      async sendMessage() {
+      connect({ name }) {
+        const messageListeners = [];
         return {
-          ok: true,
-          status: 200,
-          contentType: 'application/json',
-          body: '{"ok":true}',
+          onMessage: { addListener: (fn) => messageListeners.push(fn) },
+          onDisconnect: { addListener: () => {} },
+          postMessage() {
+            // Simulate the offscreen streaming protocol: headers first
+            // (clears the caller's connection-phase timeout), then the
+            // body as chunks, then done.
+            queueMicrotask(() => {
+              const emit = (m) => messageListeners.forEach((fn) => fn(m));
+              emit({ type: 'headers', ok: true, status: 200, contentType: 'application/json' });
+              emit({ type: 'chunk', text: '{"ok":true}' });
+              emit({ type: 'done' });
+            });
+          },
+          disconnect() {},
         };
       },
     },
@@ -12438,6 +12448,70 @@ test('chrome fetch fallback clears offscreen proxy timeout after success', async
   } finally {
     globalThis.setTimeout = previousSetTimeout;
     globalThis.clearTimeout = previousClearTimeout;
+    if (previousFetch === undefined) {
+      delete globalThis.fetch;
+    } else {
+      globalThis.fetch = previousFetch;
+    }
+    if (previousChrome === undefined) {
+      delete globalThis.chrome;
+    } else {
+      globalThis.chrome = previousChrome;
+    }
+    console.warn = previousWarn;
+  }
+});
+
+test('chrome fetch fallback resolves null-body proxy statuses without hanging', async () => {
+  const previousChrome = globalThis.chrome;
+  const previousFetch = globalThis.fetch;
+  const previousWarn = console.warn;
+  let nextStatus = 204;
+  let disconnects = 0;
+  console.warn = () => {};
+  globalThis.fetch = async () => {
+    throw new TypeError('Failed to fetch');
+  };
+  globalThis.chrome = {
+    offscreen: {
+      async hasDocument() {
+        return true;
+      },
+    },
+    runtime: {
+      connect() {
+        const messageListeners = [];
+        return {
+          onMessage: { addListener: (fn) => messageListeners.push(fn) },
+          onDisconnect: { addListener: () => {} },
+          postMessage() {
+            queueMicrotask(() => {
+              messageListeners.forEach((fn) => fn({
+                type: 'headers',
+                ok: nextStatus >= 200 && nextStatus < 300,
+                status: nextStatus,
+                contentType: 'application/json',
+              }));
+            });
+          },
+          disconnect() {
+            disconnects++;
+          },
+        };
+      },
+    },
+  };
+  try {
+    const fetchUrl = 'file://' + path.join(ROOT, 'src/chrome/src/providers/fetch-with-fallback.js').replace(/\\/g, '/') + `?test=${Date.now()}`;
+    const { fetchWithFallback } = await import(fetchUrl);
+    for (const status of [204, 205, 304]) {
+      nextStatus = status;
+      const res = await fetchWithFallback('http://127.0.0.1:11434/api/models', { timeoutMs: 12345 });
+      assert.equal(res.status, status, `chrome: proxied ${status} status should resolve`);
+      assert.equal(await res.text(), '', `chrome: proxied ${status} response must have no body`);
+    }
+    assert.equal(disconnects, 3, 'chrome: null-body responses should close their streaming ports immediately');
+  } finally {
     if (previousFetch === undefined) {
       delete globalThis.fetch;
     } else {
@@ -13634,19 +13708,19 @@ test('sidepanel flushes run chat before queue settlement after immediate tab swi
     assert.ok(sendMatch, `${label}: sendMessage finally block missing`);
     const sendFinally = sendMatch[1];
     const sendFlushIdx = sendFinally.indexOf('flushRenderedTabChat()');
-    const sendDrainIdx = sendFinally.indexOf('await drainQueuedContextMenuPromptsAfterPendingTabSwitch();');
+    const sendDrainIdx = sendFinally.indexOf('await drainQueuedPromptsAfterRunSettles();');
     assert.notEqual(sendFlushIdx, -1, `${label}: send completion should flush the final transcript`);
-    assert.notEqual(sendDrainIdx, -1, `${label}: send completion should drain pending tab switches`);
-    assert.equal(sendFlushIdx < sendDrainIdx, true, `${label}: send completion must flush before deferred tab switching`);
+    assert.notEqual(sendDrainIdx, -1, `${label}: send completion should drain queued prompts`);
+    assert.equal(sendFlushIdx < sendDrainIdx, true, `${label}: send completion must flush before draining queued prompts`);
 
     const continueMatch = panel.match(/async function continueAgent\(options = \{\}\) \{[\s\S]*?finally \{([\s\S]*?)\n  \}\n\}/);
     assert.ok(continueMatch, `${label}: continueAgent finally block missing`);
     const continueFinally = continueMatch[1];
     const continueFlushIdx = continueFinally.indexOf('flushRenderedTabChat()');
-    const continueDrainIdx = continueFinally.indexOf('await drainQueuedContextMenuPromptsAfterPendingTabSwitch();');
+    const continueDrainIdx = continueFinally.indexOf('await drainQueuedPromptsAfterRunSettles();');
     assert.notEqual(continueFlushIdx, -1, `${label}: Continue completion should flush the final transcript`);
-    assert.notEqual(continueDrainIdx, -1, `${label}: Continue completion should drain pending tab switches`);
-    assert.equal(continueFlushIdx < continueDrainIdx, true, `${label}: Continue completion must flush before deferred tab switching`);
+    assert.notEqual(continueDrainIdx, -1, `${label}: Continue completion should drain queued prompts`);
+    assert.equal(continueFlushIdx < continueDrainIdx, true, `${label}: Continue completion must flush before draining queued prompts`);
 
     const scheduledStart = panel.search(/(?:async\s+)?function settleScheduledRun\(event, job, tabId = currentTabId\)/);
     const scheduledEnd = panel.search(/(?:async\s+)?function handleScheduledJobEvent\(data, tabId\)/);
@@ -13654,21 +13728,21 @@ test('sidepanel flushes run chat before queue settlement after immediate tab swi
     assert.notEqual(scheduledEnd, -1, `${label}: scheduled event handler boundary missing`);
     const scheduledBody = panel.slice(scheduledStart, scheduledEnd);
     const scheduledFlushNeedle = 'await flushRenderedTabChat()';
-    const scheduledDrainNeedle = 'await drainQueuedContextMenuPromptsAfterPendingTabSwitch();';
+    const scheduledDrainNeedle = 'await drainQueuedPromptsAfterRunSettles();';
     const scheduledFlushIdx = scheduledBody.indexOf(scheduledFlushNeedle);
     const scheduledDrainIdx = scheduledBody.indexOf(scheduledDrainNeedle);
     assert.notEqual(scheduledFlushIdx, -1, `${label}: scheduled completion should flush the final transcript`);
-    assert.notEqual(scheduledDrainIdx, -1, `${label}: scheduled completion should drain pending tab switches`);
-    assert.equal(scheduledFlushIdx < scheduledDrainIdx, true, `${label}: scheduled completion must flush before deferred tab switching`);
+    assert.notEqual(scheduledDrainIdx, -1, `${label}: scheduled completion should drain queued prompts`);
+    assert.equal(scheduledFlushIdx < scheduledDrainIdx, true, `${label}: scheduled completion must flush before draining queued prompts`);
 
     const abortMatch = panel.match(/setTimeout\(async \(\) => \{[\s\S]*?if \(isTabAbortRequested\(tabId\)\) \{([\s\S]*?)\n    \}\n  \}, 3000\);/);
     assert.ok(abortMatch, `${label}: abort safety timeout body missing`);
     const abortBody = abortMatch[1];
     const abortFlushIdx = abortBody.indexOf('flushRenderedTabChat()');
-    const abortDrainIdx = abortBody.indexOf('await drainQueuedContextMenuPromptsAfterPendingTabSwitch();');
+    const abortDrainIdx = abortBody.indexOf('await drainQueuedPromptsAfterRunSettles();');
     assert.notEqual(abortFlushIdx, -1, `${label}: abort timeout should flush the stopped transcript`);
-    assert.notEqual(abortDrainIdx, -1, `${label}: abort timeout should drain pending tab switches`);
-    assert.equal(abortFlushIdx < abortDrainIdx, true, `${label}: abort timeout must flush before deferred tab switching`);
+    assert.notEqual(abortDrainIdx, -1, `${label}: abort timeout should drain queued prompts`);
+    assert.equal(abortFlushIdx < abortDrainIdx, true, `${label}: abort timeout must flush before draining queued prompts`);
   }
 });
 
@@ -13682,7 +13756,8 @@ test('chrome sidepanel serializes tab-chat storage writes with clears and reads'
   assert.match(loadBody, /const numericTabId = Number\(tabId\);[\s\S]*?if \(!Number\.isFinite\(numericTabId\)\) return null;/, 'chrome: tab-chat restore should normalize tab ids before checking the cache');
   assert.match(loadBody, /if \(!tabChatOperations\.has\(numericTabId\) && tabChats\.has\(numericTabId\)\) return tabChats\.get\(numericTabId\);/, 'chrome: tab-chat restore should only trust cached HTML when no queued operation can update it');
   assert.match(loadBody, /return await enqueueTabChatOperation\(numericTabId, async \(queuedTabId\) => \{[\s\S]*?if \(tabChats\.has\(queuedTabId\)\) return tabChats\.get\(queuedTabId\);[\s\S]*?const stored = await chrome\.storage\.session\.get\(key\);/, 'chrome: tab-chat restore should wait behind pending per-tab operations before reading cache or storage');
-  assert.match(panel, /return enqueueTabChatOperation\(tabId, async \(numericTabId\) => \{[\s\S]*?await chrome\.storage\.session\.set\(\{ \[key\]: html \}\)\.catch\(\(\) => \{\}\);/, 'chrome: tab-chat persistence should be serialized through the queue');
+  assert.match(panel, /return enqueueTabChatOperation\(tabId, async \(numericTabId\) => \{[\s\S]*?await chrome\.storage\.session\.set\(\{ \[key\]: toStore \}\)\.catch\(/, 'chrome: tab-chat persistence should be serialized through the queue');
+  assert.match(panel, /html\.length > TAB_CHAT_PERSIST_BUDGET[\s\S]*?stripImagePayloadsForPersist\(html\)/, 'chrome: oversized tab chats should strip embedded image payloads before persisting');
   const clearStart = panel.indexOf('function clearCachedTabChat(tabId) {');
   assert.notEqual(clearStart, -1, 'chrome: clearCachedTabChat missing');
   const clearBody = panel.slice(clearStart, panel.indexOf('\n}\n\nasync function renderClearedConversationForTab', clearStart) + 2);
@@ -13701,7 +13776,8 @@ test('firefox sidepanel serializes tab-chat storage writes with clears and reads
   assert.match(loadBody, /const numericTabId = Number\(tabId\);[\s\S]*?if \(!Number\.isFinite\(numericTabId\)\) return null;/, 'firefox: tab-chat restore should normalize tab ids before checking the cache');
   assert.match(loadBody, /if \(!tabChatOperations\.has\(numericTabId\) && tabChats\.has\(numericTabId\)\) return tabChats\.get\(numericTabId\);/, 'firefox: tab-chat restore should only trust cached HTML when no queued operation can update it');
   assert.match(loadBody, /return await enqueueTabChatOperation\(numericTabId, async \(queuedTabId\) => \{[\s\S]*?if \(tabChats\.has\(queuedTabId\)\) return tabChats\.get\(queuedTabId\);[\s\S]*?const stored = await browser\.storage\.session\.get\(key\);/, 'firefox: tab-chat restore should wait behind pending per-tab operations before reading cache or storage');
-  assert.match(panel, /return enqueueTabChatOperation\(tabId, async \(numericTabId\) => \{[\s\S]*?await browser\.storage\.session\.set\(\{ \[key\]: html \}\)\.catch\(\(\) => \{\}\);/, 'firefox: tab-chat persistence should be serialized through the queue');
+  assert.match(panel, /return enqueueTabChatOperation\(tabId, async \(numericTabId\) => \{[\s\S]*?await browser\.storage\.session\.set\(\{ \[key\]: toStore \}\)\.catch\(/, 'firefox: tab-chat persistence should be serialized through the queue');
+  assert.match(panel, /html\.length > TAB_CHAT_PERSIST_BUDGET[\s\S]*?stripImagePayloadsForPersist\(html\)/, 'firefox: oversized tab chats should strip embedded image payloads before persisting');
   const clearStart = panel.indexOf('function clearCachedTabChat(tabId) {');
   assert.notEqual(clearStart, -1, 'firefox: clearCachedTabChat missing');
   const clearBody = panel.slice(clearStart, panel.indexOf('\n}\n\n// Save current tab', clearStart) + 2);
@@ -15755,16 +15831,16 @@ test('sidepanel queued composer messages expose edit and delete controls', () =>
     assert.notEqual(queueShiftIdx, -1, `${label}: queued composer drain should shift the next queued message`);
     assert.equal(draftGuardIdx < queueShiftIdx, true, `${label}: queued composer drain must preserve drafts before removing queued messages`);
     assert.match(panel, /if \(drainQueuedComposerMessageForCurrentTab\(\)\) return;[\s\S]*?drainQueuedContextMenuPrompts\(\);/, `${label}: run settlement should drain queued composer messages before context-menu recovery prompts`);
-    const helperStart = panel.indexOf('async function drainQueuedContextMenuPromptsAfterPendingTabSwitch()');
+    const helperStart = panel.indexOf('async function drainQueuedPromptsAfterRunSettles()');
     const helperEnd = panel.indexOf('function queueAgentUpdateDuringTabSwitch', helperStart);
     assert.notEqual(helperStart, -1, `${label}: queued drain helper should exist`);
     assert.notEqual(helperEnd, -1, `${label}: queued drain helper boundary should exist`);
     const helperBody = panel.slice(helperStart, helperEnd);
     const composerDrainIdx = helperBody.indexOf('if (drainQueuedComposerMessageForCurrentTab()) return;');
-    const pendingSwitchIdx = helperBody.indexOf('const pending = pendingTabSwitch;');
+    const contextDrainIdx = helperBody.indexOf('drainQueuedContextMenuPrompts();');
     assert.notEqual(composerDrainIdx, -1, `${label}: completed-tab queued composer drain should run in the drain helper`);
-    assert.notEqual(pendingSwitchIdx, -1, `${label}: pending tab switch should still be applied in the drain helper`);
-    assert.equal(composerDrainIdx < pendingSwitchIdx, true, `${label}: queued composer messages for the completed tab must drain before applying a pending tab switch`);
+    assert.notEqual(contextDrainIdx, -1, `${label}: context-menu prompt drain should run in the drain helper`);
+    assert.equal(composerDrainIdx < contextDrainIdx, true, `${label}: queued composer messages for the completed tab must drain before context-menu recovery prompts`);
     assert.match(css, /\.queued-messages/, `${label}: queued message strip should be styled`);
     assert.match(css, /\.queued-message-action/, `${label}: queued message controls should be styled`);
     assert.match(locale, /'sp\.queue\.edit': 'Edit queued message'/, `${label}: queued edit label should have an English fallback`);
@@ -15866,7 +15942,7 @@ test('sidepanel continue runs use the initiating tab state', () => {
   }
 });
 
-test('sidepanel drains queued context-menu prompts after pending tab switches on run completion', () => {
+test('sidepanel drains queued context-menu prompts on run completion', () => {
   for (const [label, panelRel] of [
     ['chrome', 'src/chrome/src/ui/sidepanel.js'],
     ['firefox', 'src/firefox/src/ui/sidepanel.js'],
@@ -15881,17 +15957,16 @@ test('sidepanel drains queued context-menu prompts after pending tab switches on
       assert.ok(match, `${label}: ${fnName} finally block missing`);
       const finallyBody = match[1];
       const idleIdx = finallyBody.indexOf('setTabProcessing(tabId, false);');
-      const helperIdx = finallyBody.indexOf('await drainQueuedContextMenuPromptsAfterPendingTabSwitch();');
+      const helperIdx = finallyBody.indexOf('await drainQueuedPromptsAfterRunSettles();');
       assert.notEqual(idleIdx, -1, `${label}: ${fnName} should clear processing state`);
-      assert.notEqual(helperIdx, -1, `${label}: ${fnName} completion should apply pending tab switches before draining queued prompts`);
+      assert.notEqual(helperIdx, -1, `${label}: ${fnName} completion should drain queued prompts via the settlement helper`);
       assert.equal(idleIdx < helperIdx, true, `${label}: ${fnName} context-menu queue must drain after processing is cleared`);
-      assert.equal(finallyBody.includes('await switchToTab(pending);'), false, `${label}: ${fnName} should use the non-throwing context-menu drain helper`);
       assert.equal(finallyBody.includes('drainQueuedContextMenuPrompts();'), false, `${label}: ${fnName} should not drain directly against a potentially stale tab`);
     }
   }
 });
 
-test('sidepanel abort safety timeout drains queued prompts after pending tab switches', () => {
+test('sidepanel abort safety timeout drains queued prompts', () => {
   for (const [label, panelRel] of [
     ['chrome', 'src/chrome/src/ui/sidepanel.js'],
     ['firefox', 'src/firefox/src/ui/sidepanel.js'],
@@ -15901,34 +15976,33 @@ test('sidepanel abort safety timeout drains queued prompts after pending tab swi
     assert.ok(match, `${label}: abort safety timeout body missing`);
     const body = match[1];
     const idleIdx = body.indexOf('setTabProcessing(tabId, false);');
-    const helperIdx = body.indexOf('await drainQueuedContextMenuPromptsAfterPendingTabSwitch();');
+    const helperIdx = body.indexOf('await drainQueuedPromptsAfterRunSettles();');
     assert.notEqual(idleIdx, -1, `${label}: abort timeout should clear processing state`);
-    assert.notEqual(helperIdx, -1, `${label}: abort timeout should apply pending tab switches before draining queued prompts`);
+    assert.notEqual(helperIdx, -1, `${label}: abort timeout should drain queued prompts via the settlement helper`);
     assert.equal(idleIdx < helperIdx, true, `${label}: abort timeout should drain after processing is cleared`);
-    assert.equal(body.includes('await switchToTab(pending);'), false, `${label}: abort timeout should use the non-throwing context-menu drain helper`);
     assert.equal(body.includes('drainQueuedContextMenuPrompts();'), false, `${label}: abort timeout should not drain directly against a potentially stale tab`);
   }
 });
 
-test('sidepanel drains scheduled-run context-menu prompts after pending tab switches', () => {
+test('sidepanel drains scheduled-run context-menu prompts', () => {
   for (const [label, panelRel] of [
     ['chrome', 'src/chrome/src/ui/sidepanel.js'],
     ['firefox', 'src/firefox/src/ui/sidepanel.js'],
   ]) {
     const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
-    assert.match(panel, /async function drainQueuedContextMenuPromptsAfterPendingTabSwitch\(\) \{[\s\S]*?if \(pendingTabSwitch == null\) \{[\s\S]*?drainQueuedContextMenuPrompts\(\);[\s\S]*?const pending = pendingTabSwitch;[\s\S]*?pendingTabSwitch = null;[\s\S]*?try \{[\s\S]*?await switchToTab\(pending\);[\s\S]*?\} catch \{[\s\S]*?\}[\s\S]*?drainQueuedContextMenuPrompts\(\);/, `${label}: scheduled completions need a non-throwing pending-tab switch before draining context-menu prompts`);
+    assert.match(panel, /async function drainQueuedPromptsAfterRunSettles\(\) \{[\s\S]*?if \(drainQueuedComposerMessageForCurrentTab\(\)\) return;[\s\S]*?drainQueuedContextMenuPrompts\(\);/, `${label}: scheduled completions need a settlement drain helper that runs composer drain before context-menu prompts`);
 
     const scheduledStart = panel.search(/(?:async\s+)?function settleScheduledRun\(event, job, tabId = currentTabId\)/);
     const scheduledEnd = panel.indexOf('if (scheduledJobsEl)', scheduledStart);
     assert.notEqual(scheduledStart, -1, `${label}: scheduled run settlement helper missing`);
     assert.notEqual(scheduledEnd, -1, `${label}: scheduled job event block missing`);
     const scheduledBlock = panel.slice(scheduledStart, scheduledEnd);
-    const helperCalls = scheduledBlock.match(/drainQueuedContextMenuPromptsAfterPendingTabSwitch\(\);/g) || [];
-    assert.equal(helperCalls.length >= 2, true, `${label}: scheduled terminal and waiting-idle paths should drain after pending tab switches`);
+    const helperCalls = scheduledBlock.match(/drainQueuedPromptsAfterRunSettles\(\);/g) || [];
+    assert.equal(helperCalls.length >= 2, true, `${label}: scheduled terminal and waiting-idle paths should drain via the settlement helper`);
   }
 });
 
-test('sidepanel drains scheduled-clarify rejection prompts after pending tab switches', () => {
+test('sidepanel drains scheduled-clarify rejection prompts', () => {
   for (const [label, panelRel] of [
     ['chrome', 'src/chrome/src/ui/sidepanel.js'],
     ['firefox', 'src/firefox/src/ui/sidepanel.js'],
@@ -15938,9 +16012,9 @@ test('sidepanel drains scheduled-clarify rejection prompts after pending tab swi
     assert.ok(match, `${label}: scheduled clarify rejection handler missing`);
     const body = match[1];
     const idleIdx = body.indexOf('setTabProcessing(tabId, false);');
-    const drainIdx = body.indexOf('drainQueuedContextMenuPromptsAfterPendingTabSwitch();');
+    const drainIdx = body.indexOf('drainQueuedPromptsAfterRunSettles();');
     assert.notEqual(idleIdx, -1, `${label}: scheduled clarify rejection should clear processing state`);
-    assert.notEqual(drainIdx, -1, `${label}: scheduled clarify rejection should apply pending tab switches before draining`);
+    assert.notEqual(drainIdx, -1, `${label}: scheduled clarify rejection should drain queued prompts via the settlement helper`);
     assert.equal(body.includes('drainQueuedContextMenuPrompts();'), false, `${label}: scheduled clarify rejection must not drain against the stale tab`);
     assert.equal(idleIdx < drainIdx, true, `${label}: scheduled clarify rejection should drain after processing is cleared`);
   }
@@ -15953,7 +16027,7 @@ test('sidepanel keeps scheduled job action errors on the initiating tab', () => 
   ]) {
     const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
     const start = panel.indexOf('async function scheduledJobAction(action, jobId)');
-    const end = panel.indexOf('function drainQueuedContextMenuPromptsAfterPendingTabSwitch', start);
+    const end = panel.indexOf('function drainQueuedPromptsAfterRunSettles', start);
     assert.notEqual(start, -1, `${label}: scheduledJobAction missing`);
     assert.notEqual(end, -1, `${label}: scheduledJobAction boundary missing`);
     const body = panel.slice(start, end);
@@ -29094,6 +29168,28 @@ test('submit controls bypass native select guards in click paths', () => {
   assert.match(chromeContent, /el\.tagName === 'INPUT' && !\['button', 'checkbox'[\s\S]*?'submit'\]\.includes\(inputType\)/, 'chrome: checkbox/radio focus must not receive the text-editable stale-click exemption');
 });
 
+test('native select rescue yields only to exact clickables and refuses ambiguous dropdowns', () => {
+  const chromeAgent = fs.readFileSync(path.join(ROOT, 'src/chrome/src/agent/agent.js'), 'utf8');
+  const autoSelectStart = chromeAgent.indexOf('async _autoSelectOption(');
+  const autoSelectEnd = chromeAgent.indexOf('\n  async ', autoSelectStart + 10);
+  const autoSelectBody = chromeAgent.slice(autoSelectStart, autoSelectEnd);
+  assert.ok(autoSelectStart >= 0 && autoSelectEnd > autoSelectStart, 'chrome: auto-select helper should be independently inspectable');
+  assert.match(autoSelectBody, /if \(txt && txt === lc\) return \{ found: false, suppressedByClickable: true \};/, 'chrome: only exact clickable text should suppress select rescue');
+  assert.doesNotMatch(autoSelectBody, /txt\.includes\(lc\)[^\n]*suppressedByClickable/, 'chrome: substring clickables must not suppress select rescue');
+  assert.match(autoSelectBody, /if \(matchingSelects\.length !== 1\)/, 'chrome: auto-select must not pick the first of several matching dropdowns');
+
+  const firefoxContent = fs.readFileSync(path.join(ROOT, 'src/firefox/src/content/content.js'), 'utf8');
+  const clickStart = firefoxContent.indexOf('function clickElement(params) {');
+  const clickEnd = firefoxContent.indexOf('\n  function ', clickStart + 10);
+  const clickBody = firefoxContent.slice(clickStart, clickEnd);
+  assert.ok(clickStart >= 0 && clickEnd > clickStart, 'firefox: click helper should be independently inspectable');
+  assert.match(clickBody, /let textResolvedExact = false;/, 'firefox: click resolution should track the winning text tier');
+  assert.match(clickBody, /textResolvedExact = \(usedMode === 'exact'\);/, 'firefox: direct matches should record exact-tier resolution');
+  assert.match(clickBody, /!el \|\| el instanceof HTMLSelectElement \|\| !textResolvedExact/, 'firefox: prefix and contains matches should keep select rescue enabled');
+  assert.match(clickBody, /matchingSelects\.length > 1/, 'firefox: select rescue must reject ambiguous dropdown matches');
+  assert.match(clickBody, /method: 'select-already-set'/, 'firefox: an already-selected exact option must not fall through to an unrelated click');
+});
+
 test('accessibility ref lookup rejects disconnected elements', () => {
   for (const [label, rel] of [
     ['chrome', 'src/chrome/src/content/accessibility-tree.js'],
@@ -29438,13 +29534,48 @@ test('chrome submit detector probes iframe coordinate clicks in child frames', (
 
 test('submit probe index resolver stays aligned with content click ordering', () => {
   const cases = [
-    ['chrome', 'src/chrome/src/content/content.js', /return queryInteractive\(\)\[index\] \|\| null/],
+    ['chrome', 'src/chrome/src/content/content.js', /return queryInteractiveForToolIndex\(\)\[index\] \|\| null/],
     ['firefox', 'src/firefox/src/content/content.js', /return queryInteractiveForToolIndex\(\)\[index\] \|\| null/],
   ];
   for (const [label, rel, expectedResolver] of cases) {
     const content = fs.readFileSync(path.join(ROOT, rel), 'utf8');
     assert.match(content, /window\.__wb_resolve_click_target_for_submit_probe/, `${label}: content submit-probe resolver missing`);
     assert.match(content, expectedResolver, `${label}: submit-probe resolver should use the same indexed click ordering as content click`);
+  }
+});
+
+test('chrome full interactive indexes stay scoped to the topmost modal', () => {
+  const content = fs.readFileSync(path.join(ROOT, 'src/chrome/src/content/content.js'), 'utf8');
+  assert.match(content, /function _findDialogContentForOverlay\(overlay\)[\s\S]*?const siblings = overlay\?\.parentElement \? Array\.from\(overlay\.parentElement\.children\) : \[\];/, 'chrome: backdrop overlays should resolve an adjacent dialog container');
+  assert.match(content, /const dialogContent = _findDialogContentForOverlay\(candidates\[i\]\);\s*if \(dialogContent\) return dialogContent;/, 'chrome: modal scoping should prefer dialog content over a backdrop sibling');
+  assert.match(content, /const interactive = candidates\[i\]\.querySelector\?\.\(INTERACTIVE_SELECTORS\.join\(', '\)\);\s*if \(interactive\) return candidates\[i\];/, 'chrome: a backdrop without dialog or interactive descendants must not become the modal scope');
+  assert.match(content, /function _findTopmostBlockingModal\(\) \{\s*return _findTopmostModal\(\{ includeNonModalDialogs: false \}\);\s*\}/, 'chrome: interactive collectors should have a blocking-only modal resolver');
+  const fullStart = content.indexOf('function queryInteractiveFull() {');
+  const fullEnd = content.indexOf('\n  function queryInteractiveForToolIndex()', fullStart);
+  const fullBody = content.slice(fullStart, fullEnd);
+  assert.ok(fullStart >= 0 && fullEnd > fullStart, 'chrome: full interactive collector should be independently inspectable');
+  assert.match(fullBody, /const modal = _findTopmostBlockingModal\(\);/, 'chrome: full collector should ignore visible but non-modal dialogs');
+  assert.match(fullBody, /if \(modal && !_isComposedAncestor\(modal, el\)\) return false;/, 'chrome: full collector must exclude elements behind the modal, including across shadow roots');
+
+  const indexedStart = content.indexOf('function queryInteractiveForToolIndex() {', fullEnd);
+  const indexedEnd = content.indexOf('\n  function ', indexedStart + 10);
+  const indexedBody = content.slice(indexedStart, indexedEnd);
+  assert.match(indexedBody, /return queryInteractiveFull\(\)\.map\(c => c\.el\);/, 'chrome: indexed clicks and typing must use the modal-scoped full collector');
+});
+
+test('synthetic key events cross shadow boundaries without double dispatch', () => {
+  for (const [label, rel] of [
+    ['chrome', 'src/chrome/src/content/content.js'],
+    ['firefox', 'src/firefox/src/content/content.js'],
+  ]) {
+    const content = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+    const start = content.indexOf("const down = new KeyboardEvent('keydown'");
+    const end = content.indexOf("return { success: true, dispatched: true, key, repeat, method: 'keyboardevent'", start);
+    const keyBody = content.slice(start, end);
+    assert.ok(start >= 0 && end > start, `${label}: synthetic key dispatch should be independently inspectable`);
+    assert.match(keyBody, /new KeyboardEvent\('keydown',[\s\S]*?composed: true,[\s\S]*?new KeyboardEvent\('keyup',[\s\S]*?composed: true,/, `${label}: keydown and keyup should escape open shadow roots`);
+    assert.match(keyBody, /target\.dispatchEvent\(down\);\s*target\.dispatchEvent\(up\);/, `${label}: key events should still dispatch exactly once on the focused target`);
+    assert.doesNotMatch(keyBody, /document\.dispatchEvent\((?:down|up)\)/, `${label}: shadow-safe key events must not restore duplicate document dispatch`);
   }
 });
 
