@@ -3064,7 +3064,7 @@ async function exportSavedWorkflow(id, tabId = currentTabId) {
       showComposerToast(savedWorkflowFailureMessage(res), { duration: 7000 });
       return;
     }
-    const json = `${JSON.stringify(res.workflow, null, 2)}\n`;
+    const json = JSON.stringify(res.workflow);
     const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');

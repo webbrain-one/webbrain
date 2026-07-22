@@ -201,7 +201,7 @@ function targetFromTrace(refDescriptor, result) {
 
 function sensitiveParameter(target) {
   const identity = [
-    target?.name, target?.label, target?.fieldName, target?.ariaLabel,
+    target?.id, target?.name, target?.label, target?.fieldName, target?.ariaLabel,
     target?.placeholder, target?.type,
   ].filter(Boolean).join(' ').toLowerCase();
   return /password|passcode|secret|token|api.?key|otp|2fa|mfa|one.?time|recovery.?code/.test(identity);
@@ -396,35 +396,83 @@ function normalizeParameter(input) {
     id,
     label: cleanText(input?.label || id, 120),
     required: input?.required !== false,
-    sensitive: input?.sensitive === true,
+    sensitive: input?.sensitive === true || sensitiveParameter(input),
     type: 'text',
   };
 }
 
-function normalizeArgsValue(value, parameterIds, depth = 0) {
-  if (depth > 6) return undefined;
-  if (value == null || typeof value === 'boolean' || typeof value === 'number') return value;
-  if (typeof value === 'string') {
-    if (/^ref_[A-Za-z0-9_-]+$/i.test(value)) return undefined;
-    return cleanText(value, 1000);
+function normalizeWorkflowParameterMarker(value, parameterIds) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  if (Object.keys(value).length !== 1 || !Object.hasOwn(value, WORKFLOW_PARAM_REF_KEY)) return null;
+  const rawId = value[WORKFLOW_PARAM_REF_KEY];
+  if (typeof rawId !== 'string') return null;
+  const id = cleanId(rawId).toLowerCase();
+  return id === rawId && parameterIds.has(id) ? { [WORKFLOW_PARAM_REF_KEY]: id } : null;
+}
+
+function normalizeWorkflowStepArgs(tool, input, parameterIds, options = {}) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
+  const args = input;
+  const hasOnlyKeys = (allowed) => {
+    const keys = Object.keys(args);
+    if (keys.some((key) => /^(ref_?id|x|y|index|replayRequestId|apiReplayRequestId)$/i.test(key))) return false;
+    return options.strict !== true || keys.every((key) => allowed.includes(key));
+  };
+
+  if (tool === 'navigate') {
+    if (!hasOnlyKeys(['url']) || typeof args.url !== 'string') return null;
+    const url = safeHttpUrl(args.url);
+    return url ? { url } : null;
   }
-  if (Array.isArray(value)) {
-    const out = value.map((item) => normalizeArgsValue(item, parameterIds, depth + 1));
-    return out.some((item) => item === undefined) ? undefined : out;
+  if (tool === 'go_back' || tool === 'go_forward' || tool === 'click_ax') {
+    return hasOnlyKeys([]) ? {} : null;
   }
-  if (typeof value !== 'object') return undefined;
-  if (Object.keys(value).length === 1 && Object.hasOwn(value, WORKFLOW_PARAM_REF_KEY)) {
-    const id = cleanId(value[WORKFLOW_PARAM_REF_KEY]).toLowerCase();
-    return parameterIds.has(id) ? { [WORKFLOW_PARAM_REF_KEY]: id } : undefined;
+  if (tool === 'set_checked') {
+    return hasOnlyKeys(['checked']) && typeof args.checked === 'boolean'
+      ? { checked: args.checked }
+      : null;
   }
-  const out = {};
-  for (const [key, item] of Object.entries(value)) {
-    if (/^(ref_?id|x|y|index|replayRequestId|apiReplayRequestId)$/i.test(key)) return undefined;
-    const normalized = normalizeArgsValue(item, parameterIds, depth + 1);
-    if (normalized === undefined) return undefined;
-    out[key] = normalized;
+  if (tool === 'type_ax' || tool === 'set_field') {
+    const allowed = tool === 'set_field' ? ['text', 'clear', 'submit'] : ['text', 'clear'];
+    if (!hasOnlyKeys(allowed)) return null;
+    const text = normalizeWorkflowParameterMarker(args.text, parameterIds);
+    if (!text || (Object.hasOwn(args, 'clear') && typeof args.clear !== 'boolean')) return null;
+    if (tool === 'set_field' && Object.hasOwn(args, 'submit') && typeof args.submit !== 'boolean') return null;
+    return {
+      text,
+      ...(Object.hasOwn(args, 'clear') ? { clear: args.clear } : {}),
+      ...(tool === 'set_field' && Object.hasOwn(args, 'submit') ? { submit: args.submit } : {}),
+    };
   }
-  return out;
+  if (tool === 'click') {
+    if (!hasOnlyKeys(['text']) || typeof args.text !== 'string') return null;
+    const text = cleanText(args.text);
+    return text ? { text } : null;
+  }
+  if (tool === 'scroll') {
+    if (!hasOnlyKeys(['direction', 'amount'])) return null;
+    if (Object.hasOwn(args, 'direction') && !['up', 'down', 'left', 'right'].includes(args.direction)) return null;
+    if (Object.hasOwn(args, 'amount') && !Number.isFinite(args.amount)) return null;
+    return {
+      direction: args.direction || 'down',
+      ...(Object.hasOwn(args, 'amount')
+        ? { amount: Math.max(1, Math.min(5000, Math.round(args.amount))) }
+        : {}),
+    };
+  }
+  if (tool === 'wait_for_element') {
+    if (!hasOnlyKeys(['text', 'timeout']) || typeof args.text !== 'string') return null;
+    if (Object.hasOwn(args, 'timeout') && !Number.isFinite(args.timeout)) return null;
+    const text = cleanText(args.text);
+    if (!text) return null;
+    return {
+      text,
+      ...(Object.hasOwn(args, 'timeout')
+        ? { timeout: Math.max(100, Math.min(30000, Math.round(args.timeout))) }
+        : {}),
+    };
+  }
+  return null;
 }
 
 function normalizeExpected(input) {
@@ -443,10 +491,12 @@ export function normalizeSavedWorkflow(input, options = {}) {
 
   const parameters = [];
   const parameterIds = new Set();
+  const parametersById = new Map();
   for (const raw of Array.isArray(input?.parameters) ? input.parameters : []) {
     const parameter = normalizeParameter(raw);
     if (!parameter || parameterIds.has(parameter.id)) continue;
     parameterIds.add(parameter.id);
+    parametersById.set(parameter.id, parameter);
     parameters.push(parameter);
     if (parameters.length >= MAX_PARAMETERS) break;
   }
@@ -455,33 +505,24 @@ export function normalizeSavedWorkflow(input, options = {}) {
   for (const raw of Array.isArray(input?.steps) ? input.steps : []) {
     const tool = cleanText(raw?.tool, 80);
     if (!REPLAYABLE_WORKFLOW_TOOLS.has(tool)) continue;
-    let args = normalizeArgsValue(raw?.args || {}, parameterIds);
-    if (!args || typeof args !== 'object' || Array.isArray(args)) continue;
-    if (tool === 'navigate') {
-      const url = safeHttpUrl(args.url);
-      if (!url) continue;
-      args = { url };
-    }
-    if (tool === 'click') {
-      const text = cleanText(args.text);
-      if (!text) continue;
-      args = { text };
-    }
-    if (tool === 'wait_for_element') {
-      const text = cleanText(args.text);
-      if (!text) continue;
-      const timeout = Number(args.timeout);
-      args = {
-        text,
-        ...(Number.isFinite(timeout) ? { timeout: Math.max(100, Math.min(30000, Math.round(timeout))) } : {}),
-      };
-    }
-    if ((tool === 'type_ax' || tool === 'set_field') && !args.text?.[WORKFLOW_PARAM_REF_KEY]) continue;
+    const args = normalizeWorkflowStepArgs(
+      tool,
+      options.strictArgs === true ? raw?.args : (raw?.args || {}),
+      parameterIds,
+      {
+        strict: options.strictArgs === true,
+      },
+    );
+    if (!args) continue;
     const target = normalizeTarget(raw?.target);
     const scope = normalizeWorkflowScope(raw?.scope);
     if (['click_ax', 'set_checked', 'type_ax', 'set_field'].includes(tool)
         && !isReplayableWorkflowTarget(target)) {
       continue;
+    }
+    if ((tool === 'type_ax' || tool === 'set_field') && sensitiveParameter(target)) {
+      const parameter = parametersById.get(args.text[WORKFLOW_PARAM_REF_KEY]);
+      if (parameter) parameter.sensitive = true;
     }
     steps.push({
       id: cleanId(raw?.id, `step_${steps.length + 1}`),
@@ -548,13 +589,16 @@ export function importPortableWorkflowDefinition(input, options = {}) {
   if (portableWorkflowByteLength(input) > MAX_PORTABLE_WORKFLOW_BYTES) {
     return { workflow: null, reason: 'workflow_too_large' };
   }
-  const inputParameters = Array.isArray(input?.parameters) ? input.parameters : [];
-  const inputSteps = Array.isArray(input?.steps) ? input.steps : [];
+  if (!Array.isArray(input?.parameters) || !Array.isArray(input?.steps)) {
+    return { workflow: null, reason: 'invalid_workflow' };
+  }
+  const inputParameters = input.parameters;
+  const inputSteps = input.steps;
   if (inputParameters.length > MAX_PARAMETERS || inputSteps.length > MAX_STEPS) {
     return { workflow: null, reason: 'invalid_workflow' };
   }
   const ts = timestamp(options.now, nowMs());
-  const normalized = normalizeSavedWorkflow(input, { now: ts });
+  const normalized = normalizeSavedWorkflow(input, { now: ts, strictArgs: true });
   if (!normalized) return { workflow: null, reason: 'invalid_workflow' };
   if (normalized.parameters.length !== inputParameters.length || normalized.steps.length !== inputSteps.length) {
     return { workflow: null, reason: 'invalid_workflow' };

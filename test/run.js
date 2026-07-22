@@ -47513,6 +47513,8 @@ test('saved workflow slash commands are out-of-band and wired in both browsers',
     assert.match(source, /sendToBackground\('export_saved_workflow'/);
     assert.match(source, /sendToBackground\('import_saved_workflow'/);
     assert.match(source, /MAX_PORTABLE_WORKFLOW_FILE_BYTES = 1024 \* 1024/);
+    assert.match(source, /const json = JSON\.stringify\(res\.workflow\);/);
+    assert.doesNotMatch(source, /JSON\.stringify\(res\.workflow, null, 2\)/);
     assert.match(source, /Array\.isArray\(res\.warnings\)/);
     assert.match(source, /input\.type = parameter\.sensitive \? 'password' : 'text'/);
     assert.match(source, /inputs\.forEach\(\(input\) => \{ input\.value = ''; \}\)/);
@@ -47672,6 +47674,81 @@ test('portable saved workflow export and import round-trip safely with fresh ide
     });
     assert.equal(overStepLimit.reason, 'invalid_workflow');
     assert.equal(overStepLimit.workflow, null);
+
+    const checkboxStep = {
+      id: 'step_1',
+      tool: 'set_checked',
+      args: { checked: true },
+      target: { role: 'checkbox', name: 'Remember me' },
+      expected: { kind: 'checked', value: true },
+    };
+    const validCheckbox = module.importPortableWorkflowDefinition({
+      ...exported.workflow,
+      parameters: [],
+      steps: [checkboxStep],
+    });
+    assert.equal(validCheckbox.reason, '');
+    const malformedContainer = module.importPortableWorkflowDefinition({
+      ...exported.workflow,
+      parameters: {},
+    });
+    assert.equal(malformedContainer.reason, 'invalid_workflow');
+    assert.equal(malformedContainer.workflow, null);
+    for (const checked of [undefined, 'yes', 1, null]) {
+      const malformedCheckbox = module.importPortableWorkflowDefinition({
+        ...exported.workflow,
+        parameters: [],
+        steps: [{ ...checkboxStep, args: checked === undefined ? {} : { checked } }],
+      });
+      assert.equal(malformedCheckbox.reason, 'invalid_workflow');
+      assert.equal(malformedCheckbox.workflow, null);
+    }
+
+    const parameterId = exported.workflow.parameters[0].id;
+    const malformedMarker = module.importPortableWorkflowDefinition({
+      ...exported.workflow,
+      steps: [{
+        ...exported.workflow.steps[0],
+        args: { text: { [module.WORKFLOW_PARAM_REF_KEY]: parameterId, extra: true } },
+      }],
+    });
+    assert.equal(malformedMarker.reason, 'invalid_workflow');
+    assert.equal(malformedMarker.workflow, null);
+
+    const unexpectedArg = module.importPortableWorkflowDefinition({
+      ...exported.workflow,
+      steps: [{ ...exported.workflow.steps[0], args: { ...exported.workflow.steps[0].args, clear: true, extra: true } }],
+    });
+    assert.equal(unexpectedArg.reason, 'invalid_workflow');
+    assert.equal(unexpectedArg.workflow, null);
+
+    const sensitiveFromTarget = module.importPortableWorkflowDefinition({
+      ...exported.workflow,
+      parameters: [{ id: 'credential', label: 'Credential', required: true, sensitive: false, type: 'text' }],
+      steps: [{
+        id: 'step_1',
+        tool: 'set_field',
+        args: { text: { [module.WORKFLOW_PARAM_REF_KEY]: 'credential' } },
+        target: { role: 'textbox', name: 'Password', type: 'password' },
+        expected: { kind: 'tool_verified' },
+      }],
+    });
+    assert.equal(sensitiveFromTarget.reason, '');
+    assert.equal(sensitiveFromTarget.workflow.parameters[0].sensitive, true);
+
+    const sensitiveFromParameter = module.importPortableWorkflowDefinition({
+      ...exported.workflow,
+      parameters: [{ id: 'api_key', label: 'API key', required: true, type: 'password' }],
+      steps: [{
+        id: 'step_1',
+        tool: 'type_ax',
+        args: { text: { [module.WORKFLOW_PARAM_REF_KEY]: 'api_key' } },
+        target: { role: 'textbox', name: 'Credential' },
+        expected: { kind: 'tool_verified' },
+      }],
+    });
+    assert.equal(sensitiveFromParameter.reason, '');
+    assert.equal(sensitiveFromParameter.workflow.parameters[0].sensitive, true);
 
     const sanitizedNavigation = module.importPortableWorkflowDefinition({
       ...exported.workflow,

@@ -4,7 +4,7 @@ All notable changes to WebBrain are documented in this file.
 
 This changelog was generated from the repository Git history and release tags. Versions without a Git tag are inferred from version-bump commits and the current `package.json` / browser manifest versions.
 
-## [25.7.4] - 2026-07-22
+## [25.7.6] - 2026-07-22
 
 ### Added
 - Added portable saved workflow JSON export and import commands with Chrome and Firefox parity.
