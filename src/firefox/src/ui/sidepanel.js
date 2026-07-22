@@ -3349,7 +3349,13 @@ async function applyActiveRunState(numericTabId, state) {
       handleAgentUpdateMessage({
         target: 'sidepanel', action: 'agent_update', tabId: numericTabId,
         requestId: runUi.requestId, runId: runUi.runId, seq: event.seq,
-        type: event.type, data: event.data,
+        type: event.type,
+        data: event.type === 'run_complete'
+          ? {
+              ...event.data,
+              submittedTurnDurable: state?.submittedTurnDurable === true,
+            }
+          : event.data,
       });
       runAssistantEl.dataset.lastRenderedSeq = String(event.seq);
     }

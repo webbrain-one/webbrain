@@ -3510,7 +3510,12 @@ async function applyActiveRunState(numericTabId, state) {
         runId: runUi.runId,
         seq: event.seq,
         type: event.type,
-        data: event.data,
+        data: event.type === 'run_complete'
+          ? {
+              ...event.data,
+              submittedTurnDurable: state?.submittedTurnDurable === true,
+            }
+          : event.data,
       });
       runAssistantEl.dataset.lastRenderedSeq = String(event.seq);
     }
