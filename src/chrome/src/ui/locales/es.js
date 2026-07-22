@@ -637,6 +637,8 @@ export default {
   'st.display.clarify_timeout.instant': 'Instantáneo',
   'st.display.api_mutation_observer.label': 'Observador de mutaciones de API',
   'st.display.api_mutation_observer.desc': 'Observa las URLs y métodos de peticiones XHR/fetch en la misma pestaña para que WebBrain pueda detectar acciones repetidas de la interfaz y sugerir patrones de acceso directo por API. Desactivado por defecto; actívalo solo mientras investigas comportamientos de acceso directo o latencia.',
+  'st.display.openai_ask_streaming.label': 'Transmitir respuestas OpenAI en Ask',
+  'st.display.openai_ask_streaming.desc': 'Muestra el texto de OpenAI Responses oficial a medida que llega en modo Ask. Las llamadas a herramientas esperan a response.completed; Act, Dev, las ejecuciones programadas, en la nube y Continue siguen sin transmisión. Activado por defecto.',
   'st.display.plan_before_act.label': 'Planificar antes de actuar',
   'st.display.plan_before_act.desc': 'Los modos Actuar y Dev siempre ejecutan una comprobación estructurada de intención antes de las herramientas. Intentar (predeterminado) también crea planes completos, pero puede reutilizar un plan aprobado recientemente para un seguimiento breve; Estricto crea un plan completo en cada turno. Si la intención o el plan siguen siendo inválidos tras una reparación, ambos se detienen antes de usar herramientas y piden una aclaración.',
   'st.display.plan_before_act.try': 'Intentar planificar (por defecto)',

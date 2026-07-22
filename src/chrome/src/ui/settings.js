@@ -78,6 +78,7 @@ const siteAdaptersToggle = document.getElementById('toggle-site-adapters');
 const voiceInputToggle = document.getElementById('toggle-voice-input');
 const apiMutationObserverToggle = document.getElementById('toggle-api-mutation-observer');
 const webMcpToggle = document.getElementById('toggle-webmcp');
+const openAIAskStreamingToggle = document.getElementById('toggle-openai-ask-streaming');
 const planBeforeActModeSelect = document.getElementById('select-plan-before-act-mode');
 const planReviewModeSelect = document.getElementById('select-plan-review-mode');
 const planReviewConfidenceRange = document.getElementById('range-plan-review-confidence');
@@ -409,7 +410,7 @@ async function init() {
   chrome.storage.local.remove(['authToken', 'authEmail', 'authDefaultModel']).catch(() => {});
 
   // Load display settings
-  const stored = await chrome.storage.local.get(['verboseMode', 'selectionShortcutEnabled', 'helpImproveWebBrain', 'screenshotFallback', 'maxAgentSteps', 'autoScreenshot', 'useSiteAdapters', 'voiceInputEnabled', 'apiMutationObserverEnabled', 'webMcpEnabled', 'planBeforeActMode', 'planBeforeAct', 'planReviewMode', 'planReviewConfidenceThreshold', DOWNLOAD_DIRECTORY_STORAGE_KEY, 'notifySound', 'completionConfetti', 'tracingEnabled', 'strictSecretMode', 'agentAllowLocalNetwork', 'scheduledTasksEnabled', 'scheduledRequireConsequentialConfirmation', 'providerFilter', 'requestTimeoutMs', 'clarifyTimeoutSec', 'clarifyTimeoutSemanticsV2', 'costAllowanceSessionUsd', 'costAllowanceTotalUsd', 'cloudCostSpentUsd', 'screenshotRedaction']);
+  const stored = await chrome.storage.local.get(['verboseMode', 'selectionShortcutEnabled', 'helpImproveWebBrain', 'screenshotFallback', 'maxAgentSteps', 'autoScreenshot', 'useSiteAdapters', 'voiceInputEnabled', 'apiMutationObserverEnabled', 'webMcpEnabled', 'openaiAskStreamingEnabled', 'planBeforeActMode', 'planBeforeAct', 'planReviewMode', 'planReviewConfidenceThreshold', DOWNLOAD_DIRECTORY_STORAGE_KEY, 'notifySound', 'completionConfetti', 'tracingEnabled', 'strictSecretMode', 'agentAllowLocalNetwork', 'scheduledTasksEnabled', 'scheduledRequireConsequentialConfirmation', 'providerFilter', 'requestTimeoutMs', 'clarifyTimeoutSec', 'clarifyTimeoutSemanticsV2', 'costAllowanceSessionUsd', 'costAllowanceTotalUsd', 'cloudCostSpentUsd', 'screenshotRedaction']);
   if (typeof stored.providerFilter === 'string' && ['all','local','cloud','router'].includes(stored.providerFilter)) {
     providerFilter = stored.providerFilter;
   }
@@ -458,6 +459,7 @@ async function init() {
   if (voiceInputToggle) voiceInputToggle.checked = stored.voiceInputEnabled ?? true;
   apiMutationObserverToggle.checked = stored.apiMutationObserverEnabled === true;
   if (webMcpToggle) webMcpToggle.checked = stored.webMcpEnabled === true; // off by default
+  if (openAIAskStreamingToggle) openAIAskStreamingToggle.checked = stored.openaiAskStreamingEnabled !== false;
   if (planBeforeActModeSelect) {
     planBeforeActModeSelect.value = normalizePlanBeforeActMode(stored);
   }
@@ -1202,6 +1204,12 @@ apiMutationObserverToggle.addEventListener('change', async () => {
 if (webMcpToggle) {
   webMcpToggle.addEventListener('change', async () => {
     await chrome.storage.local.set({ webMcpEnabled: webMcpToggle.checked }).catch(() => {});
+  });
+}
+
+if (openAIAskStreamingToggle) {
+  openAIAskStreamingToggle.addEventListener('change', async () => {
+    await chrome.storage.local.set({ openaiAskStreamingEnabled: openAIAskStreamingToggle.checked }).catch(() => {});
   });
 }
 

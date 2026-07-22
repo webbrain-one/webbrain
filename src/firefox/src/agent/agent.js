@@ -1123,6 +1123,119 @@ export class Agent {
     return result;
   }
 
+  _shouldStreamOpenAIAsk(provider, mode, runOptions = {}, disabledForRun = false) {
+    return mode === 'ask'
+      && runOptions?.interactiveChat === true
+      && runOptions?.openaiAskStreamingEnabled !== false
+      && runOptions?.trustedContinuation !== true
+      && runOptions?.cloudRun !== true
+      && disabledForRun !== true
+      && typeof provider?.chatStream === 'function'
+      // OpenAICompatibleProvider keeps this predicate deliberately narrow:
+      // official api.openai.com Responses models only, never compatible APIs.
+      && provider?._usesResponsesApi?.() === true;
+  }
+
+  _shouldFallbackOpenAIAskStream(error) {
+    return error?.isResponsesStreamFallbackSafe === true;
+  }
+
+  async _chatStreamWithCostAllowance(provider, messages, options, costState, requestContext = null, onTextDelta = () => {}) {
+    const before = await this._checkCostAllowance(provider, costState);
+    if (before) throw this._costAllowanceError(before);
+
+    const streamOptions = requestContext
+      ? this._cloudGenerationOptions(provider, options, requestContext)
+      : options;
+    let content = '';
+    let reasoningContent = '';
+    let usage = null;
+    let responseItems = null;
+    let sawCompleted = false;
+    let usageRecorded = false;
+    const toolCalls = new Map();
+
+    const recordUsage = async () => {
+      if (usageRecorded) return null;
+      usageRecorded = true;
+      return this._recordCostUsage(provider, usage, costState);
+    };
+    const mergeToolCall = (toolCall, fallbackIndex = 0) => {
+      if (!toolCall || typeof toolCall !== 'object') return;
+      const index = Number.isInteger(toolCall.index) ? toolCall.index : fallbackIndex;
+      const existing = toolCalls.get(index) || {
+        id: '',
+        type: 'function',
+        function: { name: '', arguments: '' },
+      };
+      if (toolCall.id) existing.id = toolCall.id;
+      if (toolCall.type) existing.type = toolCall.type;
+      if (toolCall.function?.name) existing.function.name += toolCall.function.name;
+      if (toolCall.function?.arguments) existing.function.arguments += toolCall.function.arguments;
+      toolCalls.set(index, existing);
+    };
+
+    try {
+      for await (const chunk of provider.chatStream(messages, streamOptions)) {
+        if (chunk?.type === 'text') {
+          const delta = String(chunk.content || '');
+          if (delta) {
+            content += delta;
+            onTextDelta(delta);
+          }
+        } else if (chunk?.type === 'reasoning') {
+          reasoningContent += String(chunk.content || '');
+        } else if (chunk?.type === 'usage') {
+          usage = chunk.usage || usage;
+        } else if (chunk?.type === 'tool_call') {
+          const calls = Array.isArray(chunk.content) ? chunk.content : [];
+          calls.forEach((toolCall, index) => mergeToolCall(toolCall, index));
+        } else if (chunk?.type === 'tool_call_start') {
+          const index = toolCalls.size;
+          mergeToolCall({
+            index,
+            id: chunk.content?.id || '',
+            function: { name: chunk.content?.name || '', arguments: '' },
+          }, index);
+        } else if (chunk?.type === 'tool_call_delta') {
+          const index = Math.max(0, toolCalls.size - 1);
+          mergeToolCall({
+            index,
+            function: { name: '', arguments: String(chunk.content || '') },
+          }, index);
+        } else if (chunk?.type === 'done') {
+          if (Array.isArray(chunk.responseItems)) responseItems = chunk.responseItems;
+          if (chunk.usage) usage = chunk.usage;
+          sawCompleted = true;
+          break;
+        }
+      }
+      if (!sawCompleted) {
+        const error = new Error('OpenAI Responses stream ended before response.completed.');
+        error.isResponsesStreamError = true;
+        error.isResponsesStreamFallbackSafe = true;
+        throw error;
+      }
+    } catch (error) {
+      // Incomplete Responses streams can still report billable usage. Record
+      // that once before the caller either propagates or retries the failure.
+      try { await recordUsage(); } catch {}
+      throw error;
+    }
+
+    content = Agent._stripReasoningTags(content);
+    const result = {
+      content,
+      reasoningContent,
+      toolCalls: toolCalls.size ? [...toolCalls.entries()].sort(([a], [b]) => a - b).map(([, call]) => call) : null,
+      usage,
+      responseItems,
+    };
+    const after = await recordUsage();
+    if (after) result.costAllowanceMessage = after;
+    return result;
+  }
+
   _withResponseItems(message, responseItems, reasoningContent = '', provider = null) {
     if (Array.isArray(responseItems) && responseItems.length) {
       return { ...message, response_items: responseItems };
@@ -12953,6 +13066,59 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     // empty→nudge→empty→nudge cycle.
     let emptyOutputRecoveryAttempted = false;
     let compressionPlaceholderRecoveryAttempted = false;
+    let openAIAskStreamingDisabledForRun = false;
+
+    const chatMainTurn = async (chatMessages, chatOptions, requestContext) => {
+      if (!this._shouldStreamOpenAIAsk(
+        provider,
+        mode,
+        runOptions,
+        openAIAskStreamingDisabledForRun,
+      )) {
+        return this._chatWithCostAllowance(
+          provider,
+          chatMessages,
+          chatOptions,
+          costState,
+          requestContext,
+        );
+      }
+
+      let emittedText = false;
+      try {
+        return await this._chatStreamWithCostAllowance(
+          provider,
+          chatMessages,
+          chatOptions,
+          costState,
+          requestContext,
+          (delta) => {
+            emittedText = true;
+            onUpdate('text_delta', { content: delta });
+          },
+        );
+      } catch (error) {
+        if (this._isCostAllowanceError(error)) throw error;
+        if (emittedText) onUpdate('text', { content: '', replace: true });
+        if (!this._shouldFallbackOpenAIAskStream(error)) throw error;
+        openAIAskStreamingDisabledForRun = true;
+        onUpdate('warning', {
+          message: 'OpenAI streaming was interrupted; retrying this Ask turn without streaming.',
+        });
+        this._logDebug({
+          type: 'llm_stream_fallback',
+          provider: provider.constructor?.name || provider.name,
+          error: error?.message || String(error),
+        });
+        return this._chatWithCostAllowance(
+          provider,
+          chatMessages,
+          chatOptions,
+          costState,
+          requestContext,
+        );
+      }
+    };
 
     if (!runId) {
       runId = await this._startTraceRun(tabId, userMessage, mode, provider);
@@ -13011,7 +13177,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         this._logDebug({ type: 'llm_request', step: steps, provider: provider.constructor.name, messages: prunedMessages, options: chatOpts });
         const _llmStart = Date.now();
         if (runId) { try { await trace.recordLLMRequest(runId, steps, { providerClass: provider.constructor.name, model: provider.model, messageCount: prunedMessages.length, toolsCount: (chatOpts.tools || []).length }); } catch {} }
-        result = await this._chatWithCostAllowance(provider, prunedMessages, chatOpts, costState, { tabId, generationName: 'main' });
+        result = await chatMainTurn(prunedMessages, chatOpts, { tabId, generationName: 'main' });
         if (result?.usage?.prompt_tokens) {
           this._lastInputTokens.set(tabId, result.usage.prompt_tokens);
           // Snapshot the conversation size at this reading so the next
@@ -13038,7 +13204,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             const chatOpts = { tools: useTools ? tools : undefined, temperature: plannerTemperature, maxTokens: 4096 };
             const prunedMessages = this._pruneOldImages(messages, provider);
             this._logDebug({ type: 'llm_request_retry', step: steps, provider: provider.constructor.name, messages: prunedMessages, options: chatOpts });
-            result = await this._chatWithCostAllowance(provider, prunedMessages, chatOpts, costState, { tabId, generationName: 'main' });
+            result = await chatMainTurn(prunedMessages, chatOpts, { tabId, generationName: 'main' });
             this._logDebug({ type: 'llm_response_retry', step: steps, content: result.content, toolCalls: result.toolCalls });
           } catch (e2) {
             this._logDebug({ type: 'llm_error_retry', step: steps, error: e2.message });
@@ -13061,7 +13227,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           try {
             const useTools2 = provider.supportsTools;
             const chatOpts2 = { tools: useTools2 ? tools : undefined, temperature: plannerTemperature, maxTokens: 4096 };
-            result = await this._chatWithCostAllowance(provider, this._pruneOldImages(messages, provider), chatOpts2, costState, { tabId, generationName: 'main' });
+            result = await chatMainTurn(this._pruneOldImages(messages, provider), chatOpts2, { tabId, generationName: 'main' });
             this._logDebug({ type: 'llm_response_after_retry', step: steps, content: result.content, toolCalls: result.toolCalls });
           } catch (e2) {
             this._logDebug({ type: 'llm_error_final', step: steps, error: e2.message });

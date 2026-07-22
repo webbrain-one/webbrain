@@ -637,6 +637,8 @@ export default {
   'st.display.clarify_timeout.instant': '即時',
   'st.display.api_mutation_observer.label': 'API変更オブザーバー',
   'st.display.api_mutation_observer.desc': '同じタブの XHR/fetch リクエスト URL とメソッドを監視し、WebBrain が繰り返しの UI アクションを検出して API ショートカットパターンを提案できるようにします。デフォルトではオフ。ショートカット動作やレイテンシの調査中のみ有効にしてください。',
+  'st.display.openai_ask_streaming.label': 'Ask の OpenAI 応答をストリーミング',
+  'st.display.openai_ask_streaming.desc': 'Ask モードで公式 OpenAI Responses のテキストを到着と同時に表示します。ツール呼び出しは response.completed を待ち、Act、Dev、スケジュール、クラウド、Continue の実行は非ストリーミングのままです。デフォルトでオンです。',
   'st.display.plan_before_act.label': '実行前に計画',
   'st.display.plan_before_act.desc': 'Act と Dev はツール実行前に必ず構造化された意図確認を行います。試行（デフォルト）は完全な計画も作成しますが、短いフォローアップでは直近に承認された計画を再利用できます。厳格は毎ターン完全な計画を作成します。意図または計画が1回の修復後も無効な場合、どちらもツール実行前に停止して確認を求めます。',
   'st.display.plan_before_act.try': '計画を試す（デフォルト）',
