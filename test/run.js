@@ -2363,6 +2363,14 @@ test('matches google search across TLDs and includes udm=14, without hijacking o
 test('matches twitter.com and x.com', () => {
   assert.equal(getActiveAdapter('https://twitter.com/elonmusk')?.name, 'twitter');
   assert.equal(getActiveAdapter('https://x.com/elonmusk')?.name, 'twitter');
+  for (const getAdapter of [getActiveAdapter, getActiveAdapterFx]) {
+    const notes = getAdapter('https://x.com/compose/post')?.notes || '';
+    assert.match(notes, /wait_for_stable/);
+    assert.match(notes, /disabled=true/);
+    assert.match(notes, /selector:"\[data-testid=\\"tweetTextarea_0\\"\]"/);
+    assert.match(notes, /verified:false/);
+    assert.match(notes, /keep the composer open/i);
+  }
 });
 
 test('matches youtube video URLs and includes transcript guidance', () => {
@@ -6835,8 +6843,10 @@ test('WebBrain promotion has explicit X and LinkedIn variants with ready-to-go p
   const exactPost = 'Introducing WebBrain — an open-source AI browser agent that lives in your browser. Chat with any page, automate multi-step workflows, and bring your own LLM. Extensible by design. Try it: https://webbrain.one';
   const expectedTweetSteps = [
     'Open https://x.com/compose/post in the current tab through the visible browser UI.',
+    'Wait for the visible X composer to become stable before entering text.',
     `Enter this exact reviewed text in the visible X composer without translating, rewriting, or adding anything: ${JSON.stringify(exactPost)}`,
-    'Publish only after the composer text exactly matches the supplied text.',
+    'Publish only after the composer text exactly matches the supplied text and the Post control is enabled. If it remains disabled, keep the composer open and refill it through the trusted typing path.',
+    'Treat an unverified or no-progress Post click as not submitted; keep the composer open and recover instead of dismissing it.',
     'Verify the new tweet appears, then report its URL when available.',
   ];
   const expectedLinkedInSteps = [
@@ -13716,9 +13726,98 @@ test('sidepanel subscribe error card clears DOM without HTML reinterpretation', 
     assert.notEqual(runCompleteStart, -1, `${label}: run_complete handler missing`);
     assert.notEqual(runCompleteEnd, -1, `${label}: run_complete boundary missing`);
     const runCompleteBody = panel.slice(runCompleteStart, runCompleteEnd);
-    assert.match(runCompleteBody, /else if \(!renderSubscribeError\(textEl, data\.finalContent\)\) textEl\.innerHTML = formatMarkdown\(data\.finalContent\);/, `${label}: restored run finals should render subscribe actions before markdown fallback`);
+    assert.match(runCompleteBody, /else if \(!renderCostAllowanceError\(textEl, data\.finalContent,[\s\S]*?submittedTurnDurable: data\.submittedTurnDurable,[\s\S]*?&& !renderSubscribeError\(textEl, data\.finalContent\)\) textEl\.innerHTML = formatMarkdown\(data\.finalContent\);/, `${label}: restored run finals should render durability-aware allowance cards before markdown fallback`);
     assert.match(styles, /\.subscribe-actions\s*\{[\s\S]*?flex-wrap:\s*wrap;/, `${label}: subscribe actions should wrap in narrow panels`);
     assert.match(styles, /\.subscribe-resume-btn\s*\{[\s\S]*?background:\s*transparent;[\s\S]*?border:\s*1px solid var\(--accent\);/, `${label}: resume action should use secondary styling`);
+  }
+});
+
+test('sidepanel cloud cost allowance stop offers a persisted one-click $10 bump', () => {
+  const totalError = 'Error: Cloud cost allowance reached: total cloud/router usage is $10.02 against the $10.00 limit. Stopping before further cloud/router model calls. Increase or reset the allowance in Settings.';
+  const sessionError = 'Cloud cost allowance reached: this session is $4.25 against the $4.00 limit. Stopping before further cloud/router model calls. Increase or reset the allowance in Settings.';
+
+  for (const [label, panelRel, styleRel, settingsRel, backgroundRel, reconnectRel, storageApi] of [
+    ['chrome', 'src/chrome/src/ui/sidepanel.js', 'src/chrome/styles/sidepanel.css', 'src/chrome/src/ui/settings.js', 'src/chrome/src/background.js', 'src/chrome/src/run-reconnect.js', 'chrome'],
+    ['firefox', 'src/firefox/src/ui/sidepanel.js', 'src/firefox/styles/sidepanel.css', 'src/firefox/src/ui/settings.js', 'src/firefox/src/background.js', 'src/firefox/src/run-reconnect.js', 'browser'],
+  ]) {
+    const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
+    const styles = fs.readFileSync(path.join(ROOT, styleRel), 'utf8');
+    const settings = fs.readFileSync(path.join(ROOT, settingsRel), 'utf8');
+    const background = fs.readFileSync(path.join(ROOT, backgroundRel), 'utf8');
+    const reconnect = fs.readFileSync(path.join(ROOT, reconnectRel), 'utf8');
+
+    const constantsStart = panel.indexOf('const COST_ALLOWANCE_ERROR_RE =');
+    const parserStart = panel.indexOf('function parseCostAllowanceError(content) {', constantsStart);
+    const parserEnd = panel.indexOf('\n}\n\nfunction formatCostAllowanceUsd', parserStart);
+    assert.notEqual(constantsStart, -1, `${label}: cost allowance matcher missing`);
+    assert.notEqual(parserStart, -1, `${label}: cost allowance parser missing`);
+    assert.notEqual(parserEnd, -1, `${label}: cost allowance parser boundary missing`);
+    const declarations = panel.slice(constantsStart, parserStart);
+    const parserSource = panel.slice(parserStart, parserEnd + 2);
+    const parseCostAllowanceError = Function(
+      `${declarations}\n${parserSource}\nreturn parseCostAllowanceError;`,
+    )();
+
+    assert.deepEqual(
+      parseCostAllowanceError(totalError),
+      {
+        scope: 'total',
+        limitUsd: 10,
+        message: 'Error: Cloud cost allowance reached: total cloud/router usage is $10.02 against the $10.00 limit. Stopping before further cloud/router model calls.',
+      },
+      `${label}: total allowance error should expose its active limit without the Settings-only instruction`,
+    );
+    assert.equal(parseCostAllowanceError(sessionError)?.scope, 'session', `${label}: session allowance errors should target the session guard`);
+    assert.equal(parseCostAllowanceError(sessionError)?.limitUsd, 4, `${label}: session allowance limit should parse as a number`);
+    assert.equal(parseCostAllowanceError('ordinary provider failure'), null, `${label}: unrelated failures should keep normal rendering`);
+
+    const bindStart = panel.indexOf('function bindCostAllowanceButton(btn) {');
+    const bindEnd = panel.indexOf('\n}\n\nfunction parseSubscribeError', bindStart);
+    const bindBody = panel.slice(bindStart, bindEnd + 2);
+    assert.match(bindBody, new RegExp(`await ${storageApi}\\.storage\\.local\\.get\\(\\[storageKey\\]\\)`), `${label}: bump should read the currently persisted limit`);
+    assert.match(bindBody, /currentLimit \+ COST_ALLOWANCE_BUMP_USD/, `${label}: bump should add exactly $10 to the current limit`);
+    assert.match(bindBody, new RegExp(`await ${storageApi}\\.storage\\.local\\.set\\(\\{ \\[storageKey\\]: nextLimit \\}\\)`), `${label}: bump should persist the raised limit`);
+    assert.match(bindBody, /querySelector\('\.cost-allowance-retry-btn, \.cost-allowance-continue-btn'\)/, `${label}: successful bump should reveal the durability-selected resume action`);
+
+    const renderStart = panel.indexOf("function renderCostAllowanceError(textEl, content, resumeMode = '', resumeOptions = {}) {");
+    const renderEnd = panel.indexOf('\n}\n\nfunction addErrorRetryButton', renderStart);
+    const renderBody = panel.slice(renderStart, renderEnd + 2);
+    assert.match(renderBody, /textEl\.replaceChildren\(\);/, `${label}: allowance card should clear via DOM APIs`);
+    assert.match(renderBody, /msg\.textContent = parsed\.message;/, `${label}: allowance message should remain textContent`);
+    assert.match(renderBody, /bumpBtn\.textContent = '\+ \$10';/, `${label}: allowance card should expose the one-click $10 action`);
+    assert.match(renderBody, /bumpBtn\.setAttribute\('aria-label', bumpBtn\.title\);/, `${label}: compact $10 action should keep a localized accessible label`);
+    assert.match(renderBody, /continueBtn\.hidden = true;/, `${label}: continuation should stay gated until persistence succeeds`);
+    assert.match(renderBody, /const canContinue = resumeOptions\?\.submittedTurnDurable === true;[\s\S]*?const requiresRetry = !canContinue;/, `${label}: only explicit durable-turn proof should enable continuation`);
+    assert.match(renderBody, /requiresRetry && resumeOptions\?\.retryPayload\?\.text[\s\S]*?configureRetryButton\(retryBtn, resumeOptions\.retryPayload\)/, `${label}: pre-turn allowance stops should retain and use the original retry payload`);
+    assert.match(renderBody, /else if \(canContinue\)/, `${label}: unknown durability should withhold continuation`);
+    assert.match(renderBody, /else if \(canContinue\) \{[\s\S]*?resumeAfterSubscription\(continueBtn\)/, `${label}: continuation should be offered only for durable turns`);
+    assert.match(panel, /rebindCostAllowanceButtons\(\);/, `${label}: restored chats should rebind allowance controls`);
+    assert.match(panel, /!parseSubscribeError\(content\) && !parseCostAllowanceError\(content\)/, `${label}: allowance stops should not count as successful Ask completions`);
+    assert.match(panel, /renderCostAllowanceError\(textEl, res\.content, modeForSend, \{[\s\S]*?submittedTurnDurable: res\.submittedTurnDurable,[\s\S]*?retryPayload,/, `${label}: returned pre-turn stops should render with request-scoped durability and retry state`);
+    assert.match(panel, /function renderAgentErrorUpdate[\s\S]*?if \(parseCostAllowanceError\(message\)\) return;/, `${label}: pre-terminal error events should defer allowance card routing`);
+    assert.match(panel, /function renderAssistantTextUpdate[\s\S]*?if \(parseCostAllowanceError\(content\)\) \{[\s\S]*?textEl\.replaceChildren\(\);[\s\S]*?return;/, `${label}: streamed allowance text should stay empty until terminal durability is known`);
+    assert.match(panel, /if \(textEl && parseCostAllowanceError\(res\.content\)\) \{[\s\S]*?renderCostAllowanceError\(textEl, res\.content, modeForSend,[\s\S]*?\} else if \(textEl && getStreamedAssistantText\(textEl\) === String\(res\.content\)\)/, `${label}: terminal allowance content should render its card before duplicate-stream formatting`);
+    assert.match(panel, /renderCostAllowanceError\(textEl, res\.content, modeForSend, \{[\s\S]*?submittedTurnDurable: res\.submittedTurnDurable,[\s\S]*?\}\)[\s\S]*?&& !renderSubscribeError/, `${label}: returned continuation stops should render with terminal durability proof`);
+    assert.match(panel, /data: event\.type === 'run_complete'[\s\S]*?submittedTurnDurable: state\?\.submittedTurnDurable === true,[\s\S]*?: event\.data,/, `${label}: replayed terminal events should be enriched with current durability proof before rendering`);
+    assert.match(panel, /const restoredAllowanceCardMissing = !!parseCostAllowanceError\(runUi\?\.finalContent\)[\s\S]*?\|\| restoredAllowanceCardMissing[\s\S]*?restoredAllowanceCardMissing \? \{\} : \{ seq: runUi\.seq \}/, `${label}: terminal restoration should rebuild a deferred allowance card even after replaying its final text sequence`);
+    assert.match(panel, /type: 'run_complete',[\s\S]*?submittedTurnDurable: state\?\.submittedTurnDurable === true,/, `${label}: restored terminal cards should retain durable-turn proof`);
+    assert.match(panel, /case 'run_complete':[\s\S]*?if \(textEl && parseCostAllowanceError\(data\.finalContent\)\)[\s\S]*?renderCostAllowanceError\(textEl, data\.finalContent,[\s\S]*?\} else if \(textEl && !textEl\.textContent\.trim\(\)\)/, `${label}: restored terminal allowance cards should render before the empty-text fallback guard`);
+    assert.match(panel, /function retryPayloadForRunAssistant\(assistantEl\)[\s\S]*?getComposerHistoryTextFromMessage\(userEl\)[\s\S]*?attachmentCount:/, `${label}: restored non-durable stops should reconstruct retry routing from persisted chat metadata`);
+    assert.match(panel, /assistantEl\.dataset\.retryApiMutationsAllowed = apiMutationsAllowedForSend \? 'true' : 'false';[\s\S]*?assistantEl\.dataset\.retryAttachmentCount = String\(attachmentsForSend\.length\);/, `${label}: fresh chats should persist retry metadata needed after a panel reload`);
+    assert.match(panel, /activeRetryPayloadForRequest\(eventTabId, msg\.requestId\)[\s\S]*?\|\| retryPayloadForRunAssistant\(currentAssistantEl\)/, `${label}: restored terminal cards should use the reconstructed retry payload when live state is gone`);
+    assert.match(panel, /const attachmentCount = Number\.isFinite\(Number\(retryPayload\.attachmentCount\)\)[\s\S]*?btn\.dataset\.retryAttachmentCount = String\(attachmentCount\);/, `${label}: reconstructed retries should preserve missing-attachment warnings`);
+    assert.match(background, /async function sendAgentRunComplete\(tabId, snapshot = null\)[\s\S]*?snapshot\.kind === 'continue'[\s\S]*?agent\.hasDurableSubmittedTurn\([\s\S]*?submittedTurnDurable,/, `${label}: terminal UI events should treat continuations as resumable and carry durable-turn proof`);
+    assert.match(background, /const requestedRunUi = runUiSnapshotForRequest\(runUiSnapshot, requestedRequestId\);[\s\S]*?const durabilityRequestId = requestedRequestId \|\| String\(requestedRunUi\?\.requestId \|\| ''\);[\s\S]*?requestedRunUi\?\.kind === 'continue'[\s\S]*?hasDurableSubmittedTurn\(tabId, durabilityRequestId\)/, `${label}: run probes should preserve continuation and restored-chat durability proof`);
+    assert.match(reconnect, /submittedTurnDurable: state\?\.submittedTurnDurable === true,/, `${label}: detached terminal responses should preserve durable-turn proof`);
+    assert.match(reconnect, /if \(sameSnapshot && TERMINAL_RUN_STATUSES\.has\(snapshot\.status\)\)[\s\S]*?if \(requestMatches\(detachedError\?\.requestId, requestId\)\)/, `${label}: terminal journals should win over duplicate detached error records`);
+
+    assert.match(styles, /\.cost-allowance-actions\s*\{[\s\S]*?flex-wrap:\s*wrap;/, `${label}: allowance actions should wrap in narrow panels`);
+    assert.match(styles, /\.cost-allowance-bump-btn\s*\{[\s\S]*?background:\s*var\(--accent\);/, `${label}: $10 action should use the primary accent treatment`);
+    assert.match(styles, /\.cost-allowance-retry-btn,[\s\S]*?\.cost-allowance-continue-btn\s*\{[\s\S]*?background:\s*transparent;/, `${label}: retry and continuation should share secondary styling`);
+    assert.match(styles, /\.cost-allowance-continue-btn\s*\{[\s\S]*?background:\s*transparent;/, `${label}: continuation should be visually secondary`);
+
+    assert.match(settings, /costSessionLimitInput\?\.addEventListener\('change',[\s\S]*?storage\.local\.set\(\{ costAllowanceSessionUsd: value \}\)/, `${label}: session allowance edits should autosave on committed changes`);
+    assert.match(settings, /costTotalLimitInput\?\.addEventListener\('change',[\s\S]*?storage\.local\.set\(\{ costAllowanceTotalUsd: value \}\)/, `${label}: total allowance edits should autosave on committed changes`);
   }
 });
 
@@ -16586,8 +16685,8 @@ test('sidepanel keeps retry metadata long enough for returned error updates', ()
     );
     assert.match(
       source,
-      /const returnedErrorUpdate = Array\.isArray\(res\?\.updates\)[\s\S]*?res\.updates\.find\(u => u\?\.type === 'error'\)[\s\S]*?renderAgentErrorUpdate\(returnedErrorUpdate\.data, tabId, requestId\);/,
-      `${label}: returned agent error updates should render with retry metadata even if the broadcast is late`,
+      /const returnedErrorUpdate = Array\.isArray\(res\?\.updates\)[\s\S]*?res\.updates\.find\(u => u\?\.type === 'error'\)[\s\S]*?renderAgentErrorUpdate\(returnedErrorUpdate\.data, tabId, requestId, \{[\s\S]*?submittedTurnDurable: res\.submittedTurnDurable,[\s\S]*?\}\);/,
+      `${label}: returned agent error updates should render with retry metadata and durable-turn proof even if the broadcast is late`,
     );
     assert.match(
       source,
@@ -31534,6 +31633,15 @@ test('Chrome controlled-field fallback is ref-bound, trusted, verified, and subm
   assert.match(agent, /verification\.verified !== true[\s\S]*if \(toolName === 'set_field' && args\?\.submit === true\)/, 'chrome: submit must remain after trusted verification');
   assert.match(content, /'ax_prepare_field_for_trusted_type'[\s\S]*window\.__wb_ax_lookup\(ref_id\)[\s\S]*el\.select\(\)/, 'chrome: trusted retry must focus and select the ref-bound field');
   assert.match(content, /'ax_verify_field_value'[\s\S]*_setFieldValueMatches\(actual, '', expected, true/, 'chrome: trusted retry must use exact settled verification');
+  for (const toolName of ['type_ax', 'set_field']) {
+    const branchStart = content.indexOf(`'${toolName}': async () => {`);
+    const branchEnd = toolName === 'type_ax'
+      ? content.indexOf("'set_field': async () => {", branchStart)
+      : content.indexOf("'ax_prepare_field_for_trusted_type':", branchStart);
+    const branch = content.slice(branchStart, branchEnd);
+    assert.match(branch, /el\.isContentEditable[\s\S]*trustedTypeRequired: true[\s\S]*_expectedValue/, `chrome: ${toolName} contenteditables must route through trusted typing`);
+    assert.doesNotMatch(branch, /document\.execCommand\('insertText'/, `chrome: ${toolName} must not accept synthetic contenteditable DOM text as verified input`);
+  }
 });
 
 test('Chrome controlled-field fallback recovers exactly once and never submits a mismatch', async () => {
@@ -31545,11 +31653,20 @@ test('Chrome controlled-field fallback recovers exactly once and never submits a
   try {
     const commands = [];
     let verified = true;
+    let contentEditable = false;
+    let prepareCalls = 0;
     globalThis.chrome = {
       tabs: {
         async sendMessage(_tabId, message) {
           if (message.action === 'ax_prepare_field_for_trusted_type') {
-            return { success: true, fieldMeta: { type: 'text' }, isCombobox: false };
+            prepareCalls += 1;
+            return {
+              success: true,
+              fieldMeta: { type: contentEditable ? 'div' : 'text', contentEditable },
+              isCombobox: false,
+              contentEditable,
+              ...(contentEditable ? { rect: { x: 10, y: 20, w: 300, h: 80 } } : {}),
+            };
           }
           if (message.action === 'ax_verify_field_value') {
             return {
@@ -31597,7 +31714,64 @@ test('Chrome controlled-field fallback recovers exactly once and never submits a
     );
 
     commands.length = 0;
+    contentEditable = true;
+    prepareCalls = 0;
+    const recoveredEditor = await agent._maybeFallbackFieldWithCdp(
+      42,
+      'set_field',
+      { ref_id: 'ref_editor', text: 'exact post', submit: false },
+      {
+        success: false,
+        verified: false,
+        dispatched: false,
+        noDispatch: true,
+        trustedTypeRequired: true,
+        error: 'contenteditable requires trusted typing',
+        _expectedValue: 'exact post',
+      },
+    );
+    assert.equal(recoveredEditor.success, true);
+    assert.equal(recoveredEditor.trusted, true);
+    assert.equal(recoveredEditor.dispatched, true);
+    assert.equal(recoveredEditor.noDispatch, undefined);
+    assert.equal(recoveredEditor.trustedTypeRequired, undefined);
+    assert.equal(prepareCalls, 2, 'contenteditable trusted focus must be followed by ref-bound reselection');
+    assert.deepEqual(
+      commands.map(command => command.method),
+      [
+        'Input.dispatchMouseEvent',
+        'Input.dispatchMouseEvent',
+        'Input.dispatchMouseEvent',
+        'Input.insertText',
+      ],
+      'contenteditable recovery must use trusted focus followed by trusted text insertion',
+    );
+
+    commands.length = 0;
     verified = false;
+    const failedEditor = await agent._maybeFallbackFieldWithCdp(
+      42,
+      'set_field',
+      { ref_id: 'ref_editor', text: 'exact post', submit: false },
+      {
+        success: false,
+        verified: false,
+        dispatched: false,
+        noDispatch: true,
+        trustedTypeRequired: true,
+        error: 'contenteditable requires trusted typing',
+        _expectedValue: 'exact post',
+      },
+    );
+    assert.equal(failedEditor.success, false);
+    assert.equal(failedEditor.verified, false);
+    assert.equal(failedEditor.dispatched, true, 'a failed readback must preserve the trusted input dispatch');
+    assert.equal(failedEditor.noDispatch, false, 'trusted contenteditable input must not remain retry-safe');
+    assert.equal(failedEditor.recoveryRequired, 'fresh_tree');
+    assert.equal(commands.filter(command => command.method === 'Input.insertText').length, 1, 'only one trusted editor retry is allowed');
+
+    commands.length = 0;
+    contentEditable = false;
     const failed = await agent._maybeFallbackFieldWithCdp(
       42,
       'set_field',
@@ -44905,6 +45079,7 @@ test('detached runs reconnect to a live request without starting it twice', asyn
       {
         running: false,
         starting: false,
+        submittedTurnDurable: true,
         runUi: {
           requestId,
           status: 'completed',
@@ -44941,9 +45116,41 @@ test('detached runs reconnect to a live request without starting it twice', asyn
     assert.equal(response.reconnected, true, `${label}: response should report reconnection`);
     assert.equal(response.resumed, false, `${label}: a still-live run should not be resumed`);
     assert.equal(response.successfulDone, true, `${label}: successful done state should survive journal replay`);
+    assert.equal(response.submittedTurnDurable, true, `${label}: terminal responses should preserve durable-turn proof for safe UI resume routing`);
     assert.ok(statuses.includes('reconnecting'), `${label}: reconnecting status should be visible`);
     assert.ok(statuses.includes('reconnected'), `${label}: reconnected status should be visible`);
     assert.deepEqual(replayedStates, ['running', 'completed'], `${label}: missed UI journal states should be replayable after reconnect`);
+  }
+});
+
+test('detached terminal journals win over duplicate task rejection records', async () => {
+  for (const [label, runDetachedWithReconnect] of [
+    ['chrome', runDetachedWithReconnectCh],
+    ['firefox', runDetachedWithReconnectFx],
+  ]) {
+    const requestId = `${label}-terminal-with-detached-error`;
+    const response = await runDetachedWithReconnect({
+      initialAction: 'chat_start',
+      payload: { tabId: 63, requestId, mode: 'ask', text: 'preserve this prompt' },
+      start: async () => ({ accepted: true, requestId }),
+      probe: async () => ({
+        running: false,
+        starting: false,
+        submittedTurnDurable: false,
+        detachedError: { requestId, message: 'Cloud cost allowance reached.' },
+        runUi: {
+          requestId,
+          status: 'failed',
+          finalContent: 'Error: Cloud cost allowance reached.',
+          events: [],
+        },
+      }),
+      isConnectionError: () => false,
+      wait: async () => {},
+    });
+
+    assert.equal(response.content, 'Error: Cloud cost allowance reached.', `${label}: terminal content should remain renderable`);
+    assert.equal(response.submittedTurnDurable, false, `${label}: terminal durability proof should survive duplicate rejection state`);
   }
 });
 
@@ -45624,13 +45831,13 @@ test('reconnect protocol is wired through both sidepanels and backgrounds', () =
     assert.match(background, /case 'chat':[\s\S]*?await beginContinuationRunUiSnapshot\(tabId, msg\.requestId,/, `${label}: replayed fresh chats should preserve journal sequence numbers`);
     assert.match(background, /await beginContinuationRunUiSnapshot\(tabId, msg\.requestId,/, `${label}: resumed continuations should preserve their journal sequence`);
     assert.match(background, /submittedTurnDurable:?\s*,/, `${label}: run probes should expose whether the submitted chat turn is durable`);
-    assert.match(background, /await agent\.hasDurableSubmittedTurn\(tabId, requestedRequestId\)/, `${label}: recovery should verify chat durability against persisted conversation state`);
+    assert.match(background, /await agent\.hasDurableSubmittedTurn\(tabId, durabilityRequestId\)/, `${label}: recovery should verify chat durability against persisted conversation state`);
     assert.match(background, /beforeConsequentialTool: \(\) => flushRunUiSnapshot/, `${label}: consequential actions should await their pending journal checkpoint`);
     assert.match(background, /afterConsequentialTool:[\s\S]*?settleToolCall/, `${label}: tool guards should clear only after durable conversation results`);
     assert.match(background, /runUiDurable:/, `${label}: probes should expose journal persistence failures`);
     assert.match(background, /detachedRequestId: runUi\.requestId/, `${label}: detached chats should bind their persisted user turn to the run request`);
     assert.match(background, /startingRequestId: starting\?\.requestId \|\| null/, `${label}: run probes should expose in-flight start reservations`);
-    assert.match(background, /runUi: runUiSnapshotForRequest\(runUiSnapshot, requestedRequestId\)/, `${label}: reconnect probes should not receive another request's journal`);
+    assert.match(background, /const requestedRunUi = runUiSnapshotForRequest\(runUiSnapshot, requestedRequestId\)[\s\S]*?runUi: requestedRunUi,/, `${label}: reconnect probes should not receive another request's journal`);
     assert.match(background, /const entry = \{ requestId, promise: null, cancelled: false \}/, `${label}: detached starts should retain request-scoped cancellation`);
     assert.match(background, /assertDetachedRunStartNotCancelled\(tabId, detachedMessage\)/, `${label}: cancelled reservations should not launch queued runs`);
     assert.match(background, /case 'abort':[\s\S]*?cancelDetachedRunStart\(tabId\)[\s\S]*?agent\.abort\(tabId\)/, `${label}: sidebar Stop should cancel both reserved and active runs`);
@@ -45680,7 +45887,7 @@ test('sidepanel routes every run-error path through request-scoped deduplication
     const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
     assert.match(panel, /import \{ claimRunError \} from '\.\/run-error-dedupe\.js';/, `${label}: sidepanel should use the shared deduper`);
     assert.match(panel, /createActiveChatPayloadState\(retryPayload, requestId\)/, `${label}: active error state should retain request identity`);
-    assert.match(panel, /renderAgentErrorUpdate\(returnedErrorUpdate\.data, tabId, requestId\)/, `${label}: returned errors should use request-scoped rendering`);
+    assert.match(panel, /renderAgentErrorUpdate\(returnedErrorUpdate\.data, tabId, requestId(?:, \{[\s\S]*?submittedTurnDurable: res\.submittedTurnDurable,[\s\S]*?\})?\)/, `${label}: returned errors should use request-scoped rendering`);
     assert.match(panel, /renderAgentErrorUpdate\(\{ message: e\.message \}, tabId, requestId\)/, `${label}: caught errors should use request-scoped rendering`);
     assert.match(panel, /renderAgentErrorUpdate\(data, currentTabId, msg\.requestId\)/, `${label}: streamed errors should use message request identity`);
     assert.match(panel, /msgEl\.dataset\.tabId = active\.tabId;[\s\S]*?msgEl\.dataset\.runRequestId = active\.requestId;[\s\S]*?msgEl\.dataset\.errorMessageKey = active\.key;/, `${label}: persisted error cards should retain their dedupe identity`);
@@ -45773,7 +45980,7 @@ test('per-tab run UI protocol is wired into both backgrounds and side panels', (
     assert.match(background, /new RunUiJournal\(/, `${label}: background should own the bounded run journal`);
     assert.match(background, /function assertNoActiveTabRun\(tabId\)/, `${label}: background should prevent duplicate runs within one tab`);
     assert.match(background, /tabId,[\s\S]*?requestId,[\s\S]*?runId:[\s\S]*?seq:/, `${label}: agent updates should carry tab, request, run, and sequence IDs`);
-    assert.match(background, /case 'agent_run_state':[\s\S]*?const runUiSnapshot = await getRunUiSnapshot\(tabId\)[\s\S]*?runUi: runUiSnapshotForRequest\(runUiSnapshot, requestedRequestId\)/, `${label}: remount state should include only the requested UI journal snapshot`);
+    assert.match(background, /case 'agent_run_state':[\s\S]*?const runUiSnapshot = await getRunUiSnapshot\(tabId\)[\s\S]*?const requestedRunUi = runUiSnapshotForRequest\(runUiSnapshot, requestedRequestId\)[\s\S]*?runUi: requestedRunUi,/, `${label}: remount state should include only the requested UI journal snapshot`);
     assert.match(background, /case 'agent_run_ack':[\s\S]*?runUiJournal\.acknowledge/, `${label}: background should accept ordered replay acknowledgements`);
     assert.match(background, /status: snapshot\.status \|\| 'completed'/, `${label}: run_complete should carry explicit terminal status`);
     assert.match(panel, /const processingTabs = new Set\(\);/, `${label}: processing state should be tab scoped`);

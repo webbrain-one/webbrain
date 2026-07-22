@@ -145,8 +145,10 @@ function webbrainTweetRunOptions(postText) {
     summary: 'Publish the reviewed localized WebBrain post exactly as supplied.',
     steps: [
       'Open https://x.com/compose/post in the current tab through the visible browser UI.',
+      'Wait for the visible X composer to become stable before entering text.',
       `Enter this exact reviewed text in the visible X composer without translating, rewriting, or adding anything: ${JSON.stringify(exactPost)}`,
-      'Publish only after the composer text exactly matches the supplied text.',
+      'Publish only after the composer text exactly matches the supplied text and the Post control is enabled. If it remains disabled, keep the composer open and refill it through the trusted typing path.',
+      'Treat an unverified or no-progress Post click as not submitted; keep the composer open and recover instead of dismissing it.',
       'Verify the new tweet appears, then report its URL when available.',
     ],
   };
