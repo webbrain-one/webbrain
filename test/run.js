@@ -7728,6 +7728,7 @@ test('cloud workflow bridge compiles the correlated trace and never persists run
       const split = Math.floor(parameters.email.length / 2);
       update('text_delta', { content: parameters.email.slice(0, split) });
       update('text_delta', { content: parameters.email.slice(split) });
+      update('thinking', { content: `${'x'.repeat(12 * 1024)}${parameters.email}` });
       const encodedEmail = new URLSearchParams({ email: parameters.email })
         .toString()
         .slice('email='.length)
@@ -7794,7 +7795,7 @@ test('cloud workflow bridge compiles the correlated trace and never persists run
   assert.equal(compiled.workflow.source.runId, 'trace_exact');
   assert.doesNotMatch(JSON.stringify(compiled.workflow), /source@example\.com|ref_email/);
 
-  const runtimeValue = 'runtime private/path@example.com';
+  const runtimeValue = `runtime private/path@example.com:${'s'.repeat(8 * 1024)}`;
   const started = await controller.startWorkflowRun({
     workflow: compiled.workflow,
     parameters: { email: runtimeValue },
@@ -7810,6 +7811,8 @@ test('cloud workflow bridge compiles the correlated trace and never persists run
   assert.equal(completed.finalUrl, 'https://example.com/form?email=[workflow parameter]');
   assert.doesNotMatch(JSON.stringify(completed), /runtime\+private%2fpath%40example\.com/i);
   assert.doesNotMatch(JSON.stringify(session), /runtime\+private%2fpath%40example\.com/i);
+  const boundedUpdate = completed.updates.find(update => update.type === 'thinking');
+  assert.equal(boundedUpdate.data.content, `${'x'.repeat(12 * 1024)}[workflow parameter]`);
   const savedWorkflowRow = session.webbrainCloudRunSnapshots.find(row => row.runId === started.runId);
   assert.equal(savedWorkflowRow.outputSchema, null);
   await assert.rejects(

@@ -340,16 +340,16 @@ export function createCloudRunController({
     // clients must re-read that row (or take a full snapshot) rather than
     // assuming each seq is immutable.
     if (type === 'text_delta' && previous?.type === 'text_delta') {
-      previous.data = redactWorkflowRuntimeValues(scrubCloudValue({
+      previous.data = scrubCloudValue(redactWorkflowRuntimeValues({
         ...previous.data,
         content: `${previous.data?.content || ''}${data?.content || ''}`,
-      }), runtimeValues);
+      }, runtimeValues));
       previous.ts = run.updatedAt;
       schedulePersist();
       return;
     }
     run.nextUpdateSeq = (Number(run.nextUpdateSeq) || 0) + 1;
-    const scrubbedData = redactWorkflowRuntimeValues(scrubCloudValue(data), runtimeValues);
+    const scrubbedData = scrubCloudValue(redactWorkflowRuntimeValues(data, runtimeValues));
     run.updates.push({ seq: run.nextUpdateSeq, type, data: scrubbedData, ts: run.updatedAt });
     if (run.updates.length > CLOUD_UPDATE_LIMIT) {
       run.updates.splice(0, run.updates.length - CLOUD_UPDATE_LIMIT);
