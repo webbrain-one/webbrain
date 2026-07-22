@@ -43086,7 +43086,7 @@ function loadPlanReviewAutosizeHelper(panelRel, runtime) {
     'document',
     'requestAnimationFrame',
     'cancelAnimationFrame',
-    `${block}\nreturn { autosizePlanReviewField };`,
+    `${block}\nreturn { autosizePlanReviewField, capturePlanReviewScrollSnapshot };`,
   )(
     runtime.document,
     runtime.requestAnimationFrame,
@@ -43113,7 +43113,10 @@ test('plan review: textarea autosize preserves an active off-bottom scroll posit
         frames.delete(id);
       },
     };
-    const { autosizePlanReviewField } = loadPlanReviewAutosizeHelper(file, runtime);
+    const {
+      autosizePlanReviewField,
+      capturePlanReviewScrollSnapshot,
+    } = loadPlanReviewAutosizeHelper(file, runtime);
     const container = {
       clientHeight: 300,
       isConnected: true,
@@ -43143,6 +43146,10 @@ test('plan review: textarea autosize preserves an active off-bottom scroll posit
     };
     document.activeElement = field;
 
+    capturePlanReviewScrollSnapshot(field);
+    // A focused caret can move the outer scroller after beforeinput but before
+    // input. The resize must use the earlier user-visible position.
+    container.scrollTop = 520;
     autosizePlanReviewField(field);
     assert.equal(fieldHeight, '84px', `${file} should resize to its content height`);
     assert.equal(container.scrollTop, 180, `${file} should immediately restore the chat position`);
@@ -43151,6 +43158,18 @@ test('plan review: textarea autosize preserves an active off-bottom scroll posit
     container.scrollTop = 640;
     for (const callback of frames.values()) callback();
     assert.equal(container.scrollTop, 180, `${file} should restore the chat position after layout`);
+
+    const source = fs.readFileSync(path.join(ROOT, file), 'utf8');
+    assert.match(
+      source,
+      /action\.addEventListener\('beforeinput', \(\) => capturePlanReviewScrollSnapshot\(action\)\);/,
+      `${file} should snapshot step-editor scroll before the browser edits the value`,
+    );
+    assert.match(
+      source,
+      /summaryInput\.addEventListener\('beforeinput', \(\) => capturePlanReviewScrollSnapshot\(summaryInput\)\);/,
+      `${file} should snapshot summary-editor scroll before the browser edits the value`,
+    );
   }
 });
 

@@ -3627,6 +3627,7 @@ function setPlanReviewStructuredControlsDisabled(card, disabled) {
 }
 
 const planReviewScrollRestoreFrames = new WeakMap();
+const planReviewScrollSnapshots = new WeakMap();
 
 function restorePlanReviewScrollTop(container, scrollTop) {
   const previousScrollBehavior = container.style.scrollBehavior;
@@ -3635,18 +3636,35 @@ function restorePlanReviewScrollTop(container, scrollTop) {
   container.style.scrollBehavior = previousScrollBehavior;
 }
 
+function currentPlanReviewScrollSnapshot(el) {
+  const container = el?.closest?.('#chat-container') || null;
+  if (!container || document.activeElement !== el) return null;
+  if (container.scrollHeight - container.scrollTop - container.clientHeight <= 2) return null;
+  return { container, scrollTop: container.scrollTop };
+}
+
+function capturePlanReviewScrollSnapshot(el) {
+  const snapshot = currentPlanReviewScrollSnapshot(el);
+  if (snapshot) planReviewScrollSnapshots.set(el, snapshot);
+  else planReviewScrollSnapshots.delete(el);
+}
+
+function takePlanReviewScrollSnapshot(el) {
+  const snapshot = planReviewScrollSnapshots.get(el) || null;
+  planReviewScrollSnapshots.delete(el);
+  if (snapshot?.container?.isConnected && document.activeElement === el) return snapshot;
+  return currentPlanReviewScrollSnapshot(el);
+}
+
 function autosizePlanReviewField(el) {
   if (!el || el.tagName !== 'TEXTAREA') return;
-  const container = el.closest?.('#chat-container') || null;
-  const preserveScroll = !!container
-    && document.activeElement === el
-    && container.scrollHeight - container.scrollTop - container.clientHeight > 2;
-  const scrollTop = preserveScroll ? container.scrollTop : 0;
+  const snapshot = takePlanReviewScrollSnapshot(el);
 
   el.style.height = 'auto';
   el.style.height = `${Math.max(el.scrollHeight, 28)}px`;
 
-  if (!preserveScroll) return;
+  if (!snapshot) return;
+  const { container, scrollTop } = snapshot;
   restorePlanReviewScrollTop(container, scrollTop);
   const pendingFrame = planReviewScrollRestoreFrames.get(el);
   if (pendingFrame != null) cancelAnimationFrame(pendingFrame);
@@ -3767,6 +3785,7 @@ function createPlanReviewStepRow(card, step, index) {
     }
   });
 
+  action.addEventListener('beforeinput', () => capturePlanReviewScrollSnapshot(action));
   action.addEventListener('input', () => {
     autosizePlanReviewField(action);
     syncPlanReviewDraft(card);
@@ -3930,6 +3949,7 @@ function bindPlanReviewEditorControls(card, view) {
   const summaryInput = view.querySelector('.plan-review-summary-input');
   if (summaryInput && !summaryInput.dataset.bound) {
     summaryInput.dataset.bound = 'true';
+    summaryInput.addEventListener('beforeinput', () => capturePlanReviewScrollSnapshot(summaryInput));
     summaryInput.addEventListener('input', () => {
       autosizePlanReviewField(summaryInput);
       syncPlanReviewDraft(card);
