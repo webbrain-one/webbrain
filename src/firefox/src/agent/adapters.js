@@ -15864,6 +15864,7 @@ const ADAPTERS = [
     fullPageCapture: { infiniteScroll: isLinkedInInfiniteScrollUrl },
     notes: `
 - LinkedIn aggressively lazy-loads everything; scroll to populate the feed/profile, but most content lives in modal-style detail panes.
+- The post composer ("Start a post") opens a dialog rendered inside an open shadow root (#interop-outlet). If it is missing from get_accessibility_tree / click({text}) results even though the screenshot shows it open, do NOT coordinate-click inside it — clicks often hit the dialog backdrop and CLOSE it (the next screenshot shows the regular feed again). Reliable path: click({text: "Start a post"}) to open it, then type_text({selector: '[contenteditable]:not([contenteditable="false"])', text: "...", clear: true}) — this focuses the editor directly without a click. Then click the Post button (find it via get_interactive_elements or shadow_dom_query({selector: "button", shadowPath: "div#interop-outlet"}) if a plain text click matches "Post impressions" instead).
 - "Connect" button on profiles often has a "Send without a note" prompt — read it before clicking.
 - Messages are at /messaging — the message composer is a contenteditable with image/file upload icons.
 - In Messaging, after filling the composer, the reliable send path is usually Enter. If the composer footer says "Press Enter to Send" or the send-options popover shows "Press Enter to Send", call press_keys({key:"Enter"}) from the composer. Do NOT keep scrolling to find a Send button that is already visible/implicit.

@@ -161,6 +161,11 @@
     const onHost = (domain) => hostname === domain || hostname.endsWith(`.${domain}`);
     if (onHost('bilibili.com')) return { key: 'bilibili', rules: SITE_INTERACTION_RULES.bilibili };
     if (onHost('xiaohongshu.com')) return { key: 'xiaohongshu', rules: SITE_INTERACTION_RULES.xiaohongshu };
+    // LinkedIn's interop shell renders major surfaces (the post composer
+    // dialog among them) inside the open #interop-outlet shadow root. No
+    // custom interaction rules needed — piercing alone makes the dialog's
+    // contenteditable + Post button visible to the tree walk.
+    if (onHost('linkedin.com')) return { key: 'linkedin', rules: [] };
     return { key: '', rules: [] };
   }
 
@@ -190,7 +195,7 @@
     selectors: () => currentSiteInteractionConfig().rules.map(([selector]) => selector),
     describe: getSiteInteractionDescriptor,
     isInteractive: (el) => !!getSiteInteractionDescriptor(el),
-    shouldPierceShadowRoots: () => currentSiteInteractionConfig().key === 'bilibili',
+    shouldPierceShadowRoots: () => ['bilibili', 'linkedin'].includes(currentSiteInteractionConfig().key),
   });
 
   function getRole(el) {
@@ -875,28 +880,51 @@
         ];
         const overlayEls = [];
         const seen = new WeakSet();
+        // On pierce-enabled sites (LinkedIn's interop shell, Bilibili), the
+        // dialog we must hoist can live inside an open shadow root where
+        // document.querySelectorAll can't see it. Collect those roots so the
+        // overlay scan covers them too — without piercing, a freshly-opened
+        // composer dialog is completely absent from the tree output and the
+        // model falls back to blind coordinate clicks.
+        const overlayRoots = [document];
+        if (window.__wbSiteInteractions.shouldPierceShadowRoots()) {
+          const collectShadowRoots = (root, depth) => {
+            if (depth > 4) return;
+            let hosts;
+            try { hosts = root.querySelectorAll('*'); } catch (e) { return; }
+            for (const host of hosts) {
+              if (host.shadowRoot) {
+                overlayRoots.push(host.shadowRoot);
+                collectShadowRoots(host.shadowRoot, depth + 1);
+              }
+            }
+          };
+          collectShadowRoots(document, 0);
+        }
         try {
           for (const sel of overlaySelectors) {
-            const nodes = document.querySelectorAll(sel);
-            for (const n of nodes) {
-              if (seen.has(n)) continue;
-              if (!n.isConnected) continue;
-              // Skip if ancestor already collected — avoids emitting a
-              // nested listbox twice when its ancestor dialog is also hit.
-              let ancIsOverlay = false;
-              for (let p = n.parentElement; p; p = p.parentElement) {
-                if (seen.has(p)) { ancIsOverlay = true; break; }
+            for (const root of overlayRoots) {
+              const nodes = root.querySelectorAll(sel);
+              for (const n of nodes) {
+                if (seen.has(n)) continue;
+                if (!n.isConnected) continue;
+                // Skip if ancestor already collected — avoids emitting a
+                // nested listbox twice when its ancestor dialog is also hit.
+                let ancIsOverlay = false;
+                for (let p = n.parentElement; p; p = p.parentElement) {
+                  if (seen.has(p)) { ancIsOverlay = true; break; }
+                }
+                if (ancIsOverlay) continue;
+                // Quick visibility gate — don't emit hidden overlay shells.
+                try {
+                  const r = n.getBoundingClientRect();
+                  if (r.width < 1 || r.height < 1) continue;
+                  const s = window.getComputedStyle(n);
+                  if (s.visibility === 'hidden' || s.display === 'none' || parseFloat(s.opacity) === 0) continue;
+                } catch (e) { continue; }
+                seen.add(n);
+                overlayEls.push(n);
               }
-              if (ancIsOverlay) continue;
-              // Quick visibility gate — don't emit hidden overlay shells.
-              try {
-                const r = n.getBoundingClientRect();
-                if (r.width < 1 || r.height < 1) continue;
-                const s = window.getComputedStyle(n);
-                if (s.visibility === 'hidden' || s.display === 'none' || parseFloat(s.opacity) === 0) continue;
-              } catch (e) { continue; }
-              seen.add(n);
-              overlayEls.push(n);
             }
           }
         } catch (e) {}

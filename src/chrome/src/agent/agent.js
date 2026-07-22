@@ -2979,7 +2979,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const cssBoxHint = this._canUseToolInCurrentBatch(allowedToolNames, 'inspect_element_styles')
       ? 'then use get_accessibility_tree or inspect_element_styles to get CSS-pixel boxes'
       : 'then use get_accessibility_tree or get_interactive_elements to choose a reachable target';
-    return `[COORDINATE CLICK WARNING: You've clicked at or near (${args.x}, ${args.y}) several times with no visible page change. The click may be missing its target. Try: (a) call get_interactive_elements to find a real selector, (b) click({text: "..."}) to target by visible text, or (c) inspect the latest injected auto_screenshot/visual context for element positions, ${cssBoxHint}. Try a different approach before clicking these coordinates again.]`;
+    return `[COORDINATE CLICK WARNING: You've clicked at or near (${args.x}, ${args.y}) several times with no visible page change. The click may be missing its target. Try: (a) call get_interactive_elements to find a real selector, (b) click({text: "..."}) to target by visible text, (c) inspect the latest injected auto_screenshot/visual context for element positions, ${cssBoxHint}, or (d) if you are trying to focus a text editor in a dialog, STOP clicking — dialogs on some sites render in a shadow root where coordinate clicks hit the backdrop and CLOSE the dialog. Reopen it if needed, then call type_text({selector: '[contenteditable]:not([contenteditable=\"false\"])', text: "..."}) directly; it focuses the editor without a click. Try a different approach before clicking these coordinates again.]`;
   }
 
   _noProgressRecoveryWarning(allowedToolNames = AGENT_TOOL_NAMES) {
@@ -15875,10 +15875,29 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
                       return true;
                     } catch(e) { return false; }
                   }
-                  const all = Array.from(document.querySelectorAll(sels)).filter(vis);
+                  // Last-resort scan also pierces open shadow roots: sites
+                  // like LinkedIn render entire dialogs inside one (the
+                  // interop shell), where document.querySelectorAll is blind.
+                  function collectDeep(sel) {
+                    const out = [];
+                    const scan = (root, depth) => {
+                      try { out.push(...root.querySelectorAll(sel)); } catch(e) {}
+                      if (depth > 4) return;
+                      let els;
+                      try { els = root.querySelectorAll('*'); } catch(e) { return; }
+                      for (const host of els) { if (host.shadowRoot) scan(host.shadowRoot, depth + 1); }
+                    };
+                    scan(document, 0);
+                    return out;
+                  }
+                  const all = collectDeep(sels).filter(vis);
+                  // Quill/ProseMirror-style editors show their placeholder via
+                  // data-placeholder / aria-placeholder (CSS pseudo-element),
+                  // not text content — match those too so "click the 'What do
+                  // you want to talk about?' box" resolves.
                   const norm = all.map(el => ({
                     el,
-                    txt: (el.innerText || el.getAttribute('aria-label') || el.getAttribute('placeholder') || '').trim().toLowerCase(),
+                    txt: (el.innerText || el.getAttribute('aria-label') || el.getAttribute('placeholder') || el.getAttribute('data-placeholder') || el.getAttribute('aria-placeholder') || '').trim().toLowerCase(),
                   })).filter(x => !!x.txt);
                   const modes = explicit ? [explicit] : ['exact', 'prefix', 'contains'];
                   for (const m of modes) {

@@ -47670,4 +47670,37 @@ test('profile sync reset does not re-unlock after an in-flight lock', async () =
   assert.equal(manager.status, 'locked');
 });
 
+test('linkedin shadow-dom reachability: pierce, overlay hoist, placeholder match, adapter route', () => {
+  // LinkedIn's interop shell renders the post composer dialog inside the open
+  // #interop-outlet shadow root. Structural checks that every layer that must
+  // reach it actually pierces: tree walk, overlay hoist, widened text-click
+  // scan, plus the adapter/loop-warning guidance that keeps weak models off
+  // the backdrop-click-close loop.
+  for (const build of ['chrome', 'firefox']) {
+    const tree = fs.readFileSync(path.join(ROOT, `src/${build}/src/content/accessibility-tree.js`), 'utf8');
+    assert.match(tree, /onHost\('linkedin\.com'\)/,
+      `${build}: linkedin registered in site interaction config`);
+    assert.match(tree, /\['bilibili', 'linkedin'\]\.includes\(currentSiteInteractionConfig\(\)\.key\)/,
+      `${build}: shadow piercing enabled for linkedin`);
+    assert.match(tree, /const overlayRoots = \[document\];[\s\S]*?shouldPierceShadowRoots\(\)[\s\S]*?collectShadowRoots\(document, 0\);[\s\S]*?for \(const root of overlayRoots\)/,
+      `${build}: overlay hoist scans open shadow roots on pierce-enabled sites`);
+
+    const clickSrc = build === 'chrome'
+      ? fs.readFileSync(path.join(ROOT, 'src/chrome/src/agent/agent.js'), 'utf8')
+      : fs.readFileSync(path.join(ROOT, 'src/firefox/src/content/content.js'), 'utf8');
+    assert.match(clickSrc, /data-placeholder'\) \|\| \w+\.getAttribute\('aria-placeholder/,
+      `${build}: widened click scan matches Quill-style placeholder attributes`);
+    assert.match(clickSrc, /shadowRoot\) scan\(host\.shadowRoot, depth \+ 1\)/,
+      `${build}: widened click scan pierces open shadow roots`);
+
+    const agent = fs.readFileSync(path.join(ROOT, `src/${build}/src/agent/agent.js`), 'utf8');
+    assert.match(agent, /focuses the editor without a click/,
+      `${build}: coordinate-loop warning nudges selector-based type_text`);
+
+    const adapters = fs.readFileSync(path.join(ROOT, `src/${build}/src/agent/adapters.js`), 'utf8');
+    assert.match(adapters, /interop-outlet[\s\S]*?type_text\(\{selector: '\[contenteditable\]/,
+      `${build}: linkedin adapter teaches the shadow composer route`);
+  }
+});
+
 await run();
