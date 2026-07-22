@@ -1466,7 +1466,22 @@
           // Honor modal scoping here too.
           const _fbScope = _findTopmostModal() || document;
           const fbSels = '[contenteditable="true"],[contenteditable=""],[role="option"],[role="listbox"],[role="combobox"],[role="textbox"],[role="switch"],[role="checkbox"],[role="radio"],[tabindex]:not([tabindex="-1"])';
-          const fbAll = Array.from(_fbScope.querySelectorAll(fbSels)).filter(e => {
+          // Last-resort scan also pierces open shadow roots: sites like
+          // LinkedIn render entire dialogs inside one (the interop shell),
+          // where querySelectorAll on the document is blind.
+          const _fbCollectDeep = (sel) => {
+            const out = [];
+            const scan = (root, depth) => {
+              try { out.push(...root.querySelectorAll(sel)); } catch(err) {}
+              if (depth > 4) return;
+              let els;
+              try { els = root.querySelectorAll('*'); } catch(err) { return; }
+              for (const host of els) { if (host.shadowRoot) scan(host.shadowRoot, depth + 1); }
+            };
+            scan(_fbScope, 0);
+            return out;
+          };
+          const fbAll = _fbCollectDeep(fbSels).filter(e => {
             try {
               const r = e.getBoundingClientRect();
               if (r.width < 1 || r.height < 1) return false;
@@ -1475,9 +1490,12 @@
               return true;
             } catch(err) { return false; }
           });
+          // Quill/ProseMirror-style editors show their placeholder via
+          // data-placeholder / aria-placeholder (CSS pseudo-element), not
+          // text content — match those too.
           const fbNorm = fbAll.map(e => ({
             e,
-            txt: (e.innerText || e.getAttribute('aria-label') || e.getAttribute('placeholder') || '').trim().toLowerCase(),
+            txt: (e.innerText || e.getAttribute('aria-label') || e.getAttribute('placeholder') || e.getAttribute('data-placeholder') || e.getAttribute('aria-placeholder') || '').trim().toLowerCase(),
           })).filter(x => !!x.txt);
           for (const m of modes) {
             const found = fbNorm.filter(x =>
