@@ -3756,7 +3756,7 @@ function parsePlanMarkdownToDraft(text) {
 }
 
 function resolveSavedPlanReviewEdit(card) {
-  if (card?.dataset?.planDirty !== 'true') return null;
+  if (card?.dataset?.planDirty !== 'true' || card.dataset.planEditSource !== 'raw') return null;
   const editedText = String(card.dataset.editedText || '').trim();
   if (!editedText) return null;
   return {
@@ -3819,8 +3819,10 @@ function syncPlanReviewDraft(card, { fromRaw = false } = {}) {
   card.dataset.planDirty = dirty ? 'true' : 'false';
   if (dirty) {
     card.dataset.editedText = currentText;
+    if (!fromRaw) card.dataset.planEditSource = 'structured';
   } else {
     delete card.dataset.editedText;
+    delete card.dataset.planEditSource;
   }
   if (!rawMode && rawTextarea && document.activeElement !== rawTextarea) {
     // Keep the hidden raw buffer aligned with structured state when dirty;
@@ -4104,6 +4106,7 @@ function setPlanReviewRawEditing(card, enabled, { focus = false } = {}) {
       }
       card.dataset.planDirty = 'false';
       delete card.dataset.editedText;
+      delete card.dataset.planEditSource;
       textarea.value = original;
     }
     card.dataset.editing = 'false';
@@ -4139,10 +4142,6 @@ function resolvePlanReviewApprovalText(card) {
     return { editedText: current, markdownMode };
   }
 
-  const draft = getPlanReviewDraftFromDom(card);
-  if (!draft.steps.length) {
-    return { editedText: '', markdownMode: displayMode, emptySteps: true };
-  }
   // "Done" collapses raw mode after syncing its parsed fields into the
   // structured editor. Keep the exact dirty buffer as the approval source so
   // edits to verbose-only metadata (skills, scheduling, submission, etc.) are
@@ -4150,6 +4149,10 @@ function resolvePlanReviewApprovalText(card) {
   // edit overwrites dataset.editedText with compact markdown via syncPlanReviewDraft.
   const savedEdit = resolveSavedPlanReviewEdit(card);
   if (savedEdit) return savedEdit;
+  const draft = getPlanReviewDraftFromDom(card);
+  if (!draft.steps.length) {
+    return { editedText: '', markdownMode: displayMode, emptySteps: true };
+  }
   const serialized = serializePlanDraftToMarkdown(draft);
   // Structured edits always approve as compact so the agent re-appends
   // execution metadata and keeps skill activation from the planner object.
@@ -4217,6 +4220,7 @@ function bindPlanReviewCard(card) {
       textarea.addEventListener('input', () => {
         card.dataset.editedText = textarea.value;
         card.dataset.planDirty = 'true';
+        card.dataset.planEditSource = 'raw';
         // The persist observer only watches childList/characterData, not
         // attributes, so the data attribute above won't trigger a save on its
         // own — schedule one so the edit reaches storage before a panel reload.

@@ -41930,24 +41930,31 @@ test('plan review: structured draft serialize/parse round-trips step edits', () 
     const editedVerbose = verbose.replace('- download-invoices', '- file-operations');
     assert.deepEqual(
       resolveSavedPlanReviewEdit({
-        dataset: { planDirty: 'true', editedText: editedVerbose },
+        dataset: { planDirty: 'true', planEditSource: 'raw', editedText: editedVerbose },
       }),
       { editedText: editedVerbose, markdownMode: 'verbose' },
       `${file} should preserve verbose metadata edits after Done`,
     );
     assert.deepEqual(
       resolveSavedPlanReviewEdit({
-        dataset: { planDirty: 'true', editedText: editedMd },
+        dataset: { planDirty: 'true', planEditSource: 'raw', editedText: editedMd },
       }),
       { editedText: editedMd, markdownMode: 'compact' },
       `${file} should preserve compact raw edits after Done`,
     );
     assert.equal(
       resolveSavedPlanReviewEdit({
-        dataset: { planDirty: 'false', editedText: editedVerbose },
+        dataset: { planDirty: 'false', planEditSource: 'raw', editedText: editedVerbose },
       }),
       null,
       `${file} should ignore a clean saved buffer`,
+    );
+    assert.equal(
+      resolveSavedPlanReviewEdit({
+        dataset: { planDirty: 'true', planEditSource: 'structured', editedText: '**No steps**' },
+      }),
+      null,
+      `${file} should keep the empty-step guard for structured edits`,
     );
 
     assert.match(fs.readFileSync(path.join(ROOT, file), 'utf8'), /function resolvePlanReviewApprovalText\(/, file);
@@ -41964,8 +41971,8 @@ test('plan review: structured draft serialize/parse round-trips step edits', () 
     );
     assert.match(
       fs.readFileSync(path.join(ROOT, file), 'utf8'),
-      /const savedEdit = resolveSavedPlanReviewEdit\(card\);\s*if \(savedEdit\) return savedEdit;/,
-      `${file} should approve the exact dirty buffer after raw mode is collapsed`,
+      /const savedEdit = resolveSavedPlanReviewEdit\(card\);\s*if \(savedEdit\) return savedEdit;\s*const draft = getPlanReviewDraftFromDom\(card\);\s*if \(!draft\.steps\.length\)/,
+      `${file} should approve an exact collapsed raw edit before enforcing structured steps`,
     );
   }
 });
