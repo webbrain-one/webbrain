@@ -1,0 +1,23 @@
+{
+  "id": "082",
+  "user": "whats the capital of france",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 5022,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "\n\nThe capital of France is **Paris**.\n\nParis is the country's largest city, a major cultural, political, and economic center, and has been the capital for centuries. It's also one of the most visited cities in the world! 🇫🇷",
+  "usage": {
+    "prompt_tokens": 17979,
+    "total_tokens": 18106,
+    "completion_tokens": 127,
+    "prompt_tokens_details": null
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

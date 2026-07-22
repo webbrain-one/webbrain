@@ -1,0 +1,28 @@
+{
+  "id": "014",
+  "user": "show me my bookmarks",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 2244,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll help you view your bookmarks. Since we're on the New Tab page (`about:home`), I need to navigate to your browser's bookmarks manager. Let me first check the current page, then open the bookmarks view.",
+  "usage": {
+    "prompt_tokens": 17977,
+    "total_tokens": 18160,
+    "completion_tokens": 183,
+    "prompt_tokens_details": null
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

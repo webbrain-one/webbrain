@@ -1,0 +1,28 @@
+{
+  "id": "083",
+  "user": "what time is it in tokyo right now",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 8424,
+  "error": null,
+  "firstToolCall": {
+    "name": "navigate",
+    "args": {
+      "url": "https://www.time.co.uk/worldclock/asia/tokyo"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I don't have a built-in real-time clock, but I can look this up for you by checking a reliable time source. Let me navigate to a world clock site to find the current time in Tokyo.",
+  "usage": {
+    "prompt_tokens": 17983,
+    "total_tokens": 18347,
+    "completion_tokens": 364,
+    "prompt_tokens_details": null
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

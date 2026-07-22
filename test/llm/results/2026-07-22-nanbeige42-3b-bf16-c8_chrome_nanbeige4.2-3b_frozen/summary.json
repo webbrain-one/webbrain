@@ -1,0 +1,40 @@
+{
+  "runTag": "2026-07-22-nanbeige42-3b-bf16-c8",
+  "model": "nanbeige4.2-3b",
+  "browser": "chrome",
+  "base": "http://127.0.0.1:8000",
+  "saveRequest": false,
+  "tier": null,
+  "modeOverride": null,
+  "chatTemplateCompat": "off",
+  "structuredToolsSent": true,
+  "reasoningEffort": null,
+  "freeze": {
+    "path": "test/llm/freeze/baseline-2026-05-23.json",
+    "sourceRun": "anthropic/claude-sonnet-4.6",
+    "sourceRunTag": "2026-05-23T18-47-31-246Z",
+    "systemHash": "5c4fac1387025050d002fb87fb6ae02af2fba0e232cd40737f844a3a5c4e7abf",
+    "toolCount": 41
+  },
+  "cases": 100,
+  "totalLatencyMs": 55487,
+  "errors": 0,
+  "withToolCall": 91,
+  "withToolCallFromContent": 0,
+  "byTool": {
+    "list_downloads": 2,
+    "navigate": 23,
+    "new_tab": 3,
+    "get_accessibility_tree": 49,
+    "read_page": 6,
+    "extract_data": 1,
+    "research_url": 1,
+    "screenshot": 1,
+    "scroll": 1,
+    "get_selection": 1,
+    "(no_tool_call)": 9,
+    "scratchpad_read": 1,
+    "get_frames": 1,
+    "execute_js": 1
+  }
+}

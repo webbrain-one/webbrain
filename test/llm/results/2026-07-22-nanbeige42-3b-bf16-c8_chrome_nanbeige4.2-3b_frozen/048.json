@@ -1,0 +1,29 @@
+{
+  "id": "048",
+  "user": "open my inbox",
+  "mode": "act",
+  "tab": {
+    "url": "https://mail.google.com/mail/u/0/#inbox",
+    "title": "Inbox (3) — Gmail"
+  },
+  "latencyMs": 4968,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible",
+      "maxDepth": 8
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "You're already on Gmail's inbox page — URL `https://mail.google.com/mail/u/0/#inbox` with title \"Inbox (3) — Gmail\". Let me verify what's currently visible and confirm the inbox is fully open.",
+  "usage": {
+    "prompt_tokens": 18511,
+    "total_tokens": 18716,
+    "completion_tokens": 205,
+    "prompt_tokens_details": null
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

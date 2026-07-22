@@ -474,6 +474,18 @@
   "blogPost": [
     {
       "@type": "BlogPosting",
+      "headline": "Nanbeige 4.2 3B punches above its size, but Qwen 3.5 9B still wins our frozen planner test",
+      "url": "https://webbrain.one/blog/nanbeige-42-3b-bf16-planner-benchmark",
+      "datePublished": "2026-07-22",
+      "description": "We tested Nanbeige4.2-3B in BF16 on an RTX 5090. Its official agent benchmarks beat Qwen 3.5 9B and Gemma 4 12B, but WebBrain's frozen browser-planner replay did not reproduce that lead.",
+      "author": {
+        "@type": "Person",
+        "name": "Emre Sokullu",
+        "url": "https://emresokullu.com"
+      }
+    },
+    {
+      "@type": "BlogPosting",
       "headline": "Poolside Laguna M.1 reaches 73% in WebBrain, but 225B does not win",
       "url": "https://webbrain.one/blog/poolside-laguna-m1-openrouter-planner-benchmark",
       "datePublished": "2026-07-21",
@@ -878,7 +890,12 @@
     <p class="page-sub">Short write-ups on design decisions, failure modes, and benchmarks from building an open-source AI browser agent.</p>
 
     <div class="post-list">
-      <a href="/blog/poolside-laguna-m1-openrouter-planner-benchmark" class="post-card">
+      <a href="/blog/nanbeige-42-3b-bf16-planner-benchmark" class="post-card">
+        <div class="post-meta">July 22, 2026 &middot; 8 min read</div>
+        <div class="post-title">Nanbeige 4.2 3B punches above its size, but Qwen 3.5 9B still wins our frozen planner test</div>
+        <div class="post-excerpt">Nanbeige 4.2 3B produced 90 parsed calls, reached 67% Sonnet alignment, and delivered a 1.49s single-request median. That is impressive for 4B total parameters, but below Qwen 3.5 9B and Gemma 4 E4B in our first-action test.</div>
+      </a>
+<a href="/blog/poolside-laguna-m1-openrouter-planner-benchmark" class="post-card">
         <div class="post-meta">July 21, 2026 &middot; 9 min read</div>
         <div class="post-title">Poolside Laguna M.1 reaches 73% in WebBrain, but 225B does not win</div>
         <div class="post-excerpt">Laguna M.1 returned 92 valid tool calls and reached 73% Sonnet alignment with a high-reasoning request. The larger model is much more dispatchable than Laguna S, but exact and ideal tool selection barely improve.</div>

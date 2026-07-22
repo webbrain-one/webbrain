@@ -1,0 +1,28 @@
+{
+  "id": "036",
+  "user": "submit",
+  "mode": "act",
+  "tab": {
+    "url": "https://forms.example.com/contact",
+    "title": "Contact form"
+  },
+  "latencyMs": 1290,
+  "error": null,
+  "firstToolCall": {
+    "name": "get_accessibility_tree",
+    "args": {
+      "filter": "visible"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "I'll start by reading the current page to understand the contact form structure, then verify the form fields before submitting.",
+  "usage": {
+    "prompt_tokens": 17980,
+    "total_tokens": 18084,
+    "completion_tokens": 104,
+    "prompt_tokens_details": null
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

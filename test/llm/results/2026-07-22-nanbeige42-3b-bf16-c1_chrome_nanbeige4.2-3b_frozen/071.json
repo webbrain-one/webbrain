@@ -1,0 +1,23 @@
+{
+  "id": "071",
+  "user": "send it",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 2778,
+  "error": null,
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "finishReason": "stop",
+  "content": "\n\nIt looks like your message \"send it\" lacks context — I'm currently on the **New Tab** page (`about:home`) with no visible content or prior conversation about what \"it\" refers to.\n\nCould you clarify what you'd like me to send? For example:\n\n- **An email/message** — which one, and where (to whom)?\n- **A file/document** — what file, and to which service/platform?\n- **Content/data** — what content, and where should it go?\n- **Something from a previous task** — do you have context from an earlier step we were working on?\n\nPlease provide the details so I can help you send it!",
+  "usage": {
+    "prompt_tokens": 17975,
+    "total_tokens": 18204,
+    "completion_tokens": 229,
+    "prompt_tokens_details": null
+  },
+  "attempts": 1,
+  "retryErrors": []
+}
