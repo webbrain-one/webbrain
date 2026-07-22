@@ -33,6 +33,7 @@ import {
   normalizeState as normalizeStoreReviewState,
 } from './store-review-prompt.js';
 import { providerIconUrl } from './provider-icons.js';
+import { parseWatchSlashCommand, WATCH_COMMAND_USAGE } from './watch-command.js';
 
 // Hydrate the theme from chrome.storage.local (the inline <head> bootstrap
 // only sees localStorage; if the user changes the theme on another device
@@ -539,6 +540,20 @@ const SLASH_COMMANDS = [
     acceptsPayload: true,
     options: [
       { value: '--list', descriptionKey: 'sp.slash.list_schedules', action: 'list', outOfBand: true, disallowPayload: true },
+    ],
+  },
+  {
+    value: '/watch',
+    usage: '/watch [--keep] [--secs <30-120>] [--long | --short] <condition and action> [/beep]',
+    descriptionKey: 'sp.slash.watch',
+    action: 'create',
+    acceptsPayload: true,
+    outOfBand: true,
+    options: [
+      { value: '--keep', descriptionKey: 'sp.slash.watch_keep' },
+      { value: '--secs', valueLabel: '<30-120>', descriptionKey: 'sp.slash.watch_secs' },
+      { value: '--long', descriptionKey: 'sp.slash.watch_long', exclusiveGroup: 'watch-beep-style' },
+      { value: '--short', descriptionKey: 'sp.slash.watch_short', exclusiveGroup: 'watch-beep-style' },
     ],
   },
   { value: '/progress', usage: '/progress', descriptionKey: 'sp.slash.check_progress', action: 'show', outOfBand: true },
@@ -4731,6 +4746,37 @@ function requestConfigurationFile(tabId) {
  * May trigger async UI side effects (screenshot, export, etc.).
  */
 async function parseSlashCommands(text, tabId = currentTabId, options = {}) {
+  if (/^\s*\/watch(?:\s|$)/i.test(text) && !/^\s*\/watch\s+--help\s*$/i.test(text)) {
+    const watchArgs = parseWatchSlashCommand(text);
+    if (!watchArgs.ok) {
+      showComposerToast(t('sp.slash.invalid_usage', { usage: WATCH_COMMAND_USAGE }), { duration: 5000 });
+      return '';
+    }
+    try {
+      const res = await sendToBackground('create_watch_job', {
+        tabId,
+        watch: {
+          prompt: watchArgs.prompt,
+          keep: watchArgs.keep,
+          interval_seconds: watchArgs.intervalSeconds,
+          beep: watchArgs.beep,
+          beep_style: watchArgs.beepStyle,
+        },
+      });
+      if (res?.success === false || res?.ok === false || !res?.scheduledAt) {
+        throw new Error(res?.error || 'Could not create watch.');
+      }
+      if (currentTabId === tabId) {
+        addPersistentSlashMessage(t('sp.watch.created', { seconds: watchArgs.intervalSeconds }));
+        await refreshScheduledJobs({ tabId });
+      }
+    } catch (error) {
+      if (currentTabId === tabId) {
+        addPersistentSlashMessage(t('sp.watch.error', { error: error?.message || 'unknown error' }));
+      }
+    }
+    return '';
+  }
   const invocation = parseSlashInvocation(text);
   if (!invocation) return text;
   if (invocation.error || invocation.unsupported) {

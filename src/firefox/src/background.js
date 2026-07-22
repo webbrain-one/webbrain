@@ -2070,6 +2070,20 @@ async function handleMessage(msg, sender) {
       });
     }
 
+    case 'create_watch_job': {
+      const tabId = msg.tabId || sender.tab?.id || null;
+      let tab = null;
+      if (tabId != null) {
+        try { tab = await browser.tabs.get(tabId); } catch {}
+      }
+      return await scheduler.createWatchJob({
+        tabId,
+        args: msg.watch || msg.args || {},
+        currentUrl: tab?.url || '',
+        currentTitle: tab?.title || '',
+      });
+    }
+
     case 'cancel_scheduled_job':
       return await scheduler.cancelJob(msg.jobId, 'cancelled by user');
 
