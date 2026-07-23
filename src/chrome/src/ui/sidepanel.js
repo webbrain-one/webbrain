@@ -8167,8 +8167,8 @@ function renderAssistantTextUpdate(assistantEl, content, options = {}) {
   }
 
   const streamedText = getStreamedAssistantText(textEl);
-  const restoredStreamNeedsReplacement = hasStreamedAssistantText(textEl) && !streamedText;
-  const isDuplicateStreamFinal = streamedText && streamedText === String(content);
+  const hasStreamedText = hasStreamedAssistantText(textEl);
+  const restoredStreamNeedsReplacement = hasStreamedText && !streamedText;
 
   if (options.replace === true || restoredStreamNeedsReplacement) {
     // A rejected streamed terminal must replace its already-rendered deltas
@@ -8181,11 +8181,11 @@ function renderAssistantTextUpdate(assistantEl, content, options = {}) {
       textEl.textContent = '';
       clearStreamedAssistantText(textEl);
     }
-  } else if (verboseMode && !isDuplicateStreamFinal) {
+  } else if (verboseMode && !hasStreamedText) {
     // Verbose mode: append each non-streamed turn as its own paragraph so
     // intermediate prose is preserved alongside the steps log. Streaming
-    // finals are already visible live, so format the existing stream instead
-    // of appending a duplicate paragraph at run completion.
+    // finals are already visible live, so format the authoritative terminal
+    // content in place even when cleanup changed it from the raw stream.
     const para = document.createElement('div');
     para.className = 'reasoning-step';
     para.innerHTML = formatMarkdown(content);

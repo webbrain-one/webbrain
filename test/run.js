@@ -14175,8 +14175,8 @@ test('sidepanel suppresses streamed raw tool-call text before rendering tool ste
     assert.match(panel, /getStreamedAssistantText\(textEl\) === String\(res\.content\)[\s\S]*?renderAssistantTextUpdate\(assistantEl, res\.content\);/, `${label}: completed streams should format the visible final text in place`);
     assert.match(panel, /clearAssistantTextStreamState\(assistantEl\);/, `${label}: run completion should clear transient streamed-text state before persistence`);
     assert.match(panel, /case 'text':[\s\S]*?\(data\.content \|\| data\.replace === true\)[\s\S]*?renderAssistantTextUpdate\(currentAssistantEl, data\.content \|\| '', \{ replace: data\.replace === true \}\);/, `${label}: text updates should forward explicit replacement requests, including empty clears`);
-    assert.match(panel, /function renderAssistantTextUpdate\(assistantEl, content, options = \{\}\) \{[\s\S]*?const restoredStreamNeedsReplacement = hasStreamedAssistantText\(textEl\) && !streamedText;[\s\S]*?isDuplicateStreamFinal[\s\S]*?if \(options\.replace === true \|\| restoredStreamNeedsReplacement\) \{[\s\S]*?if \(content\) \{[\s\S]*?textEl\.innerHTML = formatMarkdown\(content\);[\s\S]*?streamedAssistantTextByEl\.set\(textEl, String\(content\)\);[\s\S]*?\} else \{[\s\S]*?textEl\.textContent = '';[\s\S]*?clearStreamedAssistantText\(textEl\);[\s\S]*?\} else if \(verboseMode/, `${label}: explicit and restored-stream replacements should overwrite or clear verbose streamed text`);
-    assert.match(panel, /function renderAssistantTextUpdate\(assistantEl, content, options = \{\}\) \{[\s\S]*?isDuplicateStreamFinal[\s\S]*?textEl\.innerHTML = formatMarkdown\(content\);/, `${label}: final text should format an already visible stream instead of appending a duplicate`);
+    assert.match(panel, /function renderAssistantTextUpdate\(assistantEl, content, options = \{\}\) \{[\s\S]*?const hasStreamedText = hasStreamedAssistantText\(textEl\);[\s\S]*?const restoredStreamNeedsReplacement = hasStreamedText && !streamedText;[\s\S]*?if \(options\.replace === true \|\| restoredStreamNeedsReplacement\) \{[\s\S]*?if \(content\) \{[\s\S]*?textEl\.innerHTML = formatMarkdown\(content\);[\s\S]*?streamedAssistantTextByEl\.set\(textEl, String\(content\)\);[\s\S]*?\} else \{[\s\S]*?textEl\.textContent = '';[\s\S]*?clearStreamedAssistantText\(textEl\);[\s\S]*?\} else if \(verboseMode && !hasStreamedText\)/, `${label}: explicit and restored-stream replacements should overwrite or clear verbose streamed text`);
+    assert.match(panel, /function renderAssistantTextUpdate\(assistantEl, content, options = \{\}\) \{[\s\S]*?const hasStreamedText = hasStreamedAssistantText\(textEl\);[\s\S]*?else if \(verboseMode && !hasStreamedText\)[\s\S]*?textEl\.innerHTML = formatMarkdown\(content\);/, `${label}: every streamed final should format in place even when terminal cleanup changed the raw text`);
     const start = panel.indexOf("case 'tool_call':");
     const end = panel.indexOf("case 'tool_result':", start);
     assert.notEqual(start, -1, `${label}: tool_call handler missing`);
@@ -14191,6 +14191,82 @@ test('sidepanel suppresses streamed raw tool-call text before rendering tool ste
     assert.match(clearBody, /textEl\.textContent = '';/, `${label}: tool-call prose should be cleared when a tool call begins`);
     assert.match(clearBody, /clearStreamedAssistantText\(textEl\);/, `${label}: clearing pre-tool prose should drop streamed-text dedupe state`);
     assert.doesNotMatch(clearBody, /if \(!verboseMode \|\| looksLikeRawToolCallText\(text\)\)/, `${label}: verbose mode must not preserve pre-tool assistant prose`);
+  }
+});
+
+test('verbose terminal rendering does not append a normalized streamed answer twice', () => {
+  for (const [label, panelRel] of [
+    ['chrome', 'src/chrome/src/ui/sidepanel.js'],
+    ['firefox', 'src/firefox/src/ui/sidepanel.js'],
+  ]) {
+    const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
+    const start = panel.indexOf('function renderAssistantTextUpdate(assistantEl, content, options = {}) {');
+    const end = panel.indexOf('\nfunction isStoppedByUserStatus(', start);
+    assert.notEqual(start, -1, `${label}: assistant terminal renderer missing`);
+    assert.notEqual(end, -1, `${label}: assistant terminal renderer boundary missing`);
+
+    const streamedTextByEl = new WeakMap();
+    const appended = [];
+    const makeTextEl = (html = '') => ({
+      dataset: {},
+      classList: { contains: () => false },
+      innerHTML: html,
+      textContent: html,
+      replaceChildren() {
+        this.innerHTML = '';
+        this.textContent = '';
+      },
+      appendChild(node) {
+        appended.push(node);
+        this.innerHTML += node.innerHTML;
+      },
+    });
+    const context = {
+      verboseMode: true,
+      isStoppedByUserStatus: () => false,
+      parseCostAllowanceError: () => null,
+      renderSubscribeError: () => false,
+      getStreamedAssistantText: textEl => streamedTextByEl.get(textEl) || '',
+      hasStreamedAssistantText: textEl => streamedTextByEl.has(textEl)
+        || textEl?.dataset?.streamedAssistantActive === 'true',
+      clearStreamedAssistantText: textEl => {
+        streamedTextByEl.delete(textEl);
+        delete textEl.dataset.streamedAssistantActive;
+      },
+      formatMarkdown: value => String(value),
+      addMessageCopyButton: () => {},
+      document: {
+        createElement: () => ({ className: '', innerHTML: '' }),
+      },
+    };
+    const renderAssistantTextUpdate = vm.runInNewContext(
+      `(${panel.slice(start, end).trim()})`,
+      context,
+    );
+
+    const rawStream = '\n\n**Decision**\nOne answer.';
+    const terminalContent = rawStream.replace(/^\s+/, '');
+    assert.notEqual(rawStream, terminalContent, `${label}: fixture must exercise terminal normalization`);
+    const streamedTextEl = makeTextEl(rawStream);
+    streamedTextEl.dataset.streamedAssistantActive = 'true';
+    streamedTextByEl.set(streamedTextEl, rawStream);
+    const streamedAssistantEl = {
+      querySelector: selector => selector === '.message-text' ? streamedTextEl : null,
+    };
+
+    renderAssistantTextUpdate(streamedAssistantEl, terminalContent);
+
+    assert.equal(streamedTextEl.innerHTML, terminalContent, `${label}: normalized terminal content should replace the live stream`);
+    assert.equal(appended.length, 0, `${label}: normalized streamed final must not append a verbose reasoning paragraph`);
+    assert.equal(streamedTextByEl.has(streamedTextEl), false, `${label}: terminal render should clear raw stream state`);
+
+    const nonStreamedTextEl = makeTextEl('Prior verbose turn.');
+    const nonStreamedAssistantEl = {
+      querySelector: selector => selector === '.message-text' ? nonStreamedTextEl : null,
+    };
+    renderAssistantTextUpdate(nonStreamedAssistantEl, 'New non-streamed turn.');
+    assert.equal(appended.length, 1, `${label}: verbose mode should still append genuinely non-streamed turns`);
+    assert.equal(appended[0].className, 'reasoning-step', `${label}: non-streamed verbose turn should keep reasoning styling`);
   }
 });
 
