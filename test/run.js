@@ -15302,23 +15302,26 @@ test('sidepanel does not miss startup tab switches before consuming tab-scoped s
     assert.notEqual(end, -1, `${label}: init boundary missing`);
     const body = panel.slice(start, end);
     const listenerIdx = body.indexOf('tabs.onActivated.addListener');
+    const detachListenerIdx = body.indexOf('tabs.onDetached.addListener');
+    const attachListenerIdx = body.indexOf('tabs.onAttached.addListener');
     const loadProvidersIdx = body.indexOf('await loadProviders();');
     const testConnectionIdx = body.indexOf("await testConnection({ skipWebBrainCloud: true });");
-    const resyncQueryIdx = body.lastIndexOf('tabs.query({ active: true, currentWindow: true })');
-    const resyncSwitchIdx = body.indexOf('await switchToTab(activeTab.id);');
+    const resyncSwitchIdx = body.indexOf('await windowScope.syncActiveTab();');
     const refreshJobsIdx = body.indexOf('refreshScheduledJobs({ tabId: currentTabId });', resyncSwitchIdx);
     const refreshActionsIdx = body.indexOf('refreshRecommendedActions();', resyncSwitchIdx);
     const consumeIdx = body.indexOf('await consumePendingContextMenuPrompt();', resyncSwitchIdx);
     assert.notEqual(listenerIdx, -1, `${label}: startup should register tab activation listener`);
+    assert.notEqual(detachListenerIdx, -1, `${label}: startup should register tab detach listener`);
+    assert.notEqual(attachListenerIdx, -1, `${label}: startup should register tab attach listener`);
     assert.notEqual(loadProvidersIdx, -1, `${label}: startup provider load missing`);
     assert.notEqual(testConnectionIdx, -1, `${label}: startup connection test missing`);
-    assert.notEqual(resyncQueryIdx, -1, `${label}: startup should re-query the active tab after async setup`);
     assert.notEqual(resyncSwitchIdx, -1, `${label}: startup should switch to the active tab after async setup`);
     assert.notEqual(refreshJobsIdx, -1, `${label}: startup scheduled-job refresh missing`);
     assert.notEqual(refreshActionsIdx, -1, `${label}: startup recommended-action refresh missing`);
     assert.notEqual(consumeIdx, -1, `${label}: startup context-menu consume missing`);
     assert.equal(listenerIdx < loadProvidersIdx, true, `${label}: tab activation listener must be registered before startup awaits`);
-    assert.equal(testConnectionIdx < resyncQueryIdx && resyncQueryIdx < resyncSwitchIdx, true, `${label}: startup should resync the active tab after async setup`);
+    assert.equal(detachListenerIdx < loadProvidersIdx && attachListenerIdx < loadProvidersIdx, true, `${label}: tab transfer listeners must be registered before startup awaits`);
+    assert.equal(testConnectionIdx < resyncSwitchIdx, true, `${label}: startup should resync the active tab after async setup`);
     assert.equal(resyncSwitchIdx < refreshJobsIdx && resyncSwitchIdx < refreshActionsIdx && resyncSwitchIdx < consumeIdx, true, `${label}: startup must resync before tab-scoped refreshes and context-menu consume`);
 
     if (label === 'chrome') {
@@ -15330,6 +15333,76 @@ test('sidepanel does not miss startup tab switches before consuming tab-scoped s
       assert.notEqual(restoreGuardIdx, -1, 'chrome: initial tab-chat restore should drop stale async results');
       assert.equal(listenerIdx < restoreCaptureIdx && restoreCaptureIdx < restoreLoadIdx && restoreLoadIdx < restoreGuardIdx, true, 'chrome: initial restore must be guarded after listener-driven tab changes');
     }
+  }
+});
+
+test('sidepanel follows its live window when the represented tab is detached', async () => {
+  const chromeRel = 'src/chrome/src/ui/sidepanel-window-scope.js';
+  const firefoxRel = 'src/firefox/src/ui/sidepanel-window-scope.js';
+  const chromeSource = fs.readFileSync(path.join(ROOT, chromeRel), 'utf8');
+  const firefoxSource = fs.readFileSync(path.join(ROOT, firefoxRel), 'utf8');
+  assert.equal(firefoxSource, chromeSource, 'sidepanel window-transfer routing should stay mirrored');
+
+  for (const [label, rel] of [['chrome', chromeRel], ['firefox', firefoxRel]]) {
+    const { createSidePanelWindowScope } = await import(pathToFileURL(path.join(ROOT, rel)).href);
+    let containingWindowId = 10;
+    let currentTabId = 101;
+    let renderedTabId = 101;
+    const activeTabs = new Map([
+      [10, { id: 101, windowId: 10 }],
+      [20, { id: 101, windowId: 20 }],
+    ]);
+    const queries = [];
+    const switches = [];
+    let releaseWindowTransfer;
+    const browserApi = {
+      windows: {
+        getCurrent: async () => ({ id: containingWindowId }),
+      },
+      tabs: {
+        query: async (query) => {
+          queries.push(query);
+          return activeTabs.has(query.windowId) ? [activeTabs.get(query.windowId)] : [];
+        },
+      },
+    };
+    const scope = createSidePanelWindowScope({
+      browserApi,
+      initialWindowId: 10,
+      getCurrentTabId: () => currentTabId,
+      getRenderedTabId: () => renderedTabId,
+      settleWindowTransfer: () => new Promise(resolve => {
+        releaseWindowTransfer = resolve;
+      }),
+      switchToTab: async (tabId) => {
+        switches.push(tabId);
+        currentTabId = tabId;
+        renderedTabId = tabId;
+      },
+    });
+
+    assert.equal(scope.handleDetached(101, { oldWindowId: 10 }), true, `${label}: represented tab detach should start a transfer`);
+    activeTabs.set(10, { id: 102, windowId: 10 });
+    await scope.handleActivated({ tabId: 102, windowId: 10 });
+    assert.deepEqual(switches, [], `${label}: old-window activation must be ignored while the panel tab is transferring`);
+
+    const attaching = scope.handleAttached(101, { newWindowId: 20 });
+    await scope.handleActivated({ tabId: 102, windowId: 10 });
+    assert.deepEqual(switches, [], `${label}: old-window activation must stay suppressed while attach is settling`);
+    containingWindowId = 20;
+    releaseWindowTransfer();
+    await attaching;
+    assert.deepEqual(switches, [101], `${label}: attach should resync to the active tab in the panel's new window`);
+    switches.length = 0;
+
+    activeTabs.set(10, { id: 103, windowId: 10 });
+    await scope.handleActivated({ tabId: 103, windowId: 10 });
+    assert.deepEqual(switches, [], `${label}: activity in the former window must not retarget the detached panel`);
+
+    activeTabs.set(20, { id: 201, windowId: 20 });
+    await scope.handleActivated({ tabId: 201, windowId: 20 });
+    assert.deepEqual(switches, [201], `${label}: activity in the panel's live window should still switch tab-scoped chat`);
+    assert.equal(queries.every(query => query.currentWindow == null && query.windowId != null), true, `${label}: active-tab queries must use an explicit live window ID`);
   }
 });
 
