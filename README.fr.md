@@ -41,11 +41,12 @@
   - **MiniMax**, **Kimi**, **Alibaba Cloud (Qwen)**, **z.ai GLM**
   - **Cloudflare Workers AI**, **Nvidia NIM**, **Groq**, **Together AI**, **Hugging Face Inference**, **Fireworks**
   - **OpenRouter** (modèle par défaut : `openrouter/free` ; accès à plus de 100 modèles)
+  - **76 API directes et routeurs supplémentaires** — 103 cartes intégrées au total ; voir le [catalogue des fournisseurs](docs/fr/providers-and-models.md#catalogue-étendu-de-fournisseurs)
 - **Assistant d'intégration** — Visite guidée au premier lancement couvrant la sécurité du mode Act et la configuration des fournisseurs
 - **Interface en panneau latéral** — Interface de chat épurée qui accompagne votre navigation
 - **Réponses longues pensées pour la lecture** — La nouvelle question reste visible pendant que la réponse s'allonge, avec des commandes flottantes pour suivre la réponse, aller au contenu le plus récent ou revenir à la question
 - **Conversations par onglet** — Chaque onglet possède son propre historique de chat
-- **Streaming Ask** — Les chats Ask interactifs affichent le texte de l'API Responses officielle d'OpenAI à mesure qu'il arrive ; les outils et l'historique attendent `response.completed`, avec un interrupteur avancé et un repli non-streaming automatique en cas d'interruption
+- **Streaming Ask** — Les chats Ask interactifs affichent les réponses des fournisseurs compatibles à mesure qu'elles arrivent ; les outils et l'historique attendent un événement terminal du flux, avec un interrupteur avancé et un repli non-streaming automatique en cas d'interruption
 - **Contexte intelligent** — Auto-compactage tenant compte des jetons (résume les tours plus anciens lorsque la conversation approche de la fenêtre de contexte du modèle, avec un avis visible « Contexte automatiquement compacté »), limites de résultats d'outils et récupération d'urgence en cas de débordement
 - **Contrôle de l'historique du navigateur** — Le mode Act peut utiliser les outils natifs d'historique `go_back` / `go_forward` au lieu du JavaScript de page sensible à la CSP
 - **Indices de raccourcis API** — Les clics répétés qui déclenchent la même requête XHR/fetch peuvent afficher une suggestion `fetch_url` correspondante tout en préservant la règle UI-d'abord et la politique de mutation `/allow-api`
@@ -119,7 +120,11 @@ Cliquez sur l'icône d'engrenage ou accédez à la page Options de l'extension p
 
 **Fournisseurs :**
 
-Les URL de base sont préremplies dans les paramètres lorsque vous choisissez un fournisseur. Les serveurs locaux utilisent le port par défaut indiqué ci-dessous.
+Les URL de base sont préremplies dans les paramètres lorsque vous choisissez
+un fournisseur. Les serveurs locaux utilisent le port par défaut indiqué
+ci-dessous. Ce tableau présente les fournisseurs historiques ; le
+[catalogue complet](docs/fr/providers-and-models.md#catalogue-étendu-de-fournisseurs)
+contient 103 cartes intégrées.
 
 | Fournisseur | Clé API | Modèle par défaut |
 |-------------|----------|-------------------|
@@ -136,7 +141,7 @@ Les URL de base sont préremplies dans les paramètres lorsque vous choisissez u
 | OpenAI | Requise | gpt-5.6-terra |
 | Anthropic Claude | Requise | claude-sonnet-4-6 |
 | Google Gemini | Requise | gemini-3.1-flash |
-| Cloudflare Workers AI | Requise (+ Account ID) | @cf/zai-org/glm-5.2 |
+| Cloudflare AI Gateway / Workers AI | Requise (+ Account ID) | @cf/zai-org/glm-5.2 |
 | Mistral AI | Requise | mistral-large-latest |
 | DeepSeek | Requise | deepseek-v4-flash |
 | xAI Grok | Requise | grok-4.3 |

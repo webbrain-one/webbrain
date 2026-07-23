@@ -43,6 +43,7 @@ import {
   PROVIDER_SHORT_LABELS,
   sniffProviderIdFromBaseUrl,
 } from './provider-icons.js';
+import { ADDITIONAL_PROVIDER_UI } from '../providers/provider-catalog.js';
 
 // Version shown in the subtitle. Kept here so it only needs one update per
 // release; the subtitle string itself is translated.
@@ -2185,6 +2186,7 @@ function renderProviders() {
       fields: [
         { key: 'apiKey', labelKey: 'st.provider.field.api_key', type: 'password', placeholder: 'API token' },
         { key: 'accountId', label: 'Cloudflare Account ID', type: 'text', placeholder: '0123456789abcdef0123456789abcdef' },
+        { key: 'gatewayId', label: 'AI Gateway ID (optional; @cf defaults to default)', type: 'text', placeholder: 'my-gateway' },
         { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: '@cf/zai-org/glm-5.2',
           suggestions: ['@cf/zai-org/glm-5.2'] },
         { key: 'baseUrl', labelKey: 'st.provider.field.api_base_url', type: 'text', placeholder: 'https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1' },
@@ -2292,6 +2294,50 @@ function renderProviders() {
   // "All" includes everything; the per-category pills hide cards whose
   // `category` doesn't match. The selected provider is ALWAYS visible
   // regardless of filter (so the user never loses track of it).
+  // Additional providers share a predictable OpenAI-compatible settings
+  // shape. Provider-specific suggestions/placeholders stay in the catalog;
+  // UI-only metadata is never persisted with credentials.
+  for (const [id, meta] of Object.entries(ADDITIONAL_PROVIDER_UI)) {
+    const config = providersData[id] || {};
+    const fields = [
+      {
+        key: 'apiKey',
+        labelKey: 'st.provider.field.api_key',
+        type: 'password',
+        placeholder: meta.apiKeyPlaceholder || 'API key',
+      },
+    ];
+    if (id === 'azure-cognitive-services') {
+      fields.push({ key: 'resource', label: 'Azure resource name', type: 'text', placeholder: 'my-resource' });
+    }
+    if (id === 'google-vertex' || id === 'google-vertex-anthropic') {
+      fields.push(
+        { key: 'project', label: 'Google Cloud project ID', type: 'text', placeholder: 'my-project' },
+        { key: 'location', label: 'Google Cloud location', type: 'text', placeholder: id === 'google-vertex' ? 'us-central1' : 'us-east5' },
+      );
+    }
+    fields.push(
+      {
+        key: 'model',
+        labelKey: 'st.provider.field.model',
+        type: 'text',
+        placeholder: config.model || (id === 'azure-cognitive-services' ? 'deployed-model-name' : 'model-id'),
+        suggestions: meta.suggestions || [],
+      },
+      {
+        key: 'baseUrl',
+        labelKey: 'st.provider.field.api_base_url',
+        type: 'text',
+        placeholder: config.baseUrl || 'https://provider.example/v1',
+      },
+      CONTEXT_WINDOW_FIELD,
+      { key: 'supportsVision', labelKey: 'st.provider.field.supports_vision', type: 'checkbox' },
+    );
+    if (config.category === 'router' || config.category === 'local') fields.push(PROMPT_TIER_FIELD);
+    fields.push(...COST_ESTIMATE_FIELDS);
+    providerConfigs[id] = { fields };
+  }
+
   providersContainer.appendChild(renderProviderFilterBar());
 
   let entries = Object.entries(providersData);

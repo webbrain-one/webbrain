@@ -3,6 +3,7 @@ import chromeWebStoreLocale from './chrome-web-store.mjs';
 
 export default {
   ...chromeWebStoreLocale,
+  'sp.streaming.fallback': 'Strumieniowanie odpowiedzi zostało przerwane; ponawiam tę turę Ask bez strumieniowania.',
   'sp.providers.no_setup_group': 'Bez konfiguracji',
   'sp.providers.no_setup': 'Konfiguracja nie jest wymagana',
   'sp.providers.active_group': 'Aktywni dostawcy',
@@ -622,8 +623,8 @@ export default {
   'st.display.clarify_timeout.instant': 'Natychmiast',
   'st.display.api_mutation_observer.label': 'Obserwator mutacji API',
   'st.display.api_mutation_observer.desc': 'Obserwuj URL-e i metody żądań XHR/fetch w tej samej karcie, aby WebBrain mógł wykrywać powtarzające się akcje UI i sugerować wzorce skrótów API. Wyłączone domyślnie; włącz tylko podczas badania zachowania skrótów lub opóźnień.',
-  'st.display.openai_ask_streaming.label': 'Strumieniuj odpowiedzi OpenAI w Ask',
-  'st.display.openai_ask_streaming.desc': 'Pokazuj tekst oficjalnego OpenAI Responses w miarę napływania w trybie Ask. Wywołania narzędzi czekają na response.completed; Act, Dev, zadania zaplanowane, chmurowe i Continue pozostają bez strumieniowania. Domyślnie włączone.',
+  'st.display.openai_ask_streaming.label': "Strumieniuj odpowiedzi w trybie Ask",
+  'st.display.openai_ask_streaming.desc': "Pokazuj odpowiedzi dostawcy w miar? nap?ywania w trybie Ask. Wywo?ania narz?dzi czekaj? na ko?cowe zdarzenie strumienia; Act, Dev, zadania zaplanowane, chmurowe i Continue pozostaj? bez strumieniowania. Domy?lnie w??czone.",
   'st.display.plan_before_act.label': 'Planuj przed działaniem',
   'st.display.plan_before_act.desc': 'Tryby Działaj i Dev zawsze wykonują ustrukturyzowaną kontrolę intencji przed użyciem narzędzi. Próba (domyślnie) tworzy też pełne plany, ale przy krótkiej kontynuacji może ponownie użyć niedawno zatwierdzonego planu; tryb Ścisły tworzy pełny plan w każdej turze. Jeśli intencja lub plan nadal są nieprawidłowe po jednej naprawie, Próba przechodzi do tury tylko do odczytu, a tryb Ścisły zatrzymuje się przed narzędziami.',
   'st.display.plan_before_act.try': 'Spróbuj planowania (domyślnie)',

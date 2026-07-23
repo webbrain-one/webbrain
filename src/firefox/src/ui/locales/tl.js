@@ -3,6 +3,7 @@ import chromeWebStoreLocale from './chrome-web-store.mjs';
 
 export default {
   ...chromeWebStoreLocale,
+  'sp.streaming.fallback': 'Naputol ang pag-stream ng tugon; sinusubukang muli ang Ask turn na ito nang walang streaming.',
   'sp.providers.no_setup_group': 'Walang setup',
   'sp.providers.no_setup': 'Hindi kailangan ng setup',
   'sp.providers.active_group': 'Mga aktibong provider',
@@ -631,8 +632,8 @@ export default {
   'st.display.clarify_timeout.instant': 'Agad',
   'st.display.api_mutation_observer.label': 'Tagamasid ng mutasyon ng API',
   'st.display.api_mutation_observer.desc': 'Obserbahan ang mga URL at paraan ng XHR/fetch request sa parehong tab upang matukoy ng WebBrain ang mga paulit-ulit na aksyon sa UI at magmungkahi ng mga pattern ng shortcut sa API. Naka-off bilang default; paganahin lamang habang iniimbestigahan ang pag-uugali ng shortcut o latency.',
-  'st.display.openai_ask_streaming.label': 'I-stream ang mga sagot ng OpenAI sa Ask',
-  'st.display.openai_ask_streaming.desc': 'Ipakita ang opisyal na OpenAI Responses text habang dumarating sa Ask mode. Maghihintay ang mga tool call sa response.completed; mananatiling hindi naka-stream ang Act, Dev, scheduled, cloud, at Continue runs. Naka-on bilang default.',
+  'st.display.openai_ask_streaming.label': "I-stream ang mga sagot sa Ask mode",
+  'st.display.openai_ask_streaming.desc': "Ipakita ang mga sagot ng provider habang dumarating sa Ask mode. Naghihintay ang mga tool call sa pangwakas na stream event; mananatiling hindi naka-stream ang Act, Dev, scheduled, cloud, at Continue runs. Naka-on bilang default.",
   'st.display.plan_before_act.label': 'Magplano bago Kumilos',
   'st.display.plan_before_act.desc': 'Palaging nagsasagawa ang mga mode na Kumilos at Dev ng nakaayos na pagsusuri ng layunin bago gumamit ng mga tool. Gumagawa rin ng buong plano ang Subukan (default), ngunit maaari nitong gamitin muli ang kamakailang inaprubahang plano para sa maikling follow-up; gumagawa ng buong plano ang Mahigpit sa bawat turno. Kung hindi pa rin valid ang layunin o plano matapos ang isang pag-aayos, lilipat ang Subukan sa read-only na turn at hihinto ang Mahigpit bago gumamit ng mga tool.',
   'st.display.plan_before_act.try': 'Subukan ang pagpaplano (default)',

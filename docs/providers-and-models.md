@@ -11,6 +11,7 @@ class BaseLLMProvider {
   async chat(messages, options)         // → { content, toolCalls, usage }
   async *chatStream(messages, options)  // → async generator yielding { type, content }
   get supportsTools()                   // → boolean
+  get supportsAskStreaming()            // → boolean
   get supportsVision()                  // → boolean
   get promptTier()                      // → 'compact' | 'mid' | 'full'
   async testConnection()                // → { ok, error?, model? }
@@ -63,32 +64,82 @@ class BaseLLMProvider {
 | `fireworks` | `openai` | router | `accounts/fireworks/models/llama-v3p3-70b-instruct` | Model-name regex |
 | `z_ai` | `openai` | cloud | `glm-5.2` | Model-name regex |
 
-### Interactive Ask streaming
+### Extended provider catalog
 
-Interactive Ask chats stream for the built-in OpenAI, Anthropic, Azure OpenAI,
-Gemini, Mistral, DeepSeek, xAI, Nvidia NIM, Groq, Together AI, Fireworks, z.ai,
-OpenRouter, WebBrain Cloud, llama.cpp, Ollama, LM Studio, Jan, vLLM, SGLang,
-and LocalAI providers.
+WebBrain also ships 76 disabled-by-default provider cards sourced from the
+OpenCode provider catalog snapshot at commit
+`62e4641235d7847dadc60da37cca8a023dd54fc1`. Together with the 27 original
+cards, Settings contains **103 built-in providers**.
+
+| IDs |
+|---|
+| `302ai`, `abacus`, `aihubmix`, `alibaba-coding-plan`, `alibaba-coding-plan-cn`, `azure-cognitive-services`, `bailing`, `baseten`, `berget`, `cerebras`, `chutes`, `clarifai`, `cloudferro-sherlock`, `cohere`, `cortecs`, `deepinfra`, `digitalocean`, `dinference`, `drun`, `evroc`, `fastrouter`, `friendli` |
+| `google-vertex`, `google-vertex-anthropic`, `helicone`, `iflowcn`, `inception`, `inference`, `io-net`, `jiekou`, `kilo`, `kimi-for-coding`, `kuae-cloud-coding-plan`, `llama`, `lucidquery`, `meganova`, `minimax-cn-coding-plan`, `minimax-coding-plan`, `moark`, `modelscope`, `morph` |
+| `nano-gpt`, `nebius`, `nova`, `novita-ai`, `ollama-cloud`, `opencode`, `opencode-go`, `ovhcloud`, `perplexity`, `perplexity-agent`, `poe`, `privatemode-ai`, `qihang-ai`, `qiniu-ai`, `requesty`, `scaleway`, `siliconflow`, `siliconflow-cn`, `stackit` |
+| `stepfun`, `submodel`, `synthetic`, `tencent-coding-plan`, `upstage`, `v0`, `venice`, `vercel`, `vivgrid`, `vultr`, `wandb`, `xiaomi`, `zai-coding-plan`, `zenmux`, `zhipuai`, `zhipuai-coding-plan` |
+
+Most use the OpenAI-compatible Chat Completions contract and bearer API keys.
+The exceptions are:
+
+| Provider | Authentication / protocol |
+|---|---|
+| Azure AI Foundry | Resource name plus `api-key`; model is the deployed model name |
+| Google Vertex AI | Project, location, and a Google authorization key sent as `x-goog-api-key`; `global` uses `aiplatform.googleapis.com` |
+| Google Vertex AI (Anthropic) | Vertex `rawPredict` / `streamRawPredict` with the same authorization-key fields; `us` and `eu` use their multi-region hosts |
+| Perplexity Agent | OpenAI Responses-compatible `/v1/responses` |
+| Cloudflare | Existing card supports Workers AI plus an optional AI Gateway ID; blank IDs use Cloudflare's `default` gateway for `@cf/` models |
+
+Morph and standard Perplexity Sonar are text-only integrations in the agent
+and advertise `supportsTools: false`. New provider cards remain inactive until
+the user saves their credentials and selects the provider.
+
+### Ask response streaming
+
+Providers with `supportsAskStreaming` stream visible text during interactive
+Ask turns. Act, Dev, scheduled, managed-cloud, and Continue turns remain
+non-streaming. Tool calls are withheld until a terminal protocol event arrives
+(`[DONE]`, a terminal `finish_reason`, `message_stop`, or
+`response.completed`). A network failure, HTTP failure before completion, or
+premature EOF clears partial UI text and retries that turn once without
+streaming; the rest of that run then stays non-streaming.
+
+When a streaming provider returns token usage, WebBrain records it directly.
+If the provider omits usage, WebBrain records a conservative character-based
+estimate so streaming cannot bypass the configured cost allowance.
+
+The setting still uses the stored key `openaiAskStreamingEnabled` for backward
+compatibility, but it now controls all capable providers.
+
 Official OpenAI GPT-5.6 and streaming-capable Responses-only GPT-5 Pro variants
 use Responses streaming. Supported GPT-5.x, GPT-4.1, GPT-4o, GPT-4 Turbo, and
 o-series variants retain Chat Completions streaming. GPT-5.5 Pro and other
 official OpenAI models without documented streaming or function-calling
-support stay non-streaming. Compatible built-ins opt in with
-`supportsAskStreaming: true`; custom endpoints are not inferred from their
-model names.
+support stay non-streaming. Compatible built-ins opt in explicitly; custom
+endpoints are not inferred from their model names.
 
-Alibaba Cloud remains non-streaming for interactive Ask because
+Alibaba Cloud and both Alibaba Coding Plan cards remain non-streaming for
+interactive Ask because
 [DashScope does not allow `tools` with `stream=True`](https://www.alibabacloud.com/help/en/model-studio/compatibility-of-openai-with-dashscope),
 and Ask always sends its read-only tool catalog.
 
 Every parser waits for its protocol's terminal event (`response.completed`,
 Anthropic `message_stop`, or SSE `[DONE]`). A network/read error, malformed
-frame, or premature EOF silently retries the current generation once through
-`chat()` and disables streaming for the rest of that run. HTTP failures,
-explicit in-stream provider/API errors, and `content_filter` finish reasons are
-terminal and never trigger the duplicate request. Mistral streams explicitly
-request `stream_options.include_usage` so token costs continue advancing the
-cloud-provider allowance.
+frame, or premature EOF clears partial output, displays a localized notice,
+retries the current generation once through `chat()`, and disables streaming
+for the rest of that run. HTTP failures, explicit in-stream provider/API
+errors, and `content_filter` finish reasons are terminal and never trigger the
+duplicate request.
+
+### Deliberately unsupported provider entries
+
+- `github-models`: GitHub is not being retired, but
+  [GitHub Models will retire on July 30, 2026](https://github.blog/changelog/2026-07-01-github-models-is-being-fully-retired-on-july-30-2026/).
+- `github-copilot`: requires GitHub subscription/OAuth and does not expose a
+  suitable stable general provider API for this extension.
+- `gitlab`: GitLab Duo uses custom authentication, discovery, and protocol
+  behavior rather than a direct Chat Completions endpoint.
+- `sap-ai-core`: requires service-key OAuth, deployment discovery, and custom
+  service integration.
 
 ### Local Providers
 
@@ -225,12 +276,13 @@ Used by Tab Recorder for Whisper transcription. Falls back through configured pr
 
 ## Adding a Provider
 
-1. **Create the provider class** in `src/chrome/src/providers/<name>.js` implementing `BaseLLMProvider`
-2. **Add the default config** to `_defaultConfigs()` in `manager.js`
-3. **Add the factory case** in `_createProvider()`
-4. **Register the import** in `manager.js`
-5. **Add provider-specific handling** in the agent if needed (e.g., Anthropic's message format conversion)
-6. **Mirror to Firefox** (`src/firefox/src/providers/`)
+1. Add OpenAI-compatible metadata to `providers/provider-catalog.js`, including
+   endpoint, model, auth mode, capabilities, and UI suggestions.
+2. Create a provider class only when the wire protocol differs from the
+   existing OpenAI, Anthropic, Azure, Bedrock, or Vertex adapters.
+3. Add a factory case and import when a new class is required.
+4. Add and attribute an SVG under `icons/providers/`.
+5. Mirror code, icon, UI, and tests to Firefox.
 
 ### For OpenAI-compatible providers
 
@@ -244,6 +296,7 @@ myprovider: {
   providerName: 'myprovider',
   baseUrl: 'https://api.myprovider.com/v1',
   model: 'my-model',
+  supportsAskStreaming: true,
   supportsStreamUsageOptions: false,
   apiKey: '',
   enabled: false,
