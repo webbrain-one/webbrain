@@ -6652,7 +6652,7 @@ function renderClarifyCard(data) {
     }
     card.appendChild(optionsEl);
     content.appendChild(card);
-    scrollToBottom();
+    scrollToBottom({ force: true });
     return;
   }
 
@@ -6690,7 +6690,7 @@ function renderClarifyCard(data) {
     card.appendChild(optionsEl);
     content.appendChild(card);
     void maybeShowPermissionEducationHint(card);
-    scrollToBottom();
+    scrollToBottom({ force: true });
     return;
   }
 
@@ -6755,7 +6755,7 @@ function renderClarifyCard(data) {
   }
 
   content.appendChild(card);
-  scrollToBottom();
+  scrollToBottom({ force: true });
   try { input.focus(); } catch {}
 }
 
@@ -7097,7 +7097,7 @@ function renderPlanReviewCard(data) {
 
   content.appendChild(card);
   setPlanReviewAwaiting(tabId, true, assistantEl);
-  scrollToBottom();
+  scrollToBottom({ force: true });
 }
 
 function submitPlanReview(card, tabId, planId, action, editedText) {
@@ -7867,7 +7867,7 @@ function showContinueButton() {
     <button class="continue-btn" id="btn-continue">${escapeHtml(t('sp.continue_btn'))}</button>
   `;
   messagesEl.appendChild(bar);
-  scrollToBottom();
+  scrollToBottom({ force: true });
 
   document.getElementById('btn-continue').addEventListener('click', continueAgent);
 }
@@ -8030,6 +8030,12 @@ function latestChatTurn() {
   return assistantEl && userEl ? { userEl, assistantEl } : null;
 }
 
+function chatHasPendingInteraction() {
+  return !!messagesEl?.querySelector?.(
+    '.clarify-card:not(.clarify-answered), .plan-review-card:not(.plan-reviewed), .continue-bar',
+  );
+}
+
 function chatTurnIsConnected(turn = chatNavigationTurn) {
   return !!turn?.userEl?.isConnected && !!turn?.assistantEl?.isConnected;
 }
@@ -8149,6 +8155,11 @@ function restoreLatestChatTurnPosition() {
   if (chatNavigationRestoreFrame != null) cancelAnimationFrame(chatNavigationRestoreFrame);
   chatNavigationRestoreFrame = requestAnimationFrame(() => {
     chatNavigationRestoreFrame = null;
+    if (chatHasPendingInteraction()) {
+      resetChatNavigation();
+      scrollToBottom({ force: true });
+      return;
+    }
     const turn = latestChatTurn();
     if (!turn) {
       resetChatNavigation();

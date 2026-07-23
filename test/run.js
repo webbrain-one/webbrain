@@ -17480,6 +17480,29 @@ test('sidepanel long replies use reading-first turn navigation', () => {
       /function latestChatTurn\(\) \{[\s\S]*?assistantEl\?\.dataset\?\.scheduledJobId[\s\S]*?return null;[\s\S]*?precedingUserMessage\(assistantEl\)/,
       `${label}: restored scheduled runs should not borrow an unrelated earlier question`,
     );
+    const clarifySource = panel.slice(
+      panel.indexOf('function renderClarifyCard('),
+      panel.indexOf('function clearClarifyCountdown('),
+    );
+    assert.equal(
+      (clarifySource.match(/scrollToBottom\(\{ force: true \}\);/g) || []).length,
+      3,
+      `${label}: submit, permission, and clarify prompts should override reading-first scroll suppression`,
+    );
+    const planReviewSource = panel.slice(
+      panel.indexOf('function renderPlanReviewCard('),
+      panel.indexOf('function submitPlanReview('),
+    );
+    assert.match(
+      planReviewSource,
+      /setPlanReviewAwaiting\([\s\S]*?scrollToBottom\(\{ force: true \}\);/,
+      `${label}: plan approval should be forced into view`,
+    );
+    assert.match(
+      panel,
+      /function chatHasPendingInteraction\(\) \{[\s\S]*?clarify-card:not\(\.clarify-answered\)[\s\S]*?plan-review-card:not\(\.plan-reviewed\)[\s\S]*?continue-bar[\s\S]*?function restoreLatestChatTurnPosition\(\) \{[\s\S]*?chatHasPendingInteraction\(\)[\s\S]*?scrollToBottom\(\{ force: true \}\)/,
+      `${label}: restored blocking prompts should take priority over question-first positioning`,
+    );
   }
 });
 
@@ -44824,8 +44847,8 @@ test('sidepanel: restored plan review cards rebind approve and cancel actions', 
     );
     assert.match(
       renderPlanReviewSource,
-      /content\.appendChild\(card\);\s*setPlanReviewAwaiting\([^;]+;\s*scrollToBottom\(\);/,
-      `${file} should still reveal a newly inserted plan card`,
+      /content\.appendChild\(card\);\s*setPlanReviewAwaiting\([^;]+;\s*scrollToBottom\(\{ force: true \}\);/,
+      `${file} should force a newly inserted plan card into view`,
     );
     assert.match(source, /card\.dataset\.planMarkdownMode = useVerbosePlan \? 'verbose' : 'compact';/, `${file} should remember which plan text was displayed`);
     assert.match(
