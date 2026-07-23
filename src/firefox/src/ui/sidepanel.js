@@ -6135,7 +6135,9 @@ async function sendMessage(extraChatParams = {}) {
     assistantEl.dataset.retryAttachmentCount = String(attachmentsForSend.length);
     assistantEl.dataset.lastRenderedSeq = '0';
     currentAssistantEl = assistantEl;
-    beginReadingFirstTurn(userEl, assistantEl);
+    if (beginReadingFirstTurn(userEl, assistantEl)) {
+      scrollChatToQuestion({ smooth: false });
+    }
   }
   const activePayloadState = createActiveChatPayloadState(retryPayload, requestId);
   activeChatPayloadsByTab.set(tabId, activePayloadState);

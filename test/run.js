@@ -17447,8 +17447,8 @@ test('sidepanel long replies use reading-first turn navigation', () => {
     );
     assert.match(
       panel,
-      /resetChatNavigation\(\);\s*userEl = addMessage\('user', text\);[\s\S]*?currentAssistantEl = assistantEl;\s*beginReadingFirstTurn\(userEl, assistantEl\);/,
-      `${label}: a submitted turn should enter reading-first mode after its question is visible`,
+      /resetChatNavigation\(\);\s*userEl = addMessage\('user', text\);[\s\S]*?currentAssistantEl = assistantEl;\s*if \(beginReadingFirstTurn\(userEl, assistantEl\)\) \{\s*scrollChatToQuestion\(\{ smooth: false \}\);\s*\}/,
+      `${label}: a submitted turn should enter reading-first mode and reveal its question before streaming`,
     );
     assert.match(
       panel,
