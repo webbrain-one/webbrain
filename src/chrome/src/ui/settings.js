@@ -2628,12 +2628,19 @@ function renderProviderFilterBar() {
     { key: 'cloud',  labelKey: 'st.providers.filter.cloud' },
     { key: 'router', labelKey: 'st.providers.filter.router' },
   ];
+  const filterCounts = Object.values(providersData).reduce((counts, config) => {
+    counts.all += 1;
+    const category = config.category || 'cloud';
+    if (Object.hasOwn(counts, category) && category !== 'all') counts[category] += 1;
+    return counts;
+  }, { all: 0, local: 0, cloud: 0, router: 0 });
   for (const f of filters) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = `provider-filter-pill${providerFilter === f.key ? ' active' : ''}`;
     btn.dataset.filter = f.key;
-    btn.innerHTML = `${filterIcons[f.key] || ''}<span>${escapeHtml(t(f.labelKey))}</span>`;
+    btn.innerHTML = `${filterIcons[f.key] || ''}<span>${escapeHtml(t(f.labelKey))}</span>`
+      + `<span class="provider-filter-count">${filterCounts[f.key]}</span>`;
     btn.addEventListener('click', async () => {
       if (providerFilter === f.key) return;
       // Snapshot whatever the user has typed but not yet saved BEFORE we

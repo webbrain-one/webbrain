@@ -25989,6 +25989,11 @@ test('extended provider catalog is complete, mirrored, safe, and excluded-provid
       assert.equal(fs.existsSync(icon), true, `${label}: missing icon for ${id}`);
       const svg = fs.readFileSync(icon, 'utf8');
       assert.match(svg, /<svg\b/i, `${label}: ${id} is not SVG`);
+      assert.match(
+        svg,
+        /<svg\b[^>]*\bxmlns=["']http:\/\/www\.w3\.org\/2000\/svg["']/i,
+        `${label}: ${id} SVG root lacks the SVG namespace`,
+      );
       assert.match(svg, /\bviewBox=/i, `${label}: ${id} icon lacks viewBox`);
       assert.doesNotMatch(svg, /<script\b|<image\b|\s(?:xlink:)?href\s*=/i, `${label}: ${id} icon contains active/external content`);
     }
@@ -25998,6 +26003,22 @@ test('extended provider catalog is complete, mirrored, safe, and excluded-provid
     assert.match(settings, /ADDITIONAL_PROVIDER_UI/, `${label}: catalog providers need generated settings fields`);
     assert.match(settings, /Google Cloud project ID/, `${label}: Vertex project field missing`);
     assert.match(settings, /AI Gateway ID \(optional; @cf defaults to default\)/, `${label}: Cloudflare gateway field missing`);
+    assert.match(
+      settings,
+      /const filterCounts = Object\.values\(providersData\)\.reduce\(/,
+      `${label}: provider filter counts must be derived from live provider data`,
+    );
+    assert.match(
+      settings,
+      /class="provider-filter-count">\$\{filterCounts\[f\.key\]\}/,
+      `${label}: every provider filter must render its count pill`,
+    );
+    const settingsHtml = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/settings.html'), 'utf8');
+    assert.match(
+      settingsHtml,
+      /\.provider-filter-count\s*\{[\s\S]*?border-radius:\s*999px;/,
+      `${label}: provider filter counts must use pill styling`,
+    );
 
     const localeDir = path.join(ROOT, prefix, 'src/ui/locales');
     for (const localeFile of fs.readdirSync(localeDir).filter(file => file.endsWith('.js'))) {
