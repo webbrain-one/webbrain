@@ -4,6 +4,18 @@ All notable changes to WebBrain are documented in this file.
 
 This changelog was generated from the repository Git history and release tags. Versions without a Git tag are inferred from version-bump commits and the current `package.json` / browser manifest versions.
 
+## [25.7.8] - 2026-07-23
+
+### Added
+- Added reading-first navigation for long replies across Ask, Act, and Dev modes in Chrome and Firefox.
+
+### Fixed
+- Kept blocking prompts and slash-command output visible without losing live follow when a run resumes.
+- Kept the navigation control available whenever response content extends below the viewport.
+
+### Tests
+- Added mirrored long-reply navigation, localization, restored-turn, and instant auto-follow regression coverage.
+
 ## [25.7.6] - 2026-07-22
 
 ### Added

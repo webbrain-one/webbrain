@@ -109,6 +109,9 @@ export default {
   'sp.btn.settings': '设置',
   'sp.btn.clear': '新建会话（清除历史）',
   'sp.btn.send': '发送',
+  'sp.chat.follow_response': '跟随回答',
+  'sp.chat.jump_latest': '跳到最新内容',
+  'sp.chat.back_to_question': '返回问题',
   'sp.btn.stop.title': '停止代理',
   'sp.btn.stop.label': '停止',
 

@@ -109,6 +109,9 @@ export default {
   'sp.btn.settings': 'Ajustes',
   'sp.btn.clear': 'Nueva conversación (borrar historial)',
   'sp.btn.send': 'Enviar',
+  'sp.chat.follow_response': 'Seguir respuesta',
+  'sp.chat.jump_latest': 'Ir a lo más reciente',
+  'sp.chat.back_to_question': 'Volver a la pregunta',
   'sp.btn.stop.title': 'Detener agente',
   'sp.btn.stop.label': 'Detener',
 
