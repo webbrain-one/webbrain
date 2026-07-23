@@ -38,7 +38,7 @@
   - **OpenAI**（GPT-5.5 等）
   - **Anthropic Claude**（原生 API）
   - **Google Gemini**、**Mistral AI**、**DeepSeek**、**xAI Grok**、**Groq**
-  - **MiniMax**、**阿里云（通义千问 Qwen）**
+  - **MiniMax**、**阿里云（通义千问 Qwen）**、**z.ai GLM**
   - **Cloudflare Workers AI**、**Nvidia NIM**
   - **OpenRouter**（默认模型：`openrouter/free`；可访问 100+ 模型）
 - **引导向导** — 首次启动的演练，涵盖 Act 模式安全性与提供商配置
@@ -140,6 +140,7 @@ python -m sglang.launch_server --model-path your-model --port 30000
 | Groq | 必需 | llama-3.3-70b-versatile |
 | MiniMax | 必需 | minimax-m2.7 |
 | 阿里云（通义千问 Qwen） | 必需 | qwen-max |
+| z.ai GLM | 必需 | glm-5.2 |
 | OpenRouter | 必需 | openrouter/free |
 
 ## 架构

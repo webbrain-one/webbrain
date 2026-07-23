@@ -38,7 +38,7 @@
   - **OpenAI** (GPT-5.6, etc.)
   - **Anthropic Claude** (native API)
   - **Google Gemini**, **Mistral AI**, **DeepSeek**, **xAI Grok**, **Groq**
-  - **MiniMax**, **Kimi**, **Alibaba Cloud (Qwen)**
+  - **MiniMax**, **Kimi**, **Alibaba Cloud (Qwen)**, **z.ai GLM**
   - **Cloudflare Workers AI**, **Nvidia NIM**
   - **OpenRouter** (default model: `openrouter/free`; access 100+ models)
 - **Onboarding Wizard** — First-launch walkthrough covering Act mode safety and provider setup
@@ -177,6 +177,7 @@ Base URLs are pre-filled in Settings when you select a provider. Local servers u
 | MiniMax | Required | minimax-m2.7 |
 | Kimi | Required | kimi-k2.5 |
 | Alibaba Cloud (Qwen) | Required | qwen-max |
+| z.ai GLM | Required | glm-5.2 |
 | OpenRouter | Required | openrouter/free |
 
 ## Architecture

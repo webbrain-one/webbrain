@@ -38,7 +38,7 @@
   - **OpenAI** (GPT-5.5, etc.)
   - **Anthropic Claude** (API native)
   - **Google Gemini**, **Mistral AI**, **DeepSeek**, **xAI Grok**, **Groq**
-  - **MiniMax**, **Alibaba Cloud (Qwen)**
+  - **MiniMax**, **Alibaba Cloud (Qwen)**, **z.ai GLM**
   - **Cloudflare Workers AI**, **Nvidia NIM**
   - **OpenRouter** (modèle par défaut : `openrouter/free` ; accès à plus de 100 modèles)
 - **Assistant d'intégration** — Visite guidée au premier lancement couvrant la sécurité du mode Act et la configuration des fournisseurs
@@ -140,6 +140,7 @@ Les URL de base sont préremplies dans les paramètres lorsque vous choisissez u
 | Groq | Requise | llama-3.3-70b-versatile |
 | MiniMax | Requise | minimax-m2.7 |
 | Alibaba Cloud (Qwen) | Requise | qwen-max |
+| z.ai GLM | Requise | glm-5.2 |
 | OpenRouter | Requise | openrouter/free |
 
 ## Architecture
