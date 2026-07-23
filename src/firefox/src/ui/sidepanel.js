@@ -8020,6 +8020,7 @@ let chatAutoFollow = true;
 let chatUserScrollActive = false;
 let chatUserScrollSettleTimer = null;
 let chatNavigationDismissedAssistantEl = null;
+let chatNavigationInsetAssistantEl = null;
 
 function precedingUserMessage(assistantEl) {
   let candidate = assistantEl?.previousElementSibling || null;
@@ -8056,8 +8057,15 @@ function chatTurnIsRunning(turn = chatNavigationTurn) {
 }
 
 function setChatNavigationVisible(visible) {
+  const insetAssistantEl = visible && chatTurnIsConnected()
+    ? chatNavigationTurn.assistantEl
+    : null;
+  if (chatNavigationInsetAssistantEl !== insetAssistantEl) {
+    chatNavigationInsetAssistantEl?.classList.remove('chat-navigation-inset');
+    insetAssistantEl?.classList.add('chat-navigation-inset');
+    chatNavigationInsetAssistantEl = insetAssistantEl;
+  }
   chatNavigationEl?.classList.toggle('hidden', !visible);
-  chatContainerEl?.classList.toggle('chat-navigation-visible', visible);
 }
 
 function resetChatNavigation() {

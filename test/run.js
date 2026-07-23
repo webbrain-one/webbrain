@@ -17447,8 +17447,8 @@ test('sidepanel long replies use reading-first turn navigation', () => {
     );
     assert.match(
       css,
-      /#chat-container\.chat-navigation-visible \{[\s\S]*?padding-block-end: 60px;/,
-      `${label}: visible navigation should reserve enough logical bottom space to uncover the latest content`,
+      /\.message\.assistant\.chat-navigation-inset \.message-content \{[\s\S]*?padding-block-end: 60px;/,
+      `${label}: visible navigation should reserve space inside the answer card instead of creating a separate row`,
     );
     assert.match(
       css,
@@ -17472,8 +17472,8 @@ test('sidepanel long replies use reading-first turn navigation', () => {
     );
     assert.match(
       panel,
-      /function setChatNavigationVisible\(visible\) \{[\s\S]*?toggle\('hidden', !visible\)[\s\S]*?toggle\('chat-navigation-visible', visible\)/,
-      `${label}: pill visibility should keep the scroll container's bottom inset in sync`,
+      /function setChatNavigationVisible\(visible\) \{[\s\S]*?chatNavigationInsetAssistantEl\?\.classList\.remove\('chat-navigation-inset'\);[\s\S]*?insetAssistantEl\?\.classList\.add\('chat-navigation-inset'\);[\s\S]*?toggle\('hidden', !visible\)/,
+      `${label}: pill visibility should keep the active answer's internal inset in sync`,
     );
     assert.match(
       panel,

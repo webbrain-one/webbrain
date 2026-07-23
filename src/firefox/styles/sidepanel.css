@@ -802,7 +802,7 @@ body {
   position: relative;
 }
 
-#chat-container.chat-navigation-visible {
+.message.assistant.chat-navigation-inset .message-content {
   padding-block-end: 60px;
 }
 
