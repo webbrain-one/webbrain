@@ -42500,8 +42500,17 @@ test('Chrome Web Store release uses an always-on protected-page guard and opt-in
   assert.equal(failure.errorCode, 'chrome_protected_page');
   assert.equal(failure.nonRetryable, true);
   assert.equal(failure.dispatched, false);
-  assert.equal(failure.recoverySkill, 'chrome-web-store-release');
+  assert.equal(failure.recoverySkill, undefined);
   assert.match(failure.error, /Do not retry/i);
+  assert.match(failure.error, /Continue manually/i);
+  assert.doesNotMatch(failure.error, /enable.*Chrome Web Store release|Settings → Skills/i);
+  const chromeAgentRoutingSource = fs.readFileSync(path.join(ROOT, 'src/chrome/src/agent/agent.js'), 'utf8');
+  assert.doesNotMatch(chromeAgentRoutingSource, /ask the user to enable\/configure that packaged skill/i, 'chrome: runtime warning must not route users to a removed packaged skill');
+  for (const file of ['src/chrome/src/agent/adapters.js', 'src/firefox/src/agent/adapters.js']) {
+    const adapterSource = fs.readFileSync(path.join(ROOT, file), 'utf8');
+    assert.doesNotMatch(adapterSource, /ask the user to enable "Chrome Web Store release"/i, `${file}: adapter must not route users to a removed packaged skill`);
+    assert.match(adapterSource, /Continue manually in the dashboard; no packaged release skill is available/i, `${file}: adapter should provide an available fallback`);
+  }
   for (const toolName of ['wait_for_stable', 'get_accessibility_tree', 'read_page', 'click_ax', 'upload_file', 'download_resource_from_page', 'execute_js', 'get_frames']) {
     assert.equal(isChromeProtectedPageDomTool(toolName), true, `chrome: ${toolName} should be stopped before protected-page dispatch`);
   }
@@ -42741,10 +42750,13 @@ test('Chrome Web Store release uses an always-on protected-page guard and opt-in
 
   const adapter = getActiveAdapter(dashboard);
   assert.equal(adapter?.name, 'chrome-web-store-developer');
-  assert.match(adapter?.notes || '', /chrome_web_store_status/);
+  assert.doesNotMatch(adapter?.notes || '', /chrome_web_store_status|Settings → Skills/);
+  assert.match(adapter?.notes || '', /Continue manually in the dashboard/);
   assert.equal(getActiveAdapter('https://chrome.google.com/webstore/devconsole?authuser=1')?.name, 'chrome-web-store-developer');
   assert.equal(getActiveAdapterFx(dashboard)?.name, 'chrome-web-store-developer');
   assert.equal(getActiveAdapterFx('https://chrome.google.com/webstore/devconsole#drafts')?.name, 'chrome-web-store-developer');
+  assert.doesNotMatch(getActiveAdapterFx(dashboard)?.notes || '', /chrome_web_store_status|Settings → Skills/);
+  assert.match(getActiveAdapterFx(dashboard)?.notes || '', /Continue manually in the dashboard/);
 
   const chromeAgentSource = fs.readFileSync(path.join(ROOT, 'src/chrome/src/agent/agent.js'), 'utf8');
   const guardIndex = chromeAgentSource.indexOf('const protectedPageFailure = await this._chromeProtectedPageFailure(tabId, fnName);');
@@ -42755,6 +42767,7 @@ test('Chrome Web Store release uses an always-on protected-page guard and opt-in
     'chrome: protected-page guard must run before WebMCP preparation and tool dispatch',
   );
   assert.match(chromeAgentSource, /TRUSTED RUNTIME ROUTING: Chrome blocks extension DOM\/debugger access/, 'chrome: protected-page recovery should remain outside the untrusted page-content wrapper');
+  assert.doesNotMatch(chromeAgentSource, /ask the user to enable\/configure that packaged skill/i, 'chrome: protected-page recovery must not route users to a removed packaged skill');
 });
 
 test('Chrome Web Store upload forces a fresh status turn before any batched publish', async () => {
@@ -42941,8 +42954,8 @@ test('settings exposes custom skills tab and packaged skills resource directory'
     assert.match(html, /id="skill-url"/, `${label}: URL skill input missing`);
     assert.match(html, /id="skill-text"/, `${label}: raw skill textarea missing`);
     assert.match(html, /id="packaged-skills-list"/, `${label}: available packaged skills list missing`);
-    assert.match(html, /id="chrome-web-store-release-card" hidden/, `${label}: release setup should be hidden until the skill is enabled`);
-    assert.match(html, /id="chrome-web-store-package"[^>]*accept="\.zip,application\/zip"/, `${label}: release ZIP picker missing`);
+    assert.doesNotMatch(html, /id="chrome-web-store-release-card"/, `${label}: removed release skill must not leave an orphaned setup card`);
+    assert.doesNotMatch(html, /id="chrome-web-store-package"/, `${label}: removed release skill must not leave an orphaned ZIP picker`);
     assert.match(html, /id="skill-preview-dialog"/, `${label}: skill content preview dialog missing`);
     assert.match(html, /id="skill-preview-rendered"[^>]*tabindex="0"/, `${label}: rendered skill preview should be keyboard-scrollable`);
     assert.match(html, /id="skill-preview-raw"[^>]*tabindex="0"[^>]*hidden/, `${label}: raw skill preview should be available but hidden by default`);
@@ -42975,15 +42988,14 @@ test('settings exposes custom skills tab and packaged skills resource directory'
     assert.match(settingsJs, /installedDefault/, `${label}: reinstalling a default should clear its removal tombstone`);
     assert.match(settingsJs, /st\.skills\.source\.built_in/, `${label}: settings should label packaged skills`);
     assert.match(settingsJs, /skill\.tools/, `${label}: settings should show exposed skill tools`);
-    assert.match(settingsJs, /CHROME_WEB_STORE_PACKAGE_KEY/, `${label}: release package should use dedicated local storage`);
-    assert.match(settingsJs, /crypto\.subtle\.digest\('SHA-256'/, `${label}: release package should record a local integrity digest`);
+    assert.doesNotMatch(settingsJs, /CHROME_WEB_STORE_(?:CONFIG|PACKAGE|SKILL)/, `${label}: removed release setup must not leave UI storage wiring`);
+    assert.doesNotMatch(settingsJs, /chrome_web_store_oauth_/, `${label}: removed release setup must not leave UI OAuth handlers`);
     const skillIdFunction = settingsJs.slice(
       settingsJs.indexOf('function makeSkillId()'),
       settingsJs.indexOf('function showSkillsResult'),
     );
     assert.match(skillIdFunction, /crypto\.randomUUID\(\)/, `${label}: imported skill IDs should use secure randomness`);
     assert.doesNotMatch(skillIdFunction, /Math\.random\(/, `${label}: imported skill IDs must not use insecure randomness`);
-    assert.match(background, /chrome_web_store_oauth_start/, `${label}: release OAuth should run in the durable background context`);
     assert.match(englishLocale, /small catalog sends only each eligible skill\\'s ID, name, summary, and optional semantic intents/, `${label}: settings should explain the semantic skill catalog`);
     assert.match(englishLocale, /full instructions and compatible <code>webbrain-tools<\/code> are exposed only after/i, `${label}: settings should explain on-demand skill loading`);
     assert.match(englishLocale, /Compact does not load skills/, `${label}: settings should explain Compact skill isolation`);
