@@ -2043,9 +2043,10 @@
       const matchCase = params?.matchCase === true;
       const backwards = params?.backwards === true;
       const wrap = params?.wrap !== false;
-      // Match browser Find semantics across the whole document, including
-      // embedded frames. Without searchInFrames, find_text falsely reports a
-      // miss for text that Ctrl/Cmd+F would find inside an iframe.
+      // Match browser Find semantics across the whole page, including frames.
+      // When the active match moves into a frame, the top document can retain
+      // an older selection; frame focus keeps that stale range from verifying
+      // the current hit.
       const found = window.find(text, matchCase, backwards, wrap, false, true, false);
       if (!found) {
         return {
@@ -2057,11 +2058,56 @@
           error: `find_text: "${text}" was not found on the current page. Re-read the page or try a shorter literal phrase.`,
         };
       }
+      const activeElement = window.document?.activeElement;
+      const activeElementTag = String(activeElement?.tagName || '').toUpperCase();
+      const inputType = String(activeElement?.type || 'text').toLowerCase();
+      const isTextControl = activeElementTag === 'TEXTAREA'
+        || (activeElementTag === 'INPUT' && ['text', 'search', 'url', 'tel', 'email'].includes(inputType));
+      const normalizedQuery = text.normalize('NFC');
+      const matchesQuery = (value) => {
+        const normalizedValue = String(value || '').normalize('NFC');
+        return matchCase
+          ? normalizedValue === normalizedQuery
+          : normalizedValue.toLowerCase() === normalizedQuery.toLowerCase();
+      };
+      const hasVisibleBounds = (candidate) => !!candidate
+        && [candidate.x, candidate.y, candidate.width, candidate.height].every(Number.isFinite)
+        && candidate.width > 0
+        && candidate.height > 0;
       const selection = window.getSelection?.();
-      const selectedText = String(selection?.toString?.() || '');
+      const documentSelectedText = String(selection?.toString?.() || '');
+      const documentBounds = selection?.rangeCount
+        ? selection.getRangeAt(0).getBoundingClientRect()
+        : undefined;
+      let controlSelectedText = '';
+      let controlBounds;
+      const controlSelectionStart = activeElement?.selectionStart;
+      const controlSelectionEnd = activeElement?.selectionEnd;
+      if (
+        isTextControl
+        && Number.isInteger(controlSelectionStart)
+        && Number.isInteger(controlSelectionEnd)
+        && controlSelectionStart >= 0
+        && controlSelectionEnd > controlSelectionStart
+      ) {
+        controlSelectedText = String(activeElement.value || '').slice(controlSelectionStart, controlSelectionEnd);
+        controlBounds = activeElement.getBoundingClientRect?.();
+      }
+      const documentMatchesQuery = matchesQuery(documentSelectedText);
+      const controlMatchesQuery = matchesQuery(controlSelectedText);
+      let selectedText = documentSelectedText;
+      let selectionSource = 'document';
+      let bounds = documentBounds;
+      if (documentMatchesQuery && hasVisibleBounds(documentBounds)) {
+        // Keep the page selection. A focused field can retain an unrelated
+        // selection while window.find advances to a normal document match.
+      } else if (controlMatchesQuery && hasVisibleBounds(controlBounds)) {
+        selectedText = controlSelectedText;
+        bounds = controlBounds;
+        selectionSource = 'text_control';
+      }
       let rect;
-      if (selection?.rangeCount) {
-        const bounds = selection.getRangeAt(0).getBoundingClientRect();
+      if (bounds) {
         const scrollX = Number.isFinite(Number(window.scrollX)) ? Number(window.scrollX) : 0;
         const scrollY = Number.isFinite(Number(window.scrollY)) ? Number(window.scrollY) : 0;
         rect = {
@@ -2077,12 +2123,16 @@
         && [rect.x, rect.y, rect.pageX, rect.pageY, rect.width, rect.height].every(Number.isFinite)
         && rect.width > 0
         && rect.height > 0;
-      const normalizedSelectedText = selectedText.normalize('NFC');
-      const normalizedQuery = text.normalize('NFC');
-      const selectionMatchesQuery = matchCase
-        ? normalizedSelectedText === normalizedQuery
-        : normalizedSelectedText.toLowerCase() === normalizedQuery.toLowerCase();
-      const verified = selectionMatchesQuery && hasVisibleRect;
+      const selectionMatchesQuery = matchesQuery(selectedText);
+      const selectionInFrame = activeElementTag === 'IFRAME' || activeElementTag === 'FRAME';
+      const hasSelectionIdentity = selectionSource !== 'text_control'
+        || (
+          Number.isInteger(controlSelectionStart)
+          && Number.isInteger(controlSelectionEnd)
+          && controlSelectionStart >= 0
+          && controlSelectionEnd > controlSelectionStart
+        );
+      const verified = selectionMatchesQuery && hasVisibleRect && hasSelectionIdentity && !selectionInFrame;
       return {
         success: true,
         found: true,
@@ -2090,13 +2140,18 @@
         query: text,
         selectedText,
         selectionMatchesQuery,
-        selectionScope: 'current_match_only',
-        replacesPreviousSelection: true,
+        selectionSource,
+        selectionInFrame,
+        selectionScope: selectionInFrame ? 'frame_match_unverified' : 'current_match_only',
+        ...(selectionSource === 'text_control'
+          ? { selectionStart: controlSelectionStart, selectionEnd: controlSelectionEnd }
+          : {}),
+        replacesPreviousSelection: !selectionInFrame,
         browserFindUiOpened: false,
         ...(rect ? { rect } : {}),
         warning: verified
           ? 'Only this match is selected. This call replaced any previous page selection, and it did not open the browser Find UI. Do not claim earlier find_text matches remain highlighted.'
-          : 'window.find reported a match, but WebBrain could not verify a visible selection in the top document (for example, the match may be inside a frame). Do not claim it is visibly highlighted. Only one current selection is supported, and the browser Find UI was not opened.',
+          : 'window.find reported a match, but WebBrain could not verify a visible current selection in the top document (for example, the active match may be inside a frame while an older top-document selection remains). Do not claim it is visibly highlighted. The browser Find UI was not opened.',
       };
     } catch (error) {
       return { success: false, found: false, dispatched: false, noDispatch: true, error: `find_text failed: ${error.message || error}` };

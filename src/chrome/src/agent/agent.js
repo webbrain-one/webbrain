@@ -1328,9 +1328,22 @@ export class Agent {
     const x = Number.isFinite(pageX) ? pageX : viewportX;
     const y = Number.isFinite(pageY) ? pageY : viewportY;
     if (![x, y, width, height].every(Number.isFinite) || width <= 0 || height <= 0) return '';
-    return [x, y, width, height]
+    let selectionIdentity = 'document';
+    if (result.selectionSource === 'text_control') {
+      const selectionStart = result.selectionStart;
+      const selectionEnd = result.selectionEnd;
+      if (
+        !Number.isInteger(selectionStart)
+        || !Number.isInteger(selectionEnd)
+        || selectionStart < 0
+        || selectionEnd <= selectionStart
+      ) return '';
+      selectionIdentity = `text_control:${selectionStart}:${selectionEnd}`;
+    }
+    const rectIdentity = [x, y, width, height]
       .map(value => Math.round(value * 2) / 2)
       .join(',');
+    return `${selectionIdentity}|${rectIdentity}`;
   }
 
   _noteHealthyLoopCall(tabId) {
