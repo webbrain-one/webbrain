@@ -66,9 +66,9 @@ class BaseLLMProvider {
 ### Interactive Ask streaming
 
 Interactive Ask chats stream for the built-in OpenAI, Anthropic, Azure OpenAI,
-Gemini, Mistral, DeepSeek, xAI, Nvidia NIM, Groq, Alibaba Cloud, Together AI,
-Fireworks, z.ai, OpenRouter, WebBrain Cloud, llama.cpp, Ollama, LM Studio, Jan,
-vLLM, SGLang, and LocalAI providers.
+Gemini, Mistral, DeepSeek, xAI, Nvidia NIM, Groq, Together AI, Fireworks, z.ai,
+OpenRouter, WebBrain Cloud, llama.cpp, Ollama, LM Studio, Jan, vLLM, SGLang,
+and LocalAI providers.
 Official OpenAI GPT-5.6 and streaming-capable Responses-only GPT-5 Pro variants
 use Responses streaming. Supported GPT-5.x, GPT-4.1, GPT-4o, GPT-4 Turbo, and
 o-series variants retain Chat Completions streaming. GPT-5.5 Pro and other
@@ -76,6 +76,10 @@ official OpenAI models without documented streaming or function-calling
 support stay non-streaming. Compatible built-ins opt in with
 `supportsAskStreaming: true`; custom endpoints are not inferred from their
 model names.
+
+Alibaba Cloud remains non-streaming for interactive Ask because
+[DashScope does not allow `tools` with `stream=True`](https://www.alibabacloud.com/help/en/model-studio/compatibility-of-openai-with-dashscope),
+and Ask always sends its read-only tool catalog.
 
 Every parser waits for its protocol's terminal event (`response.completed`,
 Anthropic `message_stop`, or SSE `[DONE]`). A network/read error, malformed

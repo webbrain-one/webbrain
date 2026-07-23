@@ -445,7 +445,6 @@ export class ProviderManager {
         baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
         model: 'qwen-max',
         supportsStreamUsageOptions: true,
-        supportsAskStreaming: true,
         apiKey: '',
         apiKeyUrl: 'https://dashscope.console.aliyun.com/apiKey',
         enabled: false,

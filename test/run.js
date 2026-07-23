@@ -26699,7 +26699,6 @@ test('documented built-in providers opt into interactive Ask streaming', () => {
     'xai',
     'nvidia',
     'groq',
-    'alibaba',
     'together',
     'openrouter',
     'fireworks',
@@ -26716,6 +26715,23 @@ test('documented built-in providers opt into interactive Ask streaming', () => {
         `${PM.name}/${id}: provider should expose interactive Ask streaming`,
       );
     }
+  }
+});
+
+test('Alibaba Ask stays non-streaming even with a stale stored opt-in', () => {
+  for (const PM of [ProviderManagerCh, ProviderManagerFx]) {
+    const manager = new PM();
+    const defaults = manager._defaultConfigs();
+    assert.notEqual(defaults.alibaba.supportsAskStreaming, true, `${PM.name}: Alibaba default must not opt in`);
+    const provider = manager._createProvider('alibaba', {
+      ...defaults.alibaba,
+      supportsAskStreaming: true,
+    });
+    assert.equal(
+      provider._supportsInteractiveAskStreaming(),
+      false,
+      `${PM.name}: DashScope tools+stream incompatibility must override stale stored config`,
+    );
   }
 });
 
@@ -27197,7 +27213,6 @@ test('OpenAI-compatible Ask providers consume text, tool, usage, and DONE fixtur
     'xai',
     'nvidia',
     'groq',
-    'alibaba',
     'together',
     'openrouter',
     'fireworks',

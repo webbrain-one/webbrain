@@ -224,6 +224,12 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
       baseUrl: this.baseUrl,
       model: this.model,
     };
+    // DashScope rejects `tools` together with `stream: true`, while Ask always
+    // supplies its read-only tool catalog. Keep even stale/imported opt-ins on
+    // the safe non-streaming path.
+    if (String(resolved.providerName || '').trim().toLowerCase() === 'alibaba') {
+      return false;
+    }
     if (isOfficialOpenAIConfig(resolved)) {
       return supportsOpenAIAskStreaming(resolved);
     }

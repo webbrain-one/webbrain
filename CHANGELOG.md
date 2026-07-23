@@ -9,7 +9,7 @@ This changelog was generated from the repository Git history and release tags. V
 ### Changed
 - Expanded interactive Ask streaming from GPT-5.6 to documented streaming- and function-calling-capable official OpenAI models, while keeping GPT-5.5 Pro and other unsupported variants non-streaming.
 - Routed Responses-only GPT-5 Pro variants through the Responses API and retained Chat Completions streaming for other supported OpenAI models.
-- Enabled interactive Ask streaming for Anthropic, Azure OpenAI, Gemini, DeepSeek, xAI, Mistral, Nvidia NIM, Groq, Alibaba Cloud, Together AI, Fireworks, z.ai, OpenRouter, WebBrain Cloud, llama.cpp, Ollama, LM Studio, Jan, vLLM, SGLang, and LocalAI with provider-specific terminal-event validation.
+- Enabled interactive Ask streaming for Anthropic, Azure OpenAI, Gemini, DeepSeek, xAI, Mistral, Nvidia NIM, Groq, Together AI, Fireworks, z.ai, OpenRouter, WebBrain Cloud, llama.cpp, Ollama, LM Studio, Jan, vLLM, SGLang, and LocalAI with provider-specific terminal-event validation.
 - Generalized the Advanced streaming control and made safe transport/protocol fallback silent: the affected generation retries non-streaming once, then streaming stays disabled for the rest of that run.
 
 ### Fixed
@@ -22,6 +22,7 @@ This changelog was generated from the repository Git history and release tags. V
 - Added z.ai's required `tool_stream` request option for streaming generations that expose agent tools.
 - Preserved Groq token usage delivered in the provider-specific `x_groq` streaming envelope.
 - Rejected z.ai streams that finish with `sensitive`, `network_error`, or `model_context_window_exceeded` instead of persisting partial output as a successful response.
+- Kept Alibaba Cloud Ask calls non-streaming because DashScope rejects its required `tools` payload when `stream: true`.
 - Preserved in-progress streamed Markdown across side-panel/sidebar closes, reloads, and reconnects in Chrome and Firefox.
 - Rebuilt restored streams from the background-owned UI journal without duplicating deltas, losing Markdown structure, or leaving an unfinished stream in its incremental render state.
 
