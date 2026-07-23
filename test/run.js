@@ -14182,6 +14182,16 @@ test('settings Providers tab has a search box beside provider filters', () => {
     assert.match(locale, /'st\.providers\.search\.empty': 'No providers match this search and filter\.'/, `${label}: provider search empty state should be localized`);
     assert.match(settings, /let providerSearchQuery = '';/, `${label}: provider search query should be session state`);
     assert.match(settings, /function providerSearchTextForEntry\(id, config, fieldDefs\) \{[\s\S]*?field\.labelKey \? t\(field\.labelKey\) : field\.label,[\s\S]*?config\.model,[\s\S]*?config\.baseUrl,[\s\S]*?\}/, `${label}: provider search should index labels, models, and URLs`);
+    assert.match(settings, /function providerSearchRank\(id, config, query\) \{[\s\S]*?name === query[\s\S]*?name\.startsWith\(query\)[\s\S]*?name\.includes\(query\)[\s\S]*?\}/, `${label}: exact provider names should rank above prefix and substring matches`);
+    assert.match(settings, /if \(providerQuery\) \{[\s\S]*?rank: providerSearchRank\(entry\[0\], entry\[1\], providerQuery\),[\s\S]*?\.sort\(\(a, b\) => a\.rank - b\.rank \|\| a\.index - b\.index\)[\s\S]*?\}/, `${label}: provider search should sort matches by relevance while preserving the original order for ties`);
+    const rankStart = settings.indexOf('function providerSearchRank(');
+    const rankEnd = settings.indexOf('\n}\n\nfunction renderProviders', rankStart);
+    const providerSearchRank = vm.runInNewContext(`(${settings.slice(rankStart, rankEnd + 2)})`, {
+      normalizeGeneralSearchText: (value) => String(value || '').toLowerCase(),
+    });
+    const exactOpenAiRank = providerSearchRank('openai', { label: 'OpenAI', providerName: 'openai' }, 'openai');
+    const azureOpenAiRank = providerSearchRank('azure_openai', { label: 'Azure OpenAI', providerName: 'azure-openai' }, 'openai');
+    assert.ok(exactOpenAiRank < azureOpenAiRank, `${label}: searching "openai" should put OpenAI ahead of Azure OpenAI`);
     assert.match(settings, /const providerQuery = normalizeGeneralSearchText\(providerSearchQuery\);[\s\S]*?if \(providerQuery && !providerSearchTextForEntry\(id, config, fieldDefs\)\.includes\(providerQuery\)\) continue;/, `${label}: provider rendering should combine search with the active category filter`);
     assert.match(settings, /input\.id = 'input-provider-search';[\s\S]*?input\.placeholder = t\('st\.providers\.search\.placeholder'\);[\s\S]*?input\.value = providerSearchQuery;/, `${label}: provider filter bar should render the search input`);
     assert.match(settings, /let providerSearchComposing = false;/, `${label}: provider search should track IME composition state`);
