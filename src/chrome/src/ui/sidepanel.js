@@ -1458,6 +1458,7 @@ async function flushRenderedTabChat() {
     persistTimer = null;
     persistTimerTabId = null;
   }
+  flushPendingStreamedAssistantMarkdownRenders();
   await persistTabChat(tabId, messagesEl.innerHTML);
 }
 
@@ -3600,11 +3601,50 @@ async function applyActiveRunState(numericTabId, state) {
     runAssistantEl.dataset.runRequestId = String(runUi.requestId);
     if (runUi.runId) runAssistantEl.dataset.runId = String(runUi.runId);
     const lastRenderedSeq = Number(runAssistantEl.dataset.lastRenderedSeq || 0);
+    const replayEvents = Array.isArray(runUi.events) ? runUi.events : [];
+    const snapshotStreamedText = runUi.streamedTextTruncated === true
+      ? ''
+      : String(runUi.streamedText || '');
+    const streamedTextStartSeq = Number(runUi.streamedTextStartSeq || 0);
+    const streamedTextSeq = Number(runUi.streamedTextSeq || 0);
+    const shouldRestoreStreamedText = !!snapshotStreamedText
+      && Number(runUi.seq || 0) >= lastRenderedSeq
+      && (
+        !isTerminalRunUiStatus(runUi.status)
+        || lastRenderedSeq < Number(runUi.seq || 0)
+      );
+    const hasReplayableStreamStart = shouldRestoreStreamedText
+      && streamedTextStartSeq > lastRenderedSeq
+      && replayEvents.some((event) => (
+        event?.type === 'text_delta'
+        && Number(event.seq || 0) === streamedTextStartSeq
+      ));
+    let restoredSnapshotStream = false;
+    const restoreSnapshotStream = () => {
+      if (!shouldRestoreStreamedText || restoredSnapshotStream) return;
+      const textEl = runAssistantEl.querySelector('.message-text');
+      if (!textEl) return;
+      streamedAssistantTextByEl.set(textEl, snapshotStreamedText);
+      textEl.dataset.streamedAssistantActive = 'true';
+      renderStreamedAssistantMarkdownNow(textEl);
+      restoredSnapshotStream = true;
+    };
+    if (!hasReplayableStreamStart) restoreSnapshotStream();
     if (runUi.truncatedBeforeSeq > lastRenderedSeq) {
       addContextCompactedNote({ message: 'Some hidden-tab progress was compacted.' });
     }
-    for (const event of Array.isArray(runUi.events) ? runUi.events : []) {
+    for (const event of replayEvents) {
       if (Number(event?.seq || 0) <= lastRenderedSeq) continue;
+      const eventSeq = Number(event.seq || 0);
+      const representedBySnapshotStream = shouldRestoreStreamedText
+        && event.type === 'text_delta'
+        && eventSeq >= streamedTextStartSeq
+        && eventSeq <= streamedTextSeq;
+      if (representedBySnapshotStream) {
+        restoreSnapshotStream();
+        runAssistantEl.dataset.lastRenderedSeq = String(event.seq);
+        continue;
+      }
       handleAgentUpdateMessage({
         target: 'sidepanel',
         action: 'agent_update',
@@ -6874,14 +6914,22 @@ function handleAgentUpdateMessage(msg) {
         if (textEl && textEl.dataset.suppressToolCallStream !== 'true') {
           // Keep the raw Markdown separate from the rendered DOM. Reading back
           // textContent would discard markers such as ** and backticks after
-          // the first incremental render, corrupting every later chunk.
-          const nextText = getStreamedAssistantText(textEl) + String(data.content || '');
+          // the first incremental render, corrupting every later chunk. A
+          // restored chat intentionally persists only an active-stream marker,
+          // while the background journal normally rehydrates the raw source.
+          // Use visible text only as a legacy/overflow fallback so a new chunk
+          // cannot erase the existing response before the authoritative
+          // terminal render restores exact Markdown formatting.
+          const previousText = getStreamedAssistantText(textEl)
+            || (hasStreamedAssistantText(textEl) ? textEl.innerText || textEl.textContent : '');
+          const nextText = previousText + String(data.content || '');
           if (looksLikeRawToolCallText(nextText)) {
             textEl.textContent = '';
             clearStreamedAssistantText(textEl);
             textEl.dataset.suppressToolCallStream = 'true';
           } else {
             streamedAssistantTextByEl.set(textEl, nextText);
+            textEl.dataset.streamedAssistantActive = 'true';
             scheduleStreamedAssistantMarkdownRender(textEl);
           }
         }
@@ -6963,6 +7011,9 @@ function handleAgentUpdateMessage(msg) {
       if (currentAssistantEl && data?.finalContent) {
         const textEl = currentAssistantEl.querySelector('.message-text');
         const streamedText = getStreamedAssistantText(textEl);
+        const hasStreamedText = hasStreamedAssistantText(textEl);
+        const visibleStreamedText = streamedText
+          || (hasStreamedText ? textEl?.innerText || textEl?.textContent || '' : '');
         if (textEl && parseCostAllowanceError(data.finalContent)) {
           clearAssistantTextStreamState(currentAssistantEl);
           if (!textEl.classList.contains('cost-allowance-error')) {
@@ -6973,7 +7024,7 @@ function handleAgentUpdateMessage(msg) {
             });
           }
           addMessageCopyButton(currentAssistantEl);
-        } else if (textEl && streamedText) {
+        } else if (textEl && hasStreamedText) {
           // Background/restored runs do not necessarily reach the local
           // sendRunWithReconnect response handler. Finalize their lightweight
           // live Markdown here, cancelling any queued frame and enabling the
@@ -6981,7 +7032,7 @@ function handleAgentUpdateMessage(msg) {
           // partial text when the user stopped the run; otherwise the terminal
           // snapshot is authoritative if it differs from the live stream.
           const terminalContent = data.status === 'stopped' || data.status === 'cancelled'
-            ? streamedText
+            ? visibleStreamedText
             : String(data.finalContent);
           renderAssistantTextUpdate(currentAssistantEl, terminalContent, {
             replace: terminalContent !== streamedText,
@@ -7739,13 +7790,30 @@ function getStreamedAssistantText(textEl) {
   return streamedAssistantTextByEl.get(textEl) || textEl?.dataset?.streamedAssistantText || '';
 }
 
+function hasStreamedAssistantText(textEl) {
+  return !!textEl && (
+    streamedAssistantTextByEl.has(textEl)
+    || textEl.dataset.streamedAssistantActive === 'true'
+    || !!textEl.dataset.streamedAssistantText
+  );
+}
+
 function clearStreamedAssistantText(textEl) {
   if (!textEl) return;
   const frame = streamedAssistantRenderFrameByEl.get(textEl);
   if (frame != null) cancelAnimationFrame(frame);
   streamedAssistantRenderFrameByEl.delete(textEl);
   streamedAssistantTextByEl.delete(textEl);
+  delete textEl.dataset.streamedAssistantActive;
   delete textEl.dataset.streamedAssistantText;
+}
+
+function renderStreamedAssistantMarkdownNow(textEl) {
+  if (!textEl || textEl.dataset.suppressToolCallStream === 'true') return;
+  const streamedText = getStreamedAssistantText(textEl);
+  if (!streamedText) return;
+  textEl.innerHTML = formatMarkdown(streamedText, { enhance: false });
+  scrollToBottom();
 }
 
 function scheduleStreamedAssistantMarkdownRender(textEl) {
@@ -7753,11 +7821,19 @@ function scheduleStreamedAssistantMarkdownRender(textEl) {
   const frame = requestAnimationFrame(() => {
     if (streamedAssistantRenderFrameByEl.get(textEl) !== frame) return;
     streamedAssistantRenderFrameByEl.delete(textEl);
-    if (textEl.dataset.suppressToolCallStream === 'true') return;
-    textEl.innerHTML = formatMarkdown(getStreamedAssistantText(textEl), { enhance: false });
-    scrollToBottom();
+    renderStreamedAssistantMarkdownNow(textEl);
   });
   streamedAssistantRenderFrameByEl.set(textEl, frame);
+}
+
+function flushPendingStreamedAssistantMarkdownRenders(root = messagesEl) {
+  root?.querySelectorAll?.('.message-text[data-streamed-assistant-active="true"]').forEach((textEl) => {
+    const frame = streamedAssistantRenderFrameByEl.get(textEl);
+    if (frame == null) return;
+    cancelAnimationFrame(frame);
+    streamedAssistantRenderFrameByEl.delete(textEl);
+    renderStreamedAssistantMarkdownNow(textEl);
+  });
 }
 
 function clearAssistantTextStreamState(assistantEl) {
@@ -7797,9 +7873,10 @@ function renderAssistantTextUpdate(assistantEl, content, options = {}) {
   }
 
   const streamedText = getStreamedAssistantText(textEl);
+  const restoredStreamNeedsReplacement = hasStreamedAssistantText(textEl) && !streamedText;
   const isDuplicateStreamFinal = streamedText && streamedText === String(content);
 
-  if (options.replace === true) {
+  if (options.replace === true || restoredStreamNeedsReplacement) {
     // A rejected streamed terminal must replace its already-rendered deltas
     // even in Verbose mode; appending would leave the invalid plan visible.
     // Empty content clears the bubble (plan-only retry before recovery tools).
