@@ -13887,6 +13887,12 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
             break;
           }
         } else {
+          if (e?.isAskStreamTerminalError === true) {
+            onUpdate('error', { message: e.message });
+            finalResponse = `Error communicating with LLM: ${e.message}`;
+            messages.push({ role: 'assistant', content: finalResponse });
+            break;
+          }
           // Retry once after a short delay for transient errors (rate limits, network).
           this._logDebug({ type: 'llm_error_retrying', step: steps, error: e.message });
           await new Promise(r => setTimeout(r, 2000));

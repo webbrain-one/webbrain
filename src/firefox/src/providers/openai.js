@@ -564,6 +564,7 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
     error.isResponsesStreamFallbackSafe = !!stream && reason === 'missing_response_completed';
     error.isOpenAIAskStreamFallbackSafe = error.isResponsesStreamFallbackSafe;
     error.isAskStreamFallbackSafe = error.isResponsesStreamFallbackSafe;
+    error.isAskStreamTerminalError = !!stream && !error.isResponsesStreamFallbackSafe;
     error.incomplete = true;
     error.incompleteReason = reason;
     return error;
@@ -777,7 +778,7 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
             throw this._responsesIncompleteError(response, { stream: true });
           } else if (event.type === 'response.failed' || event.type === 'error') {
             const message = event.response?.error?.message || event.error?.message || event.message || 'Responses stream failed.';
-            const streamError = new Error(message);
+            const streamError = this._askStreamTerminalError(message);
             streamError.isResponsesStreamError = true;
             throw streamError;
           }

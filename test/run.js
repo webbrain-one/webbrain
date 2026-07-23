@@ -27663,6 +27663,64 @@ test('Ask stream failure clears partial text and falls back once for the rest of
   }
 });
 
+test('Ask terminal stream errors clear partial text without retrying the generation', async () => {
+  for (const [index, [label, AgentClass]] of [['chrome', AgentCh], ['firefox', AgentFx]].entries()) {
+    let streamCalls = 0;
+    let chatCalls = 0;
+    const provider = {
+      supportsTools: false,
+      supportsVision: false,
+      promptTier: 'full',
+      contextWindow: 128000,
+      model: 'gpt-5.6-terra',
+      name: 'openai',
+      _supportsInteractiveAskStreaming: () => true,
+      async *chatStream() {
+        streamCalls += 1;
+        yield { type: 'text', content: 'Blocked partial' };
+        const error = new Error('policy blocked');
+        error.isAskStreamError = true;
+        error.isAskStreamTerminalError = true;
+        throw error;
+      },
+      async chat() {
+        chatCalls += 1;
+        return { content: 'Unexpected retry.', toolCalls: null };
+      },
+    };
+    const agent = new AgentClass({
+      getActive: () => provider,
+      getVisionProvider: async () => null,
+    });
+    const tabId = 9570 + index;
+    configurePlanOnlyGuardAgent(agent, tabId);
+    agent.conversationModes.set(tabId, 'ask');
+    agent._maybeRunPlannerGate = async (_tabId, messages, enriched) => {
+      messages.push(enriched);
+      return { proceed: true, requestKind: 'execute', requiresStateChange: false };
+    };
+    agent._startTraceRun = async () => null;
+    agent._endTraceRun = () => {};
+
+    const updates = [];
+    const final = await agent.processMessage(
+      tabId,
+      'Explain the policy.',
+      (type, data) => updates.push({ type, data }),
+      'ask',
+      [],
+      { interactiveChat: true, askStreamingEnabled: true },
+    );
+
+    assert.equal(final, 'Error communicating with LLM: policy blocked', `${label}: terminal error should be surfaced`);
+    assert.equal(streamCalls, 1, `${label}: terminal stream errors must not retry the generation`);
+    assert.equal(chatCalls, 0, `${label}: terminal stream errors must not fall back to provider.chat()`);
+    assert.ok(updates.some(update => update.type === 'text' && update.data?.replace === true && update.data?.content === ''), `${label}: partial streamed text should be cleared`);
+    assert.equal(updates.filter(update => update.type === 'error').length, 1, `${label}: terminal error should be emitted once`);
+    assert.equal(agent.conversations.get(tabId).some(message => message.role === 'assistant' && message.content === 'Blocked partial'), false, `${label}: failed partial text must not persist`);
+  }
+});
+
 test('detached chat lifecycle owns the default-on Ask streaming kill switch', () => {
   assert.equal(ConfigTransferCh.DEFAULT_CONFIG_SETTINGS.openaiAskStreamingEnabled, true, 'Chrome config export should preserve the default-on streaming setting');
   assert.equal(ConfigTransferFx.DEFAULT_CONFIG_SETTINGS.openaiAskStreamingEnabled, true, 'Firefox config export should preserve the default-on streaming setting');
@@ -28658,10 +28716,30 @@ test('official GPT-5.6 treats incomplete Responses as hard failures', async () =
       assert.equal(thrown.incomplete, true);
       assert.equal(thrown.isResponsesStreamError, true);
       assert.equal(thrown.isResponsesStreamFallbackSafe, false, 'terminal response.incomplete must not trigger provider.chat() fallback');
+      assert.equal(thrown.isAskStreamTerminalError, true, 'terminal response.incomplete must bypass the agent retry');
       assert.equal(chunks[0]?.type, 'text');
       assert.equal(chunks[0]?.content, 'partial');
       assert.equal(chunks[1]?.type, 'usage');
       assert.equal(chunks.some((chunk) => chunk.type === 'done'), false);
+
+      globalThis.fetch = async () => new Response(
+        `data: ${JSON.stringify({
+          type: 'response.failed',
+          response: { error: { message: 'provider refused the stream' } },
+        })}\n\n`,
+        { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+      );
+      let failed = null;
+      try {
+        for await (const _chunk of provider.chatStream([{ role: 'user', content: 'hello' }], { maxTokens: 10 })) {
+          // No chunks are expected for response.failed.
+        }
+      } catch (error) {
+        failed = error;
+      }
+      assert.match(failed?.message || '', /provider refused the stream/);
+      assert.equal(failed?.isResponsesStreamError, true);
+      assert.equal(failed?.isAskStreamTerminalError, true, 'response.failed must bypass the agent retry');
     }
   } finally {
     globalThis.fetch = originalFetch;
@@ -28700,6 +28778,7 @@ test('official GPT-5.6 rejects premature Responses EOF and bare DONE sentinels',
         assert.equal(thrown.incomplete, true);
         assert.equal(thrown.isResponsesStreamError, true);
         assert.equal(thrown.isResponsesStreamFallbackSafe, true, 'missing response.completed should allow the non-streaming recovery path');
+        assert.notEqual(thrown.isAskStreamTerminalError, true, 'recoverable missing completion must retain the non-streaming fallback');
         assert.equal(chunks.some((chunk) => chunk.type === 'done'), false);
       }
     }
