@@ -12284,7 +12284,7 @@ test('background waits for an active run to stop before clearing its conversatio
 
     const clearStart = background.indexOf("case 'clear_conversation':");
     const clearBody = background.slice(clearStart, background.indexOf("case 'compact_conversation':", clearStart));
-    assert.match(clearBody, /await scheduler\.cancelForConversation\(tabId, conversationId\);[\s\S]*?await stopActiveRunBeforeConversationClear\(tabId\);[\s\S]*?agent\.clearConversation\(tabId\);/, `${label}: conversation state should clear only after the active run settles`);
+    assert.match(clearBody, /const conversationId = await agent\.getConversationId\(tabId\);[\s\S]*?await stopActiveRunBeforeConversationClear\(tabId\);[\s\S]*?await scheduler\.cancelForConversation\(tabId, conversationId\);[\s\S]*?agent\.clearConversation\(tabId\);/, `${label}: active runs should settle before old-conversation jobs and state are cleared`);
   }
 });
 

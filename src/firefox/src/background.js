@@ -2071,8 +2071,8 @@ async function handleMessage(msg, sender) {
       const tabId = msg.tabId || sender.tab?.id;
       if (tabId) {
         const conversationId = await agent.getConversationId(tabId);
-        await scheduler.cancelForConversation(tabId, conversationId);
         await stopActiveRunBeforeConversationClear(tabId);
+        await scheduler.cancelForConversation(tabId, conversationId);
         agent.clearConversation(tabId);
         clearRunUiSnapshot(tabId);
       }
