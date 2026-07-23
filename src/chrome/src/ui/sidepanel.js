@@ -1258,7 +1258,7 @@ function showStoreReviewStep(step) {
     document.getElementById(`store-review-step-${id}`)?.classList.toggle('hidden', id !== step);
   }
   storeReviewEl?.classList.remove('hidden');
-  scrollToBottom();
+  scrollToBottom({ force: true });
 }
 
 function setStoreReviewStarPreview(rating) {

@@ -47258,6 +47258,7 @@ test('sidepanel wires store review prompt after successful agent completion', ()
     assert.match(html, /id="store-review-step-negative"/, `${label}: negative step should exist`);
     assert.match(panel, /from '\.\/store-review-prompt\.js'/, `${label}: sidepanel should import store-review-prompt`);
     assert.match(panel, /void maybePromptStoreReviewAfterSuccess\(\)/, `${label}: successful completion should trigger review prompt check`);
+    assert.match(panel, /function showStoreReviewStep\(step\) \{[\s\S]*?scrollToBottom\(\{ force: true \}\);/, `${label}: the review dialog should override a protected reading position when shown`);
     assert.match(panel, /storeReviewSuccess:\s*currentTabId === tabId && promptEligibleCompletion/, `${label}: review prompt should count Ask completions separately from confetti success`);
     assert.match(panel, /mode !== 'ask'[\s\S]*?updatesContainStoreReviewFailure\(response\.updates\)[\s\S]*?parseSubscribeError/, `${label}: Ask completions should require a clean content response`);
     assert.match(panel, /function setStoreReviewStarPreview\(rating\)/, `${label}: star preview helper should exist`);
