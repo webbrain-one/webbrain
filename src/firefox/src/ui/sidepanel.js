@@ -364,6 +364,9 @@ if (globalThis.browser?.storage?.onChanged) {
 })();
 
 const messagesEl = document.getElementById('messages');
+const chatContainerEl = document.getElementById('chat-container');
+const chatNavigationEl = document.getElementById('chat-navigation');
+const chatNavigationLabelEl = document.getElementById('chat-navigation-label');
 const inputEl = document.getElementById('user-input');
 const inputHighlightEl = document.getElementById('input-highlight');
 const sendBtn = document.getElementById('btn-send');
@@ -1997,6 +2000,7 @@ async function renderClearedConversationForTab(tabId) {
   setApiMutationsAllowedForTab(tabId, false);
   await resetChatHistoryStateForTab(tabId);
   if (currentTabId !== tabId) return;
+  resetChatNavigation();
   renderedTabId = tabId;
   messagesEl.innerHTML = '';
   inputEl.value = '';
@@ -2186,6 +2190,7 @@ function ensureScheduledTerminalMessage(job) {
   if (!jobId || !isUrlTargetScheduledJob(job)) return null;
   const existing = findScheduledAssistantMessageForJob(jobId);
   if (existing) return existing;
+  resetChatNavigation();
   const msgEl = addMessage('assistant', '');
   msgEl.dataset.scheduledJobId = jobId;
   return msgEl;
@@ -2365,6 +2370,7 @@ function handleScheduledJobEvent(data, tabId) {
     setTabAbortRequested(runTabId, false);
     syncSendButtonState();
     hideRecommendedActions();
+    resetChatNavigation();
     currentAssistantEl = addMessage('assistant', '');
     if (jobId) currentAssistantEl.dataset.scheduledJobId = jobId;
     showActivity(t('sp.scheduled.running', { title }));
@@ -3207,7 +3213,6 @@ async function init() {
         messagesEl.innerHTML = html;
         messagesEl.querySelectorAll('[data-bound]').forEach(el => delete el.dataset.bound);
         rebindRestoredMessageControls();
-        scrollToBottom();
       }
     }
   }
@@ -3215,6 +3220,7 @@ async function init() {
   // Start observing the messages container for changes to persist.
   persistObserver.observe(messagesEl, { childList: true, subtree: true, characterData: true });
   await restoreActiveRunState(restoreTabId);
+  restoreLatestChatTurnPosition();
 
   await loadProviders();
   await testConnection({ skipWebBrainCloud: true });
@@ -3311,6 +3317,7 @@ async function switchToTab(newTabId) {
 
     currentTabId = newTabId;
     currentAssistantEl = null;
+    resetChatNavigation();
     syncCurrentTabRunFlags();
     syncApiMutationsAllowedForCurrentTab();
 
@@ -3333,9 +3340,9 @@ async function switchToTab(newTabId) {
     restoreInputDraftForTab(newTabId);
     renderAttachmentPreviews();
     renderQueuedComposerMessages(newTabId);
-    scrollToBottom();
     await restoreActiveRunState(newTabId);
     if (switchGeneration !== tabSwitchGeneration || currentTabId !== newTabId) return;
+    restoreLatestChatTurnPosition();
     refreshScheduledJobs({ tabId: newTabId });
     refreshRecommendedActions();
   } finally {
@@ -6114,6 +6121,7 @@ async function sendMessage(extraChatParams = {}) {
       clearPendingAttachmentsForTab(tabId);
       renderAttachmentPreviews();
     }
+    resetChatNavigation();
     userEl = addMessage('user', text);
     showActivity(t('sp.activity.thinking'));
     assistantEl = addMessage('assistant', '');
@@ -6123,6 +6131,7 @@ async function sendMessage(extraChatParams = {}) {
     assistantEl.dataset.retryAttachmentCount = String(attachmentsForSend.length);
     assistantEl.dataset.lastRenderedSeq = '0';
     currentAssistantEl = assistantEl;
+    beginReadingFirstTurn(userEl, assistantEl);
   }
   const activePayloadState = createActiveChatPayloadState(retryPayload, requestId);
   activeChatPayloadsByTab.set(tabId, activePayloadState);
@@ -6290,7 +6299,10 @@ function ensureCurrentRunAssistant(msg) {
       && (!currentAssistantEl.dataset.runRequestId || currentAssistantEl.dataset.runRequestId === requestId)) {
     assistantEl = currentAssistantEl;
   }
-  if (!assistantEl) assistantEl = addMessage('assistant', '');
+  if (!assistantEl) {
+    resetChatNavigation();
+    assistantEl = addMessage('assistant', '');
+  }
   assistantEl.dataset.runRequestId = requestId;
   if (msg.runId) assistantEl.dataset.runId = String(msg.runId);
   currentAssistantEl = assistantEl;
@@ -6549,8 +6561,10 @@ function renderClarifyCard(data) {
   if (scheduledJobId) hideRecommendedActions();
   let assistantEl = currentAssistantEl;
   if (scheduledJobId && data.forceNewScheduledCard) {
+    resetChatNavigation();
     assistantEl = addMessage('assistant', '');
   } else if (scheduledJobId && !assistantEl) {
+    resetChatNavigation();
     assistantEl = addMessage('assistant', '');
     currentAssistantEl = assistantEl;
   } else if (!assistantEl) {
@@ -6966,8 +6980,11 @@ function renderPlanReviewCard(data) {
   if (tabId == null) return;
   let assistantEl = currentAssistantEl;
   if (!assistantEl) {
+    resetChatNavigation();
     assistantEl = addMessage('assistant', '');
     currentAssistantEl = assistantEl;
+    const questionEl = precedingUserMessage(assistantEl);
+    beginReadingFirstTurn(questionEl, assistantEl);
   }
 
   const planId = String(data.planId || '');
@@ -7874,11 +7891,16 @@ async function continueAgent(options = {}) {
 
     document.querySelectorAll('.continue-bar').forEach(el => el.remove());
 
+    resetChatNavigation();
     assistantEl = addMessage('assistant', '');
     assistantEl.dataset.runRequestId = requestId;
     assistantEl.dataset.runMode = modeForSend;
     assistantEl.dataset.lastRenderedSeq = '0';
     currentAssistantEl = assistantEl;
+    const questionEl = precedingUserMessage(assistantEl);
+    if (beginReadingFirstTurn(questionEl, assistantEl)) {
+      scrollChatToQuestion({ smooth: false });
+    }
     showActivity(t('sp.activity.continuing'));
     localRunRequestIds.set(tabId, requestId);
 
@@ -7976,7 +7998,188 @@ function hideActivity() {
   hideInspectionBanner();
 }
 
+// A new turn is reading-first: its question stays put while the answer grows.
+// Auto-follow resumes only after the reader deliberately reaches the bottom;
+// the floating control provides explicit shortcuts between both turn anchors.
+const CHAT_SCROLL_EDGE_PX = 24;
+const CHAT_TURN_VISIBILITY_PX = 8;
+const CHAT_USER_SCROLL_SETTLE_MS = 160;
 let scrollToBottomFrame = null;
+let chatNavigationFrame = null;
+let chatNavigationRestoreFrame = null;
+let chatNavigationTurn = null;
+let chatAutoFollow = true;
+let chatUserScrollActive = false;
+let chatUserScrollSettleTimer = null;
+
+function precedingUserMessage(assistantEl) {
+  let candidate = assistantEl?.previousElementSibling || null;
+  while (candidate) {
+    if (candidate.matches?.('.message.user')) return candidate;
+    candidate = candidate.previousElementSibling;
+  }
+  return null;
+}
+
+function latestChatTurn() {
+  const assistantEl = [...(messagesEl?.querySelectorAll?.(':scope > .message.assistant') || [])].at(-1) || null;
+  // Scheduled runs intentionally have no user-message anchor. Do not infer one
+  // from an unrelated older turn when restoring a tab or panel session.
+  if (assistantEl?.dataset?.scheduledJobId) return null;
+  const userEl = precedingUserMessage(assistantEl);
+  return assistantEl && userEl ? { userEl, assistantEl } : null;
+}
+
+function chatTurnIsConnected(turn = chatNavigationTurn) {
+  return !!turn?.userEl?.isConnected && !!turn?.assistantEl?.isConnected;
+}
+
+function chatTurnIsRunning(turn = chatNavigationTurn) {
+  return !!turn && isProcessing && currentAssistantEl === turn.assistantEl;
+}
+
+function resetChatNavigation() {
+  chatNavigationTurn = null;
+  chatAutoFollow = true;
+  chatUserScrollActive = false;
+  if (chatUserScrollSettleTimer != null) clearTimeout(chatUserScrollSettleTimer);
+  chatUserScrollSettleTimer = null;
+  if (scrollToBottomFrame != null) cancelAnimationFrame(scrollToBottomFrame);
+  if (chatNavigationFrame != null) cancelAnimationFrame(chatNavigationFrame);
+  if (chatNavigationRestoreFrame != null) cancelAnimationFrame(chatNavigationRestoreFrame);
+  scrollToBottomFrame = null;
+  chatNavigationFrame = null;
+  chatNavigationRestoreFrame = null;
+  chatNavigationEl?.classList.add('hidden');
+  chatNavigationEl?.removeAttribute('data-direction');
+  chatNavigationEl?.removeAttribute('data-action');
+}
+
+function setChatNavigationTurn(userEl, assistantEl, { autoFollow = false } = {}) {
+  if (!userEl?.isConnected || !assistantEl?.isConnected) {
+    resetChatNavigation();
+    return false;
+  }
+  chatNavigationTurn = { userEl, assistantEl };
+  chatAutoFollow = autoFollow;
+  scheduleChatNavigationUpdate();
+  return true;
+}
+
+function beginReadingFirstTurn(userEl, assistantEl) {
+  return setChatNavigationTurn(userEl, assistantEl, { autoFollow: false });
+}
+
+function chatTurnNeedsReadingNavigation(turn = chatNavigationTurn) {
+  if (!chatContainerEl || !chatTurnIsConnected(turn)) return false;
+  const userRect = turn.userEl.getBoundingClientRect();
+  const assistantRect = turn.assistantEl.getBoundingClientRect();
+  return assistantRect.bottom - userRect.top > chatContainerEl.clientHeight - CHAT_SCROLL_EDGE_PX;
+}
+
+function prefersReducedChatMotion() {
+  return globalThis.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true;
+}
+
+function scrollChatToQuestion({ smooth = true } = {}) {
+  if (!chatContainerEl || !chatTurnIsConnected()) return;
+  chatAutoFollow = false;
+  const containerRect = chatContainerEl.getBoundingClientRect();
+  const questionRect = chatNavigationTurn.userEl.getBoundingClientRect();
+  const targetTop = Math.max(
+    0,
+    chatContainerEl.scrollTop + questionRect.top - containerRect.top - CHAT_TURN_VISIBILITY_PX,
+  );
+  chatContainerEl.scrollTo({
+    top: targetTop,
+    behavior: smooth && !prefersReducedChatMotion() ? 'smooth' : 'auto',
+  });
+  scheduleChatNavigationUpdate();
+}
+
+function renderChatNavigation() {
+  if (!chatContainerEl || !chatNavigationEl || !chatNavigationLabelEl
+      || !chatTurnIsConnected() || !chatTurnNeedsReadingNavigation()) {
+    chatNavigationEl?.classList.add('hidden');
+    return;
+  }
+
+  const containerRect = chatContainerEl.getBoundingClientRect();
+  const userRect = chatNavigationTurn.userEl.getBoundingClientRect();
+  const assistantRect = chatNavigationTurn.assistantEl.getBoundingClientRect();
+  const responseContinuesBelow = assistantRect.bottom > containerRect.bottom + CHAT_TURN_VISIBILITY_PX;
+  const questionIsAbove = userRect.bottom < containerRect.top + CHAT_TURN_VISIBILITY_PX;
+  let action = '';
+  let labelKey = '';
+  let direction = '';
+
+  if (responseContinuesBelow) {
+    action = 'latest';
+    direction = 'down';
+    labelKey = chatTurnIsRunning() ? 'sp.chat.follow_response' : 'sp.chat.jump_latest';
+  } else if (questionIsAbove) {
+    action = 'question';
+    direction = 'up';
+    labelKey = 'sp.chat.back_to_question';
+  }
+
+  if (!action) {
+    chatNavigationEl.classList.add('hidden');
+    return;
+  }
+
+  const label = t(labelKey);
+  chatNavigationEl.dataset.action = action;
+  chatNavigationEl.dataset.direction = direction;
+  chatNavigationEl.setAttribute('aria-label', label);
+  chatNavigationEl.title = label;
+  chatNavigationLabelEl.textContent = label;
+  chatNavigationEl.classList.remove('hidden');
+}
+
+function scheduleChatNavigationUpdate() {
+  if (chatNavigationFrame != null) return;
+  chatNavigationFrame = requestAnimationFrame(() => {
+    chatNavigationFrame = null;
+    renderChatNavigation();
+  });
+}
+
+function restoreLatestChatTurnPosition() {
+  if (chatNavigationRestoreFrame != null) cancelAnimationFrame(chatNavigationRestoreFrame);
+  chatNavigationRestoreFrame = requestAnimationFrame(() => {
+    chatNavigationRestoreFrame = null;
+    const turn = latestChatTurn();
+    if (!turn) {
+      resetChatNavigation();
+      scrollToBottom({ force: true });
+      return;
+    }
+    setChatNavigationTurn(turn.userEl, turn.assistantEl, { autoFollow: true });
+    if (chatTurnIsRunning(turn) || chatTurnNeedsReadingNavigation(turn)) {
+      chatAutoFollow = false;
+      scrollChatToQuestion({ smooth: false });
+    } else {
+      scrollToBottom({ force: true });
+    }
+  });
+}
+
+function settleChatUserScrollIntent() {
+  if (chatUserScrollSettleTimer != null) clearTimeout(chatUserScrollSettleTimer);
+  chatUserScrollSettleTimer = setTimeout(() => {
+    chatUserScrollSettleTimer = null;
+    chatUserScrollActive = false;
+  }, CHAT_USER_SCROLL_SETTLE_MS);
+}
+
+function markChatUserScrollIntent() {
+  // Scroll events also fire for our own pin/jump calls. Once direct input
+  // starts a scroll sequence, keep it user-driven until scrolling settles so
+  // touch and trackpad momentum can still engage follow at the bottom edge.
+  chatUserScrollActive = true;
+  settleChatUserScrollIntent();
+}
 
 function pinChatToBottom(container) {
   // The chat container uses smooth scrolling for user-visible navigation.
@@ -7989,16 +8192,63 @@ function pinChatToBottom(container) {
   container.style.scrollBehavior = previousScrollBehavior;
 }
 
-function scrollToBottom() {
-  const container = document.getElementById('chat-container');
+function scrollToBottom({ force = false } = {}) {
+  const container = chatContainerEl;
   if (!container) return;
+  if (!force && chatTurnIsConnected() && !chatAutoFollow) {
+    scheduleChatNavigationUpdate();
+    return;
+  }
 
   pinChatToBottom(container);
   if (scrollToBottomFrame != null) cancelAnimationFrame(scrollToBottomFrame);
   scrollToBottomFrame = requestAnimationFrame(() => {
     scrollToBottomFrame = null;
-    if (container.isConnected) pinChatToBottom(container);
+    if (container.isConnected && (force || chatAutoFollow || !chatTurnIsConnected())) {
+      pinChatToBottom(container);
+    }
+    scheduleChatNavigationUpdate();
   });
+}
+
+chatContainerEl?.addEventListener('wheel', markChatUserScrollIntent, { passive: true });
+chatContainerEl?.addEventListener('touchmove', markChatUserScrollIntent, { passive: true });
+chatContainerEl?.addEventListener('pointerdown', markChatUserScrollIntent, { passive: true });
+chatContainerEl?.addEventListener('pointermove', (event) => {
+  if (event.buttons) markChatUserScrollIntent();
+}, { passive: true });
+chatContainerEl?.addEventListener('scroll', () => {
+  if (chatTurnIsConnected() && chatUserScrollActive) {
+    const distanceToBottom = chatContainerEl.scrollHeight
+      - chatContainerEl.scrollTop
+      - chatContainerEl.clientHeight;
+    chatAutoFollow = distanceToBottom <= CHAT_SCROLL_EDGE_PX;
+    settleChatUserScrollIntent();
+  }
+  scheduleChatNavigationUpdate();
+}, { passive: true });
+
+document.addEventListener('keydown', (event) => {
+  if (!['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(event.key)) return;
+  const target = event.target;
+  if (target?.matches?.('input, textarea, select, button, [contenteditable="true"]')) return;
+  markChatUserScrollIntent();
+});
+
+chatNavigationEl?.addEventListener('click', () => {
+  if (!chatTurnIsConnected()) return;
+  if (chatNavigationEl.dataset.action === 'question') {
+    scrollChatToQuestion();
+    return;
+  }
+  chatAutoFollow = true;
+  scrollToBottom({ force: true });
+});
+
+globalThis.addEventListener?.('resize', scheduleChatNavigationUpdate);
+if (globalThis.ResizeObserver && messagesEl) {
+  const chatNavigationResizeObserver = new ResizeObserver(scheduleChatNavigationUpdate);
+  chatNavigationResizeObserver.observe(messagesEl);
 }
 
 // Debounce math rendering so streaming updates don't re-walk the DOM
@@ -8946,10 +9196,12 @@ if (languageSelect) {
     await setLocale(languageSelect.value);
     applyDOMTranslations(document);
     updateInputPlaceholder();
+    scheduleChatNavigationUpdate();
   });
   document.addEventListener('wb-locale-changed', () => {
     languageSelect.value = getLocale();
     updateInputPlaceholder();
+    scheduleChatNavigationUpdate();
   });
 }
 

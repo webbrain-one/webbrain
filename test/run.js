@@ -17415,9 +17415,96 @@ test('sidepanel auto-follow bypasses smooth-scroll lag while messages grow', () 
     );
     assert.match(
       panel,
-      /function scrollToBottom\(\) \{[\s\S]*?pinChatToBottom\(container\);[\s\S]*?requestAnimationFrame\(\(\) => \{[\s\S]*?pinChatToBottom\(container\);[\s\S]*?\}\);[\s\S]*?\}/,
+      /function scrollToBottom\(\{ force = false \} = \{\}\) \{[\s\S]*?if \(!force && chatTurnIsConnected\(\) && !chatAutoFollow\)[\s\S]*?pinChatToBottom\(container\);[\s\S]*?requestAnimationFrame\(\(\) => \{[\s\S]*?pinChatToBottom\(container\);[\s\S]*?\}\);[\s\S]*?\}/,
       `${label}: auto-follow should re-pin after the next layout frame`,
     );
+  }
+});
+
+test('sidepanel long replies use reading-first turn navigation', () => {
+  for (const [label, prefix] of [
+    ['chrome', 'src/chrome'],
+    ['firefox', 'src/firefox'],
+  ]) {
+    const panel = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/sidepanel.js'), 'utf8');
+    const html = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/sidepanel.html'), 'utf8');
+    const css = fs.readFileSync(path.join(ROOT, prefix, 'styles/sidepanel.css'), 'utf8');
+
+    assert.match(
+      html,
+      /id="chat-shell"[\s\S]*?id="chat-container"[\s\S]*?id="chat-navigation"[\s\S]*?id="chat-navigation-label"/,
+      `${label}: chat navigation should overlay the scroll container without narrowing messages`,
+    );
+    assert.match(
+      css,
+      /#chat-shell \{[\s\S]*?position: relative;[\s\S]*?min-height: 0;[\s\S]*?\.chat-navigation \{[\s\S]*?position: absolute;[\s\S]*?left: 50%;[\s\S]*?transform: translateX\(-50%\);/,
+      `${label}: navigation pill should be shell-positioned and RTL-safe`,
+    );
+    assert.match(
+      css,
+      /@media \(prefers-reduced-motion: reduce\) \{[\s\S]*?\.chat-navigation/,
+      `${label}: navigation motion should honor reduced-motion preferences`,
+    );
+    assert.match(
+      panel,
+      /resetChatNavigation\(\);\s*userEl = addMessage\('user', text\);[\s\S]*?currentAssistantEl = assistantEl;\s*beginReadingFirstTurn\(userEl, assistantEl\);/,
+      `${label}: a submitted turn should enter reading-first mode after its question is visible`,
+    );
+    assert.match(
+      panel,
+      /function renderChatNavigation\(\) \{[\s\S]*?sp\.chat\.follow_response[\s\S]*?sp\.chat\.jump_latest[\s\S]*?sp\.chat\.back_to_question/,
+      `${label}: the pill should expose live-follow, latest, and question states`,
+    );
+    assert.match(
+      panel,
+      /function settleChatUserScrollIntent\(\) \{[\s\S]*?chatUserScrollActive = false[\s\S]*?addEventListener\('scroll',[\s\S]*?chatUserScrollActive[\s\S]*?chatAutoFollow = distanceToBottom <= CHAT_SCROLL_EDGE_PX;[\s\S]*?settleChatUserScrollIntent\(\)/,
+      `${label}: user-driven scrolling should retain intent through momentum and re-enable auto-follow at the edge`,
+    );
+    assert.match(
+      panel,
+      /function restoreLatestChatTurnPosition\(\) \{[\s\S]*?chatTurnNeedsReadingNavigation\(turn\)[\s\S]*?scrollChatToQuestion\(\{ smooth: false \}\)/,
+      `${label}: restored long turns should reopen at the question`,
+    );
+    assert.match(
+      panel,
+      /const questionEl = precedingUserMessage\(assistantEl\);[\s\S]*?beginReadingFirstTurn\(questionEl, assistantEl\)[\s\S]*?scrollChatToQuestion\(\{ smooth: false \}\)/,
+      `${label}: continuations should retain the preceding question as their turn anchor`,
+    );
+    assert.match(
+      panel,
+      /event === 'running'[\s\S]*?hideRecommendedActions\(\);\s*resetChatNavigation\(\);\s*currentAssistantEl = addMessage\('assistant', ''\);/,
+      `${label}: scheduled runs without a user-message anchor should keep bottom-follow behavior`,
+    );
+    assert.match(
+      panel,
+      /function latestChatTurn\(\) \{[\s\S]*?assistantEl\?\.dataset\?\.scheduledJobId[\s\S]*?return null;[\s\S]*?precedingUserMessage\(assistantEl\)/,
+      `${label}: restored scheduled runs should not borrow an unrelated earlier question`,
+    );
+  }
+});
+
+test('all locales translate long-reply navigation labels', () => {
+  const keys = [
+    'sp.chat.follow_response',
+    'sp.chat.jump_latest',
+    'sp.chat.back_to_question',
+  ];
+  for (const [label, prefix] of [
+    ['chrome', 'src/chrome'],
+    ['firefox', 'src/firefox'],
+  ]) {
+    const localeDir = path.join(ROOT, prefix, 'src/ui/locales');
+    for (const filename of fs.readdirSync(localeDir).filter(name => name.endsWith('.js'))) {
+      const locale = fs.readFileSync(path.join(localeDir, filename), 'utf8');
+      for (const key of keys) {
+        const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        assert.match(
+          locale,
+          new RegExp(`['"]${escapedKey}['"]:\\s*['"][^'"]+['"]`),
+          `${label}/${filename}: missing ${key}`,
+        );
+      }
+    }
   }
 });
 

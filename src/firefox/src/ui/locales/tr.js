@@ -145,6 +145,9 @@ export default {
   'sp.btn.settings': 'Ayarlar',
   'sp.btn.clear': 'Yeni konuşma (geçmişi sil)',
   'sp.btn.send': 'Gönder',
+  'sp.chat.follow_response': 'Yanıtı takip et',
+  'sp.chat.jump_latest': 'En yeniye git',
+  'sp.chat.back_to_question': 'Soruya dön',
   'sp.btn.stop.title': 'Aracıyı durdur',
   'sp.btn.stop.label': 'Durdur',
 

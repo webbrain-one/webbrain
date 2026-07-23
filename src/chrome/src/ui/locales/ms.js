@@ -109,6 +109,9 @@ export default {
   'sp.btn.settings': 'Tetapan',
   'sp.btn.clear': 'Perbualan baharu (kosongkan sejarah)',
   'sp.btn.send': 'Hantar',
+  'sp.chat.follow_response': 'Ikuti jawapan',
+  'sp.chat.jump_latest': 'Pergi ke yang terkini',
+  'sp.chat.back_to_question': 'Kembali ke soalan',
   'sp.btn.stop.title': 'Hentikan ejen',
   'sp.btn.stop.label': 'Henti',
 

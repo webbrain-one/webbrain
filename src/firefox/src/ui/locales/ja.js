@@ -109,6 +109,9 @@ export default {
   'sp.btn.settings': '設定',
   'sp.btn.clear': '新しい会話（履歴をクリア）',
   'sp.btn.send': '送信',
+  'sp.chat.follow_response': '回答を追う',
+  'sp.chat.jump_latest': '最新へ移動',
+  'sp.chat.back_to_question': '質問に戻る',
   'sp.btn.stop.title': 'エージェントを停止',
   'sp.btn.stop.label': '停止',
 
