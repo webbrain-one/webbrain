@@ -41,11 +41,12 @@
   - **MiniMax**、**Kimi**、**阿里云（通义千问 Qwen）**、**z.ai GLM**
   - **Cloudflare Workers AI**、**Nvidia NIM**、**Groq**、**Together AI**、**Hugging Face Inference**、**Fireworks**
   - **OpenRouter**（默认模型：`openrouter/free`；可访问 100+ 模型）
+  - **另外 76 个直连 API 与路由器** — 共 103 张内置提供商卡片；请参阅[提供商目录](docs/zh-CN/providers-and-models.md#扩展提供商目录)
 - **引导向导** — 首次启动的演练，涵盖 Act 模式安全性与提供商配置
 - **侧边栏 UI** — 与浏览并存的简洁聊天界面
 - **以阅读为先的长回复** — 回复增长时新问题会保持在视野中，并提供浮动控件来跟随回复、跳到最新内容或返回问题
 - **按标签页对话** — 每个标签页拥有独立的聊天历史
-- **Ask 流式输出** — 交互式 Ask 对话会在 OpenAI 官方 Responses 文本到达时实时显示；工具与历史记录会等待 `response.completed`，并提供高级关闭开关和中断后的自动非流式回退
+- **Ask 流式输出** — 交互式 Ask 对话会在支持的提供商回复到达时实时显示；工具与历史记录会等待流的终止事件，并提供高级关闭开关和中断后的自动非流式回退
 - **智能上下文** — 令牌感知的自动压缩（当对话接近模型上下文窗口时汇总较早的轮次，并显示「上下文已自动压缩」提示）、工具结果限制以及紧急溢出恢复
 - **浏览器历史控制** — Act 模式可以使用原生 `go_back` / `go_forward` 历史工具，而不是受 CSP 影响的页面 JavaScript
 - **API 快捷提示** — 重复点击触发相同 XHR/fetch 请求时，可显示匹配的 `fetch_url` 建议，同时保留 UI 优先和 `/allow-api` 变更策略
@@ -119,7 +120,9 @@ python -m sglang.launch_server --model-path your-model --port 30000
 
 **提供商：**
 
-在设置中选择提供商时会预填 Base URL。本地服务使用下方默认端口。
+在设置中选择提供商时会预填 Base URL。本地服务使用下方默认端口。下表重点列出
+原有提供商；[完整目录](docs/zh-CN/providers-and-models.md#扩展提供商目录)
+包含 103 张内置卡片。
 
 | 提供商 | API 密钥 | 默认模型 |
 |--------|----------|----------|
@@ -136,7 +139,7 @@ python -m sglang.launch_server --model-path your-model --port 30000
 | OpenAI | 必需 | gpt-5.6-terra |
 | Anthropic Claude | 必需 | claude-sonnet-4-6 |
 | Google Gemini | 必需 | gemini-3.1-flash |
-| Cloudflare Workers AI | 必需（+ Account ID） | @cf/zai-org/glm-5.2 |
+| Cloudflare AI Gateway / Workers AI | 必需（+ Account ID） | @cf/zai-org/glm-5.2 |
 | Mistral AI | 必需 | mistral-large-latest |
 | DeepSeek | 必需 | deepseek-v4-flash |
 | xAI Grok | 必需 | grok-4.3 |

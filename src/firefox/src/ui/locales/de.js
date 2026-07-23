@@ -3,6 +3,7 @@ import chromeWebStoreLocale from './chrome-web-store.mjs';
 
 export default {
   ...chromeWebStoreLocale,
+  'sp.streaming.fallback': 'Der Antwortstream wurde unterbrochen; dieser Ask-Durchgang wird ohne Streaming erneut versucht.',
   'sp.providers.no_setup_group': 'Keine Einrichtung erforderlich',
   'sp.providers.no_setup': 'Keine Einrichtung',
   'sp.providers.active_group': 'Aktive Anbieter',
@@ -485,8 +486,8 @@ export default {
   'st.display.voice_input.desc': 'Ermöglicht dem Mikrofon-Button in der Chat-Eingabe, Text über die Spracherkennung Ihres Browsers zu diktieren.',
   'st.display.api_mutation_observer.label': 'API-Mutations-Observer',
   'st.display.api_mutation_observer.desc': 'Beobachtet XHR/fetch-Anfragen-URLs und Methoden im selben Tab, damit WebBrain wiederkehrende UI-Aktionen erkennen und API-Verknüpfungsmuster vorschlagen kann.',
-  'st.display.openai_ask_streaming.label': 'OpenAI Ask-Antworten streamen',
-  'st.display.openai_ask_streaming.desc': 'Zeigt den offiziellen OpenAI Responses-Text in Echtzeit im Fragen-Modus an.',
+  'st.display.openai_ask_streaming.label': 'Ask-Antworten streamen',
+  'st.display.openai_ask_streaming.desc': 'Zeigt Text für unterstützte Anbieter im Ask-Modus während des Empfangs an. Unterbrochene Streams zeigen einen Hinweis und werden einmal ohne Streaming wiederholt. Werkzeugaufrufe warten auf das Stream-Ende; Act-, Dev-, geplante, Cloud- und Continue-Läufe bleiben ohne Streaming. Standardmäßig aktiviert.',
   'st.display.plan_before_act.label': 'Vor dem Handeln planen',
   'st.display.plan_before_act.desc': 'Handeln und Dev führen immer eine strukturierte Intent-Prüfung vor den Tools durch.',
   'st.display.plan_before_act.try': 'Planierung versuchen (Standard)',

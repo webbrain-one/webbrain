@@ -34,18 +34,48 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
   }
 
   get baseUrl() {
-    const baseUrl = this.config.baseUrl || 'https://api.openai.com/v1';
-    if ((this.config.providerName || '').toLowerCase() !== 'cloudflare') return baseUrl;
-    if (!baseUrl.includes('{account_id}')) return baseUrl;
-    const accountId = String(this.config.accountId || '').trim();
-    if (!/^[0-9a-f]{32}$/i.test(accountId)) {
-      throw new Error('Cloudflare Account ID is required and must be a 32-character hex string.');
+    let baseUrl = String(this.config.baseUrl || 'https://api.openai.com/v1').trim();
+    const vertexLocation = String(this.config.location || '').trim();
+    const replacements = {
+      account_id: {
+        value: String(this.config.accountId || '').trim(),
+        valid: (value) => /^[0-9a-f]{32}$/i.test(value),
+        message: 'Cloudflare Account ID is required and must be a 32-character hex string.',
+      },
+      project: {
+        value: String(this.config.project || '').trim(),
+        valid: (value) => /^[a-z][a-z0-9:._-]{4,127}$/i.test(value),
+        message: 'Google Cloud project ID is required.',
+      },
+      location: {
+        value: vertexLocation,
+        valid: (value) => /^[a-z0-9-]+$/i.test(value),
+        message: 'Google Cloud location is required.',
+      },
+      resource: {
+        value: String(this.config.resource || '').trim(),
+        valid: (value) => /^[a-z0-9-]{2,64}$/i.test(value),
+        message: 'Azure resource name is required.',
+      },
+      vertex_endpoint: {
+        value: vertexLocation.toLowerCase() === 'global'
+          ? 'aiplatform.googleapis.com'
+          : `${vertexLocation}-aiplatform.googleapis.com`,
+        valid: (value) => /^(?:[a-z0-9-]+-)?aiplatform\.googleapis\.com$/i.test(value),
+        message: 'Google Cloud location is required.',
+      },
+    };
+    for (const [placeholder, replacement] of Object.entries(replacements)) {
+      if (!baseUrl.includes(`{${placeholder}}`)) continue;
+      if (!replacement.valid(replacement.value)) throw new Error(replacement.message);
+      baseUrl = baseUrl.replaceAll(`{${placeholder}}`, replacement.value);
     }
-    return baseUrl.replace('{account_id}', accountId);
+    return baseUrl.replace(/\/+$/, '');
   }
 
   get model() {
     if (this.config.model) return this.config.model;
+    if (this.config.requiresModel) throw new Error(`${this.config.label || this.name} model is required.`);
     return String(this.config.providerName || '').toLowerCase() === 'openai'
       && this._isOfficialOpenAIBaseUrl()
       ? 'gpt-5.6-terra'
@@ -53,7 +83,7 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
   }
 
   get supportsTools() {
-    return true;
+    return this.config.supportsTools !== false;
   }
 
   get supportsVision() {
@@ -76,7 +106,13 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
     const headers = { 'Content-Type': 'application/json' };
     const providerName = (this.config.providerName || '').toLowerCase();
     if (this.config.apiKey) {
-      headers['Authorization'] = `Bearer ${this.config.apiKey}`;
+      if (this.config.apiKeyHeader === 'x-goog-api-key') {
+        headers['x-goog-api-key'] = String(this.config.apiKey);
+      } else if (this.config.apiKeyHeader === 'api-key') {
+        headers['api-key'] = String(this.config.apiKey);
+      } else {
+        headers['Authorization'] = `Bearer ${this.config.apiKey}`;
+      }
     }
     if (providerName === 'webbrain-cloud') {
       if (this.config.deviceGuid) headers['X-WebBrain-Device-Id'] = this.config.deviceGuid;
@@ -87,6 +123,12 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
     if (providerName === 'openrouter') {
       headers['HTTP-Referer'] = this.config.siteUrl || 'https://github.com/webbrain-one/webbrain';
       headers['X-Title'] = 'WebBrain';
+    }
+    if (providerName === 'cloudflare') {
+      const configuredGatewayId = String(this.config.gatewayId || '').trim();
+      const gatewayId = configuredGatewayId
+        || (String(this.model || '').trim().startsWith('@cf/') ? 'default' : '');
+      if (gatewayId) headers['cf-aig-gateway-id'] = gatewayId;
     }
     return headers;
   }
@@ -232,7 +274,11 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
     // DashScope rejects `tools` together with `stream: true`, while Ask always
     // supplies its read-only tool catalog. Keep even stale/imported opt-ins on
     // the safe non-streaming path.
-    if (String(resolved.providerName || '').trim().toLowerCase() === 'alibaba') {
+    if ([
+      'alibaba',
+      'alibaba-coding-plan',
+      'alibaba-coding-plan-cn',
+    ].includes(String(resolved.providerName || '').trim().toLowerCase())) {
       return false;
     }
     if (isOfficialOpenAIConfig(resolved)) {
@@ -878,6 +924,7 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
     const decoder = new TextDecoder();
     let buffer = '';
     let finalUsage = null;
+    let sawTerminalFinish = false;
 
     while (true) {
       let chunk;
@@ -939,6 +986,9 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
             `${this.name} Chat Completions stream failed with terminal finish reason "${finishReason}".`,
           );
         }
+        if (finishReason != null) {
+          sawTerminalFinish = true;
+        }
         const delta = choice?.delta;
         const reasoningDelta = delta?.reasoning_content || delta?.reasoning;
         if (typeof reasoningDelta === 'string' && reasoningDelta) {
@@ -953,6 +1003,10 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
       }
     }
     if (finalUsage) yield { type: 'usage', usage: finalUsage };
+    if (sawTerminalFinish) {
+      yield { type: 'done', content: '' };
+      return;
+    }
     if (this._supportsInteractiveAskStreaming()) {
       throw this._chatCompletionsStreamTransportError(
         `${this.name} Chat Completions stream ended before the [DONE] sentinel.`,

@@ -3,6 +3,7 @@ import chromeWebStoreLocale from './chrome-web-store.mjs';
 
 export default {
   ...chromeWebStoreLocale,
+  'sp.streaming.fallback': '响应流已中断；正在以非流式方式重试本次 Ask。',
   'sp.providers.no_setup_group': '无需配置',
   'sp.providers.no_setup': '无需设置',
   'sp.providers.active_group': '已启用的提供商',
@@ -640,8 +641,8 @@ export default {
   'st.display.clarify_timeout.instant': '立即',
   'st.display.api_mutation_observer.label': 'API 变更观察器',
   'st.display.api_mutation_observer.desc': '观察同标签页中的 XHR/fetch 请求 URL 和方法，以便 WebBrain 可以检测重复的界面操作并建议 API 快捷模式。默认关闭；仅在调查快捷行为或延迟时启用。',
-  'st.display.openai_ask_streaming.label': '在 Ask 模式流式显示 OpenAI 回复',
-  'st.display.openai_ask_streaming.desc': '在 Ask 模式中随到随显官方 OpenAI Responses 文本。工具调用会等待 response.completed；Act、Dev、计划、云端和 Continue 运行仍不使用流式传输。默认开启。',
+  'st.display.openai_ask_streaming.label': "? Ask ????????",
+  'st.display.openai_ask_streaming.desc': "? Ask ???????????????????????????Act?Dev??????? Continue ????????????????",
   'st.display.plan_before_act.label': '在执行前规划',
   'st.display.plan_before_act.desc': '操作和 Dev 模式在使用工具前始终执行结构化意图检查。尝试（默认）还会生成完整计划，但在简短跟进中可复用最近批准的计划；严格模式每轮都生成完整计划。如果意图或计划在一次修复后仍无效，尝试模式会切换为只读轮次；严格模式会在使用工具前停止。',
   'st.display.plan_before_act.try': '尝试规划（默认）',

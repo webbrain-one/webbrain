@@ -3,6 +3,7 @@ import chromeWebStoreLocale from './chrome-web-store.mjs';
 
 export default {
   ...chromeWebStoreLocale,
+  'sp.streaming.fallback': 'הזרמת התשובה נקטעה; מתבצע ניסיון חוזר לתור Ask הזה ללא הזרמה.',
   'sp.providers.no_setup_group': 'ללא הגדרה',
   'sp.providers.no_setup': 'אין צורך בהגדרה',
   'sp.providers.active_group': 'ספקים פעילים',
@@ -453,8 +454,8 @@ export default {
   "st.display.voice_input.desc": "תן ללחצן המיקרופון בקלט הצ'אט להכתיב טקסט באמצעות זיהוי הדיבור של הדפדפן שלך. פועל כברירת מחדל בדפדפנים התומכים בו.",
   "st.display.api_mutation_observer.label": "מעקב אחר שינויי API",
   "st.display.api_mutation_observer.desc": "עקוב אחר כתובות URL ושיטות של בקשות XHR/fetch באותה כרטיסייה, כדי ש-WebBrain יוכל לזהות פעולות חוזרות בממשק ולהציע דפוסי קיצור דרך דרך ה-API. כבוי כברירת מחדל; הפעל רק בעת בדיקת קיצורי דרך או זמני תגובה.",
-  "st.display.openai_ask_streaming.label": "הזרמת תשובות OpenAI במצב Ask",
-  "st.display.openai_ask_streaming.desc": "הצג טקסט רשמי של OpenAI Responses בזמן הגעתו במצב Ask. קריאות לכלים ממתינות ל-response.completed; הפעלות Act, Dev, מתוזמנות, בענן ו-Continue נשארות ללא הזרמה. מופעל כברירת מחדל.",
+  'st.display.openai_ask_streaming.label': "????? ?????? ???? Ask",
+  'st.display.openai_ask_streaming.desc': "??? ?? ?????? ???? ???? ????? ???? Ask. ?????? ????? ??????? ?????? ???? ?? ????; ?????? Act, Dev, ????????, ???? ?-Continue ?????? ??? ?????. ????? ?????? ????.",
   "st.display.plan_before_act.label": "תכנן לפני מעשה",
   "st.display.plan_before_act.desc": "מצבי Act ו-Dev מבצעים תמיד בדיקת כוונה מובנית לפני הפעלת כלים. מצב ניסיון (ברירת המחדל) גם יוצר תוכניות מלאות, אך עשוי להשתמש שוב בתוכנית שאושרה לאחרונה לצורך המשך קצר; מצב קפדני יוצר תוכנית מלאה בכל תור. מצב ניסיון עובר לתור קריאה בלבד אם הכוונה או התכנון עדיין לא תקינים לאחר ניסיון תיקון אחד; מצב קפדני נעצר לפני הכלים.",
   "st.display.plan_before_act.try": "נסה לתכנן (ברירת מחדל)",

@@ -3,6 +3,7 @@ import chromeWebStoreLocale from './chrome-web-store.mjs';
 
 export default {
   ...chromeWebStoreLocale,
+  'sp.streaming.fallback': 'De antwoordstream is onderbroken; deze Ask-beurt wordt opnieuw geprobeerd zonder streaming.',
   'sp.providers.no_setup_group': 'Geen configuratie nodig',
   'sp.providers.no_setup': 'Geen configuratie',
   'sp.providers.active_group': 'Actieve providers',
@@ -471,8 +472,8 @@ export default {
   'st.display.api_mutation_observer.desc': 'Observeer XHR/fetch-verzoek-URL\'s en -methoden op hetzelfde tabblad...',
   'st.display.webmcp.label': 'Experimenteel WebMCP',
   'st.display.webmcp.desc': 'Sta WebBrain toe om gestructureerde tools te ontdekken en uit te voeren die worden aangeboden door ondersteunde Chrome-pagina\'s...',
-  'st.display.openai_ask_streaming.label': 'Stream OpenAI Antwoord-respondenties',
-  'st.display.openai_ask_streaming.desc': 'Toon officiële OpenAI Responses-tekst zodat deze binnenkomt in Vraagmodus...',
+  'st.display.openai_ask_streaming.label': 'Ask-antwoorden streamen',
+  'st.display.openai_ask_streaming.desc': 'Toon tekst van ondersteunde providers zodra deze binnenkomt in Ask-modus. Onderbroken streams tonen een melding en worden eenmaal opnieuw geprobeerd zonder streaming. Toolaanroepen wachten op het einde van de stream; Act-, Dev-, geplande, cloud- en Continue-runs blijven niet-streamend. Standaard ingeschakeld.',
   'st.display.plan_before_act.label': 'Plannen voor Handelen',
   'st.display.plan_before_act.desc': 'Handelen en Ontwikkelaar voeren altijd een gestructureerde intentiecontrole uit voordat tools worden gebruikt...',
   'st.display.plan_before_act.try': 'Probeer plannen (standaard)',

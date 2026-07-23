@@ -1,5 +1,6 @@
 // English — canonical locale. Other locales inherit key names from this file.
 export default {
+  'sp.streaming.fallback': 'Response streaming was interrupted; retrying this Ask turn without streaming.',
   'sp.providers.no_setup_group': 'No setup required',
   'sp.providers.no_setup': 'No setup',
   'sp.providers.active_group': 'Active providers',
@@ -496,7 +497,7 @@ export default {
   'st.display.webmcp.desc': 'Allow WebBrain to discover and run structured tools exposed by supported Chrome pages. Enabling this adds experimental WebMCP tools and guidance to the model context. Off by default.',
   // TRANSLATORS: Updated for multi-provider Ask streaming and silent transport fallback.
   'st.display.openai_ask_streaming.label': 'Stream Ask responses',
-  'st.display.openai_ask_streaming.desc': 'Show text as it arrives in Ask mode for supported providers. Interrupted streams silently retry once without streaming; provider/API errors are still shown. Tool calls wait for stream completion; Act, Dev, scheduled, cloud, and Continue runs stay non-streaming. On by default.',
+  'st.display.openai_ask_streaming.desc': 'Show text as it arrives in Ask mode for supported providers. Interrupted streams show a notice and retry once without streaming; provider/API errors are still shown. Tool calls wait for stream completion; Act, Dev, scheduled, cloud, and Continue runs stay non-streaming. On by default.',
   'st.display.plan_before_act.label': 'Plan before Act',
   'st.display.plan_before_act.desc': 'Act and Dev always run a structured intent check before tools. Try (default) also builds full plans but may reuse a recently approved plan for a short follow-up; Strict builds a full plan every turn. Try falls back to a read-only turn if intent or planning remains invalid after one repair; Strict stops before tools.',
   'st.display.plan_before_act.try': 'Try planning (default)',

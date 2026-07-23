@@ -1,5 +1,6 @@
 // Persian — translated from the canonical English locale.
 export default {
+  'sp.streaming.fallback': 'جریان پاسخ قطع شد؛ این نوبت Ask بدون پخش جریانی دوباره امتحان می‌شود.',
   'sp.providers.no_setup_group': "بدون نیاز به راه اندازی",
   'sp.providers.no_setup': "بدون راه اندازی",
   'sp.providers.active_group': "ارائه دهندگان فعال",
@@ -490,8 +491,8 @@ export default {
   'st.display.voice_input.desc': "اجازه دهید دکمه میکروفون در ورودی چت، متن را از طریق تشخیص گفتار مرورگر شما دیکته کند. به طور پیش فرض در مرورگرهایی که از آن پشتیبانی می کنند روشن است.",
   'st.display.api_mutation_observer.label': "مشاهده گر جهش API",
   'st.display.api_mutation_observer.desc': "نشانی‌های وب و روش‌های درخواستی XHR/واکشی همان تب را مشاهده کنید تا WebBrain بتواند اقدامات مکرر UI را تشخیص دهد و الگوهای میانبر API را پیشنهاد کند. خاموش به طور پیش فرض؛ فقط هنگام بررسی رفتار میانبر یا تأخیر فعال شود.",
-  'st.display.openai_ask_streaming.label': "پخش جریانی OpenAI پاسخ‌ها را بپرسید",
-  'st.display.openai_ask_streaming.desc': "نمایش رسمی OpenAI به متن پاسخ می دهد که در حالت سؤال می رسد. فراخوانی ابزار منتظر answer.completed است. اجراهای Act، Dev، برنامه‌ریزی‌شده، ابری و Continue پخش نمی‌شوند. به طور پیش فرض روشن است.",
+  'st.display.openai_ask_streaming.label': "??? ??????? ?? ???? Ask",
+  'st.display.openai_ask_streaming.desc': "???????? ??????????? ?? ????? ?????? ?? ???? Ask ????? ????. ???????? ????? ????? ?????? ?????? ????? ???????? ??????? Act? Dev? ?????????????? ???? ? Continue ???? ??? ???? ????????. ?????? ??????? ???? ???.",
   'st.display.plan_before_act.label': "قبل از قانون برنامه ریزی کنید",
   'st.display.plan_before_act.desc': "Act و Dev همیشه قبل از ابزارها یک بررسی قصد ساخت یافته انجام می دهند. سعی کنید (پیش‌فرض) همچنین برنامه‌های کاملی را ایجاد می‌کند، اما ممکن است از طرحی که اخیراً تأیید شده است برای یک پیگیری کوتاه دوباره استفاده کنید. Strict در هر نوبت یک برنامه کامل می سازد. اگر بعد از یک بار تعمیر، قصد یا برنامه ریزی نامعتبر باقی بماند، سعی به یک نوبت فقط خواندنی برمی گردد. توقف های سخت قبل از ابزار.",
   'st.display.plan_before_act.try': "برنامه ریزی را امتحان کنید (پیش فرض)",

@@ -3,6 +3,7 @@ import chromeWebStoreLocale from './chrome-web-store.mjs';
 
 export default {
   ...chromeWebStoreLocale,
+  'sp.streaming.fallback': 'הזרמת התשובה נקטעה; מתבצע ניסיון חוזר לתור Ask הזה ללא הזרמה.',
   'sp.providers.no_setup_group': 'ללא הגדרה',
   'sp.providers.no_setup': 'אין צורך בהגדרה',
   'sp.providers.active_group': 'ספקים פעילים',
@@ -462,8 +463,8 @@ export default {
   "st.display.voice_input.desc": "תן ללחצן המיקרופון בקלט הצ'אט להכתיב טקסט באמצעות זיהוי הדיבור של הדפדפן שלך. פועל כברירת מחדל בדפדפנים התומכים בו.",
   "st.display.api_mutation_observer.label": "מעקב אחר שינויי API",
   "st.display.api_mutation_observer.desc": "עקוב אחר כתובות URL ושיטות של בקשות XHR/fetch באותה כרטיסייה, כדי ש-WebBrain יוכל לזהות פעולות חוזרות בממשק ולהציע דפוסי קיצור דרך דרך ה-API. כבוי כברירת מחדל; הפעל רק בעת בדיקת קיצורי דרך או זמני תגובה.",
-  "st.display.openai_ask_streaming.label": "הזרמת תשובות OpenAI במצב Ask",
-  "st.display.openai_ask_streaming.desc": "הצג טקסט רשמי של OpenAI Responses בזמן הגעתו במצב Ask. קריאות לכלים ממתינות ל-response.completed; הפעלות Act, Dev, מתוזמנות, בענן ו-Continue נשארות ללא הזרמה. מופעל כברירת מחדל.",
+  'st.display.openai_ask_streaming.label': "????? ?????? ???? Ask",
+  'st.display.openai_ask_streaming.desc': "??? ?? ?????? ???? ???? ????? ???? Ask. ?????? ????? ??????? ?????? ???? ?? ????; ?????? Act, Dev, ????????, ???? ?-Continue ?????? ??? ?????. ????? ?????? ????.",
   "st.display.webmcp.label": "WebMCP ניסיוני",
   "st.display.webmcp.desc": "אפשר ל-WebBrain לגלות ולהפעיל כלים מובנים שדפי Chrome נתמכים חושפים. הפעלה מוסיפה את כלי WebMCP הניסיוניים ואת ההנחיות שלהם להקשר של המודל. כבוי כברירת מחדל.",
   "st.display.plan_before_act.label": "תכנן לפני מעשה",

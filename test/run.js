@@ -529,6 +529,12 @@ const { ProviderManager: ProviderManagerCh } = await import(
 const { ProviderManager: ProviderManagerFx } = await import(
   'file://' + path.join(ROOT, 'src/firefox/src/providers/manager.js').replace(/\\/g, '/')
 );
+const ProviderCatalogCh = await import(
+  'file://' + path.join(ROOT, 'src/chrome/src/providers/provider-catalog.js').replace(/\\/g, '/')
+);
+const ProviderCatalogFx = await import(
+  'file://' + path.join(ROOT, 'src/firefox/src/providers/provider-catalog.js').replace(/\\/g, '/')
+);
 const {
   inferContextWindow: inferContextWindowCh,
   normalizeDetectedContextWindow: normalizeDetectedContextWindowCh,
@@ -582,6 +588,12 @@ const { AzureOpenAIProvider: AzureOpenAIProviderCh } = await import(
 );
 const { AzureOpenAIProvider: AzureOpenAIProviderFx } = await import(
   'file://' + path.join(ROOT, 'src/firefox/src/providers/azure-openai.js').replace(/\\/g, '/')
+);
+const { VertexAnthropicProvider: VertexAnthropicProviderCh } = await import(
+  'file://' + path.join(ROOT, 'src/chrome/src/providers/vertex-anthropic.js').replace(/\\/g, '/')
+);
+const { VertexAnthropicProvider: VertexAnthropicProviderFx } = await import(
+  'file://' + path.join(ROOT, 'src/firefox/src/providers/vertex-anthropic.js').replace(/\\/g, '/')
 );
 const ProviderCompatibilityCh = await import(
   'file://' + path.join(ROOT, 'src/chrome/src/providers/provider-compatibility.js').replace(/\\/g, '/')
@@ -25822,6 +25834,262 @@ test('_defaultConfigs: every entry carries an explicit category', () => {
   }
 });
 
+test('extended provider catalog is complete, mirrored, safe, and excluded-provider clean', async () => {
+  const expectedIds = `
+    302ai abacus aihubmix alibaba-coding-plan alibaba-coding-plan-cn
+    azure-cognitive-services bailing baseten berget cerebras chutes clarifai
+    cloudferro-sherlock cohere cortecs deepinfra digitalocean dinference drun
+    evroc fastrouter friendli google-vertex google-vertex-anthropic helicone
+    iflowcn inception inference io-net jiekou kilo kimi-for-coding
+    kuae-cloud-coding-plan llama lucidquery meganova minimax-cn-coding-plan
+    minimax-coding-plan moark modelscope morph nano-gpt nebius nova novita-ai
+    ollama-cloud opencode opencode-go ovhcloud perplexity perplexity-agent poe
+    privatemode-ai qihang-ai qiniu-ai requesty scaleway siliconflow
+    siliconflow-cn stackit stepfun submodel synthetic tencent-coding-plan
+    upstage v0 venice vercel vivgrid vultr wandb xiaomi zai-coding-plan zenmux
+    zhipuai zhipuai-coding-plan
+  `.trim().split(/\s+/);
+  const excluded = ['github-models', 'github-copilot', 'gitlab', 'sap-ai-core'];
+
+  assert.equal(expectedIds.length, 76);
+  assert.deepEqual(ProviderCatalogCh.ADDITIONAL_PROVIDER_IDS, expectedIds);
+  assert.deepEqual(ProviderCatalogFx.ADDITIONAL_PROVIDER_IDS, expectedIds);
+  assert.deepEqual(
+    ProviderCatalogFx.ADDITIONAL_PROVIDER_DEFAULTS,
+    ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS,
+    'Chrome and Firefox provider catalogs must stay identical',
+  );
+
+  for (const [label, PM, prefix] of [
+    ['chrome', ProviderManagerCh, 'src/chrome'],
+    ['firefox', ProviderManagerFx, 'src/firefox'],
+  ]) {
+    const defaults = new PM()._defaultConfigs();
+    assert.equal(Object.keys(defaults).length, 103, `${label}: expected 27 original + 76 new providers`);
+    for (const id of expectedIds) {
+      const config = defaults[id];
+      assert.ok(config, `${label}: missing ${id}`);
+      assert.equal(config.enabled, false, `${label}: ${id} must start disabled`);
+      assert.ok(config.label && config.type && config.category && config.baseUrl, `${label}: ${id} metadata incomplete`);
+      const expectedAskStreaming = !['alibaba-coding-plan', 'alibaba-coding-plan-cn'].includes(id);
+      assert.equal(
+        config.supportsAskStreaming,
+        expectedAskStreaming,
+        `${label}: ${id} Ask streaming capability mismatch`,
+      );
+      assert.ok(config.model || id === 'azure-cognitive-services', `${label}: ${id} missing model`);
+
+      const icon = path.join(ROOT, prefix, 'icons/providers', `${id}.svg`);
+      assert.equal(fs.existsSync(icon), true, `${label}: missing icon for ${id}`);
+      const svg = fs.readFileSync(icon, 'utf8');
+      assert.match(svg, /<svg\b/i, `${label}: ${id} is not SVG`);
+      assert.match(svg, /\bviewBox=/i, `${label}: ${id} icon lacks viewBox`);
+      assert.doesNotMatch(svg, /<script\b|<image\b|\s(?:xlink:)?href\s*=/i, `${label}: ${id} icon contains active/external content`);
+    }
+    for (const id of excluded) assert.equal(defaults[id], undefined, `${label}: excluded provider ${id} must stay absent`);
+
+    const settings = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/settings.js'), 'utf8');
+    assert.match(settings, /ADDITIONAL_PROVIDER_UI/, `${label}: catalog providers need generated settings fields`);
+    assert.match(settings, /Google Cloud project ID/, `${label}: Vertex project field missing`);
+    assert.match(settings, /AI Gateway ID \(optional; @cf defaults to default\)/, `${label}: Cloudflare gateway field missing`);
+
+    const localeDir = path.join(ROOT, prefix, 'src/ui/locales');
+    for (const localeFile of fs.readdirSync(localeDir).filter(file => file.endsWith('.js'))) {
+      const localeSource = fs.readFileSync(path.join(localeDir, localeFile), 'utf8');
+      assert.match(localeSource, /'sp\.streaming\.fallback':/, `${label}: ${localeFile} missing localized Ask stream fallback`);
+    }
+    const sidepanel = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/sidepanel.js'), 'utf8');
+    assert.match(
+      sidepanel,
+      /data\?\.code === 'ask_stream_fallback'[\s\S]*showComposerToast\(t\('sp\.streaming\.fallback'\)/,
+      `${label}: stream fallback warning should be visible and localized`,
+    );
+  }
+
+  assert.equal(ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.morph.supportsTools, false);
+  assert.equal(ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.perplexity.supportsTools, false);
+  assert.equal(ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS['perplexity-agent'].apiFormat, 'responses');
+  assert.equal(ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS['azure-cognitive-services'].model, '');
+  assert.equal(ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS['kimi-for-coding'].model, 'kimi-for-coding');
+  assert.deepEqual(
+    ProviderCatalogCh.ADDITIONAL_PROVIDER_UI['kimi-for-coding'].suggestions,
+    ['kimi-for-coding', 'kimi-for-coding-highspeed', 'k3'],
+  );
+});
+
+test('new provider auth, endpoint, protocol, and capability contracts are deterministic', () => {
+  for (const [label, OpenAIProvider, VertexProvider, PM] of [
+    ['chrome', OpenAIProviderCh, VertexAnthropicProviderCh, ProviderManagerCh],
+    ['firefox', OpenAIProviderFx, VertexAnthropicProviderFx, ProviderManagerFx],
+  ]) {
+    const bearer = new OpenAIProvider({ providerName: 'deepinfra', apiKey: 'secret' });
+    assert.equal(bearer._headers().Authorization, 'Bearer secret', `${label}: default auth should be bearer`);
+
+    const vertex = new OpenAIProvider({
+      providerName: 'google-vertex',
+      baseUrl: 'https://{vertex_endpoint}/v1/projects/{project}/locations/{location}/endpoints/openapi',
+      project: 'sample-project',
+      location: 'us-central1',
+      apiKey: 'google-key',
+      apiKeyHeader: 'x-goog-api-key',
+    });
+    assert.equal(
+      vertex.baseUrl,
+      'https://us-central1-aiplatform.googleapis.com/v1/projects/sample-project/locations/us-central1/endpoints/openapi',
+      `${label}: Vertex endpoint interpolation mismatch`,
+    );
+    assert.equal(vertex._headers()['x-goog-api-key'], 'google-key');
+    assert.equal(vertex._headers().Authorization, undefined);
+
+    const globalVertex = new OpenAIProvider({
+      providerName: 'google-vertex',
+      baseUrl: 'https://{vertex_endpoint}/v1/projects/{project}/locations/{location}/endpoints/openapi',
+      project: 'sample-project',
+      location: 'global',
+      apiKey: 'google-key',
+      apiKeyHeader: 'x-goog-api-key',
+    });
+    assert.equal(
+      globalVertex.baseUrl,
+      'https://aiplatform.googleapis.com/v1/projects/sample-project/locations/global/endpoints/openapi',
+      `${label}: Vertex global location must use the global endpoint host`,
+    );
+
+    const azure = new OpenAIProvider({
+      providerName: 'azure-cognitive-services',
+      baseUrl: 'https://{resource}.openai.azure.com/openai/v1',
+      resource: 'sample-resource',
+      apiKey: 'azure-key',
+      apiKeyHeader: 'api-key',
+    });
+    assert.equal(azure.baseUrl, 'https://sample-resource.openai.azure.com/openai/v1');
+    assert.equal(azure._headers()['api-key'], 'azure-key');
+    assert.equal(azure._headers().Authorization, undefined);
+
+    const cloudflare = new OpenAIProvider({
+      providerName: 'cloudflare',
+      baseUrl: 'https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1',
+      accountId: '0123456789abcdef0123456789abcdef',
+      gatewayId: 'my-gateway',
+      apiKey: 'cf-token',
+    });
+    assert.match(cloudflare.baseUrl, /accounts\/0123456789abcdef0123456789abcdef\/ai\/v1$/);
+    assert.equal(cloudflare._headers()['cf-aig-gateway-id'], 'my-gateway');
+
+    const cloudflareDefaultGateway = new OpenAIProvider({
+      providerName: 'cloudflare',
+      model: '@cf/moonshotai/kimi-k2.6',
+    });
+    assert.equal(
+      cloudflareDefaultGateway._headers()['cf-aig-gateway-id'],
+      'default',
+      `${label}: Workers AI models require a gateway header`,
+    );
+    const cloudflareThirdParty = new OpenAIProvider({
+      providerName: 'cloudflare',
+      model: 'anthropic/claude-sonnet-4',
+    });
+    assert.equal(
+      cloudflareThirdParty._headers()['cf-aig-gateway-id'],
+      undefined,
+      `${label}: third-party models may use Cloudflare's implicit default gateway`,
+    );
+
+    const perplexityAgent = new OpenAIProvider({
+      providerName: 'perplexity-agent',
+      baseUrl: 'https://api.perplexity.ai/v1',
+      apiFormat: 'responses',
+      model: 'xai/grok-4-1-fast-non-reasoning',
+    });
+    assert.equal(perplexityAgent._usesResponsesApi(), true);
+    assert.equal(perplexityAgent._responsesUrl(), 'https://api.perplexity.ai/v1/responses');
+
+    const vertexAnthropic = new VertexProvider({
+      project: 'sample-project',
+      location: 'us-east5',
+      apiKey: 'google-key',
+      model: 'claude-haiku-4-5@20251001',
+    });
+    assert.match(vertexAnthropic._messagesUrl(false), /publishers\/anthropic\/models\/claude-haiku-4-5%4020251001:rawPredict$/);
+    assert.match(vertexAnthropic._messagesUrl(true), /:streamRawPredict$/);
+    assert.match(vertexAnthropic._messagesUrl(false), /^https:\/\/us-east5-aiplatform\.googleapis\.com\//);
+    assert.equal(vertexAnthropic._headers()['x-goog-api-key'], 'google-key');
+    const vertexBody = vertexAnthropic._prepareRequestBody({ model: 'ignored', messages: [], max_tokens: 16 }, {}, false);
+    assert.equal(vertexBody.model, undefined);
+    assert.equal(vertexBody.anthropic_version, 'vertex-2023-10-16');
+    assert.match(
+      new VertexProvider({
+        project: 'sample-project',
+        location: 'global',
+        apiKey: 'google-key',
+        model: 'claude-haiku-4-5@20251001',
+      })._messagesUrl(false),
+      /^https:\/\/aiplatform\.googleapis\.com\/v1\/projects\/sample-project\/locations\/global\//,
+      `${label}: Vertex Anthropic global location must use the global endpoint`,
+    );
+    for (const location of ['us', 'eu']) {
+      assert.match(
+        new VertexProvider({
+          project: 'sample-project',
+          location,
+          apiKey: 'google-key',
+          model: 'claude-haiku-4-5@20251001',
+        })._messagesUrl(false),
+        new RegExp(`^https://aiplatform\\.${location}\\.rep\\.googleapis\\.com/v1/projects/sample-project/locations/${location}/`),
+        `${label}: Vertex Anthropic ${location} must use its multi-region endpoint`,
+      );
+    }
+
+    const defaults = new PM()._defaultConfigs();
+    assert.equal(new PM()._createProvider('morph', defaults.morph).supportsTools, false);
+    assert.equal(new PM()._createProvider('perplexity', defaults.perplexity).supportsTools, false);
+    assert.equal(new PM()._createProvider('aws_bedrock', defaults.aws_bedrock).supportsAskStreaming, false);
+  }
+});
+
+test('Chat Completions streaming rejects premature EOF and accepts terminal completion', async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    for (const [label, Provider] of [
+      ['chrome', OpenAIProviderCh],
+      ['firefox', OpenAIProviderFx],
+    ]) {
+      globalThis.fetch = async () => new Response(
+        'data: {"choices":[{"delta":{"content":"partial"}}]}\n\n',
+        { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+      );
+      const truncated = new Provider({
+        providerName: 'deepinfra',
+        baseUrl: 'https://api.deepinfra.com/v1/openai',
+        model: 'test-model',
+        supportsAskStreaming: true,
+      });
+      await assert.rejects(
+        async () => {
+          for await (const _chunk of truncated.chatStream([{ role: 'user', content: 'hi' }])) {}
+        },
+        (error) => error?.isAskStreamFallbackSafe === true,
+        `${label}: truncated stream should be fallback-safe`,
+      );
+
+      globalThis.fetch = async () => new Response(
+        'data: {"choices":[{"delta":{"content":"done"},"finish_reason":"stop"}]}\n\n',
+        { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+      );
+      const complete = [];
+      for await (const chunk of truncated.chatStream([{ role: 'user', content: 'hi' }])) {
+        complete.push(chunk);
+      }
+      assert.deepEqual(complete, [
+        { type: 'text', content: 'done' },
+        { type: 'done', content: '' },
+      ], `${label}: terminal finish_reason should complete the stream`);
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('_defaultConfigs: new cloud providers present and disabled by default', () => {
   // Don't enable cloud providers by default — they all require an API key.
   // Auto-enabling them would create dead entries in the UI.
@@ -27546,6 +27814,73 @@ test('Ask stream aggregation exposes text live but withholds tool calls until re
   }
 });
 
+test('Ask streaming estimates and records usage when a provider omits token metadata', async () => {
+  for (const [label, AgentClass] of [['chrome', AgentCh], ['firefox', AgentFx]]) {
+    const messages = [{ role: 'user', content: 'Summarize this page.' }];
+    const streamOptions = {
+      tools: [{
+        type: 'function',
+        function: {
+          name: 'read_page',
+          description: 'Read the current page.',
+          parameters: { type: 'object', properties: {} },
+        },
+      }],
+    };
+
+    const successfulAgent = new AgentClass({});
+    successfulAgent._checkCostAllowance = async () => null;
+    let successfulRecordedUsage = null;
+    successfulAgent._recordCostUsage = async (_provider, usage) => {
+      successfulRecordedUsage = usage;
+      return null;
+    };
+    const successfulProvider = {
+      async *chatStream() {
+        yield { type: 'text', content: 'Estimated answer.' };
+        yield { type: 'done' };
+      },
+    };
+    const result = await successfulAgent._chatStreamWithCostAllowance(
+      successfulProvider,
+      messages,
+      streamOptions,
+      {},
+    );
+    assert.equal(result.usage?.estimated, true, `${label}: missing stream usage should be marked estimated`);
+    assert.ok(result.usage?.prompt_tokens > 0, `${label}: estimated prompt usage should include messages and tools`);
+    assert.ok(result.usage?.completion_tokens > 0, `${label}: estimated completion usage should include streamed text`);
+    assert.deepEqual(successfulRecordedUsage, result.usage, `${label}: estimated stream usage should reach cost accounting`);
+
+    const interruptedAgent = new AgentClass({});
+    interruptedAgent._checkCostAllowance = async () => null;
+    let interruptedRecordedUsage = null;
+    interruptedAgent._recordCostUsage = async (_provider, usage) => {
+      interruptedRecordedUsage = usage;
+      return null;
+    };
+    const interruptedProvider = {
+      async *chatStream() {
+        yield { type: 'text', content: 'Billable partial output.' };
+        const error = new Error('stream ended early');
+        error.isAskStreamFallbackSafe = true;
+        throw error;
+      },
+    };
+    await assert.rejects(
+      interruptedAgent._chatStreamWithCostAllowance(
+        interruptedProvider,
+        messages,
+        streamOptions,
+        {},
+      ),
+      /stream ended early/,
+    );
+    assert.equal(interruptedRecordedUsage?.estimated, true, `${label}: interrupted billable output should be estimated`);
+    assert.ok(interruptedRecordedUsage?.total_tokens > 0, `${label}: interrupted stream usage should reach cost accounting`);
+  }
+});
+
 test('interactive Ask streaming preserves attachments and persists only the completed assistant turn', async () => {
   for (const [index, [label, AgentClass]] of [['chrome', AgentCh], ['firefox', AgentFx]].entries()) {
     let streamedMessages = null;
@@ -27553,6 +27888,7 @@ test('interactive Ask streaming preserves attachments and persists only the comp
     const responseItems = [{ type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Image received.' }] }];
     const provider = {
       supportsTools: false,
+      supportsAskStreaming: true,
       supportsVision: true,
       promptTier: 'full',
       contextWindow: 128000,
@@ -27616,6 +27952,7 @@ test('Ask stream failure clears partial text and falls back once for the rest of
     const executed = [];
     const provider = {
       supportsTools: true,
+      supportsAskStreaming: true,
       supportsVision: false,
       promptTier: 'full',
       contextWindow: 128000,
@@ -27678,7 +28015,11 @@ test('Ask stream failure clears partial text and falls back once for the rest of
     assert.equal(chatCalls, 2, `${label}: failed generation and its tool follow-up should use provider.chat()`);
     assert.deepEqual(executed, ['read_page'], `${label}: pre-completion streamed tool call must never execute`);
     assert.ok(updates.some(update => update.type === 'text' && update.data?.replace === true && update.data?.content === ''), `${label}: partial streamed text should be cleared`);
-    assert.equal(updates.filter(update => update.type === 'warning').length, 0, `${label}: safe fallback should be silent`);
+    assert.equal(
+      updates.filter(update => update.type === 'warning' && update.data?.code === 'ask_stream_fallback').length,
+      1,
+      `${label}: localized fallback warning event should be emitted once`,
+    );
     assert.equal(agent.conversations.get(tabId).some(message => message.role === 'assistant' && message.content === 'Partial answer'), false, `${label}: failed partial text must not persist`);
   }
 });

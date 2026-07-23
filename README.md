@@ -41,12 +41,13 @@
   - **MiniMax**, **Kimi**, **Alibaba Cloud (Qwen)**, **z.ai GLM**
   - **Cloudflare Workers AI**, **Nvidia NIM**, **Groq**, **Together AI**, **Hugging Face Inference**, **Fireworks**
   - **OpenRouter** (default model: `openrouter/free`; access 100+ models)
+  - **76 additional direct APIs and routers** — 103 built-in provider cards in total; see the [provider catalog](docs/providers-and-models.md#extended-provider-catalog)
 - **Onboarding Wizard** — First-launch walkthrough covering Act mode safety and provider setup
 - **Side Panel UI** — Clean chat interface that lives alongside your browsing
 - **Reading-first long replies** — New questions stay in view while answers grow, with floating controls to follow the response, jump to the latest content, or return to the question
 - **Per-Tab Conversations** — Each tab has its own chat history
 - **User Memory** — Optional local memory for user-stated preferences, with explicit `/memory --add` commands and opt-in background auto-learning
-- **Ask streaming** — Interactive Ask chats show text as it arrives for supported OpenAI, Anthropic, Azure OpenAI, Gemini, DeepSeek, xAI, Mistral, Nvidia NIM, Groq, Together AI, Fireworks, z.ai, OpenRouter, WebBrain Cloud, llama.cpp, Ollama, LM Studio, Jan, vLLM, SGLang, and LocalAI requests; tools and history wait for the provider's terminal event, with an Advanced kill switch and one silent non-streaming fallback for interrupted streams
+- **Ask streaming** — Interactive Ask chats stream capable provider responses as they arrive; tools and history wait for a terminal stream event, with an Advanced kill switch and automatic non-streaming fallback for interrupted streams
 - **Smart Context** — Token-aware auto-compaction (summarizes older turns once the conversation nears the model's context window, with a visible "Context automatically compacted" notice), tool result limits, and emergency overflow recovery
 - **Browser History Control** — Act mode can use native `go_back` / `go_forward` history tools instead of CSP-sensitive page JavaScript
 - **API Shortcut Hints** — Repeated clicks that fire the same XHR/fetch request can surface a matching `fetch_url` suggestion while preserving the UI-first and `/allow-api` mutation policy
@@ -155,7 +156,10 @@ Click the gear icon or go to the extension's Options page to configure:
 
 **Providers:**
 
-Base URLs are pre-filled in Settings when you select a provider. Local servers use the default port shown below.
+Base URLs are pre-filled in Settings when you select a provider. Local servers
+use the default port shown below. This table highlights the original providers;
+the [full catalog](docs/providers-and-models.md#extended-provider-catalog)
+contains 103 built-in cards.
 
 | Provider | API Key | Default Model |
 |----------|---------|---------------|
@@ -172,7 +176,7 @@ Base URLs are pre-filled in Settings when you select a provider. Local servers u
 | OpenAI | Required | gpt-5.6-terra |
 | Anthropic Claude | Required | claude-sonnet-4-6 |
 | Google Gemini | Required | gemini-3.1-flash |
-| Cloudflare Workers AI | Required (+ Account ID) | @cf/zai-org/glm-5.2 |
+| Cloudflare AI Gateway / Workers AI | Required (+ Account ID) | @cf/zai-org/glm-5.2 |
 | Mistral AI | Required | mistral-large-latest |
 | DeepSeek | Required | deepseek-v4-flash |
 | xAI Grok | Required | grok-4.3 |

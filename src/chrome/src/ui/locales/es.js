@@ -3,6 +3,7 @@ import chromeWebStoreLocale from './chrome-web-store.mjs';
 
 export default {
   ...chromeWebStoreLocale,
+  'sp.streaming.fallback': 'Se interrumpió la transmisión de la respuesta; reintentando este turno de Ask sin transmisión.',
   'sp.providers.no_setup_group': 'Sin configuración',
   'sp.providers.no_setup': 'No requiere configuración',
   'sp.providers.active_group': 'Proveedores activos',
@@ -640,8 +641,8 @@ export default {
   'st.display.clarify_timeout.instant': 'Instantáneo',
   'st.display.api_mutation_observer.label': 'Observador de mutaciones de API',
   'st.display.api_mutation_observer.desc': 'Observa las URLs y métodos de peticiones XHR/fetch en la misma pestaña para que WebBrain pueda detectar acciones repetidas de la interfaz y sugerir patrones de acceso directo por API. Desactivado por defecto; actívalo solo mientras investigas comportamientos de acceso directo o latencia.',
-  'st.display.openai_ask_streaming.label': 'Transmitir respuestas OpenAI en Ask',
-  'st.display.openai_ask_streaming.desc': 'Muestra el texto de OpenAI Responses oficial a medida que llega en modo Ask. Las llamadas a herramientas esperan a response.completed; Act, Dev, las ejecuciones programadas, en la nube y Continue siguen sin transmisión. Activado por defecto.',
+  'st.display.openai_ask_streaming.label': "Transmitir respuestas en modo Ask",
+  'st.display.openai_ask_streaming.desc': "Muestra las respuestas del proveedor a medida que llegan en modo Ask. Las llamadas a herramientas esperan un evento final del flujo; Act, Dev, las ejecuciones programadas, en la nube y Continue siguen sin transmisi?n. Activado por defecto.",
   'st.display.plan_before_act.label': 'Planificar antes de actuar',
   'st.display.plan_before_act.desc': 'Los modos Actuar y Dev siempre ejecutan una comprobación estructurada de intención antes de las herramientas. Intentar (predeterminado) también crea planes completos, pero puede reutilizar un plan aprobado recientemente para un seguimiento breve; Estricto crea un plan completo en cada turno. Intentar recurre a un turno de solo lectura si la intención o el plan siguen siendo inválidos tras una reparación; Estricto se detiene antes de usar herramientas.',
   'st.display.plan_before_act.try': 'Intentar planificar (por defecto)',

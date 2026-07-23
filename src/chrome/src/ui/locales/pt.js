@@ -1,5 +1,6 @@
 // Portuguese — translated from the canonical English locale.
 export default {
+  'sp.streaming.fallback': 'A transmissão da resposta foi interrompida; tentando novamente esta interação Ask sem transmissão.',
   'sp.providers.no_setup_group': "Nenhuma configuração necessária",
   'sp.providers.no_setup': "Sem configuração",
   'sp.providers.active_group': "Provedores ativos",
@@ -494,8 +495,8 @@ export default {
   'st.display.api_mutation_observer.desc': "Observe URLs e métodos de solicitação de busca/XHR na mesma guia para que WebBrain possa detectar ações repetidas da interface do usuário e sugerir padrões de atalho de API. Desativado por padrão; habilite apenas ao investigar o comportamento ou a latência do atalho.",
   'st.display.webmcp.label': "WebMCP Experimental",
   'st.display.webmcp.desc': "Permitir que WebBrain descubra e execute ferramentas estruturadas expostas pelas páginas Chrome suportadas. Habilitar isso adiciona ferramentas experimentais do WebMCP e orientação ao contexto do modelo. Desativado por padrão.",
-  'st.display.openai_ask_streaming.label': "Stream OpenAI Perguntar respostas",
-  'st.display.openai_ask_streaming.desc': "Mostre o texto oficial das respostas OpenAI assim que chegar no modo Perguntar. As chamadas de ferramenta aguardam resposta.completa; As execuções Act, Dev, Scheduled, Cloud e Continue permanecem sem streaming. Ativado por padrão.",
+  'st.display.openai_ask_streaming.label': "Transmitir respostas no modo Ask",
+  'st.display.openai_ask_streaming.desc': "Mostre as respostas do provedor assim que chegarem no modo Ask. As chamadas de ferramenta aguardam um evento final do fluxo; execu??es Act, Dev, agendadas, na nuvem e Continue permanecem sem streaming. Ativado por padr?o.",
   'st.display.plan_before_act.label': "Planeje antes de agir",
   'st.display.plan_before_act.desc': "Act e Dev sempre executam uma verificação de intenção estruturada antes das ferramentas. Try (padrão) também cria planos completos, mas pode reutilizar um plano recentemente aprovado para um breve acompanhamento; Strict constrói um plano completo a cada passo. Tente voltar para uma curva somente leitura se a intenção ou o planejamento permanecerem inválidos após um reparo; Paradas rigorosas antes das ferramentas.",
   'st.display.plan_before_act.try': "Tente planejar (padrão)",

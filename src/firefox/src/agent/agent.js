@@ -1152,6 +1152,27 @@ export class Agent {
     return result;
   }
 
+  _estimateAskStreamUsage(messages, options, content, reasoningContent, toolCalls) {
+    let toolSchemaChars = 0;
+    let toolCallChars = 0;
+    try { toolSchemaChars = JSON.stringify(options?.tools || []).length; } catch {}
+    try { toolCallChars = JSON.stringify(toolCalls || []).length; } catch {}
+    const promptTokens = Math.max(
+      1,
+      Math.ceil((this._estimateContextChars(Array.isArray(messages) ? messages : []) + toolSchemaChars) / 4),
+    );
+    const completionChars = String(content || '').length
+      + String(reasoningContent || '').length
+      + toolCallChars;
+    const completionTokens = completionChars > 0 ? Math.max(1, Math.ceil(completionChars / 4)) : 0;
+    return {
+      prompt_tokens: promptTokens,
+      completion_tokens: completionTokens,
+      total_tokens: promptTokens + completionTokens,
+      estimated: true,
+    };
+  }
+
   _shouldStreamInteractiveAsk(provider, mode, runOptions = {}, disabledForRun = false) {
     const streamingEnabled = runOptions?.askStreamingEnabled
       ?? runOptions?.openaiAskStreamingEnabled;
@@ -1200,6 +1221,18 @@ export class Agent {
       if (usageRecorded) return null;
       usageRecorded = true;
       return this._recordCostUsage(provider, usage, costState);
+    };
+    const estimateUsageIfMissing = (completed = false) => {
+      if (usage) return;
+      const partialToolCalls = [...toolCalls.values()];
+      if (!completed && !content && !reasoningContent && partialToolCalls.length === 0) return;
+      usage = this._estimateAskStreamUsage(
+        messages,
+        streamOptions,
+        content,
+        reasoningContent,
+        partialToolCalls,
+      );
     };
     const mergeToolCall = (toolCall, fallbackIndex = 0) => {
       if (!toolCall || typeof toolCall !== 'object') return;
@@ -1260,10 +1293,12 @@ export class Agent {
     } catch (error) {
       // Incomplete Responses streams can still report billable usage. Record
       // that once before the caller either propagates or retries the failure.
+      estimateUsageIfMissing(false);
       try { await recordUsage(); } catch {}
       throw error;
     }
 
+    estimateUsageIfMissing(true);
     content = Agent._stripReasoningTags(content);
     const result = {
       content,
@@ -13769,6 +13804,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         if (emittedText) onUpdate('text', { content: '', replace: true });
         if (!this._shouldFallbackAskStream(error)) throw error;
         askStreamingDisabledForRun = true;
+        onUpdate('warning', {
+          code: 'ask_stream_fallback',
+          message: 'Response streaming was interrupted; retrying this Ask turn without streaming.',
+        });
         this._logDebug({
           type: 'llm_stream_fallback',
           provider: provider.constructor?.name || provider.name,

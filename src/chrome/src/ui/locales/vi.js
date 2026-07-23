@@ -1,5 +1,6 @@
 // Vietnamese — translated from the canonical English locale.
 export default {
+  'sp.streaming.fallback': 'Luồng phản hồi bị gián đoạn; đang thử lại lượt Ask này mà không phát trực tuyến.',
   'sp.providers.no_setup_group': "Không cần thiết lập",
   'sp.providers.no_setup': "Không cần thiết lập",
   'sp.providers.active_group': "Nhà cung cấp đang hoạt động",
@@ -494,8 +495,8 @@ export default {
   'st.display.api_mutation_observer.desc': "Quan sát các URL và phương thức yêu cầu XHR/tìm nạp cùng một tab để WebBrain có thể phát hiện các hành động giao diện người dùng lặp lại và đề xuất các mẫu phím tắt API. Tắt theo mặc định; chỉ bật trong khi điều tra hành vi hoặc độ trễ của phím tắt.",
   'st.display.webmcp.label': "WebMCP thử nghiệm",
   'st.display.webmcp.desc': "Cho phép WebBrain khám phá và chạy các công cụ có cấu trúc được hiển thị bởi các trang Chrome được hỗ trợ. Việc kích hoạt tính năng này sẽ bổ sung thêm các công cụ và hướng dẫn WebMCP thử nghiệm vào bối cảnh mô hình. Tắt theo mặc định.",
-  'st.display.openai_ask_streaming.label': "Truyền trực tuyến OpenAI Hỏi câu trả lời",
-  'st.display.openai_ask_streaming.desc': "Hiển thị văn bản Phản hồi OpenAI chính thức khi nó đến ở chế độ Hỏi. Cuộc gọi công cụ chờ phản hồi.completed; Các hoạt động Hành động, Nhà phát triển, đã lên lịch, đám mây và Tiếp tục vẫn không phát trực tuyến. Bật theo mặc định.",
+  'st.display.openai_ask_streaming.label': "Truy?n tr?c tuy?n c?u tr? l?i ? ch? ?? Ask",
+  'st.display.openai_ask_streaming.desc': "Hi?n th? c?u tr? l?i c?a nh? cung c?p ngay khi nh?n ???c trong ch? ?? Ask. L?nh g?i c?ng c? ch? s? ki?n k?t th?c lu?ng; c?c l?n ch?y Act, Dev, theo l?ch, ??m m?y v? Continue v?n kh?ng ph?t tr?c tuy?n. B?t theo m?c ??nh.",
   'st.display.plan_before_act.label': "Lập kế hoạch trước khi hành động",
   'st.display.plan_before_act.desc': "Act và Dev luôn tiến hành kiểm tra ý định có cấu trúc trước các công cụ. Try (mặc định) cũng xây dựng các kế hoạch đầy đủ nhưng có thể sử dụng lại kế hoạch đã được phê duyệt gần đây để theo dõi trong thời gian ngắn; Strict xây dựng một kế hoạch đầy đủ mỗi lượt. Thử quay lại chế độ chỉ đọc nếu ý định hoặc kế hoạch vẫn không hợp lệ sau một lần sửa chữa; Dừng lại nghiêm ngặt trước các công cụ.",
   'st.display.plan_before_act.try': "Hãy thử lập kế hoạch (mặc định)",
