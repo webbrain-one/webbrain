@@ -8210,6 +8210,10 @@ function pinChatToBottom(container) {
 function scrollToBottom({ force = false } = {}) {
   const container = chatContainerEl;
   if (!container) return;
+  // A forced jump deliberately takes the reader to the live edge (blocking
+  // prompts, slash-command output, or the navigation pill). Keep subsequent
+  // deltas visible until the reader scrolls upward again.
+  if (force && chatTurnIsConnected()) chatAutoFollow = true;
   if (!force && chatTurnIsConnected() && !chatAutoFollow) {
     scheduleChatNavigationUpdate();
     return;

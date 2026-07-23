@@ -17415,7 +17415,7 @@ test('sidepanel auto-follow bypasses smooth-scroll lag while messages grow', () 
     );
     assert.match(
       panel,
-      /function scrollToBottom\(\{ force = false \} = \{\}\) \{[\s\S]*?if \(!force && chatTurnIsConnected\(\) && !chatAutoFollow\)[\s\S]*?pinChatToBottom\(container\);[\s\S]*?requestAnimationFrame\(\(\) => \{[\s\S]*?pinChatToBottom\(container\);[\s\S]*?\}\);[\s\S]*?\}/,
+      /function scrollToBottom\(\{ force = false \} = \{\}\) \{[\s\S]*?if \(force && chatTurnIsConnected\(\)\) chatAutoFollow = true;[\s\S]*?if \(!force && chatTurnIsConnected\(\) && !chatAutoFollow\)[\s\S]*?pinChatToBottom\(container\);[\s\S]*?requestAnimationFrame\(\(\) => \{[\s\S]*?pinChatToBottom\(container\);[\s\S]*?\}\);[\s\S]*?\}/,
       `${label}: auto-follow should re-pin after the next layout frame`,
     );
   }
