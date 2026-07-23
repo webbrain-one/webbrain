@@ -34,6 +34,7 @@ import {
 } from './store-review-prompt.js';
 import { providerIconUrl } from './provider-icons.js';
 import { TAB_CHAT_PREFIX, persistTabChatToSession } from './tab-chat-persistence.js';
+import { createSidePanelWindowScope } from './sidepanel-window-scope.js';
 
 // Hydrate the theme from chrome.storage.local (the inline <head> bootstrap
 // only sees localStorage; if the user changes the theme on another device
@@ -3346,7 +3347,11 @@ function clearScratchpad(tabId = currentTabId) {
 // --- Initialization ---
 
 async function init() {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const initialWindow = await chrome.windows.getCurrent().catch(() => null);
+  const initialWindowId = initialWindow?.id ?? null;
+  const [tab] = await chrome.tabs.query(initialWindowId != null
+    ? { active: true, windowId: initialWindowId }
+    : { active: true, currentWindow: true });
   currentTabId = tab?.id;
   renderedTabId = currentTabId;
 
@@ -3354,21 +3359,29 @@ async function init() {
   // browser window fires them, and each window has its own side panel
   // instance. Without scoping, activity in window B would silently
   // retarget window A's panel to B's tab.
-  const ownWindowId = tab?.windowId ?? (await chrome.windows.getCurrent()).id;
+  const windowScope = createSidePanelWindowScope({
+    browserApi: chrome,
+    initialWindowId: initialWindowId ?? tab?.windowId ?? null,
+    getCurrentTabId: () => currentTabId,
+    getRenderedTabId: () => renderedTabId,
+    switchToTab,
+  });
 
   chrome.tabs.onActivated.addListener(async (info) => {
-    if (info.windowId !== ownWindowId) return;
-    switchToTab(info.tabId);
+    await windowScope.handleActivated(info);
+  });
+
+  chrome.tabs.onDetached.addListener((tabId, detachInfo) => {
+    windowScope.handleDetached(tabId, detachInfo);
+  });
+
+  chrome.tabs.onAttached.addListener(async (tabId, attachInfo) => {
+    await windowScope.handleAttached(tabId, attachInfo);
   });
 
   // Also handle window focus changes
   chrome.windows.onFocusChanged.addListener(async (windowId) => {
-    if (windowId === chrome.windows.WINDOW_ID_NONE) return;
-    if (windowId !== ownWindowId) return;
-    const [tab] = await chrome.tabs.query({ active: true, windowId });
-    if (tab?.id && tab.id !== currentTabId) {
-      switchToTab(tab.id);
-    }
+    await windowScope.handleFocusChanged(windowId, chrome.windows.WINDOW_ID_NONE);
   });
 
   chrome.tabs.onUpdated?.addListener?.((tabId, changeInfo) => {
@@ -3403,10 +3416,7 @@ async function init() {
 
   await loadProviders();
   await testConnection({ skipWebBrainCloud: true });
-  const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (activeTab?.id && activeTab.id !== currentTabId) {
-    await switchToTab(activeTab.id);
-  }
+  await windowScope.syncActiveTab();
   refreshScheduledJobs({ tabId: currentTabId });
   refreshRecommendedActions();
   await consumePendingContextMenuPrompt();

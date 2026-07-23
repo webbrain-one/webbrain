@@ -34,6 +34,7 @@ import {
 } from './store-review-prompt.js';
 import { providerIconUrl } from './provider-icons.js';
 import { TAB_CHAT_PREFIX, persistTabChatToSession } from './tab-chat-persistence.js';
+import { createSidePanelWindowScope } from './sidepanel-window-scope.js';
 
 // Hydrate the theme from browser.storage.local (the inline <head> bootstrap
 // only sees localStorage; if the user changes the theme on another device
@@ -3203,7 +3204,11 @@ function clearScratchpad(tabId = currentTabId) {
 // --- Initialization ---
 
 async function init() {
-  const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+  const initialWindow = await browser.windows.getCurrent().catch(() => null);
+  const initialWindowId = initialWindow?.id ?? null;
+  const [tab] = await browser.tabs.query(initialWindowId != null
+    ? { active: true, windowId: initialWindowId }
+    : { active: true, currentWindow: true });
   currentTabId = tab?.id;
   renderedTabId = currentTabId;
 
@@ -3211,11 +3216,24 @@ async function init() {
   // them, and each window has its own side panel instance. Without
   // scoping, activity in window B would silently retarget window A's
   // panel to B's tab.
-  const ownWindowId = tab?.windowId ?? (await browser.windows.getCurrent()).id;
+  const windowScope = createSidePanelWindowScope({
+    browserApi: browser,
+    initialWindowId: initialWindowId ?? tab?.windowId ?? null,
+    getCurrentTabId: () => currentTabId,
+    getRenderedTabId: () => renderedTabId,
+    switchToTab,
+  });
 
   browser.tabs.onActivated.addListener(async (info) => {
-    if (info.windowId !== ownWindowId) return;
-    await switchToTab(info.tabId);
+    await windowScope.handleActivated(info);
+  });
+
+  browser.tabs.onDetached.addListener((tabId, detachInfo) => {
+    windowScope.handleDetached(tabId, detachInfo);
+  });
+
+  browser.tabs.onAttached.addListener(async (tabId, attachInfo) => {
+    await windowScope.handleAttached(tabId, attachInfo);
   });
 
   browser.tabs.onUpdated?.addListener?.((tabId, changeInfo) => {
@@ -3250,10 +3268,7 @@ async function init() {
 
   await loadProviders();
   await testConnection({ skipWebBrainCloud: true });
-  const [activeTab] = await browser.tabs.query({ active: true, currentWindow: true });
-  if (activeTab?.id && activeTab.id !== currentTabId) {
-    await switchToTab(activeTab.id);
-  }
+  await windowScope.syncActiveTab();
   refreshScheduledJobs({ tabId: currentTabId });
   refreshRecommendedActions();
   await consumePendingContextMenuPrompt();
