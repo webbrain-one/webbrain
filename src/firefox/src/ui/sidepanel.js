@@ -804,6 +804,7 @@ let abortRequested = false;
 const awaitingPlanReviewTabs = new Set();
 const processingTabs = new Set();
 const abortRequestedTabs = new Set();
+const clearingConversationTabs = new Set();
 const localRunRequestIds = new Map();
 const localRunFollowers = new Map();
 const cancelledRunRecoveryRequestIds = new Set();
@@ -837,6 +838,19 @@ function isTabProcessing(tabId) {
   return Number.isFinite(numericTabId) && processingTabs.has(numericTabId);
 }
 
+function setConversationClearInProgress(tabId, clearing) {
+  const numericTabId = Number(tabId);
+  if (!Number.isFinite(numericTabId)) return;
+  if (clearing) clearingConversationTabs.add(numericTabId);
+  else clearingConversationTabs.delete(numericTabId);
+  if (sameTabId(currentTabId, numericTabId)) syncSendButtonState();
+}
+
+function isConversationClearInProgress(tabId = currentTabId) {
+  const numericTabId = Number(tabId);
+  return Number.isFinite(numericTabId) && clearingConversationTabs.has(numericTabId);
+}
+
 function setTabAbortRequested(tabId, requested) {
   const numericTabId = Number(tabId);
   if (!Number.isFinite(numericTabId)) return;
@@ -866,7 +880,7 @@ const {
   clearQueuedForTab,
 } = createContextMenuPromptHandler({
   getCurrentTabId: () => currentTabId,
-  getIsProcessing: () => isProcessing,
+  getIsProcessing: () => isProcessing || isConversationClearInProgress(),
   getAgentMode: () => agentMode,
   setMode,
   getInputEl: () => inputEl,
@@ -5709,6 +5723,10 @@ function syncSendButtonState() {
     sendBtn.disabled = true;
     return;
   }
+  if (isConversationClearInProgress()) {
+    sendBtn.disabled = true;
+    return;
+  }
   if (!isProcessing) {
     sendBtn.disabled = isAttachmentReadPendingForTab();
     return;
@@ -6061,9 +6079,15 @@ async function parseSlashCommands(text, tabId = currentTabId, options = {}) {
   }
 
   if (command.value === '/reset') {
-    suppressRunUpdatesForClearedConversation(tabId);
-    await sendToBackground('clear_conversation', { tabId });
-    await renderClearedConversationForTab(tabId);
+    setConversationClearInProgress(tabId, true);
+    try {
+      suppressRunUpdatesForClearedConversation(tabId);
+      if (isTabProcessing(tabId)) await abortRun(tabId);
+      await sendToBackground('clear_conversation', { tabId });
+      await renderClearedConversationForTab(tabId);
+    } finally {
+      setConversationClearInProgress(tabId, false);
+    }
     return '';
   }
 
@@ -6290,6 +6314,7 @@ async function sendMessage(extraChatParams = {}) {
   if (!text) return;
   const submittedText = text;
   const tabId = currentTabId;
+  if (isConversationClearInProgress(tabId)) return false;
   const permissionSkipContext = permissionSkipCommandContextForDraft(tabId, text);
   const requestId = createRunRequestId(tabId);
   text = normalizeScreenshotCommandText(text);
@@ -9555,14 +9580,20 @@ document.addEventListener('wb-locale-changed', () => {
 
 clearBtn.addEventListener('click', async () => {
   const tabId = currentTabId;
+  if (isConversationClearInProgress(tabId)) return;
   if (!window.confirm(t('sp.clear.confirm'))) return;
-  suppressRunUpdatesForClearedConversation(tabId);
-  clearQueuedComposerMessagesForTab(tabId);
-  clearQueuedForTab(tabId);
-  await sendToBackground('clear_context_menu_prompt', { tabId }).catch(() => {});
-  if (isTabProcessing(tabId)) await abortRun(tabId);
-  await sendToBackground('clear_conversation', { tabId });
-  await renderClearedConversationForTab(tabId);
+  setConversationClearInProgress(tabId, true);
+  try {
+    suppressRunUpdatesForClearedConversation(tabId);
+    clearQueuedComposerMessagesForTab(tabId);
+    clearQueuedForTab(tabId);
+    await sendToBackground('clear_context_menu_prompt', { tabId }).catch(() => {});
+    if (isTabProcessing(tabId)) await abortRun(tabId);
+    await sendToBackground('clear_conversation', { tabId });
+    await renderClearedConversationForTab(tabId);
+  } finally {
+    setConversationClearInProgress(tabId, false);
+  }
 });
 
 providerSelect.addEventListener('change', async () => {
