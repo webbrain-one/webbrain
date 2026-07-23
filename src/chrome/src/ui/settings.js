@@ -1998,6 +1998,16 @@ function providerSearchTextForEntry(id, config, fieldDefs) {
   ].filter(Boolean).join(' '));
 }
 
+function providerSearchRank(id, config, query) {
+  const names = [id, config.label, config.providerName]
+    .filter(Boolean)
+    .map(normalizeGeneralSearchText);
+  if (names.some((name) => name === query)) return 0;
+  if (names.some((name) => name.startsWith(query))) return 1;
+  if (names.some((name) => name.includes(query))) return 2;
+  return 3;
+}
+
 function renderProviders() {
   providersContainer.innerHTML = '';
 
@@ -2284,8 +2294,18 @@ function renderProviders() {
   // regardless of filter (so the user never loses track of it).
   providersContainer.appendChild(renderProviderFilterBar());
 
-  const entries = Object.entries(providersData);
+  let entries = Object.entries(providersData);
   const providerQuery = normalizeGeneralSearchText(providerSearchQuery);
+  if (providerQuery) {
+    entries = entries
+      .map((entry, index) => ({
+        entry,
+        index,
+        rank: providerSearchRank(entry[0], entry[1], providerQuery),
+      }))
+      .sort((a, b) => a.rank - b.rank || a.index - b.index)
+      .map(({ entry }) => entry);
+  }
   let visibleCount = 0;
   for (const [id, config] of entries) {
     const isSelected = id === activeProviderId;
