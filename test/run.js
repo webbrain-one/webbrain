@@ -11338,7 +11338,6 @@ test('every bundled skill declares its canonical semantic intents', () => {
     'open-meteo-weather': ['current_weather', 'weather_forecast', 'location_forecast'],
     'open-library-books': ['book_search', 'book_metadata', 'isbn_lookup', 'author_lookup'],
     'temporary-file-share-litterbox': ['temporary_file_share', 'public_upload_link', 'expiring_file_upload'],
-    'chrome-web-store-release': ['chrome-web-store-release', 'extension-publish'],
   };
   for (const [label, prefix, sources, normalizeSkills] of [
     ['chrome', 'src/chrome', PACKAGED_SKILL_SOURCES_CH, normalizeCustomSkillsCh],
@@ -42863,7 +42862,6 @@ test('settings exposes custom skills tab and packaged skills resource directory'
     'temporary-file-share-litterbox',
     'open-meteo-weather',
     'open-library-books',
-    'chrome-web-store-release',
   ]);
   assert.deepEqual(PACKAGED_SKILL_SOURCES_FX.map((skill) => skill.id), [
     'freeskillz-xyz',
@@ -42872,7 +42870,6 @@ test('settings exposes custom skills tab and packaged skills resource directory'
     'temporary-file-share-litterbox',
     'open-meteo-weather',
     'open-library-books',
-    'chrome-web-store-release',
   ]);
   assert.deepEqual(DEFAULT_SKILL_SOURCES_CH.map((skill) => skill.id), [
     'freeskillz-xyz',
@@ -42882,8 +42879,8 @@ test('settings exposes custom skills tab and packaged skills resource directory'
     'freeskillz-xyz',
     'otp-verification-code-helper',
   ]);
-  assert.equal(DEFAULT_SKILL_SOURCES_CH.some((skill) => skill.id === 'chrome-web-store-release'), false, 'chrome: release skill must be disabled by default');
-  assert.equal(DEFAULT_SKILL_SOURCES_FX.some((skill) => skill.id === 'chrome-web-store-release'), false, 'firefox: release skill must be disabled by default');
+  assert.equal(PACKAGED_SKILL_SOURCES_CH.some((skill) => skill.id === 'chrome-web-store-release'), false, 'chrome: release workflow must not appear in available packaged skills');
+  assert.equal(PACKAGED_SKILL_SOURCES_FX.some((skill) => skill.id === 'chrome-web-store-release'), false, 'firefox: release workflow must not appear in available packaged skills');
 
   const privacyPolicy = fs.readFileSync(path.join(ROOT, 'web/privacy.html'), 'utf8');
   const privacyDataFlow = fs.readFileSync(path.join(ROOT, 'docs/privacy-and-data-flow.md'), 'utf8');

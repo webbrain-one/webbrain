@@ -46,11 +46,6 @@ export const PACKAGED_SKILL_SOURCES = Object.freeze([
     name: 'Open Library',
     path: 'skills/open-library-books.md',
   }),
-  Object.freeze({
-    id: 'chrome-web-store-release',
-    name: 'Chrome Web Store release',
-    path: 'skills/chrome-web-store-release.md',
-  }),
 ]);
 export const DEFAULT_SKILL_SOURCES = Object.freeze(
   PACKAGED_SKILL_SOURCES.filter((source) => [
