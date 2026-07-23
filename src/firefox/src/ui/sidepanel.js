@@ -6457,7 +6457,11 @@ async function sendMessage(extraChatParams = {}) {
     const returnedErrorUpdate = Array.isArray(res?.updates)
       ? res.updates.find(u => u?.type === 'error')
       : null;
-    if (returnedErrorUpdate && renderToCurrentTab && currentTabId === tabId && !isTabAbortRequested(tabId)) {
+    if (returnedErrorUpdate
+        && renderToCurrentTab
+        && currentTabId === tabId
+        && !isTabAbortRequested(tabId)
+        && !clearedConversationRunRequestIds.has(requestId)) {
       renderAgentErrorUpdate(returnedErrorUpdate.data, tabId, requestId, {
         submittedTurnDurable: res.submittedTurnDurable,
       });
@@ -6531,7 +6535,10 @@ async function sendMessage(extraChatParams = {}) {
         }
         syncSendButtonState();
       }
-    } else if (renderToCurrentTab && currentTabId === tabId && !isTabAbortRequested(tabId)) {
+    } else if (renderToCurrentTab
+        && currentTabId === tabId
+        && !isTabAbortRequested(tabId)
+        && !clearedConversationRunRequestIds.has(requestId)) {
       renderAgentErrorUpdate({ message: e.message }, tabId, requestId);
     }
   } finally {
@@ -8315,7 +8322,10 @@ async function continueAgent(options = {}) {
       }
     }
   } catch (e) {
-    if (currentTabId === tabId && assistantEl && !isTabAbortRequested(tabId)) {
+    if (currentTabId === tabId
+        && assistantEl
+        && !isTabAbortRequested(tabId)
+        && !clearedConversationRunRequestIds.has(requestId)) {
       addMessage('error', t('sp.error_prefix', { msg: e.message }));
     }
   } finally {
@@ -9143,6 +9153,11 @@ async function abortRun(tabId = currentTabId) {
       follower.promise.catch(() => {}),
       fallbackPromise,
     ]);
+    // A stopped background run can become inactive before this reconnect
+    // follower consumes its terminal journal. New conversation awaits
+    // abortRun(), so do not let it clear that journal until the follower has
+    // observed the terminal snapshot (or reached its bounded failure).
+    await follower.promise.catch(() => {});
     fallbackCancelled = true;
     clearTimeout(fallbackTimer);
   }
