@@ -8386,7 +8386,9 @@ function precedingUserMessage(assistantEl) {
 }
 
 function latestChatTurn() {
-  const assistantEl = [...(messagesEl?.querySelectorAll?.(':scope > .message.assistant') || [])].at(-1) || null;
+  const latestMessageEl = [...(messagesEl?.querySelectorAll?.(':scope > .message') || [])].at(-1) || null;
+  if (!latestMessageEl?.matches?.('.message.assistant')) return null;
+  const assistantEl = latestMessageEl;
   // Scheduled runs intentionally have no user-message anchor. Do not infer one
   // from an unrelated older turn when restoring a tab or panel session.
   if (assistantEl?.dataset?.scheduledJobId) return null;

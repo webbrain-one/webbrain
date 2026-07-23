@@ -17491,8 +17491,8 @@ test('sidepanel long replies use reading-first turn navigation', () => {
     );
     assert.match(
       panel,
-      /function latestChatTurn\(\) \{[\s\S]*?assistantEl\?\.dataset\?\.scheduledJobId[\s\S]*?return null;[\s\S]*?precedingUserMessage\(assistantEl\)/,
-      `${label}: restored scheduled runs should not borrow an unrelated earlier question`,
+      /function latestChatTurn\(\) \{[\s\S]*?:scope > \.message[\s\S]*?latestMessageEl\?\.matches\?\.\('\.message\.assistant'\)[\s\S]*?assistantEl\?\.dataset\?\.scheduledJobId[\s\S]*?return null;[\s\S]*?precedingUserMessage\(assistantEl\)/,
+      `${label}: restore should use only a newest assistant turn and never borrow a question for scheduled or later non-turn output`,
     );
     const clarifySource = panel.slice(
       panel.indexOf('function renderClarifyCard('),
