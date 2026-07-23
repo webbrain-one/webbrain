@@ -5699,7 +5699,7 @@ test('sidepanels wire highlighting and heading rendering into fenced Markdown', 
     const css = fs.readFileSync(path.join(ROOT, cssRel), 'utf8');
     assert.match(panel, /import \{ codeFenceLanguage, highlightCode, renderMarkdownHeadings \} from '\.\/markdown-render\.js';/, `${label}: renderer helpers should be imported`);
     assert.match(panel, /const lang = codeFenceLanguage\(info\);/, `${label}: fenced code should tolerate metadata after its language token`);
-    assert.match(panel, /const highlighted = highlightCode\(block\.code, block\.lang\);/, `${label}: fenced code should be highlighted by its language`);
+    assert.match(panel, /const highlighted = enhance \? highlightCode\(block\.code, block\.lang\) : escapeHtml\(block\.code\);/, `${label}: completed fenced code should be highlighted by its language while live code stays lightweight`);
     assert.match(panel, /text = renderMarkdownHeadings\(text\);/, `${label}: ATX headings should be rendered`);
     assert.match(css, /\.syntax-keyword[\s\S]*?var\(--syntax-keyword\)/, `${label}: token colors should be styled`);
     assert.match(css, /\.syntax-variable \{ color: var\(--syntax-variable\); \}/, `${label}: variables should use their dedicated theme color`);
@@ -13888,7 +13888,12 @@ test('sidepanel suppresses streamed raw tool-call text before rendering tool ste
     assert.match(panel, /function looksLikeRawToolCallText\(text\) \{[\s\S]*?ref_id\\s\*/, `${label}: raw tool-call detector should recognize ref_id payloads`);
     assert.match(panel, /textEl\.dataset\.suppressToolCallStream = 'true';/, `${label}: text_delta should suppress later raw tool-call chunks`);
     assert.match(panel, /const streamedAssistantTextByEl = new WeakMap\(\);/, `${label}: streamed final dedupe state should not be stored in serialized DOM attributes`);
-    assert.match(panel, /streamedAssistantTextByEl\.set\(textEl, nextText\);/, `${label}: text_delta should track visible streamed text for final dedupe`);
+    assert.match(panel, /const nextText = getStreamedAssistantText\(textEl\) \+ String\(data\.content \|\| ''\);/, `${label}: text_delta should append to raw Markdown rather than reading rendered DOM text`);
+    assert.match(panel, /streamedAssistantTextByEl\.set\(textEl, nextText\);\s*scheduleStreamedAssistantMarkdownRender\(textEl\);/, `${label}: text_delta should retain and schedule incremental Markdown rendering`);
+    assert.match(panel, /const streamedAssistantRenderFrameByEl = new WeakMap\(\);[\s\S]*?function scheduleStreamedAssistantMarkdownRender\(textEl\)[\s\S]*?requestAnimationFrame\([\s\S]*?textEl\.innerHTML = formatMarkdown\(getStreamedAssistantText\(textEl\), \{ enhance: false \}\);[\s\S]*?scrollToBottom\(\);/, `${label}: live Markdown should render at most once per animation frame before following output`);
+    assert.match(panel, /function clearStreamedAssistantText\(textEl\)[\s\S]*?cancelAnimationFrame\(frame\);[\s\S]*?streamedAssistantRenderFrameByEl\.delete\(textEl\);/, `${label}: terminal and tool transitions should cancel pending stream renders`);
+    assert.doesNotMatch(panel, /const nextText = textEl\.textContent \+ data\.content;/, `${label}: rendered Markdown must never become the source for later deltas`);
+    assert.match(panel, /function formatMarkdown\(text, options = \{\}\)[\s\S]*?const enhance = options\.enhance !== false;[\s\S]*?const highlighted = enhance \? highlightCode\(block\.code, block\.lang\) : escapeHtml\(block\.code\);[\s\S]*?if \(enhance\) scheduleMathRender\(\);[\s\S]*?if \(enhance && codeBlocks\.length > 0\)/, `${label}: syntax highlighting and interactive Markdown enhancements should wait for the terminal render`);
     assert.doesNotMatch(panel, /dataset\.streamedAssistantText\s*=/, `${label}: streamed text must not be serialized as a data attribute`);
     assert.match(panel, /getStreamedAssistantText\(textEl\) === String\(res\.content\)[\s\S]*?renderAssistantTextUpdate\(assistantEl, res\.content\);/, `${label}: completed streams should format the visible final text in place`);
     assert.match(panel, /clearAssistantTextStreamState\(assistantEl\);/, `${label}: run completion should clear transient streamed-text state before persistence`);
@@ -44831,7 +44836,8 @@ test('run UI journal: streamed deltas coalesce durable snapshots without delayin
     const persisted = [];
     const persistence = new PersistenceScheduler({
       persist: (_tabId, snapshot) => persisted.push(structuredClone(snapshot)),
-      setTimeoutFn: (callback) => {
+      setTimeoutFn: function (callback) {
+        assert.equal(this, globalThis, `${label}: setTimeout must retain its browser-global receiver`);
         const timerId = ++nextTimerId;
         timers.set(timerId, () => {
           timers.delete(timerId);
@@ -44839,7 +44845,10 @@ test('run UI journal: streamed deltas coalesce durable snapshots without delayin
         });
         return timerId;
       },
-      clearTimeoutFn: timerId => timers.delete(timerId),
+      clearTimeoutFn: function (timerId) {
+        assert.equal(this, globalThis, `${label}: clearTimeout must retain its browser-global receiver`);
+        timers.delete(timerId);
+      },
     });
     const journal = new Journal({
       onChange(tabId, snapshot, change) {

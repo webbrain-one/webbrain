@@ -6373,18 +6373,20 @@ function handleAgentUpdateMessage(msg) {
       if (currentAssistantEl) {
         const textEl = currentAssistantEl.querySelector('.message-text');
         if (textEl && textEl.dataset.suppressToolCallStream !== 'true') {
-          const nextText = textEl.textContent + data.content;
+          // Keep the raw Markdown separate from the rendered DOM. Reading back
+          // textContent would discard markers such as ** and backticks after
+          // the first incremental render, corrupting every later chunk.
+          const nextText = getStreamedAssistantText(textEl) + String(data.content || '');
           if (looksLikeRawToolCallText(nextText)) {
             textEl.textContent = '';
             clearStreamedAssistantText(textEl);
             textEl.dataset.suppressToolCallStream = 'true';
           } else {
-            textEl.textContent = nextText;
             streamedAssistantTextByEl.set(textEl, nextText);
+            scheduleStreamedAssistantMarkdownRender(textEl);
           }
         }
       }
-      scrollToBottom();
       break;
 
     case 'tool_call':
@@ -7339,6 +7341,7 @@ function looksLikeRawToolCallText(text) {
 }
 
 const streamedAssistantTextByEl = new WeakMap();
+const streamedAssistantRenderFrameByEl = new WeakMap();
 
 function getStreamedAssistantText(textEl) {
   return streamedAssistantTextByEl.get(textEl) || textEl?.dataset?.streamedAssistantText || '';
@@ -7346,8 +7349,23 @@ function getStreamedAssistantText(textEl) {
 
 function clearStreamedAssistantText(textEl) {
   if (!textEl) return;
+  const frame = streamedAssistantRenderFrameByEl.get(textEl);
+  if (frame != null) cancelAnimationFrame(frame);
+  streamedAssistantRenderFrameByEl.delete(textEl);
   streamedAssistantTextByEl.delete(textEl);
   delete textEl.dataset.streamedAssistantText;
+}
+
+function scheduleStreamedAssistantMarkdownRender(textEl) {
+  if (!textEl || streamedAssistantRenderFrameByEl.has(textEl)) return;
+  const frame = requestAnimationFrame(() => {
+    if (streamedAssistantRenderFrameByEl.get(textEl) !== frame) return;
+    streamedAssistantRenderFrameByEl.delete(textEl);
+    if (textEl.dataset.suppressToolCallStream === 'true') return;
+    textEl.innerHTML = formatMarkdown(getStreamedAssistantText(textEl), { enhance: false });
+    scrollToBottom();
+  });
+  streamedAssistantRenderFrameByEl.set(textEl, frame);
 }
 
 function clearAssistantTextStreamState(assistantEl) {
@@ -7411,7 +7429,7 @@ function renderAssistantTextUpdate(assistantEl, content, options = {}) {
     textEl.appendChild(para);
   } else {
     // Compact mode keeps only the latest blurb. A streamed final lands here
-    // too so the live plain text becomes the normal formatted final answer.
+    // too for one authoritative render with terminal-only enhancements.
     textEl.innerHTML = formatMarkdown(content);
   }
 
@@ -8034,8 +8052,9 @@ function scheduleMathRender() {
   }, 50);
 }
 
-function formatMarkdown(text) {
+function formatMarkdown(text, options = {}) {
   if (!text) return '';
+  const enhance = options.enhance !== false;
 
   // 1. Extract fenced code blocks BEFORE escaping HTML
   const codeBlocks = [];
@@ -8080,10 +8099,17 @@ function formatMarkdown(text) {
 
   // 6. Restore fenced code blocks with copy button
   codeBlocks.forEach((block, i) => {
-    const highlighted = highlightCode(block.code, block.lang);
+    // Re-highlighting every accumulated token is expensive and can visibly
+    // flicker. Keep live code escaped/plain, then highlight it once when the
+    // authoritative terminal response arrives.
+    const highlighted = enhance ? highlightCode(block.code, block.lang) : escapeHtml(block.code);
     const langLabel = block.lang ? `<span class="code-lang">${escapeHtml(block.lang)}</span>` : '';
-    const copyBtn = `<button class="code-copy-btn" data-code-index="${i}" title="${escapeHtml(t('sp.copy.code.title'))}">${escapeHtml(t('sp.copy'))}</button>`;
-    const header = `<div class="code-block-header">${langLabel}${copyBtn}</div>`;
+    const copyBtn = enhance
+      ? `<button class="code-copy-btn" data-code-index="${i}" title="${escapeHtml(t('sp.copy.code.title'))}">${escapeHtml(t('sp.copy'))}</button>`
+      : '';
+    const header = langLabel || copyBtn
+      ? `<div class="code-block-header">${langLabel}${copyBtn}</div>`
+      : '';
     text = text.replace(
       `__CODEBLOCK_${i}__`,
       () => `<div class="code-block-wrapper">${header}<pre><code>${highlighted}</code></pre></div>`
@@ -8091,10 +8117,10 @@ function formatMarkdown(text) {
   });
 
   // Schedule KaTeX rendering of any math expressions in the messages area.
-  scheduleMathRender();
+  if (enhance) scheduleMathRender();
 
   // Store raw code for copy buttons to use
-  if (codeBlocks.length > 0) {
+  if (enhance && codeBlocks.length > 0) {
     setTimeout(() => {
       document.querySelectorAll('.code-copy-btn').forEach(btn => {
         if (btn.dataset.bound) return;
