@@ -41,7 +41,7 @@ The user chooses their provider in Settings. Options include:
 
 - **WebBrain Cloud**: requests go through `api.webbrain.one`; selected interactions may be retained and used for evaluation, improvement, fine-tuning, and training while Help Improve WebBrain is enabled
 - **Bring-your-own cloud providers**: OpenAI, Anthropic, Google Gemini, Mistral, DeepSeek, xAI, Groq, OpenRouter, etc. — requests go directly to the provider using the user's credentials and are never collected by WebBrain
-- **Local providers**: llama.cpp, Ollama, LM Studio, Jan, vLLM, SGLang — data stays on the user's machine
+- **Local providers**: llama.cpp, Ollama, LM Studio, Jan, vLLM, SGLang, LocalAI — data stays on the user's machine
 
 Local-model and bring-your-own API requests are never collected by WebBrain. WebBrain Cloud requests are processed and may be retained as described below.
 
@@ -105,7 +105,15 @@ deletion or de-identification. De-identified datasets may be retained for up to
 
 ### Conversation History
 
-Stored in `chrome.storage.session` (Chrome) or in-memory (Firefox). Used to restore conversation across service-worker restarts. Relevant conversation content is sent to the configured provider as request context; the stored copy is not separately synced to WebBrain.
+Stored in browser session storage: `chrome.storage.session` on Chrome and
+`browser.storage.session` on Firefox. Per-tab provider history
+(`agentConv:<tabId>`), rendered chat (`tabChat:<tabId>`), and the detached-run
+UI journal (`runUi:<tabId>`) let a panel/sidebar close, reload, or background
+restart restore the conversation and an in-progress run. The UI journal keeps
+a bounded event window plus separately bounded accumulated streamed text so
+in-progress Markdown can be reconstructed after reconnect. Relevant
+conversation content is sent to the configured provider as request context;
+the stored copies are not separately synced to WebBrain.
 
 ### Trace Recorder
 
@@ -144,17 +152,6 @@ saved metadata and must ask the user again for any still-needed value.
 ### Settings
 
 Provider configs (API keys, base URLs, model selections) are stored in `chrome.storage.local`. API keys are in plaintext — this is a personal-computer tool and the storage is sandboxed by the browser. The extension has no mechanism to exfiltrate these keys.
-
-When the default-disabled Chrome Web Store release skill is enabled, its
-user-owned Google OAuth client credentials, OAuth access/refresh tokens,
-publisher/item IDs, and selected release ZIP are also stored in extension-local
-storage. ZIP bytes are sent only to the official
-`chromewebstore.googleapis.com` upload endpoint after the upload permission is
-approved. Tokens and ZIP bytes are never placed in model prompts, tool
-arguments, traces, configuration exports, or tool results. The model receives
-only bounded package metadata and Chrome Web Store API responses; API responses
-are treated as untrusted content. Disconnecting removes OAuth tokens, while the
-separate Clear selected ZIP control removes the locally staged package.
 
 ### User Profile
 
@@ -427,4 +424,5 @@ data-flow patterns are otherwise the same, except:
 
 - No dedicated vision sub-call (screenshots go directly to the main provider if vision is supported)
 - No slash-driven tab/screen recording
-- Conversation history is not persisted (lost when the sidebar closes)
+- Conversation, rendered chat, and detached-run UI journals use
+  `browser.storage.session`, matching Chrome's session-scoped persistence.

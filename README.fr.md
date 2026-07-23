@@ -34,17 +34,18 @@
 - **Continuer depuis la limite** — Lorsque l'agent atteint la limite d'étapes, cliquez sur Continuer pour poursuivre
 - **LLM multi-fournisseurs** — Prend en charge les modèles locaux et cloud :
   - **WebBrain Cloud 1.0** (cloud, par défaut) — Option cloud gérée intégrée, aucune configuration locale requise
-  - **llama.cpp** (local) — Aucune clé API requise. Également **Ollama**, **LM Studio**, **Jan**, **vLLM** et **SGLang**
-  - **OpenAI** (GPT-5.5, etc.)
+  - **llama.cpp** (local) — Aucune clé API requise. Également **Ollama**, **LM Studio**, **Jan**, **vLLM**, **SGLang** et **LocalAI**
+  - **OpenAI** (GPT-5.6, etc.)
   - **Anthropic Claude** (API native)
-  - **Google Gemini**, **Mistral AI**, **DeepSeek**, **xAI Grok**, **Groq**
-  - **MiniMax**, **Alibaba Cloud (Qwen)**, **z.ai GLM**
-  - **Cloudflare Workers AI**, **Nvidia NIM**
+  - **Azure OpenAI**, **AWS Bedrock**, **Google Gemini**, **Mistral AI**, **DeepSeek**, **xAI Grok**
+  - **MiniMax**, **Kimi**, **Alibaba Cloud (Qwen)**, **z.ai GLM**
+  - **Cloudflare Workers AI**, **Nvidia NIM**, **Groq**, **Together AI**, **Hugging Face Inference**, **Fireworks**
   - **OpenRouter** (modèle par défaut : `openrouter/free` ; accès à plus de 100 modèles)
 - **Assistant d'intégration** — Visite guidée au premier lancement couvrant la sécurité du mode Act et la configuration des fournisseurs
 - **Interface en panneau latéral** — Interface de chat épurée qui accompagne votre navigation
+- **Réponses longues pensées pour la lecture** — La nouvelle question reste visible pendant que la réponse s'allonge, avec des commandes flottantes pour suivre la réponse, aller au contenu le plus récent ou revenir à la question
 - **Conversations par onglet** — Chaque onglet possède son propre historique de chat
-- **Streaming** — Diffusion de jetons en temps réel depuis tous les fournisseurs
+- **Streaming Ask** — Les chats Ask interactifs affichent le texte de l'API Responses officielle d'OpenAI à mesure qu'il arrive ; les outils et l'historique attendent `response.completed`, avec un interrupteur avancé et un repli non-streaming automatique en cas d'interruption
 - **Contexte intelligent** — Auto-compactage tenant compte des jetons (résume les tours plus anciens lorsque la conversation approche de la fenêtre de contexte du modèle, avec un avis visible « Contexte automatiquement compacté »), limites de résultats d'outils et récupération d'urgence en cas de débordement
 - **Contrôle de l'historique du navigateur** — Le mode Act peut utiliser les outils natifs d'historique `go_back` / `go_forward` au lieu du JavaScript de page sensible à la CSP
 - **Indices de raccourcis API** — Les clics répétés qui déclenchent la même requête XHR/fetch peuvent afficher une suggestion `fetch_url` correspondante tout en préservant la règle UI-d'abord et la politique de mutation `/allow-api`
@@ -77,7 +78,7 @@ git clone https://github.com/webbrain-one/webbrain.git
 
 > **Note :** Les modules complémentaires temporaires sont supprimés au redémarrage de Firefox. Pour une installation permanente, l'extension doit être signée via [addons.mozilla.org](https://addons.mozilla.org).
 
-### Lancer un LLM local (par défaut)
+### Lancer un LLM local (facultatif)
 
 ```bash
 # Avec llama.cpp
@@ -112,9 +113,9 @@ Cliquez sur l'icône d'engrenage ou accédez à la page Options de l'extension p
 
 **Paramètres d'affichage :**
 - Mode verbeux — Affiche le JSON complet des appels d'outils (désactivé par défaut)
-- Repli sur capture d'écran — Utilise des captures d'écran lorsque la lecture du DOM échoue
-- Étapes max de l'agent — Limite d'étapes configurable (5-200, 60 par défaut)
-- Plan avant Act — Génère et permet de revoir facultativement un plan structuré en mode Act avant l'exécution des outils du navigateur (désactivé par défaut)
+- Capture automatique — Fournit un contexte visuel lorsque les lectures DOM/page sont insuffisantes
+- Étapes max de l'agent — Limite d'étapes configurable (5-195 ou illimitée, 130 par défaut)
+- Plan avant Act — Génère et permet de revoir facultativement un plan structuré avant l'exécution des outils Act/Dev (mode Essai par défaut ; un échec JSON retombe sur un tour en lecture seule)
 
 **Fournisseurs :**
 
@@ -122,6 +123,7 @@ Les URL de base sont préremplies dans les paramètres lorsque vous choisissez u
 
 | Fournisseur | Clé API | Modèle par défaut |
 |-------------|----------|-------------------|
+| WebBrain Cloud | Non requise | webbrain-cloud 1.0 |
 | llama.cpp (`:8080`) | Non requise | (votre modèle chargé) |
 | Ollama (`:11434/v1`) | Non requise | (votre modèle chargé) |
 | LM Studio (`:1234/v1`) | Non requise | (votre modèle chargé) |
@@ -129,7 +131,9 @@ Les URL de base sont préremplies dans les paramètres lorsque vous choisissez u
 | vLLM (`:8000/v1`) | Optionnelle | (votre modèle servi) |
 | SGLang (`:30000/v1`) | Optionnelle | (votre modèle servi) |
 | LocalAI (`:8080/v1`) | Optionnelle | (votre modèle chargé) |
-| OpenAI | Requise | gpt-5.5 |
+| Azure OpenAI | Requise | (votre déploiement) |
+| AWS Bedrock | Identifiants AWS | (votre ID de modèle) |
+| OpenAI | Requise | gpt-5.6-terra |
 | Anthropic Claude | Requise | claude-sonnet-4-6 |
 | Google Gemini | Requise | gemini-3.1-flash |
 | Cloudflare Workers AI | Requise (+ Account ID) | @cf/zai-org/glm-5.2 |
@@ -139,9 +143,13 @@ Les URL de base sont préremplies dans les paramètres lorsque vous choisissez u
 | Nvidia NIM | Requise | meta/llama-3.1-8b-instruct |
 | Groq | Requise | llama-3.3-70b-versatile |
 | MiniMax | Requise | minimax-m2.7 |
+| Kimi | Requise | kimi-k2.5 |
 | Alibaba Cloud (Qwen) | Requise | qwen-max |
+| Together AI | Requise | meta-llama/Llama-3.3-70B-Instruct-Turbo |
 | z.ai GLM | Requise | glm-5.2 |
 | OpenRouter | Requise | openrouter/free |
+| Hugging Face Inference | Requise | zai-org/GLM-5.2 |
+| Fireworks | Requise | accounts/fireworks/models/llama-v3p3-70b-instruct |
 
 ## Architecture
 
@@ -150,6 +158,7 @@ src/chrome/                        src/firefox/
 ├── manifest.json (MV3)            ├── manifest.json (MV2)
 ├── src/                           ├── src/
 │   ├── background.js              │   ├── background.js (+ background.html)
+│   ├── run-ui-journal.js          │   ├── run-ui-journal.js
 │   ├── agent/                     │   ├── agent/
 │   ├── content/                   │   ├── content/
 │   ├── providers/                 │   ├── providers/
@@ -318,7 +327,6 @@ Les raccourcis du panneau latéral Chrome fonctionnent lorsque le panneau latér
 - **Firefox est nettement plus faible que Chrome.** Firefox n'a pas d'équivalent au Chrome DevTools Protocol via `chrome.debugger`, donc plusieurs fonctionnalités propres à Chrome manquent dans le build Firefox :
   - Le clic/la saisie passe par le chemin du content-script (`document.querySelector` + `el.click()`) au lieu de CDP `Input.dispatchMouseEvent`. Cela signifie **aucune traversée du shadow-DOM**, **aucun véritable événement de souris approuvé** (certains gestionnaires React/Vue ne se déclenchent pas), **aucune traversée de shadow root fermé**, et **aucun budget de réessai `resolveSelector`**.
   - **Aucune extension de réessai consciente de la navigation SPA.**
-  - **Aucune persistance de conversation** à travers les redémarrages de l'arrière-plan.
   - **Aucune capture d'écran CDP.** La capture automatique utilise `tabs.captureVisibleTab` à la place, ce qui ne fonctionne que pour les onglets actifs et à une qualité légèrement inférieure.
   - **Aucun support de shadow root fermé** pour les outils de lecture/extraction.
   - Les adaptateurs de sites, la détection par vision, la détection de boucle, la boucle de capture d'écran automatique et l'ensemble prompt/outils compact opt-in *sont* reflétés sur Firefox.
@@ -327,7 +335,7 @@ Les raccourcis du panneau latéral Chrome fonctionnent lorsque le panneau latér
 
 ## Nouveautés
 
-Consultez [CHANGELOG.md](./CHANGELOG.md) pour l'historique complet des versions. Les points forts récents incluent Plan avant Act, les outils natifs d'historique du navigateur, les indices de raccourcis API pour les clics répétés, WebBrain Cloud 1.0, les tâches planifiées, les améliorations du mode Compact et la lecture PDF native.
+Consultez [CHANGELOG.md](./CHANGELOG.md) pour l'historique complet des versions. Les points forts récents incluent la navigation de lecture pour les longues réponses, le Markdown streamé résistant aux reconnexions, la recherche de fournisseurs classée, Plan avant Act, les outils natifs d'historique du navigateur et les workflows enregistrés.
 
 ## Ajouter un nouveau fournisseur
 

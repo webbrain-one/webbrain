@@ -195,11 +195,10 @@ How it is wired:
   tools must be POST, `readOnly: false`, `requiresDownloadPermission: true`,
   and declare same-origin status/file/cleanup endpoint templates with
   `{job_id}`.
-- Privileged packaged integrations are not a third manifest kind. For example,
-  the opt-in Chrome Web Store release skill receives its fixed
-  `chromeWebStore` handlers only when `skills.js` recognizes the exact built-in
-  skill ID and packaged path. A raw or URL-imported skill cannot declare those
-  handlers; its `webbrain-tools` block remains limited to the HTTP kinds above.
+- There is no privileged third manifest kind. Packaged, pasted, and URL-imported
+  skills all remain limited to the two HTTP kinds above; browser-privileged
+  behavior must be implemented as a core tool and pass the normal permission
+  and safety gates.
 
 Security model:
 

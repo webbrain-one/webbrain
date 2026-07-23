@@ -51,6 +51,7 @@ src/firefox/
 ├── src/
 │   ├── background.html             # Background page (MV2 requirement)
 │   ├── background.js               # Message router
+│   ├── run-ui-journal.js           # Detached-run replay + streamed-text snapshots
 │   ├── agent/
 │   │   ├── agent.js                # Core agent loop
 │   │   ├── tools.js                # Tool schemas + system prompts (incl. 4 AX tools)
@@ -68,8 +69,11 @@ src/firefox/
 │   │   ├── base.js                 # Provider interface
 │   │   ├── manager.js              # Provider lifecycle
 │   │   ├── openai.js               # OpenAI-compatible
+│   │   ├── azure-openai.js         # Azure OpenAI deployments
+│   │   ├── aws-bedrock.js          # AWS Bedrock Converse
 │   │   ├── anthropic.js            # Anthropic Claude
-│   │   └── llamacpp.js             # Local llama.cpp server
+│   │   ├── llamacpp.js             # Local llama.cpp server
+│   │   └── fetch-timeout.js        # Direct provider fetch timeout wrapper
 │   ├── trace/
 │   │   └── recorder.js             # Optional IndexedDB run recorder
 │   └── ui/
@@ -228,7 +232,7 @@ User message
 _enrichFirstUserMessage()     ← same as Chrome (URL/title + screenshot + adapter)
     │
     ▼
-Main Loop (max 120 steps)
+Main Loop (max steps from Settings, default 130)
     │
     ├─ chatMainTurn(messages, {tools, temp, maxTokens:4096})
     │  ├─ provider.chat() by default
@@ -258,11 +262,22 @@ executed. Live deltas remain immediate, while reconnect snapshots coalesce on
 a 200 ms trailing interval; terminal updates and pre-tool durability
 checkpoints flush immediately. The older full `processMessageStream()`
 lifecycle remains separate; this feature does not move normal chat traffic
-into it.
+into it. The journal also keeps separately bounded accumulated streamed text,
+so a reopened sidebar can rebuild in-progress Markdown after early delta events
+have been acknowledged or trimmed from the replay window.
 
 ### Conversation persistence (parity with Chrome)
 
-Per-tab agent conversations and sidebar chat HTML are mirrored to `browser.storage.session` (`agentConv:<tabId>`, `tabChat:<tabId>`), same key shape as Chrome. The background page hydrates from session on the next message and the sidebar restores chat HTML on open/reopen. Session keys are cleared on `/reset` and when a tab closes (`tabChat` only for the UI layer; agent conv policy matches Chrome).
+Per-tab agent conversations, sidebar chat HTML, and detached-run UI snapshots
+are mirrored to `browser.storage.session` as `agentConv:<tabId>`,
+`tabChat:<tabId>`, and `runUi:<tabId>`, the same key shapes as Chrome. The
+background page hydrates provider history before the next message; the sidebar
+restores the visible transcript and reconnects to active runs on open/reopen.
+The UI snapshot has a 256-event replay window plus separately bounded
+accumulated streamed text, so an in-progress Markdown response survives a
+sidebar close without duplicated or plaintext fragments. Delta writes
+coalesce for 200 ms; non-delta, terminal, and pre-tool checkpoints persist
+immediately.
 
 ```javascript
 // Both browsers:
@@ -415,7 +430,12 @@ Plus the legacy handlers: `read_page`, `click`, `type_text`, `press_keys`, `scro
 
 ## Provider System
 
-Identical to Chrome. Same five providers (OpenAI, Anthropic, llama.cpp, Ollama, and generic OpenAI-compatible) with the same message format and conversion logic. Ollama uses the OpenAI-compatible provider with `localhost:11434/v1`.
+Identical to Chrome at the provider-class and configuration layer:
+WebBrain Cloud, seven local backends, Azure OpenAI, AWS Bedrock, Anthropic, and
+the current direct-cloud/router OpenAI-compatible configs use the same message
+format and conversion logic. The canonical current ID and default-model table
+is maintained in
+[`docs/providers-and-models.md`](../../docs/providers-and-models.md).
 
 Uses `browser.storage.local` instead of `chrome.storage.local` for config persistence.
 
@@ -451,6 +471,7 @@ All identical to Chrome:
 |---|---|---|
 | Panel type | Side panel (MV3 API) | Sidebar action (MV2) |
 | Chat persistence | Survives panel close | Survives sidebar close (`browser.storage.session`) |
+| Long-reply navigation | Reading-first anchors + floating navigation | Same behavior and localized controls |
 | Tab tracking | `chrome.tabs.onActivated` + session storage | `browser.tabs.onActivated` + session storage |
 | Background comms | `chrome.runtime.sendMessage` | `browser.runtime.sendMessage` (Promise-based) |
 | Trace viewer | Yes (`ui/traces.html`) | No |
@@ -463,11 +484,14 @@ All identical to Chrome:
 1. User: "create a product priced at 500 CNY billed every 2 months"
    in a Stripe product-creation tab.
 
-2. sidepanel.js → background.js → agent.processMessage(tabId, text, 'act')
+2. sidepanel.js → sendRunWithReconnect('chat_start', {
+     text, mode: 'act', tabId, requestId
+   })
 
-3. Agent builds messages: [system prompt, user msg + URL/title + screenshot].
+3. background.js begins/persists `runUi:<tabId>`, starts the detached `chat`
+   lifecycle, then calls `agent.processMessage(tabId, text, onUpdate, 'act')`.
 
-4. Agent calls provider.chat(...)
+4. Agent builds messages and calls `provider.chat(...)`.
 
 5. LLM: get_accessibility_tree {}
    → content.js runs buildAccessibilityTree
@@ -515,7 +539,7 @@ when the tab conversation already has `/allow-api`.
 | No trusted keyboard events | `press_keys` may not land on all sites | Dispatched to both activeElement and document |
 | No full-page screenshot | Only visible viewport | Scroll + multiple captures |
 | No shadow-root piercing (closed) | Can't read closed shadow roots | Dev-mode `execute_js` with manual traversal |
-| No file upload | Can't automate file input dialogs | User uploads manually |
+| No arbitrary-path/CDP upload | Cannot attach an arbitrary local path silently | Use a prior `downloadId` re-fetch or WebBrain's user file picker |
 | No duplicate-submit guard | Agent may submit twice if LLM loops | Rely on site-level idempotence / user watches |
 | No ambiguous-click CDP enrichment | Overlapping hit-target ambiguity resolved by ref_id only | Prompting / adapter guidance |
 | MV2 background page | Less efficient than MV3 service worker | `persistent: false` helps |
@@ -543,7 +567,8 @@ Same as Chrome, minus CDP:
 
 Firefox remains a self-contained MV2 build with mirrored agent/provider/UI code
 where the browser APIs allow it. The historical v3.6.8 port brought the AX
-subsystem to parity; current 18.0.0 parity includes Plan before Act, scheduled
-tasks, trace recording, the API shortcut observer, and browser-history tools.
+subsystem to parity; current 25.7.12 parity includes Plan before Act, scheduled
+tasks, trace recording, the API shortcut observer, browser-history tools,
+reading-first navigation, and reconnect-safe streamed Markdown.
 The remaining gaps are browser-platform gaps listed above, mostly CDP/offscreen
 features.

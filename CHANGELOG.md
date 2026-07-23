@@ -4,10 +4,47 @@ All notable changes to WebBrain are documented in this file.
 
 This changelog was generated from the repository Git history and release tags. Versions without a Git tag are inferred from version-bump commits and the current `package.json` / browser manifest versions.
 
+## [25.7.12] - 2026-07-23
+
+### Fixed
+- Preserved in-progress streamed Markdown across side-panel/sidebar closes, reloads, and reconnects in Chrome and Firefox.
+- Rebuilt restored streams from the background-owned UI journal without duplicating deltas, losing Markdown structure, or leaving an unfinished stream in its incremental render state.
+
+### Tests
+- Added mirrored regression coverage for persisted streamed text, reconnect replay, restored finalization, and journal size limits.
+
+## [25.7.11] - 2026-07-23
+
+### Fixed
+- Ranked provider Settings search results by exact provider name/ID, then prefix, then substring matches while preserving the configured provider order for ties.
+
+### Tests
+- Added Chrome and Firefox provider-search ranking coverage.
+
+## [25.7.10] - 2026-07-23
+
+### Fixed
+- Rendered streamed assistant output as Markdown while deltas arrive and finalized the same message when the terminal response is received.
+- Replaced rejected or corrected streamed terminal content instead of appending a duplicate response.
+- Finalized restored streamed responses consistently after reconnect.
+
+## [25.7.9] - 2026-07-23
+
+### Changed
+- Refined reading-first navigation so new questions remain visible while long responses grow, explicit reader positions are preserved, and restored chats return to the latest turn.
+- Added floating **Follow response**, **Jump to latest**, and **Back to question** controls for clipped long replies.
+
+### Fixed
+- Kept Continue bars, plan/clarification prompts, store-review prompts, new questions, and slash-command output visible when they require attention.
+- Resumed live follow after an explicit jump to the response edge without overriding deliberate reading positions.
+
 ## [25.7.8] - 2026-07-23
 
 ### Added
 - Added reading-first navigation for long replies across Ask, Act, and Dev modes in Chrome and Firefox.
+
+### Removed
+- Removed the packaged Chrome Web Store release skill, its privileged upload/publish routing, setup UI, dashboard adapter, protected-page exception, and previously seeded local skill records.
 
 ### Fixed
 - Kept blocking prompts and slash-command output visible without losing live follow when a run resumes.

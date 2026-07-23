@@ -1,6 +1,6 @@
 # WebBrain 架构
 
-> 版本 18.0.0
+> 版本 25.7.12
 
 ## 概述
 
@@ -67,7 +67,9 @@ WebBrain 是一个浏览器扩展，让 LLM 能够控制用户当前活动的浏
 
 模型分层与模式分离：`compact | mid | full` 控制模型看到多少普通工具，而 `ask | act | dev` 控制用户允许的任务类型。
 
-用户输入消息，面板发送 `{action: 'chat', text, mode, tabId}` 到后台，然后监听运行期间流式返回的 `agent_update` 事件。面板逐步渲染工具调用、结果、计划审查卡片、澄清提示和最终答案。
+用户输入消息后，面板会发送分离式请求 `{action: 'chat_start', text, mode, tabId, requestId}`，随后连接到由后台持有的运行日志并接收 `agent_update` 事件。关闭或重新加载面板不会转移运行所有权，也不会重新启动任务。面板会逐步渲染工具调用、结果、计划审查卡片、澄清提示和最终答案。
+
+每个新的问答轮次都会以阅读优先的滚动状态开始：长回复增长时，问题会保持在视野中。浮动控件会根据阅读位置在**跟随回复**、**跳到最新内容**和**返回问题**之间切换。用户主动到达底部后才恢复自动跟随；其他手动阅读位置会被保留。需要处理的计划/澄清/继续卡片、审核提示、新问题和斜杠命令输出会强制显示在视野中。
 
 ### 后台脚本（`src/chrome/src/background.js`）
 
@@ -97,17 +99,19 @@ WebBrain 是一个浏览器扩展，让 LLM 能够控制用户当前活动的浏
 
 ### 步骤 1：侧面板 → 后台
 ```
-sidepanel.js → chrome.runtime.sendMessage({
-  action: 'chat',
+sidepanel.js → sendRunWithReconnect('chat_start', {
   text: 'create a product ...',
   mode: 'act',
-  tabId: 42
+  tabId: 42,
+  requestId: '...'
 })
 ```
 
 ### 步骤 2：后台 → 代理
 ```
-background.js handleMessage('chat')
+background.js handleMessage('chat_start')
+  → 创建并持久化 runUi:<tabId> 快照
+  → 启动分离式 `chat` 生命周期
   → agent.processMessage(tabId, text, onUpdate, mode)
 ```
 
@@ -256,9 +260,15 @@ while (steps < maxSteps) {
 
 消息数量 > 50、原始字符 > 80,000 或令牌预算超过上下文窗口 75% 时自动压缩。溢出时紧急裁剪到最后 6 条消息。
 
-### 对话持久化（仅 Chrome）
+### 对话与 UI 持久化
 
-MV3 Service Worker 将会话持久化到 `chrome.storage.session`。
+两个构建都会在会话存储中保存按标签页隔离的状态：
+
+- `agentConv:<tabId>` 保存发送给提供商的对话；
+- `tabChat:<tabId>` 镜像可见聊天 HTML；
+- `runUi:<tabId>` 保存分离式运行的身份与状态、有限的重放事件、计划/工具状态、终态内容以及累计的流式文本。
+
+`text_delta` 写入会在 200 毫秒尾随窗口内合并；非 delta、终态和工具执行前的耐久性检查点会立即持久化。累计流式文本使用独立于 256 条事件重放窗口的上限，因此重新打开的面板仍可正确重建进行中的 Markdown。Chrome 使用 `chrome.storage.session`，Firefox 使用 `browser.storage.session`。
 
 ---
 
@@ -269,7 +279,7 @@ MV3 Service Worker 将会话持久化到 `chrome.storage.session`。
 | 后台 | Service Worker（临时） | 后台页面（持久化） |
 | 事件 | CDP 受信任（`isTrusted=true`） | 合成事件（`isTrusted=false`） |
 | 截图 | CDP `Page.captureScreenshot` | `browser.tabs.captureVisibleTab()` |
-| 对话持久化 | `chrome.storage.session` | 仅内存 |
+| 对话/UI 持久化 | `chrome.storage.session` | `browser.storage.session` |
 | 离屏文档 | 有（fetch 代理 + 录制器） | 不可用 |
 | 轨迹记录器 | IndexedDB（可选） | IndexedDB（可选）— 相同的 `trace/recorder.js` |
 | 重复提交防护 | 有 | 不可用 |
@@ -279,7 +289,7 @@ MV3 Service Worker 将会话持久化到 `chrome.storage.session`。
 | API 快捷观察器 | `chrome.webRequest` URL/方法缓冲 | `browser.webRequest` URL/方法缓冲 |
 | 斜杠驱动的标签页/屏幕录制 | `chrome.tabCapture` / `getDisplayMedia()` + 离屏 | 不可用 |
 | 侧面板 | `sidePanel` API（MV3） | `sidebar_action`（MV2） |
-| 文件上传 | CDP 驱动 | 手动分发 |
+| 文件上传 | CDP 路径或 `downloadId` | 通过 `downloadId` 重新获取或使用 WebBrain 文件选择器；不支持任意本地路径 |
 
 ---
 

@@ -37,12 +37,13 @@
   - **llama.cpp** (local) — No API key needed. Also **Ollama**, **LM Studio**, **Jan**, **vLLM**, **SGLang**, and **LocalAI**
   - **OpenAI** (GPT-5.6, etc.)
   - **Anthropic Claude** (native API)
-  - **Google Gemini**, **Mistral AI**, **DeepSeek**, **xAI Grok**, **Groq**
+  - **Azure OpenAI**, **AWS Bedrock**, **Google Gemini**, **Mistral AI**, **DeepSeek**, **xAI Grok**
   - **MiniMax**, **Kimi**, **Alibaba Cloud (Qwen)**, **z.ai GLM**
-  - **Cloudflare Workers AI**, **Nvidia NIM**
+  - **Cloudflare Workers AI**, **Nvidia NIM**, **Groq**, **Together AI**, **Hugging Face Inference**, **Fireworks**
   - **OpenRouter** (default model: `openrouter/free`; access 100+ models)
 - **Onboarding Wizard** — First-launch walkthrough covering Act mode safety and provider setup
 - **Side Panel UI** — Clean chat interface that lives alongside your browsing
+- **Reading-first long replies** — New questions stay in view while answers grow, with floating controls to follow the response, jump to the latest content, or return to the question
 - **Per-Tab Conversations** — Each tab has its own chat history
 - **User Memory** — Optional local memory for user-stated preferences, with explicit `/memory --add` commands and opt-in background auto-learning
 - **Ask streaming** — Interactive Ask chats show official OpenAI Responses text as it arrives; tools and history wait for `response.completed`, with an Advanced kill switch and automatic non-streaming fallback for interrupted streams
@@ -80,7 +81,7 @@ git clone https://github.com/webbrain-one/webbrain.git
 
 > **Note:** Temporary add-ons are removed when Firefox restarts. For permanent installation, the extension needs to be signed via [addons.mozilla.org](https://addons.mozilla.org).
 
-### Start a local LLM (default)
+### Start a local LLM (optional)
 
 ```bash
 # Using llama.cpp
@@ -158,6 +159,7 @@ Base URLs are pre-filled in Settings when you select a provider. Local servers u
 
 | Provider | API Key | Default Model |
 |----------|---------|---------------|
+| WebBrain Cloud | Not needed | webbrain-cloud 1.0 |
 | llama.cpp (`:8080`) | Not needed | (your loaded model) |
 | Ollama (`:11434/v1`) | Not needed | (your loaded model) |
 | LM Studio (`:1234/v1`) | Not needed | (your loaded model) |
@@ -165,6 +167,8 @@ Base URLs are pre-filled in Settings when you select a provider. Local servers u
 | vLLM (`:8000/v1`) | Optional | (your served model) |
 | SGLang (`:30000/v1`) | Optional | (your served model) |
 | LocalAI (`:8080/v1`) | Optional | (your loaded model) |
+| Azure OpenAI | Required | (your deployment) |
+| AWS Bedrock | AWS credentials | (your model ID) |
 | OpenAI | Required | gpt-5.6-terra |
 | Anthropic Claude | Required | claude-sonnet-4-6 |
 | Google Gemini | Required | gemini-3.1-flash |
@@ -177,8 +181,11 @@ Base URLs are pre-filled in Settings when you select a provider. Local servers u
 | MiniMax | Required | minimax-m2.7 |
 | Kimi | Required | kimi-k2.5 |
 | Alibaba Cloud (Qwen) | Required | qwen-max |
+| Together AI | Required | meta-llama/Llama-3.3-70B-Instruct-Turbo |
 | z.ai GLM | Required | glm-5.2 |
 | OpenRouter | Required | openrouter/free |
+| Hugging Face Inference | Required | zai-org/GLM-5.2 |
+| Fireworks | Required | accounts/fireworks/models/llama-v3p3-70b-instruct |
 
 ## Architecture
 
@@ -187,6 +194,7 @@ src/chrome/                        src/firefox/
 ├── manifest.json (MV3)            ├── manifest.json (MV2)
 ├── src/                           ├── src/
 │   ├── background.js              │   ├── background.js (+ background.html)
+│   ├── run-ui-journal.js          │   ├── run-ui-journal.js
 │   ├── agent/                     │   ├── agent/
 │   ├── content/                   │   ├── content/
 │   ├── providers/                 │   ├── providers/
@@ -419,7 +427,6 @@ Chrome side panel shortcuts work when the WebBrain side panel has focus.
 - **Firefox is meaningfully weaker than Chrome.** Firefox has no equivalent to Chrome DevTools Protocol via `chrome.debugger`, so several Chrome-only features are missing in the Firefox build:
   - Click/type goes through the content-script path (`document.querySelector` + `el.click()`) instead of CDP `Input.dispatchMouseEvent`. This means **no shadow-DOM piercing**, **no real trusted mouse events** (some React/Vue handlers won't fire), **no closed-shadow-root traversal**, and **no `resolveSelector` retry budget**.
   - **No SPA-navigation-aware retry extension.**
-  - **No conversation persistence** across background restarts.
   - **No CDP screenshots.** Auto-screenshot uses `tabs.captureVisibleTab` instead, which works for active tabs only and at slightly lower quality.
   - **No closed shadow root support** for read/extract tools.
   - Site adapters, vision detection, loop detection, the auto-screenshot loop, and the opt-in compact prompt/tool set *are* mirrored to Firefox.
@@ -428,7 +435,7 @@ Chrome side panel shortcuts work when the WebBrain side panel has focus.
 
 ## What's New
 
-See [CHANGELOG.md](./CHANGELOG.md) for the full version history. Recent highlights include Plan before Act, native browser-history tools, repeated-click API shortcut hints, WebBrain Cloud 1.0, scheduled tasks, compact-mode improvements, and native PDF reading.
+See [CHANGELOG.md](./CHANGELOG.md) for the full version history. Recent highlights include reading-first long-reply navigation, reconnect-safe streamed Markdown, ranked provider search, Plan before Act, native browser-history tools, repeated-click API shortcut hints, and saved workflows.
 
 ## Adding a New Provider
 
