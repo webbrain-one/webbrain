@@ -12264,9 +12264,25 @@ test('sidepanel New conversation uses a message-plus icon and keeps its confirma
     const clearBody = panel.slice(clearStart, panel.indexOf('\n});', clearStart) + 4);
     assert.match(
       clearBody,
-      /if \(!window\.confirm\(t\('sp\.clear\.confirm'\)\)\) return;[\s\S]*?await sendToBackground\('clear_conversation', \{ tabId \}\);/,
-      `${label}: icon change must preserve confirmation before clearing`,
+      /if \(!window\.confirm\(t\('sp\.clear\.confirm'\)\)\) return;[\s\S]*?if \(isTabProcessing\(tabId\)\) await abortRun\(\);[\s\S]*?await sendToBackground\('clear_conversation', \{ tabId \}\);/,
+      `${label}: confirmed New conversation should stop an active run before clearing`,
     );
+  }
+});
+
+test('background waits for an active run to stop before clearing its conversation', () => {
+  for (const [label, backgroundRel] of [
+    ['chrome', 'src/chrome/src/background.js'],
+    ['firefox', 'src/firefox/src/background.js'],
+  ]) {
+    const background = fs.readFileSync(path.join(ROOT, backgroundRel), 'utf8');
+    const helperMatch = background.match(/async function stopActiveRunBeforeConversationClear\(tabId\) \{([\s\S]*?)\n\}/);
+    assert.ok(helperMatch, `${label}: active-run clear helper missing`);
+    assert.match(helperMatch[1], /cancelDetachedRunStart\(tabId\);[\s\S]*?agent\.abort\(tabId\);[\s\S]*?await activeStart\.promise\.catch\(\(\) => \{\}\);/, `${label}: clear helper should cancel, abort, and await the active run`);
+
+    const clearStart = background.indexOf("case 'clear_conversation':");
+    const clearBody = background.slice(clearStart, background.indexOf("case 'compact_conversation':", clearStart));
+    assert.match(clearBody, /await scheduler\.cancelForConversation\(tabId, conversationId\);[\s\S]*?await stopActiveRunBeforeConversationClear\(tabId\);[\s\S]*?agent\.clearConversation\(tabId\);/, `${label}: conversation state should clear only after the active run settles`);
   }
 });
 

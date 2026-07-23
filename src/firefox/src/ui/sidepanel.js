@@ -9043,7 +9043,7 @@ modeDevBtn?.addEventListener('click', async () => {
 
 // --- Stop / Abort ---
 
-stopBtn.addEventListener('click', async () => {
+async function abortRun() {
   const tabId = currentTabId;
   if (!isTabProcessing(tabId)) return;
   const requestId = String(
@@ -9081,7 +9081,9 @@ stopBtn.addEventListener('click', async () => {
       await drainQueuedPromptsAfterRunSettles();
     }
   }, 3000); // safety timeout if background takes too long
-});
+}
+
+stopBtn.addEventListener('click', abortRun);
 
 // --- Voice input (mic dictation, issue #210) ---
 // Web Speech API: well-supported in Chrome, absent in stock Firefox (which
@@ -9461,6 +9463,7 @@ document.addEventListener('wb-locale-changed', () => {
 clearBtn.addEventListener('click', async () => {
   const tabId = currentTabId;
   if (!window.confirm(t('sp.clear.confirm'))) return;
+  if (isTabProcessing(tabId)) await abortRun();
   await sendToBackground('clear_conversation', { tabId });
   await renderClearedConversationForTab(tabId);
 });

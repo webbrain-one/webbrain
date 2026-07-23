@@ -1483,6 +1483,23 @@ function cancelDetachedRunStart(tabId) {
   return true;
 }
 
+async function stopActiveRunBeforeConversationClear(tabId) {
+  const activeStart = detachedRunStarts.get(tabId) || null;
+  const running = agent.activeRunState(tabId)?.running === true;
+  if (!activeStart && !running) return false;
+
+  cancelDetachedRunStart(tabId);
+  try { agent.abort(tabId); } catch { /* best effort */ }
+
+  // Keep the old conversation alive until its run has unwound. Clearing it
+  // first leaves the per-tab run guard active while the UI already looks like
+  // a fresh chat, so the next send fails with "run already in progress".
+  if (activeStart?.promise) {
+    await activeStart.promise.catch(() => {});
+  }
+  return true;
+}
+
 function acquireRunKeepalive() {
   let released = false;
   const touch = () => {
@@ -2339,6 +2356,7 @@ async function handleMessage(msg, sender) {
       if (tabId) {
         const conversationId = await agent.getConversationId(tabId);
         await scheduler.cancelForConversation(tabId, conversationId);
+        await stopActiveRunBeforeConversationClear(tabId);
         agent.clearConversation(tabId);
         clearRunUiSnapshot(tabId);
       }
