@@ -43,8 +43,12 @@ export class RunUiPersistenceScheduler {
     if (typeof persist !== 'function') throw new TypeError('persist must be a function');
     this.persist = persist;
     this.delayMs = delayMs;
-    this.setTimeoutFn = setTimeoutFn;
-    this.clearTimeoutFn = clearTimeoutFn;
+    // Browser timer functions are Web APIs with receiver checks. Calling a
+    // saved setTimeout/clearTimeout as an instance property makes `this` the
+    // scheduler and Chrome throws "Illegal invocation" on the first streamed
+    // text delta. Bind injected and native timers to the actual global scope.
+    this.setTimeoutFn = setTimeoutFn.bind(globalThis);
+    this.clearTimeoutFn = clearTimeoutFn.bind(globalThis);
     this.pending = new Map();
   }
 
