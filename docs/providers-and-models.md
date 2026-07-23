@@ -63,6 +63,27 @@ class BaseLLMProvider {
 | `fireworks` | `openai` | router | `accounts/fireworks/models/llama-v3p3-70b-instruct` | Model-name regex |
 | `z_ai` | `openai` | cloud | `glm-5.2` | Model-name regex |
 
+### Interactive Ask streaming
+
+Interactive Ask chats stream for the built-in OpenAI, Anthropic, Azure OpenAI,
+Gemini, Mistral, DeepSeek, xAI, Nvidia NIM, Groq, Alibaba Cloud, Together AI,
+Fireworks, z.ai, OpenRouter, WebBrain Cloud, llama.cpp, Ollama, LM Studio, Jan,
+vLLM, SGLang, and LocalAI providers.
+Official OpenAI GPT-5.6 and streaming-capable Responses-only GPT-5 Pro variants
+use Responses streaming. Supported GPT-5.x, GPT-4.1, GPT-4o, GPT-4 Turbo, and
+o-series variants retain Chat Completions streaming. GPT-5.5 Pro and other
+official OpenAI models without documented streaming or function-calling
+support stay non-streaming. Compatible built-ins opt in with
+`supportsAskStreaming: true`; custom endpoints are not inferred from their
+model names.
+
+Every parser waits for its protocol's terminal event (`response.completed`,
+Anthropic `message_stop`, or SSE `[DONE]`). A network/read error, malformed
+frame, or premature EOF silently retries the current generation once through
+`chat()` and disables streaming for the rest of that run. HTTP failures,
+explicit in-stream provider/API errors, and `content_filter` finish reasons are
+terminal and never trigger the duplicate request.
+
 ### Local Providers
 
 Seven local providers are enabled by default with no API key needed unless the
@@ -77,6 +98,16 @@ local server was started with auth:
 - **LocalAI**: `http://localhost:8080/v1` — LocalAI's OpenAI-compatible server
 
 All seven default `supportsVision: true` since most models loaded locally in 2026 are multimodal.
+
+**Streaming.** Local streaming is primarily a runtime/server capability, not a
+property of the GGUF or other model weights. Interactive Ask streaming is
+enabled for llama.cpp, Ollama, LM Studio, Jan, vLLM, SGLang, and current LocalAI
+through their OpenAI-compatible Chat Completions endpoints. Each parser requires
+`[DONE]`; safe network/read, malformed-frame, and premature-EOF failures
+silently retry once with non-streaming generation. Tool-call streaming
+additionally depends on the model's tool-use training, the runtime's chat
+template/parser, and a current runtime version (LocalAI added tool streaming in
+3.10).
 
 **Context window.** Load local models with **at least a 16k-token context window** for reliable agent runs — that's the usable minimum. 8k can work with the Compact tier selected; 4k is too small to hold the system prompt + tool schemas. The agent reads the window from `provider.contextWindow` (`providers/base.js`) to drive auto-compaction; when a provider config doesn't set `contextWindow`, local providers default to a conservative **16k** (cloud/router default to 128k). **Test connection** / **Load models** auto-detect for **llama.cpp**, **Ollama**, and **LM Studio** when reported (llama.cpp `GET /props` `n_ctx`, Ollama `GET /api/ps` live context then `/api/show` `num_ctx`, LM Studio `/api/v0/models` `loaded_context_length`). Detection refreshes the 16k default; it shrinks a larger manual override only from live/runtime context (not from Ollama `/api/show` alone). Jan / vLLM / SGLang / LocalAI do not auto-detect yet. You can still set `config.contextWindow` explicitly, and the model server must actually be started with that much context (e.g. `llama-server -c 16384`).
 

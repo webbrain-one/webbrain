@@ -1152,21 +1152,33 @@ export class Agent {
     return result;
   }
 
-  _shouldStreamOpenAIAsk(provider, mode, runOptions = {}, disabledForRun = false) {
+  _shouldStreamInteractiveAsk(provider, mode, runOptions = {}, disabledForRun = false) {
+    const streamingEnabled = runOptions?.askStreamingEnabled
+      ?? runOptions?.openaiAskStreamingEnabled;
     return mode === 'ask'
       && runOptions?.interactiveChat === true
-      && runOptions?.openaiAskStreamingEnabled !== false
+      && streamingEnabled !== false
       && runOptions?.trustedContinuation !== true
       && runOptions?.cloudRun !== true
       && disabledForRun !== true
       && typeof provider?.chatStream === 'function'
-      // OpenAICompatibleProvider keeps this predicate deliberately narrow:
-      // official api.openai.com Responses models only, never compatible APIs.
-      && provider?._usesResponsesApi?.() === true;
+      && provider?._supportsInteractiveAskStreaming?.() === true;
+  }
+
+  // Backward-compatible aliases for integrations/tests that used the original
+  // OpenAI-specific helper names.
+  _shouldStreamOpenAIAsk(provider, mode, runOptions = {}, disabledForRun = false) {
+    return this._shouldStreamInteractiveAsk(provider, mode, runOptions, disabledForRun);
+  }
+
+  _shouldFallbackAskStream(error) {
+    return error?.isAskStreamFallbackSafe === true
+      || error?.isOpenAIAskStreamFallbackSafe === true
+      || error?.isResponsesStreamFallbackSafe === true;
   }
 
   _shouldFallbackOpenAIAskStream(error) {
-    return error?.isResponsesStreamFallbackSafe === true;
+    return this._shouldFallbackAskStream(error);
   }
 
   async _chatStreamWithCostAllowance(provider, messages, options, costState, requestContext = null, onTextDelta = () => {}) {
@@ -1240,9 +1252,9 @@ export class Agent {
         }
       }
       if (!sawCompleted) {
-        const error = new Error('OpenAI Responses stream ended before response.completed.');
-        error.isResponsesStreamError = true;
-        error.isResponsesStreamFallbackSafe = true;
+        const error = new Error('Ask stream ended before its terminal event.');
+        error.isAskStreamError = true;
+        error.isAskStreamFallbackSafe = true;
         throw error;
       }
     } catch (error) {
@@ -13721,14 +13733,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     // empty→nudge→empty→nudge cycle.
     let emptyOutputRecoveryAttempted = false;
     let compressionPlaceholderRecoveryAttempted = false;
-    let openAIAskStreamingDisabledForRun = false;
+    let askStreamingDisabledForRun = false;
 
     const chatMainTurn = async (chatMessages, chatOptions, requestContext) => {
-      if (!this._shouldStreamOpenAIAsk(
+      if (!this._shouldStreamInteractiveAsk(
         provider,
         mode,
         runOptions,
-        openAIAskStreamingDisabledForRun,
+        askStreamingDisabledForRun,
       )) {
         return this._chatWithCostAllowance(
           provider,
@@ -13755,11 +13767,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       } catch (error) {
         if (this._isCostAllowanceError(error)) throw error;
         if (emittedText) onUpdate('text', { content: '', replace: true });
-        if (!this._shouldFallbackOpenAIAskStream(error)) throw error;
-        openAIAskStreamingDisabledForRun = true;
-        onUpdate('warning', {
-          message: 'OpenAI streaming was interrupted; retrying this Ask turn without streaming.',
-        });
+        if (!this._shouldFallbackAskStream(error)) throw error;
+        askStreamingDisabledForRun = true;
         this._logDebug({
           type: 'llm_stream_fallback',
           provider: provider.constructor?.name || provider.name,

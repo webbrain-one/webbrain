@@ -58,11 +58,39 @@ export function isOfficialOpenAIConfig(config = {}) {
 
 export function shouldUseOpenAIResponsesApi(config = {}) {
   if (!isOfficialOpenAIConfig(config)) return false;
-  // Match the official GPT-5.6 family only (base alias + Sol/Terra/Luna, with
-  // optional dated suffixes). Proxies and non-OpenAI providers stay on Chat
-  // Completions even when the model id contains "gpt-5.6".
   const model = String(config.model || '').trim().toLowerCase();
-  return /^gpt-5\.6(?:$|-(?:sol|terra|luna)(?:$|-))/.test(model);
+  // GPT-5.6 needs Responses for reliable reasoning/tool replay. GPT-5 Pro,
+  // GPT-5.2 Pro, GPT-5.4 Pro, and GPT-5.5 Pro are Responses-only. Proxies and
+  // compatible providers keep their existing Chat Completions wire format even
+  // when they reuse an OpenAI model id.
+  return /^gpt-5\.6(?:$|-(?:sol|terra|luna)(?:$|-))/.test(model)
+    || /^gpt-5(?:\.(?:2|4|5))?-pro(?:$|-\d{4}-\d{2}-\d{2}$)/.test(model);
+}
+
+export function supportsOpenAIAskStreaming(config = {}) {
+  if (!isOfficialOpenAIConfig(config)) return false;
+
+  const model = clean(config.model);
+  // Keep this as an explicit capability allowlist. In particular,
+  // GPT-5.5 Pro does not support streaming even though it is Responses-only.
+  if (/^gpt-5\.5-pro(?:$|-\d{4}-\d{2}-\d{2}$)/.test(model)) return false;
+  if (shouldUseOpenAIResponsesApi(config)) return true;
+
+  return [
+    /^gpt-5\.5(?:$|-\d{4}-\d{2}-\d{2}$)/,
+    /^gpt-5\.4(?:$|-\d{4}-\d{2}-\d{2}$|-(?:mini|nano)(?:$|-\d{4}-\d{2}-\d{2}$))/,
+    /^gpt-5\.(?:1|2)(?:$|-\d{4}-\d{2}-\d{2}$)/,
+    /^gpt-5(?:$|-\d{4}-\d{2}-\d{2}$|-(?:mini|nano)(?:$|-\d{4}-\d{2}-\d{2}$))/,
+    /^gpt-5(?:\.(?:1|2|3))?-chat-latest$/,
+    /^gpt-4\.1(?:$|-\d{4}-\d{2}-\d{2}$|-(?:mini|nano)(?:$|-\d{4}-\d{2}-\d{2}$))/,
+    /^gpt-4o(?:$|-\d{4}-\d{2}-\d{2}$|-mini(?:$|-\d{4}-\d{2}-\d{2}$))/,
+    /^gpt-4-turbo(?:$|-\d{4}-\d{2}-\d{2}$|-preview$)/,
+    /^o1(?:$|-\d{4}-\d{2}-\d{2}$|-preview(?:$|-\d{4}-\d{2}-\d{2}$))/,
+    /^o3(?:$|-\d{4}-\d{2}-\d{2}$|-mini(?:$|-\d{4}-\d{2}-\d{2}$))/,
+    /^o4-mini(?:$|-\d{4}-\d{2}-\d{2}$)/,
+    /^chatgpt-4o-latest$/,
+    /^chat-latest$/,
+  ].some(pattern => pattern.test(model));
 }
 
 export function detectedCompatibilityPreset(config = {}) {

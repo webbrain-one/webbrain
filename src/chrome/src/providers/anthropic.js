@@ -261,11 +261,19 @@ export class AnthropicProvider extends BaseLLMProvider {
       body.tools = this._convertTools(options.tools);
     }
 
-    const res = await fetchWithFallback(`${this.baseUrl}/v1/messages`, {
-      method: 'POST',
-      headers: this._headers(),
-      body: JSON.stringify(body),
-    });
+    const url = `${this.baseUrl}/v1/messages`;
+    let res;
+    try {
+      res = await fetchWithFallback(url, {
+        method: 'POST',
+        headers: this._headers(),
+        body: JSON.stringify(body),
+      });
+    } catch (error) {
+      throw this._askStreamTransportError(
+        `Anthropic network error — could not reach ${url} (${error?.message || 'request failed'}).`,
+      );
+    }
 
     if (!res.ok) {
       let err = '';
@@ -273,7 +281,17 @@ export class AnthropicProvider extends BaseLLMProvider {
       throw new Error(`Anthropic stream error ${res.status}: ${err}`);
     }
 
-    const reader = res.body.getReader();
+    if (!res.body?.getReader) {
+      throw this._askStreamTransportError('Anthropic stream returned no readable body.');
+    }
+    let reader;
+    try {
+      reader = res.body.getReader();
+    } catch (error) {
+      throw this._askStreamTransportError(
+        `Anthropic stream could not open its response body (${error?.message || 'reader unavailable'}).`,
+      );
+    }
     const decoder = new TextDecoder();
     let buffer = '';
     let sawUsage = false;
@@ -308,7 +326,17 @@ export class AnthropicProvider extends BaseLLMProvider {
     const usageChunk = () => sawUsage ? this._normalizeUsage(accumulatedUsage) : null;
 
     while (true) {
-      const { done, value } = await reader.read();
+      let chunk;
+      try {
+        chunk = await reader.read();
+      } catch (error) {
+        const usage = usageChunk();
+        if (usage) yield { type: 'usage', usage };
+        throw this._askStreamTransportError(
+          `Anthropic stream transport error (${error?.message || 'read failed'}).`,
+        );
+      }
+      const { done, value } = chunk;
       if (done) break;
 
       buffer += decoder.decode(value, { stream: true });
@@ -319,42 +347,53 @@ export class AnthropicProvider extends BaseLLMProvider {
         const trimmed = line.trim();
         if (!trimmed || !trimmed.startsWith('data: ')) continue;
         const payload = trimmed.slice(6);
+        let event;
         try {
-          const event = JSON.parse(payload);
-          if (event.type === 'message_start') {
-            updateUsage(event.message?.usage);
-          } else if (event.type === 'message_delta') {
-            updateUsage(event.usage);
-          } else if (event.type === 'content_block_delta') {
-            if (event.delta?.type === 'text_delta') {
-              yield { type: 'text', content: event.delta.text };
-            } else if (event.delta?.type === 'input_json_delta') {
-              yield { type: 'tool_call_delta', content: event.delta.partial_json };
-            }
-          } else if (event.type === 'content_block_start') {
-            if (event.content_block?.type === 'tool_use') {
-              yield {
-                type: 'tool_call_start',
-                content: {
-                  id: event.content_block.id || '',
-                  name: event.content_block.name || '',
-                },
-              };
-            }
-          } else if (event.type === 'message_stop') {
-            const usage = usageChunk();
-            if (usage) yield { type: 'usage', usage };
-            yield { type: 'done', content: '' };
-            return;
+          event = JSON.parse(payload);
+        } catch (error) {
+          if (this._supportsInteractiveAskStreaming()) {
+            throw this._askStreamTransportError(
+              `Anthropic stream returned malformed JSON (${error?.message || 'parse failed'}).`,
+            );
           }
-        } catch (e) {
-          console.warn('[anthropic] malformed SSE chunk skipped:', payload?.slice(0, 120), e?.message);
+          console.warn('[anthropic] malformed SSE chunk skipped:', payload?.slice(0, 120), error?.message);
+          continue;
+        }
+        if (event.type === 'error') {
+          const detail = event.error?.message || event.error?.type || 'The provider reported a streaming error.';
+          throw this._askStreamTerminalError(`Anthropic stream error: ${detail}`);
+        }
+        if (event.type === 'message_start') {
+          updateUsage(event.message?.usage);
+        } else if (event.type === 'message_delta') {
+          updateUsage(event.usage);
+        } else if (event.type === 'content_block_delta') {
+          if (event.delta?.type === 'text_delta') {
+            yield { type: 'text', content: event.delta.text };
+          } else if (event.delta?.type === 'input_json_delta') {
+            yield { type: 'tool_call_delta', content: event.delta.partial_json };
+          }
+        } else if (event.type === 'content_block_start') {
+          if (event.content_block?.type === 'tool_use') {
+            yield {
+              type: 'tool_call_start',
+              content: {
+                id: event.content_block.id || '',
+                name: event.content_block.name || '',
+              },
+            };
+          }
+        } else if (event.type === 'message_stop') {
+          const usage = usageChunk();
+          if (usage) yield { type: 'usage', usage };
+          yield { type: 'done', content: '' };
+          return;
         }
       }
     }
     const usage = usageChunk();
     if (usage) yield { type: 'usage', usage };
-    yield { type: 'done', content: '' };
+    throw this._askStreamTransportError('Anthropic stream ended before the message_stop event.');
   }
 
   _supportsTemperatureParameter() {
