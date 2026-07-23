@@ -109,6 +109,9 @@ export default {
   'sp.btn.settings': 'Mga Setting',
   'sp.btn.clear': 'Bagong pag-uusap (i-clear ang kasaysayan)',
   'sp.btn.send': 'Ipadala',
+  'sp.chat.follow_response': 'Subaybayan ang sagot',
+  'sp.chat.jump_latest': 'Pumunta sa pinakabago',
+  'sp.chat.back_to_question': 'Bumalik sa tanong',
   'sp.btn.stop.title': 'Itigil ang ahente',
   'sp.btn.stop.label': 'Itigil',
 

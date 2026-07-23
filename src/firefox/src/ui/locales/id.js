@@ -109,6 +109,9 @@ export default {
   'sp.btn.settings': 'Pengaturan',
   'sp.btn.clear': 'Percakapan baru (hapus riwayat)',
   'sp.btn.send': 'Kirim',
+  'sp.chat.follow_response': 'Ikuti jawaban',
+  'sp.chat.jump_latest': 'Ke bagian terbaru',
+  'sp.chat.back_to_question': 'Kembali ke pertanyaan',
   'sp.btn.stop.title': 'Hentikan agen',
   'sp.btn.stop.label': 'Berhenti',
 

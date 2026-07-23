@@ -109,6 +109,9 @@ export default {
   'sp.btn.settings': 'Налаштування',
   'sp.btn.clear': 'Новий діалог (очистити історію)',
   'sp.btn.send': 'Надіслати',
+  'sp.chat.follow_response': 'Стежити за відповіддю',
+  'sp.chat.jump_latest': 'До останнього повідомлення',
+  'sp.chat.back_to_question': 'Повернутися до запитання',
   'sp.btn.stop.title': 'Зупинити агента',
   'sp.btn.stop.label': 'Стоп',
 

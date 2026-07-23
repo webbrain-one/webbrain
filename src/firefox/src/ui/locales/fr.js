@@ -109,6 +109,9 @@ export default {
   'sp.btn.settings': 'Paramètres',
   'sp.btn.clear': 'Nouvelle conversation (effacer l\'historique)',
   'sp.btn.send': 'Envoyer',
+  'sp.chat.follow_response': 'Suivre la réponse',
+  'sp.chat.jump_latest': 'Aller au plus récent',
+  'sp.chat.back_to_question': 'Revenir à la question',
   'sp.btn.stop.title': 'Arrêter l\'agent',
   'sp.btn.stop.label': 'Arrêter',
 

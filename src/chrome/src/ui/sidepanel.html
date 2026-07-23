@@ -185,67 +185,78 @@
     <div id="scheduled-jobs" class="scheduled-jobs hidden" aria-live="polite"></div>
 
     <!-- Chat Messages -->
-    <div id="chat-container">
-      <div id="messages">
-        <div class="message system">
-          <div class="message-content">
-            <p data-i18n-html="sp.greeting.html"></p>
-          </div>
-        </div>
-      </div>
-      <div id="recommended-actions" class="recommended-actions hidden" aria-live="polite">
-        <div class="recommended-actions-header">
-          <div class="recommended-actions-title" data-i18n="sp.recommended.title">Suggested actions</div>
-          <button
-            id="recommended-actions-toggle"
-            class="recommended-actions-toggle"
-            type="button"
-            aria-controls="recommended-actions-list"
-            aria-expanded="true"
-            data-i18n-title="sp.recommended.collapse"
-            data-i18n-aria-label="sp.recommended.collapse"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M6 9l6 6 6-6"/>
-            </svg>
-          </button>
-        </div>
-        <div id="recommended-actions-list" class="recommended-actions-list"></div>
-      </div>
-      <div id="store-review-prompt" class="store-review-prompt hidden" role="dialog" aria-live="polite" aria-labelledby="store-review-title">
-        <div class="store-review-card">
-          <button type="button" id="store-review-close" class="store-review-close" data-i18n-aria-label="sp.review.close" aria-label="Dismiss">×</button>
-          <div id="store-review-step-rating" class="store-review-step">
-            <div id="store-review-title" class="store-review-title" data-i18n="sp.review.rating_title">Enjoying WebBrain?</div>
-            <p class="store-review-body" data-i18n="sp.review.rating_body">Tap a star — it helps us know how we're doing.</p>
-            <div class="store-review-stars" role="group" data-i18n-aria-label="sp.review.stars_label" aria-label="Rate WebBrain">
-              <button type="button" class="store-review-star" data-rating="1" data-i18n-aria-label="sp.review.star_1" aria-label="1 star">★</button>
-              <button type="button" class="store-review-star" data-rating="2" data-i18n-aria-label="sp.review.star_2" aria-label="2 stars">★</button>
-              <button type="button" class="store-review-star" data-rating="3" data-i18n-aria-label="sp.review.star_3" aria-label="3 stars">★</button>
-              <button type="button" class="store-review-star" data-rating="4" data-i18n-aria-label="sp.review.star_4" aria-label="4 stars">★</button>
-              <button type="button" class="store-review-star" data-rating="5" data-i18n-aria-label="sp.review.star_5" aria-label="5 stars">★</button>
+    <div id="chat-shell">
+      <div id="chat-container">
+        <div id="messages">
+          <div class="message system">
+            <div class="message-content">
+              <p data-i18n-html="sp.greeting.html"></p>
             </div>
           </div>
-          <div id="store-review-step-positive" class="store-review-step hidden">
-            <div class="store-review-title" data-i18n="sp.review.positive_title">Thanks — that means a lot!</div>
-            <p class="store-review-body" data-i18n="sp.review.positive_body">Would you leave a quick review on the extension store? It helps others discover WebBrain.</p>
-            <button type="button" id="store-review-open-store" class="store-review-primary" data-i18n="sp.review.open_store">Leave a review</button>
+        </div>
+        <div id="recommended-actions" class="recommended-actions hidden" aria-live="polite">
+          <div class="recommended-actions-header">
+            <div class="recommended-actions-title" data-i18n="sp.recommended.title">Suggested actions</div>
+            <button
+              id="recommended-actions-toggle"
+              class="recommended-actions-toggle"
+              type="button"
+              aria-controls="recommended-actions-list"
+              aria-expanded="true"
+              data-i18n-title="sp.recommended.collapse"
+              data-i18n-aria-label="sp.recommended.collapse"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M6 9l6 6 6-6"/>
+              </svg>
+            </button>
           </div>
-          <div id="store-review-step-negative" class="store-review-step hidden">
-            <div class="store-review-title" data-i18n="sp.review.negative_title">Sorry it missed the mark</div>
-            <p class="store-review-body" data-i18n="sp.review.negative_body">What could we improve? Your feedback goes straight to the team.</p>
-            <textarea id="store-review-feedback" class="store-review-feedback" rows="3" data-i18n-placeholder="sp.review.feedback_placeholder" placeholder="Tell us what went wrong or what you'd like to see…"></textarea>
-            <button type="button" id="store-review-send-feedback" class="store-review-primary" data-i18n="sp.review.send_feedback">Send feedback</button>
-          </div>
-          <div id="store-review-step-thanks" class="store-review-step hidden">
-            <div class="store-review-title" data-i18n="sp.review.thanks_title">Thank you!</div>
-            <p class="store-review-body" data-i18n="sp.review.thanks_body">We appreciate you taking the time.</p>
-          </div>
-          <div class="store-review-footer">
-            <button type="button" id="store-review-not-now" class="store-review-link" data-i18n="sp.review.not_now">Not now</button>
-            <button type="button" id="store-review-never" class="store-review-link" data-i18n="sp.review.never">Don't ask again</button>
+          <div id="recommended-actions-list" class="recommended-actions-list"></div>
+        </div>
+        <div id="store-review-prompt" class="store-review-prompt hidden" role="dialog" aria-live="polite" aria-labelledby="store-review-title">
+          <div class="store-review-card">
+            <button type="button" id="store-review-close" class="store-review-close" data-i18n-aria-label="sp.review.close" aria-label="Dismiss">×</button>
+            <div id="store-review-step-rating" class="store-review-step">
+              <div id="store-review-title" class="store-review-title" data-i18n="sp.review.rating_title">Enjoying WebBrain?</div>
+              <p class="store-review-body" data-i18n="sp.review.rating_body">Tap a star — it helps us know how we're doing.</p>
+              <div class="store-review-stars" role="group" data-i18n-aria-label="sp.review.stars_label" aria-label="Rate WebBrain">
+                <button type="button" class="store-review-star" data-rating="1" data-i18n-aria-label="sp.review.star_1" aria-label="1 star">★</button>
+                <button type="button" class="store-review-star" data-rating="2" data-i18n-aria-label="sp.review.star_2" aria-label="2 stars">★</button>
+                <button type="button" class="store-review-star" data-rating="3" data-i18n-aria-label="sp.review.star_3" aria-label="3 stars">★</button>
+                <button type="button" class="store-review-star" data-rating="4" data-i18n-aria-label="sp.review.star_4" aria-label="4 stars">★</button>
+                <button type="button" class="store-review-star" data-rating="5" data-i18n-aria-label="sp.review.star_5" aria-label="5 stars">★</button>
+              </div>
+            </div>
+            <div id="store-review-step-positive" class="store-review-step hidden">
+              <div class="store-review-title" data-i18n="sp.review.positive_title">Thanks — that means a lot!</div>
+              <p class="store-review-body" data-i18n="sp.review.positive_body">Would you leave a quick review on the extension store? It helps others discover WebBrain.</p>
+              <button type="button" id="store-review-open-store" class="store-review-primary" data-i18n="sp.review.open_store">Leave a review</button>
+            </div>
+            <div id="store-review-step-negative" class="store-review-step hidden">
+              <div class="store-review-title" data-i18n="sp.review.negative_title">Sorry it missed the mark</div>
+              <p class="store-review-body" data-i18n="sp.review.negative_body">What could we improve? Your feedback goes straight to the team.</p>
+              <textarea id="store-review-feedback" class="store-review-feedback" rows="3" data-i18n-placeholder="sp.review.feedback_placeholder" placeholder="Tell us what went wrong or what you'd like to see…"></textarea>
+              <button type="button" id="store-review-send-feedback" class="store-review-primary" data-i18n="sp.review.send_feedback">Send feedback</button>
+            </div>
+            <div id="store-review-step-thanks" class="store-review-step hidden">
+              <div class="store-review-title" data-i18n="sp.review.thanks_title">Thank you!</div>
+              <p class="store-review-body" data-i18n="sp.review.thanks_body">We appreciate you taking the time.</p>
+            </div>
+            <div class="store-review-footer">
+              <button type="button" id="store-review-not-now" class="store-review-link" data-i18n="sp.review.not_now">Not now</button>
+              <button type="button" id="store-review-never" class="store-review-link" data-i18n="sp.review.never">Don't ask again</button>
+            </div>
           </div>
         </div>
+      </div>
+      <div id="chat-navigation" class="chat-navigation hidden">
+        <button id="chat-navigation-action" class="chat-navigation-action" type="button" aria-controls="chat-container">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 19V5M6.5 10.5 12 5l5.5 5.5"/>
+          </svg>
+          <span id="chat-navigation-label">Back to question</span>
+        </button>
+        <button id="chat-navigation-dismiss" class="chat-navigation-dismiss" type="button" data-i18n-aria-label="sp.review.close" aria-label="Dismiss">×</button>
       </div>
     </div>
 

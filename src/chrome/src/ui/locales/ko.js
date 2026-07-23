@@ -109,6 +109,9 @@ export default {
   'sp.btn.settings': '설정',
   'sp.btn.clear': '새 대화 (기록 지우기)',
   'sp.btn.send': '보내기',
+  'sp.chat.follow_response': '답변 따라가기',
+  'sp.chat.jump_latest': '최신으로 이동',
+  'sp.chat.back_to_question': '질문으로 돌아가기',
   'sp.btn.stop.title': '에이전트 중지',
   'sp.btn.stop.label': '중지',
 
