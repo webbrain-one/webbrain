@@ -83,6 +83,16 @@
       min-height: 54px;
       padding: 16px;
     }
+
+    .modal {
+      display: none;
+      box-sizing: border-box;
+      width: 520px;
+      min-height: 180px;
+      padding: 24px;
+      border: 2px solid #444;
+      background: #fff;
+    }
   </style>
 </head>
 <body>
@@ -161,6 +171,10 @@
       <input id="trusted-firefox-checkbox" name="trusted_compatible_apps" value="firefox" type="checkbox">
       Trusted Firefox compatibility
     </label>
+    <label class="external-label">
+      <input id="android-checkbox" name="compatible_apps" value="android" type="checkbox">
+      Firefox for Android compatibility
+    </label>
     <label class="external-label" for="selected-channel-radio">
       <input id="selected-channel-radio" name="channel" value="stable" type="radio" checked>
       Selected channel
@@ -170,6 +184,12 @@
       Blocked channel
     </label>
   </form>
+  <div id="android-confirmation" class="modal">
+    <h3>Firefox for Android compatibility</h3>
+    <p>Did you test your extension to ensure it works as expected on Firefox for Android?</p>
+    <button id="android-confirm-yes" type="button">Yes, I’ve tested my extension with Firefox for Android</button>
+    <a id="android-confirm-no" href="#">No, I have not tested</a>
+  </div>
   <div id="covered-wrap">
     <div id="covered-row" class="row" role="listitem" tabindex="0">Covered row</div>
     <div id="cover">Overlay</div>
@@ -194,6 +214,25 @@
     document.getElementById('trusted-firefox-checkbox').addEventListener('click', (event) => {
       window.__trustedCheckboxEvents.push({ trusted: event.isTrusted, checked: event.currentTarget.checked });
       if (!event.isTrusted) event.preventDefault();
+    });
+    let androidConfirmed = false;
+    const androidCheckbox = document.getElementById('android-checkbox');
+    const androidConfirmation = document.getElementById('android-confirmation');
+    androidCheckbox.addEventListener('click', (event) => {
+      if (androidConfirmed) return;
+      event.preventDefault();
+      androidConfirmation.style.display = 'block';
+    });
+    document.getElementById('android-confirm-yes').addEventListener('click', () => {
+      androidConfirmed = true;
+      androidCheckbox.checked = true;
+      androidCheckbox.dispatchEvent(new Event('change', { bubbles: true }));
+      androidConfirmation.style.display = 'none';
+    });
+    document.getElementById('android-confirm-no').addEventListener('click', (event) => {
+      event.preventDefault();
+      androidCheckbox.checked = false;
+      androidConfirmation.style.display = 'none';
     });
     document.getElementById('blocked-channel-radio').addEventListener('click', (event) => {
       event.preventDefault();

@@ -12888,6 +12888,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (!response || response.success !== true || response.needsTrustedClick !== true) {
       return response;
     }
+    const confirmationSurfacesBefore = Array.isArray(response._confirmationSurfaces)
+      ? response._confirmationSurfaces
+      : [];
     const beforeDocument = await this._getDevDocumentIdentity(tabId);
     const trustedSelector = String(response.trustedSelector || '');
     const marker = String(response.marker || '');
@@ -12974,6 +12977,17 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const stateMatches = !checkboxIdentityMismatch && checkedAfter === args.checked;
     const success = trustedClickSucceeded && (stateMatches || verificationLostAfterTrustedClick);
     const checkboxIdentity = expectedCheckboxIdentity || observedCheckboxIdentity;
+    const confirmationSurfacesAfter = Array.isArray(verified?._confirmationSurfaces)
+      ? verified._confirmationSurfaces
+      : [];
+    const priorConfirmationSignatures = new Set(
+      confirmationSurfacesBefore
+        .map(surface => String(surface?.signature || ''))
+        .filter(Boolean)
+    );
+    const confirmation = confirmationSurfacesAfter.find(
+      surface => !priorConfirmationSignatures.has(String(surface?.signature || ''))
+    ) || null;
     const completed = {
       ...response,
       ...(verified || {}),
@@ -13008,6 +13022,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       marker: undefined,
       trustedSelector: undefined,
     };
+    delete completed._confirmationSurfaces;
     if (verificationLostAfterTrustedClick) {
       return {
         ...completed,
@@ -13019,6 +13034,25 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         noProgress: undefined,
         error: undefined,
         warning: 'The trusted checkbox click was sent, but its document disappeared before the checked state could be re-read, likely because the click navigated or reloaded the page. Do not repeat set_checked; observe the current page.',
+      };
+    }
+    if (
+      trustedClickSucceeded
+      && !stateMatches
+      && !checkboxIdentityMismatch
+      && confirmation
+    ) {
+      return {
+        ...completed,
+        success: false,
+        verified: false,
+        confirmationRequired: true,
+        recoveryRequired: 'confirmation_dialog',
+        observedEffects: ['confirmation_dialog_opened'],
+        confirmation,
+        noProgress: undefined,
+        error: undefined,
+        warning: 'A confirmation dialog opened before the checkbox could reach the requested state. Do not call set_checked again. Re-read the visible accessibility tree and choose a dialog action only when it is supported by the user request or current evidence.',
       };
     }
     const failureError = clickError

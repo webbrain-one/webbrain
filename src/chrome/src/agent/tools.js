@@ -49,7 +49,7 @@ export const AGENT_TOOLS = [
     type: 'function',
     function: {
       name: 'set_checked',
-      description: 'Idempotently set a native checkbox to the requested checked state by ref_id. Unlike click_ax, this never blindly toggles: it first reads checkedBefore, does nothing when already correct, performs at most one click when needed, and returns checkedAfter. On Chrome the state-changing click uses trusted selector-backed pointer input.',
+      description: 'Idempotently set a native checkbox to the requested checked state by ref_id. Unlike click_ax, this never blindly toggles: it first reads checkedBefore, does nothing when already correct, performs at most one click when needed, and returns checkedAfter. On Chrome the state-changing click uses trusted selector-backed pointer input. If the click opens a confirmation dialog instead of changing state, returns confirmationRequired:true; handle that dialog from fresh page evidence and do not retry the checkbox.',
       parameters: {
         type: 'object',
         properties: {
