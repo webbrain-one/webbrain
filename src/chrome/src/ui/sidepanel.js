@@ -9538,6 +9538,8 @@ async function abortRun(tabId = currentTabId) {
 
   let fallbackTimer = null;
   let fallbackCancelled = false;
+  let fallbackProbeFailures = 0;
+  const maxFallbackProbeFailures = 5;
   const fallbackPromise = new Promise(resolve => {
     const settleWhenInactive = async () => {
       if (fallbackCancelled) {
@@ -9558,7 +9560,18 @@ async function abortRun(tabId = currentTabId) {
         resolve();
         return;
       }
-      if (!state || state.running || state.starting) {
+      if (!state) {
+        fallbackProbeFailures += 1;
+        // A local follower has its own bounded reconnect policy and remains
+        // authoritative. Without one, eventually release a panel whose
+        // background disappeared instead of polling "Stopping…" forever.
+        if (follower?.requestId === requestId
+            || fallbackProbeFailures < maxFallbackProbeFailures) {
+          fallbackTimer = setTimeout(settleWhenInactive, 1000);
+          return;
+        }
+      } else if (state.running || state.starting) {
+        fallbackProbeFailures = 0;
         fallbackTimer = setTimeout(settleWhenInactive, 1000);
         return;
       }
