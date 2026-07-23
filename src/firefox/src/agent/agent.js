@@ -13709,6 +13709,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     let runId = null;
     let finalResponse = '';
     let _traceStatus = 'done';
+    let askStreamingTraceWrite = Promise.resolve();
+    let shouldOrderInteractiveAskTrace = false;
+    const queueAskStreamingTraceWrite = (write) => {
+      askStreamingTraceWrite = askStreamingTraceWrite
+        .then(write)
+        .catch(() => {});
+      return askStreamingTraceWrite;
+    };
 
     if (mode === 'dev' && provider.promptTier === 'compact') {
       const msg = this._devModeBlockedMessage(provider);
@@ -13811,17 +13819,17 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     let compressionPlaceholderRecoveryAttempted = false;
     let askStreamingDisabledForRun = false;
 
-    // Keep trace persistence ordered without putting IndexedDB on the LLM
-    // request path. The recorder is diagnostic-only and must never delay a
-    // stream, fallback, or completed response.
-    let askStreamingTraceWrite = Promise.resolve();
+    // Keep trace persistence ordered without putting IndexedDB on the token
+    // delivery path. Once generation settles, later response/finalization
+    // writes flush this queue so lifecycle events cannot arrive afterward.
+    shouldOrderInteractiveAskTrace = mode === 'ask' && runOptions?.interactiveChat === true;
     const recordAskStreaming = (payload) => {
       const traceRunId = runId;
       const traceStep = steps;
       if (!traceRunId) return;
-      askStreamingTraceWrite = askStreamingTraceWrite
-        .then(() => trace.recordStreaming(traceRunId, traceStep, payload))
-        .catch(() => {});
+      queueAskStreamingTraceWrite(
+        () => trace.recordStreaming(traceRunId, traceStep, payload),
+      );
     };
 
     const chatMainTurn = async (chatMessages, chatOptions, requestContext) => {
@@ -13977,7 +13985,18 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         const prunedMessages = this._pruneOldImages(messages, provider);
         this._logDebug({ type: 'llm_request', step: steps, provider: provider.constructor.name, messages: prunedMessages, options: chatOpts });
         const _llmStart = Date.now();
-        if (runId) { try { await trace.recordLLMRequest(runId, steps, { providerClass: provider.constructor.name, model: provider.model, messageCount: prunedMessages.length, toolsCount: (chatOpts.tools || []).length }); } catch {} }
+        if (runId) {
+          const writeRequestTrace = () => trace.recordLLMRequest(runId, steps, {
+            providerClass: provider.constructor.name,
+            model: provider.model,
+            messageCount: prunedMessages.length,
+            toolsCount: (chatOpts.tools || []).length,
+          });
+          try {
+            if (shouldOrderInteractiveAskTrace) queueAskStreamingTraceWrite(writeRequestTrace);
+            else await writeRequestTrace();
+          } catch {}
+        }
         result = await chatMainTurn(prunedMessages, chatOpts, { tabId, generationName: 'main' });
         if (result?.usage?.prompt_tokens) {
           this._lastInputTokens.set(tabId, result.usage.prompt_tokens);
@@ -13985,7 +14004,19 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           // _manageContext can add only the growth since (see its delta logic).
           this._lastEstCharsAtReport.set(tabId, this._estimateContextChars(messages));
         }
-        if (runId) { try { await trace.recordLLMResponse(runId, steps, { content: result.content, toolCalls: result.toolCalls, usage: result.usage, latencyMs: Date.now() - _llmStart, model: provider.model }); } catch {} }
+        if (runId) {
+          const writeResponseTrace = () => trace.recordLLMResponse(runId, steps, {
+            content: result.content,
+            toolCalls: result.toolCalls,
+            usage: result.usage,
+            latencyMs: Date.now() - _llmStart,
+            model: provider.model,
+          });
+          try {
+            if (shouldOrderInteractiveAskTrace) await queueAskStreamingTraceWrite(writeResponseTrace);
+            else await writeResponseTrace();
+          } catch {}
+        }
         this._logDebug({ type: 'llm_response', step: steps, content: result.content, toolCalls: result.toolCalls });
       } catch (e) {
         this._logDebug({ type: 'llm_error', step: steps, error: e.message });
@@ -14271,9 +14302,14 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       const message = error?.message || String(error);
       _traceStatus = 'error';
       finalResponse = `Error: ${message}`;
-      if (runId) trace.recordError(runId, null, 'agent', message);
+      if (runId) {
+        const writeErrorTrace = () => trace.recordError(runId, null, 'agent', message);
+        if (shouldOrderInteractiveAskTrace) await queueAskStreamingTraceWrite(writeErrorTrace);
+        else writeErrorTrace();
+      }
       throw error;
     } finally {
+      await askStreamingTraceWrite;
       this._endTraceRun(tabId, runId, _traceStatus, finalResponse);
     }
   }

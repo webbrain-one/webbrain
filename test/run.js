@@ -27500,10 +27500,13 @@ test('Ask streaming lifecycle tracing is wired through recorder, agent, and Trac
     const tracesHtml = fs.readFileSync(path.join(ROOT, `src/${browser}/src/ui/traces.html`), 'utf8');
 
     assert.match(recorderSource, /export function recordStreaming\([\s\S]*?_appendEvent\(runId, 'streaming'/, `${browser}: recorder event missing`);
-    assert.match(agentSource, /let askStreamingTraceWrite = Promise\.resolve\(\)[\s\S]*?\.then\(\(\) => trace\.recordStreaming\(traceRunId, traceStep, payload\)\)/, `${browser}: ordered background recorder queue missing`);
+    assert.match(agentSource, /let askStreamingTraceWrite = Promise\.resolve\(\)[\s\S]*?const queueAskStreamingTraceWrite = \(write\) => \{[\s\S]*?\.then\(write\)[\s\S]*?queueAskStreamingTraceWrite\(\s*\(\) => trace\.recordStreaming\(traceRunId, traceStep, payload\)/, `${browser}: ordered background recorder queue missing`);
     assert.doesNotMatch(agentSource, /const recordAskStreaming = async/, `${browser}: trace writes must stay off the streaming request path`);
     assert.match(agentSource, /status: 'attempted'[\s\S]*?\}\);\s*const streamStartedAt = Date\.now\(\)/, `${browser}: stream timing should start after the trace event is queued`);
     assert.match(agentSource, /status: 'attempted'[\s\S]*?status: 'completed'[\s\S]*?status: fallbackSafe \? 'fallback' : 'failed'/, `${browser}: lifecycle outcomes missing`);
+    assert.match(agentSource, /if \(shouldOrderInteractiveAskTrace\) queueAskStreamingTraceWrite\(writeRequestTrace\)/, `${browser}: request trace must lead the streaming lifecycle queue`);
+    assert.match(agentSource, /if \(shouldOrderInteractiveAskTrace\) await queueAskStreamingTraceWrite\(writeResponseTrace\)/, `${browser}: response trace must flush after streaming lifecycle events`);
+    assert.match(agentSource, /finally \{[\s\S]{0,120}?await askStreamingTraceWrite;\s*this\._endTraceRun/, `${browser}: run finalization must wait for streaming lifecycle traces`);
     assert.match(tracesSource, /case 'streaming':[\s\S]*?t\('st\.display\.openai_ask_streaming\.label'\)/, `${browser}: localized Traces UI renderer missing`);
     assert.doesNotMatch(tracesSource, /Ask stream:|text delta|first delta|ms total|tool call/, `${browser}: streaming trace copy should not be hard-coded in English`);
     assert.match(tracesHtml, /\.event\.streaming \{ border-left:/, `${browser}: Traces UI styling missing`);
