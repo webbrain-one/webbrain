@@ -632,7 +632,8 @@ body {
   flex: 0 1 auto;
 }
 
-.provider-select-native {
+.provider-select-native,
+.language-select-native {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -719,6 +720,7 @@ body {
   max-width: min(280px, 90vw);
   max-height: min(320px, 50vh);
   overflow-y: auto;
+  overflow-x: hidden;
   background: var(--bg-secondary, var(--bg-input));
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -726,8 +728,42 @@ body {
   padding: 4px;
 }
 
+.picker-menu-highlight {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 0;
+  width: 0;
+  height: 0;
+  border-radius: 4px;
+  background: rgba(108, 99, 255, 0.12);
+  opacity: 0;
+  pointer-events: none;
+  will-change: transform, width, height;
+  transition:
+    transform 170ms cubic-bezier(0.22, 1, 0.36, 1),
+    width 170ms cubic-bezier(0.22, 1, 0.36, 1),
+    height 170ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 90ms ease;
+}
+
+.picker-menu-highlight.visible {
+  opacity: 1;
+}
+
+.picker-menu-highlight.instant {
+  transition: none;
+}
+
 .provider-picker-menu.hidden {
   display: none;
+}
+
+.provider-picker-group-label,
+.provider-picker-option,
+.language-picker-separator {
+  position: relative;
+  z-index: 1;
 }
 
 .provider-picker-group-label {
@@ -775,7 +811,7 @@ body {
 
 .provider-picker-option:hover,
 .provider-picker-option:focus-visible {
-  background: rgba(108, 99, 255, 0.12);
+  background: transparent;
   outline: none;
 }
 
@@ -784,7 +820,14 @@ body {
 }
 
 .provider-picker-option[aria-selected="true"] {
-  background: rgba(108, 99, 255, 0.18);
+  background: transparent;
+  box-shadow: inset 2px 0 0 var(--accent, #6c63ff);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .picker-menu-highlight {
+    transition: none;
+  }
 }
 
 .provider-picker-option-text {
@@ -801,37 +844,140 @@ body {
   flex-shrink: 0;
 }
 
-/* Globe language selector. Native select overlaid on a globe icon so it
-   keeps the header icon-button look while staying accessible. */
-.language-wrapper {
+/* Compact language picker: representative SVG flags aid scanning while the
+   language code and native/English names stay authoritative. */
+.language-picker {
   position: relative;
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  border-radius: 4px;
-  transition: color 0.2s, background 0.2s;
-}
-.language-wrapper:hover { color: var(--text-primary); background: var(--accent-dim); }
-.language-wrapper .language-icon { pointer-events: none; }
-.language-wrapper select {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  width: 100%;
-  height: 100%;
-  cursor: pointer;
-  border: none;
-  background: transparent;
-  appearance: none;
+  flex: 0 0 auto;
 }
 
-/* Icon buttons in the header-right cluster only. Do not target
-   .provider-picker-btn / .provider-picker-option — those need select chrome. */
-#header .header-right button {
+.language-picker-btn {
+  min-width: 56px;
+  padding: 3px 4px 3px 6px;
+  gap: 4px;
+  color: var(--text-secondary);
+  direction: ltr;
+}
+
+.language-picker-btn:hover,
+.language-picker-btn[aria-expanded="true"] {
+  color: var(--text-primary);
+}
+
+.language-picker-flag,
+.language-picker-option-flag {
+  display: block;
+  flex: 0 0 auto;
+  object-fit: cover;
+  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  background: var(--bg-input);
+}
+
+.language-picker-flag {
+  width: 20px;
+  height: 15px;
+  border-radius: 3px;
+}
+
+.language-picker-code {
+  min-width: 18px;
+  color: var(--text-primary);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.45px;
+  line-height: 1;
+  text-align: center;
+}
+
+.language-picker-caret {
+  width: 12px;
+  height: 16px;
+  margin-left: 0;
+}
+
+.language-picker-menu {
+  right: 0;
+  left: auto;
+  min-width: 224px;
+  max-width: min(272px, calc(100vw - 16px));
+  max-height: min(352px, 60vh);
+  direction: ltr;
+}
+
+.language-picker-option {
+  direction: ltr;
+  text-align: left;
+}
+
+.language-picker-option-flag {
+  width: 24px;
+  height: 18px;
+  border-radius: 3px;
+}
+
+.language-picker-option-code {
+  min-width: 18px;
+  color: var(--text-muted, var(--text-secondary));
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-align: center;
+  flex: 0 0 auto;
+}
+
+.language-picker-option-copy {
+  min-width: 0;
+  flex: 1 1 auto;
+  direction: ltr;
+  text-align: left;
+}
+
+.language-picker-option-native,
+.language-picker-option-english {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.language-picker-option-native {
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1.2;
+  text-align: left;
+  unicode-bidi: plaintext;
+}
+
+.language-picker-option-english {
+  margin-top: 2px;
+  color: var(--text-muted, var(--text-secondary));
+  font-size: 10px;
+  line-height: 1.15;
+}
+
+.language-picker-check {
+  width: 14px;
+  height: 14px;
+  color: var(--accent, #6c63ff);
+  opacity: 0;
+  flex: 0 0 auto;
+}
+
+.language-picker-option[aria-selected="true"] .language-picker-check {
+  opacity: 1;
+}
+
+.language-picker-separator {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border);
+}
+
+/* Icon buttons in the header-right cluster only. Custom picker controls keep
+   their select chrome even though the language picker also lives here. */
+#header .header-right button:not(.language-picker-btn):not(.language-picker-option) {
   background: none;
   border: none;
   color: var(--text-secondary);
@@ -843,12 +989,12 @@ body {
   transition: color 0.2s, background 0.2s;
 }
 
-#header .header-right button:hover {
+#header .header-right button:not(.language-picker-btn):not(.language-picker-option):hover {
   color: var(--text-primary);
   background: var(--accent-dim);
 }
 
-#header .header-right button.active {
+#header .header-right button:not(.language-picker-btn):not(.language-picker-option).active {
   color: var(--accent);
   background: var(--accent-dim);
 }

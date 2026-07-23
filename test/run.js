@@ -12136,11 +12136,11 @@ test('locale helpers apply RTL direction for Arabic, Hebrew, and Persian', () =>
 
 test('new locales are registered in extension and web language dropdowns', () => {
   const addedLocales = [
-    ['hi', 'हिन्दी'],
-    ['pt', 'Português'],
-    ['vi', 'Tiếng Việt'],
-    ['bn', 'বাংলা'],
-    ['fa', 'فارسی'],
+    ['hi', 'हिन्दी', 'Hindi', 'in'],
+    ['pt', 'Português', 'Portuguese', 'br'],
+    ['vi', 'Tiếng Việt', 'Vietnamese', 'vn'],
+    ['bn', 'বাংলা', 'Bengali', 'bd'],
+    ['fa', 'فارسی', 'Persian', 'ir'],
   ];
 
   for (const [label, rel] of [
@@ -12148,9 +12148,12 @@ test('new locales are registered in extension and web language dropdowns', () =>
     ['firefox', 'src/firefox/src/ui/i18n.js'],
   ]) {
     const i18n = fs.readFileSync(path.join(ROOT, rel), 'utf8');
-    for (const [code, languageLabel] of addedLocales) {
+    for (const [code, languageLabel, englishLabel, flagCode] of addedLocales) {
       assert.match(i18n, new RegExp(`import ${code} from '\\.\\/locales\\/${code}\\.js';`), `${label}: ${code} locale import missing`);
-      assert.ok(i18n.includes(`{ code: '${code}', label: '${languageLabel}' }`), `${label}: ${code} language option missing`);
+      assert.ok(
+        i18n.includes(`{ code: '${code}', label: '${languageLabel}', englishLabel: '${englishLabel}', flagCode: '${flagCode}' }`),
+        `${label}: ${code} language option missing`,
+      );
     }
   }
 
@@ -12184,6 +12187,109 @@ test('extension language dropdowns pin English and Chinese before alphabetical l
       expectedCodes,
       `${label}: language dropdown order should be English, Chinese, then alphabetical by English name`,
     );
+  }
+});
+
+test('sidepanel language picker uses the provider-style accessible listbox with bundled SVG flags', async () => {
+  const expectedFlagCodes = {
+    en: 'us', zh: 'cn', ar: 'sa', bn: 'bd', nl: 'nl', tl: 'ph', fr: 'fr', de: 'de',
+    he: 'il', hi: 'in', id: 'id', ja: 'jp', ko: 'kr', ms: 'my', fa: 'ir', pl: 'pl',
+    pt: 'br', ru: 'ru', es: 'es', th: 'th', tr: 'tr', uk: 'ua', vi: 'vn',
+  };
+
+  for (const [label, prefix] of [
+    ['chrome', 'src/chrome'],
+    ['firefox', 'src/firefox'],
+  ]) {
+    const html = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/sidepanel.html'), 'utf8');
+    const panel = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/sidepanel.js'), 'utf8');
+    const css = fs.readFileSync(path.join(ROOT, prefix, 'styles/sidepanel.css'), 'utf8');
+    const i18n = await import('file://' + path.join(ROOT, prefix, 'src/ui/i18n.js').replace(/\\/g, '/'));
+
+    assert.match(html, /id="language-select" class="language-select-native" tabindex="-1" aria-hidden="true"/, `${label}: native language select should remain as the hidden value source`);
+    assert.match(html, /id="language-picker-btn"[^>]+aria-haspopup="listbox"[^>]+aria-controls="language-picker-menu"/, `${label}: language picker trigger should expose listbox semantics`);
+    assert.match(html, /id="language-picker-menu" role="listbox"/, `${label}: language picker menu should be an accessible listbox`);
+    assert.match(html, /id="language-picker-flag" src="\.\.\/\.\.\/icons\/flags\/us\.svg"[^>]+aria-hidden="true"/, `${label}: English should show the bundled US flag in the closed picker`);
+    assert.match(html, /id="language-picker-code">EN</, `${label}: closed picker should expose a compact language code`);
+    assert.match(panel, /function initializeLanguagePicker\(\)[\s\S]*?if \(index === 2\) appendLanguagePickerSeparator\(\)/, `${label}: pinned languages should be separated from the alphabetical list`);
+    assert.match(panel, /function focusLanguagePickerByPrefix\(key\)/, `${label}: language picker should support typeahead`);
+    assert.match(panel, /moveLanguagePickerFocus\(1\)[\s\S]*?moveLanguagePickerFocus\(-1\)[\s\S]*?activateFocusedLanguagePickerOption\(\)[\s\S]*?event\.key === 'Escape'/, `${label}: language picker should support arrow, activation, and Escape keys`);
+    assert.match(panel, /btn\.setAttribute\('aria-selected', btn\.dataset\.value === code \? 'true' : 'false'\)/, `${label}: current language should stay selected in the custom list`);
+    assert.match(panel, /function languageFlagSrc\(flagCode\) \{[\s\S]*?`..\/..\/icons\/flags\/\$\{flagCode\}\.svg`/, `${label}: flag assets should resolve locally inside the extension`);
+    assert.match(panel, /flag\.className = 'language-picker-option-flag';[\s\S]*?flag\.setAttribute\('aria-hidden', 'true'\)/, `${label}: each option should render a decorative SVG flag`);
+    assert.match(css, /\.language-picker-menu \{[\s\S]*?right: 0;[\s\S]*?left: auto;/, `${label}: menu should open inward from the right header edge`);
+    assert.match(css, /\.language-picker-menu \{[\s\S]*?direction: ltr;/, `${label}: RTL locales should not reverse the picker row layout`);
+    assert.match(css, /\.language-picker-option-native \{[\s\S]*?unicode-bidi: plaintext;/, `${label}: RTL native names should retain correct script shaping`);
+    assert.match(css, /\.language-picker-option-flag \{[\s\S]*?width: 24px;[\s\S]*?height: 18px;/, `${label}: option flags should keep the library's 4:3 ratio`);
+    assert.doesNotMatch(`${html}\n${panel}\n${css}`, /[\u{1F1E6}-\u{1F1FF}]/u, `${label}: language picker should not use flag emoji`);
+
+    const languageNames = i18n.LANGUAGES.map(({ englishLabel }) => englishLabel);
+    assert.ok(languageNames.every(Boolean), `${label}: every language should have an English search label`);
+    assert.deepEqual(
+      languageNames.slice(2),
+      [...languageNames.slice(2)].sort((a, b) => a.localeCompare(b, 'en')),
+      `${label}: languages after English and Chinese should remain alphabetical by English name`,
+    );
+    assert.deepEqual(
+      Object.fromEntries(i18n.LANGUAGES.map(({ code, flagCode }) => [code, flagCode])),
+      expectedFlagCodes,
+      `${label}: each language should use the intended representative country flag`,
+    );
+    for (const flagCode of new Set(Object.values(expectedFlagCodes))) {
+      const flagPath = path.join(ROOT, prefix, 'icons/flags', `${flagCode}.svg`);
+      assert.ok(fs.existsSync(flagPath), `${label}: bundled ${flagCode} flag missing`);
+      assert.match(fs.readFileSync(flagPath, 'utf8'), /^<svg\b/, `${label}: ${flagCode} flag should be SVG`);
+    }
+    assert.ok(fs.existsSync(path.join(ROOT, prefix, 'icons/flags/LICENSE.flag-icons')), `${label}: flag-icons license missing`);
+  }
+});
+
+test('sidepanel New conversation uses a message-plus icon and keeps its confirmation guard', () => {
+  for (const [label, prefix] of [
+    ['chrome', 'src/chrome'],
+    ['firefox', 'src/firefox'],
+  ]) {
+    const html = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/sidepanel.html'), 'utf8');
+    const panel = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/sidepanel.js'), 'utf8');
+    const clearButton = html.match(/<button id="btn-clear"[\s\S]*?<\/button>/)?.[0] || '';
+
+    assert.match(clearButton, /data-i18n-title="sp\.btn\.clear"/, `${label}: New conversation tooltip should remain localized`);
+    assert.match(clearButton, /data-i18n-aria-label="sp\.btn\.clear"/, `${label}: New conversation icon button should expose an accessible name`);
+    assert.match(clearButton, /data-icon="message-square-plus"/, `${label}: New conversation should use the message-plus icon`);
+    assert.match(clearButton, /d="M20 15a4 4 0 0 1-4 4H8l-5 3V7/, `${label}: New conversation icon should include the chat bubble`);
+    assert.match(clearButton, /d="M11\.5 8v6"[\s\S]*?d="M8\.5 11h6"/, `${label}: New conversation icon should include the plus`);
+    assert.doesNotMatch(clearButton, /points="23 4 23 10 17 10"|M20\.49 15a9/, `${label}: legacy refresh icon should be removed`);
+
+    const clearStart = panel.indexOf("clearBtn.addEventListener('click', async () => {");
+    const clearBody = panel.slice(clearStart, panel.indexOf('\n});', clearStart) + 4);
+    assert.match(
+      clearBody,
+      /if \(!window\.confirm\(t\('sp\.clear\.confirm'\)\)\) return;[\s\S]*?await sendToBackground\('clear_conversation', \{ tabId \}\);/,
+      `${label}: icon change must preserve confirmation before clearing`,
+    );
+  }
+});
+
+test('sidepanel provider and language menus glide one highlight between hovered or focused options', () => {
+  for (const [label, prefix] of [
+    ['chrome', 'src/chrome'],
+    ['firefox', 'src/firefox'],
+  ]) {
+    const panel = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/sidepanel.js'), 'utf8');
+    const css = fs.readFileSync(path.join(ROOT, prefix, 'styles/sidepanel.css'), 'utf8');
+
+    assert.match(panel, /function ensurePickerMenuHighlight\(menu\)/, `${label}: shared menu highlight helper missing`);
+    assert.match(panel, /function setPickerMenuHighlight\(menu, option, \{ instant = false \} = \{\}\)/, `${label}: menu highlight positioning helper missing`);
+    assert.match(panel, /option\.offsetLeft[\s\S]*?option\.offsetWidth[\s\S]*?option\.offsetHeight[\s\S]*?option\.offsetTop/, `${label}: highlight should follow each option's rendered geometry`);
+    assert.match(panel, /addEventListener\('pointerover'[\s\S]*?addEventListener\('pointerleave'[\s\S]*?addEventListener\('focusin'[\s\S]*?addEventListener\('focusout'/, `${label}: highlight should follow pointer and keyboard focus`);
+    assert.match(panel, /bindPickerMenuHighlight\(providerPickerMenu\);[\s\S]*?bindPickerMenuHighlight\(languagePickerMenu\);/, `${label}: provider and language menus should share the effect`);
+    assert.match(panel, /setPickerMenuHighlight\(providerPickerMenu, selected, \{ instant: true \}\)/, `${label}: provider menu should seed the selected row without an opening jump`);
+    assert.match(panel, /setPickerMenuHighlight\(languagePickerMenu, selected, \{ instant: true \}\)/, `${label}: language menu should seed the selected row without an opening jump`);
+    assert.doesNotMatch(panel, /transitionPickerValue|pickerValueMotion/, `${label}: obsolete closed-button value animation should be removed`);
+    assert.match(css, /\.picker-menu-highlight \{[\s\S]*?position: absolute;[\s\S]*?pointer-events: none;[\s\S]*?transform 170ms cubic-bezier\(0\.22, 1, 0\.36, 1\)/, `${label}: highlight should glide as one non-interactive layer`);
+    assert.match(css, /\.provider-picker-option:hover,[\s\S]*?background: transparent;/, `${label}: option hover should reveal the moving highlight instead of blinking its own background`);
+    assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[\s\S]*?\.picker-menu-highlight \{[\s\S]*?transition: none;/, `${label}: menu glide should honor reduced-motion preferences`);
+    assert.doesNotMatch(css, /\.picker-value-ghost/, `${label}: obsolete closed-button ghost styling should be removed`);
   }
 });
 
@@ -12254,7 +12360,7 @@ test('Hebrew is registered as a complete RTL locale in both builds', async () =>
   ]) {
     const i18n = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/i18n.js'), 'utf8');
     assert.match(i18n, /import he from '\.\/locales\/he\.js';/, `${label}: Hebrew locale import missing`);
-    assert.match(i18n, /\{ code: 'he', label: 'עברית' \}/, `${label}: Hebrew language option missing`);
+    assert.match(i18n, /\{ code: 'he', label: 'עברית', englishLabel: 'Hebrew', flagCode: 'il' \}/, `${label}: Hebrew language option missing`);
     const hebrew = (await import('file://' + path.join(ROOT, prefix, 'src/ui/locales/he.js').replace(/\\/g, '/'))).default;
     const english = (await import('file://' + path.join(ROOT, prefix, 'src/ui/locales/en.js').replace(/\\/g, '/'))).default;
     assert.deepEqual(
