@@ -6456,7 +6456,9 @@ function handleAgentUpdateMessage(msg) {
       invalidatePlanReviewCards({ tabId: msg.tabId ?? currentTabId, requestId: msg.requestId, runId: msg.runId });
       if (currentAssistantEl && data?.finalContent) {
         const textEl = currentAssistantEl.querySelector('.message-text');
+        const streamedText = getStreamedAssistantText(textEl);
         if (textEl && parseCostAllowanceError(data.finalContent)) {
+          clearAssistantTextStreamState(currentAssistantEl);
           if (!textEl.classList.contains('cost-allowance-error')) {
             renderCostAllowanceError(textEl, data.finalContent, '', {
               submittedTurnDurable: data.submittedTurnDurable,
@@ -6465,7 +6467,21 @@ function handleAgentUpdateMessage(msg) {
             });
           }
           addMessageCopyButton(currentAssistantEl);
+        } else if (textEl && streamedText) {
+          // Background/restored runs do not necessarily reach the local
+          // sendRunWithReconnect response handler. Finalize their lightweight
+          // live Markdown here, cancelling any queued frame and enabling the
+          // terminal-only syntax, math, and copy enhancements. Preserve useful
+          // partial text when the user stopped the run; otherwise the terminal
+          // snapshot is authoritative if it differs from the live stream.
+          const terminalContent = data.status === 'stopped' || data.status === 'cancelled'
+            ? streamedText
+            : String(data.finalContent);
+          renderAssistantTextUpdate(currentAssistantEl, terminalContent, {
+            replace: terminalContent !== streamedText,
+          });
         } else if (textEl && !textEl.textContent.trim()) {
+          clearAssistantTextStreamState(currentAssistantEl);
           if (data.status === 'stopped' || data.status === 'cancelled') textEl.innerHTML = t('sp.stopped_by_user_html');
           else if (!renderCostAllowanceError(textEl, data.finalContent, '', {
                 submittedTurnDurable: data.submittedTurnDurable,
