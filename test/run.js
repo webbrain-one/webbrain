@@ -12278,7 +12278,8 @@ test('background waits for an active run to stop before clearing its conversatio
     const background = fs.readFileSync(path.join(ROOT, backgroundRel), 'utf8');
     const helperMatch = background.match(/async function stopActiveRunBeforeConversationClear\(tabId\) \{([\s\S]*?)\n\}/);
     assert.ok(helperMatch, `${label}: active-run clear helper missing`);
-    assert.match(helperMatch[1], /cancelDetachedRunStart\(tabId\);[\s\S]*?agent\.abort\(tabId\);[\s\S]*?await activeStart\.promise\.catch\(\(\) => \{\}\);/, `${label}: clear helper should cancel, abort, and await the active run`);
+    assert.match(helperMatch[1], /cancelDetachedRunStart\(tabId\);[\s\S]*?agent\.abort\(tabId\);[\s\S]*?await activeStart\.promise\.catch\(\(\) => \{\}\);/, `${label}: clear helper should cancel, abort, and await detached runs`);
+    assert.match(helperMatch[1], /while \(agent\.activeRunState\(tabId\)\?\.running\) \{[\s\S]*?setTimeout\(resolve, 50\)/, `${label}: clear helper should also wait for direct chat runs to release the agent guard`);
 
     const clearStart = background.indexOf("case 'clear_conversation':");
     const clearBody = background.slice(clearStart, background.indexOf("case 'compact_conversation':", clearStart));

@@ -1497,6 +1497,12 @@ async function stopActiveRunBeforeConversationClear(tabId) {
   if (activeStart?.promise) {
     await activeStart.promise.catch(() => {});
   }
+  // Direct chat/chat_stream callers do not have a detached-start promise.
+  // Do not clear their conversation until processMessage's finally block has
+  // released the agent's per-tab run guard.
+  while (agent.activeRunState(tabId)?.running) {
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
   return true;
 }
 
