@@ -109,6 +109,9 @@ export default {
   'sp.btn.settings': 'Настройки',
   'sp.btn.clear': 'Новый диалог (очистить историю)',
   'sp.btn.send': 'Отправить',
+  'sp.chat.follow_response': 'Следить за ответом',
+  'sp.chat.jump_latest': 'К последнему сообщению',
+  'sp.chat.back_to_question': 'Вернуться к вопросу',
   'sp.btn.stop.title': 'Остановить агента',
   'sp.btn.stop.label': 'Стоп',
 

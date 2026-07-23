@@ -109,6 +109,9 @@ export default {
   'sp.btn.settings': 'الإعدادات',
   'sp.btn.clear': 'محادثة جديدة (مسح السجل)',
   'sp.btn.send': 'إرسال',
+  'sp.chat.follow_response': 'متابعة الإجابة',
+  'sp.chat.jump_latest': 'الانتقال إلى الأحدث',
+  'sp.chat.back_to_question': 'العودة إلى السؤال',
   'sp.btn.stop.title': 'إيقاف الوكيل',
   'sp.btn.stop.label': 'إيقاف',
 

@@ -109,6 +109,9 @@ export default {
   'sp.btn.settings': 'การตั้งค่า',
   'sp.btn.clear': 'การสนทนาใหม่ (ล้างประวัติ)',
   'sp.btn.send': 'ส่ง',
+  'sp.chat.follow_response': 'ติดตามคำตอบ',
+  'sp.chat.jump_latest': 'ไปยังล่าสุด',
+  'sp.chat.back_to_question': 'กลับไปที่คำถาม',
   'sp.btn.stop.title': 'หยุดเอเจนต์',
   'sp.btn.stop.label': 'หยุด',
 

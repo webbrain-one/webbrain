@@ -17458,9 +17458,193 @@ test('sidepanel auto-follow bypasses smooth-scroll lag while messages grow', () 
     );
     assert.match(
       panel,
-      /function scrollToBottom\(\) \{[\s\S]*?pinChatToBottom\(container\);[\s\S]*?requestAnimationFrame\(\(\) => \{[\s\S]*?pinChatToBottom\(container\);[\s\S]*?\}\);[\s\S]*?\}/,
+      /function scrollToBottom\(\{ force = false \} = \{\}\) \{[\s\S]*?if \(force && chatTurnIsConnected\(\)\) \{[\s\S]*?chatAutoFollow = true;[\s\S]*?chatUserChoseReadingPosition = false;[\s\S]*?if \(!force && chatTurnIsConnected\(\) && !chatAutoFollow[\s\S]*?chatUserChoseReadingPosition \|\| chatTurnIsRunning\(\) \|\| chatTurnNeedsReadingNavigation\(\)[\s\S]*?pinChatToBottom\(container\);[\s\S]*?requestAnimationFrame\(\(\) => \{[\s\S]*?pinChatToBottom\(container\);[\s\S]*?\}\);[\s\S]*?\}/,
       `${label}: auto-follow should re-pin after the next layout frame`,
     );
+  }
+});
+
+test('sidepanel long replies use reading-first turn navigation', () => {
+  for (const [label, prefix] of [
+    ['chrome', 'src/chrome'],
+    ['firefox', 'src/firefox'],
+  ]) {
+    const panel = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/sidepanel.js'), 'utf8');
+    const html = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/sidepanel.html'), 'utf8');
+    const css = fs.readFileSync(path.join(ROOT, prefix, 'styles/sidepanel.css'), 'utf8');
+
+    assert.match(
+      html,
+      /id="chat-shell"[\s\S]*?id="chat-container"[\s\S]*?id="chat-navigation"[\s\S]*?id="chat-navigation-label"/,
+      `${label}: chat navigation should overlay the scroll container without narrowing messages`,
+    );
+    assert.match(
+      html,
+      /id="chat-navigation-action"[\s\S]*?aria-controls="chat-container"[\s\S]*?id="chat-navigation-dismiss"[\s\S]*?data-i18n-aria-label="sp\.review\.close"/,
+      `${label}: navigation and dismissal should be separate accessible controls`,
+    );
+    assert.match(
+      css,
+      /#chat-shell \{[\s\S]*?position: relative;[\s\S]*?min-height: 0;[\s\S]*?\.chat-navigation \{[\s\S]*?position: absolute;[\s\S]*?left: 50%;[\s\S]*?transform: translateX\(-50%\);/,
+      `${label}: navigation pill should be shell-positioned and RTL-safe`,
+    );
+    assert.match(
+      css,
+      /\.message\.assistant\.chat-navigation-inset \.message-content \{[\s\S]*?padding-block-end: 60px;/,
+      `${label}: visible navigation should reserve space inside the answer card instead of creating a separate row`,
+    );
+    assert.match(
+      css,
+      /\.chat-navigation-dismiss \{[\s\S]*?position: absolute;[\s\S]*?top: -6px;[\s\S]*?inset-inline-end: -6px;/,
+      `${label}: the dismissal control should sit at the logical top corner in both LTR and RTL layouts`,
+    );
+    assert.match(
+      css,
+      /@media \(prefers-reduced-motion: reduce\) \{[\s\S]*?\.chat-navigation/,
+      `${label}: navigation motion should honor reduced-motion preferences`,
+    );
+    assert.match(
+      panel,
+      /resetChatNavigation\(\);\s*userEl = addMessage\('user', text\);[\s\S]*?currentAssistantEl = assistantEl;\s*if \(beginReadingFirstTurn\(userEl, assistantEl\)\) \{\s*scrollChatToQuestion\(\{ smooth: false \}\);\s*\}/,
+      `${label}: a submitted turn should enter reading-first mode and reveal its question before streaming`,
+    );
+    assert.match(
+      panel,
+      /function renderChatNavigation\(\) \{[\s\S]*?sp\.chat\.follow_response[\s\S]*?sp\.chat\.jump_latest[\s\S]*?sp\.chat\.back_to_question/,
+      `${label}: the pill should expose live-follow, latest, and question states`,
+    );
+    assert.match(
+      panel,
+      /function setChatNavigationVisible\(visible\) \{[\s\S]*?chatNavigationInsetAssistantEl\?\.classList\.remove\('chat-navigation-inset'\);[\s\S]*?insetAssistantEl\?\.classList\.add\('chat-navigation-inset'\);[\s\S]*?toggle\('hidden', !visible\)/,
+      `${label}: pill visibility should keep the active answer's internal inset in sync`,
+    );
+    assert.match(
+      panel,
+      /chatNavigationDismissEl\?\.addEventListener\('click',[\s\S]*?chatNavigationDismissedAssistantEl = chatNavigationTurn\.assistantEl;[\s\S]*?setChatNavigationVisible\(false\);/,
+      `${label}: dismissing the pill should hide it for the active answer`,
+    );
+    assert.match(
+      panel,
+      /function setChatNavigationTurn\(userEl, assistantEl,[\s\S]*?chatNavigationDismissedAssistantEl !== assistantEl[\s\S]*?chatNavigationDismissedAssistantEl = null;/,
+      `${label}: a new answer should restore the navigation control`,
+    );
+    const navigationSource = panel.slice(
+      panel.indexOf('function renderChatNavigation()'),
+      panel.indexOf('function scheduleChatNavigationUpdate()'),
+    );
+    assert.doesNotMatch(
+      navigationSource,
+      /chatTurnNeedsReadingNavigation\(\)/,
+      `${label}: clipped response content should expose navigation even when the turn is shorter than the viewport`,
+    );
+    assert.match(
+      navigationSource,
+      /responseContinuesBelow[\s\S]*?if \(responseContinuesBelow\)/,
+      `${label}: navigation visibility should follow the response's actual viewport position`,
+    );
+    assert.match(
+      panel,
+      /function settleChatUserScrollIntent\(\) \{[\s\S]*?chatUserScrollActive = false[\s\S]*?addEventListener\('scroll',[\s\S]*?chatUserScrollActive[\s\S]*?chatAutoFollow = distanceToBottom <= CHAT_SCROLL_EDGE_PX;[\s\S]*?chatUserChoseReadingPosition = !chatAutoFollow;[\s\S]*?settleChatUserScrollIntent\(\)/,
+      `${label}: user-driven scrolling should retain intent through momentum and re-enable auto-follow at the edge`,
+    );
+    assert.match(
+      panel,
+      /function scrollChatToQuestion\(\{ smooth = true \} = \{\}\) \{[\s\S]*?if \(smooth\) chatUserChoseReadingPosition = true;/,
+      `${label}: Back to question should protect the selected reading position after completion`,
+    );
+    assert.match(
+      panel,
+      /function restoreLatestChatTurnPosition\(\) \{[\s\S]*?chatTurnNeedsReadingNavigation\(turn\)[\s\S]*?scrollChatToQuestion\(\{ smooth: false \}\)/,
+      `${label}: restored long turns should reopen at the question`,
+    );
+    assert.match(
+      panel,
+      /const questionEl = precedingUserMessage\(assistantEl\);[\s\S]*?beginReadingFirstTurn\(questionEl, assistantEl\)[\s\S]*?scrollChatToQuestion\(\{ smooth: false \}\)/,
+      `${label}: continuations should retain the preceding question as their turn anchor`,
+    );
+    assert.match(
+      panel,
+      /event === 'running'[\s\S]*?hideRecommendedActions\(\);\s*resetChatNavigation\(\);\s*currentAssistantEl = addMessage\('assistant', ''\);/,
+      `${label}: scheduled runs without a user-message anchor should keep bottom-follow behavior`,
+    );
+    assert.match(
+      panel,
+      /function latestChatTurn\(\) \{[\s\S]*?:scope > \.message[\s\S]*?latestMessageEl\?\.matches\?\.\('\.message\.assistant'\)[\s\S]*?assistantEl\?\.dataset\?\.scheduledJobId[\s\S]*?return null;[\s\S]*?precedingUserMessage\(assistantEl\)/,
+      `${label}: restore should use only a newest assistant turn and never borrow a question for scheduled or later non-turn output`,
+    );
+    const clarifySource = panel.slice(
+      panel.indexOf('function renderClarifyCard('),
+      panel.indexOf('function clearClarifyCountdown('),
+    );
+    assert.equal(
+      (clarifySource.match(/scrollToBottom\(\{ force: true \}\);/g) || []).length,
+      3,
+      `${label}: submit, permission, and clarify prompts should override reading-first scroll suppression`,
+    );
+    const planReviewSource = panel.slice(
+      panel.indexOf('function renderPlanReviewCard('),
+      panel.indexOf('function submitPlanReview('),
+    );
+    assert.match(
+      planReviewSource,
+      /setPlanReviewAwaiting\([\s\S]*?scrollToBottom\(\{ force: true \}\);/,
+      `${label}: plan approval should be forced into view`,
+    );
+    assert.match(
+      panel,
+      /function chatHasPendingInteraction\(\) \{[\s\S]*?clarify-card:not\(\.clarify-answered\)[\s\S]*?plan-review-card:not\(\.plan-reviewed\)[\s\S]*?continue-bar[\s\S]*?function restoreLatestChatTurnPosition\(\) \{[\s\S]*?chatHasPendingInteraction\(\)[\s\S]*?scrollToBottom\(\{ force: true \}\)/,
+      `${label}: restored blocking prompts should take priority over question-first positioning`,
+    );
+    assert.match(
+      panel,
+      /function showContinueButton\(\) \{[\s\S]*?resetChatNavigation\(\);[\s\S]*?messagesEl\.appendChild\(bar\);[\s\S]*?scrollToBottom\(\{ force: true \}\);/,
+      `${label}: the blocking Continue prompt should replace turn navigation instead of being covered by it`,
+    );
+    assert.match(
+      panel,
+      /function addPersistentSlashMessage\(content\) \{[\s\S]*?addMessage\('system', content, \{ beforeCurrentAssistant: true \}\);[\s\S]*?scrollToBottom\(\{ force: true \}\);[\s\S]*?return msgEl;/,
+      `${label}: persistent slash-command output should override reading-first scroll suppression`,
+    );
+    assert.match(
+      panel,
+      /await parseSlashCommands\(text, tabId, \{ permissionSkipContext \}\);\s*if \(currentTabId === tabId\) \{\s*scrollToBottom\(\{ force: true \}\);/,
+      `${label}: out-of-band slash commands should reveal their output while a run is active`,
+    );
+    assert.match(
+      panel,
+      /if \(!text\) \{\s*scrollToBottom\(\{ force: true \}\);\s*inputEl\.value = '';/,
+      `${label}: fully consumed slash commands should reveal synchronous UI output`,
+    );
+    assert.match(
+      panel,
+      /command\.value === '\/schedule'[\s\S]*?action === 'create'[\s\S]*?await renderScheduleComposer\(payload, tabId\);/,
+      `${label}: schedule forms should finish rendering before slash-command reveal`,
+    );
+  }
+});
+
+test('all locales translate long-reply navigation labels', () => {
+  const keys = [
+    'sp.chat.follow_response',
+    'sp.chat.jump_latest',
+    'sp.chat.back_to_question',
+  ];
+  for (const [label, prefix] of [
+    ['chrome', 'src/chrome'],
+    ['firefox', 'src/firefox'],
+  ]) {
+    const localeDir = path.join(ROOT, prefix, 'src/ui/locales');
+    for (const filename of fs.readdirSync(localeDir).filter(name => name.endsWith('.js'))) {
+      const locale = fs.readFileSync(path.join(localeDir, filename), 'utf8');
+      for (const key of keys) {
+        const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        assert.match(
+          locale,
+          new RegExp(`['"]${escapedKey}['"]:\\s*['"][^'"]+['"]`),
+          `${label}/${filename}: missing ${key}`,
+        );
+      }
+    }
   }
 });
 
@@ -44790,8 +44974,8 @@ test('sidepanel: restored plan review cards rebind approve and cancel actions', 
     );
     assert.match(
       renderPlanReviewSource,
-      /content\.appendChild\(card\);\s*setPlanReviewAwaiting\([^;]+;\s*scrollToBottom\(\);/,
-      `${file} should still reveal a newly inserted plan card`,
+      /content\.appendChild\(card\);\s*setPlanReviewAwaiting\([^;]+;\s*scrollToBottom\(\{ force: true \}\);/,
+      `${file} should force a newly inserted plan card into view`,
     );
     assert.match(source, /card\.dataset\.planMarkdownMode = useVerbosePlan \? 'verbose' : 'compact';/, `${file} should remember which plan text was displayed`);
     assert.match(
@@ -47141,6 +47325,7 @@ test('sidepanel wires store review prompt after successful agent completion', ()
     assert.match(html, /id="store-review-step-negative"/, `${label}: negative step should exist`);
     assert.match(panel, /from '\.\/store-review-prompt\.js'/, `${label}: sidepanel should import store-review-prompt`);
     assert.match(panel, /void maybePromptStoreReviewAfterSuccess\(\)/, `${label}: successful completion should trigger review prompt check`);
+    assert.match(panel, /function showStoreReviewStep\(step\) \{[\s\S]*?scrollToBottom\(\{ force: true \}\);/, `${label}: the review dialog should override a protected reading position when shown`);
     assert.match(panel, /storeReviewSuccess:\s*currentTabId === tabId && promptEligibleCompletion/, `${label}: review prompt should count Ask completions separately from confetti success`);
     assert.match(panel, /mode !== 'ask'[\s\S]*?updatesContainStoreReviewFailure\(response\.updates\)[\s\S]*?parseSubscribeError/, `${label}: Ask completions should require a clean content response`);
     assert.match(panel, /function setStoreReviewStarPreview\(rating\)/, `${label}: star preview helper should exist`);
