@@ -1135,17 +1135,58 @@ export class Agent {
     };
   }
 
-  _shouldStreamInteractiveAsk(provider, mode, runOptions = {}, disabledForRun = false) {
+  _interactiveAskStreamingDecision(provider, mode, runOptions = {}, disabledForRun = false) {
     const streamingEnabled = runOptions?.askStreamingEnabled
       ?? runOptions?.openaiAskStreamingEnabled;
-    return mode === 'ask'
-      && runOptions?.interactiveChat === true
-      && streamingEnabled !== false
-      && runOptions?.trustedContinuation !== true
-      && runOptions?.cloudRun !== true
-      && disabledForRun !== true
-      && typeof provider?.chatStream === 'function'
-      && provider?._supportsInteractiveAskStreaming?.() === true;
+    if (mode !== 'ask') return { eligible: false, reason: 'mode_not_ask' };
+    if (runOptions?.interactiveChat !== true) return { eligible: false, reason: 'not_interactive_chat' };
+    if (streamingEnabled === false) return { eligible: false, reason: 'disabled_in_settings' };
+    if (runOptions?.trustedContinuation === true) return { eligible: false, reason: 'trusted_continuation' };
+    if (runOptions?.cloudRun === true) return { eligible: false, reason: 'cloud_run' };
+    if (disabledForRun === true) return { eligible: false, reason: 'disabled_after_fallback' };
+    if (typeof provider?.chatStream !== 'function') return { eligible: false, reason: 'provider_missing_chat_stream' };
+    try {
+      if (provider?._supportsInteractiveAskStreaming?.() !== true) {
+        return { eligible: false, reason: 'provider_not_supported' };
+      }
+    } catch {
+      return { eligible: false, reason: 'provider_capability_check_failed' };
+    }
+    return { eligible: true, reason: 'eligible' };
+  }
+
+  _shouldStreamInteractiveAsk(provider, mode, runOptions = {}, disabledForRun = false) {
+    return this._interactiveAskStreamingDecision(provider, mode, runOptions, disabledForRun).eligible;
+  }
+
+  _interactiveAskStreamingProtocol(provider) {
+    try {
+      if (typeof provider?._usesResponsesApi === 'function') {
+        return provider._usesResponsesApi() === true ? 'responses' : 'chat_completions';
+      }
+      return 'provider_native';
+    } catch {
+      return 'unknown';
+    }
+  }
+
+  _interactiveAskStreamingFailure(error) {
+    const rawMessage = String(error?.message || error || 'Streaming request failed.');
+    const message = rawMessage
+      .replace(/\b(Bearer)\s+[^\s,;]+/gi, '$1 [redacted]')
+      .replace(/((?:api[_ -]?key|access[_ -]?token|token|secret|password)\s*[:=]\s*)["']?[^\s,"';]+/gi, '$1[redacted]')
+      .replace(/([?&](?:api[_-]?key|access[_-]?token|token|key)=)[^&\s]+/gi, '$1[redacted]')
+      .replace(/\b(?:sk-(?:or-v1-)?|gsk_|xai-)[a-zA-Z0-9_-]{12,}\b/g, '[redacted]')
+      .slice(0, 500);
+    const rawCode = error?.incompleteReason || error?.code || '';
+    const errorCode = String(rawCode).replace(/[^a-zA-Z0-9_.-]/g, '_').slice(0, 80);
+    let reason = 'stream_error';
+    if (this._isCostAllowanceError(error)) reason = 'cost_limit';
+    else if (errorCode === 'missing_response_completed' || /before (?:its )?terminal event/i.test(rawMessage)) {
+      reason = 'missing_terminal_event';
+    } else if (this._shouldFallbackAskStream(error)) reason = 'transport_error';
+    else if (error?.isAskStreamTerminalError === true) reason = 'provider_stream_error';
+    return { reason, errorCode: errorCode || null, message };
   }
 
   // Backward-compatible aliases for integrations/tests that used the original
@@ -18496,13 +18537,35 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     let compressionPlaceholderRecoveryAttempted = false;
     let askStreamingDisabledForRun = false;
 
+    // Keep trace persistence ordered without putting IndexedDB on the LLM
+    // request path. The recorder is diagnostic-only and must never delay a
+    // stream, fallback, or completed response.
+    let askStreamingTraceWrite = Promise.resolve();
+    const recordAskStreaming = (payload) => {
+      const traceRunId = runId;
+      const traceStep = steps;
+      if (!traceRunId) return;
+      askStreamingTraceWrite = askStreamingTraceWrite
+        .then(() => trace.recordStreaming(traceRunId, traceStep, payload))
+        .catch(() => {});
+    };
+
     const chatMainTurn = async (chatMessages, chatOptions, requestContext) => {
-      if (!this._shouldStreamInteractiveAsk(
+      const decision = this._interactiveAskStreamingDecision(
         provider,
         mode,
         runOptions,
         askStreamingDisabledForRun,
-      )) {
+      );
+      const protocol = this._interactiveAskStreamingProtocol(provider);
+      if (!decision.eligible) {
+        if (mode === 'ask' && runOptions?.interactiveChat === true) {
+          recordAskStreaming({
+            status: 'skipped',
+            reason: decision.reason,
+            protocol,
+          });
+        }
         return this._chatWithCostAllowance(
           provider,
           chatMessages,
@@ -18512,9 +18575,24 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         );
       }
 
+      let firstDeltaMs = null;
+      let textDeltaCount = 0;
+      let textChars = 0;
       let emittedText = false;
+      recordAskStreaming({
+        status: 'attempted',
+        reason: decision.reason,
+        protocol,
+      });
+      const streamStartedAt = Date.now();
+      const streamMetrics = () => ({
+        durationMs: Date.now() - streamStartedAt,
+        firstDeltaMs,
+        textDeltaCount,
+        textChars,
+      });
       try {
-        return await this._chatStreamWithCostAllowance(
+        const result = await this._chatStreamWithCostAllowance(
           provider,
           chatMessages,
           chatOptions,
@@ -18522,13 +18600,31 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           requestContext,
           (delta) => {
             emittedText = true;
+            if (firstDeltaMs == null) firstDeltaMs = Date.now() - streamStartedAt;
+            textDeltaCount += 1;
+            textChars += delta.length;
             onUpdate('text_delta', { content: delta });
           },
         );
+        recordAskStreaming({
+          status: 'completed',
+          reason: 'terminal_event_received',
+          protocol,
+          ...streamMetrics(),
+          toolCallCount: Array.isArray(result?.toolCalls) ? result.toolCalls.length : 0,
+        });
+        return result;
       } catch (error) {
+        const fallbackSafe = this._shouldFallbackAskStream(error);
+        recordAskStreaming({
+          status: fallbackSafe ? 'fallback' : 'failed',
+          protocol,
+          ...streamMetrics(),
+          ...this._interactiveAskStreamingFailure(error),
+        });
         if (this._isCostAllowanceError(error)) throw error;
         if (emittedText) onUpdate('text', { content: '', replace: true });
-        if (!this._shouldFallbackAskStream(error)) throw error;
+        if (!fallbackSafe) throw error;
         askStreamingDisabledForRun = true;
         onUpdate('warning', {
           code: 'ask_stream_fallback',

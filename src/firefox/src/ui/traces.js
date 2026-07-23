@@ -348,6 +348,26 @@ function renderEvent(ev, shotCache, compact, objectUrls = new Set()) {
           ${src ? `<img src="${escapeAttr(src)}" alt="${escapeAttr(caption)}" loading="lazy">` : `<span class="latency">${escapeHtml(t('tr.event.screenshot_missing'))}</span>`}
         </div>`;
     }
+    case 'streaming': {
+      const d = ev.data || {};
+      const details = [
+        d.protocol,
+        d.reason,
+        d.errorCode ? `#${d.errorCode}` : '',
+        Number.isFinite(d.textDeltaCount) ? `Δ × ${d.textDeltaCount}` : '',
+        Number.isFinite(d.textChars) ? t('st.skills.item.chars', { count: d.textChars }) : '',
+        Number.isFinite(d.firstDeltaMs) ? `TTFT ${d.firstDeltaMs} ms` : '',
+        Number.isFinite(d.durationMs) ? `${t('tr.duration.label')}: ${d.durationMs} ms` : '',
+        Number.isFinite(d.toolCallCount) ? `🔧 × ${d.toolCallCount}` : '',
+      ].filter(Boolean).join(' · ');
+      const message = d.message ? `<div class="content-text">${escapeHtml(d.message)}</div>` : '';
+      return `
+        <div class="event streaming">
+          <div class="event-head"><span class="kind">🌊 ${escapeHtml(t('st.display.openai_ask_streaming.label'))}: ${escapeHtml(d.status || '?')}</span>${stepBadge}<span class="latency">${ts}</span></div>
+          ${details ? `<div class="tool-args">${escapeHtml(details)}</div>` : ''}
+          ${message}
+        </div>`;
+    }
     case 'error': {
       return `
         <div class="event error">
