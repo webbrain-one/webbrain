@@ -35,6 +35,7 @@ class BaseLLMProvider {
 
 | ID Fournisseur | Type | Catégorie | Modèle par défaut | Vision |
 |---|---|---|---|---|
+| `webbrain_cloud` | `openai` | cloud | `webbrain-cloud 1.0` | Oui |
 | `llamacpp` | `llamacpp` | local | (modèle chargé) | Oui (activé par défaut) |
 | `ollama` | `openai` | local | (modèle chargé) | Oui (activé par défaut) |
 | `lmstudio` | `openai` | local | (modèle chargé) | Oui (activé par défaut) |
@@ -42,18 +43,25 @@ class BaseLLMProvider {
 | `vllm` | `openai` | local | (modèle chargé) | Oui (activé par défaut) |
 | `sglang` | `openai` | local | (modèle chargé) | Oui (activé par défaut) |
 | `localai` | `openai` | local | (modèle chargé) | Oui (activé par défaut) |
+| `azure_openai` | `azure_openai` | cloud | (déploiement) | Bascule manuelle |
+| `aws_bedrock` | `aws_bedrock` | cloud | (ID de modèle) | Non |
 | `openai` | `openai` | cloud | `gpt-5.6-terra` | Regex nom de modèle |
 | `anthropic` | `anthropic` | cloud | `claude-sonnet-4-6` | Regex nom de modèle |
-| `claude_subscription` | `anthropic_oauth` | cloud | `claude-sonnet-4-6` | Oui |
 | `gemini` | `openai` | cloud | `gemini-3.1-flash` | Regex nom de modèle |
+| `cloudflare` | `openai` | routeur | `@cf/zai-org/glm-5.2` | Regex nom de modèle |
 | `mistral` | `openai` | cloud | `mistral-large-latest` | Regex nom de modèle |
 | `deepseek` | `openai` | cloud | `deepseek-v4-flash` | Regex nom de modèle |
 | `xai` (Grok) | `openai` | cloud | `grok-4.3` | Regex nom de modèle |
-| `nvidia` (NIM) | `openai` | cloud | `meta/llama-3.1-8b-instruct` | Regex nom de modèle |
-| `groq` | `openai` | cloud | `llama-3.3-70b-versatile` | Regex nom de modèle |
+| `nvidia` (NIM) | `openai` | routeur | `meta/llama-3.1-8b-instruct` | Regex nom de modèle |
+| `groq` | `openai` | routeur | `llama-3.3-70b-versatile` | Regex nom de modèle |
 | `minimax` | `openai` | cloud | `minimax-m2.7` | Regex nom de modèle |
+| `kimi` | `openai` | cloud | `kimi-k2.5` | Regex nom de modèle |
 | `alibaba` (Qwen) | `openai` | cloud | `qwen-max` | Regex nom de modèle |
+| `together` | `openai` | routeur | `meta-llama/Llama-3.3-70B-Instruct-Turbo` | Regex nom de modèle |
 | `openrouter` | `openai` | routeur | `openrouter/free` | Regex nom de modèle |
+| `huggingface` | `openai` | routeur | `zai-org/GLM-5.2` | Regex nom de modèle |
+| `fireworks` | `openai` | routeur | `accounts/fireworks/models/llama-v3p3-70b-instruct` | Regex nom de modèle |
+| `z_ai` | `openai` | cloud | `glm-5.2` | Regex nom de modèle |
 
 ### Fournisseurs Locaux
 
@@ -127,11 +135,22 @@ pm.getAll();                        // Toutes les configurations de fournisseurs
 await pm.testProvider('openai');    // Teste la connexion
 ```
 
+### Recherche dans les Paramètres
+
+L'index de recherche des Paramètres comprend les identifiants et libellés des
+fournisseurs, le type/la catégorie, le modèle, l'URL de base, les libellés et
+espaces réservés des champs, les suggestions et les options de compatibilité.
+Les cartes correspondantes sont classées par nom/identifiant exact, puis
+préfixe, puis sous-chaîne, puis correspondance dans les champs uniquement.
+L'ordre original départage les égalités et le fournisseur sélectionné reste
+visible à travers les filtres de catégorie.
+
 ### Persistance de la Configuration
 
 Les configurations sont stockées dans `chrome.storage.local` sous la clé `providers`, fusionnées avec les valeurs par défaut. Les valeurs par défaut fournissent la STRUCTURE (quelles clés de fournisseur existent) ; les configurations stockées remplacent les valeurs par clé. Cela permet aux mises à jour qui introduisent de nouvelles entrées de fournisseur de fonctionner sans que les utilisateurs aient à vider le stockage.
 
-Les entrées de fournisseur obsolètes (`webbrain`, `openai_subscription`) sont filtrées.
+Les entrées de fournisseur obsolètes (`webbrain`, `openai_subscription`,
+`claude_subscription`) sont filtrées.
 
 ### Plafonds de Coût
 

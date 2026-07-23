@@ -35,14 +35,22 @@ de suivi, de télémétrie ou d'analytique.
 
 L'utilisateur choisit son fournisseur dans les Paramètres. Les options incluent :
 
-- **Fournisseurs cloud** : OpenAI, Anthropic, Google Gemini, Mistral, DeepSeek,
-  xAI, Groq, OpenRouter, etc. — les données quittent la machine de l'utilisateur
-  pour ceux-ci
-- **Fournisseurs locaux** : llama.cpp, Ollama, LM Studio, Jan, vLLM, SGLang —
+- **WebBrain Cloud** : les requêtes passent par `api.webbrain.one` ; Aider à
+  améliorer WebBrain est activé par défaut et, tant qu'il reste activé,
+  certaines interactions peuvent être conservées et utilisées pour
+  l'évaluation, l'amélioration, l'affinage et l'entraînement
+- **Fournisseurs cloud configurés par l'utilisateur** : OpenAI, Anthropic,
+  Google Gemini, Mistral, DeepSeek, xAI, Groq, OpenRouter, etc. — les requêtes
+  sont envoyées directement au fournisseur avec les identifiants de l'utilisateur
+  et ne sont jamais collectées par WebBrain
+- **Fournisseurs locaux** : llama.cpp, Ollama, LM Studio, Jan, vLLM, SGLang,
+  LocalAI —
   les données restent sur la machine de l'utilisateur
 
-L'extension elle-même ne reçoit ni ne stocke jamais les données utilisateur sur
-un serveur distant.
+Les requêtes vers un modèle local ou une API configurée par l'utilisateur ne
+sont jamais collectées par WebBrain. Les requêtes WebBrain Cloud sont traitées
+et peuvent être conservées conformément à la section détaillée de la
+[documentation anglaise](../privacy-and-data-flow.md#webbrain-cloud-improvement-data).
 
 ---
 
@@ -50,9 +58,17 @@ un serveur distant.
 
 ### Historique des conversations
 
-Stocké dans `chrome.storage.session` (Chrome) ou en mémoire (Firefox). Utilisé
-pour restaurer la conversation après les redémarrages du service worker. Jamais
-transmis.
+Stocké dans le stockage de session du navigateur :
+`chrome.storage.session` sur Chrome et `browser.storage.session` sur Firefox.
+L'historique fournisseur par onglet (`agentConv:<tabId>`), le chat rendu
+(`tabChat:<tabId>`) et le journal d'interface de l'exécution détachée
+(`runUi:<tabId>`) permettent de restaurer une conversation et une exécution en
+cours après la fermeture/recharge du panneau ou un redémarrage de l'arrière-plan.
+Le journal conserve une fenêtre bornée d'événements et un texte streamé
+accumulé, limité séparément, afin de reconstruire le Markdown en cours après
+reconnexion. Le contenu pertinent de la conversation est envoyé au fournisseur
+configuré comme contexte de requête ; les copies stockées ne sont pas
+synchronisées séparément avec WebBrain.
 
 ### Enregistreur de traces
 
@@ -250,5 +266,6 @@ par ailleurs les mêmes, sauf :
 - Pas de sous-appel de vision dédié (les captures d'écran vont directement au
   fournisseur principal si la vision est supportée)
 - Pas d'enregistrement d'onglet/écran via slash
-- L'historique des conversations n'est pas persisté (perdu lorsque le panneau
-  latéral se ferme)
+- La conversation, le chat rendu et le journal d'interface des exécutions
+  détachées utilisent `browser.storage.session`, comme la persistance de
+  session de Chrome.

@@ -35,6 +35,7 @@ class BaseLLMProvider {
 
 | Provider ID | Type | Category | Default Model | Vision |
 |---|---|---|---|---|
+| `webbrain_cloud` | `openai` | cloud | `webbrain-cloud 1.0` | Yes |
 | `llamacpp` | `llamacpp` | local | (loaded model) | Yes (default on) |
 | `ollama` | `openai` | local | (loaded model) | Yes (default on) |
 | `lmstudio` | `openai` | local | (loaded model) | Yes (default on) |
@@ -46,17 +47,21 @@ class BaseLLMProvider {
 | `aws_bedrock` | `aws_bedrock` | cloud | (model id) | No |
 | `openai` | `openai` | cloud | `gpt-5.6-terra` | Model-name regex |
 | `anthropic` | `anthropic` | cloud | `claude-sonnet-4-6` | Model-name regex |
-| `claude_subscription` | `anthropic_oauth` | cloud | `claude-sonnet-4-6` | Yes |
 | `gemini` | `openai` | cloud | `gemini-3.1-flash` | Model-name regex |
+| `cloudflare` | `openai` | router | `@cf/zai-org/glm-5.2` | Model-name regex |
 | `mistral` | `openai` | cloud | `mistral-large-latest` | Model-name regex |
 | `deepseek` | `openai` | cloud | `deepseek-v4-flash` | Model-name regex |
 | `xai` (Grok) | `openai` | cloud | `grok-4.3` | Model-name regex |
-| `nvidia` (NIM) | `openai` | cloud | `meta/llama-3.1-8b-instruct` | Model-name regex |
-| `groq` | `openai` | cloud | `llama-3.3-70b-versatile` | Model-name regex |
+| `nvidia` (NIM) | `openai` | router | `meta/llama-3.1-8b-instruct` | Model-name regex |
+| `groq` | `openai` | router | `llama-3.3-70b-versatile` | Model-name regex |
 | `minimax` | `openai` | cloud | `minimax-m2.7` | Model-name regex |
 | `kimi` | `openai` | cloud | `kimi-k2.5` | Model-name regex |
 | `alibaba` (Qwen) | `openai` | cloud | `qwen-max` | Model-name regex |
+| `together` | `openai` | router | `meta-llama/Llama-3.3-70B-Instruct-Turbo` | Model-name regex |
 | `openrouter` | `openai` | router | `openrouter/free` | Model-name regex |
+| `huggingface` | `openai` | router | `zai-org/GLM-5.2` | Model-name regex |
+| `fireworks` | `openai` | router | `accounts/fireworks/models/llama-v3p3-70b-instruct` | Model-name regex |
+| `z_ai` | `openai` | cloud | `glm-5.2` | Model-name regex |
 
 ### Local Providers
 
@@ -137,11 +142,20 @@ state and is separate from `activeProvider`, which is the provider currently
 configured. Connection tests report reachability but do not control the Active
 flag.
 
+### Settings Search
+
+The Settings search index includes provider IDs, labels, type/category, model,
+base URL, field labels/placeholders, suggestions, and compatibility options.
+Matching cards are ordered by exact provider name/ID, then name/ID prefix, then
+name/ID substring, then field-only matches. Original provider order breaks
+ties, and the selected provider remains visible across category filters.
+
 ### Config Persistence
 
 Configs are stored in `chrome.storage.local` under the `providers` key, merged against defaults. Defaults provide the SHAPE (which provider keys exist); stored configs override per-key values. This allows upgrades that introduce new provider entries to work without users clearing storage.
 
-Deprecated provider entries (`webbrain`, `openai_subscription`) are filtered out.
+Deprecated provider entries (`webbrain`, `openai_subscription`,
+`claude_subscription`) are filtered out.
 
 ### Cost Allowances
 

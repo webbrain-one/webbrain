@@ -59,11 +59,11 @@ Trust boundaries, from most to least trusted: (1) the user's chat messages and t
 
 ## 6. How this compares (honest framing)
 
-The defensible claim is *not* "we're more secure than everyone." It's that the safety posture is explicit, tested, and local-first. The axes that actually matter for an AI browser:
+The defensible claim is *not* "we're more secure than everyone." It's that the safety posture is explicit, tested, and deployment-aware. The axes that actually matter for an AI browser:
 
 1. Is page-derived content structurally isolated from the instruction path? (We do this and test it.)
 2. Is the action/automation surface bounded, or does the agent inherit full ambient authority? (Our gap G1/G2/G4 — being closed.)
-3. Where does inference run, and what leaves the device? (Local by default; nothing leaves the machine in the local path.)
+3. Where does inference run, and what leaves the device? (The selected provider determines this: WebBrain Cloud and bring-your-own cloud providers receive the request context, while local providers keep inference requests on the machine.)
 4. Is there evidence, or just assertions? (Adversarial corpus + ablation, in-repo.)
 
 Before making any *comparative* claim about a specific competitor (Edge's AI, OpenAI's browser, the Claude browser, etc.), verify their actual behaviour — don't assert it. The strong, honest line is "here are the dimensions; here's exactly where we stand on each, with tests" and let the comparison speak for itself.

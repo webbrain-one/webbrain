@@ -1,6 +1,6 @@
 # WebBrain Architecture
 
-> Version 25.5.0
+> Version 25.7.12
 
 ## Overview
 
@@ -28,6 +28,7 @@ This doc covers the shared architecture and calls out where the builds diverge.
 │              Background Script / Service Worker      │
 │                                                      │
 │  background.js        — message router               │
+│  run-ui-journal.js     — detached-run reconnect state │
 │    └─ agent.js        — agent loop + executeTool()   │
 │         ├─ tools.js   — tool schemas + system prompts│
 │         ├─ planner.js — Plan-before-Act JSON planner │
@@ -69,6 +70,15 @@ The chat UI. Communicates with the background script via `chrome.runtime.sendMes
 Model tiering is separate from mode: `compact | mid | full` controls how many normal tools the model sees, while `ask | act | dev` controls what kind of task the user is allowing.
 
 The user types a message, the panel sends a detached `{action: 'chat_start', text, mode, tabId, requestId}` request, then reconnects to the background-owned run journal for `agent_update` events. The acknowledged start becomes the existing `chat` handler and `agent.processMessage()` lifecycle; closing or reloading the panel does not transfer ownership or start the run again. The panel renders tool calls, results, plan-review cards, clarification prompts, and the final answer incrementally.
+
+Each new user/assistant pair starts in a reading-first scroll state: the question
+stays visible while a long response grows instead of being pushed immediately
+to the live edge. A floating control changes between **Follow response**,
+**Jump to latest**, and **Back to question** as the viewport crosses the two
+turn anchors. Reaching the bottom deliberately resumes auto-follow; manual
+reading positions are otherwise preserved. Blocking plan/clarification/Continue
+cards, store-review prompts, new questions, and slash-command output force the
+relevant content into view.
 
 Slash commands are defined as structured `SLASH_COMMANDS` metadata in each
 side panel. The metadata owns canonical usage signatures, option descriptions,
@@ -640,9 +650,24 @@ capabilities still use the normal permission gate.
 - **Image pruning**: strips base64 images from all but the last 4 messages before each LLM call
 - **Tool result cap**: individual results truncated at 8,000 chars
 
-### Conversation Persistence (Chrome only)
+### Conversation and UI Persistence
 
-MV3 service workers can die between turns. Conversations are persisted to `chrome.storage.session` (debounced 300ms) and hydrated on first message to a tab. Per-tab isolated.
+Both builds keep per-tab state in session storage:
+
+- `agentConv:<tabId>` stores the provider-facing conversation and is hydrated
+  before the next message.
+- `tabChat:<tabId>` mirrors rendered chat HTML so closing/reopening the panel or
+  sidebar restores the visible transcript.
+- `runUi:<tabId>` stores the background-owned detached-run snapshot: request/run
+  identity, status, bounded replay events, plan/tool state, terminal content,
+  and the current accumulated streamed text.
+
+`text_delta` journal writes are coalesced on a 200 ms trailing timer; non-delta,
+terminal, and pre-tool durability checkpoints flush immediately. The accumulated
+stream is bounded separately from the 256-event replay window so a reopened
+panel can reconstruct in-progress Markdown even after its early delta events
+have been acknowledged or trimmed. Chrome uses `chrome.storage.session`;
+Firefox uses `browser.storage.session`.
 
 ---
 
@@ -653,7 +678,7 @@ MV3 service workers can die between turns. Conversations are persisted to `chrom
 | Background | Service worker (ephemeral) | Background page (persistent) |
 | Events | CDP-trusted (`isTrusted=true`) | Synthetic (`isTrusted=false`) |
 | Screenshots | CDP `Page.captureScreenshot` | `browser.tabs.captureVisibleTab()` |
-| Conversation persistence | `chrome.storage.session` | In-memory only |
+| Conversation/UI persistence | `chrome.storage.session` | `browser.storage.session` |
 | Offscreen document | Yes (fetch proxy + recorder) | Not available |
 | Trace recorder | IndexedDB (opt-in) | IndexedDB (opt-in) — same `trace/recorder.js` |
 | Duplicate-submit guard | Yes | Not available |
@@ -665,7 +690,7 @@ MV3 service workers can die between turns. Conversations are persisted to `chrom
 | API shortcut observer | `chrome.webRequest` URL/method buffer | `browser.webRequest` URL/method buffer |
 | Slash-driven tab/screen recording | `chrome.tabCapture` / `getDisplayMedia()` + offscreen | Not available |
 | Side panel | `sidePanel` API (MV3) | `sidebar_action` (MV2) |
-| File upload | CDP-powered | Manual dispatch |
+| File upload | CDP path or `downloadId` | `downloadId` re-fetch or WebBrain file picker; no arbitrary local path |
 
 Everything else (agent loop, tools, adapters, providers, loop detection, context management, system prompts) is architecturally identical between the two builds.
 
@@ -679,6 +704,7 @@ src/
 │   ├── manifest.json
 │   ├── skills/       # Packaged default skills
 │   └── src/
+│       ├── run-ui-journal.js # Detached-run replay and streamed-text snapshots
 │       ├── agent/    # agent.js, tools.js, skills.js, adapters.js, scheduler.js, ...
 │       ├── cdp/      # CDP client (Chrome only)
 │       ├── content/  # accessibility-tree.js, content.js, ...

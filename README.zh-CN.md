@@ -34,17 +34,18 @@
 - **从限制处继续** — 当智能体达到步数限制时，点击「继续」即可接着运行
 - **多 LLM 提供商** — 支持本地与云端模型：
   - **WebBrain Cloud 1.0**（云端，默认）— 内置托管云选项，无需本地配置
-  - **llama.cpp**（本地）— 无需 API 密钥。同时支持 **Ollama**、**LM Studio**、**Jan**、**vLLM** 和 **SGLang**
-  - **OpenAI**（GPT-5.5 等）
+  - **llama.cpp**（本地）— 无需 API 密钥。同时支持 **Ollama**、**LM Studio**、**Jan**、**vLLM**、**SGLang** 和 **LocalAI**
+  - **OpenAI**（GPT-5.6 等）
   - **Anthropic Claude**（原生 API）
-  - **Google Gemini**、**Mistral AI**、**DeepSeek**、**xAI Grok**、**Groq**
-  - **MiniMax**、**阿里云（通义千问 Qwen）**、**z.ai GLM**
-  - **Cloudflare Workers AI**、**Nvidia NIM**
+  - **Azure OpenAI**、**AWS Bedrock**、**Google Gemini**、**Mistral AI**、**DeepSeek**、**xAI Grok**
+  - **MiniMax**、**Kimi**、**阿里云（通义千问 Qwen）**、**z.ai GLM**
+  - **Cloudflare Workers AI**、**Nvidia NIM**、**Groq**、**Together AI**、**Hugging Face Inference**、**Fireworks**
   - **OpenRouter**（默认模型：`openrouter/free`；可访问 100+ 模型）
 - **引导向导** — 首次启动的演练，涵盖 Act 模式安全性与提供商配置
 - **侧边栏 UI** — 与浏览并存的简洁聊天界面
+- **以阅读为先的长回复** — 回复增长时新问题会保持在视野中，并提供浮动控件来跟随回复、跳到最新内容或返回问题
 - **按标签页对话** — 每个标签页拥有独立的聊天历史
-- **流式输出** — 所有提供商的实时令牌流式传输
+- **Ask 流式输出** — 交互式 Ask 对话会在 OpenAI 官方 Responses 文本到达时实时显示；工具与历史记录会等待 `response.completed`，并提供高级关闭开关和中断后的自动非流式回退
 - **智能上下文** — 令牌感知的自动压缩（当对话接近模型上下文窗口时汇总较早的轮次，并显示「上下文已自动压缩」提示）、工具结果限制以及紧急溢出恢复
 - **浏览器历史控制** — Act 模式可以使用原生 `go_back` / `go_forward` 历史工具，而不是受 CSP 影响的页面 JavaScript
 - **API 快捷提示** — 重复点击触发相同 XHR/fetch 请求时，可显示匹配的 `fetch_url` 建议，同时保留 UI 优先和 `/allow-api` 变更策略
@@ -77,7 +78,7 @@ git clone https://github.com/webbrain-one/webbrain.git
 
 > **注意：** 临时附加组件会在 Firefox 重启后被移除。如需永久安装，扩展需通过 [addons.mozilla.org](https://addons.mozilla.org) 签名。
 
-### 启动本地 LLM（默认）
+### 启动本地 LLM（可选）
 
 ```bash
 # 使用 llama.cpp
@@ -112,9 +113,9 @@ python -m sglang.launch_server --model-path your-model --port 30000
 
 **显示设置：**
 - 详细模式 — 显示完整的工具调用 JSON（默认关闭）
-- 截图回退 — 当 DOM 读取失败时使用截图
-- 最大智能体步数 — 可配置的步数限制（5-200，默认 60）
-- Act 前规划 — 可选择在浏览器工具运行前生成并审阅结构化的 Act 模式计划（默认关闭）
+- 自动截图 — 当 DOM/页面读取不足时提供视觉上下文
+- 最大智能体步数 — 可配置的步数限制（5-195 或无限制，默认 130）
+- Act 前规划 — 可在 Act/Dev 工具运行前生成并审阅结构化计划（默认 Try；规划 JSON 失败时安全回退到只读轮次）
 
 **提供商：**
 
@@ -122,6 +123,7 @@ python -m sglang.launch_server --model-path your-model --port 30000
 
 | 提供商 | API 密钥 | 默认模型 |
 |--------|----------|----------|
+| WebBrain Cloud | 无需 | webbrain-cloud 1.0 |
 | llama.cpp (`:8080`) | 无需 | （你加载的模型） |
 | Ollama (`:11434/v1`) | 无需 | （你加载的模型） |
 | LM Studio (`:1234/v1`) | 无需 | （你加载的模型） |
@@ -129,7 +131,9 @@ python -m sglang.launch_server --model-path your-model --port 30000
 | vLLM (`:8000/v1`) | 可选 | （你提供服务的模型） |
 | SGLang (`:30000/v1`) | 可选 | （你提供服务的模型） |
 | LocalAI (`:8080/v1`) | 可选 | （你加载的模型） |
-| OpenAI | 必需 | gpt-5.5 |
+| Azure OpenAI | 必需 | （你的部署） |
+| AWS Bedrock | AWS 凭证 | （你的模型 ID） |
+| OpenAI | 必需 | gpt-5.6-terra |
 | Anthropic Claude | 必需 | claude-sonnet-4-6 |
 | Google Gemini | 必需 | gemini-3.1-flash |
 | Cloudflare Workers AI | 必需（+ Account ID） | @cf/zai-org/glm-5.2 |
@@ -139,9 +143,13 @@ python -m sglang.launch_server --model-path your-model --port 30000
 | Nvidia NIM | 必需 | meta/llama-3.1-8b-instruct |
 | Groq | 必需 | llama-3.3-70b-versatile |
 | MiniMax | 必需 | minimax-m2.7 |
+| Kimi | 必需 | kimi-k2.5 |
 | 阿里云（通义千问 Qwen） | 必需 | qwen-max |
+| Together AI | 必需 | meta-llama/Llama-3.3-70B-Instruct-Turbo |
 | z.ai GLM | 必需 | glm-5.2 |
 | OpenRouter | 必需 | openrouter/free |
+| Hugging Face Inference | 必需 | zai-org/GLM-5.2 |
+| Fireworks | 必需 | accounts/fireworks/models/llama-v3p3-70b-instruct |
 
 ## 架构
 
@@ -150,6 +158,7 @@ src/chrome/                        src/firefox/
 ├── manifest.json (MV3)            ├── manifest.json (MV2)
 ├── src/                           ├── src/
 │   ├── background.js              │   ├── background.js (+ background.html)
+│   ├── run-ui-journal.js          │   ├── run-ui-journal.js
 │   ├── agent/                     │   ├── agent/
 │   ├── content/                   │   ├── content/
 │   ├── providers/                 │   ├── providers/
@@ -317,7 +326,6 @@ Chrome 侧边面板快捷键在 WebBrain 侧边面板获得焦点时生效。
 - **Firefox 明显弱于 Chrome。** Firefox 没有通过 `chrome.debugger` 提供的 Chrome DevTools Protocol 等价物，因此 Firefox 构建中缺少若干 Chrome 独有功能：
   - 点击/输入通过内容脚本路径（`document.querySelector` + `el.click()`）而非 CDP `Input.dispatchMouseEvent`。这意味着 **无 shadow-DOM 穿透**、**无真正可信的鼠标事件**（某些 React/Vue 处理器不会触发）、**无封闭 shadow root 遍历**，以及 **无 `resolveSelector` 重试预算**。
   - **无 SPA 导航感知的重试扩展。**
-  - **无跨后台重启的对话持久化。**
   - **无 CDP 截图。** 自动截图改用 `tabs.captureVisibleTab`，仅对活动标签页有效，且质量略低。
   - **读取/提取工具无封闭 shadow root 支持。**
   - 站点适配器、视觉检测、循环检测、自动截图循环以及可选的压缩提示/工具集 *确实* 已镜像到 Firefox。
@@ -326,7 +334,7 @@ Chrome 侧边面板快捷键在 WebBrain 侧边面板获得焦点时生效。
 
 ## 更新内容
 
-完整版本历史见 [CHANGELOG.md](./CHANGELOG.md)。近期亮点包括 Act 前规划、原生浏览器历史工具、重复点击 API 快捷提示、WebBrain Cloud 1.0、计划任务、压缩模式改进以及原生 PDF 读取。
+完整版本历史见 [CHANGELOG.md](./CHANGELOG.md)。近期亮点包括长回复阅读导航、可跨重连恢复的流式 Markdown、按相关性排序的提供商搜索、Act 前规划、原生浏览器历史工具和已保存工作流。
 
 ## 添加新提供商
 

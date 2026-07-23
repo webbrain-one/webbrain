@@ -1,6 +1,6 @@
 # Architecture de WebBrain
 
-> Version 18.0.0
+> Version 25.7.12
 
 ## Aperçu
 
@@ -67,7 +67,16 @@ L'interface de chat. Communique avec le script d'arrière-plan via `chrome.runti
 
 Le niveau de modèle est séparé du mode : `compact | mid | full` contrôle combien d'outils normaux le modèle voit, tandis que `ask | act | dev` contrôle le type de tâche que l'utilisateur autorise.
 
-L'utilisateur tape un message, le panneau envoie `{action: 'chat', text, mode, tabId}` à l'arrière-plan, puis écoute les événements `agent_update` renvoyés en flux pendant l'exécution. Le panneau rend les appels d'outils, les résultats, les cartes de révision du plan, les invites de clarification et la réponse finale de manière incrémentale.
+L'utilisateur tape un message, le panneau envoie une requête détachée `{action: 'chat_start', text, mode, tabId, requestId}`, puis se reconnecte au journal d'exécution possédé par l'arrière-plan pour recevoir les événements `agent_update`. Fermer ou recharger le panneau ne transfère pas la propriété de l'exécution et ne la redémarre pas. Le panneau rend les appels d'outils, les résultats, les cartes de révision du plan, les invites de clarification et la réponse finale de manière incrémentale.
+
+Chaque paire question/réponse commence dans un état de défilement pensé pour
+la lecture : la question reste visible pendant qu'une longue réponse s'allonge.
+Une commande flottante alterne entre **Suivre la réponse**, **Aller au plus
+récent** et **Retour à la question** selon la position de lecture. Atteindre
+délibérément le bas réactive le suivi automatique ; les positions de lecture
+manuelles sont sinon préservées. Les cartes Plan/clarification/Continuer
+bloquantes, les invites de revue, les nouvelles questions et la sortie des
+commandes slash restent visibles lorsqu'elles nécessitent une action.
 
 ### Script d'arrière-plan (`src/chrome/src/background.js`)
 
@@ -97,17 +106,19 @@ L'utilisateur tape « créer un produit 'namaz' à 500 CNY, récurrent tous les 
 
 ### Étape 1 : Panneau latéral → Arrière-plan
 ```
-sidepanel.js → chrome.runtime.sendMessage({
-  action: 'chat',
+sidepanel.js → sendRunWithReconnect('chat_start', {
   text: 'create a product ...',
   mode: 'act',
-  tabId: 42
+  tabId: 42,
+  requestId: '...'
 })
 ```
 
 ### Étape 2 : Arrière-plan → Agent
 ```
-background.js handleMessage('chat')
+background.js handleMessage('chat_start')
+  → crée/persiste l'instantané runUi:<tabId>
+  → lance le cycle de vie `chat` détaché
   → agent.processMessage(tabId, text, onUpdate, mode)
 ```
 
@@ -366,9 +377,22 @@ Lorsque l'observateur de mutation API optionnel est activé et qu'une boucle `cl
 - **Élagage d'images** : supprime les images base64 de tous les messages sauf les 4 derniers avant chaque appel LLM
 - **Limite de résultat d'outil** : résultats individuels tronqués à 8 000 caractères
 
-### Persistance des conversations (Chrome uniquement)
+### Persistance des conversations et de l'interface
 
-Les service workers MV3 peuvent mourir entre les tours. Les conversations sont persistées dans `chrome.storage.session` (débruité à 300 ms) et hydratées dès le premier message vers un onglet. Isolées par onglet.
+Les deux builds conservent un état isolé par onglet dans le stockage de session :
+
+- `agentConv:<tabId>` contient la conversation envoyée au fournisseur ;
+- `tabChat:<tabId>` reflète le HTML du chat visible ;
+- `runUi:<tabId>` contient l'identité et l'état de l'exécution détachée, une
+  fenêtre bornée d'événements, l'état Plan/outils, le contenu terminal et le
+  texte streamé accumulé.
+
+Les écritures de `text_delta` sont regroupées sur une fenêtre glissante de
+200 ms ; les événements non-delta, les états terminaux et les points de
+durabilité avant outil sont persistés immédiatement. Le texte streamé possède
+sa propre limite, distincte de la fenêtre de 256 événements, afin qu'un panneau
+rouvert reconstruise correctement le Markdown en cours. Chrome utilise
+`chrome.storage.session` et Firefox `browser.storage.session`.
 
 ---
 
@@ -379,7 +403,7 @@ Les service workers MV3 peuvent mourir entre les tours. Les conversations sont p
 | Arrière-plan | Service worker (éphémère) | Page d'arrière-plan (persistante) |
 | Événements | CDP de confiance (`isTrusted=true`) | Synthétiques (`isTrusted=false`) |
 | Captures d'écran | CDP `Page.captureScreenshot` | `browser.tabs.captureVisibleTab()` |
-| Persistance conversation | `chrome.storage.session` | En mémoire uniquement |
+| Persistance conversation/interface | `chrome.storage.session` | `browser.storage.session` |
 | Document hors-écran | Oui (proxy fetch + enregistreur) | Non disponible |
 | Enregistreur de trace | IndexedDB (optionnel) | IndexedDB (optionnel) — même `trace/recorder.js` |
 | Garde de soumission en double | Oui | Non disponible |
@@ -389,7 +413,7 @@ Les service workers MV3 peuvent mourir entre les tours. Les conversations sont p
 | Observateur de raccourci API | Tampon URL/méthode `chrome.webRequest` | Tampon URL/méthode `browser.webRequest` |
 | Enregistrement d'onglet/écran par barre oblique | `chrome.tabCapture` / `getDisplayMedia()` + hors-écran | Non disponible |
 | Panneau latéral | API `sidePanel` (MV3) | `sidebar_action` (MV2) |
-| Téléchargement de fichier | Basé sur CDP | Distribution manuelle |
+| Téléversement de fichier | Chemin CDP ou `downloadId` | Rechargement via `downloadId` ou sélecteur de fichier WebBrain ; pas de chemin local arbitraire |
 
 Tout le reste (boucle d'agent, outils, adaptateurs, fournisseurs, détection de boucle, gestion de contexte, prompts système) est architecturalement identique entre les deux builds.
 
