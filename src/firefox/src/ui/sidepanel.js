@@ -808,6 +808,7 @@ const localRunRequestIds = new Map();
 const localRunFollowers = new Map();
 const cancelledRunRecoveryRequestIds = new Set();
 const adoptedRunRecoveryRequestIds = new Set();
+const clearedConversationRunRequestIds = new Set();
 let recommendationsRequestId = 0;
 let providerSelectionRequestId = 0;
 let providerTestRequestId = 0;
@@ -6060,6 +6061,7 @@ async function parseSlashCommands(text, tabId = currentTabId, options = {}) {
   }
 
   if (command.value === '/reset') {
+    suppressRunUpdatesForClearedConversation(tabId);
     await sendToBackground('clear_conversation', { tabId });
     await renderClearedConversationForTab(tabId);
     return '';
@@ -6595,6 +6597,23 @@ function ensureCurrentRunAssistant(msg) {
   return assistantEl;
 }
 
+function suppressRunUpdatesForClearedConversation(tabId) {
+  const requestId = String(
+    localRunRequestIds.get(Number(tabId))
+      || (sameTabId(currentTabId, tabId) ? currentAssistantEl?.dataset?.runRequestId : '')
+      || '',
+  );
+  if (!requestId) return;
+  // Runtime messages are delivered asynchronously. Keep recently cleared
+  // request IDs so a terminal update already queued by the background cannot
+  // recreate an assistant bubble after the empty conversation is rendered.
+  clearedConversationRunRequestIds.delete(requestId);
+  clearedConversationRunRequestIds.add(requestId);
+  while (clearedConversationRunRequestIds.size > 100) {
+    clearedConversationRunRequestIds.delete(clearedConversationRunRequestIds.values().next().value);
+  }
+}
+
 function invalidatePlanReviewCards({ tabId = currentTabId, planId = '', requestId = '', runId = '', remove = true } = {}) {
   for (const card of messagesEl.querySelectorAll('.plan-review-card')) {
     if (tabId != null && String(card.dataset.tabId || '') !== String(tabId)) continue;
@@ -6615,6 +6634,8 @@ function handleAgentUpdateMessage(msg) {
     handleScheduledJobEvent(msg.data, msg.tabId);
     return;
   }
+
+  if (msg.requestId && clearedConversationRunRequestIds.has(String(msg.requestId))) return;
 
   // Drop updates that belong to a different tab's run. agent_update is a
   // window-wide broadcast (browser.runtime.sendMessage has no per-tab
@@ -9507,6 +9528,7 @@ document.addEventListener('wb-locale-changed', () => {
 clearBtn.addEventListener('click', async () => {
   const tabId = currentTabId;
   if (!window.confirm(t('sp.clear.confirm'))) return;
+  suppressRunUpdatesForClearedConversation(tabId);
   clearQueuedComposerMessagesForTab(tabId);
   clearQueuedForTab(tabId);
   await sendToBackground('clear_context_menu_prompt', { tabId }).catch(() => {});
