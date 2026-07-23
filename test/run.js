@@ -17415,7 +17415,7 @@ test('sidepanel auto-follow bypasses smooth-scroll lag while messages grow', () 
     );
     assert.match(
       panel,
-      /function scrollToBottom\(\{ force = false \} = \{\}\) \{[\s\S]*?if \(force && chatTurnIsConnected\(\)\) chatAutoFollow = true;[\s\S]*?if \(!force && chatTurnIsConnected\(\) && !chatAutoFollow\)[\s\S]*?pinChatToBottom\(container\);[\s\S]*?requestAnimationFrame\(\(\) => \{[\s\S]*?pinChatToBottom\(container\);[\s\S]*?\}\);[\s\S]*?\}/,
+      /function scrollToBottom\(\{ force = false \} = \{\}\) \{[\s\S]*?if \(force && chatTurnIsConnected\(\)\) \{[\s\S]*?chatAutoFollow = true;[\s\S]*?chatUserChoseReadingPosition = false;[\s\S]*?if \(!force && chatTurnIsConnected\(\) && !chatAutoFollow[\s\S]*?chatUserChoseReadingPosition \|\| chatTurnIsRunning\(\) \|\| chatTurnNeedsReadingNavigation\(\)[\s\S]*?pinChatToBottom\(container\);[\s\S]*?requestAnimationFrame\(\(\) => \{[\s\S]*?pinChatToBottom\(container\);[\s\S]*?\}\);[\s\S]*?\}/,
       `${label}: auto-follow should re-pin after the next layout frame`,
     );
   }
@@ -17501,8 +17501,13 @@ test('sidepanel long replies use reading-first turn navigation', () => {
     );
     assert.match(
       panel,
-      /function settleChatUserScrollIntent\(\) \{[\s\S]*?chatUserScrollActive = false[\s\S]*?addEventListener\('scroll',[\s\S]*?chatUserScrollActive[\s\S]*?chatAutoFollow = distanceToBottom <= CHAT_SCROLL_EDGE_PX;[\s\S]*?settleChatUserScrollIntent\(\)/,
+      /function settleChatUserScrollIntent\(\) \{[\s\S]*?chatUserScrollActive = false[\s\S]*?addEventListener\('scroll',[\s\S]*?chatUserScrollActive[\s\S]*?chatAutoFollow = distanceToBottom <= CHAT_SCROLL_EDGE_PX;[\s\S]*?chatUserChoseReadingPosition = !chatAutoFollow;[\s\S]*?settleChatUserScrollIntent\(\)/,
       `${label}: user-driven scrolling should retain intent through momentum and re-enable auto-follow at the edge`,
+    );
+    assert.match(
+      panel,
+      /function scrollChatToQuestion\(\{ smooth = true \} = \{\}\) \{[\s\S]*?if \(smooth\) chatUserChoseReadingPosition = true;/,
+      `${label}: Back to question should protect the selected reading position after completion`,
     );
     assert.match(
       panel,

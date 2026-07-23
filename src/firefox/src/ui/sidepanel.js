@@ -8020,6 +8020,7 @@ let chatNavigationTurn = null;
 let chatAutoFollow = true;
 let chatUserScrollActive = false;
 let chatUserScrollSettleTimer = null;
+let chatUserChoseReadingPosition = false;
 let chatNavigationDismissedAssistantEl = null;
 let chatNavigationInsetAssistantEl = null;
 
@@ -8073,6 +8074,7 @@ function resetChatNavigation() {
   chatNavigationTurn = null;
   chatAutoFollow = true;
   chatUserScrollActive = false;
+  chatUserChoseReadingPosition = false;
   if (chatUserScrollSettleTimer != null) clearTimeout(chatUserScrollSettleTimer);
   chatUserScrollSettleTimer = null;
   if (scrollToBottomFrame != null) cancelAnimationFrame(scrollToBottomFrame);
@@ -8096,6 +8098,7 @@ function setChatNavigationTurn(userEl, assistantEl, { autoFollow = false } = {})
   }
   chatNavigationTurn = { userEl, assistantEl };
   chatAutoFollow = autoFollow;
+  chatUserChoseReadingPosition = false;
   scheduleChatNavigationUpdate();
   return true;
 }
@@ -8118,6 +8121,7 @@ function prefersReducedChatMotion() {
 function scrollChatToQuestion({ smooth = true } = {}) {
   if (!chatContainerEl || !chatTurnIsConnected()) return;
   chatAutoFollow = false;
+  if (smooth) chatUserChoseReadingPosition = true;
   const containerRect = chatContainerEl.getBoundingClientRect();
   const questionRect = chatNavigationTurn.userEl.getBoundingClientRect();
   const targetTop = Math.max(
@@ -8238,8 +8242,12 @@ function scrollToBottom({ force = false } = {}) {
   // A forced jump deliberately takes the reader to the live edge (blocking
   // prompts, slash-command output, or the navigation pill). Keep subsequent
   // deltas visible until the reader scrolls upward again.
-  if (force && chatTurnIsConnected()) chatAutoFollow = true;
-  if (!force && chatTurnIsConnected() && !chatAutoFollow) {
+  if (force && chatTurnIsConnected()) {
+    chatAutoFollow = true;
+    chatUserChoseReadingPosition = false;
+  }
+  if (!force && chatTurnIsConnected() && !chatAutoFollow
+      && (chatUserChoseReadingPosition || chatTurnIsRunning() || chatTurnNeedsReadingNavigation())) {
     scheduleChatNavigationUpdate();
     return;
   }
@@ -8267,6 +8275,7 @@ chatContainerEl?.addEventListener('scroll', () => {
       - chatContainerEl.scrollTop
       - chatContainerEl.clientHeight;
     chatAutoFollow = distanceToBottom <= CHAT_SCROLL_EDGE_PX;
+    chatUserChoseReadingPosition = !chatAutoFollow;
     settleChatUserScrollIntent();
   }
   scheduleChatNavigationUpdate();
