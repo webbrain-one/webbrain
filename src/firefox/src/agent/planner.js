@@ -67,7 +67,7 @@ Rules:
   memory: scratchpad_write, progress_update, progress_read
   schedule: schedule_task (future/recurring work the user explicitly asked for), schedule_resume (pause CURRENT run blocked on external event)
   finish: done
-- press_keys supports only unmodified Escape, Tab, Enter, and arrow keys. Never plan Ctrl/Cmd/Alt/Shift combinations or browser UI shortcuts. To locate and highlight literal page text, plan find_text instead of Ctrl/Cmd+F.
+- press_keys supports only unmodified Escape, Tab, Enter, and arrow keys. Never plan Ctrl/Cmd/Alt/Shift combinations or browser UI shortcuts. To select one literal page-text match, plan find_text instead of Ctrl/Cmd+F. Each find_text call replaces the previous selection and does not open browser Find UI; never plan sequential calls as simultaneous highlights.
 - For repeated same-kind UI mutations (for example following many users), plan visible UI first with bounded batches, verification, progress_update, and wait_for_stable pacing; do not plan one huge same-shape click/tool batch.
 - Do not invent a prerequisite to discover a raw identifier (email address, account ID, username, or similar) when the target UI provides a name-based contact/entity picker and the user already supplied a human-readable name. Plan to use the picker first. Inspect surrounding pages or messages for the raw identifier only if the picker fails, returns multiple ambiguous matches, or the user explicitly asked for the identifier itself.
 - Set confidence from 0.0 to 1.0 for how clear and safe this plan is. Use 0.90+ only when the task, page state, and next steps are straightforward; use lower scores for ambiguity, destructive changes, payments, credentials, bulk mutations, or uncertain page state.
@@ -124,7 +124,7 @@ Rules:
 - schedule_task supports one-shot times and fixed-minute intervals only. Calendar/cron recurrence such as monthly is unsupported: classify it as clarify, explain the limitation in localized.summary, and ask for a one-shot time or fixed interval. Never convert calendar recurrence into an approximate interval.
 - Canonical summary, steps, and risks must be English. localized fields must use the requested wbLocale.
 - For execute, keep the compact plan to 1–4 steps. For plan_only, provide 2–8 useful steps. For respond and clarify, steps may be empty.
-- press_keys supports only unmodified Escape, Tab, Enter, and arrow keys. Never plan modifier combinations or browser UI shortcuts; use find_text to locate and highlight page text instead of Ctrl/Cmd+F.
+- press_keys supports only unmodified Escape, Tab, Enter, and arrow keys. Never plan modifier combinations or browser UI shortcuts; use find_text to select one page-text match instead of Ctrl/Cmd+F. Each call replaces the previous selection and cannot create simultaneous highlights or browser Find UI.
 - Do not invent URLs, credentials, tool names, or facts.`;
 
 export function normalizePlannerLocale(value) {

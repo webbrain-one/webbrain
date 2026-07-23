@@ -1352,7 +1352,7 @@ export class Agent {
   }
 
   _findTextMatchLoopIdentity(result) {
-    if (result?.success !== true || !result?.rect || typeof result.rect !== 'object') return '';
+    if (result?.success !== true || result?.verified === false || !result?.rect || typeof result.rect !== 'object') return '';
     const rect = result.rect;
     const pageX = typeof rect.pageX === 'number' ? rect.pageX : NaN;
     const pageY = typeof rect.pageY === 'number' ? rect.pageY : NaN;
@@ -1362,10 +1362,23 @@ export class Agent {
     const height = typeof rect.height === 'number' ? rect.height : NaN;
     const x = Number.isFinite(pageX) ? pageX : viewportX;
     const y = Number.isFinite(pageY) ? pageY : viewportY;
-    if (![x, y, width, height].every(Number.isFinite)) return '';
-    return [x, y, width, height]
+    if (![x, y, width, height].every(Number.isFinite) || width <= 0 || height <= 0) return '';
+    let selectionIdentity = 'document';
+    if (result.selectionSource === 'text_control') {
+      const selectionStart = result.selectionStart;
+      const selectionEnd = result.selectionEnd;
+      if (
+        !Number.isInteger(selectionStart)
+        || !Number.isInteger(selectionEnd)
+        || selectionStart < 0
+        || selectionEnd <= selectionStart
+      ) return '';
+      selectionIdentity = `text_control:${selectionStart}:${selectionEnd}`;
+    }
+    const rectIdentity = [x, y, width, height]
       .map(value => Math.round(value * 2) / 2)
       .join(',');
+    return `${selectionIdentity}|${rectIdentity}`;
   }
 
   _noteHealthyLoopCall(tabId) {
@@ -10924,9 +10937,16 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       && this.constructor.EXECUTION_APP_STATE_TOOLS.has(name);
     const requiredScheduleSucceeded = state?.requiredSchedulingTool === name
       && this._isSuccessfulSchedulingEvidence(result);
+    // find_text is observational: verified:false means it did not prove a
+    // visible selection. Keep this tool-specific because mutations such as
+    // upload_file may dispatch successfully, return verified:false, and rely
+    // on the completion invariant's required follow-up page observation.
+    const unverifiedFindText = name === 'find_text'
+      && (result?.found !== true || result?.verified !== true || result?.inconclusive === true);
     if (!state?.enabled
         || name === 'done'
         || (this.constructor.EXECUTION_META_TOOLS.has(name) && !requestedAppStateTool)
+        || unverifiedFindText
         || (!this._isSuccessfulExecutionEvidence(result) && !requiredScheduleSucceeded)) return;
     state.successfulTaskToolCalls += 1;
     if (requiredScheduleSucceeded) state.successfulRequiredSchedulingToolCalls += 1;
