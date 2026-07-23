@@ -435,6 +435,27 @@
       color: var(--accent);
     }
     .provider-filter-pill.active:hover { color: var(--accent); }
+    .provider-filter-count {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 5px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--bg3);
+      color: var(--text2);
+      box-sizing: border-box;
+      font-size: 10px;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+      letter-spacing: 0;
+    }
+    .provider-filter-pill.active .provider-filter-count {
+      color: var(--accent);
+      border-color: currentColor;
+    }
     .provider-search {
       flex: 0 1 240px;
       min-width: 180px;

@@ -68,6 +68,15 @@ export class BaseLLMProvider {
   }
 
   /**
+   * Whether interactive Ask turns may use this provider's streaming method.
+   * Providers must opt in explicitly; merely implementing chatStream() is not
+   * enough because some adapters retain a non-streaming compatibility shim.
+   */
+  get supportsAskStreaming() {
+    return this.config.supportsAskStreaming === true;
+  }
+
+  /**
    * Check if this provider supports image inputs (vision).
    */
   get supportsVision() {

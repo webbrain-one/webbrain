@@ -11,6 +11,7 @@ class BaseLLMProvider {
   async chat(messages, options)         // → { content, toolCalls, usage }
   async *chatStream(messages, options)  // → générateur async produisant { type, content }
   get supportsTools()                   // → booléen
+  get supportsAskStreaming()            // → booléen
   get supportsVision()                  // → booléen
   get promptTier()                      // → 'compact' | 'mid' | 'full'
   async testConnection()                // → { ok, error?, model? }
@@ -62,6 +63,53 @@ class BaseLLMProvider {
 | `huggingface` | `openai` | routeur | `zai-org/GLM-5.2` | Regex nom de modèle |
 | `fireworks` | `openai` | routeur | `accounts/fireworks/models/llama-v3p3-70b-instruct` | Regex nom de modèle |
 | `z_ai` | `openai` | cloud | `glm-5.2` | Regex nom de modèle |
+
+### Catalogue étendu de fournisseurs
+
+WebBrain ajoute 76 cartes désactivées par défaut depuis l’instantané du
+catalogue OpenCode au commit
+`62e4641235d7847dadc60da37cca8a023dd54fc1`. Avec les 27 cartes existantes,
+les Paramètres proposent **103 fournisseurs intégrés**. La liste exacte des
+identifiants est :
+
+`302ai`, `abacus`, `aihubmix`, `alibaba-coding-plan`,
+`alibaba-coding-plan-cn`, `azure-cognitive-services`, `bailing`, `baseten`,
+`berget`, `cerebras`, `chutes`, `clarifai`, `cloudferro-sherlock`, `cohere`,
+`cortecs`, `deepinfra`, `digitalocean`, `dinference`, `drun`, `evroc`,
+`fastrouter`, `friendli`, `google-vertex`, `google-vertex-anthropic`,
+`helicone`, `iflowcn`, `inception`, `inference`, `io-net`, `jiekou`, `kilo`,
+`kimi-for-coding`, `kuae-cloud-coding-plan`, `llama`, `lucidquery`,
+`meganova`, `minimax-cn-coding-plan`, `minimax-coding-plan`, `moark`,
+`modelscope`, `morph`, `nano-gpt`, `nebius`, `nova`, `novita-ai`,
+`ollama-cloud`, `opencode`, `opencode-go`, `ovhcloud`, `perplexity`,
+`perplexity-agent`, `poe`, `privatemode-ai`, `qihang-ai`, `qiniu-ai`,
+`requesty`, `scaleway`, `siliconflow`, `siliconflow-cn`, `stackit`,
+`stepfun`, `submodel`, `synthetic`, `tencent-coding-plan`, `upstage`, `v0`,
+`venice`, `vercel`, `vivgrid`, `vultr`, `wandb`, `xiaomi`,
+`zai-coding-plan`, `zenmux`, `zhipuai`, `zhipuai-coding-plan`.
+
+La plupart utilisent Chat Completions compatible OpenAI avec une clé Bearer.
+Azure AI Foundry utilise un nom de ressource et `api-key`. Google Vertex AI
+utilise projet, région et clé d’autorisation Google via `x-goog-api-key`;
+la région `global` utilise `aiplatform.googleapis.com`, et Vertex Anthropic
+utilise `rawPredict` / `streamRawPredict` avec les hôtes multirégion `us` et
+`eu`. Perplexity Agent
+utilise l’API Responses. La carte Cloudflare existante prend désormais en
+charge un identifiant AI Gateway facultatif ; pour les modèles `@cf/`, un
+champ vide utilise automatiquement la passerelle `default`.
+
+Les réponses sont diffusées pendant les tours Ask interactifs lorsque
+`supportsAskStreaming` est actif. Un flux interrompu efface le texte partiel,
+réessaie une seule fois sans diffusion et désactive la diffusion pour le reste
+de l’exécution. Act, Dev, les tâches planifiées, cloud et Continue restent sans
+diffusion. L’utilisation de jetons fournie par le service est enregistrée
+directement ; si elle est absente, WebBrain enregistre une estimation prudente
+fondée sur le nombre de caractères afin que la diffusion ne contourne pas la
+limite de coût configurée.
+
+Entrées volontairement exclues : `github-models` (retrait de GitHub Models le
+30 juillet 2026), `github-copilot` (abonnement/OAuth), `gitlab` et
+`sap-ai-core` (authentification, découverte et protocoles spécifiques).
 
 ### Fournisseurs Locaux
 

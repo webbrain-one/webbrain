@@ -57,6 +57,7 @@ export function isOfficialOpenAIConfig(config = {}) {
 }
 
 export function shouldUseOpenAIResponsesApi(config = {}) {
+  if (config.apiFormat === 'responses') return true;
   if (!isOfficialOpenAIConfig(config)) return false;
   const model = String(config.model || '').trim().toLowerCase();
   // GPT-5.6 needs Responses for reliable reasoning/tool replay. GPT-5 Pro,

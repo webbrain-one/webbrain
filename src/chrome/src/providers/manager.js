@@ -2,8 +2,10 @@ import { LlamaCppProvider } from './llamacpp.js';
 import { OpenAICompatibleProvider } from './openai.js';
 import { AzureOpenAIProvider } from './azure-openai.js';
 import { AnthropicProvider, AnthropicOAuthProvider } from './anthropic.js';
+import { VertexAnthropicProvider } from './vertex-anthropic.js';
 import { signOutClaude } from './oauth-claude.js';
 import { AwsBedrockProvider } from './aws-bedrock.js';
+import { ADDITIONAL_PROVIDER_DEFAULTS } from './provider-catalog.js';
 // Static, NOT dynamic: this module runs in the MV3 service worker, where
 // `await import()` throws "import() is disallowed on ServiceWorkerGlobalScope".
 // The provider modules above already import this statically, so it's in the SW
@@ -32,7 +34,7 @@ const OPENROUTER_DEFAULT_MODEL = 'openrouter/free';
 const OPENROUTER_LEGACY_DEFAULT_MODEL = 'stepfun/step-3.7-flash';
 const OPENAI_DEFAULT_MODEL = 'gpt-5.6-terra';
 const OPENAI_LEGACY_DEFAULT_MODEL = 'gpt-5.5';
-const SUPPORTED_PROVIDER_TYPES = new Set(['llamacpp', 'openai', 'azure_openai', 'aws_bedrock', 'anthropic', 'anthropic_oauth']);
+const SUPPORTED_PROVIDER_TYPES = new Set(['llamacpp', 'openai', 'azure_openai', 'aws_bedrock', 'anthropic', 'anthropic_oauth', 'vertex_anthropic']);
 const SAFE_PROVIDER_ID_RE = /^[A-Za-z0-9_-]+$/;
 const ROUTER_PROVIDER_IDS = ['openrouter', 'cloudflare', 'nvidia', 'groq', 'huggingface', 'fireworks', 'together'];
 const PROVIDER_CREDENTIAL_KEYS = ['apiKey', 'accessKeyId', 'secretAccessKey', 'sessionToken'];
@@ -349,13 +351,14 @@ export class ProviderManager {
       cloudflare: {
         type: 'openai',
         category: 'router',
-        label: 'Cloudflare Workers AI',
+        label: 'Cloudflare AI Gateway / Workers AI',
         providerName: 'cloudflare',
         baseUrl: 'https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1',
         model: '@cf/zai-org/glm-5.2',
         contextWindow: 262144,
         supportsStreamUsageOptions: false,
         accountId: '',
+        gatewayId: '',
         apiKey: '',
         apiKeyUrl: 'https://dash.cloudflare.com/profile/api-tokens',
         enabled: false,
@@ -539,6 +542,7 @@ export class ProviderManager {
         apiKeyUrl: 'https://docs.z.ai/guides/overview/quick-start',
         enabled: false,
       },
+      ...ADDITIONAL_PROVIDER_DEFAULTS,
     };
   }
 
@@ -646,6 +650,14 @@ export class ProviderManager {
     const normalizedConfig = {
       ...config,
       category: ProviderManager.categoryFor(id, config),
+      supportsAskStreaming: config.supportsAskStreaming ?? [
+        'llamacpp',
+        'openai',
+        'azure_openai',
+        'anthropic',
+        'anthropic_oauth',
+        'vertex_anthropic',
+      ].includes(config.type),
     };
     switch (normalizedConfig.type) {
       case 'llamacpp':
@@ -660,6 +672,8 @@ export class ProviderManager {
         return new AnthropicProvider(normalizedConfig);
       case 'anthropic_oauth':
         return new AnthropicOAuthProvider(normalizedConfig);
+      case 'vertex_anthropic':
+        return new VertexAnthropicProvider(normalizedConfig);
       default:
         throw new Error(`Unknown provider type: ${normalizedConfig.type}`);
     }

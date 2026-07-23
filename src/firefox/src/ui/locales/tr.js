@@ -3,6 +3,7 @@ import chromeWebStoreLocale from './chrome-web-store.mjs';
 
 export default {
   ...chromeWebStoreLocale,
+  'sp.streaming.fallback': 'Yanıt akışı kesildi; bu Ask turu akış olmadan yeniden deneniyor.',
   'sp.providers.no_setup_group': 'Kurulum gerektirmez',
   'sp.providers.no_setup': 'Kurulum yok',
   'sp.providers.active_group': 'Etkin sağlayıcılar',
@@ -637,7 +638,7 @@ export default {
   'st.display.api_mutation_observer.label': 'API mutasyon gözlemcisi',
   'st.display.api_mutation_observer.desc': 'WebBrain\'in tekrarlanan UI eylemlerini tespit etmesi ve API kısayol kalıpları önermesi için aynı sekmedeki XHR/fetch istek URL\'lerini ve yöntemlerini gözlemle. Varsayılan olarak kapalı; yalnızca kısayol davranışını veya gecikmeyi araştırırken etkinleştir.',
   'st.display.openai_ask_streaming.label': 'Ask yanıtlarını akışla',
-  'st.display.openai_ask_streaming.desc': 'Desteklenen sağlayıcılarda Ask metnini geldikçe göster. Kesilen akış aynı turda sessizce ve akışsız olarak bir kez yeniden denenir; sağlayıcı/API hataları yine gösterilir. Araç çağrıları akış tamamlanana kadar bekler; Act, Dev, zamanlanmış, bulut ve Continue çalıştırmaları akışsız kalır. Varsayılan olarak açık.',
+  'st.display.openai_ask_streaming.desc': 'Desteklenen sağlayıcılarda Ask metnini geldikçe göster. Kesilen akış bir bildirim gösterir ve aynı turu akışsız olarak bir kez yeniden dener; sağlayıcı/API hataları yine gösterilir. Araç çağrıları akış tamamlanana kadar bekler; Act, Dev, zamanlanmış, bulut ve Continue çalıştırmaları akışsız kalır. Varsayılan olarak açık.',
   'st.display.plan_before_act.label': 'Eylemden önce planla',
   'st.display.plan_before_act.desc': 'Aktif ve Dev modları araçlardan önce her zaman yapılandırılmış bir niyet kontrolü çalıştırır. Dene (varsayılan) ayrıca tam planlar oluşturur ancak kısa bir takipte yakın zamanda onaylanmış planı yeniden kullanabilir; Katı her turda tam plan oluşturur. Niyet veya planlama bir onarımdan sonra hâlâ geçersizse Dene salt okunur bir tura geçer; Katı araçlardan önce durur.',
   'st.display.plan_before_act.try': 'Planlamayı dene (varsayılan)',

@@ -6754,6 +6754,9 @@ function handleAgentUpdateMessage(msg) {
 
     case 'warning':
       hideActivity();
+      if (data?.code === 'ask_stream_fallback') {
+        showComposerToast(t('sp.streaming.fallback'), { duration: 6000 });
+      }
       break;
 
     case 'run_complete':

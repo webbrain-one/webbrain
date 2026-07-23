@@ -5,6 +5,10 @@
  * marks for brands Lobe does not ship). See icons/providers/SOURCES.md.
  * Unknown ids return empty so we never invent monograms.
  */
+import {
+  ADDITIONAL_PROVIDER_DEFAULTS,
+  ADDITIONAL_PROVIDER_IDS,
+} from '../providers/provider-catalog.js';
 
 export const PROVIDER_ICON_FILES = {
   webbrain_cloud: 'webbrain_cloud.png',
@@ -34,6 +38,7 @@ export const PROVIDER_ICON_FILES = {
   huggingface: 'huggingface.svg',
   fireworks: 'fireworks.svg',
   z_ai: 'z_ai.svg',
+  ...Object.fromEntries(ADDITIONAL_PROVIDER_IDS.map((id) => [id, `${id}.svg`])),
 };
 
 export function providerIconUrl(id) {
@@ -97,6 +102,10 @@ export const PROVIDER_SHORT_LABELS = {
   huggingface: 'Hugging Face',
   fireworks: 'Fireworks',
   z_ai: 'z.ai GLM',
+  ...Object.fromEntries(ADDITIONAL_PROVIDER_IDS.map((id) => [
+    id,
+    ADDITIONAL_PROVIDER_DEFAULTS[id].label,
+  ])),
 };
 
 /** Hostname equals domain or is a subdomain of it (avoids substring spoofing). */

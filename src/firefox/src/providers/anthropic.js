@@ -35,6 +35,14 @@ export class AnthropicProvider extends BaseLLMProvider {
     return true;
   }
 
+  _messagesUrl(_stream = false) {
+    return `${String(this.baseUrl).replace(/\/+$/, '')}/v1/messages`;
+  }
+
+  _prepareRequestBody(body, _options = {}, _stream = false) {
+    return body;
+  }
+
   _headers() {
     return {
       'Content-Type': 'application/json',
@@ -186,7 +194,7 @@ export class AnthropicProvider extends BaseLLMProvider {
   async chat(messages, options = {}) {
     const { system, messages: anthropicMessages } = this._convertMessages(messages);
 
-    const body = {
+    let body = {
       model: this.model,
       max_tokens: options.maxTokens ?? 4096,
       messages: anthropicMessages,
@@ -197,8 +205,9 @@ export class AnthropicProvider extends BaseLLMProvider {
     if (options.tools && options.tools.length > 0) {
       body.tools = this._convertTools(options.tools);
     }
+    body = this._prepareRequestBody(body, options, false);
 
-    const res = await fetchWithTimeout(`${this.baseUrl}/v1/messages`, {
+    const res = await fetchWithTimeout(this._messagesUrl(false), {
       method: 'POST',
       headers: this._headers(),
       body: JSON.stringify(body),
@@ -246,7 +255,7 @@ export class AnthropicProvider extends BaseLLMProvider {
   async *chatStream(messages, options = {}) {
     const { system, messages: anthropicMessages } = this._convertMessages(messages);
 
-    const body = {
+    let body = {
       model: this.model,
       max_tokens: options.maxTokens ?? 4096,
       messages: anthropicMessages,
@@ -258,8 +267,9 @@ export class AnthropicProvider extends BaseLLMProvider {
     if (options.tools && options.tools.length > 0) {
       body.tools = this._convertTools(options.tools);
     }
+    body = this._prepareRequestBody(body, options, true);
 
-    const url = `${this.baseUrl}/v1/messages`;
+    const url = this._messagesUrl(true);
     let res;
     try {
       res = await fetchWithTimeout(url, {

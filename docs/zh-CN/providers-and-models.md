@@ -11,6 +11,7 @@ class BaseLLMProvider {
   async chat(messages, options)         // → { content, toolCalls, usage }
   async *chatStream(messages, options)  // → async generator yielding { type, content }
   get supportsTools()                   // → boolean
+  get supportsAskStreaming()            // → boolean
   get supportsVision()                  // → boolean
   get promptTier()                      // → 'compact' | 'mid' | 'full'
   async testConnection()                // → { ok, error?, model? }
@@ -62,6 +63,47 @@ class BaseLLMProvider {
 | `huggingface` | `openai` | 路由器 | `zai-org/GLM-5.2` | 模型名正则 |
 | `fireworks` | `openai` | 路由器 | `accounts/fireworks/models/llama-v3p3-70b-instruct` | 模型名正则 |
 | `z_ai` | `openai` | 云端 | `glm-5.2` | 模型名正则 |
+
+### 扩展提供商目录
+
+WebBrain 从 OpenCode 提供商目录提交
+`62e4641235d7847dadc60da37cca8a023dd54fc1` 的快照中新增了 76 张默认禁用的
+提供商卡片。加上原有 27 张，设置中共有 **103 个内置提供商**。完整 ID
+列表如下：
+
+`302ai`、`abacus`、`aihubmix`、`alibaba-coding-plan`、
+`alibaba-coding-plan-cn`、`azure-cognitive-services`、`bailing`、`baseten`、
+`berget`、`cerebras`、`chutes`、`clarifai`、`cloudferro-sherlock`、`cohere`、
+`cortecs`、`deepinfra`、`digitalocean`、`dinference`、`drun`、`evroc`、
+`fastrouter`、`friendli`、`google-vertex`、`google-vertex-anthropic`、
+`helicone`、`iflowcn`、`inception`、`inference`、`io-net`、`jiekou`、`kilo`、
+`kimi-for-coding`、`kuae-cloud-coding-plan`、`llama`、`lucidquery`、
+`meganova`、`minimax-cn-coding-plan`、`minimax-coding-plan`、`moark`、
+`modelscope`、`morph`、`nano-gpt`、`nebius`、`nova`、`novita-ai`、
+`ollama-cloud`、`opencode`、`opencode-go`、`ovhcloud`、`perplexity`、
+`perplexity-agent`、`poe`、`privatemode-ai`、`qihang-ai`、`qiniu-ai`、
+`requesty`、`scaleway`、`siliconflow`、`siliconflow-cn`、`stackit`、
+`stepfun`、`submodel`、`synthetic`、`tencent-coding-plan`、`upstage`、`v0`、
+`venice`、`vercel`、`vivgrid`、`vultr`、`wandb`、`xiaomi`、
+`zai-coding-plan`、`zenmux`、`zhipuai`、`zhipuai-coding-plan`。
+
+大多数提供商使用兼容 OpenAI 的 Chat Completions 协议和 Bearer API 密钥。
+Azure AI Foundry 使用资源名称与 `api-key`；Google Vertex AI 使用项目、区域和
+通过 `x-goog-api-key` 发送的 Google 授权密钥；`global` 区域使用
+`aiplatform.googleapis.com`。Vertex Anthropic 使用 `rawPredict` /
+`streamRawPredict`，并为 `us` 和 `eu` 使用对应的多区域主机；Perplexity
+Agent 使用 Responses API。现有 Cloudflare 卡片还支持可选的 AI Gateway
+ID；对于 `@cf/` 模型，留空时会自动使用 `default` 网关。
+
+当 `supportsAskStreaming` 启用时，交互式 Ask 回合会流式显示回复。中断的流会
+清除部分文本、仅以非流式方式重试一次，并在本次运行剩余阶段关闭流式传输。
+Act、Dev、计划任务、云端运行和 Continue 仍使用非流式请求。服务返回令牌用量时，
+WebBrain 会直接记录；若服务省略用量，则记录基于字符数的保守估算，避免流式请求绕过
+已配置的成本限额。
+
+明确不支持的条目：`github-models`（GitHub Models 于 2026 年 7 月 30 日退役）、
+`github-copilot`（订阅/OAuth）、`gitlab` 和 `sap-ai-core`（需要专用认证、
+部署发现或协议）。
 
 ### 本地提供商
 
