@@ -298,7 +298,7 @@ export const AGENT_TOOLS = [
     type: 'function',
     function: {
       name: 'press_keys',
-      description: 'Press one unmodified keyboard key. Supports only Escape, Tab, Enter, ArrowUp, ArrowDown, ArrowLeft, and ArrowRight. Ctrl/Cmd/Alt/Shift combinations and browser shortcuts such as Ctrl+F are not supported. Use find_text to locate and highlight page text.',
+      description: 'Press one unmodified keyboard key. Supports only Escape, Tab, Enter, ArrowUp, ArrowDown, ArrowLeft, and ArrowRight. Ctrl/Cmd/Alt/Shift combinations and browser shortcuts such as Ctrl+F are not supported. Use find_text to select one page-text match.',
       parameters: {
         type: 'object',
         properties: {
@@ -512,7 +512,7 @@ export const AGENT_TOOLS = [
     type: 'function',
     function: {
       name: 'find_text',
-      description: 'Find and select/highlight the next occurrence of literal text in the current page. Use this instead of Ctrl+F or Cmd+F; press_keys cannot send modifier combinations or open browser UI. Repeating the same search advances to the next match.',
+      description: 'Find and select the next occurrence of literal text in the current page. Use this instead of Ctrl+F or Cmd+F; press_keys cannot send modifier combinations. Repeating the same search advances to the next match. Each call replaces the previous page selection, so only the current match remains selected. This tool does not open the browser Find UI. Never claim that sequential find_text calls leave multiple terms highlighted.',
       parameters: {
         type: 'object',
         properties: {
@@ -1432,7 +1432,7 @@ Available tools:
 - schedule_resume: Durably pause this current task and resume it later in the same tab/conversation. Terminal tool; use only for external waits.
 - schedule_task: Create a one-shot or fixed-minute-interval task only when the user explicitly asks for future scheduled work. It does not support calendar/cron recurrence; never approximate monthly recurrence. Prefer URL targets for repeatable automations; current_tab is strict and fails if the tab changes.
 - get_selection: Get highlighted text
-- find_text: Find and select/highlight literal page text. Use this instead of Ctrl/Cmd+F.
+- find_text: Select one literal page-text match instead of Ctrl/Cmd+F. Each call replaces the previous selection; it does not open browser Find UI or keep multiple terms highlighted.
 - press_keys: Press only unmodified Escape/Tab/Enter/arrows. Modifier combinations and browser shortcuts are unsupported.
 - new_tab: Open a background reference tab; the current run stays on its original tab
 - clarify: Pause and ask the user a question. Use ONLY for material ambiguity that you cannot resolve by reading the page (e.g. "my API key" on a site with multiple plugins that each have one). Unanswered clarifies auto-select options[0] after the timeout (default 60s) with source=timeout (not high-risk approval); Settings Instant yields source=auto (intentional auto-approve — continue). Put the safe/default first. Do NOT use to confirm correct actions; do NOT call before every step. Budget 1-2 per run, max.
@@ -1704,7 +1704,7 @@ TOOLS — use ONLY these:
 - click({text}): Click by visible text. Fallback when no ref_id.
 - type_text({text}): Type into the focused element. Click the field first.
 - get_selection: Read highlighted text.
-- find_text({text}): Locate and highlight literal page text instead of using Ctrl/Cmd+F.
+- find_text({text}): Select one literal page-text match instead of Ctrl/Cmd+F. Each call replaces the previous selection; no browser Find UI or simultaneous highlights.
 - press_keys({key}): Press one supported unmodified key. Ctrl/Cmd/Alt/Shift combinations and browser shortcuts are unavailable.
 - navigate({url}): Go to a URL.
 - new_tab({url}): Open a URL in a background tab for user reference. It does not activate or retarget the current run, so never use it as a site-permission workaround.
@@ -1774,7 +1774,7 @@ TOOLS — use only these:
 - click_ax({ref_id}) / set_checked({ref_id, checked}) / type_ax({ref_id, text}) / set_field({ref_id, text, submit}): act on nodes by ref_id. set_field is preferred for text fields; set_checked is required for native checkboxes.
 - read_page: prose fallback for long articles. get_window_info: inspect browser window/viewport size. scroll, navigate({url}), go_back()/go_forward(): walk the run tab's history. new_tab({url}) only opens a background reference tab and never retargets the run.
 - get_interactive_elements: legacy indexed element list (use when the tree misses elements). click({text}) / type_text({text}) / press_keys({key}): legacy fallbacks. press_keys supports only unmodified Escape/Tab/Enter/arrows, never Ctrl/Cmd/Alt/Shift combinations or browser shortcuts.
-- extract_data: tables/headings/images/links. get_selection: read highlighted text. find_text({text}): locate and highlight literal page text instead of Ctrl/Cmd+F. read_pdf: read a PDF.
+- extract_data: tables/headings/images/links. get_selection: read highlighted text. find_text({text}): select one literal page-text match; each call replaces the previous selection and never creates simultaneous highlights or browser Find UI. read_pdf: read a PDF.
 - wait_for_element({selector}) / wait_for_stable({quietMs}): wait for an element / for the page to go quiet after an action.
 - schedule_resume({after_seconds|run_at, reason, resume_instruction}): terminal durable pause for this current task.
 - schedule_task({title, prompt, schedule, target, mode}): create one-shot or fixed-minute-interval future work only when explicitly requested by the user. Calendar/cron recurrence is unsupported and must not be approximated. Prefer target.type:"url" for monitors/repeatable automations; use current_tab only for exact current-tab state.

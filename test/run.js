@@ -860,7 +860,7 @@ class LoopDetectorShim {
     return false;
   }
   _findTextMatchLoopIdentity(result) {
-    if (result?.success !== true || !result?.rect || typeof result.rect !== 'object') return '';
+    if (result?.success !== true || result?.verified === false || !result?.rect || typeof result.rect !== 'object') return '';
     const rect = result.rect;
     const pageX = typeof rect.pageX === 'number' ? rect.pageX : NaN;
     const pageY = typeof rect.pageY === 'number' ? rect.pageY : NaN;
@@ -870,7 +870,7 @@ class LoopDetectorShim {
     const height = typeof rect.height === 'number' ? rect.height : NaN;
     const x = Number.isFinite(pageX) ? pageX : viewportX;
     const y = Number.isFinite(pageY) ? pageY : viewportY;
-    if (![x, y, width, height].every(Number.isFinite)) return '';
+    if (![x, y, width, height].every(Number.isFinite) || width <= 0 || height <= 0) return '';
     return [x, y, width, height]
       .map(value => Math.round(value * 2) / 2)
       .join(',');
@@ -3717,6 +3717,7 @@ test('find_text loop detection follows match progress in both browser agents', (
   const match = pageY => ({
     success: true,
     found: true,
+    verified: true,
     rect: { x: 10, y: 20, pageX: 110, pageY, width: 30, height: 12 },
   });
 
@@ -3755,9 +3756,14 @@ test('find_text loop detection follows match progress in both browser agents', (
     const framedTab = `${label}-framed`;
     for (let index = 0; index < 4; index += 1) {
       assert.equal(
-        framed._checkLoop(framedTab, 'find_text', args, { success: true, found: true }).kind,
+        framed._checkLoop(framedTab, 'find_text', args, {
+          success: true,
+          found: true,
+          verified: false,
+          rect: { x: 0, y: 0, pageX: 0, pageY: 0, width: 0, height: 0 },
+        }).kind,
         'none',
-        `${label}: a successful frame match without a top-document rect was blocked`,
+        `${label}: an unverified frame match without a visible top-document range was blocked`,
       );
     }
 
@@ -9122,6 +9128,9 @@ test('getToolsForMode: find_text replaces unsupported modifier shortcuts', () =>
     assert.deepEqual(findText.function.parameters.required, ['text']);
     assert.equal(findText.function.parameters.properties.text.maxLength, 500);
     assert.match(findText.function.description, /instead of Ctrl\+F or Cmd\+F/i);
+    assert.match(findText.function.description, /Each call replaces the previous page selection/i);
+    assert.match(findText.function.description, /does not open the browser Find UI/i);
+    assert.match(findText.function.description, /Never claim.*sequential find_text calls.*multiple terms highlighted/i);
 
     const pressKeys = fullTools.find(t => t.function.name === 'press_keys');
     assert.deepEqual(pressKeys.function.parameters.properties.key.enum, [
@@ -9129,6 +9138,14 @@ test('getToolsForMode: find_text replaces unsupported modifier shortcuts', () =>
     ]);
     assert.match(pressKeys.function.description, /Ctrl\/Cmd\/Alt\/Shift combinations.*not supported/i);
     assert.doesNotMatch(pressKeys.function.parameters.properties.key.enum.join(' '), /Control|Meta|Alt|Shift|KeyF/);
+
+    const prompts = label === 'chrome'
+      ? [SYSTEM_PROMPT_ACT_CH, SYSTEM_PROMPT_ACT_MID_CH, SYSTEM_PROMPT_ACT_COMPACT_CH]
+      : [SYSTEM_PROMPT_ACT_FX, SYSTEM_PROMPT_ACT_MID_FX, SYSTEM_PROMPT_ACT_COMPACT_FX];
+    for (const prompt of prompts) {
+      assert.match(prompt, /find_text[\s\S]{0,180}replaces the previous selection/i, `${label}: Act prompt omitted single-selection semantics`);
+      assert.match(prompt, /find_text[\s\S]{0,220}(?:browser Find UI|simultaneous highlights)/i, `${label}: Act prompt omitted browser UI/multi-highlight limitation`);
+    }
   }
   assert.equal(UNTRUSTED_CONTENT_TOOLS_CH.has('find_text'), true, 'chrome: selected page text must stay inside the untrusted boundary');
   assert.equal(UNTRUSTED_CONTENT_TOOLS.has('find_text'), true, 'firefox: selected page text must stay inside the untrusted boundary');
@@ -33161,12 +33178,47 @@ test('find_text uses page search and returns selected match evidence in both bro
     assert.deepEqual(Array.from(findArgs), ['Needle', true, true, false, false, true, false], `${label}: window.find should include embedded frames while honoring the finite schema`);
     assert.equal(result.success, true);
     assert.equal(result.found, true);
+    assert.equal(result.verified, true);
     assert.equal(result.selectedText, 'Needle');
+    assert.equal(result.selectionMatchesQuery, true);
+    assert.equal(result.selectionScope, 'current_match_only');
+    assert.equal(result.replacesPreviousSelection, true);
+    assert.equal(result.browserFindUiOpened, false);
+    assert.match(result.warning, /Only this match is selected/);
+    assert.match(result.warning, /replaced any previous page selection/);
+    assert.match(result.warning, /did not open the browser Find UI/);
     assert.deepEqual(
       { ...result.rect },
       { x: 10, y: 20, pageX: 110, pageY: 220, width: 30, height: 12 },
       `${label}: find_text should return stable page coordinates for loop identity`,
     );
+    window.getSelection = () => ({
+      rangeCount: 1,
+      toString: () => '',
+      getRangeAt: () => ({
+        getBoundingClientRect: () => ({ x: 0, y: 0, width: 0, height: 0 }),
+      }),
+    });
+    const unverified = findText({ text: 'framed match' });
+    assert.equal(unverified.success, true, `${label}: window.find frame matches should remain explicit matches`);
+    assert.equal(unverified.found, true);
+    assert.equal(unverified.verified, false, `${label}: empty zero-sized selections must not be verified`);
+    assert.equal(unverified.selectionMatchesQuery, false);
+    assert.equal(unverified.replacesPreviousSelection, true);
+    assert.equal(unverified.browserFindUiOpened, false);
+    assert.match(unverified.warning, /could not verify a visible selection in the top document/i);
+    assert.match(unverified.warning, /Do not claim it is visibly highlighted/i);
+    window.getSelection = () => ({
+      rangeCount: 1,
+      toString: () => 'stale previous selection',
+      getRangeAt: () => ({
+        getBoundingClientRect: () => ({ x: 10, y: 20, width: 30, height: 12 }),
+      }),
+    });
+    const staleSelection = findText({ text: 'framed match' });
+    assert.equal(staleSelection.success, true);
+    assert.equal(staleSelection.selectionMatchesQuery, false);
+    assert.equal(staleSelection.verified, false, `${label}: a visible stale top-document selection must not verify a frame match`);
     window.find = () => false;
     const missing = findText({ text: 'absent phrase' });
     assert.equal(missing.success, false, `${label}: a missing match should not count as successful task evidence`);
@@ -37587,7 +37639,7 @@ test('streamed runs preserve consequential evidence for a trusted continuation',
   }
 });
 
-test('execution evidence ignores failed, denied, skipped, blocked, and unknown outcomes', () => {
+test('execution evidence ignores failed, unverified, inconclusive, denied, skipped, blocked, and unknown outcomes', () => {
   for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
     const agent = new AgentClass({});
     const tabId = 8614 + index;
@@ -37625,6 +37677,8 @@ test('execution evidence ignores failed, denied, skipped, blocked, and unknown o
     }
     for (const result of [
       { success: false },
+      { success: true, verified: false },
+      { success: true, inconclusive: true },
       { denied: true },
       { skipped: true },
       { blocked: true },
@@ -37645,6 +37699,36 @@ test('execution evidence ignores failed, denied, skipped, blocked, and unknown o
 
     agent._markPlanExecutionToolCall(tabId, 'navigate', { success: true }, { consequential: true });
     assert.equal(agent._executionEvidenceSatisfied(state), true, `${AgentClass.name}: successful navigation evidence was not counted`);
+
+    const findTabId = 8620 + index;
+    const findState = agent._startPlanExecutionGuard(findTabId, 'act', {
+      requestKind: 'execute',
+      requiresStateChange: false,
+    });
+    agent._markPlanExecutionToolCall(findTabId, 'find_text', {
+      success: true,
+      found: true,
+      verified: false,
+      selectedText: '',
+      rect: { x: 0, y: 0, pageX: 0, pageY: 0, width: 0, height: 0 },
+    });
+    assert.equal(
+      agent._executionEvidenceSatisfied(findState),
+      false,
+      `${AgentClass.name}: an unverified find_text match counted as completed read-only work`,
+    );
+    agent._markPlanExecutionToolCall(findTabId, 'find_text', {
+      success: true,
+      found: true,
+      verified: true,
+      selectedText: 'Needle',
+      rect: { x: 10, y: 20, pageX: 10, pageY: 20, width: 30, height: 12 },
+    });
+    assert.equal(
+      agent._executionEvidenceSatisfied(findState),
+      true,
+      `${AgentClass.name}: a verified find_text selection did not count as completed read-only work`,
+    );
   }
 });
 
@@ -42939,6 +43023,8 @@ test('planner: prompt treats page context as untrusted data', () => {
   assert.match(PLANNER_SYSTEM_PROMPT, /interact:[^\n]*find_text/);
   assert.match(PLANNER_SYSTEM_PROMPT, /Never plan Ctrl\/Cmd\/Alt\/Shift combinations or browser UI shortcuts/);
   assert.match(PLANNER_SYSTEM_PROMPT, /plan find_text instead of Ctrl\/Cmd\+F/);
+  assert.match(PLANNER_SYSTEM_PROMPT, /Each find_text call replaces the previous selection/);
+  assert.match(PLANNER_SYSTEM_PROMPT, /never plan sequential calls as simultaneous highlights/);
   assert.match(PLANNER_SYSTEM_PROMPT, /attached JSON\/TXT\/CSV text file content/);
   assert.match(PLANNER_SYSTEM_PROMPT, /brief neutral scratchpad_notes/);
   assert.match(PLANNER_SYSTEM_PROMPT, /Do not plan to copy the full file/);
@@ -42954,7 +43040,9 @@ test('planner: prompt treats page context as untrusted data', () => {
   assert.match(PLANNER_INTENT_SYSTEM_PROMPT, /lacks usable timing or cadence.*clarify/i);
   assert.match(PLANNER_INTENT_SYSTEM_PROMPT, /Calendar\/cron recurrence.*unsupported/i);
   assert.match(PLANNER_INTENT_SYSTEM_PROMPT, /Never convert calendar recurrence/i);
-  assert.match(PLANNER_INTENT_SYSTEM_PROMPT, /use find_text to locate and highlight page text instead of Ctrl\/Cmd\+F/);
+  assert.match(PLANNER_INTENT_SYSTEM_PROMPT, /use find_text to select one page-text match instead of Ctrl\/Cmd\+F/);
+  assert.match(PLANNER_INTENT_SYSTEM_PROMPT, /Each call replaces the previous selection/);
+  assert.match(PLANNER_INTENT_SYSTEM_PROMPT, /cannot create simultaneous highlights or browser Find UI/);
   assert.match(PLANNER_SYSTEM_PROMPT_FX, /lacks usable timing or cadence.*clarify/i);
   assert.match(PLANNER_INTENT_SYSTEM_PROMPT_FX, /Calendar\/cron recurrence.*unsupported/i);
   assert.match(PLANNER_INTENT_SYSTEM_PROMPT_FX, /"use_progress_ledger": boolean/);

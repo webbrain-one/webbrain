@@ -2073,12 +2073,30 @@
           height: bounds.height,
         };
       }
+      const hasVisibleRect = !!rect
+        && [rect.x, rect.y, rect.pageX, rect.pageY, rect.width, rect.height].every(Number.isFinite)
+        && rect.width > 0
+        && rect.height > 0;
+      const normalizedSelectedText = selectedText.normalize('NFC');
+      const normalizedQuery = text.normalize('NFC');
+      const selectionMatchesQuery = matchCase
+        ? normalizedSelectedText === normalizedQuery
+        : normalizedSelectedText.toLowerCase() === normalizedQuery.toLowerCase();
+      const verified = selectionMatchesQuery && hasVisibleRect;
       return {
         success: true,
         found: true,
+        verified,
         query: text,
         selectedText,
+        selectionMatchesQuery,
+        selectionScope: 'current_match_only',
+        replacesPreviousSelection: true,
+        browserFindUiOpened: false,
         ...(rect ? { rect } : {}),
+        warning: verified
+          ? 'Only this match is selected. This call replaced any previous page selection, and it did not open the browser Find UI. Do not claim earlier find_text matches remain highlighted.'
+          : 'window.find reported a match, but WebBrain could not verify a visible selection in the top document (for example, the match may be inside a frame). Do not claim it is visibly highlighted. Only one current selection is supported, and the browser Find UI was not opened.',
       };
     } catch (error) {
       return { success: false, found: false, dispatched: false, noDispatch: true, error: `find_text failed: ${error.message || error}` };

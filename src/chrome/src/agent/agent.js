@@ -1317,7 +1317,7 @@ export class Agent {
   }
 
   _findTextMatchLoopIdentity(result) {
-    if (result?.success !== true || !result?.rect || typeof result.rect !== 'object') return '';
+    if (result?.success !== true || result?.verified === false || !result?.rect || typeof result.rect !== 'object') return '';
     const rect = result.rect;
     const pageX = typeof rect.pageX === 'number' ? rect.pageX : NaN;
     const pageY = typeof rect.pageY === 'number' ? rect.pageY : NaN;
@@ -1327,7 +1327,7 @@ export class Agent {
     const height = typeof rect.height === 'number' ? rect.height : NaN;
     const x = Number.isFinite(pageX) ? pageX : viewportX;
     const y = Number.isFinite(pageY) ? pageY : viewportY;
-    if (![x, y, width, height].every(Number.isFinite)) return '';
+    if (![x, y, width, height].every(Number.isFinite) || width <= 0 || height <= 0) return '';
     return [x, y, width, height]
       .map(value => Math.round(value * 2) / 2)
       .join(',');
@@ -10836,6 +10836,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (result == null || result?.done) return false;
     if (typeof result !== 'object') return true;
     if (result.success === false
+        || result.verified === false
+        || result.inconclusive
         || result.denied
         || result.cancelled
         || result.skipped
