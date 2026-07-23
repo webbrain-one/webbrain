@@ -64,6 +64,17 @@ function cleanSingleLine(value) {
   return cleanText(value).replace(/\s+/g, ' ');
 }
 
+export function removeRetiredPackagedSkills(value) {
+  const skills = Array.isArray(value) ? value : [];
+  // Match the retired packaged provenance exactly so a user-authored skill
+  // that happens to reuse the old id remains intact.
+  return skills.filter((skill) => !(
+    skill?.id === 'chrome-web-store-release'
+    && skill?.sourceType === 'built-in'
+    && cleanSingleLine(skill?.sourceUrl || skill?.path) === 'skills/chrome-web-store-release.md'
+  ));
+}
+
 function stableId(value, index) {
   const raw = cleanSingleLine(value);
   return /^[a-zA-Z0-9_-]{1,80}$/.test(raw) ? raw : `skill_${index + 1}`;

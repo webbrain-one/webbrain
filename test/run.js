@@ -704,6 +704,7 @@ const {
   fetchSkillImportResponse: fetchSkillImportResponseCh,
   normalizeCustomSkills: normalizeCustomSkillsCh,
   normalizeDefaultSkillRemovalIds: normalizeDefaultSkillRemovalIdsCh,
+  removeRetiredPackagedSkills: removeRetiredPackagedSkillsCh,
   refreshBuiltInSkillRecord: refreshBuiltInSkillRecordCh,
   readSkillImportText: readSkillImportTextCh,
   buildCustomSkillsPrompt: buildCustomSkillsPromptCh,
@@ -727,6 +728,7 @@ const {
   fetchSkillImportResponse: fetchSkillImportResponseFx,
   normalizeCustomSkills: normalizeCustomSkillsFx,
   normalizeDefaultSkillRemovalIds: normalizeDefaultSkillRemovalIdsFx,
+  removeRetiredPackagedSkills: removeRetiredPackagedSkillsFx,
   refreshBuiltInSkillRecord: refreshBuiltInSkillRecordFx,
   readSkillImportText: readSkillImportTextFx,
   buildCustomSkillsPrompt: buildCustomSkillsPromptFx,
@@ -11750,6 +11752,41 @@ test('default skill removal ids are normalized in both builds', () => {
       `${label}: default removal ids should dedupe and reject unsafe values`,
     );
     assert.deepEqual(normalizeIds(null), [], `${label}: invalid removal storage should normalize to empty`);
+  }
+});
+
+test('retired packaged Chrome Web Store release records are purged in both builds', () => {
+  for (const [label, prefix, removeRetired] of [
+    ['chrome', 'src/chrome', removeRetiredPackagedSkillsCh],
+    ['firefox', 'src/firefox', removeRetiredPackagedSkillsFx],
+  ]) {
+    const retired = packagedChromeWebStoreRecord(prefix);
+    const legacyPathRecord = { ...retired, sourceUrl: '', path: retired.sourceUrl };
+    const userSkill = {
+      ...retired,
+      sourceType: 'text',
+      sourceUrl: '',
+      content: '# My Chrome Web Store release notes',
+    };
+    const unrelated = packagedFreeSkillzRecord(prefix);
+
+    assert.deepEqual(
+      removeRetired([retired, legacyPathRecord, userSkill, unrelated]),
+      [userSkill, unrelated],
+      `${label}: only exact retired built-in release records should be removed`,
+    );
+    assert.deepEqual(removeRetired(null), [], `${label}: invalid stored skills should migrate to an empty list`);
+
+    const background = fs.readFileSync(path.join(ROOT, prefix, 'src/background.js'), 'utf8');
+    const settings = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/settings.js'), 'utf8');
+    assert.ok(
+      (background.match(/removeRetiredPackagedSkills\(/g)?.length || 0) >= 2,
+      `${label}: startup and live background updates should purge retired records`,
+    );
+    assert.ok(
+      (settings.match(/removeRetiredPackagedSkills\(/g)?.length || 0) >= 2,
+      `${label}: initial and live settings views should hide retired records`,
+    );
   }
 });
 

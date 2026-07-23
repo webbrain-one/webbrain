@@ -17,6 +17,7 @@ import {
   normalizeCustomSkills,
   normalizeDefaultSkillRemovalIds,
   readSkillImportText,
+  removeRetiredPackagedSkills,
 } from '../agent/skills.js';
 import {
   USER_MEMORY_AUTO_CAPTURE_KEY,
@@ -758,7 +759,7 @@ skillPreviewViewButtons.forEach((button) => {
 async function loadCustomSkills() {
   if (!skillsList) return;
   const stored = await chrome.storage.local.get(CUSTOM_SKILLS_STORAGE_KEY);
-  customSkills = normalizeCustomSkills(stored[CUSTOM_SKILLS_STORAGE_KEY]);
+  customSkills = normalizeCustomSkills(removeRetiredPackagedSkills(stored[CUSTOM_SKILLS_STORAGE_KEY]));
   renderSkills();
 }
 
@@ -965,7 +966,7 @@ btnClearSkillForm?.addEventListener('click', () => {
 if (globalThis.chrome?.storage?.onChanged) {
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local' || !changes[CUSTOM_SKILLS_STORAGE_KEY]) return;
-    customSkills = normalizeCustomSkills(changes[CUSTOM_SKILLS_STORAGE_KEY].newValue);
+    customSkills = normalizeCustomSkills(removeRetiredPackagedSkills(changes[CUSTOM_SKILLS_STORAGE_KEY].newValue));
     renderSkills();
   });
 }

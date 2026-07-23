@@ -9,6 +9,7 @@ import {
   PACKAGED_SKILL_SOURCES,
   normalizeCustomSkills,
   normalizeDefaultSkillRemovalIds,
+  removeRetiredPackagedSkills,
   refreshBuiltInSkillRecord,
 } from './agent/skills.js';
 import { ScheduledJobManager } from './agent/scheduler.js';
@@ -643,7 +644,18 @@ async function loadCustomSkills() {
     DEFAULT_SKILLS_SEEDED_STORAGE_KEY,
     'enableAllPackagedSkills',
   ]);
-  let skills = normalizeCustomSkills(stored[CUSTOM_SKILLS_STORAGE_KEY]);
+  const storedSkills = Array.isArray(stored[CUSTOM_SKILLS_STORAGE_KEY])
+    ? stored[CUSTOM_SKILLS_STORAGE_KEY]
+    : [];
+  const retainedSkills = removeRetiredPackagedSkills(storedSkills);
+  let skills = normalizeCustomSkills(retainedSkills);
+  if (retainedSkills.length !== storedSkills.length) {
+    try {
+      await browser.storage.local.set({ [CUSTOM_SKILLS_STORAGE_KEY]: skills });
+    } catch (error) {
+      console.warn('[WebBrain] Retired packaged skills could not be removed', error);
+    }
+  }
   const removedDefaultIds = new Set(normalizeDefaultSkillRemovalIds(stored[DEFAULT_SKILLS_REMOVED_STORAGE_KEY]));
   try {
     const existingIds = new Set(skills.map((skill) => skill.id));
@@ -846,7 +858,16 @@ browser.storage.onChanged.addListener((changes) => {
     });
   }
   if (changes[CUSTOM_SKILLS_STORAGE_KEY]) {
-    agent.customSkills = normalizeCustomSkills(changes[CUSTOM_SKILLS_STORAGE_KEY].newValue);
+    const storedSkills = Array.isArray(changes[CUSTOM_SKILLS_STORAGE_KEY].newValue)
+      ? changes[CUSTOM_SKILLS_STORAGE_KEY].newValue
+      : [];
+    const retainedSkills = removeRetiredPackagedSkills(storedSkills);
+    agent.customSkills = normalizeCustomSkills(retainedSkills);
+    if (retainedSkills.length !== storedSkills.length) {
+      browser.storage.local.set({ [CUSTOM_SKILLS_STORAGE_KEY]: agent.customSkills }).catch((error) => {
+        console.warn('[WebBrain] Retired packaged skills could not be removed', error);
+      });
+    }
     refreshPrompts = true;
   }
   if (changes.captchaSolverEnabled) {
