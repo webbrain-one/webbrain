@@ -23,8 +23,10 @@ import pt from './locales/pt.js';
 import vi from './locales/vi.js';
 import bn from './locales/bn.js';
 import fa from './locales/fa.js';
+import nl from './locales/nl.js';
+import de from './locales/de.js';
 
-const DICTS = { en, es, fr, tr, zh, ru, uk, ar, ja, ko, id, th, ms, tl, pl, he, hi, pt, vi, bn, fa };
+const DICTS = { en, es, fr, tr, zh, ru, uk, ar, ja, ko, id, th, ms, tl, pl, he, hi, pt, vi, bn, fa, nl, de };
 const LS_KEY = 'wbLocale';
 const RTL_LOCALES = new Set(['ar', 'he', 'fa']);
 
@@ -50,6 +52,8 @@ export const LANGUAGES = [
   { code: 'vi', label: 'Tiếng Việt' },
   { code: 'bn', label: 'বাংলা' },
   { code: 'fa', label: 'فارسی' },
+  { code: 'nl', label: 'Nederlands' },
+  { code: 'de', label: 'Deutsch' },
 ];
 
 function detect() {
