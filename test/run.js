@@ -17549,6 +17549,11 @@ test('sidepanel long replies use reading-first turn navigation', () => {
     );
     assert.match(
       panel,
+      /function showContinueButton\(\) \{[\s\S]*?resetChatNavigation\(\);[\s\S]*?messagesEl\.appendChild\(bar\);[\s\S]*?scrollToBottom\(\{ force: true \}\);/,
+      `${label}: the blocking Continue prompt should replace turn navigation instead of being covered by it`,
+    );
+    assert.match(
+      panel,
       /function addPersistentSlashMessage\(content\) \{[\s\S]*?addMessage\('system', content, \{ beforeCurrentAssistant: true \}\);[\s\S]*?scrollToBottom\(\{ force: true \}\);[\s\S]*?return msgEl;/,
       `${label}: persistent slash-command output should override reading-first scroll suppression`,
     );

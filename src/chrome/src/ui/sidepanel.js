@@ -8218,6 +8218,7 @@ function displayMaxAgentSteps(value) {
 function showContinueButton() {
   // Remove any existing continue button
   document.querySelectorAll('.continue-bar').forEach(el => el.remove());
+  resetChatNavigation();
 
   const bar = document.createElement('div');
   bar.className = 'continue-bar';
