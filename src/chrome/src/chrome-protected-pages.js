@@ -36,13 +36,7 @@ export function chromeProtectedPageFailure(url, toolName = '') {
     nonRetryableScope: `chrome-protected-page:${protectedPage}`,
     protectedPage,
     url: String(url || ''),
-    recoverySkill: 'chrome-web-store-release',
-    recoveryTools: [
-      'chrome_web_store_status',
-      'chrome_web_store_upload',
-      'chrome_web_store_publish',
-    ],
-    error: `${name} cannot access the Chrome Web Store Developer Dashboard because Chrome blocks extension content scripts and debugger attachment on this protected page. Do not retry this or another DOM tool. If the Chrome Web Store release skill is enabled, load it and use its trusted tools; otherwise ask the user to enable it in Settings → Skills. A screenshot may be used once for read-only visual context, but cannot make dashboard controls interactive.`,
-    stopMessage: 'Stopped: Chrome protects the Chrome Web Store Developer Dashboard from extension DOM access. Repeating DOM reads, waits, clicks, typing, script injection, or debugger-based fallbacks cannot work. Use the enabled Chrome Web Store release skill or continue manually.',
+    error: `${name} cannot access the Chrome Web Store Developer Dashboard because Chrome blocks extension content scripts and debugger attachment on this protected page. Do not retry this or another DOM tool. Continue manually in the dashboard. A screenshot may be used once for read-only visual context, but cannot make dashboard controls interactive.`,
+    stopMessage: 'Stopped: Chrome protects the Chrome Web Store Developer Dashboard from extension DOM access. Repeating DOM reads, waits, clicks, typing, script injection, or debugger-based fallbacks cannot work. Continue manually in the dashboard.',
   };
 }

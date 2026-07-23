@@ -46,11 +46,6 @@ export const PACKAGED_SKILL_SOURCES = Object.freeze([
     name: 'Open Library',
     path: 'skills/open-library-books.md',
   }),
-  Object.freeze({
-    id: 'chrome-web-store-release',
-    name: 'Chrome Web Store release',
-    path: 'skills/chrome-web-store-release.md',
-  }),
 ]);
 export const DEFAULT_SKILL_SOURCES = Object.freeze(
   PACKAGED_SKILL_SOURCES.filter((source) => [
@@ -67,6 +62,17 @@ function cleanText(value) {
 
 function cleanSingleLine(value) {
   return cleanText(value).replace(/\s+/g, ' ');
+}
+
+export function removeRetiredPackagedSkills(value) {
+  const skills = Array.isArray(value) ? value : [];
+  // Match the retired packaged provenance exactly so a user-authored skill
+  // that happens to reuse the old id remains intact.
+  return skills.filter((skill) => !(
+    skill?.id === 'chrome-web-store-release'
+    && skill?.sourceType === 'built-in'
+    && cleanSingleLine(skill?.sourceUrl || skill?.path) === 'skills/chrome-web-store-release.md'
+  ));
 }
 
 function stableId(value, index) {
