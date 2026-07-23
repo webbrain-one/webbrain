@@ -9508,6 +9508,9 @@ document.addEventListener('wb-locale-changed', () => {
 clearBtn.addEventListener('click', async () => {
   const tabId = currentTabId;
   if (!window.confirm(t('sp.clear.confirm'))) return;
+  clearQueuedComposerMessagesForTab(tabId);
+  clearQueuedForTab(tabId);
+  await sendToBackground('clear_context_menu_prompt', { tabId }).catch(() => {});
   if (isTabProcessing(tabId)) await abortRun();
   await sendToBackground('clear_conversation', { tabId });
   await renderClearedConversationForTab(tabId);
