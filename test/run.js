@@ -14802,9 +14802,11 @@ test('sidepanel flushes run chat before queue settlement after immediate tab swi
     assert.notEqual(scheduledDrainIdx, -1, `${label}: scheduled completion should drain queued prompts`);
     assert.equal(scheduledFlushIdx < scheduledDrainIdx, true, `${label}: scheduled completion must flush before draining queued prompts`);
 
-    const abortMatch = panel.match(/setTimeout\(async \(\) => \{[\s\S]*?if \(isTabAbortRequested\(tabId\)\) \{([\s\S]*?)\n    \}\n  \}, 3000\);/);
-    assert.ok(abortMatch, `${label}: abort safety timeout body missing`);
-    const abortBody = abortMatch[1];
+    const abortStart = panel.indexOf('const settleWhenInactive = async () => {');
+    const abortEnd = panel.indexOf('fallbackTimer = setTimeout(settleWhenInactive, 3000);', abortStart);
+    assert.notEqual(abortStart, -1, `${label}: abort safety timeout body missing`);
+    assert.notEqual(abortEnd, -1, `${label}: abort safety timeout registration missing`);
+    const abortBody = panel.slice(abortStart, abortEnd);
     const abortFlushIdx = abortBody.indexOf('flushRenderedTabChat()');
     const abortDrainIdx = abortBody.indexOf('await drainQueuedPromptsAfterRunSettles();');
     assert.notEqual(abortFlushIdx, -1, `${label}: abort timeout should flush the stopped transcript`);
@@ -17141,9 +17143,11 @@ test('sidepanel abort safety timeout drains queued prompts', () => {
     ['firefox', 'src/firefox/src/ui/sidepanel.js'],
   ]) {
     const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
-    const match = panel.match(/setTimeout\(async \(\) => \{[\s\S]*?if \(isTabAbortRequested\(tabId\)\) \{([\s\S]*?)\n    \}\n  \}, 3000\);/);
-    assert.ok(match, `${label}: abort safety timeout body missing`);
-    const body = match[1];
+    const abortStart = panel.indexOf('const settleWhenInactive = async () => {');
+    const abortEnd = panel.indexOf('fallbackTimer = setTimeout(settleWhenInactive, 3000);', abortStart);
+    assert.notEqual(abortStart, -1, `${label}: abort safety timeout body missing`);
+    assert.notEqual(abortEnd, -1, `${label}: abort safety timeout registration missing`);
+    const body = panel.slice(abortStart, abortEnd);
     const idleIdx = body.indexOf('setTabProcessing(tabId, false);');
     const helperIdx = body.indexOf('await drainQueuedPromptsAfterRunSettles();');
     assert.notEqual(idleIdx, -1, `${label}: abort timeout should clear processing state`);
@@ -47029,7 +47033,8 @@ test('reconnect protocol is wired through both sidepanels and backgrounds', () =
       panel.indexOf('// --- Voice input', panel.indexOf('// --- Stop / Abort ---')),
     );
     assert.match(stopSection, /localRunRequestIds\.get\(Number\(tabId\)\)[\s\S]*?cancelledRunRecoveryRequestIds\.add\(requestId\)[\s\S]*?setTabAbortRequested\(tabId, true\)/, `${label}: Stop should persist request-scoped cancellation before its UI timeout clears`);
-    assert.match(stopSection, /const follower = localRunFollowers\.get\(Number\(tabId\)\);[\s\S]*?await sendToBackground\('abort', \{ tabId \}\);[\s\S]*?await follower\.promise\.catch\(\(\) => \{\}\);/, `${label}: Stop should settle the local follower before New conversation can clear its journal`);
+    assert.match(stopSection, /const follower = localRunFollowers\.get\(Number\(tabId\)\);[\s\S]*?fallbackTimer = setTimeout\(settleWhenInactive, 3000\);[\s\S]*?await sendToBackground\('abort', \{ tabId \}\);[\s\S]*?await Promise\.race\(\[[\s\S]*?follower\.promise\.catch\(\(\) => \{\}\),[\s\S]*?fallbackPromise,[\s\S]*?\]\);/, `${label}: Stop should start its fallback before settling the local follower for New conversation`);
+    assert.match(stopSection, /sendToBackground\('agent_run_state', \{ tabId, requestId \}\)[\s\S]*?if \(!state \|\| state\.running \|\| state\.starting\) \{[\s\S]*?fallbackTimer = setTimeout\(settleWhenInactive, 1000\);[\s\S]*?setTabProcessing\(tabId, false\);/, `${label}: the Stop fallback must keep polling without unlocking while the background run guard is active`);
     assert.match(background, /case 'chat_start':[\s\S]*?launchDetachedRun\('chat'/, `${label}: background should acknowledge detached chat starts`);
     assert.match(background, /case 'continue_start':[\s\S]*?launchDetachedRun\('continue'/, `${label}: background should acknowledge detached continuation starts`);
     assert.match(background, /case 'chat':[\s\S]*?await beginContinuationRunUiSnapshot\(tabId, msg\.requestId,/, `${label}: replayed fresh chats should preserve journal sequence numbers`);

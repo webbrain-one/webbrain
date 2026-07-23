@@ -9506,19 +9506,36 @@ async function abortRun() {
   setTabAbortRequested(tabId, true);
   showActivity(t('sp.activity.stopping'));
 
-  try {
-    await sendToBackground('abort', { tabId });
-  } catch {
-    // Best effort
-  }
-  if (follower?.requestId === requestId) {
-    await follower.promise.catch(() => {});
-  }
-
-  // Force UI to settle even if background doesn't respond cleanly
-  setTimeout(async () => {
-    if (isTabAbortRequested(tabId)) {
-      if (!sameTabId(currentTabId, tabId) || !sameTabId(renderedTabId, tabId)) return;
+  let fallbackTimer = null;
+  let fallbackCancelled = false;
+  const fallbackPromise = new Promise(resolve => {
+    const settleWhenInactive = async () => {
+      if (fallbackCancelled) {
+        resolve();
+        return;
+      }
+      if (!isTabAbortRequested(tabId)) {
+        resolve();
+        return;
+      }
+      let state;
+      try {
+        state = await sendToBackground('agent_run_state', { tabId, requestId });
+      } catch {
+        state = null;
+      }
+      if (fallbackCancelled) {
+        resolve();
+        return;
+      }
+      if (!state || state.running || state.starting) {
+        fallbackTimer = setTimeout(settleWhenInactive, 1000);
+        return;
+      }
+      if (!sameTabId(currentTabId, tabId) || !sameTabId(renderedTabId, tabId)) {
+        resolve();
+        return;
+      }
       finalizeSteps();
       if (currentAssistantEl) {
         const textEl = currentAssistantEl.querySelector('.message-text');
@@ -9533,8 +9550,24 @@ async function abortRun() {
       setTabAbortRequested(tabId, false);
       await flushRenderedTabChat();
       await drainQueuedPromptsAfterRunSettles();
-    }
-  }, 3000); // safety timeout if background takes too long
+      resolve();
+    };
+    fallbackTimer = setTimeout(settleWhenInactive, 3000);
+  });
+
+  try {
+    await sendToBackground('abort', { tabId });
+  } catch {
+    // Best effort
+  }
+  if (follower?.requestId === requestId) {
+    await Promise.race([
+      follower.promise.catch(() => {}),
+      fallbackPromise,
+    ]);
+    fallbackCancelled = true;
+    clearTimeout(fallbackTimer);
+  }
 }
 
 stopBtn.addEventListener('click', abortRun);
