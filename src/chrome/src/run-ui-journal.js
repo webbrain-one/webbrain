@@ -1,5 +1,6 @@
 export const RUN_UI_EVENT_LIMIT = 256;
 export const RUN_UI_TEXT_DELTA_PERSIST_DELAY_MS = 200;
+export const RUN_UI_STREAM_TEXT_LIMIT = 100000;
 
 export function createRunRequestId(tabId, supplied = '') {
   const clean = String(supplied || '').trim();
@@ -128,6 +129,10 @@ export class RunUiJournal {
       hadError: false,
       lastError: '',
       pendingToolCall: null,
+      streamedText: '',
+      streamedTextStartSeq: 0,
+      streamedTextSeq: 0,
+      streamedTextTruncated: false,
       startedAt: Date.now(),
       endedAt: null,
     };
@@ -161,6 +166,28 @@ export class RunUiJournal {
       ts: Date.now(),
     };
     snapshot.events.push(event);
+    if (type === 'text_delta') {
+      const chunk = String(event.data?.content || '');
+      if (!snapshot.streamedText && !snapshot.streamedTextTruncated) {
+        snapshot.streamedTextStartSeq = event.seq;
+      }
+      snapshot.streamedTextSeq = event.seq;
+      if (!snapshot.streamedTextTruncated) {
+        const nextText = snapshot.streamedText + chunk;
+        if (nextText.length <= RUN_UI_STREAM_TEXT_LIMIT) {
+          snapshot.streamedText = nextText;
+        } else {
+          snapshot.streamedText = '';
+          snapshot.streamedTextStartSeq = 0;
+          snapshot.streamedTextTruncated = true;
+        }
+      }
+    } else if (type === 'text' || type === 'tool_call') {
+      snapshot.streamedText = '';
+      snapshot.streamedTextStartSeq = 0;
+      snapshot.streamedTextSeq = 0;
+      snapshot.streamedTextTruncated = false;
+    }
     while (snapshot.events.length > this.eventLimit) {
       const removed = snapshot.events.shift();
       snapshot.truncatedBeforeSeq = removed?.seq || snapshot.truncatedBeforeSeq;
@@ -246,6 +273,17 @@ export class RunUiJournal {
     }
     if (typeof snapshot.mode !== 'string') snapshot.mode = '';
     if (snapshot.kind !== 'continue' && snapshot.kind !== 'chat') snapshot.kind = 'chat';
+    if (typeof snapshot.streamedText !== 'string') snapshot.streamedText = '';
+    if (snapshot.streamedText.length > RUN_UI_STREAM_TEXT_LIMIT) {
+      snapshot.streamedText = '';
+      snapshot.streamedTextTruncated = true;
+    } else if (snapshot.streamedTextTruncated !== true) {
+      snapshot.streamedTextTruncated = false;
+    }
+    const restoredStreamStartSeq = Number(snapshot.streamedTextStartSeq || 0);
+    const restoredStreamSeq = Number(snapshot.streamedTextSeq || 0);
+    snapshot.streamedTextStartSeq = Number.isFinite(restoredStreamStartSeq) ? Math.max(0, restoredStreamStartSeq) : 0;
+    snapshot.streamedTextSeq = Number.isFinite(restoredStreamSeq) ? Math.max(0, restoredStreamSeq) : 0;
     if (!snapshot.lastPlanResolution || typeof snapshot.lastPlanResolution !== 'object') {
       snapshot.lastPlanResolution = null;
     }
