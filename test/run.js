@@ -3145,6 +3145,60 @@ test('trace export: chrome and firefox serializers are identical', () => {
   assert.equal(tracesToMarkdownFx(TRACE_RUNS).markdown, tracesToMarkdown(TRACE_RUNS).markdown);
 });
 
+test('trace export: renders Ask streaming decisions and aggregate lifecycle metrics', () => {
+  const streamingRun = [{
+    run: { runId: 'streaming', userMessage: 'Explain this page', model: 'test', status: 'done' },
+    events: [
+      {
+        runId: 'streaming',
+        seq: 0,
+        kind: 'streaming',
+        data: { step: 1, status: 'attempted', reason: 'eligible', protocol: 'chat_completions' },
+      },
+      {
+        runId: 'streaming',
+        seq: 1,
+        kind: 'streaming',
+        data: {
+          step: 1,
+          status: 'completed',
+          reason: 'terminal_event_received',
+          protocol: 'chat_completions',
+          textDeltaCount: 7,
+          textChars: 128,
+          firstDeltaMs: 42,
+          durationMs: 310,
+          toolCallCount: 0,
+        },
+      },
+      {
+        runId: 'streaming',
+        seq: 2,
+        kind: 'streaming',
+        data: {
+          step: 2,
+          status: 'fallback',
+          reason: 'missing_terminal_event',
+          protocol: 'responses',
+          errorCode: 'missing_response_completed',
+          textDeltaCount: 2,
+          textChars: 18,
+          firstDeltaMs: 50,
+          durationMs: 200,
+          message: 'Responses stream incomplete (missing_response_completed).',
+        },
+      },
+    ],
+  }];
+  for (const [label, serialize] of [['chrome', tracesToMarkdown], ['firefox', tracesToMarkdownFx]]) {
+    const { markdown, toolCount } = serialize(streamingRun);
+    assert.equal(toolCount, 0, `${label}: lifecycle events must not count as tools`);
+    assert.match(markdown, /Ask stream attempted · chat_completions · eligible/, `${label}: attempt missing`);
+    assert.match(markdown, /Ask stream completed · chat_completions · terminal_event_received · 7 text deltas · 128 chars · first delta 42 ms · 310 ms total · 0 tool calls/, `${label}: completion metrics missing`);
+    assert.match(markdown, /Ask stream fallback · responses · missing_terminal_event · code missing_response_completed · 2 text deltas/, `${label}: fallback reason missing`);
+  }
+});
+
 test('/export --traces is wired in both side panels and backgrounds', () => {
   for (const [label, panelRel, bgRel] of [
     ['chrome', 'src/chrome/src/ui/sidepanel.js', 'src/chrome/src/background.js'],
@@ -12337,9 +12391,31 @@ test('sidepanel New conversation uses a message-plus icon and keeps its confirma
     const clearBody = panel.slice(clearStart, panel.indexOf('\n});', clearStart) + 4);
     assert.match(
       clearBody,
-      /if \(!window\.confirm\(t\('sp\.clear\.confirm'\)\)\) return;[\s\S]*?await sendToBackground\('clear_conversation', \{ tabId \}\);/,
-      `${label}: icon change must preserve confirmation before clearing`,
+      /if \(!window\.confirm\(t\('sp\.clear\.confirm'\)\)\) return;[\s\S]*?setConversationClearInProgress\(tabId, true\);[\s\S]*?suppressRunUpdatesForClearedConversation\(tabId\);[\s\S]*?clearQueuedComposerMessagesForTab\(tabId\);[\s\S]*?clearQueuedForTab\(tabId\);[\s\S]*?await sendToBackground\('clear_context_menu_prompt', \{ tabId \}\)\.catch\(\(\) => \{\}\);[\s\S]*?if \(isTabProcessing\(tabId\)\) await abortRun\(tabId\);[\s\S]*?await sendToBackground\('clear_conversation', \{ tabId \}\);[\s\S]*?finally \{[\s\S]*?setConversationClearInProgress\(tabId, false\);/,
+      `${label}: confirmed New conversation should discard queued prompts before stopping and clearing`,
     );
+    assert.match(panel, /function syncSendButtonState\(\) \{[\s\S]*?isConversationClearInProgress\(\)[\s\S]*?sendBtn\.disabled = true;/, `${label}: the composer should stay disabled for the full clear transaction`);
+    assert.match(panel, /async function sendMessage\(extraChatParams = \{\}\) \{[\s\S]*?const tabId = currentTabId;[\s\S]*?if \(isConversationClearInProgress\(tabId\)\) return false;/, `${label}: Enter and programmatic sends should not bypass the pending-clear interlock`);
+    assert.match(panel, /function suppressRunUpdatesForClearedConversation\(tabId\) \{[\s\S]*?localRunRequestIds\.get\(Number\(tabId\)\)[\s\S]*?clearedConversationRunRequestIds\.add\(requestId\)[\s\S]*?clearedConversationRunRequestIds\.size > 100/, `${label}: conversation clear should retain a bounded set of invalidated run requests`);
+    assert.match(panel, /function handleAgentUpdateMessage\(msg\) \{[\s\S]*?if \(msg\.requestId && clearedConversationRunRequestIds\.has\(String\(msg\.requestId\)\)\) return;[\s\S]*?const eventAssistantEl = ensureCurrentRunAssistant\(msg\);/, `${label}: cleared-run updates should be rejected before they can recreate an assistant bubble`);
+    assert.match(panel, /async function abortRun\(tabId = currentTabId\) \{[\s\S]*?sendToBackground\('abort', \{ tabId \}\)[\s\S]*?stopBtn\.addEventListener\('click', \(\) => abortRun\(\)\);/, `${label}: Stop should support a captured tab target without treating click events as tab ids`);
+  }
+});
+
+test('background waits for an active run to stop before clearing its conversation', () => {
+  for (const [label, backgroundRel] of [
+    ['chrome', 'src/chrome/src/background.js'],
+    ['firefox', 'src/firefox/src/background.js'],
+  ]) {
+    const background = fs.readFileSync(path.join(ROOT, backgroundRel), 'utf8');
+    const helperMatch = background.match(/async function stopActiveRunBeforeConversationClear\(tabId\) \{([\s\S]*?)\n\}/);
+    assert.ok(helperMatch, `${label}: active-run clear helper missing`);
+    assert.match(helperMatch[1], /cancelDetachedRunStart\(tabId\);[\s\S]*?agent\.abort\(tabId\);[\s\S]*?await activeStart\.promise\.catch\(\(\) => \{\}\);/, `${label}: clear helper should cancel, abort, and await detached runs`);
+    assert.match(helperMatch[1], /while \(agent\.activeRunState\(tabId\)\?\.running\) \{[\s\S]*?setTimeout\(resolve, 50\)/, `${label}: clear helper should also wait for direct chat runs to release the agent guard`);
+
+    const clearStart = background.indexOf("case 'clear_conversation':");
+    const clearBody = background.slice(clearStart, background.indexOf("case 'compact_conversation':", clearStart));
+    assert.match(clearBody, /const conversationId = await agent\.getConversationId\(tabId\);[\s\S]*?await stopActiveRunBeforeConversationClear\(tabId\);[\s\S]*?await scheduler\.cancelForConversation\(tabId, conversationId\);[\s\S]*?agent\.clearConversation\(tabId\);/, `${label}: active runs should settle before old-conversation jobs and state are cleared`);
   }
 });
 
@@ -14099,8 +14175,8 @@ test('sidepanel suppresses streamed raw tool-call text before rendering tool ste
     assert.match(panel, /getStreamedAssistantText\(textEl\) === String\(res\.content\)[\s\S]*?renderAssistantTextUpdate\(assistantEl, res\.content\);/, `${label}: completed streams should format the visible final text in place`);
     assert.match(panel, /clearAssistantTextStreamState\(assistantEl\);/, `${label}: run completion should clear transient streamed-text state before persistence`);
     assert.match(panel, /case 'text':[\s\S]*?\(data\.content \|\| data\.replace === true\)[\s\S]*?renderAssistantTextUpdate\(currentAssistantEl, data\.content \|\| '', \{ replace: data\.replace === true \}\);/, `${label}: text updates should forward explicit replacement requests, including empty clears`);
-    assert.match(panel, /function renderAssistantTextUpdate\(assistantEl, content, options = \{\}\) \{[\s\S]*?const restoredStreamNeedsReplacement = hasStreamedAssistantText\(textEl\) && !streamedText;[\s\S]*?isDuplicateStreamFinal[\s\S]*?if \(options\.replace === true \|\| restoredStreamNeedsReplacement\) \{[\s\S]*?if \(content\) \{[\s\S]*?textEl\.innerHTML = formatMarkdown\(content\);[\s\S]*?streamedAssistantTextByEl\.set\(textEl, String\(content\)\);[\s\S]*?\} else \{[\s\S]*?textEl\.textContent = '';[\s\S]*?clearStreamedAssistantText\(textEl\);[\s\S]*?\} else if \(verboseMode/, `${label}: explicit and restored-stream replacements should overwrite or clear verbose streamed text`);
-    assert.match(panel, /function renderAssistantTextUpdate\(assistantEl, content, options = \{\}\) \{[\s\S]*?isDuplicateStreamFinal[\s\S]*?textEl\.innerHTML = formatMarkdown\(content\);/, `${label}: final text should format an already visible stream instead of appending a duplicate`);
+    assert.match(panel, /function renderAssistantTextUpdate\(assistantEl, content, options = \{\}\) \{[\s\S]*?const hasStreamedText = hasStreamedAssistantText\(textEl\);[\s\S]*?const restoredStreamNeedsReplacement = hasStreamedText && !streamedText;[\s\S]*?if \(options\.replace === true \|\| restoredStreamNeedsReplacement\) \{[\s\S]*?if \(content\) \{[\s\S]*?textEl\.innerHTML = formatMarkdown\(content\);[\s\S]*?streamedAssistantTextByEl\.set\(textEl, String\(content\)\);[\s\S]*?\} else \{[\s\S]*?textEl\.textContent = '';[\s\S]*?clearStreamedAssistantText\(textEl\);[\s\S]*?\} else if \(verboseMode && !hasStreamedText\)/, `${label}: explicit and restored-stream replacements should overwrite or clear verbose streamed text`);
+    assert.match(panel, /function renderAssistantTextUpdate\(assistantEl, content, options = \{\}\) \{[\s\S]*?const hasStreamedText = hasStreamedAssistantText\(textEl\);[\s\S]*?else if \(verboseMode && !hasStreamedText\)[\s\S]*?textEl\.innerHTML = formatMarkdown\(content\);/, `${label}: every streamed final should format in place even when terminal cleanup changed the raw text`);
     const start = panel.indexOf("case 'tool_call':");
     const end = panel.indexOf("case 'tool_result':", start);
     assert.notEqual(start, -1, `${label}: tool_call handler missing`);
@@ -14115,6 +14191,82 @@ test('sidepanel suppresses streamed raw tool-call text before rendering tool ste
     assert.match(clearBody, /textEl\.textContent = '';/, `${label}: tool-call prose should be cleared when a tool call begins`);
     assert.match(clearBody, /clearStreamedAssistantText\(textEl\);/, `${label}: clearing pre-tool prose should drop streamed-text dedupe state`);
     assert.doesNotMatch(clearBody, /if \(!verboseMode \|\| looksLikeRawToolCallText\(text\)\)/, `${label}: verbose mode must not preserve pre-tool assistant prose`);
+  }
+});
+
+test('verbose terminal rendering does not append a normalized streamed answer twice', () => {
+  for (const [label, panelRel] of [
+    ['chrome', 'src/chrome/src/ui/sidepanel.js'],
+    ['firefox', 'src/firefox/src/ui/sidepanel.js'],
+  ]) {
+    const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
+    const start = panel.indexOf('function renderAssistantTextUpdate(assistantEl, content, options = {}) {');
+    const end = panel.indexOf('\nfunction isStoppedByUserStatus(', start);
+    assert.notEqual(start, -1, `${label}: assistant terminal renderer missing`);
+    assert.notEqual(end, -1, `${label}: assistant terminal renderer boundary missing`);
+
+    const streamedTextByEl = new WeakMap();
+    const appended = [];
+    const makeTextEl = (html = '') => ({
+      dataset: {},
+      classList: { contains: () => false },
+      innerHTML: html,
+      textContent: html,
+      replaceChildren() {
+        this.innerHTML = '';
+        this.textContent = '';
+      },
+      appendChild(node) {
+        appended.push(node);
+        this.innerHTML += node.innerHTML;
+      },
+    });
+    const context = {
+      verboseMode: true,
+      isStoppedByUserStatus: () => false,
+      parseCostAllowanceError: () => null,
+      renderSubscribeError: () => false,
+      getStreamedAssistantText: textEl => streamedTextByEl.get(textEl) || '',
+      hasStreamedAssistantText: textEl => streamedTextByEl.has(textEl)
+        || textEl?.dataset?.streamedAssistantActive === 'true',
+      clearStreamedAssistantText: textEl => {
+        streamedTextByEl.delete(textEl);
+        delete textEl.dataset.streamedAssistantActive;
+      },
+      formatMarkdown: value => String(value),
+      addMessageCopyButton: () => {},
+      document: {
+        createElement: () => ({ className: '', innerHTML: '' }),
+      },
+    };
+    const renderAssistantTextUpdate = vm.runInNewContext(
+      `(${panel.slice(start, end).trim()})`,
+      context,
+    );
+
+    const rawStream = '\n\n**Decision**\nOne answer.';
+    const terminalContent = rawStream.replace(/^\s+/, '');
+    assert.notEqual(rawStream, terminalContent, `${label}: fixture must exercise terminal normalization`);
+    const streamedTextEl = makeTextEl(rawStream);
+    streamedTextEl.dataset.streamedAssistantActive = 'true';
+    streamedTextByEl.set(streamedTextEl, rawStream);
+    const streamedAssistantEl = {
+      querySelector: selector => selector === '.message-text' ? streamedTextEl : null,
+    };
+
+    renderAssistantTextUpdate(streamedAssistantEl, terminalContent);
+
+    assert.equal(streamedTextEl.innerHTML, terminalContent, `${label}: normalized terminal content should replace the live stream`);
+    assert.equal(appended.length, 0, `${label}: normalized streamed final must not append a verbose reasoning paragraph`);
+    assert.equal(streamedTextByEl.has(streamedTextEl), false, `${label}: terminal render should clear raw stream state`);
+
+    const nonStreamedTextEl = makeTextEl('Prior verbose turn.');
+    const nonStreamedAssistantEl = {
+      querySelector: selector => selector === '.message-text' ? nonStreamedTextEl : null,
+    };
+    renderAssistantTextUpdate(nonStreamedAssistantEl, 'New non-streamed turn.');
+    assert.equal(appended.length, 1, `${label}: verbose mode should still append genuinely non-streamed turns`);
+    assert.equal(appended[0].className, 'reasoning-step', `${label}: non-streamed verbose turn should keep reasoning styling`);
   }
 });
 
@@ -14858,9 +15010,11 @@ test('sidepanel flushes run chat before queue settlement after immediate tab swi
     assert.notEqual(scheduledDrainIdx, -1, `${label}: scheduled completion should drain queued prompts`);
     assert.equal(scheduledFlushIdx < scheduledDrainIdx, true, `${label}: scheduled completion must flush before draining queued prompts`);
 
-    const abortMatch = panel.match(/setTimeout\(async \(\) => \{[\s\S]*?if \(isTabAbortRequested\(tabId\)\) \{([\s\S]*?)\n    \}\n  \}, 3000\);/);
-    assert.ok(abortMatch, `${label}: abort safety timeout body missing`);
-    const abortBody = abortMatch[1];
+    const abortStart = panel.indexOf('const settleWhenInactive = async () => {');
+    const abortEnd = panel.indexOf('fallbackTimer = setTimeout(settleWhenInactive, 3000);', abortStart);
+    assert.notEqual(abortStart, -1, `${label}: abort safety timeout body missing`);
+    assert.notEqual(abortEnd, -1, `${label}: abort safety timeout registration missing`);
+    const abortBody = panel.slice(abortStart, abortEnd);
     const abortFlushIdx = abortBody.indexOf('flushRenderedTabChat()');
     const abortDrainIdx = abortBody.indexOf('await drainQueuedPromptsAfterRunSettles();');
     assert.notEqual(abortFlushIdx, -1, `${label}: abort timeout should flush the stopped transcript`);
@@ -17197,9 +17351,11 @@ test('sidepanel abort safety timeout drains queued prompts', () => {
     ['firefox', 'src/firefox/src/ui/sidepanel.js'],
   ]) {
     const panel = fs.readFileSync(path.join(ROOT, panelRel), 'utf8');
-    const match = panel.match(/setTimeout\(async \(\) => \{[\s\S]*?if \(isTabAbortRequested\(tabId\)\) \{([\s\S]*?)\n    \}\n  \}, 3000\);/);
-    assert.ok(match, `${label}: abort safety timeout body missing`);
-    const body = match[1];
+    const abortStart = panel.indexOf('const settleWhenInactive = async () => {');
+    const abortEnd = panel.indexOf('fallbackTimer = setTimeout(settleWhenInactive, 3000);', abortStart);
+    assert.notEqual(abortStart, -1, `${label}: abort safety timeout body missing`);
+    assert.notEqual(abortEnd, -1, `${label}: abort safety timeout registration missing`);
+    const body = panel.slice(abortStart, abortEnd);
     const idleIdx = body.indexOf('setTabProcessing(tabId, false);');
     const helperIdx = body.indexOf('await drainQueuedPromptsAfterRunSettles();');
     assert.notEqual(idleIdx, -1, `${label}: abort timeout should clear processing state`);
@@ -27500,6 +27656,44 @@ test('Ask streaming eligibility is limited to interactive runs with a capable pr
     assert.equal(agent._shouldStreamInteractiveAsk(streamingProvider, 'ask', interactive, true), false, `${label}: per-run circuit breaker must disable streaming`);
     assert.equal(agent._shouldStreamInteractiveAsk({ ...streamingProvider, _supportsInteractiveAskStreaming: () => false }, 'ask', interactive), false, `${label}: unsupported providers must stay non-streaming`);
     assert.equal(agent._shouldStreamInteractiveAsk(streamingProvider, 'ask', { interactiveChat: true, openaiAskStreamingEnabled: false }), false, `${label}: legacy kill-switch payloads remain supported`);
+
+    assert.equal(agent._interactiveAskStreamingDecision(streamingProvider, 'act', interactive).reason, 'mode_not_ask', `${label}: mode decision should be traceable`);
+    assert.equal(agent._interactiveAskStreamingDecision(streamingProvider, 'ask', {}).reason, 'not_interactive_chat', `${label}: scheduled decision should be traceable`);
+    assert.equal(agent._interactiveAskStreamingDecision(streamingProvider, 'ask', { ...interactive, askStreamingEnabled: false }).reason, 'disabled_in_settings', `${label}: setting decision should be traceable`);
+    assert.equal(agent._interactiveAskStreamingDecision(streamingProvider, 'ask', interactive, true).reason, 'disabled_after_fallback', `${label}: circuit-breaker decision should be traceable`);
+    assert.equal(agent._interactiveAskStreamingDecision({ ...streamingProvider, _supportsInteractiveAskStreaming: () => false }, 'ask', interactive).reason, 'provider_not_supported', `${label}: provider decision should be traceable`);
+    assert.equal(agent._interactiveAskStreamingDecision(streamingProvider, 'ask', interactive).reason, 'eligible', `${label}: eligible decision should be traceable`);
+    assert.equal(agent._interactiveAskStreamingProtocol(streamingProvider), 'provider_native', `${label}: native provider protocol should not be mislabeled`);
+    assert.equal(agent._interactiveAskStreamingProtocol({ _usesResponsesApi: () => false }), 'chat_completions', `${label}: compatible provider protocol should be traceable`);
+    assert.equal(agent._interactiveAskStreamingProtocol({ _usesResponsesApi: () => true }), 'responses', `${label}: Responses protocol should be traceable`);
+
+    const transportError = new Error('failed with Authorization: Bearer secret-token, api_key=secret-key, {"api_key":"json-secret","password":"quoted-secret"}, and sk-or-v1-anothersecretkey');
+    transportError.isAskStreamFallbackSafe = true;
+    const failure = agent._interactiveAskStreamingFailure(transportError);
+    assert.equal(failure.reason, 'transport_error', `${label}: fallback reason should be classified`);
+    assert.doesNotMatch(failure.message, /secret-token|secret-key|json-secret|quoted-secret|anothersecretkey/, `${label}: trace error must redact secrets`);
+    assert.match(failure.message, /\[redacted\]/, `${label}: trace error should retain a redaction marker`);
+  }
+});
+
+test('Ask streaming lifecycle tracing is wired through recorder, agent, and Traces UI', () => {
+  for (const browser of ['chrome', 'firefox']) {
+    const agentSource = fs.readFileSync(path.join(ROOT, `src/${browser}/src/agent/agent.js`), 'utf8');
+    const recorderSource = fs.readFileSync(path.join(ROOT, `src/${browser}/src/trace/recorder.js`), 'utf8');
+    const tracesSource = fs.readFileSync(path.join(ROOT, `src/${browser}/src/ui/traces.js`), 'utf8');
+    const tracesHtml = fs.readFileSync(path.join(ROOT, `src/${browser}/src/ui/traces.html`), 'utf8');
+
+    assert.match(recorderSource, /export function recordStreaming\([\s\S]*?_appendEvent\(runId, 'streaming'/, `${browser}: recorder event missing`);
+    assert.match(agentSource, /let askStreamingTraceWrite = Promise\.resolve\(\)[\s\S]*?const queueAskStreamingTraceWrite = \(write\) => \{[\s\S]*?\.then\(write\)[\s\S]*?queueAskStreamingTraceWrite\(\s*\(\) => trace\.recordStreaming\(traceRunId, traceStep, payload\)/, `${browser}: ordered background recorder queue missing`);
+    assert.doesNotMatch(agentSource, /const recordAskStreaming = async/, `${browser}: trace writes must stay off the streaming request path`);
+    assert.match(agentSource, /status: 'attempted'[\s\S]*?\}\);\s*const streamStartedAt = Date\.now\(\)/, `${browser}: stream timing should start after the trace event is queued`);
+    assert.match(agentSource, /status: 'attempted'[\s\S]*?status: 'completed'[\s\S]*?status: fallbackSafe \? 'fallback' : 'failed'/, `${browser}: lifecycle outcomes missing`);
+    assert.match(agentSource, /if \(shouldOrderInteractiveAskTrace\) queueAskStreamingTraceWrite\(writeRequestTrace\)/, `${browser}: request trace must lead the streaming lifecycle queue`);
+    assert.match(agentSource, /if \(shouldOrderInteractiveAskTrace\) await queueAskStreamingTraceWrite\(writeResponseTrace\)/, `${browser}: response trace must flush after streaming lifecycle events`);
+    assert.match(agentSource, /finally \{[\s\S]{0,120}?await askStreamingTraceWrite;\s*this\._endTraceRun/, `${browser}: run finalization must wait for streaming lifecycle traces`);
+    assert.match(tracesSource, /case 'streaming':[\s\S]*?t\('st\.display\.openai_ask_streaming\.label'\)/, `${browser}: localized Traces UI renderer missing`);
+    assert.doesNotMatch(tracesSource, /Ask stream:|text delta|first delta|ms total|tool call/, `${browser}: streaming trace copy should not be hard-coded in English`);
+    assert.match(tracesHtml, /\.event\.streaming \{ border-left:/, `${browser}: Traces UI styling missing`);
   }
 });
 
@@ -47450,6 +47644,50 @@ test('detached run recovery honors a user cancellation instead of auto-resuming'
   }
 });
 
+test('detached run followers keep Stop active until the terminal journal is observable', async () => {
+  for (const [label, runDetachedWithReconnect] of [
+    ['chrome', runDetachedWithReconnectCh],
+    ['firefox', runDetachedWithReconnectFx],
+  ]) {
+    const requestId = `${label}-follow-stopped-run`;
+    let probes = 0;
+    const states = [
+      {
+        running: true,
+        starting: false,
+        runUi: { requestId, status: 'running', events: [] },
+      },
+      {
+        running: false,
+        starting: false,
+        runUi: {
+          requestId,
+          status: 'stopped',
+          finalContent: 'Stopped by user.',
+          events: [],
+        },
+      },
+    ];
+
+    const response = await runDetachedWithReconnect({
+      initialAction: 'chat_start',
+      payload: { tabId: 45, requestId, mode: 'act', text: 'stop and clear' },
+      start: async () => ({ accepted: true, requestId }),
+      probe: async () => {
+        const state = states[Math.min(probes, states.length - 1)];
+        probes += 1;
+        return state;
+      },
+      isConnectionError: () => false,
+      shouldResume: () => false,
+      wait: async () => {},
+    });
+
+    assert.equal(probes, 2, `${label}: Stop should keep following the live run until its terminal snapshot`);
+    assert.equal(response.runStatus, 'stopped', `${label}: the follower should settle from the terminal stopped journal`);
+  }
+});
+
 test('detached run recovery preserves background preflight errors', async () => {
   for (const [label, runDetachedWithReconnect] of [
     ['chrome', runDetachedWithReconnectCh],
@@ -47568,11 +47806,17 @@ test('reconnect protocol is wired through both sidepanels and backgrounds', () =
     assert.match(panel, /probeFirst: true,[\s\S]*?requireDurableSubmittedTurn:/, `${label}: remount adoption should probe before any safe continuation`);
     assert.match(panel, /if \(state\?\.running \|\| state\?\.starting\)/, `${label}: a reserved detached start should keep the composer and Stop UI in their active state`);
     assert.match(panel, /cancelledRunRecoveryRequestIds/, `${label}: user cancellation should block automatic resume`);
+    assert.match(panel, /const localRunFollowers = new Map\(\)/, `${label}: locally initiated detached runs should expose their follower settlement`);
+    assert.match(panel, /const follower = \{ requestId, promise \};[\s\S]*?localRunFollowers\.set\(tabId, follower\);[\s\S]*?return await promise;[\s\S]*?localRunFollowers\.delete\(tabId\)/, `${label}: detached follower promises should remain tracked until they settle`);
     const stopSection = panel.slice(
       panel.indexOf('// --- Stop / Abort ---'),
       panel.indexOf('// --- Voice input', panel.indexOf('// --- Stop / Abort ---')),
     );
     assert.match(stopSection, /localRunRequestIds\.get\(Number\(tabId\)\)[\s\S]*?cancelledRunRecoveryRequestIds\.add\(requestId\)[\s\S]*?setTabAbortRequested\(tabId, true\)/, `${label}: Stop should persist request-scoped cancellation before its UI timeout clears`);
+    assert.match(stopSection, /const follower = localRunFollowers\.get\(Number\(tabId\)\);[\s\S]*?fallbackTimer = setTimeout\(settleWhenInactive, 3000\);[\s\S]*?await sendToBackground\('abort', \{ tabId \}\);[\s\S]*?await Promise\.race\(\[[\s\S]*?follower\.promise\.catch\(\(\) => \{\}\),[\s\S]*?fallbackPromise,[\s\S]*?\]\);[\s\S]*?await follower\.promise\.catch\(\(\) => \{\}\);[\s\S]*?fallbackCancelled = true;/, `${label}: Stop should start its fallback but still settle the local follower before New conversation can clear its journal`);
+    assert.match(panel, /returnedErrorUpdate[\s\S]*?!isTabAbortRequested\(tabId\)[\s\S]*?!clearedConversationRunRequestIds\.has\(requestId\)[\s\S]*?renderAgentErrorUpdate/, `${label}: cleared chats should suppress returned run errors even after the fallback clears the abort flag`);
+    assert.match(panel, /catch \(e\) \{[\s\S]*?currentTabId === tabId[\s\S]*?assistantEl[\s\S]*?!isTabAbortRequested\(tabId\)[\s\S]*?!clearedConversationRunRequestIds\.has\(requestId\)/, `${label}: cleared chats should suppress reconnect failures from direct and continuation runs`);
+    assert.match(stopSection, /let fallbackProbeFailures = 0;[\s\S]*?const maxFallbackProbeFailures = 5;[\s\S]*?if \(!state\) \{[\s\S]*?fallbackProbeFailures \+= 1;[\s\S]*?follower\?\.requestId === requestId[\s\S]*?fallbackProbeFailures < maxFallbackProbeFailures[\s\S]*?setTimeout\(settleWhenInactive, 1000\)[\s\S]*?\} else if \(state\.running \|\| state\.starting\) \{[\s\S]*?fallbackProbeFailures = 0;[\s\S]*?setTimeout\(settleWhenInactive, 1000\)[\s\S]*?setTabProcessing\(tabId, false\);/, `${label}: Stop should bound unavailable probes without unlocking a confirmed active run or bypassing a local follower`);
     assert.match(background, /case 'chat_start':[\s\S]*?launchDetachedRun\('chat'/, `${label}: background should acknowledge detached chat starts`);
     assert.match(background, /case 'continue_start':[\s\S]*?launchDetachedRun\('continue'/, `${label}: background should acknowledge detached continuation starts`);
     assert.match(background, /case 'chat':[\s\S]*?await beginContinuationRunUiSnapshot\(tabId, msg\.requestId,/, `${label}: replayed fresh chats should preserve journal sequence numbers`);

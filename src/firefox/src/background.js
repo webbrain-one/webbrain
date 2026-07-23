@@ -1582,6 +1582,29 @@ function cancelDetachedRunStart(tabId) {
   return true;
 }
 
+async function stopActiveRunBeforeConversationClear(tabId) {
+  const activeStart = detachedRunStarts.get(tabId) || null;
+  const running = agent.activeRunState(tabId)?.running === true;
+  if (!activeStart && !running) return false;
+
+  cancelDetachedRunStart(tabId);
+  try { agent.abort(tabId); } catch { /* best effort */ }
+
+  // Keep the old conversation alive until its run has unwound. Clearing it
+  // first leaves the per-tab run guard active while the UI already looks like
+  // a fresh chat, so the next send fails with "run already in progress".
+  if (activeStart?.promise) {
+    await activeStart.promise.catch(() => {});
+  }
+  // Direct chat/chat_stream callers do not have a detached-start promise.
+  // Do not clear their conversation until processMessage's finally block has
+  // released the agent's per-tab run guard.
+  while (agent.activeRunState(tabId)?.running) {
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
+  return true;
+}
+
 function acquireRunKeepalive() {
   let released = false;
   const touch = () => {
@@ -2048,6 +2071,7 @@ async function handleMessage(msg, sender) {
       const tabId = msg.tabId || sender.tab?.id;
       if (tabId) {
         const conversationId = await agent.getConversationId(tabId);
+        await stopActiveRunBeforeConversationClear(tabId);
         await scheduler.cancelForConversation(tabId, conversationId);
         agent.clearConversation(tabId);
         clearRunUiSnapshot(tabId);

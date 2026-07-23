@@ -804,9 +804,12 @@ let abortRequested = false;
 const awaitingPlanReviewTabs = new Set();
 const processingTabs = new Set();
 const abortRequestedTabs = new Set();
+const clearingConversationTabs = new Set();
 const localRunRequestIds = new Map();
+const localRunFollowers = new Map();
 const cancelledRunRecoveryRequestIds = new Set();
 const adoptedRunRecoveryRequestIds = new Set();
+const clearedConversationRunRequestIds = new Set();
 let recommendationsRequestId = 0;
 let providerSelectionRequestId = 0;
 let providerTestRequestId = 0;
@@ -833,6 +836,19 @@ function setTabProcessing(tabId, processing) {
 function isTabProcessing(tabId) {
   const numericTabId = Number(tabId);
   return Number.isFinite(numericTabId) && processingTabs.has(numericTabId);
+}
+
+function setConversationClearInProgress(tabId, clearing) {
+  const numericTabId = Number(tabId);
+  if (!Number.isFinite(numericTabId)) return;
+  if (clearing) clearingConversationTabs.add(numericTabId);
+  else clearingConversationTabs.delete(numericTabId);
+  if (sameTabId(currentTabId, numericTabId)) syncSendButtonState();
+}
+
+function isConversationClearInProgress(tabId = currentTabId) {
+  const numericTabId = Number(tabId);
+  return Number.isFinite(numericTabId) && clearingConversationTabs.has(numericTabId);
 }
 
 function setTabAbortRequested(tabId, requested) {
@@ -864,7 +880,7 @@ const {
   clearQueuedForTab,
 } = createContextMenuPromptHandler({
   getCurrentTabId: () => currentTabId,
-  getIsProcessing: () => isProcessing,
+  getIsProcessing: () => isProcessing || isConversationClearInProgress(),
   getAgentMode: () => agentMode,
   setMode,
   getInputEl: () => inputEl,
@@ -5707,6 +5723,10 @@ function syncSendButtonState() {
     sendBtn.disabled = true;
     return;
   }
+  if (isConversationClearInProgress()) {
+    sendBtn.disabled = true;
+    return;
+  }
   if (!isProcessing) {
     sendBtn.disabled = isAttachmentReadPendingForTab();
     return;
@@ -6059,8 +6079,15 @@ async function parseSlashCommands(text, tabId = currentTabId, options = {}) {
   }
 
   if (command.value === '/reset') {
-    await sendToBackground('clear_conversation', { tabId });
-    await renderClearedConversationForTab(tabId);
+    setConversationClearInProgress(tabId, true);
+    try {
+      suppressRunUpdatesForClearedConversation(tabId);
+      if (isTabProcessing(tabId)) await abortRun(tabId);
+      await sendToBackground('clear_conversation', { tabId });
+      await renderClearedConversationForTab(tabId);
+    } finally {
+      setConversationClearInProgress(tabId, false);
+    }
     return '';
   }
 
@@ -6287,6 +6314,7 @@ async function sendMessage(extraChatParams = {}) {
   if (!text) return;
   const submittedText = text;
   const tabId = currentTabId;
+  if (isConversationClearInProgress(tabId)) return false;
   const permissionSkipContext = permissionSkipCommandContextForDraft(tabId, text);
   const requestId = createRunRequestId(tabId);
   text = normalizeScreenshotCommandText(text);
@@ -6454,7 +6482,11 @@ async function sendMessage(extraChatParams = {}) {
     const returnedErrorUpdate = Array.isArray(res?.updates)
       ? res.updates.find(u => u?.type === 'error')
       : null;
-    if (returnedErrorUpdate && renderToCurrentTab && currentTabId === tabId && !isTabAbortRequested(tabId)) {
+    if (returnedErrorUpdate
+        && renderToCurrentTab
+        && currentTabId === tabId
+        && !isTabAbortRequested(tabId)
+        && !clearedConversationRunRequestIds.has(requestId)) {
       renderAgentErrorUpdate(returnedErrorUpdate.data, tabId, requestId, {
         submittedTurnDurable: res.submittedTurnDurable,
       });
@@ -6528,7 +6560,10 @@ async function sendMessage(extraChatParams = {}) {
         }
         syncSendButtonState();
       }
-    } else if (renderToCurrentTab && currentTabId === tabId && !isTabAbortRequested(tabId)) {
+    } else if (renderToCurrentTab
+        && currentTabId === tabId
+        && !isTabAbortRequested(tabId)
+        && !clearedConversationRunRequestIds.has(requestId)) {
       renderAgentErrorUpdate({ message: e.message }, tabId, requestId);
     }
   } finally {
@@ -6594,6 +6629,23 @@ function ensureCurrentRunAssistant(msg) {
   return assistantEl;
 }
 
+function suppressRunUpdatesForClearedConversation(tabId) {
+  const requestId = String(
+    localRunRequestIds.get(Number(tabId))
+      || (sameTabId(currentTabId, tabId) ? currentAssistantEl?.dataset?.runRequestId : '')
+      || '',
+  );
+  if (!requestId) return;
+  // Runtime messages are delivered asynchronously. Keep recently cleared
+  // request IDs so a terminal update already queued by the background cannot
+  // recreate an assistant bubble after the empty conversation is rendered.
+  clearedConversationRunRequestIds.delete(requestId);
+  clearedConversationRunRequestIds.add(requestId);
+  while (clearedConversationRunRequestIds.size > 100) {
+    clearedConversationRunRequestIds.delete(clearedConversationRunRequestIds.values().next().value);
+  }
+}
+
 function invalidatePlanReviewCards({ tabId = currentTabId, planId = '', requestId = '', runId = '', remove = true } = {}) {
   for (const card of messagesEl.querySelectorAll('.plan-review-card')) {
     if (tabId != null && String(card.dataset.tabId || '') !== String(tabId)) continue;
@@ -6614,6 +6666,8 @@ function handleAgentUpdateMessage(msg) {
     handleScheduledJobEvent(msg.data, msg.tabId);
     return;
   }
+
+  if (msg.requestId && clearedConversationRunRequestIds.has(String(msg.requestId))) return;
 
   // Drop updates that belong to a different tab's run. agent_update is a
   // window-wide broadcast (browser.runtime.sendMessage has no per-tab
@@ -7762,8 +7816,8 @@ function renderAssistantTextUpdate(assistantEl, content, options = {}) {
   }
 
   const streamedText = getStreamedAssistantText(textEl);
-  const restoredStreamNeedsReplacement = hasStreamedAssistantText(textEl) && !streamedText;
-  const isDuplicateStreamFinal = streamedText && streamedText === String(content);
+  const hasStreamedText = hasStreamedAssistantText(textEl);
+  const restoredStreamNeedsReplacement = hasStreamedText && !streamedText;
 
   if (options.replace === true || restoredStreamNeedsReplacement) {
     // A rejected streamed terminal must replace its already-rendered deltas
@@ -7776,11 +7830,11 @@ function renderAssistantTextUpdate(assistantEl, content, options = {}) {
       textEl.textContent = '';
       clearStreamedAssistantText(textEl);
     }
-  } else if (verboseMode && !isDuplicateStreamFinal) {
+  } else if (verboseMode && !hasStreamedText) {
     // Verbose mode: append each non-streamed turn as its own paragraph so
     // intermediate prose is preserved alongside the steps log. Streaming
-    // finals are already visible live, so format the existing stream instead
-    // of appending a duplicate paragraph at run completion.
+    // finals are already visible live, so format the authoritative terminal
+    // content in place even when cleanup changed it from the raw stream.
     const para = document.createElement('div');
     para.className = 'reasoning-step';
     para.innerHTML = formatMarkdown(content);
@@ -8296,7 +8350,10 @@ async function continueAgent(options = {}) {
       }
     }
   } catch (e) {
-    if (currentTabId === tabId && assistantEl && !isTabAbortRequested(tabId)) {
+    if (currentTabId === tabId
+        && assistantEl
+        && !isTabAbortRequested(tabId)
+        && !clearedConversationRunRequestIds.has(requestId)) {
       addMessage('error', t('sp.error_prefix', { msg: e.message }));
     }
   } finally {
@@ -8941,7 +8998,7 @@ async function sendRunWithReconnect(initialAction, payload, recoveryOptions = {}
   const tabId = Number(payload?.tabId);
   const requestId = String(payload?.requestId || '');
   cancelledRunRecoveryRequestIds.delete(requestId);
-  return runDetachedWithReconnect({
+  const promise = runDetachedWithReconnect({
     initialAction,
     payload,
     start: (action, nextPayload) => sendToBackground(action, nextPayload),
@@ -8965,6 +9022,13 @@ async function sendRunWithReconnect(initialAction, payload, recoveryOptions = {}
     },
     ...recoveryOptions,
   });
+  const follower = { requestId, promise };
+  localRunFollowers.set(tabId, follower);
+  try {
+    return await promise;
+  } finally {
+    if (localRunFollowers.get(tabId) === follower) localRunFollowers.delete(tabId);
+  }
 }
 
 function formatBackgroundSendError(action, message) {
@@ -9046,28 +9110,61 @@ modeDevBtn?.addEventListener('click', async () => {
 
 // --- Stop / Abort ---
 
-stopBtn.addEventListener('click', async () => {
-  const tabId = currentTabId;
+async function abortRun(tabId = currentTabId) {
   if (!isTabProcessing(tabId)) return;
   const requestId = String(
     localRunRequestIds.get(Number(tabId))
-      || currentAssistantEl?.dataset?.runRequestId
+      || (sameTabId(currentTabId, tabId) ? currentAssistantEl?.dataset?.runRequestId : '')
       || '',
   );
+  const follower = localRunFollowers.get(Number(tabId));
   if (requestId) cancelledRunRecoveryRequestIds.add(requestId);
   setTabAbortRequested(tabId, true);
-  showActivity(t('sp.activity.stopping'));
+  if (sameTabId(currentTabId, tabId)) showActivity(t('sp.activity.stopping'));
 
-  try {
-    await sendToBackground('abort', { tabId });
-  } catch {
-    // Best effort
-  }
-
-  // Force UI to settle even if background doesn't respond cleanly
-  setTimeout(async () => {
-    if (isTabAbortRequested(tabId)) {
-      if (!sameTabId(currentTabId, tabId) || !sameTabId(renderedTabId, tabId)) return;
+  let fallbackTimer = null;
+  let fallbackCancelled = false;
+  let fallbackProbeFailures = 0;
+  const maxFallbackProbeFailures = 5;
+  const fallbackPromise = new Promise(resolve => {
+    const settleWhenInactive = async () => {
+      if (fallbackCancelled) {
+        resolve();
+        return;
+      }
+      if (!isTabAbortRequested(tabId)) {
+        resolve();
+        return;
+      }
+      let state;
+      try {
+        state = await sendToBackground('agent_run_state', { tabId, requestId });
+      } catch {
+        state = null;
+      }
+      if (fallbackCancelled) {
+        resolve();
+        return;
+      }
+      if (!state) {
+        fallbackProbeFailures += 1;
+        // A local follower has its own bounded reconnect policy and remains
+        // authoritative. Without one, eventually release a panel whose
+        // background disappeared instead of polling "Stopping…" forever.
+        if (follower?.requestId === requestId
+            || fallbackProbeFailures < maxFallbackProbeFailures) {
+          fallbackTimer = setTimeout(settleWhenInactive, 1000);
+          return;
+        }
+      } else if (state.running || state.starting) {
+        fallbackProbeFailures = 0;
+        fallbackTimer = setTimeout(settleWhenInactive, 1000);
+        return;
+      }
+      if (!sameTabId(currentTabId, tabId) || !sameTabId(renderedTabId, tabId)) {
+        resolve();
+        return;
+      }
       finalizeSteps();
       if (currentAssistantEl) {
         const textEl = currentAssistantEl.querySelector('.message-text');
@@ -9082,9 +9179,32 @@ stopBtn.addEventListener('click', async () => {
       setTabAbortRequested(tabId, false);
       await flushRenderedTabChat();
       await drainQueuedPromptsAfterRunSettles();
-    }
-  }, 3000); // safety timeout if background takes too long
-});
+      resolve();
+    };
+    fallbackTimer = setTimeout(settleWhenInactive, 3000);
+  });
+
+  try {
+    await sendToBackground('abort', { tabId });
+  } catch {
+    // Best effort
+  }
+  if (follower?.requestId === requestId) {
+    await Promise.race([
+      follower.promise.catch(() => {}),
+      fallbackPromise,
+    ]);
+    // A stopped background run can become inactive before this reconnect
+    // follower consumes its terminal journal. New conversation awaits
+    // abortRun(), so do not let it clear that journal until the follower has
+    // observed the terminal snapshot (or reached its bounded failure).
+    await follower.promise.catch(() => {});
+    fallbackCancelled = true;
+    clearTimeout(fallbackTimer);
+  }
+}
+
+stopBtn.addEventListener('click', () => abortRun());
 
 // --- Voice input (mic dictation, issue #210) ---
 // Web Speech API: well-supported in Chrome, absent in stock Firefox (which
@@ -9463,9 +9583,20 @@ document.addEventListener('wb-locale-changed', () => {
 
 clearBtn.addEventListener('click', async () => {
   const tabId = currentTabId;
+  if (isConversationClearInProgress(tabId)) return;
   if (!window.confirm(t('sp.clear.confirm'))) return;
-  await sendToBackground('clear_conversation', { tabId });
-  await renderClearedConversationForTab(tabId);
+  setConversationClearInProgress(tabId, true);
+  try {
+    suppressRunUpdatesForClearedConversation(tabId);
+    clearQueuedComposerMessagesForTab(tabId);
+    clearQueuedForTab(tabId);
+    await sendToBackground('clear_context_menu_prompt', { tabId }).catch(() => {});
+    if (isTabProcessing(tabId)) await abortRun(tabId);
+    await sendToBackground('clear_conversation', { tabId });
+    await renderClearedConversationForTab(tabId);
+  } finally {
+    setConversationClearInProgress(tabId, false);
+  }
 });
 
 providerSelect.addEventListener('change', async () => {
