@@ -9493,18 +9493,17 @@ modeDevBtn?.addEventListener('click', async () => {
 
 // --- Stop / Abort ---
 
-async function abortRun() {
-  const tabId = currentTabId;
+async function abortRun(tabId = currentTabId) {
   if (!isTabProcessing(tabId)) return;
   const requestId = String(
     localRunRequestIds.get(Number(tabId))
-      || currentAssistantEl?.dataset?.runRequestId
+      || (sameTabId(currentTabId, tabId) ? currentAssistantEl?.dataset?.runRequestId : '')
       || '',
   );
   const follower = localRunFollowers.get(Number(tabId));
   if (requestId) cancelledRunRecoveryRequestIds.add(requestId);
   setTabAbortRequested(tabId, true);
-  showActivity(t('sp.activity.stopping'));
+  if (sameTabId(currentTabId, tabId)) showActivity(t('sp.activity.stopping'));
 
   let fallbackTimer = null;
   let fallbackCancelled = false;
@@ -9570,7 +9569,7 @@ async function abortRun() {
   }
 }
 
-stopBtn.addEventListener('click', abortRun);
+stopBtn.addEventListener('click', () => abortRun());
 
 // --- Voice input (mic dictation, issue #210) ---
 // Web Speech API: well-supported in Chrome, absent in stock Firefox (which
@@ -10059,7 +10058,7 @@ clearBtn.addEventListener('click', async () => {
   clearQueuedComposerMessagesForTab(tabId);
   clearQueuedForTab(tabId);
   await sendToBackground('clear_context_menu_prompt', { tabId }).catch(() => {});
-  if (isTabProcessing(tabId)) await abortRun();
+  if (isTabProcessing(tabId)) await abortRun(tabId);
   await sendToBackground('clear_conversation', { tabId });
   await renderClearedConversationForTab(tabId);
 });
