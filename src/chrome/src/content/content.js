@@ -679,6 +679,70 @@
       || String(el?.innerText || '').trim().slice(0, 160);
   }
 
+  function _axVisibleConfirmationSurfaces() {
+    const surfaces = [];
+    const seen = new Set();
+    const selectors = [
+      '[role="dialog"]',
+      '[role="alertdialog"]',
+      '[aria-modal="true"]',
+      'dialog[open]',
+      '.modal',
+    ].join(',');
+    const visible = (el) => {
+      try {
+        if (!el?.isConnected) return false;
+        const style = getComputedStyle(el);
+        if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return false;
+        const rect = el.getBoundingClientRect();
+        return rect.width >= 20 && rect.height >= 20;
+      } catch {
+        return false;
+      }
+    };
+    try {
+      for (const surface of document.querySelectorAll(selectors)) {
+        if (!visible(surface)) continue;
+        const id = String(surface.id || '').trim();
+        const role = String(surface.getAttribute('role') || surface.tagName || '').trim().toLowerCase();
+        const heading = surface.querySelector(
+          '[role="heading"],h1,h2,h3,h4,h5,h6,[aria-label]'
+        );
+        const title = String(
+          surface.getAttribute('aria-label')
+          || heading?.innerText
+          || heading?.textContent
+          || ''
+        ).replace(/\s+/g, ' ').trim().slice(0, 160);
+        const actions = [];
+        for (const control of surface.querySelectorAll('button,a,[role="button"]')) {
+          if (!visible(control)) continue;
+          const name = _axAccessibleName(control).replace(/\s+/g, ' ').trim();
+          if (name && !actions.includes(name)) actions.push(name.slice(0, 120));
+          if (actions.length >= 6) break;
+        }
+        const signature = id
+          ? `id:${id}`
+          : `surface:${role}|${title}|${actions.join('|')}`.slice(0, 480);
+        if (!signature || seen.has(signature)) continue;
+        seen.add(signature);
+        surfaces.push({ signature, title, actions });
+        if (surfaces.length >= 8) break;
+      }
+    } catch {}
+    return surfaces;
+  }
+
+  function _axNewConfirmationSurface(before = []) {
+    const previous = new Set(
+      (Array.isArray(before) ? before : [])
+        .map(surface => String(surface?.signature || ''))
+        .filter(Boolean)
+    );
+    return _axVisibleConfirmationSurfaces()
+      .find(surface => !previous.has(surface.signature)) || null;
+  }
+
   function _axCheckboxIdentity(el, refId = '') {
     try {
       const id = String(el?.id || '').trim();
@@ -4107,6 +4171,7 @@
           }
           const checkedBefore = !!el.checked;
           const checkboxIdentity = _axCheckboxIdentity(el, ref_id);
+          const confirmationSurfacesBefore = _axVisibleConfirmationSurfaces();
           const base = {
             method: 'set_checked',
             ref_id,
@@ -4164,6 +4229,7 @@
               needsTrustedClick: true,
               marker: marker || undefined,
               trustedSelector: trustedSelector || undefined,
+              _confirmationSurfaces: confirmationSurfacesBefore,
               ...base,
             };
           }
@@ -4171,6 +4237,9 @@
           el.click();
           const checkedAfter = !!el.checked;
           const success = checkedAfter === checked;
+          const confirmation = success
+            ? null
+            : _axNewConfirmationSurface(confirmationSurfacesBefore);
           return {
             ...base,
             success,
@@ -4184,7 +4253,13 @@
               desiredChecked: checked,
               actualChecked: checkedAfter,
             },
-            ...(success ? {} : {
+            ...(confirmation ? {
+              confirmationRequired: true,
+              recoveryRequired: 'confirmation_dialog',
+              observedEffects: ['confirmation_dialog_opened'],
+              confirmation,
+              warning: 'A confirmation dialog opened before the checkbox could reach the requested state. Do not call set_checked again. Re-read the visible accessibility tree and choose a dialog action only when it is supported by the user request or current evidence.',
+            } : success ? {} : {
               noProgress: true,
               error: `Checkbox remained ${checkedAfter ? 'checked' : 'unchecked'} after one synthetic click. This page may require trusted pointer input.`,
             }),
