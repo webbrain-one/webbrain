@@ -7,10 +7,11 @@
  * the right source for a tool chain; `this.conversations` is not (it is compacted,
  * enriched, and wrapped — see the closed PR #348 review).
  *
- * This renders the TOOL CHAIN: user/assistant/planner prose, tool calls (name,
- * args, result), and errors — in order. Screenshot / note / vision_sub_call events
- * are recorded but deliberately not rendered; the file says so in its footer, so it
- * never claims to be a complete record. The complete record is the Traces-page JSON.
+ * This renders the TOOL CHAIN: user/assistant/planner prose, streaming lifecycle
+ * metadata, tool calls (name, args, result), and errors — in order. Screenshot /
+ * note / vision_sub_call events are recorded but deliberately not rendered; the
+ * file says so in its footer, so it never claims to be a complete record. The
+ * complete record is the Traces-page JSON.
  *
  * Pure and browser-neutral → unit-tested in test/run.js without a DOM or IndexedDB.
  *
@@ -82,6 +83,22 @@ function renderResult(result) {
   return { text: truncate(oneLine(s), RESULT_LIMIT), failed };
 }
 
+function renderStreaming(data) {
+  const d = data || {};
+  const details = [
+    oneLine(d.protocol),
+    oneLine(d.reason),
+    d.errorCode ? `code ${oneLine(d.errorCode)}` : '',
+    Number.isFinite(d.textDeltaCount) ? `${d.textDeltaCount} text delta${d.textDeltaCount === 1 ? '' : 's'}` : '',
+    Number.isFinite(d.textChars) ? `${d.textChars} chars` : '',
+    Number.isFinite(d.firstDeltaMs) ? `first delta ${d.firstDeltaMs} ms` : '',
+    Number.isFinite(d.durationMs) ? `${d.durationMs} ms total` : '',
+    Number.isFinite(d.toolCallCount) ? `${d.toolCallCount} tool call${d.toolCallCount === 1 ? '' : 's'}` : '',
+  ].filter(Boolean);
+  const message = oneLine(d.message);
+  return `- 🌊 Ask stream ${oneLine(d.status || 'event')}${details.length ? ` · ${details.join(' · ')}` : ''}${message ? `: ${message}` : ''}\n`;
+}
+
 function exportedRunStatus(run, events = []) {
   const status = oneLine(run?.status || '');
   const sawLoopError = events.some(ev => ev?.kind === 'error' && ev?.data?.phase === 'loop');
@@ -137,6 +154,8 @@ export function tracesToMarkdown(runsWithEvents, {
         toolCount += 1;
         const { text, failed } = renderResult(d.result);
         md += `- 🔧 \`${d.name || 'tool'}\`(${stringifyArgs(d.args)}) → ${failed ? '✗ ' : ''}${text}\n`;
+      } else if (ev.kind === 'streaming') {
+        md += renderStreaming(d);
       } else if (ev.kind === 'error') {
         md += `- ⚠️ error${d.phase ? ` (${d.phase})` : ''}: ${oneLine(d.message || '')}\n`;
       }

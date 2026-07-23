@@ -249,6 +249,15 @@ export function recordError(runId, step, phase, message) {
 }
 
 /**
+ * Record the lifecycle of an interactive Ask streaming attempt without
+ * persisting token contents. Payloads contain only decision/outcome codes,
+ * protocol, aggregate counts, timing, and a redacted error summary.
+ */
+export function recordStreaming(runId, step, payload = {}) {
+  return _appendEvent(runId, 'streaming', { step, ...payload });
+}
+
+/**
  * Record a vision sub-call: the agent asked a dedicated vision model to
  * describe a screenshot so the main planning model receives text instead
  * of pixels. Captured for debugging and quality inspection — description

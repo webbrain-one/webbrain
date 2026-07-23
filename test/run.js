@@ -3145,6 +3145,60 @@ test('trace export: chrome and firefox serializers are identical', () => {
   assert.equal(tracesToMarkdownFx(TRACE_RUNS).markdown, tracesToMarkdown(TRACE_RUNS).markdown);
 });
 
+test('trace export: renders Ask streaming decisions and aggregate lifecycle metrics', () => {
+  const streamingRun = [{
+    run: { runId: 'streaming', userMessage: 'Explain this page', model: 'test', status: 'done' },
+    events: [
+      {
+        runId: 'streaming',
+        seq: 0,
+        kind: 'streaming',
+        data: { step: 1, status: 'attempted', reason: 'eligible', protocol: 'chat_completions' },
+      },
+      {
+        runId: 'streaming',
+        seq: 1,
+        kind: 'streaming',
+        data: {
+          step: 1,
+          status: 'completed',
+          reason: 'terminal_event_received',
+          protocol: 'chat_completions',
+          textDeltaCount: 7,
+          textChars: 128,
+          firstDeltaMs: 42,
+          durationMs: 310,
+          toolCallCount: 0,
+        },
+      },
+      {
+        runId: 'streaming',
+        seq: 2,
+        kind: 'streaming',
+        data: {
+          step: 2,
+          status: 'fallback',
+          reason: 'missing_terminal_event',
+          protocol: 'responses',
+          errorCode: 'missing_response_completed',
+          textDeltaCount: 2,
+          textChars: 18,
+          firstDeltaMs: 50,
+          durationMs: 200,
+          message: 'Responses stream incomplete (missing_response_completed).',
+        },
+      },
+    ],
+  }];
+  for (const [label, serialize] of [['chrome', tracesToMarkdown], ['firefox', tracesToMarkdownFx]]) {
+    const { markdown, toolCount } = serialize(streamingRun);
+    assert.equal(toolCount, 0, `${label}: lifecycle events must not count as tools`);
+    assert.match(markdown, /Ask stream attempted · chat_completions · eligible/, `${label}: attempt missing`);
+    assert.match(markdown, /Ask stream completed · chat_completions · terminal_event_received · 7 text deltas · 128 chars · first delta 42 ms · 310 ms total · 0 tool calls/, `${label}: completion metrics missing`);
+    assert.match(markdown, /Ask stream fallback · responses · missing_terminal_event · code missing_response_completed · 2 text deltas/, `${label}: fallback reason missing`);
+  }
+});
+
 test('/export --traces is wired in both side panels and backgrounds', () => {
   for (const [label, panelRel, bgRel] of [
     ['chrome', 'src/chrome/src/ui/sidepanel.js', 'src/chrome/src/background.js'],
@@ -27500,6 +27554,44 @@ test('Ask streaming eligibility is limited to interactive runs with a capable pr
     assert.equal(agent._shouldStreamInteractiveAsk(streamingProvider, 'ask', interactive, true), false, `${label}: per-run circuit breaker must disable streaming`);
     assert.equal(agent._shouldStreamInteractiveAsk({ ...streamingProvider, _supportsInteractiveAskStreaming: () => false }, 'ask', interactive), false, `${label}: unsupported providers must stay non-streaming`);
     assert.equal(agent._shouldStreamInteractiveAsk(streamingProvider, 'ask', { interactiveChat: true, openaiAskStreamingEnabled: false }), false, `${label}: legacy kill-switch payloads remain supported`);
+
+    assert.equal(agent._interactiveAskStreamingDecision(streamingProvider, 'act', interactive).reason, 'mode_not_ask', `${label}: mode decision should be traceable`);
+    assert.equal(agent._interactiveAskStreamingDecision(streamingProvider, 'ask', {}).reason, 'not_interactive_chat', `${label}: scheduled decision should be traceable`);
+    assert.equal(agent._interactiveAskStreamingDecision(streamingProvider, 'ask', { ...interactive, askStreamingEnabled: false }).reason, 'disabled_in_settings', `${label}: setting decision should be traceable`);
+    assert.equal(agent._interactiveAskStreamingDecision(streamingProvider, 'ask', interactive, true).reason, 'disabled_after_fallback', `${label}: circuit-breaker decision should be traceable`);
+    assert.equal(agent._interactiveAskStreamingDecision({ ...streamingProvider, _supportsInteractiveAskStreaming: () => false }, 'ask', interactive).reason, 'provider_not_supported', `${label}: provider decision should be traceable`);
+    assert.equal(agent._interactiveAskStreamingDecision(streamingProvider, 'ask', interactive).reason, 'eligible', `${label}: eligible decision should be traceable`);
+    assert.equal(agent._interactiveAskStreamingProtocol(streamingProvider), 'provider_native', `${label}: native provider protocol should not be mislabeled`);
+    assert.equal(agent._interactiveAskStreamingProtocol({ _usesResponsesApi: () => false }), 'chat_completions', `${label}: compatible provider protocol should be traceable`);
+    assert.equal(agent._interactiveAskStreamingProtocol({ _usesResponsesApi: () => true }), 'responses', `${label}: Responses protocol should be traceable`);
+
+    const transportError = new Error('failed with Authorization: Bearer secret-token, api_key=secret-key, {"api_key":"json-secret","password":"quoted-secret"}, and sk-or-v1-anothersecretkey');
+    transportError.isAskStreamFallbackSafe = true;
+    const failure = agent._interactiveAskStreamingFailure(transportError);
+    assert.equal(failure.reason, 'transport_error', `${label}: fallback reason should be classified`);
+    assert.doesNotMatch(failure.message, /secret-token|secret-key|json-secret|quoted-secret|anothersecretkey/, `${label}: trace error must redact secrets`);
+    assert.match(failure.message, /\[redacted\]/, `${label}: trace error should retain a redaction marker`);
+  }
+});
+
+test('Ask streaming lifecycle tracing is wired through recorder, agent, and Traces UI', () => {
+  for (const browser of ['chrome', 'firefox']) {
+    const agentSource = fs.readFileSync(path.join(ROOT, `src/${browser}/src/agent/agent.js`), 'utf8');
+    const recorderSource = fs.readFileSync(path.join(ROOT, `src/${browser}/src/trace/recorder.js`), 'utf8');
+    const tracesSource = fs.readFileSync(path.join(ROOT, `src/${browser}/src/ui/traces.js`), 'utf8');
+    const tracesHtml = fs.readFileSync(path.join(ROOT, `src/${browser}/src/ui/traces.html`), 'utf8');
+
+    assert.match(recorderSource, /export function recordStreaming\([\s\S]*?_appendEvent\(runId, 'streaming'/, `${browser}: recorder event missing`);
+    assert.match(agentSource, /let askStreamingTraceWrite = Promise\.resolve\(\)[\s\S]*?const queueAskStreamingTraceWrite = \(write\) => \{[\s\S]*?\.then\(write\)[\s\S]*?queueAskStreamingTraceWrite\(\s*\(\) => trace\.recordStreaming\(traceRunId, traceStep, payload\)/, `${browser}: ordered background recorder queue missing`);
+    assert.doesNotMatch(agentSource, /const recordAskStreaming = async/, `${browser}: trace writes must stay off the streaming request path`);
+    assert.match(agentSource, /status: 'attempted'[\s\S]*?\}\);\s*const streamStartedAt = Date\.now\(\)/, `${browser}: stream timing should start after the trace event is queued`);
+    assert.match(agentSource, /status: 'attempted'[\s\S]*?status: 'completed'[\s\S]*?status: fallbackSafe \? 'fallback' : 'failed'/, `${browser}: lifecycle outcomes missing`);
+    assert.match(agentSource, /if \(shouldOrderInteractiveAskTrace\) queueAskStreamingTraceWrite\(writeRequestTrace\)/, `${browser}: request trace must lead the streaming lifecycle queue`);
+    assert.match(agentSource, /if \(shouldOrderInteractiveAskTrace\) await queueAskStreamingTraceWrite\(writeResponseTrace\)/, `${browser}: response trace must flush after streaming lifecycle events`);
+    assert.match(agentSource, /finally \{[\s\S]{0,120}?await askStreamingTraceWrite;\s*this\._endTraceRun/, `${browser}: run finalization must wait for streaming lifecycle traces`);
+    assert.match(tracesSource, /case 'streaming':[\s\S]*?t\('st\.display\.openai_ask_streaming\.label'\)/, `${browser}: localized Traces UI renderer missing`);
+    assert.doesNotMatch(tracesSource, /Ask stream:|text delta|first delta|ms total|tool call/, `${browser}: streaming trace copy should not be hard-coded in English`);
+    assert.match(tracesHtml, /\.event\.streaming \{ border-left:/, `${browser}: Traces UI styling missing`);
   }
 });
 
