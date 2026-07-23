@@ -26568,12 +26568,23 @@ test('WebBrain Cloud sends the Help Improve preference without leaking it to BYO
   }
 });
 
-test('official OpenAI GPT-5.6 alone routes to Responses API', () => {
+test('official OpenAI GPT-5.6 and Responses-only GPT-5 Pro variants route to Responses API', () => {
   for (const Provider of [OpenAIProviderCh, OpenAIProviderFx]) {
     assert.equal(new Provider({ providerName: 'openai' }).model, 'gpt-5.6-terra');
     assert.equal(new Provider({ providerName: 'openrouter' }).model, 'gpt-4o');
     assert.equal(new Provider({ providerName: 'openai', baseUrl: 'https://proxy.example.test/v1' }).model, 'gpt-4o');
-    for (const model of ['gpt-5.6', 'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.6-terra-2026-07-15']) {
+    for (const model of [
+      'gpt-5.6',
+      'gpt-5.6-sol',
+      'gpt-5.6-terra',
+      'gpt-5.6-luna',
+      'gpt-5.6-terra-2026-07-15',
+      'gpt-5-pro',
+      'gpt-5.2-pro-2025-12-11',
+      'gpt-5.4-pro',
+      'gpt-5.4-pro-2026-03-05',
+      'gpt-5.5-pro-2026-04-23',
+    ]) {
       const provider = new Provider({
         providerName: 'openai',
         baseUrl: 'https://api.openai.com/v1',
@@ -26585,12 +26596,209 @@ test('official OpenAI GPT-5.6 alone routes to Responses API', () => {
 
     for (const config of [
       { providerName: 'openai', baseUrl: 'https://api.openai.com/v1', model: 'gpt-5.5' },
+      { providerName: 'openai', baseUrl: 'https://api.openai.com/v1', model: 'gpt-5.4-mini' },
       { providerName: 'openrouter', baseUrl: 'https://openrouter.ai/api/v1', model: 'openai/gpt-5.6-terra' },
       { providerName: 'openai', baseUrl: 'https://proxy.example.test/v1', model: 'gpt-5.6-terra' },
       { providerName: 'lmstudio', category: 'local', baseUrl: 'http://localhost:1234/v1', model: 'gpt-5.6-terra' },
     ]) {
       assert.equal(new Provider(config)._usesResponsesApi(), false, `${config.providerName}/${config.model} should keep Chat Completions`);
     }
+  }
+});
+
+test('Responses reasoning effort is normalized for GPT-5 Pro model constraints', () => {
+  for (const Provider of [OpenAIProviderCh, OpenAIProviderFx]) {
+    for (const model of ['gpt-5-pro', 'gpt-5-pro-2025-10-06']) {
+      const provider = new Provider({
+        providerName: 'openai',
+        baseUrl: 'https://api.openai.com/v1',
+        model,
+      });
+      assert.equal(provider._responsesBody([], {}, false).reasoning.effort, 'high', `${model}: default must be high`);
+      assert.equal(
+        provider._responsesBody([], { extraBody: { reasoning_effort: 'none' } }, false).reasoning.effort,
+        'high',
+        `${model}: unsupported overrides must be normalized to high`,
+      );
+    }
+
+    for (const model of ['gpt-5.2-pro', 'gpt-5.4-pro-2026-03-05', 'gpt-5.5-pro']) {
+      const provider = new Provider({
+        providerName: 'openai',
+        baseUrl: 'https://api.openai.com/v1',
+        model,
+      });
+      assert.equal(
+        provider._responsesBody([], { extraBody: { reasoning_effort: 'low' } }, false).reasoning.effort,
+        'medium',
+        `${model}: unsupported low effort must use the supported default`,
+      );
+      assert.equal(
+        provider._responsesBody([], { extraBody: { reasoning_effort: 'xhigh' } }, false).reasoning.effort,
+        'xhigh',
+        `${model}: supported xhigh effort should be preserved`,
+      );
+    }
+  }
+});
+
+test('official OpenAI Ask streaming follows the documented model capability', () => {
+  const supportedModels = [
+    'gpt-5.6-terra',
+    'gpt-5.5',
+    'gpt-5.5-2026-04-23',
+    'gpt-5.4',
+    'gpt-5.4-pro-2026-03-05',
+    'gpt-5.4-mini-2026-03-17',
+    'gpt-5.4-nano-2026-03-17',
+    'gpt-5.2',
+    'gpt-5.1-2025-11-13',
+    'gpt-5',
+    'gpt-5-mini',
+    'gpt-5.3-chat-latest',
+    'gpt-5.2-chat-latest',
+    'gpt-5.1-chat-latest',
+    'gpt-5-chat-latest',
+    'gpt-4.1',
+    'gpt-4.1-mini',
+    'gpt-4o',
+    'gpt-4o-mini',
+    'gpt-4-turbo',
+    'o1',
+    'o1-preview',
+    'o3',
+    'o3-mini',
+    'o4-mini',
+    'chatgpt-4o-latest',
+    'chat-latest',
+  ];
+  for (const Provider of [OpenAIProviderCh, OpenAIProviderFx]) {
+    for (const model of supportedModels) {
+      const provider = new Provider({
+        providerName: 'openai',
+        baseUrl: 'https://api.openai.com/v1',
+        model,
+      });
+      assert.equal(provider._supportsInteractiveAskStreaming(), true, `${model} should stream interactive Ask`);
+    }
+
+    for (const config of [
+      { providerName: 'openai', baseUrl: 'https://api.openai.com/v1', model: 'gpt-5.5-pro' },
+      { providerName: 'openai', baseUrl: 'https://api.openai.com/v1', model: 'gpt-5.5-pro', supportsAskStreaming: true },
+      { providerName: 'openai', baseUrl: 'https://api.openai.com/v1', model: 'gpt-3.5-turbo' },
+      { providerName: 'openai', baseUrl: 'https://api.openai.com/v1', model: 'gpt-4' },
+      { providerName: 'openai', baseUrl: 'https://api.openai.com/v1', model: 'o1-mini' },
+      { providerName: 'openai', baseUrl: 'https://api.openai.com/v1', model: 'o3-pro' },
+      { providerName: 'openai', baseUrl: 'https://proxy.example.test/v1', model: 'gpt-5.5' },
+      { providerName: 'openrouter', baseUrl: 'https://openrouter.ai/api/v1', model: 'openai/gpt-5.5' },
+    ]) {
+      assert.equal(
+        new Provider(config)._supportsInteractiveAskStreaming(),
+        false,
+        `${config.providerName}/${config.model} should not stream interactive Ask`,
+      );
+    }
+  }
+});
+
+test('documented built-in providers opt into interactive Ask streaming', () => {
+  const enabledIds = [
+    'webbrain_cloud',
+    'llamacpp',
+    'ollama',
+    'lmstudio',
+    'jan',
+    'vllm',
+    'sglang',
+    'localai',
+    'azure_openai',
+    'anthropic',
+    'gemini',
+    'mistral',
+    'deepseek',
+    'xai',
+    'nvidia',
+    'groq',
+    'together',
+    'openrouter',
+    'fireworks',
+    'z_ai',
+  ];
+  for (const PM of [ProviderManagerCh, ProviderManagerFx]) {
+    const manager = new PM();
+    const defaults = manager._defaultConfigs();
+    for (const id of enabledIds) {
+      assert.equal(defaults[id].supportsAskStreaming, true, `${PM.name}/${id}: default capability missing`);
+      assert.equal(
+        manager._createProvider(id, defaults[id])._supportsInteractiveAskStreaming(),
+        true,
+        `${PM.name}/${id}: provider should expose interactive Ask streaming`,
+      );
+    }
+  }
+});
+
+test('Alibaba Ask stays non-streaming even with a stale stored opt-in', () => {
+  for (const PM of [ProviderManagerCh, ProviderManagerFx]) {
+    const manager = new PM();
+    const defaults = manager._defaultConfigs();
+    assert.notEqual(defaults.alibaba.supportsAskStreaming, true, `${PM.name}: Alibaba default must not opt in`);
+    const provider = manager._createProvider('alibaba', {
+      ...defaults.alibaba,
+      supportsAskStreaming: true,
+    });
+    assert.equal(
+      provider._supportsInteractiveAskStreaming(),
+      false,
+      `${PM.name}: DashScope tools+stream incompatibility must override stale stored config`,
+    );
+  }
+});
+
+test('Mistral Ask streaming always requests usage metadata for metering', () => {
+  for (const PM of [ProviderManagerCh, ProviderManagerFx]) {
+    const manager = new PM();
+    const defaults = manager._defaultConfigs();
+    assert.equal(defaults.mistral.supportsStreamUsageOptions, true, `${PM.name}: Mistral usage opt-in missing`);
+    const provider = manager._createProvider('mistral', {
+      ...defaults.mistral,
+      supportsStreamUsageOptions: false,
+    });
+    const body = provider._buildChatCompletionsBody(
+      [{ role: 'user', content: 'hello' }],
+      {},
+      true,
+    );
+    assert.deepEqual(
+      body.stream_options,
+      { include_usage: true },
+      `${PM.name}: stale stored config must not disable Mistral stream metering`,
+    );
+  }
+});
+
+test('z.ai requests tool-call deltas only for streaming generations with tools', () => {
+  const tools = [{
+    type: 'function',
+    function: {
+      name: 'read_page',
+      description: 'Read the current page',
+      parameters: { type: 'object', properties: {} },
+    },
+  }];
+  for (const PM of [ProviderManagerCh, ProviderManagerFx]) {
+    const manager = new PM();
+    const provider = manager._createProvider('z_ai', manager._defaultConfigs().z_ai);
+    const messages = [{ role: 'user', content: 'hello' }];
+
+    const streamingBody = provider._buildChatCompletionsBody(messages, { tools }, true);
+    assert.equal(streamingBody.tool_stream, true, `${PM.name}: z.ai streaming tools require tool_stream`);
+
+    const nonStreamingBody = provider._buildChatCompletionsBody(messages, { tools }, false);
+    assert.equal(nonStreamingBody.tool_stream, undefined, `${PM.name}: z.ai non-streaming calls must omit tool_stream`);
+
+    const textOnlyBody = provider._buildChatCompletionsBody(messages, {}, true);
+    assert.equal(textOnlyBody.tool_stream, undefined, `${PM.name}: z.ai text-only streams do not need tool_stream`);
   }
 });
 
@@ -26817,24 +27025,25 @@ test('GPT-5.6 Responses streaming emits text, tool calls, usage, and replay item
   }
 });
 
-test('Ask streaming eligibility is limited to interactive official OpenAI Responses runs', () => {
+test('Ask streaming eligibility is limited to interactive runs with a capable provider', () => {
   for (const [label, AgentClass] of [['chrome', AgentCh], ['firefox', AgentFx]]) {
     const agent = new AgentClass({});
-    const responsesProvider = {
+    const streamingProvider = {
       chatStream: async function* () {},
-      _usesResponsesApi: () => true,
+      _supportsInteractiveAskStreaming: () => true,
     };
-    const interactive = { interactiveChat: true, openaiAskStreamingEnabled: true };
+    const interactive = { interactiveChat: true, askStreamingEnabled: true };
 
-    assert.equal(agent._shouldStreamOpenAIAsk(responsesProvider, 'ask', interactive), true, `${label}: eligible Ask chat should stream`);
-    assert.equal(agent._shouldStreamOpenAIAsk(responsesProvider, 'act', interactive), false, `${label}: Act must stay non-streaming`);
-    assert.equal(agent._shouldStreamOpenAIAsk(responsesProvider, 'dev', interactive), false, `${label}: Dev must stay non-streaming`);
-    assert.equal(agent._shouldStreamOpenAIAsk(responsesProvider, 'ask', {}), false, `${label}: scheduled/non-interactive Ask must stay non-streaming`);
-    assert.equal(agent._shouldStreamOpenAIAsk(responsesProvider, 'ask', { ...interactive, trustedContinuation: true }), false, `${label}: Continue must stay non-streaming`);
-    assert.equal(agent._shouldStreamOpenAIAsk(responsesProvider, 'ask', { ...interactive, cloudRun: true }), false, `${label}: cloud Ask must stay non-streaming`);
-    assert.equal(agent._shouldStreamOpenAIAsk(responsesProvider, 'ask', { ...interactive, openaiAskStreamingEnabled: false }), false, `${label}: kill switch must disable streaming`);
-    assert.equal(agent._shouldStreamOpenAIAsk(responsesProvider, 'ask', interactive, true), false, `${label}: per-run circuit breaker must disable streaming`);
-    assert.equal(agent._shouldStreamOpenAIAsk({ ...responsesProvider, _usesResponsesApi: () => false }, 'ask', interactive), false, `${label}: compatible/Chat Completions providers must stay non-streaming`);
+    assert.equal(agent._shouldStreamInteractiveAsk(streamingProvider, 'ask', interactive), true, `${label}: eligible Ask chat should stream`);
+    assert.equal(agent._shouldStreamInteractiveAsk(streamingProvider, 'act', interactive), false, `${label}: Act must stay non-streaming`);
+    assert.equal(agent._shouldStreamInteractiveAsk(streamingProvider, 'dev', interactive), false, `${label}: Dev must stay non-streaming`);
+    assert.equal(agent._shouldStreamInteractiveAsk(streamingProvider, 'ask', {}), false, `${label}: scheduled/non-interactive Ask must stay non-streaming`);
+    assert.equal(agent._shouldStreamInteractiveAsk(streamingProvider, 'ask', { ...interactive, trustedContinuation: true }), false, `${label}: Continue must stay non-streaming`);
+    assert.equal(agent._shouldStreamInteractiveAsk(streamingProvider, 'ask', { ...interactive, cloudRun: true }), false, `${label}: cloud Ask must stay non-streaming`);
+    assert.equal(agent._shouldStreamInteractiveAsk(streamingProvider, 'ask', { ...interactive, askStreamingEnabled: false }), false, `${label}: kill switch must disable streaming`);
+    assert.equal(agent._shouldStreamInteractiveAsk(streamingProvider, 'ask', interactive, true), false, `${label}: per-run circuit breaker must disable streaming`);
+    assert.equal(agent._shouldStreamInteractiveAsk({ ...streamingProvider, _supportsInteractiveAskStreaming: () => false }, 'ask', interactive), false, `${label}: unsupported providers must stay non-streaming`);
+    assert.equal(agent._shouldStreamInteractiveAsk(streamingProvider, 'ask', { interactiveChat: true, openaiAskStreamingEnabled: false }), false, `${label}: legacy kill-switch payloads remain supported`);
   }
 });
 
@@ -26849,7 +27058,13 @@ test('Ask stream fallback is limited to transport and missing-completion failure
       baseUrl: 'https://api.openai.com/v1',
       model: 'gpt-5.6-terra',
     });
+    const chatCompletionsProvider = new Provider({
+      providerName: 'openai',
+      baseUrl: 'https://api.openai.com/v1',
+      model: 'gpt-5.5',
+    });
     const transportError = provider._responsesStreamTransportError('connection reset');
+    const chatTransportError = chatCompletionsProvider._chatCompletionsStreamTransportError('connection reset');
     const missingCompletion = provider._responsesIncompleteError({
       incomplete_details: { reason: 'missing_response_completed' },
     }, { stream: true });
@@ -26859,10 +27074,431 @@ test('Ask stream fallback is limited to transport and missing-completion failure
     const terminalApiError = new Error('rate limited');
     terminalApiError.isResponsesStreamError = true;
 
-    assert.equal(agent._shouldFallbackOpenAIAskStream(transportError), true, `${label}: transport interruptions should fall back`);
-    assert.equal(agent._shouldFallbackOpenAIAskStream(missingCompletion), true, `${label}: a stream missing response.completed should fall back`);
-    assert.equal(agent._shouldFallbackOpenAIAskStream(terminalIncomplete), false, `${label}: response.incomplete must propagate`);
-    assert.equal(agent._shouldFallbackOpenAIAskStream(terminalApiError), false, `${label}: terminal API errors must propagate`);
+    assert.equal(agent._shouldFallbackAskStream(transportError), true, `${label}: transport interruptions should fall back`);
+    assert.equal(agent._shouldFallbackAskStream(chatTransportError), true, `${label}: Chat Completions transport interruptions should fall back`);
+    assert.equal(agent._shouldFallbackAskStream(missingCompletion), true, `${label}: a stream missing response.completed should fall back`);
+    assert.equal(agent._shouldFallbackAskStream(terminalIncomplete), false, `${label}: response.incomplete must propagate`);
+    assert.equal(agent._shouldFallbackAskStream(terminalApiError), false, `${label}: terminal API errors must propagate`);
+  }
+});
+
+test('official OpenAI Chat Completions Ask streams require the terminal DONE sentinel', async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    const completeSse = [
+      `data: ${JSON.stringify({ choices: [{ delta: { content: 'Live answer.' } }] })}\n\n`,
+      'data: [DONE]\n\n',
+    ].join('');
+    for (const Provider of [OpenAIProviderCh, OpenAIProviderFx]) {
+      globalThis.fetch = async () => new Response(completeSse, {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream' },
+      });
+      const provider = new Provider({
+        providerName: 'openai',
+        baseUrl: 'https://api.openai.com/v1',
+        model: 'gpt-5.5',
+      });
+      const chunks = [];
+      for await (const chunk of provider.chatStream([{ role: 'user', content: 'hello' }])) {
+        chunks.push(chunk);
+      }
+      assert.deepEqual(chunks, [
+        { type: 'text', content: 'Live answer.' },
+        { type: 'done', content: '' },
+      ]);
+
+      globalThis.fetch = async () => new Response(
+        `data: ${JSON.stringify({ choices: [{ delta: { content: 'Partial' } }] })}\n\n`,
+        { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+      );
+      const partialChunks = [];
+      let thrown = null;
+      try {
+        for await (const chunk of provider.chatStream([{ role: 'user', content: 'hello' }])) {
+          partialChunks.push(chunk);
+        }
+      } catch (error) {
+        thrown = error;
+      }
+      assert.deepEqual(partialChunks, [{ type: 'text', content: 'Partial' }]);
+      assert.match(thrown?.message || '', /before the \[DONE\] sentinel/);
+      assert.equal(thrown?.isChatCompletionsStreamError, true);
+      assert.equal(thrown?.isOpenAIAskStreamFallbackSafe, true);
+      assert.equal(thrown?.isAskStreamFallbackSafe, true);
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('Chat Completions stream error frames are terminal while malformed frames permit one safe fallback', async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    for (const Provider of [OpenAIProviderCh, OpenAIProviderFx]) {
+      const provider = new Provider({
+        providerName: 'openai',
+        baseUrl: 'https://api.openai.com/v1',
+        model: 'gpt-5.5',
+      });
+
+      globalThis.fetch = async () => new Response([
+        `data: ${JSON.stringify({ error: { type: 'rate_limit_error', message: 'Too many requests' } })}\n\n`,
+        'data: [DONE]\n\n',
+      ].join(''), { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+      let terminal = null;
+      try {
+        for await (const _chunk of provider.chatStream([{ role: 'user', content: 'hello' }])) {}
+      } catch (error) {
+        terminal = error;
+      }
+      assert.match(terminal?.message || '', /Too many requests/);
+      assert.equal(terminal?.isChatCompletionsStreamError, true);
+      assert.notEqual(terminal?.isAskStreamFallbackSafe, true, 'explicit provider errors must not be retried as non-streaming');
+
+      globalThis.fetch = async () => new Response([
+        'data: {not-json}\n\n',
+        'data: [DONE]\n\n',
+      ].join(''), { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+      let malformed = null;
+      try {
+        for await (const _chunk of provider.chatStream([{ role: 'user', content: 'hello' }])) {}
+      } catch (error) {
+        malformed = error;
+      }
+      assert.match(malformed?.message || '', /malformed JSON/);
+      assert.equal(malformed?.isAskStreamFallbackSafe, true);
+
+      globalThis.fetch = async () => new Response([
+        `data: ${JSON.stringify({ choices: [{ delta: { content: 'Blocked partial' } }] })}\n\n`,
+        `data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'content_filter' }] })}\n\n`,
+        'data: [DONE]\n\n',
+      ].join(''), { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+      const filteredChunks = [];
+      let filtered = null;
+      try {
+        for await (const chunk of provider.chatStream([{ role: 'user', content: 'hello' }])) {
+          filteredChunks.push(chunk);
+        }
+      } catch (error) {
+        filtered = error;
+      }
+      assert.deepEqual(filteredChunks, [{ type: 'text', content: 'Blocked partial' }]);
+      assert.match(filtered?.message || '', /content filter/);
+      assert.equal(filtered?.isChatCompletionsStreamError, true);
+      assert.notEqual(filtered?.isAskStreamFallbackSafe, true, 'content-filtered output must not retry non-streaming');
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('z.ai stream failure finish reasons are terminal and never fall back', async () => {
+  const originalFetch = globalThis.fetch;
+  const terminalReasons = [
+    'sensitive',
+    'network_error',
+    'model_context_window_exceeded',
+  ];
+  try {
+    for (const Provider of [OpenAIProviderCh, OpenAIProviderFx]) {
+      const provider = new Provider({
+        providerName: 'z_ai',
+        baseUrl: 'https://api.z.ai/api/paas/v4',
+        model: 'glm-5.2',
+        supportsAskStreaming: true,
+      });
+      for (const finishReason of terminalReasons) {
+        globalThis.fetch = async () => new Response([
+          `data: ${JSON.stringify({ choices: [{ delta: { content: 'Partial' } }] })}\n\n`,
+          `data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: finishReason }] })}\n\n`,
+          'data: [DONE]\n\n',
+        ].join(''), { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+        const chunks = [];
+        let terminal = null;
+        try {
+          for await (const chunk of provider.chatStream([{ role: 'user', content: 'hello' }])) {
+            chunks.push(chunk);
+          }
+        } catch (error) {
+          terminal = error;
+        }
+        assert.deepEqual(chunks, [{ type: 'text', content: 'Partial' }]);
+        assert.match(terminal?.message || '', new RegExp(finishReason));
+        assert.equal(terminal?.isChatCompletionsStreamError, true);
+        assert.notEqual(
+          terminal?.isAskStreamFallbackSafe,
+          true,
+          `${finishReason}: explicit z.ai terminal failures must not retry non-streaming`,
+        );
+        assert.equal(chunks.some((chunk) => chunk.type === 'done'), false);
+      }
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('OpenAI-compatible Ask providers consume text, tool, usage, and DONE fixtures', async () => {
+  const originalFetch = globalThis.fetch;
+  const providerIds = [
+    'webbrain_cloud',
+    'ollama',
+    'lmstudio',
+    'jan',
+    'vllm',
+    'sglang',
+    'localai',
+    'gemini',
+    'mistral',
+    'deepseek',
+    'xai',
+    'nvidia',
+    'groq',
+    'together',
+    'openrouter',
+    'fireworks',
+    'z_ai',
+  ];
+  try {
+    for (const [label, PM] of [
+      ['chrome', ProviderManagerCh],
+      ['firefox', ProviderManagerFx],
+    ]) {
+      const manager = new PM();
+      const defaults = manager._defaultConfigs();
+      for (const id of providerIds) {
+        globalThis.fetch = async () => new Response([
+          `data: ${JSON.stringify({ choices: [{ delta: { content: `${id} answer` } }] })}\n\n`,
+          `data: ${JSON.stringify({ choices: [{ delta: { tool_calls: [{ index: 0, id: 'call_1', type: 'function', function: { name: 'read_page', arguments: '{}' } }] } }] })}\n\n`,
+          `data: ${JSON.stringify({ choices: [], usage: { prompt_tokens: 5, completion_tokens: 3, total_tokens: 8 } })}\n\n`,
+          'data: [DONE]\n\n',
+        ].join(''), { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+        const provider = manager._createProvider(id, defaults[id]);
+        const chunks = [];
+        for await (const chunk of provider.chatStream([{ role: 'user', content: 'hello' }])) chunks.push(chunk);
+        assert.deepEqual(chunks, [
+          { type: 'text', content: `${id} answer` },
+          {
+            type: 'tool_call',
+            content: [{
+              index: 0,
+              id: 'call_1',
+              type: 'function',
+              function: { name: 'read_page', arguments: '{}' },
+            }],
+          },
+          { type: 'usage', usage: { prompt_tokens: 5, completion_tokens: 3, total_tokens: 8 } },
+          { type: 'done', content: '' },
+        ], `${label}/${id}: compatible stream fixture mismatch`);
+      }
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('llama.cpp Ask streams consume OpenAI-compatible fixtures and require DONE', async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    for (const Provider of [LlamaCppProviderCh, LlamaCppProviderFx]) {
+      const provider = new Provider({
+        baseUrl: 'http://localhost:8080',
+        model: 'local-model',
+        supportsAskStreaming: true,
+      });
+      globalThis.fetch = async () => new Response([
+        `data: ${JSON.stringify({ choices: [{ delta: { reasoning_content: 'Think.' } }] })}\n\n`,
+        `data: ${JSON.stringify({ choices: [{ delta: { content: 'Local answer.' } }] })}\n\n`,
+        `data: ${JSON.stringify({ choices: [{ delta: { tool_calls: [{ index: 0, id: 'call_1', type: 'function', function: { name: 'read_page', arguments: '{}' } }] } }] })}\n\n`,
+        `data: ${JSON.stringify({ choices: [], usage: { prompt_tokens: 5, completion_tokens: 3, total_tokens: 8 } })}\n\n`,
+        'data: [DONE]\n\n',
+      ].join(''), { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+      const chunks = [];
+      for await (const chunk of provider.chatStream([{ role: 'user', content: 'hello' }])) chunks.push(chunk);
+      assert.deepEqual(chunks, [
+        { type: 'reasoning', content: 'Think.' },
+        { type: 'text', content: 'Local answer.' },
+        {
+          type: 'tool_call',
+          content: [{
+            index: 0,
+            id: 'call_1',
+            type: 'function',
+            function: { name: 'read_page', arguments: '{}' },
+          }],
+        },
+        { type: 'usage', usage: { prompt_tokens: 5, completion_tokens: 3, total_tokens: 8 } },
+        { type: 'done', content: '' },
+      ]);
+
+      globalThis.fetch = async () => new Response(
+        `data: ${JSON.stringify({ choices: [{ delta: { content: 'Partial' } }] })}\n\n`,
+        { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+      );
+      let incomplete = null;
+      try {
+        for await (const _chunk of provider.chatStream([{ role: 'user', content: 'hello' }])) {}
+      } catch (error) {
+        incomplete = error;
+      }
+      assert.match(incomplete?.message || '', /before the \[DONE\] sentinel/);
+      assert.equal(incomplete?.isAskStreamFallbackSafe, true);
+
+      globalThis.fetch = async () => new Response([
+        `data: ${JSON.stringify({ error: { code: 'server_error', message: 'Generation failed' } })}\n\n`,
+        'data: [DONE]\n\n',
+      ].join(''), { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+      let terminal = null;
+      try {
+        for await (const _chunk of provider.chatStream([{ role: 'user', content: 'hello' }])) {}
+      } catch (error) {
+        terminal = error;
+      }
+      assert.match(terminal?.message || '', /Generation failed/);
+      assert.notEqual(terminal?.isAskStreamFallbackSafe, true);
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('Anthropic Ask streams require message_stop and propagate in-stream error events', async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    for (const Provider of [AnthropicProviderCh, AnthropicProviderFx]) {
+      const provider = new Provider({
+        baseUrl: 'https://api.anthropic.com',
+        model: 'claude-sonnet-4-6',
+        apiKey: 'test-key',
+        supportsAskStreaming: true,
+      });
+      const completeSse = [
+        `data: ${JSON.stringify({ type: 'message_start', message: { usage: { input_tokens: 4, output_tokens: 1 } } })}\n\n`,
+        `data: ${JSON.stringify({ type: 'content_block_delta', delta: { type: 'text_delta', text: 'Claude answer.' } })}\n\n`,
+        `data: ${JSON.stringify({ type: 'message_delta', usage: { output_tokens: 3 } })}\n\n`,
+        `data: ${JSON.stringify({ type: 'message_stop' })}\n\n`,
+      ].join('');
+      globalThis.fetch = async () => new Response(completeSse, {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream' },
+      });
+      const chunks = [];
+      for await (const chunk of provider.chatStream([{ role: 'user', content: 'hello' }])) chunks.push(chunk);
+      assert.equal(chunks[0]?.content, 'Claude answer.');
+      assert.equal(chunks[1]?.type, 'usage');
+      assert.equal(chunks[2]?.type, 'done');
+
+      globalThis.fetch = async () => new Response(
+        `data: ${JSON.stringify({ type: 'content_block_delta', delta: { type: 'text_delta', text: 'Partial' } })}\n\n`,
+        { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+      );
+      let incomplete = null;
+      try {
+        for await (const _chunk of provider.chatStream([{ role: 'user', content: 'hello' }])) {}
+      } catch (error) {
+        incomplete = error;
+      }
+      assert.match(incomplete?.message || '', /before the message_stop event/);
+      assert.equal(incomplete?.isAskStreamFallbackSafe, true);
+
+      globalThis.fetch = async () => new Response([
+        `data: ${JSON.stringify({ type: 'error', error: { type: 'overloaded_error', message: 'Overloaded' } })}\n\n`,
+        `data: ${JSON.stringify({ type: 'message_stop' })}\n\n`,
+      ].join(''), { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+      let terminal = null;
+      try {
+        for await (const _chunk of provider.chatStream([{ role: 'user', content: 'hello' }])) {}
+      } catch (error) {
+        terminal = error;
+      }
+      assert.match(terminal?.message || '', /Overloaded/);
+      assert.notEqual(terminal?.isAskStreamFallbackSafe, true);
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('Azure OpenAI Ask streams require DONE and distinguish terminal API errors', async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    for (const Provider of [AzureOpenAIProviderCh, AzureOpenAIProviderFx]) {
+      const provider = new Provider({
+        providerName: 'azure-openai',
+        baseUrl: 'https://example.openai.azure.com',
+        model: 'deployment',
+        apiVersion: '2024-10-21',
+        apiKey: 'test-key',
+        supportsAskStreaming: true,
+      });
+      const completeSse = [
+        `data: ${JSON.stringify({ choices: [{ delta: { content: 'Azure answer.' } }] })}\n\n`,
+        `data: ${JSON.stringify({ choices: [], usage: { prompt_tokens: 4, completion_tokens: 2, total_tokens: 6 } })}\n\n`,
+        'data: [DONE]\n\n',
+      ].join('');
+      globalThis.fetch = async () => new Response(completeSse, {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream' },
+      });
+      const chunks = [];
+      for await (const chunk of provider.chatStream([{ role: 'user', content: 'hello' }])) chunks.push(chunk);
+      assert.equal(chunks[0]?.content, 'Azure answer.');
+      assert.equal(chunks[1]?.type, 'usage');
+      assert.equal(chunks[2]?.type, 'done');
+
+      globalThis.fetch = async () => new Response(
+        `data: ${JSON.stringify({ choices: [{ delta: { content: 'Partial' } }] })}\n\n`,
+        { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+      );
+      let incomplete = null;
+      try {
+        for await (const _chunk of provider.chatStream([{ role: 'user', content: 'hello' }])) {}
+      } catch (error) {
+        incomplete = error;
+      }
+      assert.match(incomplete?.message || '', /before the \[DONE\] sentinel/);
+      assert.equal(incomplete?.isAskStreamFallbackSafe, true);
+
+      globalThis.fetch = async () => new Response([
+        `data: ${JSON.stringify({ error: { code: 'content_filter', message: 'Blocked by policy' } })}\n\n`,
+        'data: [DONE]\n\n',
+      ].join(''), { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+      let terminal = null;
+      try {
+        for await (const _chunk of provider.chatStream([{ role: 'user', content: 'hello' }])) {}
+      } catch (error) {
+        terminal = error;
+      }
+      assert.match(terminal?.message || '', /Blocked by policy/);
+      assert.notEqual(terminal?.isAskStreamFallbackSafe, true);
+
+      globalThis.fetch = async () => new Response([
+        `data: ${JSON.stringify({ choices: [{ delta: { content: 'Blocked partial' } }] })}\n\n`,
+        `data: ${JSON.stringify({
+          choices: [{
+            delta: {},
+            finish_reason: 'content_filter',
+            content_filter_results: { protected_material_text: { detected: true, filtered: true } },
+          }],
+        })}\n\n`,
+        'data: [DONE]\n\n',
+      ].join(''), { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+      const filteredChunks = [];
+      let filtered = null;
+      try {
+        for await (const chunk of provider.chatStream([{ role: 'user', content: 'hello' }])) {
+          filteredChunks.push(chunk);
+        }
+      } catch (error) {
+        filtered = error;
+      }
+      assert.deepEqual(filteredChunks, [{ type: 'text', content: 'Blocked partial' }]);
+      assert.match(filtered?.message || '', /Azure content filter/);
+      assert.notEqual(filtered?.isAskStreamFallbackSafe, true, 'Azure content-filtered output must not retry non-streaming');
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
   }
 });
 
@@ -26922,7 +27558,7 @@ test('interactive Ask streaming preserves attachments and persists only the comp
       contextWindow: 128000,
       model: 'gpt-5.6-terra',
       name: 'openai',
-      _usesResponsesApi: () => true,
+      _supportsInteractiveAskStreaming: () => true,
       chat: async () => {
         chatCalls += 1;
         return { content: 'unexpected fallback', toolCalls: null };
@@ -26956,7 +27592,7 @@ test('interactive Ask streaming preserves attachments and persists only the comp
       (type, data) => updates.push({ type, data }),
       'ask',
       [{ kind: 'image', dataUrl: imageUrl, name: 'sample.png' }],
-      { interactiveChat: true, openaiAskStreamingEnabled: true },
+      { interactiveChat: true, askStreamingEnabled: true },
     );
 
     assert.equal(final, 'Image received.', `${label}: streamed final mismatch`);
@@ -26985,7 +27621,7 @@ test('Ask stream failure clears partial text and falls back once for the rest of
       contextWindow: 128000,
       model: 'gpt-5.6-terra',
       name: 'openai',
-      _usesResponsesApi: () => true,
+      _supportsInteractiveAskStreaming: () => true,
       async *chatStream() {
         streamCalls += 1;
         yield { type: 'text', content: 'Partial answer' };
@@ -26994,8 +27630,8 @@ test('Ask stream failure clears partial text and falls back once for the rest of
           content: [{ index: 0, id: 'streamed_click', type: 'function', function: { name: 'click', arguments: '{"x":1,"y":1}' } }],
         };
         const error = new Error('connection reset before response.completed');
-        error.isResponsesStreamError = true;
-        error.isResponsesStreamFallbackSafe = true;
+        error.isAskStreamError = true;
+        error.isAskStreamFallbackSafe = true;
         throw error;
       },
       async chat() {
@@ -27034,7 +27670,7 @@ test('Ask stream failure clears partial text and falls back once for the rest of
       (type, data) => updates.push({ type, data }),
       'ask',
       [],
-      { interactiveChat: true, openaiAskStreamingEnabled: true },
+      { interactiveChat: true, askStreamingEnabled: true },
     );
 
     assert.equal(final, 'Recovered answer.', `${label}: fallback final mismatch`);
@@ -27042,8 +27678,66 @@ test('Ask stream failure clears partial text and falls back once for the rest of
     assert.equal(chatCalls, 2, `${label}: failed generation and its tool follow-up should use provider.chat()`);
     assert.deepEqual(executed, ['read_page'], `${label}: pre-completion streamed tool call must never execute`);
     assert.ok(updates.some(update => update.type === 'text' && update.data?.replace === true && update.data?.content === ''), `${label}: partial streamed text should be cleared`);
-    assert.equal(updates.filter(update => update.type === 'warning' && /retrying this Ask turn without streaming/.test(update.data?.message || '')).length, 1, `${label}: fallback warning should be emitted once`);
+    assert.equal(updates.filter(update => update.type === 'warning').length, 0, `${label}: safe fallback should be silent`);
     assert.equal(agent.conversations.get(tabId).some(message => message.role === 'assistant' && message.content === 'Partial answer'), false, `${label}: failed partial text must not persist`);
+  }
+});
+
+test('Ask terminal stream errors clear partial text without retrying the generation', async () => {
+  for (const [index, [label, AgentClass]] of [['chrome', AgentCh], ['firefox', AgentFx]].entries()) {
+    let streamCalls = 0;
+    let chatCalls = 0;
+    const provider = {
+      supportsTools: false,
+      supportsVision: false,
+      promptTier: 'full',
+      contextWindow: 128000,
+      model: 'gpt-5.6-terra',
+      name: 'openai',
+      _supportsInteractiveAskStreaming: () => true,
+      async *chatStream() {
+        streamCalls += 1;
+        yield { type: 'text', content: 'Blocked partial' };
+        const error = new Error('policy blocked');
+        error.isAskStreamError = true;
+        error.isAskStreamTerminalError = true;
+        throw error;
+      },
+      async chat() {
+        chatCalls += 1;
+        return { content: 'Unexpected retry.', toolCalls: null };
+      },
+    };
+    const agent = new AgentClass({
+      getActive: () => provider,
+      getVisionProvider: async () => null,
+    });
+    const tabId = 9570 + index;
+    configurePlanOnlyGuardAgent(agent, tabId);
+    agent.conversationModes.set(tabId, 'ask');
+    agent._maybeRunPlannerGate = async (_tabId, messages, enriched) => {
+      messages.push(enriched);
+      return { proceed: true, requestKind: 'execute', requiresStateChange: false };
+    };
+    agent._startTraceRun = async () => null;
+    agent._endTraceRun = () => {};
+
+    const updates = [];
+    const final = await agent.processMessage(
+      tabId,
+      'Explain the policy.',
+      (type, data) => updates.push({ type, data }),
+      'ask',
+      [],
+      { interactiveChat: true, askStreamingEnabled: true },
+    );
+
+    assert.equal(final, 'Error communicating with LLM: policy blocked', `${label}: terminal error should be surfaced`);
+    assert.equal(streamCalls, 1, `${label}: terminal stream errors must not retry the generation`);
+    assert.equal(chatCalls, 0, `${label}: terminal stream errors must not fall back to provider.chat()`);
+    assert.ok(updates.some(update => update.type === 'text' && update.data?.replace === true && update.data?.content === ''), `${label}: partial streamed text should be cleared`);
+    assert.equal(updates.filter(update => update.type === 'error').length, 1, `${label}: terminal error should be emitted once`);
+    assert.equal(agent.conversations.get(tabId).some(message => message.role === 'assistant' && message.content === 'Blocked partial'), false, `${label}: failed partial text must not persist`);
   }
 });
 
@@ -27065,8 +27759,8 @@ test('detached chat lifecycle owns the default-on Ask streaming kill switch', ()
     assert.match(background, /case 'chat_start':\s*return launchDetachedRun\('chat'/, `${label}: background must retain detached launch/reconnect ownership`);
     assert.match(chatBody, new RegExp(`await ${storageName}\\.storage\\.local\\.get\\('openaiAskStreamingEnabled'\\)`), `${label}: each detached chat should read the current kill switch`);
     assert.match(chatBody, /interactiveChat: true/, `${label}: only interactive chat should receive streaming capability`);
-    assert.match(chatBody, /openaiAskStreamingEnabled: askStreamingSettings\.openaiAskStreamingEnabled !== false/, `${label}: streaming should default on`);
-    assert.doesNotMatch(continueBody, /interactiveChat|openaiAskStreamingEnabled/, `${label}: Continue must not inherit streaming capability`);
+    assert.match(chatBody, /askStreamingEnabled: askStreamingSettings\.openaiAskStreamingEnabled !== false/, `${label}: streaming should default on`);
+    assert.doesNotMatch(continueBody, /interactiveChat|askStreamingEnabled|openaiAskStreamingEnabled/, `${label}: Continue must not inherit streaming capability`);
     assert.match(settingsHtml, /id="toggle-openai-ask-streaming" checked/, `${label}: Advanced kill switch should default on`);
     assert.match(settings, /openAIAskStreamingToggle\.checked = stored\.openaiAskStreamingEnabled !== false/, `${label}: unset storage should render the kill switch on`);
   }
@@ -27393,6 +28087,7 @@ test('OpenAI-compatible streams request usage metadata only for supporting provi
     for (const config of [
       { category: 'cloud', providerName: 'gemini' },
       { category: 'cloud', providerName: 'deepseek' },
+      { category: 'cloud', providerName: 'mistral', supportsStreamUsageOptions: false },
       { category: 'router', providerName: 'openrouter' },
       { providerName: 'openai' },
       { category: 'cloud', providerName: 'custom', supportsStreamUsageOptions: true },
@@ -27404,7 +28099,6 @@ test('OpenAI-compatible streams request usage metadata only for supporting provi
     }
 
     for (const config of [
-      { category: 'cloud', providerName: 'mistral' },
       { category: 'router', providerName: 'cloudflare' },
       { category: 'cloud', providerName: 'custom' },
       { category: 'router', providerName: 'custom-router' },
@@ -27457,6 +28151,45 @@ test('OpenAI-compatible streams emit only the final cumulative usage snapshot', 
       assert.equal(usageChunks.length, 1, `${Provider.name}: cumulative usage was counted more than once`);
       assert.deepEqual(usageChunks[0].usage, snapshots[1], `${Provider.name}: final usage snapshot was not retained`);
       assert.equal(chunks.at(-1)?.type, 'done');
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('Groq streams preserve usage from the nested x_groq envelope', async () => {
+  const originalFetch = globalThis.fetch;
+  const usage = {
+    prompt_tokens: 9,
+    completion_tokens: 4,
+    total_tokens: 13,
+  };
+  const sse = [
+    `data: ${JSON.stringify({ choices: [{ delta: { content: 'Groq answer.' } }] })}\n\n`,
+    `data: ${JSON.stringify({ choices: [], x_groq: { usage } })}\n\n`,
+    'data: [DONE]\n\n',
+  ].join('');
+  try {
+    globalThis.fetch = async () => new Response(sse, {
+      status: 200,
+      headers: { 'Content-Type': 'text/event-stream' },
+    });
+    for (const Provider of [OpenAIProviderCh, OpenAIProviderFx]) {
+      const provider = new Provider({
+        providerName: 'groq',
+        baseUrl: 'https://api.groq.com/openai/v1',
+        model: 'llama-3.3-70b-versatile',
+        supportsAskStreaming: true,
+      });
+      const chunks = [];
+      for await (const chunk of provider.chatStream([{ role: 'user', content: 'hello' }])) {
+        chunks.push(chunk);
+      }
+      assert.deepEqual(chunks, [
+        { type: 'text', content: 'Groq answer.' },
+        { type: 'usage', usage },
+        { type: 'done', content: '' },
+      ]);
     }
   } finally {
     globalThis.fetch = originalFetch;
@@ -28003,10 +28736,30 @@ test('official GPT-5.6 treats incomplete Responses as hard failures', async () =
       assert.equal(thrown.incomplete, true);
       assert.equal(thrown.isResponsesStreamError, true);
       assert.equal(thrown.isResponsesStreamFallbackSafe, false, 'terminal response.incomplete must not trigger provider.chat() fallback');
+      assert.equal(thrown.isAskStreamTerminalError, true, 'terminal response.incomplete must bypass the agent retry');
       assert.equal(chunks[0]?.type, 'text');
       assert.equal(chunks[0]?.content, 'partial');
       assert.equal(chunks[1]?.type, 'usage');
       assert.equal(chunks.some((chunk) => chunk.type === 'done'), false);
+
+      globalThis.fetch = async () => new Response(
+        `data: ${JSON.stringify({
+          type: 'response.failed',
+          response: { error: { message: 'provider refused the stream' } },
+        })}\n\n`,
+        { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+      );
+      let failed = null;
+      try {
+        for await (const _chunk of provider.chatStream([{ role: 'user', content: 'hello' }], { maxTokens: 10 })) {
+          // No chunks are expected for response.failed.
+        }
+      } catch (error) {
+        failed = error;
+      }
+      assert.match(failed?.message || '', /provider refused the stream/);
+      assert.equal(failed?.isResponsesStreamError, true);
+      assert.equal(failed?.isAskStreamTerminalError, true, 'response.failed must bypass the agent retry');
     }
   } finally {
     globalThis.fetch = originalFetch;
@@ -28045,6 +28798,7 @@ test('official GPT-5.6 rejects premature Responses EOF and bare DONE sentinels',
         assert.equal(thrown.incomplete, true);
         assert.equal(thrown.isResponsesStreamError, true);
         assert.equal(thrown.isResponsesStreamFallbackSafe, true, 'missing response.completed should allow the non-streaming recovery path');
+        assert.notEqual(thrown.isAskStreamTerminalError, true, 'recoverable missing completion must retain the non-streaming fallback');
         assert.equal(chunks.some((chunk) => chunk.type === 'done'), false);
       }
     }

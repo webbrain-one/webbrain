@@ -140,7 +140,9 @@ export class AzureOpenAIProvider extends BaseLLMProvider {
     try {
       res = await fetchWithFallback(url, { method: 'POST', headers: this._headers(), body: JSON.stringify(body) });
     } catch (e) {
-      throw new Error(`${this.name} network error — could not reach ${url} (${e.message}). Is the server running?`);
+      throw this._askStreamTransportError(
+        `${this.name} network error — could not reach ${url} (${e.message}). Is the server running?`,
+      );
     }
     if (!res.ok) {
       let err = '';
@@ -148,12 +150,31 @@ export class AzureOpenAIProvider extends BaseLLMProvider {
       throw new Error(`${this.name} stream error ${res.status}: ${err || res.statusText}`);
     }
 
-    const reader = res.body.getReader();
+    if (!res.body?.getReader) {
+      throw this._askStreamTransportError(`${this.name} stream returned no readable body.`);
+    }
+    let reader;
+    try {
+      reader = res.body.getReader();
+    } catch (error) {
+      throw this._askStreamTransportError(
+        `${this.name} stream could not open its response body (${error?.message || 'reader unavailable'}).`,
+      );
+    }
     const decoder = new TextDecoder();
     let buffer = '';
     let finalUsage = null;
     while (true) {
-      const { done, value } = await reader.read();
+      let chunk;
+      try {
+        chunk = await reader.read();
+      } catch (error) {
+        if (finalUsage) yield { type: 'usage', usage: finalUsage };
+        throw this._askStreamTransportError(
+          `${this.name} stream transport error (${error?.message || 'read failed'}).`,
+        );
+      }
+      const { done, value } = chunk;
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n');
@@ -167,18 +188,39 @@ export class AzureOpenAIProvider extends BaseLLMProvider {
           yield { type: 'done', content: '' };
           return;
         }
+        let json;
         try {
-          const json = JSON.parse(payload);
-          if (json.usage) finalUsage = json.usage;
-          const delta = json.choices?.[0]?.delta;
-          if (delta?.content) yield { type: 'text', content: delta.content };
-          if (delta?.tool_calls) yield { type: 'tool_call', content: delta.tool_calls };
-        } catch (e) {
-          console.warn(`[${this.name}] malformed SSE chunk skipped:`, payload?.slice(0, 120), e?.message);
+          json = JSON.parse(payload);
+        } catch (error) {
+          if (this._supportsInteractiveAskStreaming()) {
+            throw this._askStreamTransportError(
+              `${this.name} stream returned malformed JSON (${error?.message || 'parse failed'}).`,
+            );
+          }
+          console.warn(`[${this.name}] malformed SSE chunk skipped:`, payload?.slice(0, 120), error?.message);
+          continue;
         }
+        if (json?.error) {
+          const detail = json.error?.message || json.error?.code || 'The provider reported a streaming error.';
+          throw this._askStreamTerminalError(`${this.name} stream error: ${detail}`);
+        }
+        if (json.usage) finalUsage = json.usage;
+        const choice = json.choices?.[0];
+        if (choice?.finish_reason === 'content_filter') {
+          throw this._askStreamTerminalError(
+            `${this.name} stream was blocked by the Azure content filter.`,
+          );
+        }
+        const delta = choice?.delta;
+        const reasoningDelta = delta?.reasoning_content || delta?.reasoning;
+        if (typeof reasoningDelta === 'string' && reasoningDelta) {
+          yield { type: 'reasoning', content: reasoningDelta };
+        }
+        if (delta?.content) yield { type: 'text', content: delta.content };
+        if (delta?.tool_calls) yield { type: 'tool_call', content: delta.tool_calls };
       }
     }
     if (finalUsage) yield { type: 'usage', usage: finalUsage };
-    yield { type: 'done', content: '' };
+    throw this._askStreamTransportError(`${this.name} stream ended before the [DONE] sentinel.`);
   }
 }

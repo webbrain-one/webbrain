@@ -2143,7 +2143,7 @@ async function handleMessage(msg, sender) {
           locale: msg.locale,
           intentFailureMessage: msg.intentFailureMessage,
           interactiveChat: true,
-          openaiAskStreamingEnabled: askStreamingSettings.openaiAskStreamingEnabled !== false,
+          askStreamingEnabled: askStreamingSettings.openaiAskStreamingEnabled !== false,
           detachedRequestId: runUi.requestId,
           isDetachedStartCancelled: () => isDetachedRunStartCancelled(tabId, msg),
           beforeConsequentialTool: () => flushRunUiSnapshot(tabId, runUi.requestId),
