@@ -12167,6 +12167,26 @@ test('new locales are registered in extension and web language dropdowns', () =>
   }
 });
 
+test('extension language dropdowns pin English and Chinese before alphabetical languages', async () => {
+  const expectedCodes = [
+    'en', 'zh',
+    'ar', 'bn', 'nl', 'tl', 'fr', 'de', 'he', 'hi', 'id', 'ja', 'ko',
+    'ms', 'fa', 'pl', 'pt', 'ru', 'es', 'th', 'tr', 'uk', 'vi',
+  ];
+
+  for (const [label, rel] of [
+    ['chrome', 'src/chrome/src/ui/i18n.js'],
+    ['firefox', 'src/firefox/src/ui/i18n.js'],
+  ]) {
+    const i18n = await import('file://' + path.join(ROOT, rel).replace(/\\/g, '/'));
+    assert.deepEqual(
+      i18n.LANGUAGES.map(({ code }) => code),
+      expectedCodes,
+      `${label}: language dropdown order should be English, Chinese, then alphabetical by English name`,
+    );
+  }
+});
+
 test('new locale dictionaries contain translated copy and preserve functional tokens', async () => {
   const addedLocales = {
     hi: /[\u0900-\u097f]/,
