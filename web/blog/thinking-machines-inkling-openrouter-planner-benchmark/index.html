@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Thinking Machines Inkling OpenRouter planner benchmark - WebBrain Blog</title>
+  <meta name="description" content="We tested Thinking Machines Inkling through OpenRouter on WebBrain&#39;s frozen 100-case browser-planner benchmark, then checked its image and audio understanding.">
+  <meta name="keywords" content="WebBrain, Thinking Machines, Inkling, OpenRouter, open-weight model, American AI, multimodal AI, audio model, browser agent, tool calling, Poolside Laguna">
+  <meta property="og:title" content="Inkling makes the American open-weight comeback multimodal">
+  <meta property="og:description" content="96 valid calls, 45 ideal tool choices, 73% Sonnet alignment, plus successful image and audio probes. Our independent OpenRouter test of Thinking Machines Inkling.">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://webbrain.one/blog/thinking-machines-inkling-openrouter-planner-benchmark">
+  <meta property="og:image" content="https://webbrain.one/og-image.png">
+  <meta property="og:image:secure_url" content="https://webbrain.one/og-image.png">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="WebBrain detailed brain logo">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Thinking Machines Inkling: frozen planner, vision, and audio test">
+  <meta name="twitter:description" content="96 valid calls, 45 ideal tool choices, and 73% Sonnet alignment. Max reasoning did not improve the result, but Inkling&#39;s modality breadth is the real story.">
+  <meta name="twitter:image" content="https://webbrain.one/twitter-image.png">
+  <meta name="twitter:image:alt" content="WebBrain detailed brain logo">
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <link rel="canonical" href="https://webbrain.one/blog/thinking-machines-inkling-openrouter-planner-benchmark">
+  <!-- Blog is English-only; alternates point to locale homepages. -->
+  <link rel="alternate" hreflang="en" href="https://webbrain.one/">
+  <link rel="alternate" hreflang="es" href="https://webbrain.one/es/">
+  <link rel="alternate" hreflang="fr" href="https://webbrain.one/fr/">
+  <link rel="alternate" hreflang="tr" href="https://webbrain.one/tr/">
+  <link rel="alternate" hreflang="zh" href="https://webbrain.one/zh/">
+  <link rel="alternate" hreflang="ru" href="https://webbrain.one/ru/">
+  <link rel="alternate" hreflang="uk" href="https://webbrain.one/uk/">
+  <link rel="alternate" hreflang="ar" href="https://webbrain.one/ar/">
+  <link rel="alternate" hreflang="ja" href="https://webbrain.one/ja/">
+  <link rel="alternate" hreflang="ko" href="https://webbrain.one/ko/">
+  <link rel="alternate" hreflang="id" href="https://webbrain.one/id/">
+  <link rel="alternate" hreflang="th" href="https://webbrain.one/th/">
+  <link rel="alternate" hreflang="ms" href="https://webbrain.one/ms/">
+  <link rel="alternate" hreflang="tl" href="https://webbrain.one/tl/">
+  <link rel="alternate" hreflang="he" href="https://webbrain.one/he/">
+  <link rel="alternate" hreflang="x-default" href="https://webbrain.one/">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg: #0b0e17;
+      --bg-card: #111827;
+      --bg-card-hover: #1a2233;
+      --surface: #161d2e;
+      --border: rgba(255,255,255,0.07);
+      --text: #e4e4ec;
+      --text-dim: #8b8fa4;
+      --accent: #6c63ff;
+      --accent-glow: rgba(108,99,255,0.25);
+      --accent2: #a78bfa;
+      --success: #34d399;
+      --warning: #fbbf24;
+      --danger: #f87171;
+      --tint-soft: rgba(255,255,255,0.05);
+      --tint-soft-2: rgba(255,255,255,0.04);
+      --tint-medium: rgba(255,255,255,0.08);
+      --nav-bg: rgba(11,14,23,0.85);
+      --code-bg: #0a0e17;
+      --inline-code-bg: rgba(255,255,255,0.06);
+      --shadow-strong: rgba(0,0,0,0.40);
+      --radius: 12px;
+      --radius-lg: 16px;
+      --max-w: 760px;
+      color-scheme: dark;
+    }
+    :root[data-theme="light"] {
+      --bg: #f7f1e6;
+      --bg-card: #fffdf8;
+      --bg-card-hover: #f2e9d4;
+      --surface: #ede2cb;
+      --border: rgba(89,55,25,0.15);
+      --text: #2c1810;
+      --text-dim: #6b5b47;
+      --accent: #5b52e8;
+      --accent-glow: rgba(91,82,232,0.20);
+      --accent2: #7c6ce6;
+      --success: #2d8866;
+      --warning: #9a6500;
+      --danger: #b74747;
+      --tint-soft: rgba(89,55,25,0.05);
+      --tint-soft-2: rgba(89,55,25,0.07);
+      --tint-medium: rgba(89,55,25,0.10);
+      --nav-bg: rgba(247,241,230,0.85);
+      --code-bg: #fff7e6;
+      --inline-code-bg: rgba(89,55,25,0.08);
+      --shadow-strong: rgba(89,55,25,0.18);
+      color-scheme: light;
+    }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.75;
+      font-size: 17px;
+      overflow-x: hidden;
+    }
+    a { color: var(--accent2); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .glow-bg {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    .glow-bg::before,
+    .glow-bg::after {
+      content: '';
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(120px);
+      opacity: 0.26;
+    }
+    .glow-bg::before {
+      width: 500px;
+      height: 500px;
+      background: var(--accent);
+      top: -220px;
+      left: -160px;
+    }
+    .glow-bg::after {
+      width: 500px;
+      height: 500px;
+      background: var(--accent2);
+      right: -180px;
+      bottom: -230px;
+      opacity: 0.18;
+    }
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--nav-bg);
+      backdrop-filter: saturate(160%) blur(12px);
+      -webkit-backdrop-filter: saturate(160%) blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-inner {
+      max-width: var(--max-w);
+      margin: 0 auto;
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+    .nav-brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+      color: var(--text);
+      font-size: 18px;
+      font-weight: 700;
+      text-decoration: none;
+    }
+    .nav-brand:hover { text-decoration: none; }
+    .nav-brand .brand-logo { width: 26px; height: 26px; border-radius: 7px; flex: 0 0 auto; }
+    .nav-brand .domain { opacity: 0.5; font-weight: 400; }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 16px;
+      min-width: 0;
+    }
+    .nav-links a {
+      color: var(--text-dim);
+      font-size: 14px;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+    .nav-links a:hover { color: var(--text); text-decoration: none; }
+    .lang-dropdown {
+      background: var(--tint-soft);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 13px;
+      max-width: 120px;
+    }
+    .lang-dropdown:focus { outline: 2px solid var(--accent-glow); outline-offset: 1px; }
+    .lang-dropdown option { background-color: var(--bg-card-hover); color: var(--text); }
+    .theme-toggle {
+      appearance: none;
+      -webkit-appearance: none;
+      background: var(--tint-soft-2);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      width: 30px;
+      height: 30px;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      cursor: pointer;
+      color: var(--text-dim);
+      transition: background 0.2s, color 0.2s, border-color 0.2s, transform 0.1s;
+    }
+    .theme-toggle:hover {
+      background: var(--tint-medium);
+      border-color: var(--accent);
+      color: var(--text);
+      transform: translateY(-1px);
+    }
+    .theme-toggle:focus-visible {
+      outline: 2px solid var(--accent2);
+      outline-offset: 2px;
+    }
+    .theme-toggle svg { width: 16px; height: 16px; display: block; }
+    .theme-toggle .icon-sun { display: block; }
+    .theme-toggle .icon-moon { display: none; }
+    :root[data-theme="light"] .theme-toggle .icon-sun { display: none; }
+    :root[data-theme="light"] .theme-toggle .icon-moon { display: block; }
+    main,
+    article {
+      max-width: var(--max-w);
+      margin: 0 auto;
+      padding: 64px 24px 80px;
+    }
+    .page-label {
+      display: inline-block;
+      font-size: 12px;
+      letter-spacing: 0;
+      text-transform: uppercase;
+      color: var(--accent2);
+      padding: 4px 10px;
+      border: 1px solid color-mix(in srgb, var(--accent2) 28%, transparent);
+      border-radius: 999px;
+      margin-bottom: 18px;
+    }
+    h1 {
+      font-size: 38px;
+      line-height: 1.2;
+      font-weight: 700;
+      letter-spacing: 0;
+      margin-bottom: 16px;
+    }
+    .page-sub,
+    .lede {
+      color: var(--text-dim);
+      line-height: 1.6;
+    }
+    .page-sub {
+      font-size: 17px;
+      max-width: 580px;
+      margin-bottom: 48px;
+    }
+    .lede {
+      font-size: 19px;
+      margin-bottom: 40px;
+    }
+    .meta {
+      font-size: 13px;
+      color: var(--text-dim);
+      margin-bottom: 12px;
+      letter-spacing: 0;
+    }
+    h2 {
+      font-size: 24px;
+      font-weight: 700;
+      margin-top: 48px;
+      margin-bottom: 14px;
+      letter-spacing: 0;
+    }
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-top: 32px;
+      margin-bottom: 10px;
+      color: var(--text);
+    }
+    h4, h5, h6 {
+      color: var(--text);
+      margin-top: 28px;
+      margin-bottom: 10px;
+      line-height: 1.35;
+    }
+    p { margin-bottom: 16px; }
+    ul, ol { margin: 0 0 16px 20px; }
+    li { margin-bottom: 6px; }
+    code {
+      font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+      font-size: 0.88em;
+      background: var(--inline-code-bg);
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: color-mix(in srgb, var(--accent2) 80%, var(--text));
+    }
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      overflow-x: auto;
+      margin: 20px 0;
+      font-size: 14px;
+      line-height: 1.55;
+      box-shadow: 0 18px 60px var(--shadow-strong);
+    }
+    pre code {
+      background: transparent;
+      padding: 0;
+      color: inherit;
+      font-size: inherit;
+    }
+    blockquote {
+      border-left: 3px solid var(--accent);
+      padding: 4px 0 4px 18px;
+      margin: 20px 0;
+      color: var(--text-dim);
+      font-style: italic;
+    }
+    blockquote p:last-child { margin-bottom: 0; }
+    hr {
+      border: 0;
+      border-top: 1px solid var(--border);
+      margin: 36px 0;
+    }
+    article img {
+      max-width: 100%;
+      height: auto;
+      display: block;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      margin: 24px 0;
+    }
+    .table-wrap { overflow-x: auto; margin: 24px 0; }
+    table {
+      width: 100%;
+      min-width: 560px;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    th, td {
+      text-align: left;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    th {
+      color: var(--text-dim);
+      font-weight: 600;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0;
+      background: var(--tint-soft-2);
+    }
+    td code { font-size: 12px; }
+    .win { color: var(--success); font-weight: 600; }
+    .lose { color: var(--danger); }
+    .meh { color: var(--warning); }
+    .callout {
+      background: color-mix(in srgb, var(--accent) 10%, transparent);
+      border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      margin: 24px 0;
+      font-size: 15px;
+      line-height: 1.65;
+      color: var(--text-dim);
+    }
+    .callout strong { color: var(--text); }
+    .author-box {
+      margin-top: 64px;
+      padding-top: 32px;
+      border-top: 1px solid var(--border);
+      color: var(--text-dim);
+      font-size: 14px;
+    }
+    .post-list { display: flex; flex-direction: column; gap: 18px; }
+    .post-card {
+      display: block;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px 26px;
+      transition: background 0.18s, border-color 0.18s, transform 0.18s;
+    }
+    .post-card:hover {
+      background: var(--bg-card-hover);
+      border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+      transform: translateY(-1px);
+      text-decoration: none;
+    }
+    .post-meta {
+      font-size: 12px;
+      color: var(--text-dim);
+      letter-spacing: 0;
+      margin-bottom: 8px;
+    }
+    .post-title {
+      font-size: 21px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 6px;
+      letter-spacing: 0;
+      line-height: 1.35;
+    }
+    .post-excerpt {
+      color: var(--text-dim);
+      font-size: 15px;
+      line-height: 1.6;
+    }
+    footer {
+      max-width: var(--max-w);
+      margin: 0 auto;
+      padding: 40px 24px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+      color: var(--text-dim);
+      font-size: 13px;
+    }
+    footer a { color: var(--text-dim); }
+    footer a:hover { color: var(--text); }
+    @media (max-width: 700px) {
+      body { font-size: 16px; }
+      .nav-inner { padding: 14px 20px; align-items: flex-start; }
+      .nav-links { gap: 12px; flex-wrap: wrap; }
+      .lang-dropdown { display: none; }
+      h1 { font-size: 28px; }
+      .lede { font-size: 16px; }
+      .page-sub { font-size: 15px; }
+      main, article { padding: 48px 20px 64px; }
+      h2 { font-size: 20px; margin-top: 36px; }
+      .post-card { padding: 20px; }
+      .post-title { font-size: 19px; }
+      footer { flex-direction: column; padding: 32px 20px; }
+    }
+    @media (max-width: 420px) {
+      .nav-inner { gap: 12px; }
+      .nav-links a[href="https://github.com/webbrain-one/webbrain"] { display: none; }
+      .theme-toggle { width: 28px; height: 28px; }
+    }
+  </style>
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('webbrain-theme');
+        var theme = (saved === 'light' || saved === 'dark')
+          ? saved
+          : (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+        document.documentElement.setAttribute('data-theme', theme);
+      } catch (_) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    })();
+  </script>
+  <!-- Plausible analytics: start -->
+  <!-- Privacy-friendly analytics by Plausible -->
+  <script async src="https://plausible.io/js/pa-yWGfwxkkKSVs-eTuaKYpy.js"></script>
+  <script>
+    window.plausible=window.plausible||function(){(plausible.q=plausible.q||[]).push(arguments)},plausible.init=plausible.init||function(i){plausible.o=i||{}};
+    plausible.init()
+  </script>
+  <!-- Plausible analytics: end -->
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "Inkling makes the American open-weight comeback genuinely multimodal",
+  "description": "We tested Thinking Machines Inkling through OpenRouter on WebBrain's frozen 100-case browser-planner benchmark, then checked its image and audio understanding.",
+  "author": {
+    "@type": "Person",
+    "name": "Emre Sokullu",
+    "url": "https://emresokullu.com"
+  },
+  "datePublished": "2026-07-23",
+  "image": "https://webbrain.one/og-image.png",
+  "publisher": {
+    "@type": "Organization",
+    "name": "WebBrain",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://webbrain.one/logo-github.png"
+    }
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://webbrain.one/blog/thinking-machines-inkling-openrouter-planner-benchmark"
+  }
+}
+  </script>
+</head>
+<body>
+  <div class="glow-bg"></div>
+  <nav>
+    <div class="nav-inner">
+      <a href="/" class="nav-brand"><img class="brand-logo" src="/logo-github.png" alt="" aria-hidden="true"> WebBrain<span class="domain">.one</span></a>
+      <div class="nav-links">
+        <a href="/">Home</a>
+        <a href="/docs/">Docs</a>
+        <a href="/blog">Blog</a>
+        <select class="lang-dropdown" id="lang-dropdown" aria-label="Select language" data-current="en"><option value="en">English</option><option value="es">Español</option><option value="fr">Français</option><option value="tr">Türkçe</option><option value="zh">中文</option><option value="ru">Русский</option><option value="uk">Українська</option><option value="ar">العربية</option><option value="ja">日本語</option><option value="ko">한국어</option><option value="id">Bahasa Indonesia</option><option value="th">ไทย</option><option value="ms">Bahasa Melayu</option><option value="tl">Filipino</option><option value="he">עברית</option></select>
+        <button class="theme-toggle" type="button" id="theme-toggle" aria-label="Toggle light / dark theme" title="Toggle light / dark theme">
+          <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="4"/>
+            <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+          </svg>
+          <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+          </svg>
+        </button>
+        <a href="https://github.com/webbrain-one/webbrain" target="_blank" rel="noopener">GitHub</a>
+      </div>
+    </div>
+  </nav>
+
+  <article>
+    <div class="meta">July 23, 2026 &middot; 10 min read &middot; <a href="/blog">&larr; All posts</a></div>
+    <h1>Inkling makes the American open-weight comeback genuinely multimodal</h1>
+    <p class="lede"><strong>Thinking Machines Inkling</strong> is a different kind of American open-weight release: 975B total parameters, 41B active parameters, a permissive Apache 2.0 license, and native text, image, and audio input. At launch, it appears to be the largest US open-weight model by total parameter count, although that label depends on how &quot;American&quot; and &quot;open&quot; are defined. We ran the OpenRouter route through WebBrain&#39;s frozen 100-case first-action benchmark, repeated it with maximum reasoning, and added small image and audio probes. The result is not a new planner-score champion. It is something more interesting: a highly parseable, broad model that usually reaches the right tool family, handles all three advertised input modalities, and makes the recent US open-weight revival feel much less theoretical.</p>
+<h2 id="what-thinking-machines-released">What Thinking Machines released</h2>
+<p><a href="https://thinkingmachines.ai/model-card/inkling/" target="_blank" rel="noopener">Inkling&#39;s model card</a> describes a 66-layer sparse mixture-of-experts model with <strong>975B total parameters and 41B active parameters</strong>. Each layer activates six of 256 routed experts plus two shared experts, with a hybrid of local and global attention.</p>
+<div class="table-wrap"><table><thead><tr><th>Inkling specification</th><th>Official value</th></tr></thead><tbody><tr><td>Total / active parameters</td><td>975B / 41B</td></tr><tr><td>Training data</td><td>45T tokens</td></tr><tr><td>Input modalities</td><td>Text, image, audio</td></tr><tr><td>Output modality</td><td>Text</td></tr><tr><td>Official context length</td><td>Up to 1M tokens</td></tr><tr><td>License</td><td>Apache 2.0</td></tr><tr><td>BF16 deployment requirement</td><td>At least 2TB VRAM</td></tr><tr><td>NVFP4 deployment requirement</td><td>At least 600GB VRAM</td></tr></tbody></table></div>
+<p>The 45T-token pretraining mixture also included video, although the released interface accepts text, images, and audio rather than video. On OpenRouter, the available route exposes <strong>524,288 tokens</strong> of context, not the full one-million-token headline.</p>
+<p>This is an important distinction from many recent open releases. Inkling is not merely a text model with a vision adapter on a roadmap. <a href="https://thinkingmachines.ai/news/introducing-inkling/" target="_blank" rel="noopener">Thinking Machines&#39; launch post</a> and the live API expose image and audio input today. Audio output is not supported; Inkling listens and answers in text.</p>
+<h2 id="the-official-benchmark-profile-is-broad">The official benchmark profile is broad</h2>
+<p>Thinking Machines explicitly says Inkling is <strong>not the strongest model on every benchmark</strong>. Its claim is breadth: reasoning, coding, computer use, tool use, vision, audio, and fine-tunability in one open-weight checkpoint.</p>
+<p>Selected standalone results from the official model card:</p>
+<div class="table-wrap"><table><thead><tr><th>Official evaluation</th><th>Inkling</th></tr></thead><tbody><tr><td>Humanity&#39;s Last Exam, text</td><td>29.7</td></tr><tr><td>Humanity&#39;s Last Exam, tools</td><td>46.0</td></tr><tr><td>SWE-bench Verified</td><td>77.6</td></tr><tr><td>SWE-bench Pro Public</td><td>54.3</td></tr><tr><td>Terminal-Bench 2.1</td><td>63.8</td></tr><tr><td>MCP Atlas</td><td>74.1</td></tr><tr><td>Toolathlon</td><td>45.5</td></tr><tr><td>IFBench</td><td>79.8</td></tr><tr><td>MMMU Pro</td><td>73.5</td></tr><tr><td>MMAU audio</td><td>77.2</td></tr><tr><td>VoiceBench</td><td>91.4</td></tr></tbody></table></div>
+<p>Those numbers are strong enough to justify an independent agent test, but they should not be confused with our result. Thinking Machines evaluated with <code>effort=0.99</code> and <code>temperature=1.0</code>; coding trajectories could use up to 256K tokens. WebBrain freezes a much shorter and more deterministic first-action problem.</p>
+<h2 id="what-we-tested">What we tested</h2>
+<p>We used the exact OpenRouter model id:</p>
+<pre><code class="language-text">thinkingmachines/inkling</code></pre>
+<p>The route advertised text, image, and audio input, structured tools, reasoning controls, and a 524,288-token context window. At test time, <a href="https://openrouter.ai/thinkingmachines/inkling" target="_blank" rel="noopener">OpenRouter listed</a> one provider at:</p>
+<pre><code class="language-text">input:      $1.00 per million tokens
+output:     $4.05 per million tokens
+cache read: $0.17 per million tokens</code></pre>
+<p>The frozen WebBrain replay contains 100 browser instructions, 41 available tools, and the same system prompt used in our recent local-model tests. Every model must select its first action; it does not get a full browsing trajectory in which to recover from a weak opening.</p>
+<p>We kept the harness defaults:</p>
+<pre><code class="language-text">temperature: 0.15
+max output:  4,096 tokens
+concurrency: 4
+reference:   Claude Sonnet 4.6
+freeze:      baseline-2026-05-23.json
+system hash: 5c4fac1387025050</code></pre>
+<p>This is deliberately not a reproduction of Thinking Machines&#39; official scaffold. It answers a narrower product question: <strong>can the hosted model reliably dispatch WebBrain&#39;s first browser action?</strong></p>
+<h2 id="frozen-result-valid-and-usually-in-the-right-tool-family">Frozen result: valid and usually in the right tool family</h2>
+<div class="table-wrap"><table><thead><tr><th>Metric</th><th>Default reasoning</th><th>Maximum reasoning</th></tr></thead><tbody><tr><td>Requests completed</td><td>100 / 100</td><td>100 / 100</td></tr><tr><td>API errors</td><td>0</td><td>0</td></tr><tr><td>Parsed calls</td><td>96</td><td>95</td></tr><tr><td>Schema-valid calls</td><td>96</td><td>95</td></tr><tr><td>Exact ideal action</td><td>16</td><td>18</td></tr><tr><td>Ideal tool name</td><td><strong>45</strong></td><td>42</td></tr><tr><td>Sonnet tool-name match, all cases</td><td><strong>73%</strong></td><td>72%</td></tr><tr><td>Sonnet match, tool-using cases</td><td><strong>75.0%</strong></td><td>72.8%</td></tr><tr><td>Median latency</td><td>1.27s</td><td><strong>1.23s</strong></td></tr><tr><td>P95 latency</td><td>3.78s</td><td><strong>2.85s</strong></td></tr><tr><td>Wall time, concurrency 4</td><td>38.68s</td><td>38.50s</td></tr><tr><td>Observed account charge</td><td>$0.282</td><td>$0.307</td></tr></tbody></table></div>
+<p>The default run is the better result. Maximum reasoning added two exact matches, but lost one parsed call, three ideal tool-name matches, one Sonnet match, and 2.2 percentage points on the tool-using subset. It also produced a 7.84-second worst-case outlier.</p>
+<p>More revealingly, the reported reasoning usage barely moved: approximately 4.55K tokens across the default run and 4.57K with <code>reasoning_effort=max</code>. For these short dispatch tasks, OpenRouter&#39;s maximum-effort setting did not induce a meaningfully deeper pass—or Inkling simply did not need one. Either way, <strong>turning thinking up is not an automatic upgrade here</strong>.</p>
+<h2 id="why-45-ideal-tools-and-only-16-exact-actions">Why 45 ideal tools and only 16 exact actions?</h2>
+<p>Our strictest metric compares the entire first action, including its arguments. Inkling often selected the intended tool while choosing a different URL, query, or argument shape. That produces a useful tool-name hit without an exact-action hit.</p>
+<p>The model&#39;s default distribution also shows a practical bias:</p>
+<pre><code class="language-text">get_accessibility_tree  40
+navigate                22
+clarify                 11
+read_page                5
+execute_javascript       5
+no tool                  4
+other tools             13</code></pre>
+<p>That is a sensible browser-agent prior. Inkling frequently inspects the accessibility tree before acting and uses the dedicated <code>clarify</code> tool when a request is underspecified.</p>
+<p>The ambiguity cases expose why one headline score cannot tell the whole story. Inkling chose our ideal tool name in seven of eight ambiguous prompts, but matched the historical Sonnet tool name in only two. In several of those cases, explicitly asking the user for missing information is preferable product behavior even when it differs from the reference trace.</p>
+<p>Our conclusion is therefore more favorable than the 73% headline alone: <strong>Inkling is highly dispatchable</strong>. Its remaining first-action errors are more often argument and policy disagreements than broken tool syntax.</p>
+<h2 id="a-deliberately-narrow-context-check">A deliberately narrow context check</h2>
+<p>The user asked us not to turn this into another broad model race. We therefore include only the two relevant local references: ThinkingCap, an INT4 Qwen 3.6 27B derivative, and Gemma 4 31B QAT.</p>
+<div class="table-wrap"><table><thead><tr><th>Frozen metric</th><th>Inkling via OpenRouter</th><th>ThinkingCap 27B INT4</th><th>Gemma 4 31B QAT</th></tr></thead><tbody><tr><td>Parsed / valid</td><td><strong>96 / 96</strong></td><td>91 / 91</td><td>95 / 95</td></tr><tr><td>Exact ideal action</td><td>16</td><td><strong>19</strong></td><td><strong>19</strong></td></tr><tr><td>Ideal tool name</td><td><strong>45</strong></td><td>35</td><td>37</td></tr><tr><td>Sonnet match, all cases</td><td>73%</td><td><strong>77%</strong></td><td><strong>77%</strong></td></tr><tr><td>Sonnet match, tool cases</td><td>75.0%</td><td>76.1%</td><td><strong>78.3%</strong></td></tr><tr><td>Median latency</td><td>1.27s</td><td>2.25s</td><td><strong>0.55s</strong></td></tr></tbody></table></div>
+<p>This table is <strong>not apples-to-apples</strong>. Inkling was a remote, provider-managed OpenRouter route at concurrency four. ThinkingCap and Gemma ran locally in different quantizations, at different concurrency levels, through vLLM; Gemma&#39;s older run also used the legacy text-call path rather than native structured tools.</p>
+<p>The useful takeaway is limited but clear. Inkling does not beat either local reference on Sonnet alignment or exact actions. It does lead both on valid-call count and ideal tool selection. Its advantage is not a clean benchmark sweep—it is reliable structured dispatch combined with a much wider modality and context envelope.</p>
+<h2 id="vision-and-audio-work-today">Vision and audio work today</h2>
+<p>We added two small capability checks outside the frozen text-only suite. These are smoke tests, not substitute benchmarks.</p>
+<h3 id="image-probe">Image probe</h3>
+<p>We sent a screenshot of a password-entry page and asked Inkling to describe the page and identify the blocking state. It correctly extracted the account identifier, recognized the empty password field, read the validation error, identified the checkbox and navigation controls, and concluded that password validation was blocking progress.</p>
+<p>The response began after 7.59 seconds and completed in 9.98 seconds. The route reported a cost of about <strong>$0.0062</strong> for the image request.</p>
+<h3 id="audio-probe">Audio probe</h3>
+<p>We synthesized a short spoken nonce message containing an object and a four-digit code, sent the WAV directly to OpenRouter, and requested a rigid one-line answer. Inkling returned:</p>
+<pre><code class="language-text">OBJECT=lantern; CODE=7429</code></pre>
+<p>The exact code and object were correct. Total latency was 1.85 seconds, at a reported cost below <strong>$0.0005</strong>. This is only a clean transcription-and-instruction probe, but it verifies that the production route accepts and understands audio rather than merely advertising it.</p>
+<p>Audio is a real differentiator here. Neither our frozen planner score nor parameter count captures the value of one open-weight model being able to inspect a page, listen to a clip, reason, and call tools without handing the task across several specialist models.</p>
+<h2 id="the-american-openweight-picture-has-changed">The American open-weight picture has changed</h2>
+<p>For a long time, the best low-cost and locally useful open models in our tests came primarily from Chinese labs. Recent US releases are finally making that statement less absolute.</p>
+<p>Poolside&#39;s coding-focused models were the first strong signal. Our <a href="/blog/poolside-laguna-s-openrouter-planner-benchmark/">Laguna S 2.1 test</a> found an exceptionally inexpensive 118B-A8B route with credible planner behavior. <a href="/blog/poolside-laguna-m1-openrouter-planner-benchmark/">Laguna M.1</a> scaled that formula to 225B total and 23B active parameters. Our earlier <a href="/blog/poolside-laguna-xs-openrouter-planner-benchmark/">Laguna XS test</a> was much less impressive, so this is not a flag-waving exercise: the results still have to survive independent tests.</p>
+<p>Inkling extends the trend in a different direction. Poolside is compact-at-runtime, coding-first, and text-only. Thinking Machines has released a vastly larger generalist with image and audio understanding. It is too large for ordinary workstation deployment, but it is also the most complete American open-weight model we have tested.</p>
+<h2 id="downsides-that-matter">Downsides that matter</h2>
+<p>Inkling&#39;s breadth does not make the tradeoffs disappear:</p>
+<ul><li><strong>Local deployment is infrastructure-scale.</strong> At least 2TB of VRAM for BF16 or 600GB for NVFP4 puts it far beyond a desktop, including an RTX 5090.</li><li><strong>OpenRouter had only one provider route.</strong> That reduces routing redundancy and makes the hosted experience depend on one backend.</li><li><strong>Audio is input-only.</strong> It can understand speech and sound, but it does not produce audio.</li><li><strong>The official one-million-token limit is not the hosted limit.</strong> OpenRouter exposed 524,288 tokens during our test.</li><li><strong>Maximum reasoning did not improve the frozen result.</strong> The default setting was slightly stronger and cheaper.</li><li><strong>This is not the best first-action score in our archive.</strong> Inkling&#39;s case rests on completeness and reliable tool dispatch, not a benchmark crown.</li></ul>
+<p>The pricing is attractive relative to frontier hosted models, but not in Poolside&#39;s ultra-cheap category. Heavy output use at $4.05 per million tokens can add up. Our frozen prompts benefited from substantial provider-side cache reads; the actual account-credit deltas were $0.282 for default and $0.307 for maximum reasoning.</p>
+<h2 id="verdict">Verdict</h2>
+<p>Inkling passes the test that matters most for a model this ambitious: its breadth is real.</p>
+<p>It completed every request without an API error, produced 96 valid structured calls, selected our ideal tool more often than the two narrow local references, understood a real UI screenshot, and correctly decoded a synthetic audio instruction. Increasing reasoning effort did not help, and its 73% Sonnet alignment does not make it the best WebBrain planner.</p>
+<p>That is still a strong launch. The combination of Apache 2.0 weights, 41B active parameters, half-million-token hosted context, vision, audio, and solid tool use is unusual. After Poolside&#39;s stronger Laguna releases, Inkling is further evidence that American open-weight AI is no longer absent from the serious-model conversation.</p>
+<p>Frozen result directories:</p>
+<pre><code class="language-text">test/llm/results/2026-07-23-inkling-openrouter-default_chrome_thinkingmachines_inkling_frozen
+test/llm/results/2026-07-23-inkling-openrouter-max_chrome_thinkingmachines_inkling_frozen</code></pre>
+
+    <div class="author-box">
+      Written by <a href="https://emresokullu.com" target="_blank" rel="noopener">Emre Sokullu</a>. WebBrain is MIT-licensed and open on <a href="https://github.com/webbrain-one/webbrain" target="_blank" rel="noopener">GitHub</a>.
+    </div>
+  </article>
+
+  <footer>
+    <div>&copy; 2026 WebBrain &middot; <a href="/privacy">Privacy</a></div>
+    <div><a href="https://github.com/webbrain-one/webbrain" target="_blank" rel="noopener">GitHub</a></div>
+  </footer>
+  <script>
+    (function () {
+      const btn = document.getElementById('theme-toggle');
+      if (!btn) return;
+      const root = document.documentElement;
+
+      function setTheme(theme, persist) {
+        root.setAttribute('data-theme', theme);
+        if (persist) {
+          try { localStorage.setItem('webbrain-theme', theme); } catch (_) {}
+        }
+      }
+
+      btn.addEventListener('click', function () {
+        const next = root.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+        setTheme(next, true);
+      });
+
+      const mq = window.matchMedia('(prefers-color-scheme: light)');
+      function onMQ(e) {
+        try {
+          if (localStorage.getItem('webbrain-theme')) return;
+        } catch (_) {}
+        setTheme(e.matches ? 'light' : 'dark', false);
+      }
+      if (typeof mq.addEventListener === 'function') mq.addEventListener('change', onMQ);
+      else if (typeof mq.addListener === 'function') mq.addListener(onMQ);
+    })();
+  </script>
+  <script>
+    (function () {
+      const LOCALES = ["en","es","fr","tr","zh","ru","uk","ar","ja","ko","id","th","ms","tl","he"];
+      const sel = document.getElementById('lang-dropdown');
+      if (!sel) return;
+      sel.value = sel.dataset.current || 'en';
+      sel.addEventListener('change', function () {
+        const target = sel.value;
+        if (!LOCALES.includes(target)) return;
+        window.location.href = target === 'en' ? '/' : '/' + target + '/';
+      });
+    })();
+  </script>
+</body>
+</html>

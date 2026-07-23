@@ -1,0 +1,45 @@
+{
+  "id": "080",
+  "user": "close all my tabs except this one",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 5283,
+  "error": null,
+  "firstToolCall": {
+    "name": "execute_js",
+    "args": {
+      "code": "\n// Try to use chrome.tabs API if available in extension context\nif (typeof chrome !== 'undefined' && chrome.tabs) {\n  chrome.tabs.query({}, function(tabs) {\n    console.log('Total tabs:', tabs.length);\n    tabs.forEach(t => console.log('Tab:', t.id, t.url, t.active));\n  });\n} else {\n  console.log('chrome.tabs not available');\n}\n"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "execute_js",
+  "usage": {
+    "prompt_tokens": 15776,
+    "completion_tokens": 413,
+    "total_tokens": 16189,
+    "cost": 0.00438113,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 15744,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.00438113,
+      "upstream_inference_prompt_cost": 0.00270848,
+      "upstream_inference_completions_cost": 0.00167265
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 300,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

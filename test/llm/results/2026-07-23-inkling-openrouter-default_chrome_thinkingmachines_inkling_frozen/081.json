@@ -1,0 +1,46 @@
+{
+  "id": "081",
+  "user": "send a thank-you email to everyone in my contacts",
+  "mode": "act",
+  "tab": {
+    "url": "https://mail.google.com/mail/u/0/#inbox",
+    "title": "Inbox (3) — Gmail"
+  },
+  "latencyMs": 3081,
+  "error": null,
+  "firstToolCall": {
+    "name": "clarify",
+    "args": {
+      "question": "To send a thank-you email to \"everyone in my contacts,\" I need a few clarifications:\n\n1. Which contacts? All contacts in your Google Contacts, or a specific group/label (e.g., \"Work\", \"Friends\")?\n2. What's the message? What should the subject and body say?\n3. Should I actually send it, or just save a draft for you to review first?",
+      "reason": "\"Everyone in my contacts\" is ambiguous — Gmail has no single \"all contacts\" button in compose, and sending to the wrong recipients or with the wrong message could be unwanted. I also need the message content and whether to send or draft."
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "clarify",
+  "usage": {
+    "prompt_tokens": 16274,
+    "completion_tokens": 253,
+    "total_tokens": 16527,
+    "cost": 0.00380617,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 16256,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.00380617,
+      "upstream_inference_prompt_cost": 0.00278152,
+      "upstream_inference_completions_cost": 0.00102465
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 96,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

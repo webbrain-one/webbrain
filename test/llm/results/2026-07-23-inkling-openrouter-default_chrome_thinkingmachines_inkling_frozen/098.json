@@ -1,0 +1,46 @@
+{
+  "id": "098",
+  "user": "compare these two products",
+  "mode": "act",
+  "tab": {
+    "url": "https://www.amazon.com/dp/B0EXAMPLE",
+    "title": "Acme Earbuds — Amazon"
+  },
+  "latencyMs": 1694,
+  "error": null,
+  "firstToolCall": {
+    "name": "clarify",
+    "args": {
+      "question": "Which two products should I compare? I see you're on the Amazon page for \"Acme Earbuds\" (B0EXAMPLE). Do you want to compare it with another specific Amazon product (please share the link or name), or compare two variants of this same product?",
+      "reason": "The user said \"compare these two products\" but only one product page is visible; I need to know the second product or whether they mean variants of the current one."
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "clarify",
+  "usage": {
+    "prompt_tokens": 15893,
+    "completion_tokens": 151,
+    "total_tokens": 16044,
+    "cost": 0.00343703,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 15744,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.00343703,
+      "upstream_inference_prompt_cost": 0.00282548,
+      "upstream_inference_completions_cost": 0.00061155
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 40,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

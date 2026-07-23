@@ -1,0 +1,46 @@
+{
+  "id": "081",
+  "user": "send a thank-you email to everyone in my contacts",
+  "mode": "act",
+  "tab": {
+    "url": "https://mail.google.com/mail/u/0/#inbox",
+    "title": "Inbox (3) — Gmail"
+  },
+  "latencyMs": 2854,
+  "error": null,
+  "firstToolCall": {
+    "name": "clarify",
+    "args": {
+      "question": "Before I send anything, I need a few clarifications:\n\n1. Who exactly is \"everyone in my contacts\"? Gmail doesn't have a single \"all contacts\" group — do you mean a specific label/group (e.g., \"My Contacts\"), or should I look up your contacts list and send to each individually?\n2. Should this be one email with everyone in BCC, or separate individual emails to each contact?\n3. What's the thank-you message you want to send?\n4. Should I send it now, or save it as a draft first?",
+      "reason": "Sending to \"everyone in my contacts\" is ambiguous (no default group), could be destructive/spammy, and requires knowing the recipient list, message content, and send method before proceeding."
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "clarify",
+  "usage": {
+    "prompt_tokens": 16274,
+    "completion_tokens": 293,
+    "total_tokens": 16567,
+    "cost": 0.00396817,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 16256,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.00396817,
+      "upstream_inference_prompt_cost": 0.00278152,
+      "upstream_inference_completions_cost": 0.00118665
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 114,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}
