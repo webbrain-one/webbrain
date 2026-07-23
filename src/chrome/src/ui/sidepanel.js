@@ -8467,7 +8467,7 @@ function scrollChatToQuestion({ smooth = true } = {}) {
 
 function renderChatNavigation() {
   if (!chatContainerEl || !chatNavigationEl || !chatNavigationLabelEl
-      || !chatTurnIsConnected() || !chatTurnNeedsReadingNavigation()) {
+      || !chatTurnIsConnected()) {
     chatNavigationEl?.classList.add('hidden');
     return;
   }

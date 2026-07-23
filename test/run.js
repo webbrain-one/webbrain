@@ -17455,6 +17455,20 @@ test('sidepanel long replies use reading-first turn navigation', () => {
       /function renderChatNavigation\(\) \{[\s\S]*?sp\.chat\.follow_response[\s\S]*?sp\.chat\.jump_latest[\s\S]*?sp\.chat\.back_to_question/,
       `${label}: the pill should expose live-follow, latest, and question states`,
     );
+    const navigationSource = panel.slice(
+      panel.indexOf('function renderChatNavigation()'),
+      panel.indexOf('function scheduleChatNavigationUpdate()'),
+    );
+    assert.doesNotMatch(
+      navigationSource,
+      /chatTurnNeedsReadingNavigation\(\)/,
+      `${label}: clipped response content should expose navigation even when the turn is shorter than the viewport`,
+    );
+    assert.match(
+      navigationSource,
+      /responseContinuesBelow[\s\S]*?if \(responseContinuesBelow\)/,
+      `${label}: navigation visibility should follow the response's actual viewport position`,
+    );
     assert.match(
       panel,
       /function settleChatUserScrollIntent\(\) \{[\s\S]*?chatUserScrollActive = false[\s\S]*?addEventListener\('scroll',[\s\S]*?chatUserScrollActive[\s\S]*?chatAutoFollow = distanceToBottom <= CHAT_SCROLL_EDGE_PX;[\s\S]*?settleChatUserScrollIntent\(\)/,
