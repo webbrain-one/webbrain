@@ -80,7 +80,6 @@ export async function runDetachedWithReconnect({
   onStatus = () => {},
   onState = () => {},
   shouldResume = () => true,
-  isCancelled = () => false,
   wait = defaultWait,
   pollIntervalMs = 1200,
   reconnectDelaysMs = [250, 500, 1000, 2000, 4000],
@@ -109,7 +108,6 @@ export async function runDetachedWithReconnect({
   let skipStart = probeFirst;
 
   while (true) {
-    if (isCancelled()) throw new Error('Run recovery was cancelled.');
     let startAcknowledged = skipStart;
     if (skipStart) {
       skipStart = false;
@@ -135,12 +133,10 @@ export async function runDetachedWithReconnect({
     let wasDisconnected = startWasUncertain;
 
     while (true) {
-      if (isCancelled()) throw new Error('Run recovery was cancelled.');
       const reconnectDelay = reconnectDelaysMs[
         Math.min(connectionFailures, Math.max(0, reconnectDelaysMs.length - 1))
       ] ?? pollIntervalMs;
       await wait(wasDisconnected ? reconnectDelay : pollIntervalMs);
-      if (isCancelled()) throw new Error('Run recovery was cancelled.');
 
       let state;
       try {

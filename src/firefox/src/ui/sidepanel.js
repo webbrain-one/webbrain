@@ -8949,8 +8949,6 @@ async function sendRunWithReconnect(initialAction, payload, recoveryOptions = {}
     }),
     isConnectionError: isBackgroundConnectionError,
     onState: state => applyActiveRunState(tabId, state),
-    isCancelled: () => isTabAbortRequested(tabId)
-      || cancelledRunRecoveryRequestIds.has(requestId),
     shouldResume: () => !isTabAbortRequested(tabId)
       && !cancelledRunRecoveryRequestIds.has(requestId),
     onStatus: ({ phase }) => {

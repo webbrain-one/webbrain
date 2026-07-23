@@ -46860,35 +46860,47 @@ test('detached run recovery honors a user cancellation instead of auto-resuming'
   }
 });
 
-test('detached run followers settle locally before an aborted conversation can clear their journal', async () => {
+test('detached run followers keep Stop active until the terminal journal is observable', async () => {
   for (const [label, runDetachedWithReconnect] of [
     ['chrome', runDetachedWithReconnectCh],
     ['firefox', runDetachedWithReconnectFx],
   ]) {
-    const requestId = `${label}-cancel-local-follower`;
-    let cancelled = false;
+    const requestId = `${label}-follow-stopped-run`;
     let probes = 0;
-
-    await assert.rejects(
-      runDetachedWithReconnect({
-        initialAction: 'chat_start',
-        payload: { tabId: 45, requestId, mode: 'act', text: 'stop and clear' },
-        start: async () => ({ accepted: true, requestId }),
-        probe: async () => {
-          probes += 1;
-          return { running: false, starting: false, runUi: null };
+    const states = [
+      {
+        running: true,
+        starting: false,
+        runUi: { requestId, status: 'running', events: [] },
+      },
+      {
+        running: false,
+        starting: false,
+        runUi: {
+          requestId,
+          status: 'stopped',
+          finalContent: 'Stopped by user.',
+          events: [],
         },
-        isConnectionError: () => false,
-        isCancelled: () => cancelled,
-        wait: async () => {
-          cancelled = true;
-        },
-      }),
-      /recovery was cancelled/i,
-      `${label}: aborting should settle the local follower without waiting for a missing journal timeout`,
-    );
+      },
+    ];
 
-    assert.equal(probes, 0, `${label}: a cancelled follower must not probe a journal that New conversation may clear`);
+    const response = await runDetachedWithReconnect({
+      initialAction: 'chat_start',
+      payload: { tabId: 45, requestId, mode: 'act', text: 'stop and clear' },
+      start: async () => ({ accepted: true, requestId }),
+      probe: async () => {
+        const state = states[Math.min(probes, states.length - 1)];
+        probes += 1;
+        return state;
+      },
+      isConnectionError: () => false,
+      shouldResume: () => false,
+      wait: async () => {},
+    });
+
+    assert.equal(probes, 2, `${label}: Stop should keep following the live run until its terminal snapshot`);
+    assert.equal(response.runStatus, 'stopped', `${label}: the follower should settle from the terminal stopped journal`);
   }
 });
 
