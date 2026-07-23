@@ -5637,7 +5637,9 @@ function showComposerToast(message, { duration = 2600 } = {}) {
 }
 
 function addPersistentSlashMessage(content) {
-  return addMessage('system', content, { beforeCurrentAssistant: true });
+  const msgEl = addMessage('system', content, { beforeCurrentAssistant: true });
+  scrollToBottom({ force: true });
+  return msgEl;
 }
 
 function screenshotFilenamePrefix(pageUrl) {
@@ -5898,7 +5900,7 @@ async function parseSlashCommands(text, tabId = currentTabId, options = {}) {
   }
 
   if (command.value === '/schedule' && action === 'create') {
-    renderScheduleComposer(payload, tabId);
+    await renderScheduleComposer(payload, tabId);
     return '';
   }
 
@@ -6288,6 +6290,7 @@ async function sendMessage(extraChatParams = {}) {
       syncSendButtonState();
       await parseSlashCommands(text, tabId, { permissionSkipContext });
       if (currentTabId === tabId) {
+        scrollToBottom({ force: true });
         if (!inputEl.value.trim() || inputEl.value.trim() === text) {
           inputEl.value = '';
           autoResizeInput();
@@ -6339,6 +6342,7 @@ async function sendMessage(extraChatParams = {}) {
   // If the entire message was just the slash command, there's nothing
   // left to send to the agent — bail out after the side effect.
   if (!text) {
+    scrollToBottom({ force: true });
     inputEl.value = '';
     autoResizeInput();
     syncSendButtonState();

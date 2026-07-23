@@ -17503,6 +17503,26 @@ test('sidepanel long replies use reading-first turn navigation', () => {
       /function chatHasPendingInteraction\(\) \{[\s\S]*?clarify-card:not\(\.clarify-answered\)[\s\S]*?plan-review-card:not\(\.plan-reviewed\)[\s\S]*?continue-bar[\s\S]*?function restoreLatestChatTurnPosition\(\) \{[\s\S]*?chatHasPendingInteraction\(\)[\s\S]*?scrollToBottom\(\{ force: true \}\)/,
       `${label}: restored blocking prompts should take priority over question-first positioning`,
     );
+    assert.match(
+      panel,
+      /function addPersistentSlashMessage\(content\) \{[\s\S]*?addMessage\('system', content, \{ beforeCurrentAssistant: true \}\);[\s\S]*?scrollToBottom\(\{ force: true \}\);[\s\S]*?return msgEl;/,
+      `${label}: persistent slash-command output should override reading-first scroll suppression`,
+    );
+    assert.match(
+      panel,
+      /await parseSlashCommands\(text, tabId, \{ permissionSkipContext \}\);\s*if \(currentTabId === tabId\) \{\s*scrollToBottom\(\{ force: true \}\);/,
+      `${label}: out-of-band slash commands should reveal their output while a run is active`,
+    );
+    assert.match(
+      panel,
+      /if \(!text\) \{\s*scrollToBottom\(\{ force: true \}\);\s*inputEl\.value = '';/,
+      `${label}: fully consumed slash commands should reveal synchronous UI output`,
+    );
+    assert.match(
+      panel,
+      /command\.value === '\/schedule'[\s\S]*?action === 'create'[\s\S]*?await renderScheduleComposer\(payload, tabId\);/,
+      `${label}: schedule forms should finish rendering before slash-command reveal`,
+    );
   }
 });
 
