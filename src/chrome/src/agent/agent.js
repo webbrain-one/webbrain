@@ -10836,8 +10836,6 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (result == null || result?.done) return false;
     if (typeof result !== 'object') return true;
     if (result.success === false
-        || result.verified === false
-        || result.inconclusive
         || result.denied
         || result.cancelled
         || result.skipped
@@ -10891,9 +10889,16 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       && this.constructor.EXECUTION_APP_STATE_TOOLS.has(name);
     const requiredScheduleSucceeded = state?.requiredSchedulingTool === name
       && this._isSuccessfulSchedulingEvidence(result);
+    // find_text is observational: verified:false means it did not prove a
+    // visible selection. Keep this tool-specific because mutations such as
+    // upload_file may dispatch successfully, return verified:false, and rely
+    // on the completion invariant's required follow-up page observation.
+    const unverifiedFindText = name === 'find_text'
+      && (result?.found !== true || result?.verified !== true || result?.inconclusive === true);
     if (!state?.enabled
         || name === 'done'
         || (this.constructor.EXECUTION_META_TOOLS.has(name) && !requestedAppStateTool)
+        || unverifiedFindText
         || (!this._isSuccessfulExecutionEvidence(result) && !requiredScheduleSucceeded)) return;
     state.successfulTaskToolCalls += 1;
     if (requiredScheduleSucceeded) state.successfulRequiredSchedulingToolCalls += 1;

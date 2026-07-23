@@ -37639,7 +37639,7 @@ test('streamed runs preserve consequential evidence for a trusted continuation',
   }
 });
 
-test('execution evidence ignores failed, unverified, inconclusive, denied, skipped, blocked, and unknown outcomes', () => {
+test('execution evidence ignores failed, denied, skipped, blocked, and unknown outcomes', () => {
   for (const [index, AgentClass] of [AgentCh, AgentFx].entries()) {
     const agent = new AgentClass({});
     const tabId = 8614 + index;
@@ -37677,8 +37677,6 @@ test('execution evidence ignores failed, unverified, inconclusive, denied, skipp
     }
     for (const result of [
       { success: false },
-      { success: true, verified: false },
-      { success: true, inconclusive: true },
       { denied: true },
       { skipped: true },
       { blocked: true },
@@ -37728,6 +37726,23 @@ test('execution evidence ignores failed, unverified, inconclusive, denied, skipp
       agent._executionEvidenceSatisfied(findState),
       true,
       `${AgentClass.name}: a verified find_text selection did not count as completed read-only work`,
+    );
+
+    const uploadTabId = 8624 + index;
+    const uploadState = agent._startPlanExecutionGuard(uploadTabId, 'act', {
+      requestKind: 'execute',
+      requiresStateChange: true,
+    });
+    agent._markPlanExecutionToolCall(uploadTabId, 'upload_file', {
+      success: true,
+      verified: false,
+      file: '/tmp/attachment.txt',
+      note: 'The async uploader consumed the file; verify the attachment on the page.',
+    }, { consequential: true });
+    assert.equal(
+      agent._executionEvidenceSatisfied(uploadState),
+      true,
+      `${AgentClass.name}: a dispatched upload pending page verification lost its mutation evidence`,
     );
   }
 });
