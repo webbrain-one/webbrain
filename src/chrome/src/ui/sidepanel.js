@@ -947,6 +947,7 @@ const awaitingPlanReviewTabs = new Set();
 const processingTabs = new Set();
 const abortRequestedTabs = new Set();
 const localRunRequestIds = new Map();
+const localRunFollowers = new Map();
 const cancelledRunRecoveryRequestIds = new Set();
 const adoptedRunRecoveryRequestIds = new Set();
 let recommendationsRequestId = 0;
@@ -9306,7 +9307,7 @@ async function sendRunWithReconnect(initialAction, payload, recoveryOptions = {}
   const tabId = Number(payload?.tabId);
   const requestId = String(payload?.requestId || '');
   cancelledRunRecoveryRequestIds.delete(requestId);
-  return runDetachedWithReconnect({
+  const promise = runDetachedWithReconnect({
     initialAction,
     payload,
     start: (action, nextPayload) => sendToBackground(action, nextPayload),
@@ -9316,6 +9317,8 @@ async function sendRunWithReconnect(initialAction, payload, recoveryOptions = {}
     }),
     isConnectionError: isBackgroundConnectionError,
     onState: state => applyActiveRunState(tabId, state),
+    isCancelled: () => isTabAbortRequested(tabId)
+      || cancelledRunRecoveryRequestIds.has(requestId),
     shouldResume: () => !isTabAbortRequested(tabId)
       && !cancelledRunRecoveryRequestIds.has(requestId),
     onStatus: ({ phase }) => {
@@ -9330,6 +9333,13 @@ async function sendRunWithReconnect(initialAction, payload, recoveryOptions = {}
     },
     ...recoveryOptions,
   });
+  const follower = { requestId, promise };
+  localRunFollowers.set(tabId, follower);
+  try {
+    return await promise;
+  } finally {
+    if (localRunFollowers.get(tabId) === follower) localRunFollowers.delete(tabId);
+  }
 }
 
 function formatBackgroundSendError(action, message) {
@@ -9493,6 +9503,7 @@ async function abortRun() {
       || currentAssistantEl?.dataset?.runRequestId
       || '',
   );
+  const follower = localRunFollowers.get(Number(tabId));
   if (requestId) cancelledRunRecoveryRequestIds.add(requestId);
   setTabAbortRequested(tabId, true);
   showActivity(t('sp.activity.stopping'));
@@ -9501,6 +9512,9 @@ async function abortRun() {
     await sendToBackground('abort', { tabId });
   } catch {
     // Best effort
+  }
+  if (follower?.requestId === requestId) {
+    await follower.promise.catch(() => {});
   }
 
   // Force UI to settle even if background doesn't respond cleanly

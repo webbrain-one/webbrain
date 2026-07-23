@@ -46860,6 +46860,38 @@ test('detached run recovery honors a user cancellation instead of auto-resuming'
   }
 });
 
+test('detached run followers settle locally before an aborted conversation can clear their journal', async () => {
+  for (const [label, runDetachedWithReconnect] of [
+    ['chrome', runDetachedWithReconnectCh],
+    ['firefox', runDetachedWithReconnectFx],
+  ]) {
+    const requestId = `${label}-cancel-local-follower`;
+    let cancelled = false;
+    let probes = 0;
+
+    await assert.rejects(
+      runDetachedWithReconnect({
+        initialAction: 'chat_start',
+        payload: { tabId: 45, requestId, mode: 'act', text: 'stop and clear' },
+        start: async () => ({ accepted: true, requestId }),
+        probe: async () => {
+          probes += 1;
+          return { running: false, starting: false, runUi: null };
+        },
+        isConnectionError: () => false,
+        isCancelled: () => cancelled,
+        wait: async () => {
+          cancelled = true;
+        },
+      }),
+      /recovery was cancelled/i,
+      `${label}: aborting should settle the local follower without waiting for a missing journal timeout`,
+    );
+
+    assert.equal(probes, 0, `${label}: a cancelled follower must not probe a journal that New conversation may clear`);
+  }
+});
+
 test('detached run recovery preserves background preflight errors', async () => {
   for (const [label, runDetachedWithReconnect] of [
     ['chrome', runDetachedWithReconnectCh],
@@ -46978,11 +47010,14 @@ test('reconnect protocol is wired through both sidepanels and backgrounds', () =
     assert.match(panel, /probeFirst: true,[\s\S]*?requireDurableSubmittedTurn:/, `${label}: remount adoption should probe before any safe continuation`);
     assert.match(panel, /if \(state\?\.running \|\| state\?\.starting\)/, `${label}: a reserved detached start should keep the composer and Stop UI in their active state`);
     assert.match(panel, /cancelledRunRecoveryRequestIds/, `${label}: user cancellation should block automatic resume`);
+    assert.match(panel, /const localRunFollowers = new Map\(\)/, `${label}: locally initiated detached runs should expose their follower settlement`);
+    assert.match(panel, /const follower = \{ requestId, promise \};[\s\S]*?localRunFollowers\.set\(tabId, follower\);[\s\S]*?return await promise;[\s\S]*?localRunFollowers\.delete\(tabId\)/, `${label}: detached follower promises should remain tracked until they settle`);
     const stopSection = panel.slice(
       panel.indexOf('// --- Stop / Abort ---'),
       panel.indexOf('// --- Voice input', panel.indexOf('// --- Stop / Abort ---')),
     );
     assert.match(stopSection, /localRunRequestIds\.get\(Number\(tabId\)\)[\s\S]*?cancelledRunRecoveryRequestIds\.add\(requestId\)[\s\S]*?setTabAbortRequested\(tabId, true\)/, `${label}: Stop should persist request-scoped cancellation before its UI timeout clears`);
+    assert.match(stopSection, /const follower = localRunFollowers\.get\(Number\(tabId\)\);[\s\S]*?await sendToBackground\('abort', \{ tabId \}\);[\s\S]*?await follower\.promise\.catch\(\(\) => \{\}\);/, `${label}: Stop should settle the local follower before New conversation can clear its journal`);
     assert.match(background, /case 'chat_start':[\s\S]*?launchDetachedRun\('chat'/, `${label}: background should acknowledge detached chat starts`);
     assert.match(background, /case 'continue_start':[\s\S]*?launchDetachedRun\('continue'/, `${label}: background should acknowledge detached continuation starts`);
     assert.match(background, /case 'chat':[\s\S]*?await beginContinuationRunUiSnapshot\(tabId, msg\.requestId,/, `${label}: replayed fresh chats should preserve journal sequence numbers`);
