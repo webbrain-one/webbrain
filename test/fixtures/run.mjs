@@ -1631,6 +1631,32 @@ for (const browserKind of ['chrome', 'firefox']) {
     }
   });
 
+  test(`set_checked (${browserKind}): wrapped labels and confirmation-gated state are explicit`, async (page) => {
+    await setupContentFixture(page, 'trusted-click-fallback.html', browserKind);
+    const tree = await call(page, 'get_accessibility_tree', { filter: 'all', maxDepth: 10, maxChars: 30000 });
+    const content = String(tree?.pageContent || '');
+    const match = content.match(/checkbox "Firefox for Android compatibility" \[(ref_\d+)\][^\n]*type="checkbox"[^\n]*checked=false/);
+    if (!match) throw new Error(`expected wrapped Android checkbox label in AX tree: ${content}`);
+
+    const result = await call(page, 'set_checked', { ref_id: match[1], checked: true });
+    if (
+      result?.success !== false
+      || result.dispatched !== true
+      || result.checkedBefore !== false
+      || result.checkedAfter !== false
+      || result.verified !== false
+      || result.confirmationRequired !== true
+      || result.recoveryRequired !== 'confirmation_dialog'
+      || result.noProgress === true
+      || result.error
+      || result.confirmation?.title !== 'Firefox for Android compatibility'
+      || !result.confirmation?.actions?.includes('Yes, I’ve tested my extension with Firefox for Android')
+      || !result.confirmation?.actions?.includes('No, I have not tested')
+    ) {
+      throw new Error(`confirmation-gated checkbox was reported as ordinary no-progress: ${JSON.stringify(result)}`);
+    }
+  });
+
   test(`click_ax (${browserKind}): waits for controlled checkbox reconciliation`, async (page) => {
     await setupContentFixture(page, 'trusted-click-fallback.html', browserKind);
     const tree = await call(page, 'get_accessibility_tree', { filter: 'all', maxDepth: 10, maxChars: 30000 });

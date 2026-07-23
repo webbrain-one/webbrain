@@ -46,6 +46,56 @@ export function assertMatchingArchiveVersion(expected, actual, label) {
   }
 }
 
+const FLAG_LICENSE_PATH = 'icons/flags/LICENSE.flag-icons.txt';
+const REJECTED_FLAG_LICENSE_PATH = 'icons/flags/LICENSE.flag-icons';
+
+export function listZipEntryNames(filePath) {
+  const archive = readFileSync(filePath);
+  const eocdSignature = 0x06054b50;
+  const centralHeaderSignature = 0x02014b50;
+  const earliestEocd = Math.max(0, archive.length - 0xffff - 22);
+  let eocdOffset = -1;
+  for (let offset = archive.length - 22; offset >= earliestEocd; offset -= 1) {
+    if (
+      archive.readUInt32LE(offset) === eocdSignature
+      && offset + 22 + archive.readUInt16LE(offset + 20) === archive.length
+    ) {
+      eocdOffset = offset;
+      break;
+    }
+  }
+  if (eocdOffset < 0) throw new Error(`${filePath} has no ZIP end-of-central-directory record.`);
+
+  const entryCount = archive.readUInt16LE(eocdOffset + 10);
+  let offset = archive.readUInt32LE(eocdOffset + 16);
+  const entries = [];
+  for (let index = 0; index < entryCount; index += 1) {
+    if (offset + 46 > archive.length || archive.readUInt32LE(offset) !== centralHeaderSignature) {
+      throw new Error(`${filePath} has an invalid ZIP central-directory entry at index ${index}.`);
+    }
+    const nameLength = archive.readUInt16LE(offset + 28);
+    const extraLength = archive.readUInt16LE(offset + 30);
+    const commentLength = archive.readUInt16LE(offset + 32);
+    const nameStart = offset + 46;
+    const nameEnd = nameStart + nameLength;
+    if (nameEnd > archive.length) {
+      throw new Error(`${filePath} has a truncated ZIP filename at index ${index}.`);
+    }
+    entries.push(archive.toString('utf8', nameStart, nameEnd));
+    offset = nameEnd + extraLength + commentLength;
+  }
+  return entries;
+}
+
+export function assertStoreSafeFlagLicenseEntries(entries, label) {
+  if (!entries.includes(FLAG_LICENSE_PATH)) {
+    throw new Error(`${label} is missing ${FLAG_LICENSE_PATH}.`);
+  }
+  if (entries.includes(REJECTED_FLAG_LICENSE_PATH)) {
+    throw new Error(`${label} still contains Opera-rejected ${REJECTED_FLAG_LICENSE_PATH}.`);
+  }
+}
+
 function readJsonAtHead(relativePath) {
   const json = execFileSync('git', ['show', `HEAD:${relativePath}`], {
     cwd: root,
@@ -53,6 +103,18 @@ function readJsonAtHead(relativePath) {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   return JSON.parse(json);
+}
+
+function listTreeEntryNamesAtHead(relativePath) {
+  return execFileSync(
+    'git',
+    ['ls-tree', '-r', '--name-only', `HEAD:${relativePath}`],
+    {
+      cwd: root,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }
+  ).split(/\r?\n/).filter(Boolean);
 }
 
 function runCli() {
@@ -68,6 +130,10 @@ function runCli() {
   for (const { sourceDir } of targets) {
     const manifest = readJsonAtHead(`src/${sourceDir}/manifest.json`);
     assertMatchingArchiveVersion(version, manifest.version, `HEAD src/${sourceDir}/manifest.json version`);
+    assertStoreSafeFlagLicenseEntries(
+      listTreeEntryNamesAtHead(`src/${sourceDir}`),
+      `HEAD src/${sourceDir}`
+    );
   }
 
   const distDir = path.join(root, 'dist');
@@ -82,6 +148,10 @@ function runCli() {
       'git',
       ['archive', '--format=zip', '-o', out, `HEAD:src/${sourceDir}`],
       { stdio: 'inherit', cwd: root }
+    );
+    assertStoreSafeFlagLicenseEntries(
+      listZipEntryNames(out),
+      `dist/webbrain-${packageName}-${version}.zip`
     );
     console.log(`  ✓ dist/webbrain-${packageName}-${version}.zip`);
   }

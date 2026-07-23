@@ -516,7 +516,11 @@ const { bumpSemver, rewriteVersionInJsonText, rewriteVersionByAnchor, isReleaseB
 const { normalizeChangelogBody, buildChangelogSection, insertChangelogEntry } = await import(
   'file://' + path.join(ROOT, 'scripts/update-changelog.mjs').replace(/\\/g, '/')
 );
-const { assertMatchingArchiveVersion } = await import(
+const {
+  assertMatchingArchiveVersion,
+  assertStoreSafeFlagLicenseEntries,
+  listZipEntryNames,
+} = await import(
   'file://' + path.join(ROOT, 'scripts/build-zip.mjs').replace(/\\/g, '/')
 );
 
@@ -1624,6 +1628,86 @@ test('Chrome set_checked completes one selector-backed trusted click and verifie
   }
 });
 
+test('Chrome set_checked reports a newly opened confirmation dialog instead of no progress', async () => {
+  const originalChrome = globalThis.chrome;
+  const originalAttach = cdpClientCh.attach;
+  const originalClickElement = cdpClientCh.clickElement;
+  try {
+    globalThis.chrome = {
+      runtime: {},
+      tabs: {
+        async sendMessage() {
+          return {
+            success: true,
+            method: 'set_checked',
+            ref_id: 'ref_android',
+            checkedBefore: false,
+            checkedAfter: false,
+            desiredChecked: true,
+            checkboxIdentity: 'id:android-checkbox',
+            selector: '#android-checkbox',
+            _confirmationSurfaces: [{
+              signature: 'id:android-confirmation',
+              title: 'Firefox for Android compatibility',
+              actions: [
+                'Yes, I’ve tested my extension with Firefox for Android',
+                'No, I have not tested',
+              ],
+            }],
+          };
+        },
+      },
+    };
+    cdpClientCh.attach = async () => ({ attached: true });
+    cdpClientCh.clickElement = async () => ({
+      success: true,
+      method: 'cdp-mouse',
+      dispatched: true,
+    });
+
+    const response = await new AgentCh({})._completeSetCheckedWithCdp(
+      42,
+      { ref_id: 'ref_android', checked: true },
+      {
+        success: true,
+        needsTrustedClick: true,
+        marker: 'marker-android',
+        trustedSelector: '[data-webbrain-set-checked-target="marker-android"]',
+        checkedBefore: false,
+        checkedAfter: false,
+        checkboxIdentity: 'id:android-checkbox',
+        _confirmationSurfaces: [],
+      },
+      {
+        ref_id: 'ref_android',
+        checked: true,
+        expectedDocumentToken: 'doc-android',
+        probeOnly: true,
+        markForTrustedClick: true,
+      },
+    );
+
+    assert.equal(response.success, false);
+    assert.equal(response.dispatched, true);
+    assert.equal(response.trusted, true);
+    assert.equal(response.verified, false);
+    assert.equal(response.checkedAfter, false);
+    assert.equal(response.confirmationRequired, true);
+    assert.equal(response.recoveryRequired, 'confirmation_dialog');
+    assert.deepEqual(response.observedEffects, ['confirmation_dialog_opened']);
+    assert.equal(response.confirmation.title, 'Firefox for Android compatibility');
+    assert.equal(response.noProgress, undefined);
+    assert.equal(response.error, undefined);
+    assert.equal(response._confirmationSurfaces, undefined);
+    assert.match(response.warning, /Do not call set_checked again/i);
+  } finally {
+    cdpClientCh.attach = originalAttach;
+    cdpClientCh.clickElement = originalClickElement;
+    if (originalChrome === undefined) delete globalThis.chrome;
+    else globalThis.chrome = originalChrome;
+  }
+});
+
 test('Chrome set_checked fails closed when marker verification resolves another checkbox', async () => {
   const originalChrome = globalThis.chrome;
   const originalAttach = cdpClientCh.attach;
@@ -2341,6 +2425,10 @@ test('matches Mozilla Add-ons Developer Hub and guides version submission', () =
   assert.match(chromeAdapter?.notes || '', /Release Notes.*Notes to Reviewer.*optional/s);
   assert.match(chromeAdapter?.notes || '', /Leave both empty unless the user explicitly asks/i);
   assert.match(chromeAdapter?.notes || '', /release_notes\.\.\..*approval_notes.*verify_form/s);
+  assert.match(chromeAdapter?.notes || '', /compatibility checkboxes are optional platform choices/i);
+  assert.match(chromeAdapter?.notes || '', /Firefox for Android opens a confirmation dialog/i);
+  assert.match(chromeAdapter?.notes || '', /Never make that attestation without user-provided evidence/i);
+  assert.match(chromeAdapter?.notes || '', /confirmationRequired:true.*instead of retrying the checkbox/s);
   assert.match(chromeAdapter?.notes || '', /\/addon\/<addon-slug>\/versions\/submit\/<id>\/source/);
   assert.match(chromeAdapter?.notes || '', /answer "No".*Do You Need to Submit Source Code/s);
   assert.match(chromeAdapter?.notes || '', /You do not need to submit Source Code/);
@@ -6885,6 +6973,19 @@ test('build-zip rejects filenames that would disagree with archived manifests', 
     () => assertMatchingArchiveVersion('23.0.0', '22.4.5', 'Chrome manifest'),
     /Chrome manifest is 22\.4\.5, but the release package version is 23\.0\.0/
   );
+});
+
+test('tracked store archives contain the Opera-safe flag license filename', () => {
+  const { version } = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+  for (const browser of ['chrome', 'edge', 'firefox']) {
+    const relativePath = `dist/webbrain-${browser}-${version}.zip`;
+    const archivePath = path.join(ROOT, relativePath);
+    assert.ok(fs.existsSync(archivePath), `${relativePath} is missing`);
+    assert.doesNotThrow(
+      () => assertStoreSafeFlagLicenseEntries(listZipEntryNames(archivePath), relativePath),
+      `${relativePath} must contain the renamed license and omit Opera's rejected filename`,
+    );
+  }
 });
 
 test('firefox manifest uses the AMO extension id', () => {
@@ -12367,7 +12468,8 @@ test('sidepanel language picker uses the provider-style accessible listbox with 
       assert.ok(fs.existsSync(flagPath), `${label}: bundled ${flagCode} flag missing`);
       assert.match(fs.readFileSync(flagPath, 'utf8'), /^<svg\b/, `${label}: ${flagCode} flag should be SVG`);
     }
-    assert.ok(fs.existsSync(path.join(ROOT, prefix, 'icons/flags/LICENSE.flag-icons')), `${label}: flag-icons license missing`);
+    assert.ok(fs.existsSync(path.join(ROOT, prefix, 'icons/flags/LICENSE.flag-icons.txt')), `${label}: flag-icons license missing`);
+    assert.equal(fs.existsSync(path.join(ROOT, prefix, 'icons/flags/LICENSE.flag-icons')), false, `${label}: Opera-rejected extensionless flag-icons license should not be packaged`);
   }
 });
 

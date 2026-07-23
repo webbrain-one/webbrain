@@ -319,6 +319,30 @@
       } catch {}
     }
 
+    // Native form controls can be wrapped by a <label> without using a
+    // matching `for` attribute. `el.labels` covers both that pattern and
+    // explicit label associations, so action results do not expose an
+    // unnamed checkbox even though the page visibly labels it.
+    try {
+      const labelText = Array.from(el.labels || [])
+        .map(label => (label.innerText || label.textContent || '').replace(/\s+/g, ' ').trim())
+        .find(Boolean);
+      if (labelText) {
+        return labelText.length > MAX_NAME_LEN
+          ? labelText.substring(0, MAX_NAME_LEN) + '...'
+          : labelText;
+      }
+      const wrappingLabel = el.closest && el.closest('label');
+      const wrappingText = (wrappingLabel?.innerText || wrappingLabel?.textContent || '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (wrappingText) {
+        return wrappingText.length > MAX_NAME_LEN
+          ? wrappingText.substring(0, MAX_NAME_LEN) + '...'
+          : wrappingText;
+      }
+    } catch {}
+
     if (tag === 'input') {
       const t = (el.getAttribute('type') || '').toLowerCase();
       const valAttr = el.getAttribute('value');
