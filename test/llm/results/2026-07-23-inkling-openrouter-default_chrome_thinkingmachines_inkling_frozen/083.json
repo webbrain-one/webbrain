@@ -1,0 +1,45 @@
+{
+  "id": "083",
+  "user": "what time is it in tokyo right now",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 3779,
+  "error": null,
+  "firstToolCall": {
+    "name": "execute_js",
+    "args": {
+      "code": "const now = new Date();\nconst tokyoTime = new Date(now.toLocaleString(\"en-US\", { timeZone: \"Asia/Tokyo\" }));\nconsole.log(tokyoTime.toLocaleString(\"en-US\", { timeZone: \"Asia/Tokyo\", hour: \"2-digit\", minute: \"2-digit\", second: \"2-digit\", hour12: false }));"
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "execute_js",
+  "usage": {
+    "prompt_tokens": 15778,
+    "completion_tokens": 312,
+    "total_tokens": 16090,
+    "cost": 0.00397408,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 15744,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.00397408,
+      "upstream_inference_prompt_cost": 0.00271048,
+      "upstream_inference_completions_cost": 0.0012636
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 210,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}

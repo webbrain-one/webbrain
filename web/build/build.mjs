@@ -68,6 +68,8 @@ const LOCALES = [
   { code: 'vi', bcp47: 'vi-VN', label: 'Tiếng Việt', dir: 'ltr', isDefault: false },
   { code: 'bn', bcp47: 'bn-BD', label: 'বাংলা', dir: 'ltr', isDefault: false },
   { code: 'fa', bcp47: 'fa-IR', label: 'فارسی', dir: 'rtl', isDefault: false },
+  { code: 'nl', bcp47: 'nl-NL', label: 'Nederlands', dir: 'ltr', isDefault: false },
+  { code: 'de', bcp47: 'de-DE', label: 'Deutsch', dir: 'ltr', isDefault: false },
 ];
 
 const FAQ_KEYS = [

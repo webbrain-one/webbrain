@@ -23,33 +23,38 @@ import pt from './locales/pt.js';
 import vi from './locales/vi.js';
 import bn from './locales/bn.js';
 import fa from './locales/fa.js';
+import nl from './locales/nl.js';
+import de from './locales/de.js';
 
-const DICTS = { en, es, fr, tr, zh, ru, uk, ar, ja, ko, id, th, ms, tl, pl, he, hi, pt, vi, bn, fa };
+const DICTS = { en, es, fr, tr, zh, ru, uk, ar, ja, ko, id, th, ms, tl, pl, he, hi, pt, vi, bn, fa, nl, de };
 const LS_KEY = 'wbLocale';
 const RTL_LOCALES = new Set(['ar', 'he', 'fa']);
 
 export const LANGUAGES = [
   { code: 'en', label: 'English' },
-  { code: 'es', label: 'Español' },
-  { code: 'fr', label: 'Français' },
-  { code: 'tr', label: 'Türkçe' },
   { code: 'zh', label: '中文' },
-  { code: 'ru', label: 'Русский' },
-  { code: 'uk', label: 'Українська' },
+  // English and Chinese stay pinned first; the rest are sorted by English name.
   { code: 'ar', label: 'العربية' },
-  { code: 'ja', label: '日本語' },
-  { code: 'ko', label: '한국어' },
-  { code: 'id', label: 'Bahasa Indonesia' },
-  { code: 'th', label: 'ไทย' },
-  { code: 'ms', label: 'Bahasa Melayu' },
+  { code: 'bn', label: 'বাংলা' },
+  { code: 'nl', label: 'Nederlands' },
   { code: 'tl', label: 'Filipino' },
-  { code: 'pl', label: 'Polski' },
+  { code: 'fr', label: 'Français' },
+  { code: 'de', label: 'Deutsch' },
   { code: 'he', label: 'עברית' },
   { code: 'hi', label: 'हिन्दी' },
-  { code: 'pt', label: 'Português' },
-  { code: 'vi', label: 'Tiếng Việt' },
-  { code: 'bn', label: 'বাংলা' },
+  { code: 'id', label: 'Bahasa Indonesia' },
+  { code: 'ja', label: '日本語' },
+  { code: 'ko', label: '한국어' },
+  { code: 'ms', label: 'Bahasa Melayu' },
   { code: 'fa', label: 'فارسی' },
+  { code: 'pl', label: 'Polski' },
+  { code: 'pt', label: 'Português' },
+  { code: 'ru', label: 'Русский' },
+  { code: 'es', label: 'Español' },
+  { code: 'th', label: 'ไทย' },
+  { code: 'tr', label: 'Türkçe' },
+  { code: 'uk', label: 'Українська' },
+  { code: 'vi', label: 'Tiếng Việt' },
 ];
 
 function detect() {

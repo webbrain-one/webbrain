@@ -1,0 +1,43 @@
+{
+  "runTag": "2026-07-23-inkling-openrouter-default",
+  "model": "thinkingmachines/inkling",
+  "browser": "chrome",
+  "base": "https://openrouter.ai/api/v1",
+  "saveRequest": false,
+  "tier": null,
+  "modeOverride": null,
+  "chatTemplateCompat": "off",
+  "structuredToolsSent": true,
+  "reasoningEffort": null,
+  "freeze": {
+    "path": "test/llm/freeze/baseline-2026-05-23.json",
+    "sourceRun": "anthropic/claude-sonnet-4.6",
+    "sourceRunTag": "2026-05-23T18-47-31-246Z",
+    "systemHash": "5c4fac1387025050d002fb87fb6ae02af2fba0e232cd40737f844a3a5c4e7abf",
+    "toolCount": 41
+  },
+  "cases": 100,
+  "totalLatencyMs": 38682,
+  "errors": 0,
+  "withToolCall": 96,
+  "withToolCallFromContent": 0,
+  "byTool": {
+    "navigate": 22,
+    "list_downloads": 2,
+    "new_tab": 2,
+    "get_accessibility_tree": 40,
+    "read_page": 5,
+    "extract_data": 1,
+    "click_ax": 1,
+    "download_file": 1,
+    "download_social_media": 1,
+    "screenshot": 1,
+    "scroll": 1,
+    "get_selection": 1,
+    "get_interactive_elements": 1,
+    "clarify": 11,
+    "scratchpad_write": 1,
+    "(no_tool_call)": 4,
+    "execute_js": 5
+  }
+}

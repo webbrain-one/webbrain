@@ -1,0 +1,46 @@
+{
+  "id": "068",
+  "user": "click that",
+  "mode": "act",
+  "tab": {
+    "url": "about:home",
+    "title": "New Tab"
+  },
+  "latencyMs": 1989,
+  "error": null,
+  "firstToolCall": {
+    "name": "clarify",
+    "args": {
+      "question": "What would you like me to click? The current page is a blank New Tab (about:home) with no visible elements. Could you clarify — e.g., a specific link, button, or element on this page, or did you mean something from a previous page?",
+      "reason": "The user said \"click that\" but there's no identifiable target on the current blank New Tab page."
+    }
+  },
+  "toolCallSource": "tool_calls",
+  "finishReason": "tool_calls",
+  "content": "clarify",
+  "usage": {
+    "prompt_tokens": 15771,
+    "completion_tokens": 149,
+    "total_tokens": 15920,
+    "cost": 0.00330693,
+    "is_byok": false,
+    "prompt_tokens_details": {
+      "cached_tokens": 15744,
+      "cache_write_tokens": 0,
+      "audio_tokens": 0,
+      "video_tokens": 0
+    },
+    "cost_details": {
+      "upstream_inference_cost": 0.00330693,
+      "upstream_inference_prompt_cost": 0.00270348,
+      "upstream_inference_completions_cost": 0.00060345
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 52,
+      "image_tokens": 0,
+      "audio_tokens": 0
+    }
+  },
+  "attempts": 1,
+  "retryErrors": []
+}
