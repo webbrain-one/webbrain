@@ -249,12 +249,15 @@
           </div>
         </div>
       </div>
-      <button id="chat-navigation" class="chat-navigation hidden" type="button" aria-controls="chat-container">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M12 19V5M6.5 10.5 12 5l5.5 5.5"/>
-        </svg>
-        <span id="chat-navigation-label">Back to question</span>
-      </button>
+      <div id="chat-navigation" class="chat-navigation hidden">
+        <button id="chat-navigation-action" class="chat-navigation-action" type="button" aria-controls="chat-container">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 19V5M6.5 10.5 12 5l5.5 5.5"/>
+          </svg>
+          <span id="chat-navigation-label">Back to question</span>
+        </button>
+        <button id="chat-navigation-dismiss" class="chat-navigation-dismiss" type="button" data-i18n-aria-label="sp.review.close" aria-label="Dismiss">×</button>
+      </div>
     </div>
 
     <!-- Agent Activity Indicator -->

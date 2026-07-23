@@ -17436,9 +17436,24 @@ test('sidepanel long replies use reading-first turn navigation', () => {
       `${label}: chat navigation should overlay the scroll container without narrowing messages`,
     );
     assert.match(
+      html,
+      /id="chat-navigation-action"[\s\S]*?aria-controls="chat-container"[\s\S]*?id="chat-navigation-dismiss"[\s\S]*?data-i18n-aria-label="sp\.review\.close"/,
+      `${label}: navigation and dismissal should be separate accessible controls`,
+    );
+    assert.match(
       css,
       /#chat-shell \{[\s\S]*?position: relative;[\s\S]*?min-height: 0;[\s\S]*?\.chat-navigation \{[\s\S]*?position: absolute;[\s\S]*?left: 50%;[\s\S]*?transform: translateX\(-50%\);/,
       `${label}: navigation pill should be shell-positioned and RTL-safe`,
+    );
+    assert.match(
+      css,
+      /#chat-container\.chat-navigation-visible \{[\s\S]*?padding-block-end: 60px;/,
+      `${label}: visible navigation should reserve enough logical bottom space to uncover the latest content`,
+    );
+    assert.match(
+      css,
+      /\.chat-navigation-dismiss \{[\s\S]*?position: absolute;[\s\S]*?top: -6px;[\s\S]*?inset-inline-end: -6px;/,
+      `${label}: the dismissal control should sit at the logical top corner in both LTR and RTL layouts`,
     );
     assert.match(
       css,
@@ -17454,6 +17469,21 @@ test('sidepanel long replies use reading-first turn navigation', () => {
       panel,
       /function renderChatNavigation\(\) \{[\s\S]*?sp\.chat\.follow_response[\s\S]*?sp\.chat\.jump_latest[\s\S]*?sp\.chat\.back_to_question/,
       `${label}: the pill should expose live-follow, latest, and question states`,
+    );
+    assert.match(
+      panel,
+      /function setChatNavigationVisible\(visible\) \{[\s\S]*?toggle\('hidden', !visible\)[\s\S]*?toggle\('chat-navigation-visible', visible\)/,
+      `${label}: pill visibility should keep the scroll container's bottom inset in sync`,
+    );
+    assert.match(
+      panel,
+      /chatNavigationDismissEl\?\.addEventListener\('click',[\s\S]*?chatNavigationDismissedAssistantEl = chatNavigationTurn\.assistantEl;[\s\S]*?setChatNavigationVisible\(false\);/,
+      `${label}: dismissing the pill should hide it for the active answer`,
+    );
+    assert.match(
+      panel,
+      /function setChatNavigationTurn\(userEl, assistantEl,[\s\S]*?chatNavigationDismissedAssistantEl !== assistantEl[\s\S]*?chatNavigationDismissedAssistantEl = null;/,
+      `${label}: a new answer should restore the navigation control`,
     );
     const navigationSource = panel.slice(
       panel.indexOf('function renderChatNavigation()'),

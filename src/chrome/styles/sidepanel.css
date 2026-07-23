@@ -925,17 +925,29 @@ body {
   position: relative;
 }
 
+#chat-container.chat-navigation-visible {
+  padding-block-end: 60px;
+}
+
 .chat-navigation {
   position: absolute;
   left: 50%;
   bottom: 12px;
   z-index: 7;
+  display: inline-block;
+  max-width: calc(100% - 36px);
+  transform: translateX(-50%);
+  transition: transform 0.15s;
+}
+
+.chat-navigation-action {
   display: inline-flex;
   align-items: center;
   gap: 7px;
   min-height: 36px;
-  max-width: calc(100% - 36px);
-  padding: 7px 12px;
+  max-width: 100%;
+  padding-block: 7px;
+  padding-inline: 12px 24px;
   border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--border));
   border-radius: 999px;
   background: color-mix(in srgb, var(--bg-secondary) 94%, transparent);
@@ -947,8 +959,7 @@ body {
   font-size: 11px;
   font-weight: 650;
   line-height: 1;
-  transform: translateX(-50%);
-  transition: border-color 0.15s, color 0.15s, background 0.15s, transform 0.15s;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
 }
 
 .chat-navigation.hidden {
@@ -956,18 +967,22 @@ body {
 }
 
 .chat-navigation:hover {
-  border-color: color-mix(in srgb, var(--accent) 52%, var(--border));
-  background: var(--bg-secondary);
-  color: var(--text-primary);
   transform: translate(-50%, -1px);
 }
 
-.chat-navigation:focus-visible {
+.chat-navigation-action:hover {
+  border-color: color-mix(in srgb, var(--accent) 52%, var(--border));
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.chat-navigation-action:focus-visible,
+.chat-navigation-dismiss:focus-visible {
   outline: 3px solid color-mix(in srgb, var(--accent) 34%, transparent);
   outline-offset: 2px;
 }
 
-.chat-navigation svg {
+.chat-navigation-action svg {
   width: 14px;
   height: 14px;
   flex: 0 0 auto;
@@ -979,13 +994,35 @@ body {
   transition: transform 0.18s ease;
 }
 
-.chat-navigation[data-direction="down"] svg {
+.chat-navigation[data-direction="down"] .chat-navigation-action svg {
   transform: rotate(180deg);
+}
+
+.chat-navigation-dismiss {
+  position: absolute;
+  top: -6px;
+  inset-inline-end: -6px;
+  width: 20px;
+  height: 20px;
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border));
+  border-radius: 50%;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  box-shadow: 0 2px 7px color-mix(in srgb, var(--overlay-bg-strong) 60%, transparent);
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  line-height: 18px;
+}
+
+.chat-navigation-dismiss:hover {
+  border-color: color-mix(in srgb, var(--accent) 52%, var(--border));
+  color: var(--text-primary);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .chat-navigation,
-  .chat-navigation svg {
+  .chat-navigation-action svg {
     transition: none;
   }
 }

@@ -366,6 +366,8 @@ if (globalThis.browser?.storage?.onChanged) {
 const messagesEl = document.getElementById('messages');
 const chatContainerEl = document.getElementById('chat-container');
 const chatNavigationEl = document.getElementById('chat-navigation');
+const chatNavigationActionEl = document.getElementById('chat-navigation-action');
+const chatNavigationDismissEl = document.getElementById('chat-navigation-dismiss');
 const chatNavigationLabelEl = document.getElementById('chat-navigation-label');
 const inputEl = document.getElementById('user-input');
 const inputHighlightEl = document.getElementById('input-highlight');
@@ -8017,6 +8019,7 @@ let chatNavigationTurn = null;
 let chatAutoFollow = true;
 let chatUserScrollActive = false;
 let chatUserScrollSettleTimer = null;
+let chatNavigationDismissedAssistantEl = null;
 
 function precedingUserMessage(assistantEl) {
   let candidate = assistantEl?.previousElementSibling || null;
@@ -8052,6 +8055,11 @@ function chatTurnIsRunning(turn = chatNavigationTurn) {
   return !!turn && isProcessing && currentAssistantEl === turn.assistantEl;
 }
 
+function setChatNavigationVisible(visible) {
+  chatNavigationEl?.classList.toggle('hidden', !visible);
+  chatContainerEl?.classList.toggle('chat-navigation-visible', visible);
+}
+
 function resetChatNavigation() {
   chatNavigationTurn = null;
   chatAutoFollow = true;
@@ -8064,7 +8072,7 @@ function resetChatNavigation() {
   scrollToBottomFrame = null;
   chatNavigationFrame = null;
   chatNavigationRestoreFrame = null;
-  chatNavigationEl?.classList.add('hidden');
+  setChatNavigationVisible(false);
   chatNavigationEl?.removeAttribute('data-direction');
   chatNavigationEl?.removeAttribute('data-action');
 }
@@ -8073,6 +8081,9 @@ function setChatNavigationTurn(userEl, assistantEl, { autoFollow = false } = {})
   if (!userEl?.isConnected || !assistantEl?.isConnected) {
     resetChatNavigation();
     return false;
+  }
+  if (chatNavigationDismissedAssistantEl !== assistantEl) {
+    chatNavigationDismissedAssistantEl = null;
   }
   chatNavigationTurn = { userEl, assistantEl };
   chatAutoFollow = autoFollow;
@@ -8112,9 +8123,10 @@ function scrollChatToQuestion({ smooth = true } = {}) {
 }
 
 function renderChatNavigation() {
-  if (!chatContainerEl || !chatNavigationEl || !chatNavigationLabelEl
-      || !chatTurnIsConnected()) {
-    chatNavigationEl?.classList.add('hidden');
+  if (!chatContainerEl || !chatNavigationEl || !chatNavigationActionEl
+      || !chatNavigationLabelEl || !chatTurnIsConnected()
+      || chatNavigationDismissedAssistantEl === chatNavigationTurn.assistantEl) {
+    setChatNavigationVisible(false);
     return;
   }
 
@@ -8138,17 +8150,17 @@ function renderChatNavigation() {
   }
 
   if (!action) {
-    chatNavigationEl.classList.add('hidden');
+    setChatNavigationVisible(false);
     return;
   }
 
   const label = t(labelKey);
   chatNavigationEl.dataset.action = action;
   chatNavigationEl.dataset.direction = direction;
-  chatNavigationEl.setAttribute('aria-label', label);
-  chatNavigationEl.title = label;
+  chatNavigationActionEl.setAttribute('aria-label', label);
+  chatNavigationActionEl.title = label;
   chatNavigationLabelEl.textContent = label;
-  chatNavigationEl.classList.remove('hidden');
+  setChatNavigationVisible(true);
 }
 
 function scheduleChatNavigationUpdate() {
@@ -8258,7 +8270,7 @@ document.addEventListener('keydown', (event) => {
   markChatUserScrollIntent();
 });
 
-chatNavigationEl?.addEventListener('click', () => {
+chatNavigationActionEl?.addEventListener('click', () => {
   if (!chatTurnIsConnected()) return;
   if (chatNavigationEl.dataset.action === 'question') {
     scrollChatToQuestion();
@@ -8266,6 +8278,12 @@ chatNavigationEl?.addEventListener('click', () => {
   }
   chatAutoFollow = true;
   scrollToBottom({ force: true });
+});
+
+chatNavigationDismissEl?.addEventListener('click', () => {
+  if (!chatTurnIsConnected()) return;
+  chatNavigationDismissedAssistantEl = chatNavigationTurn.assistantEl;
+  setChatNavigationVisible(false);
 });
 
 globalThis.addEventListener?.('resize', scheduleChatNavigationUpdate);
