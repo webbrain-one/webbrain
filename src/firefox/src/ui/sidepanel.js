@@ -381,10 +381,17 @@ const providerSelect = document.getElementById('provider-select');
 const providerPickerBtn = document.getElementById('provider-picker-btn');
 const providerPickerMenu = document.getElementById('provider-picker-menu');
 const providerPickerLabel = document.getElementById('provider-picker-label');
+const languageSelect = document.getElementById('language-select');
+const languagePickerBtn = document.getElementById('language-picker-btn');
+const languagePickerMenu = document.getElementById('language-picker-menu');
+const languagePickerFlag = document.getElementById('language-picker-flag');
+const languagePickerCode = document.getElementById('language-picker-code');
 const MORE_PROVIDERS_OPTION_VALUE = '__more_providers__';
 const statusDot = document.getElementById('status-dot');
 // Short labels for the closed picker button (menu rows keep the longer status text).
 const providerPickerLabelById = new Map();
+let languagePickerTypeahead = '';
+let languagePickerTypeaheadTimer = null;
 const agentActivity = document.getElementById('agent-activity');
 const activityText = document.getElementById('activity-text');
 const modeAskBtn = document.getElementById('btn-mode-ask');
@@ -4914,13 +4921,17 @@ function getProviderPickerOptions() {
 
 function setProviderPickerOpen(open) {
   if (!providerPickerMenu || !providerPickerBtn) return;
+  if (open) setLanguagePickerOpen(false);
   providerPickerMenu.classList.toggle('hidden', !open);
   providerPickerBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
   if (open) {
     const selected = getProviderPickerOptions().find((btn) => btn.getAttribute('aria-selected') === 'true')
       || getProviderPickerOptions()[0];
+    setPickerMenuHighlight(providerPickerMenu, selected, { instant: true });
     // Focus the selected (or first) option so keyboard users can arrow immediately.
     queueMicrotask(() => selected?.focus());
+  } else {
+    setPickerMenuHighlight(providerPickerMenu, null);
   }
 }
 
@@ -4941,6 +4952,67 @@ function activateFocusedProviderPickerOption() {
     active.click();
   }
 }
+
+function ensurePickerMenuHighlight(menu) {
+  if (!menu) return null;
+  let highlight = menu.querySelector(':scope > .picker-menu-highlight');
+  if (highlight) return highlight;
+  highlight = document.createElement('div');
+  highlight.className = 'picker-menu-highlight';
+  highlight.setAttribute('aria-hidden', 'true');
+  menu.prepend(highlight);
+  return highlight;
+}
+
+function selectedPickerMenuOption(menu) {
+  return menu?.querySelector('.provider-picker-option[aria-selected="true"]') || null;
+}
+
+function setPickerMenuHighlight(menu, option, { instant = false } = {}) {
+  const highlight = ensurePickerMenuHighlight(menu);
+  if (!highlight) return;
+  if (!option || !menu.contains(option)) {
+    highlight.classList.remove('visible');
+    delete highlight.dataset.targetValue;
+    return;
+  }
+  const targetValue = option.dataset.value || '';
+  if (highlight.dataset.targetValue === targetValue && highlight.classList.contains('visible')) return;
+  highlight.dataset.targetValue = targetValue;
+  if (instant) highlight.classList.add('instant');
+  highlight.style.left = `${option.offsetLeft}px`;
+  highlight.style.width = `${option.offsetWidth}px`;
+  highlight.style.height = `${option.offsetHeight}px`;
+  highlight.style.transform = `translate3d(0, ${option.offsetTop}px, 0)`;
+  highlight.classList.add('visible');
+  if (instant) requestAnimationFrame(() => highlight.classList.remove('instant'));
+}
+
+function bindPickerMenuHighlight(menu) {
+  if (!menu || menu.dataset.highlightBound === 'true') return;
+  menu.dataset.highlightBound = 'true';
+  menu.addEventListener('pointerover', (event) => {
+    const option = event.target.closest?.('.provider-picker-option');
+    setPickerMenuHighlight(menu, option && menu.contains(option) ? option : null);
+  });
+  menu.addEventListener('pointerleave', () => {
+    setPickerMenuHighlight(menu, selectedPickerMenuOption(menu));
+  });
+  menu.addEventListener('focusin', (event) => {
+    const option = event.target.closest?.('.provider-picker-option');
+    if (option && menu.contains(option)) setPickerMenuHighlight(menu, option);
+  });
+  menu.addEventListener('focusout', () => {
+    queueMicrotask(() => {
+      if (!menu.contains(document.activeElement)) {
+        setPickerMenuHighlight(menu, selectedPickerMenuOption(menu));
+      }
+    });
+  });
+}
+
+bindPickerMenuHighlight(providerPickerMenu);
+bindPickerMenuHighlight(languagePickerMenu);
 
 function syncProviderPickerButton() {
   if (!providerSelect || !providerPickerLabel) return;
@@ -5020,6 +5092,171 @@ function appendProviderPickerOption(id, name, meta) {
   });
 
   providerPickerMenu.appendChild(btn);
+}
+
+function getLanguagePickerOptions() {
+  if (!languagePickerMenu) return [];
+  return Array.from(languagePickerMenu.querySelectorAll('.language-picker-option'));
+}
+
+function setLanguagePickerOpen(open) {
+  if (!languagePickerMenu || !languagePickerBtn) return;
+  if (open) setProviderPickerOpen(false);
+  languagePickerMenu.classList.toggle('hidden', !open);
+  languagePickerBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  if (open) {
+    const selected = getLanguagePickerOptions().find((btn) => btn.getAttribute('aria-selected') === 'true')
+      || getLanguagePickerOptions()[0];
+    setPickerMenuHighlight(languagePickerMenu, selected, { instant: true });
+    queueMicrotask(() => selected?.focus());
+  } else {
+    setPickerMenuHighlight(languagePickerMenu, null);
+    languagePickerTypeahead = '';
+    if (languagePickerTypeaheadTimer) clearTimeout(languagePickerTypeaheadTimer);
+    languagePickerTypeaheadTimer = null;
+  }
+}
+
+function moveLanguagePickerFocus(delta) {
+  const options = getLanguagePickerOptions();
+  if (!options.length) return;
+  const active = document.activeElement;
+  let idx = options.indexOf(active);
+  if (idx < 0) idx = options.findIndex((btn) => btn.getAttribute('aria-selected') === 'true');
+  if (idx < 0) idx = 0;
+  options[Math.max(0, Math.min(options.length - 1, idx + delta))]?.focus();
+}
+
+function activateFocusedLanguagePickerOption() {
+  const active = document.activeElement;
+  if (active?.classList?.contains('language-picker-option')) active.click();
+}
+
+function focusLanguagePickerByPrefix(key) {
+  if (key.length !== 1 || !key.trim()) return false;
+  languagePickerTypeahead += key.toLocaleLowerCase();
+  if (languagePickerTypeaheadTimer) clearTimeout(languagePickerTypeaheadTimer);
+  languagePickerTypeaheadTimer = setTimeout(() => {
+    languagePickerTypeahead = '';
+    languagePickerTypeaheadTimer = null;
+  }, 700);
+
+  const options = getLanguagePickerOptions();
+  const activeIndex = Math.max(0, options.indexOf(document.activeElement));
+  const ordered = [...options.slice(activeIndex + 1), ...options.slice(0, activeIndex + 1)];
+  const matches = (btn, query) => (btn.dataset.search || '')
+    .split('\n')
+    .some((part) => part.startsWith(query));
+  let match = ordered.find((btn) => matches(btn, languagePickerTypeahead));
+  if (!match && languagePickerTypeahead.length > 1) {
+    languagePickerTypeahead = key.toLocaleLowerCase();
+    match = ordered.find((btn) => matches(btn, languagePickerTypeahead));
+  }
+  match?.focus();
+  return !!match;
+}
+
+function languageFlagSrc(flagCode) {
+  return `../../icons/flags/${flagCode}.svg`;
+}
+
+function syncLanguagePicker() {
+  if (!languageSelect) return;
+  const code = languageSelect.value || getLocale();
+  const language = LANGUAGES.find((item) => item.code === code);
+  if (languagePickerFlag && language?.flagCode) languagePickerFlag.src = languageFlagSrc(language.flagCode);
+  if (languagePickerCode) languagePickerCode.textContent = code.toUpperCase();
+  if (languagePickerBtn) {
+    const controlLabel = `${t('sp.btn.language')}: ${language?.label || code}`;
+    languagePickerBtn.title = controlLabel;
+    languagePickerBtn.setAttribute('aria-label', controlLabel);
+  }
+  getLanguagePickerOptions().forEach((btn) => {
+    btn.setAttribute('aria-selected', btn.dataset.value === code ? 'true' : 'false');
+  });
+}
+
+function appendLanguagePickerSeparator() {
+  if (!languagePickerMenu) return;
+  const separator = document.createElement('div');
+  separator.className = 'language-picker-separator';
+  separator.setAttribute('role', 'separator');
+  languagePickerMenu.appendChild(separator);
+}
+
+function appendLanguagePickerOption(language) {
+  if (!languagePickerMenu) return;
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'provider-picker-option language-picker-option';
+  btn.setAttribute('role', 'option');
+  btn.setAttribute('aria-selected', 'false');
+  btn.dataset.value = language.code;
+  btn.dataset.search = [language.code, language.label, language.englishLabel]
+    .filter(Boolean)
+    .map((part) => String(part).toLocaleLowerCase())
+    .join('\n');
+
+  const flag = document.createElement('img');
+  flag.className = 'language-picker-option-flag';
+  flag.src = languageFlagSrc(language.flagCode);
+  flag.alt = '';
+  flag.setAttribute('aria-hidden', 'true');
+  btn.appendChild(flag);
+
+  const copy = document.createElement('span');
+  copy.className = 'language-picker-option-copy';
+  const nativeName = document.createElement('span');
+  nativeName.className = 'language-picker-option-native';
+  nativeName.textContent = language.label;
+  nativeName.dir = 'auto';
+  copy.appendChild(nativeName);
+  if (language.englishLabel && language.englishLabel !== language.label) {
+    const englishName = document.createElement('span');
+    englishName.className = 'language-picker-option-english';
+    englishName.textContent = language.englishLabel;
+    englishName.dir = 'ltr';
+    copy.appendChild(englishName);
+  }
+  btn.appendChild(copy);
+
+  const codeLabel = document.createElement('span');
+  codeLabel.className = 'language-picker-option-code';
+  codeLabel.textContent = language.code.toUpperCase();
+  codeLabel.dir = 'ltr';
+  btn.appendChild(codeLabel);
+
+  const check = document.createElement('span');
+  check.className = 'language-picker-check';
+  check.textContent = '✓';
+  check.setAttribute('aria-hidden', 'true');
+  btn.appendChild(check);
+
+  btn.addEventListener('click', () => {
+    setLanguagePickerOpen(false);
+    languagePickerBtn?.focus();
+    if (!languageSelect || languageSelect.value === language.code) return;
+    languageSelect.value = language.code;
+    syncLanguagePicker();
+    languageSelect.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  languagePickerMenu.appendChild(btn);
+}
+
+function initializeLanguagePicker() {
+  if (!languageSelect) return;
+  languageSelect.replaceChildren();
+  languagePickerMenu?.replaceChildren();
+  LANGUAGES.forEach((language, index) => {
+    const option = document.createElement('option');
+    option.value = language.code;
+    option.textContent = language.label;
+    languageSelect.appendChild(option);
+    if (index === 2) appendLanguagePickerSeparator();
+    appendLanguagePickerOption(language);
+  });
+  languageSelect.value = getLocale();
+  syncLanguagePicker();
 }
 
 async function loadProviders() {
@@ -9363,25 +9600,98 @@ settingsBtn.addEventListener('click', () => {
   browser.runtime.openOptionsPage();
 });
 
-// --- Language selector (globe icon in header) ---
-const languageSelect = document.getElementById('language-select');
+// --- Language picker (compact trigger + accessible custom listbox) ---
 if (languageSelect) {
-  languageSelect.innerHTML = LANGUAGES
-    .map((l) => `<option value="${l.code}">${l.label}</option>`)
-    .join('');
-  languageSelect.value = getLocale();
+  initializeLanguagePicker();
   languageSelect.addEventListener('change', async () => {
     await setLocale(languageSelect.value);
     applyDOMTranslations(document);
+    syncLanguagePicker();
     updateInputPlaceholder();
     scheduleChatNavigationUpdate();
   });
   document.addEventListener('wb-locale-changed', () => {
     languageSelect.value = getLocale();
+    syncLanguagePicker();
     updateInputPlaceholder();
     scheduleChatNavigationUpdate();
   });
 }
+
+languagePickerBtn?.addEventListener('click', (event) => {
+  event.stopPropagation();
+  const open = languagePickerMenu?.classList.contains('hidden') !== false;
+  setLanguagePickerOpen(open);
+});
+
+languagePickerBtn?.addEventListener('keydown', (event) => {
+  if (event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault();
+    if (languagePickerMenu?.classList.contains('hidden')) {
+      setLanguagePickerOpen(true);
+      if (event.key === 'ArrowUp') {
+        queueMicrotask(() => {
+          const options = getLanguagePickerOptions();
+          options[options.length - 1]?.focus();
+        });
+      }
+    }
+  }
+});
+
+languagePickerMenu?.addEventListener('keydown', (event) => {
+  if (languagePickerMenu.classList.contains('hidden')) return;
+  if (event.key === 'ArrowDown') {
+    event.preventDefault();
+    moveLanguagePickerFocus(1);
+  } else if (event.key === 'ArrowUp') {
+    event.preventDefault();
+    moveLanguagePickerFocus(-1);
+  } else if (event.key === 'Home') {
+    event.preventDefault();
+    getLanguagePickerOptions()[0]?.focus();
+  } else if (event.key === 'End') {
+    event.preventDefault();
+    const options = getLanguagePickerOptions();
+    options[options.length - 1]?.focus();
+  } else if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault();
+    activateFocusedLanguagePickerOption();
+  } else if (event.key === 'Escape') {
+    event.preventDefault();
+    setLanguagePickerOpen(false);
+    languagePickerBtn?.focus();
+  } else if (event.key === 'Tab') {
+    setLanguagePickerOpen(false);
+  } else if (!event.ctrlKey && !event.metaKey && !event.altKey && focusLanguagePickerByPrefix(event.key)) {
+    event.preventDefault();
+  }
+});
+
+document.addEventListener('click', (event) => {
+  if (!languagePickerMenu || languagePickerMenu.classList.contains('hidden')) return;
+  const root = document.getElementById('language-picker');
+  if (root && !root.contains(event.target)) setLanguagePickerOpen(false);
+});
+
+document.getElementById('language-picker')?.addEventListener('focusout', (event) => {
+  if (!languagePickerMenu || languagePickerMenu.classList.contains('hidden')) return;
+  const root = document.getElementById('language-picker');
+  const next = event.relatedTarget;
+  if (!root || (next && root.contains(next))) return;
+  queueMicrotask(() => {
+    if (!languagePickerMenu || languagePickerMenu.classList.contains('hidden')) return;
+    if (root.contains(document.activeElement)) return;
+    setLanguagePickerOpen(false);
+  });
+});
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && languagePickerMenu && !languagePickerMenu.classList.contains('hidden')) {
+    setLanguagePickerOpen(false);
+    languagePickerBtn?.focus();
+  }
+});
 
 // --- Start ---
 startInputPlaceholderRotation();

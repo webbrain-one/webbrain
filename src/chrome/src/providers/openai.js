@@ -1,6 +1,10 @@
 import { BaseLLMProvider } from './base.js';
 import { fetchWithFallback } from './fetch-with-fallback.js';
-import { shouldUseOpenAIResponsesApi } from './provider-compatibility.js';
+import {
+  isOfficialOpenAIConfig,
+  shouldUseOpenAIResponsesApi,
+  supportsOpenAIAskStreaming,
+} from './provider-compatibility.js';
 
 const OPENAI_RESPONSES_MIN_MAX_OUTPUT_TOKENS = 16;
 const KIMI_CURRENT_TOOL_REASONING_MODELS = new Set([
@@ -14,6 +18,11 @@ const KIMI_PRESERVED_THINKING_MODELS = new Set([
   'kimi-k3',
   'kimi-k2.7-code',
   'kimi-k2.7-code-highspeed',
+]);
+const Z_AI_STREAM_TERMINAL_FINISH_REASONS = new Set([
+  'sensitive',
+  'network_error',
+  'model_context_window_exceeded',
 ]);
 
 /**
@@ -151,6 +160,11 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
     const providerName = (this.config.providerName || '').toLowerCase();
     if (this.config.category === 'local') return false;
     if (providerName === 'ollama' || providerName === 'lmstudio') return false;
+    // Mistral's generated endpoint table omits stream_options, but its current
+    // Known Limitations page explicitly requires stream_options.include_usage:
+    // https://docs.mistral.ai/resources/known-limitations
+    // Override stale stored snapshots so Ask cost allowances remain metered.
+    if (providerName === 'mistral') return true;
     if (this.config.supportsStreamUsageOptions != null) {
       return !!this.config.supportsStreamUsageOptions;
     }
@@ -194,11 +208,10 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
   }
 
   /**
-   * GPT-5.6 combines reasoning and function tools through the Responses API.
-   * Keep this route deliberately narrow: older OpenAI models and every
-   * OpenAI-compatible provider retain their existing Chat Completions wire
-   * format. A custom base URL also stays on Chat Completions because there is
-   * no guarantee that the proxy implements /v1/responses.
+   * GPT-5.6 combines reasoning and function tools through the Responses API,
+   * while supported GPT-5 Pro variants are Responses-only. Other OpenAI models
+   * and compatible providers retain their existing Chat Completions wire
+   * format.
    */
   _usesResponsesApi() {
     return shouldUseOpenAIResponsesApi({
@@ -207,6 +220,25 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
       baseUrl: this.baseUrl,
       model: this.model,
     });
+  }
+
+  _supportsInteractiveAskStreaming() {
+    const resolved = {
+      ...this.config,
+      providerName: this.config.providerName || this.name,
+      baseUrl: this.baseUrl,
+      model: this.model,
+    };
+    // DashScope rejects `tools` together with `stream: true`, while Ask always
+    // supplies its read-only tool catalog. Keep even stale/imported opt-ins on
+    // the safe non-streaming path.
+    if (String(resolved.providerName || '').trim().toLowerCase() === 'alibaba') {
+      return false;
+    }
+    if (isOfficialOpenAIConfig(resolved)) {
+      return supportsOpenAIAskStreaming(resolved);
+    }
+    return super._supportsInteractiveAskStreaming();
   }
 
   _supportsReasoningContentReplay(options = {}) {
@@ -285,6 +317,9 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
     }
     body = this._mergeConfiguredRequestBody(body, options);
     this._addWebBrainCloudContext(body, options);
+    if (stream && body.tools && this.config.supportsToolStreamOption === true) {
+      body.tool_stream = true;
+    }
     if (stream) this._addStreamUsageOptions(body);
     return body;
   }
@@ -438,6 +473,16 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
     } else if (!body.reasoning.effort) {
       body.reasoning.effort = 'medium';
     }
+    const normalizedModel = String(this.model || '').trim().toLowerCase();
+    if (/^gpt-5-pro(?:$|-\d{4}-\d{2}-\d{2}$)/.test(normalizedModel)) {
+      // GPT-5 Pro only accepts high reasoning effort.
+      body.reasoning.effort = 'high';
+    } else if (
+      /^gpt-5\.(?:2|4|5)-pro(?:$|-\d{4}-\d{2}-\d{2}$)/.test(normalizedModel)
+      && !['medium', 'high', 'xhigh'].includes(body.reasoning.effort)
+    ) {
+      body.reasoning.effort = 'medium';
+    }
 
     // Convert Chat Completions-style response_format (from config or per-call
     // extras) into Responses text.format, then strip the legacy key so both
@@ -518,6 +563,9 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
     const error = new Error(message);
     error.isResponsesStreamError = !!stream;
     error.isResponsesStreamFallbackSafe = !!stream && reason === 'missing_response_completed';
+    error.isOpenAIAskStreamFallbackSafe = error.isResponsesStreamFallbackSafe;
+    error.isAskStreamFallbackSafe = error.isResponsesStreamFallbackSafe;
+    error.isAskStreamTerminalError = !!stream && !error.isResponsesStreamFallbackSafe;
     error.incomplete = true;
     error.incompleteReason = reason;
     return error;
@@ -527,6 +575,31 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
     const error = new Error(message);
     error.isResponsesStreamError = true;
     error.isResponsesStreamFallbackSafe = true;
+    error.isOpenAIAskStreamFallbackSafe = true;
+    error.isAskStreamFallbackSafe = true;
+    return error;
+  }
+
+  _chatCompletionsStreamTransportError(message) {
+    const error = this._askStreamTransportError(message);
+    error.isChatCompletionsStreamError = true;
+    error.isOpenAIAskStreamFallbackSafe = error.isAskStreamFallbackSafe;
+    return error;
+  }
+
+  _chatCompletionsStreamApiError(data) {
+    const detail = data?.error?.message
+      || data?.message
+      || data?.error?.code
+      || 'The provider reported an error while streaming.';
+    return this._chatCompletionsStreamTerminalError(
+      `${this.name} Chat Completions stream error: ${detail}`,
+    );
+  }
+
+  _chatCompletionsStreamTerminalError(message) {
+    const error = this._askStreamTerminalError(message);
+    error.isChatCompletionsStreamError = true;
     return error;
   }
 
@@ -706,7 +779,7 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
             throw this._responsesIncompleteError(response, { stream: true });
           } else if (event.type === 'response.failed' || event.type === 'error') {
             const message = event.response?.error?.message || event.error?.message || event.message || 'Responses stream failed.';
-            const streamError = new Error(message);
+            const streamError = this._askStreamTerminalError(message);
             streamError.isResponsesStreamError = true;
             throw streamError;
           }
@@ -778,7 +851,9 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
         body: JSON.stringify(body),
       });
     } catch (e) {
-      throw new Error(`${this.name} network error — could not reach ${streamUrl} (${e.message}). Is the server running?`);
+      throw this._chatCompletionsStreamTransportError(
+        `${this.name} network error — could not reach ${streamUrl} (${e.message}). Is the server running?`,
+      );
     }
 
     if (!res.ok) {
@@ -786,13 +861,35 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
       throw new Error(`${this.name} stream error ${res.status}: ${this._formatHttpError(res.status, err)}`);
     }
 
-    const reader = res.body.getReader();
+    if (!res.body?.getReader) {
+      throw this._chatCompletionsStreamTransportError(
+        `${this.name} Chat Completions stream returned no readable body.`,
+      );
+    }
+
+    let reader;
+    try {
+      reader = res.body.getReader();
+    } catch (error) {
+      throw this._chatCompletionsStreamTransportError(
+        `${this.name} Chat Completions stream could not open its response body (${error?.message || 'reader unavailable'}).`,
+      );
+    }
     const decoder = new TextDecoder();
     let buffer = '';
     let finalUsage = null;
 
     while (true) {
-      const { done, value } = await reader.read();
+      let chunk;
+      try {
+        chunk = await reader.read();
+      } catch (error) {
+        if (finalUsage) yield { type: 'usage', usage: finalUsage };
+        throw this._chatCompletionsStreamTransportError(
+          `${this.name} Chat Completions stream transport error (${error?.message || 'read failed'}).`,
+        );
+      }
+      const { done, value } = chunk;
       if (done) break;
 
       buffer += decoder.decode(value, { stream: true });
@@ -808,28 +905,59 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
           yield { type: 'done', content: '' };
           return;
         }
+        let json;
         try {
-          const json = JSON.parse(payload);
-          if (json.usage) {
-            finalUsage = json.usage;
+          json = JSON.parse(payload);
+        } catch (error) {
+          if (this._supportsInteractiveAskStreaming()) {
+            throw this._chatCompletionsStreamTransportError(
+              `${this.name} Chat Completions stream returned malformed JSON (${error?.message || 'parse failed'}).`,
+            );
           }
-          const delta = json.choices?.[0]?.delta;
-          const reasoningDelta = delta?.reasoning_content || delta?.reasoning;
-          if (typeof reasoningDelta === 'string' && reasoningDelta) {
-            yield { type: 'reasoning', content: reasoningDelta };
-          }
-          if (delta?.content) {
-            yield { type: 'text', content: delta.content };
-          }
-          if (delta?.tool_calls) {
-            yield { type: 'tool_call', content: delta.tool_calls };
-          }
-        } catch (e) {
-          console.warn(`[${this.name}] malformed SSE chunk skipped:`, payload?.slice(0, 120), e?.message);
+          console.warn(`[${this.name}] malformed SSE chunk skipped:`, payload?.slice(0, 120), error?.message);
+          continue;
+        }
+        if (json?.error) {
+          throw this._chatCompletionsStreamApiError(json);
+        }
+        const streamUsage = json.usage || json.x_groq?.usage;
+        if (streamUsage) {
+          finalUsage = streamUsage;
+        }
+        const choice = json.choices?.[0];
+        if (choice?.finish_reason === 'content_filter') {
+          throw this._chatCompletionsStreamTerminalError(
+            `${this.name} Chat Completions stream was blocked by the provider content filter.`,
+          );
+        }
+        const finishReason = choice?.finish_reason;
+        if (
+          String(this.config.providerName || '').toLowerCase() === 'z_ai'
+          && Z_AI_STREAM_TERMINAL_FINISH_REASONS.has(finishReason)
+        ) {
+          throw this._chatCompletionsStreamTerminalError(
+            `${this.name} Chat Completions stream failed with terminal finish reason "${finishReason}".`,
+          );
+        }
+        const delta = choice?.delta;
+        const reasoningDelta = delta?.reasoning_content || delta?.reasoning;
+        if (typeof reasoningDelta === 'string' && reasoningDelta) {
+          yield { type: 'reasoning', content: reasoningDelta };
+        }
+        if (delta?.content) {
+          yield { type: 'text', content: delta.content };
+        }
+        if (delta?.tool_calls) {
+          yield { type: 'tool_call', content: delta.tool_calls };
         }
       }
     }
     if (finalUsage) yield { type: 'usage', usage: finalUsage };
+    if (this._supportsInteractiveAskStreaming()) {
+      throw this._chatCompletionsStreamTransportError(
+        `${this.name} Chat Completions stream ended before the [DONE] sentinel.`,
+      );
+    }
     yield { type: 'done', content: '' };
   }
 }

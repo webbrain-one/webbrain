@@ -102,7 +102,9 @@ export class LlamaCppProvider extends BaseLLMProvider {
         body: JSON.stringify(body),
       });
     } catch (e) {
-      throw new Error(`llama.cpp network error — could not reach ${streamUrl} (${e.message}). Is the server running?`);
+      throw this._askStreamTransportError(
+        `llama.cpp network error — could not reach ${streamUrl} (${e.message}). Is the server running?`,
+      );
     }
 
     if (!res.ok) {
@@ -110,12 +112,32 @@ export class LlamaCppProvider extends BaseLLMProvider {
       throw new Error(`llama.cpp stream error ${res.status}: ${err}`);
     }
 
-    const reader = res.body.getReader();
+    if (!res.body?.getReader) {
+      throw this._askStreamTransportError('llama.cpp stream returned no readable body.');
+    }
+    let reader;
+    try {
+      reader = res.body.getReader();
+    } catch (error) {
+      throw this._askStreamTransportError(
+        `llama.cpp stream could not open its response body (${error?.message || 'reader unavailable'}).`,
+      );
+    }
     const decoder = new TextDecoder();
     let buffer = '';
+    let finalUsage = null;
 
     while (true) {
-      const { done, value } = await reader.read();
+      let chunk;
+      try {
+        chunk = await reader.read();
+      } catch (error) {
+        if (finalUsage) yield { type: 'usage', usage: finalUsage };
+        throw this._askStreamTransportError(
+          `llama.cpp stream transport error (${error?.message || 'read failed'}).`,
+        );
+      }
+      const { done, value } = chunk;
       if (done) break;
 
       buffer += decoder.decode(value, { stream: true });
@@ -127,22 +149,50 @@ export class LlamaCppProvider extends BaseLLMProvider {
         if (!trimmed || !trimmed.startsWith('data: ')) continue;
         const payload = trimmed.slice(6);
         if (payload === '[DONE]') {
+          if (finalUsage) yield { type: 'usage', usage: finalUsage };
           yield { type: 'done', content: '' };
           return;
         }
+        let json;
         try {
-          const json = JSON.parse(payload);
-          const delta = json.choices?.[0]?.delta;
-          if (delta?.content) {
-            yield { type: 'text', content: delta.content };
+          json = JSON.parse(payload);
+        } catch (error) {
+          if (this._supportsInteractiveAskStreaming()) {
+            throw this._askStreamTransportError(
+              `llama.cpp stream returned malformed JSON (${error?.message || 'parse failed'}).`,
+            );
           }
-          if (delta?.tool_calls) {
-            yield { type: 'tool_call', content: delta.tool_calls };
-          }
-        } catch (e) {
-          console.warn('[llama.cpp] malformed SSE chunk skipped:', payload?.slice(0, 120), e?.message);
+          console.warn('[llama.cpp] malformed SSE chunk skipped:', payload?.slice(0, 120), error?.message);
+          continue;
+        }
+        if (json?.error) {
+          const detail = json.error?.message
+            || json.error?.code
+            || json.message
+            || 'The provider reported a streaming error.';
+          throw this._askStreamTerminalError(`llama.cpp stream error: ${detail}`);
+        }
+        if (json.usage) finalUsage = json.usage;
+        const choice = json.choices?.[0];
+        if (choice?.finish_reason === 'content_filter') {
+          throw this._askStreamTerminalError('llama.cpp stream was blocked by the provider content filter.');
+        }
+        const delta = choice?.delta;
+        const reasoningDelta = delta?.reasoning_content || delta?.reasoning;
+        if (typeof reasoningDelta === 'string' && reasoningDelta) {
+          yield { type: 'reasoning', content: reasoningDelta };
+        }
+        if (delta?.content) {
+          yield { type: 'text', content: delta.content };
+        }
+        if (delta?.tool_calls) {
+          yield { type: 'tool_call', content: delta.tool_calls };
         }
       }
+    }
+    if (finalUsage) yield { type: 'usage', usage: finalUsage };
+    if (this._supportsInteractiveAskStreaming()) {
+      throw this._askStreamTransportError('llama.cpp stream ended before the [DONE] sentinel.');
     }
     yield { type: 'done', content: '' };
   }

@@ -203,7 +203,7 @@ while (steps < maxSteps) {
 }
 ```
 
-### Ask-only OpenAI Responses streaming
+### Ask-only provider streaming
 
 `chatMainTurn()` normally delegates to the established cost-aware
 `provider.chat()` call. It selects the stream aggregator only when all of these
@@ -211,20 +211,35 @@ conditions are true:
 
 - the mode is `ask`;
 - the run came from the normal interactive detached `chat_start` path;
-- the Advanced `openaiAskStreamingEnabled` kill switch is not off;
-- the provider reports the deliberately narrow official OpenAI Responses route
-  (`api.openai.com/v1` with a supported GPT-5.6 model);
+- the Advanced Ask-streaming kill switch (persisted under the legacy
+  `openaiAskStreamingEnabled` storage key) is not off;
+- the provider reports `_supportsInteractiveAskStreaming() === true`;
 - the run is not a trusted Continue, cloud run, scheduled/non-interactive run,
   or a run whose stream circuit breaker already opened.
 
+Official OpenAI GPT-5.6 and streaming-capable Responses-only GPT-5 Pro variants
+use Responses streaming. Other supported official OpenAI models use Chat
+Completions streaming. Anthropic uses its native Messages event parser, Azure
+OpenAI uses its deployment-based parser, and Gemini, DeepSeek, xAI, Mistral,
+Nvidia NIM, Groq, Together AI, Fireworks, z.ai, OpenRouter, WebBrain Cloud,
+Ollama, LM Studio, Jan, vLLM, SGLang, and LocalAI use the OpenAI-compatible
+Chat Completions parser. z.ai streaming tool calls add its documented
+`tool_stream` request flag. llama.cpp uses its dedicated OpenAI-compatible
+parser. Alibaba Cloud remains non-streaming because DashScope rejects
+`tools` together with `stream: true`, while Ask always supplies its read-only
+tool catalog. Models whose official OpenAI capability table lacks either
+streaming or function calling, including GPT-5.5 Pro, also remain non-streaming.
+
 The aggregator forwards only output-text deltas to the side panel. Reasoning,
 usage, response Items, and function calls remain in memory until the provider
-emits its terminal `response.completed` event. Only then does it return the
-canonical result to the existing agent loop, which may execute buffered tools
-or persist the assistant turn. A transport read failure, malformed/premature
-EOF, or missing `response.completed` clears emitted text, disables streaming
-for the rest of that run, and retries the same generation once through
-`provider.chat()`. Terminal HTTP/API errors, `response.incomplete`, and
+emits its terminal event: `response.completed` for Responses, `message_stop`
+for Anthropic, or `[DONE]` for Azure/OpenAI-compatible SSE. Only then does it
+return the canonical result to the existing agent loop, which may execute
+buffered tools or persist the assistant turn. A transport read failure,
+malformed/premature EOF, or missing terminal event clears emitted text,
+disables streaming for the rest of that run, and silently retries the same
+generation once through `provider.chat()`. Terminal HTTP/API or in-stream
+provider errors, `content_filter` finish reasons, `response.incomplete`, and
 `response.failed` propagate without issuing a duplicate non-streaming request.
 The persistent setting is unchanged by a transient failure.
 

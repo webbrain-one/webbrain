@@ -490,8 +490,9 @@ export default {
   'st.display.voice_input.desc': 'Let the mic button in the chat input dictate text via your browser\'s speech recognition. On by default in browsers that support it.',
   'st.display.api_mutation_observer.label': 'API mutation observer',
   'st.display.api_mutation_observer.desc': 'Observe same-tab XHR/fetch request URLs and methods so WebBrain can detect repeated UI actions and suggest API shortcut patterns. Off by default; enable only while investigating shortcut behavior or latency.',
-  'st.display.openai_ask_streaming.label': 'Stream OpenAI Ask responses',
-  'st.display.openai_ask_streaming.desc': 'Show official OpenAI Responses text as it arrives in Ask mode. Tool calls wait for response.completed; Act, Dev, scheduled, cloud, and Continue runs stay non-streaming. On by default.',
+  // TRANSLATORS: Updated for multi-provider Ask streaming and silent transport fallback.
+  'st.display.openai_ask_streaming.label': 'Stream Ask responses',
+  'st.display.openai_ask_streaming.desc': 'Show text as it arrives in Ask mode for supported providers. Interrupted streams silently retry once without streaming; provider/API errors are still shown. Tool calls wait for stream completion; Act, Dev, scheduled, cloud, and Continue runs stay non-streaming. On by default.',
   'st.display.plan_before_act.label': 'Plan before Act',
   'st.display.plan_before_act.desc': 'Act and Dev always run a structured intent check before tools. Try (default) also builds full plans but may reuse a recently approved plan for a short follow-up; Strict builds a full plan every turn. Try falls back to a read-only turn if intent or planning remains invalid after one repair; Strict stops before tools.',
   'st.display.plan_before_act.try': 'Try planning (default)',
