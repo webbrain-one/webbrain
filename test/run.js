@@ -13888,18 +13888,19 @@ test('sidepanel suppresses streamed raw tool-call text before rendering tool ste
     assert.match(panel, /function looksLikeRawToolCallText\(text\) \{[\s\S]*?ref_id\\s\*/, `${label}: raw tool-call detector should recognize ref_id payloads`);
     assert.match(panel, /textEl\.dataset\.suppressToolCallStream = 'true';/, `${label}: text_delta should suppress later raw tool-call chunks`);
     assert.match(panel, /const streamedAssistantTextByEl = new WeakMap\(\);/, `${label}: streamed final dedupe state should not be stored in serialized DOM attributes`);
-    assert.match(panel, /const nextText = getStreamedAssistantText\(textEl\) \+ String\(data\.content \|\| ''\);/, `${label}: text_delta should append to raw Markdown rather than reading rendered DOM text`);
-    assert.match(panel, /streamedAssistantTextByEl\.set\(textEl, nextText\);\s*scheduleStreamedAssistantMarkdownRender\(textEl\);/, `${label}: text_delta should retain and schedule incremental Markdown rendering`);
-    assert.match(panel, /const streamedAssistantRenderFrameByEl = new WeakMap\(\);[\s\S]*?function scheduleStreamedAssistantMarkdownRender\(textEl\)[\s\S]*?requestAnimationFrame\([\s\S]*?textEl\.innerHTML = formatMarkdown\(getStreamedAssistantText\(textEl\), \{ enhance: false \}\);[\s\S]*?scrollToBottom\(\);/, `${label}: live Markdown should render at most once per animation frame before following output`);
+    assert.match(panel, /const previousText = getStreamedAssistantText\(textEl\)\s*\|\| \(hasStreamedAssistantText\(textEl\) \? textEl\.innerText \|\| textEl\.textContent : ''\);\s*const nextText = previousText \+ String\(data\.content \|\| ''\);/, `${label}: text_delta should append to raw Markdown while legacy restored streams fall back to visible text without dropping prior output`);
+    assert.match(panel, /streamedAssistantTextByEl\.set\(textEl, nextText\);\s*textEl\.dataset\.streamedAssistantActive = 'true';\s*scheduleStreamedAssistantMarkdownRender\(textEl\);/, `${label}: text_delta should retain raw Markdown, persist only an active-stream marker, and schedule incremental rendering`);
+    assert.match(panel, /const streamedAssistantRenderFrameByEl = new WeakMap\(\);[\s\S]*?function renderStreamedAssistantMarkdownNow\(textEl\)[\s\S]*?textEl\.innerHTML = formatMarkdown\(streamedText, \{ enhance: false \}\);[\s\S]*?scrollToBottom\(\);[\s\S]*?function scheduleStreamedAssistantMarkdownRender\(textEl\)[\s\S]*?requestAnimationFrame\([\s\S]*?renderStreamedAssistantMarkdownNow\(textEl\);/, `${label}: live Markdown should render at most once per animation frame before following output`);
     assert.match(panel, /function clearStreamedAssistantText\(textEl\)[\s\S]*?cancelAnimationFrame\(frame\);[\s\S]*?streamedAssistantRenderFrameByEl\.delete\(textEl\);/, `${label}: terminal and tool transitions should cancel pending stream renders`);
+    assert.match(panel, /async function flushRenderedTabChat\(\)[\s\S]*?flushPendingStreamedAssistantMarkdownRenders\(\);\s*await persistTabChat\(tabId, messagesEl\.innerHTML\);/, `${label}: tab switches should render a queued frame before serializing its last acknowledged stream chunk`);
     assert.doesNotMatch(panel, /const nextText = textEl\.textContent \+ data\.content;/, `${label}: rendered Markdown must never become the source for later deltas`);
     assert.match(panel, /function formatMarkdown\(text, options = \{\}\)[\s\S]*?const enhance = options\.enhance !== false;[\s\S]*?const highlighted = enhance \? highlightCode\(block\.code, block\.lang\) : escapeHtml\(block\.code\);[\s\S]*?if \(enhance\) scheduleMathRender\(\);[\s\S]*?if \(enhance && codeBlocks\.length > 0\)/, `${label}: syntax highlighting and interactive Markdown enhancements should wait for the terminal render`);
-    assert.match(panel, /case 'run_complete':[\s\S]*?const streamedText = getStreamedAssistantText\(textEl\);[\s\S]*?else if \(textEl && streamedText\)[\s\S]*?const terminalContent = data\.status === 'stopped' \|\| data\.status === 'cancelled'[\s\S]*?renderAssistantTextUpdate\(currentAssistantEl, terminalContent, \{[\s\S]*?replace: terminalContent !== streamedText,[\s\S]*?else if \(textEl && !textEl\.textContent\.trim\(\)\)/, `${label}: restored/background streams should receive one enhanced authoritative terminal render while stopped runs preserve partial text`);
+    assert.match(panel, /case 'run_complete':[\s\S]*?const streamedText = getStreamedAssistantText\(textEl\);[\s\S]*?const hasStreamedText = hasStreamedAssistantText\(textEl\);[\s\S]*?const visibleStreamedText = streamedText[\s\S]*?\|\| \(hasStreamedText \? textEl\?\.innerText \|\| textEl\?\.textContent \|\| '' : ''\);[\s\S]*?else if \(textEl && hasStreamedText\)[\s\S]*?const terminalContent = data\.status === 'stopped' \|\| data\.status === 'cancelled'[\s\S]*?\? visibleStreamedText[\s\S]*?renderAssistantTextUpdate\(currentAssistantEl, terminalContent, \{[\s\S]*?replace: terminalContent !== streamedText,[\s\S]*?else if \(textEl && !textEl\.textContent\.trim\(\)\)/, `${label}: restored/background streams should receive one enhanced authoritative terminal render while stopped runs preserve visible partial text`);
     assert.doesNotMatch(panel, /dataset\.streamedAssistantText\s*=/, `${label}: streamed text must not be serialized as a data attribute`);
     assert.match(panel, /getStreamedAssistantText\(textEl\) === String\(res\.content\)[\s\S]*?renderAssistantTextUpdate\(assistantEl, res\.content\);/, `${label}: completed streams should format the visible final text in place`);
     assert.match(panel, /clearAssistantTextStreamState\(assistantEl\);/, `${label}: run completion should clear transient streamed-text state before persistence`);
     assert.match(panel, /case 'text':[\s\S]*?\(data\.content \|\| data\.replace === true\)[\s\S]*?renderAssistantTextUpdate\(currentAssistantEl, data\.content \|\| '', \{ replace: data\.replace === true \}\);/, `${label}: text updates should forward explicit replacement requests, including empty clears`);
-    assert.match(panel, /function renderAssistantTextUpdate\(assistantEl, content, options = \{\}\) \{[\s\S]*?isDuplicateStreamFinal[\s\S]*?if \(options\.replace === true\) \{[\s\S]*?if \(content\) \{[\s\S]*?textEl\.innerHTML = formatMarkdown\(content\);[\s\S]*?streamedAssistantTextByEl\.set\(textEl, String\(content\)\);[\s\S]*?\} else \{[\s\S]*?textEl\.textContent = '';[\s\S]*?clearStreamedAssistantText\(textEl\);[\s\S]*?\} else if \(verboseMode/, `${label}: explicit replacements should overwrite or clear verbose streamed text`);
+    assert.match(panel, /function renderAssistantTextUpdate\(assistantEl, content, options = \{\}\) \{[\s\S]*?const restoredStreamNeedsReplacement = hasStreamedAssistantText\(textEl\) && !streamedText;[\s\S]*?isDuplicateStreamFinal[\s\S]*?if \(options\.replace === true \|\| restoredStreamNeedsReplacement\) \{[\s\S]*?if \(content\) \{[\s\S]*?textEl\.innerHTML = formatMarkdown\(content\);[\s\S]*?streamedAssistantTextByEl\.set\(textEl, String\(content\)\);[\s\S]*?\} else \{[\s\S]*?textEl\.textContent = '';[\s\S]*?clearStreamedAssistantText\(textEl\);[\s\S]*?\} else if \(verboseMode/, `${label}: explicit and restored-stream replacements should overwrite or clear verbose streamed text`);
     assert.match(panel, /function renderAssistantTextUpdate\(assistantEl, content, options = \{\}\) \{[\s\S]*?isDuplicateStreamFinal[\s\S]*?textEl\.innerHTML = formatMarkdown\(content\);/, `${label}: final text should format an already visible stream instead of appending a duplicate`);
     const start = panel.indexOf("case 'tool_call':");
     const end = panel.indexOf("case 'tool_result':", start);
@@ -44863,6 +44864,9 @@ test('run UI journal: streamed deltas coalesce durable snapshots without delayin
     journal.record(40, `${label}-stream`, 'text_delta', { content: 'two' });
     assert.equal(persisted.length, 1, `${label}: deltas should not clone/write a durable snapshot immediately`);
     assert.equal(timers.size, 1, `${label}: consecutive deltas should share one trailing timer`);
+    assert.equal(journal.get(40).streamedText, 'onetwo', `${label}: the journal should retain exact raw Markdown across panel remounts`);
+    assert.equal(journal.get(40).streamedTextStartSeq, 1, `${label}: the raw stream snapshot should retain its first represented sequence`);
+    assert.equal(journal.get(40).streamedTextSeq, 2, `${label}: the raw stream snapshot should retain its latest represented sequence`);
 
     timers.values().next().value();
     await Promise.resolve();
@@ -44872,10 +44876,16 @@ test('run UI journal: streamed deltas coalesce durable snapshots without delayin
     journal.record(40, `${label}-stream`, 'thinking', { content: 'done streaming' });
     assert.equal(timers.size, 0, `${label}: a non-delta update should cancel the trailing timer`);
     assert.equal(persisted.at(-1).seq, 4, `${label}: a non-delta update should persist all prior deltas immediately`);
+    journal.acknowledge(40, `${label}-stream`, 4);
+    assert.equal(journal.get(40).events.length, 0, `${label}: acknowledged events should still be released`);
+    assert.equal(journal.get(40).streamedText, 'onetwothree', `${label}: acknowledgement must retain the cumulative raw stream for later remounts`);
 
     journal.record(40, `${label}-stream`, 'text_delta', { content: 'cancelled' });
     persistence.cancel(40);
     assert.equal(timers.size, 0, `${label}: clearing a run should discard its deferred persistence timer`);
+    journal.record(40, `${label}-stream`, 'tool_call', { name: 'click', args: {} });
+    assert.equal(journal.get(40).streamedText, '', `${label}: a tool transition should clear the preceding streamed prose snapshot`);
+    assert.equal(journal.get(40).streamedTextSeq, 0, `${label}: a tool transition should clear the represented stream sequence`);
 
     const background = fs.readFileSync(path.join(ROOT, backgroundRel), 'utf8');
     assert.match(background, /change\?\.eventType === 'text_delta'[\s\S]*?runUiSnapshotPersistence\.defer\(tabId, snapshot\)/, `${label}: background should defer only text deltas`);
@@ -46043,6 +46053,7 @@ test('per-tab run UI protocol is wired into both backgrounds and side panels', (
     assert.match(panel, /const localRunRequestIds = new Map\(\);/, `${label}: local request ownership should be tab scoped`);
     assert.match(panel, /function ensureCurrentRunAssistant\(msg\)/, `${label}: rendering should bind updates to their request bubble`);
     assert.match(panel, /const runAssistantEl = messagesEl\.querySelector[\s\S]*?runAssistantEl\.dataset\.lastRenderedSeq = String\(event\.seq\);[\s\S]*?const renderedSeq = Number\(runAssistantEl\.dataset\.lastRenderedSeq/, `${label}: terminal replay should retain its assistant reference through acknowledgement`);
+    assert.match(panel, /const snapshotStreamedText = runUi\.streamedTextTruncated === true[\s\S]*?const restoreSnapshotStream = \(\) => \{[\s\S]*?streamedAssistantTextByEl\.set\(textEl, snapshotStreamedText\);[\s\S]*?renderStreamedAssistantMarkdownNow\(textEl\);[\s\S]*?const representedBySnapshotStream =[\s\S]*?event\.type === 'text_delta'[\s\S]*?if \(representedBySnapshotStream\) \{[\s\S]*?continue;/, `${label}: remounts should rehydrate exact raw Markdown and skip duplicate replay of represented deltas`);
     assert.match(panel, /const locallyOwnedEvent = [\s\S]*?if \(!locallyOwnedEvent\) \{[\s\S]*?clearPlanReviewActiveRun/, `${label}: live terminal broadcasts should not tear down their locally owned request`);
     assert.match(panel, /const sequencedRequestAssistantEl = [\s\S]*?if \(sequencedRequestAssistantEl[\s\S]*?return;[\s\S]*?const eventAssistantEl = ensureCurrentRunAssistant\(msg\);/, `${label}: duplicate queued events should be rejected before rebinding the completed assistant as current`);
     assert.match(panel, /Number\(event\?\.seq \|\| 0\) <= lastRenderedSeq\) continue;/, `${label}: remount should replay only unseen events`);
