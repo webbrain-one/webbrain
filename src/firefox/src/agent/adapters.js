@@ -15710,8 +15710,7 @@ const ADAPTERS = [
     matches: (url) => /^https:\/\/chrome\.google\.com\/webstore\/devconsole(?:[/?#]|$)/i.test(url),
     notes: `
 - This dashboard does not support reliable extension DOM automation. Do not retry DOM or accessibility tools here.
-- If the enabled skill catalog contains \`chrome-web-store-release\`, load it and use \`chrome_web_store_status\`, \`chrome_web_store_upload\`, and \`chrome_web_store_publish\` instead of dashboard controls.
-- If that skill is not enabled, ask the user to enable "Chrome Web Store release" in Settings → Skills and configure OAuth, publisher/item IDs, and a release ZIP. Continue manually if they do not want API access.`,
+- Continue manually in the dashboard; no packaged release skill is available.`,
   },
   {
     name: 'github',

@@ -4034,7 +4034,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       // <untrusted_page_content> box and is read as an instruction, not data.
       let resultContent = this._wrapUntrusted(fnName, this._limitToolResult(toolResult));
       if (toolResult?.errorCode === 'chrome_protected_page') {
-        resultContent += '\n[TRUSTED RUNTIME ROUTING: Chrome blocks extension DOM/debugger access on this dashboard. Do not call another DOM, accessibility, wait, script, iframe, WebMCP, or upload_file tool here. If chrome-web-store-release is enabled and visible in the skill catalog, load it and use its chrome_web_store_* tools. Otherwise ask the user to enable/configure that packaged skill or continue manually.]';
+        resultContent += '\n[TRUSTED RUNTIME ROUTING: Chrome blocks extension DOM/debugger access on this dashboard. Do not call another DOM, accessibility, wait, script, iframe, WebMCP, or upload_file tool here. Continue manually in the dashboard.]';
         onUpdate('warning', { message: 'Chrome-protected dashboard detected; DOM automation is unavailable.' });
       }
       if (nytimesPageGateFallback) {
