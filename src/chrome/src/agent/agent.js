@@ -1174,7 +1174,7 @@ export class Agent {
     const rawMessage = String(error?.message || error || 'Streaming request failed.');
     const message = rawMessage
       .replace(/\b(Bearer)\s+[^\s,;]+/gi, '$1 [redacted]')
-      .replace(/((?:api[_ -]?key|access[_ -]?token|token|secret|password)\s*[:=]\s*)["']?[^\s,"';]+/gi, '$1[redacted]')
+      .replace(/((?:^|[^a-zA-Z0-9_])["']?(?:api[_ -]?key|access[_ -]?token|token|secret|password)["']?\s*[:=]\s*)(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\s,;}\]]+)/gi, '$1[redacted]')
       .replace(/([?&](?:api[_-]?key|access[_-]?token|token|key)=)[^&\s]+/gi, '$1[redacted]')
       .replace(/\b(?:sk-(?:or-v1-)?|gsk_|xai-)[a-zA-Z0-9_-]{12,}\b/g, '[redacted]')
       .slice(0, 500);

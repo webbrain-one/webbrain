@@ -27483,11 +27483,11 @@ test('Ask streaming eligibility is limited to interactive runs with a capable pr
     assert.equal(agent._interactiveAskStreamingProtocol({ _usesResponsesApi: () => false }), 'chat_completions', `${label}: compatible provider protocol should be traceable`);
     assert.equal(agent._interactiveAskStreamingProtocol({ _usesResponsesApi: () => true }), 'responses', `${label}: Responses protocol should be traceable`);
 
-    const transportError = new Error('failed with Authorization: Bearer secret-token, api_key=secret-key, and sk-or-v1-anothersecretkey');
+    const transportError = new Error('failed with Authorization: Bearer secret-token, api_key=secret-key, {"api_key":"json-secret","password":"quoted-secret"}, and sk-or-v1-anothersecretkey');
     transportError.isAskStreamFallbackSafe = true;
     const failure = agent._interactiveAskStreamingFailure(transportError);
     assert.equal(failure.reason, 'transport_error', `${label}: fallback reason should be classified`);
-    assert.doesNotMatch(failure.message, /secret-token|secret-key|anothersecretkey/, `${label}: trace error must redact secrets`);
+    assert.doesNotMatch(failure.message, /secret-token|secret-key|json-secret|quoted-secret|anothersecretkey/, `${label}: trace error must redact secrets`);
     assert.match(failure.message, /\[redacted\]/, `${label}: trace error should retain a redaction marker`);
   }
 });
