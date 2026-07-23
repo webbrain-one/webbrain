@@ -4,6 +4,27 @@ All notable changes to WebBrain are documented in this file.
 
 This changelog was generated from the repository Git history and release tags. Versions without a Git tag are inferred from version-bump commits and the current `package.json` / browser manifest versions.
 
+## [25.8.0] - 2026-07-23
+
+### Added
+- Added Inkling planner benchmark (OpenRouter default, Chrome thinkingmachines/inkling frozen fixtures) and published the corresponding benchmark docs/blog page.
+
+### Changed
+- Improved sidepanel UI polish for picker controls and the language menu.
+- Added new UI locales for **de** and **nl**, including flag assets, and updated locale ordering/initialization to match expected dropdown behavior in both **Chrome and Firefox**.
+- Updated provider/model documentation and synced docs with recent streaming requirements (including explicit Mistral stream usage guidance).
+- Enabled Ask streaming behavior updates across providers while aligning provider-specific streaming/usage expectations.
+- Rebuilt distribution zips for Chrome/Edge/Firefox.
+
+### Fixed
+- Fixed locale dropdown initialization and ordering issues (including missing locale pieces for **nl**/**de**).
+- Avoided retrying terminal Ask stream errors to prevent incorrect fallback behavior.
+- Corrected provider streaming usage handling for Mistral Ask (ensuring required usage/stream events are used as documented).
+- Preserved provider-specific streaming compatibility rules (e.g., keeping Alibaba Ask non-streaming where required).
+
+### Tests
+- Added Inkling planner benchmark result fixtures to the test suite (Chrome thinkingmachines/inkling frozen set).
+
 ## [25.7.12] - 2026-07-23
 
 ### Changed
