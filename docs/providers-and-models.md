@@ -86,7 +86,9 @@ Anthropic `message_stop`, or SSE `[DONE]`). A network/read error, malformed
 frame, or premature EOF silently retries the current generation once through
 `chat()` and disables streaming for the rest of that run. HTTP failures,
 explicit in-stream provider/API errors, and `content_filter` finish reasons are
-terminal and never trigger the duplicate request.
+terminal and never trigger the duplicate request. Mistral streams explicitly
+request `stream_options.include_usage` so token costs continue advancing the
+cloud-provider allowance.
 
 ### Local Providers
 

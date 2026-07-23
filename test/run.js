@@ -26735,6 +26735,28 @@ test('Alibaba Ask stays non-streaming even with a stale stored opt-in', () => {
   }
 });
 
+test('Mistral Ask streaming always requests usage metadata for metering', () => {
+  for (const PM of [ProviderManagerCh, ProviderManagerFx]) {
+    const manager = new PM();
+    const defaults = manager._defaultConfigs();
+    assert.equal(defaults.mistral.supportsStreamUsageOptions, true, `${PM.name}: Mistral usage opt-in missing`);
+    const provider = manager._createProvider('mistral', {
+      ...defaults.mistral,
+      supportsStreamUsageOptions: false,
+    });
+    const body = provider._buildChatCompletionsBody(
+      [{ role: 'user', content: 'hello' }],
+      {},
+      true,
+    );
+    assert.deepEqual(
+      body.stream_options,
+      { include_usage: true },
+      `${PM.name}: stale stored config must not disable Mistral stream metering`,
+    );
+  }
+});
+
 test('z.ai requests tool-call deltas only for streaming generations with tools', () => {
   const tools = [{
     type: 'function',
@@ -27987,6 +28009,7 @@ test('OpenAI-compatible streams request usage metadata only for supporting provi
     for (const config of [
       { category: 'cloud', providerName: 'gemini' },
       { category: 'cloud', providerName: 'deepseek' },
+      { category: 'cloud', providerName: 'mistral', supportsStreamUsageOptions: false },
       { category: 'router', providerName: 'openrouter' },
       { providerName: 'openai' },
       { category: 'cloud', providerName: 'custom', supportsStreamUsageOptions: true },
@@ -27998,7 +28021,6 @@ test('OpenAI-compatible streams request usage metadata only for supporting provi
     }
 
     for (const config of [
-      { category: 'cloud', providerName: 'mistral' },
       { category: 'router', providerName: 'cloudflare' },
       { category: 'cloud', providerName: 'custom' },
       { category: 'router', providerName: 'custom-router' },

@@ -160,6 +160,10 @@ export class OpenAICompatibleProvider extends BaseLLMProvider {
     const providerName = (this.config.providerName || '').toLowerCase();
     if (this.config.category === 'local') return false;
     if (providerName === 'ollama' || providerName === 'lmstudio') return false;
+    // Mistral only includes usage in stream events when include_usage is
+    // requested. This must override stale stored snapshots so Ask cost
+    // allowances remain metered after the capability default changes.
+    if (providerName === 'mistral') return true;
     if (this.config.supportsStreamUsageOptions != null) {
       return !!this.config.supportsStreamUsageOptions;
     }

@@ -23,6 +23,7 @@ This changelog was generated from the repository Git history and release tags. V
 - Preserved Groq token usage delivered in the provider-specific `x_groq` streaming envelope.
 - Rejected z.ai streams that finish with `sensitive`, `network_error`, or `model_context_window_exceeded` instead of persisting partial output as a successful response.
 - Kept Alibaba Cloud Ask calls non-streaming because DashScope rejects its required `tools` payload when `stream: true`.
+- Requested Mistral streaming usage events explicitly so interactive Ask turns remain included in cloud cost allowances.
 - Preserved in-progress streamed Markdown across side-panel/sidebar closes, reloads, and reconnects in Chrome and Firefox.
 - Rebuilt restored streams from the background-owned UI journal without duplicating deltas, losing Markdown structure, or leaving an unfinished stream in its incremental render state.
 

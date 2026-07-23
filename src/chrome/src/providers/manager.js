@@ -369,7 +369,7 @@ export class ProviderManager {
         model: 'mistral-large-latest',
         inputCostPerMillionUsd: 0.5,
         outputCostPerMillionUsd: 1.5,
-        supportsStreamUsageOptions: false,
+        supportsStreamUsageOptions: true,
         supportsAskStreaming: true,
         apiKey: '',
         apiKeyUrl: 'https://console.mistral.ai/api-keys/',
