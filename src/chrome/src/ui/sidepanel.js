@@ -9584,6 +9584,14 @@ modeDevBtn?.addEventListener('click', async () => {
 // Set initial highlight position without animation
 requestAnimationFrame(() => positionModeHighlight(modeAskBtn, { instant: true }));
 
+// Recalculate highlight when the toggle resizes (e.g. side panel drag)
+if (modeToggleEl) {
+  new ResizeObserver(() => {
+    const activeBtn = modeToggleEl.querySelector('.mode-btn.active');
+    if (activeBtn) positionModeHighlight(activeBtn, { instant: true });
+  }).observe(modeToggleEl);
+}
+
 // --- Stop / Abort ---
 
 async function abortRun(tabId = currentTabId) {
