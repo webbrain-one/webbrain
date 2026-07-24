@@ -1983,10 +1983,37 @@ body {
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 2px;
+  position: relative;
+}
+
+.mode-toggle-highlight {
+  position: absolute;
+  top: 2px;
+  left: 0;
+  z-index: 0;
+  height: calc(100% - 4px);
+  border-radius: 6px;
+  background: var(--accent-dim);
+  pointer-events: none;
+  will-change: transform, width;
+  transition:
+    transform 170ms cubic-bezier(0.22, 1, 0.36, 1),
+    width 170ms cubic-bezier(0.22, 1, 0.36, 1),
+    background 170ms ease;
+}
+
+.mode-toggle-highlight.act {
+  background: rgba(255, 152, 0, 0.12);
+}
+
+.mode-toggle-highlight.instant {
+  transition: none;
 }
 
 .mode-btn {
   flex: 1;
+  position: relative;
+  z-index: 1;
   background: none;
   border: none;
   color: var(--text-muted);
@@ -1995,7 +2022,7 @@ body {
   padding: 5px 0;
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: color 0.2s;
   text-align: center;
 }
 
@@ -2004,12 +2031,10 @@ body {
 }
 
 .mode-btn.active {
-  background: var(--accent-dim);
   color: var(--accent);
 }
 
 .mode-btn.active.act {
-  background: rgba(255, 152, 0, 0.12);
   color: var(--warning);
 }
 
