@@ -9155,6 +9155,14 @@ if (modeToggleEl) {
   }).observe(modeToggleEl);
 }
 
+// Reposition highlight when document direction changes (RTL locale switch)
+new MutationObserver(() => {
+  requestAnimationFrame(() => {
+    const activeBtn = modeToggleEl?.querySelector('.mode-btn.active');
+    if (activeBtn) positionModeHighlight(activeBtn, { instant: true });
+  });
+}).observe(document.documentElement, { attributes: true, attributeFilter: ['dir'] });
+
 // --- Stop / Abort ---
 
 async function abortRun(tabId = currentTabId) {
