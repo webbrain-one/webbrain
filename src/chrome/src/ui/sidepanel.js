@@ -523,6 +523,14 @@ const activityText = document.getElementById('activity-text');
 const modeAskBtn = document.getElementById('btn-mode-ask');
 const modeActBtn = document.getElementById('btn-mode-act');
 const modeDevBtn = document.getElementById('btn-mode-dev');
+const modeToggleEl = document.getElementById('mode-toggle');
+const modeToggleHighlight = (() => {
+  const el = document.createElement('div');
+  el.className = 'mode-toggle-highlight instant';
+  el.setAttribute('aria-hidden', 'true');
+  modeToggleEl?.prepend(el);
+  return el;
+})();
 const actWarning = document.getElementById('act-warning');
 const inputArea = document.getElementById('input-area');
 const slashCommandMenuEl = document.getElementById('slash-command-menu');
@@ -9503,6 +9511,14 @@ async function handleGlobalKeydown(e) {
 
 // --- Mode Toggle ---
 
+function positionModeHighlight(btn, { instant = false } = {}) {
+  if (!modeToggleHighlight || !btn) return;
+  if (instant) modeToggleHighlight.classList.add('instant');
+  modeToggleHighlight.style.width = `${btn.offsetWidth}px`;
+  modeToggleHighlight.style.transform = `translate3d(${btn.offsetLeft}px, 0, 0)`;
+  if (instant) requestAnimationFrame(() => modeToggleHighlight.classList.remove('instant'));
+}
+
 function setMode(mode) {
   if (mode !== 'ask' && mode !== 'act' && mode !== 'dev') mode = 'ask';
   const previousMode = agentMode;
@@ -9521,6 +9537,12 @@ function setMode(mode) {
   modeDevBtn?.classList.toggle('active', mode === 'dev');
   modeDevBtn?.classList.toggle('act', mode === 'dev');
   inputArea.classList.toggle('act-mode', mode !== 'ask');
+
+  // Slide the highlight pill to the active button
+  const activeBtn = mode === 'ask' ? modeAskBtn : mode === 'act' ? modeActBtn : modeDevBtn;
+  modeToggleHighlight?.classList.toggle('act', mode !== 'ask');
+  positionModeHighlight(activeBtn);
+
   updateActWarning();
   resetInputPlaceholderRotation();
 }
@@ -9559,6 +9581,8 @@ modeDevBtn?.addEventListener('click', async () => {
   await ensureDevMode();
 });
 
+// Set initial highlight position without animation
+requestAnimationFrame(() => positionModeHighlight(modeAskBtn, { instant: true }));
 
 // --- Stop / Abort ---
 
