@@ -59,6 +59,16 @@ for (const relativePath of [
     2,
     `${relativePath}: deterministic restoration read is not wired into both execution loops`,
   );
+  assert.equal(
+    (source.match(/if \(this\._consumeSelectionGroundingRestoration\(tabId, enriched\)\) \{\s*this\._persist\(tabId\);\s*\}/g) || []).length,
+    2,
+    `${relativePath}: deferred restoration consume is not wired into both execution loops`,
+  );
+  assert.equal(
+    (source.match(/this\._consumeSelectionGroundingRestoration\(tabId, submittedUserMessage\);/g) || []).length,
+    0,
+    `${relativePath}: premature restoration consume remains in _maybeRunPlannerGate`,
+  );
 }
 
 for (const [label, AgentClass, session] of [
@@ -153,6 +163,67 @@ for (const [label, AgentClass, session] of [
   assert.equal(firstReadMessages[0]?.tool_calls?.[0]?.function?.name, 'read_page', `${label}: deterministic first read did not enqueue read_page`);
   assert.equal(executedFirstRead?.[1]?.[0]?.function?.name, 'read_page', `${label}: deterministic first read was not executed`);
 
+  // Early-exit path 1: Clarification turn (proceed: false) does not consume restoration
+  const clarifyingAgent = new AgentClass({ getActive: () => ({ supportsVision: false }) });
+  await clarifyingAgent._hydrate(tabId);
+  assert.equal(clarifyingAgent.selectionGroundingRestorationPendingTabs.has(tabId), true, `${label}: restart lost pending restoration before clarify`);
+  clarifyingAgent._readCompletenessNeedsScopeClassification = () => true;
+  clarifyingAgent._runReadScopeClassifier = async () => ({
+    proceed: false,
+    message: 'Which section of the full page would you like me to inspect?',
+    reason: 'needs_clarification',
+  });
+  const clarifyTurn = await clarifyingAgent._enrichUserMessageWithCurrentPage(
+    tabId,
+    clarifyingAgent.conversations.get(tabId),
+    'check the full page',
+  );
+  assert.equal(clarifyTurn.webbrainSelectionScopeRestored, true, `${label}: clarifying turn missing restoration marker`);
+  const clarifyGate = await clarifyingAgent._maybeRunPlannerGate(
+    tabId,
+    clarifyingAgent.conversations.get(tabId),
+    clarifyTurn,
+    () => {},
+    'ask',
+    null,
+    null,
+    null,
+    { detachedRequestId: `clarify-${label}` },
+  );
+  assert.equal(clarifyGate.proceed, false, `${label}: clarifying gate did not return proceed: false`);
+  assert.equal(clarifyingAgent.selectionGroundingRestorationPendingTabs.has(tabId), true, `${label}: clarify turn prematurely consumed restoration in memory`);
+  assert.equal(session[storageKey].selectionGroundingRestorationPending, true, `${label}: clarify turn prematurely consumed restoration in storage`);
+
+  // Early-exit path 2: responseOnly gate outcome exits before tool loop, leaving restoration armed
+  const responseOnlyAgent = new AgentClass({ getActive: () => ({ supportsVision: false }) });
+  await responseOnlyAgent._hydrate(tabId);
+  assert.equal(responseOnlyAgent.selectionGroundingRestorationPendingTabs.has(tabId), true, `${label}: restart lost pending restoration before responseOnly test`);
+  responseOnlyAgent._runPlannerGate = async () => ({ proceed: true, responseOnly: true });
+  responseOnlyAgent._runPlannerIntentGate = async () => ({ proceed: true, responseOnly: true });
+  const responseOnlyTurn = await responseOnlyAgent._enrichUserMessageWithCurrentPage(
+    tabId,
+    responseOnlyAgent.conversations.get(tabId),
+    'explain without using tools',
+  );
+  assert.equal(responseOnlyTurn.webbrainSelectionScopeRestored, true, `${label}: responseOnly turn missing restoration marker`);
+  const responseOnlyGate = await responseOnlyAgent._maybeRunPlannerGate(
+    tabId,
+    responseOnlyAgent.conversations.get(tabId),
+    responseOnlyTurn,
+    () => {},
+    'act',
+    null,
+    null,
+    null,
+    { detachedRequestId: `response-only-${label}` },
+  );
+  assert.equal(responseOnlyGate.proceed, true, `${label}: responseOnly gate did not proceed`);
+  assert.equal(responseOnlyGate.responseOnly, true, `${label}: responseOnly gate did not flag responseOnly`);
+  assert.equal(responseOnlyAgent.selectionGroundingRestorationPendingTabs.has(tabId), true, `${label}: responseOnly turn prematurely consumed restoration in memory`);
+  assert.equal(session[storageKey].selectionGroundingRestorationPending, true, `${label}: responseOnly turn cleared persisted restoration in storage`);
+
+  // Early-exit path 3 / Pre-tool commitment: _maybeRunPlannerGate returning proceed: true
+  // does not consume restoration until the turn commits past responseOnly: false.
   const gate = await restarted._maybeRunPlannerGate(
     tabId,
     restarted.conversations.get(tabId),
@@ -165,7 +236,14 @@ for (const [label, AgentClass, session] of [
     { detachedRequestId: `restore-${label}` },
   );
   assert.equal(gate.proceed, true, `${label}: corrected ordinary turn did not enter Ask`);
-  assert.equal(restarted.selectionGroundingRestorationPendingTabs.has(tabId), false, `${label}: correction was not consumed after message acceptance`);
+  assert.equal(restarted.selectionGroundingRestorationPendingTabs.has(tabId), true, `${label}: planner gate prematurely consumed restoration before tool commitment`);
+  assert.equal(session[storageKey].selectionGroundingRestorationPending, true, `${label}: planner gate prematurely consumed persisted restoration`);
+
+  // Committed tool execution path: Turn passes both proceed: true and responseOnly: false,
+  // and reaches _consumeSelectionGroundingRestoration.
+  assert.equal(restarted._consumeSelectionGroundingRestoration(tabId, enriched), true, `${label}: committed consume did not return true`);
+  await restarted._persistNow(tabId);
+  assert.equal(restarted.selectionGroundingRestorationPendingTabs.has(tabId), false, `${label}: correction was not cleared after committed consumption`);
   assert.equal(session[storageKey].selectionGroundingRestorationPending, false, `${label}: consumed correction remained pending in storage`);
   assert.match(JSON.stringify(session[storageKey].messages), /user explicitly removed the selected-text boundary/i, `${label}: accepted correction was not persisted with the user turn`);
 

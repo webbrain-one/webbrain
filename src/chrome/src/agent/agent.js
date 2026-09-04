@@ -14945,7 +14945,6 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       runOptions._standalonePersistedUserMessage = submittedUserMessage;
     }
     messages.push(submittedUserMessage);
-    this._consumeSelectionGroundingRestoration(tabId, submittedUserMessage);
     if (runOptions?.selectionGroundingScopeStarted === true) {
       this._finalizeSelectionGroundingScope(tabId, messages, submittedUserMessage);
     }
@@ -33285,7 +33284,6 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         return (finalResponse = error);
       }
       messages.push(enriched);
-      this._consumeSelectionGroundingRestoration(tabId, enriched);
       if (runOptions?.selectionGroundingScopeStarted === true) {
         this._finalizeSelectionGroundingScope(tabId, messages, enriched);
       }
@@ -33397,6 +33395,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       finalResponse = responseOnly.content;
       _traceStatus = responseOnly.status;
       return finalResponse;
+    }
+    if (this._consumeSelectionGroundingRestoration(tabId, enriched)) {
+      this._persist(tabId);
     }
     this._startPlanExecutionGuard(tabId, mode, gateOutcome, runOptions);
 
@@ -34540,7 +34541,6 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (mode === 'dev' && provider.promptTier === 'compact') {
       const msg = this._devModeBlockedMessage(provider);
       messages.push(enriched);
-      this._consumeSelectionGroundingRestoration(tabId, enriched);
       if (runOptions?.selectionGroundingScopeStarted === true) {
         this._finalizeSelectionGroundingScope(tabId, messages, enriched);
       }
@@ -34595,6 +34595,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         runOptions, enriched, sourceBoundPriorMessages,
       );
       return finish(responseOnly.content, responseOnly.status);
+    }
+    if (this._consumeSelectionGroundingRestoration(tabId, enriched)) {
+      this._persist(tabId);
     }
     this._startPlanExecutionGuard(tabId, mode, gateOutcome, runOptions);
 
