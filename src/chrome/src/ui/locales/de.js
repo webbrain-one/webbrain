@@ -116,6 +116,8 @@ export default {
   'sp.attach.too_large': '{name} ist zu groß zum Anhängen (max. {max}).',
   'sp.attach.unsupported_type': '{name} ist kein unterstützter Anhangstyp — nur Bilder, PDFs, JSON, TXT- und CSV-Dateien werden unterstützt.',
   'sp.attach.read_failed': '{name} konnte nicht gelesen werden.',
+  'sp.attach.needs_prompt': 'Fügen Sie eine Frage hinzu, die mit dem Anhang gesendet wird.',
+  'sp.attach.no_tab': 'Kein aktiver Tab, an den die Auswahl angehängt werden kann.',
   'sp.queue.label': 'In Warteschlange',
   'sp.queue.label_numbered': 'In Warteschlange {index}',
   'sp.queue.edit': 'Warteschlangen-Nachricht bearbeiten',

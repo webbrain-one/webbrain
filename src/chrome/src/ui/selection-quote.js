@@ -58,6 +58,28 @@ export function buildSelectionComposerDraft(selectionText, draft = '') {
   return `${quote}${existingDraft}`;
 }
 
+export function buildSelectionTextAttachment(text) {
+  const selection = normalizedSelectionText(text);
+  if (!selection) return null;
+  const bytes = new TextEncoder().encode(selection);
+  let binary = '';
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+  }
+  return {
+    kind: 'text',
+    name: 'selected-text.txt',
+    textContent: selection,
+    dataUrl: `data:text/plain;charset=utf-8;base64,${btoa(binary)}`,
+    mimeType: 'text/plain;charset=utf-8',
+    size: bytes.byteLength,
+    // A two-value flag, not a trust level: everything that is not a slash
+    // screenshot normalizes to 'user_upload' before it reaches storage or the
+    // model, and every attachment is wrapped as untrusted regardless of it.
+    source: 'user_upload',
+  };
+}
+
 export function selectionIsQuoteable({ startTextElement, endTextElement, text } = {}) {
   // A range spanning two bubbles has no unambiguous answer boundary.
   return Boolean(

@@ -765,6 +765,8 @@ export default {
   "sp.attach.too_large": "{name} es demasiado grande para adjuntarlo (máx. {max}).",
   "sp.attach.unsupported_type": "{name} no es un tipo de adjunto compatible — solo se admiten imágenes, PDF, JSON, TXT y CSV.",
   "sp.attach.read_failed": "No se pudo leer {name}.",
+  "sp.attach.needs_prompt": "Añade una pregunta para enviarla con el archivo adjunto.",
+  "sp.attach.no_tab": "No hay ninguna pestaña activa a la que adjuntar la selección.",
   "sp.queue.label": "En cola",
   "sp.queue.label_numbered": "En cola {index}",
   "sp.queue.edit": "Editar mensaje en cola",

@@ -235,11 +235,20 @@ const browserRespondTool = tool({
   description:
     "Answer a question from a browser run whose status is needs_user_input, then wait " +
     "for the run to continue. The answer must come from the user; never invent it. Use " +
-    "the runId and clarifyId returned by browser_task or browser_status.",
+    "the runId and clarifyId returned by browser_task or browser_status. When that result " +
+    "carries a `decisions` list, the pause is a structured gate (permission, form submission, " +
+    "saved-workflow repair): send exactly one of those values, never a localized label, " +
+    "because the extension fails closed on an unknown decision.",
   parameters: {
     runId: z.string().min(1).describe("The browser run waiting for an answer."),
     clarifyId: z.string().min(1).describe("The pending clarification to answer."),
-    answer: z.string().min(1).describe("The user's answer, forwarded verbatim."),
+    answer: z
+      .string()
+      .min(1)
+      .describe(
+        "The user's answer, forwarded verbatim — or, when the pause reported a `decisions` " +
+          "list, exactly one of those stable values.",
+      ),
     timeout: z
       .number()
       .optional()

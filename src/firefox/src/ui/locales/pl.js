@@ -756,6 +756,8 @@ export default {
   "sp.attach.too_large": "{name} jest za duży, aby go dołączyć (maks. {max}).",
   "sp.attach.unsupported_type": "{name} nie jest obsługiwanym typem załącznika — obsługiwane są tylko obrazy, PDF, JSON, TXT i CSV.",
   "sp.attach.read_failed": "Nie udało się odczytać {name}.",
+  "sp.attach.needs_prompt": "Dodaj pytanie, które zostanie wysłane z załącznikiem.",
+  "sp.attach.no_tab": "Brak aktywnej karty, do której można dołączyć zaznaczenie.",
   "sp.queue.label": "W kolejce",
   "sp.queue.label_numbered": "W kolejce {index}",
   "sp.queue.edit": "Edytuj wiadomość w kolejce",

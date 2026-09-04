@@ -8,7 +8,7 @@ Open-source AI browser agent for Chrome and Firefox. Chat with any web page, aut
 - **Browser Actions** — Click, type, scroll, navigate, and interact with page elements
 - **Ask / Act / Dev Modes** — Read-only by default, normal browser actions on request, and Mid/Full Dev tools for source/style/page debugging
 - **Multi-Step Agent** — Autonomous task execution with tool-use loops (configurable, default 130 steps)
-- **Continue from Limit** — When the agent hits the step limit, click Continue to keep going
+- **Continue from Limit** — At the step limit, WebBrain first delivers a context-only partial result or explicit blocker; click Continue to keep going
 - **Multi-Provider LLM** — WebBrain Compass plus local llama.cpp/Ollama/LM Studio/Jan/vLLM/SGLang/LocalAI and major direct cloud providers
 - **Reliable Compass improvement traces** — when Help Improve WebBrain is enabled, terminal tool outcomes are durably queued and retried without delaying the visible answer
 - **Side Panel UI** — Clean chat interface that lives alongside your browsing

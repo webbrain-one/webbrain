@@ -76,6 +76,7 @@ function normalizePendingClarify(data, now = Date.now()) {
   const clarifyId = String(obj.clarifyId || '').trim();
   if (!clarifyId) return null;
   const pending = {
+    promptKind: typeof obj.promptKind === 'string' ? obj.promptKind.slice(0, 80) : null,
     clarifyId: clarifyId.slice(0, 120),
     question: String(obj.question || '').slice(0, 1000),
     options: Array.isArray(obj.options)

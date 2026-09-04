@@ -37,7 +37,14 @@ export interface CloudSnapshot {
     | "aborted";
   mode?: "ask" | "act";
   task?: string;
-  pendingInput?: Record<string, unknown> | null;
+  pendingInput?: {
+    promptKind?: string;
+    clarifyId?: string;
+    clarify_id?: string;
+    question?: string;
+    options?: unknown[];
+    [key: string]: unknown;
+  } | null;
   result?: unknown;
   summary?: string;
   content?: string;

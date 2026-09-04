@@ -116,6 +116,8 @@ export default {
   'sp.attach.too_large': "{name} সংযুক্ত করার জন্য খুব বড় (সর্বোচ্চ {max})।",
   'sp.attach.unsupported_type': "{name} একটি সমর্থিত সংযুক্তি প্রকার নয় — শুধুমাত্র ছবি, PDF, JSON, TXT, এবং CSV ফাইল সমর্থিত।",
   'sp.attach.read_failed': "{name} পড়া যায়নি।",
+  'sp.attach.needs_prompt': 'সংযুক্তির সঙ্গে পাঠানোর জন্য একটি প্রশ্ন লিখুন।',
+  'sp.attach.no_tab': 'নির্বাচিত লেখা সংযুক্ত করার মতো কোনো সক্রিয় ট্যাব নেই।',
   'sp.queue.label': "সারিবদ্ধ",
   'sp.queue.label_numbered': "সারিবদ্ধ {index}",
   'sp.queue.edit': "সারিবদ্ধ বার্তা সম্পাদনা করুন",

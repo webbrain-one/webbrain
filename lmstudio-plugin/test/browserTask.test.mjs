@@ -55,6 +55,27 @@ before(async () => {
         socket.terminate();
         return;
       }
+      if (message.payload.task === "unsupported prompt") {
+        reply(message, {
+          runId: "unsupported-run",
+          status: "needs_user_input",
+          pendingInput: { promptKind: "futureGate", question: "Choose.", clarifyId: "future-1" },
+        });
+        return;
+      }
+      if (message.payload.task === "legacy prompt") {
+        reply(message, {
+          runId: "legacy-run",
+          status: "needs_user_input",
+          pendingInput: {
+            permission: { capability: "send_message", host: "example.com" },
+            question: "Allow it?",
+            clarifyId: "legacy-1",
+            options: ["once", "always", "deny"],
+          },
+        });
+        return;
+      }
       if (message.payload.task === "stall initial response") return;
       if (message.payload.task === "stall status response") {
         reply(message, { runId: "stalled-run", status: "running" });
@@ -63,7 +84,7 @@ before(async () => {
       reply(message, {
         runId: "clarify-run",
         status: "needs_user_input",
-        pendingInput: { question: "Which account?", clarifyId: "clarify-1" },
+        pendingInput: { promptKind: "clarify", question: "Which account?", clarifyId: "clarify-1" },
       });
       return;
     }
@@ -125,6 +146,24 @@ test("browser_task tells the model how to answer a paused run", async () => {
   assert.equal(result.runId, "clarify-run");
   assert.equal(result.clarifyId, "clarify-1");
   assert.match(result.hint, /browser_respond/);
+});
+
+test("browser_task rejects an unknown prompt kind instead of treating it as free text", async () => {
+  const result = await browserTask({ task: "unsupported prompt", timeout: 5_000 });
+  assert.equal(result.needsUserInput, true);
+  assert.equal(result.promptKind, "futureGate");
+  assert.match(result.error, /unsupported prompt kind/);
+  assert.match(result.hint, /Do not send a free-form answer/);
+});
+
+test("browser_task still relays a prompt from an extension older than promptKind", async () => {
+  const result = await browserTask({ task: "legacy prompt", timeout: 5_000 });
+  assert.equal(result.needsUserInput, true);
+  assert.equal(result.promptKind, "permission");
+  assert.equal(result.question, "Allow it?");
+  assert.equal(result.clarifyId, "legacy-1");
+  assert.deepEqual(result.options, ["once", "always", "deny"]);
+  assert.equal(result.error, undefined);
 });
 
 test("browser_task rejects API mutation permission in ask mode before dispatch", async () => {

@@ -2854,7 +2854,23 @@ html[data-ui-scale-ready="false"] body { visibility: hidden; }
    ASK / ACT MODE TOGGLE
    ========================================================================== */
 
-html[data-standalone="true"] #mode-toggle {
+html[data-standalone="true"] .composer-control-row {
+  display: none;
+}
+
+html[data-standalone="true"] #header #btn-expand {
+  display: none;
+}
+
+html[data-standalone="true"] #header #btn-clear {
+  width: 26px;
+  min-width: 26px;
+  height: 26px;
+  padding: 0;
+  justify-content: center;
+}
+
+html[data-standalone="true"] #header #btn-clear .conversation-action-label {
   display: none;
 }
 

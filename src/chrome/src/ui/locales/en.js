@@ -116,6 +116,8 @@ export default {
   'sp.attach.too_large': '{name} is too large to attach (max {max}).',
   'sp.attach.unsupported_type': '{name} is not a supported attachment type — only images, PDFs, JSON, TXT, and CSV files are supported.',
   'sp.attach.read_failed': 'Could not read {name}.',
+  'sp.attach.needs_prompt': 'Add a question to send with your attachment.',
+  'sp.attach.no_tab': 'No active tab to attach the selection to.',
   'sp.queue.label': 'Queued',
   'sp.queue.label_numbered': 'Queued {index}',
   'sp.queue.edit': 'Edit queued message',

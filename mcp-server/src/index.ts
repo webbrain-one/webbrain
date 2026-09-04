@@ -293,11 +293,24 @@ server.registerTool(
     description:
       "Supply the user's answer to a run sitting at status 'needs_user_input', then keep " +
       "waiting for it to settle. The answer must come from the user — WebBrain pauses " +
-      "precisely because a human decision is required.",
+      "precisely because a human decision is required. For an ordinary clarification, pass " +
+      "the user's answer verbatim. For a structured permission prompt, map the user's explicit " +
+      "decision to the exact stable value shown by WebBrain: 'once', 'always', or 'deny'. Never " +
+      "infer permission, and use 'always' only when the user explicitly requests a persistent grant. " +
+      "Any other structured gate (form-submission confirmation, saved-workflow repair) lists its own " +
+      "stable values on a 'decisions:' line — send one of those exactly, never a localized label.",
     inputSchema: {
       run_id: z.string().describe("The run that is waiting."),
       clarify_id: z.string().describe("The clarify_id reported alongside the question."),
-      answer: z.string().min(1).describe("The user's answer, passed through verbatim."),
+      answer: z
+        .string()
+        .min(1)
+        .describe(
+          "For an ordinary clarification, the user's answer passed through verbatim. For a " +
+            "permission prompt, the exact stable decision 'once', 'always', or 'deny' after the " +
+            "user explicitly chooses it; a normal one-time approval maps to 'once'. For any other " +
+            "structured gate, one of the exact values listed on its 'decisions:' line.",
+        ),
       timeout_seconds: z
         .number()
         .int()

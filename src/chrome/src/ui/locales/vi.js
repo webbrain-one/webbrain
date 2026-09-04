@@ -116,6 +116,8 @@ export default {
   'sp.attach.too_large': "{name} quá lớn để đính kèm (tối đa {max}).",
   'sp.attach.unsupported_type': "{name} không phải là loại tệp đính kèm được hỗ trợ - chỉ hỗ trợ các tệp hình ảnh, PDF, JSON, TXT và CSV.",
   'sp.attach.read_failed': "Không thể đọc {name}.",
+  'sp.attach.needs_prompt': 'Hãy nhập câu hỏi để gửi kèm tệp đính kèm.',
+  'sp.attach.no_tab': 'Không có tab đang hoạt động để đính kèm văn bản đã chọn.',
   'sp.queue.label': "Đã xếp hàng",
   'sp.queue.label_numbered': "Đã xếp hàng {index}",
   'sp.queue.edit': "Chỉnh sửa tin nhắn xếp hàng đợi",

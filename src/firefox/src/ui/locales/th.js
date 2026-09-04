@@ -765,6 +765,8 @@ export default {
   "sp.attach.too_large": "{name} ใหญ่เกินกว่าจะแนบได้ (สูงสุด {max})",
   "sp.attach.unsupported_type": "{name} ไม่ใช่ประเภทไฟล์แนบที่รองรับ — รองรับเฉพาะรูปภาพ, PDF, JSON, TXT และ CSV",
   "sp.attach.read_failed": "อ่าน {name} ไม่ได้",
+  "sp.attach.needs_prompt": "พิมพ์คำถามเพื่อส่งไปพร้อมกับไฟล์แนบ",
+  "sp.attach.no_tab": "ไม่มีแท็บที่ใช้งานอยู่สำหรับแนบข้อความที่เลือก",
   "sp.queue.label": "อยู่ในคิว",
   "sp.queue.label_numbered": "อยู่ในคิว {index}",
   "sp.queue.edit": "แก้ไขข้อความในคิว",

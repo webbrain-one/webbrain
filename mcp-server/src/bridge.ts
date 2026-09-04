@@ -35,6 +35,7 @@ export interface CloudSnapshot {
   task?: string;
   structured?: boolean;
   pendingInput?: {
+    promptKind?: string;
     clarifyId?: string;
     clarify_id?: string;
     question?: string;

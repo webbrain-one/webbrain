@@ -14,6 +14,14 @@
     var params = new URLSearchParams(window.location.search);
     if (params.get('standalone') === 'true') {
       document.documentElement.setAttribute('data-standalone', 'true');
+      // Standalone chat has no History strip. Reuse the existing New chat
+      // button so its confirmation and event wiring remain unchanged.
+      window.addEventListener('DOMContentLoaded', function () {
+        var headerActions = document.querySelector('#header .header-right');
+        var newChat = document.getElementById('btn-clear');
+        var expand = document.getElementById('btn-expand');
+        if (headerActions && newChat) headerActions.insertBefore(newChat, expand);
+      }, { once: true });
     }
   } catch (_) { /* ignore */ }
 

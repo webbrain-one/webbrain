@@ -765,6 +765,8 @@ export default {
   "sp.attach.too_large": "{name} est trop volumineux pour être joint (max {max}).",
   "sp.attach.unsupported_type": "{name} n’est pas un type de pièce jointe pris en charge — seuls les images, PDF, JSON, TXT et CSV sont pris en charge.",
   "sp.attach.read_failed": "Impossible de lire {name}.",
+  "sp.attach.needs_prompt": "Ajoutez une question à envoyer avec votre pièce jointe.",
+  "sp.attach.no_tab": "Aucun onglet actif auquel joindre la sélection.",
   "sp.queue.label": "En file d’attente",
   "sp.queue.label_numbered": "En file d’attente {index}",
   "sp.queue.edit": "Modifier le message en file d’attente",

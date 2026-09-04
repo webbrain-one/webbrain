@@ -765,6 +765,8 @@ export default {
   "sp.attach.too_large": "{name} 太大，无法附加（最大 {max}）。",
   "sp.attach.unsupported_type": "{name} 不是支持的附件类型 — 仅支持图像、PDF、JSON、TXT 和 CSV 文件。",
   "sp.attach.read_failed": "无法读取 {name}。",
+  "sp.attach.needs_prompt": "请输入要与附件一起发送的问题。",
+  "sp.attach.no_tab": "没有可附加所选文本的活动标签页。",
   "sp.queue.label": "已排队",
   "sp.queue.label_numbered": "已排队 {index}",
   "sp.queue.edit": "编辑排队消息",

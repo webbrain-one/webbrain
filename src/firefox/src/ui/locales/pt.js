@@ -116,6 +116,8 @@ export default {
   'sp.attach.too_large': "{name} é muito grande para ser conectado (máx. {max}).",
   'sp.attach.unsupported_type': "{name} não é um tipo de anexo compatível – apenas imagens, PDFs, arquivos JSON, TXT e CSV são compatíveis.",
   'sp.attach.read_failed': "Não foi possível ler {name}.",
+  'sp.attach.needs_prompt': 'Adicione uma pergunta para enviar com o anexo.',
+  'sp.attach.no_tab': 'Nenhuma aba ativa para anexar a seleção.',
   'sp.queue.label': "Na fila",
   'sp.queue.label_numbered': "Na fila {index}",
   'sp.queue.edit': "Editar mensagem na fila",

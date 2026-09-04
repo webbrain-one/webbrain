@@ -792,6 +792,8 @@ export default {
   "sp.attach.too_large": "{name}은(는) 첨부하기에 너무 큽니다(최대 {max}).",
   "sp.attach.unsupported_type": "{name}은(는) 지원되는 첨부 파일 형식이 아닙니다 — 이미지, PDF, JSON, TXT, CSV 파일만 지원됩니다.",
   "sp.attach.read_failed": "{name}을(를) 읽을 수 없습니다.",
+  "sp.attach.needs_prompt": "첨부 파일과 함께 보낼 질문을 입력하세요.",
+  "sp.attach.no_tab": "선택한 텍스트를 첨부할 활성 탭이 없습니다.",
   "sp.queue.label": "대기 중",
   "sp.queue.label_numbered": "대기 중 {index}",
   "sp.queue.edit": "대기 중인 메시지 편집",

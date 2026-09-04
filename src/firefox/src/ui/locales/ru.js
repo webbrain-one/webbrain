@@ -765,6 +765,8 @@ export default {
   "sp.attach.too_large": "{name} слишком велик для вложения (макс. {max}).",
   "sp.attach.unsupported_type": "{name} не является поддерживаемым типом вложения — поддерживаются только изображения, PDF, JSON, TXT и CSV.",
   "sp.attach.read_failed": "Не удалось прочитать {name}.",
+  "sp.attach.needs_prompt": "Добавьте вопрос, чтобы отправить его вместе с вложением.",
+  "sp.attach.no_tab": "Нет активной вкладки, к которой можно прикрепить выделенный текст.",
   "sp.queue.label": "В очереди",
   "sp.queue.label_numbered": "В очереди {index}",
   "sp.queue.edit": "Редактировать сообщение в очереди",

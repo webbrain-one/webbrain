@@ -236,16 +236,14 @@ for (const [label, AgentClass, session] of [
     { detachedRequestId: `restore-${label}` },
   );
   assert.equal(gate.proceed, true, `${label}: corrected ordinary turn did not enter Ask`);
-  assert.equal(restarted.selectionGroundingRestorationPendingTabs.has(tabId), true, `${label}: planner gate prematurely consumed restoration before tool commitment`);
-  assert.equal(session[storageKey].selectionGroundingRestorationPending, true, `${label}: planner gate prematurely consumed persisted restoration`);
-
-  // Committed tool execution path: Turn passes both proceed: true and responseOnly: false,
-  // and reaches _consumeSelectionGroundingRestoration.
-  assert.equal(restarted._consumeSelectionGroundingRestoration(tabId, enriched), true, `${label}: committed consume did not return true`);
-  await restarted._persistNow(tabId);
-  assert.equal(restarted.selectionGroundingRestorationPendingTabs.has(tabId), false, `${label}: correction was not cleared after committed consumption`);
-  assert.equal(session[storageKey].selectionGroundingRestorationPending, false, `${label}: consumed correction remained pending in storage`);
+  assert.equal(restarted.selectionGroundingRestorationPendingTabs.has(tabId), true, `${label}: planner gate consumed correction before execution`);
+  assert.equal(session[storageKey].selectionGroundingRestorationPending, true, `${label}: planner gate persisted correction as consumed before execution`);
   assert.match(JSON.stringify(session[storageKey].messages), /user explicitly removed the selected-text boundary/i, `${label}: accepted correction was not persisted with the user turn`);
+
+  assert.equal(restarted._consumeSelectionGroundingRestoration(tabId, enriched), true, `${label}: execution did not consume the accepted correction`);
+  restarted._persist(tabId);
+  assert.equal((await restarted._persistNow(tabId)).ok, true, `${label}: consumed correction did not persist`);
+  assert.equal(session[storageKey].selectionGroundingRestorationPending, false, `${label}: consumed correction remained pending in storage`);
 
   const afterConsumption = new AgentClass({ getActive: () => ({ supportsVision: false }) });
   await afterConsumption._hydrate(tabId);
@@ -264,6 +262,84 @@ for (const [label, AgentClass, session] of [
     selectionAction: 'proofread',
   });
   assert.equal(afterConsumption.selectionGroundingRestorationPendingTabs.has(tabId), false, `${label}: a new selection did not supersede the pending correction`);
+}
+
+for (const [label, AgentClass, session] of [
+  ['chrome', ChromeAgent, chromeSession],
+  ['firefox', FirefoxAgent, firefoxSession],
+]) {
+  for (const [pathIndex, streaming] of [false, true].entries()) {
+    for (const [caseIndex, testCase] of [
+      {
+        name: 'blocked',
+        mode: 'ask',
+        promptTier: 'full',
+        outcome: { proceed: false, message: 'Clarification required.', reason: 'clarification' },
+      },
+      {
+        name: 'response-only',
+        mode: 'act',
+        promptTier: 'full',
+        outcome: { proceed: true, responseOnly: true, requestKind: 'conversation', requiresStateChange: false },
+      },
+      {
+        name: 'dev-blocked',
+        mode: 'dev',
+        promptTier: 'compact',
+        outcome: null,
+      },
+    ].entries()) {
+      const tabId = (label === 'chrome' ? 29620 : 29640) + (pathIndex * 10) + caseIndex;
+      const storageKey = `agentConv:${tabId}`;
+      const provider = { supportsVision: false, promptTier: testCase.promptTier };
+      const agent = new AgentClass({
+        getActive: () => provider,
+        prepareActiveProviderCapabilities: async () => {},
+      });
+      agent.conversations.set(tabId, [{ role: 'system', content: 'system rules' }]);
+      agent.conversationIds.set(tabId, `selection-restoration-${label}-${testCase.name}-${streaming}`);
+      agent.conversationModes.set(tabId, testCase.mode);
+      agent.selectionGroundingRestorationPendingTabs.add(tabId);
+      agent._hydrate = async () => {};
+      agent._manageContext = async () => {};
+      agent._applyStandaloneWikipediaRag = async () => null;
+      agent._getTabUrlTitle = async () => ({ tabUrl: 'https://example.com/', tabTitle: 'Example' });
+      agent._startTraceRun = async () => null;
+      agent._endTraceRun = async () => {};
+      agent._readCompletenessNeedsScopeClassification = () => testCase.name === 'blocked';
+      agent._runReadScopeClassifier = async () => testCase.outcome;
+      agent._plannerMode = () => 'off';
+      agent._runPlannerIntentGate = async () => testCase.outcome;
+      agent._completeResponseOnlyTurn = async () => ({ content: 'Context-only response.', status: 'done' });
+      agent._enrichUserMessageWithCurrentPage = async () => ({
+        role: 'user',
+        content: 'Use the restored page context.',
+        webbrainSelectionScopeRestored: true,
+      });
+
+      const final = streaming
+        ? await agent._processMessageStreamInner(
+          tabId, 'Use the restored page context.', () => {}, testCase.mode,
+          { detachedRequestId: `restore-${label}-${testCase.name}-${streaming}` },
+        )
+        : await agent._processMessageInner(
+          tabId, 'Use the restored page context.', () => {}, testCase.mode, [],
+          { detachedRequestId: `restore-${label}-${testCase.name}-${streaming}` },
+        );
+      assert.ok(final, `${label} ${testCase.name} ${streaming ? 'streaming' : 'non-streaming'}: missing early response`);
+      assert.equal((await agent._persistNow(tabId)).ok, true, `${label} ${testCase.name}: pending state did not persist`);
+      assert.equal(
+        agent.selectionGroundingRestorationPendingTabs.has(tabId),
+        true,
+        `${label} ${testCase.name} ${streaming ? 'streaming' : 'non-streaming'}: early return consumed the correction`,
+      );
+      assert.equal(
+        session[storageKey].selectionGroundingRestorationPending,
+        true,
+        `${label} ${testCase.name} ${streaming ? 'streaming' : 'non-streaming'}: early return persisted the correction as consumed`,
+      );
+    }
+  }
 }
 
 console.log('ok - selection scope restoration is persisted and consumed once (Chrome + Firefox)');

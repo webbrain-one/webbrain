@@ -765,6 +765,8 @@ export default {
   "sp.attach.too_large": "{name} terlalu besar untuk dilampirkan (maks {max}).",
   "sp.attach.unsupported_type": "{name} bukan tipe lampiran yang didukung — hanya gambar, PDF, JSON, TXT, dan CSV yang didukung.",
   "sp.attach.read_failed": "Tidak dapat membaca {name}.",
+  "sp.attach.needs_prompt": "Tambahkan pertanyaan untuk dikirim bersama lampiran Anda.",
+  "sp.attach.no_tab": "Tidak ada tab aktif untuk melampirkan teks yang dipilih.",
   "sp.queue.label": "Dalam antrean",
   "sp.queue.label_numbered": "Dalam antrean {index}",
   "sp.queue.edit": "Edit pesan antrean",

@@ -765,6 +765,8 @@ export default {
   "sp.attach.too_large": "{name} terlalu besar untuk dilampirkan (maks {max}).",
   "sp.attach.unsupported_type": "{name} bukan jenis lampiran yang disokong — hanya imej, PDF, JSON, TXT dan CSV disokong.",
   "sp.attach.read_failed": "Tidak dapat membaca {name}.",
+  "sp.attach.needs_prompt": "Tambah soalan untuk dihantar bersama lampiran anda.",
+  "sp.attach.no_tab": "Tiada tab aktif untuk melampirkan teks yang dipilih.",
   "sp.queue.label": "Dalam baris gilir",
   "sp.queue.label_numbered": "Dalam baris gilir {index}",
   "sp.queue.edit": "Edit mesej dalam baris gilir",

@@ -116,6 +116,8 @@ export default {
   "sp.attach.too_large": "{name} גדול מדי לצירוף (מקסימום {max}).",
   "sp.attach.unsupported_type": "{name} אינו סוג קובץ נתמך. ניתן לצרף רק תמונות וקובצי PDF, JSON, TXT ו-CSV.",
   "sp.attach.read_failed": "לא ניתן לקרוא את {name}.",
+  "sp.attach.needs_prompt": "הוסיפו שאלה שתישלח יחד עם הקובץ המצורף.",
+  "sp.attach.no_tab": "אין לשונית פעילה שאליה אפשר לצרף את הבחירה.",
   "sp.queue.label": "בתור",
   "sp.queue.label_numbered": "בתור {index}",
   "sp.queue.edit": "ערוך הודעה בתור",

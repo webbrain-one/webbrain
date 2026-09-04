@@ -765,6 +765,8 @@ export default {
   "sp.attach.too_large": "Masyadong malaki ang {name} para i-attach (max {max}).",
   "sp.attach.unsupported_type": "Hindi suportadong uri ng attachment ang {name} — mga image, PDF, JSON, TXT, at CSV file lang ang suportado.",
   "sp.attach.read_failed": "Hindi mabasa ang {name}.",
+  "sp.attach.needs_prompt": "Magdagdag ng tanong na ipapadala kasama ng iyong attachment.",
+  "sp.attach.no_tab": "Walang aktibong tab kung saan maidudugtong ang piniling teksto.",
   "sp.queue.label": "Naka-queue",
   "sp.queue.label_numbered": "Naka-queue {index}",
   "sp.queue.edit": "I-edit ang naka-queue na mensahe",

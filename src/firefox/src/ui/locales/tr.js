@@ -770,6 +770,8 @@ export default {
   "sp.attach.too_large": "{name} eklemek için çok büyük (en fazla {max}).",
   "sp.attach.unsupported_type": "{name} desteklenen bir ek türü değil — yalnızca görseller, PDF, JSON, TXT ve CSV dosyaları desteklenir.",
   "sp.attach.read_failed": "{name} okunamadı.",
+  "sp.attach.needs_prompt": "Ekinizle birlikte göndermek için bir soru yazın.",
+  "sp.attach.no_tab": "Seçimi ekleyebileceğiniz etkin bir sekme yok.",
   "sp.queue.label": "Kuyrukta",
   "sp.queue.label_numbered": "Kuyrukta {index}",
   "sp.queue.edit": "Kuyruktaki mesajı düzenle",

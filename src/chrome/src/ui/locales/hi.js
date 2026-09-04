@@ -116,6 +116,8 @@ export default {
   'sp.attach.too_large': "{name} संलग्न करने के लिए बहुत बड़ा है (अधिकतम {max})।",
   'sp.attach.unsupported_type': "{name} एक समर्थित अनुलग्नक प्रकार नहीं है - केवल छवियां, PDF, JSON, TXT और CSV फ़ाइलें समर्थित हैं।",
   'sp.attach.read_failed': "{name} नहीं पढ़ सका.",
+  'sp.attach.needs_prompt': 'अपने अटैचमेंट के साथ भेजने के लिए एक सवाल लिखें।',
+  'sp.attach.no_tab': 'चयनित टेक्स्ट को जोड़ने के लिए कोई सक्रिय टैब नहीं है।',
   'sp.queue.label': "कतारबद्ध",
   'sp.queue.label_numbered': "कतारबद्ध {index}",
   'sp.queue.edit': "पंक्तिबद्ध संदेश संपादित करें",

@@ -765,6 +765,8 @@ export default {
   "sp.attach.too_large": "{name} كبير جدًا لإرفاقه (الحد الأقصى {max}).",
   "sp.attach.unsupported_type": "{name} ليس نوع مرفق مدعومًا — الملفات المدعومة فقط هي الصور وPDF وJSON وTXT وCSV.",
   "sp.attach.read_failed": "تعذرت قراءة {name}.",
+  "sp.attach.needs_prompt": "أضف سؤالاً لإرساله مع المرفق.",
+  "sp.attach.no_tab": "لا توجد علامة تبويب نشطة لإرفاق النص المحدد بها.",
   "sp.queue.label": "في قائمة الانتظار",
   "sp.queue.label_numbered": "في قائمة الانتظار {index}",
   "sp.queue.edit": "تعديل الرسالة في قائمة الانتظار",

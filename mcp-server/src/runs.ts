@@ -134,6 +134,50 @@ export async function awaitSettled(
   return { snapshot: last, timedOut: true };
 }
 
+type PendingInput = NonNullable<CloudSnapshot["pendingInput"]>;
+
+const STRUCTURED_PROMPT_KINDS = ["permission", "submitConfirmation", "workflowHealing"] as const;
+
+/**
+ * An extension older than the `promptKind` protocol sends no discriminator at
+ * all, and the npm package updates independently of the browser store listing,
+ * so that skew is routine. Refusing those prompts would break every
+ * human-in-the-loop gate until the extension caught up, so a *missing* kind
+ * falls back to the payload shape the kind used to be inferred from. A kind
+ * that is present but unrecognized is a genuinely newer gate this client cannot
+ * render, and is still refused.
+ */
+function resolvePromptKind(pending: PendingInput): string {
+  const declared = typeof pending.promptKind === "string" ? pending.promptKind.trim() : "";
+  if (declared) return declared;
+  for (const kind of STRUCTURED_PROMPT_KINDS) {
+    const details = pending[kind];
+    if (details && typeof details === "object") return kind;
+  }
+  return "clarify";
+}
+
+/**
+ * `options` carries the choices a generic renderer can show, which is not the
+ * same as the set the extension accepts. A workflow healing prompt's real
+ * answers are the candidate ids inside its payload — `options` lists only the
+ * `deny` escape hatch, and relaying that alone would make every heal a refusal.
+ */
+function allowedAnswers(kind: string, pending: PendingInput): string[] {
+  const options = Array.isArray(pending.options) ? pending.options.map(String).filter(Boolean) : [];
+  if (kind !== "workflowHealing") return options;
+  const details = pending.workflowHealing as { candidates?: unknown } | undefined;
+  const candidates = Array.isArray(details?.candidates) ? details.candidates : [];
+  const ids = candidates
+    .map((candidate) => (
+      candidate && typeof candidate === "object"
+        ? String((candidate as { id?: unknown }).id ?? "")
+        : ""
+    ))
+    .filter(Boolean);
+  return [...ids, ...options.filter((option) => !ids.includes(option))];
+}
+
 /** Render a snapshot as the text an calling agent actually needs to read. */
 export function describeSnapshot(snapshot: CloudSnapshot, timedOut = false): string {
   const lines: string[] = [];
@@ -143,16 +187,49 @@ export function describeSnapshot(snapshot: CloudSnapshot, timedOut = false): str
   if (snapshot.finalUrl) lines.push(`final_url: ${snapshot.finalUrl}`);
 
   if (snapshot.status === "needs_user_input" && snapshot.pendingInput) {
-    const clarifyId = snapshot.pendingInput.clarifyId || snapshot.pendingInput.clarify_id || "";
-    const question = snapshot.pendingInput.question || "(no question text supplied)";
+    const pending = snapshot.pendingInput;
+    const promptKind = resolvePromptKind(pending);
+    const clarifyId = pending.clarifyId || pending.clarify_id || "";
+    const question = pending.question || "(no question text supplied)";
     lines.push("");
     lines.push("WebBrain is waiting on a human decision before it continues.");
-    lines.push(`question: ${question}`);
+    lines.push(`prompt_kind: ${promptKind}`);
     lines.push(`clarify_id: ${clarifyId}`);
-    lines.push(
-      "Relay this to the user and send their answer with webbrain_respond. " +
-        "Do not invent an answer on their behalf.",
-    );
+    let supported = true;
+    switch (promptKind) {
+      case "permission":
+      case "submitConfirmation":
+      case "workflowHealing": {
+        const options = allowedAnswers(promptKind, pending);
+        if (options.length) lines.push(`allowed_answers: ${options.join(", ")}`);
+        const details = pending[promptKind];
+        if (details && typeof details === "object") {
+          lines.push(`structured_prompt: ${JSON.stringify(details)}`);
+        }
+        break;
+      }
+      case "clarify": {
+        const options = allowedAnswers(promptKind, pending);
+        if (options.length) lines.push(`suggested_answers: ${options.join(", ")}`);
+        break;
+      }
+      default:
+        supported = false;
+        // The question text is withheld on purpose: printing it invites the
+        // model to answer an unrecognized gate as if it were free-form text,
+        // which is exactly what the discriminator exists to prevent.
+        lines.push(
+          "This prompt kind is unsupported by this client. Do not send a free-form answer; " +
+            "update the client before calling webbrain_respond.",
+        );
+    }
+    if (supported) {
+      lines.push(`question: ${question}`);
+      lines.push(
+        "Relay this to the user and send their answer with webbrain_respond. " +
+          "Do not invent an answer on their behalf.",
+      );
+    }
   }
 
   if (snapshot.error) {

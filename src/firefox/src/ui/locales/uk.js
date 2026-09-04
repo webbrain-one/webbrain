@@ -765,6 +765,8 @@ export default {
   "sp.attach.too_large": "{name} завеликий для вкладення (макс. {max}).",
   "sp.attach.unsupported_type": "{name} не є підтримуваним типом вкладення — підтримуються лише зображення, PDF, JSON, TXT і CSV.",
   "sp.attach.read_failed": "Не вдалося прочитати {name}.",
+  "sp.attach.needs_prompt": "Додайте запитання, щоб надіслати його разом із вкладенням.",
+  "sp.attach.no_tab": "Немає активної вкладки, до якої можна прикріпити виділений текст.",
   "sp.queue.label": "У черзі",
   "sp.queue.label_numbered": "У черзі {index}",
   "sp.queue.edit": "Редагувати повідомлення в черзі",

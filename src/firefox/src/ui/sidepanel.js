@@ -42,7 +42,7 @@ import { buildMessageInfoPills } from '../message-info.js';
 import { escapeHtml } from './utils.js';
 import { createOfflineRagReadinessController } from './offline-rag-readiness.js';
 import {
-  buildSelectionComposerDraft,
+  buildSelectionTextAttachment,
   selectionIsQuoteable,
   selectionRangeIsVisible,
   selectionRangeRect,
@@ -8284,6 +8284,11 @@ async function sendMessage(extraChatParams = {}) {
       await releaseOwnedContextMenuClaim({ reason: 'preflight-empty', retryAfterMs: 1_000 });
       return false;
     }
+    // Attachments alone cannot start a run and Send stays enabled while idle, so
+    // a staged chip with an empty composer would otherwise fail silently.
+    if (getPendingAttachmentsForTab(undefined, { create: false }).length) {
+      showComposerToast(t('sp.attach.needs_prompt'));
+    }
     return;
   }
   if (agentPrompt) text = agentPrompt;
@@ -11336,12 +11341,37 @@ function askAboutSelectedAnswer() {
     dismissSelectionAskAction();
     return;
   }
-  const nextDraft = buildSelectionComposerDraft(selection.text, inputEl.value);
-  if (nextDraft === inputEl.value) {
+  const attachment = buildSelectionTextAttachment(selection.text);
+  if (!attachment || attachment.size > MAX_TEXT_ATTACHMENT_BYTES) {
     dismissSelectionAskAction();
+    if (attachment) {
+      addMessage('system', systemHtml(tSystemHtml('sp.attach.too_large', {
+        name: attachment.name,
+        max: '5MB',
+      })));
+    }
     return;
   }
-  inputEl.value = nextDraft;
+  const tabId = normalizeAttachmentTabId(renderedTabId ?? currentTabId);
+  if (tabId == null) {
+    dismissSelectionAskAction();
+    showComposerToast(t('sp.attach.no_tab'));
+    return;
+  }
+  const pending = getPendingAttachmentsForTab(tabId);
+  // Re-adding the same snippet is a no-op, so repeated clicks cannot pile up
+  // identical chips. A *different* snippet gets its own chip instead of
+  // overwriting the previous one: replacing by filename would silently drop an
+  // earlier selection the user still expects to send, and would clobber an
+  // uploaded file that happens to share the name.
+  const alreadyStaged = pending.some(att => att?.kind === 'text' && att?.textContent === attachment.textContent);
+  if (!alreadyStaged) {
+    const takenNames = new Set(pending.map(att => att?.name));
+    let name = attachment.name;
+    for (let suffix = 2; takenNames.has(name); suffix += 1) name = `selected-text-${suffix}.txt`;
+    pending.push({ ...attachment, name });
+  }
+  renderAttachmentPreviews();
   dismissSelectionAskAction();
   window.getSelection?.()?.removeAllRanges();
   handleInput();

@@ -110,6 +110,18 @@ in Chromium browsers only, not Firefox.
 | `webbrain_abort` | Stop a run. Actions already taken are not undone. |
 | `webbrain_connection` | Report whether the extension is attached, and how to fix it if not. |
 
+When a run pauses for an ordinary clarification, relay the question and pass the
+user's answer verbatim to `webbrain_respond`. Permission prompts are structured:
+after the user explicitly decides, send the exact stable value `once`, `always`,
+or `deny`. A normal approval maps to `once`; use `always` only when the user
+explicitly requests a persistent grant. Localized labels such as "allow" must
+not be forwarded as the permission value because the extension deliberately
+fails closed on unknown decisions.
+
+Form-submission confirmations and saved-workflow repair prompts are structured
+the same way, and fail closed the same way. Each lists the values it accepts on
+a `decisions:` line in the status text — send one of those exactly.
+
 ### Example
 
 > "Open my Stripe dashboard and list last week's failed payments."
@@ -183,6 +195,16 @@ npm run build && node --test test/bridge.test.mjs
 ```
 
 The suite stands up the real listener and connects a fake extension speaking the exact frames `src/chrome/src/offscreen/cloud-bridge.js` emits — handshake, id correlation under concurrency, error propagation, disconnect mid-command, and the poll/timeout/clarify paths. If the extension's wire format changes, these fail. That is intentional.
+
+For manual poking, [`scripts/fake-extension.mjs`](scripts/fake-extension.mjs) is
+the same fake as a standalone process — run the server, then:
+
+```bash
+node scripts/fake-extension.mjs
+```
+
+It logs every frame in both directions, so you can watch what your MCP client
+actually sends without Chrome in the loop.
 
 ## License
 

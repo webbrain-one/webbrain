@@ -241,6 +241,15 @@ while (steps < maxSteps) {
 }
 ```
 
+When an interactive, tool-capable run exhausts its configured agent steps
+without a terminal answer, the browser loop stays closed and WebBrain performs
+one context-only handoff with only `done` available. That terminal schema permits
+`partial` or `failed`, never `success`; invalid output falls back to the
+deterministic step-limit summary. This also applies to the selected WebBrain
+Compass provider without changing its advisory in-loop observation checkpoints.
+Structured Cloud API runs keep their separate `done_json` output contract and do
+not enter this handoff.
+
 ### Ask-only provider streaming
 
 `chatMainTurn()` normally delegates to the established cost-aware
