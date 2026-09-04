@@ -65,6 +65,11 @@ for (const relativePath of [
     `${relativePath}: deferred restoration consume is not wired into both execution loops`,
   );
   assert.equal(
+    (source.match(/if \(!gateOutcome\.proceed\) \{[\s\S]*?return[\s\S]*?\}\s*[\s\S]*?if \(gateOutcome\.responseOnly === true\) \{[\s\S]*?return[\s\S]*?\}\s*[\s\S]*?if \(this\._consumeSelectionGroundingRestoration\(tabId, enriched\)\) \{\s*this\._persist\(tabId\);\s*\}/g) || []).length,
+    2,
+    `${relativePath}: deferred restoration consume must remain ordered after both proceed and responseOnly exits`,
+  );
+  assert.equal(
     (source.match(/this\._consumeSelectionGroundingRestoration\(tabId, submittedUserMessage\);/g) || []).length,
     0,
     `${relativePath}: premature restoration consume remains in _maybeRunPlannerGate`,
