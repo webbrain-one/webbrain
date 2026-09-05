@@ -5288,13 +5288,18 @@
             gmailComposeFlow,
             composerSubject,
             composerSubjectAvailable,
-          })
+        })
         : '';
+      let composerRef = '';
+      try {
+        if (typeof window.__wb_ax_ref === 'function') composerRef = window.__wb_ax_ref(composer) || '';
+      } catch {}
       return {
         success: true,
         messageSend: observationOnly ? false : messageSend === true,
         conclusive: true,
         composerAvailable: true,
+        ...(composerRef ? { composerRef } : {}),
         composerEmpty: composerText.replace(/[\u200b-\u200d\ufeff]/g, '').trim() === '',
         messageBody,
         messageBodyBaselineCount,
@@ -5354,6 +5359,14 @@
       'announce_rich_text_toolbar_focused_child_frame': () => _announceRichTextToolbarFocusedChildFrame(msg.params || {}),
       'blur_rich_text_toolbar_target': () => _blurRichTextToolbarTarget(msg.params || {}),
       'probe_message_recipient_guard': () => _probeMessageRecipientGuard(msg.params || {}),
+      'observe_chat': () => {
+        if (typeof window.__wb_observe_chat_dom !== 'function') {
+          return { success: false, error: 'chat-observation.js not injected' };
+        }
+        const params = msg.params && typeof msg.params === 'object' ? msg.params : {};
+        const probe = _probeMessageRecipientGuard({ ...params, tool: 'observe_active_conversation', args: {} });
+        return window.__wb_observe_chat_dom({ ...params, probe });
+      },
       'press_keys': () => pressKeys(msg.params || {}, actionDeadlineExpired),
       'scroll': () => scrollPage(msg.params || {}, actionDeadlineExpired),
       'extract_data': () => extractData(msg.params || {}),

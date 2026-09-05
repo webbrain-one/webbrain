@@ -44,6 +44,7 @@ import {
   workflowRequiredRowsAreProcessed,
 } from './adapter-workflow-evidence.js';
 import { messageTargetMatchesObservedIdentities, normalizeMessageTarget } from './message-recipient-guard.js';
+import { advanceChatSession, createChatSession, decideChatSend, markChatSendPending, normalizeChatSession, serializeChatSession } from './chat-workflow.js';
 import {
   fetchUrl,
   executeHttpSkillTool,
@@ -400,6 +401,7 @@ const HUMANIZER_SKILL_SITE_ADAPTERS = new Set([
 ]);
 const SET_CHECKED_VERIFY_DELAY_MS = 80;
 const COMPLETION_DOCUMENT_OBSERVATION_TOOLS = new Set([
+  'chat_observe',
   'auto_screenshot',
   'get_accessibility_tree',
   'read_page',
@@ -418,6 +420,7 @@ const COMPLETION_DOCUMENT_OBSERVATION_TOOLS = new Set([
   'full_page_screenshot',
 ]);
 const COMPLETION_DOCUMENT_URL_TOOLS = new Set([
+  'chat_observe',
   'auto_screenshot',
   'get_accessibility_tree',
   'read_page',
@@ -631,6 +634,7 @@ export class Agent extends LoopDetector {
     this.progressPageScopes = new Map(); // tabId -> normalized page identity for scoped progress task keys
     this.progressSessions = new Map(); // tabId -> active language-neutral progress intent/session
     this.progressExpectedItems = new Map(); // tabId -> planner-declared count/field contract
+    this.chatSessions = new Map(); // tabId -> in-memory support-chat workflow state
     this._progressSessionCounter = 0;
     this.conversationModes = new Map(); // tabId -> 'ask' | 'act' | 'dev'
     this._runModeOverrides = new Map(); // tabId -> effective mode for the active run only
@@ -12183,6 +12187,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
   async _hydrateFromSession(tabId) {
     const conversationInMemory = this.conversations.has(tabId);
+    const chatWorkflowInMemory = this.chatSessions.has(tabId);
     try {
       const key = this._convKey(tabId);
       const cloudflareKey = cloudflareManagedChallengeStorageKey(tabId);
@@ -12198,10 +12203,18 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         const cloudflareGate = cloudflareManagedChallengeGateState(cloudflareSignal);
         if (cloudflareGate) this._captchaGateStates.set(tabId, cloudflareGate);
       }
-      if (conversationInMemory) return;
       const entry = stored?.[key];
-      if (entry && Array.isArray(entry.messages) && entry.messages.length > 0) {
-        this.conversations.set(tabId, entry.messages);
+      if (conversationInMemory || chatWorkflowInMemory) {
+        if (!chatWorkflowInMemory && entry?.chatWorkflow && typeof entry.chatWorkflow === 'object') {
+          this.chatSessions.set(tabId, normalizeChatSession(entry.chatWorkflow));
+        }
+        return;
+      }
+      if (entry && ((Array.isArray(entry.messages) && entry.messages.length > 0) || entry.chatWorkflow)) {
+        if (Array.isArray(entry.messages) && entry.messages.length > 0) this.conversations.set(tabId, entry.messages);
+        if (entry.chatWorkflow && typeof entry.chatWorkflow === 'object') {
+          this.chatSessions.set(tabId, normalizeChatSession(entry.chatWorkflow));
+        }
         if (entry.mode) {
           this.conversationModes.set(tabId, entry.mode);
           this._conversationMode = entry.mode;
@@ -12315,7 +12328,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
 
   _conversationStorageEntry(tabId, options = {}) {
     const messages = this.conversations.get(tabId);
-    if (!messages) return null;
+    const chatWorkflow = this.chatSessions.get(tabId);
+    if (!messages && !chatWorkflow) return null;
     const conversationId = this.conversationIds.get(tabId) || null;
     const clarificationGuard = this._clarificationAuthorizationGuards.get(tabId);
     const persistedClarificationGuard = clarificationGuard?.source === 'timeout'
@@ -12340,11 +12354,13 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           },
         }
       : null;
-    const activeTaskBinding = this._activeTaskBinding(messages);
-    const serialized = serializeConversationForSession(messages, {
-      maxBytes: options.maxBytes || SESSION_CONVERSATION_BUDGET_BYTES,
-      preserveMessageIndices: activeTaskBinding.pinnedIndices,
-    });
+    const activeTaskBinding = messages ? this._activeTaskBinding(messages) : { pinnedIndices: [] };
+    const serialized = messages
+      ? serializeConversationForSession(messages, {
+          maxBytes: options.maxBytes || SESSION_CONVERSATION_BUDGET_BYTES,
+          preserveMessageIndices: activeTaskBinding.pinnedIndices,
+        })
+      : { messages: [], compacted: false, bytes: 2 };
     const captchaGateState = this._captchaGateStates.get(tabId) || null;
     return {
       mode: this.conversationModes.get(tabId) || 'ask',
@@ -12352,6 +12368,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       sessionSnapshotCompacted: serialized.compacted,
       sessionSnapshotBytes: serialized.bytes,
       conversationId,
+      chatWorkflow: chatWorkflow ? serializeChatSession(chatWorkflow) : null,
       workflowDraft: this._latestWorkflowDrafts.get(tabId) || null,
       submittedRunRequestId: this.submittedRunRequestIds.get(tabId) || null,
       progressLedger: this.progressLedgers.get(tabId) || [],
@@ -17625,6 +17642,184 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     }
   }
 
+  async _chatObservationParams(tabId) {
+    let pageUrl = '';
+    try { pageUrl = await this._currentUrl(tabId); } catch {}
+    let policy = null;
+    try { policy = getMessageRecipientGuardPolicy(pageUrl); } catch {}
+    return {
+      ...(policy?.adapterName ? { adapterName: policy.adapterName } : {}),
+      supportsRecipientSets: policy?.supportsRecipientSets === true,
+    };
+  }
+
+  _chatWorkflowView(advanced) {
+    return {
+      schema: advanced.session.schema,
+      state: advanced.session.state,
+      threadKey: advanced.snapshot.threadKey,
+      nextAction: advanced.nextAction,
+      events: advanced.events,
+      newMessages: advanced.newMessages,
+      pendingOutbound: !!advanced.session.pendingOutbound,
+      userInput: advanced.session.userInput,
+      resolutionEvidence: advanced.snapshot.resolutionEvidence,
+    };
+  }
+
+  async _readChatObservation(tabId) {
+    try {
+      return await this._sendDevContentAction(
+        tabId,
+        'observe_chat',
+        await this._chatObservationParams(tabId),
+      );
+    } catch (error) {
+      return { success: false, error: error?.message || String(error) };
+    }
+  }
+
+  async _observeChatWorkflow(tabId) {
+    const observation = await this._readChatObservation(tabId);
+    if (observation?.success !== true) return observation;
+    const prior = this.chatSessions.get(tabId) || createChatSession();
+    const advanced = advanceChatSession(prior, observation);
+    this.chatSessions.set(tabId, advanced.session);
+    this._persist(tabId);
+    return {
+      ...observation,
+      chatWorkflow: this._chatWorkflowView(advanced),
+    };
+  }
+
+  async _sendChatWorkflow(tabId, args = {}, onUpdate = null, executionContext = null) {
+    const before = await this._readChatObservation(tabId);
+    if (before?.success !== true) return before;
+    const prior = this.chatSessions.get(tabId) || createChatSession();
+    const observed = advanceChatSession(prior, before);
+    this.chatSessions.set(tabId, observed.session);
+    this._persist(tabId);
+    const workflow = () => this._chatWorkflowView(observed);
+    const requestedThreadKey = String(args.thread_key || args.threadKey || '');
+    if (!requestedThreadKey || requestedThreadKey !== before.threadKey) {
+      return {
+        success: false,
+        noDispatch: true,
+        dispatched: false,
+        reason: 'thread_unverified',
+        error: 'Chat send blocked: pass the exact thread_key from a fresh chat_observe for the intended conversation.',
+        chatWorkflow: workflow(),
+      };
+    }
+    // The observed ref is the only trusted binding. Without it a caller-supplied
+    // ref would be typed into an unverified element, so require both and match.
+    const observedComposerRef = String(before.composer?.ref || '');
+    const requestedComposerRef = String(args.composer_ref || args.composerRef || '');
+    const composerRef = requestedComposerRef || observedComposerRef;
+    if (!observedComposerRef || composerRef !== observedComposerRef) {
+      return {
+        success: false,
+        noDispatch: true,
+        dispatched: false,
+        reason: 'composer_unverified',
+        error: 'Chat send blocked: the active composer ref is missing or changed. Re-observe the conversation before sending.',
+        chatWorkflow: workflow(),
+      };
+    }
+    const decision = decideChatSend(observed.session, before, args.text);
+    if (!decision.ok) {
+      return {
+        ...decision,
+        success: false,
+        noDispatch: true,
+        dispatched: false,
+        chatWorkflow: workflow(),
+      };
+    }
+
+    const pending = markChatSendPending(observed.session, decision);
+    this.chatSessions.set(tabId, pending);
+    const pendingPersisted = await this._persistNow(tabId);
+    if (pendingPersisted !== true && pendingPersisted?.ok !== true) {
+      return {
+        success: false,
+        noDispatch: true,
+        dispatched: false,
+        reason: 'chat_state_not_durable',
+        error: 'Chat send blocked because the pending outbound message could not be persisted safely. Retry after storage is available.',
+        chatWorkflow: this._chatWorkflowView({
+          session: pending,
+          snapshot: before,
+          events: [],
+          newMessages: [],
+          nextAction: 'observe',
+        }),
+      };
+    }
+    let dispatch;
+    try {
+      dispatch = await this.executeTool(tabId, 'set_field', {
+        ref_id: composerRef,
+        text: decision.text,
+        clear: true,
+        submit: true,
+      }, onUpdate, executionContext);
+    } catch (error) {
+      dispatch = {
+        success: false,
+        noDispatch: true,
+        dispatched: false,
+        error: error?.message || String(error),
+      };
+    }
+
+    const after = await this._readChatObservation(tabId);
+    if (after?.success !== true) {
+      return {
+        success: false,
+        sent: false,
+        dispatched: dispatch?.dispatched === true,
+        outcomeUnknown: dispatch?.dispatched !== false && dispatch?.noDispatch !== true,
+        verificationRequired: true,
+        messageKey: decision.messageKey,
+        error: 'Chat send was not independently verified after dispatch. Observe the conversation before retrying.',
+        dispatch,
+        chatWorkflow: {
+          schema: pending.schema,
+          state: pending.state,
+          threadKey: pending.threadKey,
+          nextAction: 'observe',
+          events: [],
+          newMessages: [],
+          pendingOutbound: true,
+          userInput: pending.userInput,
+          resolutionEvidence: pending.resolutionEvidence,
+        },
+      };
+    }
+    const verifiedState = advanceChatSession(pending, after);
+    this.chatSessions.set(tabId, verifiedState.session);
+    this._persist(tabId);
+    const outgoingVerified = verifiedState.newMessages.some(message => (
+      message.direction === 'outgoing' && message.text === decision.text
+    )) && verifiedState.session.pendingOutbound === null;
+    return {
+      ...after,
+      success: outgoingVerified,
+      sent: outgoingVerified,
+      dispatched: dispatch?.dispatched === true || dispatch?.success === true,
+      deliveryVerified: outgoingVerified,
+      verificationRequired: !outgoingVerified,
+      ...(outgoingVerified ? {} : {
+        outcomeUnknown: dispatch?.dispatched !== false && dispatch?.noDispatch !== true,
+        error: 'The composer action completed without a new matching outgoing bubble. Do not retry until chat_observe confirms the result.',
+      }),
+      messageKey: decision.messageKey,
+      dispatch,
+      chatWorkflow: this._chatWorkflowView(verifiedState),
+    };
+  }
+
   async _consumeMessageRecipientDispatchBinding(tabId, binding, params = {}) {
     if (!binding?.token) {
       return {
@@ -19627,6 +19822,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     this.progressPageScopes.delete(tabId);
     this.progressSessions.delete(tabId);
     this.progressExpectedItems.delete(tabId);
+    this.chatSessions.delete(tabId);
     this.selectionGroundingScopes.delete(tabId);
     this.selectionGroundingRestorationPendingTabs.delete(tabId);
     this.responseLanguagePolicies.delete(tabId);
@@ -19710,6 +19906,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     this.progressPageScopes.delete(tabId);
     this.progressSessions.delete(tabId);
     this.progressExpectedItems.delete(tabId);
+    this.chatSessions.delete(tabId);
     this.selectionGroundingScopes.delete(tabId);
     this.selectionGroundingRestorationPendingTabs.delete(tabId);
     this.mastodonStates.delete(tabId);
@@ -24559,6 +24756,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       files: [
         'src/content/rich-text-toolbar-heuristic.js',
         'src/content/accessibility-tree.js',
+        'src/content/chat-observation.js',
         'src/content/content.js',
         'src/content/agent-visual-indicator.js',
       ],
@@ -25776,6 +25974,8 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (name === 'done_json') {
       return handleDoneJson(this.cloudRunContexts.get(tabId), args);
     }
+    if (name === 'chat_observe') return this._observeChatWorkflow(tabId);
+    if (name === 'chat_send') return this._sendChatWorkflow(tabId, args, onUpdate, dispatchContext);
     if (name === 'beep') {
       const watch = this.scheduledRunPolicies.get(tabId)?.watch;
       if (watch?.beep !== true) {
@@ -25951,6 +26151,18 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
           noDispatch: true,
           error: 'Scheduling is not available in this build.',
         };
+      }
+      if (this.chatSessions.has(tabId)) {
+        const chatStatePersisted = await this._persistNow(tabId);
+        if (chatStatePersisted !== true && chatStatePersisted?.ok !== true) {
+          return {
+            success: false,
+            dispatched: false,
+            noDispatch: true,
+            reason: 'chat_state_not_durable',
+            error: 'Resume scheduling blocked because the latest chat workflow state could not be persisted safely.',
+          };
+        }
       }
       let tab = null;
       try { tab = await chrome.tabs.get(tabId); } catch {}

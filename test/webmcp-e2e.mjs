@@ -244,12 +244,9 @@ async function runProtocolSmoke(context, fixtureUrl) {
       assert.equal(failed.status, 'Error');
       const failureText = failed.errorText || failed.exception?.description || '';
       assert.match(failureText, /fixture failure/);
-      await waitForEntry(
-        page,
-        pageErrors,
-        error => error.includes('fixture failure'),
-        'fixture page error',
-      );
+      // The WebMCP response is the authoritative exception signal. Recent
+      // Chrome versions report tool exceptions through WebMCP.toolResponded
+      // without duplicating them as Playwright pageerror events.
 
       await page.evaluate(() => window.webMCPFixture.unregister());
       // Chrome can emit one toolsRemoved event per registration. Wait for the

@@ -54,6 +54,8 @@ export const CAPABILITY_LABEL = {
  * tool is classified as gated, untrusted-read, or explicitly known-safe.
  */
 export const UNTRUSTED_CONTENT_TOOLS = new Set([
+  'chat_observe',
+  'chat_send',
   'read_page',
   'get_accessibility_tree',
   // Skill-gated cross-tab reads return bounded, attacker-controlled email
@@ -239,6 +241,7 @@ export function capabilityFor(name, args) {
  */
 export function capabilitiesFor(name, args) {
   args = args || {};
+  if (name === 'chat_send') return [Capability.TYPE, Capability.CLICK];
   if (name === 'delegate_research') {
     // agent.js substitutes explicit one-use research authorization for these
     // generic prompts only after validating the token.
