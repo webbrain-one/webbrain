@@ -23,40 +23,50 @@
  * additional context.
  */
 
-let pdfjsModule = null;
+import { ensureOffscreen } from '../offscreen/ensure.js';
+import {
+  PDF_EXTRACTION_MESSAGE,
+  PDF_EXTRACTION_READY_MESSAGE,
+  PDF_PASSTHROUGH_MAX_BYTES,
+  bytesToBase64,
+} from './pdf-extraction.js';
 
-/**
- * Lazy-load pdfjs only on first PDF read. The legacy bundle is ~1 MB
- * and the worker is ~2.3 MB; we don't want to pay that startup cost
- * for users who never open a PDF.
- */
-async function getPdfjs() {
-  if (pdfjsModule) return pdfjsModule;
-  pdfjsModule = await import(chrome.runtime.getURL('vendor/pdfjs/pdf.mjs'));
-  // Worker URL must be set BEFORE the first getDocument() call. We resolve
-  // it via runtime.getURL so it works at any extension-id deploy target.
-  pdfjsModule.GlobalWorkerOptions.workerSrc =
-    chrome.runtime.getURL('vendor/pdfjs/pdf.worker.mjs');
-  return pdfjsModule;
+// chrome.offscreen.createDocument() resolves when the document exists, not
+// when its module scripts have registered their listeners. Probe the PDF host
+// for up to one second so the first read after a cold start cannot race it.
+const PDF_HOST_READY_ATTEMPTS = 40;
+const PDF_HOST_READY_RETRY_MS = 25;
+
+function wait(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-/**
- * Cheap byte-array → base64 conversion that doesn't blow the call
- * stack on multi-MB PDFs. fromCharCode.apply has a per-call argument
- * limit (~64k in V8), so we chunk.
- */
-const BASE64_MAX_INPUT_BYTES = 32 * 1024 * 1024; // 32 MB safety cap
-
-function bytesToBase64(bytes) {
-  if (bytes.length > BASE64_MAX_INPUT_BYTES) {
-    throw new Error(`PDF too large for base64 conversion (${bytes.length} bytes, cap ${BASE64_MAX_INPUT_BYTES}).`);
+async function waitForPdfExtractionHost() {
+  let lastError = null;
+  for (let attempt = 0; attempt < PDF_HOST_READY_ATTEMPTS; attempt++) {
+    let refusal = null;
+    try {
+      const response = await chrome.runtime.sendMessage({ type: PDF_EXTRACTION_READY_MESSAGE });
+      if (response?.ready === true) return;
+      // An explicit error means the host answered and refused. Retrying cannot
+      // change the outcome, and reporting it as "not ready" sends whoever is
+      // debugging to the wrong subsystem.
+      if (response?.error) refusal = new Error(response.error);
+    } catch (error) {
+      // No listener: the document went away between ensureOffscreen() seeing it
+      // and this probe. Recreate it rather than retrying into a dead channel.
+      lastError = error;
+      try {
+        await ensureOffscreen();
+      } catch (ensureError) {
+        lastError = ensureError;
+      }
+    }
+    if (refusal) throw refusal;
+    if (attempt + 1 < PDF_HOST_READY_ATTEMPTS) await wait(PDF_HOST_READY_RETRY_MS);
   }
-  let bin = '';
-  const chunk = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunk) {
-    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
-  }
-  return btoa(bin);
+  const detail = lastError?.message ? ` ${lastError.message}` : '';
+  throw new Error(`The offscreen PDF parser did not become ready.${detail}`);
 }
 
 /**
@@ -80,41 +90,6 @@ export function isPdfUrl(url) {
 }
 
 /**
- * Fetch the PDF binary from `url`. Returns a Uint8Array.
- * Throws with a helpful message on failure — file:// URLs in Chrome
- * require the user-toggle "Allow access to file URLs" at
- * chrome://extensions, which we explain instead of leaving the
- * agent guessing.
- */
-export async function fetchPdfBytes(url) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 60000);
-  try {
-    let res;
-    try {
-      res = await fetch(url, { credentials: 'include', signal: controller.signal });
-    } catch (e) {
-      if (typeof url === 'string' && url.startsWith('file://')) {
-        throw new Error(
-          'Cannot fetch local PDF from a file:// URL. WebBrain needs ' +
-          'file-URL access in Chrome: open chrome://extensions, find ' +
-          'WebBrain, click "Details", and enable "Allow access to file URLs". ' +
-          'Then reload the PDF tab and try read_pdf again.'
-        );
-      }
-      throw new Error(`PDF fetch failed: ${e.message}`);
-    }
-    if (!res.ok) {
-      throw new Error(`PDF fetch returned HTTP ${res.status} ${res.statusText}`);
-    }
-    const buf = await res.arrayBuffer();
-    return new Uint8Array(buf);
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-/**
  * Extract text from a PDF.
  *
  * Returns:
@@ -130,91 +105,22 @@ export async function fetchPdfBytes(url) {
  * having to render every page to PNG ourselves.
  */
 export async function extractPdfText(url, opts = {}) {
-  const fromPage = Math.max(1, Math.floor(opts.fromPage || 1));
-  const requestedTo = opts.toPage ? Math.floor(opts.toPage) : fromPage + 49;
-  const maxChars = Math.max(1000, Math.floor(opts.maxChars || 50000));
-
-  const bytes = await fetchPdfBytes(url);
-  const pdfjs = await getPdfjs();
-
-  const loadingTask = pdfjs.getDocument({
-    data: bytes,
-    // Suppress pdfjs's noisy console.warn for "non-embedded font fallback" etc.
-    // We surface real errors via the catch below.
-    verbosity: 0,
+  await ensureOffscreen();
+  await waitForPdfExtractionHost();
+  const response = await chrome.runtime.sendMessage({
+    type: PDF_EXTRACTION_MESSAGE,
+    url,
+    options: {
+      fromPage: opts.fromPage,
+      toPage: opts.toPage,
+      maxChars: opts.maxChars,
+      includeBase64: opts.includeDocument === true,
+    },
   });
-  const pdf = await loadingTask.promise;
-
-  const totalPages = pdf.numPages;
-  const startPage = Math.min(fromPage, totalPages);
-  const endPage = Math.min(totalPages, Math.max(startPage, requestedTo));
-
-  // Best-effort title from the document's metadata dictionary.
-  let title = '';
-  try {
-    const meta = await pdf.getMetadata();
-    title = meta?.info?.Title || '';
-  } catch { /* ignore */ }
-
-  const pages = [];
-  let charCount = 0;
-  let truncated = false;
-  // Last page actually read, so the truncation notice's "read more with
-  // fromPage" advice resolves to a page that was really covered. Reporting
-  // `endPage` after an early `break` would make a caller resume past the
-  // unread pages and silently lose them.
-  let lastRead = startPage - 1;
-
-  for (let i = startPage; i <= endPage; i++) {
-    const page = await pdf.getPage(i);
-    const content = await page.getTextContent();
-
-    // pdfjs returns text items as a flat array with positional info.
-    // For LLM consumption we just join them with spaces — preserving
-    // exact layout would be more accurate but blows the token budget.
-    const pageText = content.items
-      .map((item) => (item && typeof item.str === 'string' ? item.str : ''))
-      .join(' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-
-    if (charCount + pageText.length > maxChars) {
-      const remaining = Math.max(0, maxChars - charCount);
-      pages.push(pageText.slice(0, remaining) + '… [page truncated, use read_pdf with fromPage to read more]');
-      lastRead = i;
-      truncated = true;
-      break;
-    }
-
-    pages.push(pageText);
-    charCount += pageText.length;
-    lastRead = i;
-
-    // Free per-page resources — pdfjs caches aggressively otherwise.
-    page.cleanup?.();
+  if (!response?.ok || !response.result) {
+    throw new Error(response?.error || 'The offscreen PDF parser returned no result.');
   }
-
-  // Heuristic: <100 chars across the whole requested range almost certainly
-  // means the pages are scanned images with no text layer. Tell the model.
-  const hasExtractableText = pages.join('\n').length > 100;
-
-  return {
-    success: true,
-    title,
-    totalPages,
-    fromPage: startPage,
-    toPage: lastRead,
-    pageCount: pages.length,
-    pages,
-    hasExtractableText,
-    truncated,
-    byteLength: bytes.length,
-    // The raw bytes are kept on `_pdfBytes` for the Tier 2 Claude
-    // passthrough path; the batch loop strips it before stringifying
-    // so the LLM doesn't see ~1 MB of base64 nonsense in the tool
-    // result text.
-    _pdfBytes: bytes,
-  };
+  return response.result;
 }
 
 /**
@@ -236,21 +142,24 @@ export function providerSupportsPdfPassthrough(provider) {
 }
 
 /**
- * Build the `document` content block for the Anthropic Messages API
- * from raw PDF bytes. Caller is responsible for size-checking — Claude's
- * cap is ~32 MB base64 / ~24 MB binary as of writing, but we cap
- * lower (16 MB binary) to leave room for the rest of the conversation.
+ * Build the `document` content block for the Anthropic Messages API from
+ * raw PDF bytes or base64 produced from those same bytes. Caller is
+ * responsible for size-checking — Claude's cap is ~32 MB base64 / ~24 MB
+ * binary as of writing, but we cap lower (16 MB binary) to leave room for
+ * the rest of the conversation.
  */
-export function buildClaudeDocumentBlock(bytes, name) {
+export function buildClaudeDocumentBlock(bytesOrBase64, name) {
   return {
     type: 'document',
     source: {
       type: 'base64',
       media_type: 'application/pdf',
-      data: bytesToBase64(bytes),
+      data: typeof bytesOrBase64 === 'string'
+        ? bytesOrBase64
+        : bytesToBase64(bytesOrBase64),
     },
     ...(name ? { title: name } : {}),
   };
 }
 
-export const PDF_PASSTHROUGH_MAX_BYTES = 16 * 1024 * 1024; // 16 MB
+export { PDF_PASSTHROUGH_MAX_BYTES };

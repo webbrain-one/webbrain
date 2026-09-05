@@ -5,6 +5,7 @@
  * and the set of `reasons` declared at createDocument time is fixed — you
  * cannot add reasons later. So both consumers of the offscreen document
  * (the localhost-fetch proxy in offscreen.js, local WebGPU inference worker,
+ * PDF text extraction in pdf-extraction-host.js,
  * offline SQLite/E5 retrieval workers,
  * large-file staging in
  * skill-download.js, Emergency Box downloads in emergency-download-host.js,
@@ -46,7 +47,7 @@ const OFFSCREEN_REASONS = [
   'AUDIO_PLAYBACK',
 ];
 const OFFSCREEN_JUSTIFICATION =
-  'Proxy localhost requests; run local WebGPU models and offline reference search; stage validated large downloads; capture active tab and mic; maintain a localhost controller WebSocket; play conditional watch alerts.';
+  'Proxy localhost requests; parse PDFs; run local WebGPU models and offline reference search; stage validated large downloads; capture active tab and mic; maintain a localhost controller WebSocket; play conditional watch alerts.';
 
 let ready = false;
 let inflight = null;

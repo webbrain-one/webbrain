@@ -4,6 +4,7 @@
   <!--
     Single offscreen document hosting:
       • offscreen.js — fetch proxy for localhost LLM servers (existing)
+      • pdf-extraction-host.js — lazy PDF.js host for Agent text extraction
       • offline-rag-host.js — worker-capable SQLite and semantic retrieval
       • vision-inference-host.js — local WebGPU model worker bridge
       • skill-download.js — validated large-file staging through OPFS + blob URLs
@@ -23,6 +24,7 @@
     AUDIO_PLAYBACK (watch alerts).
   -->
   <script src="offscreen.js"></script>
+  <script type="module" src="pdf-extraction-host.js"></script>
   <script type="module" src="offline-rag-host.js"></script>
   <script type="module" src="emergency-download-host.js"></script>
   <script type="module" src="apocalypse-download-host.js"></script>

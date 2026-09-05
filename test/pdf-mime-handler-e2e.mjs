@@ -65,12 +65,14 @@ function createMinimalPdf() {
 
 async function startPdfServer() {
   const pdf = createMinimalPdf();
+  let requestCount = 0;
   const server = createServer((request, response) => {
     const url = new URL(request.url || '/', 'http://127.0.0.1');
     if (url.pathname !== '/document.pdf') {
       response.writeHead(404).end('not found');
       return;
     }
+    requestCount += 1;
     response.writeHead(200, {
       'content-type': pdfMimeType,
       'content-length': String(pdf.byteLength),
@@ -87,6 +89,8 @@ async function startPdfServer() {
   assert.ok(address && typeof address === 'object');
   return {
     server,
+    pdf,
+    requestCount: () => requestCount,
     url: `http://127.0.0.1:${address.port}/document.pdf`,
   };
 }
@@ -158,6 +162,50 @@ async function main() {
       && typeof chrome.mimeHandler?.setMimeHandlerOptions === 'function'
     ));
     assert.equal(apiAvailable, true, `Chrome ${browser.version()} does not expose the public MIME handler options API.`);
+
+    const ensured = await settings.evaluate(async () => chrome.runtime.sendMessage({
+        target: 'background',
+        action: 'ensure_offscreen_offline_rag_host',
+      }));
+    assert.equal(ensured?.ready, true, 'The background did not create the shared offscreen host.');
+
+    const rejected = await settings.evaluate(async url => chrome.runtime.sendMessage({
+        type: 'offscreen-pdf-extract',
+        url,
+        options: { fromPage: 1, toPage: 1, maxChars: 5000 },
+      }), fixture.url);
+    assert.equal(rejected?.ok, false, 'An extension page bypassed the background-only PDF extraction gate.');
+    assert.match(rejected?.error || '', /Unauthorized PDF extraction sender/);
+    assert.equal(fixture.requestCount(), 0, 'An unauthorized PDF extraction request reached the network.');
+
+    const backgroundUrl = `chrome-extension://${extensionId}/src/background.js`;
+    // serviceWorkers() is a snapshot: Playwright may not have observed the
+    // worker yet, and Chrome can idle it out during the steps above.
+    let background = context.serviceWorkers().find(worker => worker.url() === backgroundUrl);
+    if (!background) {
+      background = await context.waitForEvent('serviceworker', {
+        predicate: worker => worker.url() === backgroundUrl,
+        timeout: 10000,
+      }).catch(() => null);
+    }
+    assert.ok(background, 'The WebBrain service worker was not available for the PDF extraction test.');
+    const ready = await background.evaluate(async () => chrome.runtime.sendMessage({
+      type: 'offscreen-pdf-extract-ready',
+    }));
+    assert.equal(ready?.ready, true, ready?.error || 'The offscreen PDF parser did not become ready.');
+
+    const requestsBeforeExtraction = fixture.requestCount();
+    const extraction = await background.evaluate(async url => chrome.runtime.sendMessage({
+      type: 'offscreen-pdf-extract',
+      url,
+      options: { fromPage: 1, toPage: 1, maxChars: 5000, includeBase64: true },
+    }), fixture.url);
+    assert.equal(extraction?.ok, true, extraction?.error || 'The offscreen PDF parser failed.');
+    assert.equal(fixture.requestCount() - requestsBeforeExtraction, 1, 'Claude-compatible extraction fetched the PDF more than once.');
+    assert.equal(extraction.result?.totalPages, 1);
+    assert.equal(extraction.result?.byteLength, fixture.pdf.byteLength);
+    assert.match(extraction.result?.pages?.[0] || '', /WebBrain PDF MIME handler test/);
+    assert.deepEqual(Buffer.from(extraction.result?._pdfBase64 || '', 'base64'), fixture.pdf);
 
     await waitForNativeHandlerOption(settings, false);
     // Installation initially registers public MIME handlers as enabled. Allow

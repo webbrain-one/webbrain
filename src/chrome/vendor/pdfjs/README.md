@@ -4,7 +4,7 @@ Mozilla PDF.js, used by `src/agent/pdf-tools.js` to extract text from
 PDFs the user is viewing in their browser. The Chrome PDF viewer is a
 `chrome-extension://` page that our content scripts can't inject into,
 so instead of trying to scrape the viewer's DOM we fetch the PDF
-binary and parse it with pdfjs in the service worker.
+binary and parse it with pdfjs in the shared offscreen document.
 
 ## Source
 
@@ -31,7 +31,9 @@ differently in the worker context). Worth the size for the resilience.
 
 ## How it's loaded
 
-`pdf-tools.js` does a lazy dynamic import on the first PDF read:
+`src/offscreen/pdf-extraction-host.js` does a lazy dynamic import on the first
+PDF read. PDF.js must run in an extension page because the Chrome MV3 service
+worker rejects dynamic `import()`:
 
 ```js
 const pdfjs = await import(chrome.runtime.getURL('vendor/pdfjs/pdf.mjs'));
@@ -44,8 +46,16 @@ pdfjs.GlobalWorkerOptions.workerSrc =
   chrome.runtime.getURL('vendor/pdfjs/pdf.worker.mjs');
 ```
 
-Both files are listed in `manifest.json`'s `web_accessible_resources`
-so `chrome.runtime.getURL` returns a fetchable URL.
+The Agent's `read_pdf` facade ensures the shared offscreen document, waits for
+an explicit ready response, and then sends the PDF URL plus bounded page
+options. The host accepts requests only from the extension's background
+service worker and only fetches `http:`, `https:`, or `file:` URLs. For Claude
+passthrough, it encodes the same fetched bytes before PDF.js transfers the
+buffer to its worker, so text extraction and the document attachment cannot
+diverge. Both PDF.js files are listed in `manifest.json`'s
+`web_accessible_resources`, so `chrome.runtime.getURL` returns a fetchable URL
+without loading the multi-megabyte modules during ordinary service-worker
+startup.
 
 ## Updating
 
