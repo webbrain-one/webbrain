@@ -62,5 +62,9 @@ web/assets/_backup/
 # Local Wasm build work tree (scripts/build-zim-xapian.mjs)
 .build/
 
+# Unpacked dev extension builds (scripts/build-unpacked.mjs) — load from
+# here during development; never publish to stores (use npm run build:zip).
+build/
+
 # Mobile app (local dev)
 mobile/

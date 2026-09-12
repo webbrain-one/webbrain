@@ -47,9 +47,12 @@ git clone https://github.com/webbrain-one/webbrain.git
 
 **Chrome** — open `chrome://extensions/`, enable **Developer mode** (top
 right), click **Load unpacked**, and select the `webbrain/src/chrome` folder.
+For an isolated copy that won't pick up stray working-tree files, run
+`npm run build:chrome` first and load `webbrain/build/chrome` instead.
 
 **Firefox** — open `about:debugging#/runtime/this-firefox`, click **Load
-Temporary Add-on**, and select `src/firefox/manifest.json`. Temporary add-ons
+Temporary Add-on**, and select `src/firefox/manifest.json` (or
+`build/firefox/manifest.json` after `npm run build:firefox`). Temporary add-ons
 are removed when Firefox restarts; permanent installation requires signing via
 [addons.mozilla.org](https://addons.mozilla.org).
 
