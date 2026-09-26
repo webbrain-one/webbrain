@@ -10,6 +10,7 @@ import {
   WebGPUProvider,
   WebGPUVisionProvider,
   WEBGPU_COMPASS_TINY_V2_MODEL_ID,
+  WEBGPU_COMPASS_TINY_XS_V3_MODEL_ID,
   WEBGPU_DTYPE,
   WEBGPU_MODEL_ID,
   WEBGPU_RUNTIME_BITGPU,
@@ -92,7 +93,7 @@ const OPENCODE_LEGACY_DEFAULT_MODEL = 'ring-2.6-1t-free';
 const SUPPORTED_PROVIDER_TYPES = new Set(['llamacpp', 'webgpu', 'openai', 'azure_openai', 'aws_bedrock', 'anthropic', 'anthropic_oauth', 'vertex_anthropic']);
 const SAFE_PROVIDER_ID_RE = /^[A-Za-z0-9_-]+$/;
 const ROUTER_PROVIDER_IDS = ['openrouter', 'cloudflare', 'nvidia', 'groq', 'huggingface', 'fireworks', 'together'];
-const PROVIDER_CREDENTIAL_KEYS = ['apiKey', 'accessKeyId', 'secretAccessKey', 'sessionToken'];
+const PROVIDER_CREDENTIAL_KEYS = ['apiKey', 'accessKeyId', 'secretAccessKey', 'sessionToken', 'hfToken'];
 const PROVIDER_COST_KEYS = [
   'inputCostPerMillionUsd',
   'cacheReadCostPerMillionUsd',
@@ -1949,6 +1950,11 @@ export class ProviderManager {
       if (!Object.hasOwn(updates, 'dtype')) {
         merged.dtype = preset?.dtype || WEBGPU_DTYPE;
       }
+    }
+    if (id === 'webgpu' && merged.model === WEBGPU_COMPASS_TINY_XS_V3_MODEL_ID) {
+      merged.contextWindow = Math.min(4096, Math.max(1024, Number(merged.contextWindow) || 4096));
+      merged.maxOutputTokens = Math.min(2048, Math.max(1, Number(merged.maxOutputTokens) || 2048));
+      merged.dtype = 'fp16';
     }
     if (this._providerDefinitionId(id, current) === 'ollama') {
       merged.visionMode = OLLAMA_VISION_MODES.has(merged.visionMode) ? merged.visionMode : 'auto';

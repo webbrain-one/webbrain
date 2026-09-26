@@ -391,6 +391,8 @@ export default {
   'st.provider.field.api_base_url': 'URL ฐานของ API',
   'st.provider.field.api_format': 'รูปแบบ API',
   'st.provider.field.api_key': 'คีย์ API',
+  'st.provider.field.hf_read_token': 'Hugging Face read token (optional, download only)',
+  'st.providers.webgpu_xs_note': 'Tiny XS v3 is a private, noncommercial research preview: native Spark FP16 / FP32 GEMM, 4K context, about 3.96 GB download. Save an authorized Hugging Face read token in Settings → Providers → WebGPU before downloading. Requires shader-f16; validated on RTX 5090. No cloud fallback.',
   'st.provider.field.model': 'โมเดล',
   'st.provider.field.model_optional': 'โมเดล (ไม่บังคับ)',
   'st.provider.field.supports_vision': 'โมเดลรองรับการมองเห็น (มัลติโมดัล)',

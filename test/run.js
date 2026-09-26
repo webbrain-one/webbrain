@@ -987,6 +987,8 @@ const {
   WEBGPU_NANBEIGE42_3B_MODEL_ID,
   WEBGPU_MINICPM5_2B_MODEL_ID,
   WEBGPU_COMPASS_TINY_V2_MODEL_ID,
+  WEBGPU_COMPASS_TINY_XS_V3_MODEL_ID,
+  WEBGPU_TEXT_UI_MODEL_IDS,
   WEBGPU_BONSAI27_MODEL_ID,
   WEBGPU_MODEL_ID,
   WEBGPU_MODEL_PRESETS,
@@ -64176,6 +64178,7 @@ test('Chrome exposes separate endpoint-free WebGPU text and vision providers', a
       { id: WEBGPU_NANBEIGE42_3B_MODEL_ID, label: 'Nanbeige4.2-3B', runtime: 'onnx', contextWindow: 4096, supportsVision: false },
       { id: WEBGPU_MINICPM5_2B_MODEL_ID, label: 'MiniCPM5-2B', runtime: 'onnx', contextWindow: 16384, supportsVision: false },
       { id: WEBGPU_COMPASS_TINY_V2_MODEL_ID, label: 'Compass Tiny v2.1', runtime: 'onnx', contextWindow: 32768, supportsVision: false },
+      { id: WEBGPU_COMPASS_TINY_XS_V3_MODEL_ID, label: 'Compass Tiny XS v3 (private research preview)', runtime: 'onnx', contextWindow: 4096, supportsVision: false },
       { id: WEBGPU_BONSAI27_MODEL_ID, label: 'Basic text model', runtime: 'bitgpu', contextWindow: 4096, supportsVision: false },
     ]);
     assert.equal(new WebGPUProvider({ model: WEBGPU_BONSAI27_MODEL_ID }).dtype, 'q1');
@@ -65005,7 +65008,7 @@ test('Apocalypse controls retain Settings transfers while the preset stays on Co
       const panel = { dataset: {}, querySelector: node };
       const radio = { value: WEBGPU_COMPASS_TINY_V2_MODEL_ID, checked: true };
       const context = vm.createContext({
-        WEBGPU_COMPASS_TINY_V2_MODEL_ID, WEBGPU_DTYPE, webgpuModelPreset, webgpuModelDtype, isShippedWebgpuPreset,
+        WEBGPU_COMPASS_TINY_V2_MODEL_ID, WEBGPU_COMPASS_TINY_XS_V3_MODEL_ID, WEBGPU_TEXT_UI_MODEL_IDS, WEBGPU_DTYPE, webgpuModelPreset, webgpuModelDtype, isShippedWebgpuPreset,
         supportsWebgpuVision: true, fixedWebgpuProviderConfigured: false, fixedWebgpuProviderMarkedReady: false,
         webgpuPresetHydrated: false, webgpuDownloadStatusRequest: 0, webgpuDownloadState: { status: 'checking' },
         snapshot: { enabled: false }, elements: {}, CSS: { escape: value => value },
@@ -65602,7 +65605,7 @@ test('WebGPU worker follows local text-generation and WebBrain VL vision contrac
   assert.match(bonsaiWorker, /return \{ content, reasoningContent, toolCalls \}/);
   assert.match(bonsaiWorker, /if \(queuedTextDownload === request\) queuedTextDownload = null/,
     'a completed download request must not clear a newer queued resume for the same model');
-  assert.match(apocalypseScript, /if \(!preset \|\| preset\.id !== WEBGPU_COMPASS_TINY_V2_MODEL_ID\)[\s\S]*?setWebgpuDownloadState\(state, \{ syncActiveTransfer: true \}\)[\s\S]*?ensureFixedWebgpuProvider\(\{ force: true \}\)[\s\S]*?get_webgpu_download_status/,
+  assert.match(apocalypseScript, /if \(!preset \|\| !WEBGPU_TEXT_UI_MODEL_IDS\.includes\(preset\.id\)\)[\s\S]*?setWebgpuDownloadState\(state, \{ syncActiveTransfer: true \}\)[\s\S]*?ensureFixedWebgpuProvider\(\{ force: true \}\)[\s\S]*?get_webgpu_download_status/,
     'Apocalypse Mode must replace a persisted custom WebGPU model with the checked shipped preset');
   const resumeHelpersStart = bonsaiWorker.indexOf('function parseContentRange');
   const resumeHelpersEnd = bonsaiWorker.indexOf('\n\nasync function fetchGgufForStorage', resumeHelpersStart);

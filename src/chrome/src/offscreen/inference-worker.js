@@ -7,6 +7,8 @@
  * request/response messages to it.
  */
 
+import { SPARK_MODEL_ID, SPARK_REVISION, sparkCacheReady, cacheSparkFiles, createSparkRuntime } from './spark-runtime.js';
+
 let libraryPromise = null;
 let libraryVersion = null;
 let workerConfig = null;
@@ -259,6 +261,7 @@ function postTextDownloadState({ force = false } = {}) {
 }
 
 async function isTextModelReady(modelId, dtype) {
+  if (modelId === SPARK_MODEL_ID) return dtype === 'fp16' && await sparkCacheReady();
   const key = textModelKey(modelId, dtype);
   if (readyTextModelKeys.has(key)) return true;
   if (typeof caches === 'undefined') return false;
@@ -774,6 +777,23 @@ async function getTextRuntime(modelId, dtype, device, { localFilesOnly = false }
     await captureWebGpuAdapterSummary();
     await disposeVisionRuntime('text');
     await disposeTextRuntime();
+    if (modelId === SPARK_MODEL_ID) {
+      if (dtype !== 'fp16') throw new Error('Tiny XS v3 requires its native FP16 graph, not q4f16.');
+      try {
+        const ort = await import(workerConfig.ortUrl);
+        const spark = await createSparkRuntime({
+          library, ort,
+          wasmPaths: { mjs: workerConfig.wasmMjsUrl, wasm: workerConfig.wasmUrl },
+        });
+        textRuntime = { library, tokenizer: spark.tokenizer, spark, model: { dispose: () => spark.dispose() } };
+        textRuntimeKey = key;
+        textRuntimeModelKey = textModelKey(modelId, dtype);
+        return textRuntime;
+      } catch (error) {
+        if (isWebGpuExecutionFailure(error)) throw await handleWebGpuExecutionFailure(error);
+        throw error;
+      }
+    }
     const previousAllowLocalModels = library.env?.allowLocalModels;
     if (localFilesOnly && library.env) library.env.allowLocalModels = true;
     let pipeline;
@@ -941,6 +961,13 @@ async function downloadTextModel(payload, { onStarted } = {}) {
   onStarted?.(textDownloadSnapshot());
 
   try {
+    if (modelId === SPARK_MODEL_ID) {
+      if (dtype !== 'fp16') throw new Error('Tiny XS v3 requires FP16 precision.');
+      await cacheSparkFiles({
+        token: String(payload?.hfToken || ''), signal: controller.signal,
+        fetchFile: nativeFetch, progress: event => postProgress(modelId, event),
+      });
+    }
     const runtime = await getDownloadedTextRuntime(modelId, dtype, device);
     if (payload?.requireTools === true) assertToolCapableTextRuntime(runtime, modelId);
     if (textDownloadCancelMode) {
@@ -1399,7 +1426,7 @@ async function runText(payload) {
   const runtime = await getTextRuntime(modelId, dtype, device, { localFilesOnly: true });
   if (payload?.requireTools === true) assertToolCapableTextRuntime(runtime, modelId);
   const requestedTokens = Number(payload?.options?.maxTokens);
-  const maxTokenLimit = usesLongOutputBudget
+  const maxTokenLimit = modelId === SPARK_MODEL_ID ? 2048 : usesLongOutputBudget
     ? WEBGPU_LFM25_MAX_NEW_TOKENS
     : WEBGPU_TEXT_MAX_NEW_TOKENS;
   const maxNewTokens = Number.isFinite(requestedTokens)
@@ -1410,6 +1437,13 @@ async function runText(payload) {
   lastWebGpuDeviceLost = '';
   let output;
   try {
+    if (runtime.spark) {
+      const generated = await runtime.spark.generate(prepareTextMessages(payload?.messages), { tools, maxTokens: maxNewTokens });
+      const result = splitThinking(generated.content);
+      if (result.incompleteReasoning) throw new Error(`${modelId} used its generation budget before finishing reasoning.`);
+      noteWebgpuExecutionSuccess();
+      return { content: result.content, reasoningContent: result.reasoningContent, usage: generated.usage, raw: { revision: SPARK_REVISION, finishReason: generated.finishReason } };
+    }
     output = await runtime.pipeline(prepareTextMessages(payload?.messages), {
       do_sample: Boolean(sampling),
       ...(sampling || {}),

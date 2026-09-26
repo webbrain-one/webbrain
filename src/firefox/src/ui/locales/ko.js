@@ -383,6 +383,8 @@ export default {
   'st.provider.field.api_base_url': 'API 기본 URL',
   'st.provider.field.api_format': 'API 형식',
   'st.provider.field.api_key': 'API 키',
+  'st.provider.field.hf_read_token': 'Hugging Face read token (optional, download only)',
+  'st.providers.webgpu_xs_note': 'Tiny XS v3 is a private, noncommercial research preview: native Spark FP16 / FP32 GEMM, 4K context, about 3.96 GB download. Save an authorized Hugging Face read token in Settings → Providers → WebGPU before downloading. Requires shader-f16; validated on RTX 5090. No cloud fallback.',
   'st.provider.field.model': '모델',
   'st.provider.field.model_optional': '모델 (선택)',
   'st.provider.field.supports_vision': '모델이 비전(멀티모달)을 지원합니다',

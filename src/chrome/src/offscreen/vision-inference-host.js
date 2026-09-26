@@ -376,6 +376,7 @@ function startExclusiveTextDownload(message) {
       device: message.device,
       dtype: message.dtype,
       requireTools: message.requireTools === true,
+      ...(message.hfToken ? { hfToken: message.hfToken } : {}),
     }, { exclusive: true, runtime: message.runtime });
   });
   textDownloadStartChain = operation.catch(() => {});
@@ -525,6 +526,7 @@ async function ensureVisionWorker() {
   });
   visionWorkerReady = sendVisionWorkerMessage('init', {
     transformersUrl: chrome.runtime.getURL('vendor/transformers/transformers.web.js'),
+    ortUrl: chrome.runtime.getURL('vendor/transformers/ort.webgpu.mjs'),
     wasmMjsUrl: chrome.runtime.getURL('vendor/transformers/ort-wasm-simd-threaded.asyncify.mjs'),
     wasmUrl: chrome.runtime.getURL('vendor/transformers/ort-wasm-simd-threaded.asyncify.wasm'),
   }, { timeoutMs: WORKER_INITIALIZATION_TIMEOUT_MS });

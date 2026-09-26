@@ -40,7 +40,12 @@ public model, tokenizer, and configuration files from Hugging Face. That
 request contains only ordinary model-download metadata; screenshots, page
 content, and conversation data are not included. The downloaded files are
 cached by the browser, and both general text/tool inference and screenshot
-inference stay on-device.
+inference stay on-device. The optional private Tiny XS v3 text preset can use
+an explicitly saved Hugging Face read token solely to download its pinned
+data files. It is never attached to inference, prompts, page content, a
+configurable endpoint or a URL. This local WebGPU configuration is excluded
+from Cloud Sync; local storage and explicit settings backups can contain the
+plaintext credential and should be kept private. Public presets need no token.
 
 ### Which provider receives the data?
 

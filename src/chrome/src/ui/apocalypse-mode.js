@@ -22,6 +22,8 @@ import {
 import { createOfflineRagReadinessController } from './offline-rag-readiness.js';
 import {
   WEBGPU_COMPASS_TINY_V2_MODEL_ID,
+  WEBGPU_COMPASS_TINY_XS_V3_MODEL_ID,
+  WEBGPU_TEXT_UI_MODEL_IDS,
   WEBGPU_DTYPE,
   WEBGPU_VISION_CONSENT_VERSION,
   WEBGPU_VISION_CONSENT_VERSION_KEY,
@@ -426,9 +428,17 @@ function updateWebgpuTextPresetUi() {
   const size = document.querySelector('[data-webgpu-text-size]');
   if (size) size.textContent = `${preset?.size || '1.87 GB'} · WebGPU`;
   const warning = document.querySelector('[data-webgpu-text-warning]');
-  if (warning) warning.hidden = true;
+  if (warning) {
+    const isXs = preset?.id === WEBGPU_COMPASS_TINY_XS_V3_MODEL_ID;
+    warning.hidden = !isXs;
+    if (isXs) {
+      warning.removeAttribute('data-i18n');
+      warning.textContent = t('st.providers.webgpu_xs_note');
+    }
+  }
   const copy = document.querySelector('[data-webgpu-text-copy]');
   if (copy) {
+    copy.hidden = preset?.id === WEBGPU_COMPASS_TINY_XS_V3_MODEL_ID;
     copy.dataset.i18n = 'ap.webgpu.rag';
     copy.textContent = t('ap.webgpu.rag');
   }
@@ -557,10 +567,8 @@ async function refreshWebgpuDownloadStatus({ probeSibling = false } = {}) {
     let state = await providerCommand('get_webgpu_download_status');
     if (requestId !== webgpuDownloadStatusRequest) return;
     let preset = webgpuModelPreset(state?.modelId);
-    if (!preset || preset.id !== WEBGPU_COMPASS_TINY_V2_MODEL_ID) {
-      // Only Compass Tiny v2.1 is offered. Retain an active transfer in the
-      // aggregate tracker, then switch the provider to Compass before
-      // rendering its controls.
+    if (!preset || !WEBGPU_TEXT_UI_MODEL_IDS.includes(preset.id)) {
+      // Retain hidden/custom transfers without losing their Pause/Stop controls.
       setWebgpuDownloadState(state, { syncActiveTransfer: true });
       await ensureFixedWebgpuProvider({ force: true });
       if (requestId !== webgpuDownloadStatusRequest) return;
@@ -588,9 +596,13 @@ async function refreshWebgpuDownloadStatus({ probeSibling = false } = {}) {
 }
 
 async function refreshSiblingWebgpuTextStatus(currentModelId, requestId = webgpuDownloadStatusRequest) {
-  // Only Compass Tiny v2.1 is offered, so there are no unselected shipped
-  // text models to probe.
-  return;
+  for (const model of WEBGPU_TEXT_UI_MODEL_IDS) {
+    if (model === currentModelId) continue;
+    const state = await providerCommand('get_webgpu_download_status', { model, dtype: webgpuModelDtype(model) });
+    if (requestId !== webgpuDownloadStatusRequest) return;
+    recordWebgpuTextState(state);
+  }
+  updateWebgpuDownloadPanel();
 }
 
 async function onWebgpuTextPresetChange() {
