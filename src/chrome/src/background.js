@@ -41,6 +41,7 @@ import {
 } from './providers/oauth-claude.js';
 import { getBalance as capsolverGetBalance } from './agent/captcha-solver.js';
 import { isCapsolverEnabled } from './agent/capsolver-config.js';
+import { testImageGenProvider } from './agent/fal-media.js';
 import { createSystemOneJudge } from './agent/systemone-judge.js';
 import { cloudSafeScheduledJob, createCloudRunController } from './cloud-runs.js';
 import { ensureOffscreen } from './offscreen/ensure.js';
@@ -181,7 +182,7 @@ async function startExplicitVisionModelDownload() {
     total: 0,
     error: String(result?.error || 'The local vision model download could not be started.').slice(0, 500),
     updatedAt: Date.now(),
-  }).catch(() => {});
+  }).catch(() => { });
   return result;
 }
 
@@ -227,7 +228,7 @@ agent.setConversationScopeChangeListener((tabId, state) => {
     tabId,
     type: 'conversation_scope',
     data: state,
-  }).catch(() => {});
+  }).catch(() => { });
 });
 const userMemoryStore = createUserMemoryStore(chrome.storage.local);
 const savedWorkflowStore = createSavedWorkflowStore(chrome.storage.local);
@@ -273,7 +274,7 @@ const scheduler = new ScheduledJobManager({
       tabId,
       type,
       data,
-    }).catch(() => {});
+    }).catch(() => { });
     maybeFlashScheduledTerminalEvent(tabId, type, data);
   },
   showIndicator: (tabId) => sendIndicatorMessage(tabId, 'WB_SHOW_AGENT_INDICATORS'),
@@ -305,7 +306,7 @@ const cloudRunController = createCloudRunController({
 });
 alwaysAllowApiMutationsReady
   .then(() => cloudRunController.syncBridge())
-  .catch(() => {});
+  .catch(() => { });
 
 const MAX_AGENT_STEPS_DEFAULT = 130;
 const MAX_AGENT_STEPS_UNLIMITED_SENTINEL = 200;
@@ -422,7 +423,7 @@ const selectionShortcutLocaleReady = chrome.storage.local.get({ wbLocale: '' })
   .then((stored) => {
     selectionShortcutLocale = resolveStoredSelectionShortcutLocale(stored?.wbLocale);
   })
-  .catch(() => {});
+  .catch(() => { });
 
 function getContextMenuPromptStore() {
   return chrome.storage?.session || chrome.storage?.local || null;
@@ -458,7 +459,7 @@ async function createContextMenus() {
         console.warn('[WebBrain] Failed to create context menu:', err.message || err);
       }
       if (item.id === CONTEXT_MENU_OPEN_PDF_VIEWER_ID) {
-        syncPdfContextMenuForActiveTab().catch(() => {});
+        syncPdfContextMenuForActiveTab().catch(() => { });
       }
     });
   };
@@ -539,7 +540,7 @@ async function loadClarifyTimeout() {
       updates.clarifyTimeoutSec = CLARIFY_TIMEOUT_OFF_SLIDER;
       stored.clarifyTimeoutSec = CLARIFY_TIMEOUT_OFF_SLIDER;
     }
-    await chrome.storage.local.set(updates).catch(() => {});
+    await chrome.storage.local.set(updates).catch(() => { });
   }
   agent.clarifyTimeoutSec = normalizeClarifyTimeoutSec(
     stored.clarifyTimeoutSec != null ? stored.clarifyTimeoutSec : 60,
@@ -564,7 +565,7 @@ async function loadResearchEscalation() {
   agent.researchEscalationEnabled = stored.researchEscalationEnabled === true;
   agent.researchEscalationEngine = String(stored.researchEscalationEngine || 'chatgpt');
 }
-const researchEscalationReady = loadResearchEscalation().catch(() => {});
+const researchEscalationReady = loadResearchEscalation().catch(() => { });
 
 // Local screenshot redaction (issue #312): when on, screenshots are pixelated
 // over DOM-detected PII (form fields + email/phone text) BEFORE leaving the
@@ -584,13 +585,13 @@ async function loadImageBudget() {
 }
 // Retained so handleMessage can await hydration on a cold SW start — the first
 // chat must not race ahead of the persisted image-budget settings (issue #311).
-const imageBudgetReady = loadImageBudget().catch(() => {});
+const imageBudgetReady = loadImageBudget().catch(() => { });
 
 async function loadStrictSecretMode() {
   const stored = await chrome.storage.local.get('strictSecretMode').catch(() => ({}));
   agent.strictSecretMode = stored?.strictSecretMode === true;
 }
-const strictSecretModeReady = loadStrictSecretMode().catch(() => {});
+const strictSecretModeReady = loadStrictSecretMode().catch(() => { });
 
 async function loadWebMCPEnabled() {
   const stored = await chrome.storage.local.get('webMcpEnabled');
@@ -661,7 +662,7 @@ function recordClarificationMemoryCandidate(tabId, question, answer) {
   if (!normalizedAnswer) return;
   const normalizedQuestion = normalizeUserMemoryText(question, 500);
   if (looksLikeSensitiveMemoryText(normalizedAnswer)
-      || (normalizedQuestion && looksLikeSensitiveMemoryText(normalizedQuestion))) {
+    || (normalizedQuestion && looksLikeSensitiveMemoryText(normalizedQuestion))) {
     return;
   }
   const context = getUserMemoryTurnContext(tabId);
@@ -748,7 +749,7 @@ async function isUserMemoryFormCaptureEnabled() {
 
 async function withUserMemoryExtractionQueueLock(task) {
   const run = userMemoryExtractionQueueLock.then(task, task);
-  userMemoryExtractionQueueLock = run.catch(() => {});
+  userMemoryExtractionQueueLock = run.catch(() => { });
   return run;
 }
 
@@ -814,13 +815,13 @@ async function markUserMemoryExtractionJobFailed(jobId) {
 
 async function withUserMemoryStoreLock(task) {
   const run = userMemoryStoreLock.then(task, task);
-  userMemoryStoreLock = run.catch(() => {});
+  userMemoryStoreLock = run.catch(() => { });
   return run;
 }
 
 async function withSavedWorkflowStoreLock(task) {
   const run = savedWorkflowStoreLock.then(task, task);
-  savedWorkflowStoreLock = run.catch(() => {});
+  savedWorkflowStoreLock = run.catch(() => { });
   return run;
 }
 
@@ -869,7 +870,7 @@ function notifyUserMemoryCreated() {
   chrome.runtime.sendMessage({
     target: 'sidepanel',
     action: 'user_memory_created',
-  }).catch(() => {});
+  }).catch(() => { });
 }
 
 function scheduleUserMemoryExtractionDrain(delayMs = USER_MEMORY_EXTRACTION_DELAY_MS) {
@@ -1175,8 +1176,8 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   await providerManager.load();
   await loadMaxSteps();
   await loadClarifyTimeout();
-  await syncAgentUserMemoryFromStorage().catch(() => {});
-  await cloudRunController.syncBridge().catch(() => {});
+  await syncAgentUserMemoryFromStorage().catch(() => { });
+  await cloudRunController.syncBridge().catch(() => { });
   // Chrome registers the manifest handler with enabled=true after install.
   // Reconcile now and once more after registration settles so the native
   // default cannot overwrite the extension's opt-in default. The in-handler
@@ -1194,8 +1195,8 @@ chrome.runtime.onStartup?.addListener(async () => {
   await providerManager.load();
   await loadMaxSteps();
   await loadClarifyTimeout();
-  await syncAgentUserMemoryFromStorage().catch(() => {});
-  await cloudRunController.syncBridge().catch(() => {});
+  await syncAgentUserMemoryFromStorage().catch(() => { });
+  await cloudRunController.syncBridge().catch(() => { });
   scheduleUserMemoryExtractionDrain(5000);
 });
 
@@ -1208,12 +1209,12 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
   }
   if (changes.wbLocale) {
     selectionShortcutLocale = normalizeSelectionShortcutLocale(changes.wbLocale.newValue);
-    createContextMenus().catch(() => {});
+    createContextMenus().catch(() => { });
   }
-  if (PROFILE_SYNC_DATA_KEYS.some((key) => changes[key])) profileSync.noteChanges(changes).catch(() => {});
-  if (changes.providers || changes.activeProvider || changes.helpImproveWebBrain) providerManager.load().catch(() => {});
+  if (PROFILE_SYNC_DATA_KEYS.some((key) => changes[key])) profileSync.noteChanges(changes).catch(() => { });
+  if (changes.providers || changes.activeProvider || changes.helpImproveWebBrain) providerManager.load().catch(() => { });
   if (changes.webbrainCloudBridgeEnabled || changes.webbrainCloudBridgeUrl) {
-    cloudRunController.syncBridge().catch(() => {});
+    cloudRunController.syncBridge().catch(() => { });
   }
   if (changes.maxAgentSteps) {
     agent.maxSteps = normalizeMaxAgentSteps(changes.maxAgentSteps.newValue);
@@ -1418,7 +1419,7 @@ async function loadPanelTabs() {
   } catch (e) { /* session storage not available */ }
 }
 function savePanelTabs() {
-  chrome.storage.session?.set({ [PANEL_TABS_KEY]: Array.from(panelTabs) }).catch(() => {});
+  chrome.storage.session?.set({ [PANEL_TABS_KEY]: Array.from(panelTabs) }).catch(() => { });
 }
 loadPanelTabs();
 
@@ -1451,11 +1452,11 @@ async function loadWebBrainGroups() {
 function saveWebBrainGroups() {
   chrome.storage.session?.set({
     [WB_GROUPS_KEY]: Array.from(webBrainGroupByWindow.entries()),
-  }).catch(() => {});
+  }).catch(() => { });
 }
 loadWebBrainGroups();
 
-chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false }).catch(() => {});
+chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false }).catch(() => { });
 
 // Panel visibility model — opt-in per tab (Cmd+T no longer leaks the panel).
 //
@@ -1561,8 +1562,8 @@ chrome.runtime.onMessage.addListener((msg, sender) => {
     if (tab?.url !== installGuideUrl) return;
     panelTabs.add(tab.id);
     savePanelTabs();
-    ensureWebBrainGroup(tab).catch(() => {});
-  }).catch(() => {});
+    ensureWebBrainGroup(tab).catch(() => { });
+  }).catch(() => { });
 });
 
 // Tracks the pending 250 ms retry timer per tab so it can be cancelled if the
@@ -1578,10 +1579,10 @@ function notifySidePanelOfContextMenuPrompt(payload) {
     prompt: payload,
   };
   clearTimeout(pendingContextMenuNotifications.get(tabId));
-  chrome.runtime.sendMessage(msg).catch(() => {});
+  chrome.runtime.sendMessage(msg).catch(() => { });
   const timerId = setTimeout(() => {
     pendingContextMenuNotifications.delete(tabId);
-    chrome.runtime.sendMessage(msg).catch(() => {});
+    chrome.runtime.sendMessage(msg).catch(() => { });
   }, 250);
   pendingContextMenuNotifications.set(tabId, timerId);
 }
@@ -1596,7 +1597,7 @@ function openSidePanelForContextMenu(tab) {
     enabled: true,
   });
   chrome.sidePanel.open({ tabId: tab.id });
-  ensureWebBrainGroup(tab).catch(() => {});
+  ensureWebBrainGroup(tab).catch(() => { });
 }
 
 async function handleContextMenuAsk(info, tab) {
@@ -1644,7 +1645,7 @@ async function handleContextMenuAsk(info, tab) {
   openSidePanelForContextMenu(tab);
   try {
     await contextMenuStorage.save(tab.id, payload);
-  } catch {}
+  } catch { }
   notifySidePanelOfContextMenuPrompt(payload);
 }
 
@@ -1707,7 +1708,7 @@ function queueSelectionShortcutPrompt(msg, tab, sendResponse) {
   (async () => {
     try {
       await contextMenuStorage.save(tab.id, payload);
-    } catch {}
+    } catch { }
     notifySidePanelOfContextMenuPrompt(payload);
     return { ok: true, queued: true, requiresManualOpen: false };
   })().then(sendResponse).catch((error) => {
@@ -1741,7 +1742,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   // now (stub is enough for setOptions/open), then verify the live tab.
   try {
     openSidePanelForContextMenu({ id: tabId });
-  } catch {}
+  } catch { }
   chrome.tabs.get(tabId)
     .then(tab => queueSelectionShortcutPrompt(msg, tab, sendResponse))
     .catch(error => sendResponse({
@@ -1801,8 +1802,8 @@ function startIndicatorHeartbeat(tabId) {
             sendIndicatorMessage(tabId, 'WB_SHOW_AGENT_INDICATORS');
           }
         })
-        .catch(() => {});
-    } catch {}
+        .catch(() => { });
+    } catch { }
   }, INDICATOR_HEARTBEAT_INTERVAL_MS);
   indicatorHeartbeatTimers.set(tabId, timer);
 }
@@ -1838,7 +1839,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   // discard the entry it just recorded. trackPdfResponse() already replaces
   // the entry on the next main-frame response, and onRemoved clears it.
   if (changeInfo?.url || changeInfo?.status) {
-    syncPdfContextMenuForActiveTab().catch(() => {});
+    syncPdfContextMenuForActiveTab().catch(() => { });
   }
   if (changeInfo?.status === 'complete') {
     reassertIndicatorIfActive(tabId);
@@ -1848,7 +1849,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
 chrome.tabs.onRemoved.addListener((tabId) => {
   activeIndicatorTabs.delete(tabId);
   stopIndicatorHeartbeat(tabId);
-  withTeacherSessionStoreLock(() => teacherSessionStore.clear(tabId)).catch(() => {});
+  withTeacherSessionStoreLock(() => teacherSessionStore.clear(tabId)).catch(() => { });
 });
 
 const RUN_UI_PREFIX = 'runUi:';
@@ -1888,7 +1889,7 @@ function persistRunUiSnapshot(tabId, snapshot) {
   runUiPersistenceQueues.set(tabId, write);
   write.finally(() => {
     if (runUiPersistenceQueues.get(tabId) === write) runUiPersistenceQueues.delete(tabId);
-  }).catch(() => {});
+  }).catch(() => { });
   return write;
 }
 
@@ -2007,7 +2008,7 @@ async function getRunUiSnapshot(tabId) {
     if (snapshot && typeof snapshot === 'object') {
       return runUiJournal.restore(tabId, snapshot);
     }
-  } catch {}
+  } catch { }
   return null;
 }
 
@@ -2016,11 +2017,11 @@ function clearRunUiSnapshot(tabId) {
   runUiJournal.clear(tabId);
   runUiPersistenceFailures.delete(tabId);
   const previous = runUiPersistenceQueues.get(tabId) || Promise.resolve();
-  const removal = previous.catch(() => {}).then(() => chrome.storage.session?.remove(RUN_UI_PREFIX + tabId));
+  const removal = previous.catch(() => { }).then(() => chrome.storage.session?.remove(RUN_UI_PREFIX + tabId));
   runUiPersistenceQueues.set(tabId, removal);
   removal.finally(() => {
     if (runUiPersistenceQueues.get(tabId) === removal) runUiPersistenceQueues.delete(tabId);
-  }).catch(() => {});
+  }).catch(() => { });
 }
 
 function sendAgentUpdate(tabId, requestId, type, data) {
@@ -2035,7 +2036,7 @@ function sendAgentUpdate(tabId, requestId, type, data) {
     seq: event?.seq || null,
     type,
     data: event?.data ?? data,
-  }).catch(() => {});
+  }).catch(() => { });
 }
 
 function assertNoActiveTabRun(tabId) {
@@ -2154,8 +2155,8 @@ function acquireRunKeepalive() {
   let released = false;
   const touch = () => {
     try {
-      chrome.runtime.getPlatformInfo().catch(() => {});
-    } catch {}
+      chrome.runtime.getPlatformInfo().catch(() => { });
+    } catch { }
   };
   touch();
   const timer = setInterval(touch, RUN_KEEPALIVE_INTERVAL_MS);
@@ -2241,7 +2242,7 @@ async function sendAgentRunComplete(tabId, snapshot = null) {
     flashTabAttention({
       tabId,
       success: liveStatus === 'completed' && snapshot.runSucceeded === true,
-    }).catch(() => {});
+    }).catch(() => { });
   }
   const submittedTurnDurable = snapshot.kind === 'continue'
     || await agent.hasDurableSubmittedTurn(
@@ -2277,7 +2278,7 @@ async function sendAgentRunComplete(tabId, snapshot = null) {
       submittedTurnDurable,
       attachmentDeliveryState,
     },
-  }).catch(() => {});
+  }).catch(() => { });
 }
 
 // Stop button on the page → abort the agent run for that tab. Mirrors
@@ -2319,7 +2320,7 @@ chrome.action.onClicked.addListener((tab) => {
   // before the user can switch tabs. Async — we already lost the user-
   // gesture window for sidePanel.open, but ensureWebBrainGroup doesn't
   // need it.
-  ensureWebBrainGroup(tab).catch(() => {});
+  ensureWebBrainGroup(tab).catch(() => { });
 });
 
 // (Was: chrome.tabs.onActivated + chrome.tabs.onUpdated listeners that
@@ -2357,11 +2358,11 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   clearTimeout(pendingContextMenuNotifications.get(tabId));
   pendingContextMenuNotifications.delete(tabId);
   contextMenuStorage.cleanup(tabId);
-  tabChatHandoff.clear(tabId).catch(() => {});
-  clearStagedScreenshots(chrome.storage.local, tabId).catch(() => {});
+  tabChatHandoff.clear(tabId).catch(() => { });
+  clearStagedScreenshots(chrome.storage.local, tabId).catch(() => { });
   savePanelTabs();
-  scheduler.cancelForTab(tabId).catch(() => {});
-  agent.clearDevCssPatchesForTab(tabId).catch(() => {});
+  scheduler.cancelForTab(tabId).catch(() => { });
+  agent.clearDevCssPatchesForTab(tabId).catch(() => { });
   try { agent._cleanupTab(tabId); } catch { /* ignore */ }
 });
 
@@ -2376,7 +2377,7 @@ function invalidateContextMenuForTab(tabId) {
     target: 'sidepanel',
     action: 'context_menu_tab_navigated',
     tabId,
-  }).catch(() => {});
+  }).catch(() => { });
 }
 
 // SPA navigation tracking. Many sites change route via History API without
@@ -2395,7 +2396,7 @@ function recordNav(tabId, type, url, { resetTypeIdentity = true } = {}) {
 }
 
 function recordTeacherNavigation(tabId, url, options) {
-  teacherRunInterlock.navigation(tabId, url, options).catch(() => {});
+  teacherRunInterlock.navigation(tabId, url, options).catch(() => { });
 }
 
 const TEACHER_EXPLICIT_NAVIGATION_TYPES = new Set([
@@ -2404,26 +2405,26 @@ const TEACHER_EXPLICIT_NAVIGATION_TYPES = new Set([
 
 chrome.webNavigation?.onHistoryStateUpdated?.addListener((details) => {
   if (details.frameId !== 0) return;
-  agent.observeCloudflareManagedChallengeNavigation(details).catch(() => {});
+  agent.observeCloudflareManagedChallengeNavigation(details).catch(() => { });
   recordNav(details.tabId, 'history', details.url);
   recordTeacherNavigation(details.tabId, details.url);
   invalidateContextMenuForTab(details.tabId);
 });
 chrome.webNavigation?.onReferenceFragmentUpdated?.addListener((details) => {
   if (details.frameId !== 0) return;
-  agent.observeCloudflareManagedChallengeNavigation(details).catch(() => {});
+  agent.observeCloudflareManagedChallengeNavigation(details).catch(() => { });
   recordNav(details.tabId, 'fragment', details.url);
   invalidateContextMenuForTab(details.tabId);
 });
 chrome.webNavigation?.onCommitted?.addListener((details) => {
   if (details.frameId !== 0) return;
-  agent.observeCloudflareManagedChallengeNavigation(details).catch(() => {});
+  agent.observeCloudflareManagedChallengeNavigation(details).catch(() => { });
   recordNav(details.tabId, 'committed', details.url);
   recordTeacherNavigation(details.tabId, details.url, {
     force: TEACHER_EXPLICIT_NAVIGATION_TYPES.has(details.transitionType),
   });
   invalidateContextMenuForTab(details.tabId);
-  agent.clearDevCssPatchesForTab(details.tabId).catch(() => {});
+  agent.clearDevCssPatchesForTab(details.tabId).catch(() => { });
 });
 chrome.webNavigation?.onCompleted?.addListener((details) => {
   if (details.frameId === 0) {
@@ -2437,11 +2438,11 @@ chrome.webNavigation?.onCompleted?.addListener((details) => {
 // detection and embedded widgets may use the same managed endpoint.
 const observeCloudflareManagedChallengeResponse = details => {
   trackPdfResponse(details);
-  syncPdfContextMenuForActiveTab().catch(() => {});
-  agent.observeCloudflareManagedChallengeResponse(details).catch(() => {});
+  syncPdfContextMenuForActiveTab().catch(() => { });
+  agent.observeCloudflareManagedChallengeResponse(details).catch(() => { });
 };
 const observeCloudflareChallengePlatformRequest = details => {
-  agent.observeCloudflareChallengePlatformRequest(details).catch(() => {});
+  agent.observeCloudflareChallengePlatformRequest(details).catch(() => { });
 };
 chrome.webRequest?.onHeadersReceived?.addListener?.(
   observeCloudflareManagedChallengeResponse,
@@ -2503,7 +2504,7 @@ function extractApiReplayBody(requestBody) {
       const text = params.toString();
       return text.length <= API_REPLAY_BODY_LIMIT ? text : null;
     }
-  } catch (_) {}
+  } catch (_) { }
   return null;
 }
 
@@ -2670,7 +2671,7 @@ async function showCompletionNotification(tabId, success) {
         if (!notificationId) return resolve();
         setTimeout(() => {
           completionNotificationFocusHandlers.delete(notificationId);
-          chrome.notifications.clear(notificationId, () => {});
+          chrome.notifications.clear(notificationId, () => { });
         }, COMPLETION_NOTIFICATION_VISIBLE_MS);
         if (Number.isInteger(tabId)) {
           completionNotificationFocusHandlers.set(notificationId, async () => {
@@ -2689,11 +2690,11 @@ async function showCompletionNotification(tabId, success) {
 
 chrome.tabs.onActivated.addListener(({ tabId } = {}) => {
   flashedBadgeTabs.delete(tabId);
-  syncPdfContextMenuForActiveTab().catch(() => {});
+  syncPdfContextMenuForActiveTab().catch(() => { });
   // Clear unconditionally: the Set only lives in service-worker memory, but
   // a tab-scoped badge survives MV3 worker suspension/restarts. Resetting
   // the per-tab override is idempotent and restores any global badge.
-  chrome.action.setBadgeText({ tabId, text: '' }).catch(() => {});
+  chrome.action.setBadgeText({ tabId, text: '' }).catch(() => { });
 });
 
 // Focusing a window does not fire tabs.onActivated for its already-active
@@ -2883,7 +2884,7 @@ async function handleMessage(msg, sender) {
         chrome.runtime.sendMessage({
           type: 'apocalypse-mode-state',
           enabled: snapshot.enabled === true,
-        }).catch(() => {});
+        }).catch(() => { });
         if (msg.enabled === true) {
           const textModel = await providerManager.enableAndStartWebgpuTextDownload();
           return { ...snapshot, textModel };
@@ -3175,9 +3176,9 @@ async function handleMessage(msg, sender) {
       const compiled = draft?.conversationId === conversationId
         ? finalizeSavedWorkflowDraft(draft, { name: msg.name })
         : await compileLatestSuccessfulWorkflow(workflowTrace, {
-            conversationId,
-            name: msg.name,
-          });
+          conversationId,
+          name: msg.name,
+        });
       if (!compiled.workflow) return { ok: false, ...compiled };
       const saved = await withSavedWorkflowStoreLock(() => savedWorkflowStore.put(compiled.workflow));
       return { ok: saved.changed, workflow: saved.workflow, warnings: compiled.warnings, reason: saved.reason || '' };
@@ -3605,7 +3606,7 @@ async function handleMessage(msg, sender) {
           handoffOwnerId: tabChatClearResult.handoffOwnerId,
           handoffGeneration: tabChatClearResult.handoffGeneration,
           clearedContextMenuPromptId,
-        }).catch(() => {});
+        }).catch(() => { });
       }
       return { ok: true, clearedContextMenuPromptId };
     }
@@ -3834,7 +3835,7 @@ async function handleMessage(msg, sender) {
           tabId,
           handoffOwnerId: result.handoffOwnerId,
           handoffGeneration: result.handoffGeneration,
-        }).catch(() => {});
+        }).catch(() => { });
       }
       return result;
     }
@@ -3848,7 +3849,7 @@ async function handleMessage(msg, sender) {
       const tabId = msg.tabId || sender.tab?.id || null;
       let tab = null;
       if (tabId != null) {
-        try { tab = await chrome.tabs.get(tabId); } catch {}
+        try { tab = await chrome.tabs.get(tabId); } catch { }
       }
       return await scheduler.createTaskJob({
         tabId,
@@ -3864,7 +3865,7 @@ async function handleMessage(msg, sender) {
       const tabId = msg.tabId || sender.tab?.id || null;
       let tab = null;
       if (tabId != null) {
-        try { tab = await chrome.tabs.get(tabId); } catch {}
+        try { tab = await chrome.tabs.get(tabId); } catch { }
       }
       return await scheduler.createWatchJob({
         args: msg.watch || msg.args || {},
@@ -4075,6 +4076,10 @@ async function handleMessage(msg, sender) {
 
     case 'test_transcription_provider': {
       return await providerManager.testTranscriptionProvider();
+    }
+
+    case 'test_image_gen_provider': {
+      return await testImageGenProvider();
     }
 
     case 'test_system_one': {

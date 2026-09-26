@@ -163,6 +163,13 @@ const btnSaveTranscription = document.getElementById('btn-save-transcription');
 const btnTestTranscription = document.getElementById('btn-test-transcription');
 const btnClearTranscription = document.getElementById('btn-clear-transcription');
 const transcriptionTestResult = document.getElementById('test-transcription');
+// Generative media (fal.ai) — assistive model, stored as `imageGenModel = { apiKey, model }`.
+const imageGenApiKeyInput = document.getElementById('image-gen-api-key');
+const imageGenModelInput = document.getElementById('image-gen-model');
+const btnSaveImageGen = document.getElementById('btn-save-image-gen');
+const btnTestImageGen = document.getElementById('btn-test-image-gen');
+const btnClearImageGen = document.getElementById('btn-clear-image-gen');
+const imageGenTestResult = document.getElementById('test-image-gen');
 const profileEnabledToggle = document.getElementById('toggle-profile-enabled');
 const profileTextArea = document.getElementById('profile-text');
 const btnSaveProfile = document.getElementById('btn-save-profile');
@@ -689,6 +696,12 @@ async function init() {
   if (transcriptionModelInput) transcriptionModelInput.value = transcription.model || '';
   updateMultimodalDetectedProvider('vision');
   updateMultimodalDetectedProvider('transcription');
+
+  // Load generative media (fal.ai) config. Used by the generate_image agent tool.
+  const imageGenStored = await browser.storage.local.get(['imageGenModel']);
+  const imageGen = imageGenStored.imageGenModel || {};
+  if (imageGenApiKeyInput) imageGenApiKeyInput.value = imageGen.apiKey || '';
+  if (imageGenModelInput) imageGenModelInput.value = imageGen.model || '';
 
   // Load profile (auto-fill bio + throwaway password)
   const profileStored = await browser.storage.local.get(['profileEnabled', 'profileText']);
@@ -1693,6 +1706,83 @@ if (btnClearTranscription) {
 
 transcriptionBaseUrlInput?.addEventListener('input', () => updateMultimodalDetectedProvider('transcription'));
 
+// --- Generative Media (fal.ai) ---
+//
+// Same UX as the transcription override. Stored in browser.storage.local under
+// `imageGenModel = { apiKey, model }`. Consumed by the `generate_image` agent
+// tool (agent/fal-media.js), which submits to fal.ai's queue API.
+
+function showImageGenResult(className, text, color = '') {
+  if (!imageGenTestResult) return;
+  imageGenTestResult.className = `test-result show${className ? ` ${className}` : ''}`;
+  imageGenTestResult.textContent = text;
+  imageGenTestResult.style.color = color || '';
+  return imageGenTestResult;
+}
+
+function flashImageGenResult(className, text) {
+  const resultEl = showImageGenResult(className, text);
+  if (resultEl) setTimeout(() => resultEl.classList.remove('show'), 2000);
+}
+
+if (btnSaveImageGen) {
+  btnSaveImageGen.addEventListener('click', async () => {
+    const apiKey = imageGenApiKeyInput.value.trim();
+    const model = imageGenModelInput.value.trim();
+
+    if (!apiKey && !model) {
+      await browser.storage.local.remove('imageGenModel');
+      flashImageGenResult('ok', t('st.imagegen.cleared'));
+      return;
+    }
+
+    await browser.storage.local.set({
+      imageGenModel: { apiKey, model },
+    });
+    flashImageGenResult('ok', t('st.imagegen.saved'));
+  });
+}
+
+if (btnTestImageGen) {
+  btnTestImageGen.addEventListener('click', async () => {
+    const apiKey = imageGenApiKeyInput.value.trim();
+    const model = imageGenModelInput.value.trim();
+
+    if (!apiKey || !model) {
+      const resultEl = showImageGenResult('fail', t('st.imagegen.fill_required'));
+      if (resultEl) setTimeout(() => resultEl.classList.remove('show'), 2500);
+      return;
+    }
+
+    // Persist before testing so the background handler sees the values.
+    await browser.storage.local.set({
+      imageGenModel: { apiKey, model },
+    });
+
+    showImageGenResult('', t('st.imagegen.testing'), 'var(--text2)');
+
+    try {
+      const res = await sendToBackground('test_image_gen_provider');
+      if (res?.ok) {
+        showImageGenResult('ok', t('st.imagegen.connected', { model: res.model || model }));
+      } else {
+        showImageGenResult('fail', t('st.imagegen.failed', { error: res?.error || 'Unknown error' }));
+      }
+    } catch (e) {
+      showImageGenResult('fail', t('st.imagegen.failed', { error: e.message }));
+    }
+  });
+}
+
+if (btnClearImageGen) {
+  btnClearImageGen.addEventListener('click', async () => {
+    imageGenApiKeyInput.value = '';
+    imageGenModelInput.value = '';
+    await browser.storage.local.remove('imageGenModel');
+    flashImageGenResult('ok', t('st.imagegen.cleared'));
+  });
+}
+
 // --- Profile auto-fill ---
 let profileSyncChallenge = null;
 function showProfileSyncResult(ok, text) { if (!profileSyncResult) return; profileSyncResult.className = `test-result show ${ok ? 'ok' : 'fail'}`; profileSyncResult.textContent = text; }
@@ -1725,7 +1815,7 @@ function renderProfileSyncState(state) {
   if (profileSyncStatus) profileSyncStatus.textContent = describeProfileSyncState(state || {});
 }
 async function refreshProfileSyncState() { const state = await sendToBackground('profile_sync_state').catch(e => ({ status: 'error', error: e.message })); renderProfileSyncState(state); return state; }
-async function reloadProfileSyncData() { const stored = await browser.storage.local.get(['profileEnabled', 'profileText', 'visionModel', 'transcriptionModel']); if (profileEnabledToggle) profileEnabledToggle.checked = !!stored.profileEnabled; if (profileTextArea) profileTextArea.value = stored.profileText || ''; const vision = stored.visionModel || {}; visionBaseUrlInput.value = vision.baseUrl || ''; visionApiKeyInput.value = vision.apiKey || ''; visionModelInput.value = vision.model || ''; const transcription = stored.transcriptionModel || {}; if (transcriptionBaseUrlInput) transcriptionBaseUrlInput.value = transcription.baseUrl || ''; if (transcriptionApiKeyInput) transcriptionApiKeyInput.value = transcription.apiKey || ''; if (transcriptionModelInput) transcriptionModelInput.value = transcription.model || ''; updateMultimodalDetectedProvider('vision'); updateMultimodalDetectedProvider('transcription'); await loadUserMemorySettings(); const res = await sendToBackground('get_providers'); providersData = res.providers; activeProviderId = res.active; renderProviders(); }
+async function reloadProfileSyncData() { const stored = await browser.storage.local.get(['profileEnabled', 'profileText', 'visionModel', 'transcriptionModel', 'imageGenModel']); if (profileEnabledToggle) profileEnabledToggle.checked = !!stored.profileEnabled; if (profileTextArea) profileTextArea.value = stored.profileText || ''; const vision = stored.visionModel || {}; visionBaseUrlInput.value = vision.baseUrl || ''; visionApiKeyInput.value = vision.apiKey || ''; visionModelInput.value = vision.model || ''; const transcription = stored.transcriptionModel || {}; if (transcriptionBaseUrlInput) transcriptionBaseUrlInput.value = transcription.baseUrl || ''; if (transcriptionApiKeyInput) transcriptionApiKeyInput.value = transcription.apiKey || ''; if (transcriptionModelInput) transcriptionModelInput.value = transcription.model || ''; const imageGen = stored.imageGenModel || {}; if (imageGenApiKeyInput) imageGenApiKeyInput.value = imageGen.apiKey || ''; if (imageGenModelInput) imageGenModelInput.value = imageGen.model || ''; updateMultimodalDetectedProvider('vision'); updateMultimodalDetectedProvider('transcription'); await loadUserMemorySettings(); const res = await sendToBackground('get_providers'); providersData = res.providers; activeProviderId = res.active; renderProviders(); }
 async function requestProfileSyncDataConsent() { const permissions = await browser.permissions.getAll(); if (!Object.hasOwn(permissions, 'data_collection')) return window.confirm(t('st.sync.consent.legacy')); return browser.permissions.request({ data_collection: ['personallyIdentifyingInfo', 'authenticationInfo', 'personalCommunications', 'websiteContent', 'technicalAndInteraction'] }); }
 function profileSyncButtonRestore(button, pendingLabel) {
   if (!button) return () => {};

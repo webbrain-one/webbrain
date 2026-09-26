@@ -1098,6 +1098,20 @@ export const AGENT_TOOLS = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'generate_image',
+      description: 'Generate media (usually an image) from a text prompt using the user\'s configured fal.ai assistive model (Settings → Assistive Models → Generative media). Runs on fal.ai\'s queue API and may take up to a minute. Returns the hosted media URL on success. Not available in Ask mode.',
+      parameters: {
+        type: 'object',
+        properties: {
+          prompt: { type: 'string', description: 'Text prompt describing the media to generate.' },
+        },
+        required: ['prompt'],
+      },
+    },
+  },
 ];
 
 /**
@@ -1827,6 +1841,7 @@ ${BROWSER_TAB_LIMITATION}
 - scratchpad_write: Pin a note in context that survives summarization (use on long tasks to remember download IDs, file paths, plans)
 - progress_update / progress_read: Structured app-owned ledger for the active repeated item/action task. Use it for per-user/per-item status and collected fields; close pending/acted rows before done.
 - download_public_media (if enabled by a skill) / download_social_media: One-shot image/video download from public social sites. Prefer the enabled skill tool for public media URLs; otherwise use download_social_media. Single call — no need to inspect the DOM yourself.
+- generate_image: Create media (usually an image, sometimes video/audio) directly from a text prompt through the user's configured fal.ai generative-media model. When the user asks to GENERATE media ("generate an image of a red apple", "make a logo", "create a video clip"), call this tool — do NOT navigate to third-party image sites (Midjourney, DALL·E, Bing Images, etc.). Requires Settings → Assistive Models → Generative media. Not available in Ask mode.
 - hover: Synthetic hover over a ref_id (Firefox MV2 — no CDP). Use ONLY for menus/tooltips that REVEAL on hover (GitHub three-dot menus, Linear card actions). Re-read the tree after to find the newly-visible items. isTrusted=false, so sites with strict event-trust gating won't respond — fall back to clicking the explicit "..." button if hover doesn't reveal a menu.
 - drag_drop: Synthetic drag from one ref_id to another (pointerdown/move/up + HTML5 dragstart/drop). Use for Trello/Linear/Notion-style card reordering, image-crop handles. Less reliable than Chrome's CDP path — verify by re-reading the tree.
 - wait_for_stable: Wait until the page is quiet (no DOM mutations + no in-flight network) for \`quietMs\` ms. Use AFTER navigate / set_field({submit:true}) / a click that fires async work, BEFORE re-reading the tree. Different from wait_for_element: wait_for_element answers "did X appear", wait_for_stable answers "is the page done shuffling".

@@ -4,7 +4,7 @@ export const PROFILE_SYNC_KEYS = {
   enabled: 'profileSyncEnabled', token: 'profileSyncToken', deviceGuid: 'webbrainDeviceGuid',
   metadata: 'profileSyncMetadataV1', recovery: 'profileSyncRecoveryV1', everEnabled: 'profileSyncEverEnabled',
 };
-export const PROFILE_SYNC_DATA_KEYS = [USER_MEMORY_STORAGE_KEY, 'providers', 'activeProvider', 'visionModel', 'transcriptionModel', 'profileEnabled', 'profileText'];
+export const PROFILE_SYNC_DATA_KEYS = [USER_MEMORY_STORAGE_KEY, 'providers', 'activeProvider', 'visionModel', 'transcriptionModel', 'imageGenModel', 'profileEnabled', 'profileText'];
 const API = 'https://api.webbrain.one/v1/sync';
 const ITERATIONS = 600000;
 const NON_PORTABLE_PROVIDER_ID = 'webgpu';
@@ -144,6 +144,7 @@ function mergeLegacyProviderState(local, remote, conflicts) {
     auxiliaryProviders: {
       visionModel: local.auxiliaryProviders?.visionModel ?? remote.auxiliaryProviders?.visionModel ?? null,
       transcriptionModel: local.auxiliaryProviders?.transcriptionModel ?? remote.auxiliaryProviders?.transcriptionModel ?? null,
+      imageGenModel: local.auxiliaryProviders?.imageGenModel ?? remote.auxiliaryProviders?.imageGenModel ?? null,
     },
   };
 }
@@ -162,7 +163,7 @@ function mergeProviderState(local, remote, lm, rm, conflicts) {
     if (providers[id] === undefined) delete providers[id];
   }
   const auxiliaryProviders = {};
-  for (const id of ['visionModel', 'transcriptionModel']) {
+  for (const id of ['visionModel', 'transcriptionModel', 'imageGenModel']) {
     auxiliaryProviders[id] = newer(local.auxiliaryProviders?.[id], remote.auxiliaryProviders?.[id], itemTimestamp(lm, 'auxiliaryItemsAt', id), itemTimestamp(rm, 'auxiliaryItemsAt', id), conflicts, `providers.${id}`) ?? null;
   }
   const localActiveAt = lm.activeProviderAt ?? (lm.providerItemsAt ? 0 : lm.providersAt || 0);
@@ -200,7 +201,7 @@ export function mergeProfileVaults(local, remote) {
   out.memory = normalizeUserMemoryStore({ ...(local.memory || {}), records: [...byId.values()] });
   out.tombstones = tombstones;
   const providerIds = new Set([...Object.keys(local.providers || {}), ...Object.keys(remote.providers || {}), ...Object.keys(lm.providerItemsAt || {}), ...Object.keys(rm.providerItemsAt || {})]);
-  const auxiliaryIds = new Set(['visionModel', 'transcriptionModel', ...Object.keys(lm.auxiliaryItemsAt || {}), ...Object.keys(rm.auxiliaryItemsAt || {})]);
+  const auxiliaryIds = new Set(['visionModel', 'transcriptionModel', 'imageGenModel', ...Object.keys(lm.auxiliaryItemsAt || {}), ...Object.keys(rm.auxiliaryItemsAt || {})]);
   out.meta = { providersAt: Math.max(lm.providersAt || 0, rm.providersAt || 0), providerItemsAt: Object.fromEntries([...providerIds].map(id => [id, Math.max(itemTimestamp(lm, 'providerItemsAt', id), itemTimestamp(rm, 'providerItemsAt', id))])), activeProviderAt: Math.max(lm.activeProviderAt || 0, rm.activeProviderAt || 0), auxiliaryItemsAt: Object.fromEntries([...auxiliaryIds].map(id => [id, Math.max(itemTimestamp(lm, 'auxiliaryItemsAt', id), itemTimestamp(rm, 'auxiliaryItemsAt', id))])), profileAt: Math.max(lm.profileAt || 0, rm.profileAt || 0), memoryAt: Math.max(lm.memoryAt || 0, rm.memoryAt || 0) };
   return { vault: out, conflicts };
 }
@@ -217,7 +218,7 @@ export class ProfileSyncManager {
       meta: rawMeta,
     }, s[PORTABLE_ACTIVE_PROVIDER_KEY]);
     const meta = portable.meta;
-    return { version: 1, memory: normalizeUserMemoryStore(s[USER_MEMORY_STORAGE_KEY]), tombstones: meta.tombstones || {}, providers: portable.providers, activeProvider: portable.activeProvider, auxiliaryProviders: { visionModel: s.visionModel || null, transcriptionModel: s.transcriptionModel || null }, profile: { enabled: !!s.profileEnabled, text: s.profileText || '' }, meta: { providersAt: meta.providersAt || 0, providerItemsAt: meta.providerItemsAt, activeProviderAt: meta.activeProviderAt, auxiliaryItemsAt: meta.auxiliaryItemsAt, profileAt: meta.profileAt || 0, memoryAt: meta.memoryAt || 0 } };
+    return { version: 1, memory: normalizeUserMemoryStore(s[USER_MEMORY_STORAGE_KEY]), tombstones: meta.tombstones || {}, providers: portable.providers, activeProvider: portable.activeProvider, auxiliaryProviders: { visionModel: s.visionModel || null, transcriptionModel: s.transcriptionModel || null, imageGenModel: s.imageGenModel || null }, profile: { enabled: !!s.profileEnabled, text: s.profileText || '' }, meta: { providersAt: meta.providersAt || 0, providerItemsAt: meta.providerItemsAt, activeProviderAt: meta.activeProviderAt, auxiliaryItemsAt: meta.auxiliaryItemsAt, profileAt: meta.profileAt || 0, memoryAt: meta.memoryAt || 0 } };
   }
   async request(path, options = {}) {
     const s = await this.storage.get(PROFILE_SYNC_KEYS.token); const token = s[PROFILE_SYNC_KEYS.token];
@@ -286,7 +287,7 @@ export class ProfileSyncManager {
     }
     if (changes.activeProvider) { meta.providersAt = now; meta.activeProviderAt = now; }
     if (changes.activeProvider) syncRelevantChange = true;
-    for (const id of ['visionModel', 'transcriptionModel']) if (changes[id]) { meta.providersAt = now; meta.auxiliaryItemsAt = meta.auxiliaryItemsAt || {}; meta.auxiliaryItemsAt[id] = now; syncRelevantChange = true; }
+    for (const id of ['visionModel', 'transcriptionModel', 'imageGenModel']) if (changes[id]) { meta.providersAt = now; meta.auxiliaryItemsAt = meta.auxiliaryItemsAt || {}; meta.auxiliaryItemsAt[id] = now; syncRelevantChange = true; }
     if (changes.profileEnabled || changes.profileText) { meta.profileAt = now; syncRelevantChange = true; }
     if (changes[USER_MEMORY_STORAGE_KEY]) {
       syncRelevantChange = true;
@@ -305,7 +306,7 @@ export class ProfileSyncManager {
     if (syncRelevantChange) this.schedule();
   }
   schedule() { if (this.applying || !this.password) return; clearTimeout(this.timer); this.timer = setTimeout(() => this.sync().catch((e) => { this.status = [402, 403].includes(e.status) ? 'subscription' : e instanceof TypeError ? 'offline' : 'error'; }), 1500); }
-  async apply(vault, conflicts) { this.applying = true; try { const current = await this.storage.get(['providers', 'activeProvider', PORTABLE_ACTIVE_PROVIDER_KEY]); const currentProviders = current.providers || {}; const localOnlyIds = nonPortableProviderIds(currentProviders); const portable = portableVault(vault, current[PORTABLE_ACTIVE_PROVIDER_KEY]); const providers = { ...portable.providers }; for (const id of localOnlyIds) if (currentProviders[id]) providers[id] = currentProviders[id]; const preserveLocalActive = localOnlyIds.has(current.activeProvider) && !!currentProviders[current.activeProvider]; const portableActive = portable.activeProvider || DEFAULT_PORTABLE_ACTIVE_PROVIDER; await this.storage.set({ [USER_MEMORY_STORAGE_KEY]: portable.memory, providers, activeProvider: preserveLocalActive ? current.activeProvider : portableActive, visionModel: portable.auxiliaryProviders?.visionModel || null, transcriptionModel: portable.auxiliaryProviders?.transcriptionModel || null, profileEnabled: portable.profile.enabled, profileText: portable.profile.text, [PORTABLE_ACTIVE_PROVIDER_KEY]: portableActive, [PROFILE_SYNC_KEYS.metadata]: { ...portable.meta, tombstones: portable.tombstones }, [PROFILE_SYNC_KEYS.recovery]: conflicts }); } finally { this.applying = false; } }
+  async apply(vault, conflicts) { this.applying = true; try { const current = await this.storage.get(['providers', 'activeProvider', PORTABLE_ACTIVE_PROVIDER_KEY]); const currentProviders = current.providers || {}; const localOnlyIds = nonPortableProviderIds(currentProviders); const portable = portableVault(vault, current[PORTABLE_ACTIVE_PROVIDER_KEY]); const providers = { ...portable.providers }; for (const id of localOnlyIds) if (currentProviders[id]) providers[id] = currentProviders[id]; const preserveLocalActive = localOnlyIds.has(current.activeProvider) && !!currentProviders[current.activeProvider]; const portableActive = portable.activeProvider || DEFAULT_PORTABLE_ACTIVE_PROVIDER; await this.storage.set({ [USER_MEMORY_STORAGE_KEY]: portable.memory, providers, activeProvider: preserveLocalActive ? current.activeProvider : portableActive, visionModel: portable.auxiliaryProviders?.visionModel || null, transcriptionModel: portable.auxiliaryProviders?.transcriptionModel || null, imageGenModel: portable.auxiliaryProviders?.imageGenModel || null, profileEnabled: portable.profile.enabled, profileText: portable.profile.text, [PORTABLE_ACTIVE_PROVIDER_KEY]: portableActive, [PROFILE_SYNC_KEYS.metadata]: { ...portable.meta, tombstones: portable.tombstones }, [PROFILE_SYNC_KEYS.recovery]: conflicts }); } finally { this.applying = false; } }
   sync(options = {}) {
     if (this.syncPromise) { this.syncAgain = true; return this.syncPromise; }
     this.syncAgain = false;

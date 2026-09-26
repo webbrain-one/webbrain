@@ -879,6 +879,16 @@ export default {
   'st.transcription.failed': 'Failed: {error}',
   'st.transcription.fill_required': 'Fill in Base URL and Model first.',
 
+  // Generative media (fal.ai) — Assistive Models section
+  'st.imagegen.heading': 'Generative media (fal.ai)',
+  'st.imagegen.desc': 'Used by the generate_image agent tool to create images and other media from a text prompt via fal.ai\'s queue API. Get a key at fal.ai/dashboard/keys. Not used for chat.',
+  'st.imagegen.saved': 'Saved!',
+  'st.imagegen.cleared': 'Cleared.',
+  'st.imagegen.testing': 'Testing...',
+  'st.imagegen.connected': 'Connected! Model: {model}',
+  'st.imagegen.failed': 'Failed: {error}',
+  'st.imagegen.fill_required': 'Fill in API Key and Model first.',
+
   // Image budget (issue #311): screenshot quality + capture limits.
   'st.imageBudget.heading': 'Image budget',
   'st.imageBudget.desc': 'Control screenshot size and how many the agent captures for vision per turn. Lower detail and dimension cuts cost and latency for smaller endpoints; higher keeps fidelity. Defaults match the previous behavior.',

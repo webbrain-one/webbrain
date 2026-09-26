@@ -40,6 +40,7 @@ import {
 } from './providers/oauth-claude.js';
 import { getBalance as capsolverGetBalance } from './agent/captcha-solver.js';
 import { isCapsolverEnabled } from './agent/capsolver-config.js';
+import { testImageGenProvider } from './agent/fal-media.js';
 import { createSystemOneJudge } from './agent/systemone-judge.js';
 import {
   SELECTION_CONTEXT_SOURCE_GROUNDING,
@@ -3468,6 +3469,10 @@ async function handleMessage(msg, sender) {
 
     case 'test_transcription_provider': {
       return await providerManager.testTranscriptionProvider();
+    }
+
+    case 'test_image_gen_provider': {
+      return await testImageGenProvider();
     }
 
     case 'test_system_one': {

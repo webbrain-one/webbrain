@@ -118,6 +118,7 @@ import {
   visionGenerationOptions,
 } from '../providers/provider-compatibility.js';
 import { resolveMaxOutputTokens } from '../providers/context-windows.js';
+import { generateImage } from './fal-media.js';
 import { extractFirstJsonObject } from './json-extract.js';
 import { repairAssistantDisplayText, sanitizeText as sanitizePlannerText } from './text-sanitize.js';
 import { emptyOutputFailureMessage, modelOutputDiagnostics } from './model-output-diagnostics.js';
@@ -32022,6 +32023,9 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     if (name === 'fetch_url') {
       const result = await fetchUrl(args.url, args, { tabId, signal: executionContext?._contentActionAbortSignal });
       return await this._restrictedDomainScreenshotFallback(tabId, name, args.url, result);
+    }
+    if (name === 'generate_image') {
+      return await generateImage(args, { signal: executionContext?._contentActionAbortSignal });
     }
     if (name === 'read_page_source') {
       const result = await readPageSource(args.url, args, { tabId, signal: executionContext?._contentActionAbortSignal });

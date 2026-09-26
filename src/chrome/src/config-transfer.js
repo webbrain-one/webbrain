@@ -66,6 +66,7 @@ export const DEFAULT_CONFIG_SETTINGS = Object.freeze({
   activeProvider: 'webbrain_cloud',
   visionModel: null,
   transcriptionModel: null,
+  imageGenModel: null,
   profileEnabled: false,
   profileText: '',
   [USER_MEMORY_STORAGE_KEY]: { version: 1, records: [] },
@@ -160,7 +161,7 @@ const ARRAY_KEYS = new Set([
   CUSTOM_SKILLS_STORAGE_KEY,
   DEFAULT_SKILLS_REMOVED_STORAGE_KEY,
 ]);
-const NULLABLE_OBJECT_KEYS = new Set(['visionModel', 'transcriptionModel']);
+const NULLABLE_OBJECT_KEYS = new Set(['visionModel', 'transcriptionModel', 'imageGenModel']);
 
 function isPlainObject(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;

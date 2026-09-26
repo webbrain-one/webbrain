@@ -1771,6 +1771,32 @@
       <div class="test-result" id="test-transcription"></div>
     </div>
 
+    <h3 class="mm-section-heading" id="image-gen-heading">
+      <svg class="mm-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+        <circle cx="8.5" cy="8.5" r="1.5"/>
+        <polyline points="21 15 16 10 5 21"/>
+      </svg>
+      <span data-i18n="st.imagegen.heading"></span>
+    </h3>
+    <div class="provider-card" id="image-gen-card">
+      <div style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.5;" data-i18n="st.imagegen.desc"></div>
+      <div class="field">
+        <label data-i18n="st.provider.field.api_key"></label>
+        <input type="password" id="image-gen-api-key" placeholder="FAL_KEY">
+      </div>
+      <div class="field">
+        <label data-i18n="st.provider.field.model"></label>
+        <input type="text" id="image-gen-model" placeholder="fal-ai/flux/schnell">
+      </div>
+      <div class="btn-row">
+        <button class="btn-primary" id="btn-save-image-gen" data-i18n="st.transcription.save"></button>
+        <button class="btn-secondary" id="btn-test-image-gen" data-i18n="st.transcription.test"></button>
+        <button class="btn-secondary" id="btn-clear-image-gen" data-i18n="st.transcription.clear"></button>
+      </div>
+      <div class="test-result" id="test-image-gen"></div>
+    </div>
+
     <h3 class="mm-section-heading" id="system-one-heading">
       <svg class="mm-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <circle cx="12" cy="12" r="9"/>

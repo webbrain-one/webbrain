@@ -1244,6 +1244,20 @@ export const AGENT_TOOLS = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'generate_image',
+      description: 'Generate media (usually an image) from a text prompt using the user\'s configured fal.ai assistive model (Settings → Assistive Models → Generative media). Runs on fal.ai\'s queue API and may take up to a minute. Returns the hosted media URL on success. Not available in Ask mode.',
+      parameters: {
+        type: 'object',
+        properties: {
+          prompt: { type: 'string', description: 'Text prompt describing the media to generate.' },
+        },
+        required: ['prompt'],
+      },
+    },
+  },
 ];
 
 /**
@@ -1952,6 +1966,7 @@ ${BROWSER_TAB_LIMITATION}
 - scratchpad_write: Pin a note in context that survives summarization (use on long tasks to remember download IDs, file paths, plans)
 - progress_update / progress_read: Structured app-owned ledger for the active repeated item/action task. Use it for per-user/per-item status and collected fields; close pending/acted rows before done.
 - download_public_media (if enabled by a skill) / download_social_media: One-shot image/video download from public social sites. Prefer the enabled skill tool for public media URLs; otherwise use download_social_media. Single call — no need to inspect the DOM yourself.
+- generate_image: Create media (usually an image, sometimes video/audio) directly from a text prompt through the user's configured fal.ai generative-media model. When the user asks to GENERATE media ("generate an image of a red apple", "make a logo", "create a video clip"), call this tool — do NOT navigate to third-party image sites (Midjourney, DALL·E, Bing Images, etc.). Requires Settings → Assistive Models → Generative media. Not available in Ask mode.
 - Recording is user-driven only. If the user asks to record, do NOT call tools; tell them to type \`/record\` for current-tab recording or \`/record --full-screen\` for screen/window recording; add \`--transcribe\` to either form if they want a Whisper transcript after stop. If they ask to stop a recording, tell them to press Escape twice in WebBrain/browser surfaces or use Chrome's Stop sharing control.
 - hover: CDP-trusted hover over a ref_id. Use ONLY for menus/tooltips that REVEAL on hover (GitHub three-dot menus, Linear card actions, nav menus with reveal-on-hover children). Re-read the tree after to find the newly-visible items. Do NOT call hover before every click — most things are clickable directly.
 - drag_drop: Drag one ref_id onto another via CDP-trusted pointer events. Use for Trello/Linear/Notion-style card reordering, file-tree node moves, image-crop handles, slider thumbs. Pass \`steps: 15–20\` if the first attempt doesn't trigger the drop indicator on momentum-tracking dnd. Verify by re-reading the tree.
