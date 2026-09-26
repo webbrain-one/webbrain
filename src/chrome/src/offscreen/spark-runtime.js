@@ -178,7 +178,8 @@ export async function createSparkRuntime({ library, ort, wasmPaths, cacheStorage
   if (abi.numLayers !== 28 || abi.inputs.length !== 58 || abi.outputs.length !== 57 || abi.deploymentContextTokens !== SPARK_CONTEXT) throw new Error('Tiny XS v3 graph ABI mismatch.');
   const generation = await (await read('generation_config.json')).json();
   const eos = Array.isArray(generation.eos_token_id) ? generation.eos_token_id : [generation.eos_token_id];
-  // ORT reads external weights as a streamed URL, not a >2 GB typed array.
+  // ORT reads the external-data URL while creating the session. Keep these
+  // object URLs alive until that work completes, then release their backing blobs.
   const graphUrl = URL.createObjectURL(await (await read('onnx/model_fp16.onnx')).blob());
   const dataUrl = URL.createObjectURL(await (await read('onnx/model_fp16.onnx_data')).blob());
   try {
@@ -187,6 +188,13 @@ export async function createSparkRuntime({ library, ort, wasmPaths, cacheStorage
       preferredOutputLocation: 'gpu-buffer',
       externalData: [{ path: 'model_fp16.onnx_data', data: dataUrl }],
     });
+    if (session.inputNames.length !== abi.inputs.length ||
+        session.outputNames.length !== abi.outputs.length ||
+        session.inputNames.some((name, index) => name !== abi.inputs[index]) ||
+        session.outputNames.some((name, index) => name !== abi.outputs[index])) {
+      await session.release();
+      throw new Error('Tiny XS v3 graph ABI tensor ordering mismatch.');
+    }
     return new SparkRuntime(ort, tokenizer, abi, eos, session);
   } finally {
     URL.revokeObjectURL(graphUrl);

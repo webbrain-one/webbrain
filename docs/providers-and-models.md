@@ -232,10 +232,11 @@ Transformers.js 4.2 tokenizer, the package's native Jinja tool template,
 greedy decoding, and no helper model or cloud fallback. Input plus output is
 bounded to **4,096 tokens**, with at most 2,048 output tokens; input is never
 silently truncated by the native runtime. Download size is about **3.96 GB**.
-Hardware needs `shader-f16` and sufficient free GPU memory (weights plus KV
-and temporary buffers); package validation used an RTX 5090. Other adapters
-are not yet validated. A smaller parameter count does not imply a smaller
-download than quantized Tiny v2.1 or better benchmark quality.
+Hardware needs `shader-f16`, sufficient free GPU memory (weights plus KV and
+temporary buffers), and several GB of transient host memory while ORT loads the
+external weights; package validation used an RTX 5090. Other adapters are not
+yet validated. A smaller parameter count does not imply a smaller download than
+quantized Tiny v2.1 or better benchmark quality.
 
 All seven required data files are streamed into a revision-specific cache
 and checked against pinned SHA-256 hashes and byte lengths. No remote
