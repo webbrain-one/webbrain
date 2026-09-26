@@ -181,6 +181,7 @@ curl example in the skill. It does not claim to play audio from metadata alone.
 
 ## See also
 
+- [Opt-in external memory proposal](memcode-memory-proposal.md) — why hosted MemCode needs an extension-owned OAuth flow before it can be packaged as a skill
 - [Agent tools](agent-tools.md) — tiers, modes, and the full tool matrix
 - [Privacy and data flow](privacy-and-data-flow.md#bundled-skills)
 - [Architecture](architecture.md) — skills and dynamic tool exposure in the turn
