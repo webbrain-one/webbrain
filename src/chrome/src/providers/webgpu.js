@@ -13,6 +13,8 @@ export const WEBGPU_LFM25_VL_3B_MODEL_ID = 'LiquidAI/LFM2.5-VL-3B-ONNX';
 export const WEBGPU_NANBEIGE42_3B_MODEL_ID = 'Michionlion/Nanbeige4.2-3B-ONNX-WebGPU';
 export const WEBGPU_MINICPM5_2B_MODEL_ID = 'RASMUS/MiniCPM5-2B-ONNX';
 export const WEBGPU_COMPASS_TINY_V2_MODEL_ID = 'webbrain-one/webbrain-compass-tiny-v2.1';
+export const WEBGPU_COMPASS_TINY_XS_V3_MODEL_ID = 'webbrain-one/webbrain-compass-tiny-xs-v3-onnx';
+export const WEBGPU_TEXT_UI_MODEL_IDS = Object.freeze([WEBGPU_COMPASS_TINY_V2_MODEL_ID, WEBGPU_COMPASS_TINY_XS_V3_MODEL_ID]);
 export const WEBGPU_BONSAI27_MODEL_ID = 'prism-ml/Bonsai-27B-gguf';
 export const WEBGPU_DTYPE = 'q4f16';
 export const WEBGPU_BONSAI27_DTYPE = 'q1';
@@ -116,6 +118,16 @@ export const WEBGPU_MODEL_PRESETS = Object.freeze([
     // routing. Same 42-layer GQA shape as the base export. Default browser
     // context is 32k.
     contextWindow: 32768,
+    supportsVision: false,
+  }),
+  Object.freeze({
+    id: WEBGPU_COMPASS_TINY_XS_V3_MODEL_ID,
+    runtime: WEBGPU_RUNTIME_ONNX,
+    label: 'Compass Tiny XS v3 (private research preview)',
+    size: '3.96 GB',
+    dtype: 'fp16',
+    dtypeLabel: 'FP16 storage / FP32 GEMM',
+    contextWindow: 4096,
     supportsVision: false,
   }),
   Object.freeze({
@@ -321,6 +333,7 @@ export class WebGPUProvider extends WebGPUOffscreenProvider {
       model,
       device: 'webgpu',
       dtype,
+      ...(model === WEBGPU_COMPASS_TINY_XS_V3_MODEL_ID ? { contextWindow: Math.min(4096, Math.max(1024, Number(config.contextWindow) || 4096)) } : {}),
       promptTier: config.promptTier || 'compact',
       supportsVision: webgpuModelSupportsVision(model),
       supportsAskStreaming: false,
@@ -338,6 +351,11 @@ export class WebGPUProvider extends WebGPUOffscreenProvider {
 
   get supportsTools() {
     return true;
+  }
+
+  get maxOutputTokens() {
+    return this.model === WEBGPU_COMPASS_TINY_XS_V3_MODEL_ID
+      ? Math.min(2048, super.maxOutputTokens) : super.maxOutputTokens;
   }
 
   get supportsVision() {
@@ -380,7 +398,7 @@ export class WebGPUProvider extends WebGPUOffscreenProvider {
       content: String(response.content || ''),
       reasoningContent: response.reasoningContent || null,
       toolCalls: Array.isArray(response.toolCalls) && response.toolCalls.length ? response.toolCalls : null,
-      usage: null,
+      usage: response.usage || null,
       raw: response.raw || null,
     };
   }
@@ -423,6 +441,8 @@ export class WebGPUProvider extends WebGPUOffscreenProvider {
       device: this.device,
       dtype: target.dtype,
       requireTools: target.requireTools,
+      // Download credential only; never attach it to a chat request.
+      ...(target.model === WEBGPU_COMPASS_TINY_XS_V3_MODEL_ID ? { hfToken: String(this.config.hfToken || '') } : {}),
     });
     if (!response || response.error) {
       throw new Error(response?.error || `Unable to download ${webgpuModelDisplayName(target.model)}.`);

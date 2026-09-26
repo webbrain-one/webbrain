@@ -5,7 +5,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "npm run test:markdown && npm run test:systemone && npm run test:systemone:fast && node --test test/browser-dialogs.mjs && npm run test:firefox-bidi && npm run test:runtime-lifecycle && npm run test:provider-limits && npm run test:accessibility-tree-benchmark && npm run test:toolbar-guard && npm run test:pdf-read && npm run test:pdf-selection && npm run test:social-contract && npm run test:safesocial && npm run test:build-unpacked && npm run test:attachment-drop && node test/run.js && node test/selection-scope-restoration.mjs && node scripts/benchmark-offline-relevance.mjs && npm run test:security",
+    "test": "npm run test:spark-webgpu && npm run test:markdown && npm run test:systemone && npm run test:systemone:fast && node --test test/browser-dialogs.mjs && npm run test:firefox-bidi && npm run test:runtime-lifecycle && npm run test:provider-limits && npm run test:accessibility-tree-benchmark && npm run test:toolbar-guard && npm run test:pdf-read && npm run test:pdf-selection && npm run test:social-contract && npm run test:safesocial && npm run test:build-unpacked && npm run test:attachment-drop && node test/run.js && node test/selection-scope-restoration.mjs && node scripts/benchmark-offline-relevance.mjs && npm run test:security",
+    "test:spark-webgpu": "node --test test/spark-webgpu.mjs",
+    "test:spark-webgpu:browser": "node test/spark-webgpu-browser.mjs",
     "test:provider-limits": "node test/provider-model-limits.mjs",
     "test:markdown": "node --test test/markdown-render.mjs",
     "test:accessibility-tree-benchmark": "node --test test/llm/lib/accessibility-tree-formats.test.mjs && node test/llm/accessibility-tree-benchmark.mjs --no-exact-tokenizer --check",

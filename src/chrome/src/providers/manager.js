@@ -10,6 +10,7 @@ import {
   WebGPUProvider,
   WebGPUVisionProvider,
   WEBGPU_COMPASS_TINY_V2_MODEL_ID,
+  WEBGPU_COMPASS_TINY_XS_V3_MODEL_ID,
   WEBGPU_DTYPE,
   WEBGPU_MODEL_ID,
   WEBGPU_RUNTIME_BITGPU,
@@ -1949,6 +1950,11 @@ export class ProviderManager {
       if (!Object.hasOwn(updates, 'dtype')) {
         merged.dtype = preset?.dtype || WEBGPU_DTYPE;
       }
+    }
+    if (id === 'webgpu' && merged.model === WEBGPU_COMPASS_TINY_XS_V3_MODEL_ID) {
+      merged.contextWindow = Math.min(4096, Math.max(1024, Number(merged.contextWindow) || 4096));
+      merged.maxOutputTokens = Math.min(2048, Math.max(1, Number(merged.maxOutputTokens) || 2048));
+      merged.dtype = 'fp16';
     }
     if (this._providerDefinitionId(id, current) === 'ollama') {
       merged.visionMode = OLLAMA_VISION_MODES.has(merged.visionMode) ? merged.visionMode : 'auto';

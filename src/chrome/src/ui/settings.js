@@ -70,6 +70,7 @@ import { AUTO_VISION_PROVIDER_IDS, visionDetectionMatches } from '../providers/v
 import { canonicalizeOllamaBaseUrl } from '../providers/context-windows.js';
 import {
   WEBGPU_COMPASS_TINY_V2_MODEL_ID,
+  WEBGPU_TEXT_UI_MODEL_IDS,
   WEBGPU_MODEL_PRESETS,
   WEBGPU_VISION_AUTO_SELECTED_KEY,
   WEBGPU_VISION_CONSENT_VERSION,
@@ -3206,12 +3207,13 @@ function renderProviders() {
           labelKey: 'st.provider.field.model',
           type: 'text',
           placeholder: 'owner/repository',
-          suggestions: [WEBGPU_COMPASS_TINY_V2_MODEL_ID],
-          suggestionLabels: Object.fromEntries(WEBGPU_MODEL_PRESETS.filter(option => option.id === WEBGPU_COMPASS_TINY_V2_MODEL_ID).map(option => [
+          suggestions: WEBGPU_TEXT_UI_MODEL_IDS,
+          suggestionLabels: Object.fromEntries(WEBGPU_MODEL_PRESETS.filter(option => WEBGPU_TEXT_UI_MODEL_IDS.includes(option.id)).map(option => [
             option.id,
             `${option.label} — ${option.id}${option.supportsVision ? ` — ${t('st.provider.field.supports_vision')}` : ''}`,
           ])),
         },
+        { key: 'hfToken', labelKey: 'st.provider.field.hf_read_token', type: 'password', placeholder: 'Optional HF read token for private Tiny XS v3; download only' },
         WEBGPU_CONTEXT_WINDOW_FIELD,
         PROMPT_TIER_FIELD,
       ],
@@ -3652,6 +3654,9 @@ function renderProviders() {
                   font-size:12px;color:var(--text2);line-height:1.5;">
            ${t('st.providers.webbrain_data_use.body', { privacyLink, subscribeLink, accountLink })}
          </div>`;
+    }
+    if (definitionId === 'webgpu') {
+      providerNote = `<p class="field-hint">${escapeHtml(t('st.providers.webgpu_xs_note'))}</p>`;
     }
     const extensionOrigin = chrome.runtime.getURL('').replace(/\/$/, '');
     const ollamaWarningTitleId = `ollama-warning-title-${id}`;

@@ -431,6 +431,8 @@ export default {
   'st.provider.field.api_base_url': 'API temel URL\'si',
   'st.provider.field.api_format': 'API biçimi',
   'st.provider.field.api_key': 'API anahtarı',
+  'st.provider.field.hf_read_token': 'Hugging Face okuma anahtarı (isteğe bağlı, yalnız indirme)',
+  'st.providers.webgpu_xs_note': 'Tiny XS v3 özel, ticari olmayan bir araştırma önizlemesidir: yerel Spark FP16 / FP32 GEMM, 4K bağlam, yaklaşık 3,96 GB indirme. İndirmeden önce Ayarlar → Sağlayıcılar → WebGPU içinde yetkili Hugging Face okuma anahtarını kaydedin. shader-f16 gerektirir; RTX 5090 üzerinde doğrulanmıştır. Bulut yedeği yoktur.',
   'st.provider.field.model': 'Model',
   'st.provider.field.model_optional': 'Model (isteğe bağlı)',
   'st.provider.field.supports_vision': 'Model görme yeteneğini destekliyor (çok kipli)',

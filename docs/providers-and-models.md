@@ -94,7 +94,7 @@ class BaseLLMProvider {
 | `gpt4all` | `openai` | local | (loaded model) | Yes (default on) |
 | `local_openai_proxy` | `openai` | local | (required) | Off / manual toggle |
 | `unsloth` | `openai` | local | (required) | Off / manual toggle |
-| `webgpu` (Chromium) | `webgpu` | local | Compass Tiny v2.1 (only preset); experimental custom HF ONNX repos | No |
+| `webgpu` (Chromium) | `webgpu` | local | Compass Tiny v2.1 (default), Tiny XS v3 private research preview; experimental custom HF ONNX repos | No |
 | `azure_openai` | `azure_openai` | cloud | (deployment) | Manual toggle |
 | `aws_bedrock` | `aws_bedrock` | cloud | (model id) | No |
 | `openai` | `openai` | cloud | `gpt-5.6-terra` | Model-name regex |
@@ -216,8 +216,53 @@ duplicate request.
 
 ### Local Providers
 
+#### Compass Tiny XS v3 private research preview
+
+Settings → Providers → WebGPU and Apocalypse Mode → Text Model also offer
+**Compass Tiny XS v3**, based on Spark-X2.5-1.7B. Tiny v2.1 remains the default.
+The XS download is pinned to `webbrain-one/webbrain-compass-tiny-xs-v3-onnx`
+revision `67a2d019a1a713753b692826767269384e9e9b10`. The repo is private;
+save an authorized **Hugging Face read token** in the WebGPU provider card
+before downloading. Apocalypse uses that same saved credential.
+
+This is **FP16 storage / FP32 GEMM**, not q4f16. Its native Spark graph has
+28 layers / 56 KV tensors; it must not be loaded through the MiniCPM/Llama
+Transformers.js model pipeline. WebBrain uses its bundled ORT 1.27 and
+Transformers.js 4.2 tokenizer, the package's native Jinja tool template,
+greedy decoding, and no helper model or cloud fallback. Input plus output is
+bounded to **4,096 tokens**, with at most 2,048 output tokens; input is never
+silently truncated by the native runtime. Download size is about **3.96 GB**.
+Hardware needs `shader-f16` and sufficient free GPU memory (weights plus KV
+and temporary buffers); package validation used an RTX 5090. Other adapters
+are not yet validated. A smaller parameter count does not imply a smaller
+download than quantized Tiny v2.1 or better benchmark quality.
+
+All seven required data files are streamed into a revision-specific cache
+and checked against pinned SHA-256 hashes and byte lengths. No remote
+JavaScript is executed. Pause retains complete verified files; an interrupted
+file restarts from byte zero on Resume. Stop & remove deletes this model's
+cache without deleting Tiny v2.1. Readiness requires every pinned file, so a
+completion marker alone cannot hide a missing file. Cached inference needs
+no Hugging Face access or token. The credential is sent only to fixed HF
+download URLs, never to chat, prompts or a model endpoint; WebGPU provider
+configuration is excluded from Cloud Sync. Like other local credentials,
+it remains plaintext in extension local storage and may appear in an explicit
+settings backup: keep exports private.
+
+**Noncommercial research only**: this optional private preview retains the
+dataset's WebLINX licensing restriction. It is not commercial-release
+clearance and is not selected or downloaded just by installing WebBrain.
+
+Validation: `npm run test:spark-webgpu` covers pinned downloads, credentials,
+cache completeness, native graph feeds, failure cleanup and tool parsing.
+The opt-in `npm run test:spark-webgpu:browser` exercises the actual extension
+worker on the GPU with a local pinned bundle. See the repository's
+`test/spark-webgpu-validation.md` integration validation record for
+reproduction, tested hardware and limitations. This is an integration smoke
+test, not a new agent benchmark or a claim of better model quality.
+
 On Chromium, **WebGPU (In-browser)** is an endpoint-free local provider. Its
-Apocalypse text picker offers a single shipped preset:
+Settings and Apocalypse text pickers offer these shipped presets:
 
 - [`webbrain-one/webbrain-compass-tiny-v2.1`](https://huggingface.co/webbrain-one/webbrain-compass-tiny-v2.1)
   (`q4f16`, about 1.87 GB across two external-data shards), WebBrain's Compass
@@ -226,15 +271,22 @@ Apocalypse text picker offers a single shipped preset:
   Runtime Web GPU worker, and emits MiniCPM5 XML-style tool calls
   (`<function name="..."><param name="...">...</param></function>`, CDATA-wrapped
   when values contain `<`, `&`, or newlines), which the local fallback parser
-  accepts. Enabling Apocalypse Mode starts this download automatically.
+  accepts. This remains the default preset.
+- [`webbrain-one/webbrain-compass-tiny-xs-v3-onnx`](https://huggingface.co/webbrain-one/webbrain-compass-tiny-xs-v3-onnx)
+  (native FP16 graph, about 3.96 GB, 4K context), the optional private Spark
+  research preview described above. An authorized HF read token is required
+  for its first download.
+
+Enabling Apocalypse Mode starts the selected text model's download. The
+existing shared transfer ownership and Pause/Stop controls apply to both.
 
 Custom Hugging Face repositories have not been tested and are likely not to
 work. They must be compatible with Transformers.js text generation, provide a
 `q4f16` ONNX variant, and use a chat template that accepts `tools`; WebBrain
 validates the template after loading and rejects incompatible repositories.
 
-The provider is text-only and defaults to the Compact prompt tier with a
-32k context window. Budget roughly 4 GB of GPU headroom (about 1.87 GB of
+The provider is text-only and uses the Compact prompt tier. The default Tiny
+v2.1 preset has a 32k context window. Budget roughly 4 GB of GPU headroom (about 1.87 GB of
 weights plus KV cache that grows with context length); on constrained GPUs,
 lower the context window on the WebGPU card in Settings → Providers (16384 is
 a safe fallback) and retry with a short prompt. Each repository is cached
