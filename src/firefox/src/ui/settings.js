@@ -196,6 +196,10 @@ const btnClearUserMemory = document.getElementById('btn-clear-user-memory');
 const userMemoryImportText = document.getElementById('user-memory-import-text');
 const btnImportUserMemory = document.getElementById('btn-import-user-memory');
 const userMemoryTestResult = document.getElementById('test-user-memory');
+const memcodeRecallToggle = document.getElementById('toggle-memcode-recall');
+const memcodeConnectButton = document.getElementById('btn-memcode-connect');
+const memcodeDisconnectButton = document.getElementById('btn-memcode-disconnect');
+const memcodeRecallResult = document.getElementById('test-memcode-recall');
 const captchaApiKeyInput = document.getElementById('captcha-api-key');
 const btnSaveCaptcha = document.getElementById('btn-save-captcha');
 const btnTestCaptcha = document.getElementById('btn-test-captcha');
@@ -695,6 +699,7 @@ async function init() {
   if (profileEnabledToggle) profileEnabledToggle.checked = !!profileStored.profileEnabled;
   if (profileTextArea) profileTextArea.value = profileStored.profileText || '';
   await loadUserMemorySettings();
+  await loadMemcodeStatus();
 
   // A valid saved key is the CapSolver enable control.
   const captchaStored = await browser.storage.local.get('capsolverApiKey');
@@ -1802,6 +1807,47 @@ function flashUserMemoryResult(className, text) {
   userMemoryTestResult.textContent = text;
   setTimeout(() => userMemoryTestResult.classList.remove('show'), 2500);
 }
+
+async function loadMemcodeStatus() {
+  if (!memcodeRecallToggle) return;
+  const result = await sendToBackground('memcode_recall_status').catch(() => null);
+  memcodeRecallToggle.disabled = !result?.connected;
+  memcodeRecallToggle.checked = result?.recallEnabled === true;
+  if (memcodeConnectButton) memcodeConnectButton.disabled = result?.connected === true;
+  if (memcodeDisconnectButton) memcodeDisconnectButton.disabled = result?.connected !== true;
+  if (memcodeRecallResult) {
+    memcodeRecallResult.className = 'test-result show';
+    memcodeRecallResult.textContent = t(result?.connected
+      ? (result.recallEnabled ? 'st.memcode.active' : 'st.memcode.connected')
+      : 'st.memcode.disconnected', { account: result?.accountId || 'unknown' });
+  }
+}
+
+memcodeConnectButton?.addEventListener('click', async () => {
+  memcodeConnectButton.disabled = true;
+  try {
+    const result = await sendToBackground('memcode_recall_connect');
+    if (!result?.ok) throw new Error(result?.error || 'Connection failed');
+    await loadMemcodeStatus();
+  } catch (error) {
+    memcodeConnectButton.disabled = false;
+    if (memcodeRecallResult) memcodeRecallResult.textContent = t('st.memcode.error', { error: error.message });
+  }
+});
+memcodeDisconnectButton?.addEventListener('click', async () => {
+  const result = await sendToBackground('memcode_recall_disconnect');
+  await loadMemcodeStatus();
+  if (result?.revocationFailed && memcodeRecallResult) {
+    memcodeRecallResult.textContent = t('st.memcode.revocation_warning');
+  }
+});
+memcodeRecallToggle?.addEventListener('change', async () => {
+  const result = await sendToBackground('memcode_recall_enable', { enabled: memcodeRecallToggle.checked });
+  if (!result?.ok) {
+    if (memcodeRecallResult) memcodeRecallResult.textContent = t('st.memcode.error', { error: result?.error || 'Setting unavailable' });
+  }
+  await loadMemcodeStatus();
+});
 
 const USER_MEMORY_FAILURE_REASON_KEYS = {
   invalid_or_sensitive: 'st.memory.reason.invalid_or_sensitive',

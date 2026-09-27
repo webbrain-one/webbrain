@@ -56,6 +56,7 @@ export const CAPABILITY_LABEL = {
  * tool is classified as gated, untrusted-read, or explicitly known-safe.
  */
 export const UNTRUSTED_CONTENT_TOOLS = new Set([
+  'recall_memcode',
   'chat_observe',
   'chat_send',
   'read_page',
@@ -387,6 +388,7 @@ export function isNetworkMutation(name, args) {
 // gated — adding a new state-changing tool without listing it would silently
 // bypass the gate, so keep this exhaustive.
 const TOOL_CAPABILITY = {
+  recall_memcode: Capability.NETWORK,
   navigate: Capability.NAVIGATE,
   // This read helper temporarily walks Gmail /pN routes before restoring the
   // exact starting URL, so it needs the same site-scoped navigation grant.
@@ -558,6 +560,7 @@ function resolveHostAgainst(url, base) {
  */
 export function hostForCapability(capability, args, currentUrlOrHost, toolName) {
   args = args || {};
+  if (toolName === 'recall_memcode') return 'memory.memcode.in';
   if (toolName === 'read_email_verification_message' && capability === Capability.CLICK) {
     // agent.js supplies this from its opaque inspected-mailbox session only to
     // the permission check; it never comes from model arguments.

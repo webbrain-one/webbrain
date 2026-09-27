@@ -136,6 +136,8 @@ see the [full catalog](docs/providers-and-models.md#extended-provider-catalog).
   emergency overflow recovery
 - **Per-tab conversations** — each tab keeps its own history; optional local
   user memory for stated preferences
+- **Optional cross-device recall** — connect MemCode with OAuth for read-only
+  lookup while local memory stays the default ([setup and privacy](docs/memcode-recall.md))
 - **Reading-first side panel** — streaming Ask replies, floating controls that
   keep your question in view as answers grow, copy buttons, a page-inspection
   banner, and a stop button that works mid-run

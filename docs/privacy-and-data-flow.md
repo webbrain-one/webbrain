@@ -335,6 +335,13 @@ the v1 bridge for moving memory between browser profiles.
 
 ### Configuration Snapshot Transfer
 
+An optional MemCode connection is documented in [MemCode recall](memcode-recall.md).
+It is disabled by default and separate from local user memory. When enabled,
+short agent-selected search queries go to MemCode, and returned memories can be
+sent as untrusted tool context to the configured LLM provider. OAuth tokens stay
+in extension-local storage outside portable configuration snapshots; disconnect
+removes them locally. No local memory is automatically uploaded.
+
 `/export --config` creates a local plaintext `webbrain-config/1` JSON file, and
 `/import <json>` or `/import --file` reads that snapshot locally before writing
 the validated Settings values to extension storage. The snapshot intentionally

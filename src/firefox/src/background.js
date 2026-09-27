@@ -85,6 +85,7 @@ import {
   parseUserMemoryExtractionResult,
 } from './agent/user-memory.js';
 import { PROFILE_SYNC_DATA_KEYS, PROFILE_SYNC_KEYS, ProfileSyncManager } from './profile-sync.js';
+import { createMemcodeRecall, MEMCODE_RECALL_ENABLED_KEY } from './agent/memcode-recall.js';
 import { shouldAutoGroupTabs } from './tab-group-preference.js';
 import {
   SHORTCUT_COMMAND_STORAGE_KEY,
@@ -168,6 +169,7 @@ agent.setConversationScopeChangeListener((tabId, state) => {
   }).catch(() => {});
 });
 const userMemoryStore = createUserMemoryStore(browser.storage.local);
+const memcodeRecall = createMemcodeRecall({ storage: browser.storage.local, identity: browser.identity });
 const savedWorkflowStore = createSavedWorkflowStore(browser.storage.local);
 const teacherSessionStore = createTeacherSessionStore(browser.storage.session);
 const teacherRunInterlock = createTeacherRunInterlock(teacherSessionStore, {
@@ -2438,6 +2440,12 @@ browser.runtime.onMessage.addListener((msg, sender) => {
 });
 
 async function handleMessage(msg, sender) {
+  // Only Settings may start OAuth or change the user's remote-memory choice.
+  // Content scripts share this message bus and must not control the connection.
+  if (String(msg.action || '').startsWith('memcode_recall_')
+    && sender?.url?.split(/[?#]/)[0] !== browser.runtime.getURL('src/ui/settings.html')) {
+    return { ok: false, error: 'MemCode connection controls are available in Settings only.' };
+  }
   const lightweightAction = [
     'persist_tab_chat',
     'load_tab_chat',
@@ -2494,6 +2502,19 @@ async function handleMessage(msg, sender) {
         formCaptureEnabled: settings[USER_MEMORY_FORM_CAPTURE_KEY] === true,
         maxPromptChars: normalizeUserMemoryMaxPromptChars(settings[USER_MEMORY_MAX_PROMPT_CHARS_KEY]),
       };
+    }
+
+    case 'memcode_recall_status':
+      return { ok: true, ...(await memcodeRecall.status()) };
+    case 'memcode_recall_connect':
+      return { ok: true, ...(await memcodeRecall.connect()) };
+    case 'memcode_recall_disconnect':
+      return { ok: true, ...(await memcodeRecall.disconnect()) };
+    case 'memcode_recall_enable': {
+      const status = await memcodeRecall.status();
+      if (!status.connected && msg.enabled) return { ok: false, error: 'Connect MemCode before enabling recall.' };
+      await browser.storage.local.set({ [MEMCODE_RECALL_ENABLED_KEY]: status.connected && msg.enabled === true });
+      return { ok: true, ...(await memcodeRecall.status()) };
     }
 
     case 'add_user_memory': {

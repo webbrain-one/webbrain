@@ -1,5 +1,10 @@
 # Proposal: opt-in external memory for WebBrain
 
+The read-only first slice is implemented in [Optional MemCode recall](memcode-recall.md).
+It uses MemCode's direct API resource to obtain a genuinely read-only OAuth
+token; the hosted MCP server currently requires a write scope for all clients.
+The remote-write slice below remains a proposal.
+
 This is an architecture proposal, not an installable skill or an enabled integration. WebBrain already has local user memory in browser storage; that remains the default and source of truth. The proposed MemCode connection would be a separate opt-in capability for people who want cross-device recall.
 
 ## Why a skill manifest alone is not enough
@@ -8,7 +13,7 @@ This is an architecture proposal, not an installable skill or an enabled integra
 
 ## Proposed minimum boundary
 
-1. **Explicit connection.** A Settings → Memory choice defaults to **local only**. Connecting external memory opens an extension-owned OAuth flow. Credentials stay in extension storage, never in skill text, prompts or page content. Disconnect revokes or discards local credentials and stops future traffic; remote deletion is a separate user action.
+1. **Explicit connection.** A Settings → Profile choice defaults to **local only**. Connecting external memory opens an extension-owned OAuth flow. Credentials stay in extension storage, never in skill text, prompts or page content. Disconnect revokes or discards local credentials and stops future traffic; remote deletion is a separate user action.
 2. **Separate consent for reads and writes.** A user can enable cross-device recall without enabling upload. A durable write shows the exact short text, destination/account and scope for approval. Auto-learn, form capture, page text and raw transcripts do not silently become remote writes.
 3. **Scope is local policy plus server authorization.** Only active, user-selected records are considered. Scope is explicitly chosen (for example personal vs. a named project); a page, skill or model cannot invent a user ID or integration identity. The server derives the account from OAuth and enforces access to any project scope.
 4. **Treat recall as untrusted data.** Returned memory takes the same nonce-delimited untrusted-content path used for page-derived tool output, not a trusted system-prompt insertion. The existing local user-memory block cannot be copied wholesale to that remote path. No recalled text can authorize browser actions or override the user's current request.
@@ -16,7 +21,7 @@ This is an architecture proposal, not an installable skill or an enabled integra
 
 ## Suggested implementation slices
 
-- Extension-owned OAuth/PKCE client for the MemCode MCP resource, with account display, refresh and disconnect. Do not add a bundled skill until this exists.
+- Extension-owned OAuth/PKCE client for the MemCode resource, with account display, refresh and disconnect. The read-only first slice uses the direct API resource because the hosted MCP server currently requires write scope as well. Do not add a bundled skill until this exists.
 - A read-only recall tool gated by the user's memory-read choice and marked untrusted in both Chrome and Firefox builds; add permission and prompt-injection tests in each build.
 - A distinct write tool with exact-text approval and idempotent retry. It must not be reachable through Ask or Compact mode, nor through an instruction in retrieved content.
 - One end-to-end signed-in test and an attribution check showing `webbrain` assigned by the server, never from a caller-provided header.

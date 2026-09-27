@@ -3,6 +3,7 @@
 // Works identically in Chrome MV3 and Firefox MV2.
 
 import en from './locales/en.js';
+import { memcodeEnglish } from './locales/memcode-copy.mjs';
 import { safeSocialEnglish, safeSocialTranslations } from './locales/safesocial-copy.mjs';
 import es from './locales/es.js';
 import fr from './locales/fr.js';
@@ -32,6 +33,7 @@ import { pdfViewerEnglish } from './locales/pdf-viewer-copy.mjs';
 const DICTS = Object.fromEntries(Object.entries({ en, es, fr, tr, zh, ru, uk, ar, ja, ko, id, th, ms, tl, pl, he, hi, pt, vi, bn, fa, nl, de })
   .map(([code, dict]) => [code, {
     ...dict,
+    ...memcodeEnglish,
     ...providerGuideEnglish,
     ...pdfViewerEnglish,
     ...safeSocialEnglish,

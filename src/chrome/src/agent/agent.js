@@ -131,6 +131,7 @@ import { buildCustomSkillsPrompt, buildSkillLoaderDefinition, buildSkillToolDefi
 import { OTP_EMAIL_PROVIDER_IDS, OTP_EMAIL_SKILL_ID, OTP_EMAIL_TOOL_NAME, otpEmailCandidates, otpEmailProviderForUrl, otpEmailUrlLooksLikeMessage, otpOpenMessageRootRef, otpRedactRefs, otpServiceDisplay, otpServiceKey, otpVerificationMessageExcerpt, selectOtpMailboxTab, selectUniqueOtpCandidateByPreview } from './otp-email-tool.js';
 import { publicMediaUrlNeedsExplicitTarget } from './public-media-url.js';
 import { USER_MEMORY_DEFAULT_MAX_PROMPT_CHARS, formatUserMemoryPrompt, normalizeUserMemoryMaxPromptChars, normalizeUserMemoryStore } from './user-memory.js';
+import { createMemcodeRecall } from './memcode-recall.js';
 import {
   compileWorkflowFromTrace,
   findWorkflowHealingCandidates,
@@ -33597,6 +33598,10 @@ If the user has already named or confirmed this exact recipient, do NOT ask agai
       return handleDoneJson(this.cloudRunContexts.get(tabId), args);
     }
     if (name === 'chat_observe') return this._observeChatWorkflow(tabId, args);
+    if (name === 'recall_memcode') {
+      this.memcodeRecall ||= createMemcodeRecall({ storage: chrome.storage.local, identity: chrome.identity });
+      return this.memcodeRecall.recall(args?.query);
+    }
     if (name === 'chat_send') return this._sendChatWorkflow(tabId, args, onUpdate, dispatchContext);
     if (name === 'beep') {
       const watch = this.scheduledRunPolicies.get(tabId)?.watch;
