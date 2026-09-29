@@ -376,6 +376,7 @@ ${PLANNER_RESPONSE_LANGUAGE_RULES}
   read: get_accessibility_tree, read_page, extract_data, fetch_url, research_url
   interact: click_ax, set_checked, type_ax, set_field, find_text, press_keys, scroll, navigate, gmail_count_results, carousel_navigate, promote_iframe
   wait: wait_for_element, wait_for_stable
+  media: generate_image (create an image/video/audio directly from a text prompt via the user's fal.ai generative-media model — use when the user asks to GENERATE media, not to browse an image site)
   memory: scratchpad_write, progress_update, progress_read
   schedule: schedule_task (future/recurring work the user explicitly asked for), schedule_resume (pause CURRENT run blocked on external event)
   user input: clarify (pause and ask one concise question when a required value remains missing after relevant inspection)
@@ -464,6 +465,7 @@ ${PLANNER_RESPONSE_ONLY_RULES}
 - Canonical summary, steps, and risks must be English. localized fields must use the requested wbLocale.
 ${PLANNER_RESPONSE_LANGUAGE_RULES}
 - For execute, keep the compact plan to 1–4 steps. For plan_only, provide 2–8 useful steps. For respond and clarify, steps may be empty.
+- When the user asks to generate an image/video/audio, plan one generate_image step (WebBrain's built-in fal.ai media tool). Do not plan steps to visit image-generation sites or to check whether the current page supports image generation.
 - clarify pauses execution to ask one concise question for a required value. done is terminal and must never be used to request information needed to continue.
 - press_keys supports only unmodified Escape, Tab, Enter, arrow keys, and ; (semicolon, for page shortcuts such as Gmail Expand all). Never plan modifier combinations or browser UI shortcuts; use find_text to select one page-text match instead of Ctrl/Cmd+F. Each call replaces the previous selection and cannot create simultaneous highlights or browser Find UI.
 - For Instagram /p/<id>/ carousel enumeration, use strictly increasing carousel_navigate indexes unless the latest user request explicitly asks for reverse traversal, in which case use strictly decreasing indexes; never use arrow keys, coordinate clicks, Previous/Next, or go_back to traverse slides.
