@@ -84,7 +84,7 @@ const SUBSCRIPTION_GUIDE_PRODUCTS = Object.freeze({
 
 // Version shown in the subtitle. Kept here so it only needs one update per
 // release; the subtitle string itself is translated.
-const EXT_VERSION = '40.6.4';
+const EXT_VERSION = '40.8.1';
 
 const providersContainer = document.getElementById('providers');
 const displaySettings = document.getElementById('display-settings');
@@ -2932,7 +2932,7 @@ function renderProviders() {
       fields: [
         { key: 'apiKey', labelKey: 'st.provider.field.api_key', type: 'password', placeholder: 'sk-or-...' },
         { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'openrouter/free',
-          suggestions: ['openrouter/free', 'anthropic/claude-opus-5.5', 'qwen/qwen3.8-27b', 'moonshotai/kimi-k3', 'z-ai/glm-5.3', 'minimax/minimax-m3'] },
+          suggestions: ['openrouter/free', 'google/gemini-4-argon', 'meta/muse-wonder', 'meta/muse-spark-open', 'anthropic/claude-opus-5.5', 'qwen/qwen3.8-27b', 'moonshotai/kimi-k3', 'z-ai/glm-5.3', 'minimax/minimax-m3'] },
         { key: 'baseUrl', labelKey: 'st.provider.field.api_base_url', type: 'text', placeholder: 'https://openrouter.ai/api/v1' },
         PROMPT_TIER_FIELD,
         TOOL_MODE_FIELD,
@@ -2981,7 +2981,7 @@ function renderProviders() {
       fields: [
         { key: 'apiKey', labelKey: 'st.provider.field.api_key', type: 'password', placeholder: 'AIza...' },
         { key: 'model', labelKey: 'st.provider.field.model', type: 'text', placeholder: 'gemini-3.1-pro',
-          suggestions: ['gemini-3.1-pro', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite'] },
+          suggestions: ['gemini-4-argon', 'gemini-3.1-pro', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite'] },
         { key: 'baseUrl', labelKey: 'st.provider.field.api_base_url', type: 'text', placeholder: 'https://generativelanguage.googleapis.com/v1beta/openai' },
         ...COST_ESTIMATE_FIELDS,
       ],

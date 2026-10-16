@@ -36,6 +36,22 @@ event kind is unknown:
 Raw JSON re-export keeps the original fields. Compatibility handling does not
 perform destructive migration and does not change the default privacy policy.
 
+## Browser batch tool events
+
+`browser_batch` records a parent tool event and ordinary events for the actions
+it executes. Sub-call events may carry optional
+`data.batch: {parentId, index, total}` metadata linking them to the original
+model tool-call ID. `index` is the action's zero-based position within the batch;
+`total` is the number of requested actions, including any later skipped ones.
+The wrapper result summarizes completion or the stop reason; skipped actions
+are reported as not run. Readers must tolerate absent `batch` metadata on old
+events and ordinary tool calls, and preserve it when re-exporting JSON.
+
+This is an additive field: no database, trace-format or export-envelope version
+bump is required. Trace grouping does not change the provider transcript,
+which contains one tool result per original batch call and keeps supplemental
+images after the parent results.
+
 ## Session bundles
 
 The existing single-run `webbrain-trace/1` shape remains valid. A session bundle

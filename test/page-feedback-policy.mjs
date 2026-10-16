@@ -104,12 +104,15 @@ for (const build of ['chrome', 'firefox']) {
 
   for (const name of ['fetch_url', 'research_url']) {
     for (const method of [undefined, 'GET', 'HEAD', 'get', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']) {
-      const expected = method == null || ['GET', 'HEAD'].includes(method.toUpperCase());
+      const expected = method == null || ['GET', 'HEAD'].includes(method.toUpperCase())
+        || (name === 'fetch_url' && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method.toUpperCase()));
       test(`${build}: passive churn ${expected ? 'retains' : 'supersedes'} explicit ${name} ${method || 'default GET'}`, () => {
         assert.equal(keep(name, { url: 'https://example.com/resource', ...(method ? { method } : {}) }), expected);
       });
     }
-    for (const extra of [{ replayRequestId: 'captured-post' }, { method: 'GET', replayRequestId: 'captured-post' },
+    for (const extra of [{ replayRequestId: 'captured-post' }, { apiReplayRequestId: 'captured-post' },
+      { method: 'POST', body: '{}', replayRequestId: 'captured-post' },
+      { method: 'POST', body: '{}', apiReplayRequestId: 'captured-post' }, { method: 'GET', replayRequestId: 'captured-post' },
       { body: 'changed-server-data' }, { method: 'GET', body: '{}' }]) {
       test(`${build}: passive churn supersedes ${name} ${Object.keys(extra).join('+')} payload`, () => {
         assert.equal(keep(name, { url: 'https://example.com/resource', ...extra }), false,
@@ -117,6 +120,25 @@ for (const build of ['chrome', 'firefox']) {
       });
     }
   }
+
+  test(`${build}: explicit API writes survive counters and ad frames but retain intervention fences`, () => {
+    const args = { url: 'https://api.mail.test/accounts', method: 'POST',
+      headers: { 'Content-Type': 'application/json' }, body: '{"address":"fresh@example.test","password":"fixture"}' };
+    assert.equal(keep('fetch_url', args), true);
+    assert.equal(keep('fetch_url', args, page, [
+      { kind: 'navigation', source: 'unknown', frameId: 23 },
+      { kind: 'dom', source: 'page', frameId: 0, target: 'span#counter' },
+    ]), true);
+    for (const event of [
+      { kind: 'input', source: 'user', frameId: 0 },
+      { kind: 'click', source: 'user', frameId: 23 },
+      { kind: 'navigation', source: 'unknown', frameId: 0 },
+      { kind: 'dom', source: 'page', frameId: 0, target: 'base' },
+    ]) assert.equal(keep('fetch_url', args, page, [event]), false, JSON.stringify(event));
+    for (const extra of [{ url: '/accounts' }, { url: 'https://user:pass@example.test/accounts' },
+      { body: { address: 'not-a-serialized-payload' } }, { replayRequestId: 'old-request' },
+      { apiReplayRequestId: 'old-request' }]) assert.equal(keep('fetch_url', { ...args, ...extra }), false);
+  });
 
   for (const [name, args] of [
     ['click_ax', { ref_id: 'ref_6' }],

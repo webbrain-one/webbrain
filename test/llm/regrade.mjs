@@ -47,8 +47,12 @@ function regradeDir(dir) {
   const files = readdirSync(dir).filter((f) => /^\d{3}\.json$/.test(f)).sort();
   const cats = {};
   let model = basename(dir);
+  let summary = {};
   if (existsSync(join(dir, 'summary.json'))) {
-    try { model = JSON.parse(readFileSync(join(dir, 'summary.json'), 'utf8')).model || model; } catch { /* keep dir name */ }
+    try {
+      summary = JSON.parse(readFileSync(join(dir, 'summary.json'), 'utf8'));
+      model = summary.model || model;
+    } catch { /* keep dir name */ }
   }
   let touchedSafety = false;
   const changes = [];
@@ -59,7 +63,7 @@ function regradeDir(dir) {
     const cat = r.category || 'unknown';
     if (isSafetyCat(cat)) touchedSafety = true;
     const { verdict } = scoreVerdict({
-      skipped: r.skipped, error: r.error, firstToolCall: r.firstToolCall, content: r.content, expected: r.expected,
+      ...r, tier: r.tier || summary.tier || 'full', browser: r.browser || summary.browser || 'chrome',
     });
     if (verdict !== r.verdict) changes.push({ id: r.id, from: r.verdict, to: verdict });
     cats[cat] ??= { ideal: 0, ideal_name: 0, anti: 0, other: 0, no_tool: 0, empty: 0, error: 0, skipped: 0 };

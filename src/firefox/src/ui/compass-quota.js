@@ -11,7 +11,7 @@ export function socialComposer(platform, text, shareUrl) {
       : `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl || 'https://webbrain.one/')}`;
 }
 
-export function createQuotaController({ t, locale, request, openUrl, providers, switchProvider, openSettings, continueTask, persist }) {
+export function createQuotaController({ t, locale, request, openUrl, continueTask, persist }) {
   const cards = new Map();
   const event = name => { void request('/promotions/events', { event: name }).catch(() => {}); };
   function mount(host, quota, context = {}) {
@@ -38,7 +38,6 @@ export function createQuotaController({ t, locale, request, openUrl, providers, 
     const reset = el('div', '', 'quota-reset');
     const actions = el('div', '', 'quota-choices');
     const claimArea = el('div', '', 'quota-claim');
-    const providerArea = el('div', '', 'quota-providers');
     const status = el('div', '', 'quota-status');
     status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
     const share = button(t('quota.get'), async () => {
@@ -52,23 +51,7 @@ export function createQuotaController({ t, locale, request, openUrl, providers, 
       } catch (error) { status.textContent = error.message; }
     }, 'quota-share');
     const subscribe = button(t('quota.subscribe'), () => { event('checkout_open'); openUrl(quota.subscribe_url); }, 'subscribe-btn');
-    const other = button(t('quota.other'), async () => {
-      providerArea.replaceChildren();
-      try {
-        const options = await providers();
-        const label = el('label', t('quota.provider'));
-        const select = el('select'); label.append(select);
-        select.append(new Option(t('quota.choose'), ''));
-        for (const option of options.filter(p => p.id !== 'webbrain_cloud')) select.append(new Option(option.label, option.id));
-        providerArea.append(label, button(t('quota.switch'), async () => {
-          if (!select.value) { select.focus(); return; }
-          try { await switchProvider(select.value); event('provider_switch'); status.textContent = t('quota.ready'); }
-          catch (error) { status.textContent = error.message; }
-        }), button(t('quota.settings'), openSettings));
-        select.focus();
-      } catch (error) { status.textContent = error.message; }
-    }, 'quota-other');
-    actions.append(share, subscribe, other);
+    actions.append(share, subscribe);
     const resume = button(t(context.retry ? 'sp.retry' : 'sp.continue_btn'), () => {
       if (social && !social.eligible) event('continuation_after_reward');
       continueTask(resume, context);
@@ -76,7 +59,7 @@ export function createQuotaController({ t, locale, request, openUrl, providers, 
     resume.dataset.resumeMode = context.mode || 'act';
     resume.dataset.resumeForeground = context.foreground ? 'true' : 'false';
     const refreshButton = button(t('quota.refresh'), () => refresh(), 'quota-refresh');
-    host.append(info, balance, reset, actions, claimArea, providerArea, status, refreshButton, resume);
+    host.append(info, balance, reset, actions, claimArea, status, refreshButton, resume);
 
     function renderState() {
       if (cards.get(host)?.refresh !== refresh) return;

@@ -268,6 +268,13 @@ Open `src/chrome/src/agent/tools.js` and add an entry to the `AGENT_TOOLS` array
 - **State-change tools**: add to `Agent.STATE_CHANGE_TOOLS` (auto-screenshot on state change)
 - **Navigation-prone tools**: add to `Agent.NAV_PRONE_TOOLS` when a successful call should be checked for URL/history changes (`navigate`, `go_back`, `go_forward`, click-like tools)
 - **URL-family tools**: if the tool takes a URL argument that should be bucket-identity-hashed for loop detection, update `loop-bucket.js`'s `URL_FAMILY_TOOLS`
+- **Batch eligibility**: new tools are excluded from `browser_batch` by default.
+  Review the mirrored `BATCHABLE_ACTION_TOOLS` and
+  `BATCH_TRAILING_OBSERVATION_TOOLS` allowlists before adding an action or final
+  observation. Eligibility never overrides mode/tier exposure or capability and
+  host checks. Keep nested batches, control, network/file, Dev-only and skill
+  tools excluded. Test validation before dispatch, early stops, transcript
+  folding and untrusted-content boundaries when changing these allowlists.
 
 Keep mode and tier separate: mode is `ask | act | dev`; tier is `compact | mid | full`. `getToolsForMode('dev', { tier: 'mid' })` returns Mid Act tools plus Dev add-ons. `getToolsForMode('dev', { tier: 'compact' })` is intentionally empty because Compact Dev is blocked before an LLM request.
 
@@ -441,6 +448,7 @@ See `docs/security-model.md` for the full threat model.
 - [ ] Compact, Mid, Full, and Dev Compact-block behavior covered when the tool surface changes
 - [ ] Added to `Agent.NAV_TOOLS` / `Agent.STATE_CHANGE_TOOLS` / `Agent.NAV_PRONE_TOOLS` (if it navigates, changes page state, or should be checked for navigation)
 - [ ] Security classification documented
+- [ ] Batch eligibility reviewed; new eligible tools covered by batch validation and execution tests
 - [ ] README / architecture docs updated when the public tool surface or execution flow changes
 - [ ] UI labels added to `locales/*.js` (if needed)
 - [ ] Tool description updated in corresponding system prompt (if the model should know about it proactively)

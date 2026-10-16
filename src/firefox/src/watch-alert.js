@@ -1,12 +1,18 @@
 /**
- * Persistent-background audio for /watch alerts. Generated tones keep the
- * alert distinct from Firefox's ordinary side-panel completion chime.
+ * Persistent-background audio for /watch and plan-review alerts. Generated
+ * tones differ from Firefox's ordinary side-panel completion chime.
  */
 
 let audioContext = null;
 let playback = Promise.resolve();
 
 export function watchAlertPattern(style = 'default') {
+  if (style === 'plan_review' || style === 'clarify') {
+    return [
+      { at: 0, duration: 0.14, frequency: 880 },
+      { at: 0.2, duration: 0.2, frequency: 660 },
+    ];
+  }
   if (style === 'short') {
     return [{ at: 0, duration: 0.12, frequency: 740 }];
   }
@@ -24,11 +30,13 @@ export function watchAlertPattern(style = 'default') {
   ];
 }
 
-async function play(style) {
+async function play(style, isCurrent) {
+  if (!isCurrent()) return;
   const AudioContextCtor = globalThis.AudioContext || globalThis.webkitAudioContext;
   if (!AudioContextCtor) throw new Error('Web Audio is unavailable in the background page.');
   if (!audioContext || audioContext.state === 'closed') audioContext = new AudioContextCtor();
   if (audioContext.state === 'suspended') await audioContext.resume();
+  if (!isCurrent()) return;
 
   const pattern = watchAlertPattern(style);
   const start = audioContext.currentTime + 0.02;
@@ -50,10 +58,11 @@ async function play(style) {
   await new Promise((resolve) => setTimeout(resolve, Math.ceil((end + 0.05) * 1000)));
 }
 
-export async function playWatchAlert(api, { style = 'default' } = {}) {
+export async function playWatchAlert(api, { style = 'default', isCurrent = () => true } = {}) {
   const stored = await api.storage.local.get('notifySound');
   if (stored?.notifySound === false) return { ok: true, muted: true };
-  playback = playback.catch(() => {}).then(() => play(style));
+  if (!isCurrent()) return { ok: true, stale: true };
+  playback = playback.catch(() => {}).then(() => play(style, isCurrent));
   await playback;
   return { ok: true };
 }

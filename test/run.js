@@ -15783,7 +15783,7 @@ test('import_config_patch background handler merges against live provider storag
         parseConfigImport, parseConfigPatchImport, mergeConfigPatchSettings,
         providerManager, agent,
         loadMaxSteps, loadClarifyTimeout, loadAutoScreenshot, loadSiteAdapters, loadResearchEscalation,
-        loadScreenshotRedaction, loadStrictSecretMode, loadImageGenConfig, loadWebMCPEnabled, loadProfile,
+        loadScreenshotRedaction, loadStrictSecretMode, loadImageGenConfig, loadBrowserBatchEnabled, loadWebMCPEnabled, loadProfile,
         syncAgentUserMemoryFromStorage, loadCustomSkills, loadCaptchaSolver,
         loadPlanBeforeAct, loadPlanReviewSettings, loadApiMutationObserverSetting,
       } = helpers;
@@ -15835,6 +15835,7 @@ test('import_config_patch background handler merges against live provider storag
       loadScreenshotRedaction: noop,
       loadStrictSecretMode: noop,
       loadImageGenConfig: noop,
+      loadBrowserBatchEnabled: noop,
       loadWebMCPEnabled: noop,
       loadProfile: noop,
       syncAgentUserMemoryFromStorage: noop,
@@ -29163,9 +29164,9 @@ test('getToolsForMode: mode/tier redesign exposes the intended normal and Dev to
     }
     const researchOptions = { researchEscalationEnabled: true };
     assert.equal(getTools('act', { tier: 'compact', ...researchOptions }).length, 26, `[${label}] Compact includes bounded calculation after tab-tool removal`);
-    assert.equal(getTools('act', { tier: 'mid', ...researchOptions }).length, 49, `[${label}] Mid includes bounded calculation, CAPTCHA discovery and answer application`);
-    assert.equal(getTools('act', researchOptions).length, label === 'chrome' ? 56 : 55, `[${label}] Full includes bounded calculation and omits unconfigured media generation`);
-    assert.equal(getTools('act', { ...researchOptions, imageGenConfigured: true }).length, label === 'chrome' ? 57 : 56,
+    assert.equal(getTools('act', { tier: 'mid', ...researchOptions }).length, 50, `[${label}] Mid includes bounded calculation, CAPTCHA discovery, answer application and browser batching`);
+    assert.equal(getTools('act', researchOptions).length, label === 'chrome' ? 57 : 56, `[${label}] Full includes bounded calculation and browser batching and omits unconfigured media generation`);
+    assert.equal(getTools('act', { ...researchOptions, imageGenConfigured: true }).length, label === 'chrome' ? 58 : 57,
       `[${label}] Configured Full tier should include media generation`);
     assert.equal(ask.includes('recall_memcode'), true, `[${label}] Ask can read connected MemCode memories`);
     assert.equal(compact.includes('recall_memcode'), false, `[${label}] Compact does not expose remote recall`);
@@ -29476,7 +29477,7 @@ test('test/llm goldens only name tools the model is actually offered', () => {
   }
 
   const scenarioFiles = walk(path.join(llmDir, 'scenarios'));
-  assert.equal(scenarioFiles.length, 108, 'scenarios/ should hold 108 multi-turn cases, including 8 CMS recovery cases');
+  assert.equal(scenarioFiles.length, 111, 'scenarios/ should hold 111 multi-turn cases, including 8 CMS recovery and 3 browser-batch cases');
   for (const file of scenarioFiles) {
     const scenario = readJson(file);
     const rel = path.relative(ROOT, file);
@@ -88934,7 +88935,7 @@ test('browser batches keep leading reads, then require fresh evidence after unsa
         calls,
         messages,
         () => { },
-        { supportsVision: false },
+        { promptTier: tier, supportsVision: false },
         null,
         new Set(['read_page', 'get_accessibility_tree', 'set_field', 'click_ax', 'type_ax']),
         1,
@@ -89083,7 +89084,7 @@ test('fresh-turn batch interruptions preserve configured auto-screenshots', asyn
         ],
         messages,
         (type, data) => updates.push({ type, data }),
-        { supportsVision: true },
+        { promptTier: 'mid', supportsVision: true },
         null,
         new Set(['click_ax', 'get_accessibility_tree']),
         1,
@@ -108582,18 +108583,18 @@ test('web editing read tools are untrusted page content', () => {
 });
 
 test('exhaustiveness: every model-exposed tool is classified', () => {
-  for (const [label, getTools, capFor] of [
-    ['firefox', getToolsForModeFx, capabilityFor],
-    ['chrome', getToolsForModeCh, capabilityForCh],
+  for (const [label, getTools, capFor, untrustedTools] of [
+    ['firefox', getToolsForModeFx, capabilityFor, UNTRUSTED_CONTENT_TOOLS],
+    ['chrome', getToolsForModeCh, capabilityForCh, UNTRUSTED_CONTENT_TOOLS_CH],
   ]) {
-    const tools = getTools('act');
+    const tools = [...getTools('act'), ...getTools('dev')];
     // Guard against a vacuous pass (e.g. getTools returning []).
     assert.ok(tools.length >= 15, `[${label}] expected the act toolset, got ${tools.length} tools`);
     for (const t of tools) {
       const name = t.function?.name;
       if (!name) continue;
       const gated = capFor(name, {}) !== null;       // has a (possible) side effect
-      const untrustedRead = UNTRUSTED_CONTENT_TOOLS.has(name); // result is page-derived
+      const untrustedRead = untrustedTools.has(name); // result is page-derived
       const knownSafe = KNOWN_SAFE_TOOLS.has(name);
       assert.ok(
         gated || untrustedRead || knownSafe,
@@ -118917,7 +118918,7 @@ test('attachments: text attachment scratchpad path never writes raw textContent'
     );
     assert.match(
       source,
-      /const attachmentToolNames = new Set\([\s\S]*?getToolsForMode\(mode, \{ tier: provider\.promptTier(?:, [^}]*)? \}\)[\s\S]*?const canUseScratchpadTool = attachmentToolNames\.has\('scratchpad_write'\);[\s\S]*?const canUseUploadTool = attachmentToolNames\.has\('upload_file'\);[\s\S]*?(?:await )?this\._applyAttachments\(enriched, sourceBoundAttachments, provider, \{[\s\S]*?canUseScratchpadTool,[\s\S]*?canUseUploadTool,[\s\S]*?tabId,[\s\S]*?messages,[\s\S]*?\}\);[\s\S]*?_pinTextAttachmentMetadata\(tabId, sourceBoundAttachments, \{ canUseScratchpadTool \}\);/,
+      /const attachmentToolNames = new Set\([\s\S]*?getToolsForMode\(mode, \{ browserBatchEnabled: this\.browserBatchEnabled, tier: provider\.promptTier(?:, [^}]*)? \}\)[\s\S]*?const canUseScratchpadTool = attachmentToolNames\.has\('scratchpad_write'\);[\s\S]*?const canUseUploadTool = attachmentToolNames\.has\('upload_file'\);[\s\S]*?(?:await )?this\._applyAttachments\(enriched, sourceBoundAttachments, provider, \{[\s\S]*?canUseScratchpadTool,[\s\S]*?canUseUploadTool,[\s\S]*?tabId,[\s\S]*?messages,[\s\S]*?\}\);[\s\S]*?_pinTextAttachmentMetadata\(tabId, sourceBoundAttachments, \{ canUseScratchpadTool \}\);/,
       `${label} should derive attachment guidance from the active run tool catalog`,
     );
   }

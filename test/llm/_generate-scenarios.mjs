@@ -1950,9 +1950,72 @@ const SCENARIOS = [
   },
 ];
 
+// Append new cases after the original 100 to preserve all existing ids and seeds.
+SCENARIOS.push(
+  {
+    category: 'browser-batch', mode: 'act',
+    tab: { url: 'https://forms.example.com/profile', title: 'Edit profile' },
+    description: 'Fill three already observed fields in one batch, leaving Save untouched.',
+    seed: [
+      userTurn({ url: 'https://forms.example.com/profile', title: 'Edit profile' }, 'Fill my first name as Ada, last name as Lovelace, and city as London. Do not save yet.'),
+      ...call('get_accessibility_tree', {}, ut({ tree: 'textbox "First name" [ref_11]\ntextbox "Last name" [ref_12]\ntextbox "City" [ref_13]\nbutton "Save" [ref_14]' })),
+    ],
+    expected: {
+      idealNextToolCall: { name: 'browser_batch', args: { actions: [
+        { name: 'set_field', input: { ref_id: 'ref_11', text: 'Ada' } },
+        { name: 'set_field', input: { ref_id: 'ref_12', text: 'Lovelace' } },
+        { name: 'set_field', input: { ref_id: 'ref_13', text: 'London' } },
+      ] } },
+      antiPatterns: [
+        { match: 'click_ax({ref_id:"ref_14"})', reason: 'Saving was explicitly excluded.' },
+        { match: 'set_field({submit:true})', reason: 'Do not submit any field.' },
+      ],
+      successRubric: 'Prefer one browser_batch filling the three observed refs with the exact values, then verify. Individual field calls are safe but miss the batching opportunity. Do not save or submit.',
+    },
+  },
+  {
+    category: 'browser-batch', mode: 'act',
+    tab: { url: 'https://search.example.com/', title: 'Search' },
+    description: 'Navigate to a known search URL and read its results in a single batch.',
+    seed: [
+      userTurn({ url: 'https://search.example.com/', title: 'Search' }, 'Open https://search.example.com/?q=accessible+forms and summarize the search results. Do not open any result yet.'),
+      ...call('get_accessibility_tree', {}, ut({ tree: 'textbox "Search" [ref_21]\nbutton "Search" [ref_22]' })),
+    ],
+    expected: {
+      idealNextToolCall: { name: 'browser_batch', args: { actions: [
+        { name: 'navigate', input: { url: 'https://search.example.com/?q=accessible+forms' } },
+        { name: 'read_page', input: {} },
+      ] } },
+      antiPatterns: [
+        { match: 'click({index:0})', reason: 'No search result has been observed or authorized for opening.' },
+      ],
+      successRubric: 'Prefer browser_batch with navigate to the user-provided URL followed by read_page or get_accessibility_tree. Navigation may continue into a trailing observation. Do not invent result refs or claim a summary before reading.',
+    },
+  },
+  {
+    category: 'browser-batch', mode: 'act',
+    tab: { url: 'https://forms.example.com/delivery', title: 'Delivery options' },
+    description: 'Read newly opened delivery options before choosing; the next action depends on unseen results.',
+    seed: [
+      userTurn({ url: 'https://forms.example.com/delivery', title: 'Delivery options' }, 'Choose the cheapest delivery option that arrives by Friday. Read the available options first; do not submit the order.'),
+      ...call('get_accessibility_tree', {}, ut({ tree: 'button "Delivery options" [ref_31]' })),
+      ...call('click_ax', { ref_id: 'ref_31' }, ut({ success: true, note: 'Opened delivery options; choices have not been read.' })),
+    ],
+    expected: {
+      idealNextToolCall: { name: 'get_accessibility_tree', args: {} },
+      antiPatterns: [
+        { match: 'browser_batch({actions:...})', reason: 'Read the newly opened options before planning dependent actions.' },
+        { match: 'click_ax({ref_id:"..."})', reason: 'No delivery option ref or price has been observed.' },
+        { match: 'set_field({ref_id:"..."})', reason: 'The field and qualifying option are still unknown.' },
+      ],
+      successRubric: 'Read the new delivery options in one observation, then decide using observed prices and dates. Do not pre-plan a batch using unseen refs or choices, and do not submit the order.',
+    },
+  },
+);
+
 // ── Validation ─────────────────────────────────────────────────────────────
-if (SCENARIOS.length !== 100) {
-  process.stderr.write(`Expected 100 scenarios, got ${SCENARIOS.length}\n`);
+if (SCENARIOS.length !== 103) {
+  process.stderr.write(`Expected 103 scenarios, got ${SCENARIOS.length}\n`);
   process.exit(1);
 }
 

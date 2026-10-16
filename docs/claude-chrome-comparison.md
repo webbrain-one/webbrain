@@ -37,6 +37,28 @@ sidepanel quick-command prompt.
 
 ## Architecture
 
+### Claude in Chrome 1.0.100: sequential batching
+
+The 1.0.100 behavior summary supplied for this implementation adds
+`browser_batch`: several browser actions run sequentially within one model
+round trip. WebBrain now implements this with its own schemas, prompts and
+existing execution guards in both browser builds. Mid/Full Act and Dev receive
+the tool by default (6/10 action limits); Ask and Compact exclude it. The
+internal `browserBatchEnabled` switch removes exposure and optional guidance.
+
+WebBrain validates every action before dispatch and gates each action at its
+normal capability and origin boundary. Failure, unverified application and
+submit boundaries require a fresh turn; navigation can continue into trailing
+observations. One original parent call receives the folded results, preserving
+per-action untrusted-content boundaries and provider replay metadata. Trace
+sub-calls carry optional batch grouping metadata. No recurring nudge is enabled.
+
+The same 1.0.100 reference summary describes Anthropic cache breakpoints and
+region/scale screenshot controls. This update implements only batching; it
+does not establish those other features as shipped or verified in WebBrain.
+The earlier tree comparison below remains a historical snapshot where its
+tool counts or bundled paths differ from the current source.
+
 | Area | WebBrain | Claude Chrome extension |
 |---|---|---|
 | Browser support | Two mirrored extension builds: Chrome/Edge MV3 and Firefox MV2. | Chrome MV3 only in this tree. |

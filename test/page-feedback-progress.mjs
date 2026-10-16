@@ -187,6 +187,40 @@ for (const build of ['chrome', 'firefox']) {
   });
 
   for (const streaming of [false, true]) {
+    for (const allowed of [true, false]) {
+      test(`${build}: ${streaming ? 'stream' : 'chat'} API fallback survives continuous counters and still requires API consent (${allowed})`, async () => {
+        const tab = nextTab++, updates = [], sent = [];
+        const args = { url: 'https://api.mail.test/accounts', method: 'POST',
+          headers: { 'Content-Type': 'application/json' }, body: '{"address":"fresh@example.test","password":"fixture"}' };
+        let send, requests = 0, reads = 0;
+        const agent = makeAgent(Agent, async () => {
+          requests++;
+          assert.ok(requests <= 2, 'Unrelated counters cannot restart the API decision');
+          send({}); send({});
+          return requests === 1 ? call('create-mailbox', 'fetch_url', args)
+            : allowed ? done() : call('blocked-api', 'done', { summary: 'API consent is required.', outcome: 'partial' });
+        });
+        agent.isApiMutationsAllowed = () => allowed;
+        agent._enrichUserMessageWithCurrentPage = async (_tab, _messages, content) => {
+          send = bind(agent, tab); return { role: 'user', content };
+        };
+        agent.executeTool = async (_tab, name, actual) => {
+          if (name === 'get_accessibility_tree') {
+            reads++; send({});
+            return { success: true, pageContent: `heading "Inbox" [ref_inbox]\ntext "${reads} seconds ago"` };
+          }
+          if (name === 'done') return { success: true, done: true, summary: actual.summary, outcome: actual.outcome };
+          assert.equal(name, 'fetch_url');
+          assert.equal(allowed, true, 'The freshness exception must not authorize API mutations');
+          sent.push(structuredClone(actual));
+          return { success: true, status: 201, json: '{"id":"fixture-mailbox"}' };
+        };
+        await finish(agent, tab, streaming, updates, { detachedRequestId: 'api-fallback-' + tab, askStreamingEnabled: false });
+        assert.equal(requests, 2);
+        assert.deepEqual(sent, allowed ? [args] : []);
+        if (!allowed) assert.ok(updates.some(update => update.type === 'warning' && /API mutation blocked/.test(update.data.message)));
+      });
+    }
     for (const condition of ['unsupported', 'targeted_recovery', 'target_drift', 'stale_document']) {
       test(build + ': ' + (streaming ? 'stream' : 'chat') + ' ' + condition + ' action-context diagnostics preserve no-dispatch and fresh-decision fences', async () => {
         const tab = nextTab++, updates = [], modelMessages = [], captures = [];

@@ -286,6 +286,11 @@ export function projectTraceEventData(kind, data, { includeContent = false } = {
   if (kind === 'tool') {
     return {
       ...pick(source, ['step', 'name', 'latencyMs']),
+      ...(source.batch && typeof source.batch.parentId === 'string'
+        && /^[a-zA-Z0-9_-]{1,200}$/.test(source.batch.parentId)
+        && Number.isInteger(source.batch.index) && source.batch.index >= 0
+        && Number.isInteger(source.batch.total) && source.batch.total > source.batch.index && source.batch.total <= 10
+        ? { batch: pick(source.batch, ['parentId', 'index', 'total']) } : {}),
       ...projectToolResultMetadata(source.result),
     };
   }

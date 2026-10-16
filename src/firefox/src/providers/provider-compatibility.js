@@ -20,7 +20,86 @@ export const OPENROUTER_ROUTING_VARIANTS = Object.freeze(['standard', 'nitro', '
 // it without duplicating the explicit-override precedence in supportsVision.
 const BASE_VISION_MODEL_PATTERN = /gpt-4o|gpt-4\.1|gpt-4-turbo|gpt-5|gpt-6(?:\.1)?-(?:luna-pro|sol|astra)(?:$|[-_.:/])|claude|gemini|grok|minimax-m3|kimi-k(?:-?3|2\.[5-9])|llava|qwen.*vl|qwen2.*vl|qwen3.*vl|qwen3\.[5-9]|qwen3p8-27b|pixtral|llama.*vision|gemma.*vision|gemma-?[34]|step-3/;
 export function baseModelNameSniffedVision(model) {
-  return BASE_VISION_MODEL_PATTERN.test(String(model || ''));
+  return BASE_VISION_MODEL_PATTERN.test(String(model || ''))
+    || /(?:^|\/)muse-(?:wonder|spark-open)(?=$|:)/i.test(String(model || '').trim());
+}
+
+// Gemini's OpenAI-compatible tool calls carry opaque replay signatures.
+// Later argument-only deltas must not erase the signature on the first delta.
+export function preserveToolCallSignature(target, delta) {
+  const signature = delta?.extra_content?.google?.thought_signature;
+  if (typeof signature === 'string' && signature) {
+    target.extra_content = {
+      ...target.extra_content,
+      google: { ...target.extra_content?.google, thought_signature: signature },
+    };
+  }
+}
+
+// These launch contracts are endpoint-scoped: a similarly named local model
+// may use a different template or support disabling thinking.
+function mandatoryReasoningModel(config = {}) {
+  let url;
+  try { url = new URL(config.baseUrl || ''); } catch { return null; }
+  const model = String(config.model || '').trim().toLowerCase().replace(OPENROUTER_MODEL_VARIANT_SUFFIXES, '');
+  const router = url.hostname === 'openrouter.ai';
+  const argon = (router && model === 'google/gemini-4-argon')
+    || (url.hostname === 'generativelanguage.googleapis.com'
+      && url.pathname.replace(/\/+$/, '') === '/v1beta/openai' && model === 'gemini-4-argon');
+  if (argon) return { argon: true, router, minimumEffort: 'low', maxTokens: 65536 };
+  if (router && ['meta/muse-wonder', 'meta/muse-spark-open'].includes(model)) {
+    return { router, minimumEffort: model === 'meta/muse-wonder' ? 'minimal' : 'low', maxTokens: 943718 };
+  }
+  return null;
+}
+
+export function mandatoryReasoningOptions(config = {}, options = {}) {
+  const contract = mandatoryReasoningModel(config);
+  if (!contract) return options;
+  // Argon's output budget includes thinking. Google recommends at least 32k;
+  // short text/classifier calls on Muse also need room beyond their JSON.
+  const textOnly = options.toolChoice === 'none' || !options.tools?.length;
+  const minimum = contract.argon ? 32768 : textOnly ? 2048 : 1;
+  return { ...options, maxTokens: Math.min(contract.maxTokens, Math.max(minimum, Number(options.maxTokens) || 4096)) };
+}
+
+function normalizeMandatoryReasoningBody(body, config, perRequestExtraBody) {
+  const contract = mandatoryReasoningModel(config);
+  if (!contract) return body;
+  const reasoning = isPlainObject(body.reasoning) ? { ...body.reasoning } : {};
+  let effort = body.reasoning_effort || reasoning.effort;
+  // Classifiers disable thinking per call. Their override must beat an effort
+  // inherited from settings. Conversely, an explicit per-call effort can
+  // override a saved disabled setting unless this call also disables it.
+  const requestedEffort = perRequestExtraBody?.reasoning_effort || perRequestExtraBody?.reasoning?.effort;
+  const disabled = reasoning.enabled === false
+    && (!requestedEffort || perRequestExtraBody?.reasoning?.enabled === false);
+  if (disabled || ['none', 'off', 'minimal'].includes(effort)) {
+    effort = contract.minimumEffort;
+  }
+  if (contract.argon && ['xhigh', 'max'].includes(effort)) effort = 'high';
+  if (contract.minimumEffort === 'low' && effort === 'max') effort = 'xhigh';
+  delete reasoning.enabled;
+  if (effort) reasoning.effort = effort;
+  if (contract.router) {
+    delete body.reasoning_effort;
+    if (Object.keys(reasoning).length) body.reasoning = reasoning;
+    else delete body.reasoning;
+  } else {
+    delete body.reasoning;
+    const configured = normalizeProviderCompatibility(config).reasoningEffort;
+    if (!effort && configured !== 'auto') {
+      effort = ['off', 'minimal'].includes(configured) ? 'low'
+        : ['xhigh', 'max'].includes(configured) ? 'high' : configured;
+    }
+    if (effort) body.reasoning_effort = effort;
+  }
+  if (contract.argon) {
+    delete body.temperature;
+    delete body.top_p;
+    delete body.top_k;
+  }
+  return body;
 }
 
 // OpenRouter model-specific capability helpers (pure model-id checks; callers
@@ -152,13 +231,13 @@ export const RESERVED_EXTRA_BODY_KEYS = new Set([
 
 const UNSAFE_OBJECT_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
 
-/** Muse Spark on OpenRouter accepts only automatic tool selection. Custom
+/** Meta's hosted Muse routes accept only automatic tool selection. Custom
  * imported provider names still speak the same endpoint/model contract. */
 export function openRouterMuseToolOptions(config = {}, options = {}) {
   let openRouter = false;
   try { openRouter = new URL(config.baseUrl || '').hostname.toLowerCase() === 'openrouter.ai'; } catch { /* not an OpenRouter endpoint */ }
   const model = String(config.model || '').trim().toLowerCase().replace(OPENROUTER_MODEL_VARIANT_SUFFIXES, '');
-  if (!openRouter || model !== 'meta/muse-spark-1.3-contributor') return options;
+  if (!openRouter || !['meta/muse-spark-1.3-contributor', 'meta/muse-wonder'].includes(model)) return options;
   // Muse cannot disable reasoning. Small classifier budgets otherwise end in
   // hidden reasoning with no JSON output, even after the portable retry.
   const disabledReasoning = options.extraBody?.reasoning?.enabled === false;
@@ -175,7 +254,7 @@ export function openRouterMuseToolOptions(config = {}, options = {}) {
   const choice = options.toolChoice;
   const name = choice && typeof choice === 'object' ? choice.function?.name || choice.name : null;
   const tools = name ? (options.tools || []).filter(tool => tool?.function?.name === name || tool?.name === name) : options.tools;
-  if (name && !tools.length) throw new Error(`Requested tool '${name}' is not available for Muse Spark.`);
+  if (name && !tools.length) throw new Error(`Requested tool '${name}' is not available for Muse.`);
   return { ...options, tools, toolChoice: 'auto' };
 }
 
@@ -653,7 +732,7 @@ export function mergeProviderRequestBody(body, config = {}, perRequestExtraBody 
   // per-call planner/vision override must clear an effort inherited from the
   // configured compatibility preset (see deepseek-config.js).
   if (isDirectDeepSeekConfig(config)) stripDisabledDeepSeekReasoningEffort(result);
-  return result;
+  return normalizeMandatoryReasoningBody(result, config, perRequestExtraBody);
 }
 
 export function validateProviderExtraBody(value) {

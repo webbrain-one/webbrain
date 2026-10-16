@@ -5,6 +5,102 @@ import vm from 'node:vm';
 import { fixturePageBlockerReading, stubPageTextReadings } from './semantic-decision-stub.mjs';
 const captchaNames = ['get_captcha_capabilities', 'solve_captcha', 'apply_captcha_solution'];
 const solverInstructions = /get_captcha_capabilities|solve_captcha|apply_captcha_solution|\[CAPTCHA SOLVER/;
+
+for (const build of ['chrome', 'firefox']) {
+  const { Agent } = await import(`../src/${build}/src/agent/agent.js`);
+  test(`${build}: CAPTCHA preflight scans loading pages and ad frames without waiting for document_idle`, { timeout: 2000 }, async t => {
+    const url = 'https://mail.test/inbox', scans = [];
+    const payload = { challenge: null, frameContext: { frameUrl: url, childFrames: [] } };
+    const probe = async (name, immediate, frameId = 0) => {
+      scans.push({ name, immediate, frameId });
+      // Models the browser waiting forever for a loading ad's document_idle.
+      if (!immediate) return new Promise(() => {});
+      return name.includes('observeAwsWafChallengeInPage')
+        ? { active: false, inspectionComplete: true, pageUrl: url }
+        : { ...payload, frameContext: { ...payload.frameContext, frameUrl: frameId ? 'https://ads.test/loading' : url } };
+    };
+    const apiName = build === 'chrome' ? 'chrome' : 'browser', previous = globalThis[apiName];
+    globalThis[apiName] = {
+      tabs: { get: async () => ({ url }), executeScript: async (_tab, opts) => [await probe(opts.code, opts.runAt === 'document_start', opts.frameId)] },
+      scripting: { executeScript: async opts => {
+        const ids = opts.target.allFrames ? [0, 7] : opts.target.frameIds || [0];
+        return Promise.all(ids.map(async frameId => ({ frameId, result: await probe(opts.func.name, opts.injectImmediately === true, frameId) })));
+      } },
+      webNavigation: { getAllFrames: async () => [
+        { frameId: 0, parentFrameId: -1, url }, { frameId: 7, parentFrameId: 0, url: 'https://ads.test/loading' },
+      ] },
+    };
+    t.after(() => { globalThis[apiName] = previous; });
+    const agent = new Agent({ getActive: () => ({ promptTier: 'full' }) });
+    agent.conversationModes.set(1, 'act');
+    assert.equal(await agent._captchaMutationPreflight(1, 'click_ax', { ref_id: 'ref_signout' }), null);
+    assert.ok(scans.some(scan => scan.name.includes('observeAwsWafChallengeInPage')));
+    assert.ok(scans.some(scan => scan.frameId === 7));
+    assert.ok(scans.every(scan => scan.immediate));
+
+    // Immediate injection must still recognize an actual visible challenge.
+    payload.challenge = { label: 'CAPTCHA', normalizedLabel: 'captcha' };
+    let observed = 0;
+    agent._observeCaptchaChallenge = async (_tab, _tool, result) => {
+      observed++;
+      assert.equal(result.captchaChallengeVisibilityConfirmed, true);
+      assert.equal(result.captchaChallengeFrameId, 0);
+      return { gate: { status: 'solve_required' } };
+    };
+    assert.equal((await agent._captchaMutationPreflight(1, 'click_ax')).status, 'solve_required');
+    assert.equal(observed, 1);
+  });
+
+  test(`${build}: a stalled CAPTCHA probe fails closed after eight seconds and ignores its late result`, async t => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const agent = new Agent({ getActive: () => ({ promptTier: 'full' }) });
+    let resolveProbe;
+    agent._readAwsWafChallenge = () => new Promise(resolve => { resolveProbe = resolve; });
+    const work = agent._captchaMutationPreflight(1, 'click_ax');
+    const rejected = assert.rejects(work, error => error.code === 'content_action_timeout' && /8 seconds/.test(error.message));
+    await Promise.resolve(); await Promise.resolve();
+    assert.equal(typeof resolveProbe, 'function');
+    t.mock.timers.tick(8000);
+    await rejected;
+    resolveProbe({ active: true, inspectionComplete: true, pageUrl: 'https://mail.test/inbox' });
+    await Promise.resolve(); await Promise.resolve();
+    assert.equal(agent._captchaGateStates.has(1), false, 'An expired preflight cannot arm or retire a later gate');
+  });
+
+  test(`${build}: Stop interrupts a stalled CAPTCHA probe immediately`, async () => {
+    const agent = new Agent({});
+    agent._readAwsWafChallenge = () => new Promise(() => {});
+    const controller = new AbortController();
+    agent._runAbortSignal = () => controller.signal;
+    const work = agent._captchaMutationPreflight(1, 'click_ax', {}, new AbortController().signal);
+    const error = new Error('Stopped fixture preflight'); error.name = 'AbortError';
+    controller.abort(error);
+    await assert.rejects(work, value => value === error);
+  });
+
+  test(`${build}: a late document identity check cannot retire a paid CAPTCHA answer after preflight expiry`, async t => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const agent = new Agent({});
+    const url = 'https://mail.test/inbox';
+    const gate = { pageUrl: url, rootDocument: { url, timeOrigin: 1000 }, status: 'solve_required' };
+    const answer = { solution: 'paid-answer', documents: [{ frameId: 0, url, timeOrigin: 1000 }] };
+    agent._captchaGateStates.set(1, gate); agent._nativeCaptchaSolutions = new Map([[1, answer]]);
+    agent._readAwsWafChallenge = async () => ({ active: false, rootDocument: { url, timeOrigin: 2000 } });
+    let resolveUrl;
+    agent._currentUrl = () => new Promise(resolve => { resolveUrl = resolve; });
+    const rejected = assert.rejects(agent._captchaMutationPreflight(1, 'click_ax'), error => error.code === 'content_action_timeout');
+    for (let turn = 0; turn < 5; turn++) await Promise.resolve();
+    assert.equal(typeof resolveUrl, 'function');
+    t.mock.timers.tick(8000);
+    await rejected;
+    resolveUrl(url);
+    for (let turn = 0; turn < 5; turn++) await Promise.resolve();
+    assert.equal(agent._captchaGateStates.get(1), gate);
+    assert.equal(answer.solution, 'paid-answer');
+    assert.equal(answer.documentRetired, undefined);
+  });
+}
+
 test('CAPTCHA tool matrix matches Ask, Compact, Mid, Full and Dev availability', async () => {
   const rows = (await readFile(new URL('../docs/agent-tools.md', import.meta.url), 'utf8')).split('\n');
   for (const name of captchaNames) {

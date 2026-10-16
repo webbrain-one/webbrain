@@ -22,6 +22,7 @@ import {
   SYSTEM_PROMPT_ACT_COMPACT as CHROME_SYSTEM_PROMPT_ACT_COMPACT,
   SYSTEM_PROMPT_DEV_APPENDIX as CHROME_SYSTEM_PROMPT_DEV_APPENDIX,
   SYSTEM_PROMPT_ASK as CHROME_SYSTEM_PROMPT_ASK,
+  SYSTEM_PROMPT_BATCHING as CHROME_SYSTEM_PROMPT_BATCHING,
   getToolsForMode as chromeGetToolsForMode,
 } from '../../../src/chrome/src/agent/tools.js';
 import {
@@ -34,6 +35,7 @@ import {
   SYSTEM_PROMPT_ACT_COMPACT as FIREFOX_SYSTEM_PROMPT_ACT_COMPACT,
   SYSTEM_PROMPT_DEV_APPENDIX as FIREFOX_SYSTEM_PROMPT_DEV_APPENDIX,
   SYSTEM_PROMPT_ASK as FIREFOX_SYSTEM_PROMPT_ASK,
+  SYSTEM_PROMPT_BATCHING as FIREFOX_SYSTEM_PROMPT_BATCHING,
   getToolsForMode as firefoxGetToolsForMode,
 } from '../../../src/firefox/src/agent/tools.js';
 import {
@@ -90,6 +92,7 @@ export const BROWSERS = {
     SYSTEM_PROMPT_ACT_COMPACT: CHROME_SYSTEM_PROMPT_ACT_COMPACT,
     SYSTEM_PROMPT_DEV_APPENDIX: CHROME_SYSTEM_PROMPT_DEV_APPENDIX,
     SYSTEM_PROMPT_ASK: CHROME_SYSTEM_PROMPT_ASK,
+    SYSTEM_PROMPT_BATCHING: CHROME_SYSTEM_PROMPT_BATCHING,
     UNIVERSAL_PREAMBLE: CHROME_UNIVERSAL_PREAMBLE,
     getActiveAdapter: chromeGetActiveAdapter,
     getToolsForMode: chromeGetToolsForMode,
@@ -100,6 +103,7 @@ export const BROWSERS = {
     SYSTEM_PROMPT_ACT_COMPACT: FIREFOX_SYSTEM_PROMPT_ACT_COMPACT,
     SYSTEM_PROMPT_DEV_APPENDIX: FIREFOX_SYSTEM_PROMPT_DEV_APPENDIX,
     SYSTEM_PROMPT_ASK: FIREFOX_SYSTEM_PROMPT_ASK,
+    SYSTEM_PROMPT_BATCHING: FIREFOX_SYSTEM_PROMPT_BATCHING,
     UNIVERSAL_PREAMBLE: FIREFOX_UNIVERSAL_PREAMBLE,
     getActiveAdapter: firefoxGetActiveAdapter,
     getToolsForMode: firefoxGetToolsForMode,
@@ -114,9 +118,12 @@ function getActPromptForTier(browser, tier) {
   return browser.SYSTEM_PROMPT_ACT;
 }
 
-export function getSystemPromptForMode(browser, mode, tier) {
+export function getSystemPromptForMode(browser, mode, tier, tools = []) {
   if (mode === 'ask') return browser.SYSTEM_PROMPT_ASK;
   let prompt = getActPromptForTier(browser, tier);
+  if (tools.some(tool => tool.function?.name === 'browser_batch')) {
+    prompt += `\n\n${browser.SYSTEM_PROMPT_BATCHING}`;
+  }
   if (mode === 'dev') {
     prompt += `\n\n${browser.SYSTEM_PROMPT_DEV_APPENDIX.trim()}`;
   }
@@ -185,6 +192,18 @@ export function buildPayload(caseRec, opts = {}) {
   const title = caseRec.tab?.title || '';
   const useSiteAdapters = opts.useSiteAdapters !== false;
   const strictSecretMode = !!opts.strictSecretMode;
+  if (!FROZEN_BASELINE) assertRunnableModeTier(mode, tier);
+
+  // ── tools ────────────────────────────────────────────────────────────
+  // FREEZE MODE: use the snapshot's tools verbatim. The strictSecretMode,
+  // tier, and mode options have no effect on a frozen baseline by design.
+  const tools = FROZEN_BASELINE
+    ? FROZEN_BASELINE.tools
+    : browser.getToolsForMode(mode, {
+      strictSecretMode,
+      tier,
+      researchEscalationEnabled: opts.researchEscalationEnabled === true,
+    });
 
   // ── system message ───────────────────────────────────────────────────
   // FREEZE MODE: skip ALL system-prompt assembly (incl. adapters, profile,
@@ -196,9 +215,8 @@ export function buildPayload(caseRec, opts = {}) {
   if (FROZEN_BASELINE) {
     systemContent = FROZEN_BASELINE.systemContent;
   } else {
-    assertRunnableModeTier(mode, tier);
     // ACT and DEV modes honor tier (full / mid / compact). ASK mode has one prompt.
-    systemContent = getSystemPromptForMode(browser, mode, tier);
+    systemContent = getSystemPromptForMode(browser, mode, tier, tools);
     if (useSiteAdapters) {
       systemContent += `\n\n${browser.UNIVERSAL_PREAMBLE.trim()}`;
     }
@@ -228,17 +246,6 @@ export function buildPayload(caseRec, opts = {}) {
   }
 
   const userContent = contextLine + caseRec.user;
-
-  // ── tools ────────────────────────────────────────────────────────────
-  // FREEZE MODE: use the snapshot's tools verbatim. The strictSecretMode,
-  // tier, and mode options have no effect on a frozen baseline by design.
-  const tools = FROZEN_BASELINE
-    ? FROZEN_BASELINE.tools
-    : browser.getToolsForMode(mode, {
-      strictSecretMode,
-      tier,
-      researchEscalationEnabled: opts.researchEscalationEnabled === true,
-    });
 
   return {
     messages: [

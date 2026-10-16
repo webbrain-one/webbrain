@@ -1,3 +1,11 @@
+# Automatic reward follow-up — 2026-10-16
+
+The current change grants $0.50 immediately for valid submissions and accepts existing pending claims on status reads. Chrome and Firefox quota cards remove the provider-switch choice, and all 23 supported locales use automatic-credit copy.
+
+Validation: extension quota unit suite passed 19 tests. Cloud `composer check` and `composer run test:promotions` passed, including real HTTP routes, concurrent submissions, legacy pending/rejected recovery, metering, and write/interruption durability. The HTTP flow passed at both $0.50 and $0.375 allowances. The Playwright UI suite was updated for immediate credit and the two card choices; this Mac environment aborts Chromium and Firefox at process launch, so the automated UI suite could not execute. Local fixtures were checked through running native Chrome (English) and Firefox (Turkish): submitting immediately displayed the $0.50 reward balance and approved status, with no provider option. These checks do not deploy the backend or update the installed extension.
+
+The earlier validation record below describes the original manual-review implementation.
+
 # Compass quota validation — 2026-10-05
 
 Both repositories were clean before implementation. No applicable `AGENTS.md` was found in either repository or its ancestor directories. Implementation and validation were completed locally before preparing the PRs. No deployment, social publication, or purchase was performed.

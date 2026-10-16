@@ -97,6 +97,10 @@ function gradeDir(kind, dir) {
       firstToolCall: call,
       content: row.content,
       expected,
+      tools: row.gradingTools || tools,
+      tier: row.tier || summary.tier || 'compact',
+      mode: row.mode,
+      browser: row.browser || summary.browser || 'chrome',
     });
     counts[bucket(scored.verdict)] += 1;
     rows.push({

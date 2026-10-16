@@ -254,7 +254,14 @@ export function pageFeedbackCallPolicy(name, args = {}, state = {}, currentPage 
   if (DETACHED_TOOLS.has(name)) return { kind: 'independent' };
   if (['fetch_url', 'research_url'].includes(name) && httpUrl(args.url)
       && ['GET', 'HEAD'].includes(String(args.method || 'GET').toUpperCase())
-      && !args.replayRequestId && !args.body) return { kind: 'independent' };
+      && !args.replayRequestId && !args.apiReplayRequestId && !args.body) return { kind: 'independent' };
+  // A concrete API request does not act on a DOM target. Retaining it only
+  // preserves the proposed call: API consent, recipient, submission and CAPTCHA
+  // checks still run before dispatch. Captured replays depend on page state.
+  if (name === 'fetch_url' && httpUrl(args.url)
+      && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(String(args.method || '').toUpperCase())
+      && !args.replayRequestId && !args.apiReplayRequestId
+      && (args.body == null || typeof args.body === 'string')) return { kind: 'request' };
   if (['download_files', 'download_file'].includes(name)) {
     // Match the handler's singular-URL alias and precedence exactly. Page churn
     // does not alter a concrete resource URL already supplied to the download.

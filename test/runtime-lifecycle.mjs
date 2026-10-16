@@ -396,7 +396,7 @@ async function chatInputFixture(browser) {
     assertRunCanStart:() => { effects.run++; throw reached; },
     assertNoActiveTabRun:() => { effects.run++; throw reached; },
   };
-  for (const key of ['planBeforeActReady','planReviewReady','customSkillsReady','userMemoryReady','imageGenConfigReady',
+  for (const key of ['planBeforeActReady','planReviewReady','customSkillsReady','userMemoryReady','imageGenConfigReady','browserBatchEnabledReady',
     'alwaysAllowApiMutationsReady','strictSecretModeReady','webMcpEnabledReady','screenshotRedactionReady','imageBudgetReady','researchEscalationReady']) context[key] = Promise.resolve();
   const functions = ['assertChatRequestInput', 'handleMessage'].map(name => chatInputFunction(source,name)).join('\n');
   chatInputVM.runInNewContext(functions + '\nglobalThis.request = handleMessage;', context);

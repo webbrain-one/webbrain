@@ -58,6 +58,7 @@ export const CAPABILITY_LABEL = {
  * tool is classified as gated, untrusted-read, or explicitly known-safe.
  */
 export const UNTRUSTED_CONTENT_TOOLS = new Set([
+  'browser_batch', // Aggregate preserves each sub-result's own untrusted boundary.
   'page_feedback', // Internal monitor observations contain page-derived targets and URLs.
   'recall_memcode',
   // Managed history and verification can carry prior page text and notes.
@@ -473,6 +474,8 @@ const TOOL_CAPABILITY = {
  *     Tab/Escape are benign.
  */
 export function capabilityFor(name, args) {
+  // The wrapper dispatches nothing; each sub-call passes the ordinary gate.
+  if (name === 'browser_batch') return null;
   args = args || {};
   if (name === 'read_email_verification_message') {
     // inspect is read-only. open_message clicks a mailbox row in a disposable

@@ -1,0 +1,78 @@
+{
+  "id": "101",
+  "category": "browser-batch",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://forms.example.com/profile",
+    "title": "Edit profile"
+  },
+  "description": "Fill three already observed fields in one batch, leaving Save untouched.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://forms.example.com/profile — Title: Edit profile]\n\nFill my first name as Ada, last name as Lovelace, and city as London. Do not save yet."
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_3d_743866",
+          "type": "function",
+          "function": {
+            "name": "get_accessibility_tree",
+            "arguments": "{}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_3d_743866",
+      "name": "get_accessibility_tree",
+      "content": "<untrusted_page_content id=\"pg7x2k9q\">\n{\"tree\":\"textbox \\\"First name\\\" [ref_11]\\ntextbox \\\"Last name\\\" [ref_12]\\ntextbox \\\"City\\\" [ref_13]\\nbutton \\\"Save\\\" [ref_14]\"}\n</untrusted_page_content id=\"pg7x2k9q\">"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "browser_batch",
+      "args": {
+        "actions": [
+          {
+            "name": "set_field",
+            "input": {
+              "ref_id": "ref_11",
+              "text": "Ada"
+            }
+          },
+          {
+            "name": "set_field",
+            "input": {
+              "ref_id": "ref_12",
+              "text": "Lovelace"
+            }
+          },
+          {
+            "name": "set_field",
+            "input": {
+              "ref_id": "ref_13",
+              "text": "London"
+            }
+          }
+        ]
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "click_ax({ref_id:\"ref_14\"})",
+        "reason": "Saving was explicitly excluded."
+      },
+      {
+        "match": "set_field({submit:true})",
+        "reason": "Do not submit any field."
+      }
+    ],
+    "successRubric": "Prefer one browser_batch filling the three observed refs with the exact values, then verify. Individual field calls are safe but miss the batching opportunity. Do not save or submit."
+  }
+}

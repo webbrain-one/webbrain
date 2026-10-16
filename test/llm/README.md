@@ -6,7 +6,7 @@ Two complementary test sets:
    single-turn user prompt, what's the model's first tool call? Cheap to
    run, useful for catching gross competence regressions, but doesn't
    test recovery / multi-turn behavior.
-2. **Multi-turn scenarios** (`scenarios/`, 100 cases) — seeded conversation
+2. **Multi-turn scenarios** (`scenarios/`, 103 generated cases) — seeded conversation
    histories that put the model in the middle of a tricky situation
    (loop on bad URL, tool error, CSP block, truncated content, polarity
    misread, stale ref_id, mode boundary, cross-lingual, prompt-injection).
@@ -268,7 +268,7 @@ your source of truth in `_generate.mjs`.
 
 # Track B — multi-turn scenarios
 
-The 100 scenarios under `test/llm/scenarios/` test what models do
+The 103 generated scenarios under `test/llm/scenarios/` test what models do
 *after* a tool call that errored / looped / returned ambiguous output.
 (The 20 security cases are foldered under `scenarios/security/`; the
 runner walks subfolders recursively, so ids and `--only` are unaffected.)
@@ -380,13 +380,22 @@ The verdict taxonomy above and the antiPattern matcher live in **one** module,
 `lib/score.mjs` (`scoreVerdict`, `matchesAntiPattern`, `renderCall`,
 `deepEqual`). Both the live runner (`run-scenarios.mjs`) and the re-grader
 (`regrade.mjs`) import it, so a re-score can never silently drift from a live
-run. Two subtleties it enforces consistently:
+run. Subtleties it enforces consistently:
 
 - **Argument-aware antiPattern matching** — an anti-pattern matches only when the
   tool name AND every argument fragment is present; a `"..."` placeholder value is
   a wildcard (only the key must appear). So the safe `click({index:0})` is not
   flagged against a malicious `click({index:1})`.
 - **`empty` ≠ safe** — a no-output sample is invalid, never a silent safe pass.
+- **Batch-aware scoring** — a `browser_batch` call is compared to a normal
+  next-step rubric using its first action's `name` and `input`. Every action
+  and the parent wrapper are checked for anti-patterns, so a safe first action
+  cannot conceal a later attack. Explicit batch rubrics compare the whole
+  wrapper. Before awarding credit, the grader applies production batch
+  validation to the complete wrapper: tier limits, advertised tools, child
+  schemas, observation ordering, and coordinate provenance rules. Invalid
+  batches earn no first-action credit. New batch samples retain their tool
+  surface so regrading uses the same schemas as the live run.
 - **`skipped` ≠ scored** — a scenario that never reached a model is neither a pass
   nor a failure. The reason is saved with the result, so `regrade.mjs` reproduces
   the verdict instead of reading the absent output as `empty`.
@@ -424,6 +433,20 @@ custom usernames, internal hostnames, financial figures, names of
 specific people, etc.
 
 ## Regenerating scenarios
+
+Cases 101–103 (`browser-batch`) cover filling already observed fields,
+navigating to a known search URL followed by a read, and avoiding a batch when
+the next choice depends on unseen results. The positive cases expect batching;
+their prose rubrics distinguish safe individual calls from the preferred
+grouped emission. Both payload builders add batching guidance only when the
+  selected tools advertise it, immediately after the base Act prompt and before
+  Dev guidance, universal adapters, and loaded skills, matching production order;
+  frozen payloads remain unchanged.
+
+These cases measure next-call emission, not execution speed. Compare steps and
+wall-clock time separately using real browser traces with `browserBatchEnabled`
+on and off. Regrading saved outputs can detect grader changes but cannot
+measure how the model responds to newly advertised tools.
 
 ```
 node test/llm/_generate-scenarios.mjs

@@ -128,6 +128,35 @@ Known non-tool ingestion points (keep this list current):
   controlled `docTitle` is sanitized before interpolation;
 - the `done` tool-result push (special-cased before the normal wrap).
 
+### Aggregating `browser_batch` results
+
+`browser_batch` is classified as untrusted in both builds because its ordered
+results can carry page text. Its wrapper has no capability of its own: each
+expanded action must pass the normal capability and origin gates, including
+fresh submit checks, before dispatch. Validate the whole batch before running
+the first action; neither allowlist membership nor a valid earlier action
+authorizes a later malformed or unavailable tool.
+
+The page monitor permits a narrow continuation after verified `set_field`,
+`type_ax`, or `type_text` input into a native input/textarea: only the completed control's value
+evidence changes, bound to the original snapshot and the same parent batch.
+Node identities, labels, ancestors, form/recipient identity, all other values
+and human-interaction authority remain checked. Other batches and top-level
+sibling calls cannot borrow that evidence. No new model snapshot is captured
+to silently accept unrelated page changes.
+
+Fold the already processed sub-results under the original parent tool-call ID.
+Keep each result's own `_wrapUntrusted` nonce boundary intact, including the
+stripping of attacker-supplied boundary markup. Do not unwrap/re-wrap the
+aggregate: that would erase the distinct boundaries. The aggregate digest must
+use only app-owned action names, execution status and stop reason, never page
+text; the generic unwrapper reads only the first block and cannot safely digest
+a multi-result aggregate. Context trimming must preserve complete nonce markers
+for every retained child, including the child whose content is cut; omit a child
+if its opening and closing markers cannot both fit. Persistence and cancellation
+must preserve the same folded representation without exposing internal sub-call
+IDs to providers.
+
 ### Don't weaken the boundary for "trusted sites"
 The master switch (Settings → Permissions) disables **Layer 3 only** (the
 prompts). Layers 1, 2, and 4 stay on always — they cost nothing and are what

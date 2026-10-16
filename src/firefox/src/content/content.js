@@ -8161,10 +8161,10 @@
       'wait_for_element': () => waitForElement(msg.params || {}),
       'get_selection': () => ({ text: window.getSelection()?.toString() || '' }),
       'find_text': () => findText(msg.params || {}),
-      // ── Completion attention flash (tab title/favicon blink) ─────────
+      // ── Completion / plan attention flash (tab title/favicon blink) ──
       'attention_flash_start': () => {
         try {
-          return { success: true, started: startAttentionFlash() };
+          return { success: true, started: startAttentionFlash(msg.params || {}) };
         } catch (error) {
           if (error?.code === 'page_feedback_pending') throw error;
           return { success: false, error: error?.message || String(error) };
@@ -8172,7 +8172,7 @@
       },
       'attention_flash_stop': () => {
         try {
-          stopAttentionFlash();
+          stopAttentionFlash(msg.params || {});
           return { success: true };
         } catch (error) {
           if (error?.code === 'page_feedback_pending') throw error;
@@ -9883,31 +9883,34 @@
   });
 
   // ─── Tab attention flash ────────────────────────────────────────────
-  // When a run finishes on a tab the user has navigated away from, the side
-  // panel asks this page to blink its title and favicon so the finished tab
+  // When a run finishes or a plan needs review on a tab the user has left,
+  // the background asks this page to blink its title and favicon so the tab
   // can be found at a glance. With many tabs open the strip only shows the
   // favicon, so the favicon itself alternates between the site's own icons
-  // and a bell alert icon — swapping the site's <link> hrefs outright,
+  // and an alert icon — swapping the site's <link> hrefs outright,
   // because an appended icon link loses to favicons the page injects later.
-  // Blinking stops when the tab becomes visible, after
-  // ATTENTION_FLASH_TIMEOUT_MS, or on an explicit stop message.
+  // Completion blinking stops when the tab becomes visible. Plans and
+  // clarifications remain marked until resolved. Every flash also stops
+  // after ATTENTION_FLASH_TIMEOUT_MS or on an explicit stop message.
   //
   // Declared at the end of this closure (function declarations hoist, so the
   // message handlers above can call them) — code above this point is sliced
   // and evaluated standalone by tests.
-  // Blink persists for minutes rather than seconds: the user is by
-  // definition looking elsewhere while it runs, and it stops the moment the
-  // tab becomes visible anyway. A short window is how completions get
-  // missed entirely.
+  // Blink persists for minutes rather than seconds so background alerts are
+  // not missed. Completion clears when shown; pending input clears when its
+  // owner resolves it, with this timeout as a final cleanup fallback.
   const ATTENTION_FLASH_INTERVAL_MS = 700;
   const ATTENTION_FLASH_TIMEOUT_MS = 300000;
   const ATTENTION_FLASH_MARKER = '\u{1F514} ';
+  const ATTENTION_FLASH_INPUT_MARKER = '\u26A0\uFE0F ';
+  let attentionFlashMarker = ATTENTION_FLASH_MARKER;
+  let attentionFlashId = null;
   let attentionFlashTimer = null;
   let attentionFlashTimeout = null;
   let attentionFlashOnVisible = null;
   // Exact title string this flash last wrote — ownership marker. Stripping
   // by prefix alone would eat a page's own title that legitimately starts
-  // with the same bell character.
+  // with the same alert character.
   let attentionFlashOwnTitle = null;
   // Favicon blink state. Every icon <link> present when the flash started is
   // remembered with its original href; the alert data URL replaces it each
@@ -9928,7 +9931,7 @@
         ctx.font = '52px sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(ATTENTION_FLASH_MARKER.trim(), 32, 36);
+        ctx.fillText(attentionFlashMarker.trim(), 32, 36);
       }
       return canvas.toDataURL('image/png');
     } catch {
@@ -9938,8 +9941,8 @@
 
   function attentionFlashStripMarker(title) {
     const text = String(title ?? '');
-    return text.startsWith(ATTENTION_FLASH_MARKER)
-      ? text.slice(ATTENTION_FLASH_MARKER.length)
+    return text.startsWith(attentionFlashMarker)
+      ? text.slice(attentionFlashMarker.length)
       : text;
   }
 
@@ -10001,7 +10004,11 @@
     } catch { /* favicon swap is best-effort */ }
   }
 
-  function stopAttentionFlash() {
+  function stopAttentionFlash(params = {}) {
+    // A delayed cancellation belongs only to the alert that requested it.
+    // Internal stops omit the ID and always clear the current flash.
+    if (params?.attentionId != null && String(params.attentionId) !== attentionFlashId) return;
+    attentionFlashId = null;
     if (attentionFlashTimer) {
       clearInterval(attentionFlashTimer);
       attentionFlashTimer = null;
@@ -10040,22 +10047,30 @@
     attentionFlashAlertUrl = null;
   }
 
-  function startAttentionFlash() {
+  function startAttentionFlash(params = {}) {
     if (typeof document === 'undefined') return false;
     stopAttentionFlash();
-    // Already looking at the page — nothing to draw attention to.
-    if (document.visibilityState === 'visible') return false;
-    attentionFlashOnVisible = () => {
-      if (document.visibilityState === 'visible') stopAttentionFlash();
-    };
-    document.addEventListener('visibilitychange', attentionFlashOnVisible);
+    // Restore the previous flash with its own marker before changing reason.
+    const pendingInput = params?.reason === 'plan_review' || params?.reason === 'clarify';
+    attentionFlashMarker = pendingInput ? ATTENTION_FLASH_INPUT_MARKER : ATTENTION_FLASH_MARKER;
+    // Input requests must identify their tab even while visible, including
+    // the selected tab in another window. Their owner clears the exact alert
+    // when answered; merely looking at the page does not resolve the request.
+    if (!pendingInput && document.visibilityState === 'visible') return false;
+    attentionFlashId = params?.attentionId == null ? null : String(params.attentionId);
+    if (!pendingInput) {
+      attentionFlashOnVisible = () => {
+        if (document.visibilityState === 'visible') stopAttentionFlash();
+      };
+      document.addEventListener('visibilitychange', attentionFlashOnVisible);
+    }
     attentionFlashAlertUrl = attentionFlashBuildAlertIcon();
     if (attentionFlashAlertUrl) attentionFlashCaptureIcons();
     // Chrome throttles hidden-tab timers hard (once per minute after ~5
     // minutes) and Memory Saver may freeze the tab outright, so the phase
     // is derived from wall-clock time instead of a boolean flip: however
     // sparse or late the wake-ups land, each one shows the correct side of
-    // the blink and the bell is on immediately at start.
+    // the blink and the alert is on immediately at start.
     const attentionFlashEpoch = Date.now();
     const applyAttentionTick = () => {
       const flashing = Math.floor((Date.now() - attentionFlashEpoch) / ATTENTION_FLASH_INTERVAL_MS) % 2 === 0;
@@ -10068,9 +10083,9 @@
       // Only the marked phase is extension-owned — during the quiet phase
       // the title belongs to the page even though we just wrote it, so it
       // must never be stripped on stop.
-      attentionFlashOwnTitle = flashing ? `${ATTENTION_FLASH_MARKER}${base}` : null;
+      attentionFlashOwnTitle = flashing ? `${attentionFlashMarker}${base}` : null;
       document.title = flashing ? attentionFlashOwnTitle : base;
-      // The favicon blinks with the title: the bell alert icon replaces the
+      // The favicon blinks with the title: the alert icon replaces the
       // site's own icons during the marked phase and they return during the
       // quiet one — with many tabs open the favicon is all that shows.
       attentionFlashToggleFavicon(flashing);

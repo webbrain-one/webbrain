@@ -39,6 +39,9 @@ function fixture(build) {
   const messages = [], waits = [];
   const context = vm.createContext({ agent, runUiJournal: journal,
     recordRunUiEvent: (tabId, requestId, type, data) => journal.record(tabId, requestId, type, data, agent.currentRunId.get(tabId)),
+    // Background alert delivery has its own suite; this harness exercises
+    // genuine clarification authority and sidepanel hydration without audio.
+    notifyPlanReview() {}, clearPlanReviewAttention() {}, planReviewAttentionByTab: new Map(),
     chrome: { runtime: { sendMessage: async msg => { messages.push(structuredClone(msg)); } } },
     detachedRunStarts: new Map(), detachedRunFailures: new Map(), runUiPersistenceFailures: new Map(),
     getRunUiSnapshot: async tabId => journal.get(tabId), runUiSnapshotForRequest: build.journalModule.runUiSnapshotForRequest,
@@ -131,7 +134,7 @@ for (const build of builds) {
     try {
       await p.apply(); assert.equal((await p.shape()).cards, 1); assert.equal(f.journal.get(f.tab).events.length, 0);
       await p.clearHtml(); await p.apply(); await p.apply();
-      const shape = await p.shape(); assert.equal(shape.cards, 1); assert.equal(shape.permissionCards, 1); assert.equal(shape.sound, 2);
+      const shape = await p.shape(); assert.equal(shape.cards, 1); assert.equal(shape.permissionCards, 1); assert.equal(shape.sound, 0, 'Hydrated cards leave sound to the live background event');
       assert.equal(f.agent._pendingClarifications.get(f.tab).get(wait.prompt.clarifyId).settled, undefined);
       assert.equal(p.calls.filter(x => x.action === 'clarify_response').length, 0);
       await p.page.locator('.clarify-option[data-value="once"]').click();
@@ -190,7 +193,7 @@ for (const build of builds) {
       const applying = p.apply(old); await started.promise; const wait = f.permission();
       await p.page.evaluate(msg => window.handleAgentUpdateMessage(msg), f.messages.at(-1));
       assert.equal((await p.shape()).cards, 1); gate.resolve(); await applying;
-      assert.equal((await p.shape()).cards, 1); assert.equal((await p.shape()).sound, 1);
+      assert.equal((await p.shape()).cards, 1); assert.equal((await p.shape()).sound, 0, 'Rendering and hydration must not replay notification audio');
       assert.equal(f.agent.activeRunState(f.tab).pendingCurrentClarification.clarifyId, wait.prompt.clarifyId);
     } finally { gate.resolve(); await p.close(); await f.close(); }
   });
@@ -225,7 +228,7 @@ for (const build of builds) {
       const applying = p.apply(); await started.promise;
       await p.page.evaluate(tab => { window.abortPending = true; window.localRunRequestIds.set(tab, 'newer-owned-request'); }, f.tab);
       f.agent.abortFlags.set(f.tab, true); gate.resolve(); await applying;
-      assert.equal((await p.shape()).sound, 1); assert.equal(f.agent.activeRunState(f.tab).pendingCurrentClarification, null);
+      assert.equal((await p.shape()).sound, 0, 'Rendering and hydration must not replay notification audio'); assert.equal(f.agent.activeRunState(f.tab).pendingCurrentClarification, null);
       assert.equal(p.calls.filter(x => x.action === 'clarify_response').length, 0);
     } finally { gate.resolve(); await p.close(); await f.close(); }
   });

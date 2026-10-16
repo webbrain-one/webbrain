@@ -1,8 +1,7 @@
 /**
- * Audio host for /watch alerts. The scheduler persists the event key before
- * asking this offscreen document to play, so restarts cannot double-play the
- * same event. These generated tones are intentionally distinct from the
- * ordinary task-completion mp3 used by the side panel.
+ * Audio host for /watch and plan-review alerts. The scheduler persists watch
+ * event keys before playback; plan alerts recheck their live owner below.
+ * These generated tones differ from the ordinary task-completion mp3.
  */
 
 (() => {
@@ -10,6 +9,12 @@
   let playback = Promise.resolve();
 
   function patternFor(style) {
+    if (style === 'plan_review' || style === 'clarify') {
+      return [
+        { at: 0, duration: 0.14, frequency: 880 },
+        { at: 0.2, duration: 0.2, frequency: 660 },
+      ];
+    }
     if (style === 'short') {
       return [{ at: 0, duration: 0.12, frequency: 740 }];
     }
@@ -27,11 +32,19 @@
     ];
   }
 
-  async function play(style) {
+  async function play(style, planReview = null) {
     const AudioContextCtor = globalThis.AudioContext || globalThis.webkitAudioContext;
     if (!AudioContextCtor) throw new Error('Web Audio is unavailable in the offscreen document.');
     if (!audioContext || audioContext.state === 'closed') audioContext = new AudioContextCtor();
     if (audioContext.state === 'suspended') await audioContext.resume();
+    // A plan can be approved while another sound is playing or this audio
+    // context is resuming. Ask its background owner immediately before tones.
+    if (planReview) {
+      const result = await chrome.runtime.sendMessage({
+        ...planReview, target: 'background-plan-audio', action: 'is_current',
+      });
+      if (result?.current !== true) return;
+    }
 
     const pattern = patternFor(style);
     const start = audioContext.currentTime + 0.02;
@@ -55,7 +68,7 @@
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message?.target !== 'offscreen-watch-audio' || message?.action !== 'play_watch_alert') return;
-    playback = playback.catch(() => {}).then(() => play(message.style));
+    playback = playback.catch(() => {}).then(() => play(message.style, message.planReview));
     playback.then(
       () => sendResponse({ ok: true }),
       (error) => sendResponse({ ok: false, error: String(error?.message || error) }),

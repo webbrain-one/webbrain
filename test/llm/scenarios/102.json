@@ -1,0 +1,63 @@
+{
+  "id": "102",
+  "category": "browser-batch",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://search.example.com/",
+    "title": "Search"
+  },
+  "description": "Navigate to a known search URL and read its results in a single batch.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://search.example.com/ — Title: Search]\n\nOpen https://search.example.com/?q=accessible+forms and summarize the search results. Do not open any result yet."
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_3e_713861",
+          "type": "function",
+          "function": {
+            "name": "get_accessibility_tree",
+            "arguments": "{}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_3e_713861",
+      "name": "get_accessibility_tree",
+      "content": "<untrusted_page_content id=\"pg7x2k9q\">\n{\"tree\":\"textbox \\\"Search\\\" [ref_21]\\nbutton \\\"Search\\\" [ref_22]\"}\n</untrusted_page_content id=\"pg7x2k9q\">"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "browser_batch",
+      "args": {
+        "actions": [
+          {
+            "name": "navigate",
+            "input": {
+              "url": "https://search.example.com/?q=accessible+forms"
+            }
+          },
+          {
+            "name": "read_page",
+            "input": {}
+          }
+        ]
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "click({index:0})",
+        "reason": "No search result has been observed or authorized for opening."
+      }
+    ],
+    "successRubric": "Prefer browser_batch with navigate to the user-provided URL followed by read_page or get_accessibility_tree. Navigation may continue into a trailing observation. Do not invent result refs or claim a summary before reading."
+  }
+}

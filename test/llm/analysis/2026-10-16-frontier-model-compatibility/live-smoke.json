@@ -1,0 +1,488 @@
+{
+  "date": "2026-10-16",
+  "recorded_at_utc": "2026-10-16T01:06:09.775814+00:00",
+  "base_commit": "21e3643937cdd9e04b0b67a6c31ba337b26c6310",
+  "tested_working_tree": "uncommitted local changes",
+  "route": "https://openrouter.ai/api/v1/chat/completions",
+  "live_checks": {
+    "browsers": [
+      "chrome",
+      "firefox"
+    ],
+    "unique_probes": 36,
+    "passed": 36,
+    "failed": 0,
+    "scope": "Live upstream API calls through WebBrain production providers and tool replay aggregation; tool observations are supplied fixtures. No real browser task completion claim. Direct Google API route not live tested."
+  },
+  "observations": [
+    {
+      "browser": "chrome",
+      "provider": "openrouter",
+      "model": "google/gemini-4-argon",
+      "probe": "text",
+      "passed": true
+    },
+    {
+      "browser": "chrome",
+      "provider": "openrouter",
+      "model": "google/gemini-4-argon",
+      "probe": "streaming",
+      "passed": true
+    },
+    {
+      "browser": "chrome",
+      "provider": "openrouter",
+      "model": "google/gemini-4-argon",
+      "probe": "tool_round_trip",
+      "passed": true
+    },
+    {
+      "browser": "chrome",
+      "provider": "openrouter",
+      "model": "google/gemini-4-argon",
+      "probe": "screenshot",
+      "passed": true
+    },
+    {
+      "browser": "chrome",
+      "provider": "openrouter",
+      "model": "google/gemini-4-argon",
+      "probe": "short_classifier",
+      "passed": true
+    },
+    {
+      "browser": "chrome",
+      "provider": "openrouter",
+      "model": "meta/muse-wonder",
+      "probe": "text",
+      "passed": true
+    },
+    {
+      "browser": "chrome",
+      "provider": "openrouter",
+      "model": "meta/muse-wonder",
+      "probe": "streaming",
+      "passed": true
+    },
+    {
+      "browser": "chrome",
+      "provider": "openrouter",
+      "model": "meta/muse-wonder",
+      "probe": "tool_round_trip",
+      "passed": false,
+      "error": "HTTP 400"
+    },
+    {
+      "browser": "chrome",
+      "provider": "openrouter",
+      "model": "meta/muse-wonder",
+      "probe": "screenshot",
+      "passed": true
+    },
+    {
+      "browser": "chrome",
+      "provider": "openrouter",
+      "model": "meta/muse-wonder",
+      "probe": "short_classifier",
+      "passed": true
+    },
+    {
+      "browser": "chrome",
+      "provider": "openrouter",
+      "model": "meta/muse-spark-open",
+      "probe": "text",
+      "passed": true
+    },
+    {
+      "browser": "chrome",
+      "provider": "openrouter",
+      "model": "meta/muse-spark-open",
+      "probe": "streaming",
+      "passed": true
+    },
+    {
+      "browser": "chrome",
+      "provider": "openrouter",
+      "model": "meta/muse-spark-open",
+      "probe": "tool_round_trip",
+      "passed": true
+    },
+    {
+      "browser": "chrome",
+      "provider": "openrouter",
+      "model": "meta/muse-spark-open",
+      "probe": "screenshot",
+      "passed": true
+    },
+    {
+      "browser": "chrome",
+      "provider": "openrouter",
+      "model": "meta/muse-spark-open",
+      "probe": "short_classifier",
+      "passed": true
+    },
+    {
+      "browser": "firefox",
+      "provider": "openrouter",
+      "model": "google/gemini-4-argon",
+      "probe": "text",
+      "passed": true,
+      "latencyMs": 3245
+    },
+    {
+      "browser": "firefox",
+      "provider": "openrouter",
+      "model": "google/gemini-4-argon",
+      "probe": "streaming",
+      "passed": true,
+      "latencyMs": 3280
+    },
+    {
+      "browser": "firefox",
+      "provider": "openrouter",
+      "model": "google/gemini-4-argon",
+      "probe": "tool_round_trip",
+      "passed": true,
+      "latencyMs": 5148
+    },
+    {
+      "browser": "firefox",
+      "provider": "openrouter",
+      "model": "google/gemini-4-argon",
+      "probe": "screenshot",
+      "passed": true,
+      "latencyMs": 3703
+    },
+    {
+      "browser": "firefox",
+      "provider": "openrouter",
+      "model": "google/gemini-4-argon",
+      "probe": "short_classifier",
+      "passed": true,
+      "latencyMs": 2094
+    },
+    {
+      "browser": "firefox",
+      "provider": "openrouter",
+      "model": "meta/muse-wonder",
+      "probe": "text",
+      "passed": true,
+      "latencyMs": 2290
+    },
+    {
+      "browser": "firefox",
+      "provider": "openrouter",
+      "model": "meta/muse-wonder",
+      "probe": "streaming",
+      "passed": true,
+      "latencyMs": 3576
+    },
+    {
+      "browser": "firefox",
+      "provider": "openrouter",
+      "model": "meta/muse-wonder",
+      "probe": "tool_round_trip",
+      "passed": true,
+      "latencyMs": 3794
+    },
+    {
+      "browser": "firefox",
+      "provider": "openrouter",
+      "model": "meta/muse-wonder",
+      "probe": "screenshot",
+      "passed": true,
+      "latencyMs": 14277
+    },
+    {
+      "browser": "firefox",
+      "provider": "openrouter",
+      "model": "meta/muse-wonder",
+      "probe": "short_classifier",
+      "passed": true,
+      "latencyMs": 1223
+    },
+    {
+      "browser": "firefox",
+      "provider": "openrouter",
+      "model": "meta/muse-spark-open",
+      "probe": "text",
+      "passed": true,
+      "latencyMs": 2792
+    },
+    {
+      "browser": "firefox",
+      "provider": "openrouter",
+      "model": "meta/muse-spark-open",
+      "probe": "streaming",
+      "passed": true,
+      "latencyMs": 1279
+    },
+    {
+      "browser": "firefox",
+      "provider": "openrouter",
+      "model": "meta/muse-spark-open",
+      "probe": "tool_round_trip",
+      "passed": true,
+      "latencyMs": 5589
+    },
+    {
+      "browser": "firefox",
+      "provider": "openrouter",
+      "model": "meta/muse-spark-open",
+      "probe": "screenshot",
+      "passed": true,
+      "latencyMs": 11352
+    },
+    {
+      "browser": "firefox",
+      "provider": "openrouter",
+      "model": "meta/muse-spark-open",
+      "probe": "short_classifier",
+      "passed": true,
+      "latencyMs": 863
+    },
+    {
+      "browser": "chrome",
+      "provider": "openrouter",
+      "model": "google/gemini-4-argon",
+      "probe": "streaming_tool_round_trip",
+      "passed": true,
+      "latencyMs": 4981
+    },
+    {
+      "browser": "chrome",
+      "provider": "openrouter",
+      "model": "meta/muse-wonder",
+      "probe": "streaming_tool_round_trip",
+      "passed": true,
+      "latencyMs": 3979
+    },
+    {
+      "browser": "chrome",
+      "provider": "openrouter",
+      "model": "meta/muse-spark-open",
+      "probe": "streaming_tool_round_trip",
+      "passed": true,
+      "latencyMs": 3039
+    },
+    {
+      "browser": "firefox",
+      "provider": "openrouter",
+      "model": "google/gemini-4-argon",
+      "probe": "streaming_tool_round_trip",
+      "passed": true,
+      "latencyMs": 7101
+    },
+    {
+      "browser": "firefox",
+      "provider": "openrouter",
+      "model": "meta/muse-wonder",
+      "probe": "streaming_tool_round_trip",
+      "passed": true,
+      "latencyMs": 3407
+    },
+    {
+      "browser": "firefox",
+      "provider": "openrouter",
+      "model": "meta/muse-spark-open",
+      "probe": "streaming_tool_round_trip",
+      "passed": true,
+      "latencyMs": 7738
+    },
+    {
+      "browser": "chrome",
+      "provider": "openrouter",
+      "model": "meta/muse-wonder",
+      "probe": "tool_round_trip",
+      "passed": true,
+      "latencyMs": 3470
+    }
+  ],
+  "resolved_failure": {
+    "model": "meta/muse-wonder",
+    "browser": "chrome",
+    "probe": "tool_round_trip",
+    "initial_http_status": 400,
+    "cause": "Meta accepts only auto tool choice; required, none and named choices are rejected.",
+    "repair": "Use auto, narrow named choices to their offered tool, and remove tools for none.",
+    "retry_passed": true
+  },
+  "local_validation": {
+    "provider_capabilities": {
+      "passed": 132,
+      "failed": 0
+    },
+    "related_privacy_identity_build_and_stream_tests": {
+      "passed": 57,
+      "failed": 0
+    },
+    "model_limits": "passed",
+    "provider_catalog": "passed",
+    "unpacked_builds": [
+      "chrome 40.7.1",
+      "firefox 40.7.1"
+    ],
+    "broader_provider_regressions": {
+      "passed": 133,
+      "failed": 1,
+      "failure": "standalone WebGPU control uses a per-run provider without changing global selection",
+      "baseline_evidence": "The failing assertion checks src/chrome/src/background.js. That file and the assertion are unchanged; the same regex matches the background at baseline HEAD."
+    }
+  },
+  "source_sha256": {
+    "docs/providers-and-models.md": "fd90081fee049255e1d6ffd0616646fb69a147a9d109712a2703d2627b325a34",
+    "package.json": "707cb8acb17bd131deec7715d04c2fe79e1516af42eb64dee2de51e4fc25e698",
+    "src/chrome/src/agent/agent.js": "64d932980c773345633f68c6af448baa29d7a382b5b3256a392425bdd85a5370",
+    "src/chrome/src/providers/context-windows.js": "266c923744cfe2cad5bcec58babc5673a77e6a1721303c9227f194e8a0716143",
+    "src/chrome/src/providers/openai.js": "94d7821102c877a8686d1b3151b3e2ccd7c87656f4d9eb898db8737372cdeed6",
+    "src/chrome/src/providers/provider-compatibility.js": "ef6ea5011322d1dafe651a2e5c46c169d02a0a4ce707255643b1928fc40b2dec",
+    "src/chrome/src/ui/settings.js": "6a3d89ef8c9ada0314e823da8c4cfee6ad2071d0006ccfa21fe74720a6218c3d",
+    "src/firefox/src/agent/agent.js": "a04af0b0e6904d3550763bd50427fae267e0e2a476f69a11ac3f6c5eb59a53cd",
+    "src/firefox/src/providers/context-windows.js": "266c923744cfe2cad5bcec58babc5673a77e6a1721303c9227f194e8a0716143",
+    "src/firefox/src/providers/openai.js": "596730e75a70c172e9f28795cf1433b0fdc801c3bcb6ef6212ce8228c2d6922b",
+    "src/firefox/src/providers/provider-compatibility.js": "ef6ea5011322d1dafe651a2e5c46c169d02a0a4ce707255643b1928fc40b2dec",
+    "src/firefox/src/ui/settings.js": "b4981742c1f5ad2b2f229b289d8a18894284b06b8aa8468b4d8985c119db2d50",
+    "test/muse-tool-choice.mjs": "7549553bf394ea1e28c490d55a735239841f49e5bb5f8a6b2aec663587e2fd06",
+    "scripts/check-frontier-models.mjs": "db34dc5acfb573b97db192ed3daf926871184d52e2b5407ba80a5692c5b439f1",
+    "src/chrome/src/providers/openrouter-replay.js": "a5bf13f409fad2fb1d48554c89300995184bace641649b84f3aaed3db7f53709",
+    "src/firefox/src/providers/openrouter-replay.js": "a5bf13f409fad2fb1d48554c89300995184bace641649b84f3aaed3db7f53709",
+    "test/frontier-model-compatibility.mjs": "4e8a340c62c644c224e699286df97c089e2aa0ca58a80f64220af487b2007f65"
+  },
+  "review_followup": {
+    "recorded_at_utc": "2026-10-16T01:31:59.203342+00:00",
+    "issue": "Classifier disabling retained an inherited high reasoning effort.",
+    "repair": "Per-call disabling takes precedence over saved effort. Explicit per-call effort still overrides saved disabled settings when the call itself does not disable thinking.",
+    "reproduction": {
+      "failed_before_fix": 2,
+      "passed_before_fix": 0,
+      "test_name": "classifier disabling overrides inherited high reasoning"
+    },
+    "validation": {
+      "provider_capabilities": {
+        "passed": 134,
+        "failed": 0
+      },
+      "related_privacy_identity_build_and_stream_tests": {
+        "passed": 59,
+        "failed": 0
+      },
+      "model_limits": "passed",
+      "provider_catalog": "passed",
+      "unpacked_builds": [
+        "chrome 40.7.1",
+        "firefox 40.7.1"
+      ]
+    },
+    "live_inference_after_fix": false,
+    "source_sha256": {
+      "src/chrome/src/providers/provider-compatibility.js": "df6f75064ebf9053970d4bd413f66fc12faba87dffc2cca0a59e875882a9a8c6",
+      "src/firefox/src/providers/provider-compatibility.js": "df6f75064ebf9053970d4bd413f66fc12faba87dffc2cca0a59e875882a9a8c6",
+      "test/frontier-model-compatibility.mjs": "68a6526e2d1b9924e82f3e6b5c228aefe6fe30ed31833066b3527a16d35e69a6"
+    }
+  },
+  "local_proxy_validation": {
+    "route": "http://127.0.0.1:8317/v1/chat/completions",
+    "model": "gemini-4-argon-high",
+    "passed": 12,
+    "failed": 0,
+    "scope": "Live API probes through Chrome and Firefox provider implementations, with supplied tool observations and vision enabled. No installed settings changed. Recorded before the classifier review fix; this local endpoint does not use the changed mandatory reasoning normalizer.",
+    "observations": [
+      {
+        "browser": "chrome",
+        "provider": "local-openai-proxy",
+        "model": "gemini-4-argon-high",
+        "probe": "text",
+        "passed": true,
+        "latencyMs": 4265
+      },
+      {
+        "browser": "chrome",
+        "provider": "local-openai-proxy",
+        "model": "gemini-4-argon-high",
+        "probe": "streaming",
+        "passed": true,
+        "latencyMs": 3153
+      },
+      {
+        "browser": "chrome",
+        "provider": "local-openai-proxy",
+        "model": "gemini-4-argon-high",
+        "probe": "tool_round_trip",
+        "passed": true,
+        "latencyMs": 6146
+      },
+      {
+        "browser": "chrome",
+        "provider": "local-openai-proxy",
+        "model": "gemini-4-argon-high",
+        "probe": "streaming_tool_round_trip",
+        "passed": true,
+        "latencyMs": 7979
+      },
+      {
+        "browser": "chrome",
+        "provider": "local-openai-proxy",
+        "model": "gemini-4-argon-high",
+        "probe": "screenshot",
+        "passed": true,
+        "latencyMs": 3786
+      },
+      {
+        "browser": "chrome",
+        "provider": "local-openai-proxy",
+        "model": "gemini-4-argon-high",
+        "probe": "short_classifier",
+        "passed": true,
+        "latencyMs": 2907
+      },
+      {
+        "browser": "firefox",
+        "provider": "local-openai-proxy",
+        "model": "gemini-4-argon-high",
+        "probe": "text",
+        "passed": true,
+        "latencyMs": 3233
+      },
+      {
+        "browser": "firefox",
+        "provider": "local-openai-proxy",
+        "model": "gemini-4-argon-high",
+        "probe": "streaming",
+        "passed": true,
+        "latencyMs": 5038
+      },
+      {
+        "browser": "firefox",
+        "provider": "local-openai-proxy",
+        "model": "gemini-4-argon-high",
+        "probe": "tool_round_trip",
+        "passed": true,
+        "latencyMs": 5829
+      },
+      {
+        "browser": "firefox",
+        "provider": "local-openai-proxy",
+        "model": "gemini-4-argon-high",
+        "probe": "streaming_tool_round_trip",
+        "passed": true,
+        "latencyMs": 36788
+      },
+      {
+        "browser": "firefox",
+        "provider": "local-openai-proxy",
+        "model": "gemini-4-argon-high",
+        "probe": "screenshot",
+        "passed": true,
+        "latencyMs": 4625
+      },
+      {
+        "browser": "firefox",
+        "provider": "local-openai-proxy",
+        "model": "gemini-4-argon-high",
+        "probe": "short_classifier",
+        "passed": true,
+        "latencyMs": 4409
+      }
+    ]
+  }
+}

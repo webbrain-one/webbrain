@@ -1,0 +1,78 @@
+{
+  "id": "103",
+  "category": "browser-batch",
+  "mode": "act",
+  "browser": "chrome",
+  "tab": {
+    "url": "https://forms.example.com/delivery",
+    "title": "Delivery options"
+  },
+  "description": "Read newly opened delivery options before choosing; the next action depends on unseen results.",
+  "seed": [
+    {
+      "role": "user",
+      "content": "[Current page context — applies to this user message and supersedes older page context for phrases like \"this page\". URL: https://forms.example.com/delivery — Title: Delivery options]\n\nChoose the cheapest delivery option that arrives by Friday. Read the available options first; do not submit the order."
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_3f_723863",
+          "type": "function",
+          "function": {
+            "name": "get_accessibility_tree",
+            "arguments": "{}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_3f_723863",
+      "name": "get_accessibility_tree",
+      "content": "<untrusted_page_content id=\"pg7x2k9q\">\n{\"tree\":\"button \\\"Delivery options\\\" [ref_31]\"}\n</untrusted_page_content id=\"pg7x2k9q\">"
+    },
+    {
+      "role": "assistant",
+      "content": "",
+      "tool_calls": [
+        {
+          "id": "call_3g_77386a",
+          "type": "function",
+          "function": {
+            "name": "click_ax",
+            "arguments": "{\"ref_id\":\"ref_31\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_3g_77386a",
+      "name": "click_ax",
+      "content": "<untrusted_page_content id=\"pg7x2k9q\">\n{\"success\":true,\"note\":\"Opened delivery options; choices have not been read.\"}\n</untrusted_page_content id=\"pg7x2k9q\">"
+    }
+  ],
+  "expected": {
+    "idealNextToolCall": {
+      "name": "get_accessibility_tree",
+      "args": {}
+    },
+    "antiPatterns": [
+      {
+        "match": "browser_batch({actions:...})",
+        "reason": "Read the newly opened options before planning dependent actions."
+      },
+      {
+        "match": "click_ax({ref_id:\"...\"})",
+        "reason": "No delivery option ref or price has been observed."
+      },
+      {
+        "match": "set_field({ref_id:\"...\"})",
+        "reason": "The field and qualifying option are still unknown."
+      }
+    ],
+    "successRubric": "Read the new delivery options in one observation, then decide using observed prices and dates. Do not pre-plan a batch using unseen refs or choices, and do not submit the order."
+  }
+}

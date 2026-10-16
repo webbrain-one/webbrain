@@ -29,7 +29,7 @@ window.makeController=()=>createQuotaController({t,locale:()=>code,request:async
  if(path==='/promotions/social/claims'){
   if(window.delaySubmission)await new Promise(resolve=>{window.releaseSubmission=resolve;});
   if(window.rejectSubmission)throw Error('Submission not received.');
-  claim={...claim,status:'pending',platform:body.platform,post_url:body.post_url};return {...claim};
+  claim={...claim,status:window.legacySubmission?'pending':'approved',eligible:!!window.legacySubmission,remaining_credit_usd:window.legacySubmission?0:0.5,platform:body.platform,post_url:body.post_url};return {...claim};
  }
  if(path==='/promotions/social')claim={...claim,claim_id:'opaque-random-claim',share_url:'https://webbrain.one/?share=opaque-random-claim'};
  const snapshot=path==='/usage'?{...usage,social_claim:{...claim}}:{...claim};
@@ -75,7 +75,8 @@ try {
         const errors = []; page.on('pageerror', e => errors.push(e.message));
         await page.goto(`${origin}/quota?build=${build}&locale=${lang}`);
         await page.waitForFunction(() => window.ready);
-        assert.equal(await page.locator('.quota-choices button:visible').count(), 3); checks++;
+        assert.equal(await page.locator('.quota-choices button:visible').count(), 2); checks++;
+        assert.equal(await page.locator('.quota-other').count(), 0); checks++;
         assert.equal(await page.locator('#card').evaluate(el => /quota\.|\{(?:base|credit|time)\}/.test(el.textContent)), false); checks++;
         assert.equal(await page.evaluate(() => continuations.length), 0); checks++;
         if (lang === 'en') {
@@ -86,7 +87,7 @@ try {
           await page.keyboard.press('Tab');
           assert.equal(await page.evaluate(() => document.activeElement.className), 'subscribe-btn');
           await page.keyboard.press('Tab');
-          assert.equal(await page.evaluate(() => document.activeElement.className), 'quota-other'); checks += 3;
+          assert.equal(await page.evaluate(() => document.activeElement.className), 'quota-refresh'); checks += 3;
           await page.locator('.subscribe-btn').click();
           assert.equal(await page.evaluate(() => opened.at(-1)), 'https://buy.stripe.com/test?client_reference_id=device-guid');
           assert.equal(await page.evaluate(() => continuations.length), 0); checks += 2;
@@ -114,6 +115,8 @@ try {
           assert.equal(await page.locator('.quota-claim textarea').inputValue(), copy);
           assert.equal(await page.locator('.quota-claim select').inputValue(), 'bluesky');
           assert.match(await page.locator('.quota-claim input').inputValue(), /bsky\.app/); checks += 3;
+          // Older servers may still return pending. Keep stale-response/remount compatibility.
+          await page.evaluate(() => { window.legacySubmission = true; });
           // A focus refresh may already have read draft state when submission completes.
           await page.evaluate(() => { window.delayRefresh = true; window.staleRefresh = controller.refreshAll(); });
           assert.equal(await page.evaluate(() => deferredRefresh.length), 1); checks++;
@@ -121,7 +124,7 @@ try {
           await page.waitForFunction(() => claim.status === 'pending');
           await page.evaluate(async () => { window.delayRefresh = false; deferredRefresh.splice(0).forEach(resolve => resolve()); await staleRefresh; });
           assert.equal(await page.locator('#card').evaluate(el => JSON.parse(el.dataset.quota).usage.social_claim.status), 'pending'); checks++;
-          assert.match(await page.locator('.quota-status').textContent(), /Pending manual review/);
+          assert.match(await page.locator('.quota-status').textContent(), /Refresh status to receive your credit automatically/);
           assert.equal(await page.locator('.quota-claim textarea').count(), 0); checks += 2;
           await page.evaluate(() => { claim.status = 'rejected'; claim.reason = 'Add the generated link.'; });
           await page.locator('.quota-refresh').click();
@@ -132,7 +135,7 @@ try {
           await page.locator('.quota-claim form button[type=submit]').click();
           await page.waitForFunction(() => claim.status === 'pending');
           await page.evaluate(async () => { window.failDelayedRefresh = true; window.delayRefresh = false; deferredRefresh.splice(0).forEach(resolve => resolve()); await staleRefresh; window.failDelayedRefresh = false; });
-          assert.match(await page.locator('.quota-status').textContent(), /Pending manual review/); checks++;
+          assert.match(await page.locator('.quota-status').textContent(), /Refresh status to receive your credit automatically/); checks++;
           // Remounting during an outstanding POST must neither allow a second submission
           // nor retain the pre-submission status after the response arrives.
           await page.evaluate(async () => { claim.status = 'rejected'; await controller.refreshAll(); window.delaySubmission = true; });
@@ -142,7 +145,7 @@ try {
           assert.equal(await page.locator('.quota-claim form button[type=submit]').isDisabled(), true); checks++;
           await page.evaluate(() => { window.delaySubmission = false; releaseSubmission(); });
           await page.waitForFunction(() => !document.querySelector('.quota-claim form'));
-          assert.match(await page.locator('.quota-status').textContent(), /Pending manual review/);
+          assert.match(await page.locator('.quota-status').textContent(), /Refresh status to receive your credit automatically/);
           assert.equal(await page.evaluate(() => continuations.length), 0); checks += 2;
           await page.evaluate(async () => { claim.status = 'rejected'; await controller.refreshAll(); window.delaySubmission = true; window.rejectSubmission = true; window.releaseSubmission = null; });
           await page.locator('.quota-claim form button[type=submit]').click();
@@ -153,30 +156,14 @@ try {
           await page.waitForFunction(() => document.querySelector('.quota-claim form button[type=submit]')?.disabled === false);
           assert.equal(await page.locator('.quota-claim form button[type=submit]').isDisabled(), false);
           assert.equal(await page.evaluate(() => continuations.length), 0); checks += 2;
-          await page.evaluate(() => { window.rejectSubmission = false; });
+          await page.evaluate(() => { window.rejectSubmission = false; window.legacySubmission = false; });
           await page.locator('.quota-claim form button[type=submit]').click();
           await page.waitForFunction(() => !document.querySelector('.quota-claim form'));
-          await page.evaluate(() => { claim.status = 'approved'; claim.eligible = false; claim.remaining_credit_usd = 0.5; });
-          const usageReadsBeforeCheck = await page.evaluate(() => requests.filter(r => r.path === '/usage').length);
-          await page.getByRole('button', { name: 'Check claim status', exact: true }).click();
-          await page.waitForFunction(() => document.querySelector('.quota-share')?.hidden);
-          assert.equal(await page.evaluate(() => requests.filter(r => r.path === '/usage').length), usageReadsBeforeCheck + 1); checks++;
+          assert.match(await page.locator('.quota-status').textContent(), /Approved/); checks++;
           assert.equal(await page.locator('.quota-share:visible').count(), 0);
           assert.match(await page.locator('.quota-balance').textContent(), /\$0\.50/);
           assert.equal(await page.evaluate(() => continuations.length), 0); checks += 3;
-          await page.locator('.quota-other').click();
-          await page.locator('.quota-providers select').selectOption('local');
-          await page.evaluate(() => { window.providerError = 'Invalid credentials'; });
-          await page.locator('.quota-providers button').first().click();
-          assert.match(await page.locator('.quota-status').textContent(), /Invalid credentials/);
-          assert.deepEqual(await page.evaluate(() => switched), []);
-          assert.equal(await page.evaluate(() => requests.filter(r => r.body?.event === 'provider_switch').length), 0); checks += 3;
-          await page.evaluate(() => { window.providerError = null; });
-          await page.locator('.quota-providers button').first().click();
-          assert.deepEqual(await page.evaluate(() => switched), ['local']);
-          assert.equal(await page.evaluate(() => continuations.length), 0); checks += 2;
-          await page.locator('.quota-providers button').last().click();
-          assert.equal(await page.evaluate(() => settingsOpened), 1); checks++;
+          assert.equal(await page.locator('.quota-providers').count(), 0); checks++;
           await page.evaluate(() => { const html = document.querySelector('#history').innerHTML; document.querySelector('#history').innerHTML = html; controller = makeController(); controller.restore(document.querySelector('#history')); });
           assert.equal(await page.locator('.quota-share:visible').count(), 0); checks++;
           await page.locator('.subscribe-resume-btn').click();
@@ -190,6 +177,13 @@ try {
           assert.equal(await page.evaluate(() => continuations.length), 1); checks += 2;
           await page.setViewportSize({ width: 420, height: 850 });
           await page.screenshot({ path: resolve(output, `${build}-quota-awarded-420.png`), fullPage: true });
+        }
+        if (lang !== 'en') {
+          await page.locator('.quota-claim input').fill('https://x.com/name/status/123');
+          await page.locator('.quota-claim form button[type=submit]').click();
+          await page.waitForFunction(() => document.querySelector('.quota-share')?.hidden);
+          assert.equal(await page.locator('#card').evaluate(el => JSON.parse(el.dataset.quota).usage.social_claim.remaining_credit_usd), 0.5); checks++;
+          assert.equal(await page.evaluate(() => continuations.length), 0); checks++;
         }
         assert.deepEqual(errors, []); checks++;
         await page.close();

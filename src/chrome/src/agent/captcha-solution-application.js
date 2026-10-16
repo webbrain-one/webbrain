@@ -75,12 +75,12 @@ export function prepareCaptchaApplication(solution, application) {
 export async function captureCaptchaDocuments(tabId, frames, api = globalThis.browser || globalThis.chrome) {
   const read = () => ({ url: location.href, timeOrigin: performance.timeOrigin });
   if (typeof api.scripting?.executeScript === 'function') {
-    const results = await api.scripting.executeScript({ target: { tabId, allFrames: true }, func: read });
+    const results = await api.scripting.executeScript({ target: { tabId, allFrames: true }, injectImmediately: true, func: read });
     return results.filter(r => Number.isFinite(r.result?.timeOrigin)).map(r => ({ frameId: r.frameId, ...r.result }));
   }
   const identities = await Promise.all(frames.map(async frame => {
     try {
-      const result = (await api.tabs.executeScript(tabId, { frameId: frame.frameId, code: `(${read.toString()})()` }))?.[0];
+      const result = (await api.tabs.executeScript(tabId, { frameId: frame.frameId, runAt: 'document_start', code: `(${read.toString()})()` }))?.[0];
       return Number.isFinite(result?.timeOrigin) ? { frameId: frame.frameId, ...result } : null;
     } catch { return null; }
   }));

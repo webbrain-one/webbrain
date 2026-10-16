@@ -222,6 +222,7 @@ const scheduler = new ScheduledJobManager({
     await alwaysAllowApiMutationsReady;
     await strictSecretModeReady;
     await imageGenConfigReady;
+    await browserBatchEnabledReady;
     if (providerManager.providers.size === 0) await providerManager.load();
   },
   sendUpdate: (tabId, type, data, owner) => {
@@ -529,6 +530,19 @@ async function loadImageGenConfig() {
   agent.setImageGenConfig(stored?.[IMAGE_GEN_MODEL_KEY]);
 }
 const imageGenConfigReady = loadImageGenConfig();
+
+let browserBatchSettingsRevision = 0;
+async function loadBrowserBatchEnabled() {
+  const revision = ++browserBatchSettingsRevision;
+  try {
+    const stored = await browser.storage.local.get('browserBatchEnabled');
+    if (revision === browserBatchSettingsRevision) agent.setBrowserBatchEnabled(stored.browserBatchEnabled !== false);
+  } catch {
+    // A delayed read must never override a newer explicit kill-switch change.
+    if (revision === browserBatchSettingsRevision) agent.setBrowserBatchEnabled(false);
+  }
+}
+const browserBatchEnabledReady = loadBrowserBatchEnabled();
 
 async function loadProfile() {
   const stored = await browser.storage.local.get(['profileEnabled', 'profileText']);
@@ -1173,6 +1187,10 @@ browser.storage.onChanged.addListener((changes, areaName) => {
   if (changes.webbrainCloudBridgeEnabled || changes.webbrainCloudBridgeUrl
     || changes.webbrainCloudBridgeToken || changes.webbrainCloudBridgeBrowserId) {
     cloudRunController.syncBridge().catch(() => {});
+  }
+  if (areaName === 'local' && changes.browserBatchEnabled) {
+    browserBatchSettingsRevision++;
+    agent.setBrowserBatchEnabled(changes.browserBatchEnabled.newValue !== false);
   }
   if (changes.strictSecretMode) {
     agent.strictSecretMode = changes.strictSecretMode.newValue === true;
@@ -1927,10 +1945,11 @@ browser.tabs.onRemoved.addListener((tabId) => {
   clearRunUiSnapshot(tabId);
   clearDetachedRunFailure(tabId);
   flashedBadgeTabs.delete(tabId);
+  attentionBadgeOwners.delete(tabId);
 });
 
-// ─── Completion attention flash ─────────────────────────────────────
-// When a run settles on a background tab, the side panel asks us to make
+// ─── Completion and plan attention flash ─────────────────────────────────────
+// When a run settles or presents a plan on a background tab, make
 // that tab noticeable. The preferred path blinks the page title/favicon
 // via the content script; when no receiver answers (restricted pages,
 // discarded tabs, …) we fall back to a per-tab toolbar badge that clears
@@ -1955,23 +1974,33 @@ browser.notifications.onClosed.addListener((notificationId) => {
   completionNotificationFocusHandlers.delete(notificationId);
 });
 
-async function showCompletionNotification(tabId, success) {
+async function showCompletionNotification(tabId, success, reason = 'completion', isCurrent = () => true) {
   let tab = null;
   try {
     tab = await browser.tabs.get(tabId);
   } catch { return; }
-  const message = tab?.title || tab?.url || 'A background task finished.';
+  if (!isCurrent()) return;
+  const planReview = reason === 'plan_review';
+  const clarification = reason === 'clarify';
+  const pendingInput = planReview || clarification;
+  const attention = pendingInput ? planReviewAttentionByTab.get(tabId) : null;
+  const message = tab?.title || tab?.url || (planReview ? 'A plan is waiting for your review.' : clarification ? 'A question is waiting for your response.' : 'A background task finished.');
   let notificationId = null;
   try {
     notificationId = await browser.notifications.create({
       type: 'basic',
-      iconUrl: browser.runtime.getURL('icons/icon48.png'),
-      title: `WebBrain — ${success ? 'Task finished' : 'Task needs attention'}`,
+      iconUrl: browser.runtime.getURL(pendingInput ? 'icons/plan-review.png' : 'icons/icon48.png'),
+      title: planReview ? 'WebBrain — ⚠️ Plan ready for review' : clarification ? 'WebBrain — ⚠️ Your input is needed' : `WebBrain — ${success ? 'Task finished' : 'Task needs attention'}`,
       message,
       silent: true,
     });
   } catch { return; }
   if (!notificationId) return;
+  if (!isCurrent()) {
+    void browser.notifications.clear(notificationId).catch(() => {});
+    return;
+  }
+  if (attention) attention.notificationId = notificationId;
   setTimeout(() => {
     completionNotificationFocusHandlers.delete(notificationId);
     browser.notifications.clear(notificationId).catch(() => {});
@@ -1989,6 +2018,7 @@ async function showCompletionNotification(tabId, success) {
 
 browser.tabs.onActivated.addListener(({ tabId } = {}) => {
   flashedBadgeTabs.delete(tabId);
+  attentionBadgeOwners.delete(tabId);
   // Clear unconditionally so badge cleanup never depends on volatile state.
   // Resetting the per-tab override is idempotent and restores any global badge.
   browser.browserAction.setBadgeText({ tabId, text: '' }).catch(() => {});
@@ -2006,6 +2036,7 @@ browser.windows.onFocusChanged.addListener(async (windowId) => {
     const activeTabId = Number(activeTab?.id);
     if (!Number.isInteger(activeTabId)) return;
     flashedBadgeTabs.delete(activeTabId);
+    attentionBadgeOwners.delete(activeTabId);
     await browser.browserAction.setBadgeText({ tabId: activeTabId, text: '' });
   } catch { /* best-effort cleanup */ }
 });
@@ -2035,12 +2066,17 @@ async function maybeFlashScheduledTerminalEvent(_tabId, type, data) {
 }
 
 async function flashTabAttention(msg) {
+  const isCurrent = typeof msg?.isCurrent === 'function' ? msg.isCurrent : () => true;
   try {
     const stored = await browser.storage.local.get('completionFlashTab');
     if (stored?.completionFlashTab === false) return { ok: true, mode: 'disabled' };
   } catch { /* setting defaults to on */ }
+  if (!isCurrent()) return { ok: true, mode: 'stale' };
   const tabId = Number(msg?.tabId);
   const success = msg?.success !== false;
+  const reason = ['plan_review', 'clarify'].includes(msg?.reason) ? msg.reason : 'completion';
+  const pendingInput = reason !== 'completion';
+  const attentionId = String(msg?.attentionId || '');
   if (!Number.isInteger(tabId) || tabId < 0) {
     return { ok: false, error: 'flash_tab_attention requires a valid tabId.' };
   }
@@ -2049,22 +2085,45 @@ async function flashTabAttention(msg) {
   } catch {
     return { ok: false, error: `Tab ${tabId} no longer exists.` };
   }
+  if (!isCurrent()) return { ok: true, mode: 'stale' };
   // Discarded/unloaded tabs and pages whose content script declines to
   // blink (document already visible) both fall through to the badge
   // fallback — which works without touching the page and survives until
   // the user actually looks at the tab.
   let flashAccepted = false;
+  const startFlash = () => browser.tabs.sendMessage(tabId, {
+    target: 'content', action: 'attention_flash_start', params: { success, reason, attentionId },
+  }, { frameId: 0 });
+  let response = null;
+  let missingReceiver = false;
   try {
-    const response = await browser.tabs.sendMessage(tabId, {
-      target: 'content',
-      action: 'attention_flash_start',
-      params: { success },
-    });
-    flashAccepted = response?.started === true;
-  } catch {
-    flashAccepted = false;
+    response = await startFlash();
+    missingReceiver = response == null;
+  } catch (error) {
+    missingReceiver = /receiving end does not exist|could not establish connection|message (?:port|channel) closed|extension context invalidated/i
+      .test(String(error?.message || error));
   }
-  if (flashAccepted) return { ok: true, mode: 'title-flash' };
+  // Plans can pause before the first page tool repairs a receiver left behind
+  // by an extension reload. Recover it here instead of silently losing the title.
+  if (missingReceiver && isCurrent()) {
+    try {
+      await agent._injectCoreContentScripts(tabId);
+      if (isCurrent()) response = await startFlash();
+    } catch { /* restricted pages retain the badge/notification fallback */ }
+  }
+  flashAccepted = response?.started === true;
+  if (!isCurrent()) {
+    if (flashAccepted && attentionId) {
+      void browser.tabs.sendMessage(tabId, {
+        target: 'content', action: 'attention_flash_stop', params: { attentionId },
+      }).catch(() => {});
+    }
+    return { ok: true, mode: 'stale' };
+  }
+  if (flashAccepted) {
+    if (pendingInput) await showCompletionNotification(tabId, false, reason, isCurrent);
+    return { ok: true, mode: pendingInput ? 'title-flash+notification' : 'title-flash' };
+  }
   // No content-script receiver (or it declined) — fall back to a per-tab
   // toolbar badge. But re-check first whether the user is actually looking
   // at the tab: "active" only means selected within its own window, so an
@@ -2083,17 +2142,30 @@ async function flashTabAttention(msg) {
   } catch {
     return { ok: false, error: `Tab ${tabId} no longer exists.` };
   }
+  if (!isCurrent()) return { ok: true, mode: 'stale' };
   if (tabIsWatched) return { ok: true, mode: 'skipped-tab-watched' };
+  const badgeOwner = { attentionId };
+  attentionBadgeOwners.set(tabId, badgeOwner);
+  const attention = planReviewAttentionByTab.get(tabId);
+  if (attention?.id === attentionId) attention.badge = true;
   try {
-    await browser.browserAction.setBadgeText({ tabId, text: success ? '✓' : '!' });
+    await browser.browserAction.setBadgeText({ tabId, text: pendingInput ? '⚠' : success ? '✓' : '!' });
+    if (!isCurrent()) {
+      await clearAttentionBadge(tabId, badgeOwner);
+      return { ok: true, mode: 'stale' };
+    }
     await browser.browserAction.setBadgeBackgroundColor({
       tabId,
-      color: success ? '#22c55e' : '#ef4444',
+      color: pendingInput ? '#f59e0b' : success ? '#22c55e' : '#ef4444',
     });
+    if (!isCurrent()) {
+      await clearAttentionBadge(tabId, badgeOwner);
+      return { ok: true, mode: 'stale' };
+    }
     flashedBadgeTabs.add(tabId);
     // The badge itself is invisible while another tab is selected — pair it
     // with a system notification so the completion is discoverable anyway.
-    await showCompletionNotification(tabId, success);
+    await showCompletionNotification(tabId, success, reason, isCurrent);
     return { ok: true, mode: 'badge+notification' };
   } catch (error) {
     return { ok: false, error: String(error?.message || error) };
@@ -2163,6 +2235,7 @@ const runUiJournal = new RunUiJournal({
 const runUiSnapshotReads = new Map();
 
 function beginRunUiSnapshot(tabId, requestId, metadata = {}) {
+  clearPlanReviewAttention(tabId);
   runUiSnapshotReads.delete(tabId);
   runUiPersistenceFailures.delete(tabId);
   return runUiJournal.begin(tabId, requestId, metadata);
@@ -2295,6 +2368,7 @@ async function getRunUiSnapshot(tabId) {
 }
 
 function clearRunUiSnapshot(tabId) {
+  clearPlanReviewAttention(tabId);
   runUiSnapshotReads.delete(tabId);
   runUiSnapshotPersistence.cancel(tabId);
   runUiJournal.clear(tabId);
@@ -2310,12 +2384,87 @@ function clearRunUiSnapshot(tabId) {
 function sendAgentUpdate(tabId, requestId, type, data) {
   const event = recordRunUiEvent(tabId, requestId, type, data);
   if (!event) return;
-  if (type === 'clarify') agent._capturePendingClarificationForUi?.(tabId, requestId, event.data ?? data, event);
+  if (type === 'plan_review') notifyPlanReview(tabId, requestId, event.data ?? data);
+  if (type === 'plan_resolved') clearPlanReviewAttention(tabId, requestId, data?.planId);
+  if (type === 'clarify') {
+    agent._capturePendingClarificationForUi?.(tabId, requestId, event.data ?? data, event);
+    notifyPlanReview(tabId, requestId, event.data ?? data, 'clarify');
+  } else {
+    const attention = planReviewAttentionByTab.get(tabId);
+    if (attention?.clarifyId) {
+      const pending = agent._pendingClarifications?.get(tabId)?.get(attention.clarifyId);
+      if ((type === 'clarify_auto' && data?.clarifyId === attention.clarifyId)
+          || !pending || pending.settled) {
+        clearPlanReviewAttention(tabId, attention.requestId, attention.clarifyId);
+      }
+    }
+  }
   browser.runtime.sendMessage({
     target: 'sidepanel', action: 'agent_update', tabId, requestId,
     runId: event?.runId || agent.currentRunId.get(tabId) || null,
     seq: event?.seq || null, type, data: event?.data ?? data,
   }).catch(() => {});
+}
+
+// Alert only for newly emitted plans. Journal replay never passes through
+// this dispatcher, and each live plan can be delivered more than once.
+const planReviewAlertIds = new WeakMap();
+const planReviewAttentionByTab = new Map();
+const attentionBadgeOwners = new Map();
+
+async function clearAttentionBadge(tabId, owner) {
+  const current = attentionBadgeOwners.get(tabId);
+  if (current && current !== owner) return;
+  attentionBadgeOwners.delete(tabId);
+  flashedBadgeTabs.delete(tabId);
+  await browser.browserAction.setBadgeText({ tabId, text: '' });
+}
+
+function clearPlanReviewAttention(tabId, requestId = null, planId = null) {
+  const attention = planReviewAttentionByTab.get(tabId);
+  if (!attention || (requestId && attention.requestId !== requestId)
+      || (planId && String(attention.clarifyId || attention.planId) !== String(planId))) return;
+  planReviewAttentionByTab.delete(tabId);
+  void browser.tabs.sendMessage(tabId, {
+    target: 'content', action: 'attention_flash_stop', params: { attentionId: attention.id },
+  }).catch(() => {});
+  const badgeOwner = attentionBadgeOwners.get(tabId);
+  if (attention.badge && badgeOwner?.attentionId === attention.id) {
+    void clearAttentionBadge(tabId, badgeOwner).catch(() => {});
+  }
+  if (attention.notificationId) {
+    completionNotificationFocusHandlers.delete(attention.notificationId);
+    void browser.notifications.clear(attention.notificationId).catch(() => {});
+  }
+}
+
+function notifyPlanReview(tabId, requestId, data, reason = 'plan_review') {
+  const snapshot = runUiJournal.get(tabId);
+  const clarification = reason === 'clarify';
+  const promptId = String(data?.[clarification ? 'clarifyId' : 'planId'] || '');
+  // Notification ownership follows the live prompt, independently of tracing
+  // and the stricter descriptor used to restore conversation authority.
+  const pendingEntry = clarification ? agent._pendingClarifications?.get(tabId)?.get(promptId) : null;
+  const isCurrent = () => {
+    if (!promptId || runUiJournal.get(tabId) !== snapshot || snapshot?.requestId !== requestId) return false;
+    if (!clarification) return snapshot.status === 'awaiting_plan' && snapshot.pendingPlanId === promptId;
+    return !['completed', 'stopped', 'failed', 'cancelled', 'clarification_required'].includes(snapshot.status)
+      && !!pendingEntry && !pendingEntry.settled
+      && agent._pendingClarifications?.get(tabId)?.get(promptId) === pendingEntry;
+  };
+  if (!isCurrent()) return;
+  let alerted = planReviewAlertIds.get(snapshot);
+  if (!alerted) planReviewAlertIds.set(snapshot, alerted = new Set());
+  const alertKey = `${reason}:${promptId}`;
+  if (alerted.has(alertKey)) return;
+  alerted.add(alertKey);
+  clearPlanReviewAttention(tabId);
+  const owner = { tabId, requestId, ...(clarification ? { reason, clarifyId: promptId } : { planId: promptId }) };
+  const attentionId = JSON.stringify([tabId, requestId, reason, promptId]);
+  planReviewAttentionByTab.set(tabId, { id: attentionId, requestId, reason,
+    ...(clarification ? { clarifyId: promptId } : { planId: promptId }) });
+  void playWatchAlert(browser, { style: reason, isCurrent, planReview: owner }).catch(() => {});
+  void flashTabAttention({ tabId, success: false, reason, isCurrent, attentionId }).catch(() => {});
 }
 
 function sendScheduledAgentUpdate(tabId, type, data, owner) {
@@ -2518,6 +2667,7 @@ async function sendAgentRunComplete(tabId, snapshot = null) {
     && snapshot.requestId === requestId && snapshot.status === status
     && snapshot.endedAt === endedAt && snapshot.seq === seq;
   if (endedAt == null || !['completed', 'stopped', 'failed', 'cancelled', 'clarification_required'].includes(status)) return;
+  clearPlanReviewAttention(tabId, snapshot.requestId);
   await flushRunUiSnapshot(tabId, snapshot.requestId);
   if (!isCurrent()) return;
   // Live runs continue in the background even if their side panel is closed
@@ -2703,7 +2853,7 @@ async function handleMessage(msg, sender) {
     }
     // Hydrate agent toggles and prompt add-ons once at boot (not per message);
     // onChanged keeps them in sync afterward.
-    await Promise.all([planBeforeActReady, planReviewReady, customSkillsReady, userMemoryReady, imageGenConfigReady]);
+    await Promise.all([planBeforeActReady, planReviewReady, customSkillsReady, userMemoryReady, imageGenConfigReady, browserBatchEnabledReady]);
     await alwaysAllowApiMutationsReady;
     await strictSecretModeReady;
     await screenshotRedactionReady;
@@ -3500,6 +3650,7 @@ async function handleMessage(msg, sender) {
         loadScreenshotRedaction(),
         loadStrictSecretMode(),
         loadImageGenConfig(),
+        loadBrowserBatchEnabled(),
         loadProfile(),
         syncAgentUserMemoryFromStorage(),
         loadCustomSkills(),
@@ -3688,6 +3839,7 @@ async function handleMessage(msg, sender) {
       if (!answer) return { ok: false, error: 'answer required' };
       const source = String(msg.source || 'user');
       const matched = agent.submitClarifyResponse(tabId, clarifyId, answer, source);
+      if (matched) clearPlanReviewAttention(tabId, null, clarifyId);
       // Waited-timeout and Instant auto-selects are not user-authored preferences.
       const isAutoClarify = source === 'timeout' || source === 'auto';
       if (matched && !isAutoClarify && msg.memorySource === 'clarification_response') {

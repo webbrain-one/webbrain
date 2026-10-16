@@ -350,6 +350,10 @@ async function runOne(scenario) {
     firstToolCall,
     content: msg?.content,
     expected: scenario.expected,
+    tools: payload.tools,
+    tier: TIER,
+    mode,
+    browser: scenario.browser || BROWSER,
   });
   const anti = matchedAntiPattern;
   const scoreNote = (!firstToolCall && verdict === 'ideal_name')
@@ -367,6 +371,8 @@ async function runOne(scenario) {
     firstToolCall,
     toolCallSource,
     expected: scenario.expected,
+    tier: TIER,
+    gradingTools: firstToolCall?.name === 'browser_batch' ? payload.tools : undefined,
     matchedAntiPattern: anti || null,
     verdict,
     scoreNote,

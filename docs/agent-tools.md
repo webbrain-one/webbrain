@@ -91,6 +91,7 @@ Legend: **Yes** = available · **-** = not available · **C** = Chrome only ·
 | `click_ax` | No | Yes | Yes | Yes | - |
 | `type_ax` | No | Yes | Yes | Yes | - |
 | `set_field` | No | Yes | Yes | Yes | - |
+| `browser_batch` | No | No | Yes | Yes | - |
 | `resize_window` | No | No | No | Yes | - |
 | `click` | No | Yes | Yes | Yes | - |
 | `type_text` | No | Yes | Yes | Yes | - |
@@ -131,6 +132,46 @@ Legend: **Yes** = available · **-** = not available · **C** = Chrome only ·
 | `inspect_network_requests` | No | No | No | No | C |
 | `inspect_event_listeners` | No | No | No | No | C |
 | `highlight_element` | No | No | No | No | C |
+
+### Sequential browser batches
+
+`browser_batch({actions:[{name:"set_field",input:{ref_id:"ref_11",text:"Ada"}},
+{name:"set_field",input:{ref_id:"ref_12",text:"Lovelace"}}]})` runs predictable
+actions in order within one model round trip. It is enabled by default for
+Mid/Full Act and their Dev modes, with at most 6 actions for Mid and 10 for Full.
+Ask and Compact omit it. The internal `browserBatchEnabled: false` setting
+removes both the tool and its optional prompt guidance; there is no Settings
+control or recurring batching nudge.
+
+Only advertised tools from the batch action allowlist may run: `click_ax`,
+`type_ax`, `set_field`, `set_checked`, `click`, `type_text`, `press_keys`,
+`scroll`, `hover`, `drag_drop`, `navigate`, `go_back`, `go_forward`,
+`wait_for_element`, `wait_for_stable`, `iframe_click`, and `iframe_type`.
+Trailing observations may be `get_accessibility_tree`, `read_page`,
+`inspect_viewport`, or `get_window_info`. Full-only actions remain Full-only.
+Nested batches, skill/Dev-only tools, network/file tools and control tools are
+excluded. All inputs are validated before any action runs; each action still
+passes its normal permission, targeting, submit and verification checks.
+
+Use existing refs and known values, then verify the outcome. Do not batch a
+decision that depends on an unread result. Failures, unverified actions and
+submits stop the remaining actions and sibling calls for a fresh model turn.
+Navigation also stops unless only trailing observations remain. Mid's usual
+single-action boundary is suspended inside a batch but still applies after it.
+Coordinate clicks after an earlier mutation are rejected during validation.
+
+Verified `set_field`/`type_ax`/`type_text` edits to native input and textarea controls can
+continue within the same batch using updated evidence for those exact values.
+Element identities, labels, surrounding form/recipient bindings, other control
+values and user-interaction checks remain fixed. A sibling call or another
+batch cannot reuse that exception. Selects, contenteditable editors and clicks
+retain the normal context-change stops; batching does not guarantee that every
+valid sequence will finish without another model turn.
+
+The model receives one result for the original batch call, with ordered action
+results and explicit skipped entries. Page-derived results retain separate
+untrusted-content boundaries. Automatic screenshot capture happens once after
+the turn's executed actions, rather than after each batch action.
 
 `promote_iframe` is a normal Mid/Full Act tool, not a Dev-only add-on. Dev
 sessions using a Mid or Full provider inherit it from the selected Act tier.

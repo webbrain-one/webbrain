@@ -22,6 +22,7 @@ import {
   SYSTEM_PROMPT_ACT_COMPACT as CHROME_SYSTEM_PROMPT_ACT_COMPACT,
   SYSTEM_PROMPT_DEV_APPENDIX as CHROME_SYSTEM_PROMPT_DEV_APPENDIX,
   SYSTEM_PROMPT_ASK as CHROME_SYSTEM_PROMPT_ASK,
+  SYSTEM_PROMPT_BATCHING as CHROME_SYSTEM_PROMPT_BATCHING,
   getToolsForMode as chromeGetToolsForMode,
 } from '../../../src/chrome/src/agent/tools.js';
 import {
@@ -33,6 +34,7 @@ import {
   SYSTEM_PROMPT_ACT_COMPACT as FIREFOX_SYSTEM_PROMPT_ACT_COMPACT,
   SYSTEM_PROMPT_DEV_APPENDIX as FIREFOX_SYSTEM_PROMPT_DEV_APPENDIX,
   SYSTEM_PROMPT_ASK as FIREFOX_SYSTEM_PROMPT_ASK,
+  SYSTEM_PROMPT_BATCHING as FIREFOX_SYSTEM_PROMPT_BATCHING,
   getToolsForMode as firefoxGetToolsForMode,
 } from '../../../src/firefox/src/agent/tools.js';
 import {
@@ -55,6 +57,7 @@ const BROWSERS = {
     SYSTEM_PROMPT_ACT_COMPACT: CHROME_SYSTEM_PROMPT_ACT_COMPACT,
     SYSTEM_PROMPT_DEV_APPENDIX: CHROME_SYSTEM_PROMPT_DEV_APPENDIX,
     SYSTEM_PROMPT_ASK: CHROME_SYSTEM_PROMPT_ASK,
+    SYSTEM_PROMPT_BATCHING: CHROME_SYSTEM_PROMPT_BATCHING,
     UNIVERSAL_PREAMBLE: CHROME_UNIVERSAL_PREAMBLE,
     getToolsForMode: chromeGetToolsForMode,
   },
@@ -64,6 +67,7 @@ const BROWSERS = {
     SYSTEM_PROMPT_ACT_COMPACT: FIREFOX_SYSTEM_PROMPT_ACT_COMPACT,
     SYSTEM_PROMPT_DEV_APPENDIX: FIREFOX_SYSTEM_PROMPT_DEV_APPENDIX,
     SYSTEM_PROMPT_ASK: FIREFOX_SYSTEM_PROMPT_ASK,
+    SYSTEM_PROMPT_BATCHING: FIREFOX_SYSTEM_PROMPT_BATCHING,
     UNIVERSAL_PREAMBLE: FIREFOX_UNIVERSAL_PREAMBLE,
     getToolsForMode: firefoxGetToolsForMode,
   },
@@ -114,24 +118,14 @@ export function buildScenarioPayload(scenario, opts = {}) {
   const strictSecretMode = opts.strictSecretMode ?? (scenario.strictSecretMode === true);
   const unprotected = !!opts.unprotected;
 
-  // FREEZE MODE: snapshot wins. Site adapters / tier are ignored — whatever
-  // was active at capture time is what we replay. Multi-turn seeds still
-  // flow through verbatim.
+  // Freeze preserves both the captured prompt and its tool surface verbatim.
   const FROZEN = getFrozenSnapshot();
-  let systemContent;
-  if (FROZEN) {
-    systemContent = FROZEN.systemContent;
-  } else {
-    assertRunnableModeTier(mode, tier);
-    systemContent = getSystemPromptForMode(browser, mode, tier);
-    if (useSiteAdapters) {
-      systemContent += `\n\n${browser.UNIVERSAL_PREAMBLE.trim()}`;
-    }
-  }
+  if (!FROZEN) assertRunnableModeTier(mode, tier);
 
   // Fixture-owned enabled/active IDs reproduce on-demand package loading. Never
   // infer activation from seed/tool text; Compact uses the production exclusion.
   let skillLoaderTool;
+  let skillsPrompt = '';
   if (!FROZEN && scenario.packagedSkillIds?.length) {
     const skills = scenario.browser === 'firefox' ? firefoxSkills : chromeSkills;
     const enabled = scenario.packagedSkillIds.map(id => {
@@ -143,7 +137,7 @@ export function buildScenarioPayload(scenario, opts = {}) {
     const context = { mode, tier, activeSkillIds: scenario.activeSkillIds || [] };
     skillLoaderTool = skills.buildSkillLoaderDefinition(enabled, context);
     const loaded = skills.buildCustomSkillsPrompt(enabled, context);
-    if (loaded) systemContent += `\n\n${loaded}`;
+    if (loaded) skillsPrompt = loaded;
   }
 
   const tools = FROZEN
@@ -154,6 +148,14 @@ export function buildScenarioPayload(scenario, opts = {}) {
       skillLoaderTool,
       researchEscalationEnabled: opts.researchEscalationEnabled === true,
     });
+
+  let systemContent = FROZEN
+    ? FROZEN.systemContent
+    : getSystemPromptForMode(browser, mode, tier, tools);
+  if (!FROZEN) {
+    if (useSiteAdapters) systemContent += `\n\n${browser.UNIVERSAL_PREAMBLE.trim()}`;
+    if (skillsPrompt) systemContent += `\n\n${skillsPrompt}`;
+  }
 
   // ABLATION: remove both layers of injection defense.
   let seed = scenario.seed;

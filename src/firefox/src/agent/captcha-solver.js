@@ -380,6 +380,7 @@ export async function detectCaptcha(tabId, constraints = {}) {
         code,
         frameId: frame.frameId,
         matchAboutBlank: true,
+        runAt: 'document_start',
       });
       const response = results?.[0];
       const payload = response?.direct || response;

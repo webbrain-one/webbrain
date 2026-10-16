@@ -1713,6 +1713,50 @@
           && (!item.files || (item.files.length === current.files?.length && item.files.every((file, fileIndex) => file === current.files[fileIndex])));
       }));
   }
+  function sealBrowserBatchInput(owner, params) {
+    const op = owner?.batchInputOperation || owner;
+    const snapshot = modelSnapshots.get(op?.expectedModelSnapshot);
+    if (!op?.batchId || !snapshot || snapshot.until < Date.now() || snapshot.runToken !== runToken
+        || op.batchId !== owner.batchId || op.modelBindingInvalid || op.preparedBinding?.relaxed || authorityChanged(op)
+        || typeof params.batchInputText !== 'string') return false;
+    const current = operationBinding(op);
+    if (!inputContinuationBindingMatches(op, current)) return false;
+    const target = op.preparedBinding.target;
+    if (target.tagName !== 'TEXTAREA' && !(target.tagName === 'INPUT'
+        && !['password', 'file', 'hidden', 'checkbox', 'radio', 'button', 'submit', 'reset', 'image'].includes(target.type))) return false;
+    const originalField = preparedBindingFor(op.preparedBinding).nodes.find(item => item.node === target);
+    const originalValue = originalField && JSON.parse(originalField.value)[12];
+    const expectedValue = params.batchInputClear === true ? params.batchInputText : originalValue + params.batchInputText;
+    if (typeof originalValue !== 'string' || target.value !== expectedValue
+        || (op.batchFinalBinding && !samePreparedBinding(op.batchFinalBinding, current))) return false;
+    // Carry only this verified input's own value into the original certificates.
+    // Names, recipients, form identity, other controls and node identity stay
+    // fixed. A sibling top-level call cannot borrow this batch's continuation.
+    const changed = current.nodes.find(item => item.node === op.preparedBinding.target);
+    if (!changed) return false;
+    snapshot.batchInputs ??= new Map();
+    const proofs = snapshot.batchInputs.get(op.batchId) || new Map();
+    const changedValue = JSON.parse(changed.value);
+    const changedState = changedValue[11] && JSON.parse(changedValue[11]);
+    for (const original of snapshot.targets.values()) {
+      const before = proofs.get(original) || original;
+      // The target's own certificate includes its observed accessible name;
+      // collateral entries may use authored labels instead. Keep that shape.
+      const nodes = before.nodes.map(item => {
+        if (item.node !== changed.node) return item;
+        const value = JSON.parse(item.value);
+        if (!value[11] || !changedState) return item;
+        const state = JSON.parse(value[11]);
+        for (const index of [1, 3, 4, 8, 9]) state[index] = changedState[index];
+        value[11] = JSON.stringify(state);
+        value[12] = changedValue[12];
+        return { ...item, value: JSON.stringify(value) };
+      });
+      proofs.set(original, { ...before, nodes });
+    }
+    snapshot.batchInputs.set(op.batchId, proofs);
+    return true;
+  }
   function operationBindingMatches(op, target = op?.preparedBinding?.target) {
     const current = operationBinding(op, target);
     const matches = samePreparedBinding(preparedBindingFor(op?.preparedBinding), current) || inputContinuationBindingMatches(op, current);
@@ -1859,7 +1903,9 @@
       if (relaxed) { revokeRelaxedGrant(); return { reason: 'target_unresolved' }; }
       return params.ref_id && snapshot.refs.has(params.ref_id) ? {} : { reason: 'target_unresolved' };
     }
-    const before = snapshot.targets.get(target), previous = snapshot.uncertified.get(target);
+    const original = snapshot.targets.get(target);
+    const before = snapshot.batchInputs?.get(params.batchId)?.get(original) || original;
+    const previous = snapshot.uncertified.get(target);
     if (!relaxed && !before && !previous) return { reason: 'target_uncovered', certificationFailure: snapshot.captureFailures.get(target) || 'identity_unobserved' };
     if (params.ref_id && snapshot.hasRefs && snapshot.refs.get(params.ref_id) !== target) {
       if (relaxed) revokeRelaxedGrant();
@@ -3140,7 +3186,7 @@
     operations.set(params.operationId, { ...params, target: operationTarget, focusTarget, focusEligible, controlStateAtPrepare,
       focusBound: inherited ? previous.focusBound : !!certified && modelFocusTools.has(params.tool)
         && !params.ref_id && !params.selector && !params.nativeTarget && !params.textMatch,
-      ...(inherited ? { expectedModelSnapshot: previous.expectedModelSnapshot,
+      ...(inherited ? { expectedModelSnapshot: previous.expectedModelSnapshot, batchId: previous.batchId,
         modelBindingTool: previous.modelBindingTool || previous.tool } : {}),
       allowPassiveRebase: allowPassiveRebase && (!proofRequired || !!certified),
       modelBindingInvalid: proofRequired && !certified,
@@ -3304,6 +3350,7 @@
       textMatch: action === 'click' ? params.text : undefined, tool: bindingTool, operationId, runToken,
       ...(params.expectedModelSnapshot !== undefined || approved?.expectedModelSnapshot !== undefined
         ? { expectedModelSnapshot: params.expectedModelSnapshot ?? approved.expectedModelSnapshot } : {}),
+      ...(approved?.batchId ? { batchId: approved.batchId } : {}),
       ...(approved?.preparedBinding?.relaxed ? { relaxedMonitorGrantToken: approved.preparedBinding.grantToken } : {}),
       ...(bindingTool !== action ? { relaxedMonitorGrantToken: params.relaxedMonitorGrantToken } : {}),
       allowPassiveRebase: params.allowPassiveRebase === true || !!approved });
@@ -3315,6 +3362,8 @@
       local.preparedBinding = approved.preparedBinding;
       local.modelBindingTool = approved.modelBindingTool || approved.tool;
       local.expectedModelSnapshot = approved.expectedModelSnapshot;
+      local.batchId = approved.batchId;
+      if (approved.batchId) approved.batchInputOperation = local;
       local.focusBound = approved.focusBound;
       local.modelBindingInvalid = false;
       local.allowPassiveRebase = true;
@@ -3326,7 +3375,13 @@
     if (!params._bidiPrepare) beforeLocalDispatch({ preparation: true });
     return () => {
       const op = operations.get(operationId);
-      if (op) { finishRelaxedOwnedAction(op); op.until = Date.now() + 200; op.finished = true; }
+      if (op) {
+        if (op.batchId && op.dispatched && op.kind === 'input' && !authorityChanged(op)) {
+          const current = operationBinding(op);
+          if (inputContinuationBindingMatches(op, current)) op.batchFinalBinding = current;
+        }
+        finishRelaxedOwnedAction(op); op.until = Date.now() + 200; op.finished = true;
+      }
       installed.finished = true;
       // Restore only this action's own owner. A stop/start or a later action in
       // between keeps its current owner; a finished outer owner is not revived.
@@ -3551,8 +3606,10 @@
         flushPendingMutations(op); sampleFormControls(op?.target);
         if (domTimer) flushPendingDOM();
       }
+      const batchInputSealed = params.commitBrowserBatchInput === true && params.runToken === runToken
+        && params.batchId === op?.batchId && sealBrowserBatchInput(op, params);
       if (op) { finishRelaxedOwnedAction(op); op.until = Date.now() + 200; op.finished = true; }
-      void lastFeedbackDelivery.then(() => respond({ ready: true }));
+      void lastFeedbackDelivery.then(() => respond({ ready: true, ...(params.commitBrowserBatchInput ? { batchInputSealed } : {}) }));
       return true;
     }
   };

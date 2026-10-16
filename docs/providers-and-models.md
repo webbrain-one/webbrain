@@ -21,6 +21,41 @@ as `openrouter/free` identify the configured route; they do not establish which
 upstream model the router selected. Endpoint URLs, credentials, local model paths
 and private inference-profile ARNs are omitted from this identity context.
 
+### Gemini 4 Argon and new Muse models
+
+Settings suggests `gemini-4-argon` on Google Gemini and
+`google/gemini-4-argon`, `meta/muse-wonder`, and `meta/muse-spark-open` on
+OpenRouter. These models support native tools and screenshot input. WebBrain
+infers their 1,048,576-token context unless a user or local runtime overrides it.
+
+Argon uses the existing Google OpenAI-compatible or OpenRouter Chat Completions
+route. Its synchronous output ceiling is 65,536 tokens; background long decode
+is not implemented. WebBrain reserves at least 32,768 tokens including thinking,
+omits ignored sampling controls, and maps unsupported thinking-off requests to
+low reasoning. Muse Wonder and Spark Open also require reasoning: short text
+and classifier calls receive at least 2,048 tokens and use the lowest supported
+effort when disabling reasoning was requested. The Meta-hosted Muse Wonder route
+requires automatic tool choice, like Spark 1.3 Contributor: named choices narrow
+the offered tools, and disabling tools removes them from the request. Spark Open
+retains native tool choices.
+Streamed Google tool-call signatures and OpenRouter reasoning details are
+retained for subsequent tool turns. OpenRouter's opaque replay blocks are
+scoped to the same endpoint, model, and tool-call IDs.
+
+Release/API references: [Google Argon guide](https://ai.google.dev/gemini-api/docs/latest-model),
+[Muse Wonder](https://research.meta.ai/blog/muse-wonder),
+[Muse Spark Open](https://research.meta.ai/blog/muse-spark-open), and the
+[OpenRouter live catalog](https://openrouter.ai/api/v1/models).
+
+Run `npm run test:frontier:live` with `OPENROUTER_API_KEY` and/or
+`GEMINI_API_KEY` in the environment to make paid API probes through the production
+provider. It checks visible text, streaming, native and streamed tool round trips, an
+image-only code, and short classifier output. Add `-- --browser firefox` for the
+Firefox provider. Tool results in this smoke check are supplied fixtures; it
+does not verify real browser task completion. Without a key it exits before
+making any inference calls. Local regression tests use mocked responses and
+cannot establish live account access or upstream availability.
+
 ### Decision models
 
 Select OpenRouter (the default), TypeSafe directly, or a local/custom System One

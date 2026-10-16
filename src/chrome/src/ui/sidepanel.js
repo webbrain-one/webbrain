@@ -1786,22 +1786,6 @@ function playCompletionSound() {
   } catch { /* ignore */ }
 }
 
-// Play a short chime when the agent asks the user for clarification or a
-// permission decision. Uses the same asset + toggle as the completion chime.
-// Best-effort: autoplay-blocked or a closed panel just swallows the error.
-function playClarifySound() {
-  if (!notifySoundEnabled) return;
-  try {
-    if (!notifyAudio) {
-      notifyAudio = new Audio(chrome.runtime.getURL('assets/notification.mp3'));
-      notifyAudio.volume = 0.6;
-    }
-    notifyAudio.currentTime = 0;
-    const p = notifyAudio.play();
-    if (p && typeof p.catch === 'function') p.catch(() => {});
-  } catch { /* ignore */ }
-}
-
 function triggerCompletionConfetti() {
   if (!completionConfettiEnabled) return;
   if (globalThis.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) return;
@@ -11146,7 +11130,6 @@ function renderClarifyCard(data) {
   const content = assistantEl.querySelector('.message-content');
   if (!content) return;
   hideActivity();
-  playClarifySound();
 
   const card = document.createElement('div');
   card.className = 'clarify-card';

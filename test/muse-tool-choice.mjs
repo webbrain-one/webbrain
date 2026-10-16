@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 
 for (const browser of ['chrome', 'firefox']) {
   const { OpenAICompatibleProvider } = await import(`../src/${browser}/src/providers/openai.js`);
-  const config = { providerName: 'webbrain_me', baseUrl: 'https://openrouter.ai/api/v1', model: 'meta/muse-spark-1.3-contributor' };
+  for (const model of ['meta/muse-spark-1.3-contributor', 'meta/muse-wonder']) {
+  const config = { providerName: 'webbrain_me', baseUrl: 'https://openrouter.ai/api/v1', model };
   const tools = ['read_page', 'done'].map(name => ({ type: 'function', function: { name, parameters: { type: 'object', properties: {} } } }));
   test(`${browser}: Muse uses auto and preserves restricted tools in chat and streaming`, () => {
     const provider = new OpenAICompatibleProvider(config);
@@ -59,4 +60,5 @@ for (const browser of ['chrome', 'firefox']) {
       assert.equal(Object.hasOwn(regular, 'reasoning'), false);
     }
   });
+  }
 }

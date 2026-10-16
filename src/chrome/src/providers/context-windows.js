@@ -289,7 +289,10 @@ export function inferContextWindow(config = {}) {
   if (model.includes('claude-')) return 200000;
 
   // Google Gemini
+  if (/(?:^|\/)gemini-4-argon(?=$|:)/.test(model)) return 1048576;
   if (/gemini-(?:3|3\.|2\.5)/.test(model)) return M1;
+
+  if (/(?:^|\/)muse-(?:wonder|spark-open)(?=$|:)/.test(model)) return 1048576;
 
   // Cloudflare Workers AI
   if (provider === 'cloudflare' && model.includes('@cf/zai-org/glm-5.2')) return K256;
@@ -351,6 +354,11 @@ export const DEFAULT_MAX_OUTPUT_TOKENS = 4096;
 export function inferMaxOutputTokens(config = {}) {
   const model = clean(config.model);
   if (!model) return null;
+
+  // WebBrain uses synchronous Chat Completions, without Argon's background
+  // long-decode continuation. Do not advertise its 1M background output cap.
+  if (/(?:^|\/)gemini-4-argon(?=$|:)/.test(model)) return 65536;
+  if (/(?:^|\/)muse-(?:wonder|spark-open)(?=$|:)/.test(model)) return 943718;
 
   // OpenAI and router slugs
   if (/^gpt-6(?:\.1)?-(?:luna-pro|sol|astra)(?:[.\-:]|$)/.test(model) || model.includes('/gpt-6.1-sol')) return 128000;

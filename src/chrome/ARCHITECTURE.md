@@ -1,6 +1,6 @@
 # WebBrain Chrome/Edge Extension — Architecture
 
-> Version 40.6.4 · Manifest V3 · Service Worker background
+> Version 40.8.1 · Manifest V3 · Service Worker background
 
 ## High-Level Overview
 
@@ -408,6 +408,35 @@ Main loop (max steps from Settings, default 130)
     4. If done() called → summary (but see blockedDone below)
 ```
 
+### Sequential browser batches
+
+Mid/Full Act and Dev expose `browser_batch` (6 actions for Mid, 10 for Full),
+unless the internal `browserBatchEnabled` switch is false. Ask and Compact do
+not expose it. `_executeToolBatch` validates the whole wrapper, then expands
+its allowlisted actions into the existing execution loop. Every action retains
+normal permission, targeting, submit, cancellation and verification checks.
+An invalid later action prevents all dispatch. Navigation continues only into
+trailing observations; failures, unverified actions and submits stop remaining
+actions and sibling calls. Mid's single-action boundary is suppressed only
+between actions of the same batch. Navigation-prone actions use the existing
+bounded settling helpers before the next action.
+
+The page monitor can derive same-batch continuation evidence after verified
+native input/textarea edits by `set_field`, `type_ax`, or `type_text`. It updates only the
+completed control's value while retaining original nodes, labels, ancestors,
+form/recipient bindings, collateral values and human authority. Other batches
+and top-level siblings cannot borrow this evidence. Select/contenteditable and
+click transitions keep normal context-change stops; no model snapshot recapture
+is used to accept a changed page.
+
+The original assistant call and provider replay state remain intact. Results
+fold into one parent tool message before persistence and provider conversion,
+with internal sub-call IDs excluded and supplemental images following parent
+results. Each sub-result keeps its own untrusted-content wrapper; aggregate
+digests contain only app-owned execution metadata. UI and trace show the parent
+and ordinary sub-call rows, with optional trace `batch` metadata for grouping.
+Automatic capture remains once per executed turn, not once per sub-action.
+
 ### Execution modes
 
 | | Production `processMessage()` lifecycle | Legacy explicit `processMessageStream()` lifecycle |
@@ -490,6 +519,10 @@ tier:
 `get_accessibility_tree`, `read_page`, `read_pdf`, `get_window_info`, `get_interactive_elements`, `get_selection`, `extract_data`, `wait_for_stable`
 
 ### Interaction
+
+`browser_batch` groups advertised, allowlisted actions with optional trailing
+observations. See [Agent Tools](../../docs/agent-tools.md#sequential-browser-batches)
+for its limits, stop rules and exclusions.
 
 > **`verified` is a positive proof, not a boolean.** Text-entry tools set it
 > `true` only when the field's final value proves the edit landed, and omit it

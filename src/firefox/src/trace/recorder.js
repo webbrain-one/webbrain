@@ -850,7 +850,8 @@ export function recordLLMResponse(runId, step, {
   });
 }
 
-export function recordToolCall(runId, step, { name, args, result, latencyMs }) {
+export function recordToolCall(runId, step, { name, args, result, latencyMs, batch }) {
+  const batchMetadata = batch ? { batch: { parentId: batch.parentId, index: batch.index, total: batch.total } } : {};
   const workflowCapture = _workflowTraceCaptures.get(runId);
   if (workflowCapture) {
     workflowCapture.nextSeq += 1;
@@ -858,6 +859,7 @@ export function recordToolCall(runId, step, { name, args, result, latencyMs }) {
       seq: workflowCapture.nextSeq,
       kind: 'tool',
       data: {
+        ...batchMetadata,
         step,
         name,
         args: clampUtf8Value(args ?? null, 20_000),
@@ -874,14 +876,14 @@ export function recordToolCall(runId, step, { name, args, result, latencyMs }) {
     if (state?.lossless === true && (state.losslessBytes || 0) >= LOSSILESS_RUN_CAP) {
       let length = null;
       try { const s = JSON.stringify(result); length = s ? utf8ByteLength(s) : 0; } catch {}
-      return { step, name, args: args || null, outcome, result: { ...outcome, _truncated: true, length, head: '(per-run lossless budget reached)' }, latencyMs: latencyMs || null };
+      return { ...batchMetadata, step, name, args: args || null, outcome, result: { ...outcome, _truncated: true, length, head: '(per-run lossless budget reached)' }, latencyMs: latencyMs || null };
     }
     const remainingBytes = Math.max(0, LOSSILESS_RUN_CAP - (state?.losslessBytes || 0));
     const cap = state?.lossless === true
       ? Math.min(LOSSILESS_RESULT_CAP, remainingBytes)
       : 20_000;
     const shortResult = clampUtf8Value(result, cap);
-    return { step, name, args: args || null, outcome, result: shortResult, latencyMs: latencyMs || null };
+    return { ...batchMetadata, step, name, args: args || null, outcome, result: shortResult, latencyMs: latencyMs || null };
   });
 }
 

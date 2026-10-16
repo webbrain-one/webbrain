@@ -313,6 +313,7 @@ export async function detectCaptcha(tabId, constraints = {}) {
   const [scriptAttempt, frameTreeAttempt] = await Promise.allSettled([
     chrome.scripting.executeScript({
       target: { tabId, allFrames: true },
+      injectImmediately: true,
       func: detectCaptchaCandidatesInPage,
       args: [null, captchaChallengeMatcherOptions(constraints?.challengeReadings)],
     }),
