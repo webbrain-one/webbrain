@@ -96,7 +96,7 @@ The agent uses this as its first action on almost every turn — it's faster and
 
 Accessibility-tree paging uses two coordinated limits: the `pageContent`
 window returned by the content script and the outer serialized tool result sent
-to the model. The standard pair is 6,000 / 8,000 characters. WebBrain exposes
+to the model. The standard pair is 6,000 / 8,000 characters. DIV exposes
 an expanded 12,000 / 16,000 pair only when the active provider:
 
 - is Mid or Full rather than Compact; and

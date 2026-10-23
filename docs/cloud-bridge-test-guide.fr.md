@@ -14,7 +14,7 @@ flowchart LR
     ST[("chrome.storage.local<br/>url, token, browserId, installationId")]
     BG["Background (cloud-runs.js)<br/>lit la config, exécute les cloud_*"]
     OFF["Offscreen (cloud-bridge.js)<br/>socket WebSocket + état d'approbation"]
-    AG["Agent WebBrain<br/>+ permissions navigate / click…"]
+    AG["Agent DIV<br/>+ permissions navigate / click…"]
     TAB["Onglets web<br/>(sessions de l'utilisateur)"]
     S --> ST --> BG
     BG -- "cloud-bridge-start + identité" --> OFF
@@ -77,17 +77,17 @@ L'extension Chrome est directement chargeable depuis `src/chrome` (pas de build 
 2. Activer **Mode développeur** (interrupteur en haut à droite).
 3. Cliquer sur **Charger l'extension non empaquetée**.
 4. Sélectionner le dossier `~/Documents/webbrain/src/chrome` (celui qui contient `manifest.json`).
-5. WebBrain apparaît dans la liste. Épingler l'icône dans la barre d'outils si besoin.
+5. DIV apparaît dans la liste. Épingler l'icône dans la barre d'outils si besoin.
 
-> Après chaque modification du code : sur `chrome://extensions`, cliquer sur l'icône ↻ de WebBrain, puis recharger la page Settings.
+> Après chaque modification du code : sur `chrome://extensions`, cliquer sur l'icône ↻ de DIV, puis recharger la page Settings.
 
 ### Firefox
 
 1. Ouvrir `about:debugging#/runtime/this-firefox`.
 2. **Charger un module complémentaire temporaire…** et choisir `~/Documents/webbrain/src/firefox/manifest.json`.
-3. Ouvrir les préférences de WebBrain (`about:addons` → WebBrain → Préférences, ou la page Settings du panneau latéral) et aller dans l'onglet **Cloud Bridge**. Le reste du guide (serveur de test, scénarios A à F) est identique.
+3. Ouvrir les préférences de DIV (`about:addons` → DIV → Préférences, ou la page Settings du panneau latéral) et aller dans l'onglet **Cloud Bridge**. Le reste du guide (serveur de test, scénarios A à F) est identique.
 
-Le module est temporaire : il disparaît au redémarrage de Firefox. Sur Firefox, la socket vit dans la page d'arrière-plan (pas de document offscreen) ; pour déboguer, `about:debugging` → WebBrain → **Inspecter**.
+Le module est temporaire : il disparaît au redémarrage de Firefox. Sur Firefox, la socket vit dans la page d'arrière-plan (pas de document offscreen) ; pour déboguer, `about:debugging` → DIV → **Inspecter**.
 
 Alternative (copie construite) : `npm run build:chrome` génère `build/chrome`, à charger de la même façon.
 
@@ -108,7 +108,7 @@ Ce terminal sert à la fois de **backend** (il affiche tout ce que l'extension e
 
 ## 4. Configurer l'extension
 
-1. Ouvrir les Settings de WebBrain (clic droit sur l'icône → Options, ou la roue dentée du panneau latéral).
+1. Ouvrir les Settings de DIV (clic droit sur l'icône → Options, ou la roue dentée du panneau latéral).
 2. Aller dans l'onglet **Cloud Bridge**.
 3. Remplir :
    - **Backend WebSocket URL** : `ws://127.0.0.1:17374/extension` (seul `ws://` en local est accepté)
@@ -156,7 +156,7 @@ Le statut dans Settings devient *Connected and approved.* (il se rafraîchit tou
 send {"id":"2","action":"cloud_status","payload":{"runId":"x"}}
 ```
 
-Réponse attendue : `"ok":false,"error":"Unknown cloud run."` — c'est normal, le run `x` n'existe pas ; ce qui compte est que la commande a **atteint** WebBrain (plus de `connection_not_approved`).
+Réponse attendue : `"ok":false,"error":"Unknown cloud run."` — c'est normal, le run `x` n'existe pas ; ce qui compte est que la commande a **atteint** DIV (plus de `connection_not_approved`).
 
 Pour lancer un vrai run, voir le format existant de `cloud_run` dans la doc technique (même payload qu'avant la feature).
 
@@ -181,7 +181,7 @@ Vider le champ token et sauvegarder : plus aucune approbation n'est exigée, le 
 
 ## 6. Inspecter / déboguer
 
-- **Console du service worker** : `chrome://extensions` → WebBrain → *service worker* → Console.
+- **Console du service worker** : `chrome://extensions` → DIV → *service worker* → Console.
 - **Voir la config stockée** (même console) :
 
 ```js
@@ -216,7 +216,7 @@ node test/run.js                     # suite complète existante (≈ 2400 tests
 
 ## 9. Test réel : lancer une vraie tâche (`cloud_run`)
 
-Pré-requis côté WebBrain : un **provider LLM configuré** (onglet Providers, avec sa clé API) et un onglet web ouvert (le run s'exécute dans l'onglet actif). Les permissions habituelles de WebBrain s'appliquent comme pour un utilisateur humain.
+Pré-requis côté DIV : un **provider LLM configuré** (onglet Providers, avec sa clé API) et un onglet web ouvert (le run s'exécute dans l'onglet actif). Les permissions habituelles de DIV s'appliquent comme pour un utilisateur humain.
 
 Avec le serveur d'exemple, après `approve` :
 

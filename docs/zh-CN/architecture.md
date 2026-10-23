@@ -1,10 +1,10 @@
-# WebBrain 架构
+# DIV 架构
 
 > 版本 25.7.12
 
 ## 概述
 
-WebBrain 是一个浏览器扩展，让 LLM 能够控制用户当前活动的浏览器标签页。用户在侧面板中输入自然语言指令，自主代理循环调用 LLM，执行工具调用（点击、输入、导航、读取页面状态等），将结果反馈给 LLM，并重复此过程直到任务完成。
+DIV 是一个浏览器扩展，让 LLM 能够控制用户当前活动的浏览器标签页。用户在侧面板中输入自然语言指令，自主代理循环调用 LLM，执行工具调用（点击、输入、导航、读取页面状态等），将结果反馈给 LLM，并重复此过程直到任务完成。
 
 有两个构建版本共享几乎相同的代码：
 - **Chrome** — Manifest V3，Service Worker，基于 CDP 的受信任事件
@@ -78,7 +78,7 @@ WebBrain 是一个浏览器扩展，让 LLM 能够控制用户当前活动的浏
 1. **路由消息** 在侧面板、内容脚本和代理之间
 2. **管理代理生命周期**：`chat` / `chat_stream` / `continue` / `abort` / `clear_conversation`
 3. **管理提供商配置**：加载、保存、测试、切换活动提供商
-4. **管理侧面板可见性**：每个窗口的"WebBrain"标签组控制面板启用的位置
+4. **管理侧面板可见性**：每个窗口的"DIV"标签组控制面板启用的位置
 5. **使用 `webRequest` 观察同标签页的 XHR/fetch 请求**，以便循环检测可以在重复 UI 点击触发相同后台请求时建议精确的 `fetch_url` 快捷方式
 6. **暴露 Claude OAuth**、标签页录制、CAPTCHA 和其他子功能作为消息处理器
 
@@ -299,7 +299,7 @@ Trace 运行时元数据中新增的选区作用域字段只记录作用域策�
 | API 快捷观察器 | `chrome.webRequest` URL/方法缓冲 | `browser.webRequest` URL/方法缓冲 |
 | 斜杠驱动的标签页/屏幕录制 | `chrome.tabCapture` / `getDisplayMedia()` + 离屏 | 不可用 |
 | 侧面板 | `sidePanel` API（MV3） | `sidebar_action`（MV2） |
-| 文件上传 | CDP 路径或 `downloadId` | 通过 `downloadId` 重新获取或使用 WebBrain 文件选择器；不支持任意本地路径 |
+| 文件上传 | CDP 路径或 `downloadId` | 通过 `downloadId` 重新获取或使用 DIV 文件选择器；不支持任意本地路径 |
 
 ---
 

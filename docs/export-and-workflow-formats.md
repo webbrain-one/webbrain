@@ -1,6 +1,6 @@
 # Export and saved-workflow formats
 
-WebBrain can export a conversation, a recorded tool chain, Settings, or a saved
+DIV can export a conversation, a recorded tool chain, Settings, or a saved
 workflow. These files have different privacy and compatibility properties.
 
 | Command or UI | File | Format | Treat as sensitive? |
@@ -19,13 +19,13 @@ it.
 `/export` serializes the messages currently rendered in the side panel:
 
 ```md
-# WebBrain Conversation
+# DIV Conversation
 
-_Exported with WebBrain v25.8.5_
+_Exported with DIV v25.8.5_
 
 **You:** Summarize this page.
 
-**WebBrain:** ...
+**DIV:** ...
 ```
 
 The export is intended for reading rather than round-trip import. It includes
@@ -119,7 +119,7 @@ The converter maps user and agent messages, tool calls and observations, token
 metrics, errors, model metadata, and final content. It does not upload data.
 Screenshots and verbose diagnostic event kinds are counted in
 `extra.omitted_event_counts` but are not copied: ATIF represents images as
-files referenced alongside the trajectory, while a WebBrain JSON export embeds
+files referenced alongside the trajectory, while a DIV JSON export embeds
 them as data URLs or base64. The converted trajectory remains sensitive because
 it still contains prompts, tool arguments, URLs, and results.
 
@@ -142,7 +142,7 @@ links rather than parent spans.
 
 The output is an
 [OTLP/HTTP JSON](https://opentelemetry.io/docs/specs/otlp/#json-protobuf-encoding)
-`ExportTraceServiceRequest`. Legacy input contains one `invoke_agent WebBrain`
+`ExportTraceServiceRequest`. Legacy input contains one `invoke_agent DIV`
 root span, child model-call and `execute_tool` spans, and lightweight lifecycle
 events; session bundles contain one `invoke_agent` span per run.
 The mappings follow the current
@@ -211,7 +211,7 @@ distributed context propagation.
 The snapshot includes provider, vision, transcription, and CapSolver API keys;
 profile data; user memory; custom skills; and permission choices. It excludes
 conversations, traces, schedules, usage counters, accumulated spend, and
-device-bound WebBrain Compass or Cloud Sync identity and session data.
+device-bound DIV Compass or Cloud Sync identity and session data.
 
 Import with `/import <json>` or `/import --file`. Import validates known setting
 types, ignores unknown setting keys, and fills omitted known settings with the

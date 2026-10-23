@@ -1,6 +1,6 @@
 # Prompt-injection defense — how it works & how not to break it
 
-WebBrain's agent acts **inside the user's authenticated browser session**: it
+DIV's agent acts **inside the user's authenticated browser session**: it
 can click, type, navigate, run JS, and submit forms *as the logged-in user*. So
 any text it reads from a web page is **attacker-controllable** — a malicious
 tweet, a shared doc, an email, an issue comment, a PDF. The whole point of the

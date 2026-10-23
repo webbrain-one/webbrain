@@ -1,6 +1,6 @@
 # Slash Commands
 
-WebBrain accepts slash commands as the first thing on a line in the input box.
+DIV accepts slash commands as the first thing on a line in the input box.
 Type `/help` in the panel to see complete usage signatures and flag
 descriptions. Typing a canonical command followed by a space opens autocomplete
 for its available flags.
@@ -36,7 +36,7 @@ for its available flags.
 | `/teach --end` | Stop teaching and compile the captured actions into a value-free saved workflow |
 | `/allow-api` | **Per-conversation API mutation override.** See [below](#allow-api). |
 | `/foreground [prompt]` | Run one local task in the foreground for visual compatibility |
-| `/dangerously-skip-permissions` | **Global permission-prompt bypass.** Turns off `Ask before consequential actions` without opening Settings. WebBrain will act without per-site prompts until you re-enable the setting (the Permissions page, or the warning button next to the microphone in the side panel composer). |
+| `/dangerously-skip-permissions` | **Global permission-prompt bypass.** Turns off `Ask before consequential actions` without opening Settings. DIV will act without per-site prompts until you re-enable the setting (the Permissions page, or the warning button next to the microphone in the side panel composer). |
 | `/compact` | Force context compaction for the current conversation |
 | `/verbose` | Toggle verbose/compact tool display |
 | `/reset` | Clear the conversation and all per-conversation flags |
@@ -79,7 +79,7 @@ Regular local runs stay pinned to their original tab and operate without
 activating that tab or focusing its window. Chrome captures through CDP with
 focus emulation scoped to the run; Firefox captures the target tab directly
 with `tabs.captureTab`. If Chrome repeatedly returns a blank background frame,
-WebBrain discards it and continues from DOM and accessibility data.
+DIV discards it and continues from DOM and accessibility data.
 
 Use `/foreground <prompt>` as a one-run compatibility escape hatch for a site
 whose visual state does not render correctly in the background. It restores tab
@@ -116,10 +116,10 @@ WebM when that run settles (Chrome only).
 Append `/screenshot [--save-as <filename>]` to save viewport screenshots
 immediately before and after the run (Chrome and Firefox). For example,
 `Test the checkout /screenshot --save-as checkout.png` saves
-`checkout-before.png` and `checkout-after.png`; without `--save-as`, WebBrain
+`checkout-before.png` and `checkout-after.png`; without `--save-as`, DIV
 uses timestamped filenames.
 
-For the Chrome diagnostic suffix, WebBrain may reactivate the originating run
+For the Chrome diagnostic suffix, DIV may reactivate the originating run
 tab before saving the after screenshot. Firefox captures that tab directly
 without activating it. If the recording or initial screenshot cannot be
 started and saved, the run is not sent. Standalone `/record` and `/screenshot`
@@ -141,7 +141,7 @@ version:
   raw trace replays. Historical `ref_id` values, action CSS selectors,
   coordinates, query strings, fragments, and typed field values are excluded.
   Typed values become runtime parameters, and each action is bound to the
-  recorded origin and URL family. At run time WebBrain resolves a fresh
+  recorded origin and URL family. At run time DIV resolves a fresh
   accessibility-tree target and executes through the normal Act permission,
   submit-confirmation, and verification gates. Ambiguous targets fail closed. If
   an action may already have happened but its result is unknown, replay stops
@@ -158,6 +158,6 @@ version:
   definition and are limited to 1 MiB. Export re-normalizes the definition
   before download. Import normalizes it again, assigns a fresh local ID and
   timestamps, and never overwrites an existing workflow, so the same file can
-  safely move between Chrome, Firefox, and WebBrain Cloud.
+  safely move between Chrome, Firefox, and DIV Cloud.
 
 `/export --traces --full` uses the same versioned JSON format as the Traces page, without Markdown preview truncation or the 500-turn Markdown limit. It exports recorded data only: earlier recording omissions remain marked, and the panel reports when they exist. Content and screenshots follow the recording privacy setting; the command does not enable lossless recording retroactively. Essential solver outcomes remain available even when the lossless content budget fills.

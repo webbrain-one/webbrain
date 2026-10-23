@@ -1,6 +1,6 @@
 # Adding a Tool
 
-This guide walks through adding a new tool to the WebBrain agent — from schema definition to execution dispatch to result handling.
+This guide walks through adding a new tool to the DIV agent — from schema definition to execution dispatch to result handling.
 
 ---
 
@@ -9,11 +9,11 @@ This guide walks through adding a new tool to the WebBrain agent — from schema
 There are two ways to add a model-callable tool:
 
 - **Core tool**: product-owned browser, DOM, network, download, scheduler, or
-  privileged behavior implemented in WebBrain source. Use the full checklist
+  privileged behavior implemented in DIV source. Use the full checklist
   below.
 - **Skill tool**: user-importable, removable HTTP or download-job integration
   declared in a skill's `webbrain-tools` manifest. Use this when the tool is
-  best treated as a trusted third-party extension rather than a WebBrain core
+  best treated as a trusted third-party extension rather than a DIV core
   primitive.
 
 A core tool requires changes in three layers:
@@ -86,7 +86,7 @@ Use this skill when...
 single-line `summary` is capped at 200 characters and appears with the skill ID
 and name in the Mid/Full `load_skill` catalog. `modes` controls catalog
 eligibility; Ask must be listed explicitly, while Dev inherits Act eligibility.
-Without metadata, WebBrain infers the first prose paragraph as the summary and
+Without metadata, DIV infers the first prose paragraph as the summary and
 defaults the skill to Act/Dev. Compact exposes no skills. Full skill prose and
 declared tools remain absent until `load_skill` activates the skill for the
 current run.

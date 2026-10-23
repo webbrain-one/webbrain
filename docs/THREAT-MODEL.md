@@ -1,4 +1,4 @@
-# WebBrain — Agent Security Threat Model & Mitigations
+# DIV — Agent Security Threat Model & Mitigations
 
 *Status: working draft. Audience: security reviewers (and ourselves). The goal is to state plainly what can go wrong when an LLM drives a real browser as the logged-in user, what we do about each risk today, and what's still open. Sections marked **[built]** exist in the shipping code; **[planned]** is on the roadmap; **[gap]** is a known weakness we have not yet closed.*
 
@@ -63,7 +63,7 @@ The defensible claim is *not* "we're more secure than everyone." It's that the s
 
 1. Is page-derived content structurally isolated from the instruction path? (We do this and test it.)
 2. Is the action/automation surface bounded, or does the agent inherit full ambient authority? (Our gap G1/G2/G4 — being closed.)
-3. Where does inference run, and what leaves the device? (The selected provider determines this: WebBrain Compass and bring-your-own cloud providers receive the request context; local model runtimes keep inference on the machine, while a local gateway may forward it upstream.)
+3. Where does inference run, and what leaves the device? (The selected provider determines this: DIV Compass and bring-your-own cloud providers receive the request context; local model runtimes keep inference on the machine, while a local gateway may forward it upstream.)
 4. Is there evidence, or just assertions? (Adversarial corpus + ablation, in-repo.)
 
 Before making any *comparative* claim about a specific competitor (Edge's AI, OpenAI's browser, the Claude browser, etc.), verify their actual behaviour — don't assert it. The strong, honest line is "here are the dimensions; here's exactly where we stand on each, with tests" and let the comparison speak for itself.

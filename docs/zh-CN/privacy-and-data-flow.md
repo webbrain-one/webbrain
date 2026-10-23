@@ -26,14 +26,14 @@
 
 用户在提供商页面中选择他们的提供商。选项包括：
 
-- **WebBrain Compass**：请求会经过 `api.webbrain.one`；“帮助改进 WebBrain”默认启用，在其保持启用期间，部分交互可能会被保留并用于评估、改进、微调和训练
-- **用户自带的云提供商**：OpenAI、Anthropic、Google Gemini、Mistral、DeepSeek、xAI、Groq、OpenRouter 等——请求使用用户凭据直接发送给提供商，WebBrain 不会收集这些请求
+- **DIV Compass**：请求会经过 `api.webbrain.one`；“帮助改进 DIV”默认启用，在其保持启用期间，部分交互可能会被保留并用于评估、改进、微调和训练
+- **用户自带的云提供商**：OpenAI、Anthropic、Google Gemini、Mistral、DeepSeek、xAI、Groq、OpenRouter 等——请求使用用户凭据直接发送给提供商，DIV 不会收集这些请求
 - **本地模型运行时**：llama.cpp、Ollama、LM Studio、Jan、vLLM、SGLang、LocalAI
   和 GPT4All——推理请求保留在用户的机器上
-- **本地 OpenAI 兼容代理**：WebBrain 只连接已配置的本地网关，但网关可能把请求上下文
+- **本地 OpenAI 兼容代理**：DIV 只连接已配置的本地网关，但网关可能把请求上下文
   转发给上游账户。实际数据去向取决于网关的配置和隐私政策。
 
-本地模型和用户自带 API 的请求不会被 WebBrain 收集。WebBrain Compass
+本地模型和用户自带 API 的请求不会被 DIV 收集。DIV Compass
 请求会被处理，并可能按照[英文文档中的详细说明](../privacy-and-data-flow.md#webbrain-compass-improvement-data)予以保留。
 
 ---
@@ -42,7 +42,7 @@
 
 ### 对话历史
 
-存储在浏览器会话存储中：Chrome 使用 `chrome.storage.session`，Firefox 使用 `browser.storage.session`。按标签页保存的提供商历史（`agentConv:<tabId>`）、已渲染聊天（`tabChat:<tabId>`）和分离式运行 UI 日志（`runUi:<tabId>`）可在面板/侧栏关闭、重新加载或后台重启后恢复对话及进行中的运行。UI 日志保留有限的事件窗口，并单独限制累计的流式文本，以便在重连后重建进行中的 Markdown。相关对话内容会作为请求上下文发送给已配置的提供商；这些本地副本不会另行同步到 WebBrain。
+存储在浏览器会话存储中：Chrome 使用 `chrome.storage.session`，Firefox 使用 `browser.storage.session`。按标签页保存的提供商历史（`agentConv:<tabId>`）、已渲染聊天（`tabChat:<tabId>`）和分离式运行 UI 日志（`runUi:<tabId>`）可在面板/侧栏关闭、重新加载或后台重启后恢复对话及进行中的运行。UI 日志保留有限的事件窗口，并单独限制累计的流式文本，以便在重连后重建进行中的 Markdown。相关对话内容会作为请求上下文发送给已配置的提供商；这些本地副本不会另行同步到 DIV。
 
 ### 追踪记录器
 
@@ -83,7 +83,7 @@
 
 ### 预置技能
 
-一个内置的"FreeSkillz.xyz"技能（`skills/freeskillz-xyz.md`）在首次运行时被植入设置 → 技能中，默认启用，可以在那里删除。它声明了 `read_youtube_transcript`、`resolve_public_media` 和 `download_public_media` 工具。当模型调用这些工具之一时，WebBrain 仅将当前或模型提供的 URL，以及声明的选项（如转录语言、媒体类型、最大高度或文件名提示）通过 HTTPS 发送到声明的 `https://freeskillz.xyz` 端点——这是由扩展程序开发者运营的第一方服务，与用户配置的 LLM 提供商分开。转录工具仅限于 YouTube/youtu.be URL，而媒体工具仅限于技能清单中声明的公共媒体主机。只读的转录和解析器工具不需要 `/allow-api`；`download_public_media` 仅在执行模式下可用，并且需要下载权限，因为它会创建一个短期的提供商作业，通过浏览器下载 API 保存完成的文件，然后要求提供商删除该作业。这些调用不会发送页面内容、聊天历史或浏览历史（除了 URL 和声明的工具参数）。用户可以从设置 → 技能中删除此技能或任何用户导入的技能工具，以完全停止此数据流。
+一个内置的"FreeSkillz.xyz"技能（`skills/freeskillz-xyz.md`）在首次运行时被植入设置 → 技能中，默认启用，可以在那里删除。它声明了 `read_youtube_transcript`、`resolve_public_media` 和 `download_public_media` 工具。当模型调用这些工具之一时，DIV 仅将当前或模型提供的 URL，以及声明的选项（如转录语言、媒体类型、最大高度或文件名提示）通过 HTTPS 发送到声明的 `https://freeskillz.xyz` 端点——这是由扩展程序开发者运营的第一方服务，与用户配置的 LLM 提供商分开。转录工具仅限于 YouTube/youtu.be URL，而媒体工具仅限于技能清单中声明的公共媒体主机。只读的转录和解析器工具不需要 `/allow-api`；`download_public_media` 仅在执行模式下可用，并且需要下载权限，因为它会创建一个短期的提供商作业，通过浏览器下载 API 保存完成的文件，然后要求提供商删除该作业。这些调用不会发送页面内容、聊天历史或浏览历史（除了 URL 和声明的工具参数）。用户可以从设置 → 技能中删除此技能或任何用户导入的技能工具，以完全停止此数据流。
 
 ### 可选打包技能
 

@@ -1,13 +1,13 @@
-# WebBrain vs Extension Claude Chrome
+# DIV vs Extension Claude Chrome
 
-Cette note compare le checkout WebBrain local avec `../webbrain-claude`, un
+Cette note compare le checkout DIV local avec `../webbrain-claude`, un
 arbre désobfusqué de l'extension Claude Chrome. Elle se concentre sur
 l'architecture, les outils appelables par le modèle et le comportement des
 adaptateurs spécifiques aux sites.
 
 ## Sources inspectées
 
-WebBrain :
+DIV :
 
 - `docs/architecture.md`
 - `docs/adding-a-tool.md`
@@ -39,7 +39,7 @@ latéral.
 
 ## Architecture
 
-| Domaine | WebBrain | Extension Claude Chrome |
+| Domaine | DIV | Extension Claude Chrome |
 |---|---|---|
 | Support navigateur | Deux builds d'extension miroirs : Chrome/Edge MV3 et Firefox MV2. | Chrome MV3 uniquement dans cet arbre. |
 | Emplacement de l'agent | L'extension possède la boucle d'agent complète dans `agent.js` ; les fournisseurs sont des modules d'extension locaux. | Deux chemins : une boucle normale d'appel d'outils Anthropic dans le panneau latéral, plus un pont hôte natif/MCP dans le service worker. |
@@ -50,7 +50,7 @@ latéral.
 | Contrôles de conversation | Modes Demander/Agir, planifier avant d'agir, bloc-notes, registre de progression, tâches/reprises planifiées, traces optionnelles. | Modes de permission, approbation du plan via `update_plan`, invites de transition de domaine, groupes d'onglets, compaction, statut hôte natif/MCP. |
 | Modèle d'extension dynamique | Les compétences utilisateur/importées peuvent injecter du texte d'invite et déclarer des outils runtime `webbrain-tools`. | Les extensions natives/MCP et les raccourcis sont les points d'extension visibles dans l'arbre désobfusqué ; aucun manifeste d'outil Markdown modifiable par l'utilisateur n'a été trouvé. |
 
-## Surface d'outils WebBrain
+## Surface d'outils DIV
 
 Outils statiques de base actuels de la source locale :
 
@@ -91,7 +91,7 @@ verify_form, download_social_media, solve_captcha
 Firefox omet les outils Dev exclusifs à Chrome et `shadow_dom_query` ; le reste
 de la surface de base, y compris `execute_js` réservé au mode Dev, est partagé.
 
-### Familles d'outils WebBrain
+### Familles d'outils DIV
 
 | Famille | Outils |
 |---|---|
@@ -107,9 +107,9 @@ de la surface de base, y compris `execute_js` réservé au mode Dev, est partag�
 | Sécurité/flux de travail | `verify_form`, `clarify`, `done`, `solve_captcha` |
 | Média | `download_social_media`, plus les outils de compétences dynamiques lorsqu'ils sont activés |
 
-### Outils de compétences dynamiques WebBrain
+### Outils de compétences dynamiques DIV
 
-WebBrain dispose de deux classes d'outils déclarées dans les blocs Markdown de
+DIV dispose de deux classes d'outils déclarées dans les blocs Markdown de
 compétences :
 
 - `kind: "http"` : outils GET/POST HTTPS en lecture seule, disponibles en modes
@@ -189,7 +189,7 @@ synthétiques avec une nouvelle capture d'écran.
 
 ## Différences d'outils
 
-| Capacité | WebBrain | Claude Chrome |
+| Capacité | DIV | Claude Chrome |
 |---|---|---|
 | Granularité des outils | Beaucoup d'outils étroits : clic AX, saisie, définition de champ, réseau, téléchargements, planificateur, iframe, PDF, source, progression. | Moins d'outils de haut niveau ; la saisie navigateur est principalement un outil `computer` avec une énumération d'actions. |
 | Chemin de lecture principal | `get_accessibility_tree` est la première lecture préférée et retourne des références stables avec pagination/dégradation automatique. | `read_page` retourne également un arbre d'accessibilité, mais le contrôle par coordonnées basé sur les captures d'écran est plus central, surtout en mode rapide. |
@@ -197,7 +197,7 @@ synthétiques avec une nouvelle capture d'écran.
 | Texte de page | `read_page` est orienté prose/article ; `get_accessibility_tree` est orienté UI. | Sépare `read_page` (arbre AX) et `get_page_text` (texte brut/article). |
 | Lecture PDF | `read_pdf` extrait le texte PDF directement. | Aucun équivalent trouvé. |
 | Lecture de source brute | `read_page_source` expose le HTML fourni par le serveur et les URLs des ressources. | Aucun équivalent trouvé. |
-| Requête réseau | `fetch_url` / `research_url`, avec des règles de mutation d'API spécifiques à WebBrain et `/allow-api` pour les méthodes mutantes. | Aucun outil de requête générique trouvé. Des logs réseau de débogage existent via `read_network_requests`. |
+| Requête réseau | `fetch_url` / `research_url`, avec des règles de mutation d'API spécifiques à DIV et `/allow-api` pour les méthodes mutantes. | Aucun outil de requête générique trouvé. Des logs réseau de débogage existent via `read_network_requests`. |
 | Inspection console/réseau | Chrome Dev expose `read_console`, `inspect_network_requests` et `inspect_event_listeners` ; Firefox n'expose pas ces diagnostics exclusifs à Chrome. | `read_console_messages` et `read_network_requests` dédiés. |
 | Téléchargements | Plusieurs outils de téléchargement/fichier navigateur plus des outils de compétences de tâche de téléchargement dynamiques. | La permission `downloads` existe et `gif_creator` peut télécharger des exports, mais aucun gestionnaire de téléchargement général équivalent n'a été trouvé. |
 | Téléchargement média | Compétence `download_public_media` d'abord ; `download_social_media` en repli navigateur. | Aucun équivalent de téléchargement de média public trouvé. |
@@ -208,13 +208,13 @@ synthétiques avec une nouvelle capture d'écran.
 | Sécurité des formulaires | `verify_form` pour les formulaires importants. | `form_input` peut définir des valeurs ; aucun outil de vérification de formulaire dédié trouvé. |
 | Iframes | `get_frames`, `iframe_read`, `iframe_click` et `iframe_type` dédiés, plus `promote_iframe` pour déplacer une frame enfant découverte dans l'onglet courant sous forme de page autonome, avec contrôles d'ambiguïté et de brouillon non enregistré. | Aucun outil iframe dédié trouvé ; les actions se font probablement par coordonnées/JS lorsque c'est permis. |
 | Raccourcis/flux de travail | Les compétences personnalisées sont du Markdown avec des manifestes d'outils optionnels. | `shortcuts_list` / `shortcuts_execute` exposent les raccourcis/flux de travail sauvegardés. |
-| Flux de travail GIF/vidéo | L'enregistrement via slash existe dans WebBrain Chrome, mais pas en tant qu'outils appelables par le modèle. | `gif_creator` est appelable par le modèle et peut enregistrer/exporter des sessions d'automatisation navigateur en GIF. |
+| Flux de travail GIF/vidéo | L'enregistrement via slash existe dans DIV Chrome, mais pas en tant qu'outils appelables par le modèle. | `gif_creator` est appelable par le modèle et peut enregistrer/exporter des sessions d'automatisation navigateur en GIF. |
 
 ## Adaptateurs spécifiques aux sites
 
-### WebBrain
+### DIV
 
-WebBrain dispose d'un véritable système d'adaptateurs de sites :
+DIV dispose d'un véritable système d'adaptateurs de sites :
 
 - Les fichiers d'adaptateurs se trouvent dans `src/chrome/src/agent/adapters.js`
   et `src/firefox/src/agent/adapters.js`.
@@ -222,7 +222,7 @@ WebBrain dispose d'un véritable système d'adaptateurs de sites :
 - Un seul adaptateur s'exécute à la fois.
 - Les notes des adaptateurs sont injectées dans le premier message utilisateur.
 - Si la navigation passe à un adaptateur correspondant différent en cours de
-  conversation, WebBrain injecte un nouveau message utilisateur
+  conversation, DIV injecte un nouveau message utilisateur
   `[Contexte du site modifié ...]`.
 - `UNIVERSAL_PREAMBLE` est ajouté à l'invite système lorsque les adaptateurs
   sont activés. Il couvre les bannières de cookies/consentement, les paywalls
@@ -268,7 +268,7 @@ L'arbre Claude désobfusqué possède une interface de paramètres qui mentionne
 Cependant, aucun registre d'adaptateurs sous-jacent, d'équivalent
 `getActiveAdapter`, d'injection de préambule universel ou de chemin d'injection
 de conseils spécifiques au site n'a été trouvé dans l'arbre Claude inspecté.
-Les recherches de marqueurs d'adaptateurs de style WebBrain n'ont trouvé que
+Les recherches de marqueurs d'adaptateurs de style DIV n'ont trouvé que
 l'étiquette/le chemin de stockage des paramètres.
 
 Les équivalents Claude les plus proches ne sont pas des adaptateurs de sites :
@@ -280,7 +280,7 @@ Les équivalents Claude les plus proches ne sont pas des adaptateurs de sites :
 
 La différence pratique d'adaptateur est donc :
 
-- WebBrain dispose d'une augmentation d'invite spécifique au site en tant que
+- DIV dispose d'une augmentation d'invite spécifique au site en tant que
   fonctionnalité d'agent navigateur de première classe.
 - Claude Chrome, dans cet arbre désobfusqué, semble s'appuyer sur des captures
   d'écran, `find`, les permissions de domaine et le contexte d'onglet/domaine
@@ -288,7 +288,7 @@ La différence pratique d'adaptateur est donc :
 
 ## Idées à emprunter
 
-Idées potentiellement utiles de Claude pour WebBrain :
+Idées potentiellement utiles de Claude pour DIV :
 
 - Un outil `find` qui utilise un modèle petit/rapide sur l'arbre AX pour
   retourner des références candidates pour des descriptions vagues d'éléments.
@@ -297,7 +297,7 @@ Idées potentiellement utiles de Claude pour WebBrain :
 - Un outil d'export GIF/flux de travail si l'enregistrement/export appelable
   par le modèle est souhaité.
 - Des primitives de liste et d'exécution de raccourcis/flux de travail, si
-  WebBrain souhaite une couche de flux de travail réutilisable distincte des
+  DIV souhaite une couche de flux de travail réutilisable distincte des
   compétences Markdown.
 - Téléchargement direct d'image par ID de capture d'écran/d'image, si les flux
   de travail de pièce jointe d'image du panneau latéral se développent.
@@ -307,7 +307,7 @@ Idées à éviter de copier directement :
 - Une surface d'« adaptateurs de sites » uniquement dans les paramètres sans
   registre sous-jacent ni chemin d'injection.
 - Regrouper trop d'opérations navigateur déterministes dans un seul schéma
-  `computer` si WebBrain souhaite préserver sa sémantique d'outils étroite,
+  `computer` si DIV souhaite préserver sa sémantique d'outils étroite,
   vérifiable et actuelle.
 - Traiter le contrôle par capture d'écran/coordonnées comme le chemin principal
   lorsque des références AX stables sont disponibles.

@@ -33,12 +33,12 @@ and private inference-profile ARNs are omitted from this identity context.
 
 The Providers page suggests `gemini-4-argon` on Google Gemini and
 `google/gemini-4-argon`, `meta/muse-wonder`, and `meta/muse-spark-open` on
-OpenRouter. These models support native tools and screenshot input. WebBrain
+OpenRouter. These models support native tools and screenshot input. DIV
 infers their 1,048,576-token context unless a user or local runtime overrides it.
 
 Argon uses the existing Google OpenAI-compatible or OpenRouter Chat Completions
 route. Its synchronous output ceiling is 65,536 tokens; background long decode
-is not implemented. WebBrain reserves at least 32,768 tokens including thinking,
+is not implemented. DIV reserves at least 32,768 tokens including thinking,
 omits ignored sampling controls, and maps unsupported thinking-off requests to
 low reasoning. Muse Wonder and Spark Open also require reasoning: short text
 and classifier calls receive at least 2,048 tokens and use the lowest supported
@@ -226,7 +226,7 @@ existing checks. Strict Secret Mode disables these additional calls.
 
 | Active provider | First completion verifier | Fallback |
 | --- | --- | --- |
-| WebBrain Compass (default), no on-device decision model downloaded | Managed decision model | Active LLM, then existing checks |
+| DIV Compass (default), no on-device decision model downloaded | Managed decision model | Active LLM, then existing checks |
 | Explicitly selected in-browser chat model (Chrome), including with Compass | Compass VLD Tiny v5; no sole success authority | Active LLM, then existing checks |
 | Explicitly enabled and consented D1, including with Compass | Experimental local D1; no sole success authority | Active LLM, then existing checks |
 | Auto, Compass VLD Tiny v5 downloaded and no other in-browser model serving the task (Chrome; Compass included) | Compass VLD Tiny v5; no sole success authority | Active LLM, then existing checks |
@@ -269,7 +269,7 @@ Configure **Providers → Generative** for the
 For Comfy Router models with native inputs other than `prompt`, paste their input
 JSON in **Model input JSON** and place `{{prompt}}` in the text field(s). Other
 values, such as duration or resolution, are preserved. Without a placeholder,
-WebBrain supplies the tool prompt as `prompt`. Refer to the model's
+DIV supplies the tool prompt as `prompt`. Refer to the model's
 [input schema](https://docs.comfy.org/development/comfy-router/schemas).
 
 For local ComfyUI, start the server, export a working workflow **in API format**,
@@ -402,15 +402,15 @@ class BaseLLMProvider {
 | `fireworks`          | `openai`       | router   | `accounts/fireworks/models/llama-v3p3-70b-instruct`                | Model-name regex                |
 | `z_ai`               | `openai`       | cloud    | `glm-5.2`                                                          | Model-name regex                |
 
-The sidepanel also exposes `webbrain_cloud_max` as **WebBrain Compass XL**.
+The sidepanel also exposes `webbrain_cloud_max` as **DIV Compass XL**.
 It is a managed, sidepanel-only runtime profile rather than a second provider
 card on the Providers page. It uses the same endpoint and sends `model: max`; the hosted
-backend returns `WebBrain Compass XL 1.0` and consumes usage credits at five
+backend returns `DIV Compass XL 1.0` and consumes usage credits at five
 times the standard rate.
 
 ### Extended provider catalog
 
-WebBrain also ships 80 disabled-by-default provider cards. Most are sourced
+DIV also ships 80 disabled-by-default provider cards. Most are sourced
 from the OpenCode provider catalog snapshot at commit
 `62e4641235d7847dadc60da37cca8a023dd54fc1`; provider-specific additions use
 their official API documentation. Together with the original cards, the
@@ -446,7 +446,7 @@ OpenAI-compatible proxy. Start the server, then configure the **Freebuff2API
 (Local)** card with its URL (the default is `http://127.0.0.1:8080/v1`) and
 select a model with **Load Models**. Enter a proxy API key only when its
 `API_KEYS` access control is enabled; Freebuff authentication tokens remain on
-the proxy server and are never entered into WebBrain.
+the proxy server and are never entered into DIV.
 
 #### IO.NET and Synthetic
 
@@ -467,7 +467,7 @@ same API and billing but do not inherit the TEE privacy guarantees. See the
 [OpenAI compatibility](https://docs.near.ai/cloud/guides/openai-compatibility)
 guides.
 
-In WebBrain, open **Providers -> LLM -> NEAR AI Cloud**. Generate an API
+In DIV, open **Providers -> LLM -> NEAR AI Cloud**. Generate an API
 key from the [NEAR AI Cloud dashboard](https://cloud.near.ai/), paste it into
 the card, keep the default `z-ai/glm-5.3-flash` model, then click **Test
 Connection**. If selecting a model with a smaller context window, such as
@@ -485,8 +485,8 @@ non-streaming. Tool calls are withheld until a terminal protocol event arrives
 premature EOF clears partial UI text and retries that turn once without
 streaming; the rest of that run then stays non-streaming.
 
-When a streaming provider returns token usage, WebBrain records it directly.
-If the provider omits usage, WebBrain records a conservative character-based
+When a streaming provider returns token usage, DIV records it directly.
+If the provider omits usage, DIV records a conservative character-based
 estimate so streaming cannot bypass the configured cost allowance.
 
 The setting still uses the stored key `openaiAskStreamingEnabled` for backward
@@ -552,7 +552,7 @@ own download and readiness state. Changing models preserves already downloaded
 files, and switching back can reuse them.
 
 In-browser models answer questions only. In the side panel, each Ask turn
-makes one tool-free call. WebBrain first reads the current page, the
+makes one tool-free call. DIV first reads the current page, the
 selection, a PDF tab and any page linked in the question, then sends that text
 with a short prompt (tiny Ask, see [`docs/webgpu-models.md`](webgpu-models.md)).
 Act and Dev mode are refused for this provider; choose another provider for
@@ -560,10 +560,10 @@ browser actions. The standalone chat window keeps its own page-free profile.
 
 - [`webbrain-one/webbrain-compass-vld-tiny-v5-onnx`](https://huggingface.co/webbrain-one/webbrain-compass-vld-tiny-v5-onnx)
   (Q8 language model and embeddings, FP16 vision encoder, about 2.2 GB),
-  WebBrain's Compass VLD Tiny v5 fine-tune of
+  DIV's Compass VLD Tiny v5 fine-tune of
   [MiniCPM-V-4.7-1B](https://huggingface.co/openbmb/MiniCPM-V-4.7-1B): one
   model that chats and calls tools (V-L: it reads screenshots; D: it answers
-  WebBrain's decision questions). It is the default for a new installation,
+  DIV's decision questions). It is the default for a new installation,
   the install guide's download, Auto's in-browser vision model and Auto's
   decision model once downloaded. Transformers.js has no MiniCPM-V runtime, so
   the same worker drives its three ONNX graphs through ONNX Runtime Web
@@ -579,7 +579,7 @@ browser actions. The standalone chat window keeps its own page-free profile.
   Compass Tiny v2.1 was never downloaded there; choosing Compass Tiny v2.1
   later stays.
 - [`webbrain-one/webbrain-compass-tiny-v2.1`](https://huggingface.co/webbrain-one/webbrain-compass-tiny-v2.1)
-  (`q4f16`, about 1.87 GB across two external-data shards), WebBrain's Compass
+  (`q4f16`, about 1.87 GB across two external-data shards), DIV's Compass
   Tiny v2.1 fine-tune of MiniCPM5-2B for Compact tool routing. It runs greedy
   with thinking disabled through the packaged Transformers.js 4.2 / ONNX
   Runtime Web GPU worker, and emits MiniCPM5 XML-style tool calls
@@ -628,7 +628,7 @@ establish model inference quality.
 
 Custom Hugging Face repositories have not been tested and are likely not to
 work. They must be compatible with Transformers.js text generation, provide a
-`q4f16` ONNX variant, and use a chat template that accepts `tools`; WebBrain
+`q4f16` ONNX variant, and use a chat template that accepts `tools`; DIV
 validates the template after loading and rejects incompatible repositories.
 
 The provider defaults to the Compact prompt tier. For Compass VLD Tiny v5,
@@ -676,10 +676,10 @@ proxy card require their configured client keys:
 Open **Providers → LLM → ODS (Local)**, set the server URL to the local
 inference port in ODS's `.env`, click **Load Models**, select the running model,
 and click **Test Connection**. ODS exposes OpenAI-compatible `/v1/models` and
-`/v1/chat/completions`; WebBrain reads `/props` for the live context window and
+`/v1/chat/completions`; DIV reads `/props` for the live context window and
 vision support when the installed backend exposes it. Add an API key only if
 you configured ODS to require one. When ODS switches models, select the new
-model in WebBrain unless your ODS installation exposes a stable alias. See the
+model in DIV unless your ODS installation exposes a stable alias. See the
 [ODS quickstart](https://github.com/Osmantic/ODS/blob/main/ods/QUICKSTART.md).
 
 #### Osaurus
@@ -707,11 +707,11 @@ then start Studio and load a chat model. In Studio, open the avatar menu,
 choose **Settings → API Access**, and create an API key. Keys currently use the
 `sk-unsloth-` prefix; keep the full value private.
 
-In WebBrain, open **Providers → LLM → Unsloth Studio (Local)**. Enter the
+In DIV, open **Providers → LLM → Unsloth Studio (Local)**. Enter the
 Studio API address as `http://127.0.0.1:8888/v1`, replacing `8888` when the
 running Studio instance shows a different port. Enter the generated API key,
 click **Load Models**, select the loaded model, then click **Test Connection**.
-WebBrain normalizes a
+DIV normalizes a
 base URL entered without the terminal `/v1` after a successful request.
 
 Unsloth model discovery, chat, interactive Ask streaming, and tool calls use
@@ -720,9 +720,9 @@ vision checkbox only when the model loaded in Studio accepts image input.
 
 #### Subscription proxy guide (EasyCLIProxyAPI / CLIProxyAPI)
 
-The generic **Local OpenAI-compatible Proxy** card can connect WebBrain to a
+The generic **Local OpenAI-compatible Proxy** card can connect DIV to a
 separately managed [EasyCLIProxyAPI](https://github.com/router-for-me/EasyCLIProxyAPI)
-or [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) instance. WebBrain
+or [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI) instance. DIV
 uses only the local OpenAI-compatible endpoint and its client key; it does not
 bundle, launch, update, audit, or manage the proxy or its upstream OAuth tokens.
 
@@ -734,7 +734,7 @@ publish the endpoint to a LAN or the internet. Official provider API keys remain
 the stable default.
 
 **Context window.** After **Load Models**, picking a model from the loaded list,
-or **Test Connection**, WebBrain sets the card's **Context window** from the first
+or **Test Connection**, DIV sets the card's **Context window** from the first
 source that knows it:
 
 1. the proxy's `/v1/models` card for the selected model (`max_model_len`,
@@ -742,25 +742,25 @@ source that knows it:
    or `input_token_limit`);
 2. `GET /props?model=<model>` at the proxy root, when a llama.cpp server behind it
    reports the loaded model's live `n_ctx`;
-3. the model name, for hosted models WebBrain knows (`claude-…`, `gpt-5…`,
+3. the model name, for hosted models DIV knows (`claude-…`, `gpt-5…`,
    `gemini-…`, …), capped at 128k because subscription gateways can serve less
    context than the vendor API advertises;
 4. otherwise the **64k** proxy fallback, which is also the card's default
    (previously 16k, which starved the hosted models these gateways usually front).
 
 A reported window (1 or 2) may shrink a manual value; a name or the fallback only
-replaces the default, the old 16k default, or a value WebBrain filled in itself,
+replaces the default, the old 16k default, or a value DIV filled in itself,
 never a number you typed. If the proxy fronts a small local model and reports
 nothing, lower **Context window** to that model's loaded window, because 64k can
 overflow it. Untouched cards (never saved, no key) move from 16k to 64k on
 upgrade; a saved card still at 16k moves at its next detection.
 
-Ollama, llama.cpp, ODS, LM Studio, and LocalAI default to `visionMode: auto`. WebBrain asks
+Ollama, llama.cpp, ODS, LM Studio, and LocalAI default to `visionMode: auto`. DIV asks
 the selected server for model capability metadata before enrichment and sends
 screenshots only when the response explicitly reports image input. A failed or
 malformed metadata request is text-only for that turn and is retried later;
 The Providers page can override Auto with Force on or Off. For providers whose Model
-field may be blank, WebBrain coalesces concurrent checks but rechecks once per
+field may be blank, DIV coalesces concurrent checks but rechecks once per
 user turn, so changing the model loaded by the server cannot reuse a stale
 answer. Other local providers retain
 their existing explicit `supportsVision` setting.
@@ -768,11 +768,11 @@ their existing explicit `supportsVision` setting.
 #### Ollama launch handoff (preview)
 
 <p align="center">
-  <img src="../web/assets/webbrain-ollama-heart.png" alt="WebBrain loves Ollama launch handoff" width="720">
+  <img src="../web/assets/webbrain-ollama-heart.png" alt="DIV loves Ollama launch handoff" width="720">
 </p>
 
-WebBrain supports Ollama today through the local OpenAI-compatible provider. A
-new `ollama launch webbrain --model <model>` handoff can also configure WebBrain
+DIV supports Ollama today through the local OpenAI-compatible provider. A
+new `ollama launch webbrain --model <model>` handoff can also configure DIV
 automatically, but it is not integrated into upstream Ollama yet. For now, try
 it from the [`codex/ollama-webbrain-launch-handoff` branch of
 `esokullu/ollama`](https://github.com/esokullu/ollama/tree/codex/ollama-webbrain-launch-handoff);
@@ -821,7 +821,7 @@ Provider tier and conversation mode are separate knobs:
 
 Ask mode ignores provider tier and stays read-only. Act mode uses the selected tier's normal tools. Dev mode requires Mid or Full, uses the selected Act prompt, appends `SYSTEM_PROMPT_DEV_APPENDIX`, and adds Dev-only source/style tools plus Dev-extended shadow/frame inspection for Mid-tier debugging. Compact Dev is blocked before an LLM request is sent.
 
-**Lean mode** (Settings → Advanced → Lean mode; Auto by default) skips WebBrain's quality checks in Act runs; the run keeps its tier's tools and prompt, with one note asking the model to check its own work. Under Auto it applies only to a strong model on a cloud or router provider whose tier is Full; Compact and Mid tiers and local providers keep the checks. See [lean-mode.md](lean-mode.md).
+**Lean mode** (Settings → Advanced → Lean mode; Auto by default) skips DIV's quality checks in Act runs; the run keeps its tier's tools and prompt, with one note asking the model to check its own work. Under Auto it applies only to a strong model on a cloud or router provider whose tier is Full; Compact and Mid tiers and local providers keep the checks. See [lean-mode.md](lean-mode.md).
 
 ### Vision Detection
 
@@ -901,10 +901,10 @@ pm.getAll(); // All provider configs (for the Providers page)
 await pm.testProvider("openai"); // Test connection
 ```
 
-Each non-WebBrain provider config includes a persisted `configured` flag. An
+Each non-DIV provider config includes a persisted `configured` flag. An
 explicit configuration update sets it to `true`; this is the UI's **Active**
 state and is separate from `activeProvider`, which is the provider currently
-**Selected** for chat. WebBrain Compass is always selectable without being marked
+**Selected** for chat. DIV Compass is always selectable without being marked
 configured. Connection tests report reachability but do not control the Active
 flag.
 
@@ -923,7 +923,7 @@ New instances start with blank credentials, endpoint, model, and overrides,
 and must be saved before selection or further duplication. Duplicates stay
 grouped after their source; deleting one leaves the other instances intact.
 The manager rejects nested, orphaned, type-mismatched, and malformed duplicate
-entries when loading storage. WebBrain Compass and the
+entries when loading storage. DIV Compass and the
 Chromium-only WebGPU runtime are not duplicable because they do not represent
 independent user-managed API credentials or endpoints; their cards keep the
 Duplicate affordance disabled with an explanatory tooltip.
@@ -945,7 +945,7 @@ Deprecated provider entries (`webbrain`, `openai_subscription`,
 
 ### Cost Allowances
 
-Settings → Budgets exposes session and total cloud cost allowances. The agent prefers a provider-reported `usage.cost`/`usage.cost_usd` value when present (OpenRouter reports this directly). For direct cloud providers that only return token counts, WebBrain estimates spend from the provider config fields:
+Settings → Budgets exposes session and total cloud cost allowances. The agent prefers a provider-reported `usage.cost`/`usage.cost_usd` value when present (OpenRouter reports this directly). For direct cloud providers that only return token counts, DIV estimates spend from the provider config fields:
 
 - `inputCostPerMillionUsd`
 - `cacheReadCostPerMillionUsd`
@@ -953,7 +953,7 @@ Settings → Budgets exposes session and total cloud cost allowances. The agent 
 - `cacheWrite1hCostPerMillionUsd`
 - `outputCostPerMillionUsd`
 
-OpenAI reports cache reads and writes inside the input-token total (`prompt_tokens_details.cached_tokens` / `cache_write_tokens`, or the Responses API `input_tokens_details` equivalents), so WebBrain subtracts both before applying the regular input rate and prices writes with `cacheWriteCostPerMillionUsd`. Anthropic and Bedrock report regular input, cache reads, and cache writes separately, so those counts are added as separate billing classes. Anthropic and Bedrock can also distinguish 5-minute and 1-hour cache writes.
+OpenAI reports cache reads and writes inside the input-token total (`prompt_tokens_details.cached_tokens` / `cache_write_tokens`, or the Responses API `input_tokens_details` equivalents), so DIV subtracts both before applying the regular input rate and prices writes with `cacheWriteCostPerMillionUsd`. Anthropic and Bedrock report regular input, cache reads, and cache writes separately, so those counts are added as separate billing classes. Anthropic and Bedrock can also distinguish 5-minute and 1-hour cache writes.
 
 Those rates are editable in the provider card so custom model pricing can be adjusted without code changes. If a cache-specific rate is absent, it falls back to the regular input rate; a missing 1-hour write rate falls back to the general cache-write rate. If a metered remote provider has token usage but no configured input/output rates, the agent uses conservative defaults (`$3` input / `$15` output per 1M tokens). Streaming providers contribute only their final cumulative usage snapshot for each request. Local providers are not counted.
 
@@ -984,7 +984,7 @@ const vision = await providerManager.getVisionProvider();
 
 On Chromium, **Providers -> Vision** also offers an
 in-browser vision model, chosen from **Auto** (default), **Compass VLD Tiny v5**,
-**Ternary Bonsai 2 2B Vision**, **WebBrain VL 2 450M** or **Off**. The choice is stored in the
+**Ternary Bonsai 2 2B Vision**, **DIV VL 2 450M** or **Off**. The choice is stored in the
 Chrome-only `webgpuVisionChoice` key (`storedWebgpuVisionChoice()` and
 `resolveWebgpuVisionChoice()` in `providers/webgpu.js`), separately from the
 synced OpenAI-compatible vision endpoint, so changing it never touches that
@@ -1005,7 +1005,7 @@ Firefox, whose build has no MV3 offscreen document and no local option.
   the chat cancellation key. Its download is the ordinary text-model download,
   started only by a click. When the active chat model is one of them, it reads
   the screenshot itself and no second model is involved.
-- **WebBrain VL 2 450M** runs `webbrain-one/webbrain-vl-2-450M-onnx` in a
+- **DIV VL 2 450M** runs `webbrain-one/webbrain-vl-2-450M-onnx` in a
   dedicated Worker with FP16 embeddings/vision encoder and a Q4 decoder. Its
   first download goes through the dedicated consent step: it probes WebGPU,
   records versioned consent, and then downloads approximately 810 MB of model

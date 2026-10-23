@@ -1,6 +1,6 @@
 # 离线 RAG 与紧急语料库
 
-WebBrain 的离线检索增强生成（RAG）流水线允许扩展在没有任何网络连接的情况下，使用本地存储的参考材料回答问题。它建立在末日模式（Apocalypse Mode）的 Wikipedia 存档之上，并新增了紧急语料库（Emergency Box）文本集合——一份涵盖医疗、生存、教育和通信领域公共领域参考文档的精选合集。
+DIV 的离线检索增强生成（RAG）流水线允许扩展在没有任何网络连接的情况下，使用本地存储的参考材料回答问题。它建立在末日模式（Apocalypse Mode）的 Wikipedia 存档之上，并新增了紧急语料库（Emergency Box）文本集合——一份涵盖医疗、生存、教育和通信领域公共领域参考文档的精选合集。
 
 独立 WebGPU 聊天没有工具。检索到的段落会先注入提示；所选 WebGPU 文本模型（默认
 Compass Tiny v2.1，或 Ternary Bonsai 2 预设）根据这些证据作答，或说明无法回答。切换文本模型
@@ -23,7 +23,7 @@ Compass Tiny v2.1，或 Ternary Bonsai 2 预设）根据这些证据作答，或
 1. **规范化查询。** 去掉问句前缀，再删除多语言停用词（来自 [ranks.nl](https://www.ranks.nl/stopwords)，打包在 `offline-query-stopwords.js`）。只剩停用词的查询不会回退到原始句子。
 2. **为本轮选择来源。** 路由不跨轮次粘滞。在同时选中 Wikipedia 和 Emergency Box 时，百科类问题只搜 Wikipedia。个人健康和急救问题在两者就绪时会同时搜索。在历史条目之后出现的代词追问（例如 “fix it”），如果新消息有自己的区分性词语，不会复用上一轮主题。
 3. **搜索。** Wikipedia 在档案有 Xapian 索引时走全文 worker，否则走 ZIM 标题索引。Emergency Box 在文本包为 `ready` 时始终使用 FTS5；当模型和索引可用时再使用 E5 向量。
-4. **融合与预算。** 命中结果经融合、去冗余后作为不可信证据封装。WebGPU 生成有上限（当前为 2048 个新 token）。如果模型把预算花在推理上，WebBrain 会用更短的证据提示重试，而不是编造答案。
+4. **融合与预算。** 命中结果经融合、去冗余后作为不可信证据封装。WebGPU 生成有上限（当前为 2048 个新 token）。如果模型把预算花在推理上，DIV 会用更短的证据提示重试，而不是编造答案。
 5. **本地引用。** 每个保留的段落都有稳定标记（`[WB-E-…]` 或 Wikipedia 对应标记）和本地阅读器 URL。仅当目录中的对应 PDF 已安装时，Emergency Box 引用才会附加 **Open PDF** 链接。
 
 ## 技术架构
@@ -132,7 +132,7 @@ BM25 评分权重：`body` 7、`search_terms` 1、`locator` 0.6、`collection` 2
 
 ## 许可证
 
-紧急语料库、SQLite、fflate 和 Transformers.js 均采用宽松许可证，本身不会引入 copyleft 条款。尽管如此，WebBrain 33.0.0 及更高版本仍采用 GPL-3.0-or-later，因为发布的扩展集成了采用 GPL 许可证的 Xapian/libzim 运行时。
+紧急语料库、SQLite、fflate 和 Transformers.js 均采用宽松许可证，本身不会引入 copyleft 条款。尽管如此，DIV 33.0.0 及更高版本仍采用 GPL-3.0-or-later，因为发布的扩展集成了采用 GPL 许可证的 Xapian/libzim 运行时。
 
 Xapian/libzim Wikipedia 全文运行时已 vendored，许可证为 GPL。详见 [offline-rag-licensing.md](offline-rag-licensing.md)。
 

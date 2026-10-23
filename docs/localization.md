@@ -90,9 +90,9 @@ The policy is derived only from the user's request and trusted conversation cont
 
 When the user edits an approved plan, explicit language instructions in that user-edited plan override the policy inferred before review. This exception applies only to the runtime-marked approved-plan block; it does not grant authority to other scratchpad content.
 
-When **Continue** resumes an interrupted run, WebBrain carries the normalized policy only into that trusted continuation of the same conversation. The handoff is stored in the session snapshot so it survives a browser worker restart, then consumed as a one-shot value. For a fallback policy, the synthetic Continue message is explicitly excluded from language inference, which remains anchored to the most recent earlier genuine user request. A genuine new user turn discards the carryover and derives a new policy from the new request.
+When **Continue** resumes an interrupted run, DIV carries the normalized policy only into that trusted continuation of the same conversation. The handoff is stored in the session snapshot so it survives a browser worker restart, then consumed as a one-shot value. For a fallback policy, the synthetic Continue message is explicitly excluded from language inference, which remains anchored to the most recent earlier genuine user request. A genuine new user turn discards the carryover and derives a new policy from the new request.
 
-If planning is unavailable, WebBrain infers framing from the language of the latest genuine user request. It uses the interface locale only as a soft fallback when that request language is unclear, and continues to honor explicit language or translation instructions.
+If planning is unavailable, DIV infers framing from the language of the latest genuine user request. It uses the interface locale only as a soft fallback when that request language is unclear, and continues to honor explicit language or translation instructions.
 
 An incomplete or malformed planner language policy is treated the same way as an unavailable policy. In particular, a missing source-preservation decision never defaults to translating quoted or extracted text. A planner answer that names deliverable languages but supplies only invalid locale codes also fails closed, while an explicitly empty deliverable list is kept as the coherent answer it is: no fixed target, so the deliverable follows the framing language or an explicit instruction in the request.
 
@@ -122,7 +122,7 @@ The file exports a flat key → string map:
 
 ```js
 export default {
-  'brand': 'WebBrain',
+  'brand': 'DIV',
   'sp.btn.send': 'Send',
   // ... all keys from en.js
 };
@@ -160,7 +160,7 @@ Copy the locale file to `src/firefox/src/ui/locales/<code>.js` and update `src/f
 ## Translation Tips
 
 - **Keep placeholders intact**: `{model}`, `{error}`, `{count}` must appear exactly as in the English file. The code replaces these with runtime values.
-- **Don't translate brand names**: "WebBrain" is kept in English across all locales.
+- **Don't translate brand names**: "DIV" is kept in English across all locales.
 - **Watch for HTML in values**: Some keys contain HTML (`data-i18n-html`). Preserve the HTML structure but translate the text content.
 - **Plurals**: The system doesn't have plural forms. Use `{n} item(s)` style or code-level plural handling where needed.
 - **Tool labels**: Keys starting with `tool.` are used as compact step labels in the side panel. Keep them short (2–4 words).

@@ -102,7 +102,7 @@ Le fichier exporte une map plate clé → chaîne :
 
 ```js
 export default {
-  'brand': 'WebBrain',
+  'brand': 'DIV',
   'sp.btn.send': 'Envoyer',
   // ... toutes les clés de en.js
 };
@@ -144,7 +144,7 @@ mettez à jour `src/firefox/src/ui/i18n.js` à l'identique.
 - **Conservez les espaces réservés intacts** : `{model}`, `{error}`, `{count}`
   doivent apparaître exactement comme dans le fichier anglais. Le code les
   remplace par des valeurs d'exécution.
-- **Ne traduisez pas les noms de marque** : « WebBrain » est conservé en anglais
+- **Ne traduisez pas les noms de marque** : « DIV » est conservé en anglais
   dans toutes les locales.
 - **Attention au HTML dans les valeurs** : Certaines clés contiennent du HTML
   (`data-i18n-html`). Préservez la structure HTML mais traduisez le contenu

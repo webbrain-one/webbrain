@@ -1,6 +1,6 @@
 # Commandes slash
 
-WebBrain accepte les commandes slash en tant que premier élément d'une ligne dans
+DIV accepte les commandes slash en tant que premier élément d'une ligne dans
 le champ de saisie. Tapez `/help` dans le panneau pour afficher les syntaxes
 complètes et la description des options. Saisir une commande canonique suivie
 d'une espace ouvre l'autocomplétion de ses options disponibles.
@@ -36,7 +36,7 @@ d'une espace ouvre l'autocomplétion de ses options disponibles.
 | `/teach --end` | Arrêter l’apprentissage et compiler les actions en workflow enregistré sans valeurs saisies |
 | `/allow-api` | **Dérogation de mutation API par conversation.** Voir [plus bas](#allow-api). |
 | `/foreground [invite]` | Exécuter une tâche locale au premier plan pour assurer la compatibilité visuelle |
-| `/dangerously-skip-permissions` | **Contournement global des demandes d'autorisation.** Désactive `Ask before consequential actions` sans ouvrir les Paramètres. WebBrain agira sans demandes par site jusqu'à ce que vous réactiviez le réglage. |
+| `/dangerously-skip-permissions` | **Contournement global des demandes d'autorisation.** Désactive `Ask before consequential actions` sans ouvrir les Paramètres. DIV agira sans demandes par site jusqu'à ce que vous réactiviez le réglage. |
 | `/compact` | Force le compactage du contexte pour la conversation actuelle |
 | `/verbose` | Bascule l'affichage verbeux/compact des outils |
 | `/reset` | Efface la conversation et tous les indicateurs par conversation |
@@ -75,7 +75,7 @@ Les exécutions locales ordinaires restent liées à leur onglet d'origine et
 fonctionnent sans activer cet onglet ni donner le focus à sa fenêtre. Chrome
 effectue les captures via CDP avec une émulation du focus limitée à l'exécution ;
 Firefox capture directement l'onglet cible avec `tabs.captureTab`. Si Chrome
-renvoie plusieurs fois une image vide en arrière-plan, WebBrain l'écarte et
+renvoie plusieurs fois une image vide en arrière-plan, DIV l'écarte et
 continue à partir du DOM et des données d'accessibilité.
 
 Utilisez `/foreground <invite>` comme solution de compatibilité pour une seule
@@ -117,7 +117,7 @@ uniquement).
 Ajoutez `/screenshot [--save-as <fichier>]` pour enregistrer des captures de la
 zone visible juste avant et après l'exécution (Chrome et Firefox). Par exemple,
 `Teste le paiement /screenshot --save-as checkout.png` enregistre
-`checkout-before.png` et `checkout-after.png` ; sans `--save-as`, WebBrain
+`checkout-before.png` et `checkout-after.png` ; sans `--save-as`, DIV
 utilise des noms horodatés.
 
 Pour ce suffixe de diagnostic, Chrome peut réactiver l'onglet d'origine avant
@@ -145,7 +145,7 @@ décrits dans [export and workflow formats](../export-and-workflow-formats.md)
   `ref_id` historiques, les sélecteurs CSS d'action, les coordonnées, les chaînes
   de requête, les fragments et les valeurs de champ saisies sont exclus. Les
   valeurs saisies deviennent des paramètres d'exécution, et chaque action est
-  liée à l'origine et à la famille d'URL enregistrées. À l'exécution, WebBrain
+  liée à l'origine et à la famille d'URL enregistrées. À l'exécution, DIV
   résout une cible fraîche dans l'arbre d'accessibilité et passe par les
   contrôles habituels de permission Act, de confirmation de soumission et de
   vérification. Les cibles ambiguës échouent de façon sûre. Si une action a
@@ -165,4 +165,4 @@ décrits dans [export and workflow formats](../export-and-workflow-formats.md)
   renormalise la définition avant le téléchargement. L'import la renormalise à
   nouveau, attribue un nouvel ID local et de nouveaux horodatages, et n'écrase
   jamais un workflow existant : le même fichier peut donc circuler en toute
-  sécurité entre Chrome, Firefox et WebBrain Cloud.
+  sécurité entre Chrome, Firefox et DIV Cloud.

@@ -1,6 +1,6 @@
 # Apocalypse Mode
 
-Apocalypse Mode is WebBrain's optional offline knowledge layer. It reads
+Apocalypse Mode is DIV's optional offline knowledge layer. It reads
 Wikipedia archives in the openZIM format used by Kiwix. It does **not** make the
 configured LLM available offline: generating an answer still requires a local
 model or a reachable model provider.
@@ -14,7 +14,7 @@ opt in.
 
 On supported Chromium browsers, local vision is optional and has three
 in-browser models: Compass VLD Tiny v5, Ternary Bonsai 2 2B Vision and
-WebBrain VL 2 450M. The **Vision Model** card here and **Providers → Vision**
+DIV VL 2 450M. The **Vision Model** card here and **Providers → Vision**
 share one choice: **Auto** (the default), one of the models, or **Off**. Auto
 uses Compass VLD Tiny v5 once it is downloaded (Ternary Bonsai 2 2B Vision when
 only that one is) and is off until then. When the selected Text Model reads
@@ -24,7 +24,7 @@ never enables or downloads a vision model of its own: enabling it downloads
 the selected Text Model, and once that is Compass VLD Tiny v5, Auto also uses
 it to read screenshots and answer decisions. Otherwise a Compass VLD Tiny v5 or Bonsai download is
 the chat preset's own transfer and starts only from a click on **Download**
-(here or on the Providers page). WebBrain VL 2 450M first needs the explicit consent step in
+(here or on the Providers page). DIV VL 2 450M first needs the explicit consent step in
 Providers → Vision, which checks WebGPU support, records consent and
 starts caching the approximately 810 MB model from Hugging Face. Downloads
 continue in the background, but screenshot operations report their status and
@@ -32,17 +32,17 @@ never wait for them. Wikipedia archives still require their own confirmation.
 The default local **text** model is Compass VLD Tiny v5
 (`webbrain-one/webbrain-compass-vld-tiny-v5-onnx`, about 2.2 GB, 32k context
 window): one model that chats and calls tools, reads screenshots and answers
-WebBrain's decision questions. The picker also offers Compass Tiny v2.1
+DIV's decision questions. The picker also offers Compass Tiny v2.1
 (`webbrain-one/webbrain-compass-tiny-v2.1`, about 1.87 GB, text only) and
 Ternary Bonsai 2 2B Vision. The other
 Bonsai 2 presets ship but are hidden from the pickers for now. The selected model's download starts automatically when Apocalypse
 Mode is enabled. Once downloaded,
 the model works without Apocalypse Mode enabled: it is selectable as a chat
 provider on the Providers page and through the standalone chat control.
-Turning local vision off (or leaving WebBrain VL 2 450M for another choice)
+Turning local vision off (or leaving DIV VL 2 450M for another choice)
 preserves its cache and any configured remote vision provider.
 
-Archive language is selected independently from WebBrain's interface language.
+Archive language is selected independently from DIV's interface language.
 The management page reads Kiwix's current OPDS catalog and offers a language plus
 one of two editions: **Text only**, which resolves to the complete `nopic`
 edition, and **With images**, which resolves to the complete `maxi` edition.
@@ -56,12 +56,12 @@ The required first download is separate and fixed: Simple English, complete, and
 Because both selectable editions are complete `_all_` archives, both carry the
 Kiwix full-text index: `nopic` omits images, not the index.
 
-Before an install, WebBrain resolves the archive's Metalink and shows its exact byte size,
+Before an install, DIV resolves the archive's Metalink and shows its exact byte size,
 archive date, catalog publisher/source and license notice, integrity-piece
 count, and the browser's reported free extension storage. The archive is
 downloaded only after that confirmation. Existing `.zim` files are validated
 and their embedded date/language/source/license metadata is shown before import.
-When the current catalog or archive omits a license field, WebBrain says that it
+When the current catalog or archive omits a license field, DIV says that it
 was not declared instead of presenting the general Wikipedia notice as an exact
 publisher declaration.
 
@@ -77,7 +77,7 @@ current entry.
 - Archive bodies are kept in the extension's Origin Private File System (OPFS),
   not as multi-gigabyte IndexedDB values. Chromium browsers exposing the File
   System Access API can instead use a user-selected file target. Removing that
-  archive from WebBrain retains the user-owned file; Firefox uses OPFS.
+  archive from DIV retains the user-owned file; Firefox uses OPFS.
 - Downloads use Metalink piece boundaries and verify each piece before writing
   it. The persisted cursor makes background-worker restarts resumable.
 - A lease prevents two extension contexts from claiming the same piece.
@@ -90,13 +90,13 @@ current entry.
   closed. Reopen Apocalypse Mode to inspect progress or pause the download.
 - The Chromium-only local vision model uses the browser's Transformers cache.
   After its explicitly requested download completes, its GPU allocations are
-  released until WebBrain actually needs local screenshot analysis.
+  released until DIV actually needs local screenshot analysis.
 - Every optional WebGPU text/VL preset has a separate completion marker and
   cache entry. Switching presets can release the previous GPU runtime without
   deleting its cached files.
 - An installed archive that later becomes unreadable because of corruption,
   eviction, or a revoked file grant moves from ready to an actionable error;
-  WebBrain reports the read failure instead of misreporting an empty search.
+  DIV reports the read failure instead of misreporting an empty search.
 - Update checks can be manual or automatic. The automatic policy performs a
   daily catalog network check, but installing a discovered replacement still
   requires confirmation. A newer archive never silently overwrites an older
@@ -123,7 +123,7 @@ query terms, and returns the resolved canonical Wikipedia URL plus embedded
 archive language/date/source/license metadata. Local archive text uses the same
 untrusted-result boundary as live third-party content.
 
-WebBrain reads the documented openZIM structures directly, using the MIT-licensed
+DIV reads the documented openZIM structures directly, using the MIT-licensed
 `fzstd` decoder, and that reader stays the only path used for reading articles.
 
 Full-text search over a ZIM's Xapian index uses the GPL worker vendored under

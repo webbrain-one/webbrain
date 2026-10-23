@@ -23,7 +23,7 @@ base_model:
 
 **DeepSeek V4 Flash with sight.** This source overlay connects DeepSeek's
 reasoning and agentic model to the MoonViT vision encoder from
-[Kimi-K2.6](https://huggingface.co/moonshotai/Kimi-K2.6) through WebBrain's
+[Kimi-K2.6](https://huggingface.co/moonshotai/Kimi-K2.6) through DIV's
 trained, routing-aware PatchMerger projector.
 
 The text backbone and vision tower remain frozen. The only newly trained
@@ -33,9 +33,9 @@ DeepSeek's 4096-dimensional token space. Original text routing IDs are
 preserved; image positions receive deterministic routing IDs from a fixed
 64-ID palette.
 
-## Why vision at WebBrain
+## Why vision at DIV
 
-At [WebBrain](https://www.webbrain.one), we build browser agents that need to
+At [DIV](https://www.webbrain.one), we build browser agents that need to
 understand the visual state of the web—not just extracted text. Screenshots,
 charts, dashboards, rich editors, and the location and appearance of controls
 are part of real browser work, so vision is a practical product requirement.
@@ -101,7 +101,7 @@ Machine-readable provenance is in
   [`7eb5002f6aadc958aed6a9177b7ed26bb94011bb`](https://huggingface.co/moonshotai/Kimi-K2.6/commit/7eb5002f6aadc958aed6a9177b7ed26bb94011bb),
   extracted from the frozen `vision_tower.` namespace without changing tensor
   dtype.
-- Projector: the final WebBrain MoonViT projector trained in BF16 on the frozen
+- Projector: the final DIV MoonViT projector trained in BF16 on the frozen
   tower and a frozen BF16 reconstruction used for gradient-compatible reference
   training.
 - Packaging source: verified vision artifacts and serving glue from

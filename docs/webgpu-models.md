@@ -160,7 +160,7 @@ Use the tools in `scripts/models/bonsai/`:
 
 The default in-browser model,
 [`webbrain-one/webbrain-compass-vld-tiny-v5-onnx`](https://huggingface.co/webbrain-one/webbrain-compass-vld-tiny-v5-onnx)
-(about 2.2 GB), is WebBrain's fine-tune of
+(about 2.2 GB), is DIV's fine-tune of
 [MiniCPM-V-4.7-1B](https://huggingface.co/openbmb/MiniCPM-V-4.7-1B): a SigLIP
 vision tower with a merger that downsamples 16 times, and a language model with
 Qwen3.5-0.8B's topology (18 GatedDeltaNet and 6 full-attention layers). One
@@ -245,7 +245,7 @@ Ask) and decisions. Its training data and evaluations are on the model card.
 
 - **Tiny Ask** (`src/chrome/src/agent/tiny-ask.js`). A side-panel Ask turn
   whose provider is the in-browser model makes one tool-free call.
-  - WebBrain reads the current page before the call: `read_page` windows up to
+  - DIV reads the current page before the call: `read_page` windows up to
     60k characters, the selection, PDF text through the `read_pdf` redirect,
     and a page the user linked in the question (`fetch_url`). It sends a
     ~280-token system prompt with that text in untrusted-content wrappers.
@@ -268,7 +268,7 @@ Ask) and decisions. Its training data and evaluations are on the model card.
     - A small probe scores them (`tiny-ask-gate-probe.js`, 2,050 weights,
       `scripts/models/bonsai/train_gate_probe.py`). The training data comes
       from templates in 11 languages (`gate_dataset.py`).
-    - The readout sees only the user's message and facts WebBrain knows: how
+    - The readout sees only the user's message and facts DIV knows: how
       much page text there is, an attached image, a linked page. It never
       sees page content, so a page cannot steer it.
     - Hand-written test, 72 questions: 64/72 correct and 1/38 false "yes".
@@ -474,7 +474,7 @@ through the judge, provider and worker passed with its two pixel facts in
 2.0 s. A request's prefill (a median of about 500 tokens with the
 screenshot) took about 0.38 s and its questions about 0.5 s.
 
-- At WebBrain's 0.9 completion threshold d1 was the better completion
+- At DIV's 0.9 completion threshold d1 was the better completion
   verifier than Bonsai's probe (22 found, 1 false against 19 and 4); the
   probe is better on every other question type and better calibrated overall
   (test NLL 1.04 against 1.38). Score questions got worse with the probe (18

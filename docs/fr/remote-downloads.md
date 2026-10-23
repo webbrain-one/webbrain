@@ -1,12 +1,12 @@
 # Téléchargements distants et sources de données
 
-Ce document décrit tous les téléchargements distants effectués par WebBrain, les origines et serveurs auxquels ils se connectent, les déclencheurs exacts, l'ordre d'exécution, les procédures de vérification d'intégrité et l'emplacement de stockage local.
+Ce document décrit tous les téléchargements distants effectués par DIV, les origines et serveurs auxquels ils se connectent, les déclencheurs exacts, l'ordre d'exécution, les procédures de vérification d'intégrité et l'emplacement de stockage local.
 
 ---
 
 ## 1. Vue d'ensemble et principes de confidentialité
 
-WebBrain est conçu pour minimiser les dépendances réseau distantes. Tous les téléchargements appartiennent à trois catégories :
+DIV est conçu pour minimiser les dépendances réseau distantes. Tous les téléchargements appartiennent à trois catégories :
 1. **Poids de modèles d'IA publics** (pour l'inférence locale via WebGPU et Transformers.js / ONNX Runtime).
 2. **Archives de connaissances sous licence libre et bases de données RAG** (archives Wikipedia openZIM, packs d'index SQLite FTS5 et vecteurs).
 3. **Références de terrain du domaine public** (documents PDF et guides de survie).

@@ -1,6 +1,6 @@
 # Cloud Bridge browser registration & approval
 
-A backend can require explicit approval of a WebBrain installation before it is allowed to run `cloud_*` commands. The feature is opt-in: **without a Cloud Bridge token the bridge behaves exactly as before** (local MCP server, no approval step).
+A backend can require explicit approval of a DIV installation before it is allowed to run `cloud_*` commands. The feature is opt-in: **without a Cloud Bridge token the bridge behaves exactly as before** (local MCP server, no approval step).
 
 ## Architecture
 
@@ -16,7 +16,7 @@ flowchart LR
     ST[("chrome.storage.local<br/>url, token, browserId, installationId")]
     BG["Background (cloud-runs.js)<br/>reads config, runs cloud_*"]
     OFF["Offscreen (cloud-bridge.js)<br/>WebSocket + approval state"]
-    AG["Agent WebBrain<br/>+ permissions navigate / click…"]
+    AG["Agent DIV<br/>+ permissions navigate / click…"]
     TAB["Web tabs<br/>(user's sessions)"]
     S --> ST --> BG
     BG -- "cloud-bridge-start + identité" --> OFF

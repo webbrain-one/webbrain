@@ -1,17 +1,17 @@
 <p align="center">
-  <img src="assets/logo-mark.png" alt="WebBrain 标志" width="92">
+  <img src="assets/logo-mark.png" alt="DIV 标志" width="92">
 </p>
 
-<h1 align="center">WebBrain</h1>
+<h1 align="center">DIV</h1>
 
 <p align="center">
   开源 AI 浏览器智能体：与网页对话、自动化浏览器任务，并使用你选择的 LLM 运行多步骤工作流。
 </p>
 
 <p align="center">
-  <a href="https://chromewebstore.google.com/detail/webbrain/ljhijonmfahplgbbacgcfnaihbjljhhb"><img src="https://img.shields.io/badge/Chrome-Install-4285F4?style=for-the-badge&amp;logo=googlechrome&amp;logoColor=white" alt="从 Chrome 应用商店安装 WebBrain"></a>
-  <a href="https://addons.mozilla.org/en-US/firefox/addon/webbrain/"><img src="https://img.shields.io/badge/Firefox-Install-FF7139?style=for-the-badge&amp;logo=firefoxbrowser&amp;logoColor=white" alt="从 Firefox 浏览器附加组件安装 WebBrain"></a>
-  <a href="https://microsoftedge.microsoft.com/addons/detail/dfbioajafcijomhljabppcelecgdgfeo"><img src="https://img.shields.io/badge/Edge-Install-0A84FF?style=for-the-badge&amp;logo=microsoftedge&amp;logoColor=white" alt="从 Microsoft Edge 加载项安装 WebBrain"></a>
+  <a href="https://chromewebstore.google.com/detail/webbrain/ljhijonmfahplgbbacgcfnaihbjljhhb"><img src="https://img.shields.io/badge/Chrome-Install-4285F4?style=for-the-badge&amp;logo=googlechrome&amp;logoColor=white" alt="从 Chrome 应用商店安装 DIV"></a>
+  <a href="https://addons.mozilla.org/en-US/firefox/addon/webbrain/"><img src="https://img.shields.io/badge/Firefox-Install-FF7139?style=for-the-badge&amp;logo=firefoxbrowser&amp;logoColor=white" alt="从 Firefox 浏览器附加组件安装 DIV"></a>
+  <a href="https://microsoftedge.microsoft.com/addons/detail/dfbioajafcijomhljabppcelecgdgfeo"><img src="https://img.shields.io/badge/Edge-Install-0A84FF?style=for-the-badge&amp;logo=microsoftedge&amp;logoColor=white" alt="从 Microsoft Edge 加载项安装 DIV"></a>
 </p>
 
 <p align="center">
@@ -23,9 +23,9 @@
   <a href="LICENSE">GPL-3.0-or-later</a>
 </p>
 
-![WebBrain 阅读页面、填写表单并下载文件](assets/webbrain-demo.gif)
+![DIV 阅读页面、填写表单并下载文件](assets/webbrain-demo.gif)
 
-WebBrain 是一个浏览器扩展，在标签页旁的侧边栏中放入一个 AI 智能体。你可以就当前页面
+DIV 是一个浏览器扩展，在标签页旁的侧边栏中放入一个 AI 智能体。你可以就当前页面
 向它提问，也可以交给它一项任务，让它自己点击、输入、导航完成。它运行在你选择的模型
 上 —— 本地的 llama.cpp 或 Ollama 服务、前沿云端 API，或者完全无需配置的内置托管选项。
 
@@ -54,7 +54,7 @@ git clone https://github.com/webbrain-one/webbrain.git
 
 ## 使用方法
 
-点击 WebBrain 图标打开侧边栏，然后输入例如：
+点击 DIV 图标打开侧边栏，然后输入例如：
 
 - 「总结这个页面」
 - 「找出所有关于定价的链接」
@@ -71,9 +71,9 @@ git clone https://github.com/webbrain-one/webbrain.git
 
 ## 选择模型
 
-**WebBrain Compass 1.0** 是默认选项，无需 API 密钥或本地配置。
+**DIV Compass 1.0** 是默认选项，无需 API 密钥或本地配置。
 
-**本地模型** 同样无需 API 密钥。将 WebBrain 指向任意 OpenAI 兼容服务即可：
+**本地模型** 同样无需 API 密钥。将 DIV 指向任意 OpenAI 兼容服务即可：
 
 ```bash
 llama-server -m your-model.gguf --port 8080          # llama.cpp
@@ -89,7 +89,7 @@ LM Studio（`:1234/v1`）、Jan（`:1337/v1`）、LocalAI（`:8080/v1`）和 GPT
 **16k 是配置回退值，并非保证足够的最低容量；Compact 也不保证能放入 8k。**
 Mid 和 Full 在历史积累之前就可能超过 16k；压缩历史无法缩小固定提示或工具 schema。
 字符估算不等于模型的精确 tokenizer 计数；请参阅[上下文指南](docs/providers-and-models.md#local-providers)。
-WebBrain 会为 llama.cpp、Ollama 和 LM Studio 自动检测真实窗口，
+DIV 会为 llama.cpp、Ollama 和 LM Studio 自动检测真实窗口，
 并在对话接近上限时自动压缩。此外还有预览版的
 `ollama launch webbrain --model <model>` 交接。详见
 [提供商与模型](docs/zh-CN/providers-and-models.md#本地提供商)。
@@ -123,7 +123,7 @@ Cloudflare、Nvidia NIM、Hugging Face、Fireworks、OpenRouter 等。设置中�
 
 ## 智能体工具
 
-WebBrain 将**层级**与**模式**分开。层级（`compact`、`mid`、`full`）是按提供商设置的，
+DIV 将**层级**与**模式**分开。层级（`compact`、`mid`、`full`）是按提供商设置的，
 控制模型可见的工具数量 —— Compact 适合小型本地模型，Full 解锁 hover、drag-drop、
 frames 和 shadow DOM。模式（`ask`、`act`、`dev`）控制用户允许的任务类型。
 
@@ -156,7 +156,7 @@ frames 和 shadow DOM。模式（`ask`、`act`、`dev`）控制用户允许的�
 
 ## 键盘快捷键
 
-Chrome 侧边面板快捷键在 WebBrain 侧边面板获得焦点时生效。
+Chrome 侧边面板快捷键在 DIV 侧边面板获得焦点时生效。
 
 | 快捷键 | 作用 |
 |----------|--------------|
@@ -165,7 +165,7 @@ Chrome 侧边面板快捷键在 WebBrain 侧边面板获得焦点时生效。
 | `Ctrl+Shift+X` 或 `Cmd+Shift+X` | 切换到 Act 模式 |
 | `Ctrl+Shift+D` 或 `Cmd+Shift+D` | 切换到 Dev 模式 |
 | `Escape` | 停止当前运行，除非它只是关闭斜杠命令自动补全 |
-| `Escape` 两次 | 从 WebBrain 或浏览器页面停止当前录制 |
+| `Escape` 两次 | 从 DIV 或浏览器页面停止当前录制 |
 
 ## 文档
 
@@ -246,7 +246,7 @@ lms clone webbrain/web-tools
 ```bibtex
 @software{webbrain2026,
   author = {Sokullu, Emre},
-  title = {WebBrain: 开源 AI 浏览器智能体，用于与网页对话},
+  title = {DIV: 开源 AI 浏览器智能体，用于与网页对话},
   year = {2026},
   publisher = {GitHub},
   url = {https://github.com/webbrain-one/webbrain}
@@ -255,7 +255,7 @@ lms clone webbrain/web-tools
 
 ## 许可证
 
-WebBrain 33.0.0 及更高版本采用 [GPL-3.0-or-later](LICENSE) 许可证，因为发布的
+DIV 33.0.0 及更高版本采用 [GPL-3.0-or-later](LICENSE) 许可证，因为发布的
 浏览器扩展捆绑并集成了采用 GPL 许可证的 Xapian/libzim WebAssembly 运行时。
 
 由 [Emre Sokullu](https://emresokullu.com) 和[开源贡献者](https://github.com/webbrain-one/webbrain/graphs/contributors)用 ❤️ 构建。

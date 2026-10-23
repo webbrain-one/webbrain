@@ -1,7 +1,7 @@
 # RAG hors ligne et corpus d'urgence
 
 Le pipeline de génération augmentée par récupération (RAG) hors ligne de
-WebBrain permet à l'extension de répondre à des questions en utilisant des
+DIV permet à l'extension de répondre à des questions en utilisant des
 documents de référence stockés localement, sans aucune connexion réseau. Il
 s'appuie sur les archives Wikipedia du mode Apocalypse et ajoute un nouveau
 corpus de textes Emergency Box — une collection de documents de référence
@@ -85,7 +85,7 @@ preuves ou indique qu'il ne peut pas.
    (actuellement 2048 nouveaux jetons). LFM2.5 retire `<think>` de la réponse
    visible ; Bonsai 27B utilise un budget de raisonnement de 128 jetons pour
    que le raisonnement ne consomme pas tout le décodage. Si le modèle épuise
-   ce budget dans son raisonnement, WebBrain réessaie avec un prompt de
+   ce budget dans son raisonnement, DIV réessaie avec un prompt de
    preuves plus court plutôt que d'inventer une réponse.
 5. **Citer localement.** Chaque passage conservé reçoit un jeton stable
    (`[WB-E-…]` ou équivalent Wikipedia) et une URL de lecteur local. Les
@@ -208,7 +208,7 @@ les données de corpus sont téléchargés par l'utilisateur.
 ## Licence
 
 Le corpus Emergency Box, SQLite, fflate et Transformers.js sont tous sous
-licences permissives et n'imposent pas eux-mêmes de copyleft. WebBrain 33.0.0
+licences permissives et n'imposent pas eux-mêmes de copyleft. DIV 33.0.0
 et les versions ultérieures sont néanmoins sous GPL-3.0-or-later, car
 l'extension distribuée intègre le runtime Xapian/libzim sous GPL.
 

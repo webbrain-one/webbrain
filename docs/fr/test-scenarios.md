@@ -1,6 +1,6 @@
-# Scénarios de test WebBrain
+# Scénarios de test DIV
 
-Une douzaine de tâches de bout en bout pour évaluer l'agent navigateur WebBrain sur un éventail de difficultés et de couverture de motifs d'interface. Chaque scénario liste le site, l'invite à coller dans le panneau latéral et le critère de réussite observable.
+Une douzaine de tâches de bout en bout pour évaluer l'agent navigateur DIV sur un éventail de difficultés et de couverture de motifs d'interface. Chaque scénario liste le site, l'invite à coller dans le panneau latéral et le critère de réussite observable.
 
 ## Scénarios
 
@@ -21,7 +21,7 @@ Une douzaine de tâches de bout en bout pour évaluer l'agent navigateur WebBrai
 
 ### 4. Création d'issue GitHub — Moyen
 - **Site :** github.com (votre propre dépôt de test)
-- **Tâche :** "Ouvre une nouvelle issue intitulée 'Test depuis WebBrain' avec le corps 'ignorez ceci' sur github.com/&lt;vous&gt;/&lt;dépôt&gt;."
+- **Tâche :** "Ouvre une nouvelle issue intitulée 'Test depuis DIV' avec le corps 'ignorez ceci' sur github.com/&lt;vous&gt;/&lt;dépôt&gt;."
 - **Attendu :** L'agent navigue vers `/issues/new`, remplit le titre + le corps, clique sur Soumettre. Teste l'éditeur de corps contenteditable et le bouton "Submit new issue" en double.
 
 ### 5. Rédaction de brouillon Gmail — Moyen

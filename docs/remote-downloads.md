@@ -1,12 +1,12 @@
 # Remote Downloads & Data Sources
 
-This document describes all remote network downloads performed by WebBrain, the remote origins and servers they connect to, the exact triggers and sequence of downloads, integrity verification procedures, and where downloaded assets are stored locally.
+This document describes all remote network downloads performed by DIV, the remote origins and servers they connect to, the exact triggers and sequence of downloads, integrity verification procedures, and where downloaded assets are stored locally.
 
 ---
 
 ## 1. Overview & Privacy Principles
 
-WebBrain is designed to minimize remote network dependencies. All downloads fall into three categories:
+DIV is designed to minimize remote network dependencies. All downloads fall into three categories:
 1. **Public AI model weights** (for local on-device inference via WebGPU and Transformers.js / ONNX Runtime).
 2. **Open-licensed knowledge archives & RAG databases** (openZIM Wikipedia archives, SQLite FTS5 index packs, and vector embeddings).
 3. **Public-domain emergency field references** (PDF documents and survival guides).
@@ -35,7 +35,7 @@ WebBrain is designed to minimize remote network dependencies. All downloads fall
 ## 3. Download Triggers & Execution Flow
 
 ### A. Apocalypse Mode Auto-Download Sequence
-When a user turns on **Apocalypse Mode** (or opens `apocalypse-mode.html` with Apocalypse Mode already enabled), WebBrain initiates the offline readiness sequence. The sequence runs as follows:
+When a user turns on **Apocalypse Mode** (or opens `apocalypse-mode.html` with Apocalypse Mode already enabled), DIV initiates the offline readiness sequence. The sequence runs as follows:
 
 ```mermaid
 flowchart TD
@@ -77,13 +77,13 @@ flowchart TD
 
 1. **Wikipedia Library Selection (`wikipedia-library.html`)**:
    - The user selects a specific language edition or size tier (Starter, Mini, No-Pic, or Full).
-   - WebBrain queries `library.kiwix.org` for the OPDS catalog entry and resolves the corresponding `.meta4` (Metalink) file.
+   - DIV queries `library.kiwix.org` for the OPDS catalog entry and resolves the corresponding `.meta4` (Metalink) file.
    - The user reviews the byte size, license notice, and storage requirements before confirming.
    - The background worker downloads the file in verified chunks, storing the result in OPFS.
 
 2. **Emergency Box Field Documents (`emergency-box.html`)**:
    - The user selects a collection kit or individual field document (e.g., Wilderness First Aid, Disaster Sanitation).
-   - WebBrain streams the PDF file into the local `webbrain_emergency_box` IndexedDB store.
+   - DIV streams the PDF file into the local `webbrain_emergency_box` IndexedDB store.
 
 3. **Local Whisper Speech-to-Text (`sidepanel.js`)**:
    - Triggered when the user clicks the microphone button for the first time with local voice input configured.
@@ -95,7 +95,7 @@ flowchart TD
    - Local vision never downloads on its own. Ternary Bonsai 2 2B Vision
      (1.45 GB) is the chat preset's download, started by a click on its
      Download button here, on the Providers page or in the Text Model picker; the separate
-     810 MB WebBrain VL 2 450M is downloaded only after the user consents to it
+     810 MB DIV VL 2 450M is downloaded only after the user consents to it
      in **Providers -> Vision**.
 
 ---
@@ -105,7 +105,7 @@ flowchart TD
 ### Resumable HTTP Range Streaming
 - The Emergency text pack download tracks byte offsets continuously in IndexedDB.
 - If a tab is navigated away from or closed during a download, the connection aborts cleanly and saves its `bytesReceived` cursor.
-- When reopened, WebBrain issues an HTTP `Range: bytes={bytesReceived}-` header to resume downloading without re-fetching existing bytes.
+- When reopened, DIV issues an HTTP `Range: bytes={bytesReceived}-` header to resume downloading without re-fetching existing bytes.
 
 ### Piece-by-Piece Metalink Verification
 - Wikipedia ZIM archives use Metalink piece boundaries (typically 1 MB to 4 MB per block).

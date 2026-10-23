@@ -51,8 +51,8 @@ inference stay on-device.
 
 The user chooses their provider on the Providers page (side panel provider picker → More…). Options include:
 
-- **WebBrain Compass**: requests go through `api.webbrain.one`; selected interactions may be retained and used for evaluation, improvement, fine-tuning, and training while Help Improve WebBrain is enabled
-- **Bring-your-own cloud providers**: OpenAI, Anthropic, Google Gemini, Mistral, DeepSeek, xAI, Groq, OpenRouter, etc. — requests go directly to the provider using the user's credentials; WebBrain receives a separate research copy only if the user enables that provider's **Share queries for research** switch
+- **DIV Compass**: requests go through `api.webbrain.one`; selected interactions may be retained and used for evaluation, improvement, fine-tuning, and training while Help Improve DIV is enabled
+- **Bring-your-own cloud providers**: OpenAI, Anthropic, Google Gemini, Mistral, DeepSeek, xAI, Groq, OpenRouter, etc. — requests go directly to the provider using the user's credentials; DIV receives a separate research copy only if the user enables that provider's **Share queries for research** switch
 - **Local model runtimes**: llama.cpp, Ollama, LM Studio, Jan, vLLM, SGLang,
   LocalAI, GPT4All, and Unsloth Studio — inference requests stay on the user's
   machine when Studio is configured with its loopback URL
@@ -62,25 +62,25 @@ The user chooses their provider on the Providers page (side panel provider picke
   own on-device readout says the question needs it (not in Strict Secret Mode);
   it stays in the browser and is not saved with the chat (the stored question
   only notes that one was used, so a follow-up can look again)
-- **Local OpenAI-compatible Proxy**: WebBrain connects only to the configured
+- **Local OpenAI-compatible Proxy**: DIV connects only to the configured
   local gateway, but the gateway may forward the request context to an upstream
   account. Its configuration and privacy policy determine where data goes.
 
-Local-model and bring-your-own API requests do not pass through WebBrain Compass. A separate, per-provider research-sharing switch is off by default; when enabled, bounded copies and diagnostic metadata are sent to WebBrain as described below. WebBrain Compass requests are processed and may be retained separately.
+Local-model and bring-your-own API requests do not pass through DIV Compass. A separate, per-provider research-sharing switch is off by default; when enabled, bounded copies and diagnostic metadata are sent to DIV as described below. DIV Compass requests are processed and may be retained separately.
 
 ### Optional research escalation to ChatGPT
 
 Research escalation is **off by default**. A user must enable it under
 Settings → General before either `delegate_research` or its consent step is
-available to the model. When enabled, WebBrain may propose sending one unusually
+available to the model. When enabled, DIV may propose sending one unusually
 complex, read-only research request to ChatGPT. The consent card shows the exact
 prompt, puts the continue-locally choice first, and requires the user to select
 the explicit approval choice. A timeout, automatic selection, typed variation,
 or prior approval does not count. Each approval creates a tab- and
 conversation-scoped, single-use authorization that expires after five minutes.
 
-After approval, WebBrain opens `https://chatgpt.com/` in a visible helper tab
-and types only the displayed prompt. WebBrain does not separately transmit
+After approval, DIV opens `https://chatgpt.com/` in a visible helper tab
+and types only the displayed prompt. DIV does not separately transmit
 ChatGPT cookies, credentials, API keys, browsing history, attachments, user
 profile, or undisclosed source-page data; any context sent to ChatGPT must be
 visible in that exact prompt before approval. The browser may use the user's
@@ -90,7 +90,7 @@ actions, or high-stakes decisions. Users should still inspect the displayed
 prompt before approving it.
 
 ChatGPT receives and processes the approved prompt under the user's ChatGPT
-account and OpenAI settings and policies. WebBrain reads the resulting answer
+account and OpenAI settings and policies. DIV reads the resulting answer
 and source links from the visible page, labels them as untrusted research
 evidence, and sends that tool result to the user's configured primary LLM as
 part of the ongoing turn. The primary model is instructed to verify decisive
@@ -98,7 +98,7 @@ facts instead of treating the delegated answer as instructions or proof.
 
 If ChatGPT is logged out, blocked by a network or regional policy, redirects
 off the approved origin, changes to an unsupported page layout, or does not
-answer before the configured wait limit, the delegation fails and WebBrain can
+answer before the configured wait limit, the delegation fails and DIV can
 continue locally. Visible Log in or Sign up controls fail closed even when
 ChatGPT also offers a guest composer; the approved prompt is not submitted
 without a logged-in composer on the fixed ChatGPT origin. Stop, closing the
@@ -177,7 +177,7 @@ reports the field, is masked in all judge evidence text while the conversation
 still holds that entry: as typed, as the accessibility tree prints it once a
 "show password" control reveals it (normalized, trimmed and cut to 60
 characters), line by line, and escaped. Values entered into other fields,
-including fields WebBrain flags as credentials such as a one-time-code box, are
+including fields DIV flags as credentials such as a one-time-code box, are
 not masked: the page shows them, and judges compare them with the request.
 Screenshots are not masked this way; a password input shows only dots. The
 active conversation model already holds the task, approved plan and candidate
@@ -251,20 +251,20 @@ Legacy TypeSafe input is estimated at $0.042 per million tokens with free output
 Usage/model/reason metadata enters accounting and traces without raw evidence.
 Strict Secret Mode disables judging; offline loopback decisions remain available.
 
-### WebBrain Compass improvement data
+### DIV Compass improvement data
 
-Help Improve WebBrain is available under Settings → Advanced and is
-on by default. When it is on, WebBrain may retain eligible Compass prompts, model
+Help Improve DIV is available under Settings → Advanced and is
+on by default. When it is on, DIV may retain eligible Compass prompts, model
 responses, relevant page text, tool calls, browser-agent actions, feedback, and
 task outcome information for evaluation, development, improvement, fine-tuning,
 training, safety, and browser-automation research. Screenshots and uploaded
 images may be processed to answer the request, but image bytes, base64 media,
-and image URLs are excluded from WebBrain's improvement database. The extension
+and image URLs are excluded from DIV's improvement database. The extension
 sends the current preference, stable conversation id, and an allowlisted
-generation label with every WebBrain Compass model request. It never attaches
+generation label with every DIV Compass model request. It never attaches
 those collection fields to local or bring-your-own providers.
 
-For WebBrain Compass only, an enabled Help Improve preference also allows the
+For DIV Compass only, an enabled Help Improve preference also allows the
 extension to retain one bounded terminal tool call/result and the final run
 status in a local durable outbox until the Compass improvement endpoint
 acknowledges it. Delivery is retried on a later Compass run after transient
@@ -273,8 +273,8 @@ providers, and disabling Help Improve stops new terminal records; any older
 queued records are sent with the disabled preference so the server discards
 them and the client can remove them.
 
-Current clients explicitly send `X-WebBrain-Help-Improve: 1` or `0`. Older
-WebBrain Compass clients that send neither the preference header nor a session id
+Current clients explicitly send `X-DIV-Help-Improve: 1` or `0`. Older
+DIV Compass clients that send neither the preference header nor a session id
 are treated as using the default-on setting. The Compass service derives a
 best-effort opaque legacy session from the device and the first user message;
 the raw device and prompt-derived fingerprint are not stored or sent upstream.
@@ -293,11 +293,11 @@ routed through an OpenRouter workspace where content logging is disabled. This
 does not prevent the minimal metadata-only operational logging required to
 provide the service, enforce quotas, prevent abuse, maintain security, or debug
 failures. Requests sent to local models or directly to providers using the
-user's own credentials never pass through WebBrain Compass for inference. They
-are not collected by WebBrain unless the user separately opts in to that
+user's own credentials never pass through DIV Compass for inference. They
+are not collected by DIV unless the user separately opts in to that
 provider's research sharing.
 
-For eligible completed generations, MySQL is WebBrain's canonical store. The
+For eligible completed generations, MySQL is DIV's canonical store. The
 service strips media, compresses the request/response payload, encrypts it with
 AES-256-GCM, and stores it with an opaque HMAC session id. Interrupted streams
 and failed generations are not stored as generation content. Separately,
@@ -311,7 +311,7 @@ Its separate **Use Inputs/Outputs** training/discount option remains disabled.
 OpenRouter logging is not treated as permanent storage or an image backup. See
 [OpenRouter Input & Output Logging](https://openrouter.ai/docs/guides/features/input-output-logging).
 
-Before retained Compass interactions are used for model development, WebBrain
+Before retained Compass interactions are used for model development, DIV
 applies technical measures designed to remove or mask direct identifiers,
 credentials, secrets, and other sensitive information. Raw Compass interactions
 selected for improvement are retained for no longer than 12 months before
@@ -321,7 +321,7 @@ deletion or de-identification. De-identified datasets may be retained for up to
 ### Voluntary external/local provider research sharing
 
 **Share queries for research** is off by default for each local or bring-your-own
-provider. If the user turns it on, WebBrain sends a bounded copy of that
+provider. If the user turns it on, DIV sends a bounded copy of that
 provider's model-facing request and response to the Compass improvement service.
 It also sends a bounded diagnostic timeline for model-attempt runs, including
 failed ones: steps, tool names, outcomes, error codes, and timings. A failed run
@@ -356,7 +356,7 @@ restart restore the conversation and an in-progress run. The UI journal keeps
 a bounded event window plus separately bounded accumulated streamed text so
 in-progress Markdown can be reconstructed after reconnect. Relevant
 conversation content is sent to the configured provider as request context;
-the stored copies are not separately synced to WebBrain.
+the stored copies are not separately synced to DIV.
 
 ### Trace Recorder
 
@@ -472,7 +472,7 @@ redact that separate trace.
 Replay traces contain workflow/step IDs, semantic match status and score,
 postcondition status, fallback status, and estimated model calls saved. They do
 not contain runtime parameter values or freshly resolved element references.
-If a saved locator stops matching, WebBrain may show sanitized semantic target
+If a saved locator stops matching, DIV may show sanitized semantic target
 descriptions for the user to choose from. It never selects or persists a
 replacement automatically: the user must explicitly choose it, the attempted
 action must pass its saved postcondition, and the workflow must still be the
@@ -484,7 +484,7 @@ saved metadata and must ask the user again for any still-needed value.
 
 ### New Tab Page
 
-The new tab page (`docs/newtab.md`) makes one network request of its own, the WebBrain
+The new tab page (`docs/newtab.md`) makes one network request of its own, the DIV
 bulletin check (item 11 below). Apart from that: backgrounds
 are bundled, there are no fonts, favicons, link-title lookups, weather, quotes or
 analytics requests, and no error reporting. Custom backgrounds are images you upload;
@@ -517,7 +517,7 @@ If the user enables profile auto-fill, the profile text (name, email, throwaway 
 Saved user memory records are stored locally in `chrome.storage.local` /
 `browser.storage.local` under `wb_user_memory_v1` in plaintext. Records are meant
 for user-stated durable preferences, stable profile hints, and recurring
-workflow preferences. WebBrain rejects obvious secrets and credential-like text,
+workflow preferences. DIV rejects obvious secrets and credential-like text,
 but users should not store passwords, API keys, tokens, recovery codes, or other
 sensitive secrets as memory.
 
@@ -545,13 +545,13 @@ profile text, user memory, custom skills, and saved permission choices. Users
 should treat the file like a credential backup and store it securely.
 
 The snapshot does not include device-bound Cloud Sync authentication/session
-state, the WebBrain Compass device ID, conversations, traces, scheduled jobs,
+state, the DIV Compass device ID, conversations, traces, scheduled jobs,
 usage counters, or accumulated spend. Import does not upload the JSON to
-WebBrain Compass or to the configured LLM provider.
+DIV Compass or to the configured LLM provider.
 
 ### Optional Encrypted Cloud Sync
 
-Active WebBrain Compass subscribers may explicitly enable encrypted profile sync in
+Active DIV Compass subscribers may explicitly enable encrypted profile sync in
 Settings → Memory. The extension combines user memory, profile autofill, and provider
 configuration (including API keys, but excluding legacy OAuth access/refresh
 token stores) into one vault. Chromium-only WebGPU provider configuration and
@@ -561,13 +561,13 @@ encrypts it in the browser with AES-256-GCM. Its key is derived from the sync
 password with PBKDF2-HMAC-SHA-256 (600,000 iterations). The password and derived
 key are retained in memory only for the browser session.
 
-WebBrain Compass receives ciphertext, cryptographic/version metadata, and three
+DIV Compass receives ciphertext, cryptographic/version metadata, and three
 counts supplied by the extension with each vault upload: configured portable
 providers, saved memory records, and whether the freeform profile text is
 nonempty (0 or 1). These counts support the authenticated admin stats page;
 provider names, memory text, profile text, and API keys remain inside the
 encrypted vault. Older vaults have unknown counts until a newer extension syncs.
-WebBrain Compass cannot decrypt the vault or recover a forgotten password.
+DIV Compass cannot decrypt the vault or recover a forgotten password.
 Authentication uses a separate email-approved, scoped token; the billing device GUID alone cannot read
 a vault. Sync is off by default, local writes continue while locked or offline,
 and chat history, traces, tasks, permissions, and extraction queues are excluded.
@@ -585,11 +585,11 @@ the URL + method to the active LLM conversation.
 ### Experimental WebMCP
 
 WebMCP is on by default. A user can disable **Experimental WebMCP** under
-Settings → Bridge to prevent WebBrain from sending its tool schemas
-or prompt guidance to the configured LLM. On supporting Chrome pages, WebBrain
+Settings → Bridge to prevent DIV from sending its tool schemas
+or prompt guidance to the configured LLM. On supporting Chrome pages, DIV
 can enable the experimental CDP `WebMCP` domain. Chrome reports the structured tools registered by the current page,
 including their page-supplied name, description, input schema, annotations, and
-registration frame. WebBrain keeps a bounded in-memory per-tab catalog, assigns
+registration frame. DIV keeps a bounded in-memory per-tab catalog, assigns
 opaque `wmcp_*` IDs, and removes it when the conversation/tab CDP session is
 cleaned up. The catalog is not uploaded separately, but catalog fields and tool
 results enter the ordinary conversation context when the model calls
@@ -604,13 +604,13 @@ support this path.
 
 The extension does not include an analytics SDK or crash-reporting SDK. Opt-in
 research sharing uses separate improvement endpoints; it is not general product
-telemetry. When WebBrain Compass is selected, the model
+telemetry. When DIV Compass is selected, the model
 request itself goes to `api.webbrain.one` and is subject to the Compass data-use
 terms above. Operational request metadata is retained separately for quota,
 security, abuse prevention, and debugging.
 
 The only outbound HTTP requests are:
-1. **WebBrain Compass model calls** to `https://api.webbrain.one/v1` (when WebBrain Compass is selected; the Help Improve WebBrain preference is sent with each request)
+1. **DIV Compass model calls** to `https://api.webbrain.one/v1` (when DIV Compass is selected; the Help Improve DIV preference is sent with each request)
 2. **Other LLM provider API calls** (directly to URLs the user configured)
 3. **CAPTCHA provider API calls** (only for enabled services, or an explicit balance test)
 4. **Content fetches** via `fetch_url` / `research_url` tools (to URLs the agent is asked to fetch)
@@ -634,13 +634,13 @@ The only outbound HTTP requests are:
     same authorized bytes. Full traces that exceed the attachment limit use an
     explicitly disclosed diagnostic fallback; the original stays available as
     a local download.
-11. **WebBrain bulletins**: a `GET` of a fixed static file on `https://webbrain.one`, with no
+11. **DIV bulletins**: a `GET` of a fixed static file on `https://webbrain.one`, with no
     cookies, referrer, query string or identifiers. The new tab page reads
     `/newtab-comm.html` at most once every 10 minutes per browser (only while the new tab is
     shown); Apocalypse Mode pages read `/apocalypse-comm.html` when they open. Both files ship
     empty, and an empty file shows nothing. Published markup is shown in a sandboxed frame
     under a restrictive Content Security Policy that cannot run scripts or load external
-    subresources. See `docs/newtab.md` (WebBrain bulletin).
+    subresources. See `docs/newtab.md` (DIV bulletin).
 
 The `webRequest` API shortcut observer is on by default and does not
 create outbound requests; it observes replay metadata for requests
@@ -667,7 +667,7 @@ tabs also preactivate the enabled FreeSkillz skill for the current run so a
 structured blocking `pageGate` can expose its site-scoped read-only fallback
 without a second `load_skill` turn.
 
-Trace records store the WebBrain version that created each run. Conversation
+Trace records store the DIV version that created each run. Conversation
 Markdown records the exporting version; trace Markdown records both the
 exporting version and each turn's recording version, while trace JSON includes
 `exportedByWebBrainVersion` plus the run's `webbrainVersion` when available.
@@ -677,7 +677,7 @@ The "FreeSkillz.xyz" skill (`skills/freeskillz-xyz.md`) is explicitly Ask/Act
 compatible and declares
 `read_youtube_transcript`, `fetch_nytimes_article`, `resolve_public_media`, and
 `download_public_media` tools. When the model calls one of those tools,
-WebBrain sends only the current or model-provided URL, plus declared options
+DIV sends only the current or model-provided URL, plus declared options
 such as transcript language, media kind, maximum height, or filename hint, to
 the declared `https://freeskillz.xyz` endpoint over HTTPS — a first-party
 service operated by the extension's developer, separate from the user's
@@ -687,7 +687,7 @@ without browser credentials or cookies. The transcript tool is limited to
 YouTube/youtu.be URLs, while the media tools are limited to public media hosts
 declared in the skill manifest. Mastodon status URLs must use HTTPS and a
 known instance host or an instance verified through public NodeInfo metadata.
-For unknown hosts, WebBrain first reads `/.well-known/nodeinfo` and its
+For unknown hosts, DIV first reads `/.well-known/nodeinfo` and its
 same-origin metadata link without cookies or credentials, with redirects
 blocked. Those checks do not include the post path, query string, or fragment.
 Only the verified status origin and path are sent to FreeSkillz; Mastodon query
@@ -703,7 +703,7 @@ stop this data flow entirely.
 
 The "OTP / verification-code helper (email)" skill
 (`skills/otp-verification-code-helper.md`) is explicitly Ask/Act compatible,
-and declares no external endpoint. It guides WebBrain's existing page-reading
+and declares no external endpoint. It guides DIV's existing page-reading
 tools to prefer selected text or a bounded, message-scoped accessibility-tree
 subtree on the active run tab. On Mid/Full, and only after that exact skill is
 active, one fixed internal tool may inspect an already-open signed-in supported
@@ -721,7 +721,7 @@ and closes the clone.
 That clone can make ordinary authenticated requests to the same webmail origin;
 the helper does not call a mailbox API or external skill endpoint. Compact has
 no such tool. The skill cannot read SMS, phone notifications, native apps, or
-another device, and it forbids sign-in bypasses. When the user asks WebBrain to
+another device, and it forbids sign-in bypasses. When the user asks DIV to
 read a code, the scoped page content and extracted code are included
 in the normal request to the user's configured LLM provider as part of the
 current conversation. When Record traces is enabled, the raw page-reading tool
@@ -751,7 +751,7 @@ recordings. The bearer key is supplied by the user and included in tool argument
 which can be present in the configured LLM conversation and enabled traces; this
 skill does not provide a separate credential vault. Returned call details and
 transcripts enter the conversation as untrusted data. The skill ships without a
-key and does not send unrelated browsing content. POST requests keep WebBrain's
+key and does not send unrelated browsing content. POST requests keep DIV's
 existing API-mutation permission gate; merely enabling the skill does not dial.
 
 The packaged Wikipedia skill does not silently create an offline corpus.
@@ -826,7 +826,7 @@ All IndexedDB reads happen only when the user opens the Traces page.
 Model proposes one exact read-only research prompt
   │
   ▼
-WebBrain consent card shows the exact prompt
+DIV consent card shows the exact prompt
   ├─ Decline / timeout / automatic answer → continue locally; nothing sent
   └─ Explicit approval → single-use, five-minute authorization
                               │

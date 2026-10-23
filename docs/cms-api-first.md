@@ -1,6 +1,6 @@
 # CMS content through existing APIs
 
-The nine `cms-*` packaged skills are WebBrain instructions, not Codex skills or
+The nine `cms-*` packaged skills are DIV instructions, not Codex skills or
 plugins. They operate on existing content models. They do not create schemas,
 install plugins/themes, change settings/roles, grant app access, handle commerce
 data, send newsletters, publish whole sites or deploy front-ends.
@@ -60,7 +60,7 @@ each task. “API supports” does not mean “this browser session can authenti
 
 ## Permission and secret boundaries
 
-Task authorization, WebBrain API mutation authorization and CMS access rights are
+Task authorization, DIV API mutation authorization and CMS access rights are
 three separate conditions. A supported content API is preferred before editor
 failure only when all are met. Missing `/allow-api` is requested once when it is
 the remaining blocker; a valid prior/persistent grant is reused. Refusal leads to

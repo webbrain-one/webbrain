@@ -1,6 +1,6 @@
 # 技能
 
-技能是可信的指令文本 —— 可选地带有自己的工具清单 —— WebBrain **只在相关时**才会
+技能是可信的指令文本 —— 可选地带有自己的工具清单 —— DIV **只在相关时**才会
 将其加载到运行中。可在设置 → 技能中管理：导入技能文本或 URL，或移除任何内置技能。
 
 ## 加载机制
@@ -24,16 +24,16 @@ Mid 和 Full 运行会收到一个小型的可用技能目录：ID、名称、�
 意图是给 LLM 的跨语言*语义*提示，而非字面关键词匹配。没有元数据的技能会将第一段
 正文推断为摘要，不会推断出意图，并默认为 Act/Dev。
 
-WebBrain 也会识别导入的
+DIV 也会识别导入的
 [Agent Skills `SKILL.md`](https://agentskills.io/specification) 中必需的
 `name` 和 `description` YAML frontmatter。名称和描述会写入路由目录，而在加载
 Markdown 正文前会移除 frontmatter。在设置中输入的名称及 `webbrain-skill` 块仍有
 更高优先级。
 
-这仅属于指令兼容。WebBrain 只导入一个文本文档；它不会获取打包的 `scripts/`、
+这仅属于指令兼容。DIV 只导入一个文本文档；它不会获取打包的 `scripts/`、
 `references/` 或 `assets/`，不会执行技能代码，也不会把 Agent Skills 的
-`allowed-tools` 字段当作 WebBrain 权限或工具清单。WebBrain HTTP 工具仍应使用
-`webbrain-tools`。WebBrain 只识别有效 frontmatter 之后 Markdown 正文中的
+`allowed-tools` 字段当作 DIV 权限或工具清单。DIV HTTP 工具仍应使用
+`webbrain-tools`。DIV 只识别有效 frontmatter 之后 Markdown 正文中的
 `webbrain-skill` 和 `webbrain-tools` 围栏；frontmatter 内形似围栏的文本不能授予
 路由资格或注册工具。
 
@@ -89,7 +89,7 @@ Markdown 正文前会移除 frontmatter。在设置中输入的名称及 `webbra
 
 #### Humanizer（人性化改写）
 
-改写 WebBrain 为你撰写的正文，例如邮件回复或帖子，使其读起来像真人所写。它不声明
+改写 DIV 为你撰写的正文，例如邮件回复或帖子，使其读起来像真人所写。它不声明
 任何网络工具，也不新增工具。
 
 在网页邮箱标签页（Gmail、Outlook、Yahoo、Proton、Fastmail、Zoho、Yandex）上，它会
@@ -128,8 +128,8 @@ Wix、Strapi、Contentful 和 Sanity**。它们在 Mid/Full 的 Ask/Act/Dev 中�
 清单、凭据存储或 OAuth 集成。各服务的对照矩阵与测试覆盖见
 [CMS API-first 边界与验证](../cms-api-first.md)（英文）。
 
-在这类内容任务中，若目标站点、所需字段、任务范围、服务端权限和 WebBrain 的
-API 修改授权都满足条件，WebBrain 会在只读的能力与身份探测之后优先使用官方 API，
+在这类内容任务中，若目标站点、所需字段、任务范围、服务端权限和 DIV 的
+API 修改授权都满足条件，DIV 会在只读的能力与身份探测之后优先使用官方 API，
 无需先在编辑器中失败。API 本可用但缺少授权时，只请求一次 `/allow-api`；已有授权
 直接复用，拒绝也会被尊重。Ask 保持只读，GraphQL 查询的 POST 同样受按方法的
 权限校验约束。Compact 没有技能加载器，仅在受支持的 CMS 路由上获得简短的适配器

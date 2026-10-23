@@ -1,7 +1,7 @@
-# WebBrain Community
+# DIV Community
 
-WebBrain runs a Discord server as the informal home for users, contributors, and
-maintainers to discuss everything WebBrain: how to use it, which models and
+DIV runs a Discord server as the informal home for users, contributors, and
+maintainers to discuss everything DIV: how to use it, which models and
 providers work well, site adapters, feature ideas, show-and-tell, and
 coordination between contributors.
 
@@ -22,8 +22,8 @@ PR, move it to a GitHub issue so it does not get lost in chat.
 | `#welcome`         | One-time welcome message with the rules and a "getting started" pointer |
 | `#rules`           | Server rules (read-only)                                                |
 | `#announcements`   | Releases and project news (read-only)                                   |
-| `#general`         | Anything WebBrain: questions, ideas, conversation                       |
-| `#introductions`   | Say hi, tell us what you use WebBrain for                               |
+| `#general`         | Anything DIV: questions, ideas, conversation                       |
+| `#introductions`   | Say hi, tell us what you use DIV for                               |
 | `#show-and-tell`   | Traces, workflows, adapters, and runs you are proud of                  |
 | `#help`            | Getting started, side panel, modes, slash commands                      |
 | `#local-models`    | llama.cpp, Ollama, LM Studio, Jan, vLLM, and local provider setups      |
@@ -33,7 +33,7 @@ PR, move it to a GitHub issue so it does not get lost in chat.
 | `#site-adapters`   | The highest-leverage contribution — see `CONTRIBUTING.md`               |
 | `#roadmap`         | Proposed features and design discussion, mirroring GitHub Discussions   |
 | `#github-feed`     | GitHub bot stream of issues, PRs, and releases                          |
-| `#off-topic`       | Non-WebBrain conversation, clearly marked safe space for casual chat    |
+| `#off-topic`       | Non-DIV conversation, clearly marked safe space for casual chat    |
 
 ## Roles
 
@@ -53,7 +53,7 @@ decision.
 
 1. Be civil. Disagree with the code, not with the person.
 2. No spam, self-promotion, or unsolicited DMs. The only exception is show-and-tell
-   of your own WebBrain workflows in `#show-and-tell`.
+   of your own DIV workflows in `#show-and-tell`.
 3. Do not post credentials, API keys, or traces containing personal data. Traces
    should be scrubbed before sharing — see `CONTRIBUTING.md`.
 4. Keep security-sensitive discussions in DMs with a maintainer, or file a
@@ -76,11 +76,11 @@ decision.
 
 | You want to...                | Where                                                             |
 | ----------------------------- | ----------------------------------------------------------------- |
-| Get quick help using WebBrain | Discord `#help`, `#local-models`, `#providers`                    |
+| Get quick help using DIV | Discord `#help`, `#local-models`, `#providers`                    |
 | Report a bug with a trace     | GitHub issue (see `CONTRIBUTING.md`)                              |
 | Ask for a feature             | GitHub Discussion, or Discord `#roadmap` for discussion first     |
 | Contribute an adapter / PR    | GitHub, coordinated in Discord `#site-adapters` / `#contributing` |
-| Chat about WebBrain casually  | Discord `#general`                                                |
+| Chat about DIV casually  | Discord `#general`                                                |
 
 ## Setup and Maintenance
 

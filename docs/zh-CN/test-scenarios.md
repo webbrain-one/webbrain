@@ -1,6 +1,6 @@
-# WebBrain 测试场景
+# DIV 测试场景
 
-一组端到端任务，用于评估 WebBrain 浏览器代理在不同难度和 UI 模式覆盖范围下的表现。每个场景列出了站点、要粘贴到侧面板的提示以及可观察的通过标准。
+一组端到端任务，用于评估 DIV 浏览器代理在不同难度和 UI 模式覆盖范围下的表现。每个场景列出了站点、要粘贴到侧面板的提示以及可观察的通过标准。
 
 ## 场景
 
@@ -21,7 +21,7 @@
 
 ### 4. GitHub 问题提交 —— 中等
 - **站点：** github.com（你自己的测试仓库）
-- **任务：** "在 github.com/<你>/<仓库> 上打开一个新 issue，标题为 'Test from WebBrain'，内容为 'ignore this'。"
+- **任务：** "在 github.com/<你>/<仓库> 上打开一个新 issue，标题为 'Test from DIV'，内容为 'ignore this'。"
 - **预期：** 代理导航到 `/issues/new`，填写标题 + 内容，点击提交。测试 contenteditable 内容编辑器和带有重复标签的"Submit new issue"按钮。
 
 ### 5. Gmail 撰写草稿 —— 中等

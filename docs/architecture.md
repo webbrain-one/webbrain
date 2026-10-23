@@ -1,10 +1,10 @@
-# WebBrain Architecture
+# DIV Architecture
 
 > Version 25.8.5
 
 ## Overview
 
-WebBrain is a browser extension that gives an LLM control over the user's active browser tab. The user types a natural-language instruction in a side panel, and an autonomous agent loop calls the LLM, executes tool calls (click, type, navigate, read page state, etc.), feeds results back to the LLM, and repeats until the task is done.
+DIV is a browser extension that gives an LLM control over the user's active browser tab. The user types a natural-language instruction in a side panel, and an autonomous agent loop calls the LLM, executes tool calls (click, type, navigate, read page state, etc.), feeds results back to the LLM, and repeats until the task is done.
 
 There are two builds that share almost all code:
 - **Chrome** — Manifest V3, service worker, CDP-backed trusted events
@@ -73,7 +73,7 @@ Model tiering is separate from mode: `compact | mid | full` controls how many no
 
 **Automatic mode selection** is the default: the side panel sends `mode: 'auto'`. The composer's "!" menu also has an Auto | Ask | Act | Dev picker. Ask, Act or Dev chosen there is kept for the tab's chat (`composer-mode-pin.js`, one session-storage key per tab, so a reopened panel finds it): the panel then sends that mode as in Manual, and the menu's trigger shows it. A new chat or a recovered history record returns to Auto; Act and Dev pass the same checks as the shortcuts (selection scope, in-browser model, Compact for Dev), and the standalone window hides the picker. The agent routes the turn in `auto-mode.js`, shared by both builds:
 
-1. Run state decides alone when it can: a continuation keeps an action run's mode. A continuation of a read-only run (Retry, Continue, or a quota or cost resume, which the panel sends as `auto` for a run it saw routed to Ask, marked `data-auto-routed`) is routed like a new turn from the continued task's own words, its request and the answers, updates and corrections bound to it, never from WebBrain's continuation text; its hand-off must quote those words, and the background's `continue` handler restarts it like `chat` does. Without such words it stays in Ask. A turn for an in-browser (WebGPU) model, which runs as a tiny Ask, a selected-text scope, the standalone window, a Cloud run and a message that carries an `<untrusted_page_content>` block (a selection shortcut with page context) stay in Ask; and a video attachment, which can only be uploaded, needs Act. Context-menu and selection prompts are sent as Ask, as in Manual.
+1. Run state decides alone when it can: a continuation keeps an action run's mode. A continuation of a read-only run (Retry, Continue, or a quota or cost resume, which the panel sends as `auto` for a run it saw routed to Ask, marked `data-auto-routed`) is routed like a new turn from the continued task's own words, its request and the answers, updates and corrections bound to it, never from DIV's continuation text; its hand-off must quote those words, and the background's `continue` handler restarts it like `chat` does. Without such words it stays in Ask. A turn for an in-browser (WebGPU) model, which runs as a tiny Ask, a selected-text scope, the standalone window, a Cloud run and a message that carries an `<untrusted_page_content>` block (a selection shortcut with page context) stay in Ask; and a video attachment, which can only be uploaded, needs Act. Context-menu and selection prompts are sent as Ask, as in Manual.
 2. Otherwise the decision model answers the fixed-choice `run_mode` question (`semantic-decisions.js`) about the user's own words, the previous turn's mode and the earlier task. It never sees page text, title or address. The question starts as soon as the turn's cost state exists and is awaited after `_enrichUserMessageWithCurrentPage`, so it overlaps page capture; after capture the turn waits at most `AUTO_MODE_ROUTE_GRACE_MS` (250 ms). Only a sure `act` or `dev` answer (the choices are `authorizing`) selects an action mode; Compact maps Dev to Act. The same decision request also asks `plan_need` about the same words (`direct`, `plan` or `unclear`); a sure answer travels with an action route as `modeRoute.plan`, which lets Try skip the full planner for a direct task ([Step 4](#step-4-plan-before-act-gate)). It adds no request and no data. The routed mode replaces the provisional Ask setup: run mode, system prompt, the turn's trusted runtime line and dialog handling (Chrome) or the BiDi run (Firefox).
 3. Without a sure answer, or with no decision model, the turn starts in Ask at once. So does a turn whose user sent a correction while the route ran or while the action run's browser setup started (`route_corrected`): the route did not read it, so an action answer is not trusted. That check follows the setup's last await, so nothing arrives between it and the committed mode. Its tools add `request_action_mode`, and its system prompt adds `AUTO_MODE_ASK_NOTE`. The tool is never dispatched. Page updates that arrive while the model decides (a timeline's counters and relative times, page-script focus) do not discard the call (`page-feedback-policy.js` treats it like the other page-independent tools): it never runs on the page, and the action run reads the page again before acting. The person's own input on the page, a navigation or a correction still makes the model decide again. The loop accepts the call only when its `evidence` quotes the user's own words exactly (the request, or a correction sent during the turn) and, because the calling model has read the page, when the same `run_mode` question, about the request with its corrections and asked again without any page content (decision model, then the active model with a quoted reason; a sure routing answer is reused from the semantic-decision cache) also answers act or dev. A correction sent while that check runs supersedes the call like any pending correction: the next step applies it and the model asks again, so a correction that needs Dev gets a Dev hand-off. Corrections sent during the read-only pass, applied or still pending, go with the hand-off: they stay journaled under the same request, and the action run queues them before its first model or tool boundary, so it never acts on the uncorrected request. A correction that arrives after the check (while the hand-off is saved) marks the escalation `reroute`: the background then restarts the request in Automatic again, and that route reads the request with its carried corrections; a third such restart runs read-only (`reroute_limit`, without the hand-off tool): it applies the corrections and answers, and never runs in a mode chosen before the latest correction. An accepted hand-off restores the conversation and per-tab turn state captured before the turn gathered its context (approved plans, site-adapter and API notes, the follow-up allowance, the durable-turn marker) and returns; the background's `chat` handler then restarts the same request with `modeEscalation` in the requested mode, under the same request ID, so Stop still cancels it. The page-free check asks `plan_need` alongside `run_mode` too, and a sure answer rides along as `modeEscalation.plan`. The action run's planner gate reads the request again before any action. A refused call gets a tool result with the reason, and a second refusal withdraws the tool. Chrome drains Dev diagnostics only when a routed turn after Dev ends without handing itself to Dev.
 
@@ -114,7 +114,7 @@ platform only when the correction's receipt lists every publication the task
 had made and none was on the post's site; on x.com, twitter.com and bsky.app
 only a composer publication posts, so a settings save or a consent click there
 is not one. Their other hosts and clients, such as X Pro, post without the
-composer controls WebBrain recognizes, so there any action that may have been
+composer controls DIV recognizes, so there any action that may have been
 sent counts as a publication unless the page probe proved it cannot post (an
 ordinary form, a deletion, or a control resolved as a link, field, menu item or
 other non-submitting control). There, a control that looks ordinary only
@@ -197,7 +197,7 @@ is named only by position); another item; no deletion asked; told not to
 delete. Only "delete this item" deletes without asking, and only with a
 quotation from the request that supports it. "Told not to delete" refuses
 without a card. Everything else, including no answer, goes to the user on
-WebBrain's card below. The same record is never deleted twice at the same step
+DIV's card below. The same record is never deleted twice at the same step
 in a task, even after a reload, and a changed record, step or set of
 neighbours changes the checked action, so a decision cannot carry over to it.
 Toolbar, bulk and selection deletions, menus with neither a linked launcher nor
@@ -205,7 +205,7 @@ that click provenance, and confirmation dialogs that cannot be linked get no
 record and stay blocked.
 Completion after such a deletion uses the ordinary post-submit checks.
 
-When the decision is not a clear "delete this item", WebBrain asks the user on
+When the decision is not a clear "delete this item", DIV asks the user on
 its own card instead of refusing: "Delete this item on <site>?" with the item's
 text as the page shows it (plain, bounded text), its link when it has one, the
 site's own confirmation question at that step, and fixed choices (Delete,
@@ -275,7 +275,7 @@ The central message router. On Chrome it's a service worker (MV3); on Firefox it
 1. **Route messages** between the side panel, content scripts, and the agent
 2. **Manage the agent lifecycle**: `chat` / `chat_stream` / `continue` / `abort` / `clear_conversation`
 3. **Manage provider config**: load, save, test, switch active provider
-4. **Manage side panel visibility**: per-window "WebBrain" tab group controls where the panel is enabled
+4. **Manage side panel visibility**: per-window "DIV" tab group controls where the panel is enabled
 5. **Observe same-tab XHR/fetch requests** with `webRequest` so loop detection can suggest an exact `fetch_url` shortcut when repeated UI clicks trigger the same background request
 6. **Expose Claude OAuth**, tab recording, CAPTCHA, and other sub-features as message handlers
 
@@ -336,7 +336,7 @@ _enrichUserMessageWithCurrentPage(tabId, messages, userMessage)
 
 #### Page context reduction
 
-WebBrain does not send raw HTML or a raw DOM dump to the model by default. The
+DIV does not send raw HTML or a raw DOM dump to the model by default. The
 initial page context is the sanitized URL and title, matching site-adapter
 guidance, and an optional viewport screenshot when vision is available. When a
 task needs page content, the agent requests it on demand as a reduced semantic
@@ -421,10 +421,10 @@ while (steps < maxSteps) {
 ```
 
 When an interactive, tool-capable run exhausts its configured agent steps
-without a terminal answer, the browser loop stays closed and WebBrain performs
+without a terminal answer, the browser loop stays closed and DIV performs
 one context-only handoff with only `done` available. That terminal schema permits
 `partial` or `failed`, never `success`; invalid output falls back to the
-deterministic step-limit summary. This also applies to the selected WebBrain
+deterministic step-limit summary. This also applies to the selected DIV
 Compass provider without changing its advisory in-loop observation checkpoints.
 Structured Cloud API runs keep their separate `done_json` output contract and do
 not enter this handoff.
@@ -447,7 +447,7 @@ Official OpenAI GPT-5.6 and streaming-capable Responses-only GPT-5 Pro variants
 use Responses streaming. Other supported official OpenAI models use Chat
 Completions streaming. Anthropic uses its native Messages event parser, Azure
 OpenAI uses its deployment-based parser, and Gemini, DeepSeek, xAI, Mistral,
-Nvidia NIM, Groq, Together AI, Fireworks, z.ai, OpenRouter, WebBrain Compass,
+Nvidia NIM, Groq, Together AI, Fireworks, z.ai, OpenRouter, DIV Compass,
 Ollama, LM Studio, Jan, vLLM, SGLang, LocalAI, and Unsloth Studio use the OpenAI-compatible
 Chat Completions parser. z.ai streaming tool calls add its documented
 `tool_stream` request flag. llama.cpp uses its dedicated OpenAI-compatible
@@ -550,7 +550,7 @@ cut-off, the error), and the card shows it under that answer, since the next car
 fail with no warning. Continue sends the unfinished text as
 `continueFrom`; the background wraps it inside the selection's untrusted block (whole, up to the
 most a card holds, because the side panel shows that block to the user) with a trusted request to resume from where it stops, because running the action again
-would meet the same output limit. The card keeps the whole unfinished answer to show, but once the active provider's context window is known the background sends only its tail (`buildContinuationSelectionPrompt`'s `contextWindow` option, marked with a leading ellipsis): it keeps what the window leaves after the rest of the prompt, the side panel's own prompt (`SIDE_PANEL_SELECTION_SYSTEM_TOKENS`, which a test holds above the real prompt) and a reply of up to 2,048 tokens, or only the 256-token minimum when the window is tight, so a long answer produced on a small local model is not refused as too long when it is continued. A card follow-up is sized the same way, but keeps the start of the earlier answer and says that the rest was left out (`buildFollowUpSelectionText`'s `contextWindow`, `question` and `language` options; a follow-up that brings the page as context manages its own context and is left alone). The estimate counts a system message, which is WebBrain's own prose and never page text, at a token per three characters instead of the worst case used for everything else, because otherwise the side panel's own prompt alone fills a 4k window. A window that cannot take the rest of the prompt and that minimum (about 2k) keeps the whole text and is refused, with the reason, when it runs. The side-panel reply to a continuation or a card follow-up carries the earlier answer as well as the selection, and a selection-only run skips context management, so that reply is sized to the room the model's context window leaves (the same worst-case estimate, `fitAnswerToContext`) rather than asking for the provider's full output ceiling; when the window leaves no room it says the selection is too long for the model and sends nothing. A resumed Proofread gets its own instruction, without the ordinary request for one complete corrected version, so a model asked for only the remainder is not also asked to write the corrected text again. A side-panel reply that is cut off again says so (the
+would meet the same output limit. The card keeps the whole unfinished answer to show, but once the active provider's context window is known the background sends only its tail (`buildContinuationSelectionPrompt`'s `contextWindow` option, marked with a leading ellipsis): it keeps what the window leaves after the rest of the prompt, the side panel's own prompt (`SIDE_PANEL_SELECTION_SYSTEM_TOKENS`, which a test holds above the real prompt) and a reply of up to 2,048 tokens, or only the 256-token minimum when the window is tight, so a long answer produced on a small local model is not refused as too long when it is continued. A card follow-up is sized the same way, but keeps the start of the earlier answer and says that the rest was left out (`buildFollowUpSelectionText`'s `contextWindow`, `question` and `language` options; a follow-up that brings the page as context manages its own context and is left alone). The estimate counts a system message, which is DIV's own prose and never page text, at a token per three characters instead of the worst case used for everything else, because otherwise the side panel's own prompt alone fills a 4k window. A window that cannot take the rest of the prompt and that minimum (about 2k) keeps the whole text and is refused, with the reason, when it runs. The side-panel reply to a continuation or a card follow-up carries the earlier answer as well as the selection, and a selection-only run skips context management, so that reply is sized to the room the model's context window leaves (the same worst-case estimate, `fitAnswerToContext`) rather than asking for the provider's full output ceiling; when the window leaves no room it says the selection is too long for the model and sends nothing. A resumed Proofread gets its own instruction, without the ordinary request for one complete corrected version, so a model asked for only the remainder is not also asked to write the corrected text again. A side-panel reply that is cut off again says so (the
 response-only path appends a notice when the provider reports a length finish, WebGPU
 reports `outputTruncated`, or OpenAI Responses raises the limit as an error carrying
 `partialContent`, whose text is then shown), so a long remainder never passes as complete
@@ -623,7 +623,7 @@ model call.
 
 Browser-tab creation, enumeration, activation, and run retargeting are not general model-callable capabilities. To inspect another URL, the agent uses an available URL reader; to interact with it, it navigates the current run tab. Explicit separate-tab requests are surfaced as a limitation rather than silently converted into current-tab navigation. The only private-tab exception is the single OTP-skill-gated reader above: the runtime chooses an already-open supported mailbox without exposing the tab catalog, and any message-opening helper is inactive and disposable. Internal research/helper tabs and normal page-authored `target=_blank` behavior remain separate infrastructure.
 
-Chrome CSS patch records include the top-level `documentId` and a patch-specific CSS marker. Full navigation clears persisted records, and `remove_injected_css` checks the live document before calling `removeCSS`, preventing an old patch ID from removing equivalent CSS on a replacement page. If navigation races either identity check during injection, WebBrain removes that patch's exact uniquely marked CSS from the replacement document before discarding its record. Chrome `execute_js` passes a 15-second timeout to CDP. Dev diagnostic event handlers are registered before either agent-loop variant starts and own their debugger session across turns, so ordinary run cleanup preserves their bounded buffers. Leaving the panel-wide Dev mode drains every tab in the CDP client's active-diagnostics registry, removes the handlers and buffers, and sends `Runtime.disable`, `Log.disable`, and `Network.disable` so Chrome also stops domain-level diagnostic work; conversation and tab cleanup additionally detach the debugger.
+Chrome CSS patch records include the top-level `documentId` and a patch-specific CSS marker. Full navigation clears persisted records, and `remove_injected_css` checks the live document before calling `removeCSS`, preventing an old patch ID from removing equivalent CSS on a replacement page. If navigation races either identity check during injection, DIV removes that patch's exact uniquely marked CSS from the replacement document before discarding its record. Chrome `execute_js` passes a 15-second timeout to CDP. Dev diagnostic event handlers are registered before either agent-loop variant starts and own their debugger session across turns, so ordinary run cleanup preserves their bounded buffers. Leaving the panel-wide Dev mode drains every tab in the CDP client's active-diagnostics registry, removes the handlers and buffers, and sends `Runtime.disable`, `Log.disable`, and `Network.disable` so Chrome also stops domain-level diagnostic work; conversation and tab cleanup additionally detach the debugger.
 
 ### Step 6a: Skills and Dynamic Tool Exposure
 
@@ -804,7 +804,7 @@ The runtime enforces catalog membership, mode/tier eligibility, active-skill
 tool ownership, and tool filters. It cannot independently determine *why* the
 model requested a valid skill ID. The rule against activation from page, email,
 document, or tool-result instructions is therefore a model-policy boundary,
-reinforced by WebBrain's untrusted-content wrappers and the loader description,
+reinforced by DIV's untrusted-content wrappers and the loader description,
 not a deterministic intent classifier. Routing quality also depends on concise,
 distinct summaries; a broad skill such as FreeSkillz deliberately loads one
 instruction bundle for several related capabilities.
@@ -941,7 +941,7 @@ copied nor fingerprinted in request events. Policy revisions are bumped when
 controlled prompt templates or tool-exposure rules change; private request
 content does not affect them.
 
-WebBrain Compass runs also have a separate consent-gated terminal-runtime path.
+DIV Compass runs also have a separate consent-gated terminal-runtime path.
 After an executed tool result is made durable in `chrome.storage.local`, a
 bounded `terminal_runtime` envelope is sent to the Compass improvement endpoint.
 Transient failures remain in the outbox for the next Compass run; acknowledged or
@@ -959,7 +959,7 @@ version rather than being attributed to the currently installed build.
 
 ### Language decisions (`semantic-decisions.js`)
 
-Where a rule depends on what the user's words mean, WebBrain asks a model one
+Where a rule depends on what the user's words mean, DIV asks a model one
 closed question instead of matching words (`semantic-decisions.js`, shared by
 both builds). Each question lists its choices and what each one means. The
 request is the user's own text; page text is passed as untrusted data and can
@@ -980,7 +980,7 @@ continuation by construction; long turns, Ask turns, first turns and turns
 without a sure answer are new requests. A carousel scan asks whether the
 request wants the slides from last to first; no sure answer is the usual
 order. Consent itself never comes from reading words: who receives a message
-and whether an unclear deletion proceeds are answered on WebBrain's own cards
+and whether an unclear deletion proceeds are answered on DIV's own cards
 with fixed choices, and a question the model asks, and whatever the user
 answers to it, approves neither.
 
@@ -1021,7 +1021,7 @@ object is recognized by its shape, and one the model rates at zero confidence
 is its refusal; a plain final message in an Act run gets one recovery whatever
 it says. No word list reads a summary or a final message.
 
-When the model request fails after an Act run sent a submission, WebBrain reads
+When the model request fails after an Act run sent a submission, DIV reads
 the page itself and completes the run only while that submission is still the
 run's latest action (or a navigation bound to its result) and the plan names at
 most one deliverable; its answer claims only that submission. Otherwise the run
@@ -1378,7 +1378,7 @@ Jobs are stored in `chrome.storage.local` under the key `wb_scheduled_jobs` as a
 
 110+ adapters inject site-specific guidance into the first user message (and re-inject on navigation to a different matched site). Only ONE adapter fires at a time (`getActiveAdapter(url)` returns the first match). See `docs/site-adapters.md` for how to write one. Each matched adapter emits a content-free `adapter_match` trace note with its identity, revision, and whether notes were injected. High-evidence repeated tasks may additionally expose validated V2 workflow jobs; the planner selects an app-owned ID semantically, the binding is revalidated on the live pre-execution URL, and the executor receives its trusted stages/evidence contract. Required submissions need dispatch plus post-submit observation, while jobs with a trusted complete inventory may require an explicit job-bound complete-coverage marker whose count matches terminal current-task ledger rows.
 
-Adapters may also expose narrowly scoped runtime policy. Douyin `/chat` is the first `messaging.verifyActiveRecipient` route. The structured planner resolves an anaphoric recipient to `named` only when authentic prior-user context identifies exactly one target; unresolved pronouns clarify, and words that refer back to someone named earlier never mean the open thread. `active_conversation` is reserved for a request that points at the conversation on screen itself instead of naming it ("reply here", "this one", "this user", in any language): the planner never sees the page, so it does not ask who that is. An `active_conversation` planner target must first be pinned to exactly one strong visible header identity, while planning or, where the identity needs the page's own preparation first (Gmail's collapsed reply composer, a native WhatsApp contact drawer), at the first send in the thread open when the run was authorized; ambiguous or missing evidence stops for clarification. Its `recipients` are only the people the same request also names. On a route where a conversation reaches one person, the pinned conversation is the target and stays authorized for the whole task, while each named person is kept as requested (`requestedMessaging`, shown in the reviewed plan) and confirmed on WebBrain's recipient card before the first send to them. Native WhatsApp checks a contact through its drawer once per run, for the first chat the run looks at, except that a request naming its recipient may first open that person's chat from the chat list: its anchor follows the chat selection until the run arms its check with the guarded contact-name click. Once that check is invalidated, as by a change of the chat selection after it was armed (or at all, in a request for the open chat), the observer and the recipient probe report `native_whatsapp_contact_check_spent`, and the agent is told that the chat needs a new request instead of being sent to retry. Before the check, a blocked message action names the exact contact-name or Close control to click (`nativeWhatsappRepairTarget`). A chat only hidden for a moment, as behind a modal, is not a spent check. On a recipient-set route such as mail the named people are not added to the pin, since a planner copies names as the user wrote them while a mail composer shows addresses. The pin is the thread's recipients as before: one taken while planning sends a differing set to the card, while one taken at the first send from Gmail's collapsed reply composer is whatever that composer holds then, an existing limit. The first user message's screenshot note is dropped from the planner's copy of the task with the image the planner never receives. Immediately before a send-like click, submitted field, or Enter press, the content script resolves the exact target and a lower-page layout composer, then collects only unique header evidence from the narrow, non-scrollable region above it. Enter or submitted field input in a different editable is conclusively non-message only when structural semantics positively identify a search or navigation field; an alternate reply/forward/split-pane composer remains inconclusive and therefore cannot bypass recipient verification. A distant general control likewise remains inconclusive rather than being declared safe. A semantic conversation row in a separate left rail is conclusively navigation-only, allowing recovery to the requested thread whether or not the short rail currently overflows, and a row of WhatsApp's native chat list is navigation-only even while the open chat's contact is unconfirmed; nested row buttons, links, and their leaf descendants plus controls outside that structure remain inconclusive. The agent requires exact normalized identity equality and returns a no-dispatch blocker on missing, inconclusive, ambiguous, or mismatched evidence, and protected Enter dispatch permits exactly one keypress per verification. Every authorized `click`, `click_ax`, `set_field({submit:true})`, and composer Enter receives a one-use binding to the exact action target, composer, URL, and identity set. Direct content dispatches and Chrome's trusted CDP mouse/key paths consume and revalidate it immediately before `el.click()`, `mousePressed`, or Enter, after any field reconciliation and combobox delays; protected `click_ax` never issues a second no-progress fallback click. Search-result text, message content, input values, generic page text, failed probes, and edited plans with stale hidden metadata cannot authorize a send. Dispatch-capable tools whose effects cannot be bound to the probed recipient (`iframe_click`, `execute_js`, WebMCP execution, and `upload_file`, whose change event may auto-send) are unavailable on this protected route. Deterministic saved-workflow replay has no planner-owned recipient target, so a workflow with any potentially dispatching step scoped to a protected messaging route stops before page actions and directs the user to run a normal Act task with a named recipient; a per-step check also covers legacy workflows whose scope metadata is incomplete.
+Adapters may also expose narrowly scoped runtime policy. Douyin `/chat` is the first `messaging.verifyActiveRecipient` route. The structured planner resolves an anaphoric recipient to `named` only when authentic prior-user context identifies exactly one target; unresolved pronouns clarify, and words that refer back to someone named earlier never mean the open thread. `active_conversation` is reserved for a request that points at the conversation on screen itself instead of naming it ("reply here", "this one", "this user", in any language): the planner never sees the page, so it does not ask who that is. An `active_conversation` planner target must first be pinned to exactly one strong visible header identity, while planning or, where the identity needs the page's own preparation first (Gmail's collapsed reply composer, a native WhatsApp contact drawer), at the first send in the thread open when the run was authorized; ambiguous or missing evidence stops for clarification. Its `recipients` are only the people the same request also names. On a route where a conversation reaches one person, the pinned conversation is the target and stays authorized for the whole task, while each named person is kept as requested (`requestedMessaging`, shown in the reviewed plan) and confirmed on DIV's recipient card before the first send to them. Native WhatsApp checks a contact through its drawer once per run, for the first chat the run looks at, except that a request naming its recipient may first open that person's chat from the chat list: its anchor follows the chat selection until the run arms its check with the guarded contact-name click. Once that check is invalidated, as by a change of the chat selection after it was armed (or at all, in a request for the open chat), the observer and the recipient probe report `native_whatsapp_contact_check_spent`, and the agent is told that the chat needs a new request instead of being sent to retry. Before the check, a blocked message action names the exact contact-name or Close control to click (`nativeWhatsappRepairTarget`). A chat only hidden for a moment, as behind a modal, is not a spent check. On a recipient-set route such as mail the named people are not added to the pin, since a planner copies names as the user wrote them while a mail composer shows addresses. The pin is the thread's recipients as before: one taken while planning sends a differing set to the card, while one taken at the first send from Gmail's collapsed reply composer is whatever that composer holds then, an existing limit. The first user message's screenshot note is dropped from the planner's copy of the task with the image the planner never receives. Immediately before a send-like click, submitted field, or Enter press, the content script resolves the exact target and a lower-page layout composer, then collects only unique header evidence from the narrow, non-scrollable region above it. Enter or submitted field input in a different editable is conclusively non-message only when structural semantics positively identify a search or navigation field; an alternate reply/forward/split-pane composer remains inconclusive and therefore cannot bypass recipient verification. A distant general control likewise remains inconclusive rather than being declared safe. A semantic conversation row in a separate left rail is conclusively navigation-only, allowing recovery to the requested thread whether or not the short rail currently overflows, and a row of WhatsApp's native chat list is navigation-only even while the open chat's contact is unconfirmed; nested row buttons, links, and their leaf descendants plus controls outside that structure remain inconclusive. The agent requires exact normalized identity equality and returns a no-dispatch blocker on missing, inconclusive, ambiguous, or mismatched evidence, and protected Enter dispatch permits exactly one keypress per verification. Every authorized `click`, `click_ax`, `set_field({submit:true})`, and composer Enter receives a one-use binding to the exact action target, composer, URL, and identity set. Direct content dispatches and Chrome's trusted CDP mouse/key paths consume and revalidate it immediately before `el.click()`, `mousePressed`, or Enter, after any field reconciliation and combobox delays; protected `click_ax` never issues a second no-progress fallback click. Search-result text, message content, input values, generic page text, failed probes, and edited plans with stale hidden metadata cannot authorize a send. Dispatch-capable tools whose effects cannot be bound to the probed recipient (`iframe_click`, `execute_js`, WebMCP execution, and `upload_file`, whose change event may auto-send) are unavailable on this protected route. Deterministic saved-workflow replay has no planner-owned recipient target, so a workflow with any potentially dispatching step scoped to a protected messaging route stops before page actions and directs the user to run a normal Act task with a named recipient; a per-step check also covers legacy workflows whose scope metadata is incomplete.
 
 ### Accessibility Tree (`accessibility-tree.js`)
 
@@ -1391,7 +1391,7 @@ Wraps `chrome.debugger` API for:
 - **Screenshots** — `Page.captureScreenshot` with clip/scale control
 - **DOM queries** — `Runtime.evaluate` for shadow DOM piercing, `DOM.getDocument` for closed roots
 - **WebMCP** — `WebMCP.enable` maintains a bounded live catalog and
-  `WebMCP.invokeTool` executes a page-registered structured capability. WebBrain
+  `WebMCP.invokeTool` executes a page-registered structured capability. DIV
   exposes opaque `wmcp_*` IDs rather than page-controlled names as call handles.
 
 During active Chrome Act/Dev runs (including saved workflow replay), native
@@ -1543,7 +1543,7 @@ Firefox uses `browser.storage.session`.
 | API shortcut observer | `chrome.webRequest` URL/method buffer | `browser.webRequest` URL/method buffer |
 | Slash-driven tab/screen recording | `chrome.tabCapture` / `getDisplayMedia()` + offscreen | Not available |
 | Side panel | `sidePanel` API (MV3) | `sidebar_action` (MV2) |
-| File upload | CDP path or `downloadId` | `downloadId` re-fetch or WebBrain file picker; no arbitrary local path |
+| File upload | CDP path or `downloadId` | `downloadId` re-fetch or DIV file picker; no arbitrary local path |
 
 Apart from the Chromium-only endpoint-free WebGPU provider and vision sidecar,
 the agent loop, tools, adapters, providers, loop detection, context management,

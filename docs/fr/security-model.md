@@ -1,6 +1,6 @@
 # Modèle de Sécurité
 
-Ce document décrit l'architecture de sécurité de WebBrain — ce que l'extension peut faire, ce qu'elle considère comme fiable, comment elle gère les identifiants, et comment elle se défend contre l'injection de prompt.
+Ce document décrit l'architecture de sécurité de DIV — ce que l'extension peut faire, ce qu'elle considère comme fiable, comment elle gère les identifiants, et comment elle se défend contre l'injection de prompt.
 
 Pour la divulgation de vulnérabilités, voir [SECURITY.md](../SECURITY.md).
 

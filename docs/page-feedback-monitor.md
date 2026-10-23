@@ -248,9 +248,9 @@ Steer or grant authorization. Enter and Alt+Enter retain their existing behavior
   guard for the next key. Preflight messages that sent no input preserve the
   original snapshot through native preparation. Submissions retain the existing
   authorization, form and recipient gates.
-  Snapshots are bounded, expire after two minutes of WebBrain's own time and
+  Snapshots are bounded, expire after two minutes of DIV's own time and
   are discarded with the run. The background reports with each check how long
-  it waited for the model's decision and for the user's answers to WebBrain's
+  it waited for the model's decision and for the user's answers to DIV's
   own cards (permission, submit and deletion confirmations, questions) since
   the capture (`modelHeldMs`, at most 30 minutes); that time does not age the
   snapshot, and page changes during it are judged as usual. A slow provider or
@@ -407,7 +407,7 @@ Steer or grant authorization. Enter and Alt+Enter retain their existing behavior
   declared to be about the recipient is refused while such a blocker stands.
 - When a send would reach recipients other than the ones the task named, and
   approval is the only thing missing (the plan authorizes sending, the body,
-  baseline and dispatch binding are present), WebBrain asks the user on its
+  baseline and dispatch binding are present), DIV asks the user on its
   own card: "Send to <recipients>?" with fixed choices (Send; on tasks with
   several recipients also "Send, and don't ask again in this task"; Don't
   send) and no free text. The card shows the recipients from the page probe
@@ -419,7 +419,7 @@ Steer or grant authorization. Enter and Alt+Enter retain their existing behavior
   is never told to obtain consent itself.
 - A typed message that the task never named a recipient for, or never asked
   to send, gets the same card once its recipients, draft and baseline are
-  verified. The card says why WebBrain is asking and shows the message text;
+  verified. The card says why DIV is asking and shows the message text;
   the send keeps the reason `authorized_recipient_missing` until the user
   confirms. An attachment still needs a plan that authorizes sending one, and
   a send whose draft cannot be verified keeps its previous block. A
@@ -428,8 +428,8 @@ Steer or grant authorization. Enter and Alt+Enter retain their existing behavior
   ("draft it but don't send"), the send is refused without a card; a model
   reads that from the request in any language, and no answer means the card.
 - A question the model asks itself never approves a recipient, whatever the
-  user picks or types on it, in any language; the model is told that WebBrain
-  confirms the recipient itself, and the send still gets WebBrain's card. No
+  user picks or types on it, in any language; the model is told that DIV
+  confirms the recipient itself, and the send still gets DIV's card. No
   question or answer wording is read for consent. Icon-only attachment and
   picker launchers beside a chat composer, named by their icon's label or
   title, are composer utilities when a model reads that name, in any

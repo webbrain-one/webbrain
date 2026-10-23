@@ -115,7 +115,7 @@ Run on current stable Chrome and Firefox with a fresh profile for each:
    available. Verify that source/language filters persist and that citations
    retain distinct archive identity.
 3. In browser developer tools, set the network to Offline (or disconnect the
-   machine), close all WebBrain pages, and restart the browser.
+   machine), close all DIV pages, and restart the browser.
 4. Ask an English factual question, an English emergency question, and a CJK
    question. Verify retrieval/generation readiness are shown independently,
    no request reaches the network, and answers cite only returned evidence.

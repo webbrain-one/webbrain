@@ -1,7 +1,7 @@
 # Skills
 
 A skill is trusted instruction text — optionally with its own tool manifest —
-that WebBrain loads into a run **only when it is relevant**. Manage them under
+that DIV loads into a run **only when it is relevant**. Manage them under
 Settings → Skills. It lists your enabled skills first, where you can edit or
 remove any of them, bundled ones included, and then the packaged skills you can
 enable. **Add skill** opens the form for importing a skill from a URL or pasting
@@ -31,16 +31,16 @@ Intents are cross-language *meaning* hints for the LLM, not literal keyword
 matching. Skills without metadata infer the first prose paragraph as their
 summary, have no inferred intents, and default to Act/Dev.
 
-WebBrain also recognizes the required `name` and `description` YAML frontmatter
+DIV also recognizes the required `name` and `description` YAML frontmatter
 from an imported [Agent Skills `SKILL.md`](https://agentskills.io/specification).
 The name and description populate the routing catalog, and the frontmatter is
 removed before the Markdown body is loaded. A name entered in Settings and a
 `webbrain-skill` block still take precedence.
 
-This is instruction-only compatibility. WebBrain imports one text document; it
+This is instruction-only compatibility. DIV imports one text document; it
 does not fetch bundled `scripts/`, `references/`, or `assets/`, execute skill
-code, or treat the Agent Skills `allowed-tools` field as a WebBrain permission
-or tool manifest. Use `webbrain-tools` for WebBrain HTTP tools. WebBrain
+code, or treat the Agent Skills `allowed-tools` field as a DIV permission
+or tool manifest. Use `webbrain-tools` for DIV HTTP tools. DIV
 recognizes `webbrain-skill` and `webbrain-tools` fences only in the Markdown
 body after valid frontmatter; fence-like text inside frontmatter cannot grant
 routing eligibility or register tools.
@@ -110,7 +110,7 @@ deleted.
 
 #### Humanizer
 
-Rewrites prose WebBrain composes for you, such as an email reply or a post, so
+Rewrites prose DIV composes for you, such as an email reply or a post, so
 it reads as human writing. It declares no network tool and adds no tools.
 
 On webmail tabs (Gmail, Outlook, Yahoo, Proton, Fastmail, Zoho, Yandex) it is
@@ -168,9 +168,9 @@ is loaded. They add no HTTP tool manifest, credential store or OAuth integration
 See [CMS API-first boundaries and validation](cms-api-first.md) for the service
 matrix and test coverage.
 
-For these CMS content tasks, WebBrain prefers the official API after read-only
+For these CMS content tasks, DIV prefers the official API after read-only
 capability/auth discovery when the target, required fields, task scope, service
-rights and WebBrain mutation permission all permit it. Editor failure is not a
+rights and DIV mutation permission all permit it. Editor failure is not a
 prerequisite. An otherwise usable API with permission off prompts once for
 `/allow-api`; existing permission is reused and refusal is respected. Ask stays
 read-only. GraphQL/query POSTs remain subject to the same method-based gate.
@@ -215,7 +215,7 @@ Installed archive passages retain canonical attribution and remain untrusted.
 
 ### Phone calls (Phonr)
 
-Enable **Phone calls (Phonr)** under Settings → Skills, then ask WebBrain to call
+Enable **Phone calls (Phonr)** under Settings → Skills, then ask DIV to call
 a person or business with a specific purpose and language. Supply your Phonr
 bearer key for that service; the packaged skill contains no credential and cannot
 read the server's `.env`. Act/Dev calls use `fetch_url` with the existing
@@ -236,7 +236,7 @@ This is an instruction-only API integration: its bearer header is part of
 model-generated `fetch_url` arguments, so the key may appear in the configured
 LLM conversation and enabled traces. Do not embed it in skill text, memory,
 scheduled instructions, or links. The skill can inspect transcript, result, and
-clip metadata; WebBrain's generic download tool cannot attach a bearer header,
+clip metadata; DIV's generic download tool cannot attach a bearer header,
 so actual audio retrieval uses the local Phonr dashboard or the authenticated
 curl example in the skill. It does not claim to play audio from metadata alone.
 

@@ -2,7 +2,7 @@
 export default {
   "st.bidi.title": "Firefox trusted automation (experimental)",
   "st.bidi.desc": "Use a local companion for browser dialogs, trusted clicks and typing, and file uploads. Requires Node.js 22+ and Firefox started with remote automation enabled.",
-  "st.bidi.setup_html": "Install the companion using <code>node firefox-companion/install.mjs</code> from the WebBrain checkout. Restart Firefox with <code>--remote-debugging-port 9222</code>. Keep the connection on this computer.",
+  "st.bidi.setup_html": "Install the companion using <code>node firefox-companion/install.mjs</code> from the DIV checkout. Restart Firefox with <code>--remote-debugging-port 9222</code>. Keep the connection on this computer.",
   "st.bidi.enable": "Use trusted Firefox automation",
   "st.bidi.port": "Local Firefox port",
   "st.bidi.test": "Test connection",

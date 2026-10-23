@@ -1,17 +1,17 @@
 <p align="center">
-<img src="assets/logo-mark.png" alt="WebBrain logosu" width="92">
+<img src="assets/logo-mark.png" alt="DIV logosu" width="92">
 </p>
 
-<h1 align="center">WebBrain</h1>
+<h1 align="center">DIV</h1>
 
 <p align="center">
 Sayfalarla sohbet etmenizi, görevleri otomatikleştirmenizi ve seçtiğiniz bir LLM ile çok adımlı iş akışlarını çalıştırmanızı sağlayan, açık kaynaklı bir yapay zeka tarayıcı aracısı.
 </p>
 
 <p align="center">
-<a href="https://chromewebstore.google.com/detail/webbrain/ljhijonmfahplgbbacgcfnaihbjljhhb"><img src="https://img.shields.io/badge/Chrome-Install-4285F4?style=for-the-badge&amp;logo=googlechrome&amp;logoColor=white" alt="WebBrain'i Chrome Web Mağazası'ndan yükleyin"></a>
-<a href="https://addons.mozilla.org/firefox/addon/webbrain/"><img src="https://img.shields.io/badge/Firefox-Install-FF7139?style=for-the-badge&amp;logo=firefoxbrowser&amp;logoColor=white" alt="WebBrain'i Firefox Tarayıcı Eklentileri'nden yükleyin"></a>
-<a href="https://microsoftedge.microsoft.com/addons/detail/dfbioajafcijomhljabppcelecgdgfeo"><img src="https://img.shields.io/badge/Edge-Install-0A84FF?style=for-the-badge&amp;logo=microsoftedge&amp;logoColor=white" alt="WebBrain'i Microsoft Edge Eklentileri'nden yükleyin"></a>
+<a href="https://chromewebstore.google.com/detail/webbrain/ljhijonmfahplgbbacgcfnaihbjljhhb"><img src="https://img.shields.io/badge/Chrome-Install-4285F4?style=for-the-badge&amp;logo=googlechrome&amp;logoColor=white" alt="DIV'i Chrome Web Mağazası'ndan yükleyin"></a>
+<a href="https://addons.mozilla.org/firefox/addon/webbrain/"><img src="https://img.shields.io/badge/Firefox-Install-FF7139?style=for-the-badge&amp;logo=firefoxbrowser&amp;logoColor=white" alt="DIV'i Firefox Tarayıcı Eklentileri'nden yükleyin"></a>
+<a href="https://microsoftedge.microsoft.com/addons/detail/dfbioajafcijomhljabppcelecgdgfeo"><img src="https://img.shields.io/badge/Edge-Install-0A84FF?style=for-the-badge&amp;logo=microsoftedge&amp;logoColor=white" alt="DIV'i Microsoft Edge Eklentileri'nden yükleyin"></a>
 </p>
 
 <p align="center">
@@ -24,9 +24,9 @@ Sayfalarla sohbet etmenizi, görevleri otomatikleştirmenizi ve seçtiğiniz bir
 <a href="LICENSE">GPL-3.0-or-later</a>
 </p>
 
-![WebBrain bir sayfayı okuyor, bir formu dolduruyor ve bir dosya getiriyor](assets/webbrain-demo.gif)
+![DIV bir sayfayı okuyor, bir formu dolduruyor ve bir dosya getiriyor](assets/webbrain-demo.gif)
 
-WebBrain, bir yapay zekayı... ...sekmelerinizin yanındaki bir panelde yer alan bir aracı (agent).
+DIV, bir yapay zekayı... ...sekmelerinizin yanındaki bir panelde yer alan bir aracı (agent).
 Üzerinde bulunduğunuz sayfa hakkında ona sorular sorun ya da bir görev verip
 sayfa içinde tıklama, yazma ve gezinme işlemlerini gerçekleştirmesine izin verin.
 Araç, seçtiğiniz model üzerinde çalışır: yerel bir `llama.cpp` veya `Ollama` sunucusu,
@@ -63,7 +63,7 @@ imzalama işlemi gereklidir.
 
 ## Kullanım
 
-Yan paneli açmak için WebBrain simgesine tıklayın ve ardından şuna benzer komutlar yazın:
+Yan paneli açmak için DIV simgesine tıklayın ve ardından şuna benzer komutlar yazın:
 
 - "Bu sayfayı özetle"
 - "Fiyatlandırmayla ilgili tüm bağlantıları bul"
@@ -80,9 +80,9 @@ Yan paneli açmak için WebBrain simgesine tıklayın ve ardından şuna benzer 
 
 ## Bir model seçin
 
-**WebBrain Compass 1.0** varsayılan modeldir; herhangi bir API anahtarı veya yerel kurulum gerektirmez.
+**DIV Compass 1.0** varsayılan modeldir; herhangi bir API anahtarı veya yerel kurulum gerektirmez.
 
-**Yerel modeller** de API anahtarı gerektirmez. WebBrain'i OpenAI uyumlu herhangi bir
+**Yerel modeller** de API anahtarı gerektirmez. DIV'i OpenAI uyumlu herhangi bir
 sunucuya yönlendirmeniz yeterlidir:
 
 ```bash
@@ -106,7 +106,7 @@ seviyesinin 8k'ya sığacağı da garanti edilmez.** Mid ve Full, geçmiş birik
 bile 16k'yı aşabilir; sıkıştırma sabit istem ve şemaları küçültemez. Boyut
 tahmini modelin gerçek tokenizer hesabı değildir; bkz.
 [bağlam rehberi](docs/providers-and-models.md#local-providers).
-WebBrain; llama.cpp, Ollama ve LM Studio için ilgili pencereyi otomatik olarak algılar
+DIV; llama.cpp, Ollama ve LM Studio için ilgili pencereyi otomatik olarak algılar
 ve alan doldukça konuşma içeriğini otomatik olarak sıkıştırır. Ollama,
 llama.cpp, LM Studio ve LocalAI için, ekran görüntüleri eklenmeden önce
 sunucuya özgü meta verileri de okur; Ayarlar bölümü Otomatik, Zorunlu Açık ve Kapalı
@@ -153,7 +153,7 @@ tanılama kaydına dahil edilir. İkinci bir paylaşım anahtarına gerek yoktur
 
 ## Ajan araçları
 
-WebBrain, **katman** (tier) ile **mod** (mode) kavramlarını birbirinden ayırır. Seviye (`compact`, `mid`, `full`), bir modelin kaç araca erişebileceğini belirleyen
+DIV, **katman** (tier) ile **mod** (mode) kavramlarını birbirinden ayırır. Seviye (`compact`, `mid`, `full`), bir modelin kaç araca erişebileceğini belirleyen
 ve sağlayıcı bazında ayarlanan bir parametredir; `Compact` küçük yerel modeller için uygundur,
 `Full` ise üzerine gelme (hover), sürükle-bırak, çerçeveler (frames) ve shadow DOM özelliklerini etkinleştirir.
 Mod (`ask`, `act`, `dev`) ise kullanıcının hangi işlemlere izin verdiğini kontrol eder.
@@ -189,7 +189,7 @@ sonekleri dahil olmak üzere tam referans: [slash komutları](docs/slash-command
 
 ## Klavye Kısayolları
 
-Chrome yan panel kısayolları, WebBrain yan paneli odaklanmış durumdayken çalışır.
+Chrome yan panel kısayolları, DIV yan paneli odaklanmış durumdayken çalışır.
 
 | Kısayol                         | İşlevi                                                                       |
 | ------------------------------- | ---------------------------------------------------------------------------- |
@@ -198,7 +198,7 @@ Chrome yan panel kısayolları, WebBrain yan paneli odaklanmış durumdayken ça
 | `Ctrl+Shift+X` veya `Cmd+Shift+X` | Act (Eylem) moduna geç                                                       |
 | `Ctrl+Shift+D` veya `Cmd+Shift+D` | Dev (Geliştirme) moduna geç                                                  |
 | `Escape`                        | Yalnızca slash komutu otomatik tamamlama listesini kapatmıyorsa, aktif çalıştırmayı durdur |
-| `Escape` (iki kez)              | WebBrain veya tarayıcı sayfalarındaki aktif kaydı durdur                     |
+| `Escape` (iki kez)              | DIV veya tarayıcı sayfalarındaki aktif kaydı durdur                     |
 
 ## Dokümantasyon
 
@@ -223,9 +223,9 @@ Ayrıca [中文](docs/zh-CN/) ve [Français](docs/fr/) dillerinde de mevcuttur.
 
 ## Topluluk
 
-WebBrain ile ilgili her konuda —yardım, yerel ve bulut model kurulumları, site
+DIV ile ilgili her konuda —yardım, yerel ve bulut model kurulumları, site
 adaptörleri, paylaşımlar ve katkıda bulunanların koordinasyonu—
-[WebBrain Discord](https://discord.gg/cgC325ssfw) sunucusunda sohbet edin.
+[DIV Discord](https://discord.gg/cgC325ssfw) sunucusunda sohbet edin.
 Sunucu yapısı için [topluluk](docs/community.md) sayfasına; kanal, rol ve
 karşılama ekranı yapılandırması içinse [discord-setup](docs/discord-setup.md)
 sayfasına bakın. Hata bildirimleri ve özellik istekleri Discord'da değil,
@@ -260,7 +260,7 @@ Yakın zamandaki değişiklikler [CHANGELOG.md](CHANGELOG.md) dosyasında yer al
 
 ## MCP sunucusu
 
-Bir kodlama aracısının *sizin* tarayıcınızı kullanmasını sağlayın. Claude Code, Codex, Cursor ve OpenClaw; halihazırda oturum açmış olduğunuz (çerezlerin mevcut olduğu ve SSO işlemlerinin tamamlandığı) bir oturumda çalışan WebBrain'e görev devredebilir. Başsız (headless) bir çerçeve (framework) oturum kapalı şekilde başlar ve ilk giriş engelinde takılır; bu sistemde ise böyle bir sorun yaşanmaz. ```bash
+Bir kodlama aracısının *sizin* tarayıcınızı kullanmasını sağlayın. Claude Code, Codex, Cursor ve OpenClaw; halihazırda oturum açmış olduğunuz (çerezlerin mevcut olduğu ve SSO işlemlerinin tamamlandığı) bir oturumda çalışan DIV'e görev devredebilir. Başsız (headless) bir çerçeve (framework) oturum kapalı şekilde başlar ve ilk giriş engelinde takılır; bu sistemde ise böyle bir sorun yaşanmaz. ```bash
 claude mcp add --transport stdio webbrain -- npx -y @webbrain/mcp-server
 ```
 
@@ -272,7 +272,7 @@ açık bırakın (durdurmak için `Ctrl+C` tuşlarına basın):
 npx -y @webbrain/mcp-server
 ```
 
-Sunucu çalışmaya başladıktan sonra **WebBrain → Settings → Bridge** (Ayarlar → Köprü) kısmını açın,
+Sunucu çalışmaya başladıktan sonra **DIV → Settings → Bridge** (Ayarlar → Köprü) kısmını açın,
 URL'yi `ws://127.0.0.1:17374/extension` olarak ayarlayın ve özelliği etkinleştirin.
 Chromium tabanlı tarayıcılarda köprü, uzantının ekran dışı belgesi (off-screen document) üzerinden çalışır.
 Firefox ise bunu arka plan sayfasında barındırır ve yapılandırma yine aynı
@@ -295,11 +295,11 @@ webbrain_run(task: "Stripe panosunu aç ve geçen haftaki başarısız
 Çağıran tarafın düz metin bir özet yerine öngörülebilir ve yapılandırılmış bir çıktıya
 ihtiyaç duyduğu durumlarda, JSON Şeması (JSON Schema) ile birlikte `webbrain_extract` kullanın.r, görev düzeyinde altı araç sunar: çalıştırma (run), yapılandırılmış veri çıkarma (structured extraction), durum (status), açıklama talebine yanıt (clarification response), iptal (abort) ve bağlantı tanılaması (connection diagnostics).
 
-`mode='ask'` modu salt okunurdur. `mode='act'` modu ise tıklama ve yazma işlemlerini gerçekleştirebilir; ancak bu işlemler, bir insanın karşılaştığı tarayıcı içi onay istemlerine tabidir. Sunucu, yaklaşık 50 adet düşük seviyeli tarayıcı ilkel komutu (primitive) yerine görev devretme (delegation) yeteneği sunar; WebBrain'in izin denetim mekanizması (permission gate) ajan döngüsü içinde yer aldığından, bir soket üzerinden doğrudan ilkel komut erişimi sağlamak bu denetim mekanizmasının altında kalır ve onu devre dışı bırakırdı. Ayrıntılar [`mcp-server/`](mcp-server/) dizinindedir.
+`mode='ask'` modu salt okunurdur. `mode='act'` modu ise tıklama ve yazma işlemlerini gerçekleştirebilir; ancak bu işlemler, bir insanın karşılaştığı tarayıcı içi onay istemlerine tabidir. Sunucu, yaklaşık 50 adet düşük seviyeli tarayıcı ilkel komutu (primitive) yerine görev devretme (delegation) yeteneği sunar; DIV'in izin denetim mekanizması (permission gate) ajan döngüsü içinde yer aldığından, bir soket üzerinden doğrudan ilkel komut erişimi sağlamak bu denetim mekanizmasının altında kalır ve onu devre dışı bırakırdı. Ayrıntılar [`mcp-server/`](mcp-server/) dizinindedir.
 
 Eksiksiz istemci kurulumu, araç argümanları, çalıştırma yaşam döngüsü, yapılandırılmış çıktı örnekleri, güvenlik sınırları ve sorun giderme kılavuzu [`web/docs/mcp/`](web/docs/mcp/) adresinde yer almaktadır.
 
-> Uzantı, aynı anda **tek bir** köprü soketi (bridge socket) tutar: WebBrain Cloud (17373),
+> Uzantı, aynı anda **tek bir** köprü soketi (bridge socket) tutar: DIV Cloud (17373),
 > MCP sunucusu (17374) veya LM Studio eklentisi (17375). **Ayarlar → Köprü (Settings → Bridge)**
 > altındaki URL'yi değiştirerek geçiş yapabilirsiniz.
 
@@ -325,7 +325,7 @@ Kaynak: [`lmstudio-plugin/`](lmstudio-plugin/). ## Katkıda Bulunanlar
 ```bibtex
 @software{webbrain2026,
 author = {Sokullu, Emre},
-title = {WebBrain: Web sayfalarıyla sohbet etmeye olanak tanıyan açık kaynaklı yapay zeka tarayıcı aracısı},
+title = {DIV: Web sayfalarıyla sohbet etmeye olanak tanıyan açık kaynaklı yapay zeka tarayıcı aracısı},
 year = {2026},
 publisher = {GitHub},
 url = {https://github.com/webbrain-one/webbrain}
@@ -334,7 +334,7 @@ url = {https://github.com/webbrain-one/webbrain}
 
 ## Lisans
 
-WebBrain, [GPL-3.0-or-later](LICENSE) lisansı altındadır;
+DIV, [GPL-3.0-or-later](LICENSE) lisansı altındadır;
 çünkü dağıtılan tarayıcı uzantısı, GPL lisanslı Xapian/libzim WebAssembly çalışma zamanını
 bünyesinde barındırır ve entegre eder.
 

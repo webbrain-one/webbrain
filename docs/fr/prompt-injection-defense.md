@@ -1,6 +1,6 @@
 # Défense contre l'injection de prompt — comment ça fonctionne et comment ne pas la casser
 
-L'agent de WebBrain agit **à l'intérieur de la session navigateur authentifiée de l'utilisateur** : il
+L'agent de DIV agit **à l'intérieur de la session navigateur authentifiée de l'utilisateur** : il
 peut cliquer, taper, naviguer, exécuter du JS et soumettre des formulaires *en tant qu'utilisateur connecté*. Ainsi,
 tout texte qu'il lit sur une page web est **contrôlable par un attaquant** — un
 tweet malveillant, un document partagé, un courriel, un commentaire d'issue, un PDF. Le but

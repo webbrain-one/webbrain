@@ -2,7 +2,7 @@
 // fallback without changing the exhaustive core locale dictionaries.
 export const memcodeEnglish = {
   'st.memcode.heading': 'MemCode cross-device recall (optional)',
-  'st.memcode.desc': 'Local WebBrain memory stays the default. Connect your MemCode account with OAuth, then separately enable read-only recall. Search queries and matching memories go to MemCode and your configured LLM provider. Nothing is uploaded automatically. OAuth tokens stay in this browser profile in local storage and are not included in settings exports.',
+  'st.memcode.desc': 'Local DIV memory stays the default. Connect your MemCode account with OAuth, then separately enable read-only recall. Search queries and matching memories go to MemCode and your configured LLM provider. Nothing is uploaded automatically. OAuth tokens stay in this browser profile in local storage and are not included in settings exports.',
   'st.memcode.read.label': 'Enable MemCode recall',
   'st.memcode.read.desc': 'Allow the agent to search your connected MemCode account using read-only OAuth scope. Results are untrusted data; this integration cannot write remote memory.',
   'st.memcode.connect': 'Connect MemCode',

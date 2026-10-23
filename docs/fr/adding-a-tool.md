@@ -1,6 +1,6 @@
 # Ajouter un outil
 
-Ce guide explique comment ajouter un nouvel outil à l'agent WebBrain — de la définition du schéma à la répartition de l'exécution en passant par la gestion des résultats.
+Ce guide explique comment ajouter un nouvel outil à l'agent DIV — de la définition du schéma à la répartition de l'exécution en passant par la gestion des résultats.
 
 ---
 
@@ -8,8 +8,8 @@ Ce guide explique comment ajouter un nouvel outil à l'agent WebBrain — de la 
 
 Il existe deux façons d'ajouter un outil appelable par le modèle :
 
-- **Outil central** : navigateur, DOM, réseau, téléchargement, planificateur ou comportement privilégié appartenant au produit et implémenté dans le code source de WebBrain. Utilisez la liste de contrôle complète ci-dessous.
-- **Outil de compétence** : intégration HTTP ou de tâche de téléchargement importable et supprimable par l'utilisateur, déclarée dans le manifeste `webbrain-tools` d'une compétence. Utilisez ceci lorsque l'outil est mieux traité comme une extension tierce de confiance plutôt qu'une primitive centrale de WebBrain.
+- **Outil central** : navigateur, DOM, réseau, téléchargement, planificateur ou comportement privilégié appartenant au produit et implémenté dans le code source de DIV. Utilisez la liste de contrôle complète ci-dessous.
+- **Outil de compétence** : intégration HTTP ou de tâche de téléchargement importable et supprimable par l'utilisateur, déclarée dans le manifeste `webbrain-tools` d'une compétence. Utilisez ceci lorsque l'outil est mieux traité comme une extension tierce de confiance plutôt qu'une primitive centrale de DIV.
 
 Un outil central nécessite des modifications dans trois couches :
 

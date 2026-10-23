@@ -1,8 +1,8 @@
 # New tab page
 
-WebBrain can show a Mue-derived new tab page with a single WebBrain box. On Chrome and
-Chromium it is opt-in (Firefox: see below): the last step of onboarding has a "Use WebBrain
-as my new tab page" checkbox, ticked by default, next to "Help Improve WebBrain", and
+DIV can show a Mue-derived new tab page with a single DIV box. On Chrome and
+Chromium it is opt-in (Firefox: see below): the last step of onboarding has a "Use DIV
+as my new tab page" checkbox, ticked by default, next to "Help Improve DIV", and
 Settings → General has the same switch (`newTabEnabled` in extension storage). Source:
 `newtab/`. Built output: `src/{chrome,firefox}/newtab/` (committed). Build with `npm run build:newtab`.
 
@@ -27,7 +27,7 @@ override applies whether or not a user opted in. The address bar may not hold fo
 opted-out tab for the instant before the redirect lands.
 
 Checked: Chromium 141 with the real extension loaded (unset / off → `chrome://new-tab-page/`,
-on → the WebBrain page). **Not checked:** Edge's `chrome-search://local-ntp/...` target (taken
+on → the DIV page). **Not checked:** Edge's `chrome-search://local-ntp/...` target (taken
 from a report in the Chromium Extensions group) and other Chromium browsers (Brave, Opera,
 Vivaldi may show a different default page).
 
@@ -45,11 +45,11 @@ back to Firefox's page.
 | Mode | What happens |
 |------|--------------|
 | Ask | The text is handed to the side panel and **sent** (Ask is read-only). |
-| Act | The panel opens in Act and the text is **sent immediately**, like Ask. The box shows a warning that Act starts working right away. If **Plan before Act** is on in WebBrain, the plan is still shown for approval before anything is done. |
+| Act | The panel opens in Act and the text is **sent immediately**, like Ask. The box shows a warning that Act starts working right away. If **Plan before Act** is on in DIV, the plan is still shown for approval before anything is done. |
 | Search | A URL is opened (http/https only); anything else goes to the browser's default search engine via `chrome.search.query` / `browser.search.search`. Hidden if the API is missing. |
 
-No search engine is hard-coded, and nothing typed into the box is sent to WebBrain's servers by
-the page. The only request the page itself makes to WebBrain is the bulletin check below.
+No search engine is hard-coded, and nothing typed into the box is sent to DIV's servers by
+the page. The only request the page itself makes to DIV is the bulletin check below.
 
 ## Hand-off
 
@@ -64,7 +64,7 @@ the page. The only request the page itself makes to WebBrain is the bulletin che
    never be picked up and sent later when the panel is opened by hand.
 2. It then sends `WB_NEWTAB_PANEL_OPENED`. `background.js` accepts it only from the
    extension's own `newtab/index.html` tab, on Chrome adds the tab to the
-   WebBrain group/`panelTabs` as the install page does. Records that are never claimed
+   DIV group/`panelTabs` as the install page does. Records that are never claimed
    are removed when their tab closes and cleared when the browser starts (one written in the few
    seconds before a crash is left until the start after that; the panel ignores it meanwhile). There is no
    periodic sweep: storage has no compare-and-delete, so deleting a key from an earlier
@@ -98,9 +98,9 @@ the page. The only request the page itself makes to WebBrain is the bulletin che
 The text is user-typed, so it enters the panel exactly like typing in the composer;
 it is never treated as page content.
 
-## WebBrain bulletin
+## DIV bulletin
 
-A banner slot under the box lets WebBrain put a short notice (an outage, an emergency, a
+A banner slot under the box lets DIV put a short notice (an outage, an emergency, a
 release note) on every new tab without an extension update. It follows the Apocalypse Mode
 bulletin (`src/*/src/ui/apocalypse-comm.js`), which reads its own file.
 

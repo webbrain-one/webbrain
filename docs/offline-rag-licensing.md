@@ -24,7 +24,7 @@ The only candidate binary asset is `libzim_wasm_0.95.zip`:
 Do not copy that asset into either extension until the decision below is signed
 off and the corresponding-source procedure has been completed.
 
-For a reproducible source build, WebBrain pins the versions declared by the
+For a reproducible source build, DIV pins the versions declared by the
 v0.95 source Makefile and workflow:
 
 | Component | Pinned version | License and canonical text |
@@ -67,7 +67,7 @@ session.close()
 Each result contains `path`, `title`, `snippet`, and optionally `score`. Search
 is capped at ten results per archive. A ZIM with no full-text index, a missing
 runtime, or a runtime error uses the existing title provider. Reader operations
-continue through WebBrain's existing audited ZIM reader.
+continue through DIV's existing audited ZIM reader.
 
 ## Required notices and corresponding source
 
@@ -76,7 +76,7 @@ If GPL distribution is approved, every Chrome and Firefox release must include:
 1. the complete GPLv3 and GPLv2 license texts plus all third-party copyright and
    license notices listed above;
 2. a prominent notice that the package contains a modified javascript-libzim /
-   libzim / Xapian Wasm build and the exact WebBrain modifications and date;
+   libzim / Xapian Wasm build and the exact DIV modifications and date;
 3. the exact build scripts, patches, configuration, interface-definition files,
    and installation information needed to reproduce the shipped Wasm;
 4. complete corresponding source for the shipped binaries, published alongside
@@ -84,7 +84,7 @@ If GPL distribution is approved, every Chrome and Firefox release must include:
 5. an SBOM mapping every shipped Wasm/JS artifact to its version, source archive,
    license, and SHA-256; and
 6. a documented determination about the license of the combined extension and
-   any required source release or relicensing of WebBrain itself.
+   any required source release or relicensing of DIV itself.
 
 Merely linking to the upstream repositories is not the corresponding-source
 procedure for a locally modified binary. Store terms, trademark rules, and the
@@ -114,7 +114,7 @@ MIT-licensed code can be incorporated into a GPL work, but a combined work that
 integrates GPL components must be distributed under compatible GPL terms. The
 project therefore uses this version boundary:
 
-- WebBrain **33.0.0 and later**, including the repository and Chrome, Edge, and
+- DIV **33.0.0 and later**, including the repository and Chrome, Edge, and
   Firefox packages, is conveyed under **GPL-3.0-or-later**.
 - Releases before 33.0.0 remain available under the MIT license that applied
   when they were published. The historical text is retained at
@@ -142,13 +142,13 @@ The upstream Makefile has two paths and only one of them is acceptable here.
 
 - `make libzim_release` downloads a **prebuilt** `libzim_wasm-emscripten-9.8.1`
   tarball from download.openzim.org and compiles only the bindings against it.
-  The upstream release workflow uses this. WebBrain must not, because the
+  The upstream release workflow uses this. DIV must not, because the
   corresponding source for that binary is not ours to provide.
 - The default `all` target builds xz, zlib, zstd, ICU, Xapian, and libzim from
   pinned source tarballs with documented origins, then links the bindings. Every
   version in the table above comes from these targets.
 
-WebBrain builds the source path. CI must archive every downloaded tarball and
+DIV builds the source path. CI must archive every downloaded tarball and
 patch, record its SHA-256, and publish them as the corresponding source beside
 the release. The release packager keeps the tracked
 `dist/corresponding-source/` tree in the tagged commit and creates a
@@ -165,7 +165,7 @@ so the link is `-O2`; `sbom.json` records `linkOptimization: "O2"`.
 libzim 0.95 exposes no `hasFulltextIndex` binding, and its `search()` catches its
 own exceptions and returns an empty vector, so a missing index looks exactly like
 a query that matched nothing. Kiwix stores the index as an ordinary ZIM entry, so
-WebBrain's own reader answers the question instead: `hasFullTextIndex()` on the
+DIV's own reader answers the question instead: `hasFullTextIndex()` on the
 archive, surfaced through `createKiwixZimProvider`. That keeps the check outside
 the GPL surface and lets an archive with no index skip loading the runtime at
 all.

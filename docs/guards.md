@@ -1,6 +1,6 @@
 # Guards
 
-A guard is WebBrain code, not the user, that refuses, defers or stops a tool
+A guard is DIV code, not the user, that refuses, defers or stops a tool
 call, a write, a submit or a completion. Every guard is registered in
 `src/*/src/agent/guard-policy.js` with a class and what it does when it knows
 the action is wrong (`onDecided`) and when it cannot tell (`onCannotDecide`):
@@ -12,7 +12,7 @@ the action is wrong (`onDecided`) and when it cannot tell (`onCannotDecide`):
   the wrong recipient (`recipient`), deleting data (`deletion`), spending
   money (`money`), credentials (`credentials`), and publishing or sending
   something the user did not ask for (`unrequested_publication`). When a hard
-  guard cannot decide, it asks the user on WebBrain's own card where one
+  guard cannot decide, it asks the user on DIV's own card where one
   exists (`ask`), and refuses otherwise.
 - **Everything else advises.** Verification, exact readback, evidence and
   completion checks are `quality` guards. They tell the model about the
@@ -25,7 +25,7 @@ the action is wrong (`onDecided`) and when it cannot tell (`onCannotDecide`):
     that refusal is its note. Each guard gets its own: when two apply, the
     second is checked once the first has advised. The next completion a guard
     would refuse is accepted, and the final answer ends with one line,
-    "WebBrain could not verify everything: …" (at most four items). An
+    "DIV could not verify everything: …" (at most four items). An
     exact table delivered from its `data_ref` stays the complete JSON its
     contract promises: the line goes beside it, as a warning and as the
     done result's `completionCaveat`.
@@ -71,7 +71,7 @@ the action is wrong (`onDecided`) and when it cannot tell (`onCannotDecide`):
 ## Asking instead of refusing
 
 When a guard cannot verify a consequential step and its `onCannotDecide` is
-`ask`, WebBrain asks the user on its own card instead of refusing.
+`ask`, DIV asks the user on its own card instead of refusing.
 
 - **The card.** A question ("Commit this on github.com?"), why the step could
   not be verified, and what the page shows now: the editor or composer text,
@@ -94,7 +94,7 @@ When a guard cannot verify a consequential step and its `onCannotDecide` is
   out and never goes ahead on its own, like the recipient and deletion cards.
 - **Unattended scheduled runs** cannot show a card: a quality guard follows
   the timeout policy at once, a hard-class guard refuses.
-- **Authority.** A timeout, Instant or unattended answer is WebBrain's, not the
+- **Authority.** A timeout, Instant or unattended answer is DIV's, not the
   user's: it is never recorded as task authority or memory.
 - **Strict checks.** Quality guards keep their refusal and show no card.
   Hard-class asks apply in both modes, because they replace a dead end with
@@ -132,10 +132,10 @@ of `renderClarifyCard` in `ui/sidepanel.js`. Tests: `test/guard-ask-cards.mjs`.
 
 After a correction, `steer-post-correction-commit-guard` and
 `steer-prior-submission-unreconciled` hold a post, commit or submit until
-WebBrain has matched what the attempt before the correction did. A deletion
+DIV has matched what the attempt before the correction did. A deletion
 is not held to that, because it cannot repeat that attempt: the latest
-request, or the user on WebBrain's deletion card, decides which item goes. A
-Mastodon post is one WebBrain cannot match after the fact (the home timeline
+request, or the user on DIV's deletion card, decides which item goes. A
+Mastodon post is one DIV cannot match after the fact (the home timeline
 shows it, not a page of its own), and "now delete it" used to be refused on
 every click there.
 

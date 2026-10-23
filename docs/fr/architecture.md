@@ -1,10 +1,10 @@
-# Architecture de WebBrain
+# Architecture de DIV
 
 > Version 25.7.12
 
 ## Aperçu
 
-WebBrain est une extension de navigateur qui donne à un LLM le contrôle de l'onglet actif du navigateur de l'utilisateur. L'utilisateur tape une instruction en langage naturel dans un panneau latéral, et une boucle d'agent autonome appelle le LLM, exécute des appels d'outils (clic, saisie, navigation, lecture d'état de page, etc.), renvoie les résultats au LLM, et répète jusqu'à ce que la tâche soit terminée.
+DIV est une extension de navigateur qui donne à un LLM le contrôle de l'onglet actif du navigateur de l'utilisateur. L'utilisateur tape une instruction en langage naturel dans un panneau latéral, et une boucle d'agent autonome appelle le LLM, exécute des appels d'outils (clic, saisie, navigation, lecture d'état de page, etc.), renvoie les résultats au LLM, et répète jusqu'à ce que la tâche soit terminée.
 
 Il existe deux builds qui partagent presque tout le code :
 - **Chrome** — Manifest V3, service worker, événements de confiance basés sur CDP
@@ -85,7 +85,7 @@ Le routeur de messages central. Sur Chrome c'est un service worker (MV3) ; sur F
 1. **Router les messages** entre le panneau latéral, les scripts de contenu et l'agent
 2. **Gérer le cycle de vie de l'agent** : `chat` / `chat_stream` / `continue` / `abort` / `clear_conversation`
 3. **Gérer la configuration du fournisseur** : charger, sauvegarder, tester, changer de fournisseur actif
-4. **Gérer la visibilité du panneau latéral** : le groupe d'onglets « WebBrain » par fenêtre contrôle où le panneau est activé
+4. **Gérer la visibilité du panneau latéral** : le groupe d'onglets « DIV » par fenêtre contrôle où le panneau est activé
 5. **Observer les requêtes XHR/fetch du même onglet** avec `webRequest` pour que la détection de boucle puisse suggérer un raccourci `fetch_url` exact lorsque des clics d'interface répétés déclenchent la même requête d'arrière-plan
 6. **Exposer OAuth Claude**, l'enregistrement d'onglet, CAPTCHA et autres sous-fonctionnalités comme gestionnaires de messages
 
@@ -415,7 +415,7 @@ rouvert reconstruise correctement le Markdown en cours. Chrome utilise
 | Observateur de raccourci API | Tampon URL/méthode `chrome.webRequest` | Tampon URL/méthode `browser.webRequest` |
 | Enregistrement d'onglet/écran par barre oblique | `chrome.tabCapture` / `getDisplayMedia()` + hors-écran | Non disponible |
 | Panneau latéral | API `sidePanel` (MV3) | `sidebar_action` (MV2) |
-| Téléversement de fichier | Chemin CDP ou `downloadId` | Rechargement via `downloadId` ou sélecteur de fichier WebBrain ; pas de chemin local arbitraire |
+| Téléversement de fichier | Chemin CDP ou `downloadId` | Rechargement via `downloadId` ou sélecteur de fichier DIV ; pas de chemin local arbitraire |
 
 Tout le reste (boucle d'agent, outils, adaptateurs, fournisseurs, détection de boucle, gestion de contexte, prompts système) est architecturalement identique entre les deux builds.
 

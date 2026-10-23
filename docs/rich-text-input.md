@@ -9,7 +9,7 @@ The October 11 regression came from `50c8d73ad`, which moved `type_ax` and
 not recognized as ProseMirror. DraftJS reached that path. Its old test fixture
 rebuilt the DOM on input, masking the conflict with React-owned document nodes.
 
-WebBrain identifies managed editors by their editor markup, independently of the
+DIV identifies managed editors by their editor markup, independently of the
 site: DraftJS, ProseMirror, Slate, Lexical, Quill, CKEditor, TinyMCE and CodeMirror.
 These editors bypass generic HTML insertion and DOM replacement. Chrome uses
 ref-bound browser input; iframe preparation and verification stay in the original
@@ -29,7 +29,7 @@ boundaries. ProseMirror text uses one public plain-text paste into the pinned
 selection, so a replacement does not briefly clear the draft and disable sibling
 controls before inserting its new value. Empty clears use one native deletion.
 The original editor, document, root, selection and task fences remain required.
-Without a supported transport, WebBrain leaves the draft intact and explains how
+Without a supported transport, DIV leaves the draft intact and explains how
 to enable trusted automation. Chrome canonicalizes CRLF and CR to LF before its
 single native insertion, preventing carriage returns from becoming extra spaces.
 
@@ -52,7 +52,7 @@ Input transport and action ownership are separate checks. A visible editor can
 still be rejected before typing if its surrounding composer has no verified
 owner. X's inline home composer exposed this second gap: it has no form or dialog,
 and binding the whole home timeline would make unrelated feed updates invalidate
-every action. WebBrain instead binds the local native editor, publishing control,
+every action. DIV instead binds the local native editor, publishing control,
 audience and matching local/navigation account links. It observes those identities
 before a decision and rechecks them before dispatch; feed counters stay outside
 the composer. Focus that reveals new audience controls requires a fresh observation.

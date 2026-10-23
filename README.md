@@ -1,17 +1,17 @@
 <p align="center">
-  <img src="assets/logo-mark.png" alt="WebBrain logo" width="92">
+  <img src="assets/logo-mark.png" alt="DIV logo" width="92">
 </p>
 
-<h1 align="center">WebBrain</h1>
+<h1 align="center">DIV</h1>
 
 <p align="center">
   Open-source AI browser agent for chatting with pages, automating tasks, and running multi-step workflows with your choice of LLM.
 </p>
 
 <p align="center">
-  <a href="https://chromewebstore.google.com/detail/webbrain/ljhijonmfahplgbbacgcfnaihbjljhhb"><img src="https://img.shields.io/badge/Chrome-Install-4285F4?style=for-the-badge&amp;logo=googlechrome&amp;logoColor=white" alt="Install WebBrain from the Chrome Web Store"></a>
-  <a href="https://addons.mozilla.org/firefox/addon/webbrain/"><img src="https://img.shields.io/badge/Firefox-Install-FF7139?style=for-the-badge&amp;logo=firefoxbrowser&amp;logoColor=white" alt="Install WebBrain from Firefox Browser Add-ons"></a>
-  <a href="https://microsoftedge.microsoft.com/addons/detail/dfbioajafcijomhljabppcelecgdgfeo"><img src="https://img.shields.io/badge/Edge-Install-0A84FF?style=for-the-badge&amp;logo=microsoftedge&amp;logoColor=white" alt="Install WebBrain from Microsoft Edge Add-ons"></a>
+  <a href="https://chromewebstore.google.com/detail/webbrain/ljhijonmfahplgbbacgcfnaihbjljhhb"><img src="https://img.shields.io/badge/Chrome-Install-4285F4?style=for-the-badge&amp;logo=googlechrome&amp;logoColor=white" alt="Install DIV from the Chrome Web Store"></a>
+  <a href="https://addons.mozilla.org/firefox/addon/webbrain/"><img src="https://img.shields.io/badge/Firefox-Install-FF7139?style=for-the-badge&amp;logo=firefoxbrowser&amp;logoColor=white" alt="Install DIV from Firefox Browser Add-ons"></a>
+  <a href="https://microsoftedge.microsoft.com/addons/detail/dfbioajafcijomhljabppcelecgdgfeo"><img src="https://img.shields.io/badge/Edge-Install-0A84FF?style=for-the-badge&amp;logo=microsoftedge&amp;logoColor=white" alt="Install DIV from Microsoft Edge Add-ons"></a>
 </p>
 
 <p align="center">
@@ -21,16 +21,21 @@
   <a href="docs/">Docs</a> ·
   <a href="https://webbrain.one">Website</a> ·
   <a href="https://discord.gg/cgC325ssfw">Discord</a> ·
-  <a href="LICENSE">GPL-3.0-or-later</a>
+  <a href="LICENSE">MIT</a>
 </p>
 
-![WebBrain reading a page, filling in a form, and fetching a file](assets/webbrain-demo.gif)
+![DIV reading a page, filling in a form, and fetching a file](assets/webbrain-demo.gif)
 
-WebBrain is a web browser extension that puts an AI agent in a side panel next to
+DIV is a web browser extension that puts an AI agent in a side panel next to
 your tabs. Ask it about the page you're on, or hand it a task and let it click,
 type, and navigate its way through. It runs on the model you choose — a local
 llama.cpp or Ollama server, a frontier cloud API, or the managed default that
 needs no setup at all.
+
+> **Note:** DIV is a byte-for-byte engine replica of the open-source WebBrain
+> extension, rebranded to DIV — only the visible product name changed. This repo
+> is MIT-licensed; see [OPENSOURCE.md](OPENSOURCE.md) for the full note on what
+> DIV is, how it works, and the relicensing + attribution.
 
 ## Install
 
@@ -60,7 +65,7 @@ are removed when Firefox restarts; permanent installation requires signing via
 
 ## Use it
 
-Click the WebBrain icon to open the side panel, then type something like:
+Click the DIV icon to open the side panel, then type something like:
 
 - "Summarize this page"
 - "Find all links about pricing"
@@ -75,15 +80,15 @@ Three modes control what the agent is allowed to do:
 | **Act** | Clicks, types, navigates, uploads, downloads, fills forms.             |
 | **Dev** | Adds page source, styles, console, network, and reversible page edits. |
 
-WebBrain picks the mode for each message: it stays in Ask unless your message
+DIV picks the mode for each message: it stays in Ask unless your message
 asks it to do something in the browser. Start a message with `/ask`, `/act` or
 `/dev` to choose the mode yourself.
 
 ## Pick a model
 
-**WebBrain Compass 1.0** is the default and needs no API key or local setup.
+**DIV Compass 1.0** is the default and needs no API key or local setup.
 
-**Local models** need no API key either. Point WebBrain at any OpenAI-compatible
+**Local models** need no API key either. Point DIV at any OpenAI-compatible
 server:
 
 ```bash
@@ -108,7 +113,7 @@ fallback, not a guaranteed minimum; Compact is not guaranteed to fit 8k.**
 Mid and Full can exceed 16k before history accumulates, and compaction cannot
 shrink fixed instructions or schemas. The sizing estimate is not the model's
 exact tokenizer; see the [context guidance](docs/providers-and-models.md#local-providers).
-WebBrain auto-detects the real window for llama.cpp, Ollama, and LM
+DIV auto-detects the real window for llama.cpp, Ollama, and LM
 Studio, and auto-compacts the conversation as it fills up. For Ollama,
 llama.cpp, LM Studio, and LocalAI, it also reads native server metadata before
 adding screenshots; the Providers page provides Auto, Force on, and Off overrides. When
@@ -164,7 +169,7 @@ required; turning the existing switch off also purges queued diagnostics.
 
 ## Agent tools
 
-WebBrain separates **tier** from **mode**. Tier (`compact`, `mid`, `full`) is a
+DIV separates **tier** from **mode**. Tier (`compact`, `mid`, `full`) is a
 per-provider setting controlling how many tools a model sees — Compact suits
 small local models, Full unlocks hover, drag-drop, frames, and shadow DOM. Mode
 (`ask`, `act`, `dev`) controls what the user is allowing.
@@ -200,7 +205,7 @@ suffixes: [slash commands](docs/slash-commands.md).
 
 ## Keyboard Shortcuts
 
-Chrome side panel shortcuts work when the WebBrain side panel has focus.
+Chrome side panel shortcuts work when the DIV side panel has focus.
 
 | Shortcut                        | What it does                                                                 |
 | ------------------------------- | ---------------------------------------------------------------------------- |
@@ -209,7 +214,7 @@ Chrome side panel shortcuts work when the WebBrain side panel has focus.
 | `Ctrl+Shift+X` or `Cmd+Shift+X` | Start the message with `/act`                                                |
 | `Ctrl+Shift+D` or `Cmd+Shift+D` | Start the message with `/dev`                                                |
 | `Escape`                        | Stop the active run, unless it is only dismissing slash-command autocomplete |
-| `Escape` twice                  | Stop an active recording from WebBrain or browser pages                      |
+| `Escape` twice                  | Stop an active recording from DIV or browser pages                      |
 
 ## Documentation
 
@@ -234,9 +239,9 @@ Also available in [中文](docs/zh-CN/) and [Français](docs/fr/).
 
 ## Community
 
-Chat about everything WebBrain — help, local and cloud model setups, site
+Chat about everything DIV — help, local and cloud model setups, site
 adapters, show-and-tell, and contributor coordination — on the
-[WebBrain Discord](https://discord.gg/cgC325ssfw). See
+[DIV Discord](https://discord.gg/cgC325ssfw). See
 [community](docs/community.md) for how the server is organized, and
 [discord-setup](docs/discord-setup.md) for the channel, role, and welcome-screen
 configuration. Bug reports and feature requests belong in
@@ -286,7 +291,7 @@ Recent changes are in [CHANGELOG.md](CHANGELOG.md).
 ## MCP server
 
 Let a coding agent use *your* browser. Claude Code, Codex, Cursor and OpenClaw
-can delegate a task to WebBrain running in the session you are already signed
+can delegate a task to DIV running in the session you are already signed
 into — cookies present, SSO already passed. A headless framework starts logged
 out and stalls at the first login wall; this does not.
 
@@ -302,7 +307,7 @@ open (press `Ctrl+C` to stop it):
 npx -y @webbrain/mcp-server
 ```
 
-Once the server is running, open **WebBrain → Settings → Bridge**,
+Once the server is running, open **DIV → Settings → Bridge**,
 set the URL to `ws://127.0.0.1:17374/extension`, and enable it.
 On Chromium browsers the bridge runs from the extension's off-screen document.
 Firefox hosts it in the background page and is configured under the same
@@ -329,7 +334,7 @@ connection diagnostics.
 
 `mode='ask'` is read-only. `mode='act'` can click and type, gated by the same
 in-browser approval prompts a human gets. The server exposes task delegation
-rather than the ~50 low-level browser primitives: WebBrain's permission gate
+rather than the ~50 low-level browser primitives: DIV's permission gate
 lives in the agent loop, so per-primitive access over a socket would sit below
 the gate and bypass it. Details in [`mcp-server/`](mcp-server/).
 
@@ -337,7 +342,7 @@ The complete client setup, tool arguments, run lifecycle, structured-output
 examples, safety boundaries, and troubleshooting guide live at
 [`web/docs/mcp/`](web/docs/mcp/).
 
-> The extension holds **one** bridge socket at a time — WebBrain Cloud (17373),
+> The extension holds **one** bridge socket at a time — DIV Cloud (17373),
 > the MCP server (17374), or the LM Studio plugin (17375). Switch by changing
 > the URL under **Settings → Bridge**.
 
@@ -371,7 +376,7 @@ Source: [`lmstudio-plugin/`](lmstudio-plugin/).
 ```bibtex
 @software{webbrain2026,
   author = {Sokullu, Emre},
-  title = {WebBrain: Open-source AI browser agent for chatting with pages},
+  title = {DIV: Open-source AI browser agent for chatting with pages},
   year = {2026},
   publisher = {GitHub},
   url = {https://github.com/webbrain-one/webbrain}
@@ -380,8 +385,12 @@ Source: [`lmstudio-plugin/`](lmstudio-plugin/).
 
 ## License
 
-WebBrain is licensed under
-[GPL-3.0-or-later](LICENSE) because the distributed browser extension bundles
-and integrates the GPL-licensed Xapian/libzim WebAssembly runtime.
+DIV is licensed under the MIT License (see [LICENSE](LICENSE)).
+
+This fork reuses the WebBrain engine as-is; the bundled
+Xapian/libzim WebAssembly runtime and all third-party components keep their own
+upstream licenses. The original WebBrain was distributed under the GNU General
+Public License v3.0-or-later, which permits relicensing. See
+[OPENSOURCE.md](OPENSOURCE.md) for the full relicensing note.
 
 Built with ❤️ by [Emre Sokullu](https://emresokullu.com) and [open-source contributors](https://github.com/webbrain-one/webbrain/graphs/contributors).

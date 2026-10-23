@@ -65,7 +65,7 @@ with a structured contract use their declared workflow revision.
 Adapters with repeated, evidence-backed tasks may also declare a versioned
 `webbrain-adapter-workflow/2` contract. This is runtime policy, not more page
 prose. Before either the compact intent planner or the full planner runs,
-WebBrain gives it only the active adapter name and a bounded list of app-owned
+DIV gives it only the active adapter name and a bounded list of app-owned
 job IDs plus short descriptions. The planner selects `site_job` semantically,
 so routing does not depend on the language of the user's request. Page content
 cannot add or select a job, and an ID is accepted only if it still belongs to

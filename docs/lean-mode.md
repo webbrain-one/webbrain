@@ -1,10 +1,10 @@
 # Lean mode
 
-Lean mode turns off WebBrain's own verification of a strong model's work. The run keeps its tier's tools and prompt, with one added note asking the model to check its own work. WebBrain's permission and safety boundaries stay exactly as they are.
+Lean mode turns off DIV's own verification of a strong model's work. The run keeps its tier's tools and prompt, with one added note asking the model to check its own work. DIV's permission and safety boundaries stay exactly as they are.
 
-WebBrain's checks were built for small local models, which mistype, lose track and report success too early. A strong model does not need most of that help. Each check costs a page read, a model call or a forced turn, and when a check cannot verify something it may refuse an action that was right. The clearest case is GitHub's file editor: it renders blank lines in a way WebBrain's readback reads as doubled, so WebBrain can never confirm a multi-paragraph edit, and it refuses the commit that follows. [lean-mode-comparison.md](lean-mode-comparison.md) replays that case and two ordinary ones with and without lean mode.
+DIV's checks were built for small local models, which mistype, lose track and report success too early. A strong model does not need most of that help. Each check costs a page read, a model call or a forced turn, and when a check cannot verify something it may refuse an action that was right. The clearest case is GitHub's file editor: it renders blank lines in a way DIV's readback reads as doubled, so DIV can never confirm a multi-paragraph edit, and it refuses the commit that follows. [lean-mode-comparison.md](lean-mode-comparison.md) replays that case and two ordinary ones with and without lean mode.
 
-For verification, lean mode follows the Claude in Chrome model ([claude-chrome-comparison.md](claude-chrome-comparison.md)): safety comes from permission prompts, site checks right before each action and the model's own judgment, with no readback of typing and no completion judge. Unlike Claude in Chrome, it keeps WebBrain's whole tool set. An earlier version also cut the tools to a short list and the prompt to a short one; that list had no download tool, so a lean run could not download a file it then had to upload, such as a release asset.
+For verification, lean mode follows the Claude in Chrome model ([claude-chrome-comparison.md](claude-chrome-comparison.md)): safety comes from permission prompts, site checks right before each action and the model's own judgment, with no readback of typing and no completion judge. Unlike Claude in Chrome, it keeps DIV's whole tool set. An earlier version also cut the tools to a short list and the prompt to a short one; that list had no download tool, so a lean run could not download a file it then had to upload, such as a release asset.
 
 ## The setting
 
@@ -27,8 +27,8 @@ The resolved mode is recorded:
 Auto turns lean mode on only when all of these hold (`src/*/src/agent/lean-mode.js`):
 
 1. **The run is in Act mode.**
-2. **The provider is a cloud or router provider.** The category WebBrain gives the provider decides, so Ollama Cloud is a cloud provider. A local provider never gets lean mode under Auto, whatever model it serves, and a provider of unknown category does not either. A provider config that names no category is local when it is llama.cpp, Ollama, LM Studio or WebGPU.
-3. **The provider's prompt tier is Full.** Auto keeps WebBrain's checks for a provider the user set to Compact or Mid.
+2. **The provider is a cloud or router provider.** The category DIV gives the provider decides, so Ollama Cloud is a cloud provider. A local provider never gets lean mode under Auto, whatever model it serves, and a provider of unknown category does not either. A provider config that names no category is local when it is llama.cpp, Ollama, LM Studio or WebGPU.
+3. **The provider's prompt tier is Full.** Auto keeps DIV's checks for a provider the user set to Compact or Mid.
 4. **The model id is on the strong-model list:**
    - Claude Opus and Sonnet, generation 4 and later, and Claude Fable and Mythos (`claude-sonnet-4-5`, `claude-opus-4-1-…`, `claude-fable-5-1`, `anthropic/claude-sonnet-4.5`, Bedrock ids);
    - GPT-5 and later, including gpt-6 variants, except nano models;
@@ -36,7 +36,7 @@ Auto turns lean mode on only when all of these hold (`src/*/src/agent/lean-mode.
    - Gemini 2.5 Pro and newer Pro or Ultra models;
    - Grok 4 and later.
 
-   The id is the model the provider calls: with the model setting left blank, that is the provider's default (Anthropic's is `claude-sonnet-5`). Ids are matched in lower case anywhere in the string, so router prefixes, regional prefixes and dated snapshots match. Haiku, Flash, GPT-4o, Claude 3.x and the WebBrain Cloud default model are not on the list, so Auto leaves them off.
+   The id is the model the provider calls: with the model setting left blank, that is the provider's default (Anthropic's is `claude-sonnet-5`). Ids are matched in lower case anywhere in the string, so router prefixes, regional prefixes and dated snapshots match. Haiku, Flash, GPT-4o, Claude 3.x and the DIV Cloud default model are not on the list, so Auto leaves them off.
 
 The list is `LEAN_STRONG_MODEL_RULES` in `lean-mode.js`. That file is identical in both builds (a test checks it); add a family there when it has proven itself, and add a case to `test/lean-mode.mjs`.
 
@@ -44,7 +44,7 @@ The list is `LEAN_STRONG_MODEL_RULES` in `lean-mode.js`. That file is identical 
 
 **Tools.** The same tools as any Act run at the provider's tier, with the same schemas. Downloads, uploads, `browser_batch`, the scratchpad, WebMCP, research escalation and the CAPTCHA tools are offered when they apply, as in a run without lean mode: `getToolsForMode` in `tools.js` does not look at lean mode. A call to a tool the run does not offer is refused, as in every mode.
 
-**Prompt.** The tier's Act prompt with its usual additions, plus one note, `SYSTEM_PROMPT_LEAN_NOTE` in `tools.js`: WebBrain will not re-check the model's typing or its result, so the model reads the page again and compares what it sees with the request before calling `done`.
+**Prompt.** The tier's Act prompt with its usual additions, plus one note, `SYSTEM_PROMPT_LEAN_NOTE` in `tools.js`: DIV will not re-check the model's typing or its result, so the model reads the page again and compares what it sees with the request before calling `done`.
 
 [lean-mode-comparison.md](lean-mode-comparison.md) shows the per-turn sizes: the same tools as Off and a slightly longer prompt.
 
@@ -85,7 +85,7 @@ These quality guards keep running, each because a hard check depends on it (`LEA
 
 | Guard | Why it stays |
 | --- | --- |
-| `owned-native-chat-read-repair` | The recipient guard needs WebBrain's own exact read of the latest messages before a reply is sent. |
+| `owned-native-chat-read-repair` | The recipient guard needs DIV's own exact read of the latest messages before a reply is sent. |
 | `chat-send-evidence-unavailable` | A send whose conversation or message baseline cannot be observed cannot be checked for the right recipient or a duplicate. |
 | `recipient-draft-evidence-unavailable` | The recipient guard reads the draft body and the message baseline to verify a send. |
 | `recipient-guard-target-preparation` | It runs inside the recipient guard's own target resolution. |
@@ -95,17 +95,17 @@ These quality guards keep running, each because a hard check depends on it (`LEA
 | `captcha-solve-detection-binding` | It keeps a paid CAPTCHA solve from going to the wrong widget. |
 | `set-field-bundled-submit-outcome` | `set_field` never sends its bundled Enter for a value it could not verify. |
 | `clickax-native-button-preparation` | Its vetoes include a person acting in the tab and a change of task owner (host checks). |
-| `clickax-trusted-retry-vetoes` | It stops WebBrain's own automatic re-click from acting twice. |
+| `clickax-trusted-retry-vetoes` | It stops DIV's own automatic re-click from acting twice. |
 | `action-no-progress-classification` | It feeds the loop detector, a budget. |
 | `terminal-recovery-no-success` | It is the ending of the step-limit and observation budgets. |
 
 ## What to expect
 
-- **The model checks its own work.** WebBrain does not tell it that a write could not be read back or that the page still shows a form; the prompt asks it to read the page again before `done`. A strong model does this with a tree read or `inspect_viewport`; a weak one may report success too early, which is why Auto keeps lean mode off for local and small models.
-- **No caveat line.** A lean answer never carries "WebBrain could not verify everything", because WebBrain verified nothing.
-- **GitHub commits go through.** The commit after a CodeMirror edit is no longer held for an exact editor proof. The submit card still asks before the commit when "Ask before consequential actions" is on, and the committed file is not read back by WebBrain.
-- **Scheduled lean runs stop for the user more often.** When a scheduled run's consequential action ends with an effect WebBrain could not confirm, the task waits for the user to check the page before it runs again. In a full run the completion judge can confirm the effect and settle it; a lean run has no judge.
-- **The same tools.** A lean run can download, upload, batch, use WebMCP and a configured CAPTCHA solver as a full run can. Lean mode still keeps no progress ledger of its own: the model may write progress rows itself, but WebBrain does not classify the task's items or check them at `done`.
+- **The model checks its own work.** DIV does not tell it that a write could not be read back or that the page still shows a form; the prompt asks it to read the page again before `done`. A strong model does this with a tree read or `inspect_viewport`; a weak one may report success too early, which is why Auto keeps lean mode off for local and small models.
+- **No caveat line.** A lean answer never carries "DIV could not verify everything", because DIV verified nothing.
+- **GitHub commits go through.** The commit after a CodeMirror edit is no longer held for an exact editor proof. The submit card still asks before the commit when "Ask before consequential actions" is on, and the committed file is not read back by DIV.
+- **Scheduled lean runs stop for the user more often.** When a scheduled run's consequential action ends with an effect DIV could not confirm, the task waits for the user to check the page before it runs again. In a full run the completion judge can confirm the effect and settle it; a lean run has no judge.
+- **The same tools.** A lean run can download, upload, batch, use WebMCP and a configured CAPTCHA solver as a full run can. Lean mode still keeps no progress ledger of its own: the model may write progress rows itself, but DIV does not classify the task's items or check them at `done`.
 
 ## How to compare
 

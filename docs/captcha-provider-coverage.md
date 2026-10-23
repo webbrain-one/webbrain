@@ -4,7 +4,7 @@ Initial catalog audit: **2026-09-29**. Integration contracts rechecked against f
 
 This integration exposes **seven providers and 198 catalog method variants**. A method variant can be a proxy/proxyless route, an Enterprise option, a recognition model, or a separate response mode. It is not a claim that there are 198 CAPTCHA products.
 
-“Integrated” means WebBrain can validate the method's input, submit its documented request, poll when needed, and preserve its answer. It does **not** mean every website exposes the required parameters, that a token is accepted, or that authenticated live success rates have been measured. This implementation was checked with provider-contract fixtures and browser tests; no paid live solves were performed.
+“Integrated” means DIV can validate the method's input, submit its documented request, poll when needed, and preserve its answer. It does **not** mean every website exposes the required parameters, that a token is accepted, or that authenticated live success rates have been measured. This implementation was checked with provider-contract fixtures and browser tests; no paid live solves were performed.
 
 ## Contents
 
@@ -88,7 +88,7 @@ The seven adapters were checked against official request, authentication, pollin
 | [NopeCHA](https://nopecha.com/api-reference/) | Rechecked Basic-key authorization, v1 job IDs, polling and incomplete-job responses. Existing transport regressions cover them. The hCaptcha documentation discrepancy is recorded above; no new endpoint was guessed. |
 | [NoneCap](https://nonecap.com/api-reference/) | Rechecked Bearer authorization, solve states, token, response key and returned User-Agent. Required identity checks now also apply to stored/native answers, so manual bindings cannot bypass them. |
 
-NoneCap and [CapMonster reCAPTCHA v3](https://docs.capmonster.cloud/docs/captchas/recaptcha-v3-task/) explicitly require the returned User-Agent. Automatic and native application check it before writing fields, cookies or invoking callbacks. A mismatched answer is retained, including after worker restart, and requires manual completion; WebBrain does not silently change the browser identity or purchase another answer. Matching answers proceed normally. Other providers' optional User-Agent metadata remains available in their structured results and AWS diagnostics.
+NoneCap and [CapMonster reCAPTCHA v3](https://docs.capmonster.cloud/docs/captchas/recaptcha-v3-task/) explicitly require the returned User-Agent. Automatic and native application check it before writing fields, cookies or invoking callbacks. A mismatched answer is retained, including after worker restart, and requires manual completion; DIV does not silently change the browser identity or purchase another answer. Matching answers proceed normally. Other providers' optional User-Agent metadata remains available in their structured results and AWS diagnostics.
 
 ## Fallback and charging
 
@@ -99,7 +99,7 @@ NoneCap and [CapMonster reCAPTCHA v3](https://docs.capmonster.cloud/docs/captcha
 5. On API error, unusable answer, or timeout, try the next compatible provider.
 6. Stop at the first usable answer. Injection or later page rejection does not restart fallback.
 
-**Fallback can incur multiple charges.** A timed-out job may still finish upstream after WebBrain starts the next provider. This behavior is intentional. “Never retry” prevents repurchasing the same unresolved challenge from an already attempted provider. Provider errors advance the configured sequence within one call. For automatic AWS cookie solving, a fresh read after a reload that still shows AWS blocking can advance to an untried compatible provider; the attempted-provider record survives restart.
+**Fallback can incur multiple charges.** A timed-out job may still finish upstream after DIV starts the next provider. This behavior is intentional. “Never retry” prevents repurchasing the same unresolved challenge from an already attempted provider. Provider errors advance the configured sequence within one call. For automatic AWS cookie solving, a fresh read after a reload that still shows AWS blocking can advance to an untried compatible provider; the attempted-provider record survives restart.
 
 Most adapters use a 180-second job deadline and 30-second HTTP requests. The original direct CapSolver route retains its 120-second polling deadline. NopeCHA/NoneCap poll every two seconds; generic JSON providers every five seconds. SolveCaptcha waits 20 seconds initially for reCAPTCHA and five seconds for other tasks. Actual completion time is provider-dependent.
 
@@ -139,7 +139,7 @@ Then inspect a particular provider/method to retrieve its exact schema:
 {"provider":"2captcha","method":"GeeTestTaskProxyless"}
 ```
 
-Use observed page parameters to prepare fallback tasks. Method IDs are WebBrain identifiers; suffixes such as `:enterprise` select fixed provider options and are not sent as the upstream task type.
+Use observed page parameters to prepare fallback tasks. Method IDs are DIV identifiers; suffixes such as `:enterprise` select fixed provider options and are not sent as the upstream task type.
 
 ```json
 {
@@ -166,7 +166,7 @@ Use observed page parameters to prepare fallback tasks. Method IDs are WebBrain 
 }
 ```
 
-AWS WAF pages keep their inputs out of the page text: `key`, `iv`, and `context` sit in the `window.gokuProps` global, and the challenge script loads from an `awswaf.com` host. When `get_captcha_capabilities` is called without a provider or method on such a page, it reads those values from the top frame and returns `observedChallenge`. That object includes one ready task per enabled CapSolver, CapMonster Cloud, or Anti-Captcha provider, plus the `aws-waf-token` cookie path for each provider's answer (`cookie`, `cookies.aws-waf-token`, and `token`). Automatic CapMonster tasks set `cookieSolution: true`. Explicit native tasks may instead request the default voucher answer; that valid response is retained without falling through to another paid provider. 2Captcha and SolveCaptcha are left out because they return a `captcha_voucher`/`existing_token` pair that WebBrain can't turn into the cookie, so a win by either would be charged and unusable. If an input is missing, the result names it and nothing is guessed. After `apply_captcha_solution` sets the cookie, reload the page and read it again. A site can still reject a proxyless token.
+AWS WAF pages keep their inputs out of the page text: `key`, `iv`, and `context` sit in the `window.gokuProps` global, and the challenge script loads from an `awswaf.com` host. When `get_captcha_capabilities` is called without a provider or method on such a page, it reads those values from the top frame and returns `observedChallenge`. That object includes one ready task per enabled CapSolver, CapMonster Cloud, or Anti-Captcha provider, plus the `aws-waf-token` cookie path for each provider's answer (`cookie`, `cookies.aws-waf-token`, and `token`). Automatic CapMonster tasks set `cookieSolution: true`. Explicit native tasks may instead request the default voucher answer; that valid response is retained without falling through to another paid provider. 2Captcha and SolveCaptcha are left out because they return a `captcha_voucher`/`existing_token` pair that DIV can't turn into the cookie, so a win by either would be charged and unusable. If an input is missing, the result names it and nothing is guessed. After `apply_captcha_solution` sets the cookie, reload the page and read it again. A site can still reject a proxyless token.
 
 Saved weights determine execution order, regardless of array order. Supply a task for each enabled provider that can solve that family and for which the required inputs are available. The tool does not invent another provider's parameters. Page URLs must belong to the active tab or an observed frame. Native methods do not automatically scrape every site's internal configuration.
 
@@ -219,7 +219,7 @@ A proxyless method means the solver chooses its network route. It does not guara
 - Proxied JSON APIs use provider-specific `proxyType`, `proxyAddress`, `proxyPort`, and optional authentication fields. SolveCaptcha uses form-encoded proxy fields.
 - Weighted native fallbacks compare supplied proxy scheme, host, port, and credentials across provider-specific formats before any paid request. Identity-bound fallbacks require a proxy on every attempt; supplied User-Agent values must also agree.
 
-WebBrain does not silently change the browser's proxy or User-Agent, transplant a complete remote session, or infer an IP match. Satisfy those prerequisites separately. Returned cookies can be explicitly bound; returned JavaScript, arbitrary storage dumps, and arbitrary navigation instructions cannot.
+DIV does not silently change the browser's proxy or User-Agent, transplant a complete remote session, or infer an IP match. Satisfy those prerequisites separately. Returned cookies can be explicitly bound; returned JavaScript, arbitrary storage dumps, and arbitrary navigation instructions cannot.
 
 ## Security and data flow
 

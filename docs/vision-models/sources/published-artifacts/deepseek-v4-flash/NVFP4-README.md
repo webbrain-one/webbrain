@@ -31,9 +31,9 @@ of MoonViT patches and maps the resulting 4608-dimensional representation into
 DeepSeek's 4096-dimensional token space. Original text routing IDs are preserved;
 image positions receive deterministic routing IDs from a fixed 64-ID palette.
 
-## Why vision at WebBrain
+## Why vision at DIV
 
-At [WebBrain](https://www.webbrain.one), we build browser agents that need to
+At [DIV](https://www.webbrain.one), we build browser agents that need to
 understand the visual state of the web—not just extracted text. Screenshots,
 charts, dashboards, rich editors, and the location and appearance of controls
 are part of real browser work, so vision is a practical product requirement.

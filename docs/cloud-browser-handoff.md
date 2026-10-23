@@ -7,7 +7,7 @@ reserved while it is `pausing`; a writable `paused` acknowledgement follows only
 after the current model/tool boundary settles and the handoff guard is saved.
 Pausing a run does not suspend or power off its browser session.
 
-`cloud_resume` returns control with an optional note. WebBrain reads the current
+`cloud_resume` returns control with an optional note. DIV reads the current
 page before further work. The note reports state and grants no new task authority.
 An existing clarification remains pending and requires its original explicit answer.
 

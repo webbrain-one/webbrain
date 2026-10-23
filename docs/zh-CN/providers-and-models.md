@@ -69,7 +69,7 @@ class BaseLLMProvider {
 
 ### 扩展提供商目录
 
-WebBrain 从 OpenCode 提供商目录提交
+DIV 从 OpenCode 提供商目录提交
 `62e4641235d7847dadc60da37cca8a023dd54fc1` 的快照中新增了 76 张默认禁用的
 提供商卡片。提供商页面在 **Chromium 上共有 106 个内置提供商**，在 **Firefox
 上共有 105 个**；两者的差异是仅 Chromium 提供的本地 WebGPU 运行时。完整 ID
@@ -102,7 +102,7 @@ ID；对于 `@cf/` 模型，留空时会自动使用 `default` 网关。
 当 `supportsAskStreaming` 启用时，交互式 Ask 回合会流式显示回复。中断的流会
 清除部分文本、仅以非流式方式重试一次，并在本次运行剩余阶段关闭流式传输。
 Act、Dev、计划任务、云端运行和 Continue 仍使用非流式请求。服务返回令牌用量时，
-WebBrain 会直接记录；若服务省略用量，则记录基于字符数的保守估算，避免流式请求绕过
+DIV 会直接记录；若服务省略用量，则记录基于字符数的保守估算，避免流式请求绕过
 已配置的成本限额。
 
 明确不支持的条目：`github-models`（GitHub Models 于 2026 年 7 月 30 日退役）、
@@ -113,7 +113,7 @@ WebBrain 会直接记录；若服务省略用量，则记录基于字符数的�
 
 在 Chromium 上，**WebGPU（浏览器内）** 是无端点的本地提供商。提供商页面和末日模式选择器提供两个预设：**Compass Tiny v2.1**（默认，`q4f16`，约 1.87 GB，仅文本，32k 上下文）和 **Ternary Bonsai 2 2B Vision**（约 1.45 GB，支持图片，16k 上下文），走 Transformers.js / ONNX；提供商页面还接受自定义 Hugging Face 仓库。其他 Bonsai 2 预设随扩展提供，但暂时不在选择器中显示。启用末日模式时会自动下载所选模型；缓存完成后，即使未启用末日模式也可正常使用。在显存受限的 GPU 上，可在提供商页面的 WebGPU 卡片中调低上下文窗口。Firefox 不提供该卡片。
 
-浏览器内模型只回答问题。在侧边栏中，每个 Ask 回合只进行一次不带工具的调用：WebBrain 先读取当前页面、选中文本、PDF 标签页以及问题中链接的页面，再把这些文本和一个简短提示一起发送（tiny Ask，见 `docs/webgpu-models.md`）。该提供商不支持 Act 和 Dev 模式；如需在浏览器中执行操作，请选择其他提供商。
+浏览器内模型只回答问题。在侧边栏中，每个 Ask 回合只进行一次不带工具的调用：DIV 先读取当前页面、选中文本、PDF 标签页以及问题中链接的页面，再把这些文本和一个简短提示一起发送（tiny Ask，见 `docs/webgpu-models.md`）。该提供商不支持 Act 和 Dev 模式；如需在浏览器中执行操作，请选择其他提供商。
 
 九个本地端点提供商默认启用。模型运行时无需 API 密钥（除非服务器启用了认证）；
 通用代理卡片必须填写客户端密钥：
@@ -145,7 +145,7 @@ ChatGPT/Codex，或用 `--claude-login` 登录 Claude；Gemini CLI 需先安装
 CLIProxyAPI 官方插件商店安装 `gemini-cli`，重启代理，再使用 `--geminicli-login`
 （参见[插件管理说明](https://help.router-for.me/cn/management/api#插件)）。最后运行
 `./cli-proxy-api --config ./config.yaml` 启动服务。
-在 WebBrain 中保留 `http://127.0.0.1:8317/v1`，填写同一密钥，加载并选择模型，
+在 DIV 中保留 `http://127.0.0.1:8317/v1`，填写同一密钥，加载并选择模型，
 最后测试连接。
 
 不要把代理暴露到局域网或公网：CLIProxyAPI 的空 host 默认监听所有网络接口，TLS
@@ -153,7 +153,7 @@ CLIProxyAPI 官方插件商店安装 `gemini-cli`，重启代理，再使用 `--
 路径。代理进程在本机运行，但可能把请求上下文转发给上游账户；上游 OAuth 凭据始终
 保留在 CLIProxyAPI 中。
 
-Ollama、llama.cpp、LM Studio 和 LocalAI 默认使用 `visionMode: auto`。WebBrain 在
+Ollama、llama.cpp、LM Studio 和 LocalAI 默认使用 `visionMode: auto`。DIV 在
 页面上下文增强前读取所选模型的原生服务器元数据，只有服务器明确报告支持图像输入时才
 发送截图。元数据请求失败或格式错误时，本回合按纯文本处理，之后会重试。提供商页面中
 可选择自动、强制开启或关闭。模型字段为空时，每个用户回合都会重新检测当前加载
@@ -162,11 +162,11 @@ Ollama、llama.cpp、LM Studio 和 LocalAI 默认使用 `visionMode: auto`。Web
 #### Ollama 启动交接（预览）
 
 <p align="center">
-  <img src="../../web/assets/webbrain-ollama-heart.png" alt="WebBrain 喜爱 Ollama 启动交接" width="720">
+  <img src="../../web/assets/webbrain-ollama-heart.png" alt="DIV 喜爱 Ollama 启动交接" width="720">
 </p>
 
-WebBrain 目前通过本地 OpenAI 兼容提供商支持 Ollama。新的
-`ollama launch webbrain --model <model>` 交接还可以自动配置 WebBrain，但它尚未
+DIV 目前通过本地 OpenAI 兼容提供商支持 Ollama。新的
+`ollama launch webbrain --model <model>` 交接还可以自动配置 DIV，但它尚未
 集成到上游 Ollama。目前可以从
 [`esokullu/ollama` 的 `codex/ollama-webbrain-launch-handoff` 分支](https://github.com/esokullu/ollama/tree/codex/ollama-webbrain-launch-handoff)
 试用；我们希望 Ollama 能将其上游集成。
@@ -284,7 +284,7 @@ await pm.testProvider('openai');    // 测试连接
 
 ### 费用限额
 
-“设置 → 预算”提供会话和总云端费用限额。智能体优先使用提供商报告的 `usage.cost`/`usage.cost_usd` 值（OpenRouter 直接报告此值）。对于仅返回令牌计数的直接云端提供商，WebBrain 根据提供商配置字段估算费用：
+“设置 → 预算”提供会话和总云端费用限额。智能体优先使用提供商报告的 `usage.cost`/`usage.cost_usd` 值（OpenRouter 直接报告此值）。对于仅返回令牌计数的直接云端提供商，DIV 根据提供商配置字段估算费用：
 
 - `inputCostPerMillionUsd`
 - `cacheReadCostPerMillionUsd`
@@ -292,7 +292,7 @@ await pm.testProvider('openai');    // 测试连接
 - `cacheWrite1hCostPerMillionUsd`
 - `outputCostPerMillionUsd`
 
-OpenAI 将缓存读取与写入令牌都包含在输入令牌总数中（`prompt_tokens_details.cached_tokens` / `cache_write_tokens`，或 Responses API 的 `input_tokens_details` 等价字段），因此 WebBrain 会先减去这两部分，再对剩余令牌应用常规输入费率，并用 `cacheWriteCostPerMillionUsd` 为写入计价。Anthropic 和 Bedrock 分别报告常规输入、缓存读取和缓存写入，因此这些计数会作为独立的计费类别相加；它们还可以区分 5 分钟和 1 小时缓存写入。
+OpenAI 将缓存读取与写入令牌都包含在输入令牌总数中（`prompt_tokens_details.cached_tokens` / `cache_write_tokens`，或 Responses API 的 `input_tokens_details` 等价字段），因此 DIV 会先减去这两部分，再对剩余令牌应用常规输入费率，并用 `cacheWriteCostPerMillionUsd` 为写入计价。Anthropic 和 Bedrock 分别报告常规输入、缓存读取和缓存写入，因此这些计数会作为独立的计费类别相加；它们还可以区分 5 分钟和 1 小时缓存写入。
 
 这些费率在提供商卡片中可编辑，因此无需修改代码即可调整自定义模型定价。未配置缓存专用费率时，它会回退到常规输入费率；未配置 1 小时写入费率时，会回退到通用缓存写入费率。如果计费的远程提供商有令牌使用量但未配置输入/输出费率，智能体会使用保守默认值（每百万令牌输入 `$3` / 输出 `$15`）。流式提供商每次请求只计入最终累计使用量快照。本地提供商不计费。
 

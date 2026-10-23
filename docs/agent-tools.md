@@ -1,6 +1,6 @@
 # Agent Tools
 
-WebBrain separates **model tier** from **conversation mode**.
+DIV separates **model tier** from **conversation mode**.
 
 - **Tier** (`compact`, `mid`, `full`) is a per-provider setting. It controls how
   many normal browser-agent tools a model sees.
@@ -23,7 +23,7 @@ Tier defaults and resolution rules are documented in
 [providers and models](providers-and-models.md#prompttool-tiers-and-modes).
 
 **Lean mode** (Settings → Advanced → Lean mode) does not change these lists: a
-lean Act run gets its tier's tools and prompt, and WebBrain skips its quality
+lean Act run gets its tier's tools and prompt, and DIV skips its quality
 checks; see [lean mode](lean-mode.md).
 
 ## Accessibility read budgets

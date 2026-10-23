@@ -13,17 +13,17 @@ The system prompt and tool schemas a model receives on each Act turn, with produ
 | Firefox | `claude-sonnet-4-5`, `gpt-5` | Off | 44,972 chars, ≈11,244 tokens | 57 | 80,718 chars, ≈20,180 tokens | ≈31,424 tokens |
 | Firefox | `claude-sonnet-4-5`, `gpt-5` | Auto → lean (strong_cloud_model) | 45,190 chars, ≈11,298 tokens | 57 | 80,718 chars, ≈20,180 tokens | ≈31,478 tokens |
 
-Lean mode keeps the tier's tools and prompt. A lean run gets the same 58 tools as Off and a system prompt 218 characters longer in the Chrome build, and the same 57 tools as Off and a system prompt 218 characters longer in the Firefox build: the Off prompt plus one note that asks the model to check its own work, because WebBrain does not. What lean mode saves comes from the checks it skips (section 2).
+Lean mode keeps the tier's tools and prompt. A lean run gets the same 58 tools as Off and a system prompt 218 characters longer in the Chrome build, and the same 57 tools as Off and a system prompt 218 characters longer in the Firefox build: the Off prompt plus one note that asks the model to check its own work, because DIV does not. What lean mode saves comes from the checks it skips (section 2).
 
 ## 2. Scripted replays
 
 Each task runs twice through the Chrome build's real run loop (`Agent#processMessage`): once with Lean mode **Off** and once with **Auto**, which resolves to lean mode for the strong cloud model used here (`claude-sonnet-4-5`). Everything between the model and the page is the product's code: the planner's intent gate, the batch pipeline, permission and submit cards, every guard, text-write finalization, completion checks and `done`. The pages are real too: each fixture page runs in headless Chromium with the Chrome build's content scripts in an isolated world, the agent's `chrome.debugger` commands go to a DevTools session on that page, and its `chrome.scripting` probes run there. The fixtures answer every request; nothing reaches the network.
 
-The model is a fixed script: it reads the page, acts on the targets it names by role and name (resolved to the refs of its latest page read), reads the page again and calls `done`. The user approves every card WebBrain shows.
+The model is a fixed script: it reads the page, acts on the targets it names by role and name (resolved to the refs of its latest page read), reads the page again and calls `done`. The user approves every card DIV shows.
 
-- **Model turns:** requests to the model with tools. **Refused:** tool calls and `done` calls WebBrain did not carry out. **Notes:** guard notes on tool results. **Caveat:** the final answer carries "WebBrain could not verify everything".
-- **LLM side calls:** model calls WebBrain makes on its own (readings, classifiers, the completion judge), not counting the planner's intent call, which runs once in each mode.
-- **Cards:** site-permission and submit-confirmation cards WebBrain showed the user. These are permission gates, so lean mode keeps them.
+- **Model turns:** requests to the model with tools. **Refused:** tool calls and `done` calls DIV did not carry out. **Notes:** guard notes on tool results. **Caveat:** the final answer carries "DIV could not verify everything".
+- **LLM side calls:** model calls DIV makes on its own (readings, classifiers, the completion judge), not counting the planner's intent call, which runs once in each mode.
+- **Cards:** site-permission and submit-confirmation cards DIV showed the user. These are permission gates, so lean mode keeps them.
 - **Page probes:** content-script messages, injected scripts, DevTools commands and screenshots, including the ones that carry out the actions.
 - **Input tokens:** the estimated input of all model turns of the run (system prompt, conversation and tool schemas).
 - **On the page:** what the fixture recorded. **Result:** success means the page shows the task done and the answer has no caveat.
@@ -39,9 +39,9 @@ The model is a fixed script: it reads the page, acts on the targets it names by 
 
 ### 1. GitHub file edit: multi-paragraph text into CodeMirror, then commit
 
-The case that motivated lean mode. The task replaces NOTES.md with a three-paragraph text and commits it. `set_field` types it into the CodeMirror editor with trusted input. The browser's `innerText` shows each blank line twice, but WebBrain reads CodeMirror's lines, so the text verifies. "Commit changes..." opens the commit dialog, whose "Commit changes" commits. The fixture serves no raw file, so the check of the committed file after the commit cannot read it back.
+The case that motivated lean mode. The task replaces NOTES.md with a three-paragraph text and commits it. `set_field` types it into the CodeMirror editor with trusted input. The browser's `innerText` shows each blank line twice, but DIV reads CodeMirror's lines, so the text verifies. "Commit changes..." opens the commit dialog, whose "Commit changes" commits. The fixture serves no raw file, so the check of the committed file after the commit cannot read it back.
 
-- **Off:** `get_accessibility_tree` → `set_field` → `click_ax` → `get_accessibility_tree` → `click_ax` → `get_accessibility_tree` → `done` **refused** (plan execution block: The selected edit-file-and-commit job requires terminal evidence for its own publication) → `done`; the final answer carries "WebBrain could not verify everything".
+- **Off:** `get_accessibility_tree` → `set_field` → `click_ax` → `get_accessibility_tree` → `click_ax` → `get_accessibility_tree` → `done` **refused** (plan execution block: The selected edit-file-and-commit job requires terminal evidence for its own publication) → `done`; the final answer carries "DIV could not verify everything".
 - **Auto → lean:** `get_accessibility_tree` → `set_field` → `click_ax` → `get_accessibility_tree` → `click_ax` → `get_accessibility_tree` → `done`.
 - **LLM side calls** (besides the planner's intent call, 1 in each mode): Off 5 (intent, reading: control_effect ×2, reading: page_blocker, completion_verification); lean 4 (intent, reading: control_effect ×2, reading: page_blocker).
 - **Cards shown to the user:** Off site permission, submit confirmation ×2; lean site permission, submit confirmation ×2.
@@ -69,11 +69,11 @@ A question about the open product page: what does the Trail Runner 2 cost? The a
 
 ## Limits
 
-- **A script is not a live model.** The scripted model does not react to what WebBrain tells it: after a refusal it carries on with its script, and when it has nothing left it repeats `done`. A live model reads each refusal and note and spends more turns on them: reading the page again, re-checking a field, asking. So the Off columns show WebBrain's own overhead, not what a live model would spend there.
-- **The model's other answers are stand-ins.** The planner's intent, the workflow-field classifier and WebBrain's fixed-choice readings of page texts are answered the way the repo's tests answer them (`test/semantic-decision-stub.mjs`); a caption that ends in an ellipsis is read as unclear, so the Off run can open GitHub's commit dialog. The completion judge's stand-in answers from the fixture's true end state, so it is never wrong; a real judge can be.
+- **A script is not a live model.** The scripted model does not react to what DIV tells it: after a refusal it carries on with its script, and when it has nothing left it repeats `done`. A live model reads each refusal and note and spends more turns on them: reading the page again, re-checking a field, asking. So the Off columns show DIV's own overhead, not what a live model would spend there.
+- **The model's other answers are stand-ins.** The planner's intent, the workflow-field classifier and DIV's fixed-choice readings of page texts are answered the way the repo's tests answer them (`test/semantic-decision-stub.mjs`); a caption that ends in an ellipsis is read as unclear, so the Off run can open GitHub's commit dialog. The completion judge's stand-in answers from the fixture's true end state, so it is never wrong; a real judge can be.
 - **Settings:** product defaults, except Plan before act (Off, so only the intent gate runs; the planner is not part of lean mode and costs the same in both modes), no vision, so no screenshots reach the model, a 20-step limit (no run comes near it), and no conversation storage or tracing. Strict checks are off; lean mode ignores them anyway.
 - **Fixtures are small stand-ins.** The CodeMirror editor is a minimal one that, like GitHub's, owns its DOM and renders blank lines as `<br>` lines, so the browser's `innerText` shows each blank line twice; it is not GitHub's editor. It serves no raw file, so the check of the committed file after the commit cannot read it back. Real pages are larger, slower and change while a run reads them.
 - **Chrome only.** The replays run the Chrome build; the Firefox build is measured only in part 1.
 - **This branch only.** The Off columns show this branch's guards; a change to them (a card instead of a refusal, say) changes those columns, so run the script again after it.
 - **Token counts are estimates** (characters / 4) and do not include the planner's or the side calls' input.
-- **Timing.** The pages run in a real browser, so a much slower machine could change how often WebBrain waits for or re-reads a settling page, and with it the page-probe counts. Repeated runs on the same machine give the same numbers.
+- **Timing.** The pages run in a real browser, so a much slower machine could change how often DIV waits for or re-reads a settling page, and with it the page-probe counts. Repeated runs on the same machine give the same numbers.

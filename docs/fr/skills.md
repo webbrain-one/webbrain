@@ -1,7 +1,7 @@
 # Compétences
 
 Une compétence est un texte d'instructions de confiance — éventuellement
-accompagné de son propre manifeste d'outils — que WebBrain charge dans une
+accompagné de son propre manifeste d'outils — que DIV charge dans une
 exécution **uniquement quand c'est pertinent**. Gérez-les dans Paramètres →
 Compétences, où vous pouvez importer un texte ou une URL de compétence, ou
 retirer n'importe quelle compétence intégrée.
@@ -32,19 +32,19 @@ correspondance littérale de mots-clés. Les compétences sans métadonnées
 déduisent leur résumé du premier paragraphe de prose, n'ont aucune intention
 déduite, et utilisent Act/Dev par défaut.
 
-WebBrain reconnaît également les métadonnées YAML obligatoires `name` et
+DIV reconnaît également les métadonnées YAML obligatoires `name` et
 `description` d'un fichier
 [Agent Skills `SKILL.md`](https://agentskills.io/specification) importé. Le nom
 et la description alimentent le catalogue de routage, et les métadonnées sont
 retirées avant le chargement du corps Markdown. Un nom saisi dans Paramètres et
 un bloc `webbrain-skill` restent prioritaires.
 
-Cette compatibilité concerne uniquement les instructions. WebBrain importe un
+Cette compatibilité concerne uniquement les instructions. DIV importe un
 seul document texte ; il ne récupère pas les répertoires `scripts/`,
 `references/` ou `assets/`, n'exécute pas le code de la compétence et ne traite
 pas le champ Agent Skills `allowed-tools` comme une permission ou un manifeste
-d'outils WebBrain. Utilisez `webbrain-tools` pour les outils HTTP WebBrain.
-WebBrain ne reconnaît les blocs `webbrain-skill` et `webbrain-tools` que dans
+d'outils DIV. Utilisez `webbrain-tools` pour les outils HTTP DIV.
+DIV ne reconnaît les blocs `webbrain-skill` et `webbrain-tools` que dans
 le corps Markdown après des métadonnées valides ; du texte ressemblant à un
 bloc dans les métadonnées ne peut ni autoriser le routage ni enregistrer
 d'outil.
@@ -120,7 +120,7 @@ ces traces.
 
 #### Humanizer
 
-Réécrit la prose que WebBrain rédige pour vous, par exemple une réponse à un
+Réécrit la prose que DIV rédige pour vous, par exemple une réponse à un
 e-mail ou une publication, afin qu'elle se lise comme un texte humain. Elle ne
 déclare aucun outil réseau et n'ajoute aucun outil.
 
@@ -155,7 +155,7 @@ en Act/Dev, sur Mid et Full. Elle n'ajoute ni outil ni mécanisme
 d'authentification. Compact conserve seulement les indications de l'adaptateur.
 Pour les articles, pages, types personnalisés compatibles REST et taxonomies,
 l'API passe en premier si les champs, la session et l'autorisation le permettent.
-Si seule l'autorisation manque, WebBrain demande `/allow-api` une seule fois.
+Si seule l'autorisation manque, DIV demande `/allow-api` une seule fois.
 Une autorisation existante suffit ; Ask reste en lecture seule.
 
 La recette conserve l'identifiant existant, crée les nouveaux contenus en
@@ -178,10 +178,10 @@ manifeste d'outils HTTP, ni magasin d'identifiants, ni intégration OAuth. Voir
 [Limites et validation CMS API-first](../cms-api-first.md) (en anglais) pour la
 matrice des services et la couverture des tests.
 
-Pour ces tâches, WebBrain privilégie l'API officielle après une découverte en
+Pour ces tâches, DIV privilégie l'API officielle après une découverte en
 lecture seule des capacités et de l'authentification, lorsque la cible, les
 champs requis, la portée de la tâche, les droits du service et l'autorisation de
-modification WebBrain le permettent. L'échec de l'éditeur n'est pas un
+modification DIV le permettent. L'échec de l'éditeur n'est pas un
 préalable. Une API par ailleurs utilisable, mais sans autorisation, demande
 `/allow-api` une seule fois ; une autorisation existante est réutilisée et un
 refus est respecté. Ask reste en lecture seule, et les requêtes GraphQL en POST

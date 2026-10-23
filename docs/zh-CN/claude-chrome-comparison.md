@@ -1,10 +1,10 @@
-# WebBrain 与 Claude Chrome 扩展对比
+# DIV 与 Claude Chrome 扩展对比
 
-本文比较了本地的 WebBrain 代码库与 `../webbrain-claude`（一个去混淆后的 Claude Chrome 扩展代码树）。重点比较架构、模型可调用工具以及特定网站的适配器行为。
+本文比较了本地的 DIV 代码库与 `../webbrain-claude`（一个去混淆后的 Claude Chrome 扩展代码树）。重点比较架构、模型可调用工具以及特定网站的适配器行为。
 
 ## 已检查的源代码
 
-WebBrain：
+DIV：
 
 - `docs/architecture.md`
 - `docs/adding-a-tool.md`
@@ -33,7 +33,7 @@ Claude 代码树部分经过打包/压缩。以下工具名称是根据 `toAnthr
 
 ## 架构
 
-| 领域 | WebBrain | Claude Chrome 扩展 |
+| 领域 | DIV | Claude Chrome 扩展 |
 |---|---|---|
 | 浏览器支持 | 两套镜像扩展构建：Chrome/Edge MV3 和 Firefox MV2。 | 此代码树仅支持 Chrome MV3。 |
 | 代理位置 | 扩展在 `agent.js` 中拥有完整的代理循环；提供者为本地扩展模块。 | 两条路径：侧面板中的标准 Anthropic 工具调用循环，以及 Service Worker 中的原生主机/MCP 桥接。 |
@@ -44,7 +44,7 @@ Claude 代码树部分经过打包/压缩。以下工具名称是根据 `toAnthr
 | 对话控制 | 询问/执行模式、先计划后执行、草稿板、进度记录、定时任务/恢复、可选追踪。 | 权限模式、通过 `update_plan` 进行计划审批、域名转换提示、标签组、压缩、原生主机/MCP 状态。 |
 | 动态扩展模型 | 用户/导入的技能可以注入提示文本并声明 `webbrain-tools` 运行时工具。 | 在去混淆后的代码树中，原生/MCP 和快捷方式是可见的扩展点；未找到等效的用户可编辑 Markdown 工具清单。 |
 
-## WebBrain 工具面
+## DIV 工具面
 
 当前本地源代码中的静态核心工具：
 
@@ -84,7 +84,7 @@ verify_form, download_social_media, solve_captcha
 
 Firefox 不包含 Chrome 独有的 Dev 工具和 `shadow_dom_query`；其余核心工具（包括仅限 Dev 的 `execute_js`）两者共有。
 
-### WebBrain 工具族
+### DIV 工具族
 
 | 族 | 工具 |
 |---|---|
@@ -100,9 +100,9 @@ Firefox 不包含 Chrome 独有的 Dev 工具和 `shadow_dom_query`；其余核�
 | 安全/工作流 | `verify_form`、`clarify`、`done`、`solve_captcha` |
 | 媒体 | `download_social_media`，以及启用时的动态技能工具 |
 
-### WebBrain 动态技能工具
+### DIV 动态技能工具
 
-WebBrain 有两种在技能 Markdown 代码块中声明的工具类：
+DIV 有两种在技能 Markdown 代码块中声明的工具类：
 
 - `kind: "http"`：只读的 HTTPS GET/POST 工具，根据其清单 `modes` 在询问和执行模式下可用。
 - `kind: "httpDownloadJob"`：仅执行模式的 HTTPS POST 作业工具，用于创建作业、轮询状态、获取文件、通过浏览器下载保存并清理。
@@ -173,7 +173,7 @@ W               等待页面稳定
 
 ## 工具差异
 
-| 能力 | WebBrain | Claude Chrome |
+| 能力 | DIV | Claude Chrome |
 |---|---|---|
 | 工具粒度 | 许多细粒度工具：独立的 AX 点击/输入/设置字段、网络、下载、调度器、iframe、PDF、源代码、进度工具。 | 较少的高级工具；浏览器输入主要通过一个 `computer` 工具加 action 枚举。 |
 | 主要读取路径 | `get_accessibility_tree` 是首选的首次读取方式，返回带有分页/自动降级行为的稳定引用。 | `read_page` 也返回无障碍树，但以截图驱动的坐标控制更为核心，尤其是在快速模式下。 |
@@ -181,7 +181,7 @@ W               等待页面稳定
 | 页面文本 | `read_page` 面向散文/文章；`get_accessibility_tree` 面向 UI。 | 将 `read_page` 作为 AX 树，`get_page_text` 作为原始/文章文本。 |
 | PDF 阅读 | `read_pdf` 直接提取 PDF 文本。 | 未找到等效功能。 |
 | 原始源代码读取 | `read_page_source` 公开服务器返回的 HTML 和资源 URL。 | 未找到等效功能。 |
-| 网络请求 | `fetch_url` / `research_url`，带有 WebBrain 特定的 API 变更规则和用于可变方法的 `/allow-api`。 | 未恢复通用请求工具。通过 `read_network_requests` 存在调试网络日志。 |
+| 网络请求 | `fetch_url` / `research_url`，带有 DIV 特定的 API 变更规则和用于可变方法的 `/allow-api`。 | 未恢复通用请求工具。通过 `read_network_requests` 存在调试网络日志。 |
 | 控制台/网络检查 | Chrome Dev 提供 `read_console`、`inspect_network_requests` 和 `inspect_event_listeners`；Firefox 不提供这些 Chrome 独有诊断工具。 | 专用的 `read_console_messages` 和 `read_network_requests`。 |
 | 下载 | 多个浏览器下载/文件工具加上动态下载作业技能工具。 | `downloads` 权限存在，`gif_creator` 可以下载导出内容，但未找到通用的下载管理器等效功能。 |
 | 媒体下载 | 首选 `download_public_media` 技能；浏览器回退 `download_social_media`。 | 未找到公共媒体下载等效功能。 |
@@ -192,19 +192,19 @@ W               等待页面稳定
 | 表单安全 | 重要表单使用 `verify_form`。 | `form_input` 可以设置值；未恢复专用的表单验证工具。 |
 | Iframe | 专用的 `get_frames`、`iframe_read`、`iframe_click`、`iframe_type`，以及 `promote_iframe`；后者可把已发现的子框架在当前标签页中作为独立页面打开，并执行歧义与未保存草稿检查。 | 未恢复专用的 iframe 工具；操作可能通过坐标/JS 在允许的地方进行。 |
 | 快捷方式/工作流 | 自定义技能是 Markdown 加可选的工具清单。 | `shortcuts_list` / `shortcuts_execute` 公开保存的快捷方式/工作流。 |
-| GIF/视频工作流 | WebBrain Chrome 中存在斜杠驱动的录制，但不是以模型可调用的工具形式。 | `gif_creator` 是模型可调用的，可以录制/导出浏览器自动化会话为 GIF。 |
+| GIF/视频工作流 | DIV Chrome 中存在斜杠驱动的录制，但不是以模型可调用的工具形式。 | `gif_creator` 是模型可调用的，可以录制/导出浏览器自动化会话为 GIF。 |
 
 ## 特定网站的适配器
 
-### WebBrain
+### DIV
 
-WebBrain 拥有真实的站点适配器系统：
+DIV 拥有真实的站点适配器系统：
 
 - 适配器文件位于 `src/chrome/src/agent/adapters.js` 和 `src/firefox/src/agent/adapters.js`。
 - `getActiveAdapter(url)` 返回第一个匹配的适配器。
 - 一次仅触发一个适配器。
 - 适配器注释放入第一条用户消息中。
-- 如果导航在对话中途移动到不同的匹配适配器，WebBrain 会注入一条新的 `[Site context changed ...]` 用户消息。
+- 如果导航在对话中途移动到不同的匹配适配器，DIV 会注入一条新的 `[Site context changed ...]` 用户消息。
 - 当适配器启用时，`UNIVERSAL_PREAMBLE` 被添加到系统提示中。它涵盖 Cookie/同意横幅、付费墙和 PDF 标签页行为。
 - 金融适配器包含高风险措辞，必须放在 `finance-generic` 之前。
 - Chrome 和 Firefox 的适配器更改应保持镜像同步。
@@ -237,7 +237,7 @@ mastodon
 - `settings.html` 公开了一个"站点适配器"开关。
 - `settings.js` 读取和写入 `useSiteAdapters`。
 
-然而，在被检查的 Claude 代码树中，未找到支持的适配器注册表、`getActiveAdapter` 等效功能、通用前导注入或站点特定指导注入路径。搜索 WebBrain 风格的适配器标记只找到了设置标签/存储路径。
+然而，在被检查的 Claude 代码树中，未找到支持的适配器注册表、`getActiveAdapter` 等效功能、通用前导注入或站点特定指导注入路径。搜索 DIV 风格的适配器标记只找到了设置标签/存储路径。
 
 Claude 最接近的等效功能不是网站适配器：
 
@@ -248,23 +248,23 @@ Claude 最接近的等效功能不是网站适配器：
 
 因此，实际的适配器差异是：
 
-- WebBrain 将特定网站的提示增强作为浏览器代理的一级功能。
+- DIV 将特定网站的提示增强作为浏览器代理的一级功能。
 - 在这个去混淆后的代码树中，Claude Chrome 似乎依赖截图、`find`、域名权限和标签/域名上下文，而非每个站点的适配器笔记。
 
 ## 值得借鉴的想法
 
-对 WebBrain 可能有用的 Claude 想法：
+对 DIV 可能有用的 Claude 想法：
 
 - 一个 `find` 工具，使用小型/快速模型在 AX 树上返回模糊元素描述的候选引用。
 - 面向模型的控制台和网络请求读取器，用于调试 Web 应用。
 - 如果需要模型可调用的录制/导出功能，则添加 GIF/工作流导出工具。
-- 快捷方式/工作流列表和执行原语，如果 WebBrain 想要一个独立于 Markdown 技能的可重用工作流层。
+- 快捷方式/工作流列表和执行原语，如果 DIV 想要一个独立于 Markdown 技能的可重用工作流层。
 - 通过捕获的截图/图像 ID 直接上传图像，如果侧面板图像附件工作流发展的话。
 
 应避免直接复制的想法：
 
 - 只有设置界面的"站点适配器"表面，没有支持的注册表和注入路径。
-- 如果 WebBrain 希望保留当前细粒度、可审计的工具语义，则将太多确定性的浏览器操作合并到一个 `computer` 模式中。
+- 如果 DIV 希望保留当前细粒度、可审计的工具语义，则将太多确定性的浏览器操作合并到一个 `computer` 模式中。
 - 在稳定的 AX 引用可用时，将截图/坐标控制作为主要路径。
 
 ## 文档后续

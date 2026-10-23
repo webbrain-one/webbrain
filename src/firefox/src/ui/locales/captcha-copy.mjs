@@ -9,7 +9,7 @@ export const captchaEnglish = {
   "st.captcha.hcaptcha_desc": "Use {provider} for hCaptcha. Success depends on the site.",
   "st.captcha.hcaptcha_need_key": "Enter a valid {provider} API key.",
   "st.captcha.credits_ok": "Available credits: {balance}",
-  "st.captcha.coverage": "Supported in WebBrain:",
+  "st.captcha.coverage": "Supported in DIV:",
   "st.captcha.docs": "Provider documentation",
   "st.captcha.image_type": "Text-image CAPTCHA"
 };
@@ -26,7 +26,7 @@ export const captchaTranslations = {
     "st.captcha.hcaptcha_desc": "hCaptcha için {provider} kullanın. Başarı siteye bağlıdır.",
     "st.captcha.hcaptcha_need_key": "Geçerli bir {provider} API anahtarı girin.",
     "st.captcha.credits_ok": "Kullanılabilir kredi: {balance}",
-    "st.captcha.coverage": "WebBrain desteği:",
+    "st.captcha.coverage": "DIV desteği:",
     "st.captcha.docs": "Sağlayıcı belgeleri",
     "st.captcha.image_type": "Görseldeki metin CAPTCHA’sı"
   },
@@ -41,7 +41,7 @@ export const captchaTranslations = {
     "st.captcha.hcaptcha_desc": "Usa {provider} para hCaptcha. El éxito depende del sitio.",
     "st.captcha.hcaptcha_need_key": "Introduce una clave API válida de {provider}.",
     "st.captcha.credits_ok": "Créditos disponibles: {balance}",
-    "st.captcha.coverage": "Compatible con WebBrain:",
+    "st.captcha.coverage": "Compatible con DIV:",
     "st.captcha.docs": "Documentación del proveedor",
     "st.captcha.image_type": "CAPTCHA de texto en imagen"
   },
@@ -56,7 +56,7 @@ export const captchaTranslations = {
     "st.captcha.hcaptcha_desc": "Utilisez {provider} pour hCaptcha. La réussite dépend du site.",
     "st.captcha.hcaptcha_need_key": "Saisissez une clé API {provider} valide.",
     "st.captcha.credits_ok": "Crédits disponibles : {balance}",
-    "st.captcha.coverage": "Pris en charge dans WebBrain :",
+    "st.captcha.coverage": "Pris en charge dans DIV :",
     "st.captcha.docs": "Documentation du fournisseur",
     "st.captcha.image_type": "CAPTCHA de texte en image"
   },
@@ -71,7 +71,7 @@ export const captchaTranslations = {
     "st.captcha.hcaptcha_desc": "Verwenden Sie {provider} für hCaptcha. Der Erfolg hängt von der Website ab.",
     "st.captcha.hcaptcha_need_key": "Geben Sie einen gültigen API-Schlüssel für {provider} ein.",
     "st.captcha.credits_ok": "Verfügbare Credits: {balance}",
-    "st.captcha.coverage": "In WebBrain unterstützt:",
+    "st.captcha.coverage": "In DIV unterstützt:",
     "st.captcha.docs": "Dokumentation des Anbieters",
     "st.captcha.image_type": "Text-Bild-CAPTCHA"
   },
@@ -86,7 +86,7 @@ export const captchaTranslations = {
     "st.captcha.hcaptcha_desc": "Gebruik {provider} voor hCaptcha. Het resultaat hangt af van de website.",
     "st.captcha.hcaptcha_need_key": "Voer een geldige API-sleutel voor {provider} in.",
     "st.captcha.credits_ok": "Beschikbare credits: {balance}",
-    "st.captcha.coverage": "Ondersteund in WebBrain:",
+    "st.captcha.coverage": "Ondersteund in DIV:",
     "st.captcha.docs": "Documentatie van de aanbieder",
     "st.captcha.image_type": "CAPTCHA met tekst in een afbeelding"
   },
@@ -101,7 +101,7 @@ export const captchaTranslations = {
     "st.captcha.hcaptcha_desc": "Use {provider} para hCaptcha. O sucesso depende do site.",
     "st.captcha.hcaptcha_need_key": "Insira uma chave API válida de {provider}.",
     "st.captcha.credits_ok": "Créditos disponíveis: {balance}",
-    "st.captcha.coverage": "Compatível com WebBrain:",
+    "st.captcha.coverage": "Compatível com DIV:",
     "st.captcha.docs": "Documentação do provedor",
     "st.captcha.image_type": "CAPTCHA de texto em imagem"
   },
@@ -116,7 +116,7 @@ export const captchaTranslations = {
     "st.captcha.hcaptcha_desc": "使用 {provider} 处理 hCaptcha。成功与否取决于网站。",
     "st.captcha.hcaptcha_need_key": "请输入有效的 {provider} API 密钥。",
     "st.captcha.credits_ok": "可用额度：{balance}",
-    "st.captcha.coverage": "WebBrain 支持：",
+    "st.captcha.coverage": "DIV 支持：",
     "st.captcha.docs": "服务商文档",
     "st.captcha.image_type": "文字图片验证码"
   },
@@ -131,7 +131,7 @@ export const captchaTranslations = {
     "st.captcha.hcaptcha_desc": "hCaptcha に {provider} を使用します。成功するかどうかはサイトによって異なります。",
     "st.captcha.hcaptcha_need_key": "有効な {provider} API キーを入力してください。",
     "st.captcha.credits_ok": "利用可能なクレジット：{balance}",
-    "st.captcha.coverage": "WebBrain で対応：",
+    "st.captcha.coverage": "DIV で対応：",
     "st.captcha.docs": "プロバイダーのドキュメント",
     "st.captcha.image_type": "画像内の文字 CAPTCHA"
   },
@@ -146,7 +146,7 @@ export const captchaTranslations = {
     "st.captcha.hcaptcha_desc": "hCaptcha에 {provider}를 사용합니다. 성공 여부는 사이트에 따라 다릅니다.",
     "st.captcha.hcaptcha_need_key": "유효한 {provider} API 키를 입력하세요.",
     "st.captcha.credits_ok": "사용 가능한 크레딧: {balance}",
-    "st.captcha.coverage": "WebBrain 지원:",
+    "st.captcha.coverage": "DIV 지원:",
     "st.captcha.docs": "제공업체 문서",
     "st.captcha.image_type": "이미지 내 텍스트 CAPTCHA"
   },
@@ -161,7 +161,7 @@ export const captchaTranslations = {
     "st.captcha.hcaptcha_desc": "Используйте {provider} для hCaptcha. Успех зависит от сайта.",
     "st.captcha.hcaptcha_need_key": "Введите действительный API-ключ {provider}.",
     "st.captcha.credits_ok": "Доступные кредиты: {balance}",
-    "st.captcha.coverage": "Поддерживается в WebBrain:",
+    "st.captcha.coverage": "Поддерживается в DIV:",
     "st.captcha.docs": "Документация провайдера",
     "st.captcha.image_type": "CAPTCHA с текстом на изображении"
   },
@@ -176,7 +176,7 @@ export const captchaTranslations = {
     "st.captcha.hcaptcha_desc": "Використовуйте {provider} для hCaptcha. Успіх залежить від сайту.",
     "st.captcha.hcaptcha_need_key": "Введіть дійсний API-ключ {provider}.",
     "st.captcha.credits_ok": "Доступні кредити: {balance}",
-    "st.captcha.coverage": "Підтримується у WebBrain:",
+    "st.captcha.coverage": "Підтримується у DIV:",
     "st.captcha.docs": "Документація провайдера",
     "st.captcha.image_type": "CAPTCHA з текстом на зображенні"
   },
@@ -191,7 +191,7 @@ export const captchaTranslations = {
     "st.captcha.hcaptcha_desc": "Użyj {provider} do hCaptcha. Powodzenie zależy od witryny.",
     "st.captcha.hcaptcha_need_key": "Wprowadź prawidłowy klucz API {provider}.",
     "st.captcha.credits_ok": "Dostępne kredyty: {balance}",
-    "st.captcha.coverage": "Obsługiwane w WebBrain:",
+    "st.captcha.coverage": "Obsługiwane w DIV:",
     "st.captcha.docs": "Dokumentacja dostawcy",
     "st.captcha.image_type": "CAPTCHA z tekstem na obrazku"
   },
@@ -206,7 +206,7 @@ export const captchaTranslations = {
     "st.captcha.hcaptcha_desc": "استخدم {provider} لحل hCaptcha. يعتمد النجاح على الموقع.",
     "st.captcha.hcaptcha_need_key": "أدخل مفتاح API صالحاً لخدمة {provider}.",
     "st.captcha.credits_ok": "الرصيد المتاح: {balance}",
-    "st.captcha.coverage": "الأنواع المدعومة في WebBrain:",
+    "st.captcha.coverage": "الأنواع المدعومة في DIV:",
     "st.captcha.docs": "وثائق المزوّد",
     "st.captcha.image_type": "CAPTCHA نص داخل صورة"
   },
@@ -221,7 +221,7 @@ export const captchaTranslations = {
     "st.captcha.hcaptcha_desc": "השתמשו ב-{provider} עבור hCaptcha. ההצלחה תלויה באתר.",
     "st.captcha.hcaptcha_need_key": "הזינו מפתח API תקין של {provider}.",
     "st.captcha.credits_ok": "נקודות זכות זמינות: {balance}",
-    "st.captcha.coverage": "נתמך ב-WebBrain:",
+    "st.captcha.coverage": "נתמך ב-DIV:",
     "st.captcha.docs": "תיעוד הספק",
     "st.captcha.image_type": "CAPTCHA של טקסט בתמונה"
   },
@@ -236,7 +236,7 @@ export const captchaTranslations = {
     "st.captcha.hcaptcha_desc": "برای hCaptcha از {provider} استفاده کنید. موفقیت به سایت بستگی دارد.",
     "st.captcha.hcaptcha_need_key": "یک کلید API معتبر برای {provider} وارد کنید.",
     "st.captcha.credits_ok": "اعتبار موجود: {balance}",
-    "st.captcha.coverage": "پشتیبانی‌شده در WebBrain:",
+    "st.captcha.coverage": "پشتیبانی‌شده در DIV:",
     "st.captcha.docs": "مستندات ارائه‌دهنده",
     "st.captcha.image_type": "CAPTCHA متنی در تصویر"
   },
@@ -251,7 +251,7 @@ export const captchaTranslations = {
     "st.captcha.hcaptcha_desc": "hCaptcha के लिए {provider} का उपयोग करें। सफलता साइट पर निर्भर करती है।",
     "st.captcha.hcaptcha_need_key": "मान्य {provider} API कुंजी दर्ज करें।",
     "st.captcha.credits_ok": "उपलब्ध क्रेडिट: {balance}",
-    "st.captcha.coverage": "WebBrain में समर्थित:",
+    "st.captcha.coverage": "DIV में समर्थित:",
     "st.captcha.docs": "प्रदाता का दस्तावेज़",
     "st.captcha.image_type": "चित्र में पाठ वाला CAPTCHA"
   },
@@ -266,7 +266,7 @@ export const captchaTranslations = {
     "st.captcha.hcaptcha_desc": "hCaptcha-এর জন্য {provider} ব্যবহার করুন। সফলতা সাইটের উপর নির্ভর করে।",
     "st.captcha.hcaptcha_need_key": "একটি বৈধ {provider} API কী লিখুন।",
     "st.captcha.credits_ok": "উপলব্ধ ক্রেডিট: {balance}",
-    "st.captcha.coverage": "WebBrain-এ সমর্থিত:",
+    "st.captcha.coverage": "DIV-এ সমর্থিত:",
     "st.captcha.docs": "প্রদানকারীর নথি",
     "st.captcha.image_type": "ছবিতে লেখা CAPTCHA"
   },
@@ -281,7 +281,7 @@ export const captchaTranslations = {
     "st.captcha.hcaptcha_desc": "Gunakan {provider} untuk hCaptcha. Keberhasilan bergantung pada situs.",
     "st.captcha.hcaptcha_need_key": "Masukkan kunci API {provider} yang valid.",
     "st.captcha.credits_ok": "Kredit tersedia: {balance}",
-    "st.captcha.coverage": "Didukung di WebBrain:",
+    "st.captcha.coverage": "Didukung di DIV:",
     "st.captcha.docs": "Dokumentasi penyedia",
     "st.captcha.image_type": "CAPTCHA teks dalam gambar"
   },
@@ -296,7 +296,7 @@ export const captchaTranslations = {
     "st.captcha.hcaptcha_desc": "Gunakan {provider} untuk hCaptcha. Kejayaan bergantung pada laman.",
     "st.captcha.hcaptcha_need_key": "Masukkan kunci API {provider} yang sah.",
     "st.captcha.credits_ok": "Kredit tersedia: {balance}",
-    "st.captcha.coverage": "Disokong dalam WebBrain:",
+    "st.captcha.coverage": "Disokong dalam DIV:",
     "st.captcha.docs": "Dokumentasi penyedia",
     "st.captcha.image_type": "CAPTCHA teks dalam imej"
   },
@@ -311,7 +311,7 @@ export const captchaTranslations = {
     "st.captcha.hcaptcha_desc": "Dùng {provider} cho hCaptcha. Thành công tùy thuộc vào trang web.",
     "st.captcha.hcaptcha_need_key": "Nhập khóa API {provider} hợp lệ.",
     "st.captcha.credits_ok": "Tín dụng khả dụng: {balance}",
-    "st.captcha.coverage": "Được hỗ trợ trong WebBrain:",
+    "st.captcha.coverage": "Được hỗ trợ trong DIV:",
     "st.captcha.docs": "Tài liệu nhà cung cấp",
     "st.captcha.image_type": "CAPTCHA chữ trong ảnh"
   },
@@ -326,7 +326,7 @@ export const captchaTranslations = {
     "st.captcha.hcaptcha_desc": "ใช้ {provider} สำหรับ hCaptcha ความสำเร็จขึ้นอยู่กับเว็บไซต์",
     "st.captcha.hcaptcha_need_key": "ป้อนคีย์ API ของ {provider} ที่ถูกต้อง",
     "st.captcha.credits_ok": "เครดิตที่ใช้ได้: {balance}",
-    "st.captcha.coverage": "รองรับใน WebBrain:",
+    "st.captcha.coverage": "รองรับใน DIV:",
     "st.captcha.docs": "เอกสารของผู้ให้บริการ",
     "st.captcha.image_type": "CAPTCHA ข้อความในภาพ"
   },
@@ -341,7 +341,7 @@ export const captchaTranslations = {
     "st.captcha.hcaptcha_desc": "Gamitin ang {provider} para sa hCaptcha. Nakadepende sa site ang tagumpay.",
     "st.captcha.hcaptcha_need_key": "Maglagay ng wastong API key ng {provider}.",
     "st.captcha.credits_ok": "Mga available na credit: {balance}",
-    "st.captcha.coverage": "Suportado sa WebBrain:",
+    "st.captcha.coverage": "Suportado sa DIV:",
     "st.captcha.docs": "Dokumentasyon ng provider",
     "st.captcha.image_type": "CAPTCHA na teksto sa larawan"
   }

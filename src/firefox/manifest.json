@@ -1,6 +1,6 @@
 {
   "manifest_version": 2,
-  "name": "WebBrain",
+  "name": "DIV",
   "version": "42.3.1",
   "description": "Open-source AI browser agent — chat with pages, automate tasks, multi-provider LLM support.",
   "permissions": [
@@ -33,7 +33,7 @@
     "persistent": true
   },
   "sidebar_action": {
-    "default_title": "WebBrain",
+    "default_title": "DIV",
     "default_panel": "src/ui/sidepanel.html",
     "default_icon": {
       "16": "icons/icon16.png",
@@ -139,7 +139,7 @@
     "open_in_tab": true
   },
   "browser_action": {
-    "default_title": "WebBrain",
+    "default_title": "DIV",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
@@ -175,7 +175,7 @@
       "suggested_key": {
         "default": "Alt+Shift+W"
       },
-      "description": "Open WebBrain panel"
+      "description": "Open DIV panel"
     },
     "switch-to-ask": {
       "suggested_key": {
@@ -205,19 +205,19 @@
       "suggested_key": {
         "default": "Alt+Shift+Comma"
       },
-      "description": "Zoom WebBrain UI out"
+      "description": "Zoom DIV UI out"
     },
     "increase-ui-scale": {
       "suggested_key": {
         "default": "Alt+Shift+Period"
       },
-      "description": "Zoom WebBrain UI in"
+      "description": "Zoom DIV UI in"
     },
     "reset-ui-scale": {
       "suggested_key": {
         "default": "Alt+Shift+0"
       },
-      "description": "Reset WebBrain UI zoom"
+      "description": "Reset DIV UI zoom"
     }
   }
 }

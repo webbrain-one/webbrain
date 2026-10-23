@@ -1,6 +1,6 @@
 # Trace format compatibility
 
-WebBrain's trace data has three independent version layers:
+DIV's trace data has three independent version layers:
 
 - `DB_VERSION` describes IndexedDB object-store structure and changes only when
   stores or indexes change.

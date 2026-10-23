@@ -10,12 +10,12 @@ export default {
   "st.cb.preset_mcp": 'MCP',
   "st.cb.preset_lmstudio": 'LM Studio',
   "st.cb.preset_custom": 'Custom',
-  "st.cb.preset_cloud_hint": 'WebBrain Cloud backend (port 17373). Only one destination can be active at a time.',
+  "st.cb.preset_cloud_hint": 'DIV Cloud backend (port 17373). Only one destination can be active at a time.',
   "st.cb.preset_mcp_hint": 'Local MCP server (port 17374) for Claude Code, Cursor and other MCP clients. No approval step without a token.',
   "st.cb.preset_lmstudio_hint": 'LM Studio plugin (port 17375). Only one destination can be active at a time.',
   "st.cb.preset_custom_hint": 'Custom local bridge URL (ws:// on localhost only). Manual edits stay here.',
   "st.cb.enabled": 'Let a backend control this browser',
-  "st.cb.desc": 'WebBrain connects out to the backend below and waits for cloud_* commands. With a token set, the backend must approve this browser before any command runs.',
+  "st.cb.desc": 'DIV connects out to the backend below and waits for cloud_* commands. With a token set, the backend must approve this browser before any command runs.',
   "st.cb.url": 'Backend WebSocket URL (local ws:// only)',
   "st.cb.token": 'Cloud Bridge token',
   "st.cb.token_hint": 'Leave empty for a plain local controller (no approval step). This is not a provider API key.',
@@ -28,7 +28,7 @@ export default {
   "st.cb.approved": 'Connected and approved.',
   "st.cb.rejected": 'Rejected by the backend: {reason}',
   "st.cb.unreachable": 'Backend unreachable at {url}.',
-  "st.cb.howto_html": 'To try it locally, run <code>node examples/cloud-bridge-approval-server.mjs --token YOUR_TOKEN</code> from the WebBrain checkout, enter the same token here, then press “Save &amp; test connection”. Type <code>approve</code> in that terminal. <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/cloud-bridge-browser-approval.md" target="_blank" rel="noopener noreferrer">Documentation</a>',
+  "st.cb.howto_html": 'To try it locally, run <code>node examples/cloud-bridge-approval-server.mjs --token YOUR_TOKEN</code> from the DIV checkout, enter the same token here, then press “Save &amp; test connection”. Type <code>approve</code> in that terminal. <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/cloud-bridge-browser-approval.md" target="_blank" rel="noopener noreferrer">Documentation</a>',
 };
 
 // Per-locale translations for the Bridge settings tab. Every locale below must
@@ -47,12 +47,12 @@ export const cloudBridgeTranslations = Object.freeze({
     "st.cb.preset_mcp": 'MCP',
     "st.cb.preset_lmstudio": 'LM Studio',
     "st.cb.preset_custom": 'مخصص',
-    "st.cb.preset_cloud_hint": 'الواجهة الخلفية لسحابة WebBrain (المنفذ 17373). يمكن تفعيل وجهة واحدة فقط في كل مرة.',
+    "st.cb.preset_cloud_hint": 'الواجهة الخلفية لسحابة DIV (المنفذ 17373). يمكن تفعيل وجهة واحدة فقط في كل مرة.',
     "st.cb.preset_mcp_hint": 'خادم MCP محلي (المنفذ 17374) لـ Claude Code وCursor وعملاء MCP الآخرين. لا توجد خطوة موافقة بدون رمز.',
     "st.cb.preset_lmstudio_hint": 'ملحق LM Studio (المنفذ 17375). يمكن تفعيل وجهة واحدة فقط في كل مرة.',
     "st.cb.preset_custom_hint": 'عنوان URL مخصص للجسر المحلي (ws:// على localhost فقط). التعديلات اليدوية تبقى هنا.',
     "st.cb.enabled": 'السماح لواجهة خلفية بالتحكم في هذا المتصفح',
-    "st.cb.desc": 'يتصل WebBrain بالواجهة الخلفية أدناه وينتظر أوامر cloud_*. عند تعيين رمز، يجب أن توافق الواجهة الخلفية على هذا المتصفح قبل تشغيل أي أمر.',
+    "st.cb.desc": 'يتصل DIV بالواجهة الخلفية أدناه وينتظر أوامر cloud_*. عند تعيين رمز، يجب أن توافق الواجهة الخلفية على هذا المتصفح قبل تشغيل أي أمر.',
     "st.cb.url": 'عنوان WebSocket للواجهة الخلفية (ws:// محلي فقط)',
     "st.cb.token": 'رمز الجسر السحابي',
     "st.cb.token_hint": 'اتركه فارغًا لوحدة تحكم محلية عادية (بدون خطوة موافقة). هذا ليس مفتاح API للمزود.',
@@ -65,7 +65,7 @@ export const cloudBridgeTranslations = Object.freeze({
     "st.cb.approved": 'متصل وتمت الموافقة.',
     "st.cb.rejected": 'رفضته الواجهة الخلفية: {reason}',
     "st.cb.unreachable": 'تعذر الوصول إلى الواجهة الخلفية على {url}.',
-    "st.cb.howto_html": 'لتجربته محليًا، شغّل <code>node examples/cloud-bridge-approval-server.mjs --token YOUR_TOKEN</code> من نسخة WebBrain، وأدخل نفس الرمز هنا، ثم اضغط “حفظ &amp; اختبار الاتصال”. اكتب <code>approve</code> في تلك الوحدة الطرفية. <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/cloud-bridge-browser-approval.md" target="_blank" rel="noopener noreferrer">الوثائق</a>'
+    "st.cb.howto_html": 'لتجربته محليًا، شغّل <code>node examples/cloud-bridge-approval-server.mjs --token YOUR_TOKEN</code> من نسخة DIV، وأدخل نفس الرمز هنا، ثم اضغط “حفظ &amp; اختبار الاتصال”. اكتب <code>approve</code> في تلك الوحدة الطرفية. <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/cloud-bridge-browser-approval.md" target="_blank" rel="noopener noreferrer">الوثائق</a>'
   },
   bn: {
     "st.cb.invalid_url": '127.0.0.1, localhost অথবা ::1 সহ একটি স্থানীয় ws:// URL ব্যবহার করুন।',
@@ -78,12 +78,12 @@ export const cloudBridgeTranslations = Object.freeze({
     "st.cb.preset_mcp": 'MCP',
     "st.cb.preset_lmstudio": 'LM Studio',
     "st.cb.preset_custom": 'কাস্টম',
-    "st.cb.preset_cloud_hint": 'WebBrain ক্লাউড ব্যাকএন্ড (পোর্ট 17373)। একবারে শুধু একটি গন্তব্য সক্রিয় থাকতে পারে।',
+    "st.cb.preset_cloud_hint": 'DIV ক্লাউড ব্যাকএন্ড (পোর্ট 17373)। একবারে শুধু একটি গন্তব্য সক্রিয় থাকতে পারে।',
     "st.cb.preset_mcp_hint": 'Claude Code, Cursor এবং অন্যান্য MCP ক্লায়েন্টের জন্য স্থানীয় MCP সার্ভার (পোর্ট 17374)। টোকেন ছাড়া কোনো অনুমোদন ধাপ নেই।',
     "st.cb.preset_lmstudio_hint": 'LM Studio প্লাগইন (পোর্ট 17375)। একবারে শুধু একটি গন্তব্য সক্রিয় থাকতে পারে।',
     "st.cb.preset_custom_hint": 'কাস্টম স্থানীয় ব্রিজ URL (শুধু localhost-এ ws://)। ম্যানুয়াল সম্পাদনা এখানেই থাকে।',
     "st.cb.enabled": 'একটি ব্যাকএন্ডকে এই ব্রাউজার নিয়ন্ত্রণ করতে দিন',
-    "st.cb.desc": 'WebBrain নিচের ব্যাকএন্ডের সাথে বাইরে থেকে সংযোগ করে এবং cloud_* কমান্ডের জন্য অপেক্ষা করে। টোকেন সেট থাকলে, কোনো কমান্ড চলার আগে ব্যাকএন্ডকে এই ব্রাউজার অনুমোদন করতে হবে।',
+    "st.cb.desc": 'DIV নিচের ব্যাকএন্ডের সাথে বাইরে থেকে সংযোগ করে এবং cloud_* কমান্ডের জন্য অপেক্ষা করে। টোকেন সেট থাকলে, কোনো কমান্ড চলার আগে ব্যাকএন্ডকে এই ব্রাউজার অনুমোদন করতে হবে।',
     "st.cb.url": 'ব্যাকএন্ড WebSocket URL (শুধু স্থানীয় ws://)',
     "st.cb.token": 'ক্লাউড ব্রিজ টোকেন',
     "st.cb.token_hint": 'সাধারণ স্থানীয় কন্ট্রোলারের জন্য খালি রাখুন (কোনো অনুমোদন ধাপ নেই)। এটি প্রদানকারী API কী নয়।',
@@ -96,7 +96,7 @@ export const cloudBridgeTranslations = Object.freeze({
     "st.cb.approved": 'সংযুক্ত এবং অনুমোদিত।',
     "st.cb.rejected": 'ব্যাকএন্ড দ্বারা প্রত্যাখ্যাত: {reason}',
     "st.cb.unreachable": 'ব্যাকএন্ড {url}-এ পৌঁছানো যাচ্ছে না।',
-    "st.cb.howto_html": 'স্থানীয়ভাবে চেষ্টা করতে, WebBrain চেকআউট থেকে <code>node examples/cloud-bridge-approval-server.mjs --token YOUR_TOKEN</code> চালান, একই টোকেন এখানে লিখুন, তারপর “সংরক্ষণ &amp; সংযোগ পরীক্ষা” চাপুন। সেই টার্মিনালে <code>approve</code> টাইপ করুন। <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/cloud-bridge-browser-approval.md" target="_blank" rel="noopener noreferrer">ডকুমেন্টেশন</a>'
+    "st.cb.howto_html": 'স্থানীয়ভাবে চেষ্টা করতে, DIV চেকআউট থেকে <code>node examples/cloud-bridge-approval-server.mjs --token YOUR_TOKEN</code> চালান, একই টোকেন এখানে লিখুন, তারপর “সংরক্ষণ &amp; সংযোগ পরীক্ষা” চাপুন। সেই টার্মিনালে <code>approve</code> টাইপ করুন। <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/cloud-bridge-browser-approval.md" target="_blank" rel="noopener noreferrer">ডকুমেন্টেশন</a>'
   },
   de: {
     "st.cb.invalid_url": 'Verwende eine lokale ws://-URL mit 127.0.0.1, localhost oder ::1.',
@@ -109,12 +109,12 @@ export const cloudBridgeTranslations = Object.freeze({
     "st.cb.preset_mcp": 'MCP',
     "st.cb.preset_lmstudio": 'LM Studio',
     "st.cb.preset_custom": 'Benutzerdefiniert',
-    "st.cb.preset_cloud_hint": 'WebBrain-Cloud-Backend (Port 17373). Es kann jeweils nur ein Ziel aktiv sein.',
+    "st.cb.preset_cloud_hint": 'DIV-Cloud-Backend (Port 17373). Es kann jeweils nur ein Ziel aktiv sein.',
     "st.cb.preset_mcp_hint": 'Lokaler MCP-Server (Port 17374) für Claude Code, Cursor und andere MCP-Clients. Ohne Token kein Genehmigungsschritt.',
     "st.cb.preset_lmstudio_hint": 'LM Studio-Plugin (Port 17375). Es kann jeweils nur ein Ziel aktiv sein.',
     "st.cb.preset_custom_hint": 'Benutzerdefinierte lokale Bridge-URL (ws:// nur auf localhost). Manuelle Änderungen bleiben hier.',
     "st.cb.enabled": 'Einem Backend erlauben, diesen Browser zu steuern',
-    "st.cb.desc": 'WebBrain verbindet sich nach außen mit dem untenstehenden Backend und wartet auf cloud_*-Befehle. Mit gesetztem Token muss das Backend diesen Browser genehmigen, bevor ein Befehl ausgeführt wird.',
+    "st.cb.desc": 'DIV verbindet sich nach außen mit dem untenstehenden Backend und wartet auf cloud_*-Befehle. Mit gesetztem Token muss das Backend diesen Browser genehmigen, bevor ein Befehl ausgeführt wird.',
     "st.cb.url": 'Backend-WebSocket-URL (nur lokales ws://)',
     "st.cb.token": 'Cloud-Bridge-Token',
     "st.cb.token_hint": 'Für einen einfachen lokalen Controller leer lassen (kein Genehmigungsschritt). Dies ist kein Anbieter-API-Schlüssel.',
@@ -127,7 +127,7 @@ export const cloudBridgeTranslations = Object.freeze({
     "st.cb.approved": 'Verbunden und genehmigt.',
     "st.cb.rejected": 'Vom Backend abgelehnt: {reason}',
     "st.cb.unreachable": 'Backend unter {url} nicht erreichbar.',
-    "st.cb.howto_html": 'Zum lokalen Ausprobieren <code>node examples/cloud-bridge-approval-server.mjs --token YOUR_TOKEN</code> aus dem WebBrain-Checkout ausführen, dasselbe Token hier eingeben, dann “Speichern &amp; Verbindung testen” drücken. <code>approve</code> in dieses Terminal eingeben. <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/cloud-bridge-browser-approval.md" target="_blank" rel="noopener noreferrer">Dokumentation</a>'
+    "st.cb.howto_html": 'Zum lokalen Ausprobieren <code>node examples/cloud-bridge-approval-server.mjs --token YOUR_TOKEN</code> aus dem DIV-Checkout ausführen, dasselbe Token hier eingeben, dann “Speichern &amp; Verbindung testen” drücken. <code>approve</code> in dieses Terminal eingeben. <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/cloud-bridge-browser-approval.md" target="_blank" rel="noopener noreferrer">Dokumentation</a>'
   },
   es: {
     "st.cb.invalid_url": 'Usa una URL ws:// local con 127.0.0.1, localhost o ::1.',
@@ -140,12 +140,12 @@ export const cloudBridgeTranslations = Object.freeze({
     "st.cb.preset_mcp": 'MCP',
     "st.cb.preset_lmstudio": 'LM Studio',
     "st.cb.preset_custom": 'Personalizado',
-    "st.cb.preset_cloud_hint": 'Backend de WebBrain Cloud (puerto 17373). Solo un destino puede estar activo a la vez.',
+    "st.cb.preset_cloud_hint": 'Backend de DIV Cloud (puerto 17373). Solo un destino puede estar activo a la vez.',
     "st.cb.preset_mcp_hint": 'Servidor MCP local (puerto 17374) para Claude Code, Cursor y otros clientes MCP. Sin token no hay paso de aprobación.',
     "st.cb.preset_lmstudio_hint": 'Complemento de LM Studio (puerto 17375). Solo un destino puede estar activo a la vez.',
     "st.cb.preset_custom_hint": 'URL de puente local personalizada (ws:// solo en localhost). Los cambios manuales se quedan aquí.',
     "st.cb.enabled": 'Permitir que un backend controle este navegador',
-    "st.cb.desc": 'WebBrain se conecta al backend indicado abajo y espera comandos cloud_*. Si hay un token configurado, el backend debe aprobar este navegador antes de ejecutar ningún comando.',
+    "st.cb.desc": 'DIV se conecta al backend indicado abajo y espera comandos cloud_*. Si hay un token configurado, el backend debe aprobar este navegador antes de ejecutar ningún comando.',
     "st.cb.url": 'URL de WebSocket del backend (solo ws:// local)',
     "st.cb.token": 'Token del puente de la nube',
     "st.cb.token_hint": 'Déjalo vacío para un controlador local simple (sin paso de aprobación). No es una clave API de proveedor.',
@@ -158,7 +158,7 @@ export const cloudBridgeTranslations = Object.freeze({
     "st.cb.approved": 'Conectado y aprobado.',
     "st.cb.rejected": 'Rechazado por el backend: {reason}',
     "st.cb.unreachable": 'Backend inaccesible en {url}.',
-    "st.cb.howto_html": 'Para probarlo localmente, ejecuta <code>node examples/cloud-bridge-approval-server.mjs --token YOUR_TOKEN</code> desde la copia de WebBrain, introduce el mismo token aquí y pulsa “Guardar &amp; probar la conexión”. Escribe <code>approve</code> en ese terminal. <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/cloud-bridge-browser-approval.md" target="_blank" rel="noopener noreferrer">Documentación</a>'
+    "st.cb.howto_html": 'Para probarlo localmente, ejecuta <code>node examples/cloud-bridge-approval-server.mjs --token YOUR_TOKEN</code> desde la copia de DIV, introduce el mismo token aquí y pulsa “Guardar &amp; probar la conexión”. Escribe <code>approve</code> en ese terminal. <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/cloud-bridge-browser-approval.md" target="_blank" rel="noopener noreferrer">Documentación</a>'
   },
   fa: {
     "st.cb.invalid_url": 'از یک نشانی محلی ws:// با 127.0.0.1، localhost یا ::1 استفاده کنید.',
@@ -171,12 +171,12 @@ export const cloudBridgeTranslations = Object.freeze({
     "st.cb.preset_mcp": 'MCP',
     "st.cb.preset_lmstudio": 'LM Studio',
     "st.cb.preset_custom": 'سفارشی',
-    "st.cb.preset_cloud_hint": 'بک‌اند ابری WebBrain (درگاه 17373). در هر زمان فقط یک مقصد می‌تواند فعال باشد.',
+    "st.cb.preset_cloud_hint": 'بک‌اند ابری DIV (درگاه 17373). در هر زمان فقط یک مقصد می‌تواند فعال باشد.',
     "st.cb.preset_mcp_hint": 'سرور محلی MCP (درگاه 17374) برای Claude Code، Cursor و سایر کلاینت‌های MCP. بدون رمز، مرحله تأیید وجود ندارد.',
     "st.cb.preset_lmstudio_hint": 'افزونه LM Studio (درگاه 17375). در هر زمان فقط یک مقصد می‌تواند فعال باشد.',
     "st.cb.preset_custom_hint": 'نشانی سفارشی پل محلی (ws:// فقط روی localhost). ویرایش‌های دستی اینجا می‌مانند.',
     "st.cb.enabled": 'به بک‌اند اجازه بده این مرورگر را کنترل کند',
-    "st.cb.desc": 'WebBrain به بک‌اند زیر متصل می‌شود و منتظر فرمان‌های cloud_* می‌ماند. اگر رمز تنظیم شده باشد، بک‌اند باید پیش از اجرای هر فرمانی این مرورگر را تأیید کند.',
+    "st.cb.desc": 'DIV به بک‌اند زیر متصل می‌شود و منتظر فرمان‌های cloud_* می‌ماند. اگر رمز تنظیم شده باشد، بک‌اند باید پیش از اجرای هر فرمانی این مرورگر را تأیید کند.',
     "st.cb.url": 'نشانی WebSocket بک‌اند (فقط ws:// محلی)',
     "st.cb.token": 'رمز پل ابری',
     "st.cb.token_hint": 'برای یک کنترل‌کننده محلی ساده خالی بگذارید (بدون مرحله تأیید). این کلید API ارائه‌دهنده نیست.',
@@ -189,7 +189,7 @@ export const cloudBridgeTranslations = Object.freeze({
     "st.cb.approved": 'متصل و تأیید شد.',
     "st.cb.rejected": 'توسط بک‌اند رد شد: {reason}',
     "st.cb.unreachable": 'بک‌اند در {url} در دسترس نیست.',
-    "st.cb.howto_html": 'برای امتحان محلی، از نسخه WebBrain دستور <code>node examples/cloud-bridge-approval-server.mjs --token YOUR_TOKEN</code> را اجرا کنید، همان رمز را اینجا وارد کنید، سپس “ذخیره &amp; آزمایش اتصال” را بزنید. در آن ترمینال <code>approve</code> را تایپ کنید. <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/cloud-bridge-browser-approval.md" target="_blank" rel="noopener noreferrer">مستندات</a>'
+    "st.cb.howto_html": 'برای امتحان محلی، از نسخه DIV دستور <code>node examples/cloud-bridge-approval-server.mjs --token YOUR_TOKEN</code> را اجرا کنید، همان رمز را اینجا وارد کنید، سپس “ذخیره &amp; آزمایش اتصال” را بزنید. در آن ترمینال <code>approve</code> را تایپ کنید. <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/cloud-bridge-browser-approval.md" target="_blank" rel="noopener noreferrer">مستندات</a>'
   },
   fr: {
     "st.cb.invalid_url": 'Utilisez une URL ws:// locale avec 127.0.0.1, localhost ou ::1.',
@@ -202,12 +202,12 @@ export const cloudBridgeTranslations = Object.freeze({
     "st.cb.preset_mcp": 'MCP',
     "st.cb.preset_lmstudio": 'LM Studio',
     "st.cb.preset_custom": 'Personnalisé',
-    "st.cb.preset_cloud_hint": 'Backend WebBrain Cloud (port 17373). Une seule destination peut être active à la fois.',
+    "st.cb.preset_cloud_hint": 'Backend DIV Cloud (port 17373). Une seule destination peut être active à la fois.',
     "st.cb.preset_mcp_hint": 'Serveur MCP local (port 17374) pour Claude Code, Cursor et autres clients MCP. Sans jeton, aucune étape d’approbation.',
     "st.cb.preset_lmstudio_hint": 'Plugin LM Studio (port 17375). Une seule destination peut être active à la fois.',
     "st.cb.preset_custom_hint": 'URL de pont locale personnalisée (ws:// sur localhost uniquement). Les modifications manuelles restent ici.',
     "st.cb.enabled": 'Laisser un backend contrôler ce navigateur',
-    "st.cb.desc": 'WebBrain se connecte au backend ci-dessous et attend des commandes cloud_*. Si un jeton est défini, le backend doit approuver ce navigateur avant toute exécution de commande.',
+    "st.cb.desc": 'DIV se connecte au backend ci-dessous et attend des commandes cloud_*. Si un jeton est défini, le backend doit approuver ce navigateur avant toute exécution de commande.',
     "st.cb.url": 'URL WebSocket du backend (ws:// local uniquement)',
     "st.cb.token": 'Jeton du pont Cloud',
     "st.cb.token_hint": 'Laissez vide pour un contrôleur local simple (sans étape d’approbation). Il ne s’agit pas d’une clé API de fournisseur.',
@@ -220,7 +220,7 @@ export const cloudBridgeTranslations = Object.freeze({
     "st.cb.approved": 'Connecté et approuvé.',
     "st.cb.rejected": 'Refusé par le backend : {reason}',
     "st.cb.unreachable": 'Backend inaccessible à l’adresse {url}.',
-    "st.cb.howto_html": 'Pour essayer localement, exécutez <code>node examples/cloud-bridge-approval-server.mjs --token YOUR_TOKEN</code> depuis le dépôt WebBrain, saisissez le même jeton ici, puis cliquez sur “Enregistrer &amp; tester la connexion”. Tapez <code>approve</code> dans ce terminal. <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/cloud-bridge-browser-approval.md" target="_blank" rel="noopener noreferrer">Documentation</a>'
+    "st.cb.howto_html": 'Pour essayer localement, exécutez <code>node examples/cloud-bridge-approval-server.mjs --token YOUR_TOKEN</code> depuis le dépôt DIV, saisissez le même jeton ici, puis cliquez sur “Enregistrer &amp; tester la connexion”. Tapez <code>approve</code> dans ce terminal. <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/cloud-bridge-browser-approval.md" target="_blank" rel="noopener noreferrer">Documentation</a>'
   },
   he: {
     "st.cb.invalid_url": 'השתמש בכתובת ws:// מקומית עם 127.0.0.1, localhost או ::1.',
@@ -233,12 +233,12 @@ export const cloudBridgeTranslations = Object.freeze({
     "st.cb.preset_mcp": 'MCP',
     "st.cb.preset_lmstudio": 'LM Studio',
     "st.cb.preset_custom": 'מותאם אישית',
-    "st.cb.preset_cloud_hint": 'הבקאנד של ענן WebBrain (פורט 17373). רק יעד אחד יכול להיות פעיל בכל פעם.',
+    "st.cb.preset_cloud_hint": 'הבקאנד של ענן DIV (פורט 17373). רק יעד אחד יכול להיות פעיל בכל פעם.',
     "st.cb.preset_mcp_hint": 'שרת MCP מקומי (פורט 17374) עבור Claude Code, Cursor ולקוחות MCP אחרים. ללא אסימון אין שלב אישור.',
     "st.cb.preset_lmstudio_hint": 'תוסף LM Studio (פורט 17375). רק יעד אחד יכול להיות פעיל בכל פעם.',
     "st.cb.preset_custom_hint": 'כתובת גשר מקומית מותאמת אישית (ws:// על localhost בלבד). עריכות ידניות נשארות כאן.',
     "st.cb.enabled": 'אפשר לבקאנד לשלוט בדפדפן הזה',
-    "st.cb.desc": 'WebBrain מתחבר החוצה אל הבקאנד למטה וממתין לפקודות cloud_*. כאשר מוגדר אסימון, הבקאנד חייב לאשר את הדפדפן הזה לפני שפקודה כלשהי תפעל.',
+    "st.cb.desc": 'DIV מתחבר החוצה אל הבקאנד למטה וממתין לפקודות cloud_*. כאשר מוגדר אסימון, הבקאנד חייב לאשר את הדפדפן הזה לפני שפקודה כלשהי תפעל.',
     "st.cb.url": 'כתובת WebSocket של הבקאנד (ws:// מקומי בלבד)',
     "st.cb.token": 'אסימון גשר הענן',
     "st.cb.token_hint": 'השאירו ריק עבור בקר מקומי פשוט (ללא שלב אישור). זה אינו מפתח API של ספק.',
@@ -251,7 +251,7 @@ export const cloudBridgeTranslations = Object.freeze({
     "st.cb.approved": 'מחובר ומאושר.',
     "st.cb.rejected": 'נדחה על ידי הבקאנד: {reason}',
     "st.cb.unreachable": 'לא ניתן להגיע אל הבקאנד בכתובת {url}.',
-    "st.cb.howto_html": 'כדי לנסות מקומית, הריצו <code>node examples/cloud-bridge-approval-server.mjs --token YOUR_TOKEN</code> מתוך עותק WebBrain, הזינו את אותו אסימון כאן, ואז לחצו על “שמירה &amp; בדיקת חיבור”. הקלידו <code>approve</code> באותו טרמינל. <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/cloud-bridge-browser-approval.md" target="_blank" rel="noopener noreferrer">תיעוד</a>'
+    "st.cb.howto_html": 'כדי לנסות מקומית, הריצו <code>node examples/cloud-bridge-approval-server.mjs --token YOUR_TOKEN</code> מתוך עותק DIV, הזינו את אותו אסימון כאן, ואז לחצו על “שמירה &amp; בדיקת חיבור”. הקלידו <code>approve</code> באותו טרמינל. <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/cloud-bridge-browser-approval.md" target="_blank" rel="noopener noreferrer">תיעוד</a>'
   },
   hi: {
     "st.cb.invalid_url": '127.0.0.1, localhost या ::1 वाला स्थानीय ws:// URL इस्तेमाल करें।',
@@ -264,12 +264,12 @@ export const cloudBridgeTranslations = Object.freeze({
     "st.cb.preset_mcp": 'MCP',
     "st.cb.preset_lmstudio": 'LM Studio',
     "st.cb.preset_custom": 'कस्टम',
-    "st.cb.preset_cloud_hint": 'WebBrain क्लाउड बैकएंड (पोर्ट 17373)। एक समय में केवल एक गंतव्य सक्रिय हो सकता है।',
+    "st.cb.preset_cloud_hint": 'DIV क्लाउड बैकएंड (पोर्ट 17373)। एक समय में केवल एक गंतव्य सक्रिय हो सकता है।',
     "st.cb.preset_mcp_hint": 'Claude Code, Cursor और अन्य MCP क्लाइंट के लिए स्थानीय MCP सर्वर (पोर्ट 17374)। टोकन के बिना कोई अनुमोदन चरण नहीं।',
     "st.cb.preset_lmstudio_hint": 'LM Studio प्लगइन (पोर्ट 17375)। एक समय में केवल एक गंतव्य सक्रिय हो सकता है।',
     "st.cb.preset_custom_hint": 'कस्टम स्थानीय ब्रिज URL (केवल localhost पर ws://)। मैन्युअल बदलाव यहीं रहते हैं।',
     "st.cb.enabled": 'किसी बैकएंड को इस ब्राउज़र को नियंत्रित करने दें',
-    "st.cb.desc": 'WebBrain नीचे दिए गए बैकएंड से बाहर कनेक्ट करता है और cloud_* कमांड की प्रतीक्षा करता है। टोकन सेट होने पर, कोई भी कमांड चलने से पहले बैकएंड को इस ब्राउज़र का अनुमोदन करना होगा।',
+    "st.cb.desc": 'DIV नीचे दिए गए बैकएंड से बाहर कनेक्ट करता है और cloud_* कमांड की प्रतीक्षा करता है। टोकन सेट होने पर, कोई भी कमांड चलने से पहले बैकएंड को इस ब्राउज़र का अनुमोदन करना होगा।',
     "st.cb.url": 'बैकएंड WebSocket URL (केवल स्थानीय ws://)',
     "st.cb.token": 'क्लाउड ब्रिज टोकन',
     "st.cb.token_hint": 'सादे स्थानीय कंट्रोलर के लिए खाली छोड़ें (कोई अनुमोदन चरण नहीं)। यह प्रदाता एपीआई कुंजी नहीं है।',
@@ -282,7 +282,7 @@ export const cloudBridgeTranslations = Object.freeze({
     "st.cb.approved": 'कनेक्टेड और स्वीकृत।',
     "st.cb.rejected": 'बैकएंड द्वारा अस्वीकृत: {reason}',
     "st.cb.unreachable": 'बैकएंड {url} पर उपलब्ध नहीं है।',
-    "st.cb.howto_html": 'स्थानीय रूप से आज़माने के लिए, WebBrain चेकआउट से <code>node examples/cloud-bridge-approval-server.mjs --token YOUR_TOKEN</code> चलाएँ, वही टोकन यहाँ दर्ज करें, फिर “सहेजें &amp; कनेक्शन जांचें” दबाएँ। उस टर्मिनल में <code>approve</code> टाइप करें। <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/cloud-bridge-browser-approval.md" target="_blank" rel="noopener noreferrer">दस्तावेज़</a>'
+    "st.cb.howto_html": 'स्थानीय रूप से आज़माने के लिए, DIV चेकआउट से <code>node examples/cloud-bridge-approval-server.mjs --token YOUR_TOKEN</code> चलाएँ, वही टोकन यहाँ दर्ज करें, फिर “सहेजें &amp; कनेक्शन जांचें” दबाएँ। उस टर्मिनल में <code>approve</code> टाइप करें। <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/cloud-bridge-browser-approval.md" target="_blank" rel="noopener noreferrer">दस्तावेज़</a>'
   },
   id: {
     "st.cb.invalid_url": 'Gunakan URL ws:// lokal dengan 127.0.0.1, localhost, atau ::1.',
@@ -295,12 +295,12 @@ export const cloudBridgeTranslations = Object.freeze({
     "st.cb.preset_mcp": 'MCP',
     "st.cb.preset_lmstudio": 'LM Studio',
     "st.cb.preset_custom": 'Kustom',
-    "st.cb.preset_cloud_hint": 'Backend WebBrain Cloud (port 17373). Hanya satu tujuan yang dapat aktif pada satu waktu.',
+    "st.cb.preset_cloud_hint": 'Backend DIV Cloud (port 17373). Hanya satu tujuan yang dapat aktif pada satu waktu.',
     "st.cb.preset_mcp_hint": 'Server MCP lokal (port 17374) untuk Claude Code, Cursor, dan klien MCP lainnya. Tanpa langkah persetujuan jika tanpa token.',
     "st.cb.preset_lmstudio_hint": 'Plugin LM Studio (port 17375). Hanya satu tujuan yang dapat aktif pada satu waktu.',
     "st.cb.preset_custom_hint": 'URL bridge lokal kustom (hanya ws:// di localhost). Edit manual tetap di sini.',
     "st.cb.enabled": 'Biarkan backend mengontrol browser ini',
-    "st.cb.desc": 'WebBrain terhubung keluar ke backend di bawah dan menunggu perintah cloud_*. Jika token diisi, backend harus menyetujui browser ini sebelum perintah apa pun berjalan.',
+    "st.cb.desc": 'DIV terhubung keluar ke backend di bawah dan menunggu perintah cloud_*. Jika token diisi, backend harus menyetujui browser ini sebelum perintah apa pun berjalan.',
     "st.cb.url": 'URL WebSocket backend (hanya ws:// lokal)',
     "st.cb.token": 'Token Cloud Bridge',
     "st.cb.token_hint": 'Kosongkan untuk pengontrol lokal biasa (tanpa langkah persetujuan). Ini bukan kunci API penyedia.',
@@ -313,7 +313,7 @@ export const cloudBridgeTranslations = Object.freeze({
     "st.cb.approved": 'Terhubung dan disetujui.',
     "st.cb.rejected": 'Ditolak oleh backend: {reason}',
     "st.cb.unreachable": 'Backend tidak dapat dijangkau di {url}.',
-    "st.cb.howto_html": 'Untuk mencoba secara lokal, jalankan <code>node examples/cloud-bridge-approval-server.mjs --token YOUR_TOKEN</code> dari checkout WebBrain, masukkan token yang sama di sini, lalu tekan “Simpan &amp; uji koneksi”. Ketik <code>approve</code> di terminal tersebut. <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/cloud-bridge-browser-approval.md" target="_blank" rel="noopener noreferrer">Dokumentasi</a>'
+    "st.cb.howto_html": 'Untuk mencoba secara lokal, jalankan <code>node examples/cloud-bridge-approval-server.mjs --token YOUR_TOKEN</code> dari checkout DIV, masukkan token yang sama di sini, lalu tekan “Simpan &amp; uji koneksi”. Ketik <code>approve</code> di terminal tersebut. <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/cloud-bridge-browser-approval.md" target="_blank" rel="noopener noreferrer">Dokumentasi</a>'
   },
   ja: {
     "st.cb.invalid_url": '127.0.0.1、localhost、または ::1 を使ったローカル ws:// URL を指定してください。',
@@ -326,12 +326,12 @@ export const cloudBridgeTranslations = Object.freeze({
     "st.cb.preset_mcp": 'MCP',
     "st.cb.preset_lmstudio": 'LM Studio',
     "st.cb.preset_custom": 'カスタム',
-    "st.cb.preset_cloud_hint": 'WebBrain Cloud バックエンド（ポート 17373）。同時に有効にできる接続先は 1 つだけです。',
+    "st.cb.preset_cloud_hint": 'DIV Cloud バックエンド（ポート 17373）。同時に有効にできる接続先は 1 つだけです。',
     "st.cb.preset_mcp_hint": 'Claude Code、Cursor などの MCP クライアント用のローカル MCP サーバー（ポート 17374）。トークンなしでは承認ステップはありません。',
     "st.cb.preset_lmstudio_hint": 'LM Studio プラグイン（ポート 17375）。同時に有効にできる接続先は 1 つだけです。',
     "st.cb.preset_custom_hint": 'カスタムのローカルブリッジ URL（localhost 上の ws:// のみ）。手動編集はここに残ります。',
     "st.cb.enabled": 'バックエンドによるこのブラウザーの制御を許可する',
-    "st.cb.desc": 'WebBrain は下のバックエンドへ外向きに接続し、cloud_* コマンドを待ち受けます。トークンが設定されている場合、コマンド実行前にバックエンドがこのブラウザーを承認する必要があります。',
+    "st.cb.desc": 'DIV は下のバックエンドへ外向きに接続し、cloud_* コマンドを待ち受けます。トークンが設定されている場合、コマンド実行前にバックエンドがこのブラウザーを承認する必要があります。',
     "st.cb.url": 'バックエンド WebSocket URL（ローカル ws:// のみ）',
     "st.cb.token": 'Cloud Bridge トークン',
     "st.cb.token_hint": '通常のローカルコントローラー用には空欄のままにします（承認ステップなし）。これはプロバイダーの API キーではありません。',
@@ -344,7 +344,7 @@ export const cloudBridgeTranslations = Object.freeze({
     "st.cb.approved": '接続・承認済みです。',
     "st.cb.rejected": 'バックエンドに拒否されました: {reason}',
     "st.cb.unreachable": '{url} のバックエンドに接続できません。',
-    "st.cb.howto_html": 'ローカルで試すには、WebBrain のチェックアウトから <code>node examples/cloud-bridge-approval-server.mjs --token YOUR_TOKEN</code> を実行し、同じトークンをここに入力して「保存して接続テスト」を押します。そのターミナルで <code>approve</code> と入力してください。 <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/cloud-bridge-browser-approval.md" target="_blank" rel="noopener noreferrer">ドキュメント</a>'
+    "st.cb.howto_html": 'ローカルで試すには、DIV のチェックアウトから <code>node examples/cloud-bridge-approval-server.mjs --token YOUR_TOKEN</code> を実行し、同じトークンをここに入力して「保存して接続テスト」を押します。そのターミナルで <code>approve</code> と入力してください。 <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/cloud-bridge-browser-approval.md" target="_blank" rel="noopener noreferrer">ドキュメント</a>'
   },
   ko: {
     "st.cb.invalid_url": '127.0.0.1, localhost 또는 ::1을 사용하는 로컬 ws:// URL을 입력하세요.',
@@ -357,12 +357,12 @@ export const cloudBridgeTranslations = Object.freeze({
     "st.cb.preset_mcp": 'MCP',
     "st.cb.preset_lmstudio": 'LM Studio',
     "st.cb.preset_custom": '사용자 지정',
-    "st.cb.preset_cloud_hint": 'WebBrain Cloud 백엔드(포트 17373). 한 번에 하나의 대상만 활성화할 수 있습니다.',
+    "st.cb.preset_cloud_hint": 'DIV Cloud 백엔드(포트 17373). 한 번에 하나의 대상만 활성화할 수 있습니다.',
     "st.cb.preset_mcp_hint": 'Claude Code, Cursor 및 기타 MCP 클라이언트용 로컬 MCP 서버(포트 17374). 토큰이 없으면 승인 단계가 없습니다.',
     "st.cb.preset_lmstudio_hint": 'LM Studio 플러그인(포트 17375). 한 번에 하나의 대상만 활성화할 수 있습니다.',
     "st.cb.preset_custom_hint": '사용자 지정 로컬 브리지 URL(localhost의 ws:// 전용). 수동 편집은 여기에 유지됩니다.',
     "st.cb.enabled": '백엔드가 이 브라우저를 제어하도록 허용',
-    "st.cb.desc": 'WebBrain은 아래 백엔드에 연결하여 cloud_* 명령을 기다립니다. 토큰이 설정되어 있으면 명령이 실행되기 전에 백엔드가 이 브라우저를 승인해야 합니다.',
+    "st.cb.desc": 'DIV은 아래 백엔드에 연결하여 cloud_* 명령을 기다립니다. 토큰이 설정되어 있으면 명령이 실행되기 전에 백엔드가 이 브라우저를 승인해야 합니다.',
     "st.cb.url": '백엔드 WebSocket URL(로컬 ws:// 전용)',
     "st.cb.token": 'Cloud Bridge 토큰',
     "st.cb.token_hint": '일반 로컬 컨트롤러는 비워 두세요(승인 단계 없음). 제공자 API 키가 아닙니다.',
@@ -375,7 +375,7 @@ export const cloudBridgeTranslations = Object.freeze({
     "st.cb.approved": '연결 및 승인됨.',
     "st.cb.rejected": '백엔드에서 거부됨: {reason}',
     "st.cb.unreachable": '{url}의 백엔드에 연결할 수 없습니다.',
-    "st.cb.howto_html": '로컬에서 시험하려면 WebBrain 체크아웃에서 <code>node examples/cloud-bridge-approval-server.mjs --token YOUR_TOKEN</code>을 실행하고, 같은 토큰을 여기에 입력한 뒤 “저장 및 연결 테스트”를 누르세요. 해당 터미널에 <code>approve</code>를 입력하세요. <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/cloud-bridge-browser-approval.md" target="_blank" rel="noopener noreferrer">문서</a>'
+    "st.cb.howto_html": '로컬에서 시험하려면 DIV 체크아웃에서 <code>node examples/cloud-bridge-approval-server.mjs --token YOUR_TOKEN</code>을 실행하고, 같은 토큰을 여기에 입력한 뒤 “저장 및 연결 테스트”를 누르세요. 해당 터미널에 <code>approve</code>를 입력하세요. <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/cloud-bridge-browser-approval.md" target="_blank" rel="noopener noreferrer">문서</a>'
   },
   ms: {
     "st.cb.invalid_url": 'Gunakan URL ws:// setempat dengan 127.0.0.1, localhost atau ::1.',
@@ -388,12 +388,12 @@ export const cloudBridgeTranslations = Object.freeze({
     "st.cb.preset_mcp": 'MCP',
     "st.cb.preset_lmstudio": 'LM Studio',
     "st.cb.preset_custom": 'Tersuai',
-    "st.cb.preset_cloud_hint": 'Backend WebBrain Cloud (port 17373). Hanya satu destinasi boleh aktif pada satu masa.',
+    "st.cb.preset_cloud_hint": 'Backend DIV Cloud (port 17373). Hanya satu destinasi boleh aktif pada satu masa.',
     "st.cb.preset_mcp_hint": 'Pelayan MCP setempat (port 17374) untuk Claude Code, Cursor dan klien MCP lain. Tiada langkah kelulusan tanpa token.',
     "st.cb.preset_lmstudio_hint": 'Plugin LM Studio (port 17375). Hanya satu destinasi boleh aktif pada satu masa.',
     "st.cb.preset_custom_hint": 'URL jambatan setempat tersuai (hanya ws:// pada localhost). Suntingan manual kekal di sini.',
     "st.cb.enabled": 'Benarkan backend mengawal pelayar ini',
-    "st.cb.desc": 'WebBrain bersambung keluar ke backend di bawah dan menunggu perintah cloud_*. Jika token ditetapkan, backend mesti meluluskan pelayar ini sebelum sebarang perintah berjalan.',
+    "st.cb.desc": 'DIV bersambung keluar ke backend di bawah dan menunggu perintah cloud_*. Jika token ditetapkan, backend mesti meluluskan pelayar ini sebelum sebarang perintah berjalan.',
     "st.cb.url": 'URL WebSocket backend (ws:// setempat sahaja)',
     "st.cb.token": 'Token Cloud Bridge',
     "st.cb.token_hint": 'Biarkan kosong untuk pengawal setempat biasa (tanpa langkah kelulusan). Ini bukan kunci API pembekal.',
@@ -406,7 +406,7 @@ export const cloudBridgeTranslations = Object.freeze({
     "st.cb.approved": 'Disambungkan dan diluluskan.',
     "st.cb.rejected": 'Ditolak oleh backend: {reason}',
     "st.cb.unreachable": 'Backend tidak dapat dicapai di {url}.',
-    "st.cb.howto_html": 'Untuk mencuba secara setempat, jalankan <code>node examples/cloud-bridge-approval-server.mjs --token YOUR_TOKEN</code> dari checkout WebBrain, masukkan token yang sama di sini, kemudian tekan “Simpan &amp; uji sambungan”. Taip <code>approve</code> dalam terminal tersebut. <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/cloud-bridge-browser-approval.md" target="_blank" rel="noopener noreferrer">Dokumentasi</a>'
+    "st.cb.howto_html": 'Untuk mencuba secara setempat, jalankan <code>node examples/cloud-bridge-approval-server.mjs --token YOUR_TOKEN</code> dari checkout DIV, masukkan token yang sama di sini, kemudian tekan “Simpan &amp; uji sambungan”. Taip <code>approve</code> dalam terminal tersebut. <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/cloud-bridge-browser-approval.md" target="_blank" rel="noopener noreferrer">Dokumentasi</a>'
   },
   nl: {
     "st.cb.invalid_url": 'Gebruik een lokale ws://-URL met 127.0.0.1, localhost of ::1.',
@@ -419,12 +419,12 @@ export const cloudBridgeTranslations = Object.freeze({
     "st.cb.preset_mcp": 'MCP',
     "st.cb.preset_lmstudio": 'LM Studio',
     "st.cb.preset_custom": 'Aangepast',
-    "st.cb.preset_cloud_hint": 'WebBrain-Cloud-backend (poort 17373). Er kan maar één bestemming tegelijk actief zijn.',
+    "st.cb.preset_cloud_hint": 'DIV-Cloud-backend (poort 17373). Er kan maar één bestemming tegelijk actief zijn.',
     "st.cb.preset_mcp_hint": 'Lokale MCP-server (poort 17374) voor Claude Code, Cursor en andere MCP-clients. Zonder token geen goedkeuringsstap.',
     "st.cb.preset_lmstudio_hint": 'LM Studio-plug-in (poort 17375). Er kan maar één bestemming tegelijk actief zijn.',
     "st.cb.preset_custom_hint": 'Aangepaste lokale bridge-URL (ws:// alleen op localhost). Handmatige wijzigingen blijven hier.',
     "st.cb.enabled": 'Een backend deze browser laten bedienen',
-    "st.cb.desc": 'WebBrain verbindt naar de onderstaande backend en wacht op cloud_*-opdrachten. Met een ingestelde token moet de backend deze browser goedkeuren voordat een opdracht wordt uitgevoerd.',
+    "st.cb.desc": 'DIV verbindt naar de onderstaande backend en wacht op cloud_*-opdrachten. Met een ingestelde token moet de backend deze browser goedkeuren voordat een opdracht wordt uitgevoerd.',
     "st.cb.url": 'Backend-WebSocket-URL (alleen lokale ws://)',
     "st.cb.token": 'Cloud-bridge-token',
     "st.cb.token_hint": 'Laat leeg voor een eenvoudige lokale controller (geen goedkeuringsstap). Dit is geen provider-API-sleutel.',
@@ -437,7 +437,7 @@ export const cloudBridgeTranslations = Object.freeze({
     "st.cb.approved": 'Verbonden en goedgekeurd.',
     "st.cb.rejected": 'Geweigerd door de backend: {reason}',
     "st.cb.unreachable": 'Backend onbereikbaar op {url}.',
-    "st.cb.howto_html": 'Om lokaal te proberen, voer <code>node examples/cloud-bridge-approval-server.mjs --token YOUR_TOKEN</code> uit vanuit de WebBrain-checkout, voer hier dezelfde token in en druk op “Opslaan &amp; verbinding testen”. Typ <code>approve</code> in die terminal. <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/cloud-bridge-browser-approval.md" target="_blank" rel="noopener noreferrer">Documentatie</a>'
+    "st.cb.howto_html": 'Om lokaal te proberen, voer <code>node examples/cloud-bridge-approval-server.mjs --token YOUR_TOKEN</code> uit vanuit de DIV-checkout, voer hier dezelfde token in en druk op “Opslaan &amp; verbinding testen”. Typ <code>approve</code> in die terminal. <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/cloud-bridge-browser-approval.md" target="_blank" rel="noopener noreferrer">Documentatie</a>'
   },
   pl: {
     "st.cb.invalid_url": 'Użyj lokalnego adresu ws:// z 127.0.0.1, localhost lub ::1.',
@@ -450,12 +450,12 @@ export const cloudBridgeTranslations = Object.freeze({
     "st.cb.preset_mcp": 'MCP',
     "st.cb.preset_lmstudio": 'LM Studio',
     "st.cb.preset_custom": 'Własne',
-    "st.cb.preset_cloud_hint": 'Chmurowy backend WebBrain (port 17373). W danej chwili może być aktywne tylko jedno miejsce docelowe.',
+    "st.cb.preset_cloud_hint": 'Chmurowy backend DIV (port 17373). W danej chwili może być aktywne tylko jedno miejsce docelowe.',
     "st.cb.preset_mcp_hint": 'Lokalny serwer MCP (port 17374) dla Claude Code, Cursor i innych klientów MCP. Bez tokenu brak kroku zatwierdzania.',
     "st.cb.preset_lmstudio_hint": 'Wtyczka LM Studio (port 17375). W danej chwili może być aktywne tylko jedno miejsce docelowe.',
     "st.cb.preset_custom_hint": 'Własny lokalny URL mostu (ws:// tylko na localhost). Ręczne edycje zostają tutaj.',
     "st.cb.enabled": 'Pozwól backendowi sterować tą przeglądarką',
-    "st.cb.desc": 'WebBrain łączy się z backendem poniżej i czeka na polecenia cloud_*. Po ustawieniu tokenu backend musi zatwierdzić tę przeglądarkę przed wykonaniem jakiegokolwiek polecenia.',
+    "st.cb.desc": 'DIV łączy się z backendem poniżej i czeka na polecenia cloud_*. Po ustawieniu tokenu backend musi zatwierdzić tę przeglądarkę przed wykonaniem jakiegokolwiek polecenia.',
     "st.cb.url": 'Adres URL backendu WebSocket (tylko lokalny ws://)',
     "st.cb.token": 'Token mostu w chmurze',
     "st.cb.token_hint": 'Pozostaw puste dla zwykłego lokalnego kontrolera (bez kroku zatwierdzania). To nie jest klucz API dostawcy.',
@@ -468,7 +468,7 @@ export const cloudBridgeTranslations = Object.freeze({
     "st.cb.approved": 'Połączono i zatwierdzono.',
     "st.cb.rejected": 'Odrzucone przez backend: {reason}',
     "st.cb.unreachable": 'Backend nieosiągalny pod adresem {url}.',
-    "st.cb.howto_html": 'Aby wypróbować lokalnie, uruchom <code>node examples/cloud-bridge-approval-server.mjs --token YOUR_TOKEN</code> z katalogu WebBrain, wprowadź ten sam token tutaj, a następnie naciśnij “Zapisz &amp; testuj połączenie”. Wpisz <code>approve</code> w tym terminalu. <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/cloud-bridge-browser-approval.md" target="_blank" rel="noopener noreferrer">Dokumentacja</a>'
+    "st.cb.howto_html": 'Aby wypróbować lokalnie, uruchom <code>node examples/cloud-bridge-approval-server.mjs --token YOUR_TOKEN</code> z katalogu DIV, wprowadź ten sam token tutaj, a następnie naciśnij “Zapisz &amp; testuj połączenie”. Wpisz <code>approve</code> w tym terminalu. <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/cloud-bridge-browser-approval.md" target="_blank" rel="noopener noreferrer">Dokumentacja</a>'
   },
   pt: {
     "st.cb.invalid_url": 'Use uma URL ws:// local com 127.0.0.1, localhost ou ::1.',
@@ -481,12 +481,12 @@ export const cloudBridgeTranslations = Object.freeze({
     "st.cb.preset_mcp": 'MCP',
     "st.cb.preset_lmstudio": 'LM Studio',
     "st.cb.preset_custom": 'Personalizado',
-    "st.cb.preset_cloud_hint": 'Backend do WebBrain Cloud (porta 17373). Apenas um destino pode ficar ativo por vez.',
+    "st.cb.preset_cloud_hint": 'Backend do DIV Cloud (porta 17373). Apenas um destino pode ficar ativo por vez.',
     "st.cb.preset_mcp_hint": 'Servidor MCP local (porta 17374) para Claude Code, Cursor e outros clientes MCP. Sem token, nenhuma etapa de aprovação.',
     "st.cb.preset_lmstudio_hint": 'Plug-in do LM Studio (porta 17375). Apenas um destino pode ficar ativo por vez.',
     "st.cb.preset_custom_hint": 'URL de ponte local personalizada (ws:// apenas em localhost). Edições manuais ficam aqui.',
     "st.cb.enabled": 'Permitir que um backend controle este navegador',
-    "st.cb.desc": 'O WebBrain se conecta ao backend abaixo e aguarda comandos cloud_*. Com um token definido, o backend precisa aprovar este navegador antes da execução de qualquer comando.',
+    "st.cb.desc": 'O DIV se conecta ao backend abaixo e aguarda comandos cloud_*. Com um token definido, o backend precisa aprovar este navegador antes da execução de qualquer comando.',
     "st.cb.url": 'URL do WebSocket do backend (somente ws:// local)',
     "st.cb.token": 'Token da ponte na nuvem',
     "st.cb.token_hint": 'Deixe vazio para um controlador local simples (sem etapa de aprovação). Isso não é uma chave API de provedor.',
@@ -499,7 +499,7 @@ export const cloudBridgeTranslations = Object.freeze({
     "st.cb.approved": 'Conectado e aprovado.',
     "st.cb.rejected": 'Rejeitado pelo backend: {reason}',
     "st.cb.unreachable": 'Backend inacessível em {url}.',
-    "st.cb.howto_html": 'Para testar localmente, execute <code>node examples/cloud-bridge-approval-server.mjs --token YOUR_TOKEN</code> a partir da cópia do WebBrain, insira o mesmo token aqui e pressione “Salvar &amp; testar a conexão”. Digite <code>approve</code> nesse terminal. <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/cloud-bridge-browser-approval.md" target="_blank" rel="noopener noreferrer">Documentação</a>'
+    "st.cb.howto_html": 'Para testar localmente, execute <code>node examples/cloud-bridge-approval-server.mjs --token YOUR_TOKEN</code> a partir da cópia do DIV, insira o mesmo token aqui e pressione “Salvar &amp; testar a conexão”. Digite <code>approve</code> nesse terminal. <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/cloud-bridge-browser-approval.md" target="_blank" rel="noopener noreferrer">Documentação</a>'
   },
   ru: {
     "st.cb.invalid_url": 'Используйте локальный URL ws:// с 127.0.0.1, localhost или ::1.',
@@ -512,12 +512,12 @@ export const cloudBridgeTranslations = Object.freeze({
     "st.cb.preset_mcp": 'MCP',
     "st.cb.preset_lmstudio": 'LM Studio',
     "st.cb.preset_custom": 'Свой',
-    "st.cb.preset_cloud_hint": 'Облачный бэкенд WebBrain (порт 17373). Одновременно может быть активно только одно назначение.',
+    "st.cb.preset_cloud_hint": 'Облачный бэкенд DIV (порт 17373). Одновременно может быть активно только одно назначение.',
     "st.cb.preset_mcp_hint": 'Локальный MCP-сервер (порт 17374) для Claude Code, Cursor и других MCP-клиентов. Без токена шаг одобрения не требуется.',
     "st.cb.preset_lmstudio_hint": 'Плагин LM Studio (порт 17375). Одновременно может быть активно только одно назначение.',
     "st.cb.preset_custom_hint": 'Свой локальный URL моста (ws:// только на localhost). Правки вручную остаются здесь.',
     "st.cb.enabled": 'Разрешить бэкенду управлять этим браузером',
-    "st.cb.desc": 'WebBrain подключается к бэкенду ниже и ожидает команды cloud_*. Если задан токен, бэкенд должен одобрить этот браузер, прежде чем будет выполнена какая-либо команда.',
+    "st.cb.desc": 'DIV подключается к бэкенду ниже и ожидает команды cloud_*. Если задан токен, бэкенд должен одобрить этот браузер, прежде чем будет выполнена какая-либо команда.',
     "st.cb.url": 'URL бэкенда WebSocket (только локальный ws://)',
     "st.cb.token": 'Токен облачного моста',
     "st.cb.token_hint": 'Оставьте пустым для обычного локального контроллера (без шага одобрения). Это не API-ключ провайдера.',
@@ -530,7 +530,7 @@ export const cloudBridgeTranslations = Object.freeze({
     "st.cb.approved": 'Подключено и одобрено.',
     "st.cb.rejected": 'Отклонено бэкендом: {reason}',
     "st.cb.unreachable": 'Бэкенд недоступен по адресу {url}.',
-    "st.cb.howto_html": 'Чтобы попробовать локально, выполните <code>node examples/cloud-bridge-approval-server.mjs --token YOUR_TOKEN</code> из папки с исходным кодом WebBrain, введите тот же токен здесь, затем нажмите “Сохранить &amp; проверить соединение”. Введите <code>approve</code> в этом терминале. <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/cloud-bridge-browser-approval.md" target="_blank" rel="noopener noreferrer">Документация</a>'
+    "st.cb.howto_html": 'Чтобы попробовать локально, выполните <code>node examples/cloud-bridge-approval-server.mjs --token YOUR_TOKEN</code> из папки с исходным кодом DIV, введите тот же токен здесь, затем нажмите “Сохранить &amp; проверить соединение”. Введите <code>approve</code> в этом терминале. <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/cloud-bridge-browser-approval.md" target="_blank" rel="noopener noreferrer">Документация</a>'
   },
   th: {
     "st.cb.invalid_url": 'ใช้ URL ws:// ภายในเครื่องกับ 127.0.0.1, localhost หรือ ::1',
@@ -543,12 +543,12 @@ export const cloudBridgeTranslations = Object.freeze({
     "st.cb.preset_mcp": 'MCP',
     "st.cb.preset_lmstudio": 'LM Studio',
     "st.cb.preset_custom": 'กำหนดเอง',
-    "st.cb.preset_cloud_hint": 'แบ็กเอนด์ WebBrain Cloud (พอร์ต 17373) เปิดใช้ปลายทางได้ครั้งละหนึ่งรายการเท่านั้น',
+    "st.cb.preset_cloud_hint": 'แบ็กเอนด์ DIV Cloud (พอร์ต 17373) เปิดใช้ปลายทางได้ครั้งละหนึ่งรายการเท่านั้น',
     "st.cb.preset_mcp_hint": 'เซิร์ฟเวอร์ MCP ภายในเครื่อง (พอร์ต 17374) สำหรับ Claude Code, Cursor และไคลเอ็นต์ MCP อื่น ไม่มีขั้นตอนการอนุมัติหากไม่มีโทเค็น',
     "st.cb.preset_lmstudio_hint": 'ปลั๊กอิน LM Studio (พอร์ต 17375) เปิดใช้ปลายทางได้ครั้งละหนึ่งรายการเท่านั้น',
     "st.cb.preset_custom_hint": 'URL บริดจ์ภายในเครื่องแบบกำหนดเอง (ws:// บน localhost เท่านั้น) การแก้ไขด้วยตนเองจะอยู่ที่นี่',
     "st.cb.enabled": 'ให้แบ็กเอนด์ควบคุมเบราว์เซอร์นี้',
-    "st.cb.desc": 'WebBrain เชื่อมต่อออกไปยังแบ็กเอนด์ด้านล่างและรอคำสั่ง cloud_* เมื่อตั้งค่าโทเค็นไว้ แบ็กเอนด์ต้องอนุมัติเบราว์เซอร์นี้ก่อนคำสั่งใดจะทำงาน',
+    "st.cb.desc": 'DIV เชื่อมต่อออกไปยังแบ็กเอนด์ด้านล่างและรอคำสั่ง cloud_* เมื่อตั้งค่าโทเค็นไว้ แบ็กเอนด์ต้องอนุมัติเบราว์เซอร์นี้ก่อนคำสั่งใดจะทำงาน',
     "st.cb.url": 'URL WebSocket ของแบ็กเอนด์ (เฉพาะ ws:// ภายในเครื่อง)',
     "st.cb.token": 'โทเค็นบริดจ์คลาวด์',
     "st.cb.token_hint": 'เว้นว่างไว้สำหรับตัวควบคุมภายในเครื่องแบบธรรมดา (ไม่มีขั้นตอนการอนุมัติ) นี่ไม่ใช่คีย์ API ของผู้ให้บริการ',
@@ -561,7 +561,7 @@ export const cloudBridgeTranslations = Object.freeze({
     "st.cb.approved": 'เชื่อมต่อและได้รับการอนุมัติแล้ว',
     "st.cb.rejected": 'แบ็กเอนด์ปฏิเสธ: {reason}',
     "st.cb.unreachable": 'ไม่สามารถเข้าถึงแบ็กเอนด์ที่ {url} ได้',
-    "st.cb.howto_html": 'หากต้องการลองในเครื่อง ให้รัน <code>node examples/cloud-bridge-approval-server.mjs --token YOUR_TOKEN</code> จากซอร์ส WebBrain ป้อนโทเค็นเดียวกันที่นี่ แล้วกด “บันทึก &amp; ทดสอบการเชื่อมต่อ” พิมพ์ <code>approve</code> ในเทอร์มินัลนั้น <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/cloud-bridge-browser-approval.md" target="_blank" rel="noopener noreferrer">เอกสาร</a>'
+    "st.cb.howto_html": 'หากต้องการลองในเครื่อง ให้รัน <code>node examples/cloud-bridge-approval-server.mjs --token YOUR_TOKEN</code> จากซอร์ส DIV ป้อนโทเค็นเดียวกันที่นี่ แล้วกด “บันทึก &amp; ทดสอบการเชื่อมต่อ” พิมพ์ <code>approve</code> ในเทอร์มินัลนั้น <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/cloud-bridge-browser-approval.md" target="_blank" rel="noopener noreferrer">เอกสาร</a>'
   },
   tl: {
     "st.cb.invalid_url": 'Gumamit ng lokal na ws:// URL na may 127.0.0.1, localhost, o ::1.',
@@ -574,12 +574,12 @@ export const cloudBridgeTranslations = Object.freeze({
     "st.cb.preset_mcp": 'MCP',
     "st.cb.preset_lmstudio": 'LM Studio',
     "st.cb.preset_custom": 'Custom',
-    "st.cb.preset_cloud_hint": 'WebBrain Cloud backend (port 17373). Isang patutunguhan lang ang maaaring aktibo sa isang pagkakataon.',
+    "st.cb.preset_cloud_hint": 'DIV Cloud backend (port 17373). Isang patutunguhan lang ang maaaring aktibo sa isang pagkakataon.',
     "st.cb.preset_mcp_hint": 'Lokal na MCP server (port 17374) para sa Claude Code, Cursor at iba pang MCP clients. Walang hakbang ng pag-apruba kung walang token.',
     "st.cb.preset_lmstudio_hint": 'Plugin ng LM Studio (port 17375). Isang patutunguhan lang ang maaaring aktibo sa isang pagkakataon.',
     "st.cb.preset_custom_hint": 'Custom na lokal na bridge URL (ws:// sa localhost lang). Mananatili dito ang mga manwal na pag-edit.',
     "st.cb.enabled": 'Hayaang kontrolin ng backend ang browser na ito',
-    "st.cb.desc": 'Kumokonekta ang WebBrain palabas sa backend sa ibaba at naghihintay ng mga cloud_* na command. Kapag may nakatakdang token, kailangang aprubahan ng backend ang browser na ito bago tumakbo ang anumang command.',
+    "st.cb.desc": 'Kumokonekta ang DIV palabas sa backend sa ibaba at naghihintay ng mga cloud_* na command. Kapag may nakatakdang token, kailangang aprubahan ng backend ang browser na ito bago tumakbo ang anumang command.',
     "st.cb.url": 'Backend WebSocket URL (lokal na ws:// lang)',
     "st.cb.token": 'Cloud Bridge token',
     "st.cb.token_hint": 'Iwang blangko para sa payak na lokal na controller (walang hakbang ng pag-apruba). Hindi ito provider API key.',
@@ -592,7 +592,7 @@ export const cloudBridgeTranslations = Object.freeze({
     "st.cb.approved": 'Konektado at naaprubahan.',
     "st.cb.rejected": 'Tinanggihan ng backend: {reason}',
     "st.cb.unreachable": 'Hindi maabot ang backend sa {url}.',
-    "st.cb.howto_html": 'Upang subukan ito nang lokal, patakbuhin ang <code>node examples/cloud-bridge-approval-server.mjs --token YOUR_TOKEN</code> mula sa WebBrain checkout, ilagay ang parehong token dito, pagkatapos ay pindutin ang “I-save &amp; subukan ang koneksyon”. I-type ang <code>approve</code> sa terminal na iyon. <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/cloud-bridge-browser-approval.md" target="_blank" rel="noopener noreferrer">Dokumentasyon</a>'
+    "st.cb.howto_html": 'Upang subukan ito nang lokal, patakbuhin ang <code>node examples/cloud-bridge-approval-server.mjs --token YOUR_TOKEN</code> mula sa DIV checkout, ilagay ang parehong token dito, pagkatapos ay pindutin ang “I-save &amp; subukan ang koneksyon”. I-type ang <code>approve</code> sa terminal na iyon. <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/cloud-bridge-browser-approval.md" target="_blank" rel="noopener noreferrer">Dokumentasyon</a>'
   },
   tr: {
     "st.cb.invalid_url": '127.0.0.1, localhost veya ::1 içeren yerel bir ws:// URL’si kullanın.',
@@ -605,12 +605,12 @@ export const cloudBridgeTranslations = Object.freeze({
     "st.cb.preset_mcp": 'MCP',
     "st.cb.preset_lmstudio": 'LM Studio',
     "st.cb.preset_custom": 'Özel',
-    "st.cb.preset_cloud_hint": 'WebBrain Cloud arka ucu (17373 numaralı bağlantı noktası). Aynı anda yalnızca bir hedef etkin olabilir.',
+    "st.cb.preset_cloud_hint": 'DIV Cloud arka ucu (17373 numaralı bağlantı noktası). Aynı anda yalnızca bir hedef etkin olabilir.',
     "st.cb.preset_mcp_hint": 'Claude Code, Cursor ve diğer MCP istemcileri için yerel MCP sunucusu (17374 numaralı bağlantı noktası). Jeton yoksa onay adımı uygulanmaz.',
     "st.cb.preset_lmstudio_hint": 'LM Studio eklentisi (17375 numaralı bağlantı noktası). Aynı anda yalnızca bir hedef etkin olabilir.',
     "st.cb.preset_custom_hint": 'Özel yerel köprü URL’si (yalnızca localhost üzerinde ws://). Elle yaptığın düzenlemeler burada kalır.',
     "st.cb.enabled": 'Bir arka ucun bu tarayıcıyı kontrol etmesine izin ver',
-    "st.cb.desc": 'WebBrain aşağıdaki arka uca bağlanır ve cloud_* komutlarını bekler. Jeton ayarlanmışsa, herhangi bir komut çalışmadan önce arka ucun bu tarayıcıyı onaylaması gerekir.',
+    "st.cb.desc": 'DIV aşağıdaki arka uca bağlanır ve cloud_* komutlarını bekler. Jeton ayarlanmışsa, herhangi bir komut çalışmadan önce arka ucun bu tarayıcıyı onaylaması gerekir.',
     "st.cb.url": 'Arka uç WebSocket URL’si (yalnızca yerel ws://)',
     "st.cb.token": 'Bulut Köprü jetonu',
     "st.cb.token_hint": 'Düz bir yerel denetleyici için boş bırak (onay adımı olmaz). Bu bir sağlayıcı API anahtarı değildir.',
@@ -623,7 +623,7 @@ export const cloudBridgeTranslations = Object.freeze({
     "st.cb.approved": 'Bağlandı ve onaylandı.',
     "st.cb.rejected": 'Arka uç tarafından reddedildi: {reason}',
     "st.cb.unreachable": '{url} adresindeki arka uca ulaşılamıyor.',
-    "st.cb.howto_html": 'Yerelde denemek için WebBrain kopyasından <code>node examples/cloud-bridge-approval-server.mjs --token YOUR_TOKEN</code> komutunu çalıştır, aynı jetonu buraya gir, ardından “Kaydet &amp; bağlantıyı sına” düğmesine bas. O terminalde <code>approve</code> yaz. <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/cloud-bridge-browser-approval.md" target="_blank" rel="noopener noreferrer">Belgeler</a>'
+    "st.cb.howto_html": 'Yerelde denemek için DIV kopyasından <code>node examples/cloud-bridge-approval-server.mjs --token YOUR_TOKEN</code> komutunu çalıştır, aynı jetonu buraya gir, ardından “Kaydet &amp; bağlantıyı sına” düğmesine bas. O terminalde <code>approve</code> yaz. <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/cloud-bridge-browser-approval.md" target="_blank" rel="noopener noreferrer">Belgeler</a>'
   },
   uk: {
     "st.cb.invalid_url": 'Використовуйте локальний URL ws:// із 127.0.0.1, localhost або ::1.',
@@ -636,12 +636,12 @@ export const cloudBridgeTranslations = Object.freeze({
     "st.cb.preset_mcp": 'MCP',
     "st.cb.preset_lmstudio": 'LM Studio',
     "st.cb.preset_custom": 'Власний',
-    "st.cb.preset_cloud_hint": 'Хмарний бекенд WebBrain (порт 17373). Одночасно може бути активним лише одне призначення.',
+    "st.cb.preset_cloud_hint": 'Хмарний бекенд DIV (порт 17373). Одночасно може бути активним лише одне призначення.',
     "st.cb.preset_mcp_hint": 'Локальний MCP-сервер (порт 17374) для Claude Code, Cursor та інших MCP-клієнтів. Без токена крок схвалення не потрібен.',
     "st.cb.preset_lmstudio_hint": 'Плагін LM Studio (порт 17375). Одночасно може бути активним лише одне призначення.',
     "st.cb.preset_custom_hint": 'Власний локальний URL мосту (ws:// лише на localhost). Ручні правки залишаються тут.',
     "st.cb.enabled": 'Дозволити бекенду керувати цим браузером',
-    "st.cb.desc": 'WebBrain підключається до бекенда нижче й чекає на команди cloud_*. Якщо задано токен, бекенд має схвалити цей браузер, перш ніж виконуватиметься будь-яка команда.',
+    "st.cb.desc": 'DIV підключається до бекенда нижче й чекає на команди cloud_*. Якщо задано токен, бекенд має схвалити цей браузер, перш ніж виконуватиметься будь-яка команда.',
     "st.cb.url": 'URL бекенда WebSocket (лише локальний ws://)',
     "st.cb.token": 'Токен хмарного мосту',
     "st.cb.token_hint": 'Залиште порожнім для звичайного локального контролера (без кроку схвалення). Це не ключ API провайдера.',
@@ -654,7 +654,7 @@ export const cloudBridgeTranslations = Object.freeze({
     "st.cb.approved": 'Підключено й схвалено.',
     "st.cb.rejected": 'Відхилено бекендом: {reason}',
     "st.cb.unreachable": 'Бекенд недоступний за адресою {url}.',
-    "st.cb.howto_html": 'Щоб спробувати локально, запустіть <code>node examples/cloud-bridge-approval-server.mjs --token YOUR_TOKEN</code> з папки з вихідним кодом WebBrain, введіть той самий токен тут, потім натисніть “Зберегти &amp; перевірити з’єднання”. Введіть <code>approve</code> у цьому терміналі. <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/cloud-bridge-browser-approval.md" target="_blank" rel="noopener noreferrer">Документація</a>'
+    "st.cb.howto_html": 'Щоб спробувати локально, запустіть <code>node examples/cloud-bridge-approval-server.mjs --token YOUR_TOKEN</code> з папки з вихідним кодом DIV, введіть той самий токен тут, потім натисніть “Зберегти &amp; перевірити з’єднання”. Введіть <code>approve</code> у цьому терміналі. <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/cloud-bridge-browser-approval.md" target="_blank" rel="noopener noreferrer">Документація</a>'
   },
   vi: {
     "st.cb.invalid_url": 'Hãy dùng URL ws:// cục bộ với 127.0.0.1, localhost hoặc ::1.',
@@ -667,12 +667,12 @@ export const cloudBridgeTranslations = Object.freeze({
     "st.cb.preset_mcp": 'MCP',
     "st.cb.preset_lmstudio": 'LM Studio',
     "st.cb.preset_custom": 'Tùy chỉnh',
-    "st.cb.preset_cloud_hint": 'Backend WebBrain Cloud (cổng 17373). Mỗi lần chỉ một đích có thể hoạt động.',
+    "st.cb.preset_cloud_hint": 'Backend DIV Cloud (cổng 17373). Mỗi lần chỉ một đích có thể hoạt động.',
     "st.cb.preset_mcp_hint": 'Máy chủ MCP cục bộ (cổng 17374) cho Claude Code, Cursor và các MCP client khác. Không có bước phê duyệt nếu thiếu mã thông báo.',
     "st.cb.preset_lmstudio_hint": 'Plugin LM Studio (cổng 17375). Mỗi lần chỉ một đích có thể hoạt động.',
     "st.cb.preset_custom_hint": 'URL cầu nối cục bộ tùy chỉnh (chỉ ws:// trên localhost). Mọi chỉnh sửa thủ công sẽ ở lại đây.',
     "st.cb.enabled": 'Cho phép backend điều khiển trình duyệt này',
-    "st.cb.desc": 'WebBrain kết nối ra tới backend bên dưới và chờ lệnh cloud_*. Nếu đã đặt mã thông báo, backend phải phê duyệt trình duyệt này trước khi bất kỳ lệnh nào chạy.',
+    "st.cb.desc": 'DIV kết nối ra tới backend bên dưới và chờ lệnh cloud_*. Nếu đã đặt mã thông báo, backend phải phê duyệt trình duyệt này trước khi bất kỳ lệnh nào chạy.',
     "st.cb.url": 'URL WebSocket của backend (chỉ ws:// cục bộ)',
     "st.cb.token": 'Mã thông báo Cloud Bridge',
     "st.cb.token_hint": 'Để trống nếu dùng bộ điều khiển cục bộ thông thường (không cần phê duyệt). Đây không phải khóa API của nhà cung cấp.',
@@ -685,7 +685,7 @@ export const cloudBridgeTranslations = Object.freeze({
     "st.cb.approved": 'Đã kết nối và được phê duyệt.',
     "st.cb.rejected": 'Bị backend từ chối: {reason}',
     "st.cb.unreachable": 'Không thể kết nối tới backend tại {url}.',
-    "st.cb.howto_html": 'Để thử cục bộ, hãy chạy <code>node examples/cloud-bridge-approval-server.mjs --token YOUR_TOKEN</code> từ bản checkout WebBrain, nhập cùng mã thông báo tại đây, rồi nhấn “Lưu &amp; kiểm tra kết nối”. Gõ <code>approve</code> trong terminal đó. <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/cloud-bridge-browser-approval.md" target="_blank" rel="noopener noreferrer">Tài liệu</a>'
+    "st.cb.howto_html": 'Để thử cục bộ, hãy chạy <code>node examples/cloud-bridge-approval-server.mjs --token YOUR_TOKEN</code> từ bản checkout DIV, nhập cùng mã thông báo tại đây, rồi nhấn “Lưu &amp; kiểm tra kết nối”. Gõ <code>approve</code> trong terminal đó. <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/cloud-bridge-browser-approval.md" target="_blank" rel="noopener noreferrer">Tài liệu</a>'
   },
   zh: {
     "st.cb.invalid_url": '请使用包含 127.0.0.1、localhost 或 ::1 的本地 ws:// URL。',
@@ -698,12 +698,12 @@ export const cloudBridgeTranslations = Object.freeze({
     "st.cb.preset_mcp": 'MCP',
     "st.cb.preset_lmstudio": 'LM Studio',
     "st.cb.preset_custom": '自定义',
-    "st.cb.preset_cloud_hint": 'WebBrain Cloud 后端（端口 17373）。一次只能启用一个目标。',
+    "st.cb.preset_cloud_hint": 'DIV Cloud 后端（端口 17373）。一次只能启用一个目标。',
     "st.cb.preset_mcp_hint": '面向 Claude Code、Cursor 及其他 MCP 客户端的本地 MCP 服务器（端口 17374）。未设置令牌时无需批准步骤。',
     "st.cb.preset_lmstudio_hint": 'LM Studio 插件（端口 17375）。一次只能启用一个目标。',
     "st.cb.preset_custom_hint": '自定义本地桥接 URL（仅限 localhost 上的 ws://）。手动编辑将保留在此处。',
     "st.cb.enabled": '允许后端控制此浏览器',
-    "st.cb.desc": 'WebBrain 会向下方后端发起外连并等待 cloud_* 命令。如果设置了令牌，后端必须先批准此浏览器，然后才能运行任何命令。',
+    "st.cb.desc": 'DIV 会向下方后端发起外连并等待 cloud_* 命令。如果设置了令牌，后端必须先批准此浏览器，然后才能运行任何命令。',
     "st.cb.url": '后端 WebSocket URL（仅限本地 ws://）',
     "st.cb.token": 'Cloud Bridge 令牌',
     "st.cb.token_hint": '普通本地控制器请留空（无批准步骤）。这不是提供商 API 密钥。',
@@ -716,6 +716,6 @@ export const cloudBridgeTranslations = Object.freeze({
     "st.cb.approved": '已连接并已批准。',
     "st.cb.rejected": '被后端拒绝：{reason}',
     "st.cb.unreachable": '无法连接到后端 {url}。',
-    "st.cb.howto_html": '要在本地试用，请在 WebBrain 检出目录中运行 <code>node examples/cloud-bridge-approval-server.mjs --token YOUR_TOKEN</code>，在此处输入相同令牌，然后点击“保存并测试连接”。在该终端中输入 <code>approve</code>。 <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/cloud-bridge-browser-approval.md" target="_blank" rel="noopener noreferrer">文档</a>'
+    "st.cb.howto_html": '要在本地试用，请在 DIV 检出目录中运行 <code>node examples/cloud-bridge-approval-server.mjs --token YOUR_TOKEN</code>，在此处输入相同令牌，然后点击“保存并测试连接”。在该终端中输入 <code>approve</code>。 <a href="https://github.com/webbrain-one/webbrain/blob/main/docs/cloud-bridge-browser-approval.md" target="_blank" rel="noopener noreferrer">文档</a>'
   },
 });

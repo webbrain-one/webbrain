@@ -1,6 +1,6 @@
 # Offline RAG and Emergency Corpus
 
-WebBrain's offline retrieval-augmented generation (RAG) pipeline lets the
+DIV's offline retrieval-augmented generation (RAG) pipeline lets the
 extension answer questions using locally stored reference materials without any
 network connection. It builds on Apocalypse Mode's Wikipedia archives and adds
 a new Emergency Box text corpus — a curated collection of public-domain
@@ -70,7 +70,7 @@ a Ternary Bonsai 2 preset) answers from that evidence or says it cannot.
    evidence. WebGPU generation is capped (currently 2048 new tokens). LFM2.5
    strips `<think>` from the visible answer; Bonsai 27B uses a 128-token think
    budget so reasoning cannot consume the whole decode. If the model spends that
-   budget inside reasoning, WebBrain retries with a shorter evidence prompt
+   budget inside reasoning, DIV retries with a shorter evidence prompt
    rather than inventing an answer.
 5. **Cite locally.** Each kept passage gets a stable token (`[WB-E-…]` or
    Wikipedia equivalent) and a local reader URL. Emergency Box citations add an
@@ -195,7 +195,7 @@ user.
 ## Licensing
 
 The Emergency Box corpus, SQLite, fflate, and Transformers.js are all
-permissively licensed and do not independently impose copyleft terms. WebBrain
+permissively licensed and do not independently impose copyleft terms. DIV
 33.0.0 and later is nevertheless GPL-3.0-or-later because the distributed
 extension integrates the GPL-licensed Xapian/libzim runtime.
 
