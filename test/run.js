@@ -76478,7 +76478,7 @@ test('_defaultConfigs: every entry carries an explicit category', () => {
 test('extended provider catalog is complete, mirrored, safe, and excluded-provider clean', async () => {
   const expectedIds = `
     api-route 302ai abacus aihubmix alibaba-coding-plan alibaba-coding-plan-cn
-    azure-cognitive-services bailing baseten berget cerebras cheaperinference chutes clarifai
+    atlascloud azure-cognitive-services bailing baseten berget cerebras cheaperinference chutes clarifai
     cloudferro-sherlock cohere cortecs deepinfra digitalocean dinference drun
     evroc fastrouter freebuff2api friendli google-vertex google-vertex-anthropic helicone
     iflowcn inception inference io-net jiekou kilo kimi-for-coding
@@ -76492,7 +76492,7 @@ test('extended provider catalog is complete, mirrored, safe, and excluded-provid
   `.trim().split(/\s+/);
   const excluded = ['github-models', 'github-copilot', 'gitlab', 'sap-ai-core'];
 
-  assert.equal(expectedIds.length, 83);
+  assert.equal(expectedIds.length, 84);
   assert.deepEqual(ProviderCatalogCh.ADDITIONAL_PROVIDER_IDS, expectedIds);
   assert.deepEqual(ProviderCatalogFx.ADDITIONAL_PROVIDER_IDS, expectedIds);
   assert.deepEqual(
@@ -76507,8 +76507,8 @@ test('extended provider catalog is complete, mirrored, safe, and excluded-provid
   ]) {
     const defaults = new PM()._defaultConfigs();
     // Includes the sidepanel-only WebBrain Compass XL runtime profile, which is
-    // deliberately omitted from the 117/116 Settings provider cards.
-    const expectedDefaultCount = label === 'chrome' ? 118 : 117;
+    // deliberately omitted from the 118/117 Settings provider cards.
+    const expectedDefaultCount = label === 'chrome' ? 119 : 118;
     assert.equal(
       Object.keys(defaults).length,
       expectedDefaultCount,
@@ -76707,6 +76707,30 @@ test('extended provider catalog is complete, mirrored, safe, and excluded-provid
   assert.deepEqual(
     ProviderCatalogCh.ADDITIONAL_PROVIDER_UI['api-route'].suggestions,
     ['gpt-6.1-sol'],
+  );
+  assert.deepEqual(
+    {
+      baseUrl: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.atlascloud.baseUrl,
+      model: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.atlascloud.model,
+      contextWindow: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.atlascloud.contextWindow,
+      supportsVision: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.atlascloud.supportsVision,
+      supportsTools: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.atlascloud.supportsTools,
+      supportsAskStreaming: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.atlascloud.supportsAskStreaming,
+      apiKeyUrl: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.atlascloud.apiKeyUrl,
+    },
+    {
+      baseUrl: 'https://api.atlascloud.ai/v1',
+      model: 'qwen/qwen3.7-plus',
+      contextWindow: 1000000,
+      supportsVision: true,
+      supportsTools: true,
+      supportsAskStreaming: true,
+      apiKeyUrl: 'https://console.atlascloud.ai/api-keys',
+    },
+  );
+  assert.deepEqual(
+    ProviderCatalogCh.ADDITIONAL_PROVIDER_UI.atlascloud.suggestions,
+    ['qwen/qwen3.7-plus', 'deepseek-ai/deepseek-v4-flash', 'deepseek-ai/deepseek-v3.2', 'moonshotai/kimi-k2.6'],
   );
   assert.deepEqual(
     ProviderCatalogCh.ADDITIONAL_PROVIDER_UI['kimi-for-coding'].suggestions,
