@@ -1,0 +1,31 @@
+{
+  "id": "025",
+  "category": "csp-blocked-eval",
+  "description": "execute_js to flip a class for dark mode blocked. Look for the dark-mode toggle in UI.",
+  "mode": "dev",
+  "browser": "chrome",
+  "latencyMs": 0,
+  "error": null,
+  "skipped": "dev mode has no compact-tier payload; pass --mode to run this scenario here",
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "expected": {
+    "idealNextToolCall": {
+      "name": "get_interactive_elements",
+      "args": {}
+    },
+    "antiPatterns": [
+      {
+        "match": "execute_js({code:\"...\"})",
+        "reason": "CSP applies to all execute_js calls on this page."
+      }
+    ],
+    "successRubric": "Look for a dark-mode toggle via get_interactive_elements; if none found, call done and explain the page has no toggle."
+  },
+  "matchedAntiPattern": null,
+  "verdict": "skipped",
+  "scoreNote": null,
+  "finishReason": null,
+  "content": null,
+  "usage": null
+}

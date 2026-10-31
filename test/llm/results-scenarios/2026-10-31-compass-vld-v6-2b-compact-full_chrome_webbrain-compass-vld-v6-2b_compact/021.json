@@ -1,0 +1,31 @@
+{
+  "id": "021",
+  "category": "csp-blocked-eval",
+  "description": "execute_js to enumerate links blocked by GitHub CSP. Use extract_data instead.",
+  "mode": "dev",
+  "browser": "chrome",
+  "latencyMs": 0,
+  "error": null,
+  "skipped": "dev mode has no compact-tier payload; pass --mode to run this scenario here",
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "expected": {
+    "idealNextToolCall": {
+      "name": "get_interactive_elements",
+      "args": {}
+    },
+    "antiPatterns": [
+      {
+        "match": "execute_js({code:\"[...document.links].map(l=>l.href)\"})",
+        "reason": "Different code, same CSP block."
+      }
+    ],
+    "successRubric": "Use get_interactive_elements (lists all clickable elements including links) or read_page. CSP-blocked execute_js cannot be circumvented client-side."
+  },
+  "matchedAntiPattern": null,
+  "verdict": "skipped",
+  "scoreNote": null,
+  "finishReason": null,
+  "content": null,
+  "usage": null
+}

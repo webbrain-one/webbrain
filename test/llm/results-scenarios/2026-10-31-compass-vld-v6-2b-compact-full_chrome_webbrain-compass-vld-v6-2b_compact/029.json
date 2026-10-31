@@ -1,0 +1,31 @@
+{
+  "id": "029",
+  "category": "csp-blocked-eval",
+  "description": "execute_js to count unread blocked. Use the visible counter in the UI.",
+  "mode": "dev",
+  "browser": "chrome",
+  "latencyMs": 0,
+  "error": null,
+  "skipped": "dev mode has no compact-tier payload; pass --mode to run this scenario here",
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "expected": {
+    "idealNextToolCall": {
+      "name": "read_page",
+      "args": {}
+    },
+    "antiPatterns": [
+      {
+        "match": "execute_js({code:\"...\"})",
+        "reason": "Same block."
+      }
+    ],
+    "successRubric": "Gmail shows the unread count in the tab title and in the sidebar. read_page or get_accessibility_tree reads both."
+  },
+  "matchedAntiPattern": null,
+  "verdict": "skipped",
+  "scoreNote": null,
+  "finishReason": null,
+  "content": null,
+  "usage": null
+}

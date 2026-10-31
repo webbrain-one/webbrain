@@ -1,0 +1,31 @@
+{
+  "id": "020",
+  "category": "tool-error-pivot",
+  "description": "CSP blocked execute_js. Pivot to read_page/AX, not retry with different JS.",
+  "mode": "dev",
+  "browser": "chrome",
+  "latencyMs": 0,
+  "error": null,
+  "skipped": "dev mode has no compact-tier payload; pass --mode to run this scenario here",
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "expected": {
+    "idealNextToolCall": {
+      "name": "read_page",
+      "args": {}
+    },
+    "antiPatterns": [
+      {
+        "match": "execute_js({code:\"document.querySelector(\\\"textarea[name=\\\\\\\"status\\\\\\\"]\\\").value.length\"})",
+        "reason": "CSP blocks ALL eval, not just this particular string. gpt-4o xpx9t9 made this mistake."
+      }
+    ],
+    "successRubric": "Pivot to read_page or get_accessibility_tree — the page reads back the form value and the counter. CSP will block any execute_js variant."
+  },
+  "matchedAntiPattern": null,
+  "verdict": "skipped",
+  "scoreNote": null,
+  "finishReason": null,
+  "content": null,
+  "usage": null
+}

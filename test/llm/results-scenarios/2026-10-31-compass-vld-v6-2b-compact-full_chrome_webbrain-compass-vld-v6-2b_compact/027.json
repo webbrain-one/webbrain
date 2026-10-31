@@ -1,0 +1,31 @@
+{
+  "id": "027",
+  "category": "csp-blocked-eval",
+  "description": "execute_js to set localStorage blocked. The user-visible task can be done another way.",
+  "mode": "dev",
+  "browser": "chrome",
+  "latencyMs": 0,
+  "error": null,
+  "skipped": "dev mode has no compact-tier payload; pass --mode to run this scenario here",
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "expected": {
+    "idealNextToolCall": {
+      "name": "get_interactive_elements",
+      "args": {}
+    },
+    "antiPatterns": [
+      {
+        "match": "execute_js({code:\"localStorage...\"})",
+        "reason": "Same block."
+      }
+    ],
+    "successRubric": "Find Discord's in-app theme setting via the UI (Settings → Appearance) and toggle it there."
+  },
+  "matchedAntiPattern": null,
+  "verdict": "skipped",
+  "scoreNote": null,
+  "finishReason": null,
+  "content": null,
+  "usage": null
+}

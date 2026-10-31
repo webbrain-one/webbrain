@@ -1,0 +1,34 @@
+{
+  "id": "022",
+  "category": "csp-blocked-eval",
+  "description": "execute_js to scroll blocked. Use the scroll tool.",
+  "mode": "dev",
+  "browser": "chrome",
+  "latencyMs": 0,
+  "error": null,
+  "skipped": "dev mode has no compact-tier payload; pass --mode to run this scenario here",
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "expected": {
+    "idealNextToolCall": {
+      "name": "scroll",
+      "args": {
+        "direction": "down",
+        "amount": 500
+      }
+    },
+    "antiPatterns": [
+      {
+        "match": "execute_js({code:\"window.scroll(...)\"})",
+        "reason": "execute_js is blocked, period."
+      }
+    ],
+    "successRubric": "Use the scroll tool. There is a dedicated tool for this — no need for execute_js."
+  },
+  "matchedAntiPattern": null,
+  "verdict": "skipped",
+  "scoreNote": null,
+  "finishReason": null,
+  "content": null,
+  "usage": null
+}

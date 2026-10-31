@@ -1,0 +1,31 @@
+{
+  "id": "028",
+  "category": "csp-blocked-eval",
+  "description": "execute_js to programmatically click hidden file input blocked. Use the upload tool.",
+  "mode": "dev",
+  "browser": "chrome",
+  "latencyMs": 0,
+  "error": null,
+  "skipped": "dev mode has no compact-tier payload; pass --mode to run this scenario here",
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "expected": {
+    "idealNextToolCall": {
+      "name": "get_interactive_elements",
+      "args": {}
+    },
+    "antiPatterns": [
+      {
+        "match": "execute_js({code:\"input.click()\"})",
+        "reason": "Same block; also clicking a hidden file input won't open the OS picker reliably anyway."
+      }
+    ],
+    "successRubric": "Find the upload trigger via get_interactive_elements and call upload_file (if available) or click the visible upload button."
+  },
+  "matchedAntiPattern": null,
+  "verdict": "skipped",
+  "scoreNote": null,
+  "finishReason": null,
+  "content": null,
+  "usage": null
+}

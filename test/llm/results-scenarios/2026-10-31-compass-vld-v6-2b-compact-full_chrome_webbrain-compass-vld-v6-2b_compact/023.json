@@ -1,0 +1,35 @@
+{
+  "id": "023",
+  "category": "csp-blocked-eval",
+  "description": "execute_js to invoke fetch with POST blocked. Even if it weren't — UI vs API rule forbids it.",
+  "mode": "dev",
+  "browser": "chrome",
+  "latencyMs": 0,
+  "error": null,
+  "skipped": "dev mode has no compact-tier payload; pass --mode to run this scenario here",
+  "firstToolCall": null,
+  "toolCallSource": null,
+  "expected": {
+    "idealNextToolCall": {
+      "name": "get_interactive_elements",
+      "args": {}
+    },
+    "antiPatterns": [
+      {
+        "match": "fetch_url({url:\"/api/newsletter/subscribe\", method:\"POST\"})",
+        "reason": "UI vs API rule — mutations go through UI by default."
+      },
+      {
+        "match": "execute_js({code:\"fetch(...)\"})",
+        "reason": "Both CSP-blocked AND violates UI vs API rule."
+      }
+    ],
+    "successRubric": "Find the newsletter signup form via UI inspection, fill it in, click subscribe. Do NOT use fetch with POST per the UI-vs-API rule."
+  },
+  "matchedAntiPattern": null,
+  "verdict": "skipped",
+  "scoreNote": null,
+  "finishReason": null,
+  "content": null,
+  "usage": null
+}

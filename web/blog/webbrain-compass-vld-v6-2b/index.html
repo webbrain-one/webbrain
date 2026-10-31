@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebBrain Compass VLD v6 2B: Benchmark &amp; Release - WebBrain Blog</title>
+  <meta name="description" content="Comprehensive evaluation of WebBrain Compass VLD v6 2B across WebBrain&#39;s frozen 100-case browser viewport vision suite and compact agent tool routing benchmark locally on NVIDIA RTX 5060 Ti hardware.">
+  <meta name="keywords" content="WebBrain Compass, LFM3-VLD, Liquid AI, browser vision, vision benchmark, tool routing, agent benchmark, NVIDIA RTX 5060 Ti, llama.cpp, WebBrain, multimodal, on-device AI">
+  <meta property="og:title" content="WebBrain Compass VLD v6 2B: SOTA Vision &amp; Agent Routing">
+  <meta property="og:description" content="WebBrain&#39;s new 2B browser specialist achieves 66/100 strict vision passes and 42.7% compact routing accuracy locally on NVIDIA RTX 5060 Ti.">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://webbrain.one/blog/webbrain-compass-vld-v6-2b">
+  <meta property="og:image" content="https://webbrain.one/og-image.png">
+  <meta property="og:image:secure_url" content="https://webbrain.one/og-image.png">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="WebBrain — Open-source AI browser agent">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="WebBrain Compass VLD v6 2B: SOTA Browser Vision &amp; Routing">
+  <meta name="twitter:description" content="A 2B specialist outperforming 4B models in browser comprehension: 66/100 strict vision passes and 90.2% mean rubric score on consumer GPUs.">
+  <meta name="twitter:image" content="https://webbrain.one/twitter-image.png">
+  <meta name="twitter:image:alt" content="WebBrain — Open-source AI browser agent">
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <link rel="canonical" href="https://webbrain.one/blog/webbrain-compass-vld-v6-2b">
+  <!-- Blog is English-only; alternates point to locale homepages. -->
+  <link rel="alternate" hreflang="en" href="https://webbrain.one/">
+  <link rel="alternate" hreflang="es" href="https://webbrain.one/es/">
+  <link rel="alternate" hreflang="fr" href="https://webbrain.one/fr/">
+  <link rel="alternate" hreflang="tr" href="https://webbrain.one/tr/">
+  <link rel="alternate" hreflang="zh" href="https://webbrain.one/zh/">
+  <link rel="alternate" hreflang="ru" href="https://webbrain.one/ru/">
+  <link rel="alternate" hreflang="uk" href="https://webbrain.one/uk/">
+  <link rel="alternate" hreflang="ar" href="https://webbrain.one/ar/">
+  <link rel="alternate" hreflang="ja" href="https://webbrain.one/ja/">
+  <link rel="alternate" hreflang="ko" href="https://webbrain.one/ko/">
+  <link rel="alternate" hreflang="id" href="https://webbrain.one/id/">
+  <link rel="alternate" hreflang="th" href="https://webbrain.one/th/">
+  <link rel="alternate" hreflang="ms" href="https://webbrain.one/ms/">
+  <link rel="alternate" hreflang="tl" href="https://webbrain.one/tl/">
+  <link rel="alternate" hreflang="he" href="https://webbrain.one/he/">
+  <link rel="alternate" hreflang="x-default" href="https://webbrain.one/">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg: #0b0e17;
+      --bg-card: #111827;
+      --bg-card-hover: #1a2233;
+      --surface: #161d2e;
+      --border: rgba(255,255,255,0.07);
+      --text: #e4e4ec;
+      --text-dim: #8b8fa4;
+      --accent: #6c63ff;
+      --accent-glow: rgba(108,99,255,0.25);
+      --accent2: #a78bfa;
+      --success: #34d399;
+      --warning: #fbbf24;
+      --danger: #f87171;
+      --tint-soft: rgba(255,255,255,0.05);
+      --tint-soft-2: rgba(255,255,255,0.04);
+      --tint-medium: rgba(255,255,255,0.08);
+      --nav-bg: rgba(11,14,23,0.85);
+      --code-bg: #0a0e17;
+      --inline-code-bg: rgba(255,255,255,0.06);
+      --shadow-strong: rgba(0,0,0,0.40);
+      --radius: 12px;
+      --radius-lg: 16px;
+      --max-w: 760px;
+      /* Line the shared site footer up with the blog's header. */
+      --wb-footer-width: min(calc(var(--max-w) - 48px), calc(100% - 48px));
+      color-scheme: dark;
+    }
+    :root[data-theme="light"] {
+      --bg: #f7f1e6;
+      --bg-card: #fffdf8;
+      --bg-card-hover: #f2e9d4;
+      --surface: #ede2cb;
+      --border: rgba(89,55,25,0.15);
+      --text: #2c1810;
+      --text-dim: #6b5b47;
+      --accent: #5b52e8;
+      --accent-glow: rgba(91,82,232,0.20);
+      --accent2: #7c6ce6;
+      --success: #2d8866;
+      --warning: #9a6500;
+      --danger: #b74747;
+      --tint-soft: rgba(89,55,25,0.05);
+      --tint-soft-2: rgba(89,55,25,0.07);
+      --tint-medium: rgba(89,55,25,0.10);
+      --nav-bg: rgba(247,241,230,0.85);
+      --code-bg: #fff7e6;
+      --inline-code-bg: rgba(89,55,25,0.08);
+      --shadow-strong: rgba(89,55,25,0.18);
+      color-scheme: light;
+    }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.75;
+      font-size: 17px;
+      overflow-x: hidden;
+    }
+    a { color: var(--accent2); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .glow-bg {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    .glow-bg::before,
+    .glow-bg::after {
+      content: '';
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(120px);
+      opacity: 0.26;
+    }
+    .glow-bg::before {
+      width: 500px;
+      height: 500px;
+      background: var(--accent);
+      top: -220px;
+      left: -160px;
+    }
+    .glow-bg::after {
+      width: 500px;
+      height: 500px;
+      background: var(--accent2);
+      right: -180px;
+      bottom: -230px;
+      opacity: 0.18;
+    }
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--nav-bg);
+      backdrop-filter: saturate(160%) blur(12px);
+      -webkit-backdrop-filter: saturate(160%) blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-inner {
+      max-width: var(--max-w);
+      margin: 0 auto;
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+    .nav-brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+      color: var(--text);
+      font-size: 18px;
+      font-weight: 700;
+      text-decoration: none;
+    }
+    .nav-brand:hover { text-decoration: none; }
+    .nav-brand .brand-logo { width: 26px; height: 26px; border-radius: 7px; flex: 0 0 auto; }
+    .nav-brand .domain { opacity: 0.5; font-weight: 400; }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 16px;
+      min-width: 0;
+    }
+    .nav-links a {
+      position: relative;
+      color: var(--text-dim);
+      font-size: 14px;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+    .nav-links a:hover { color: var(--text); text-decoration: none; }
+    .nav-links a[aria-current="page"] { color: var(--text); }
+    .nav-links a[aria-current="page"]::after {
+      content: '';
+      position: absolute;
+      left: 1px;
+      right: 1px;
+      bottom: -7px;
+      height: 3px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--accent2), var(--accent));
+      box-shadow: 0 2px 12px var(--accent-glow);
+    }
+    .lang-dropdown {
+      background: var(--tint-soft);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 13px;
+      max-width: 120px;
+    }
+    .lang-dropdown:focus { outline: 2px solid var(--accent-glow); outline-offset: 1px; }
+    .lang-dropdown option { background-color: var(--bg-card-hover); color: var(--text); }
+    .theme-toggle {
+      appearance: none;
+      -webkit-appearance: none;
+      background: var(--tint-soft-2);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      width: 30px;
+      height: 30px;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      cursor: pointer;
+      color: var(--text-dim);
+      transition: background 0.2s, color 0.2s, border-color 0.2s, transform 0.1s;
+    }
+    .theme-toggle:hover {
+      background: var(--tint-medium);
+      border-color: var(--accent);
+      color: var(--text);
+      transform: translateY(-1px);
+    }
+    .theme-toggle:focus-visible {
+      outline: 2px solid var(--accent2);
+      outline-offset: 2px;
+    }
+    .theme-toggle svg { width: 16px; height: 16px; display: block; }
+    .theme-toggle .icon-sun { display: block; }
+    .theme-toggle .icon-moon { display: none; }
+    :root[data-theme="light"] .theme-toggle .icon-sun { display: none; }
+    :root[data-theme="light"] .theme-toggle .icon-moon { display: block; }
+    main,
+    article {
+      max-width: var(--max-w);
+      margin: 0 auto;
+      padding: 64px 24px 80px;
+    }
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+    h1 {
+      font-size: 38px;
+      line-height: 1.2;
+      font-weight: 700;
+      letter-spacing: 0;
+      margin-bottom: 16px;
+    }
+    .lede {
+      color: var(--text-dim);
+      line-height: 1.6;
+    }
+    .lede {
+      font-size: 19px;
+      margin-bottom: 40px;
+    }
+    .meta {
+      font-size: 13px;
+      color: var(--text-dim);
+      margin-bottom: 12px;
+      letter-spacing: 0;
+    }
+    h2 {
+      font-size: 24px;
+      font-weight: 700;
+      margin-top: 48px;
+      margin-bottom: 14px;
+      letter-spacing: 0;
+    }
+    h3 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-top: 32px;
+      margin-bottom: 10px;
+      color: var(--text);
+    }
+    h4, h5, h6 {
+      color: var(--text);
+      margin-top: 28px;
+      margin-bottom: 10px;
+      line-height: 1.35;
+    }
+    p { margin-bottom: 16px; }
+    ul, ol { margin: 0 0 16px 20px; }
+    li { margin-bottom: 6px; }
+    code {
+      font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+      font-size: 0.88em;
+      background: var(--inline-code-bg);
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: color-mix(in srgb, var(--accent2) 80%, var(--text));
+    }
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      overflow-x: auto;
+      margin: 20px 0;
+      font-size: 14px;
+      line-height: 1.55;
+      box-shadow: 0 18px 60px var(--shadow-strong);
+    }
+    pre code {
+      background: transparent;
+      padding: 0;
+      color: inherit;
+      font-size: inherit;
+    }
+    blockquote {
+      border-left: 3px solid var(--accent);
+      padding: 4px 0 4px 18px;
+      margin: 20px 0;
+      color: var(--text-dim);
+      font-style: italic;
+    }
+    blockquote p:last-child { margin-bottom: 0; }
+    hr {
+      border: 0;
+      border-top: 1px solid var(--border);
+      margin: 36px 0;
+    }
+    article img {
+      max-width: 100%;
+      height: auto;
+      display: block;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      margin: 24px 0;
+    }
+    .table-wrap { overflow-x: auto; margin: 24px 0; }
+    table {
+      width: 100%;
+      min-width: 560px;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    th, td {
+      text-align: left;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    th {
+      color: var(--text-dim);
+      font-weight: 600;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0;
+      background: var(--tint-soft-2);
+    }
+    td code { font-size: 12px; }
+    .win { color: var(--success); font-weight: 600; }
+    .lose { color: var(--danger); }
+    .meh { color: var(--warning); }
+    .callout {
+      background: color-mix(in srgb, var(--accent) 10%, transparent);
+      border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      margin: 24px 0;
+      font-size: 15px;
+      line-height: 1.65;
+      color: var(--text-dim);
+    }
+    .callout strong { color: var(--text); }
+    .author-box {
+      margin-top: 64px;
+      padding-top: 32px;
+      border-top: 1px solid var(--border);
+      color: var(--text-dim);
+      font-size: 14px;
+    }
+    .post-list { display: flex; flex-direction: column; gap: 18px; }
+    .post-card {
+      display: block;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px 26px;
+      transition: background 0.18s, border-color 0.18s, transform 0.18s;
+    }
+    .post-card:hover {
+      background: var(--bg-card-hover);
+      border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+      transform: translateY(-1px);
+      text-decoration: none;
+    }
+    .post-meta {
+      font-size: 12px;
+      color: var(--text-dim);
+      letter-spacing: 0;
+      margin-bottom: 8px;
+    }
+    .post-title {
+      font-size: 21px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 6px;
+      letter-spacing: 0;
+      line-height: 1.35;
+    }
+    .post-excerpt {
+      color: var(--text-dim);
+      font-size: 15px;
+      line-height: 1.6;
+    }
+    @media (max-width: 700px) {
+      :root { --wb-footer-width: calc(100% - 40px); }
+      body { font-size: 16px; }
+      .nav-inner { padding: 14px 20px; align-items: flex-start; }
+      .nav-links { gap: 12px; flex-wrap: wrap; }
+      .lang-dropdown { display: none; }
+      h1 { font-size: 28px; }
+      .lede { font-size: 16px; }
+      main, article { padding: 48px 20px 64px; }
+      h2 { font-size: 20px; margin-top: 36px; }
+      .post-card { padding: 20px; }
+      .post-title { font-size: 19px; }
+    }
+    @media (max-width: 420px) {
+      .nav-inner { gap: 12px; }
+      .nav-links a[href="https://github.com/webbrain-one/webbrain"] { display: none; }
+      .theme-toggle { width: 28px; height: 28px; }
+    }
+  </style>
+  <!-- Site footer styles: start -->
+  <style>
+    .wb-footer {
+      --wb-footer-text: var(--text, var(--ink, #2c1810));
+      --wb-footer-dim: var(--text-dim, var(--muted, #6b5b47));
+      --wb-footer-line: var(--border, var(--line, rgba(89, 55, 25, 0.15)));
+      margin: 0;
+      padding: 0;
+      border-top: 1px solid var(--wb-footer-line);
+      background: var(--wb-footer-bg, none);
+      color: var(--wb-footer-dim);
+      font-size: 13px;
+      line-height: 1.5;
+      text-align: start;
+    }
+    .wb-footer-inner {
+      width: var(--wb-footer-width, min(calc(100% - 48px), 1100px));
+      margin: 0 auto;
+      padding: 26px 0 30px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+    /* Page links start on the brand's left edge; the social icons sit at
+       the far end of the same row. */
+    .wb-footer-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px 32px; }
+    .wb-footer-brand { display: flex; flex-direction: column; gap: 5px; }
+    .wb-footer-tagline { margin: 0; color: var(--wb-footer-text); font-size: 15px; font-weight: 700; line-height: 1.4; }
+    .wb-footer-copy { margin: 0; }
+    .wb-footer-copy a { color: var(--wb-footer-text); font-weight: 650; text-decoration: none; }
+    .wb-footer-links { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
+    .wb-footer-social { display: flex; align-items: center; gap: 8px; }
+    .wb-footer-links a { color: var(--wb-footer-dim); font-weight: 600; text-decoration: none; }
+    .wb-footer a:hover { color: var(--wb-footer-text); text-decoration: none; }
+    .wb-footer a:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; border-radius: 4px; }
+    .wb-footer-icon { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; margin: -4px 0; border-radius: 6px; }
+    .wb-footer-icon:hover { background: color-mix(in srgb, currentColor 12%, transparent); }
+    .wb-footer-icon svg { display: block; width: 15px; height: 15px; }
+    /* Only shown without JavaScript, when the language picker can't run. */
+    .wb-footer-languages { display: none; flex-wrap: wrap; gap: 6px 12px; width: 100%; direction: ltr; }
+    .wb-footer-languages span { color: var(--wb-footer-text); font-weight: 700; }
+    @media (max-width: 860px) {
+      .wb-footer-inner { width: var(--wb-footer-width, calc(100% - 32px)); }
+    }
+  </style>
+  <!-- Site footer styles: end -->
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('webbrain-theme');
+        var theme = (saved === 'light' || saved === 'dark')
+          ? saved
+          : (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+        document.documentElement.setAttribute('data-theme', theme);
+      } catch (_) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    })();
+  </script>
+  <!-- Plausible analytics: start -->
+  <!-- Privacy-friendly analytics by Plausible -->
+  <script async src="https://157.230.3.9.sslip.io/js/pa-omp0F7DsOXM4sGKR50l7S.js"></script>
+  <script>
+    window.plausible=window.plausible||function(){(plausible.q=plausible.q||[]).push(arguments)},plausible.init=plausible.init||function(i){plausible.o=i||{}};
+    plausible.init()
+  </script>
+  <!-- Plausible analytics: end -->
+  <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "WebBrain Compass VLD v6 2B: State-of-the-Art Browser Vision and Agent Routing on Consumer Hardware",
+  "description": "Comprehensive evaluation of WebBrain Compass VLD v6 2B across WebBrain's frozen 100-case browser viewport vision suite and compact agent tool routing benchmark locally on NVIDIA RTX 5060 Ti hardware.",
+  "author": {
+    "@type": "Person",
+    "name": "Emre Sokullu",
+    "url": "https://emresokullu.com"
+  },
+  "datePublished": "2026-10-31",
+  "image": "https://webbrain.one/og-image.png",
+  "publisher": {
+    "@type": "Organization",
+    "name": "WebBrain",
+    "logo": {
+      "@type": "ImageObject",
+      "url": "https://webbrain.one/logo-github.png"
+    }
+  },
+  "mainEntityOfPage": {
+    "@type": "WebPage",
+    "@id": "https://webbrain.one/blog/webbrain-compass-vld-v6-2b"
+  }
+}
+  </script>
+</head>
+<body>
+  <div class="glow-bg"></div>
+  <nav>
+    <div class="nav-inner">
+      <a href="/" class="nav-brand"><img class="brand-logo" src="/logo-github.png" alt="" aria-hidden="true"> WebBrain<span class="domain">.one</span></a>
+      <div class="nav-links">
+        <a href="/">Home</a>
+        <a href="/docs/">Docs</a>
+        <a href="/blog" aria-current="page">Blog</a>
+        <select class="lang-dropdown" id="lang-dropdown" aria-label="Select language" data-current="en"><option value="en">English</option><option value="es">Español</option><option value="fr">Français</option><option value="tr">Türkçe</option><option value="zh">中文</option><option value="ru">Русский</option><option value="uk">Українська</option><option value="ar">العربية</option><option value="ja">日本語</option><option value="ko">한국어</option><option value="id">Bahasa Indonesia</option><option value="th">ไทย</option><option value="ms">Bahasa Melayu</option><option value="tl">Filipino</option><option value="he">עברית</option></select>
+        <button class="theme-toggle" type="button" id="theme-toggle" aria-label="Toggle light / dark theme" title="Toggle light / dark theme">
+          <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="4"/>
+            <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+          </svg>
+          <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+          </svg>
+        </button>
+        <a href="https://github.com/webbrain-one/webbrain" target="_blank" rel="noopener">GitHub</a>
+      </div>
+    </div>
+  </nav>
+
+  <article>
+    <div class="meta">October 31, 2026 &middot; 8 min read &middot; <a href="/blog">&larr; All posts</a></div>
+    <h1>WebBrain Compass VLD v6 2B: State-of-the-Art Browser Vision and Agent Routing on Consumer Hardware</h1>
+    <p class="lede"><strong>A specialized 2B multimodal model can surpass general-purpose 4B architectures when fine-tuned on real browser environments.</strong> In our comprehensive dual-benchmark evaluation, the newly trained <a href="https://huggingface.co/webbrain-one/webbrain-compass-vld-v6-2b" target="_blank" rel="noopener">WebBrain Compass VLD v6 2B</a> established a new state-of-the-art on WebBrain&#39;s frozen 100-case browser viewport vision suite with <strong>66 strict passes out of 100</strong> and a <strong>90.2% mean rubric score</strong> at 1.87-second latency on a single NVIDIA GeForce RTX 5060 Ti GPU. Simultaneously, in the multi-turn compact agent tool routing benchmark, it achieved an all-time high <strong>38/89 (42.7%) loose tool-family match rate with zero anti-pattern regressions</strong>.</p>
+<h2 id="why-a-dedicated-browser-visionlanguage-decision-model">Why a dedicated browser vision-language decision model?</h2>
+<p>General-purpose vision-language models frequently falter when placed in autonomous browser automation loops. They either invent freeform formatting that breaks brittle agent contracts, hallucinate obscured form fields, or miss subtle validation states like red input borders and transient toast banners.</p>
+<p><strong>WebBrain Compass VLD v6 2B</strong> is designed specifically to resolve this mismatch. Built upon Liquid AI&#39;s LFM3 architecture and fine-tuned across <strong>70,717 reviewed browser interaction trajectories</strong>, Compass VLD v6 couples multimodal perception with structured decision-making:</p>
+<ol><li><strong>Strict 6-Section Screen Parsing</strong>: Directly outputs standardized viewport analyses (<code>Page purpose</code>, <code>Visible text</code>, <code>Inputs</code>, <code>Interactive elements</code>, <code>Active modals</code>, and <code>Blockers</code>) matching WebBrain&#39;s production vision contract with 99.0% compliance.</li><li><strong>Native Tool Routing</strong>: Emits verified browser tool calls (<code>navigate</code>, <code>get_accessibility_tree</code>, <code>read_page</code>, <code>inspect_viewport</code>, <code>click_ax</code>) without hallucinating invalid arguments.</li><li><strong>Hardened Adversarial Defense</strong>: Trained on counter-polarity and prompt injection probes to reject untrusted DOM instructions without dropping valid user intents.</li></ol>
+<p>Below are the audited results across both WebBrain&#39;s 100-case browser vision suite and our frozen Compact agent routing benchmark.</p>
+<hr>
+<h2 id="1-browser-viewport-vision-suite-100-frozen-cases">1. Browser viewport vision suite (100 frozen cases)</h2>
+<p>We evaluated the native BF16 GGUF checkpoint (<code>webbrain-compass-vld-v6-2b-BF16.gguf</code> paired with <code>mmproj-webbrain-compass-vld-v6-2b-F16.gguf</code>) using <code>llama-server</code> on an NVIDIA GeForce RTX 5060 Ti GPU.</p>
+<p>Every model in this comparison was tested on the identical frozen 100 browser screenshots—ranging from simple authentication forms to complex Kanban boards, non-Latin checkouts, and high-contrast occlusion cases—under WebBrain&#39;s production system prompt and deterministic regex rubric.</p>
+<div class="table-wrap"><table><thead><tr><th>Model</th><th>Parameter class</th><th>Artifact size / precision</th><th>Strict passes / 100</th><th>Mean rubric</th><th>Latency</th><th>Execution platform</th></tr></thead><tbody><tr><td><strong>WebBrain Compass VLD v6 2B</strong></td><td><strong>2B</strong></td><td><strong>3.46 GB (BF16)</strong></td><td><strong>66 / 100</strong></td><td><strong>90.2%</strong></td><td><strong>1.87s</strong></td><td><strong>GGUF (RTX 5060 Ti)</strong></td></tr><tr><td><strong><a href="https://huggingface.co/Qwen/Qwen3.5-4B" target="_blank" rel="noopener">Qwen 3.5 4B</a></strong></td><td>4B</td><td>3.06 GB (Q4)</td><td>55 / 100</td><td>83.4%</td><td>25.92s</td><td>MLX 4-bit</td></tr><tr><td><strong><a href="https://huggingface.co/webbrain-one/webbrain-vl-2-450M" target="_blank" rel="noopener">WebBrain VL 2 450M</a></strong></td><td>453M</td><td>0.81 GB (INT8)</td><td>44 / 100</td><td>76.2%</td><td>2.00s</td><td>ONNX / WebGPU</td></tr><tr><td><strong><a href="https://huggingface.co/google/gemma-4-E4B-it" target="_blank" rel="noopener">Gemma 4 E4B IT</a></strong></td><td>E4B</td><td>6.86 GB (Q4)</td><td>41 / 100</td><td>81.3%</td><td>5.96s</td><td>MLX 4-bit</td></tr><tr><td><strong><a href="https://huggingface.co/Qwen/Qwen3.5-2B" target="_blank" rel="noopener">Qwen 3.5 2B</a></strong></td><td>2B</td><td>1.75 GB (Q4)</td><td>39 / 100</td><td>79.1%</td><td>10.01s</td><td>MLX 4-bit</td></tr><tr><td><strong><a href="https://huggingface.co/openbmb/MiniCPM-V-4.7-1B-gguf" target="_blank" rel="noopener">MiniCPM-V 4.7 1B</a></strong> <em>(semantic)</em></td><td>1B</td><td>0.64 GB (Q4)</td><td>37 / 100</td><td>68.2%</td><td>1.30s</td><td>GGUF (RTX 5060 Ti)</td></tr><tr><td><strong><a href="https://huggingface.co/webbrain-one/webbrain-vl-3-450M" target="_blank" rel="noopener">WebBrain VL 3 450M</a></strong></td><td>453M</td><td>0.91 GB (BF16)</td><td>26 / 100</td><td>69.3%</td><td>3.58s</td><td>PyTorch</td></tr><tr><td><strong><a href="https://huggingface.co/Qwen/Qwen3.5-0.8B" target="_blank" rel="noopener">Qwen 3.5 0.8B</a></strong></td><td>0.8B</td><td>0.58 GB (Q4)</td><td>20 / 100</td><td>41.6%</td><td>7.35s</td><td>GGUF</td></tr><tr><td><strong><a href="https://huggingface.co/LiquidAI/LFM2.5-VL-1.6B" target="_blank" rel="noopener">LFM2.5-VL-1.6B</a></strong></td><td>1.6B</td><td>1.80 GB (Q4)</td><td>12 / 100</td><td>44.4%</td><td>0.81s</td><td>MLX</td></tr><tr><td><strong><a href="https://huggingface.co/webbrain-one/lfm3-vld-2b" target="_blank" rel="noopener">LFM3-VLD-2B</a></strong> <em>(base)</em></td><td>2B</td><td>1.25 GB (Q4)</td><td>4 / 100</td><td>44.7%</td><td>2.20s</td><td>GGUF (RTX 5060 Ti)</td></tr></tbody></table></div>
+<h3 id="performance-analysis-a-generational-leap-over-the-base-model">Performance analysis: a generational leap over the base model</h3>
+<p>Compass VLD v6 2B moves from <strong>4 to 66 strict passes</strong> (+62 passes) and from <strong>44.7% to 90.2% mean rubric score</strong> (+45.5 percentage points) compared to the unadapted LFM3-VLD baseline:</p>
+<ul><li><strong>100% pass rates across critical UI patterns</strong>: </li><li>Kanban Board (5/5, 100.0% score)</li><li>Toast Notifications (5/5, 100.0% score)</li><li>Search Results (5/5, 98.3% score)</li><li>Data Tables (5/5, 94.3% score)</li><li>Consent Banners (5/5, 94.0% score)</li><li><strong>High scores on dense layouts</strong>:</li><li>Photo Understanding (4/5, 95.6% score)</li><li>Checkout &amp; Payment Forms (4/5, 95.1% score)</li><li>Analytics Dashboards (4/5, 95.0% score)</li><li>Chart Reading (4/5, 95.0% score)</li><li><strong>Difficulty tier breakdown</strong>:</li><li><strong>Easy (001–020)</strong>: 14/20 passes (70.0%), 90.7% mean score, 1.64s latency</li><li><strong>Basic (021–040)</strong>: 16/20 passes (80.0%), 92.3% mean score, 1.83s latency</li><li><strong>Intermediate (041–060)</strong>: 15/20 passes (75.0%), 94.2% mean score, 1.90s latency</li><li><strong>Advanced (061–080)</strong>: 10/20 passes (50.0%), 84.2% mean score, 2.00s latency</li><li><strong>Challenging (081–100)</strong>: 11/20 passes (55.0%), 89.7% mean score, 1.96s latency</li></ul>
+<p>Crucially, Compass VLD v6 achieved <strong>0 errors</strong> across all 100 screenshots while executing in <strong>1.87 seconds</strong> on average—over 13 times faster than Qwen 3.5 4B (25.92s) while scoring 11 more strict passes.</p>
+<hr>
+<h2 id="2-compact-tool-routing-benchmark-100-firstturn-89-multiturn-scenarios">2. Compact tool routing benchmark (100 first-turn &amp; 89 multi-turn scenarios)</h2>
+<p>In addition to visual perception, browser agents require precise action selection. We evaluated Compass VLD v6 on WebBrain&#39;s frozen Compact agent suite, comprising 100 first-turn queries and 100 multi-turn scenarios (89 scored compact cases with 11 dev scenarios excluded).</p>
+<div class="table-wrap"><table><thead><tr><th>Model</th><th>Parameters</th><th>First-turn structured calls (/100)</th><th>Strict exact action (/89)</th><th>Loose tool-family match (/89)</th><th>Loose match rate</th><th>Anti-patterns (/89)</th><th>Output truncations</th></tr></thead><tbody><tr><td><strong>WebBrain Compass VLD v6 2B</strong></td><td><strong>2B</strong></td><td><strong>93</strong></td><td><strong>7</strong></td><td><strong>38</strong></td><td><strong>42.7%</strong></td><td><strong>0</strong></td><td><strong>0</strong></td></tr><tr><td><strong>webbrain-compass-vld-tiny-v5</strong></td><td>1B</td><td>97</td><td>7</td><td>32</td><td>36.0%</td><td>8</td><td>0</td></tr><tr><td><strong>lfm3-vld-2b</strong></td><td>2B</td><td>87</td><td>1</td><td>32</td><td>36.0%</td><td>2</td><td>6</td></tr><tr><td><strong>Spark-X2.6-4B</strong></td><td>4B</td><td>100</td><td>11</td><td>29</td><td>32.6%</td><td>2</td><td>0</td></tr><tr><td><strong>MiniCPM-V-4.7-1B</strong></td><td>1B</td><td>97</td><td>2</td><td>27</td><td>30.3%</td><td>4</td><td>0</td></tr><tr><td><strong>LFM3-1.7B</strong></td><td>1.7B</td><td>100</td><td>10</td><td>19</td><td>21.3%</td><td>1</td><td>0</td></tr></tbody></table></div>
+<h3 id="routing-highlights">Routing highlights</h3>
+<ol><li><strong>Top Loose Routing Accuracy (42.7%)</strong>: Compass VLD v6 matched the reference tool family in 38 out of 89 scenarios, surpassing previous leaders <code>tiny-v5</code> (32/89) and Spark-X2.6-4B (29/89).</li><li><strong>Zero Anti-Patterns</strong>: Many compact models exhibit regressions such as looping on bad URLs, repeatedly fetching expired trees, or misrouting error pivots. Compass VLD v6 achieved <strong>0 anti-patterns</strong>, down from 8 in v5 and 2 in base LFM3-VLD.</li><li><strong>Hardened Prompt Injection Defense</strong>:</li></ol>
+<ul><li>Protected prompt injection scenarios: <strong>6/8 ideal/ideal_name (75%)</strong></li><li>Injection control scenarios: <strong>2/2 ideal (100%)</strong></li><li>Unprotected injection scenarios: <strong>6/8 ideal/ideal_name (75%)</strong></li><li>Unprotected control: <strong>2/2 ideal (100%)</strong></li></ul>
+<ol><li><strong>First-Turn Tool Call Distribution</strong>: Across the 100 first-turn prompts, the model made 41 <code>get_accessibility_tree</code>, 31 <code>navigate</code>, 9 <code>inspect_viewport</code>, 8 <code>read_page</code>, 2 <code>extract_data</code>, 1 <code>fetch_url</code>, 1 <code>get_window_info</code>, and 7 direct textual responses (for purely conversational inquiries).</li></ol>
+<hr>
+<h2 id="3-hardware-footprint-and-efficiency-on-nvidia-rtx-5060-ti">3. Hardware footprint and efficiency on NVIDIA RTX 5060 Ti</h2>
+<p>Testing was performed on consumer-grade desktop hardware running native <code>llama-server</code> compiled with CUDA support:</p>
+<ul><li><strong>Model format</strong>: Unquantized BF16 weights (<code>webbrain-compass-vld-v6-2b-BF16.gguf</code>, 3.46 GB)</li><li><strong>Projector format</strong>: F16 multimodal vision projector (<code>mmproj-webbrain-compass-vld-v6-2b-F16.gguf</code>, 379 MB)</li><li><strong>VRAM consumption</strong>: ~3.8 GB VRAM with full 99-layer GPU offload</li><li><strong>Inference speed</strong>:</li><li>Prompt evaluation: <strong>3,650 tokens/sec</strong> (~0.27 ms/token)</li><li>Text generation: <strong>99.85 – 128 tokens/sec</strong> (~8–10 ms/token)</li><li>End-to-end screenshot observation: <strong>1.87 seconds</strong></li><li>Tool routing latency: <strong>863 ms</strong> (first-turn) / <strong>906 ms</strong> (multi-turn scenarios)</li></ul>
+<p>Because the entire model and KV cache occupy under 4 GB of VRAM, WebBrain Compass VLD v6 2B can easily co-exist with a local embedding model, an in-memory browser tab, or background automation workers on an 8 GB or 16 GB consumer card.</p>
+<hr>
+<h2 id="availability-and-download-links">Availability and download links</h2>
+<p>WebBrain Compass VLD v6 2B is released openly under the Apache 2.0 license:</p>
+<ul><li><strong>Merged PyTorch Model (BF16)</strong>: <a href="https://huggingface.co/webbrain-one/webbrain-compass-vld-v6-2b" target="_blank" rel="noopener">webbrain-one/webbrain-compass-vld-v6-2b</a></li><li><strong>GGUF Quantizations (BF16, Q8<em>0, Q4</em>K_M, mmproj)</strong>: <a href="https://huggingface.co/webbrain-one/webbrain-compass-vld-v6-2b-gguf" target="_blank" rel="noopener">webbrain-one/webbrain-compass-vld-v6-2b-gguf</a></li><li><strong>ONNX WebGPU Bundle &amp; JS Probes</strong>: <a href="https://huggingface.co/webbrain-one/webbrain-compass-vld-v6-2b-onnx" target="_blank" rel="noopener">webbrain-one/webbrain-compass-vld-v6-2b-onnx</a></li><li><strong>Model Collection</strong>: <a href="https://huggingface.co/collections/webbrain-one/webbrain-compass-vld-v6-2b-6ae5de0980732cb99b006957" target="_blank" rel="noopener">WebBrain Compass VLD v6 Collection</a></li></ul>
+<p>With 66/100 strict vision passes, 90.2% rubric adherence, and 42.7% compact routing accuracy at sub-2-second local latency, Compass VLD v6 2B represents our most capable and reliable on-device browser agent model to date.</p>
+
+    <div class="author-box">
+      Written by <a href="https://emresokullu.com" target="_blank" rel="noopener">Emre Sokullu</a>. WebBrain is GPL-3.0-or-later and open on <a href="https://github.com/webbrain-one/webbrain" target="_blank" rel="noopener">GitHub</a>.
+    </div>
+  </article>
+
+  <!-- Site footer: start -->
+<footer class="wb-footer">
+  <div class="wb-footer-inner">
+    <div class="wb-footer-brand">
+      <p class="wb-footer-tagline">On a mission to make the web smarter.</p>
+      <p class="wb-footer-copy">© 2026 WebBrain. Built by <a href="https://emresokullu.com" target="_blank">Emre Sokullu</a> &amp; <a href="https://github.com/webbrain-one/webbrain/graphs/contributors" target="_blank">contributors</a>.</p>
+    </div>
+    <div class="wb-footer-row">
+      <div class="wb-footer-links">
+        <a href="/">Browser extension</a>
+        <a href="/companion/">Desktop Companion</a>
+        <a href="/research/">Research</a>
+        <a href="/docs/">Docs</a>
+        <a href="/docs/faq/">FAQ</a>
+        <a href="/blog/">Blog</a>
+        <a href="/privacy">Privacy Policy</a>
+        <a href="https://github.com/webbrain-one/webbrain/issues" target="_blank" rel="noopener">Report Bug</a>
+        <a href="https://github.com/webbrain-one/webbrain/blob/main/LICENSE" target="_blank" rel="noopener">GPL-3.0 License</a>
+        <a href="https://pressreleases.online/org/webbrain.one" target="_blank" rel="noopener">Press</a>
+        <a href="https://api.webbrain.one/account" target="_blank" rel="noopener">Compass Subscription</a>
+      </div>
+      <div class="wb-footer-social">
+        <a href="https://mastoturk.org/@webbrain" target="_blank" rel="me noopener" aria-label="WebBrain on Mastodon" title="WebBrain on Mastodon" class="wb-footer-icon"><svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M21.327 8.566c0-5.035-3.298-6.511-3.298-6.511C16.366 1.292 13.508.971 12.04.947h-.036c-1.468.024-4.326.345-5.989 1.108 0 0-3.298 1.476-3.298 6.511 0 1.153-.022 2.535.014 4.001.12 4.935.907 9.799 5.478 11.007 2.106.557 3.916.674 5.374.594 2.645-.147 4.128-.943 4.128-.943l-.087-1.918s-1.888.595-4.012.523c-2.104-.072-4.326-.227-4.668-2.809a5.289 5.289 0 0 1-.047-.724s2.066.505 4.686.625c1.603.073 3.107-.094 4.632-.276 2.925-.349 5.474-2.149 5.794-3.793.503-2.591.462-6.287.462-6.287ZM8.545 15.023H6.09V8.996c0-2.534 1.627-3.829 3.424-3.829 1.963 0 2.909 1.268 3.35 2.257.44-.989 1.386-2.257 3.349-2.257 1.797 0 3.424 1.295 3.424 3.829v6.027h-2.454V9.174c0-1.233-.519-1.859-1.557-1.859-1.148 0-1.724.742-1.724 2.207v3.203h-2.454V9.522c0-1.465-.576-2.207-1.724-2.207-1.038 0-1.557.626-1.557 1.859v5.849Z"/></svg></a>
+        <a href="https://bsky.app/profile/webbrain-one.bsky.social" target="_blank" rel="me noopener" aria-label="WebBrain on Bluesky" title="WebBrain on Bluesky" class="wb-footer-icon"><svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M12 10.8c-1.1-2.1-4-6-6.8-8C2.6.9 1.6 1.3.9 1.6.1 1.9 0 3.1 0 3.8c0 .7.4 5.7.6 6.5.8 2.7 3.7 3.7 5.6 3.4-3.5.6-6.5 2-2.5 6.5 4.3 4.5 5.9-1 6.3-2.8.1-.5.2-.8.3-.8.1 0 .2.3.3.8.4 1.8 2 7.3 6.3 2.8 4-4.5 1-5.9-2.5-6.5 1.9.3 4.8-.7 5.6-3.4.2-.8.6-5.8.6-6.5 0-.7-.1-1.9-.9-2.2-.7-.3-1.7-.6-4.3 1.2-2.8 2-5.7 5.9-6.8 8Z"/></svg></a>
+        <a href="https://discord.gg/cgC325ssfw" target="_blank" rel="noopener" aria-label="WebBrain on Discord" title="WebBrain on Discord" class="wb-footer-icon"><svg viewBox="0 0 16 16" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M13.545 2.907a13.227 13.227 0 0 0-3.257-1.011c.05.069.098.137.142.207a12.471 12.471 0 0 0-3.616 0c.044-.07.093-.138.143-.207A13.207 13.207 0 0 0 3.7 2.907 13.136 13.136 0 0 0 .931 13.362a13.667 13.667 0 0 0 4.022 2.018c.33-.442.623-.907.87-1.396a8.95 8.95 0 0 1-1.37-.652c.114-.083.225-.171.33-.269a9.6 9.6 0 0 0 8.243 0c.108.09.218.18.33.269a8.923 8.923 0 0 1-1.37.652c.248.489.54.954.87 1.396a13.667 13.667 0 0 0 4.022-2.018 13.136 13.136 0 0 0-2.769-10.455zM5.106 11.275c-.788 0-1.438-.72-1.438-1.608 0-.889.625-1.608 1.438-1.608.818 0 1.451.726 1.438 1.608 0 .888-.625 1.608-1.438 1.608zm5.788 0c-.788 0-1.438-.72-1.438-1.608 0-.889.625-1.608 1.438-1.608.818 0 1.451.726 1.438 1.608 0 .888-.625 1.608-1.438 1.608z"/></svg></a>
+        <a href="https://huggingface.co/webbrain-one" target="_blank" rel="me noopener" aria-label="WebBrain on Hugging Face" title="WebBrain on Hugging Face" class="wb-footer-icon"><svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M12.025 1.13c-5.77 0-10.449 4.647-10.449 10.378 0 1.112.178 2.181.503 3.185.064-.222.203-.444.416-.577a.96.96 0 0 1 .524-.15c.293 0 .584.124.84.284.278.173.48.408.71.694.226.282.458.611.684.951v-.014c.017-.324.106-.622.264-.874s.403-.487.762-.543c.3-.047.596.06.787.203s.31.313.4.467c.15.257.212.468.233.542.01.026.653 1.552 1.657 2.54.616.605 1.01 1.223 1.082 1.912.055.537-.096 1.059-.38 1.572.637.121 1.294.187 1.967.187.657 0 1.298-.063 1.921-.178-.287-.517-.44-1.041-.384-1.581.07-.69.465-1.307 1.081-1.913 1.004-.987 1.647-2.513 1.657-2.539.021-.074.083-.285.233-.542.09-.154.208-.323.4-.467a1.08 1.08 0 0 1 .787-.203c.359.056.604.29.762.543s.247.55.265.874v.015c.225-.34.457-.67.683-.952.23-.286.432-.52.71-.694.257-.16.547-.284.84-.285a.97.97 0 0 1 .524.151c.228.143.373.388.43.625l.006.04a10.3 10.3 0 0 0 .534-3.273c0-5.731-4.678-10.378-10.449-10.378M8.327 6.583a1.5 1.5 0 0 1 .713.174 1.487 1.487 0 0 1 .617 2.013c-.183.343-.762-.214-1.102-.094-.38.134-.532.914-.917.71a1.487 1.487 0 0 1 .69-2.803m7.486 0a1.487 1.487 0 0 1 .689 2.803c-.385.204-.536-.576-.916-.71-.34-.12-.92.437-1.103.094a1.487 1.487 0 0 1 .617-2.013 1.5 1.5 0 0 1 .713-.174m-10.68 1.55a.96.96 0 1 1 0 1.921.96.96 0 0 1 0-1.92m13.838 0a.96.96 0 1 1 0 1.92.96.96 0 0 1 0-1.92M8.489 11.458c.588.01 1.965 1.157 3.572 1.164 1.607-.007 2.984-1.155 3.572-1.164.196-.003.305.12.305.454 0 .886-.424 2.328-1.563 3.202-.22-.756-1.396-1.366-1.63-1.32q-.011.001-.02.006l-.044.026-.01.008-.03.024q-.018.017-.035.036l-.032.04a1 1 0 0 0-.058.09l-.014.025q-.049.088-.11.19a1 1 0 0 1-.083.116 1.2 1.2 0 0 1-.173.18q-.035.029-.075.058a1.3 1.3 0 0 1-.251-.243 1 1 0 0 1-.076-.107c-.124-.193-.177-.363-.337-.444-.034-.016-.104-.008-.2.022q-.094.03-.216.087-.06.028-.125.063l-.13.074q-.067.04-.136.086a3 3 0 0 0-.135.096 3 3 0 0 0-.26.219 2 2 0 0 0-.12.121 2 2 0 0 0-.106.128l-.002.002a2 2 0 0 0-.09.132l-.001.001a1.2 1.2 0 0 0-.105.212q-.013.036-.024.073c-1.139-.875-1.563-2.317-1.563-3.203 0-.334.109-.457.305-.454m.836 10.354c.824-1.19.766-2.082-.365-3.194-1.13-1.112-1.789-2.738-1.789-2.738s-.246-.945-.806-.858-.97 1.499.202 2.362c1.173.864-.233 1.45-.685.64-.45-.812-1.683-2.896-2.322-3.295s-1.089-.175-.938.647 2.822 2.813 2.562 3.244-1.176-.506-1.176-.506-2.866-2.567-3.49-1.898.473 1.23 2.037 2.16c1.564.932 1.686 1.178 1.464 1.53s-3.675-2.511-4-1.297c-.323 1.214 3.524 1.567 3.287 2.405-.238.839-2.71-1.587-3.216-.642-.506.946 3.49 2.056 3.522 2.064 1.29.33 4.568 1.028 5.713-.624m5.349 0c-.824-1.19-.766-2.082.365-3.194 1.13-1.112 1.789-2.738 1.789-2.738s.246-.945.806-.858.97 1.499-.202 2.362c-1.173.864.233 1.45.685.64.451-.812 1.683-2.896 2.322-3.295s1.089-.175.938.647-2.822 2.813-2.562 3.244 1.176-.506 1.176-.506 2.866-2.567 3.49-1.898-.473 1.23-2.037 2.16c-1.564.932-1.686 1.178-1.464 1.53s3.675-2.511 4-1.297c.323 1.214-3.524 1.567-3.287 2.405.238.839 2.71-1.587 3.216-.642.506.946-3.49 2.056-3.522 2.064-1.29.33-4.568 1.028-5.713-.624"/></svg></a>
+      </div>
+    </div>
+  </div>
+</footer>
+<!-- Site footer: end -->
+  <script>
+    (function () {
+      const btn = document.getElementById('theme-toggle');
+      if (!btn) return;
+      const root = document.documentElement;
+
+      function setTheme(theme, persist) {
+        root.setAttribute('data-theme', theme);
+        if (persist) {
+          try { localStorage.setItem('webbrain-theme', theme); } catch (_) {}
+        }
+      }
+
+      btn.addEventListener('click', function () {
+        const next = root.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+        setTheme(next, true);
+      });
+
+      const mq = window.matchMedia('(prefers-color-scheme: light)');
+      function onMQ(e) {
+        try {
+          if (localStorage.getItem('webbrain-theme')) return;
+        } catch (_) {}
+        setTheme(e.matches ? 'light' : 'dark', false);
+      }
+      if (typeof mq.addEventListener === 'function') mq.addEventListener('change', onMQ);
+      else if (typeof mq.addListener === 'function') mq.addListener(onMQ);
+    })();
+  </script>
+  <script>
+    (function () {
+      const LOCALES = ["en","es","fr","tr","zh","ru","uk","ar","ja","ko","id","th","ms","tl","he"];
+      const sel = document.getElementById('lang-dropdown');
+      if (!sel) return;
+      sel.value = sel.dataset.current || 'en';
+      sel.addEventListener('change', function () {
+        const target = sel.value;
+        if (!LOCALES.includes(target)) return;
+        window.location.href = target === 'en' ? '/' : '/' + target + '/';
+      });
+    })();
+  </script>
+</body>
+</html>

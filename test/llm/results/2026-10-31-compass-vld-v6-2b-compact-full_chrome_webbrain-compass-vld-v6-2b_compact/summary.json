@@ -1,0 +1,35 @@
+{
+  "runTag": "2026-10-31-compass-vld-v6-2b-compact-full",
+  "model": "webbrain-compass-vld-v6-2b",
+  "browser": "chrome",
+  "base": "http://127.0.0.1:18080",
+  "saveRequest": true,
+  "tier": "compact",
+  "modeOverride": null,
+  "chatTemplateCompat": "off",
+  "structuredToolsSent": true,
+  "reasoningEffort": null,
+  "replay": {
+    "path": "test/llm/freeze/compact-replay-2026-09-07.json",
+    "sha256": "6eccbd0284fd2f63e4888789122ff7204de8ac9d1bdcc518fd3108ffe8bee309",
+    "sourceRun": "2026-09-07-qwen3.5-4b-compact-full-v2_chrome_qwen3.5-4b_compact",
+    "askToolsSourceCommit": "5e12c0003",
+    "note": "Messages and Act tools replay the saved September 7 run. Ask tools come from the September 7 source (15 tools). The saved rubric and skipped set are retained."
+  },
+  "freeze": null,
+  "cases": 100,
+  "totalLatencyMs": 86312,
+  "errors": 0,
+  "withToolCall": 93,
+  "withToolCallFromContent": 0,
+  "byTool": {
+    "navigate": 31,
+    "get_accessibility_tree": 41,
+    "read_page": 8,
+    "extract_data": 2,
+    "inspect_viewport": 9,
+    "fetch_url": 1,
+    "(no_tool_call)": 7,
+    "get_window_info": 1
+  }
+}
