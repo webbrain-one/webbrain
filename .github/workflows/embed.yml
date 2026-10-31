@@ -1,0 +1,101 @@
+name: Embed widget
+
+# Builds and tests the WebBrain for websites widget (embed/) whenever it or
+# the extension code it bundles changes, including loading embed.js in Chrome.
+# Pushing a tag like embed-v1.0.0 publishes a GitHub release with embed.js,
+# tools.json, the icons, VERSION.json and SHA256SUMS, which sites.webbrain.one
+# pins by version.
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/embed.yml"
+      - "embed/**"
+      - "package.json"
+      - "package-lock.json"
+      - "src/chrome/**"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/embed.yml"
+      - "embed/**"
+      - "package.json"
+      - "package-lock.json"
+      - "src/chrome/**"
+    tags:
+      - "embed-v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: embed-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: embed
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Build and test
+        run: |
+          npm run build
+          npm test
+
+      # Playwright comes from the repository root; the widget itself has no dependencies.
+      - name: Install Playwright
+        working-directory: .
+        run: npm ci
+
+      - name: Run embed.js in Chrome
+        env:
+          EMBED_CHROME_PATH: /usr/bin/google-chrome
+        run: npm run test:browser
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/embed-v')
+    needs: test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: embed
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check the tag matches embed/package.json
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          if [ "${GITHUB_REF_NAME}" != "embed-v${version}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match embed/package.json version ${version}" >&2
+            exit 1
+          fi
+
+      - name: Build
+        run: npm run build
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" dist/* \
+            --title "WebBrain for websites widget ${GITHUB_REF_NAME#embed-v}" \
+            --notes "The script site owners add with <script src=\".../embed.js\">, built from commit ${GITHUB_SHA}. Verify downloads against SHA256SUMS. Source: https://github.com/${GITHUB_REPOSITORY}/tree/${GITHUB_SHA}/embed" \
+            --latest=false

@@ -1,0 +1,18 @@
+{
+  "name": "@webbrain/embed",
+  "version": "1.0.0",
+  "private": true,
+  "description": "WebBrain for websites: the script site owners add to their pages. Built from the WebBrain extension's own content scripts.",
+  "type": "module",
+  "license": "GPL-3.0-or-later",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node --no-warnings --test test/*.test.mjs",
+    "test:browser": "node --no-warnings --test test/browser.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/webbrain-one/webbrain.git",
+    "directory": "embed"
+  }
+}
