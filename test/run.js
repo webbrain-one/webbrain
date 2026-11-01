@@ -76602,7 +76602,7 @@ test('_defaultConfigs: every entry carries an explicit category', () => {
 test('extended provider catalog is complete, mirrored, safe, and excluded-provider clean', async () => {
   const expectedIds = `
     api-route 302ai abacus aihubmix alibaba-coding-plan alibaba-coding-plan-cn
-    azure-cognitive-services bailing baseten berget cerebras cheaperinference chutes clarifai
+    atmorouter azure-cognitive-services bailing baseten berget cerebras cheaperinference chutes clarifai
     cloudferro-sherlock cohere cortecs deepinfra digitalocean dinference drun
     evroc fastrouter freebuff2api friendli google-vertex google-vertex-anthropic helicone
     iflowcn inception inference io-net jiekou kilo kimi-for-coding
@@ -76616,7 +76616,7 @@ test('extended provider catalog is complete, mirrored, safe, and excluded-provid
   `.trim().split(/\s+/);
   const excluded = ['github-models', 'github-copilot', 'gitlab', 'sap-ai-core'];
 
-  assert.equal(expectedIds.length, 83);
+  assert.equal(expectedIds.length, 84);
   assert.deepEqual(ProviderCatalogCh.ADDITIONAL_PROVIDER_IDS, expectedIds);
   assert.deepEqual(ProviderCatalogFx.ADDITIONAL_PROVIDER_IDS, expectedIds);
   assert.deepEqual(
@@ -76631,8 +76631,8 @@ test('extended provider catalog is complete, mirrored, safe, and excluded-provid
   ]) {
     const defaults = new PM()._defaultConfigs();
     // Includes the sidepanel-only WebBrain Compass XL runtime profile, which is
-    // deliberately omitted from the 117/116 Settings provider cards.
-    const expectedDefaultCount = label === 'chrome' ? 118 : 117;
+    // deliberately omitted from the 118/117 Settings provider cards.
+    const expectedDefaultCount = label === 'chrome' ? 119 : 118;
     assert.equal(
       Object.keys(defaults).length,
       expectedDefaultCount,
@@ -76807,6 +76807,30 @@ test('extended provider catalog is complete, mirrored, safe, and excluded-provid
   assert.deepEqual(
     ProviderCatalogCh.ADDITIONAL_PROVIDER_UI.opper.suggestions,
     ['gpt-5.4-mini', 'claude-sonnet-4-6', 'gemini-3.8-flash', 'deepseek-v4-flash'],
+  );
+  assert.deepEqual(
+    {
+      baseUrl: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.atmorouter.baseUrl,
+      model: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.atmorouter.model,
+      contextWindow: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.atmorouter.contextWindow,
+      supportsVision: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.atmorouter.supportsVision,
+      supportsTools: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.atmorouter.supportsTools,
+      supportsAskStreaming: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.atmorouter.supportsAskStreaming,
+      apiKeyUrl: ProviderCatalogCh.ADDITIONAL_PROVIDER_DEFAULTS.atmorouter.apiKeyUrl,
+    },
+    {
+      baseUrl: 'https://atmorouter.dev/v1',
+      model: 'cc/claude-sonnet-4-6',
+      contextWindow: 1000000,
+      supportsVision: true,
+      supportsTools: true,
+      supportsAskStreaming: true,
+      apiKeyUrl: 'https://atmorouter.dev',
+    },
+  );
+  assert.deepEqual(
+    ProviderCatalogCh.ADDITIONAL_PROVIDER_UI.atmorouter.suggestions,
+    ['cc/claude-sonnet-4-6', 'cx/gpt-6.1-sol', 'ag/gemini-3.8-flash-high'],
   );
   assert.deepEqual(
     {
