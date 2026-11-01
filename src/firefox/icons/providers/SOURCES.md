@@ -21,6 +21,7 @@ Most brand marks come from [Lobe Icons](https://github.com/lobehub/lobe-icons)
 | nearai | WebBrain-authored simple N mark (not an official NEAR brand asset) |
 | cheaperinference | Cheaper Inference logo mark (cheaperinference.com) |
 | opper | Opper official logo mark (opper.ai) |
+| atmorouter | AtmoRouter logo mark (atmorouter.dev) |
 
 Brand trademarks remain property of their owners; used only for provider identification in the settings UI.
 
