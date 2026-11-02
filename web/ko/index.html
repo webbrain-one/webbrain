@@ -3782,6 +3782,8 @@
       padding: 12px 32px 12px 12px;
     }
     .path-websites .path-copy { display: flex; flex-direction: column; gap: 22px; padding: 14px 0; }
+    .home-websites { max-width: var(--max-w); margin: 0 auto; padding: 8px 24px 40px; }
+    .home-websites .path-websites { margin-top: 0; }
 
     .illo {
       position: relative;
@@ -3904,6 +3906,7 @@
     }
     @media (max-width: 768px) {
       .home-hero { padding: 48px 16px 0; }
+      .home-websites { padding: 4px 16px 32px; }
       .path-browser { padding: 22px 16px 20px; margin-top: 34px; }
       .video-dialog { width: min(440px, calc(100vw - 24px)); }
       .video-dialog video { aspect-ratio: 9 / 16; }
@@ -4567,10 +4570,54 @@
 
   </div>
 
-  
-  <!-- WebBrain for websites: same weight of words, less room. The code
-       illustration marks it as the developer product. Shown while
-       WEBSITES_LAUNCHED (site-footer.mjs) is on. -->
+</section>
+
+<dialog class="video-dialog" id="home-video-dialog" aria-labelledby="home-video-title">
+  <div class="video-dialog-head">
+    <h2 id="home-video-title">WebBrain의 실제 동작을 보세요</h2>
+    <button class="video-dialog-close" id="home-video-close" type="button" aria-label="동영상 닫기">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </div>
+  <video id="home-video" data-desktop-src="/assets/webbrain-home-demo.mp4" data-mobile-src="/assets/webbrain-home-demo-vertical.mp4" data-desktop-poster="/assets/webbrain-home-demo-poster.jpg" data-mobile-poster="/assets/webbrain-home-demo-poster-vertical.jpg" controls preload="none" playsinline></video>
+</dialog>
+
+<section class="section voices-section" id="voices" lang="en" dir="ltr" aria-labelledby="voices-title">
+  <h2 id="voices-title">Word on the web</h2>
+  <div class="voices-grid">
+    <figure class="voice">
+      <img class="voice-portrait" src="/assets/voices/chris-messina.png" alt="Illustrated portrait of Chris Messina" width="76" height="76" loading="lazy" decoding="async">
+      <blockquote cite="https://www.producthunt.com/products/webbrain">“The power of this approach is that the assistant has access to your sessions, cookies, and context — <em>intact</em>.”</blockquote>
+      <figcaption>
+        <span class="voice-name">Chris Messina</span>
+        <a class="voice-source" href="https://www.producthunt.com/products/webbrain" target="_blank" rel="noopener noreferrer">Product Hunt</a>
+      </figcaption>
+    </figure>
+    <figure class="voice voice-featured">
+      <img class="voice-portrait" src="/assets/voices/robert-scoble.png" alt="Illustrated portrait of Robert Scoble" width="90" height="90" loading="lazy" decoding="async">
+      <blockquote cite="https://x.com/Scobleizer/status/2098481418687123967">“Makes Google Chrome a lot more useful.”</blockquote>
+      <figcaption>
+        <span class="voice-name">Robert Scoble</span>
+        <a class="voice-source" href="https://x.com/Scobleizer/status/2098481418687123967" target="_blank" rel="noopener noreferrer">X / Scobleizer</a>
+      </figcaption>
+    </figure>
+    <figure class="voice">
+      <img class="voice-portrait" src="/assets/voices/asif-razzaq.png" alt="Illustrated portrait of Asif Razzaq" width="76" height="76" loading="lazy" decoding="async">
+      <blockquote cite="https://www.marktechpost.com/2026/07/02/meet-webbrain-an-open-source-local-first-ai-browser-agent-that-reads-pages-and-automates-tasks-in-chrome-and-firefox/">“Run the agent against a local model, and no page data leaves your machine.”</blockquote>
+      <figcaption>
+        <span class="voice-name">Asif Razzaq</span>
+        <a class="voice-source" href="https://www.marktechpost.com/2026/07/02/meet-webbrain-an-open-source-local-first-ai-browser-agent-that-reads-pages-and-automates-tasks-in-chrome-and-firefox/" target="_blank" rel="noopener noreferrer">MarkTechPost</a>
+      </figcaption>
+    </figure>
+  </div>
+</section>
+
+
+<!-- WebBrain for websites: same weight of words, less room. The code
+     illustration marks it as the developer product. It follows Word on
+     the web, so the quotes back the extension right after its card.
+     Shown while WEBSITES_LAUNCHED (site-footer.mjs) is on. -->
+<div class="home-websites">
   <section class="path path-websites" aria-labelledby="path-websites-title">
     <div class="illo illo-site" aria-hidden="true">
       <div class="code-pane">
@@ -4623,48 +4670,8 @@
       </div>
     </div>
   </section>
-  
-</section>
+</div>
 
-<dialog class="video-dialog" id="home-video-dialog" aria-labelledby="home-video-title">
-  <div class="video-dialog-head">
-    <h2 id="home-video-title">WebBrain의 실제 동작을 보세요</h2>
-    <button class="video-dialog-close" id="home-video-close" type="button" aria-label="동영상 닫기">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
-    </button>
-  </div>
-  <video id="home-video" data-desktop-src="/assets/webbrain-home-demo.mp4" data-mobile-src="/assets/webbrain-home-demo-vertical.mp4" data-desktop-poster="/assets/webbrain-home-demo-poster.jpg" data-mobile-poster="/assets/webbrain-home-demo-poster-vertical.jpg" controls preload="none" playsinline></video>
-</dialog>
-
-<section class="section voices-section" id="voices" lang="en" dir="ltr" aria-labelledby="voices-title">
-  <h2 id="voices-title">Word on the web</h2>
-  <div class="voices-grid">
-    <figure class="voice">
-      <img class="voice-portrait" src="/assets/voices/chris-messina.png" alt="Illustrated portrait of Chris Messina" width="76" height="76" loading="lazy" decoding="async">
-      <blockquote cite="https://www.producthunt.com/products/webbrain">“The power of this approach is that the assistant has access to your sessions, cookies, and context — <em>intact</em>.”</blockquote>
-      <figcaption>
-        <span class="voice-name">Chris Messina</span>
-        <a class="voice-source" href="https://www.producthunt.com/products/webbrain" target="_blank" rel="noopener noreferrer">Product Hunt</a>
-      </figcaption>
-    </figure>
-    <figure class="voice voice-featured">
-      <img class="voice-portrait" src="/assets/voices/robert-scoble.png" alt="Illustrated portrait of Robert Scoble" width="90" height="90" loading="lazy" decoding="async">
-      <blockquote cite="https://x.com/Scobleizer/status/2098481418687123967">“Makes Google Chrome a lot more useful.”</blockquote>
-      <figcaption>
-        <span class="voice-name">Robert Scoble</span>
-        <a class="voice-source" href="https://x.com/Scobleizer/status/2098481418687123967" target="_blank" rel="noopener noreferrer">X / Scobleizer</a>
-      </figcaption>
-    </figure>
-    <figure class="voice">
-      <img class="voice-portrait" src="/assets/voices/asif-razzaq.png" alt="Illustrated portrait of Asif Razzaq" width="76" height="76" loading="lazy" decoding="async">
-      <blockquote cite="https://www.marktechpost.com/2026/07/02/meet-webbrain-an-open-source-local-first-ai-browser-agent-that-reads-pages-and-automates-tasks-in-chrome-and-firefox/">“Run the agent against a local model, and no page data leaves your machine.”</blockquote>
-      <figcaption>
-        <span class="voice-name">Asif Razzaq</span>
-        <a class="voice-source" href="https://www.marktechpost.com/2026/07/02/meet-webbrain-an-open-source-local-first-ai-browser-agent-that-reads-pages-and-automates-tasks-in-chrome-and-firefox/" target="_blank" rel="noopener noreferrer">MarkTechPost</a>
-      </figcaption>
-    </figure>
-  </div>
-</section>
 
 <!-- 4. BRING YOUR OWN AI -->
 <section class="section" id="providers" style="padding-top: 40px;">
