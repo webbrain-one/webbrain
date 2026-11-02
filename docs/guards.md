@@ -192,10 +192,11 @@ geometry rule then read the Post control beside the composer as a send, and
 with no identity to read, every Post click was refused as
 `recipient_identity_unavailable`. An adapter's `messaging.publicComposer` now
 marks the route's policy `publicComposer`, and an ordinary control there (a
-click, Enter, a field submit, an upload) is not checked against a recipient:
-the submission and publication checks decide what is published. A script,
-frame click or drag is still refused on the route, since nothing binds what
-it does on the page, and a send already bound to a recipient keeps its check.
+click, Enter, a field submit, an upload) is not checked against a recipient in
+live runs or saved workflow replay: the submission and publication checks
+decide what is published. A script, frame click or drag is still refused on
+the route, since nothing binds what it does on the page, and a send already
+bound to a recipient keeps its check.
 
 A deletion stays bound to the item's text, with each `<time datetime>`
 element read as its datetime rather than as the relative time it shows.

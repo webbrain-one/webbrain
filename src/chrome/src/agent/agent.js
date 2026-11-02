@@ -242,8 +242,15 @@ const WORKFLOW_FIELD_KEYS = new Set(['alt_text', 'paid_promotion', 'recording_da
 const STAGED_SCREENSHOT_REDACTION_MAX_REGIONS = 400;
 const CHROME_WEB_STORE_GALLERY_PAGE = 'chrome-web-store-gallery';
 const CHROME_WEB_STORE_URL_READ_TOOLS = new Set(['fetch_url', 'research_url', 'read_page_source']);
+const SAVED_WORKFLOW_ORDINARY_DISPATCH_TOOLS = new Set([
+  'click', 'click_ax', 'upload_file',
+]);
+const SAVED_WORKFLOW_UNBINDABLE_DISPATCH_TOOLS = new Set([
+  'iframe_click', 'execute_js', 'execute_webmcp_tool', 'drag_at',
+]);
 const SAVED_WORKFLOW_MESSAGE_DISPATCH_TOOLS = new Set([
-  'click', 'click_ax', 'iframe_click', 'execute_js', 'execute_webmcp_tool', 'upload_file',
+  ...SAVED_WORKFLOW_ORDINARY_DISPATCH_TOOLS,
+  ...SAVED_WORKFLOW_UNBINDABLE_DISPATCH_TOOLS,
 ]);
 
 function savedWorkflowStepMayDispatchMessage(step) {
@@ -251,6 +258,18 @@ function savedWorkflowStepMayDispatchMessage(step) {
   if (SAVED_WORKFLOW_MESSAGE_DISPATCH_TOOLS.has(tool)) return true;
   if (tool === 'set_field') return step?.args?.submit === true;
   return tool === 'press_keys' && String(step?.args?.key || '') === 'Enter';
+}
+
+function savedWorkflowStepRequiresRecipientAuthorization(step, policy) {
+  if (policy?.verifyActiveRecipient !== true) return false;
+  const tool = String(step?.tool || '');
+  // Scripts, iframe clicks, drags and WebMCP dispatches cannot be bound to
+  // what they do on the page, so they stay restricted on a public composer too.
+  if (SAVED_WORKFLOW_UNBINDABLE_DISPATCH_TOOLS.has(tool)) return true;
+  // An ordinary control on a public composer (such as X's Post button)
+  // reaches no recipient, so saved workflow replay lets it through.
+  if (policy.publicComposer === true) return false;
+  return savedWorkflowStepMayDispatchMessage(step);
 }
 
 function savedWorkflowScopeUrl(scope, fallback = '') {
@@ -268,11 +287,11 @@ function savedWorkflowProtectedMessagingStepIndex(workflow, startUrl = '') {
   for (let index = 0; index < steps.length; index++) {
     const step = steps[index];
     const scopedUrl = savedWorkflowScopeUrl(step?.scope, inferredUrl);
-    let protectedMessaging = false;
+    let policy = null;
     try {
-      protectedMessaging = getMessageRecipientGuardPolicy(scopedUrl)?.verifyActiveRecipient === true;
+      policy = getMessageRecipientGuardPolicy(scopedUrl);
     } catch {}
-    if (protectedMessaging && savedWorkflowStepMayDispatchMessage(step)) return index;
+    if (savedWorkflowStepRequiresRecipientAuthorization(step, policy)) return index;
     if (step?.tool === 'navigate' && typeof step?.args?.url === 'string') {
       inferredUrl = step.args.url;
     } else if (step?.scope?.origin) {
@@ -47079,11 +47098,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         if (this._checkAbort(tabId)) return finishStopped('stopped by the user', index);
         const step = workflow.steps[index];
         const stepUrl = await this._currentUrl(tabId);
-        let protectedMessaging = false;
+        let policy = null;
         try {
-          protectedMessaging = getMessageRecipientGuardPolicy(stepUrl)?.verifyActiveRecipient === true;
+          policy = getMessageRecipientGuardPolicy(stepUrl);
         } catch {}
-        if (protectedMessaging && savedWorkflowStepMayDispatchMessage(step)) {
+        if (savedWorkflowStepRequiresRecipientAuthorization(step, policy)) {
           return finishStopped(
             'protected messaging replay requires fresh structured recipient authorization; start a normal Act task and name the recipient',
             index,
