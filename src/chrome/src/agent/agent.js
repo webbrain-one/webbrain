@@ -73,7 +73,7 @@ import { analyzeMastodonPage, isMastodonPageUrl, mastodonHandoffInstruction, mas
 import { PROGRESS_ACTIONS, isProgressActionAllowed, isProgressIntentActive, normalizeProgressAction, normalizeProgressIntent } from './progress-intent.js';
 import { classifyCompletionForm, completionDoneBlock, completionPlainFinalBlock, completionPlainFinalPartial, consumeCompletionObservation, consumeCompletionObservationResult, createCompletionInvariantState, didCompletionActionExecute, hasUnconsumedCompletionObservation, hasUnconsumedCompletionObservationResult, isCompletionActionTool, publicationDetailResource, publicationReplyParent, publicationResourceRecordRoot, recordCompletionToolResult } from './completion-invariant.js';
 import { cdpClient, isCdpCommandNotSentError } from '../cdp/cdp-client.js';
-import { findLastGmailResultPage, getActiveAdapter, getAdapterWorkflowRouting, getCarouselNavigationPolicy, getCarouselNavigationTarget, getFullPageCapturePolicy, getGmailResultCountPolicy, getGmailResultPageUrl, getMessageRecipientGuardPolicy, isGmailChatRoute, isPublicComposerRoute, parseCarouselSlideCount, parseGmailPaginationRange, resolveAdapterWorkflowJob, UNIVERSAL_PREAMBLE } from './adapters.js';
+import { findLastGmailResultPage, getActiveAdapter, getAdapterWorkflowRouting, getCarouselNavigationPolicy, getCarouselNavigationTarget, getFullPageCapturePolicy, getGmailResultCountPolicy, getGmailResultPageUrl, getMessageRecipientGuardPolicy, isGmailChatRoute, parseCarouselSlideCount, parseGmailPaginationRange, resolveAdapterWorkflowJob, UNIVERSAL_PREAMBLE } from './adapters.js';
 import { formatAdapterWorkflowExecutionPolicy } from './adapter-workflow.js';
 import {
   invalidateWorkflowInventoryCompleteness,
@@ -26846,7 +26846,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const reading = this._socialPublicationPrefetchReading ||= new Map();
     const unread = kind => list.filter(caption => this._pageTextReading(kind, caption) === null);
     let guarded = false;
-    try { guarded = getMessageRecipientGuardPolicy(pageUrl)?.verifyActiveRecipient === true; } catch {}
+    try { guarded = this._recipientGuardChecksControls(getMessageRecipientGuardPolicy(pageUrl)); } catch {}
     const unreadEffects = unread('control_effect');
     const unreadControls = guarded ? unread('message_control') : [];
     const joined = [...new Set([...unreadEffects.map(caption => reading.get('control_effect\u0000' + caption)),
@@ -31218,7 +31218,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     // On a page whose sends the recipient guard checks, the same names are
     // read for that guard too.
     let guarded = false;
-    try { guarded = getMessageRecipientGuardPolicy(url)?.verifyActiveRecipient === true; } catch {}
+    try { guarded = this._recipientGuardChecksControls(getMessageRecipientGuardPolicy(url)); } catch {}
     const unreadMessaging = guarded
       ? captions.filter(caption => this._pageTextReading('message_control', caption) === null).slice(0, 48) : [];
     if (unreadMessaging.length) {
@@ -33042,13 +33042,19 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       guard?.approvedRecipients || [], guard?.messagingConversationScope || '']);
   }
 
+  // Whether the recipient guard checks an ordinary control (a click, Enter, a
+  // field submit or an upload) on a page with this policy. A public
+  // composer's controls reach no recipient, unless the call has already
+  // bound a send to one.
+  _recipientGuardChecksControls(policy, executionContext = null) {
+    return policy?.verifyActiveRecipient === true
+      && (policy.publicComposer !== true || executionContext?.messageRecipientGuardRequired === true);
+  }
+
   async _recipientBoundUploadContext(tabId, args, executionContext = {}, onUpdate = null) {
     let pageUrl = '';
     try { pageUrl = await this._currentUrl(tabId); } catch {}
-    const publicComposer = executionContext.messageRecipientGuardRequired !== true
-      && isPublicComposerRoute(pageUrl);
-    const protectedPage = !publicComposer
-      && getMessageRecipientGuardPolicy(pageUrl)?.verifyActiveRecipient === true;
+    const protectedPage = this._recipientGuardChecksControls(getMessageRecipientGuardPolicy(pageUrl), executionContext);
     if (!protectedPage && executionContext.messageRecipientGuardRequired !== true) return { protected: false };
     const context = { ...executionContext };
     const sourceKey = messageRecipientUploadSourceKey(args);
@@ -33367,9 +33373,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       resolvedPageUrl = resolvedPageUrl || await this._currentUrl(tabId);
       policy = getMessageRecipientGuardPolicy(resolvedPageUrl);
     } catch {}
-    if (name === 'upload_file' && executionContext?.messageRecipientGuardRequired !== true
-        && isPublicComposerRoute(resolvedPageUrl)) return null;
     if (!policy?.verifyActiveRecipient) return null;
+    // A script, frame click or drag stays checked on a public composer too:
+    // nothing binds what it does on the page.
+    if (ordinaryGuardedTools.has(name) && !this._recipientGuardChecksControls(policy, executionContext)) return null;
 
     if (name === 'press_keys') {
       const repeatRaw = Number(args?.repeat ?? 1);

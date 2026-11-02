@@ -16282,8 +16282,10 @@ const ADAPTERS = [
     matches: (url) => /^https?:\/\/(www\.)?(twitter\.com|x\.com)\//.test(url),
     messaging: {
       verifyActiveRecipient: url => /^\/i\/chat\/[^/]+\/?$/.test(new URL(url).pathname),
-      // A public post has no recipient to bind, so this route is not a messaging surface.
-      publicComposer: url => /^\/compose\/(?:post|tweet)\/?$/.test(new URL(url).pathname),
+      // Posts, articles and their drafts are published, never sent to anyone,
+      // so these routes bind no recipient. Direct messages live under /i/chat
+      // and /messages.
+      publicComposer: url => /^\/compose\/(?:post|tweet|articles?)(?:\/|$)/.test(new URL(url).pathname),
     },
     fullPageCapture: { infiniteScroll: isTwitterInfiniteScrollUrl },
     notes: `
@@ -18274,15 +18276,26 @@ const GENERIC_MESSAGING_MAIL_LIKE_RE = new RegExp(
   'i',
 );
 
+// The adapter's own word that a route is a public composer: what is written
+// there is published, never sent to a recipient (X's /compose/post).
+function declaresPublicComposer(adapter, url) {
+  try {
+    return adapter?.messaging?.publicComposer?.(url) === true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * True for a public composer whose adapter declares that it has no recipient
- * to bind (for example X /compose/post). The route carries no recipient at
- * all, so no tool on it binds one: getMessageRecipientGuardPolicy returns no
- * policy there, and the publication guards gate what is published.
+ * to bind (for example X /compose/post). getMessageRecipientGuardPolicy marks
+ * such a route `publicComposer`: the guard lets its ordinary controls through
+ * and still checks a script, frame click or drag, and a send already bound to
+ * a recipient.
  */
 export function isPublicComposerRoute(url) {
   try {
-    return getActiveAdapter(url)?.messaging?.publicComposer?.(url) === true;
+    return declaresPublicComposer(getActiveAdapter(url), url);
   } catch {
     return false;
   }
@@ -18319,15 +18332,6 @@ export function getMessageRecipientGuardPolicy(url) {
     enabled = false;
   }
   if (!enabled) {
-    // An adapter that declares this route a public composer has already
-    // classified it, so the generic path heuristic below must not reclaim it.
-    // X's /compose/post matches that heuristic's own /compose/ rule, which
-    // reads a public post composer as a mail-like recipient surface. The Post
-    // control sits beside the composer, so the probe's geometry rule called it
-    // a message send, a public composer offers no recipient identity to read,
-    // and every Post click was refused as recipient_identity_unavailable: a
-    // hard refusal no approval can clear.
-    if (isPublicComposerRoute(url)) return null;
     let mailLike = false;
     let chatLike = false;
     try {
@@ -18341,6 +18345,12 @@ export function getMessageRecipientGuardPolicy(url) {
       adapterName: 'generic-messaging',
       verifyActiveRecipient: true,
       ...(mailLike ? { supportsRecipientSets: true } : {}),
+      // A route its adapter declares a public composer (X's /compose/post)
+      // still matches the /compose/ rule above. Its posts reach no recipient,
+      // so the guard checks none of its ordinary controls: only what it cannot
+      // bind to the page (scripts, frame clicks, drags), and a send the call
+      // has already bound to a recipient.
+      ...(declaresPublicComposer(adapter, url) ? { publicComposer: true } : {}),
     };
   }
   const recipientSets = adapter.messaging.supportsRecipientSets;
