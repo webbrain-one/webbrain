@@ -70,6 +70,7 @@
   "hero.mockup.result_more": "...et 21 autres",
   "hero.mockup.input_placeholder": "Posez une question sur cette page...",
   "hero.mockup.scene_nav_aria": "Changer de scénario de démo",
+  "hero.mockup.scene_nav_label": "Voir :",
   "hero.mockup.scene_prev_aria": "Scénario de démo précédent",
   "hero.mockup.scene_next_aria": "Scénario de démo suivant",
   "hero.mockup.scene_label.products": "Démo d'extraction de produits",
