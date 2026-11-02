@@ -539,7 +539,7 @@
     <div class="research-lede">
       <p>A browser agent shouldn’t need a datacenter. We build small, specialized models that run where the page is, shrink strong ones until they fit, and test every model we can find on the same frozen browser tasks.</p>
       <p>Everything here is open: the weights and datasets on Hugging Face, the OpenBonsai pipeline, and the benchmark results, failures included.</p>
-      <p class="research-totals"><span><b>32</b> open models and datasets</span><span><b>5.2k</b> downloads</span><span><b>143</b> likes</span><span class="research-asof">on <a href="https://huggingface.co/webbrain-one" target="_blank" rel="noopener">Hugging Face</a>, October 30, 2026</span></p>
+      <p class="research-totals"><span><b>30</b> open models and datasets</span><span><b>6.1k</b> downloads</span><span><b>138</b> likes</span><span class="research-asof">on <a href="https://huggingface.co/webbrain-one" target="_blank" rel="noopener">Hugging Face</a>, November 2, 2026</span></p>
     </div>
   </section>
 
@@ -555,7 +555,7 @@
     <a class="tile tile-l" href="/research/compass-vld/">
       <span class="tile-kind">On-device model</span>
       <h2>Compass VLD</h2>
-      <p>One small model that sees the screenshot, reads the request and decides: vision, language and decision together, so the browser needs no separate captioner, planner and judge.</p>
+      <p>One 2B model that sees the screenshot, reads the request and decides. Compass VLD v6 puts vision, language and decisions in a single checkpoint that runs in the browser.</p>
       <div class="viz viz-vld" aria-hidden="true">
       <span class="vv-shot"><i></i><i></i><i></i><b></b></span>
       <span class="vv-plus">+</span>
@@ -563,7 +563,7 @@
       <span class="vv-arrow"></span>
       <span class="vv-out">click(412, 286)</span>
     </div>
-      <span class="tile-stats"><span class="tile-stat"><b>120/126</b><span>page-state decisions, zero false completions</span></span><span class="tile-stat"><b>0.94 s</b><span>per decision, in the browser</span></span></span>
+      <span class="tile-stats"><span class="tile-stat"><b>66/100</b><span>strict browser-vision passes, best of the small models tested</span></span><span class="tile-stat"><b>122/126</b><span>page-state decisions, zero false completions</span></span></span>
       <span class="tile-more">Read the introduction</span>
     </a>
     <a class="tile tile-m" href="/research/compass/">
