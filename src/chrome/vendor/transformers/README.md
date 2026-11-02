@@ -4,7 +4,9 @@ This directory packages the JavaScript and WASM runtime used by two local
 WebGPU paths in Chrome and by offline RAG's CPU/WASM semantic reranker:
 
 - **Apocalypse Mode / Settings -> local WebGPU chat** offers Compass VLD
-  Tiny v5 (`webbrain-one/webbrain-compass-vld-tiny-v5-onnx`, ~2.2 GB, the
+  v6 2B (`webbrain-one/webbrain-compass-vld-v6-2b-onnx`, ~2.4 GB, the
+  default), Compass VLD Tiny v5
+  (`webbrain-one/webbrain-compass-vld-tiny-v5-onnx`, ~2.2 GB, the previous
   default), Compass Tiny v2.1 (`webbrain-one/webbrain-compass-tiny-v2.1`,
   ~1.87 GB) and Ternary Bonsai 2 2B / 4B in text and vision variants, used by
   the standalone-chat nuclear control and selectable as a normal chat provider. The underlying runtime also supports
@@ -19,7 +21,7 @@ WebGPU paths in Chrome and by offline RAG's CPU/WASM semantic reranker:
 
 Model weights are not bundled. Explicit download controls fetch the selected
 WebGPU model and store it in the browser cache; inference only uses cached
-models. The default preset is Compass VLD Tiny v5 (~2.2 GB), with underlying runtime support for LFM2.5
+models. The default preset is Compass VLD v6 2B (~2.4 GB), with underlying runtime support for LFM2.5
 (2.6B, 1.2B Instruct, 1.2B Thinking, VL 1.6B, VL 3B) and Nanbeige4.2-3B.
 The selected preset is available through the nuclear control in standalone chat
 and can also be configured, downloaded, and selected directly in Settings ->
@@ -49,6 +51,18 @@ bound each pass at the cost of roughly one extra decoder run per slice. Greedy
 answers match the single-pass path. `chrome.storage.local` key
 `webgpuPrefillSliceTokens` overrides the slice size (64–8192 tokens; `0`
 disables slicing).
+
+Compass VLD v6 2B, a fine-tune of Liquid's LFM3-VL-2B, has no Transformers.js
+model class or processor either. `src/chrome/src/offscreen/compass-vld-v6-runtime.js`
+creates its two graphs (`vision_encoder` FP16 over pre-cut 16x16 patches, and a
+Q8 `decoder` that embeds the tokens, writes the image features into the image
+rows and keeps a conv state or a KV cache per layer) with the same
+`ort.webgpu.mjs`, and ports Lfm3VlImageProcessor (smart resize to multiples of
+32, the same Pillow-compatible bicubic resampling, the patch order). Its
+decoder uses `GatherBlockQuantized` with the `bits` attribute, which this
+ONNX Runtime Web build (1.27.0) loads. The chat template's `{% generation %}`
+markers, unknown to Transformers.js's Jinja, are rewritten to an equivalent
+always-true `if` before rendering.
 
 Compass VLD Tiny v5, a fine-tune of MiniCPM-V-4.7-1B, has no Transformers.js
 model class or processor. `src/chrome/src/offscreen/compass-vld-runtime.js`
@@ -193,7 +207,7 @@ ProviderManager._createProvider('webgpu') / getVisionProvider()
   -> MV3 offscreen document
   -> dedicated module Worker
   -> text-generation pipeline / AutoProcessor + AutoModelForImageTextToText
-  -> selected preset (Compass VLD Tiny v5 through its own ONNX Runtime sessions,
+  -> selected preset (Compass VLD v6 2B or Tiny v5 through their own ONNX Runtime sessions,
      Compass Tiny v2.1 or a custom ONNX repo) / local vision sidecar over WebGPU
 ```
 

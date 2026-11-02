@@ -7,13 +7,16 @@
  * ask this on hot paths (each completion check, each screenshot route), so it
  * stays one cache lookup and never starts the offscreen document to find out.
  */
-import { WEBGPU_BONSAI2_VL_2B_MODEL_ID, WEBGPU_COMPASS_VLD_TINY_V5_MODEL_ID, webgpuModelDtype } from './webgpu.js';
+import {
+  WEBGPU_BONSAI2_VL_2B_MODEL_ID, WEBGPU_COMPASS_VLD_MODEL_IDS, WEBGPU_COMPASS_VLD_V6_MODEL_ID, webgpuModelDtype,
+} from './webgpu.js';
 
 const TRANSFORMERS_CACHE_NAME = 'transformers-cache';
 
-// Compass VLD Tiny v5 chats, sees and answers decisions on the device, so the
-// Auto decision and vision settings follow whether it is downloaded.
-export const WEBGPU_LOCAL_ASSIST_MODEL_ID = WEBGPU_COMPASS_VLD_TINY_V5_MODEL_ID;
+// Compass VLD chats, sees and answers decisions on the device, so the Auto
+// decision and vision settings follow whether it is downloaded: v6 2B, or
+// Tiny v5 where only that is (readyCompassVldModel).
+export const WEBGPU_LOCAL_ASSIST_MODEL_ID = WEBGPU_COMPASS_VLD_V6_MODEL_ID;
 
 // Mirrors textDtypeKey()/textModelKey() in offscreen/inference-worker.js.
 function textDtypeKey(dtype) {
@@ -44,8 +47,16 @@ export async function hasWebgpuTextModelCache(modelId, dtype) {
   }
 }
 
+/** The newest downloaded Compass VLD (v6 2B, then Tiny v5), or null when neither is. */
+export async function readyCompassVldModel() {
+  for (const modelId of WEBGPU_COMPASS_VLD_MODEL_IDS) {
+    if (await hasWebgpuTextModelCache(modelId) === true) return modelId;
+  }
+  return null;
+}
+
 export async function isLocalAssistModelReady() {
-  return await hasWebgpuTextModelCache(WEBGPU_LOCAL_ASSIST_MODEL_ID) === true;
+  return await readyCompassVldModel() !== null;
 }
 
 /** Whether Ternary Bonsai 2 2B Vision, the earlier screenshot-reading preset, is downloaded. */
@@ -53,11 +64,14 @@ export async function isBonsaiVisionModelReady() {
   return await hasWebgpuTextModelCache(WEBGPU_BONSAI2_VL_2B_MODEL_ID) === true;
 }
 
-/** Which chat presets that read screenshots are downloaded, for the vision choice. */
+/**
+ * Which chat presets that read screenshots are downloaded, for the vision
+ * choice; `compassVldModel` is the Compass VLD build that reads them.
+ */
 export async function webgpuChatVisionReadiness() {
-  const [compassVldReady, bonsaiReady] = await Promise.all([
-    isLocalAssistModelReady().catch(() => false),
+  const [compassVldModel, bonsaiReady] = await Promise.all([
+    readyCompassVldModel().catch(() => null),
     isBonsaiVisionModelReady().catch(() => false),
   ]);
-  return { compassVldReady, bonsaiReady };
+  return { compassVldReady: compassVldModel !== null, compassVldModel, bonsaiReady };
 }

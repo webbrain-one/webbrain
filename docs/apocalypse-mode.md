@@ -13,26 +13,31 @@ Open the **☢ Apocalypse Mode** link beside **Support** in the Settings header 
 opt in.
 
 On supported Chromium browsers, local vision is optional and has three
-in-browser models: Compass VLD Tiny v5, Ternary Bonsai 2 2B Vision and
+in-browser models: Compass VLD (v6 2B, or Tiny v5 where it is the only one
+downloaded), Ternary Bonsai 2 2B Vision and
 WebBrain VL 2 450M. The **Vision Model** card here and **Providers → Vision**
 share one choice: **Auto** (the default), one of the models, or **Off**. Auto
-uses Compass VLD Tiny v5 once it is downloaded (Ternary Bonsai 2 2B Vision when
-only that one is) and is off until then. When the selected Text Model reads
-images itself (Compass VLD Tiny v5 or Ternary Bonsai 2 2B Vision), the card
+uses Compass VLD once v6 2B or Tiny v5 is downloaded (v6 2B when both are;
+Ternary Bonsai 2 2B Vision when only that one is) and is off until then. When
+the selected Text Model reads images itself (Compass VLD v6 2B, Compass VLD
+Tiny v5 or Ternary Bonsai 2 2B Vision), the card
 says so: there is nothing more to download. Apocalypse Mode
 never enables or downloads a vision model of its own: enabling it downloads
-the selected Text Model, and once that is Compass VLD Tiny v5, Auto also uses
-it to read screenshots and answer decisions. Otherwise a Compass VLD Tiny v5 or Bonsai download is
+the selected Text Model, and once that is a Compass VLD build, Auto also uses
+it to read screenshots and answer decisions. Otherwise a Compass VLD or Bonsai download is
 the chat preset's own transfer and starts only from a click on **Download**
 (here or on the Providers page). WebBrain VL 2 450M first needs the explicit consent step in
 Providers → Vision, which checks WebGPU support, records consent and
 starts caching the approximately 810 MB model from Hugging Face. Downloads
 continue in the background, but screenshot operations report their status and
 never wait for them. Wikipedia archives still require their own confirmation.
-The default local **text** model is Compass VLD Tiny v5
-(`webbrain-one/webbrain-compass-vld-tiny-v5-onnx`, about 2.2 GB, 32k context
+The default local **text** model is Compass VLD v6 2B
+(`webbrain-one/webbrain-compass-vld-v6-2b-onnx`, about 2.4 GB, 32k context
 window): one model that chats and calls tools, reads screenshots and answers
-WebBrain's decision questions. The picker also offers Compass Tiny v2.1
+WebBrain's decision questions. The picker lists it first, checked by default,
+then the previous default, Compass VLD Tiny v5
+(`webbrain-one/webbrain-compass-vld-tiny-v5-onnx`, about 2.2 GB, also reads
+screenshots and answers decisions), Compass Tiny v2.1
 (`webbrain-one/webbrain-compass-tiny-v2.1`, about 1.87 GB, text only) and
 Ternary Bonsai 2 2B Vision. The other
 Bonsai 2 presets ship but are hidden from the pickers for now. The selected model's download starts automatically when Apocalypse
