@@ -6,6 +6,9 @@ This changelog was generated from the repository Git history and release tags. V
 
 ## [Unreleased]
 
+### Fixed
+- Asking WebBrain to post on X no longer stops at the Post button. On `x.com/compose/post` that button sits beside the composer, so the recipient guard's probe read it as a message send, and a public post names no recipient, so the guard refused the click as `recipient_identity_unavailable`, which no approval can clear. The X adapter already marked that route as a public composer that binds no recipient, but only `upload_file` honored the mark. Every tool honors it now, and the route is no longer read as a mail-like recipient surface. X direct messages (`/i/chat/<id>` and `/messages/...`) keep the guard, and what a post contains is still checked by the publication contract and audit. Both builds.
+
 ## [45.0.4] - 2026-10-30
 
 ### Fixed

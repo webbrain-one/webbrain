@@ -1753,3 +1753,35 @@ test('Chrome and Firefox share the contract runtime and composer extraction', as
   assert.equal(chromeInvariant.publicationReplyParent.toString()===firefoxInvariant.publicationReplyParent.toString(),true,'published reply parent parity');
   assert.equal(chromeInvariant.publicationDetailResource.toString()===firefoxInvariant.publicationDetailResource.toString(),true,'published detail resource parity');
 });
+
+// X's /compose/post and /compose/tweet carry a public post composer and no
+// recipient. The generic messaging fallback used to claim them on its own
+// /compose/ path rule, and because a public composer shows no recipient
+// identity to read, every Post click came back
+// recipient_identity_unavailable: a hard refusal no approval can clear. The
+// publication contract and audit remain the authority on what gets published.
+test('a public X post is not a message send, so the recipient guard lets it through', async () => {
+  const sends=[['click',{selector:'[data-testid="tweetButton"]'}],['click_ax',{ref_id:'r1'}],['press_keys',{key:'Enter'}],
+    ['set_field',{selector:'#editor',value:'Hello',submit:true}],['drag_at',{x:4,y:8}],['execute_js',{code:'1'}]];
+  for(const build of ['chrome','firefox']){
+    const {Agent}=await import(`../src/${build}/src/agent/agent.js`);
+    const {getMessageRecipientGuardPolicy,isPublicComposerRoute}=await import(`../src/${build}/src/agent/adapters.js`);
+    for(const route of ['https://x.com/compose/post','https://x.com/compose/tweet','https://twitter.com/compose/post']){
+      assert.equal(isPublicComposerRoute(route),true,`${build}: ${route} is a public composer`);
+      assert.equal(getMessageRecipientGuardPolicy(route),null,`${build}: ${route} binds no recipient`);
+      for(const [tool,args] of sends){
+        assert.equal(await new Agent({})._messageRecipientGuardBlock(9101,tool,args,route),null,
+          `${build}: ${tool} on ${route} must publish, not stall on a recipient`);
+      }
+    }
+    // The DM routes keep the guard, and keep failing closed without evidence.
+    for(const route of ['https://x.com/i/chat/123','https://x.com/messages/compose']){
+      assert.equal(isPublicComposerRoute(route),false,`${build}: ${route} is never a public composer`);
+      assert.equal(getMessageRecipientGuardPolicy(route)?.verifyActiveRecipient,true,`${build}: ${route} stays protected`);
+      for(const [tool,args] of sends){
+        const block=await new Agent({})._messageRecipientGuardBlock(9102,tool,args,route);
+        assert.equal(block?.noDispatch,true,`${build}: ${tool} on ${route} must stay recipient-bound`);
+      }
+    }
+  }
+});
