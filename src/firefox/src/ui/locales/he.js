@@ -509,7 +509,7 @@ export default {
   "sp.permissions.gate_off": "כבוי: WebBrain פועל בכל אתר בלי לשאול.",
   "sp.permissions.manage": "ניהול הרשאות אתרים",
   "sp.permissions.enabled": "בקשות ההרשאה הופעלו שוב.",
-  "sp.help.shortcuts_html": "<strong>קיצורי מקלדת</strong><br><code>Ctrl/Cmd+/</code> — מקד את שדה הקלט<br><code>Ctrl/Cmd+Shift+A</code> — עבור למצב שאל<br><code>Ctrl/Cmd+Shift+X</code> — עבור למצב פעולה<br><code>Ctrl/Cmd+Shift+D</code> — עבור למצב Dev<br><code>Ctrl/Cmd+M</code> — הפעל או השבת קלט קולי",
+  "sp.help.shortcuts_html": "<strong>קיצורי מקלדת</strong><br><code>Ctrl/Cmd+/</code> — מקד את שדה הקלט<br><code>Ctrl/Cmd+Shift+A</code> — עבור למצב שאל<br><code>Ctrl/Cmd+Shift+X</code> — עבור למצב פעולה<br><code>Ctrl/Cmd+Shift+D</code> — עבור למצב Dev<br><code>Escape</code> — עצירת ההרצה הפעילה<br><code>1</code>–<code>9</code> — בחירת התשובה שמספרה זה",
   "sp.slash.record_transcribe": "הקלט ושמור תמלול Whisper לאחר העצירה",
   "sp.slash.unknown_command": "פקודת לוכסן לא מוכרת {command}. השתמשו ב-/help כדי לראות את הפקודות הזמינות.",
   "sp.slash.invalid_usage": "תחביר פקודת לוכסן לא תקין. שימוש: {usage}",

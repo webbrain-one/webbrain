@@ -652,7 +652,7 @@ export default {
   "sp.perm.verb.download": "скачивать файлы с",
   "sp.perm.verb.upload": "загрузить файл на",
   "sp.perm.verb.record": "записывать вкладку (и микрофон) на",
-  "sp.help.shortcuts_html": "<strong>Горячие клавиши</strong><br><code>Ctrl/Cmd+/</code> — Переключить фокус на ввод<br><code>Ctrl/Cmd+Shift+A</code> — Переключиться в режим «Вопрос»<br><code>Ctrl/Cmd+Shift+X</code> — Переключиться в режим «Действие»<br><code>Ctrl/Cmd+Shift+D</code> — Переключиться в режим «Разработка»<br><code>Ctrl/Cmd+M</code> — Переключить голосовой ввод",
+  "sp.help.shortcuts_html": "<strong>Горячие клавиши</strong><br><code>Ctrl/Cmd+/</code> — Переключить фокус на ввод<br><code>Ctrl/Cmd+Shift+A</code> — Переключиться в режим «Вопрос»<br><code>Ctrl/Cmd+Shift+X</code> — Переключиться в режим «Действие»<br><code>Ctrl/Cmd+Shift+D</code> — Переключиться в режим «Разработка»<br><code>Escape</code> — Остановить активный запуск<br><code>1</code>–<code>9</code> — Выбрать ответ с этим номером",
   "sp.slash.record_transcribe": "Записать и сохранить расшифровку Whisper после остановки",
   "sp.slash.unknown_command": "Неизвестная slash-команда {command}. Используйте /help, чтобы увидеть доступные команды.",
   "sp.slash.invalid_usage": "Неверный синтаксис slash-команды. Использование: {usage}",

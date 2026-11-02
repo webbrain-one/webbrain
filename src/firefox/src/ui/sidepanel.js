@@ -6720,7 +6720,14 @@ function rebindClarifyCards() {
     card.querySelectorAll('.permission-education-action').forEach(bindPermissionEducationAction);
     card.querySelectorAll('.clarify-skip-permissions').forEach(btn => bindPermissionSkipButton(btn, card, tabId, clarifyId));
 
+    // Number the answers again: a card whose HTML was saved before the numbers
+    // existed gets them now, so every live card answers to its digits.
+    let shortcut = 0;
     card.querySelectorAll('.clarify-option').forEach(btn => {
+      if (++shortcut <= 9) {
+        btn.dataset.shortcut = String(shortcut);
+        btn.setAttribute('aria-keyshortcuts', String(shortcut));
+      }
       if (btn.dataset.bound) return;
       btn.dataset.bound = 'true';
       btn.addEventListener('click', () => {
@@ -11480,6 +11487,21 @@ function renderClarifyCard(data) {
     card.dataset.deadlineTs = String(Math.floor(deadlineTs));
   }
 
+  // Every answer carries its own number, shown in a small square at the right
+  // edge of the button, and typing that digit answers the card
+  // (handleClarifyShortcutKeydown). The number lives in a data attribute the
+  // CSS draws rather than in the button's text, because a card restored from
+  // saved chat HTML sends that text back as the answer. Inlined, like the text
+  // repair above, so function-extraction test harnesses keep working.
+  const numberClarifyOptions = (optionsEl) => {
+    let shortcut = 0;
+    for (const button of optionsEl.querySelectorAll('.clarify-option')) {
+      if (++shortcut > 9) break;
+      button.dataset.shortcut = String(shortcut);
+      button.setAttribute('aria-keyshortcuts', String(shortcut));
+    }
+  };
+
   const qEl = document.createElement('div');
   qEl.className = 'clarify-question';
   if (data.pendingReconciliation === true) qEl.style.whiteSpace = 'pre-wrap';
@@ -11523,6 +11545,7 @@ function renderClarifyCard(data) {
     deny.dataset.value = 'deny';
     deny.addEventListener('click', () => submitClarify(card, tabId, clarifyId, 'deny', 'option'));
     optionsEl.appendChild(deny);
+    numberClarifyOptions(optionsEl);
     card.appendChild(optionsEl);
     content.appendChild(card);
     scrollToBottom({ force: true });
@@ -11566,6 +11589,7 @@ function renderClarifyCard(data) {
       b.addEventListener('click', () => submitClarify(card, tabId, clarifyId, value, 'option'));
       optionsEl.appendChild(b);
     }
+    numberClarifyOptions(optionsEl);
     card.appendChild(optionsEl);
     content.appendChild(card);
     scrollToBottom({ force: true });
@@ -11626,6 +11650,7 @@ function renderClarifyCard(data) {
       });
       optionsEl.appendChild(b);
     }
+    numberClarifyOptions(optionsEl);
     card.appendChild(optionsEl);
     content.appendChild(card);
     scrollToBottom({ force: true });
@@ -11676,6 +11701,7 @@ function renderClarifyCard(data) {
       });
       optionsEl.appendChild(b);
     }
+    numberClarifyOptions(optionsEl);
     card.appendChild(optionsEl);
     content.appendChild(card);
     scrollToBottom({ force: true });
@@ -11714,6 +11740,7 @@ function renderClarifyCard(data) {
       });
       optionsEl.appendChild(b);
     }
+    numberClarifyOptions(optionsEl);
     card.appendChild(optionsEl);
     content.appendChild(card);
     scrollToBottom({ force: true });
@@ -11752,6 +11779,7 @@ function renderClarifyCard(data) {
       });
       optionsEl.appendChild(b);
     }
+    numberClarifyOptions(optionsEl);
     card.appendChild(optionsEl);
     content.appendChild(card);
     scrollToBottom({ force: true });
@@ -11803,6 +11831,7 @@ function renderClarifyCard(data) {
       });
       optionsEl.appendChild(b);
     }
+    numberClarifyOptions(optionsEl);
     card.appendChild(optionsEl);
     // The agent's timer decides; this countdown shows it and backs it up.
     const stepTimeoutAnswer = ['once', 'deny'].includes(data.timeoutAnswer) ? data.timeoutAnswer : '';
@@ -11901,6 +11930,7 @@ function renderClarifyCard(data) {
       bindPermissionSkipButton(skip, card, tabId, clarifyId);
       optionsEl.appendChild(skip);
     }
+    numberClarifyOptions(optionsEl);
     card.appendChild(optionsEl);
     content.appendChild(card);
     // The hint offers "Always allow", which an upload card does not have.
@@ -11937,6 +11967,7 @@ function renderClarifyCard(data) {
       b.addEventListener('click', () => submitClarify(card, tabId, clarifyId, b.textContent, 'option'));
       optionsEl.appendChild(b);
     }
+    numberClarifyOptions(optionsEl);
     card.appendChild(optionsEl);
   }
 
@@ -12603,6 +12634,45 @@ function submitClarify(card, tabId, clarifyId, answer, source) {
     });
 }
 
+
+/**
+ * The numbered answer a digit picks on the live clarify card, or null.
+ *
+ * The digit only counts where nothing else claims the keyboard: no focus, the
+ * composer, or the card itself. A field with text in it keeps the digit as
+ * text, so an answer the user is typing is never cut short; an empty field
+ * gives it up, which is what makes "1" work while the card's own input holds
+ * the caret. The lowest card is the live one — an older unanswered card sits
+ * above it, already invalidated or abandoned.
+ */
+function clarifyShortcutOption(event) {
+  if (event.defaultPrevented || event.isComposing) return null;
+  if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return null;
+  if (!/^[1-9]$/.test(event.key)) return null;
+  const cards = document.querySelectorAll('.clarify-card:not(.clarify-answered):not(.clarify-obsolete)');
+  const card = cards[cards.length - 1];
+  if (!card) return null;
+  const active = document.activeElement;
+  if (active && active !== document.body && active !== inputEl && !card.contains(active)) return null;
+  const tag = active?.tagName;
+  if (tag === 'SELECT' || active?.isContentEditable) return null;
+  if ((tag === 'INPUT' || tag === 'TEXTAREA') && String(active.value || '')) return null;
+  const option = card.querySelector(`.clarify-option[data-shortcut="${event.key}"]`);
+  return option && !option.disabled ? option : null;
+}
+
+function handleClarifyShortcutKeydown(event) {
+  const option = clarifyShortcutOption(event);
+  if (!option) return;
+  // preventDefault keeps the digit out of the composer it was typed into.
+  event.preventDefault();
+  event.stopPropagation();
+  // Click the button rather than answering here, so a permission card's own
+  // label bookkeeping and a scheduled card's tab still go through one path.
+  option.click();
+}
+
+document.addEventListener('keydown', handleClarifyShortcutKeydown, true);
 
 // ==========================================================================
 // ACTIVITY HISTORY — retained in every mode, revealed by verbose mode

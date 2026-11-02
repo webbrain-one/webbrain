@@ -532,7 +532,7 @@ export default {
   'sp.perm.verb.record': 'Tab (und Mikrofon) aufnehmen auf',
   'sp.perm.verb.schedule': 'zukünftige Aufgaben planen für',
   'sp.perm.verb.window': 'die Größe des Browserfensters ändern auf',
-  'sp.help.shortcuts_html': '<strong>Tastenkürzel</strong><br><code>Ctrl/Cmd+/</code> — Eingabefeld fokussieren<br><code>Ctrl/Cmd+Shift+A</code> — Zum Fragen-Modus wechseln<br><code>Ctrl/Cmd+Shift+X</code> — Zum Handeln-Modus wechseln<br><code>Ctrl/Cmd+Shift+D</code> — Zum Dev-Modus wechseln<br><code>Escape</code> — Aktiven Durchlauf stoppen<br><code>Escape</code> zweimal — Aktive Aufnahme stoppen',
+  'sp.help.shortcuts_html': '<strong>Tastenkürzel</strong><br><code>Ctrl/Cmd+/</code> — Eingabefeld fokussieren<br><code>Ctrl/Cmd+Shift+A</code> — Zum Fragen-Modus wechseln<br><code>Ctrl/Cmd+Shift+X</code> — Zum Handeln-Modus wechseln<br><code>Ctrl/Cmd+Shift+D</code> — Zum Dev-Modus wechseln<br><code>Escape</code> — Aktiven Durchlauf stoppen<br><code>Escape</code> zweimal — Aktive Aufnahme stoppen<br><code>1</code>–<code>9</code> — Antwort mit dieser Nummer wählen',
   'sp.compact.nothing_to_compact': 'Noch nichts zu kompaktieren — es gibt nicht genügend älteren Kontext.',
   'sp.compact.busy': 'Kompaktierung nicht möglich, während ein Durchlauf läuft — warten Sie auf dessen Abschluss.',
   'sp.compact.failed': 'Kontext-Kompaktierung fehlgeschlagen: {error}',

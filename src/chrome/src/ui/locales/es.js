@@ -679,7 +679,7 @@ export default {
   "sp.perm.verb.download": "descargar archivos de",
   "sp.perm.verb.upload": "subir un archivo a",
   "sp.perm.verb.record": "grabar la pestaña (y el micrófono) en",
-  "sp.help.shortcuts_html": "<strong>Atajos de teclado</strong><br><code>Ctrl/Cmd+/</code> — Enfocar la entrada<br><code>Ctrl/Cmd+Shift+A</code> — Cambiar al modo Preguntar<br><code>Ctrl/Cmd+Shift+X</code> — Cambiar al modo Actuar<br><code>Ctrl/Cmd+Shift+D</code> — Cambiar al modo Desarrollo<br><code>Ctrl/Cmd+M</code> — Alternar entrada de voz",
+  "sp.help.shortcuts_html": "<strong>Atajos de teclado</strong><br><code>Ctrl/Cmd+/</code> — Enfocar la entrada<br><code>Ctrl/Cmd+Shift+A</code> — Cambiar al modo Preguntar<br><code>Ctrl/Cmd+Shift+X</code> — Cambiar al modo Actuar<br><code>Ctrl/Cmd+Shift+D</code> — Cambiar al modo Desarrollo<br><code>Escape</code> — Detener la ejecución activa<br><code>Escape</code> dos veces — Detener una grabación activa<br><code>1</code>–<code>9</code> — Elegir la respuesta con ese número",
   "sp.slash.record_transcribe": "Grabar y guardar una transcripción de Whisper al detener",
   "sp.slash.unknown_command": "Comando de barra desconocido {command}. Usa /help para ver los comandos disponibles.",
   "sp.slash.invalid_usage": "Sintaxis de comando de barra no válida. Uso: {usage}",

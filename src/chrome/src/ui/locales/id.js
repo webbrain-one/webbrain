@@ -679,7 +679,7 @@ export default {
   "sp.perm.verb.download": "mengunduh berkas dari",
   "sp.perm.verb.upload": "mengunggah berkas ke",
   "sp.perm.verb.record": "merekam tab (dan mikrofon) pada",
-  "sp.help.shortcuts_html": "<strong>Pintasan Keyboard</strong><br><code>Ctrl/Cmd+/</code> — Fokus ke input<br><code>Ctrl/Cmd+Shift+A</code> — Beralih ke mode Tanya<br><code>Ctrl/Cmd+Shift+X</code> — Beralih ke mode Aksi<br><code>Ctrl/Cmd+Shift+D</code> — Beralih ke mode Dev<br><code>Ctrl/Cmd+M</code> — Alihkan input suara",
+  "sp.help.shortcuts_html": "<strong>Pintasan Keyboard</strong><br><code>Ctrl/Cmd+/</code> — Fokus ke input<br><code>Ctrl/Cmd+Shift+A</code> — Beralih ke mode Tanya<br><code>Ctrl/Cmd+Shift+X</code> — Beralih ke mode Aksi<br><code>Ctrl/Cmd+Shift+D</code> — Beralih ke mode Dev<br><code>Escape</code> — Hentikan proses yang berjalan<br><code>Escape</code> dua kali — Hentikan perekaman yang berjalan<br><code>1</code>–<code>9</code> — Pilih jawaban bernomor itu",
   "sp.slash.record_transcribe": "Rekam dan simpan transkrip Whisper setelah berhenti",
   "sp.slash.unknown_command": "Perintah garis miring tidak dikenal {command}. Gunakan /help untuk melihat perintah yang tersedia.",
   "sp.slash.invalid_usage": "Sintaks perintah garis miring tidak valid. Penggunaan: {usage}",
