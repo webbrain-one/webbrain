@@ -1754,34 +1754,174 @@ test('Chrome and Firefox share the contract runtime and composer extraction', as
   assert.equal(chromeInvariant.publicationDetailResource.toString()===firefoxInvariant.publicationDetailResource.toString(),true,'published detail resource parity');
 });
 
-// X's /compose/post and /compose/tweet carry a public post composer and no
-// recipient. The generic messaging fallback used to claim them on its own
-// /compose/ path rule, and because a public composer shows no recipient
-// identity to read, every Post click came back
-// recipient_identity_unavailable: a hard refusal no approval can clear. The
-// publication contract and audit remain the authority on what gets published.
+// X's compose routes publish to no one, yet they match the generic messaging
+// fallback's /compose/ rule. Looking for a recipient there finds none and
+// refuses the Post click as recipient_identity_unavailable, which no
+// approval can clear, so the guard must let ordinary controls through. What
+// it cannot bind (a script, a frame click, a drag) and a send already bound
+// to a recipient are still checked, and the DM routes are checked in full.
 test('a public X post is not a message send, so the recipient guard lets it through', async () => {
-  const sends=[['click',{selector:'[data-testid="tweetButton"]'}],['click_ax',{ref_id:'r1'}],['press_keys',{key:'Enter'}],
-    ['set_field',{selector:'#editor',value:'Hello',submit:true}],['drag_at',{x:4,y:8}],['execute_js',{code:'1'}]];
+  // What the page shows a probe at X's Post control: a send beside the
+  // composer, and no recipient identity anywhere.
+  const sendWithoutRecipient={success:true,conclusive:true,messageSend:true,identityCandidates:[],messageBody:'Hello',messageBodyBaselineCount:0};
+  const ordinary=[['click',{selector:'[data-testid="tweetButton"]'}],['click_ax',{ref_id:'r1'}],['press_keys',{key:'Enter'}],
+    ['set_field',{selector:'#editor',value:'Hello',submit:true}],['upload_file',{selector:'input[data-testid="fileInput"]',attachmentId:'a1'}]];
+  const unbindable=[['execute_js',{code:'1'}],['iframe_click',{selector:'#frame'}],['drag_at',{x:4,y:8}],['execute_webmcp_tool',{name:'post'}]];
   for(const build of ['chrome','firefox']){
     const {Agent}=await import(`../src/${build}/src/agent/agent.js`);
     const {getMessageRecipientGuardPolicy,isPublicComposerRoute}=await import(`../src/${build}/src/agent/adapters.js`);
-    for(const route of ['https://x.com/compose/post','https://x.com/compose/tweet','https://twitter.com/compose/post']){
+    const guarded=()=>{
+      const agent=new Agent({});
+      agent.probes=0;
+      agent._messageRecipientGuardProbe=async()=>{agent.probes+=1;return structuredClone(sendWithoutRecipient);};
+      return agent;
+    };
+    for(const route of ['https://x.com/compose/post','https://x.com/compose/tweet','https://twitter.com/compose/post',
+      'https://x.com/compose/post/unsent/drafts','https://x.com/compose/articles','https://x.com/compose/article/edit/1']){
       assert.equal(isPublicComposerRoute(route),true,`${build}: ${route} is a public composer`);
-      assert.equal(getMessageRecipientGuardPolicy(route),null,`${build}: ${route} binds no recipient`);
-      for(const [tool,args] of sends){
-        assert.equal(await new Agent({})._messageRecipientGuardBlock(9101,tool,args,route),null,
+      assert.equal(getMessageRecipientGuardPolicy(route)?.publicComposer,true,`${build}: ${route} keeps a policy, marked public`);
+      for(const [tool,args] of ordinary){
+        const agent=guarded();
+        assert.equal(await agent._messageRecipientGuardBlock(9101,tool,args,route),null,
           `${build}: ${tool} on ${route} must publish, not stall on a recipient`);
+        assert.equal(agent.probes,0,`${build}: ${tool} on ${route} has no recipient to look for`);
+      }
+      for(const [tool,args] of unbindable){
+        assert.equal((await guarded()._messageRecipientGuardBlock(9101,tool,args,route))?.reasonCode,
+          'recipient_unverifiable_dispatch_path',`${build}: ${tool} on ${route} still cannot be bound to what it does`);
+      }
+      const agent=guarded();
+      const bound=await agent._messageRecipientGuardBlock(9101,'click',{selector:'#send'},route,{messageRecipientGuardRequired:true});
+      assert.equal(bound?.reasonCode,'recipient_identity_unavailable',`${build}: a send bound to a recipient is still verified on ${route}`);
+      assert.equal(agent.probes,1,`${build}: the bound send on ${route} was probed`);
+    }
+    for(const route of ['https://x.com/i/chat/123','https://x.com/messages/compose','https://x.com/compose/postx']){
+      assert.equal(isPublicComposerRoute(route),false,`${build}: ${route} is not a public composer`);
+      assert.equal(getMessageRecipientGuardPolicy(route)?.publicComposer,undefined,`${build}: ${route} is not marked public`);
+      for(const [tool,args] of ordinary){
+        const agent=guarded();
+        assert.equal((await agent._messageRecipientGuardBlock(9102,tool,args,route))?.reasonCode,'recipient_identity_unavailable',
+          `${build}: ${tool} on ${route} must find its recipient`);
+        assert.equal(agent.probes,1,`${build}: ${tool} on ${route} was probed for its recipient`);
       }
     }
-    // The DM routes keep the guard, and keep failing closed without evidence.
-    for(const route of ['https://x.com/i/chat/123','https://x.com/messages/compose']){
-      assert.equal(isPublicComposerRoute(route),false,`${build}: ${route} is never a public composer`);
-      assert.equal(getMessageRecipientGuardPolicy(route)?.verifyActiveRecipient,true,`${build}: ${route} stays protected`);
-      for(const [tool,args] of sends){
-        const block=await new Agent({})._messageRecipientGuardBlock(9102,tool,args,route);
-        assert.equal(block?.noDispatch,true,`${build}: ${tool} on ${route} must stay recipient-bound`);
+  }
+});
+
+test('saved workflow replay exempts ordinary controls on public composers and keeps the guard on unbindable tools and DMs', async () => {
+  const ordinary = [
+    ['click', { selector: '[data-testid="tweetButton"]' }],
+    ['click_ax', { ref_id: 'r1' }],
+    ['press_keys', { key: 'Enter' }],
+    ['set_field', { selector: '#editor', value: 'Hello', submit: true }],
+    ['upload_file', { selector: 'input[data-testid="fileInput"]', attachmentId: 'a1' }],
+  ];
+  const unbindable = [
+    ['execute_js', { code: '1' }],
+    ['iframe_click', { selector: '#frame' }],
+    ['drag_at', { x: 4, y: 8 }],
+    ['execute_webmcp_tool', { name: 'post' }],
+  ];
+  for (const build of ['chrome', 'firefox']) {
+    const { Agent } = await import(`../src/${build}/src/agent/agent.js`);
+    const makeAgent = (currentUrl) => {
+      const agent = new Agent({ getActive: () => ({ model: 'test-model' }) });
+      agent._hydrate = async () => {};
+      agent._persist = () => {};
+      agent.ensureConversationId = async () => 'conv_saved_wf';
+      agent._currentUrl = async () => currentUrl;
+      agent.executeTool = async () => ({ success: true });
+      agent._executeToolBatch = async () => ({ action: 'continue' });
+      agent._endSavedWorkflowTraceRun = async () => {};
+      return agent;
+    };
+
+    // Public composer routes: ordinary controls pass preflight and replay; unbindable tools stop for recipient auth
+    for (const route of ['https://x.com/compose/post', 'https://x.com/compose/tweet', 'https://x.com/compose/articles']) {
+      const url = new URL(route);
+      const scope = { origin: url.origin, pathFamily: url.pathname };
+      for (const [tool, args] of ordinary) {
+        const agent = makeAgent(route);
+        const workflow = {
+          id: `wf_pub_${tool}`,
+          start: scope,
+          steps: [{ id: 'step_1', tool, args, scope }],
+        };
+        const result = await agent.replaySavedWorkflow(9201, workflow);
+        assert.doesNotMatch(result.reason || '', /fresh structured recipient authorization/,
+          `${build}: ordinary ${tool} on public composer ${route} must not require recipient auth`);
       }
+      for (const [tool, args] of unbindable) {
+        const agent = makeAgent(route);
+        const workflow = {
+          id: `wf_pub_unbindable_${tool}`,
+          start: scope,
+          steps: [{ id: 'step_1', tool, args, scope }],
+        };
+        const result = await agent.replaySavedWorkflow(9201, workflow);
+        assert.equal(result.status, 'stopped', `${build}: ${tool} on ${route} must stop`);
+        assert.match(result.reason || '', /fresh structured recipient authorization/,
+          `${build}: unbindable ${tool} on ${route} must require recipient auth`);
+      }
+    }
+
+    // Direct message route: ordinary controls must still stop for recipient auth
+    const dmRoute = 'https://x.com/i/chat/123';
+    const dmScope = { origin: 'https://x.com', pathFamily: '/i/chat/:id' };
+    for (const [tool, args] of ordinary) {
+      const agent = makeAgent(dmRoute);
+      const workflow = {
+        id: `wf_dm_${tool}`,
+        start: dmScope,
+        steps: [{ id: 'step_1', tool, args, scope: dmScope }],
+      };
+      const result = await agent.replaySavedWorkflow(9202, workflow);
+      assert.equal(result.status, 'stopped', `${build}: ordinary ${tool} on DM route must stop`);
+      assert.match(result.reason || '', /fresh structured recipient authorization/,
+        `${build}: ordinary ${tool} on DM route must require recipient auth`);
+    }
+
+    // Runtime navigation to public composer executes ordinary controls; navigation to DM stops
+    {
+      const agent = makeAgent('https://example.com/start');
+      let currentUrl = 'https://example.com/start';
+      agent._currentUrl = async () => currentUrl;
+      agent.executeTool = async (name, args) => {
+        if (name === 'navigate') currentUrl = args.url;
+        return { success: true };
+      };
+      const workflow = {
+        id: 'wf_runtime_public',
+        start: { origin: 'https://example.com', pathFamily: '/start' },
+        steps: [
+          { id: 'step_1', tool: 'navigate', args: { url: 'https://x.com/compose/post' } },
+          { id: 'step_2', tool: 'click', args: { selector: '[data-testid="tweetButton"]' } },
+        ],
+      };
+      const result = await agent.replaySavedWorkflow(9203, workflow);
+      assert.doesNotMatch(result.reason || '', /fresh structured recipient authorization/,
+        `${build}: navigating to public composer then clicking must not require recipient auth`);
+    }
+    {
+      const agent = makeAgent('https://example.com/start');
+      let currentUrl = 'https://example.com/start';
+      agent._currentUrl = async () => currentUrl;
+      agent.executeTool = async (name, args) => {
+        if (name === 'navigate') currentUrl = args.url;
+        return { success: true };
+      };
+      const workflow = {
+        id: 'wf_runtime_dm',
+        start: { origin: 'https://example.com', pathFamily: '/start' },
+        steps: [
+          { id: 'step_1', tool: 'navigate', args: { url: 'https://x.com/i/chat/123' } },
+          { id: 'step_2', tool: 'click', args: { selector: '#send' } },
+        ],
+      };
+      const result = await agent.replaySavedWorkflow(9204, workflow);
+      assert.equal(result.status, 'stopped', `${build}: runtime navigation to DM must stop before click`);
+      assert.equal(result.stepIndex, 1, `${build}: step 2 was stopped`);
+      assert.match(result.reason || '', /fresh structured recipient authorization/);
     }
   }
 });

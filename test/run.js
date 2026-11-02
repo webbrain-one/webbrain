@@ -129156,6 +129156,45 @@ for (const [browser, AgentClass] of [['chrome', AgentCh], ['firefox', AgentFx]])
     }
   });
 
+  test(`${browser} saved workflow exempts ordinary public-composer controls from recipient preflight and retains unbindable restrictions`, async () => {
+    const makeAgent = (currentUrl) => {
+      const agent = new AgentClass({ getActive: () => ({ model: 'test-model' }) });
+      agent._hydrate = async () => {};
+      agent._persist = () => {};
+      agent.ensureConversationId = async () => 'conv_saved_wf';
+      agent._currentUrl = async () => currentUrl;
+      agent.executeTool = async () => ({ success: true });
+      agent._executeToolBatch = async () => ({ action: 'continue' });
+      agent._endSavedWorkflowTraceRun = async () => {};
+      return agent;
+    };
+
+    // Public composer: click passes recipient preflight; execute_js stops
+    {
+      const agent = makeAgent('https://x.com/compose/post');
+      const workflow = {
+        id: 'wf_public_click',
+        start: { origin: 'https://x.com', pathFamily: '/compose/post' },
+        steps: [{ id: 'step_1', tool: 'click', args: { selector: '[data-testid="tweetButton"]' }, scope: { origin: 'https://x.com', pathFamily: '/compose/post' } }],
+      };
+      const result = await agent.replaySavedWorkflow(779, workflow);
+      assert.doesNotMatch(result.reason || '', /fresh structured recipient authorization/,
+        `${browser}: clicking on public composer must not require recipient auth`);
+    }
+    {
+      const agent = makeAgent('https://x.com/compose/post');
+      const workflow = {
+        id: 'wf_public_unbindable',
+        start: { origin: 'https://x.com', pathFamily: '/compose/post' },
+        steps: [{ id: 'step_1', tool: 'execute_js', args: { code: '1' }, scope: { origin: 'https://x.com', pathFamily: '/compose/post' } }],
+      };
+      const result = await agent.replaySavedWorkflow(779, workflow);
+      assert.equal(result.status, 'stopped');
+      assert.match(result.reason || '', /fresh structured recipient authorization/,
+        `${browser}: unbindable tool on public composer must require recipient auth`);
+    }
+  });
+
   test(`${browser} saved workflow replay resolves fresh targets without exposing runtime parameters`, async () => {
     const workflow = {
       schema: SavedWorkflowsCh.SAVED_WORKFLOW_SCHEMA,

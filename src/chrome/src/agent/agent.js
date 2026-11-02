@@ -73,7 +73,7 @@ import { analyzeMastodonPage, isMastodonPageUrl, mastodonHandoffInstruction, mas
 import { PROGRESS_ACTIONS, isProgressActionAllowed, isProgressIntentActive, normalizeProgressAction, normalizeProgressIntent } from './progress-intent.js';
 import { classifyCompletionForm, completionDoneBlock, completionPlainFinalBlock, completionPlainFinalPartial, consumeCompletionObservation, consumeCompletionObservationResult, createCompletionInvariantState, didCompletionActionExecute, hasUnconsumedCompletionObservation, hasUnconsumedCompletionObservationResult, isCompletionActionTool, publicationDetailResource, publicationReplyParent, publicationResourceRecordRoot, recordCompletionToolResult } from './completion-invariant.js';
 import { cdpClient, isCdpCommandNotSentError } from '../cdp/cdp-client.js';
-import { findLastGmailResultPage, getActiveAdapter, getAdapterWorkflowRouting, getCarouselNavigationPolicy, getCarouselNavigationTarget, getFullPageCapturePolicy, getGmailResultCountPolicy, getGmailResultPageUrl, getMessageRecipientGuardPolicy, isGmailChatRoute, isPublicComposerRoute, parseCarouselSlideCount, parseGmailPaginationRange, resolveAdapterWorkflowJob, UNIVERSAL_PREAMBLE } from './adapters.js';
+import { findLastGmailResultPage, getActiveAdapter, getAdapterWorkflowRouting, getCarouselNavigationPolicy, getCarouselNavigationTarget, getFullPageCapturePolicy, getGmailResultCountPolicy, getGmailResultPageUrl, getMessageRecipientGuardPolicy, isGmailChatRoute, parseCarouselSlideCount, parseGmailPaginationRange, resolveAdapterWorkflowJob, UNIVERSAL_PREAMBLE } from './adapters.js';
 import { formatAdapterWorkflowExecutionPolicy } from './adapter-workflow.js';
 import {
   invalidateWorkflowInventoryCompleteness,
@@ -242,8 +242,15 @@ const WORKFLOW_FIELD_KEYS = new Set(['alt_text', 'paid_promotion', 'recording_da
 const STAGED_SCREENSHOT_REDACTION_MAX_REGIONS = 400;
 const CHROME_WEB_STORE_GALLERY_PAGE = 'chrome-web-store-gallery';
 const CHROME_WEB_STORE_URL_READ_TOOLS = new Set(['fetch_url', 'research_url', 'read_page_source']);
+const SAVED_WORKFLOW_ORDINARY_DISPATCH_TOOLS = new Set([
+  'click', 'click_ax', 'upload_file',
+]);
+const SAVED_WORKFLOW_UNBINDABLE_DISPATCH_TOOLS = new Set([
+  'iframe_click', 'execute_js', 'execute_webmcp_tool', 'drag_at',
+]);
 const SAVED_WORKFLOW_MESSAGE_DISPATCH_TOOLS = new Set([
-  'click', 'click_ax', 'iframe_click', 'execute_js', 'execute_webmcp_tool', 'upload_file',
+  ...SAVED_WORKFLOW_ORDINARY_DISPATCH_TOOLS,
+  ...SAVED_WORKFLOW_UNBINDABLE_DISPATCH_TOOLS,
 ]);
 
 function savedWorkflowStepMayDispatchMessage(step) {
@@ -251,6 +258,18 @@ function savedWorkflowStepMayDispatchMessage(step) {
   if (SAVED_WORKFLOW_MESSAGE_DISPATCH_TOOLS.has(tool)) return true;
   if (tool === 'set_field') return step?.args?.submit === true;
   return tool === 'press_keys' && String(step?.args?.key || '') === 'Enter';
+}
+
+function savedWorkflowStepRequiresRecipientAuthorization(step, policy) {
+  if (policy?.verifyActiveRecipient !== true) return false;
+  const tool = String(step?.tool || '');
+  // Scripts, iframe clicks, drags and WebMCP dispatches cannot be bound to
+  // what they do on the page, so they stay restricted on a public composer too.
+  if (SAVED_WORKFLOW_UNBINDABLE_DISPATCH_TOOLS.has(tool)) return true;
+  // An ordinary control on a public composer (such as X's Post button)
+  // reaches no recipient, so saved workflow replay lets it through.
+  if (policy.publicComposer === true) return false;
+  return savedWorkflowStepMayDispatchMessage(step);
 }
 
 function savedWorkflowScopeUrl(scope, fallback = '') {
@@ -268,11 +287,11 @@ function savedWorkflowProtectedMessagingStepIndex(workflow, startUrl = '') {
   for (let index = 0; index < steps.length; index++) {
     const step = steps[index];
     const scopedUrl = savedWorkflowScopeUrl(step?.scope, inferredUrl);
-    let protectedMessaging = false;
+    let policy = null;
     try {
-      protectedMessaging = getMessageRecipientGuardPolicy(scopedUrl)?.verifyActiveRecipient === true;
+      policy = getMessageRecipientGuardPolicy(scopedUrl);
     } catch {}
-    if (protectedMessaging && savedWorkflowStepMayDispatchMessage(step)) return index;
+    if (savedWorkflowStepRequiresRecipientAuthorization(step, policy)) return index;
     if (step?.tool === 'navigate' && typeof step?.args?.url === 'string') {
       inferredUrl = step.args.url;
     } else if (step?.scope?.origin) {
@@ -26846,7 +26865,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     const reading = this._socialPublicationPrefetchReading ||= new Map();
     const unread = kind => list.filter(caption => this._pageTextReading(kind, caption) === null);
     let guarded = false;
-    try { guarded = getMessageRecipientGuardPolicy(pageUrl)?.verifyActiveRecipient === true; } catch {}
+    try { guarded = this._recipientGuardChecksControls(getMessageRecipientGuardPolicy(pageUrl)); } catch {}
     const unreadEffects = unread('control_effect');
     const unreadControls = guarded ? unread('message_control') : [];
     const joined = [...new Set([...unreadEffects.map(caption => reading.get('control_effect\u0000' + caption)),
@@ -31218,7 +31237,7 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
     // On a page whose sends the recipient guard checks, the same names are
     // read for that guard too.
     let guarded = false;
-    try { guarded = getMessageRecipientGuardPolicy(url)?.verifyActiveRecipient === true; } catch {}
+    try { guarded = this._recipientGuardChecksControls(getMessageRecipientGuardPolicy(url)); } catch {}
     const unreadMessaging = guarded
       ? captions.filter(caption => this._pageTextReading('message_control', caption) === null).slice(0, 48) : [];
     if (unreadMessaging.length) {
@@ -33042,13 +33061,19 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       guard?.approvedRecipients || [], guard?.messagingConversationScope || '']);
   }
 
+  // Whether the recipient guard checks an ordinary control (a click, Enter, a
+  // field submit or an upload) on a page with this policy. A public
+  // composer's controls reach no recipient, unless the call has already
+  // bound a send to one.
+  _recipientGuardChecksControls(policy, executionContext = null) {
+    return policy?.verifyActiveRecipient === true
+      && (policy.publicComposer !== true || executionContext?.messageRecipientGuardRequired === true);
+  }
+
   async _recipientBoundUploadContext(tabId, args, executionContext = {}, onUpdate = null) {
     let pageUrl = '';
     try { pageUrl = await this._currentUrl(tabId); } catch {}
-    const publicComposer = executionContext.messageRecipientGuardRequired !== true
-      && isPublicComposerRoute(pageUrl);
-    const protectedPage = !publicComposer
-      && getMessageRecipientGuardPolicy(pageUrl)?.verifyActiveRecipient === true;
+    const protectedPage = this._recipientGuardChecksControls(getMessageRecipientGuardPolicy(pageUrl), executionContext);
     if (!protectedPage && executionContext.messageRecipientGuardRequired !== true) return { protected: false };
     const context = { ...executionContext };
     const sourceKey = messageRecipientUploadSourceKey(args);
@@ -33367,9 +33392,10 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
       resolvedPageUrl = resolvedPageUrl || await this._currentUrl(tabId);
       policy = getMessageRecipientGuardPolicy(resolvedPageUrl);
     } catch {}
-    if (name === 'upload_file' && executionContext?.messageRecipientGuardRequired !== true
-        && isPublicComposerRoute(resolvedPageUrl)) return null;
     if (!policy?.verifyActiveRecipient) return null;
+    // A script, frame click or drag stays checked on a public composer too:
+    // nothing binds what it does on the page.
+    if (ordinaryGuardedTools.has(name) && !this._recipientGuardChecksControls(policy, executionContext)) return null;
 
     if (name === 'press_keys') {
       const repeatRaw = Number(args?.repeat ?? 1);
@@ -47072,11 +47098,11 @@ Rules: no prose intro, no conclusion, no "this screenshot shows...", no layout d
         if (this._checkAbort(tabId)) return finishStopped('stopped by the user', index);
         const step = workflow.steps[index];
         const stepUrl = await this._currentUrl(tabId);
-        let protectedMessaging = false;
+        let policy = null;
         try {
-          protectedMessaging = getMessageRecipientGuardPolicy(stepUrl)?.verifyActiveRecipient === true;
+          policy = getMessageRecipientGuardPolicy(stepUrl);
         } catch {}
-        if (protectedMessaging && savedWorkflowStepMayDispatchMessage(step)) {
+        if (savedWorkflowStepRequiresRecipientAuthorization(step, policy)) {
           return finishStopped(
             'protected messaging replay requires fresh structured recipient authorization; start a normal Act task and name the recipient',
             index,
