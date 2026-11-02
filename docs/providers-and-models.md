@@ -510,16 +510,16 @@ times the standard rate.
 
 ### Extended provider catalog
 
-WebBrain also ships 84 disabled-by-default provider cards. Most are sourced
+WebBrain also ships 85 disabled-by-default provider cards. Most are sourced
 from the OpenCode provider catalog snapshot at commit
 `62e4641235d7847dadc60da37cca8a023dd54fc1`; provider-specific additions use
 their official API documentation. Together with the original cards, the
-Providers page lists **118 built-in providers on Chromium** and **117 on Firefox**; the
+Providers page lists **119 built-in providers on Chromium** and **118 on Firefox**; the
 difference is the Chromium-only in-browser WebGPU runtime.
 
 | IDs                                                                                                                                                                                                                                                                                                                        |
 | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `api-route`, `302ai`, `abacus`, `aihubmix`, `alibaba-coding-plan`, `alibaba-coding-plan-cn`, `atlascloud`, `azure-cognitive-services`, `bailing`, `baseten`, `berget`, `cerebras`, `cheaperinference`, `chutes`, `clarifai`, `cloudferro-sherlock`, `cohere`, `cortecs`, `deepinfra`, `digitalocean`, `dinference`, `drun`, `evroc`, `fastrouter`, `friendli` |
+| `api-route`, `302ai`, `abacus`, `aihubmix`, `alibaba-coding-plan`, `alibaba-coding-plan-cn`, `atlascloud`, `azure-cognitive-services`, `bailing`, `baseten`, `berget`, `cerebras`, `cheapaimodel`, `cheaperinference`, `chutes`, `clarifai`, `cloudferro-sherlock`, `cohere`, `cortecs`, `deepinfra`, `digitalocean`, `dinference`, `drun`, `evroc`, `fastrouter`, `friendli` |
 | `freebuff2api`, `google-vertex`, `google-vertex-anthropic`, `helicone`, `iflowcn`, `inception`, `inference`, `io-net`, `jiekou`, `kilo`, `kimi-for-coding`, `kuae-cloud-coding-plan`, `llama`, `lucidquery`, `meganova`, `minimax-cn-coding-plan`, `minimax-coding-plan`, `moark`, `modelscope`, `morph`                       |
 | `nano-gpt`, `nearai`, `nebius`, `nova`, `novita-ai`, `ollama-cloud`, `opencode`, `opencode-go`, `opper`, `orcarouter`, `ovhcloud`, `perplexity`, `perplexity-agent`, `poe`, `pollinations`, `privatemode-ai`, `qihang-ai`, `qiniu-ai`, `requesty`, `scaleway`, `siliconflow`, `siliconflow-cn`, `stackit`                      |
 | `stepfun`, `submodel`, `synthetic`, `tencent-coding-plan`, `upstage`, `v0`, `venice`, `vercel`, `vivgrid`, `vultr`, `wandb`, `xiaomi`, `zai-coding-plan`, `zenmux`, `zhipuai`, `zhipuai-coding-plan`                                                                                                                       |
@@ -629,6 +629,25 @@ the card, keep the default `qwen/qwen3.7-plus` model (1000000 tokens), then
 click **Test Connection**. Interactive Ask streaming, tool calls, and vision
 work through the existing OpenAI-compatible path. Vision depends on the model:
 `deepseek-ai/deepseek-v4-flash` and `deepseek-ai/deepseek-v3.2` are text-only.
+
+#### cheapaimodel
+
+[cheapaimodel](https://cheapaimodel.ai) is an OpenAI-compatible, pay-per-token
+gateway for open-weight models (DeepSeek, GLM, Kimi) and Grok at
+`https://api.cheapaimodel.ai/v1`. Model IDs are bare (such as
+`deepseek-v4-1-flash`, `glm-5.3-flash`, `glm-5.3`, and `grok-4.7`); the full
+list is on the [models page](https://cheapaimodel.ai/models). See the
+[docs](https://cheapaimodel.ai/docs).
+
+In WebBrain, open **Providers -> LLM -> cheapaimodel**. Create an API key in the
+[console](https://console.cheapaimodel.ai/keys), paste it into the card, keep
+the default `deepseek-v4-1-flash` model (1000000 tokens), then click **Test
+Connection**. Interactive Ask streaming, tool calls, and vision work through
+the existing OpenAI-compatible path. Vision depends on the model: use
+`deepseek-v4-1-flash` or `grok-4.7`. `glm-5.3` is text-only, and `glm-5.3-flash`
+rejects WebBrain's vision requests because it cannot turn reasoning off (HTTP
+400); both work for text chat and tool calls. `kimi-k3` only accepts a
+temperature of 1 or 0.6, so it is not suggested on this card.
 
 ### Ask response streaming
 
