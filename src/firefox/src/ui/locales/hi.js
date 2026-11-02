@@ -524,7 +524,7 @@ export default {
   'sp.permissions.gate_off': 'बंद: WebBrain बिना पूछे हर साइट पर कार्रवाई करता है।',
   'sp.permissions.manage': 'साइट अनुमतियां प्रबंधित करें',
   'sp.permissions.enabled': 'अनुमति संकेत फिर से चालू हैं।',
-  "sp.help.shortcuts_html": "<strong>कीबोर्ड शॉर्टकट</strong><br><code>Ctrl/Cmd+/</code> - इनपुट पर फोकस करें<br><code>Ctrl/Cmd+Shift+A</code> - आस्क मोड पर स्विच करें<br><code>Ctrl/Cmd+Shift+X</code> - एक्ट मोड पर स्विच करें<br><code>Ctrl/Cmd+Shift+D</code> - डेव मोड पर स्विच करें<br><code>Escape</code> - सक्रिय रन बंद करें",
+  "sp.help.shortcuts_html": "<strong>कीबोर्ड शॉर्टकट</strong><br><code>Ctrl/Cmd+/</code> - इनपुट पर फोकस करें<br><code>Ctrl/Cmd+Shift+A</code> - आस्क मोड पर स्विच करें<br><code>Ctrl/Cmd+Shift+X</code> - एक्ट मोड पर स्विच करें<br><code>Ctrl/Cmd+Shift+D</code> - डेव मोड पर स्विच करें<br><code>Escape</code> - सक्रिय रन बंद करें<br><code>1</code>–<code>9</code> - उस नंबर वाला उत्तर चुनें",
   "sp.slash.record_transcribe": "रुकने के बाद व्हिस्पर प्रतिलेख को रिकॉर्ड करें और सहेजें",
   "sp.slash.unknown_command": "अज्ञात स्लैश कमांड {command}। उपलब्ध कमांड देखने के लिए /help का उपयोग करें।",
   "sp.slash.invalid_usage": "अमान्य स्लैश कमांड सिंटैक्स. उपयोग: {usage}",

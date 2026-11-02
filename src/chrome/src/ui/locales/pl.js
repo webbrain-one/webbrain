@@ -411,7 +411,7 @@ export default {
   'sp.permissions.gate_off': 'Wyłączone: WebBrain działa na każdej stronie bez pytania.',
   'sp.permissions.manage': 'Zarządzaj uprawnieniami stron',
   'sp.permissions.enabled': 'Pytania o uprawnienia są ponownie włączone.',
-  "sp.help.shortcuts_html": "<strong>Skróty klawiszowe</strong><br><code>Ctrl/Cmd+/</code> — Ustaw fokus na polu wprowadzania<br><code>Ctrl/Cmd+Shift+A</code> — Przełącz na tryb Pytaj<br><code>Ctrl/Cmd+Shift+X</code> — Przełącz na tryb Działaj<br><code>Ctrl/Cmd+Shift+D</code> — Przełącz na tryb Dev<br><code>Ctrl/Cmd+M</code> — Togol wprowadzanie głosowe",
+  "sp.help.shortcuts_html": "<strong>Skróty klawiszowe</strong><br><code>Ctrl/Cmd+/</code> — Ustaw fokus na polu wprowadzania<br><code>Ctrl/Cmd+Shift+A</code> — Przełącz na tryb Pytaj<br><code>Ctrl/Cmd+Shift+X</code> — Przełącz na tryb Działaj<br><code>Ctrl/Cmd+Shift+D</code> — Przełącz na tryb Dev<br><code>Escape</code> — Zatrzymaj aktywne uruchomienie<br><code>Escape</code> dwukrotnie — Zatrzymaj aktywne nagrywanie<br><code>1</code>–<code>9</code> — Wybierz odpowiedź z tym numerem",
   "sp.slash.record_transcribe": "Nagraj i zapisz transkrypcję Whisper po zatrzymaniu",
   "sp.slash.unknown_command": "Nieznane polecenie ukośnikowe {command}. Użyj /help, aby zobaczyć dostępne polecenia.",
   "sp.slash.invalid_usage": "Nieprawidłowa składnia polecenia ukośnikowego. Użycie: {usage}",

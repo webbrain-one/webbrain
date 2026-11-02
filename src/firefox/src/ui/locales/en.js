@@ -538,7 +538,7 @@ export default {
   'sp.permissions.gate_off': 'Off: WebBrain acts on every site without asking.',
   'sp.permissions.manage': 'Manage site permissions',
   'sp.permissions.enabled': 'Permission prompts are on again.',
-  "sp.help.shortcuts_html": "<strong>Keyboard Shortcuts</strong><br><code>Ctrl/Cmd+/</code> — Focus the input<br><code>Ctrl/Cmd+Shift+A</code> — Switch to Ask mode<br><code>Ctrl/Cmd+Shift+X</code> — Switch to Act mode<br><code>Ctrl/Cmd+Shift+D</code> — Switch to Dev mode<br><code>Escape</code> — Stop the active run",
+  "sp.help.shortcuts_html": "<strong>Keyboard Shortcuts</strong><br><code>Ctrl/Cmd+/</code> — Focus the input<br><code>Ctrl/Cmd+Shift+A</code> — Switch to Ask mode<br><code>Ctrl/Cmd+Shift+X</code> — Switch to Act mode<br><code>Ctrl/Cmd+Shift+D</code> — Switch to Dev mode<br><code>Escape</code> — Stop the active run<br><code>1</code>–<code>9</code> — Pick that answer when WebBrain asks",
   "sp.slash.record_transcribe": "Record and save a Whisper transcript after stop",
   "sp.slash.unknown_command": "Unknown slash command {command}. Use /help to see available commands.",
   "sp.slash.invalid_usage": "Invalid slash command syntax. Usage: {usage}",

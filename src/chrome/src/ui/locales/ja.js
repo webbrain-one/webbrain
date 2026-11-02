@@ -679,7 +679,7 @@ export default {
   "sp.perm.verb.download": "からのファイルのダウンロードを",
   "sp.perm.verb.upload": "へのファイルのアップロードを",
   "sp.perm.verb.record": "でのタブ（およびマイク）の録画を",
-  "sp.help.shortcuts_html": "<strong>キーボードショートカット</strong><br><code>Ctrl/Cmd+/</code> — 入力にフォーカス<br><code>Ctrl/Cmd+Shift+A</code> — 質問モードに切り替え<br><code>Ctrl/Cmd+Shift+X</code> — 操作モードに切り替え<br><code>Ctrl/Cmd+Shift+D</code> — 開発モードに切り替え<br><code>Ctrl/Cmd+M</code> — 音声入力を切り替え",
+  "sp.help.shortcuts_html": "<strong>キーボードショートカット</strong><br><code>Ctrl/Cmd+/</code> — 入力にフォーカス<br><code>Ctrl/Cmd+Shift+A</code> — 質問モードに切り替え<br><code>Ctrl/Cmd+Shift+X</code> — 操作モードに切り替え<br><code>Ctrl/Cmd+Shift+D</code> — 開発モードに切り替え<br><code>Escape</code> — 実行中のタスクを停止<br><code>Escape</code> 2回 — 録音を停止<br><code>1</code>–<code>9</code> — その番号の回答を選択",
   "sp.slash.record_transcribe": "録画停止後に Whisper の文字起こしを保存",
   "sp.slash.unknown_command": "不明なスラッシュコマンドです: {command}。利用可能なコマンドは /help で確認できます。",
   "sp.slash.invalid_usage": "スラッシュコマンドの構文が正しくありません。使用法: {usage}",

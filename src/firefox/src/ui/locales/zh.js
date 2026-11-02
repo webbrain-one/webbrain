@@ -652,7 +652,7 @@ export default {
   "sp.perm.verb.download": "下载文件自",
   "sp.perm.verb.upload": "上传文件到",
   "sp.perm.verb.record": "录制标签页（及麦克风）于",
-  "sp.help.shortcuts_html": "<strong>键盘快捷键</strong><br><code>Ctrl/Cmd+/</code> —— 聚焦输入框<br><code>Ctrl/Cmd+Shift+A</code> —— 切换到提问模式<br><code>Ctrl/Cmd+Shift+X</code> —— 切换到执行模式<br><code>Ctrl/Cmd+Shift+D</code> —— 切换到开发模式<br><code>Ctrl/Cmd+M</code> —— 切换语音输入",
+  "sp.help.shortcuts_html": "<strong>键盘快捷键</strong><br><code>Ctrl/Cmd+/</code> —— 聚焦输入框<br><code>Ctrl/Cmd+Shift+A</code> —— 切换到提问模式<br><code>Ctrl/Cmd+Shift+X</code> —— 切换到执行模式<br><code>Ctrl/Cmd+Shift+D</code> —— 切换到开发模式<br><code>Escape</code> —— 停止当前运行<br><code>1</code>–<code>9</code> —— 选择对应编号的答案",
   "sp.slash.record_transcribe": "停止录制后保存 Whisper 转录",
   "sp.slash.unknown_command": "未知斜杠命令 {command}。使用 /help 查看可用命令。",
   "sp.slash.invalid_usage": "斜杠命令语法无效。用法：{usage}",

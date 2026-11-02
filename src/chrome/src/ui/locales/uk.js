@@ -679,7 +679,7 @@ export default {
   "sp.perm.verb.download": "завантажити файли з",
   "sp.perm.verb.upload": "вивантажити файл на",
   "sp.perm.verb.record": "записати вкладку (і мікрофон) на",
-  "sp.help.shortcuts_html": "<strong>Гарячі клавіші</strong><br><code>Ctrl/Cmd+/</code> — Фокус на полі введення<br><code>Ctrl/Cmd+Shift+A</code> — Перейти в режим запитань<br><code>Ctrl/Cmd+Shift+X</code> — Перейти в режим дій<br><code>Ctrl/Cmd+Shift+D</code> — Перейти в режим розробки<br><code>Ctrl/Cmd+M</code> — Перемкнути голосове введення",
+  "sp.help.shortcuts_html": "<strong>Гарячі клавіші</strong><br><code>Ctrl/Cmd+/</code> — Фокус на полі введення<br><code>Ctrl/Cmd+Shift+A</code> — Перейти в режим запитань<br><code>Ctrl/Cmd+Shift+X</code> — Перейти в режим дій<br><code>Ctrl/Cmd+Shift+D</code> — Перейти в режим розробки<br><code>Escape</code> — Зупинити активний запуск<br><code>Escape</code> двічі — Зупинити активний запис<br><code>1</code>–<code>9</code> — Вибрати відповідь із цим номером",
   "sp.slash.record_transcribe": "Записати та зберегти транскрипт Whisper після зупинки",
   "sp.slash.unknown_command": "Невідома slash-команда {command}. Скористайтеся /help, щоб переглянути доступні команди.",
   "sp.slash.invalid_usage": "Неправильний синтаксис slash-команди. Використання: {usage}",

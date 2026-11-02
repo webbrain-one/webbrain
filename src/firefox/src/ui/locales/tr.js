@@ -698,7 +698,7 @@ export default {
   "sp.perm.verb.download": "dosya indirmek",
   "sp.perm.verb.upload": "dosya yüklemek",
   "sp.perm.verb.record": "sekmeyi (ve mikrofonu) kaydetmek",
-  "sp.help.shortcuts_html": "<strong>Klavye Kısayolları</strong><br><code>Ctrl/Cmd+/</code> — Giriş alanına odaklan<br><code>Ctrl/Cmd+Shift+A</code> — Sor moduna geç<br><code>Ctrl/Cmd+Shift+X</code> — Uygula moduna geç<br><code>Ctrl/Cmd+Shift+D</code> — Dev moduna geç<br><code>Ctrl/Cmd+M</code> — Ses girişini aç/kapat",
+  "sp.help.shortcuts_html": "<strong>Klavye Kısayolları</strong><br><code>Ctrl/Cmd+/</code> — Giriş alanına odaklan<br><code>Ctrl/Cmd+Shift+A</code> — Sor moduna geç<br><code>Ctrl/Cmd+Shift+X</code> — Uygula moduna geç<br><code>Ctrl/Cmd+Shift+D</code> — Dev moduna geç<br><code>Escape</code> — Aktif çalışmayı durdur<br><code>1</code>–<code>9</code> — O numaralı yanıtı seç",
   "sp.slash.record_transcribe": "Kaydet ve durdurduktan sonra Whisper dökümü kaydet",
   "sp.slash.unknown_command": "Bilinmeyen slash komutu {command}. Kullanılabilir komutları görmek için /help kullanın.",
   "sp.slash.invalid_usage": "Geçersiz slash komutu sözdizimi. Kullanım: {usage}",

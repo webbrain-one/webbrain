@@ -527,7 +527,7 @@ export default {
   'sp.permissions.gate_off': 'Desativado: o WebBrain age em qualquer site sem perguntar.',
   'sp.permissions.manage': 'Gerenciar permissões de sites',
   'sp.permissions.enabled': 'Os prompts de permissão estão ativados novamente.',
-  "sp.help.shortcuts_html": "<strong>Atalhos de teclado</strong><br><code>Ctrl/Cmd+/</code> - Concentre a entrada<br><code>Ctrl/Cmd+Shift+A</code> — Mudar para o modo Perguntar<br><code>Ctrl/Cmd+Shift+X</code> — Mudar para o modo Agir<br><code>Ctrl/Cmd+Shift+D</code> — Mudar para o modo Dev<br><code>Escape</code> — Pare a execução ativa<br><code>Escape</code> duas vezes — Interrompa uma gravação ativa",
+  "sp.help.shortcuts_html": "<strong>Atalhos de teclado</strong><br><code>Ctrl/Cmd+/</code> - Concentre a entrada<br><code>Ctrl/Cmd+Shift+A</code> — Mudar para o modo Perguntar<br><code>Ctrl/Cmd+Shift+X</code> — Mudar para o modo Agir<br><code>Ctrl/Cmd+Shift+D</code> — Mudar para o modo Dev<br><code>Escape</code> — Pare a execução ativa<br><code>Escape</code> duas vezes — Interrompa uma gravação ativa<br><code>1</code>–<code>9</code> — Escolher a resposta com esse número",
   "sp.slash.record_transcribe": "Grave e salve uma transcrição do Whisper após parar",
   "sp.slash.unknown_command": "Comando de barra desconhecido {command}. Use /help para ver os comandos disponíveis.",
   "sp.slash.invalid_usage": "Sintaxe de comando de barra inválida. Uso: {usage}",

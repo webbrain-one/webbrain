@@ -652,7 +652,7 @@ export default {
   "sp.perm.verb.download": "파일 다운로드",
   "sp.perm.verb.upload": "파일 업로드",
   "sp.perm.verb.record": "탭(및 마이크) 녹화",
-  "sp.help.shortcuts_html": "<strong>키보드 단축키</strong><br><code>Ctrl/Cmd+/</code> — 입력에 포커스<br><code>Ctrl/Cmd+Shift+A</code> — 질문 모드로 전환<br><code>Ctrl/Cmd+Shift+X</code> — 실행 모드로 전환<br><code>Ctrl/Cmd+Shift+D</code> — 개발 모드로 전환<br><code>Ctrl/Cmd+M</code> — 음성 입력 전환",
+  "sp.help.shortcuts_html": "<strong>키보드 단축키</strong><br><code>Ctrl/Cmd+/</code> — 입력에 포커스<br><code>Ctrl/Cmd+Shift+A</code> — 질문 모드로 전환<br><code>Ctrl/Cmd+Shift+X</code> — 실행 모드로 전환<br><code>Ctrl/Cmd+Shift+D</code> — 개발 모드로 전환<br><code>Escape</code> — 실행 중인 작업 중지<br><code>1</code>–<code>9</code> — 해당 번호의 답변 선택",
   "sp.slash.record_transcribe": "녹화 후 Whisper 전사본 저장",
   "sp.slash.unknown_command": "알 수 없는 슬래시 명령어입니다: {command}. 사용 가능한 명령어는 /help에서 확인하세요.",
   "sp.slash.invalid_usage": "슬래시 명령어 구문이 올바르지 않습니다. 사용법: {usage}",
