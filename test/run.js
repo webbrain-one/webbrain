@@ -45094,11 +45094,12 @@ test('homepage plays the product video in a dialog and loads a live websites dem
   assert.doesNotMatch(template, /home\.websites\.info/, 'web home: the website card has no Info link');
 });
 
-test('websites page promises free forever and leads to the dashboard only while launched', () => {
+test('websites page says it is free and leads to the dashboard only while launched', () => {
   const page = fs.readFileSync(path.join(ROOT, 'web/websites/index.html'), 'utf8');
   const template = fs.readFileSync(path.join(ROOT, 'web/build/websites-template.html'), 'utf8');
   const runtimeAttributes = ['data-webbrain-ask', 'data-webbrain-act'];
-  assert.match(page, /Free now\. <span>Free forever\.<\/span>/);
+  assert.match(page, /<h2 id="free-title">It's <span>free\.<\/span><\/h2>/);
+  assert.doesNotMatch(page, /forever|here to stay/i, 'websites: the page says free without promising it forever');
   // The launched page stays in the template: the form hands the address to
   // the dashboard as ?url=.
   assert.match(template, /<!-- if websites -->\s*<form class="get-script" id="get-script" action="\{\{sites_dashboard_url\}\}\/dashboard" method="get">[\s\S]*?name="url"[\s\S]*?<!-- else websites -->/);
