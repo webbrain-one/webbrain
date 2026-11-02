@@ -44973,13 +44973,13 @@ test('homepage leads with the browser extension and offers WebBrain for websites
   assert.match(build, /\{ page: 'home', source: template, outPath: path\.join\(localeDir, 'index\.html'\) \}/);
 
   // Order: headline, the browser extension with the scene carousel, then
-  // WebBrain for websites, word on the web, and the extension's sections.
+  // word on the web, WebBrain for websites, and the extension's sections.
   const order = [
     '<section class="home-hero"',
     '<section class="path path-browser"',
     'id="mockup-stack"',
-    '<section class="path path-websites"',
     'id="voices"',
+    '<section class="path path-websites"',
     '<section class="section" id="providers"',
     '<section class="section" id="features"',
     'id="faq"',
@@ -45010,7 +45010,11 @@ test('homepage leads with the browser extension and offers WebBrain for websites
   assert.match(template, /href="\{\{websites_path\}\}" class="path-btn path-btn-ink" id="hero-websites-cta"/, 'web home: the website card adds WebBrain to a website');
   // WebBrain for websites sits behind one switch: the card stays in the
   // template either way, and the built pages keep it only while it is on.
-  assert.match(template, /<!-- if websites -->\s*<!-- WebBrain for websites:[\s\S]*?<section class="path path-websites"[\s\S]*?<\/section>\s*<!-- end websites -->/, 'web home: the website card is behind the launch switch');
+  assert.match(template, /<!-- if websites -->\s*<!-- WebBrain for websites:[\s\S]*?<div class="home-websites">\s*<section class="path path-websites"[\s\S]*?<\/section>\s*<\/div>\s*<!-- end websites -->/, 'web home: the website card is behind the launch switch');
+  // Word on the web backs the extension right after its card; the website card follows it.
+  assert.ok(template.indexOf('id="voices"') < template.indexOf('<div class="home-websites">'), 'web home: the website card comes after Word on the web');
+  const heroSection = template.slice(template.indexOf('<section class="home-hero"'), template.indexOf('id="voices"'));
+  assert.doesNotMatch(heroSection, /path-websites/, 'web home: the website card is no longer inside the hero');
   assert.match(build, /WEBSITES_LAUNCHED,/, 'web home: the build reads the launch switch');
   // The hero has a browser-only version for while the switch is off.
   for (const key of ['kicker', 'title_line1', 'title_line2', 'lede']) {
