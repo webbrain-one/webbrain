@@ -510,18 +510,18 @@ times the standard rate.
 
 ### Extended provider catalog
 
-WebBrain also ships 84 disabled-by-default provider cards. Most are sourced
+WebBrain also ships 85 disabled-by-default provider cards. Most are sourced
 from the OpenCode provider catalog snapshot at commit
 `62e4641235d7847dadc60da37cca8a023dd54fc1`; provider-specific additions use
 their official API documentation. Together with the original cards, the
-Providers page lists **118 built-in providers on Chromium** and **117 on Firefox**; the
+Providers page lists **119 built-in providers on Chromium** and **118 on Firefox**; the
 difference is the Chromium-only in-browser WebGPU runtime.
 
 | IDs                                                                                                                                                                                                                                                                                                                        |
 | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `api-route`, `302ai`, `abacus`, `aihubmix`, `alibaba-coding-plan`, `alibaba-coding-plan-cn`, `atlascloud`, `azure-cognitive-services`, `bailing`, `baseten`, `berget`, `cerebras`, `cheaperinference`, `chutes`, `clarifai`, `cloudferro-sherlock`, `cohere`, `cortecs`, `deepinfra`, `digitalocean`, `dinference`, `drun`, `evroc`, `fastrouter`, `friendli` |
 | `freebuff2api`, `google-vertex`, `google-vertex-anthropic`, `helicone`, `iflowcn`, `inception`, `inference`, `io-net`, `jiekou`, `kilo`, `kimi-for-coding`, `kuae-cloud-coding-plan`, `llama`, `lucidquery`, `meganova`, `minimax-cn-coding-plan`, `minimax-coding-plan`, `moark`, `modelscope`, `morph`                       |
-| `nano-gpt`, `nearai`, `nebius`, `nova`, `novita-ai`, `ollama-cloud`, `opencode`, `opencode-go`, `opper`, `orcarouter`, `ovhcloud`, `perplexity`, `perplexity-agent`, `poe`, `pollinations`, `privatemode-ai`, `qihang-ai`, `qiniu-ai`, `requesty`, `scaleway`, `siliconflow`, `siliconflow-cn`, `stackit`                      |
+| `nano-gpt`, `nearai`, `nebius`, `nova`, `novita-ai`, `ollama-cloud`, `opencode`, `opencode-go`, `opper`, `orcarouter`, `ovhcloud`, `perplexity`, `perplexity-agent`, `poe`, `pollinations`, `privatemode-ai`, `qihang-ai`, `qiniu-ai`, `requesty`, `runcrate`, `scaleway`, `siliconflow`, `siliconflow-cn`, `stackit`        |
 | `stepfun`, `submodel`, `synthetic`, `tencent-coding-plan`, `upstage`, `v0`, `venice`, `vercel`, `vivgrid`, `vultr`, `wandb`, `xiaomi`, `zai-coding-plan`, `zenmux`, `zhipuai`, `zhipuai-coding-plan`                                                                                                                       |
 
 Most use the OpenAI-compatible Chat Completions contract and bearer API keys.
@@ -629,6 +629,22 @@ the card, keep the default `qwen/qwen3.7-plus` model (1000000 tokens), then
 click **Test Connection**. Interactive Ask streaming, tool calls, and vision
 work through the existing OpenAI-compatible path. Vision depends on the model:
 `deepseek-ai/deepseek-v4-flash` and `deepseek-ai/deepseek-v3.2` are text-only.
+
+#### Runcrate
+
+[Runcrate](https://runcrate.ai) serves open-weight models through an
+OpenAI-compatible API at `https://api.runcrate.ai/v1`. Model IDs carry the lab
+prefix (such as `deepseek-ai/DeepSeek-V4.1-Flash`, `zai-org/GLM-5.3`, and
+`moonshotai/Kimi-K3`); the live list is at `https://api.runcrate.ai/v1/models`.
+See the [docs](https://runcrate.ai/docs) and create a key in the
+[dashboard](https://runcrate.ai/dashboard/api-keys).
+
+In WebBrain, open **Providers -> LLM -> Runcrate**. Paste an API key into the
+card, keep the default `deepseek-ai/DeepSeek-V4.1-Flash` model (1048576 tokens),
+then click **Test Connection**. Interactive Ask streaming and tool calls work
+through the existing OpenAI-compatible path. The card starts with vision off
+because the default model is text-only; enable it for a vision model such as
+`moonshotai/Kimi-K3`.
 
 ### Ask response streaming
 
