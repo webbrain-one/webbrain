@@ -506,16 +506,16 @@ times the standard rate.
 
 ### Extended provider catalog
 
-WebBrain also ships 83 disabled-by-default provider cards. Most are sourced
+WebBrain also ships 84 disabled-by-default provider cards. Most are sourced
 from the OpenCode provider catalog snapshot at commit
 `62e4641235d7847dadc60da37cca8a023dd54fc1`; provider-specific additions use
 their official API documentation. Together with the original cards, the
-Providers page lists **117 built-in providers on Chromium** and **116 on Firefox**; the
+Providers page lists **118 built-in providers on Chromium** and **117 on Firefox**; the
 difference is the Chromium-only in-browser WebGPU runtime.
 
 | IDs                                                                                                                                                                                                                                                                                                                        |
 | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `api-route`, `302ai`, `abacus`, `aihubmix`, `alibaba-coding-plan`, `alibaba-coding-plan-cn`, `azure-cognitive-services`, `bailing`, `baseten`, `berget`, `cerebras`, `cheaperinference`, `chutes`, `clarifai`, `cloudferro-sherlock`, `cohere`, `cortecs`, `deepinfra`, `digitalocean`, `dinference`, `drun`, `evroc`, `fastrouter`, `friendli` |
+| `api-route`, `302ai`, `abacus`, `aihubmix`, `alibaba-coding-plan`, `alibaba-coding-plan-cn`, `atlascloud`, `azure-cognitive-services`, `bailing`, `baseten`, `berget`, `cerebras`, `cheaperinference`, `chutes`, `clarifai`, `cloudferro-sherlock`, `cohere`, `cortecs`, `deepinfra`, `digitalocean`, `dinference`, `drun`, `evroc`, `fastrouter`, `friendli` |
 | `freebuff2api`, `google-vertex`, `google-vertex-anthropic`, `helicone`, `iflowcn`, `inception`, `inference`, `io-net`, `jiekou`, `kilo`, `kimi-for-coding`, `kuae-cloud-coding-plan`, `llama`, `lucidquery`, `meganova`, `minimax-cn-coding-plan`, `minimax-coding-plan`, `moark`, `modelscope`, `morph`                       |
 | `nano-gpt`, `nearai`, `nebius`, `nova`, `novita-ai`, `ollama-cloud`, `opencode`, `opencode-go`, `opper`, `orcarouter`, `ovhcloud`, `perplexity`, `perplexity-agent`, `poe`, `pollinations`, `privatemode-ai`, `qihang-ai`, `qiniu-ai`, `requesty`, `scaleway`, `siliconflow`, `siliconflow-cn`, `stackit`                      |
 | `stepfun`, `submodel`, `synthetic`, `tencent-coding-plan`, `upstage`, `v0`, `venice`, `vercel`, `vivgrid`, `vultr`, `wandb`, `xiaomi`, `zai-coding-plan`, `zenmux`, `zhipuai`, `zhipuai-coding-plan`                                                                                                                       |
@@ -610,6 +610,21 @@ Interactive Ask streaming, tool calls, and vision work through the existing
 OpenAI-compatible path. The 32768-token context setting is a conservative
 application budget, not an advertised model context limit; adjust it to a limit
 verified for your selected model and account.
+
+#### Atlas Cloud
+
+[Atlas Cloud](https://www.atlascloud.ai) is an OpenAI-compatible LLM gateway at
+`https://api.atlascloud.ai/v1`. One API key gives access to models from several
+labs; model IDs carry the lab prefix (such as `qwen/qwen3.7-plus`,
+`deepseek-ai/deepseek-v4-flash`, and `moonshotai/kimi-k2.6`). The live list is
+public at `https://api.atlascloud.ai/v1/models`. Create a key in the
+[console](https://console.atlascloud.ai/api-keys).
+
+In WebBrain, open **Providers -> LLM -> Atlas Cloud**. Paste an API key into
+the card, keep the default `qwen/qwen3.7-plus` model (1000000 tokens), then
+click **Test Connection**. Interactive Ask streaming, tool calls, and vision
+work through the existing OpenAI-compatible path. Vision depends on the model:
+`deepseek-ai/deepseek-v4-flash` and `deepseek-ai/deepseek-v3.2` are text-only.
 
 ### Ask response streaming
 
