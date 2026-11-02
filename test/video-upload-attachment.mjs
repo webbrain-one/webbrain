@@ -112,21 +112,21 @@ for (const kind of ['chrome', 'firefox']) {
   });
 }
 
-test('X public composer binds no recipient, on the upload path or any other', () => {
+test('X public composer exempts its ordinary controls, uploads included; scripts and DMs keep the recipient guard', () => {
   for (const [label, policy, publicComposer] of [['chrome', chromePolicy, chromePublicComposer], ['firefox', firefoxPolicy, firefoxPublicComposer]]) {
     assert.equal(publicComposer('https://x.com/compose/post'), true, `${label}: X compose is a public composer`);
     assert.equal(publicComposer('https://x.com/compose/tweet'), true, `${label}: legacy tweet compose is a public composer`);
     assert.equal(publicComposer('https://x.com/i/chat/123'), false, `${label}: X DM is never a public composer`);
+    assert.equal(publicComposer('https://x.com/messages/compose'), false, `${label}: DM compose is never a public composer`);
     assert.equal(publicComposer('https://x.com/home'), false, `${label}: timeline is not a public composer`);
-    // A public post has no recipient, so no tool on the route binds one: the
-    // generic /compose/ path rule must not reclaim it and refuse the Post
-    // click as recipient_identity_unavailable. What is published stays gated
-    // by the publication contract and audit (see
+    // The route keeps the recipient guard's policy, marked as a public
+    // composer: its ordinary controls reach no recipient, while a script,
+    // frame click or drag is still checked there (see
     // test/social-publish-contract.mjs).
-    assert.equal(policy('https://x.com/compose/post'), null,
-      `${label}: click, press_keys and set_field on X compose carry no recipient to verify`);
+    assert.equal(policy('https://x.com/compose/post')?.verifyActiveRecipient, true, `${label}: X compose keeps its policy`);
+    assert.equal(policy('https://x.com/compose/post')?.publicComposer, true, `${label}: X compose is marked a public composer`);
     assert.equal(policy('https://x.com/i/chat/123')?.verifyActiveRecipient, true, `${label}: X DM stays protected`);
-    assert.equal(policy('https://x.com/messages/compose')?.verifyActiveRecipient, true, `${label}: DM compose stays protected`);
+    assert.equal(policy('https://x.com/messages/compose')?.publicComposer, undefined, `${label}: DM compose is checked in full`);
   }
 });
 
