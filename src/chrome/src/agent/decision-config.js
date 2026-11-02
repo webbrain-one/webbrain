@@ -24,19 +24,29 @@ export const DECISION_SETTINGS_KEYS = [
   D1_CONSENT_KEY,
 ];
 
-// The in-browser chat model that answers decisions: Compass VLD Tiny v5,
+// The in-browser chat model that answers decisions: Compass VLD v6 2B,
 // fine-tuned on the decision protocol, with its trained probe (Chrome;
 // src/chrome/src/offscreen/compass-vld-decision-probe.js). Kept in sync with
 // WEBGPU_DECISION_MODEL_ID and the preset's dtype in providers/webgpu.js.
-export const WEBGPU_CHAT_DECISION_MODEL = 'webbrain-one/webbrain-compass-vld-tiny-v5-onnx';
-export const WEBGPU_CHAT_DECISION_DTYPE = Object.freeze({ decoder_model_merged: 'q8f16', embed_tokens: 'q8f16', vision_encoder: 'fp16' });
+export const WEBGPU_CHAT_DECISION_MODEL = 'webbrain-one/webbrain-compass-vld-v6-2b-onnx';
+export const WEBGPU_CHAT_DECISION_DTYPE = Object.freeze({ decoder: 'q8f16', vision_encoder: 'fp16' });
+// Every in-browser chat model with a trained decision probe, newest first:
+// decisions go to the newest one downloaded (decision-availability.js
+// readyChatDecisionModel), so Tiny v5 keeps answering where it is the only one.
+export const WEBGPU_CHAT_DECISION_MODELS = Object.freeze([
+  Object.freeze({ model: WEBGPU_CHAT_DECISION_MODEL, dtype: WEBGPU_CHAT_DECISION_DTYPE }),
+  Object.freeze({
+    model: 'webbrain-one/webbrain-compass-vld-tiny-v5-onnx',
+    dtype: Object.freeze({ decoder_model_merged: 'q8f16', embed_tokens: 'q8f16', vision_encoder: 'fp16' }),
+  }),
+]);
 
 const NO_DECISION_FEATURES = Object.freeze(Object.fromEntries(DECISION_FEATURES.map(feature => [feature, false])));
 // Auto with Compass keeps what Compass did before modes existed: completion
 // checks and semantic decisions on its managed model. A downloaded D1 takes
 // the completion checks (AUTO_LOCAL_FEATURES).
 const AUTO_COMPASS_FEATURES = Object.freeze({ ...NO_DECISION_FEATURES, done: true, semantic: true });
-// Auto with an on-device decision model downloaded (Compass VLD Tiny v5, or
+// Auto with an on-device decision model downloaded (Compass VLD, or
 // else D1): the checks it answers by itself. It is Auto's decision model for
 // them, in place of Compass's managed model too. Fast classifications, fast
 // browser actions and semantic decisions need an explicit On, so the
@@ -61,7 +71,7 @@ export function decisionNeedsLocalAssist(stored = {}, compass = null, feature = 
     && (!compass || feature == null || AUTO_LOCAL_FEATURES[feature] === true);
 }
 
-// Auto prefers the in-browser chat model, Compass VLD Tiny v5, once it is
+// Auto prefers the in-browser chat model, Compass VLD, once it is
 // downloaded (decision-availability.js reads its ready marker); its download
 // is the consent. While Compass is the chat provider it takes only the
 // decisions it answers in Auto.
@@ -100,7 +110,7 @@ function onDecisionFeatures(stored, config, legacy) {
 // Resolve settings without rewriting credentials or opted-in features. The
 // result keeps the selected provider's fields even when no decision is
 // answered, so Settings and model discovery see the same configuration.
-// `chatAssistReady` says Compass VLD Tiny v5, the in-browser chat model
+// `chatAssistReady` says Compass VLD (v6 2B or Tiny v5), the in-browser chat model
 // fine-tuned for decisions, is downloaded; `localAssistReady` says D1 is
 // downloaded and the user's Download or Load stands (decision-availability.js).
 // Other downloaded chat or vision weights never enable decisions. Only Auto
@@ -204,7 +214,7 @@ function selectedDecisionConfig(stored, compass, on) {
   };
   // Explicitly selected, like D1: an on-device decision provider that never
   // leaves the browser. A positive completion still needs independent proof.
-  // Compass VLD Tiny v5 replaced Ternary Bonsai 2 2B Vision here, whose real
+  // Compass VLD replaced Ternary Bonsai 2 2B Vision here, whose real
   // trace replays exposed confident false failures and false completions; a
   // saved selection now uses the new model.
   if (provider === 'webgpu_chat') return {
@@ -245,7 +255,7 @@ function selectedDecisionConfig(stored, compass, on) {
 }
 
 export async function listDecisionModels(config, fetchImpl = decisionFetch, signal) {
-  if (config.provider === 'webgpu_chat') return [{ id: WEBGPU_CHAT_DECISION_MODEL, name: 'Compass VLD Tiny v5 (in-browser)', supportsVision: true, inputRate: 0, outputRate: 0 }];
+  if (config.provider === 'webgpu_chat') return [{ id: WEBGPU_CHAT_DECISION_MODEL, name: 'Compass VLD v6 2B (in-browser)', supportsVision: true, inputRate: 0, outputRate: 0 }];
   if (config.provider === 'webgpu_d1') return [{ id: D1_MODEL_ID, name: 'D1 FP16 (experimental, on-device)', supportsVision: true, inputRate: 0, outputRate: 0 }];
   return withCompletionTimeout(requestSignal => discoverDecisionModels(config, fetchImpl, requestSignal), signal, 5000);
 }

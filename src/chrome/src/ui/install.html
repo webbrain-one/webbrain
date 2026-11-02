@@ -19,7 +19,7 @@
         <!-- The one in-browser model WebBrain already offers for WebGPU. Its id
              lives here so install.js stays identical in the Firefox build,
              which has no in-browser model runtime and no such block. -->
-        <div id="local-model" class="local-model" data-model="webbrain-one/webbrain-compass-vld-tiny-v5-onnx" data-state="checking">
+        <div id="local-model" class="local-model" data-model="webbrain-one/webbrain-compass-vld-v6-2b-onnx" data-state="checking">
           <button id="local-model-button" class="open-panel-button local-model-button" type="button" aria-describedby="local-model-status local-model-note" disabled>
             <span id="local-model-label" data-i18n="install.local_model.download">Download local models</span>
             <svg class="local-model-icon local-model-icon--download" viewBox="0 0 24 24" aria-hidden="true">
@@ -34,7 +34,7 @@
           </button>
           <div id="local-model-progress" class="local-model-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Local model download" data-i18n-aria-label="install.local_model.progress_label" hidden><i></i></div>
           <p id="local-model-status" class="local-model-status" aria-live="polite"></p>
-          <p id="local-model-note" class="local-model-note" data-i18n="install.local_model.note">Optional · about 2.2 GB from Hugging Face: Compass VLD Tiny v5, one model that chats, reads screenshots and answers WebBrain’s quick questions on this device, using its GPU memory. You can skip this.</p>
+          <p id="local-model-note" class="local-model-note" data-i18n="install.local_model.note">Optional · about 2.4 GB from Hugging Face: Compass VLD v6 2B, one model that chats, reads screenshots and answers WebBrain’s quick questions on this device, using its GPU memory. You can skip this.</p>
         </div>
       </div>
 

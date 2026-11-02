@@ -16,7 +16,9 @@ const fixture = JSON.parse(await readFile(new URL('./fixtures/compass-vld-proces
 
 test('the preset, the runtime and the default agree on the model, its dtype and its size', () => {
   assert.equal(MODEL, WEBGPU_COMPASS_VLD_TINY_V5_MODEL_ID);
-  assert.equal(WEBGPU_DEFAULT_MODEL_ID, MODEL);
+  // Compass VLD v6 2B is the default now (test/compass-vld-v6-runtime.mjs); Tiny v5 stays a preset.
+  assert.notEqual(WEBGPU_DEFAULT_MODEL_ID, MODEL);
+  assert.ok(webgpuModelPreset(MODEL), 'Tiny v5 stays a preset');
   assert.deepEqual(runtime.COMPASS_VLD_DTYPE, WEBGPU_COMPASS_VLD_DTYPE);
   assert.equal(runtime.isCompassVldModel(` ${MODEL} `), true);
   assert.equal(runtime.isCompassVldModel('webbrain-one/Ternary-Bonsai-2-2B-ONNX-WebGPU-Vision'), false);

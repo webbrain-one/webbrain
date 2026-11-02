@@ -20,17 +20,18 @@ import {
 import { BONSAI_DECISION_PROBE, bonsaiProbeScores } from './bonsai-decision-probe.js';
 import { tinyAskGateProbability } from './tiny-ask-gate-probe.js';
 import {
-  COMPASS_VLD_DTYPE,
   CompassVldRuntime,
+  compassVldDtype,
   compassVldFilesCached,
   createCompassVldSessions,
   createCompassVldTokenizer,
   downloadCompassVld,
   isCompassVldModel,
-  preprocessImage as preprocessCompassVldImage,
+  isCompassVldV6Model,
   toRGB,
 } from './compass-vld-runtime.js';
-import { COMPASS_VLD_DECISION_PROBE, compassVldProbeScores } from './compass-vld-decision-probe.js';
+import { CompassVldV6Runtime } from './compass-vld-v6-runtime.js';
+import { compassVldDecisionProbe, compassVldProbeScores } from './compass-vld-decision-probe.js';
 
 let libraryPromise = null;
 let libraryVersion = null;
@@ -660,7 +661,7 @@ async function isTextModelReady(modelId, dtype) {
     const cache = await caches.open(TRANSFORMERS_CACHE_NAME);
     const marker = await cache.match(textReadyMarkerUrl(modelId, dtype));
     if (!marker) return false;
-    // The marker does not name Compass VLD Tiny v5's pinned revision. When its
+    // The marker does not name Compass VLD's pinned revision. When its
     // files are not all cached and checked (a newer pin, or a file stored but
     // never checked), drop the marker so the model reads as not downloaded and
     // Download fetches or checks them.
@@ -1270,7 +1271,8 @@ async function getTextRuntime(modelId, dtype, device, { localFilesOnly = false }
 }
 
 /**
- * Compass VLD Tiny v5 (compass-vld-runtime.js): ONNX Runtime sessions on the
+ * Compass VLD v6 2B (compass-vld-v6-runtime.js) or Tiny v5
+ * (compass-vld-runtime.js): ONNX Runtime sessions on the
  * same WebGPU device as Transformers.js, a Transformers.js tokenizer, and the
  * model's own processor port. It is one multimodal model for chat, screenshots
  * and decisions, so it lives in the resident multimodal slot (owner `text`)
@@ -1329,7 +1331,11 @@ async function getCompassVldRuntime(modelId, dtype, device, { localFilesOnly = f
       }
       throw error;
     }
-    const engine = new CompassVldRuntime(ort, tokenizer, sessions);
+    // v6 2B (LFM3-VL) and Tiny v5 (MiniCPM-V) share files, downloads and the
+    // tokenizer, but each has its own processor and decoder loop.
+    const engine = isCompassVldV6Model(modelId)
+      ? new CompassVldV6Runtime(ort, tokenizer, sessions)
+      : new CompassVldRuntime(ort, tokenizer, sessions);
     bindWebGpuDeviceDiagnostics(library);
     visionRuntime = { library, tokenizer, compassVld: engine, model: { dispose: () => engine.dispose() } };
     visionRuntimeKey = key;
@@ -1899,12 +1905,12 @@ async function loadCompassVldImages(runtime, urls, beforeImage = null) {
   for (const url of urls) {
     beforeImage?.();
     const image = await runtime.library.load_image(url);
-    images.push(preprocessCompassVldImage(toRGB(image.data, image.width, image.height, image.channels), image.width, image.height));
+    images.push(runtime.compassVld.preprocess(toRGB(image.data, image.width, image.height, image.channels), image.width, image.height));
   }
   return images;
 }
 
-// Chat, tool calls and screenshot reading on Compass VLD Tiny v5. Tool calls
+// Chat, tool calls and screenshot reading on Compass VLD (v6 2B or Tiny v5). Tool calls
 // come back as the template's <tool_call> XML in the text, which the agent's
 // tool-call parser reads, as for the other Qwen-template presets.
 async function runCompassVldText(payload) {
@@ -1912,7 +1918,7 @@ async function runCompassVldText(payload) {
   throwIfTextCancelled(requestKey);
   const modelId = assertOnnxTextModel(payload?.modelId);
   const device = payload?.device || 'webgpu';
-  const dtype = payload?.dtype || COMPASS_VLD_DTYPE;
+  const dtype = payload?.dtype || compassVldDtype(modelId);
   if (!await isTextModelReady(modelId, dtype)) {
     throw new Error(`${modelId} is not downloaded. Open Providers > WebGPU or Apocalypse Mode > WebGPU to download it before chatting.`);
   }
@@ -2079,7 +2085,7 @@ function decisionCancelledError() {
 // `isCancelled` reports a `cancel` for this request (a judge timeout or Stop).
 // It is checked before loading, between prefill slices and before every
 // continuation, so a timed-out decision frees the model queue promptly.
-// The same protocol on Compass VLD Tiny v5, which was fine-tuned on these
+// The same protocol on Compass VLD (v6 2B or Tiny v5), each fine-tuned on these
 // prompts (d1's train split): the page state and screenshots are prefilled
 // once and each question continues that cache.
 async function runCompassVldDecision(payload, { isCancelled = () => false } = {}) {
@@ -2087,7 +2093,7 @@ async function runCompassVldDecision(payload, { isCancelled = () => false } = {}
   stopIfCancelled();
   const modelId = assertOnnxTextModel(payload?.modelId);
   const request = normalizeDecisionRequest(payload);
-  const dtype = payload?.dtype || COMPASS_VLD_DTYPE;
+  const dtype = payload?.dtype || compassVldDtype(modelId);
   if (!await isTextModelReady(modelId, dtype)) {
     throw new Error(`${modelId} is not downloaded. Open Providers > WebGPU or Apocalypse Mode > WebGPU to download it first.`);
   }
@@ -2095,7 +2101,7 @@ async function runCompassVldDecision(payload, { isCancelled = () => false } = {}
   stopIfCancelled();
   const temperature = Number(payload?.temperature) > 0 ? Number(payload.temperature) : 1;
   const variant = ['readout', 'default', 'strict', 'verify', 'probe', 'gate'].includes(payload?.promptVariant) ? payload.promptVariant : 'probe';
-  if (variant === 'probe' && modelId !== COMPASS_VLD_DECISION_PROBE.model) {
+  if (variant === 'probe' && !compassVldDecisionProbe(modelId)) {
     throw new Error(`No decision probe is trained for ${modelId}.`);
   }
   const engine = runtime.compassVld;
@@ -2156,7 +2162,7 @@ async function runCompassVldDecision(payload, { isCancelled = () => false } = {}
           margins.push(output.logits[yesId] - output.logits[noId]);
           hidden.push(output.hidden);
         }
-        const scores = variant === 'probe' ? compassVldProbeScores(margins, hidden) : margins;
+        const scores = variant === 'probe' ? compassVldProbeScores(margins, hidden, modelId) : margins;
         answers[id] = {
           ...decisionAnswer(question, scores, { temperature }),
           ...(returnHidden ? { margins, hidden: hidden.map(vector => (vector ? encodeFloat16Base64(vector) : null)) } : {}),

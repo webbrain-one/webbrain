@@ -141,14 +141,14 @@ try {
           await page.waitForFunction(() => document.querySelector('#decision-auto-status').dataset.state === 'inactive');
           assert.doesNotMatch(await statusText(), /Ternary Bonsai/);
           assert.equal(await page.locator('#btn-test-system-one').isVisible(), false);
-          // A finished Compass VLD Tiny v5 download is what Auto uses.
+          // A finished Compass VLD download is what Auto uses.
           await page.evaluate(async () => {
             const { webgpuTextReadyMarkerUrl, WEBGPU_LOCAL_ASSIST_MODEL_ID } = await import('/src/chrome/src/providers/webgpu-model-cache.js');
             await (await caches.open('transformers-cache')).put(webgpuTextReadyMarkerUrl(WEBGPU_LOCAL_ASSIST_MODEL_ID), new Response('{}'));
             dispatchEvent(new Event('focus'));
           });
           await page.waitForFunction(() => document.querySelector('#decision-auto-status').dataset.state === 'active');
-          assert.match(await statusText(), tr ? /Kullanılıyor: bu cihazda Compass VLD Tiny v5\./ : /In use: Compass VLD Tiny v5, on this device\./);
+          assert.match(await statusText(), tr ? /Kullanılıyor: bu cihazda Compass VLD\./ : /In use: Compass VLD, on this device\./);
           assert.equal(await page.locator('#btn-test-system-one').isVisible(), true, 'the chat model runs here, so Auto can test it');
           await page.locator('#system-one-card').screenshot({ animations: 'disabled', caret: 'hide', path: `${output}/${build}-${lang}-${width}-auto-chat-model.png` });
           assert.equal(await page.evaluate(() => testRequests.filter(r => r.action === 'test_system_one').length), 0);
@@ -156,11 +156,11 @@ try {
           // check would unload it, so Auto does not use the chat model.
           await page.evaluate(() => { window.testInBrowserModels = ['webbrain-one/webbrain-compass-tiny-v2.1']; dispatchEvent(new Event('focus')); });
           await page.waitForFunction(() => document.querySelector('#decision-auto-status').dataset.state === 'inactive');
-          assert.doesNotMatch(await statusText(), /Compass VLD Tiny v5/);
+          assert.doesNotMatch(await statusText(), /Compass VLD/);
           assert.equal(await page.locator('#btn-test-system-one').isVisible(), false);
-          await page.evaluate(() => { window.testInBrowserModels = ['webbrain-one/webbrain-compass-vld-tiny-v5-onnx']; dispatchEvent(new Event('focus')); });
+          await page.evaluate(() => { window.testInBrowserModels = ['webbrain-one/webbrain-compass-vld-v6-2b-onnx']; dispatchEvent(new Event('focus')); });
           await page.waitForFunction(() => document.querySelector('#decision-auto-status').dataset.state === 'active');
-          assert.match(await statusText(), /Compass VLD Tiny v5/, 'a provider chatting on the chat decision model shares it');
+          assert.match(await statusText(), /Compass VLD/, 'a provider chatting on the chat decision model shares it');
           await page.evaluate(() => { delete window.testInBrowserModels; });
           await page.evaluate(async () => { await caches.delete('transformers-cache'); dispatchEvent(new Event('focus')); });
           await page.waitForFunction(() => document.querySelector('#decision-auto-status').dataset.state === 'inactive');
@@ -291,7 +291,7 @@ try {
           await page.reload();
           await page.waitForFunction(() => document.querySelector('#decision-provider').value === 'webgpu_chat');
           assert.equal(await page.locator('#btn-test-system-one').isVisible(), true, 'the in-browser chat model runs here, so it can be tested');
-          assert.equal(await page.locator('#decision-model').inputValue(), 'webbrain-one/webbrain-compass-vld-tiny-v5-onnx', 'its model is fixed');
+          assert.equal(await page.locator('#decision-model').inputValue(), 'webbrain-one/webbrain-compass-vld-v6-2b-onnx', 'its model is fixed');
           const ids = ['toggle-decision-done', 'toggle-system-one-watch', 'toggle-system-one-completion', 'toggle-system-one-classifications', 'toggle-system-one-browser'];
           for (const [i, value] of Object.values(switches).entries()) assert.equal(await page.locator(`#${ids[i]}`).isChecked(), value, 'the saved selection retains its switches');
           for (const provider of ['openrouter', 'typesafe', 'local']) {
