@@ -14,27 +14,55 @@
       <div class="install-copy">
         <p id="browser-label" class="eyebrow" aria-live="polite" data-i18n="install.checking">Checking your browser…</p>
         <h1 id="install-title" data-i18n="install.installed">WebBrain installed</h1>
-        <p id="install-intro" class="intro" aria-live="polite" data-i18n="install.local_model.intro">Start with an optional local model. When you’re ready, open WebBrain at the bottom of this page.</p>
+        <p id="install-intro" class="intro" aria-live="polite" data-i18n="install.setup.intro">Both options below are optional. Pick either, both, or neither, and change it anytime in Settings.</p>
 
-        <!-- The one in-browser model WebBrain already offers for WebGPU. Its id
-             lives here so install.js stays identical in the Firefox build,
-             which has no in-browser model runtime and no such block. -->
-        <div id="local-model" class="local-model" data-model="webbrain-one/webbrain-compass-vld-v6-2b-onnx" data-state="checking">
-          <button id="local-model-button" class="open-panel-button local-model-button" type="button" aria-describedby="local-model-status local-model-note" disabled>
-            <span id="local-model-label" data-i18n="install.local_model.download">Download local models</span>
-            <svg class="local-model-icon local-model-icon--download" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19.5h14"/>
-            </svg>
-            <svg class="local-model-icon local-model-icon--pause" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M9 6.5v11M15 6.5v11"/>
-            </svg>
-            <svg class="local-model-icon local-model-icon--ready" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M5 12.5l4.5 4.5L19 7.5"/>
-            </svg>
-          </button>
-          <div id="local-model-progress" class="local-model-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Local model download" data-i18n-aria-label="install.local_model.progress_label" hidden><i></i></div>
-          <p id="local-model-status" class="local-model-status" aria-live="polite"></p>
-          <p id="local-model-note" class="local-model-note" data-i18n="install.local_model.note">Optional · about 2.4 GB from Hugging Face: Compass VLD v6 2B, one model that chats, reads screenshots and answers WebBrain’s quick questions on this device, using its GPU memory. You can skip this.</p>
+        <div class="setup-options" role="group" aria-label="Optional setup" data-i18n-aria-label="install.setup.group_label">
+          <article id="companion-setup" class="setup-card companion-setup" data-state="checking" aria-labelledby="companion-title">
+            <div class="setup-card-head">
+              <span class="setup-glyph setup-glyph--companion" aria-hidden="true"><i></i></span>
+              <h2 id="companion-title" class="setup-title" data-i18n="install.companion.title">Use the AI plans you pay for</h2>
+              <span class="setup-optional" data-i18n="install.setup.optional">Optional</span>
+            </div>
+            <div class="setup-card-body">
+              <a id="companion-download" class="setup-button" href="https://webbrain.one/companion/#download" target="_blank" rel="noopener noreferrer" aria-describedby="companion-status companion-note">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19.5h14"/></svg>
+                <span id="companion-download-label" data-i18n="install.companion.get">Get WebBrain Companion</span>
+              </a>
+              <p id="companion-status" class="setup-status" aria-live="polite" hidden></p>
+              <p id="companion-note" class="setup-note" data-i18n="install.companion.note">Free app for your menu bar or system tray. Sign in to Claude, ChatGPT, Gemini, Grok or Kimi there, and WebBrain can use that plan.</p>
+              <p class="setup-note"><a href="https://webbrain.one/companion/#download" target="_blank" rel="noopener noreferrer" data-i18n="install.companion.other">Other systems and checksums</a></p>
+            </div>
+          </article>
+
+          <!-- The one in-browser model WebBrain already offers for WebGPU. Its id
+               lives here so install.js stays identical in the Firefox build,
+               which has no in-browser model runtime and no such block. -->
+          <article id="local-model" class="setup-card local-model" data-model="webbrain-one/webbrain-compass-vld-v6-2b-onnx" data-state="checking" aria-labelledby="local-model-title">
+            <div class="setup-card-head">
+              <span class="setup-glyph" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2.5"/><path d="M9.5 2.5V6M14.5 2.5V6M9.5 18v3.5M14.5 18v3.5M2.5 9.5H6M2.5 14.5H6M18 9.5h3.5M18 14.5h3.5M10 10h4v4h-4z"/></svg>
+              </span>
+              <h2 id="local-model-title" class="setup-title" data-i18n="install.local_model.title">Run a model on this device</h2>
+              <span class="setup-optional" data-i18n="install.setup.optional">Optional</span>
+            </div>
+            <div class="setup-card-body">
+              <button id="local-model-button" class="setup-button setup-button--quiet local-model-button" type="button" aria-describedby="local-model-status local-model-note" disabled>
+                <svg class="local-model-icon local-model-icon--download" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19.5h14"/>
+                </svg>
+                <svg class="local-model-icon local-model-icon--pause" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M9 6.5v11M15 6.5v11"/>
+                </svg>
+                <svg class="local-model-icon local-model-icon--ready" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M5 12.5l4.5 4.5L19 7.5"/>
+                </svg>
+                <span id="local-model-label" data-i18n="install.local_model.download">Download local models</span>
+              </button>
+              <div id="local-model-progress" class="local-model-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Local model download" data-i18n-aria-label="install.local_model.progress_label" hidden><i></i></div>
+              <p id="local-model-status" class="local-model-status" aria-live="polite"></p>
+              <p id="local-model-note" class="local-model-note" data-i18n="install.local_model.note">Optional · about 2.4 GB from Hugging Face: Compass VLD v6 2B, one model that chats, reads screenshots and answers WebBrain’s quick questions on this device, using its GPU memory. You can skip this.</p>
+            </div>
+          </article>
         </div>
       </div>
 

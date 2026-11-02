@@ -97,14 +97,14 @@ kbd {
   min-height: 100svh;
   padding: clamp(40px, 7vh, 80px) 0 clamp(24px, 4vh, 40px);
   display: grid;
-  grid-template-columns: minmax(280px, 0.72fr) minmax(540px, 1.45fr);
+  grid-template-columns: minmax(340px, 0.8fr) minmax(540px, 1.4fr);
   grid-template-rows: 1fr auto;
   align-items: center;
   gap: clamp(24px, 4vh, 40px) clamp(42px, 6vw, 78px);
 }
 
 .install-copy {
-  max-width: 470px;
+  max-width: 500px;
 }
 
 .eyebrow {
@@ -121,7 +121,7 @@ h1 {
   max-width: 660px;
   margin: 16px 0 0;
   font-family: var(--display);
-  font-size: clamp(56px, 6vw, 82px);
+  font-size: clamp(48px, 4.6vw, 66px);
   font-weight: 800;
   font-variation-settings: "opsz" 84;
   line-height: 0.94;
@@ -130,10 +130,10 @@ h1 {
 }
 
 .intro {
-  max-width: 460px;
-  margin: 26px 0 0;
+  max-width: 470px;
+  margin: 20px 0 0;
   color: var(--muted);
-  font-size: clamp(16px, 1.5vw, 20px);
+  font-size: clamp(15px, 1.3vw, 18px);
   font-weight: 520;
   line-height: 1.52;
   letter-spacing: -0.012em;
@@ -218,17 +218,202 @@ h1 {
   color: var(--error);
 }
 
-/* Optional local model (Chrome hero). Firefox has no in-browser runtime, so
-   its page has no .local-model block and these rules stay unused there. */
-.local-model {
-  margin-top: 34px;
+/* Optional setup cards: WebBrain Companion (both builds) and the local model
+   (Chrome only; Firefox has no in-browser runtime and no #local-model card).
+   The hero column is narrow, so the cards stack. */
+.setup-options {
+  margin-top: 26px;
+  display: grid;
+  gap: 12px;
+}
+
+.setup-card {
+  position: relative;
+  padding: 16px 16px 15px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--surface) 86%, transparent);
+  box-shadow: inset 0 0 0 1px var(--line);
+  transition: box-shadow 200ms ease;
+}
+
+.setup-card-head {
+  min-height: 40px;
+  display: grid;
+  grid-template-columns: 40px 1fr;
+  align-items: center;
+  gap: 14px;
+}
+
+.setup-glyph {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.setup-glyph svg {
+  width: 24px;
+  height: 24px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* The Companion's own menu bar icon, tinted by the theme. */
+.setup-glyph--companion i {
+  width: 24px;
+  height: 24px;
+  display: block;
+  background: currentColor;
+  -webkit-mask: url("../../icons/companion-tray.png") center / contain no-repeat;
+  mask: url("../../icons/companion-tray.png") center / contain no-repeat;
+}
+
+.setup-title {
+  margin: 0;
+  padding-right: 84px;
+  font-family: var(--display);
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.setup-optional {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--quiet);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.setup-card-body {
+  margin: 12px 0 0 54px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
 }
 
-.local-model .open-panel-button {
+.setup-button {
+  min-height: 40px;
+  padding: 0 16px 0 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 11px;
+  background: var(--accent-strong);
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: background 160ms ease, transform 160ms ease;
+}
+
+.setup-button:hover {
+  background: var(--accent);
+  transform: translateY(-1px);
+}
+
+.setup-button:focus-visible,
+.setup-note a:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent) 48%, transparent);
+  outline-offset: 3px;
+}
+
+.setup-button svg {
+  width: 17px;
+  height: 17px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.setup-button--quiet {
+  background: var(--surface-strong);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.setup-button--quiet:hover {
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface-strong));
+}
+
+.setup-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+  transform: none;
+}
+
+.setup-status,
+.local-model-status {
+  max-width: 440px;
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 520;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+}
+
+.setup-status[hidden],
+.local-model-status:empty {
+  display: none;
+}
+
+.local-model-status.is-error {
+  color: var(--error);
+}
+
+.setup-note,
+.local-model-note {
+  max-width: 440px;
+  margin: 8px 0 0;
+  color: var(--quiet);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.setup-note a {
+  color: var(--muted);
+}
+
+/* Done: the card turns green and keeps only its title and status line. */
+.setup-card[data-state="ready"] {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--success) 42%, var(--line));
+}
+
+.setup-card[data-state="ready"] .setup-optional,
+.setup-card[data-state="ready"] .setup-button,
+.setup-card[data-state="ready"] .setup-note,
+.setup-card[data-state="ready"] .local-model-note {
+  display: none;
+}
+
+.setup-card[data-state="ready"] .setup-card-body {
+  margin-top: 4px;
+}
+
+.setup-card[data-state="ready"] .setup-status,
+.setup-card[data-state="ready"] .local-model-status {
   margin-top: 0;
+  color: var(--success);
+  font-weight: 600;
 }
 
 .local-model-icon--pause,
@@ -243,38 +428,10 @@ h1 {
   display: block;
 }
 
-.local-model-button:hover svg {
-  transform: translateY(2px);
-}
-
-/* While the transfer runs the button only pauses it, so it steps back. */
-.local-model[data-state="downloading"] .local-model-button {
-  background: var(--surface-strong);
-  color: var(--text);
-  box-shadow: inset 0 0 0 1px var(--line);
-}
-
-.local-model[data-state="downloading"] .local-model-button:hover {
-  background: color-mix(in srgb, var(--accent) 12%, var(--surface-strong));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 34%, var(--line));
-}
-
-.local-model[data-state="downloading"] .local-model-button:hover svg {
-  transform: none;
-}
-
-.local-model[data-state="ready"] .local-model-button:disabled {
-  background: color-mix(in srgb, var(--success) 13%, var(--surface));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--success) 42%, transparent);
-  color: var(--success);
-  cursor: default;
-  opacity: 1;
-}
-
 .local-model-progress {
-  width: min(100%, 340px);
+  width: 100%;
   height: 6px;
-  margin-top: 16px;
+  margin-top: 4px;
   overflow: hidden;
   border-radius: 999px;
   background: color-mix(in srgb, var(--text) 11%, transparent);
@@ -293,33 +450,19 @@ h1 {
   transition: width 400ms ease;
 }
 
-.local-model-status {
-  max-width: 440px;
-  margin: 10px 0 0;
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 520;
-  line-height: 1.5;
-  font-variant-numeric: tabular-nums;
+/* While the transfer runs, the progress bar leads and the button steps below it. */
+.local-model[data-state="downloading"] .setup-card-body,
+.local-model[data-state="paused"] .setup-card-body {
+  flex-direction: column-reverse;
 }
 
-.local-model-status:empty {
-  display: none;
+.local-model[data-state="downloading"] .local-model-status,
+.local-model[data-state="paused"] .local-model-status {
+  margin: 8px 0;
 }
 
-.local-model-status.is-error {
-  color: var(--error);
-}
-
-.local-model-note {
-  max-width: 440px;
-  margin: 10px 0 0;
-  color: var(--quiet);
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.local-model[data-state="ready"] .local-model-note {
+.local-model[data-state="downloading"] .local-model-note,
+.local-model[data-state="paused"] .local-model-note {
   display: none;
 }
 
@@ -700,10 +843,12 @@ body::after {
 }
 
 @media (max-width: 420px) {
-  .open-panel-button,
-  .local-model,
-  .local-model-progress {
+  .open-panel-button {
     width: 100%;
+  }
+
+  .setup-card-body {
+    margin-left: 0;
   }
 
   .feature-showcase {
@@ -714,6 +859,8 @@ body::after {
 @media (prefers-reduced-motion: reduce) {
   .open-panel-button,
   .open-panel-button svg,
+  .setup-button,
+  .setup-card,
   .local-model-progress > i,
   .feature-tab {
     transition: none;

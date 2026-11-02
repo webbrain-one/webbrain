@@ -24,6 +24,25 @@
         </button>
 
         <p id="open-panel-status" class="open-panel-status" aria-live="polite"></p>
+
+        <div class="setup-options" role="group" aria-label="Optional setup" data-i18n-aria-label="install.setup.group_label">
+          <article id="companion-setup" class="setup-card companion-setup" data-state="checking" aria-labelledby="companion-title">
+            <div class="setup-card-head">
+              <span class="setup-glyph setup-glyph--companion" aria-hidden="true"><i></i></span>
+              <h2 id="companion-title" class="setup-title" data-i18n="install.companion.title">Use the AI plans you pay for</h2>
+              <span class="setup-optional" data-i18n="install.setup.optional">Optional</span>
+            </div>
+            <div class="setup-card-body">
+              <a id="companion-download" class="setup-button" href="https://webbrain.one/companion/#download" target="_blank" rel="noopener noreferrer" aria-describedby="companion-status companion-note">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19.5h14"/></svg>
+                <span id="companion-download-label" data-i18n="install.companion.get">Get WebBrain Companion</span>
+              </a>
+              <p id="companion-status" class="setup-status" aria-live="polite" hidden></p>
+              <p id="companion-note" class="setup-note" data-i18n="install.companion.note">Free app for your menu bar or system tray. Sign in to Claude, ChatGPT, Gemini, Grok or Kimi there, and WebBrain can use that plan.</p>
+              <p class="setup-note"><a href="https://webbrain.one/companion/#download" target="_blank" rel="noopener noreferrer" data-i18n="install.companion.other">Other systems and checksums</a></p>
+            </div>
+          </article>
+        </div>
       </div>
 
       <aside class="feature-showcase" aria-labelledby="install-title">

@@ -45879,7 +45879,7 @@ test('first install opens a browser-aware panel launcher without fake toolbar co
     const chromeLocale = (await import(pathToFileURL(path.join(ROOT, 'src/chrome/src/ui/locales', filename)).href)).default;
     const firefoxLocale = (await import(pathToFileURL(path.join(ROOT, 'src/firefox/src/ui/locales', filename)).href)).default;
     const installKeys = Object.keys(chromeLocale).filter((key) => key.startsWith('install.'));
-    assert.equal(installKeys.length, 86, `${filename}: install guide should translate every user-facing string`);
+    assert.equal(installKeys.length, 97, `${filename}: install guide should translate every user-facing string`);
     assert.ok(chromeLocale['install.showcase.ask.title'], `${filename}: Ask showcase headline should be translated`);
     assert.ok(chromeLocale['install.showcase.apocalypse.body'], `${filename}: Apocalypse showcase body should be translated`);
     for (const key of [
@@ -45891,12 +45891,16 @@ test('first install opens a browser-aware panel launcher without fake toolbar co
       'install.mock.files', 'install.mock.offline', 'install.mock.not_robot', 'install.mock.captcha_blocked',
       'install.mock.captcha_sent', 'install.mock.captcha_waiting', 'install.mock.captcha_note',
       'install.mock.show_image', 'install.mock.safesocial_note', 'install.mock.tab', 'install.mock.screen',
-      ...['intro', 'download', 'note', 'checking', 'downloading', 'pause', 'resume', 'paused', 'working', 'ready',
+      'install.setup.intro', 'install.setup.optional', 'install.setup.group_label', 'install.local_model.title',
+      ...['title', 'note', 'download', 'get', 'other', 'idle', 'signin', 'ready'].map((key) => `install.companion.${key}`),
+      ...['download', 'note', 'checking', 'downloading', 'pause', 'resume', 'paused', 'working', 'ready',
         'ready_detail', 'retry', 'error', 'unsupported', 'busy', 'progress_label', 'd1_downloading', 'd1_paused',
         'd1_ready', 'd1_saved', 'd1_unsupported', 'd1_error'].map((key) => `install.local_model.${key}`),
     ]) {
       assert.ok(chromeLocale[key], `${filename}: ${key} should be translated`);
     }
+    assert.ok(chromeLocale['install.companion.download'].includes('{os}'), `${filename}: the Companion button must keep its {os} placeholder`);
+    assert.equal(chromeLocale['install.local_model.intro'], undefined, `${filename}: the old local-model intro is gone`);
     assert.ok(chromeLocale['install.local_model.downloading'].includes('{progress}'), `${filename}: download progress must keep its placeholder`);
     assert.ok(chromeLocale['install.local_model.paused'].includes('{progress}'), `${filename}: paused progress must keep its placeholder`);
     assert.ok(chromeLocale['install.local_model.error'].includes('{error}'), `${filename}: the download error must keep its placeholder`);
@@ -45931,6 +45935,110 @@ test('first install opens a browser-aware panel launcher without fake toolbar co
   assert.match(englishLocale['install.open_failed_firefox'], /Firefox Extensions/i, 'firefox: failed open should point to Firefox Extensions');
 });
 
+test('install page and onboarding offer the optional WebBrain Companion', async () => {
+  const companion = await import(pathToFileURL(path.join(ROOT, 'src/chrome/src/providers/companion-config.js')).href);
+  const english = (await import(pathToFileURL(path.join(ROOT, 'src/chrome/src/ui/locales/en.js')).href)).default;
+  for (const [label, prefix] of [['chrome', 'src/chrome'], ['firefox', 'src/firefox']]) {
+    const html = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/install.html'), 'utf8');
+    const hero = html.match(/<section class="install-hero"[\s\S]*?<\/section>/)[0];
+    const card = hero.match(/<article id="companion-setup"[\s\S]*?<\/article>/)?.[0];
+    assert.ok(card, `${label}: the hero should offer the Companion`);
+    assert.match(hero, /<div class="setup-options" role="group"[^>]*data-i18n-aria-label="install\.setup\.group_label">\s*<article id="companion-setup"/, `${label}: the setup cards are one labelled group, Companion first`);
+    assert.match(card, /class="setup-optional" data-i18n="install\.setup\.optional"/, `${label}: the card says it is optional`);
+    assert.match(card, /class="setup-glyph setup-glyph--companion"/, `${label}: the card shows the Companion's menu bar icon`);
+    assert.match(card, /<a id="companion-download" class="setup-button" href="https:\/\/webbrain\.one\/companion\/#download" target="_blank" rel="noopener noreferrer"/, `${label}: without script the button still reaches the download page`);
+    assert.match(card, /id="companion-status" class="setup-status" aria-live="polite" hidden/, `${label}: the Companion's status is announced and hidden until known`);
+    assert.ok(fs.existsSync(path.join(ROOT, prefix, 'icons/companion-tray.png')), `${label}: the tray icon ships with the extension`);
+    if (label === 'chrome') {
+      assert.ok(hero.indexOf('id="companion-setup"') < hero.indexOf('id="local-model"'), 'chrome: plans people already pay for come before the 2.4 GB download');
+    } else {
+      assert.ok(hero.indexOf('id="open-panel-button"') < hero.indexOf('id="companion-setup"'), 'firefox: the sidebar button stays first');
+    }
+    for (const key of new Set([...card.matchAll(/data-i18n="([\w.]+)"/g)].map((m) => m[1]))) assert.ok(english[key], `${label}: missing English string ${key}`);
+
+    const settings = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/settings.js'), 'utf8');
+    assert.doesNotMatch(settings, /const WEBBRAIN_COMPANION_(?:DOWNLOAD_BASE|SITE_URL) =/, `${label}: Settings reads the Companion links from companion-config.js`);
+
+    const panelHtml = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/sidepanel.html'), 'utf8');
+    const panelJs = fs.readFileSync(path.join(ROOT, prefix, 'src/ui/sidepanel.js'), 'utf8');
+    const panelCss = fs.readFileSync(path.join(ROOT, prefix, 'styles/sidepanel.css'), 'utf8');
+    assert.match(panelHtml, /id="ob-provider-status"[^>]*><\/div>\s*<p class="ob-companion-hint hidden" id="ob-companion-hint">[\s\S]*?href="https:\/\/webbrain\.one\/companion\/#download" target="_blank" rel="noopener noreferrer" data-i18n="ob\.tokens\.companion_link"[\s\S]*?data-i18n="ob\.tokens\.companion_optional"/, `${label}: the model step can point to the Companion, marked optional`);
+    assert.match(panelJs, /function showProviderFallback\([\s\S]*?setCompanionHintVisible\(true\)/, `${label}: the Companion line shows when no model was found`);
+    for (const fn of ['showLocalChoices', 'showCloudReady', 'showConfiguredProviderReady', 'scanLocalModels']) {
+      assert.match(panelJs, new RegExp(`function ${fn}\\([\\s\\S]*?setCompanionHintVisible\\(false\\)`), `${label}: ${fn} hides the Companion line`);
+    }
+    assert.match(panelCss, /mask: url\("\.\.\/icons\/companion-tray\.png"\)/, `${label}: the line uses the tray icon`);
+  }
+  for (const key of ['companion_title', 'companion_body', 'companion_link', 'companion_optional']) assert.ok(english[`ob.tokens.${key}`], `ob.tokens.${key} should be translated`);
+
+  const mac = { userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/140.0 Safari/537.36' };
+  for (const [nav, expected] of [
+    [mac, 'macos'],
+    [{ userAgent: 'Mozilla/5.0', userAgentData: { platform: 'macOS' } }, 'macos'],
+    [{ userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/140.0' }, 'windows'],
+    [{ userAgent: 'Mozilla/5.0 (X11; Linux x86_64) Chrome/140.0' }, 'linux-x64'],
+    [{ userAgent: 'Mozilla/5.0 (X11; Linux aarch64) Chrome/140.0' }, 'linux-arm64'],
+    [{ userAgent: 'Mozilla/5.0 (X11; CrOS x86_64 14541.0.0) Chrome/140.0' }, ''],
+    [{ userAgent: 'Mozilla/5.0 (Linux; Android 15) Chrome/140.0 Mobile' }, ''],
+  ]) {
+    assert.equal(companion.detectCompanionPlatform(nav), expected, `${nav.userAgent || nav.userAgentData.platform}: Companion build`);
+  }
+  assert.equal(companion.companionDownloadFor('windows').url, `https://github.com/webbrain-one/webbrain/releases/download/systray-v${companion.WEBBRAIN_COMPANION_VERSION}/WebBrain-Companion-${companion.WEBBRAIN_COMPANION_VERSION}-windows-setup.exe`);
+  assert.equal(companion.companionDownloadFor(''), null, 'no build: no direct download');
+
+  const install = await import(pathToFileURL(path.join(ROOT, 'src/chrome/src/ui/install.js')).href);
+  assert.equal(install.normalizeCompanionProbe({ ok: false, error: 'Failed to fetch' }), 'idle');
+  assert.equal(install.normalizeCompanionProbe(undefined), 'idle');
+  assert.equal(install.normalizeCompanionProbe({ ok: true, models: [] }), 'signin', 'running without a signed-in plan');
+  assert.equal(install.normalizeCompanionProbe({ ok: true, models: ['haiku-5.5'] }), 'ready');
+  for (const status of ['idle', 'signin', 'ready']) assert.ok(english[install.companionStatusKey(status)], `${status}: status line should be translated`);
+  assert.equal(install.companionStatusKey('checking'), '', 'nothing to say before the first probe');
+
+  const element = () => ({ dataset: {}, hidden: false, textContent: '', href: '' });
+  const companionDocument = () => {
+    const nodes = { 'companion-setup': element(), 'companion-download': element(), 'companion-download-label': element(), 'companion-status': element() };
+    const listeners = new Map();
+    return { nodes, listeners, visibilityState: 'visible', getElementById: (id) => nodes[id] || null, addEventListener: (type, fn) => listeners.set(type, fn), removeEventListener: (type) => listeners.delete(type) };
+  };
+  const translate = (key, params = {}) => `${key}${params.os ? `|${params.os}` : ''}`;
+  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  assert.equal(install.initializeCompanionSetup({ documentLike: { getElementById: () => null } }), null, 'no card, nothing to wire');
+  {
+    const documentLike = companionDocument();
+    let reply = { ok: false, error: 'Failed to fetch' };
+    const sent = [];
+    const runtime = { async sendMessage(message) { sent.push(message); return reply; } };
+    const setup = install.initializeCompanionSetup({ documentLike, runtime, navigatorLike: mac, translate, pollMs: 5 });
+    assert.equal(documentLike.nodes['companion-download'].href, companion.companionDownloadFor('macos').url, 'a Mac gets the macOS build');
+    assert.equal(documentLike.nodes['companion-download-label'].textContent, 'install.companion.download|macOS');
+    assert.equal(documentLike.nodes['companion-setup'].dataset.state, 'checking');
+    await wait(1);
+    assert.deepEqual(sent[0], { target: 'background', action: 'list_provider_models', providerId: 'webbrain_companion' }, 'the card asks the background, like onboarding does');
+    assert.equal(documentLike.nodes['companion-setup'].dataset.state, 'idle');
+    assert.equal(documentLike.nodes['companion-status'].hidden, false);
+    assert.equal(documentLike.nodes['companion-status'].textContent, 'install.companion.idle');
+    reply = { ok: true, models: [] };
+    await wait(20);
+    assert.equal(documentLike.nodes['companion-setup'].dataset.state, 'signin', 'it keeps watching until the app is signed in');
+    reply = { ok: true, models: ['haiku-5.5', 'luna-6.1'] };
+    await wait(20);
+    assert.equal(documentLike.nodes['companion-setup'].dataset.state, 'ready');
+    assert.equal(documentLike.nodes['companion-status'].textContent, 'install.companion.ready');
+    const probes = sent.length;
+    await wait(20);
+    assert.equal(sent.length, probes, 'once ready, it stops polling');
+    setup.dispose();
+    assert.equal(documentLike.listeners.has('visibilitychange'), false, 'dispose releases its listener');
+  }
+  {
+    const documentLike = companionDocument();
+    const setup = install.initializeCompanionSetup({ documentLike, runtime: { sendMessage: async () => ({ ok: false }) }, navigatorLike: { userAgent: 'Mozilla/5.0 (X11; CrOS x86_64 14541.0.0) Chrome/140.0' }, translate, pollMs: 1000 });
+    assert.equal(documentLike.nodes['companion-download'].href, companion.WEBBRAIN_COMPANION_SITE_URL, 'ChromeOS has no build: the button opens the download page');
+    assert.equal(documentLike.nodes['companion-download-label'].textContent, 'install.companion.get');
+    setup.dispose();
+  }
+});
+
 test('chrome install page offers the shipped in-browser model with progress instead of opening the panel first', async () => {
   const chromeHtml = fs.readFileSync(path.join(ROOT, 'src/chrome/src/ui/install.html'), 'utf8');
   const firefoxHtml = fs.readFileSync(path.join(ROOT, 'src/firefox/src/ui/install.html'), 'utf8');
@@ -45940,7 +46048,7 @@ test('chrome install page offers the shipped in-browser model with progress inst
   const english = (await import(pathToFileURL(path.join(ROOT, 'src/chrome/src/ui/locales/en.js')).href)).default;
 
   const hero = chromeHtml.match(/<section class="install-hero"[\s\S]*?<\/section>/)[0];
-  const modelId = hero.match(/<div id="local-model" class="local-model" data-model="([^"]+)"/)?.[1];
+  const modelId = hero.match(/<article id="local-model" class="setup-card local-model" data-model="([^"]+)"/)?.[1];
   assert.equal(modelId, webgpu.WEBGPU_DEFAULT_MODEL_ID, 'the install page should download the default preset, Compass VLD v6 2B');
   assert.equal(modelId, webgpu.WEBGPU_COMPASS_VLD_V6_MODEL_ID);
   assert.ok(webgpu.isSelectableWebgpuPreset(modelId), 'the install page should offer a model the WebGPU pickers already offer');
@@ -45948,7 +46056,8 @@ test('chrome install page offers the shipped in-browser model with progress inst
   assert.match(hero, /id="local-model-progress"[^>]*role="progressbar"[^>]*hidden/, 'progress should be an accessible progress bar, hidden until a transfer runs');
   assert.match(hero, /id="local-model-status"[^>]*aria-live="polite"/, 'download status should be announced');
   assert.match(hero, /id="local-model-note" class="local-model-note" data-i18n="install\.local_model\.note"/, 'the optional note should sit under the button');
-  assert.match(hero, /id="install-intro"[^>]*data-i18n="install\.local_model\.intro"/, 'the hero intro should point to the open button at the bottom of the page');
+  assert.match(hero, /id="install-intro"[^>]*data-i18n="install\.setup\.intro"/, 'the hero intro should say both setup options are optional');
+  assert.match(english['install.setup.intro'], /optional/i, 'the intro says the options are optional');
   assert.doesNotMatch(firefoxHtml, /id="local-model"|install\.local_model\./, 'firefox: no in-browser model runtime, so the page keeps its sidebar button');
   assert.match(css, /\.local-model-note \{[\s\S]*?color: var\(--quiet\);[\s\S]*?font-size: 12px;/, 'the optional note should be small and gray');
   assert.match(english['install.local_model.note'], /^Optional\b/, 'the note should say up front that the download is optional');
@@ -73573,7 +73682,7 @@ test('onboarding distinguishes Osaurus and Jan on their shared port in both brow
         const totalSteps = 3, current = totalSteps - 1;
         const settingsBtn = {}, skipBtn = {}, providerBody = {};
         const providerList = { classList: { add() {} } }, localModels = providerList;
-        const t = key => key, setProviderStatus = () => {};
+        const t = key => key, setProviderStatus = () => {}, setCompanionHintVisible = () => {};
         const providerSortIndex = id => {
           const index = LOCAL_PROVIDER_ORDER.indexOf(id);
           return index === -1 ? LOCAL_PROVIDER_ORDER.length : index;

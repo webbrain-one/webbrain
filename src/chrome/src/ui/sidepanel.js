@@ -280,6 +280,7 @@ const pinCoachmarkDismissed = (async function initPinCoachmark() {
   const newTabCheckbox = document.getElementById('ob-newtab-checkbox');
   const localModels = document.getElementById('ob-local-models');
   const localModelList = document.getElementById('ob-local-model-list');
+  const companionHint = document.getElementById('ob-companion-hint');
   const totalSteps = steps.length;
   const LOCAL_PROVIDER_ORDER = ['webbrain_companion', 'unsloth', 'local_openai_proxy', 'jan', 'osaurus', 'lmstudio', 'ollama', 'ods', 'llamacpp', 'vllm', 'sglang', 'localai', 'gpt4all'];
   let current = 0;
@@ -316,6 +317,11 @@ const pinCoachmarkDismissed = (async function initPinCoachmark() {
   function setProviderStatus(key, params) {
     if (dismissed) return;
     if (providerStatus) providerStatus.textContent = t(key, params);
+  }
+
+  // The optional Companion line shows only when no model was found.
+  function setCompanionHintVisible(visible) {
+    companionHint?.classList.toggle('hidden', !visible);
   }
 
   function setHelpImproveVisible(visible) {
@@ -375,6 +381,7 @@ const pinCoachmarkDismissed = (async function initPinCoachmark() {
     localModelChoices = [];
     const providerUnknown = statusKey === 'ob.tokens.detect_failed';
     setHelpImproveVisible(providerUnknown);
+    setCompanionHintVisible(true);
     if (providerBody) providerBody.textContent = t('ob.tokens.body');
     providerList?.classList.remove('hidden');
     localModels?.classList.add('hidden');
@@ -389,6 +396,7 @@ const pinCoachmarkDismissed = (async function initPinCoachmark() {
     readyProviderId = null;
     localModelChoices = choices;
     setHelpImproveVisible(false);
+    setCompanionHintVisible(false);
     selectedLocalModelIndex = 0;
     if (providerBody) providerBody.textContent = t('ob.tokens.local_body');
     if (localModelList) {
@@ -449,6 +457,7 @@ const pinCoachmarkDismissed = (async function initPinCoachmark() {
     readyProviderId = 'webbrain_cloud';
     localModelChoices = [];
     setHelpImproveVisible(true);
+    setCompanionHintVisible(false);
     if (providerBody) {
       providerBody.textContent = t('ob.cloud.using').trim();
     }
@@ -500,6 +509,7 @@ const pinCoachmarkDismissed = (async function initPinCoachmark() {
     readyProviderId = provider.id;
     localModelChoices = [];
     setHelpImproveVisible(false);
+    setCompanionHintVisible(false);
     if (providerBody) providerBody.textContent = t('ob.tokens.local_note');
     const model = provider.model ? ` · ${provider.model}` : '';
     showReadyProviderStatus(`${t('st.providers.selected')}: ${provider.label}${model}. `);
@@ -528,6 +538,7 @@ const pinCoachmarkDismissed = (async function initPinCoachmark() {
     settingsBtn.textContent = t('ob.btn.detecting');
     providerList?.classList.add('hidden');
     localModels?.classList.add('hidden');
+    setCompanionHintVisible(false);
     if (providerBody) providerBody.textContent = t('ob.tokens.body');
     setProviderStatus('ob.tokens.scanning');
 

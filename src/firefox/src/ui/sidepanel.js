@@ -161,6 +161,7 @@ if (globalThis.browser?.storage?.onChanged) {
   const helpImproveCheckbox = document.getElementById('ob-help-improve-checkbox');
   const localModels = document.getElementById('ob-local-models');
   const localModelList = document.getElementById('ob-local-model-list');
+  const companionHint = document.getElementById('ob-companion-hint');
   const totalSteps = steps.length;
   const LOCAL_PROVIDER_ORDER = ['webbrain_companion', 'unsloth', 'local_openai_proxy', 'jan', 'osaurus', 'lmstudio', 'ollama', 'ods', 'llamacpp', 'vllm', 'sglang', 'localai', 'gpt4all'];
   let current = 0;
@@ -193,6 +194,11 @@ if (globalThis.browser?.storage?.onChanged) {
   function setProviderStatus(key, params) {
     if (dismissed) return;
     if (providerStatus) providerStatus.textContent = t(key, params);
+  }
+
+  // The optional Companion line shows only when no model was found.
+  function setCompanionHintVisible(visible) {
+    companionHint?.classList.toggle('hidden', !visible);
   }
 
   function setHelpImproveVisible(visible) {
@@ -252,6 +258,7 @@ if (globalThis.browser?.storage?.onChanged) {
     localModelChoices = [];
     const providerUnknown = statusKey === 'ob.tokens.detect_failed';
     setHelpImproveVisible(providerUnknown);
+    setCompanionHintVisible(true);
     if (providerBody) providerBody.textContent = t('ob.tokens.body');
     providerList?.classList.remove('hidden');
     localModels?.classList.add('hidden');
@@ -266,6 +273,7 @@ if (globalThis.browser?.storage?.onChanged) {
     readyProviderId = null;
     localModelChoices = choices;
     setHelpImproveVisible(false);
+    setCompanionHintVisible(false);
     selectedLocalModelIndex = 0;
     if (providerBody) providerBody.textContent = t('ob.tokens.local_body');
     if (localModelList) {
@@ -326,6 +334,7 @@ if (globalThis.browser?.storage?.onChanged) {
     readyProviderId = 'webbrain_cloud';
     localModelChoices = [];
     setHelpImproveVisible(true);
+    setCompanionHintVisible(false);
     if (providerBody) {
       providerBody.textContent = t('ob.cloud.using').trim();
     }
@@ -377,6 +386,7 @@ if (globalThis.browser?.storage?.onChanged) {
     readyProviderId = provider.id;
     localModelChoices = [];
     setHelpImproveVisible(false);
+    setCompanionHintVisible(false);
     if (providerBody) providerBody.textContent = t('ob.tokens.local_note');
     const model = provider.model ? ` · ${provider.model}` : '';
     showReadyProviderStatus(`${t('st.providers.selected')}: ${provider.label}${model}. `);
@@ -405,6 +415,7 @@ if (globalThis.browser?.storage?.onChanged) {
     settingsBtn.textContent = t('ob.btn.detecting');
     providerList?.classList.add('hidden');
     localModels?.classList.add('hidden');
+    setCompanionHintVisible(false);
     if (providerBody) providerBody.textContent = t('ob.tokens.body');
     setProviderStatus('ob.tokens.scanning');
 
