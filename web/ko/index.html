@@ -374,7 +374,7 @@
       "name": "WebBrain",
       "url": "https://webbrain.one/ko/",
       "inLanguage": "ko-KR",
-      "description": "WebBrain은 Claude 브라우저 플러그인의 무료 오픈소스 대안입니다. Chrome, Firefox, Edge용 AI 브라우저 에이전트 — 페이지를 읽고, 데이터를 추출하고, 작업을 자동화합니다. llama.cpp, OpenAI, Claude, OpenRouter와 함께 작동합니다. 다국어 UI, 토큰을 아끼는 스크린샷. GPL-3.0-or-later 라이선스.",
+      "description": "WebBrain은 웹페이지를 읽고, 설명하고, 직접 작업까지 하는 무료 AI 에이전트입니다. 오픈소스 확장 프로그램을 Chrome, Edge, Firefox에 추가하거나 방문자를 위해 웹사이트에 WebBrain을 추가하세요.",
       "publisher": {
         "@id": "https://webbrain.one/#organization"
       }
@@ -4187,7 +4187,7 @@
       <img class="brand-logo" src="/logo-github.png" alt="" aria-hidden="true"> WebBrain<span style="opacity:0.5; font-weight:400; -webkit-text-fill-color:currentColor;">.one</span>
     </a>
     <div class="nav-links">
-      
+      <a href="/websites/">웹사이트용</a>
       <a href="/research/" class="nav-secondary">연구</a>
       <a href="/docs/" class="nav-secondary">문서</a>
       <a href="/blog/" class="nav-secondary">블로그</a>
@@ -4248,14 +4248,14 @@
 <main class="home" id="top">
 <section class="home-hero" aria-labelledby="home-title">
   <div class="hero-split">
-    <div class="hero-copy" data-title="short">
+    <div class="hero-copy" data-title="long">
       <div class="hero-title">
         <!-- Until WebBrain for websites launches the hero speaks for the browser
              extension alone (WEBSITES_LAUNCHED in site-footer.mjs). -->
-        <p class="hero-kicker">무료 오픈 소스</p>
-        <h1 id="home-title"><span class="title-line">방문하는 모든 페이지에</span> <span class="title-line title-accent">AI 에이전트를.</span></h1>
+        <p class="hero-kicker">브라우저와 웹사이트 모두 무료</p>
+        <h1 id="home-title"><span class="title-line">방문하는 페이지에도, 만드는 페이지에도</span> <span class="title-line title-accent">AI 에이전트를.</span></h1>
       </div>
-      <p class="hero-lede">WebBrain은 웹 페이지를 읽고, 설명하고, 직접 작업합니다. Chrome, Edge, Firefox에 추가하면 어떤 사이트에서든, 로컬 모델을 포함한 어떤 모델로든 도움을 받을 수 있습니다.</p>
+      <p class="hero-lede">WebBrain은 웹페이지를 읽고, 설명하고, 직접 작업까지 합니다. 브라우저에 추가하면 어떤 사이트에서든 도움을 받고, 웹사이트에 추가하면 방문자도 같은 도움을 받습니다.</p>
       <div class="path-actions hero-actions-row">
         <a href="https://chromewebstore.google.com/detail/webbrain/ljhijonmfahplgbbacgcfnaihbjljhhb" target="_blank" rel="noopener noreferrer" class="path-btn" id="hero-install-cta">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -4584,6 +4584,62 @@
 
   </div>
 
+  
+  <!-- WebBrain for websites: same weight of words, less room. The code
+       illustration marks it as the developer product. Shown while
+       WEBSITES_LAUNCHED (site-footer.mjs) is on. -->
+  <section class="path path-websites" aria-labelledby="path-websites-title">
+    <div class="illo illo-site" aria-hidden="true">
+      <div class="code-pane">
+        <div class="code-tabbar"><span class="code-tab">index.html</span></div>
+        <code class="code-lines">
+          <span class="code-line" data-n="40"><span class="tk-tag">&lt;body&gt;</span></span>
+          <span class="code-line" data-n="41">  <span class="tk-tag">&lt;main&gt;</span><span class="tk-dim">…</span><span class="tk-tag">&lt;/main&gt;</span></span>
+          <span class="code-line is-added">  <span class="tk-tag">&lt;script</span> <span class="tk-attr">src</span>=<span class="tk-str">"…/embed.js"</span></span>
+          <span class="code-line is-added">    <span class="tk-attr">data-site-id</span>=<span class="tk-str">"…"</span><span class="tk-tag">&gt;&lt;/script&gt;</span></span>
+          <span class="code-line" data-n="44"><span class="tk-tag">&lt;/body&gt;</span></span>
+          <span class="code-line" data-n="45"><span class="tk-tag">&lt;/html&gt;</span></span>
+        </code>
+      </div>
+      <div class="sp-pane">
+        <div class="sp-nav"><b class="sp-logo"></b><span class="ln"></span><span class="ln"></span><span class="ln"></span></div>
+        <div class="sp-body">
+          <span class="ln ln-title"></span>
+          <span class="ln w95"></span>
+          <span class="ln w75"></span>
+        </div>
+        <div class="sp-drawer">
+          <span class="ln w85"></span>
+          <span class="ln w60"></span>
+          <span class="sp-chip"></span>
+          <span class="sp-chip w60"></span>
+        </div>
+        <span class="sp-launcher">✦ Ask AI</span>
+      </div>
+    </div>
+    <div class="path-copy">
+      <div class="path-text">
+        <div class="path-head">
+          <h2 id="path-websites-title">웹사이트에서</h2>
+          <span class="path-badge">무료</span>
+        </div>
+        <p>script 태그 하나로 모든 방문자에게 AI 가이드를 제공하세요. 페이지를 설명하고, 질문에 답하고, 허용하면 양식도 채워 줍니다.</p>
+      </div>
+      <div class="path-actions">
+        <a href="/websites/" class="path-btn path-btn-ink" id="hero-websites-cta">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          <span>웹사이트에 WebBrain 추가</span>
+        </a>
+        <span class="path-more">
+          <a href="https://sites.webbrain.one/playground" class="path-action" id="home-demo-open" data-embed-src="https://sites.webbrain.one/embed.js" data-site-id="site_webbrain_one" data-error="데모를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.">
+            <span class="path-action-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
+            <span>데모</span>
+          </a>
+        </span>
+        <p class="path-status" id="home-demo-status" role="status"></p>
+      </div>
+    </div>
+  </section>
   
 </section>
 
@@ -5139,6 +5195,7 @@
     <div class="wb-footer-row">
       <div class="wb-footer-links">
         <a href="/ko/">브라우저 확장 프로그램</a>
+        <a href="/websites/">웹사이트용</a>
         <a href="/companion/ko/">데스크톱 Companion</a>
         <a href="/research/">연구</a>
         <a href="/docs/">문서</a>
