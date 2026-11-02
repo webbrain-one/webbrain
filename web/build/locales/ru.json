@@ -70,6 +70,7 @@
   "hero.mockup.result_more": "...и ещё 21",
   "hero.mockup.input_placeholder": "Спросите что угодно об этой странице...",
   "hero.mockup.scene_nav_aria": "Сменить демо-сценарий",
+  "hero.mockup.scene_nav_label": "Смотрите:",
   "hero.mockup.scene_prev_aria": "Предыдущий демо-сценарий",
   "hero.mockup.scene_next_aria": "Следующий демо-сценарий",
   "hero.mockup.scene_label.products": "Демо извлечения товаров",

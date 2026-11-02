@@ -70,6 +70,7 @@
   "hero.mockup.result_more": "...এবং আরও 21টি৷",
   "hero.mockup.input_placeholder": "এই পেজ সম্পর্কে কিছু জিজ্ঞাসা করুন...",
   "hero.mockup.scene_nav_aria": "ডেমো দৃশ্যকল্প স্যুইচ করুন",
+  "hero.mockup.scene_nav_label": "দেখুন:",
   "hero.mockup.scene_prev_aria": "পূর্ববর্তী ডেমো দৃশ্যকল্প",
   "hero.mockup.scene_next_aria": "পরবর্তী ডেমো দৃশ্যকল্প",
   "hero.mockup.scene_label.products": "পণ্য নিষ্কাশন ডেমো",

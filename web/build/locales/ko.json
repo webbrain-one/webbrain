@@ -70,6 +70,7 @@
   "hero.mockup.result_more": "...그리고 21개 더",
   "hero.mockup.input_placeholder": "이 페이지에 대해 무엇이든 물어보세요...",
   "hero.mockup.scene_nav_aria": "데모 시나리오 전환",
+  "hero.mockup.scene_nav_label": "살펴보기:",
   "hero.mockup.scene_prev_aria": "이전 데모 시나리오",
   "hero.mockup.scene_next_aria": "다음 데모 시나리오",
   "hero.mockup.scene_label.products": "제품 추출 데모",
