@@ -45042,10 +45042,23 @@ test('homepage leads with the browser extension and offers WebBrain for websites
   assert.ok(nav, 'web home: nav links missing');
   assert.deepEqual(
     [...nav[1].matchAll(/<a [^>]*>([^<]+)<\/a>/g)].map((m) => m[1]),
-    [...(WEBSITES_LAUNCHED ? ['For websites'] : []), 'Research', 'Docs', 'Blog', 'Download'],
-    'web home: the nav keeps For websites (while launched), research, docs, blog and the install shortcut',
+    ['Docs', 'Blog', 'Download'],
+    'web home: next to the Developers menu, the nav keeps docs, blog and the install shortcut',
   );
-  assert.match(template, /<!-- if websites --><a href="\{\{websites_path\}\}">\{\{t:nav\.for_websites\}\}<\/a><!-- end websites -->/, 'web home: the For websites link follows the launch switch');
+  // Developers: For websites (while launched), Research, WebBrain Cloud and MCP.
+  const devMenu = nav[1].match(/<details class="nav-dev" id="nav-dev">\s*<summary>Developers<svg[\s\S]*?<\/details>/);
+  assert.ok(devMenu, 'web home: the nav opens with a Developers menu');
+  assert.deepEqual(
+    [...devMenu[0].matchAll(/<a href="([^"]+)"><strong>([^<]+)<\/strong>/g)].map((m) => [m[1], m[2]]),
+    [...(WEBSITES_LAUNCHED ? [['/websites/', 'For websites']] : []), ['/research/', 'Research'], ['https://webbrain.cloud', 'WebBrain Cloud'], ['/docs/mcp/', 'MCP server']],
+    'web home: the Developers menu lists For websites, Research, WebBrain Cloud and MCP',
+  );
+  assert.match(template, /<!-- if websites --><a href="\{\{websites_path\}\}"><strong>\{\{t:nav\.for_websites\}\}<\/strong>/, 'web home: the For websites item follows the launch switch');
+  assert.doesNotMatch(template, /top-announcement/, 'web home: the MCP banner is gone');
+  for (const rel of ['web/websites/index.html', 'web/research/index.html']) {
+    const page = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+    assert.match(page, /<details class="nav-dev is-current" id="nav-dev">\s*<summary>Developers/, `${rel}: the header has the same Developers menu`);
+  }
   if (WEBSITES_LAUNCHED) assert.match(turkish, /href="\/websites\/"/, 'web home: localized homepages link to the English websites page');
   else assert.doesNotMatch(turkish, /href="\/websites\/"/, 'web home: no page links to the websites page before launch');
   assert.match(english, /<link rel="canonical" href="https:\/\/webbrain\.one\/">/);
@@ -45147,7 +45160,7 @@ test('research section renders a mosaic and one page per research line', () => {
 
   assert.ok(data.projects.length >= 8, 'research: several research lines');
   assert.match(index, /<link rel="canonical" href="https:\/\/webbrain\.one\/research\/">/);
-  assert.match(index, /<a href="\/research\/" aria-current="page">Research<\/a>/);
+  assert.match(index, /<a href="\/research\/" aria-current="page"><strong>Research<\/strong>/, 'research: the Developers menu marks Research as the current page');
   for (const source of ['/research', '/research/', '/research/:slug', '/research/:slug/']) {
     assert.ok(sources.includes(source), `vercel: ${source} rewrite missing`);
   }
