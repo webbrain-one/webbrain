@@ -12,7 +12,7 @@ import { readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PLAUSIBLE_SCRIPT_URL, withPlausibleAnalytics } from '../web/build/plausible.mjs';
-import { withSiteFooter } from '../web/build/site-footer.mjs';
+import { WEBSITES_LAUNCHED, withSiteFooter } from '../web/build/site-footer.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..');
@@ -81,6 +81,18 @@ function withGuideNavigation(html, file) {
       throw new Error(`${path.relative(REPO_ROOT, file)} is missing the providers guide navigation anchor`);
     }
     generated = withCompanion;
+  }
+
+  // The WebBrain for websites guide gets its own group after "Use WebBrain",
+  // while the site shows that product (WEBSITES_LAUNCHED). English only.
+  const websitesGroup = /<div class="sidebar-group"><div class="sidebar-label">On your website<\/div><nav><a href="\/docs\/websites\/"[^>]*>WebBrain for websites<\/a><\/nav><\/div>/;
+  if (!isChinese && WEBSITES_LAUNCHED && !websitesGroup.test(generated)) {
+    generated = generated.replace(
+      /(<a href="\/docs\/ollama\/"[^>]*>Ollama<\/a><\/nav>\s*<\/div>)/,
+      '$1<div class="sidebar-group"><div class="sidebar-label">On your website</div><nav><a href="/docs/websites/">WebBrain for websites</a></nav></div>',
+    );
+  } else if (!WEBSITES_LAUNCHED && !normalized.endsWith('/web/docs/websites/index.html')) {
+    generated = generated.replace(websitesGroup, '');
   }
 
   return generated;
